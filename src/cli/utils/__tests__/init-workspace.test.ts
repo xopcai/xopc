@@ -11,7 +11,7 @@ describe('initWorkspace', () => {
     const root = mkdtempSync(join(tmpdir(), 'xopc-init-skip-'));
     try {
       const configPath = join(root, 'xopc.json');
-      const workspacePath = join(root, 'workspace');
+      const workspacePath = join(root, 'workspace', 'main');
       const result = await initWorkspace({
         configPath,
         workspacePath,
@@ -31,13 +31,30 @@ describe('initWorkspace', () => {
     const root = mkdtempSync(join(tmpdir(), 'xopc-init-full-'));
     try {
       const configPath = join(root, 'xopc.json');
-      const workspacePath = join(root, 'workspace');
+      const workspacePath = join(root, 'workspace', 'main');
       const result = await initWorkspace({
         configPath,
         workspacePath,
       });
       expect(result.token.length).toBeGreaterThan(10);
       expect(readFileSync(configPath, 'utf8')).toContain(result.token);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('persists agents.defaults.workspace as dirname(workspacePath) when persistWorkspacePath', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'xopc-init-persist-'));
+    try {
+      const configPath = join(root, 'xopc.json');
+      const workspacePath = join(root, 'workspace', 'main');
+      const result = await initWorkspace({
+        configPath,
+        workspacePath,
+        persistWorkspacePath: true,
+        skipChannelPluginValidation: true,
+      });
+      expect(result.config.agents?.defaults?.workspace).toBe(join(root, 'workspace'));
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

@@ -129,6 +129,7 @@ function renderChunkedContent(
     searchedWeb: string;
     readFile: string;
     stepDetails: string;
+    stepsRoundComplete: string;
   },
   imagePreviewLabel: string,
   onImagePreview: ((block: ImageContent, index: number) => void) | undefined,
@@ -251,6 +252,7 @@ export const MessageBubble = memo(function MessageBubble({
       searchedWeb: m.chat.stepSearchedWeb,
       readFile: m.chat.stepReadFile,
       stepDetails: m.chat.stepDetails,
+      stepsRoundComplete: m.chat.stepsRoundComplete,
     }),
     [
       m.chat.thoughts,
@@ -260,6 +262,7 @@ export const MessageBubble = memo(function MessageBubble({
       m.chat.stepSearchedWeb,
       m.chat.stepReadFile,
       m.chat.stepDetails,
+      m.chat.stepsRoundComplete,
     ],
   );
 

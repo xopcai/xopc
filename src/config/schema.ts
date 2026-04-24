@@ -19,6 +19,7 @@ export const AgentModelRefSchema = z.union([
 export type AgentModelConfig = z.infer<typeof AgentModelRefSchema>;
 
 export const AgentDefaultsSchema = z.object({
+  /** Parent directory: each agent’s Markdown root is `<expanded>/<agentId>/` (e.g. `.../workspace/main`). */
   workspace: z.string().default('~/.xopc/workspace'),
   model: z.union([
     z.string(),
@@ -754,7 +755,7 @@ export interface ParsedModelRef {
 }
 
 /**
- * Default agent Markdown workspace (merged `agents.defaults` + `agents.list`).
+ * Default agent’s resolved Markdown workspace root (`resolveAgentWorkspaceDir` for the default agent id).
  */
 export function getWorkspacePath(config: Config): string {
   return getDefaultWorkspacePath(config);

@@ -343,6 +343,7 @@
     "noOutput": "（无输出）",
     "viewSteps_one": "查看 {{count}} 步",
     "viewSteps_other": "查看 {{count}} 步",
+    "stepsRoundComplete": "已完成",
     "stepSearchedWeb": "搜索网页",
     "stepReadFile": "读取文件",
     "stepDetails": "详情",

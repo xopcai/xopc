@@ -143,13 +143,13 @@ Each entry must include **`id`**. Other fields are optional overrides (same shap
 
 The same optional keys can appear under **`agents.defaults`** for global defaults (e.g. `agents.defaults.tools.disable` merged with per-agent disables).
 
-**Note:** On-disk paths (`~/.xopc/agents/<id>/` for sessions and internal state, per-agent Markdown workspace beside state) are **derived from `config.json`** (`agents.list`, `agents.defaults`, optional `agentDir` overrides). Use **`xopc agents add`** / **`agents delete`** to manage entries and directories; there is no separate agent “registry” outside config.
+**Note:** On-disk paths (`~/.xopc/agents/<id>/` for sessions and internal state, per-agent Markdown workspace under **`agents.defaults.workspace/<agentId>`** or `<stateDir>/workspace/<agentId>`) are **derived from `config.json`** (`agents.list`, `agents.defaults`, optional `agentDir` overrides). Use **`xopc agents add`** / **`agents delete`** to manage entries and directories; there is no separate agent “registry” outside config.
 
 #### agents.defaults
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `workspace` | string | `~/.xopc/workspace` | Workspace directory |
+| `workspace` | string | `~/.xopc/workspace` | **Parent** directory for Markdown workspaces; each agent resolves to `<expanded>/<agentId>/` (e.g. `~/.xopc/workspace/main`) |
 | `model` | string/object | `anthropic/claude-sonnet-4-5` | Default model |
 | `max_tokens` | number | `8192` | Maximum output tokens |
 | `temperature` | number | `0.7` | Temperature (0-2) |

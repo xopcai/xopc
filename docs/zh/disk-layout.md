@@ -61,7 +61,7 @@
 
 ## Markdown 工作空间
 
-由 `resolveAgentWorkspaceDir(config, agentId)` 解析：默认智能体常为 `<stateDir>/workspace`，其它 id 常为 `<stateDir>/workspace-<id>`，或由 `agents.defaults.workspace` / 列表项 `workspace` 指定。
+由 `resolveAgentWorkspaceDir(config, agentId)` 解析：未设置 `agents.defaults.workspace` 时常为 **`<stateDir>/workspace/<agentId>`**；设置时为 **`join(<agents.defaults.workspace>, <agentId>)`**；或由列表项 `workspace` 显式指定。
 
 **预期内容**（用户可见 / 工具面向）：
 

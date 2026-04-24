@@ -42,12 +42,12 @@ xopc skills list --json
 
 ```bash
 # Clone a skill repository to workspace
-git clone <repo-url> ~/.xopc/workspace/skills/<skill-name>
+git clone <repo-url> ~/.xopc/workspace/main/skills/<skill-name>
 
 # Example: Install vercel-react-best-practices
-git clone https://github.com/vercel-labs/agent-skills.git ~/.xopc/workspace/skills/vercel-react-best-practices-temp
-mv ~/.xopc/workspace/skills/vercel-react-best-practices-temp/SKILL.md ~/.xopc/workspace/skills/vercel-react-best-practices/SKILL.md
-rm -rf ~/.xopc/workspace/skills/vercel-react-best-practices-temp
+git clone https://github.com/vercel-labs/agent-skills.git ~/.xopc/workspace/main/skills/vercel-react-best-practices-temp
+mv ~/.xopc/workspace/main/skills/vercel-react-best-practices-temp/SKILL.md ~/.xopc/workspace/main/skills/vercel-react-best-practices/SKILL.md
+rm -rf ~/.xopc/workspace/main/skills/vercel-react-best-practices-temp
 ```
 
 **Using xopc skills install (for skills with install specs):**
@@ -160,18 +160,18 @@ Use your browsing capabilities to search:
 
 1. **Create skill directory** in workspace:
    ```bash
-   mkdir -p ~/.xopc/workspace/skills/<skill-name>
+   mkdir -p ~/.xopc/workspace/main/skills/<skill-name>
    ```
 
 2. **Download SKILL.md**:
    ```bash
    # From GitHub
    curl -L https://raw.githubusercontent.com/<owner>/<repo>/main/skills/<skill-name>/SKILL.md \
-     -o ~/.xopc/workspace/skills/<skill-name>/SKILL.md
+     -o ~/.xopc/workspace/main/skills/<skill-name>/SKILL.md
    
    # Or clone and copy
    git clone <repo-url> /tmp/skill-temp
-   cp /tmp/skill-temp/skills/<skill-name>/SKILL.md ~/.xopc/workspace/skills/<skill-name>/
+   cp /tmp/skill-temp/skills/<skill-name>/SKILL.md ~/.xopc/workspace/main/skills/<skill-name>/
    rm -rf /tmp/skill-temp
    ```
 
@@ -214,9 +214,9 @@ To install it, run:
   xopc skills install vercel-react-best-practices
 
 Or manually:
-  mkdir -p ~/.xopc/workspace/skills/vercel-react-best-practices
+  mkdir -p ~/.xopc/workspace/main/skills/vercel-react-best-practices
   curl -L https://raw.githubusercontent.com/vercel-labs/agent-skills/main/skills/vercel-react-best-practices/SKILL.md \
-    -o ~/.xopc/workspace/skills/vercel-react-best-practices/SKILL.md
+    -o ~/.xopc/workspace/main/skills/vercel-react-best-practices/SKILL.md
 
 Learn more: https://skills.sh/vercel-labs/agent-skills/vercel-react-best-practices
 ```
@@ -230,8 +230,8 @@ If the user wants to proceed, you can help them install:
 xopc skills install <skill-name> -y
 
 # For GitHub skills (automated)
-mkdir -p ~/.xopc/workspace/skills/<skill-name>
-curl -L <skill-url>/SKILL.md -o ~/.xopc/workspace/skills/<skill-name>/SKILL.md
+mkdir -p ~/.xopc/workspace/main/skills/<skill-name>
+curl -L <skill-url>/SKILL.md -o ~/.xopc/workspace/main/skills/<skill-name>/SKILL.md
 ```
 
 ## Common Skill Categories
@@ -251,7 +251,7 @@ curl -L <skill-url>/SKILL.md -o ~/.xopc/workspace/skills/<skill-name>/SKILL.md
 Skills must be installed in the correct directory structure:
 
 ```
-~/.xopc/workspace/skills/
+~/.xopc/workspace/main/skills/
 ├── <skill-name>/           ← Each skill needs its own directory
 │   ├── SKILL.md            ← Required: Skill metadata and instructions
 │   ├── config.json         ← Optional: Default configuration
@@ -265,12 +265,12 @@ Skills must be installed in the correct directory structure:
 
 **Correct:**
 ```
-~/.xopc/workspace/skills/my-skill/SKILL.md
+~/.xopc/workspace/main/skills/my-skill/SKILL.md
 ```
 
 **Incorrect:**
 ```
-~/.xopc/workspace/skills/SKILL.md  ← Won't be loaded!
+~/.xopc/workspace/main/skills/SKILL.md  ← Won't be loaded!
 ```
 
 ## Skill Installation Methods
@@ -299,11 +299,11 @@ For skills without install specs:
 
 ```bash
 # 1. Create directory
-mkdir -p ~/.xopc/workspace/skills/<skill-name>
+mkdir -p ~/.xopc/workspace/main/skills/<skill-name>
 
 # 2. Download SKILL.md
 curl -L https://raw.githubusercontent.com/<owner>/<repo>/main/skills/<skill-name>/SKILL.md \
-  -o ~/.xopc/workspace/skills/<skill-name>/SKILL.md
+  -o ~/.xopc/workspace/main/skills/<skill-name>/SKILL.md
 
 # 3. Verify
 xopc skills list | grep <skill-name>
@@ -318,7 +318,7 @@ For complex skills with multiple files:
 git clone <repo-url> /tmp/skill-clone
 
 # Copy skill directory
-cp -r /tmp/skill-clone/skills/<skill-name> ~/.xopc/workspace/skills/
+cp -r /tmp/skill-clone/skills/<skill-name> ~/.xopc/workspace/main/skills/
 
 # Clean up
 rm -rf /tmp/skill-clone
@@ -334,12 +334,12 @@ xopc skills status <skill-name>
 **Check directory structure:**
 ```bash
 # Should show SKILL.md in a subdirectory
-ls -la ~/.xopc/workspace/skills/<skill-name>/
+ls -la ~/.xopc/workspace/main/skills/<skill-name>/
 ```
 
 **Validate SKILL.md format:**
 ```bash
-xopc skills test validate ~/.xopc/workspace/skills/<skill-name>/SKILL.md
+xopc skills test validate ~/.xopc/workspace/main/skills/<skill-name>/SKILL.md
 ```
 
 **Check for errors:**
@@ -408,8 +408,8 @@ xopc skills install <skill-name>
 2. Found: `playwright-testing`
 3. Install:
    ```bash
-   mkdir -p ~/.xopc/workspace/skills/playwright-testing
-   curl -L <url>/SKILL.md -o ~/.xopc/workspace/skills/playwright-testing/SKILL.md
+   mkdir -p ~/.xopc/workspace/main/skills/playwright-testing
+   curl -L <url>/SKILL.md -o ~/.xopc/workspace/main/skills/playwright-testing/SKILL.md
    ```
 4. Verify: `xopc skills status playwright-testing`
 

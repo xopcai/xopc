@@ -61,7 +61,7 @@ Resolved by `resolveAgentDir(config, agentId)`.
 
 ## Markdown workspace
 
-Resolved by `resolveAgentWorkspaceDir(config, agentId)` — often `<stateDir>/workspace` for the default agent, or `<stateDir>/workspace-<id>`, or paths from `agents.defaults.workspace` / per-list `workspace`.
+Resolved by `resolveAgentWorkspaceDir(config, agentId)` — often **`<stateDir>/workspace/<agentId>`** when `agents.defaults.workspace` is unset, or **`join(<agents.defaults.workspace>, <agentId>)`** when set, or an explicit per-list `workspace` path.
 
 **Intended contents** (user-visible / tool-facing):
 

@@ -4,7 +4,8 @@ import { expandWorkspacePathString } from './workspace-path.js';
 import { resolveStateDir } from './paths-state.js';
 
 /**
- * Default Markdown workspace when only `XOPC_WORKSPACE` / state heuristics apply (no `agents.list` yet).
+ * Default Markdown workspace for the primary agent when `agents.defaults.workspace` is unset and
+ * there is no per-list `workspace` — `<stateDir>/workspace/main`, unless `XOPC_WORKSPACE` is set.
  */
 export function resolveDefaultAgentWorkspaceDir(
   env: NodeJS.ProcessEnv = process.env,
@@ -13,5 +14,6 @@ export function resolveDefaultAgentWorkspaceDir(
   if (fromEnv) {
     return expandWorkspacePathString(fromEnv);
   }
-  return join(resolveStateDir(env), 'workspace');
+  // Leaf `main` must match DEFAULT_AGENT_ID in agent-scope.ts (avoid importing it here → cycle).
+  return join(resolveStateDir(env), 'workspace', 'main');
 }

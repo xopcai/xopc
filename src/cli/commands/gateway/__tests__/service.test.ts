@@ -29,7 +29,7 @@ vi.mock('../../../../config/index.js', () => ({
 vi.mock('../../index.js', () => ({
   getContextWithOpts: vi.fn(() => ({
     configPath: '/root/.xopc/xopc.json',
-    workspacePath: '/root/.xopc/workspace',
+    workspacePath: '/root/.xopc/workspace/main',
     isVerbose: false,
   })),
 }));
