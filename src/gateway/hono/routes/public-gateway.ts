@@ -56,6 +56,18 @@ export function registerPublicGatewayRoutes(app: Hono, service: GatewayService):
     return c.text('Not found', 404);
   });
 
+  app.get('/logo.svg', (c) => {
+    const response = serveStaticFile('logo.svg');
+    if (response) return response;
+    return c.text('Not found', 404);
+  });
+
+  app.get('/logo-dark.svg', (c) => {
+    const response = serveStaticFile('logo-dark.svg');
+    if (response) return response;
+    return c.text('Not found', 404);
+  });
+
   app.get('/', (c) => {
     const response = serveStaticFile('index.html');
     if (response) return response;
