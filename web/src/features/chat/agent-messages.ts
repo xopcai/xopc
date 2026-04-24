@@ -303,6 +303,19 @@ export function collapseExpandedSkillBlockForDisplay(text: string): string {
   return args ? `/skill:${name} ${args}` : `/skill:${name}`;
 }
 
+/**
+ * Remove `<file path="…">…</file>` blocks prepended by `expandAtFileMentionsInPlainText`
+ * when the server persists the expanded @file: content into the session transcript.
+ * The original `@file:` wire tokens are kept so `UserMessageSegments` can render pills.
+ */
+export function stripExpandedAtFileBlocks(text: string): string {
+  if (!text.includes('<file path=')) return text;
+  return text
+    .replace(/<file\s+path="[^"]*">\r?\n[\s\S]*?<\/file>(?:\r?\n)*/g, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 /** Remove persisted inbound machine lines from bubble text (attachments show separately). */
 export function stripInboundFileMachineText(text: string): string {
   if (!text.includes('xopc-path:')) return text;
@@ -388,7 +401,8 @@ function applyStripToUserContent(
   if (role !== 'user' && role !== 'user-with-attachments') return blocks;
   const mapped = blocks.map((b) => {
     if (b.type === 'text' && typeof b.text === 'string') {
-      const stripped = stripInboundFileMachineText(b.text);
+      let stripped = stripExpandedAtFileBlocks(b.text);
+      stripped = stripInboundFileMachineText(stripped);
       return { ...b, text: collapseExpandedSkillBlockForDisplay(stripped) };
     }
     return b;
