@@ -1,4 +1,4 @@
-import { Clock, FileText, Plug, Puzzle, User, Wrench } from 'lucide-react';
+import { Clock, FileText, Plug, Puzzle, User, UserCircle, Wrench } from 'lucide-react';
 
 import { cn } from '@/lib/cn';
 import type { AgentsSettingsMessages } from '@/i18n/messages';
@@ -7,6 +7,7 @@ import type { AgentPanel } from './utils';
 
 const mainNav: { id: AgentPanel; labelKey: keyof AgentsSettingsMessages; icon: typeof User }[] = [
   { id: 'overview', labelKey: 'navIdentity', icon: User },
+  { id: 'profile', labelKey: 'navProfile', icon: UserCircle },
   { id: 'tools', labelKey: 'navTools', icon: Wrench },
   { id: 'skills', labelKey: 'navSkills', icon: Puzzle },
   { id: 'files', labelKey: 'navCoreFiles', icon: FileText },

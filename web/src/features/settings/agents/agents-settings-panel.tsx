@@ -48,6 +48,7 @@ import { AgentChannelsTab } from './tabs/agent-channels-tab';
 import { AgentCronTab } from './tabs/agent-cron-tab';
 import { AgentFilesTab } from './tabs/agent-files-tab';
 import { AgentOverviewTab } from './tabs/agent-overview-tab';
+import { AgentProfileTab } from './tabs/agent-profile-tab';
 import { AgentSkillsTab } from './tabs/agent-skills-tab';
 import { AgentToolsTab } from './tabs/agent-tools-tab';
 import type { AgentPanel } from './utils';
@@ -123,6 +124,11 @@ export function AgentsSettingsPanel() {
   selectedIdRef.current = selectedId;
   const activeFileRef = useRef(activeFile);
   activeFileRef.current = activeFile;
+  const overviewSaveBootstrapRef = useRef<(() => Promise<void>) | null>(null);
+  const profileSaveRef = useRef<(() => Promise<void>) | null>(null);
+  const [overviewBootstrapDirty, setOverviewBootstrapDirty] = useState(false);
+  const [profileDirty, setProfileDirty] = useState(false);
+  const [savedFlash, setSavedFlash] = useState(false);
   const bootstrapFileKeyRef = useRef('');
   const bootstrapSyncedRef = useRef('');
 
@@ -269,7 +275,7 @@ export function AgentsSettingsPanel() {
     setEditModel(selected.model?.primary ?? '');
     setEditName(selected.name?.trim() ? selected.name.trim() : selected.id);
     setEditDescription(selected.description?.trim() ?? '');
-  }, [selected]);
+  }, [selected?.id]);
 
   useEffect(() => {
     if (panel !== 'files' || !selectedId || !hasToken) {
@@ -845,21 +851,63 @@ export function AgentsSettingsPanel() {
     }
   }
 
-  const footerSaveDisabled = panel === 'channels' || panel === 'cron';
+  const footerSaveNotApplicable = panel === 'channels' || panel === 'cron';
 
-  function handleModalFooterSave() {
+  // Compute whether overview REST fields have changed compared to the loaded agent
+  const overviewRestDirty = (() => {
+    if (!selected || panel !== 'overview') return false;
+    const origName = selected.name?.trim() || selected.id;
+    const origDesc = selected.description?.trim() ?? '';
+    const origWorkspace = selected.workspace;
+    const origModel = selected.model?.primary ?? '';
+    return (
+      editName.trim() !== origName ||
+      editDescription.trim() !== origDesc ||
+      editWorkspace.trim() !== origWorkspace ||
+      editModel.trim() !== origModel
+    );
+  })();
+
+  const isCurrentPanelDirty = (() => {
+    if (footerSaveNotApplicable) return false;
     switch (panel) {
       case 'overview':
-        void onSaveAgentEdits();
+        return overviewRestDirty || overviewBootstrapDirty;
+      case 'profile':
+        return profileDirty;
+      default:
+        return true; // tools, skills, files — always allow save
+    }
+  })();
+
+  const footerSaveDisabled = footerSaveNotApplicable || !isCurrentPanelDirty;
+
+  function showSavedFlash() {
+    setSavedFlash(true);
+    setTimeout(() => setSavedFlash(false), 2000);
+  }
+
+  async function handleModalFooterSave() {
+    switch (panel) {
+      case 'overview':
+        await Promise.all([onSaveAgentEdits(), overviewSaveBootstrapRef.current?.() ?? Promise.resolve()]);
+        showSavedFlash();
+        break;
+      case 'profile':
+        await profileSaveRef.current?.();
+        showSavedFlash();
         break;
       case 'tools':
-        void onSaveTools();
+        await onSaveTools();
+        showSavedFlash();
         break;
       case 'skills':
-        void onSaveSkills();
+        await onSaveSkills();
+        showSavedFlash();
         break;
       case 'files':
         saveBootstrapDebounced.flush();
+        showSavedFlash();
         break;
       default:
         break;
@@ -907,7 +955,11 @@ export function AgentsSettingsPanel() {
         onSaveAgentEdits={() => void onSaveAgentEdits()}
         onDelete={(purge) => void onDelete(selected, purge)}
         hideInlineSave
+        saveBootstrapRef={overviewSaveBootstrapRef}
+        onBootstrapDirtyChange={setOverviewBootstrapDirty}
       />
+    ) : panel === 'profile' ? (
+      <AgentProfileTab a={a} agentId={selected.id} saveRef={profileSaveRef} onDirtyChange={setProfileDirty} />
     ) : panel === 'files' ? (
       <AgentFilesTab
         a={a}
@@ -1021,8 +1073,9 @@ export function AgentsSettingsPanel() {
           subtitle={modalSubtitle}
           panel={panel}
           onPanelChange={setPanel}
-          onFooterSave={handleModalFooterSave}
+          onFooterSave={() => void handleModalFooterSave()}
           footerSaveDisabled={footerSaveDisabled}
+          footerSavedFlash={savedFlash}
           busy={busy}
         >
           {loading || !data ? (
