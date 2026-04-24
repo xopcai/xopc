@@ -74,6 +74,12 @@ describe('agent-profile', () => {
     expect(p.resolvedWorkspacePath).toContain('coder-ws');
   });
 
+  it('resolves main workspace under defaults.workspace parent', () => {
+    const cfg = minimalConfig();
+    const p = resolveEffectiveAgentProfile(cfg, 'main');
+    expect(p.resolvedWorkspacePath).toMatch(/workspace[/\\]main$/);
+  });
+
   it('merges tool disable lists from defaults and list', () => {
     const cfg = minimalConfig();
     const p = resolveEffectiveAgentProfile(cfg, 'coder');

@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { CheckCircle2, ChevronDown, CircleDot, Loader2, XCircle } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { CheckCircle2, ChevronDown, Loader2, XCircle } from 'lucide-react';
 
 import type {
   Message,
@@ -7,13 +7,20 @@ import type {
   ThinkingContent,
   ToolUseContent,
 } from '@/features/chat/messages.types';
+import { formatStepRoundDuration } from '@/features/chat/step-round-duration';
 import { ToolResultFileLinks } from '@/features/chat/tool-result-file-links';
 import { extractFilePathsFromToolResult } from '@/features/chat/tool-result-file-paths';
+import {
+  extractWebSearchLinksFromToolResult,
+  isWebSearchToolName,
+  WebSearchToolResultLinks,
+} from '@/features/chat/web-search-tool-result-links';
 import { ExtensionChatWidget } from '@/features/extensions/extension-chat-widget';
 import { useUiExtensions } from '@/features/extensions/extension-provider';
 import { useChatWidgetMatch } from '@/features/extensions/use-chat-widget-match';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
+import { useLocaleStore } from '@/stores/locale-store';
 
 function formatParamsJson(params: unknown): string {
   if (params === undefined) return '';
@@ -145,9 +152,11 @@ export function AssistantStepsBlock({
     searchedWeb: string;
     readFile: string;
     stepDetails: string;
+    stepsRoundComplete: string;
   };
   sessionKey?: string | null;
 }) {
+  const language = useLocaleStore((s) => s.language);
   const visibleBlocks = useMemo(() => filterVisibleSteps(blocks), [blocks]);
   const stepCount = visibleBlocks.length;
   const anyActive = visibleBlocks.some(
@@ -155,13 +164,35 @@ export function AssistantStepsBlock({
       (b.type === 'thinking' && b.streaming) || (b.type === 'tool_use' && b.status === 'running'),
   );
 
+  const roundStartRef = useRef<number | null>(null);
+  const prevAnyActiveRef = useRef(false);
+  const [frozenDurationMs, setFrozenDurationMs] = useState<number | null>(null);
+  const [liveTick, setLiveTick] = useState(0);
   const [expanded, setExpanded] = useState(anyActive);
+
+  if (anyActive && roundStartRef.current === null) {
+    roundStartRef.current = Date.now();
+  }
+
+  useEffect(() => {
+    if (!anyActive) return;
+    const id = window.setInterval(() => setLiveTick((n) => n + 1), 500);
+    return () => window.clearInterval(id);
+  }, [anyActive]);
 
   useEffect(() => {
     if (anyActive) {
       setExpanded(true);
+    } else if (prevAnyActiveRef.current) {
+      if (roundStartRef.current !== null) {
+        setFrozenDurationMs(Date.now() - roundStartRef.current);
+      }
+      setExpanded(false);
     }
+    prevAnyActiveRef.current = anyActive;
   }, [anyActive]);
+
+  void liveTick;
 
   if (stepCount === 0) {
     return null;
@@ -174,6 +205,37 @@ export function AssistantStepsBlock({
     readFile: stepLabels.readFile,
     stepDetails: stepLabels.stepDetails,
   };
+
+  const liveElapsedMs =
+    anyActive && roundStartRef.current !== null ? Date.now() - roundStartRef.current : 0;
+  const summaryDurationText =
+    anyActive && roundStartRef.current !== null
+      ? formatStepRoundDuration(liveElapsedMs, language)
+      : frozenDurationMs !== null
+        ? formatStepRoundDuration(frozenDurationMs, language)
+        : null;
+
+  const headerLeadingIcon = anyActive ? (
+    <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin text-accent-fg" aria-hidden />
+  ) : (
+    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />
+  );
+
+  const headerMain = anyActive ? (
+    <>
+      <span className="[overflow-wrap:anywhere]">{viewStepsLabel(stepCount, stepLabels)}</span>
+      {summaryDurationText ? (
+        <span className="ml-1.5 tabular-nums text-fg-muted">{summaryDurationText}</span>
+      ) : null}
+    </>
+  ) : (
+    <>
+      <span className="[overflow-wrap:anywhere]">{stepLabels.stepsRoundComplete}</span>
+      {summaryDurationText ? (
+        <span className="ml-1.5 tabular-nums text-fg-muted">{summaryDurationText}</span>
+      ) : null}
+    </>
+  );
 
   return (
     <div className="my-1 w-full min-w-0 overflow-hidden rounded-xl bg-surface-hover/50 dark:bg-surface-hover/30">
@@ -189,10 +251,10 @@ export function AssistantStepsBlock({
         onClick={() => setExpanded(!expanded)}
         aria-expanded={expanded}
       >
-        <CircleDot className="mt-0.5 h-4 w-4 shrink-0 text-accent-fg" aria-hidden />
+        {headerLeadingIcon}
         <div className="min-w-0">
-          <span className="inline-flex max-w-full rounded-md bg-accent-soft/70 px-2 py-0.5 text-xs font-medium text-fg [overflow-wrap:anywhere] dark:bg-accent-soft/40">
-            {viewStepsLabel(stepCount, stepLabels)}
+          <span className="inline-flex max-w-full flex-wrap items-baseline rounded-md bg-accent-soft/70 px-2 py-0.5 text-xs font-medium text-fg dark:bg-accent-soft/40">
+            {headerMain}
           </span>
         </div>
         <ChevronDown
@@ -472,6 +534,16 @@ function StepRow({
     return extractFilePathsFromToolResult(toolResultText);
   }, [block, toolResultText]);
 
+  const webSearchLinks = useMemo(() => {
+    if (block.type !== 'tool_use' || block.status === 'running' || block.status === 'error') {
+      return [];
+    }
+    if (!isWebSearchToolName(block.name) || !toolResultText) {
+      return [];
+    }
+    return extractWebSearchLinksFromToolResult(toolResultText);
+  }, [block, toolResultText]);
+
   if (block.type === 'thinking') {
     const streaming = Boolean(block.streaming);
     const text = block.text?.trim() ?? '';
@@ -575,6 +647,9 @@ function StepRow({
         ) : null}
         {!isStreaming && !isError ? (
           <ToolUseWidgetSlot toolName={block.name} toolResult={block.result} />
+        ) : null}
+        {!isStreaming && !isError && webSearchLinks.length > 0 ? (
+          <WebSearchToolResultLinks links={webSearchLinks} />
         ) : null}
         {!isStreaming && !isError && extractedFilePaths.length > 0 ? (
           <ToolResultFileLinks paths={extractedFilePaths} sessionKey={sessionKey} />

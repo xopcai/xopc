@@ -144,13 +144,13 @@ xopc onboard
 
 同类可选字段也可写在 **`agents.defaults`** 里作为全局默认（例如 `agents.defaults.tools.disable` 会与每条 list 的 disable **合并**）。
 
-**说明：** 磁盘路径（`~/.xopc/agents/<id>/` 下的会话与内部状态、以及各 agent 的 Markdown 工作区）均按 **`config.json`** 解析（`agents.list`、`agents.defaults`、可选的 `agentDir`）。请使用 **`xopc agents add`** / **`agents delete`** 管理列表与目录；**不存在**独立于配置之外的 agent「注册表」。
+**说明：** 磁盘路径（`~/.xopc/agents/<id>/` 下的会话与内部状态、以及各 agent 的 Markdown 工作区，即 **`agents.defaults.workspace/<agentId>`** 或 **`<状态目录>/workspace/<agentId>`**）均按 **`config.json`** 解析（`agents.list`、`agents.defaults`、可选的 `agentDir`）。请使用 **`xopc agents add`** / **`agents delete`** 管理列表与目录；**不存在**独立于配置之外的 agent「注册表」。
 
 #### agents.defaults
 
 | 字段 | 类型 | 默认值 | 说明 |
 |-------|------|---------|------|
-| `workspace` | string | `~/.xopc/workspace` | 工作目录 |
+| `workspace` | string | `~/.xopc/workspace` | Markdown 工作区的**父目录**；每个智能体解析为 `<展开路径>/<agentId>/`（如 `~/.xopc/workspace/main`） |
 | `model` | string/object | `anthropic/claude-sonnet-4-5` | 默认模型 |
 | `max_tokens` | number | `8192` | 最大输出 tokens |
 | `temperature` | number | `0.7` | 温度参数 (0-2) |

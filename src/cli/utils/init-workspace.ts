@@ -14,8 +14,8 @@ export interface InitWorkspaceOptions {
   /** When set with a new config file, overrides schema default port (e.g. Electron). */
   gatewayPort?: number;
   /**
-   * When true, writes workspacePath into agents.defaults.workspace.
-   * Electron-specific: CLI derives the path from context at runtime.
+   * When true, sets `agents.defaults.workspace` to `dirname(workspacePath)` (parent of the
+   * Markdown root being initialised, e.g. `…/workspace` when `workspacePath` is `…/workspace/main`).
    */
   persistWorkspacePath?: boolean;
   /**
@@ -73,6 +73,7 @@ export async function initWorkspace(options: InitWorkspaceOptions): Promise<Init
   const persistWorkspacePath = options.persistWorkspacePath ?? false;
   const skipChannelPluginValidation = options.skipChannelPluginValidation ?? false;
   const { configPath, workspacePath } = options;
+  const persistedDefaultsWorkspace = persistWorkspacePath ? dirname(workspacePath) : undefined;
 
   mkdirSync(dirname(configPath), { recursive: true });
 
@@ -110,7 +111,7 @@ export async function initWorkspace(options: InitWorkspaceOptions): Promise<Init
 
   const agentsDefaults = {
     ...config.agents.defaults,
-    ...(persistWorkspacePath ? { workspace: workspacePath } : {}),
+    ...(persistedDefaultsWorkspace !== undefined ? { workspace: persistedDefaultsWorkspace } : {}),
   };
 
   const nextConfig: Config = {

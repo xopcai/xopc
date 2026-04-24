@@ -343,6 +343,7 @@
     "noOutput": "(no output)",
     "viewSteps_one": "View {{count}} step",
     "viewSteps_other": "View {{count}} steps",
+    "stepsRoundComplete": "Completed",
     "stepSearchedWeb": "Searched web",
     "stepReadFile": "Read file",
     "stepDetails": "Details",
