@@ -1,4 +1,32 @@
 import { spawn } from 'node:child_process';
+import { existsSync } from 'node:fs';
+
+import { createLogger } from '../utils/logger.js';
+
+const log = createLogger('WorkspaceRipgrep');
+
+let cachedRipgrepBin: string | undefined;
+
+/**
+ * Prefer `@vscode/ripgrep` when its postinstall placed `bin/rg`; otherwise use `rg` on PATH.
+ * (Bundled path can be ENOENT if postinstall was skipped or the binary was never downloaded.)
+ */
+async function resolveRipgrepBinary(): Promise<string> {
+  if (cachedRipgrepBin) return cachedRipgrepBin;
+  let bin = 'rg';
+  try {
+    const { rgPath } = await import('@vscode/ripgrep');
+    if (typeof rgPath === 'string' && rgPath.length > 0 && existsSync(rgPath)) {
+      bin = rgPath;
+    } else if (typeof rgPath === 'string' && rgPath.length > 0) {
+      log.warn({ rgPath }, '@vscode/ripgrep path missing on disk; falling back to rg on PATH');
+    }
+  } catch {
+    // pnpm may skip @vscode/ripgrep postinstall; package dir can be missing.
+  }
+  cachedRipgrepBin = bin;
+  return bin;
+}
 
 export interface WorkspaceSearchHit {
   filePath: string;
@@ -6,18 +34,6 @@ export interface WorkspaceSearchHit {
   lineContent: string;
   matchStart: number;
   matchEnd: number;
-}
-
-async function resolveRipgrepBinary(): Promise<string | null> {
-  try {
-    const { rgPath } = await import('@vscode/ripgrep');
-    if (typeof rgPath === 'string' && rgPath.length > 0) {
-      return rgPath;
-    }
-  } catch {
-    // pnpm may skip @vscode/ripgrep postinstall; package dir can be missing.
-  }
-  return 'rg';
 }
 
 /** Run ripgrep in a directory (absolute path). Returns empty array if rg fails to start. */
@@ -110,107 +126,18 @@ export function runRipgrepListFiles(dirAbsPath: string): Promise<string[]> {
         }
       });
 
-      rg.on('close', () => {
+      rg.on('close', (code) => {
         const tail = buffer.trim();
         if (tail) lines.push(tail.replace(/\\/g, '/'));
+        if (code !== 0 && lines.length === 0) {
+          log.warn({ code, cwd: dirAbsPath, rg: rgExecutable }, 'ripgrep --files exited with no output');
+        }
         resolve(lines);
       });
-      rg.on('error', () => resolve([]));
-    });
-  })();
-}
-
-export interface SymbolWorkspaceHit {
-  filePath: string;
-  lineNumber: number;
-  lineContent: string;
-}
-
-/** Word-boundary search for a symbol name in common source extensions (relative paths vs `workspaceRootAbs`). */
-export function runRipgrepSymbolHits(
-  workspaceRootAbs: string,
-  rawSymbol: string,
-  limit: number,
-): Promise<SymbolWorkspaceHit[]> {
-  return (async () => {
-    const trimmed = rawSymbol.trim();
-    if (!trimmed || trimmed.length > 80) return [];
-
-    const rgExecutable = await resolveRipgrepBinary();
-    const escaped = trimmed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const pattern = `\\b${escaped}\\b`;
-
-    return await new Promise<SymbolWorkspaceHit[]>((resolve) => {
-      const cap = Math.min(Math.max(limit, 1), 40);
-      const args = [
-        '--json',
-        '--smart-case',
-        '--max-count',
-        String(cap),
-        '--glob',
-        '*.ts',
-        '--glob',
-        '*.tsx',
-        '--glob',
-        '*.mts',
-        '--glob',
-        '*.cts',
-        '--glob',
-        '*.js',
-        '--glob',
-        '*.jsx',
-        '--glob',
-        '*.mjs',
-        '--glob',
-        '*.cjs',
-        '--glob',
-        '*.vue',
-        '--glob',
-        '*.svelte',
-        pattern,
-        '.',
-      ];
-
-      const rg = spawn(rgExecutable, args, { shell: false, cwd: workspaceRootAbs });
-      const results: SymbolWorkspaceHit[] = [];
-      let buffer = '';
-
-      rg.stdout.on('data', (data: Buffer) => {
-        buffer += data.toString();
-        const lines = buffer.split('\n');
-        buffer = lines.pop() ?? '';
-
-        for (const line of lines) {
-          if (!line.trim()) continue;
-          try {
-            const parsed = JSON.parse(line) as {
-              type?: string;
-              data?: {
-                path?: { text?: string };
-                lines?: { text?: string };
-                line_number?: number;
-              };
-            };
-            if (parsed.type === 'match' && parsed.data) {
-              const d = parsed.data;
-              const pathText = d.path?.text ?? '';
-              const lineContent = d.lines?.text ?? '';
-              const lineNumber = d.line_number ?? 0;
-              results.push({
-                filePath: pathText,
-                lineNumber,
-                lineContent: lineContent.trimEnd(),
-              });
-              if (results.length >= cap) break;
-            }
-          } catch {
-            /* skip */
-          }
-        }
+      rg.on('error', (err) => {
+        log.warn({ err, cwd: dirAbsPath, rg: rgExecutable }, 'ripgrep --files failed to start');
+        resolve([]);
       });
-
-      rg.on('close', () => resolve(results));
-      rg.on('error', () => resolve([]));
     });
   })();
 }

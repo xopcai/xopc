@@ -1,4 +1,4 @@
-import { FileText, Folder, Hash, Link2, Loader2, ScrollText } from 'lucide-react';
+import { FileText, Folder, Loader2 } from 'lucide-react';
 import {
   memo,
   useCallback,
@@ -11,7 +11,7 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 
-import type { AtCategory, AtMentionItem } from '@/features/chat/at-mention-api';
+import type { AtMentionItem } from '@/features/chat/at-mention-api';
 import { fileExtColor } from '@/features/file-tree/file-tree';
 import { cn } from '@/lib/cn';
 import { readWorkspaceFile } from '@/features/workspace/workspace-api';
@@ -67,19 +67,9 @@ function NameWithHighlights({ name, query }: { name: string; query: string }) {
   return <>{parts}</>;
 }
 
-const categoryIcon = {
-  files: FileText,
-  docs: ScrollText,
-  symbols: Hash,
-  urls: Link2,
-} as const;
-
 export const AtMentionPicker = memo(function AtMentionPicker({
   open,
   anchorRef,
-  category,
-  onCategoryChange,
-  tabLabels,
   items,
   selectedIndex,
   loading,
@@ -87,14 +77,12 @@ export const AtMentionPicker = memo(function AtMentionPicker({
   noResults,
   sessionKey,
   recentLabel,
+  ariaLabel,
   onSelectItem,
   shiftHint,
 }: {
   open: boolean;
   anchorRef: RefObject<HTMLElement | null>;
-  category: AtCategory;
-  onCategoryChange: (c: AtCategory) => void;
-  tabLabels: Record<AtCategory, string>;
   items: AtMentionItem[];
   selectedIndex: number;
   loading: boolean;
@@ -102,6 +90,7 @@ export const AtMentionPicker = memo(function AtMentionPicker({
   noResults: string;
   sessionKey: string | null;
   recentLabel: string;
+  ariaLabel: string;
   onSelectItem: (item: AtMentionItem, meta?: { shiftKey?: boolean }) => void;
   shiftHint?: string;
 }) {
@@ -122,13 +111,7 @@ export const AtMentionPicker = memo(function AtMentionPicker({
       clearPreviewTimer();
       previewAbortRef.current += 1;
       const rid = previewAbortRef.current;
-      if (
-        !sessionKey?.trim() ||
-        item.isDirectory ||
-        item.isBrowseUp ||
-        (item.pickKind !== 'file' && item.pickKind !== 'doc') ||
-        !item.relativePath
-      ) {
+      if (!sessionKey?.trim() || item.isDirectory || item.isBrowseUp || !item.relativePath) {
         setHoverPreview(null);
         return;
       }
@@ -191,7 +174,6 @@ export const AtMentionPicker = memo(function AtMentionPicker({
 
   const totalRows = items.length;
   const panelWidth = Math.min(box.width, MAX_PALETTE_WIDTH_PX);
-  const categories: AtCategory[] = ['files', 'docs', 'symbols', 'urls'];
 
   const shell = (
     <div
@@ -206,35 +188,10 @@ export const AtMentionPicker = memo(function AtMentionPicker({
       }}
       role="presentation"
     >
-      <div className="flex gap-0.5 border-b border-edge-subtle px-1.5 py-1.5">
-        {categories.map((c) => {
-          const Icon = categoryIcon[c];
-          const active = category === c;
-          return (
-            <button
-              key={c}
-              type="button"
-              className={cn(
-                'inline-flex flex-1 items-center justify-center gap-1 rounded-md px-1.5 py-1 text-[0.7rem] font-medium',
-                active
-                  ? 'bg-surface-hover text-fg'
-                  : 'text-fg-muted hover:bg-surface-hover/70 hover:text-fg',
-              )}
-              onPointerDown={(e) => {
-                e.preventDefault();
-                onCategoryChange(c);
-              }}
-            >
-              <Icon className="size-3 shrink-0 opacity-80" aria-hidden />
-              <span className="truncate">{tabLabels[c]}</span>
-            </button>
-          );
-        })}
-      </div>
       <div
-        className="max-h-[min(22rem,48vh)] overflow-y-auto"
+        className="max-h-[min(26rem,54vh)] overflow-y-auto"
         role="listbox"
-        aria-label={tabLabels[category]}
+        aria-label={ariaLabel}
         aria-activedescendant={selectedIndex >= 0 && selectedIndex < totalRows ? `at-mention-${selectedIndex}` : undefined}
       >
         {loading && totalRows === 0 ? (
@@ -249,7 +206,7 @@ export const AtMentionPicker = memo(function AtMentionPicker({
           <>
             {items.map((item, i) => (
               <div
-                key={`${item.pickKind}-${item.relativePath}-${item.name}-${item.line ?? i}`}
+                key={`${item.relativePath}-${item.name}-${i}`}
                 id={`at-mention-${i}`}
                 role="option"
                 aria-selected={selectedIndex === i}
@@ -274,12 +231,6 @@ export const AtMentionPicker = memo(function AtMentionPicker({
                 <span className="mt-0.5 shrink-0">
                   {item.isBrowseUp ? (
                     <Folder className="size-3.5 text-fg-muted" aria-hidden />
-                  ) : item.pickKind === 'symbol' ? (
-                    <Hash className="size-3.5 text-violet-600 dark:text-violet-400" aria-hidden />
-                  ) : item.pickKind === 'url' ? (
-                    <Link2 className="size-3.5 text-sky-600 dark:text-sky-400" aria-hidden />
-                  ) : item.pickKind === 'doc' ? (
-                    <ScrollText className="size-3.5 text-emerald-600 dark:text-emerald-400" aria-hidden />
                   ) : item.isDirectory ? (
                     <Folder className="size-3.5 text-amber-600 dark:text-amber-400" aria-hidden />
                   ) : (
@@ -289,11 +240,7 @@ export const AtMentionPicker = memo(function AtMentionPicker({
                 <span className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 truncate">
                     <span className="truncate">
-                      {item.pickKind === 'symbol' ? (
-                        <span className="font-medium text-fg">{item.name}</span>
-                      ) : (
-                        <NameWithHighlights name={item.name} query={query} />
-                      )}
+                      <NameWithHighlights name={item.name} query={query} />
                     </span>
                     {item.isRecent ? (
                       <span className="shrink-0 rounded bg-accent-soft px-1 py-0 text-[0.65rem] text-accent-fg">
@@ -301,13 +248,7 @@ export const AtMentionPicker = memo(function AtMentionPicker({
                       </span>
                     ) : null}
                   </div>
-                  {item.pickKind === 'symbol' && item.preview ? (
-                    <div className="mt-0.5 line-clamp-2 font-mono text-[0.7rem] text-fg-muted">{item.preview}</div>
-                  ) : (
-                    <div className="mt-0.5 truncate text-xs text-fg-muted">
-                      {item.pickKind === 'symbol' ? item.relativePath : item.relativePath || '—'}
-                    </div>
-                  )}
+                  <div className="mt-0.5 truncate text-xs text-fg-muted">{item.relativePath || '—'}</div>
                 </span>
               </div>
             ))}

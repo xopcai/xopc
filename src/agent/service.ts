@@ -74,7 +74,7 @@ import {
   formatInboundFileTextBlock,
   type InternalAttachmentRoots,
 } from '../channels/attachments/inbound-persist.js';
-import { expandAllContextMentionsInPlainText } from './context/expand-context-mentions.js';
+import { expandAtFileMentionsInPlainText } from './context/expand-at-file-mentions.js';
 import { resolveInboundImageContentParts } from './image/inbound-image-handling.js';
 import { getDefaultModelSync, resolveModel } from '../providers/index.js';
 import { complete, type UserMessage } from '@mariozechner/pi-ai';
@@ -671,10 +671,10 @@ export class AgentService {
 
     if (content.trim()) {
       let textPart = content;
-      if (/@(file|doc|url|symbol):/.test(textPart)) {
+      if (/@file:/.test(textPart)) {
         const wsKey = sk !== '' ? sk : 'cli:direct';
         const root = this.agentManager.getResolvedWorkspaceForSession(wsKey);
-        textPart = await expandAllContextMentionsInPlainText(textPart, root);
+        textPart = await expandAtFileMentionsInPlainText(textPart, root);
       }
       messageContent.push({ type: 'text', text: textPart });
     }
