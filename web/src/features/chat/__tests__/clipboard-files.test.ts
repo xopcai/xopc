@@ -83,4 +83,15 @@ describe('collectClipboardFiles', () => {
     expect(got).toHaveLength(1);
     expect(got[0]?.name).toBe('same.txt');
   });
+
+  it('dedupes same bytes from files and items when lastModified differs (browser paste quirk)', () => {
+    const fromFiles = new File(['x'], 'image.png', { type: 'image/png', lastModified: 1 });
+    const fromItems = new File(['x'], 'image.png', { type: 'image/png', lastModified: 2 });
+    const dt = mockDataTransfer({
+      files: [fromFiles],
+      itemGetters: [() => fromItems],
+    });
+    const got = collectClipboardFiles(dt);
+    expect(got).toHaveLength(1);
+  });
 });

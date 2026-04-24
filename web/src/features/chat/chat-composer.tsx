@@ -59,7 +59,8 @@ export function isComposerAcceptableFile(file: File): boolean {
 }
 
 function fileDedupeKey(f: File): string {
-  return `${f.name}\0${f.size}\0${f.lastModified}`;
+  // name+size only: files vs items can differ in lastModified for the same pasted blob (Chrome/Edge).
+  return `${f.name}\0${f.size}`;
 }
 
 /** Merges `DataTransfer.files` and `kind === 'file'` items; dedupes; skips empty blobs. Exported for unit tests. */
