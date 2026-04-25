@@ -478,6 +478,11 @@ export const ChatComposer = memo(function ChatComposer({
     if (!pendingFocusAfterEnableRef.current) return;
     pendingFocusAfterEnableRef.current = false;
     const id = requestAnimationFrame(() => {
+      // Avoid popping the soft keyboard on mobile/touch devices when entering chat.
+      const allowAutoFocus =
+        typeof globalThis.matchMedia === 'function' &&
+        globalThis.matchMedia('(hover: hover) and (pointer: fine)').matches;
+      if (!allowAutoFocus) return;
       editorRef.current?.focus({ preventScroll: true });
     });
     return () => cancelAnimationFrame(id);
