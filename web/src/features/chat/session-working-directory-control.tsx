@@ -1,6 +1,8 @@
+import * as Dialog from '@radix-ui/react-dialog';
 import { FolderInput } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
 
+import { Button } from '@/components/ui/button';
 import { SessionManager } from '@/features/chat/session-manager';
 import { WorkingDirectoryPickerModal } from '@/features/chat/working-directory-picker-modal';
 import { cn } from '@/lib/cn';
@@ -65,6 +67,8 @@ export const SessionWorkingDirectoryControl = memo(function SessionWorkingDirect
   const [effectivePath, setEffectivePath] = useState('');
   const [loading, setLoading] = useState(false);
   const [pathModalOpen, setPathModalOpen] = useState(false);
+  const [errorModalOpen, setErrorModalOpen] = useState(false);
+  const [errorModalMessage, setErrorModalMessage] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     if (!sessionKey) {
@@ -95,7 +99,8 @@ export const SessionWorkingDirectoryControl = memo(function SessionWorkingDirect
         await refresh();
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
-        window.alert(msg);
+        setErrorModalMessage(msg);
+        setErrorModalOpen(true);
         throw e;
       }
     },
@@ -263,6 +268,37 @@ export const SessionWorkingDirectoryControl = memo(function SessionWorkingDirect
           wd={wd}
         />
       ) : null}
+
+      <Dialog.Root
+        open={errorModalOpen}
+        onOpenChange={(open) => {
+          setErrorModalOpen(open);
+          if (!open) setErrorModalMessage(null);
+        }}
+      >
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 z-[80] bg-scrim backdrop-blur-[2px]" />
+          <Dialog.Content
+            className={cn(
+              'fixed left-1/2 top-1/2 z-[81] w-[min(100%-2rem,26rem)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-edge bg-surface-panel p-4 shadow-popover',
+              'dark:border-edge',
+            )}
+            onOpenAutoFocus={(e) => e.preventDefault()}
+          >
+            <Dialog.Title className="text-base font-semibold text-fg">{wd.applyErrorTitle}</Dialog.Title>
+            {errorModalMessage ? (
+              <Dialog.Description className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-fg-muted">
+                {errorModalMessage}
+              </Dialog.Description>
+            ) : null}
+            <div className="mt-4 flex items-center justify-end border-t border-edge-subtle/60 pt-3">
+              <Button type="button" onClick={() => setErrorModalOpen(false)}>
+                {wd.applyErrorClose}
+              </Button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
     </>
   );
 });
