@@ -181,9 +181,12 @@ export function useChatSession() {
   const [steeringFollowUpId, setSteeringFollowUpId] = useState<string | null>(null);
   const [followUpSuggestions, setFollowUpSuggestions] = useState<FollowUpSuggestionId[]>([]);
 
-  useEffect(() => {
-    sendingRef.current = sending;
-  }, [sending]);
+  /**
+   * Do not sync `sendingRef` from `sending` state: the UI sets `sending` to false when switching
+   * away from a session (see [decodedKey] effect), but the same MessageSender may still be
+   * streaming that chat in the background. Overwriting the ref would break `tryResume` and
+   * in-flight gating. `sendingRef` is updated only from send/resume/abort/finalize paths.
+   */
   useEffect(() => {
     streamingRef.current = streaming;
   }, [streaming]);
@@ -346,9 +349,28 @@ export function useChatSession() {
     return sessionKeyRef.current === streamSessionKey;
   }, []);
 
+  const applyLoadedSessionSnapshot = useCallback(
+    (chatId: string, data: { messages: Message[]; hasMore: boolean; name?: string }) => {
+      if (sessionKeyRef.current !== chatId) {
+        return;
+      }
+      setMessages(data.messages);
+      setHasMore(data.hasMore);
+      if (data.name) {
+        setSessionName(data.name);
+      }
+    },
+    [],
+  );
+
   const loadSessionById = useCallback(
     async (key: string, offset = 0) => {
-      if (offset === 0 && key === sessionKeyRef.current && (sendingRef.current || streamingRef.current)) {
+      if (
+        offset === 0 &&
+        key === sessionKeyRef.current &&
+        (sendingRef.current || streamingRef.current) &&
+        activeStreamSessionKeyRef.current === key
+      ) {
         return;
       }
       // Dismiss any clarify prompt from the previous session.
@@ -496,7 +518,10 @@ export function useChatSession() {
 
   const tryResumeAgentRun = useCallback(async (chatId: string) => {
     const sender = senderRef.current;
-    if (sendingRef.current || streamingRef.current) return;
+    /** A single `MessageSender` can only have one in-flight request; do not use `sendingRef` (UI can clear it when switching sessions while send continues). */
+    if (sender.isSending) {
+      return;
+    }
     let stored: { runId: string } | null = null;
     try {
       const raw = sessionStorage.getItem(pendingAgentRunStorageKey(chatId));
@@ -640,6 +665,10 @@ export function useChatSession() {
             setSending(false);
             setProgress(null);
             setClarifyPrompt(null);
+            void sessionMgrRef.current
+              .loadSession(chatId, 0)
+              .then((data) => applyLoadedSessionSnapshot(chatId, data))
+              .catch(() => {});
             return;
           }
           if (userAbortedRef.current) {
@@ -658,6 +687,10 @@ export function useChatSession() {
             setSending(false);
             setProgress(null);
             setClarifyPrompt(null);
+            void sessionMgrRef.current
+              .loadSession(chatId, 0)
+              .then((data) => applyLoadedSessionSnapshot(chatId, data))
+              .catch(() => {});
             return;
           }
           activeResumeRunIdRef.current = null;
@@ -686,7 +719,7 @@ export function useChatSession() {
         activeStreamSessionKeyRef.current = null;
       }
     }
-  }, [finalizeMessage, shouldApplyStreamUpdate]);
+  }, [applyLoadedSessionSnapshot, finalizeMessage, shouldApplyStreamUpdate]);
 
   const addPendingFollowUp = useCallback(
     (
@@ -796,7 +829,9 @@ export function useChatSession() {
       levelOverride?: string,
     ) => {
       if (!content.trim() && !attachments?.length) return;
-      if (!sendingRef.current && !streamingRef.current) return;
+      if (!sendingRef.current && !streamingRef.current && !senderRef.current.isSending) {
+        return;
+      }
       const trimmed = content.trim();
       if (trimmed === '/new' && !attachments?.length) {
         await createNewSession();
@@ -839,15 +874,21 @@ export function useChatSession() {
       attachments?: Array<{ type: string; mimeType?: string; data?: string; name?: string; size?: number }>,
       levelOverride?: string,
     ) => {
-      if ((!content.trim() && !attachments?.length) || sendingRef.current || streamingRef.current) return;
+      if (!sessionKey) {
+        return;
+      }
+      if (
+        (!content.trim() && !attachments?.length) ||
+        (activeStreamSessionKeyRef.current === sessionKey && (sendingRef.current || streamingRef.current))
+      ) {
+        return;
+      }
 
       const trimmed = content.trim();
       if (trimmed === '/new' && !attachments?.length) {
         await createNewSession();
         return;
       }
-
-      if (!sessionKey) return;
 
       const effectiveThinking = modelSupportsThinking ? (levelOverride ?? thinkingLevel) : 'off';
 
@@ -856,6 +897,7 @@ export function useChatSession() {
       userAbortedRef.current = false;
       setFollowUpSuggestions([]);
       activeStreamSessionKeyRef.current = chatId;
+      sendingRef.current = true;
       setSending(true);
       setError(null);
       // Clear any stale clarify prompt from a previous turn so its requestId
@@ -969,6 +1011,10 @@ export function useChatSession() {
               setSending(false);
               setProgress(null);
               setClarifyPrompt(null);
+              void sessionMgrRef.current
+                .loadSession(chatId, 0)
+                .then((data) => applyLoadedSessionSnapshot(chatId, data))
+                .catch(() => {});
               return;
             }
             if (userAbortedRef.current) {
@@ -986,6 +1032,10 @@ export function useChatSession() {
               setSending(false);
               setProgress(null);
               setClarifyPrompt(null);
+              void sessionMgrRef.current
+                .loadSession(chatId, 0)
+                .then((data) => applyLoadedSessionSnapshot(chatId, data))
+                .catch(() => {});
               return;
             }
             sendingRef.current = false;
@@ -1017,6 +1067,7 @@ export function useChatSession() {
       sessionKey,
       thinkingLevel,
       modelSupportsThinking,
+      applyLoadedSessionSnapshot,
       finalizeMessage,
       shouldApplyStreamUpdate,
       createNewSession,
