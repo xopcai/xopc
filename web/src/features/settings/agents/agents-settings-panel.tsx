@@ -1,3 +1,4 @@
+import * as Dialog from '@radix-ui/react-dialog';
 import { Plus, Search, SlidersHorizontal } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -36,6 +37,7 @@ import {
   type SessionChatId,
 } from '@/features/cron/cron-api';
 import { messages } from '@/i18n/messages';
+import { cn } from '@/lib/cn';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
@@ -58,6 +60,11 @@ export function AgentsSettingsPanel() {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const a = m.agentsSettings;
+
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<GatewayAgentRow | null>(null);
+  const [deletePurge, setDeletePurge] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const cCron = m.cron;
   const chat = m.chat;
   const token = useGatewayStore((st) => st.token);
@@ -714,13 +721,7 @@ export function AgentsSettingsPanel() {
     }
   }
 
-  async function onDelete(agent: GatewayAgentRow, purge: boolean) {
-    if (agent.id === 'main') {
-      return;
-    }
-    if (!window.confirm(purge ? a.confirmDeletePurge : a.confirmDelete)) {
-      return;
-    }
+  async function performDelete(agent: GatewayAgentRow, purge: boolean) {
     setBusy(true);
     setError(null);
     try {
@@ -731,11 +732,24 @@ export function AgentsSettingsPanel() {
       if (routeAgentId === agent.id) {
         navigate(AGENTS_APP_LIST_PATH, { replace: true });
       }
+      setDeleteDialogOpen(false);
+      setDeleteTarget(null);
+      setDeleteConfirmText('');
     } catch (err) {
       setError(err instanceof Error ? err.message : a.saveError);
     } finally {
       setBusy(false);
     }
+  }
+
+  function onDelete(agent: GatewayAgentRow, purge: boolean) {
+    if (agent.id === 'main') {
+      return;
+    }
+    setDeleteTarget(agent);
+    setDeletePurge(purge);
+    setDeleteConfirmText('');
+    setDeleteDialogOpen(true);
   }
 
   async function onSaveTools() {
@@ -1117,6 +1131,88 @@ export function AgentsSettingsPanel() {
         onCreate={onCreate}
         onSuggestWorkspace={() => applyCreateWorkspaceSuggestion()}
       />
+
+      <Dialog.Root
+        open={deleteDialogOpen}
+        onOpenChange={(open) => {
+          setDeleteDialogOpen(open);
+          if (!open) {
+            setDeleteTarget(null);
+            setDeleteConfirmText('');
+          }
+        }}
+      >
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 z-[80] bg-scrim backdrop-blur-[2px]" />
+          <Dialog.Content
+            className={cn(
+              'fixed left-1/2 top-1/2 z-[81] w-[min(100%-2rem,28rem)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-edge bg-surface-panel p-4 shadow-popover',
+              'dark:border-edge',
+            )}
+            onOpenAutoFocus={(e) => e.preventDefault()}
+          >
+            <Dialog.Title className="text-base font-semibold text-fg">
+              {deletePurge ? a.purgeDisk : a.removeFromConfig}
+            </Dialog.Title>
+            <Dialog.Description className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-fg-muted">
+              {deletePurge ? a.confirmDeletePurge : a.confirmDelete}
+            </Dialog.Description>
+
+            {deletePurge && deleteTarget ? (
+              <div className="mt-3 space-y-3">
+                <label className="mb-2 block text-sm font-medium text-fg" htmlFor="agent-delete-confirm">
+                  {a.purgeConfirmLabel}
+                </label>
+                <input
+                  id="agent-delete-confirm"
+                  type="text"
+                  autoComplete="off"
+                  spellCheck={false}
+                  className={cn(
+                    'w-full rounded-md border border-edge bg-surface-panel px-3 py-1.5 font-mono text-xs text-fg',
+                    'placeholder:text-fg-subtle',
+                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
+                    'dark:border-edge',
+                  )}
+                  placeholder={a.purgeConfirmPlaceholder.replace('{{agentId}}', deleteTarget.id)}
+                  value={deleteConfirmText}
+                  onChange={(e) => setDeleteConfirmText(e.target.value)}
+                />
+                <p className="pt-0.5 text-xs text-fg-muted">
+                  {a.purgeConfirmHint.replace('{{agentId}}', deleteTarget.id)}
+                </p>
+              </div>
+            ) : null}
+
+            <div className="mt-4 flex flex-wrap items-center justify-end gap-2 border-t border-edge-subtle/60 pt-3">
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={busy}
+                onClick={() => setDeleteDialogOpen(false)}
+              >
+                {a.createModalCancel}
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                className={deletePurge ? 'border-red-200 text-red-700 hover:bg-red-50 dark:border-red-900/60 dark:text-red-300 dark:hover:bg-red-950/40' : undefined}
+                disabled={
+                  busy ||
+                  !deleteTarget ||
+                  (deletePurge && deleteConfirmText.trim().toLowerCase() !== deleteTarget.id.toLowerCase())
+                }
+                onClick={() => {
+                  if (!deleteTarget) return;
+                  void performDelete(deleteTarget, deletePurge);
+                }}
+              >
+                {deletePurge ? a.purgeDisk : a.removeFromConfig}
+              </Button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
     </div>
   );
 }
