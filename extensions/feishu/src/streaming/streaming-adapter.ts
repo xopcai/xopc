@@ -25,6 +25,10 @@ export function createFeishuStreamingAdapter(getConfig: () => Config): ChannelSt
       if (!account.configured) {
         return null;
       }
+      // Feishu streaming is opt-in. When omitted/false, fall back to normal final outbound.
+      if (account.streaming !== true) {
+        return null;
+      }
       const { api } = createFeishuClient(account);
 
       let messageId: string | undefined;
@@ -36,6 +40,7 @@ export function createFeishuStreamingAdapter(getConfig: () => Config): ChannelSt
       let cardId: string | undefined;
       let cardSeq = 0;
       const cardElementId = 'md_1';
+      let fallbackSent = false;
 
       const preferCard = account.renderMode === 'card';
 
@@ -70,6 +75,41 @@ export function createFeishuStreamingAdapter(getConfig: () => Config): ChannelSt
         editedAtLeastOnce = true;
       };
 
+      const sendFallbackText = async (text: string) => {
+        if (fallbackSent) return;
+        fallbackSent = true;
+        const receive_id_type =
+          options.chatId.startsWith('ou_') || options.chatId.startsWith('on_') ? 'open_id' : 'chat_id';
+        try {
+          const res = options.replyToMessageId
+            ? await (api as any).im.message.reply({
+                path: { message_id: options.replyToMessageId },
+                data: {
+                  msg_type: 'text',
+                  content: JSON.stringify({ text }),
+                  ...(options.threadId ? { reply_in_thread: true } : {}),
+                },
+              })
+            : await (api as any).im.message.create({
+                params: { receive_id_type },
+                data: {
+                  receive_id: options.chatId,
+                  msg_type: 'text',
+                  content: JSON.stringify({ text }),
+                },
+              });
+          const mid = res?.data?.message_id ?? res?.message_id ?? undefined;
+          if (mid) recordBindingIfReply(mid);
+          // Mark as delivered through the channel so the final outbound is skipped.
+          editedAtLeastOnce = true;
+          messageId = mid ?? messageId;
+          // If we were in card mode, stop trying to update the card.
+          cardId = undefined;
+        } catch (err) {
+          log.warn({ err, accountId: account.accountId }, 'Feishu streaming fallback send failed');
+        }
+      };
+
       const flush = async () => {
         if (aborted) return;
         if (ready) await ready;
@@ -79,8 +119,12 @@ export function createFeishuStreamingAdapter(getConfig: () => Config): ChannelSt
         try {
           await edit(text);
         } catch (err) {
-          // Don't crash the agent loop — if editing fails, fall back to final outbound send.
-          log.warn({ err, accountId: account.accountId, messageId }, 'Feishu streaming edit failed');
+          // Don't crash the agent loop. In card mode, card streaming can fail due to missing CardKit scopes;
+          // fall back to sending a plain text reply so the user never gets stuck on "Thinking…".
+          log.warn({ err, accountId: account.accountId, messageId, mode: preferCard ? 'card' : 'text' }, 'Feishu streaming edit failed');
+          if (preferCard) {
+            await sendFallbackText(text);
+          }
         }
       };
 
@@ -131,6 +175,10 @@ export function createFeishuStreamingAdapter(getConfig: () => Config): ChannelSt
               });
           messageId = res?.data?.message_id ?? res?.message_id ?? undefined;
           if (messageId) recordBindingIfReply(messageId);
+          log.info(
+            { accountId: account.accountId, chatId: options.chatId, messageId, mode: 'card' },
+            'Feishu streaming started',
+          );
           return;
         }
 
@@ -153,6 +201,10 @@ export function createFeishuStreamingAdapter(getConfig: () => Config): ChannelSt
             });
         messageId = res?.data?.message_id ?? res?.message_id ?? undefined;
         if (messageId) recordBindingIfReply(messageId);
+        log.info(
+          { accountId: account.accountId, chatId: options.chatId, messageId, mode: 'text' },
+          'Feishu streaming started',
+        );
       };
 
       ready = start().catch((err) => {
@@ -170,6 +222,17 @@ export function createFeishuStreamingAdapter(getConfig: () => Config): ChannelSt
         end: async () => {
           if (timer) clearTimeout(timer);
           await flush();
+          log.debug(
+            {
+              accountId: account.accountId,
+              chatId: options.chatId,
+              messageId,
+              editedAtLeastOnce,
+              lastTextLen: lastText.length,
+              mode: preferCard ? 'card' : 'text',
+            },
+            'Feishu streaming ended',
+          );
         },
         abort: async () => {
           aborted = true;

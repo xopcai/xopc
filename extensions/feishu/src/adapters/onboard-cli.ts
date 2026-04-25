@@ -130,7 +130,7 @@ async function configureFeishu(config: Config): Promise<Config> {
 
   const streaming = await confirm({
     message: 'Enable streaming updates (Thinking… + incremental output)?',
-    default: true,
+    default: false,
   });
 
   const nextFeishu: Record<string, unknown> = {

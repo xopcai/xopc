@@ -75,7 +75,7 @@ export function defaultChannelsState(): ChannelsSettingsState {
       historyLimit: 50,
       textChunkLimit: 4000,
       renderMode: 'auto',
-      streaming: true,
+      streaming: false,
       reactionNotifications: 'own',
       accounts: {},
     },
@@ -160,7 +160,7 @@ export function normalizeChannelsFromConfig(config: unknown): ChannelsSettingsSt
       historyLimit: typeof fs?.historyLimit === 'number' ? fs.historyLimit : 50,
       textChunkLimit: typeof fs?.textChunkLimit === 'number' ? fs.textChunkLimit : 4000,
       renderMode: (fs?.renderMode as any) || 'auto',
-      streaming: fs?.streaming === undefined ? true : Boolean(fs.streaming),
+      streaming: fs?.streaming === undefined ? false : Boolean(fs.streaming),
       reactionNotifications: (fs?.reactionNotifications as any) || 'own',
       accounts:
         fs?.accounts && typeof fs.accounts === 'object' && !Array.isArray(fs.accounts)

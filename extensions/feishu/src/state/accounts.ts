@@ -25,7 +25,8 @@ export interface ResolvedFeishuAccount {
 
   reactionNotifications?: 'off' | 'own' | 'all';
 
-  streaming?: boolean;
+  /** Opt-in: only `true` enables Feishu streaming (Thinking… + incremental updates). */
+  streaming: boolean;
   blockStreamingCoalesce?: { enabled?: boolean; minChars?: number; idleMs?: number };
 
   tools?: FeishuConfig['tools'];
@@ -118,7 +119,7 @@ export function resolveFeishuAccount(cfg: Config, accountId?: string | null): Re
     textChunkLimit: typeof merged.textChunkLimit === 'number' ? merged.textChunkLimit : 4000,
     renderMode: (merged as any).renderMode,
     reactionNotifications: merged.reactionNotifications,
-    streaming: merged.streaming,
+    streaming: merged.streaming === true,
     blockStreamingCoalesce: merged.blockStreamingCoalesce as any,
     tools: merged.tools,
     actions: merged.actions,
