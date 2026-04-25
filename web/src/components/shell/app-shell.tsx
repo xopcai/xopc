@@ -10,7 +10,7 @@ import { TokenDialog } from '@/components/shell/token-dialog';
 import { ElectronGatewayExitBanner } from '@/features/electron/electron-gateway-exit-banner';
 import { UpdateReminderBar } from '@/features/updater/update-reminder-bar';
 import { useUpdateReminder } from '@/features/updater/use-update-reminder';
-import { ExtensionCommandPaletteHost } from '@/features/extensions/extension-command-palette';
+import { GlobalCommandPaletteHost } from '@/features/search/global-command-palette/global-command-palette-host';
 import { GatewaySseBridge } from '@/features/gateway/gateway-sse-bridge';
 import { WorkspacePreviewDialog } from '@/features/workspace/workspace-preview-dialog';
 import { cn } from '@/lib/cn';
@@ -131,7 +131,7 @@ export function AppShell() {
       <GatewaySseBridge />
       <NavigateToChatListener />
       <ExtensionNavigateListener />
-      <ExtensionCommandPaletteHost />
+      <GlobalCommandPaletteHost />
       <ExtensionNotificationListener />
       <TokenDialog />
       <ElectronGatewayExitBanner />
