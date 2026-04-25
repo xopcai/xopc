@@ -399,6 +399,7 @@ export const ChatComposer = memo(function ChatComposer({
   const m = messages(language);
   const [value, setValue] = useState('');
   const [cursor, setCursor] = useState(0);
+  const cursorRef = useRef(cursor);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [isComposing, setIsComposing] = useState(false);
@@ -432,6 +433,7 @@ export const ChatComposer = memo(function ChatComposer({
     isComposing,
   });
 
+  cursorRef.current = cursor;
   valueRef.current = value;
   attachmentsRef.current = attachments;
   thinkingLevelRef.current = thinkingLevel;
@@ -481,16 +483,67 @@ export const ChatComposer = memo(function ChatComposer({
     return () => cancelAnimationFrame(id);
   }, [disabled]);
 
+  const shouldSyncCursorStateRef = useRef(false);
+  shouldSyncCursorStateRef.current = palette.open || atPicker.open || atRangeForSuppress != null;
+
   useEffect(() => {
     const el = editorRef.current;
     if (!el) return;
-    const onSelectionChange = () => {
+
+    let listening = false;
+    let rafId: number | null = null;
+    let queued = false;
+    let lastOffset = -1;
+
+    const flush = () => {
+      rafId = null;
+      queued = false;
       if (document.activeElement !== el) return;
-      setCursor(getWireCaretOffset(el));
+      const next = getWireCaretOffset(el);
+      cursorRef.current = next;
+      if (next === lastOffset) return;
+      lastOffset = next;
+      if (!shouldSyncCursorStateRef.current) return;
+      setCursor(next);
     };
-    document.addEventListener('selectionchange', onSelectionChange);
-    return () => document.removeEventListener('selectionchange', onSelectionChange);
-  }, []);
+
+    const onSelectionChange = () => {
+      if (!listening) return;
+      if (queued) return;
+      queued = true;
+      rafId = requestAnimationFrame(flush);
+    };
+
+    const attach = () => {
+      if (listening) return;
+      listening = true;
+      document.addEventListener('selectionchange', onSelectionChange);
+      onSelectionChange();
+    };
+
+    const detach = () => {
+      if (!listening) return;
+      listening = false;
+      document.removeEventListener('selectionchange', onSelectionChange);
+      if (rafId != null) cancelAnimationFrame(rafId);
+      rafId = null;
+      queued = false;
+    };
+
+    const onFocus = () => attach();
+    const onBlur = () => detach();
+
+    el.addEventListener('focus', onFocus);
+    el.addEventListener('blur', onBlur);
+
+    if (document.activeElement === el) attach();
+
+    return () => {
+      el.removeEventListener('focus', onFocus);
+      el.removeEventListener('blur', onBlur);
+      detach();
+    };
+  }, [atRangeForSuppress, atPicker.open, palette.open]);
 
   useEffect(() => {
     const handler = (e: Event) => {
