@@ -108,7 +108,7 @@ export async function runWeixinQrLoginCli(opts: WeixinQrLoginCliOptions): Promis
 
   console.log('Scan this QR code with WeChat:\n');
   try {
-    const qrcodeTerminal = await import('qrcode-terminal');
+    const qrcodeTerminal = await import(/* @vite-ignore */ 'qrcode-terminal');
     await new Promise<void>((resolve) => {
       qrcodeTerminal.default.generate(startResult.qrcodeUrl!, { small: true }, (qr: string) => {
         console.log(qr);
