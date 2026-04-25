@@ -1,5 +1,5 @@
 // Send media tool - allows sending local files as media
-import { Type, type Static } from '@sinclair/typebox';
+import { Type } from '@sinclair/typebox';
 import { readFile } from 'fs/promises';
 import { basename } from 'node:path';
 import { AgentTool, type AgentToolResult } from '@mariozechner/pi-agent-core';
@@ -25,6 +25,12 @@ interface MessageContext {
   channel: string;
   chatId: string;
 }
+
+type SendMediaParams = {
+  filePath: string;
+  mediaType?: 'photo' | 'video' | 'audio' | 'document';
+  caption?: string;
+};
 
 // Detect media type from file extension
 function detectMediaType(filePath: string): 'photo' | 'video' | 'audio' | 'document' {
@@ -73,7 +79,7 @@ export function createSendMediaTool(
   workspace: string,
   bus: MessageBus,
   getContext: () => MessageContext | null,
-): AgentTool<typeof SendMediaSchema, {}> {
+): AgentTool {
   return {
     name: 'send_media',
     description:
@@ -83,9 +89,10 @@ export function createSendMediaTool(
 
     async execute(
       _toolCallId: string,
-      params: Static<typeof SendMediaSchema>,
+      params: any,
       _signal?: AbortSignal,
     ): Promise<AgentToolResult<{}>> {
+      const p = params as SendMediaParams;
       const ctx = getContext();
       if (!ctx) {
         return {
@@ -94,7 +101,7 @@ export function createSendMediaTool(
         };
       }
 
-      const resolved = resolvePathUnderWorkspace(params.filePath, workspace);
+      const resolved = resolvePathUnderWorkspace(p.filePath, workspace);
       const safety = checkFileSafety('read', resolved);
       if (!safety.allowed) {
         return {
@@ -107,7 +114,7 @@ export function createSendMediaTool(
         const fileBuffer = await readFile(resolved);
         const base64 = fileBuffer.toString('base64');
         const mimeType = detectMimeType(resolved);
-        const mediaType = params.mediaType || detectMediaType(resolved);
+        const mediaType = p.mediaType || detectMediaType(resolved);
 
         // Create data URL
         const dataUrl = `data:${mimeType};base64,${base64}`;
@@ -115,7 +122,7 @@ export function createSendMediaTool(
         const msg: OutboundMessage = {
           channel: ctx.channel,
           chat_id: ctx.chatId,
-          content: params.caption || '',
+          content: p.caption || '',
           mediaUrl: dataUrl,
           mediaType,
         };
@@ -135,5 +142,5 @@ export function createSendMediaTool(
         };
       }
     },
-  };
+  } as any;
 }

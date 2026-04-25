@@ -1,4 +1,4 @@
-import { Type, type Static } from '@sinclair/typebox';
+import { Type } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core';
 import type { MessageBus, OutboundMessage } from '../../infra/bus/index.js';
 import { createLogger } from '../../utils/logger.js';
@@ -35,6 +35,20 @@ interface MessageContext {
   chatId: string;
 }
 
+type MessageSendParams = {
+  content: string;
+  mediaUrl?: string;
+  mediaType?: 'photo' | 'video' | 'audio' | 'document';
+  replyTo?: string;
+  quoteText?: string;
+  buffer?: string;
+  filename?: string;
+  contentType?: string;
+  silent?: boolean;
+  spoiler?: boolean;
+  buttons?: Array<Array<{ text: string; callback_data: string }>>;
+};
+
 /**
  * Create the send_message tool.
  *
@@ -46,7 +60,7 @@ interface MessageContext {
 export function createMessageTool(
   bus: MessageBus,
   getContext: () => MessageContext | null,
-): AgentTool<typeof MessageSendSchema, {}> {
+): AgentTool {
   return {
     name: 'send_message',
     description: `Send a message to the user.
@@ -64,9 +78,10 @@ When TTS is enabled, you may also use the \`text_to_speech\` tool to send a stan
 
     async execute(
       _toolCallId: string,
-      params: Static<typeof MessageSendSchema>,
-      _signal?: AbortSignal
+      params: any,
+      _signal?: AbortSignal,
     ): Promise<AgentToolResult<{}>> {
+      const p = params as MessageSendParams;
       const ctx = getContext();
       if (!ctx) {
         return {
@@ -79,20 +94,20 @@ When TTS is enabled, you may also use the \`text_to_speech\` tool to send a stan
         const msg: OutboundMessage = {
           channel: ctx.channel,
           chat_id: ctx.chatId,
-          content: params.content,
-          mediaUrl: params.mediaUrl,
-          mediaType: params.mediaType as 'photo' | 'video' | 'audio' | 'document' | undefined,
-          replyToMessageId: params.replyTo,
-          quoteText: params.quoteText,
-          silent: params.silent,
-          spoiler: params.spoiler,
-          buttons: params.buttons,
+          content: p.content,
+          mediaUrl: p.mediaUrl,
+          mediaType: p.mediaType,
+          replyToMessageId: p.replyTo,
+          quoteText: p.quoteText,
+          silent: p.silent,
+          spoiler: p.spoiler,
+          buttons: p.buttons,
         };
 
         await bus.publishOutbound(msg);
 
-        const mediaInfo = params.mediaUrl ? ` + ${params.mediaType || 'media'}` : '';
-        const replyInfo = params.replyTo ? ' (as reply)' : '';
+        const mediaInfo = p.mediaUrl ? ` + ${p.mediaType || 'media'}` : '';
+        const replyInfo = p.replyTo ? ' (as reply)' : '';
 
         return {
           content: [{ type: 'text', text: `✅ Message sent${mediaInfo}${replyInfo}` }],
@@ -106,7 +121,7 @@ When TTS is enabled, you may also use the \`text_to_speech\` tool to send a stan
             errorMessage: em,
             channel: ctx.channel,
             chatId: ctx.chatId,
-            contentPreview: params.content.slice(0, 100),
+            contentPreview: String(p.content ?? '').slice(0, 100),
           },
           `send_message: outbound publish failed (${ctx.channel}/${ctx.chatId}): ${em}`,
         );
@@ -116,5 +131,5 @@ When TTS is enabled, you may also use the \`text_to_speech\` tool to send a stan
         };
       }
     },
-  };
+  } as any;
 }

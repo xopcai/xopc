@@ -1,4 +1,4 @@
-import type { ImageContent, MessageAttachment, MessageContent, ToolUseContent } from '@/features/chat/messages.types';
+import type { ImageContent, MessageAttachment, MessageContent } from '@/features/chat/messages.types';
 import { extractFilePathsFromToolResult, type ExtractedFilePath } from '@/features/chat/tool-result-file-paths';
 
 /**
@@ -47,7 +47,7 @@ export function collectAssistantWorkspaceOutputPaths(
     if (b.type !== 'tool_use') {
       continue;
     }
-    const t = b as ToolUseContent;
+    const t = b;
     if (t.status !== 'done') {
       continue;
     }
@@ -107,7 +107,7 @@ export function imageContentBlocksToAttachments(blocks: ImageContent[] | undefin
   }
   const out: MessageAttachment[] = [];
   for (let i = 0; i < blocks.length; i += 1) {
-    const att = imageBlockToMessageAttachment(blocks[i]!, i);
+    const att = imageBlockToMessageAttachment(blocks[i], i);
     if (att) {
       out.push(att);
     }

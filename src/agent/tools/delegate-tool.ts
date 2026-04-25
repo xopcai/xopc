@@ -1,4 +1,4 @@
-import { Type, type Static } from '@sinclair/typebox';
+import { Type } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core';
 
 import { createDelegateChildHandle, type DelegateChildHandleOptions } from '../child-agent-factory.js';
@@ -66,10 +66,14 @@ export interface DelegateToolDeps {
   toolExecutorConfig?: Partial<import('./executor.js').ToolExecutorConfig>;
 }
 
-export function createDelegateTool(deps: DelegateToolDeps): AgentTool<
-  typeof DelegateTaskSchema,
-  { summary: string; iterations: number }
-> {
+type DelegateTaskParams = {
+  goal: string;
+  context?: string;
+  toolset?: string[];
+  maxIterations?: number;
+};
+
+export function createDelegateTool(deps: DelegateToolDeps): AgentTool {
   return {
     name: 'delegate_task',
     label: '🤖 Delegate',
@@ -87,10 +91,11 @@ export function createDelegateTool(deps: DelegateToolDeps): AgentTool<
 
     async execute(
       _toolCallId: string,
-      params: Static<typeof DelegateTaskSchema>,
+      params: any,
       signal?: AbortSignal,
     ): Promise<AgentToolResult<{ summary: string; iterations: number }>> {
-      const maxIterations = params.maxIterations ?? DEFAULT_MAX_ITERATIONS;
+      const p = params as DelegateTaskParams;
+      const maxIterations = p.maxIterations ?? DEFAULT_MAX_ITERATIONS;
       if (!Number.isFinite(maxIterations) || maxIterations < 1 || maxIterations > 200) {
         return {
           content: [{ type: 'text', text: 'Invalid maxIterations (use 1–200).' }],
@@ -98,7 +103,7 @@ export function createDelegateTool(deps: DelegateToolDeps): AgentTool<
         };
       }
 
-      const requested = params.toolset ?? [...DEFAULT_DELEGATE_TOOLS];
+      const requested = p.toolset ?? [...DEFAULT_DELEGATE_TOOLS];
       const allowedNames = [
         ...new Set(
           requested.map((t) => String(t).trim()).filter(Boolean).filter((t) => !DELEGATE_BLOCKED_TOOLS.has(t)),
@@ -130,8 +135,8 @@ export function createDelegateTool(deps: DelegateToolDeps): AgentTool<
 
       const childOptions: DelegateChildHandleOptions = {
         workspace: deps.workspace,
-        goal: params.goal,
-        context: params.context,
+        goal: p.goal,
+        context: p.context,
         allowedToolNames: allowedNames,
         maxIterations,
         model,
@@ -161,5 +166,5 @@ export function createDelegateTool(deps: DelegateToolDeps): AgentTool<
         };
       }
     },
-  };
+  } as any;
 }

@@ -27,8 +27,8 @@ function NavigateToChatListener() {
         navigate(`/chat/${encodeURIComponent(d.sessionKey)}`);
       }
     };
-    window.addEventListener('navigate-to-chat', handler as EventListener);
-    return () => window.removeEventListener('navigate-to-chat', handler as EventListener);
+    window.addEventListener('navigate-to-chat', handler);
+    return () => window.removeEventListener('navigate-to-chat', handler);
   }, [navigate]);
   return null;
 }
@@ -44,8 +44,8 @@ function ExtensionNavigateListener() {
         navigate(path.startsWith('/') ? path : `/${path}`);
       }
     };
-    window.addEventListener('extension-navigate', handler as EventListener);
-    return () => window.removeEventListener('extension-navigate', handler as EventListener);
+    window.addEventListener('extension-navigate', handler);
+    return () => window.removeEventListener('extension-navigate', handler);
   }, [navigate]);
   return null;
 }
@@ -75,8 +75,8 @@ function ExtensionNotificationListener() {
         window.setTimeout(() => setToast(null), ms);
       }
     };
-    window.addEventListener('extension-notification', handler as EventListener);
-    return () => window.removeEventListener('extension-notification', handler as EventListener);
+    window.addEventListener('extension-notification', handler);
+    return () => window.removeEventListener('extension-notification', handler);
   }, []);
 
   if (!toast) return null;

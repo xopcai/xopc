@@ -63,7 +63,7 @@ export function normalizeModelsJsonConfig(input: unknown): ModelsJsonConfig {
   if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
     return input as ModelsJsonConfig;
   }
-  return { ...o, providers: {} } as ModelsJsonConfig;
+  return { ...o, providers: {} };
 }
 
 export async function fetchModelsJson(): Promise<ModelsJsonStatus> {

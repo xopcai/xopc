@@ -1,5 +1,5 @@
 // Memory search tools for xopc agent
-import { Type, type Static } from '@sinclair/typebox';
+import { Type } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core';
 import { memorySearch, memoryGet } from '../prompt/memory/index.js';
 
@@ -12,7 +12,9 @@ const MemorySearchSchema = Type.Object({
   minScore: Type.Optional(Type.Number()),
 });
 
-export function createMemorySearchTool(workspaceDir: string): AgentTool<typeof MemorySearchSchema, {}> {
+type MemorySearchParams = { query: string; maxResults?: number; minScore?: number };
+
+export function createMemorySearchTool(workspaceDir: string): AgentTool {
   return {
     name: 'memory_search',
     label: '🔍 Memory Search',
@@ -22,10 +24,10 @@ export function createMemorySearchTool(workspaceDir: string): AgentTool<typeof M
 
     async execute(
       _toolCallId: string,
-      params: Static<typeof MemorySearchSchema>,
-      _signal?: AbortSignal
+      params: any,
+      _signal?: AbortSignal,
     ): Promise<AgentToolResult<{}>> {
-      const { query, maxResults } = params;
+      const { query, maxResults } = params as MemorySearchParams;
 
       try {
         const results = await memorySearch(workspaceDir, query, { maxResults });
@@ -47,7 +49,7 @@ export function createMemorySearchTool(workspaceDir: string): AgentTool<typeof M
         };
       }
     },
-  };
+  } as any;
 }
 
 // =============================================================================
@@ -59,7 +61,9 @@ const MemoryGetSchema = Type.Object({
   lines: Type.Optional(Type.Number()),
 });
 
-export function createMemoryGetTool(workspaceDir: string): AgentTool<typeof MemoryGetSchema, {}> {
+type MemoryGetParams = { path: string; from?: number; lines?: number };
+
+export function createMemoryGetTool(workspaceDir: string): AgentTool {
   return {
     name: 'memory_get',
     label: '📄 Memory Get',
@@ -68,10 +72,10 @@ export function createMemoryGetTool(workspaceDir: string): AgentTool<typeof Memo
 
     async execute(
       _toolCallId: string,
-      params: Static<typeof MemoryGetSchema>,
-      _signal?: AbortSignal
+      params: any,
+      _signal?: AbortSignal,
     ): Promise<AgentToolResult<{}>> {
-      const { path, from, lines } = params;
+      const { path, from, lines } = params as MemoryGetParams;
 
       try {
         const result = memoryGet(workspaceDir, path, from, lines);
@@ -93,5 +97,5 @@ export function createMemoryGetTool(workspaceDir: string): AgentTool<typeof Memo
         };
       }
     },
-  };
+  } as any;
 }

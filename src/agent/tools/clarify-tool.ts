@@ -1,4 +1,4 @@
-import { Type, type Static } from '@sinclair/typebox';
+import { Type } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core';
 
 const ClarifySchema = Type.Object({
@@ -50,10 +50,9 @@ function waitForAbort(signal: AbortSignal | undefined): Promise<never> {
   });
 }
 
-export function createClarifyTool(deps: ClarifyToolDeps): AgentTool<
-  typeof ClarifySchema,
-  { answer: string }
-> {
+type ClarifyParams = { question: string; choices?: string[]; default?: string };
+
+export function createClarifyTool(deps: ClarifyToolDeps): AgentTool {
   return {
     name: 'clarify',
     label: '❓ Clarify',
@@ -76,20 +75,21 @@ export function createClarifyTool(deps: ClarifyToolDeps): AgentTool<
 
     async execute(
       _toolCallId: string,
-      params: Static<typeof ClarifySchema>,
+      params: any,
       signal?: AbortSignal,
     ): Promise<AgentToolResult<{ answer: string }>> {
+      const p = params as ClarifyParams;
       const askUser = deps.resolveAskUser();
       if (!askUser) {
-        if (params.default !== undefined && params.default !== '') {
+        if (p.default !== undefined && p.default !== '') {
           return {
             content: [
               {
                 type: 'text',
-                text: `Interactive clarification is not available in this environment. Using default: ${params.default}`,
+                text: `Interactive clarification is not available in this environment. Using default: ${p.default}`,
               },
             ],
-            details: { answer: params.default },
+            details: { answer: p.default },
           };
         }
         return {
@@ -104,9 +104,9 @@ export function createClarifyTool(deps: ClarifyToolDeps): AgentTool<
       }
 
       const payload: ClarifyRequestPayload = {
-        question: params.question,
-        choices: params.choices,
-        default: params.default,
+        question: p.question,
+        choices: p.choices,
+        default: p.default,
       };
 
       try {
@@ -125,19 +125,19 @@ export function createClarifyTool(deps: ClarifyToolDeps): AgentTool<
         if (message === 'aborted') {
           return {
             content: [{ type: 'text', text: 'Clarification cancelled (run aborted).' }],
-            details: { answer: params.default ?? '' },
+            details: { answer: p.default ?? '' },
           };
         }
 
-        if (params.default !== undefined && params.default !== '' && message.toLowerCase().includes('timeout')) {
+        if (p.default !== undefined && p.default !== '' && message.toLowerCase().includes('timeout')) {
           return {
             content: [
               {
                 type: 'text',
-                text: `User did not respond in time. Using default: ${params.default}`,
+                text: `User did not respond in time. Using default: ${p.default}`,
               },
             ],
-            details: { answer: params.default },
+            details: { answer: p.default },
           };
         }
 
@@ -147,5 +147,5 @@ export function createClarifyTool(deps: ClarifyToolDeps): AgentTool<
         };
       }
     },
-  };
+  } as any;
 }

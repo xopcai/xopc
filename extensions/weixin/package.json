@@ -24,7 +24,7 @@
     "@xopcai/xopc": "workspace:*"
   },
   "devDependencies": {
-    "typescript": "^6.0.3"
+    "typescript": "^5.9.3"
   },
   "xopc": {
     "bundledChannel": {

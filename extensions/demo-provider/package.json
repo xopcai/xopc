@@ -8,6 +8,13 @@
   "peerDependencies": {
     "@xopcai/xopc": "workspace:*"
   },
-  "keywords": ["xopc", "xopc-extension", "provider"],
-  "license": "MIT"
+  "keywords": [
+    "xopc",
+    "xopc-extension",
+    "provider"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
 }

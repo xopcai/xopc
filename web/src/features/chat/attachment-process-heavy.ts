@@ -68,7 +68,7 @@ async function generatePdfPreview(pdf: PDFDocumentProxy): Promise<string | undef
       .render({
         canvasContext: context,
         viewport: scaledViewport,
-        canvas: canvas as unknown as HTMLCanvasElement,
+        canvas: canvas,
       })
       .promise;
 

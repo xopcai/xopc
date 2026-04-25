@@ -569,8 +569,8 @@ export const ChatComposer = memo(function ChatComposer({
         adjustHeight();
       });
     };
-    window.addEventListener(FILL_CHAT_COMPOSER_EVENT, handler as EventListener);
-    return () => window.removeEventListener(FILL_CHAT_COMPOSER_EVENT, handler as EventListener);
+    window.addEventListener(FILL_CHAT_COMPOSER_EVENT, handler);
+    return () => window.removeEventListener(FILL_CHAT_COMPOSER_EVENT, handler);
   }, [adjustHeight]);
 
   const processFiles = useCallback(

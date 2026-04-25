@@ -1,5 +1,5 @@
 // Cross-session transcript search + optional LLM summaries
-import { Type, type Static } from '@sinclair/typebox';
+import { Type } from '@sinclair/typebox';
 import type { AgentMessage, AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core';
 import { complete, type UserMessage } from '@mariozechner/pi-ai';
 
@@ -151,7 +151,14 @@ export interface SessionSearchToolDeps {
   getCurrentSessionKey?: () => string | undefined;
 }
 
-export function createSessionSearchTool(deps: SessionSearchToolDeps): AgentTool<typeof SessionSearchSchema, {}> {
+type SessionSearchParams = {
+  query?: string;
+  roleFilter?: 'user' | 'assistant' | 'system' | 'tool' | 'toolResult';
+  limit?: number;
+  excludeSessionKey?: string;
+};
+
+export function createSessionSearchTool(deps: SessionSearchToolDeps): AgentTool {
   return {
     name: 'session_search',
     label: 'Session search',
@@ -161,12 +168,13 @@ export function createSessionSearchTool(deps: SessionSearchToolDeps): AgentTool<
 
     async execute(
       _toolCallId: string,
-      params: Static<typeof SessionSearchSchema>,
+      params: any,
       signal?: AbortSignal,
     ): Promise<AgentToolResult<{}>> {
+      const p = params as SessionSearchParams;
       const store = deps.getSessionStore();
-      const limit = Math.min(15, Math.max(1, params.limit ?? 5));
-      const query = params.query?.trim() ?? '';
+      const limit = Math.min(15, Math.max(1, p.limit ?? 5));
+      const query = p.query?.trim() ?? '';
 
       try {
         if (!query) {
@@ -202,8 +210,7 @@ export function createSessionSearchTool(deps: SessionSearchToolDeps): AgentTool<
         const index = await getOrLoadSessionSearchIndex(sessionsRoot);
         let matches = index.search(query, 80);
 
-        const exclude =
-          params.excludeSessionKey?.trim() || deps.getCurrentSessionKey?.() || '';
+        const exclude = p.excludeSessionKey?.trim() || deps.getCurrentSessionKey?.() || '';
         if (exclude) {
           matches = matches.filter((m) => m.key !== exclude);
         }
@@ -217,8 +224,8 @@ export function createSessionSearchTool(deps: SessionSearchToolDeps): AgentTool<
               messages = await store.load(key);
             }
 
-            if (params.roleFilter) {
-              messages = messages.filter((m) => m.role === params.roleFilter);
+            if (p.roleFilter) {
+              messages = messages.filter((m) => m.role === p.roleFilter);
             }
 
             const summary = await summarizeSession(messages, query, deps.getConfig, signal, {
@@ -255,5 +262,5 @@ export function createSessionSearchTool(deps: SessionSearchToolDeps): AgentTool<
         };
       }
     },
-  };
+  } as any;
 }

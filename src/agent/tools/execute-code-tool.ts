@@ -5,7 +5,7 @@
 
 import { Script, createContext } from 'node:vm';
 
-import { Type, type Static } from '@sinclair/typebox';
+import { Type } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core';
 
 /** Default script wall time when `timeout` omitted (30 minutes). */
@@ -103,7 +103,7 @@ function createToolsApi(
       throw new Error(`Tool not available in sandbox: ${name}`);
     }
     const id = `ptc-${Date.now()}-${seq++}`;
-    const result = await tool.execute(id, params, signal);
+    const result = await (tool as any).execute(id, params, signal);
     return extractTextFromResult(result);
   };
 
@@ -206,10 +206,9 @@ export interface ExecuteCodeToolDeps {
   getSandboxToolMap: () => Map<string, AgentTool<any, any>>;
 }
 
-export function createExecuteCodeTool(deps: ExecuteCodeToolDeps): AgentTool<
-  typeof ExecuteCodeSchema,
-  { exitCode: number }
-> {
+type ExecuteCodeParams = { code: string; timeout?: number };
+
+export function createExecuteCodeTool(deps: ExecuteCodeToolDeps): AgentTool {
   return {
     name: 'execute_code',
     label: '⚡ Execute Code',
@@ -225,10 +224,11 @@ export function createExecuteCodeTool(deps: ExecuteCodeToolDeps): AgentTool<
 
     async execute(
       _toolCallId: string,
-      params: Static<typeof ExecuteCodeSchema>,
+      params: any,
       signal?: AbortSignal,
     ): Promise<AgentToolResult<{ exitCode: number }>> {
-      const sec = params.timeout ?? DEFAULT_TIMEOUT_SEC;
+      const p = params as ExecuteCodeParams;
+      const sec = p.timeout ?? DEFAULT_TIMEOUT_SEC;
       const timeoutMs = Math.min(
         Math.max(1, Number.isFinite(sec) ? sec : DEFAULT_TIMEOUT_SEC) * 1000,
         MAX_TIMEOUT_MS,
@@ -276,7 +276,7 @@ export function createExecuteCodeTool(deps: ExecuteCodeToolDeps): AgentTool<
       };
 
       try {
-        await runSandboxedScript(params.code, sandbox, timeoutMs, signal);
+        await runSandboxedScript(p.code, sandbox, timeoutMs, signal);
 
         let out = stdout.join('\n');
         if (out.length > MAX_STDOUT_CHARS) {
@@ -307,5 +307,5 @@ export function createExecuteCodeTool(deps: ExecuteCodeToolDeps): AgentTool<
         };
       }
     },
-  };
+  } as any;
 }
