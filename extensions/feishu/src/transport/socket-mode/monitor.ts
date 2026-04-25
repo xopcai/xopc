@@ -141,7 +141,7 @@ export function createFeishuSocketModeMonitor(deps: FeishuSocketModeMonitorDeps)
         });
 
         try {
-          wsClient.start();
+          wsClient.start({ eventDispatcher: dispatcher });
         } catch (err) {
           const delayMs = computeBackoffMs(attempt);
           log.error({ err, accountId: account.accountId, delayMs }, 'Feishu socket mode start failed; retrying');
