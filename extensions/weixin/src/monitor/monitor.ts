@@ -149,7 +149,14 @@ export async function monitorWeixinProvider(opts: MonitorWeixinOpts): Promise<vo
         return;
       }
       consecutiveFailures += 1;
-      aLog.error(`getUpdates error: ${String(err)}, stack=${(err as Error).stack ?? ''}`);
+      const e = err as { stack?: string; cause?: unknown };
+      const cause = (e && typeof e === 'object' ? (e as any).cause : undefined) as
+        | { code?: string; message?: string; name?: string }
+        | undefined;
+      const causeText = cause
+        ? ` cause=${cause.name ?? ''}${cause.code ? `(${cause.code})` : ''}:${cause.message ?? String(cause)}`
+        : '';
+      aLog.error(`getUpdates error: ${String(err)}${causeText}, stack=${(err as Error).stack ?? ''}`);
       if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
         aLog.error(
           `getUpdates: ${MAX_CONSECUTIVE_FAILURES} consecutive failures, backing off 30s`,
@@ -160,16 +167,15 @@ export async function monitorWeixinProvider(opts: MonitorWeixinOpts): Promise<vo
         await sleep(2000, abortSignal);
       }
 
-      // 健康检查：每次循环后更新，最后在超时时强制刷新
-      lastHealthCheck = Date.now();
-
       // 健康检查：定期重置 getUpdatesBuf 防止长轮询卡死
       // 强制刷新缓冲区，避免网络/VPN 不稳定时卡在旧请求上
       const HEALTH_CHECK_INTERVAL_MS = 120_000; // 2 分钟
-      if (Date.now() - lastHealthCheck > HEALTH_CHECK_INTERVAL_MS) {
+      const now = Date.now();
+      if (now - lastHealthCheck > HEALTH_CHECK_INTERVAL_MS) {
         aLog.debug(`Health check: resetting get_updates_buf to force fresh poll`);
         getUpdatesBuf = '';
       }
+      lastHealthCheck = now;
     }
   }
   aLog.info(`Weixin monitor ended`);

@@ -500,8 +500,18 @@ export function ChannelsSettingsPanel() {
                     className={cn(inputClassName(), 'min-w-0 flex-1 font-mono text-xs')}
                     type={showToken ? 'text' : 'password'}
                     autoComplete="off"
-                    value={tg.botToken}
-                    onChange={(e) => updateTelegram({ botToken: e.target.value })}
+                    readOnly={!showToken && Boolean(tg.botToken)}
+                    value={
+                      showToken
+                        ? tg.botToken
+                        : tg.botToken
+                          ? '*'.repeat(Math.max(1, tg.botToken.length))
+                          : ''
+                    }
+                    onChange={(e) => {
+                      if (!showToken && tg.botToken) return;
+                      updateTelegram({ botToken: e.target.value });
+                    }}
                     placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
                   />
                   {tg.botToken ? (
