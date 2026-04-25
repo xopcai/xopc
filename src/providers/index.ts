@@ -268,6 +268,7 @@ export interface ProviderMeta {
 export const PROVIDER_META: Record<string, ProviderMeta> = {
   'openai': { name: 'OpenAI (GPT-4, o1, o3)', category: 'common', supportsApiKey: true },
   'anthropic': { name: 'Anthropic Claude', category: 'common', supportsApiKey: true, supportsOAuth: true },
+  'deepseek': { name: 'DeepSeek', category: 'common', supportsApiKey: true },
   'google': { name: 'Google Gemini', category: 'common', supportsApiKey: true },
   'groq': { name: 'Groq (Fast Inference)', category: 'common', supportsApiKey: true },
   'minimax': { name: 'MiniMax', category: 'common', supportsApiKey: true, supportsOAuth: true },

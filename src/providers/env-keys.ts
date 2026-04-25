@@ -6,6 +6,7 @@
 export const PROVIDER_ENV_MAP: Record<string, string[]> = {
 	openai: ['OPENAI_API_KEY'],
 	anthropic: ['ANTHROPIC_OAUTH_TOKEN', 'ANTHROPIC_API_KEY'],
+	deepseek: ['DEEPSEEK_API_KEY'],
 	google: ['GEMINI_API_KEY', 'GOOGLE_API_KEY'],
 	'google-vertex': ['GOOGLE_CLOUD_PROJECT', 'GOOGLE_CLOUD_LOCATION'],
 	groq: ['GROQ_API_KEY'],
