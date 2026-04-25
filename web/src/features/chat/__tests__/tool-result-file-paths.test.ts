@@ -35,6 +35,37 @@ describe('extractFilePathsFromToolResult', () => {
     );
     expect(extractFilePathsFromToolResult(text)).toEqual([]);
   });
+
+  it('strips list_dir f/d/? line prefix so paths are not `f <name>` in the API', () => {
+    const text = JSON.stringify({
+      content: [{ type: 'text', text: 'f test.txt' }],
+      details: {},
+    });
+    expect(extractFilePathsFromToolResult(text)).toEqual([
+      expect.objectContaining({
+        fileName: 'test.txt',
+        workspaceRelativePath: 'test.txt',
+        absolutePath: 'rel:test.txt',
+      }),
+    ]);
+  });
+
+  it('strips "File written:" so the line is not used as a workspace relative path (404)', () => {
+    const abs = '/Users/micjoyce/.xopc/workspace/abbbbb/markdown-test.md';
+    const text = JSON.stringify({
+      content: [{ type: 'text', text: `File written: ${abs}` }],
+      details: {},
+    });
+    const paths = extractFilePathsFromToolResult(text);
+    expect(paths).toEqual([
+      expect.objectContaining({
+        fileName: 'markdown-test.md',
+        absolutePath: abs,
+        mimeType: 'text/markdown',
+      }),
+    ]);
+    expect(paths[0]).not.toHaveProperty('workspaceRelativePath');
+  });
 });
 
 describe('extractWebSearchLinksFromToolResult', () => {
