@@ -13,5 +13,8 @@
     "xopc",
     "xopc-extension"
   ],
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
 }

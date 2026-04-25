@@ -199,5 +199,5 @@ export function createImageTool(options: {
 
       return buildImageToolTextResult(result, imageDetails);
     },
-  };
+  } as any;
 }

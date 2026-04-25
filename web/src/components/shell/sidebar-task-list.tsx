@@ -312,11 +312,11 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
     const onSessionUpdated = () => {
       void mutate();
     };
-    window.addEventListener('session-updated', onSessionUpdated as EventListener);
-    window.addEventListener('session-created', onSessionUpdated as EventListener);
+    window.addEventListener('session-updated', onSessionUpdated);
+    window.addEventListener('session-created', onSessionUpdated);
     return () => {
-      window.removeEventListener('session-updated', onSessionUpdated as EventListener);
-      window.removeEventListener('session-created', onSessionUpdated as EventListener);
+      window.removeEventListener('session-updated', onSessionUpdated);
+      window.removeEventListener('session-created', onSessionUpdated);
     };
   }, [token, mutate]);
 

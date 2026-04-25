@@ -1,5 +1,5 @@
 // Read file tool
-import { Type, type Static } from '@sinclair/typebox';
+import { Type } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core';
 import { readFile, stat } from 'fs/promises';
 import { checkFileSafety } from '../prompt/safety.js';
@@ -23,10 +23,15 @@ export interface CreateReadFileToolOptions {
   bootstrapDir?: string;
 }
 
+type ReadFileParams = {
+  path: string;
+  limit?: number;
+};
+
 export function createReadFileTool(
   workspace: string,
   options?: CreateReadFileToolOptions,
-): AgentTool<typeof ReadFileSchema, {}> {
+): AgentTool {
   return {
     name: 'read_file',
     description:
@@ -36,18 +41,18 @@ export function createReadFileTool(
 
     async execute(
       _toolCallId: string,
-      params: Static<typeof ReadFileSchema>,
+      params: any,
       _signal?: AbortSignal,
     ): Promise<AgentToolResult<{}>> {
-      return executeReadFile(workspace, options?.bootstrapDir, params);
+      return executeReadFile(workspace, options?.bootstrapDir, params as ReadFileParams);
     },
-  };
+  } as any;
 }
 
 async function executeReadFile(
   workspace: string,
   bootstrapDir: string | undefined,
-  params: Static<typeof ReadFileSchema>,
+  params: ReadFileParams,
 ): Promise<AgentToolResult<{}>> {
   try {
     const safety = checkFileSafety('read', params.path);

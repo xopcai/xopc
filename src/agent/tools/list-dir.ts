@@ -1,5 +1,5 @@
 // List Directory Tool
-import { Type, type Static } from '@sinclair/typebox';
+import { Type } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core';
 import { readdir } from 'fs/promises';
 import { resolvePathUnderWorkspace } from './tool-paths.js';
@@ -8,7 +8,9 @@ const ListDirSchema = Type.Object({
   path: Type.String({ description: 'The directory path to list' }),
 });
 
-export function createListDirTool(workspace: string): AgentTool<typeof ListDirSchema, {}> {
+type ListDirParams = { path: string };
+
+export function createListDirTool(workspace: string): AgentTool {
   return {
     name: 'list_dir',
     description: 'List the contents of a directory. Relative paths are under the current agent workspace.',
@@ -17,33 +19,34 @@ export function createListDirTool(workspace: string): AgentTool<typeof ListDirSc
 
     async execute(
       _toolCallId: string,
-      params: Static<typeof ListDirSchema>,
-      _signal?: AbortSignal
+      params: any,
+      _signal?: AbortSignal,
     ): Promise<AgentToolResult<{}>> {
       try {
-        const target = resolvePathUnderWorkspace(params.path, workspace);
+        const p = params as ListDirParams;
+        const target = resolvePathUnderWorkspace(p.path, workspace);
         const entries = await readdir(target, { withFileTypes: true });
-      const lines = entries.map((e) => {
-        const type = e.isDirectory() ? 'd' : e.isFile() ? 'f' : '?';
-        return `${type} ${e.name}`;
-      });
-      return {
-        content: [{ type: 'text', text: lines.join('\n') || '(empty)' }],
-        details: {},
-      };
-    } catch (error) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `Error listing directory: ${error instanceof Error ? error.message : String(error)}`,
-          },
-        ],
-        details: {},
-      };
-    }
-  },
-  };
+        const lines = entries.map((e) => {
+          const type = e.isDirectory() ? 'd' : e.isFile() ? 'f' : '?';
+          return `${type} ${e.name}`;
+        });
+        return {
+          content: [{ type: 'text', text: lines.join('\n') || '(empty)' }],
+          details: {},
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Error listing directory: ${error instanceof Error ? error.message : String(error)}`,
+            },
+          ],
+          details: {},
+        };
+      }
+    },
+  } as any;
 }
 
-export const listDirTool: AgentTool<typeof ListDirSchema, {}> = createListDirTool(process.cwd());
+export const listDirTool: AgentTool = createListDirTool(process.cwd());

@@ -60,8 +60,8 @@ export function useUpdateReminder() {
         return next;
       });
     };
-    window.addEventListener('xopc:npm-update-installed', handler as EventListener);
-    return () => window.removeEventListener('xopc:npm-update-installed', handler as EventListener);
+    window.addEventListener('xopc:npm-update-installed', handler);
+    return () => window.removeEventListener('xopc:npm-update-installed', handler);
   }, []);
 
   const show: UpdateReminderView = useMemo(() => {

@@ -182,7 +182,8 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
       'abort',
       () => {
         clearTimeout(t);
-        reject(new Error('aborted'));
+        // Treat abort as a normal shutdown path (caller may catch and ignore).
+        reject(Object.assign(new Error('aborted'), { name: 'AbortError' }));
       },
       { once: true },
     );

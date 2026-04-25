@@ -82,10 +82,10 @@ async function ariaSnapshotFor(
   return text;
 }
 
-export function createBrowserTools(deps: CreateBrowserToolsDeps): AgentTool<any, any>[] {
+export function createBrowserTools(deps: CreateBrowserToolsDeps): AgentTool[] {
   const pageFor = () => deps.getManager().getPage(deps.getTaskId());
 
-  const navigate: AgentTool<typeof BrowserNavigateSchema, { url: string; title: string }> = {
+  const navigate: any = {
     name: 'browser_navigate',
     label: '🌐 Browser Navigate',
     description:
@@ -93,14 +93,15 @@ export function createBrowserTools(deps: CreateBrowserToolsDeps): AgentTool<any,
       'Call `browser_snapshot` after navigation to inspect the UI. Only http(s) public URLs; private IPs and localhost are blocked.',
     parameters: BrowserNavigateSchema,
 
-    async execute(_id, params, signal) {
-      assertBrowserUrlAllowed(params.url);
+    async execute(_id, params: any, signal) {
+      const p = params as { url: string; waitFor?: 'domcontentloaded' | 'load' | 'networkidle' };
+      assertBrowserUrlAllowed(p.url);
       if (signal?.aborted) {
         throw new Error('aborted');
       }
       const page = await pageFor();
-      const waitUntil = params.waitFor ?? 'domcontentloaded';
-      await page.goto(params.url, {
+      const waitUntil = p.waitFor ?? 'domcontentloaded';
+      await page.goto(p.url, {
         waitUntil,
         timeout: NAV_TIMEOUT_MS,
       });
@@ -113,7 +114,7 @@ export function createBrowserTools(deps: CreateBrowserToolsDeps): AgentTool<any,
     },
   };
 
-  const snapshot: AgentTool<typeof BrowserSnapshotSchema, { length: number }> = {
+  const snapshot: any = {
     name: 'browser_snapshot',
     label: '📸 Browser Snapshot',
     description:
@@ -121,14 +122,15 @@ export function createBrowserTools(deps: CreateBrowserToolsDeps): AgentTool<any,
       'Use after `browser_navigate` to see interactive elements before `browser_click` / `browser_type`.',
     parameters: BrowserSnapshotSchema,
 
-    async execute(_id, params, signal) {
+    async execute(_id, params: any, signal) {
       if (signal?.aborted) {
         throw new Error('aborted');
       }
       const page = await pageFor();
-      const maxLength = params.maxLength ?? DEFAULT_SNAPSHOT_MAX;
+      const p = params as { selector?: string; maxLength?: number };
+      const maxLength = p.maxLength ?? DEFAULT_SNAPSHOT_MAX;
       try {
-        const text = await ariaSnapshotFor(page, params.selector, maxLength);
+        const text = await ariaSnapshotFor(page, p.selector, maxLength);
         return {
           content: [{ type: 'text', text }],
           details: { length: text.length },
@@ -143,20 +145,20 @@ export function createBrowserTools(deps: CreateBrowserToolsDeps): AgentTool<any,
     },
   };
 
-  const click: AgentTool<typeof BrowserClickSchema, { ok: boolean }> = {
+  const click: any = {
     name: 'browser_click',
     label: '🖱️ Browser Click',
     description:
       'Click an element. Provide exactly one targeting mode: `selector` (CSS), `text` (visible text), or `role` (e.g. `button:Submit`).',
     parameters: BrowserClickSchema,
 
-    async execute(_id, params, signal) {
+    async execute(_id, params: any, signal) {
       if (signal?.aborted) {
         throw new Error('aborted');
       }
       const page = await pageFor();
       try {
-        const loc = resolveClickLocator(page, params);
+        const loc = resolveClickLocator(page, params as any);
         await loc.click({ timeout: 15_000 });
         return {
           content: [{ type: 'text', text: 'Click succeeded.' }],
@@ -172,23 +174,24 @@ export function createBrowserTools(deps: CreateBrowserToolsDeps): AgentTool<any,
     },
   };
 
-  const typeTool: AgentTool<typeof BrowserTypeSchema, { ok: boolean }> = {
+  const typeTool: any = {
     name: 'browser_type',
     label: '⌨️ Browser Type',
     description:
       'Type into an input. Provide exactly one of `selector` or `label` (associated label text). Optional `pressEnter` to submit.',
     parameters: BrowserTypeSchema,
 
-    async execute(_id, params, signal) {
+    async execute(_id, params: any, signal) {
       if (signal?.aborted) {
         throw new Error('aborted');
       }
       const page = await pageFor();
       try {
-        const loc = resolveTypeLocator(page, params);
+        const p = params as { selector?: string; label?: string; text: string; pressEnter?: boolean };
+        const loc = resolveTypeLocator(page, p);
         await loc.clear({ timeout: 5000 }).catch(() => {});
-        await loc.fill(params.text, { timeout: 15_000 });
-        if (params.pressEnter) {
+        await loc.fill(p.text, { timeout: 15_000 });
+        if (p.pressEnter) {
           await page.keyboard.press('Enter');
         }
         return {
@@ -205,19 +208,20 @@ export function createBrowserTools(deps: CreateBrowserToolsDeps): AgentTool<any,
     },
   };
 
-  const scroll: AgentTool<typeof BrowserScrollSchema, { ok: boolean }> = {
+  const scroll: any = {
     name: 'browser_scroll',
     label: '📜 Browser Scroll',
     description: 'Scroll the page up or down by a pixel amount (default 500).',
     parameters: BrowserScrollSchema,
 
-    async execute(_id, params, signal) {
+    async execute(_id, params: any, signal) {
       if (signal?.aborted) {
         throw new Error('aborted');
       }
       const page = await pageFor();
-      const amount = params.amount ?? 500;
-      const dy = params.direction === 'down' ? amount : -amount;
+      const p = params as { direction: 'up' | 'down'; amount?: number };
+      const amount = p.amount ?? 500;
+      const dy = p.direction === 'down' ? amount : -amount;
       await page.evaluate(
         ({ deltaY }) => {
           (globalThis as unknown as { scrollBy: (x: number, y: number) => void }).scrollBy(0, deltaY);
@@ -225,20 +229,20 @@ export function createBrowserTools(deps: CreateBrowserToolsDeps): AgentTool<any,
         { deltaY: dy },
       );
       return {
-        content: [{ type: 'text', text: `Scrolled ${params.direction} by ${amount}px.` }],
+        content: [{ type: 'text', text: `Scrolled ${p.direction} by ${amount}px.` }],
         details: { ok: true },
       };
     },
   };
 
-  const screenshot: AgentTool<typeof BrowserScreenshotSchema, Record<string, unknown>> = {
+  const screenshot: any = {
     name: 'browser_screenshot',
     label: '🖼️ Browser Screenshot',
     description:
       'Take a PNG screenshot of the viewport or a CSS selector. When `agents.defaults.imageModel` is configured, runs vision on the image using `description` as the prompt (default: short UI summary).',
     parameters: BrowserScreenshotSchema,
 
-    async execute(_id, params, signal) {
+    async execute(_id, params: any, signal) {
       if (signal?.aborted) {
         throw new Error('aborted');
       }
@@ -246,8 +250,9 @@ export function createBrowserTools(deps: CreateBrowserToolsDeps): AgentTool<any,
       const cfg = deps.getConfig();
       let buf: Buffer;
       try {
-        if (params.selector?.trim()) {
-          const loc = page.locator(params.selector.trim()).first();
+        const p = params as { selector?: string; description?: string };
+        if (p.selector?.trim()) {
+          const loc = page.locator(p.selector.trim()).first();
           await loc.waitFor({ state: 'visible', timeout: 15_000 });
           buf = await loc.screenshot({ type: 'png', timeout: 15_000 });
         } else {
@@ -275,7 +280,7 @@ export function createBrowserTools(deps: CreateBrowserToolsDeps): AgentTool<any,
 
       const imageModelConfig = resolveImageModelConfigForTool({ cfg });
       const prompt =
-        params.description?.trim() ||
+        (params as { description?: string }).description?.trim() ||
         'Describe this browser screenshot briefly. Focus on visible text, controls, and actionable UI state.';
 
       if (!imageModelConfig) {

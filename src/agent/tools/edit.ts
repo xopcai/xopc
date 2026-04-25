@@ -1,5 +1,5 @@
 // Edit file tool
-import { Type, type Static } from '@sinclair/typebox';
+import { Type } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core';
 import { readFile, writeFile, stat } from 'fs/promises';
 import { checkFileSafety } from '../prompt/safety.js';
@@ -20,57 +20,75 @@ export interface EditToolDetails {
   fuzzyMatchUsed?: boolean;
 }
 
-export function createEditFileTool(workspace: string): AgentTool<typeof EditFileSchema, EditToolDetails> {
+type EditFileParams = { path: string; oldText: string; newText: string };
+
+export function createEditFileTool(workspace: string): AgentTool {
   return {
-  name: 'edit_file',
-  description: 'Edit file by replacing text. Relative paths are under the current agent workspace.',
-  parameters: EditFileSchema,
-  label: '✏️ Edit',
+    name: 'edit_file',
+    description: 'Edit file by replacing text. Relative paths are under the current agent workspace.',
+    parameters: EditFileSchema,
+    label: '✏️ Edit',
 
-  async execute(_toolCallId: string, params: Static<typeof EditFileSchema>, _signal?: AbortSignal): Promise<AgentToolResult<EditToolDetails>> {
-    try {
-      const safety = checkFileSafety('write', params.path);
-      if (!safety.allowed) return { content: [{ type: 'text', text: `🚫 ${safety.message}` }], details: {} };
+    async execute(
+      _toolCallId: string,
+      params: any,
+      _signal?: AbortSignal,
+    ): Promise<AgentToolResult<EditToolDetails>> {
+      try {
+        const p = params as EditFileParams;
+        const safety = checkFileSafety('write', p.path);
+        if (!safety.allowed) return { content: [{ type: 'text', text: `🚫 ${safety.message}` }], details: {} };
 
-      const normalized = resolvePathUnderWorkspace(params.path, workspace);
-      const stats = await stat(normalized);
-      if (stats.size > MAX_FILE_SIZE) return { content: [{ type: 'text', text: `🚫 File too large` }], details: {} };
+        const normalized = resolvePathUnderWorkspace(p.path, workspace);
+        const stats = await stat(normalized);
+        if (stats.size > MAX_FILE_SIZE) return { content: [{ type: 'text', text: `🚫 File too large` }], details: {} };
 
-      const rawContent = await readFile(normalized, 'utf-8');
-      const content = stripBom(rawContent);
-      const lineEnding = detectLineEnding(rawContent);
+        const rawContent = await readFile(normalized, 'utf-8');
+        const content = stripBom(rawContent);
+        const lineEnding = detectLineEnding(rawContent);
 
-      const normalizedContent = normalizeToLF(content);
-      const normalizedOldText = normalizeToLF(params.oldText);
-      const normalizedNewText = normalizeToLF(params.newText);
+        const normalizedContent = normalizeToLF(content);
+        const normalizedOldText = normalizeToLF(p.oldText);
+        const normalizedNewText = normalizeToLF(p.newText);
 
-      const matchResult = fuzzyFindText(normalizedContent, normalizedOldText);
-      if (!matchResult.found) return { content: [{ type: 'text', text: `Error: oldText not found` }], details: {} };
+        const matchResult = fuzzyFindText(normalizedContent, normalizedOldText);
+        if (!matchResult.found) return { content: [{ type: 'text', text: `Error: oldText not found` }], details: {} };
 
-      const fuzzyContent = normalizeForFuzzyMatch(normalizedContent);
-      const fuzzyOldText = normalizeForFuzzyMatch(normalizedOldText);
-      const occurrences = fuzzyContent.split(fuzzyOldText).length - 1;
-      if (occurrences > 1) return { content: [{ type: 'text', text: `Error: ${occurrences} occurrences found, text must be unique` }], details: {} };
+        const fuzzyContent = normalizeForFuzzyMatch(normalizedContent);
+        const fuzzyOldText = normalizeForFuzzyMatch(normalizedOldText);
+        const occurrences = fuzzyContent.split(fuzzyOldText).length - 1;
+        if (occurrences > 1)
+          return { content: [{ type: 'text', text: `Error: ${occurrences} occurrences found, text must be unique` }], details: {} };
 
-      const baseContent = matchResult.contentForReplacement;
-      const newContent = baseContent.substring(0, matchResult.index) + normalizedNewText + baseContent.substring(matchResult.index + matchResult.matchLength);
-      const finalContent = restoreLineEndings(newContent, lineEnding);
-      const originalWithReplacement = restoreLineEndings(baseContent, lineEnding);
+        const baseContent = matchResult.contentForReplacement;
+        const newContent =
+          baseContent.substring(0, matchResult.index) +
+          normalizedNewText +
+          baseContent.substring(matchResult.index + matchResult.matchLength);
+        const finalContent = restoreLineEndings(newContent, lineEnding);
+        const originalWithReplacement = restoreLineEndings(baseContent, lineEnding);
 
-      if (originalWithReplacement === finalContent) return { content: [{ type: 'text', text: `Error: No changes` }], details: {} };
+        if (originalWithReplacement === finalContent)
+          return { content: [{ type: 'text', text: `Error: No changes` }], details: {} };
 
-      const diffResult = generateDiffString(originalWithReplacement, finalContent, normalized);
-      await writeFile(normalized, finalContent, 'utf-8');
+        const diffResult = generateDiffString(originalWithReplacement, finalContent, normalized);
+        await writeFile(normalized, finalContent, 'utf-8');
 
-      return { content: [{ type: 'text', text: `File edited: ${normalized}` }], details: { diff: diffResult, fuzzyMatchUsed: matchResult.usedFuzzyMatch } };
-    } catch (error) {
-      return { content: [{ type: 'text', text: `Error: ${error instanceof Error ? error.message : String(error)}` }], details: {} };
-    }
-  },
-  };
+        return {
+          content: [{ type: 'text', text: `File edited: ${normalized}` }],
+          details: { diff: diffResult, fuzzyMatchUsed: matchResult.usedFuzzyMatch },
+        };
+      } catch (error) {
+        return {
+          content: [{ type: 'text', text: `Error: ${error instanceof Error ? error.message : String(error)}` }],
+          details: {},
+        };
+      }
+    },
+  } as any;
 }
 
-export const editFileTool: AgentTool<typeof EditFileSchema, EditToolDetails> = createEditFileTool(process.cwd());
+export const editFileTool: AgentTool = createEditFileTool(process.cwd());
 
 function detectLineEnding(content: string): '\r\n' | '\n' {
   const crlfIdx = content.indexOf('\r\n');

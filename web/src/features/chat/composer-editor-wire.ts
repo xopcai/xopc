@@ -45,8 +45,8 @@ function joinComposerWireParts(parts: string[]): string {
   for (const part of parts) {
     if (!part) continue;
     if (out.length > 0) {
-      const last = out[out.length - 1]!;
-      const first = part[0]!;
+      const last = out[out.length - 1];
+      const first = part[0];
       if (!/\s/.test(last) && !/\s/.test(first)) {
         const endsWithWire = wireTextEndsWithCompleteFileToken(out) || /\/skill:\S+$/.test(out);
         const startsWithWire = part.startsWith('@file:') || part.startsWith('/skill:');

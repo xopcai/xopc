@@ -46,9 +46,9 @@ export function ExtensionProvider({ children }: { children: React.ReactNode }) {
   );
 
   useEffect(() => {
-    window.addEventListener('agent-stream-event', handleAgentStreamEvent as EventListener);
+    window.addEventListener('agent-stream-event', handleAgentStreamEvent);
     return () => {
-      window.removeEventListener('agent-stream-event', handleAgentStreamEvent as EventListener);
+      window.removeEventListener('agent-stream-event', handleAgentStreamEvent);
     };
   }, [handleAgentStreamEvent]);
 

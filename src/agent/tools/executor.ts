@@ -82,7 +82,7 @@ export async function executeToolWithProtection(
   // Build execution function
   const execute = async (): Promise<AgentToolResult<any>> => {
     try {
-      const result = await tool.execute(toolCallId, params);
+      const result = await (tool as any).execute(toolCallId, params);
       return result;
     } catch (error) {
       // Wrap non-error throws
@@ -200,12 +200,12 @@ export function wrapToolWithProtection(
   tool: AgentTool<any, any>,
   config?: Partial<ToolExecutorConfig>
 ): AgentTool<any, any> {
-  return {
+  return ({
     ...tool,
     async execute(toolCallId: string, params: any): Promise<AgentToolResult<any>> {
       return executeToolWithProtection(tool, toolCallId, params, config);
     },
-  };
+  } as any) as AgentTool<any, any>;
 }
 
 /**

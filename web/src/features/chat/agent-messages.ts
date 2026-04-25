@@ -445,7 +445,7 @@ function buildUserMessage(m: WireMessage): Message {
   const roleRaw = String(m.role ?? 'user');
   const role: Message['role'] =
     roleRaw === 'user' || roleRaw === 'user-with-attachments'
-      ? (roleRaw as Message['role'])
+      ? (roleRaw)
       : 'assistant';
 
   const fromContent = extractAttachmentsFromUserContent(m.content);

@@ -26,7 +26,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     const Comp = asChild ? Slot : 'button';
     return (
       <Comp
-        ref={ref as never}
+        ref={ref}
         type={asChild ? undefined : type}
         className={cn(
           'inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-medium',

@@ -1,4 +1,4 @@
-import { Type, type Static } from '@sinclair/typebox';
+import { Type } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core';
 import { readFileSync, existsSync, statSync } from 'fs';
 import { globSync } from 'glob';
@@ -23,7 +23,15 @@ const grepSchema = Type.Object({
 	limit: Type.Optional(Type.Number({ description: 'Maximum number of matches to return (default: 100)' })),
 });
 
-export type GrepToolInput = Static<typeof grepSchema>;
+export type GrepToolInput = {
+	pattern: string;
+	path?: string;
+	glob?: string;
+	ignoreCase?: boolean;
+	literal?: boolean;
+	context?: number;
+	limit?: number;
+};
 
 const DEFAULT_LIMIT = 100;
 
@@ -61,7 +69,7 @@ function simpleGrep(
 /**
  * Grep tool - Search file contents for a pattern
  */
-export function createGrepTool(cwd: string): AgentTool<typeof grepSchema> {
+export function createGrepTool(cwd: string): AgentTool {
 	return {
 		name: 'grep',
 		label: '🔍 grep',
@@ -69,11 +77,12 @@ export function createGrepTool(cwd: string): AgentTool<typeof grepSchema> {
 		parameters: grepSchema,
 		execute: async (
 			_toolCallId: string,
-			params: Static<typeof grepSchema>,
+			params: any,
 			signal?: AbortSignal
 		): Promise<AgentToolResult<GrepToolDetails>> => {
 			try {
-				const searchPath = resolveToCwd(params.path || '.', cwd);
+				const p = params as GrepToolInput;
+				const searchPath = resolveToCwd(p.path || '.', cwd);
 				
 				if (!existsSync(searchPath)) {
 					return {
@@ -83,13 +92,13 @@ export function createGrepTool(cwd: string): AgentTool<typeof grepSchema> {
 				}
 
 				const isDirectory = statSync(searchPath).isDirectory();
-				const context = params.context || 0;
-				const effectiveLimit = params.limit || DEFAULT_LIMIT;
+				const context = p.context || 0;
+				const effectiveLimit = p.limit || DEFAULT_LIMIT;
 				const files: string[] = [];
 
 				// Collect files to search
 				if (isDirectory) {
-					const globPattern = params.glob || '**/*';
+					const globPattern = p.glob || '**/*';
 					const filePaths = globSync(globPattern, {
 						cwd: searchPath,
 						dot: true,
@@ -116,9 +125,9 @@ export function createGrepTool(cwd: string): AgentTool<typeof grepSchema> {
 					try {
 						if (!existsSync(filePath)) continue;
 						const content = readFileSync(filePath, 'utf-8');
-						const fileMatches = simpleGrep(content, params.pattern, {
-							ignoreCase: params.ignoreCase || false,
-							literal: params.literal || false,
+						const fileMatches = simpleGrep(content, p.pattern, {
+							ignoreCase: p.ignoreCase || false,
+							literal: p.literal || false,
 						});
 
 						for (const match of fileMatches) {
@@ -216,8 +225,8 @@ export function createGrepTool(cwd: string): AgentTool<typeof grepSchema> {
 				};
 			}
 		},
-	};
+	} as any;
 }
 
 /** Default grep tool using process.cwd() */
-export const grepTool = createGrepTool(process.cwd());
+export const grepTool: AgentTool = createGrepTool(process.cwd());

@@ -75,8 +75,8 @@ function OnboardingModelSetupStep() {
 
   useEffect(() => {
     const onReload = () => void refresh();
-    window.addEventListener('config-reload', onReload as EventListener);
-    return () => window.removeEventListener('config-reload', onReload as EventListener);
+    window.addEventListener('config-reload', onReload);
+    return () => window.removeEventListener('config-reload', onReload);
   }, [refresh]);
 
   /** In-memory only for Radix teardown (React Strict Mode); do not write localStorage here. */

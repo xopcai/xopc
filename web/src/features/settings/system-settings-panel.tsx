@@ -216,7 +216,7 @@ export function SystemSettingsPanel() {
           <ul className="space-y-3">
             {PERM_ROWS.map(({ key, pane }) => {
               const st = triStateFromMessages(language, perms[key]);
-              const permLabel = t.perm[key as keyof typeof t.perm];
+              const permLabel = t.perm[key];
               if (!permLabel) {
                 return null;
               }

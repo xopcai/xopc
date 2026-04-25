@@ -95,7 +95,7 @@ export async function renderPdfInContainer(
       .render({
         canvasContext: context!,
         viewport,
-        canvas: canvas as unknown as HTMLCanvasElement,
+        canvas: canvas,
       })
       .promise;
 

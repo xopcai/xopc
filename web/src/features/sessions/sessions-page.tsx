@@ -170,9 +170,9 @@ export function SessionsPage() {
         prev && prev.key === detail.key ? { ...prev, name: detail.name } : prev,
       );
     };
-    window.addEventListener('session-updated', handler as EventListener);
+    window.addEventListener('session-updated', handler);
     return () => {
-      window.removeEventListener('session-updated', handler as EventListener);
+      window.removeEventListener('session-updated', handler);
     };
   }, [hasToken]);
 

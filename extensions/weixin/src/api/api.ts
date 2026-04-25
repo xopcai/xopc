@@ -205,14 +205,18 @@ async function apiPostFetch(params: {
       : controller.signal;
   const keepalive = params.keepalive ?? true;
   try {
-    const res = await fetch(url.toString(), {
+    const init: RequestInit = {
       method: "POST",
       headers: hdrs,
       body: params.body,
       signal,
       keepalive,
-      ...(params.dispatcher ? { dispatcher: params.dispatcher } : {}),
-    });
+    };
+    // `dispatcher` is an undici extension. Node's `fetch` types come from `undici-types`,
+    // which may not match the installed undici version's `Dispatcher` type.
+    if (params.dispatcher) (init as any).dispatcher = params.dispatcher;
+
+    const res = await fetch(url.toString(), init);
     clearTimeout(t);
     const rawText = await res.text();
     logger.debug(`${params.label} status=${res.status} raw=${redactBody(rawText)}`);

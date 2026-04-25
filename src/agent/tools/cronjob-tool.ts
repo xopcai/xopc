@@ -1,5 +1,5 @@
 // Agent tool for managing scheduled cron jobs (CronService-backed)
-import { Type, type Static } from '@sinclair/typebox';
+import { Type } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core';
 
 import type { CronService } from '../../cron/index.js';
@@ -85,7 +85,17 @@ const CronjobSchema = Type.Object({
   jobId: Type.Optional(Type.String({ description: 'Job ID (from list output)' })),
 });
 
-export type CronjobToolParams = Static<typeof CronjobSchema>;
+export type CronjobToolParams = {
+  action: 'list' | 'create' | 'update' | 'remove' | 'enable' | 'disable' | 'history';
+  name?: string;
+  schedule?: string;
+  message?: string;
+  timezone?: string;
+  sessionTarget?: 'main' | 'isolated';
+  agentId?: string;
+  workingDirectory?: string;
+  jobId?: string;
+};
 
 export interface CronjobToolDeps {
   getCronService: () => CronService | undefined;
@@ -126,7 +136,7 @@ function formatExecution(exec: JobExecution): string {
   return lines.join('\n');
 }
 
-export function createCronjobTool(deps: CronjobToolDeps): AgentTool<typeof CronjobSchema, {}> {
+export function createCronjobTool(deps: CronjobToolDeps): AgentTool {
   return {
     name: 'cronjob',
     label: '⏰ Cronjob',
@@ -284,5 +294,5 @@ export function createCronjobTool(deps: CronjobToolDeps): AgentTool<typeof Cronj
         return textResult(`Error: ${message}`);
       }
     },
-  };
+  } as any;
 }

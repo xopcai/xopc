@@ -34,7 +34,7 @@ export interface TextToSpeechToolDeps {
   getConfig: () => Config | undefined;
 }
 
-export function createTextToSpeechTool(deps: TextToSpeechToolDeps): AgentTool<typeof TextToSpeechSchema, {}> {
+export function createTextToSpeechTool(deps: TextToSpeechToolDeps): AgentTool {
   return {
     name: 'text_to_speech',
     label: '🔊 Text to speech',
@@ -152,5 +152,5 @@ export function createTextToSpeechTool(deps: TextToSpeechToolDeps): AgentTool<ty
         };
       }
     },
-  };
+  } as any;
 }

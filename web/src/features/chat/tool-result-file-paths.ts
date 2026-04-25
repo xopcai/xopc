@@ -135,7 +135,7 @@ function stripListDirLinePrefix(s: string): string {
     return t;
   }
   const m = t.match(/^[fd?] (.+)$/);
-  return m ? m[1]!.trim() : t;
+  return m ? m[1].trim() : t;
 }
 
 function pushPath(

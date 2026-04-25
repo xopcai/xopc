@@ -354,7 +354,7 @@ function ModelEditDialogContent({
     setForm((f) => ({ ...f, [field]: value }));
     setErrors((prev) => {
       const next = new Map(prev);
-      next.delete(field as string);
+      next.delete(field);
       return next;
     });
   };
