@@ -35,7 +35,7 @@ function formatTime(ts?: number): string {
   return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-/** User bubble: inline image → {@link AttachmentPreviewDialog} (delegates to shared builder). */
+/** User bubble: inline image opens {@link AttachmentPreviewDialog} (shared `file-preview` UI). */
 function imageContentToPreviewAttachment(block: ImageContent, index: number): MessageAttachment | null {
   return imageBlockToMessageAttachment(block, index);
 }
