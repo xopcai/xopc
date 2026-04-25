@@ -74,7 +74,7 @@ export function ChatAgentSelector({
             selectComboboxTriggerFocusClass,
             'disabled:cursor-not-allowed disabled:opacity-50',
             'dark:border-edge-subtle dark:hover:bg-surface-hover/55',
-            compact && 'min-w-[8rem] py-1.5 text-[13px]',
+            compact && 'min-w-[8rem] max-w-full py-1.5 text-[13px]',
             className,
           )}
         >
