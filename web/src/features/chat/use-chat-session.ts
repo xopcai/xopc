@@ -29,14 +29,8 @@ import {
   startThinkingSegment,
 } from '@/features/chat/streaming';
 import { useGatewayStore } from '@/stores/gateway-store';
-import { apiFetch } from '@/lib/fetch';
-import { apiUrl } from '@/lib/url';
-import type { ClarifyPromptState } from '@/features/chat/clarify-prompt';
-import {
-  suggestFollowUpsFromAssistantMessage,
-  type FollowUpSuggestionId,
-} from '@/features/chat/follow-up-suggestions';
-import { MAX_PENDING_FOLLOW_UPS, type PendingFollowUp } from '@/features/chat/pending-follow-up.types';
+import type { PendingFollowUp } from '@/features/chat/pending-follow-up.types';
+import { useChatFollowUpClarify } from '@/features/chat/use-chat-follow-up-clarify';
 
 const DEFAULT_THINKING = 'medium';
 const DEFAULT_REASONING: ReasoningLevel = 'off';
@@ -155,7 +149,6 @@ export function useChatSession() {
       levelOverride?: string,
     ) => Promise<void>
   >(async () => {});
-  const flushSteeringQueueRef = useRef<() => void>(() => {});
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [streamingMsg, setStreamingMsg] = useState<Message | null>(null);
@@ -163,9 +156,6 @@ export function useChatSession() {
   const [sending, setSending] = useState(false);
   const [progress, setProgress] = useState<ProgressState | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [clarifyPrompt, setClarifyPrompt] = useState<ClarifyPromptState | null>(null);
-  const [clarifySubmitting, setClarifySubmitting] = useState(false);
-  const clarifyPromptRef = useRef<ClarifyPromptState | null>(null);
   const [sessionKey, setSessionKey] = useState<string | null>(null);
   const [sessionName, setSessionName] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -176,10 +166,6 @@ export function useChatSession() {
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const messagesLenRef = useRef(0);
-  const [pendingFollowUps, setPendingFollowUps] = useState<PendingFollowUp[]>([]);
-  const pendingFollowUpsRef = useRef<PendingFollowUp[]>([]);
-  const [steeringFollowUpId, setSteeringFollowUpId] = useState<string | null>(null);
-  const [followUpSuggestions, setFollowUpSuggestions] = useState<FollowUpSuggestionId[]>([]);
 
   /**
    * Do not sync `sendingRef` from `sending` state: the UI sets `sending` to false when switching
@@ -197,21 +183,8 @@ export function useChatSession() {
     sessionNameRef.current = sessionName;
   }, [sessionName]);
   useEffect(() => {
-    clarifyPromptRef.current = clarifyPrompt;
-  }, [clarifyPrompt]);
-  useEffect(() => {
     messagesLenRef.current = messages.length;
   }, [messages.length]);
-
-  useEffect(() => {
-    pendingFollowUpsRef.current = [];
-    setPendingFollowUps([]);
-    setFollowUpSuggestions([]);
-  }, [sessionKey]);
-
-  useEffect(() => {
-    pendingFollowUpsRef.current = pendingFollowUps;
-  }, [pendingFollowUps]);
 
   useEffect(() => {
     if (!sessionKey) return;
@@ -296,6 +269,35 @@ export function useChatSession() {
   }, []);
 
   /**
+   * Only apply streaming deltas to the visible chat when the browser route still points
+   * at the same session that started this stream. Prevents cross-session bleed while
+   * preserving the ability to switch back and continue seeing live updates.
+   */
+  const shouldApplyStreamUpdate = useCallback((streamSessionKey: string) => {
+    const routeKey = routeSessionKeyRef.current;
+    if (routeKey) {
+      return routeKey === streamSessionKey;
+    }
+    return sessionKeyRef.current === streamSessionKey;
+  }, []);
+
+  const fq = useChatFollowUpClarify({
+    sessionKey,
+    decodedKey,
+    sessionKeyRef,
+    sendingRef,
+    streamingRef,
+    setSending,
+    setStreaming,
+    setProgress,
+    modelSupportsThinking,
+    thinkingLevel,
+    shouldApplyStreamUpdate,
+    setError,
+    sendMessageRef,
+  });
+
+  /**
    * Commit streaming assistant bubble into `messages` and clear `streamingMsg`.
    * Do not call `setMessages` inside `setStreamingMsg`'s updater — React Strict Mode
    * invokes that updater twice in development, which duplicated assistant rows.
@@ -316,7 +318,7 @@ export function useChatSession() {
       const appended = finalMsg;
       if (appended && hasRenderableAssistantContent(appended)) {
         setMessages((m) => mergeConsecutiveAssistantMessages([...m, appended]));
-        setFollowUpSuggestions(suggestFollowUpsFromAssistantMessage(appended));
+        fq.refreshFollowUpSuggestions(appended);
       }
       setStreaming(false);
       setProgress(null);
@@ -325,29 +327,16 @@ export function useChatSession() {
       streamingRef.current = false;
       activeStreamSessionKeyRef.current = null;
       activeResumeRunIdRef.current = null;
-      setClarifyPrompt(null);
+      fq.dismissClarify();
       void pollSessionNameAfterTurn();
       if (!opts?.skipSteeringQueueFlush) {
         queueMicrotask(() => {
-          flushSteeringQueueRef.current();
+          fq.flushSteeringQueue();
         });
       }
     },
-    [pollSessionNameAfterTurn],
+    [pollSessionNameAfterTurn, fq.dismissClarify, fq.refreshFollowUpSuggestions, fq.flushSteeringQueue],
   );
-
-  /**
-   * Only apply streaming deltas to the visible chat when the browser route still points
-   * at the same session that started this stream. Prevents cross-session bleed while
-   * preserving the ability to switch back and continue seeing live updates.
-   */
-  const shouldApplyStreamUpdate = useCallback((streamSessionKey: string) => {
-    const routeKey = routeSessionKeyRef.current;
-    if (routeKey) {
-      return routeKey === streamSessionKey;
-    }
-    return sessionKeyRef.current === streamSessionKey;
-  }, []);
 
   const applyLoadedSessionSnapshot = useCallback(
     (chatId: string, data: { messages: Message[]; hasMore: boolean; name?: string }) => {
@@ -375,7 +364,7 @@ export function useChatSession() {
       }
       // Dismiss any clarify prompt from the previous session.
       if (offset === 0) {
-        setClarifyPrompt(null);
+        fq.dismissClarify();
       }
       if (loadingSessionRef.current) return;
       loadingSessionRef.current = true;
@@ -442,7 +431,7 @@ export function useChatSession() {
         loadingSessionRef.current = false;
       }
     },
-    [navigateToSession, refreshModelThinkingSupport, resolveAgentIdForPost],
+    [navigateToSession, refreshModelThinkingSupport, resolveAgentIdForPost, fq.dismissClarify],
   );
 
   const loadMoreMessages = useCallback(async () => {
@@ -472,7 +461,7 @@ export function useChatSession() {
   );
 
   const createNewSession = useCallback(async () => {
-    setClarifyPrompt(null);
+    fq.dismissClarify();
     try {
       const sessions = await sessionMgrRef.current.loadSessions();
       const aid = resolveAgentIdForPost();
@@ -514,7 +503,7 @@ export function useChatSession() {
     } catch (err) {
       console.error('[chat] createNewSession failed:', err);
     }
-  }, [navigateToSession, refreshModelThinkingSupport, resolveAgentIdForPost]);
+  }, [navigateToSession, refreshModelThinkingSupport, resolveAgentIdForPost, fq.dismissClarify]);
 
   const tryResumeAgentRun = useCallback(async (chatId: string) => {
     const sender = senderRef.current;
@@ -611,7 +600,7 @@ export function useChatSession() {
           // Resume replays buffered SSE from the start, including `clarify_request` events for
           // clarifications already answered — only `tool_end(clarify)` reflects completion.
           if (toolName === 'clarify') {
-            setClarifyPrompt(null);
+            fq.onClarifyToolEnd();
           }
           hydrateResumeTailAssistant();
           setStreamingMsg((prev) => {
@@ -644,17 +633,7 @@ export function useChatSession() {
             return cloneMessageForRender(msg);
           });
         },
-        onClarifyRequest: (payload) => {
-          if (!shouldApplyStreamUpdate(chatId)) return;
-          // Pause the "AI is running" UI state so the composer shows the clarify prompt
-          // instead of the stop button. The SSE stream stays open waiting for the answer.
-          sendingRef.current = false;
-          streamingRef.current = false;
-          setSending(false);
-          setStreaming(false);
-          setProgress(null);
-          setClarifyPrompt(payload);
-        },
+        onClarifyRequest: fq.makeOnClarifyRequest(chatId),
         onResult: () => {
           if (!shouldApplyStreamUpdate(chatId)) {
             activeStreamSessionKeyRef.current = null;
@@ -664,7 +643,7 @@ export function useChatSession() {
             setStreaming(false);
             setSending(false);
             setProgress(null);
-            setClarifyPrompt(null);
+            fq.dismissClarify();
             void sessionMgrRef.current
               .loadSession(chatId, 0)
               .then((data) => applyLoadedSessionSnapshot(chatId, data))
@@ -686,7 +665,7 @@ export function useChatSession() {
             setStreaming(false);
             setSending(false);
             setProgress(null);
-            setClarifyPrompt(null);
+            fq.dismissClarify();
             void sessionMgrRef.current
               .loadSession(chatId, 0)
               .then((data) => applyLoadedSessionSnapshot(chatId, data))
@@ -701,7 +680,7 @@ export function useChatSession() {
           setStreaming(false);
           setSending(false);
           setProgress(null);
-          setClarifyPrompt(null);
+          fq.dismissClarify();
         },
       });
     } catch (err) {
@@ -719,108 +698,14 @@ export function useChatSession() {
         activeStreamSessionKeyRef.current = null;
       }
     }
-  }, [applyLoadedSessionSnapshot, finalizeMessage, shouldApplyStreamUpdate]);
-
-  const addPendingFollowUp = useCallback(
-    (
-      content: string,
-      attachments?: Array<{ type: string; mimeType?: string; data?: string; name?: string; size?: number }>,
-    ) => {
-      const trimmed = content.trim();
-      if (!trimmed && !attachments?.length) return;
-      if (pendingFollowUpsRef.current.length >= MAX_PENDING_FOLLOW_UPS) {
-        return;
-      }
-      const effectiveThinking = modelSupportsThinking ? thinkingLevel : 'off';
-      const row: PendingFollowUp = {
-        id: crypto.randomUUID(),
-        text: trimmed || content,
-        attachments: attachments?.length ? attachments : undefined,
-        thinkingLevel: effectiveThinking,
-      };
-      setPendingFollowUps((prev) => {
-        const next = [...prev, row];
-        pendingFollowUpsRef.current = next;
-        return next;
-      });
-    },
-    [modelSupportsThinking, thinkingLevel],
-  );
-
-  const popPendingFollowUpForComposer = useCallback((id: string) => {
-    const row = pendingFollowUpsRef.current.find((r) => r.id === id);
-    if (!row) return null;
-    setPendingFollowUps((prev) => {
-      const next = prev.filter((r) => r.id !== id);
-      pendingFollowUpsRef.current = next;
-      return next;
-    });
-    return {
-      text: row.text,
-      attachments: row.attachments ?? [],
-      thinkingLevel: row.thinkingLevel,
-    };
-  }, []);
-
-  const removePendingFollowUp = useCallback((id: string) => {
-    setPendingFollowUps((prev) => {
-      const next = prev.filter((r) => r.id !== id);
-      pendingFollowUpsRef.current = next;
-      return next;
-    });
-  }, []);
-
-  const movePendingFollowUp = useCallback((id: string, dir: 'up' | 'down') => {
-    setPendingFollowUps((prev) => {
-      const i = prev.findIndex((r) => r.id === id);
-      if (i < 0) return prev;
-      const j = dir === 'up' ? i - 1 : i + 1;
-      if (j < 0 || j >= prev.length) return prev;
-      const next = [...prev];
-      [next[i], next[j]] = [next[j], next[i]];
-      pendingFollowUpsRef.current = next;
-      return next;
-    });
-  }, []);
-
-  const reorderPendingFollowUp = useCallback((fromIndex: number, toIndex: number) => {
-    setPendingFollowUps((prev) => {
-      if (fromIndex < 0 || fromIndex >= prev.length || toIndex < 0 || toIndex >= prev.length) {
-        return prev;
-      }
-      const next = [...prev];
-      const [removed] = next.splice(fromIndex, 1);
-      next.splice(toIndex, 0, removed);
-      pendingFollowUpsRef.current = next;
-      return next;
-    });
-  }, []);
-
-  const steerPendingFollowUp = useCallback(async (id: string) => {
-    const key = sessionKeyRef.current;
-    if (!key) return;
-    const row = pendingFollowUpsRef.current.find((r) => r.id === id);
-    if (!row?.text.trim() || row.attachments?.length) return;
-    setSteeringFollowUpId(id);
-    try {
-      const res = await apiFetch(apiUrl('/api/agent/steer'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chatId: key, message: row.text.trim() }),
-      });
-      if (res.ok) {
-        setPendingFollowUps((prev) => {
-          const next = prev.filter((r) => r.id !== id);
-          pendingFollowUpsRef.current = next;
-          return next;
-        });
-      }
-    } catch {
-      /* ignore */
-    } finally {
-      setSteeringFollowUpId(null);
-    }
-  }, []);
+  }, [
+    applyLoadedSessionSnapshot,
+    finalizeMessage,
+    shouldApplyStreamUpdate,
+    fq.dismissClarify,
+    fq.makeOnClarifyRequest,
+    fq.onClarifyToolEnd,
+  ]);
 
   const interruptAndSend = useCallback(
     async (
@@ -839,8 +724,7 @@ export function useChatSession() {
       }
       const key = sessionKeyRef.current;
       if (!key) return;
-      pendingFollowUpsRef.current = [];
-      setPendingFollowUps([]);
+      fq.dismissClarifyAndClearPending();
       const effectiveThinking = modelSupportsThinking ? (levelOverride ?? thinkingLevel) : 'off';
       userAbortedRef.current = true;
       activeResumeRunIdRef.current = null;
@@ -848,24 +732,13 @@ export function useChatSession() {
       senderRef.current.abort();
       sendingRef.current = false;
       streamingRef.current = false;
-      setClarifyPrompt(null);
       finalizeMessage({ skipSteeringQueueFlush: true });
       setProgress(null);
       queueMicrotask(() => {
         void sendMessageRef.current(content, attachments, effectiveThinking);
       });
     },
-    [createNewSession, finalizeMessage, modelSupportsThinking, thinkingLevel],
-  );
-
-  const pickFollowUpSuggestion = useCallback(
-    (text: string) => {
-      const t = text.trim();
-      if (!t) return;
-      setFollowUpSuggestions([]);
-      void sendMessageRef.current(t, undefined, undefined);
-    },
-    [],
+    [createNewSession, finalizeMessage, modelSupportsThinking, thinkingLevel, fq.dismissClarifyAndClearPending],
   );
 
   const sendMessage = useCallback(
@@ -895,14 +768,14 @@ export function useChatSession() {
       const sender = senderRef.current;
       const chatId = sessionKey;
       userAbortedRef.current = false;
-      setFollowUpSuggestions([]);
+      fq.clearFollowUpSuggestions();
       activeStreamSessionKeyRef.current = chatId;
       sendingRef.current = true;
       setSending(true);
       setError(null);
       // Clear any stale clarify prompt from a previous turn so its requestId
       // cannot be accidentally re-submitted against the new run.
-      setClarifyPrompt(null);
+      fq.dismissClarify();
       setMessages((m) => [
         ...m,
         {
@@ -959,7 +832,7 @@ export function useChatSession() {
           onToolEnd: (toolName, isErr, result) => {
             if (!shouldApplyStreamUpdate(chatId)) return;
             if (toolName === 'clarify') {
-              setClarifyPrompt(null);
+              fq.onClarifyToolEnd();
             }
             setStreamingMsg((prev) => {
               const msg = ensureAssistantMessage(prev, Date.now());
@@ -991,17 +864,7 @@ export function useChatSession() {
               return cloneMessageForRender(msg);
             });
           },
-          onClarifyRequest: (payload) => {
-            if (!shouldApplyStreamUpdate(chatId)) return;
-            // Pause the "AI is running" UI state so the composer shows the clarify prompt
-            // instead of the stop button. The SSE stream stays open waiting for the answer.
-            sendingRef.current = false;
-            streamingRef.current = false;
-            setSending(false);
-            setStreaming(false);
-            setProgress(null);
-            setClarifyPrompt(payload);
-          },
+          onClarifyRequest: fq.makeOnClarifyRequest(chatId),
           onResult: () => {
             if (!shouldApplyStreamUpdate(chatId)) {
               activeStreamSessionKeyRef.current = null;
@@ -1010,7 +873,7 @@ export function useChatSession() {
               setStreaming(false);
               setSending(false);
               setProgress(null);
-              setClarifyPrompt(null);
+              fq.dismissClarify();
               void sessionMgrRef.current
                 .loadSession(chatId, 0)
                 .then((data) => applyLoadedSessionSnapshot(chatId, data))
@@ -1031,7 +894,7 @@ export function useChatSession() {
               setStreaming(false);
               setSending(false);
               setProgress(null);
-              setClarifyPrompt(null);
+              fq.dismissClarify();
               void sessionMgrRef.current
                 .loadSession(chatId, 0)
                 .then((data) => applyLoadedSessionSnapshot(chatId, data))
@@ -1045,7 +908,7 @@ export function useChatSession() {
             setStreaming(false);
             setSending(false);
             setProgress(null);
-            setClarifyPrompt(null);
+            fq.dismissClarify();
           },
         });
       } catch (err) {
@@ -1071,40 +934,21 @@ export function useChatSession() {
       finalizeMessage,
       shouldApplyStreamUpdate,
       createNewSession,
+      fq.clearFollowUpSuggestions,
+      fq.dismissClarify,
+      fq.makeOnClarifyRequest,
+      fq.onClarifyToolEnd,
     ],
   );
-
-  const submitClarifyAnswer = useCallback(async (answer: string) => {
-    const p = clarifyPromptRef.current;
-    if (!p) return;
-    setClarifySubmitting(true);
-    try {
-      const res = await apiFetch(apiUrl(`/api/clarify/${encodeURIComponent(p.requestId)}`), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ answer }),
-      });
-      if (!res.ok) {
-        const j = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
-        setError(j.error?.message ?? res.statusText ?? 'Clarify failed');
-      }
-      // Always dismiss after a response so 4xx/5xx (e.g. stale requestId) cannot block the composer.
-      setClarifyPrompt(null);
-    } finally {
-      setClarifySubmitting(false);
-    }
-  }, []);
 
   const abort = useCallback(() => {
     userAbortedRef.current = true;
     activeResumeRunIdRef.current = null;
     activeStreamSessionKeyRef.current = null;
-    pendingFollowUpsRef.current = [];
-    setPendingFollowUps([]);
+    fq.dismissClarifyAndClearPending();
     senderRef.current.abort();
     sendingRef.current = false;
     streamingRef.current = false;
-    setClarifyPrompt(null);
     finalizeMessage({ skipSteeringQueueFlush: true });
     setProgress(null);
     const key = sessionKeyRef.current;
@@ -1113,16 +957,11 @@ export function useChatSession() {
         void loadSessionById(key, 0);
       }, 300);
     }
-  }, [finalizeMessage, loadSessionById]);
+  }, [finalizeMessage, loadSessionById, fq.dismissClarifyAndClearPending]);
 
   useEffect(() => {
     const active = activeStreamSessionKeyRef.current;
     if (!decodedKey) return;
-    // Always clear clarify prompt when navigating to a different session,
-    // even if there is no active stream — the prompt is session-scoped.
-    if (decodedKey !== sessionKeyRef.current) {
-      setClarifyPrompt(null);
-    }
     if (!active || decodedKey === active) return;
     setStreamingMsg(null);
     setProgress(null);
@@ -1290,21 +1129,6 @@ export function useChatSession() {
   const showChatAgentSelector = (chatAgentsData?.items.length ?? 0) > 1;
 
   sendMessageRef.current = sendMessage;
-  flushSteeringQueueRef.current = () => {
-    let q = pendingFollowUpsRef.current;
-    while (q.length > 0 && !q[0].text.trim() && !q[0].attachments?.length) {
-      q = q.slice(1);
-    }
-    if (q.length === 0) {
-      pendingFollowUpsRef.current = [];
-      setPendingFollowUps([]);
-      return;
-    }
-    const [first, ...rest] = q;
-    pendingFollowUpsRef.current = rest;
-    setPendingFollowUps(rest);
-    void sendMessageRef.current(first.text, first.attachments, first.thinkingLevel);
-  };
 
   return {
     messages: displayMessages,
@@ -1329,21 +1153,21 @@ export function useChatSession() {
     sending,
     progress,
     sendMessage,
-    addPendingFollowUp,
-    pendingFollowUps,
-    popPendingFollowUpForComposer,
-    removePendingFollowUp,
-    movePendingFollowUp,
-    reorderPendingFollowUp,
-    steerPendingFollowUp,
-    steeringFollowUpId,
+    addPendingFollowUp: fq.addPendingFollowUp,
+    pendingFollowUps: fq.pendingFollowUps,
+    popPendingFollowUpForComposer: fq.popPendingFollowUpForComposer,
+    removePendingFollowUp: fq.removePendingFollowUp,
+    movePendingFollowUp: fq.movePendingFollowUp,
+    reorderPendingFollowUp: fq.reorderPendingFollowUp,
+    steerPendingFollowUp: fq.steerPendingFollowUp,
+    steeringFollowUpId: fq.steeringFollowUpId,
     interruptAndSend,
     abort,
-    followUpSuggestions,
-    pickFollowUpSuggestion,
-    clarifyPrompt,
-    clarifySubmitting,
-    submitClarifyAnswer,
+    followUpSuggestions: fq.followUpSuggestions,
+    pickFollowUpSuggestion: fq.pickFollowUpSuggestion,
+    clarifyPrompt: fq.clarifyPrompt,
+    clarifySubmitting: fq.clarifySubmitting,
+    submitClarifyAnswer: fq.submitClarifyAnswer,
     hasToken: Boolean(token),
     chatAgents: chatAgentsData,
     displayAgentId,
