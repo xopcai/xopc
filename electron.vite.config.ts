@@ -22,6 +22,10 @@ export default defineConfig({
   main: {
     build: {
       rollupOptions: {
+        // IMPORTANT: In the Electron main process, `electron` is a runtime-provided module.
+        // If Rollup resolves it to the npm package `electron`, the bundle will include
+        // `node_modules/electron/index.js`, which throws at runtime inside packaged apps.
+        external: ['electron'],
         input: {
           index: resolve(__dirname, 'electron/main.ts'),
         },
@@ -36,6 +40,8 @@ export default defineConfig({
   preload: {
     build: {
       rollupOptions: {
+        // Same as main: keep `electron` as runtime-provided, not the npm package.
+        external: ['electron'],
         input: {
           index: resolve(__dirname, 'electron/preload.ts'),
         },
