@@ -106,7 +106,6 @@ function renderChunkedContent(
     searchedWeb: string;
     readFile: string;
     stepDetails: string;
-    stepsRoundComplete: string;
     runCommand: string;
     listDirectory: string;
     writeFile: string;
@@ -236,7 +235,6 @@ export const MessageBubble = memo(function MessageBubble({
       searchedWeb: m.chat.stepSearchedWeb,
       readFile: m.chat.stepReadFile,
       stepDetails: m.chat.stepDetails,
-      stepsRoundComplete: m.chat.stepsRoundComplete,
       runCommand: m.chat.stepRunCommand,
       listDirectory: m.chat.stepListDirectory,
       writeFile: m.chat.stepWriteFile,
@@ -253,7 +251,6 @@ export const MessageBubble = memo(function MessageBubble({
       m.chat.stepSearchedWeb,
       m.chat.stepReadFile,
       m.chat.stepDetails,
-      m.chat.stepsRoundComplete,
       m.chat.stepRunCommand,
       m.chat.stepListDirectory,
       m.chat.stepWriteFile,

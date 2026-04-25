@@ -20,6 +20,7 @@ import { useUiExtensions } from '@/features/extensions/extension-provider';
 import { useChatWidgetMatch } from '@/features/extensions/use-chat-widget-match';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
+import type { StoredLanguage } from '@/lib/storage';
 import { useLocaleStore } from '@/stores/locale-store';
 
 function formatParamsJson(params: unknown): string {
@@ -203,6 +204,84 @@ function viewStepsLabel(
   return key.replace(/\{\{count\}\}/g, String(count));
 }
 
+const FIRST_TOOL_DETAIL_MAX = 120;
+const COMPLETE_HEADER_LINE_MAX = 240;
+
+type FirstToolHeaderLabels = {
+  searchedWeb: string;
+  readFile: string;
+  runCommand: string;
+  listDirectory: string;
+  writeFile: string;
+  editFile: string;
+  openUrl: string;
+  fetchUrl: string;
+  unknownTool: string;
+};
+
+function previewDetailForFirstToolHeader(block: ToolUseContent): string {
+  const input = block.input;
+  const n = toolNameKey(block.name);
+  if (isWebSearchToolName(block.name)) {
+    const q = extractSearchQuery(input);
+    if (q.trim()) return q.trim();
+  }
+  if (n === 'shell') {
+    const c = extractCommandPreview(input);
+    if (c.trim()) return c.trim();
+  }
+  if (n === 'read_file' || n.includes('read_file')) {
+    const p = extractPathPreview(input);
+    if (p.trim()) return p.trim();
+  }
+  if (n === 'web_fetch' || n === 'open_url') {
+    const u = extractUrlPreview(input);
+    if (u.trim()) return u.trim();
+  }
+  return getKeyDetailLine(input).trim();
+}
+
+/** One-line “what happened” when a tool round finishes (first tool + best input preview). */
+export function buildStepsRoundCompleteSummary(
+  visibleBlocks: Array<ThinkingContent | ToolUseContent>,
+  labels: FirstToolHeaderLabels,
+  language: StoredLanguage,
+  /** When there is no tool step (e.g. only thinking), show this (e.g. “View N steps”). */
+  noToolFallback: string,
+): string {
+  const firstTool = visibleBlocks.find((b): b is ToolUseContent => b.type === 'tool_use');
+  if (!firstTool) {
+    return noToolFallback;
+  }
+
+  const title = getFriendlyToolTitle(firstTool.name, {
+    searchedWeb: labels.searchedWeb,
+    readFile: labels.readFile,
+    runCommand: labels.runCommand,
+    listDirectory: labels.listDirectory,
+    writeFile: labels.writeFile,
+    editFile: labels.editFile,
+    openUrl: labels.openUrl,
+    fetchUrl: labels.fetchUrl,
+    unknownTool: labels.unknownTool,
+  });
+
+  let detail = previewDetailForFirstToolHeader(firstTool);
+  if (!detail) {
+    return title;
+  }
+  if (detail.length > FIRST_TOOL_DETAIL_MAX) {
+    detail = `${detail.slice(0, FIRST_TOOL_DETAIL_MAX)}…`;
+  }
+
+  const colon = language === 'zh' ? '：' : ': ';
+  let line = `${title}${colon}${detail}`;
+  if (line.length > COMPLETE_HEADER_LINE_MAX) {
+    line = `${line.slice(0, COMPLETE_HEADER_LINE_MAX)}…`;
+  }
+  return line;
+}
+
 /** Collapsible inline block: “View N steps” header + timeline (main chat column). */
 export function AssistantStepsBlock({
   blocks,
@@ -220,7 +299,6 @@ export function AssistantStepsBlock({
     searchedWeb: string;
     readFile: string;
     stepDetails: string;
-    stepsRoundComplete: string;
     runCommand: string;
     listDirectory: string;
     writeFile: string;
@@ -269,6 +347,27 @@ export function AssistantStepsBlock({
 
   void liveTick;
 
+  const completedHeader = useMemo(() => {
+    if (anyActive) return '';
+    const labels: FirstToolHeaderLabels = {
+      searchedWeb: stepLabels.searchedWeb,
+      readFile: stepLabels.readFile,
+      runCommand: stepLabels.runCommand,
+      listDirectory: stepLabels.listDirectory,
+      writeFile: stepLabels.writeFile,
+      editFile: stepLabels.editFile,
+      openUrl: stepLabels.openUrl,
+      fetchUrl: stepLabels.fetchUrl,
+      unknownTool: stepLabels.unknownTool,
+    };
+    return buildStepsRoundCompleteSummary(
+      visibleBlocks,
+      labels,
+      language,
+      viewStepsLabel(stepCount, stepLabels),
+    );
+  }, [anyActive, visibleBlocks, language, stepCount, stepLabels]);
+
   if (stepCount === 0) {
     return null;
   }
@@ -312,7 +411,7 @@ export function AssistantStepsBlock({
     </>
   ) : (
     <>
-      <span className="[overflow-wrap:anywhere]">{stepLabels.stepsRoundComplete}</span>
+      <span className="[overflow-wrap:anywhere]">{completedHeader}</span>
     </>
   );
 
