@@ -271,7 +271,7 @@ export async function waitForWeixinLogin(opts: {
             if (!silent) {
               process.stdout.write(`🔄 新二维码已生成，请重新扫描\n\n`);
               try {
-                const qrterm = await import("qrcode-terminal");
+                const qrterm = await import(/* @vite-ignore */ "qrcode-terminal");
                 qrterm.default.generate(qrResponse.qrcode_img_content, { small: true });
                 process.stdout.write(`如果二维码未能成功展示，请用浏览器打开以下链接扫码：\n`);
                 process.stdout.write(`${qrResponse.qrcode_img_content}\n`);
