@@ -347,8 +347,6 @@
     "stepSearchedWeb": "搜索网页",
     "stepReadFile": "读取文件",
     "stepDetails": "详情",
-    "advancedModeOn": "高级",
-    "advancedModeOff": "普通",
     "stepRunCommand": "运行命令",
     "stepListDirectory": "查看文件夹内容",
     "stepWriteFile": "保存文件",
