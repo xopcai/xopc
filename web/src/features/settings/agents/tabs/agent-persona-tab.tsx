@@ -1,8 +1,9 @@
-import { Sparkles, User } from 'lucide-react';
+import { Eye, Pencil, Sparkles, User } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useDebouncedCallback } from 'use-debounce';
 
 import { MarkdownEditor } from '@/components/markdown/markdown-editor';
+import { MarkdownView } from '@/components/markdown/markdown-view';
 import {
   SettingsFormSection,
   SettingsFormSectionHeader,
@@ -60,6 +61,7 @@ export function AgentPersonaTab({ a, agentId }: PersonaTabProps) {
   const [soulTemplate, setSoulTemplate] = useState<SoulTemplateId>('professional');
   const [soulCustomContent, setSoulCustomContent] = useState('');
   const [soulEditorNonce, setSoulEditorNonce] = useState(0);
+  const [soulPreviewMode, setSoulPreviewMode] = useState(false);
 
   // ---- Track whether initial load is complete ----
   const initialLoadDoneRef = useRef(false);
@@ -293,15 +295,32 @@ export function AgentPersonaTab({ a, agentId }: PersonaTabProps) {
         {/* Custom soul editor */}
         {soulTemplate === 'custom' ? (
           <div className="flex flex-col gap-2">
-            <span className="text-sm font-medium text-fg">{a.personaSoulCustomEdit}</span>
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-sm font-medium text-fg">{a.personaSoulCustomEdit}</span>
+              <button
+                type="button"
+                className="inline-flex size-9 shrink-0 items-center justify-center rounded-md text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg"
+                title={soulPreviewMode ? a.personaSoulEdit : a.personaSoulPreview}
+                aria-label={soulPreviewMode ? a.personaSoulEdit : a.personaSoulPreview}
+                onClick={() => setSoulPreviewMode((v) => !v)}
+              >
+                {soulPreviewMode ? <Pencil className="size-4" aria-hidden /> : <Eye className="size-4" aria-hidden />}
+              </button>
+            </div>
             <div className={cn(agentsSettingsInputClass(), 'flex min-h-64 flex-col overflow-hidden p-0')}>
-              <MarkdownEditor
-                key={`soul-${soulEditorNonce}`}
-                initialContent={soulCustomContent}
-                onChange={handleSoulContentChange}
-                isDark={isDark}
-                className="min-h-0 flex-1"
-              />
+              {soulPreviewMode ? (
+                <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+                  <MarkdownView content={soulCustomContent} />
+                </div>
+              ) : (
+                <MarkdownEditor
+                  key={`soul-${soulEditorNonce}`}
+                  initialContent={soulCustomContent}
+                  onChange={handleSoulContentChange}
+                  isDark={isDark}
+                  className="min-h-0 flex-1"
+                />
+              )}
             </div>
           </div>
         ) : null}
