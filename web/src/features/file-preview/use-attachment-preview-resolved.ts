@@ -2,17 +2,14 @@ import { useEffect, useMemo, useState } from 'react';
 
 import type { MessageAttachment } from '@/features/chat/messages.types';
 import {
-  arrayBufferToBase64,
   base64ToArrayBuffer,
   extractTextForPreview,
   getAttachmentBinaryPayload,
   inferAttachmentFileType,
   PPTX_PREVIEW_MAX_CHARS,
-  workspaceRelativePathToApiPath,
   type AttachmentPreviewFileType,
 } from '@/features/chat/attachment-utils-core';
-import { apiFetch } from '@/lib/fetch';
-import { apiUrl } from '@/lib/url';
+import { fetchWorkspaceRelativeFileAsBase64 } from '@/features/file-preview/fetch-workspace-relative-file-base64';
 import { messages } from '@/i18n/messages';
 import type { StoredLanguage } from '@/lib/storage';
 import type { FilePreviewKind } from '@/features/file-preview/types';
@@ -85,20 +82,17 @@ export function useAttachmentPreviewResolved({
 
     void (async () => {
       try {
-        const url = apiUrl(workspaceRelativePathToApiPath(path, { sessionKey }));
-        const res = await apiFetch(url);
+        const result = await fetchWorkspaceRelativeFileAsBase64({ workspaceRelativePath: path, sessionKey });
         if (cancelled) return;
-        if (!res.ok) {
-          setFetchError(`${L.attachmentPreviewLoadError} (HTTP ${res.status})`);
+        if (!result.ok) {
+          if (result.reason === 'http') {
+            setFetchError(`${L.attachmentPreviewLoadError} (HTTP ${result.status})`);
+          } else {
+            setFetchError(result.message);
+          }
           return;
         }
-        const buf = await res.arrayBuffer();
-        const b64 = arrayBufferToBase64(buf);
-        setPreview((prev) => (prev ? { ...prev, content: b64, data: b64 } : prev));
-      } catch (e) {
-        if (!cancelled) {
-          setFetchError(e instanceof Error ? e.message : String(e));
-        }
+        setPreview((prev) => (prev ? { ...prev, content: result.base64, data: result.base64 } : prev));
       } finally {
         if (!cancelled) {
           setLoadingGateway(false);

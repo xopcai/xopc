@@ -1,17 +1,11 @@
 import { FileSpreadsheet, FileText, X } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 
 import type { MessageAttachment } from '@/features/chat/messages.types';
-import {
-  arrayBufferToBase64,
-  getAttachmentBinaryPayload,
-  resolveDataUrlForDisplay,
-  workspaceRelativePathToApiPath,
-} from '@/features/chat/attachment-utils-core';
-import { apiFetch } from '@/lib/fetch';
+import { getAttachmentBinaryPayload, resolveDataUrlForDisplay } from '@/features/chat/attachment-utils-core';
+import { fetchWorkspaceRelativeFileAsBase64 } from '@/features/file-preview/fetch-workspace-relative-file-base64';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
-import { apiUrl } from '@/lib/url';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 
@@ -34,9 +28,14 @@ export function AttachmentTile({
 }: AttachmentTileProps) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
+  const missingAuthHintId = useId();
   const [hydrated, setHydrated] = useState<MessageAttachment | null>(null);
 
   const effective = hydrated ?? attachment;
+
+  const needsGatewayBinary =
+    Boolean(attachment.workspaceRelativePath) && !getAttachmentBinaryPayload(attachment);
+  const showMissingAuthHint = needsGatewayBinary && !String(authToken ?? '').trim();
 
   useEffect(() => {
     setHydrated(null);
@@ -47,29 +46,24 @@ export function AttachmentTile({
     if (!base?.workspaceRelativePath || getAttachmentBinaryPayload(base)) {
       return;
     }
-    if (!authToken) return;
+    if (!String(authToken ?? '').trim()) return;
 
     let cancelled = false;
     void (async () => {
-      try {
-        const url = apiUrl(
-          workspaceRelativePathToApiPath(base.workspaceRelativePath!, { sessionKey }),
-        );
-        const res = await apiFetch(url);
-        if (!res.ok || cancelled) return;
-        const buf = await res.arrayBuffer();
-        const b64 = arrayBufferToBase64(buf);
-        const isImg = base.mimeType?.startsWith('image/') || base.type === 'image';
-        setHydrated({
-          ...base,
-          content: b64,
-          data: b64,
-          preview: isImg ? b64 : base.preview,
-          type: isImg ? 'image' : 'document',
-        });
-      } catch {
-        /* ignore */
-      }
+      const result = await fetchWorkspaceRelativeFileAsBase64({
+        workspaceRelativePath: base.workspaceRelativePath!,
+        sessionKey,
+      });
+      if (!result.ok || cancelled) return;
+      const b64 = result.base64;
+      const isImg = base.mimeType?.startsWith('image/') || base.type === 'image';
+      setHydrated({
+        ...base,
+        content: b64,
+        data: b64,
+        preview: isImg ? b64 : base.preview,
+        type: isImg ? 'image' : 'document',
+      });
     })();
 
     return () => {
@@ -90,53 +84,84 @@ export function AttachmentTile({
     previewBase64 && isImageMime ? resolveDataUrlForDisplay(imgMime, previewBase64) : '';
   const showImageThumb = Boolean(thumbSrc);
 
+  const mainLabel = showMissingAuthHint
+    ? `${displayName} — ${m.chat.attachmentPreviewMissingAuth}`
+    : displayName;
+
+  const missingAuthText = m.chat.attachmentPreviewMissingAuth;
+
   return (
     <div className="group relative inline-block">
       {showImageThumb ? (
-        <div className="relative">
-          <button
-            type="button"
-            className={cn(
-              'block overflow-hidden rounded-md border border-edge dark:border-edge',
-              interaction.transition,
-              interaction.press,
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
-            )}
-            onClick={() => onOpen(effective)}
-            title={displayName}
-            aria-label={displayName}
-          >
-            <img src={thumbSrc} alt={displayName} className="max-h-16 w-full object-cover" />
-          </button>
-          {isPdf ? (
-            <div
-              className="pointer-events-none absolute bottom-1 right-1 rounded bg-black/60 px-1.5 py-0.5 text-[10px] font-semibold text-white"
-              aria-hidden
+        <div className="max-w-[10rem]">
+          <div className="relative">
+            <button
+              type="button"
+              className={cn(
+                'block w-full overflow-hidden rounded-md border border-edge dark:border-edge',
+                interaction.transition,
+                interaction.press,
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
+              )}
+              onClick={() => onOpen(effective)}
+              title={mainLabel}
+              aria-label={mainLabel}
+              aria-describedby={showMissingAuthHint ? missingAuthHintId : undefined}
             >
-              PDF
-            </div>
+              <img src={thumbSrc} alt={displayName} className="max-h-16 w-full object-cover" />
+            </button>
+            {isPdf ? (
+              <div
+                className="pointer-events-none absolute bottom-1 right-1 rounded bg-black/60 px-1.5 py-0.5 text-[10px] font-semibold text-white"
+                aria-hidden
+              >
+                PDF
+              </div>
+            ) : null}
+          </div>
+          {showMissingAuthHint ? (
+            <p
+              id={missingAuthHintId}
+              className="mt-1 line-clamp-2 text-[10px] leading-snug text-amber-600 dark:text-amber-500"
+            >
+              {missingAuthText}
+            </p>
           ) : null}
         </div>
       ) : (
-        <button
-          type="button"
-          onClick={() => onOpen(effective)}
-          title={displayName}
-          aria-label={displayName}
-          className={cn(
-            'flex max-w-[14rem] items-center gap-2 rounded-md border border-edge bg-surface-hover px-2 py-1.5 text-left text-xs text-fg-muted hover:bg-surface-active dark:border-edge',
-            interaction.transition,
-            interaction.press,
-            interaction.focusRingPanel,
-          )}
-        >
-          {isExcel ? (
-            <FileSpreadsheet className="h-8 w-8 shrink-0 text-fg-subtle" aria-hidden />
-          ) : (
-            <FileText className="h-8 w-8 shrink-0 text-fg-subtle" aria-hidden />
-          )}
-          <span className="min-w-0 flex-1 truncate text-fg">{displayName}</span>
-        </button>
+        <div className="max-w-[14rem]">
+          <button
+            type="button"
+            onClick={() => onOpen(effective)}
+            title={mainLabel}
+            aria-label={mainLabel}
+            aria-describedby={showMissingAuthHint ? missingAuthHintId : undefined}
+            className={cn(
+              'flex w-full min-w-0 gap-2 rounded-md border border-edge bg-surface-hover px-2 py-1.5 text-left text-xs text-fg-muted hover:bg-surface-active dark:border-edge',
+              showMissingAuthHint ? 'items-start' : 'items-center',
+              interaction.transition,
+              interaction.press,
+              interaction.focusRingPanel,
+            )}
+          >
+            {isExcel ? (
+              <FileSpreadsheet className="h-8 w-8 shrink-0 text-fg-subtle" aria-hidden />
+            ) : (
+              <FileText className="h-8 w-8 shrink-0 text-fg-subtle" aria-hidden />
+            )}
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-fg">{displayName}</span>
+              {showMissingAuthHint ? (
+                <span
+                  id={missingAuthHintId}
+                  className="mt-0.5 line-clamp-2 block text-[10px] font-normal leading-snug text-amber-600 dark:text-amber-500"
+                >
+                  {missingAuthText}
+                </span>
+              ) : null}
+            </span>
+          </button>
+        </div>
       )}
       {showDelete ? (
         <button
