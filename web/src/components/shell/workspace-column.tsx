@@ -18,7 +18,7 @@ import {
 import {
   getFileName,
   shouldReadWorkspaceFileAsBase64Path,
-} from '@/features/workspace/workspace-file-preview-dialog';
+} from '@/features/file-preview';
 import { useWorkspaceTree } from '@/features/workspace/use-workspace-tree';
 import { cn } from '@/lib/cn';
 import { messages } from '@/i18n/messages';

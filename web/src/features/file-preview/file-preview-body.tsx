@@ -1,0 +1,427 @@
+import { useMemo, useRef, type ReactNode } from 'react';
+
+import { HtmlWorkspaceEditor } from '@/components/html/html-workspace-editor';
+import { MarkdownSplit } from '@/components/markdown/markdown-split';
+import { MarkdownView } from '@/components/markdown/markdown-view';
+import { arrayBufferToBase64, inferMimeTypeFromFileName, PPTX_PREVIEW_MAX_CHARS } from '@/features/chat/attachment-utils-core';
+import { PreviewOpenAlternativesBar } from '@/features/preview/preview-open-alternatives';
+import { PptxPreviewView } from '@/features/preview/pptx-preview-view';
+import { useBinaryPreviewInContainer } from '@/features/file-preview/use-binary-preview-in-container';
+import type { FilePreviewKind } from '@/features/file-preview/types';
+import { getFileExtension } from '@/features/file-preview/utils';
+import { messages } from '@/i18n/messages';
+import type { StoredLanguage } from '@/lib/storage';
+
+type CommonActions = {
+  onDownload: () => void;
+  canDownload: boolean;
+  onOpenWithSystemApp?: () => void | Promise<void>;
+  canOpenWithSystemApp?: boolean;
+};
+
+type WorkspaceTextEditing = {
+  markdownEditMode: boolean;
+  onSaveMarkdown?: (next: string) => void | Promise<void>;
+  htmlCodeMode: boolean;
+  onHtmlChange?: (next: string) => void;
+  isDark?: boolean;
+};
+
+export type FilePreviewBodyProps = {
+  context: 'workspace' | 'attachment';
+  language: StoredLanguage;
+  resolvedTheme?: 'light' | 'dark';
+  fileKey: string;
+  fileName: string;
+
+  loading: boolean;
+  loadError: string | null;
+
+  previewKind: FilePreviewKind | null;
+  textContent: string | null;
+  binaryBuffer: ArrayBuffer | null;
+
+  /** Attachment-only: if true, show extracted text view (not binary renderer). */
+  showExtractedText?: boolean;
+  /** Attachment-only: extractedText payload (already capped by caller if needed). */
+  extractedText?: string | null;
+  /** Attachment-only: whether extracted text is truncated. */
+  extractedTextTruncated?: boolean;
+
+  /** Workspace-only: markdown/html editors; ignored for attachment. */
+  workspaceEditing?: WorkspaceTextEditing;
+
+  /** PPTX: already processed text & error. */
+  pptxText?: string | null;
+  pptxTruncated?: boolean;
+  pptxError?: string | null;
+
+  actions: CommonActions;
+};
+
+function wrapInCodeFence(content: string, extension: string): string {
+  const langMap: Record<string, string> = {
+    '.ts': 'typescript',
+    '.js': 'javascript',
+    '.json': 'json',
+  };
+  const lang = langMap[extension] ?? 'plaintext';
+  return `\`\`\`${lang}\n${content}\n\`\`\``;
+}
+
+type PptxSlidePaneLayout = 'attachment' | 'workspace';
+
+/** Shared PPTX “slides from extracted text” layout for attachment vs workspace previews. */
+function FilePreviewPptxSlidePane({
+  layout,
+  text,
+  showTruncationBar,
+  onDownload,
+  downloadLabel,
+  truncationMessage,
+  truncatedCaption,
+  slideLabel,
+  emptySlideLabel,
+  openSystemLabel,
+  onOpenWithSystemApp,
+  canOpenWithSystemApp,
+}: {
+  layout: PptxSlidePaneLayout;
+  text: string;
+  showTruncationBar: boolean;
+  onDownload: () => void;
+  downloadLabel: string;
+  truncationMessage: string;
+  truncatedCaption: string;
+  slideLabel: (n: number) => string;
+  emptySlideLabel: string;
+  openSystemLabel?: string;
+  onOpenWithSystemApp?: () => void | Promise<void>;
+  canOpenWithSystemApp?: boolean;
+}) {
+  const outerClass =
+    layout === 'workspace'
+      ? 'flex min-h-0 flex-1 flex-col gap-2 overflow-hidden px-2 pb-2 pt-1 sm:px-4'
+      : 'flex min-h-0 flex-1 flex-col gap-2 overflow-hidden';
+
+  const innerScrollClass =
+    layout === 'workspace'
+      ? 'min-h-0 flex-1 overflow-auto px-2 py-2'
+      : 'min-h-0 flex-1 overflow-auto rounded-lg border border-edge-subtle p-4 dark:border-edge';
+
+  return (
+    <div className={outerClass}>
+      {showTruncationBar ? (
+        <PreviewOpenAlternativesBar
+          message={truncationMessage}
+          downloadLabel={downloadLabel}
+          onDownload={onDownload}
+          openSystemLabel={openSystemLabel}
+          onOpenWithSystemApp={onOpenWithSystemApp}
+          canOpenWithSystemApp={canOpenWithSystemApp}
+        />
+      ) : null}
+      <div className={innerScrollClass}>
+        {showTruncationBar ? (
+          <p className="mb-2 border-b border-edge-subtle pb-2 text-xs text-fg-muted dark:border-edge">
+            {truncatedCaption}
+          </p>
+        ) : null}
+        <PptxPreviewView text={text} slideLabel={slideLabel} emptySlideLabel={emptySlideLabel} />
+      </div>
+    </div>
+  );
+}
+
+export function FilePreviewBody(props: FilePreviewBodyProps) {
+  const {
+    context,
+    language,
+    resolvedTheme,
+    fileKey,
+    fileName,
+    loading,
+    loadError,
+    previewKind,
+    textContent,
+    binaryBuffer,
+    showExtractedText,
+    extractedText,
+    extractedTextTruncated,
+    workspaceEditing,
+    pptxText,
+    pptxTruncated,
+    pptxError,
+    actions,
+  } = props;
+
+  const m = messages(language);
+  const ext = useMemo(() => getFileExtension(fileName), [fileName]);
+  const isMd = ext === '.md';
+  const isHtml = ext === '.html' || ext === '.htm';
+
+  const binaryContainerRef = useRef<HTMLDivElement | null>(null);
+  const binaryKind = previewKind === 'pdf' || previewKind === 'excel' || previewKind === 'docx' ? previewKind : null;
+  const { error: binaryRenderError, excelTruncated } = useBinaryPreviewInContainer({
+    language,
+    buffer: binaryBuffer,
+    kind: binaryKind,
+    fileKey,
+    containerEl: binaryContainerRef.current,
+  });
+
+  const showSystemOpen =
+    Boolean(actions.onOpenWithSystemApp) && (actions.canOpenWithSystemApp ?? true) && context === 'workspace';
+
+  const openElsewhereMessage =
+    context === 'workspace' ? m.workspace.openElsewhereHint : m.chat.attachmentPreviewOpenElsewhereHint;
+
+  const downloadLabel = m.chat.attachmentPreviewDownloadFull;
+
+  const openSystemLabel = context === 'workspace' ? m.workspace.openSystemApp : undefined;
+
+  const pptxSlideLabel = (n: number) => m.chat.attachmentPreviewPptxSlide.replaceAll('{n}', String(n));
+
+  const baseAlternativesBar = (
+    <PreviewOpenAlternativesBar
+      message={openElsewhereMessage}
+      downloadLabel={downloadLabel}
+      onDownload={actions.onDownload}
+      openSystemLabel={openSystemLabel}
+      onOpenWithSystemApp={actions.onOpenWithSystemApp}
+      canOpenWithSystemApp={showSystemOpen}
+    />
+  );
+
+  let body: ReactNode = null;
+
+  if (loading) {
+    body = <p className="px-4 py-6 text-sm text-fg-muted">{m.chat.loading}</p>;
+  } else if (loadError) {
+    body = (
+      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto px-4 py-4">
+        {baseAlternativesBar}
+        <p className="text-sm text-red-600 dark:text-red-400">
+          {(context === 'workspace' ? m.workspace.loadError : m.chat.attachmentPreviewLoadError) + ': ' + loadError}
+        </p>
+      </div>
+    );
+  } else if (context === 'attachment' && showExtractedText && previewKind !== 'image') {
+    const raw = extractedText || m.chat.attachmentPreviewNoText;
+    const capText =
+      previewKind === 'pptx' && raw.length > PPTX_PREVIEW_MAX_CHARS ? raw.slice(0, PPTX_PREVIEW_MAX_CHARS) : raw;
+    const truncated = Boolean(extractedTextTruncated) || (previewKind === 'pptx' && raw.length > PPTX_PREVIEW_MAX_CHARS);
+    body = (
+      <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden">
+        {truncated && previewKind === 'pptx' ? (
+          <PreviewOpenAlternativesBar
+            message={m.chat.attachmentPreviewOpenElsewhereTruncated}
+            downloadLabel={m.chat.attachmentPreviewDownloadFull}
+            onDownload={actions.onDownload}
+          />
+        ) : null}
+        <div className="min-h-0 flex-1 overflow-auto rounded-lg border border-edge-subtle bg-surface-hover/40 p-4 dark:border-edge">
+          {truncated && previewKind === 'pptx' ? (
+            <p className="mb-2 border-b border-edge-subtle pb-2 text-xs text-fg-muted dark:border-edge">
+              {m.chat.attachmentPreviewPptxTruncated}
+            </p>
+          ) : null}
+          <pre className="whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-fg-muted">
+            {capText}
+          </pre>
+        </div>
+      </div>
+    );
+  } else if (previewKind === 'binaryOnly' && binaryBuffer) {
+    body = (
+      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto px-4 py-4">
+        <PreviewOpenAlternativesBar
+          message={
+            context === 'workspace'
+              ? m.workspace.cannotPreviewType + ' ' + m.workspace.openElsewhereHint
+              : m.chat.attachmentPreviewOpenElsewhereHint
+          }
+          downloadLabel={m.chat.attachmentPreviewDownloadFull}
+          onDownload={actions.onDownload}
+          openSystemLabel={openSystemLabel}
+          onOpenWithSystemApp={actions.onOpenWithSystemApp}
+          canOpenWithSystemApp={showSystemOpen}
+        />
+      </div>
+    );
+  } else if (binaryBuffer && previewKind === 'image') {
+    const mime = inferMimeTypeFromFileName(fileName) ?? 'image/png';
+    const src = `data:${mime};base64,${arrayBufferToBase64(binaryBuffer)}`;
+    body = (
+      <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto bg-surface-base px-3 py-4 dark:bg-surface-hover/20">
+        <img
+          src={src}
+          alt=""
+          className={context === 'workspace' ? 'max-h-[min(100%,calc(100dvh-9rem))] w-auto max-w-full object-contain' : 'max-h-full max-w-full object-contain'}
+        />
+      </div>
+    );
+  } else if (binaryBuffer && previewKind === 'pptx') {
+    if (context === 'attachment') {
+      const raw = extractedText || m.chat.attachmentPreviewNoText;
+      const cap = PPTX_PREVIEW_MAX_CHARS;
+      const truncated = Boolean(extractedTextTruncated) || raw.length > cap;
+      const text = raw.length > cap ? raw.slice(0, cap) : raw;
+      body = (
+        <FilePreviewPptxSlidePane
+          layout="attachment"
+          text={text}
+          showTruncationBar={truncated}
+          onDownload={actions.onDownload}
+          downloadLabel={downloadLabel}
+          truncationMessage={m.chat.attachmentPreviewOpenElsewhereTruncated}
+          truncatedCaption={m.chat.attachmentPreviewPptxTruncated}
+          slideLabel={pptxSlideLabel}
+          emptySlideLabel={m.chat.attachmentPreviewPptxEmptySlide}
+        />
+      );
+    } else if (pptxError) {
+      body = (
+        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto px-4 py-4">
+          {baseAlternativesBar}
+          <p className="text-sm text-red-600 dark:text-red-400">
+            {(context === 'workspace' ? m.workspace.loadError : m.chat.attachmentPreviewLoadError) + ': ' + pptxError}
+          </p>
+        </div>
+      );
+    } else if (pptxText == null) {
+      body = <p className="px-4 py-6 text-sm text-fg-muted">{m.chat.loading}</p>;
+    } else {
+      body = (
+        <FilePreviewPptxSlidePane
+          layout="workspace"
+          text={pptxText}
+          showTruncationBar={Boolean(pptxTruncated)}
+          onDownload={actions.onDownload}
+          downloadLabel={downloadLabel}
+          truncationMessage={m.chat.attachmentPreviewOpenElsewhereTruncated}
+          truncatedCaption={m.chat.attachmentPreviewPptxTruncated}
+          slideLabel={pptxSlideLabel}
+          emptySlideLabel={m.chat.attachmentPreviewPptxEmptySlide}
+          openSystemLabel={openSystemLabel}
+          onOpenWithSystemApp={actions.onOpenWithSystemApp}
+          canOpenWithSystemApp={showSystemOpen}
+        />
+      );
+    }
+  } else if (binaryBuffer && (previewKind === 'pdf' || previewKind === 'docx')) {
+    if (binaryRenderError) {
+      body = (
+        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto px-4 py-4">
+          {baseAlternativesBar}
+          <p className="text-sm text-red-600 dark:text-red-400">
+            {(context === 'workspace' ? m.workspace.loadError : m.chat.attachmentPreviewLoadError) + ': ' + binaryRenderError}
+          </p>
+        </div>
+      );
+    } else {
+      body = (
+        <div
+          ref={binaryContainerRef}
+          className="docx-preview-host min-h-0 flex-1 overflow-auto rounded-lg border border-edge-subtle bg-surface-panel p-2 dark:border-edge"
+        />
+      );
+    }
+  } else if (binaryBuffer && previewKind === 'excel') {
+    body = (
+      <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden px-2 pb-2 pt-1 sm:px-4">
+        {binaryRenderError ? (
+          <div className="flex flex-col gap-2 px-2">
+            {baseAlternativesBar}
+            <p className="text-sm text-red-600 dark:text-red-400">{binaryRenderError}</p>
+          </div>
+        ) : (
+          <>
+            {excelTruncated ? (
+              <PreviewOpenAlternativesBar
+                message={m.chat.attachmentPreviewOpenElsewhereTruncated}
+                downloadLabel={m.chat.attachmentPreviewDownloadFull}
+                onDownload={actions.onDownload}
+                openSystemLabel={openSystemLabel}
+                onOpenWithSystemApp={actions.onOpenWithSystemApp}
+                canOpenWithSystemApp={showSystemOpen}
+              />
+            ) : null}
+            <div
+              ref={binaryContainerRef}
+              className="docx-preview-host min-h-0 flex-1 overflow-auto rounded-lg border border-edge-subtle bg-surface-panel p-2 dark:border-edge"
+            />
+          </>
+        )}
+      </div>
+    );
+  } else if (textContent !== null && previewKind === 'text') {
+    if (context === 'workspace' && isMd && workspaceEditing?.markdownEditMode) {
+      body = (
+        <div className="min-h-0 flex-1 overflow-hidden">
+          <MarkdownSplit
+            key={fileKey}
+            initialContent={textContent}
+            onSave={(c) => void workspaceEditing?.onSaveMarkdown?.(c)}
+            isDark={(workspaceEditing?.isDark ?? (resolvedTheme === 'dark')) === true}
+          />
+        </div>
+      );
+    } else if (isMd) {
+      body = (
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+          <MarkdownView content={textContent} />
+        </div>
+      );
+    } else if (context === 'workspace' && isHtml && workspaceEditing?.htmlCodeMode) {
+      body = (
+        <div className="min-h-0 flex-1 overflow-hidden">
+          <HtmlWorkspaceEditor
+            key={fileKey}
+            initialContent={textContent}
+            onChange={(v) => workspaceEditing?.onHtmlChange?.(v)}
+            isDark={(workspaceEditing?.isDark ?? (resolvedTheme === 'dark')) === true}
+          />
+        </div>
+      );
+    } else if (isHtml) {
+      body = (
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-2 pb-2 pt-1 sm:px-4">
+          <iframe
+            title={fileName}
+            className="min-h-0 w-full flex-1 rounded-lg border border-edge-subtle bg-white dark:border-edge dark:bg-[#1e1e1e]"
+            srcDoc={textContent}
+            sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-downloads allow-forms allow-modals"
+          />
+        </div>
+      );
+    } else if (ext === '.ts' || ext === '.js') {
+      body = (
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+          <MarkdownView content={wrapInCodeFence(textContent, ext)} />
+        </div>
+      );
+    } else if (ext === '.json') {
+      let display = textContent;
+      try {
+        display = JSON.stringify(JSON.parse(textContent), null, 2);
+      } catch {
+        /* keep raw */
+      }
+      body = (
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+          <MarkdownView content={wrapInCodeFence(display, '.json')} />
+        </div>
+      );
+    } else {
+      body = (
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+          <pre className="whitespace-pre-wrap break-words font-mono text-xs text-fg">{textContent}</pre>
+        </div>
+      );
+    }
+  }
+
+  return <div className="flex min-h-0 flex-1 flex-col">{body}</div>;
+}
+
