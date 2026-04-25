@@ -107,6 +107,15 @@ function renderChunkedContent(
     readFile: string;
     stepDetails: string;
     stepsRoundComplete: string;
+    advancedModeOn: string;
+    advancedModeOff: string;
+    runCommand: string;
+    listDirectory: string;
+    writeFile: string;
+    editFile: string;
+    openUrl: string;
+    fetchUrl: string;
+    unknownTool: string;
   },
   imagePreviewLabel: string,
   onImagePreview: ((block: ImageContent, index: number) => void) | undefined,
@@ -230,6 +239,15 @@ export const MessageBubble = memo(function MessageBubble({
       readFile: m.chat.stepReadFile,
       stepDetails: m.chat.stepDetails,
       stepsRoundComplete: m.chat.stepsRoundComplete,
+      advancedModeOn: m.chat.advancedModeOn,
+      advancedModeOff: m.chat.advancedModeOff,
+      runCommand: m.chat.stepRunCommand,
+      listDirectory: m.chat.stepListDirectory,
+      writeFile: m.chat.stepWriteFile,
+      editFile: m.chat.stepEditFile,
+      openUrl: m.chat.stepOpenUrl,
+      fetchUrl: m.chat.stepFetchUrl,
+      unknownTool: m.chat.stepUnknownTool,
     }),
     [
       m.chat.thoughts,
@@ -240,6 +258,15 @@ export const MessageBubble = memo(function MessageBubble({
       m.chat.stepReadFile,
       m.chat.stepDetails,
       m.chat.stepsRoundComplete,
+      m.chat.advancedModeOn,
+      m.chat.advancedModeOff,
+      m.chat.stepRunCommand,
+      m.chat.stepListDirectory,
+      m.chat.stepWriteFile,
+      m.chat.stepEditFile,
+      m.chat.stepOpenUrl,
+      m.chat.stepFetchUrl,
+      m.chat.stepUnknownTool,
     ],
   );
 
