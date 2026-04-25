@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { Agent, type Dispatcher } from "undici";
+import { Agent, type Dispatcher, fetch as undiciFetch } from "undici";
 
 import { logger } from "../util/logger.js";
 import { redactBody, redactUrl } from "../util/redact.js";
@@ -216,7 +216,8 @@ async function apiPostFetch(params: {
     // which may not match the installed undici version's `Dispatcher` type.
     if (params.dispatcher) (init as any).dispatcher = params.dispatcher;
 
-    const res = await fetch(url.toString(), init);
+    // Use undici's fetch implementation so `dispatcher` is interpreted consistently.
+    const res = await undiciFetch(url.toString(), init as any);
     clearTimeout(t);
     const rawText = await res.text();
     logger.debug(`${params.label} status=${res.status} raw=${redactBody(rawText)}`);

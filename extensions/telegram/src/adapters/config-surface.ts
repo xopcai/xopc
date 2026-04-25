@@ -6,7 +6,9 @@ export const telegramConfigSurface: ChannelConfigSurfaceAdapter = {
     const telegram = cfg.channels?.telegram as Record<string, unknown> | undefined;
     return {
       enabled: telegram?.enabled,
-      botToken: telegram?.botToken ? '***' : '',
+      // Send the real token to the authenticated settings UI.
+      // The web UI is responsible for masking it by default.
+      botToken: typeof telegram?.botToken === 'string' ? telegram.botToken : '',
       allowFrom: telegram?.allowFrom || [],
       groupAllowFrom: telegram?.groupAllowFrom || [],
       apiRoot: telegram?.apiRoot || '',
