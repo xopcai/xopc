@@ -18,13 +18,13 @@
     "build": "tsc -p tsconfig.json"
   },
   "dependencies": {
-    "zod": "^3.25.76"
+    "zod": "^4.3.6"
   },
   "peerDependencies": {
     "@xopcai/xopc": "workspace:*"
   },
   "devDependencies": {
-    "typescript": "^6.0.2"
+    "typescript": "^6.0.3"
   },
   "xopc": {
     "bundledChannel": {
@@ -32,7 +32,11 @@
       "order": 20
     }
   },
-  "keywords": ["xopc", "weixin", "wechat"],
+  "keywords": [
+    "xopc",
+    "weixin",
+    "wechat"
+  ],
   "license": "MIT",
   "ilink_appid": "bot"
 }
