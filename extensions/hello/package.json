@@ -9,14 +9,17 @@
     "name": "Hello World",
     "kind": "utility"
   },
-  "keywords": ["xopc", "xopc-extension"],
+  "keywords": [
+    "xopc",
+    "xopc-extension"
+  ],
   "license": "MIT",
   "dependencies": {
     "@xopcai/extension-ui-sdk": "workspace:*"
   },
   "devDependencies": {
     "esbuild": "^0.28.0",
-    "typescript": "^6.0.2"
+    "typescript": "^6.0.3"
   },
   "scripts": {
     "build:ui": "node scripts/build-ui.mjs"
