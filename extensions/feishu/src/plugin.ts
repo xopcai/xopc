@@ -35,7 +35,16 @@ import { createFeishuDoctorAdapter } from './status/doctor.js';
 import { feishuConfigSurface } from './ui/config-surface.js';
 import { createFeishuStreamingAdapter } from './streaming/streaming-adapter.js';
 import { readFrameworkAllowFromList } from './auth/pairing.js';
-import { editMessageFeishu, getMessageFeishu } from './outbound/actions.js';
+import {
+  addReactionFeishu,
+  editMessageFeishu,
+  getMessageFeishu,
+  listPinsFeishu,
+  listReactionsFeishu,
+  pinMessageFeishu,
+  removeReactionFeishu,
+  unpinMessageFeishu,
+} from './outbound/actions.js';
 import { createFeishuDirectoryAdapter } from './directory/directory-adapter.js';
 import { feishuWhoAmI } from './tools/tools.js';
 
@@ -150,7 +159,7 @@ export class FeishuChannelPlugin implements ChannelPlugin<ResolvedFeishuAccount>
 
   outbound: ChannelOutboundAdapter = createFeishuOutboundAdapter();
 
-  streaming = createFeishuStreamingAdapter();
+  streaming = createFeishuStreamingAdapter(() => this.cfg);
 
   status: ChannelStatusAdapter<ResolvedFeishuAccount> = createFeishuStatusAdapter();
 
@@ -190,6 +199,70 @@ export class FeishuChannelPlugin implements ChannelPlugin<ResolvedFeishuAccount>
       description: 'Probe Feishu credentials/scopes (placeholder for full docs/wiki/drive tools).',
       execute: async (toolCtx) => {
         return await feishuWhoAmI({ cfg: this.cfg, accountId: toolCtx.accountId });
+      },
+    },
+    {
+      name: 'feishu_react',
+      description: 'Add/remove/list reactions for a message.',
+      execute: async (toolCtx, args) => {
+        const a = args as any;
+        const messageId = typeof a?.messageId === 'string' ? a.messageId : toolCtx.messageId;
+        if (!messageId) throw new Error('feishu_react requires messageId');
+
+        const account = resolveFeishuAccount(this.cfg, toolCtx.accountId ?? 'default');
+        const enabled = (account.actions as any)?.reactions !== false;
+        if (!enabled) {
+          throw new Error('Feishu reactions are disabled via channels.feishu.actions.reactions');
+        }
+
+        if (a?.list === true) {
+          return await listReactionsFeishu({
+            cfg: this.cfg,
+            accountId: toolCtx.accountId,
+            messageId,
+            emojiType: typeof a?.emojiType === 'string' ? a.emojiType : undefined,
+          });
+        }
+
+        if (a?.remove === true) {
+          const reactionId = typeof a?.reactionId === 'string' ? a.reactionId : '';
+          if (!reactionId) throw new Error('feishu_react remove requires reactionId');
+          return await removeReactionFeishu({ cfg: this.cfg, accountId: toolCtx.accountId, messageId, reactionId });
+        }
+
+        const emojiType = typeof a?.emojiType === 'string' ? a.emojiType : '';
+        if (!emojiType) throw new Error('feishu_react requires emojiType');
+        return await addReactionFeishu({ cfg: this.cfg, accountId: toolCtx.accountId, messageId, emojiType });
+      },
+    },
+    {
+      name: 'feishu_pins',
+      description: 'Pin/unpin/list pins for a chat.',
+      execute: async (toolCtx, args) => {
+        const a = args as any;
+        const action = typeof a?.action === 'string' ? a.action : '';
+        if (action === 'list') {
+          const chatId = typeof a?.chatId === 'string' ? a.chatId : toolCtx.chatId;
+          if (!chatId) throw new Error('feishu_pins list requires chatId');
+          return await listPinsFeishu({
+            cfg: this.cfg,
+            accountId: toolCtx.accountId,
+            chatId,
+            startTime: typeof a?.startTime === 'string' ? a.startTime : undefined,
+            endTime: typeof a?.endTime === 'string' ? a.endTime : undefined,
+            pageSize: typeof a?.pageSize === 'number' ? a.pageSize : undefined,
+            pageToken: typeof a?.pageToken === 'string' ? a.pageToken : undefined,
+          });
+        }
+        const messageId = typeof a?.messageId === 'string' ? a.messageId : toolCtx.messageId;
+        if (!messageId) throw new Error('feishu_pins requires messageId');
+        if (action === 'pin') {
+          return await pinMessageFeishu({ cfg: this.cfg, accountId: toolCtx.accountId, messageId });
+        }
+        if (action === 'unpin') {
+          return await unpinMessageFeishu({ cfg: this.cfg, accountId: toolCtx.accountId, messageId });
+        }
+        throw new Error('feishu_pins requires action: pin | unpin | list');
       },
     },
   ];

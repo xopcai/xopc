@@ -9,6 +9,7 @@ import { createFeishuClient } from '../client/client.js';
 import { createFeishuDedupe } from '../reliability/dedupe.js';
 import { stripFeishuMentions } from '../text/mentions.js';
 import { computeBackoffMs } from './retry.js';
+import { getFeishuBindingByMessageId, recordFeishuMessageBinding } from '../../state/message-bindings.js';
 
 const log = createLogger('FeishuSocketMode');
 
@@ -26,6 +27,96 @@ export function createFeishuSocketModeMonitor(deps: FeishuSocketModeMonitorDeps)
   const { account, config: _config, bus, abortSignal, security } = deps;
   const dedupe = createFeishuDedupe();
   let lastEventAt = 0;
+
+  async function handleReactionEvent(kind: 'created' | 'deleted', event: any, api: any): Promise<void> {
+    const msgId = event?.event?.message_id ?? event?.message_id ?? '';
+    const emojiType = event?.event?.reaction_type?.emoji_type ?? event?.reaction_type?.emoji_type ?? '';
+    const operatorType = event?.event?.operator_type ?? event?.operator_type ?? '';
+    const userOpenId =
+      event?.event?.user_id?.open_id ?? event?.user_id?.open_id ?? event?.event?.open_id ?? event?.open_id ?? '';
+    if (!msgId || !emojiType) return;
+    if (operatorType === 'app') return;
+
+    const notifMode = account.reactionNotifications ?? 'own';
+    if (notifMode === 'off') {
+      return;
+    }
+
+    const binding = getFeishuBindingByMessageId(msgId);
+    if (!binding) return;
+
+    const reacted = await fetchFeishuMessageForReaction(api, msgId, 1500);
+    if (!reacted && notifMode === 'own') {
+      // In own-mode, we must be sure this is a bot message.
+      return;
+    }
+
+    const isBotMessage = reacted?.sender_type === 'app' || reacted?.senderType === 'app';
+    if (notifMode === 'own' && !isBotMessage) {
+      return;
+    }
+
+    const senderId = userOpenId || binding.senderId;
+    const preview = reacted ? extractFeishuMessagePreview(reacted) : '';
+
+    await bus.publishInbound({
+      channel: 'feishu',
+      sender_id: senderId,
+      chat_id: binding.chatId,
+      content:
+        kind === 'deleted'
+          ? `撤回了一个表情（${emojiType}）${preview ? `，对应消息：「${preview}」` : ''}`
+          : `对一条消息添加了表情（${emojiType}）${preview ? `：「${preview}」` : ''}`,
+      metadata: {
+        sessionKey: binding.sessionKey,
+        accountId: binding.accountId,
+        isGroup: binding.isGroup,
+        threadId: binding.threadId,
+        feishuEventType: `im.message.reaction.${kind}_v1`,
+        reactedMessageId: msgId,
+        emojiType,
+        raw: event,
+        reactedMessage: reacted ?? null,
+      },
+    });
+  }
+
+  async function handleCardAction(event: any): Promise<void> {
+    const ctx = event?.event?.context ?? event?.context ?? {};
+    const operator = event?.event?.operator ?? event?.operator ?? {};
+    const action = event?.event?.action ?? event?.action ?? {};
+    const chatId = (ctx?.chat_id ?? '').trim();
+    const senderId = (operator?.open_id ?? '').trim();
+    const openMessageId = (ctx?.open_message_id ?? '').trim();
+    const binding = openMessageId ? getFeishuBindingByMessageId(openMessageId) : null;
+
+    const isGroup = chatId.startsWith('oc_');
+    const sessionKey =
+      binding?.sessionKey ??
+      generateSessionKey({
+        source: 'feishu',
+        chatId: chatId || senderId,
+        senderId: senderId || 'unknown',
+        isGroup: Boolean(chatId) && isGroup,
+        accountId: account.accountId,
+      });
+
+    await bus.publishInbound({
+      channel: 'feishu',
+      sender_id: senderId || 'unknown',
+      chat_id: chatId || senderId || 'unknown',
+      content: `[card action: ${String(action?.tag ?? 'unknown')}]`,
+      metadata: {
+        sessionKey,
+        accountId: account.accountId,
+        isGroup: Boolean(chatId) && isGroup,
+        feishuEventType: 'card.action.trigger',
+        cardAction: action,
+        cardContext: ctx,
+        raw: event,
+      },
+    });
+  }
 
   async function handleMessageReceive(event: any): Promise<void> {
     lastEventAt = Date.now();
@@ -72,6 +163,16 @@ export function createFeishuSocketModeMonitor(deps: FeishuSocketModeMonitorDeps)
       isGroup,
       threadId: typeof threadId === 'string' && threadId.trim() ? threadId : undefined,
       accountId: account.accountId,
+    });
+
+    recordFeishuMessageBinding({
+      messageId,
+      sessionKey,
+      accountId: account.accountId,
+      chatId,
+      senderId,
+      isGroup,
+      threadId: typeof threadId === 'string' && threadId.trim() ? threadId : undefined,
     });
 
     const securityCtx: ChannelSecurityContext = {
@@ -132,11 +233,20 @@ export function createFeishuSocketModeMonitor(deps: FeishuSocketModeMonitorDeps)
       while (!abortSignal.aborted) {
         attempt++;
         const client = createFeishuClient(account);
-        const { wsClient, dispatcher } = client;
+        const { wsClient, dispatcher, api } = client;
 
         dispatcher.register({
           'im.message.receive_v1': async (data: any) => {
             await handleMessageReceive(data);
+          },
+          'im.message.reaction.created_v1': async (data: any) => {
+            await handleReactionEvent('created', data, api);
+          },
+          'im.message.reaction.deleted_v1': async (data: any) => {
+            await handleReactionEvent('deleted', data, api);
+          },
+          'card.action.trigger': async (data: any) => {
+            await handleCardAction(data);
           },
         });
 
@@ -181,6 +291,43 @@ export function createFeishuSocketModeMonitor(deps: FeishuSocketModeMonitorDeps)
   }
 
   return { run };
+}
+
+async function fetchFeishuMessageForReaction(api: any, messageId: string, timeoutMs: number): Promise<any | null> {
+  const t = messageId.trim();
+  if (!t) return null;
+  try {
+    const result = await Promise.race([
+      (api as any).im.message.get({ path: { message_id: t } }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), timeoutMs)),
+    ]);
+    return (result as any)?.data ?? result;
+  } catch {
+    return null;
+  }
+}
+
+function extractFeishuMessagePreview(msg: any): string {
+  const raw = msg?.body?.content ?? msg?.content ?? msg?.message?.content;
+  if (typeof raw !== 'string' || !raw.trim()) return '';
+  try {
+    const parsed = JSON.parse(raw);
+    const t =
+      typeof parsed?.text === 'string'
+        ? parsed.text
+        : typeof parsed?.content === 'string'
+          ? parsed.content
+          : '';
+    return summarizeText(String(t || ''), 80);
+  } catch {
+    return summarizeText(raw, 80);
+  }
+}
+
+function summarizeText(text: string, max: number): string {
+  const s = text.replace(/\s+/g, ' ').trim();
+  if (s.length <= max) return s;
+  return s.slice(0, max - 1) + '…';
 }
 
 function safeJsonText(raw: unknown): string | undefined {

@@ -93,6 +93,7 @@ export const FeishuConfigSchema = z
 
   historyLimit: z.number().int().min(0).default(50).optional(),
   textChunkLimit: z.number().int().positive().default(4000).optional(),
+  reactionNotifications: z.enum(['off', 'own', 'all']).optional(),
 
   streaming: z.boolean().optional(),
   blockStreamingCoalesce: z
