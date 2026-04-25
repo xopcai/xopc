@@ -22,6 +22,24 @@ import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 import { useLocaleStore } from '@/stores/locale-store';
 
+const STEPS_ADVANCED_STORAGE_KEY = 'xopc.chat.steps.advanced';
+
+function readStepsAdvancedPreference(): boolean {
+  try {
+    return globalThis.localStorage?.getItem(STEPS_ADVANCED_STORAGE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function writeStepsAdvancedPreference(next: boolean): void {
+  try {
+    globalThis.localStorage?.setItem(STEPS_ADVANCED_STORAGE_KEY, next ? '1' : '0');
+  } catch {
+    /* ignore */
+  }
+}
+
 function formatParamsJson(params: unknown): string {
   if (params === undefined) return '';
   try {
@@ -111,11 +129,79 @@ export function getToolStepDisplayName(
   return name.trim() || 'tool';
 }
 
-function toolStepTitle(
+function toolNameKey(name: string): string {
+  return name.toLowerCase().replace(/-/g, '_').trim();
+}
+
+function getFriendlyToolTitle(
   name: string,
-  labels: { searchedWeb: string; readFile: string },
+  labels: {
+    searchedWeb: string;
+    readFile: string;
+    runCommand: string;
+    listDirectory: string;
+    writeFile: string;
+    editFile: string;
+    openUrl: string;
+    fetchUrl: string;
+    unknownTool: string;
+  },
 ): string {
-  return getToolStepDisplayName(name, labels);
+  const n = toolNameKey(name);
+  if (n === 'shell') return labels.runCommand;
+  if (n === 'list_dir' || n === 'ls') return labels.listDirectory;
+  if (n === 'write_file') return labels.writeFile;
+  if (n === 'edit_file') return labels.editFile;
+  if (n === 'web_fetch') return labels.fetchUrl;
+  if (n === 'open_url') return labels.openUrl;
+  if (n === 'web_search' || n === 'brave_search' || n.includes('search')) return labels.searchedWeb;
+  if (n === 'read_file' || n.includes('read_file') || n.includes('file_read')) return labels.readFile;
+  return labels.unknownTool.replace('{{name}}', name.trim() || 'tool');
+}
+
+function getKeyDetailLine(input: unknown): string {
+  if (input == null) return '';
+  let obj: Record<string, unknown> | null = null;
+  try {
+    obj =
+      typeof input === 'string'
+        ? (JSON.parse(input) as Record<string, unknown>)
+        : (input as Record<string, unknown>);
+  } catch {
+    // fall back to string input
+    return typeof input === 'string' ? input.trim() : '';
+  }
+
+  const candidates = [
+    obj.command,
+    obj.cmd,
+    obj.shell,
+    obj.script,
+    obj.path,
+    obj.file_path,
+    obj.filepath,
+    obj.file,
+    obj.url,
+    obj.href,
+    obj.uri,
+    obj.website,
+    obj.query,
+    obj.q,
+    obj.query_string,
+    obj.search_term,
+    obj.searchQuery,
+  ];
+
+  for (const c of candidates) {
+    if (typeof c === 'string' && c.trim()) {
+      const t = c.trim();
+      return t.length > 120 ? `${t.slice(0, 120)}…` : t;
+    }
+    if (typeof c === 'number' && Number.isFinite(c)) {
+      return String(c);
+    }
+  }
+  return '';
 }
 
 function filterVisibleSteps(blocks: Array<ThinkingContent | ToolUseContent>): Array<ThinkingContent | ToolUseContent> {
@@ -153,6 +239,15 @@ export function AssistantStepsBlock({
     readFile: string;
     stepDetails: string;
     stepsRoundComplete: string;
+    advancedModeOn: string;
+    advancedModeOff: string;
+    runCommand: string;
+    listDirectory: string;
+    writeFile: string;
+    editFile: string;
+    openUrl: string;
+    fetchUrl: string;
+    unknownTool: string;
   };
   sessionKey?: string | null;
 }) {
@@ -169,6 +264,7 @@ export function AssistantStepsBlock({
   const [frozenDurationMs, setFrozenDurationMs] = useState<number | null>(null);
   const [liveTick, setLiveTick] = useState(0);
   const [expanded, setExpanded] = useState(anyActive);
+  const [advanced, setAdvanced] = useState<boolean>(() => readStepsAdvancedPreference());
 
   if (anyActive && roundStartRef.current === null) {
     roundStartRef.current = Date.now();
@@ -204,6 +300,15 @@ export function AssistantStepsBlock({
     searchedWeb: stepLabels.searchedWeb,
     readFile: stepLabels.readFile,
     stepDetails: stepLabels.stepDetails,
+    advancedModeOn: stepLabels.advancedModeOn,
+    advancedModeOff: stepLabels.advancedModeOff,
+    runCommand: stepLabels.runCommand,
+    listDirectory: stepLabels.listDirectory,
+    writeFile: stepLabels.writeFile,
+    editFile: stepLabels.editFile,
+    openUrl: stepLabels.openUrl,
+    fetchUrl: stepLabels.fetchUrl,
+    unknownTool: stepLabels.unknownTool,
   };
 
   const liveElapsedMs =
@@ -231,20 +336,21 @@ export function AssistantStepsBlock({
   ) : (
     <>
       <span className="[overflow-wrap:anywhere]">{stepLabels.stepsRoundComplete}</span>
-      {summaryDurationText ? (
-        <span className="ml-1.5 tabular-nums text-fg-muted">{summaryDurationText}</span>
-      ) : null}
     </>
   );
+
+  const headerDurationRight =
+    !anyActive && summaryDurationText ? (
+      <span className="mt-0.5 tabular-nums text-xs text-fg-muted">{summaryDurationText}</span>
+    ) : null;
 
   return (
     <div className="my-1 w-full min-w-0 overflow-hidden rounded-xl bg-surface-hover/50 dark:bg-surface-hover/30">
       <button
         type="button"
         className={cn(
-          'grid w-full min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-x-2 rounded-t-xl px-3 py-2 text-left',
+          'grid w-full min-w-0 grid-cols-[auto_minmax(0,1fr)_auto_auto_auto] items-start gap-x-2 rounded-t-xl px-3 py-2 text-left',
           interaction.transition,
-          interaction.press,
           'hover:bg-surface-hover/80 dark:hover:bg-surface-hover/50',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
         )}
@@ -257,6 +363,30 @@ export function AssistantStepsBlock({
             {headerMain}
           </span>
         </div>
+        <span className="flex items-start justify-end">{headerDurationRight}</span>
+        <span className="mt-0.5 flex items-center justify-end">
+          <button
+            type="button"
+            className={cn(
+              'inline-flex items-center rounded-md border border-edge-subtle bg-surface-panel px-1 py-0.5 text-[11px] font-medium text-fg-muted',
+              'hover:bg-surface-hover/60 hover:text-fg',
+              interaction.focusRingPanel,
+            )}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setAdvanced((cur) => {
+                const next = !cur;
+                writeStepsAdvancedPreference(next);
+                return next;
+              });
+            }}
+            aria-pressed={advanced}
+            title={advanced ? stepLabels.advancedModeOn : stepLabels.advancedModeOff}
+          >
+            {advanced ? stepLabels.advancedModeOn : stepLabels.advancedModeOff}
+          </button>
+        </span>
         <ChevronDown
           className={cn('mt-0.5 h-4 w-4 shrink-0 text-fg-muted transition-transform', expanded && 'rotate-180')}
           aria-hidden
@@ -268,6 +398,7 @@ export function AssistantStepsBlock({
             blocks={blocks}
             toolLabels={toolLabels}
             stepLabels={timelineLabels}
+            advanced={advanced}
             sessionKey={sessionKey}
           />
         </div>
@@ -420,6 +551,7 @@ export function AssistantStepsTimeline({
   blocks,
   toolLabels,
   stepLabels,
+  advanced,
   className,
   sessionKey,
 }: {
@@ -431,7 +563,17 @@ export function AssistantStepsTimeline({
     searchedWeb: string;
     readFile: string;
     stepDetails: string;
+    advancedModeOn: string;
+    advancedModeOff: string;
+    runCommand: string;
+    listDirectory: string;
+    writeFile: string;
+    editFile: string;
+    openUrl: string;
+    fetchUrl: string;
+    unknownTool: string;
   };
+  advanced: boolean;
   className?: string;
   sessionKey?: string | null;
 }) {
@@ -449,6 +591,7 @@ export function AssistantStepsTimeline({
             block={b}
             toolLabels={toolLabels}
             stepLabels={stepLabels}
+            advanced={advanced}
             sessionKey={sessionKey}
           />
         ))}
@@ -490,6 +633,7 @@ function StepRow({
   block,
   toolLabels,
   stepLabels,
+  advanced,
   sessionKey,
 }: {
   block: ThinkingContent | ToolUseContent;
@@ -500,7 +644,17 @@ function StepRow({
     searchedWeb: string;
     readFile: string;
     stepDetails: string;
+    advancedModeOn: string;
+    advancedModeOff: string;
+    runCommand: string;
+    listDirectory: string;
+    writeFile: string;
+    editFile: string;
+    openUrl: string;
+    fetchUrl: string;
+    unknownTool: string;
   };
+  advanced: boolean;
   sessionKey?: string | null;
 }) {
   const toolResultText = useMemo(() => {
@@ -587,13 +741,18 @@ function StepRow({
     }
   }
 
-  const title = toolStepTitle(block.name, {
+  const title = getFriendlyToolTitle(block.name, {
     searchedWeb: stepLabels.searchedWeb,
     readFile: stepLabels.readFile,
+    runCommand: stepLabels.runCommand,
+    listDirectory: stepLabels.listDirectory,
+    writeFile: stepLabels.writeFile,
+    editFile: stepLabels.editFile,
+    openUrl: stepLabels.openUrl,
+    fetchUrl: stepLabels.fetchUrl,
+    unknownTool: stepLabels.unknownTool,
   });
-  const q = extractSearchQuery(block.input);
-  const path = extractPathPreview(block.input);
-  const detailLine = q || path || '';
+  const detailLine = getKeyDetailLine(block.input);
 
   const paramsJson = block.input !== undefined ? formatParamsJson(block.input) : '';
 
@@ -624,7 +783,7 @@ function StepRow({
             {detailLine}
           </p>
         ) : null}
-        {!isStreaming ? (
+        {!isStreaming && advanced ? (
           <details className="group min-w-0 text-xs">
             <summary className="cursor-pointer select-none text-fg-subtle underline-offset-2 hover:text-fg-muted group-open:text-fg-muted">
               {stepLabels.stepDetails}
