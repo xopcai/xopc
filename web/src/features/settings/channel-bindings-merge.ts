@@ -31,14 +31,25 @@ export function weixinRoutingAccountIds(wx: { accounts?: Record<string, unknown>
   return Object.keys(wx.accounts ?? {}).sort();
 }
 
+export function feishuRoutingAccountIds(fs: { appId?: string; appSecret?: string; accounts?: Record<string, unknown> }): string[] {
+  const keys = Object.keys(fs.accounts ?? {});
+  if (keys.length > 0) return [...keys].sort();
+  if (typeof fs.appId === 'string' && fs.appId.trim() && typeof fs.appSecret === 'string' && fs.appSecret.trim()) {
+    return ['default'];
+  }
+  return [];
+}
+
 export function extractChannelAgentRoutes(
   bindings: BindingRuleWire[],
   telegramAccountIds: string[],
   weixinAccountIds: string[],
+  feishuAccountIds: string[],
   defaultAgentId: string,
 ): ChannelAgentRoutesState {
   const telegram: Record<string, string> = {};
   const weixin: Record<string, string> = {};
+  const feishu: Record<string, string> = {};
 
   for (const id of telegramAccountIds) {
     const rule = bindings.find(
@@ -59,7 +70,17 @@ export function extractChannelAgentRoutes(
     weixin[id] = (rule?.agentId ?? defaultAgentId).trim().toLowerCase();
   }
 
-  return { telegram, weixin };
+  for (const id of feishuAccountIds) {
+    const rule = bindings.find(
+      (r) =>
+        normAcc(r.match?.channel) === 'feishu' &&
+        normAcc(r.match?.accountId) === normAcc(id) &&
+        isSimpleAccountOnlyRule(r),
+    );
+    feishu[id] = (rule?.agentId ?? defaultAgentId).trim().toLowerCase();
+  }
+
+  return { telegram, weixin, feishu };
 }
 
 export function mergeChannelAgentBindings(
@@ -67,10 +88,12 @@ export function mergeChannelAgentBindings(
   routes: ChannelAgentRoutesState,
   telegramAccountIds: string[],
   weixinAccountIds: string[],
+  feishuAccountIds: string[],
   defaultAgentId: string,
 ): BindingRuleWire[] {
   const tgAcc = new Set(telegramAccountIds.map(normAcc));
   const wxAcc = new Set(weixinAccountIds.map(normAcc));
+  const fsAcc = new Set(feishuAccountIds.map(normAcc));
 
   const filtered = previous.filter((r) => {
     if (r.id?.startsWith('ui:route:account:')) return false;
@@ -80,6 +103,7 @@ export function mergeChannelAgentBindings(
     if (!acc || acc === '*') return true;
     if (ch === 'telegram' && tgAcc.has(acc)) return false;
     if (ch === 'weixin' && wxAcc.has(acc)) return false;
+    if (ch === 'feishu' && fsAcc.has(acc)) return false;
     return true;
   });
 
@@ -104,6 +128,17 @@ export function mergeChannelAgentBindings(
       priority: 45,
       enabled: true,
       match: { channel: 'weixin', accountId: acc },
+    });
+  }
+
+  for (const acc of feishuAccountIds) {
+    const agentId = (routes.feishu[acc] ?? routes.feishu[normAcc(acc)] ?? defaultAgentId).trim().toLowerCase();
+    added.push({
+      id: `ui:route:account:feishu:${acc}`,
+      agentId,
+      priority: 45,
+      enabled: true,
+      match: { channel: 'feishu', accountId: acc },
     });
   }
 
