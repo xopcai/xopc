@@ -2,7 +2,8 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
 
-import { WorkspaceFilePreviewPanel, getFileName } from '@/features/workspace/workspace-file-preview-dialog';
+import { getFileName } from '@/features/file-preview';
+import { WorkspaceFilePreviewPanel } from '@/features/workspace/workspace-file-preview-dialog';
 import { cn } from '@/lib/cn';
 import { useSidebarStore } from '@/stores/sidebar-store';
 import { useWorkspaceEditorAgentStore } from '@/stores/workspace-editor-agent-store';
