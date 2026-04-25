@@ -19,7 +19,7 @@
   },
   "devDependencies": {
     "esbuild": "^0.28.0",
-    "typescript": "^6.0.3"
+    "typescript": "^5.9.3"
   },
   "scripts": {
     "build:ui": "node scripts/build-ui.mjs"

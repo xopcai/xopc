@@ -61,7 +61,7 @@ function jsonResult(obj: Record<string, unknown>): AgentToolResult<{}> {
   return { content: [{ type: 'text', text: JSON.stringify(obj, null, 2) }], details: {} };
 }
 
-export function createSkillManageTool(deps: SkillManageToolDeps): AgentTool<typeof SkillManageSchema, {}> {
+export function createSkillManageTool(deps: SkillManageToolDeps): AgentTool {
   return {
     name: 'skill_manage',
     label: '🛠️ Skill',
@@ -358,5 +358,5 @@ export function createSkillManageTool(deps: SkillManageToolDeps): AgentTool<type
         });
       }
     },
-  };
+  } as any;
 }

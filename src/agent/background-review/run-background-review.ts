@@ -1,4 +1,4 @@
-import { Agent, type AgentMessage, type AgentTool, type ThinkingLevel } from '@mariozechner/pi-agent-core';
+import { Agent, type AgentMessage, type ThinkingLevel } from '@mariozechner/pi-agent-core';
 import type { Api, Model } from '@mariozechner/pi-ai';
 
 import type { Config } from '../../config/schema.js';
@@ -80,7 +80,7 @@ export async function runBackgroundReviewTurn(params: RunBackgroundReviewParams)
         ? MEMORY_REVIEW_USER_PROMPT
         : SKILL_REVIEW_USER_PROMPT;
 
-  const rawTools: AgentTool<any, any>[] = [];
+  const rawTools: any[] = [];
 
   if (reviewMemory && shouldRegisterCuratedMemoryTool(getConfig())) {
     rawTools.push(

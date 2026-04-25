@@ -1,5 +1,5 @@
 import { readFileSync, statSync } from 'fs';
-import { Type, type Static } from '@sinclair/typebox';
+import { Type } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core';
 
 import { resolveStateDir } from '../../config/paths.js';
@@ -46,7 +46,7 @@ function maxSkillBytes(): number {
   return typeof lim === 'number' && lim > 0 ? lim : DEFAULT_MAX_SKILL_FILE_BYTES;
 }
 
-export function createSkillsListTool(deps: SkillsToolsDeps): AgentTool<typeof SkillsListSchema, {}> {
+export function createSkillsListTool(deps: SkillsToolsDeps): AgentTool {
   return {
     name: 'skills_list',
     label: '📚 Skills',
@@ -55,7 +55,7 @@ export function createSkillsListTool(deps: SkillsToolsDeps): AgentTool<typeof Sk
     parameters: SkillsListSchema,
     async execute(
       _toolCallId: string,
-      params: Static<typeof SkillsListSchema>,
+      params: any,
     ): Promise<AgentToolResult<{}>> {
       const mgr = deps.getSkillManager();
       if (!mgr) {
@@ -70,7 +70,7 @@ export function createSkillsListTool(deps: SkillsToolsDeps): AgentTool<typeof Sk
         skillAllowlist: idx?.skillAllowlist,
         registeredToolNames: idx?.registeredToolNames,
       });
-      const q = params.query?.trim().toLowerCase();
+      const q = (params as { query?: string }).query?.trim().toLowerCase();
       if (q) {
         skills = skills.filter(
           (s) =>
@@ -91,10 +91,10 @@ export function createSkillsListTool(deps: SkillsToolsDeps): AgentTool<typeof Sk
         details: {},
       };
     },
-  };
+  } as any;
 }
 
-export function createSkillViewTool(deps: SkillsToolsDeps): AgentTool<typeof SkillViewSchema, {}> {
+export function createSkillViewTool(deps: SkillsToolsDeps): AgentTool {
   return {
     name: 'skill_view',
     label: '📖 Skill',
@@ -103,8 +103,9 @@ export function createSkillViewTool(deps: SkillsToolsDeps): AgentTool<typeof Ski
     parameters: SkillViewSchema,
     async execute(
       _toolCallId: string,
-      params: Static<typeof SkillViewSchema>,
+      params: any,
     ): Promise<AgentToolResult<{}>> {
+      const p = params as { name: string; path?: string; limit?: number };
       const mgr = deps.getSkillManager();
       if (!mgr) {
         return {
@@ -113,13 +114,13 @@ export function createSkillViewTool(deps: SkillsToolsDeps): AgentTool<typeof Ski
         };
       }
 
-      const skill = mgr.findSkill(params.name.trim());
+      const skill = mgr.findSkill(p.name.trim());
       if (!skill) {
         return {
           content: [
             {
               type: 'text',
-              text: `Skill not found: "${params.name}". Use skills_list to see available names.`,
+              text: `Skill not found: "${p.name}". Use skills_list to see available names.`,
             },
           ],
           details: {},
@@ -151,7 +152,7 @@ export function createSkillViewTool(deps: SkillsToolsDeps): AgentTool<typeof Ski
         };
       }
 
-      const resolved = resolveSkillReadablePath(skill, params.path);
+      const resolved = resolveSkillReadablePath(skill, p.path);
       if (resolved.ok === false) {
         return { content: [{ type: 'text', text: resolved.error }], details: {} };
       }
@@ -173,7 +174,7 @@ export function createSkillViewTool(deps: SkillsToolsDeps): AgentTool<typeof Ski
 
         const raw = readFileSync(resolved.absolutePath, 'utf-8');
         const truncation = truncateHead(raw, {
-          maxLines: params.limit ?? DEFAULT_MAX_LINES,
+          maxLines: p.limit ?? DEFAULT_MAX_LINES,
           maxBytes: DEFAULT_MAX_BYTES,
         });
 
@@ -201,5 +202,5 @@ export function createSkillViewTool(deps: SkillsToolsDeps): AgentTool<typeof Ski
         };
       }
     },
-  };
+  } as any;
 }

@@ -74,8 +74,8 @@ export function useChatSession() {
 
   useEffect(() => {
     const onConfigReload = () => void mutateChatAgents();
-    window.addEventListener('config-reload', onConfigReload as EventListener);
-    return () => window.removeEventListener('config-reload', onConfigReload as EventListener);
+    window.addEventListener('config-reload', onConfigReload);
+    return () => window.removeEventListener('config-reload', onConfigReload);
   }, [mutateChatAgents]);
 
   const [preferredAgentId, setPreferredAgentId] = useState<string | null>(() => readStoredWebchatAgentId());
@@ -988,8 +988,8 @@ export function useChatSession() {
       if (!d?.key || d.name === undefined) return;
       if (d.key === sessionKey) setSessionName(d.name || null);
     };
-    window.addEventListener('session-updated', handler as EventListener);
-    return () => window.removeEventListener('session-updated', handler as EventListener);
+    window.addEventListener('session-updated', handler);
+    return () => window.removeEventListener('session-updated', handler);
   }, [sessionKey]);
 
   /** After settings PATCH / gateway reload, resolved reasoning/thinking use new defaults (session overrides still win). */
@@ -1007,8 +1007,8 @@ export function useChatSession() {
         })
         .catch(() => {});
     };
-    window.addEventListener('config-reload', onConfigReload as EventListener);
-    return () => window.removeEventListener('config-reload', onConfigReload as EventListener);
+    window.addEventListener('config-reload', onConfigReload);
+    return () => window.removeEventListener('config-reload', onConfigReload);
   }, [refreshModelThinkingSupport]);
 
   useEffect(() => {

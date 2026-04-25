@@ -177,5 +177,5 @@ export function createImageGenerateTool(options: {
         };
       }
     },
-  };
+  } as any;
 }

@@ -1,5 +1,5 @@
 // Web search and fetch tools
-import { Type, type Static } from '@sinclair/typebox';
+import { Type } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core';
 import type { Config } from '../../config/schema.js';
 import { SearchProviderRegistry } from './search/registry.js';
@@ -24,10 +24,9 @@ function formatSearchResults(
     .join('\n\n');
 }
 
-export function createWebSearchTool(getConfig: () => Config | undefined): AgentTool<
-  typeof WebSearchSchema,
-  { results: unknown[]; provider?: string }
-> {
+type WebSearchParams = { query: string; count?: number };
+
+export function createWebSearchTool(getConfig: () => Config | undefined): AgentTool {
   return {
     name: 'web_search',
     description:
@@ -37,15 +36,16 @@ export function createWebSearchTool(getConfig: () => Config | undefined): AgentT
 
     async execute(
       _toolCallId: string,
-      params: Static<typeof WebSearchSchema>,
+      params: any,
       signal?: AbortSignal,
     ): Promise<AgentToolResult<{ results: unknown[]; provider?: string }>> {
+      const p = params as WebSearchParams;
       const cfg = resolveWebSearchConfig(getConfig()?.tools?.web);
       const registry = new SearchProviderRegistry(cfg);
-      const count = params.count ?? cfg.maxResults ?? 5;
+      const count = p.count ?? cfg.maxResults ?? 5;
 
       try {
-        const { results, provider } = await registry.search(params.query, count, signal);
+        const { results, provider } = await registry.search(p.query, count, signal);
 
         if (results.length === 0) {
           return {
@@ -71,7 +71,7 @@ export function createWebSearchTool(getConfig: () => Config | undefined): AgentT
         };
       }
     },
-  };
+  } as any;
 }
 
 // =============================================================================
@@ -104,7 +104,9 @@ async function extractReadableText(html: string, pageUrl: string): Promise<strin
   return text;
 }
 
-export const webFetchTool: AgentTool<typeof WebFetchSchema, {}> = {
+type WebFetchParams = { url: string; maxChars?: number };
+
+export const webFetchTool: AgentTool = {
   name: 'web_fetch',
   description: 'Fetch and extract readable content from a URL (HTML via Readability; plain text as-is).',
   parameters: WebFetchSchema,
@@ -112,11 +114,12 @@ export const webFetchTool: AgentTool<typeof WebFetchSchema, {}> = {
 
   async execute(
     _toolCallId: string,
-    params: Static<typeof WebFetchSchema>,
+    params: any,
     signal?: AbortSignal,
   ): Promise<AgentToolResult<{}>> {
     try {
-      const response = await fetch(params.url, { signal });
+      const p = params as WebFetchParams;
+      const response = await fetch(p.url, { signal });
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
@@ -126,7 +129,7 @@ export const webFetchTool: AgentTool<typeof WebFetchSchema, {}> = {
       if (html.length > MAX_FETCH_CHARS) {
         throw new Error('Response too large');
       }
-      const maxChars = params.maxChars || 10000;
+      const maxChars = p.maxChars || 10000;
       const contentType = response.headers.get('content-type') ?? '';
       const looksHtml =
         /html|xml/i.test(contentType) || /^[\s\n]*</.test(html.slice(0, Math.min(500, html.length)));
@@ -134,7 +137,7 @@ export const webFetchTool: AgentTool<typeof WebFetchSchema, {}> = {
       let text: string;
       if (looksHtml) {
         try {
-          text = await extractReadableText(html, params.url);
+          text = await extractReadableText(html, p.url);
           if (!text || text.length < 40) {
             text = stripHtmlFallback(html);
           }
@@ -165,4 +168,4 @@ export const webFetchTool: AgentTool<typeof WebFetchSchema, {}> = {
       };
     }
   },
-};
+} as any;

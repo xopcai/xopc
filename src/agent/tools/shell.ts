@@ -1,5 +1,5 @@
 // Shell tool - executes commands with output truncation
-import { Type, type Static } from '@sinclair/typebox';
+import { Type } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core';
 import { spawn } from 'child_process';
 import { prepareSafeToolEnv } from '../sandbox/sanitize-env-vars.js';
@@ -65,7 +65,7 @@ export interface CreateShellToolOptions {
 export function createShellTool(
   cwd: string,
   options?: CreateShellToolOptions,
-): AgentTool<typeof ShellSchema, ShellDetails> {
+): AgentTool {
   return {
     name: 'shell',
     description: 'Execute shell command.',
@@ -74,10 +74,11 @@ export function createShellTool(
 
     async execute(
       toolCallId: string,
-      params: Static<typeof ShellSchema>,
-      _signal?: AbortSignal
+      params: any,
+      _signal?: AbortSignal,
     ): Promise<AgentToolResult<ShellDetails>> {
-      const safety = checkShellSafety(params.command);
+      const p = params as { command: string };
+      const safety = checkShellSafety(p.command);
       if (!safety.allowed) {
         return {
           content: [{ type: 'text', text: `🚫 ${safety.message}` }],
@@ -100,7 +101,7 @@ export function createShellTool(
         }, MAX_SHELL_TIMEOUT * 1000);
 
         const passthroughNames = options?.getSkillPassthroughEnvVarNames?.() ?? [];
-        const proc = spawn(params.command, [], {
+        const proc = spawn(p.command, [], {
           shell: true,
           cwd,
           env: {
@@ -155,5 +156,5 @@ export function createShellTool(
         });
       });
     },
-  };
+  } as any;
 }

@@ -1,4 +1,4 @@
-import { Type, type Static } from '@sinclair/typebox';
+import { Type } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core';
 
 const SessionStatusSchema = Type.Object({
@@ -52,7 +52,7 @@ function formatTimestamp(now: Date, timezone?: string): { label: string; isoUtc:
   }
 }
 
-export function createSessionStatusTool(): AgentTool<typeof SessionStatusSchema, {}> {
+export function createSessionStatusTool(): AgentTool {
   return {
     name: 'session_status',
     label: '📊 Session Status',
@@ -61,11 +61,11 @@ export function createSessionStatusTool(): AgentTool<typeof SessionStatusSchema,
     parameters: SessionStatusSchema,
     async execute(
       _toolCallId: string,
-      params: Static<typeof SessionStatusSchema>,
+      params: any,
       _signal?: AbortSignal,
     ): Promise<AgentToolResult<{}>> {
       const now = new Date();
-      const fmt = formatTimestamp(now, params.timezone);
+      const fmt = formatTimestamp(now, (params as { timezone?: string }).timezone);
       const lines = [
         '📊 Session status',
         `Time: ${fmt.label}`,
@@ -78,6 +78,6 @@ export function createSessionStatusTool(): AgentTool<typeof SessionStatusSchema,
         details: {},
       };
     },
-  };
+  } as any;
 }
 

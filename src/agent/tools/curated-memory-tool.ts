@@ -1,5 +1,5 @@
 // Curated memory tool — agent home `memories/MEMORY.md` + `USER.md` (session snapshot + live edits)
-import { Type, type Static } from '@sinclair/typebox';
+import { Type } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core';
 
 import type { BuiltinMemoryStore } from '../memory/builtin-memory-store.js';
@@ -26,10 +26,17 @@ const CuratedMemorySchema = Type.Object({
   ),
 });
 
+type CuratedMemoryParams = {
+  action: 'add' | 'replace' | 'remove' | 'read';
+  target: 'memory' | 'user';
+  content?: string;
+  old_text?: string;
+};
+
 export function createCuratedMemoryTool(
   getStore: () => BuiltinMemoryStore,
   options?: CuratedMemoryToolOptions,
-): AgentTool<typeof CuratedMemorySchema, {}> {
+): AgentTool {
   return {
     name: 'curated_memory',
     label: '🧠 Curated memory',
@@ -39,11 +46,11 @@ export function createCuratedMemoryTool(
 
     async execute(
       _toolCallId: string,
-      params: Static<typeof CuratedMemorySchema>,
+      params: any,
       _signal?: AbortSignal,
     ): Promise<AgentToolResult<{}>> {
       const store = getStore();
-      const { action, target } = params;
+      const { action, target } = params as CuratedMemoryParams;
 
       try {
         if (target === 'user' && !store.isUserProfileEnabled() && action !== 'read') {
@@ -72,7 +79,7 @@ export function createCuratedMemoryTool(
         }
 
         if (action === 'add') {
-          const content = params.content?.trim() ?? '';
+          const content = (params as CuratedMemoryParams).content?.trim() ?? '';
           const result = await store.add(target, content);
           if (!result.success) {
             return {
@@ -88,8 +95,8 @@ export function createCuratedMemoryTool(
         }
 
         if (action === 'replace') {
-          const oldText = params.old_text?.trim() ?? '';
-          const newContent = params.content?.trim() ?? '';
+          const oldText = (params as CuratedMemoryParams).old_text?.trim() ?? '';
+          const newContent = (params as CuratedMemoryParams).content?.trim() ?? '';
           const result = await store.replace(target, oldText, newContent);
           if (!result.success) {
             return {
@@ -104,7 +111,7 @@ export function createCuratedMemoryTool(
           };
         }
 
-        const oldText = params.old_text?.trim() ?? '';
+        const oldText = (params as CuratedMemoryParams).old_text?.trim() ?? '';
         const result = await store.remove(target, oldText);
         if (!result.success) {
           return {
@@ -125,5 +132,5 @@ export function createCuratedMemoryTool(
         };
       }
     },
-  };
+  } as any;
 }

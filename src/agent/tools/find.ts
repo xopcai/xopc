@@ -1,4 +1,4 @@
-import { Type, type Static } from '@sinclair/typebox';
+import { Type } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core';
 import { existsSync } from 'fs';
 import { globSync } from 'glob';
@@ -14,7 +14,7 @@ const findSchema = Type.Object({
 	limit: Type.Optional(Type.Number({ description: 'Maximum number of results (default: 1000)' })),
 });
 
-export type FindToolInput = Static<typeof findSchema>;
+export type FindToolInput = { pattern: string; path?: string; limit?: number };
 
 const DEFAULT_LIMIT = 1000;
 
@@ -26,7 +26,7 @@ export interface FindToolDetails {
 /**
  * Find tool - Search for files by glob pattern
  */
-export function createFindTool(cwd: string): AgentTool<typeof findSchema> {
+export function createFindTool(cwd: string): AgentTool {
 	return {
 		name: 'find',
 		label: '📁 find',
@@ -34,12 +34,13 @@ export function createFindTool(cwd: string): AgentTool<typeof findSchema> {
 		parameters: findSchema,
 		execute: async (
 			_toolCallId: string,
-			params: Static<typeof findSchema>,
+			params: any,
 			signal?: AbortSignal
 		): Promise<AgentToolResult<FindToolDetails>> => {
 			try {
-				const searchPath = resolveToCwd(params.path || '.', cwd);
-				const effectiveLimit = params.limit || DEFAULT_LIMIT;
+				const p = params as FindToolInput;
+				const searchPath = resolveToCwd(p.path || '.', cwd);
+				const effectiveLimit = p.limit || DEFAULT_LIMIT;
 
 				if (!existsSync(searchPath)) {
 					return {
@@ -55,7 +56,7 @@ export function createFindTool(cwd: string): AgentTool<typeof findSchema> {
 					};
 				}
 
-				const filePaths = globSync(params.pattern, {
+				const filePaths = globSync(p.pattern, {
 					cwd: searchPath,
 					dot: true,
 					ignore: ['**/node_modules/**', '**/.git/**'],
@@ -118,8 +119,8 @@ export function createFindTool(cwd: string): AgentTool<typeof findSchema> {
 				};
 			}
 		},
-	};
+	} as any;
 }
 
 /** Default find tool using process.cwd() */
-export const findTool = createFindTool(process.cwd());
+export const findTool: AgentTool = createFindTool(process.cwd());

@@ -1,4 +1,4 @@
-import { Type, type Static } from '@sinclair/typebox';
+import { Type } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core';
 
 const VALID_STATUSES = new Set(['pending', 'in_progress', 'completed', 'cancelled']);
@@ -136,7 +136,7 @@ function resolveSessionKey(getSessionKey: () => string | null | undefined): stri
 /**
  * In-session task list for multi-step work. One {@link TodoStore} per session key.
  */
-export function createTodoTool(options?: CreateTodoToolOptions): AgentTool<typeof TodoSchema, { items: TodoItem[] }> {
+export function createTodoTool(options?: CreateTodoToolOptions): AgentTool {
   const getSessionKey = options?.getSessionKey ?? (() => 'default');
   const stores = new Map<string, TodoStore>();
 
@@ -173,12 +173,12 @@ export function createTodoTool(options?: CreateTodoToolOptions): AgentTool<typeo
 
     async execute(
       _toolCallId: string,
-      params: Static<typeof TodoSchema>,
+      params: any,
       _signal?: AbortSignal,
     ): Promise<AgentToolResult<{ items: TodoItem[] }>> {
       const store = getStore();
       try {
-        if (params.todos === undefined) {
+        if ((params as { todos?: unknown }).todos === undefined) {
           const items = store.read();
           const text = items.length === 0 ? 'No todos yet.' : formatTodoList(items);
           return {
@@ -187,7 +187,8 @@ export function createTodoTool(options?: CreateTodoToolOptions): AgentTool<typeo
           };
         }
 
-        const items = store.write(params.todos, params.merge ?? false);
+        const p = params as { todos: TodoItem[]; merge?: boolean };
+        const items = store.write(p.todos, p.merge ?? false);
         return {
           content: [{ type: 'text', text: formatTodoList(items) }],
           details: { items },
@@ -200,5 +201,5 @@ export function createTodoTool(options?: CreateTodoToolOptions): AgentTool<typeo
         };
       }
     },
-  };
+  } as any;
 }

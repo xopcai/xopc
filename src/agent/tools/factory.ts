@@ -164,9 +164,7 @@ export class AgentToolsFactory {
       workspace,
     });
 
-    const optionalTools = [imageTool, imageGenerateTool].filter(
-      (t): t is AgentTool<any, any> => t != null,
-    );
+    const optionalTools = [imageTool, imageGenerateTool].filter((t) => t != null) as any[];
 
     const readTool = createReadFileTool(workspace, { bootstrapDir: options?.bootstrapDir });
     const writeTool = createWriteFileTool(workspace);
@@ -316,7 +314,7 @@ export class AgentToolsFactory {
     if (executeEnabled) {
       const sandboxMap = buildSandboxToolMap(wrapped);
       const executeTool = createExecuteCodeTool({ getSandboxToolMap: () => sandboxMap });
-      const wrappedExecute = wrapToolsWithProtection([executeTool], this.deps.toolExecutorConfig);
+      const wrappedExecute = wrapToolsWithProtection([executeTool as any], this.deps.toolExecutorConfig);
       return [...wrapped, ...wrappedExecute];
     }
 
@@ -325,9 +323,9 @@ export class AgentToolsFactory {
 }
 
 function filterToolsByDisabledSet(
-  tools: AgentTool<any, any>[],
+  tools: any[],
   disabled: Set<string> | undefined,
-): AgentTool<any, any>[] {
+): any[] {
   if (!disabled || disabled.size === 0) {
     return tools;
   }

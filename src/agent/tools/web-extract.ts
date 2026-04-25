@@ -1,4 +1,4 @@
-import { Type, type Static } from '@sinclair/typebox';
+import { Type } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core';
 import { complete, type UserMessage } from '@mariozechner/pi-ai';
 
@@ -171,10 +171,9 @@ async function extractWithLlm(
   return trimmed;
 }
 
-export function createWebExtractTool(deps: WebExtractDeps): AgentTool<
-  typeof WebExtractSchema,
-  { url: string; extractedLength: number }
-> {
+type WebExtractParams = { url: string; instruction?: string; maxLength?: number };
+
+export function createWebExtractTool(deps: WebExtractDeps): AgentTool {
   return {
     name: 'web_extract',
     label: '📄 Web Extract',
@@ -195,14 +194,14 @@ export function createWebExtractTool(deps: WebExtractDeps): AgentTool<
 
     async execute(
       _toolCallId: string,
-      params: Static<typeof WebExtractSchema>,
+      params: any,
       signal?: AbortSignal,
     ): Promise<AgentToolResult<{ url: string; extractedLength: number }>> {
-      const { url, instruction } = params;
+      const { url, instruction } = params as WebExtractParams;
       const cfg = deps.getConfig();
       const configuredDefault =
         cfg?.agents?.defaults?.webExtract?.maxLength ?? DEFAULT_WEB_EXTRACT_MAX_LENGTH;
-      const maxLength = params.maxLength ?? configuredDefault;
+      const maxLength = (params as WebExtractParams).maxLength ?? configuredDefault;
 
       try {
         const rawContent = await fetchPageContent(url, signal);
@@ -240,5 +239,5 @@ export function createWebExtractTool(deps: WebExtractDeps): AgentTool<
         };
       }
     },
-  };
+  } as any;
 }

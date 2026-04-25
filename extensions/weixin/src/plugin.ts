@@ -192,6 +192,10 @@ export class WeixinChannelPlugin implements ChannelPlugin<ResolvedWeixinAccount>
         bus: this.bus,
         abortSignal: ac.signal,
       }).catch((err) => {
+        if ((err as { name?: string; message?: string } | undefined)?.name === 'AbortError') {
+          log.debug({ accountId }, 'Weixin monitor stopped');
+          return;
+        }
         log.error({ err, accountId }, 'Weixin monitor exited with error');
       });
 
