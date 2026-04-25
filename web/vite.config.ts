@@ -49,6 +49,9 @@ export default defineConfig({
           if (/node_modules[/\\]swr[/\\]/.test(id)) {
             return 'vendor-swr';
           }
+          if (/node_modules[/\\]@codemirror[/\\]/.test(id) || /node_modules[/\\]@lezer[/\\]/.test(id)) {
+            return 'vendor-codemirror';
+          }
         },
       },
     },
