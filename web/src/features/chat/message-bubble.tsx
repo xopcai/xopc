@@ -35,6 +35,11 @@ function formatTime(ts?: number): string {
   return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
+function stripEnvelopeTimestampPrefix(text: string): string {
+  // xopc envelope timestamp: `[YYYY-MM-DD HH:MM ...] ` (kept for model context, hidden in UI)
+  return text.replace(/^\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}[^\]]*\]\s+/, '');
+}
+
 /** User bubble: inline image opens {@link AttachmentPreviewDialog} (shared `file-preview` UI). */
 function imageContentToPreviewAttachment(block: ImageContent, index: number): MessageAttachment | null {
   return imageBlockToMessageAttachment(block, index);
@@ -50,9 +55,10 @@ function renderTextOrImageBlock(
 ) {
   if (block.type === 'text') {
     if (isUser) {
+      const displayText = stripEnvelopeTimestampPrefix(block.text ?? '');
       return (
         <div key={key} className="min-w-0 w-full">
-          <UserMessageSegments text={block.text} />
+          <UserMessageSegments text={displayText} />
         </div>
       );
     }

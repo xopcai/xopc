@@ -969,6 +969,13 @@ export function useChatSession() {
     setSending(false);
   }, [decodedKey]);
 
+  // When returning to a session, attempt to reattach to an in-flight run.
+  // Some route switches can drop the original SSE connection; resume uses the stored runId.
+  useEffect(() => {
+    if (!decodedKey) return;
+    void tryResumeAgentRun(decodedKey);
+  }, [decodedKey, tryResumeAgentRun]);
+
   /** Avoid copying `messages` on every render when no streaming row — keeps stable array ref for memoized bubbles. */
   const displayMessages = useMemo(() => {
     if (!streamingMsg) return messages;
