@@ -454,6 +454,7 @@
     "attachmentPreviewOpenElsewhereTruncated": "此处仅显示部分内容。请下载完整文件后在本机其他应用中打开。",
     "attachmentPreviewDownloadFull": "下载文件",
     "attachmentPreviewImage": "预览图片",
+    "messageArtifactsHeading": "本消息输出",
     "stepTimelineThinkingStreaming": "正在思考…",
     "stepTimelineThinkingDone": "思考完成",
     "stepTimelineToolSearchRunning": "搜索网络中…",

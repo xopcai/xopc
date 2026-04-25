@@ -454,6 +454,7 @@
     "attachmentPreviewOpenElsewhereTruncated": "Only part of this file is shown here. Download the full file to open it elsewhere.",
     "attachmentPreviewDownloadFull": "Download file",
     "attachmentPreviewImage": "Preview image",
+    "messageArtifactsHeading": "Message output",
     "stepTimelineThinkingStreaming": "Thinking…",
     "stepTimelineThinkingDone": "Thinking complete",
     "stepTimelineToolSearchRunning": "Searching the web…",

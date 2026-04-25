@@ -19,6 +19,12 @@ import { MarkdownView } from '@/features/chat/markdown/markdown-view';
 import { SearchSourceList } from '@/features/chat/search-source-list';
 import { UserMessageSegments } from '@/features/chat/user-message-segments';
 import { UsageBadge } from '@/features/chat/usage-badge';
+import { ToolResultFileLinks } from '@/features/chat/tool-result-file-links';
+import {
+  collectAssistantWorkspaceOutputPaths,
+  imageBlockToMessageAttachment,
+  imageContentBlocksToAttachments,
+} from '@/features/chat/assistant-message-artifacts';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 import { messages } from '@/i18n/messages';
@@ -29,38 +35,9 @@ function formatTime(ts?: number): string {
   return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-/** Build attachment payload for {@link AttachmentPreviewDialog} from an inline content image block. */
+/** User bubble: inline image → {@link AttachmentPreviewDialog} (delegates to shared builder). */
 function imageContentToPreviewAttachment(block: ImageContent, index: number): MessageAttachment | null {
-  const raw = block.source?.data?.trim();
-  if (!raw) return null;
-  const m = raw.match(/^data:([^;]+);base64,([\s\S]+)$/i);
-  if (m?.[1] && m[2]) {
-    const b64 = m[2].replace(/\s/g, '');
-    return {
-      name: `image-${index + 1}`,
-      mimeType: m[1],
-      type: 'image',
-      content: b64,
-      data: b64,
-    };
-  }
-  if (raw.startsWith('data:')) {
-    return {
-      name: `image-${index + 1}`,
-      mimeType: 'image/png',
-      type: 'image',
-      content: raw,
-      data: raw,
-    };
-  }
-  const compact = raw.replace(/\s/g, '');
-  return {
-    name: `image-${index + 1}`,
-    mimeType: 'image/png',
-    type: 'image',
-    content: compact,
-    data: compact,
-  };
+  return imageBlockToMessageAttachment(block, index);
 }
 
 function renderTextOrImageBlock(
@@ -273,6 +250,36 @@ export const MessageBubble = memo(function MessageBubble({
     return (message.content ?? []).filter((b) => b.type !== 'thinking');
   }, [message.content, reasoningHidden]);
 
+  /** Assistant model images: show in the “Message output” strip below, not in the main column. */
+  const displayForFlow = useMemo(() => {
+    if (!isAssistant) {
+      return displayContent;
+    }
+    return (displayContent ?? []).filter((b) => b.type !== 'image');
+  }, [isAssistant, displayContent]);
+
+  const assistantWorkspacePaths = useMemo(
+    () => (isAssistant ? collectAssistantWorkspaceOutputPaths(message.content) : []),
+    [isAssistant, message.content],
+  );
+
+  const assistantImageBlocks = useMemo(
+    () =>
+      isAssistant
+        ? (message.content ?? []).filter((b): b is ImageContent => b.type === 'image' && Boolean(b.source?.data))
+        : [],
+    [isAssistant, message.content],
+  );
+
+  const assistantImageAttachments = useMemo(
+    () => (isAssistant ? imageContentBlocksToAttachments(assistantImageBlocks) : []),
+    [isAssistant, assistantImageBlocks],
+  );
+
+  const showAssistantArtifacts =
+    isAssistant &&
+    (assistantWorkspacePaths.length > 0 || assistantImageAttachments.length > 0);
+
   const progressForMeta =
     reasoningHidden && progress?.stage === 'thinking' ? null : progress;
 
@@ -378,10 +385,10 @@ export const MessageBubble = memo(function MessageBubble({
               isUser && message.attachments?.length ? 'items-end' : '',
             )}
           >
-            {(displayContent?.length ?? 0) > 0 ? (
+            {(displayForFlow?.length ?? 0) > 0 ? (
               <>
                 {renderChunkedContent(
-                  displayContent,
+                  displayForFlow,
                   isUser,
                   toolLabels,
                   stepLabels,
@@ -399,6 +406,31 @@ export const MessageBubble = memo(function MessageBubble({
 
             {isAssistant && stepBlocksForSources.length > 0 ? (
               <SearchSourceList blocks={stepBlocksForSources} />
+            ) : null}
+
+            {showAssistantArtifacts ? (
+              <div
+                className="rounded-lg border border-edge-subtle/60 bg-surface-elevated/20 px-3 py-2.5"
+                role="group"
+                aria-label={m.chat.messageArtifactsHeading}
+              >
+                <div className="mb-1.5 text-[10px] font-medium uppercase tracking-wide text-fg-subtle">
+                  {m.chat.messageArtifactsHeading}
+                </div>
+                <div className="flex min-w-0 flex-col gap-2">
+                  {assistantWorkspacePaths.length > 0 ? (
+                    <ToolResultFileLinks paths={assistantWorkspacePaths} sessionKey={sessionKey} />
+                  ) : null}
+                  {assistantImageAttachments.length > 0 ? (
+                    <AttachmentRenderer
+                      attachments={assistantImageAttachments}
+                      authToken={authToken}
+                      sessionKey={sessionKey}
+                      layout="assistant"
+                    />
+                  ) : null}
+                </div>
+              </div>
             ) : null}
 
             {message.attachments?.length ? (

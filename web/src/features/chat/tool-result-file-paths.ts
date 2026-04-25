@@ -109,6 +109,35 @@ function getFileName(path: string): string {
   return n[n.length - 1] || path;
 }
 
+/**
+ * Strips `File written:` / `File edited:` / `Saved:` (write, edit, image tools — see e.g. `src/agent/tools/write.ts`).
+ * When left on the line, `File written: /Users/…/a.md` does not start with `/` and was mis-tagged as a workspace-relative path.
+ */
+function stripFileToolResultLinePrefix(s: string): string {
+  const t = s.trim();
+  if (t.includes('\n') || t.includes('\r')) {
+    return t;
+  }
+  return t
+    .replace(/^(?:File written|File edited)\s*:\s*/i, '')
+    .replace(/^Saved\s*:\s*/i, '')
+    .trim();
+}
+
+/**
+ * Strips a single `list_dir` / `read_multiple` line prefix (`f ` / `d ` / `? `).
+ * See `src/agent/tools/list-dir.ts` (`${type} ${e.name}`).
+ * Only single-line tool output is altered so multi-line blobs are left unchanged.
+ */
+function stripListDirLinePrefix(s: string): string {
+  const t = s.trim();
+  if (t.includes('\n') || t.includes('\r')) {
+    return t;
+  }
+  const m = t.match(/^[fd?] (.+)$/);
+  return m ? m[1]!.trim() : t;
+}
+
 function pushPath(
   absolutePath: string,
   out: ExtractedFilePath[],
@@ -143,8 +172,12 @@ function looksLikeWorkspaceRelativeFilePath(s: string): boolean {
 }
 
 function pushWorkspaceRelativePath(rel: string, out: ExtractedFilePath[], _fullText: string): void {
-  const t = rel.trim().replace(/\\/g, '/');
-  if (!looksLikeWorkspaceRelativeFilePath(t)) return;
+  const t = stripListDirLinePrefix(stripFileToolResultLinePrefix(rel))
+    .trim()
+    .replace(/\\/g, '/');
+  if (!looksLikeWorkspaceRelativeFilePath(t)) {
+    return;
+  }
   const fileName = getFileName(t);
   out.push({
     absolutePath: `rel:${t}`,
@@ -158,14 +191,17 @@ function pushWorkspaceRelativePath(rel: string, out: ExtractedFilePath[], _fullT
 
 function collectPathsFromJson(obj: unknown, out: ExtractedFilePath[], fullText: string): void {
   if (typeof obj === 'string') {
-    if (looksLikeWorkspaceRelativeFilePath(obj)) {
+    const norm = stripListDirLinePrefix(stripFileToolResultLinePrefix(obj))
+      .trim()
+      .replace(/\\/g, '/');
+    if (looksLikeWorkspaceRelativeFilePath(norm)) {
       pushWorkspaceRelativePath(obj, out, fullText);
-    } else if (looksLikeAbsoluteFilePath(obj) && /\.[a-z0-9]+$/i.test(obj.trim())) {
+    } else if (looksLikeAbsoluteFilePath(norm) && /\.[a-z0-9]+$/i.test(norm)) {
       const i = fullText.indexOf(obj);
       if (i >= 0) {
-        pushPath(obj, out, fullText, i, i + obj.length);
+        pushPath(norm, out, fullText, i, i + obj.length);
       } else {
-        pushPath(obj, out, fullText, 0, 0);
+        pushPath(norm, out, fullText, 0, 0);
       }
     }
     return;
