@@ -20,6 +20,7 @@ import {
   normalizeOrphanComposerDom,
   serializeEditorToWire,
 } from '@/features/chat/composer-editor-wire';
+import { FILL_CHAT_COMPOSER_EVENT, type FillChatComposerDetail } from '@/features/chat/fill-composer-dispatch';
 import { formatFilePathForWire } from '@/features/chat/file-wire-pattern';
 import {
   browseDirFromQuery,
@@ -490,6 +491,29 @@ export const ChatComposer = memo(function ChatComposer({
     document.addEventListener('selectionchange', onSelectionChange);
     return () => document.removeEventListener('selectionchange', onSelectionChange);
   }, []);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const d = (e as CustomEvent<FillChatComposerDetail>).detail;
+      if (typeof d?.text !== 'string' || d.text.length === 0) return;
+      const nextText = d.text;
+      setValue(nextText);
+      valueRef.current = nextText;
+      setCursor(nextText.length);
+      setAttachments([]);
+      requestAnimationFrame(() => {
+        const el = editorRef.current;
+        if (el) {
+          applyWireToEditor(el, nextText, nextText.length);
+          syncComposerPlaceholderClass(el, nextText);
+          el.focus({ preventScroll: true });
+        }
+        adjustHeight();
+      });
+    };
+    window.addEventListener(FILL_CHAT_COMPOSER_EVENT, handler as EventListener);
+    return () => window.removeEventListener(FILL_CHAT_COMPOSER_EVENT, handler as EventListener);
+  }, [adjustHeight]);
 
   const processFiles = useCallback(
     async (files: File[]) => {
