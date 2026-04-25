@@ -685,12 +685,14 @@ export class GatewayService {
         });
 
         const timezone = this.agentService.resolveUserTimezoneForSession(sessionKey);
+        // Keep UI clean: persist raw user text (no envelope timestamp),
+        // but include a stamped variant for the model so it has a stable "now".
         const stampedMessage = prependEnvelopeTimestamp(message, timezone);
         const prepared = await this.agentService.prepareInboundAttachments(sessionKey, cappedAttachments);
 
         // Persist before streaming so a mid-turn refresh still sees text + attachment refs on disk.
         try {
-          await this._saveUserMessage(sessionKey, stampedMessage, prepared);
+          await this._saveUserMessage(sessionKey, message, prepared);
         } catch (err) {
           log.error({ err, sessionKey }, 'Failed to save user message');
         }
