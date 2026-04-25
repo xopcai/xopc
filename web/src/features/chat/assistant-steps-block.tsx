@@ -22,24 +22,6 @@ import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 import { useLocaleStore } from '@/stores/locale-store';
 
-const STEPS_ADVANCED_STORAGE_KEY = 'xopc.chat.steps.advanced';
-
-function readStepsAdvancedPreference(): boolean {
-  try {
-    return globalThis.localStorage?.getItem(STEPS_ADVANCED_STORAGE_KEY) === '1';
-  } catch {
-    return false;
-  }
-}
-
-function writeStepsAdvancedPreference(next: boolean): void {
-  try {
-    globalThis.localStorage?.setItem(STEPS_ADVANCED_STORAGE_KEY, next ? '1' : '0');
-  } catch {
-    /* ignore */
-  }
-}
-
 function formatParamsJson(params: unknown): string {
   if (params === undefined) return '';
   try {
@@ -239,8 +221,6 @@ export function AssistantStepsBlock({
     readFile: string;
     stepDetails: string;
     stepsRoundComplete: string;
-    advancedModeOn: string;
-    advancedModeOff: string;
     runCommand: string;
     listDirectory: string;
     writeFile: string;
@@ -264,7 +244,6 @@ export function AssistantStepsBlock({
   const [frozenDurationMs, setFrozenDurationMs] = useState<number | null>(null);
   const [liveTick, setLiveTick] = useState(0);
   const [expanded, setExpanded] = useState(anyActive);
-  const [advanced, setAdvanced] = useState<boolean>(() => readStepsAdvancedPreference());
 
   if (anyActive && roundStartRef.current === null) {
     roundStartRef.current = Date.now();
@@ -300,8 +279,6 @@ export function AssistantStepsBlock({
     searchedWeb: stepLabels.searchedWeb,
     readFile: stepLabels.readFile,
     stepDetails: stepLabels.stepDetails,
-    advancedModeOn: stepLabels.advancedModeOn,
-    advancedModeOff: stepLabels.advancedModeOff,
     runCommand: stepLabels.runCommand,
     listDirectory: stepLabels.listDirectory,
     writeFile: stepLabels.writeFile,
@@ -349,7 +326,7 @@ export function AssistantStepsBlock({
       <button
         type="button"
         className={cn(
-          'grid w-full min-w-0 grid-cols-[auto_minmax(0,1fr)_auto_auto_auto] items-start gap-x-2 rounded-t-xl px-3 py-2 text-left',
+          'grid w-full min-w-0 grid-cols-[auto_minmax(0,1fr)_auto_auto] items-start gap-x-2 rounded-t-xl px-3 py-2 text-left',
           interaction.transition,
           'hover:bg-surface-hover/80 dark:hover:bg-surface-hover/50',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
@@ -364,29 +341,6 @@ export function AssistantStepsBlock({
           </span>
         </div>
         <span className="flex items-start justify-end">{headerDurationRight}</span>
-        <span className="mt-0.5 flex items-center justify-end">
-          <button
-            type="button"
-            className={cn(
-              'inline-flex items-center rounded-md border border-edge-subtle bg-surface-panel px-1 py-0.5 text-[11px] font-medium text-fg-muted',
-              'hover:bg-surface-hover/60 hover:text-fg',
-              interaction.focusRingPanel,
-            )}
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              setAdvanced((cur) => {
-                const next = !cur;
-                writeStepsAdvancedPreference(next);
-                return next;
-              });
-            }}
-            aria-pressed={advanced}
-            title={advanced ? stepLabels.advancedModeOn : stepLabels.advancedModeOff}
-          >
-            {advanced ? stepLabels.advancedModeOn : stepLabels.advancedModeOff}
-          </button>
-        </span>
         <ChevronDown
           className={cn('mt-0.5 h-4 w-4 shrink-0 text-fg-muted transition-transform', expanded && 'rotate-180')}
           aria-hidden
@@ -398,7 +352,6 @@ export function AssistantStepsBlock({
             blocks={blocks}
             toolLabels={toolLabels}
             stepLabels={timelineLabels}
-            advanced={advanced}
             sessionKey={sessionKey}
           />
         </div>
@@ -551,7 +504,6 @@ export function AssistantStepsTimeline({
   blocks,
   toolLabels,
   stepLabels,
-  advanced,
   className,
   sessionKey,
 }: {
@@ -563,8 +515,6 @@ export function AssistantStepsTimeline({
     searchedWeb: string;
     readFile: string;
     stepDetails: string;
-    advancedModeOn: string;
-    advancedModeOff: string;
     runCommand: string;
     listDirectory: string;
     writeFile: string;
@@ -573,7 +523,6 @@ export function AssistantStepsTimeline({
     fetchUrl: string;
     unknownTool: string;
   };
-  advanced: boolean;
   className?: string;
   sessionKey?: string | null;
 }) {
@@ -591,7 +540,6 @@ export function AssistantStepsTimeline({
             block={b}
             toolLabels={toolLabels}
             stepLabels={stepLabels}
-            advanced={advanced}
             sessionKey={sessionKey}
           />
         ))}
@@ -633,7 +581,6 @@ function StepRow({
   block,
   toolLabels,
   stepLabels,
-  advanced,
   sessionKey,
 }: {
   block: ThinkingContent | ToolUseContent;
@@ -644,8 +591,6 @@ function StepRow({
     searchedWeb: string;
     readFile: string;
     stepDetails: string;
-    advancedModeOn: string;
-    advancedModeOff: string;
     runCommand: string;
     listDirectory: string;
     writeFile: string;
@@ -654,7 +599,6 @@ function StepRow({
     fetchUrl: string;
     unknownTool: string;
   };
-  advanced: boolean;
   sessionKey?: string | null;
 }) {
   const toolResultText = useMemo(() => {
@@ -783,7 +727,7 @@ function StepRow({
             {detailLine}
           </p>
         ) : null}
-        {!isStreaming && advanced ? (
+        {!isStreaming ? (
           <details className="group min-w-0 text-xs">
             <summary className="cursor-pointer select-none text-fg-subtle underline-offset-2 hover:text-fg-muted group-open:text-fg-muted">
               {stepLabels.stepDetails}
