@@ -118,6 +118,45 @@ export function createFeishuSocketModeMonitor(deps: FeishuSocketModeMonitorDeps)
     });
   }
 
+  async function handleMessageRecalled(event: any): Promise<void> {
+    const e = event?.event ?? event ?? {};
+    const recalledMessageId = (e?.message_id ?? '').trim();
+    const chatId = (e?.chat_id ?? '').trim();
+    if (!recalledMessageId) return;
+
+    const binding = getFeishuBindingByMessageId(recalledMessageId);
+    if (!binding && !chatId) return;
+
+    const isGroup = (binding?.isGroup ?? chatId.startsWith('oc_')) === true;
+    const sessionKey =
+      binding?.sessionKey ??
+      generateSessionKey({
+        source: 'feishu',
+        chatId: chatId || 'unknown',
+        senderId: binding?.senderId ?? 'unknown',
+        isGroup,
+        accountId: account.accountId,
+      });
+
+    await bus.publishInbound({
+      channel: 'feishu',
+      sender_id: binding?.senderId ?? 'system',
+      chat_id: chatId || binding?.chatId || 'unknown',
+      content: `撤回了一条消息（${recalledMessageId}）`,
+      metadata: {
+        sessionKey,
+        accountId: account.accountId,
+        isGroup,
+        threadId: binding?.threadId,
+        feishuEventType: 'im.message.recalled_v1',
+        recalledMessageId,
+        recallTime: e?.recall_time,
+        recallType: e?.recall_type,
+        raw: event,
+      },
+    });
+  }
+
   async function handleMessageReceive(event: any): Promise<void> {
     lastEventAt = Date.now();
     const msg = event?.event?.message ?? event?.message ?? event?.data?.message;
@@ -244,6 +283,9 @@ export function createFeishuSocketModeMonitor(deps: FeishuSocketModeMonitorDeps)
           },
           'im.message.reaction.deleted_v1': async (data: any) => {
             await handleReactionEvent('deleted', data, api);
+          },
+          'im.message.recalled_v1': async (data: any) => {
+            await handleMessageRecalled(data);
           },
           'card.action.trigger': async (data: any) => {
             await handleCardAction(data);

@@ -28,23 +28,50 @@ export function createFeishuOutboundAdapter(): ChannelOutboundAdapter {
       const content = ctx.text ?? '';
 
       const receive_id_type = isProbablyOpenId(to) ? 'open_id' : 'chat_id';
-      const res = ctx.replyToId
-        ? await (api as any).im.message.reply({
-            path: { message_id: ctx.replyToId },
-            data: {
-              msg_type: 'text',
-              content: JSON.stringify({ text: content }),
-              ...(ctx.threadId ? { reply_in_thread: true } : {}),
-            },
-          })
-        : await (api as any).im.message.create({
-            params: { receive_id_type },
-            data: {
-              receive_id: to,
-              msg_type: 'text',
-              content: JSON.stringify({ text: content }),
-            },
-          });
+      const preferCard = account.renderMode === 'card';
+      const payloadText = {
+        msg_type: 'text',
+        content: JSON.stringify({ text: content }),
+      };
+      const payloadCard = {
+        msg_type: 'interactive',
+        content: JSON.stringify({
+          schema: '2.0',
+          config: { update_multi: true },
+          body: {
+            elements: [
+              {
+                tag: 'markdown',
+                element_id: 'md_1',
+                content,
+              },
+            ],
+          },
+        }),
+      };
+
+      const send = async (useCard: boolean) => {
+        const p = useCard ? payloadCard : payloadText;
+        return ctx.replyToId
+          ? await (api as any).im.message.reply({
+              path: { message_id: ctx.replyToId },
+              data: {
+                ...p,
+                ...(ctx.threadId ? { reply_in_thread: true } : {}),
+              },
+            })
+          : await (api as any).im.message.create({
+              params: { receive_id_type },
+              data: {
+                receive_id: to,
+                ...p,
+              },
+            });
+      };
+
+      const res = preferCard
+        ? await send(true).catch(async () => await send(false))
+        : await send(false);
 
       const messageId = res?.data?.message_id ?? res?.message_id ?? '';
       if (messageId && ctx.replyToId) {

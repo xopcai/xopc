@@ -35,6 +35,7 @@ export async function loadMediaForFeishu(
 
   const isHttpUrl = /^https?:\/\//i.test(input);
   const isFileUrl = /^file:\/\//i.test(input);
+  const isDataUrl = /^data:/i.test(input);
 
   if (isHttpUrl) {
     const res = await fetch(input, { redirect: 'follow' });
@@ -45,6 +46,36 @@ export async function loadMediaForFeishu(
     const mime = ct.split(';')[0]?.trim() || 'application/octet-stream';
     const nameFromUrl = safeBasename(new URL(input).pathname) || 'media.bin';
     return { buffer: buf, mimeType: mime, filename: nameFromUrl, stream: Readable.from(buf) };
+  }
+
+  if (isDataUrl) {
+    // data:[<mime>][;base64],<data>
+    const m = /^data:([^;,]+)?(;base64)?,/i.exec(input);
+    if (!m) throw new Error('Invalid data URL');
+    const mime = (m[1] || 'application/octet-stream').trim();
+    const isB64 = Boolean(m[2]);
+    const dataPart = input.slice(m[0].length);
+    const buf = isB64 ? Buffer.from(dataPart, 'base64') : Buffer.from(decodeURIComponent(dataPart), 'utf8');
+    if (buf.length > opts.maxBytes) throw new Error(`Media too large (${buf.length} bytes, max ${opts.maxBytes})`);
+    const filename = mime.startsWith('image/') ? `image.${mime.split('/')[1] || 'bin'}` : 'media.bin';
+    return { buffer: buf, mimeType: mime, filename, stream: Readable.from(buf) };
+  }
+
+  // Heuristic: some callers persist raw base64 (no data: prefix). If it looks like base64, treat it as such.
+  // This avoids mis-classifying huge base64 blobs as file paths during outbound replay.
+  const b64Candidate = input.replace(/^['"]|['"]$/g, '');
+  const looksBase64 =
+    b64Candidate.length >= 256 &&
+    b64Candidate.length % 4 === 0 &&
+    /^[A-Za-z0-9+/=\r\n]+$/.test(b64Candidate) &&
+    !b64Candidate.includes(path.sep);
+  if (looksBase64) {
+    const buf = Buffer.from(b64Candidate, 'base64');
+    if (buf.length > 0) {
+      if (buf.length > opts.maxBytes) throw new Error(`Media too large (${buf.length} bytes, max ${opts.maxBytes})`);
+      const { mimeType, filename } = sniffBufferType(buf);
+      return { buffer: buf, mimeType, filename, stream: Readable.from(buf) };
+    }
   }
 
   let filePath = input;
@@ -77,6 +108,44 @@ export async function loadMediaForFeishu(
   const filename = path.basename(realPath) || 'media.bin';
   const mimeType = getMimeType('document', realPath);
   return { buffer, mimeType, filename, stream: Readable.from(buffer) };
+}
+
+function sniffBufferType(buf: Buffer): { mimeType: string; filename: string } {
+  // PNG
+  if (
+    buf.length >= 8 &&
+    buf[0] === 0x89 &&
+    buf[1] === 0x50 &&
+    buf[2] === 0x4e &&
+    buf[3] === 0x47 &&
+    buf[4] === 0x0d &&
+    buf[5] === 0x0a &&
+    buf[6] === 0x1a &&
+    buf[7] === 0x0a
+  ) {
+    return { mimeType: 'image/png', filename: 'image.png' };
+  }
+  // JPEG
+  if (buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) {
+    return { mimeType: 'image/jpeg', filename: 'image.jpg' };
+  }
+  // GIF
+  if (buf.length >= 6 && buf.subarray(0, 6).toString('ascii') === 'GIF89a') {
+    return { mimeType: 'image/gif', filename: 'image.gif' };
+  }
+  // WEBP (RIFF....WEBP)
+  if (
+    buf.length >= 12 &&
+    buf.subarray(0, 4).toString('ascii') === 'RIFF' &&
+    buf.subarray(8, 12).toString('ascii') === 'WEBP'
+  ) {
+    return { mimeType: 'image/webp', filename: 'image.webp' };
+  }
+  // PDF
+  if (buf.length >= 4 && buf.subarray(0, 4).toString('ascii') === '%PDF') {
+    return { mimeType: 'application/pdf', filename: 'file.pdf' };
+  }
+  return { mimeType: 'application/octet-stream', filename: 'media.bin' };
 }
 
 function safeBasename(p: string): string {

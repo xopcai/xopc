@@ -21,6 +21,7 @@ export interface ResolvedFeishuAccount {
 
   historyLimit: number;
   textChunkLimit: number;
+  renderMode?: 'auto' | 'raw' | 'card';
 
   reactionNotifications?: 'off' | 'own' | 'all';
 
@@ -61,6 +62,7 @@ function resolveRootAccount(section: FeishuConfig): FeishuAccountConfig {
     requireMention: section.requireMention,
     historyLimit: section.historyLimit,
     textChunkLimit: section.textChunkLimit,
+    renderMode: (section as any).renderMode,
     reactionNotifications: section.reactionNotifications,
     streaming: section.streaming,
     blockStreamingCoalesce: section.blockStreamingCoalesce,
@@ -114,6 +116,7 @@ export function resolveFeishuAccount(cfg: Config, accountId?: string | null): Re
     requireMention: merged.requireMention,
     historyLimit: typeof merged.historyLimit === 'number' ? merged.historyLimit : 50,
     textChunkLimit: typeof merged.textChunkLimit === 'number' ? merged.textChunkLimit : 4000,
+    renderMode: (merged as any).renderMode,
     reactionNotifications: merged.reactionNotifications,
     streaming: merged.streaming,
     blockStreamingCoalesce: merged.blockStreamingCoalesce as any,
