@@ -27,6 +27,7 @@ import {
   createMemorySearchTool,
   createMemoryGetTool,
   createTodoTool,
+  createSessionStatusTool,
   createClarifyTool,
 } from './index.js';
 import { createCuratedMemoryTool } from './curated-memory-tool.js';
@@ -175,6 +176,7 @@ export class AgentToolsFactory {
     const find = createFindTool(workspace);
 
     const core: AgentTool<any, any>[] = [
+      createSessionStatusTool(),
       createClarifyTool({
         resolveAskUser: () => {
           const req = this.deps.gatewayClarify?.requestClarification;

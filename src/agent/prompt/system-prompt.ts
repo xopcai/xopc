@@ -438,6 +438,8 @@ function buildTimeSection(timezone?: string): string {
   return `## Current Date & Time
 
 Time zone: ${timezone}
+
+If you need the current date/time/day-of-week, use the \`session_status\` tool or the inbound message timestamp envelope (when present).
 `;
 }
 
