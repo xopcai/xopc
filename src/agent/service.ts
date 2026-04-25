@@ -991,6 +991,15 @@ export class AgentService {
     await this.hydrateSessionModelFromStore(sessionKey);
     const cfg = this.effectiveAppConfig()!;
     const sc = await this.sessionConfigStore.get(sessionKey);
+
+    // Ensure model display matches the effective agent profile even before an Agent instance exists.
+    // Otherwise, `ModelManager.getModelForSession()` falls back to the global default until the first turn creates the agent.
+    const profile = resolveEffectiveAgentProfileForSession(cfg, sessionKey);
+    const profileModelRef = profile.primaryModelRef?.trim();
+    if (profileModelRef) {
+      this.modelManager.setSessionProfileDefault(sessionKey, profileModelRef);
+    }
+
     const defThink = cfg.agents?.defaults?.thinkingDefault ?? 'medium';
     const level = await resolveEffectiveThinkingLevel(this.sessionConfigStore, sessionKey, null, defThink);
     const defReason = (cfg.agents?.defaults?.reasoningDefault ?? 'off') as ReasoningLevel;
