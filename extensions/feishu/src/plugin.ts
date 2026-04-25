@@ -47,6 +47,7 @@ import {
 } from './outbound/actions.js';
 import { createFeishuDirectoryAdapter } from './directory/directory-adapter.js';
 import { feishuWhoAmI } from './tools/tools.js';
+import { feishuOnboardAdapter } from './adapters/onboard-cli.js';
 
 const log = createLogger('FeishuPlugin');
 
@@ -98,6 +99,8 @@ export class FeishuChannelPlugin implements ChannelPlugin<ResolvedFeishuAccount>
   };
 
   readonly configSurface = feishuConfigSurface;
+
+  onboard = feishuOnboardAdapter;
 
   private bus!: MessageBus;
   private cfg!: Config;
