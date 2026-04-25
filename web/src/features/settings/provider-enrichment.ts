@@ -134,6 +134,18 @@ export const PROVIDER_ENRICHMENT: Record<string, ProviderEnrichment> = {
     aliases: ['groq', 'llama on groq', 'mixtral on groq'],
     envVars: ['GROQ_API_KEY'],
   },
+  deepseek: {
+    apiKeyUrl: 'https://platform.deepseek.com/api_keys',
+    pricingUrl: 'https://api-docs.deepseek.com/quick_start/pricing/',
+    docsUrl: 'https://platform.deepseek.com/api-docs/',
+    description: 'DeepSeek models — OpenAI-compatible API with strong reasoning and low costs.',
+    descriptionZh: 'DeepSeek 模型：OpenAI 兼容 API，推理强、成本低。',
+    bestFor: ['reasoning', 'cheap', 'coding'],
+    freeTier: true,
+    freeTierNote: 'Free credits may be available for new accounts.',
+    aliases: ['deepseek', 'deep seek', 'deepseek v4', 'deepseek-v4', 'r1'],
+    envVars: ['DEEPSEEK_API_KEY'],
+  },
   xai: {
     apiKeyUrl: 'https://console.x.ai/',
     pricingUrl: 'https://x.ai/api',
