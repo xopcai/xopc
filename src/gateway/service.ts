@@ -57,6 +57,7 @@ const log = createLogger('GatewayService');
 import { PACKAGE_VERSION } from '../package-version.js';
 import { buildSessionKey, parseSessionKey } from '../routing/session-key.js';
 import { getDefaultAgentId } from '../routing/resolve-route.js';
+import { prependEnvelopeTimestamp } from '../channels/envelope-timestamp.js';
 import { scheduleGatewayUpdateCheck } from '../infra/update-startup.js';
 import { MAX_CHAT_ATTACHMENTS } from './chat-limits.js';
 
@@ -683,11 +684,13 @@ export class GatewayService {
           peerId: chatId,
         });
 
+        const timezone = this.agentService.resolveUserTimezoneForSession(sessionKey);
+        const stampedMessage = prependEnvelopeTimestamp(message, timezone);
         const prepared = await this.agentService.prepareInboundAttachments(sessionKey, cappedAttachments);
 
         // Persist before streaming so a mid-turn refresh still sees text + attachment refs on disk.
         try {
-          await this._saveUserMessage(sessionKey, message, prepared);
+          await this._saveUserMessage(sessionKey, stampedMessage, prepared);
         } catch (err) {
           log.error({ err, sessionKey }, 'Failed to save user message');
         }
@@ -703,7 +706,7 @@ export class GatewayService {
         this.activeWebchatRunBySession.set(sessionKey, runId);
         try {
           this.emit('agent.stream', { sessionKey, event: statusEvent });
-          const eventStream = this.agentService.processDirectStreaming(message, sessionKey, prepared, thinking, {
+          const eventStream = this.agentService.processDirectStreaming(stampedMessage, sessionKey, prepared, thinking, {
             signal: mergedSignal,
           });
 
