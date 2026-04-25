@@ -5,7 +5,9 @@ import { maybeAutoTitleSessionStore } from '../session/session-title.js';
 import type { ChannelManager } from '../channels/manager.js';
 import { INTERNAL_OUTBOUND_DROP_CHANNEL } from '../channels/internal-outbound.js';
 
+import { existsSync, readFileSync } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
+import { join } from 'node:path';
 
 import {
   SessionStore,
@@ -1183,6 +1185,24 @@ export class AgentService {
       thinking,
       signal: options?.signal,
     });
+  }
+
+  /**
+   * Best-effort timezone resolution for webchat envelope timestamps.
+   * Reads `USER.md` in the resolved workspace and extracts a `Timezone:` line.
+   */
+  resolveUserTimezoneForSession(sessionKey: string): string | undefined {
+    try {
+      const workspace = this.agentManager.getResolvedWorkspaceForSession(sessionKey);
+      const userPath = join(workspace, 'USER.md');
+      if (!existsSync(userPath)) return undefined;
+      const raw = readFileSync(userPath, 'utf-8');
+      const match = raw.match(/Timezone:\s*(.+)/i);
+      const tz = match?.[1]?.trim();
+      return tz || undefined;
+    } catch {
+      return undefined;
+    }
   }
 
   private createProcessDirectStreamingDeps(): ProcessDirectStreamingDeps {
