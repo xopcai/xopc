@@ -1,4 +1,4 @@
-import lark from '@larksuiteoapi/node-sdk';
+import * as lark from '@larksuiteoapi/node-sdk';
 
 import type { ResolvedFeishuAccount } from '../../state/accounts.js';
 import { createFeishuLarkSdkPinoLogger } from './lark-sdk-logger.js';

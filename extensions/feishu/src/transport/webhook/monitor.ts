@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import * as http from 'node:http';
 
-import lark from '@larksuiteoapi/node-sdk';
+import * as lark from '@larksuiteoapi/node-sdk';
 
 import type { MessageBus } from '@xopcai/xopc/infra/bus/index.js';
 import type { Config } from '@xopcai/xopc/config/schema.js';
@@ -267,7 +267,7 @@ export function createFeishuWebhookMonitor(deps: FeishuWebhookMonitorDeps) {
       return text(res, 401, 'Invalid verification token');
     }
 
-    const { isChallenge, challenge } = (lark as any).generateChallenge(payload, { encryptKey });
+    const { isChallenge, challenge } = lark.generateChallenge(payload, { encryptKey });
     if (isChallenge) return json(res, 200, challenge);
 
     const envelope = Object.assign(Object.create({ headers: req.headers }), payload);
