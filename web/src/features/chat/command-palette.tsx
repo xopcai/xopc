@@ -6,7 +6,15 @@ import {
   Trigger as TooltipTrigger,
 } from '@radix-ui/react-tooltip';
 import { Sparkles, Zap } from 'lucide-react';
-import { Fragment, memo, useLayoutEffect, useState, type ReactNode, type RefObject } from 'react';
+import {
+  Fragment,
+  memo,
+  useLayoutEffect,
+  useState,
+  type PointerEvent,
+  type ReactNode,
+  type RefObject,
+} from 'react';
 import { createPortal } from 'react-dom';
 
 import type { PaletteItem } from '@/features/chat/command-palette.types';
@@ -15,7 +23,7 @@ import { cn } from '@/lib/cn';
 /** Above shell `overflow-hidden`; portal + fixed avoids clipping (only shadow was visible). */
 const PORTAL_Z = 100;
 /** Cap width so the list stays readable; full composer width is often unnecessarily wide. */
-const MAX_PALETTE_WIDTH_PX = 352;
+const MAX_PALETTE_WIDTH_PX = 280;
 
 function highlightFuzzyName(name: string, q: string): ReactNode {
   const needle = q.trim().toLowerCase();
@@ -90,9 +98,12 @@ export const CommandPalette = memo(function CommandPalette({
   onExpandSkills,
   onExpandCommands,
   onSelectItem,
+  panelRef,
 }: {
   open: boolean;
   anchorRef: RefObject<HTMLElement | null>;
+  /** The floating listbox `div` (for outside-click to dismiss the slash token in the parent). */
+  panelRef?: RefObject<HTMLDivElement | null>;
   items: PaletteItem[];
   selectedIndex: number;
   noResults: string;
@@ -157,10 +168,10 @@ export const CommandPalette = memo(function CommandPalette({
   const showHighlight = !grouped && filterQuery.length > 0;
 
   const showMoreClass =
-    'w-full px-3 py-1.5 text-left text-xs text-fg-muted transition hover:bg-surface-hover/80 hover:text-fg';
+    'w-full px-2.5 py-1 text-left text-[11px] leading-tight text-fg-muted transition hover:bg-surface-hover/80 hover:text-fg';
 
   const sectionHeaderClass =
-    'px-3 pt-2.5 text-[0.65rem] font-medium uppercase tracking-wide text-fg-muted';
+    'mb-1.5 px-2.5 pt-2.5 text-[0.6rem] font-medium uppercase leading-none tracking-wide text-fg-muted';
 
   const renderOptionRow = (item: PaletteItem, i: number) => {
     const isSkill = item.kind === 'skill';
@@ -169,9 +180,9 @@ export const CommandPalette = memo(function CommandPalette({
         item={item}
         icon={
           isSkill ? (
-            <Sparkles className="size-3.5 shrink-0 text-accent-fg" aria-hidden />
+            <Sparkles className="size-3 shrink-0 text-accent-fg" aria-hidden />
           ) : (
-            <Zap className="size-3.5 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />
+            <Zap className="size-3 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />
           )
         }
         selected={selectedIndex === i}
@@ -201,7 +212,7 @@ export const CommandPalette = memo(function CommandPalette({
 
   const listBody =
     totalRows === 0 ? (
-      <div className="px-3 py-2 text-sm text-fg-muted">{noResults}</div>
+      <div className="px-2.5 py-2.5 text-xs leading-normal text-fg-muted">{noResults}</div>
     ) : grouped ? (
       <>
         {groupedHasSkills ? (
@@ -229,7 +240,7 @@ export const CommandPalette = memo(function CommandPalette({
         {groupedHasCommands ? (
           <div
             className={cn(
-              groupedHasSkills && 'mt-0.5 border-t border-edge-subtle',
+              groupedHasSkills && 'mt-1 border-t border-edge-subtle',
             )}
           >
             <div className={sectionHeaderClass} aria-hidden>
@@ -258,9 +269,10 @@ export const CommandPalette = memo(function CommandPalette({
     );
 
   const shell = (
-    <TooltipProvider delayDuration={150} skipDelayDuration={0}>
+    <TooltipProvider delayDuration={0} skipDelayDuration={0} disableHoverableContent={false}>
       <div
-        className="pointer-events-auto max-h-[min(24rem,55vh)] min-h-[2.5rem] overflow-y-auto rounded-lg border border-edge bg-surface-panel shadow-lg dark:bg-surface-panel/95"
+        ref={panelRef}
+        className="pointer-events-auto max-h-[min(24rem,55vh)] min-h-8 overflow-y-auto rounded-md border border-edge bg-surface-panel text-xs leading-4 shadow-lg dark:bg-surface-panel/95"
         style={{
           position: 'fixed',
           left: box.left,
@@ -307,22 +319,71 @@ const PaletteRow = memo(function PaletteRow({
   const fullDescription = item.description ?? '';
 
   const textColumn = (
-    <span className="flex min-w-0 flex-1 items-baseline gap-1.5">
+    <span className="flex min-w-0 flex-1 items-baseline gap-1">
       <span className="min-w-0 max-w-[min(12rem,46%)] shrink-0 truncate font-semibold text-fg">
         {nameLine}
       </span>
       {item.category && item.kind !== 'skill' && !dimCategoryBadge ? (
-        <span className="shrink-0 rounded bg-surface-hover px-1.5 py-0.5 text-[0.65rem] font-normal text-fg-muted">
+        <span className="shrink-0 rounded bg-surface-hover px-1 py-px text-[0.6rem] font-normal leading-none text-fg-muted">
           {item.category}
         </span>
       ) : null}
       {showDescription ? (
-        <span className="min-w-0 flex-1 truncate text-xs font-normal text-fg-muted">
+        <span className="min-w-0 flex-1 truncate text-[11px] font-normal leading-tight text-fg-muted">
           {descriptionLine}
         </span>
       ) : null}
     </span>
   );
+
+  const optionClassName = cn(
+    'flex w-full min-w-0 cursor-pointer items-center gap-1.5 px-2.5 py-1 text-left text-xs leading-4',
+    selected ? 'bg-surface-hover text-fg' : 'text-fg-subtle hover:bg-surface-hover/80',
+  );
+
+  const onRowPointerDown = (e: PointerEvent) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    e.preventDefault();
+    onSelect();
+  };
+
+  const rowInner = (
+    <>
+      <span className="shrink-0 [&_svg]:align-middle">{icon}</span>
+      {textColumn}
+    </>
+  );
+
+  if (showDescTooltip) {
+    return (
+      <TooltipRoot delayDuration={0}>
+        <TooltipTrigger asChild>
+          <div
+            id={id}
+            role="option"
+            aria-selected={selected}
+            tabIndex={-1}
+            className={optionClassName}
+            onPointerDown={onRowPointerDown}
+          >
+            {rowInner}
+          </div>
+        </TooltipTrigger>
+        <TooltipPortal>
+          <TooltipContent
+            side="right"
+            align="start"
+            sideOffset={8}
+            collisionPadding={12}
+            className="!z-[10000] max-h-[min(12rem,40vh)] max-w-sm overflow-y-auto rounded-md border border-edge bg-surface-panel px-2 py-1.5 text-left text-[11px] leading-snug text-fg shadow-lg select-text [max-width:min(20rem,90vw)]"
+            data-slash-palette-tooltip=""
+          >
+            <span className="whitespace-pre-wrap break-words">{fullDescription}</span>
+          </TooltipContent>
+        </TooltipPortal>
+      </TooltipRoot>
+    );
+  }
 
   return (
     <div
@@ -330,34 +391,10 @@ const PaletteRow = memo(function PaletteRow({
       role="option"
       aria-selected={selected}
       tabIndex={-1}
-      className={cn(
-        'flex cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-sm',
-        selected ? 'bg-surface-hover text-fg' : 'text-fg-subtle hover:bg-surface-hover/80',
-      )}
-      onPointerDown={(e) => {
-        if (e.pointerType === 'mouse' && e.button !== 0) return;
-        e.preventDefault();
-        onSelect();
-      }}
+      className={optionClassName}
+      onPointerDown={onRowPointerDown}
     >
-      <span className="shrink-0 [&_svg]:align-middle">{icon}</span>
-      {showDescTooltip ? (
-        <TooltipRoot delayDuration={150}>
-          <TooltipTrigger asChild>{textColumn}</TooltipTrigger>
-          <TooltipPortal>
-            <TooltipContent
-              side="top"
-              align="start"
-              sideOffset={6}
-              className="z-[200] max-h-[min(12rem,40vh)] max-w-sm overflow-y-auto rounded-md border border-edge bg-surface-panel px-2.5 py-1.5 text-xs leading-snug text-fg shadow-lg select-text [max-width:min(20rem,90vw)]"
-            >
-              <span className="whitespace-pre-wrap break-words">{fullDescription}</span>
-            </TooltipContent>
-          </TooltipPortal>
-        </TooltipRoot>
-      ) : (
-        textColumn
-      )}
+      {rowInner}
     </div>
   );
 });
