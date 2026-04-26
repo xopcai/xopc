@@ -6,6 +6,7 @@ import type { AgentMessage } from '@mariozechner/pi-agent-core';
 import { complete, type UserMessage } from '@mariozechner/pi-ai';
 
 import { stripInboundFileMetadataFromText } from '../channels/attachments/inbound-persist.js';
+import { stripEnvelopeTimestampPrefix } from '../channels/envelope-timestamp.js';
 import { isCronSessionKey, parseSessionKey } from '../routing/session-key.js';
 import { resolveModel } from '../providers/index.js';
 import { createLogger } from '../utils/logger.js';
@@ -40,7 +41,8 @@ function firstUserText(messages: AgentMessage[]): string {
   if (!u) return '';
   const raw = extractTextFromMessage(u);
   // User turns include `formatInboundFileTextBlock` text blocks; do not feed [File:…] into title LLM / fallback.
-  return stripInboundFileMetadataFromText(raw);
+  // Inbound pipeline / webchat prepends `[YYYY-MM-DD HH:MM TZ]`; strip so titles are not timestamp-led.
+  return stripInboundFileMetadataFromText(stripEnvelopeTimestampPrefix(raw));
 }
 
 /** First assistant message that has visible text (skips tool-only assistant rows). */

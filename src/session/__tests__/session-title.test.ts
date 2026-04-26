@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { shouldAutoTitleSessionKey } from '../session-title.js';
+import { fallbackTitleFromMessages, shouldAutoTitleSessionKey } from '../session-title.ts';
 
 describe('shouldAutoTitleSessionKey', () => {
   it('allows webchat, telegram, weixin-style keys', () => {
@@ -21,5 +21,17 @@ describe('shouldAutoTitleSessionKey', () => {
   it('rejects empty key', () => {
     expect(shouldAutoTitleSessionKey('')).toBe(false);
     expect(shouldAutoTitleSessionKey('   ')).toBe(false);
+  });
+});
+
+describe('fallbackTitleFromMessages', () => {
+  it('ignores leading envelope timestamp on first user message', () => {
+    const title = fallbackTitleFromMessages([
+      {
+        role: 'user',
+        content: [{ type: 'text', text: '[2026-01-15 10:00 UTC] 你好' }],
+      },
+    ]);
+    expect(title).toBe('你好');
   });
 });
