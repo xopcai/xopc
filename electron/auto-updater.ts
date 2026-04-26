@@ -36,6 +36,9 @@ let updateDownloadedPendingInstall = false;
 const CHECK_DELAY_MS = 30_000;
 const CHECK_INTERVAL_MS = 4 * 3600_000;
 
+/** Baked into app-update.yml; overridden here so dev builds and env can point elsewhere. */
+const DEFAULT_UPDATE_FEED_BASE = 'https://xopc.ai/api/download';
+
 /**
  * Initialize the auto-updater. Must be called after app.whenReady() and only in packaged builds.
  */
@@ -46,6 +49,13 @@ export function initAutoUpdater(mainWindow: BrowserWindow): void {
   }
 
   mainWindowRef = mainWindow;
+
+  const feedBase = (process.env['XOPC_UPDATE_FEED_URL'] ?? DEFAULT_UPDATE_FEED_BASE).replace(/\/$/, '');
+  autoUpdater.setFeedURL({
+    provider: 'generic',
+    url: feedBase,
+  });
+  log.info({ feedBase }, 'electron-updater generic feed');
 
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
