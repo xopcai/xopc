@@ -260,7 +260,8 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
         };
       }
       const result = await listSessions({
-        channel: 'telegram,weixin',
+        // IM channel sessions: include Feishu/Lark alongside Telegram/WeChat.
+        channel: 'telegram,weixin,feishu,lark',
         limit: PAGE_SIZE,
         offset,
       });

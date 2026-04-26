@@ -1,11 +1,13 @@
 import type { LucideIcon } from 'lucide-react';
-import { Hash, MessagesSquare, Send } from 'lucide-react';
+import { Hash, MessageCircle, MessagesSquare, Send } from 'lucide-react';
 
 import { cn } from '@/lib/cn';
 
 const ICON_BY_CHANNEL: Record<string, LucideIcon> = {
   telegram: Send,
   weixin: MessagesSquare,
+  feishu: MessageCircle,
+  lark: MessageCircle,
 };
 
 function iconForSourceChannel(sourceChannel: string): LucideIcon {
