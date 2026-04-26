@@ -27,6 +27,12 @@ let currentStatus: UpdateStatus = { state: 'idle' };
 let checkTimer: ReturnType<typeof setInterval> | null = null;
 let mainWindowRef: BrowserWindow | null = null;
 
+/**
+ * True after `update-downloaded` until process exit. Further `checkForUpdates` calls are skipped to avoid
+ * racing Squirrel.Mac (proxy + native autoUpdater) and to prevent `update-not-available` from clearing UI state.
+ */
+let updateDownloadedPendingInstall = false;
+
 const CHECK_DELAY_MS = 30_000;
 const CHECK_INTERVAL_MS = 4 * 3600_000;
 
@@ -53,11 +59,18 @@ export function initAutoUpdater(mainWindow: BrowserWindow): void {
   } as typeof autoUpdater.logger;
 
   autoUpdater.on('checking-for-update', () => {
+    if (updateDownloadedPendingInstall) {
+      return;
+    }
     log.info('Checking for updates...');
     setStatus({ state: 'checking' });
   });
 
   autoUpdater.on('update-available', (info: UpdateInfo) => {
+    if (updateDownloadedPendingInstall) {
+      log.debug({ version: info.version }, 'Ignoring update-available while install is pending');
+      return;
+    }
     log.info({ version: info.version }, `Update available: v${info.version}`);
     setStatus({
       state: 'available',
@@ -68,6 +81,10 @@ export function initAutoUpdater(mainWindow: BrowserWindow): void {
   });
 
   autoUpdater.on('update-not-available', () => {
+    if (updateDownloadedPendingInstall) {
+      log.debug('Ignoring update-not-available while install is pending');
+      return;
+    }
     log.info('Already up to date');
     setStatus({ state: 'not-available' });
     setTimeout(() => {
@@ -78,6 +95,9 @@ export function initAutoUpdater(mainWindow: BrowserWindow): void {
   });
 
   autoUpdater.on('download-progress', (progress: ProgressInfo) => {
+    if (updateDownloadedPendingInstall) {
+      return;
+    }
     setStatus({
       state: 'downloading',
       percent: progress.percent,
@@ -88,11 +108,16 @@ export function initAutoUpdater(mainWindow: BrowserWindow): void {
   });
 
   autoUpdater.on('update-downloaded', (info: UpdateInfo) => {
+    updateDownloadedPendingInstall = true;
     log.info({ version: info.version }, `Update downloaded: v${info.version}. Ready to install.`);
     setStatus({ state: 'downloaded', version: info.version });
   });
 
   autoUpdater.on('error', (err: Error) => {
+    if (updateDownloadedPendingInstall) {
+      log.warn({ err }, `Auto-updater error while install pending: ${err.message}`);
+      return;
+    }
     log.error({ err }, `Auto-updater error: ${err.message}`);
     setStatus({ state: 'error', message: err.message });
     setTimeout(() => {
@@ -121,14 +146,26 @@ export function getUpdateStatus(): UpdateStatus {
   return currentStatus;
 }
 
+/** Whether a build is downloaded and waiting for quit / restart (Squirrel.Mac staged update). */
+export function hasPendingInstall(): boolean {
+  return updateDownloadedPendingInstall;
+}
+
 export function checkForUpdates(): void {
+  if (!app.isPackaged) {
+    return;
+  }
+  if (updateDownloadedPendingInstall) {
+    log.debug('Skipping update check: downloaded update awaiting install');
+    return;
+  }
   void autoUpdater.checkForUpdates().catch((err) => {
     log.warn({ err }, 'Manual update check failed');
   });
 }
 
 export function quitAndInstall(): void {
-  if (currentStatus.state !== 'downloaded') {
+  if (!updateDownloadedPendingInstall) {
     log.warn({ state: currentStatus.state }, 'quitAndInstall called but no update is downloaded');
     return;
   }
