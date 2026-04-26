@@ -320,7 +320,7 @@ export function ChannelsSettingsPanel() {
     if (!form) return;
     const raw = feishuAccountsDraft.trim();
     if (!raw) {
-      updateFeishu({ accounts: {} as any });
+      updateFeishu({ accounts: {} });
       setFeishuAccountsError('');
       return;
     }
@@ -845,8 +845,8 @@ export function ChannelsSettingsPanel() {
                         className={cn(inputClassName(), 'min-w-0 flex-1 font-mono text-xs')}
                         type={showFeishuWebhookSecrets ? 'text' : 'password'}
                         autoComplete="off"
-                        value={(fs as any).verificationToken ?? ''}
-                        onChange={(e) => updateFeishu({ verificationToken: e.target.value } as any)}
+                        value={fs.verificationToken ?? ''}
+                        onChange={(e) => updateFeishu({ verificationToken: e.target.value })}
                       />
                       <FieldHint>{ch.verificationTokenDesc}</FieldHint>
                     </div>
@@ -856,8 +856,8 @@ export function ChannelsSettingsPanel() {
                         className={cn(inputClassName(), 'min-w-0 flex-1 font-mono text-xs')}
                         type={showFeishuWebhookSecrets ? 'text' : 'password'}
                         autoComplete="off"
-                        value={(fs as any).encryptKey ?? ''}
-                        onChange={(e) => updateFeishu({ encryptKey: e.target.value } as any)}
+                        value={fs.encryptKey ?? ''}
+                        onChange={(e) => updateFeishu({ encryptKey: e.target.value })}
                       />
                       <FieldHint>{ch.encryptKeyDesc}</FieldHint>
                     </div>
@@ -868,8 +868,8 @@ export function ChannelsSettingsPanel() {
                       <FieldLabel>{ch.webhookHost}</FieldLabel>
                       <input
                         className={cn(inputClassName(), 'min-w-0 flex-1 font-mono text-xs')}
-                        value={(fs as any).webhookHost ?? ''}
-                        onChange={(e) => updateFeishu({ webhookHost: e.target.value } as any)}
+                        value={fs.webhookHost ?? ''}
+                        onChange={(e) => updateFeishu({ webhookHost: e.target.value })}
                         placeholder="127.0.0.1"
                       />
                     </div>
@@ -879,9 +879,9 @@ export function ChannelsSettingsPanel() {
                         className={cn(inputClassName(), 'min-w-0 flex-1 font-mono text-xs')}
                         type="number"
                         inputMode="numeric"
-                        value={String((fs as any).webhookPort ?? '')}
+                        value={String(fs.webhookPort ?? '')}
                         onChange={(e) =>
-                          updateFeishu({ webhookPort: Number(e.target.value || '0') || 0 } as any)
+                          updateFeishu({ webhookPort: Number(e.target.value || '0') || 0 })
                         }
                         placeholder="3000"
                       />
@@ -892,8 +892,8 @@ export function ChannelsSettingsPanel() {
                     <FieldLabel>{ch.webhookPath}</FieldLabel>
                     <input
                       className={cn(inputClassName(), 'min-w-0 flex-1 font-mono text-xs')}
-                      value={(fs as any).webhookPath ?? ''}
-                      onChange={(e) => updateFeishu({ webhookPath: e.target.value } as any)}
+                      value={fs.webhookPath ?? ''}
+                      onChange={(e) => updateFeishu({ webhookPath: e.target.value })}
                       placeholder="/feishu/events"
                     />
                     <FieldHint>{ch.webhookPathDesc}</FieldHint>
@@ -1043,11 +1043,11 @@ export function ChannelsSettingsPanel() {
                       <input
                         type="checkbox"
                         className="ui-checkbox"
-                        checked={Boolean((fs as any).tools?.[key])}
+                        checked={Boolean(fs.tools?.[key])}
                         onChange={(e) =>
                           updateFeishu({
-                            tools: { ...(fs as any).tools, [key]: e.target.checked },
-                          } as any)
+                            tools: { ...fs.tools, [key]: e.target.checked },
+                          })
                         }
                       />
                       {label}
@@ -1065,11 +1065,11 @@ export function ChannelsSettingsPanel() {
                   <input
                     type="checkbox"
                     className="ui-checkbox"
-                    checked={Boolean((fs as any).actions?.reactions)}
+                    checked={Boolean(fs.actions?.reactions)}
                     onChange={(e) =>
                       updateFeishu({
-                        actions: { ...(fs as any).actions, reactions: e.target.checked },
-                      } as any)
+                        actions: { ...fs.actions, reactions: e.target.checked },
+                      })
                     }
                   />
                   {ch.feishuActionReactions}
@@ -1078,7 +1078,7 @@ export function ChannelsSettingsPanel() {
 
               {form ? (
                 <ChannelAgentRoutingBlock
-                  accountIds={feishuRoutingAccountIds(fs as any)}
+                  accountIds={feishuRoutingAccountIds(fs)}
                   routes={(form as any).channelAgentRoutes.feishu}
                   defaultAgentId={form.defaultAgentId}
                   agentItems={chatAgents?.items ?? []}

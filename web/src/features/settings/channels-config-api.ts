@@ -191,7 +191,7 @@ export function normalizeChannelsFromConfig(config: unknown): ChannelsSettingsSt
 
   const tgIds = telegramRoutingAccountIds(base.telegram);
   const wxIds = weixinRoutingAccountIds(base.weixin);
-  const fsIds = feishuRoutingAccountIds(base.feishu as any);
+  const fsIds = feishuRoutingAccountIds(base.feishu);
   const channelAgentRoutes = extractChannelAgentRoutes(bindingsRaw, tgIds, wxIds, fsIds, defaultAgentId);
 
   return {
@@ -243,7 +243,7 @@ export async function patchChannelsSettings(state: ChannelsSettingsState): Promi
     state.channelAgentRoutes,
     telegramRoutingAccountIds(tg),
     weixinRoutingAccountIds(wx),
-    feishuRoutingAccountIds(fs as any),
+    feishuRoutingAccountIds(fs),
     state.defaultAgentId,
   );
   const weixinRouteTag: string | number | null = (() => {
