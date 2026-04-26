@@ -5,6 +5,7 @@ import { apiUrl } from '@/lib/url';
 import {
   extractChannelAgentRoutes,
   mergeChannelAgentBindings,
+  feishuRoutingAccountIds,
   telegramRoutingAccountIds,
   weixinRoutingAccountIds,
   type BindingRuleWire,
@@ -30,7 +31,7 @@ export type { DmPolicy, GroupPolicy, ReplyToMode, StreamMode };
 export function defaultChannelsState(): ChannelsSettingsState {
   return {
     bindingsFull: [],
-    channelAgentRoutes: { telegram: {}, weixin: {} },
+    channelAgentRoutes: { telegram: {}, weixin: {}, feishu: {} },
     defaultAgentId: 'main',
     telegram: {
       enabled: false,
@@ -59,6 +60,32 @@ export function defaultChannelsState(): ChannelsSettingsState {
       routeTag: '',
       accounts: {},
     },
+    feishu: {
+      enabled: false,
+      defaultAccount: '',
+      appId: '',
+      appSecret: '',
+      domain: 'feishu',
+      connectionMode: 'websocket',
+      verificationToken: '',
+      encryptKey: '',
+      webhookHost: '127.0.0.1',
+      webhookPort: 3000,
+      webhookPath: '/feishu/events',
+      dmPolicy: 'pairing',
+      groupPolicy: 'allowlist',
+      allowFrom: [],
+      groupAllowFrom: [],
+      requireMention: true,
+      historyLimit: 50,
+      textChunkLimit: 4000,
+      renderMode: 'auto',
+      streaming: false,
+      reactionNotifications: 'own',
+      tools: { doc: true, wiki: true, drive: true, scopes: true, bitable: true, perm: false },
+      actions: { reactions: true },
+      accounts: {},
+    },
   };
 }
 
@@ -67,6 +94,7 @@ export function normalizeChannelsFromConfig(config: unknown): ChannelsSettingsSt
   const ch = cfg && typeof cfg === 'object' ? (cfg as Record<string, unknown>) : {};
   const tg = ch.telegram as Record<string, unknown> | undefined;
   const wx = ch.weixin as Record<string, unknown> | undefined;
+  const fs = ch.feishu as Record<string, unknown> | undefined;
 
   const telegramAccounts = tg?.accounts;
   const accounts: Record<string, TelegramAccount> =
@@ -124,11 +152,47 @@ export function normalizeChannelsFromConfig(config: unknown): ChannelsSettingsSt
       routeTag: wx?.routeTag != null ? String(wx.routeTag) : '',
       accounts: { ...wxAcc },
     },
+    feishu: {
+      enabled: Boolean(fs?.enabled),
+      defaultAccount: typeof fs?.defaultAccount === 'string' ? fs.defaultAccount : '',
+      appId: typeof fs?.appId === 'string' ? fs.appId : '',
+      appSecret: typeof fs?.appSecret === 'string' ? fs.appSecret : '',
+      domain: (typeof fs?.domain === 'string' && fs.domain) || 'feishu',
+      connectionMode: (fs?.connectionMode as any) || 'websocket',
+      verificationToken: typeof fs?.verificationToken === 'string' ? fs.verificationToken : '',
+      encryptKey: typeof fs?.encryptKey === 'string' ? fs.encryptKey : '',
+      webhookHost: typeof fs?.webhookHost === 'string' ? fs.webhookHost : '127.0.0.1',
+      webhookPort: typeof fs?.webhookPort === 'number' ? fs.webhookPort : 3000,
+      webhookPath: typeof fs?.webhookPath === 'string' ? fs.webhookPath : '/feishu/events',
+      dmPolicy: (fs?.dmPolicy as DmPolicy) || 'pairing',
+      groupPolicy: (fs?.groupPolicy as GroupPolicy) || 'allowlist',
+      allowFrom: Array.isArray(fs?.allowFrom) ? [...(fs.allowFrom as (string | number)[])] : [],
+      groupAllowFrom: Array.isArray(fs?.groupAllowFrom) ? [...(fs.groupAllowFrom as (string | number)[])] : [],
+      requireMention: fs?.requireMention === undefined ? true : Boolean(fs.requireMention),
+      historyLimit: typeof fs?.historyLimit === 'number' ? fs.historyLimit : 50,
+      textChunkLimit: typeof fs?.textChunkLimit === 'number' ? fs.textChunkLimit : 4000,
+      renderMode: (fs?.renderMode as any) || 'auto',
+      streaming: fs?.streaming === undefined ? false : Boolean(fs.streaming),
+      reactionNotifications: (fs?.reactionNotifications as any) || 'own',
+      tools:
+        fs?.tools && typeof fs.tools === 'object' && !Array.isArray(fs.tools)
+          ? ({ ...(fs.tools as Record<string, boolean>) } as any)
+          : undefined,
+      actions:
+        fs?.actions && typeof fs.actions === 'object' && !Array.isArray(fs.actions)
+          ? ({ ...(fs.actions as Record<string, boolean>) } as any)
+          : undefined,
+      accounts:
+        fs?.accounts && typeof fs.accounts === 'object' && !Array.isArray(fs.accounts)
+          ? ({ ...(fs.accounts as Record<string, any>) } as any)
+          : {},
+    },
   };
 
   const tgIds = telegramRoutingAccountIds(base.telegram);
   const wxIds = weixinRoutingAccountIds(base.weixin);
-  const channelAgentRoutes = extractChannelAgentRoutes(bindingsRaw, tgIds, wxIds, defaultAgentId);
+  const fsIds = feishuRoutingAccountIds(base.feishu);
+  const channelAgentRoutes = extractChannelAgentRoutes(bindingsRaw, tgIds, wxIds, fsIds, defaultAgentId);
 
   return {
     ...base,
@@ -173,11 +237,13 @@ export async function fetchWeixinGatewayQrLoginStatus(
 export async function patchChannelsSettings(state: ChannelsSettingsState): Promise<ChannelsSettingsState> {
   const tg = state.telegram;
   const wx = state.weixin;
+  const fs = state.feishu;
   const mergedBindings = mergeChannelAgentBindings(
     state.bindingsFull,
     state.channelAgentRoutes,
     telegramRoutingAccountIds(tg),
     weixinRoutingAccountIds(wx),
+    feishuRoutingAccountIds(fs),
     state.defaultAgentId,
   );
   const weixinRouteTag: string | number | null = (() => {
@@ -218,6 +284,32 @@ export async function patchChannelsSettings(state: ChannelsSettingsState): Promi
           textChunkLimit: wx.textChunkLimit,
           routeTag: weixinRouteTag,
           accounts: wx.accounts,
+        },
+        feishu: {
+          enabled: fs.enabled,
+          defaultAccount: fs.defaultAccount || undefined,
+          appId: fs.appId,
+          appSecret: fs.appSecret || undefined,
+          domain: fs.domain || undefined,
+          connectionMode: fs.connectionMode,
+          verificationToken: (fs as any).verificationToken?.trim() ? (fs as any).verificationToken : undefined,
+          encryptKey: (fs as any).encryptKey?.trim() ? (fs as any).encryptKey : undefined,
+          webhookHost: (fs as any).webhookHost?.trim() ? (fs as any).webhookHost : undefined,
+          webhookPort: typeof (fs as any).webhookPort === 'number' ? (fs as any).webhookPort : undefined,
+          webhookPath: (fs as any).webhookPath?.trim() ? (fs as any).webhookPath : undefined,
+          dmPolicy: fs.dmPolicy,
+          groupPolicy: fs.groupPolicy,
+          allowFrom: fs.allowFrom,
+          groupAllowFrom: fs.groupAllowFrom.length ? fs.groupAllowFrom : undefined,
+          requireMention: fs.requireMention,
+          historyLimit: fs.historyLimit,
+          textChunkLimit: fs.textChunkLimit,
+          renderMode: fs.renderMode,
+          streaming: fs.streaming,
+          reactionNotifications: fs.reactionNotifications,
+          tools: (fs as any).tools,
+          actions: (fs as any).actions,
+          accounts: fs.accounts,
         },
       },
     }),

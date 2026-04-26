@@ -18,7 +18,7 @@
   - [Image & vision](image-multimodal.md)
   - [Voice (STT/TTS)](voice.md)
   - [UI Design System](design/ui-design-system.md)
-  - [Channels (Telegram)](channels.md)
+  - [Channels](channels/)
   - [Progress Feedback](progress.md)
   - [Extensions](extensions.md)
   - [Scheduled Tasks (Cron)](cron.md)

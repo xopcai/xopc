@@ -212,5 +212,5 @@ const manager = new ProgressFeedbackManager({
 
 ## 相关文档
 
-- [即时通讯配置](channels.md) — Telegram 等通道配置
+- [消息通道](/zh/channels) — Telegram 等通道配置
 - [架构设计](architecture.md) - 系统架构概述

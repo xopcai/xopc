@@ -16,6 +16,7 @@ import useSWR from 'swr';
 import { Button } from '@/components/ui/button';
 import { fetchChatAgents } from '@/features/chat/chat-agents-api';
 import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
+import { feishuRoutingAccountIds } from '@/features/settings/channel-bindings-merge';
 import { telegramRoutingAccountIds } from '@/features/settings/channel-bindings-merge';
 import {
   defaultChannelsState,
@@ -41,6 +42,7 @@ import { WeixinAdvanced } from './weixin-advanced';
 import { WeixinQrLoginDialog } from './weixin-qr-login-dialog';
 import {
   channelsInputClassName,
+  isFeishuConfigured,
   isTelegramConfigured,
   isWeixinConfigured,
   joinAllowFrom,
@@ -62,16 +64,23 @@ export function ChannelsSettingsPanel() {
 
   const [weixinModalOpen, setWeixinModalOpen] = useState(false);
   const [telegramModalOpen, setTelegramModalOpen] = useState(false);
-  const [removeTarget, setRemoveTarget] = useState<'weixin' | 'telegram' | null>(null);
+  const [feishuModalOpen, setFeishuModalOpen] = useState(false);
+  const [removeTarget, setRemoveTarget] = useState<'weixin' | 'telegram' | 'feishu' | null>(null);
   const [weixinSuccessBanner, setWeixinSuccessBanner] = useState<string | null>(null);
   const [tgAdvanced, setTgAdvanced] = useState(false);
   const [showToken, setShowToken] = useState(false);
+  const [showFeishuSecret, setShowFeishuSecret] = useState(false);
+  const [showFeishuWebhookSecrets, setShowFeishuWebhookSecrets] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [feishuCopied, setFeishuCopied] = useState(false);
+  const [feishuWebhookCopied, setFeishuWebhookCopied] = useState(false);
 
   const [tgAccountsDraft, setTgAccountsDraft] = useState('');
   const [tgAccountsError, setTgAccountsError] = useState('');
   const [wxAccountsDraft, setWxAccountsDraft] = useState('');
   const [wxAccountsError, setWxAccountsError] = useState('');
+  const [feishuAccountsDraft, setFeishuAccountsDraft] = useState('');
+  const [feishuAccountsError, setFeishuAccountsError] = useState('');
 
   const { data: chatAgents } = useSWR(hasToken ? 'gateway-chat-agents-ch' : null, fetchChatAgents, {
     revalidateOnFocus: false,
@@ -106,6 +115,8 @@ export function ChannelsSettingsPanel() {
       setTgAccountsError('');
       setWxAccountsDraft(JSON.stringify(parsed.weixin.accounts ?? {}, null, 2));
       setWxAccountsError('');
+      setFeishuAccountsDraft(JSON.stringify((parsed as any).feishu?.accounts ?? {}, null, 2));
+      setFeishuAccountsError('');
       setSaveOk(false);
     }
   }, [hasToken, parsed, dirty]);
@@ -115,10 +126,10 @@ export function ChannelsSettingsPanel() {
     swrError instanceof Error ? swrError.message : swrError ? String(swrError) : null;
 
   const updateChannelAgentRoute = useCallback(
-    (channel: 'telegram' | 'weixin', accountId: string, agentId: string) => {
+    (channel: 'telegram' | 'weixin' | 'feishu', accountId: string, agentId: string) => {
       setForm((f) => {
         if (!f) return null;
-        const k = channel === 'telegram' ? 'telegram' : 'weixin';
+        const k = channel === 'telegram' ? 'telegram' : channel === 'weixin' ? 'weixin' : 'feishu';
         return {
           ...f,
           channelAgentRoutes: {
@@ -139,6 +150,10 @@ export function ChannelsSettingsPanel() {
     setForm((f) => (f ? { ...f, weixin: { ...f.weixin, ...patch } } : null));
   }, []);
 
+  const updateFeishu = useCallback((patch: Partial<ChannelsSettingsState['feishu']>) => {
+    setForm((f) => (f ? { ...f, feishu: { ...f.feishu, ...patch } } : null));
+  }, []);
+
   const save = useCallback(async (): Promise<boolean> => {
     if (!form || saving) return false;
     setSaving(true);
@@ -153,6 +168,8 @@ export function ChannelsSettingsPanel() {
       setTgAccountsError('');
       setWxAccountsDraft(JSON.stringify(baselineClone.weixin.accounts ?? {}, null, 2));
       setWxAccountsError('');
+      setFeishuAccountsDraft(JSON.stringify((baselineClone as any).feishu?.accounts ?? {}, null, 2));
+      setFeishuAccountsError('');
       setSaveOk(true);
       window.setTimeout(() => setSaveOk(false), 2500);
       return true;
@@ -165,13 +182,15 @@ export function ChannelsSettingsPanel() {
   }, [form, saving, ch.saveError]);
 
   const toggleChannelEnabled = useCallback(
-    async (which: 'weixin' | 'telegram', enabled: boolean) => {
+    async (which: 'weixin' | 'telegram' | 'feishu', enabled: boolean) => {
       if (!form || saving) return;
       const prev = form;
       const next: ChannelsSettingsState =
         which === 'weixin'
           ? { ...form, weixin: { ...form.weixin, enabled } }
-          : { ...form, telegram: { ...form.telegram, enabled } };
+          : which === 'telegram'
+            ? { ...form, telegram: { ...form.telegram, enabled } }
+            : { ...form, feishu: { ...form.feishu, enabled } };
       setForm(next);
       setSaving(true);
       setError(null);
@@ -182,6 +201,7 @@ export function ChannelsSettingsPanel() {
         setBaseline(baselineClone);
         setTgAccountsDraft(JSON.stringify(baselineClone.telegram.accounts ?? {}, null, 2));
         setWxAccountsDraft(JSON.stringify(baselineClone.weixin.accounts ?? {}, null, 2));
+      setFeishuAccountsDraft(JSON.stringify((baselineClone as any).feishu?.accounts ?? {}, null, 2));
       } catch (e) {
         setError(e instanceof Error ? e.message : ch.saveError);
         setForm(prev);
@@ -198,7 +218,9 @@ export function ChannelsSettingsPanel() {
     const next: ChannelsSettingsState =
       removeTarget === 'weixin'
         ? { ...form, weixin: defaults.weixin }
-        : { ...form, telegram: defaults.telegram };
+        : removeTarget === 'telegram'
+          ? { ...form, telegram: defaults.telegram }
+          : { ...form, feishu: defaults.feishu };
     setSaving(true);
     setError(null);
     try {
@@ -210,6 +232,8 @@ export function ChannelsSettingsPanel() {
       setWxAccountsDraft(JSON.stringify(baselineClone.weixin.accounts ?? {}, null, 2));
       setTgAccountsError('');
       setWxAccountsError('');
+      setFeishuAccountsDraft(JSON.stringify((baselineClone as any).feishu?.accounts ?? {}, null, 2));
+      setFeishuAccountsError('');
       setRemoveTarget(null);
       setSaveOk(true);
       window.setTimeout(() => setSaveOk(false), 2500);
@@ -227,6 +251,30 @@ export function ChannelsSettingsPanel() {
     setCopied(true);
     window.setTimeout(() => setCopied(false), 2000);
   }, [form?.telegram.botToken]);
+
+  const copyFeishuSecret = useCallback(async () => {
+    const t = (form as any)?.feishu?.appSecret as string | undefined;
+    if (!t) return;
+    await navigator.clipboard.writeText(t).catch(() => {});
+    setFeishuCopied(true);
+    window.setTimeout(() => setFeishuCopied(false), 2000);
+  }, [form]);
+
+  const copyFeishuWebhookConfig = useCallback(async () => {
+    const fs = (form as any)?.feishu as ChannelsSettingsState['feishu'] | undefined;
+    if (!fs) return;
+    const payload = {
+      connectionMode: fs.connectionMode,
+      verificationToken: (fs as any).verificationToken || '',
+      encryptKey: (fs as any).encryptKey || '',
+      webhookHost: (fs as any).webhookHost || '',
+      webhookPort: (fs as any).webhookPort || 0,
+      webhookPath: (fs as any).webhookPath || '',
+    };
+    await navigator.clipboard.writeText(JSON.stringify(payload, null, 2)).catch(() => {});
+    setFeishuWebhookCopied(true);
+    window.setTimeout(() => setFeishuWebhookCopied(false), 2000);
+  }, [form]);
 
   const onTgAccountsBlur = useCallback(() => {
     if (!form) return;
@@ -267,6 +315,26 @@ export function ChannelsSettingsPanel() {
       setWxAccountsError(err instanceof Error ? err.message : ch.jsonInvalid);
     }
   }, [form, wxAccountsDraft, updateWeixin, ch.jsonObjectAccounts, ch.jsonInvalid]);
+
+  const onFeishuAccountsBlur = useCallback(() => {
+    if (!form) return;
+    const raw = feishuAccountsDraft.trim();
+    if (!raw) {
+      updateFeishu({ accounts: {} });
+      setFeishuAccountsError('');
+      return;
+    }
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+        throw new Error(ch.jsonObjectAccounts);
+      }
+      updateFeishu({ accounts: parsed as any });
+      setFeishuAccountsError('');
+    } catch (err) {
+      setFeishuAccountsError(err instanceof Error ? err.message : ch.jsonInvalid);
+    }
+  }, [form, feishuAccountsDraft, updateFeishu, ch.jsonObjectAccounts, ch.jsonInvalid]);
 
   const dmOpts = useMemo(
     () =>
@@ -336,8 +404,10 @@ export function ChannelsSettingsPanel() {
 
   const tg = form.telegram;
   const wx = form.weixin;
+  const fs = (form as any).feishu as ChannelsSettingsState['feishu'];
   const weixinConfigured = isWeixinConfigured(wx);
   const telegramConfigured = isTelegramConfigured(tg);
+  const feishuConfigured = isFeishuConfigured(fs);
 
   const weixinMoreSettings = (
     <details className="group rounded-xl border border-edge-subtle bg-surface-base open:pb-3 dark:border-edge">
@@ -437,6 +507,19 @@ export function ChannelsSettingsPanel() {
           onConfigure={() => setTelegramModalOpen(true)}
           onEdit={() => setTelegramModalOpen(true)}
           onRemove={() => setRemoveTarget('telegram')}
+          ch={ch}
+        />
+        <ChannelImHubCard
+          icon={<MessageSquare className="size-6 text-accent" strokeWidth={1.75} />}
+          title={ch.feishuTitle}
+          subtitle={ch.feishuSubtitle}
+          configured={feishuConfigured}
+          enabled={fs.enabled}
+          toggleDisabled={saving}
+          onToggle={(next) => void toggleChannelEnabled('feishu', next)}
+          onConfigure={() => setFeishuModalOpen(true)}
+          onEdit={() => setFeishuModalOpen(true)}
+          onRemove={() => setRemoveTarget('feishu')}
           ch={ch}
         />
       </div>
@@ -604,6 +687,445 @@ export function ChannelsSettingsPanel() {
         </Dialog.Portal>
       </Dialog.Root>
 
+      <Dialog.Root open={feishuModalOpen} onOpenChange={setFeishuModalOpen}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[60] bg-scrim backdrop-blur-[1px]" />
+          <Dialog.Content
+            className={cn(
+              'fixed left-1/2 top-1/2 z-[60] max-h-[min(90vh,48rem)] w-[min(100%-2rem,36rem)] -translate-x-1/2 -translate-y-1/2',
+              'overflow-y-auto rounded-2xl border border-edge bg-surface-panel p-6 shadow-popover outline-none dark:border-edge',
+            )}
+            onOpenAutoFocus={(e) => e.preventDefault()}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <Dialog.Title className="text-lg font-semibold tracking-tight text-fg">{ch.feishuTitle}</Dialog.Title>
+                <Dialog.Description className="mt-1 text-sm text-fg-muted">{ch.feishuSubtitle}</Dialog.Description>
+              </div>
+              <Dialog.Close asChild>
+                <button
+                  type="button"
+                  className="rounded-lg p-1.5 text-fg-muted hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                  aria-label={ch.modalCancel}
+                >
+                  <X className="size-4" />
+                </button>
+              </Dialog.Close>
+            </div>
+
+            <label className="mt-6 flex cursor-pointer items-center gap-2 text-sm text-fg">
+              <input
+                type="checkbox"
+                className="ui-checkbox"
+                checked={fs.enabled}
+                onChange={(e) => updateFeishu({ enabled: e.target.checked })}
+              />
+              <span>{ch.enableFeishuAria}</span>
+            </label>
+
+            <div className="mt-6 space-y-4">
+              <div className="flex flex-col gap-1.5">
+                <FieldLabel>
+                  {ch.feishuAppId}
+                  <span className="text-red-600 dark:text-red-400"> *</span>
+                </FieldLabel>
+                <input
+                  className={cn(inputClassName(), 'min-w-0 flex-1 font-mono text-xs')}
+                  value={fs.appId}
+                  onChange={(e) => updateFeishu({ appId: e.target.value })}
+                  placeholder="cli_xxx"
+                />
+                <FieldHint>{ch.feishuAppIdDesc}</FieldHint>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <FieldLabel>
+                  {ch.feishuAppSecret}
+                  <span className="text-red-600 dark:text-red-400"> *</span>
+                </FieldLabel>
+                <div className="flex flex-wrap gap-2">
+                  <input
+                    className={cn(inputClassName(), 'min-w-0 flex-1 font-mono text-xs')}
+                    type={showFeishuSecret ? 'text' : 'password'}
+                    autoComplete="off"
+                    readOnly={!showFeishuSecret && Boolean(fs.appSecret)}
+                    value={
+                      showFeishuSecret
+                        ? fs.appSecret
+                        : fs.appSecret
+                          ? '*'.repeat(Math.max(1, fs.appSecret.length))
+                          : ''
+                    }
+                    onChange={(e) => {
+                      if (!showFeishuSecret && fs.appSecret) return;
+                      updateFeishu({ appSecret: e.target.value });
+                    }}
+                    placeholder="••••••••"
+                  />
+                  {fs.appSecret ? (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="px-2 py-1 text-xs"
+                      onClick={() => void copyFeishuSecret()}
+                    >
+                      {feishuCopied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+                      {feishuCopied ? ch.copied : ch.copy}
+                    </Button>
+                  ) : null}
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="px-2 py-1 text-xs"
+                    onClick={() => setShowFeishuSecret((s) => !s)}
+                  >
+                    {showFeishuSecret ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+                    {showFeishuSecret ? ch.hide : ch.show}
+                  </Button>
+                </div>
+                <FieldHint>{ch.feishuAppSecretDesc}</FieldHint>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="flex flex-col gap-1.5">
+                  <FieldLabel>{ch.feishuDomain}</FieldLabel>
+                  <select
+                    className={inputClassName()}
+                    value={String(fs.domain || 'feishu')}
+                    onChange={(e) => updateFeishu({ domain: e.target.value })}
+                  >
+                    <option value="feishu">feishu</option>
+                    <option value="lark">lark</option>
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <FieldLabel>{ch.connectionMode}</FieldLabel>
+                  <select
+                    className={inputClassName()}
+                    value={fs.connectionMode}
+                    onChange={(e) => updateFeishu({ connectionMode: e.target.value as any })}
+                  >
+                    <option value="websocket">websocket</option>
+                    <option value="webhook">webhook</option>
+                  </select>
+                  <FieldHint>{ch.connectionModeDesc}</FieldHint>
+                </div>
+              </div>
+
+              {fs.connectionMode === 'webhook' ? (
+                <div className="rounded-xl border border-edge-subtle bg-surface px-4 py-3 dark:border-edge-subtle">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="text-sm font-medium text-fg">{ch.webhookTitle}</div>
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        className="px-2 py-1 text-xs"
+                        onClick={() => setShowFeishuWebhookSecrets((s) => !s)}
+                      >
+                        {showFeishuWebhookSecrets ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+                        {showFeishuWebhookSecrets ? ch.hide : ch.show}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        className="px-2 py-1 text-xs"
+                        onClick={() => void copyFeishuWebhookConfig()}
+                      >
+                        {feishuWebhookCopied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+                        {feishuWebhookCopied ? ch.copied : ch.copy}
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    <div className="flex flex-col gap-1.5">
+                      <FieldLabel>{ch.verificationToken}</FieldLabel>
+                      <input
+                        className={cn(inputClassName(), 'min-w-0 flex-1 font-mono text-xs')}
+                        type={showFeishuWebhookSecrets ? 'text' : 'password'}
+                        autoComplete="off"
+                        value={fs.verificationToken ?? ''}
+                        onChange={(e) => updateFeishu({ verificationToken: e.target.value })}
+                      />
+                      <FieldHint>{ch.verificationTokenDesc}</FieldHint>
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <FieldLabel>{ch.encryptKey}</FieldLabel>
+                      <input
+                        className={cn(inputClassName(), 'min-w-0 flex-1 font-mono text-xs')}
+                        type={showFeishuWebhookSecrets ? 'text' : 'password'}
+                        autoComplete="off"
+                        value={fs.encryptKey ?? ''}
+                        onChange={(e) => updateFeishu({ encryptKey: e.target.value })}
+                      />
+                      <FieldHint>{ch.encryptKeyDesc}</FieldHint>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                    <div className="flex flex-col gap-1.5 sm:col-span-2">
+                      <FieldLabel>{ch.webhookHost}</FieldLabel>
+                      <input
+                        className={cn(inputClassName(), 'min-w-0 flex-1 font-mono text-xs')}
+                        value={fs.webhookHost ?? ''}
+                        onChange={(e) => updateFeishu({ webhookHost: e.target.value })}
+                        placeholder="127.0.0.1"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <FieldLabel>{ch.webhookPort}</FieldLabel>
+                      <input
+                        className={cn(inputClassName(), 'min-w-0 flex-1 font-mono text-xs')}
+                        type="number"
+                        inputMode="numeric"
+                        value={String(fs.webhookPort ?? '')}
+                        onChange={(e) =>
+                          updateFeishu({ webhookPort: Number(e.target.value || '0') || 0 })
+                        }
+                        placeholder="3000"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="mt-3 flex flex-col gap-1.5">
+                    <FieldLabel>{ch.webhookPath}</FieldLabel>
+                    <input
+                      className={cn(inputClassName(), 'min-w-0 flex-1 font-mono text-xs')}
+                      value={fs.webhookPath ?? ''}
+                      onChange={(e) => updateFeishu({ webhookPath: e.target.value })}
+                      placeholder="/feishu/events"
+                    />
+                    <FieldHint>{ch.webhookPathDesc}</FieldHint>
+                  </div>
+                </div>
+              ) : null}
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="flex flex-col gap-1.5">
+                  <FieldLabel>{ch.renderMode}</FieldLabel>
+                  <select
+                    className={inputClassName()}
+                    value={fs.renderMode}
+                    onChange={(e) => updateFeishu({ renderMode: e.target.value as any })}
+                  >
+                    <option value="auto">auto</option>
+                    <option value="raw">raw</option>
+                    <option value="card">card</option>
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <FieldLabel>{ch.reactionNotifications}</FieldLabel>
+                  <select
+                    className={inputClassName()}
+                    value={fs.reactionNotifications}
+                    onChange={(e) => updateFeishu({ reactionNotifications: e.target.value as any })}
+                  >
+                    <option value="off">off</option>
+                    <option value="own">own</option>
+                    <option value="all">all</option>
+                  </select>
+                </div>
+              </div>
+
+              <label className="flex cursor-pointer items-center gap-2 text-sm text-fg">
+                <input
+                  type="checkbox"
+                  className="ui-checkbox"
+                  checked={fs.streaming}
+                  onChange={(e) => updateFeishu({ streaming: e.target.checked })}
+                />
+                {ch.enableStreaming}
+              </label>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="flex flex-col gap-1.5">
+                  <FieldLabel>{ch.dmPolicy}</FieldLabel>
+                  <select
+                    className={inputClassName()}
+                    value={fs.dmPolicy}
+                    onChange={(e) => updateFeishu({ dmPolicy: e.target.value as any })}
+                  >
+                    {dmOpts.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <FieldLabel>{ch.groupPolicy}</FieldLabel>
+                  <select
+                    className={inputClassName()}
+                    value={fs.groupPolicy}
+                    onChange={(e) => updateFeishu({ groupPolicy: e.target.value as any })}
+                  >
+                    {groupOpts.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <label className="flex cursor-pointer items-center gap-2 text-sm text-fg">
+                <input
+                  type="checkbox"
+                  className="ui-checkbox"
+                  checked={fs.requireMention}
+                  onChange={(e) => updateFeishu({ requireMention: e.target.checked })}
+                />
+                {ch.requireMention}
+              </label>
+
+              <div className="flex flex-col gap-1.5">
+                <FieldLabel>{ch.allowFromDm}</FieldLabel>
+                <textarea
+                  className={cn(inputClassName(), 'min-h-[2.75rem] resize-y font-mono text-xs')}
+                  rows={2}
+                  placeholder="ou_xxx, on_xxx"
+                  value={joinAllowFrom(fs.allowFrom)}
+                  onChange={(e) => updateFeishu({ allowFrom: parseIdList(e.target.value) })}
+                />
+                <FieldHint>{ch.allowFromDmDesc}</FieldHint>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <FieldLabel>{ch.allowFromGroups}</FieldLabel>
+                <textarea
+                  className={cn(inputClassName(), 'min-h-[2.75rem] resize-y font-mono text-xs')}
+                  rows={2}
+                  placeholder="oc_xxx, oc_yyy"
+                  value={joinAllowFrom(fs.groupAllowFrom)}
+                  onChange={(e) => updateFeishu({ groupAllowFrom: parseIdList(e.target.value) })}
+                />
+                <FieldHint>{ch.allowFromGroupsDesc}</FieldHint>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="flex flex-col gap-1.5">
+                  <FieldLabel>{ch.historyLimit}</FieldLabel>
+                  <input
+                    className={cn(inputClassName(), 'min-w-0 flex-1 font-mono text-xs')}
+                    type="number"
+                    inputMode="numeric"
+                    value={String(fs.historyLimit)}
+                    onChange={(e) => updateFeishu({ historyLimit: Number(e.target.value || '0') || 0 })}
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <FieldLabel>{ch.textChunkLimit}</FieldLabel>
+                  <input
+                    className={cn(inputClassName(), 'min-w-0 flex-1 font-mono text-xs')}
+                    type="number"
+                    inputMode="numeric"
+                    value={String(fs.textChunkLimit)}
+                    onChange={(e) => updateFeishu({ textChunkLimit: Number(e.target.value || '0') || 0 })}
+                  />
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-edge-subtle bg-surface px-4 py-3 dark:border-edge-subtle">
+                <div className="text-sm font-medium text-fg">{ch.feishuToolsTitle}</div>
+                <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                  {(
+                    [
+                      ['doc', ch.feishuToolDoc],
+                      ['wiki', ch.feishuToolWiki],
+                      ['drive', ch.feishuToolDrive],
+                      ['perm', ch.feishuToolPerm],
+                      ['bitable', ch.feishuToolBitable],
+                      ['scopes', ch.feishuToolScopes],
+                    ] as const
+                  ).map(([key, label]) => (
+                    <label key={key} className="flex cursor-pointer items-center gap-2 text-sm text-fg">
+                      <input
+                        type="checkbox"
+                        className="ui-checkbox"
+                        checked={Boolean(fs.tools?.[key])}
+                        onChange={(e) =>
+                          updateFeishu({
+                            tools: { ...fs.tools, [key]: e.target.checked },
+                          })
+                        }
+                      />
+                      {label}
+                    </label>
+                  ))}
+                </div>
+                <div className="mt-2">
+                  <FieldHint>{ch.feishuToolsDesc}</FieldHint>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-edge-subtle bg-surface px-4 py-3 dark:border-edge-subtle">
+                <div className="text-sm font-medium text-fg">{ch.feishuActionsTitle}</div>
+                <label className="mt-2 flex cursor-pointer items-center gap-2 text-sm text-fg">
+                  <input
+                    type="checkbox"
+                    className="ui-checkbox"
+                    checked={Boolean(fs.actions?.reactions)}
+                    onChange={(e) =>
+                      updateFeishu({
+                        actions: { ...fs.actions, reactions: e.target.checked },
+                      })
+                    }
+                  />
+                  {ch.feishuActionReactions}
+                </label>
+              </div>
+
+              {form ? (
+                <ChannelAgentRoutingBlock
+                  accountIds={feishuRoutingAccountIds(fs)}
+                  routes={(form as any).channelAgentRoutes.feishu}
+                  defaultAgentId={form.defaultAgentId}
+                  agentItems={chatAgents?.items ?? []}
+                  disabled={saving}
+                  onChange={(acc, aid) => updateChannelAgentRoute('feishu', acc, aid)}
+                  ch={ch}
+                />
+              ) : null}
+
+              <div className="flex flex-col gap-1.5">
+                <FieldLabel>{ch.multiAccountJson}</FieldLabel>
+                <textarea
+                  className={cn(inputClassName(), 'min-h-[140px] resize-y font-mono text-xs')}
+                  spellCheck={false}
+                  value={feishuAccountsDraft}
+                  onChange={(e) => setFeishuAccountsDraft(e.target.value)}
+                  onBlur={onFeishuAccountsBlur}
+                  placeholder='{ "default": { "appId": "...", "appSecret": "...", "enabled": true } }'
+                />
+                {feishuAccountsError ? (
+                  <p className="text-xs text-red-600 dark:text-red-400">{feishuAccountsError}</p>
+                ) : (
+                  <FieldHint>{ch.multiAccountJsonDesc}</FieldHint>
+                )}
+              </div>
+            </div>
+
+            <div className="mt-8 flex flex-wrap justify-end gap-2 border-t border-edge-subtle pt-4 dark:border-edge-subtle">
+              <Button type="button" variant="secondary" onClick={() => setFeishuModalOpen(false)}>
+                {ch.modalCancel}
+              </Button>
+              <Button
+                type="button"
+                variant="primary"
+                disabled={!dirty || saving}
+                onClick={async () => {
+                  const ok = await save();
+                  if (ok) setFeishuModalOpen(false);
+                }}
+              >
+                {saving ? ch.saving : ch.save}
+              </Button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+
       <Dialog.Root open={removeTarget !== null} onOpenChange={(o) => !o && setRemoveTarget(null)}>
         <Dialog.Portal>
           <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[70] bg-scrim backdrop-blur-[1px]" />
@@ -619,7 +1141,11 @@ export function ChannelsSettingsPanel() {
               {removeTarget
                 ? ch.removeChannelConfirm.replace(
                     '{{name}}',
-                    removeTarget === 'weixin' ? ch.weixinTitle : ch.telegramTitle,
+                    removeTarget === 'weixin'
+                      ? ch.weixinTitle
+                      : removeTarget === 'telegram'
+                        ? ch.telegramTitle
+                        : ch.feishuTitle,
                   )
                 : '\u00a0'}
             </Dialog.Description>
