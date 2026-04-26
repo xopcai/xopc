@@ -35,9 +35,16 @@ await esbuild.build({
   outfile,
   external,
   format: 'esm',
-  // Alias avoids duplicate `createRequire` binding when bundled code also imports from node:module.
+  // ESM bundle: dependents (e.g. @larksuiteoapi/node-sdk) use `__dirname` / CJS `require`.
   banner: {
-    js: "import { createRequire as __xopcCreateRequire } from 'module'; globalThis.require = __xopcCreateRequire(import.meta.url);",
+    js: [
+      "import { createRequire as __xopcCreateRequire } from 'module';",
+      "import { fileURLToPath as __xopcFileURLToPath } from 'node:url';",
+      "import { dirname as __xopcDirname } from 'node:path';",
+      'const __filename = __xopcFileURLToPath(import.meta.url);',
+      'const __dirname = __xopcDirname(__filename);',
+      'globalThis.require = __xopcCreateRequire(import.meta.url);',
+    ].join('\n'),
   },
   minify: false,
   sourcemap: false,

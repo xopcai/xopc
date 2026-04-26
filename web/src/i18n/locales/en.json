@@ -113,7 +113,6 @@
   "systemSettings": {
     "title": "System",
     "behaviorGroup": "App behavior",
-    "subtitle": "Desktop (Windows, macOS, Linux) start-up, power, and notification preferences; per-OS settings links for system access.",
     "desktopOnlyTitle": "Desktop app only",
     "desktopOnlyBody": "System integration is available in the xopc Electron app. In the browser, use your OS settings instead.",
     "toggles": {
