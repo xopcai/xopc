@@ -419,6 +419,8 @@ export const ChatComposer = memo(function ChatComposer({
   const [isDragging, setIsDragging] = useState(false);
   const [isComposing, setIsComposing] = useState(false);
   const editorRef = useRef<HTMLDivElement>(null);
+  /** The portaled command palette listbox, for dismissing the slash on outside pointerdown. */
+  const commandPalettePanelRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const mediaChunksRef = useRef<Blob[]>([]);
@@ -449,6 +451,9 @@ export const ChatComposer = memo(function ChatComposer({
     slashPaletteOpen: palette.open,
     isComposing,
   });
+
+  const paletteSlashRangeRef = useRef(palette.slashRange);
+  paletteSlashRangeRef.current = palette.slashRange;
 
   cursorRef.current = cursor;
   valueRef.current = value;
@@ -743,6 +748,46 @@ export const ChatComposer = memo(function ChatComposer({
 
   const replaceRange = (text: string, start: number, end: number, insert: string) =>
     text.slice(0, start) + insert + text.slice(end);
+
+  useEffect(() => {
+    if (!palette.open) {
+      return;
+    }
+    const onPointerDown = (e: PointerEvent) => {
+      const t = e.target;
+      if (!(t instanceof Node)) {
+        return;
+      }
+      if (editorRef.current?.contains(t)) {
+        return;
+      }
+      if (commandPalettePanelRef.current?.contains(t)) {
+        return;
+      }
+      if (t instanceof Element && t.closest('[data-slash-palette-tooltip]')) {
+        return;
+      }
+      const range = paletteSlashRangeRef.current;
+      if (!range) {
+        return;
+      }
+      const v = valueRef.current;
+      const next = v.slice(0, range.start) + v.slice(range.end);
+      setValue(next);
+      valueRef.current = next;
+      setCursor(range.start);
+      requestAnimationFrame(() => {
+        const el = editorRef.current;
+        if (el) {
+          applyWireToEditor(el, next, range.start);
+          syncComposerPlaceholderClass(el, next);
+        }
+        adjustHeight();
+      });
+    };
+    document.addEventListener('pointerdown', onPointerDown, true);
+    return () => document.removeEventListener('pointerdown', onPointerDown, true);
+  }, [palette.open, adjustHeight, setValue, setCursor]);
 
   const applyPaletteItem = (item: PaletteItem) => {
     const range = palette.slashRange;
@@ -1161,6 +1206,7 @@ export const ChatComposer = memo(function ChatComposer({
             <CommandPalette
               open={palette.open}
               anchorRef={editorRef}
+              panelRef={commandPalettePanelRef}
               items={palette.loadError ? [] : palette.items}
               selectedIndex={palette.selectedIndex}
               noResults={palette.loadError ?? m.chat.commandPalette.noResults}
