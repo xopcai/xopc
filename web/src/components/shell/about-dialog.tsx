@@ -3,6 +3,8 @@ import { X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { BrandLogo } from '@/components/shell/brand-logo';
+import { XOPC_ELECTRON_UPDATE_RECHECK_EVENT } from '@/features/updater/use-update-reminder';
+import { useUpdateStatus } from '@/features/updater/use-update-status';
 import { messages } from '@/i18n/messages';
 import { webBuildInfo } from '@/lib/build-info';
 import { cn } from '@/lib/cn';
@@ -46,6 +48,7 @@ export function AboutDialog({
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const d = m.aboutDialog;
+  const { isElectron, electronCheck, checkNow } = useUpdateStatus();
 
   const [gatewayVersion, setGatewayVersion] = useState<string | null>(null);
 
@@ -126,7 +129,15 @@ export function AboutDialog({
                       'transition-colors hover:bg-surface-hover hover:text-fg',
                       'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
                     )}
-                    onClick={() => window.open(RELEASES_URL, '_blank', 'noopener,noreferrer')}
+                    onClick={() => {
+                      if (isElectron) {
+                        window.dispatchEvent(new CustomEvent(XOPC_ELECTRON_UPDATE_RECHECK_EVENT));
+                        electronCheck();
+                        void checkNow();
+                      } else {
+                        window.open(RELEASES_URL, '_blank', 'noopener,noreferrer');
+                      }
+                    }}
                   >
                     {d.checkUpdates}
                   </button>
