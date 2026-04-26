@@ -287,6 +287,23 @@
           ]
         },
         {
+          "id": "research",
+          "icon": "globe",
+          "title": "Research & search",
+          "description": "Web search, comparisons, fact-check",
+          "scenarios": [
+            {
+              "prompt": "Search the web for the latest news and developments on [topic]; summarize key findings with sources."
+            },
+            {
+              "prompt": "Compare [A] vs [B] for [use case]: list pros, cons, and recommend which to choose in a table format."
+            },
+            {
+              "prompt": "Fact-check the claims in this text: identify uncertain statements and suggest how to verify them."
+            }
+          ]
+        },
+        {
           "id": "content",
           "icon": "content",
           "title": "Content creation",
@@ -300,23 +317,6 @@
             },
             {
               "prompt": "Rewrite one long article or technical note from the workspace into five short social posts (hook, bullet takeaways, quote, poll question, resource drop) with length suited to threads."
-            }
-          ]
-        },
-        {
-          "id": "documents",
-          "icon": "documents",
-          "title": "Document processing",
-          "description": "Summaries, diffs, tables",
-          "scenarios": [
-            {
-              "prompt": "Open the PDF or long Markdown I specify in the workspace and return: executive summary, three key takeaways, risks and assumptions; say what you read if it is partial."
-            },
-            {
-              "prompt": "Diff two versions of a config or API doc (paths I give) in a table: added, removed, renamed items, and call out anything deployment-sensitive."
-            },
-            {
-              "prompt": "Inventory all CSV and XLSX files: path, sheet or column preview, rough row counts; which schemas look merge-compatible and what to watch for when combining."
             }
           ]
         }
@@ -399,7 +399,7 @@
     "maxAttachmentsReached": "Maximum {{max}} files per message. Remove some to add more.",
     "maxAttachmentsTruncated": "{{dropped}} file(s) not added (limit {{max}} per message).",
     "attachmentFileTooLarge": "File \"{{name}}\" is too large (max {{maxSize}} per file).",
-    "inputPlaceholder": "Plan, @ for context, / for commands",
+    "inputPlaceholder": "Ask anything — @ for files, / for skills & commands",
     "currentModel": "Model used for this conversation",
     "modelSearchPlaceholder": "Search by name, provider, or ID…",
     "modelNoMatches": "No models match your search",
@@ -414,10 +414,18 @@
     "followUpSuggestionsAria": "Suggested follow-up questions",
     "followUpChipErrorHandling": "Add error handling and edge cases.",
     "followUpChipRefactorReadability": "Refactor for readability.",
+    "followUpChipCodeExplain": "Explain this code step by step.",
+    "followUpChipCodeOptimize": "Suggest performance optimizations.",
+    "followUpChipWebMoreDetails": "Find more details online.",
+    "followUpChipWebFindSources": "Find reliable sources.",
     "followUpChipShorterSummary": "Give a shorter summary.",
     "followUpChipMainRisks": "What are the main risks?",
+    "followUpChipEmailMakeFormal": "Make it more formal.",
+    "followUpChipEmailShorten": "Shorten this.",
     "followUpChipSimplerTerms": "Explain that in simpler terms.",
     "followUpChipConcreteExample": "Give a concrete example.",
+    "followUpChipBulletPoints": "Summarize as bullet points.",
+    "followUpChipCreateTable": "Present as a table.",
     "followUpChipWhatNext": "What should I do next?",
     "followUpQueueAria": "Follow-up queue (sent after this reply, in order)",
     "followUpQueueHeading": "Follow-ups",

@@ -15,14 +15,30 @@ function labelForFollowUpId(
       return chat.followUpChipErrorHandling;
     case 'code_refactor':
       return chat.followUpChipRefactorReadability;
+    case 'code_explain':
+      return chat.followUpChipCodeExplain;
+    case 'code_optimize':
+      return chat.followUpChipCodeOptimize;
+    case 'web_more_details':
+      return chat.followUpChipWebMoreDetails;
+    case 'web_find_sources':
+      return chat.followUpChipWebFindSources;
     case 'date_shorter_summary':
       return chat.followUpChipShorterSummary;
     case 'date_main_risks':
       return chat.followUpChipMainRisks;
+    case 'email_make_formal':
+      return chat.followUpChipEmailMakeFormal;
+    case 'email_shorten':
+      return chat.followUpChipEmailShorten;
     case 'generic_simpler_terms':
       return chat.followUpChipSimplerTerms;
     case 'generic_concrete_example':
       return chat.followUpChipConcreteExample;
+    case 'generic_bullet_points':
+      return chat.followUpChipBulletPoints;
+    case 'generic_create_table':
+      return chat.followUpChipCreateTable;
     case 'what_next':
       return chat.followUpChipWhatNext;
     default: {

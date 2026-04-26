@@ -287,6 +287,23 @@
           ]
         },
         {
+          "id": "research",
+          "icon": "globe",
+          "title": "研究与搜索",
+          "description": "网络搜索、对比分析、事实核查",
+          "scenarios": [
+            {
+              "prompt": "搜索 [主题] 的最新资讯和发展动态，整理要点并注明信息来源。"
+            },
+            {
+              "prompt": "对比 [A] 和 [B] 在 [使用场景] 上的优劣，用表格列出并给出选择建议。"
+            },
+            {
+              "prompt": "核查以下文本中声明的准确性：指出不确定的表述，并建议如何验证。"
+            }
+          ]
+        },
+        {
           "id": "content",
           "icon": "content",
           "title": "内容创作",
@@ -300,23 +317,6 @@
             },
             {
               "prompt": "把我选定的一篇长文或技术笔记改写成 5 条社交媒体短帖（不同角度：问题引入、要点列表、金句、投票提问、资源推荐），每条控制在平台适合长度。"
-            }
-          ]
-        },
-        {
-          "id": "documents",
-          "icon": "documents",
-          "title": "文档处理",
-          "description": "摘要、对比与表格",
-          "scenarios": [
-            {
-              "prompt": "在工作区中定位我指定的 PDF 或长 Markdown，输出：一段执行摘要、三条关键结论、风险与假设列表；若文档过长先说明阅读范围。"
-            },
-            {
-              "prompt": "对比工作区里两个版本的配置文件或 API 文档（路径我来指定），用表格列出新增、删除、重命名的项，并标出可能影响部署的差异。"
-            },
-            {
-              "prompt": "枚举工作区中所有 CSV 与 XLSX：路径、工作表名或列名预览、大致行数；判断哪些表结构一致可以纵向合并，并给出合并注意事项。"
             }
           ]
         }
@@ -399,7 +399,7 @@
     "maxAttachmentsReached": "每条消息最多 {{max}} 个文件，请先移除部分附件。",
     "maxAttachmentsTruncated": "已忽略 {{dropped}} 个文件（每条最多 {{max}} 个）。",
     "attachmentFileTooLarge": "文件「{{name}}」过大（单文件最大 {{maxSize}}）。",
-    "inputPlaceholder": "输入计划，@ 引用上下文，/ 命令",
+    "inputPlaceholder": "提问或描述任务 — @ 引用文件，/ 使用技能和命令",
     "currentModel": "当前对话使用的模型",
     "modelSearchPlaceholder": "按名称、服务商或 ID 搜索…",
     "modelNoMatches": "没有匹配的模型",
@@ -414,10 +414,18 @@
     "followUpSuggestionsAria": "建议的后续问题",
     "followUpChipErrorHandling": "补充错误处理和边界情况。",
     "followUpChipRefactorReadability": "重构以提高可读性。",
+    "followUpChipCodeExplain": "逐步解释这段代码。",
+    "followUpChipCodeOptimize": "建议性能优化方案。",
+    "followUpChipWebMoreDetails": "搜索更多详情。",
+    "followUpChipWebFindSources": "查找可靠来源。",
     "followUpChipShorterSummary": "给一段更短的摘要。",
     "followUpChipMainRisks": "主要风险有哪些？",
+    "followUpChipEmailMakeFormal": "语气更正式。",
+    "followUpChipEmailShorten": "精简这段内容。",
     "followUpChipSimplerTerms": "用更通俗的话解释一下。",
     "followUpChipConcreteExample": "举一个具体例子。",
+    "followUpChipBulletPoints": "整理为要点列表。",
+    "followUpChipCreateTable": "以表格形式呈现。",
     "followUpChipWhatNext": "我接下来该做什么？",
     "followUpQueueAria": "后续问题队列（本轮结束后按顺序发送）",
     "followUpQueueHeading": "后续问题",
