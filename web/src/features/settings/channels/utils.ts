@@ -34,3 +34,7 @@ export function isTelegramConfigured(tg: ChannelsSettingsState['telegram']): boo
 export function isWeixinConfigured(wx: ChannelsSettingsState['weixin']): boolean {
   return Object.keys(wx.accounts ?? {}).length > 0 || wx.allowFrom.length > 0;
 }
+
+export function isFeishuConfigured(fs: ChannelsSettingsState['feishu']): boolean {
+  return Boolean(fs.appId?.trim() && fs.appSecret?.trim()) || Object.keys(fs.accounts ?? {}).length > 0;
+}

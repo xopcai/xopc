@@ -14,6 +14,12 @@ src/**/*.d.ts.map
 src/**/*.d.ts
 !src/cli/types/cli-table3.d.ts
 
+# Accidental tsc/tsup emit inside workspace extensions (sources live in extensions/*/src)
+extensions/**/src/**/*.js
+extensions/**/src/**/*.js.map
+extensions/**/src/**/*.d.ts
+extensions/**/src/**/*.d.ts.map
+
 # Logs
 *.log
 npm-debug.log*

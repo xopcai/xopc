@@ -17,4 +17,5 @@ export type BindingRuleWire = {
 export type ChannelAgentRoutesState = {
   telegram: Record<string, string>;
   weixin: Record<string, string>;
+  feishu: Record<string, string>;
 };

@@ -18,7 +18,15 @@ import type { SessionConfigStore } from '../session/index.js';
 // Unified Message Format (Platform Agnostic)
 // ============================================================================
 
-export type MessageSource = 'telegram' | 'weixin' | 'webui' | 'cli' | 'api' | 'system' | 'gateway';
+export type MessageSource =
+  | 'telegram'
+  | 'weixin'
+  | 'feishu'
+  | 'webui'
+  | 'cli'
+  | 'api'
+  | 'system'
+  | 'gateway';
 
 export interface UnifiedMessage {
   /** Message source platform */
