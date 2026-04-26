@@ -48,7 +48,11 @@ export type ExtensionHookEvent =
   //  Reset hook
   | 'before_reset'
   //  Message write hook
-  | 'before_message_write';
+  | 'before_message_write'
+  // Sub-agent lifecycle (openclaw parity surface)
+  | 'subagent_spawning'
+  | 'subagent_delivery_target'
+  | 'subagent_ended';
 
 // ============================================================================
 // Hook Execution Modes 
@@ -85,6 +89,7 @@ export const HOOK_EXECUTION_MODES: Record<ExtensionHookEvent, HookExecutionMode>
   'tool_execution_update': 'void',
   'tool_execution_end': 'void',
   'before_reset': 'void',
+  'subagent_ended': 'void',
   
   // Modifying: Sequential execution, results merge
   'before_agent_start': 'modifying',
@@ -95,6 +100,8 @@ export const HOOK_EXECUTION_MODES: Record<ExtensionHookEvent, HookExecutionMode>
   'context': 'modifying',
   'input': 'modifying',
   'before_message_write': 'modifying',
+  'subagent_spawning': 'modifying',
+  'subagent_delivery_target': 'modifying',
   
   // Claiming: First handler with handled:true wins
   'inbound_claim': 'claiming',
@@ -244,6 +251,56 @@ export interface HookToolExecutionEndEvent {
 }
 
 // ============================================================================
+// Sub-agent hook types (delegate_task + future subagent sessions)
+// ============================================================================
+
+export interface HookSubagentSpawningEvent {
+  childSessionKey: string;
+  requester?: {
+    channel?: string;
+    accountId?: string;
+    to?: string;
+    threadId?: string | number;
+  };
+  threadRequested?: boolean;
+  agentId?: string;
+  label?: string;
+}
+
+export type HookSubagentSpawningResult =
+  | { status: 'ok'; threadBindingReady?: boolean }
+  | { status: 'error'; error: string }
+  | void;
+
+export interface HookSubagentDeliveryTargetEvent {
+  childSessionKey: string;
+  requesterSessionKey?: string;
+  requesterOrigin?: {
+    channel?: string;
+    accountId?: string;
+    to?: string;
+    threadId?: string | number;
+  };
+  expectsCompletionMessage?: boolean;
+}
+
+export type HookSubagentDeliveryTargetResult =
+  | {
+      origin: {
+        channel: string;
+        accountId?: string;
+        to?: string;
+        threadId?: string | number;
+      };
+    }
+  | void;
+
+export interface HookSubagentEndedEvent {
+  targetSessionKey: string;
+  accountId?: string;
+}
+
+// ============================================================================
 // Strongly Typed Handler Map 
 // ============================================================================
 
@@ -342,6 +399,21 @@ export type HookHandlerMap = {
   
   tool_execution_end: (
     event: HookToolExecutionEndEvent,
+    ctx: HookAgentContext,
+  ) => Promise<void> | void;
+
+  subagent_spawning: (
+    event: HookSubagentSpawningEvent,
+    ctx: HookAgentContext,
+  ) => Promise<HookSubagentSpawningResult> | HookSubagentSpawningResult;
+
+  subagent_delivery_target: (
+    event: HookSubagentDeliveryTargetEvent,
+    ctx: HookAgentContext,
+  ) => Promise<HookSubagentDeliveryTargetResult> | HookSubagentDeliveryTargetResult;
+
+  subagent_ended: (
+    event: HookSubagentEndedEvent,
     ctx: HookAgentContext,
   ) => Promise<void> | void;
   

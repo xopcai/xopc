@@ -94,6 +94,7 @@ export interface AgentManagerConfig {
   model?: string;
   config?: Config;
   extensionRegistry?: ExtensionRegistry;
+  hookRunner?: import('../extensions/index.js').ExtensionHookRunner;
   bus: MessageBus;
   getCurrentContext: () => SessionContext | null;
   /** Session persistence (enables `session_search` when set). */
@@ -161,6 +162,7 @@ export class AgentManager {
       workspace: this.baseWorkspacePath,
       extensionRegistry: config.extensionRegistry,
       getCurrentContext: config.getCurrentContext,
+      hookRunner: config.hookRunner,
       bus: config.bus,
       getConfig: () => this.mergedConfig(),
       getPrimaryModel: () => this.resolveModelStringToModel(this.pickDefaultModelRef()),

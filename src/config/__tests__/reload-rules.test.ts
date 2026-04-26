@@ -9,7 +9,7 @@ describe('matchReloadRule', () => {
   });
 
   it('matches generic channels subtree for other channel ids', () => {
-    const r = matchReloadRule('channels.feishu.enabled');
+    const r = matchReloadRule('channels.unknown_channel.enabled');
     expect(r?.prefix).toBe('channels');
     expect(r?.kind).toBe('hot');
   });

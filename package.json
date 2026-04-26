@@ -40,7 +40,7 @@
     "dev:web": "pnpm -C web run dev",
     "dev": "tsx src/cli/index.ts",
     "start": "node dist/src/cli/index.js",
-    "test": "vitest run src extensions/telegram/src",
+    "test": "vitest run src extensions/telegram/src extensions/feishu/src",
     "test:skills": "vitest run src/agent/skills/__tests__",
     "test:skills:regression": "./scripts/test-skills.sh",
     "test:skills:all": "npm run test:skills && npm run test:skills:regression",

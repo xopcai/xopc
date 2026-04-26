@@ -63,6 +63,8 @@ export interface DelegateToolDeps {
   getSubagentModel: () => import('@mariozechner/pi-ai').Model<import('@mariozechner/pi-ai').Api>;
   bus: import('../../infra/bus/index.js').MessageBus;
   getConfig: () => import('../../config/schema.js').Config | undefined;
+  getCurrentContext?: () => { sessionKey?: string; channel?: string; accountId?: string; to?: string; threadId?: string | number } | null;
+  hookRunner?: import('../../extensions/index.js').ExtensionHookRunner;
   toolExecutorConfig?: Partial<import('./executor.js').ToolExecutorConfig>;
 }
 
@@ -145,6 +147,55 @@ export function createDelegateTool(deps: DelegateToolDeps): AgentTool {
         toolExecutorConfig: deps.toolExecutorConfig,
       };
 
+      // Sub-agent lifecycle hook (parity surface for channel thread bindings).
+      const ctx = deps.getCurrentContext?.() ?? null;
+      const parentSessionKey = ctx?.sessionKey;
+      let childSessionKey: string | undefined;
+      try {
+        if (deps.hookRunner && parentSessionKey) {
+          const { parseSessionKey, buildSessionKey } = await import('../../routing/session-key.js');
+          const parsed = parseSessionKey(parentSessionKey);
+          if (parsed) {
+            childSessionKey = buildSessionKey({
+              agentId: 'subagent',
+              source: parsed.agentId,
+              accountId: parsed.accountId,
+              peerKind: parsed.peerKind,
+              peerId: parsed.peerId,
+              threadId: parsed.threadId,
+              scopeId: parsed.scopeId,
+            });
+          }
+          if (childSessionKey) {
+            const hookResult = await (deps.hookRunner as any).runHooksWithResult(
+              'subagent_spawning',
+              {
+                childSessionKey,
+                requester: {
+                  channel: ctx?.channel,
+                  accountId: ctx?.accountId,
+                  to: (ctx as any)?.to,
+                  threadId: (ctx as any)?.threadId,
+                },
+                threadRequested: true,
+                agentId: 'subagent',
+                label: 'delegate_task',
+              },
+              { sessionKey: parentSessionKey, agentId: ctx?.channel },
+            );
+            const r = hookResult as any;
+            if (r && r.status === 'error') {
+              return {
+                content: [{ type: 'text', text: `delegate_task: ${String(r.error || 'subagent spawn blocked')}` }],
+                details: { summary: '', iterations: 0 },
+              };
+            }
+          }
+        }
+      } catch {
+        // Hooks are best-effort.
+      }
+
       const child = createDelegateChildHandle(childOptions);
 
       if (signal) {
@@ -153,12 +204,34 @@ export function createDelegateTool(deps: DelegateToolDeps): AgentTool {
 
       try {
         const { summary, toolIterations } = await child.run();
+        try {
+          if (deps.hookRunner && childSessionKey) {
+            await (deps.hookRunner as any).runHooks(
+              'subagent_ended',
+              { targetSessionKey: childSessionKey, accountId: ctx?.accountId },
+              { sessionKey: parentSessionKey },
+            );
+          }
+        } catch {
+          // best-effort
+        }
         return {
           content: [{ type: 'text', text: `Sub-agent completed:\n\n${summary}` }],
           details: { summary, iterations: toolIterations },
         };
       } catch (error) {
         child.abort();
+        try {
+          if (deps.hookRunner && childSessionKey) {
+            await (deps.hookRunner as any).runHooks(
+              'subagent_ended',
+              { targetSessionKey: childSessionKey, accountId: ctx?.accountId },
+              { sessionKey: parentSessionKey },
+            );
+          }
+        } catch {
+          // best-effort
+        }
         const message = error instanceof Error ? error.message : String(error);
         return {
           content: [{ type: 'text', text: `Sub-agent failed: ${message}` }],

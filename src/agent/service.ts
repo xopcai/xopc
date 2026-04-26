@@ -201,6 +201,7 @@ export class AgentService {
       model: config.model,
       config: config.config,
       extensionRegistry: config.extensionRegistry,
+      hookRunner: this.hookRunner,
       bus,
       getCurrentContext: () => this.sessionContextManager.getContext(),
       getSessionStore: () => this.sessionStore,

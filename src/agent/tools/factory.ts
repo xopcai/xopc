@@ -71,6 +71,7 @@ export interface ToolFactoryDeps {
   workspace: string;
   extensionRegistry?: any;
   getCurrentContext: () => { channel: string; chatId: string; sessionKey: string } | null;
+  hookRunner?: import('../../extensions/index.js').ExtensionHookRunner;
   bus: MessageBus;
   toolExecutorConfig?: Partial<ToolExecutorConfig>;
   /** Agent defaults (image tools, etc.); use getter so hot-reloaded config applies. */
@@ -281,6 +282,8 @@ export class AgentToolsFactory {
               },
               bus: this.deps.bus,
               getConfig: () => this.deps.getConfig?.(),
+              getCurrentContext: () => this.deps.getCurrentContext?.() ?? null,
+              hookRunner: this.deps.hookRunner,
               toolExecutorConfig: this.deps.toolExecutorConfig,
             }),
           ]

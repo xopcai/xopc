@@ -96,7 +96,7 @@ Long-running tool work emits short status lines (reading, searching, shell, …)
 
 ## Channels and extensions
 
-Channels (Telegram, Weixin, Web chat, and extension-provided types) share the same message bus into the agent. Configure them under `channels.*` in your config file; see [Channel configuration](channels.md). Extensions add tools, hooks, optional channel plugins, and optional Web-console UI—see [Extensions](extensions.md).
+Channels (Telegram, Weixin, Web chat, and extension-provided types) share the same message bus into the agent. Configure them under `channels.*` in your config file; see [Channel configuration](/channels). Extensions add tools, hooks, optional channel plugins, and optional Web-console UI—see [Extensions](extensions.md).
 
 ## Data Flow
 

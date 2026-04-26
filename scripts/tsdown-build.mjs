@@ -32,4 +32,18 @@ if (existsSync(srcTpl)) {
   cpSync(srcTpl, distTpl, { recursive: true });
 }
 
+// Bundled extension manifests: `extensions/*/xopc.extension.json` → `dist/extensions/<id>/xopc.extension.json`
+// (tsdown emits `dist/extensions/<id>/src/**` but does not copy JSON assets)
+const extensionsRoot = join(root, 'extensions');
+const distExtensionsRoot = join(root, 'dist/extensions');
+for (const extId of ['telegram', 'weixin', 'feishu']) {
+  const srcManifest = join(extensionsRoot, extId, 'xopc.extension.json');
+  const destDir = join(distExtensionsRoot, extId);
+  const destManifest = join(destDir, 'xopc.extension.json');
+  if (existsSync(srcManifest) && existsSync(destDir)) {
+    mkdirSync(destDir, { recursive: true });
+    cpSync(srcManifest, destManifest);
+  }
+}
+
 process.exit(0);

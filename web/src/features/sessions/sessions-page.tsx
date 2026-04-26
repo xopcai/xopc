@@ -61,6 +61,7 @@ export function SessionsPage() {
   const initialSearch = searchParams.get('q') ?? '';
   const initialStatus = searchParams.get('status');
   const initialView = searchParams.get('view');
+  const initialChannel = searchParams.get('channel') ?? '';
   const initialStatusFilter: StatusFilter = SESSION_STATUS_FILTER_SET.has(initialStatus as StatusFilter)
     ? (initialStatus as StatusFilter)
     : 'all';
@@ -72,6 +73,7 @@ export function SessionsPage() {
   const [debouncedSearch, setDebouncedSearch] = useState(initialSearch.trim());
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(initialStatusFilter);
   const [viewMode, setViewMode] = useState<SessionsViewMode>(initialViewMode);
+  const [channelFilter, setChannelFilter] = useState(initialChannel.trim());
 
   const [sessions, setSessions] = useState<SessionMetadata[]>([]);
   const [loading, setLoading] = useState(false);
@@ -95,6 +97,7 @@ export function SessionsPage() {
     const nextQ = searchParams.get('q') ?? '';
     const nextStatusRaw = searchParams.get('status');
     const nextViewRaw = searchParams.get('view');
+    const nextChannel = (searchParams.get('channel') ?? '').trim();
     const nextStatus: StatusFilter = SESSION_STATUS_FILTER_SET.has(nextStatusRaw as StatusFilter)
       ? (nextStatusRaw as StatusFilter)
       : 'all';
@@ -107,6 +110,7 @@ export function SessionsPage() {
     setDebouncedSearch((prev) => (prev === nextDebouncedQ ? prev : nextDebouncedQ));
     setStatusFilter((prev) => (prev === nextStatus ? prev : nextStatus));
     setViewMode((prev) => (prev === nextView ? prev : nextView));
+    setChannelFilter((prev) => (prev === nextChannel ? prev : nextChannel));
   }, [searchParams]);
 
   useEffect(() => {
@@ -118,11 +122,13 @@ export function SessionsPage() {
     else params.delete('status');
     if (viewMode !== 'grid') params.set('view', viewMode);
     else params.delete('view');
+    if (channelFilter) params.set('channel', channelFilter);
+    else params.delete('channel');
     const next = params.toString();
     if (next !== searchParams.toString()) {
       setSearchParams(params, { replace: true });
     }
-  }, [debouncedSearch, searchParams, setSearchParams, statusFilter, viewMode]);
+  }, [debouncedSearch, searchParams, setSearchParams, statusFilter, viewMode, channelFilter]);
 
   useEffect(() => {
     if (!hasToken) return;
@@ -136,6 +142,7 @@ export function SessionsPage() {
           offset: 0,
           ...(debouncedSearch ? { search: debouncedSearch } : {}),
           ...(statusFilter !== 'all' ? { status: statusFilter } : {}),
+          ...(channelFilter ? { channel: channelFilter } : {}),
         });
         if (cancelled) return;
         setSessions(result.items);
@@ -186,6 +193,7 @@ export function SessionsPage() {
         offset: sessions.length,
         ...(debouncedSearch ? { search: debouncedSearch } : {}),
         ...(statusFilter !== 'all' ? { status: statusFilter } : {}),
+        ...(channelFilter ? { channel: channelFilter } : {}),
       });
       setSessions((prev) => [...prev, ...result.items]);
       setHasMore(result.hasMore);
@@ -201,6 +209,7 @@ export function SessionsPage() {
     sessions.length,
     debouncedSearch,
     statusFilter,
+    channelFilter,
     s.loadError,
   ]);
 
@@ -322,6 +331,16 @@ export function SessionsPage() {
     { key: 'archived', label: s.filterArchived, icon: Archive },
   ];
 
+  const channelChips = (() => {
+    const entries = Object.entries(stats?.byChannel ?? {}).sort((a, b) => b[1] - a[1]);
+    const top = entries.slice(0, 6).map(([id]) => id);
+    // Keep a few common channels visible even if no stats yet.
+    for (const c of ['telegram', 'weixin', 'feishu']) {
+      if (!top.includes(c)) top.push(c);
+    }
+    return top.slice(0, 8);
+  })();
+
   if (!hasToken) {
     return (
       <div className="mx-auto w-full max-w-2xl px-4 py-16 text-center text-sm text-fg-muted sm:px-8 lg:max-w-app-main">
@@ -369,6 +388,48 @@ export function SessionsPage() {
             >
               <Icon className="size-4" strokeWidth={1.75} aria-hidden />
               {label}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium text-fg-subtle">{s.filterChannelLabel}</span>
+          <button
+            type="button"
+            aria-pressed={!channelFilter}
+            onClick={() => setChannelFilter('')}
+            className={cn(
+              'inline-flex items-center rounded-xl px-3 py-2 text-sm font-medium',
+              interaction.transition,
+              interaction.focusRingPanel,
+              !channelFilter
+                ? 'bg-accent-soft text-accent-fg'
+                : 'bg-surface-base text-fg-muted hover:bg-surface-hover hover:text-fg dark:bg-surface-hover/35',
+            )}
+          >
+            {s.filterChannelAll}
+          </button>
+          {channelChips.map((chId) => (
+            <button
+              key={chId}
+              type="button"
+              aria-pressed={channelFilter === chId}
+              onClick={() => setChannelFilter(chId)}
+              className={cn(
+                'inline-flex items-center rounded-xl px-3 py-2 text-sm font-medium',
+                interaction.transition,
+                interaction.focusRingPanel,
+                channelFilter === chId
+                  ? 'bg-accent-soft text-accent-fg'
+                  : 'bg-surface-base text-fg-muted hover:bg-surface-hover hover:text-fg dark:bg-surface-hover/35',
+              )}
+            >
+              {chId}
+              {stats?.byChannel?.[chId] != null ? (
+                <span className="ml-2 rounded-full bg-surface-hover px-2 py-0.5 text-[11px] text-fg-subtle">
+                  {stats.byChannel[chId]}
+                </span>
+              ) : null}
             </button>
           ))}
         </div>
