@@ -4,6 +4,9 @@ import { useUpdateStatus } from '@/features/updater/use-update-status';
 
 const STORAGE_KEY = 'xopc.updateReminder.dismissed';
 
+/** About / menu “check updates”: clear Electron dismissal so the top bar can show again after a manual check. */
+export const XOPC_ELECTRON_UPDATE_RECHECK_EVENT = 'xopc:electron-update-recheck';
+
 type Dismissed = {
   /** Dismissed npm "available" reminder for this registry version string. */
   npm?: string;
@@ -44,6 +47,24 @@ export function useUpdateReminder() {
       setHideDownloading(false);
     }
   }, [electron?.state]);
+
+  useEffect(() => {
+    const onRecheck = () => {
+      setHideDownloading(false);
+      setDismissed((prev) => {
+        const next: Dismissed = { ...prev };
+        delete next.electronReady;
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+        } catch {
+          /* ignore */
+        }
+        return next;
+      });
+    };
+    window.addEventListener(XOPC_ELECTRON_UPDATE_RECHECK_EVENT, onRecheck);
+    return () => window.removeEventListener(XOPC_ELECTRON_UPDATE_RECHECK_EVENT, onRecheck);
+  }, []);
 
   /** After one-click npm install, hide the bar for the installed version until the next check. */
   useEffect(() => {
