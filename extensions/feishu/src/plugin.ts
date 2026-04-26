@@ -302,17 +302,19 @@ export class FeishuChannelPlugin implements ChannelPlugin<ResolvedFeishuAccount>
         },
       });
 
-      const webhookMonitor = createFeishuWebhookMonitor({
-        account,
-        config: this.cfg,
-        bus: this.bus,
-        abortSignal: ac.signal,
-        security: {
-          checkAccess: (ctx: ChannelSecurityContext) => this.security.checkAccess?.(ctx, account, this.cfg),
-        },
-      });
-
-      const runner = account.connectionMode === 'webhook' ? webhookMonitor : monitor;
+      const runner =
+        account.connectionMode === 'webhook'
+          ? createFeishuWebhookMonitor({
+              account,
+              config: this.cfg,
+              bus: this.bus,
+              abortSignal: ac.signal,
+              security: {
+                checkAccess: (ctx: ChannelSecurityContext) =>
+                  this.security.checkAccess?.(ctx, account, this.cfg),
+              },
+            })
+          : monitor;
 
       void runner.run().catch((err) => {
         if ((err as { name?: string } | undefined)?.name === 'AbortError') {
