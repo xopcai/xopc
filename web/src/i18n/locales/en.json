@@ -409,6 +409,7 @@
     "voiceRecordingStop": "Stop recording",
     "voiceMicDenied": "Microphone access denied or unavailable.",
     "inputPlaceholderSteering": "Follow-up: Enter queues a row; click a row to edit here",
+    "inputPlaceholderSteeringEdit": "Editing queued follow-up — Enter saves, Esc discards changes",
     "steeringInterruptSend": "Stop and send now (⌘↵ or Ctrl+↵)",
     "followUpSuggestionsAria": "Suggested follow-up questions",
     "followUpChipErrorHandling": "Add error handling and edge cases.",

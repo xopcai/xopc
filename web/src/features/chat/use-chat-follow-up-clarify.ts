@@ -27,15 +27,20 @@ export type ChatFollowUpClarifyApi = {
   pendingFollowUpsRef: MutableRefObject<PendingFollowUp[]>;
   followUpSuggestions: FollowUpSuggestionId[];
   steeringFollowUpId: string | null;
+  /** Row open in the composer for in-place edit (line stays in queue until commit). */
+  editingFollowUpId: string | null;
   addPendingFollowUp: (
     content: string,
     attachments?: Array<{ type: string; mimeType?: string; data?: string; name?: string; size?: number }>,
   ) => void;
-  popPendingFollowUpForComposer: (id: string) => {
-    text: string;
-    attachments: NonNullable<PendingFollowUp['attachments']>;
-    thinkingLevel: string;
-  } | null;
+  beginEditFollowUp: (id: string) => void;
+  cancelEditFollowUp: () => void;
+  commitEditFollowUp: (
+    id: string,
+    content: string,
+    attachments?: PendingFollowUp['attachments'],
+    levelOverride?: string,
+  ) => void;
   removePendingFollowUp: (id: string) => void;
   movePendingFollowUp: (id: string, dir: 'up' | 'down') => void;
   reorderPendingFollowUp: (fromIndex: number, toIndex: number) => void;
@@ -93,6 +98,8 @@ export function useChatFollowUpClarify(options: {
   const [pendingFollowUps, setPendingFollowUps] = useState<PendingFollowUp[]>([]);
   const pendingFollowUpsRef = useRef<PendingFollowUp[]>([]);
   const [steeringFollowUpId, setSteeringFollowUpId] = useState<string | null>(null);
+  const [editingFollowUpId, setEditingFollowUpId] = useState<string | null>(null);
+  const editingFollowUpIdRef = useRef<string | null>(null);
   const [followUpSuggestions, setFollowUpSuggestions] = useState<FollowUpSuggestionId[]>([]);
 
   useEffect(() => {
@@ -103,11 +110,16 @@ export function useChatFollowUpClarify(options: {
     pendingFollowUpsRef.current = [];
     setPendingFollowUps([]);
     setFollowUpSuggestions([]);
+    setEditingFollowUpId(null);
   }, [sessionKey]);
 
   useEffect(() => {
     pendingFollowUpsRef.current = pendingFollowUps;
   }, [pendingFollowUps]);
+
+  useEffect(() => {
+    editingFollowUpIdRef.current = editingFollowUpId;
+  }, [editingFollowUpId]);
 
   useEffect(() => {
     if (!decodedKey) return;
@@ -123,12 +135,14 @@ export function useChatFollowUpClarify(options: {
   const clearPendingFollowUps = useCallback(() => {
     pendingFollowUpsRef.current = [];
     setPendingFollowUps([]);
+    setEditingFollowUpId(null);
   }, []);
 
   const dismissClarifyAndClearPending = useCallback(() => {
     pendingFollowUpsRef.current = [];
     setPendingFollowUps([]);
     setClarifyPrompt(null);
+    setEditingFollowUpId(null);
   }, []);
 
   const clearFollowUpSuggestions = useCallback(() => {
@@ -167,6 +181,9 @@ export function useChatFollowUpClarify(options: {
       return;
     }
     const [first, ...rest] = q;
+    if (editingFollowUpIdRef.current === first.id) {
+      setEditingFollowUpId(null);
+    }
     pendingFollowUpsRef.current = rest;
     setPendingFollowUps(rest);
     void sendMessageRef.current(first.text, first.attachments, first.thinkingLevel);
@@ -198,22 +215,54 @@ export function useChatFollowUpClarify(options: {
     [modelSupportsThinking, thinkingLevel],
   );
 
-  const popPendingFollowUpForComposer = useCallback((id: string) => {
-    const row = pendingFollowUpsRef.current.find((r) => r.id === id);
-    if (!row) return null;
-    setPendingFollowUps((prev) => {
-      const next = prev.filter((r) => r.id !== id);
-      pendingFollowUpsRef.current = next;
-      return next;
-    });
-    return {
-      text: row.text,
-      attachments: row.attachments ?? [],
-      thinkingLevel: row.thinkingLevel ?? 'off',
-    };
+  const beginEditFollowUp = useCallback((id: string) => {
+    setEditingFollowUpId(id);
   }, []);
 
+  const cancelEditFollowUp = useCallback(() => {
+    setEditingFollowUpId(null);
+  }, []);
+
+  const commitEditFollowUp = useCallback(
+    (
+      id: string,
+      content: string,
+      attachments?: PendingFollowUp['attachments'],
+      levelOverride?: string,
+    ) => {
+      const trimmed = content.trim();
+      const prev = pendingFollowUpsRef.current;
+      const i = prev.findIndex((r) => r.id === id);
+      if (i < 0) {
+        setEditingFollowUpId(null);
+        return;
+      }
+      if (!trimmed && !attachments?.length) {
+        const next = prev.filter((r) => r.id !== id);
+        pendingFollowUpsRef.current = next;
+        setPendingFollowUps(next);
+        setEditingFollowUpId(null);
+        return;
+      }
+      const next = [...prev];
+      const effThinking = modelSupportsThinking ? (levelOverride ?? thinkingLevel) : 'off';
+      next[i] = {
+        ...next[i],
+        text: trimmed || content,
+        attachments: attachments?.length ? attachments : undefined,
+        thinkingLevel: effThinking,
+      };
+      pendingFollowUpsRef.current = next;
+      setPendingFollowUps(next);
+      setEditingFollowUpId(null);
+    },
+    [modelSupportsThinking, thinkingLevel],
+  );
+
   const removePendingFollowUp = useCallback((id: string) => {
+    if (editingFollowUpIdRef.current === id) {
+      setEditingFollowUpId(null);
+    }
     setPendingFollowUps((prev) => {
       const next = prev.filter((r) => r.id !== id);
       pendingFollowUpsRef.current = next;
@@ -265,6 +314,9 @@ export function useChatFollowUpClarify(options: {
           pendingFollowUpsRef.current = next;
           return next;
         });
+        if (editingFollowUpIdRef.current === id) {
+          setEditingFollowUpId(null);
+        }
       }
     } catch {
       /* ignore */
@@ -278,9 +330,19 @@ export function useChatFollowUpClarify(options: {
       const t = text.trim();
       if (!t) return;
       setFollowUpSuggestions([]);
+      if (sendingRef.current || streamingRef.current) {
+        if (pendingFollowUpsRef.current.length >= MAX_PENDING_FOLLOW_UPS) {
+          console.warn(
+            `Follow-up queue is full (max ${MAX_PENDING_FOLLOW_UPS}). Remove one or wait for the run to finish.`,
+          );
+          return;
+        }
+        addPendingFollowUp(t, undefined);
+        return;
+      }
       void sendMessageRef.current(t, undefined, undefined);
     },
-    [sendMessageRef],
+    [addPendingFollowUp, sendMessageRef, sendingRef, streamingRef],
   );
 
   const submitClarifyAnswer = useCallback(async (answer: string) => {
@@ -311,8 +373,11 @@ export function useChatFollowUpClarify(options: {
     pendingFollowUpsRef,
     followUpSuggestions,
     steeringFollowUpId,
+    editingFollowUpId,
     addPendingFollowUp,
-    popPendingFollowUpForComposer,
+    beginEditFollowUp,
+    cancelEditFollowUp,
+    commitEditFollowUp,
     removePendingFollowUp,
     movePendingFollowUp,
     reorderPendingFollowUp,

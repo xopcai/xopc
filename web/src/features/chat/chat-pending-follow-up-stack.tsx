@@ -10,6 +10,7 @@ import { useLocaleStore } from '@/stores/locale-store';
 export const ChatPendingFollowUpStack = memo(function ChatPendingFollowUpStack({
   items,
   disabled,
+  editingFollowUpId,
   onEditInComposer,
   onRemove,
   onMove,
@@ -19,6 +20,7 @@ export const ChatPendingFollowUpStack = memo(function ChatPendingFollowUpStack({
 }: {
   items: PendingFollowUp[];
   disabled?: boolean;
+  editingFollowUpId?: string | null;
   onEditInComposer: (id: string) => void;
   onRemove: (id: string) => void;
   onMove: (id: string, dir: 'up' | 'down') => void;
@@ -79,7 +81,12 @@ export const ChatPendingFollowUpStack = memo(function ChatPendingFollowUpStack({
             role="listitem"
             onDragOver={onDragOver}
             onDrop={disabled ? undefined : onDropRow(index)}
-            className="flex h-7 items-center gap-1 rounded border border-edge-subtle/80 bg-surface-hover/25 px-1 dark:border-edge-subtle/90 dark:bg-surface-hover/15"
+            className={cn(
+              'flex h-7 items-center gap-1 rounded border px-1',
+              editingFollowUpId === item.id
+                ? 'border-accent/50 bg-accent-soft/20 dark:border-accent/50 dark:bg-accent-soft/10'
+                : 'border-edge-subtle/80 bg-surface-hover/25 dark:border-edge-subtle/90 dark:bg-surface-hover/15',
+            )}
           >
             <div
               draggable={!disabled}

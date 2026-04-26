@@ -120,6 +120,7 @@ function wireFollowUpAttachmentsToComposer(
     content: w.data ?? '',
     name: w.name ?? 'file',
     size: w.size ?? 0,
+    workspaceRelativePath: w.workspaceRelativePath,
   }));
 }
 
@@ -133,6 +134,8 @@ type ComposerKbdContext = {
   runBusy: boolean;
   flushSteeringDraft?: () => void | Promise<void>;
   interruptDraft?: () => void;
+  editingFollowUpId: string | null;
+  onCancelEditFollowUp: () => void;
   attachmentsLen: number;
   isComposing: boolean;
   valueRef: MutableRefObject<string>;
@@ -308,6 +311,11 @@ const ChatComposerInput = memo(function ChatComposerInput({
             return;
           }
         }
+        if (e.key === 'Escape' && !k.isComposing && k.editingFollowUpId) {
+          e.preventDefault();
+          k.onCancelEditFollowUp?.();
+          return;
+        }
         if (e.key === 'Enter' && e.shiftKey && !k.isComposing) {
           e.preventDefault();
           document.execCommand('insertText', false, '\n');
@@ -349,7 +357,10 @@ export const ChatComposer = memo(function ChatComposer({
   onAddPendingFollowUp,
   onSteeringInterrupt,
   pendingFollowUps,
-  onPopPendingFollowUp,
+  editingFollowUpId,
+  onBeginEditFollowUp,
+  onCancelEditFollowUp,
+  onCommitEditFollowUp,
   onPendingFollowUpRemove,
   onPendingFollowUpMove,
   onPendingFollowUpReorder,
@@ -384,11 +395,15 @@ export const ChatComposer = memo(function ChatComposer({
     attachments?: Array<{ type: string; mimeType?: string; data?: string; name?: string; size?: number }>,
   ) => void;
   pendingFollowUps: PendingFollowUp[];
-  onPopPendingFollowUp: (id: string) => {
-    text: string;
-    attachments: NonNullable<PendingFollowUp['attachments']>;
-    thinkingLevel?: string;
-  } | null;
+  editingFollowUpId: string | null;
+  onBeginEditFollowUp: (id: string) => void;
+  onCancelEditFollowUp: () => void;
+  onCommitEditFollowUp: (
+    id: string,
+    text: string,
+    attachments?: PendingFollowUp['attachments'],
+    thinkingLevel?: string,
+  ) => void;
   onPendingFollowUpRemove: (id: string) => void;
   onPendingFollowUpMove: (id: string, dir: 'up' | 'down') => void;
   onPendingFollowUpReorder: (fromIndex: number, toIndex: number) => void;
@@ -417,6 +432,8 @@ export const ChatComposer = memo(function ChatComposer({
   const busyRef = useRef(false);
   const onSendRef = useRef(onSend);
   const lastWelcomeDraftIdRef = useRef(0);
+  /** Avoid re-hydrating the editor on every `pendingFollowUps` change while editing the same row. */
+  const lastLoadedEditFollowUpIdRef = useRef<string | null>(null);
 
   const runBusy = sending || streaming;
 
@@ -634,6 +651,7 @@ export const ChatComposer = memo(function ChatComposer({
       data: a.content,
       name: a.name,
       size: a.size,
+      ...(a.workspaceRelativePath ? { workspaceRelativePath: a.workspaceRelativePath } : {}),
     };
   }, []);
 
@@ -850,6 +868,7 @@ export const ChatComposer = memo(function ChatComposer({
       data: a.content,
       name: a.name,
       size: a.size,
+      ...(a.workspaceRelativePath ? { workspaceRelativePath: a.workspaceRelativePath } : {}),
     }));
 
   const clearComposer = () => {
@@ -866,51 +885,91 @@ export const ChatComposer = memo(function ChatComposer({
     });
   };
 
-  const hydrateFollowUpIntoComposer = useCallback(
-    (id: string) => {
-      const popped = onPopPendingFollowUp(id);
-      if (!popped) return;
-      if (popped.thinkingLevel != null && showThinkingSelector) {
-        onThinkingChange(popped.thinkingLevel);
+  useLayoutEffect(() => {
+    if (!editingFollowUpId) {
+      if (lastLoadedEditFollowUpIdRef.current) {
+        clearComposer();
+        lastLoadedEditFollowUpIdRef.current = null;
       }
-      const nextText = popped.text;
-      setValue(nextText);
-      valueRef.current = nextText;
-      setAttachments(wireFollowUpAttachmentsToComposer(popped.attachments));
-      requestAnimationFrame(() => {
-        const el = editorRef.current;
-        if (el) {
-          applyWireToEditor(el, nextText, nextText.length);
-          syncComposerPlaceholderClass(el, nextText);
-          el.focus({ preventScroll: true });
-        }
-        adjustHeight();
-      });
+      return;
+    }
+    if (editingFollowUpId === lastLoadedEditFollowUpIdRef.current) {
+      return;
+    }
+    const row = pendingFollowUps.find((r) => r.id === editingFollowUpId);
+    if (!row) {
+      onCancelEditFollowUp();
+      return;
+    }
+    lastLoadedEditFollowUpIdRef.current = editingFollowUpId;
+    if (row.thinkingLevel != null && showThinkingSelector) {
+      onThinkingChange(row.thinkingLevel);
+    }
+    const nextText = row.text;
+    setValue(nextText);
+    valueRef.current = nextText;
+    setAttachments(wireFollowUpAttachmentsToComposer(row.attachments ?? []));
+    requestAnimationFrame(() => {
+      const el = editorRef.current;
+      if (el) {
+        applyWireToEditor(el, nextText, nextText.length);
+        syncComposerPlaceholderClass(el, nextText);
+        el.focus({ preventScroll: true });
+      }
+      adjustHeight();
+    });
+  }, [
+    adjustHeight,
+    editingFollowUpId,
+    onCancelEditFollowUp,
+    onThinkingChange,
+    pendingFollowUps,
+    showThinkingSelector,
+  ]);
+
+  const openFollowUpInComposer = useCallback(
+    (id: string) => {
+      onBeginEditFollowUp(id);
     },
-    [adjustHeight, onPopPendingFollowUp, onThinkingChange, showThinkingSelector],
+    [onBeginEditFollowUp],
   );
 
   const flushSteeringDraft = useCallback(async () => {
-    if (!runBusy || !onAddPendingFollowUp) return;
+    if (!runBusy) return;
     if (voiceRecording) {
       stopVoiceRecording();
       return;
     }
     if (!value.trim() && attachments.length === 0) return;
+    const payload = wireAttachmentsPayload();
+    if (editingFollowUpId) {
+      onCommitEditFollowUp(
+        editingFollowUpId,
+        value,
+        payload.length ? payload : undefined,
+        thinkingLevel,
+      );
+      lastLoadedEditFollowUpIdRef.current = null;
+      clearComposer();
+      return;
+    }
+    if (!onAddPendingFollowUp) return;
     if (pendingFollowUps.length >= MAX_PENDING_FOLLOW_UPS) {
       console.warn(interpolate(m.chat.followUpQueueMaxReached, { max: MAX_PENDING_FOLLOW_UPS }));
       return;
     }
-    const payload = wireAttachmentsPayload();
     await onAddPendingFollowUp(value, payload.length ? payload : undefined);
     clearComposer();
   }, [
     attachments,
+    editingFollowUpId,
     m.chat.followUpQueueMaxReached,
     onAddPendingFollowUp,
+    onCommitEditFollowUp,
     pendingFollowUps.length,
     runBusy,
     stopVoiceRecording,
+    thinkingLevel,
     value,
     voiceRecording,
   ]);
@@ -923,9 +982,23 @@ export const ChatComposer = memo(function ChatComposer({
     }
     if (!value.trim() && attachments.length === 0) return;
     const payload = wireAttachmentsPayload();
+    const editId = editingFollowUpId;
     onSteeringInterrupt(value, payload.length ? payload : undefined);
+    if (editId) {
+      lastLoadedEditFollowUpIdRef.current = null;
+      onPendingFollowUpRemove(editId);
+    }
     clearComposer();
-  }, [attachments, onSteeringInterrupt, runBusy, stopVoiceRecording, value, voiceRecording]);
+  }, [
+    attachments,
+    editingFollowUpId,
+    onPendingFollowUpRemove,
+    onSteeringInterrupt,
+    runBusy,
+    stopVoiceRecording,
+    value,
+    voiceRecording,
+  ]);
 
   const send = () => {
     if (runBusy) return;
@@ -959,6 +1032,8 @@ export const ChatComposer = memo(function ChatComposer({
     runBusy,
     flushSteeringDraft,
     interruptDraft,
+    editingFollowUpId,
+    onCancelEditFollowUp,
     attachmentsLen: attachments.length,
     isComposing,
     valueRef,
@@ -1033,7 +1108,8 @@ export const ChatComposer = memo(function ChatComposer({
             <ChatPendingFollowUpStack
               items={pendingFollowUps}
               disabled={disabled}
-              onEditInComposer={hydrateFollowUpIntoComposer}
+              editingFollowUpId={editingFollowUpId}
+              onEditInComposer={openFollowUpInComposer}
               onRemove={onPendingFollowUpRemove}
               onMove={onPendingFollowUpMove}
               onReorder={onPendingFollowUpReorder}
@@ -1088,7 +1164,13 @@ export const ChatComposer = memo(function ChatComposer({
             <ChatComposerInput
               editorRef={editorRef}
               disabled={disabled}
-              placeholder={runBusy ? m.chat.inputPlaceholderSteering : m.chat.inputPlaceholder}
+              placeholder={
+                runBusy
+                  ? editingFollowUpId
+                    ? m.chat.inputPlaceholderSteeringEdit
+                    : m.chat.inputPlaceholderSteering
+                  : m.chat.inputPlaceholder
+              }
               onWireInput={onWireInput}
               adjustHeight={adjustHeight}
               processFiles={processFiles}
