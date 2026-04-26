@@ -8,6 +8,8 @@ export type PendingFollowUpAttachment = {
   data?: string;
   name?: string;
   size?: number;
+  /** Session-backed file (inbound/tts) when the queue row has no base64 `data` yet. */
+  workspaceRelativePath?: string;
 };
 
 export type PendingFollowUp = {
