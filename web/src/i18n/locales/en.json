@@ -484,7 +484,10 @@
     "messageCopied": "Copied",
     "commandPalette": {
       "noResults": "No matching commands or skills",
-      "placeholder": "Search skills and commands…"
+      "placeholder": "Search skills and commands…",
+      "skillsSection": "Skills",
+      "commandsSection": "Commands",
+      "showGroupedMore": "Show {{count}} more"
     },
     "atMention": {
       "noResults": "No matches",
