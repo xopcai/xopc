@@ -113,7 +113,6 @@
   "systemSettings": {
     "title": "系统设置",
     "behaviorGroup": "应用行为",
-    "subtitle": "支持 Windows、macOS、Linux 桌面：自启动、防睡眠、通知偏好，以及各系统的相关设置入口。",
     "desktopOnlyTitle": "仅桌面端",
     "desktopOnlyBody": "系统集成功能仅在 xopc Electron 桌面版中可用。在浏览器中请通过操作系统设置管理。",
     "toggles": {
