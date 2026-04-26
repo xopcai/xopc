@@ -814,6 +814,7 @@
     "emptyDir": "暂无文件",
     "loadError": "加载失败",
     "close": "关闭",
+    "resizeHandleAria": "调整项目文件区域宽度",
     "lastModified": "修改时间",
     "openElsewhereHint": "预览可能受限或不可用。请下载文件或使用其他应用打开。",
     "cannotPreviewType": "无法在预览中打开此类型的文件。",
