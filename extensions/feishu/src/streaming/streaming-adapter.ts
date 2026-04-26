@@ -6,6 +6,7 @@ import type { Config } from '@xopcai/xopc/config/schema.js';
 import { createLogger } from '@xopcai/xopc/utils/logger.js';
 
 import { resolveFeishuAccount } from '../state/accounts.js';
+import { formatFeishuOutboundText } from '../format.js';
 import { getFeishuBindingByMessageId, recordFeishuMessageBinding } from '../state/message-bindings.js';
 import { createFeishuClient } from '../transport/client/client.js';
 
@@ -42,7 +43,19 @@ export function createFeishuStreamingAdapter(getConfig: () => Config): ChannelSt
       const cardElementId = 'md_1';
       let fallbackSent = false;
 
-      const preferCard = account.renderMode === 'card';
+      const renderMode = account.renderMode ?? 'auto';
+      const preferCard = renderMode === 'card' || renderMode === 'auto';
+
+      const formatStreamText = (text: string) => {
+        if (!text.trim()) return text;
+        if (text.trim() === 'Thinking…') return text;
+        const forCardMarkdown = Boolean(preferCard && cardId);
+        return formatFeishuOutboundText({
+          text,
+          renderMode,
+          forCardMarkdown,
+        });
+      };
 
       const recordBindingIfReply = (childMessageId: string) => {
         if (!childMessageId) return;
@@ -56,12 +69,13 @@ export function createFeishuStreamingAdapter(getConfig: () => Config): ChannelSt
       const edit = async (text: string) => {
         if (ready) await ready;
         if (!messageId) return;
+        const outbound = formatStreamText(text);
         if (cardId && preferCard) {
           cardSeq += 1;
           await (api as any).cardkit.v1.cardElement.content({
             path: { card_id: cardId, element_id: cardElementId },
             data: {
-              content: text,
+              content: outbound,
               sequence: cardSeq,
               uuid: `${cardId}:${cardSeq}`,
             },
@@ -69,7 +83,7 @@ export function createFeishuStreamingAdapter(getConfig: () => Config): ChannelSt
         } else {
           await (api as any).im.v1.message.update({
             path: { message_id: messageId },
-            data: { msg_type: 'text', content: JSON.stringify({ text }) },
+            data: { msg_type: 'text', content: JSON.stringify({ text: outbound }) },
           });
         }
         editedAtLeastOnce = true;
@@ -81,12 +95,13 @@ export function createFeishuStreamingAdapter(getConfig: () => Config): ChannelSt
         const receive_id_type =
           options.chatId.startsWith('ou_') || options.chatId.startsWith('on_') ? 'open_id' : 'chat_id';
         try {
+          const outbound = formatStreamText(text);
           const res = options.replyToMessageId
             ? await (api as any).im.message.reply({
                 path: { message_id: options.replyToMessageId },
                 data: {
                   msg_type: 'text',
-                  content: JSON.stringify({ text }),
+                  content: JSON.stringify({ text: outbound }),
                   ...(options.threadId ? { reply_in_thread: true } : {}),
                 },
               })
@@ -95,7 +110,7 @@ export function createFeishuStreamingAdapter(getConfig: () => Config): ChannelSt
                 data: {
                   receive_id: options.chatId,
                   msg_type: 'text',
-                  content: JSON.stringify({ text }),
+                  content: JSON.stringify({ text: outbound }),
                 },
               });
           const mid = res?.data?.message_id ?? res?.message_id ?? undefined;

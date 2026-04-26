@@ -7,6 +7,7 @@ import type { Config } from '@xopcai/xopc/config/schema.js';
 
 import { resolveFeishuAccount } from '../state/accounts.js';
 import { createFeishuClient } from '../transport/client/client.js';
+import { formatFeishuOutboundText } from '../format.js';
 import { loadMediaForFeishu } from './media-load.js';
 import { getFeishuBindingByMessageId, recordFeishuMessageBinding } from '../state/message-bindings.js';
 
@@ -25,13 +26,25 @@ export function createFeishuOutboundAdapter(): ChannelOutboundAdapter {
 
       const { api } = createFeishuClient(account);
       const to = ctx.to;
-      const content = ctx.text ?? '';
+      const raw = ctx.text ?? '';
+      const renderMode = account.renderMode ?? 'auto';
+      const preferCard = renderMode === 'card' || renderMode === 'auto';
+
+      const cardBody = formatFeishuOutboundText({
+        text: raw,
+        renderMode,
+        forCardMarkdown: true,
+      });
+      const plainBody = formatFeishuOutboundText({
+        text: raw,
+        renderMode,
+        forCardMarkdown: false,
+      });
 
       const receive_id_type = isProbablyOpenId(to) ? 'open_id' : 'chat_id';
-      const preferCard = account.renderMode === 'card';
       const payloadText = {
         msg_type: 'text',
-        content: JSON.stringify({ text: content }),
+        content: JSON.stringify({ text: plainBody }),
       };
       const payloadCard = {
         msg_type: 'interactive',
@@ -43,7 +56,7 @@ export function createFeishuOutboundAdapter(): ChannelOutboundAdapter {
               {
                 tag: 'markdown',
                 element_id: 'md_1',
-                content,
+                content: cardBody,
               },
             ],
           },
