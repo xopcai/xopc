@@ -50,7 +50,17 @@ export default defineConfig({
           {
             text: 'Features',
             items: [
-              { text: 'Channels', link: '/channels' },
+              {
+                text: 'Channels',
+                collapsed: true,
+                items: [
+                  { text: 'Overview', link: '/channels' },
+                  { text: 'Telegram', link: '/channels/telegram' },
+                  { text: 'Weixin (WeChat)', link: '/channels/weixin' },
+                  { text: 'Feishu (Lark)', link: '/channels/feishu' },
+                  { text: 'Web UI', link: '/channels/webui' },
+                ],
+              },
               { text: 'Voice (STT/TTS)', link: '/voice' },
               { text: 'Image & vision', link: '/image-multimodal' },
               { text: 'Progress Feedback', link: '/progress' },
@@ -113,7 +123,17 @@ export default defineConfig({
           {
             text: '功能特性',
             items: [
-              { text: '消息通道', link: '/zh/channels' },
+              {
+                text: '消息通道',
+                collapsed: true,
+                items: [
+                  { text: '概览', link: '/zh/channels' },
+                  { text: 'Telegram', link: '/zh/channels/telegram' },
+                  { text: '微信（Weixin）', link: '/zh/channels/weixin' },
+                  { text: '飞书（Feishu / Lark）', link: '/zh/channels/feishu' },
+                  { text: '网页（Web UI）', link: '/zh/channels/webui' },
+                ],
+              },
               { text: '语音（STT/TTS）', link: '/zh/voice' },
               { text: '图像与视觉', link: '/zh/image-multimodal' },
               { text: '进度反馈', link: '/zh/progress' },

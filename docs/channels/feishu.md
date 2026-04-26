@@ -5,6 +5,83 @@ Feishu/Lark is configured under **`channels.feishu`**. The channel supports two 
 - **`websocket`** (default): Feishu Socket Mode.
 - **`webhook`**: a local HTTP server that receives Feishu events. Requires webhook secrets.
 
+## Create and configure a Feishu app
+
+In Feishu Open Platform (or Lark Developer):
+
+1. Create a **self-built app** (internal app).
+2. Add a **Bot** capability to the app.
+3. Copy **App ID** / **App Secret** from the app **Credentials** page.
+4. Configure **Permissions (Scopes)** (see below) and request approval/publish as required by your tenant.
+5. Configure **Event Subscriptions**:
+   - Enable the subscription feature.
+   - Subscribe to the required event types (see below).
+   - For **Socket Mode**: enable the platform’s **persistent connection / WebSocket** option.
+   - For **Webhook mode**: set your **Request URL** to match `webhookHost` + `webhookPort` + `webhookPath`, and copy **Verification Token** + **Encrypt Key** into `channels.feishu`.
+
+## Permissions (scopes) — copy/paste JSON
+
+Feishu permissions are scope-based. You can keep scopes minimal for chat-only bots, and add scopes only when you enable the corresponding xopc Feishu tools (`channels.feishu.tools.*`).
+
+### Minimal (chat + cards + basic identity)
+
+```json
+{
+  "scopes": ["im:message", "im:chat", "contact:user.base:readonly"]
+}
+```
+
+### Recommended (includes doc/wiki/drive; add perm/bitable only if you need them)
+
+```json
+{
+  "scopes": [
+    "im:message",
+    "im:chat",
+    "contact:user.base:readonly",
+
+    "docx:document",
+    "docx:document:readonly",
+    "docx:document.block:convert",
+
+    "drive:drive",
+    "drive:drive:readonly",
+
+    "wiki:wiki",
+    "wiki:wiki:readonly",
+
+    "drive:permission",
+
+    "bitable:app",
+    "bitable:app:readonly",
+    "bitable:table",
+    "bitable:table:readonly",
+    "bitable:record",
+    "bitable:record:readonly"
+  ]
+}
+```
+
+Notes:
+
+- If your tenant only allows requesting either read-write or read-only scopes, pick the smallest set that matches your usage.
+- If you aren’t using a tool (for example `feishu_perm`), keep its scope disabled.
+- After changing scopes, the app may require (re)approval in the admin console before the bot can access newly granted APIs.
+
+## Event subscriptions (what to subscribe)
+
+At minimum, subscribe to:
+
+- `im.message.receive_v1` (inbound messages)
+- `card.action.trigger` (interactive card button/input callbacks, used by streaming cards and UI actions)
+
+Recommended (if you enable those features):
+
+- `im.message.reaction.created_v1` / `im.message.reaction.deleted_v1` (reaction-driven workflows)
+- `drive.notice.comment_add_v1` (drive/doc comment notices)
+- `im.chat.member.bot.added_v1` / `im.chat.member.bot.deleted_v1` (bot added/removed from chats; optional)
+- `application.bot.menu_v6` (bot menu actions; optional)
+
 ## Minimal (Socket Mode / websocket)
 
 ```json
