@@ -6,10 +6,18 @@ const MAX_ASSISTANT_CHARS = 1200;
 export type FollowUpSuggestionId =
   | 'code_error_handling'
   | 'code_refactor'
+  | 'code_explain'
+  | 'code_optimize'
+  | 'web_more_details'
+  | 'web_find_sources'
   | 'date_shorter_summary'
   | 'date_main_risks'
+  | 'email_make_formal'
+  | 'email_shorten'
   | 'generic_simpler_terms'
   | 'generic_concrete_example'
+  | 'generic_bullet_points'
+  | 'generic_create_table'
   | 'what_next';
 
 function collectAssistantPlainText(content: MessageContent[]): string {
@@ -35,15 +43,34 @@ export function suggestFollowUpsFromAssistantMessage(msg: Message): FollowUpSugg
 
   const out: FollowUpSuggestionId[] = [];
 
-  if (/\b(function|class|const |def |import |export )\b/.test(lower) || /```/.test(slice)) {
+  // Code detection
+  if (/\b(function|class|const |def |import |export |async |await |interface |type )\b/.test(lower) || /```/.test(slice)) {
     out.push('code_error_handling');
+    out.push('code_explain');
     out.push('code_refactor');
-  } else if (/\d{4}-\d{2}-\d{2}|january|february|march|april|may|june|july|august|september|october|november|december/i.test(slice)) {
+    out.push('code_optimize');
+  }
+  // Date/timeline content
+  else if (/\d{4}-\d{2}-\d{2}|january|february|march|april|may|june|july|august|september|october|november|december|q[1-4]|quarter/i.test(slice)) {
     out.push('date_shorter_summary');
     out.push('date_main_risks');
-  } else {
+  }
+  // List content (already bulleted)
+  else if (/^[-*•]|\n[-*•]/.test(slice.trim())) {
+    out.push('generic_simpler_terms');
+    out.push('generic_create_table');
+    out.push('generic_bullet_points');
+  }
+  // Table content detected
+  else if (/\|.*\|.*\|/.test(slice)) {
+    out.push('generic_simpler_terms');
+    out.push('generic_bullet_points');
+  }
+  // Default/generic content
+  else {
     out.push('generic_simpler_terms');
     out.push('generic_concrete_example');
+    out.push('generic_bullet_points');
   }
 
   out.push('what_next');

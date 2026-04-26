@@ -1,4 +1,4 @@
-import { FileBarChart, FolderOpen, MessageCircle, PenLine } from 'lucide-react';
+import { FileBarChart, FolderOpen, Globe, MessageCircle, PenLine } from 'lucide-react';
 import { memo, useId, useMemo, useState } from 'react';
 
 import type { ChatMessages } from '@/i18n/messages';
@@ -9,6 +9,7 @@ const categoryIcons = {
   folder: FolderOpen,
   content: PenLine,
   documents: FileBarChart,
+  globe: Globe,
 } as const;
 
 type CategoryIconKey = keyof typeof categoryIcons;
