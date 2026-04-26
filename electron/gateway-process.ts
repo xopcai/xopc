@@ -12,6 +12,28 @@ const DEFAULT_PORT = 28790;
 let gatewayChild: ChildProcess | null = null;
 let gatewayExitHandler: ((code: number | null, signal: string | null) => void) | null = null;
 
+/** Recent stdout/stderr from the packaged gateway child (dev uses inherited stdio — usually empty). */
+let gatewayLogBuffer = '';
+const GATEWAY_LOG_BUFFER_MAX = 12_000;
+
+function clearGatewayLogBuffer(): void {
+  gatewayLogBuffer = '';
+}
+
+function appendGatewayLog(chunk: string): void {
+  gatewayLogBuffer += chunk;
+  if (gatewayLogBuffer.length > GATEWAY_LOG_BUFFER_MAX) {
+    gatewayLogBuffer = gatewayLogBuffer.slice(-GATEWAY_LOG_BUFFER_MAX);
+  }
+}
+
+function gatewayLogSnippetForError(): string {
+  const s = gatewayLogBuffer.trim();
+  if (!s) return '';
+  const cap = 4000;
+  return s.length > cap ? `…\n${s.slice(-cap)}` : s;
+}
+
 export function getDefaultGatewayPort(): number {
   return DEFAULT_PORT;
 }
@@ -82,6 +104,7 @@ export interface GatewayProcessOptions {
 export function spawnGatewayProcess(opts: GatewayProcessOptions): ChildProcess {
   const cli = resolveCliEntry();
   const isPackaged = app.isPackaged;
+  clearGatewayLogBuffer();
   const child = spawn(
     process.execPath,
     [
@@ -130,11 +153,14 @@ export function spawnGatewayProcess(opts: GatewayProcessOptions): ChildProcess {
   // In packaged mode, we capture logs but don't want to block the process.
   if (isPackaged && child.stdout && child.stderr) {
     child.stdout.on('data', (data: Buffer) => {
-      // Forward to console for debugging (optional, can be removed in production)
-      console.log(`[gateway:stdout] ${data.toString().trimEnd()}`);
+      const text = data.toString();
+      appendGatewayLog(text);
+      console.log(`[gateway:stdout] ${text.trimEnd()}`);
     });
     child.stderr.on('data', (data: Buffer) => {
-      console.error(`[gateway:stderr] ${data.toString().trimEnd()}`);
+      const text = data.toString();
+      appendGatewayLog(text);
+      console.error(`[gateway:stderr] ${text.trimEnd()}`);
     });
   }
 
@@ -183,8 +209,10 @@ export async function waitForGatewayReady(
   const url = `http://127.0.0.1:${port}/api/config`;
   while (Date.now() < deadline) {
     if (child.exitCode !== null || child.signalCode !== null) {
+      const logHint = gatewayLogSnippetForError();
       throw new Error(
         `Gateway process exited before becoming ready (code=${child.exitCode}, signal=${child.signalCode}). ` +
+          (logHint ? `Output:\n${logHint}\n\n` : '') +
           `Port ${port} may be in use by another program, or the gateway failed to start.`,
       );
     }
@@ -199,7 +227,11 @@ export async function waitForGatewayReady(
     }
     await new Promise((r) => setTimeout(r, 250));
   }
-  throw new Error(`Gateway did not become ready with expected auth at ${url} within ${timeoutMs}ms`);
+  const logHint = gatewayLogSnippetForError();
+  throw new Error(
+    `Gateway did not become ready with expected auth at ${url} within ${timeoutMs}ms` +
+      (logHint ? `\n\nRecent gateway output:\n${logHint}` : ''),
+  );
 }
 
 export function stopGatewayProcess(): void {
