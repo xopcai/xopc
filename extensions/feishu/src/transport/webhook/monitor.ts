@@ -13,6 +13,7 @@ import type { ResolvedFeishuAccount } from '../../state/accounts.js';
 import { createFeishuDedupe } from '../reliability/dedupe.js';
 import { stripFeishuMentions } from '../text/mentions.js';
 import { recordFeishuMessageBinding } from '../../state/message-bindings.js';
+import { createFeishuLarkSdkPinoLogger } from '../client/lark-sdk-logger.js';
 
 const log = createLogger('FeishuWebhook');
 
@@ -149,6 +150,8 @@ export function createFeishuWebhookMonitor(deps: FeishuWebhookMonitorDeps) {
   const host = (account.webhookHost ?? '127.0.0.1').trim() || '127.0.0.1';
   const port = account.webhookPort ?? 3000;
   const path = (account.webhookPath ?? '/feishu/events').trim() || '/feishu/events';
+  const l = lark as any;
+  const sdkLogger = createFeishuLarkSdkPinoLogger(account.accountId);
 
   async function handleMessageReceive(event: any): Promise<void> {
     const msg = event?.event?.message ?? event?.message ?? event?.data?.message;
@@ -223,7 +226,13 @@ export function createFeishuWebhookMonitor(deps: FeishuWebhookMonitorDeps) {
     });
   }
 
-  const dispatcher = new (lark as any).EventDispatcher({ verifyChallenge: false } as any);
+  const dispatcher = new l.EventDispatcher({
+    verifyChallenge: false,
+    encryptKey,
+    verificationToken,
+    logger: sdkLogger,
+    loggerLevel: l.LoggerLevel.info,
+  } as any);
   dispatcher.register({
     'im.message.receive_v1': async (data: any) => await handleMessageReceive(data),
   });

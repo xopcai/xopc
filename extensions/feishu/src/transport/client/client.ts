@@ -1,6 +1,7 @@
 import lark from '@larksuiteoapi/node-sdk';
 
 import type { ResolvedFeishuAccount } from '../../state/accounts.js';
+import { createFeishuLarkSdkPinoLogger } from './lark-sdk-logger.js';
 
 export function createFeishuClient(account: ResolvedFeishuAccount): {
   wsClient: any;
@@ -8,20 +9,25 @@ export function createFeishuClient(account: ResolvedFeishuAccount): {
   api: any;
 } {
   const l = lark as any;
+  const sdkLogger = createFeishuLarkSdkPinoLogger(account.accountId);
 
   const apiBaseUrl = resolveFeishuBaseUrl(account.domain);
 
   const api = new l.Client({
     appId: account.appId,
     appSecret: account.appSecret,
+    logger: sdkLogger,
+    loggerLevel: l.LoggerLevel.info,
     ...(apiBaseUrl ? { baseURL: apiBaseUrl } : {}),
   });
 
-  const dispatcher = new l.EventDispatcher({ verifyChallenge: false } as any);
+  const dispatcher = new l.EventDispatcher({ verifyChallenge: false, logger: sdkLogger, loggerLevel: l.LoggerLevel.info } as any);
   const wsClient = new l.WSClient({
     appId: account.appId,
     appSecret: account.appSecret,
     eventDispatcher: dispatcher,
+    logger: sdkLogger,
+    loggerLevel: l.LoggerLevel.info,
     ...(apiBaseUrl ? { baseURL: apiBaseUrl } : {}),
   });
 
