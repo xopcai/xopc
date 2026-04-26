@@ -1164,6 +1164,29 @@ export const ChatComposer = memo(function ChatComposer({
               items={palette.loadError ? [] : palette.items}
               selectedIndex={palette.selectedIndex}
               noResults={palette.loadError ?? m.chat.commandPalette.noResults}
+              grouped={palette.loadError ? false : palette.grouped}
+              skillRowCount={palette.loadError ? 0 : palette.skillRowCount}
+              query={palette.query}
+              skillsLabel={m.chat.commandPalette.skillsSection}
+              commandsLabel={m.chat.commandPalette.commandsSection}
+              groupedHasSkills={palette.loadError ? false : palette.groupedHasSkills}
+              groupedHasCommands={palette.loadError ? false : palette.groupedHasCommands}
+              groupedSkillsShowMoreLabel={
+                palette.loadError || !palette.grouped
+                  ? null
+                  : palette.groupedSkillsMoreCount > 0
+                    ? interpolate(m.chat.commandPalette.showGroupedMore, { count: palette.groupedSkillsMoreCount })
+                    : null
+              }
+              groupedCommandsShowMoreLabel={
+                palette.loadError || !palette.grouped
+                  ? null
+                  : palette.groupedCommandsMoreCount > 0
+                    ? interpolate(m.chat.commandPalette.showGroupedMore, { count: palette.groupedCommandsMoreCount })
+                    : null
+              }
+              onExpandSkills={palette.expandGroupedSkills}
+              onExpandCommands={palette.expandGroupedCommands}
               onSelectItem={applyPaletteItem}
             />
             <ChatComposerInput
