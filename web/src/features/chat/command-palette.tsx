@@ -1,5 +1,12 @@
-import { Sparkles, Terminal } from 'lucide-react';
-import { memo, useLayoutEffect, useState, type ReactNode, type RefObject } from 'react';
+import {
+  Content as TooltipContent,
+  Portal as TooltipPortal,
+  Provider as TooltipProvider,
+  Root as TooltipRoot,
+  Trigger as TooltipTrigger,
+} from '@radix-ui/react-tooltip';
+import { Sparkles, Zap } from 'lucide-react';
+import { Fragment, memo, useLayoutEffect, useState, type ReactNode, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 
 import type { PaletteItem } from '@/features/chat/command-palette.types';
@@ -10,12 +17,78 @@ const PORTAL_Z = 100;
 /** Cap width so the list stays readable; full composer width is often unnecessarily wide. */
 const MAX_PALETTE_WIDTH_PX = 352;
 
+function highlightFuzzyName(name: string, q: string): ReactNode {
+  const needle = q.trim().toLowerCase();
+  if (!needle) {
+    return name;
+  }
+  const nLower = name.toLowerCase();
+  const idx = nLower.indexOf(needle);
+  if (idx >= 0) {
+    return (
+      <>
+        {name.slice(0, idx)}
+        <span className="text-accent-fg">{name.slice(idx, idx + needle.length)}</span>
+        {name.slice(idx + needle.length)}
+      </>
+    );
+  }
+  // Subsequence: greedily mark chars that match query in order.
+  const out: ReactNode[] = [];
+  let qi = 0;
+  for (let i = 0; i < name.length; i += 1) {
+    const ch = name.charAt(i);
+    const nq = needle[qi];
+    if (nq !== undefined && ch.toLowerCase() === nq) {
+      out.push(
+        <span key={i} className="text-accent-fg">
+          {ch}
+        </span>,
+      );
+      qi += 1;
+    } else {
+      out.push(<Fragment key={i}>{ch}</Fragment>);
+    }
+  }
+  return <>{out}</>;
+}
+
+function highlightPlainSlice(text: string, q: string): ReactNode {
+  const needle = q.trim().toLowerCase();
+  if (!needle) {
+    return text;
+  }
+  const t = text.toLowerCase();
+  const idx = t.indexOf(needle);
+  if (idx < 0) {
+    return text;
+  }
+  return (
+    <>
+      {text.slice(0, idx)}
+      <span className="text-accent-fg">{text.slice(idx, idx + needle.length)}</span>
+      {text.slice(idx + needle.length)}
+    </>
+  );
+}
+
 export const CommandPalette = memo(function CommandPalette({
   open,
   anchorRef,
   items,
   selectedIndex,
   noResults,
+  grouped,
+  skillRowCount,
+  query,
+  skillsLabel,
+  commandsLabel,
+  groupedHasSkills,
+  groupedHasCommands,
+  groupedSkillsShowMoreLabel,
+  groupedCommandsShowMoreLabel,
+  onExpandSkills,
+  onExpandCommands,
   onSelectItem,
 }: {
   open: boolean;
@@ -23,6 +96,19 @@ export const CommandPalette = memo(function CommandPalette({
   items: PaletteItem[];
   selectedIndex: number;
   noResults: string;
+  /** When true, show Skills / Commands section labels (query empty). */
+  grouped: boolean;
+  /** Leading rows in `items` that are skills; rest are commands. */
+  skillRowCount: number;
+  query: string;
+  skillsLabel: string;
+  commandsLabel: string;
+  groupedHasSkills: boolean;
+  groupedHasCommands: boolean;
+  groupedSkillsShowMoreLabel: string | null;
+  groupedCommandsShowMoreLabel: string | null;
+  onExpandSkills: () => void;
+  onExpandCommands: () => void;
   /** Same behavior as choosing the row with Enter (skill pill / slash command). */
   onSelectItem: (item: PaletteItem) => void;
 }) {
@@ -67,45 +153,129 @@ export const CommandPalette = memo(function CommandPalette({
 
   const totalRows = items.length;
   const panelWidth = Math.min(box.width, MAX_PALETTE_WIDTH_PX);
+  const filterQuery = query.trim();
+  const showHighlight = !grouped && filterQuery.length > 0;
+
+  const showMoreClass =
+    'w-full px-3 py-1.5 text-left text-xs text-fg-muted transition hover:bg-surface-hover/80 hover:text-fg';
+
+  const sectionHeaderClass =
+    'px-3 pt-2.5 text-[0.65rem] font-medium uppercase tracking-wide text-fg-muted';
+
+  const renderOptionRow = (item: PaletteItem, i: number) => {
+    const isSkill = item.kind === 'skill';
+    return (
+      <PaletteRow
+        item={item}
+        icon={
+          isSkill ? (
+            <Sparkles className="size-3.5 shrink-0 text-accent-fg" aria-hidden />
+          ) : (
+            <Zap className="size-3.5 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />
+          )
+        }
+        selected={selectedIndex === i}
+        id={`palette-${i}`}
+        nameLine={
+          showHighlight ? (
+            <>
+              <span className="text-fg">/</span>
+              {highlightFuzzyName(item.name, filterQuery)}
+            </>
+          ) : (
+            <span className="text-fg">/{item.name}</span>
+          )
+        }
+        descriptionLine={
+          item.description
+            ? showHighlight
+              ? highlightPlainSlice(item.description, filterQuery)
+              : item.description
+            : null
+        }
+        dimCategoryBadge={showHighlight}
+        onSelect={() => onSelectItem(item)}
+      />
+    );
+  };
+
+  const listBody =
+    totalRows === 0 ? (
+      <div className="px-3 py-2 text-sm text-fg-muted">{noResults}</div>
+    ) : grouped ? (
+      <>
+        {groupedHasSkills ? (
+          <>
+            <div className={sectionHeaderClass} aria-hidden>
+              {skillsLabel}
+            </div>
+            {items.slice(0, skillRowCount).map((item, j) => (
+              <Fragment key={item.id}>{renderOptionRow(item, j)}</Fragment>
+            ))}
+            {groupedSkillsShowMoreLabel ? (
+              <button
+                type="button"
+                className={showMoreClass}
+                onClick={(e) => {
+                  e.preventDefault();
+                  onExpandSkills();
+                }}
+              >
+                {groupedSkillsShowMoreLabel}
+              </button>
+            ) : null}
+          </>
+        ) : null}
+        {groupedHasCommands ? (
+          <div
+            className={cn(
+              groupedHasSkills && 'mt-0.5 border-t border-edge-subtle',
+            )}
+          >
+            <div className={sectionHeaderClass} aria-hidden>
+              {commandsLabel}
+            </div>
+            {items.slice(skillRowCount).map((item, j) => (
+              <Fragment key={item.id}>{renderOptionRow(item, skillRowCount + j)}</Fragment>
+            ))}
+            {groupedCommandsShowMoreLabel ? (
+              <button
+                type="button"
+                className={showMoreClass}
+                onClick={(e) => {
+                  e.preventDefault();
+                  onExpandCommands();
+                }}
+              >
+                {groupedCommandsShowMoreLabel}
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+      </>
+    ) : (
+      items.map((item, i) => <Fragment key={item.id}>{renderOptionRow(item, i)}</Fragment>)
+    );
 
   const shell = (
-    <div
-      className="pointer-events-auto max-h-[min(24rem,55vh)] min-h-[2.5rem] overflow-y-auto rounded-lg border border-edge bg-surface-panel shadow-lg dark:bg-surface-panel/95"
-      style={{
-        position: 'fixed',
-        left: box.left,
-        top: box.top,
-        width: panelWidth,
-        transform: 'translateY(calc(-100% - 8px))',
-        zIndex: PORTAL_Z,
-      }}
-      role="listbox"
-      aria-label="Commands"
-      aria-activedescendant={selectedIndex >= 0 && selectedIndex < totalRows ? `palette-${selectedIndex}` : undefined}
-    >
-      {totalRows === 0 ? (
-        <div className="px-3 py-2 text-sm text-fg-muted">{noResults}</div>
-      ) : (
-        <>
-          {items.map((item, i) => (
-            <PaletteRow
-              key={item.id}
-              item={item}
-              icon={
-                item.kind === 'skill' ? (
-                  <Sparkles className="size-3.5 shrink-0 text-accent-fg" aria-hidden />
-                ) : (
-                  <Terminal className="size-3.5 shrink-0 text-fg-subtle" aria-hidden />
-                )
-              }
-              selected={selectedIndex === i}
-              id={`palette-${i}`}
-              onSelect={() => onSelectItem(item)}
-            />
-          ))}
-        </>
-      )}
-    </div>
+    <TooltipProvider delayDuration={150} skipDelayDuration={0}>
+      <div
+        className="pointer-events-auto max-h-[min(24rem,55vh)] min-h-[2.5rem] overflow-y-auto rounded-lg border border-edge bg-surface-panel shadow-lg dark:bg-surface-panel/95"
+        style={{
+          position: 'fixed',
+          left: box.left,
+          top: box.top,
+          width: panelWidth,
+          transform: 'translateY(calc(-100% - 8px))',
+          zIndex: PORTAL_Z,
+        }}
+        role="listbox"
+        aria-label="Commands"
+        aria-activedescendant={selectedIndex >= 0 && selectedIndex < totalRows ? `palette-${selectedIndex}` : undefined}
+      >
+        {listBody}
+      </div>
+    </TooltipProvider>
   );
 
   return createPortal(shell, document.body);
@@ -116,14 +286,44 @@ const PaletteRow = memo(function PaletteRow({
   icon,
   selected,
   id,
+  nameLine,
+  descriptionLine,
+  dimCategoryBadge,
   onSelect,
 }: {
   item: PaletteItem;
   icon: ReactNode;
   selected: boolean;
   id: string;
+  nameLine: ReactNode;
+  descriptionLine: ReactNode | null;
+  /** Hide category chip when the row uses match highlighting (grouped by section instead). */
+  dimCategoryBadge: boolean;
   onSelect: () => void;
 }) {
+  const descPlain = (item.description ?? '').trim();
+  const showDescription = descPlain.length > 0 && descriptionLine != null;
+  const showDescTooltip = descPlain.length > 0;
+  const fullDescription = item.description ?? '';
+
+  const textColumn = (
+    <span className="flex min-w-0 flex-1 items-baseline gap-1.5">
+      <span className="min-w-0 max-w-[min(12rem,46%)] shrink-0 truncate font-semibold text-fg">
+        {nameLine}
+      </span>
+      {item.category && item.kind !== 'skill' && !dimCategoryBadge ? (
+        <span className="shrink-0 rounded bg-surface-hover px-1.5 py-0.5 text-[0.65rem] font-normal text-fg-muted">
+          {item.category}
+        </span>
+      ) : null}
+      {showDescription ? (
+        <span className="min-w-0 flex-1 truncate text-xs font-normal text-fg-muted">
+          {descriptionLine}
+        </span>
+      ) : null}
+    </span>
+  );
+
   return (
     <div
       id={id}
@@ -131,7 +331,7 @@ const PaletteRow = memo(function PaletteRow({
       aria-selected={selected}
       tabIndex={-1}
       className={cn(
-        'flex cursor-pointer items-start gap-2 px-3 py-2 text-left text-sm',
+        'flex cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-sm',
         selected ? 'bg-surface-hover text-fg' : 'text-fg-subtle hover:bg-surface-hover/80',
       )}
       onPointerDown={(e) => {
@@ -140,14 +340,24 @@ const PaletteRow = memo(function PaletteRow({
         onSelect();
       }}
     >
-      <span className="mt-0.5">{icon}</span>
-      <span className="min-w-0 flex-1">
-        <span className="font-medium text-fg">/{item.name}</span>
-        {item.category && item.kind !== 'skill' ? (
-          <span className="ml-2 rounded bg-surface-hover px-1.5 py-0.5 text-[0.65rem] text-fg-muted">{item.category}</span>
-        ) : null}
-        {item.description ? <div className="mt-0.5 line-clamp-2 text-xs text-fg-muted">{item.description}</div> : null}
-      </span>
+      <span className="shrink-0 [&_svg]:align-middle">{icon}</span>
+      {showDescTooltip ? (
+        <TooltipRoot delayDuration={150}>
+          <TooltipTrigger asChild>{textColumn}</TooltipTrigger>
+          <TooltipPortal>
+            <TooltipContent
+              side="top"
+              align="start"
+              sideOffset={6}
+              className="z-[200] max-h-[min(12rem,40vh)] max-w-sm overflow-y-auto rounded-md border border-edge bg-surface-panel px-2.5 py-1.5 text-xs leading-snug text-fg shadow-lg select-text [max-width:min(20rem,90vw)]"
+            >
+              <span className="whitespace-pre-wrap break-words">{fullDescription}</span>
+            </TooltipContent>
+          </TooltipPortal>
+        </TooltipRoot>
+      ) : (
+        textColumn
+      )}
     </div>
   );
 });

@@ -484,7 +484,10 @@
     "messageCopied": "已复制",
     "commandPalette": {
       "noResults": "没有匹配的命令或技能",
-      "placeholder": "搜索技能与命令…"
+      "placeholder": "搜索技能与命令…",
+      "skillsSection": "技能",
+      "commandsSection": "命令",
+      "showGroupedMore": "显示另外 {{count}} 条"
     },
     "atMention": {
       "noResults": "无匹配项",

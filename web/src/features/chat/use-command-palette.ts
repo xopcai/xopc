@@ -29,8 +29,10 @@ function atFileTokenSpanContainingIndex(text: string, index: number): { start: n
   return null;
 }
 
-/** Max rows in the flat palette (skills and commands mixed, sorted by match then name). */
-const MAX_PALETTE_ITEMS = 20;
+/** Max rows when filtering (flat list, by relevance). */
+const MAX_FLAT_PALETTE_ITEMS = 20;
+/** When grouped (empty query), rows per section before “Show N more”. */
+const GROUPED_INITIAL_PER_SECTION = 3;
 
 export function detectSlashRange(text: string, cursor: number): SlashRange | null {
   const len = text.length;
@@ -115,6 +117,9 @@ export function useCommandPalette(
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [allItems, setAllItems] = useState<PaletteItem[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
+  /** Grouped (empty) palette: each section can expand independently after “Show N more”. */
+  const [groupedSkillsExpanded, setGroupedSkillsExpanded] = useState(false);
+  const [groupedCommandsExpanded, setGroupedCommandsExpanded] = useState(false);
 
   const slashRange = useMemo(
     () => (options?.isComposing ? null : detectSlashRange(value, cursor)),
@@ -127,6 +132,13 @@ export function useCommandPalette(
       setSelectedIndex(0);
     }
   }, [slashRange]);
+
+  useEffect(() => {
+    if (!paletteActive) {
+      setGroupedSkillsExpanded(false);
+      setGroupedCommandsExpanded(false);
+    }
+  }, [paletteActive]);
 
   useEffect(() => {
     if (!paletteActive) return;
@@ -178,7 +190,31 @@ export function useCommandPalette(
   /** Slash commands only run when the token is at the start of the composer (`/new`); mid-string `/` is for skills only. */
   const commandsAllowed = slashRange !== null && slashRange.start === 0;
 
-  const items = useMemo(() => {
+  const qTrim = query.trim();
+  const grouped = qTrim === '';
+
+  useEffect(() => {
+    if (!grouped) {
+      setGroupedSkillsExpanded(false);
+      setGroupedCommandsExpanded(false);
+    }
+  }, [grouped]);
+
+  const expandGroupedSkills = useCallback(() => {
+    setGroupedSkillsExpanded(true);
+  }, []);
+  const expandGroupedCommands = useCallback(() => {
+    setGroupedCommandsExpanded(true);
+  }, []);
+
+  const {
+    items,
+    skillRowCount,
+    groupedHasSkills,
+    groupedHasCommands,
+    groupedSkillsMoreCount,
+    groupedCommandsMoreCount,
+  } = useMemo(() => {
     const alreadyPicked = listSkillNamesInWire(value);
     const scored: Array<{ item: PaletteItem; rank: number }> = [];
 
@@ -196,6 +232,47 @@ export function useCommandPalette(
       scored.push({ item, rank });
     }
 
+    if (grouped) {
+      const skills = scored
+        .filter((s) => s.item.kind === 'skill')
+        .sort((a, b) => {
+          const t = paletteDefaultTiebreak(a.item, b.item);
+          if (t !== 0) return t;
+          return a.item.id.localeCompare(b.item.id);
+        })
+        .map((s) => s.item);
+      const commands = scored
+        .filter((s) => s.item.kind === 'command')
+        .sort((a, b) => {
+          const t = paletteDefaultTiebreak(a.item, b.item);
+          if (t !== 0) return t;
+          return a.item.id.localeCompare(b.item.id);
+        })
+        .map((s) => s.item);
+      const hasSkills = skills.length > 0;
+      const hasCommands = commands.length > 0;
+      const visSkills = groupedSkillsExpanded
+        ? skills
+        : skills.slice(0, GROUPED_INITIAL_PER_SECTION);
+      const visCommands = groupedCommandsExpanded
+        ? commands
+        : commands.slice(0, GROUPED_INITIAL_PER_SECTION);
+      const moreSkills = !groupedSkillsExpanded
+        ? Math.max(0, skills.length - GROUPED_INITIAL_PER_SECTION)
+        : 0;
+      const moreCommands = !groupedCommandsExpanded
+        ? Math.max(0, commands.length - GROUPED_INITIAL_PER_SECTION)
+        : 0;
+      return {
+        items: [...visSkills, ...visCommands],
+        skillRowCount: visSkills.length,
+        groupedHasSkills: hasSkills,
+        groupedHasCommands: hasCommands,
+        groupedSkillsMoreCount: moreSkills,
+        groupedCommandsMoreCount: moreCommands,
+      };
+    }
+
     scored.sort((a, b) => {
       if (a.rank !== b.rank) {
         return a.rank - b.rank;
@@ -207,8 +284,15 @@ export function useCommandPalette(
       return 0;
     });
 
-    return scored.slice(0, MAX_PALETTE_ITEMS).map((s) => s.item);
-  }, [allItems, commandsAllowed, query, value]);
+    return {
+      items: scored.slice(0, MAX_FLAT_PALETTE_ITEMS).map((s) => s.item),
+      skillRowCount: 0,
+      groupedHasSkills: false,
+      groupedHasCommands: false,
+      groupedSkillsMoreCount: 0,
+      groupedCommandsMoreCount: 0,
+    };
+  }, [allItems, commandsAllowed, grouped, groupedCommandsExpanded, groupedSkillsExpanded, query, value]);
 
   useEffect(() => {
     setSelectedIndex(0);
@@ -236,11 +320,24 @@ export function useCommandPalette(
     slashRange,
     /** False when `/` is not at position 0 — palette may still list skills. */
     commandsAllowed,
+    /** `true` when the slash token has no filter text: show Skills / Commands sections. */
+    grouped,
+    /** In grouped mode, number of leading rows that belong to Skills (rest are Commands). */
+    skillRowCount,
+    /** In grouped mode, whether the full (untruncated) lists include each kind. */
+    groupedHasSkills,
+    groupedHasCommands,
+    /** Hidden skill rows in that section when the section is collapsed. */
+    groupedSkillsMoreCount,
+    /** Hidden command rows in that section when the section is collapsed. */
+    groupedCommandsMoreCount,
     items,
     selectedIndex,
     query,
     loadError,
     onNavigate,
     setSelectedIndex,
+    expandGroupedSkills,
+    expandGroupedCommands,
   };
 }
