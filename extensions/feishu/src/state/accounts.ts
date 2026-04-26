@@ -13,6 +13,12 @@ export interface ResolvedFeishuAccount {
   domain: 'feishu' | 'lark' | string;
   connectionMode: 'websocket' | 'webhook';
 
+  webhookHost?: string;
+  webhookPort?: number;
+  webhookPath?: string;
+  verificationToken?: string;
+  encryptKey?: string;
+
   dmPolicy: 'pairing' | 'allowlist' | 'open' | 'disabled';
   groupPolicy: 'open' | 'disabled' | 'allowlist';
   allowFrom?: Array<string | number>;
@@ -56,6 +62,11 @@ function resolveRootAccount(section: FeishuConfig): FeishuAccountConfig {
     appSecret: section.appSecret,
     domain: section.domain,
     connectionMode: section.connectionMode,
+    webhookHost: (section as any).webhookHost,
+    webhookPort: (section as any).webhookPort,
+    webhookPath: (section as any).webhookPath,
+    verificationToken: (section as any).verificationToken,
+    encryptKey: (section as any).encryptKey,
     dmPolicy: section.dmPolicy,
     groupPolicy: section.groupPolicy,
     allowFrom: section.allowFrom,
@@ -110,6 +121,11 @@ export function resolveFeishuAccount(cfg: Config, accountId?: string | null): Re
     appSecret,
     domain: (merged.domain ?? 'feishu') as any,
     connectionMode: (merged.connectionMode ?? 'websocket') as any,
+    webhookHost: (merged as any).webhookHost,
+    webhookPort: (merged as any).webhookPort,
+    webhookPath: (merged as any).webhookPath,
+    verificationToken: (merged as any).verificationToken,
+    encryptKey: (merged as any).encryptKey,
     dmPolicy: (merged.dmPolicy ?? 'pairing') as any,
     groupPolicy: (merged.groupPolicy ?? 'allowlist') as any,
     allowFrom: merged.allowFrom,

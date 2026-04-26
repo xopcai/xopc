@@ -29,6 +29,7 @@ import { evaluateAccess, resolveDmPolicy, resolveGroupPolicy } from '@xopcai/xop
 import { FeishuConfigSchema, type FeishuConfig } from './schema/config-schema.js';
 import { listFeishuAccountIds, resolveFeishuAccount, type ResolvedFeishuAccount } from './state/accounts.js';
 import { createFeishuSocketModeMonitor } from './transport/socket-mode/monitor.js';
+import { createFeishuWebhookMonitor } from './transport/webhook/monitor.js';
 import { createFeishuOutboundAdapter } from './outbound/outbound-adapter.js';
 import { createFeishuStatusAdapter } from './status/status-adapter.js';
 import { createFeishuDoctorAdapter } from './status/doctor.js';
@@ -301,7 +302,19 @@ export class FeishuChannelPlugin implements ChannelPlugin<ResolvedFeishuAccount>
         },
       });
 
-      void monitor.run().catch((err) => {
+      const webhookMonitor = createFeishuWebhookMonitor({
+        account,
+        config: this.cfg,
+        bus: this.bus,
+        abortSignal: ac.signal,
+        security: {
+          checkAccess: (ctx: ChannelSecurityContext) => this.security.checkAccess?.(ctx, account, this.cfg),
+        },
+      });
+
+      const runner = account.connectionMode === 'webhook' ? webhookMonitor : monitor;
+
+      void runner.run().catch((err) => {
         if ((err as { name?: string } | undefined)?.name === 'AbortError') {
           log.debug({ accountId }, 'Feishu monitor stopped');
           return;

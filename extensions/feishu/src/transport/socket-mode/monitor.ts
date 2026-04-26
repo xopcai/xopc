@@ -101,16 +101,22 @@ export function createFeishuSocketModeMonitor(deps: FeishuSocketModeMonitorDeps)
         accountId: account.accountId,
       });
 
+    const extracted = extractCardActionCommand(action);
+    const content =
+      extracted?.trim() ||
+      `[card action: ${String(action?.tag ?? 'unknown')}]`;
+
     await bus.publishInbound({
       channel: 'feishu',
       sender_id: senderId || 'unknown',
       chat_id: chatId || senderId || 'unknown',
-      content: `[card action: ${String(action?.tag ?? 'unknown')}]`,
+      content,
       metadata: {
         sessionKey,
         accountId: account.accountId,
         isGroup: Boolean(chatId) && isGroup,
         feishuEventType: 'card.action.trigger',
+        cardActionText: extracted ?? null,
         cardAction: action,
         cardContext: ctx,
         raw: event,
@@ -388,6 +394,19 @@ function safeJsonText(raw: unknown): string | undefined {
   } catch {
     return raw;
   }
+}
+
+function extractCardActionCommand(action: any): string | null {
+  const value = action?.value;
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+  const v = value as Record<string, unknown>;
+  const command = typeof v.command === 'string' ? v.command.trim() : '';
+  if (command) return command;
+  const text = typeof v.text === 'string' ? v.text.trim() : '';
+  if (text) return text;
+  return null;
 }
 
 function sleep(ms: number, signal: AbortSignal): Promise<void> {

@@ -14,6 +14,15 @@ export const FeishuAccountConfigSchema = z.object({
   /** Socket Mode is the default transport in xopc. */
   connectionMode: z.enum(['websocket', 'webhook']).default('websocket').optional(),
 
+  /** Webhook mode transport config (openclaw parity). */
+  webhookHost: z.string().optional(),
+  webhookPort: z.number().int().positive().optional(),
+  webhookPath: z.string().optional(),
+
+  /** Webhook mode secrets (openclaw parity). */
+  verificationToken: z.string().optional(),
+  encryptKey: z.string().optional(),
+
   /** Access control */
   dmPolicy: z.enum(['pairing', 'allowlist', 'open', 'disabled']).default('pairing').optional(),
   groupPolicy: z.enum(['open', 'disabled', 'allowlist']).default('allowlist').optional(),
@@ -84,6 +93,12 @@ export const FeishuConfigSchema = z
   appSecret: z.string().optional(),
   domain: z.union([z.enum(['feishu', 'lark']), z.string().url()]).default('feishu').optional(),
   connectionMode: z.enum(['websocket', 'webhook']).default('websocket').optional(),
+
+  webhookHost: z.string().optional(),
+  webhookPort: z.number().int().positive().optional(),
+  webhookPath: z.string().optional(),
+  verificationToken: z.string().optional(),
+  encryptKey: z.string().optional(),
 
   dmPolicy: z.enum(['pairing', 'allowlist', 'open', 'disabled']).default('pairing').optional(),
   groupPolicy: z.enum(['open', 'disabled', 'allowlist']).default('allowlist').optional(),
@@ -179,6 +194,28 @@ export const FeishuConfigSchema = z
           path: ['accounts', id, 'appSecret'],
           message: `channels.feishu.accounts.${id} requires appSecret (or top-level channels.feishu.appSecret)`,
         });
+      }
+
+      const effectiveConnectionMode = (acc.connectionMode ?? value.connectionMode ?? 'websocket') as
+        | 'websocket'
+        | 'webhook';
+      if (effectiveConnectionMode === 'webhook') {
+        const vt = acc.verificationToken?.trim() || value.verificationToken?.trim() || '';
+        const ek = acc.encryptKey?.trim() || value.encryptKey?.trim() || '';
+        if (!vt) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['accounts', id, 'verificationToken'],
+            message: `channels.feishu.accounts.${id} webhook mode requires verificationToken (or top-level channels.feishu.verificationToken)`,
+          });
+        }
+        if (!ek) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['accounts', id, 'encryptKey'],
+            message: `channels.feishu.accounts.${id} webhook mode requires encryptKey (or top-level channels.feishu.encryptKey)`,
+          });
+        }
       }
     }
   });
