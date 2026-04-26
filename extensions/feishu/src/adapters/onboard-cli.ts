@@ -13,6 +13,20 @@ type DmPolicy = 'pairing' | 'allowlist' | 'open' | 'disabled';
 type GroupPolicy = 'open' | 'disabled' | 'allowlist';
 type Domain = 'feishu' | 'lark';
 type RenderMode = 'auto' | 'raw' | 'card';
+type ConnectionMode = 'websocket' | 'webhook';
+type ReactionNotifications = 'off' | 'own' | 'all';
+
+type AppRegistrationResult = {
+  appId: string;
+  appSecret: string;
+  domain: Domain;
+  openId?: string;
+};
+
+const FEISHU_ACCOUNTS_URL = 'https://accounts.feishu.cn';
+const LARK_ACCOUNTS_URL = 'https://accounts.larksuite.com';
+const REGISTRATION_PATH = '/oauth/v1/app/registration';
+const REQUEST_TIMEOUT_MS = 10_000;
 
 function isFeishuConfigured(config: Config): boolean {
   const feishu = config.channels?.feishu as Record<string, unknown> | undefined;
@@ -35,6 +49,160 @@ function parseAllowlistRaw(raw: string): Array<string | number> {
   });
 }
 
+function accountsBaseUrl(domain: Domain): string {
+  return domain === 'lark' ? LARK_ACCOUNTS_URL : FEISHU_ACCOUNTS_URL;
+}
+
+async function postRegistration<T>(baseUrl: string, body: Record<string, string>): Promise<T> {
+  const res = await fetch(`${baseUrl}${REGISTRATION_PATH}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams(body).toString(),
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  });
+  // Registration poll returns 4xx for pending/error states with a JSON body.
+  return (await res.json()) as T;
+}
+
+async function initAppRegistration(domain: Domain): Promise<boolean> {
+  type InitResponse = { supported_auth_methods?: string[] };
+  try {
+    const res = await postRegistration<InitResponse>(accountsBaseUrl(domain), { action: 'init' });
+    return Boolean(res.supported_auth_methods?.includes('client_secret'));
+  } catch {
+    return false;
+  }
+}
+
+async function beginAppRegistration(domain: Domain): Promise<{
+  deviceCode: string;
+  qrUrl: string;
+  intervalSec: number;
+  expireInSec: number;
+}> {
+  type RawBeginResponse = {
+    device_code: string;
+    verification_uri_complete: string;
+    interval?: number;
+    expire_in?: number;
+  };
+  const res = await postRegistration<RawBeginResponse>(accountsBaseUrl(domain), {
+    action: 'begin',
+    archetype: 'PersonalAgent',
+    auth_method: 'client_secret',
+    request_user_info: 'open_id',
+  });
+  const qrUrl = new URL(res.verification_uri_complete);
+  qrUrl.searchParams.set('from', 'xopc_onboard');
+  qrUrl.searchParams.set('tp', 'ob_cli_app');
+  return {
+    deviceCode: res.device_code,
+    qrUrl: qrUrl.toString(),
+    intervalSec: res.interval || 5,
+    expireInSec: res.expire_in || 600,
+  };
+}
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise<void>((r) => setTimeout(r, ms));
+}
+
+async function pollAppRegistration(params: {
+  deviceCode: string;
+  intervalSec: number;
+  expireInSec: number;
+  initialDomain: Domain;
+}): Promise<
+  | { status: 'success'; result: AppRegistrationResult }
+  | { status: 'access_denied' | 'expired' | 'timeout'; message?: string }
+  | { status: 'error'; message: string }
+> {
+  type PollResponse = {
+    client_id?: string;
+    client_secret?: string;
+    user_info?: { open_id?: string; tenant_brand?: 'feishu' | 'lark' };
+    error?: string;
+    error_description?: string;
+  };
+
+  let domain: Domain = params.initialDomain;
+  let intervalSec = params.intervalSec;
+  let domainSwitched = false;
+  const deadline = Date.now() + params.expireInSec * 1000;
+
+  while (Date.now() < deadline) {
+    let pollRes: PollResponse;
+    try {
+      pollRes = await postRegistration<PollResponse>(accountsBaseUrl(domain), {
+        action: 'poll',
+        device_code: params.deviceCode,
+        tp: 'ob_cli_app',
+      });
+    } catch {
+      await sleep(intervalSec * 1000);
+      continue;
+    }
+
+    // Auto-detect domain based on tenant.
+    if (pollRes.user_info?.tenant_brand) {
+      const isLark = pollRes.user_info.tenant_brand === 'lark';
+      if (!domainSwitched && isLark) {
+        domain = 'lark';
+        domainSwitched = true;
+        continue;
+      }
+    }
+
+    if (pollRes.client_id && pollRes.client_secret) {
+      return {
+        status: 'success',
+        result: {
+          appId: pollRes.client_id,
+          appSecret: pollRes.client_secret,
+          domain,
+          openId: pollRes.user_info?.open_id,
+        },
+      };
+    }
+
+    if (pollRes.error) {
+      if (pollRes.error === 'authorization_pending') {
+        // keep waiting
+      } else if (pollRes.error === 'slow_down') {
+        intervalSec += 5;
+      } else if (pollRes.error === 'access_denied') {
+        return { status: 'access_denied' };
+      } else if (pollRes.error === 'expired_token') {
+        return { status: 'expired' };
+      } else {
+        return {
+          status: 'error',
+          message: `${pollRes.error}: ${pollRes.error_description ?? 'unknown'}`,
+        };
+      }
+    }
+
+    await sleep(intervalSec * 1000);
+  }
+
+  return { status: 'timeout' };
+}
+
+async function printQrCode(url: string): Promise<void> {
+  try {
+    const qrcodeTerminal = await import(/* @vite-ignore */ 'qrcode-terminal');
+    await new Promise<void>((resolve) => {
+      qrcodeTerminal.default.generate(url, { small: true }, (qr: string) => {
+        process.stdout.write(qr.endsWith('\n') ? qr : `${qr}\n`);
+        resolve();
+      });
+    });
+  } catch {
+    console.log('Open this URL in a browser to scan:\n');
+    console.log(url);
+  }
+}
+
 async function configureFeishu(config: Config): Promise<Config> {
   console.log(`\n${'='.repeat(50)}`);
   console.log('📱 Feishu / Lark setup');
@@ -52,20 +220,7 @@ async function configureFeishu(config: Config): Promise<Config> {
     if (!keep) return config;
   }
 
-  console.log('📝 Feishu app credentials (from Feishu Open Platform developer console):\n');
-
-  const appId = (await input({
-    message: 'App ID (cli_xxx):',
-    default: existingAppId || undefined,
-    validate: (v) => v.trim().length > 0 || 'App ID cannot be empty',
-  })).trim();
-
-  const appSecret = (await input({
-    message: 'App Secret:',
-    validate: (v) => v.trim().length > 0 || 'App Secret cannot be empty',
-  })).trim();
-
-  const domain = await select<Domain>({
+  const initialDomain = await select<Domain>({
     message: 'Feishu/Lark domain:',
     choices: [
       { value: 'feishu', name: 'feishu (open.feishu.cn)', description: 'China / Feishu' },
@@ -73,6 +228,98 @@ async function configureFeishu(config: Config): Promise<Config> {
     ],
     default: existingDomain === 'lark' ? 'lark' : 'feishu',
   });
+
+  const canScanToCreate = await initAppRegistration(initialDomain);
+  const useScanToCreate = canScanToCreate
+    ? await confirm({
+        message: 'Create an app by scanning a QR code (recommended)?',
+        default: true,
+      })
+    : false;
+
+  let appId = '';
+  let appSecret = '';
+  let domain: Domain = initialDomain;
+  let ownerOpenId: string | undefined;
+
+  if (useScanToCreate) {
+    console.log('\nScan this QR code with Feishu/Lark to create an app:\n');
+    const begin = await beginAppRegistration(initialDomain);
+    await printQrCode(begin.qrUrl);
+    console.log('\nWaiting for confirmation...\n');
+    const outcome = await pollAppRegistration({
+      deviceCode: begin.deviceCode,
+      intervalSec: begin.intervalSec,
+      expireInSec: begin.expireInSec,
+      initialDomain,
+    });
+    if (outcome.status !== 'success') {
+      console.log('Scan-to-create did not complete. Falling back to manual input.\n');
+    } else {
+      appId = outcome.result.appId;
+      appSecret = outcome.result.appSecret;
+      domain = outcome.result.domain;
+      ownerOpenId = outcome.result.openId;
+      console.log(`✅ App created. Domain detected as "${domain}".\n`);
+    }
+  }
+
+  if (!appId || !appSecret) {
+    console.log('📝 Feishu app credentials (from Feishu Open Platform developer console):\n');
+
+    appId = (await input({
+      message: 'App ID (cli_xxx):',
+      default: existingAppId || undefined,
+      validate: (v) => v.trim().length > 0 || 'App ID cannot be empty',
+    })).trim();
+
+    appSecret = (await input({
+      message: 'App Secret:',
+      validate: (v) => v.trim().length > 0 || 'App Secret cannot be empty',
+    })).trim();
+
+    domain = initialDomain;
+  }
+
+  const connectionMode = await select<ConnectionMode>({
+    message: 'Connection mode:',
+    choices: [
+      { value: 'websocket', name: 'websocket  [recommended]', description: 'Socket Mode (persistent connection)' },
+      { value: 'webhook', name: 'webhook', description: 'Local HTTP server receives events' },
+    ],
+    default: 'websocket',
+  });
+
+  let verificationToken: string | undefined;
+  let encryptKey: string | undefined;
+  let webhookHost: string | undefined;
+  let webhookPort: number | undefined;
+  let webhookPath: string | undefined;
+  if (connectionMode === 'webhook') {
+    console.log('\n🪝 Webhook secrets (from Feishu event subscription settings):\n');
+    verificationToken = (await input({
+      message: 'Verification Token:',
+      validate: (v) => v.trim().length > 0 || 'Verification Token cannot be empty',
+    })).trim();
+    encryptKey = (await input({
+      message: 'Encrypt Key:',
+      validate: (v) => v.trim().length > 0 || 'Encrypt Key cannot be empty',
+    })).trim();
+    webhookHost = (await input({
+      message: 'Webhook host:',
+      default: typeof existing?.webhookHost === 'string' ? existing.webhookHost : '127.0.0.1',
+    })).trim();
+    webhookPort = Number(
+      (await input({
+        message: 'Webhook port:',
+        default: typeof existing?.webhookPort === 'number' ? String(existing.webhookPort) : '3000',
+      })).trim(),
+    );
+    webhookPath = (await input({
+      message: 'Webhook path:',
+      default: typeof existing?.webhookPath === 'string' ? existing.webhookPath : '/feishu/events',
+    })).trim();
+  }
 
   const dmPolicy = await select<DmPolicy>({
     message: 'DM (private chat) policy:',
@@ -87,11 +334,15 @@ async function configureFeishu(config: Config): Promise<Config> {
 
   let allowFrom: Array<string | number> | undefined;
   if (dmPolicy === 'allowlist') {
+    const defaultAllow =
+      ownerOpenId && (existing?.allowFrom == null || (Array.isArray(existing.allowFrom) && existing.allowFrom.length === 0))
+        ? ownerOpenId
+        : '';
     const raw = await input({
       message: 'Allowed user open_id / union_id / numeric ids (comma-separated):',
-      default: '',
+      default: defaultAllow,
     });
-    allowFrom = parseAllowlistRaw(raw);
+    allowFrom = parseAllowlistRaw(raw || defaultAllow);
   }
 
   const groupPolicy = await select<GroupPolicy>({
@@ -133,13 +384,49 @@ async function configureFeishu(config: Config): Promise<Config> {
     default: false,
   });
 
+  const reactionNotifications = await select<ReactionNotifications>({
+    message: 'Reaction notifications:',
+    choices: [
+      { value: 'off', name: 'off', description: 'Disable reaction notifications' },
+      { value: 'own', name: 'own  [recommended]', description: 'Only notify reactions to bot messages' },
+      { value: 'all', name: 'all', description: 'Notify all reactions (noisy)' },
+    ],
+    default: 'own',
+  });
+
+  const enableFeishuTools = await select<'minimal' | 'docs' | 'full'>({
+    message: 'Enable Feishu tools (docs/wiki/drive/etc.)?',
+    choices: [
+      { value: 'minimal', name: 'minimal', description: 'No extra tools (chat only)' },
+      { value: 'docs', name: 'docs', description: 'Enable doc/wiki/drive/scopes (common)' },
+      { value: 'full', name: 'full', description: 'Enable doc/wiki/drive/bitable/perm/scopes' },
+    ],
+    default: 'docs',
+  });
+
+  const tools =
+    enableFeishuTools === 'minimal'
+      ? { doc: false, wiki: false, drive: false, perm: false, bitable: false, scopes: true }
+      : enableFeishuTools === 'docs'
+        ? { doc: true, wiki: true, drive: true, perm: false, bitable: true, scopes: true }
+        : { doc: true, wiki: true, drive: true, perm: true, bitable: true, scopes: true };
+
   const nextFeishu: Record<string, unknown> = {
     ...(existing ?? {}),
     enabled: true,
     appId,
     appSecret,
     domain,
-    connectionMode: 'websocket',
+    connectionMode,
+    ...(connectionMode === 'webhook'
+      ? {
+          verificationToken,
+          encryptKey,
+          webhookHost,
+          webhookPort,
+          webhookPath,
+        }
+      : {}),
     dmPolicy,
     groupPolicy,
     allowFrom: allowFrom ?? (existing?.allowFrom as any) ?? [],
@@ -147,6 +434,9 @@ async function configureFeishu(config: Config): Promise<Config> {
     requireMention,
     renderMode,
     streaming,
+    reactionNotifications,
+    actions: { reactions: true },
+    tools,
     historyLimit: typeof existing?.historyLimit === 'number' ? existing.historyLimit : 50,
     textChunkLimit: typeof existing?.textChunkLimit === 'number' ? existing.textChunkLimit : 4000,
   };

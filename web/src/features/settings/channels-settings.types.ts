@@ -78,6 +78,11 @@ export interface FeishuAccount {
   appSecret?: string;
   domain?: FeishuDomain;
   connectionMode?: 'websocket' | 'webhook';
+  verificationToken?: string;
+  encryptKey?: string;
+  webhookHost?: string;
+  webhookPort?: number;
+  webhookPath?: string;
   dmPolicy?: DmPolicy;
   groupPolicy?: GroupPolicy;
   allowFrom?: (string | number)[];
@@ -99,6 +104,11 @@ export interface FeishuConfig {
   appSecret: string;
   domain: FeishuDomain;
   connectionMode: 'websocket' | 'webhook';
+  verificationToken?: string;
+  encryptKey?: string;
+  webhookHost?: string;
+  webhookPort?: number;
+  webhookPath?: string;
   dmPolicy: DmPolicy;
   groupPolicy: GroupPolicy;
   allowFrom: (string | number)[];
@@ -109,6 +119,8 @@ export interface FeishuConfig {
   renderMode: FeishuRenderMode;
   streaming: boolean;
   reactionNotifications: FeishuReactionNotifications;
+  tools?: Record<string, boolean>;
+  actions?: Record<string, boolean>;
   accounts: Record<string, FeishuAccount>;
 }
 

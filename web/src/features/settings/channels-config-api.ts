@@ -67,6 +67,11 @@ export function defaultChannelsState(): ChannelsSettingsState {
       appSecret: '',
       domain: 'feishu',
       connectionMode: 'websocket',
+      verificationToken: '',
+      encryptKey: '',
+      webhookHost: '127.0.0.1',
+      webhookPort: 3000,
+      webhookPath: '/feishu/events',
       dmPolicy: 'pairing',
       groupPolicy: 'allowlist',
       allowFrom: [],
@@ -77,6 +82,8 @@ export function defaultChannelsState(): ChannelsSettingsState {
       renderMode: 'auto',
       streaming: false,
       reactionNotifications: 'own',
+      tools: { doc: true, wiki: true, drive: true, scopes: true, bitable: true, perm: false },
+      actions: { reactions: true },
       accounts: {},
     },
   };
@@ -152,6 +159,11 @@ export function normalizeChannelsFromConfig(config: unknown): ChannelsSettingsSt
       appSecret: typeof fs?.appSecret === 'string' ? fs.appSecret : '',
       domain: (typeof fs?.domain === 'string' && fs.domain) || 'feishu',
       connectionMode: (fs?.connectionMode as any) || 'websocket',
+      verificationToken: typeof fs?.verificationToken === 'string' ? fs.verificationToken : '',
+      encryptKey: typeof fs?.encryptKey === 'string' ? fs.encryptKey : '',
+      webhookHost: typeof fs?.webhookHost === 'string' ? fs.webhookHost : '127.0.0.1',
+      webhookPort: typeof fs?.webhookPort === 'number' ? fs.webhookPort : 3000,
+      webhookPath: typeof fs?.webhookPath === 'string' ? fs.webhookPath : '/feishu/events',
       dmPolicy: (fs?.dmPolicy as DmPolicy) || 'pairing',
       groupPolicy: (fs?.groupPolicy as GroupPolicy) || 'allowlist',
       allowFrom: Array.isArray(fs?.allowFrom) ? [...(fs.allowFrom as (string | number)[])] : [],
@@ -162,6 +174,14 @@ export function normalizeChannelsFromConfig(config: unknown): ChannelsSettingsSt
       renderMode: (fs?.renderMode as any) || 'auto',
       streaming: fs?.streaming === undefined ? false : Boolean(fs.streaming),
       reactionNotifications: (fs?.reactionNotifications as any) || 'own',
+      tools:
+        fs?.tools && typeof fs.tools === 'object' && !Array.isArray(fs.tools)
+          ? ({ ...(fs.tools as Record<string, boolean>) } as any)
+          : undefined,
+      actions:
+        fs?.actions && typeof fs.actions === 'object' && !Array.isArray(fs.actions)
+          ? ({ ...(fs.actions as Record<string, boolean>) } as any)
+          : undefined,
       accounts:
         fs?.accounts && typeof fs.accounts === 'object' && !Array.isArray(fs.accounts)
           ? ({ ...(fs.accounts as Record<string, any>) } as any)
@@ -272,6 +292,11 @@ export async function patchChannelsSettings(state: ChannelsSettingsState): Promi
           appSecret: fs.appSecret || undefined,
           domain: fs.domain || undefined,
           connectionMode: fs.connectionMode,
+          verificationToken: (fs as any).verificationToken?.trim() ? (fs as any).verificationToken : undefined,
+          encryptKey: (fs as any).encryptKey?.trim() ? (fs as any).encryptKey : undefined,
+          webhookHost: (fs as any).webhookHost?.trim() ? (fs as any).webhookHost : undefined,
+          webhookPort: typeof (fs as any).webhookPort === 'number' ? (fs as any).webhookPort : undefined,
+          webhookPath: (fs as any).webhookPath?.trim() ? (fs as any).webhookPath : undefined,
           dmPolicy: fs.dmPolicy,
           groupPolicy: fs.groupPolicy,
           allowFrom: fs.allowFrom,
@@ -282,6 +307,8 @@ export async function patchChannelsSettings(state: ChannelsSettingsState): Promi
           renderMode: fs.renderMode,
           streaming: fs.streaming,
           reactionNotifications: fs.reactionNotifications,
+          tools: (fs as any).tools,
+          actions: (fs as any).actions,
           accounts: fs.accounts,
         },
       },
