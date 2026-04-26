@@ -1065,8 +1065,35 @@ export const ChatComposer = memo(function ChatComposer({
           if (files?.length) await processFiles(Array.from(files));
         }}
       >
+        {isDragging ? (
+          <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-accent-soft/80 text-sm font-medium text-accent-fg backdrop-blur-[1px]">
+            {m.chat.dropFiles}
+          </div>
+        ) : null}
+
+        {runBusy && pendingFollowUps.length > 0 ? (
+          <div className="max-h-[min(30vh,11rem)] shrink-0 overflow-y-auto overflow-x-hidden border-b border-edge-subtle/80 [scrollbar-gutter:stable] dark:border-edge-subtle/70">
+            <ChatPendingFollowUpStack
+              items={pendingFollowUps}
+              disabled={disabled}
+              editingFollowUpId={editingFollowUpId}
+              onEditInComposer={openFollowUpInComposer}
+              onRemove={onPendingFollowUpRemove}
+              onMove={onPendingFollowUpMove}
+              onReorder={onPendingFollowUpReorder}
+              onSteer={onPendingFollowUpSteer}
+              steeringBusyId={steeringFollowUpId}
+            />
+          </div>
+        ) : null}
+
         {attachments.length > 0 ? (
-          <div className="flex flex-wrap gap-2 border-b border-edge-subtle/90 bg-surface-hover/20 px-4 pb-2 pt-3 dark:border-edge-subtle">
+          <div
+            className={cn(
+              'flex flex-wrap gap-2 border-b border-edge-subtle/90 bg-surface-hover/20 px-4 pb-2 dark:border-edge-subtle',
+              runBusy && pendingFollowUps.length > 0 ? 'pt-2' : 'pt-3',
+            )}
+          >
             {attachments.map((att, index) => (
               <div
                 key={`${att.name}-${index}`}
@@ -1094,28 +1121,6 @@ export const ChatComposer = memo(function ChatComposer({
                 </button>
               </div>
             ))}
-          </div>
-        ) : null}
-
-        {isDragging ? (
-          <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-accent-soft/80 text-sm font-medium text-accent-fg backdrop-blur-[1px]">
-            {m.chat.dropFiles}
-          </div>
-        ) : null}
-
-        {runBusy && pendingFollowUps.length > 0 ? (
-          <div className="max-h-[min(30vh,11rem)] shrink-0 overflow-y-auto overflow-x-hidden border-b border-edge-subtle/80 [scrollbar-gutter:stable] dark:border-edge-subtle/70">
-            <ChatPendingFollowUpStack
-              items={pendingFollowUps}
-              disabled={disabled}
-              editingFollowUpId={editingFollowUpId}
-              onEditInComposer={openFollowUpInComposer}
-              onRemove={onPendingFollowUpRemove}
-              onMove={onPendingFollowUpMove}
-              onReorder={onPendingFollowUpReorder}
-              onSteer={onPendingFollowUpSteer}
-              steeringBusyId={steeringFollowUpId}
-            />
           </div>
         ) : null}
 
