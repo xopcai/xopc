@@ -18,12 +18,15 @@ import { registerSearchIpc } from './ipc/search-ipc.js';
 import { initElectronShellPreferences, registerSystemSettingsIpc, stopAllPowerSaveBlockers } from './ipc/system-settings-ipc.js';
 import { registerUpdaterIpc } from './ipc/updater-ipc.js';
 import { getLoadingPageDataUrl } from './loading-page.js';
-import { initAutoUpdater, stopAutoUpdater } from './auto-updater.js';
+import { hasPendingInstall, initAutoUpdater, stopAutoUpdater } from './auto-updater.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 /** Track the main window for gateway exit notifications. */
 let mainWindow: BrowserWindow | null = null;
+
+/** True while `before-quit` has run so window `close` does not call `preventDefault` during a normal quit. */
+let appIsQuitting = false;
 
 /** Track if gateway exited unexpectedly so we can show an error dialog. */
 let gatewayExitedUnexpectedly = false;
@@ -162,6 +165,16 @@ function createWindow(): void {
 
   attachExternalUrlHandlers(win);
 
+  // Squirrel.Mac only finishes installing when the app process quits. Closing the last window does not call
+  // `app.quit()` on macOS by default, so a pending update would never apply after a red-traffic-light close.
+  win.on('close', (e) => {
+    if (process.platform !== 'darwin' || !app.isPackaged || appIsQuitting || !hasPendingInstall()) {
+      return;
+    }
+    e.preventDefault();
+    app.quit();
+  });
+
   win.on('closed', () => {
     mainWindow = null;
   });
@@ -212,6 +225,7 @@ app.whenReady().then(async () => {
 });
 
 app.on('before-quit', () => {
+  appIsQuitting = true;
   stopAllPowerSaveBlockers();
   stopGatewayProcess();
   stopAutoUpdater();
