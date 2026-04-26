@@ -46,3 +46,15 @@ export function prependEnvelopeTimestamp(content: string, timezone?: string): st
   return `[${timestamp}] ${content}`;
 }
 
+/** Matches `[YYYY-MM-DD HH:MM]` plus optional ` TZ` inside brackets, as produced by {@link prependEnvelopeTimestamp}. */
+const ENVELOPE_TIMESTAMP_PREFIX_RE =
+  /^\[\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}(?:\s+[^\]]+)?\]\s*/;
+
+/**
+ * Remove a single leading envelope timestamp prefix from inbound text (session auto-title, etc.).
+ * Does not strip arbitrary `[…]` — only the date+time-shaped prefix from {@link formatEnvelopeTimestamp}.
+ */
+export function stripEnvelopeTimestampPrefix(text: string): string {
+  return text.replace(ENVELOPE_TIMESTAMP_PREFIX_RE, '');
+}
+
