@@ -64,7 +64,10 @@ export function ChatPage() {
     sendMessage,
     addPendingFollowUp,
     pendingFollowUps,
-    popPendingFollowUpForComposer,
+    editingFollowUpId,
+    beginEditFollowUp,
+    cancelEditFollowUp,
+    commitEditFollowUp,
     removePendingFollowUp,
     movePendingFollowUp,
     reorderPendingFollowUp,
@@ -292,13 +295,7 @@ export function ChatPage() {
               <div className="mx-auto w-full max-w-[var(--max-width-chat)] px-3 sm:px-5 xl:px-6">
                 <ChatFollowUpChips
                   suggestions={followUpSuggestions}
-                  disabled={
-                    showSessionLoading ||
-                    sessionRoutePending ||
-                    Boolean(clarifyPrompt) ||
-                    sending ||
-                    streaming
-                  }
+                  disabled={showSessionLoading || sessionRoutePending || Boolean(clarifyPrompt)}
                   onPick={pickFollowUpSuggestion}
                 />
               </div>
@@ -318,7 +315,10 @@ export function ChatPage() {
                 onAddPendingFollowUp={(text, atts) => void addPendingFollowUp(text, atts)}
                 onSteeringInterrupt={(text, atts) => void interruptAndSend(text, atts)}
                 pendingFollowUps={pendingFollowUps}
-                onPopPendingFollowUp={popPendingFollowUpForComposer}
+                editingFollowUpId={editingFollowUpId}
+                onBeginEditFollowUp={beginEditFollowUp}
+                onCancelEditFollowUp={cancelEditFollowUp}
+                onCommitEditFollowUp={(id, text, atts, level) => void commitEditFollowUp(id, text, atts, level)}
                 onPendingFollowUpRemove={removePendingFollowUp}
                 onPendingFollowUpMove={movePendingFollowUp}
                 onPendingFollowUpReorder={reorderPendingFollowUp}

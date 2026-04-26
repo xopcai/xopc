@@ -409,6 +409,7 @@
     "voiceRecordingStop": "停止录音",
     "voiceMicDenied": "无法使用麦克风（权限被拒绝或设备不可用）。",
     "inputPlaceholderSteering": "后续问题：Enter 加入队列；点击队列一行在此编辑",
+    "inputPlaceholderSteeringEdit": "正在编辑队列中的后续问题 — Enter 保存，Esc 放弃修改",
     "steeringInterruptSend": "停止当前回复并立即发送（⌘↵ 或 Ctrl+↵）",
     "followUpSuggestionsAria": "建议的后续问题",
     "followUpChipErrorHandling": "补充错误处理和边界情况。",
