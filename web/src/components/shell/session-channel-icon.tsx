@@ -18,7 +18,7 @@ function iconForSourceChannel(sourceChannel: string): LucideIcon {
   return ICON_BY_CHANNEL[sourceChannel.toLowerCase()] ?? Hash;
 }
 
-/** Small glyph for `SessionMetadata.sourceChannel` in sidebar / lists (not brand logos). */
+/** Small glyph for `SessionMetadata.sourceChannel` in sidebar / lists (some channels use brand marks from `web/public`). */
 export function SessionChannelIcon({
   sourceChannel,
   className,
