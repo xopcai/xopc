@@ -67,8 +67,8 @@
 
   /* Main column under AppShell <main> — docs/design/ui-design-system.md §13.1 Web */
   --max-width-app-main: 56rem;
-  /** Chat column (message list + composer); readable width within app main. */
-  --max-width-chat: 52rem;
+  /** Chat column (message list + composer); wider than app main for long threads. */
+  --max-width-chat: 64rem;
 }
 
 /* Dark — Apple-style elevated grays + rim light via borders (see design spec §2.3) */
@@ -335,6 +335,26 @@ html.dark {
   }
 }
 
+/* Project files (right) rail: width from `--workspace-panel-px` (md+), matches sidebar drag pattern. */
+@media (min-width: 768px) {
+  .app-workspace-panel-expanded-width {
+    transform: translateZ(0);
+    width: var(--workspace-panel-px, 20rem);
+    max-width: var(--workspace-panel-px, 20rem);
+    transition: width 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+}
+
+.app-workspace-panel-expanded-width.workspace-panel-rail-resizing {
+  transition: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-workspace-panel-expanded-width {
+    transition: none;
+  }
+}
+
 /*
  * Page-level enter animation — triggered when the top-level route segment changes
  * (AppShell re-keys the Outlet wrapper on routeKey). Keeps the shell layout stable
@@ -493,6 +513,9 @@ html.dark[data-color-scheme='emerald'] {
   scrollbar-width: thin;
   scrollbar-color: color-mix(in srgb, var(--color-edge-strong) 58%, transparent) transparent;
   overscroll-behavior-y: contain;
+  /* Inset from the end edge so right-aligned user bubbles sit clear of the scrollbar thumb
+   * (overlay scrollbars and thick WebKit thumbs can still read as covering content without this). */
+  padding-inline-end: 0.5rem;
 }
 
 /**

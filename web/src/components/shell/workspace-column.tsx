@@ -1,7 +1,8 @@
 import { FolderOpen, RefreshCw, X } from 'lucide-react';
-import { memo, useCallback, useEffect, useState } from 'react';
+import { memo, useCallback, useEffect, useState, type CSSProperties } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
 
+import { APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
 import { Button } from '@/components/ui/button';
 import {
   FileTree,
@@ -39,6 +40,9 @@ export const WorkspaceColumn = memo(function WorkspaceColumn() {
       : null;
   const open = useWorkspacePanelStore((s) => s.open);
   const setOpen = useWorkspacePanelStore((s) => s.setOpen);
+  const widthPx = useWorkspacePanelStore((s) => s.widthPx);
+  const setWidthPx = useWorkspacePanelStore((s) => s.setWidthPx);
+  const [widthResizing, setWidthResizing] = useState(false);
   const previewPath = useWorkspacePreviewStore((s) => s.path);
   const setPreviewPath = useWorkspacePreviewStore((s) => s.setPath);
   const workspaceAgentId = useWorkspaceEditorAgentStore((s) => s.agentId);
@@ -57,6 +61,38 @@ export const WorkspaceColumn = memo(function WorkspaceColumn() {
         ? { agentId: workspaceAgentId.trim() }
         : undefined;
   const [pathCopiedFlash, setPathCopiedFlash] = useState(false);
+
+  const onWorkspaceResizePointerDown = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (!open) return;
+      e.preventDefault();
+      const el = e.currentTarget;
+      el.setPointerCapture(e.pointerId);
+      setWidthResizing(true);
+      const startX = e.clientX;
+      const startW = useWorkspacePanelStore.getState().widthPx;
+      const pid = e.pointerId;
+      const onMove = (ev: PointerEvent) => {
+        // Left edge: drag left widens, drag right narrows
+        setWidthPx(startW + (startX - ev.clientX));
+      };
+      const onDone = () => {
+        try {
+          el.releasePointerCapture(pid);
+        } catch {
+          /* ignore */
+        }
+        setWidthResizing(false);
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', onDone);
+        window.removeEventListener('pointercancel', onDone);
+      };
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', onDone);
+      window.addEventListener('pointercancel', onDone);
+    },
+    [open, setWidthPx],
+  );
 
   useEffect(() => {
     if (!pathname.startsWith('/chat')) {
@@ -159,24 +195,49 @@ export const WorkspaceColumn = memo(function WorkspaceColumn() {
         aria-label={m.workspace.title}
         aria-hidden={!open}
         className={cn(
-          'flex min-h-0 flex-col overflow-hidden bg-surface-panel',
+          'flex min-h-0 flex-col overflow-hidden bg-surface-base',
           'max-md:fixed max-md:right-0 max-md:top-0 max-md:z-50 max-md:h-[100dvh] max-md:shadow-popover',
           'max-md:transition-transform max-md:duration-200 max-md:ease-out',
           'motion-reduce:max-md:transition-none',
           'max-md:w-[min(20rem,92vw)]',
           open ? 'max-md:translate-x-0' : 'max-md:pointer-events-none max-md:translate-x-full',
-          open && 'max-md:border-l max-md:border-edge max-md:dark:border-edge',
           'md:relative md:h-full md:translate-x-0',
-          open &&
-            'md:transition-[width,max-width] md:duration-300 md:ease-[cubic-bezier(0.22,1,0.36,1)]',
           'motion-reduce:md:transition-none',
           !open &&
-            'md:pointer-events-none md:w-0 md:min-w-0 md:max-w-0 md:overflow-hidden md:border-l-0',
-          open && 'md:w-80 md:max-w-80 md:shrink-0 md:border-l md:border-edge md:dark:border-edge',
+            'md:pointer-events-none md:w-0 md:min-w-0 md:max-w-0 md:overflow-hidden',
+          open && 'app-workspace-panel-expanded-width md:shrink-0',
+          open && widthResizing && 'workspace-panel-rail-resizing',
         )}
+        style={
+          open
+            ? ({
+                '--workspace-panel-px': `${widthPx}px`,
+              } as CSSProperties)
+            : undefined
+        }
       >
         {open ? (
-          <div className="flex h-full min-h-0 w-80 min-w-0 max-w-80 shrink-0 grow-0 flex-col overflow-x-hidden bg-surface-panel">
+          <div
+            className={cn(
+              'relative flex h-full min-h-0 w-full min-w-0 flex-col overflow-x-hidden overflow-y-hidden bg-surface-base',
+            )}
+          >
+            <div
+              role="separator"
+              aria-orientation="vertical"
+              aria-label={m.workspace.resizeHandleAria}
+              onPointerDown={onWorkspaceResizePointerDown}
+              className={cn(
+                'pointer-events-auto absolute left-0 top-0 z-20 hidden h-full w-2 cursor-col-resize md:block',
+                "before:content-[''] before:pointer-events-none before:absolute before:left-1/2 before:top-0 before:z-0 before:h-full before:w-px before:-translate-x-1/2",
+                'before:bg-transparent before:transition-[background-color] before:duration-150',
+                'hover:bg-surface-hover/20 hover:before:bg-edge/65 dark:hover:before:bg-edge/75',
+                widthResizing && 'bg-surface-hover/30 before:!bg-edge/80 dark:before:!bg-edge/85',
+                'transition-[background-color] duration-150',
+                'touch-none select-none',
+                APP_CHROME_NO_DRAG_CLASS,
+              )}
+            />
             <div className="flex h-11 shrink-0 items-center gap-2 border-b border-edge px-4 dark:border-edge">
               <FolderOpen className="size-4 shrink-0 text-fg-muted" aria-hidden />
               <h2 className="min-w-0 flex-1 truncate text-base font-semibold leading-tight tracking-tight text-fg">
