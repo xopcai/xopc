@@ -1,6 +1,14 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { Plus, Search, SlidersHorizontal } from 'lucide-react';
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+} from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
 import { useDebouncedCallback } from 'use-debounce';
@@ -46,6 +54,8 @@ import { AgentsEditorModal } from './agents-editor-modal';
 import { AgentsListGrid } from './agents-list-grid';
 import { AgentsSettingsHeader } from './agents-settings-header';
 import { CreateAgentDialog } from './create-agent-dialog';
+import { PRESET_AGENTS_SKIPPED_KEY } from './preset-agents';
+import { PresetAgentsSetup } from './preset-agents-setup';
 import { AgentChannelsTab } from './tabs/agent-channels-tab';
 import { AgentCronTab } from './tabs/agent-cron-tab';
 import { AgentFilesTab } from './tabs/agent-files-tab';
@@ -98,6 +108,7 @@ export function AgentsSettingsPanel() {
   const displayError = error ?? loadError;
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [showPresetSetup, setShowPresetSetup] = useState(false);
   const [panel, setPanel] = useState<AgentPanel>('overview');
 
   const [createDisplayName, setCreateDisplayName] = useState('');
@@ -220,6 +231,25 @@ export function AgentsSettingsPanel() {
       return data.defaultId;
     });
   }, [data, routeAgentId]);
+
+  useEffect(() => {
+    if (!data || loading) {
+      return;
+    }
+    const onlyMain =
+      data.agents.length <= 1 && data.agents.every((ag) => ag.id === data.defaultId);
+    const skipped = localStorage.getItem(PRESET_AGENTS_SKIPPED_KEY) === 'true';
+    setShowPresetSetup(onlyMain && !skipped);
+  }, [data, loading]);
+
+  const onPresetSetupComplete = useCallback(() => {
+    setShowPresetSetup(false);
+    void mutateAgents();
+  }, [mutateAgents]);
+
+  const onPresetSetupSkip = useCallback(() => {
+    setShowPresetSetup(false);
+  }, []);
 
   useEffect(() => {
     if (!data || !routeAgentId) {
@@ -944,6 +974,19 @@ export function AgentsSettingsPanel() {
       <div className="mx-auto flex w-full max-w-app-main flex-col gap-3 px-4 py-8">
         <h1 className="text-lg font-semibold text-fg">{a.title}</h1>
         <p className="text-sm text-fg-muted">{a.needToken}</p>
+      </div>
+    );
+  }
+
+  if (showPresetSetup && data) {
+    const existingIds = new Set(data.agents.map((ag) => ag.id));
+    return (
+      <div className="mx-auto flex w-full max-w-app-main flex-col px-4 py-8">
+        <PresetAgentsSetup
+          existingAgentIds={existingIds}
+          onComplete={onPresetSetupComplete}
+          onSkip={onPresetSetupSkip}
+        />
       </div>
     );
   }
