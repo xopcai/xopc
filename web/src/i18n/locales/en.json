@@ -1349,7 +1349,16 @@
     "personaMemoryNote": "Your agent will automatically remember preferences you share in conversation (like favorite foods or habits). No need to add those here.",
     "personaSaving": "Saving…",
     "personaSaved": "Saved",
-    "footerSaveNotApplicable": "Use actions in this section; the bar Save applies to Identity, Tools, Skills, and Core files."
+    "footerSaveNotApplicable": "Use actions in this section; the bar Save applies to Identity, Tools, Skills, and Core files.",
+    "presetSetupBadge": "Quick Setup",
+    "presetSetupTitle": "Get Started with Preset Agents",
+    "presetSetupSubtitle": "Choose agents to create. Each comes with a tailored personality and workspace. You can customize them later.",
+    "presetSkip": "Skip for now",
+    "presetCreateSelected": "Create {{count}} Agent(s)",
+    "presetCreating": "Creating…",
+    "presetCreatingProgress": "Creating agent {{current}} of {{total}}…",
+    "presetSetupComplete": "Agents created successfully!",
+    "presetCreateFailed": "Failed to create {{name}}: {{message}}"
   },
   "providersSettings": {
     "subtitle": "Provider API keys and OAuth. Keys you save here go to the gateway credential store.",

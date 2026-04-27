@@ -1349,7 +1349,16 @@
     "personaMemoryNote": "你在对话中分享的偏好（如喜欢的食物、习惯等）会被智能体自动记住，无需在这里添加。",
     "personaSaving": "保存中…",
     "personaSaved": "已保存",
-    "footerSaveNotApplicable": "本页内容自动保存，无需手动操作。底部「保存」仅用于智能体身份、工具、技能与核心文件。"
+    "footerSaveNotApplicable": "本页内容自动保存，无需手动操作。底部「保存」仅用于智能体身份、工具、技能与核心文件。",
+    "presetSetupBadge": "快速设置",
+    "presetSetupTitle": "创建预置 Agent 开始使用",
+    "presetSetupSubtitle": "选择要创建的 Agent，每个都带有定制化的性格和独立工作空间，创建后可随时修改。",
+    "presetSkip": "跳过",
+    "presetCreateSelected": "创建 {{count}} 个 Agent",
+    "presetCreating": "正在创建…",
+    "presetCreatingProgress": "正在创建第 {{current}} 个 / 共 {{total}} 个…",
+    "presetSetupComplete": "Agent 创建成功！",
+    "presetCreateFailed": "创建 {{name}} 失败：{{message}}"
   },
   "providersSettings": {
     "subtitle": "服务商 API Key 与 OAuth。在此保存的密钥写入网关凭据存储。",
