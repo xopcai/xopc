@@ -50,6 +50,14 @@ export function registerPublicGatewayRoutes(app: Hono, service: GatewayService):
     return c.text('Not found', 404);
   });
 
+  /** From `web/public/channel-icons/` (Vite copies to static root). Public: img requests send no Bearer token. */
+  app.get('/channel-icons/*', (c) => {
+    const path = c.req.path.replace('/channel-icons/', '');
+    const response = serveStaticFile(`channel-icons/${path}`);
+    if (response) return response;
+    return c.text('Not found', 404);
+  });
+
   app.get('/favicon.ico', (c) => {
     const response = serveStaticFile('favicon.ico');
     if (response) return response;
