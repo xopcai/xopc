@@ -9,24 +9,19 @@ import { confirm, input, select } from '@inquirer/prompts';
 import type { Config } from '@xopcai/xopc/config/schema.js';
 import type { ChannelOnboardAdapter } from '@xopcai/xopc/channels/plugins/types.adapters.js';
 
+import {
+  initAppRegistration,
+  beginAppRegistration,
+  pollAppRegistration,
+  printQrCode,
+  type FeishuDomain,
+} from '../auth/app-registration.js';
+
 type DmPolicy = 'pairing' | 'allowlist' | 'open' | 'disabled';
 type GroupPolicy = 'open' | 'disabled' | 'allowlist';
-type Domain = 'feishu' | 'lark';
 type RenderMode = 'auto' | 'raw' | 'card';
 type ConnectionMode = 'websocket' | 'webhook';
 type ReactionNotifications = 'off' | 'own' | 'all';
-
-type AppRegistrationResult = {
-  appId: string;
-  appSecret: string;
-  domain: Domain;
-  openId?: string;
-};
-
-const FEISHU_ACCOUNTS_URL = 'https://accounts.feishu.cn';
-const LARK_ACCOUNTS_URL = 'https://accounts.larksuite.com';
-const REGISTRATION_PATH = '/oauth/v1/app/registration';
-const REQUEST_TIMEOUT_MS = 10_000;
 
 function isFeishuConfigured(config: Config): boolean {
   const feishu = config.channels?.feishu as Record<string, unknown> | undefined;
@@ -49,160 +44,6 @@ function parseAllowlistRaw(raw: string): Array<string | number> {
   });
 }
 
-function accountsBaseUrl(domain: Domain): string {
-  return domain === 'lark' ? LARK_ACCOUNTS_URL : FEISHU_ACCOUNTS_URL;
-}
-
-async function postRegistration<T>(baseUrl: string, body: Record<string, string>): Promise<T> {
-  const res = await fetch(`${baseUrl}${REGISTRATION_PATH}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams(body).toString(),
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-  });
-  // Registration poll returns 4xx for pending/error states with a JSON body.
-  return (await res.json()) as T;
-}
-
-async function initAppRegistration(domain: Domain): Promise<boolean> {
-  type InitResponse = { supported_auth_methods?: string[] };
-  try {
-    const res = await postRegistration<InitResponse>(accountsBaseUrl(domain), { action: 'init' });
-    return Boolean(res.supported_auth_methods?.includes('client_secret'));
-  } catch {
-    return false;
-  }
-}
-
-async function beginAppRegistration(domain: Domain): Promise<{
-  deviceCode: string;
-  qrUrl: string;
-  intervalSec: number;
-  expireInSec: number;
-}> {
-  type RawBeginResponse = {
-    device_code: string;
-    verification_uri_complete: string;
-    interval?: number;
-    expire_in?: number;
-  };
-  const res = await postRegistration<RawBeginResponse>(accountsBaseUrl(domain), {
-    action: 'begin',
-    archetype: 'PersonalAgent',
-    auth_method: 'client_secret',
-    request_user_info: 'open_id',
-  });
-  const qrUrl = new URL(res.verification_uri_complete);
-  qrUrl.searchParams.set('from', 'xopc_onboard');
-  qrUrl.searchParams.set('tp', 'ob_cli_app');
-  return {
-    deviceCode: res.device_code,
-    qrUrl: qrUrl.toString(),
-    intervalSec: res.interval || 5,
-    expireInSec: res.expire_in || 600,
-  };
-}
-
-async function sleep(ms: number): Promise<void> {
-  await new Promise<void>((r) => setTimeout(r, ms));
-}
-
-async function pollAppRegistration(params: {
-  deviceCode: string;
-  intervalSec: number;
-  expireInSec: number;
-  initialDomain: Domain;
-}): Promise<
-  | { status: 'success'; result: AppRegistrationResult }
-  | { status: 'access_denied' | 'expired' | 'timeout'; message?: string }
-  | { status: 'error'; message: string }
-> {
-  type PollResponse = {
-    client_id?: string;
-    client_secret?: string;
-    user_info?: { open_id?: string; tenant_brand?: 'feishu' | 'lark' };
-    error?: string;
-    error_description?: string;
-  };
-
-  let domain: Domain = params.initialDomain;
-  let intervalSec = params.intervalSec;
-  let domainSwitched = false;
-  const deadline = Date.now() + params.expireInSec * 1000;
-
-  while (Date.now() < deadline) {
-    let pollRes: PollResponse;
-    try {
-      pollRes = await postRegistration<PollResponse>(accountsBaseUrl(domain), {
-        action: 'poll',
-        device_code: params.deviceCode,
-        tp: 'ob_cli_app',
-      });
-    } catch {
-      await sleep(intervalSec * 1000);
-      continue;
-    }
-
-    // Auto-detect domain based on tenant.
-    if (pollRes.user_info?.tenant_brand) {
-      const isLark = pollRes.user_info.tenant_brand === 'lark';
-      if (!domainSwitched && isLark) {
-        domain = 'lark';
-        domainSwitched = true;
-        continue;
-      }
-    }
-
-    if (pollRes.client_id && pollRes.client_secret) {
-      return {
-        status: 'success',
-        result: {
-          appId: pollRes.client_id,
-          appSecret: pollRes.client_secret,
-          domain,
-          openId: pollRes.user_info?.open_id,
-        },
-      };
-    }
-
-    if (pollRes.error) {
-      if (pollRes.error === 'authorization_pending') {
-        // keep waiting
-      } else if (pollRes.error === 'slow_down') {
-        intervalSec += 5;
-      } else if (pollRes.error === 'access_denied') {
-        return { status: 'access_denied' };
-      } else if (pollRes.error === 'expired_token') {
-        return { status: 'expired' };
-      } else {
-        return {
-          status: 'error',
-          message: `${pollRes.error}: ${pollRes.error_description ?? 'unknown'}`,
-        };
-      }
-    }
-
-    await sleep(intervalSec * 1000);
-  }
-
-  return { status: 'timeout' };
-}
-
-async function printQrCode(url: string): Promise<void> {
-  try {
-    const qrcodeTerminal = await import(/* @vite-ignore */ 'qrcode-terminal');
-    await new Promise<void>((resolve) => {
-      qrcodeTerminal.default.generate(url, { small: true }, (qr: string) => {
-        process.stdout.write(qr.endsWith('\n') ? qr : `${qr}\n`);
-        resolve();
-      });
-    });
-  } catch {
-    console.log('Open this URL in a browser to scan:\n');
-    console.log(url);
-  }
-}
-
 async function configureFeishu(config: Config): Promise<Config> {
   console.log(`\n${'='.repeat(50)}`);
   console.log('📱 Feishu / Lark setup');
@@ -220,7 +61,7 @@ async function configureFeishu(config: Config): Promise<Config> {
     if (!keep) return config;
   }
 
-  const initialDomain = await select<Domain>({
+  const initialDomain = await select<FeishuDomain>({
     message: 'Feishu/Lark domain:',
     choices: [
       { value: 'feishu', name: 'feishu (open.feishu.cn)', description: 'China / Feishu' },
@@ -239,7 +80,7 @@ async function configureFeishu(config: Config): Promise<Config> {
 
   let appId = '';
   let appSecret = '';
-  let domain: Domain = initialDomain;
+  let domain: FeishuDomain = initialDomain;
   let ownerOpenId: string | undefined;
 
   if (useScanToCreate) {

@@ -5,7 +5,7 @@
 
 import type { ChannelCapabilities } from './plugin-types.js';
 
-export const CHAT_CHANNEL_ORDER = ['telegram', 'weixin'] as const;
+export const CHAT_CHANNEL_ORDER = ['telegram', 'weixin', 'feishu'] as const;
 
 export type ChatChannelId = (typeof CHAT_CHANNEL_ORDER)[number];
 
@@ -41,6 +41,18 @@ const WEIXIN_CAPABILITIES: ChannelCapabilities = {
   blockStreaming: true,
 };
 
+const FEISHU_CAPABILITIES: ChannelCapabilities = {
+  chatTypes: ['direct', 'channel'],
+  reactions: true,
+  threads: true,
+  media: true,
+  polls: false,
+  nativeCommands: false,
+  blockStreaming: false,
+  edit: true,
+  reply: true,
+};
+
 const CHAT_CHANNEL_META: Record<ChatChannelId, ChatChannelMeta> = {
   telegram: {
     id: 'telegram',
@@ -57,6 +69,16 @@ const CHAT_CHANNEL_META: Record<ChatChannelId, ChatChannelMeta> = {
     label: 'Weixin',
     description: 'WeChat via Tencent ilink (QR login)',
     capabilities: WEIXIN_CAPABILITIES,
+    dock: {
+      outbound: { textChunkLimit: 4000 },
+      queue: { debounceMs: 0 },
+    },
+  },
+  feishu: {
+    id: 'feishu',
+    label: 'Feishu',
+    description: 'Feishu/Lark enterprise messaging (Socket Mode)',
+    capabilities: FEISHU_CAPABILITIES,
     dock: {
       outbound: { textChunkLimit: 4000 },
       queue: { debounceMs: 0 },
