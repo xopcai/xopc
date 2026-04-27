@@ -1738,7 +1738,12 @@
     "listenHost": "监听地址",
     "listenPort": "端口",
     "listenHint": "若在 UI 外修改监听地址，需重启网关后生效。",
-    "authModeNone": "当前认证模式为 none，配置文件中的令牌可能被忽略。"
+    "authModeNone": "当前认证模式为 none，配置文件中的令牌可能被忽略。",
+    "updateChannel": "更新通道",
+    "channelStable": "稳定版",
+    "channelBeta": "测试版",
+    "channelDev": "开发版",
+    "updateChannelHint": "测试版与开发版会较早收到构建；日常使用建议稳定版。"
   },
   "heartbeatSettings": {
     "needToken": "请先保存网关访问令牌后再加载或修改心跳选项。",
@@ -1880,7 +1885,9 @@
     "updateSuccessDetail": "请重启网关以使用新版本（例如：xopc gateway restart）。",
     "updateErrorGit": "无法一键更新",
     "updateErrorBusy": "已有更新任务在进行中",
-    "updateErrorFailed": "更新失败"
+    "updateErrorFailed": "更新失败",
+    "restartRequired": "已安装 v{{version}}。请重启网关以使用新版本。",
+    "restartGateway": "重启网关"
   },
   "aboutDialog": {
     "windowTitle": "关于本应用",

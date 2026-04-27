@@ -2,9 +2,9 @@ import { revalidateGatewayConfig } from '@/features/gateway/gateway-config-swr';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
-import type { GatewaySettingsState } from './gateway-settings.types';
+import type { GatewaySettingsState, UpdatePackageChannel } from './gateway-settings.types';
 
-export type { GatewaySettingsState } from './gateway-settings.types';
+export type { GatewaySettingsState, UpdatePackageChannel } from './gateway-settings.types';
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -15,6 +15,10 @@ export function normalizeGatewayFromConfig(config: unknown): GatewaySettingsStat
   const gw = isRecord(c.gateway) ? c.gateway : {};
   const auth = isRecord(gw.auth) ? gw.auth : {};
   const mode = auth.mode === 'none' || auth.mode === 'token' ? auth.mode : 'token';
+  const upd = isRecord(c.update) ? c.update : {};
+  const ch = upd.channel;
+  const updateChannel: UpdatePackageChannel =
+    ch === 'beta' || ch === 'dev' || ch === 'stable' ? ch : 'stable';
   return {
     host: typeof gw.host === 'string' ? gw.host : '',
     port: typeof gw.port === 'number' ? gw.port : undefined,
@@ -22,6 +26,7 @@ export function normalizeGatewayFromConfig(config: unknown): GatewaySettingsStat
       mode,
       token: typeof auth.token === 'string' ? auth.token : '',
     },
+    updateChannel,
   };
 }
 
@@ -41,6 +46,9 @@ export async function patchGatewaySettings(state: GatewaySettingsState): Promise
     body: JSON.stringify({
       gateway: {
         auth,
+      },
+      update: {
+        channel: state.updateChannel,
       },
     }),
   });

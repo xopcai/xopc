@@ -109,6 +109,9 @@ export async function buildSafeWebConfigPayload(service: GatewayService) {
       },
     },
     cron: { enabled: config.cron?.enabled },
+    update: {
+      channel: config.update?.channel ?? 'stable',
+    },
     stt: config.stt,
     tts: config.tts,
     tools: safeToolsWebForGet(config),

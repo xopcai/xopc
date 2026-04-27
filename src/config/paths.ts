@@ -83,6 +83,16 @@ export function resolveAuthProfilesPath(): string {
   return join(resolveCredentialsDir(), FILENAMES.CREDENTIALS_PROFILES);
 }
 
+/** Persisted npm update check throttle / notification state (`~/.xopc/update-check.json`). */
+export function resolveUpdateCheckStatePath(): string {
+  return join(resolveStateDir(), 'update-check.json');
+}
+
+/** Cross-process lock for one-click / CLI / auto npm updates (`~/.xopc/update.lock`). */
+export function resolveUpdateLockPath(): string {
+  return join(resolveStateDir(), 'update.lock');
+}
+
 /**
  * Resolve OAuth token file path for a provider
  */
