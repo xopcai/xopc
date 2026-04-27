@@ -544,6 +544,19 @@ export class GatewayService {
   }
 
   /**
+   * After Feishu WebUI QR setup: `channels.feishu` was written directly to disk; reload into memory
+   * and apply channel plugins (same baseline as PATCH /api/config).
+   */
+  async afterFeishuCredentialsPersisted(): Promise<void> {
+    const next = loadConfig(this.configPath);
+    this.config = next;
+    this.agentService.applyAgentDefaultsFromConfig(next);
+    this.configReloader?.syncCurrentConfig(next);
+    await this.handleChannelsReload(next);
+    log.info('Feishu config applied after QR setup');
+  }
+
+  /**
    * Save current config to disk
    */
   /**
