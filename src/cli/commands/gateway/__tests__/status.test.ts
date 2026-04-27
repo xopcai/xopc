@@ -1,6 +1,6 @@
 // Mock os.homedir for consistent paths across environments
-vi.mock("os", () => ({
-  homedir: () => "/root",
+vi.mock('os', () => ({
+  homedir: () => '/root',
 }));
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -11,6 +11,7 @@ process.env.HOME = '/root';
 import { createStatusCommand } from '../status.js';
 import { loadConfig } from '../../../../config/index.js';
 import { acquireGatewayLock } from '../../../../gateway/lock.js';
+import * as gatewayClient from '../../../utils/gateway-client.js';
 
 // Mock dependencies
 vi.mock('../../../../config/index.js', () => ({
@@ -38,6 +39,13 @@ vi.mock('../../../../gateway/lock.js', () => ({
   },
 }));
 
+vi.mock('../../../utils/gateway-client.js', () => ({
+  callGatewayApi: vi.fn(),
+  addGatewayClientOptions: vi.fn((cmd) => cmd),
+  parseGatewayClientOptions: vi.fn(() => ({ timeoutMs: 10_000, json: false })),
+  resolveGatewayUrl: vi.fn(() => 'http://127.0.0.1:18790'),
+}));
+
 describe('Gateway Status Command', () => {
   let consoleLogSpy: ReturnType<typeof vi.spyOn>;
   let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
@@ -48,6 +56,12 @@ describe('Gateway Status Command', () => {
     consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     processExitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {}) as any);
     vi.clearAllMocks();
+    vi.mocked(gatewayClient.callGatewayApi).mockResolvedValue({
+      ok: false,
+      status: 0,
+      error: 'ECONNREFUSED',
+      durationMs: 1,
+    });
   });
 
   afterEach(() => {
@@ -60,12 +74,12 @@ describe('Gateway Status Command', () => {
     it('should create command with correct name and description', () => {
       const cmd = createStatusCommand();
       expect(cmd.name()).toBe('status');
-      expect(cmd.description()).toBe('Check gateway status');
+      expect(cmd.description()).toBe('Check gateway status with connectivity probe');
     });
   });
 
   describe('status checking', () => {
-    it('should show not running when lock can be acquired', async () => {
+    it('should show not running when lock can be acquired and probe fails', async () => {
       const mockConfig = {
         gateway: {
           port: 18790,
@@ -84,7 +98,7 @@ describe('Gateway Status Command', () => {
         port: 18790,
       });
       expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('not running'));
-      expect(processExitSpy).toHaveBeenCalledWith(0);
+      expect(processExitSpy).toHaveBeenCalledWith(1);
     });
 
     it('should show running when GatewayLockError is thrown', async () => {
@@ -97,7 +111,9 @@ describe('Gateway Status Command', () => {
         },
       };
       vi.mocked(loadConfig).mockReturnValue(mockConfig as any);
-      vi.mocked(acquireGatewayLock).mockRejectedValue(new (await import('../../../../gateway/lock.js')).GatewayLockError('Lock exists'));
+      vi.mocked(acquireGatewayLock).mockRejectedValue(
+        new (await import('../../../../gateway/lock.js')).GatewayLockError('Lock exists'),
+      );
 
       const cmd = createStatusCommand();
       await cmd.parseAsync(['node', 'test']);
@@ -117,7 +133,9 @@ describe('Gateway Status Command', () => {
         },
       };
       vi.mocked(loadConfig).mockReturnValue(mockConfig as any);
-      vi.mocked(acquireGatewayLock).mockRejectedValue(new (await import('../../../../gateway/lock.js')).GatewayLockError('Lock exists'));
+      vi.mocked(acquireGatewayLock).mockRejectedValue(
+        new (await import('../../../../gateway/lock.js')).GatewayLockError('Lock exists'),
+      );
 
       const cmd = createStatusCommand();
       await cmd.parseAsync(['node', 'test']);

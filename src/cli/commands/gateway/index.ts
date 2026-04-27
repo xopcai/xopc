@@ -1,6 +1,9 @@
 // Gateway subcommands
 export { createTokenCommand } from './token.js';
 export { createStatusCommand } from './status.js';
+export { createHealthCommand } from './health.js';
+export { createCallCommand } from './call.js';
+export { createProbeCommand } from './probe.js';
 export { createStopCommand } from './stop.js';
 export { createRestartCommand } from './restart.js';
 export { createLogsCommand } from './logs.js';
