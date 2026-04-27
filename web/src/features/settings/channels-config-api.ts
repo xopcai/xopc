@@ -322,3 +322,34 @@ export async function patchChannelsSettings(state: ChannelsSettingsState): Promi
     bindingsFull: mergedBindings,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Feishu QR scan-to-create
+// ---------------------------------------------------------------------------
+
+export type FeishuSetupStatusPayload =
+  | { phase: 'polling' }
+  | { phase: 'done'; ok: true; appId: string; domain: string; openId?: string }
+  | { phase: 'done'; ok: false; message: string }
+  | { phase: 'unknown'; message: string };
+
+export async function fetchFeishuSetupStart(body?: {
+  domain?: 'feishu' | 'lark';
+}): Promise<{ sessionKey: string; qrUrl: string }> {
+  const res = await fetchJson<{
+    ok: boolean;
+    payload: { sessionKey: string; qrUrl: string };
+  }>(apiUrl('/api/channels/feishu/setup/start'), {
+    method: 'POST',
+    body: JSON.stringify(body ?? {}),
+  });
+  return res.payload;
+}
+
+export async function fetchFeishuSetupStatus(sessionKey: string): Promise<FeishuSetupStatusPayload> {
+  const res = await fetchJson<{
+    ok: boolean;
+    payload: { status: FeishuSetupStatusPayload };
+  }>(apiUrl(`/api/channels/feishu/setup/${encodeURIComponent(sessionKey)}`));
+  return res.payload.status;
+}
