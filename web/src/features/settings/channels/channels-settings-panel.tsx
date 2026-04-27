@@ -39,6 +39,7 @@ import { ChannelImHubCard } from './channel-im-hub-card';
 import { FieldHint, FieldLabel } from './field-primitives';
 import { TelegramAdvanced } from './telegram-advanced';
 import { WeixinAdvanced } from './weixin-advanced';
+import { FeishuQrSetupDialog } from './feishu-qr-setup-dialog';
 import { WeixinQrLoginDialog } from './weixin-qr-login-dialog';
 import {
   channelsInputClassName,
@@ -67,6 +68,8 @@ export function ChannelsSettingsPanel() {
   const [feishuModalOpen, setFeishuModalOpen] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<'weixin' | 'telegram' | 'feishu' | null>(null);
   const [weixinSuccessBanner, setWeixinSuccessBanner] = useState<string | null>(null);
+  const [feishuQrSetupOpen, setFeishuQrSetupOpen] = useState(false);
+  const [feishuSetupSuccessBanner, setFeishuSetupSuccessBanner] = useState<string | null>(null);
   const [tgAdvanced, setTgAdvanced] = useState(false);
   const [showToken, setShowToken] = useState(false);
   const [showFeishuSecret, setShowFeishuSecret] = useState(false);
@@ -251,6 +254,20 @@ export function ChannelsSettingsPanel() {
     setCopied(true);
     window.setTimeout(() => setCopied(false), 2000);
   }, [form?.telegram.botToken]);
+
+  const handleFeishuQrSetupSuccess = useCallback(
+    (result: { appId: string; domain: string; openId?: string }) => {
+      updateFeishu({
+        appId: result.appId,
+        domain: result.domain,
+        enabled: true,
+      });
+      void mutate();
+      setFeishuSetupSuccessBanner(ch.feishuQrSetupSuccess);
+      window.setTimeout(() => setFeishuSetupSuccessBanner(null), 4000);
+    },
+    [updateFeishu, mutate, ch.feishuQrSetupSuccess],
+  );
 
   const copyFeishuSecret = useCallback(async () => {
     const t = (form as any)?.feishu?.appSecret as string | undefined;
@@ -491,6 +508,11 @@ export function ChannelsSettingsPanel() {
       {saveOk ? <p className="text-xs text-fg-muted">{ch.saved}</p> : null}
       {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
       {weixinSuccessBanner ? <p className="text-xs text-accent">{weixinSuccessBanner}</p> : null}
+      {feishuSetupSuccessBanner ? (
+        <div className="rounded-xl border border-success/30 bg-success-soft px-4 py-3 text-sm text-success">
+          {feishuSetupSuccessBanner}
+        </div>
+      ) : null}
 
       <div className="flex flex-col gap-3">
         <ChannelImHubCard
@@ -544,6 +566,13 @@ export function ChannelsSettingsPanel() {
           window.setTimeout(() => setWeixinSuccessBanner(null), 4000);
         }}
         moreSettings={weixinMoreSettings}
+      />
+
+      <FeishuQrSetupDialog
+        open={feishuQrSetupOpen}
+        onOpenChange={setFeishuQrSetupOpen}
+        ch={ch}
+        onSetupSuccess={handleFeishuQrSetupSuccess}
       />
 
       <Dialog.Root open={telegramModalOpen} onOpenChange={setTelegramModalOpen}>
@@ -730,6 +759,25 @@ export function ChannelsSettingsPanel() {
               />
               <span>{ch.enableFeishuAria}</span>
             </label>
+
+            {!feishuConfigured ? (
+              <div className="mt-6 rounded-xl border border-dashed border-accent/40 bg-accent/5 px-4 py-3 dark:bg-accent/10">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-fg">{ch.feishuQrSetupTitle}</p>
+                    <p className="mt-0.5 text-xs text-fg-muted">{ch.feishuQrSetupDesc}</p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="primary"
+                    className="shrink-0"
+                    onClick={() => setFeishuQrSetupOpen(true)}
+                  >
+                    {ch.feishuQrSetupButton}
+                  </Button>
+                </div>
+              </div>
+            ) : null}
 
             <div className="mt-6 space-y-4">
               <div className="flex flex-col gap-1.5">
