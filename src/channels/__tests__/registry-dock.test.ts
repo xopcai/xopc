@@ -21,6 +21,7 @@ describe('registry', () => {
 
   it('isChatChannelId narrows', () => {
     expect(isChatChannelId('telegram')).toBe(true);
+    expect(isChatChannelId('feishu')).toBe(true);
     expect(isChatChannelId('unknown')).toBe(false);
   });
 
@@ -42,7 +43,13 @@ describe('dock', () => {
     expect(d.id).toBe('telegram');
   });
 
+  it('getChannelDock exposes feishu limits', () => {
+    const d = getChannelDock('feishu');
+    expect(d?.outbound?.textChunkLimit).toBe(4000);
+    expect(d?.queue?.debounceMs).toBe(0);
+  });
+
   it('returns undefined for unknown id', () => {
-    expect(getChannelDock('feishu')).toBeUndefined();
+    expect(getChannelDock('unknown-channel')).toBeUndefined();
   });
 });

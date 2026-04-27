@@ -41,6 +41,7 @@ function createChannelsCommand(ctx: CLIContext): Command {
       formatExamples([
         'xopc channels login',
         'xopc channels login --channel weixin',
+        'xopc channels login --channel feishu',
         'xopc channels login --account my-bot-id',
       ]),
     );
@@ -48,13 +49,37 @@ function createChannelsCommand(ctx: CLIContext): Command {
   cmd
     .command('login')
     .description('Log in with QR code or channel-specific credentials flow')
-    .option('--channel <id>', 'Channel id', 'weixin')
+    .option(
+      '--channel <id>',
+      'Channel id (auto-detected when only one login-capable channel is registered)',
+    )
     .option('--account <id>', 'Optional account id when re-logging an existing bot')
     .option('--timeout <ms>', 'Max wait for scan (default 480000)', '480000')
     .option('--credentials-only', 'Only save token files; do not update xopc.json')
     .action(async (options, command) => {
       ensureChannelRegistryForCli();
-      const channelId = String(options.channel || '').trim() || 'weixin';
+      const explicitChannel = options.channel?.trim?.();
+      let channelId: string;
+      if (explicitChannel) {
+        channelId = explicitChannel;
+      } else {
+        const loginCapable = listChannelPlugins().filter((p) => p.cliLogin);
+        if (loginCapable.length === 1) {
+          channelId = loginCapable[0].id;
+          console.log(`Auto-detected channel: ${channelId}`);
+        } else if (loginCapable.length === 0) {
+          console.error('No channels with login support found.');
+          process.exitCode = 1;
+          return;
+        } else {
+          console.error(
+            `Multiple channels support login: ${loginCapable.map((p) => p.id).join(', ')}. ` +
+              'Use --channel <id> to specify.',
+          );
+          process.exitCode = 1;
+          return;
+        }
+      }
       const plugin = getChannelPlugin(channelId);
       if (!plugin?.cliLogin) {
         console.error(`Channel "${channelId}" does not support CLI login.`);
