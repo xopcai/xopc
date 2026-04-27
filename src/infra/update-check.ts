@@ -34,6 +34,8 @@ export type UpdateAvailable = {
 const REGISTRY_BASE = 'https://registry.npmjs.org';
 const PACKAGE_NAME = '@xopcai/xopc';
 const REGISTRY_TIMEOUT_MS = 3500;
+const MAX_REGISTRY_RETRIES = 2;
+const INITIAL_REGISTRY_RETRY_DELAY_MS = 500;
 
 /**
  * Fetch the version published under a specific npm dist-tag.
@@ -46,19 +48,35 @@ export async function fetchNpmTagVersion(params: {
   const timeoutMs = params.timeoutMs ?? REGISTRY_TIMEOUT_MS;
   const encodedName = encodeURIComponent(PACKAGE_NAME).replace('%40', '@');
   const url = `${REGISTRY_BASE}/${encodedName}/${encodeURIComponent(params.tag)}`;
-  try {
-    const response = await fetch(url, {
-      signal: AbortSignal.timeout(timeoutMs),
-    });
-    if (!response.ok) {
-      return { tag: params.tag, version: null, error: `HTTP ${response.status}` };
+
+  let lastError: string | undefined;
+
+  for (let attempt = 0; attempt <= MAX_REGISTRY_RETRIES; attempt++) {
+    if (attempt > 0) {
+      const delayMs = INITIAL_REGISTRY_RETRY_DELAY_MS * Math.pow(2, attempt - 1);
+      await new Promise((r) => setTimeout(r, delayMs));
     }
-    const json = (await response.json()) as { version?: unknown };
-    const version = typeof json?.version === 'string' ? json.version : null;
-    return { tag: params.tag, version };
-  } catch (err) {
-    return { tag: params.tag, version: null, error: String(err) };
+
+    try {
+      const response = await fetch(url, {
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      if (!response.ok) {
+        lastError = `HTTP ${response.status}`;
+        if (response.status >= 400 && response.status < 500) {
+          return { tag: params.tag, version: null, error: lastError };
+        }
+        continue;
+      }
+      const json = (await response.json()) as { version?: unknown };
+      const version = typeof json?.version === 'string' ? json.version : null;
+      return { tag: params.tag, version };
+    } catch (err) {
+      lastError = String(err);
+    }
   }
+
+  return { tag: params.tag, version: null, error: lastError };
 }
 
 /**
@@ -133,9 +151,36 @@ export function compareSemver(a: string | null, b: string | null): number | null
   if (parsedA.prerelease !== null && parsedB.prerelease === null) return -1; // pre < release
   if (parsedA.prerelease === null && parsedB.prerelease !== null) return 1;
 
-  // Both have prerelease — lexicographic fallback
-  if (parsedA.prerelease! < parsedB.prerelease!) return -1;
-  if (parsedA.prerelease! > parsedB.prerelease!) return 1;
+  return comparePrereleaseIdentifiers(parsedA.prerelease!, parsedB.prerelease!);
+}
+
+/**
+ * Compare prerelease strings per semver 2.0 §11.
+ */
+function comparePrereleaseIdentifiers(a: string, b: string): number {
+  const partsA = a.split('.');
+  const partsB = b.split('.');
+  const length = Math.min(partsA.length, partsB.length);
+
+  for (let i = 0; i < length; i++) {
+    const segA = partsA[i]!;
+    const segB = partsB[i]!;
+    if (segA === segB) continue;
+
+    const numA = /^\d+$/.test(segA) ? parseInt(segA, 10) : null;
+    const numB = /^\d+$/.test(segB) ? parseInt(segB, 10) : null;
+
+    if (numA !== null && numB !== null) {
+      return numA < numB ? -1 : 1;
+    }
+    if (numA !== null && numB === null) return -1;
+    if (numA === null && numB !== null) return 1;
+    return segA < segB ? -1 : 1;
+  }
+
+  if (partsA.length !== partsB.length) {
+    return partsA.length < partsB.length ? -1 : 1;
+  }
   return 0;
 }
 

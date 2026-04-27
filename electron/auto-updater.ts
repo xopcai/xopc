@@ -26,6 +26,7 @@ export type UpdateStatus =
 let currentStatus: UpdateStatus = { state: 'idle' };
 let checkTimer: ReturnType<typeof setInterval> | null = null;
 let mainWindowRef: BrowserWindow | null = null;
+let lastCheckWasManual = false;
 
 /**
  * True after `update-downloaded` until process exit. Further `checkForUpdates` calls are skipped to avoid
@@ -50,12 +51,27 @@ export function initAutoUpdater(mainWindow: BrowserWindow): void {
 
   mainWindowRef = mainWindow;
 
-  const feedBase = (process.env['XOPC_UPDATE_FEED_URL'] ?? DEFAULT_UPDATE_FEED_BASE).replace(/\/$/, '');
+  const feedBaseRaw = (process.env['XOPC_UPDATE_FEED_URL'] ?? DEFAULT_UPDATE_FEED_BASE).replace(/\/$/, '');
+  let effectiveFeedBase = feedBaseRaw;
+  try {
+    const feedUrl = new URL(feedBaseRaw);
+    if (app.isPackaged && feedUrl.protocol !== 'https:') {
+      log.warn(
+        { feedBase: feedBaseRaw },
+        'Update feed URL is not HTTPS; falling back to default for security',
+      );
+      effectiveFeedBase = DEFAULT_UPDATE_FEED_BASE.replace(/\/$/, '');
+    }
+  } catch {
+    log.error({ feedBase: feedBaseRaw }, 'Invalid update feed URL; falling back to default');
+    effectiveFeedBase = DEFAULT_UPDATE_FEED_BASE.replace(/\/$/, '');
+  }
+
   autoUpdater.setFeedURL({
     provider: 'generic',
-    url: feedBase,
+    url: effectiveFeedBase,
   });
-  log.info({ feedBase }, 'electron-updater generic feed');
+  log.info({ feedBase: effectiveFeedBase }, 'electron-updater generic feed');
 
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
@@ -96,12 +112,16 @@ export function initAutoUpdater(mainWindow: BrowserWindow): void {
       return;
     }
     log.info('Already up to date');
+    const wasManual = lastCheckWasManual;
+    lastCheckWasManual = false;
     setStatus({ state: 'not-available' });
-    setTimeout(() => {
-      if (currentStatus.state === 'not-available') {
-        setStatus({ state: 'idle' });
-      }
-    }, 5000);
+    if (!wasManual) {
+      setTimeout(() => {
+        if (currentStatus.state === 'not-available') {
+          setStatus({ state: 'idle' });
+        }
+      }, 5000);
+    }
   });
 
   autoUpdater.on('download-progress', (progress: ProgressInfo) => {
@@ -161,7 +181,7 @@ export function hasPendingInstall(): boolean {
   return updateDownloadedPendingInstall;
 }
 
-export function checkForUpdates(): void {
+export function checkForUpdates(manual = false): void {
   if (!app.isPackaged) {
     return;
   }
@@ -169,8 +189,9 @@ export function checkForUpdates(): void {
     log.debug('Skipping update check: downloaded update awaiting install');
     return;
   }
+  lastCheckWasManual = manual;
   void autoUpdater.checkForUpdates().catch((err) => {
-    log.warn({ err }, 'Manual update check failed');
+    log.warn({ err }, `${manual ? 'Manual' : 'Periodic'} update check failed`);
   });
 }
 
