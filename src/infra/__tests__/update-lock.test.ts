@@ -6,8 +6,8 @@ const { testLockPath } = vi.hoisted(() => {
   return { testLockPath: `${base.replace(/\/$/, '')}/xopc-ul-test-${process.pid}-${Date.now()}.json` };
 });
 
-vi.mock('../../config/paths.js', async (importActual) => {
-  const actual = await importActual<typeof import('../../config/paths.js')>();
+vi.mock('../../config/paths-state.js', async (importActual) => {
+  const actual = await importActual<typeof import('../../config/paths-state.js')>();
   return { ...actual, resolveUpdateLockPath: () => testLockPath };
 });
 
