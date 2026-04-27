@@ -405,6 +405,16 @@ export function ChannelsSettingsPanel() {
   const tg = form.telegram;
   const wx = form.weixin;
   const fs = (form as any).feishu as ChannelsSettingsState['feishu'];
+  const tgBaselineToken = baseline?.telegram?.botToken ?? '';
+  const telegramTokenDisplayLocked =
+    !showToken &&
+    Boolean(String(tgBaselineToken).trim()) &&
+    tg.botToken === tgBaselineToken;
+  const feishuBaselineSecret = baseline?.feishu?.appSecret ?? '';
+  const feishuSecretDisplayLocked =
+    !showFeishuSecret &&
+    Boolean(String(feishuBaselineSecret).trim()) &&
+    fs.appSecret === feishuBaselineSecret;
   const weixinConfigured = isWeixinConfigured(wx);
   const telegramConfigured = isTelegramConfigured(tg);
   const feishuConfigured = isFeishuConfigured(fs);
@@ -583,16 +593,14 @@ export function ChannelsSettingsPanel() {
                     className={cn(inputClassName(), 'min-w-0 flex-1 font-mono text-xs')}
                     type={showToken ? 'text' : 'password'}
                     autoComplete="off"
-                    readOnly={!showToken && Boolean(tg.botToken)}
+                    readOnly={telegramTokenDisplayLocked}
                     value={
-                      showToken
-                        ? tg.botToken
+                      telegramTokenDisplayLocked
+                        ? '*'.repeat(Math.max(1, tg.botToken.length))
                         : tg.botToken
-                          ? '*'.repeat(Math.max(1, tg.botToken.length))
-                          : ''
                     }
                     onChange={(e) => {
-                      if (!showToken && tg.botToken) return;
+                      if (telegramTokenDisplayLocked) return;
                       updateTelegram({ botToken: e.target.value });
                     }}
                     placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
@@ -748,16 +756,14 @@ export function ChannelsSettingsPanel() {
                     className={cn(inputClassName(), 'min-w-0 flex-1 font-mono text-xs')}
                     type={showFeishuSecret ? 'text' : 'password'}
                     autoComplete="off"
-                    readOnly={!showFeishuSecret && Boolean(fs.appSecret)}
+                    readOnly={feishuSecretDisplayLocked}
                     value={
-                      showFeishuSecret
-                        ? fs.appSecret
+                      feishuSecretDisplayLocked
+                        ? '*'.repeat(Math.max(1, fs.appSecret.length))
                         : fs.appSecret
-                          ? '*'.repeat(Math.max(1, fs.appSecret.length))
-                          : ''
                     }
                     onChange={(e) => {
-                      if (!showFeishuSecret && fs.appSecret) return;
+                      if (feishuSecretDisplayLocked) return;
                       updateFeishu({ appSecret: e.target.value });
                     }}
                     placeholder="••••••••"
