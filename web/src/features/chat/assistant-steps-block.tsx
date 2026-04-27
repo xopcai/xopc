@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 import { CheckCircle2, ChevronDown, Loader2, XCircle } from 'lucide-react';
 
 import type {
@@ -282,6 +282,49 @@ export function buildStepsRoundCompleteSummary(
   return line;
 }
 
+const AssistantStepsHeaderStatusIcon = memo(function AssistantStepsHeaderStatusIcon({ active }: { active: boolean }) {
+  if (active) {
+    return <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin text-accent-fg" aria-hidden />;
+  }
+  return <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />;
+});
+
+/**
+ * Live step-round duration ticks locally so parent re-renders (SSE tokens, etc.) do not
+ * restart spinners or thrash the whole steps card every 500ms.
+ */
+const StepRoundDurationText = memo(function StepRoundDurationText({
+  active,
+  roundStartRef,
+  frozenMs,
+  language,
+  className,
+}: {
+  active: boolean;
+  roundStartRef: MutableRefObject<number | null>;
+  frozenMs: number | null;
+  language: StoredLanguage;
+  className: string;
+}) {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (!active) return;
+    const id = window.setInterval(() => setTick((n) => n + 1), 500);
+    return () => window.clearInterval(id);
+  }, [active]);
+
+  const startedAt = roundStartRef.current;
+  const elapsedMs = active && startedAt != null ? Math.max(0, Date.now() - startedAt) : 0;
+  const text =
+    active && startedAt != null
+      ? formatStepRoundDuration(elapsedMs, language)
+      : frozenMs != null
+        ? formatStepRoundDuration(frozenMs, language)
+        : null;
+  if (!text) return null;
+  return <span className={className}>{text}</span>;
+});
+
 /** Collapsible inline block: “View N steps” header + timeline (main chat column). */
 export function AssistantStepsBlock({
   blocks,
@@ -320,18 +363,11 @@ export function AssistantStepsBlock({
   const roundStartRef = useRef<number | null>(null);
   const prevAnyActiveRef = useRef(false);
   const [frozenDurationMs, setFrozenDurationMs] = useState<number | null>(null);
-  const [liveTick, setLiveTick] = useState(0);
   const [expanded, setExpanded] = useState(anyActive);
 
   if (anyActive && roundStartRef.current === null) {
     roundStartRef.current = Date.now();
   }
-
-  useEffect(() => {
-    if (!anyActive) return;
-    const id = window.setInterval(() => setLiveTick((n) => n + 1), 500);
-    return () => window.clearInterval(id);
-  }, [anyActive]);
 
   useEffect(() => {
     if (anyActive) {
@@ -344,8 +380,6 @@ export function AssistantStepsBlock({
     }
     prevAnyActiveRef.current = anyActive;
   }, [anyActive]);
-
-  void liveTick;
 
   const completedHeader = useMemo(() => {
     if (anyActive) return '';
@@ -387,27 +421,16 @@ export function AssistantStepsBlock({
     unknownTool: stepLabels.unknownTool,
   };
 
-  const liveElapsedMs =
-    anyActive && roundStartRef.current !== null ? Date.now() - roundStartRef.current : 0;
-  const summaryDurationText =
-    anyActive && roundStartRef.current !== null
-      ? formatStepRoundDuration(liveElapsedMs, language)
-      : frozenDurationMs !== null
-        ? formatStepRoundDuration(frozenDurationMs, language)
-        : null;
-
-  const headerLeadingIcon = anyActive ? (
-    <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin text-accent-fg" aria-hidden />
-  ) : (
-    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />
-  );
-
   const headerMain = anyActive ? (
     <>
       <span className="[overflow-wrap:anywhere]">{viewStepsLabel(stepCount, stepLabels)}</span>
-      {summaryDurationText ? (
-        <span className="ml-1.5 tabular-nums text-fg-muted">{summaryDurationText}</span>
-      ) : null}
+      <StepRoundDurationText
+        active={anyActive}
+        roundStartRef={roundStartRef}
+        frozenMs={null}
+        language={language}
+        className="ml-1.5 tabular-nums text-fg-muted"
+      />
     </>
   ) : (
     <>
@@ -415,10 +438,15 @@ export function AssistantStepsBlock({
     </>
   );
 
-  const headerDurationRight =
-    !anyActive && summaryDurationText ? (
-      <span className="mt-0.5 tabular-nums text-xs text-fg-muted">{summaryDurationText}</span>
-    ) : null;
+  const headerDurationRight = !anyActive ? (
+    <StepRoundDurationText
+      active={false}
+      roundStartRef={roundStartRef}
+      frozenMs={frozenDurationMs}
+      language={language}
+      className="mt-0.5 tabular-nums text-xs text-fg-muted"
+    />
+  ) : null;
 
   return (
     <div className="my-1 w-full min-w-0 overflow-hidden rounded-xl bg-surface-hover/50 dark:bg-surface-hover/30">
@@ -433,7 +461,7 @@ export function AssistantStepsBlock({
         onClick={() => setExpanded(!expanded)}
         aria-expanded={expanded}
       >
-        {headerLeadingIcon}
+        <AssistantStepsHeaderStatusIcon active={anyActive} />
         <div className="min-w-0">
           <span className="inline-flex max-w-full flex-wrap items-baseline rounded-md bg-accent-soft/70 px-2 py-0.5 text-xs font-medium text-fg dark:bg-accent-soft/40">
             {headerMain}

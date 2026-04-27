@@ -11,8 +11,9 @@ const UNIX_FILE_PATH_RE = new RegExp(
   'gi',
 );
 
+/** Exclude `=` so code snippets (e.g. `s:\\n` + `result = …` + `args.json`) are not parsed as drive paths. */
 const WIN_FILE_PATH_RE = new RegExp(
-  `([A-Za-z]:[\\\\/][^"'\`<>*?\\n|]+?\\.(?:${extensionPattern()}))`,
+  `([A-Za-z]:[\\\\/][^"'\`<>*?\\n|=]+?\\.(?:${extensionPattern()}))`,
   'gi',
 );
 
