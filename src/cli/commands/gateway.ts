@@ -13,6 +13,9 @@ import { initWorkspace } from '../utils/init-workspace.js';
 import {
   createTokenCommand,
   createStatusCommand,
+  createHealthCommand,
+  createCallCommand,
+  createProbeCommand,
   createStopCommand,
   createRestartCommand,
   createLogsCommand,
@@ -65,6 +68,9 @@ function createGatewayCommand(_ctx: CLIContext): Command {
         'xopc gateway stop             # Stop gateway',
         'xopc gateway restart          # Restart gateway',
         'xopc gateway status           # Check gateway status',
+        'xopc gateway health           # Check gateway health',
+        'xopc gateway call status      # Call gateway API (alias)',
+        'xopc gateway probe            # Probe reachability / auth',
         'xopc gateway logs             # View recent logs',
         'xopc gateway token            # Show current token',
         'xopc gateway token --generate # Generate new token',
@@ -79,6 +85,9 @@ function createGatewayCommand(_ctx: CLIContext): Command {
     .option('--background', 'Start gateway in background mode (detached)', false)
     .addCommand(createTokenCommand())
     .addCommand(createStatusCommand())
+    .addCommand(createHealthCommand())
+    .addCommand(createCallCommand())
+    .addCommand(createProbeCommand())
     .addCommand(createStopCommand())
     .addCommand(createRestartCommand())
     .addCommand(createLogsCommand())
