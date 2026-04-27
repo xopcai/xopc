@@ -959,6 +959,37 @@ export function useChatSession() {
     }
   }, [finalizeMessage, loadSessionById, fq.dismissClarifyAndClearPending]);
 
+  const deleteMessageRound = useCallback(
+    (messageIndex: number) => {
+      const key = sessionKeyRef.current;
+      if (!key) return;
+      if (sendingRef.current || streamingRef.current) return;
+
+      setMessages((prev) => {
+        const msg = prev[messageIndex];
+        if (!msg) return prev;
+        const isUserMsg = msg.role === 'user' || msg.role === 'user-with-attachments';
+        if (!isUserMsg) return prev;
+
+        let deleteCount = 1;
+        const next = prev[messageIndex + 1];
+        if (next && next.role === 'assistant') {
+          deleteCount = 2;
+        }
+
+        const updated = [...prev];
+        updated.splice(messageIndex, deleteCount);
+
+        void sessionMgrRef.current.deleteMessages(key, messageIndex, deleteCount).catch(() => {
+          void loadSessionById(key, 0);
+        });
+
+        return updated;
+      });
+    },
+    [loadSessionById],
+  );
+
   useEffect(() => {
     const active = activeStreamSessionKeyRef.current;
     if (!decodedKey) return;
@@ -1173,6 +1204,7 @@ export function useChatSession() {
     steeringFollowUpId: fq.steeringFollowUpId,
     interruptAndSend,
     abort,
+    deleteMessageRound,
     followUpSuggestions: fq.followUpSuggestions,
     pickFollowUpSuggestion: fq.pickFollowUpSuggestion,
     clarifyPrompt: fq.clarifyPrompt,

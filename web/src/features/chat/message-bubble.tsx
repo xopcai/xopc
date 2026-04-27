@@ -1,5 +1,5 @@
 import { type ReactNode, memo, useCallback, useMemo, useState } from 'react';
-import { Check, Copy, FileCode2 } from 'lucide-react';
+import { Check, Copy, FileCode2, Trash2 } from 'lucide-react';
 import { marked } from 'marked';
 
 import type {
@@ -213,6 +213,9 @@ export const MessageBubble = memo(function MessageBubble({
   isStreaming,
   progress,
   reasoningLevel = 'off',
+  messageIndex,
+  onDeleteRound,
+  deleteRoundDisabled = false,
 }: {
   message: Message;
   authToken?: string;
@@ -220,6 +223,12 @@ export const MessageBubble = memo(function MessageBubble({
   isStreaming: boolean;
   progress: ProgressState | null;
   reasoningLevel?: ReasoningLevel;
+  /** Index of this message in the messages array (needed for delete). */
+  messageIndex?: number;
+  /** Delete this user message and the following assistant response. */
+  onDeleteRound?: (messageIndex: number) => void;
+  /** When true, omit delete control (e.g. while sending or streaming). */
+  deleteRoundDisabled?: boolean;
 }) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
@@ -324,7 +333,15 @@ export const MessageBubble = memo(function MessageBubble({
     () => (isAssistant && copyMarkdown ? getAssistantCopyPlainText(message.content ?? []) : ''),
     [isAssistant, copyMarkdown, message.content],
   );
-  const [copyFeedback, setCopyFeedback] = useState<'plain' | 'markdown' | null>(null);
+  const userCopyText = useMemo(() => {
+    if (!isUser) return '';
+    return (message.content ?? [])
+      .filter((b): b is { type: 'text'; text: string } => b.type === 'text' && Boolean(b.text))
+      .map((b) => stripEnvelopeTimestampPrefix(b.text))
+      .join('\n\n')
+      .trim();
+  }, [isUser, message.content]);
+  const [copyFeedback, setCopyFeedback] = useState<'plain' | 'markdown' | 'user' | null>(null);
   const [inlineImagePreview, setInlineImagePreview] = useState<MessageAttachment | null>(null);
   const openInlineImagePreview = useCallback((block: ImageContent, index: number) => {
     const att = imageContentToPreviewAttachment(block, index);
@@ -353,6 +370,25 @@ export const MessageBubble = memo(function MessageBubble({
     }
   }, [copyMarkdown]);
 
+  const handleCopyUserMessage = useCallback(async () => {
+    if (!userCopyText) return;
+    try {
+      await navigator.clipboard.writeText(userCopyText);
+      setCopyFeedback('user');
+      window.setTimeout(() => setCopyFeedback((f) => (f === 'user' ? null : f)), 2000);
+    } catch {
+      /* clipboard denied or unavailable */
+    }
+  }, [userCopyText]);
+
+  const handleDeleteRound = useCallback(() => {
+    if (messageIndex == null || !onDeleteRound) return;
+    const confirmed = window.confirm(m.chat.userMessageDeleteConfirm);
+    if (confirmed) {
+      onDeleteRound(messageIndex);
+    }
+  }, [messageIndex, onDeleteRound, m.chat.userMessageDeleteConfirm]);
+
   const stepBlocksForSources = useMemo(() => {
     const blocks = collectAssistantStepBlocks(message);
     if (reasoningHidden) return blocks.filter((b) => b.type !== 'thinking');
@@ -360,7 +396,37 @@ export const MessageBubble = memo(function MessageBubble({
   }, [message, reasoningHidden]);
 
   return (
-    <article className={cn('flex w-full min-w-0', isUser ? 'justify-end' : 'justify-start')}>
+    <article className={cn('group/msg flex w-full min-w-0', isUser ? 'justify-end' : 'justify-start')}>
+      {isUser && !isStreaming ? (
+        <div className="mr-1.5 flex shrink-0 items-center gap-0.5 self-start pt-1 opacity-0 transition-opacity duration-150 group-hover/msg:opacity-100">
+          <button
+            type="button"
+            className={messageActionIconButton}
+            onClick={() => void handleCopyUserMessage()}
+            disabled={!userCopyText}
+            title={copyFeedback === 'user' ? m.chat.messageCopied : m.chat.userMessageCopy}
+            aria-label={copyFeedback === 'user' ? m.chat.messageCopied : m.chat.userMessageCopy}
+          >
+            {copyFeedback === 'user' ? (
+              <Check className="h-3.5 w-3.5 text-fg-muted" strokeWidth={1.75} aria-hidden />
+            ) : (
+              <Copy className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
+            )}
+          </button>
+          {onDeleteRound && messageIndex != null && !deleteRoundDisabled ? (
+            <button
+              type="button"
+              className={cn(messageActionIconButton, 'hover:text-red-500')}
+              onClick={handleDeleteRound}
+              title={m.chat.userMessageDelete}
+              aria-label={m.chat.userMessageDelete}
+            >
+              <Trash2 className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
       <div
         className={cn(
           'min-w-0 max-w-[min(85%,var(--max-width-chat))]',

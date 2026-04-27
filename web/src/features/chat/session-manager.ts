@@ -147,4 +147,17 @@ export class SessionManager {
     const key = m ? decodeURIComponent(m[1]) : null;
     return key && key !== 'new' ? key : null;
   }
+
+  /** Delete a range of messages from a session by index. */
+  async deleteMessages(sessionKey: string, startIndex: number, count: number): Promise<void> {
+    const res = await apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(sessionKey)}/messages`), {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ startIndex, count }),
+    });
+    if (!res.ok) {
+      const json = (await res.json().catch(() => ({}))) as { error?: string };
+      throw new Error(json.error ?? `HTTP ${res.status}`);
+    }
+  }
 }

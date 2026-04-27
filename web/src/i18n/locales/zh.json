@@ -489,6 +489,12 @@
     "messageCopyPlainText": "复制纯文本",
     "messageCopyMarkdown": "复制 Markdown 格式",
     "messageCopied": "已复制",
+    "userMessageCopy": "复制消息",
+    "userMessageDelete": "删除本轮对话",
+    "userMessageDeleteConfirm": "将同时删除你的消息和 AI 的回复，确定要删除吗？",
+    "userMessageDeleteConfirmTitle": "删除本轮对话",
+    "userMessageDeleteCancel": "取消",
+    "userMessageDeleteOk": "删除",
     "commandPalette": {
       "noResults": "没有匹配的命令或技能",
       "placeholder": "搜索技能与命令…",
