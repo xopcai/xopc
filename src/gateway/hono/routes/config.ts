@@ -542,6 +542,85 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
           if (wx.accounts !== undefined) wxTarget.accounts = wx.accounts;
         }
       }
+
+      if ('feishu' in patchChannels) {
+        const fsRaw = patchChannels.feishu;
+        if (fsRaw === null) {
+          if (config.channels) delete config.channels.feishu;
+        } else if (typeof fsRaw === 'object' && !Array.isArray(fsRaw)) {
+          const fs = fsRaw as Record<string, unknown>;
+          if (!config.channels) config.channels = {} as any;
+          if (!config.channels.feishu) {
+            config.channels.feishu = {
+              enabled: false,
+              appId: '',
+              appSecret: '',
+              domain: 'feishu',
+              connectionMode: 'websocket',
+              dmPolicy: 'pairing',
+              groupPolicy: 'allowlist',
+              allowFrom: [],
+              groupAllowFrom: [],
+              requireMention: true,
+              historyLimit: 50,
+              textChunkLimit: 4000,
+              accounts: {},
+            };
+          }
+          const fsTarget = config.channels.feishu as Record<string, unknown>;
+
+          if (fs.enabled !== undefined) fsTarget.enabled = fs.enabled;
+          if (fs.defaultAccount !== undefined) {
+            const da = fs.defaultAccount;
+            if (da === null || da === '') delete fsTarget.defaultAccount;
+            else fsTarget.defaultAccount = String(da);
+          }
+          if (fs.appId !== undefined) fsTarget.appId = fs.appId;
+          if (fs.appSecret !== undefined) fsTarget.appSecret = fs.appSecret;
+          if (fs.domain !== undefined) fsTarget.domain = fs.domain;
+          if (fs.connectionMode !== undefined) fsTarget.connectionMode = fs.connectionMode;
+          if (fs.verificationToken !== undefined) {
+            const v = fs.verificationToken;
+            if (v === null || (typeof v === 'string' && !String(v).trim())) delete fsTarget.verificationToken;
+            else fsTarget.verificationToken = v;
+          }
+          if (fs.encryptKey !== undefined) {
+            const v = fs.encryptKey;
+            if (v === null || (typeof v === 'string' && !String(v).trim())) delete fsTarget.encryptKey;
+            else fsTarget.encryptKey = v;
+          }
+          if (fs.webhookHost !== undefined) {
+            const v = fs.webhookHost;
+            if (v === null || (typeof v === 'string' && !String(v).trim())) delete fsTarget.webhookHost;
+            else fsTarget.webhookHost = v;
+          }
+          if (fs.webhookPort !== undefined) fsTarget.webhookPort = fs.webhookPort;
+          if (fs.webhookPath !== undefined) {
+            const v = fs.webhookPath;
+            if (v === null || (typeof v === 'string' && !String(v).trim())) delete fsTarget.webhookPath;
+            else fsTarget.webhookPath = v;
+          }
+          if (fs.dmPolicy !== undefined) fsTarget.dmPolicy = fs.dmPolicy;
+          if (fs.groupPolicy !== undefined) fsTarget.groupPolicy = fs.groupPolicy;
+          if (fs.allowFrom !== undefined) fsTarget.allowFrom = fs.allowFrom;
+          if (fs.groupAllowFrom !== undefined) {
+            const ga = fs.groupAllowFrom;
+            if (ga === null || (Array.isArray(ga) && ga.length === 0)) delete fsTarget.groupAllowFrom;
+            else fsTarget.groupAllowFrom = ga;
+          }
+          if (fs.requireMention !== undefined) fsTarget.requireMention = fs.requireMention;
+          if (fs.historyLimit !== undefined) fsTarget.historyLimit = fs.historyLimit;
+          if (fs.textChunkLimit !== undefined) fsTarget.textChunkLimit = fs.textChunkLimit;
+          if (fs.renderMode !== undefined) fsTarget.renderMode = fs.renderMode;
+          if (fs.streaming !== undefined) fsTarget.streaming = fs.streaming;
+          if (fs.reactionNotifications !== undefined) {
+            fsTarget.reactionNotifications = fs.reactionNotifications;
+          }
+          if (fs.tools !== undefined) fsTarget.tools = fs.tools;
+          if (fs.actions !== undefined) fsTarget.actions = fs.actions;
+          if (fs.accounts !== undefined) fsTarget.accounts = fs.accounts;
+        }
+      }
     }
     
     // Update gateway heartbeat (partial merge)
