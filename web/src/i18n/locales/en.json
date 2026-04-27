@@ -489,6 +489,12 @@
     "messageCopyPlainText": "Copy plain text",
     "messageCopyMarkdown": "Copy Markdown",
     "messageCopied": "Copied",
+    "userMessageCopy": "Copy message",
+    "userMessageDelete": "Delete this round",
+    "userMessageDeleteConfirm": "This will delete both your message and the AI response. Continue?",
+    "userMessageDeleteConfirmTitle": "Delete conversation round",
+    "userMessageDeleteCancel": "Cancel",
+    "userMessageDeleteOk": "Delete",
     "commandPalette": {
       "noResults": "No matching commands or skills",
       "placeholder": "Search skills and commands…",

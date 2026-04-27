@@ -136,6 +136,25 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
     return c.json(result);
   });
 
+  // DELETE /api/sessions/:key/messages — delete a range of messages by index (before whole-session DELETE)
+  authenticated.delete('/api/sessions/:key/messages', async (c) => {
+    const key = c.req.param('key');
+    const body = await c.req.json().catch(() => ({}));
+    const startIndex = typeof body.startIndex === 'number' ? body.startIndex : -1;
+    const count = typeof body.count === 'number' ? body.count : 0;
+    if (startIndex < 0 || count <= 0) {
+      return c.json({ error: 'Invalid startIndex or count' }, 400);
+    }
+    const loaded = await service.sessionManagerInstance.loadMessages(key);
+    if (!loaded || startIndex >= loaded.length) {
+      return c.json({ error: 'Index out of range' }, 400);
+    }
+    const deleteCount = Math.min(count, loaded.length - startIndex);
+    const next = loaded.slice(0, startIndex).concat(loaded.slice(startIndex + deleteCount));
+    await service.sessionManagerInstance.saveMessages(key, next);
+    return c.json({ ok: true, deleted: deleteCount });
+  });
+
   // DELETE /api/sessions/:key - Delete session
   authenticated.delete('/api/sessions/:key', async (c) => {
     const key = c.req.param('key');

@@ -75,6 +75,7 @@ export function ChatPage() {
     steeringFollowUpId,
     interruptAndSend,
     abort,
+    deleteMessageRound,
     followUpSuggestions,
     pickFollowUpSuggestion,
     clarifyPrompt,
@@ -276,6 +277,8 @@ export function ChatPage() {
                     scrollElementRef={scrollRef}
                     pinToBottom={atBottom}
                     onPickWelcomePrompt={onPickWelcomePrompt}
+                    onDeleteRound={deleteMessageRound}
+                    deleteRoundDisabled={streaming || sending}
                   />
                 </>
               )}
