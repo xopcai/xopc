@@ -34,6 +34,11 @@ export interface ReloadCallbacks {
   onHeartbeatReload?: ReloadCallback;
   onToolsReload?: ReloadCallback;
   onWebSearchReload?: ReloadCallback;
+  /** All `extensions.*` hot paths in one batch (deduplicated in applyReload). */
+  onExtensionsReload?: (
+    newConfig: Config,
+    changedPaths: string[],
+  ) => void | Promise<void>;
   onFullRestart?: ReloadCallback;
 }
 
@@ -206,11 +211,21 @@ export class ConfigHotReloader {
       return;
     }
 
-    // Handle hot reload changes
-    if (plan.requiresHotReload) {
-      for (const path of plan.hotPaths) {
-        await this.applyHotPath(path, newConfig);
-      }
+    if (!plan.requiresHotReload) {
+      log.info({ plan }, 'Config hot reload completed');
+      return;
+    }
+
+    const isExtensionPath = (p: string) => p === 'extensions' || p.startsWith('extensions.');
+    const extensionPaths = plan.hotPaths.filter(isExtensionPath);
+    const otherPaths = plan.hotPaths.filter((p) => !isExtensionPath(p));
+
+    for (const path of otherPaths) {
+      await this.applyHotPath(path, newConfig);
+    }
+
+    if (extensionPaths.length > 0 && this.callbacks.onExtensionsReload) {
+      await Promise.resolve(this.callbacks.onExtensionsReload(newConfig, extensionPaths));
     }
 
     log.info({ plan }, 'Config hot reload completed');

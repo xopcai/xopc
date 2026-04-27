@@ -9,8 +9,8 @@ export function registerCommandsSkillsRoutes(authenticated: Hono, deps: Authenti
   // ========== Chat slash commands (CommandRegistry) ==========
 
   authenticated.get('/api/commands', (c) => {
-    const commands = commandRegistry
-      .list()
+    const all = commandRegistry.list();
+    const commands = all
       .filter((cmd) => cmd.scope.includes('global') || cmd.scope.includes('private'))
       .map((cmd) => ({
         id: cmd.id,
@@ -18,10 +18,19 @@ export function registerCommandsSkillsRoutes(authenticated: Hono, deps: Authenti
         aliases: cmd.aliases ?? [],
         description: cmd.description,
         category: cmd.category,
+        scope: cmd.scope,
         acceptsArgs: cmd.acceptsArgs ?? false,
         examples: cmd.examples ?? [],
       }));
-    return c.json({ ok: true, payload: { commands } });
+    const extensionCommands = all
+      .filter((cmd) => cmd.category === 'extension')
+      .map((cmd) => ({
+        id: cmd.id,
+        name: cmd.name,
+        description: cmd.description,
+        extensionId: cmd.id.startsWith('ext.') ? cmd.id.split('.')[1] : undefined,
+      }));
+    return c.json({ ok: true, payload: { commands, extensionCommands } });
   });
 
   // ========== Skills (managed global skills under ~/.xopc/skills) ==========
