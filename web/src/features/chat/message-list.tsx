@@ -22,6 +22,8 @@ export const MessageList = memo(function MessageList({
   scrollElementRef,
   pinToBottom,
   onPickWelcomePrompt,
+  onDeleteRound,
+  deleteRoundDisabled,
 }: {
   messages: Message[];
   authToken?: string;
@@ -35,6 +37,10 @@ export const MessageList = memo(function MessageList({
   pinToBottom: boolean;
   /** Empty-state quick prompts — fills the composer when chosen. */
   onPickWelcomePrompt?: (text: string) => void;
+  /** Delete a user message round (user + assistant) by message index. */
+  onDeleteRound?: (messageIndex: number) => void;
+  /** Omit delete-round control while sending/streaming. */
+  deleteRoundDisabled?: boolean;
 }) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
@@ -137,6 +143,9 @@ export const MessageList = memo(function MessageList({
               isStreaming={isStreamRow}
               progress={isStreamRow ? progress : null}
               reasoningLevel={reasoningLevel}
+              messageIndex={virtualRow.index}
+              onDeleteRound={onDeleteRound}
+              deleteRoundDisabled={deleteRoundDisabled}
             />
           </div>
         );
