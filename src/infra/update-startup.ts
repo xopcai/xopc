@@ -1,11 +1,12 @@
 // src/infra/update-startup.ts
 
-import { createHash, randomUUID } from 'node:crypto';
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
-import { join, dirname } from 'node:path';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { readFile, writeFile, mkdir, rename, unlink } from 'node:fs/promises';
+import { dirname } from 'node:path';
 
 import type { Config } from '../config/schema.js';
-import { resolveStateDir } from '../config/paths.js';
+import { resolveUpdateCheckStatePath } from '../config/paths.js';
+import { acquireUpdateLock } from './update-lock.js';
 import { PACKAGE_VERSION } from '../package-version.js';
 import { createLogger } from '../utils/logger.js';
 
@@ -23,7 +24,6 @@ const log = createLogger('UpdateCheck');
 
 // --- State persistence ---
 
-const UPDATE_CHECK_FILENAME = 'update-check.json';
 const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
 const ONE_HOUR_MS = 60 * 60 * 1000;
 
@@ -60,15 +60,33 @@ async function readState(statePath: string): Promise<UpdateCheckState> {
   try {
     const raw = await readFile(statePath, 'utf-8');
     const parsed = JSON.parse(raw) as UpdateCheckState;
-    return parsed && typeof parsed === 'object' ? parsed : {};
-  } catch {
+    if (!parsed || typeof parsed !== 'object') {
+      log.warn({ statePath }, 'Update check state file contains non-object; resetting');
+      return {};
+    }
+    return parsed;
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+      log.warn({ err, statePath }, 'Failed to read update check state; resetting');
+    }
     return {};
   }
 }
 
 async function writeState(statePath: string, state: UpdateCheckState): Promise<void> {
   await mkdir(dirname(statePath), { recursive: true });
-  await writeFile(statePath, JSON.stringify(state, null, 2), 'utf-8');
+  const tmpPath = `${statePath}.${randomBytes(4).toString('hex')}.tmp`;
+  try {
+    await writeFile(tmpPath, JSON.stringify(state, null, 2), 'utf-8');
+    await rename(tmpPath, statePath);
+  } catch (err) {
+    try {
+      await unlink(tmpPath);
+    } catch {
+      // ignore
+    }
+    throw err;
+  }
 }
 
 function resolveCheckIntervalMs(config: Config): number {
@@ -114,8 +132,7 @@ export async function runGatewayUpdateCheck(params: {
   const shouldCheckHints = config.update?.checkOnStart !== false;
   if (!force && !shouldCheckHints && !autoEnabled) return;
 
-  const stateDir = resolveStateDir();
-  const statePath = join(stateDir, UPDATE_CHECK_FILENAME);
+  const statePath = resolveUpdateCheckStatePath();
   const state = await readState(statePath);
   const now = Date.now();
 
@@ -302,6 +319,11 @@ async function handleAutoUpdate(params: {
 
   log.info({ channel, version, tag }, 'Starting auto-update');
 
+  const lock = await acquireUpdateLock('auto');
+  if (!lock) {
+    log.info({ version, tag }, 'Auto-update skipped: another update is in progress');
+    return;
+  }
   try {
     const { runAutoUpdateCommand } = await import('./update-runner.js');
     const result = await runAutoUpdateCommand({ channel, root });
@@ -317,6 +339,8 @@ async function handleAutoUpdate(params: {
     }
   } catch (err) {
     log.error({ err, channel, version }, 'Auto-update command threw');
+  } finally {
+    await lock.release();
   }
 }
 

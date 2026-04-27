@@ -1,9 +1,11 @@
 import { Download, Loader2, RefreshCw, X } from 'lucide-react';
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 
 import type { UpdateReminderController } from '@/features/updater/use-update-reminder';
+import { apiFetch } from '@/lib/fetch';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
+import { apiUrl } from '@/lib/url';
 import { useLocaleStore } from '@/stores/locale-store';
 
 /**
@@ -19,6 +21,46 @@ export function UpdateReminderBar({
   const language = useLocaleStore((s) => s.language);
   const t = messages(language).updatePanel;
   const { show, dismiss, electronQuitAndInstall, runNpmUpdate, npmUpdateRunning } = reminder;
+
+  const [restartBusy, setRestartBusy] = useState(false);
+
+  const onRestartGateway = useCallback(async () => {
+    const tp = messages(language).updatePanel;
+    setRestartBusy(true);
+    try {
+      const res = await apiFetch(apiUrl('/api/gateway/restart'), { method: 'POST' });
+      const j = (await res.json().catch(() => ({}))) as { ok?: boolean; message?: string };
+      if (res.ok && j.ok !== false) {
+        window.dispatchEvent(
+          new CustomEvent('extension-notification', {
+            detail: { type: 'success', title: tp.restartGateway, message: '' },
+          }),
+        );
+        return;
+      }
+      window.dispatchEvent(
+        new CustomEvent('extension-notification', {
+          detail: {
+            type: 'error',
+            title: tp.updateErrorFailed,
+            message: typeof j.message === 'string' ? j.message : `HTTP ${res.status}`,
+          },
+        }),
+      );
+    } catch (e) {
+      window.dispatchEvent(
+        new CustomEvent('extension-notification', {
+          detail: {
+            type: 'error',
+            title: tp.updateErrorFailed,
+            message: e instanceof Error ? e.message : String(e),
+          },
+        }),
+      );
+    } finally {
+      setRestartBusy(false);
+    }
+  }, [language]);
 
   const onNpmUpdateClick = useCallback(async () => {
     const tp = messages(language).updatePanel;
@@ -116,6 +158,43 @@ export function UpdateReminderBar({
           onClick={dismiss}
           className={cn(actionsRight, 'sm:right-2')}
           aria-label={t.dismissAria}
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+    );
+  }
+
+  if (show.kind === 'npm-restart-required') {
+    return (
+      <div
+        className={cn(
+          'relative flex min-h-10 w-full min-w-0 items-center justify-center border-b border-amber-500/25 bg-amber-500/10 py-2 text-sm',
+          compact && 'text-xs',
+        )}
+      >
+        <div className="mx-auto flex max-w-[min(100%,52rem)] flex-wrap items-center justify-center gap-x-2 gap-y-1 px-10 pr-14 text-center sm:px-12 sm:pr-16">
+          <span>{t.restartRequired.replace('{{version}}', show.version)}</span>
+          <button
+            type="button"
+            onClick={onRestartGateway}
+            disabled={restartBusy}
+            className="inline-flex shrink-0 items-center gap-1 rounded bg-accent px-2.5 py-1 text-xs font-medium text-white hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {restartBusy ? (
+              <Loader2 className="h-3 w-3 shrink-0 animate-spin" aria-hidden />
+            ) : (
+              <RefreshCw className="h-3 w-3 shrink-0" aria-hidden />
+            )}
+            {t.restartGateway}
+          </button>
+        </div>
+        <button
+          type="button"
+          onClick={dismiss}
+          className={actionsRight}
+          aria-label={t.dismissAria}
+          title={t.dismissHint}
         >
           <X className="h-4 w-4" />
         </button>

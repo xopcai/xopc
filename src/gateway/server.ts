@@ -29,6 +29,9 @@ export class GatewayServer {
 
     // Start the underlying service first
     await this.service.start();
+    this.service.registerGatewayShutdownForRestart(async () => {
+      await this.stop();
+    });
 
     // Create Hono app
     // Priority: CLI token > service auto-generated token

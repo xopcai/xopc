@@ -59,6 +59,7 @@ import { buildSessionKey, parseSessionKey } from '../routing/session-key.js';
 import { getDefaultAgentId } from '../routing/resolve-route.js';
 import { prependEnvelopeTimestamp } from '../channels/envelope-timestamp.js';
 import { scheduleGatewayUpdateCheck } from '../infra/update-startup.js';
+import { restartGatewayProcessWithFreshPid } from './respawn.js';
 import { MAX_CHAT_ATTACHMENTS } from './chat-limits.js';
 
 // ========== SSE Event System ==========
@@ -108,6 +109,9 @@ export class GatewayService {
   private runAbortControllers = new Map<string, AbortController>();
 
   private stopGatewayUpdateCheck: (() => void) | null = null;
+
+  /** When set (e.g. by `GatewayServer`), `triggerGatewayProcessRestart` can stop HTTP then exit. */
+  private gatewayShutdownForRestart: (() => Promise<void>) | null = null;
 
   private readonly clarifyBridge = new ClarifyBridge();
 
@@ -1022,6 +1026,45 @@ export class GatewayService {
    */
   requestHeartbeatNow(opts?: { reason?: string }): void {
     this.heartbeatService.requestNow({ reason: opts?.reason ?? 'manual' });
+  }
+
+  /**
+   * Register graceful shutdown used after spawning a replacement gateway process (foreground CLI server).
+   */
+  registerGatewayShutdownForRestart(handler: () => Promise<void>): void {
+    this.gatewayShutdownForRestart = handler;
+  }
+
+  /**
+   * Respawn the gateway process when supported (spawn + exit, supervisor exit, or disabled when XOPC_NO_RESPAWN).
+   */
+  triggerGatewayProcessRestart(): { ok: boolean; mode: string; message?: string } {
+    const result = restartGatewayProcessWithFreshPid();
+    if (result.mode === 'failed') {
+      return { ok: false, mode: result.mode, message: result.detail ?? 'spawn failed' };
+    }
+    if (result.mode === 'disabled') {
+      return {
+        ok: false,
+        mode: 'disabled',
+        message:
+          'Process respawn is disabled (XOPC_NO_RESPAWN). Restart the gateway manually (e.g. xopc gateway restart).',
+      };
+    }
+    const shutdown = this.gatewayShutdownForRestart;
+    if (!shutdown) {
+      return {
+        ok: false,
+        mode: result.mode,
+        message: 'Gateway restart is not available in this process.',
+      };
+    }
+    setImmediate(() => {
+      void shutdown().finally(() => {
+        process.exit(0);
+      });
+    });
+    return { ok: true, mode: result.mode };
   }
 
   /**

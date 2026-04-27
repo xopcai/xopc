@@ -1738,7 +1738,12 @@
     "listenHost": "Listen address",
     "listenPort": "Port",
     "listenHint": "Effective after gateway restart if changed outside this UI.",
-    "authModeNone": "Auth mode is set to none — token in config may be ignored."
+    "authModeNone": "Auth mode is set to none — token in config may be ignored.",
+    "updateChannel": "Update channel",
+    "channelStable": "Stable",
+    "channelBeta": "Beta",
+    "channelDev": "Dev",
+    "updateChannelHint": "Beta and dev receive builds earlier; stable is recommended for daily use."
   },
   "heartbeatSettings": {
     "needToken": "Save a gateway token to load and edit heartbeat options.",
@@ -1880,7 +1885,9 @@
     "updateSuccessDetail": "Restart the gateway to use the new version (for example: xopc gateway restart).",
     "updateErrorGit": "One-click update unavailable",
     "updateErrorBusy": "An update is already in progress",
-    "updateErrorFailed": "Update failed"
+    "updateErrorFailed": "Update failed",
+    "restartRequired": "v{{version}} installed. Restart the gateway to use the new version.",
+    "restartGateway": "Restart gateway"
   },
   "aboutDialog": {
     "windowTitle": "About this application",

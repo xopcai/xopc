@@ -81,6 +81,11 @@ export function GatewaySettingsPanel() {
     setForm((f) => (f ? { ...f, auth: { ...f.auth, ...patch } } : null));
   }, []);
 
+  const updateChannel = useCallback((channel: GatewaySettingsState['updateChannel']) => {
+    dirtyRef.current = true;
+    setForm((f) => (f ? { ...f, updateChannel: channel } : null));
+  }, []);
+
   const save = useCallback(async () => {
     if (!form || saving) return;
     setSaving(true);
@@ -226,6 +231,23 @@ export function GatewaySettingsPanel() {
           <Button type="button" variant="secondary" className="w-full sm:w-auto" onClick={() => openTokenDialog()}>
             {g.changeToken}
           </Button>
+
+          <div className="space-y-2 border-t border-edge pt-4">
+            <label className="text-sm font-medium text-fg" htmlFor="gateway-update-channel">
+              {g.updateChannel}
+            </label>
+            <select
+              id="gateway-update-channel"
+              value={form.updateChannel}
+              onChange={(e) => updateChannel(e.target.value as GatewaySettingsState['updateChannel'])}
+              className={inputClassName()}
+            >
+              <option value="stable">{g.channelStable}</option>
+              <option value="beta">{g.channelBeta}</option>
+              <option value="dev">{g.channelDev}</option>
+            </select>
+            <p className="text-xs text-fg-subtle">{g.updateChannelHint}</p>
+          </div>
         </div>
       </section>
     </div>

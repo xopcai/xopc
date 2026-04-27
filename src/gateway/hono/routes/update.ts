@@ -1,17 +1,21 @@
 import type { Hono } from 'hono';
+import { streamSSE } from 'hono/streaming';
 
 import { loadConfig } from '../../../config/index.js';
+import { acquireUpdateLock } from '../../../infra/update-lock.js';
 import { detectInstallKind, resolvePackageRoot } from '../../../infra/update-check.js';
-import { DEFAULT_PACKAGE_CHANNEL, normalizeUpdateChannel } from '../../../infra/update-channels.js';
-import { runAutoUpdateCommand } from '../../../infra/update-runner.js';
+import {
+  DEFAULT_PACKAGE_CHANNEL,
+  normalizeUpdateChannel,
+  type UpdateChannel,
+} from '../../../infra/update-channels.js';
+import { runAutoUpdateCommand, runAutoUpdateCommandWithProgress } from '../../../infra/update-runner.js';
 import { getUpdateAvailable, runGatewayUpdateCheck } from '../../../infra/update-startup.js';
 import { PACKAGE_VERSION } from '../../../package-version.js';
 import { createLogger } from '../../../utils/logger.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
 const log = createLogger('GatewayUpdate');
-
-let updateRunInFlight = false;
 
 function parseUpdateCliJson(stdout: string): Record<string, unknown> | null {
   const t = stdout.trim();
@@ -37,6 +41,44 @@ function parseUpdateCliJson(stdout: string): Record<string, unknown> | null {
     }
   }
   return null;
+}
+
+type PreconditionOk = {
+  ok: true;
+  channel: UpdateChannel;
+  root: string | null;
+};
+
+function isPreconditionFail(
+  x: PreconditionOk | { ok: false; status: 400; body: Record<string, unknown> },
+): x is { ok: false; status: 400; body: Record<string, unknown> } {
+  return !x.ok;
+}
+
+async function npmUpdatePreconditions(
+  service: AuthenticatedRouteDeps['service'],
+): Promise<PreconditionOk | { ok: false; status: 400; body: Record<string, unknown> }> {
+  const config = loadConfig(service.getHealth().configPath);
+  const channel = normalizeUpdateChannel(config.update?.channel) ?? DEFAULT_PACKAGE_CHANNEL;
+
+  const root = await resolvePackageRoot();
+  if (root) {
+    const kind = await detectInstallKind(root);
+    if (kind === 'git') {
+      return {
+        ok: false,
+        status: 400,
+        body: {
+          ok: false,
+          error: 'git-checkout',
+          message:
+            'Running from a git checkout. Use `git pull` in the repo, or install from npm to use one-click update.',
+        },
+      };
+    }
+  }
+
+  return { ok: true, channel, root };
 }
 
 export function registerUpdateRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
@@ -86,7 +128,13 @@ export function registerUpdateRoutes(authenticated: Hono, deps: AuthenticatedRou
    * POST /api/update/run — one-click npm install (OpenClaw-style). Rejects git checkouts.
    */
   authenticated.post('/api/update/run', strictRateLimitMiddleware, async (c) => {
-    if (updateRunInFlight) {
+    const pre = await npmUpdatePreconditions(service);
+    if (isPreconditionFail(pre)) {
+      return c.json(pre.body, pre.status);
+    }
+
+    const lock = await acquireUpdateLock('gateway');
+    if (!lock) {
       return c.json(
         {
           ok: false,
@@ -97,28 +145,7 @@ export function registerUpdateRoutes(authenticated: Hono, deps: AuthenticatedRou
       );
     }
 
-    const configPath = service.getHealth().configPath;
-    const config = loadConfig(configPath);
-    const channel =
-      normalizeUpdateChannel(config.update?.channel) ?? DEFAULT_PACKAGE_CHANNEL;
-
-    const root = await resolvePackageRoot();
-    if (root) {
-      const kind = await detectInstallKind(root);
-      if (kind === 'git') {
-        return c.json(
-          {
-            ok: false,
-            error: 'git-checkout',
-            message:
-              'Running from a git checkout. Use `git pull` in the repo, or install from npm to use one-click update.',
-          },
-          400,
-        );
-      }
-    }
-
-    updateRunInFlight = true;
+    const { channel, root } = pre;
     try {
       log.info({ channel }, 'Gateway: starting one-click npm update');
       const result = await runAutoUpdateCommand({ channel, root });
@@ -149,8 +176,6 @@ export function registerUpdateRoutes(authenticated: Hono, deps: AuthenticatedRou
       }
 
       log.info({ channel }, 'Gateway: one-click npm update finished');
-      // Do not run registry check here: the process still reports the old `PACKAGE_VERSION`
-      // until the gateway is restarted, which would keep `update available` set incorrectly.
       return c.json({ ok: true, result: parsed });
     } catch (err) {
       log.error({ err, channel }, 'Gateway: one-click npm update threw');
@@ -163,7 +188,95 @@ export function registerUpdateRoutes(authenticated: Hono, deps: AuthenticatedRou
         500,
       );
     } finally {
-      updateRunInFlight = false;
+      await lock.release();
     }
+  });
+
+  /**
+   * POST /api/update/run/stream — SSE-streamed npm update with progress lines.
+   */
+  authenticated.post('/api/update/run/stream', strictRateLimitMiddleware, async (c) => {
+    const pre = await npmUpdatePreconditions(service);
+    if (isPreconditionFail(pre)) {
+      return c.json(pre.body, pre.status);
+    }
+
+    const { channel, root } = pre;
+
+    return streamSSE(c, async (stream) => {
+      const lock = await acquireUpdateLock('gateway');
+      if (!lock) {
+        await stream.writeSSE({
+          event: 'result',
+          data: JSON.stringify({
+            ok: false,
+            error: 'busy',
+            message: 'Another update is already in progress.',
+          }),
+        });
+        return;
+      }
+
+      try {
+        log.info({ channel }, 'Gateway: starting streamed one-click npm update');
+        const result = await runAutoUpdateCommandWithProgress({
+          channel,
+          root,
+          onProgress: async (line, source) => {
+            await stream.writeSSE({
+              event: 'progress',
+              data: JSON.stringify({ line, source }),
+            });
+          },
+        });
+
+        const parsed = parseUpdateCliJson(result.stdout ?? '');
+
+        if (result.ok && parsed?.status === 'skipped' && parsed?.reason === 'git-checkout') {
+          await stream.writeSSE({
+            event: 'result',
+            data: JSON.stringify({
+              ok: false,
+              error: 'git-checkout',
+              message: String(parsed.message ?? 'Git checkout — use git pull instead.'),
+            }),
+          });
+          return;
+        }
+
+        if (!result.ok) {
+          await stream.writeSSE({
+            event: 'result',
+            data: JSON.stringify({
+              ok: false,
+              error: 'update-failed',
+              message:
+                result.stderr?.trim() || result.reason || `Update exited with code ${result.exitCode ?? 'unknown'}`,
+              result: parsed,
+              exitCode: result.exitCode,
+              reason: result.reason,
+            }),
+          });
+          return;
+        }
+
+        await stream.writeSSE({
+          event: 'result',
+          data: JSON.stringify({ ok: true, result: parsed }),
+        });
+      } catch (err) {
+        log.error({ err, channel }, 'Gateway: streamed npm update threw');
+        await stream.writeSSE({
+          event: 'result',
+          data: JSON.stringify({
+            ok: false,
+            error: 'internal',
+            message: err instanceof Error ? err.message : String(err),
+          }),
+        });
+      } finally {
+        await lock.release();
+      }
+    });
   });
 }

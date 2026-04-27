@@ -11,7 +11,7 @@ export function registerUpdaterIpc(ipcMain: IpcMain): void {
   });
 
   ipcMain.handle('updater:check', () => {
-    checkForUpdates();
+    checkForUpdates(true);
     return { ok: true };
   });
 

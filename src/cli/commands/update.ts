@@ -129,7 +129,25 @@ function createUpdateCommand(_ctx: CLIContext): Command {
         }
 
         const installArgs = buildInstallArgs(packageManager, spec);
-        const exitCode = await runInstallCommand(installArgs);
+
+        const { acquireUpdateLock } = await import('../../infra/update-lock.js');
+        const lock = await acquireUpdateLock('cli');
+        if (!lock) {
+          const message = 'Another update is already in progress. Try again later.';
+          if (options.json) {
+            console.log(JSON.stringify({ status: 'error', reason: 'lock-held', message }));
+          } else {
+            console.error(`❌ ${message}`);
+          }
+          process.exit(1);
+        }
+
+        let exitCode: number;
+        try {
+          exitCode = await runInstallCommand(installArgs);
+        } finally {
+          await lock.release();
+        }
 
         if (exitCode === 0) {
           if (options.json) {

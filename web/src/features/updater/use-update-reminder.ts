@@ -1,8 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import { useUpdateStatus } from '@/features/updater/use-update-status';
+import { NPM_PENDING_RESTART_KEY, useUpdateStatus } from '@/features/updater/use-update-status';
 
 const STORAGE_KEY = 'xopc.updateReminder.dismissed';
+
+const isElectronEnv =
+  typeof window !== 'undefined' &&
+  (window as unknown as { electronAPI?: { updater?: unknown } }).electronAPI?.updater !== undefined;
 
 /** About / menu “check updates”: clear Electron dismissal so the top bar can show again after a manual check. */
 export const XOPC_ELECTRON_UPDATE_RECHECK_EVENT = 'xopc:electron-update-recheck';
@@ -30,6 +34,7 @@ export type UpdateReminderView =
   | { kind: 'none' }
   | { kind: 'electron-ready'; version: string }
   | { kind: 'electron-downloading'; percent: number }
+  | { kind: 'npm-restart-required'; version: string }
   | { kind: 'npm'; version: string; channel: string | null };
 
 /**
@@ -41,12 +46,57 @@ export function useUpdateReminder() {
     useUpdateStatus();
   const [dismissed, setDismissed] = useState<Dismissed>(readDismissed);
   const [hideDownloading, setHideDownloading] = useState(false);
+  const [pendingNpmRestartVersion, setPendingNpmRestartVersion] = useState<string | null>(() => {
+    if (typeof window === 'undefined' || isElectronEnv) return null;
+    try {
+      const raw = sessionStorage.getItem(NPM_PENDING_RESTART_KEY);
+      if (!raw) return null;
+      const p = JSON.parse(raw) as { installedVersion?: string };
+      const v = typeof p.installedVersion === 'string' ? p.installedVersion.trim() : '';
+      return v || null;
+    } catch {
+      return null;
+    }
+  });
 
   useEffect(() => {
     if (electron?.state !== 'downloading') {
       setHideDownloading(false);
     }
   }, [electron?.state]);
+
+  useEffect(() => {
+    if (isElectron) return;
+    const sync = () => {
+      try {
+        const raw = sessionStorage.getItem(NPM_PENDING_RESTART_KEY);
+        if (!raw) {
+          setPendingNpmRestartVersion(null);
+          return;
+        }
+        const p = JSON.parse(raw) as { installedVersion?: string };
+        const v = typeof p.installedVersion === 'string' ? p.installedVersion.trim() : '';
+        setPendingNpmRestartVersion(v || null);
+      } catch {
+        setPendingNpmRestartVersion(null);
+      }
+    };
+    sync();
+    window.addEventListener('xopc:npm-update-installed', sync);
+    return () => window.removeEventListener('xopc:npm-update-installed', sync);
+  }, [isElectron]);
+
+  useEffect(() => {
+    if (!npm?.currentVersion || !pendingNpmRestartVersion) return;
+    if (npm.currentVersion === pendingNpmRestartVersion) {
+      try {
+        sessionStorage.removeItem(NPM_PENDING_RESTART_KEY);
+      } catch {
+        /* ignore */
+      }
+      setPendingNpmRestartVersion(null);
+    }
+  }, [npm?.currentVersion, pendingNpmRestartVersion]);
 
   useEffect(() => {
     const onRecheck = () => {
@@ -95,18 +145,43 @@ export function useUpdateReminder() {
     if (isElectron && electron?.state === 'downloading' && !hideDownloading) {
       return { kind: 'electron-downloading', percent: Math.round(electron.percent ?? 0) };
     }
-    if (npm?.updateAvailable && npm.latestVersion) {
+    if (
+      !isElectron &&
+      pendingNpmRestartVersion &&
+      npm &&
+      npm.currentVersion !== pendingNpmRestartVersion
+    ) {
+      return { kind: 'npm-restart-required', version: pendingNpmRestartVersion };
+    }
+    if (!isElectron && npm?.updateAvailable && npm.latestVersion) {
       if (dismissed.npm === npm.latestVersion) {
         return { kind: 'none' };
       }
       return { kind: 'npm', version: npm.latestVersion, channel: npm.channel };
     }
     return { kind: 'none' };
-  }, [dismissed.npm, dismissed.electronReady, electron, hideDownloading, isElectron, npm]);
+  }, [
+    dismissed.npm,
+    dismissed.electronReady,
+    electron,
+    hideDownloading,
+    isElectron,
+    npm,
+    pendingNpmRestartVersion,
+  ]);
 
   const dismiss = useCallback(() => {
     if (show.kind === 'electron-downloading') {
       setHideDownloading(true);
+      return;
+    }
+    if (show.kind === 'npm-restart-required') {
+      try {
+        sessionStorage.removeItem(NPM_PENDING_RESTART_KEY);
+      } catch {
+        /* ignore */
+      }
+      setPendingNpmRestartVersion(null);
       return;
     }
     if (show.kind === 'none') return;

@@ -3,6 +3,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { apiUrl } from '@/lib/url';
 import { apiFetch } from '@/lib/fetch';
 
+/** Session flag: npm install finished but gateway process still on older `currentVersion`. */
+export const NPM_PENDING_RESTART_KEY = 'xopc.npmPendingRestart';
+
 // --- Types ---
 
 export type NpmUpdateStatus = {
@@ -59,6 +62,7 @@ export function useUpdateStatus(): UpdateStatus & {
   );
 
   useEffect(() => {
+    if (isElectronEnv) return;
     void fetchNpmStatus().then(setNpm).catch(() => {});
 
     const handler = (e: Event) => {
@@ -81,6 +85,22 @@ export function useUpdateStatus(): UpdateStatus & {
     return () => window.removeEventListener('update-available', handler);
   }, []);
 
+  /** When the running gateway version catches up, clear pending npm restart UX. */
+  useEffect(() => {
+    if (isElectronEnv || !npm?.currentVersion) return;
+    try {
+      const raw = sessionStorage.getItem(NPM_PENDING_RESTART_KEY);
+      if (!raw) return;
+      const p = JSON.parse(raw) as { installedVersion?: string };
+      const v = typeof p.installedVersion === 'string' ? p.installedVersion.trim() : '';
+      if (v && v === npm.currentVersion) {
+        sessionStorage.removeItem(NPM_PENDING_RESTART_KEY);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [npm?.currentVersion]);
+
   useEffect(() => {
     if (!isElectronEnv) return;
     const api = (window as unknown as { electronAPI: { updater: {
@@ -95,6 +115,7 @@ export function useUpdateStatus(): UpdateStatus & {
   }, []);
 
   const checkNow = useCallback(async () => {
+    if (isElectronEnv) return;
     try {
       const res = await apiFetch(apiUrl('/api/update/check'), { method: 'POST' });
       if (res.ok) {
@@ -107,18 +128,49 @@ export function useUpdateStatus(): UpdateStatus & {
   }, []);
 
   const runNpmUpdate = useCallback(async (): Promise<NpmUpdateRunResult> => {
+    if (isElectronEnv) {
+      return {
+        ok: false,
+        error: 'not-applicable',
+        message: 'npm update is not used in the desktop app.',
+        status: 400,
+      };
+    }
     setNpmUpdateRunning(true);
     try {
-      const res = await apiFetch(apiUrl('/api/update/run'), { method: 'POST' });
-      const json = (await res.json()) as {
-        ok?: boolean;
-        error?: string;
-        message?: string;
-        result?: Record<string, unknown> | null;
-      };
-      if (json.ok) {
-        const r = json.result ?? null;
+      const res = await apiFetch(apiUrl('/api/update/run/stream'), {
+        method: 'POST',
+        headers: { Accept: 'text/event-stream' },
+      });
+      if (!res.ok || !res.body) {
+        const text = await res.text().catch(() => '');
+        let message = `HTTP ${res.status}`;
+        try {
+          const j = JSON.parse(text) as { message?: string };
+          if (typeof j.message === 'string') message = j.message;
+        } catch {
+          if (text) message = text.slice(0, 500);
+        }
+        return {
+          ok: false,
+          error: res.status === 409 ? 'busy' : 'unknown',
+          message,
+          status: res.status,
+        };
+      }
+
+      const final = await consumeNpmUpdateSse(res.body);
+      if (final.ok && final.result) {
+        const r = final.result;
         if (r && typeof r === 'object' && r.status === 'ok' && typeof r.installedVersion === 'string') {
+          try {
+            sessionStorage.setItem(
+              NPM_PENDING_RESTART_KEY,
+              JSON.stringify({ installedVersion: r.installedVersion }),
+            );
+          } catch {
+            /* ignore */
+          }
           window.dispatchEvent(
             new CustomEvent('xopc:npm-update-installed', { detail: { version: r.installedVersion } }),
           );
@@ -132,15 +184,8 @@ export function useUpdateStatus(): UpdateStatus & {
             new CustomEvent('xopc:npm-update-installed', { detail: { version: r.latestVersion } }),
           );
         }
-        return { ok: true, result: r };
       }
-      return {
-        ok: false,
-        error: String(json.error ?? 'unknown'),
-        message: String(json.message ?? (res.ok ? 'Update failed' : `HTTP ${res.status}`)),
-        status: res.status,
-        result: json.result ?? null,
-      };
+      return final;
     } catch (err) {
       return {
         ok: false,
@@ -182,4 +227,98 @@ async function fetchNpmStatus(): Promise<NpmUpdateStatus> {
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const json = (await res.json()) as { payload: NpmUpdateStatus };
   return json.payload;
+}
+
+/**
+ * Parse POST /api/update/run/stream SSE until a `result` event.
+ */
+async function consumeNpmUpdateSse(body: ReadableStream<Uint8Array>): Promise<NpmUpdateRunResult> {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let final: NpmUpdateRunResult | null = null;
+
+  const dispatchProgress = (dataLine: string) => {
+    try {
+      const o = JSON.parse(dataLine) as { line?: string; source?: string };
+      if (typeof o.line === 'string') {
+        window.dispatchEvent(
+          new CustomEvent('xopc:npm-update-progress', {
+            detail: { line: o.line, source: o.source === 'stderr' ? 'stderr' : 'stdout' },
+          }),
+        );
+      }
+    } catch {
+      /* ignore malformed chunk */
+    }
+  };
+
+  const handleSseBlock = (block: string) => {
+    let ev = '';
+    let dataPayload = '';
+    for (const line of block.split('\n')) {
+      const L = line.replace(/\r$/, '');
+      if (L.startsWith('event:')) ev = L.slice(6).trim();
+      else if (L.startsWith('data:')) dataPayload += L.slice(5).trimStart();
+    }
+    if (!dataPayload) return;
+    if (ev === 'progress') {
+      dispatchProgress(dataPayload);
+      return;
+    }
+    if (ev === 'result') {
+      try {
+        const json = JSON.parse(dataPayload) as {
+          ok?: boolean;
+          error?: string;
+          message?: string;
+          result?: Record<string, unknown> | null;
+        };
+        if (json.ok) {
+          final = { ok: true, result: json.result ?? null };
+        } else {
+          final = {
+            ok: false,
+            error: String(json.error ?? 'unknown'),
+            message: String(json.message ?? 'Update failed'),
+            status: json.error === 'busy' ? 409 : 400,
+            result: json.result ?? null,
+          };
+        }
+      } catch {
+        final = {
+          ok: false,
+          error: 'parse',
+          message: 'Invalid update stream',
+          status: 0,
+        };
+      }
+    }
+  };
+
+  try {
+    while (final === null) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      buffer = buffer.replace(/\r\n/g, '\n');
+      let idx: number;
+      while ((idx = buffer.indexOf('\n\n')) !== -1) {
+        const chunk = buffer.slice(0, idx);
+        buffer = buffer.slice(idx + 2);
+        if (chunk.length) handleSseBlock(chunk);
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  return (
+    final ?? {
+      ok: false,
+      error: 'no-result',
+      message: 'Update stream ended without a result',
+      status: 0,
+    }
+  );
 }

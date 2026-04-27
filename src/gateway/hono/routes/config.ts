@@ -710,6 +710,17 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
       }
     }
 
+    if (body.update !== undefined && typeof body.update === 'object' && body.update !== null) {
+      const p = body.update as Record<string, unknown>;
+      if (p.channel === 'stable' || p.channel === 'beta' || p.channel === 'dev') {
+        if (!config.update) {
+          config.update = { checkOnStart: true, channel: p.channel };
+        } else {
+          config.update.channel = p.channel;
+        }
+      }
+    }
+
     // Update providers config - save to credential system instead of config
     if (body.providers) {
       const resolver = new CredentialResolver();
