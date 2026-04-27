@@ -68,6 +68,10 @@ export default defineConfig({
         target: 'http://localhost:18790',
         changeOrigin: true,
       },
+      '/api/health': {
+        target: 'http://localhost:18790',
+        changeOrigin: true,
+      },
       '/status': {
         target: 'http://localhost:18790',
         changeOrigin: true,

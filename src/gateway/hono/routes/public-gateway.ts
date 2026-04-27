@@ -9,6 +9,16 @@ export function registerPublicGatewayRoutes(app: Hono, service: GatewayService):
     return c.json(service.getHealth());
   });
 
+  /** Public liveness probe (no auth) — minimal payload for CLI / load balancers. */
+  app.get('/api/health', (c) => {
+    const health = service.getHealth();
+    return c.json({
+      status: 'ok',
+      version: health.version,
+      uptime: health.uptime,
+    });
+  });
+
   app.get('/api', (c) => {
     return c.json({
       service: 'xopc-gateway',
@@ -16,7 +26,9 @@ export function registerPublicGatewayRoutes(app: Hono, service: GatewayService):
       transport: 'streamable-http',
       endpoints: [
         'GET  /health',
+        'GET  /api/health',
         'GET  /status',
+        'GET  /api/status',
         'POST /api/agent           (SSE stream / JSON)',
         'POST /api/agent/abort',
         'POST /api/agent/steer',
