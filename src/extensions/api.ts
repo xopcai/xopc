@@ -14,6 +14,8 @@ import type {
   GatewayMethodHandler,
   HttpRequestHandler,
   ExtensionCommand,
+  ExtensionCommandContext,
+  ExtensionReloadHandler,
   ExtensionService,
   FlagConfig,
   FlagValue,
@@ -22,11 +24,14 @@ import type {
   ExtensionHookEvent,
   HookExecutionMode,
 } from './types/index.js';
+import type { CommandDefinition } from '../chat-commands/types.js';
+import { commandRegistry } from '../chat-commands/registry.js';
 import type { ChannelPlugin } from '../channels/plugin-types.js';
 import {
   HOOK_EXECUTION_MODES,
 } from './types/hooks.js';
 import type { Config } from '../config/config-surface.js';
+import type { Config as SchemaConfig } from '../config/schema.js';
 import { resolve, isAbsolute } from 'path';
 import { EventEmitter } from 'events';
 import { createLogger } from '../utils/logger.js';
@@ -45,6 +50,9 @@ export class ExtensionApiImpl implements ExtensionApi {
   private _registry: ExtensionRegistryImpl;
 
   private readonly _runtime: ExtensionRuntime;
+
+  private _reloadConfigPrefixes: string[] = [];
+  private _registeredCommandIds: string[] = [];
 
   constructor(
     public readonly id: string,
@@ -154,8 +162,63 @@ export class ExtensionApiImpl implements ExtensionApi {
   }
 
   registerCommand(command: ExtensionCommand): void {
+    const commandId = `ext.${this.id}.${command.name}`;
+
+    const definition: CommandDefinition = {
+      id: commandId,
+      name: command.name,
+      aliases: command.aliases,
+      description: command.description,
+      category: 'extension',
+      scope: command.scope ?? ['global'],
+      acceptsArgs: command.acceptsArgs,
+      examples: command.examples,
+      handler: async (ctx, args) => {
+        const extensionCtx: ExtensionCommandContext = {
+          sessionKey: ctx.sessionKey,
+          source: ctx.source,
+          isGroup: ctx.isGroup,
+          config: ctx.config as SchemaConfig as ExtensionCommandContext['config'],
+          reply: (text: string) => ctx.reply(text),
+        };
+
+        const result = await command.handler(args, extensionCtx);
+
+        if (!result) {
+          return { content: '', success: true };
+        }
+        return {
+          content: result.content,
+          success: result.success ?? true,
+        };
+      },
+    };
+
+    commandRegistry.register(definition);
+    this._registeredCommandIds.push(commandId);
+    this._registry.addCommand(command);
+
     this._eventBus.emit('command:register', command);
-    this._logger.info(`Registered command: /${command.name}`);
+    this._logger.info(`Registered chat command: /${command.name}`);
+  }
+
+  registerReload(handler: ExtensionReloadHandler): void {
+    const prefixes =
+      this._reloadConfigPrefixes.length > 0
+        ? this._reloadConfigPrefixes
+        : [`extensions.${this.id}`];
+
+    this._registry.addReloadRegistration({
+      extensionId: this.id,
+      handler,
+      configPrefixes: prefixes,
+    });
+    this._logger.info('Registered reload handler');
+  }
+
+  /** Called from loader when manifest declares `reload.configPrefixes`. */
+  _setReloadConfigPrefixes(prefixes: string[]): void {
+    this._reloadConfigPrefixes = [...prefixes];
   }
 
   registerService(service: ExtensionService): void {
@@ -253,6 +316,13 @@ export class ExtensionApiImpl implements ExtensionApi {
   }
 
   _cleanup(): void {
+    for (const commandId of this._registeredCommandIds) {
+      commandRegistry.unregister(commandId);
+    }
+    this._registeredCommandIds = [];
+
+    this._registry.removeReloadRegistration(this.id);
+
     this._typedEventBus.cleanupAll();
     this._eventBus.removeAllListeners();
     this._hooks.clear();

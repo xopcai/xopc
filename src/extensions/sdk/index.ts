@@ -209,6 +209,12 @@ export type {
 
 export type {
   ExtensionCommand,
+  ExtensionCommandHandler,
+  ExtensionCommandContext,
+  ExtensionCommandResult,
+  ExtensionReloadHandler,
+  ExtensionReloadResult,
+  ExtensionReloadRegistration,
 } from '../types/index.js';
 
 // ============================================================================
