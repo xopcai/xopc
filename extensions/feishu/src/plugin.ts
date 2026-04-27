@@ -23,6 +23,7 @@ import type {
   ChannelStatusAdapter,
   ChatType,
 } from '@xopcai/xopc/channels/plugin-types.js';
+import type { ChannelCliLoginAdapter } from '@xopcai/xopc/channels/plugins/types.adapters.js';
 import { createLogger } from '@xopcai/xopc/utils/logger.js';
 import { evaluateAccess, resolveDmPolicy, resolveGroupPolicy } from '@xopcai/xopc/channels/security.js';
 
@@ -48,6 +49,7 @@ import {
 } from './outbound/actions.js';
 import { createFeishuDirectoryAdapter } from './directory/directory-adapter.js';
 import { feishuWhoAmI } from './tools/tools.js';
+import { feishuCliLoginAdapter } from './adapters/cli-login.js';
 import { feishuOnboardAdapter } from './adapters/onboard-cli.js';
 
 const log = createLogger('FeishuPlugin');
@@ -102,6 +104,8 @@ export class FeishuChannelPlugin implements ChannelPlugin<ResolvedFeishuAccount>
   readonly configSurface = feishuConfigSurface;
 
   onboard = feishuOnboardAdapter;
+
+  readonly cliLogin: ChannelCliLoginAdapter = feishuCliLoginAdapter;
 
   private bus!: MessageBus;
   private cfg!: Config;
