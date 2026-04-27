@@ -14,7 +14,14 @@ const MemorySearchSchema = Type.Object({
 
 type MemorySearchParams = { query: string; maxResults?: number; minScore?: number };
 
-export function createMemorySearchTool(workspaceDir: string): AgentTool {
+export interface MemoryToolOptions {
+  workspaceDir: string;
+  /** Agent home curated memories dir, e.g. ~/.xopc/agents/<id>/memories/ */
+  memoriesDir?: string;
+}
+
+export function createMemorySearchTool(options: MemoryToolOptions): AgentTool {
+  const { workspaceDir, memoriesDir } = options;
   return {
     name: 'memory_search',
     label: '🔍 Memory Search',
@@ -27,11 +34,11 @@ export function createMemorySearchTool(workspaceDir: string): AgentTool {
       params: any,
       _signal?: AbortSignal,
     ): Promise<AgentToolResult<{}>> {
-      const { query, maxResults } = params as MemorySearchParams;
+      const { query, maxResults, minScore } = params as MemorySearchParams;
 
       try {
-        const results = await memorySearch(workspaceDir, query, { maxResults });
-        const withCitations = results.map(entry => ({
+        const results = await memorySearch(workspaceDir, query, { maxResults, minScore, memoriesDir });
+        const withCitations = results.map((entry) => ({
           ...entry,
           citation: `${entry.file}#L${entry.lineNumbers[0]}${entry.lineNumbers.length > 1 ? `-L${entry.lineNumbers[entry.lineNumbers.length - 1]}` : ''}`,
           snippet: `${entry.lines.trim()}\n\nSource: ${entry.file}#L${entry.lineNumbers[0]}${entry.lineNumbers.length > 1 ? `-L${entry.lineNumbers[entry.lineNumbers.length - 1]}` : ''}`,
@@ -63,7 +70,8 @@ const MemoryGetSchema = Type.Object({
 
 type MemoryGetParams = { path: string; from?: number; lines?: number };
 
-export function createMemoryGetTool(workspaceDir: string): AgentTool {
+export function createMemoryGetTool(options: MemoryToolOptions): AgentTool {
+  const { workspaceDir, memoriesDir } = options;
   return {
     name: 'memory_get',
     label: '📄 Memory Get',
@@ -78,7 +86,7 @@ export function createMemoryGetTool(workspaceDir: string): AgentTool {
       const { path, from, lines } = params as MemoryGetParams;
 
       try {
-        const result = memoryGet(workspaceDir, path, from, lines);
+        const result = memoryGet(workspaceDir, path, from, lines, memoriesDir);
         if (!result) {
           return {
             content: [{ type: 'text', text: `File not found: ${path}` }],
