@@ -50,6 +50,11 @@ describe('extractFilePathsFromToolResult', () => {
     ]);
   });
 
+  it('does not treat Python/code snippets as Windows paths (avoids false resolve-path 403)', () => {
+    const snippet = String.raw`s:\n        result = analyze_stock(code, with_minute=args.minute, realtime_cache=realtime_cache)\n        results.append(result)\n    \n    if args.json`;
+    expect(extractFilePathsFromToolResult(snippet)).toEqual([]);
+  });
+
   it('strips "File written:" so the line is not used as a workspace relative path (404)', () => {
     const abs = '/Users/micjoyce/.xopc/workspace/abbbbb/markdown-test.md';
     const text = JSON.stringify({
