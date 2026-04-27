@@ -59,7 +59,13 @@ export function browseParentDir(dir: string): string {
 export function useAtMentionPicker(
   value: string,
   cursor: number,
-  options: { sessionKey: string | null; slashPaletteOpen: boolean; isComposing?: boolean },
+  options: {
+    sessionKey: string | null;
+    slashPaletteOpen: boolean;
+    isComposing?: boolean;
+    /** When provided, skips internal `detectAtRange` computation. */
+    precomputedAtRange?: AtRange | null;
+  },
 ) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [items, setItems] = useState<AtMentionItem[]>([]);
@@ -69,10 +75,15 @@ export function useAtMentionPicker(
   const requestIdRef = useRef(0);
 
   const atRange = useMemo(() => {
+    if (options.precomputedAtRange !== undefined) {
+      if (options.isComposing) return null;
+      if (options.slashPaletteOpen) return null;
+      return options.precomputedAtRange;
+    }
     if (options.isComposing) return null;
     if (options.slashPaletteOpen) return null;
     return detectAtRange(value, cursor);
-  }, [value, cursor, options.slashPaletteOpen, options.isComposing]);
+  }, [value, cursor, options.slashPaletteOpen, options.isComposing, options.precomputedAtRange]);
 
   const pickerActive = atRange !== null;
   const [debouncedQuery, setDebouncedQuery] = useState('');

@@ -328,6 +328,7 @@
     "thoughts": "思考内容",
     "thoughtsStreaming": "思考中…",
     "thoughtsExpandHint": "展开查看模型思考过程",
+    "thinkingLevelLabel": "思考深度",
     "thinkingLevels": {
       "off": "关闭",
       "minimal": "最低",
@@ -398,6 +399,8 @@
     "maxAttachmentsReached": "每条消息最多 {{max}} 个文件，请先移除部分附件。",
     "maxAttachmentsTruncated": "已忽略 {{dropped}} 个文件（每条最多 {{max}} 个）。",
     "attachmentFileTooLarge": "文件「{{name}}」过大（单文件最大 {{maxSize}}）。",
+    "attachmentLoadFailed": "加载附件失败：{{name}}",
+    "clipboardFileTypeUnsupported": "剪贴板中的文件类型不支持作为聊天附件",
     "inputPlaceholder": "提问或描述任务 — @ 引用文件，/ 使用技能和命令",
     "currentModel": "当前对话使用的模型",
     "modelSearchPlaceholder": "按名称、服务商或 ID 搜索…",
