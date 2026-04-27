@@ -328,6 +328,7 @@
     "thoughts": "Thoughts",
     "thoughtsStreaming": "Thinking…",
     "thoughtsExpandHint": "Expand to view model thoughts",
+    "thinkingLevelLabel": "Thinking",
     "thinkingLevels": {
       "off": "Off",
       "minimal": "Minimal",
@@ -398,6 +399,8 @@
     "maxAttachmentsReached": "Maximum {{max}} files per message. Remove some to add more.",
     "maxAttachmentsTruncated": "{{dropped}} file(s) not added (limit {{max}} per message).",
     "attachmentFileTooLarge": "File \"{{name}}\" is too large (max {{maxSize}} per file).",
+    "attachmentLoadFailed": "Failed to load attachment: {{name}}",
+    "clipboardFileTypeUnsupported": "Clipboard file type not supported for chat attachments",
     "inputPlaceholder": "Ask anything — @ for files, / for skills & commands",
     "currentModel": "Model used for this conversation",
     "modelSearchPlaceholder": "Search by name, provider, or ID…",
