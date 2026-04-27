@@ -27,26 +27,27 @@ export class BuiltinMemoryStore {
     return this.config.userProfileEnabled !== false;
   }
 
-  private get memDir(): string {
+  /** Agent-scoped curated memory directory (`~/.xopc/agents/<id>/memories/`). */
+  get memoriesDir(): string {
     return this.config.memoriesDir;
   }
 
   pathFor(target: 'memory' | 'user'): string {
-    return join(this.memDir, target === 'memory' ? 'MEMORY.md' : 'USER.md');
+    return join(this.memoriesDir, target === 'memory' ? 'MEMORY.md' : 'USER.md');
   }
 
   /**
    * Load from disk and freeze {@link getSnapshot}. Sync for agent creation (prefix cache stability).
    */
   loadFromDiskSync(): void {
-    mkdirSync(this.memDir, { recursive: true });
+    mkdirSync(this.memoriesDir, { recursive: true });
     this.memoryEntries = this.parseFileContent(
-      this.readPathSync(join(this.memDir, 'MEMORY.md')),
+      this.readPathSync(join(this.memoriesDir, 'MEMORY.md')),
     );
     this.userEntries =
       this.config.userProfileEnabled === false
         ? []
-        : this.parseFileContent(this.readPathSync(join(this.memDir, 'USER.md')));
+        : this.parseFileContent(this.readPathSync(join(this.memoriesDir, 'USER.md')));
     this.memoryEntries = dedupePreserveOrder(this.memoryEntries);
     this.userEntries = dedupePreserveOrder(this.userEntries);
     this.snapshot = {
@@ -230,7 +231,7 @@ export class BuiltinMemoryStore {
     fn: () => Promise<T>,
   ): Promise<T> {
     const filePath = this.pathFor(target);
-    await mkdir(this.memDir, { recursive: true });
+    await mkdir(this.memoriesDir, { recursive: true });
     if (!existsSync(filePath)) {
       await writeFile(filePath, '', 'utf-8');
     }

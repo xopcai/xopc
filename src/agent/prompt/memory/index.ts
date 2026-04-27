@@ -2,6 +2,10 @@
 import { readFileSync, existsSync } from 'fs';
 import { join, relative } from 'path';
 
+import { createLogger } from '../../../utils/logger.js';
+
+const log = createLogger('MemorySearch');
+
 // =============================================================================
 // Types (Internal)
 // =============================================================================
@@ -13,9 +17,11 @@ interface MemoryMatch {
   lineNumbers: number[];
 }
 
-interface MemorySearchOptions {
+export interface MemorySearchOptions {
   maxResults?: number;
   minScore?: number;
+  /** Absolute path to agent-scoped curated memories dir (MEMORY.md + USER.md). */
+  memoriesDir?: string;
 }
 
 interface MemoryFile {
@@ -23,6 +29,8 @@ interface MemoryFile {
   content: string;
   modified: Date;
 }
+
+const CURATED_MEMORY_FILENAMES = new Set(['MEMORY.md', 'USER.md']);
 
 // =============================================================================
 // Memory Path Utilities (Internal)
@@ -40,23 +48,23 @@ function getLongTermMemoryPath(baseDir: string): string {
   return join(baseDir, 'MEMORY.md');
 }
 
-function getCuratedMemoryPaths(baseDir: string): string[] {
-  const memDir = join(baseDir, '.xopc', 'memories');
-  const curated = [join(memDir, 'MEMORY.md'), join(memDir, 'USER.md')];
+function getCuratedMemoryPaths(memoriesDir: string | undefined): string[] {
+  if (!memoriesDir) return [];
+  const curated = [join(memoriesDir, 'MEMORY.md'), join(memoriesDir, 'USER.md')];
   return curated.filter((p) => existsSync(p));
 }
 
-function getAllMemoryPaths(baseDir: string): string[] {
+function getAllMemoryPaths(baseDir: string, memoriesDir?: string): string[] {
   const paths: string[] = [];
 
-  paths.push(...getCuratedMemoryPaths(baseDir));
+  paths.push(...getCuratedMemoryPaths(memoriesDir));
 
-  // Long-term memory
+  // Long-term memory (workspace root)
   const longTermPath = getLongTermMemoryPath(baseDir);
   if (existsSync(longTermPath)) {
     paths.push(longTermPath);
   }
-  
+
   // Daily memories (last 30 days)
   const memoryDir = join(baseDir, 'memory');
   if (existsSync(memoryDir)) {
@@ -70,7 +78,7 @@ function getAllMemoryPaths(baseDir: string): string[] {
       }
     }
   }
-  
+
   return paths;
 }
 
@@ -81,7 +89,7 @@ function getAllMemoryPaths(baseDir: string): string[] {
 function parseMemoryFile(path: string): MemoryFile {
   const content = readFileSync(path, 'utf-8');
   const stats = existsSync(path) ? { mtime: new Date() } : { mtime: new Date() };
-  
+
   return {
     path,
     content,
@@ -96,51 +104,51 @@ function parseMemoryFile(path: string): MemoryFile {
 function fuzzyMatch(query: string, text: string): number {
   const queryLower = query.toLowerCase();
   const textLower = text.toLowerCase();
-  
+
   // Exact match
   if (textLower.includes(queryLower)) {
     return 1.0;
   }
-  
+
   // Word-by-word match
   const queryWords = queryLower.split(/\s+/);
   const textWords = textLower.split(/\s+/);
-  
+
   let matchedWords = 0;
   for (const qWord of queryWords) {
-    if (textWords.some(tWord => tWord.includes(qWord) || qWord.includes(tWord))) {
+    if (textWords.some((tWord) => tWord.includes(qWord) || qWord.includes(tWord))) {
       matchedWords++;
     }
   }
-  
+
   return matchedWords / queryWords.length;
 }
 
 function searchInContent(query: string, content: string, options: MemorySearchOptions = {}): MemoryMatch | null {
   const { maxResults = 5, minScore = 0.3 } = options;
-  
+
   const lines = content.split('\n');
   const matches: Array<{ line: string; index: number; score: number }> = [];
-  
+
   for (let i = 0; i < lines.length; i++) {
     const score = fuzzyMatch(query, lines[i]);
     if (score >= minScore) {
       matches.push({ line: lines[i], index: i, score });
     }
   }
-  
+
   // Sort by score descending
   matches.sort((a, b) => b.score - a.score);
-  
+
   if (matches.length === 0) {
     return null;
   }
-  
+
   // Take top matches
   const topMatches = matches.slice(0, maxResults);
-  const lineNumbers = topMatches.map(m => m.index + 1);
-  const linesContent = topMatches.map(m => m.line).join('\n');
-  
+  const lineNumbers = topMatches.map((m) => m.index + 1);
+  const linesContent = topMatches.map((m) => m.line).join('\n');
+
   return {
     file: '', // Will be set by caller
     lines: linesContent,
@@ -156,18 +164,18 @@ function searchInContent(query: string, content: string, options: MemorySearchOp
 export async function memorySearch(
   baseDir: string,
   query: string,
-  options: MemorySearchOptions = {}
+  options: MemorySearchOptions = {},
 ): Promise<MemoryMatch[]> {
-  const { maxResults = 5, minScore = 0.3 } = options;
-  
-  const paths = getAllMemoryPaths(baseDir);
+  const { maxResults = 5, minScore = 0.3, memoriesDir } = options;
+
+  const paths = getAllMemoryPaths(baseDir, memoriesDir);
   const results: MemoryMatch[] = [];
-  
+
   for (const path of paths) {
     try {
       const memoryFile = parseMemoryFile(path);
       const match = searchInContent(query, memoryFile.content, options);
-      
+
       if (match) {
         match.file = relative(baseDir, path);
         if (match.score >= minScore) {
@@ -175,14 +183,13 @@ export async function memorySearch(
         }
       }
     } catch {
-      // Skip files that can't be read
-      console.warn(`Could not read memory file: ${path}`);
+      log.warn({ path }, 'Could not read memory file');
     }
   }
-  
+
   // Sort all results by score
   results.sort((a, b) => b.score - a.score);
-  
+
   // Return top results per file or overall
   return results.slice(0, maxResults * 3); // Return more to allow grouping
 }
@@ -195,23 +202,35 @@ export function memoryGet(
   baseDir: string,
   path: string,
   from?: number,
-  lines?: number
+  lines?: number,
+  memoriesDir?: string,
 ): { content: string; lineNumbers: { start: number; end: number } } | null {
-  const fullPath = path.startsWith('/') ? path : join(baseDir, path);
-  
+  let fullPath = path.startsWith('/') ? path : join(baseDir, path);
+
+  if (!existsSync(fullPath) && memoriesDir) {
+    const segments = path.split(/[/\\]/);
+    const filename = segments.pop() ?? path;
+    if (CURATED_MEMORY_FILENAMES.has(filename)) {
+      const candidatePath = join(memoriesDir, filename);
+      if (existsSync(candidatePath)) {
+        fullPath = candidatePath;
+      }
+    }
+  }
+
   if (!existsSync(fullPath)) {
     return null;
   }
-  
+
   const content = readFileSync(fullPath, 'utf-8');
   const allLines = content.split('\n');
-  
+
   const start = from || 1;
   const count = lines || 10;
   const end = Math.min(start + count - 1, allLines.length);
-  
+
   const snippet = allLines.slice(start - 1, end).join('\n');
-  
+
   return {
     content: snippet,
     lineNumbers: { start, end },

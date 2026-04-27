@@ -148,6 +148,8 @@ export class AgentToolsFactory {
     const { bus } = this.deps;
     const getPrimary = options?.getPrimaryModel ?? this.deps.getPrimaryModel;
     const getBuiltin = options?.getBuiltinMemoryStore ?? this.deps.getBuiltinMemoryStore;
+    const builtinStore = getBuiltin?.();
+    const memoriesDir = builtinStore?.memoriesDir;
     const getMemMgr = options?.getMemoryManager ?? this.deps.getMemoryManager;
     const getSkillMgr = options?.getSkillManager;
     const disabled = options?.disabledTools;
@@ -233,8 +235,8 @@ export class AgentToolsFactory {
           ]
         : []),
       createSendMediaTool(workspace, bus, () => this.deps.getCurrentContext()),
-      createMemorySearchTool(workspace),
-      createMemoryGetTool(workspace),
+      createMemorySearchTool({ workspaceDir: workspace, memoriesDir }),
+      createMemoryGetTool({ workspaceDir: workspace, memoriesDir }),
       ...(getBuiltin && shouldRegisterCuratedMemoryTool(this.deps.getConfig?.())
         ? [
             createCuratedMemoryTool(getBuiltin, {
