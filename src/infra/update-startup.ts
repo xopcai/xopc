@@ -5,7 +5,7 @@ import { readFile, writeFile, mkdir, rename, unlink } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
 import type { Config } from '../config/schema.js';
-import { resolveUpdateCheckStatePath } from '../config/paths.js';
+import { resolveUpdateCheckStatePath } from '../config/paths-state.js';
 import { acquireUpdateLock } from './update-lock.js';
 import { PACKAGE_VERSION } from '../package-version.js';
 import { createLogger } from '../utils/logger.js';

@@ -3,7 +3,7 @@
 import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
-import { resolveUpdateLockPath } from '../config/paths.js';
+import { resolveUpdateLockPath } from '../config/paths-state.js';
 import { createLogger } from '../utils/logger.js';
 
 const log = createLogger('UpdateLock');

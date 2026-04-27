@@ -33,3 +33,13 @@ export function resolveStateDir(env: NodeJS.ProcessEnv = process.env): string {
 
   return join(home, '.xopc');
 }
+
+/** Persisted npm update check throttle / notification state (`~/.xopc/update-check.json`). */
+export function resolveUpdateCheckStatePath(env: NodeJS.ProcessEnv = process.env): string {
+  return join(resolveStateDir(env), 'update-check.json');
+}
+
+/** Cross-process lock for one-click / CLI / auto npm updates (`~/.xopc/update.lock`). */
+export function resolveUpdateLockPath(env: NodeJS.ProcessEnv = process.env): string {
+  return join(resolveStateDir(env), 'update.lock');
+}
