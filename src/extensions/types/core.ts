@@ -6,6 +6,7 @@
 
 import type { Command } from 'commander';
 import type { Config } from '../../config/config-surface.js';
+import type { Config as FullConfig } from '../../config/schema.js';
 import type { MessageBus } from '../../infra/bus/index.js';
 import type { TypedEventBus } from './events.js';
 import type { AgentTool } from '@mariozechner/pi-agent-core';
@@ -111,6 +112,11 @@ export interface ExtensionApi {
   
   // Command Registration
   registerCommand(command: ExtensionCommand): void;
+
+  /**
+   * Register a reload handler when config paths matching this extension change during hot reload.
+   */
+  registerReload(handler: ExtensionReloadHandler): void;
   
   // Service Registration
   registerService(service: ExtensionService): void;
@@ -184,14 +190,59 @@ export type HttpRequestHandler = (req: HttpRequest) => HttpResponse | Promise<Ht
 export type GatewayMethodHandler = (params: unknown) => unknown | Promise<unknown>;
 
 // ============================================================================
+// Extension config hot reload
+// ============================================================================
+
+export interface ExtensionReloadResult {
+  success: boolean;
+  error?: string;
+}
+
+export type ExtensionReloadHandler = (
+  newConfig: FullConfig,
+  changedPaths: string[],
+) => ExtensionReloadResult | Promise<ExtensionReloadResult>;
+
+export interface ExtensionReloadRegistration {
+  extensionId: string;
+  handler: ExtensionReloadHandler;
+  /** Config path prefixes this handler cares about. Empty = any extension-related change passed to matcher. */
+  configPrefixes: string[];
+}
+
+// ============================================================================
 // Commands
 // ============================================================================
 
+/**
+ * Chat command registered by an extension (bridged into CommandRegistry with category `extension`).
+ */
 export interface ExtensionCommand {
   name: string;
   description: string;
-  handler: (args: string[]) => void | Promise<void>;
   aliases?: string[];
+  scope?: Array<'global' | 'private' | 'group'>;
+  acceptsArgs?: boolean;
+  examples?: string[];
+  handler: ExtensionCommandHandler;
+}
+
+export type ExtensionCommandHandler = (
+  args: string,
+  context: ExtensionCommandContext,
+) => Promise<ExtensionCommandResult | void> | ExtensionCommandResult | void;
+
+export interface ExtensionCommandContext {
+  sessionKey: string;
+  source: string;
+  isGroup: boolean;
+  config: Config;
+  reply(text: string): Promise<void>;
+}
+
+export interface ExtensionCommandResult {
+  content: string;
+  success?: boolean;
 }
 
 // ============================================================================

@@ -80,8 +80,23 @@ export const BASE_RELOAD_RULES: ReloadRule[] = [
   { prefix: 'webSearch', kind: 'hot', description: 'Web search settings' },
   { prefix: 'webTools', kind: 'hot', description: 'Web tools settings' },
   
-  // Extensions - restart required
-  { prefix: 'extensions', kind: 'restart', description: 'Extension configuration' },
+  // Extension list toggles — still require process restart to load/unload modules
+  {
+    prefix: 'extensions.enabled',
+    kind: 'restart',
+    description: 'Extension enable list (requires restart)',
+  },
+  {
+    prefix: 'extensions.disabled',
+    kind: 'restart',
+    description: 'Extension disable list (requires restart)',
+  },
+  // Extension instance config — hot-reloaded via extension registerReload handlers
+  {
+    prefix: 'extensions',
+    kind: 'hot',
+    description: 'Extension configuration (hot-reloaded via extension handlers)',
+  },
   
   // Tools - hot reload (for tool-specific settings)
   { prefix: 'tools', kind: 'hot', description: 'Tools configuration' },

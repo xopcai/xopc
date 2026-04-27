@@ -419,6 +419,9 @@ export class GatewayService {
         onCronReload: (newConfig) => this.handleCronReload(newConfig),
         onHeartbeatReload: (newConfig) => this.handleHeartbeatReload(newConfig),
         onToolsReload: (newConfig) => this.handleToolsReload(newConfig),
+        onExtensionsReload: async (newConfig, changedPaths) => {
+          await this.handleExtensionsReload(newConfig, changedPaths);
+        },
         onFullRestart: (newConfig) => {
           log.warn(
             { requiresProcessRestart: true, hint: 'Restart the gateway process (hot reload cannot apply this change).' },
@@ -515,6 +518,78 @@ export class GatewayService {
     this.config = newConfig;
     this.emit('config.reload', { section: 'tools' });
     log.debug('Tools config reloaded');
+  }
+
+  /**
+   * Dispatch config hot reload to extensions that registered `registerReload`, matching changed paths.
+   */
+  private async handleExtensionsReload(
+    newConfig: Config,
+    changedPaths: string[],
+  ): Promise<void> {
+    this.config = newConfig;
+    this.extensionLoader?.setConfig(this.config as unknown as SurfaceConfig);
+
+    if (!this.extensionLoader) {
+      this.emit('config.reload', {
+        section: 'extensions',
+        source: 'extension-reload',
+        changedPaths,
+      });
+      return;
+    }
+
+    const registry = this.extensionLoader.getRegistry();
+    const matchingRegs = registry.getMatchingReloadRegistrations(changedPaths);
+
+    if (matchingRegs.length === 0) {
+      log.debug({ changedPaths }, 'No extension reload handlers matched');
+      this.emit('config.reload', {
+        section: 'extensions',
+        source: 'extension-reload',
+        changedPaths,
+      });
+      return;
+    }
+
+    for (const reg of matchingRegs) {
+      const relevantPaths = changedPaths.filter(
+        (p) =>
+          reg.configPrefixes.length === 0 ||
+          reg.configPrefixes.some(
+            (prefix) => p === prefix || p.startsWith(`${prefix}.`),
+          ),
+      );
+
+      log.info(
+        { extensionId: reg.extensionId, relevantPaths },
+        'Calling extension reload handler',
+      );
+
+      try {
+        const result = await reg.handler(newConfig, relevantPaths);
+        if (result.success) {
+          log.info({ extensionId: reg.extensionId }, 'Extension reload succeeded');
+        } else {
+          log.warn(
+            { extensionId: reg.extensionId, error: result.error },
+            `Extension reload reported failure: ${result.error ?? 'unknown'}`,
+          );
+        }
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        log.error(
+          { err, extensionId: reg.extensionId, errorMessage },
+          `Extension reload handler threw: ${errorMessage}`,
+        );
+      }
+    }
+
+    this.emit('config.reload', {
+      section: 'extensions',
+      source: 'extension-reload',
+      changedPaths,
+    });
   }
 
   /**

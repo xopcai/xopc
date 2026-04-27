@@ -76,9 +76,8 @@ const extension = {
       name: 'hello',
       description: 'Send a greeting',
       acceptsArgs: true,
-      requireAuth: false,
-      handler: async (args, _context) => {
-        const name = args || 'World';
+      handler: async (args, _ctx) => {
+        const name = args.trim() || 'World';
         const greeting = (api.extensionConfig.greeting as string) || 'Hello';
         return {
           content: `${greeting}, ${name}!`,

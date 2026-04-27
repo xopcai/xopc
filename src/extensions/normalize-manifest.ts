@@ -5,6 +5,7 @@ import type {
   CommandContribution,
   ContractDeclaration,
   ExtensionManifest,
+  ExtensionManifestCommand,
   ExtensionUiContributions,
   ExtensionUiManifest,
   ExtensionUiPermission,
@@ -20,6 +21,51 @@ import type { ExtensionKind } from './types/core.js';
 
 function isRecord(x: unknown): x is Record<string, unknown> {
   return typeof x === 'object' && x !== null && !Array.isArray(x);
+}
+
+function normalizeReload(raw: unknown): ExtensionManifest['reload'] {
+  if (!isRecord(raw)) return undefined;
+  const configPrefixes = Array.isArray(raw.configPrefixes)
+    ? raw.configPrefixes.filter((x): x is string => typeof x === 'string')
+    : undefined;
+  const supportsHotReload =
+    typeof raw.supportsHotReload === 'boolean' ? raw.supportsHotReload : undefined;
+  if (!configPrefixes?.length && supportsHotReload === undefined) return undefined;
+  return {
+    ...(configPrefixes?.length ? { configPrefixes } : {}),
+    ...(supportsHotReload !== undefined ? { supportsHotReload } : {}),
+  };
+}
+
+function normalizeManifestCommands(raw: unknown): ExtensionManifestCommand[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const out: ExtensionManifestCommand[] = [];
+  for (const item of raw) {
+    if (!isRecord(item)) continue;
+    const name = typeof item.name === 'string' ? item.name.trim() : '';
+    const description = typeof item.description === 'string' ? item.description : '';
+    if (!name || !description) continue;
+    const aliases = Array.isArray(item.aliases)
+      ? item.aliases.filter((x): x is string => typeof x === 'string')
+      : undefined;
+    const scope = Array.isArray(item.scope)
+      ? item.scope.filter(
+          (x): x is 'global' | 'private' | 'group' =>
+            x === 'global' || x === 'private' || x === 'group',
+        )
+      : undefined;
+    const examples = Array.isArray(item.examples)
+      ? item.examples.filter((x): x is string => typeof x === 'string')
+      : undefined;
+    out.push({
+      name,
+      description,
+      ...(aliases?.length ? { aliases } : {}),
+      ...(scope?.length ? { scope } : {}),
+      ...(examples?.length ? { examples } : {}),
+    });
+  }
+  return out.length > 0 ? out : undefined;
 }
 
 /**
@@ -60,6 +106,8 @@ export function normalizeExtensionManifest(raw: Record<string, unknown>): Extens
     activation: normalizeActivation(raw.activation),
     contracts: normalizeContracts(raw.contracts),
     setup: normalizeSetup(raw.setup),
+    reload: normalizeReload(raw.reload),
+    commands: normalizeManifestCommands(raw.commands),
     ui: normalizeUiManifest(raw.ui),
   };
 }

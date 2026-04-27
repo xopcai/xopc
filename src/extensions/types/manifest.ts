@@ -31,8 +31,25 @@ export interface ExtensionManifest {
   contracts?: ContractDeclaration;
   setup?: SetupDeclaration;
 
+  /** Hot-reload: config path prefixes and capability flags (optional; handlers can register at runtime). */
+  reload?: {
+    configPrefixes?: string[];
+    supportsHotReload?: boolean;
+  };
+
+  /** Chat commands metadata (runtime registration still required in `register()`). */
+  commands?: ExtensionManifestCommand[];
+
   /** Frontend UI declaration — enables extensions to render custom UI in the Gateway Console. */
   ui?: ExtensionUiManifest;
+}
+
+export interface ExtensionManifestCommand {
+  name: string;
+  description: string;
+  aliases?: string[];
+  scope?: Array<'global' | 'private' | 'group'>;
+  examples?: string[];
 }
 
 /** Top-level UI declaration within an extension manifest. */

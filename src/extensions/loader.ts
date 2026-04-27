@@ -33,6 +33,7 @@ import type {
   GatewayMethodHandler,
   HttpRequestHandler,
   ExtensionCommand,
+  ExtensionReloadRegistration,
   ExtensionService,
   ExtensionHookEvent,
   ExtensionHookHandler,
@@ -101,6 +102,7 @@ export class ExtensionRegistryImpl implements ExtensionRegistry {
   tools: Map<string, AgentTool<any, any>> = new Map();
   channelPlugins: ChannelPlugin[] = [];
   private cliRegistrations: ExtensionCliRegistration[] = [];
+  private reloadRegistrations: ExtensionReloadRegistration[] = [];
 
   addExtension(record: ExtensionRecord): void {
     this.extensions.set(record.id, record);
@@ -209,6 +211,34 @@ export class ExtensionRegistryImpl implements ExtensionRegistry {
 
   getCliRegistrations(): readonly ExtensionCliRegistration[] {
     return this.cliRegistrations;
+  }
+
+  addReloadRegistration(reg: ExtensionReloadRegistration): void {
+    this.reloadRegistrations = this.reloadRegistrations.filter(
+      (r) => r.extensionId !== reg.extensionId,
+    );
+    this.reloadRegistrations.push(reg);
+  }
+
+  removeReloadRegistration(extensionId: string): void {
+    this.reloadRegistrations = this.reloadRegistrations.filter(
+      (r) => r.extensionId !== extensionId,
+    );
+  }
+
+  getReloadRegistrations(): readonly ExtensionReloadRegistration[] {
+    return this.reloadRegistrations;
+  }
+
+  getMatchingReloadRegistrations(changedPaths: string[]): ExtensionReloadRegistration[] {
+    return this.reloadRegistrations.filter((reg) => {
+      if (reg.configPrefixes.length === 0) {
+        return true;
+      }
+      return reg.configPrefixes.some((prefix) =>
+        changedPaths.some((path) => path === prefix || path.startsWith(`${prefix}.`)),
+      );
+    });
   }
 }
 
@@ -880,7 +910,7 @@ export class ExtensionLoader {
             }
           : undefined;
 
-    return new ExtensionApiImpl(
+    const api = new ExtensionApiImpl(
       manifest.id,
       manifest.name,
       manifest.version,
@@ -892,6 +922,10 @@ export class ExtensionLoader {
       this.registry,
       runtime,
     );
+    if (manifest.reload?.configPrefixes?.length) {
+      api._setReloadConfigPrefixes(manifest.reload.configPrefixes);
+    }
+    return api;
   }
 
   private async initializeExtension(
