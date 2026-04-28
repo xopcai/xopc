@@ -1,12 +1,14 @@
 import { cn } from '@/lib/cn';
 
+import { ProviderLogo } from '@/features/onboarding/provider-icons';
+
 export const ONBOARDING_FEATURED_PROVIDERS = [
-  { id: 'openai', name: 'OpenAI', icon: '🟢' },
-  { id: 'anthropic', name: 'Anthropic', icon: '🟣' },
-  { id: 'google', name: 'Google AI', icon: '🔵' },
-  { id: 'groq', name: 'Groq', icon: '⚡' },
-  { id: 'openrouter', name: 'OpenRouter', icon: '🔀' },
-  { id: 'xai', name: 'xAI', icon: '✖' },
+  { id: 'deepseek', name: 'DeepSeek', recommended: true },
+  { id: 'minimax', name: 'MiniMax', recommended: false },
+  { id: 'kimi-coding', name: 'Kimi Coding', recommended: false },
+  { id: 'openai', name: 'OpenAI', recommended: false },
+  { id: 'anthropic', name: 'Anthropic', recommended: false },
+  { id: 'google', name: 'Google AI', recommended: false },
 ] as const;
 
 export function OnboardingProviderGrid({
@@ -22,14 +24,18 @@ export function OnboardingProviderGrid({
           type="button"
           onClick={() => onSelect(p.id)}
           className={cn(
-            'flex flex-col items-center gap-1.5 rounded-xl border border-edge p-4 text-center transition-colors',
+            'relative flex flex-col items-center gap-1.5 rounded-xl border border-edge p-4 text-center transition-colors',
             'hover:border-accent hover:bg-accent-soft',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+            p.recommended && 'border-accent/50 bg-accent-soft/30',
           )}
         >
-          <span className="text-2xl" aria-hidden>
-            {p.icon}
-          </span>
+          {p.recommended && (
+            <span className="absolute -top-2 right-2 rounded-full bg-accent px-2 py-0.5 text-[10px] font-semibold text-white">
+              推荐
+            </span>
+          )}
+          <ProviderLogo providerId={p.id} className="size-8" />
           <span className="text-sm font-medium text-fg">{p.name}</span>
         </button>
       ))}

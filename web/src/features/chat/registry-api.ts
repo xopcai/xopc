@@ -25,6 +25,21 @@ let _modelsInflight: Promise<ConfiguredModel[]> | null = null;
 
 const MODELS_CACHE_TTL_MS = 60_000; // 60 seconds
 
+/** SWR key used by ModelSelector and other consumers. */
+export const CONFIGURED_MODELS_SWR_KEY = 'gateway-configured-models';
+
+/**
+ * Invalidate the module-level models cache so the next fetch hits the server.
+ * Also revalidates the SWR key so any mounted `useSWR` hook re-renders.
+ */
+export async function invalidateConfiguredModelsCache(): Promise<void> {
+  _modelsCache = null;
+  _modelsCacheExpiry = 0;
+  // Lazy import to avoid circular deps; mutate is a standalone SWR util.
+  const { mutate } = await import('swr');
+  await mutate(CONFIGURED_MODELS_SWR_KEY);
+}
+
 /**
  * Fetch configured models with caching and request deduplication.
  * All callers share the same cache within the TTL period.

@@ -1,11 +1,13 @@
+import { ExternalLink } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import type { ConfiguredModel } from '@/features/chat/registry-api';
-import { fetchConfiguredModelsCached } from '@/features/chat/registry-api';
+import { fetchConfiguredModelsCached, invalidateConfiguredModelsCache } from '@/features/chat/registry-api';
 import { revalidateGatewayConfig } from '@/features/gateway/gateway-config-swr';
 import { OnboardingModelSelect } from '@/features/onboarding/onboarding-model-select';
 import { OnboardingProviderGrid } from '@/features/onboarding/onboarding-provider-grid';
+import { PROVIDER_ENRICHMENT } from '@/features/settings/provider-enrichment';
 import { patchProviderApiKeys } from '@/features/settings/providers-api';
 import { Button } from '@/components/ui/button';
 import { fetchJson } from '@/lib/fetch';
@@ -86,6 +88,7 @@ export function OnboardingCard({ onComplete, onDismiss }: OnboardingCardProps) {
         }),
       });
       void revalidateGatewayConfig();
+      void invalidateConfiguredModelsCache();
       window.dispatchEvent(new CustomEvent('config-reload'));
       onComplete();
     } catch (e) {
@@ -148,6 +151,41 @@ export function OnboardingCard({ onComplete, onDismiss }: OnboardingCardProps) {
               </h3>
               <p className="mt-1 text-sm text-fg-muted">{o.step2Subtitle}</p>
             </div>
+            {selectedProvider && (() => {
+              const enrichment = PROVIDER_ENRICHMENT[selectedProvider];
+              const apiKeyUrl = enrichment?.apiKeyUrl;
+              const apiKeyUrlCn = enrichment?.apiKeyUrlCn;
+              if (!apiKeyUrl) return null;
+              return (
+                <div className="flex flex-wrap items-center gap-3 rounded-xl border border-edge-subtle bg-surface-base px-3.5 py-2.5">
+                  <span className="text-xs text-fg-muted">
+                    {language === 'zh' ? '获取 API Key：' : 'Get your API Key:'}
+                  </span>
+                  <a
+                    href={apiKeyUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-xs font-medium text-accent-fg hover:underline"
+                  >
+                    {apiKeyUrlCn
+                      ? (language === 'zh' ? '国际版' : 'International')
+                      : (language === 'zh' ? '前往获取' : 'Get API Key')}
+                    <ExternalLink className="size-3" />
+                  </a>
+                  {apiKeyUrlCn && (
+                    <a
+                      href={apiKeyUrlCn}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-xs font-medium text-accent-fg hover:underline"
+                    >
+                      {language === 'zh' ? '中国版' : 'China'}
+                      <ExternalLink className="size-3" />
+                    </a>
+                  )}
+                </div>
+              );
+            })()}
             <label className="block text-sm font-medium text-fg">
               <span className="sr-only">{o.step2Placeholder}</span>
               <input
