@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { apiUrl } from '@/lib/url';
 import { apiFetch } from '@/lib/fetch';
@@ -47,6 +47,42 @@ export type NpmUpdateRunResult =
 
 const isElectronEnv =
   typeof window !== 'undefined' && (window as unknown as { electronAPI?: { updater?: unknown } }).electronAPI?.updater !== undefined;
+const DEV_MOCK_STORAGE_KEY = 'xopc.dev.mockElectron';
+const DEV_MOCK_EVENT = 'xopc:dev:mock-electron-changed';
+
+type DevMockWindow = Window & {
+  __xopcSetMockElectron?: (next: ElectronUpdateStatus | null) => void;
+};
+
+function readDevMockState(): ElectronUpdateStatus | null {
+  if (!import.meta.env.DEV || typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(DEV_MOCK_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as ElectronUpdateStatus | null;
+    return parsed && typeof parsed === 'object' && typeof parsed.state === 'string' ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+if (import.meta.env.DEV && typeof window !== 'undefined') {
+  const w = window as DevMockWindow;
+  if (!w.__xopcSetMockElectron) {
+    w.__xopcSetMockElectron = (next: ElectronUpdateStatus | null) => {
+      try {
+        if (next === null) {
+          window.localStorage.removeItem(DEV_MOCK_STORAGE_KEY);
+        } else {
+          window.localStorage.setItem(DEV_MOCK_STORAGE_KEY, JSON.stringify(next));
+        }
+      } catch {
+        /* ignore */
+      }
+      window.dispatchEvent(new CustomEvent<ElectronUpdateStatus | null>(DEV_MOCK_EVENT, { detail: next }));
+    };
+  }
+}
 
 export function useUpdateStatus(): UpdateStatus & {
   checkNow: () => Promise<void>;
@@ -57,12 +93,15 @@ export function useUpdateStatus(): UpdateStatus & {
 } {
   const [npm, setNpm] = useState<NpmUpdateStatus | null>(null);
   const [npmUpdateRunning, setNpmUpdateRunning] = useState(false);
+  const [devMockElectron, setDevMockElectron] = useState<ElectronUpdateStatus | null>(() => readDevMockState());
   const [electron, setElectron] = useState<ElectronUpdateStatus | null>(
-    isElectronEnv ? { state: 'idle' } : null,
+    isElectronEnv ? { state: 'idle' } : readDevMockState(),
   );
+  const mockCheckTimeoutRef = useRef<number | null>(null);
+  const isEffectiveElectron = isElectronEnv || devMockElectron !== null;
 
   useEffect(() => {
-    if (isElectronEnv) return;
+    if (isEffectiveElectron) return;
     void fetchNpmStatus().then(setNpm).catch(() => {});
 
     const handler = (e: Event) => {
@@ -83,11 +122,11 @@ export function useUpdateStatus(): UpdateStatus & {
     };
     window.addEventListener('update-available', handler);
     return () => window.removeEventListener('update-available', handler);
-  }, []);
+  }, [isEffectiveElectron]);
 
   /** When the running gateway version catches up, clear pending npm restart UX. */
   useEffect(() => {
-    if (isElectronEnv || !npm?.currentVersion) return;
+    if (isEffectiveElectron || !npm?.currentVersion) return;
     try {
       const raw = sessionStorage.getItem(NPM_PENDING_RESTART_KEY);
       if (!raw) return;
@@ -99,7 +138,7 @@ export function useUpdateStatus(): UpdateStatus & {
     } catch {
       /* ignore */
     }
-  }, [npm?.currentVersion]);
+  }, [isEffectiveElectron, npm?.currentVersion]);
 
   useEffect(() => {
     if (!isElectronEnv) return;
@@ -114,8 +153,33 @@ export function useUpdateStatus(): UpdateStatus & {
     return cleanup;
   }, []);
 
+  useEffect(() => {
+    if (!import.meta.env.DEV || isElectronEnv) return;
+    setElectron(devMockElectron);
+  }, [devMockElectron]);
+
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<ElectronUpdateStatus | null>).detail;
+      setDevMockElectron(detail);
+    };
+    window.addEventListener(DEV_MOCK_EVENT, handler);
+    return () => window.removeEventListener(DEV_MOCK_EVENT, handler);
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (mockCheckTimeoutRef.current !== null) {
+        window.clearTimeout(mockCheckTimeoutRef.current);
+        mockCheckTimeoutRef.current = null;
+      }
+    },
+    [],
+  );
+
   const checkNow = useCallback(async () => {
-    if (isElectronEnv) return;
+    if (isEffectiveElectron) return;
     try {
       const res = await apiFetch(apiUrl('/api/update/check'), { method: 'POST' });
       if (res.ok) {
@@ -125,10 +189,10 @@ export function useUpdateStatus(): UpdateStatus & {
     } catch {
       /* silent */
     }
-  }, []);
+  }, [isEffectiveElectron]);
 
   const runNpmUpdate = useCallback(async (): Promise<NpmUpdateRunResult> => {
-    if (isElectronEnv) {
+    if (isEffectiveElectron) {
       return {
         ok: false,
         error: 'not-applicable',
@@ -196,13 +260,25 @@ export function useUpdateStatus(): UpdateStatus & {
     } finally {
       setNpmUpdateRunning(false);
     }
-  }, []);
+  }, [isEffectiveElectron]);
 
   const electronCheck = useCallback(() => {
     if (isElectronEnv) {
       void (window as unknown as { electronAPI: { updater: { check: () => void } } }).electronAPI.updater.check();
+      return;
     }
-  }, []);
+    if (import.meta.env.DEV && devMockElectron !== null) {
+      const w = window as DevMockWindow;
+      w.__xopcSetMockElectron?.({ ...devMockElectron, state: 'checking' });
+      if (mockCheckTimeoutRef.current !== null) {
+        window.clearTimeout(mockCheckTimeoutRef.current);
+      }
+      mockCheckTimeoutRef.current = window.setTimeout(() => {
+        w.__xopcSetMockElectron?.({ ...devMockElectron, state: 'not-available' });
+        mockCheckTimeoutRef.current = null;
+      }, 1500);
+    }
+  }, [devMockElectron]);
 
   const electronQuitAndInstall = useCallback(() => {
     if (isElectronEnv) {
@@ -213,7 +289,7 @@ export function useUpdateStatus(): UpdateStatus & {
   return {
     npm,
     electron,
-    isElectron: isElectronEnv,
+    isElectron: isEffectiveElectron,
     checkNow,
     runNpmUpdate,
     npmUpdateRunning,
