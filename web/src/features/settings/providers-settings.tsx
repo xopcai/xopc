@@ -27,7 +27,7 @@ import {
   startAsyncOAuthLogin,
   submitOAuthCode,
 } from '@/features/settings/oauth-api';
-import { fetchConfiguredModelsCached, type ConfiguredModel } from '@/features/chat/registry-api';
+import { CONFIGURED_MODELS_SWR_KEY, fetchConfiguredModelsCached, type ConfiguredModel } from '@/features/chat/registry-api';
 import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
 import {
   isMaskedKey,
@@ -131,7 +131,7 @@ export function ProvidersSettingsPanel() {
     mutate: mutMeta,
   } = useSWR(hasToken ? metaUrl : null, fetchMetaList, { revalidateOnFocus: false });
   const { data: models, mutate: mutModels } = useSWR(
-    hasToken ? 'gateway-configured-models' : null,
+    hasToken ? CONFIGURED_MODELS_SWR_KEY : null,
     () => fetchConfiguredModelsCached(),
     { revalidateOnFocus: false },
   );

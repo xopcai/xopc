@@ -216,6 +216,7 @@ export const PROVIDER_ENRICHMENT: Record<string, ProviderEnrichment> = {
   },
   minimax: {
     apiKeyUrl: 'https://platform.minimax.io/user-center/basic-information/interface-key',
+    apiKeyUrlCn: 'https://platform.minimaxi.com/user-center/basic-information/interface-key',
     pricingUrl: 'https://platform.minimax.io/docs/guides/models-intro',
     docsUrl: 'https://platform.minimax.io/docs/guides/quickstart-preparation',
     description: 'MiniMax — Chinese multimodal model with strong text and audio capabilities.',
