@@ -1,27 +1,25 @@
-import { File, FolderOpen, Puzzle, Sparkles, Terminal } from 'lucide-react';
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { File, FolderOpen, Puzzle, Settings, Sparkles, Terminal, Zap } from 'lucide-react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 
+import { buildAutomationActionHits } from '@/features/search/global-command-palette/actions-provider';
 import type { GlobalHit } from '@/features/search/global-command-palette/types';
 import { hitRank, sortHits } from '@/features/search/global-command-palette/rank';
 import { buildRouteSeeds } from '@/features/search/global-command-palette/routes-provider';
+import { buildQuickSettingHits } from '@/features/search/global-command-palette/settings-provider';
 import { fetchCommandsCached, getSkillsCached } from '@/features/chat/command-palette-api';
 import type { CommandEntry } from '@/features/chat/command-palette.types';
 import { dispatchFillChatComposer } from '@/features/chat/fill-composer-dispatch';
 import { searchWorkspaceFiles } from '@/features/chat/at-mention-api';
 import { listSessions } from '@/features/sessions/session-api';
+import { fetchGatewayAgents } from '@/features/settings/agents-admin-api';
 import { useUiExtensions } from '@/features/extensions/extension-provider';
+import { revalidateGatewayConfig } from '@/features/gateway/gateway-config-swr';
+import { fetchJson } from '@/lib/fetch';
+import { apiUrl } from '@/lib/url';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useWorkspacePreviewStore } from '@/stores/workspace-preview-store';
 import { useWorkspaceEditorAgentStore } from '@/stores/workspace-editor-agent-store';
-
-function isEditableTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false;
-  const tag = target.tagName.toLowerCase();
-  if (tag === 'input' || tag === 'textarea' || tag === 'select') return true;
-  if (target.isContentEditable) return true;
-  return false;
-}
 
 function useCurrentChatSessionKey(): string | undefined {
   const { pathname } = useLocation();
@@ -32,26 +30,34 @@ function useCurrentChatSessionKey(): string | undefined {
   return sk && sk !== 'new' ? sk : undefined;
 }
 
+type PaletteRow = { id: string; title: string; subtitle?: string };
+
 type PaletteState =
   | { phase: 'idle'; hits: GlobalHit[] }
   | { phase: 'loading'; hits: GlobalHit[] }
   | { phase: 'ready'; hits: GlobalHit[] }
   | { phase: 'error'; hits: GlobalHit[]; message: string };
 
+type PaletteLayer = 'main' | 'models' | 'agents';
+
 function groupOrder(label: string): number {
   switch (label) {
     case 'Navigate':
       return 0;
-    case 'Extensions':
+    case 'Quick Settings':
       return 1;
-    case 'Sessions':
+    case 'Extensions':
       return 2;
-    case 'Files':
+    case 'Sessions':
       return 3;
-    case 'Commands':
+    case 'Files':
       return 4;
-    case 'Skills':
+    case 'Commands':
       return 5;
+    case 'Skills':
+      return 6;
+    case 'Actions':
+      return 7;
     default:
       return 10;
   }
@@ -71,6 +77,10 @@ function iconFor(hit: GlobalHit) {
       return <Terminal className="size-3.5 shrink-0 text-fg-subtle" aria-hidden />;
     case 'skill':
       return <Sparkles className="size-3.5 shrink-0 text-accent-fg" aria-hidden />;
+    case 'setting':
+      return <Settings className="size-3.5 shrink-0 text-fg-subtle" aria-hidden />;
+    case 'action':
+      return <Zap className="size-3.5 shrink-0 text-accent-fg" aria-hidden />;
     default:
       return null;
   }
@@ -155,37 +165,123 @@ export function GlobalCommandPaletteHost() {
   const requestIdRef = useRef(0);
   const [state, setState] = useState<PaletteState>({ phase: 'idle', hits: [] });
 
+  const [paletteLayer, setPaletteLayer] = useState<PaletteLayer>('main');
+  const [modelRows, setModelRows] = useState<PaletteRow[]>([]);
+  const [agentRows, setAgentRows] = useState<PaletteRow[]>([]);
+  const [layerLoading, setLayerLoading] = useState(false);
+
   const routeSeeds = useMemo(() => buildRouteSeeds(language), [language]);
+
+  const openModelPalette = useCallback(async () => {
+    setPaletteLayer('models');
+    setQuery('');
+    setSelectedIndex(0);
+    setLayerLoading(true);
+    try {
+      const data = await fetchJson<{
+        payload?: {
+          providers?: Array<{ models?: Array<{ ref: string; name: string; available?: boolean }> }>;
+        };
+      }>(apiUrl('/api/registry'));
+      const rows: PaletteRow[] = [];
+      for (const p of data.payload?.providers ?? []) {
+        for (const m of p.models ?? []) {
+          if (m.available === false) continue;
+          rows.push({
+            id: m.ref,
+            title: m.name || m.ref,
+            subtitle: m.ref,
+          });
+        }
+      }
+      rows.sort((a, b) => a.title.localeCompare(b.title));
+      setModelRows(rows);
+    } catch {
+      setModelRows([]);
+    } finally {
+      setLayerLoading(false);
+    }
+  }, []);
+
+  const openAgentPalette = useCallback(async () => {
+    setPaletteLayer('agents');
+    setQuery('');
+    setSelectedIndex(0);
+    setLayerLoading(true);
+    try {
+      const data = await fetchGatewayAgents();
+      setAgentRows(
+        data.agents.map((a) => ({
+          id: a.id,
+          title: a.name?.trim() || a.id,
+          subtitle: a.id,
+        })),
+      );
+    } catch {
+      setAgentRows([]);
+    } finally {
+      setLayerLoading(false);
+    }
+  }, []);
+
+  const displayedLayerRows = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const src = paletteLayer === 'models' ? modelRows : paletteLayer === 'agents' ? agentRows : [];
+    if (!q) return src;
+    return src.filter(
+      (r) =>
+        r.title.toLowerCase().includes(q) ||
+        r.id.toLowerCase().includes(q) ||
+        (r.subtitle?.toLowerCase().includes(q) ?? false),
+    );
+  }, [paletteLayer, modelRows, agentRows, query]);
 
   useEffect(() => {
     if (!open) return;
     setQuery('');
     setSelectedIndex(0);
+    setPaletteLayer('main');
+    setModelRows([]);
+    setAgentRows([]);
     setState({ phase: 'idle', hits: [] });
     window.setTimeout(() => inputRef.current?.focus(), 50);
   }, [open]);
 
   useEffect(() => {
+    setSelectedIndex((i) =>
+      Math.min(i, Math.max(0, displayedLayerRows.length > 0 ? displayedLayerRows.length - 1 : 0)),
+    );
+  }, [displayedLayerRows.length, paletteLayer, query]);
+
+  useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key === 'k') {
-        // Avoid browser default (location bar / search).
         event.preventDefault();
-        // Allow opening even when focus is in an editor; Ctrl+K is explicitly global.
-        if (isEditableTarget(event.target)) {
-          // no-op: we still open
-        }
         setOpen((prev) => !prev);
         return;
       }
       if (!open) return;
+
       if (event.key === 'Escape') {
         event.preventDefault();
+        if (paletteLayer !== 'main') {
+          setPaletteLayer('main');
+          setQuery('');
+          setSelectedIndex(0);
+          return;
+        }
         setOpen(false);
         return;
       }
+
+      const maxIdx =
+        paletteLayer === 'main'
+          ? Math.max(0, state.hits.length - 1)
+          : Math.max(0, displayedLayerRows.length);
+
       if (event.key === 'ArrowDown') {
         event.preventDefault();
-        setSelectedIndex((i) => Math.min(i + 1, Math.max(0, state.hits.length - 1)));
+        setSelectedIndex((i) => Math.min(i + 1, maxIdx));
         return;
       }
       if (event.key === 'ArrowUp') {
@@ -194,16 +290,50 @@ export function GlobalCommandPaletteHost() {
         return;
       }
       if (event.key === 'Enter') {
+        event.preventDefault();
+        if (paletteLayer === 'models') {
+          if (selectedIndex === 0) {
+            setPaletteLayer('main');
+            setQuery('');
+            return;
+          }
+          const row = displayedLayerRows[selectedIndex - 1];
+          if (!row) return;
+          void (async () => {
+            await fetchJson(apiUrl('/api/config'), {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ agents: { defaults: { model: row.id } } }),
+            });
+            void revalidateGatewayConfig();
+            window.dispatchEvent(new CustomEvent('config-reload'));
+            setOpen(false);
+            setPaletteLayer('main');
+          })();
+          return;
+        }
+        if (paletteLayer === 'agents') {
+          if (selectedIndex === 0) {
+            setPaletteLayer('main');
+            setQuery('');
+            return;
+          }
+          const row = displayedLayerRows[selectedIndex - 1];
+          if (!row) return;
+          window.dispatchEvent(new CustomEvent('xopc-set-chat-agent', { detail: { agentId: row.id } }));
+          setOpen(false);
+          setPaletteLayer('main');
+          return;
+        }
         const item = state.hits[selectedIndex];
         if (item) {
-          event.preventDefault();
           item.run();
         }
       }
     };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
-  }, [open, selectedIndex, state.hits]);
+  }, [open, selectedIndex, state.hits, paletteLayer, displayedLayerRows, layerLoading]);
 
   useEffect(() => {
     const handler = () => setOpen(true);
@@ -212,7 +342,13 @@ export function GlobalCommandPaletteHost() {
   }, []);
 
   useEffect(() => {
-    if (!open) return;
+    const handler = () => setOpen((p) => !p);
+    window.addEventListener('toggle-command-palette', handler);
+    return () => window.removeEventListener('toggle-command-palette', handler);
+  }, []);
+
+  useEffect(() => {
+    if (!open || paletteLayer !== 'main') return;
 
     const q = query.trim();
     const rid = ++requestIdRef.current;
@@ -237,6 +373,14 @@ export function GlobalCommandPaletteHost() {
               navigate(r.path);
             },
           }));
+
+          const quickHits = buildQuickSettingHits(language, {
+            closePalette: close,
+            openModelPalette,
+            openAgentPalette,
+          });
+
+          const actionHits = buildAutomationActionHits(language, navigate, close);
 
           const extensionHits = buildExtensionHits({ query: q, close, navigate, uiExtensions });
 
@@ -321,6 +465,8 @@ export function GlobalCommandPaletteHost() {
 
           const seeds: Array<Omit<GlobalHit, 'rank'>> = [
             ...routeHits,
+            ...quickHits,
+            ...actionHits,
             ...extensionHits,
             ...sessionHits,
             ...fileHits,
@@ -335,9 +481,10 @@ export function GlobalCommandPaletteHost() {
             ranked.push({ ...s, rank: r });
           }
 
-          // Per-group caps to keep variety.
           const caps: Record<string, number> = {
-            Navigate: 6,
+            Navigate: 12,
+            'Quick Settings': 12,
+            Actions: 8,
             Extensions: 8,
             Sessions: 8,
             Files: 10,
@@ -352,9 +499,8 @@ export function GlobalCommandPaletteHost() {
             if (n > (caps[h.groupLabel] ?? 6)) continue;
             seen[h.groupLabel] = n;
             grouped.push(h);
-            if (grouped.length >= 30) break;
+            if (grouped.length >= 36) break;
           }
-          // Stable group ordering.
           grouped.sort(
             (a, b) =>
               groupOrder(a.groupLabel) - groupOrder(b.groupLabel) ||
@@ -380,23 +526,149 @@ export function GlobalCommandPaletteHost() {
       cancelled = true;
       window.clearTimeout(debounce);
     };
-  }, [open, query, routeSeeds, uiExtensions, navigate, chatSessionKey, editorAgentId, pathname, setPreviewPath]);
+  }, [
+    open,
+    query,
+    routeSeeds,
+    uiExtensions,
+    navigate,
+    chatSessionKey,
+    editorAgentId,
+    pathname,
+    setPreviewPath,
+    language,
+    openModelPalette,
+    openAgentPalette,
+    paletteLayer,
+  ]);
 
-  // Keep the keyboard-selected row in view so the list scrollbar tracks selection.
   useLayoutEffect(() => {
     if (!open) return;
     const list = listRef.current;
     if (!list) return;
     const btn = list.querySelector<HTMLElement>(`[data-global-palette-index="${String(selectedIndex)}"]`);
     btn?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-  }, [open, selectedIndex, state.hits]);
+  }, [open, selectedIndex, state.hits, paletteLayer, displayedLayerRows.length]);
 
   if (!open) return null;
 
   const hits = state.hits;
-  const active = hits[selectedIndex];
+  const subBackLabel = language === 'zh' ? '返回' : 'Back';
 
-  // Group headers inline: render a small label row when group changes.
+  if (paletteLayer === 'models' || paletteLayer === 'agents') {
+    const rows = displayedLayerRows;
+    return (
+      <div
+        className="fixed inset-0 z-[120] flex items-start justify-center bg-black/40 p-4 pt-[min(18vh,7rem)]"
+        role="dialog"
+        aria-modal="true"
+        aria-label={language === 'zh' ? '选择模型或智能体' : 'Model or agent picker'}
+        onMouseDown={(e) => {
+          if (e.target === e.currentTarget) setOpen(false);
+        }}
+      >
+        <div className="flex w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-elevated">
+          <input
+            ref={inputRef}
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={
+              paletteLayer === 'models'
+                ? language === 'zh'
+                  ? '搜索模型…'
+                  : 'Search models…'
+                : language === 'zh'
+                  ? '搜索智能体…'
+                  : 'Search agents…'
+            }
+            className="border-b border-edge bg-transparent px-4 py-3 text-sm text-fg outline-none placeholder:text-fg-muted"
+            autoComplete="off"
+            autoCorrect="off"
+          />
+          <ul
+            ref={listRef}
+            className="max-h-[min(60vh,26rem)] overflow-y-auto p-2 text-sm [scrollbar-gutter:stable]"
+            role="listbox"
+          >
+            <li>
+              <button
+                type="button"
+                data-global-palette-index={0}
+                className={[
+                  'flex w-full items-start gap-2 rounded-lg px-3 py-2 text-left text-fg-muted',
+                  selectedIndex === 0 ? 'bg-surface-hover' : 'hover:bg-surface-muted',
+                ].join(' ')}
+                onMouseEnter={() => setSelectedIndex(0)}
+                onClick={() => {
+                  setPaletteLayer('main');
+                  setQuery('');
+                  setSelectedIndex(0);
+                }}
+              >
+                ← {subBackLabel}
+              </button>
+            </li>
+            {layerLoading ? (
+              <li className="rounded-lg px-3 py-6 text-center text-fg-muted">
+                {language === 'zh' ? '加载中…' : 'Loading…'}
+              </li>
+            ) : rows.length === 0 ? (
+              <li className="rounded-lg px-3 py-6 text-center text-fg-muted">
+                {language === 'zh' ? '无结果' : 'No results'}
+              </li>
+            ) : (
+              rows.map((row, i) => {
+                const idx = i + 1;
+                return (
+                  <li key={row.id}>
+                    <button
+                      type="button"
+                      data-global-palette-index={idx}
+                      className={[
+                        'flex w-full items-start gap-2 rounded-lg px-3 py-2 text-left',
+                        selectedIndex === idx ? 'bg-surface-hover text-fg' : 'text-fg hover:bg-surface-muted',
+                      ].join(' ')}
+                      onMouseEnter={() => setSelectedIndex(idx)}
+                      onClick={() => {
+                        if (paletteLayer === 'models') {
+                          void (async () => {
+                            await fetchJson(apiUrl('/api/config'), {
+                              method: 'PATCH',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ agents: { defaults: { model: row.id } } }),
+                            });
+                            void revalidateGatewayConfig();
+                            window.dispatchEvent(new CustomEvent('config-reload'));
+                            setOpen(false);
+                            setPaletteLayer('main');
+                          })();
+                        } else {
+                          window.dispatchEvent(
+                            new CustomEvent('xopc-set-chat-agent', { detail: { agentId: row.id } }),
+                          );
+                          setOpen(false);
+                          setPaletteLayer('main');
+                        }
+                      }}
+                    >
+                      <span className="min-w-0 flex-1">
+                        <div className="min-w-0 truncate font-medium">{row.title}</div>
+                        {row.subtitle ? (
+                          <div className="mt-0.5 line-clamp-2 text-xs text-fg-muted">{row.subtitle}</div>
+                        ) : null}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })
+            )}
+          </ul>
+        </div>
+      </div>
+    );
+  }
+
   let lastGroup = '';
 
   return (
@@ -415,7 +687,9 @@ export function GlobalCommandPaletteHost() {
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder={language === 'zh' ? '搜索…（会话 / 文件 / 设置 / 命令）' : 'Search… (sessions, files, settings, commands)'}
+          placeholder={
+            language === 'zh' ? '搜索…（会话 / 文件 / 设置 / 命令）' : 'Search… (sessions, files, settings, commands)'
+          }
           className="border-b border-edge bg-transparent px-4 py-3 text-sm text-fg outline-none placeholder:text-fg-muted"
           autoComplete="off"
           autoCorrect="off"
@@ -424,7 +698,9 @@ export function GlobalCommandPaletteHost() {
           ref={listRef}
           className="max-h-[min(60vh,26rem)] overflow-y-auto p-2 text-sm [scrollbar-gutter:stable]"
           role="listbox"
-          aria-activedescendant={active ? `global-hit-${active.id}` : undefined}
+          aria-activedescendant={
+            hits[selectedIndex] ? `global-hit-${hits[selectedIndex].id}` : undefined
+          }
         >
           {hits.length === 0 ? (
             <li className="rounded-lg px-3 py-6 text-center text-fg-muted">
@@ -463,7 +739,9 @@ export function GlobalCommandPaletteHost() {
                     <span className="mt-0.5">{iconFor(h)}</span>
                     <span className="min-w-0 flex-1">
                       <div className="min-w-0 truncate font-medium">{h.title}</div>
-                      {h.subtitle ? <div className="mt-0.5 line-clamp-2 text-xs text-fg-muted">{h.subtitle}</div> : null}
+                      {h.subtitle ? (
+                        <div className="mt-0.5 line-clamp-2 text-xs text-fg-muted">{h.subtitle}</div>
+                      ) : null}
                     </span>
                   </button>
                 </li>
@@ -475,4 +753,3 @@ export function GlobalCommandPaletteHost() {
     </div>
   );
 }
-

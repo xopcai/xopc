@@ -50,7 +50,9 @@ export function hitRank(hit: Omit<GlobalHit, 'rank'>, query: string): number | n
         ? -0.1
         : hit.kind === 'session'
           ? -0.05
-          : 0;
+          : hit.kind === 'setting' || hit.kind === 'action'
+            ? -0.02
+            : 0;
 
   return Math.max(0, best + kindBias);
 }

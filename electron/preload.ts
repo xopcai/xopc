@@ -87,6 +87,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
     },
   },
   platform: process.platform as 'darwin' | 'win32' | 'linux',
+  menu: {
+    onNavigate: (callback: (path: string) => void) => {
+      const handler = (_: unknown, path: string) => callback(path);
+      ipcRenderer.on('menu:navigate', handler);
+      return () => ipcRenderer.removeListener('menu:navigate', handler);
+    },
+    onTogglePalette: (callback: () => void) => {
+      const handler = () => callback();
+      ipcRenderer.on('menu:toggle-palette', handler);
+      return () => ipcRenderer.removeListener('menu:toggle-palette', handler);
+    },
+  },
   system: {
     getBehavior: () => ipcRenderer.invoke('system-settings:get-behavior'),
     setBehavior: (patch: {

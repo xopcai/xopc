@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { BrowserWindow, app, dialog, ipcMain, session, shell } from 'electron';
+import { BrowserWindow, Menu, app, dialog, globalShortcut, ipcMain, session, shell } from 'electron';
 
 /** Before config loader initializes pino (thread-stream worker path breaks when bundled under `out/main/`). */
 import './thread-stream-bundle-shim.js';
@@ -22,11 +22,62 @@ import { initElectronShellPreferences, registerSystemSettingsIpc, stopAllPowerSa
 import { registerUpdaterIpc } from './ipc/updater-ipc.js';
 import { getLoadingPageDataUrl } from './loading-page.js';
 import { hasPendingInstall, initAutoUpdater, stopAutoUpdater } from './auto-updater.js';
+import { buildAppMenu } from './menu.js';
+import { createTray, destroyTray } from './tray.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 /** Track the main window for gateway exit notifications. */
 let mainWindow: BrowserWindow | null = null;
+
+const gotTheLock = app.requestSingleInstanceLock();
+if (!gotTheLock) {
+  app.quit();
+}
+
+if (process.defaultApp) {
+  if (process.argv.length >= 2) {
+    app.setAsDefaultProtocolClient('xopc', process.execPath, [process.argv[1]!]);
+  }
+} else {
+  app.setAsDefaultProtocolClient('xopc');
+}
+
+function handleDeepLink(url: string): void {
+  try {
+    const parsed = new URL(url);
+    const path = `/${parsed.hostname}${parsed.pathname}`;
+    const queryString = parsed.search;
+
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.show();
+      mainWindow.focus();
+      mainWindow.webContents.send('menu:navigate', path + queryString);
+    }
+  } catch {
+    console.warn(`[main] Invalid deep link URL: ${url}`);
+  }
+}
+
+if (process.platform === 'darwin') {
+  app.on('open-url', (event, url) => {
+    event.preventDefault();
+    handleDeepLink(url);
+  });
+}
+
+if (gotTheLock) {
+  app.on('second-instance', (_event, commandLine) => {
+    const url = commandLine.find((arg) => arg.startsWith('xopc://'));
+    if (url) handleDeepLink(url);
+
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+    }
+  });
+}
 
 /** True while `before-quit` has run so window `close` does not call `preventDefault` during a normal quit. */
 let appIsQuitting = false;
@@ -164,6 +215,13 @@ function createWindow(): void {
 
   mainWindow = win;
 
+  Menu.setApplicationMenu(buildAppMenu(win));
+
+  const trayIconDir = app.isPackaged
+    ? join(process.resourcesPath, 'resources')
+    : join(__dirname, '../../electron/resources');
+  createTray(win, trayIconDir);
+
   initAutoUpdater(win);
 
   attachExternalUrlHandlers(win);
@@ -212,6 +270,8 @@ function createWindow(): void {
 }
 
 app.whenReady().then(async () => {
+  if (!gotTheLock) return;
+
   // getUserMedia / MediaRecorder need Chromium "media" permission; without a handler some Electron
   // builds deny it for packaged apps (browser tabs are unaffected).
   session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
@@ -224,11 +284,35 @@ app.whenReady().then(async () => {
   registerAgentIpc(ipcMain);
   registerSystemSettingsIpc(ipcMain);
   registerUpdaterIpc(ipcMain);
+
+  const hotkey = process.platform === 'darwin' ? 'Command+Shift+Space' : 'Control+Shift+Space';
+  const registered = globalShortcut.register(hotkey, () => {
+    if (!mainWindow) {
+      createWindow();
+      return;
+    }
+    if (mainWindow.isVisible() && mainWindow.isFocused()) {
+      mainWindow.hide();
+    } else {
+      mainWindow.show();
+      mainWindow.focus();
+    }
+  });
+
+  if (!registered) {
+    console.warn(`[main] Failed to register global shortcut: ${hotkey}`);
+  }
+
   createWindow();
+
+  const startupLink = process.argv.find((arg) => arg.startsWith('xopc://'));
+  if (startupLink) handleDeepLink(startupLink);
 });
 
 app.on('before-quit', () => {
   appIsQuitting = true;
+  destroyTray();
+  globalShortcut.unregisterAll();
   stopAllPowerSaveBlockers();
   stopGatewayProcess();
   stopAutoUpdater();
