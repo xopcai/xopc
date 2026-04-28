@@ -70,7 +70,8 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     c.header('X-Content-Type-Options', 'nosniff');
     c.header('Referrer-Policy', 'strict-origin-when-cross-origin');
     c.header('X-XSS-Protection', '1; mode=block');
-    c.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+    // microphone=(self): allow same-origin chat voice (composer). microphone=() breaks packaged Electron loading the gateway SPA.
+    c.header('Permissions-Policy', 'camera=(), microphone=(self), geolocation=()');
     c.header(
       'Content-Security-Policy',
       "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'",

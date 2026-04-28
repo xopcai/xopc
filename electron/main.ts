@@ -4,6 +4,9 @@ import { fileURLToPath } from 'node:url';
 
 import { BrowserWindow, app, dialog, ipcMain, session, shell } from 'electron';
 
+/** Before config loader initializes pino (thread-stream worker path breaks when bundled under `out/main/`). */
+import './thread-stream-bundle-shim.js';
+
 import { ensureGatewayConfigForElectron, getElectronUserPaths } from './ensure-gateway-config.js';
 import {
   isCliBundlePresent,
