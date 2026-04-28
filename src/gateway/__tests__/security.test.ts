@@ -87,7 +87,9 @@ describe('Gateway Security Fixes', () => {
       const app = createHonoApp({ service, token: 'test' });
       
       const res = await app.request('/health');
-      expect(res.headers.get('Permissions-Policy')).toBe('camera=(), microphone=(), geolocation=()');
+      expect(res.headers.get('Permissions-Policy')).toBe(
+        'camera=(), microphone=(self), geolocation=()',
+      );
     });
 
     it('should include Content-Security-Policy', async () => {

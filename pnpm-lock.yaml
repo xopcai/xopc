@@ -119,6 +119,9 @@ importers:
       silk-wasm:
         specifier: ^3.7.1
         version: 3.7.1
+      thread-stream:
+        specifier: ^4.0.0
+        version: 4.0.0
       undici:
         specifier: ^8.1.0
         version: 8.1.0

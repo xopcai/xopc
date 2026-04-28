@@ -25,6 +25,9 @@ export default defineConfig({
         // IMPORTANT: In the Electron main process, `electron` is a runtime-provided module.
         // If Rollup resolves it to the npm package `electron`, the bundle will include
         // `node_modules/electron/index.js`, which throws at runtime inside packaged apps.
+        // Do not mark `thread-stream` external: pnpm may not hoist it, so `require('thread-stream')`
+        // from `out/main/chunks/*` fails. Bundled `thread-stream` + `thread-stream-bundle-shim.ts`
+        // fixes pino transport worker path (see electron/thread-stream-bundle-shim.ts).
         external: ['electron'],
         input: {
           index: resolve(__dirname, 'electron/main.ts'),
