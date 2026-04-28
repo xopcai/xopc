@@ -1,10 +1,11 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { X } from 'lucide-react';
+import { AlertCircle, CheckCircle, Download, Loader2, RefreshCw, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { BrandLogo } from '@/components/shell/brand-logo';
 import { XOPC_ELECTRON_UPDATE_RECHECK_EVENT } from '@/features/updater/use-update-reminder';
 import { useUpdateStatus } from '@/features/updater/use-update-status';
+import type { ElectronUpdateState } from '@/features/updater/use-update-status';
 import { messages } from '@/i18n/messages';
 import { webBuildInfo } from '@/lib/build-info';
 import { cn } from '@/lib/cn';
@@ -48,9 +49,14 @@ export function AboutDialog({
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const d = m.aboutDialog;
-  const { isElectron, electronCheck, checkNow } = useUpdateStatus();
+  const { isElectron, electron, electronCheck } = useUpdateStatus();
 
   const [gatewayVersion, setGatewayVersion] = useState<string | null>(null);
+  const [manualCheckTriggered, setManualCheckTriggered] = useState(false);
+
+  useEffect(() => {
+    if (!open) setManualCheckTriggered(false);
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -132,17 +138,33 @@ export function AboutDialog({
                     onClick={() => {
                       if (isElectron) {
                         window.dispatchEvent(new CustomEvent(XOPC_ELECTRON_UPDATE_RECHECK_EVENT));
+                        setManualCheckTriggered(true);
                         electronCheck();
-                        void checkNow();
                       } else {
                         window.open(RELEASES_URL, '_blank', 'noopener,noreferrer');
                       }
                     }}
+                    disabled={isElectron && electron?.state === 'checking'}
                   >
-                    {d.checkUpdates}
+                    {isElectron && electron?.state === 'checking' ? (
+                      <span className="flex items-center gap-1">
+                        <Loader2 className="size-3 animate-spin" />
+                        {d.checkUpdatesChecking}
+                      </span>
+                    ) : (
+                      d.checkUpdates
+                    )}
                   </button>
                 </div>
               </div>
+              {isElectron && manualCheckTriggered && (
+                <ElectronUpdateHint
+                  state={electron?.state}
+                  version={electron?.version}
+                  percent={electron?.percent}
+                  d={d}
+                />
+              )}
 
               <div className="grid grid-cols-[5.5rem_1fr] gap-x-3 gap-y-1">
                 <span className="pt-0.5 text-fg-muted">{d.commitLabel}</span>
@@ -183,4 +205,75 @@ export function AboutDialog({
       </Dialog.Portal>
     </Dialog.Root>
   );
+}
+
+function ElectronUpdateHint({
+  state,
+  version,
+  percent,
+  d,
+}: {
+  state?: ElectronUpdateState;
+  version?: string;
+  percent?: number;
+  d: {
+    checkUpdatesChecking: string;
+    checkUpdatesUpToDate: string;
+    checkUpdatesAvailable: string;
+    checkUpdatesDownloading: string;
+    checkUpdatesDownloaded: string;
+    checkUpdatesError: string;
+  };
+}) {
+  if (!state || state === 'idle') return null;
+
+  if (state === 'checking') {
+    return (
+      <p className="flex items-center gap-2 text-[12px] text-fg-muted">
+        <Loader2 className="size-3.5 animate-spin" />
+        <span>{d.checkUpdatesChecking}</span>
+      </p>
+    );
+  }
+  if (state === 'not-available') {
+    return (
+      <p className="flex items-center gap-2 text-[12px] text-green-600 dark:text-green-400">
+        <CheckCircle className="size-3.5" />
+        <span>{d.checkUpdatesUpToDate}</span>
+      </p>
+    );
+  }
+  if (state === 'available') {
+    return (
+      <p className="flex items-center gap-2 text-[12px] text-accent-fg">
+        <RefreshCw className="size-3.5" />
+        <span>{d.checkUpdatesAvailable.replace('{version}', version ?? '?')}</span>
+      </p>
+    );
+  }
+  if (state === 'downloading') {
+    return (
+      <p className="flex items-center gap-2 text-[12px] text-fg-muted">
+        <Download className="size-3.5 animate-bounce" />
+        <span>{d.checkUpdatesDownloading.replace('{percent}', String(Math.round(percent ?? 0)))}</span>
+      </p>
+    );
+  }
+  if (state === 'downloaded') {
+    return (
+      <p className="flex items-center gap-2 text-[12px] font-semibold text-accent-fg">
+        <Download className="size-3.5" />
+        <span>{d.checkUpdatesDownloaded.replace('{version}', version ?? '?')}</span>
+      </p>
+    );
+  }
+  if (state === 'error') {
+    return (
+      <p className="flex items-center gap-2 text-[12px] text-red-500 dark:text-red-400">
+        <AlertCircle className="size-3.5" />
+        <span>{d.checkUpdatesError}</span>
+      </p>
+    );
+  }
+  return null;
 }
