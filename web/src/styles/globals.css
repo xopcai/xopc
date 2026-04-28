@@ -392,6 +392,29 @@ html.dark {
   }
 }
 
+@keyframes settings-sheet-enter {
+  from {
+    opacity: 0.85;
+    transform: translateX(0.5rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .settings-sheet-enter {
+    animation: settings-sheet-enter 250ms ease-out both;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-sheet-enter {
+    animation: none;
+  }
+}
+
 /*
  * Theme (light/dark): smooth cross-fade instead of an instant snap (View Transitions API).
  * Browsers without support keep an immediate switch; `prefers-reduced-motion` disables animation.
