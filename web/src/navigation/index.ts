@@ -17,11 +17,13 @@ const SETTINGS_SECTION_TO_TAB: Record<SettingsSectionId, Tab> = {
   agents: 'settingsAgents',
   providers: 'settingsProviders',
   models: 'settingsModels',
-  channels: 'settingsChannels',
+  channels: 'channels',
   voice: 'settingsVoice',
   gateway: 'settingsGateway',
   heartbeat: 'settingsHeartbeat',
   search: 'settingsSearch',
+  cron: 'cron',
+  skills: 'skills',
 };
 
 const TAB_TO_SETTINGS_SECTION: Record<
@@ -35,7 +37,10 @@ const TAB_TO_SETTINGS_SECTION: Record<
   | 'settingsVoice'
   | 'settingsGateway'
   | 'settingsHeartbeat'
-  | 'settingsSearch',
+  | 'settingsSearch'
+  | 'cron'
+  | 'skills'
+  | 'channels',
   SettingsSectionId
 > = {
   settingsAppearance: 'appearance',
@@ -49,6 +54,9 @@ const TAB_TO_SETTINGS_SECTION: Record<
   settingsGateway: 'gateway',
   settingsHeartbeat: 'heartbeat',
   settingsSearch: 'search',
+  cron: 'cron',
+  skills: 'skills',
+  channels: 'channels',
 };
 
 export function settingsSectionToTab(section: SettingsSectionId): Tab {
@@ -61,10 +69,10 @@ export function tabToSettingsSection(tab: Tab): SettingsSectionId | null {
 
 /** Group keys for `messages(lang).settingsNavGroups` — left rail sections + sort order. */
 export type SettingsNavGroupId =
-  | 'interface'
-  | 'agentAndModels'
-  | 'voice'
-  | 'gateway'
+  | 'general'
+  | 'ai'
+  | 'automation'
+  | 'connections'
   | 'data';
 
 export type SettingsShellNavGroup = {
@@ -73,20 +81,22 @@ export type SettingsShellNavGroup = {
 };
 
 /**
- * Priority: general UX → history → AI (providers → models → agent → search) → voice →
- * connection/heartbeat → extensions (rendered last in settings shell).
- * Cron, skills, IM channels, and agents live under the main app shell (`/cron`, `/skills`, `/channels`, `/agents`), not here.
+ * Task-centric groups: general → AI → automation → connections → data; extensions render last via
+ * `ExtensionSettingsNav`. Cron, skills, and channels route under `/settings/...`.
  * See `settingsNavGroups` copy in i18n.
  */
 export const SETTINGS_SHELL_NAV_GROUPS: readonly SettingsShellNavGroup[] = [
-  { id: 'interface', tabs: ['settingsAppearance', 'settingsSystem'] },
-  { id: 'data', tabs: ['sessions', 'logs'] },
+  { id: 'general', tabs: ['settingsAppearance', 'settingsSystem'] },
   {
-    id: 'agentAndModels',
+    id: 'ai',
     tabs: ['settingsProviders', 'settingsModels', 'settingsAgentDefaults', 'settingsSearch'],
   },
-  { id: 'voice', tabs: ['settingsVoice'] },
-  { id: 'gateway', tabs: ['settingsGateway', 'settingsHeartbeat'] },
+  { id: 'automation', tabs: ['cron', 'skills'] },
+  {
+    id: 'connections',
+    tabs: ['channels', 'settingsVoice', 'settingsGateway', 'settingsHeartbeat'],
+  },
+  { id: 'data', tabs: ['sessions', 'logs'] },
 ] as const;
 
 /** Flat order: settings routes only (excludes sessions/logs). */
@@ -174,10 +184,10 @@ export function getChatHash(route: ChatRoute): string {
 /** Path for React Router `to` prop (hash router, no `#`). */
 export function pathForTab(tab: Tab): string {
   if (tab === 'chat') return '/chat';
-  if (tab === 'cron') return '/cron';
-  if (tab === 'skills') return '/skills';
-  if (tab === 'channels' || tab === 'settingsChannels') return '/channels';
   if (tab === 'agents' || tab === 'settingsAgents') return '/agents';
+  if (tab === 'cron') return '/settings/cron';
+  if (tab === 'skills') return '/settings/skills';
+  if (tab === 'channels' || tab === 'settingsChannels') return '/settings/channels';
   const section = tabToSettingsSection(tab);
   if (section) return `/settings/${section}`;
   if (tab === 'sessions' || tab === 'logs') {
