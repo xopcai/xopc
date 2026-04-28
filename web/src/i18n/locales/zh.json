@@ -35,6 +35,7 @@
     "tabAll": "全部",
     "tabWithUi": "带界面",
     "tabBackend": "仅后端",
+    "tabMarketplace": "扩展市场",
     "searchPlaceholder": "搜索应用",
     "noSearchResults": "没有符合筛选的应用。",
     "statusEnabled": "已启用",

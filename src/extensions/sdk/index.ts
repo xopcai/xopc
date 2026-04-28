@@ -288,3 +288,10 @@ export type { Config } from '../../config/config-surface.js';
 
 // Subpath barrels (also available as `xopc/extension-sdk/<name>`)
 export { lazyModule, lazyFunction } from './lazy.js';
+
+export { createMockExtensionApi, createTestGateway } from './testing.js';
+export type {
+  MockExtensionApi,
+  MockExtensionApiOptions,
+  TestGateway,
+} from './testing.js';

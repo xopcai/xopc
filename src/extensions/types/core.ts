@@ -114,6 +114,15 @@ export interface ExtensionApi {
   registerCommand(command: ExtensionCommand): void;
 
   /**
+   * Bind a handler to a manifest-declared command id (`ui.contributions.commands`).
+   * Metadata comes from the manifest; optional `chatAlias` becomes the slash command name.
+   */
+  onCommand(
+    commandId: string,
+    handler: ExtensionCommandHandler,
+  ): void;
+
+  /**
    * Register a reload handler when config paths matching this extension change during hot reload.
    */
   registerReload(handler: ExtensionReloadHandler): void;

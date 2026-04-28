@@ -35,6 +35,7 @@
     "tabAll": "All",
     "tabWithUi": "With UI",
     "tabBackend": "Backend only",
+    "tabMarketplace": "Marketplace",
     "searchPlaceholder": "Search apps",
     "noSearchResults": "No apps match your filters.",
     "statusEnabled": "Enabled",

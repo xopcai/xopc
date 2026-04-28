@@ -948,6 +948,10 @@ export class ExtensionLoader {
     if (manifest.reload?.configPrefixes?.length) {
       api._setReloadConfigPrefixes(manifest.reload.configPrefixes);
     }
+    const manifestCommands = manifest.ui?.contributions?.commands;
+    if (manifestCommands?.length) {
+      (api as ExtensionApiImpl)._setManifestCommands(manifestCommands);
+    }
     return api;
   }
 

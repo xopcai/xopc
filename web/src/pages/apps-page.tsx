@@ -18,6 +18,7 @@ import {
   useExtensions,
   useExtensionsLoading,
 } from '@/features/extensions/extension-provider';
+import { ExtensionMarketplacePanel } from '@/features/extensions/extension-marketplace';
 import { extensionPagePath } from '@/features/extensions/extension-paths';
 import type { ExtensionApiRow, PageContribution } from '@/features/extensions/types';
 import { messages } from '@/i18n/messages';
@@ -29,7 +30,7 @@ import { usePageHeaderStore } from '@/stores/page-header-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
 type AppsPageCopy = MessageBundle['appsPage'];
-type AppsTab = 'all' | 'ui' | 'backend';
+type AppsTab = 'all' | 'ui' | 'backend' | 'marketplace';
 
 export function AppsPage() {
   const language = useLocaleStore((s) => s.language);
@@ -88,7 +89,7 @@ export function AppsPage() {
     return () => clearPageHeader();
   }, [clearPageHeader, m.appsPage.title, setPageHeader]);
 
-  if (loading) {
+  if (loading && tab !== 'marketplace') {
     return <AppsPageSkeleton />;
   }
 
@@ -100,57 +101,62 @@ export function AppsPage() {
           <p className="mt-1 text-sm text-fg-muted">{m.appsPage.subtitle}</p>
         </header>
 
-        {extensions.length === 0 ? (
-          <EmptyAppsState message={m.appsPage.empty} />
-        ) : (
-          <>
-            <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex flex-wrap gap-2">
-                <TabChip active={tab === 'all'} onClick={() => setTab('all')} label={m.appsPage.tabAll} />
-                <TabChip
-                  active={tab === 'ui'}
-                  onClick={() => setTab('ui')}
-                  label={m.appsPage.tabWithUi}
-                />
-                <TabChip
-                  active={tab === 'backend'}
-                  onClick={() => setTab('backend')}
-                  label={m.appsPage.tabBackend}
-                />
-              </div>
-              <div className="relative w-full sm:max-w-xs">
-                <Search
-                  className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-muted"
-                  aria-hidden
-                />
-                <input
-                  type="search"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder={m.appsPage.searchPlaceholder}
-                  className="w-full rounded-lg border border-edge bg-surface-base py-2 pl-9 pr-3 text-sm text-fg placeholder:text-fg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                  autoComplete="off"
-                />
-              </div>
+        <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap gap-2">
+            <TabChip active={tab === 'all'} onClick={() => setTab('all')} label={m.appsPage.tabAll} />
+            <TabChip
+              active={tab === 'ui'}
+              onClick={() => setTab('ui')}
+              label={m.appsPage.tabWithUi}
+            />
+            <TabChip
+              active={tab === 'backend'}
+              onClick={() => setTab('backend')}
+              label={m.appsPage.tabBackend}
+            />
+            <TabChip
+              active={tab === 'marketplace'}
+              onClick={() => setTab('marketplace')}
+              label={m.appsPage.tabMarketplace}
+            />
+          </div>
+          {tab !== 'marketplace' && extensions.length > 0 ? (
+            <div className="relative w-full sm:max-w-xs">
+              <Search
+                className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-muted"
+                aria-hidden
+              />
+              <input
+                type="search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder={m.appsPage.searchPlaceholder}
+                className="w-full rounded-lg border border-edge bg-surface-base py-2 pl-9 pr-3 text-sm text-fg placeholder:text-fg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                autoComplete="off"
+              />
             </div>
+          ) : null}
+        </div>
 
-            {filtered.length === 0 ? (
-              <p className="rounded-xl border border-dashed border-edge-subtle bg-surface-hover/30 px-4 py-8 text-center text-sm text-fg-muted dark:bg-surface-hover/15">
-                {m.appsPage.noSearchResults}
-              </p>
-            ) : (
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {filtered.map((ext) => (
-                  <ExtensionAppCard
-                    key={ext.id}
-                    extension={ext}
-                    copy={m.appsPage}
-                    onOpen={() => setDetail(ext)}
-                  />
-                ))}
-              </div>
-            )}
-          </>
+        {tab === 'marketplace' ? (
+          <ExtensionMarketplacePanel />
+        ) : extensions.length === 0 ? (
+          <EmptyAppsState message={m.appsPage.empty} />
+        ) : filtered.length === 0 ? (
+          <p className="rounded-xl border border-dashed border-edge-subtle bg-surface-hover/30 px-4 py-8 text-center text-sm text-fg-muted dark:bg-surface-hover/15">
+            {m.appsPage.noSearchResults}
+          </p>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {filtered.map((ext) => (
+              <ExtensionAppCard
+                key={ext.id}
+                extension={ext}
+                copy={m.appsPage}
+                onOpen={() => setDetail(ext)}
+              />
+            ))}
+          </div>
         )}
       </div>
 
