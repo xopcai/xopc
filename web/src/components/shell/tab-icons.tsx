@@ -10,6 +10,7 @@ import {
   Layers,
   MessageSquare,
   Mic,
+  Moon,
   Palette,
   Plug,
   Search,
@@ -39,6 +40,7 @@ const TAB_ICONS: Record<Tab, LucideIcon> = {
   settingsGateway: Globe,
   settingsHeartbeat: Heart,
   settingsSearch: Search,
+  settingsDreams: Moon,
 };
 
 export function TabIcon({ tab, className }: { tab: Tab; className?: string }) {

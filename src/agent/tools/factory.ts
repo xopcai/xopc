@@ -28,6 +28,7 @@ import {
   createMemoryGetTool,
   createTodoTool,
   createSessionStatusTool,
+  createDreamingTool,
   createClarifyTool,
 } from './index.js';
 import { createCuratedMemoryTool } from './curated-memory-tool.js';
@@ -178,6 +179,10 @@ export class AgentToolsFactory {
 
     const core: AgentTool<any, any>[] = [
       createSessionStatusTool(),
+      createDreamingTool({
+        getWorkspace: () => workspace,
+        getConfig: () => this.deps.getConfig?.(),
+      }),
       createClarifyTool({
         resolveAskUser: () => {
           const req = this.deps.gatewayClarify?.requestClarification;

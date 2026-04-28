@@ -30,6 +30,9 @@ import {
 } from '../../channels/attachments/inbound-persist.js';
 import { expandAtFileMentionsInPlainText } from '../context/expand-at-file-mentions.js';
 import { resolveInboundImageContentParts } from '../image/inbound-image-handling.js';
+import { DREAMING_SWEEP_TOKEN } from '../memory/dreaming/constants.js';
+import { resolveDreamingConfig } from '../memory/dreaming/config.js';
+import { runDreamingDeepPromotion } from '../memory/dreaming/deep-promotion.js';
 
 const log = createLogger('AgentOrchestrator');
 
@@ -108,6 +111,27 @@ export class AgentOrchestrator {
     log.debug({ sessionKey }, 'Processing message through agent orchestrator');
 
     await this.hydrateSessionWorkspaceFromStore?.(sessionKey);
+
+    // Dreaming: short-circuit cron-triggered sweep token into a maintenance run.
+    // This avoids spending LLM tokens for scheduled memory consolidation.
+    if (
+      typeof msg.content === 'string' &&
+      msg.content.includes(DREAMING_SWEEP_TOKEN) &&
+      (sessionKey.startsWith('cron:') || context.channel === 'cron')
+    ) {
+      const workspaceDir = this.agentManager.getResolvedWorkspaceForSession(sessionKey);
+      const resolved = resolveDreamingConfig(this.getConfig?.());
+      await runDreamingDeepPromotion({
+        workspaceDir,
+        config: {
+          enabled: resolved.deep.enabled,
+          minScore: resolved.deep.minScore,
+          minRecallCount: resolved.deep.minRecallCount,
+          limit: resolved.deep.limit,
+        },
+      });
+      return;
+    }
 
     // Get or create agent for this session
     const agent = this.agentManager.getOrCreateAgent(sessionKey);

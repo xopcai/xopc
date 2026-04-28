@@ -2,6 +2,7 @@
 import { Type } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core';
 import { memorySearch, memoryGet } from '../prompt/memory/index.js';
+import { recordDreamingRecalls } from '../memory/dreaming/short-term-store.js';
 
 // =============================================================================
 // Memory Search Tool
@@ -38,6 +39,9 @@ export function createMemorySearchTool(options: MemoryToolOptions): AgentTool {
 
       try {
         const results = await memorySearch(workspaceDir, query, { maxResults, minScore, memoriesDir });
+        // Dreaming: record short-term recall evidence from memory_search.
+        // Only records workspace daily notes (`memory/YYYY-MM-DD.md`) and ignores curated/long-term files.
+        void recordDreamingRecalls({ workspaceDir, query, matches: results }).catch(() => {});
         const withCitations = results.map((entry) => ({
           ...entry,
           citation: `${entry.file}#L${entry.lineNumbers[0]}${entry.lineNumbers.length > 1 ? `-L${entry.lineNumbers[entry.lineNumbers.length - 1]}` : ''}`,

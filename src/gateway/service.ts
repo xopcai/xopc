@@ -646,6 +646,11 @@ export class GatewayService {
     await writeConfigToDisk(configToWrite, this.configPath);
     this.config = loadConfig(this.configPath);
     this.agentService.applyAgentDefaultsFromConfig(this.config);
+    // Hot-apply: reconcile managed dreaming cron jobs immediately after config persists.
+    await this.agentService.reconcileDreamingNow().catch((err) => {
+      const em = err instanceof Error ? err.message : String(err);
+      log.warn({ err, errorMessage: em }, `Dreaming cron reconcile after save failed: ${em}`);
+    });
   }
 
   async saveConfig(config: Config): Promise<{ saved: boolean; error?: string }> {

@@ -27,6 +27,7 @@ import {
   triggerHeartbeat,
 } from '@/features/settings/heartbeat-config-api';
 import { fetchWebSearchSettings, patchWebSearchSettings } from '@/features/settings/web-search-config-api';
+import { fetchDreamingStatus, postDreamingAction } from '@/features/settings/dreaming-api';
 import {
   fetchVoiceModels,
   fetchVoiceSettings,
@@ -77,5 +78,9 @@ export const settingsApi = {
   webSearch: {
     fetchWebSearchSettings,
     patchWebSearchSettings,
+  },
+  dreaming: {
+    fetchDreamingStatus,
+    postDreamingAction,
   },
 } as const;
