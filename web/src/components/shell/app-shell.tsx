@@ -7,6 +7,7 @@ import { SidebarColumn } from '@/components/shell/sidebar-column';
 import { WorkspaceColumn } from '@/components/shell/workspace-column';
 import { TokenDialog } from '@/components/shell/token-dialog';
 import { ElectronGatewayExitBanner } from '@/features/electron/electron-gateway-exit-banner';
+import { ElectronMenuListener } from '@/features/electron/electron-menu-listener';
 import { UpdateReminderBar } from '@/features/updater/update-reminder-bar';
 import { useUpdateReminder } from '@/features/updater/use-update-reminder';
 import { GlobalCommandPaletteHost } from '@/features/search/global-command-palette/global-command-palette-host';
@@ -110,6 +111,7 @@ export function AppShell() {
   if (!token) {
     return (
       <div className="flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden bg-surface-base">
+        <ElectronMenuListener />
         <GatewayConnectLanding />
       </div>
     );
@@ -128,6 +130,7 @@ export function AppShell() {
         {language === 'zh' ? '跳到主要内容' : 'Skip to main content'}
       </a>
       <GatewaySseBridge />
+      <ElectronMenuListener />
       <NavigateToChatListener />
       <ExtensionNavigateListener />
       <GlobalCommandPaletteHost />
