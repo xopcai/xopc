@@ -32,7 +32,7 @@ export function getContextWithOpts(argv: string[] = process.argv): CLIContext {
 }
 
 // Long-running commands that should not auto-exit
-const LONG_RUNNING_COMMANDS = new Set(['gateway', 'agent']);
+const LONG_RUNNING_COMMANDS = new Set(['gateway', 'agent', 'extension:dev']);
 
 const program = new Command()
   .name('xopc')

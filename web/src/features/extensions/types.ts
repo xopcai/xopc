@@ -59,6 +59,8 @@ export type ExtensionApiRow = {
   /** True if current config + activation rules would load this extension after a gateway restart. */
   activationEligible?: boolean;
   hasUi: boolean;
+  /** True when manifest includes `configSchema` (for auto settings UI). */
+  hasConfigSchema?: boolean;
   ui?: {
     icon?: string;
     permissions?: string[];

@@ -47,6 +47,8 @@ import { ActivationPlanner } from './activation-planner.js';
 import { mergeActivationContext } from './activation-context.js';
 import { ManifestRegistry } from './manifest-registry.js';
 import { normalizeExtensionManifest } from './normalize-manifest.js';
+import { checkEngineCompatibility } from './engine-check.js';
+import { PACKAGE_VERSION } from '../package-version.js';
 import type { ChannelPlugin } from '../channels/plugin-types.js';
 import { bundledChannelPlugins } from '../channels/plugins/bundled.js';
 import { ExtensionApiImpl, createExtensionLogger, createPathResolver } from './api.js';
@@ -651,6 +653,27 @@ export class ExtensionLoader {
         log.error({ extensionId: config.id, extensionPath }, `Failed to load manifest for extension`);
         this.diagnostics.error(config.id, `Failed to load manifest`);
         return null;
+      }
+
+      if (manifest.engines?.xopc) {
+        const range = manifest.engines.xopc;
+        const engineResult = checkEngineCompatibility(PACKAGE_VERSION, range);
+        if (engineResult.parseWarning) {
+          log.warn(
+            { extensionId: config.id, range, reason: engineResult.reason },
+            'Engine range parse warning — loading anyway',
+          );
+        } else if (!engineResult.compatible) {
+          log.warn(
+            { extensionId: config.id, range, currentVersion: PACKAGE_VERSION },
+            'Extension engine requirement not met (engines.xopc) — skipping load',
+          );
+          this.diagnostics.error(
+            config.id,
+            engineResult.reason ?? 'Incompatible xopc version (engines.xopc)',
+          );
+          return null;
+        }
       }
 
       // Validate extension config against schema (basic validation)

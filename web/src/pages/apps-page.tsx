@@ -306,7 +306,9 @@ function ExtensionDetailDialog({
   const openPath = primaryPage ? extensionPagePath(ext.id, primaryPage) : null;
   const settingsPath = primarySettingsPanel
     ? `/settings/ext/${ext.id}/${primarySettingsPanel.id}`
-    : null;
+    : ext.hasConfigSchema
+      ? `/settings/ext/${ext.id}`
+      : null;
 
   const eligible = activationEligibleFor(ext);
   const isBundled = ext.source === 'bundled';

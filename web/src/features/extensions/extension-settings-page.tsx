@@ -1,59 +1,68 @@
 /**
- * ExtensionSettingsPage — renders an extension's settings panel via ExtensionIframeHost.
+ * Extension settings: auto-generated config form (configSchema) + optional iframe (settingsPanels).
  *
- * Mounted at /settings/ext/:extensionId/:panelId within the settings layout.
+ * Routes: /settings/ext/:extensionId, /settings/ext/:extensionId/:panelId
  */
 
 import { useParams } from 'react-router-dom';
 
+import { ExtensionAutoSettings } from './extension-auto-settings';
 import { ExtensionIframeHost } from './extension-iframe-host';
-import { useUiExtensions } from './extension-provider';
+import { useExtensions } from './extension-provider';
 
 export function ExtensionSettingsPage() {
   const { extensionId, panelId } = useParams<{ extensionId: string; panelId?: string }>();
-  const uiExtensions = useUiExtensions();
+  const extensions = useExtensions();
 
   if (!extensionId) {
     return <SettingsPanelNotFound message="No extension ID provided." />;
   }
 
-  const extension = uiExtensions.find((ext) => ext.id === extensionId);
+  const extension = extensions.find((ext) => ext.id === extensionId);
   if (!extension) {
     return (
-      <SettingsPanelNotFound message={`Extension "${extensionId}" not found or has no UI.`} />
+      <SettingsPanelNotFound
+        message={`Extension "${extensionId}" not found or is not available in this workspace.`}
+      />
     );
   }
 
   const panels = extension.ui?.contributions?.settingsPanels;
-  if (!panels?.length) {
+  const panel = panelId
+    ? panels?.find((p) => p.id === panelId || p.id === `${extensionId}.${panelId}`)
+    : panels?.[0];
+
+  const hasIframe = Boolean(panel && extension.ui);
+  const hasAuto = Boolean(extension.hasConfigSchema);
+
+  if (!hasAuto && !hasIframe) {
     return (
-      <SettingsPanelNotFound message={`Extension "${extensionId}" has no settings panels.`} />
+      <SettingsPanelNotFound
+        message={`Extension "${extensionId}" has no settings panels or config schema.`}
+      />
     );
   }
 
-  const panel = panelId
-    ? panels.find((p) => p.id === panelId || p.id === `${extensionId}.${panelId}`)
-    : panels[0];
-
-  if (!panel) {
-    return <SettingsPanelNotFound message={`Settings panel "${panelId}" not found.`} />;
-  }
+  const title = panel?.title ?? `${extension.name} Settings`;
 
   return (
     <div className="mx-auto flex w-full max-w-app-main flex-col gap-3 px-4 py-8">
-      <h1 className="text-lg font-semibold text-fg">{panel.title}</h1>
-      <div className="overflow-hidden rounded-xl border border-edge bg-surface-base">
-        <ExtensionIframeHost
-          extensionId={extensionId}
-          extensionName={extension.name}
-          entrypoint={panel.entrypoint}
-          permissions={extension.ui?.permissions}
-          title={panel.title}
-          className="w-full"
-          minHeight={120}
-          maxHeight={2000}
-        />
-      </div>
+      <h1 className="text-lg font-semibold text-fg">{title}</h1>
+      <ExtensionAutoSettings extensionId={extensionId} />
+      {hasIframe && panel && extension.ui ? (
+        <div className="overflow-hidden rounded-xl border border-edge bg-surface-base">
+          <ExtensionIframeHost
+            extensionId={extensionId}
+            extensionName={extension.name}
+            entrypoint={panel.entrypoint}
+            permissions={extension.ui?.permissions}
+            title={panel.title}
+            className="w-full"
+            minHeight={120}
+            maxHeight={2000}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }
