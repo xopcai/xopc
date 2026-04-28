@@ -44,6 +44,7 @@ export { createSendMediaTool } from './send-media.js';
 
 export { createTodoTool, TodoStore, type TodoItem, type TodoStatus } from './todo-tool.js';
 export { createSessionStatusTool } from './session-status-tool.js';
+export { createDreamingTool, type DreamingToolDeps } from './dreaming-tool.js';
 export {
   createClarifyTool,
   type ClarifyRequestPayload,

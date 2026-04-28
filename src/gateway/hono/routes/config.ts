@@ -270,6 +270,78 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
               t.dialecticCadence = Math.floor(p.dialecticCadence);
             }
           }
+
+          // Dreaming (schemaless patch): agents.defaults.memory.dreaming
+          if (p.dreaming !== undefined) {
+            const d0 = p.dreaming;
+            if (d0 === null) {
+              delete (t as { dreaming?: unknown }).dreaming;
+            } else if (typeof d0 === 'object' && d0 !== null && !Array.isArray(d0)) {
+              if (!('dreaming' in t) || typeof (t as { dreaming?: unknown }).dreaming !== 'object') {
+                (t as { dreaming?: Record<string, unknown> }).dreaming = {};
+              }
+              const dt = (t as { dreaming: Record<string, unknown> }).dreaming;
+              const dp = d0 as Record<string, unknown>;
+
+              if (dp.enabled !== undefined) {
+                if (dp.enabled === null) delete dt.enabled;
+                else dt.enabled = Boolean(dp.enabled);
+              }
+              if (dp.frequency !== undefined) {
+                const v = dp.frequency;
+                if (v === null || v === '') delete dt.frequency;
+                else if (typeof v === 'string') dt.frequency = v;
+              }
+              if (dp.timezone !== undefined) {
+                const v = dp.timezone;
+                if (v === null || v === '') delete dt.timezone;
+                else if (typeof v === 'string') dt.timezone = v;
+              }
+
+              // Accept either `phases.deep` or `deep`.
+              if (dp.phases !== undefined || dp.deep !== undefined) {
+                if (!('phases' in dt) || typeof (dt as { phases?: unknown }).phases !== 'object' || (dt as { phases?: unknown }).phases === null) {
+                  dt.phases = {};
+                }
+                const phases = (dt as { phases: Record<string, unknown> }).phases;
+                if (!('deep' in phases) || typeof phases.deep !== 'object' || phases.deep === null) {
+                  phases.deep = {};
+                }
+                const deep = phases.deep as Record<string, unknown>;
+
+                const deepPatchRaw =
+                  typeof dp.phases === 'object' && dp.phases !== null && !Array.isArray(dp.phases)
+                    ? (dp.phases as Record<string, unknown>).deep
+                    : dp.deep;
+                const deepPatch =
+                  typeof deepPatchRaw === 'object' && deepPatchRaw !== null && !Array.isArray(deepPatchRaw)
+                    ? (deepPatchRaw as Record<string, unknown>)
+                    : null;
+
+                if (deepPatch) {
+                  if (deepPatch.enabled !== undefined) {
+                    if (deepPatch.enabled === null) delete deep.enabled;
+                    else deep.enabled = Boolean(deepPatch.enabled);
+                  }
+                  if (deepPatch.minScore !== undefined) {
+                    const v = deepPatch.minScore;
+                    if (v === null) delete deep.minScore;
+                    else if (typeof v === 'number' && Number.isFinite(v)) deep.minScore = v;
+                  }
+                  if (deepPatch.minRecallCount !== undefined) {
+                    const v = deepPatch.minRecallCount;
+                    if (v === null) delete deep.minRecallCount;
+                    else if (typeof v === 'number' && Number.isFinite(v)) deep.minRecallCount = Math.floor(v);
+                  }
+                  if (deepPatch.limit !== undefined) {
+                    const v = deepPatch.limit;
+                    if (v === null) delete deep.limit;
+                    else if (typeof v === 'number' && Number.isFinite(v)) deep.limit = Math.floor(v);
+                  }
+                }
+              }
+            }
+          }
         }
       }
 
