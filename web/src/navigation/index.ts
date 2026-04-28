@@ -91,10 +91,9 @@ export const SETTINGS_SHELL_NAV_GROUPS: readonly SettingsShellNavGroup[] = [
     id: 'ai',
     tabs: ['settingsProviders', 'settingsModels', 'settingsAgentDefaults', 'settingsSearch'],
   },
-  { id: 'automation', tabs: ['cron', 'skills'] },
   {
     id: 'connections',
-    tabs: ['channels', 'settingsVoice', 'settingsGateway', 'settingsHeartbeat'],
+    tabs: ['settingsVoice', 'settingsGateway', 'settingsHeartbeat'],
   },
   { id: 'data', tabs: ['sessions', 'logs'] },
 ] as const;
@@ -185,9 +184,9 @@ export function getChatHash(route: ChatRoute): string {
 export function pathForTab(tab: Tab): string {
   if (tab === 'chat') return '/chat';
   if (tab === 'agents' || tab === 'settingsAgents') return '/agents';
-  if (tab === 'cron') return '/settings/cron';
-  if (tab === 'skills') return '/settings/skills';
-  if (tab === 'channels' || tab === 'settingsChannels') return '/settings/channels';
+  if (tab === 'cron') return '/cron';
+  if (tab === 'skills') return '/skills';
+  if (tab === 'channels' || tab === 'settingsChannels') return '/channels';
   const section = tabToSettingsSection(tab);
   if (section) return `/settings/${section}`;
   if (tab === 'sessions' || tab === 'logs') {
