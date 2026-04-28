@@ -108,6 +108,8 @@ export interface SidebarPanelContribution {
   icon?: string;
   entrypoint: string;
   defaultVisible?: boolean;
+  /** When-expression for visibility (see Phase 2). */
+  when?: string;
 }
 
 /** A panel rendered inside the settings page. */
@@ -144,6 +146,7 @@ export interface PageContribution {
   showInNav?: boolean;
   /** Lucide icon name */
   navIcon?: string;
+  when?: string;
 }
 
 /** A command registered in the command palette. */
@@ -152,6 +155,9 @@ export interface CommandContribution {
   title: string;
   shortcut?: string;
   opensPanel?: string;
+  /** Optional chat slash name (e.g. `/hello`); bound via `api.onCommand`. */
+  chatAlias?: string;
+  when?: string;
 }
 
 /** A small widget rendered in the status bar. */
@@ -160,6 +166,7 @@ export interface StatusBarItemContribution {
   entrypoint: string;
   position?: 'left' | 'right';
   width?: number;
+  when?: string;
 }
 
 export interface ProviderAuthChoice {

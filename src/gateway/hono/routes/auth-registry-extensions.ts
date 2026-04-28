@@ -4,6 +4,8 @@ import { relative, resolve } from 'node:path';
 
 import type { Config as SurfaceConfig } from '../../../config/config-surface.js';
 import type { GatewayService } from '../../service.js';
+import { buildWhenContextSnapshot } from '../../../extensions/when-context.js';
+import * as extensionMarketplace from '../../../extensions/marketplace.js';
 import { mergeActivationContext } from '../../../extensions/activation-context.js';
 import { ActivationPlanner } from '../../../extensions/activation-planner.js';
 import { getAllModels, getAvailableModels, type Model, type Api } from '../../../providers/index.js';
@@ -356,6 +358,41 @@ export function registerAuthRegistryExtensionsRoutes(authenticated: Hono, deps: 
     Object.assign(config, patch);
     await saveExtensionStore(namespace, config);
     return c.json({ ok: true });
+  });
+
+  authenticated.get('/api/context', (c) => {
+    const loader = service.getExtensionLoader();
+    const snapshot = buildWhenContextSnapshot(
+      service.currentConfig as unknown as SurfaceConfig,
+      loader,
+    );
+    return c.json(snapshot);
+  });
+
+  authenticated.get('/api/marketplace', async (c) => {
+    const q = c.req.query('q');
+    const category = c.req.query('category');
+    try {
+      let extensions;
+      if (typeof q === 'string' && q.trim()) {
+        extensions = await extensionMarketplace.searchExtensions(q.trim());
+      } else if (typeof category === 'string' && category.trim()) {
+        extensions = await extensionMarketplace.listExtensions(category.trim());
+      } else {
+        const reg = await extensionMarketplace.fetchRegistry();
+        extensions = reg.extensions;
+      }
+      return c.json({ ok: true, extensions });
+    } catch (err) {
+      return c.json(
+        {
+          ok: false,
+          extensions: [],
+          error: err instanceof Error ? err.message : 'marketplace fetch failed',
+        },
+        500,
+      );
+    }
   });
 
   // POST /api/registry/reload — reload gateway config and refresh model list for clients

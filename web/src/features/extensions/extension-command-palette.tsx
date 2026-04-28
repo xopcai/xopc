@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 
 import { useUiExtensions } from '@/features/extensions/extension-provider';
 import type { ExtensionCommandContribution } from '@/features/extensions/types';
+import { evaluateWhen } from '@/lib/when-evaluator';
+import { useContextStore } from '@/stores/context-store';
 
 type ResolvedCommand = {
   extensionId: string;
@@ -12,6 +14,7 @@ type ResolvedCommand = {
 
 function useExtensionCommands(): ResolvedCommand[] {
   const uiExtensions = useUiExtensions();
+  const contextVariables = useContextStore((s) => s.variables);
   return useMemo(() => {
     const commands: ResolvedCommand[] = [];
     for (const extension of uiExtensions) {
@@ -19,6 +22,8 @@ function useExtensionCommands(): ResolvedCommand[] {
       if (!Array.isArray(list)) continue;
       for (const command of list) {
         if (command && typeof command.id === 'string' && typeof command.title === 'string') {
+          const when = typeof command.when === 'string' ? command.when : undefined;
+          if (!evaluateWhen(when, contextVariables)) continue;
           commands.push({
             extensionId: extension.id,
             extensionName: extension.name,
@@ -28,7 +33,7 @@ function useExtensionCommands(): ResolvedCommand[] {
       }
     }
     return commands;
-  }, [uiExtensions]);
+  }, [uiExtensions, contextVariables]);
 }
 
 type CommandPaletteProps = {

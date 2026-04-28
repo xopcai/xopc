@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef } fr
 import useSWR from 'swr';
 
 import { useGatewayStore } from '@/stores/gateway-store';
+import { useContextStore } from '@/stores/context-store';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 import { useThemeStore } from '@/stores/theme-store';
@@ -35,6 +36,31 @@ export function ExtensionProvider({ children }: { children: React.ReactNode }) {
 
   const extensions = data?.extensions ?? [];
   const resolved = useThemeStore((s) => s.resolved);
+
+  useEffect(() => {
+    if (!hasToken) return;
+    void useContextStore.getState().fetchContext();
+  }, [hasToken]);
+
+  useEffect(() => {
+    const onCtx = (event: Event) => {
+      const detail = (event as CustomEvent<Record<string, unknown>>).detail;
+      if (detail && typeof detail === 'object' && !Array.isArray(detail)) {
+        useContextStore.getState().updateContext(detail);
+      }
+    };
+    const refetch = () => {
+      void useContextStore.getState().fetchContext();
+    };
+    window.addEventListener('context-update', onCtx);
+    window.addEventListener('config-reload', refetch);
+    window.addEventListener('registry-updated', refetch);
+    return () => {
+      window.removeEventListener('context-update', onCtx);
+      window.removeEventListener('config-reload', refetch);
+      window.removeEventListener('registry-updated', refetch);
+    };
+  }, []);
 
   const handleAgentStreamEvent = useCallback(
     (event: Event) => {

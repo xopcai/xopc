@@ -8,6 +8,11 @@ import {
 import { colors } from '../utils/colors.js';
 import { createExtensionPackCommand } from './extension-pack.js';
 import { createExtensionDevCommand } from './extension-dev.js';
+import {
+  createExtensionPublishCommand,
+  createExtensionSearchCommand,
+  createExtensionUpdateCommand,
+} from './extension-marketplace.js';
 
 const log = createLogger('ExtensionCommands');
 
@@ -218,6 +223,9 @@ Related commands:
   xopc extension:audit    Security audit             (alias: ext:audit)
   xopc extension:pack     Package extension .tgz     (alias: ext:pack)
   xopc extension:dev      Dev mode (symlink + optional gateway) (alias: ext:dev)
+  xopc extension:search   Search extension registry   (alias: ext:search)
+  xopc extension:publish  Publish extension to npm    (alias: ext:publish)
+  xopc extension:update   Update installed extensions (alias: ext:update)
 `
       )
       .action((_opts, cmd) => {
@@ -231,4 +239,7 @@ Related commands:
   program.addCommand(createExtensionAuditCommand());
   program.addCommand(createExtensionPackCommand());
   program.addCommand(createExtensionDevCommand());
+  program.addCommand(createExtensionSearchCommand());
+  program.addCommand(createExtensionPublishCommand());
+  program.addCommand(createExtensionUpdateCommand());
 }
