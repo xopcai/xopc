@@ -4,7 +4,7 @@
   "description": "Feishu/Lark tools (doc/wiki/drive/perm/bitable) for xopc agents. Activates when the Feishu channel is configured.",
   "version": "0.0.14",
   "kind": "tool",
-  "main": "src/extension.ts",
+  "main": "src/index.ts",
   "channels": ["feishu", "lark"],
   "activation": {
     "onChannels": ["feishu", "lark"],
