@@ -8,6 +8,7 @@ import { registerCommandsSkillsRoutes } from './commands-skills.js';
 import { registerConfigRoutes } from './config.js';
 import { registerDoctorRoutes } from './doctor.js';
 import { registerCronRoutes } from './cron.js';
+import { registerDreamingRoutes } from './dreaming.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 import { registerExtensionGatewayRoutes } from './extension-gateway.js';
 import { registerHostFsRoutes } from './host-fs.js';
@@ -26,6 +27,7 @@ export function registerAuthenticatedRoutes(authenticated: Hono, deps: Authentic
   registerChannelRoutes(authenticated, deps);
   registerConfigRoutes(authenticated, deps);
   registerDoctorRoutes(authenticated, deps);
+  registerDreamingRoutes(authenticated, deps);
   registerAgentsRoutes(authenticated, deps);
   registerAuthRegistryExtensionsRoutes(authenticated, deps);
   registerModelsRoutes(authenticated, deps);

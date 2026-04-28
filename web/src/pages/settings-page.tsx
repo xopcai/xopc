@@ -7,6 +7,7 @@ import { ModelsSettingsPanel } from '@/features/settings/models-settings';
 import { VoiceSettingsPanel } from '@/features/settings/voice-settings';
 import { WebSearchSettingsPanel } from '@/features/settings/web-search-settings';
 import { SystemSettingsPanel } from '@/features/settings/system-settings-panel';
+import { DreamingSettingsPanel } from '@/features/settings/dreaming-settings';
 import { AgentSettingsPanel } from '@/features/settings/agents';
 import { ProvidersSettingsPanel } from '@/features/settings/providers-settings';
 import { messages } from '@/i18n/messages';
@@ -23,6 +24,7 @@ const SECTIONS: SettingsSectionId[] = [
   'gateway',
   'heartbeat',
   'search',
+  'dreams',
 ];
 
 export function SettingsPage() {
@@ -75,6 +77,10 @@ export function SettingsPage() {
 
   if (id === 'search') {
     return <WebSearchSettingsPanel />;
+  }
+
+  if (id === 'dreams') {
+    return <DreamingSettingsPanel />;
   }
 
   return (

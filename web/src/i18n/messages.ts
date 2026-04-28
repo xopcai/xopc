@@ -19,6 +19,7 @@ export type Tab =
   | 'settingsGateway'
   | 'settingsHeartbeat'
   | 'settingsSearch'
+  | 'settingsDreams'
   | 'settingsAgentDefaults'
   | 'settingsAgents'
   | 'settingsSystem';
@@ -34,6 +35,7 @@ export type SettingsSectionId =
   | 'gateway'
   | 'heartbeat'
   | 'search'
+  | 'dreams'
   | 'agents'
   | 'system'
   | 'cron'

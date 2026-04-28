@@ -67,6 +67,8 @@ import { extractProfileAgentId, resolveAgentBootstrapDir } from '../config/agent
 import { DEFAULT_ACK_MAX_CHARS, NO_REPLY, shouldSilence } from '../heartbeat/tokens.js';
 import { createTypingController, type TypingController } from './lifecycle/typing.js';
 import { cleanTrailingErrors, sanitizeMessages } from './memory/message-sanitizer.js';
+import { DREAMING_CRON_NAME, DREAMING_CRON_TAG, DREAMING_SWEEP_TOKEN } from './memory/dreaming/constants.js';
+import { resolveDreamingConfig } from './memory/dreaming/config.js';
 import {
   tryApplySessionTranscriptHygiene,
   tryApplySessionTranscriptHygieneForPersistence,
@@ -504,6 +506,10 @@ export class AgentService {
     this.running = true;
     await this.sessionConfigStore.initialize();
     await this.hookHandler.trigger('gateway_start', { port: 0, host: 'cli' });
+    await this.reconcileDreamingCronJob().catch((err) => {
+      const em = err instanceof Error ? err.message : String(err);
+      log.warn({ err, errorMessage: em }, `Dreaming cron reconcile failed: ${em}`);
+    });
     log.debug('Agent service started');
     await this.hookHandler.trigger('session_start', { sessionId: this.agentId });
 
@@ -538,6 +544,71 @@ export class AgentService {
     this.hookHandler.trigger('gateway_stop', { reason: 'stopped' });
     log.debug('Agent service stopped');
     return Promise.resolve();
+  }
+
+  private async reconcileDreamingCronJob(): Promise<void> {
+    const cron = this.config.getCronService?.();
+    if (!cron) {
+      return;
+    }
+    const cfg = this.effectiveAppConfig();
+    const dreaming = resolveDreamingConfig(cfg);
+    const jobs = await cron.listJobs();
+    const managed = jobs.filter(
+      (job) => job.name === DREAMING_CRON_NAME || (job.name?.includes?.(DREAMING_CRON_TAG) ?? false),
+    );
+
+    const desiredPayload = { kind: 'agentTurn' as const, message: DREAMING_SWEEP_TOKEN };
+    const desired = {
+      name: DREAMING_CRON_NAME,
+      timezone: dreaming.timezone,
+      sessionTarget: 'isolated' as const,
+      payload: desiredPayload,
+      enabled: true,
+    };
+
+    if (!dreaming.enabled || !dreaming.deep.enabled) {
+      // Remove managed jobs when disabled.
+      for (const job of managed) {
+        await cron.removeJob(job.id).catch(() => {});
+      }
+      return;
+    }
+
+    if (managed.length === 0) {
+      await cron.addJob(dreaming.frequency, { ...desired } as any);
+      return;
+    }
+
+    const primary = managed[0]!;
+    // Prune duplicates (best-effort).
+    for (const dup of managed.slice(1)) {
+      await cron.removeJob(dup.id).catch(() => {});
+    }
+
+    // Patch if needed (schedule/message/timezone/sessionTarget).
+    const payloadMessage =
+      primary.payload?.kind === 'agentTurn'
+        ? primary.payload.message
+        : (primary.payload as any)?.text;
+    const needsUpdate =
+      primary.schedule !== dreaming.frequency ||
+      (dreaming.timezone ?? null) !== (primary.timezone ?? null) ||
+      primary.sessionTarget !== 'isolated' ||
+      payloadMessage !== DREAMING_SWEEP_TOKEN ||
+      primary.enabled !== true ||
+      primary.name !== DREAMING_CRON_NAME;
+
+    if (needsUpdate) {
+      await cron.updateJob(primary.id, {
+        schedule: dreaming.frequency,
+        timezone: dreaming.timezone ?? undefined,
+        sessionTarget: 'isolated',
+        name: DREAMING_CRON_NAME,
+        payload: desiredPayload,
+        enabled: true,
+      } as any);
+    }
   }
 
   /**
