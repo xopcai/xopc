@@ -444,6 +444,8 @@
     "voicePlay": "Play voice",
     "voicePause": "Pause",
     "voiceLoading": "Loading audio…",
+    "voiceAriaRegion": "Voice playback",
+    "voiceAwaitingMeta": "Measuring clip length",
     "voiceMessage": "Voice",
     "loadOlder": "Loading older messages…",
     "scrollToBottom": "Scroll to bottom",

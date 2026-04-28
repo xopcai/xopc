@@ -49,6 +49,11 @@ export function useComposerAttachments(options: UseComposerAttachmentsOptions): 
       name: a.name,
       size: a.size,
       ...(a.workspaceRelativePath ? { workspaceRelativePath: a.workspaceRelativePath } : {}),
+      ...(typeof a.durationSeconds === 'number' &&
+      Number.isFinite(a.durationSeconds) &&
+      a.durationSeconds > 0
+        ? { durationSeconds: a.durationSeconds }
+        : {}),
     }));
   }, []);
 

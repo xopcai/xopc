@@ -36,6 +36,7 @@ export interface Attachment {
   preview?: string; // base64 image preview (first page for PDFs, or same as content for images)
   /** Server-persisted path under agent home (`inbound/…` or `tts/…`; gateway with `?sessionKey=` when needed) */
   workspaceRelativePath?: string;
+  durationSeconds?: number;
 }
 
 /** Prefer `content`, then `data` (gateway / webchat wire format). */

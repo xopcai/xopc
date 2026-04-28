@@ -444,6 +444,8 @@
     "voicePlay": "播放语音",
     "voicePause": "暂停",
     "voiceLoading": "正在加载音频…",
+    "voiceAriaRegion": "语音播放",
+    "voiceAwaitingMeta": "正在读取时长",
     "voiceMessage": "语音",
     "loadOlder": "正在加载更早的消息…",
     "scrollToBottom": "回到底部",

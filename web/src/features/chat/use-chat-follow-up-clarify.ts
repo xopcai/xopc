@@ -31,7 +31,7 @@ export type ChatFollowUpClarifyApi = {
   editingFollowUpId: string | null;
   addPendingFollowUp: (
     content: string,
-    attachments?: Array<{ type: string; mimeType?: string; data?: string; name?: string; size?: number }>,
+    attachments?: PendingFollowUp['attachments'],
   ) => void;
   beginEditFollowUp: (id: string) => void;
   cancelEditFollowUp: () => void;
@@ -192,7 +192,7 @@ export function useChatFollowUpClarify(options: {
   const addPendingFollowUp = useCallback(
     (
       content: string,
-      attachments?: Array<{ type: string; mimeType?: string; data?: string; name?: string; size?: number }>,
+      attachments?: PendingFollowUp['attachments'],
     ) => {
       const trimmed = content.trim();
       if (!trimmed && !attachments?.length) return;

@@ -49,6 +49,11 @@ function wireFollowUpAttachmentsToComposer(
     name: w.name ?? 'file',
     size: w.size ?? 0,
     workspaceRelativePath: w.workspaceRelativePath,
+    ...(typeof w.durationSeconds === 'number' &&
+    Number.isFinite(w.durationSeconds) &&
+    w.durationSeconds > 0
+      ? { durationSeconds: w.durationSeconds }
+      : {}),
   }));
 }
 
