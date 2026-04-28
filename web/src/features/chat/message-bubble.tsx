@@ -398,7 +398,7 @@ export const MessageBubble = memo(function MessageBubble({
   return (
     <article className={cn('group/msg flex w-full min-w-0', isUser ? 'justify-end' : 'justify-start')}>
       {isUser && !isStreaming ? (
-        <div className="mr-1.5 flex shrink-0 items-center gap-0.5 self-start pt-1 opacity-0 transition-opacity duration-150 group-hover/msg:opacity-100">
+        <div className="mr-1.5 flex shrink-0 items-center gap-0.5 self-end pb-0.5 opacity-0 transition-opacity duration-150 group-hover/msg:opacity-100">
           <button
             type="button"
             className={messageActionIconButton}
