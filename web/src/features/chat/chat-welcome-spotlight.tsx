@@ -50,7 +50,7 @@ export const ChatWelcomeSpotlight = memo(function ChatWelcomeSpotlight({
         <p className="max-w-md text-pretty text-sm leading-snug text-fg-muted sm:text-[0.9375rem]">{s.tagline}</p>
       </div>
 
-      <div className="mt-10 grid w-full grid-cols-1 gap-2 sm:mt-12 sm:grid-cols-3 sm:gap-2.5">
+      <div className="mt-10 grid w-full grid-cols-1 gap-2 sm:mt-12 sm:grid-cols-2 sm:gap-2.5 lg:grid-cols-4">
         {s.categories.map((cat) => {
           const expanded = selectedCategoryId === cat.id;
           return (
