@@ -6,6 +6,8 @@ import {
   checkAllExtensionsHealth,
 } from '../../extensions/health.js';
 import { colors } from '../utils/colors.js';
+import { createExtensionPackCommand } from './extension-pack.js';
+import { createExtensionDevCommand } from './extension-dev.js';
 
 const log = createLogger('ExtensionCommands');
 
@@ -214,6 +216,8 @@ Related commands:
   xopc extension:health   Health check               (alias: ext:health)
   xopc extension:verify   Verify integrity           (alias: ext:verify)
   xopc extension:audit    Security audit             (alias: ext:audit)
+  xopc extension:pack     Package extension .tgz     (alias: ext:pack)
+  xopc extension:dev      Dev mode (symlink + optional gateway) (alias: ext:dev)
 `
       )
       .action((_opts, cmd) => {
@@ -225,4 +229,6 @@ Related commands:
   program.addCommand(createExtensionHealthCommand());
   program.addCommand(createExtensionVerifyCommand());
   program.addCommand(createExtensionAuditCommand());
+  program.addCommand(createExtensionPackCommand());
+  program.addCommand(createExtensionDevCommand());
 }

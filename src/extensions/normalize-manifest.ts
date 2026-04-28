@@ -4,6 +4,7 @@ import type {
   ChatWidgetMatch,
   CommandContribution,
   ContractDeclaration,
+  EnginesDeclaration,
   ExtensionManifest,
   ExtensionManifestCommand,
   ExtensionUiContributions,
@@ -35,6 +36,13 @@ function normalizeReload(raw: unknown): ExtensionManifest['reload'] {
     ...(configPrefixes?.length ? { configPrefixes } : {}),
     ...(supportsHotReload !== undefined ? { supportsHotReload } : {}),
   };
+}
+
+function normalizeEngines(raw: unknown): EnginesDeclaration | undefined {
+  if (!isRecord(raw)) return undefined;
+  const xopc = typeof raw.xopc === 'string' && raw.xopc.length > 0 ? raw.xopc : undefined;
+  if (!xopc) return undefined;
+  return { xopc };
 }
 
 function normalizeManifestCommands(raw: unknown): ExtensionManifestCommand[] | undefined {
@@ -107,6 +115,7 @@ export function normalizeExtensionManifest(raw: Record<string, unknown>): Extens
     contracts: normalizeContracts(raw.contracts),
     setup: normalizeSetup(raw.setup),
     reload: normalizeReload(raw.reload),
+    engines: normalizeEngines(raw.engines),
     commands: normalizeManifestCommands(raw.commands),
     ui: normalizeUiManifest(raw.ui),
   };
