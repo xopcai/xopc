@@ -72,6 +72,11 @@ export type SystemSettingsBehavior = {
   notifySoundEnabled: boolean;
 };
 
+export interface ElectronMenuAPI {
+  onNavigate(callback: (path: string) => void): () => void;
+  onTogglePalette(callback: () => void): () => void;
+}
+
 export interface ElectronSystemSettingsAPI {
   getBehavior(): Promise<SystemSettingsBehavior>;
   setBehavior(patch: {
@@ -96,6 +101,7 @@ export interface ElectronAPI {
   startup?: ElectronStartupAPI;
   gateway?: ElectronGatewayShellAPI;
   platform: 'darwin' | 'win32' | 'linux';
+  menu?: ElectronMenuAPI;
   system?: ElectronSystemSettingsAPI;
 }
 

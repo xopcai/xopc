@@ -128,6 +128,17 @@ export function useChatSession() {
     [navigate],
   );
 
+  /** Command palette “Switch agent” (`GlobalCommandPaletteHost`). */
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const aid = (e as CustomEvent<{ agentId?: string }>).detail?.agentId;
+      if (typeof aid !== 'string' || !aid.trim()) return;
+      onChatAgentChange(aid);
+    };
+    window.addEventListener('xopc-set-chat-agent', handler);
+    return () => window.removeEventListener('xopc-set-chat-agent', handler);
+  }, [onChatAgentChange]);
+
   const sessionMgrRef = useRef(new SessionManager());
   const senderRef = useRef(new MessageSender());
   const loadingSessionRef = useRef(false);

@@ -39,6 +39,15 @@ extraResources:
     filter:
       - rg
       - rg.exe
+  - from: electron/resources
+    to: resources
+    filter:
+      - '**/*.png'
+
+protocols:
+  - name: xopc
+    schemes:
+      - xopc
 
 mac:
   category: public.app-category.productivity

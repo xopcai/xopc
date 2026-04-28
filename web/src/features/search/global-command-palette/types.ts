@@ -1,4 +1,12 @@
-export type GlobalHitKind = 'extension' | 'route' | 'session' | 'file' | 'command' | 'skill';
+export type GlobalHitKind =
+  | 'extension'
+  | 'route'
+  | 'session'
+  | 'file'
+  | 'command'
+  | 'skill'
+  | 'setting'
+  | 'action';
 
 export type GlobalHit = {
   kind: GlobalHitKind;
@@ -13,4 +21,3 @@ export type GlobalHit = {
   /** Execute the hit. */
   run: () => void;
 };
-
