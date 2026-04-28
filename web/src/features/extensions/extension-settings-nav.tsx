@@ -84,7 +84,7 @@ function configOnlyExtensions(extensions: ExtensionUiInfo[]): ExtensionUiInfo[] 
       Boolean(e.hasConfigSchema) &&
       !(
         Array.isArray(e.ui?.contributions?.settingsPanels) &&
-        e.ui!.contributions!.settingsPanels!.length > 0
+        e.ui.contributions.settingsPanels.length > 0
       ),
   );
 }
