@@ -7,6 +7,7 @@ import type { GatewayAgentRow, SkillCatalogRow } from '@/features/settings/agent
 import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/settings/settings-form-section';
 import { cn } from '@/lib/cn';
 import type { AgentsSettingsMessages } from '@/i18n/messages';
+import { pathForTab } from '@/navigation';
 
 export function AgentSkillsTab(props: {
   a: AgentsSettingsMessages;
@@ -81,7 +82,7 @@ export function AgentSkillsTab(props: {
           </Button>
         </div>
         <Link
-          to="/skills"
+          to={pathForTab('skills')}
           className="shrink-0 text-xs font-medium text-accent-fg hover:underline"
         >
           {a.skillsLibraryLink}
