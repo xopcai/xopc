@@ -84,6 +84,29 @@ export const AgentDefaultsSchema = z.object({
       contextCadence: z.number().int().min(1).optional(),
       /** Reserved for future external “dialectic” sync cadence (not wired yet). */
       dialecticCadence: z.number().int().min(1).optional(),
+      /**
+       * Background memory consolidation ("dreaming"): cron-triggered deep promotion of short-term recall signals
+       * (workspace `memory/YYYY-MM-DD.md`) into `MEMORY.md`.
+       */
+      dreaming: z
+        .object({
+          enabled: z.boolean().optional(),
+          frequency: z.string().optional(),
+          timezone: z.string().optional(),
+          phases: z
+            .object({
+              deep: z
+                .object({
+                  enabled: z.boolean().optional(),
+                  minScore: z.number().min(0).max(1).optional(),
+                  minRecallCount: z.number().int().min(1).optional(),
+                  limit: z.number().int().min(0).optional(),
+                })
+                .optional(),
+            })
+            .optional(),
+        })
+        .optional(),
     })
     .optional(),
   /** Cross-session transcript search (`session_search` tool). */
