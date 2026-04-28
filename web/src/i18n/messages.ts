@@ -35,7 +35,9 @@ export type SettingsSectionId =
   | 'heartbeat'
   | 'search'
   | 'agents'
-  | 'system';
+  | 'system'
+  | 'cron'
+  | 'skills';
 
 export type MessageBundle = typeof en;
 

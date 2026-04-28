@@ -109,7 +109,9 @@
     "heartbeat": "Heartbeat",
     "search": "Web search",
     "agents": "Agents",
-    "system": "System"
+    "system": "System",
+    "cron": "Scheduled Tasks",
+    "skills": "Skills"
   },
   "systemSettings": {
     "title": "System",
@@ -170,11 +172,11 @@
     }
   },
   "settingsNavGroups": {
-    "gateway": "Connection & service",
-    "agentAndModels": "Providers & models",
+    "general": "General",
+    "ai": "AI configuration",
+    "automation": "Automation",
+    "connections": "Connections",
     "data": "Sessions & logs",
-    "interface": "General",
-    "voice": "Voice",
     "extensions": "Extensions"
   },
   "token": {

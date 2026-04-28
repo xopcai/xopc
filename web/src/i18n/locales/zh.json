@@ -109,7 +109,9 @@
     "heartbeat": "心跳",
     "search": "网络搜索",
     "agents": "智能体",
-    "system": "系统设置"
+    "system": "系统设置",
+    "cron": "定时任务",
+    "skills": "技能"
   },
   "systemSettings": {
     "title": "系统设置",
@@ -170,11 +172,11 @@
     }
   },
   "settingsNavGroups": {
-    "gateway": "连接与服务",
-    "agentAndModels": "服务商与模型",
+    "general": "通用",
+    "ai": "AI 配置",
+    "automation": "自动化",
+    "connections": "连接",
     "data": "会话与日志",
-    "interface": "通用",
-    "voice": "语音",
     "extensions": "扩展"
   },
   "token": {
