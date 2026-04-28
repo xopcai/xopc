@@ -195,6 +195,7 @@ function normalizeSidebarPanels(raw: unknown): SidebarPanelContribution[] | unde
       entrypoint,
       icon: typeof item.icon === 'string' ? item.icon : undefined,
       defaultVisible: typeof item.defaultVisible === 'boolean' ? item.defaultVisible : undefined,
+      when: typeof item.when === 'string' && item.when.length > 0 ? item.when : undefined,
     });
   }
   return out.length ? out : undefined;
@@ -282,6 +283,7 @@ function normalizePages(raw: unknown): PageContribution[] | undefined {
       entrypoint,
       showInNav: typeof item.showInNav === 'boolean' ? item.showInNav : undefined,
       navIcon: typeof item.navIcon === 'string' ? item.navIcon : undefined,
+      when: typeof item.when === 'string' && item.when.length > 0 ? item.when : undefined,
     });
   }
   return out.length ? out : undefined;
@@ -300,6 +302,9 @@ function normalizeCommands(raw: unknown): CommandContribution[] | undefined {
       title,
       shortcut: typeof item.shortcut === 'string' ? item.shortcut : undefined,
       opensPanel: typeof item.opensPanel === 'string' ? item.opensPanel : undefined,
+      chatAlias:
+        typeof item.chatAlias === 'string' && item.chatAlias.length > 0 ? item.chatAlias : undefined,
+      when: typeof item.when === 'string' && item.when.length > 0 ? item.when : undefined,
     });
   }
   return out.length ? out : undefined;
@@ -319,6 +324,7 @@ function normalizeStatusBarItems(raw: unknown): StatusBarItemContribution[] | un
       entrypoint,
       position: position === 'left' || position === 'right' ? position : undefined,
       width: typeof item.width === 'number' ? item.width : undefined,
+      when: typeof item.when === 'string' && item.when.length > 0 ? item.when : undefined,
     });
   }
   return out.length ? out : undefined;

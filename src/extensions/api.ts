@@ -15,6 +15,7 @@ import type {
   HttpRequestHandler,
   ExtensionCommand,
   ExtensionCommandContext,
+  ExtensionCommandHandler,
   ExtensionReloadHandler,
   ExtensionService,
   FlagConfig,
@@ -24,6 +25,7 @@ import type {
   ExtensionHookEvent,
   HookExecutionMode,
 } from './types/index.js';
+import type { CommandContribution } from './types/manifest.js';
 import type { CommandDefinition } from '../chat-commands/types.js';
 import { commandRegistry } from '../chat-commands/registry.js';
 import type { ChannelPlugin } from '../channels/plugin-types.js';
@@ -53,6 +55,7 @@ export class ExtensionApiImpl implements ExtensionApi {
 
   private _reloadConfigPrefixes: string[] = [];
   private _registeredCommandIds: string[] = [];
+  private readonly _manifestCommands = new Map<string, CommandContribution>();
 
   constructor(
     public readonly id: string,
@@ -202,6 +205,47 @@ export class ExtensionApiImpl implements ExtensionApi {
     this._logger.info(`Registered chat command: /${command.name}`);
   }
 
+  /** Injected from manifest `ui.contributions.commands` by the loader. */
+  _setManifestCommands(commands: CommandContribution[]): void {
+    this._manifestCommands.clear();
+    for (const c of commands) {
+      this._manifestCommands.set(c.id, c);
+    }
+  }
+
+  onCommand(commandId: string, handler: ExtensionCommandHandler): void {
+    const meta = this._manifestCommands.get(commandId);
+    if (!meta) {
+      this._logger.warn(
+        `onCommand: unknown command id "${commandId}" — registering runtime-only chat command`,
+      );
+      const name = commandId.includes('.')
+        ? (commandId.split('.').pop() ?? commandId).trim()
+        : commandId;
+      this.registerCommand({
+        name: name || commandId,
+        description: commandId,
+        handler,
+      });
+      return;
+    }
+    let name: string;
+    if (meta.chatAlias?.trim()) {
+      name = meta.chatAlias.trim().replace(/^\//, '');
+    } else {
+      name = meta.id.includes('.') ? (meta.id.split('.').pop() ?? meta.id) : meta.id;
+    }
+    if (!name) {
+      name = meta.id;
+    }
+    this.registerCommand({
+      name,
+      description: meta.title,
+      handler,
+    });
+    this._logger.info(`Bound manifest command "${commandId}" as /${name}`);
+  }
+
   registerReload(handler: ExtensionReloadHandler): void {
     const prefixes =
       this._reloadConfigPrefixes.length > 0
@@ -320,6 +364,7 @@ export class ExtensionApiImpl implements ExtensionApi {
       commandRegistry.unregister(commandId);
     }
     this._registeredCommandIds = [];
+    this._manifestCommands.clear();
 
     this._registry.removeReloadRegistration(this.id);
 
