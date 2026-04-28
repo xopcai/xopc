@@ -43,6 +43,16 @@ export function ExtensionSettingsNav({ navLinkClassName }: ExtensionSettingsNavP
             </NavLink>
           );
         })}
+        {configOnlyExtensions(uiExtensions).map((extension) => (
+          <NavLink
+            key={`${extension.id}:config`}
+            to={`/settings/ext/${extension.id}`}
+            className={navLinkClassName}
+          >
+            <Puzzle className="size-5 shrink-0 opacity-90" strokeWidth={1.75} aria-hidden />
+            <span className="min-w-0 flex-1 truncate">{extension.name}</span>
+          </NavLink>
+        ))}
       </div>
     </div>
   );
@@ -66,4 +76,15 @@ function collectSettingsPanels(
     return a.panel.title.localeCompare(b.panel.title);
   });
   return result;
+}
+
+function configOnlyExtensions(extensions: ExtensionUiInfo[]): ExtensionUiInfo[] {
+  return extensions.filter(
+    (e) =>
+      Boolean(e.hasConfigSchema) &&
+      !(
+        Array.isArray(e.ui?.contributions?.settingsPanels) &&
+        e.ui!.contributions!.settingsPanels!.length > 0
+      ),
+  );
 }

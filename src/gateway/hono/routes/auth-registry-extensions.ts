@@ -239,6 +239,7 @@ export function registerAuthRegistryExtensionsRoutes(authenticated: Hono, deps: 
       active: activeIds.has(ext.id),
       activationEligible: activationEligibleIds.has(ext.id),
       hasUi: Boolean(ext.manifest.ui),
+      hasConfigSchema: Boolean(ext.manifest.configSchema),
       ui: ext.manifest.ui
         ? {
             icon: ext.manifest.ui.icon,

@@ -5,6 +5,12 @@
 
 import type { ExtensionKind } from './core.js';
 
+/** Declared in `engines` in the extension manifest (e.g. VSCode-style). */
+export interface EnginesDeclaration {
+  /** Semver range string for the running xopc CLI / gateway, e.g. `">=0.0.20"`. */
+  xopc?: string;
+}
+
 export interface ExtensionManifest {
   id: string;
   name: string;
@@ -36,6 +42,12 @@ export interface ExtensionManifest {
     configPrefixes?: string[];
     supportsHotReload?: boolean;
   };
+
+  /**
+   * Host / runtime requirements (e.g. compatible xopc semver range).
+   * Normalized from `xopc.extension.json` `engines`.
+   */
+  engines?: EnginesDeclaration;
 
   /** Chat commands metadata (runtime registration still required in `register()`). */
   commands?: ExtensionManifestCommand[];
