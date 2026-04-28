@@ -19,12 +19,15 @@ export function AttachmentRenderer({
   authToken,
   sessionKey,
   layout = 'assistant',
+  centerUserVoiceRow = false,
 }: {
   attachments: MessageAttachment[];
   authToken?: string;
   sessionKey?: string | null;
   /** User bubbles align voice pills to the right (WeChat-style). */
   layout?: 'user' | 'assistant';
+  /** When text is empty (attachment-only bubble), center audio so horizontal padding reads even. */
+  centerUserVoiceRow?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState<MessageAttachment | null>(null);
@@ -44,7 +47,7 @@ export function AttachmentRenderer({
 
   return (
     <>
-      <div className="mt-2 flex flex-col gap-2">
+      <div className="flex flex-col gap-2">
         {images.length > 0 ? (
           <div
             className={cn(
@@ -69,13 +72,25 @@ export function AttachmentRenderer({
           </div>
         ) : null}
         {audioItems.length > 0 ? (
-          <div className={cn('flex flex-col gap-2', layout === 'user' && 'w-full items-end')}>
+          <div
+            className={cn(
+              'flex flex-col gap-2',
+              layout === 'user' &&
+                (centerUserVoiceRow ? 'items-center' : 'items-end'),
+            )}
+          >
             {audioItems.map((a, i) => (
               <VoiceMessageBar
                 key={a.id ?? `${a.name}-${i}`}
                 att={a}
                 sessionKey={sessionKey}
-                align={layout === 'user' ? 'end' : 'start'}
+                align={
+                  layout === 'user'
+                    ? centerUserVoiceRow
+                      ? 'center'
+                      : 'end'
+                    : 'start'
+                }
                 variant={layout === 'user' ? 'compact' : 'default'}
               />
             ))}

@@ -1,5 +1,5 @@
-import { Pause, Play } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Mic, Pause, Play } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { MessageAttachment } from '@/features/chat/messages.types';
 import { workspaceRelativePathToApiPath } from '@/features/chat/attachment-utils-core';
@@ -8,6 +8,11 @@ import { cn } from '@/lib/cn';
 import { apiUrl } from '@/lib/url';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
+
+/** `<audio.duration>` often reports 0 / NaN / Infinity for recorder WebMs; element duration must pass this gate. */
+function isUsableHtmlAudioDuration(sec: number): boolean {
+  return typeof sec === 'number' && Number.isFinite(sec) && sec > 0 && sec !== Infinity;
+}
 
 function formatDur(sec: number): string {
   if (!Number.isFinite(sec) || sec < 0) return '0:00';
@@ -21,7 +26,7 @@ function isAudioAtt(att: MessageAttachment): boolean {
 }
 
 /**
- * User voice: single play control + duration. Assistant TTS: full bar with progress.
+ * Inline voice playback — compact chip nests in user tinted bubble; default matches panel typography (DESIGN.md).
  */
 export function VoiceMessageBar({
   att,
@@ -30,10 +35,8 @@ export function VoiceMessageBar({
   sessionKey,
 }: {
   att: MessageAttachment;
-  align?: 'start' | 'end';
-  /** `compact` = one play button + duration only (user messages). */
+  align?: 'start' | 'end' | 'center';
   variant?: 'default' | 'compact';
-  /** Resolves correct agent home for `tts/` and `inbound/` gateway paths. */
   sessionKey?: string | null;
 }) {
   const language = useLocaleStore((s) => s.language);
@@ -41,12 +44,25 @@ export function VoiceMessageBar({
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [src, setSrc] = useState<string | undefined>();
   const [playing, setPlaying] = useState(false);
-  const [duration, setDuration] = useState(0);
+  const hintDuration = useMemo(() => {
+    const d = att.durationSeconds;
+    return typeof d === 'number' && Number.isFinite(d) && d > 0 ? d : 0;
+  }, [att.durationSeconds]);
+
+  const [duration, setDuration] = useState(hintDuration);
   const [current, setCurrent] = useState(0);
+
+  const syncDurationFromElement = useCallback(() => {
+    const el = audioRef.current;
+    if (!el) return;
+    const d = el.duration;
+    if (isUsableHtmlAudioDuration(d)) {
+      setDuration(d);
+    }
+  }, []);
 
   useEffect(() => {
     setCurrent(0);
-    setDuration(0);
     setPlaying(false);
     let revoke: string | undefined;
     let cancelled = false;
@@ -78,6 +94,10 @@ export function VoiceMessageBar({
     };
   }, [att, sessionKey]);
 
+  useEffect(() => {
+    setDuration(hintDuration);
+  }, [hintDuration]);
+
   const toggle = useCallback(() => {
     const el = audioRef.current;
     if (!el || !src) return;
@@ -90,16 +110,39 @@ export function VoiceMessageBar({
 
   if (!isAudioAtt(att)) return null;
 
+  const pct =
+    duration > 0 ? Math.min(100, Number.isFinite(duration) ? (current / duration) * 100 : 0) : 0;
+  const durationReady =
+    typeof duration === 'number' && duration > 0 && Number.isFinite(duration);
+
+  /** True when metadata not yet surfaced */
+  const awaitingMeta = Boolean(src && !durationReady);
+
+  const timeCaptionEl = !src ? (
+    <span className="tabular-nums tracking-tight text-fg-subtle">— / —</span>
+  ) : (
+    <span className="tabular-nums tracking-tight text-fg-muted" aria-live="polite">
+      <span>{formatDur(current)}</span>
+      <span className="mx-0.5 text-fg-subtle">/</span>
+      {!durationReady ? (
+        <span className="text-fg-subtle" title={m.chat.voiceAwaitingMeta}>
+          —
+        </span>
+      ) : (
+        <span>{formatDur(duration)}</span>
+      )}
+    </span>
+  );
+
   const audioEl = src ? (
     <audio
       ref={audioRef}
       src={src}
       preload="metadata"
       className="hidden"
-      onLoadedMetadata={() => {
-        const d = audioRef.current?.duration;
-        if (typeof d === 'number' && Number.isFinite(d)) setDuration(d);
-      }}
+      onLoadedMetadata={syncDurationFromElement}
+      onLoadedData={syncDurationFromElement}
+      onDurationChange={syncDurationFromElement}
       onTimeUpdate={(e) => setCurrent(e.currentTarget.currentTime)}
       onPlay={() => setPlaying(true)}
       onPause={() => setPlaying(false)}
@@ -112,70 +155,84 @@ export function VoiceMessageBar({
     <span className="sr-only">{m.chat.voiceLoading}</span>
   );
 
-  if (variant === 'compact') {
-    const timeText =
-      duration > 0
-        ? playing
-          ? `${formatDur(current)} / ${formatDur(duration)}`
-          : formatDur(duration)
-        : src
-          ? '…'
-          : '—';
+  const playBtn = (
+    <button
+      type="button"
+      onClick={toggle}
+      disabled={!src}
+      className={cn(
+        'flex size-8 shrink-0 items-center justify-center rounded-full border text-accent-fg',
+        'border-edge-subtle bg-surface-panel transition-colors',
+        'hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+        'motion-safe:active:scale-[0.97]',
+        'dark:bg-surface-panel/90 dark:border-edge',
+        variant === 'compact' &&
+          cn(
+            'border-white/55 bg-white/92 shadow-[inset_0_1px_0_rgb(255_255_255/0.65)]',
+            'dark:border-white/14 dark:bg-surface-hover/98 dark:shadow-none',
+          ),
+        !src && 'opacity-50',
+      )}
+      aria-label={playing ? m.chat.voicePause : m.chat.voicePlay}
+      title={playing ? m.chat.voicePause : m.chat.voicePlay}
+    >
+      {playing ? <Pause className="size-[14px]" strokeWidth={2} /> : <Play className="size-[14px] ml-px" strokeWidth={2} />}
+    </button>
+  );
 
-    return (
-      <div className={cn('flex w-full min-w-0', align === 'end' && 'justify-end')}>
-        <div className="inline-flex max-w-[min(280px,90vw)] items-center gap-3 rounded-full border border-edge bg-surface-hover/80 px-2.5 py-1.5 shadow-surface dark:border-edge dark:bg-surface-hover/50">
-          <button
-            type="button"
-            onClick={toggle}
-            disabled={!src}
-            className={cn(
-              'flex size-10 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent-fg',
-              'hover:bg-accent-soft/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-              !src && 'opacity-50',
-            )}
-            aria-label={playing ? m.chat.voicePause : m.chat.voicePlay}
-            title={playing ? m.chat.voicePause : m.chat.voicePlay}
-          >
-            {playing ? <Pause className="size-[18px]" /> : <Play className="size-[18px] ml-0.5" />}
-          </button>
-          <span className="min-w-[4.25rem] tabular-nums text-sm font-semibold text-fg">{timeText}</span>
-          {audioEl}
-        </div>
-      </div>
-    );
-  }
+  const trackBg = cn(
+    'relative h-0.5 min-h-[2px] w-full overflow-hidden rounded-full bg-edge-subtle dark:bg-edge/65',
+    variant === 'compact' && 'bg-white/45 dark:bg-white/14',
+  );
+
+  const shellClass = cn(
+    'inline-flex min-w-0 items-center rounded-full border',
+    variant === 'compact'
+      ? 'max-w-[min(220px,88vw)] gap-2 px-2 py-1.5 backdrop-blur-[2px]'
+      : 'min-w-[min(160px,80vw)] max-w-[17rem] gap-2 px-2 py-1.5',
+    variant === 'compact'
+      ? 'border-white/58 bg-white/86 shadow-none dark:border-white/13 dark:bg-black/[0.22] dark:backdrop-blur-sm'
+      : 'border-edge-subtle bg-surface-panel/[0.96] shadow-surface dark:border-edge dark:bg-surface-panel/92',
+  );
+
+  const label = `${m.chat.voiceAriaRegion}${att.name ? ` · ${att.name}` : ''}`;
 
   return (
-    <div className={cn('flex w-full min-w-0', align === 'end' && 'justify-end')}>
-      <div className="inline-flex min-w-[min(240px,85vw)] max-w-sm items-center gap-2 rounded-full border border-edge bg-surface-hover/80 px-3 py-2 text-left shadow-surface dark:border-edge dark:bg-surface-hover/50">
-        <button
-          type="button"
-          onClick={toggle}
-          disabled={!src}
-          className={cn(
-            'flex size-9 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent-fg',
-            'hover:bg-accent-soft/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-            !src && 'opacity-50',
+    <div
+      className={cn(
+        'flex min-w-0',
+        align === 'end' && 'justify-end',
+        align === 'center' && 'justify-center',
+      )}
+    >
+      <div role="group" aria-label={label} className={shellClass}>
+        {playBtn}
+        <div className="flex min-w-0 flex-1 flex-col justify-center gap-1 py-px">
+          {variant === 'default' ? (
+            <div className="flex min-w-0 items-center gap-1.5 text-[11px] leading-snug tracking-tight text-fg-muted">
+              <Mic className="size-3 shrink-0 opacity-90 text-fg-subtle" strokeWidth={1.75} aria-hidden />
+              <span className="truncate font-normal">{m.chat.voiceMessage}</span>
+            </div>
+          ) : (
+            <span className="sr-only">{m.chat.voiceMessage}</span>
           )}
-          aria-label={playing ? m.chat.voicePause : m.chat.voicePlay}
-          title={playing ? m.chat.voicePause : m.chat.voicePlay}
-        >
-          {playing ? <Pause className="size-4" /> : <Play className="size-4 ml-0.5" />}
-        </button>
-        <div className="min-w-0 flex-1">
-          <div className="h-1.5 w-full overflow-hidden rounded-full bg-edge-subtle/80">
-            <div
-              className="h-full rounded-full bg-accent transition-[width] duration-150 ease-linear"
-              style={{ width: `${duration > 0 ? Math.min(100, (current / duration) * 100) : 0}%` }}
-            />
+          <div className={trackBg} aria-hidden>
+            {!src ? null : awaitingMeta ? (
+              <span
+                className={cn(
+                  'absolute inset-y-0 left-[18%] w-[42%] max-w-[4.5rem] rounded-full bg-accent/45 motion-safe:animate-pulse',
+                )}
+              />
+            ) : (
+              <div
+                className={cn(
+                  'h-full rounded-full bg-accent motion-safe:transition-[width] motion-safe:duration-150 motion-safe:ease-linear',
+                )}
+                style={{ width: `${pct}%` }}
+              />
+            )}
           </div>
-          <div className="mt-1 flex justify-between gap-2 text-[10px] tabular-nums text-fg-muted">
-            <span className="min-w-0 truncate">{m.chat.voiceMessage}</span>
-            <span className="shrink-0">
-              {duration > 0 ? `${formatDur(current)} / ${formatDur(duration)}` : '—'}
-            </span>
-          </div>
+          <div className={cn('flex justify-end text-[10px] leading-snug tracking-tight text-fg-muted')}>{timeCaptionEl}</div>
         </div>
         {audioEl}
       </div>

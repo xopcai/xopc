@@ -3,6 +3,7 @@ import { flushSync } from 'react-dom';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import useSWR from 'swr';
 
+import type { WireAttachment } from '@/features/chat/composer.types';
 import {
   coerceReasoningLevel,
   type Message,
@@ -710,7 +711,7 @@ export function useChatSession() {
   const interruptAndSend = useCallback(
     async (
       content: string,
-      attachments?: Array<{ type: string; mimeType?: string; data?: string; name?: string; size?: number }>,
+      attachments?: WireAttachment[],
       levelOverride?: string,
     ) => {
       if (!content.trim() && !attachments?.length) return;
@@ -744,7 +745,7 @@ export function useChatSession() {
   const sendMessage = useCallback(
     async (
       content: string,
-      attachments?: Array<{ type: string; mimeType?: string; data?: string; name?: string; size?: number }>,
+      attachments?: WireAttachment[],
       levelOverride?: string,
     ) => {
       if (!sessionKey) {
