@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import { useLocation } from 'react-router-dom';
 
-import { APP_TOP_HEADER_BAR_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
+import { APP_CHROME_NO_DRAG_CLASS, APP_TOP_HEADER_BAR_CLASS } from '@/components/shell/app-chrome';
 import { MainRailExpandWhenCollapsed } from '@/components/shell/main-rail-expand-when-collapsed';
 import { MobileNavMenuButton } from '@/components/shell/mobile-nav-menu-button';
 import { cn } from '@/lib/cn';
@@ -18,20 +18,20 @@ export const PrimaryAppHeader = memo(function PrimaryAppHeader() {
   return (
     <header
       className={cn(
-        'flex shrink-0 gap-3 bg-surface-panel',
-        APP_TOP_HEADER_BAR_NO_DRAG_CLASS,
+        'flex shrink-0 items-center gap-3 bg-surface-panel',
+        APP_TOP_HEADER_BAR_CLASS,
         'px-3 sm:gap-4 sm:px-5 xl:px-6',
       )}
     >
-      <div className="flex min-w-0 shrink-0 items-center gap-2.5">
+      <div className={cn('flex min-w-0 shrink-0 items-center gap-2.5', APP_CHROME_NO_DRAG_CLASS)}>
         <MainRailExpandWhenCollapsed />
         {showMobileNav ? <MobileNavMenuButton /> : null}
         {startExtra}
       </div>
-      <div className="flex min-h-0 min-w-0 w-full flex-1 flex-col justify-center overflow-hidden">
-        {main}
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col justify-center overflow-hidden">
+        <div className={cn('w-fit max-w-full', APP_CHROME_NO_DRAG_CLASS)}>{main}</div>
       </div>
-      <div className="flex min-w-0 shrink-0 items-center justify-end gap-2">{end}</div>
+      <div className={cn('flex min-w-0 shrink-0 items-center justify-end gap-2', APP_CHROME_NO_DRAG_CLASS)}>{end}</div>
     </header>
   );
 });

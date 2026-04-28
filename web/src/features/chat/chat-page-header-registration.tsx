@@ -82,7 +82,7 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
         </Link>
       ) : null,
       main: (
-        <div className="w-full min-w-0 max-w-[var(--max-width-chat)] px-3 sm:px-5 xl:px-6">
+        <div className="w-full min-w-0 max-w-(--max-width-chat) px-3 sm:px-5 xl:px-6">
           <h1
             className={cn(
               'min-w-0 truncate text-base font-semibold tracking-tight text-fg',
