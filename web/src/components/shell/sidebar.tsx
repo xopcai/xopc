@@ -1,4 +1,4 @@
-import { LayoutGrid, Plus, Users } from 'lucide-react';
+import { Clock, Layers, Plug, Plus, Users } from 'lucide-react';
 import { Link, NavLink } from 'react-router-dom';
 
 import { messages } from '@/i18n/messages';
@@ -67,14 +67,31 @@ export function SidebarNav({
             {!collapsed ? <span className="truncate">{m.nav.agents}</span> : null}
           </NavLink>
           <NavLink
-            to="/apps"
-            end
+            to={pathForTab('skills')}
             className={(props) => secondaryNavClass(props, collapsed)}
-            title={m.nav.apps}
+            title={m.nav.skills}
             onClick={() => onNavigate?.()}
           >
-            <LayoutGrid className="size-4 shrink-0 opacity-90" strokeWidth={1.75} aria-hidden />
-            {!collapsed ? <span className="truncate">{m.nav.apps}</span> : null}
+            <Layers className="size-4 shrink-0 opacity-90" strokeWidth={1.75} aria-hidden />
+            {!collapsed ? <span className="truncate">{m.nav.skills}</span> : null}
+          </NavLink>
+          <NavLink
+            to={pathForTab('cron')}
+            className={(props) => secondaryNavClass(props, collapsed)}
+            title={m.nav.cron}
+            onClick={() => onNavigate?.()}
+          >
+            <Clock className="size-4 shrink-0 opacity-90" strokeWidth={1.75} aria-hidden />
+            {!collapsed ? <span className="truncate">{m.nav.cron}</span> : null}
+          </NavLink>
+          <NavLink
+            to={pathForTab('channels')}
+            className={(props) => secondaryNavClass(props, collapsed)}
+            title={m.nav.channels}
+            onClick={() => onNavigate?.()}
+          >
+            <Plug className="size-4 shrink-0 opacity-90" strokeWidth={1.75} aria-hidden />
+            {!collapsed ? <span className="truncate">{m.nav.channels}</span> : null}
           </NavLink>
           <ExtensionNavItems
             collapsed={collapsed}

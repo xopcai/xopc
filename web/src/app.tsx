@@ -102,15 +102,27 @@ const router = createHashRouter([
       },
       {
         path: 'cron',
-        element: <Navigate to="/settings/cron" replace />,
+        element: (
+          <Suspense fallback={<SecondaryRouteFallback />}>
+            <CronPage />
+          </Suspense>
+        ),
       },
       {
         path: 'skills',
-        element: <Navigate to="/settings/skills" replace />,
+        element: (
+          <Suspense fallback={<SecondaryRouteFallback />}>
+            <SkillsPage />
+          </Suspense>
+        ),
       },
       {
         path: 'channels',
-        element: <Navigate to="/settings/channels" replace />,
+        element: (
+          <Suspense fallback={<SecondaryRouteFallback />}>
+            <ChannelsPage />
+          </Suspense>
+        ),
       },
       {
         path: 'agents',
@@ -178,26 +190,10 @@ const router = createHashRouter([
             ),
           },
           {
-            path: 'cron',
+            path: 'apps',
             element: (
               <Suspense fallback={<SettingsRouteFallback />}>
-                <CronPage />
-              </Suspense>
-            ),
-          },
-          {
-            path: 'skills',
-            element: (
-              <Suspense fallback={<SettingsRouteFallback />}>
-                <SkillsPage />
-              </Suspense>
-            ),
-          },
-          {
-            path: 'channels',
-            element: (
-              <Suspense fallback={<SettingsRouteFallback />}>
-                <ChannelsPage />
+                <AppsPage />
               </Suspense>
             ),
           },
