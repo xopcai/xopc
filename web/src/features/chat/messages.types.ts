@@ -42,6 +42,8 @@ export type MessageAttachment = {
   extractedText?: string;
   /** Persisted under agent home `inbound/` — fetch via gateway for preview */
   workspaceRelativePath?: string;
+  /** Known clip length (sec). Set for recorded voice; HTML audio may omit WebM duration. */
+  durationSeconds?: number;
 };
 
 /** Alias for message attachments (API / editor payloads). */

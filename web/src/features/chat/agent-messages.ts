@@ -264,6 +264,11 @@ function normalizeOneAttachment(item: unknown): MessageAttachment {
         ? content
         : undefined;
 
+  const durationSeconds =
+    typeof a.durationSeconds === 'number' && Number.isFinite(a.durationSeconds) && a.durationSeconds > 0
+      ? a.durationSeconds
+      : undefined;
+
   return {
     id: typeof a.id === 'string' ? a.id : undefined,
     name,
@@ -278,6 +283,7 @@ function normalizeOneAttachment(item: unknown): MessageAttachment {
       typeof a.workspaceRelativePath === 'string' && a.workspaceRelativePath.length > 0
         ? a.workspaceRelativePath
         : undefined,
+    durationSeconds,
   };
 }
 

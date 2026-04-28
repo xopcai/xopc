@@ -463,18 +463,10 @@ export const MessageBubble = memo(function MessageBubble({
           className={cn(
             'min-w-0 text-sm leading-relaxed text-fg',
             isUser &&
-              'rounded-xl bg-accent-soft/55 px-4 py-3 text-left dark:bg-accent-soft/35',
-            isUser && message.attachments?.length
-              ? 'min-w-[min(16rem,90vw)] max-w-[min(85%,var(--max-width-chat))]'
-              : '',
+              'w-fit max-w-[min(85%,var(--max-width-chat))] rounded-xl bg-accent-soft/55 px-4 py-3 text-left dark:bg-accent-soft/35',
           )}
         >
-          <div
-            className={cn(
-              'flex min-w-0 flex-col gap-2',
-              isUser && message.attachments?.length ? 'items-end' : '',
-            )}
-          >
+          <div className="flex min-w-0 flex-col gap-2">
             {(displayForFlow?.length ?? 0) > 0 ? (
               <>
                 {renderChunkedContent(
@@ -524,12 +516,22 @@ export const MessageBubble = memo(function MessageBubble({
             ) : null}
 
             {message.attachments?.length ? (
-              <AttachmentRenderer
-                attachments={message.attachments}
-                authToken={authToken}
-                sessionKey={sessionKey}
-                layout={isUser ? 'user' : 'assistant'}
-              />
+              isUser ? (
+                <AttachmentRenderer
+                  attachments={message.attachments}
+                  authToken={authToken}
+                  sessionKey={sessionKey}
+                  layout="user"
+                  centerUserVoiceRow={userCopyText.length === 0}
+                />
+              ) : (
+                <AttachmentRenderer
+                  attachments={message.attachments}
+                  authToken={authToken}
+                  sessionKey={sessionKey}
+                  layout="assistant"
+                />
+              )
             ) : null}
           </div>
         </div>

@@ -1,3 +1,4 @@
+import type { WireAttachment } from '@/features/chat/composer.types';
 import type { ProgressState } from '@/features/chat/messages.types';
 import { MAX_CHAT_ATTACHMENTS } from '@/features/chat/constants';
 import { apiFetch } from '@/lib/fetch';
@@ -44,7 +45,7 @@ export class MessageSender {
   async send(
     content: string,
     chatId: string,
-    attachments?: Array<{ type: string; mimeType?: string; data?: string; name?: string; size?: number }>,
+    attachments?: WireAttachment[],
     thinkingLevel?: string,
     callbacks?: MessagingCallbacks,
   ): Promise<void> {

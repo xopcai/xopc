@@ -9,6 +9,8 @@ async function handleRecordingComplete(
   chunks: Blob[],
   recorderMimeType: string,
   opts: {
+    /** Wall-clock elapsed while recording stopped (helps WebM duration in browsers). */
+    recordingDurationSec: number;
     wireAttachmentsPayload: () => WireAttachment[];
     getTextValue: () => string;
     getThinkingLevel: () => string;
@@ -28,12 +30,17 @@ async function handleRecordingComplete(
   const voiceAttachment = await loadAttachment(file, file.name);
 
   const existingPayload = opts.wireAttachmentsPayload();
+  const secs = opts.recordingDurationSec;
+  const durationSeconds =
+    Number.isFinite(secs) && secs >= 0.05 ? Math.round(secs * 1000) / 1000 : undefined;
+
   const voiceWire: WireAttachment = {
     type: 'voice',
     mimeType: voiceAttachment.mimeType,
     data: voiceAttachment.content,
     name: voiceAttachment.name,
     size: voiceAttachment.size,
+    ...(durationSeconds != null ? { durationSeconds } : {}),
   };
 
   opts.onAutoSend(
@@ -88,6 +95,8 @@ export function useComposerVoice(options: UseComposerVoiceOptions): UseComposerV
   const mediaChunksRef = useRef<Blob[]>([]);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const voiceSkipAutoSendRef = useRef(false);
+  /** Captured when MediaRecorder starts — used because WebMs often expose no `<audio.duration`. */
+  const recordStartPerfRef = useRef<number | null>(null);
 
   const onAutoSendRef = useRef(onAutoSend);
   onAutoSendRef.current = onAutoSend;
@@ -152,11 +161,18 @@ export function useComposerVoice(options: UseComposerVoiceOptions): UseComposerV
           try {
             if (voiceSkipAutoSendRef.current) {
               voiceSkipAutoSendRef.current = false;
+              recordStartPerfRef.current = null;
               return;
             }
+            const t0 = recordStartPerfRef.current;
+            recordStartPerfRef.current = null;
+            const recordingDurationSec =
+              typeof t0 === 'number' ? Math.max(0, (performance.now() - t0) / 1000) : 0;
+
             const chunks = mediaChunksRef.current;
             mediaChunksRef.current = [];
             await handleRecordingComplete(chunks, rec.mimeType, {
+              recordingDurationSec,
               wireAttachmentsPayload: () => wireRef.current(),
               getTextValue: () => getTextRef.current(),
               getThinkingLevel: () => getLevelRef.current(),
@@ -171,6 +187,7 @@ export function useComposerVoice(options: UseComposerVoiceOptions): UseComposerV
         })();
       };
       mediaRecorderRef.current = rec;
+      recordStartPerfRef.current = performance.now();
       rec.start(250);
       setVoiceRecording(true);
     } catch {

@@ -15,6 +15,8 @@ export interface WireAttachment {
   name?: string;
   size?: number;
   workspaceRelativePath?: string;
+  /** Recorder / client-known length (seconds). Helps WebMs that report NaN duration in `<audio>`. */
+  durationSeconds?: number;
 }
 
 // ── Draft harvest result (shared by send / flush / interrupt) ───────
