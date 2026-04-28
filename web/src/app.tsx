@@ -5,6 +5,7 @@ import { createHashRouter, Navigate, RouterProvider, useParams } from 'react-rou
 import { i18n } from '@/i18n/i18n';
 import { AppShell } from '@/components/shell/app-shell';
 import { SettingsPageLayout } from '@/components/shell/settings-page-layout';
+import { SettingsSheet } from '@/components/shell/settings-sheet';
 import { ChatPage } from '@/features/chat/chat-page';
 import { ChatRouteLayout } from '@/features/chat/chat-route-layout';
 import { ExtensionProvider } from '@/features/extensions/extension-provider';
@@ -153,7 +154,11 @@ const router = createHashRouter([
       },
       {
         path: 'settings',
-        element: <SettingsPageLayout />,
+        element: (
+          <SettingsSheet>
+            <SettingsPageLayout />
+          </SettingsSheet>
+        ),
         children: [
           { index: true, element: <Navigate to="appearance" replace /> },
           {

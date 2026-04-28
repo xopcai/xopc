@@ -28,6 +28,24 @@
     "settingsAgents": "Agents",
     "settingsSystem": "System"
   },
+  "onboarding": {
+    "title": "Welcome to xopc",
+    "subtitle": "Let's get your AI assistant set up in 3 quick steps.",
+    "step1Title": "Choose an AI Provider",
+    "step1Subtitle": "Select the AI service you'd like to use.",
+    "step2Title": "Enter your API key",
+    "step2Subtitle": "Your key is stored locally in your xopc config file.",
+    "step2Placeholder": "Paste your API key here",
+    "step2SecurityNote": "🔒 Keys never leave your machine.",
+    "step3Title": "Choose a default model",
+    "step3Subtitle": "You can change this anytime in settings.",
+    "back": "Back",
+    "continue": "Continue",
+    "startChatting": "Start chatting",
+    "skipSetup": "Skip — I'll set this up later",
+    "setupComplete": "You're all set! Start chatting below.",
+    "stepOf": "Step {{current}} of {{total}}"
+  },
   "appsPage": {
     "title": "Apps",
     "subtitle": "Discovered extensions in one place — open a card for details and built-in enable/disable.",

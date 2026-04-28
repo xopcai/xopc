@@ -9,6 +9,7 @@ import { MessageList } from '@/features/chat/message-list';
 import { ScrollToBottomButton } from '@/features/chat/scroll-to-bottom-button';
 import { useChatSession } from '@/features/chat/use-chat-session';
 import { ClarifyPrompt } from '@/features/chat/clarify-prompt';
+import { OnboardingCard, useNeedsModelSetup } from '@/features/onboarding';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { useGatewayStore } from '@/stores/gateway-store';
@@ -19,6 +20,8 @@ export function ChatPage() {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const token = useGatewayStore((s) => s.token);
+
+  const modelSetup = useNeedsModelSetup(Boolean(token));
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const welcomeDraftSeq = useRef(0);
@@ -115,8 +118,17 @@ export function ChatPage() {
     return () => setWorkspaceEditorAgentId('');
   }, [hasToken, displayAgentId, setWorkspaceEditorAgentId]);
 
+  const showInlineOnboarding =
+    Boolean(token) &&
+    modelSetup.ready &&
+    modelSetup.needsSetup &&
+    !modelSetup.guideDismissed &&
+    !showSessionLoading &&
+    !streaming;
+
   /** Match `MessageList` empty welcome: tighter vertical padding so the first screen fits without scrolling. */
-  const compactWelcomeLayout = !showSessionLoading && chatMessages.length === 0 && !streaming;
+  const compactWelcomeLayout =
+    !showSessionLoading && chatMessages.length === 0 && !streaming && !showInlineOnboarding;
 
   const chatHeadline = useMemo(() => {
     const titleKey = sessionRoutePending && decodedKey ? decodedKey : sessionKey;
@@ -277,6 +289,14 @@ export function ChatPage() {
                     scrollElementRef={scrollRef}
                     pinToBottom={atBottom}
                     onPickWelcomePrompt={onPickWelcomePrompt}
+                    welcomeOverlay={
+                      showInlineOnboarding ? (
+                        <OnboardingCard
+                          onComplete={() => void modelSetup.refresh()}
+                          onDismiss={modelSetup.dismissPermanently}
+                        />
+                      ) : undefined
+                    }
                     onDeleteRound={deleteMessageRound}
                     deleteRoundDisabled={streaming || sending}
                   />

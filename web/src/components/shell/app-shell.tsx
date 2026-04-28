@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 
 import { GatewayConnectLanding } from '@/components/shell/gateway-connect-landing';
-import { OnboardingDialog } from '@/components/shell/onboarding-dialog';
 import { PrimaryAppHeader } from '@/components/shell/primary-app-header';
 import { SidebarColumn } from '@/components/shell/sidebar-column';
 import { WorkspaceColumn } from '@/components/shell/workspace-column';
@@ -135,12 +134,10 @@ export function AppShell() {
       <ExtensionNotificationListener />
       <TokenDialog />
       <ElectronGatewayExitBanner />
-      <OnboardingDialog />
-
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        {!isSettingsRoute ? <UpdateReminderBar reminder={updateReminder} /> : null}
+        <UpdateReminderBar reminder={updateReminder} />
         <div className="flex min-h-0 min-w-0 flex-1 flex-row overflow-hidden">
-          {!isSettingsRoute ? <SidebarColumn /> : null}
+          <SidebarColumn />
 
           {/* Main + workspace: workspace is a right rail sibling (not a dialog), like app-sidebar */}
           <div className="flex min-h-0 min-w-0 flex-1 min-w-0 flex-col overflow-hidden bg-surface-panel">

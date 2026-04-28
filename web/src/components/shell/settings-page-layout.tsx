@@ -10,24 +10,9 @@ import { ExtensionSettingsNav } from '@/features/extensions/extension-settings-n
 import { pathForTab, SETTINGS_SHELL_NAV_GROUPS } from '@/navigation';
 import { isElectron } from '@/lib/electron-env';
 import { AGENTS_APP_LIST_PATH } from '@/features/settings/agents/agents-app-path';
-import { SETTINGS_BACK_PATH_STATE_KEY } from '@/features/settings/settings-nav-state';
+import { resolveSettingsBackTarget } from '@/features/settings/settings-nav-state';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useSidebarStore } from '@/stores/sidebar-store';
-
-function resolveSettingsBackTarget(state: unknown): string {
-  if (!state || typeof state !== 'object') {
-    return '/chat';
-  }
-  const raw = (state as Record<string, unknown>)[SETTINGS_BACK_PATH_STATE_KEY];
-  if (typeof raw !== 'string') {
-    return '/chat';
-  }
-  const path = raw.trim();
-  if (!path.startsWith('/') || path.startsWith('//')) {
-    return '/chat';
-  }
-  return path;
-}
 
 /** Aligned with `SidebarNav` secondary links (§4.3 — same rail rhythm as main app sidebar). */
 function settingsNavLinkClass({ isActive }: { isActive: boolean }) {
