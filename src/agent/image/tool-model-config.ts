@@ -27,7 +27,7 @@ export function resolveDefaultModelRef(cfg?: Config): { provider: string; model:
   if (p2) {
     return p2;
   }
-  return { provider: 'anthropic', model: 'claude-sonnet-4-5' };
+  return { provider: 'deepseek', model: 'deepseek-v4-flash' };
 }
 
 export function coerceToolModelConfig(model?: AgentModelConfig): ToolModelConfig {

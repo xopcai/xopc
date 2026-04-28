@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useSWR from 'swr';
 
-import { fetchConfiguredModelsCached, type ConfiguredModel } from '@/features/chat/registry-api';
+import { CONFIGURED_MODELS_SWR_KEY, fetchConfiguredModelsCached, type ConfiguredModel } from '@/features/chat/registry-api';
 import {
   comboboxTriggerLayoutClass,
   formControlBorderFocusClass,
@@ -70,7 +70,7 @@ export function ModelSelector({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
 
-  const { data: models = [], isLoading, error } = useSWR('gateway-configured-models', fetchConfiguredModelsCached, {
+  const { data: models = [], isLoading, error } = useSWR(CONFIGURED_MODELS_SWR_KEY, fetchConfiguredModelsCached, {
     revalidateOnFocus: false,
   });
 

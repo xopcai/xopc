@@ -328,22 +328,21 @@ export function providerSupportsApiKey(provider: string): boolean {
 // Dynamic Default Model Resolution
 // ============================================
 
+/** Preferred default model when no explicit model is configured. */
+const DEFAULT_FALLBACK_MODEL = 'deepseek/deepseek-v4-flash';
+
 /**
  * Get a default model reference.
  * Priority:
- * 1. First available model with configured API key
- * 2. First model from pi-ai catalog
- * 3. Fallback to anthropic/claude-sonnet-4-5 as last resort
+ * 1. Explicitly configured model in agents.defaults.model (if set and available)
+ * 2. Default fallback: deepseek/deepseek-v4-flash
  */
 export async function getDefaultModel(config?: Config | null | undefined): Promise<string> {
-  const availableModels = await getAvailableModels();
-  
-  // Try to find configured default model first
   const defaultModel = config?.agents?.defaults?.model;
   if (defaultModel) {
     const modelRef = typeof defaultModel === 'string' ? defaultModel : defaultModel.primary;
     if (modelRef) {
-      // Check if the configured model has valid API key
+      const availableModels = await getAvailableModels();
       const configured = availableModels.find(m => 
         `${m.provider}/${m.id}` === modelRef ||
         m.id === modelRef
@@ -351,33 +350,20 @@ export async function getDefaultModel(config?: Config | null | undefined): Promi
       if (configured) {
         return `${configured.provider}/${configured.id}`;
       }
+      return modelRef;
     }
   }
-  
-  // Return first available model
-  if (availableModels.length > 0) {
-    return `${availableModels[0].provider}/${availableModels[0].id}`;
-  }
-  
-  // Try to get first model from pi-ai catalog
-  for (const provider of getPiAiProviders()) {
-    try {
-      const models = getPiAiModels(provider);
-      if (models.length > 0) {
-        return `${provider}/${models[0].id}`;
-      }
-    } catch {
-      continue;
-    }
-  }
-  
-  // Last resort fallback
-  return 'anthropic/claude-sonnet-4-5';
+
+  return DEFAULT_FALLBACK_MODEL;
 }
 
 /**
  * Synchronous default model resolution for constructors and sync code paths.
  * Uses catalog/registry only (no async credential checks).
+ *
+ * When no model is explicitly configured, returns the preferred default
+ * (`deepseek/deepseek-v4-flash`) rather than picking an arbitrary first
+ * model from the full catalog.
  */
 export function getDefaultModelSync(config?: Config | null | undefined): string {
   const defaultModel = config?.agents?.defaults?.model;
@@ -387,21 +373,8 @@ export function getDefaultModelSync(config?: Config | null | undefined): string 
       return modelRef;
     }
   }
-  const all = getAllModels();
-  if (all.length > 0) {
-    return `${all[0].provider}/${all[0].id}`;
-  }
-  for (const provider of getPiAiProviders()) {
-    try {
-      const models = getPiAiModels(provider);
-      if (models.length > 0) {
-        return `${provider}/${models[0].id}`;
-      }
-    } catch {
-      continue;
-    }
-  }
-  return 'anthropic/claude-sonnet-4-5';
+
+  return DEFAULT_FALLBACK_MODEL;
 }
 
 // Re-export ModelRegistry for advanced use cases

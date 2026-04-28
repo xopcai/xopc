@@ -502,7 +502,7 @@ export const TTSConfigSchema = z.object({
     ),
   fallback: TTSFallbackConfigSchema.optional(),
   maxTextLength: z.number().int().min(1).default(512), // Conservative default to accommodate all providers (Alibaba limit is 512)
-  timeoutMs: z.number().int().min(1000).max(180000).default(30000),
+  timeoutMs: z.number().int().min(1000).max(180000).default(60000),
   summarization: TTSSummarizationConfigSchema.optional(),
   modelOverrides: TTSModelOverridesConfigSchema.optional(),
   alibaba: TTSProviderConfigSchema.optional(),
