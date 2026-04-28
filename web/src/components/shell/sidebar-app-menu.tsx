@@ -5,7 +5,7 @@ import { Link } from 'react-router-dom';
 import { messages } from '@/i18n/messages';
 import type { StoredLanguage } from '@/lib/storage';
 import { cn } from '@/lib/cn';
-import { helpDocsHomeUrl, pathForTab } from '@/navigation';
+import { helpDocsHomeUrl } from '@/navigation';
 import { useLocaleStore } from '@/stores/locale-store';
 import { type FontScalePreference, useFontScaleStore } from '@/stores/font-scale-store';
 import { type ThemePreference, useThemeStore } from '@/stores/theme-store';
@@ -216,7 +216,7 @@ export function SidebarAppMenu({
       </a>
 
       <Link
-        to={pathForTab('settingsGateway')}
+        to="/settings/appearance"
         className={cn(
           rowClass,
           'text-accent-fg hover:bg-accent-soft hover:text-accent-fg',

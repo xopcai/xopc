@@ -1,5 +1,13 @@
 import { measureElement, useVirtualizer } from '@tanstack/react-virtual';
-import { memo, useCallback, useEffect, useLayoutEffect, useRef, type RefObject } from 'react';
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  type ReactNode,
+  type RefObject,
+} from 'react';
 
 import { ChatWelcomeSpotlight } from '@/features/chat/chat-welcome-spotlight';
 import { MessageBubble } from '@/features/chat/message-bubble';
@@ -22,6 +30,7 @@ export const MessageList = memo(function MessageList({
   scrollElementRef,
   pinToBottom,
   onPickWelcomePrompt,
+  welcomeOverlay,
   onDeleteRound,
   deleteRoundDisabled,
 }: {
@@ -37,6 +46,8 @@ export const MessageList = memo(function MessageList({
   pinToBottom: boolean;
   /** Empty-state quick prompts — fills the composer when chosen. */
   onPickWelcomePrompt?: (text: string) => void;
+  /** When set (e.g. inline onboarding), replaces default welcome / spotlight. */
+  welcomeOverlay?: ReactNode;
   /** Delete a user message round (user + assistant) by message index. */
   onDeleteRound?: (messageIndex: number) => void;
   /** Omit delete-round control while sending/streaming. */
@@ -97,6 +108,9 @@ export const MessageList = memo(function MessageList({
   }, [pinToBottom, list.length, scrollLastToEnd]);
 
   if (showWelcome) {
+    if (welcomeOverlay) {
+      return <div className="flex w-full flex-col items-center pb-6 pt-4">{welcomeOverlay}</div>;
+    }
     if (onPickWelcomePrompt && m.chat.welcomeSpotlight) {
       return (
         <div className="pb-1.5">

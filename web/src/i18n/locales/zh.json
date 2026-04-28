@@ -28,6 +28,24 @@
     "settingsAgents": "智能体",
     "settingsSystem": "系统设置"
   },
+  "onboarding": {
+    "title": "欢迎使用 xopc",
+    "subtitle": "只需 3 步，即可开始使用你的 AI 助手。",
+    "step1Title": "选择 AI 服务商",
+    "step1Subtitle": "选择你想要使用的 AI 服务。",
+    "step2Title": "输入你的 API 密钥",
+    "step2Subtitle": "密钥将保存在本地 xopc 配置文件中。",
+    "step2Placeholder": "在此粘贴你的 API 密钥",
+    "step2SecurityNote": "🔒 密钥不会离开你的设备。",
+    "step3Title": "选择默认模型",
+    "step3Subtitle": "你可以随时在设置中更改。",
+    "back": "返回",
+    "continue": "继续",
+    "startChatting": "开始对话",
+    "skipSetup": "跳过 — 稍后再设置",
+    "setupComplete": "设置完成！在下方开始对话吧。",
+    "stepOf": "第 {{current}} 步，共 {{total}} 步"
+  },
   "appsPage": {
     "title": "应用",
     "subtitle": "网关已发现的扩展统一展示；点开卡片查看说明，并可对内置扩展启用或停用。",
