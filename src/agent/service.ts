@@ -546,6 +546,14 @@ export class AgentService {
     return Promise.resolve();
   }
 
+  /**
+   * Reconcile managed Dreaming cron job against the current effective config.
+   * Safe to call after config saves to apply changes without restarting the process.
+   */
+  async reconcileDreamingNow(): Promise<void> {
+    await this.reconcileDreamingCronJob();
+  }
+
   private async reconcileDreamingCronJob(): Promise<void> {
     const cron = this.config.getCronService?.();
     if (!cron) {
