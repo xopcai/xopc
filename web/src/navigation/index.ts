@@ -94,10 +94,10 @@ export const SETTINGS_SHELL_NAV_GROUPS: readonly SettingsShellNavGroup[] = [
     id: 'ai',
     tabs: ['settingsProviders', 'settingsModels', 'settingsAgentDefaults', 'settingsSearch'],
   },
-  { id: 'automation', tabs: ['cron', 'skills', 'settingsDreams'] },
+  { id: 'automation', tabs: ['settingsDreams'] },
   {
     id: 'connections',
-    tabs: ['channels', 'settingsVoice', 'settingsGateway', 'settingsHeartbeat'],
+    tabs: ['settingsVoice', 'settingsGateway', 'settingsHeartbeat'],
   },
   { id: 'data', tabs: ['sessions', 'logs'] },
 ] as const;
