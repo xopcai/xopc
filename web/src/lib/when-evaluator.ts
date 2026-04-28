@@ -23,7 +23,7 @@ function tokenize(input: string): Tok[] {
   let i = 0;
   const s = input.trim();
   while (i < s.length) {
-    const c = s[i]!;
+    const c = s[i];
     if (/\s/.test(c)) {
       i++;
       continue;
@@ -68,9 +68,9 @@ function tokenize(input: string): Tok[] {
       i++;
       let buf = '';
       while (i < s.length) {
-        const ch = s[i]!;
+        const ch = s[i];
         if (ch === '\\' && i + 1 < s.length) {
-          buf += s[i + 1]!;
+          buf += s[i + 1];
           i += 2;
           continue;
         }
@@ -84,9 +84,9 @@ function tokenize(input: string): Tok[] {
       out.push({ k: 'STR', v: buf });
       continue;
     }
-    if (/[0-9]/.test(c) || (c === '-' && i + 1 < s.length && /[0-9]/.test(s[i + 1]!))) {
+    if (/[0-9]/.test(c) || (c === '-' && i + 1 < s.length && /[0-9]/.test(s[i + 1]))) {
       let j = i + 1;
-      while (j < s.length && /[0-9.]/.test(s[j]!)) j++;
+      while (j < s.length && /[0-9.]/.test(s[j])) j++;
       const n = Number(s.slice(i, j));
       out.push({ k: 'NUM', v: Number.isFinite(n) ? n : 0 });
       i = j;
@@ -94,7 +94,7 @@ function tokenize(input: string): Tok[] {
     }
     if (/[a-zA-Z_]/.test(c)) {
       let j = i + 1;
-      while (j < s.length && /[a-zA-Z0-9_.]/.test(s[j]!)) j++;
+      while (j < s.length && /[a-zA-Z0-9_.]/.test(s[j])) j++;
       const word = s.slice(i, j);
       i = j;
       if (word === 'true') out.push({ k: 'BOOL', v: true });
