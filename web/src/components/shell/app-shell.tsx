@@ -154,7 +154,7 @@ export function AppShell() {
                       'page-enter flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden',
                       routeKey === 'settings'
                         ? 'page-enter--gentle overflow-hidden'
-                        : 'overflow-y-auto overscroll-contain [scrollbar-gutter:stable]',
+                        : 'overflow-y-auto overscroll-contain [scrollbar-gutter:stable_both-edges]',
                     )}
                   >
                     <Outlet />

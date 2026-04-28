@@ -57,7 +57,7 @@ function renderTextOrImageBlock(
     if (isUser) {
       const displayText = stripEnvelopeTimestampPrefix(block.text ?? '');
       return (
-        <div key={key} className="min-w-0 w-full">
+        <div key={key} className="min-w-0">
           <UserMessageSegments text={displayText} />
         </div>
       );
@@ -430,7 +430,7 @@ export const MessageBubble = memo(function MessageBubble({
       <div
         className={cn(
           'min-w-0 max-w-[min(85%,var(--max-width-chat))]',
-          isUser ? 'w-max' : 'w-full',
+          isUser ? 'flex w-full flex-col items-end' : 'w-full',
         )}
       >
         <span className="sr-only">{roleLabel}</span>
@@ -463,7 +463,7 @@ export const MessageBubble = memo(function MessageBubble({
           className={cn(
             'min-w-0 text-sm leading-relaxed text-fg',
             isUser &&
-              'w-fit max-w-[min(85%,var(--max-width-chat))] rounded-xl bg-accent-soft/55 px-4 py-3 text-left dark:bg-accent-soft/35',
+              'w-fit max-w-full rounded-xl bg-accent-soft/55 px-4 py-3 text-left dark:bg-accent-soft/35',
           )}
         >
           <div className="flex min-w-0 flex-col gap-2">

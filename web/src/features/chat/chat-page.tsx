@@ -260,7 +260,7 @@ export function ChatPage() {
             <div
               ref={scrollRef}
               className={cn(
-                'chat-messages min-h-0 flex-1 overflow-y-auto overflow-x-hidden [scrollbar-gutter:stable]',
+                'chat-messages min-h-0 flex-1 overflow-y-auto overflow-x-hidden [scrollbar-gutter:stable_both-edges]',
                 compactWelcomeLayout ? 'pt-5 pb-2' : 'py-4',
               )}
               onScroll={onScroll}
