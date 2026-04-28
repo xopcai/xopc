@@ -47,9 +47,9 @@ function sortedFields(schema: JsonSchema): FieldDef[] {
     if (isHidden(sub)) continue;
     out.push({
       key,
-      sub: sub as JsonSchema,
-      order: getXOrder(sub as JsonSchema),
-      group: getXGroup(sub as JsonSchema),
+      sub: sub,
+      order: getXOrder(sub),
+      group: getXGroup(sub),
       hidden: false,
     });
   }
@@ -95,7 +95,7 @@ function StringField({
           disabled={disabled}
           onChange={(e) => onChange(e.target.value)}
         >
-          {(s.enum as string[]).map((op) => (
+          {(s.enum).map((op) => (
             <option key={op} value={op}>
               {op}
             </option>
