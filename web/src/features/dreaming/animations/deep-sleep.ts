@@ -1,13 +1,13 @@
 /**
- * 🌙 Deep Sleep — "墨潭晋升"
+ * 🌙 Deep Sleep — "Ink pool ascent"
  *
- * 意象：深夜墨潭底部，散落的记忆石子安静地躺着。
- * 月光从水面透下来，形成壮观的焦散纹理（caustics），
- * 照亮某些石子——它们开始发光、上浮，拖曳微光尾迹，
- * 穿过水面，化为墨字。底部有生物发光的微弱脉动。
+ * Imagery: At the bottom of a midnight ink pool, scattered memory-pebbles rest quietly.
+ * Moonlight filters through the water as caustics;
+ * some pebbles catch the light—they glow, rise, and trail faint wakes,
+ * break the surface and become ink characters. A soft bioluminescent pulse at the depths.
  *
- * 技术：全屏深色渐变 + 水下焦散 + 月光柱 + 粒子系统分层上浮。
- * 色调：靛蓝/墨色 #1a237e → #0d1117
+ * Technique: Full-screen dark gradient + underwater caustics + moonbeams + layered rising particles.
+ * Palette: indigo / ink #1a237e → #0d1117.
  */
 import * as THREE from 'three';
 

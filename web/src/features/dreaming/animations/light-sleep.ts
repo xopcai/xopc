@@ -1,13 +1,13 @@
 /**
- * 💤 Light Sleep — "涟漪收纳"
+ * 💤 Light Sleep — "Gathering ripples"
  *
- * 意象：一滴墨水落入静水，涟漪一圈圈扩散。
- * 涟漪交汇处浮现半透明文字碎片，缓缓沉入水底。
- * 多个墨水落点随机出现，每个形成独立的涟漪波纹，
- * 水墨在暗色水面上扩散、交织、消融。
+ * Imagery: An ink drop falls into still water; rings of ripples spread outward.
+ * Where ripples meet, semi-transparent text fragments appear and sink slowly.
+ * Multiple drop centers appear at random, each with its own ripple train;
+ * ink-wash spreads, interlaces, and fades across a dark surface.
  *
- * 技术：全屏 ShaderMaterial 绘制多源涟漪 + 粒子系统模拟浮动碎片。
- * 色调：薄荷绿 #e0f7f0（暗色模式下改为深青 #0a2e26 基底）
+ * Technique: Full-screen ShaderMaterial for multi-source ripples + particle system for drifting fragments.
+ * Palette: mint #e0f7f0 (dark mode uses a deep teal #0a2e26 base).
  */
 import * as THREE from 'three';
 
