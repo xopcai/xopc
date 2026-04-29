@@ -86,7 +86,11 @@ export function DreamingOverlay() {
 
   if (!isActive && !isFading) {
     return (
-      <div ref={containerRef} className="pointer-events-none fixed inset-0 z-[90]" aria-hidden>
+      <div
+        ref={containerRef}
+        className="pointer-events-none fixed inset-0 z-[90] opacity-0"
+        aria-hidden
+      >
         <canvas ref={canvasRef} className="h-full w-full" />
       </div>
     );
@@ -96,7 +100,9 @@ export function DreamingOverlay() {
     <div
       ref={containerRef}
       className={cn(
-        'fixed inset-0 z-[90] transition-opacity',
+        // Always use the default theme's dark background for the dreaming overlay.
+        // (Matches `html.dark` `--color-surface-base` = #1c1c1e in globals.css.)
+        'fixed inset-0 z-[90] bg-[#1c1c1e]/70 transition-opacity',
         isFading ? 'dreaming-overlay-exit pointer-events-none' : 'dreaming-overlay-enter',
       )}
       role="status"

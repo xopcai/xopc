@@ -50,10 +50,10 @@ const STAR_BG_FRAGMENT = /* glsl */ `
     vec2 uv = vUv;
     float aspect = resolution.x / resolution.y;
 
-    // Deep space gradient: rich dark purple
-    vec3 zenith = vec3(0.08, 0.03, 0.18);      // deep violet sky
-    vec3 horizon = vec3(0.03, 0.02, 0.08);      // near black
-    vec3 nadir = vec3(0.02, 0.01, 0.04);        // abyss
+    // Deep space gradient: darker overall so it stays nocturnal in light theme
+    vec3 zenith = vec3(0.05, 0.018, 0.12);      // deep violet sky
+    vec3 horizon = vec3(0.018, 0.012, 0.055);   // near black
+    vec3 nadir = vec3(0.01, 0.006, 0.028);      // abyss
     vec3 bg = mix(nadir, horizon, smoothstep(0.0, 0.3, uv.y));
     bg = mix(bg, zenith, smoothstep(0.4, 0.9, uv.y));
 

@@ -91,11 +91,11 @@ const RIPPLE_FRAGMENT = /* glsl */ `
     float surface = fbm(uv * 6.0 + time * 0.15) * 0.06;
     float surfaceDetail = fbm(uv * 15.0 - time * 0.08) * 0.03;
 
-    // Dark-mode ink wash palette
-    vec3 waterBase = vec3(0.04, 0.18, 0.15);     // deep teal-black
-    vec3 waterMid = vec3(0.06, 0.25, 0.20);      // slightly lighter
-    vec3 rippleGlow = vec3(0.25, 0.75, 0.58);    // mint highlight
-    vec3 inkAccent = vec3(0.0, 0.12, 0.10);      // darkest ink
+    // Ink-wash palette (darker base so it reads deep even in light theme)
+    vec3 waterBase = vec3(0.02, 0.09, 0.08);     // deep teal-black
+    vec3 waterMid = vec3(0.035, 0.14, 0.12);     // slightly lighter
+    vec3 rippleGlow = vec3(0.22, 0.70, 0.55);    // mint highlight (slightly dimmer)
+    vec3 inkAccent = vec3(0.0, 0.06, 0.055);     // darkest ink
 
     // Base: subtle radial gradient
     vec3 color = mix(waterBase, waterMid, smoothstep(0.6, 0.0, centralDist) + surface);
