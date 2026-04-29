@@ -3,7 +3,7 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 
 import { createLogger } from '../../../utils/logger.js';
-import { MEMORY_MD_FILENAME } from './constants.js';
+import { DEFAULT_MAX_AGE_DAYS, DEFAULT_RECENCY_HALF_LIFE_DAYS, MEMORY_MD_FILENAME } from './constants.js';
 import {
   loadDreamingStore,
   saveDreamingStore,
@@ -14,18 +14,21 @@ import {
   DREAMING_LAST_RUN_FORMAT_VERSION,
   emptyDeepPhaseSkipped,
   writeDreamingDeepLastRun,
-  type DreamingDeepConfig,
   type DreamingDeepLastRun,
   type DreamingDeepPhaseSkipped,
 } from './last-run.js';
+import type { DreamingDeepConfig } from './config.js';
 
 const log = createLogger('Dreaming:Deep');
 
-export type { DreamingDeepConfig } from './last-run.js';
+export type { DreamingDeepConfig } from './config.js';
 
 export type DreamingPromotionCandidate = DreamingStoreEntry & {
   avgScore: number;
+  /** Time-decay-adjusted final score used for ranking. */
   score: number;
+  /** Raw recency decay multiplier (0–1). */
+  recencyDecay: number;
 };
 
 function clampScore(value: number): number {
@@ -160,17 +163,57 @@ async function rehydrateSnippet(params: {
   return { snippet, startLine, endLine };
 }
 
+// ── Time-decay scoring ─────────────────────────────────────────────────
+
+const MS_PER_DAY = 86_400_000;
+
+/**
+ * Exponential time-decay multiplier.
+ * Returns a value in (0, 1] where 1 means "just now" and approaches 0 as
+ * the age exceeds multiple half-lives.
+ *
+ * Formula: decay = 2 ^ (-ageDays / halfLifeDays)
+ */
+function computeRecencyDecay(lastRecalledAtIso: string, nowMs: number, halfLifeDays: number): number {
+  const lastMs = Date.parse(lastRecalledAtIso);
+  if (!Number.isFinite(lastMs)) return 0;
+  const ageDays = Math.max(0, (nowMs - lastMs) / MS_PER_DAY);
+  return Math.pow(2, -ageDays / Math.max(1, halfLifeDays));
+}
+
+/**
+ * Check if an entry has expired (older than maxAgeDays since last recall).
+ */
+function isExpiredEntry(lastRecalledAtIso: string, nowMs: number, maxAgeDays: number): boolean {
+  const lastMs = Date.parse(lastRecalledAtIso);
+  if (!Number.isFinite(lastMs)) return true;
+  const ageDays = (nowMs - lastMs) / MS_PER_DAY;
+  return ageDays > maxAgeDays;
+}
+
 function resolveDefaultConfig(overrides?: Partial<DreamingDeepConfig>): DreamingDeepConfig {
   const enabled = overrides?.enabled === true;
   const minScore = typeof overrides?.minScore === 'number' ? overrides.minScore : 0.8;
   const minRecallCount =
     typeof overrides?.minRecallCount === 'number' ? overrides.minRecallCount : 3;
+  const minUniqueQueries =
+    typeof overrides?.minUniqueQueries === 'number' ? overrides.minUniqueQueries : 3;
   const limit = typeof overrides?.limit === 'number' ? overrides.limit : 10;
+  const recencyHalfLifeDays =
+    typeof overrides?.recencyHalfLifeDays === 'number'
+      ? overrides.recencyHalfLifeDays
+      : DEFAULT_RECENCY_HALF_LIFE_DAYS;
+  const maxAgeDays =
+    typeof overrides?.maxAgeDays === 'number' ? overrides.maxAgeDays : DEFAULT_MAX_AGE_DAYS;
   return {
     enabled,
+    cron: typeof overrides?.cron === 'string' ? overrides.cron : '0 3 * * *',
     minScore: clampScore(minScore),
     minRecallCount: Math.max(1, Math.floor(minRecallCount)),
+    minUniqueQueries: Math.max(1, Math.floor(minUniqueQueries)),
     limit: Math.max(0, Math.floor(limit)),
+    recencyHalfLifeDays: Math.max(1, Math.floor(recencyHalfLifeDays)),
+    maxAgeDays: Math.max(1, Math.floor(maxAgeDays)),
   };
 }
 
@@ -264,11 +307,17 @@ export async function runDreamingDeepPromotion(params: {
     const result = await withDreamingPromotionLock(params.workspaceDir, async () => {
       const { store } = await loadDreamingStore({ workspaceDir: params.workspaceDir });
 
-    const all = Object.values(store.entries ?? {}).filter((e): e is DreamingStoreEntry => {
+      const nowMs = now.getTime();
+
+      const all = Object.values(store.entries ?? {}).filter((e): e is DreamingStoreEntry => {
         if (!e || typeof e !== 'object') return false;
         if (e.promotedAt) return false;
         if (!e.path || !e.path.startsWith('memory/')) return false;
         if (e.recallCount < cfg.minRecallCount) return false;
+        // Require minimum unique queries to avoid single-query inflation.
+        if ((e.queryHashes?.length ?? 0) < cfg.minUniqueQueries) return false;
+        // Expire entries older than maxAgeDays since last recall.
+        if (isExpiredEntry(e.lastRecalledAt, nowMs, cfg.maxAgeDays)) return false;
         const avg = e.recallCount > 0 ? e.totalScore / e.recallCount : 0;
         return clampScore(avg) >= cfg.minScore;
       });
@@ -276,10 +325,21 @@ export async function runDreamingDeepPromotion(params: {
       const ranked: DreamingPromotionCandidate[] = all
         .map((e) => {
           const avgScore = e.recallCount > 0 ? clampScore(e.totalScore / e.recallCount) : 0;
-        // Score: avgScore primary, with mild recallCount reinforcement.
+          // Recall-count reinforcement (mild logarithmic boost).
           const reinforcement = clampScore(Math.log1p(e.recallCount) / Math.log1p(10)) * 0.12;
-          const score = clampScore(avgScore + reinforcement);
-          return { ...e, avgScore, score };
+          // Multi-signal bonus: reward entries touched by multiple signal dimensions.
+          const signalDiversity =
+            (e.recallCount > 0 ? 1 : 0) +
+            (e.dailyCount > 0 ? 1 : 0) +
+            (e.groundedCount > 0 ? 1 : 0) +
+            (e.lightHits > 0 ? 1 : 0);
+          const diversityBonus = clampScore(signalDiversity / 4) * 0.08;
+          // Time-decay: exponential decay based on recency half-life.
+          const recencyDecay = computeRecencyDecay(e.lastRecalledAt, nowMs, cfg.recencyHalfLifeDays);
+          // Final score: (base + reinforcement + diversity) * recency decay.
+          const rawScore = avgScore + reinforcement + diversityBonus;
+          const score = clampScore(rawScore * recencyDecay);
+          return { ...e, avgScore, score, recencyDecay };
         })
         .sort(compareCandidates)
         .slice(0, cfg.limit);

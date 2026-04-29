@@ -67,7 +67,15 @@ import { extractProfileAgentId, resolveAgentBootstrapDir } from '../config/agent
 import { DEFAULT_ACK_MAX_CHARS, NO_REPLY, shouldSilence } from '../heartbeat/tokens.js';
 import { createTypingController, type TypingController } from './lifecycle/typing.js';
 import { cleanTrailingErrors, sanitizeMessages } from './memory/message-sanitizer.js';
-import { DREAMING_CRON_NAME, DREAMING_CRON_TAG, DREAMING_SWEEP_TOKEN } from './memory/dreaming/constants.js';
+import {
+  DREAMING_CRON_NAME,
+  DREAMING_CRON_TAG,
+  DREAMING_SWEEP_TOKEN,
+  DREAMING_LIGHT_CRON_NAME,
+  DREAMING_LIGHT_SWEEP_TOKEN,
+  DREAMING_REM_CRON_NAME,
+  DREAMING_REM_SWEEP_TOKEN,
+} from './memory/dreaming/constants.js';
 import { resolveDreamingConfig } from './memory/dreaming/config.js';
 import {
   tryApplySessionTranscriptHygiene,
@@ -563,59 +571,97 @@ export class AgentService {
     const dreaming = resolveDreamingConfig(cfg);
     const jobs = await cron.listJobs();
     const managed = jobs.filter(
-      (job) => job.name === DREAMING_CRON_NAME || (job.name?.includes?.(DREAMING_CRON_TAG) ?? false),
+      (job) => job.name?.includes?.(DREAMING_CRON_TAG) ?? false,
     );
 
-    const desiredPayload = { kind: 'agentTurn' as const, message: DREAMING_SWEEP_TOKEN };
-    const desired = {
-      name: DREAMING_CRON_NAME,
-      timezone: dreaming.timezone,
-      sessionTarget: 'isolated' as const,
-      payload: desiredPayload,
-      enabled: true,
-    };
+    // Phase definitions: name → { token, schedule, phaseEnabled }.
+    const phaseSpecs: Array<{
+      cronName: string;
+      token: string;
+      schedule: string;
+      phaseEnabled: boolean;
+    }> = [
+      {
+        cronName: DREAMING_LIGHT_CRON_NAME,
+        token: DREAMING_LIGHT_SWEEP_TOKEN,
+        schedule: dreaming.phases.light.cron,
+        phaseEnabled: dreaming.phases.light.enabled,
+      },
+      {
+        cronName: DREAMING_CRON_NAME,
+        token: DREAMING_SWEEP_TOKEN,
+        schedule: dreaming.phases.deep.cron,
+        phaseEnabled: dreaming.phases.deep.enabled,
+      },
+      {
+        cronName: DREAMING_REM_CRON_NAME,
+        token: DREAMING_REM_SWEEP_TOKEN,
+        schedule: dreaming.phases.rem.cron,
+        phaseEnabled: dreaming.phases.rem.enabled,
+      },
+    ];
 
-    if (!dreaming.enabled || !dreaming.deep.enabled) {
-      // Remove managed jobs when disabled.
+    if (!dreaming.enabled) {
+      // Remove all managed dreaming jobs when globally disabled.
       for (const job of managed) {
         await cron.removeJob(job.id).catch(() => {});
       }
       return;
     }
 
-    if (managed.length === 0) {
-      await cron.addJob(dreaming.frequency, { ...desired } as any);
-      return;
-    }
+    // Reconcile each phase independently.
+    for (const spec of phaseSpecs) {
+      const phaseJobs = managed.filter((job) => job.name === spec.cronName);
 
-    const primary = managed[0]!;
-    // Prune duplicates (best-effort).
-    for (const dup of managed.slice(1)) {
-      await cron.removeJob(dup.id).catch(() => {});
-    }
+      if (!spec.phaseEnabled) {
+        for (const job of phaseJobs) {
+          await cron.removeJob(job.id).catch(() => {});
+        }
+        continue;
+      }
 
-    // Patch if needed (schedule/message/timezone/sessionTarget).
-    const payloadMessage =
-      primary.payload?.kind === 'agentTurn'
-        ? primary.payload.message
-        : (primary.payload as any)?.text;
-    const needsUpdate =
-      primary.schedule !== dreaming.frequency ||
-      (dreaming.timezone ?? null) !== (primary.timezone ?? null) ||
-      primary.sessionTarget !== 'isolated' ||
-      payloadMessage !== DREAMING_SWEEP_TOKEN ||
-      primary.enabled !== true ||
-      primary.name !== DREAMING_CRON_NAME;
+      const desiredPayload = { kind: 'agentTurn' as const, message: spec.token };
 
-    if (needsUpdate) {
-      await cron.updateJob(primary.id, {
-        schedule: dreaming.frequency,
-        timezone: dreaming.timezone ?? undefined,
-        sessionTarget: 'isolated',
-        name: DREAMING_CRON_NAME,
-        payload: desiredPayload,
-        enabled: true,
-      } as any);
+      if (phaseJobs.length === 0) {
+        await cron.addJob(spec.schedule, {
+          name: spec.cronName,
+          timezone: dreaming.timezone,
+          sessionTarget: 'isolated' as const,
+          payload: desiredPayload,
+          enabled: true,
+        } as any);
+        continue;
+      }
+
+      const primary = phaseJobs[0]!;
+      // Prune duplicates (best-effort).
+      for (const dup of phaseJobs.slice(1)) {
+        await cron.removeJob(dup.id).catch(() => {});
+      }
+
+      // Patch if schedule/payload/timezone/name drifted.
+      const payloadMessage =
+        primary.payload?.kind === 'agentTurn'
+          ? primary.payload.message
+          : (primary.payload as any)?.text;
+      const needsUpdate =
+        primary.schedule !== spec.schedule ||
+        (dreaming.timezone ?? null) !== (primary.timezone ?? null) ||
+        primary.sessionTarget !== 'isolated' ||
+        payloadMessage !== spec.token ||
+        primary.enabled !== true ||
+        primary.name !== spec.cronName;
+
+      if (needsUpdate) {
+        await cron.updateJob(primary.id, {
+          schedule: spec.schedule,
+          timezone: dreaming.timezone ?? undefined,
+          sessionTarget: 'isolated',
+          name: spec.cronName,
+          payload: desiredPayload,
+          enabled: true,
+        } as any);
+      }
     }
   }
 

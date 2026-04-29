@@ -1,6 +1,8 @@
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
+export type DreamingPhaseId = 'light' | 'deep' | 'rem';
+
 /** Gateway payload shape for memory/.dreams/last-run.json (deep sweep). */
 export type DreamingLastRunRecord = {
   version: 2;
@@ -31,12 +33,22 @@ export type DreamingLastRunRecord = {
   };
 };
 
+/** Lightweight last-run payload for light / rem phases. */
+export type PhaseLastRun =
+  | { exists: false }
+  | { exists: true; path: string; raw: unknown };
+
 export type DreamingGatewayStatus = {
   workspaceDir: string;
   config: {
     enabled: boolean;
     frequency: string;
     timezone: string;
+    phases: {
+      light: { enabled: boolean; cron: string; lookbackDays: number; limit: number; dedupeSimilarity: number };
+      deep: { enabled: boolean; cron: string; minScore: number; minRecallCount: number; minUniqueQueries: number; limit: number; recencyHalfLifeDays: number; maxAgeDays: number };
+      rem: { enabled: boolean; cron: string; lookbackDays: number; limit: number; minPatternStrength: number };
+    };
     deep: { minScore: number; minRecallCount: number; limit: number };
   };
   storePath: string;
@@ -51,6 +63,8 @@ export type DreamingGatewayStatus = {
   lastRun:
     | { exists: false }
     | { exists: true; path: string; raw: unknown; record: DreamingLastRunRecord | null; parseError: string | null };
+  lightLastRun: PhaseLastRun;
+  remLastRun: PhaseLastRun;
 };
 
 export function dreamingSwrKey(): string {
@@ -67,15 +81,15 @@ export async function postDreamingAction(action: 'reset_store' | 'clear_lock'): 
   await fetchJson(apiUrl('/api/dreaming/action'), { method: 'POST', body: JSON.stringify({ action }) });
 }
 
-export async function postDreamingRunNow(): Promise<{ triggered: boolean; jobId: string }> {
-  const res = await fetchJson<{ ok?: boolean; payload?: { triggered?: boolean; jobId?: string } }>(
+export async function postDreamingRunNow(phase: DreamingPhaseId = 'deep'): Promise<{ triggered: boolean; jobId: string; phase: DreamingPhaseId }> {
+  const res = await fetchJson<{ ok?: boolean; payload?: { triggered?: boolean; jobId?: string; phase?: string } }>(
     apiUrl('/api/dreaming/run'),
-    { method: 'POST', body: JSON.stringify({}) },
+    { method: 'POST', body: JSON.stringify({ phase }) },
   );
   const triggered = Boolean(res.payload?.triggered);
   const jobId = typeof res.payload?.jobId === 'string' ? res.payload.jobId : '';
   if (!triggered || !jobId) throw new Error('Failed to trigger');
-  return { triggered, jobId };
+  return { triggered, jobId, phase };
 }
 
 export type DreamingPreviewItem = {
@@ -88,6 +102,7 @@ export type DreamingPreviewItem = {
   score: number;
   avgScore: number;
   recallCount: number;
+  recencyDecay: number;
   alreadyPromotedByKey: boolean;
   alreadyPromotedByHash: boolean;
   skippedReason: string | null;
@@ -105,5 +120,31 @@ export async function fetchDreamingPreview(limit?: number): Promise<DreamingPrev
   const res = await fetchJson<{ ok?: boolean; payload?: DreamingPreviewResponse }>(apiUrl(`/api/dreaming/preview${q}`));
   if (!res.payload) throw new Error('Missing payload');
   return res.payload;
+}
+
+// ── Event audit log ────────────────────────────────────────────────────
+
+export type DreamingEvent = {
+  timestamp: string;
+  phase: DreamingPhaseId;
+  ok: boolean;
+  reason: string;
+  durationMs: number;
+  // Light-specific
+  scannedEntries?: number;
+  newSignals?: number;
+  deduped?: number;
+  // Deep-specific
+  candidates?: number;
+  applied?: number;
+  // REM-specific
+  patternsDiscovered?: number;
+  entriesAnalyzed?: number;
+};
+
+export async function fetchDreamingEvents(limit = 50): Promise<DreamingEvent[]> {
+  const q = `?limit=${encodeURIComponent(String(limit))}`;
+  const res = await fetchJson<{ ok?: boolean; payload?: { events: DreamingEvent[] } }>(apiUrl(`/api/dreaming/events${q}`));
+  return res.payload?.events ?? [];
 }
 
