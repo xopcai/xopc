@@ -31,6 +31,20 @@ export const DEFAULT_REM_CRON = '0 5 * * 0';
 export const DEFAULT_RECENCY_HALF_LIFE_DAYS = 14;
 export const DEFAULT_MAX_AGE_DAYS = 30;
 
+// ── Scoring weights ────────────────────────────────────────────────────
+
+/** Milliseconds in one day (used for time-decay calculations). */
+export const MS_PER_DAY = 86_400_000;
+
+/** Weight applied to recall-count reinforcement (logarithmic boost). */
+export const REINFORCEMENT_WEIGHT = 0.12;
+
+/** Weight applied to signal-diversity bonus. */
+export const DIVERSITY_WEIGHT = 0.08;
+
+/** Number of signal dimensions used for diversity calculation. */
+export const DIVERSITY_DIMENSION_COUNT = 4;
+
 // ── File paths ─────────────────────────────────────────────────────────
 
 export const DREAMING_DIR_RELATIVE = path.join('memory', '.dreams');

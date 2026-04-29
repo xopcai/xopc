@@ -8,6 +8,7 @@ import {
   SHORT_TERM_PROMOTION_LOCK_RELATIVE,
   SHORT_TERM_RECALL_STORE_RELATIVE,
 } from './constants.js';
+import { buildEntryKey, clamp01, isoDay, normalizeMemoryPath } from './utils.js';
 
 const log = createLogger('Dreaming:Store');
 
@@ -54,30 +55,13 @@ export type DreamingStore = {
 
 type MemoryMatch = Awaited<ReturnType<typeof import('../../prompt/memory/index.js').memorySearch>>[number];
 
-function normalizeMemoryPath(raw: string): string {
-  return raw.replaceAll('\\', '/').replace(/^\.\//, '');
-}
-
 function isDailyWorkspaceMemoryPath(rel: string): boolean {
   const p = normalizeMemoryPath(rel);
   return /^memory\/\d{4}-\d{2}-\d{2}\.md$/i.test(p);
 }
 
-function clampScore(value: number): number {
-  if (!Number.isFinite(value)) return 0;
-  return Math.max(0, Math.min(1, value));
-}
-
-function isoDay(now: Date): string {
-  return now.toISOString().slice(0, 10);
-}
-
 function hashQuery(query: string): string {
   return createHash('sha1').update(query.trim().toLowerCase()).digest('hex').slice(0, 12);
-}
-
-function buildEntryKey(params: { path: string; startLine: number; endLine: number }): string {
-  return `memory:${normalizeMemoryPath(params.path)}:${params.startLine}:${params.endLine}`;
 }
 
 function mergeRecentDistinct(existing: string[], nextValue: string, limit: number): string[] {
@@ -173,7 +157,7 @@ export async function recordDreamingRecalls(params: {
       skipped += 1;
       continue;
     }
-    const score = clampScore(Number(match.score));
+    const score = clamp01(Number(match.score));
     const key = buildEntryKey({ path: file, startLine, endLine });
     const existing = store.entries[key];
     const snippet = lines.length > 0 ? lines.slice(0, 360) : file;

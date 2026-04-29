@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-import { DREAMING_LAST_RUN_RELATIVE, type DreamingPhaseId } from './constants.js';
+import { DREAMING_LAST_RUN_RELATIVE } from './constants.js';
 import type { DreamingDeepConfig, DreamingLightConfig, DreamingRemConfig } from './config.js';
 
 export const DREAMING_LAST_RUN_FORMAT_VERSION = 2 as const;

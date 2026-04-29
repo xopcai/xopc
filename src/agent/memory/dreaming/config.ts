@@ -105,7 +105,7 @@ export function resolveDreamingConfig(cfg: Config | undefined): DreamingResolved
   };
 
   // ── Deep phase ─────────────────────────────────────────────────────
-  const deepRaw = dreaming?.phases?.deep ?? dreaming?.deep ?? {};
+  const deepRaw = dreaming?.phases?.deep ?? {};
   const deep: DreamingDeepConfig = {
     enabled: enabled && deepRaw?.enabled !== false,
     cron: trimmedStringOr(deepRaw?.cron, frequency),
@@ -132,7 +132,6 @@ export function resolveDreamingConfig(cfg: Config | undefined): DreamingResolved
     frequency,
     ...(timezone ? { timezone } : {}),
     phases: { light, deep, rem },
-    // Backward-compat alias:
     deep,
   };
 }
