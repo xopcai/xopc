@@ -1,9 +1,8 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { createHash } from 'node:crypto';
 
 import { createLogger } from '../../../utils/logger.js';
-import { DEFAULT_MAX_AGE_DAYS, DEFAULT_RECENCY_HALF_LIFE_DAYS, MEMORY_MD_FILENAME } from './constants.js';
+import { MEMORY_MD_FILENAME } from './constants.js';
 import {
   loadDreamingStore,
   saveDreamingStore,
@@ -18,6 +17,19 @@ import {
   type DreamingDeepPhaseSkipped,
 } from './last-run.js';
 import type { DreamingDeepConfig } from './config.js';
+import {
+  clamp01,
+  compareCandidatesByScore,
+  computeCandidateScore,
+  extractPromotionMarkers,
+  isContaminatedSnippet,
+  isExpiredEntry,
+  isoDay,
+  readFileLines,
+  resolveDeepDefaults,
+  sliceRange,
+  snippetHash,
+} from './utils.js';
 
 const log = createLogger('Dreaming:Deep');
 
@@ -31,122 +43,12 @@ export type DreamingPromotionCandidate = DreamingStoreEntry & {
   recencyDecay: number;
 };
 
-function clampScore(value: number): number {
-  if (!Number.isFinite(value)) return 0;
-  return Math.max(0, Math.min(1, value));
-}
-
-function formatIsoDay(now: Date): string {
-  return now.toISOString().slice(0, 10);
-}
-
-function compareCandidates(a: DreamingPromotionCandidate, b: DreamingPromotionCandidate): number {
-  if (b.score !== a.score) return b.score - a.score;
-  if (b.recallCount !== a.recallCount) return b.recallCount - a.recallCount;
-  const aMs = Date.parse(a.lastRecalledAt);
-  const bMs = Date.parse(b.lastRecalledAt);
-  if (Number.isFinite(aMs) || Number.isFinite(bMs)) {
-    if (bMs !== aMs) return bMs - aMs;
-  }
-  return a.path.localeCompare(b.path);
-}
-
-function normalizeSnippetForHash(snippet: string): string {
-  return snippet
-    .trim()
-    .replace(/\s+/g, ' ')
-    .replace(/[“”]/g, '"')
-    .replace(/[‘’]/g, "'")
-    .toLowerCase()
-    .slice(0, 512);
-}
-
-function snippetHash(snippet: string): string {
-  const normalized = normalizeSnippetForHash(snippet);
-  return createHash('sha1').update(normalized).digest('hex').slice(0, 12);
-}
 
 function markerForPromotion(key: string, hash: string): string {
   // Quote values to allow spaces/colons in key.
   return `<!-- xopc-memory-promotion key="${key}" hash="${hash}" -->`;
 }
 
-function extractPromotionMarkers(memoryText: string): { keys: Set<string>; hashes: Set<string> } {
-  const keys = new Set<string>();
-  const hashes = new Set<string>();
-
-  // New format: <!-- xopc-memory-promotion key="..." hash="..." -->
-  for (const match of memoryText.matchAll(/<!--\s*xopc-memory-promotion\b([\s\S]*?)-->/gi)) {
-    const body = match[1] ?? '';
-    const k = body.match(/\bkey\s*=\s*"([^"]+)"/i)?.[1]?.trim();
-    const h = body.match(/\bhash\s*=\s*"([^"]+)"/i)?.[1]?.trim();
-    if (k) keys.add(k);
-    if (h) hashes.add(h);
-  }
-
-  // Legacy format: <!-- xopc-memory-promotion:<key> -->
-  for (const match of memoryText.matchAll(/<!--\s*xopc-memory-promotion:([^\n]+?)\s*-->/gi)) {
-    const key = match[1]?.trim();
-    if (key) keys.add(key);
-  }
-
-  return { keys, hashes };
-}
-
-function isContaminatedSnippet(snippet: string): boolean {
-  const s = snippet.trim();
-  if (!s) return true;
-  const lower = s.toLowerCase();
-
-  // Obvious tool/system/prompt artifacts.
-  const patterns: RegExp[] = [
-    /\b(system|assistant|tool)\s*:/i,
-    /<\s*(system|assistant|tool)\b/i,
-    /<!--\s*xopc-memory-promotion\b/i,
-    /tool_call_id|toolcallid|function_call|arguments\s*:\s*\{/i,
-    /"tool"\s*:\s*|\btool_name\b|\btool\b\s*results?/i,
-    /you are (an|a)\s+(ai|assistant)|follow these instructions/i,
-    /begin\s+(system prompt|instructions)|end\s+(system prompt|instructions)/i,
-    /```/i,
-    /\b__xopc_/i,
-  ];
-  if (patterns.some((p) => p.test(s))) return true;
-
-  // JSON-ish blocks or obvious dumps.
-  const braceCount = (s.match(/[{}[\]]/g) ?? []).length;
-  if (braceCount >= 12) return true;
-
-  // Very link-heavy / log-like.
-  const urlCount = (lower.match(/https?:\/\//g) ?? []).length;
-  if (urlCount >= 3) return true;
-
-  return false;
-}
-
-async function readFileLines(fullPath: string): Promise<string[] | null> {
-  try {
-    const raw = await fs.readFile(fullPath, 'utf-8');
-    return raw.split(/\r?\n/);
-  } catch (err) {
-    const code = (err as NodeJS.ErrnoException | undefined)?.code;
-    if (code === 'ENOENT') return null;
-    throw err;
-  }
-}
-
-function sliceRange(lines: string[], startLine: number, endLine: number): string {
-  const startIdx = Math.max(0, startLine - 1);
-  const endIdx = Math.min(lines.length, endLine);
-  if (startIdx >= endIdx) return '';
-  return lines
-    .slice(startIdx, endIdx)
-    .map((l) => l.trim())
-    .filter(Boolean)
-    .join(' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 360);
-}
 
 async function rehydrateSnippet(params: {
   workspaceDir: string;
@@ -163,59 +65,6 @@ async function rehydrateSnippet(params: {
   return { snippet, startLine, endLine };
 }
 
-// ── Time-decay scoring ─────────────────────────────────────────────────
-
-const MS_PER_DAY = 86_400_000;
-
-/**
- * Exponential time-decay multiplier.
- * Returns a value in (0, 1] where 1 means "just now" and approaches 0 as
- * the age exceeds multiple half-lives.
- *
- * Formula: decay = 2 ^ (-ageDays / halfLifeDays)
- */
-function computeRecencyDecay(lastRecalledAtIso: string, nowMs: number, halfLifeDays: number): number {
-  const lastMs = Date.parse(lastRecalledAtIso);
-  if (!Number.isFinite(lastMs)) return 0;
-  const ageDays = Math.max(0, (nowMs - lastMs) / MS_PER_DAY);
-  return Math.pow(2, -ageDays / Math.max(1, halfLifeDays));
-}
-
-/**
- * Check if an entry has expired (older than maxAgeDays since last recall).
- */
-function isExpiredEntry(lastRecalledAtIso: string, nowMs: number, maxAgeDays: number): boolean {
-  const lastMs = Date.parse(lastRecalledAtIso);
-  if (!Number.isFinite(lastMs)) return true;
-  const ageDays = (nowMs - lastMs) / MS_PER_DAY;
-  return ageDays > maxAgeDays;
-}
-
-function resolveDefaultConfig(overrides?: Partial<DreamingDeepConfig>): DreamingDeepConfig {
-  const enabled = overrides?.enabled === true;
-  const minScore = typeof overrides?.minScore === 'number' ? overrides.minScore : 0.8;
-  const minRecallCount =
-    typeof overrides?.minRecallCount === 'number' ? overrides.minRecallCount : 3;
-  const minUniqueQueries =
-    typeof overrides?.minUniqueQueries === 'number' ? overrides.minUniqueQueries : 3;
-  const limit = typeof overrides?.limit === 'number' ? overrides.limit : 10;
-  const recencyHalfLifeDays =
-    typeof overrides?.recencyHalfLifeDays === 'number'
-      ? overrides.recencyHalfLifeDays
-      : DEFAULT_RECENCY_HALF_LIFE_DAYS;
-  const maxAgeDays =
-    typeof overrides?.maxAgeDays === 'number' ? overrides.maxAgeDays : DEFAULT_MAX_AGE_DAYS;
-  return {
-    enabled,
-    cron: typeof overrides?.cron === 'string' ? overrides.cron : '0 3 * * *',
-    minScore: clampScore(minScore),
-    minRecallCount: Math.max(1, Math.floor(minRecallCount)),
-    minUniqueQueries: Math.max(1, Math.floor(minUniqueQueries)),
-    limit: Math.max(0, Math.floor(limit)),
-    recencyHalfLifeDays: Math.max(1, Math.floor(recencyHalfLifeDays)),
-    maxAgeDays: Math.max(1, Math.floor(maxAgeDays)),
-  };
-}
 
 function buildDeepLastRun(base: {
   runId: string;
@@ -257,14 +106,16 @@ export async function runDreamingDeepPromotion(params: {
   applied: number;
   memoryPath: string;
 }> {
-  const cfg = resolveDefaultConfig(params.config);
+  const cfg = resolveDeepDefaults(params.config);
   const now = params.now ?? new Date();
   const startedAt = now.toISOString();
   const runId = `${startedAt}:${process.pid}:${Math.random().toString(16).slice(2)}`;
   const memoryPath = path.join(params.workspaceDir, MEMORY_MD_FILENAME);
   const t0 = Date.now();
 
-  if (!cfg.enabled) {
+  // Early exit for disabled or zero-limit configurations.
+  const earlyExitReason = !cfg.enabled ? 'dreaming disabled' : cfg.limit === 0 ? 'dreaming limit=0' : null;
+  if (earlyExitReason) {
     const finishedAt = new Date().toISOString();
     const empty = emptyDeepPhaseSkipped();
     await writeDreamingDeepLastRun({
@@ -275,32 +126,13 @@ export async function runDreamingDeepPromotion(params: {
         finishedAt,
         t0,
         ok: true,
-        reason: 'dreaming mvp disabled',
+        reason: earlyExitReason,
         config: cfg,
         memoryPath,
         deep: { candidatesRanked: 0, applied: 0, skipped: empty },
       }),
     }).catch(() => undefined);
-    return { ok: true, reason: 'dreaming mvp disabled', candidates: 0, applied: 0, memoryPath };
-  }
-  if (cfg.limit === 0) {
-    const finishedAt = new Date().toISOString();
-    const empty = emptyDeepPhaseSkipped();
-    await writeDreamingDeepLastRun({
-      workspaceDir: params.workspaceDir,
-      lastRun: buildDeepLastRun({
-        runId,
-        startedAt,
-        finishedAt,
-        t0,
-        ok: true,
-        reason: 'dreaming mvp limit=0',
-        config: cfg,
-        memoryPath,
-        deep: { candidatesRanked: 0, applied: 0, skipped: empty },
-      }),
-    }).catch(() => undefined);
-    return { ok: true, reason: 'dreaming mvp limit=0', candidates: 0, applied: 0, memoryPath };
+    return { ok: true, reason: earlyExitReason, candidates: 0, applied: 0, memoryPath };
   }
 
   try {
@@ -319,29 +151,15 @@ export async function runDreamingDeepPromotion(params: {
         // Expire entries older than maxAgeDays since last recall.
         if (isExpiredEntry(e.lastRecalledAt, nowMs, cfg.maxAgeDays)) return false;
         const avg = e.recallCount > 0 ? e.totalScore / e.recallCount : 0;
-        return clampScore(avg) >= cfg.minScore;
+        return clamp01(avg) >= cfg.minScore;
       });
 
       const ranked: DreamingPromotionCandidate[] = all
         .map((e) => {
-          const avgScore = e.recallCount > 0 ? clampScore(e.totalScore / e.recallCount) : 0;
-          // Recall-count reinforcement (mild logarithmic boost).
-          const reinforcement = clampScore(Math.log1p(e.recallCount) / Math.log1p(10)) * 0.12;
-          // Multi-signal bonus: reward entries touched by multiple signal dimensions.
-          const signalDiversity =
-            (e.recallCount > 0 ? 1 : 0) +
-            (e.dailyCount > 0 ? 1 : 0) +
-            (e.groundedCount > 0 ? 1 : 0) +
-            (e.lightHits > 0 ? 1 : 0);
-          const diversityBonus = clampScore(signalDiversity / 4) * 0.08;
-          // Time-decay: exponential decay based on recency half-life.
-          const recencyDecay = computeRecencyDecay(e.lastRecalledAt, nowMs, cfg.recencyHalfLifeDays);
-          // Final score: (base + reinforcement + diversity) * recency decay.
-          const rawScore = avgScore + reinforcement + diversityBonus;
-          const score = clampScore(rawScore * recencyDecay);
+          const { avgScore, score, recencyDecay } = computeCandidateScore(e, nowMs, cfg.recencyHalfLifeDays);
           return { ...e, avgScore, score, recencyDecay };
         })
-        .sort(compareCandidates)
+        .sort(compareCandidatesByScore)
         .slice(0, cfg.limit);
 
       if (ranked.length === 0) {
@@ -353,11 +171,11 @@ export async function runDreamingDeepPromotion(params: {
         if ((err as NodeJS.ErrnoException | undefined)?.code === 'ENOENT') return '';
         throw err;
       });
-    const existingMarkers = extractPromotionMarkers(existing);
+      const existingMarkers = extractPromotionMarkers(existing);
 
       const appliedCandidates: Array<{
         key: string;
-      hash: string;
+        hash: string;
         snippet: string;
         path: string;
         startLine: number;
@@ -422,12 +240,12 @@ export async function runDreamingDeepPromotion(params: {
         };
       }
 
-      const day = formatIsoDay(now);
+      const day = isoDay(now);
       const header = existing.trim().length > 0 ? '' : '# Long-Term Memory\n\n';
       const sectionLines: string[] = ['', `## Promoted From Short-Term Memory (${day})`, ''];
       for (const c of appliedCandidates) {
         const src = `${c.path}:${c.startLine}-${c.endLine}`;
-      sectionLines.push(markerForPromotion(c.key, c.hash));
+        sectionLines.push(markerForPromotion(c.key, c.hash));
         sectionLines.push(
           `- ${c.snippet} [score=${c.score.toFixed(3)} recalls=${c.recallCount} avg=${c.avgScore.toFixed(3)} source=${src}]`,
         );

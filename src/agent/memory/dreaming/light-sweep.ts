@@ -1,6 +1,5 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { createHash } from 'node:crypto';
 
 import { createLogger } from '../../../utils/logger.js';
 import { DREAMING_DIR_RELATIVE } from './constants.js';
@@ -9,9 +8,14 @@ import {
   bumpEntryPhaseSignal,
   loadDreamingStore,
   saveDreamingStore,
-  type DreamingStore,
-  type DreamingStoreEntry,
 } from './short-term-store.js';
+import {
+  buildEntryKey,
+  isoDay,
+  normalizeMemoryPath,
+  normalizeSnippetForHash,
+  snippetHash,
+} from './utils.js';
 import {
   DREAMING_LAST_RUN_FORMAT_VERSION,
   type DreamingLightLastRun,
@@ -21,28 +25,8 @@ const log = createLogger('Dreaming:Light');
 
 // ── Helpers ────────────────────────────────────────────────────────────
 
-function isoDay(now: Date): string {
-  return now.toISOString().slice(0, 10);
-}
-
-function normalizeMemoryPath(raw: string): string {
-  return raw.replaceAll('\\', '/').replace(/^\.\//, '');
-}
-
 function isDailyMemoryFile(filename: string): boolean {
   return /^\d{4}-\d{2}-\d{2}\.md$/i.test(filename);
-}
-
-function normalizeSnippet(text: string): string {
-  return text
-    .trim()
-    .replace(/\s+/g, ' ')
-    .toLowerCase()
-    .slice(0, 512);
-}
-
-function snippetHash(text: string): string {
-  return createHash('sha1').update(normalizeSnippet(text)).digest('hex').slice(0, 12);
 }
 
 /**
@@ -50,8 +34,8 @@ function snippetHash(text: string): string {
  * Fast and deterministic — no embeddings required.
  */
 function trigramSimilarity(textA: string, textB: string): number {
-  const normalizedA = normalizeSnippet(textA);
-  const normalizedB = normalizeSnippet(textB);
+  const normalizedA = normalizeSnippetForHash(textA);
+  const normalizedB = normalizeSnippetForHash(textB);
   if (!normalizedA || !normalizedB) return 0;
   if (normalizedA === normalizedB) return 1;
 
@@ -72,10 +56,6 @@ function buildTrigramSet(text: string): Set<string> {
     grams.add(text.slice(i, i + 3));
   }
   return grams;
-}
-
-function buildEntryKey(params: { path: string; startLine: number; endLine: number }): string {
-  return `memory:${normalizeMemoryPath(params.path)}:${params.startLine}:${params.endLine}`;
 }
 
 // ── Light sweep config defaults ────────────────────────────────────────

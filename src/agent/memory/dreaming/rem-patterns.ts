@@ -1,47 +1,22 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { createHash } from 'node:crypto';
 
 import { createLogger } from '../../../utils/logger.js';
-import { DREAMING_DIR_RELATIVE, DREAMS_MD_FILENAME } from './constants.js';
+import { DREAMING_DIR_RELATIVE, DREAMS_MD_FILENAME, MS_PER_DAY } from './constants.js';
 import type { DreamingRemConfig } from './config.js';
 import {
   bumpEntryPhaseSignal,
   loadDreamingStore,
   saveDreamingStore,
-  type DreamingStore,
   type DreamingStoreEntry,
 } from './short-term-store.js';
+import { isoDay } from './utils.js';
 import {
   DREAMING_LAST_RUN_FORMAT_VERSION,
   type DreamingRemLastRun,
 } from './last-run.js';
 
 const log = createLogger('Dreaming:REM');
-
-// ── Helpers ────────────────────────────────────────────────────────────
-
-const MS_PER_DAY = 86_400_000;
-
-function isoDay(now: Date): string {
-  return now.toISOString().slice(0, 10);
-}
-
-function normalizeMemoryPath(raw: string): string {
-  return raw.replaceAll('\\', '/').replace(/^\.\//, '');
-}
-
-function normalizeForComparison(text: string): string {
-  return text
-    .trim()
-    .replace(/\s+/g, ' ')
-    .toLowerCase()
-    .slice(0, 512);
-}
-
-function buildEntryKey(params: { path: string; startLine: number; endLine: number }): string {
-  return `memory:${normalizeMemoryPath(params.path)}:${params.startLine}:${params.endLine}`;
-}
 
 // ── Pattern types ──────────────────────────────────────────────────────
 
