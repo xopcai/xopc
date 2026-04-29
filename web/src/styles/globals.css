@@ -359,7 +359,7 @@ html.dark {
  * Page-level enter animation — triggered when the top-level route segment changes
  * (AppShell re-keys the Outlet wrapper on routeKey). Keeps the shell layout stable
  * while the incoming page content fades + lifts in. Duration 200ms matches the
- * design system "尺寸/位移变化" spec (§8.2). translateZ(0) avoids sub-pixel jitter.
+ * design system size / displacement-motion spec (§8.2). translateZ(0) avoids sub-pixel jitter.
  */
 @keyframes page-enter {
   from {

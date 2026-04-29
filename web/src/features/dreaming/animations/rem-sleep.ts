@@ -1,12 +1,12 @@
 /**
- * 🌈 REM Sleep — "星图织梦"
+ * 🌈 REM Sleep — "Star-map dreaming"
  *
- * 意象：夜空中散落的星辰（记忆碎片），星星之间开始出现淡紫色的连线
- * ——发现隐藏关联（模式聚类）。连线交汇处绽放微型星云。
- * 壮观的极光幕帘在天际缓缓流动，星群合并时有优雅的吸引-融合动效。
+ * Imagery: Stars (memory shards) scattered in the night sky; faint violet links appear between them—
+ * surfacing hidden ties (pattern clustering). Micro-nebulae bloom at line intersections.
+ * A sweeping aurora curtain drifts along the horizon; clusters merge with soft attract–merge motion.
  *
- * 技术：粒子系统（星点）+ 动态 LineSegments（连线）+ 全屏 shader 背景（极光+星云）。
- * 色调：紫罗兰/极光色 #7c4dff → #e040fb
+ * Technique: Particle stars + dynamic LineSegments + full-screen shader (aurora + nebula).
+ * Palette: violet / aurora #7c4dff → #e040fb.
  */
 import * as THREE from 'three';
 
