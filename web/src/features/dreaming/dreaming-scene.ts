@@ -28,7 +28,11 @@ export class DreamingScene {
   private disposed = false;
   private fadeOpacity = 0;
   private fadeTarget = 0;
-  private readonly fadeSpeed = 2.5; // opacity per second
+  private readonly fadeSpeed = 2.5; // opacity per second (before time scaling)
+  /** Global time scaling for a calmer, meditative feel. */
+  private readonly timeScale = 0.35;
+  /** Accumulated scaled time in seconds. */
+  private t = 0;
 
   constructor(private canvas: HTMLCanvasElement) {
     this.renderer = new THREE.WebGLRenderer({
@@ -72,6 +76,7 @@ export class DreamingScene {
     if (this.currentPhase === phase && this.currentAnimation) return;
 
     this.stopCurrentAnimation();
+    this.t = 0;
 
     const width = this.canvas.clientWidth;
     const height = this.canvas.clientHeight;
@@ -110,8 +115,10 @@ export class DreamingScene {
   private tick = (): void => {
     if (this.disposed) return;
 
-    const delta = this.clock.getDelta();
-    const elapsed = this.clock.getElapsedTime();
+    const rawDelta = this.clock.getDelta();
+    const delta = rawDelta * this.timeScale;
+    this.t += delta;
+    const elapsed = this.t;
 
     // Smooth fade
     if (this.fadeOpacity < this.fadeTarget) {
