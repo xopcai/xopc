@@ -53,6 +53,8 @@ export class GatewaySseConnection {
       'message.sent',
       'session.updated',
       'session.created',
+      'dreaming.phase.start',
+      'dreaming.phase.end',
     ]) {
       this._eventSource.addEventListener(evt, (e: MessageEvent) => {
         this._callbacks.onEvent(evt, e.data as string);
