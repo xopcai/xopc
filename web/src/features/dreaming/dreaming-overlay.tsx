@@ -9,7 +9,6 @@
 import { useCallback, useEffect, useRef } from 'react';
 
 import { cn } from '@/lib/cn';
-import { useThemeStore } from '@/stores/theme-store';
 
 import { DreamingScene } from './dreaming-scene';
 import { useDreamingEvents } from './use-dreaming-events';
@@ -56,29 +55,6 @@ export function DreamingOverlay() {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
-
-  // Force dark mode while dreaming animation is active
-  const savedThemeRef = useRef<'light' | 'dark' | 'system' | null>(null);
-  const setPreference = useThemeStore((s) => s.setPreference);
-  const currentPreference = useThemeStore((s) => s.preference);
-  const resolved = useThemeStore((s) => s.resolved);
-
-  useEffect(() => {
-    if (state.status === 'running') {
-      // Save current theme and force dark if not already dark
-      if (savedThemeRef.current === null) {
-        savedThemeRef.current = currentPreference;
-      }
-      if (resolved !== 'dark') {
-        setPreference('dark');
-      }
-    } else if (state.status === 'idle' && savedThemeRef.current !== null) {
-      // Restore original theme when animation completes
-      const saved = savedThemeRef.current;
-      savedThemeRef.current = null;
-      setPreference(saved);
-    }
-  }, [state.status, resolved, currentPreference, setPreference]);
 
   // Drive animation based on state
   useEffect(() => {
