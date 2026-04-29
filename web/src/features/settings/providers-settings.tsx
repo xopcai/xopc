@@ -12,6 +12,7 @@ import {
   LogIn,
   LogOut,
   Search,
+  Trash2,
   X,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -19,6 +20,7 @@ import { Link } from 'react-router-dom';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import {
   cancelOAuth,
   cleanupOAuthSession,
@@ -30,6 +32,7 @@ import {
 import { CONFIGURED_MODELS_SWR_KEY, fetchConfiguredModelsCached, type ConfiguredModel } from '@/features/chat/registry-api';
 import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
 import {
+  deleteProviderApiKey,
   isMaskedKey,
   mergeProviderRows,
   patchProviderApiKeys,
@@ -570,6 +573,9 @@ function ProviderCredentialRow({
   const [showKey, setShowKey] = useState(false);
   const [copied, setCopied] = useState(false);
   const [revokeError, setRevokeError] = useState<string | null>(null);
+  const [removeLoading, setRemoveLoading] = useState(false);
+  const [removeMessage, setRemoveMessage] = useState<string | null>(null);
+  const [removeConfirmOpen, setRemoveConfirmOpen] = useState(false);
   const masked = isMaskedKey(value);
   const inputValue = masked && !showKey ? '' : value;
   const isOAuthConfigured = row.configured && !masked && Boolean(value);
@@ -680,6 +686,24 @@ function ProviderCredentialRow({
       .then(() => onReload())
       .catch((e) => setRevokeError(e instanceof Error ? e.message : labels.revokeFailed));
   };
+
+  const doRemoveKey = async () => {
+    setRemoveConfirmOpen(false);
+    setRemoveLoading(true);
+    setRemoveMessage(null);
+    try {
+      await deleteProviderApiKey(row.id);
+      setRemoveMessage(labels.removeKeySuccess);
+      onChange(row.id, '');
+      window.setTimeout(() => onReload(), 600);
+    } catch (error) {
+      setRemoveMessage(error instanceof Error ? error.message : labels.removeKeyFailed);
+    } finally {
+      setRemoveLoading(false);
+    }
+  };
+
+  const canRemoveKey = row.configured && masked && activeSrc !== 'env' && activeSrc !== 'extension' && activeSrc !== 'models_json';
 
   const copyKey = async () => {
     if (!value || masked) return;
@@ -862,6 +886,30 @@ function ProviderCredentialRow({
                       </Button>
                     )
                   ) : null}
+                  {canRemoveKey ? (
+                    <>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        className="gap-1 text-red-600 dark:text-red-400"
+                        disabled={removeLoading}
+                        onClick={() => setRemoveConfirmOpen(true)}
+                      >
+                        {removeLoading ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Trash2 className="size-4" aria-hidden />}
+                        {labels.removeKey}
+                      </Button>
+                      <ConfirmDialog
+                        open={removeConfirmOpen}
+                        title={labels.removeKey}
+                        description={interpolate(labels.removeKeyConfirm, { name: row.name })}
+                        confirmLabel={labels.removeKey}
+                        cancelLabel={labels.cancelOAuth}
+                        destructive
+                        onConfirm={() => void doRemoveKey()}
+                        onCancel={() => setRemoveConfirmOpen(false)}
+                      />
+                    </>
+                  ) : null}
                 </div>
               </div>
               {testMessage ? (
@@ -921,6 +969,25 @@ function ProviderCredentialRow({
             >
               <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden />
               <span>{revokeError}</span>
+            </div>
+          ) : null}
+
+          {removeMessage ? (
+            <div
+              className={cn(
+                'flex gap-2 rounded-md px-3 py-2 text-xs',
+                removeMessage === labels.removeKeySuccess
+                  ? 'bg-surface-hover/60 text-fg-muted dark:bg-surface-hover/40'
+                  : 'border border-red-200 bg-red-50 text-red-700 dark:border-red-900/50 dark:bg-red-950/50 dark:text-red-400',
+              )}
+              role="status"
+            >
+              {removeMessage === labels.removeKeySuccess ? (
+                <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />
+              ) : (
+                <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden />
+              )}
+              <span>{removeMessage}</span>
             </div>
           ) : null}
 

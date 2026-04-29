@@ -1575,7 +1575,11 @@
     "submitCode": "Submit",
     "envHint": "API key is set via environment variable. Enter a new key above to override.",
     "maskedStoredHint": "Stored credential is not shown. Enter a new key above to replace it.",
-    "oauthHint": "Use OAuth for secure authentication, or enter an API key manually."
+    "oauthHint": "Use OAuth for secure authentication, or enter an API key manually.",
+    "removeKey": "Remove key",
+    "removeKeyConfirm": "Remove the stored API key for \"{{name}}\"? This cannot be undone.",
+    "removeKeySuccess": "API key removed.",
+    "removeKeyFailed": "Failed to remove key."
   },
   "modelsSettings": {
     "needToken": "Save a gateway token to edit models.json.",

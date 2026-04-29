@@ -17,6 +17,7 @@ import {
   isProviderConfigured,
   PROVIDER_META,
 } from '../../../providers/index.js';
+import { CredentialResolver } from '../../../auth/credentials.js';
 import { getProviderRegistry } from '../../../providers/plugin-registry.js';
 import type { ProviderModelDefinition } from '../../../extensions/types/providers.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
@@ -37,7 +38,7 @@ function mapPluginModel(providerId: string, model: ProviderModelDefinition, avai
 }
 
 export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
-  const { service } = deps;
+  const { service, strictRateLimitMiddleware } = deps;
 
   // GET /api/models-json - Get models.json configuration
   authenticated.get('/api/models-json', async (c) => {
@@ -257,5 +258,25 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
     }
 
     return c.json({ ok: true, payload: { providers: meta } });
+  });
+
+  // DELETE /api/providers/:providerId/key - Remove a provider's stored API key
+  authenticated.delete('/api/providers/:providerId/key', strictRateLimitMiddleware, async (c) => {
+    const providerId = c.req.param('providerId');
+    if (!providerId) {
+      return c.json({ ok: false, error: { message: 'Missing providerId' } }, 400);
+    }
+
+    const normalizedProvider = providerId.toLowerCase();
+    const profileId = `${normalizedProvider}:default`;
+    const resolver = new CredentialResolver();
+
+    try {
+      await resolver.deleteProfile(profileId);
+      return c.json({ ok: true, payload: { deleted: normalizedProvider } });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      return c.json({ ok: false, error: { message: `Failed to delete key: ${errorMessage}` } }, 500);
+    }
   });
 }

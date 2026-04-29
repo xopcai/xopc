@@ -1575,7 +1575,11 @@
     "submitCode": "提交",
     "envHint": "API Key 来自环境变量。在上方输入新 Key 可覆盖。",
     "maskedStoredHint": "已保存的凭据不会显示。在上方输入新 Key 可覆盖。",
-    "oauthHint": "可使用 OAuth 安全登录，或手动填写 API Key。"
+    "oauthHint": "可使用 OAuth 安全登录，或手动填写 API Key。",
+    "removeKey": "移除密钥",
+    "removeKeyConfirm": "确定移除「{{name}}」的已保存 API Key？此操作不可撤销。",
+    "removeKeySuccess": "API Key 已移除。",
+    "removeKeyFailed": "移除失败。"
   },
   "modelsSettings": {
     "needToken": "请先保存网关访问令牌后再编辑 models.json。",
