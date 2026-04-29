@@ -153,6 +153,9 @@ export class LightSleepAnimation implements PhaseAnimation {
       depthWrite: false,
     });
     this.backgroundMesh = createFullscreenQuad(this.backgroundMaterial);
+    // Our scene uses an orthographic camera with width = 2 * aspect.
+    // Scale the quad to cover the full visible width on wide viewports.
+    this.backgroundMesh.scale.set(aspect, 1, 1);
     this.backgroundMesh.renderOrder = 0;
     scene.add(this.backgroundMesh);
 
@@ -287,6 +290,7 @@ export class LightSleepAnimation implements PhaseAnimation {
   resize(width: number, height: number, _aspect: number): void {
     this.backgroundMaterial.uniforms.resolution.value.set(width, height);
     this.particleMaterial.uniforms.baseSize.value = Math.max(4, Math.min(8, width / 200));
+    this.backgroundMesh.scale.set(_aspect, 1, 1);
   }
 
   dispose(): void {

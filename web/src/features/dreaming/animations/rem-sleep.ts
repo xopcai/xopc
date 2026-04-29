@@ -152,6 +152,8 @@ export class RemSleepAnimation implements PhaseAnimation {
       depthWrite: false,
     });
     this.backgroundMesh = createFullscreenQuad(this.backgroundMaterial);
+    // Scale full-screen quad to match orthographic camera width (2 * aspect).
+    this.backgroundMesh.scale.set(aspect, 1, 1);
     this.backgroundMesh.renderOrder = 0;
     scene.add(this.backgroundMesh);
 
@@ -434,6 +436,7 @@ export class RemSleepAnimation implements PhaseAnimation {
   resize(width: number, height: number, aspect: number): void {
     this.aspect = aspect;
     this.backgroundMaterial.uniforms.resolution.value.set(width, height);
+    this.backgroundMesh.scale.set(aspect, 1, 1);
   }
 
   dispose(): void {
