@@ -13,6 +13,7 @@ import {
   SHORT_TERM_RECALL_STORE_RELATIVE,
 } from '../../../agent/memory/dreaming/constants.js';
 import { previewDreamingDeepPromotion } from '../../../agent/memory/dreaming/preview.js';
+import { parseDreamingLastRunFile, type DreamingDeepLastRun } from '../../../agent/memory/dreaming/last-run.js';
 import {
   loadDreamingStore,
   saveDreamingStore,
@@ -46,15 +47,49 @@ async function readLockInfo(workspaceDir: string): Promise<
 
 async function readLastRun(
   workspaceDir: string,
-): Promise<{ exists: false } | { exists: true; path: string; raw: unknown }> {
+): Promise<
+  | { exists: false }
+  | {
+      exists: true;
+      path: string;
+      raw: unknown;
+      record: DreamingDeepLastRun | null;
+      parseError: string | null;
+    }
+> {
   const fullPath = path.join(workspaceDir, DREAMING_LAST_RUN_RELATIVE);
   try {
     const text = await fs.readFile(fullPath, 'utf-8');
-    return { exists: true, path: DREAMING_LAST_RUN_RELATIVE, raw: JSON.parse(text) as unknown };
+    let raw: unknown;
+    try {
+      raw = JSON.parse(text) as unknown;
+    } catch (parseErr) {
+      return {
+        exists: true,
+        path: DREAMING_LAST_RUN_RELATIVE,
+        raw: null,
+        record: null,
+        parseError: parseErr instanceof Error ? parseErr.message : String(parseErr),
+      };
+    }
+    const record = parseDreamingLastRunFile(raw);
+    return {
+      exists: true,
+      path: DREAMING_LAST_RUN_RELATIVE,
+      raw,
+      record,
+      parseError: record ? null : 'Invalid or unsupported last-run.json (expected v2 deep record).',
+    };
   } catch (err) {
     const code = (err as NodeJS.ErrnoException | undefined)?.code;
     if (code === 'ENOENT') return { exists: false };
-    return { exists: true, path: DREAMING_LAST_RUN_RELATIVE, raw: null };
+    return {
+      exists: true,
+      path: DREAMING_LAST_RUN_RELATIVE,
+      raw: null,
+      record: null,
+      parseError: err instanceof Error ? err.message : String(err),
+    };
   }
 }
 

@@ -1,6 +1,36 @@
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
+/** Gateway payload shape for memory/.dreams/last-run.json (deep sweep). */
+export type DreamingLastRunRecord = {
+  version: 2;
+  phase: 'deep';
+  runId: string;
+  startedAt: string;
+  finishedAt: string;
+  durationMs: number;
+  ok: boolean;
+  reason: string;
+  errorMessage?: string;
+  config: {
+    enabled: boolean;
+    minScore: number;
+    minRecallCount: number;
+    limit: number;
+  };
+  memoryPath: string;
+  deep: {
+    candidatesRanked: number;
+    applied: number;
+    skipped: {
+      alreadyPromotedKey: number;
+      rehydrateFailed: number;
+      contaminated: number;
+      hashDuplicate: number;
+    };
+  };
+};
+
 export type DreamingGatewayStatus = {
   workspaceDir: string;
   config: {
@@ -18,7 +48,9 @@ export type DreamingGatewayStatus = {
     lastPromotedAt: string | null;
   };
   lock: | { locked: false } | { locked: true; path: string; content: string; mtimeMs?: number };
-  lastRun: | { exists: false } | { exists: true; path: string; raw: unknown };
+  lastRun:
+    | { exists: false }
+    | { exists: true; path: string; raw: unknown; record: DreamingLastRunRecord | null; parseError: string | null };
 };
 
 export function dreamingSwrKey(): string {
