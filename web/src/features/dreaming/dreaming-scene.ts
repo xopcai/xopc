@@ -182,11 +182,11 @@ export class DreamingScene {
     this.renderer.clear();
 
     if (this.outgoingScene && this.outgoingAnimation && outgoingMix > 0.001) {
-      this.applyGlobalOpacity(this.outgoingScene, this.fadeOpacity * outgoingMix);
+      this.setMaterialsOpacity(this.outgoingAnimation, this.fadeOpacity * outgoingMix);
       this.renderer.render(this.outgoingScene, this.camera);
     }
     if (this.currentScene && this.currentAnimation) {
-      this.applyGlobalOpacity(this.currentScene, this.fadeOpacity * incomingMix);
+      this.setMaterialsOpacity(this.currentAnimation, this.fadeOpacity * incomingMix);
       this.renderer.render(this.currentScene, this.camera);
     }
 
@@ -204,15 +204,11 @@ export class DreamingScene {
     }
   }
 
-  private applyGlobalOpacity(scene: THREE.Scene, opacity: number): void {
-    scene.traverse((child) => {
-      if ((child as THREE.Mesh).material) {
-        const material = (child as THREE.Mesh).material as THREE.ShaderMaterial;
-        if (material.uniforms?.globalOpacity) {
-          material.uniforms.globalOpacity.value = opacity;
-        }
-      }
-    });
+  /** Set globalOpacity on all materials directly — no scene.traverse needed. */
+  private setMaterialsOpacity(animation: PhaseAnimation, opacity: number): void {
+    for (const material of animation.materials) {
+      material.uniforms.globalOpacity.value = opacity;
+    }
   }
 
   private finalizeTransition(): void {
