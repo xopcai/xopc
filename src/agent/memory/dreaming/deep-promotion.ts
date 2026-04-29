@@ -10,16 +10,18 @@ import {
   withDreamingPromotionLock,
   type DreamingStoreEntry,
 } from './short-term-store.js';
-import { DREAMING_LAST_RUN_RELATIVE } from './constants.js';
+import {
+  DREAMING_LAST_RUN_FORMAT_VERSION,
+  emptyDeepPhaseSkipped,
+  writeDreamingDeepLastRun,
+  type DreamingDeepConfig,
+  type DreamingDeepLastRun,
+  type DreamingDeepPhaseSkipped,
+} from './last-run.js';
 
 const log = createLogger('Dreaming:Deep');
 
-export type DreamingDeepConfig = {
-  enabled: boolean;
-  minScore: number;
-  minRecallCount: number;
-  limit: number;
-};
+export type { DreamingDeepConfig } from './last-run.js';
 
 export type DreamingPromotionCandidate = DreamingStoreEntry & {
   avgScore: number;
@@ -172,26 +174,33 @@ function resolveDefaultConfig(overrides?: Partial<DreamingDeepConfig>): Dreaming
   };
 }
 
-type DreamingLastRun = {
-  version: 1;
+function buildDeepLastRun(base: {
   runId: string;
   startedAt: string;
   finishedAt: string;
+  t0: number;
   ok: boolean;
   reason: string;
   config: DreamingDeepConfig;
-  candidates: number;
-  applied: number;
   memoryPath: string;
   errorMessage?: string;
-};
-
-async function writeLastRun(params: { workspaceDir: string; lastRun: DreamingLastRun }): Promise<void> {
-  const fullPath = path.join(params.workspaceDir, DREAMING_LAST_RUN_RELATIVE);
-  await fs.mkdir(path.dirname(fullPath), { recursive: true });
-  const tmp = `${fullPath}.${process.pid}.${Date.now()}.tmp`;
-  await fs.writeFile(tmp, `${JSON.stringify(params.lastRun, null, 2)}\n`, 'utf-8');
-  await fs.rename(tmp, fullPath);
+  deep: DreamingDeepLastRun['deep'];
+}): DreamingDeepLastRun {
+  const durationMs = Math.max(0, Date.now() - base.t0);
+  return {
+    version: DREAMING_LAST_RUN_FORMAT_VERSION,
+    phase: 'deep',
+    runId: base.runId,
+    startedAt: base.startedAt,
+    finishedAt: base.finishedAt,
+    durationMs,
+    ok: base.ok,
+    reason: base.reason,
+    config: base.config,
+    memoryPath: base.memoryPath,
+    ...(base.errorMessage ? { errorMessage: base.errorMessage } : {}),
+    deep: base.deep,
+  };
 }
 
 export async function runDreamingDeepPromotion(params: {
@@ -210,42 +219,43 @@ export async function runDreamingDeepPromotion(params: {
   const startedAt = now.toISOString();
   const runId = `${startedAt}:${process.pid}:${Math.random().toString(16).slice(2)}`;
   const memoryPath = path.join(params.workspaceDir, MEMORY_MD_FILENAME);
+  const t0 = Date.now();
 
   if (!cfg.enabled) {
     const finishedAt = new Date().toISOString();
-    await writeLastRun({
+    const empty = emptyDeepPhaseSkipped();
+    await writeDreamingDeepLastRun({
       workspaceDir: params.workspaceDir,
-      lastRun: {
-        version: 1,
+      lastRun: buildDeepLastRun({
         runId,
         startedAt,
         finishedAt,
+        t0,
         ok: true,
         reason: 'dreaming mvp disabled',
         config: cfg,
-        candidates: 0,
-        applied: 0,
         memoryPath,
-      },
+        deep: { candidatesRanked: 0, applied: 0, skipped: empty },
+      }),
     }).catch(() => undefined);
     return { ok: true, reason: 'dreaming mvp disabled', candidates: 0, applied: 0, memoryPath };
   }
   if (cfg.limit === 0) {
     const finishedAt = new Date().toISOString();
-    await writeLastRun({
+    const empty = emptyDeepPhaseSkipped();
+    await writeDreamingDeepLastRun({
       workspaceDir: params.workspaceDir,
-      lastRun: {
-        version: 1,
+      lastRun: buildDeepLastRun({
         runId,
         startedAt,
         finishedAt,
+        t0,
         ok: true,
         reason: 'dreaming mvp limit=0',
         config: cfg,
-        candidates: 0,
-        applied: 0,
         memoryPath,
-      },
+        deep: { candidatesRanked: 0, applied: 0, skipped: empty },
+      }),
     }).catch(() => undefined);
     return { ok: true, reason: 'dreaming mvp limit=0', candidates: 0, applied: 0, memoryPath };
   }
@@ -275,7 +285,8 @@ export async function runDreamingDeepPromotion(params: {
         .slice(0, cfg.limit);
 
       if (ranked.length === 0) {
-        return { ok: true, reason: 'no eligible candidates', candidates: 0, applied: 0, memoryPath };
+        const z = emptyDeepPhaseSkipped();
+        return { ok: true, reason: 'no eligible candidates', candidates: 0, applied: 0, memoryPath, skipped: z };
       }
 
       const existing = await fs.readFile(memoryPath, 'utf-8').catch((err: unknown) => {
@@ -296,8 +307,10 @@ export async function runDreamingDeepPromotion(params: {
         avgScore: number;
       }> = [];
 
+      const skipped: DreamingDeepPhaseSkipped = emptyDeepPhaseSkipped();
       for (const candidate of ranked) {
-      if (existingMarkers.keys.has(candidate.key)) {
+        if (existingMarkers.keys.has(candidate.key)) {
+          skipped.alreadyPromotedKey += 1;
           // Treat as already applied; mark promotedAt for idempotency and keep going.
           const entry = store.entries[candidate.key];
           if (entry && !entry.promotedAt) {
@@ -307,20 +320,23 @@ export async function runDreamingDeepPromotion(params: {
         }
         const rehydrated = await rehydrateSnippet({ workspaceDir: params.workspaceDir, candidate });
         if (!rehydrated) {
+          skipped.rehydrateFailed += 1;
           continue;
         }
-      if (isContaminatedSnippet(rehydrated.snippet)) {
-        continue;
-      }
-      const hash = snippetHash(rehydrated.snippet);
-      if (existingMarkers.hashes.has(hash)) {
-        // Already promoted (possibly from a different key/line range). Mark promoted for idempotency.
-        const entry = store.entries[candidate.key];
-        if (entry && !entry.promotedAt) {
-          entry.promotedAt = now.toISOString();
+        if (isContaminatedSnippet(rehydrated.snippet)) {
+          skipped.contaminated += 1;
+          continue;
         }
-        continue;
-      }
+        const hash = snippetHash(rehydrated.snippet);
+        if (existingMarkers.hashes.has(hash)) {
+          skipped.hashDuplicate += 1;
+          // Already promoted (possibly from a different key/line range). Mark promoted for idempotency.
+          const entry = store.entries[candidate.key];
+          if (entry && !entry.promotedAt) {
+            entry.promotedAt = now.toISOString();
+          }
+          continue;
+        }
         appliedCandidates.push({
           key: candidate.key,
         hash,
@@ -342,6 +358,7 @@ export async function runDreamingDeepPromotion(params: {
           candidates: ranked.length,
           applied: 0,
           memoryPath,
+          skipped,
         };
       }
 
@@ -384,45 +401,57 @@ export async function runDreamingDeepPromotion(params: {
         candidates: ranked.length,
         applied: appliedCandidates.length,
         memoryPath,
+        skipped,
       };
     });
 
     const finishedAt = new Date().toISOString();
-    await writeLastRun({
+    const empty = emptyDeepPhaseSkipped();
+    const resultSkipped = 'skipped' in result ? result.skipped : empty;
+    await writeDreamingDeepLastRun({
       workspaceDir: params.workspaceDir,
-      lastRun: {
-        version: 1,
+      lastRun: buildDeepLastRun({
         runId,
         startedAt,
         finishedAt,
+        t0,
         ok: result.ok,
         reason: result.reason,
         config: cfg,
-        candidates: result.candidates,
-        applied: result.applied,
         memoryPath: result.memoryPath,
-      },
+        deep: {
+          candidatesRanked: result.candidates,
+          applied: result.applied,
+          skipped: resultSkipped,
+        },
+      }),
     }).catch(() => undefined);
 
-    return result;
+    return {
+      ok: result.ok,
+      reason: result.reason,
+      candidates: result.candidates,
+      applied: result.applied,
+      memoryPath: result.memoryPath,
+    };
   } catch (err) {
     const finishedAt = new Date().toISOString();
     const em = err instanceof Error ? err.message : String(err);
-    await writeLastRun({
+    const z = emptyDeepPhaseSkipped();
+    await writeDreamingDeepLastRun({
       workspaceDir: params.workspaceDir,
-      lastRun: {
-        version: 1,
+      lastRun: buildDeepLastRun({
         runId,
         startedAt,
         finishedAt,
+        t0,
         ok: false,
         reason: 'error',
         config: cfg,
-        candidates: 0,
-        applied: 0,
         memoryPath,
         errorMessage: em,
-      },
+        deep: { candidatesRanked: 0, applied: 0, skipped: z },
+      }),
     }).catch(() => undefined);
     throw err;
   }

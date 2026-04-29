@@ -4,6 +4,7 @@ import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
 import { messages } from '@/i18n/messages';
+import en from '@/i18n/locales/en.json' with { type: 'json' };
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 import { cn } from '@/lib/cn';
@@ -15,6 +16,7 @@ import {
   postDreamingAction,
   postDreamingRunNow,
   type DreamingGatewayStatus,
+  type DreamingLastRunRecord,
   type DreamingPreviewItem,
 } from '@/features/settings/dreaming-api';
 import {
@@ -35,6 +37,70 @@ function rowValueClass(): string {
 function isoShort(v: string | null | undefined): string {
   if (!v) return '—';
   return v.replace('T', ' ').replace('Z', '');
+}
+
+function formatDurationMs(ms: number | undefined): string {
+  if (ms === undefined || !Number.isFinite(ms) || ms < 0) return '—';
+  if (ms < 1000) return `${Math.round(ms)} ms`;
+  return `${(ms / 1000).toFixed(2)} s`;
+}
+
+type DreamingSettingsI18n = (typeof en)['dreamingSettings'];
+
+function LastRunStructuredView({ t, r }: { t: DreamingSettingsI18n; r: DreamingLastRunRecord }) {
+  const s = r.deep?.skipped;
+  return (
+    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+      <div className={settingsFormSectionClassName()}>
+        <div className={rowLabelClass()}>{t.lastRunStatus}</div>
+        <div className={cn(rowValueClass(), r.ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400')}>
+          {r.ok ? t.lastRunSuccess : t.lastRunFailure}
+        </div>
+      </div>
+      <div className={settingsFormSectionClassName()}>
+        <div className={rowLabelClass()}>{t.lastRunDuration}</div>
+        <div className={rowValueClass()}>{formatDurationMs(r.durationMs)}</div>
+      </div>
+      <div className={cn(settingsFormSectionClassName(), 'sm:col-span-2')}>
+        <div className={rowLabelClass()}>{t.lastRunReason}</div>
+        <div className={rowValueClass()}>{r.reason}</div>
+        {r.errorMessage ? (
+          <div className="mt-1 text-xs text-amber-600 dark:text-amber-400">{`${t.lastRunError}: ${r.errorMessage}`}</div>
+        ) : null}
+      </div>
+      <div className={settingsFormSectionClassName()}>
+        <div className={rowLabelClass()}>{t.lastRunRanked}</div>
+        <div className={rowValueClass()}>{String(r.deep?.candidatesRanked ?? '—')}</div>
+      </div>
+      <div className={settingsFormSectionClassName()}>
+        <div className={rowLabelClass()}>{t.lastRunApplied}</div>
+        <div className={rowValueClass()}>{String(r.deep?.applied ?? '—')}</div>
+      </div>
+      {s ? (
+        <div className="sm:col-span-2">
+          <div className="mb-2 text-xs font-medium text-fg">{t.lastRunSkipped}</div>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <div className={settingsFormSectionClassName()}>
+              <div className={rowLabelClass()}>{t.lastRunSkipKey}</div>
+              <div className={rowValueClass()}>{String(s.alreadyPromotedKey)}</div>
+            </div>
+            <div className={settingsFormSectionClassName()}>
+              <div className={rowLabelClass()}>{t.lastRunSkipRehydrate}</div>
+              <div className={rowValueClass()}>{String(s.rehydrateFailed)}</div>
+            </div>
+            <div className={settingsFormSectionClassName()}>
+              <div className={rowLabelClass()}>{t.lastRunSkipContaminated}</div>
+              <div className={rowValueClass()}>{String(s.contaminated)}</div>
+            </div>
+            <div className={settingsFormSectionClassName()}>
+              <div className={rowLabelClass()}>{t.lastRunSkipHash}</div>
+              <div className={rowValueClass()}>{String(s.hashDuplicate)}</div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 function lockStatusLabel(s: DreamingGatewayStatus['lock']): { text: string; className: string } {
@@ -494,9 +560,24 @@ export function DreamingSettingsPanel() {
           <p className="mt-0.5 text-xs text-fg-muted">{t.lastRunHint}</p>
         </div>
         {data?.lastRun?.exists ? (
-          <pre className="max-h-[14rem] overflow-auto rounded-xl border border-edge bg-surface-panel/60 p-3 text-xs text-fg-muted">
-            {JSON.stringify(data.lastRun.raw, null, 2)}
-          </pre>
+          <div className="space-y-3">
+            {data.lastRun.parseError ? (
+              <p className="text-sm text-amber-600 dark:text-amber-400" role="alert">
+                {t.lastRunParseError}
+                {': '}
+                {data.lastRun.parseError}
+              </p>
+            ) : null}
+            {data.lastRun.record ? <LastRunStructuredView t={t} r={data.lastRun.record} /> : null}
+            {data.lastRun.raw !== undefined && data.lastRun.raw !== null ? (
+              <div>
+                <div className="mb-1 text-xs font-medium text-fg-muted">{t.lastRunRaw}</div>
+                <pre className="max-h-[12rem] overflow-auto rounded-xl border border-edge bg-surface-panel/60 p-3 text-xs text-fg-muted">
+                  {JSON.stringify(data.lastRun.raw, null, 2)}
+                </pre>
+              </div>
+            ) : null}
+          </div>
         ) : (
           <p className="text-sm text-fg-muted">{t.lastRunEmpty}</p>
         )}
