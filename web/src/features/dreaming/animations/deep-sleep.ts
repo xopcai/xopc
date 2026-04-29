@@ -81,8 +81,8 @@ const DEEP_BG_FRAGMENT = /* glsl */ `
     float beamAngle = atan(beamPos.x, -beamPos.y);
     float beamDist = length(beamPos);
 
-    // Wide soft cone with internal ray structure
-    float beamEnvelope = exp(-abs(beamAngle) * 4.0) * exp(-beamDist * 0.6);
+    // Wide soft cone with internal ray structure (merged exp calls)
+    float beamEnvelope = exp(-abs(beamAngle) * 4.0 - beamDist * 0.6);
     float rays = (sin(beamAngle * 15.0 + time * 0.3) * 0.3 + 0.7);
     float beam = beamEnvelope * rays;
 
@@ -128,6 +128,7 @@ const DEEP_BG_FRAGMENT = /* glsl */ `
 const STONE_COUNT = 55;
 
 export class DeepSleepAnimation implements PhaseAnimation {
+  readonly materials!: THREE.ShaderMaterial[];
   private backgroundMesh: THREE.Mesh;
   private backgroundMaterial: THREE.ShaderMaterial;
   private stoneSystem: THREE.Points;
@@ -246,6 +247,8 @@ export class DeepSleepAnimation implements PhaseAnimation {
     this.stoneSystem = new THREE.Points(geometry, this.stoneMaterial);
     this.stoneSystem.renderOrder = 1;
     scene.add(this.stoneSystem);
+
+    this.materials = [this.backgroundMaterial, this.stoneMaterial];
   }
 
   private resetStone(index: number, aspect: number, initialSpread = false): void {
@@ -278,6 +281,7 @@ export class DeepSleepAnimation implements PhaseAnimation {
     const aspect = this.backgroundMaterial.uniforms.resolution.value.x /
       Math.max(1, this.backgroundMaterial.uniforms.resolution.value.y);
 
+    let stoneWasReset = false;
     for (let i = 0; i < STONE_COUNT; i++) {
       const idx = i * 3;
       const isChosen = this.stoneChosen[i] > 0.5;
@@ -309,6 +313,7 @@ export class DeepSleepAnimation implements PhaseAnimation {
       // Reset chosen stones when above viewport
       if (isChosen && this.stonePositions[idx + 1] > 1.4) {
         this.resetStone(i, aspect);
+        stoneWasReset = true;
       }
     }
 
@@ -316,8 +321,12 @@ export class DeepSleepAnimation implements PhaseAnimation {
     posAttr.needsUpdate = true;
     const brightAttr = this.stoneSystem.geometry.getAttribute('brightness') as THREE.BufferAttribute;
     brightAttr.needsUpdate = true;
-    const chosenAttr = this.stoneSystem.geometry.getAttribute('chosen') as THREE.BufferAttribute;
-    chosenAttr.needsUpdate = true;
+    // chosen/size/phase attributes only change on resetStone — skip upload when nothing changed.
+    if (stoneWasReset) {
+      (this.stoneSystem.geometry.getAttribute('chosen') as THREE.BufferAttribute).needsUpdate = true;
+      (this.stoneSystem.geometry.getAttribute('size') as THREE.BufferAttribute).needsUpdate = true;
+      (this.stoneSystem.geometry.getAttribute('phase') as THREE.BufferAttribute).needsUpdate = true;
+    }
   }
 
   resize(width: number, height: number, aspect: number): void {
@@ -326,7 +335,7 @@ export class DeepSleepAnimation implements PhaseAnimation {
   }
 
   dispose(): void {
-    this.backgroundMesh.geometry.dispose();
+    // Background mesh uses shared geometry — do not dispose it.
     this.backgroundMaterial.dispose();
     this.stoneSystem.geometry.dispose();
     this.stoneMaterial.dispose();

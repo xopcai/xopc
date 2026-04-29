@@ -51,13 +51,12 @@ const RIPPLE_FRAGMENT = /* glsl */ `
   // Ripple from a specific center point with birth time
   float rippleFrom(vec2 pos, vec2 center, float birthTime, float currentTime) {
     float age = currentTime - birthTime;
-    if (age < 0.0) return 0.0;
+    float alive = step(0.0, age); // 0 when age < 0, 1 otherwise (replaces if branch)
     float dist = length(pos - center);
-    float speed = 0.8;
-    float wavePos = dist - age * speed;
+    float wavePos = dist - age * 0.8;
     // Expanding ring that decays over time
-    float wave = sin(wavePos * 25.0) * exp(-dist * 2.0) * exp(-age * 0.4);
-    return wave * smoothstep(0.0, 0.5, age);
+    float wave = sin(wavePos * 25.0) * exp(-dist * 2.0 - age * 0.4);
+    return wave * smoothstep(0.0, 0.5, age) * alive;
   }
 
   void main() {
@@ -126,6 +125,7 @@ const RIPPLE_FRAGMENT = /* glsl */ `
 const FRAGMENT_COUNT = 80;
 
 export class LightSleepAnimation implements PhaseAnimation {
+  readonly materials!: THREE.ShaderMaterial[];
   private backgroundMesh: THREE.Mesh;
   private backgroundMaterial: THREE.ShaderMaterial;
   private particleSystem: THREE.Points;
@@ -159,7 +159,8 @@ export class LightSleepAnimation implements PhaseAnimation {
     this.backgroundMesh.renderOrder = 0;
     scene.add(this.backgroundMesh);
 
-    // Floating fragment particles — lotus petal-like text scraps
+    // Floating fragment particles — lotus petal-like text scraps (initialized below)
+    // materials array populated after particleMaterial is created
     this.particlePositions = new Float32Array(FRAGMENT_COUNT * 3);
     this.particleVelocities = new Float32Array(FRAGMENT_COUNT * 3);
     this.particleAlphas = new Float32Array(FRAGMENT_COUNT);
@@ -236,6 +237,8 @@ export class LightSleepAnimation implements PhaseAnimation {
     this.particleSystem = new THREE.Points(geometry, this.particleMaterial);
     this.particleSystem.renderOrder = 1;
     scene.add(this.particleSystem);
+
+    this.materials = [this.backgroundMaterial, this.particleMaterial];
   }
 
   private resetParticle(index: number, aspect: number, initialSpread: boolean): void {
@@ -294,7 +297,7 @@ export class LightSleepAnimation implements PhaseAnimation {
   }
 
   dispose(): void {
-    this.backgroundMesh.geometry.dispose();
+    // Background mesh uses shared geometry — do not dispose it.
     this.backgroundMaterial.dispose();
     this.particleSystem.geometry.dispose();
     this.particleMaterial.dispose();

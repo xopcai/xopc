@@ -62,13 +62,13 @@ const STAR_BG_FRAGMENT = /* glsl */ `
       float scale = 80.0 + float(layer) * 40.0;
       vec2 grid = floor(uv * scale);
       float starHash = hash(grid + float(layer) * 17.3);
-      if (starHash > 0.97) {
-        vec2 starPos = (grid + 0.5) / scale;
-        float dist = length((uv - starPos) * vec2(aspect, 1.0)) * scale;
-        float twinkle = sin(time * (1.5 + starHash * 3.0) + starHash * 20.0) * 0.4 + 0.6;
-        float brightness = exp(-dist * dist * 4.0) * twinkle * (0.3 + starHash * 0.7);
-        bg += vec3(0.6, 0.5, 0.9) * brightness * 0.3;
-      }
+      // Use step() instead of if-branch for GPU-friendly branchless execution
+      float isVisible = step(0.97, starHash);
+      vec2 starPos = (grid + 0.5) / scale;
+      float dist = length((uv - starPos) * vec2(aspect, 1.0)) * scale;
+      float twinkle = sin(time * (1.5 + starHash * 3.0) + starHash * 20.0) * 0.4 + 0.6;
+      float brightness = exp(-dist * dist * 4.0) * twinkle * (0.3 + starHash * 0.7);
+      bg += vec3(0.6, 0.5, 0.9) * brightness * 0.3 * isVisible;
     }
 
     // Nebula clouds: rich ink-wash style cosmic gas
@@ -115,6 +115,7 @@ const STAR_COUNT = 90;
 const MAX_CONNECTIONS = 160;
 
 export class RemSleepAnimation implements PhaseAnimation {
+  readonly materials!: THREE.ShaderMaterial[];
   private backgroundMesh: THREE.Mesh;
   private backgroundMaterial: THREE.ShaderMaterial;
   private starSystem: THREE.Points;
@@ -131,6 +132,10 @@ export class RemSleepAnimation implements PhaseAnimation {
   private lineAlphas: Float32Array;
   private connectionThreshold = 0.3;
   private aspect = 1;
+
+  /** Spatial grid for O(n·k) connection search instead of O(n²). */
+  private spatialGrid = new Map<number, number[]>();
+  private readonly gridCellSize = 0.6;
 
   constructor(
     private scene: THREE.Scene,
@@ -319,6 +324,8 @@ export class RemSleepAnimation implements PhaseAnimation {
     this.lineSystem = new THREE.LineSegments(lineGeometry, this.lineMaterial);
     this.lineSystem.renderOrder = 1;
     scene.add(this.lineSystem);
+
+    this.materials = [this.backgroundMaterial, this.starMaterial, this.lineMaterial];
   }
 
   update(elapsed: number, delta: number): void {
@@ -382,46 +389,93 @@ export class RemSleepAnimation implements PhaseAnimation {
     this.connectionThreshold = 0.2 + Math.min(elapsed * 0.008, 0.3) + Math.sin(elapsed * 0.25) * 0.06;
     this.connectionThreshold = Math.min(this.connectionThreshold, 0.6);
 
-    this.updateConnections(elapsed);
+    this.updateConnections();
   }
 
-  private updateConnections(_elapsed: number): void {
+  /** Build spatial hash grid for efficient neighbor queries. */
+  private buildSpatialGrid(): void {
+    this.spatialGrid.clear();
+    const invCell = 1 / this.gridCellSize;
+    for (let i = 0; i < STAR_COUNT; i++) {
+      const cellX = Math.floor(this.starPositions[i * 3] * invCell);
+      const cellY = Math.floor(this.starPositions[i * 3 + 1] * invCell);
+      const key = cellX * 73856093 + cellY * 19349663; // Spatial hash
+      const bucket = this.spatialGrid.get(key);
+      if (bucket) {
+        bucket.push(i);
+      } else {
+        this.spatialGrid.set(key, [i]);
+      }
+    }
+  }
+
+  private updateConnections(): void {
+    this.buildSpatialGrid();
     let lineIndex = 0;
 
+    // Pre-compute squared thresholds to avoid sqrt in inner loop
+    const baseThresholdSq = this.connectionThreshold * this.connectionThreshold;
+    const clusterThreshold = this.connectionThreshold * 1.4;
+    const clusterThresholdSq = clusterThreshold * clusterThreshold;
+    const invCell = 1 / this.gridCellSize;
+
+    // Track which pairs we've already processed to avoid duplicates
+    const processed = new Set<number>();
+
     for (let i = 0; i < STAR_COUNT && lineIndex < MAX_CONNECTIONS; i++) {
-      for (let j = i + 1; j < STAR_COUNT && lineIndex < MAX_CONNECTIONS; j++) {
-        const ix = i * 3;
-        const jx = j * 3;
-        const dx = this.starPositions[ix] - this.starPositions[jx];
-        const dy = this.starPositions[ix + 1] - this.starPositions[jx + 1];
-        const distSquared = dx * dx + dy * dy;
+      const ix = i * 3;
+      const px = this.starPositions[ix];
+      const py = this.starPositions[ix + 1];
+      const cellX = Math.floor(px * invCell);
+      const cellY = Math.floor(py * invCell);
+      const clusterI = this.starCluster[i];
 
-        // Same-cluster stars connect more easily
-        const sameCluster = this.starCluster[i] >= 0 && this.starCluster[i] === this.starCluster[j];
-        const threshold = sameCluster
-          ? this.connectionThreshold * 1.4
-          : this.connectionThreshold;
+      // Check 3x3 neighboring cells
+      for (let dx = -1; dx <= 1 && lineIndex < MAX_CONNECTIONS; dx++) {
+        for (let dy = -1; dy <= 1 && lineIndex < MAX_CONNECTIONS; dy++) {
+          const neighborKey = (cellX + dx) * 73856093 + (cellY + dy) * 19349663;
+          const bucket = this.spatialGrid.get(neighborKey);
+          if (!bucket) continue;
 
-        if (distSquared < threshold * threshold) {
-          const dist = Math.sqrt(distSquared);
-          let lineAlpha = 1.0 - dist / threshold;
-          // Same-cluster connections are brighter
-          if (sameCluster) lineAlpha *= 1.3;
-          lineAlpha = Math.min(lineAlpha, 1.0);
+          for (let bi = 0; bi < bucket.length && lineIndex < MAX_CONNECTIONS; bi++) {
+            const j = bucket[bi];
+            if (j <= i) continue; // Only process each pair once (j > i)
 
-          const offset = lineIndex * 6;
-          this.linePositions[offset] = this.starPositions[ix];
-          this.linePositions[offset + 1] = this.starPositions[ix + 1];
-          this.linePositions[offset + 2] = 0;
-          this.linePositions[offset + 3] = this.starPositions[jx];
-          this.linePositions[offset + 4] = this.starPositions[jx + 1];
-          this.linePositions[offset + 5] = 0;
+            // Deduplicate — a star can appear in overlapping neighbor queries
+            const pairKey = i * STAR_COUNT + j;
+            if (processed.has(pairKey)) continue;
+            processed.add(pairKey);
 
-          const alphaOffset = lineIndex * 2;
-          this.lineAlphas[alphaOffset] = lineAlpha * this.starBrightness[i];
-          this.lineAlphas[alphaOffset + 1] = lineAlpha * this.starBrightness[j];
+            const jx = j * 3;
+            const ddx = px - this.starPositions[jx];
+            const ddy = py - this.starPositions[jx + 1];
+            const distSq = ddx * ddx + ddy * ddy;
 
-          lineIndex++;
+            const sameCluster = clusterI >= 0 && clusterI === this.starCluster[j];
+            const thresholdSq = sameCluster ? clusterThresholdSq : baseThresholdSq;
+
+            if (distSq < thresholdSq) {
+              const dist = Math.sqrt(distSq);
+              const threshold = sameCluster ? clusterThreshold : this.connectionThreshold;
+              let lineAlpha = 1.0 - dist / threshold;
+              if (sameCluster) lineAlpha *= 1.3;
+              lineAlpha = Math.min(lineAlpha, 1.0);
+
+              const offset = lineIndex * 6;
+              this.linePositions[offset] = px;
+              this.linePositions[offset + 1] = py;
+              this.linePositions[offset + 2] = 0;
+              this.linePositions[offset + 3] = this.starPositions[jx];
+              this.linePositions[offset + 4] = this.starPositions[jx + 1];
+              this.linePositions[offset + 5] = 0;
+
+              const alphaOffset = lineIndex * 2;
+              this.lineAlphas[alphaOffset] = lineAlpha * this.starBrightness[i];
+              this.lineAlphas[alphaOffset + 1] = lineAlpha * this.starBrightness[j];
+
+              lineIndex++;
+            }
+          }
         }
       }
     }
@@ -440,7 +494,7 @@ export class RemSleepAnimation implements PhaseAnimation {
   }
 
   dispose(): void {
-    this.backgroundMesh.geometry.dispose();
+    // Background mesh uses shared geometry — do not dispose it.
     this.backgroundMaterial.dispose();
     this.starSystem.geometry.dispose();
     this.starMaterial.dispose();
@@ -449,5 +503,6 @@ export class RemSleepAnimation implements PhaseAnimation {
     this.scene.remove(this.backgroundMesh);
     this.scene.remove(this.starSystem);
     this.scene.remove(this.lineSystem);
+    this.spatialGrid.clear();
   }
 }
