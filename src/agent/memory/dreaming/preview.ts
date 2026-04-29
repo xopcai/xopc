@@ -2,9 +2,9 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 
-import type { DreamingDeepConfig } from './deep-promotion.js';
+import type { DreamingDeepConfig } from './config.js';
+import { DEFAULT_MAX_AGE_DAYS, DEFAULT_RECENCY_HALF_LIFE_DAYS, MEMORY_MD_FILENAME } from './constants.js';
 import { loadDreamingStore, type DreamingStoreEntry } from './short-term-store.js';
-import { MEMORY_MD_FILENAME } from './constants.js';
 
 type PreviewItem = {
   key: string;
@@ -16,6 +16,7 @@ type PreviewItem = {
   score: number;
   avgScore: number;
   recallCount: number;
+  recencyDecay: number;
   alreadyPromotedByKey: boolean;
   alreadyPromotedByHash: boolean;
   skippedReason: string | null;
@@ -116,16 +117,41 @@ function isContaminatedSnippet(snippet: string): boolean {
   return false;
 }
 
+// ── Time-decay scoring (aligned with deep-promotion.ts) ────────────────
+
+const MS_PER_DAY = 86_400_000;
+
+function computeRecencyDecay(lastRecalledAtIso: string, nowMs: number, halfLifeDays: number): number {
+  const lastMs = Date.parse(lastRecalledAtIso);
+  if (!Number.isFinite(lastMs)) return 0;
+  const ageDays = Math.max(0, (nowMs - lastMs) / MS_PER_DAY);
+  return Math.pow(2, -ageDays / Math.max(1, halfLifeDays));
+}
+
+function isExpiredEntry(lastRecalledAtIso: string, nowMs: number, maxAgeDays: number): boolean {
+  const lastMs = Date.parse(lastRecalledAtIso);
+  if (!Number.isFinite(lastMs)) return true;
+  const ageDays = (nowMs - lastMs) / MS_PER_DAY;
+  return ageDays > maxAgeDays;
+}
+
 function resolveDefaultConfig(overrides?: Partial<DreamingDeepConfig>): DreamingDeepConfig {
   const enabled = overrides?.enabled === true;
   const minScore = typeof overrides?.minScore === 'number' ? overrides.minScore : 0.8;
   const minRecallCount = typeof overrides?.minRecallCount === 'number' ? overrides.minRecallCount : 3;
+  const minUniqueQueries = typeof overrides?.minUniqueQueries === 'number' ? overrides.minUniqueQueries : 3;
   const limit = typeof overrides?.limit === 'number' ? overrides.limit : 10;
+  const recencyHalfLifeDays = typeof overrides?.recencyHalfLifeDays === 'number' ? overrides.recencyHalfLifeDays : DEFAULT_RECENCY_HALF_LIFE_DAYS;
+  const maxAgeDays = typeof overrides?.maxAgeDays === 'number' ? overrides.maxAgeDays : DEFAULT_MAX_AGE_DAYS;
   return {
     enabled,
+    cron: typeof overrides?.cron === 'string' ? overrides.cron : '0 3 * * *',
     minScore: clamp01(minScore),
     minRecallCount: Math.max(1, Math.floor(minRecallCount)),
+    minUniqueQueries: Math.max(1, Math.floor(minUniqueQueries)),
     limit: Math.max(0, Math.floor(limit)),
+    recencyHalfLifeDays: Math.max(1, Math.floor(recencyHalfLifeDays)),
+    maxAgeDays: Math.max(1, Math.floor(maxAgeDays)),
   };
 }
 
@@ -133,17 +159,22 @@ export async function previewDreamingDeepPromotion(params: {
   workspaceDir: string;
   config?: Partial<DreamingDeepConfig>;
   limit?: number;
+  now?: Date;
 }): Promise<{ ok: boolean; reason: string; items: PreviewItem[]; memoryPath: string }> {
   const cfg = resolveDefaultConfig(params.config);
   const memoryPath = path.join(params.workspaceDir, MEMORY_MD_FILENAME);
   if (!cfg.enabled) return { ok: true, reason: 'dreaming disabled', items: [], memoryPath };
 
   const { store } = await loadDreamingStore({ workspaceDir: params.workspaceDir });
+  const nowMs = (params.now ?? new Date()).getTime();
+
   const all = Object.values(store.entries ?? {}).filter((e): e is DreamingStoreEntry => {
     if (!e || typeof e !== 'object') return false;
     if (e.promotedAt) return false;
     if (!e.path || !e.path.startsWith('memory/')) return false;
     if (e.recallCount < cfg.minRecallCount) return false;
+    if ((e.queryHashes?.length ?? 0) < cfg.minUniqueQueries) return false;
+    if (isExpiredEntry(e.lastRecalledAt, nowMs, cfg.maxAgeDays)) return false;
     const avg = e.recallCount > 0 ? e.totalScore / e.recallCount : 0;
     return clamp01(avg) >= cfg.minScore;
   });
@@ -151,9 +182,21 @@ export async function previewDreamingDeepPromotion(params: {
   const ranked = all
     .map((e) => {
       const avgScore = e.recallCount > 0 ? clamp01(e.totalScore / e.recallCount) : 0;
+      // Recall-count reinforcement (mild logarithmic boost).
       const reinforcement = clamp01(Math.log1p(e.recallCount) / Math.log1p(10)) * 0.12;
-      const score = clamp01(avgScore + reinforcement);
-      return { ...e, avgScore, score };
+      // Multi-signal bonus: reward entries touched by multiple signal dimensions.
+      const signalDiversity =
+        (e.recallCount > 0 ? 1 : 0) +
+        (e.dailyCount > 0 ? 1 : 0) +
+        (e.groundedCount > 0 ? 1 : 0) +
+        (e.lightHits > 0 ? 1 : 0);
+      const diversityBonus = clamp01(signalDiversity / 4) * 0.08;
+      // Time-decay: exponential decay based on recency half-life.
+      const recencyDecay = computeRecencyDecay(e.lastRecalledAt, nowMs, cfg.recencyHalfLifeDays);
+      // Final score: (base + reinforcement + diversity) * recency decay.
+      const rawScore = avgScore + reinforcement + diversityBonus;
+      const score = clamp01(rawScore * recencyDecay);
+      return { ...e, avgScore, score, recencyDecay };
     })
     .sort(compare);
 
@@ -181,6 +224,7 @@ export async function previewDreamingDeepPromotion(params: {
         score: candidate.score,
         avgScore: candidate.avgScore,
         recallCount: candidate.recallCount,
+        recencyDecay: candidate.recencyDecay,
         alreadyPromotedByKey: true,
         alreadyPromotedByHash: false,
         skippedReason: 'already promoted (key)',
@@ -208,6 +252,7 @@ export async function previewDreamingDeepPromotion(params: {
       score: candidate.score,
       avgScore: candidate.avgScore,
       recallCount: candidate.recallCount,
+      recencyDecay: candidate.recencyDecay,
       alreadyPromotedByKey: false,
       alreadyPromotedByHash,
       skippedReason: alreadyPromotedByHash ? 'already promoted (hash)' : null,

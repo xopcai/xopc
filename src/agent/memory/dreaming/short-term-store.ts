@@ -17,11 +17,30 @@ export type DreamingStoreEntry = {
   startLine: number;
   endLine: number;
   snippet: string;
+
+  // ── Signal dimensions ────────────────────────────────────────────────
+  /** Number of times this snippet was returned by a memory recall query. */
   recallCount: number;
+  /** Number of times recorded from daily log scanning (light sweep). */
+  dailyCount: number;
+  /** Number of times replayed from grounded context (agent-initiated). */
+  groundedCount: number;
+  /** Number of times the light phase touched this entry. */
+  lightHits: number;
+  /** Number of times the REM phase touched this entry. */
+  remHits: number;
+  /** Cross-phase hit count (light + deep + rem combined touches). */
+  phaseHitCount: number;
+  /** Weighted aggregate of all signal dimensions. */
+  totalSignalCount: number;
+
+  // ── Score tracking ───────────────────────────────────────────────────
   totalScore: number;
   maxScore: number;
   queryHashes: string[];
   recallDays: string[];
+
+  // ── Timestamps ───────────────────────────────────────────────────────
   firstRecalledAt: string;
   lastRecalledAt: string;
   promotedAt?: string;
@@ -164,6 +183,12 @@ export async function recordDreamingRecalls(params: {
           ...existing,
           snippet,
           recallCount: Math.max(0, Math.floor(existing.recallCount + 1)),
+          dailyCount: existing.dailyCount ?? 0,
+          groundedCount: existing.groundedCount ?? 0,
+          lightHits: existing.lightHits ?? 0,
+          remHits: existing.remHits ?? 0,
+          phaseHitCount: existing.phaseHitCount ?? 0,
+          totalSignalCount: Math.max(0, (existing.totalSignalCount ?? existing.recallCount ?? 0) + 1),
           totalScore: Math.max(0, existing.totalScore + score),
           maxScore: Math.max(existing.maxScore, score),
           queryHashes: mergeQueryHashes(existing.queryHashes ?? [], qHash),
@@ -177,6 +202,12 @@ export async function recordDreamingRecalls(params: {
           endLine,
           snippet,
           recallCount: 1,
+          dailyCount: 0,
+          groundedCount: 0,
+          lightHits: 0,
+          remHits: 0,
+          phaseHitCount: 0,
+          totalSignalCount: 1,
           totalScore: score,
           maxScore: score,
           queryHashes: [qHash],
@@ -248,5 +279,24 @@ export async function saveDreamingStore(params: {
   store: DreamingStore;
 }): Promise<void> {
   await writeStore(params.workspaceDir, params.store);
+}
+
+// ── Phase-level signal helpers ─────────────────────────────────────────
+
+type PhaseSignalField = 'dailyCount' | 'groundedCount' | 'lightHits' | 'remHits';
+
+/**
+ * Increment a phase-specific signal counter on an existing store entry.
+ * Also bumps `phaseHitCount` and `totalSignalCount`.
+ * Returns `true` if the entry existed and was updated.
+ */
+export function bumpEntryPhaseSignal(
+  entry: DreamingStoreEntry,
+  field: PhaseSignalField,
+  increment = 1,
+): void {
+  entry[field] = (entry[field] ?? 0) + increment;
+  entry.phaseHitCount = (entry.phaseHitCount ?? 0) + increment;
+  entry.totalSignalCount = (entry.totalSignalCount ?? 0) + increment;
 }
 

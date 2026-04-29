@@ -30,9 +30,16 @@ import {
 } from '../../channels/attachments/inbound-persist.js';
 import { expandAtFileMentionsInPlainText } from '../context/expand-at-file-mentions.js';
 import { resolveInboundImageContentParts } from '../image/inbound-image-handling.js';
-import { DREAMING_SWEEP_TOKEN } from '../memory/dreaming/constants.js';
+import {
+  DREAMING_SWEEP_TOKEN,
+  DREAMING_LIGHT_SWEEP_TOKEN,
+  DREAMING_REM_SWEEP_TOKEN,
+} from '../memory/dreaming/constants.js';
 import { resolveDreamingConfig } from '../memory/dreaming/config.js';
 import { runDreamingDeepPromotion } from '../memory/dreaming/deep-promotion.js';
+import { appendDreamingEvent, type DreamingEvent } from '../memory/dreaming/events.js';
+import { runLightSweep } from '../memory/dreaming/light-sweep.js';
+import { runRemPatterns } from '../memory/dreaming/rem-patterns.js';
 
 const log = createLogger('AgentOrchestrator');
 
@@ -112,25 +119,50 @@ export class AgentOrchestrator {
 
     await this.hydrateSessionWorkspaceFromStore?.(sessionKey);
 
-    // Dreaming: short-circuit cron-triggered sweep token into a maintenance run.
+    // Dreaming: short-circuit cron-triggered sweep tokens into maintenance runs.
     // This avoids spending LLM tokens for scheduled memory consolidation.
     if (
       typeof msg.content === 'string' &&
-      msg.content.includes(DREAMING_SWEEP_TOKEN) &&
       (sessionKey.startsWith('cron:') || context.channel === 'cron')
     ) {
-      const workspaceDir = this.agentManager.getResolvedWorkspaceForSession(sessionKey);
-      const resolved = resolveDreamingConfig(this.getConfig?.());
-      await runDreamingDeepPromotion({
-        workspaceDir,
-        config: {
-          enabled: resolved.deep.enabled,
-          minScore: resolved.deep.minScore,
-          minRecallCount: resolved.deep.minRecallCount,
-          limit: resolved.deep.limit,
-        },
-      });
-      return;
+      const content = msg.content;
+      const isDreamingSweep =
+        content.includes(DREAMING_SWEEP_TOKEN) ||
+        content.includes(DREAMING_LIGHT_SWEEP_TOKEN) ||
+        content.includes(DREAMING_REM_SWEEP_TOKEN);
+
+      if (isDreamingSweep) {
+        const workspaceDir = this.agentManager.getResolvedWorkspaceForSession(sessionKey);
+        const resolved = resolveDreamingConfig(this.getConfig?.());
+        const t0 = Date.now();
+
+        if (content.includes(DREAMING_LIGHT_SWEEP_TOKEN)) {
+          const result = await runLightSweep({ workspaceDir, config: resolved.phases.light });
+          const event: DreamingEvent = {
+            timestamp: new Date().toISOString(), phase: 'light',
+            ok: result.ok, reason: result.reason, durationMs: Date.now() - t0,
+            scannedEntries: result.scannedEntries, newSignals: result.newSignals, deduped: result.deduped,
+          };
+          await appendDreamingEvent(workspaceDir, event);
+        } else if (content.includes(DREAMING_REM_SWEEP_TOKEN)) {
+          const result = await runRemPatterns({ workspaceDir, config: resolved.phases.rem });
+          const event: DreamingEvent = {
+            timestamp: new Date().toISOString(), phase: 'rem',
+            ok: result.ok, reason: result.reason, durationMs: Date.now() - t0,
+            patternsDiscovered: result.patternsDiscovered, entriesAnalyzed: result.entriesAnalyzed,
+          };
+          await appendDreamingEvent(workspaceDir, event);
+        } else {
+          const result = await runDreamingDeepPromotion({ workspaceDir, config: resolved.phases.deep });
+          const event: DreamingEvent = {
+            timestamp: new Date().toISOString(), phase: 'deep',
+            ok: result.ok, reason: result.reason, durationMs: Date.now() - t0,
+            candidates: result.candidates, applied: result.applied,
+          };
+          await appendDreamingEvent(workspaceDir, event);
+        }
+        return;
+      }
     }
 
     // Get or create agent for this session

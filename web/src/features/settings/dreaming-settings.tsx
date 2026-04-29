@@ -1,4 +1,4 @@
-import { Activity, Loader2, Play, RefreshCw, ScanLine, Settings2, Trash2, Unlock, Wrench } from 'lucide-react';
+import { Activity, Loader2, Moon, Play, RefreshCw, ScanLine, Settings2, Sparkles, Sun, Trash2, Unlock, Wrench } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import useSWR from 'swr';
@@ -16,13 +16,17 @@ import {
 } from '@/features/settings/settings-form-section';
 import {
   dreamingSwrKey,
+  fetchDreamingEvents,
   fetchDreamingStatus,
   fetchDreamingPreview,
   postDreamingAction,
   postDreamingRunNow,
+  type DreamingEvent,
   type DreamingGatewayStatus,
   type DreamingLastRunRecord,
+  type DreamingPhaseId,
   type DreamingPreviewItem,
+  type PhaseLastRun,
 } from '@/features/settings/dreaming-api';
 import {
   normalizeDreamingFromConfig,
@@ -58,6 +62,63 @@ function Subsection({ label, children, className }: { label: string; children: R
       <h3 className="text-[0.7rem] font-semibold uppercase tracking-wider text-fg-muted">{label}</h3>
       {children}
     </div>
+  );
+}
+
+function PhaseStatusCard({
+  icon,
+  label,
+  enabled,
+  cron,
+  details,
+  t,
+}: {
+  icon: ReactNode;
+  label: string;
+  enabled: boolean;
+  cron: string;
+  details: string;
+  t: DreamingSettingsI18n;
+}) {
+  return (
+    <div className={cn(settingsFormSectionClassName(), 'space-y-1.5')}>
+      <div className="flex items-center gap-2">
+        {icon}
+        <span className="text-sm font-medium text-fg">{label}</span>
+        <span className={cn('ml-auto text-xs font-medium', enabled ? 'text-emerald-600 dark:text-emerald-400' : 'text-fg-muted')}>
+          {enabled ? t.on : t.off}
+        </span>
+      </div>
+      <div className="font-mono text-xs text-fg-muted">{cron}</div>
+      <div className="text-xs text-fg-muted">{details}</div>
+    </div>
+  );
+}
+
+function PhaseLastRunBlock({
+  label,
+  lastRun,
+  t,
+}: {
+  label: string;
+  lastRun: PhaseLastRun | undefined;
+  t: DreamingSettingsI18n;
+}) {
+  return (
+    <Subsection label={label}>
+      {lastRun?.exists ? (
+        <details className="group rounded-lg border border-edge-subtle">
+          <summary className="cursor-pointer list-none px-3 py-2 text-xs font-medium text-fg-muted marker:hidden [&::-webkit-details-marker]:hidden">
+            <span className="underline decoration-edge underline-offset-2 group-open:text-fg">{t.lastRunRaw}</span>
+          </summary>
+          <pre className="max-h-[12rem] overflow-auto border-t border-edge-subtle p-3 text-xs text-fg-muted">
+            {JSON.stringify(lastRun.raw, null, 2)}
+          </pre>
+        </details>
+      ) : (
+        <p className="text-sm text-fg-muted">{t.phaseLastRunEmpty}</p>
+      )}
+    </Subsection>
   );
 }
 
@@ -143,6 +204,7 @@ export function DreamingSettingsPanel() {
   const [runBusy, setRunBusy] = useState(false);
   const [runOk, setRunOk] = useState(false);
   const [runError, setRunError] = useState<string | null>(null);
+  const [runPhase, setRunPhase] = useState<DreamingPhaseId>('deep');
   const [cfgForm, setCfgForm] = useState<DreamingConfigState | null>(null);
   const [cfgBaseline, setCfgBaseline] = useState<DreamingConfigState | null>(null);
   const [cfgSaving, setCfgSaving] = useState(false);
@@ -151,6 +213,9 @@ export function DreamingSettingsPanel() {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [previewItems, setPreviewItems] = useState<DreamingPreviewItem[] | null>(null);
+  const [eventsLoading, setEventsLoading] = useState(false);
+  const [eventsError, setEventsError] = useState<string | null>(null);
+  const [events, setEvents] = useState<DreamingEvent[] | null>(null);
 
   const { data, error, isLoading, mutate } = useSWR(hasToken ? dreamingSwrKey() : null, fetchDreamingStatus, {
     revalidateOnFocus: false,
@@ -167,9 +232,10 @@ export function DreamingSettingsPanel() {
     if (actionError) list.push(actionError);
     if (runError) list.push(runError);
     if (previewError) list.push(previewError);
+    if (eventsError) list.push(eventsError);
     if (cfgError) list.push(cfgError);
     return list;
-  }, [error, actionError, runError, previewError, cfgError]);
+  }, [error, actionError, runError, previewError, eventsError, cfgError]);
 
   const successMessages = useMemo(() => {
     const list: string[] = [];
@@ -203,12 +269,25 @@ export function DreamingSettingsPanel() {
     }
   }, []);
 
-  const doRunNow = useCallback(async () => {
+  const loadEvents = useCallback(async () => {
+    setEventsLoading(true);
+    setEventsError(null);
+    try {
+      const result = await fetchDreamingEvents(50);
+      setEvents(result);
+    } catch (e) {
+      setEventsError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setEventsLoading(false);
+    }
+  }, []);
+
+  const doRunNow = useCallback(async (phase: DreamingPhaseId = 'deep') => {
     setRunBusy(true);
     setRunOk(false);
     setRunError(null);
     try {
-      await postDreamingRunNow();
+      await postDreamingRunNow(phase);
       setRunOk(true);
       await mutate();
     } catch (e) {
@@ -290,11 +369,21 @@ export function DreamingSettingsPanel() {
           <p className="mt-1 text-sm text-fg-muted">{t.subtitle}</p>
         </div>
         <div className="flex shrink-0 items-center justify-end gap-2">
+          <select
+            className="rounded-lg border border-edge bg-surface-panel px-2 py-1.5 text-xs text-fg"
+            value={runPhase}
+            onChange={(e) => setRunPhase(e.target.value as DreamingPhaseId)}
+            disabled={!hasToken || runBusy}
+          >
+            <option value="light">Light</option>
+            <option value="deep">Deep</option>
+            <option value="rem">REM</option>
+          </select>
           <Button
             variant="secondary"
             className="px-2.5 py-1.5 text-xs"
             disabled={!hasToken || runBusy}
-            onClick={() => void doRunNow()}
+            onClick={() => void doRunNow(runPhase)}
             title={t.runNowHint}
           >
             {runBusy ? (
@@ -375,89 +464,138 @@ export function DreamingSettingsPanel() {
           />
 
         {cfgForm ? (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div className={settingsFormSectionClassName()}>
-              <div className={rowLabelClass()}>{t.configEnabled}</div>
-              <label className="mt-2 inline-flex items-center gap-2 text-sm text-fg">
+          <div className="space-y-5">
+            {/* Global settings */}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div className={settingsFormSectionClassName()}>
+                <div className={rowLabelClass()}>{t.configEnabled}</div>
+                <label className="mt-2 inline-flex items-center gap-2 text-sm text-fg">
+                  <input
+                    type="checkbox"
+                    className="ui-checkbox"
+                    checked={cfgForm.enabled}
+                    onChange={(e) => setCfgForm({ ...cfgForm, enabled: e.target.checked })}
+                  />
+                  <span>{cfgForm.enabled ? t.on : t.off}</span>
+                </label>
+              </div>
+              <div className={settingsFormSectionClassName()}>
+                <div className={rowLabelClass()}>{t.configFrequency}</div>
                 <input
-                  type="checkbox"
-                  className="ui-checkbox"
-                  checked={cfgForm.enabled}
-                  onChange={(e) => setCfgForm({ ...cfgForm, enabled: e.target.checked })}
+                  className="mt-2 w-full rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg placeholder:text-fg-subtle dark:border-edge"
+                  value={cfgForm.frequency}
+                  onChange={(e) => setCfgForm({ ...cfgForm, frequency: e.target.value })}
+                  placeholder="0 3 * * *"
                 />
-                <span>{cfgForm.enabled ? t.on : t.off}</span>
-              </label>
-            </div>
-
-            <div className={settingsFormSectionClassName()}>
-              <div className={rowLabelClass()}>{t.configDeepEnabled}</div>
-              <label className="mt-2 inline-flex items-center gap-2 text-sm text-fg">
+              </div>
+              <div className={settingsFormSectionClassName()}>
+                <div className={rowLabelClass()}>{t.configTimezone}</div>
                 <input
-                  type="checkbox"
-                  className="ui-checkbox"
-                  checked={cfgForm.deepEnabled}
-                  onChange={(e) => setCfgForm({ ...cfgForm, deepEnabled: e.target.checked })}
+                  className="mt-2 w-full rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg placeholder:text-fg-subtle dark:border-edge"
+                  value={cfgForm.timezone}
+                  onChange={(e) => setCfgForm({ ...cfgForm, timezone: e.target.value })}
+                  placeholder="Asia/Shanghai"
                 />
-                <span>{cfgForm.deepEnabled ? t.on : t.off}</span>
-              </label>
+              </div>
             </div>
 
-            <div className={settingsFormSectionClassName()}>
-              <div className={rowLabelClass()}>{t.configFrequency}</div>
-              <input
-                className="mt-2 w-full rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg placeholder:text-fg-subtle dark:border-edge"
-                value={cfgForm.frequency}
-                onChange={(e) => setCfgForm({ ...cfgForm, frequency: e.target.value })}
-                placeholder="0 3 * * *"
-              />
-            </div>
+            {/* Light Sleep */}
+            <Subsection label={t.configPhaseLight}>
+              <p className="text-xs text-fg-muted">{t.configPhaseLightHint}</p>
+              <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <div className={settingsFormSectionClassName()}>
+                  <div className={rowLabelClass()}>{t.configPhaseEnabled}</div>
+                  <label className="mt-2 inline-flex items-center gap-2 text-sm text-fg">
+                    <input type="checkbox" className="ui-checkbox" checked={cfgForm.light.enabled} onChange={(e) => setCfgForm({ ...cfgForm, light: { ...cfgForm.light, enabled: e.target.checked } })} />
+                    <span>{cfgForm.light.enabled ? t.on : t.off}</span>
+                  </label>
+                </div>
+                <div className={settingsFormSectionClassName()}>
+                  <div className={rowLabelClass()}>{t.configPhaseCron}</div>
+                  <input className="mt-2 w-full rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg dark:border-edge" value={cfgForm.light.cron} onChange={(e) => setCfgForm({ ...cfgForm, light: { ...cfgForm.light, cron: e.target.value } })} placeholder="0 */6 * * *" />
+                </div>
+                <div className={settingsFormSectionClassName()}>
+                  <div className={rowLabelClass()}>{t.configLightLookbackDays}</div>
+                  <input type="number" step="1" min={1} className="mt-2 w-full rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg dark:border-edge" value={cfgForm.light.lookbackDays} onChange={(e) => setCfgForm({ ...cfgForm, light: { ...cfgForm.light, lookbackDays: Number(e.target.value) } })} />
+                </div>
+                <div className={settingsFormSectionClassName()}>
+                  <div className={rowLabelClass()}>{t.configLightLimit}</div>
+                  <input type="number" step="1" min={0} className="mt-2 w-full rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg dark:border-edge" value={cfgForm.light.limit} onChange={(e) => setCfgForm({ ...cfgForm, light: { ...cfgForm.light, limit: Number(e.target.value) } })} />
+                </div>
+                <div className={settingsFormSectionClassName()}>
+                  <div className={rowLabelClass()}>{t.configLightDedupe}</div>
+                  <input type="number" step="0.01" min={0} max={1} className="mt-2 w-full rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg dark:border-edge" value={cfgForm.light.dedupeSimilarity} onChange={(e) => setCfgForm({ ...cfgForm, light: { ...cfgForm.light, dedupeSimilarity: Number(e.target.value) } })} />
+                </div>
+              </div>
+            </Subsection>
 
-            <div className={settingsFormSectionClassName()}>
-              <div className={rowLabelClass()}>{t.configTimezone}</div>
-              <input
-                className="mt-2 w-full rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg placeholder:text-fg-subtle dark:border-edge"
-                value={cfgForm.timezone}
-                onChange={(e) => setCfgForm({ ...cfgForm, timezone: e.target.value })}
-                placeholder="Asia/Shanghai"
-              />
-            </div>
+            {/* Deep Sleep */}
+            <Subsection label={t.configPhaseDeep}>
+              <p className="text-xs text-fg-muted">{t.configPhaseDeepHint}</p>
+              <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <div className={settingsFormSectionClassName()}>
+                  <div className={rowLabelClass()}>{t.configPhaseEnabled}</div>
+                  <label className="mt-2 inline-flex items-center gap-2 text-sm text-fg">
+                    <input type="checkbox" className="ui-checkbox" checked={cfgForm.deep.enabled} onChange={(e) => setCfgForm({ ...cfgForm, deep: { ...cfgForm.deep, enabled: e.target.checked } })} />
+                    <span>{cfgForm.deep.enabled ? t.on : t.off}</span>
+                  </label>
+                </div>
+                <div className={settingsFormSectionClassName()}>
+                  <div className={rowLabelClass()}>{t.configPhaseCron}</div>
+                  <input className="mt-2 w-full rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg dark:border-edge" value={cfgForm.deep.cron} onChange={(e) => setCfgForm({ ...cfgForm, deep: { ...cfgForm.deep, cron: e.target.value } })} placeholder="0 3 * * *" />
+                </div>
+                <div className={settingsFormSectionClassName()}>
+                  <div className={rowLabelClass()}>{t.configDeepMinScore}</div>
+                  <input type="number" step="0.01" min={0} max={1} className="mt-2 w-full rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg dark:border-edge" value={cfgForm.deep.minScore} onChange={(e) => setCfgForm({ ...cfgForm, deep: { ...cfgForm.deep, minScore: Number(e.target.value) } })} />
+                </div>
+                <div className={settingsFormSectionClassName()}>
+                  <div className={rowLabelClass()}>{t.configDeepMinRecallCount}</div>
+                  <input type="number" step="1" min={1} className="mt-2 w-full rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg dark:border-edge" value={cfgForm.deep.minRecallCount} onChange={(e) => setCfgForm({ ...cfgForm, deep: { ...cfgForm.deep, minRecallCount: Number(e.target.value) } })} />
+                </div>
+                <div className={settingsFormSectionClassName()}>
+                  <div className={rowLabelClass()}>{t.configDeepLimit}</div>
+                  <input type="number" step="1" min={0} className="mt-2 w-full rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg dark:border-edge" value={cfgForm.deep.limit} onChange={(e) => setCfgForm({ ...cfgForm, deep: { ...cfgForm.deep, limit: Number(e.target.value) } })} />
+                </div>
+                <div className={settingsFormSectionClassName()}>
+                  <div className={rowLabelClass()}>{t.configDeepHalfLife}</div>
+                  <input type="number" step="1" min={1} className="mt-2 w-full rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg dark:border-edge" value={cfgForm.deep.recencyHalfLifeDays} onChange={(e) => setCfgForm({ ...cfgForm, deep: { ...cfgForm.deep, recencyHalfLifeDays: Number(e.target.value) } })} />
+                </div>
+                <div className={settingsFormSectionClassName()}>
+                  <div className={rowLabelClass()}>{t.configDeepMaxAge}</div>
+                  <input type="number" step="1" min={1} className="mt-2 w-full rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg dark:border-edge" value={cfgForm.deep.maxAgeDays} onChange={(e) => setCfgForm({ ...cfgForm, deep: { ...cfgForm.deep, maxAgeDays: Number(e.target.value) } })} />
+                </div>
+              </div>
+            </Subsection>
 
-            <div className={settingsFormSectionClassName()}>
-              <div className={rowLabelClass()}>{t.configMinScore}</div>
-              <input
-                type="number"
-                step="0.01"
-                min={0}
-                max={1}
-                className="mt-2 w-full rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg dark:border-edge"
-                value={cfgForm.minScore}
-                onChange={(e) => setCfgForm({ ...cfgForm, minScore: Number(e.target.value) })}
-              />
-            </div>
-
-            <div className={settingsFormSectionClassName()}>
-              <div className={rowLabelClass()}>{t.configMinRecallCount}</div>
-              <input
-                type="number"
-                step="1"
-                min={1}
-                className="mt-2 w-full rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg dark:border-edge"
-                value={cfgForm.minRecallCount}
-                onChange={(e) => setCfgForm({ ...cfgForm, minRecallCount: Number(e.target.value) })}
-              />
-            </div>
-
-            <div className={settingsFormSectionClassName()}>
-              <div className={rowLabelClass()}>{t.configLimit}</div>
-              <input
-                type="number"
-                step="1"
-                min={0}
-                className="mt-2 w-full rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg dark:border-edge"
-                value={cfgForm.limit}
-                onChange={(e) => setCfgForm({ ...cfgForm, limit: Number(e.target.value) })}
-              />
-            </div>
+            {/* REM Sleep */}
+            <Subsection label={t.configPhaseRem}>
+              <p className="text-xs text-fg-muted">{t.configPhaseRemHint}</p>
+              <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <div className={settingsFormSectionClassName()}>
+                  <div className={rowLabelClass()}>{t.configPhaseEnabled}</div>
+                  <label className="mt-2 inline-flex items-center gap-2 text-sm text-fg">
+                    <input type="checkbox" className="ui-checkbox" checked={cfgForm.rem.enabled} onChange={(e) => setCfgForm({ ...cfgForm, rem: { ...cfgForm.rem, enabled: e.target.checked } })} />
+                    <span>{cfgForm.rem.enabled ? t.on : t.off}</span>
+                  </label>
+                </div>
+                <div className={settingsFormSectionClassName()}>
+                  <div className={rowLabelClass()}>{t.configPhaseCron}</div>
+                  <input className="mt-2 w-full rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg dark:border-edge" value={cfgForm.rem.cron} onChange={(e) => setCfgForm({ ...cfgForm, rem: { ...cfgForm.rem, cron: e.target.value } })} placeholder="0 5 * * 0" />
+                </div>
+                <div className={settingsFormSectionClassName()}>
+                  <div className={rowLabelClass()}>{t.configRemLookbackDays}</div>
+                  <input type="number" step="1" min={1} className="mt-2 w-full rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg dark:border-edge" value={cfgForm.rem.lookbackDays} onChange={(e) => setCfgForm({ ...cfgForm, rem: { ...cfgForm.rem, lookbackDays: Number(e.target.value) } })} />
+                </div>
+                <div className={settingsFormSectionClassName()}>
+                  <div className={rowLabelClass()}>{t.configRemLimit}</div>
+                  <input type="number" step="1" min={0} className="mt-2 w-full rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg dark:border-edge" value={cfgForm.rem.limit} onChange={(e) => setCfgForm({ ...cfgForm, rem: { ...cfgForm.rem, limit: Number(e.target.value) } })} />
+                </div>
+                <div className={settingsFormSectionClassName()}>
+                  <div className={rowLabelClass()}>{t.configRemMinStrength}</div>
+                  <input type="number" step="0.01" min={0} max={1} className="mt-2 w-full rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg dark:border-edge" value={cfgForm.rem.minPatternStrength} onChange={(e) => setCfgForm({ ...cfgForm, rem: { ...cfgForm.rem, minPatternStrength: Number(e.target.value) } })} />
+                </div>
+              </div>
+            </Subsection>
           </div>
         ) : (
           <p className="text-sm text-fg-muted">{t.configLoading}</p>
@@ -515,14 +653,34 @@ export function DreamingSettingsPanel() {
               </div>
             </Subsection>
 
-            {data ? (
-              <Subsection label={t.subsectionDeep}>
-                <p className="text-sm text-fg">
-                  {t.deepGateValue
-                    .replace('{{minScore}}', String(data.config.deep.minScore))
-                    .replace('{{minRecallCount}}', String(data.config.deep.minRecallCount))
-                    .replace('{{limit}}', String(data.config.deep.limit))}
-                </p>
+            {data?.config?.phases ? (
+              <Subsection label={t.subsectionPhases}>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  <PhaseStatusCard
+                    icon={<Sun className="size-4 text-amber-500" />}
+                    label="Light"
+                    enabled={data.config.phases.light.enabled}
+                    cron={data.config.phases.light.cron}
+                    details={`lookback=${data.config.phases.light.lookbackDays}d, limit=${data.config.phases.light.limit}, dedupe=${data.config.phases.light.dedupeSimilarity}`}
+                    t={t}
+                  />
+                  <PhaseStatusCard
+                    icon={<Moon className="size-4 text-indigo-500" />}
+                    label="Deep"
+                    enabled={data.config.phases.deep.enabled}
+                    cron={data.config.phases.deep.cron}
+                    details={`minScore=${data.config.phases.deep.minScore}, recalls≥${data.config.phases.deep.minRecallCount}, limit=${data.config.phases.deep.limit}, halfLife=${data.config.phases.deep.recencyHalfLifeDays}d`}
+                    t={t}
+                  />
+                  <PhaseStatusCard
+                    icon={<Sparkles className="size-4 text-purple-500" />}
+                    label="REM"
+                    enabled={data.config.phases.rem.enabled}
+                    cron={data.config.phases.rem.cron}
+                    details={`lookback=${data.config.phases.rem.lookbackDays}d, limit=${data.config.phases.rem.limit}, strength≥${data.config.phases.rem.minPatternStrength}`}
+                    t={t}
+                  />
+                </div>
               </Subsection>
             ) : null}
 
@@ -557,6 +715,9 @@ export function DreamingSettingsPanel() {
                 <p className="text-sm text-fg-muted">{t.lastRunEmpty}</p>
               )}
             </Subsection>
+
+            <PhaseLastRunBlock label={t.subsectionLightLastRun} lastRun={data?.lightLastRun} t={t} />
+            <PhaseLastRunBlock label={t.subsectionRemLastRun} lastRun={data?.remLastRun} t={t} />
           </div>
         </SettingsFormSection>
       </div>
@@ -594,6 +755,7 @@ export function DreamingSettingsPanel() {
                       <span>score={it.score.toFixed(3)}</span>
                       <span>recalls={it.recallCount}</span>
                       <span>avg={it.avgScore.toFixed(3)}</span>
+                      <span>decay={it.recencyDecay?.toFixed(3) ?? '—'}</span>
                       {skipped ? (
                         <span className="text-amber-600 dark:text-amber-400">{skipped}</span>
                       ) : (
@@ -610,6 +772,58 @@ export function DreamingSettingsPanel() {
           )
         ) : (
           <p className="text-sm text-fg-muted">{t.previewNotLoaded}</p>
+        )}
+      </SettingsFormSection>
+
+      <SettingsFormSection>
+        <SettingsFormSectionHeader
+          icon={Activity}
+          title={t.eventsTitle}
+          subtitle={t.eventsHint}
+          trailing={
+            <Button
+              variant="secondary"
+              className="px-2.5 py-1.5 text-xs"
+              disabled={!hasToken || eventsLoading}
+              onClick={() => void loadEvents()}
+            >
+              {eventsLoading ? <Loader2 className="mr-2 size-4 animate-spin" aria-hidden /> : null}
+              {t.eventsLoad}
+            </Button>
+          }
+        />
+        {events ? (
+          events.length > 0 ? (
+            <div className="space-y-1.5">
+              {events.map((ev, idx) => {
+                const phaseIcon = ev.phase === 'light' ? '☀️' : ev.phase === 'rem' ? '✨' : '🌙';
+                const metrics = ev.phase === 'light'
+                  ? `scanned=${ev.scannedEntries ?? 0} new=${ev.newSignals ?? 0} deduped=${ev.deduped ?? 0}`
+                  : ev.phase === 'rem'
+                    ? `patterns=${ev.patternsDiscovered ?? 0} analyzed=${ev.entriesAnalyzed ?? 0}`
+                    : `candidates=${ev.candidates ?? 0} applied=${ev.applied ?? 0}`;
+                return (
+                  <div
+                    key={`${ev.timestamp}:${ev.phase}:${idx}`}
+                    className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-edge-subtle bg-surface-panel/60 px-3 py-2 text-xs"
+                  >
+                    <span>{phaseIcon}</span>
+                    <span className="font-medium text-fg">{ev.phase}</span>
+                    <span className={cn('font-medium', ev.ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400')}>
+                      {ev.ok ? 'OK' : 'FAIL'}
+                    </span>
+                    <span className="text-fg-muted">{metrics}</span>
+                    <span className="text-fg-muted">{formatDurationMs(ev.durationMs)}</span>
+                    <span className="ml-auto text-fg-subtle">{isoShort(ev.timestamp)}</span>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-sm text-fg-muted">{t.eventsEmpty}</p>
+          )
+        ) : (
+          <p className="text-sm text-fg-muted">{t.eventsNotLoaded}</p>
         )}
       </SettingsFormSection>
 

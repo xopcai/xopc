@@ -1,16 +1,12 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-import { DREAMING_LAST_RUN_RELATIVE } from './constants.js';
+import { DREAMING_LAST_RUN_RELATIVE, type DreamingPhaseId } from './constants.js';
+import type { DreamingDeepConfig, DreamingLightConfig, DreamingRemConfig } from './config.js';
 
 export const DREAMING_LAST_RUN_FORMAT_VERSION = 2 as const;
 
-export type DreamingDeepConfig = {
-  enabled: boolean;
-  minScore: number;
-  minRecallCount: number;
-  limit: number;
-};
+export type { DreamingDeepConfig } from './config.js';
 
 export type DreamingDeepPhaseSkipped = {
   alreadyPromotedKey: number;
@@ -41,6 +37,50 @@ export type DreamingDeepLastRun = {
   };
 };
 
+/**
+ * On-disk shape for light sweep last-run.
+ */
+export type DreamingLightLastRun = {
+  version: typeof DREAMING_LAST_RUN_FORMAT_VERSION;
+  phase: 'light';
+  runId: string;
+  startedAt: string;
+  finishedAt: string;
+  durationMs: number;
+  ok: boolean;
+  reason: string;
+  config: DreamingLightConfig;
+  light: {
+    scannedEntries: number;
+    newSignals: number;
+    deduped: number;
+  };
+  errorMessage?: string;
+};
+
+/**
+ * On-disk shape for REM pattern last-run.
+ */
+export type DreamingRemLastRun = {
+  version: typeof DREAMING_LAST_RUN_FORMAT_VERSION;
+  phase: 'rem';
+  runId: string;
+  startedAt: string;
+  finishedAt: string;
+  durationMs: number;
+  ok: boolean;
+  reason: string;
+  config: DreamingRemConfig;
+  rem: {
+    patternsDiscovered: number;
+    entriesAnalyzed: number;
+  };
+  errorMessage?: string;
+};
+
+/** Union of all phase last-run shapes. */
+export type DreamingLastRun = DreamingDeepLastRun | DreamingLightLastRun | DreamingRemLastRun;
+
 function isRecord(v: unknown): v is Record<string, unknown> {
   return v !== null && typeof v === 'object' && !Array.isArray(v);
 }
@@ -57,9 +97,13 @@ function asDreamingDeepConfig(v: unknown): DreamingDeepConfig | null {
   if (!isRecord(v)) return null;
   return {
     enabled: v.enabled === true,
+    cron: typeof v.cron === 'string' ? v.cron : '0 3 * * *',
     minScore: typeof v.minScore === 'number' && Number.isFinite(v.minScore) ? v.minScore : 0,
     minRecallCount: asNonNegInt(v.minRecallCount) || 1,
+    minUniqueQueries: asNonNegInt(v.minUniqueQueries) || 3,
     limit: asNonNegInt(v.limit),
+    recencyHalfLifeDays: asNonNegInt(v.recencyHalfLifeDays) || 14,
+    maxAgeDays: asNonNegInt(v.maxAgeDays) || 30,
   };
 }
 

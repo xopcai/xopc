@@ -85,22 +85,50 @@ export const AgentDefaultsSchema = z.object({
       /** Reserved for future external “dialectic” sync cadence (not wired yet). */
       dialecticCadence: z.number().int().min(1).optional(),
       /**
-       * Background memory consolidation ("dreaming"): cron-triggered deep promotion of short-term recall signals
-       * (workspace `memory/YYYY-MM-DD.md`) into `MEMORY.md`.
+       * Background memory consolidation ("dreaming"): three-phase sleep model that
+       * promotes short-term recall signals into long-term memory (`MEMORY.md`).
+       *
+       * Phases:
+       * - **light** — fast, frequent sweep (default every 6 h): dedup + signal collection.
+       * - **deep**  — daily deep promotion (default 3 AM): score-gated write to MEMORY.md.
+       * - **rem**   — weekly pattern discovery (default Sun 5 AM): cross-session insight mining.
        */
       dreaming: z
         .object({
           enabled: z.boolean().optional(),
+          /** Legacy top-level cron; prefer per-phase `cron` instead. */
           frequency: z.string().optional(),
           timezone: z.string().optional(),
           phases: z
             .object({
+              light: z
+                .object({
+                  enabled: z.boolean().optional(),
+                  cron: z.string().optional(),
+                  lookbackDays: z.number().int().min(1).optional(),
+                  limit: z.number().int().min(0).optional(),
+                  dedupeSimilarity: z.number().min(0).max(1).optional(),
+                })
+                .optional(),
               deep: z
                 .object({
                   enabled: z.boolean().optional(),
+                  cron: z.string().optional(),
                   minScore: z.number().min(0).max(1).optional(),
                   minRecallCount: z.number().int().min(1).optional(),
+                  minUniqueQueries: z.number().int().min(1).optional(),
                   limit: z.number().int().min(0).optional(),
+                  recencyHalfLifeDays: z.number().min(1).optional(),
+                  maxAgeDays: z.number().int().min(1).optional(),
+                })
+                .optional(),
+              rem: z
+                .object({
+                  enabled: z.boolean().optional(),
+                  cron: z.string().optional(),
+                  lookbackDays: z.number().int().min(1).optional(),
+                  limit: z.number().int().min(0).optional(),
+                  minPatternStrength: z.number().min(0).max(1).optional(),
                 })
                 .optional(),
             })

@@ -7,11 +7,18 @@ import { resolveDreamingConfig } from '../../../agent/memory/dreaming/config.js'
 import {
   DREAMING_CRON_NAME,
   DREAMING_CRON_TAG,
+  DREAMING_DIR_RELATIVE,
   DREAMING_LAST_RUN_RELATIVE,
+  DREAMING_LIGHT_CRON_NAME,
+  DREAMING_LIGHT_SWEEP_TOKEN,
+  DREAMING_REM_CRON_NAME,
+  DREAMING_REM_SWEEP_TOKEN,
   DREAMING_SWEEP_TOKEN,
   SHORT_TERM_PROMOTION_LOCK_RELATIVE,
   SHORT_TERM_RECALL_STORE_RELATIVE,
+  type DreamingPhaseId,
 } from '../../../agent/memory/dreaming/constants.js';
+import { readDreamingEvents } from '../../../agent/memory/dreaming/events.js';
 import { previewDreamingDeepPromotion } from '../../../agent/memory/dreaming/preview.js';
 import { parseDreamingLastRunFile, type DreamingDeepLastRun } from '../../../agent/memory/dreaming/last-run.js';
 import {
@@ -93,6 +100,23 @@ async function readLastRun(
   }
 }
 
+async function readPhaseLastRun(
+  workspaceDir: string,
+  filename: string,
+): Promise<{ exists: false } | { exists: true; path: string; raw: unknown }> {
+  const relPath = path.join(DREAMING_DIR_RELATIVE, filename);
+  const fullPath = path.join(workspaceDir, relPath);
+  try {
+    const text = await fs.readFile(fullPath, 'utf-8');
+    const raw = JSON.parse(text) as unknown;
+    return { exists: true, path: relPath, raw };
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException | undefined)?.code;
+    if (code === 'ENOENT') return { exists: false };
+    return { exists: false };
+  }
+}
+
 function storeStats(store: DreamingStore): {
   version: number;
   updatedAt: string;
@@ -136,7 +160,13 @@ export function registerDreamingRoutes(authenticated: Hono, deps: AuthenticatedR
     const resolved = resolveDreamingConfig(cfg);
     const { store } = await loadDreamingStore({ workspaceDir });
     const lock = await readLockInfo(workspaceDir);
-    const lastRun = await readLastRun(workspaceDir);
+
+    // Read all three phase last-run files in parallel.
+    const [lastRun, lightLastRun, remLastRun] = await Promise.all([
+      readLastRun(workspaceDir),
+      readPhaseLastRun(workspaceDir, 'last-run-light.json'),
+      readPhaseLastRun(workspaceDir, 'last-run-rem.json'),
+    ]);
 
     return c.json({
       ok: true,
@@ -147,6 +177,8 @@ export function registerDreamingRoutes(authenticated: Hono, deps: AuthenticatedR
         store: storeStats(store),
         lock,
         lastRun,
+        lightLastRun,
+        remLastRun,
       },
     });
   });
@@ -164,12 +196,7 @@ export function registerDreamingRoutes(authenticated: Hono, deps: AuthenticatedR
 
     const preview = await previewDreamingDeepPromotion({
       workspaceDir,
-      config: {
-        enabled: resolved.deep.enabled,
-        minScore: resolved.deep.minScore,
-        minRecallCount: resolved.deep.minRecallCount,
-        limit: resolved.deep.limit,
-      },
+      config: resolved.deep,
       limit: Number.isFinite(limit) ? limit : 20,
     });
 
@@ -177,22 +204,41 @@ export function registerDreamingRoutes(authenticated: Hono, deps: AuthenticatedR
   });
 
   authenticated.post('/api/dreaming/run', async (c) => {
+    let body: unknown;
+    try { body = await c.req.json(); } catch { body = {}; }
+    const requestedPhase: DreamingPhaseId =
+      isRecord(body) && typeof body.phase === 'string' && ['light', 'deep', 'rem'].includes(body.phase)
+        ? (body.phase as DreamingPhaseId)
+        : 'deep';
+
+    // Map phase → token + cron name for job lookup.
+    const phaseTokenMap: Record<DreamingPhaseId, { token: string; cronName: string }> = {
+      light: { token: DREAMING_LIGHT_SWEEP_TOKEN, cronName: DREAMING_LIGHT_CRON_NAME },
+      deep: { token: DREAMING_SWEEP_TOKEN, cronName: DREAMING_CRON_NAME },
+      rem: { token: DREAMING_REM_SWEEP_TOKEN, cronName: DREAMING_REM_CRON_NAME },
+    };
+    const { token, cronName } = phaseTokenMap[requestedPhase];
+
     const jobs = await service.cronServiceInstance.listJobs();
     const primary =
-      jobs.find((job) => payloadMessageFromJob(job) === DREAMING_SWEEP_TOKEN) ??
-      jobs.find((job) => job.name === DREAMING_CRON_NAME) ??
-      jobs.find((job) => (job.name?.includes?.(DREAMING_CRON_TAG) ?? false));
+      jobs.find((job) => payloadMessageFromJob(job) === token) ??
+      jobs.find((job) => job.name === cronName) ??
+      (requestedPhase === 'deep'
+        ? jobs.find((job) => (job.name?.includes?.(DREAMING_CRON_TAG) ?? false))
+        : undefined);
+
     if (!primary) {
       const dreaming = resolveDreamingConfig(service.currentConfig as Config);
-      const hint = dreaming.enabled && dreaming.deep.enabled
-        ? 'Dreaming is enabled, but no cron job was found yet. Restart the gateway/agent process so it can reconcile managed cron jobs.'
-        : 'Dreaming cron is disabled in config (agents.defaults.memory.dreaming.enabled / phases.deep.enabled). Enable it first.';
-      return c.json({ ok: false, error: { message: `Dreaming cron job not found. ${hint}` } }, 404);
+      const phaseEnabled = dreaming.enabled && dreaming.phases[requestedPhase].enabled;
+      const hint = phaseEnabled
+        ? `Dreaming ${requestedPhase} phase is enabled, but no cron job was found yet. Restart the gateway/agent process so it can reconcile managed cron jobs.`
+        : `Dreaming ${requestedPhase} phase is disabled in config. Enable it first.`;
+      return c.json({ ok: false, error: { message: `Dreaming ${requestedPhase} cron job not found. ${hint}` } }, 404);
     }
 
     try {
       await service.cronServiceInstance.runJobNow(primary.id);
-      return c.json({ ok: true, payload: { triggered: true, jobId: primary.id } });
+      return c.json({ ok: true, payload: { triggered: true, jobId: primary.id, phase: requestedPhase } });
     } catch (err) {
       const em = err instanceof Error ? err.message : String(err);
       return c.json({ ok: false, error: { message: em || 'Failed to trigger job' } }, 400);
@@ -228,6 +274,20 @@ export function registerDreamingRoutes(authenticated: Hono, deps: AuthenticatedR
     const lockPath = path.join(workspaceDir, SHORT_TERM_PROMOTION_LOCK_RELATIVE);
     await fs.unlink(lockPath).catch(() => undefined);
     return c.json({ ok: true, payload: { cleared: true, lockPath: SHORT_TERM_PROMOTION_LOCK_RELATIVE } });
+  });
+
+  authenticated.get('/api/dreaming/events', async (c) => {
+    const cfg = service.currentConfig as Config;
+    const workspaceDir = getWorkspacePath(cfg);
+    if (!workspaceDir) {
+      return c.json({ ok: false, error: { message: 'Workspace not configured' } }, 400);
+    }
+
+    const rawLimit = c.req.query('limit');
+    const limit = rawLimit ? Math.min(Math.max(Number(rawLimit) || 50, 1), 200) : 50;
+
+    const events = await readDreamingEvents(workspaceDir, limit);
+    return c.json({ ok: true, payload: { events } });
   });
 }
 
