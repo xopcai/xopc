@@ -92,6 +92,13 @@ export async function patchProviderApiKeys(providers: Record<string, string>): P
   void Promise.all([revalidateGatewayConfig(), mutate(apiUrl('/api/providers/meta'))]);
 }
 
+export async function deleteProviderApiKey(providerId: string): Promise<void> {
+  await fetchJson(apiUrl(`/api/providers/${encodeURIComponent(providerId)}/key`), {
+    method: 'DELETE',
+  });
+  void Promise.all([revalidateGatewayConfig(), mutate(apiUrl('/api/providers/meta'))]);
+}
+
 export type TestApiKeyResolutionPayload = {
   type: 'literal' | 'env' | 'command';
   resolved?: string;
