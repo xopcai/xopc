@@ -29,7 +29,6 @@ export class DreamingScene {
 
   private outgoingScene: THREE.Scene | null = null;
   private outgoingAnimation: PhaseAnimation | null = null;
-  private outgoingPhase: DreamingPhase | null = null;
   private outgoingElapsed = 0;
 
   private isTransitioning = false;
@@ -107,7 +106,6 @@ export class DreamingScene {
       // Crossfade: keep old animation running as outgoing.
       this.outgoingScene = this.currentScene;
       this.outgoingAnimation = this.currentAnimation;
-      this.outgoingPhase = this.currentPhase;
       this.outgoingElapsed = this.currentElapsed;
 
       this.currentScene = nextScene;
@@ -220,7 +218,6 @@ export class DreamingScene {
     }
     this.outgoingScene = null;
     this.outgoingAnimation = null;
-    this.outgoingPhase = null;
     this.outgoingElapsed = 0;
   }
 
@@ -237,7 +234,6 @@ export class DreamingScene {
     this.currentElapsed = 0;
     this.outgoingScene = null;
     this.outgoingAnimation = null;
-    this.outgoingPhase = null;
     this.outgoingElapsed = 0;
     this.isTransitioning = false;
     this.transitionT = 0;
