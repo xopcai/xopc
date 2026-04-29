@@ -62,10 +62,10 @@ const DEEP_BG_FRAGMENT = /* glsl */ `
     vec2 uv = vUv;
     float aspect = resolution.x / resolution.y;
 
-    // Deep water gradient: darker at bottom, subtle indigo at top
-    vec3 topColor = vec3(0.08, 0.10, 0.35);      // deep indigo
-    vec3 midColor = vec3(0.04, 0.06, 0.15);       // midnight
-    vec3 bottomColor = vec3(0.02, 0.03, 0.07);    // abyss
+    // Deep water gradient: darker overall so it stays night-like in light theme
+    vec3 topColor = vec3(0.045, 0.055, 0.22);     // deep indigo
+    vec3 midColor = vec3(0.022, 0.03, 0.10);      // midnight
+    vec3 bottomColor = vec3(0.01, 0.012, 0.04);   // abyss
     vec3 bg = mix(bottomColor, midColor, smoothstep(0.0, 0.4, uv.y));
     bg = mix(bg, topColor, smoothstep(0.5, 1.0, uv.y));
 
