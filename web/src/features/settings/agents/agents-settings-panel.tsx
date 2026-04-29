@@ -1,5 +1,5 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { Plus, Search, SlidersHorizontal } from 'lucide-react';
+import { Moon, Plus, Search } from 'lucide-react';
 import {
   useCallback,
   useEffect,
@@ -9,7 +9,7 @@ import {
   useState,
   type FormEvent,
 } from 'react';
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
 import { useDebouncedCallback } from 'use-debounce';
 
@@ -34,6 +34,7 @@ import {
 import { AGENTS_APP_LIST_PATH, agentsAppDetailPath } from '@/features/settings/agents/agents-app-path';
 import { SETTINGS_BACK_PATH_STATE_KEY } from '@/features/settings/settings-nav-state';
 import { suggestWorkspaceFromAgentName } from '@/features/settings/suggest-agent-workspace';
+import { postDreamingRunNow, type DreamingPhaseId } from '@/features/settings/dreaming-api';
 import { validateAgentIdForNewAgent } from '@/lib/agent-id';
 import {
   getChannels,
@@ -120,6 +121,7 @@ export function AgentsSettingsPanel() {
   const [addAgentModalOpen, setAddAgentModalOpen] = useState(false);
   const createWorkspaceSuggestedRef = useRef('');
   const [busy, setBusy] = useState(false);
+  const [sleeping, setSleeping] = useState(false);
   const [listSearchQuery, setListSearchQuery] = useState('');
 
   const [editWorkspace, setEditWorkspace] = useState('');
@@ -599,20 +601,70 @@ export function AgentsSettingsPanel() {
     setAddAgentModalOpen(true);
   }, []);
 
-  const globalDefaultsTitle = m.settingsSections['agent-defaults'];
+  const sleep = useCallback((ms: number) => new Promise<void>((resolve) => window.setTimeout(resolve, ms)), []);
+
+  const triggerSleepSequence = useCallback(async () => {
+    if (sleeping || busy) return;
+    setSleeping(true);
+    setError(null);
+
+    const phases: DreamingPhaseId[] = ['light', 'deep', 'rem'];
+    try {
+      // Kick off backend jobs in the background. UI animation should NOT wait on network.
+      // We intentionally decouple the visuals from `/api/dreaming/run` latency.
+      void (async () => {
+        for (const phase of phases) {
+          try {
+            await postDreamingRunNow(phase);
+          } catch {
+            // Don't surface here — avoid interrupting animation.
+            // If needed, we can add a toast later.
+          }
+        }
+      })();
+
+      for (let idx = 0; idx < phases.length; idx++) {
+        const phase = phases[idx];
+        // Start animation immediately (SSE may arrive later / job may run long).
+        window.dispatchEvent(new CustomEvent('dreaming-phase-start', { detail: { phase, source: 'ui' } }));
+
+        // UI choreography: keep it calm and predictable (meditation / chill).
+        // We intentionally do NOT wait for the backend job to finish (end event can be delayed),
+        // otherwise the button can get stuck in "Sleeping…" and later phases never play.
+        const displayMs = phase === 'light' ? 7000 : phase === 'deep' ? 9000 : 8000;
+        await sleep(displayMs);
+
+        // Only end the overlay once, after the final phase, to avoid visible "gaps"
+        // between scenes (fade-out would temporarily clear the canvas).
+        if (idx === phases.length - 1) {
+          // Prevent late SSE `dreaming.phase.start` from re-opening the overlay after we end.
+          // (The backend jobs may still be running / dispatching events.)
+          (window as unknown as { __xopcDreamingIgnoreSseUntil?: number }).__xopcDreamingIgnoreSseUntil =
+            Date.now() + 60_000;
+          window.dispatchEvent(new CustomEvent('dreaming-phase-end', { detail: { phase, source: 'ui' } }));
+        }
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : a.saveError);
+    } finally {
+      setSleeping(false);
+    }
+  }, [a.saveError, busy, sleeping, sleep]);
 
   const agentsHeaderEnd = useMemo(
     () => (
       <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2">
-        <Button asChild variant="secondary" className="shrink-0 gap-2">
-          <Link
-            to="/settings/agent-defaults"
-            title={globalDefaultsTitle}
-            state={{ [SETTINGS_BACK_PATH_STATE_KEY]: AGENTS_APP_LIST_PATH }}
-          >
-            <SlidersHorizontal className="size-4 shrink-0" strokeWidth={1.75} aria-hidden />
-            {globalDefaultsTitle}
-          </Link>
+        <Button
+          type="button"
+          variant="secondary"
+          className="shrink-0 gap-2"
+          disabled={busy || sleeping}
+          onClick={() => void triggerSleepSequence()}
+          aria-label={language === 'zh' ? '让智能体进入睡眠流程' : 'Trigger agent sleep sequence'}
+          title={language === 'zh' ? '由浅入深：Light → Deep → REM' : 'Light → Deep → REM'}
+        >
+          <Moon className="size-4 shrink-0" strokeWidth={1.75} aria-hidden />
+          {language === 'zh' ? (sleeping ? '睡眠中…' : '睡眠') : sleeping ? 'Sleeping…' : 'Sleep'}
         </Button>
         <label className="relative flex min-h-9 min-w-0 max-w-sm cursor-text items-center rounded-pill border border-edge bg-surface-base py-1.5 pl-9 pr-3 shadow-surface dark:bg-surface-hover/40 sm:max-w-md">
           <Search
@@ -651,9 +703,11 @@ export function AgentsSettingsPanel() {
       a.addAgentAria,
       a.listSearchPlaceholder,
       busy,
-      globalDefaultsTitle,
       listSearchQuery,
       openAddAgentModal,
+      sleeping,
+      triggerSleepSequence,
+      language,
     ],
   );
 
