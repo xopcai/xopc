@@ -174,6 +174,18 @@ const router = createHashRouter([
         children: [
           { index: true, element: <Navigate to="appearance" replace /> },
           {
+            path: 'skills',
+            element: <Navigate to="/skills" replace />,
+          },
+          {
+            path: 'cron',
+            element: <Navigate to="/cron" replace />,
+          },
+          {
+            path: 'channels',
+            element: <Navigate to="/channels" replace />,
+          },
+          {
             path: 'sessions',
             element: (
               <Suspense fallback={<SecondaryRouteFallback />}>

@@ -18,7 +18,7 @@ export function buildAutomationActionHits(
       keywords: ['cron', 'schedule', 'job', 'timer'],
       run: () => {
         closePalette();
-        navigate('/settings/cron?action=create');
+        navigate('/cron?action=create');
       },
     },
     {
@@ -30,7 +30,7 @@ export function buildAutomationActionHits(
       keywords: ['cron', 'schedule', 'tasks'],
       run: () => {
         closePalette();
-        navigate('/settings/cron');
+        navigate('/cron');
       },
     },
     {
@@ -42,7 +42,7 @@ export function buildAutomationActionHits(
       keywords: ['skills', 'skill', 'catalog'],
       run: () => {
         closePalette();
-        navigate('/settings/skills');
+        navigate('/skills');
       },
     },
     {
