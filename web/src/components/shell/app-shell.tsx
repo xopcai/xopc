@@ -12,6 +12,7 @@ import { UpdateReminderBar } from '@/features/updater/update-reminder-bar';
 import { useUpdateReminder } from '@/features/updater/use-update-reminder';
 import { GlobalCommandPaletteHost } from '@/features/search/global-command-palette/global-command-palette-host';
 import { GatewaySseBridge } from '@/features/gateway/gateway-sse-bridge';
+import { DreamingOverlay } from '@/features/dreaming/dreaming-overlay';
 import { WorkspacePreviewDialog } from '@/features/workspace/workspace-preview-dialog';
 import { cn } from '@/lib/cn';
 import { useGatewayStore } from '@/stores/gateway-store';
@@ -130,6 +131,7 @@ export function AppShell() {
         {language === 'zh' ? '跳到主要内容' : 'Skip to main content'}
       </a>
       <GatewaySseBridge />
+      <DreamingOverlay />
       <ElectronMenuListener />
       <NavigateToChatListener />
       <ExtensionNavigateListener />

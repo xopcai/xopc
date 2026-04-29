@@ -237,10 +237,18 @@ export function registerDreamingRoutes(authenticated: Hono, deps: AuthenticatedR
     }
 
     try {
+      // Broadcast phase start to all SSE subscribers (drives dreaming animation overlay).
+      service.emit('dreaming.phase.start', { phase: requestedPhase, timestamp: new Date().toISOString() });
+
       await service.cronServiceInstance.runJobNow(primary.id);
+
+      // Broadcast phase end (the cron job runs async, so this only marks "triggered").
+      service.emit('dreaming.phase.end', { phase: requestedPhase, ok: true, timestamp: new Date().toISOString() });
+
       return c.json({ ok: true, payload: { triggered: true, jobId: primary.id, phase: requestedPhase } });
     } catch (err) {
       const em = err instanceof Error ? err.message : String(err);
+      service.emit('dreaming.phase.end', { phase: requestedPhase, ok: false, error: em, timestamp: new Date().toISOString() });
       return c.json({ ok: false, error: { message: em || 'Failed to trigger job' } }, 400);
     }
   });
