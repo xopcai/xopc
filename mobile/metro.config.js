@@ -14,4 +14,18 @@ config.resolver.nodeModulesPaths = [
   path.resolve(workspaceRoot, 'node_modules'),
 ];
 
+// Resolve .ts/.tsx sources in workspace packages that use ESM .js import specifiers
+config.resolver.resolveRequest = (context, moduleName, platform) => {
+  // Rewrite `.js` → `.ts` for workspace packages (e.g. gateway-sse-client)
+  if (moduleName.endsWith('.js') && !moduleName.includes('node_modules')) {
+    const tsName = moduleName.replace(/\.js$/, '.ts');
+    try {
+      return context.resolveRequest(context, tsName, platform);
+    } catch {
+      // fall through to default resolution
+    }
+  }
+  return context.resolveRequest(context, moduleName, platform);
+};
+
 module.exports = config;

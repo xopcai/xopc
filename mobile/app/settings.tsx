@@ -1,21 +1,27 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'expo-router';
 import { Controller, useForm } from 'react-hook-form';
-import { ScrollView, View } from 'react-native';
-import { Button, HelperText, Text, TextInput } from 'react-native-paper';
+import { ScrollView, StyleSheet, View } from 'react-native';
+import { Button, Divider, HelperText, Text, TextInput } from 'react-native-paper';
 
 import { type GatewaySettingsForm, gatewaySettingsSchema } from '../src/config/schema';
+import { useMessages } from '../src/i18n/messages';
+import { AgentSection } from '../src/features/settings/AgentSection';
+import { AppearanceSection } from '../src/features/settings/AppearanceSection';
 import { useGatewayStore } from '../src/stores/gateway-store';
 
 export default function SettingsScreen() {
   const router = useRouter();
-  const baseUrl = useGatewayStore((s) => s.baseUrl);
-  const token = useGatewayStore((s) => s.token);
-  const thinking = useGatewayStore((s) => s.thinking);
-  const setBaseUrl = useGatewayStore((s) => s.setBaseUrl);
-  const setToken = useGatewayStore((s) => s.setToken);
-  const setThinking = useGatewayStore((s) => s.setThinking);
-  const persist = useGatewayStore((s) => s.persist);
+  const m = useMessages();
+  const s = m.settings;
+
+  const baseUrl = useGatewayStore((st) => st.baseUrl);
+  const token = useGatewayStore((st) => st.token);
+  const thinking = useGatewayStore((st) => st.thinking);
+  const setBaseUrl = useGatewayStore((st) => st.setBaseUrl);
+  const setToken = useGatewayStore((st) => st.setToken);
+  const setThinking = useGatewayStore((st) => st.setThinking);
+  const persist = useGatewayStore((st) => st.persist);
 
   const {
     control,
@@ -39,12 +45,13 @@ export default function SettingsScreen() {
   };
 
   return (
-    <ScrollView contentContainerStyle={{ padding: 16 }}>
-      <Text variant="titleMedium" style={{ marginBottom: 8 }}>
-        Gateway
+    <ScrollView contentContainerStyle={styles.scroll}>
+      {/* ── Gateway section ──────────────────────────── */}
+      <Text variant="titleMedium" style={styles.sectionTitle}>
+        {s.gateway}
       </Text>
-      <Text variant="bodySmall" style={{ marginBottom: 16, opacity: 0.75 }}>
-        MMKV persists these fields in a development build. Expo Go uses in-memory storage only.
+      <Text variant="bodySmall" style={styles.sectionHint}>
+        {s.gatewayHint}
       </Text>
 
       <Controller
@@ -52,7 +59,7 @@ export default function SettingsScreen() {
         name="baseUrl"
         render={({ field: { onChange, onBlur, value } }) => (
           <TextInput
-            label="Base URL"
+            label={s.baseUrl}
             value={value}
             onBlur={onBlur}
             onChangeText={onChange}
@@ -73,7 +80,7 @@ export default function SettingsScreen() {
         name="token"
         render={({ field: { onChange, onBlur, value } }) => (
           <TextInput
-            label="Bearer token (optional)"
+            label={s.token}
             value={value}
             onBlur={onBlur}
             onChangeText={onChange}
@@ -89,22 +96,61 @@ export default function SettingsScreen() {
         name="thinking"
         render={({ field: { onChange, onBlur, value } }) => (
           <TextInput
-            label="Thinking level (optional)"
+            label={s.thinkingLevel}
             value={value}
             onBlur={onBlur}
             onChangeText={onChange}
             autoCapitalize="none"
             mode="outlined"
-            style={{ marginTop: 8 }}
+            style={styles.thinkingInput}
           />
         )}
       />
 
-      <View style={{ marginTop: 24 }}>
+      <View style={styles.saveRow}>
         <Button mode="contained" onPress={handleSubmit(onSubmit)}>
-          Save
+          {s.save}
         </Button>
       </View>
+
+      <Divider style={styles.sectionDivider} />
+
+      {/* ── Appearance section ───────────────────────── */}
+      <AppearanceSection />
+
+      <Divider style={styles.sectionDivider} />
+
+      {/* ── Agent section ────────────────────────────── */}
+      <AgentSection />
+
+      {/* Bottom spacer */}
+      <View style={styles.bottomSpacer} />
     </ScrollView>
   );
 }
+
+const styles = StyleSheet.create({
+  scroll: {
+    padding: 16,
+  },
+  sectionTitle: {
+    marginBottom: 8,
+  },
+  sectionHint: {
+    marginBottom: 16,
+    opacity: 0.75,
+  },
+  thinkingInput: {
+    marginTop: 8,
+  },
+  saveRow: {
+    marginTop: 24,
+  },
+  sectionDivider: {
+    marginTop: 28,
+    marginBottom: 4,
+  },
+  bottomSpacer: {
+    height: 40,
+  },
+});
