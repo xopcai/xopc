@@ -3,30 +3,45 @@ import '../src/shims';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { Stack } from 'expo-router';
 import { useEffect } from 'react';
-import { useColorScheme } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { MD3DarkTheme, MD3LightTheme, PaperProvider } from 'react-native-paper';
 
+import { useMessages } from '../src/i18n/messages';
 import { queryClient } from '../src/query/query-client';
 import { useGatewayStore } from '../src/stores/gateway-store';
+import {
+  subscribeSystemAppearance,
+  usePreferencesStore,
+} from '../src/stores/preferences-store';
 
 export default function RootLayout() {
-  const scheme = useColorScheme();
-  const paperTheme = scheme === 'dark' ? MD3DarkTheme : MD3LightTheme;
-  const hydrateFromStorage = useGatewayStore((s) => s.hydrateFromStorage);
+  const resolvedTheme = usePreferencesStore((s) => s.resolvedTheme);
+  const hydratePrefs = usePreferencesStore((s) => s.hydrate);
+  const hydrateGateway = useGatewayStore((s) => s.hydrateFromStorage);
+  const m = useMessages();
+
+  const paperTheme = resolvedTheme === 'dark' ? MD3DarkTheme : MD3LightTheme;
 
   useEffect(() => {
-    hydrateFromStorage();
-  }, [hydrateFromStorage]);
+    hydrateGateway();
+    hydratePrefs();
+    return subscribeSystemAppearance();
+  }, [hydrateGateway, hydratePrefs]);
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <QueryClientProvider client={queryClient}>
         <PaperProvider theme={paperTheme}>
-          <Stack>
-            <Stack.Screen name="index" options={{ title: 'Sessions' }} />
-            <Stack.Screen name="settings" options={{ title: 'Gateway settings' }} />
-            <Stack.Screen name="chat" options={{ title: 'Chat' }} />
+          <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="(drawer)" />
+            <Stack.Screen
+              name="settings"
+              options={{
+                headerShown: true,
+                title: m.settings.title,
+                presentation: 'modal',
+              }}
+            />
           </Stack>
         </PaperProvider>
       </QueryClientProvider>

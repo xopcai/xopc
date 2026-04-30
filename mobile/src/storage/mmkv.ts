@@ -5,6 +5,8 @@ export const KEYS = {
   token: 'gateway.token',
   thinking: 'gateway.thinking',
   pendingRunPrefix: 'xopc:pendingRun:',
+  language: 'prefs.language',
+  themePreference: 'prefs.themePreference',
 } as const;
 
 export type KeyValueStorage = {
