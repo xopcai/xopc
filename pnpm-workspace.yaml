@@ -3,3 +3,4 @@ packages:
   - 'extensions/*'
   - 'packages/*'
   - 'web'
+  - 'mobile'
