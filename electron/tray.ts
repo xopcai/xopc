@@ -1,10 +1,23 @@
 import { join } from 'node:path';
 
-import { Menu, Tray, nativeImage, type BrowserWindow } from 'electron';
+import { Menu, Tray, nativeImage } from 'electron';
 
 let tray: Tray | null = null;
 
-export function createTray(mainWindow: BrowserWindow, iconDir: string): Tray {
+export type TrayActions = {
+  /** Focus existing window or create one — must not close over a BrowserWindow (stale after close). */
+  showWindow: () => void;
+  /** Open app and navigate once content can receive IPC. */
+  navigate: (hashPath: string) => void;
+  quit: () => void;
+};
+
+export function createTray(iconDir: string, actions: TrayActions): Tray {
+  if (tray) {
+    tray.destroy();
+    tray = null;
+  }
+
   /** Colored PNG from logo.svg — do not use *Template.png naming (macOS would treat full-color art as a monochrome template). */
   const iconPath = join(iconDir, 'tray-icon.png');
   const icon = nativeImage.createFromPath(iconPath);
@@ -16,31 +29,28 @@ export function createTray(mainWindow: BrowserWindow, iconDir: string): Tray {
     {
       label: 'New Chat',
       click: () => {
-        mainWindow.show();
-        mainWindow.webContents.send('menu:navigate', '/chat/new');
+        actions.navigate('/chat/new');
       },
     },
     { type: 'separator' },
     {
       label: 'Show Window',
       click: () => {
-        mainWindow.show();
-        mainWindow.focus();
+        actions.showWindow();
       },
     },
     { type: 'separator' },
     {
       label: 'Settings',
       click: () => {
-        mainWindow.show();
-        mainWindow.webContents.send('menu:navigate', '/settings/appearance');
+        actions.navigate('/settings/appearance');
       },
     },
     { type: 'separator' },
     {
       label: 'Quit',
       click: () => {
-        mainWindow.destroy();
+        actions.quit();
       },
     },
   ]);
@@ -48,8 +58,7 @@ export function createTray(mainWindow: BrowserWindow, iconDir: string): Tray {
   tray.setContextMenu(contextMenu);
 
   tray.on('double-click', () => {
-    mainWindow.show();
-    mainWindow.focus();
+    actions.showWindow();
   });
 
   return tray;
