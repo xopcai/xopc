@@ -6,6 +6,7 @@
  */
 
 import type { AgentService } from '../../../agent/index.js';
+import { prependEnvelopeTimestamp } from '../../../channels/envelope-timestamp.js';
 
 /** Styled labels for terminal output */
 const STYLE = {
@@ -42,7 +43,13 @@ export async function renderStreamToTerminal(
   message: string,
   sessionKey: string,
 ): Promise<string> {
-  const stream = agent.processDirectStreaming(message, sessionKey);
+  // Prepend envelope timestamp so the model knows the current date/time,
+  // matching the behavior of channel pipelines and webchat gateway.
+  // Skip for slash commands — parseSlashCommand requires lines starting with '/'.
+  const stamped = message.trimStart().startsWith('/')
+    ? message
+    : prependEnvelopeTimestamp(message);
+  const stream = agent.processDirectStreaming(stamped, sessionKey);
 
   let responseText = '';
   let isFirstToken = true;

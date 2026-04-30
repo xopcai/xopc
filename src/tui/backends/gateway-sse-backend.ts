@@ -1,3 +1,4 @@
+import { prependEnvelopeTimestamp } from '../../channels/envelope-timestamp.js';
 import { createLogger } from '../../utils/logger.js';
 import { consumeSSEStream, parseSSEData } from '../sse-consumer.js';
 import type {
@@ -85,7 +86,12 @@ export class GatewaySseBackend implements TuiBackend {
           method: 'POST',
           headers: { Accept: 'text/event-stream' },
           body: JSON.stringify({
-            message: opts.message,
+            // Prepend envelope timestamp for regular messages so the model knows
+            // the current date/time. Skip for slash commands — parseSlashCommand
+            // requires lines starting with '/'.
+            message: opts.message.trimStart().startsWith('/')
+              ? opts.message
+              : prependEnvelopeTimestamp(opts.message),
             channel: 'webchat',
             sessionKey: opts.sessionKey,
             thinking: opts.thinking,

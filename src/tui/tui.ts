@@ -1,9 +1,7 @@
 import {
   CombinedAutocompleteProvider,
   Container,
-  Key,
   Loader,
-  matchesKey,
   ProcessTerminal,
   Text,
   TUI,
@@ -27,26 +25,48 @@ interface SlashCommandDef {
   description: string;
 }
 
-function getSlashCommands(isLocal: boolean): SlashCommandDef[] {
+function getSlashCommands(_isLocal: boolean): SlashCommandDef[] {
   return [
+    // TUI-local commands
     { name: 'help', description: 'Show available commands' },
-    { name: 'model', description: 'Set or pick model' },
-    { name: 'models', description: 'Open model picker' },
-    { name: 'session', description: 'Switch session' },
-    { name: 'sessions', description: 'List sessions' },
-    { name: 'new', description: 'Start a new session' },
-    { name: 'reset', description: 'Reset the session' },
-    { name: 'abort', description: 'Abort active run' },
-    { name: 'thinking', description: 'Toggle thinking display' },
-    { name: 'tools', description: 'Toggle tools expanded/collapsed' },
-    ...(isLocal ? [] : [{ name: 'status', description: 'Show connection status' }]),
+    { name: 'abort', description: 'Abort active run (or press Escape)' },
+    { name: 'tools', description: 'Toggle tool output expanded/collapsed (or Ctrl+O)' },
+    { name: 'thinking', description: 'Toggle thinking display (or Ctrl+T)' },
     { name: 'exit', description: 'Exit the TUI' },
-    { name: 'quit', description: 'Exit the TUI' },
+    // Backend-delegated commands (handled by chat-command system)
+    { name: 'models', description: 'List available models' },
+    { name: 'switch', description: 'Switch model (e.g. /switch openai/gpt-4o)' },
+    { name: 'usage', description: 'Show token usage statistics' },
+    { name: 'new', description: 'Start a new session' },
+    { name: 'clear', description: 'Clear current session' },
+    { name: 'list', description: 'List sessions' },
+    { name: 'compact', description: 'Compact session history' },
+    { name: 'think', description: 'Set thinking level (e.g. /think high)' },
+    { name: 'reasoning', description: 'Set reasoning visibility (e.g. /reasoning stream)' },
+    { name: 'verbose', description: 'Toggle verbose mode' },
+    { name: 'status', description: 'Show agent status' },
+    { name: 'config', description: 'Show or update configuration' },
+    { name: 'context', description: 'Show context budget' },
+    { name: 'btw', description: 'Side question without saving to session' },
+    { name: 'export', description: 'Export session (markdown/html/json)' },
+    { name: 'settings', description: 'Show current settings' },
+    { name: 'start', description: 'Show welcome message' },
   ];
 }
 
 function helpText(isLocal: boolean): string {
-  return ['Slash commands:', ...getSlashCommands(isLocal).map((c) => `  /${c.name} — ${c.description}`)].join('\n');
+  const commands = getSlashCommands(isLocal);
+  const lines = ['Available commands:'];
+  for (const c of commands) {
+    lines.push(`  /${c.name} — ${c.description}`);
+  }
+  lines.push('', 'Keyboard shortcuts:');
+  lines.push('  Escape — Abort active run');
+  lines.push('  Ctrl+O — Toggle tool output');
+  lines.push('  Ctrl+T — Toggle thinking display');
+  lines.push('  Ctrl+C — Clear input / exit');
+  lines.push('  Ctrl+D — Exit');
+  return lines.join('\n');
 }
 
 // ── Ctrl+C handling ──
@@ -395,100 +415,71 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     await client.abortChat({ sessionKey: state.currentSessionKey, runId }).catch(() => {});
   };
 
-  // Handle slash commands
-  const handleCommand = async (input: string) => {
+  // Handle slash commands.
+  // TUI-local commands are processed here; everything else is delegated to the
+  // backend's chat-command system via sendMessage (processDirectStreaming handles
+  // the commandRegistry lookup and returns results as SSE token events).
+  const handleCommand = (input: string) => {
     const trimmed = input.replace(/^\//, '').trim();
-    const [commandName, ...rest] = trimmed.split(/\s+/);
-    const args = rest.join(' ').trim();
+    const [commandName] = trimmed.split(/\s+/);
     const normalizedCommand = (commandName ?? '').toLowerCase();
 
+    // TUI-local commands (never sent to backend)
     switch (normalizedCommand) {
       case 'help':
         chatLog.addSystem(helpText(isLocalMode));
-        break;
+        tui.requestRender();
+        return;
       case 'exit':
       case 'quit':
         requestExit();
         return;
       case 'abort':
-        await abortActive();
-        chatLog.addSystem('Aborted.');
-        break;
-      case 'new':
-      case 'reset':
-        await abortActive();
-        assembler.clear();
-        chatLog.clearAll();
-        await client.resetSession(state.currentSessionKey);
-        chatLog.addSystem('Session reset.');
-        await refreshSessionInfo();
-        break;
-      case 'model':
-      case 'models':
-        if (args) {
-          await client.patchSession(state.currentSessionKey, { model: args });
-          chatLog.addSystem(`Model set to ${args}`);
-          await refreshSessionInfo();
-        } else {
-          try {
-            const models = await client.listModels();
-            if (models.length === 0) {
-              chatLog.addSystem('No models available.');
-            } else {
-              const list = models.map((m) => `  ${m.provider}/${m.id}`).join('\n');
-              chatLog.addSystem(`Available models:\n${list}\n\nUse /model <provider/id> to set.`);
-            }
-          } catch {
-            chatLog.addSystem('Failed to list models.');
-          }
-        }
-        break;
-      case 'session':
-      case 'sessions': {
-        if (args) {
-          state.currentSessionKey = args;
-          assembler.clear();
-          chatLog.clearAll();
-          chatLog.addSystem(`Switched to session: ${args}`);
-          updateHeader();
-          await refreshSessionInfo();
-        } else {
-          try {
-            const sessions = await client.listSessions();
-            if (sessions.length === 0) {
-              chatLog.addSystem('No sessions found.');
-            } else {
-              const list = sessions
-                .map((s) => {
-                  const label = s.displayName ? ` (${s.displayName})` : '';
-                  return `  ${s.key}${label}`;
-                })
-                .join('\n');
-              chatLog.addSystem(`Sessions:\n${list}\n\nUse /session <key> to switch.`);
-            }
-          } catch {
-            chatLog.addSystem('Failed to list sessions.');
-          }
-        }
-        break;
-      }
-      case 'thinking':
-        state.showThinking = !state.showThinking;
-        chatLog.addSystem(`Thinking display: ${state.showThinking ? 'on' : 'off'}`);
-        updateFooter();
-        break;
+      case 'stop':
+      case 'cancel':
+        void abortActive().then(() => {
+          chatLog.addSystem('Aborted.');
+          tui.requestRender();
+        });
+        return;
       case 'tools':
         state.toolsExpanded = !state.toolsExpanded;
         chatLog.setToolsExpanded(state.toolsExpanded);
         chatLog.addSystem(`Tools: ${state.toolsExpanded ? 'expanded' : 'collapsed'}`);
-        break;
-      case 'status':
-        chatLog.addSystem(`Connection: ${state.connectionStatus}\nActivity: ${state.activityStatus}`);
-        break;
+        tui.requestRender();
+        return;
+      case 'thinking':
+        state.showThinking = !state.showThinking;
+        chatLog.addSystem(`Thinking display: ${state.showThinking ? 'on' : 'off'}`);
+        updateFooter();
+        tui.requestRender();
+        return;
       default:
-        chatLog.addSystem(`Unknown command: /${normalizedCommand}. Use /help for available commands.`);
+        break;
     }
-    tui.requestRender();
+
+    // Commands that need TUI-side state cleanup before delegating to backend
+    switch (normalizedCommand) {
+      case 'new':
+      case 'reset':
+      case 'restart':
+      case 'clear': {
+        void abortActive().then(() => {
+          assembler.clear();
+          chatLog.clearAll();
+          tui.requestRender();
+          // Delegate to backend so session store is actually cleared/reset
+          sendMessage(input);
+        });
+        return;
+      }
+      default:
+        break;
+    }
+
+    // Everything else is delegated to the backend chat-command system — send the
+    // raw slash command so processDirectStreaming's commandRegistry handles it.
+    sendMessage(input);
   };
 
   // Editor submit
