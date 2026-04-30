@@ -94,7 +94,6 @@ export interface TuiState {
   historyLoaded: boolean;
   toolsExpanded: boolean;
   showThinking: boolean;
-  lastCtrlCAt: number;
   exitRequested: boolean;
 }
 
@@ -110,7 +109,6 @@ export function createInitialState(sessionKey: string): TuiState {
     historyLoaded: false,
     toolsExpanded: false,
     showThinking: false,
-    lastCtrlCAt: 0,
     exitRequested: false,
   };
 }

@@ -183,6 +183,7 @@ export async function* runProcessDirectStreaming(
             : 'unknown';
         pushEvent({
           type: 'tool_start',
+          toolCallId: toolEvent.toolCallId,
           toolName,
           args: toolEvent.args,
         });
@@ -196,6 +197,7 @@ export async function* runProcessDirectStreaming(
             : 'unknown';
         pushEvent({
           type: 'tool_end',
+          toolCallId: toolEvent.toolCallId,
           toolName,
           isError: toolEvent.isError,
           result: serializeAgentToolResultForSse(toolEvent.result),

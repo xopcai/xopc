@@ -1,7 +1,10 @@
 import {
   CombinedAutocompleteProvider,
   Container,
+  getKeybindings,
+  Key,
   Loader,
+  matchesKey,
   ProcessTerminal,
   Text,
   TUI,
@@ -64,19 +67,14 @@ function helpText(isLocal: boolean): string {
   lines.push('  Escape — Abort active run');
   lines.push('  Ctrl+O — Toggle tool output');
   lines.push('  Ctrl+T — Toggle thinking display');
-  lines.push('  Ctrl+C — Clear input / exit');
+  lines.push('  Ctrl+C — Clear line, abort ongoing reply when line empty, or exit when idle');
   lines.push('  Ctrl+D — Exit');
   return lines.join('\n');
 }
 
-// ── Ctrl+C handling ──
-
-type CtrlCAction = 'clear' | 'warn' | 'exit';
-
-function resolveCtrlCAction(hasInput: boolean, now: number, lastCtrlCAt: number): { action: CtrlCAction; nextLastCtrlCAt: number } {
-  if (hasInput) return { action: 'clear', nextLastCtrlCAt: now };
-  if (now - lastCtrlCAt <= 1000) return { action: 'exit', nextLastCtrlCAt: lastCtrlCAt };
-  return { action: 'warn', nextLastCtrlCAt: now };
+function matchesCtrlCSequence(data: string): boolean {
+  const kb = getKeybindings();
+  return matchesKey(data, Key.ctrl('c')) || kb.matches(data, 'tui.input.copy');
 }
 
 // ── SSE event dispatch ──
@@ -144,7 +142,7 @@ function dispatchAgentSSE(
       stack.push(toolCallId);
       pendingToolCallIds.set(toolName, stack);
       setActivityStatus('running');
-      chatLog.startTool(toolCallId, toolName, data.args);
+      chatLog.startTool(toolCallId, toolName, data.args, runId);
       tui.requestRender();
       break;
     }
@@ -199,31 +197,73 @@ function dispatchAgentSSE(
   }
 }
 
+function isLikelyPinoJsonLogLine(line: string): boolean {
+  const t = line.trim();
+  if (!t.startsWith('{')) return false;
+  try {
+    const parsed = JSON.parse(t) as { level?: unknown };
+    return typeof parsed.level === 'number';
+  } catch {
+    return false;
+  }
+}
+
 // ── Main entry ──
 
 export async function runTui(opts: TuiOptions): Promise<TuiResult> {
   // Suppress pino JSON logs from polluting the terminal while pi-tui owns the screen.
-  // We intercept stdout/stderr writes and swallow anything that looks like a JSON log line.
+  // Buffer by newline so key order differs from '{"level":' or writes are chunked.
   const originalStdoutWrite = process.stdout.write.bind(process.stdout);
   const originalStderrWrite = process.stderr.write.bind(process.stderr);
   let suppressLogs = true;
 
-  const logFilter = (
-    original: typeof process.stdout.write,
-  ): typeof process.stdout.write => {
-    return function filteredWrite(chunk: unknown, ...rest: unknown[]): boolean {
-      if (!suppressLogs) return (original as Function)(chunk, ...rest) as boolean;
-      const text = typeof chunk === 'string' ? chunk : chunk instanceof Buffer ? chunk.toString() : '';
-      if (text.startsWith('{"level":')) return true; // swallow JSON log lines
-      return (original as Function)(chunk, ...rest) as boolean;
-    } as typeof process.stdout.write;
-  };
+  /** Shared mutable buffers so incomplete log lines survive across write() chunks. */
+  const stdoutBuf = { s: '' };
+  const stderrBuf = { s: '' };
 
-  process.stdout.write = logFilter(originalStdoutWrite);
-  process.stderr.write = logFilter(originalStderrWrite);
+  const installBufferedLogFilter = (
+    original: typeof process.stdout.write,
+    buf: { s: string },
+  ): typeof process.stdout.write =>
+    function filteredWrite(chunk: unknown, ...rest: unknown[]): boolean {
+      if (!suppressLogs) {
+        const extra = typeof chunk === 'string' ? chunk : chunk instanceof Buffer ? chunk.toString() : '';
+        const combined = buf.s ? buf.s + extra : extra;
+        buf.s = '';
+        return combined.length > 0
+          ? ((original as Function)(combined, ...rest) as boolean)
+          : true;
+      }
+      const text = typeof chunk === 'string' ? chunk : chunk instanceof Buffer ? chunk.toString() : '';
+      buf.s += text;
+      let emit = '';
+      while (true) {
+        const idx = buf.s.indexOf('\n');
+        if (idx === -1) break;
+        const line = buf.s.slice(0, idx);
+        buf.s = buf.s.slice(idx + 1);
+        if (!isLikelyPinoJsonLogLine(line)) {
+          emit += `${line}\n`;
+        }
+      }
+      return emit.length > 0 ? ((original as Function)(emit, ...rest) as boolean) : true;
+    } as typeof process.stdout.write;
+
+  process.stdout.write = installBufferedLogFilter(originalStdoutWrite, stdoutBuf);
+  process.stderr.write = installBufferedLogFilter(originalStderrWrite, stderrBuf);
 
   const restoreStdio = () => {
     suppressLogs = false;
+    const flushRemainder = (buf: { s: string }, orig: typeof process.stdout.write): void => {
+      const rest = buf.s.trimEnd();
+      buf.s = '';
+      if (!rest.length) return;
+      if (!isLikelyPinoJsonLogLine(rest)) {
+        orig(`${rest}\n`);
+      }
+    };
+    flushRemainder(stdoutBuf, originalStdoutWrite);
+    flushRemainder(stderrBuf, originalStderrWrite);
     process.stdout.write = originalStdoutWrite;
     process.stderr.write = originalStderrWrite;
   };
@@ -511,25 +551,30 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
   };
 
   const handleCtrlC = () => {
-    const now = Date.now();
-    const decision = resolveCtrlCAction(
-      editor.getText().trim().length > 0,
-      now,
-      state.lastCtrlCAt,
-    );
-    state.lastCtrlCAt = decision.nextLastCtrlCAt;
-    if (decision.action === 'clear') {
+    if (editor.getText().trim().length > 0) {
       editor.setText('');
-      setActivityStatus('cleared input; press ctrl+c again to exit');
+      setActivityStatus('cleared input');
       tui.requestRender();
-    } else if (decision.action === 'exit') {
-      requestExit();
-    } else {
-      setActivityStatus('press ctrl+c again to exit');
-      tui.requestRender();
+      return;
     }
+    if (state.activeRunId) {
+      void abortActive().then(() => {
+        chatLog.addSystem('Aborted.');
+        tui.requestRender();
+      });
+      return;
+    }
+    requestExit();
   };
   editor.onCtrlC = handleCtrlC;
+
+  // Raw TTY often does not deliver SIGINT for Ctrl+C; pi-tui README recommends a global listener
+  // so exit works even when focus or key encoding would otherwise drop the keystroke.
+  tui.addInputListener((data) => {
+    if (!matchesCtrlCSequence(data)) return undefined;
+    handleCtrlC();
+    return { consume: true };
+  });
 
   // Exit
   let finishTui: (() => void) | null = null;

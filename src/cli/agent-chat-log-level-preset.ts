@@ -1,6 +1,6 @@
 /**
- * Quieter defaults for `xopc agent -m` / `agent -i`: use `warn` when no log level
- * env is set, so `info` chatter stays off the console in dev.
+ * Quieter console for full-screen chat UIs (`xopc agent -m` / `-i`, `xopc tui`): use `warn`
+ * when no log level env is set, so `info` chatter stays off the terminal.
  * This module must load before `../utils/logger.js` (imported from `cli/index.ts`).
  */
 function argvHasAgentMessageOrInteractive(argv: string[]): boolean {
@@ -14,6 +14,10 @@ function argvHasAgentMessageOrInteractive(argv: string[]): boolean {
   return false;
 }
 
+function argvHasTuiCommand(argv: string[]): boolean {
+  return argv.includes('tui');
+}
+
 const env = process.env;
 if (
   !env.VITEST &&
@@ -23,7 +27,7 @@ if (
   !env.DEBUG &&
   !process.argv.includes('--verbose') &&
   !process.argv.includes('-v') &&
-  argvHasAgentMessageOrInteractive(process.argv)
+  (argvHasAgentMessageOrInteractive(process.argv) || argvHasTuiCommand(process.argv))
 ) {
   env.XOPC_LOG_LEVEL = 'warn';
 }

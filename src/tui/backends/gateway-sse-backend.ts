@@ -78,6 +78,10 @@ export class GatewaySseBackend implements TuiBackend {
     const signal = this.chatAbort.signal;
     const runId = crypto.randomUUID();
 
+    // Match EmbeddedBackend: set activeRunId before any token/tool events so TUI state stays on one
+    // runId (avoids assistant under "default" and tools under the real uuid).
+    this.onEvent?.({ event: 'status', data: { status: 'started', runId } });
+
     // Fire-and-forget: run the HTTP request + SSE consumption in background
     // so the TUI event loop stays responsive for keyboard input.
     void (async () => {
