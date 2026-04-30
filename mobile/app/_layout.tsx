@@ -42,6 +42,30 @@ export default function RootLayout() {
                 presentation: 'modal',
               }}
             />
+            <Stack.Screen
+              name="agents"
+              options={{
+                headerShown: true,
+                title: m.agentsPage.title,
+                presentation: 'modal',
+              }}
+            />
+            <Stack.Screen
+              name="skills"
+              options={{
+                headerShown: true,
+                title: m.skillsPage.title,
+                presentation: 'modal',
+              }}
+            />
+            <Stack.Screen
+              name="channels"
+              options={{
+                headerShown: true,
+                title: m.channelsPage.title,
+                presentation: 'modal',
+              }}
+            />
           </Stack>
         </PaperProvider>
       </QueryClientProvider>

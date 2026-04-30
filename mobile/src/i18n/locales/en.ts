@@ -145,6 +145,41 @@ export const en = {
     retry: 'Retry',
   },
 
+  // ── Agents page ──────────────────────────────────────────
+  agentsPage: {
+    title: 'Agents',
+    empty: 'No agents configured on the gateway.',
+    loadFailed: 'Failed to load agents.',
+    defaultBadge: 'Default',
+    model: 'Model',
+    chatWith: 'Chat',
+  },
+
+  // ── Channels page ────────────────────────────────────────
+  channelsPage: {
+    title: 'Channels',
+    empty: 'No channels configured.',
+    loadFailed: 'Failed to load channels.',
+    enabled: 'Enabled',
+    disabled: 'Disabled',
+    connected: 'Connected',
+    disconnected: 'Disconnected',
+  },
+
+  // ── Skills page ─────────────────────────────────────────
+  skillsPage: {
+    title: 'Skills',
+    empty: 'No skills available.',
+    loadFailed: 'Failed to load skills.',
+    enabled: 'Enabled',
+    disabled: 'Disabled',
+    sourceBuiltin: 'Built-in',
+    sourceWorkspace: 'Workspace',
+    sourceGlobal: 'Global',
+    sourceExtra: 'Extra',
+    managed: 'Managed',
+  },
+
   // ── Common ──────────────────────────────────────────────
   common: {
     ok: 'OK',
