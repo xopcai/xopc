@@ -32,6 +32,11 @@ export type WeixinQrLoginCliOptions = {
   account?: string;
   /** When true, merge `channels.weixin.enabled` and accounts entry after success. */
   writeConfig?: boolean;
+  /**
+   * When set (e.g. interactive onboard), merges Weixin after login into this in-memory snapshot
+   * instead of reloading from disk so prior unsaved onboarding edits are preserved when saving.
+   */
+  existingConfig?: Config;
 };
 
 export function getWeixinLoginApiContext(cfg: Config, accountHint?: string): { baseUrl: string; routeTag?: string } {
@@ -87,7 +92,7 @@ export async function runWeixinQrLoginCli(opts: WeixinQrLoginCliOptions): Promis
   message: string;
 }> {
   const configPath = opts.configPath ?? process.env.XOPC_CONFIG_PATH;
-  const cfg = loadConfig(configPath);
+  const cfg = opts.existingConfig ?? loadConfig(configPath);
   const { baseUrl, routeTag } = getWeixinLoginApiContext(cfg, opts.account);
   const timeoutMs = opts.timeoutMs ?? 480_000;
   const verbose = Boolean(opts.verbose);

@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import { join } from 'path';
-import { input, select, confirm } from '@inquirer/prompts';
+import { select } from '@inquirer/prompts';
 import { saveConfig } from '../../config/index.js';
 import { register, formatExamples } from '../registry.js';
 import type { CLIContext } from '../registry.js';
@@ -11,6 +11,8 @@ import { acquireGatewayLock, GatewayLockError } from '../../gateway/lock.js';
 import { setupChannels as runChannelOnboard, getChannelConfigurators } from './onboard/channels/index.js';
 import { seedMainAgentBootstrap } from '../../agent/context/workspace-seed.js';
 import { initWorkspace } from '../utils/init-workspace.js';
+import { ConfigSchema } from '../../config/schema.js';
+import { isWeixinOnboardConfigured } from '../../../extensions/weixin/src/adapters/onboard-cli.js';
 
 function isInteractive(): boolean {
   return process.stdin.isTTY && process.stdout.isTTY;
@@ -26,14 +28,14 @@ async function setupNonInteractive(_configPath: string, existingConfig: Config):
 
 function createOnboardCommand(ctx: CLIContext): Command {
   const cmd = new Command('onboard')
-    .description('Interactive setup wizard for xopc')
+    .description('Interactive setup wizard for xopc (gateway uses schema defaults)')
     .addHelpText(
       'after',
       formatExamples([
         'xopc onboard              # Full interactive setup',
         'xopc onboard --model      # Configure LLM model only',
-        'xopc onboard --channels   # Configure channels only',
-        'xopc onboard --gateway    # Configure gateway only',
+        'xopc onboard --channels   # Configure channels (incl. Weixin QR)',
+        'xopc onboard --gateway    # Apply default gateway settings (quiet)',
       ])
     )
     .option('--model', 'Configure LLM provider and model')
@@ -56,8 +58,15 @@ function createOnboardCommand(ctx: CLIContext): Command {
   return cmd;
 }
 
+type OnboardOptions = {
+  model?: boolean;
+  channels?: boolean;
+  gateway?: boolean;
+  all?: boolean;
+};
+
 async function runOnboard(
-  options: { model?: boolean; channels?: boolean; gateway?: boolean; all?: boolean },
+  options: OnboardOptions,
   ctx: CLIContext
 ): Promise<void> {
   console.log(colors.cyan('\n🚀 Welcome to xopc setup!\n'));
@@ -74,6 +83,8 @@ async function runOnboard(
   const doChannels = options.channels || options.all || (!options.model && !options.gateway);
   const doGateway = options.gateway || options.all || (!options.model && !options.channels);
   const runFullWizard = !options.model && !options.channels && !options.gateway;
+  /** Any setup step besides the unified launch prompt ran in interactive flow. */
+  const didConfigurableSteps = doModel || doChannels || doGateway;
 
   if (!isInteractive()) {
     // Non-interactive mode
@@ -138,8 +149,8 @@ async function runOnboard(
   if (runFullWizard) {
     console.log('🚀 Next steps:');
     if (gatewayConfigured) {
-      console.log('  1. Open the Web console in your browser (URL above; start the gateway below if needed)');
-      console.log('  2. Or chat in the terminal: xopc agent -i');
+      console.log('  1. Choose how to launch below (gateway or terminal UI)');
+      console.log('  2. Or chat with: xopc agent -i');
       console.log('  3. Optional: read BOOTSTRAP.md in your workspace for workspace tips');
     } else {
       console.log('  1. Chat in the terminal: xopc agent -i');
@@ -166,16 +177,16 @@ async function runOnboard(
     console.log('  Bootstrap:', join(workspacePath, 'BOOTSTRAP.md'));
   }
 
-  if (showGatewaySummary) {
-    await startGatewayNow(config as Config, ctx);
+  if (isInteractive() && didConfigurableSteps) {
+    await promptLaunchAfterOnboard(config as Config, ctx, { doChannels });
   }
 
   process.exit(0);
 }
 
-async function startGatewayNow(config: Config, ctx: CLIContext): Promise<void> {
-  const host = (config as any)?.gateway?.host || '0.0.0.0';
-  const port = (config as any)?.gateway?.port || 18790;
+async function startGatewayInBackground(config: Config, ctx: CLIContext): Promise<void> {
+  const host = (config as { gateway?: { host?: string } }).gateway?.host ?? '127.0.0.1';
+  const port = (config as { gateway?: { port?: number } }).gateway?.port ?? 18790;
   const displayHost = host === '0.0.0.0' ? 'localhost' : host;
 
   let isRunning = false;
@@ -195,146 +206,139 @@ async function startGatewayNow(config: Config, ctx: CLIContext): Promise<void> {
     console.log('📝 To apply the new configuration, restart gateway:');
     console.log('   xopc gateway restart');
   } else {
-    if (isInteractive()) {
-      const shouldStart = await confirm({
-        message: 'Start Gateway WebUI now (background mode)?',
-        default: true,
-      });
+    console.log('\n🚀 Starting Gateway WebUI in background...');
+    console.log('');
 
-      if (shouldStart) {
-        console.log('\n🚀 Starting Gateway WebUI in background...');
-        console.log('');
+    const { spawn } = await import('child_process');
+    const args = [
+      ...process.execArgv,
+      ...process.argv.slice(1).filter((arg) => !arg.includes('onboard') && arg !== '--quick'),
+      'gateway',
+      '--background',
+      '--host',
+      host,
+      '--port',
+      String(port),
+    ];
 
-        const { spawn } = await import('child_process');
-        const args = [
-          ...process.execArgv,
-          ...process.argv.slice(1).filter(arg => !arg.includes('onboard') && arg !== '--quick'),
-          'gateway',
-          '--background',
-          '--host', host,
-          '--port', String(port),
-        ];
+    const child = spawn(process.execPath, args, {
+      detached: true,
+      stdio: 'ignore',
+      env: process.env,
+    });
 
-        const child = spawn(process.execPath, args, {
-          detached: true,
-          stdio: 'ignore',
-          env: process.env,
-        });
+    child.unref();
 
-        child.unref();
+    await new Promise((resolve) => setTimeout(resolve, 500));
 
-        await new Promise(resolve => setTimeout(resolve, 500));
-
-        if (child.pid && !child.killed) {
-          console.log('✅ Gateway started in background');
-          console.log(`   PID: ${child.pid}`);
-          console.log(`   URL: http://${displayHost}:${port}`);
-          const token = (config as any)?.gateway?.auth?.token;
-          if (token) {
-            console.log(`   Token: ${token.slice(0, 8)}...${token.slice(-8)}`);
-          }
-        } else {
-          console.log('⚠️  Failed to start gateway automatically.');
-          console.log('   You can start it manually with:');
-          console.log(`   xopc gateway --background`);
-        }
-      } else {
-        console.log('\n⏭️  Skipping gateway startup.');
-        console.log('   You can start it later with:');
-        console.log(`   xopc gateway --background`);
+    if (child.pid && !child.killed) {
+      console.log('✅ Gateway started in background');
+      console.log(`   PID: ${child.pid}`);
+      console.log(`   URL: http://${displayHost}:${port}`);
+      const token = (config as { gateway?: { auth?: { token?: string } } }).gateway?.auth?.token;
+      if (token) {
+        console.log(`   Token: ${token.slice(0, 8)}...${token.slice(-8)}`);
       }
     } else {
-      console.log('\n🚀 Gateway is configured but not running.');
-      console.log('');
-      console.log('📝 To start the gateway in background:');
-      console.log(`   xopc gateway --background`);
-      console.log('');
-      console.log('📝 To start in foreground (development mode):');
-      console.log(`   pnpm run dev -- gateway --host ${host} --port ${port}`);
+      console.log('⚠️  Failed to start gateway automatically.');
+      console.log('   Start manually with:');
+      console.log('   xopc gateway --background');
     }
   }
 
   console.log('');
-  console.log('📚 Other useful commands:');
+  console.log('📚 Useful commands:');
   console.log('   xopc gateway status    # Check gateway status');
   console.log('   xopc gateway stop      # Stop gateway');
   console.log('   xopc gateway restart   # Restart gateway');
   console.log('   xopc gateway logs      # View logs');
 }
 
+async function promptLaunchAfterOnboard(
+  config: Config,
+  ctx: CLIContext,
+  flags: { doChannels: boolean },
+): Promise<void> {
+  console.log('');
+  const choice = await select<'tui' | 'gateway' | 'none'>({
+    message: 'How do you want to launch xopc now?',
+    choices: [
+      {
+        value: 'tui',
+        name: 'Terminal UI (embedded)',
+        description: 'xopc tui --local — no gateway process required',
+      },
+      {
+        value: 'gateway',
+        name: 'Gateway WebUI (background)',
+        description: 'Start the HTTP gateway for the browser console',
+      },
+      {
+        value: 'none',
+        name: 'Exit — I will start manually',
+        description: 'Finish setup without starting a runtime',
+      },
+    ],
+    default: 'tui',
+  });
+
+  if (choice === 'gateway') {
+    await startGatewayInBackground(config, ctx);
+    return;
+  }
+
+  if (choice === 'tui') {
+    if (flags.doChannels && !isWeixinOnboardConfigured(config)) {
+      console.log(
+        colors.gray(
+          '\n💡 Weixin is not logged in yet. When ready run: xopc channels login --channel weixin\n',
+        ),
+      );
+    }
+    const { runTui } = await import('../../tui/tui.js');
+    await runTui({ local: true });
+    return;
+  }
+
+  console.log('\n⏭️  You can start later:');
+  console.log('   xopc gateway --background');
+  console.log('   xopc tui --local');
+}
+
 async function setupGateway(config: Config): Promise<Config> {
-  console.log(colors.cyan('\n🌐 Step 4: Gateway WebUI\n'));
+  console.log(colors.cyan('\n🌐 Gateway WebUI\n'));
+  console.log(
+    colors.gray(
+      'Applying defaults from config schema (127.0.0.1:18790, token auth; token generated if missing).\n',
+    ),
+  );
 
-  const enableGateway = await confirm({
-    message: 'Enable Gateway WebUI?',
-    default: true,
-  });
+  const gw = config.gateway ?? {};
+  const { randomBytes } = await import('node:crypto');
+  const authMode = gw.auth?.mode === 'none' ? ('none' as const) : ('token' as const);
+  const token =
+    authMode === 'token'
+      ? typeof gw.auth?.token === 'string' && gw.auth.token.length > 0
+        ? gw.auth.token
+        : randomBytes(24).toString('hex')
+      : undefined;
 
-  if (!enableGateway) {
-    console.log('ℹ️  Gateway skipped.');
-    return config;
-  }
-
-  const host = await select({
-    message: 'Bind address:',
-    choices: [
-      { name: 'Localhost only (127.0.0.1)', value: '127.0.0.1' },
-      { name: 'All interfaces (0.0.0.0)', value: '0.0.0.0' },
-    ],
-    default: '0.0.0.0',
-  });
-
-  const portInput = await input({
-    message: 'Port:',
-    default: '18790',
-    validate: (input) => {
-      const port = parseInt(input, 10);
-      return !isNaN(port) && port > 0 && port < 65536 || 'Invalid port number';
+  const merged: Config = {
+    ...config,
+    gateway: {
+      ...gw,
+      host: gw.host ?? '127.0.0.1',
+      port: gw.port ?? 18790,
+      auth:
+        authMode === 'none'
+          ? { mode: 'none' as const }
+          : { mode: 'token' as const, token: token! },
     },
-  });
-
-  const port = parseInt(portInput, 10);
-
-  const authMode = await select({
-    message: 'Authentication:',
-    choices: [
-      { name: 'Token (recommended)', value: 'token' },
-      { name: 'None (local only)', value: 'none' },
-    ],
-    default: 'token',
-  });
-
-  let token: string | undefined;
-  if (authMode === 'token') {
-    const existingToken = (config as any)?.gateway?.auth?.token;
-    if (existingToken) {
-      const reuse = await confirm({
-        message: 'Use existing token?',
-        default: true,
-      });
-      if (reuse) {
-        token = existingToken;
-      }
-    }
-
-    if (!token) {
-      const crypto = await import('crypto');
-      token = crypto.randomBytes(24).toString('hex');
-      console.log(`\n🔑 Generated token: ${token.slice(0, 8)}...${token.slice(-8)}`);
-    }
-  }
-
-  (config as any).gateway = (config as any).gateway || {};
-  (config as any).gateway.host = host;
-  (config as any).gateway.port = port;
-  (config as any).gateway.auth = {
-    mode: authMode,
-    ...(token ? { token } : {}),
   };
 
-  console.log('✅ Gateway configuration saved.\n');
-
-  return config;
+  const parsed = ConfigSchema.parse(merged);
+  console.log('✅ Gateway defaults applied.\n');
+  return parsed;
 }
 
 register({
@@ -344,10 +348,6 @@ register({
   factory: createOnboardCommand,
   metadata: {
     category: 'setup',
-    examples: [
-      'xopc onboard',
-      'xopc onboard --model',
-      'xopc onboard --channels',
-    ],
+    examples: ['xopc onboard', 'xopc onboard --model', 'xopc onboard --channels'],
   },
 });

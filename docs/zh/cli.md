@@ -81,7 +81,7 @@ xopc setup --workspace ~/my-workspace
 
 ## onboard
 
-xopc 的交互式设置向导。这是设置 xopc 的推荐方式。
+xopc 的交互式设置向导。Gateway 绑定/端口/令牌沿用配置默认值（`127.0.0.1:18790`，token 缺失时自动生成），向导中不再逐项询问。
 
 ```bash
 xopc onboard
@@ -93,7 +93,7 @@ xopc onboard
 |------|------|
 | `--model` | 仅配置 LLM 服务商和模型 |
 | `--channels` | 仅配置消息渠道 |
-| `--gateway` | 仅配置 Gateway WebUI |
+| `--gateway` | 静默应用默认 Gateway 设置 |
 | `--all` | 配置所有内容（默认） |
 
 **示例**：
@@ -115,9 +115,9 @@ xopc onboard --gateway
 **功能**（不带选项时）：
 - 自动检测是否需要设置工作区
 - 配置 LLM 服务商和模型
-- 配置消息渠道（Telegram）
-- 配置 Gateway WebUI 并自动生成访问令牌
-- 完成后显示启动网关的命令
+- 配置消息渠道（Telegram、在渠道菜单中可选 Weixin 扫码等）
+- 应用 Gateway 默认设置（令牌缺失则自动生成）
+- 交互结束前可选择：**终端 UI（本地嵌入）**、**后台启动 Gateway**，或稍后手动启动
 
 ---
 

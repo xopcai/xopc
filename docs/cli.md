@@ -76,7 +76,7 @@ xopc setup --workspace ~/my-workspace
 
 ## onboard
 
-Interactive setup wizard for xopc.
+Interactive setup wizard for xopc (gateway defaults: `127.0.0.1:18790`, token auth; no prompts for bind/port/token).
 
 ```bash
 xopc onboard
@@ -88,7 +88,7 @@ xopc onboard
 |--------|-------------|
 | `--model` | Configure LLM provider and model only |
 | `--channels` | Configure messaging channels only |
-| `--gateway` | Configure gateway WebUI only |
+| `--gateway` | Apply default gateway settings (quiet) |
 | `--all` | Configure everything (default) |
 
 **Examples:**
@@ -107,8 +107,9 @@ xopc onboard --channels
 **Features:**
 - Auto-detects if workspace needs setup
 - Configure LLM provider and model
-- Configure messaging channels (Telegram)
-- Configure gateway WebUI with auto-generated token
+- Configure messaging channels (Telegram, Weixin QR via channel menu, …)
+- Apply gateway defaults with auto-generated token when missing
+- At the end (interactive): choose **Terminal UI (embedded)** or **Gateway (background)** or exit
 
 ---
 
