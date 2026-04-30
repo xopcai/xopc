@@ -7,7 +7,10 @@ import { createFixedWindowRateLimiter } from '../../infra/rate-limit.js';
 import { createLogger } from '../../utils/logger.js';
 import type { GatewayService } from '../service.js';
 import { maxWebchatAgentRequestBodyBytes } from '../chat-limits.js';
+import { buildGatewayConsoleCspHeader } from '../security/csp.js';
+import { checkBrowserOrigin } from '../security/origin-check.js';
 import { auth } from './middleware/auth.js';
+import { operatorScopes } from './middleware/scopes.js';
 import { logContextMiddleware } from './middleware/log-context.js';
 import { logger } from './middleware/logger.js';
 import { registerPublicExtensionAssetRoutes } from './routes/auth-registry-extensions.js';
@@ -61,6 +64,10 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   app.use(logger());
   app.use(cors(CORS_OPTIONS));
 
+  // Build CSP header once at startup (no inline script hashes needed for SPA)
+  const gatewayConsoleCsp = buildGatewayConsoleCspHeader();
+
+  // Security headers middleware
   app.use(createMiddleware(async (c, next) => {
     await next();
     if (isExtensionGatewayUiAssetPath(c.req.path)) {
@@ -72,10 +79,37 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     c.header('X-XSS-Protection', '1; mode=block');
     // microphone=(self): allow same-origin chat voice (composer). microphone=() breaks packaged Electron loading the gateway SPA.
     c.header('Permissions-Policy', 'camera=(), microphone=(self), geolocation=()');
-    c.header(
-      'Content-Security-Policy',
-      "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'",
-    );
+    c.header('Content-Security-Policy', gatewayConsoleCsp);
+  }));
+
+  // Browser Origin check middleware for API routes (CSRF protection).
+  // Non-browser requests (no Origin header) pass through — they are
+  // authenticated by the token middleware instead.
+  const allowedOrigins = Array.isArray(corsOrigin) ? corsOrigin : [corsOrigin];
+  app.use('/api/*', createMiddleware(async (c, next) => {
+    const origin = c.req.header('origin');
+    if (!origin) {
+      // Non-browser request (CLI, server-to-server) — skip origin check
+      return next();
+    }
+
+    const result = checkBrowserOrigin({
+      requestHost: c.req.header('host'),
+      origin,
+      allowedOrigins,
+      allowHostHeaderOriginFallback: true,
+      isLocalClient: false,
+    });
+
+    if (!result.ok) {
+      log.warn(
+        { origin, reason: 'reason' in result ? result.reason : 'unknown', path: c.req.path },
+        'Browser origin check failed',
+      );
+      return c.json({ error: 'Forbidden', message: 'Origin not allowed' }, 403);
+    }
+
+    return next();
   }));
 
   app.use('/api/skills/upload', bodyLimit({
@@ -112,6 +146,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
       getGatewayAuth: () => service.currentConfig.gateway?.auth,
     }),
   );
+  authenticated.use(operatorScopes());
 
   const strictRateLimiter = new Map<string, ReturnType<typeof createFixedWindowRateLimiter>>();
 
