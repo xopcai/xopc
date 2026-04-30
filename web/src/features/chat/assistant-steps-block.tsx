@@ -331,6 +331,8 @@ export function AssistantStepsBlock({
   toolLabels,
   stepLabels,
   sessionKey,
+  isMessageStreaming = false,
+  finalAnswerStarted = false,
 }: {
   blocks: Array<ThinkingContent | ToolUseContent>;
   toolLabels: { input: string; output: string; noOutput: string };
@@ -351,6 +353,10 @@ export function AssistantStepsBlock({
     unknownTool: string;
   };
   sessionKey?: string | null;
+  /** Assistant reply SSE still open for this bubble. */
+  isMessageStreaming?: boolean;
+  /** A non-empty assistant `text` block exists after this thinking/tool chunk (final answer has begun). */
+  finalAnswerStarted?: boolean;
 }) {
   const language = useLocaleStore((s) => s.language);
   const visibleBlocks = useMemo(() => filterVisibleSteps(blocks), [blocks]);
@@ -360,26 +366,29 @@ export function AssistantStepsBlock({
       (b.type === 'thinking' && b.streaming) || (b.type === 'tool_use' && b.status === 'running'),
   );
 
+  /** Open during tools/thinking; fold as soon as answer text starts, or when the turn ends (tool-only). */
+  const stepsDrawerOpen = Boolean(isMessageStreaming) && !finalAnswerStarted;
+
   const roundStartRef = useRef<number | null>(null);
-  const prevAnyActiveRef = useRef(false);
+  const prevStepsDrawerOpenRef = useRef(false);
   const [frozenDurationMs, setFrozenDurationMs] = useState<number | null>(null);
-  const [expanded, setExpanded] = useState(anyActive);
+  const [expanded, setExpanded] = useState(stepsDrawerOpen);
 
   if (anyActive && roundStartRef.current === null) {
     roundStartRef.current = Date.now();
   }
 
   useEffect(() => {
-    if (anyActive) {
+    if (stepsDrawerOpen) {
       setExpanded(true);
-    } else if (prevAnyActiveRef.current) {
+    } else if (prevStepsDrawerOpenRef.current) {
       if (roundStartRef.current !== null) {
         setFrozenDurationMs(Date.now() - roundStartRef.current);
       }
       setExpanded(false);
     }
-    prevAnyActiveRef.current = anyActive;
-  }, [anyActive]);
+    prevStepsDrawerOpenRef.current = stepsDrawerOpen;
+  }, [stepsDrawerOpen]);
 
   const completedHeader = useMemo(() => {
     if (anyActive) return '';
