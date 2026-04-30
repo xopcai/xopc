@@ -6,7 +6,6 @@ export default [
     ignores: [
       "dist/**",
       "docs/**",
-      "mobile/**",
       "node_modules/**",
       "ui/**",
       "web/**",
