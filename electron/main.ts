@@ -71,10 +71,12 @@ if (gotTheLock) {
     const url = commandLine.find((arg) => arg.startsWith('xopc://'));
     if (url) handleDeepLink(url);
 
-    if (mainWindow) {
+    if (mainWindow && !mainWindow.isDestroyed()) {
       if (mainWindow.isMinimized()) mainWindow.restore();
       mainWindow.show();
       mainWindow.focus();
+    } else {
+      createWindow();
     }
   });
 }
@@ -193,8 +195,43 @@ async function resolveWindowLoad(): Promise<
   return { kind: 'file', path: join(__dirname, '../renderer/index.html') };
 }
 
+/** Send navigate IPC once the window can receive it (handles tray actions after window was closed). */
+function navigateMainWindow(hashPath: string): void {
+  const needNew = !mainWindow || mainWindow.isDestroyed();
+  if (needNew) {
+    createWindow();
+  }
+  const win = mainWindow;
+  if (!win || win.isDestroyed()) return;
+  win.show();
+  win.focus();
+  const path = hashPath.startsWith('/') ? hashPath : `/${hashPath}`;
+  const send = () => {
+    if (!win.isDestroyed()) {
+      win.webContents.send('menu:navigate', path);
+    }
+  };
+  if (win.webContents.isLoading()) {
+    win.webContents.once('did-finish-load', send);
+  } else {
+    send();
+  }
+}
+
+function focusOrCreateMainWindow(): void {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    createWindow();
+    return;
+  }
+  if (mainWindow.isMinimized()) {
+    mainWindow.restore();
+  }
+  mainWindow.show();
+  mainWindow.focus();
+}
+
 function createWindow(): void {
-  if (mainWindow) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.focus();
     return;
   }
@@ -220,7 +257,17 @@ function createWindow(): void {
   const trayIconDir = app.isPackaged
     ? join(process.resourcesPath, 'resources')
     : join(__dirname, '../../electron/resources');
-  createTray(win, trayIconDir);
+  createTray(trayIconDir, {
+    showWindow: () => {
+      focusOrCreateMainWindow();
+    },
+    navigate: (hashPath) => {
+      navigateMainWindow(hashPath);
+    },
+    quit: () => {
+      app.quit();
+    },
+  });
 
   initAutoUpdater(win);
 
@@ -287,7 +334,7 @@ app.whenReady().then(async () => {
 
   const hotkey = process.platform === 'darwin' ? 'Command+Shift+Space' : 'Control+Shift+Space';
   const registered = globalShortcut.register(hotkey, () => {
-    if (!mainWindow) {
+    if (!mainWindow || mainWindow.isDestroyed()) {
       createWindow();
       return;
     }
