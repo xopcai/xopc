@@ -9,6 +9,7 @@ import { ExtensionLoader } from '../../extensions/index.js';
 import { join } from 'path';
 import { listSessions } from './agent/sessions.js';
 import { startInteractiveChat } from './agent/interactive.js';
+import { renderStreamToTerminal } from './agent/stream-renderer.js';
 
 const log = createLogger('AgentCommand');
 
@@ -141,8 +142,7 @@ function createAgentCommand(_ctx: CLIContext): Command {
         if (oneShotModel) {
           await agent.switchModelForSession(sessionKey, oneShotModel);
         }
-        const response = await agent.processDirect(options.message, sessionKey);
-        console.log('\n🤖:', response);
+        await renderStreamToTerminal(agent, options.message, sessionKey);
         if (oneShotModel) {
           await agent.resetSessionModelToAgentDefault(sessionKey);
         }

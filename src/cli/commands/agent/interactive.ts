@@ -6,6 +6,7 @@ import type { Interface as _Interface } from 'readline';
 import type { AgentService } from '../../../agent/index.js';
 import { getSessionManager } from '../../utils/session.js';
 import { listSessions } from './sessions.js';
+import { renderStreamToTerminal } from './stream-renderer.js';
 
 export interface InteractiveOptions {
   workspace: string;
@@ -74,8 +75,9 @@ export async function startInteractiveChat(
       return;
     }
 
-    const response = await agent.processDirect(input, sessionKey);
-    console.log('\n🤖:', response);
+    rl.pause();
+    await renderStreamToTerminal(agent, input, sessionKey);
+    rl.resume();
     rl.prompt();
   });
 
