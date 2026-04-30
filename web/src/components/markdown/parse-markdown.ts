@@ -23,6 +23,6 @@ const MARKED_OPTIONS: MarkedOptions = {
  * Parse markdown to HTML string.
  * Output MUST be passed through DOMPurify before dangerouslySetInnerHTML.
  */
-export function parseMarkdown(text: string): string {
-  return marked.parse(text, MARKED_OPTIONS) as string;
+export function parseMarkdown(text: string, overrides?: Partial<MarkedOptions>): string {
+  return marked.parse(text, { ...MARKED_OPTIONS, ...overrides }) as string;
 }

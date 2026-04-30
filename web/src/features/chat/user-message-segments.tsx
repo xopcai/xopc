@@ -95,9 +95,12 @@ export const UserMessageSegments = memo(function UserMessageSegments({ text }: {
             {fileBubbleLabel(p.path)}
           </span>
         ) : p.text ? (
-          <span key={`txt-${i}`} className="min-w-0 whitespace-pre-wrap break-words text-fg">
-            {p.text}
-          </span>
+          <div
+            key={`txt-${i}`}
+            className="markdown-content inline-block min-w-0 max-w-full align-baseline text-fg"
+          >
+            <MarkdownView content={p.text} compact breaks />
+          </div>
         ) : null,
       )}
     </span>

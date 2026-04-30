@@ -30,15 +30,17 @@ export interface MarkdownViewProps {
   content: string;
   /** Tighter heading/paragraph spacing for chat bubbles */
   compact?: boolean;
+  /** GFM line breaks: single `\n` in paragraphs becomes `<br>` (chat-style wrapping). */
+  breaks?: boolean;
   className?: string;
 }
 
-function MarkdownViewImpl({ content, compact = false, className }: MarkdownViewProps) {
+function MarkdownViewImpl({ content, compact = false, breaks = false, className }: MarkdownViewProps) {
   const safeHtml = useMemo(() => {
     if (!content.trim()) return '';
-    const raw = parseMarkdown(content);
+    const raw = parseMarkdown(content, breaks ? { breaks: true } : undefined);
     return DOMPurify.sanitize(raw, { USE_PROFILES: { html: true } });
-  }, [content]);
+  }, [content, breaks]);
 
   return (
     <div
