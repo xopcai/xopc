@@ -15,6 +15,8 @@ import { SessionManager } from '../session/index.js';
 import type { Config } from '../config/schema.js';
 import type { SessionListQuery, ExportFormat } from '../session/types.js';
 import { resolveGatewayAuth, assertGatewayAuthConfigured, validateToken, extractToken, type ResolvedGatewayAuth } from './auth.js';
+import { assertGatewayAuthNotKnownWeak } from './security/known-weak-secrets.js';
+import { auditGatewayConfig } from './security/audit.js';
 import { getModelRegistry } from '../providers/index.js';
 import {
   createLogger,
@@ -130,6 +132,16 @@ export class GatewayService {
 
     // Validate auth configuration
     assertGatewayAuthConfigured(this.auth);
+
+    // Reject known weak / placeholder credentials at startup
+    assertGatewayAuthNotKnownWeak(this.auth);
+
+    // Security audit: detect dangerous configuration combinations early
+    auditGatewayConfig({
+      auth: this.auth,
+      host: this.config.gateway?.host,
+      corsOrigins: this.config.gateway?.corsOrigins,
+    });
 
     // Log token info (not the token itself)
     if (this.auth.mode === 'token') {
@@ -1544,7 +1556,7 @@ export class GatewayService {
   /**
    * Get current auth mode.
    */
-  getAuthMode(): 'none' | 'token' {
+  getAuthMode(): 'none' | 'token' | 'password' {
     return this.auth.mode;
   }
 

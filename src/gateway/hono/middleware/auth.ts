@@ -6,6 +6,7 @@ import {
   isAuthRateLimitGloballyDisabled,
   resolveAuthRateLimitConfig,
 } from '../../auth-rate-limit.js';
+import { safeEqualSecret } from '../../security/secret-equal.js';
 import { createLogger } from '../../../utils/logger.js';
 
 const log = createLogger('Hono:Auth');
@@ -17,11 +18,11 @@ export interface AuthConfig {
 }
 
 /**
- * Validate token from header or query parameter
+ * Validate token using constant-time comparison to prevent timing attacks.
  */
 function validateToken(providedToken: string | undefined, expectedToken: string): boolean {
   if (!providedToken) return false;
-  return providedToken === expectedToken;
+  return safeEqualSecret(providedToken, expectedToken);
 }
 
 /**
@@ -155,7 +156,7 @@ export function validateWebSocketAuth(
     return { valid: false, error: 'Missing authentication token' };
   }
 
-  if (!validateToken(providedToken, expectedToken)) {
+  if (!safeEqualSecret(providedToken, expectedToken)) {
     log.warn({ path: url.pathname, reason: 'invalid_token' }, 'WebSocket auth rejected: token mismatch');
     return { valid: false, error: 'Invalid authentication token' };
   }

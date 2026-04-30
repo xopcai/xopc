@@ -396,8 +396,9 @@ export const GatewayAuthRateLimitSchema = z
 
 export const GatewayAuthSchema = z
   .object({
-    mode: z.enum(['none', 'token']).default('token'),
+    mode: z.enum(['none', 'token', 'password']).default('token'),
     token: z.string().optional(),
+    password: z.string().optional(),
     rateLimit: GatewayAuthRateLimitSchema,
   })
   .default({
