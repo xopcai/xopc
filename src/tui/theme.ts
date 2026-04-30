@@ -51,7 +51,7 @@ function isLightBackground(): boolean {
       const rVal = XTERM_LEVELS[Math.floor(cubeIndex / 36)]!;
       const bgLum = relativeLuminanceRgb(rVal, gVal, bVal);
       return (
-        contrastRatio(bgLum, '#1E1E1E') >= contrastRatio(bgLum, '#E8E3D5')
+        contrastRatio(bgLum, '#1d1d1f') >= contrastRatio(bgLum, '#f5f5f7')
       );
     }
   }
@@ -60,52 +60,53 @@ function isLightBackground(): boolean {
 
 export const lightMode = isLightBackground();
 
+// Palette tokens align with DESIGN.md (§2 surface/text/border, §2.5 accent, §12.1).
 const darkPalette = {
-  text: '#E8E3D5',
-  dim: '#7B7F87',
-  accent: '#60A5FA',      // blue accent (matching xopc design system)
-  accentSoft: '#93C5FD',
-  border: '#3C414B',
-  userBg: '#2B2F36',
-  userText: '#F3EEE0',
-  systemText: '#9BA3B2',
-  toolPendingBg: '#1F2A2F',
-  toolSuccessBg: '#1E2D23',
-  toolErrorBg: '#2F1F1F',
-  toolTitle: '#60A5FA',
-  toolOutput: '#E1DACB',
-  quote: '#8CC8FF',
-  quoteBorder: '#3B4D6B',
-  code: '#F0C987',
-  codeBlock: '#1E232A',
-  codeBorder: '#343A45',
-  link: '#7DD3A5',
-  error: '#F97066',
-  success: '#7DD3A5',
+  text: '#f5f5f7',
+  dim: '#a1a1a6',
+  accent: '#3b82f6',
+  accentSoft: '#60a5fa',
+  border: '#48484a',
+  userBg: '#3a3a3c',
+  userText: '#f5f5f7',
+  systemText: '#8e8e93',
+  toolPendingBg: '#2c2c2e',
+  toolSuccessBg: '#1e2a22',
+  toolErrorBg: '#2a2222',
+  toolTitle: '#3b82f6',
+  toolOutput: '#d1d1d6',
+  quote: '#60a5fa',
+  quoteBorder: '#48484a',
+  code: '#d1d1d6',
+  codeBlock: '#1c1c1e',
+  codeBorder: '#48484a',
+  link: '#60a5fa',
+  error: '#f87171',
+  success: '#34d399',
 } as const;
 
 const lightPalette = {
-  text: '#1E1E1E',
-  dim: '#5B6472',
-  accent: '#2563EB',
-  accentSoft: '#3B82F6',
-  border: '#5B6472',
-  userBg: '#F3F0E8',
-  userText: '#1E1E1E',
-  systemText: '#4B5563',
-  toolPendingBg: '#EFF6FF',
-  toolSuccessBg: '#ECFDF5',
-  toolErrorBg: '#FEF2F2',
-  toolTitle: '#2563EB',
-  toolOutput: '#374151',
-  quote: '#1D4ED8',
-  quoteBorder: '#2563EB',
-  code: '#92400E',
-  codeBlock: '#F9FAFB',
-  codeBorder: '#92400E',
-  link: '#047857',
-  error: '#DC2626',
-  success: '#047857',
+  text: '#1d1d1f',
+  dim: '#6e6e73',
+  accent: '#2563eb',
+  accentSoft: '#3b82f6',
+  border: '#d2d2d7',
+  userBg: '#ffffff',
+  userText: '#1d1d1f',
+  systemText: '#86868b',
+  toolPendingBg: '#f0f5ff',
+  toolSuccessBg: '#ecfdf5',
+  toolErrorBg: '#fef2f2',
+  toolTitle: '#2563eb',
+  toolOutput: '#6e6e73',
+  quote: '#2563eb',
+  quoteBorder: '#d2d2d7',
+  code: '#92400e',
+  codeBlock: '#ffffff',
+  codeBorder: '#d2d2d7',
+  link: '#2563eb',
+  error: '#dc2626',
+  success: '#059669',
 } as const;
 
 export const palette = lightMode ? lightPalette : darkPalette;

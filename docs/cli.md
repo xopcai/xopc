@@ -33,6 +33,7 @@ pnpm run dev -- <command>
 | `onboard` | Interactive setup wizard |
 | `agents` | Manage multi-agent entries in config (`list`, add, delete) |
 | `agent` | Chat with Agent |
+| `tui` | Full-screen terminal UI (gateway or `--local` embedded) — see [TUI](./tui.md) |
 | `gateway` | Start REST gateway |
 | `cron` | Manage scheduled tasks |
 | `extension` | Manage extensions |
@@ -172,6 +173,32 @@ Bot: File listing...
 ```bash
 xopc agent -m "Continue our discussion" -s my-session
 ```
+
+---
+
+## tui
+
+Interactive terminal UI for chatting with the agent (streaming, tools, thinking). Built on `@mariozechner/pi-tui`.
+
+**Quick start:**
+
+```bash
+xopc tui                              # gateway mode (default URL in CLI; override with --url)
+xopc tui --local                      # embedded AgentService, no gateway
+xopc tui --url http://localhost:18790 --token <token>
+xopc tui -s <sessionKey> -m "Hello"   # resume session + optional first message
+```
+
+| Option | Description |
+|--------|-------------|
+| `--url <url>` | Gateway base URL |
+| `--token <token>` | Gateway bearer token |
+| `-s, --session <key>` | Session key (default: `cli:tui`) |
+| `-m, --message <text>` | Send once after connect |
+| `--local` | Embedded mode (no gateway) |
+| `--thinking <level>` | Thinking level override |
+
+Full behavior, slash commands, and keyboard shortcuts: **[Terminal UI (tui)](./tui.md)**.
 
 ---
 

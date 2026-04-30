@@ -38,6 +38,7 @@ pnpm run dev -- <command>
 | `onboard` | 交互式设置向导（LLM、渠道、Gateway） |
 | `agents` | 管理 `config.json` 中的多个智能体（`agents.list`：列出、添加、删除） |
 | `agent` | 与智能体对话 |
+| `tui` | 全屏终端对话界面（连网关或 `--local` 嵌入式）— 详见 [TUI](./tui.md) |
 | `gateway` | 启动 REST 网关 |
 | `cron` | 管理定时任务 |
 | `extension` | 管理扩展 |
@@ -189,6 +190,32 @@ Bot: File listing...
 ```bash
 xopc agent -m "Continue our discussion" -s my-session
 ```
+
+---
+
+## tui
+
+全屏终端里与智能体对话（流式输出、工具、思考块），基于 `@mariozechner/pi-tui`。
+
+**快速开始：**
+
+```bash
+xopc tui                              # 网关模式（CLI 内置默认地址；可用 --url 覆盖）
+xopc tui --local                      # 嵌入式 AgentService，无需网关
+xopc tui --url http://localhost:18790 --token <令牌>
+xopc tui -s <sessionKey> -m "你好"     # 指定会话 + 可选首条消息
+```
+
+| 参数 | 说明 |
+|------|------|
+| `--url <url>` | 网关根 URL |
+| `--token <token>` | 网关 Bearer 令牌 |
+| `-s, --session <key>` | 会话键（默认：`cli:tui`） |
+| `-m, --message <text>` | 连接成功后自动发送一条 |
+| `--local` | 嵌入式模式（不连网关） |
+| `--thinking <level>` | 思考等级覆盖 |
+
+斜杠命令、快捷键与两种模式说明见 **[终端界面（tui）](./tui.md)**。
 
 ---
 
