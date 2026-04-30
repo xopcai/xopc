@@ -100,9 +100,21 @@ function renderTextOrImageBlock(
   return null;
 }
 
+/** True once assistant text exists after this index (first answer token closes the steps drawer). */
+function hasAssistantTextAfter(content: MessageContent[], indexAfterSteps: number): boolean {
+  for (let j = indexAfterSteps; j < content.length; j++) {
+    const b = content[j];
+    if (b.type === 'text' && (b.text ?? '').length > 0) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function renderChunkedContent(
   content: MessageContent[],
   isUser: boolean,
+  isAssistantMessageStreaming: boolean,
   toolLabels: { input: string; output: string; noOutput: string },
   stepLabels: {
     thoughts: string;
@@ -136,6 +148,7 @@ function renderChunkedContent(
       }
       const slice = content.slice(start, i) as Array<ThinkingContent | ToolUseContent>;
       if (slice.length > 0) {
+        const finalAnswerStarted = !isUser && hasAssistantTextAfter(content, i);
         nodes.push(
           <AssistantStepsBlock
             key={`steps-${start}`}
@@ -143,6 +156,8 @@ function renderChunkedContent(
             toolLabels={toolLabels}
             stepLabels={stepLabels}
             sessionKey={sessionKey}
+            isMessageStreaming={!isUser && isAssistantMessageStreaming}
+            finalAnswerStarted={finalAnswerStarted}
           />,
         );
       }
@@ -472,6 +487,7 @@ export const MessageBubble = memo(function MessageBubble({
                 {renderChunkedContent(
                   displayForFlow,
                   isUser,
+                  isAssistant && isStreaming,
                   toolLabels,
                   stepLabels,
                   m.chat.attachmentPreviewImage,
