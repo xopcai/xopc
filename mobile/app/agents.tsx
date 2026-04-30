@@ -8,7 +8,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { useCallback } from 'react';
 import { FlatList, StyleSheet, useColorScheme, View } from 'react-native';
-import { ActivityIndicator, Button, Chip, Icon, List, Text } from 'react-native-paper';
+import { ActivityIndicator, Button, Chip, Icon, Text } from 'react-native-paper';
 
 import { useMessages } from '../src/i18n/messages';
 import { fetchChatAgents, type ChatAgentOption } from '../src/query/agents';
