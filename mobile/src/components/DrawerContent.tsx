@@ -161,7 +161,13 @@ export function DrawerContent(_props: DrawerContentComponentProps) {
             key={item.id}
             style={styles.navItem}
             onPress={() => {
-              /* placeholder — navigate to sub-pages in future */
+              if (item.id === 'agents') {
+                router.push('/agents');
+              } else if (item.id === 'skills') {
+                router.push('/skills');
+              } else if (item.id === 'channels') {
+                router.push('/channels');
+              }
             }}
             rippleColor={colors.activeBg}
           >

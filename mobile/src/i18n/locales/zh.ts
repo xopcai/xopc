@@ -147,6 +147,41 @@ export const zh: MessageBundle = {
     retry: '重试',
   },
 
+  // ── Agents 页面 ────────────────────────────────────────
+  agentsPage: {
+    title: '智能体',
+    empty: '网关上未配置任何智能体。',
+    loadFailed: '加载智能体失败。',
+    defaultBadge: '默认',
+    model: '模型',
+    chatWith: '对话',
+  },
+
+  // ── Channels 页面 ─────────────────────────────────────────
+  channelsPage: {
+    title: '消息通道',
+    empty: '未配置任何消息通道。',
+    loadFailed: '加载消息通道失败。',
+    enabled: '已启用',
+    disabled: '已禁用',
+    connected: '已连接',
+    disconnected: '未连接',
+  },
+
+  // ── Skills 页面 ──────────────────────────────────────────
+  skillsPage: {
+    title: '技能',
+    empty: '暂无可用技能。',
+    loadFailed: '加载技能失败。',
+    enabled: '已启用',
+    disabled: '已禁用',
+    sourceBuiltin: '内置',
+    sourceWorkspace: '工作区',
+    sourceGlobal: '全局',
+    sourceExtra: '扩展',
+    managed: '托管',
+  },
+
   // ── 通用 ────────────────────────────────────────────────
   common: {
     ok: '好',

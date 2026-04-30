@@ -271,9 +271,12 @@ export default function ChatScreen() {
   const modelName = useMemo(() => {
     const agents = agentsQuery.data?.items ?? [];
     const defaultId = agentsQuery.data?.defaultId ?? 'main';
-    const agent = agents.find((a) => a.id === defaultId);
-    return agent?.name ?? agent?.id ?? defaultId;
-  }, [agentsQuery.data]);
+    // Extract agentId from session key (format: {agentId}:{source}:{accountId}:{peerKind}:{peerId})
+    const sessionAgentId = sessionKey ? sessionKey.split(':')[0]?.trim().toLowerCase() : null;
+    const targetId = sessionAgentId || defaultId;
+    const agent = agents.find((a) => a.id === targetId);
+    return agent?.name ?? agent?.id ?? targetId;
+  }, [agentsQuery.data, sessionKey]);
 
   // ── Session data ─────────────────────────────────────────
   const sessionQuery = useQuery({

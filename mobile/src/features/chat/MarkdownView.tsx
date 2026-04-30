@@ -135,15 +135,18 @@ const darkStyle: MarkdownStyle = {
     backgroundColor: '#1F2937',
     borderColor: '#4B5563',
     borderWidth: 3,
+    color: '#D1D5DB',
   },
   list: {
     fontSize: 15,
+    color: '#E5E7EB',
     marginLeft: 16,
     bulletColor: '#9CA3AF',
     markerColor: '#9CA3AF',
   },
   table: {
     fontSize: 14,
+    color: '#E5E7EB',
     borderColor: '#374151',
     borderRadius: 6,
     headerBackgroundColor: '#1F2937',
