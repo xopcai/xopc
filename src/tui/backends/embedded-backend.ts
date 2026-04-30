@@ -1,6 +1,8 @@
 import { AgentService } from '../../agent/index.js';
+import { prependEnvelopeTimestamp } from '../../channels/envelope-timestamp.js';
 import { loadConfig, getWorkspacePath } from '../../config/index.js';
 import { MessageBus, MessageBusShutdownError } from '../../infra/bus/index.js';
+import { getAllProviders, getModelsByProvider } from '../../providers/index.js';
 import { createLogger } from '../../utils/logger.js';
 import type {
   ChatSendOptions,
@@ -86,8 +88,15 @@ export class EmbeddedBackend implements TuiBackend {
     // Run the stream in background so the TUI event loop stays responsive.
     void (async () => {
       try {
+        // Prepend envelope timestamp so the model knows the current date/time,
+        // matching the behavior of channel pipelines (Telegram, Weixin, etc.).
+        // Skip for slash commands — parseSlashCommand requires lines starting with '/'.
+        const messageForAgent = opts.message.trimStart().startsWith('/')
+          ? opts.message
+          : prependEnvelopeTimestamp(opts.message);
+
         const stream = this.agent!.processDirectStreaming(
-          opts.message,
+          messageForAgent,
           opts.sessionKey,
           undefined,
           opts.thinking,
@@ -144,7 +153,17 @@ export class EmbeddedBackend implements TuiBackend {
   }
 
   async listModels(): Promise<TuiModelChoice[]> {
-    return [];
+    const choices: TuiModelChoice[] = [];
+    for (const provider of getAllProviders()) {
+      for (const model of getModelsByProvider(provider)) {
+        choices.push({
+          id: model.id,
+          name: model.name ?? model.id,
+          provider,
+        });
+      }
+    }
+    return choices;
   }
 
   async resetSession(_sessionKey: string): Promise<void> {
