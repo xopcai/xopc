@@ -33,6 +33,7 @@ import { createWeixinOutboundHandlers, weixinTextChunker } from './outbound-send
 import { normalizeWeixinCronDeliveryToResolved } from './delivery-to.js';
 import { weixinConfigSurface } from './config-surface.js';
 import { WeixinConfigSchema } from './config-schema.js';
+import { weixinOnboardAdapter } from './adapters/onboard-cli.js';
 
 const log = createLogger('WeixinPlugin');
 
@@ -76,6 +77,8 @@ export class WeixinChannelPlugin implements ChannelPlugin<ResolvedWeixinAccount>
       return { chatId, accountId };
     },
   };
+
+  readonly onboard = weixinOnboardAdapter;
 
   readonly cliLogin: ChannelCliLoginAdapter = {
     async runLogin(params) {
