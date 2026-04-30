@@ -456,17 +456,9 @@ export function LogsPage() {
   return (
     <div className="mx-auto flex w-full max-w-app-main flex-col gap-6 px-4 py-6">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex min-w-0 items-start gap-3">
-          <div
-            className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-edge-subtle bg-surface-base dark:border-edge"
-            aria-hidden
-          >
-            <Terminal className="size-5 text-fg-muted" strokeWidth={1.75} />
-          </div>
-          <div className="min-w-0">
-            <h1 className="text-xl font-semibold tracking-tight text-fg">{L.title}</h1>
-            <p className="mt-0.5 text-sm leading-relaxed text-fg-muted">{L.subtitle}</p>
-          </div>
+        <div className="min-w-0">
+          <h1 className="text-xl font-semibold tracking-tight text-fg">{L.title}</h1>
+          <p className="mt-0.5 text-sm leading-relaxed text-fg-muted">{L.subtitle}</p>
         </div>
         <div className="flex w-full shrink-0 flex-col gap-2 sm:w-auto sm:max-w-md sm:flex-row sm:items-center sm:justify-end">
           <div className="w-full sm:w-48">

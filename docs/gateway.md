@@ -446,25 +446,64 @@ def chat(message):
 
 ## Authentication
 
-⚠️ **Current version has no API authentication enabled by default.**
+Gateway authentication supports 3 modes:
+- `token` (default): API clients pass credential via `Authorization: Bearer <token>` or `X-Api-Key`.
+- `password`: simple password mode (same transport as token validation layer).
+- `none`: disables auth (local development only).
 
-For production, recommended:
-- Add Basic Auth via Nginx/Traefik
-- Or configure API Key via config
-- Limit accessible IPs
-
-### Configure Auth
+### Configure Auth (`token` mode)
 
 ```json
 {
   "gateway": {
     "auth": {
-      "enabled": true,
-      "api_key": "your-secret-token"
+      "mode": "token",
+      "token": "${XOPC_GATEWAY_TOKEN}"
     }
   }
 }
 ```
+
+### Configure Auth (`password` mode)
+
+```json
+{
+  "gateway": {
+    "auth": {
+      "mode": "password",
+      "password": "${XOPC_GATEWAY_PASSWORD}"
+    }
+  }
+}
+```
+
+### Auth Environment Variables
+
+- `XOPC_GATEWAY_AUTH_MODE` (`none` | `token` | `password`)
+- `XOPC_GATEWAY_TOKEN`
+- `XOPC_GATEWAY_PASSWORD`
+
+Notes:
+- `token` and `password` are mutually exclusive; startup fails if both are set.
+- In `token` mode, a random token is auto-generated when no explicit token is provided.
+- Token comparison uses constant-time checks to reduce timing-attack risk.
+- Placeholder / weak tokens and tokens shorter than 16 chars are rejected at startup.
+- Startup also runs a security audit (for example: `mode: none` on non-loopback host, wildcard CORS, auto-generated token warning).
+
+### Browser Origin Protection (CSRF)
+
+- Browser-initiated requests (with `Origin`) are checked against `gateway.corsOrigins`.
+- Same-host fallback and local loopback fallback are supported for trusted local dev paths.
+- Requests without `Origin` (CLI / server-to-server) skip origin checks and rely on auth credentials.
+
+### Route Scope Enforcement
+
+Authenticated API routes enforce operator scopes (`operator.read`, `operator.write`, `operator.admin`) internally.
+Current authenticated users are granted default operator scopes, and this layer prepares the gateway for future per-connection scoped auth.
+
+### WebSocket Flood Guard
+
+Unauthorized WebSocket request bursts are throttled and can trigger forced socket close to limit abuse.
 
 ---
 
@@ -473,28 +512,32 @@ For production, recommended:
 ```json
 {
   "gateway": {
-    "host": "0.0.0.0",
+    "host": "127.0.0.1",
     "port": 18790,
     "auth": {
-      "enabled": true,
-      "api_key": "your-secret-token"
+      "mode": "token",
+      "token": "${XOPC_GATEWAY_TOKEN}",
+      "rateLimit": {
+        "enabled": true,
+        "maxAttempts": 5,
+        "windowMs": 900000,
+        "blockDurationMs": 300000
+      }
     },
-    "cors": {
-      "enabled": true,
-      "origins": ["http://localhost:3000"]
-    }
+    "corsOrigins": ["http://localhost:5173"]
   }
 }
 ```
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `host` | `0.0.0.0` | Bind address |
+| `host` | `127.0.0.1` | Bind address |
 | `port` | `18790` | Port number |
-| `auth.enabled` | `false` | Enable authentication |
-| `auth.api_key` | `null` | API auth token |
-| `cors.enabled` | `false` | Enable CORS |
-| `cors.origins` | `[]` | Allowed origins |
+| `auth.mode` | `token` | Auth mode (`none` / `token` / `password`) |
+| `auth.token` | auto-generated in token mode | Token credential |
+| `auth.password` | unset | Password credential |
+| `auth.rateLimit.*` | see defaults above | Failed-auth rate limiter config |
+| `corsOrigins` | `[]` | Allowed browser origins |
 
 ---
 
@@ -517,6 +560,9 @@ xopc gateway stop --timeout 10000  # 10 second timeout
 
 | Variable | Description |
 |----------|-------------|
+| `XOPC_GATEWAY_AUTH_MODE` | Override auth mode (`none` / `token` / `password`) |
+| `XOPC_GATEWAY_TOKEN` | Gateway token when auth mode is `token` |
+| `XOPC_GATEWAY_PASSWORD` | Gateway password when auth mode is `password` |
 | `XOPC_NO_RESPAWN` | Disable process respawn |
 | `XOPC_ALLOW_SIGUSR1_RESTART` | Allow SIGUSR1 to trigger restart |
 | `XOPC_SERVICE_MARKER` | Mark running under supervisor |
@@ -530,11 +576,7 @@ To access from browser, add CORS headers:
 ```json
 {
   "gateway": {
-    "cors": {
-      "enabled": true,
-      "origins": ["http://localhost:3000"],
-      "credentials": true
-    }
+    "corsOrigins": ["http://localhost:5173"]
   }
 }
 ```

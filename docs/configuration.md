@@ -344,18 +344,36 @@ HTTP API gateway configuration.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `enabled` | boolean | `false` | Enable auth |
-| `username` | string | - | Auth username |
-| `password` | string | - | Auth password |
-| `api_key` | string | - | API key auth |
+| `mode` | string | `token` | Auth mode: `none`, `token`, `password` |
+| `token` | string | auto-generated | Bearer / `X-Api-Key` credential when `mode: "token"` |
+| `password` | string | - | Password credential when `mode: "password"` |
+| `rateLimit` | object | enabled | Brute-force protection for failed auth attempts |
 
-#### gateway.cors
+Notes:
+- `gateway.auth.token` and `gateway.auth.password` are mutually exclusive; setting both is rejected at startup.
+- In `token` mode, if no token is configured, xopc generates a random token at startup.
+- Weak / placeholder tokens (for example `your-secret-token-here`) and tokens shorter than 16 chars are rejected.
+- You can override auth from env: `XOPC_GATEWAY_AUTH_MODE`, `XOPC_GATEWAY_TOKEN`, `XOPC_GATEWAY_PASSWORD`.
+
+#### gateway.auth.rateLimit
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `enabled` | boolean | `false` | Enable CORS |
-| `origins` | array | `[]` | Allowed origins |
-| `credentials` | boolean | `false` | Allow credentials |
+| `enabled` | boolean | `true` | Enable auth failure rate limiting |
+| `maxAttempts` | number | `5` | Max failed attempts within the window |
+| `windowMs` | number | `900000` | Rolling window in milliseconds |
+| `blockDurationMs` | number | `300000` | Temporary block duration in milliseconds |
+
+#### gateway.corsOrigins
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `gateway.corsOrigins` | string[] | `[]` | Browser origin allowlist (exact origins, e.g. `http://localhost:5173`) |
+
+Security behavior:
+- Browser requests with an `Origin` header are rejected when origin checks fail.
+- Non-browser requests without `Origin` are validated by the auth middleware instead.
+- Setting `corsOrigins` to `"*"` is allowed but flagged by startup security audit logs.
 
 ---
 
