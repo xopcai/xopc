@@ -5,8 +5,8 @@ import { Menu, Tray, nativeImage, type BrowserWindow } from 'electron';
 let tray: Tray | null = null;
 
 export function createTray(mainWindow: BrowserWindow, iconDir: string): Tray {
-  const iconName = process.platform === 'darwin' ? 'tray-iconTemplate.png' : 'tray-icon.png';
-  const iconPath = join(iconDir, iconName);
+  /** Colored PNG from logo.svg — do not use *Template.png naming (macOS would treat full-color art as a monochrome template). */
+  const iconPath = join(iconDir, 'tray-icon.png');
   const icon = nativeImage.createFromPath(iconPath);
 
   tray = new Tray(icon);
