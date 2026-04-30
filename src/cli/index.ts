@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import './agent-chat-log-level-preset.js';
 import { Command } from 'commander';
 import { registry, createDefaultContext, type CLIContext } from './registry.js';
 import pkg from '../../package.json' with { type: 'json' };
