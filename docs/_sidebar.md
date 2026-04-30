@@ -14,6 +14,7 @@
 
 - **Features**
   - [CLI Reference](cli.md)
+  - [Terminal UI (tui)](tui.md)
   - [LLM Models](models.md)
   - [Image & vision](image-multimodal.md)
   - [Voice (STT/TTS)](voice.md)
