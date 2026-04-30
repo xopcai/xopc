@@ -51,7 +51,7 @@
     "skills:test": "tsx src/cli/index.ts skills test",
     "skills:validate": "tsx src/cli/index.ts skills test validate",
     "skills:security": "tsx src/cli/index.ts skills test security",
-    "lint": "eslint",
+    "lint": "eslint && pnpm -C web run lint && pnpm -C mobile run lint",
     "prepublishOnly": "npm test && npm run test:skills:all && npm run build",
     "docs:dev": "vitepress dev docs",
     "docs:build": "vitepress build docs",
