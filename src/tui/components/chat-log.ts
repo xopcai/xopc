@@ -11,6 +11,8 @@ const MAX_COMPONENTS = 180;
 export class ChatLog extends Container {
   private toolById = new Map<string, ToolExecutionComponent>();
   private streamingRuns = new Map<string, AssistantMessageComponent>();
+  /** After finalizeAssistant, late tool_start can still arrive; keep the bubble to insert tools above. */
+  private assistantAnchorByRunId = new Map<string, AssistantMessageComponent>();
   private toolsExpanded = false;
 
   private pruneOverflow(): void {
@@ -29,6 +31,9 @@ export class ChatLog extends Container {
     for (const [runId, msg] of this.streamingRuns.entries()) {
       if (msg === component) this.streamingRuns.delete(runId);
     }
+    for (const [runId, msg] of this.assistantAnchorByRunId.entries()) {
+      if (msg === component) this.assistantAnchorByRunId.delete(runId);
+    }
   }
 
   private append(component: Component): void {
@@ -40,6 +45,7 @@ export class ChatLog extends Container {
     this.clear();
     this.toolById.clear();
     this.streamingRuns.clear();
+    this.assistantAnchorByRunId.clear();
   }
 
   addSystem(text: string): void {
@@ -50,6 +56,7 @@ export class ChatLog extends Container {
   }
 
   addUser(text: string): void {
+    this.assistantAnchorByRunId.clear();
     this.append(new UserMessageComponent(text));
   }
 
@@ -78,9 +85,14 @@ export class ChatLog extends Container {
     if (existing) {
       existing.setText(text);
       this.streamingRuns.delete(runId);
+      this.assistantAnchorByRunId.set(runId, existing);
       return;
     }
-    this.append(new AssistantMessageComponent(text));
+    const legacy = new AssistantMessageComponent(text);
+    this.append(legacy);
+    if (text.trim()) {
+      this.assistantAnchorByRunId.set(runId, legacy);
+    }
   }
 
   dropAssistant(runId: string): void {
@@ -90,7 +102,7 @@ export class ChatLog extends Container {
     this.streamingRuns.delete(runId);
   }
 
-  startTool(toolCallId: string, toolName: string, args: unknown): void {
+  startTool(toolCallId: string, toolName: string, args: unknown, runId: string): void {
     const existing = this.toolById.get(toolCallId);
     if (existing) {
       existing.setArgs(args);
@@ -99,7 +111,19 @@ export class ChatLog extends Container {
     const component = new ToolExecutionComponent(toolName, args);
     component.setExpanded(this.toolsExpanded);
     this.toolById.set(toolCallId, component);
-    this.append(component);
+
+    const assistant =
+      this.streamingRuns.get(runId) ?? this.assistantAnchorByRunId.get(runId);
+    if (assistant) {
+      // Streamed assistant text is updated in place from the start of the turn; tools
+      // arrive later from SSE but should appear above the conversational reply (like the web UI).
+      this.removeChild(assistant);
+      this.addChild(component);
+      this.addChild(assistant);
+    } else {
+      this.addChild(component);
+    }
+    this.pruneOverflow();
   }
 
   updateToolResult(toolCallId: string, result: string, isError: boolean): void {

@@ -1,4 +1,4 @@
-import { Editor, Key, matchesKey } from '@mariozechner/pi-tui';
+import { Editor, getKeybindings, Key, matchesKey } from '@mariozechner/pi-tui';
 
 /**
  * Extended editor with additional key bindings for the TUI.
@@ -12,6 +12,7 @@ export class CustomEditor extends Editor {
   onCtrlT?: () => void;
 
   handleInput(data: string): void {
+    const kb = getKeybindings();
     if (matchesKey(data, Key.ctrl('l')) && this.onCtrlL) {
       this.onCtrlL();
       return;
@@ -28,7 +29,10 @@ export class CustomEditor extends Editor {
       this.onEscape();
       return;
     }
-    if (matchesKey(data, Key.ctrl('c')) && this.onCtrlC) {
+    // Match all encodings pi-tui uses for Ctrl+C (incl. Kitty protocol). Base Editor treats
+    // "tui.input.copy" as a no-op expecting TUI-wide handling — if we fall through with an
+    // unmatched sequence, Ctrl+C is swallowed and the UI cannot exit in raw terminals.
+    if (this.onCtrlC && (matchesKey(data, Key.ctrl('c')) || kb.matches(data, 'tui.input.copy'))) {
       this.onCtrlC();
       return;
     }

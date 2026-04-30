@@ -50,10 +50,12 @@ program.hook('preAction', (thisCommand) => {
 });
 
 // Hook to ensure process exits after command completion
-program.hook('postAction', async (thisCommand) => {
-  // Get the actual subcommand being executed (not the root program name)
-  const args = thisCommand.args;
-  const subCommandName = args.length > 0 ? args[0] : thisCommand.name();
+// Second arg is the command whose action ran; the first is the ancestor that registered the hook
+// (often the root program), so using only the first arg mis-detects the subcommand as "xopc".
+program.hook('postAction', async (_hookOwner, actionCommand) => {
+  const cmd = actionCommand ?? program;
+  const args = cmd.args;
+  const subCommandName = args.length > 0 ? args[0] : cmd.name();
 
   // Skip long-running commands (gateway foreground, agent interactive mode)
   if (LONG_RUNNING_COMMANDS.has(subCommandName)) {
