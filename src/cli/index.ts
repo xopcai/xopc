@@ -10,6 +10,7 @@ import { registerExtensionCliCommands } from './bootstrap-extensions.js';
 import './commands/setup.js';
 import './commands/onboard.js';
 import './commands/agent.js';
+import './commands/tui.js';
 import './commands/gateway.js';
 import './commands/session.js';
 import './commands/cron.js';
@@ -33,7 +34,7 @@ export function getContextWithOpts(argv: string[] = process.argv): CLIContext {
 }
 
 // Long-running commands that should not auto-exit
-const LONG_RUNNING_COMMANDS = new Set(['gateway', 'agent', 'extension:dev']);
+const LONG_RUNNING_COMMANDS = new Set(['gateway', 'agent', 'tui', 'extension:dev']);
 
 const program = new Command()
   .name('xopc')
