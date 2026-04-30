@@ -16,7 +16,8 @@ export async function consumeSSEStream(
   onEvent: (event: ParsedSSEEvent) => void,
   signal?: AbortSignal,
 ): Promise<void> {
-  const reader = body.pipeThrough(new TextDecoderStream()).getReader();
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
   let buffer = '';
   let currentEvent = '';
   let currentData = '';
@@ -28,7 +29,7 @@ export async function consumeSSEStream(
       const { done, value } = await reader.read();
       if (done) break;
 
-      buffer += value;
+      buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split('\n');
       // Keep the last (possibly incomplete) line in the buffer
       buffer = lines.pop() ?? '';
@@ -76,6 +77,7 @@ export async function consumeSSEStream(
       }
     }
   } finally {
+    buffer += decoder.decode();
     reader.releaseLock();
   }
 }

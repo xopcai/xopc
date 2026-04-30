@@ -20,7 +20,11 @@ export function createTray(iconDir: string, actions: TrayActions): Tray {
 
   /** Colored PNG from logo.svg — do not use *Template.png naming (macOS would treat full-color art as a monochrome template). */
   const iconPath = join(iconDir, 'tray-icon.png');
-  const icon = nativeImage.createFromPath(iconPath);
+  let icon = nativeImage.createFromPath(iconPath);
+  if (process.platform === 'darwin') {
+    // Keep status bar icon aligned with macOS menubar glyph size.
+    icon = icon.resize({ height: 18 });
+  }
 
   tray = new Tray(icon);
   tray.setToolTip('xopc');

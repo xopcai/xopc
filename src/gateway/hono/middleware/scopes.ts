@@ -23,7 +23,7 @@ export function operatorScopes() {
     const grantedScopes: OperatorScope[] = [...DEFAULT_OPERATOR_SCOPES];
 
     const scopeCheck = authorizeRouteScope(c.req.path, grantedScopes);
-    if (!scopeCheck.allowed) {
+    if (!scopeCheck.allowed && 'requiredScope' in scopeCheck) {
       const { requiredScope } = scopeCheck;
       log.warn(
         { path: c.req.path, method: c.req.method, requiredScope },
