@@ -498,32 +498,95 @@ Content-Type: application/json
 
 ## 认证
 
-⚠️ 当前版本 API 无认证。
+网关认证支持 3 种模式：
+- `token`（默认）：通过 `Authorization: Bearer <token>` 或 `X-Api-Key` 传递凭证。
+- `password`：密码模式（沿用同一传输与校验链路）。
+- `none`：关闭认证（仅建议本地开发）。
 
-生产环境建议：
-- 使用 Nginx/Traefik 添加 Basic Auth
-- 或通过 `.env` 配置 API Key
-- 限制可访问 IP
+### 配置认证（`token` 模式）
+
+```json
+{
+  "gateway": {
+    "auth": {
+      "mode": "token",
+      "token": "${XOPC_GATEWAY_TOKEN}"
+    }
+  }
+}
+```
+
+### 配置认证（`password` 模式）
+
+```json
+{
+  "gateway": {
+    "auth": {
+      "mode": "password",
+      "password": "${XOPC_GATEWAY_PASSWORD}"
+    }
+  }
+}
+```
+
+### 认证相关环境变量
+
+- `XOPC_GATEWAY_AUTH_MODE`（`none` | `token` | `password`）
+- `XOPC_GATEWAY_TOKEN`
+- `XOPC_GATEWAY_PASSWORD`
+
+说明：
+- `token` 与 `password` 互斥，同时配置会导致启动失败。
+- `token` 模式下若未配置 token，会自动生成随机 token。
+- token 比较采用常量时间比较，降低时序攻击风险。
+- 示例占位/弱 token 与短 token（<16）会在启动时被拒绝。
+- 启动时会执行安全审计（例如：非回环地址下 `mode: none`、`corsOrigins: ["*"]`、自动生成 token 告警）。
+
+### 浏览器来源校验（CSRF 防护）
+
+- 带 `Origin` 的浏览器请求会按 `gateway.corsOrigins` 校验来源。
+- 支持同 host 回退与本地回环回退（用于受控本地开发场景）。
+- 不带 `Origin` 的请求（CLI/服务间）跳过来源校验，改由认证层验证。
+
+### 路由 Scope 校验
+
+已认证 API 会做 operator scope 校验（`operator.read`、`operator.write`、`operator.admin`）。当前默认授予完整 operator scopes，这一层为后续细粒度权限收敛做准备。
+
+### WebSocket 未授权洪泛防护
+
+WebSocket 上重复未授权请求会触发限流，并在阈值后主动断开连接，降低滥用风险。
 
 ## 配置
 
 ```json
 {
   "gateway": {
-    "host": "0.0.0.0",
+    "host": "127.0.0.1",
     "port": 18790,
     "auth": {
-      "token": "your-secret-token"
-    }
+      "mode": "token",
+      "token": "${XOPC_GATEWAY_TOKEN}",
+      "rateLimit": {
+        "enabled": true,
+        "maxAttempts": 5,
+        "windowMs": 900000,
+        "blockDurationMs": 300000
+      }
+    },
+    "corsOrigins": ["http://localhost:5173"]
   }
 }
 ```
 
 | 参数 | 默认值 | 描述 |
 |------|--------|------|
-| `host` | `0.0.0.0` | 绑定地址 |
+| `host` | `127.0.0.1` | 绑定地址 |
 | `port` | `18790` | 端口号 |
-| `auth.token` | `null` | API 认证令牌（可选） |
+| `auth.mode` | `token` | 认证模式（`none` / `token` / `password`） |
+| `auth.token` | token 模式下自动生成 | token 凭证 |
+| `auth.password` | 未设置 | password 凭证 |
+| `auth.rateLimit.*` | 见上方示例默认值 | 认证失败限流配置 |
+| `corsOrigins` | `[]` | 允许的浏览器来源 |
 
 ## 锁文件
 
@@ -562,6 +625,9 @@ xopc gateway stop --timeout 10000  # 10 秒超时
 
 | 变量 | 描述 |
 |------|------|
+| `XOPC_GATEWAY_AUTH_MODE` | 覆盖认证模式（`none` / `token` / `password`） |
+| `XOPC_GATEWAY_TOKEN` | `token` 模式下的网关 token |
+| `XOPC_GATEWAY_PASSWORD` | `password` 模式下的网关密码 |
 | `XOPC_NO_RESPAWN` | 禁用进程重生，使用进程内重启 |
 | `XOPC_ALLOW_SIGUSR1_RESTART` | 允许 SIGUSR1 触发重启 |
 | `XOPC_SERVICE_MARKER` | 标记在监督器下运行（systemd/launchd） |
@@ -569,6 +635,14 @@ xopc gateway stop --timeout 10000  # 10 秒超时
 ## CORS 配置
 
 如需从浏览器访问，添加 CORS 头（可经由反向代理或中间件注入）。
+
+```json
+{
+  "gateway": {
+    "corsOrigins": ["http://localhost:5173"]
+  }
+}
+```
 
 ## 从旧版本迁移
 

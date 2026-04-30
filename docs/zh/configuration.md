@@ -344,18 +344,36 @@ HTTP API 网关配置。
 
 | 字段 | 类型 | 默认值 | 说明 |
 |-------|------|---------|------|
-| `enabled` | boolean | `false` | 启用认证 |
-| `username` | string | - | 认证用户名 |
-| `password` | string | - | 认证密码 |
-| `api_key` | string | - | API 密钥认证 |
+| `mode` | string | `token` | 认证模式：`none`、`token`、`password` |
+| `token` | string | 自动生成 | `mode: "token"` 时使用的 Bearer / `X-Api-Key` 凭证 |
+| `password` | string | - | `mode: "password"` 时使用的密码凭证 |
+| `rateLimit` | object | 默认启用 | 认证失败限流（防暴力破解） |
 
-#### gateway.cors
+说明：
+- `gateway.auth.token` 与 `gateway.auth.password` 互斥，同时设置会在启动时报错。
+- `token` 模式下未显式配置 token 时，xopc 会在启动时自动生成随机 token。
+- 弱口令/示例占位 token（如 `your-secret-token-here`）以及长度小于 16 的 token 会被拒绝。
+- 可通过环境变量覆盖：`XOPC_GATEWAY_AUTH_MODE`、`XOPC_GATEWAY_TOKEN`、`XOPC_GATEWAY_PASSWORD`。
+
+#### gateway.auth.rateLimit
 
 | 字段 | 类型 | 默认值 | 说明 |
 |-------|------|---------|------|
-| `enabled` | boolean | `false` | 启用 CORS |
-| `origins` | array | `[]` | 允许的来源 |
-| `credentials` | boolean | `false` | 允许凭证 |
+| `enabled` | boolean | `true` | 启用认证失败限流 |
+| `maxAttempts` | number | `5` | 窗口内最大失败次数 |
+| `windowMs` | number | `900000` | 滚动时间窗口（毫秒） |
+| `blockDurationMs` | number | `300000` | 临时封禁时长（毫秒） |
+
+#### gateway.corsOrigins
+
+| 字段 | 类型 | 默认值 | 说明 |
+|-------|------|---------|------|
+| `gateway.corsOrigins` | string[] | `[]` | 浏览器来源白名单（精确 origin，如 `http://localhost:5173`） |
+
+安全行为：
+- 带 `Origin` 头的浏览器请求会执行来源校验，不通过则拒绝。
+- 不带 `Origin` 的非浏览器请求（CLI/服务间）由认证中间件校验。
+- `corsOrigins` 配置为 `"*"` 虽可用，但会在启动安全审计日志中提示风险。
 
 ---
 
