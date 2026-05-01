@@ -1,4 +1,5 @@
 import type { EditorTheme, MarkdownTheme, SelectListTheme } from '@mariozechner/pi-tui';
+import type { SearchableSelectListTheme } from './components/searchable-select-list.js';
 import chalk from 'chalk';
 
 const XTERM_LEVELS = [0, 95, 135, 175, 215, 255] as const;
@@ -164,6 +165,13 @@ export const selectListTheme: SelectListTheme = {
   description: (text) => fg(palette.dim)(text),
   scrollInfo: (text) => fg(palette.dim)(text),
   noMatch: (text) => fg(palette.dim)(text),
+};
+
+export const searchableSelectListTheme: SearchableSelectListTheme = {
+  ...selectListTheme,
+  searchPrompt: (text) => fg(palette.dim)(text),
+  searchInput: (text) => fg(palette.text)(text),
+  matchHighlight: (text) => fg(palette.accentSoft)(text),
 };
 
 export const editorTheme: EditorTheme = {

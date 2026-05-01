@@ -94,6 +94,8 @@ export interface TuiState {
   historyLoaded: boolean;
   toolsExpanded: boolean;
   showThinking: boolean;
+  /** Last Ctrl+C timestamp for double-press exit (see `resolveCtrlCAction`). */
+  lastCtrlCAt: number;
   exitRequested: boolean;
 }
 
@@ -109,6 +111,7 @@ export function createInitialState(sessionKey: string): TuiState {
     historyLoaded: false,
     toolsExpanded: false,
     showThinking: false,
+    lastCtrlCAt: 0,
     exitRequested: false,
   };
 }
