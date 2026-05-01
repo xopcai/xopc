@@ -19,6 +19,7 @@ import {
   type CompactionConfig,
   type WindowConfig,
 } from '../session/index.js';
+import type { SessionDetail } from '../session/types.js';
 import {
   normalizeThinkLevel,
   normalizeReasoningLevel,
@@ -899,6 +900,11 @@ export class AgentService {
     this.sessionContextManager.clearContext();
     this.feedbackCoordinator.clearContext();
     this.contextMiddleware.onResponse();
+  }
+
+  /** Full session snapshot (metadata + API-shaped messages), e.g. embedded TUI history. */
+  async loadSessionDetail(sessionKey: string): Promise<SessionDetail | null> {
+    return this.sessionStore.get(sessionKey);
   }
 
   async compactSession(

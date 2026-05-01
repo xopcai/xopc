@@ -1,3 +1,5 @@
+import type { ClientHistoryMessage } from '../session/client-history.js';
+
 import type { SessionInfo } from './tui-types.js';
 
 /** Options for sending a chat message. */
@@ -43,6 +45,8 @@ export interface TuiBackend {
   onEvent?: (evt: TuiEvent) => void;
   onConnected?: () => void;
   onDisconnected?: (reason: string) => void;
+  /** Broadcast SSE sequence gap (if the gateway emits `gap` events). */
+  onGap?: (info: { expected: number; received: number }) => void;
 
   /** Start the backend (open SSE streams / start agent service). */
   start(): void;
@@ -81,10 +85,5 @@ export interface TuiBackend {
   ): Promise<void>;
 }
 
-/** A single message in chat history. */
-export interface HistoryMessage {
-  role: 'user' | 'assistant' | 'system';
-  content: string;
-  timestamp?: number;
-  toolCalls?: Array<{ name: string; args?: unknown; result?: string; isError?: boolean }>;
-}
+/** A single message in chat history (aligned with `ClientHistoryMessage`). */
+export type HistoryMessage = ClientHistoryMessage;

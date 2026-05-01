@@ -1,4 +1,5 @@
 import { AgentService } from '../../agent/index.js';
+import { messagesToClientHistory } from '../../session/client-history.js';
 import { prependEnvelopeTimestamp } from '../../channels/envelope-timestamp.js';
 import { loadConfig, getWorkspacePath } from '../../config/index.js';
 import { MessageBus, MessageBusShutdownError } from '../../infra/bus/index.js';
@@ -133,12 +134,26 @@ export class EmbeddedBackend implements TuiBackend {
     return { ok: false };
   }
 
-  async loadHistory(_opts: {
+  async loadHistory(opts: {
     sessionKey: string;
     limit?: number;
   }): Promise<{ messages: HistoryMessage[] }> {
-    // Session history loading deferred to future iteration
-    return { messages: [] };
+    if (!this.agent) {
+      return { messages: [] };
+    }
+    try {
+      const detail = await this.agent.loadSessionDetail(opts.sessionKey);
+      if (!detail) {
+        return { messages: [] };
+      }
+      return {
+        messages: messagesToClientHistory(detail.messages, { limit: opts.limit }),
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      log.warn({ err: error, errorMessage }, `Embedded loadHistory failed: ${errorMessage}`);
+      return { messages: [] };
+    }
   }
 
   async listSessions(): Promise<TuiSessionItem[]> {

@@ -41,3 +41,5 @@ export {
   isWebchatSessionKey,
   shouldAutoTitleSessionKey,
 } from './session-title.js';
+
+export { messagesToClientHistory, flattenMessageContent, type ClientHistoryMessage } from './client-history.js';

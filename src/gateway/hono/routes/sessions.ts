@@ -3,6 +3,7 @@ import type { Hono } from 'hono';
 import { buildSessionKey, parseSessionKey } from '../../../routing/session-key.js';
 import { agentExists, getDefaultAgentId } from '../../../routing/resolve-route.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
+import { messagesToClientHistory } from '../../../session/client-history.js';
 
 export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const { service } = deps;
@@ -116,6 +117,25 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
       return c.json({ ok: false, error: result.error }, 400);
     }
     return c.json({ ok: true });
+  });
+
+  // GET /api/sessions/:key/messages — flattened transcript for TUI / clients
+  authenticated.get('/api/sessions/:key/messages', async (c) => {
+    const key = c.req.param('key');
+    const limitRaw = c.req.query('limit');
+    const parsedLimit = limitRaw ? Number.parseInt(limitRaw, 10) : undefined;
+    const limit =
+      parsedLimit !== undefined && Number.isFinite(parsedLimit)
+        ? Math.min(500, Math.max(1, parsedLimit))
+        : undefined;
+
+    const session = await service.getSession(key);
+    if (!session) {
+      return c.json({ ok: false, error: 'Session not found' }, 404);
+    }
+
+    const messages = messagesToClientHistory(session.messages, { limit });
+    return c.json({ ok: true, payload: { messages } });
   });
 
   // GET /api/sessions/:key - Get single session (must be after /stats and /chat-ids)

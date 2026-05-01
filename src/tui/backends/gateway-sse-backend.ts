@@ -49,6 +49,7 @@ export class GatewaySseBackend implements TuiBackend {
   onEvent?: (evt: TuiEvent) => void;
   onConnected?: () => void;
   onDisconnected?: (reason: string) => void;
+  onGap?: (info: { expected: number; received: number }) => void;
 
   constructor(opts: GatewaySSEOptions) {
     this.baseUrl = opts.url.replace(/\/+$/, '');
@@ -167,11 +168,12 @@ export class GatewaySseBackend implements TuiBackend {
     limit?: number;
   }): Promise<{ messages: HistoryMessage[] }> {
     try {
-      const params = new URLSearchParams({ key: opts.sessionKey });
+      const params = new URLSearchParams();
       if (opts.limit) params.set('limit', String(opts.limit));
+      const qs = params.toString();
       const res = await gatewayFetch(
         this.baseUrl,
-        `/api/sessions/${encodeURIComponent(opts.sessionKey)}/messages?${params}`,
+        `/api/sessions/${encodeURIComponent(opts.sessionKey)}/messages${qs ? `?${qs}` : ''}`,
         this.token,
       );
       if (!res.ok) return { messages: [] };
@@ -189,10 +191,26 @@ export class GatewaySseBackend implements TuiBackend {
       const res = await gatewayFetch(this.baseUrl, '/api/sessions', this.token);
       if (!res.ok) return [];
       const json = (await res.json()) as {
-        ok?: boolean;
-        payload?: { sessions?: TuiSessionItem[] };
+        items?: Array<{
+          key: string;
+          name?: string;
+          updatedAt?: string;
+          estimatedTokens?: number;
+          customData?: Record<string, unknown>;
+        }>;
       };
-      return json.payload?.sessions ?? [];
+      return (json.items ?? []).map((s) => ({
+        key: s.key,
+        displayName: s.name,
+        updatedAt: s.updatedAt ? Date.parse(s.updatedAt) : undefined,
+        totalTokens: s.estimatedTokens ?? null,
+        model:
+          typeof s.customData?.model === 'string'
+            ? s.customData.model
+            : typeof s.customData?.modelRef === 'string'
+              ? s.customData.modelRef
+              : null,
+      }));
     } catch {
       return [];
     }
@@ -206,8 +224,27 @@ export class GatewaySseBackend implements TuiBackend {
         this.token,
       );
       if (!res.ok) return {};
-      const json = (await res.json()) as { ok?: boolean; payload?: SessionInfo };
-      return json.payload ?? {};
+      const json = (await res.json()) as {
+        session?: {
+          name?: string;
+          estimatedTokens?: number;
+          customData?: Record<string, unknown>;
+        };
+      };
+      const s = json.session;
+      if (!s) return {};
+      return {
+        displayName: s.name,
+        totalTokens: s.estimatedTokens ?? undefined,
+        model:
+          typeof s.customData?.model === 'string'
+            ? s.customData.model
+            : typeof s.customData?.modelRef === 'string'
+              ? s.customData.modelRef
+              : undefined,
+        modelProvider:
+          typeof s.customData?.modelProvider === 'string' ? s.customData.modelProvider : undefined,
+      };
     } catch {
       return {};
     }
@@ -273,6 +310,20 @@ export class GatewaySseBackend implements TuiBackend {
           res.body,
           (sseEvent) => {
             if (sseEvent.event === 'connected') return;
+            if (sseEvent.event === 'gap') {
+              const gapData = parseSSEData(sseEvent.data) as {
+                expected?: unknown;
+                received?: unknown;
+              } | null;
+              if (
+                gapData &&
+                typeof gapData.expected === 'number' &&
+                typeof gapData.received === 'number'
+              ) {
+                this.onGap?.({ expected: gapData.expected, received: gapData.received });
+              }
+              return;
+            }
             const data = parseSSEData(sseEvent.data);
             if (data !== null) {
               this.onEvent?.({ event: sseEvent.event, data });
