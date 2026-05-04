@@ -1,0 +1,30 @@
+{
+  "id": "standing-goal",
+  "name": "Standing goal (webchat)",
+  "description": "Hermes-style standing goal for gateway webchat: /goal command, optional judge + auto-continuation. Add to extensions.disabled to turn off.",
+  "version": "1.0.0",
+  "kind": "utility",
+  "main": "index.ts",
+  "enabledByDefault": true,
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "continuationBody": {
+        "type": "string",
+        "default": "Take the next concrete step toward the standing goal. Do not greet; focus on progress.",
+        "description": "Body of the synthetic user message used for auto-continuation (a marker prefix is added)."
+      },
+      "maxAutoSteps": {
+        "type": "number",
+        "default": 8,
+        "minimum": 0,
+        "maximum": 50,
+        "description": "Max chained auto-continuations per standing goal (resets when the user sends a non-auto message)."
+      },
+      "judgeModelRef": {
+        "type": "string",
+        "description": "Model ref for the judge LLM; defaults to agents.defaults.model when unset."
+      }
+    }
+  }
+}

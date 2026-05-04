@@ -112,11 +112,16 @@ export function useChatSession() {
   );
 
   const shouldApplyStreamUpdate = useCallback((streamSessionKey: string) => {
-    const routeKey = routeSessionKeyRef.current;
-    if (routeKey) {
-      return routeKey === streamSessionKey;
-    }
-    return sessionKeyRef.current === streamSessionKey;
+    const a = String(streamSessionKey ?? '').trim();
+    if (!a) return false;
+    const routeKey = String(routeSessionKeyRef.current ?? '').trim();
+    const sk = String(sessionKeyRef.current ?? '').trim();
+    // Accept if the stream matches either the URL session or the resolved state session.
+    // During navigation / hydration, `decodedKey` and `sessionKey` can briefly disagree; matching only
+    // the route would drop every SSE token (slash commands look like "no response", no assistant turn).
+    if (routeKey && a === routeKey) return true;
+    if (sk && a === sk) return true;
+    return false;
   }, []);
 
   const fq = useChatFollowUpClarify({

@@ -16,6 +16,11 @@ import { getAllProviders, getModelsByProvider, getProviderDisplayName } from '..
 
 const log = createLogger('CommandHandler');
 
+/** Gateway console direct stream uses SSE tokens; there is no ChannelPlugin outbound for `webchat`. */
+function shouldSkipBusOutboundForChannel(channel: string): boolean {
+  return channel === 'webchat';
+}
+
 export interface CommandContext {
   sessionKey: string;
   channel: string;
@@ -115,6 +120,7 @@ export class CommandHandler {
       applySessionThinkingLevel: this.applySessionThinkingLevel,
 
       replyHandler: async (text: string, _options?) => {
+        if (shouldSkipBusOutboundForChannel(context.channel)) return;
         await this.bus.publishOutbound({
           channel: context.channel,
           chat_id: context.chatId,
@@ -124,6 +130,7 @@ export class CommandHandler {
       },
 
       typingHandler: async (typing: boolean) => {
+        if (shouldSkipBusOutboundForChannel(context.channel)) return;
         await this.bus.publishOutbound({
           channel: context.channel,
           chat_id: context.chatId,
@@ -195,7 +202,7 @@ export class CommandHandler {
 
     const result = await commandRegistry.execute(commandName, cmdCtx, args);
 
-    if (result.content) {
+    if (result.content && !shouldSkipBusOutboundForChannel(context.channel)) {
       await this.bus.publishOutbound({
         channel: context.channel,
         chat_id: context.chatId,
@@ -249,6 +256,7 @@ export class CommandHandler {
 
       replyHandler: async (text: string, _options?) => {
         segments.push(text);
+        if (shouldSkipBusOutboundForChannel(context.channel)) return;
         await this.bus.publishOutbound({
           channel: context.channel,
           chat_id: context.chatId,
@@ -258,6 +266,7 @@ export class CommandHandler {
       },
 
       typingHandler: async (typing: boolean) => {
+        if (shouldSkipBusOutboundForChannel(context.channel)) return;
         await this.bus.publishOutbound({
           channel: context.channel,
           chat_id: context.chatId,
@@ -331,12 +340,14 @@ export class CommandHandler {
 
     if (result.content) {
       segments.push(result.content);
-      await this.bus.publishOutbound({
-        channel: context.channel,
-        chat_id: context.chatId,
-        content: result.content,
-        type: 'message',
-      });
+      if (!shouldSkipBusOutboundForChannel(context.channel)) {
+        await this.bus.publishOutbound({
+          channel: context.channel,
+          chat_id: context.chatId,
+          content: result.content,
+          type: 'message',
+        });
+      }
     }
 
     const aggregatedText = segments.filter((s) => s && s.trim()).join('\n\n');

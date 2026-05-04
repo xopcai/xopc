@@ -118,6 +118,12 @@ export class SessionManager extends EventEmitter {
     this.emit('sessionUpdated', { key, name });
   }
 
+  /** Partial metadata update (caller merges nested fields like `customData` when needed). */
+  async updateSessionMetadata(key: string, updates: Partial<SessionMetadata>): Promise<void> {
+    await this.store.updateMetadata(key, updates);
+    this.emit('sessionUpdated', { key });
+  }
+
   async tagSession(key: string, tags: string[]): Promise<void> {
     const existing = await this.store.getMetadata(key);
     if (!existing) {

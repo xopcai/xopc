@@ -305,6 +305,11 @@ export class GatewayService {
       this.extensionLoader.setRuntimeContext({
         bus: this.bus,
         sessionManager: this.sessionManager,
+        scheduleWebchatContinuation: (sessionKey: string, continuationMessage: string) => {
+          queueMicrotask(() => {
+            void this.drainScheduledWebchatContinuation(sessionKey, continuationMessage);
+          });
+        },
       });
     }
 
@@ -818,6 +823,7 @@ export class GatewayService {
           : runAbort.signal;
 
         this.activeWebchatRunBySession.set(sessionKey, runId);
+        let streamError: string | undefined;
         try {
           this.emit('agent.stream', { sessionKey, event: statusEvent });
           const eventStream = this.agentService.processDirectStreaming(stampedMessage, sessionKey, prepared, thinking, {
@@ -845,15 +851,24 @@ export class GatewayService {
           };
         } catch (error) {
           log.error({ error }, 'Agent processing failed');
-          const errorEvent = { type: 'error', content: `Error: ${error instanceof Error ? error.message : 'Unknown error'}` };
+          streamError = error instanceof Error ? error.message : 'Unknown error';
+          const errorEvent = { type: 'error', content: `Error: ${streamError}` };
           this.runRelay.publish(runId, errorEvent);
           this.emit('agent.stream', { sessionKey, event: errorEvent });
           this.runRelay.complete(runId);
           yield errorEvent;
-          return { status: 'error', summary: error instanceof Error ? error.message : 'Unknown error' };
+          return { status: 'error', summary: streamError };
         } finally {
           this.activeWebchatRunBySession.delete(sessionKey);
           this.runAbortControllers.delete(runId);
+          const assistantPlainText = this.agentService.getLastAssistantPlainText(sessionKey);
+          await this.agentService.emitWebchatTurnComplete({
+            sessionKey,
+            inboundUserText: message,
+            assistantPlainText,
+            aborted: mergedSignal.aborted,
+            ...(streamError !== undefined ? { streamError } : {}),
+          });
         }
       }
 
@@ -897,6 +912,18 @@ export class GatewayService {
     }
     c.abort();
     return true;
+  }
+
+  /** Background drain for extension-initiated webchat turns (`scheduleWebchatContinuation`). */
+  private async drainScheduledWebchatContinuation(sessionKey: string, message: string): Promise<void> {
+    try {
+      const gen = this.runAgent(message, 'webchat', sessionKey, undefined, undefined, undefined);
+      for await (const _ of gen) {
+        // Relay + persistence; no HTTP client attached.
+      }
+    } catch (err) {
+      log.warn({ err, sessionKey }, 'Scheduled webchat continuation failed');
+    }
   }
 
   /**
