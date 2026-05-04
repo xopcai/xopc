@@ -1,6 +1,7 @@
 import { Ban, File as FileIcon, Mic, Send, Sparkles, Square } from 'lucide-react';
 import { memo } from 'react';
 
+import { ModelSelector } from '@/features/chat/model-selector';
 import { SessionWorkingDirectoryControl } from '@/features/chat/session-working-directory-control';
 import type { SessionManager } from '@/features/chat/session-manager';
 import type { ThinkingLevel } from '@/features/chat/composer.types';
@@ -42,6 +43,11 @@ export interface ComposerToolbarProps {
   onSend: () => void;
   onAbort: () => void;
   onInterrupt?: () => void;
+
+  sessionModel: string;
+  showModelSelector: boolean;
+  onModelChange: (modelId: string) => void;
+  modelDisabled: boolean;
 }
 
 export const ComposerToolbar = memo(function ComposerToolbar({
@@ -66,6 +72,10 @@ export const ComposerToolbar = memo(function ComposerToolbar({
   onSend,
   onAbort,
   onInterrupt,
+  sessionModel,
+  showModelSelector,
+  onModelChange,
+  modelDisabled,
 }: ComposerToolbarProps) {
   const ThinkingIcon = thinkingIcon(thinkingLevel as ThinkingLevel);
 
@@ -122,79 +132,98 @@ export const ComposerToolbar = memo(function ComposerToolbar({
         </div>
       ) : null}
 
-      <div className="ml-auto flex items-center gap-1">
-        <button
-          type="button"
-          className={cn(
-            'inline-flex size-8 shrink-0 items-center justify-center rounded-lg border border-transparent',
-            interaction.transition,
-            interaction.press,
-            interaction.focusRingPanel,
-            voiceRecording
-              ? 'bg-red-500/20 text-red-600 dark:bg-red-500/25 dark:text-red-400'
-              : 'text-fg-subtle hover:bg-surface-hover hover:text-fg',
-            'disabled:opacity-50 disabled:cursor-not-allowed',
-          )}
-          disabled={disabled || runBusy || attachmentCount >= maxAttachments}
-          title={voiceRecording ? m.voiceRecordingStop : m.voiceRecording}
-          aria-label={voiceRecording ? m.voiceRecordingStop : m.voiceRecording}
-          onClick={() => void onToggleVoice()}
-        >
-          <Mic className={cn('h-4 w-4 stroke-[1.75]', voiceRecording && 'animate-pulse')} />
-        </button>
+      <div className="ml-auto flex min-w-0 items-center gap-2">
+        {showModelSelector ? (
+          <div className="min-w-0 w-fit max-w-[min(20rem,calc(100vw-10rem))] shrink-0">
+            <ModelSelector
+              value={sessionModel}
+              disabled={modelDisabled}
+              placeholder={m.modelPlaceholder}
+              searchPlaceholder={m.modelSearchPlaceholder}
+              noMatches={m.modelNoMatches}
+              compact
+              showProviderInTrigger={false}
+              contentSide="top"
+              contentAlign="end"
+              showProviderSettingsFooter
+              onChange={onModelChange}
+            />
+          </div>
+        ) : null}
+        <div className="flex shrink-0 items-center gap-1">
+          <button
+            type="button"
+            className={cn(
+              'inline-flex size-8 shrink-0 items-center justify-center rounded-lg border border-transparent',
+              interaction.transition,
+              interaction.press,
+              interaction.focusRingPanel,
+              voiceRecording
+                ? 'bg-red-500/20 text-red-600 dark:bg-red-500/25 dark:text-red-400'
+                : 'text-fg-subtle hover:bg-surface-hover hover:text-fg',
+              'disabled:opacity-50 disabled:cursor-not-allowed',
+            )}
+            disabled={disabled || runBusy || attachmentCount >= maxAttachments}
+            title={voiceRecording ? m.voiceRecordingStop : m.voiceRecording}
+            aria-label={voiceRecording ? m.voiceRecordingStop : m.voiceRecording}
+            onClick={() => void onToggleVoice()}
+          >
+            <Mic className={cn('h-4 w-4 stroke-[1.75]', voiceRecording && 'animate-pulse')} />
+          </button>
 
-        {runBusy ? (
-          <>
-            {showSteeringInterrupt && onInterrupt ? (
+          {runBusy ? (
+            <>
+              {showSteeringInterrupt && onInterrupt ? (
+                <button
+                  type="button"
+                  className={cn(
+                    'inline-flex size-8 shrink-0 items-center justify-center rounded-lg border border-transparent text-accent-fg hover:bg-accent-soft dark:hover:bg-accent-soft',
+                    interaction.transition,
+                    interaction.press,
+                    interaction.focusRingPanel,
+                  )}
+                  title={m.steeringInterruptSend}
+                  aria-label={m.steeringInterruptSend}
+                  onClick={() => void onInterrupt()}
+                >
+                  <Send className="h-4 w-4 stroke-[1.75]" />
+                </button>
+              ) : null}
               <button
                 type="button"
                 className={cn(
-                  'inline-flex size-8 shrink-0 items-center justify-center rounded-lg border border-transparent text-accent-fg hover:bg-accent-soft dark:hover:bg-accent-soft',
+                  'inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-surface-hover/70 text-fg-muted hover:bg-surface-hover hover:text-fg dark:bg-surface-hover/50',
                   interaction.transition,
                   interaction.press,
                   interaction.focusRingPanel,
                 )}
-                title={m.steeringInterruptSend}
-                aria-label={m.steeringInterruptSend}
-                onClick={() => void onInterrupt()}
+                title={m.abort}
+                aria-label={m.abort}
+                onClick={onAbort}
               >
-                <Send className="h-4 w-4 stroke-[1.75]" />
+                <Square className="h-4 w-4 stroke-[1.75]" />
               </button>
-            ) : null}
+            </>
+          ) : (
             <button
               type="button"
               className={cn(
-                'inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-surface-hover/70 text-fg-muted hover:bg-surface-hover hover:text-fg dark:bg-surface-hover/50',
-                interaction.transition,
+                'inline-flex size-8 shrink-0 items-center justify-center rounded-lg border transition-colors duration-150 ease-out',
                 interaction.press,
                 interaction.focusRingPanel,
+                hasDraft
+                  ? 'border-transparent text-accent-fg hover:bg-accent-soft dark:text-accent-fg dark:hover:bg-accent-soft'
+                  : 'border-transparent text-fg-disabled',
               )}
-              title={m.abort}
-              aria-label={m.abort}
-              onClick={onAbort}
+              disabled={disabled || !hasDraft}
+              title={m.sendMessage}
+              aria-label={m.sendMessage}
+              onClick={onSend}
             >
-              <Square className="h-4 w-4 stroke-[1.75]" />
+              <Send className="h-4 w-4 stroke-[1.75]" />
             </button>
-          </>
-        ) : (
-          <button
-            type="button"
-            className={cn(
-              'inline-flex size-8 shrink-0 items-center justify-center rounded-lg border transition-colors duration-150 ease-out',
-              interaction.press,
-              interaction.focusRingPanel,
-              hasDraft
-                ? 'border-transparent text-accent-fg hover:bg-accent-soft dark:text-accent-fg dark:hover:bg-accent-soft'
-                : 'border-transparent text-fg-disabled',
-            )}
-            disabled={disabled || !hasDraft}
-            title={m.sendMessage}
-            aria-label={m.sendMessage}
-            onClick={onSend}
-          >
-            <Send className="h-4 w-4 stroke-[1.75]" />
-          </button>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );
