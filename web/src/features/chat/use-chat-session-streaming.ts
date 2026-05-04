@@ -112,6 +112,14 @@ export function useChatSessionStreaming(deps: {
           fq.flushSteeringQueue();
         });
       }
+      /** Persisted transcript includes `thinking` blocks the SSE path may omit (e.g. `reasoningLevel: off` strips thinking events). Re-sync from gateway so history matches server JSON. */
+      const syncKey = sessionKeyRef.current;
+      if (syncKey) {
+        window.setTimeout(() => {
+          if (sessionKeyRef.current !== syncKey) return;
+          void loadSessionById(syncKey, 0);
+        }, 400);
+      }
     },
     [
       setStreamingMsg,
@@ -123,10 +131,12 @@ export function useChatSessionStreaming(deps: {
       streamingRef,
       activeStreamSessionKeyRef,
       activeResumeRunIdRef,
+      sessionKeyRef,
       fq.dismissClarify,
       fq.refreshFollowUpSuggestions,
       fq.flushSteeringQueue,
       pollSessionNameAfterTurn,
+      loadSessionById,
     ],
   );
 
