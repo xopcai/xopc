@@ -2,20 +2,25 @@ import { MessageSquarePlus, Plus } from 'lucide-react';
 
 import type { GatewayAgentRow } from '@/features/settings/agents-admin-api';
 import { AgentAvatarDisplay } from '@/features/settings/agents/agent-avatar-display';
+import {
+  agentListDisplayDescription,
+  agentListDisplayName,
+} from '@/features/settings/agents/agent-display-names';
 import { cn } from '@/lib/cn';
 import type { AgentsSettingsMessages } from '@/i18n/messages';
 
-function filterAgents(agents: GatewayAgentRow[], query: string): GatewayAgentRow[] {
+function filterAgents(agents: GatewayAgentRow[], query: string, a: AgentsSettingsMessages): GatewayAgentRow[] {
   const q = query.trim().toLowerCase();
   if (!q) {
     return agents;
   }
   return agents.filter((ag) => {
-    const name = (ag.name ?? '').toLowerCase();
+    const name = agentListDisplayName(ag, a).toLowerCase();
     const id = ag.id.toLowerCase();
     const ws = ag.workspace.toLowerCase();
     const desc = (ag.description ?? '').toLowerCase();
-    return name.includes(q) || id.includes(q) || ws.includes(q) || desc.includes(q);
+    const displayDesc = agentListDisplayDescription(ag, a).toLowerCase();
+    return name.includes(q) || id.includes(q) || ws.includes(q) || desc.includes(q) || displayDesc.includes(q);
   });
 }
 
@@ -53,7 +58,7 @@ export function AgentsListGrid(props: {
   busy: boolean;
 }) {
   const { a, agents, searchQuery, onOpenAgent, onChatWithAgent, onNewAgent, busy } = props;
-  const filtered = filterAgents(agents, searchQuery);
+  const filtered = filterAgents(agents, searchQuery, a);
   const searchMiss = agents.length > 0 && filtered.length === 0 && searchQuery.trim().length > 0;
 
   if (agents.length === 0) {
@@ -79,9 +84,9 @@ export function AgentsListGrid(props: {
           <NewAgentCard a={a} busy={busy} onNewAgent={onNewAgent} />
         </li>
         {filtered.map((ag) => {
-          const title = ag.name?.trim() ? ag.name.trim() : ag.id;
+          const title = agentListDisplayName(ag, a);
           const monoId = ag.id;
-          const descTrim = ag.description?.trim() ?? '';
+          const descTrim = agentListDisplayDescription(ag, a);
           return (
             <li key={ag.id} className="h-full min-h-0">
               <div

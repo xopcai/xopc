@@ -1460,6 +1460,8 @@
     "listNoAgentsYet": "No agents yet. Create one to get started.",
     "listNewAgentCard": "New agent",
     "listChatWithAgent": "Chat",
+    "defaultMainAgentName": "Smart Assistant",
+    "defaultMainAgentDescription": "Your personal intelligent assistant for answering questions, handling everyday tasks, and chatting with you anytime.",
     "editorNavAria": "Agent editor sections",
     "skillsLibraryLink": "Skill library",
     "personaHint": "Set up your agent's identity and personality with a friendly form. For advanced editing, use Core files.",
