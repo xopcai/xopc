@@ -5,6 +5,7 @@ import { mergeConsecutiveAssistantMessages } from '@/features/chat/agent-message
 import { createAgentStreamMessagingCallbacks } from '@/features/chat/agent-stream-messaging-callbacks';
 import type { WireAttachment } from '@/features/chat/composer.types';
 import type { Message, ProgressState } from '@/features/chat/messages.types';
+import { extractUserMessagePlainText, messageAttachmentsToWire } from '@/features/chat/user-message-plain-text';
 import { pendingAgentRunStorageKey, MessageSender } from '@/features/chat/message-sender';
 import type { PendingFollowUp } from '@/features/chat/pending-follow-up.types';
 import type { SessionManager } from '@/features/chat/session-manager';
@@ -459,6 +460,48 @@ export function useChatSessionStreaming(deps: {
     [sessionKeyRef, sendingRef, streamingRef, setMessages, sessionMgrRef, loadSessionById],
   );
 
+  const retryUserMessageRound = useCallback(
+    (messageIndex: number) => {
+      const key = sessionKeyRef.current;
+      if (!key) return;
+      if (sendingRef.current || streamingRef.current) return;
+
+      setMessages((prev) => {
+        const msg = prev[messageIndex];
+        if (!msg) return prev;
+        if (msg.role !== 'user' && msg.role !== 'user-with-attachments') return prev;
+        for (let j = messageIndex + 1; j < prev.length; j++) {
+          const r = prev[j].role;
+          if (r === 'user' || r === 'user-with-attachments') return prev;
+        }
+
+        const text = extractUserMessagePlainText(msg.content);
+        const wireAtt = messageAttachmentsToWire(msg.attachments);
+        if (!text.trim() && !wireAtt?.length) return prev;
+
+        let deleteCount = 1;
+        const next = prev[messageIndex + 1];
+        if (next && next.role === 'assistant') {
+          deleteCount = 2;
+        }
+
+        const updated = [...prev];
+        updated.splice(messageIndex, deleteCount);
+
+        void sessionMgrRef.current.deleteMessages(key, messageIndex, deleteCount).catch(() => {
+          void loadSessionById(key, 0);
+        });
+
+        queueMicrotask(() => {
+          void sendMessageRef.current(text, wireAtt);
+        });
+
+        return updated;
+      });
+    },
+    [sessionKeyRef, sendingRef, streamingRef, setMessages, sessionMgrRef, loadSessionById, sendMessageRef],
+  );
+
   return {
     finalizeMessage,
     tryResumeAgentRun,
@@ -466,5 +509,6 @@ export function useChatSessionStreaming(deps: {
     interruptAndSend,
     abort,
     deleteMessageRound,
+    retryUserMessageRound,
   };
 }

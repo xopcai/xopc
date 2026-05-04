@@ -158,6 +158,7 @@ export function ChatPage() {
                       ) : undefined
                     }
                     onDeleteRound={stream.deleteMessageRound}
+                    onRetryUserMessageRound={stream.retryUserMessageRound}
                     deleteRoundDisabled={stream.streaming || stream.sending}
                   />
                 </>

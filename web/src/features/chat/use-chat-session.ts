@@ -172,7 +172,7 @@ export function useChatSession() {
     setModelSupportsThinking,
   });
 
-  const { tryResumeAgentRun, sendMessage, interruptAndSend, abort, deleteMessageRound } =
+  const { tryResumeAgentRun, sendMessage, interruptAndSend, abort, deleteMessageRound, retryUserMessageRound } =
     useChatSessionStreaming({
       sessionKey,
       thinkingLevel,
@@ -402,6 +402,7 @@ export function useChatSession() {
       abort,
       interruptAndSend,
       deleteMessageRound,
+      retryUserMessageRound,
     },
     followUp: {
       addPendingFollowUp: fq.addPendingFollowUp,
