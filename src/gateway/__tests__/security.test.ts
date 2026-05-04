@@ -33,6 +33,7 @@ function createMockService(config: any = {}): GatewayService {
     reloadSkillsFromDisk: () => {},
     installManagedSkillZip: () => ({ success: true }),
     deleteManagedSkill: () => {},
+    getExtensionLoader: () => null,
   } as unknown as GatewayService;
 }
 
@@ -46,6 +47,15 @@ describe('Gateway Security Fixes', () => {
       expect(isExtensionGatewayUiAssetPath('/api/extensions/hello/storage')).toBe(false);
       expect(isExtensionGatewayUiAssetPath('/api/extensions')).toBe(false);
       expect(isExtensionGatewayUiAssetPath('/health')).toBe(false);
+    });
+
+    it('allows extension asset requests with sandbox Origin null (not 403 from CSRF middleware)', async () => {
+      const service = createMockService();
+      const app = createHonoApp({ service, token: 'test' });
+      const res = await app.request('/api/extensions/hello/assets/ui/panel.bundle.js', {
+        headers: { Origin: 'null' },
+      });
+      expect(res.status).toBe(503);
     });
   });
 

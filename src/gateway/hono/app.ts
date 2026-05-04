@@ -87,6 +87,13 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   // authenticated by the token middleware instead.
   const allowedOrigins = Array.isArray(corsOrigin) ? corsOrigin : [corsOrigin];
   app.use('/api/*', createMiddleware(async (c, next) => {
+    // Sandboxed extension iframes (no allow-same-origin) send `Origin: null`.
+    // `checkBrowserOrigin` rejects that; these routes rely on CSP instead
+    // (`registerPublicExtensionAssetRoutes`).
+    if (isExtensionGatewayUiAssetPath(c.req.path)) {
+      return next();
+    }
+
     const origin = c.req.header('origin');
     if (!origin) {
       // Non-browser request (CLI, server-to-server) — skip origin check
