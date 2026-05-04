@@ -342,7 +342,6 @@ export function AgentsSettingsPanel() {
     setEditDescription(selected.description?.trim() ?? '');
     // Intentionally only `selected?.id` + `language`: refresh localized default main name on locale change
     // without resetting on unrelated `selected` object identity updates from SWR.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- see above
   }, [selected?.id, language]);
 
   useEffect(() => {

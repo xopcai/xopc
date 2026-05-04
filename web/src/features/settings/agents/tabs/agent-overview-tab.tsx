@@ -1,5 +1,6 @@
+import * as Dialog from '@radix-ui/react-dialog';
 import { type MutableRefObject, useCallback, useEffect, useRef, useState } from 'react';
-import { AlertTriangle, Cog, Eye, Pencil, Sparkles, Trash2, User } from 'lucide-react';
+import { AlertTriangle, Cog, Eye, Pencil, Sparkles, Trash2, User, X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { MarkdownEditor } from '@/components/markdown/markdown-editor';
@@ -16,6 +17,7 @@ import type { AgentsSettingsMessages, ChatMessages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useThemeStore } from '@/stores/theme-store';
 
+import { AgentAvatarDisplay } from '../agent-avatar-display';
 import { AgentAvatarPicker } from '../agent-avatar-picker';
 import { agentsSettingsInputClass } from '../utils';
 import {
@@ -88,6 +90,7 @@ export function AgentOverviewTab(props: {
   const [soulCustomContent, setSoulCustomContent] = useState('');
   const [soulEditorNonce, setSoulEditorNonce] = useState(0);
   const [soulPreviewMode, setSoulPreviewMode] = useState(false);
+  const [avatarDialogOpen, setAvatarDialogOpen] = useState(false);
 
   const initialLoadDoneRef = useRef(false);
   const agentIdRef = useRef(selected?.id ?? '');
@@ -213,6 +216,19 @@ export function AgentOverviewTab(props: {
           icon={Sparkles}
           title={a.personaSectionIdentity}
           subtitle={a.personaSectionIdentityHint}
+          iconLeading={
+            <AgentAvatarDisplay
+              agentId={selected.id}
+              avatar={identity.avatar}
+              size={36}
+              className="size-9 rounded-lg"
+            />
+          }
+          iconInteractive={{
+            onClick: () => setAvatarDialogOpen(true),
+            ariaLabel: a.avatarOpenSettingsAria,
+            id: 'agent-avatar-settings',
+          }}
           trailing={
             !selected.isDefault ? (
               <Button
@@ -227,6 +243,39 @@ export function AgentOverviewTab(props: {
             ) : null
           }
         />
+
+        <Dialog.Root open={avatarDialogOpen} onOpenChange={setAvatarDialogOpen}>
+          <Dialog.Portal>
+            <Dialog.Overlay className="fixed inset-0 z-[70] bg-scrim backdrop-blur-[2px]" />
+            <Dialog.Content
+              className={cn(
+                'fixed left-1/2 top-1/2 z-[71] w-[min(calc(100vw-2rem),26rem)] max-h-[min(90dvh,36rem)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-xl border border-edge bg-surface-panel p-4 shadow-popover dark:border-edge',
+              )}
+              onOpenAutoFocus={(e) => e.preventDefault()}
+            >
+              <div className="mb-3 flex items-start justify-between gap-2">
+                <Dialog.Title className="text-base font-semibold text-fg">{a.avatarPickerTitle}</Dialog.Title>
+                <Dialog.Close asChild>
+                  <button
+                    type="button"
+                    className="shrink-0 rounded-lg p-1.5 text-fg-muted hover:bg-surface-base hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                    aria-label={a.closeDialogAria}
+                  >
+                    <X className="size-4" aria-hidden />
+                  </button>
+                </Dialog.Close>
+              </div>
+              <Dialog.Description className="sr-only">{a.avatarRowHint}</Dialog.Description>
+              <AgentAvatarPicker
+                agentId={selected.id}
+                value={identity.avatar}
+                onChange={(next) => updateIdentity({ avatar: next })}
+                a={a}
+              />
+            </Dialog.Content>
+          </Dialog.Portal>
+        </Dialog.Root>
+
         <div className="grid gap-4 sm:grid-cols-2">
           {/* Name — single unified field */}
           <label className="flex flex-col gap-1.5 text-sm">
@@ -300,13 +349,6 @@ export function AgentOverviewTab(props: {
               />
             ) : null}
           </div>
-
-          <AgentAvatarPicker
-            agentId={selected.id}
-            value={identity.avatar}
-            onChange={(next) => updateIdentity({ avatar: next })}
-            a={a}
-          />
         </div>
       </SettingsFormSection>
 

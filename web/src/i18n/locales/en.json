@@ -1482,6 +1482,8 @@
     "personaAvatar": "Avatar",
     "personaAvatarPlaceholder": "URL or workspace path",
     "avatarPickerTitle": "Agent avatar",
+    "avatarOpenSettingsAria": "Open agent avatar settings",
+    "avatarRowHint": "Pick a style or upload a custom image.",
     "avatarUploadCustom": "Upload custom image",
     "avatarStylePixelArt": "Pixel art",
     "avatarStyleAdventurer": "Adventurer",
