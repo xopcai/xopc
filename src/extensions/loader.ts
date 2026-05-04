@@ -404,6 +404,10 @@ export class ExtensionLoader {
     scheduleWebchatContinuation?: (sessionKey: string, message: string) => void;
   }): void {
     this._runtimeContext = ctx;
+    // ExtensionApi snapshots `runtime` at construction and is tied to this loader's registry.
+    // CLI bootstrap loads extensions with `{ bus }` first; a global cache hit would reuse that
+    // api for the gateway loader (no sessionManager, wrong registry) — breaks e.g. `/goal`.
+    this.cache.invalidate();
   }
 
   getRegistry(): ExtensionRegistryImpl {
