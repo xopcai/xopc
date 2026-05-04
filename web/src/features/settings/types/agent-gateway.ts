@@ -14,6 +14,8 @@ export type GatewayAgentRow = {
   id: string;
   name?: string;
   description?: string;
+  /** From `IDENTITY.md` when gateway enriches `/api/agents`. */
+  avatar?: string;
   workspace: string;
   bootstrapDir: string;
   model?: { primary?: string; fallbacks?: string[] };

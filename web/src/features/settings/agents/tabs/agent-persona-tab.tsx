@@ -17,6 +17,7 @@ import type { AgentsSettingsMessages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useThemeStore } from '@/stores/theme-store';
 
+import { AgentAvatarPicker } from '../agent-avatar-picker';
 import { agentsSettingsInputClass } from '../utils';
 import {
   type IdentityFields,
@@ -251,17 +252,12 @@ export function AgentPersonaTab({ a, agentId }: PersonaTabProps) {
             </div>
           </label>
 
-          {/* Avatar */}
-          <label className="flex flex-col gap-1.5 text-sm sm:col-span-2">
-            <span className="font-medium text-fg">{a.personaAvatar}</span>
-            <input
-              className={cn(inputClass, 'font-mono text-xs')}
-              value={identity.avatar}
-              onChange={(e) => updateIdentity({ avatar: e.target.value })}
-              placeholder={a.personaAvatarPlaceholder}
-              autoComplete="off"
-            />
-          </label>
+          <AgentAvatarPicker
+            agentId={agentId}
+            value={identity.avatar}
+            onChange={(next) => updateIdentity({ avatar: next })}
+            a={a}
+          />
         </div>
       </SettingsFormSection>
 

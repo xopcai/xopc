@@ -80,7 +80,7 @@ export function AgentsSettingsPanel() {
   const chat = m.chat;
   const token = useGatewayStore((st) => st.token);
   const hasToken = Boolean(token);
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const { agentId: routeAgentId } = useParams<{ agentId?: string }>();
   const setPageHeader = usePageHeaderStore((s) => s.setPageHeader);
@@ -277,6 +277,31 @@ export function AgentsSettingsPanel() {
       state: { [SETTINGS_BACK_PATH_STATE_KEY]: AGENTS_APP_LIST_PATH },
     });
   }, [searchParams, navigate]);
+
+  useEffect(() => {
+    if (searchParams.get('focus') !== 'avatar' || !routeAgentId) {
+      return;
+    }
+    setPanel('overview');
+    if (loading || !data?.agents.some((x) => x.id === routeAgentId)) {
+      return;
+    }
+    const t = window.setTimeout(() => {
+      document.getElementById('agent-avatar-settings')?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+      });
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.delete('focus');
+          return next;
+        },
+        { replace: true },
+      );
+    }, 220);
+    return () => window.clearTimeout(t);
+  }, [searchParams, routeAgentId, loading, data, setSearchParams]);
 
   const selected = useMemo(
     () => data?.agents.find((x) => x.id === selectedId) ?? null,

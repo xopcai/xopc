@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { Config } from '../../config/schema.js';
 import {
+  extractAvatarFromIdentityMarkdown,
   listGatewayAgents,
   prepareCreateAgent,
   prepareDeleteAgent,
@@ -33,9 +34,9 @@ function minimalConfig(overrides: Partial<Config> = {}): Config {
 }
 
 describe('agents-admin', () => {
-  it('listGatewayAgents includes default agent when list is empty', () => {
+  it('listGatewayAgents includes default agent when list is empty', async () => {
     const cfg = minimalConfig();
-    const { defaultId, agents, builtinToolIds } = listGatewayAgents(cfg);
+    const { defaultId, agents, builtinToolIds } = await listGatewayAgents(cfg);
     expect(defaultId).toBe('main');
     expect(agents).toHaveLength(1);
     expect(agents[0]?.id).toBe('main');
@@ -43,6 +44,13 @@ describe('agents-admin', () => {
     expect(Array.isArray(builtinToolIds)).toBe(true);
     expect(builtinToolIds.length).toBeGreaterThan(0);
     expect(agents[0]?.tools.effectiveDisable).toEqual([]);
+  });
+
+  it('extractAvatarFromIdentityMarkdown reads Avatar line', () => {
+    const md = '# IDENTITY\n\n- **Avatar:** xopc:dicebear:pixel-art:Test\n';
+    expect(extractAvatarFromIdentityMarkdown(md)).toBe('xopc:dicebear:pixel-art:Test');
+    expect(extractAvatarFromIdentityMarkdown('')).toBeUndefined();
+    expect(extractAvatarFromIdentityMarkdown('- **Avatar:**  \n')).toBeUndefined();
   });
 
   it('prepareUpdateAgent sets description and can clear it', () => {
