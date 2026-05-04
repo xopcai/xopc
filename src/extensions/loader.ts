@@ -260,7 +260,11 @@ export class ExtensionLoader {
   private extensionInstances: Map<string, ExtensionApi> = new Map();
   private jiti: ReturnType<typeof createJiti>;
   private _appConfig?: Config;
-  private _runtimeContext?: { bus: MessageBus; sessionManager?: SessionManager };
+  private _runtimeContext?: {
+    bus: MessageBus;
+    sessionManager?: SessionManager;
+    scheduleWebchatContinuation?: (sessionKey: string, message: string) => void;
+  };
   
   //  Security
   private securityConfig: SecurityConfig;
@@ -394,7 +398,11 @@ export class ExtensionLoader {
   /**
    * Inject MessageBus and optional SessionManager for ExtensionApi.runtime (Gateway).
    */
-  setRuntimeContext(ctx: { bus: MessageBus; sessionManager?: SessionManager }): void {
+  setRuntimeContext(ctx: {
+    bus: MessageBus;
+    sessionManager?: SessionManager;
+    scheduleWebchatContinuation?: (sessionKey: string, message: string) => void;
+  }): void {
     this._runtimeContext = ctx;
   }
 
@@ -925,6 +933,7 @@ export class ExtensionLoader {
             bus: this._runtimeContext.bus,
             log: logger,
             sessionManager: this._runtimeContext.sessionManager,
+            scheduleWebchatContinuation: this._runtimeContext.scheduleWebchatContinuation,
           }
         : this._appConfig
           ? {

@@ -52,7 +52,9 @@ export type ExtensionHookEvent =
   // Sub-agent lifecycle (openclaw parity surface)
   | 'subagent_spawning'
   | 'subagent_delivery_target'
-  | 'subagent_ended';
+  | 'subagent_ended'
+  /** After a webchat direct stream finishes (success or error); session lock released. */
+  | 'webchat_turn_complete';
 
 // ============================================================================
 // Hook Execution Modes 
@@ -90,6 +92,7 @@ export const HOOK_EXECUTION_MODES: Record<ExtensionHookEvent, HookExecutionMode>
   'tool_execution_end': 'void',
   'before_reset': 'void',
   'subagent_ended': 'void',
+  'webchat_turn_complete': 'void',
   
   // Modifying: Sequential execution, results merge
   'before_agent_start': 'modifying',
@@ -338,6 +341,11 @@ export type HookHandlerMap = {
     event: AgentEndContext,
     ctx: HookAgentContext,
   ) => Promise<void> | void;
+
+  webchat_turn_complete: (
+    event: WebchatTurnCompleteEvent,
+    ctx: HookAgentContext,
+  ) => Promise<void> | void;
   
   // Compaction
   before_compaction: (
@@ -494,6 +502,19 @@ export interface AgentEndContext extends HookContext {
   success: boolean;
   error?: string;
   durationMs?: number;
+}
+
+/** Payload for {@link ExtensionHookEvent} `webchat_turn_complete` (also passed as `event` fields + ctx.sessionKey). */
+export interface WebchatTurnCompleteEvent extends HookContext {
+  sessionKey: string;
+  /** Raw inbound user text from the POST body (before model envelope). */
+  inboundUserText: string;
+  /** Last assistant visible text after persistence (may be empty). */
+  assistantPlainText: string;
+  /** User aborted the HTTP/SSE run. */
+  aborted: boolean;
+  /** Set when the direct stream threw before normal completion. */
+  streamError?: string;
 }
 
 export interface BeforeCompactionContext extends HookContext {

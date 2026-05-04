@@ -12,6 +12,7 @@ import type { TypedEventBus } from './events.js';
 import type { AgentTool } from '@mariozechner/pi-agent-core';
 import type { ExtensionHookEvent, ExtensionHookHandler, HookOptions, HookHandlerMap } from './hooks.js';
 import type { ChannelPlugin } from '../../channels/plugin-types.js';
+import type { SessionMetadata } from '../../session/types.js';
 import type { FlagConfig, FlagValue, ShortcutConfig } from './phase4.js';
 import type { ProviderPlugin } from './providers.js';
 
@@ -59,6 +60,8 @@ export type ExtensionModule = ExtensionDefinition | ((api: ExtensionApi) => void
 /** Optional: session manager when extension runs inside Gateway. */
 export type ExtensionSessionManager = {
   initialize?: () => Promise<void>;
+  getSessionMetadata?: (key: string) => Promise<SessionMetadata | null>;
+  updateSessionMetadata?: (key: string, updates: Partial<SessionMetadata>) => Promise<void>;
 };
 
 export interface ExtensionRuntime {
@@ -67,6 +70,11 @@ export interface ExtensionRuntime {
   bus?: MessageBus;
   log: ExtensionLogger;
   sessionManager?: ExtensionSessionManager;
+  /**
+   * Queue another webchat agent turn (same as POST /api/agent) after the current run unlocks.
+   * Only injected in the Gateway process.
+   */
+  scheduleWebchatContinuation?: (sessionKey: string, message: string) => void;
 }
 
 export interface ExtensionCliRegistration {

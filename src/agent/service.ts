@@ -511,6 +511,30 @@ export class AgentService {
     this.feedbackCoordinator.endTask();
   }
 
+  /** Last assistant visible plain text for a session (e.g. after a webchat stream). */
+  getLastAssistantPlainText(sessionKey: string): string {
+    return this.agentManager.getLastAssistantContent(sessionKey) ?? '';
+  }
+
+  /**
+   * Notify extensions after a webchat direct stream ends (Gateway calls after session run lock is released).
+   */
+  async emitWebchatTurnComplete(payload: {
+    sessionKey: string;
+    inboundUserText: string;
+    assistantPlainText: string;
+    aborted: boolean;
+    streamError?: string;
+  }): Promise<void> {
+    await this.hookHandler.triggerWithSessionKey(payload.sessionKey, 'webchat_turn_complete', {
+      sessionKey: payload.sessionKey,
+      inboundUserText: payload.inboundUserText,
+      assistantPlainText: payload.assistantPlainText,
+      aborted: payload.aborted,
+      ...(payload.streamError !== undefined ? { streamError: payload.streamError } : {}),
+    });
+  }
+
   async start(): Promise<void> {
     this.running = true;
     await this.sessionConfigStore.initialize();

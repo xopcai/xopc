@@ -87,6 +87,7 @@ export type {
   BeforeAgentStartContext,
   BeforeAgentStartResult,
   AgentEndContext,
+  WebchatTurnCompleteEvent,
   BeforeCompactionContext,
   AfterCompactionContext,
   MessageReceivedContext,

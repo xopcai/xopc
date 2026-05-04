@@ -313,24 +313,53 @@ export async function* runProcessDirectStreaming(
 
     const commandInfo = parseSlashCommand(mergedUserText);
     let ranSlashCommand = false;
-    if (!abortHandled && commandInfo && commandRegistry.has(commandInfo.command)) {
-      ranSlashCommand = true;
-      const { aggregatedText } = await commandHandler.executeCommandAndAggregateReply(
-        commandInfo.command,
-        commandInfo.args,
-        {
-          sessionKey,
-          channel,
-          chatId,
-          senderId: context.senderId,
-          isGroup: context.isGroup,
-        },
-      );
-      if (aggregatedText) {
-        pushEvent({ type: 'token', content: aggregatedText });
+    /** Plain text to persist for webchat slash turns (SSE can be dropped by the UI; disk is source of truth). */
+    let webchatSlashReceipt: string | undefined;
+    if (!abortHandled && commandInfo) {
+      if (commandRegistry.has(commandInfo.command)) {
+        ranSlashCommand = true;
+        try {
+          const { aggregatedText } = await commandHandler.executeCommandAndAggregateReply(
+            commandInfo.command,
+            commandInfo.args,
+            {
+              sessionKey,
+              channel,
+              chatId,
+              senderId: context.senderId,
+              isGroup: context.isGroup,
+            },
+          );
+          if (aggregatedText?.trim()) {
+            webchatSlashReceipt = aggregatedText.trim();
+            pushEvent({ type: 'token', content: webchatSlashReceipt });
+          } else if (channel === 'webchat') {
+            webchatSlashReceipt =
+              'Command finished with no assistant text. For `/goal`, that usually means the goal was saved; the assistant will not run until your next normal message (or an auto-continuation after an assistant reply).';
+            pushEvent({ type: 'token', content: webchatSlashReceipt });
+          }
+        } catch (cmdErr) {
+          const em = cmdErr instanceof Error ? cmdErr.message : String(cmdErr);
+          log.warn({ err: cmdErr, sessionKey, command: commandInfo.command }, `Slash command failed: ${em}`);
+          webchatSlashReceipt = `Command error: ${em}`;
+          pushEvent({ type: 'token', content: webchatSlashReceipt });
+        }
+        pushEvent({ type: '__done__' });
+        agentDone = true;
+      } else if (commandInfo.command === 'goal') {
+        // `/goal` is provided by the `standing-goal` bundled extension; avoid silent LLM fallback.
+        ranSlashCommand = true;
+        webchatSlashReceipt =
+          'The /goal command is not available: the `standing-goal` extension is not loaded.\n\n' +
+          'Fix: add `"standing-goal"` to `extensions.enabled` in your xopc config (or remove it from `extensions.disabled`), then restart the gateway. ' +
+          'If you use a strict allowlist, include `standing-goal` in `extensions.enabled`.';
+        pushEvent({
+          type: 'token',
+          content: webchatSlashReceipt,
+        });
+        pushEvent({ type: '__done__' });
+        agentDone = true;
       }
-      pushEvent({ type: '__done__' });
-      agentDone = true;
     }
 
     let messageContent:
@@ -406,7 +435,29 @@ export async function* runProcessDirectStreaming(
       yield event;
     }
 
-    await persistAgentSessionMessages(sessionKey);
+    // Persist slash command text to the session file so the gateway console can show a receipt even when
+    // the browser drops SSE tokens (e.g. session key mismatch during hydration).
+    if (channel === 'webchat' && ranSlashCommand && webchatSlashReceipt?.trim()) {
+      try {
+        const loaded = await sessionStore.load(sessionKey);
+        const text = webchatSlashReceipt.trim();
+        // Minimal assistant row for session JSON; full AssistantMessage metadata is LLM-turn specific.
+        const assistantMsg = {
+          role: 'assistant' as const,
+          content: [{ type: 'text' as const, text }],
+          timestamp: Date.now(),
+        } as AgentMessage;
+        await sessionStore.save(sessionKey, [...loaded, assistantMsg]);
+      } catch (err) {
+        log.warn({ err, sessionKey }, 'Failed to persist webchat slash command receipt');
+      }
+    }
+
+    // Slash-only turns never hydrate the early-saved user row into pi-agent state; persisting here would
+    // write an empty/stale transcript over the gateway `SessionManager` copy (and break e.g. `/goal`).
+    if (!ranSlashCommand) {
+      await persistAgentSessionMessages(sessionKey);
+    }
 
     if (!userAborted) {
       const ttsAudioEvent = await maybeEmitWebchatTts(sessionKey, inboundVoice);
