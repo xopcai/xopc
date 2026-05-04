@@ -1,6 +1,5 @@
 {
   "compilerOptions": {
-    "ignoreDeprecations": "6.0",
     "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "bundler",
@@ -15,12 +14,11 @@
     "sourceMap": true,
     "resolveJsonModule": true,
     "allowSyntheticDefaultImports": true,
-    "baseUrl": ".",
     "paths": {
       "@xopcai/xopc/extension-sdk": ["./src/extensions/sdk/index.ts"],
       "@xopcai/xopc/extension-sdk/*": ["./src/extensions/sdk/*"],
       "@xopcai/xopc/*": ["./src/*"],
-      "*": ["node_modules/*"]
+      "*": ["./node_modules/*"]
     }
   },
   "include": ["src/**/*", "extensions/telegram/src/**/*", "extensions/weixin/src/**/*"],
