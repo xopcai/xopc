@@ -1,5 +1,5 @@
 import { type ReactNode, memo, useCallback, useMemo, useState } from 'react';
-import { Check, Copy, FileCode2, Trash2 } from 'lucide-react';
+import { Check, Copy, FileCode2, Pencil, RefreshCw, Trash2 } from 'lucide-react';
 import { marked } from 'marked';
 
 import type {
@@ -17,7 +17,9 @@ import { AttachmentPreviewDialog } from '@/features/chat/attachment-preview-dial
 import { AttachmentRenderer } from '@/features/chat/attachment-renderer';
 import { MarkdownView } from '@/features/chat/markdown/markdown-view';
 import { SearchSourceList } from '@/features/chat/search-source-list';
+import { dispatchFillChatComposer } from '@/features/chat/fill-composer-dispatch';
 import { UserMessageSegments } from '@/features/chat/user-message-segments';
+import { extractUserMessagePlainText, stripEnvelopeTimestampPrefix } from '@/features/chat/user-message-plain-text';
 import { UsageBadge } from '@/features/chat/usage-badge';
 import { ToolResultFileLinks } from '@/features/chat/tool-result-file-links';
 import {
@@ -32,12 +34,11 @@ import { useLocaleStore } from '@/stores/locale-store';
 
 function formatTime(ts?: number): string {
   if (!ts) return '';
-  return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-}
-
-function stripEnvelopeTimestampPrefix(text: string): string {
-  // xopc envelope timestamp: `[YYYY-MM-DD HH:MM ...] ` (kept for model context, hidden in UI)
-  return text.replace(/^\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}[^\]]*\]\s+/, '');
+  return new Date(ts).toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
 }
 
 /** User bubble: inline image opens {@link AttachmentPreviewDialog} (shared `file-preview` UI). */
@@ -221,6 +222,13 @@ const messageActionIconButton = cn(
   interaction.disabled,
 );
 
+const userMessageFooterAction = cn(
+  'inline-flex h-8 shrink-0 items-center justify-center gap-1 rounded-md px-2 text-xs text-fg-muted transition-colors',
+  'hover:bg-surface-hover hover:text-fg active:scale-[0.98]',
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent',
+  interaction.disabled,
+);
+
 export const MessageBubble = memo(function MessageBubble({
   message,
   authToken,
@@ -230,6 +238,8 @@ export const MessageBubble = memo(function MessageBubble({
   reasoningLevel = 'stream',
   messageIndex,
   onDeleteRound,
+  onRetryUserMessageRound,
+  userMessageCanRetry = false,
   deleteRoundDisabled = false,
 }: {
   message: Message;
@@ -242,6 +252,10 @@ export const MessageBubble = memo(function MessageBubble({
   messageIndex?: number;
   /** Delete this user message and the following assistant response. */
   onDeleteRound?: (messageIndex: number) => void;
+  /** Remove this user turn and send the same text again (only for the latest user message). */
+  onRetryUserMessageRound?: (messageIndex: number) => void;
+  /** True when this row is the most recent user message in the thread (retry allowed). */
+  userMessageCanRetry?: boolean;
   /** When true, omit delete control (e.g. while sending or streaming). */
   deleteRoundDisabled?: boolean;
 }) {
@@ -350,11 +364,7 @@ export const MessageBubble = memo(function MessageBubble({
   );
   const userCopyText = useMemo(() => {
     if (!isUser) return '';
-    return (message.content ?? [])
-      .filter((b): b is { type: 'text'; text: string } => b.type === 'text' && Boolean(b.text))
-      .map((b) => stripEnvelopeTimestampPrefix(b.text))
-      .join('\n\n')
-      .trim();
+    return extractUserMessagePlainText(message.content);
   }, [isUser, message.content]);
   const [copyFeedback, setCopyFeedback] = useState<'plain' | 'markdown' | 'user' | null>(null);
   const [inlineImagePreview, setInlineImagePreview] = useState<MessageAttachment | null>(null);
@@ -410,38 +420,10 @@ export const MessageBubble = memo(function MessageBubble({
     return blocks;
   }, [message, reasoningHidden]);
 
+  const retryDisabled = deleteRoundDisabled || !userMessageCanRetry;
+
   return (
     <article className={cn('group/msg flex w-full min-w-0', isUser ? 'justify-end' : 'justify-start')}>
-      {isUser && !isStreaming ? (
-        <div className="mr-1.5 flex shrink-0 items-center gap-0.5 self-end pb-0.5 opacity-0 transition-opacity duration-150 group-hover/msg:opacity-100">
-          <button
-            type="button"
-            className={messageActionIconButton}
-            onClick={() => void handleCopyUserMessage()}
-            disabled={!userCopyText}
-            title={copyFeedback === 'user' ? m.chat.messageCopied : m.chat.userMessageCopy}
-            aria-label={copyFeedback === 'user' ? m.chat.messageCopied : m.chat.userMessageCopy}
-          >
-            {copyFeedback === 'user' ? (
-              <Check className="h-3.5 w-3.5 text-fg-muted" strokeWidth={1.75} aria-hidden />
-            ) : (
-              <Copy className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
-            )}
-          </button>
-          {onDeleteRound && messageIndex != null && !deleteRoundDisabled ? (
-            <button
-              type="button"
-              className={cn(messageActionIconButton, 'hover:text-red-500')}
-              onClick={handleDeleteRound}
-              title={m.chat.userMessageDelete}
-              aria-label={m.chat.userMessageDelete}
-            >
-              <Trash2 className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
-            </button>
-          ) : null}
-        </div>
-      ) : null}
-
       <div
         className={cn(
           'min-w-0 max-w-[min(85%,var(--max-width-chat))]',
@@ -450,13 +432,29 @@ export const MessageBubble = memo(function MessageBubble({
       >
         <span className="sr-only">{roleLabel}</span>
 
-        {showMeta ? (
-          <div
-            className={cn(
-              'mb-2 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs text-fg-disabled',
-              isUser && 'justify-end',
-            )}
-          >
+        {isUser && showMeta ? (
+          <div className="mb-2 flex w-full min-w-0 flex-wrap items-center justify-end gap-x-2 gap-y-0.5 text-xs">
+            {message.timestamp ? (
+              <time
+                className="shrink-0 tabular-nums text-fg-disabled"
+                dateTime={new Date(message.timestamp).toISOString()}
+              >
+                {formatTime(message.timestamp)}
+              </time>
+            ) : null}
+            {progressForMeta?.message ? (
+              <span className="text-fg-subtle" title={progressForMeta.detail ?? ''}>
+                {progressForMeta.message}
+              </span>
+            ) : null}
+            {isStreaming && !streamingThinking && !progressForMeta?.message ? (
+              <span className="text-fg-subtle">{m.chat.thinkingLabel}</span>
+            ) : null}
+          </div>
+        ) : null}
+
+        {!isUser && showMeta ? (
+          <div className="mb-2 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs text-fg-disabled">
             {message.timestamp ? (
               <time className="tabular-nums" dateTime={new Date(message.timestamp).toISOString()}>
                 {formatTime(message.timestamp)}
@@ -478,7 +476,7 @@ export const MessageBubble = memo(function MessageBubble({
           className={cn(
             'min-w-0 text-sm leading-relaxed text-fg',
             isUser &&
-              'w-fit max-w-full rounded-xl bg-accent-soft/55 px-4 py-3 text-left dark:bg-accent-soft/35',
+              'w-fit max-w-full rounded-xl border border-edge-subtle/70 bg-surface-hover/90 px-4 py-3 text-left shadow-sm dark:border-edge-subtle dark:bg-surface-hover/50',
           )}
         >
           <div className="flex min-w-0 flex-col gap-2">
@@ -551,6 +549,75 @@ export const MessageBubble = memo(function MessageBubble({
             ) : null}
           </div>
         </div>
+
+        {isUser && !isStreaming ? (
+          <div className="mt-1.5 flex h-8 w-full min-w-0 shrink-0 justify-end">
+            <div
+              className={cn(
+                'flex h-full max-w-full items-center justify-end gap-0.5 sm:gap-2',
+                'pointer-events-none opacity-0 transition-opacity duration-150 ease-out',
+                'group-hover/msg:pointer-events-auto group-hover/msg:opacity-100',
+                'group-focus-within/msg:pointer-events-auto group-focus-within/msg:opacity-100',
+                '[@media(hover:none)_and_(pointer:coarse)]:pointer-events-auto [@media(hover:none)_and_(pointer:coarse)]:opacity-100',
+              )}
+            >
+              {onRetryUserMessageRound && messageIndex != null ? (
+                <button
+                  type="button"
+                  className={cn(userMessageFooterAction, retryDisabled && 'opacity-40')}
+                  onClick={() => onRetryUserMessageRound(messageIndex)}
+                  disabled={retryDisabled}
+                  title={
+                    deleteRoundDisabled
+                      ? m.chat.userMessageActionsWait
+                      : !userMessageCanRetry
+                        ? m.chat.userMessageRetryDisabledHint
+                        : m.chat.userMessageRetry
+                  }
+                  aria-label={m.chat.userMessageRetry}
+                >
+                  <RefreshCw className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
+                  <span className="max-w-[4.5rem] truncate sm:max-w-none">{m.chat.userMessageRetry}</span>
+                </button>
+              ) : null}
+              <button
+                type="button"
+                className={cn(userMessageFooterAction, 'size-8 px-0')}
+                onClick={() => dispatchFillChatComposer(userCopyText)}
+                disabled={!userCopyText}
+                title={m.chat.userMessageEdit}
+                aria-label={m.chat.userMessageEdit}
+              >
+                <Pencil className="size-3.5" strokeWidth={1.75} aria-hidden />
+              </button>
+              <button
+                type="button"
+                className={cn(userMessageFooterAction, 'size-8 px-0')}
+                onClick={() => void handleCopyUserMessage()}
+                disabled={!userCopyText}
+                title={copyFeedback === 'user' ? m.chat.messageCopied : m.chat.userMessageCopy}
+                aria-label={copyFeedback === 'user' ? m.chat.messageCopied : m.chat.userMessageCopy}
+              >
+                {copyFeedback === 'user' ? (
+                  <Check className="size-3.5 text-fg-muted" strokeWidth={1.75} aria-hidden />
+                ) : (
+                  <Copy className="size-3.5" strokeWidth={1.75} aria-hidden />
+                )}
+              </button>
+              {onDeleteRound && messageIndex != null && !deleteRoundDisabled ? (
+                <button
+                  type="button"
+                  className={cn(userMessageFooterAction, 'size-8 px-0 hover:text-red-500 dark:hover:text-red-400')}
+                  onClick={handleDeleteRound}
+                  title={m.chat.userMessageDelete}
+                  aria-label={m.chat.userMessageDelete}
+                >
+                  <Trash2 className="size-3.5" strokeWidth={1.75} aria-hidden />
+                </button>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
 
         {isAssistant && copyMarkdown ? (
           <div className="mt-2 flex shrink-0 flex-wrap items-center gap-2 overflow-visible">

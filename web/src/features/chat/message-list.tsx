@@ -12,6 +12,7 @@ import {
 import { ChatWelcomeSpotlight } from '@/features/chat/chat-welcome-spotlight';
 import { MessageBubble } from '@/features/chat/message-bubble';
 import type { Message, ProgressState, ReasoningLevel } from '@/features/chat/messages.types';
+import { isLastUserMessageInThread } from '@/features/chat/user-message-plain-text';
 import { messageRowKey } from '@/features/chat/thinking-blocks';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -32,6 +33,7 @@ export const MessageList = memo(function MessageList({
   onPickWelcomePrompt,
   welcomeOverlay,
   onDeleteRound,
+  onRetryUserMessageRound,
   deleteRoundDisabled,
 }: {
   messages: Message[];
@@ -50,6 +52,8 @@ export const MessageList = memo(function MessageList({
   welcomeOverlay?: ReactNode;
   /** Delete a user message round (user + assistant) by message index. */
   onDeleteRound?: (messageIndex: number) => void;
+  /** Re-send the latest user turn (removes that round locally, then sends again). */
+  onRetryUserMessageRound?: (messageIndex: number) => void;
   /** Omit delete-round control while sending/streaming. */
   deleteRoundDisabled?: boolean;
 }) {
@@ -159,6 +163,10 @@ export const MessageList = memo(function MessageList({
               reasoningLevel={reasoningLevel}
               messageIndex={virtualRow.index}
               onDeleteRound={onDeleteRound}
+              onRetryUserMessageRound={onRetryUserMessageRound}
+              userMessageCanRetry={
+                Boolean(onRetryUserMessageRound) && isLastUserMessageInThread(list, virtualRow.index)
+              }
               deleteRoundDisabled={deleteRoundDisabled}
             />
           </div>
