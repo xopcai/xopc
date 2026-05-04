@@ -93,7 +93,7 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
           )}
         >
           {showChatAgentSelector ? (
-            <div className="min-w-0 w-fit max-w-[min(10rem,calc(100vw-12rem))] shrink-0">
+            <div className="min-w-0 w-fit shrink-0">
               <ChatAgentSelector
                 items={chatAgents}
                 value={chatAgentId}
