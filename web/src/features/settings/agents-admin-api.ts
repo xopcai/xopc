@@ -204,15 +204,13 @@ export async function saveAgentBootstrapFileContent(
   );
 }
 
-const AVATAR_MIME = ['image/png', 'image/jpeg', 'image/webp'] as const;
-
-export type AgentAvatarMime = (typeof AVATAR_MIME)[number];
+export type AgentAvatarMime = 'image/png' | 'image/jpeg' | 'image/webp';
 
 function mimeFromFile(file: File): AgentAvatarMime | null {
   const t = file.type.toLowerCase();
   if (t === 'image/png' || t === 'image/jpeg' || t === 'image/jpg' || t === 'image/webp') {
     if (t === 'image/jpg') return 'image/jpeg';
-    return t as AgentAvatarMime;
+    return t;
   }
   return null;
 }

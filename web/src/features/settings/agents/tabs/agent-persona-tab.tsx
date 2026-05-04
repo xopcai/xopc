@@ -17,6 +17,7 @@ import type { AgentsSettingsMessages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useThemeStore } from '@/stores/theme-store';
 
+import { AgentAvatarDisplay } from '../agent-avatar-display';
 import { AgentAvatarPicker } from '../agent-avatar-picker';
 import { agentsSettingsInputClass } from '../utils';
 import {
@@ -195,6 +196,9 @@ export function AgentPersonaTab({ a, agentId }: PersonaTabProps) {
           icon={Sparkles}
           title={a.personaSectionIdentity}
           subtitle={a.personaSectionIdentityHint}
+          iconLeading={
+            <AgentAvatarDisplay agentId={agentId} avatar={identity.avatar} size={36} className="size-9 rounded-lg" />
+          }
         />
         <div className="grid gap-4 sm:grid-cols-2">
           {/* Name */}

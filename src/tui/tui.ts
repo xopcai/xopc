@@ -28,7 +28,6 @@ import { createLocalShellRunner } from './tui-local-shell.js';
 import {
   createBackspaceDeduper,
   drainAndStopTuiSafely,
-  type DrainableTui,
   resolveCtrlCAction,
 } from './tui-lifecycle.js';
 import { openModelPickerOverlay, openSessionPickerOverlay } from './tui-picker-overlay.js';

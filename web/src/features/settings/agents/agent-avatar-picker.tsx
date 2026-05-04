@@ -43,8 +43,10 @@ export function AgentAvatarPicker(props: {
   value: string;
   onChange: (next: string) => void;
   a: AgentsSettingsMessages;
+  /** Optional root id (e.g. for scroll-into-view); omit when embedded in a dialog. */
+  id?: string;
 }) {
-  const { agentId, value, onChange, a } = props;
+  const { agentId, value, onChange, a, id } = props;
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploadBusy, setUploadBusy] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -105,7 +107,7 @@ export function AgentAvatarPicker(props: {
   };
 
   return (
-    <div id="agent-avatar-settings" className="flex flex-col gap-3 sm:col-span-2">
+    <div {...(id ? { id } : {})} className="flex flex-col gap-3 sm:col-span-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="text-sm font-medium text-fg">{a.avatarPickerTitle}</span>
         <div className="flex items-center gap-2">

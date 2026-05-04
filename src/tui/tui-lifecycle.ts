@@ -1,4 +1,4 @@
-import { getKeybindings, Key, matchesKey } from '@mariozechner/pi-tui';
+import { Key, matchesKey } from '@mariozechner/pi-tui';
 
 /** Suppress duplicate backspace bursts from some terminals (openclaw-aligned). */
 export function createBackspaceDeduper(params?: { dedupeWindowMs?: number; now?: () => number }) {
