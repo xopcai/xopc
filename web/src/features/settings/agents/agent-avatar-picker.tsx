@@ -19,20 +19,23 @@ import {
   XOPC_CUSTOM_AVATAR,
   buildXopcDicebearValue,
   dicebearToDataUri,
+  isDicebearStyleId,
   parseXopcDicebearValue,
   type DicebearStyleId,
 } from './agent-avatar-dicebear';
 
 function styleLabel(style: DicebearStyleId, a: AgentsSettingsMessages): string {
   switch (style) {
-    case 'pixel-art':
-      return a.avatarStylePixelArt;
     case 'adventurer':
       return a.avatarStyleAdventurer;
     case 'bottts':
       return a.avatarStyleRobot;
     case 'lorelei':
       return a.avatarStyleLorelei;
+    case 'thumbs':
+      return a.avatarStyleThumbs;
+    case 'fun-emoji':
+      return a.avatarStyleFunEmoji;
     default:
       return style;
   }
@@ -54,10 +57,10 @@ export function AgentAvatarPicker(props: {
 
   const activeStyle = useMemo((): DicebearStyleId => {
     const p = parseXopcDicebearValue(value.trim());
-    if (p) {
+    if (p && isDicebearStyleId(p.styleId)) {
       return p.styleId;
     }
-    return 'pixel-art';
+    return DICEBEAR_STYLE_ORDER[0] ?? 'adventurer';
   }, [value]);
 
   const pickDicebear = useCallback(
