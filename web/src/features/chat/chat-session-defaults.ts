@@ -4,7 +4,7 @@ import { isWebUiSessionKey } from '@/features/chat/session-manager';
 import { getAgentIdFromWebSessionKey } from '@/lib/web-session-agent';
 
 export const DEFAULT_THINKING = 'medium';
-export const DEFAULT_REASONING: ReasoningLevel = 'off';
+export const DEFAULT_REASONING: ReasoningLevel = 'stream';
 
 export const WEBCHAT_AGENT_STORAGE_KEY = 'xopc.webchat.agentId';
 

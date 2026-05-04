@@ -36,7 +36,7 @@ export async function resolveEffectiveThinkingLevel(
   return def as ThinkingLevel;
 }
 
-const REASONING_FALLBACK: ReasoningLevel = 'off';
+const REASONING_FALLBACK: ReasoningLevel = 'stream';
 
 /**
  * Session override > agent default (`agents.defaults.reasoningDefault`).

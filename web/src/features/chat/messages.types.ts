@@ -75,5 +75,5 @@ export type ReasoningLevel = 'off' | 'on' | 'stream';
 
 export function coerceReasoningLevel(raw: string | undefined): ReasoningLevel {
   if (raw === 'on' || raw === 'stream' || raw === 'off') return raw;
-  return 'off';
+  return 'stream';
 }

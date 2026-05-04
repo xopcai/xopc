@@ -1134,7 +1134,7 @@ export class AgentService {
 
     const defThink = cfg.agents?.defaults?.thinkingDefault ?? 'medium';
     const level = await resolveEffectiveThinkingLevel(this.sessionConfigStore, sessionKey, null, defThink);
-    const defReason = (cfg.agents?.defaults?.reasoningDefault ?? 'off') as ReasoningLevel;
+    const defReason = (cfg.agents?.defaults?.reasoningDefault ?? 'stream') as ReasoningLevel;
     const reasoningLevel = await resolveEffectiveReasoningLevel(this.sessionConfigStore, sessionKey, defReason);
     const model = this.modelManager.getModelForSession(sessionKey);
     return {

@@ -251,6 +251,9 @@ export const AgentsConfigSchema = z.object({
     maxToolIterations: 20,
     maxRequestsPerTurn: 50,
     maxToolFailuresPerTurn: 3,
+    thinkingDefault: 'medium',
+    reasoningDefault: 'stream',
+    verboseDefault: 'full',
     compaction: {
       enabled: true,
       mode: 'default',
@@ -650,8 +653,8 @@ export const ConfigSchema = z.object({
       maxRequestsPerTurn: 50,
       maxToolFailuresPerTurn: 3,
       thinkingDefault: 'medium',
-      reasoningDefault: 'off',
-      verboseDefault: 'off',
+      reasoningDefault: 'stream',
+      verboseDefault: 'full',
       compaction: {
         enabled: true,
         mode: 'default',

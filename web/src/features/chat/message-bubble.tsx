@@ -227,7 +227,7 @@ export const MessageBubble = memo(function MessageBubble({
   sessionKey,
   isStreaming,
   progress,
-  reasoningLevel = 'off',
+  reasoningLevel = 'stream',
   messageIndex,
   onDeleteRound,
   deleteRoundDisabled = false,

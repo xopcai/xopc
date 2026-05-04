@@ -57,7 +57,7 @@ export class SessionManager {
       };
       const thinkingLevel = data.payload?.thinkingLevel ?? 'medium';
       const model = typeof data.payload?.model === 'string' ? data.payload.model : '';
-      const reasoningLevel = data.payload?.reasoningLevel ?? 'off';
+      const reasoningLevel = data.payload?.reasoningLevel ?? 'stream';
       const effectiveWorkspacePath =
         typeof data.payload?.effectiveWorkspacePath === 'string'
           ? data.payload.effectiveWorkspacePath
