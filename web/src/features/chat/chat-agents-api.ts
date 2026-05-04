@@ -9,7 +9,17 @@ export type ChatAgentsPayload = {
   items: ChatAgentOption[];
 };
 
+let _chatAgentsInflight: Promise<ChatAgentsPayload> | null = null;
+
 export async function fetchChatAgents(): Promise<ChatAgentsPayload> {
+  if (_chatAgentsInflight) return _chatAgentsInflight;
+  _chatAgentsInflight = fetchChatAgentsUncached().finally(() => {
+    _chatAgentsInflight = null;
+  });
+  return _chatAgentsInflight;
+}
+
+async function fetchChatAgentsUncached(): Promise<ChatAgentsPayload> {
   const agentsRes = await apiFetch(apiUrl('/api/agents'));
   if (agentsRes.ok) {
     const data = (await agentsRes.json()) as {

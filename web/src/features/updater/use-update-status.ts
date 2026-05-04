@@ -298,11 +298,20 @@ export function useUpdateStatus(): UpdateStatus & {
   };
 }
 
+let _npmStatusInflight: Promise<NpmUpdateStatus> | null = null;
+
+/** Concurrent callers share one request (Strict Mode remounts + multiple `useUpdateStatus` mounts). */
 async function fetchNpmStatus(): Promise<NpmUpdateStatus> {
-  const res = await apiFetch(apiUrl('/api/update/status'));
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const json = (await res.json()) as { payload: NpmUpdateStatus };
-  return json.payload;
+  if (_npmStatusInflight) return _npmStatusInflight;
+  _npmStatusInflight = (async () => {
+    const res = await apiFetch(apiUrl('/api/update/status'));
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = (await res.json()) as { payload: NpmUpdateStatus };
+    return json.payload;
+  })().finally(() => {
+    _npmStatusInflight = null;
+  });
+  return _npmStatusInflight;
 }
 
 /**

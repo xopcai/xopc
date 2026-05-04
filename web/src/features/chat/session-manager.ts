@@ -19,6 +19,7 @@ type SessionAgentConfig = {
 };
 
 const _agentConfigInflight = new Map<string, Promise<SessionAgentConfig>>();
+const _sessionLoadInflight = new Map<string, Promise<{ messages: Message[]; hasMore: boolean; name?: string }>>();
 
 /** Session list + history via REST; auth from `apiFetch` (gateway token store). */
 export class SessionManager {
@@ -96,20 +97,31 @@ export class SessionManager {
     sessionKey: string,
     offset = 0,
   ): Promise<{ messages: Message[]; hasMore: boolean; name?: string }> {
-    const res = await apiFetch(
-      apiUrl(`/api/sessions/${encodeURIComponent(sessionKey)}?offset=${offset}&limit=50`),
-    );
-    if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-    const data = (await res.json()) as {
-      session?: { messages?: unknown[]; name?: string };
-    };
-    const raw = data.session?.messages || [];
-    const messages = sessionWireToUiMessages(raw);
-    const name =
-      typeof data.session?.name === 'string' && data.session.name.trim()
-        ? data.session.name.trim()
-        : undefined;
-    return { messages, hasMore: raw.length >= 50, name };
+    const dedupeKey = `${sessionKey}\0${offset}`;
+    const existing = _sessionLoadInflight.get(dedupeKey);
+    if (existing) return existing;
+
+    const pending = (async () => {
+      const res = await apiFetch(
+        apiUrl(`/api/sessions/${encodeURIComponent(sessionKey)}?offset=${offset}&limit=50`),
+      );
+      if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+      const data = (await res.json()) as {
+        session?: { messages?: unknown[]; name?: string };
+      };
+      const raw = data.session?.messages || [];
+      const messages = sessionWireToUiMessages(raw);
+      const name =
+        typeof data.session?.name === 'string' && data.session.name.trim()
+          ? data.session.name.trim()
+          : undefined;
+      return { messages, hasMore: raw.length >= 50, name };
+    })().finally(() => {
+      _sessionLoadInflight.delete(dedupeKey);
+    });
+
+    _sessionLoadInflight.set(dedupeKey, pending);
+    return pending;
   }
 
   async createSession(options?: { agentId?: string }): Promise<SessionInfo> {

@@ -1,20 +1,11 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import useSWR from 'swr';
 
-import { fetchConfiguredModelsCached } from '@/features/chat/registry-api';
-import { fetchGatewayConfigSwrResponse } from '@/features/gateway/gateway-config-swr';
+import { CONFIGURED_MODELS_SWR_KEY, fetchConfiguredModelsCached } from '@/features/chat/registry-api';
+import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
 import { needsModelOrProviders } from '@/features/gateway/model-setup-state';
 
 import { LOCAL_STORAGE_MODEL_SETUP_DISMISSED } from '@/features/onboarding/onboarding-constants';
-
-type ConfigGet = {
-  ok: true;
-  payload: {
-    config: {
-      agents: { defaults: { model: string } };
-      providers: Record<string, string>;
-    };
-  };
-};
 
 export function useNeedsModelSetup(enabled: boolean) {
   const [guideDismissed, setGuideDismissed] = useState(
@@ -22,39 +13,45 @@ export function useNeedsModelSetup(enabled: boolean) {
       typeof localStorage !== 'undefined' &&
       localStorage.getItem(LOCAL_STORAGE_MODEL_SETUP_DISMISSED) === '1',
   );
-  const [needsSetup, setNeedsSetup] = useState(false);
-  const [ready, setReady] = useState(false);
+
+  const {
+    data: configData,
+    error: configError,
+    isLoading: configLoading,
+    mutate: mutateConfig,
+  } = useGatewayConfigSwr(enabled);
+
+  const {
+    data: modelsData,
+    isLoading: modelsLoading,
+    mutate: mutateModels,
+  } = useSWR(enabled ? CONFIGURED_MODELS_SWR_KEY : null, fetchConfiguredModelsCached, {
+    revalidateOnFocus: false,
+  });
+
+  const ready = !enabled || (!configLoading && !modelsLoading);
+
+  const needsSetup = useMemo(() => {
+    if (!enabled || !ready) return false;
+    if (configError) return true;
+    const configNeeds = needsModelOrProviders(configData?.payload?.config);
+    const noUsableModels = Array.isArray(modelsData) && modelsData.length === 0;
+    return configNeeds || noUsableModels;
+  }, [enabled, ready, configError, configData, modelsData]);
 
   const refresh = useCallback(async () => {
-    if (!enabled) {
-      setNeedsSetup(false);
-      setReady(true);
-      return;
-    }
-    try {
-      const [j, models] = await Promise.all([
-        fetchGatewayConfigSwrResponse() as Promise<ConfigGet>,
-        fetchConfiguredModelsCached().catch(() => null),
-      ]);
-      const configNeeds = needsModelOrProviders(j.payload?.config);
-      const noUsableModels = Array.isArray(models) && models.length === 0;
-      setNeedsSetup(configNeeds || noUsableModels);
-    } catch {
-      setNeedsSetup(true);
-    } finally {
-      setReady(true);
-    }
-  }, [enabled]);
+    await Promise.all([mutateConfig(), mutateModels()]);
+  }, [mutateConfig, mutateModels]);
 
+  /** Config reload is handled by {@link useGatewayConfigSwr}; revalidate models when registry/config changes. */
   useEffect(() => {
-    void refresh();
-  }, [refresh]);
-
-  useEffect(() => {
-    const onReload = () => void refresh();
+    if (!enabled) return;
+    const onReload = () => {
+      void mutateModels();
+    };
     window.addEventListener('config-reload', onReload);
     return () => window.removeEventListener('config-reload', onReload);
-  }, [refresh]);
+  }, [enabled, mutateModels]);
 
   const dismissPermanently = useCallback(() => {
     try {
