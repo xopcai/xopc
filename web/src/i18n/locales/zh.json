@@ -518,6 +518,8 @@
       "lockedTapTitle": "本会话无法更改工作区",
       "lockedTapBody": "要选择项目文件夹，请先新建对话，在发送第一条消息前点击此处选择路径。也可在「设置 → 智能体」中配置默认工作空间。",
       "clickToCopyFullPath": "点击复制完整路径",
+      "tooltipAgentWorkspace": "智能体工作目录",
+      "tooltipOpenProjectFiles": "点击在左侧打开或关闭项目文件。",
       "copied": "已复制",
       "openWorkspaceMenu": "工作区选项",
       "folderPickerRequiresDesktop": "文件夹选择需要使用桌面版（Electron）。请使用桌面端 xopc，或通过其他方式配置路径。",

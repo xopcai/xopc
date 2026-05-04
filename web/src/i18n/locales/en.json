@@ -518,6 +518,8 @@
       "lockedTapTitle": "Workspace is locked for this chat",
       "lockedTapBody": "To pick a folder for the agent, open New chat and click this control before you send the first message. You can also set a default workspace under Settings → Agents.",
       "clickToCopyFullPath": "Click to copy full path",
+      "tooltipAgentWorkspace": "Agent workspace",
+      "tooltipOpenProjectFiles": "Click to open or close project files in the sidebar.",
       "copied": "Copied",
       "openWorkspaceMenu": "Workspace options",
       "folderPickerRequiresDesktop": "Folder selection requires the desktop app (Electron). Open xopc from the desktop app, or configure the path another way.",
