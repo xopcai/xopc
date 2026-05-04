@@ -13,6 +13,10 @@ export interface SessionMetadata {
   compactedCount: number;
   sourceChannel: string;
   sourceChatId: string;
+  /** Gateway session index: which agent owns this session (when set). */
+  routing?: {
+    agentId?: string;
+  };
 }
 
 export interface SessionDetail extends SessionMetadata {

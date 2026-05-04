@@ -13,12 +13,16 @@ import {
 } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type UIEvent } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import useSWR from 'swr';
 import useSWRInfinite from 'swr/infinite';
 
 import { SessionChannelIcon } from '@/components/shell/session-channel-icon';
 import { Button } from '@/components/ui/button';
 import { SlidingSegmented } from '@/components/ui/sliding-segmented';
+import { fetchChatAgents } from '@/features/chat/chat-agents-api';
 import { isWebUiSessionKey } from '@/features/chat/session-manager';
+import { AgentAvatarDisplay } from '@/features/settings/agents/agent-avatar-display';
+import { agentAvatarFromOptions, resolveSessionAgentId } from '@/features/sessions/session-agent-resolve';
 import {
   deleteSession,
   listSessions,
@@ -79,6 +83,8 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
   sb,
   sess,
   defaultUnnamedTitle,
+  sessionAgentId,
+  sessionAgentAvatar,
 }: {
   session: SessionMetadata;
   isActive: boolean;
@@ -91,6 +97,8 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
   sb: ReturnType<typeof messages>['sidebar'];
   sess: ReturnType<typeof messages>['sessions'];
   defaultUnnamedTitle: string;
+  sessionAgentId: string;
+  sessionAgentAvatar?: string;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const title = sessionTitle(session, defaultUnnamedTitle);
@@ -125,11 +133,17 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
         to={`/chat/${encodeURIComponent(session.key)}`}
         className={cn(
           'min-w-0 flex-1 rounded-xl py-1 outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
-          showSourceChannelIcon ? 'flex items-center gap-2' : 'truncate',
+          'flex min-w-0 items-center gap-2',
         )}
         title={title}
         onClick={() => onNavigate?.()}
       >
+        <AgentAvatarDisplay
+          agentId={sessionAgentId}
+          avatar={sessionAgentAvatar}
+          size={24}
+          className="size-6 shrink-0 ring-1 ring-edge/60 dark:ring-edge"
+        />
         {showSourceChannelIcon ? (
           <>
             <span
@@ -144,7 +158,7 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
             <span className="min-w-0 flex-1 truncate">{title}</span>
           </>
         ) : (
-          title
+          <span className="min-w-0 flex-1 truncate">{title}</span>
         )}
       </Link>
       <Popover.Root open={menuOpen} onOpenChange={setMenuOpen}>
@@ -230,6 +244,20 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
   const sess = m.sessions;
   const token = useGatewayStore((s) => s.token);
   const openTokenDialog = useGatewayStore((s) => s.openTokenDialog);
+
+  const { data: chatAgents, mutate: mutateChatAgents } = useSWR(
+    token ? (['gateway-chat-agents', token] as const) : null,
+    fetchChatAgents,
+    { revalidateOnFocus: false },
+  );
+  const defaultAgentId = chatAgents?.defaultId ?? 'main';
+  const agentItems = chatAgents?.items ?? [];
+
+  useEffect(() => {
+    const onConfigReload = () => void mutateChatAgents();
+    window.addEventListener('config-reload', onConfigReload);
+    return () => window.removeEventListener('config-reload', onConfigReload);
+  }, [mutateChatAgents]);
   const { pathname } = useLocation();
   const navigate = useNavigate();
 
@@ -432,21 +460,26 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
           </div>
         ) : items.length > 0 ? (
           <div className="flex flex-col gap-0.5 px-4">
-            {items.map((session) => (
-              <SidebarTaskRow
-                key={session.key}
-                session={session}
-                isActive={activeSessionKey === session.key}
-                showSourceChannelIcon={sessionFilter === 'channels'}
-                onNavigate={onNavigate}
-                mutate={mutate}
-                onRequestRename={openRename}
-                onRequestDelete={setDeleteKey}
-                sb={sb}
-                sess={sess}
-                defaultUnnamedTitle={m.chat.newSession}
-              />
-            ))}
+            {items.map((session) => {
+              const sessionAgentId = resolveSessionAgentId(session, defaultAgentId);
+              return (
+                <SidebarTaskRow
+                  key={session.key}
+                  session={session}
+                  isActive={activeSessionKey === session.key}
+                  showSourceChannelIcon={sessionFilter === 'channels'}
+                  onNavigate={onNavigate}
+                  mutate={mutate}
+                  onRequestRename={openRename}
+                  onRequestDelete={setDeleteKey}
+                  sb={sb}
+                  sess={sess}
+                  defaultUnnamedTitle={m.chat.newSession}
+                  sessionAgentId={sessionAgentId}
+                  sessionAgentAvatar={agentAvatarFromOptions(sessionAgentId, agentItems)}
+                />
+              );
+            })}
           </div>
         ) : (
           <div className="px-4 pb-2">

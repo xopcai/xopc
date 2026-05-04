@@ -11,8 +11,11 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import useSWR from 'swr';
 
+import { fetchChatAgents } from '@/features/chat/chat-agents-api';
 import { SessionCard, type SessionCardAction } from '@/features/sessions/session-card';
+import { agentAvatarFromOptions, resolveSessionAgentId } from '@/features/sessions/session-agent-resolve';
 import { SessionDetailDrawer } from '@/features/sessions/session-detail-drawer';
 import {
   archiveSession,
@@ -56,6 +59,13 @@ export function SessionsPage() {
   const s = m.sessions;
   const token = useGatewayStore((st) => st.token);
   const hasToken = Boolean(token);
+  const { data: chatAgents, mutate: mutateChatAgents } = useSWR(
+    hasToken ? (['gateway-chat-agents', token] as const) : null,
+    fetchChatAgents,
+    { revalidateOnFocus: false },
+  );
+  const defaultAgentId = chatAgents?.defaultId ?? 'main';
+  const agentItems = chatAgents?.items ?? [];
   const [searchParams, setSearchParams] = useSearchParams();
 
   const initialSearch = searchParams.get('q') ?? '';
@@ -164,6 +174,13 @@ export function SessionsPage() {
       .then(setStats)
       .catch(() => {});
   }, [hasToken]);
+
+  useEffect(() => {
+    if (!hasToken) return;
+    const onConfigReload = () => void mutateChatAgents();
+    window.addEventListener('config-reload', onConfigReload);
+    return () => window.removeEventListener('config-reload', onConfigReload);
+  }, [hasToken, mutateChatAgents]);
 
   useEffect(() => {
     if (!hasToken) return;
@@ -524,16 +541,21 @@ export function SessionsPage() {
                 viewMode === 'grid' ? 'sm:grid-cols-2 lg:grid-cols-3' : 'grid-cols-1',
               )}
             >
-              {sessions.map((session) => (
-                <SessionCard
-                  key={session.key}
-                  session={session}
-                  variant={viewMode}
-                  labels={cardLabels}
-                  onOpen={() => handleCardOpen(session.key)}
-                  onAction={(action) => void handleCardAction(session.key, action)}
-                />
-              ))}
+              {sessions.map((session) => {
+                const sessionAgentId = resolveSessionAgentId(session, defaultAgentId);
+                return (
+                  <SessionCard
+                    key={session.key}
+                    session={session}
+                    variant={viewMode}
+                    labels={cardLabels}
+                    sessionAgentId={sessionAgentId}
+                    sessionAgentAvatar={agentAvatarFromOptions(sessionAgentId, agentItems)}
+                    onOpen={() => handleCardOpen(session.key)}
+                    onAction={(action) => void handleCardAction(session.key, action)}
+                  />
+                );
+              })}
             </div>
             {hasMore ? (
               <div className="flex justify-center pt-2">
@@ -550,6 +572,17 @@ export function SessionsPage() {
         open={detailOpen}
         loading={detailLoading}
         session={detailSession}
+        sessionAgentId={
+          detailSession ? resolveSessionAgentId(detailSession, defaultAgentId) : undefined
+        }
+        sessionAgentAvatar={
+          detailSession
+            ? agentAvatarFromOptions(
+                resolveSessionAgentId(detailSession, defaultAgentId),
+                agentItems,
+              )
+            : undefined
+        }
         labels={detailLabels}
         onClose={() => {
           setDetailOpen(false);
