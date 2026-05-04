@@ -5,6 +5,8 @@ import { apiUrl } from '@/lib/url';
 
 export type ContextVariables = Record<string, unknown>;
 
+let _contextFetchInflight: Promise<void> | null = null;
+
 type ContextState = {
   variables: ContextVariables;
   loaded: boolean;
@@ -19,7 +21,13 @@ export const useContextStore = create<ContextState>((set, get) => ({
   updateContext: (partial) => set((s) => ({ variables: { ...s.variables, ...partial } })),
   setContext: (variables) => set({ variables, loaded: true }),
   fetchContext: async () => {
-    const data = await fetchJson<ContextVariables>(apiUrl('/api/context'));
-    get().setContext(data);
+    if (_contextFetchInflight) return _contextFetchInflight;
+    _contextFetchInflight = (async () => {
+      const data = await fetchJson<ContextVariables>(apiUrl('/api/context'));
+      get().setContext(data);
+    })().finally(() => {
+      _contextFetchInflight = null;
+    });
+    return _contextFetchInflight;
   },
 }));
