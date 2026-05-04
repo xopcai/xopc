@@ -74,11 +74,20 @@ export function ChatAgentSelector({
             selectComboboxTriggerFocusClass,
             'disabled:cursor-not-allowed disabled:opacity-50',
             'dark:border-edge-subtle dark:hover:bg-surface-hover/55',
-            compact && 'min-w-[8rem] max-w-full py-1.5 text-[13px]',
+            // Compact header: shrink-to-fit label, max ~10ch text + chrome; drop combobox min-w-[10rem].
+            compact &&
+              'min-w-0 max-w-[min(calc(10ch+3rem),calc(100vw-8rem))] py-1.5 text-[13px]',
             className,
           )}
         >
-          <span className="min-w-0 flex-1 truncate text-left">{label}</span>
+          <span
+            className={cn(
+              'min-w-0 truncate text-left',
+              compact ? 'max-w-[10ch] shrink' : 'flex-1',
+            )}
+          >
+            {label}
+          </span>
           <ChevronsUpDown className="h-4 w-4 shrink-0 text-fg-subtle opacity-70" aria-hidden />
         </button>
       </Popover.Trigger>
