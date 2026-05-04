@@ -2,6 +2,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 
 import type { SessionDetail } from '@/features/sessions/session.types';
+import { AgentAvatarDisplay } from '@/features/settings/agents/agent-avatar-display';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/cn';
 
@@ -21,6 +22,8 @@ export function SessionDetailDrawer({
   open,
   loading,
   session,
+  sessionAgentId,
+  sessionAgentAvatar,
   labels,
   onClose,
   onArchive,
@@ -33,6 +36,8 @@ export function SessionDetailDrawer({
   open: boolean;
   loading: boolean;
   session: SessionDetail | null;
+  sessionAgentId?: string;
+  sessionAgentAvatar?: string;
   labels: {
     close: string;
     detailLoading: string;
@@ -68,9 +73,19 @@ export function SessionDetailDrawer({
           aria-describedby={undefined}
         >
           <div className="flex min-w-0 shrink-0 items-center justify-between gap-2 border-b border-edge px-4 py-3 dark:border-edge">
-            <Dialog.Title className="min-w-0 flex-1 truncate text-base font-semibold tracking-tight text-fg">
-              {session?.name?.trim() || labels.unnamedSession}
-            </Dialog.Title>
+            <div className="flex min-w-0 flex-1 items-center gap-3">
+              {session && sessionAgentId ? (
+                <AgentAvatarDisplay
+                  agentId={sessionAgentId}
+                  avatar={sessionAgentAvatar}
+                  size={40}
+                  className="size-10 shrink-0 ring-1 ring-edge/60 dark:ring-edge"
+                />
+              ) : null}
+              <Dialog.Title className="min-w-0 flex-1 truncate text-base font-semibold tracking-tight text-fg">
+                {session?.name?.trim() || labels.unnamedSession}
+              </Dialog.Title>
+            </div>
             <Dialog.Close asChild>
               <Button type="button" variant="ghost" className="h-9 w-9 shrink-0 p-0" aria-label={labels.close}>
                 <X className="size-5" strokeWidth={1.75} />

@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 
 import type { SessionMetadata } from '@/features/sessions/session.types';
+import { AgentAvatarDisplay } from '@/features/settings/agents/agent-avatar-display';
 import { ghostIconButton } from '@/lib/interaction';
 import { cn } from '@/lib/cn';
 
@@ -43,11 +44,15 @@ export function SessionCard({
   session,
   variant,
   labels,
+  sessionAgentId,
+  sessionAgentAvatar,
   onOpen,
   onAction,
 }: {
   session: SessionMetadata;
   variant: 'grid' | 'list';
+  sessionAgentId: string;
+  sessionAgentAvatar?: string;
   labels: {
     continueChat: string;
     archive: string;
@@ -104,17 +109,27 @@ export function SessionCard({
       </div>
 
       <div className={cn('min-w-0 flex-1 px-3 py-2', variant === 'list' && 'sm:py-3')}>
-        <div className="min-w-0 max-w-full truncate text-sm font-semibold text-fg" title={displayName}>
-          {displayName}
-        </div>
-        {showKeySubtitle ? (
-          <div
-            className="mt-0.5 min-w-0 max-w-full truncate font-mono text-[11px] text-fg-subtle"
-            title={session.key}
-          >
-            {session.key}
+        <div className={cn('flex gap-3', variant === 'list' && 'sm:items-start')}>
+          <AgentAvatarDisplay
+            agentId={sessionAgentId}
+            avatar={sessionAgentAvatar}
+            size={40}
+            className="size-10 shrink-0 ring-1 ring-edge/60 dark:ring-edge"
+          />
+          <div className="min-w-0 flex-1">
+            <div className="min-w-0 max-w-full truncate text-sm font-semibold text-fg" title={displayName}>
+              {displayName}
+            </div>
+            {showKeySubtitle ? (
+              <div
+                className="mt-0.5 min-w-0 max-w-full truncate font-mono text-[11px] text-fg-subtle"
+                title={session.key}
+              >
+                {session.key}
+              </div>
+            ) : null}
           </div>
-        ) : null}
+        </div>
         <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-fg-muted">
           <span className="inline-flex items-center gap-1">
             <MessageSquare className="size-3.5" strokeWidth={1.75} aria-hidden />
