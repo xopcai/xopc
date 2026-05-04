@@ -15,19 +15,15 @@ import { modelSupportsReasoning } from '@/features/chat/model-capabilities';
 import { pendingAgentRunStorageKey, MessageSender } from '@/features/chat/message-sender';
 import { fetchChatAgents } from '@/features/chat/chat-agents-api';
 import { SessionManager, isWebUiSessionKey } from '@/features/chat/session-manager';
-import { getAgentIdFromWebSessionKey } from '@/lib/web-session-agent';
 import { mergeConsecutiveAssistantMessages } from '@/features/chat/agent-messages';
+import { createAgentStreamMessagingCallbacks } from '@/features/chat/agent-stream-messaging-callbacks';
+import { getAgentIdFromWebSessionKey } from '@/lib/web-session-agent';
 import {
-  appendThinkingDelta,
-  appendTextDelta,
-  appendToolStart,
   cloneMessageForRender,
-  completeTool,
   ensureAssistantMessage,
   finalizeRunningTools,
   finalizeStreamingThinking,
   hasRenderableAssistantContent,
-  startThinkingSegment,
 } from '@/features/chat/streaming';
 import { useGatewayStore } from '@/stores/gateway-store';
 import type { PendingFollowUp } from '@/features/chat/pending-follow-up.types';
@@ -561,140 +557,30 @@ export function useChatSession() {
     };
 
     try {
-      await sender.resume(stored.runId, chatId, {
-        onStreamStart: () => {
-          if (!shouldApplyStreamUpdate(chatId)) return;
-          hydrateResumeTailAssistant();
-          setStreamingMsg((prev) => cloneMessageForRender(ensureAssistantMessage(prev, Date.now())));
-        },
-        onToken: (delta) => {
-          if (!shouldApplyStreamUpdate(chatId)) return;
-          hydrateResumeTailAssistant();
-          setStreamingMsg((prev) => {
-            const msg = ensureAssistantMessage(prev, Date.now());
-            appendTextDelta(msg.content, delta);
-            return cloneMessageForRender(msg);
-          });
-          setStreaming(true);
-        },
-        onThinking: (c, isDelta) => {
-          if (!shouldApplyStreamUpdate(chatId)) return;
-          hydrateResumeTailAssistant();
-          setStreamingMsg((prev) => {
-            const msg = ensureAssistantMessage(prev, Date.now());
-            if (!isDelta && c === '') startThinkingSegment(msg.content);
-            else appendThinkingDelta(msg.content, c, isDelta);
-            return cloneMessageForRender(msg);
-          });
-        },
-        onThinkingEnd: () => {
-          if (!shouldApplyStreamUpdate(chatId)) return;
-          hydrateResumeTailAssistant();
-          setStreamingMsg((prev) => {
-            if (!prev) return prev;
-            const msg = ensureAssistantMessage(prev, Date.now());
-            finalizeStreamingThinking(msg.content);
-            return cloneMessageForRender(msg);
-          });
-        },
-        onToolStart: (toolName, args) => {
-          if (!shouldApplyStreamUpdate(chatId)) return;
-          hydrateResumeTailAssistant();
-          setStreamingMsg((prev) => {
-            const msg = ensureAssistantMessage(prev, Date.now());
-            appendToolStart(msg.content, toolName, args);
-            return cloneMessageForRender(msg);
-          });
-          setStreaming(true);
-        },
-        onToolEnd: (toolName, isErr, result) => {
-          if (!shouldApplyStreamUpdate(chatId)) return;
-          // Resume replays buffered SSE from the start, including `clarify_request` events for
-          // clarifications already answered — only `tool_end(clarify)` reflects completion.
-          if (toolName === 'clarify') {
-            fq.onClarifyToolEnd();
-          }
-          hydrateResumeTailAssistant();
-          setStreamingMsg((prev) => {
-            const msg = ensureAssistantMessage(prev, Date.now());
-            completeTool(msg.content, toolName, isErr, result);
-            return cloneMessageForRender(msg);
-          });
-        },
-        onProgress: (p) => {
-          if (!shouldApplyStreamUpdate(chatId)) return;
-          setProgress(p);
-        },
-        onTtsAudio: (p) => {
-          if (!shouldApplyStreamUpdate(chatId)) return;
-          setStreamingMsg((prev) => {
-            const msg = ensureAssistantMessage(prev, Date.now());
-            const rel = p.workspaceRelativePath?.replace(/\\/g, '/').trim();
-            const existing = msg.attachments ?? [];
-            if (rel && existing.some((a) => a.workspaceRelativePath?.replace(/\\/g, '/').trim() === rel)) {
-              return cloneMessageForRender(msg);
-            }
-            const nextAtt = {
-              name: p.name,
-              mimeType: p.mimeType,
-              type: 'voice' as const,
-              workspaceRelativePath: p.workspaceRelativePath,
-              size: 0,
-            };
-            msg.attachments = [...existing, nextAtt];
-            return cloneMessageForRender(msg);
-          });
-        },
-        onClarifyRequest: fq.makeOnClarifyRequest(chatId),
-        onResult: () => {
-          if (!shouldApplyStreamUpdate(chatId)) {
-            activeStreamSessionKeyRef.current = null;
-            activeResumeRunIdRef.current = null;
-            sendingRef.current = false;
-            streamingRef.current = false;
-            setStreaming(false);
-            setSending(false);
-            setProgress(null);
-            fq.dismissClarify();
-            void sessionMgrRef.current
-              .loadSession(chatId, 0)
-              .then((data) => applyLoadedSessionSnapshot(chatId, data))
-              .catch(() => {});
-            return;
-          }
-          if (userAbortedRef.current) {
-            userAbortedRef.current = false;
-            return;
-          }
-          finalizeMessage();
-        },
-        onError: (msg) => {
-          if (!shouldApplyStreamUpdate(chatId)) {
-            activeStreamSessionKeyRef.current = null;
-            activeResumeRunIdRef.current = null;
-            sendingRef.current = false;
-            streamingRef.current = false;
-            setStreaming(false);
-            setSending(false);
-            setProgress(null);
-            fq.dismissClarify();
-            void sessionMgrRef.current
-              .loadSession(chatId, 0)
-              .then((data) => applyLoadedSessionSnapshot(chatId, data))
-              .catch(() => {});
-            return;
-          }
-          activeResumeRunIdRef.current = null;
-          sendingRef.current = false;
-          streamingRef.current = false;
-          setError(msg);
-          setStreamingMsg(null);
-          setStreaming(false);
-          setSending(false);
-          setProgress(null);
-          fq.dismissClarify();
-        },
+      const resumeStreamCallbacks = createAgentStreamMessagingCallbacks({
+        chatId,
+        shouldApplyStreamUpdate,
+        beforeAssistantDelta: hydrateResumeTailAssistant,
+        setStreamingOnStreamStart: false,
+        clearResumeRunIdOnBackgroundTerminal: true,
+        clearResumeRunIdOnVisibleError: true,
+        setStreaming,
+        setStreamingMsg,
+        setProgress,
+        setSending,
+        setError,
+        userAbortedRef,
+        activeStreamSessionKeyRef,
+        activeResumeRunIdRef,
+        sendingRef,
+        streamingRef,
+        sessionMgrRef,
+        applyLoadedSessionSnapshot,
+        finalizeMessage,
+        fq,
       });
+
+      await sender.resume(stored.runId, chatId, resumeStreamCallbacks);
     } catch (err) {
       if ((err as Error).name !== 'AbortError') {
         console.error('[chat] resume failed:', err);
@@ -799,130 +685,30 @@ export function useChatSession() {
       ]);
 
       try {
-        await sender.send(content, chatId, attachments, effectiveThinking, {
-          onStreamStart: () => {
-            if (!shouldApplyStreamUpdate(chatId)) return;
-            setStreaming(true);
-            setStreamingMsg((prev) => cloneMessageForRender(ensureAssistantMessage(prev, Date.now())));
-          },
-          onToken: (delta) => {
-            if (!shouldApplyStreamUpdate(chatId)) return;
-            setStreamingMsg((prev) => {
-              const msg = ensureAssistantMessage(prev, Date.now());
-              appendTextDelta(msg.content, delta);
-              return cloneMessageForRender(msg);
-            });
-            setStreaming(true);
-          },
-          onThinking: (c, isDelta) => {
-            if (!shouldApplyStreamUpdate(chatId)) return;
-            setStreamingMsg((prev) => {
-              const msg = ensureAssistantMessage(prev, Date.now());
-              if (!isDelta && c === '') startThinkingSegment(msg.content);
-              else appendThinkingDelta(msg.content, c, isDelta);
-              return cloneMessageForRender(msg);
-            });
-          },
-          onThinkingEnd: () => {
-            if (!shouldApplyStreamUpdate(chatId)) return;
-            setStreamingMsg((prev) => {
-              if (!prev) return prev;
-              const msg = ensureAssistantMessage(prev, Date.now());
-              finalizeStreamingThinking(msg.content);
-              return cloneMessageForRender(msg);
-            });
-          },
-          onToolStart: (toolName, args) => {
-            if (!shouldApplyStreamUpdate(chatId)) return;
-            setStreamingMsg((prev) => {
-              const msg = ensureAssistantMessage(prev, Date.now());
-              appendToolStart(msg.content, toolName, args);
-              return cloneMessageForRender(msg);
-            });
-            setStreaming(true);
-          },
-          onToolEnd: (toolName, isErr, result) => {
-            if (!shouldApplyStreamUpdate(chatId)) return;
-            if (toolName === 'clarify') {
-              fq.onClarifyToolEnd();
-            }
-            setStreamingMsg((prev) => {
-              const msg = ensureAssistantMessage(prev, Date.now());
-              completeTool(msg.content, toolName, isErr, result);
-              return cloneMessageForRender(msg);
-            });
-          },
-          onProgress: (p) => {
-            if (!shouldApplyStreamUpdate(chatId)) return;
-            setProgress(p);
-          },
-          onTtsAudio: (p) => {
-            if (!shouldApplyStreamUpdate(chatId)) return;
-            setStreamingMsg((prev) => {
-              const msg = ensureAssistantMessage(prev, Date.now());
-              const rel = p.workspaceRelativePath?.replace(/\\/g, '/').trim();
-              const existing = msg.attachments ?? [];
-              if (rel && existing.some((a) => a.workspaceRelativePath?.replace(/\\/g, '/').trim() === rel)) {
-                return cloneMessageForRender(msg);
-              }
-              const nextAtt = {
-                name: p.name,
-                mimeType: p.mimeType,
-                type: 'voice' as const,
-                workspaceRelativePath: p.workspaceRelativePath,
-                size: 0,
-              };
-              msg.attachments = [...existing, nextAtt];
-              return cloneMessageForRender(msg);
-            });
-          },
-          onClarifyRequest: fq.makeOnClarifyRequest(chatId),
-          onResult: () => {
-            if (!shouldApplyStreamUpdate(chatId)) {
-              activeStreamSessionKeyRef.current = null;
-              sendingRef.current = false;
-              streamingRef.current = false;
-              setStreaming(false);
-              setSending(false);
-              setProgress(null);
-              fq.dismissClarify();
-              void sessionMgrRef.current
-                .loadSession(chatId, 0)
-                .then((data) => applyLoadedSessionSnapshot(chatId, data))
-                .catch(() => {});
-              return;
-            }
-            if (userAbortedRef.current) {
-              userAbortedRef.current = false;
-              return;
-            }
-            finalizeMessage();
-          },
-          onError: (msg) => {
-            if (!shouldApplyStreamUpdate(chatId)) {
-              activeStreamSessionKeyRef.current = null;
-              sendingRef.current = false;
-              streamingRef.current = false;
-              setStreaming(false);
-              setSending(false);
-              setProgress(null);
-              fq.dismissClarify();
-              void sessionMgrRef.current
-                .loadSession(chatId, 0)
-                .then((data) => applyLoadedSessionSnapshot(chatId, data))
-                .catch(() => {});
-              return;
-            }
-            sendingRef.current = false;
-            streamingRef.current = false;
-            setError(msg);
-            setStreamingMsg(null);
-            setStreaming(false);
-            setSending(false);
-            setProgress(null);
-            fq.dismissClarify();
-          },
+        const sendStreamCallbacks = createAgentStreamMessagingCallbacks({
+          chatId,
+          shouldApplyStreamUpdate,
+          beforeAssistantDelta: () => {},
+          setStreamingOnStreamStart: true,
+          clearResumeRunIdOnBackgroundTerminal: false,
+          clearResumeRunIdOnVisibleError: false,
+          setStreaming,
+          setStreamingMsg,
+          setProgress,
+          setSending,
+          setError,
+          userAbortedRef,
+          activeStreamSessionKeyRef,
+          activeResumeRunIdRef,
+          sendingRef,
+          streamingRef,
+          sessionMgrRef,
+          applyLoadedSessionSnapshot,
+          finalizeMessage,
+          fq,
         });
+
+        await sender.send(content, chatId, attachments, effectiveThinking, sendStreamCallbacks);
       } catch (err) {
         if ((err as Error).name !== 'AbortError') {
           setError(err instanceof Error ? err.message : 'Send failed');
