@@ -200,7 +200,7 @@ export function ChatPage() {
                 canSelectWorkingDirectory={canSelectWorkingDirectory}
                 thinkingLevel={session.thinkingLevel}
                 showThinkingSelector={session.modelSupportsThinking}
-                onThinkingChange={session.setThinkingLevel}
+                onThinkingChange={session.onSessionThinkingLevelChange}
                 onSend={stream.sendMessage}
                 onAbort={stream.abort}
                 onAddPendingFollowUp={(text, atts) => void followUp.addPendingFollowUp(text, atts)}

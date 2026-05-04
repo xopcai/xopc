@@ -142,6 +142,7 @@ export function useChatSession() {
     loadSessionById,
     loadMoreMessages,
     onSessionModelChange,
+    onSessionThinkingLevelChange,
     createNewSession,
   } = useChatSessionLoad({
     sessionMgrRef,
@@ -379,7 +380,7 @@ export function useChatSession() {
       loading,
       sessionModel,
       thinkingLevel,
-      setThinkingLevel,
+      onSessionThinkingLevelChange,
       reasoningLevel,
       modelSupportsThinking,
       hasMore,
