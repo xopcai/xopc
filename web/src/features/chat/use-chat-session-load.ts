@@ -1,4 +1,4 @@
-import { useCallback, type Dispatch, type RefObject, type SetStateAction } from 'react';
+import { useCallback, useRef, type Dispatch, type RefObject, type SetStateAction } from 'react';
 
 import { mergeConsecutiveAssistantMessages } from '@/features/chat/agent-messages';
 import {
@@ -71,6 +71,9 @@ export function useChatSessionLoad(deps: {
     setModelSupportsThinking,
   } = deps;
 
+  /** Serialize session loads so rapid route changes (A→B→A) never drop the final `loadSession` fetch. */
+  const loadTailRef = useRef(Promise.resolve<void>(undefined));
+
   const refreshModelThinkingSupport = useCallback(async (modelId: string) => {
     const gen = ++thinkingSupportGenRef.current;
     if (!modelId.trim()) {
@@ -117,83 +120,93 @@ export function useChatSessionLoad(deps: {
 
   const loadSessionById = useCallback(
     async (key: string, offset = 0) => {
-      if (
-        offset === 0 &&
-        key === sessionKeyRef.current &&
-        (sendingRef.current || streamingRef.current) &&
-        activeStreamSessionKeyRef.current === key
-      ) {
-        return;
-      }
-      if (offset === 0) {
-        dismissClarifyOnSessionLoad();
-      }
-      if (loadingSessionRef.current) return;
-      loadingSessionRef.current = true;
-
-      try {
-        const { messages: loaded, hasMore: more, name } = await sessionMgrRef.current.loadSession(
-          key,
-          offset,
-        );
-        if (offset === 0) {
-          setSessionKey(key);
-          setSessionName(name ?? null);
-          setMessages(loaded);
-          setHasMore(more);
-          setError(null);
-          try {
-            const cfg = await sessionMgrRef.current.loadSessionAgentConfig(key);
-            setSessionModel(cfg.model);
-            setThinkingLevel(cfg.thinkingLevel || DEFAULT_THINKING);
-            setReasoningLevel(coerceReasoningLevel(cfg.reasoningLevel));
-            void refreshModelThinkingSupport(cfg.model);
-          } catch {
-            /* gateway may be older */
-          }
-        } else {
-          setMessages((prev) => {
-            const existing = new Set(prev.map((m) => m.timestamp));
-            const prepended = loaded.filter((m) => !existing.has(m.timestamp));
-            return mergeConsecutiveAssistantMessages([...prepended, ...prev]);
-          });
-          setHasMore(more);
+      const runBody = async (k: string, o: number): Promise<void> => {
+        if (
+          o === 0 &&
+          k === sessionKeyRef.current &&
+          (sendingRef.current || streamingRef.current) &&
+          activeStreamSessionKeyRef.current === k
+        ) {
+          return;
         }
-      } catch {
-        if (offset === 0) {
-          setError('Failed to load session');
-          const sessions = await sessionMgrRef.current.loadSessions().catch(() => [] as SessionInfo[]);
-          const withMsgs = sessions.filter((s) => (s.messageCount ?? 0) > 0);
-          const target = withMsgs[0] ?? sessions[0];
-          if (target) {
-            navigateToSession(target.key);
-            await loadSessionById(target.key, 0);
-          } else {
+        if (o === 0) {
+          dismissClarifyOnSessionLoad();
+        }
+        loadingSessionRef.current = true;
+        try {
+          const { messages: loaded, hasMore: more, name } = await sessionMgrRef.current.loadSession(k, o);
+          if (o === 0) {
+            setSessionKey(k);
+            setSessionName(name ?? null);
+            setMessages(loaded);
+            setHasMore(more);
+            setError(null);
             try {
-              const aid = resolveAgentIdForPost();
-              const session = await sessionMgrRef.current.createSession(
-                aid ? { agentId: aid } : undefined,
-              );
-              navigateToSession(session.key);
-              setSessionKey(session.key);
-              setMessages([]);
-              setHasMore(false);
-              try {
-                const cfg = await sessionMgrRef.current.loadSessionAgentConfig(session.key);
-                setSessionModel(cfg.model);
-                setThinkingLevel(cfg.thinkingLevel || DEFAULT_THINKING);
-                setReasoningLevel(coerceReasoningLevel(cfg.reasoningLevel));
-                void refreshModelThinkingSupport(cfg.model);
-              } catch {
-                /* ignore */
-              }
+              const cfg = await sessionMgrRef.current.loadSessionAgentConfig(k);
+              setSessionModel(cfg.model);
+              setThinkingLevel(cfg.thinkingLevel || DEFAULT_THINKING);
+              setReasoningLevel(coerceReasoningLevel(cfg.reasoningLevel));
+              void refreshModelThinkingSupport(cfg.model);
             } catch {
-              setError('Could not open a session');
+              /* gateway may be older */
+            }
+          } else {
+            setMessages((prev) => {
+              const existing = new Set(prev.map((m) => m.timestamp));
+              const prepended = loaded.filter((m) => !existing.has(m.timestamp));
+              return mergeConsecutiveAssistantMessages([...prepended, ...prev]);
+            });
+            setHasMore(more);
+          }
+        } catch {
+          if (o === 0) {
+            setError('Failed to load session');
+            const sessions = await sessionMgrRef.current.loadSessions().catch(() => [] as SessionInfo[]);
+            const withMsgs = sessions.filter((s) => (s.messageCount ?? 0) > 0);
+            const target = withMsgs[0] ?? sessions[0];
+            if (target) {
+              navigateToSession(target.key);
+              await runBody(target.key, 0);
+            } else {
+              try {
+                const aid = resolveAgentIdForPost();
+                const session = await sessionMgrRef.current.createSession(
+                  aid ? { agentId: aid } : undefined,
+                );
+                navigateToSession(session.key);
+                setSessionKey(session.key);
+                setMessages([]);
+                setHasMore(false);
+                try {
+                  const cfg = await sessionMgrRef.current.loadSessionAgentConfig(session.key);
+                  setSessionModel(cfg.model);
+                  setThinkingLevel(cfg.thinkingLevel || DEFAULT_THINKING);
+                  setReasoningLevel(coerceReasoningLevel(cfg.reasoningLevel));
+                  void refreshModelThinkingSupport(cfg.model);
+                } catch {
+                  /* ignore */
+                }
+              } catch {
+                setError('Could not open a session');
+              }
             }
           }
+        } finally {
+          loadingSessionRef.current = false;
         }
+      };
+
+      const prev = loadTailRef.current;
+      let releaseTail!: () => void;
+      const tailGate = new Promise<void>((r) => {
+        releaseTail = r;
+      });
+      loadTailRef.current = prev.then(() => tailGate);
+      await prev;
+      try {
+        await runBody(key, offset);
       } finally {
-        loadingSessionRef.current = false;
+        releaseTail();
       }
     },
     [
@@ -220,7 +233,7 @@ export function useChatSessionLoad(deps: {
 
   const loadMoreMessages = useCallback(async () => {
     const key = sessionKeyRef.current;
-    if (!key || loadingMore || !hasMore || loadingSessionRef.current) return;
+    if (!key || loadingMore || !hasMore) return;
     setLoadingMore(true);
     try {
       await loadSessionById(key, messagesLenRef.current);
