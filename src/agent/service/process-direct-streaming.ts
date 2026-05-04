@@ -143,7 +143,7 @@ export async function* runProcessDirectStreaming(
 
   let lastSentContent = '';
   let lastSentThinking = '';
-  let reasoningLevel: ReasoningLevel = 'off';
+  let reasoningLevel: ReasoningLevel = 'stream';
 
   const enqueueSseEvent = (event: ProcessDirectStreamingSseEvent) => {
     eventQueue.push(event);
@@ -281,7 +281,7 @@ export async function* runProcessDirectStreaming(
     await modelManager.applyModelForSession(agent, sessionKey);
     await applyResolvedThinkingLevel(sessionKey, input.thinking);
     {
-      const defReason = (getConfig()?.agents?.defaults?.reasoningDefault ?? 'off') as ReasoningLevel;
+      const defReason = (getConfig()?.agents?.defaults?.reasoningDefault ?? 'stream') as ReasoningLevel;
       reasoningLevel = await resolveEffectiveReasoningLevel(sessionConfigStore, sessionKey, defReason);
     }
 
