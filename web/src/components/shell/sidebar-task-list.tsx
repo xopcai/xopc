@@ -66,7 +66,7 @@ function interpolate(template: string, params: Record<string, string | number>):
 function rowShellClass(isActive: boolean): string {
   return cn(
     // `px-4` list + `pl-3` row = same inset as nav `px-4` + item `px-3` → aligns with menu icons.
-    'group flex w-full min-w-0 items-center gap-0.5 rounded-xl pl-3 pr-1 text-left text-sm font-medium leading-5 transition-colors duration-200 ease-out',
+    'group flex w-full min-w-0 items-center gap-0.5 rounded-xl pl-1.5 pr-1 text-left text-sm font-medium leading-5 transition-colors duration-200 ease-out',
     'focus-within:outline-none',
     isActive ? 'bg-surface-active text-fg' : 'text-fg-muted hover:bg-surface-hover hover:text-fg',
   );
