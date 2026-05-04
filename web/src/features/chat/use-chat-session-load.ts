@@ -244,6 +244,20 @@ export function useChatSessionLoad(deps: {
     [sessionKey, sessionMgrRef, setError, setSessionModel, refreshModelThinkingSupport],
   );
 
+  const onSessionThinkingLevelChange = useCallback(
+    async (level: string) => {
+      if (!sessionKey) return;
+      try {
+        setError(null);
+        await sessionMgrRef.current.patchSessionAgentConfig(sessionKey, { thinkingLevel: level });
+        setThinkingLevel(level);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Failed to update thinking level');
+      }
+    },
+    [sessionKey, sessionMgrRef, setError, setThinkingLevel],
+  );
+
   const createNewSession = useCallback(async () => {
     dismissClarifyOnSessionLoad();
     try {
@@ -309,6 +323,7 @@ export function useChatSessionLoad(deps: {
     loadSessionById,
     loadMoreMessages,
     onSessionModelChange,
+    onSessionThinkingLevelChange,
     createNewSession,
   };
 }
