@@ -1,6 +1,8 @@
+import { agentListDisplayName } from '@/features/settings/agents/agent-display-names';
 import { nativeSelectMaxWidthClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
-import type { ChannelsSettingsMessages } from '@/i18n/messages';
+import { messages, type ChannelsSettingsMessages } from '@/i18n/messages';
+import { useLocaleStore } from '@/stores/locale-store';
 
 import { FieldHint, FieldLabel } from './field-primitives';
 import { channelsInputClassName } from './utils';
@@ -22,6 +24,8 @@ export function ChannelAgentRoutingBlock({
   onChange: (accountId: string, agentId: string) => void;
   ch: ChannelsSettingsMessages;
 }) {
+  const language = useLocaleStore((s) => s.language);
+  const agentsMessages = messages(language).agentsSettings;
   if (accountIds.length === 0) return null;
   const opts = agentItems.length > 0 ? agentItems : [{ id: defaultAgentId }];
   return (
@@ -53,9 +57,9 @@ export function ChannelAgentRoutingBlock({
                 value={(routes[acc] ?? defaultAgentId).toLowerCase()}
                 onChange={(e) => onChange(acc, e.target.value)}
               >
-                {opts.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.name?.trim() ? `${a.name} (${a.id})` : a.id}
+                {opts.map((ag) => (
+                  <option key={ag.id} value={ag.id}>
+                    {`${agentListDisplayName(ag, agentsMessages)} (${ag.id})`}
                   </option>
                 ))}
               </select>

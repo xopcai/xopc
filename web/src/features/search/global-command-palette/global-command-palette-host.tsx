@@ -13,10 +13,12 @@ import { dispatchFillChatComposer } from '@/features/chat/fill-composer-dispatch
 import { searchWorkspaceFiles } from '@/features/chat/at-mention-api';
 import { listSessions } from '@/features/sessions/session-api';
 import { fetchGatewayAgents } from '@/features/settings/agents-admin-api';
+import { agentListDisplayName } from '@/features/settings/agents/agent-display-names';
 import { useUiExtensions } from '@/features/extensions/extension-provider';
 import { revalidateGatewayConfig } from '@/features/gateway/gateway-config-swr';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
+import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useWorkspacePreviewStore } from '@/stores/workspace-preview-store';
 import { useWorkspaceEditorAgentStore } from '@/stores/workspace-editor-agent-store';
@@ -210,11 +212,12 @@ export function GlobalCommandPaletteHost() {
     setLayerLoading(true);
     try {
       const data = await fetchGatewayAgents();
+      const agSettings = messages(language).agentsSettings;
       setAgentRows(
-        data.agents.map((a) => ({
-          id: a.id,
-          title: a.name?.trim() || a.id,
-          subtitle: a.id,
+        data.agents.map((agent) => ({
+          id: agent.id,
+          title: agentListDisplayName(agent, agSettings),
+          subtitle: agent.id,
         })),
       );
     } catch {
@@ -222,7 +225,7 @@ export function GlobalCommandPaletteHost() {
     } finally {
       setLayerLoading(false);
     }
-  }, []);
+  }, [language]);
 
   const displayedLayerRows = useMemo(() => {
     const q = query.trim().toLowerCase();

@@ -1460,6 +1460,8 @@
     "listNoAgentsYet": "暂无智能体，请先创建一个。",
     "listNewAgentCard": "新建智能体",
     "listChatWithAgent": "聊天",
+    "defaultMainAgentName": "智能助手",
+    "defaultMainAgentDescription": "你的个人智能助手：解答疑问、协助日常事务，并随时与你交流。",
     "editorNavAria": "智能体编辑器分区",
     "skillsLibraryLink": "技能库",
     "personaHint": "通过表单快速设置你的智能体身份和个性。高级编辑请前往「核心文件」。",

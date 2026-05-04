@@ -12,17 +12,30 @@ import { interaction } from '@/lib/interaction';
 
 import type { ChatAgentOption } from '@/features/chat/chat-agents-api';
 import { AgentAvatarDisplay } from '@/features/settings/agents/agent-avatar-display';
+import {
+  agentListDisplayDescription,
+  agentListDisplayName,
+} from '@/features/settings/agents/agent-display-names';
+import type { AgentsSettingsMessages } from '@/i18n/messages';
+import { messages } from '@/i18n/messages';
+import { useLocaleStore } from '@/stores/locale-store';
 
-function haystack(a: ChatAgentOption): string {
-  return `${a.id} ${a.name ?? ''} ${a.description ?? ''}`.toLowerCase();
+function haystack(a: ChatAgentOption, agentsMessages: AgentsSettingsMessages): string {
+  const name = agentListDisplayName(a, agentsMessages);
+  const desc = agentListDisplayDescription(a, agentsMessages);
+  return `${a.id} ${name} ${desc}`.toLowerCase();
 }
 
-function agentsMatchingQuery(agents: ChatAgentOption[], query: string): ChatAgentOption[] {
+function agentsMatchingQuery(
+  agents: ChatAgentOption[],
+  query: string,
+  agentsMessages: AgentsSettingsMessages,
+): ChatAgentOption[] {
   const raw = query.trim().toLowerCase();
   if (!raw) return agents;
   const tokens = raw.split(/\s+/).filter(Boolean);
   return agents.filter((a) => {
-    const h = haystack(a);
+    const h = haystack(a, agentsMessages);
     return tokens.every((tok) => h.includes(tok));
   });
 }
@@ -52,14 +65,21 @@ export function ChatAgentSelector({
   className?: string;
   onChange: (agentId: string) => void;
 }) {
+  const language = useLocaleStore((s) => s.language);
+  const agentsMessages = messages(language).agentsSettings;
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
 
-  const filtered = useMemo(() => agentsMatchingQuery(items, query), [items, query]);
+  const filtered = useMemo(
+    () => agentsMatchingQuery(items, query, agentsMessages),
+    [items, query, agentsMessages],
+  );
   const selected = items.find((a) => a.id === value);
-  const label = selected ? selected.name?.trim() || selected.id : value || placeholder;
+  const label = selected ? agentListDisplayName(selected, agentsMessages) : value || placeholder;
   const selectedTitle = selected
-    ? [selected.name?.trim() || selected.id, selected.description?.trim()].filter(Boolean).join(' — ')
+    ? [agentListDisplayName(selected, agentsMessages), agentListDisplayDescription(selected, agentsMessages)]
+        .filter(Boolean)
+        .join(' — ')
     : undefined;
 
   return (
@@ -129,8 +149,8 @@ export function ChatAgentSelector({
             ) : (
               filtered.map((a) => {
                 const isSel = a.id === value;
-                const name = a.name?.trim() || a.id;
-                const desc = a.description?.trim() ?? '';
+                const name = agentListDisplayName(a, agentsMessages);
+                const desc = agentListDisplayDescription(a, agentsMessages);
                 const descTitle = desc.length > 0 ? desc : undefined;
                 return (
                   <li key={a.id} role="option" aria-selected={isSel}>

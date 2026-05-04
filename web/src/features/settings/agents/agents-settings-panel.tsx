@@ -51,6 +51,7 @@ import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 
+import { agentListDisplayName } from './agent-display-names';
 import { AgentsEditorModal } from './agents-editor-modal';
 import { AgentsListGrid } from './agents-list-grid';
 import { AgentsSettingsHeader } from './agents-settings-header';
@@ -337,9 +338,12 @@ export function AgentsSettingsPanel() {
     }
     setEditWorkspace(selected.workspace);
     setEditModel(selected.model?.primary ?? '');
-    setEditName(selected.name?.trim() ? selected.name.trim() : selected.id);
+    setEditName(agentListDisplayName(selected, messages(language).agentsSettings));
     setEditDescription(selected.description?.trim() ?? '');
-  }, [selected?.id]);
+    // Intentionally only `selected?.id` + `language`: refresh localized default main name on locale change
+    // without resetting on unrelated `selected` object identity updates from SWR.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- see above
+  }, [selected?.id, language]);
 
   useEffect(() => {
     if (panel !== 'files' || !selectedId || !hasToken) {
@@ -979,7 +983,7 @@ export function AgentsSettingsPanel() {
   // Compute whether overview REST fields have changed compared to the loaded agent
   const overviewRestDirty = (() => {
     if (!selected || panel !== 'overview') return false;
-    const origName = selected.name?.trim() || selected.id;
+    const origName = agentListDisplayName(selected, a);
     const origDesc = selected.description?.trim() ?? '';
     const origWorkspace = selected.workspace;
     const origModel = selected.model?.primary ?? '';
@@ -1043,9 +1047,7 @@ export function AgentsSettingsPanel() {
     }
   }
 
-  const modalTitle = selected
-    ? editName.trim() || selected.name?.trim() || selected.id
-    : (routeAgentId ?? '');
+  const modalTitle = selected ? editName.trim() || agentListDisplayName(selected, a) : (routeAgentId ?? '');
   const modalSubtitle = selected?.id ?? routeAgentId ?? '';
 
   if (!hasToken) {

@@ -48,6 +48,7 @@ import {
   type CronPayload,
   type SessionChatId,
 } from '@/features/cron/cron-api';
+import { agentListDisplayName } from '@/features/settings/agents/agent-display-names';
 import { getCronTemplateCopy } from '@/features/cron/cron-template-i18n';
 import { CronTemplateLibrary, type CronTemplateFilter } from '@/features/cron/cron-template-library';
 import { cronTemplateById } from '@/features/cron/cron-templates';
@@ -1266,7 +1267,7 @@ export function CronPage() {
                         <option value="">{c.agentProfileDefault}</option>
                         {cronAgentSelectOptions.map((ag) => (
                           <option key={ag.id} value={ag.id}>
-                            {ag.name ? `${ag.id} — ${ag.name}` : ag.id}
+                            {`${ag.id} — ${agentListDisplayName(ag, m.agentsSettings)}`}
                           </option>
                         ))}
                       </select>
