@@ -11,6 +11,7 @@ import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 
 import type { ChatAgentOption } from '@/features/chat/chat-agents-api';
+import { AgentAvatarDisplay } from '@/features/settings/agents/agent-avatar-display';
 
 function haystack(a: ChatAgentOption): string {
   return `${a.id} ${a.name ?? ''} ${a.description ?? ''}`.toLowerCase();
@@ -57,6 +58,9 @@ export function ChatAgentSelector({
   const filtered = useMemo(() => agentsMatchingQuery(items, query), [items, query]);
   const selected = items.find((a) => a.id === value);
   const label = selected ? selected.name?.trim() || selected.id : value || placeholder;
+  const selectedTitle = selected
+    ? [selected.name?.trim() || selected.id, selected.description?.trim()].filter(Boolean).join(' — ')
+    : undefined;
 
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
@@ -64,10 +68,10 @@ export function ChatAgentSelector({
         <button
           type="button"
           disabled={disabled}
-          title={selected ? `${selected.name ? `${selected.name} · ` : ''}${selected.id}` : placeholder}
+          title={selectedTitle ?? placeholder}
           className={cn(
             comboboxTriggerLayoutClass,
-            'items-center gap-2 rounded-lg border border-edge-subtle bg-surface-panel px-3 py-2 text-left text-sm font-normal text-fg',
+            'items-center gap-2 rounded-lg border border-edge-subtle bg-surface-panel px-2.5 py-2 text-left text-sm font-normal text-fg',
             interaction.transition,
             'hover:border-edge hover:bg-surface-hover/45',
             formControlBorderFocusClass,
@@ -80,6 +84,9 @@ export function ChatAgentSelector({
             className,
           )}
         >
+          {value ? (
+            <AgentAvatarDisplay agentId={value} avatar={selected?.avatar} size={28} className="shrink-0" />
+          ) : null}
           <span
             className={cn(
               'min-w-0 truncate text-left',
@@ -122,6 +129,9 @@ export function ChatAgentSelector({
             ) : (
               filtered.map((a) => {
                 const isSel = a.id === value;
+                const name = a.name?.trim() || a.id;
+                const desc = a.description?.trim() ?? '';
+                const descTitle = desc.length > 0 ? desc : undefined;
                 return (
                   <li key={a.id} role="option" aria-selected={isSel}>
                     <button
@@ -137,14 +147,17 @@ export function ChatAgentSelector({
                       }}
                     >
                       <Check className={cn('size-4 shrink-0', isSel ? 'opacity-100' : 'opacity-0')} aria-hidden />
+                      <AgentAvatarDisplay agentId={a.id} avatar={a.avatar} size={32} className="shrink-0" />
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate font-medium">{a.name?.trim() || a.id}</span>
-                        {a.name?.trim() ? (
-                          <span className="block truncate font-mono text-xs text-fg-muted">{a.id}</span>
-                        ) : null}
-                        {a.description?.trim() ? (
-                          <span className="mt-0.5 line-clamp-2 text-xs leading-snug text-fg-muted">
-                            {a.description.trim()}
+                        <span className="block truncate font-medium leading-tight" title={name}>
+                          {name}
+                        </span>
+                        {desc ? (
+                          <span
+                            className="mt-0.5 block truncate text-xs leading-tight text-fg-muted"
+                            title={descTitle}
+                          >
+                            {desc}
                           </span>
                         ) : null}
                       </span>

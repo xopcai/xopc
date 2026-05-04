@@ -2,7 +2,7 @@
  * Gateway REST helpers for multi-agent management.
  */
 
-import { mkdir, readFile, realpath, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, realpath, stat, unlink, writeFile } from 'node:fs/promises';
 import { join, resolve as pathResolve } from 'node:path';
 
 import {
@@ -41,6 +41,8 @@ export type GatewayAgentRow = {
   id: string;
   name?: string;
   description?: string;
+  /** Value from `IDENTITY.md` **Avatar:** line when present (may be URL, `xopc:…`, etc.). */
+  avatar?: string;
   workspace: string;
   bootstrapDir: string;
   model?: { primary?: string; fallbacks?: string[] };
@@ -77,7 +79,19 @@ function collectAgentIdsForList(cfg: Config): string[] {
   return [...ids];
 }
 
-export function listGatewayAgents(cfg: Config): GatewayAgentsListResponse {
+/** Extract `**Avatar:**` value from bootstrap IDENTITY.md (same line shape as the gateway console parser). */
+export function extractAvatarFromIdentityMarkdown(content: string): string | undefined {
+  for (const line of content.split('\n')) {
+    const match = line.match(/^[-*]\s+\*\*Avatar:\*\*\s*(.*)/i);
+    if (match) {
+      const v = match[1]?.trim() ?? '';
+      return v.length > 0 ? v : undefined;
+    }
+  }
+  return undefined;
+}
+
+export async function listGatewayAgents(cfg: Config): Promise<GatewayAgentsListResponse> {
   const defaultId = resolveDefaultAgentId(cfg);
   const agents: GatewayAgentRow[] = [];
   const defaultsSkills = cfg.agents?.defaults?.skills;
@@ -94,10 +108,19 @@ export function listGatewayAgents(cfg: Config): GatewayAgentsListResponse {
         : undefined;
     const entrySkills = entry?.skills;
     const entryDisable = entry?.tools?.disable ?? [];
+    let avatar: string | undefined;
+    try {
+      const identityPath = join(resolveAgentBootstrapDir(cfg, id), WORKSPACE_FILES.IDENTITY);
+      const content = await readFile(identityPath, 'utf-8');
+      avatar = extractAvatarFromIdentityMarkdown(content);
+    } catch {
+      /* missing IDENTITY.md or unreadable */
+    }
     agents.push({
       id,
       ...(entry?.name?.trim() ? { name: entry.name.trim() } : {}),
       ...(entry?.description?.trim() ? { description: entry.description.trim() } : {}),
+      ...(avatar ? { avatar } : {}),
       workspace: profile.resolvedWorkspacePath,
       bootstrapDir: resolveAgentBootstrapDir(cfg, id),
       ...(model ? { model } : {}),
@@ -434,4 +457,177 @@ export async function writeAgentBootstrapFile(
   }
   await writeFile(abs, content, 'utf-8');
   return { ok: true, data: { agentId: id, path: abs } };
+}
+
+// ---------------------------------------------------------------------------
+// Binary agent avatar (bootstrap dir, not a markdown bootstrap file)
+// ---------------------------------------------------------------------------
+
+const AGENT_AVATAR_MAX_BYTES = 512 * 1024;
+const AGENT_AVATAR_BASENAME = 'agent-avatar';
+
+const AGENT_AVATAR_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp'] as const;
+
+function agentAvatarFilenames(): string[] {
+  return AGENT_AVATAR_EXTENSIONS.map((ext) => `${AGENT_AVATAR_BASENAME}${ext}`);
+}
+
+function mimeToExt(mime: string): '.png' | '.jpg' | '.jpeg' | '.webp' | null {
+  const m = mime.toLowerCase().trim();
+  if (m === 'image/png') return '.png';
+  if (m === 'image/jpeg' || m === 'image/jpg') return '.jpg';
+  if (m === 'image/webp') return '.webp';
+  return null;
+}
+
+function detectImageMimeFromBytes(buf: Uint8Array): 'image/png' | 'image/jpeg' | 'image/webp' | null {
+  if (buf.length >= 8 && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) {
+    return 'image/png';
+  }
+  if (buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) {
+    return 'image/jpeg';
+  }
+  if (
+    buf.length >= 12 &&
+    buf[0] === 0x52 &&
+    buf[1] === 0x49 &&
+    buf[2] === 0x46 &&
+    buf[3] === 0x46 &&
+    buf[8] === 0x57 &&
+    buf[9] === 0x45 &&
+    buf[10] === 0x42 &&
+    buf[11] === 0x50
+  ) {
+    return 'image/webp';
+  }
+  return null;
+}
+
+function assertAgentExistsForAvatar(cfg: Config, id: string): AgentAdminResult<never> | null {
+  if (collectAgentIdsForList(cfg).every((x) => x !== id)) {
+    return { ok: false, error: `agent "${id}" not found`, status: 404 };
+  }
+  return null;
+}
+
+export async function readAgentAvatarFile(
+  cfg: Config,
+  agentId: string,
+): Promise<AgentAdminResult<{ agentId: string; buffer: Buffer; contentType: string; path: string }>> {
+  const missingAgent = assertAgentExistsForAvatar(cfg, agentId);
+  if (missingAgent) {
+    return missingAgent;
+  }
+  const id = normalizeAgentId(agentId);
+  const root = await bootstrapRootReal(cfg, id);
+  for (const name of agentAvatarFilenames()) {
+    const abs = resolveWorkspaceSafePath(root, name);
+    if (!abs) {
+      continue;
+    }
+    try {
+      const st = await stat(abs);
+      if (!st.isFile() || st.size <= 0 || st.size > AGENT_AVATAR_MAX_BYTES) {
+        continue;
+      }
+      const buffer = await readFile(abs);
+      const detected = detectImageMimeFromBytes(buffer);
+      if (!detected) {
+        continue;
+      }
+      return { ok: true, data: { agentId: id, buffer, contentType: detected, path: abs } };
+    } catch {
+      /* try next */
+    }
+  }
+  return { ok: false, error: 'avatar not found', status: 404 };
+}
+
+export async function writeAgentAvatarFromBase64(
+  cfg: Config,
+  agentId: string,
+  base64: string,
+  mimeType: string,
+): Promise<AgentAdminResult<{ agentId: string; path: string }>> {
+  const missingAgent = assertAgentExistsForAvatar(cfg, agentId);
+  if (missingAgent) {
+    return missingAgent;
+  }
+  const id = normalizeAgentId(agentId);
+  const ext = mimeToExt(mimeType);
+  if (!ext) {
+    return { ok: false, error: 'unsupported mimeType (use image/png, image/jpeg, or image/webp)', status: 400 };
+  }
+  let raw: Buffer;
+  try {
+    raw = Buffer.from(base64, 'base64');
+  } catch {
+    return { ok: false, error: 'invalid base64', status: 400 };
+  }
+  if (raw.length === 0 || raw.length > AGENT_AVATAR_MAX_BYTES) {
+    return { ok: false, error: `avatar must be non-empty and at most ${AGENT_AVATAR_MAX_BYTES} bytes`, status: 400 };
+  }
+  const detected = detectImageMimeFromBytes(raw);
+  if (!detected || !extMatchesDetectedMime(ext, detected)) {
+    return { ok: false, error: 'file content does not match declared image type', status: 400 };
+  }
+
+  const root = await bootstrapRootReal(cfg, id);
+  const rootReal = await bootstrapRootReal(cfg, id);
+  const targetName = `${AGENT_AVATAR_BASENAME}${ext}`;
+  const abs = resolveWorkspaceSafePath(root, targetName);
+  if (!abs || !isPathUnderWorkspace(rootReal, abs)) {
+    return { ok: false, error: 'invalid path', status: 400 };
+  }
+  for (const name of agentAvatarFilenames()) {
+    if (name === targetName) {
+      continue;
+    }
+    const other = resolveWorkspaceSafePath(root, name);
+    if (other && isPathUnderWorkspace(rootReal, other)) {
+      try {
+        await unlink(other);
+      } catch {
+        /* absent */
+      }
+    }
+  }
+  await writeFile(abs, raw);
+  return { ok: true, data: { agentId: id, path: abs } };
+}
+
+function mimeToExtToMime(ext: '.png' | '.jpg' | '.jpeg' | '.webp'): 'image/png' | 'image/jpeg' | 'image/webp' {
+  if (ext === '.png') return 'image/png';
+  if (ext === '.webp') return 'image/webp';
+  return 'image/jpeg';
+}
+
+function extMatchesDetectedMime(
+  ext: '.png' | '.jpg' | '.jpeg' | '.webp',
+  detected: 'image/png' | 'image/jpeg' | 'image/webp',
+): boolean {
+  return detected === mimeToExtToMime(ext);
+}
+
+/** Remove any `agent-avatar.*` in the agent bootstrap dir. Idempotent: ok even when no file existed. */
+export async function deleteAgentAvatarFile(cfg: Config, agentId: string): Promise<AgentAdminResult<{ agentId: string }>> {
+  const missingAgent = assertAgentExistsForAvatar(cfg, agentId);
+  if (missingAgent) {
+    return missingAgent;
+  }
+  const id = normalizeAgentId(agentId);
+  const root = await bootstrapRootReal(cfg, id);
+  const rootReal = await bootstrapRootReal(cfg, id);
+  for (const name of agentAvatarFilenames()) {
+    const abs = resolveWorkspaceSafePath(root, name);
+    if (!abs || !isPathUnderWorkspace(rootReal, abs)) {
+      continue;
+    }
+    try {
+      await unlink(abs);
+    } catch {
+      /* absent */
+    }
+  }
+  return { ok: true, data: { agentId: id } };
 }

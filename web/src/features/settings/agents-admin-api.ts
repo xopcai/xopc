@@ -23,6 +23,7 @@ export type {
 function normalizeAgentRow(raw: GatewayAgentRow): GatewayAgentRow {
   return {
     ...raw,
+    ...(typeof raw.avatar === 'string' && raw.avatar.trim() ? { avatar: raw.avatar.trim() } : {}),
     skills: raw.skills ?? { defaults: [] },
     tools: raw.tools ?? { defaultsDisable: [], entryDisable: [], effectiveDisable: [] },
   };
@@ -201,4 +202,55 @@ export async function saveAgentBootstrapFileContent(
       body: JSON.stringify({ content }),
     },
   );
+}
+
+const AVATAR_MIME = ['image/png', 'image/jpeg', 'image/webp'] as const;
+
+export type AgentAvatarMime = (typeof AVATAR_MIME)[number];
+
+function mimeFromFile(file: File): AgentAvatarMime | null {
+  const t = file.type.toLowerCase();
+  if (t === 'image/png' || t === 'image/jpeg' || t === 'image/jpg' || t === 'image/webp') {
+    if (t === 'image/jpg') return 'image/jpeg';
+    return t as AgentAvatarMime;
+  }
+  return null;
+}
+
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => {
+      const dataUrl = String(r.result ?? '');
+      const i = dataUrl.indexOf(',');
+      resolve(i >= 0 ? dataUrl.slice(i + 1) : '');
+    };
+    r.onerror = () => reject(r.error ?? new Error('read failed'));
+    r.readAsDataURL(file);
+  });
+}
+
+export async function uploadAgentAvatarFile(agentId: string, file: File): Promise<void> {
+  const mimeType = mimeFromFile(file);
+  if (!mimeType) {
+    throw new Error('unsupported_image_type');
+  }
+  if (file.size === 0 || file.size > 512 * 1024) {
+    throw new Error('avatar_too_large');
+  }
+  const base64 = await fileToBase64(file);
+  if (!base64) {
+    throw new Error('empty_file');
+  }
+  await fetchJson(apiUrl(`/api/agents/${encodeURIComponent(agentId)}/avatar`), {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ base64, mimeType }),
+  });
+}
+
+export async function deleteAgentAvatarFile(agentId: string): Promise<void> {
+  await fetchJson(apiUrl(`/api/agents/${encodeURIComponent(agentId)}/avatar`), {
+    method: 'DELETE',
+  });
 }

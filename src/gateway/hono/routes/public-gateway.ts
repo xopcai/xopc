@@ -42,6 +42,7 @@ export function registerPublicGatewayRoutes(app: Hono, service: GatewayService):
         'POST /api/agents',
         'PATCH /api/agents/:id',
         'DELETE /api/agents/:id',
+        'GET/PUT/DELETE /api/agents/:id/avatar',
         'GET/PUT /api/agents/:id/files/...',
         'DELETE /api/providers/:providerId/key',
         'PATCH /api/config',

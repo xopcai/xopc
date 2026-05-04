@@ -2,7 +2,7 @@ import { fetchGatewayConfigSwrResponse } from '@/features/gateway/gateway-config
 import { apiFetch } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
-export type ChatAgentOption = { id: string; name?: string; description?: string };
+export type ChatAgentOption = { id: string; name?: string; description?: string; avatar?: string };
 
 export type ChatAgentsPayload = {
   defaultId: string;
@@ -26,13 +26,13 @@ async function fetchChatAgentsUncached(): Promise<ChatAgentsPayload> {
       ok?: boolean;
       payload?: {
         defaultId?: string;
-        agents?: Array<{ id?: string; name?: string; description?: string }>;
+        agents?: Array<{ id?: string; name?: string; description?: string; avatar?: string }>;
       };
     };
     if (data.ok && data.payload?.defaultId && Array.isArray(data.payload.agents)) {
       const defaultId = data.payload.defaultId.trim().toLowerCase();
       const items: ChatAgentOption[] = data.payload.agents
-        .filter((a): a is { id: string; name?: string; description?: string } =>
+        .filter((a): a is { id: string; name?: string; description?: string; avatar?: string } =>
           Boolean(a && typeof a.id === 'string' && a.id.trim()),
         )
         .map((a) => ({
@@ -40,6 +40,7 @@ async function fetchChatAgentsUncached(): Promise<ChatAgentsPayload> {
           name: typeof a.name === 'string' && a.name.trim() ? a.name.trim() : undefined,
           description:
             typeof a.description === 'string' && a.description.trim() ? a.description.trim() : undefined,
+          ...(typeof a.avatar === 'string' && a.avatar.trim() ? { avatar: a.avatar.trim() } : {}),
         }));
       if (items.length > 0) {
         return { defaultId, items };
@@ -50,7 +51,7 @@ async function fetchChatAgentsUncached(): Promise<ChatAgentsPayload> {
   const data = (await fetchGatewayConfigSwrResponse()) as {
     payload?: {
       config?: {
-        agents?: { defaultId?: string; list?: Array<{ id?: string; name?: string }> };
+        agents?: { defaultId?: string; list?: Array<{ id?: string; name?: string; avatar?: string }> };
       };
     };
   };
@@ -58,7 +59,7 @@ async function fetchChatAgentsUncached(): Promise<ChatAgentsPayload> {
   const defaultId = (agents?.defaultId ?? 'main').trim().toLowerCase();
   const raw = Array.isArray(agents?.list) ? agents.list : [];
   const items: ChatAgentOption[] = raw
-    .filter((e): e is { id: string; name?: string; description?: string } =>
+    .filter((e): e is { id: string; name?: string; description?: string; avatar?: string } =>
       Boolean(e && typeof e.id === 'string' && e.id.trim()),
     )
     .map((e) => ({
@@ -66,6 +67,7 @@ async function fetchChatAgentsUncached(): Promise<ChatAgentsPayload> {
       name: typeof e.name === 'string' && e.name.trim() ? e.name.trim() : undefined,
       description:
         typeof e.description === 'string' && e.description.trim() ? e.description.trim() : undefined,
+      ...(typeof e.avatar === 'string' && e.avatar.trim() ? { avatar: e.avatar.trim() } : {}),
     }));
   if (items.length === 0) {
     return { defaultId, items: [{ id: defaultId }] };

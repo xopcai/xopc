@@ -1,6 +1,7 @@
-import { Bot, MessageSquarePlus, Plus } from 'lucide-react';
+import { MessageSquarePlus, Plus } from 'lucide-react';
 
 import type { GatewayAgentRow } from '@/features/settings/agents-admin-api';
+import { AgentAvatarDisplay } from '@/features/settings/agents/agent-avatar-display';
 import { cn } from '@/lib/cn';
 import type { AgentsSettingsMessages } from '@/i18n/messages';
 
@@ -100,12 +101,12 @@ export function AgentsListGrid(props: {
                   )}
                 >
                   <div className="flex items-start gap-3">
-                    <span
-                      className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent-fg"
+                    <div
+                      className="flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-accent-soft ring-1 ring-edge-subtle/40"
                       aria-hidden
                     >
-                      <Bot className="size-6" strokeWidth={1.75} />
-                    </span>
+                      <AgentAvatarDisplay agentId={ag.id} avatar={ag.avatar} size={44} className="size-full" />
+                    </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                         <span className="truncate font-semibold text-fg">{title}</span>

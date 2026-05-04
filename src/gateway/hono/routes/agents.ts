@@ -8,14 +8,17 @@ import {
 } from '../../../providers/index.js';
 import { normalizeAgentId } from '../../../agent/agent-scope.js';
 import {
+  deleteAgentAvatarFile,
   finalizeCreateAgentDirs,
   listAgentBootstrapFiles,
   listGatewayAgents,
   prepareCreateAgent,
   prepareDeleteAgent,
   prepareUpdateAgent,
+  readAgentAvatarFile,
   readAgentBootstrapFile,
   runAfterDeletePurge,
+  writeAgentAvatarFromBase64,
   writeAgentBootstrapFile,
 } from '../../agents-admin.js';
 import {
@@ -33,7 +36,8 @@ export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRou
 
   authenticated.get('/api/agents', async (c) => {
     const cfg = service.currentConfig as Config;
-    return c.json({ ok: true, payload: listGatewayAgents(cfg) });
+    const payload = await listGatewayAgents(cfg);
+    return c.json({ ok: true, payload });
   });
 
   authenticated.post('/api/agents', strictRateLimitMiddleware, async (c) => {
@@ -66,11 +70,12 @@ export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRou
       return c.json({ ok: false, error: { message: save.error ?? 'save failed' } }, 500);
     }
     await finalizeCreateAgentDirs(service.currentConfig as Config, agentId);
+    const agentsPayload = await listGatewayAgents(service.currentConfig as Config);
     return c.json({
       ok: true,
       payload: {
         agentId,
-        agents: listGatewayAgents(service.currentConfig as Config),
+        agents: agentsPayload,
       },
     });
   });
@@ -131,7 +136,8 @@ export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRou
     if (!save.saved) {
       return c.json({ ok: false, error: { message: save.error ?? 'save failed' } }, 500);
     }
-    return c.json({ ok: true, payload: listGatewayAgents(service.currentConfig as Config) });
+    const agentsPayload = await listGatewayAgents(service.currentConfig as Config);
+    return c.json({ ok: true, payload: agentsPayload });
   });
 
   authenticated.delete('/api/agents/:id', strictRateLimitMiddleware, async (c) => {
@@ -149,10 +155,52 @@ export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRou
     if (purge) {
       await runAfterDeletePurge(service.currentConfig as Config, agentId);
     }
+    const agentsPayload = await listGatewayAgents(service.currentConfig as Config);
     return c.json({
       ok: true,
-      payload: { agentId, purged: purge, agents: listGatewayAgents(service.currentConfig as Config) },
+      payload: { agentId, purged: purge, agents: agentsPayload },
     });
+  });
+
+  authenticated.get('/api/agents/:id/avatar', async (c) => {
+    const id = normalizeAgentId(c.req.param('id') ?? '');
+    const res = await readAgentAvatarFile(service.currentConfig as Config, id);
+    if (res.ok === false) {
+      return c.json({ ok: false, error: { message: res.error } }, res.status ?? 400);
+    }
+    return new Response(res.data.buffer, {
+      status: 200,
+      headers: {
+        'Content-Type': res.data.contentType,
+        'Cache-Control': 'private, max-age=3600',
+      },
+    });
+  });
+
+  authenticated.put('/api/agents/:id/avatar', strictRateLimitMiddleware, async (c) => {
+    const id = normalizeAgentId(c.req.param('id') ?? '');
+    let body: Record<string, unknown> = {};
+    try {
+      body = (await c.req.json()) as Record<string, unknown>;
+    } catch {
+      return c.json({ ok: false, error: { message: 'Invalid JSON' } }, 400);
+    }
+    const base64 = typeof body.base64 === 'string' ? body.base64 : '';
+    const mimeType = typeof body.mimeType === 'string' ? body.mimeType : '';
+    const res = await writeAgentAvatarFromBase64(service.currentConfig as Config, id, base64, mimeType);
+    if (res.ok === false) {
+      return c.json({ ok: false, error: { message: res.error } }, res.status ?? 400);
+    }
+    return c.json({ ok: true, payload: { agentId: res.data.agentId } });
+  });
+
+  authenticated.delete('/api/agents/:id/avatar', strictRateLimitMiddleware, async (c) => {
+    const id = normalizeAgentId(c.req.param('id') ?? '');
+    const res = await deleteAgentAvatarFile(service.currentConfig as Config, id);
+    if (res.ok === false) {
+      return c.json({ ok: false, error: { message: res.error } }, res.status ?? 400);
+    }
+    return c.json({ ok: true, payload: { agentId: res.data.agentId } });
   });
 
   authenticated.get('/api/agents/:id/files', async (c) => {
