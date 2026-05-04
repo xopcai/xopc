@@ -1,12 +1,12 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import type { Message } from '@/features/chat/messages.types';
 import { ChatComposer } from '@/features/chat/chat-composer';
 import { ChatFollowUpChips } from '@/features/chat/chat-follow-up-chips';
 import { ChatPageHeaderRegistration } from '@/features/chat/chat-page-header-registration';
 import { ChatSseStatus } from '@/features/chat/chat-sse-status';
 import { MessageList } from '@/features/chat/message-list';
 import { ScrollToBottomButton } from '@/features/chat/scroll-to-bottom-button';
+import { useChatScrollViewport } from '@/features/chat/use-chat-scroll-viewport';
 import { useChatSession } from '@/features/chat/use-chat-session';
 import { ClarifyPrompt } from '@/features/chat/clarify-prompt';
 import { OnboardingCard, useNeedsModelSetup } from '@/features/onboarding';
@@ -23,78 +23,24 @@ export function ChatPage() {
 
   const modelSetup = useNeedsModelSetup(Boolean(token));
 
-  const scrollRef = useRef<HTMLDivElement>(null);
   const welcomeDraftSeq = useRef(0);
   const [welcomeDraftSeed, setWelcomeDraftSeed] = useState<{ id: number; text: string } | null>(null);
-  const [atBottom, setAtBottom] = useState(true);
-  const atBottomRef = useRef(true);
-  const lastScrollTopRef = useRef(0);
-  const lastClientHeightRef = useRef(0);
-  /** Tracks loading→idle so we scroll to bottom once after refresh / session load. */
-  const prevLoadingRef = useRef(true);
 
-  /** After prepending older messages, preserve viewport (virtual + non-virtual lists). */
-  const listScrollMetricsRef = useRef<{
-    first: Message | undefined;
-    len: number;
-    scrollHeight: number;
-  }>({ first: undefined, len: 0, scrollHeight: 0 });
+  const { auth, session, messages: msgSlice, stream, followUp, clarify, agents } = useChatSession();
 
-  useEffect(() => {
-    atBottomRef.current = atBottom;
-  }, [atBottom]);
-
-  const {
-    messages: chatMessages,
-    sessionKey,
-    sessionName,
-    decodedKey,
-    sessionRoutePending,
-    showSessionLoading,
-    sessionModel,
-    thinkingLevel,
-    setThinkingLevel,
-    reasoningLevel,
-    modelSupportsThinking,
-    hasMore,
-    loadingMore,
-    loadMoreMessages,
-    onSessionModelChange,
-    error,
-    streaming,
-    sending,
-    progress,
-    sendMessage,
-    addPendingFollowUp,
-    pendingFollowUps,
-    editingFollowUpId,
-    beginEditFollowUp,
-    cancelEditFollowUp,
-    commitEditFollowUp,
-    removePendingFollowUp,
-    movePendingFollowUp,
-    reorderPendingFollowUp,
-    steerPendingFollowUp,
-    steeringFollowUpId,
-    interruptAndSend,
-    abort,
-    deleteMessageRound,
-    followUpSuggestions,
-    pickFollowUpSuggestion,
-    clarifyPrompt,
-    clarifySubmitting,
-    submitClarifyAnswer,
-    hasToken,
-    chatAgents,
-    displayAgentId,
-    showChatAgentSelector,
-    onChatAgentChange,
-    sessionManager,
-  } = useChatSession();
+  const { scrollRef, atBottom, scrollToBottom, onScroll } = useChatScrollViewport({
+    hasToken: auth.hasToken,
+    showSessionLoading: session.showSessionLoading,
+    sending: stream.sending,
+    chatMessages: msgSlice.items,
+    hasMore: session.hasMore,
+    loadingMore: session.loadingMore,
+    loadMoreMessages: session.loadMoreMessages,
+  });
 
   useEffect(() => {
     setWelcomeDraftSeed(null);
-  }, [sessionKey]);
+  }, [session.sessionKey]);
 
   const onPickWelcomePrompt = useCallback((text: string) => {
     welcomeDraftSeq.current += 1;
@@ -103,133 +49,51 @@ export function ChatPage() {
 
   const canSelectWorkingDirectory = useMemo(
     () =>
-      Boolean(sessionKey) &&
-      !showSessionLoading &&
-      !sessionRoutePending &&
-      chatMessages.length === 0,
-    [sessionKey, showSessionLoading, sessionRoutePending, chatMessages.length],
+      Boolean(session.sessionKey) &&
+      !session.showSessionLoading &&
+      !session.sessionRoutePending &&
+      msgSlice.items.length === 0,
+    [session.sessionKey, session.showSessionLoading, session.sessionRoutePending, msgSlice.items.length],
   );
 
   const setWorkspaceEditorAgentId = useWorkspaceEditorAgentStore((s) => s.setAgentId);
 
   useEffect(() => {
-    if (!hasToken) return;
-    setWorkspaceEditorAgentId(displayAgentId);
+    if (!auth.hasToken) return;
+    setWorkspaceEditorAgentId(agents.displayAgentId);
     return () => setWorkspaceEditorAgentId('');
-  }, [hasToken, displayAgentId, setWorkspaceEditorAgentId]);
+  }, [auth.hasToken, agents.displayAgentId, setWorkspaceEditorAgentId]);
 
   const showInlineOnboarding =
     Boolean(token) &&
     modelSetup.ready &&
     modelSetup.needsSetup &&
     !modelSetup.guideDismissed &&
-    !showSessionLoading &&
-    !streaming;
+    !session.showSessionLoading &&
+    !stream.streaming;
 
   /** Match `MessageList` empty welcome: tighter vertical padding so the first screen fits without scrolling. */
   const compactWelcomeLayout =
-    !showSessionLoading && chatMessages.length === 0 && !streaming && !showInlineOnboarding;
+    !session.showSessionLoading &&
+    msgSlice.items.length === 0 &&
+    !stream.streaming &&
+    !showInlineOnboarding;
 
   const chatHeadline = useMemo(() => {
-    const titleKey = sessionRoutePending && decodedKey ? decodedKey : sessionKey;
+    const titleKey =
+      session.sessionRoutePending && session.decodedKey ? session.decodedKey : session.sessionKey;
     if (!titleKey) return m.nav.chat;
-    return sessionName?.trim() || m.chat.newSession;
-  }, [sessionKey, sessionName, sessionRoutePending, decodedKey, m.nav.chat, m.chat.newSession]);
+    return session.sessionName?.trim() || m.chat.newSession;
+  }, [
+    session.sessionKey,
+    session.sessionName,
+    session.sessionRoutePending,
+    session.decodedKey,
+    m.nav.chat,
+    m.chat.newSession,
+  ]);
 
-  const scrollToBottom = useCallback((smooth = true) => {
-    const el = scrollRef.current;
-    if (!el) return;
-    requestAnimationFrame(() => {
-      el.scrollTo({ top: el.scrollHeight, behavior: smooth ? 'smooth' : 'auto' });
-      const before = el.scrollHeight;
-      requestAnimationFrame(() => {
-        if (scrollRef.current && scrollRef.current.scrollHeight > before) {
-          scrollRef.current.scrollTo({
-            top: scrollRef.current.scrollHeight,
-            behavior: smooth ? 'smooth' : 'auto',
-          });
-        }
-      });
-    });
-  }, []);
-
-  const onScroll = useCallback(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const { scrollTop, scrollHeight, clientHeight } = el;
-    const fromBottom = scrollHeight - scrollTop - clientHeight;
-
-    if (clientHeight < lastClientHeightRef.current) {
-      lastClientHeightRef.current = clientHeight;
-      return;
-    }
-    if (scrollTop !== 0 && scrollTop < lastScrollTopRef.current && fromBottom > 50) {
-      setAtBottom(false);
-    } else if (fromBottom < 10) {
-      setAtBottom(true);
-    }
-    lastScrollTopRef.current = scrollTop;
-    lastClientHeightRef.current = clientHeight;
-
-    if (scrollTop < 100 && !atBottomRef.current && hasMore && !loadingMore) {
-      void loadMoreMessages();
-    }
-  }, [hasMore, loadingMore, loadMoreMessages]);
-
-  useLayoutEffect(() => {
-    if (!hasToken) return;
-    if (showSessionLoading) {
-      prevLoadingRef.current = true;
-      return;
-    }
-    if (prevLoadingRef.current !== true) return;
-    prevLoadingRef.current = false;
-    setAtBottom(true);
-    const el = scrollRef.current;
-    if (el) {
-      el.scrollTop = el.scrollHeight;
-    }
-    requestAnimationFrame(() => {
-      scrollToBottom(false);
-      requestAnimationFrame(() => scrollToBottom(false));
-    });
-  }, [showSessionLoading, hasToken, scrollToBottom]);
-
-  // User scrolled up then sent: re-enable follow mode and scroll to the new message.
-  useEffect(() => {
-    if (!sending) return;
-    if (showSessionLoading) return;
-    setAtBottom(true);
-    scrollToBottom(true);
-  }, [sending, showSessionLoading, scrollToBottom]);
-
-  // Follow the bottom whenever message content updates (not just length): streaming updates
-  // the same assistant bubble without changing length.
-  useEffect(() => {
-    if (showSessionLoading) return;
-    if (!atBottom) return;
-    scrollToBottom(false);
-  }, [chatMessages, atBottom, scrollToBottom, showSessionLoading]);
-
-  useLayoutEffect(() => {
-    const el = scrollRef.current;
-    if (!el || showSessionLoading) return;
-
-    const prev = listScrollMetricsRef.current;
-    const first = chatMessages[0];
-    const len = chatMessages.length;
-    const newHeight = el.scrollHeight;
-
-    const prepended = len > prev.len && prev.len > 0 && first !== undefined && first !== prev.first;
-
-    if (prepended && prev.scrollHeight > 0) {
-      el.scrollTop += newHeight - prev.scrollHeight;
-    }
-
-    listScrollMetricsRef.current = { first, len, scrollHeight: newHeight };
-  }, [chatMessages, showSessionLoading]);
-
-  if (!hasToken) {
+  if (!auth.hasToken) {
     return (
       <div className="mx-auto w-full max-w-[var(--max-width-chat)] px-3 py-16 text-center text-sm leading-relaxed text-fg-muted sm:px-5">
         {m.chat.needToken}
@@ -243,15 +107,15 @@ export function ChatPage() {
 
       <ChatPageHeaderRegistration
         chatHeadline={chatHeadline}
-        sessionModel={sessionModel}
-        showModelSelector={Boolean(sessionKey && !sessionRoutePending)}
-        onModelChange={onSessionModelChange}
-        modelDisabled={showSessionLoading || sessionRoutePending || streaming}
-        chatAgents={chatAgents?.items ?? []}
-        showChatAgentSelector={showChatAgentSelector}
-        chatAgentId={displayAgentId}
-        onChatAgentChange={onChatAgentChange}
-        chatAgentDisabled={showSessionLoading || sessionRoutePending || streaming}
+        sessionModel={session.sessionModel}
+        showModelSelector={Boolean(session.sessionKey && !session.sessionRoutePending)}
+        onModelChange={session.onSessionModelChange}
+        modelDisabled={session.showSessionLoading || session.sessionRoutePending || stream.streaming}
+        chatAgents={agents.chatAgents?.items ?? []}
+        showChatAgentSelector={agents.showChatAgentSelector}
+        chatAgentId={agents.displayAgentId}
+        onChatAgentChange={agents.onChatAgentChange}
+        chatAgentDisabled={session.showSessionLoading || session.sessionRoutePending || stream.streaming}
       />
 
       <div className="mx-auto flex min-h-0 w-full max-w-[var(--max-width-chat)] flex-1 flex-col">
@@ -265,27 +129,27 @@ export function ChatPage() {
               )}
               onScroll={onScroll}
             >
-              {showSessionLoading ? (
+              {session.showSessionLoading ? (
                 <div className="flex min-h-[min(40vh,20rem)] flex-col items-center justify-center gap-3 py-12 text-center text-sm text-fg-muted">
                   {m.chat.loading}
                 </div>
               ) : (
                 <>
-                  {loadingMore ? (
+                  {session.loadingMore ? (
                     <div className="mb-3 text-center text-xs text-fg-muted">{m.chat.loadOlder}</div>
                   ) : null}
-                  {error ? (
+                  {stream.error ? (
                     <div className="mb-4 rounded-md border border-edge bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-edge dark:bg-red-950/40 dark:text-red-300">
-                      {error}
+                      {stream.error}
                     </div>
                   ) : null}
                   <MessageList
-                    messages={chatMessages}
+                    messages={msgSlice.items}
                     authToken={token ?? undefined}
-                    sessionKey={sessionKey}
-                    streaming={streaming}
-                    progress={progress}
-                    reasoningLevel={reasoningLevel}
+                    sessionKey={session.sessionKey}
+                    streaming={stream.streaming}
+                    progress={stream.progress}
+                    reasoningLevel={session.reasoningLevel}
                     scrollElementRef={scrollRef}
                     pinToBottom={atBottom}
                     onPickWelcomePrompt={onPickWelcomePrompt}
@@ -297,8 +161,8 @@ export function ChatPage() {
                         />
                       ) : undefined
                     }
-                    onDeleteRound={deleteMessageRound}
-                    deleteRoundDisabled={streaming || sending}
+                    onDeleteRound={stream.deleteMessageRound}
+                    deleteRoundDisabled={stream.streaming || stream.sending}
                   />
                 </>
               )}
@@ -311,42 +175,52 @@ export function ChatPage() {
               )}
             >
               <ClarifyPrompt
-                prompt={clarifyPrompt}
-                submitting={clarifySubmitting}
-                onSubmit={submitClarifyAnswer}
+                prompt={clarify.clarifyPrompt}
+                submitting={clarify.clarifySubmitting}
+                onSubmit={clarify.submitClarifyAnswer}
               />
               <div className="mx-auto w-full max-w-[var(--max-width-chat)] px-3 sm:px-5 xl:px-6">
                 <ChatFollowUpChips
-                  suggestions={followUpSuggestions}
-                  disabled={showSessionLoading || sessionRoutePending || Boolean(clarifyPrompt)}
-                  onPick={pickFollowUpSuggestion}
+                  suggestions={followUp.followUpSuggestions}
+                  disabled={
+                    session.showSessionLoading ||
+                    session.sessionRoutePending ||
+                    Boolean(clarify.clarifyPrompt)
+                  }
+                  onPick={followUp.pickFollowUpSuggestion}
                 />
               </div>
               <ChatComposer
-                disabled={showSessionLoading || sessionRoutePending || Boolean(clarifyPrompt)}
-                sending={sending}
-                streaming={streaming}
-                sessionKey={sessionKey}
-                sessionManager={sessionManager}
+                disabled={
+                  session.showSessionLoading ||
+                  session.sessionRoutePending ||
+                  Boolean(clarify.clarifyPrompt)
+                }
+                sending={stream.sending}
+                streaming={stream.streaming}
+                sessionKey={session.sessionKey}
+                sessionManager={session.sessionManager}
                 welcomeDraftSeed={welcomeDraftSeed}
                 canSelectWorkingDirectory={canSelectWorkingDirectory}
-                thinkingLevel={thinkingLevel}
-                showThinkingSelector={modelSupportsThinking}
-                onThinkingChange={setThinkingLevel}
-                onSend={sendMessage}
-                onAbort={abort}
-                onAddPendingFollowUp={(text, atts) => void addPendingFollowUp(text, atts)}
-                onSteeringInterrupt={(text, atts) => void interruptAndSend(text, atts)}
-                pendingFollowUps={pendingFollowUps}
-                editingFollowUpId={editingFollowUpId}
-                onBeginEditFollowUp={beginEditFollowUp}
-                onCancelEditFollowUp={cancelEditFollowUp}
-                onCommitEditFollowUp={(id, text, atts, level) => void commitEditFollowUp(id, text, atts, level)}
-                onPendingFollowUpRemove={removePendingFollowUp}
-                onPendingFollowUpMove={movePendingFollowUp}
-                onPendingFollowUpReorder={reorderPendingFollowUp}
-                onPendingFollowUpSteer={(id) => void steerPendingFollowUp(id)}
-                steeringFollowUpId={steeringFollowUpId}
+                thinkingLevel={session.thinkingLevel}
+                showThinkingSelector={session.modelSupportsThinking}
+                onThinkingChange={session.setThinkingLevel}
+                onSend={stream.sendMessage}
+                onAbort={stream.abort}
+                onAddPendingFollowUp={(text, atts) => void followUp.addPendingFollowUp(text, atts)}
+                onSteeringInterrupt={(text, atts) => void stream.interruptAndSend(text, atts)}
+                pendingFollowUps={followUp.pendingFollowUps}
+                editingFollowUpId={followUp.editingFollowUpId}
+                onBeginEditFollowUp={followUp.beginEditFollowUp}
+                onCancelEditFollowUp={followUp.cancelEditFollowUp}
+                onCommitEditFollowUp={(id, text, atts, level) =>
+                  void followUp.commitEditFollowUp(id, text, atts, level)
+                }
+                onPendingFollowUpRemove={followUp.removePendingFollowUp}
+                onPendingFollowUpMove={followUp.movePendingFollowUp}
+                onPendingFollowUpReorder={followUp.reorderPendingFollowUp}
+                onPendingFollowUpSteer={(id) => void followUp.steerPendingFollowUp(id)}
+                steeringFollowUpId={followUp.steeringFollowUpId}
               />
             </div>
           </div>
@@ -354,7 +228,7 @@ export function ChatPage() {
       </div>
 
       <ScrollToBottomButton
-        visible={!showSessionLoading && !atBottom}
+        visible={!session.showSessionLoading && !atBottom}
         onClick={() => scrollToBottom(true)}
       />
     </div>
