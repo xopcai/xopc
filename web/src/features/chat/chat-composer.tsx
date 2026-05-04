@@ -82,6 +82,10 @@ export const ChatComposer = memo(function ChatComposer({
   onPendingFollowUpSteer,
   steeringFollowUpId,
   welcomeDraftSeed,
+  sessionModel,
+  showModelSelector,
+  onModelChange,
+  modelDisabled,
 }: {
   disabled: boolean;
   sending: boolean;
@@ -90,6 +94,10 @@ export const ChatComposer = memo(function ChatComposer({
   sessionManager: SessionManager;
   welcomeDraftSeed?: { id: number; text: string } | null;
   canSelectWorkingDirectory: boolean;
+  sessionModel: string;
+  showModelSelector: boolean;
+  onModelChange: (modelId: string) => void;
+  modelDisabled: boolean;
   thinkingLevel: string;
   showThinkingSelector: boolean;
   onThinkingChange: (level: string) => void;
@@ -554,6 +562,10 @@ export const ChatComposer = memo(function ChatComposer({
           onSend={actions.send}
           onAbort={onAbort}
           onInterrupt={actions.interruptDraft}
+          sessionModel={sessionModel}
+          showModelSelector={showModelSelector}
+          onModelChange={onModelChange}
+          modelDisabled={modelDisabled}
         />
       </div>
     </div>

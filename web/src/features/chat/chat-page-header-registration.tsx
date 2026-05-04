@@ -4,7 +4,6 @@ import { Link } from 'react-router-dom';
 
 import { APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
 import { ChatAgentSelector } from '@/features/chat/chat-agent-selector';
-import { ModelSelector } from '@/features/chat/model-selector';
 import type { ChatAgentOption } from '@/features/chat/chat-agents-api';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
@@ -18,10 +17,6 @@ const MAX_MD = '(max-width: 767px)';
 
 type ChatPageHeaderRegistrationProps = {
   chatHeadline: string;
-  sessionModel: string;
-  showModelSelector: boolean;
-  onModelChange: (modelId: string) => void;
-  modelDisabled: boolean;
   chatAgents: ChatAgentOption[];
   showChatAgentSelector: boolean;
   chatAgentId: string;
@@ -30,14 +25,10 @@ type ChatPageHeaderRegistrationProps = {
 };
 
 /**
- * Registers chat title / model / new-task link into `page-header-store` for {@link PrimaryAppHeader}.
+ * Registers chat title / agent / new-task link into `page-header-store` for {@link PrimaryAppHeader}.
  */
 export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistration({
   chatHeadline,
-  sessionModel,
-  showModelSelector,
-  onModelChange,
-  modelDisabled,
   chatAgents,
   showChatAgentSelector,
   chatAgentId,
@@ -117,23 +108,6 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
               />
             </div>
           ) : null}
-          {showModelSelector ? (
-            <div className={cn('min-w-0 w-fit max-w-[min(20rem,calc(100vw-10rem))] shrink-0')}>
-              <ModelSelector
-                value={sessionModel}
-                disabled={modelDisabled}
-                placeholder={m.chat.modelPlaceholder}
-                searchPlaceholder={m.chat.modelSearchPlaceholder}
-                noMatches={m.chat.modelNoMatches}
-                compact
-                showProviderInTrigger={false}
-                contentSide="bottom"
-                contentAlign="end"
-                showProviderSettingsFooter
-                onChange={onModelChange}
-              />
-            </div>
-          ) : null}
           <button
             type="button"
             className={cn(
@@ -153,20 +127,12 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
     return () => clearPageHeader();
   }, [
     chatHeadline,
-    sessionModel,
-    showModelSelector,
-    onModelChange,
-    modelDisabled,
     chatAgents,
     showChatAgentSelector,
     chatAgentId,
     onChatAgentChange,
     chatAgentDisabled,
     showNewChatLink,
-    m.chat.modelPlaceholder,
-    m.chat.modelSearchPlaceholder,
-    m.chat.modelNoMatches,
-    m.chat.modelProviderSettingsLink,
     m.chat.agentPlaceholder,
     m.chat.agentSearchPlaceholder,
     m.chat.agentNoMatches,

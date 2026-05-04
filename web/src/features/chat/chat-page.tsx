@@ -107,10 +107,6 @@ export function ChatPage() {
 
       <ChatPageHeaderRegistration
         chatHeadline={chatHeadline}
-        sessionModel={session.sessionModel}
-        showModelSelector={Boolean(session.sessionKey && !session.sessionRoutePending)}
-        onModelChange={session.onSessionModelChange}
-        modelDisabled={session.showSessionLoading || session.sessionRoutePending || stream.streaming}
         chatAgents={agents.chatAgents?.items ?? []}
         showChatAgentSelector={agents.showChatAgentSelector}
         chatAgentId={agents.displayAgentId}
@@ -221,6 +217,12 @@ export function ChatPage() {
                 onPendingFollowUpReorder={followUp.reorderPendingFollowUp}
                 onPendingFollowUpSteer={(id) => void followUp.steerPendingFollowUp(id)}
                 steeringFollowUpId={followUp.steeringFollowUpId}
+                sessionModel={session.sessionModel}
+                showModelSelector={Boolean(session.sessionKey && !session.sessionRoutePending)}
+                onModelChange={session.onSessionModelChange}
+                modelDisabled={
+                  session.showSessionLoading || session.sessionRoutePending || stream.streaming
+                }
               />
             </div>
           </div>
