@@ -27,6 +27,7 @@ import {
   imageBlockToMessageAttachment,
   imageContentBlocksToAttachments,
 } from '@/features/chat/assistant-message-artifacts';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 import { messages } from '@/i18n/messages';
@@ -367,6 +368,7 @@ export const MessageBubble = memo(function MessageBubble({
     return extractUserMessagePlainText(message.content);
   }, [isUser, message.content]);
   const [copyFeedback, setCopyFeedback] = useState<'plain' | 'markdown' | 'user' | null>(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [inlineImagePreview, setInlineImagePreview] = useState<MessageAttachment | null>(null);
   const openInlineImagePreview = useCallback((block: ImageContent, index: number) => {
     const att = imageContentToPreviewAttachment(block, index);
@@ -406,13 +408,20 @@ export const MessageBubble = memo(function MessageBubble({
     }
   }, [userCopyText]);
 
-  const handleDeleteRound = useCallback(() => {
+  const openDeleteConfirm = useCallback(() => {
     if (messageIndex == null || !onDeleteRound) return;
-    const confirmed = window.confirm(m.chat.userMessageDeleteConfirm);
-    if (confirmed) {
-      onDeleteRound(messageIndex);
-    }
-  }, [messageIndex, onDeleteRound, m.chat.userMessageDeleteConfirm]);
+    setDeleteConfirmOpen(true);
+  }, [messageIndex, onDeleteRound]);
+
+  const confirmDeleteRound = useCallback(() => {
+    if (messageIndex == null || !onDeleteRound) return;
+    onDeleteRound(messageIndex);
+    setDeleteConfirmOpen(false);
+  }, [messageIndex, onDeleteRound]);
+
+  const cancelDeleteRound = useCallback(() => {
+    setDeleteConfirmOpen(false);
+  }, []);
 
   const stepBlocksForSources = useMemo(() => {
     const blocks = collectAssistantStepBlocks(message);
@@ -608,7 +617,7 @@ export const MessageBubble = memo(function MessageBubble({
                 <button
                   type="button"
                   className={cn(userMessageFooterAction, 'size-8 px-0 hover:text-red-500 dark:hover:text-red-400')}
-                  onClick={handleDeleteRound}
+                  onClick={openDeleteConfirm}
                   title={m.chat.userMessageDelete}
                   aria-label={m.chat.userMessageDelete}
                 >
@@ -657,6 +666,19 @@ export const MessageBubble = memo(function MessageBubble({
           </div>
         ) : null}
       </div>
+
+      {isUser && onDeleteRound && messageIndex != null ? (
+        <ConfirmDialog
+          open={deleteConfirmOpen}
+          title={m.chat.userMessageDeleteConfirmTitle}
+          description={m.chat.userMessageDeleteConfirm}
+          confirmLabel={m.chat.userMessageDeleteOk}
+          cancelLabel={m.chat.userMessageDeleteCancel}
+          destructive
+          onConfirm={confirmDeleteRound}
+          onCancel={cancelDeleteRound}
+        />
+      ) : null}
 
       <AttachmentPreviewDialog
         open={inlineImagePreview !== null}
