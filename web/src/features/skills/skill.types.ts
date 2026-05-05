@@ -38,6 +38,12 @@ export interface SkillsPayload {
   managed: ManagedSkillDir[];
 }
 
+/** GET /api/skills/marketplace/categories — provider-specific taxonomy. */
+export interface MarketplaceCategoryItem {
+  id: string;
+  label: string;
+}
+
 /** GET /api/skills/marketplace — proxied xopc-store package list (type=skill). */
 export interface MarketplacePackageItem {
   id: string;
@@ -48,6 +54,10 @@ export interface MarketplacePackageItem {
   author: { username: string; avatarUrl: string | null };
   latestVersion?: string;
   updatedAt: string;
+  categories?: string[];
+  tags?: string[];
+  stars?: number;
+  sourceLabel?: string;
 }
 
 export interface SkillsMarketplacePayload {

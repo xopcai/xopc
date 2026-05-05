@@ -17,6 +17,9 @@ export interface SkillHubEcosystemListItem {
   author: { username: string; avatarUrl: string | null };
   latestVersion?: string;
   updatedAt: string;
+  categories?: string[];
+  stars?: number;
+  sourceLabel?: string;
 }
 
 const DEFAULT_SKILLS_INDEX_URL = 'https://skillhub-1388575217.cos.ap-guangzhou.myqcloud.com/skills.json';
@@ -162,6 +165,13 @@ export async function fetchSkillHubCuratedIndex(urls: SkillHubEcosystemUrls): Pr
   throw new Error('SkillHub index JSON must be an object with a skills array');
 }
 
+function sourceLabelFromHomepage(homepage?: string): string | undefined {
+  const h = homepage?.trim().toLowerCase() ?? '';
+  if (h.includes('clawhub')) return 'ClawHub';
+  if (h.includes('skillhub')) return 'SkillHub';
+  return undefined;
+}
+
 export function curatedSkillsToPackageItems(skills: SkillHubCuratedIndexSkill[]): SkillHubEcosystemListItem[] {
   return skills.map((s) => ({
     id: s.slug,
@@ -172,6 +182,9 @@ export function curatedSkillsToPackageItems(skills: SkillHubCuratedIndexSkill[])
     author: { username: 'skillhub', avatarUrl: null },
     latestVersion: (s.version ?? '').trim() || undefined,
     updatedAt: String(s.rank ?? s.score ?? 0),
+    categories: (s.categories ?? []).map((c) => String(c).trim()).filter(Boolean),
+    stars: typeof s.stars === 'number' ? s.stars : undefined,
+    sourceLabel: sourceLabelFromHomepage(s.homepage),
   }));
 }
 
@@ -198,6 +211,7 @@ function lightmakeHitToPackageItem(hit: LightmakeSearchHit): SkillHubEcosystemLi
   const desc =
     (hit.summary ?? hit.description_zh ?? hit.description ?? '').trim() || '';
   const updated = hit.updatedAt ?? hit.updated_at ?? 0;
+  const cat = hit.category?.trim();
   return {
     id: slug,
     name: (hit.displayName ?? hit.name ?? slug).trim() || slug,
@@ -210,6 +224,9 @@ function lightmakeHitToPackageItem(hit: LightmakeSearchHit): SkillHubEcosystemLi
     },
     latestVersion: (hit.version ?? '').trim() || undefined,
     updatedAt: String(updated),
+    categories: cat ? [cat] : [],
+    stars: typeof hit.stars === 'number' ? hit.stars : undefined,
+    sourceLabel: 'Lightmake',
   };
 }
 

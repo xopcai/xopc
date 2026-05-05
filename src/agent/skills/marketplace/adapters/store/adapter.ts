@@ -13,6 +13,10 @@ import type { SkillsMarketplaceAdapter } from '../../adapter.types.js';
 export const storeMarketplaceAdapter: SkillsMarketplaceAdapter = {
   id: 'store',
 
+  async listCategories(_config) {
+    return [];
+  },
+
   async listPackages(config, params) {
     const base = resolveSkillsStoreBaseUrl(config);
     const response = await listSkillPackages(base, params);

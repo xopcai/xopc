@@ -10,6 +10,7 @@ import {
   resolveSkillsMarketplaceProvider,
 } from './marketplace/resolve-adapter.js';
 import type {
+  MarketplaceCategoryOption,
   SkillsStoreListParams,
   UnifiedMarketplaceListResponse,
   UnifiedMarketplacePackageDetail,
@@ -19,12 +20,20 @@ export type { SkillsMarketplaceAdapter } from './marketplace/adapter.types.js';
 export type { SkillsMarketplaceProvider } from './marketplace/adapters/store/store-api-client.js';
 export { getMarketplaceAdapter, getMarketplaceProviderDisplayName, resolveSkillsMarketplaceProvider };
 export type {
+  MarketplaceCategoryOption,
   MarketplacePackageDetail,
   SkillsStoreListParams,
   SkillsStoreListResponse,
   UnifiedMarketplaceListResponse,
   UnifiedMarketplacePackageDetail,
 } from './marketplace/adapters/store/store-api-client.js';
+
+export async function listMarketplaceCategories(
+  config: Config,
+): Promise<{ items: MarketplaceCategoryOption[] }> {
+  const items = await getMarketplaceAdapter(config).listCategories(config);
+  return { items };
+}
 
 export async function listMarketplacePackages(
   config: Config,
