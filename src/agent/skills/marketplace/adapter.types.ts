@@ -1,5 +1,6 @@
 import type { Config } from '../../../config/schema.js';
 import type {
+  MarketplaceCategoryOption,
   SkillsStoreListParams,
   UnifiedMarketplaceListResponse,
   UnifiedMarketplacePackageDetail,
@@ -10,6 +11,9 @@ import type {
  */
 export interface SkillsMarketplaceAdapter {
   readonly id: 'store' | 'skillhub';
+
+  /** Filter chips for the current provider (may be empty). */
+  listCategories(config: Config): Promise<MarketplaceCategoryOption[]>;
 
   listPackages(config: Config, params: SkillsStoreListParams): Promise<UnifiedMarketplaceListResponse>;
 

@@ -98,12 +98,14 @@ export function registerCommandsSkillsRoutes(authenticated: Hono, deps: Authenti
         : undefined;
     const sort =
       sortRaw === 'newest' || sortRaw === 'downloads' ? sortRaw : undefined;
+    const category = c.req.query('category')?.trim() ?? '';
     try {
       const payload = await service.fetchSkillsMarketplaceCatalog({
         q: q || undefined,
         page,
         pageSize,
         sort,
+        category: category || undefined,
       });
       return c.json({ ok: true, payload });
     } catch (err) {
@@ -117,6 +119,18 @@ export function registerCommandsSkillsRoutes(authenticated: Hono, deps: Authenti
   authenticated.get('/api/skills/marketplace/provider', (c) => {
     const info = service.getSkillsMarketplaceProvider();
     return c.json({ ok: true, payload: info });
+  });
+
+  authenticated.get('/api/skills/marketplace/categories', async (c) => {
+    try {
+      const payload = await service.fetchSkillsMarketplaceCategories();
+      return c.json({ ok: true, payload });
+    } catch (err) {
+      return c.json(
+        { ok: false, error: err instanceof Error ? err.message : 'Marketplace categories failed' },
+        502,
+      );
+    }
   });
 
   authenticated.get('/api/skills/marketplace/packages/:pkgName', async (c) => {

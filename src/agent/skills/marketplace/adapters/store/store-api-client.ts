@@ -17,6 +17,14 @@ export interface SkillsStoreListParams {
   page?: number;
   pageSize?: number;
   sort?: 'downloads' | 'newest';
+  /** Adapter-defined category id (exact match against package `categories`). */
+  category?: string;
+}
+
+/** Category option for marketplace filter chips (from adapter). */
+export interface MarketplaceCategoryOption {
+  id: string;
+  label: string;
 }
 
 /** Mirrors xopc-store GET /api/v1/packages list response (subset used by UI). */
@@ -29,6 +37,12 @@ export interface SkillsStorePackageListItem {
   author: { username: string; avatarUrl: string | null };
   latestVersion?: string;
   updatedAt: string;
+  /** Taxonomy / tags from the marketplace (adapter-specific). */
+  categories?: string[];
+  tags?: string[];
+  stars?: number;
+  /** Short provenance label for the row (e.g. ClawHub). */
+  sourceLabel?: string;
 }
 
 /** Unified marketplace package list item (works for all adapters). */
@@ -122,6 +136,7 @@ export async function listSkillPackages(
   if (params.page != null) sp.set('page', String(params.page));
   if (params.pageSize != null) sp.set('pageSize', String(params.pageSize));
   if (params.sort) sp.set('sort', params.sort);
+  if (params.category?.trim()) sp.set('category', params.category.trim());
 
   const url = `${base}/api/v1/packages?${sp.toString()}`;
   return fetchJson<SkillsStoreListResponse>(url);

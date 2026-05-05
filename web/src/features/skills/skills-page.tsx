@@ -11,6 +11,7 @@ import {
   Plus,
   RefreshCw,
   Search,
+  Star,
   Trash2,
   X,
 } from 'lucide-react';
@@ -23,6 +24,7 @@ import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 import {
   deleteSkill,
+  getMarketplaceCategories,
   getMarketplacePackageDetail,
   getMarketplaceSkills,
   getSkillMarkdown,
@@ -32,7 +34,11 @@ import {
   reloadSkills,
   uploadSkillZip,
 } from '@/features/skills/skill-api';
-import type { MarketplacePackageItem, SkillCatalogEntry } from '@/features/skills/skill.types';
+import type {
+  MarketplaceCategoryItem,
+  MarketplacePackageItem,
+  SkillCatalogEntry,
+} from '@/features/skills/skill.types';
 import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -232,6 +238,9 @@ export function SkillsPage() {
     provider?: 'store' | 'skillhub';
   } | null>(null);
   const [installingMarketName, setInstallingMarketName] = useState<string | null>(null);
+  const [marketCategoryId, setMarketCategoryId] = useState('');
+  const [mpCategories, setMpCategories] = useState<MarketplaceCategoryItem[]>([]);
+  const [mpCategoriesError, setMpCategoriesError] = useState<string | null>(null);
 
   const load = useCallback(
     async (opts?: { silent?: boolean }): Promise<{ ok: true } | { ok: false; message: string }> => {
@@ -275,12 +284,18 @@ export function SkillsPage() {
     setSearchQuery((prev) => (prev === nextQ ? prev : nextQ));
     setMainTab((prev) => (prev === nextTab ? prev : nextTab));
     setSourceFilter((prev) => (prev === nextSource ? prev : nextSource));
+    const nextMcat = searchParams.get('mcat') ?? '';
+    if (nextTab === 'marketplace') {
+      setMarketCategoryId((prev) => (prev === nextMcat ? prev : nextMcat));
+    } else {
+      setMarketCategoryId('');
+    }
   }, [searchParams]);
 
   useEffect(() => {
     if (mainTab !== 'marketplace') return;
     setMarketPage(1);
-  }, [searchQuery, marketSort, mainTab]);
+  }, [searchQuery, marketSort, mainTab, marketCategoryId]);
 
   useEffect(() => {
     if (!hasToken || mainTab !== 'marketplace') return;
@@ -292,6 +307,7 @@ export function SkillsPage() {
       page: marketPage,
       pageSize: 20,
       sort: marketSort,
+      category: marketCategoryId.trim() || undefined,
     })
       .then((payload) => {
         if (!cancelled) setMpPayload(payload);
@@ -308,22 +324,68 @@ export function SkillsPage() {
     return () => {
       cancelled = true;
     };
-  }, [hasToken, mainTab, marketPage, marketSort, searchQuery, sk.marketplaceLoadFailed]);
+  }, [
+    hasToken,
+    mainTab,
+    marketCategoryId,
+    marketPage,
+    marketSort,
+    searchQuery,
+    sk.marketplaceLoadFailed,
+  ]);
 
   useEffect(() => {
-    const params = new URLSearchParams(searchParams);
-    const nextQ = searchQuery.trim();
-    if (nextQ) params.set('q', nextQ);
-    else params.delete('q');
-    if (mainTab !== 'builtin') params.set('tab', mainTab);
-    else params.delete('tab');
-    if (sourceFilter !== 'all') params.set('source', sourceFilter);
-    else params.delete('source');
-    const next = params.toString();
-    if (next !== searchParams.toString()) {
-      setSearchParams(params, { replace: true });
+    if (!hasToken || mainTab !== 'marketplace') return;
+    let cancelled = false;
+    setMpCategoriesError(null);
+    void getMarketplaceCategories()
+      .then((r) => {
+        if (!cancelled) setMpCategories(r.items);
+      })
+      .catch((e) => {
+        if (!cancelled) {
+          setMpCategories([]);
+          setMpCategoriesError(e instanceof Error ? e.message : sk.marketplaceCategoriesFailed);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [hasToken, mainTab, sk.marketplaceCategoriesFailed]);
+
+  useEffect(() => {
+    if (!marketCategoryId.trim() || mpCategories.length === 0) return;
+    if (!mpCategories.some((c) => c.id === marketCategoryId)) {
+      setMarketCategoryId('');
     }
-  }, [mainTab, searchParams, searchQuery, setSearchParams, sourceFilter]);
+  }, [mpCategories, marketCategoryId]);
+
+  // Sync controlled state → URL. Use functional `setSearchParams` and omit `searchParams`
+  // from deps so updating the query string does not re-run this effect (avoids request storms).
+  useEffect(() => {
+    setSearchParams(
+      (prev) => {
+        const params = new URLSearchParams(prev);
+        const nextQ = searchQuery.trim();
+        if (nextQ) params.set('q', nextQ);
+        else params.delete('q');
+        if (mainTab !== 'builtin') params.set('tab', mainTab);
+        else params.delete('tab');
+        if (sourceFilter !== 'all') params.set('source', sourceFilter);
+        else params.delete('source');
+        if (mainTab === 'marketplace' && marketCategoryId.trim()) {
+          params.set('mcat', marketCategoryId.trim());
+        } else {
+          params.delete('mcat');
+        }
+        if (params.toString() === prev.toString()) {
+          return prev;
+        }
+        return params;
+      },
+      { replace: true },
+    );
+  }, [mainTab, marketCategoryId, searchQuery, setSearchParams, sourceFilter]);
 
   const showFeedback = useCallback((kind: 'success' | 'error', message: string, durationMs = 5000) => {
     setActionFeedback({ kind, message });
@@ -644,7 +706,7 @@ export function SkillsPage() {
             enterKeyHint="search"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder={sk.searchPlaceholder}
+            placeholder={mainTab === 'marketplace' ? sk.marketplaceSearchPackages : sk.searchPlaceholder}
             autoComplete="off"
             spellCheck={false}
             className="min-w-0 flex-1 appearance-none border-0 bg-transparent py-0.5 text-sm leading-normal text-fg caret-current placeholder:text-fg-disabled focus:border-0 focus:shadow-none focus:outline-none focus:ring-0 focus-visible:outline-none"
@@ -671,7 +733,9 @@ export function SkillsPage() {
       setInstallOpen,
       setPendingFile,
       setSearchQuery,
+      mainTab,
       sk.installCta,
+      sk.marketplaceSearchPackages,
       sk.reloadDiskAria,
       sk.reloadRuntime,
       sk.searchPlaceholder,
@@ -902,6 +966,56 @@ export function SkillsPage() {
                     : 'xopc Store (store.xopc.ai)'}
                 </span>
               </div>
+              {mpCategories.length > 0 ? (
+                <div
+                  role="tablist"
+                  aria-label={sk.marketplaceCategoriesAria}
+                  className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 pt-0.5 [scrollbar-width:thin]"
+                >
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={marketCategoryId === ''}
+                    className={cn(
+                      'shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
+                      interaction.focusRingPanel,
+                      marketCategoryId === ''
+                        ? 'border-fg bg-fg text-surface-panel dark:border-fg dark:bg-fg dark:text-surface-base'
+                        : 'border-edge bg-surface-panel text-fg-muted hover:border-edge-strong hover:text-fg dark:border-edge dark:bg-surface-hover/40',
+                    )}
+                    onClick={() => setMarketCategoryId('')}
+                  >
+                    {sk.marketplaceCategoryAll}
+                  </button>
+                  {mpCategories.map((c) => {
+                    const selected = marketCategoryId === c.id;
+                    return (
+                      <button
+                        key={c.id}
+                        type="button"
+                        role="tab"
+                        aria-selected={selected}
+                        className={cn(
+                          'max-w-[14rem] shrink-0 truncate rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
+                          interaction.focusRingPanel,
+                          selected
+                            ? 'border-fg bg-fg text-surface-panel dark:border-fg dark:bg-fg dark:text-surface-base'
+                            : 'border-edge bg-surface-panel text-fg-muted hover:border-edge-strong hover:text-fg dark:border-edge dark:bg-surface-hover/40',
+                        )}
+                        title={c.label}
+                        onClick={() => setMarketCategoryId(c.id)}
+                      >
+                        {c.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
+              {mpCategoriesError ? (
+                <p className="text-xs text-red-600 dark:text-red-400" role="alert">
+                  {mpCategoriesError}
+                </p>
+              ) : null}
               {mpLoading ? (
                 <div
                   className="overflow-hidden rounded-2xl border border-edge-subtle bg-surface-base dark:border-edge-subtle"
@@ -963,6 +1077,17 @@ export function SkillsPage() {
                                 <span className="rounded-md bg-surface-hover/60 px-2 py-0.5 dark:bg-surface-active/50">
                                   {sk.marketplaceDownloads}: {row.downloads}
                                 </span>
+                                {row.stars != null && row.stars > 0 ? (
+                                  <span className="inline-flex items-center gap-0.5 rounded-md bg-surface-hover/60 px-2 py-0.5 dark:bg-surface-active/50">
+                                    <Star className="size-3 shrink-0 text-amber-600 dark:text-amber-400" strokeWidth={2} aria-hidden />
+                                    {row.stars}
+                                  </span>
+                                ) : null}
+                                {row.sourceLabel ? (
+                                  <span className="rounded-md bg-surface-hover/60 px-2 py-0.5 dark:bg-surface-active/50">
+                                    {sk.marketplaceSource}: {row.sourceLabel}
+                                  </span>
+                                ) : null}
                                 {row.latestVersion ? (
                                   <span className="rounded-md bg-surface-hover/60 px-2 py-0.5 font-mono text-[10px] dark:bg-surface-active/50">
                                     {sk.marketplaceVersion}: {row.latestVersion}

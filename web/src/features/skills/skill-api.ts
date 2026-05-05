@@ -3,6 +3,7 @@ import { apiUrl } from '@/lib/url';
 import { useGatewayStore } from '@/stores/gateway-store';
 
 import type {
+  MarketplaceCategoryItem,
   MarketplacePackageDetailPayload,
   SkillsMarketplacePayload,
   SkillsPayload,
@@ -102,17 +103,31 @@ export async function patchSkillEnabled(skillName: string, enabled: boolean): Pr
   }
 }
 
+export async function getMarketplaceCategories(): Promise<{ items: MarketplaceCategoryItem[] }> {
+  const res = await apiFetch(apiUrl('/api/skills/marketplace/categories'), { cache: 'no-store' });
+  if (!res.ok) {
+    throw new Error(await readErrorMessage(res));
+  }
+  const data = (await res.json()) as { ok?: boolean; payload?: { items?: MarketplaceCategoryItem[] } };
+  if (!data.payload || !Array.isArray(data.payload.items)) {
+    throw new Error('Invalid response');
+  }
+  return { items: data.payload.items };
+}
+
 export async function getMarketplaceSkills(params: {
   q?: string;
   page?: number;
   pageSize?: number;
   sort?: 'downloads' | 'newest';
+  category?: string;
 }): Promise<SkillsMarketplacePayload & { provider?: string }> {
   const sp = new URLSearchParams();
   if (params.q?.trim()) sp.set('q', params.q.trim());
   if (params.page != null) sp.set('page', String(params.page));
   if (params.pageSize != null) sp.set('pageSize', String(params.pageSize));
   if (params.sort) sp.set('sort', params.sort);
+  if (params.category?.trim()) sp.set('category', params.category.trim());
   const qs = sp.toString();
   const res = await apiFetch(apiUrl(`/api/skills/marketplace${qs ? `?${qs}` : ''}`), {
     cache: 'no-store',

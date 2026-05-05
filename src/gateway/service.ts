@@ -43,8 +43,10 @@ import {
   downloadFromMarketplace,
   getMarketplacePackageDetail,
   getMarketplaceProviderDisplayName,
+  listMarketplaceCategories,
   listMarketplacePackages,
   resolveSkillsMarketplaceProvider,
+  type MarketplaceCategoryOption,
   type MarketplacePackageDetail,
   type SkillsStoreListParams,
   type SkillsStoreListResponse,
@@ -1231,6 +1233,10 @@ export class GatewayService {
 
   async fetchSkillsMarketplaceCatalog(params: SkillsStoreListParams): Promise<UnifiedMarketplaceListResponse> {
     return listMarketplacePackages(this.config, params);
+  }
+
+  async fetchSkillsMarketplaceCategories(): Promise<{ items: MarketplaceCategoryOption[] }> {
+    return listMarketplaceCategories(this.config);
   }
 
   async fetchSkillsMarketplacePackageDetail(packageName: string): Promise<UnifiedMarketplacePackageDetail> {
