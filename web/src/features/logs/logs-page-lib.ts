@@ -1,5 +1,14 @@
-import type { LogEntry, LogLevel } from '@/features/logs/log.types';
-import { LOG_LEVELS } from '@/features/logs/log.types';
+import { LOG_LEVELS, type LogEntry, type LogLevel } from '@/features/logs/log.types';
+
+function logEntryTimeMs(entry: LogEntry): number {
+  const t = new Date(String(entry.timestamp)).getTime();
+  return Number.isFinite(t) ? t : 0;
+}
+
+/** Newest first (descending by timestamp). */
+export function sortLogsByTimeDesc(entries: readonly LogEntry[]): LogEntry[] {
+  return [...entries].sort((a, b) => logEntryTimeMs(b) - logEntryTimeMs(a));
+}
 
 export const PAGE_LIMIT = 50;
 export const REFRESH_MS = 5000;
