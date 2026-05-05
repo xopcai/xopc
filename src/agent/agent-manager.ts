@@ -38,11 +38,10 @@ import type { CronService } from '../cron/index.js';
 import type { SessionStore } from '../session/store.js';
 import { isValidSkillEnvVarName } from './skills/required-env-vars.js';
 import type { SessionContext } from './session/session-context.js';
-import type { Skill } from './skills/types.js';
+import type { Skill, SkillMarkdownPreviewPayload } from './skills/types.js';
 import { createSkillConfigManager } from './skills/config.js';
 import { isUnderManagedSkillsDir } from './skills/managed-store.js';
 import { loadSkillsLock, type SkillHubLockEntry } from './skills/hub-lock.js';
-import { readFileSync } from 'node:fs';
 import { basename, resolve, sep } from 'node:path';
 
 import { BuiltinMemoryStore } from './memory/builtin-memory-store.js';
@@ -508,18 +507,20 @@ export class AgentManager {
   }
 
   /**
-   * Read raw SKILL.md from disk (including frontmatter) for UI preview.
+   * Structured SKILL.md preview for the gateway console (body after frontmatter + parsed metadata).
    */
-  getSkillMarkdownSource(skillName: string): { name: string; markdown: string } | null {
+  getSkillMarkdownSource(skillName: string): SkillMarkdownPreviewPayload | null {
     const skill = this.getWorkspaceRuntime(this.baseWorkspacePath).skillManager.findSkill(skillName);
     if (!skill) return null;
-    try {
-      const markdown = readFileSync(skill.filePath, 'utf-8');
-      return { name: skill.name, markdown };
-    } catch (err) {
-      log.warn({ err, skillName, path: skill.filePath }, 'Failed to read SKILL.md');
-      return null;
-    }
+    return {
+      name: skill.name,
+      description: skill.description,
+      bodyMarkdown: skill.content,
+      disableModelInvocation: skill.disableModelInvocation,
+      metadata: skill.metadata,
+      toolConditions: skill.toolConditions,
+      requiredEnvVarNames: skill.requiredEnvVarNames,
+    };
   }
 
   private loadBootstrapForProfile(profile: EffectiveAgentProfile): BootstrapFile[] {

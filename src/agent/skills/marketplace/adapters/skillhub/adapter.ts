@@ -1,4 +1,8 @@
+import { basename } from 'node:path';
+
 import { isValidSkillId } from '../../../managed-store.js';
+import type { SkillMarkdownPreviewPayload } from '../../../types.js';
+import { buildSkillMarkdownPreviewFromRaw } from '../../../skill-markdown-preview-from-raw.js';
 import type { MarketplaceCategoryOption, MarketplacePackageListItem } from '../store/store-api-client.js';
 import {
   curatedSkillsToPackageItems,
@@ -267,9 +271,10 @@ export const skillhubMarketplaceAdapter: SkillsMarketplaceAdapter = {
     const changelog = detail.latestVersion.changelog;
 
     let readme: string | null = null;
+    let docPath: string | null = null;
     try {
       const { files } = await getSkillHubSkillFiles(slug, version);
-      const docPath = pickSkillHubDocFilePath(files);
+      docPath = pickSkillHubDocFilePath(files);
       if (docPath) {
         readme = await getSkillHubSkillFileText(slug, docPath, version);
       }
@@ -278,8 +283,29 @@ export const skillhubMarketplaceAdapter: SkillsMarketplaceAdapter = {
     }
 
     const trimmed = readme?.trim() ?? '';
+    const docBase = docPath ? basename(docPath.replace(/\\/g, '/')).toLowerCase() : '';
+    const isSkillMd = docBase === 'skill.md';
+
+    let skillDocPreview: SkillMarkdownPreviewPayload | undefined;
+
     if (!trimmed) {
       readme = skillHubFallbackReadmeMarkdown(detail);
+    } else if (isSkillMd) {
+      try {
+        skillDocPreview = buildSkillMarkdownPreviewFromRaw(trimmed, {
+          name: detail.skill.slug,
+          description: detail.skill.summary_zh || detail.skill.summary || '',
+        });
+        readme = skillDocPreview.bodyMarkdown;
+        if (changelog?.trim() && !isPipelineOnlyChangelog(changelog)) {
+          readme = `${readme}\n\n---\n\n## Changelog\n\n${changelog.trim()}`;
+        }
+      } catch {
+        readme = trimmed;
+        if (changelog?.trim() && !isPipelineOnlyChangelog(changelog)) {
+          readme = `${trimmed}\n\n---\n\n## Changelog\n\n${changelog.trim()}`;
+        }
+      }
     } else {
       readme = trimmed;
       if (changelog?.trim() && !isPipelineOnlyChangelog(changelog)) {
@@ -293,6 +319,7 @@ export const skillhubMarketplaceAdapter: SkillsMarketplaceAdapter = {
       type: 'skill',
       description: detail.skill.summary_zh || detail.skill.summary,
       readme,
+      skillDocPreview,
       downloads: detail.skill.stats.downloads,
       author: {
         username: detail.owner.handle,

@@ -56,6 +56,7 @@ import {
 import { createSkillConfigManager } from '../agent/skills/config.js';
 import { removeSkillsLockEntry } from '../agent/skills/hub-lock.js';
 import type { SkillCatalogEntry } from '../agent/agent-manager.js';
+import type { SkillMarkdownPreviewPayload } from '../agent/skills/types.js';
 import type { ManagedSkillListItem } from '../agent/skills/managed-store.js';
 
 const log = createLogger('GatewayService');
@@ -1211,7 +1212,7 @@ export class GatewayService {
     };
   }
 
-  getSkillMarkdownSource(skillName: string): { name: string; markdown: string } | null {
+  getSkillMarkdownSource(skillName: string): SkillMarkdownPreviewPayload | null {
     return this.agentService.getSkillMarkdownSource(skillName);
   }
 

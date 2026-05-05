@@ -6,6 +6,7 @@ import { createLogger } from '../../utils/logger.js';
 import { createSkillConfigManager, isSkillEnabled } from './config.js';
 import { formatSkillsForPrompt } from './format-skills-prompt.js';
 import { parseRequiredEnvVarNames } from './required-env-vars.js';
+import { parseSkillMetadata } from './parse-skill-metadata.js';
 import { parseSkillToolConditions } from './skill-tool-gating.js';
 import type {
   Skill,
@@ -14,7 +15,6 @@ import type {
   LoadSkillsResult,
   SkillConfig,
   SkillInstallSpec,
-  SkillRequires,
   SkillsConfig,
 } from './types.js';
 
@@ -133,34 +133,6 @@ function discoverSkills(dir: string, source: 'builtin' | 'workspace' | 'global')
 
   scan(dir, loadIgnoreRules(dir, dir));
   return skills;
-}
-
-function parseSkillMetadata(frontmatter: Record<string, unknown>): SkillMetadata {
-  // Only support metadata.xopc nested structure
-  const meta = frontmatter.metadata as Record<string, unknown> | undefined;
-  const xopcMeta = meta?.xopc as Record<string, unknown> | undefined;
-  
-  const metadata: SkillMetadata = {
-    name: frontmatter.name as string || '',
-    description: frontmatter.description as string || '',
-    emoji: xopcMeta?.emoji as string || frontmatter.emoji as string || undefined,
-    homepage: frontmatter.homepage as string || undefined,
-    os: xopcMeta?.os as Array<'darwin' | 'linux' | 'win32'> || frontmatter.os as Array<'darwin' | 'linux' | 'win32'> || undefined,
-    requires: xopcMeta?.requires as SkillRequires || frontmatter.requires as SkillRequires || undefined,
-    install: xopcMeta?.install as SkillInstallSpec[] || frontmatter.install as SkillInstallSpec[] || undefined,
-  };
-
-  // Store xopc metadata for reference
-  if (xopcMeta) {
-    metadata.xopc = {
-      emoji: xopcMeta.emoji as string || undefined,
-      requires: xopcMeta.requires as SkillRequires || undefined,
-      install: xopcMeta.install as SkillInstallSpec[] || undefined,
-      os: xopcMeta.os as Array<'darwin' | 'linux' | 'win32'> || undefined,
-    };
-  }
-
-  return metadata;
 }
 
 function loadSkillFromFile(filePath: string, source: 'builtin' | 'workspace' | 'global'): Skill | null {

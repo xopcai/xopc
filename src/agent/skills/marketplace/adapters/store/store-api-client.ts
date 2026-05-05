@@ -7,6 +7,7 @@
 
 import type { Config } from '../../../../../config/schema.js';
 import { isValidSkillId, MAX_SKILL_ZIP_BYTES } from '../../../managed-store.js';
+import type { SkillMarkdownPreviewPayload } from '../../../types.js';
 
 const DEFAULT_STORE_BASE = 'https://store.xopc.ai';
 
@@ -247,6 +248,8 @@ export interface UnifiedMarketplaceListResponse {
  */
 export interface UnifiedMarketplacePackageDetail extends MarketplacePackageDetail {
   provider: SkillsMarketplaceProvider;
+  /** When set (e.g. SkillHub SKILL.md), gateway console renders structured meta + body like installed skills. */
+  skillDocPreview?: SkillMarkdownPreviewPayload;
   /** SkillHub-specific fields */
   skillHubInfo?: {
     category: string;

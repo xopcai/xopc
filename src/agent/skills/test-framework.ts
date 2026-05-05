@@ -9,9 +9,10 @@ import { existsSync, readFileSync, readdirSync } from 'fs';
 import { basename, join, relative } from 'path';
 import { createLogger } from '../../utils/logger.js';
 import { parseFrontmatter } from '../../markdown/frontmatter.js';
+import { parseSkillMetadata } from './parse-skill-metadata.js';
 import { scanSkillDirectory } from './scanner.js';
 import { hasBinary } from './installer.js';
-import type { SkillMetadata, SkillInstallSpec, SkillRequires } from './types.js';
+import type { SkillMetadata, SkillInstallSpec } from './types.js';
 
 const log = createLogger('SkillTestFramework');
 
@@ -105,7 +106,7 @@ export class SkillTestFramework {
     }
 
     const { frontmatter } = parseFrontmatter(readFileSync(skillMdPath, 'utf-8'));
-    const metadata = this.extractMetadata(frontmatter);
+    const metadata = parseSkillMetadata(frontmatter);
 
     // Run dependency tests
     if (!this.options.skipDeps) {
@@ -450,34 +451,6 @@ export class SkillTestFramework {
   // ============================================================================
   // Helper Methods
   // ============================================================================
-
-  private extractMetadata(frontmatter: Record<string, unknown>): SkillMetadata {
-    // Only support metadata.xopc nested structure
-    const meta = frontmatter.metadata as Record<string, unknown> | undefined;
-    const xopcMeta = meta?.xopc as Record<string, unknown> | undefined;
-    
-    const metadata: SkillMetadata = {
-      name: frontmatter.name as string || '',
-      description: frontmatter.description as string || '',
-      emoji: xopcMeta?.emoji as string || frontmatter.emoji as string || undefined,
-      homepage: frontmatter.homepage as string || undefined,
-      os: xopcMeta?.os as Array<'darwin' | 'linux' | 'win32'> || frontmatter.os as Array<'darwin' | 'linux' | 'win32'> || undefined,
-      requires: xopcMeta?.requires as SkillRequires || frontmatter.requires as SkillRequires || undefined,
-      install: xopcMeta?.install as SkillInstallSpec[] || frontmatter.install as SkillInstallSpec[] || undefined,
-    };
-
-    // Store xopc metadata for reference
-    if (xopcMeta) {
-      metadata.xopc = {
-        emoji: xopcMeta.emoji as string || undefined,
-        requires: xopcMeta.requires as SkillRequires || undefined,
-        install: xopcMeta.install as SkillInstallSpec[] || undefined,
-        os: xopcMeta.os as Array<'darwin' | 'linux' | 'win32'> || undefined,
-      };
-    }
-
-    return metadata;
-  }
 
   private validateInstallSpec(spec: SkillInstallSpec): TestResult {
     switch (spec.kind) {
