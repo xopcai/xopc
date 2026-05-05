@@ -6,7 +6,13 @@ import {
   useState,
   type RefObject,
 } from 'react';
+import { flushSync } from 'react-dom';
 
+import {
+  CHAT_SCROLL_REPIN_WITHIN_PX,
+  CHAT_SCROLL_UNPIN_BEYOND_PX,
+  chatScrollDistanceFromBottom,
+} from '@/features/chat/chat-scroll-geometry';
 import type { Message } from '@/features/chat/messages.types';
 
 export interface UseChatScrollViewportArgs {
@@ -22,7 +28,8 @@ export interface UseChatScrollViewportArgs {
 export interface UseChatScrollViewportResult {
   scrollRef: RefObject<HTMLDivElement | null>;
   atBottom: boolean;
-  scrollToBottom: (smooth?: boolean) => void;
+  /** @param smooth Animate scroll when true. @param force When true, ignore "reading history" geometry (e.g. explicit scroll-to-bottom). */
+  scrollToBottom: (smooth?: boolean, force?: boolean) => void;
   onScroll: () => void;
 }
 
@@ -41,8 +48,6 @@ export function useChatScrollViewport({
   const scrollRef = useRef<HTMLDivElement>(null);
   const [atBottom, setAtBottom] = useState(true);
   const atBottomRef = useRef(true);
-  const lastScrollTopRef = useRef(0);
-  const lastClientHeightRef = useRef(0);
   /** Tracks loading→idle so we scroll to bottom once after refresh / session load. */
   const prevLoadingRef = useRef(true);
 
@@ -57,9 +62,17 @@ export function useChatScrollViewport({
     atBottomRef.current = atBottom;
   }, [atBottom]);
 
-  const scrollToBottom = useCallback((smooth = true) => {
+  const scrollToBottom = useCallback((smooth = true, force = false) => {
     const el = scrollRef.current;
     if (!el) return;
+    const fromBottom = chatScrollDistanceFromBottom(el);
+    if (!force && fromBottom > CHAT_SCROLL_UNPIN_BEYOND_PX + 1) {
+      if (atBottomRef.current) {
+        atBottomRef.current = false;
+        setAtBottom(false);
+      }
+      return;
+    }
     requestAnimationFrame(() => {
       el.scrollTo({ top: el.scrollHeight, behavior: smooth ? 'smooth' : 'auto' });
       const before = el.scrollHeight;
@@ -80,17 +93,15 @@ export function useChatScrollViewport({
     const { scrollTop, scrollHeight, clientHeight } = el;
     const fromBottom = scrollHeight - scrollTop - clientHeight;
 
-    if (clientHeight < lastClientHeightRef.current) {
-      lastClientHeightRef.current = clientHeight;
-      return;
-    }
-    if (scrollTop !== 0 && scrollTop < lastScrollTopRef.current && fromBottom > 50) {
-      setAtBottom(false);
-    } else if (fromBottom < 10) {
+    if (atBottomRef.current) {
+      if (fromBottom > CHAT_SCROLL_UNPIN_BEYOND_PX) {
+        atBottomRef.current = false;
+        setAtBottom(false);
+      }
+    } else if (fromBottom < CHAT_SCROLL_REPIN_WITHIN_PX) {
+      atBottomRef.current = true;
       setAtBottom(true);
     }
-    lastScrollTopRef.current = scrollTop;
-    lastClientHeightRef.current = clientHeight;
 
     if (scrollTop < 100 && !atBottomRef.current && hasMore && !loadingMore) {
       void loadMoreMessages();
@@ -111,8 +122,8 @@ export function useChatScrollViewport({
       el.scrollTop = el.scrollHeight;
     }
     requestAnimationFrame(() => {
-      scrollToBottom(false);
-      requestAnimationFrame(() => scrollToBottom(false));
+      scrollToBottom(false, true);
+      requestAnimationFrame(() => scrollToBottom(false, true));
     });
   }, [showSessionLoading, hasToken, scrollToBottom]);
 
@@ -120,8 +131,48 @@ export function useChatScrollViewport({
     if (!sending) return;
     if (showSessionLoading) return;
     setAtBottom(true);
-    scrollToBottom(true);
+    scrollToBottom(true, true);
   }, [sending, showSessionLoading, scrollToBottom]);
+
+  /** Wheel / touch intent to view older messages: unpin before React commits so list auto-scroll cannot fight the gesture. */
+  useLayoutEffect(() => {
+    if (!hasToken || showSessionLoading) return;
+    const root = scrollRef.current;
+    if (!root) return;
+
+    const unpinFromUserIntent = () => {
+      if (!atBottomRef.current) return;
+      atBottomRef.current = false;
+      flushSync(() => setAtBottom(false));
+    };
+
+    const onWheel = (e: WheelEvent) => {
+      if (Math.abs(e.deltaY) < Math.abs(e.deltaX)) return;
+      if (e.deltaY >= -0.001) return;
+      unpinFromUserIntent();
+    };
+
+    let touchLastY = 0;
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 1) touchLastY = e.touches[0].clientY;
+    };
+    const onTouchMove = (e: TouchEvent) => {
+      if (e.touches.length !== 1) return;
+      const y = e.touches[0].clientY;
+      const dy = y - touchLastY;
+      touchLastY = y;
+      if (dy > 2) unpinFromUserIntent();
+    };
+
+    root.addEventListener('wheel', onWheel, { passive: true });
+    root.addEventListener('touchstart', onTouchStart, { passive: true });
+    root.addEventListener('touchmove', onTouchMove, { passive: true });
+    return () => {
+      root.removeEventListener('wheel', onWheel);
+      root.removeEventListener('touchstart', onTouchStart);
+      root.removeEventListener('touchmove', onTouchMove);
+    };
+  }, [hasToken, showSessionLoading]);
 
   useEffect(() => {
     if (showSessionLoading) return;

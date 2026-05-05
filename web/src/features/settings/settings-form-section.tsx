@@ -1,4 +1,5 @@
 import type { LucideIcon } from 'lucide-react';
+import { Pencil } from 'lucide-react';
 import type { ReactNode } from 'react';
 
 import { cn } from '@/lib/cn';
@@ -58,18 +59,40 @@ export function SettingsFormSectionHeader({
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
       );
 
+  const showAvatarEditPencil = Boolean(iconInteractive && iconLeading);
+
   return (
     <div className={cn('mb-5 flex items-start gap-3', className)}>
       {iconInteractive ? (
-        <button
-          type="button"
-          id={iconInteractive.id}
-          onClick={iconInteractive.onClick}
-          aria-label={iconInteractive.ariaLabel}
-          className={leadingInteractiveClass}
-        >
-          {lead}
-        </button>
+        showAvatarEditPencil ? (
+          <span className="relative shrink-0">
+            <button
+              type="button"
+              id={iconInteractive.id}
+              onClick={iconInteractive.onClick}
+              aria-label={iconInteractive.ariaLabel}
+              className={leadingInteractiveClass}
+            >
+              {lead}
+            </button>
+            <span
+              className="pointer-events-none absolute -bottom-0.5 -right-0.5 flex size-4 items-center justify-center rounded-md border border-edge bg-surface-panel text-fg-muted shadow-sm dark:border-edge dark:bg-surface-base"
+              aria-hidden
+            >
+              <Pencil className="size-2.5" strokeWidth={2.25} />
+            </span>
+          </span>
+        ) : (
+          <button
+            type="button"
+            id={iconInteractive.id}
+            onClick={iconInteractive.onClick}
+            aria-label={iconInteractive.ariaLabel}
+            className={leadingInteractiveClass}
+          >
+            {lead}
+          </button>
+        )
       ) : (
         <div
           className={cn(

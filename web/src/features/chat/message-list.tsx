@@ -9,6 +9,7 @@ import {
   type RefObject,
 } from 'react';
 
+import { CHAT_SCROLL_UNPIN_BEYOND_PX, chatScrollDistanceFromBottom } from '@/features/chat/chat-scroll-geometry';
 import { ChatWelcomeSpotlight } from '@/features/chat/chat-welcome-spotlight';
 import { MessageBubble } from '@/features/chat/message-bubble';
 import type { Message, ProgressState, ReasoningLevel } from '@/features/chat/messages.types';
@@ -66,6 +67,10 @@ export const MessageList = memo(function MessageList({
   const virtualizer = useVirtualizer({
     count,
     enabled: !showWelcome,
+    /** Default `true` runs `flushSync` on every scroll offset update — blocks the main thread and feels janky. */
+    useFlushSync: false,
+    /** Batch row ResizeObserver work to rAF so scrolling stays smoother when rows mount. */
+    useAnimationFrameWithResizeObserver: true,
     getScrollElement: () => scrollElementRef.current,
     estimateSize: () => 200,
     gap: MESSAGE_GAP_PX,
@@ -80,10 +85,17 @@ export const MessageList = memo(function MessageList({
   pinToBottomRef.current = pinToBottom;
 
   const scrollLastToEnd = useCallback(() => {
+    const scrollEl = scrollElementRef.current;
+    if (
+      scrollEl &&
+      chatScrollDistanceFromBottom(scrollEl) > CHAT_SCROLL_UNPIN_BEYOND_PX + 1
+    ) {
+      return;
+    }
     const c = virtualizer.options.count;
     if (c === 0) return;
     virtualizer.scrollToIndex(c - 1, { align: 'end', behavior: 'auto' });
-  }, [virtualizer]);
+  }, [virtualizer, scrollElementRef]);
 
   /** User clicked “scroll to bottom” or list length changed while pinned — height may not change. */
   useLayoutEffect(() => {

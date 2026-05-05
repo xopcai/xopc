@@ -232,7 +232,7 @@ export function ChatPage() {
 
       <ScrollToBottomButton
         visible={!session.showSessionLoading && !atBottom}
-        onClick={() => scrollToBottom(true)}
+        onClick={() => scrollToBottom(true, true)}
       />
     </div>
   );
