@@ -1,8 +1,10 @@
 // Session store - manages session persistence, indexing, compaction, and sliding window
 
-import { readFile, writeFile, mkdir, unlink, readdir, stat } from 'fs/promises';
+import { randomUUID } from 'node:crypto';
+import { readFile, mkdir, unlink, readdir, stat, copyFile } from 'fs/promises';
 import { basename, join } from 'path';
 import { existsSync } from 'fs';
+import { writeTextAtomic } from '../infra/write-file-atomic.js';
 import { resolveSessionsDir, FILENAMES } from '../config/paths.js';
 import { resolveDefaultAgentId } from '../agent/agent-scope.js';
 import type { Config } from '../config/schema.js';
@@ -31,6 +33,8 @@ const log = createLogger('SessionStore');
 
 const INDEX_VERSION = '1.0';
 const DEFAULT_LIMIT = 50;
+/** Pre-compaction transcript snapshots per session file (same directory as `{safeKey}.json`). */
+const MAX_COMPACTION_CHECKPOINTS = 15;
 
 /**
  * Session files live under `resolveSessionsDir(config, agentId)` (ADR-003), sharded by
@@ -55,6 +59,9 @@ export class SessionStore {
   private indexDirty = false;
   private window: SlidingWindow;
   private compactor: SessionCompactor;
+  /** Serialize index + transcript mutations (reentrant for nested store calls). */
+  private storeMutationChain: Promise<void> = Promise.resolve();
+  private storeMutationDepth = 0;
 
   constructor(
     options: SessionStoreOptions,
@@ -98,6 +105,85 @@ export class SessionStore {
       jsonPath: join(dir, `${safeKey}.json`),
       metaPath: join(dir, `${safeKey}.meta.json`),
     };
+  }
+
+  private invalidateIndexCache(): void {
+    this.indexCache = null;
+    this.indexCacheTime = 0;
+  }
+
+  /**
+   * Serialize mutations that touch the sessions index or transcript paths.
+   * Reentrant: nested calls (e.g. applyCompaction → saveMessages) run inline without deadlocking.
+   */
+  private async runStoreMutation<T>(fn: () => Promise<T>): Promise<T> {
+    if (this.storeMutationDepth > 0) {
+      return fn();
+    }
+    const run = this.storeMutationChain.then(async () => {
+      this.storeMutationDepth++;
+      try {
+        return await fn();
+      } finally {
+        this.storeMutationDepth--;
+      }
+    });
+    this.storeMutationChain = run.then(() => undefined).catch(() => undefined);
+    return run as Promise<T>;
+  }
+
+  private checkpointBasenamePrefix(safeKey: string): string {
+    return `${safeKey}.compaction-backup.`;
+  }
+
+  private async pruneCompactionCheckpoints(dir: string, safeKey: string): Promise<void> {
+    const prefix = this.checkpointBasenamePrefix(safeKey);
+    let names: string[];
+    try {
+      names = await readdir(dir);
+    } catch {
+      return;
+    }
+    const candidates = names.filter((n) => n.startsWith(prefix) && n.endsWith('.json'));
+    if (candidates.length <= MAX_COMPACTION_CHECKPOINTS) {
+      return;
+    }
+    const stats = await Promise.all(
+      candidates.map(async (name) => {
+        const p = join(dir, name);
+        try {
+          const s = await stat(p);
+          return { p, mtimeMs: s.mtimeMs };
+        } catch {
+          return { p, mtimeMs: 0 };
+        }
+      }),
+    );
+    stats.sort((a, b) => a.mtimeMs - b.mtimeMs);
+    const removeCount = stats.length - MAX_COMPACTION_CHECKPOINTS;
+    for (let i = 0; i < removeCount; i++) {
+      try {
+        await unlink(stats[i]!.p);
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
+  /** Best-effort copy of the current transcript before compaction replaces it. */
+  private async captureCompactionCheckpointIfExists(key: string, jsonPath: string): Promise<void> {
+    if (!existsSync(jsonPath)) {
+      return;
+    }
+    const safeKey = this.sanitizeKey(key);
+    const dir = join(this.sessionsDir, resolveSessionShardRelativePath(key));
+    const backupPath = join(dir, `${this.checkpointBasenamePrefix(safeKey)}${randomUUID()}.json`);
+    try {
+      await copyFile(jsonPath, backupPath);
+      await this.pruneCompactionCheckpoints(dir, safeKey);
+    } catch (err) {
+      log.warn({ err, key, jsonPath }, 'Compaction checkpoint copy failed (continuing)');
+    }
   }
 
   // ========== Index Management ==========
@@ -194,7 +280,7 @@ export class SessionStore {
     if (!this.indexCache) return;
 
     this.indexCache.lastUpdated = new Date().toISOString();
-    await writeFile(this.indexFile, JSON.stringify(this.indexCache, null, 2));
+    await writeTextAtomic(this.indexFile, JSON.stringify(this.indexCache, null, 2));
     this.indexDirty = false;
     
     // Update cache time after saving
@@ -207,47 +293,52 @@ export class SessionStore {
   }
 
   private async rebuildIndex(): Promise<SessionIndex> {
-    log.info('Rebuilding session index...');
+    return this.runStoreMutation(async () => {
+      log.info('Rebuilding session index...');
 
-    const sessions: SessionMetadata[] = [];
+      const sessions: SessionMetadata[] = [];
 
-    // Scan sessions directory
-    const files = await this.scanSessionFiles();
+      // Scan sessions directory
+      const files = await this.scanSessionFiles();
 
-    for (const file of files) {
-      if (file.endsWith('.json') && !file.endsWith('.meta.json')) {
-        const stem = basename(file, '.json');
-        const key = this.fileNameToKey(stem);
-        try {
-          const metadata = await this.scanSessionFile(key);
-          if (metadata) {
-            sessions.push(metadata);
+      for (const file of files) {
+        if (file.endsWith('.json') && !file.endsWith('.meta.json')) {
+          const stem = basename(file, '.json');
+          if (stem.includes('.compaction-backup.')) {
+            continue;
           }
-        } catch (err) {
-          log.warn({ key, err }, 'Failed to scan session file');
+          const key = this.fileNameToKey(stem);
+          try {
+            const metadata = await this.scanSessionFile(key);
+            if (metadata) {
+              sessions.push(metadata);
+            }
+          } catch (err) {
+            log.warn({ key, err }, 'Failed to scan session file');
+          }
         }
       }
-    }
 
-    this.indexCache = {
-      version: INDEX_VERSION,
-      lastUpdated: new Date().toISOString(),
-      sessions,
-    };
+      this.indexCache = {
+        version: INDEX_VERSION,
+        lastUpdated: new Date().toISOString(),
+        sessions,
+      };
 
-    await this.saveIndex();
-    
-    // Update cache time after saving
-    try {
-      const stats = await stat(this.indexFile);
-      this.indexCacheTime = stats.mtime.getTime();
-    } catch {
-      this.indexCacheTime = Date.now();
-    }
-    
-    log.info({ count: sessions.length }, 'Session index rebuilt');
+      await this.saveIndex();
 
-    return this.indexCache;
+      // Update cache time after saving
+      try {
+        const stats = await stat(this.indexFile);
+        this.indexCacheTime = stats.mtime.getTime();
+      } catch {
+        this.indexCacheTime = Date.now();
+      }
+
+      log.info({ count: sessions.length }, 'Session index rebuilt');
+
+      return this.indexCache!;
+    });
   }
 
   private async scanSessionFiles(): Promise<string[]> {
@@ -268,7 +359,8 @@ export class SessionStore {
         } else if (
           ent.name.endsWith('.json') &&
           ent.name !== FILENAMES.SESSIONS_INDEX &&
-          !ent.name.endsWith('.meta.json')
+          !ent.name.endsWith('.meta.json') &&
+          !ent.name.includes('.compaction-backup.')
         ) {
           out.push(childRel);
         }
@@ -443,67 +535,82 @@ export class SessionStore {
     if (!metadata) {
       // Try to load from file directly (orphaned session)
       const scanned = await this.scanSessionFile(key);
-      if (scanned) {
-        index.sessions.push(scanned);
-        this.indexDirty = true;
-        return scanned;
+      if (!scanned) {
+        return null;
       }
-      return null;
+      await this.runStoreMutation(async () => {
+        this.invalidateIndexCache();
+        const fresh = await this.loadIndex();
+        if (fresh.sessions.some((s) => s.key === key)) {
+          return;
+        }
+        fresh.sessions.push(scanned);
+        this.indexDirty = true;
+        await this.saveIndex();
+        invalidateSessionSearchIndexCache();
+      });
+      return scanned;
     }
 
     return metadata;
   }
 
   async updateMetadata(key: string, updates: Partial<SessionMetadata>): Promise<void> {
-    const index = await this.loadIndex();
-    const idx = index.sessions.findIndex((s) => s.key === key);
+    return this.runStoreMutation(async () => {
+      this.invalidateIndexCache();
+      const index = await this.loadIndex();
+      const idx = index.sessions.findIndex((s) => s.key === key);
 
-    if (idx === -1) {
-      throw new Error(`Session not found: ${key}`);
-    }
+      if (idx === -1) {
+        throw new Error(`Session not found: ${key}`);
+      }
 
-    index.sessions[idx] = {
-      ...index.sessions[idx],
-      ...updates,
-      updatedAt: new Date().toISOString(),
-    };
+      index.sessions[idx] = {
+        ...index.sessions[idx],
+        ...updates,
+        updatedAt: new Date().toISOString(),
+      };
 
-    this.indexDirty = true;
-    await this.saveIndex();
+      this.indexDirty = true;
+      await this.saveIndex();
 
-    log.debug({ key, updates }, 'Session metadata updated');
+      log.debug({ key, updates }, 'Session metadata updated');
+    });
   }
 
   async delete(key: string): Promise<boolean> {
-    const index = await this.loadIndex();
-    const idx = index.sessions.findIndex((s) => s.key === key);
+    return this.runStoreMutation(async () => {
+      this.invalidateIndexCache();
+      const index = await this.loadIndex();
+      const idx = index.sessions.findIndex((s) => s.key === key);
 
-    const primary = this.sessionPathsForKey(key);
+      const primary = this.sessionPathsForKey(key);
 
-    for (const p of [primary.jsonPath]) {
-      try {
-        await unlink(p);
-      } catch (err: any) {
-        if (err.code !== 'ENOENT') throw err;
+      for (const p of [primary.jsonPath]) {
+        try {
+          await unlink(p);
+        } catch (err: any) {
+          if (err.code !== 'ENOENT') throw err;
+        }
       }
-    }
-    for (const p of [primary.metaPath]) {
-      try {
-        await unlink(p);
-      } catch (err: any) {
-        if (err.code !== 'ENOENT') throw err;
+      for (const p of [primary.metaPath]) {
+        try {
+          await unlink(p);
+        } catch (err: any) {
+          if (err.code !== 'ENOENT') throw err;
+        }
       }
-    }
 
-    // Remove from index
-    if (idx !== -1) {
-      index.sessions.splice(idx, 1);
-      this.indexDirty = true;
-      await this.saveIndex();
-    }
+      // Remove from index
+      if (idx !== -1) {
+        index.sessions.splice(idx, 1);
+        this.indexDirty = true;
+        await this.saveIndex();
+      }
 
-    log.info({ key }, 'Session deleted');
-    return true;
+      log.info({ key }, 'Session deleted');
+      return true;
+    });
   }
 
   async deleteMany(keys: string[]): Promise<{ success: string[]; failed: string[] }> {
@@ -604,7 +711,13 @@ export class SessionStore {
       try {
         const files = await readdir(dir);
         const matchingFiles = files
-          .filter((f) => f.startsWith(`${safeKey}.`) && f.endsWith('.json') && !f.endsWith('.meta.json'))
+          .filter(
+            (f) =>
+              f.startsWith(`${safeKey}.`) &&
+              f.endsWith('.json') &&
+              !f.endsWith('.meta.json') &&
+              !f.includes('.compaction-backup.'),
+          )
           .sort()
           .reverse();
         if (matchingFiles.length === 0) return null;
@@ -619,13 +732,18 @@ export class SessionStore {
     return await scanDir(this.archiveDir);
   }
 
-  async saveMessages(key: string, messages: AgentMessage[]): Promise<void> {
+  /**
+   * Persist transcript JSON + merge session row into the index. Caller must hold {@link runStoreMutation} (or be nested under it).
+   */
+  private async writeSessionTranscriptAndUpdateIndex(
+    key: string,
+    messages: AgentMessage[],
+  ): Promise<void> {
     const { dir, jsonPath } = this.sessionPathsForKey(key);
 
     await mkdir(dir, { recursive: true });
-    await writeFile(jsonPath, JSON.stringify(messages, null, 2));
+    await writeTextAtomic(jsonPath, JSON.stringify(messages, null, 2));
 
-    // Update or create metadata
     const index = await this.loadIndex();
     const existingIdx = index.sessions.findIndex((s) => s.key === key);
     const now = new Date().toISOString();
@@ -711,6 +829,13 @@ export class SessionStore {
     invalidateSessionSearchIndexCache();
   }
 
+  async saveMessages(key: string, messages: AgentMessage[]): Promise<void> {
+    return this.runStoreMutation(async () => {
+      this.invalidateIndexCache();
+      await this.writeSessionTranscriptAndUpdateIndex(key, messages);
+    });
+  }
+
   // ========== Sliding Window & Compaction ==========
 
   /**
@@ -752,25 +877,33 @@ export class SessionStore {
     result: CompactionResult
   ): Promise<AgentMessage[]> {
     const compacted = this.compactor.applyCompaction(messages, result);
-    
-    // Persist the compacted messages to disk so subsequent loads see the reduced context
-    await this.saveMessages(key, compacted);
-    
-    const metadata = await this.getMetadata(key);
-    if (metadata) {
-      await this.updateMetadata(key, {
-        compactedCount: metadata.compactedCount + 1,
-      });
-    }
-    
-    log.info({
-      key,
-      tokensBefore: result.tokensBefore,
-      tokensAfter: result.tokensAfter,
-      keptMessages: compacted.length,
-    }, 'Session compacted');
-    
-    return compacted;
+
+    return this.runStoreMutation(async () => {
+      this.invalidateIndexCache();
+      const { jsonPath } = this.sessionPathsForKey(key);
+      await this.captureCompactionCheckpointIfExists(key, jsonPath);
+
+      await this.writeSessionTranscriptAndUpdateIndex(key, compacted);
+
+      const metadata = await this.getMetadata(key);
+      if (metadata) {
+        await this.updateMetadata(key, {
+          compactedCount: metadata.compactedCount + 1,
+        });
+      }
+
+      log.info(
+        {
+          key,
+          tokensBefore: result.tokensBefore,
+          tokensAfter: result.tokensAfter,
+          keptMessages: compacted.length,
+        },
+        'Session compacted',
+      );
+
+      return compacted;
+    });
   }
 
   /**
@@ -1030,64 +1163,68 @@ export class SessionStore {
   }
 
   private async moveToArchive(key: string): Promise<void> {
-    const safeKey = this.sanitizeKey(key);
-    const primary = this.sessionPathsForKey(key);
-    const sourcePath = existsSync(primary.jsonPath) ? primary.jsonPath : null;
-    if (!sourcePath) {
-      return;
-    }
-
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const archiveShard = join(this.archiveDir, resolveSessionShardRelativePath(key));
-    await mkdir(archiveShard, { recursive: true });
-    const targetPath = join(archiveShard, `${safeKey}.${timestamp}.json`);
-
-    try {
-      const data = await readFile(sourcePath, 'utf-8');
-      await writeFile(targetPath, data);
-      await unlink(sourcePath);
-
-      const metaSource = primary.metaPath;
-      const metaTarget = join(archiveShard, `${safeKey}.${timestamp}.meta.json`);
-      try {
-        const metaData = await readFile(metaSource, 'utf-8');
-        await writeFile(metaTarget, metaData);
-        await unlink(metaSource);
-      } catch {
-        // Meta file might not exist
+    return this.runStoreMutation(async () => {
+      const safeKey = this.sanitizeKey(key);
+      const primary = this.sessionPathsForKey(key);
+      const sourcePath = existsSync(primary.jsonPath) ? primary.jsonPath : null;
+      if (!sourcePath) {
+        return;
       }
-    } catch (err: any) {
-      if (err.code !== 'ENOENT') throw err;
-    }
+
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const archiveShard = join(this.archiveDir, resolveSessionShardRelativePath(key));
+      await mkdir(archiveShard, { recursive: true });
+      const targetPath = join(archiveShard, `${safeKey}.${timestamp}.json`);
+
+      try {
+        const data = await readFile(sourcePath, 'utf-8');
+        await writeTextAtomic(targetPath, data);
+        await unlink(sourcePath);
+
+        const metaSource = primary.metaPath;
+        const metaTarget = join(archiveShard, `${safeKey}.${timestamp}.meta.json`);
+        try {
+          const metaData = await readFile(metaSource, 'utf-8');
+          await writeTextAtomic(metaTarget, metaData);
+          await unlink(metaSource);
+        } catch {
+          // Meta file might not exist
+        }
+      } catch (err: any) {
+        if (err.code !== 'ENOENT') throw err;
+      }
+    });
   }
 
   private async moveFromArchive(key: string): Promise<void> {
-    const sourcePath = await this.findMostRecentArchive(key);
-    if (!sourcePath) {
-      return;
-    }
-
-    const primary = this.sessionPathsForKey(key);
-    await mkdir(primary.dir, { recursive: true });
-    const targetPath = primary.jsonPath;
-
-    try {
-      const data = await readFile(sourcePath, 'utf-8');
-      await writeFile(targetPath, data);
-      await unlink(sourcePath);
-
-      const metaSource = sourcePath.replace('.json', '.meta.json');
-      const metaTarget = primary.metaPath;
-      try {
-        const metaData = await readFile(metaSource, 'utf-8');
-        await writeFile(metaTarget, metaData);
-        await unlink(metaSource);
-      } catch {
-        // Meta file might not exist
+    return this.runStoreMutation(async () => {
+      const sourcePath = await this.findMostRecentArchive(key);
+      if (!sourcePath) {
+        return;
       }
-    } catch (err: any) {
-      if (err.code !== 'ENOENT') throw err;
-    }
+
+      const primary = this.sessionPathsForKey(key);
+      await mkdir(primary.dir, { recursive: true });
+      const targetPath = primary.jsonPath;
+
+      try {
+        const data = await readFile(sourcePath, 'utf-8');
+        await writeTextAtomic(targetPath, data);
+        await unlink(sourcePath);
+
+        const metaSource = sourcePath.replace('.json', '.meta.json');
+        const metaTarget = primary.metaPath;
+        try {
+          const metaData = await readFile(metaSource, 'utf-8');
+          await writeTextAtomic(metaTarget, metaData);
+          await unlink(metaSource);
+        } catch {
+          // Meta file might not exist
+        }
+      } catch (err: any) {
+        if (err.code !== 'ENOENT') throw err;
+      }
+    });
   }
 
 }
