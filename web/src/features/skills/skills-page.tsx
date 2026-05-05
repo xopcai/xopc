@@ -427,7 +427,7 @@ export function SkillsPage() {
       }
       setError(null);
       try {
-        const data = await getSkills();
+        const data = await getSkills(language !== 'en' ? language : undefined);
         setCatalog(data.catalog.map(normalizeCatalogEntry));
         return { ok: true };
       } catch (e) {
@@ -440,7 +440,7 @@ export function SkillsPage() {
         }
       }
     },
-    [sk.loadFailed],
+    [language, sk.loadFailed],
   );
 
   useEffect(() => {
@@ -580,7 +580,7 @@ export function SkillsPage() {
       setDetailError(null);
       setDetailLoading(true);
       try {
-        const preview = await getSkillMarkdown(row.name);
+        const preview = await getSkillMarkdown(row.name, language !== 'en' ? language : undefined);
         setDetailCatalogPreview(preview);
         setDetailTitle(preview.name);
       } catch (e) {
@@ -590,7 +590,7 @@ export function SkillsPage() {
         setDetailLoading(false);
       }
     },
-    [sk.detailLoadFailed],
+    [language, sk.detailLoadFailed],
   );
 
   const openMarketplaceDetail = useCallback(
