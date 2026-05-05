@@ -985,13 +985,12 @@
     "lastModified": "Modified",
     "openElsewhereHint": "Preview may be limited or unavailable. Download the file or open it with another app.",
     "cannotPreviewType": "This file type can't be previewed here.",
-    "openSystemApp": "Open with default app",
-    "copyPath": "Copy path"
+    "openSystemApp": "Open with default app"
   },
   "skills": {
     "title": "Skills",
     "needToken": "Save a gateway token to manage skills.",
-    "tagline": "Install and manage skills to extend xopc in conversation. Managed skills live under ~/.xopc/skills.",
+    "tagline": "Install and manage skills to extend xopc in conversation.",
     "refresh": "Refresh list",
     "reloadRuntime": "Reload from disk",
     "reloadDiskAria": "Reload skills from disk",

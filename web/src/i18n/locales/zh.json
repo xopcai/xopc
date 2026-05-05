@@ -985,13 +985,12 @@
     "lastModified": "修改时间",
     "openElsewhereHint": "预览可能受限或不可用。请下载文件或使用其他应用打开。",
     "cannotPreviewType": "无法在预览中打开此类型的文件。",
-    "openSystemApp": "用默认应用打开",
-    "copyPath": "复制路径"
+    "openSystemApp": "用默认应用打开"
   },
   "skills": {
     "title": "技能",
     "needToken": "请先保存网关访问令牌后再管理技能。",
-    "tagline": "安装与管理技能，在对话中扩展 xopc 的能力。技能保存在 ~/.xopc/skills。",
+    "tagline": "安装与管理技能，在对话中扩展 xopc 的能力。",
     "refresh": "刷新列表",
     "reloadRuntime": "从磁盘重载",
     "reloadDiskAria": "从磁盘重载技能",

@@ -172,6 +172,32 @@ export interface SkillHubSkillsetListResponse {
   total: number;
 }
 
+/** Official taxonomy from GET /api/v1/categories (registry). */
+export interface SkillHubRegistryCategoryItem {
+  key: string;
+  name: string;
+  nameEn: string;
+  sortOrder: number;
+  active: boolean;
+}
+
+/**
+ * SkillHub registry category taxonomy (ids align with {@link SkillHubSkill.category}).
+ */
+export async function listSkillHubRegistryCategories(): Promise<SkillHubRegistryCategoryItem[]> {
+  const raw = await fetchJson<{ count?: number; items?: SkillHubRegistryCategoryItem[] }>(
+    `${SKILLHUB_API_BASE}/api/v1/categories`,
+  );
+  const items = Array.isArray(raw.items) ? raw.items : [];
+  return items.filter(
+    (c) =>
+      c &&
+      typeof c.key === 'string' &&
+      c.key.trim().length > 0 &&
+      (c as SkillHubRegistryCategoryItem).active !== false,
+  );
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function fetchJson<T>(url: string, init?: any): Promise<T> {
   const res = await fetch(url, {
