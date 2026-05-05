@@ -15,6 +15,18 @@ import {
 } from '@/features/chat/chat-scroll-geometry';
 import type { Message } from '@/features/chat/messages.types';
 
+const WHEEL_SCROLL_TOP_EPS = 0.5;
+const WHEEL_FROM_BOTTOM_EPS = 0.75;
+
+/** WebKit/Chromium: wheel deltas flipped relative to device default (e.g. some mice on macOS). */
+function wheelDeltaImpliesTowardOlderMessages(e: WheelEvent): boolean {
+  const wk = e as WheelEvent & { webkitDirectionInvertedFromDevice?: boolean };
+  if (wk.webkitDirectionInvertedFromDevice === true) {
+    return e.deltaY > 0;
+  }
+  return e.deltaY < 0;
+}
+
 export interface UseChatScrollViewportArgs {
   hasToken: boolean;
   showSessionLoading: boolean;
@@ -147,9 +159,46 @@ export function useChatScrollViewport({
     };
 
     const onWheel = (e: WheelEvent) => {
+      if (!atBottomRef.current) return;
       if (Math.abs(e.deltaY) < Math.abs(e.deltaX)) return;
-      if (e.deltaY >= -0.001) return;
-      unpinFromUserIntent();
+      if (Math.abs(e.deltaY) < 0.25) return;
+
+      const beforeTop = root.scrollTop;
+      const beforeFromBottom = chatScrollDistanceFromBottom(root);
+
+      const applyPostWheel = () => {
+        const el = scrollRef.current;
+        if (!el || !atBottomRef.current) return;
+
+        const afterTop = el.scrollTop;
+        const afterFromBottom = chatScrollDistanceFromBottom(el);
+
+        const scrolledTowardHistory =
+          afterTop < beforeTop - WHEEL_SCROLL_TOP_EPS ||
+          afterFromBottom > beforeFromBottom + WHEEL_FROM_BOTTOM_EPS;
+
+        if (scrolledTowardHistory) {
+          unpinFromUserIntent();
+          return;
+        }
+
+        const noScrollApplied =
+          Math.abs(afterTop - beforeTop) < WHEEL_SCROLL_TOP_EPS &&
+          Math.abs(afterFromBottom - beforeFromBottom) < WHEEL_FROM_BOTTOM_EPS;
+
+        if (
+          noScrollApplied &&
+          beforeFromBottom <= 4 &&
+          Math.abs(e.deltaY) >= 0.5 &&
+          wheelDeltaImpliesTowardOlderMessages(e)
+        ) {
+          unpinFromUserIntent();
+        }
+      };
+
+      requestAnimationFrame(() => {
+        requestAnimationFrame(applyPostWheel);
+      });
     };
 
     let touchLastY = 0;
