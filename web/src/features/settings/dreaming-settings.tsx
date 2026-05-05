@@ -4,8 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
-import { messages } from '@/i18n/messages';
-import en from '@/i18n/locales/en.json' with { type: 'json' };
+import { messages, type MessageBundle } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 import { cn } from '@/lib/cn';
@@ -54,7 +53,7 @@ function formatDurationMs(ms: number | undefined): string {
   return `${(ms / 1000).toFixed(2)} s`;
 }
 
-type DreamingSettingsI18n = (typeof en)['dreamingSettings'];
+type DreamingSettingsI18n = MessageBundle['dreamingSettings'];
 
 function Subsection({ label, children, className }: { label: string; children: ReactNode; className?: string }) {
   return (

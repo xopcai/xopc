@@ -1,0 +1,262 @@
+{
+  "cron": {
+    "title": "Scheduled Tasks",
+    "subtitle": "Tasks run automatically on schedule and can be triggered manually anytime. Describe what you want to do regularly in any chat to create one quickly.",
+    "needToken": "Save a gateway token to manage scheduled tasks.",
+    "statsRegion": "Overview",
+    "tabMyTasks": "My Scheduled Tasks",
+    "tabRunHistory": "Run History",
+    "wakeBanner": "Scheduled tasks only run while this device is awake. When the system or display sleeps, runs may be skipped.",
+    "keepAwake": "Keep screen awake",
+    "wakeLockUnavailable": "Screen wake lock is not available in this browser or context.",
+    "sortCreatedDesc": "Created (newest first)",
+    "sortCreatedAsc": "Created (oldest first)",
+    "historyRangeDay": "Day",
+    "historyRangeWeek": "Week",
+    "historyRangeMonth": "Month",
+    "filterAllTasks": "All tasks",
+    "filterAllStatuses": "All statuses",
+    "emptyHistoryTitle": "No execution records",
+    "emptyHistoryHint": "Records will appear here once scheduled tasks start running.",
+    "jobCardMenuAria": "Task actions",
+    "scheduleBadge": {
+      "everyMinute": "Every minute",
+      "everyNMinutes": "Every {{n}} minutes",
+      "everyNHours": "Every {{n}} hours",
+      "hourly": "Hourly",
+      "dailyAt": "Daily, {{time}}",
+      "weekdaysAt": "Weekdays, {{time}}",
+      "weeklyOn": "{{day}}, {{time}}",
+      "cronExpr": "{{expr}}"
+    },
+    "jobsHeading": "Scheduled jobs",
+    "addJob": "New task",
+    "editJob": "Edit task",
+    "name": "Name *",
+    "namePlaceholder": "My scheduled task",
+    "nameRequired": "Name is required",
+    "schedule": "Schedule (cron expression) *",
+    "message": "Message *",
+    "messagePlaceholder": "What should the assistant do?",
+    "messageEdit": "Edit",
+    "messagePreview": "Preview",
+    "messageMarkdownHint": "Supports Markdown (headings, lists, code blocks, links, …).",
+    "create": "Create Job",
+    "runNow": "Run Now",
+    "delete": "Delete",
+    "edit": "Edit",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "running": "Running",
+    "nextRun": "Next Run",
+    "status": "Status",
+    "runHistoryTitle": "Run History",
+    "runHistoryHint": "Completed runs are stored on disk (state/cron/runs). Use Refresh to update.",
+    "detailRunHistory": "Recent runs",
+    "colStarted": "Started",
+    "colJob": "Job",
+    "colDuration": "Duration",
+    "colDetail": "Result",
+    "colChat": "Chat",
+    "openChat": "Open",
+    "openChatTitle": "Open this run in chat (isolated agent sessions only)",
+    "execStatusRunning": "Running",
+    "execStatusSuccess": "Success",
+    "execStatusFailed": "Failed",
+    "execStatusCancelled": "Skipped",
+    "noRunsYet": "No executions in this range.",
+    "confirmDelete": "Are you sure you want to delete this cron job?",
+    "confirmRun": "Run this cron job now?",
+    "scheduleLabel": "Schedule",
+    "messageLabel": "Message",
+    "totalJobs": "Total jobs",
+    "emptyStateCta": "Create your first job",
+    "channel": "Channel",
+    "channelLocal": "Local (no outbound)",
+    "deliveryTargetLocalChannel": "Local channel — transcript or message stays on this machine",
+    "recipient": "Recipient *",
+    "recipientPlaceholder": "Telegram: numeric id, or pick from recent sessions",
+    "refreshList": "Refresh",
+    "refreshRecipientHint": "Reload list from recent sessions",
+    "selectRecipient": "— Select —",
+    "noRecentChatsOption": "No recent sessions",
+    "deliveryTarget": "Delivery",
+    "scheduleHintPreset": "Select a preset or enter custom cron expression",
+    "schedulePicker": {
+      "scheduleTimeLabel": "Scheduled time",
+      "modeNoRepeat": "Does not repeat (yearly date)",
+      "modeInterval": "Interval",
+      "intervalKindMinutes": "Minutes",
+      "intervalKindHours": "Hours",
+      "modeHourly": "Every hour",
+      "modeDaily": "Daily",
+      "modeWeekly": "Weekly",
+      "modeMonthly": "Monthly",
+      "modeCustom": "Custom (cron)",
+      "minuteUnit": "min",
+      "minuteAtHour": "Minute",
+      "intervalMinutes": "Interval in minutes",
+      "intervalHours": "Interval in hours",
+      "hourUnit": "h",
+      "dayOfMonth": "Day of month",
+      "customCronHint": "Five-field cron: minute hour day-of-month month day-of-week",
+      "weekdays": [
+        "Mo",
+        "Tu",
+        "We",
+        "Th",
+        "Fr",
+        "Sa",
+        "Su"
+      ]
+    },
+    "mode": "Mode",
+    "modeDirect": "Send message directly to the channel without AI processing",
+    "modeAgent": "Use AI agent to process the message, then send the response",
+    "modeDirectOption": "Direct (send message directly)",
+    "modeAgentOption": "AI Agent (process with AI then send)",
+    "agentLocalOnly": "Local only (save transcript, no channel send)",
+    "agentLocalOnlyHint": "Runs the agent on this machine. The transcript is stored as a cron session under the default or selected agent (the job id is part of the session key); no Telegram or CLI delivery.",
+    "deliveryLocalOnly": "Local only — transcript saved as a cron session under that agent",
+    "agentProfile": "Agent",
+    "agentProfileHint": "Only applies when mode is AI Agent. Leave as default to use the gateway default agent profile.",
+    "agentProfileDefault": "Default agent",
+    "workingDirectoryLabel": "Workspace",
+    "workingDirectoryHint": "Optional. Absolute path on the gateway host; leave unset to use this agent's default workspace.",
+    "workingDirectoryReset": "Use agent default",
+    "model": "Model",
+    "save": "Save",
+    "failedToLoadJobs": "Failed to load jobs",
+    "scheduleRequired": "Schedule and message are required",
+    "chatIdRequired": "Chat ID is required",
+    "failedToCreateJob": "Failed to create job",
+    "failedToUpdateJob": "Failed to save job",
+    "failedToToggleJob": "Failed to toggle job",
+    "actionFailed": "Action failed",
+    "enterManuallyOrSelect": "Enter manually or select from recent chats",
+    "noRecentChats": "No recent chats found. Enter chat ID manually (e.g., 123456789 for Telegram)",
+    "refresh": "Refresh",
+    "close": "Close",
+    "cancel": "Cancel",
+    "loading": "Loading…",
+    "schedulePresets": {
+      "custom": "-- Custom (enter below) --",
+      "everyMinute": "Every minute",
+      "every5Minutes": "Every 5 minutes (default)",
+      "every10Minutes": "Every 10 minutes",
+      "every15Minutes": "Every 15 minutes",
+      "every30Minutes": "Every 30 minutes",
+      "everyHour": "Every hour",
+      "every2Hours": "Every 2 hours",
+      "every4Hours": "Every 4 hours",
+      "every6Hours": "Every 6 hours",
+      "every12Hours": "Every 12 hours",
+      "everyDayMidnight": "Every day at midnight",
+      "everyDay9AM": "Every day at 9:00 AM",
+      "everyDay9PM": "Every day at 9:00 PM"
+    },
+    "timeLabels": {
+      "overdue": "Overdue",
+      "lessThanMinute": "Less than a minute",
+      "minutes": "{{count}} min",
+      "hours": "{{count}} hours"
+    },
+    "lastActiveLabels": {
+      "justNow": "just now",
+      "minutesAgo": "{{count}}m ago",
+      "hoursAgo": "{{count}}h ago",
+      "daysAgo": "{{count}}d ago"
+    },
+    "templateFilterAll": "All",
+    "fromTemplate": "From template",
+    "templatesEmptyHint": "No templates match this filter.",
+    "templateCategories": {
+      "daily": "Daily",
+      "monitoring": "Monitoring",
+      "reports": "Reports",
+      "automation": "Automation"
+    },
+    "templates": {
+      "morning_briefing": {
+        "title": "Morning briefing",
+        "description": "Weather-style day snapshot, headlines in your topics, and top priorities—edit the topic list in the prompt.",
+        "prompt": "Build a **morning briefing** I can read in a few minutes.\n- **Weather / day shape**: if you cannot access a real forecast API, say so and give **one** practical clothing or commute tip based only on season/region I name below, or skip this bullet.\n- **Headlines**: topics I care about (edit): **(e.g. local news, macro, tech policy, sports)**—if web search works, 4–6 bullets from the last ~24h with source type; if not, give a **manual check order** instead of inventing stories.\n- **Top 3 priorities today** from workspace notes/todos if visible; else ask me to paste them once.\n- **No fake URLs or quotes**."
+      },
+      "standup_prep": {
+        "title": "Standup prep",
+        "description": "Draft a standup-style update from recent git activity and notable file changes in the workspace.",
+        "prompt": "Prepare a **standup update** for me:\n- If Git is available: **yesterday / since last standup** themes from `git log` (no wall of SHAs), risky paths if obvious from messages.\n- If not: give **commands** I should run locally next time.\n- **Files touched**: infer from workspace if you can (recent edits, open PR-style hints); mark uncertain.\n- **Blockers**: max 3, honest \"unknown\" allowed.\n- **Today intent**: one sentence.\n- Keep it speakable aloud in under ~90 seconds."
+      },
+      "end_of_day_wrap_up": {
+        "title": "End-of-day wrap-up",
+        "description": "Summarize progress, open items, and tomorrow's priorities from workspace context when possible.",
+        "prompt": "**End-of-day wrap** (weekday):\n- **Done**: up to 5 bullets (mark inferred items).\n- **Open / parked**: up to 4 bullets.\n- **Tomorrow**: first concrete task after login—single bullet.\n- Pull from task docs, changelogs, or notes in the workspace when present; otherwise say what is missing.\n- Neutral tone, no guilt."
+      },
+      "inbox_triage": {
+        "title": "Inbox triage",
+        "description": "Surface urgent follow-ups first—uses any mail/export notes in the workspace; no mailbox access implied.",
+        "prompt": "Help me **triage inbox-style work** (no live email unless I paste content):\n- If I have exported snippets, `*.eml`, or notes about mail in the workspace, summarize **urgent follow-ups first** with suggested next action each.\n- If nothing mail-related exists, output a **5-step triage routine** (folders/labels, oldest-first, VIP senders I list below) and ask me to paste 3 subject lines next run.\n- **VIP / domains to watch** (edit): **(add yours)**.\n- Do not claim you read my real inbox."
+      },
+      "competitor_watch": {
+        "title": "Competitor watch",
+        "description": "Track competitor news, product updates, and pricing signals you name—web search when available.",
+        "prompt": "Competitors or alternatives to watch (edit names/topics): **(list here)**.\n- If web search works: summarize **news, product/changelog moves, pricing or packaging signals** from roughly the past week; separate **fact** vs **rumor**.\n- If search is unavailable: give **official domains + what to check** (pricing page, changelog, press) without fabricating updates.\n- **Never invent press quotes, numbers, or URLs**."
+      },
+      "trending_topics_monitor": {
+        "title": "Trending topics",
+        "description": "Track trending discussions and news in industries or communities you list.",
+        "prompt": "Industries, communities, or hashtags I track (edit): **(e.g. fintech, indie games, city subreddit, AI tools)**.\n- If web search works: **5–7** bullets on what is **trending or unusually active** this week; note platform (news, Reddit-style, HN-style) at a high level.\n- If not: suggest **where to look** and **search phrases**—no made-up threads.\n- Flag **controversy or misinformation risk** briefly when relevant."
+      },
+      "tech_radar_stack": {
+        "title": "Tech radar",
+        "description": "Monitor new releases and security advisories for stacks you name (frameworks, runtimes, cloud).",
+        "prompt": "Stacks I use (edit): **(e.g. Node LTS, Postgres, AWS service X, Android SDK)**.\n- List **notable releases or deprecations** from the past ~14 days using **official blogs, registries, or changelogs** only.\n- Security: point to **official advisory channels**; **do not invent CVE IDs**.\n- If the workspace has lockfiles, you may mention ecosystem at a high level; if unsure, say what file you need."
+      },
+      "dependency_check_audit": {
+        "title": "Dependency check",
+        "description": "Audit-style nudge for outdated packages and known issues—suggests commands, does not fabricate CVEs.",
+        "prompt": "From the repo in the workspace, infer package managers (`package.json`, `go.mod`, `pyproject.toml`, etc.).\n- Suggest **one concrete audit command** per ecosystem if documented (npm/pnpm audit, pip-audit, etc.).\n- Summarize **what I should look for** (majors, yanked packages, EOL runtimes) without claiming scan results you did not run.\n- **Never fabricate CVE numbers** or vulnerable versions."
+      },
+      "weekly_review": {
+        "title": "Weekly review",
+        "description": "Summarize the week's commits, open items, and next-week priorities.",
+        "prompt": "**Weekly review** (assume end of week):\n- **Shipped themes** from git + workspace notes (or say git unavailable).\n- **Open items** still worrying (max 6).\n- **Next week**: 3 headline priorities.\n- **One thing to stop or delegate** if overload is visible.\n- Short, executive-summary tone."
+      },
+      "code_quality_report": {
+        "title": "Code quality report",
+        "description": "Outline how to run lint/type-check and what to look for in output—does not pretend CI already ran.",
+        "prompt": "Inspect the workspace for **lint / typecheck / format** scripts (package.json, Makefile, CI YAML).\n- Propose **commands** I should run locally and in what order.\n- Describe **how to skim output**: error categories, flaky tests, type debt hotspots—without inventing numbers.\n- If no scripts found, suggest a **minimal** starter for the detected language with caveats."
+      },
+      "git_activity_summary": {
+        "title": "Git activity summary",
+        "description": "Summarize recent commits, active branches, and hotspot files when git is available.",
+        "prompt": "Summarize **recent Git activity** (last ~7 days if possible):\n- Commit **themes**, **active branches** worth naming, **hotspot files** touched often.\n- If git is not callable here, output **commands** to reproduce the summary locally.\n- Avoid dumping hashes; keep it scannable."
+      },
+      "user_feedback_digest": {
+        "title": "User feedback digest",
+        "description": "Summarize recurring feedback and pain points from notes, issues exports, or docs you keep in the workspace.",
+        "prompt": "I store feedback in (edit paths or patterns): **`feedback/`, issues export, Notion export, etc.`**\n- From readable workspace text, cluster **recurring themes**, **sentiment (rough)**, and **top pain points** (max 5).\n- If no material: give a **template** for how I should paste feedback next time.\n- No PII beyond what is already in files; redact if needed in summary."
+      },
+      "stale_todo_or_issue_sweep": {
+        "title": "Stale todo / issue sweep",
+        "description": "Find aging TODOs or issue-like markers in the repo and suggest keep / close / split.",
+        "prompt": "Scan the workspace for **TODO/FIXME/HACK** comments or lightweight issue lists in markdown.\n- List up to **10 stale candidates** (old by file churn or vague wording) with **suggested next action**: close, split, or schedule.\n- Do not delete anything—recommendations only.\n- If scan is incomplete, say why."
+      },
+      "release_notes_or_changelog_draft": {
+        "title": "Release notes draft",
+        "description": "Draft changelog bullets from recent commits and version files—human must verify before ship.",
+        "prompt": "Draft **release notes / changelog** candidate for the **next** version bump:\n- Read `CHANGELOG`, version in `package.json`/`Cargo.toml`/similar if present.\n- Summarize **user-visible** changes from recent commits since last tag if inferable; else since last week.\n- Mark **uncertain** items; I will edit before publishing.\n- No marketing exaggeration."
+      },
+      "workspace_cleanup_suggestions": {
+        "title": "Workspace cleanup",
+        "description": "List large artifacts, caches, or generated files to review before the weekend—never auto-delete.",
+        "prompt": "Suggest **workspace cleanup** before the weekend:\n- Large **build outputs, caches, logs** if discoverable.\n- Table: path | why it might be safe to trim | risk | suggested action (review only).\n- **Never delete**; if you cannot see disk usage, say so and give generic patterns."
+      },
+      "smoke_or_ci_health_reminder": {
+        "title": "Smoke / CI health",
+        "description": "Remind which smoke tests or CI checks matter this week and how to run them locally.",
+        "prompt": "From CI config and package scripts, list **smoke or health checks** worth running this week.\n- For each: **command**, **expected green signal**, **when to run** (before release, daily, etc.).\n- If CI files are missing, propose a **minimal** manual smoke path for this repo type.\n- Do not claim CI passed without evidence."
+      }
+    }
+  }
+}

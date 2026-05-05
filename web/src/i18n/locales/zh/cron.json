@@ -1,0 +1,262 @@
+{
+  "cron": {
+    "title": "定时任务",
+    "subtitle": "任务会按计划自动执行，也可随时手动触发。在任意对话里描述你想定期做的事，即可快速创建任务。",
+    "needToken": "请先保存网关访问令牌后再管理定时任务。",
+    "statsRegion": "概览",
+    "tabMyTasks": "我的定时任务",
+    "tabRunHistory": "运行记录",
+    "wakeBanner": "定时任务仅在设备保持唤醒时运行；系统或屏幕休眠时，执行可能会被跳过。",
+    "keepAwake": "保持屏幕常亮",
+    "wakeLockUnavailable": "当前浏览器或环境不支持屏幕唤醒锁。",
+    "sortCreatedDesc": "创建时间（新→旧）",
+    "sortCreatedAsc": "创建时间（旧→新）",
+    "historyRangeDay": "日",
+    "historyRangeWeek": "周",
+    "historyRangeMonth": "月",
+    "filterAllTasks": "全部任务",
+    "filterAllStatuses": "全部状态",
+    "emptyHistoryTitle": "暂无执行记录",
+    "emptyHistoryHint": "定时任务开始运行后，记录将显示在这里。",
+    "jobCardMenuAria": "任务操作",
+    "scheduleBadge": {
+      "everyMinute": "每分钟",
+      "everyNMinutes": "每 {{n}} 分钟",
+      "everyNHours": "每 {{n}} 小时",
+      "hourly": "每小时",
+      "dailyAt": "每天 {{time}}",
+      "weekdaysAt": "工作日 {{time}}",
+      "weeklyOn": "{{day}} {{time}}",
+      "cronExpr": "{{expr}}"
+    },
+    "jobsHeading": "计划任务",
+    "addJob": "新建任务",
+    "editJob": "编辑任务",
+    "name": "名称 *",
+    "namePlaceholder": "我的定时任务",
+    "nameRequired": "请填写名称",
+    "schedule": "计划（cron 表达式）*",
+    "message": "消息 *",
+    "messagePlaceholder": "助手应该做什么？",
+    "messageEdit": "编辑",
+    "messagePreview": "预览",
+    "messageMarkdownHint": "支持 Markdown（标题、列表、代码块、链接等）。",
+    "create": "创建任务",
+    "runNow": "立即执行",
+    "delete": "删除",
+    "edit": "编辑",
+    "enabled": "已启用",
+    "disabled": "已禁用",
+    "running": "运行中",
+    "nextRun": "下次执行",
+    "status": "状态",
+    "runHistoryTitle": "运行记录",
+    "runHistoryHint": "已完成的执行会保存在本地（state/cron/runs）。点击刷新更新列表。",
+    "detailRunHistory": "最近执行",
+    "colStarted": "开始时间",
+    "colJob": "任务",
+    "colDuration": "耗时",
+    "colDetail": "结果",
+    "colChat": "会话",
+    "openChat": "打开",
+    "openChatTitle": "在聊天中打开此次执行（仅 AI 智能体隔离会话）",
+    "execStatusRunning": "运行中",
+    "execStatusSuccess": "成功",
+    "execStatusFailed": "失败",
+    "execStatusCancelled": "已跳过",
+    "noRunsYet": "该时间范围内暂无执行记录。",
+    "confirmDelete": "确定要删除此定时任务吗？",
+    "confirmRun": "立即执行此定时任务？",
+    "scheduleLabel": "计划",
+    "messageLabel": "消息",
+    "totalJobs": "任务总数",
+    "emptyStateCta": "创建第一个任务",
+    "channel": "消息通道",
+    "channelLocal": "本地（不发出）",
+    "deliveryTargetLocalChannel": "本地消息通道 — 内容仅保存在本机",
+    "recipient": "接收方 *",
+    "recipientPlaceholder": "Telegram：填写数字形式的会话 ID，或从下方最近会话中选择",
+    "refreshList": "刷新",
+    "refreshRecipientHint": "从最近会话重新加载列表",
+    "selectRecipient": "— 请选择 —",
+    "noRecentChatsOption": "暂无最近会话",
+    "deliveryTarget": "投递目标",
+    "scheduleHintPreset": "选择预设或输入自定义 cron 表达式",
+    "schedulePicker": {
+      "scheduleTimeLabel": "计划时间",
+      "modeNoRepeat": "不重复",
+      "modeInterval": "间隔",
+      "intervalKindMinutes": "分钟",
+      "intervalKindHours": "小时",
+      "modeHourly": "每小时",
+      "modeDaily": "每天",
+      "modeWeekly": "每周",
+      "modeMonthly": "每月",
+      "modeCustom": "自定义表达式",
+      "minuteUnit": "分",
+      "minuteAtHour": "分钟",
+      "intervalMinutes": "间隔分钟数",
+      "intervalHours": "间隔小时数",
+      "hourUnit": "小时",
+      "dayOfMonth": "日期",
+      "customCronHint": "标准五段 cron：分 时 日 月 周",
+      "weekdays": [
+        "一",
+        "二",
+        "三",
+        "四",
+        "五",
+        "六",
+        "日"
+      ]
+    },
+    "mode": "模式",
+    "modeDirect": "直接发送消息到消息通道，不经过 AI 处理",
+    "modeAgent": "由 AI 智能体处理消息并生成回复后发送",
+    "modeDirectOption": "直接发送（发到消息通道）",
+    "modeAgentOption": "AI 智能体（先由模型处理再发送）",
+    "agentLocalOnly": "仅本地运行（保存对话，不发送到消息通道）",
+    "agentLocalOnlyHint": "在本机运行智能体。对话以 cron 类型会话保存到默认或所选智能体下（任务 id 包含在会话键中）；不向 Telegram/CLI 投递。",
+    "deliveryLocalOnly": "仅本地 — 对话以 cron 会话保存到该智能体目录",
+    "agentProfile": "智能体",
+    "agentProfileHint": "仅在「AI 智能体」模式下生效。选默认则使用网关配置的默认智能体。",
+    "agentProfileDefault": "默认智能体",
+    "workingDirectoryLabel": "工作目录",
+    "workingDirectoryHint": "可选。填写网关所在机器上的绝对路径；不填则使用该智能体的默认工作空间。",
+    "workingDirectoryReset": "使用智能体默认",
+    "model": "模型",
+    "save": "保存",
+    "failedToLoadJobs": "加载任务失败",
+    "scheduleRequired": "计划表达式和消息为必填项",
+    "chatIdRequired": "会话 ID 为必填项",
+    "failedToCreateJob": "创建任务失败",
+    "failedToUpdateJob": "保存任务失败",
+    "failedToToggleJob": "切换任务状态失败",
+    "actionFailed": "操作失败",
+    "enterManuallyOrSelect": "手动输入或从最近聊天中选择",
+    "noRecentChats": "未找到最近会话。请手动填写会话 ID（例如 Telegram 为 123456789）",
+    "refresh": "刷新",
+    "close": "关闭",
+    "cancel": "取消",
+    "loading": "加载中…",
+    "schedulePresets": {
+      "custom": "-- 自定义（在下方输入） --",
+      "everyMinute": "每分钟",
+      "every5Minutes": "每 5 分钟（默认）",
+      "every10Minutes": "每 10 分钟",
+      "every15Minutes": "每 15 分钟",
+      "every30Minutes": "每 30 分钟",
+      "everyHour": "每小时",
+      "every2Hours": "每 2 小时",
+      "every4Hours": "每 4 小时",
+      "every6Hours": "每 6 小时",
+      "every12Hours": "每 12 小时",
+      "everyDayMidnight": "每天午夜",
+      "everyDay9AM": "每天早上 9 点",
+      "everyDay9PM": "每天晚上 9 点"
+    },
+    "timeLabels": {
+      "overdue": "已过期",
+      "lessThanMinute": "不到 1 分钟",
+      "minutes": "{{count}} 分钟",
+      "hours": "{{count}} 小时"
+    },
+    "lastActiveLabels": {
+      "justNow": "刚刚",
+      "minutesAgo": "{{count}} 分钟前",
+      "hoursAgo": "{{count}} 小时前",
+      "daysAgo": "{{count}} 天前"
+    },
+    "templateFilterAll": "全部",
+    "fromTemplate": "从模版创建",
+    "templatesEmptyHint": "该分类下暂无模版。",
+    "templateCategories": {
+      "daily": "每日",
+      "monitoring": "监控",
+      "reports": "报告",
+      "automation": "自动化"
+    },
+    "templates": {
+      "morning_briefing": {
+        "title": "早间简报",
+        "description": "天气/出行提示（无 API 则如实说明）、你关心领域要闻、今日优先三件事——在提示词里改主题列表。",
+        "prompt": "生成一份**早间简报**，几分钟内读完。\n- **天气/出行**：若无真实预报接口，请说明限制；仅根据我写的地区/季节给**一条**穿衣或通勤提示，或跳过。\n- **要闻**：我关心的领域（**请编辑**）：**（例：本地、宏观、科技政策、球队等）**；有检索则概括约 24 小时内要点并标注来源类型；无检索则给出我应**依次打开哪些首页**。\n- **今日优先 3 件**：尽量从工作区笔记/待办推断；否则请我在文末一次性补充。\n- **不要编造链接、引语或具体气温数字**。"
+      },
+      "standup_prep": {
+        "title": "站会准备",
+        "description": "根据近期 Git 与文件变动起草站会式更新，便于口头汇报。",
+        "prompt": "帮我准备**站会发言稿**：\n- 若可访问 Git：概括**自上次站会或昨天以来**的提交主题（不要堆 hash），若有明显风险路径可点出。\n- 若不可用：给出我本地应执行的**简短命令**以便下次自动生成。\n- **文件/改动线索**：从工作区可见信息推断，不确定请标注「推断」。\n- **阻塞**：最多 3 条，可写「暂无」。\n- **今天打算做什么**：一句话。\n- 控制在约 **90 秒**可念完。"
+      },
+      "end_of_day_wrap_up": {
+        "title": "日终小结",
+        "description": "总结今日进展、未闭环与明日第一件事。",
+        "prompt": "做**工作日日终小结**：\n- **已完成**：最多 5 条（推断请标注）。\n- **未闭环/搁置**：最多 4 条，语气中性。\n- **明日登录后第一件事**：仅一条，动作具体。\n- 尽量引用工作区内任务/日志；若无则说明缺口。\n- 不做价值评判。"
+      },
+      "inbox_triage": {
+        "title": "收件箱式梳理",
+        "description": "优先列出紧急待跟进项；若工作区无邮件内容则给可执行的梳理流程。",
+        "prompt": "协助**收件箱/待处理**梳理（**不假设**能登录真实邮箱）：\n- 若工作区有导出邮件、`.eml`、或关于邮件的笔记：按**紧急跟进优先**列出条目及建议下一步。\n- 若无材料：给出**五步梳理流程**（文件夹/标签、先处理谁、如何处理老邮件等），并请我在下列 **VIP 发件人或域名**（**请编辑**）基础上下次粘贴若干主题行。\n- **不要声称已读取真实收件箱**。"
+      },
+      "competitor_watch": {
+        "title": "竞品动态",
+        "description": "按你列出的竞品做新闻、产品更新与价格信号摘要；有检索才写细节。",
+        "prompt": "竞品或对标名单（**请编辑**）：**（填写公司/产品名）**。\n- 有网络检索：概括约**一周**内公开动态：新闻、产品/changelog、价格或套餐变化；区分**已核实**与**传闻**。\n- 无检索：列出**应查看的官方入口**（官网、定价页、changelog）及建议核对顺序，**不要编造更新**。\n- **禁止捏造报道引语、数字或链接**。"
+      },
+      "trending_topics_monitor": {
+        "title": "热点话题追踪",
+        "description": "跟踪你列出的行业或社区讨论热度与要闻线索。",
+        "prompt": "我关注的行业/社区/话题（**请编辑**）：**（例：金融科技、独立游戏、本城论坛、AI 工具）**。\n- 有检索：用 **5～7 条**要点概括本周**讨论变热或异常活跃**的方向，并注明大致平台类型（新闻/论坛类/HN 类等），勿捏造具体帖子链接。\n- 无检索：给出**检索词组合**与**建议浏览顺序**。\n- 若有争议或易误传话题，用一行提示**核实风险**。"
+      },
+      "tech_radar_stack": {
+        "title": "技术雷达",
+        "description": "关注你列出的技术栈近期的发版与官方安全通告入口，不臆造 CVE。",
+        "prompt": "技术栈清单（**请编辑**）：**（例：Node LTS、Postgres、某云产品、Android SDK）**。\n- 汇总约 **14 天**内值得注意的发版、弃用说明，信息来源限于**官方博客、changelog、注册表**。\n- 安全相关只指向**官方安全公告渠道**；**严禁编造 CVE 编号**或虚假漏洞版本。\n- 若可见锁文件可概括生态；信息不足则说明缺哪份文件。"
+      },
+      "dependency_check_audit": {
+        "title": "依赖检查",
+        "description": "根据仓库生态建议审计命令与关注项，不假装已跑过扫描。",
+        "prompt": "从工作区识别包管理文件（`package.json`、`go.mod`、`pyproject.toml` 等）。\n- 为每种生态给出**一条**文档中常见的审计/检查命令（若不存在则说明）。\n- 用文字说明**应关注什么**（大版本、被撤回包、EOL 运行时等），**不要编造扫描结果**。\n- **不要捏造 CVE**。"
+      },
+      "weekly_review": {
+        "title": "周报式回顾",
+        "description": "一周提交主题、未闭环与下周三块重点。",
+        "prompt": "写一份**周末/周五周报式回顾**：\n- **本周交付主题**（结合 git 与笔记，若 git 不可用则说明）。\n- **仍挂心的事**（≤6 条）。\n- **下周 3 个标题级重点**。\n- **一条**「该停做或该委派」的建议（仅在过载迹象明显时）。\n- 语气像给上级的短简报。"
+      },
+      "code_quality_report": {
+        "title": "代码质量报告",
+        "description": "从脚本与 CI 配置推断如何跑 lint/类型检查，并说明如何阅读输出——不虚构错误数量。",
+        "prompt": "在工作区查找 **lint / 类型检查 / 格式化** 相关脚本（`package.json`、Makefile、CI 配置等）。\n- 给出建议的**本地执行顺序**。\n- 说明**如何扫一眼输出**（错误类别、易 flaky 测试、类型债热点），**不要编造错误条数**。\n- 若项目无脚本，按识别出的语言给**最小**起步建议并注明局限。"
+      },
+      "git_activity_summary": {
+        "title": "Git 活动摘要",
+        "description": "归纳近期提交、活跃分支与热点文件；此处不能跑 git 则只给命令。",
+        "prompt": "总结约 **最近 7 天** 的 Git 活动：提交**主题**、值得注意的**分支**、**热点文件**。\n- 若当前环境不能执行 git：**不要虚构**，改为列出我本地可复制的命令以生成同样摘要。\n- 避免罗列大量 hash，保持可扫读。"
+      },
+      "user_feedback_digest": {
+        "title": "用户反馈摘要",
+        "description": "从工作区内的反馈笔记、工单导出等聚类主题与痛点；无材料则给收集模板。",
+        "prompt": "我存放反馈的位置或命名习惯（**请编辑**）：**（例：`feedback/`、导出的 issues、问卷摘要）**。\n- 从可读文本中聚类**重复主题**、**大致情绪**、**主要痛点**（≤5）。\n- 注意**脱敏**：不展开无关个人信息。\n- 若无内容：给出我下次应粘贴/保存的**简短结构模板**。"
+      },
+      "stale_todo_or_issue_sweep": {
+        "title": "陈旧待办清扫",
+        "description": "扫描 TODO/FIXME 或简易 issue 列表，建议保留/关闭/拆分，不自动改文件。",
+        "prompt": "扫描工作区中的 **TODO/FIXME/HACK** 或 Markdown 里的简易任务表。\n- 列出最多 **10 条**「可能陈旧」的项（根据模糊措辞或文件很少再改动等启发式），每条给**建议动作**：关闭、拆分、排期。\n- **仅建议，不修改文件**。\n- 若扫描不完整，说明原因。"
+      },
+      "release_notes_or_changelog_draft": {
+        "title": "发版说明草稿",
+        "description": "结合版本号文件与近期提交起草 changelog 草案，需人工核对后发布。",
+        "prompt": "为**下一次**版本发布起草 **changelog / 发版说明** 草案：\n- 读取 `CHANGELOG`、以及 `package.json` / `Cargo.toml` 等版本字段（若存在）。\n- 从可见提交归纳**面向用户**的变更；无法确定上次标签则退化为「最近一周」。\n- 不确定条目请标注「待核实」。\n- 语气克制，避免营销夸张。"
+      },
+      "workspace_cleanup_suggestions": {
+        "title": "工作区清理建议",
+        "description": "列出大体积构建产物、缓存、日志等供周末前审视，不自动删除。",
+        "prompt": "为**周末前清理**给建议：\n- 尽量发现**构建产物、缓存、日志**等；用表格：路径 | 可能原因 | 风险 | 建议（仅审视/归档）。\n- **禁止删除或移动**。\n- 若无法读磁盘占用，说明限制并给通用模式。"
+      },
+      "smoke_or_ci_health_reminder": {
+        "title": "冒烟 / CI 健康",
+        "description": "从 CI 与脚本提炼本周值得跑的检查及如何确认通过，不谎称 CI 已绿。",
+        "prompt": "根据 CI 配置与脚本，列出本周值得做的 **smoke / 健康检查**：每条含**命令**、**期望通过信号**、**建议频率**。\n- 若无 CI 文件：按仓库类型给**最小手工冒烟**路径。\n- **不要在没有证据时声称 CI 已通过**。"
+      }
+    }
+  }
+}
