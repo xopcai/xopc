@@ -53,6 +53,8 @@ export interface MarketplacePackageItem {
 export interface SkillsMarketplacePayload {
   items: MarketplacePackageItem[];
   meta: { page: number; pageSize: number; total: number; totalPages: number };
+  /** Current marketplace provider */
+  provider?: 'store' | 'skillhub';
 }
 
 /** GET /api/skills/marketplace/packages/:name — store package detail for preview. */

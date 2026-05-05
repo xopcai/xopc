@@ -107,7 +107,7 @@ export async function getMarketplaceSkills(params: {
   page?: number;
   pageSize?: number;
   sort?: 'downloads' | 'newest';
-}): Promise<SkillsMarketplacePayload> {
+}): Promise<SkillsMarketplacePayload & { provider?: string }> {
   const sp = new URLSearchParams();
   if (params.q?.trim()) sp.set('q', params.q.trim());
   if (params.page != null) sp.set('page', String(params.page));
@@ -120,7 +120,7 @@ export async function getMarketplaceSkills(params: {
   if (!res.ok) {
     throw new Error(await readErrorMessage(res));
   }
-  const data = (await res.json()) as { ok?: boolean; payload?: SkillsMarketplacePayload };
+  const data = (await res.json()) as { ok?: boolean; payload?: SkillsMarketplacePayload & { provider?: string } };
   if (!data.payload?.items || !data.payload.meta) {
     throw new Error('Invalid response');
   }
@@ -180,6 +180,25 @@ export async function getSkillMarkdown(skillName: string): Promise<{ name: strin
     payload?: { name: string; markdown: string };
   };
   if (!data.payload?.markdown) {
+    throw new Error('Invalid response');
+  }
+  return data.payload;
+}
+
+export interface MarketplaceProviderInfo {
+  provider: 'store' | 'skillhub';
+  displayName: string;
+}
+
+export async function getMarketplaceProvider(): Promise<MarketplaceProviderInfo> {
+  const res = await apiFetch(apiUrl('/api/skills/marketplace/provider'), {
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    throw new Error(await readErrorMessage(res));
+  }
+  const data = (await res.json()) as { ok?: boolean; payload?: MarketplaceProviderInfo };
+  if (!data.payload?.provider) {
     throw new Error('Invalid response');
   }
   return data.payload;

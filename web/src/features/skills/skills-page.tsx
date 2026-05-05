@@ -218,6 +218,7 @@ export function SkillsPage() {
   const [mpPayload, setMpPayload] = useState<{
     items: MarketplacePackageItem[];
     meta: { page: number; pageSize: number; total: number; totalPages: number };
+    provider?: 'store' | 'skillhub';
   } | null>(null);
   const [installingMarketName, setInstallingMarketName] = useState<string | null>(null);
 
@@ -880,9 +881,16 @@ export function SkillsPage() {
 
           {mainTab === 'marketplace' ? (
             <>
-              <p className="text-xs font-medium uppercase tracking-wide text-fg-subtle">
-                {sk.sectionMarketplace}
-              </p>
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-medium uppercase tracking-wide text-fg-subtle">
+                  {sk.sectionMarketplace}
+                </p>
+                <span className="rounded-md bg-surface-hover/60 px-2 py-0.5 text-[11px] text-fg-subtle dark:bg-surface-active/50">
+                  {mpPayload?.provider === 'skillhub'
+                    ? 'SkillHub (skillhub.cn)'
+                    : 'xopc Store (store.xopc.ai)'}
+                </span>
+              </div>
               {mpLoading ? (
                 <div
                   className="overflow-hidden rounded-2xl border border-edge-subtle bg-surface-base dark:border-edge-subtle"

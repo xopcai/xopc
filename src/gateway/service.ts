@@ -40,16 +40,17 @@ import {
   listManagedSkillDirs,
 } from '../agent/skills/managed-store.js';
 import {
-  downloadSkillZipBuffer,
-  fetchMarketplacePackageDetail,
-  listSkillPackages,
-  resolveSkillZipDownloadUrl,
-  resolveSkillsStoreBaseUrl,
-  skillIdForMarketplaceInstall,
+  downloadFromMarketplace,
+  getMarketplacePackageDetail,
+  getMarketplaceProviderDisplayName,
+  listMarketplacePackages,
+  resolveSkillsMarketplaceProvider,
   type MarketplacePackageDetail,
   type SkillsStoreListParams,
   type SkillsStoreListResponse,
-} from '../agent/skills/skills-store-client.js';
+  type UnifiedMarketplaceListResponse,
+  type UnifiedMarketplacePackageDetail,
+} from '../agent/skills/skills-marketplace.js';
 import { createSkillConfigManager } from '../agent/skills/config.js';
 import { removeSkillsLockEntry } from '../agent/skills/hub-lock.js';
 import type { SkillCatalogEntry } from '../agent/agent-manager.js';
@@ -1228,14 +1229,12 @@ export class GatewayService {
     return result;
   }
 
-  async fetchSkillsMarketplaceCatalog(params: SkillsStoreListParams): Promise<SkillsStoreListResponse> {
-    const base = resolveSkillsStoreBaseUrl(this.config);
-    return listSkillPackages(base, params);
+  async fetchSkillsMarketplaceCatalog(params: SkillsStoreListParams): Promise<UnifiedMarketplaceListResponse> {
+    return listMarketplacePackages(this.config, params);
   }
 
-  async fetchSkillsMarketplacePackageDetail(packageName: string): Promise<MarketplacePackageDetail> {
-    const base = resolveSkillsStoreBaseUrl(this.config);
-    return fetchMarketplacePackageDetail(base, packageName);
+  async fetchSkillsMarketplacePackageDetail(packageName: string): Promise<UnifiedMarketplacePackageDetail> {
+    return getMarketplacePackageDetail(this.config, packageName);
   }
 
   async installSkillFromMarketplace(opts: {
@@ -1243,11 +1242,16 @@ export class GatewayService {
     version?: string;
     overwrite?: boolean;
   }): Promise<{ skillId: string; path: string }> {
-    const base = resolveSkillsStoreBaseUrl(this.config);
-    const { downloadUrl } = await resolveSkillZipDownloadUrl(base, opts.name, opts.version);
-    const buf = await downloadSkillZipBuffer(base, downloadUrl);
-    const skillId = skillIdForMarketplaceInstall(opts.name);
-    return this.installManagedSkillZip(buf, { skillId, overwrite: opts.overwrite ?? false });
+    const { buffer, skillId } = await downloadFromMarketplace(this.config, opts.name, opts.version);
+    return this.installManagedSkillZip(buffer, { skillId, overwrite: opts.overwrite ?? false });
+  }
+
+  getSkillsMarketplaceProvider(): { provider: string; displayName: string } {
+    const provider = resolveSkillsMarketplaceProvider(this.config);
+    return {
+      provider,
+      displayName: getMarketplaceProviderDisplayName(provider),
+    };
   }
 
   reloadSkillsFromDisk(): void {

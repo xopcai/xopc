@@ -6,9 +6,9 @@ import {
   downloadSkillZipBuffer,
   resolveSkillsStoreBaseUrl,
   skillIdForMarketplaceInstall,
-} from '../skills-store-client.js';
+} from '../marketplace/adapters/store/store-api-client.js';
 
-describe('skills-store-client', () => {
+describe('store-api-client (xopc Store HTTP)', () => {
   const storeBase = 'https://store.xopc.ai';
 
   describe('assertDownloadUrlAllowed', () => {

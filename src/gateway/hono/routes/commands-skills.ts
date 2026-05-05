@@ -114,6 +114,11 @@ export function registerCommandsSkillsRoutes(authenticated: Hono, deps: Authenti
     }
   });
 
+  authenticated.get('/api/skills/marketplace/provider', (c) => {
+    const info = service.getSkillsMarketplaceProvider();
+    return c.json({ ok: true, payload: info });
+  });
+
   authenticated.get('/api/skills/marketplace/packages/:pkgName', async (c) => {
     const raw = c.req.param('pkgName');
     if (!raw) {
