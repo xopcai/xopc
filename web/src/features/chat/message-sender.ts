@@ -1,6 +1,7 @@
 import type { WireAttachment } from '@/features/chat/composer.types';
 import type { ProgressState } from '@/features/chat/messages.types';
 import { MAX_CHAT_ATTACHMENTS } from '@/features/chat/constants';
+import { dispatchPendingAgentRunChanged } from '@/features/chat/pending-agent-run-events';
 import { apiFetch } from '@/lib/fetch';
 import { formatApiHttpError } from '@/lib/http-error-message';
 import { apiUrl } from '@/lib/url';
@@ -197,12 +198,14 @@ export class MessageSender {
   }
 
   private _clearPendingRun(): void {
-    if (this._sseChatId) {
+    const chatId = this._sseChatId;
+    if (chatId) {
       try {
-        sessionStorage.removeItem(pendingAgentRunStorageKey(this._sseChatId));
+        sessionStorage.removeItem(pendingAgentRunStorageKey(chatId));
       } catch {
         /* ignore */
       }
+      dispatchPendingAgentRunChanged(chatId);
     }
   }
 
@@ -265,6 +268,7 @@ export class MessageSender {
               pendingAgentRunStorageKey(this._sseChatId),
               JSON.stringify({ runId: parsed.runId }),
             );
+            dispatchPendingAgentRunChanged(this._sseChatId);
           } catch {
             /* ignore */
           }

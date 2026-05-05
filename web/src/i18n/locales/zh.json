@@ -357,6 +357,7 @@
     "taskListStartChat": "开始对话",
     "appMenuAria": "应用菜单与设置",
     "taskSessionMenuAria": "会话操作",
+    "taskSessionAgentRunning": "助手仍在回复中",
     "taskRename": "重命名",
     "taskCopyChatId": "复制会话 ID",
     "taskDeleteTask": "删除对话",

@@ -12,6 +12,7 @@ import { ClarifyPrompt } from '@/features/chat/clarify-prompt';
 import { OnboardingCard, useNeedsModelSetup } from '@/features/onboarding';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
+import { useChatAgentRunIndicatorStore } from '@/stores/chat-agent-run-indicator-store';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useWorkspaceEditorAgentStore } from '@/stores/workspace-editor-agent-store';
@@ -27,6 +28,12 @@ export function ChatPage() {
   const [welcomeDraftSeed, setWelcomeDraftSeed] = useState<{ id: number; text: string } | null>(null);
 
   const { auth, session, messages: msgSlice, stream, followUp, clarify, agents } = useChatSession();
+
+  useEffect(() => {
+    return () => {
+      useChatAgentRunIndicatorStore.getState().setFocusedAgentRun(null, false);
+    };
+  }, []);
 
   const { scrollRef, atBottom, scrollToBottom, onScroll } = useChatScrollViewport({
     hasToken: auth.hasToken,
