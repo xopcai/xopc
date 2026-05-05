@@ -15,6 +15,7 @@ overrides:
   basic-ftp: ^5.3.0
   picomatch: ^4.0.4
   vitepress>vite: 5.4.21
+  axios: ^1.15.1
 
 importers:
 
@@ -203,7 +204,7 @@ importers:
         version: 8.0.10(@types/node@25.6.0)(esbuild@0.28.0)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.3)
       vitepress:
         specifier: ^1.6.4
-        version: 1.6.4(@algolia/client-search@5.51.0)(@types/node@25.6.0)(axios@1.13.6)(lightningcss@1.32.0)(postcss@8.5.10)(qrcode@1.5.4)(search-insights@2.17.3)(terser@5.46.1)(typescript@6.0.3)
+        version: 1.6.4(@algolia/client-search@5.51.0)(@types/node@25.6.0)(axios@1.16.0)(lightningcss@1.32.0)(postcss@8.5.10)(qrcode@1.5.4)(search-insights@2.17.3)(terser@5.46.1)(typescript@6.0.3)
       vitest:
         specifier: 4.1.5
         version: 4.1.5(@types/node@25.6.0)(jsdom@29.0.2)(vite@8.0.10(@types/node@25.6.0)(esbuild@0.28.0)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.3))
@@ -3596,7 +3597,7 @@ packages:
     resolution: {integrity: sha512-fbGYivgK5uBTRt7p5F3zy6VrETlV9RtZjBqd1/HxGdjdckBgBM4ugP8LHpjolqTj14TXTxSK1ZfgPbHYyGuH7g==}
     peerDependencies:
       async-validator: ^4
-      axios: ^1
+      axios: ^1.15.1
       change-case: ^5
       drauu: ^0.4
       focus-trap: ^7
@@ -3748,8 +3749,8 @@ packages:
     resolution: {integrity: sha512-kNOjDqAh7px0XWNI+4QbzoiR/nTkHAWNud2uvnJquD1/x5a7EQZMJT0AczqK0Qn67oY/TTQ1LbUKajZpp3I9tQ==}
     engines: {node: '>=8.0.0'}
 
-  axios@1.13.6:
-    resolution: {integrity: sha512-ChTCHMouEe2kn713WHbQGcuYrr6fXTBiu460OTwWrWob16g1bXn4vtz07Ope7ewMozJAnEquLk5lWQWtBig9DQ==}
+  axios@1.16.0:
+    resolution: {integrity: sha512-6hp5CwvTPlN2A31g5dxnwAX0orzM7pmCRDLnZSX772mv8WDqICwFjowHuPs04Mc8deIld1+ejhtaMn5vp6b+1w==}
 
   balanced-match@1.0.2:
     resolution: {integrity: sha512-3oSeUO0TMV67hN1AmbXsK4yaqU7tjiHlbxRDZOpH0KW9+CeX4bRAaX0Anxt0tx2MrpRpWwQaPwIlISEJhYU5Pw==}
@@ -5375,6 +5376,10 @@ packages:
 
   proxy-from-env@1.1.0:
     resolution: {integrity: sha512-D+zkORCbA9f1tdWRK0RaCR3GPv50cMxcrz4X8k5LTSUD1Dkw47mKJEZQNunItRTkWwgtaUSo1RVFRIG9ZXiFYg==}
+
+  proxy-from-env@2.1.0:
+    resolution: {integrity: sha512-cJ+oHTW1VAEa8cJslgmUZrc+sjRKgAKl3Zyse6+PV38hZe/V6Z14TbCuXcan9F9ghlz4QrFr2c92TNF82UkYHA==}
+    engines: {node: '>=10'}
 
   pump@3.0.4:
     resolution: {integrity: sha512-VS7sjc6KR7e1ukRFhQSY5LM2uBWAUPiOPa/A3mkKmiMwSmRFUITt0xuj+/lesgnCv+dPIEYlkzrcyXgquIHMcA==}
@@ -8225,7 +8230,7 @@ snapshots:
 
   '@larksuiteoapi/node-sdk@1.62.0':
     dependencies:
-      axios: 1.13.6
+      axios: 1.16.0
       lodash.identity: 3.0.0
       lodash.merge: 4.6.2
       lodash.pickby: 4.6.0
@@ -9906,13 +9911,13 @@ snapshots:
     transitivePeerDependencies:
       - typescript
 
-  '@vueuse/integrations@12.8.2(axios@1.13.6)(focus-trap@7.8.0)(qrcode@1.5.4)(typescript@6.0.3)':
+  '@vueuse/integrations@12.8.2(axios@1.16.0)(focus-trap@7.8.0)(qrcode@1.5.4)(typescript@6.0.3)':
     dependencies:
       '@vueuse/core': 12.8.2(typescript@6.0.3)
       '@vueuse/shared': 12.8.2(typescript@6.0.3)
       vue: 3.5.33(typescript@6.0.3)
     optionalDependencies:
-      axios: 1.13.6
+      axios: 1.16.0
       focus-trap: 7.8.0
       qrcode: 1.5.4
     transitivePeerDependencies:
@@ -10059,11 +10064,11 @@ snapshots:
 
   atomic-sleep@1.0.0: {}
 
-  axios@1.13.6:
+  axios@1.16.0:
     dependencies:
       follow-redirects: 1.16.0
       form-data: 4.0.5
-      proxy-from-env: 1.1.0
+      proxy-from-env: 2.1.0
     transitivePeerDependencies:
       - debug
 
@@ -11845,6 +11850,8 @@ snapshots:
 
   proxy-from-env@1.1.0: {}
 
+  proxy-from-env@2.1.0: {}
+
   pump@3.0.4:
     dependencies:
       end-of-stream: 1.4.5
@@ -12579,7 +12586,7 @@ snapshots:
       tsx: 4.21.0
       yaml: 2.8.3
 
-  vitepress@1.6.4(@algolia/client-search@5.51.0)(@types/node@25.6.0)(axios@1.13.6)(lightningcss@1.32.0)(postcss@8.5.10)(qrcode@1.5.4)(search-insights@2.17.3)(terser@5.46.1)(typescript@6.0.3):
+  vitepress@1.6.4(@algolia/client-search@5.51.0)(@types/node@25.6.0)(axios@1.16.0)(lightningcss@1.32.0)(postcss@8.5.10)(qrcode@1.5.4)(search-insights@2.17.3)(terser@5.46.1)(typescript@6.0.3):
     dependencies:
       '@docsearch/css': 3.8.2
       '@docsearch/js': 3.8.2(@algolia/client-search@5.51.0)(search-insights@2.17.3)
@@ -12592,7 +12599,7 @@ snapshots:
       '@vue/devtools-api': 7.7.9
       '@vue/shared': 3.5.33
       '@vueuse/core': 12.8.2(typescript@6.0.3)
-      '@vueuse/integrations': 12.8.2(axios@1.13.6)(focus-trap@7.8.0)(qrcode@1.5.4)(typescript@6.0.3)
+      '@vueuse/integrations': 12.8.2(axios@1.16.0)(focus-trap@7.8.0)(qrcode@1.5.4)(typescript@6.0.3)
       focus-trap: 7.8.0
       mark.js: 8.11.1
       minisearch: 7.2.0

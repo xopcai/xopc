@@ -96,7 +96,8 @@
       "defu": "^6.1.5",
       "basic-ftp": "^5.3.0",
       "picomatch": "^4.0.4",
-      "vitepress>vite": "5.4.21"
+      "vitepress>vite": "5.4.21",
+      "axios": "^1.15.1"
     },
     "onlyBuiltDependencies": [
       "@swc/core",
