@@ -2,7 +2,8 @@
  * Durable outbound queue (crash recovery): JSON file under agent internal dir.
  */
 
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync } from 'fs';
+import { writeTextAtomicSync } from '../../infra/write-file-atomic.js';
 import { join } from 'path';
 import { randomUUID } from 'node:crypto';
 import type { OutboundMessage } from '../transport-types.js';
@@ -37,9 +38,7 @@ export class OutboundPersistStore {
   }
 
   private flush(): void {
-    const tmp = `${this.filePath}.tmp`;
-    writeFileSync(tmp, JSON.stringify(this.pending), 'utf-8');
-    renameSync(tmp, this.filePath);
+    writeTextAtomicSync(this.filePath, JSON.stringify(this.pending));
   }
 
   enqueue(message: OutboundMessage): string {

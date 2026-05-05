@@ -8,7 +8,6 @@ import { isTTSAvailable } from './factory.js';
  */
 function normalizeTtsTrigger(raw: unknown): TTSConfig['trigger'] {
   const t = typeof raw === 'string' ? raw.toLowerCase() : '';
-  if (t === 'auto') return 'inbound';
   if (t === 'off' || t === 'always' || t === 'inbound' || t === 'tagged') return t;
   return DEFAULT_TTS_CONFIG.trigger;
 }

@@ -297,7 +297,7 @@ Lists skills available for the session (name, description, source), respecting a
 
 Loads `SKILL.md` or a path under `references/`, `templates/`, `scripts/`, or `assets/`. Parameters: `name`, optional `path`, optional `limit` (lines, default 500). Registers declared env var **names** for passthrough into `shell`. Respects `skills.limits.maxSkillFileBytes` and disabled/gated skills.
 
-When `skills.promptStyle` is `metadata-only` (default), use `skills_list` / `skill_view` instead of opening skill paths manually.
+Use `skills_list` / `skill_view` to load skill bodies; do not read skill disk paths directly from `<available_skills>` or bypass those tools.
 
 ### `skill_manage`
 

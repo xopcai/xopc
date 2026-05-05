@@ -33,7 +33,6 @@ export interface TelegramAccount {
 
 export interface TelegramConfig {
   enabled: boolean;
-  botToken: string;
   apiRoot: string;
   debug: boolean;
   allowFrom: (string | number)[];

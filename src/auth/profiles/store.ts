@@ -5,8 +5,9 @@
  * Handles loading and saving auth credentials.
  */
 
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
+import { writeTextAtomicSync } from '../../infra/write-file-atomic.js';
 import { homedir } from 'os';
 import type { AuthProfileCredential, AuthProfileStore, ProfileUsageStats } from './types.js';
 
@@ -26,7 +27,10 @@ export function ensureAuthStoreFile(authPath: string): void {
 		mkdirSync(dir, { recursive: true, mode: 0o700 });
 	}
 	if (!existsSync(authPath)) {
-		writeFileSync(authPath, JSON.stringify({ version: AUTH_STORE_VERSION, profiles: {} }, null, 2));
+		writeTextAtomicSync(
+			authPath,
+			JSON.stringify({ version: AUTH_STORE_VERSION, profiles: {} }, null, 2),
+		);
 		chmodSync(authPath, 0o600);
 	}
 }
@@ -48,7 +52,7 @@ function saveJsonFile(filePath: string, data: unknown): void {
 	if (!existsSync(dir)) {
 		mkdirSync(dir, { recursive: true, mode: 0o700 });
 	}
-	writeFileSync(filePath, JSON.stringify(data, null, 2));
+	writeTextAtomicSync(filePath, JSON.stringify(data, null, 2));
 	chmodSync(filePath, 0o600);
 }
 

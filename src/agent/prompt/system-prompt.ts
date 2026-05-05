@@ -70,8 +70,6 @@ export interface SystemPromptOptions {
   curatedMemorySnapshot?: MemorySnapshot;
   /** External memory provider static instructions. */
   externalMemoryInstructions?: string;
-  /** How skill instructions are surfaced (metadata-only → use skills_list / skill_view). */
-  skillsPromptMode?: 'metadata-only' | 'legacy-with-paths';
   /** Optional TTS / voice output guidance (when TTS is enabled). */
   ttsSystemHint?: string;
 }
@@ -316,29 +314,9 @@ Before answering anything about prior work, decisions, dates, people, preference
 /**
  * Build Skills section - skill matching guidelines
  */
-function buildSkillsSection(
-  availableTools: string[] = [],
-  skillsPromptMode: 'metadata-only' | 'legacy-with-paths' = 'metadata-only',
-): string {
+function buildSkillsSection(availableTools: string[] = []): string {
   if (availableTools.length === 0) {
     return '';
-  }
-
-  if (skillsPromptMode === 'legacy-with-paths') {
-    return `## Skills
-
-When a solution already exists, do not reinvent the wheel.
-
-**How to use:**
-1. Skim <available_skills> — is anything clearly relevant?
-2. Only one match? → Use read_file on its SKILL.md (see location) and follow it.
-3. Several plausible matches? → Pick the most specific one.
-4. No match? → Solve it yourself; do not force-fit a skill.
-
-**Principle:** Skills are tools, not shackles. If after reading one it does not fit, set it aside and proceed on your own.
-
-**Division of labor with memory:** Skills = **procedural** workflows (how to do a class of tasks); memory / \`curated_memory\` = **declarative** facts and preferences. After a complex task succeeds, you may codify it as a skill; user-profile-style information belongs in memory.
-`;
   }
 
   return `## Skills
@@ -516,7 +494,6 @@ export function buildSystemPrompt(
     channels = [],
     curatedMemorySnapshot,
     externalMemoryInstructions,
-    skillsPromptMode = 'metadata-only',
     ttsSystemHint,
   } = options;
 
@@ -565,7 +542,7 @@ export function buildSystemPrompt(
   }
 
   // 6. Skills
-  sections.push(buildSkillsSection(availableTools, skillsPromptMode));
+  sections.push(buildSkillsSection(availableTools));
 
   // 6b. Safety (non-minimal only)
   if (!isMinimal) {

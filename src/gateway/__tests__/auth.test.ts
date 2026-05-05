@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import {
   resolveGatewayAuth,
-  safeCompare,
   validateToken,
   extractToken,
   assertGatewayAuthConfigured,
 } from '../auth.js';
+import { safeEqualSecret } from '../security/secret-equal.js';
 
 describe('Gateway Auth', () => {
   describe('resolveGatewayAuth', () => {
@@ -50,22 +50,22 @@ describe('Gateway Auth', () => {
     });
   });
 
-  describe('safeCompare', () => {
+  describe('safeEqualSecret', () => {
     it('should return true for equal strings', () => {
-      expect(safeCompare('abc123', 'abc123')).toBe(true);
+      expect(safeEqualSecret('abc123', 'abc123')).toBe(true);
     });
 
     it('should return false for different strings', () => {
-      expect(safeCompare('abc123', 'abc124')).toBe(false);
+      expect(safeEqualSecret('abc123', 'abc124')).toBe(false);
     });
 
     it('should return false for different lengths', () => {
-      expect(safeCompare('abc', 'abcdef')).toBe(false);
+      expect(safeEqualSecret('abc', 'abcdef')).toBe(false);
     });
 
     it('should handle empty strings', () => {
-      expect(safeCompare('', '')).toBe(true);
-      expect(safeCompare('', 'abc')).toBe(false);
+      expect(safeEqualSecret('', '')).toBe(true);
+      expect(safeEqualSecret('', 'abc')).toBe(false);
     });
   });
 

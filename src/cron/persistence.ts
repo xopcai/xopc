@@ -1,13 +1,6 @@
 // Cron persistence layer with atomic writes and caching
-import {
-  readFile,
-  writeFile,
-  mkdir,
-  access,
-  rename,
-  unlink,
-} from 'fs/promises';
-import { dirname } from 'path';
+import { readFile, access } from 'fs/promises';
+import { writeTextAtomic } from '../infra/write-file-atomic.js';
 import { createLogger } from '../utils/logger.js';
 import type { JobData } from './types.js';
 import { JobDataSchema } from './validation.js';
@@ -201,32 +194,10 @@ export class CronPersistence {
     return true;
   }
 
-  /**
-   * Atomic write to disk (write to temp file, then rename)
-   */
+  /** Atomic write (fsync + rename) via shared helper. */
   private async writeToDisk(data: JobsFile): Promise<void> {
-    const tempPath = `${this.filePath}.tmp.${Date.now()}`;
-    
-    try {
-      // Ensure directory exists
-      await mkdir(dirname(this.filePath), { recursive: true });
-      
-      // Write to temp file
-      await writeFile(tempPath, JSON.stringify(data, null, 2), 'utf-8');
-      
-      // Atomic rename
-      await rename(tempPath, this.filePath);
-      
-      log.debug({ jobCount: data.jobs.length }, 'Jobs saved to disk');
-    } catch (error) {
-      // Clean up temp file on error
-      try {
-        await unlink(tempPath);
-      } catch {
-        // Ignore cleanup errors
-      }
-      throw error;
-    }
+    await writeTextAtomic(this.filePath, JSON.stringify(data, null, 2));
+    log.debug({ jobCount: data.jobs.length }, 'Jobs saved to disk');
   }
 
   /**

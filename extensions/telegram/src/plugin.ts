@@ -274,28 +274,10 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
     }
 
     const accounts = telegramCfg.accounts as Record<string, any> | undefined;
-    const hasNamedAccounts = Boolean(accounts && Object.keys(accounts).length > 0);
+    if (!accounts || Object.keys(accounts).length === 0) return;
 
-    if (hasNamedAccounts) {
-      for (const [id, account] of Object.entries(accounts!)) {
-        this.accountManager.registerAccount({ ...account, accountId: id });
-      }
-      return;
-    }
-
-    // Single-token layout: `accounts: {}` is truthy but must not skip root `botToken` registration.
-    if (telegramCfg.botToken) {
-      this.accountManager.registerAccount({
-        accountId: 'default',
-        name: 'Default Account',
-        enabled: true,
-        botToken: telegramCfg.botToken as string,
-        apiRoot: telegramCfg.apiRoot as string | undefined,
-        dmPolicy: telegramCfg.dmPolicy as any,
-        groupPolicy: telegramCfg.groupPolicy as any,
-        allowFrom: telegramCfg.allowFrom as Array<string | number> | undefined,
-        groupAllowFrom: telegramCfg.groupAllowFrom as Array<string | number> | undefined,
-      });
+    for (const [id, account] of Object.entries(accounts)) {
+      this.accountManager.registerAccount({ ...account, accountId: id });
     }
   }
 

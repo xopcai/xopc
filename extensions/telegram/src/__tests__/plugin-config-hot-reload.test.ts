@@ -11,7 +11,10 @@ import { TelegramChannelPlugin } from '../plugin.js';
 function minimalConfig(overrides?: Partial<Config>): Config {
   return {
     channels: {
-      telegram: { enabled: true, botToken: '123:TEST_TOKEN' },
+      telegram: {
+        enabled: true,
+        accounts: { default: { accountId: 'default', enabled: true, botToken: '123:TEST_TOKEN' } },
+      },
       weixin: { enabled: false },
     },
     ...overrides,
@@ -69,7 +72,10 @@ describe('TelegramChannelPlugin onConfigUpdated', () => {
       ...initial,
       channels: {
         ...initial.channels,
-        telegram: { enabled: true, botToken: '999:OTHER_TOKEN' },
+        telegram: {
+          enabled: true,
+          accounts: { default: { accountId: 'default', enabled: true, botToken: '999:OTHER_TOKEN' } },
+        },
       },
     } as Config;
 
@@ -121,7 +127,10 @@ describe('TelegramChannelPlugin onConfigUpdated', () => {
       ...initial,
       channels: {
         ...initial.channels,
-        telegram: { enabled: false, botToken: '123:TEST_TOKEN' },
+        telegram: {
+          enabled: false,
+          accounts: { default: { accountId: 'default', enabled: true, botToken: '123:TEST_TOKEN' } },
+        },
       },
     } as Config;
 

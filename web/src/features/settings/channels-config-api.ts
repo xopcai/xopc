@@ -28,6 +28,24 @@ export type {
 
 export type { DmPolicy, GroupPolicy, ReplyToMode, StreamMode };
 
+export function emptyTelegramAccount(accountId: string): TelegramAccount {
+  return {
+    accountId,
+    name: '',
+    enabled: true,
+    botToken: '',
+    allowFrom: [],
+    dmPolicy: 'pairing',
+    groupPolicy: 'open',
+    replyToMode: 'off',
+    apiRoot: '',
+    proxy: '',
+    historyLimit: 50,
+    textChunkLimit: 4000,
+    streamMode: 'partial',
+  };
+}
+
 export function defaultChannelsState(): ChannelsSettingsState {
   return {
     bindingsFull: [],
@@ -35,7 +53,6 @@ export function defaultChannelsState(): ChannelsSettingsState {
     defaultAgentId: 'main',
     telegram: {
       enabled: false,
-      botToken: '',
       apiRoot: '',
       debug: false,
       allowFrom: [],
@@ -47,7 +64,7 @@ export function defaultChannelsState(): ChannelsSettingsState {
       historyLimit: 50,
       textChunkLimit: 4000,
       proxy: '',
-      accounts: {},
+      accounts: { default: emptyTelegramAccount('default') },
     },
     weixin: {
       enabled: false,
@@ -97,10 +114,26 @@ export function normalizeChannelsFromConfig(config: unknown): ChannelsSettingsSt
   const fs = ch.feishu as Record<string, unknown> | undefined;
 
   const telegramAccounts = tg?.accounts;
-  const accounts: Record<string, TelegramAccount> =
+  let accounts: Record<string, TelegramAccount> =
     telegramAccounts && typeof telegramAccounts === 'object' && !Array.isArray(telegramAccounts)
-      ? (telegramAccounts as Record<string, TelegramAccount>)
+      ? { ...(telegramAccounts as Record<string, TelegramAccount>) }
       : {};
+
+  const legacyTopToken = typeof tg?.botToken === 'string' ? tg.botToken.trim() : '';
+  const defaultTok = accounts.default?.botToken?.trim() ?? '';
+  if (legacyTopToken && !defaultTok) {
+    accounts = {
+      ...accounts,
+      default: {
+        ...(accounts.default ?? emptyTelegramAccount('default')),
+        accountId: 'default',
+        botToken: legacyTopToken,
+      },
+    };
+  }
+  if (!accounts.default) {
+    accounts = { ...accounts, default: emptyTelegramAccount('default') };
+  }
 
   const weixinAccounts = wx?.accounts;
   const wxAcc: Record<string, WeixinAccount> =
@@ -127,7 +160,6 @@ export function normalizeChannelsFromConfig(config: unknown): ChannelsSettingsSt
   const base = {
     telegram: {
       enabled: Boolean(tg?.enabled),
-      botToken: typeof tg?.botToken === 'string' ? tg.botToken : '',
       apiRoot: typeof tg?.apiRoot === 'string' ? tg.apiRoot : '',
       debug: Boolean(tg?.debug),
       allowFrom: Array.isArray(tg?.allowFrom) ? [...(tg.allowFrom as (string | number)[])] : [],
@@ -259,7 +291,6 @@ export async function patchChannelsSettings(state: ChannelsSettingsState): Promi
       channels: {
         telegram: {
           enabled: tg.enabled,
-          botToken: tg.botToken,
           apiRoot: tg.apiRoot || undefined,
           debug: tg.debug,
           allowFrom: tg.allowFrom,

@@ -1,4 +1,5 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
+import { writeTextAtomic } from '../../../infra/write-file-atomic.js';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
@@ -29,7 +30,6 @@ export async function loadExtensionStore(namespace: string): Promise<Record<stri
 
 export async function saveExtensionStore(namespace: string, data: Record<string, unknown>): Promise<void> {
   const filePath = getExtensionStorePath(namespace);
-  await mkdir(join(filePath, '..'), { recursive: true });
-  await writeFile(filePath, JSON.stringify(data, null, 2), 'utf-8');
+  await writeTextAtomic(filePath, JSON.stringify(data, null, 2));
   extensionStoreCache.set(namespace, data);
 }

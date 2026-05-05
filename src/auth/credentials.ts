@@ -1,4 +1,5 @@
-import { readFile, writeFile, mkdir } from 'fs/promises';
+import { readFile, mkdir } from 'fs/promises';
+import { writeTextAtomic } from '../infra/write-file-atomic.js';
 import { join, dirname } from 'path';
 import { createLogger } from '../utils/logger.js';
 import { getApiKeyFromEnv } from '../providers/env-keys.js';
@@ -255,7 +256,7 @@ export class CredentialResolver {
       updatedAt: new Date().toISOString(),
     };
 
-    await writeFile(oauthPath, JSON.stringify(fullToken, null, 2), 'utf-8');
+    await writeTextAtomic(oauthPath, JSON.stringify(fullToken, null, 2));
     log.info({ provider }, 'Saved OAuth token');
   }
 
@@ -342,7 +343,7 @@ export class CredentialResolver {
     const file = await this.loadAuthProfilesFile();
     file.profiles[profileId] = profile;
 
-    await writeFile(path, JSON.stringify(file, null, 2), 'utf-8');
+    await writeTextAtomic(path, JSON.stringify(file, null, 2));
   }
 
   private async saveAgentAuthProfile(profileId: string, profile: ApiKeyProfile): Promise<void> {
@@ -354,7 +355,7 @@ export class CredentialResolver {
     const file = await this.loadAgentAuthProfilesFile();
     file.profiles[profileId] = profile;
 
-    await writeFile(path, JSON.stringify(file, null, 2), 'utf-8');
+    await writeTextAtomic(path, JSON.stringify(file, null, 2));
   }
 
   private async deleteGlobalAuthProfile(profileId: string): Promise<void> {
@@ -363,7 +364,7 @@ export class CredentialResolver {
 
     delete file.profiles[profileId];
 
-    await writeFile(path, JSON.stringify(file, null, 2), 'utf-8');
+    await writeTextAtomic(path, JSON.stringify(file, null, 2));
   }
 
   private async deleteAgentAuthProfile(profileId: string): Promise<void> {
@@ -374,7 +375,7 @@ export class CredentialResolver {
 
     delete file.profiles[profileId];
 
-    await writeFile(path, JSON.stringify(file, null, 2), 'utf-8');
+    await writeTextAtomic(path, JSON.stringify(file, null, 2));
   }
 }
 

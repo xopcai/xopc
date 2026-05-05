@@ -1,9 +1,8 @@
 // src/infra/update-startup.ts
 
-import { createHash, randomBytes, randomUUID } from 'node:crypto';
-import { readFile, writeFile, mkdir, rename, unlink } from 'node:fs/promises';
-import { dirname } from 'node:path';
-
+import { createHash, randomUUID } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
+import { writeTextAtomic } from './write-file-atomic.js';
 import type { Config } from '../config/schema.js';
 import { resolveUpdateCheckStatePath } from '../config/paths-state.js';
 import { acquireUpdateLock } from './update-lock.js';
@@ -74,19 +73,7 @@ async function readState(statePath: string): Promise<UpdateCheckState> {
 }
 
 async function writeState(statePath: string, state: UpdateCheckState): Promise<void> {
-  await mkdir(dirname(statePath), { recursive: true });
-  const tmpPath = `${statePath}.${randomBytes(4).toString('hex')}.tmp`;
-  try {
-    await writeFile(tmpPath, JSON.stringify(state, null, 2), 'utf-8');
-    await rename(tmpPath, statePath);
-  } catch (err) {
-    try {
-      await unlink(tmpPath);
-    } catch {
-      // ignore
-    }
-    throw err;
-  }
+  await writeTextAtomic(statePath, JSON.stringify(state, null, 2));
 }
 
 function resolveCheckIntervalMs(config: Config): number {

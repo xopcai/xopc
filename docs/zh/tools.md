@@ -295,7 +295,7 @@ TTS 开启时注册。用于需要语音播报的场景；一般仍以文字回�
 
 加载 `SKILL.md` 或 `references/`、`templates/`、`scripts/`、`assets/` 下路径。参数：`name`、可选 `path`、可选 `limit`（行数，默认 500）。注册 SKILL 声明的环境变量**名**供 `shell` 透传。遵守 `skills.limits.maxSkillFileBytes` 与被禁用/门控技能。
 
-默认 `skills.promptStyle` 为 `metadata-only` 时，优先用 `skills_list` / `skill_view`，不要硬读技能路径。
+请用 `skills_list` / `skill_view` 加载技能正文，不要从 `<available_skills>` 硬猜路径或直接绕开这些工具读盘。
 
 ### `skill_manage`
 

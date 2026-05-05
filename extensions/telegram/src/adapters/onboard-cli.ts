@@ -14,12 +14,11 @@ function isTelegramConfigured(config: Config): boolean {
   const telegram = config.channels?.telegram as Record<string, unknown> | undefined;
   if (!telegram) return false;
 
-  if (typeof telegram.botToken === 'string' && telegram.botToken && telegram.enabled) return true;
-
   const accounts = telegram.accounts as Record<string, Record<string, unknown>> | undefined;
   if (accounts) {
     for (const account of Object.values(accounts)) {
-      if (typeof account.botToken === 'string' && account.botToken && account.enabled) return true;
+      if (account?.enabled === false) continue;
+      if (typeof account.botToken === 'string' && account.botToken.trim()) return true;
     }
   }
 
@@ -32,7 +31,9 @@ function detectEnvToken(): string | null {
 
 async function promptBotToken(config: Config): Promise<string | null> {
   const envToken = detectEnvToken();
-  const existing = (config.channels?.telegram as Record<string, unknown> | undefined)?.botToken;
+  const tg = config.channels?.telegram as Record<string, unknown> | undefined;
+  const accounts = tg?.accounts as Record<string, { botToken?: string }> | undefined;
+  const existing = accounts?.default?.botToken?.trim();
 
   if (envToken && !existing) {
     const useEnv = await confirm({
@@ -160,29 +161,38 @@ async function configureTelegram(config: Config): Promise<Config> {
     groupAllowFrom = await promptAllowlist('Allowed group chat IDs (comma-separated):');
   }
 
+  const prev = config.channels?.telegram as Record<string, unknown> | undefined;
+  const prevAccounts =
+    prev?.accounts && typeof prev.accounts === 'object' && !Array.isArray(prev.accounts)
+      ? { ...(prev.accounts as Record<string, unknown>) }
+      : {};
+  const prevDefault =
+    prevAccounts.default && typeof prevAccounts.default === 'object' && !Array.isArray(prevAccounts.default)
+      ? { ...(prevAccounts.default as Record<string, unknown>) }
+      : {};
+
   const telegramConfig: Record<string, unknown> = {
+    ...(prev ?? {}),
     enabled: true,
-    botToken,
     dmPolicy,
     groupPolicy,
-    debug: false,
-    replyToMode: 'off',
-    historyLimit: 50,
-    textChunkLimit: 4000,
-    allowFrom: allowFrom || [],
-    groupAllowFrom: groupAllowFrom || [],
+    allowFrom: allowFrom ?? (prev?.allowFrom as Array<string | number> | undefined) ?? [],
+    groupAllowFrom: groupAllowFrom ?? (prev?.groupAllowFrom as Array<string | number> | undefined) ?? [],
+    accounts: {
+      ...prevAccounts,
+      default: {
+        ...prevDefault,
+        accountId: 'default',
+        enabled: true,
+        botToken,
+        dmPolicy,
+        groupPolicy,
+        allowFrom: allowFrom ?? (prevDefault.allowFrom as Array<string | number> | undefined) ?? [],
+        groupAllowFrom:
+          groupAllowFrom ?? (prevDefault.groupAllowFrom as Array<string | number> | undefined) ?? [],
+      },
+    },
   };
-
-  const existingTelegramConfig = config.channels?.telegram as Record<string, unknown> | undefined;
-  if (existingTelegramConfig) {
-    Object.assign(telegramConfig, existingTelegramConfig);
-    telegramConfig.enabled = true;
-    telegramConfig.botToken = botToken;
-    telegramConfig.dmPolicy = dmPolicy;
-    telegramConfig.groupPolicy = groupPolicy;
-    if (allowFrom) telegramConfig.allowFrom = allowFrom;
-    if (groupAllowFrom) telegramConfig.groupAllowFrom = groupAllowFrom;
-  }
 
   const newConfig: Config = {
     ...config,

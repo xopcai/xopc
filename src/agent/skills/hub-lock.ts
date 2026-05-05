@@ -2,10 +2,10 @@
  * Skills hub lock (~/.xopc/skills-lock.json): records install source + tree hash per managed skill id.
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
 
 import { resolveSkillsLockPath } from '../../config/paths.js';
+import { writeTextAtomicSync } from '../../infra/write-file-atomic.js';
 
 export type SkillHubKind = 'git' | 'archive';
 
@@ -49,8 +49,7 @@ export function loadSkillsLock(): SkillsLockFile {
 
 export function saveSkillsLock(lock: SkillsLockFile): void {
   const p = resolveSkillsLockPath();
-  mkdirSync(dirname(p), { recursive: true });
-  writeFileSync(p, `${JSON.stringify(lock, null, 2)}\n`, 'utf-8');
+  writeTextAtomicSync(p, `${JSON.stringify(lock, null, 2)}\n`);
 }
 
 /** Record or replace hub metadata for a managed skill directory id (folder name under ~/.xopc/skills). */

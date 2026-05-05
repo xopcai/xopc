@@ -20,6 +20,7 @@ import { feishuRoutingAccountIds } from '@/features/settings/channel-bindings-me
 import { telegramRoutingAccountIds } from '@/features/settings/channel-bindings-merge';
 import {
   defaultChannelsState,
+  emptyTelegramAccount,
   normalizeChannelsFromConfig,
   patchChannelsSettings,
   type ChannelsSettingsState,
@@ -48,6 +49,7 @@ import {
   isWeixinConfigured,
   joinAllowFrom,
   parseIdList,
+  telegramDefaultBotToken,
 } from './utils';
 export function ChannelsSettingsPanel() {
   const inputClassName = channelsInputClassName;
@@ -248,12 +250,12 @@ export function ChannelsSettingsPanel() {
   }, [form, removeTarget, saving, ch.saveError]);
 
   const copyToken = useCallback(async () => {
-    const t = form?.telegram.botToken;
+    const t = form ? telegramDefaultBotToken(form.telegram) : '';
     if (!t) return;
     await navigator.clipboard.writeText(t).catch(() => {});
     setCopied(true);
     window.setTimeout(() => setCopied(false), 2000);
-  }, [form?.telegram.botToken]);
+  }, [form]);
 
   const handleFeishuQrSetupSuccess = useCallback(
     (result: { appId: string; domain: string; openId?: string }) => {
@@ -422,11 +424,10 @@ export function ChannelsSettingsPanel() {
   const tg = form.telegram;
   const wx = form.weixin;
   const fs = (form as any).feishu as ChannelsSettingsState['feishu'];
-  const tgBaselineToken = baseline?.telegram?.botToken ?? '';
+  const tgBaselineToken = baseline ? telegramDefaultBotToken(baseline.telegram) : '';
+  const tgToken = telegramDefaultBotToken(tg);
   const telegramTokenDisplayLocked =
-    !showToken &&
-    Boolean(String(tgBaselineToken).trim()) &&
-    tg.botToken === tgBaselineToken;
+    !showToken && Boolean(String(tgBaselineToken).trim()) && tgToken === tgBaselineToken;
   const feishuBaselineSecret = baseline?.feishu?.appSecret ?? '';
   const feishuSecretDisplayLocked =
     !showFeishuSecret &&
@@ -625,16 +626,22 @@ export function ChannelsSettingsPanel() {
                     readOnly={telegramTokenDisplayLocked}
                     value={
                       telegramTokenDisplayLocked
-                        ? '*'.repeat(Math.max(1, tg.botToken.length))
-                        : tg.botToken
+                        ? '*'.repeat(Math.max(1, tgBaselineToken.length))
+                        : tgToken
                     }
                     onChange={(e) => {
                       if (telegramTokenDisplayLocked) return;
-                      updateTelegram({ botToken: e.target.value });
+                      const prev = tg.accounts?.default ?? emptyTelegramAccount('default');
+                      updateTelegram({
+                        accounts: {
+                          ...tg.accounts,
+                          default: { ...prev, accountId: 'default', botToken: e.target.value },
+                        },
+                      });
                     }}
                     placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
                   />
-                  {tg.botToken ? (
+                  {tgToken ? (
                     <Button type="button" variant="secondary" className="px-2 py-1 text-xs" onClick={() => void copyToken()}>
                       {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
                       {copied ? ch.copied : ch.copy}

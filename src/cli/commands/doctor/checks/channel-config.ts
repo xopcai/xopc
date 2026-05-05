@@ -6,7 +6,6 @@ import type { CheckResult, DoctorContext } from '../types.js';
 
 type TelegramCfg = {
   enabled?: boolean;
-  botToken?: string;
   accounts?: Record<string, { botToken?: string; dmPolicy?: string; enabled?: boolean }>;
   dmPolicy?: string;
 };
@@ -22,9 +21,8 @@ function checkTelegram(cfg: Config): { ok: boolean; messages: string[]; hints: s
     return { ok: true, messages: [], hints: [] };
   }
 
-  const legacyToken = tg.botToken?.trim() ?? '';
   const defaultAcc = tg.accounts?.default;
-  const token = (defaultAcc?.botToken?.trim() || legacyToken) ?? '';
+  const token = defaultAcc?.botToken?.trim() ?? '';
   const enabled = tg.enabled === true || token.length > 0;
 
   if (!enabled) {
@@ -36,7 +34,7 @@ function checkTelegram(cfg: Config): { ok: boolean; messages: string[]; hints: s
 
   if (!token) {
     messages.push('Telegram is enabled but no bot token is set.');
-    hints.push('Set channels.telegram.accounts.default.botToken or legacy channels.telegram.botToken.');
+    hints.push('Set channels.telegram.accounts.default.botToken.');
   }
 
   const dm = (defaultAcc?.dmPolicy ?? tg.dmPolicy) || 'pairing';
@@ -103,7 +101,7 @@ export async function checkChannelConfig(ctx: DoctorContext): Promise<CheckResul
 
   const tgEnabled =
     (cfg.channels?.telegram as TelegramCfg | undefined)?.enabled === true ||
-    Boolean((cfg.channels?.telegram as TelegramCfg | undefined)?.botToken?.trim());
+    Boolean((cfg.channels?.telegram as TelegramCfg | undefined)?.accounts?.default?.botToken?.trim());
   const wxOn = (cfg.channels?.weixin as WeixinCfg | undefined)?.enabled === true;
   if (!tgEnabled && !wxOn) {
     return {

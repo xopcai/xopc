@@ -1,5 +1,6 @@
 import { Command } from 'commander';
-import { existsSync, writeFileSync } from 'fs';
+import { existsSync } from 'fs';
+import { writeTextAtomic } from '../../infra/write-file-atomic.js';
 import { loadConfig } from '../../config/index.js';
 import { createLogger } from '../../utils/logger.js';
 import { register, formatExamples, type CLIContext } from '../registry.js';
@@ -67,7 +68,7 @@ function createConfigCommand(ctx: CLIContext): Command {
   cmd
     .command('set <path> <value>')
     .description('Set a config value by dot path')
-    .action((path: string, value: string) => {
+    .action(async (path: string, value: string) => {
       if (!existsSync(ctx.configPath)) {
         log.error('Config file not found. Run: xopc onboard');
         process.exit(1);
@@ -83,15 +84,15 @@ function createConfigCommand(ctx: CLIContext): Command {
       const config = loadConfig(ctx.configPath);
       setNestedValue(config, path, parsedValue);
 
-      writeFileSync(ctx.configPath, JSON.stringify(config, null, 2));
-      
+      await writeTextAtomic(ctx.configPath, JSON.stringify(config, null, 2));
+
       log.info({ path }, `Config updated`);
     });
 
   cmd
     .command('unset <path>')
     .description('Remove a config value by dot path')
-    .action((path: string) => {
+    .action(async (path: string) => {
       if (!existsSync(ctx.configPath)) {
         log.error('Config file not found. Run: xopc onboard');
         process.exit(1);
@@ -106,7 +107,7 @@ function createConfigCommand(ctx: CLIContext): Command {
 
       if (target && typeof target === 'object' && lastKey in target) {
         delete target[lastKey];
-        writeFileSync(ctx.configPath, JSON.stringify(config, null, 2));
+        await writeTextAtomic(ctx.configPath, JSON.stringify(config, null, 2));
         log.info({ path }, `Config removed`);
       } else {
         log.error({ path }, `Config path not found`);
@@ -168,7 +169,7 @@ function createConfigCommand(ctx: CLIContext): Command {
           token: newToken,
         };
 
-        writeFileSync(ctx.configPath, JSON.stringify(config, null, 2));
+        await writeTextAtomic(ctx.configPath, JSON.stringify(config, null, 2));
         log.info('New gateway token generated');
         console.log(`Token: ${newToken.slice(0, 8)}...${newToken.slice(-8)}`);
         console.log('\nUse "xopc config token --show" to view the full token');

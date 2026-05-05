@@ -1,5 +1,8 @@
+import { readFileSync } from 'node:fs';
+
 import type { Hono } from 'hono';
 
+import { writeTextAtomic } from '../../../infra/write-file-atomic.js';
 import type { GatewayService } from '../../service.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
@@ -44,9 +47,8 @@ async function startFeishuSetupPolling(sessionKey: string, service: GatewayServi
     session.phase = 'done';
     session.result = outcome.result;
     try {
-      const fs = await import('node:fs');
       const configPath = service.getHealth().configPath;
-      const raw = fs.readFileSync(configPath, 'utf8');
+      const raw = readFileSync(configPath, 'utf8');
       const config = JSON.parse(raw) as {
         channels?: Record<string, unknown>;
       };
@@ -64,7 +66,7 @@ async function startFeishuSetupPolling(sessionKey: string, service: GatewayServi
         },
       };
 
-      fs.writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n', 'utf8');
+      await writeTextAtomic(configPath, `${JSON.stringify(config, null, 2)}\n`);
       await service.afterFeishuCredentialsPersisted();
     } catch {
       // Config write / reload failure is non-blocking; session still carries credentials for debugging.

@@ -1,4 +1,5 @@
 import { mkdir, writeFile } from 'fs/promises';
+import { writeTextAtomic } from '../../infra/write-file-atomic.js';
 import { existsSync } from 'fs';
 import { join } from 'path';
 import { createLogger } from '../../utils/logger.js';
@@ -123,7 +124,7 @@ export async function initCommand(options: InitOptions = {}): Promise<void> {
       channels: ['gateway'],
       tags: agentId === 'main' ? ['personal', 'primary'] : [],
     };
-    await writeFile(agentMetadataPath, JSON.stringify(agentMetadata, null, 2), 'utf-8');
+    await writeTextAtomic(agentMetadataPath, JSON.stringify(agentMetadata, null, 2));
     log.info({ agentId, agentMetadataPath }, 'Created agent metadata');
   }
 
@@ -377,7 +378,7 @@ Run \`xopc skills list\` to see all available skills.
       agentId,
       bootstrapSeededAt: new Date().toISOString(),
     };
-    await writeFile(workspaceStatePath, JSON.stringify(workspaceState, null, 2), 'utf-8');
+    await writeTextAtomic(workspaceStatePath, JSON.stringify(workspaceState, null, 2));
     log.info({ path: workspaceStatePath }, 'Created workspace state');
   }
 }

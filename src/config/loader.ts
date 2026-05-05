@@ -1,5 +1,6 @@
 import { readFileSync, existsSync, mkdirSync, promises as fsPromises } from 'fs';
 import { dirname } from 'path';
+import { writeTextAtomic } from '../infra/write-file-atomic.js';
 import { type Config, ConfigSchema } from './schema.js';
 import { resolveConfigPath } from './paths.js';
 import { config } from 'dotenv';
@@ -122,7 +123,7 @@ export async function saveConfig(config: Config, configPath?: string): Promise<v
     }
   }
 
-  await fsPromises.writeFile(path, content, 'utf-8');
+  await writeTextAtomic(path, content);
 }
 
 export { resolveConfigPath } from './paths.js';

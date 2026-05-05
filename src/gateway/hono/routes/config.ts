@@ -529,7 +529,35 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
           if (config.channels) delete config.channels.telegram;
         } else if (typeof tgRaw === 'object' && !Array.isArray(tgRaw)) {
           const bodyTg = tgRaw as Record<string, unknown>;
-          if (!config.channels) config.channels = { telegram: { enabled: false, botToken: '', allowFrom: [], groupAllowFrom: [], debug: false, dmPolicy: 'pairing' as const, groupPolicy: 'open' as const, replyToMode: 'off' as const, historyLimit: 50, textChunkLimit: 4000 } };
+          if (!config.channels) {
+            config.channels = {
+              telegram: {
+                enabled: false,
+                allowFrom: [],
+                groupAllowFrom: [],
+                debug: false,
+                accounts: {
+                  default: {
+                    accountId: 'default',
+                    enabled: true,
+                    botToken: '',
+                    allowFrom: [],
+                    dmPolicy: 'pairing' as const,
+                    groupPolicy: 'open' as const,
+                    replyToMode: 'off' as const,
+                    historyLimit: 50,
+                    textChunkLimit: 4000,
+                    streamMode: 'partial' as const,
+                  },
+                },
+                dmPolicy: 'pairing' as const,
+                groupPolicy: 'open' as const,
+                replyToMode: 'off' as const,
+                historyLimit: 50,
+                textChunkLimit: 4000,
+              },
+            };
+          }
           if (!config.channels.telegram) config.channels.telegram = {} as any;
           const tg = config.channels.telegram as Record<string, unknown>;
 
@@ -537,7 +565,22 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
             tg.enabled = bodyTg.enabled;
           }
           if (bodyTg.botToken !== undefined) {
-            tg.botToken = bodyTg.botToken;
+            const accRaw = tg.accounts;
+            const acc =
+              accRaw && typeof accRaw === 'object' && !Array.isArray(accRaw)
+                ? { ...(accRaw as Record<string, unknown>) }
+                : {};
+            const defRaw = acc.default;
+            const def =
+              defRaw && typeof defRaw === 'object' && !Array.isArray(defRaw)
+                ? { ...(defRaw as Record<string, unknown>) }
+                : {};
+            acc.default = {
+              ...def,
+              accountId: 'default',
+              botToken: bodyTg.botToken,
+            };
+            tg.accounts = acc;
           }
           if (bodyTg.allowFrom !== undefined) {
             tg.allowFrom = bodyTg.allowFrom;
