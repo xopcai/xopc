@@ -31,6 +31,7 @@ export function ChatPage() {
   const { scrollRef, atBottom, scrollToBottom, onScroll } = useChatScrollViewport({
     hasToken: auth.hasToken,
     showSessionLoading: session.showSessionLoading,
+    sessionKey: session.sessionKey,
     sending: stream.sending,
     chatMessages: msgSlice.items,
     hasMore: session.hasMore,
