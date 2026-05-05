@@ -197,7 +197,7 @@ export function SkillsPage() {
   const initialSourceRaw = searchParams.get('source');
   const initialTab: MainTab = MAIN_TAB_SET.has(initialTabRaw as MainTab)
     ? (initialTabRaw as MainTab)
-    : 'builtin';
+    : 'marketplace';
   const initialSourceFilter: SourceFilter = SOURCE_FILTER_SET.has(initialSourceRaw as SourceFilter)
     ? (initialSourceRaw as SourceFilter)
     : 'all';
@@ -277,7 +277,7 @@ export function SkillsPage() {
     const nextSourceRaw = searchParams.get('source');
     const nextTab: MainTab = MAIN_TAB_SET.has(nextTabRaw as MainTab)
       ? (nextTabRaw as MainTab)
-      : 'builtin';
+      : 'marketplace';
     const nextSource: SourceFilter = SOURCE_FILTER_SET.has(nextSourceRaw as SourceFilter)
       ? (nextSourceRaw as SourceFilter)
       : 'all';
@@ -369,7 +369,7 @@ export function SkillsPage() {
         const nextQ = searchQuery.trim();
         if (nextQ) params.set('q', nextQ);
         else params.delete('q');
-        if (mainTab !== 'builtin') params.set('tab', mainTab);
+        if (mainTab !== 'marketplace') params.set('tab', mainTab);
         else params.delete('tab');
         if (sourceFilter !== 'all') params.set('source', sourceFilter);
         else params.delete('source');
@@ -807,6 +807,20 @@ export function SkillsPage() {
               <button
                 type="button"
                 role="tab"
+                aria-selected={mainTab === 'marketplace'}
+                className={cn(
+                  'relative rounded-md px-3 py-2 text-sm font-medium transition-colors',
+                  mainTab === 'marketplace' ? 'text-fg' : 'text-fg-muted hover:text-fg',
+                  mainTab === 'marketplace' &&
+                    'after:absolute after:bottom-0 after:left-1/2 after:h-0.5 after:w-9 after:-translate-x-1/2 after:rounded-full after:bg-accent',
+                )}
+                onClick={() => setMainTab('marketplace')}
+              >
+                {sk.tabMarketplace}
+              </button>
+              <button
+                type="button"
+                role="tab"
                 aria-selected={mainTab === 'builtin'}
                 className={cn(
                   'relative rounded-md px-3 py-2 text-sm font-medium transition-colors',
@@ -837,20 +851,6 @@ export function SkillsPage() {
                 <span className="ml-1 tabular-nums text-fg-muted">
                   ({userTabStats.enabled}/{userTabStats.total})
                 </span>
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={mainTab === 'marketplace'}
-                className={cn(
-                  'relative rounded-md px-3 py-2 text-sm font-medium transition-colors',
-                  mainTab === 'marketplace' ? 'text-fg' : 'text-fg-muted hover:text-fg',
-                  mainTab === 'marketplace' &&
-                    'after:absolute after:bottom-0 after:left-1/2 after:h-0.5 after:w-9 after:-translate-x-1/2 after:rounded-full after:bg-accent',
-                )}
-                onClick={() => setMainTab('marketplace')}
-              >
-                {sk.tabMarketplace}
               </button>
             </div>
             <div

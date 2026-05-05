@@ -3,13 +3,10 @@ import type { MarketplaceCategoryOption, MarketplacePackageListItem } from '../s
 import {
   curatedSkillsToPackageItems,
   downloadSkillHubZipFromEcosystem,
-  fetchSkillHubCuratedIndex,
   resolveSkillHubEcosystemUrls,
   searchSkillHubLightmake,
 } from './ecosystem-client.js';
 import {
-  batchGetSkillHubSkills,
-  getDefaultSkillSlugs,
   getSkillHubSkill,
   getSkillHubSkillFileText,
   getSkillHubSkillFiles,
@@ -18,10 +15,17 @@ import {
   searchSkillHubSkills,
   type SkillHubSkill,
 } from './registry-client.js';
+import {
+  cachedBatchGetSkillHubSkills,
+  cachedFetchSkillHubCuratedIndex,
+  cachedGetDefaultSkillSlugs,
+  cachedListSkillHubRegistryCategories,
+} from './skillhub-fetch-cache.js';
 
 import type { SkillsMarketplaceAdapter } from '../../adapter.types.js';
 
-const REGISTRY_CATEGORY_SAMPLE_CAP = 80;
+/** Batch size for POST /api/v1/skills/batch (slug lists from default discovery). */
+const REGISTRY_SKILL_BATCH_CHUNK = 80;
 
 function humanizeRegistryCategoryKey(slug: string): string {
   return slug
@@ -49,6 +53,19 @@ function filterByCategory(
   const want = category?.trim();
   if (!want) return rows;
   return rows.filter((r) => (r.categories ?? []).includes(want));
+}
+
+async function collectRegistryCategoryKeysFromSlugs(slugs: string[]): Promise<Set<string>> {
+  const used = new Set<string>();
+  for (let i = 0; i < slugs.length; i += REGISTRY_SKILL_BATCH_CHUNK) {
+    const chunk = slugs.slice(i, i + REGISTRY_SKILL_BATCH_CHUNK);
+    const details = await cachedBatchGetSkillHubSkills(chunk);
+    for (const d of details) {
+      const k = d.skill.category?.trim();
+      if (k) used.add(k);
+    }
+  }
+  return used;
 }
 
 function isPipelineOnlyChangelog(text: string | null | undefined): boolean {
@@ -95,38 +112,53 @@ export const skillhubMarketplaceAdapter: SkillsMarketplaceAdapter = {
   id: 'skillhub',
 
   async listCategories(_config) {
-    const map = new Map<string, MarketplaceCategoryOption>();
+    const sortByLabel = (a: MarketplaceCategoryOption, b: MarketplaceCategoryOption) =>
+      a.label.localeCompare(b.label, 'zh-Hans-CN', { sensitivity: 'base' });
+
     const ecoUrls = resolveSkillHubEcosystemUrls();
     try {
-      const idx = await fetchSkillHubCuratedIndex(ecoUrls);
-      for (const s of idx.skills) {
-        for (const raw of s.categories ?? []) {
-          const label = String(raw).trim();
-          if (label) map.set(label, { id: label, label });
+      const idx = await cachedFetchSkillHubCuratedIndex(ecoUrls);
+      if (idx.skills?.length) {
+        const map = new Map<string, MarketplaceCategoryOption>();
+        for (const s of idx.skills) {
+          for (const raw of s.categories ?? []) {
+            const label = String(raw).trim();
+            if (label) map.set(label, { id: label, label });
+          }
         }
+        return Array.from(map.values())
+          .filter((c) => c.id.trim() && c.label.trim())
+          .sort(sortByLabel);
       }
     } catch {
-      /* curated optional */
+      /* fall through: registry-backed catalog */
     }
 
     try {
-      const slugs = (await getDefaultSkillSlugs()).slice(0, REGISTRY_CATEGORY_SAMPLE_CAP);
-      if (slugs.length) {
-        const details = await batchGetSkillHubSkills(slugs);
-        for (const d of details) {
-          const slug = d.skill.category?.trim();
-          if (slug) {
-            map.set(slug, { id: slug, label: humanizeRegistryCategoryKey(slug) });
-          }
-        }
+      const [taxonomy, slugs] = await Promise.all([
+        cachedListSkillHubRegistryCategories(),
+        cachedGetDefaultSkillSlugs(),
+      ]);
+      const usedKeys = await collectRegistryCategoryKeysFromSlugs(slugs);
+      const taxByKey = new Map(taxonomy.map((t) => [t.key, t] as const));
+      const options: MarketplaceCategoryOption[] = [];
+      for (const key of usedKeys) {
+        const t = taxByKey.get(key);
+        const label =
+          t?.name?.trim() || t?.nameEn?.trim() || humanizeRegistryCategoryKey(key).trim();
+        if (!label) continue;
+        options.push({ id: key, label });
       }
+      options.sort((a, b) => {
+        const oa = taxByKey.get(a.id)?.sortOrder ?? 999;
+        const ob = taxByKey.get(b.id)?.sortOrder ?? 999;
+        if (oa !== ob) return oa - ob;
+        return sortByLabel(a, b);
+      });
+      return options;
     } catch {
-      /* registry optional */
+      return [];
     }
-
-    return Array.from(map.values()).sort((a, b) =>
-      a.label.localeCompare(b.label, 'zh-Hans-CN', { sensitivity: 'base' }),
-    );
   },
 
   async listPackages(_config, params) {
@@ -145,7 +177,7 @@ export const skillhubMarketplaceAdapter: SkillsMarketplaceAdapter = {
       }
       if (rows.length === 0) {
         const searchResult = await searchSkillHubSkills(q, 200);
-        const details = await batchGetSkillHubSkills(searchResult.slugs);
+        const details = await cachedBatchGetSkillHubSkills(searchResult.slugs);
         rows = details.map((d) => convertSkillHubToPackageListItem(d.skill));
       }
       rows = filterByCategory(rows, params.category);
@@ -166,7 +198,7 @@ export const skillhubMarketplaceAdapter: SkillsMarketplaceAdapter = {
     }
 
     try {
-      const idx = await fetchSkillHubCuratedIndex(ecoUrls);
+      const idx = await cachedFetchSkillHubCuratedIndex(ecoUrls);
       let skills = [...idx.skills].filter((s) => s.slug?.trim());
       if (params.category?.trim()) {
         const want = params.category.trim();
@@ -193,9 +225,9 @@ export const skillhubMarketplaceAdapter: SkillsMarketplaceAdapter = {
       // fall through
     }
 
-    const slugs = await getDefaultSkillSlugs();
+    const slugs = await cachedGetDefaultSkillSlugs();
     if (params.category?.trim()) {
-      const details = await batchGetSkillHubSkills(slugs);
+      const details = await cachedBatchGetSkillHubSkills(slugs);
       let allItems = details.map((d) => convertSkillHubToPackageListItem(d.skill));
       allItems = filterByCategory(allItems, params.category);
       if (params.sort === 'downloads') {
@@ -218,7 +250,7 @@ export const skillhubMarketplaceAdapter: SkillsMarketplaceAdapter = {
     const start = (page - 1) * pageSize;
     const paginatedSlugs = slugs.slice(start, start + pageSize);
     const totalPages = Math.max(1, Math.ceil(total / pageSize));
-    const details = await batchGetSkillHubSkills(paginatedSlugs);
+    const details = await cachedBatchGetSkillHubSkills(paginatedSlugs);
     const items = details.map((d) => convertSkillHubToPackageListItem(d.skill));
 
     return {
