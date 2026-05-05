@@ -102,10 +102,6 @@ export class SystemPromptBuilder {
 
     const workspaceBootstrapFiles = bootstrapFiles.map((f) => toWorkspaceBootstrapFile(f, ws));
 
-    const skillsCfg = createSkillConfigManager(resolveStateDir()).load();
-    const skillsPromptMode =
-      skillsCfg.promptStyle === 'legacy-with-paths' ? 'legacy-with-paths' : 'metadata-only';
-
     const ttsMerged = mergeTtsConfigFromAppConfig(this.config.tts);
     const reg = options?.registeredToolNames ?? [];
     const ttsSystemHint = buildTtsSystemPromptHint({
@@ -126,7 +122,6 @@ export class SystemPromptBuilder {
       userTimezone,
       curatedMemorySnapshot,
       externalMemoryInstructions,
-      skillsPromptMode,
       ttsSystemHint,
     });
 

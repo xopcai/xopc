@@ -5,9 +5,10 @@
  *
  */
 
-import { existsSync, readFileSync, writeFileSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { createLogger } from '../../utils/logger.js';
+import { writeTextAtomicSync } from '../../infra/write-file-atomic.js';
 import type { SkillConfig, SkillsConfig, Skill } from './types.js';
 
 const log = createLogger('SkillConfig');
@@ -147,7 +148,7 @@ export function createSkillConfigManager(configDir: string): SkillConfigFile {
 
   function saveConfig(config: SkillsConfig): void {
     try {
-      writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf-8');
+      writeTextAtomicSync(configPath, JSON.stringify(config, null, 2));
       log.info('Saved skills config');
     } catch (err) {
       const em = err instanceof Error ? err.message : String(err);
@@ -256,14 +257,6 @@ export function validateSkillConfig(config: SkillsConfig): {
   errors: string[];
 } {
   const errors: string[] = [];
-
-  if (
-    config.promptStyle !== undefined &&
-    config.promptStyle !== 'metadata-only' &&
-    config.promptStyle !== 'legacy-with-paths'
-  ) {
-    errors.push('promptStyle must be "metadata-only" or "legacy-with-paths"');
-  }
 
   if (config.toolGating !== undefined && typeof config.toolGating !== 'boolean') {
     errors.push('toolGating must be a boolean');

@@ -19,12 +19,9 @@ export function isSimpleAccountOnlyRule(r: BindingRuleWire): boolean {
   return true;
 }
 
-/** Telegram: `accounts` keys, or implicit `default` when only top-level `botToken` is set. */
-export function telegramRoutingAccountIds(tg: { botToken?: string; accounts?: Record<string, unknown> }): string[] {
-  const keys = Object.keys(tg.accounts ?? {});
-  if (keys.length > 0) return [...keys].sort();
-  if (typeof tg.botToken === 'string' && tg.botToken.trim()) return ['default'];
-  return [];
+/** Telegram: `accounts` keys (token lives per account, typically `default`). */
+export function telegramRoutingAccountIds(tg: { accounts?: Record<string, unknown> }): string[] {
+  return Object.keys(tg.accounts ?? {}).sort();
 }
 
 export function weixinRoutingAccountIds(wx: { accounts?: Record<string, unknown> }): string[] {

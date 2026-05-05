@@ -1,6 +1,7 @@
 // src/infra/update-lock.ts
 
-import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, unlink } from 'node:fs/promises';
+import { writeTextAtomic } from './write-file-atomic.js';
 import { dirname } from 'node:path';
 
 import { resolveUpdateLockPath } from '../config/paths-state.js';
@@ -69,7 +70,7 @@ export async function acquireUpdateLock(
   };
 
   await mkdir(dirname(lockPath), { recursive: true });
-  await writeFile(lockPath, JSON.stringify(info, null, 2), 'utf-8');
+  await writeTextAtomic(lockPath, JSON.stringify(info, null, 2));
 
   const release = async () => {
     try {

@@ -1,5 +1,5 @@
 /**
- * Root `botToken` + empty `accounts: {}` must still register the default account (JSON often omits keys vs {}).
+ * Token lives under `accounts.<id>.botToken` (typically `default`).
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
@@ -11,8 +11,15 @@ import { TelegramChannelPlugin } from '../plugin.js';
 function baseTelegramConfig(): NonNullable<Config['channels']>['telegram'] {
   return {
     enabled: true,
-    botToken: '123456:TEST_TOKEN',
-    accounts: {},
+    accounts: {
+      default: {
+        accountId: 'default',
+        enabled: true,
+        botToken: '123456:TEST_TOKEN',
+        dmPolicy: 'open',
+        groupPolicy: 'open',
+      },
+    },
     dmPolicy: 'open',
     groupPolicy: 'open',
   } as NonNullable<Config['channels']>['telegram'];
@@ -25,7 +32,7 @@ describe('TelegramChannelPlugin loadAccounts', () => {
     bus = new MessageBus();
   });
 
-  it('registers default account when accounts is an empty object', async () => {
+  it('registers default account from accounts.default.botToken', async () => {
     const cfg = {
       channels: {
         telegram: baseTelegramConfig(),
@@ -72,8 +79,15 @@ describe('TelegramChannelPlugin loadAccounts', () => {
       channels: {
         telegram: {
           enabled: false,
-          botToken: '123456:TEST_TOKEN',
-          accounts: {},
+          accounts: {
+            default: {
+              accountId: 'default',
+              enabled: true,
+              botToken: '123456:TEST_TOKEN',
+              dmPolicy: 'open',
+              groupPolicy: 'open',
+            },
+          },
           dmPolicy: 'open',
           groupPolicy: 'open',
         },

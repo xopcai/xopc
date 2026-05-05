@@ -7,8 +7,8 @@
  */
 
 import { z } from 'zod';
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
-import { dirname } from 'path';
+import { existsSync, readFileSync } from 'fs';
+import { writeTextAtomicSync } from '../infra/write-file-atomic.js';
 import { resolveModelsJsonPath } from './paths.js';
 
 // Re-export for convenience
@@ -370,14 +370,7 @@ export function saveModelsJson(path: string, config: ModelsJsonConfig): { succes
 			return { success: false, error: `Validation failed: ${errors}` };
 		}
 
-		// Ensure directory exists
-		const dir = dirname(path);
-		if (!existsSync(dir)) {
-			mkdirSync(dir, { recursive: true });
-		}
-
-		// Write file
-		writeFileSync(path, JSON.stringify(config, null, 2), 'utf-8');
+		writeTextAtomicSync(path, JSON.stringify(config, null, 2));
 		return { success: true };
 	} catch (error) {
 		return {

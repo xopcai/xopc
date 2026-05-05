@@ -36,13 +36,39 @@ export const TelegramAccountConfigSchema = z.object({
   apiRoot: z.string().optional(),
 });
 
-/** Implicit enable when `botToken` is set. */
+/** Migrate legacy top-level `botToken` into `accounts.default`; implicit enable when `accounts.default.botToken` is set. */
 function preprocessTelegramConfigInput(raw: unknown): unknown {
   if (raw === null || raw === undefined) return raw;
   if (typeof raw !== 'object' || Array.isArray(raw)) return raw;
   const o = { ...(raw as Record<string, unknown>) };
-  const botToken = typeof o.botToken === 'string' ? o.botToken : '';
-  if (o.enabled === undefined && botToken.trim().length > 0) {
+
+  const legacyToken = typeof o.botToken === 'string' ? o.botToken.trim() : '';
+  if (legacyToken) {
+    const prev =
+      o.accounts && typeof o.accounts === 'object' && !Array.isArray(o.accounts)
+        ? (o.accounts as Record<string, unknown>)
+        : {};
+    const acc = { ...prev };
+    const rawDef = acc.default;
+    const def =
+      rawDef && typeof rawDef === 'object' && !Array.isArray(rawDef)
+        ? { ...(rawDef as Record<string, unknown>) }
+        : {};
+    const defToken = typeof def.botToken === 'string' ? def.botToken.trim() : '';
+    if (!defToken) {
+      acc.default = { ...def, accountId: 'default', botToken: legacyToken };
+    }
+    o.accounts = acc;
+  }
+  delete o.botToken;
+
+  const accounts = o.accounts as Record<string, { botToken?: string }> | undefined;
+  const defaultAcc = accounts?.default;
+  const token =
+    defaultAcc && typeof defaultAcc === 'object' && typeof defaultAcc.botToken === 'string'
+      ? defaultAcc.botToken
+      : '';
+  if (o.enabled === undefined && token.trim().length > 0) {
     o.enabled = true;
   }
   return o;
@@ -50,7 +76,6 @@ function preprocessTelegramConfigInput(raw: unknown): unknown {
 
 const TelegramConfigSchemaInner = z.object({
   enabled: z.boolean().default(false),
-  botToken: z.string().default(''),
   allowFrom: z.array(z.union([z.string(), z.number()])).default([]),
   groupAllowFrom: z.array(z.union([z.string(), z.number()])).default([]),
   apiRoot: z.string().optional(),

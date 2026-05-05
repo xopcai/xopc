@@ -1,4 +1,5 @@
-import { readFile, writeFile, mkdir } from 'fs/promises';
+import { readFile, mkdir } from 'fs/promises';
+import { writeTextAtomic } from '../infra/write-file-atomic.js';
 import { existsSync } from 'fs';
 import { dirname, join } from 'path';
 import { createHash } from 'crypto';
@@ -84,11 +85,7 @@ export class ExtensionLockfileManager {
     data.lastUpdated = new Date().toISOString();
 
     await mkdir(dirname(this.lockfilePath), { recursive: true });
-    await writeFile(
-      this.lockfilePath,
-      JSON.stringify(data, null, 2),
-      'utf-8'
-    );
+    await writeTextAtomic(this.lockfilePath, JSON.stringify(data, null, 2));
 
     log.debug('Lockfile saved');
   }

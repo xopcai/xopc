@@ -96,7 +96,7 @@ export const AgentDefaultsSchema = z.object({
       dreaming: z
         .object({
           enabled: z.boolean().optional(),
-          /** Legacy top-level cron; prefer per-phase `cron` instead. */
+          /** Default deep-phase cron when `phases.deep.cron` is omitted. */
           frequency: z.string().optional(),
           timezone: z.string().optional(),
           phases: z
@@ -335,10 +335,23 @@ export const SessionConfigSchema = z.object({
 export const ChannelsConfigSchema = z.record(z.string(), z.unknown()).default({
   telegram: {
     enabled: false,
-    botToken: '',
     allowFrom: [],
     groupAllowFrom: [],
     debug: false,
+    accounts: {
+      default: {
+        accountId: 'default',
+        enabled: true,
+        botToken: '',
+        allowFrom: [],
+        dmPolicy: 'pairing' as const,
+        groupPolicy: 'open' as const,
+        replyToMode: 'off' as const,
+        historyLimit: 50,
+        textChunkLimit: 4000,
+        streamMode: 'partial' as const,
+      },
+    },
     dmPolicy: 'pairing' as const,
     groupPolicy: 'open' as const,
     replyToMode: 'off' as const,
@@ -550,11 +563,7 @@ export const TTSSummarizationConfigSchema = z.object({
 export const TTSConfigSchema = z.object({
   enabled: z.boolean().default(false),
   provider: z.enum(['openai', 'alibaba', 'edge', 'minimax']).default('openai'),
-  trigger: z
-    .preprocess(
-      (v) => (v === 'auto' ? 'inbound' : v),
-      z.enum(['off', 'always', 'inbound', 'tagged']).default('always'),
-    ),
+  trigger: z.enum(['off', 'always', 'inbound', 'tagged']).default('always'),
   fallback: TTSFallbackConfigSchema.optional(),
   maxTextLength: z.number().int().min(1).default(512), // Conservative default to accommodate all providers (Alibaba limit is 512)
   timeoutMs: z.number().int().min(1000).max(180000).default(60000),
@@ -680,10 +689,23 @@ export const ConfigSchema = z.object({
   channels: {
     telegram: {
       enabled: false,
-      botToken: '',
       allowFrom: [],
       groupAllowFrom: [],
       debug: false,
+      accounts: {
+        default: {
+          accountId: 'default',
+          enabled: true,
+          botToken: '',
+          allowFrom: [],
+          dmPolicy: 'pairing' as const,
+          groupPolicy: 'open' as const,
+          replyToMode: 'off' as const,
+          historyLimit: 50,
+          textChunkLimit: 4000,
+          streamMode: 'partial' as const,
+        },
+      },
       dmPolicy: 'pairing' as const,
       groupPolicy: 'open' as const,
       replyToMode: 'off' as const,

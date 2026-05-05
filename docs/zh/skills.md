@@ -8,7 +8,7 @@ xopc 的技能系统基于工作区中的文件：通过 `SKILL.md` 等为 AI �
 - [SKILL.md 文件格式](#skillmd-文件格式)
 - [技能来源](#技能来源)
 - [Skills Hub（Git / 压缩包）](#skills-hubgit--压缩包)
-- [智能体运行时：工具与提示风格](#agent-运行时工具与提示风格)
+- [智能体运行时：工具](#agent-运行时工具与提示风格)
 - [声明环境变量](#声明环境变量)
 - [CLI 命令](#cli-命令)
 - [配置技能](#配置技能)
@@ -150,7 +150,7 @@ xopc skills hub lock --json
 
 Hub 安装的技能与全局 `~/.xopc/skills/` 规则一致，仍可用 `skills enable` / `disable` 与 `skills.json` 条目控制。
 
-## 智能体运行时：工具与提示风格 {#agent-运行时工具与提示风格}
+## 智能体运行时：工具 {#agent-运行时工具与提示风格}
 
 智能体在接入 SkillManager 时注册与技能相关的工具：
 
@@ -164,7 +164,6 @@ Hub 安装的技能与全局 `~/.xopc/skills/` 规则一致，仍可用 `skills 
 
 | 字段 | 含义 |
 |------|------|
-| `promptStyle` | `metadata-only`（默认）：Hermes 风格 `<available_skills>` 不含磁盘路径，需用 `skill_view` 读正文。`legacy-with-paths`：旧版带路径，可用 `read_file`。 |
 | `toolGating` | 为 `true`（默认）时，声明了所需工具/扩展的技能在未满足条件前不进入列表；设为 `false` 可关闭门控。 |
 | `agentWritePolicy` | `skill_manage` 可写范围：`global`、`workspace` 或 `both`（默认 `global`）。 |
 | `limits.maxSkillFileBytes` | `skill_view` 单文件最大字节数。 |
@@ -293,7 +292,6 @@ xopc skills test security --deep
 
 ```json
 {
-  "promptStyle": "metadata-only",
   "toolGating": true,
   "agentWritePolicy": "global",
   "limits": {

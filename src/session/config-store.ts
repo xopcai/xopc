@@ -6,7 +6,8 @@
  * session-specific settings that can be overridden via commands.
  */
 
-import { readFile, writeFile, mkdir } from 'fs/promises';
+import { readFile, mkdir } from 'fs/promises';
+import { writeTextAtomic } from '../infra/write-file-atomic.js';
 import { join } from 'path';
 import { existsSync } from 'fs';
 import { createLogger } from '../utils/logger.js';
@@ -97,7 +98,7 @@ export class SessionConfigStore {
     };
 
     try {
-      await writeFile(configPath, JSON.stringify(configWithTimestamp, null, 2), 'utf-8');
+      await writeTextAtomic(configPath, JSON.stringify(configWithTimestamp, null, 2));
       log.debug({ sessionKey }, 'Session config saved');
     } catch (error) {
       log.error({ sessionKey, error }, 'Failed to save session config');

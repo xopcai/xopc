@@ -27,8 +27,15 @@ export function joinAllowFrom(ids: (string | number)[]): string {
   return ids.map(String).join(', ');
 }
 
+export function telegramDefaultBotToken(tg: ChannelsSettingsState['telegram']): string {
+  const t = tg.accounts?.default?.botToken;
+  return typeof t === 'string' ? t : '';
+}
+
 export function isTelegramConfigured(tg: ChannelsSettingsState['telegram']): boolean {
-  return Boolean(tg.botToken?.trim()) || Object.keys(tg.accounts ?? {}).length > 0;
+  return Object.values(tg.accounts ?? {}).some(
+    (a) => typeof a.botToken === 'string' && a.botToken.trim().length > 0,
+  );
 }
 
 export function isWeixinConfigured(wx: ChannelsSettingsState['weixin']): boolean {

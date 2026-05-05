@@ -1,4 +1,5 @@
-import { readFile, writeFile, readdir, rename, mkdir } from 'fs/promises';
+import { readFile, readdir, rename, mkdir } from 'fs/promises';
+import { writeTextAtomic } from '../../infra/write-file-atomic.js';
 import { existsSync } from 'fs';
 import { join } from 'path';
 import { watch, type FSWatcher } from 'fs';
@@ -37,7 +38,7 @@ export class AgentInbox {
     await mkdir(this.pendingDir, { recursive: true });
 
     const filePath = join(this.pendingDir, `${message.id}.json`);
-    await writeFile(filePath, JSON.stringify(message, null, 2), 'utf-8');
+    await writeTextAtomic(filePath, JSON.stringify(message, null, 2));
 
     log.debug({ messageId: message.id, to: message.to }, 'Enqueued message');
   }

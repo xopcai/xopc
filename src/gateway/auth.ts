@@ -95,18 +95,6 @@ export function assertGatewayAuthConfigured(auth: ResolvedGatewayAuth): void {
 }
 
 /**
- * Constant-time string comparison to prevent timing attacks.
- *
- * Uses `crypto.timingSafeEqual` with padding so both buffers always have
- * the same byte length. The actual length is checked separately.
- *
- * @deprecated Use `safeEqualSecret` from `./security/secret-equal.js` directly.
- */
-export function safeCompare(a: string, b: string): boolean {
-  return safeEqualSecret(a, b);
-}
-
-/**
  * Validate a credential against configured auth using constant-time comparison.
  *
  * Works for both token and password modes — the caller extracts the credential

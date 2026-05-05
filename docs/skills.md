@@ -8,7 +8,7 @@ xopc's skills system is file-based: add domain-specific capabilities and knowled
 - [SKILL.md File Format](#skillmd-file-format)
 - [Skill Sources](#skill-sources)
 - [Skills Hub (git / archives)](#skills-hub-git--archives)
-- [Agent runtime: tools & prompt style](#agent-runtime-tools--prompt-style)
+- [Agent runtime: tools](#agent-runtime-tools)
 - [Declaring environment variables](#declaring-environment-variables)
 - [CLI Commands](#cli-commands)
 - [Configure Skills](#configure-skills)
@@ -155,7 +155,7 @@ xopc skills hub lock --json
 
 Hub-installed skills behave like **global** skills (same load rules as `~/.xopc/skills/`). Use `skills enable` / `skills disable` and `~/.xopc/skills.json` entries as usual.
 
-## Agent runtime: tools & prompt style
+## Agent runtime: tools
 
 The agent exposes skill-oriented tools (when a skill manager is wired):
 
@@ -169,7 +169,6 @@ The agent exposes skill-oriented tools (when a skill manager is wired):
 
 | Field | Meaning |
 |-------|---------|
-| `promptStyle` | `metadata-only` (default): Hermes-style `<available_skills>` without disk paths — use `skill_view` to load bodies. `legacy-with-paths`: older behaviour with paths for `read_file`. |
 | `toolGating` | When true (default), skills that declare required tools/extensions are hidden until those tools are registered. Set `false` to ignore gating. |
 | `agentWritePolicy` | Where `skill_manage` may write: `global`, `workspace`, or `both` (default `global`). |
 | `limits.maxSkillFileBytes` | Maximum bytes `skill_view` will read per file. |
@@ -298,11 +297,10 @@ xopc skills test security --deep
 
 ## Configure Skills
 
-Skill configuration file is located at `~/.xopc/skills.json`. Optional **top-level** keys control loading and agent behaviour (see [Agent runtime](#agent-runtime-tools--prompt-style)); **`entries`** hold per-skill overrides:
+Skill configuration file is located at `~/.xopc/skills.json`. Optional **top-level** keys control loading and agent behaviour (see [Agent runtime](#agent-runtime-tools)); **`entries`** hold per-skill overrides:
 
 ```json
 {
-  "promptStyle": "metadata-only",
   "toolGating": true,
   "agentWritePolicy": "global",
   "limits": {

@@ -43,8 +43,7 @@ export function shouldUseTTS(config: TTSConfig | undefined, inboundAudio?: boole
     return { useTTS: false, reason: 'TTS disabled' };
   }
 
-  const triggerRaw = (config.trigger ?? 'off') as string;
-  const trigger = triggerRaw === 'auto' ? 'inbound' : triggerRaw;
+  const trigger = (config.trigger ?? 'off') as string;
 
   switch (trigger) {
     case 'off':

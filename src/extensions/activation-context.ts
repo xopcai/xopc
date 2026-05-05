@@ -12,7 +12,6 @@ function isRecord(x: unknown): x is Record<string, unknown> {
 function telegramConfigured(ch: Record<string, unknown> | undefined): boolean {
   if (!ch) return false;
   if (ch.enabled === true) return true;
-  if (typeof ch.botToken === 'string' && ch.botToken.trim().length > 0) return true;
   const accounts = ch.accounts;
   if (isRecord(accounts)) {
     for (const acc of Object.values(accounts)) {

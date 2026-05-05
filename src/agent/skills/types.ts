@@ -116,14 +116,7 @@ export interface SkillsLimitsConfig {
   maxSkillFileBytes?: number;
 }
 
-export type SkillsPromptStyle = 'metadata-only' | 'legacy-with-paths';
-
 export interface SkillsConfig {
-  /**
-   * How `<available_skills>` is rendered. Default: metadata-only (Hermes-style: no disk paths;
-   * use `skills_list` / `skill_view`). Legacy mode exposes SKILL.md paths for `read_file`.
-   */
-  promptStyle?: SkillsPromptStyle;
   /** Bundled skill allowlist */
   allowBundled?: string[];
   /** Load configuration */

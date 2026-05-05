@@ -8,11 +8,8 @@ import type { ChannelSetupWizard } from '@xopcai/xopc/channels/plugins/types.ada
 function resolveTelegramToken(cfg: Config, _accountId?: string): string | undefined {
   const tg = cfg.channels?.telegram as Record<string, unknown> | undefined;
   const accounts = tg?.accounts as Record<string, { botToken?: string }> | undefined;
-  return (
-    (accounts && Object.values(accounts).find((a) => a?.botToken)?.botToken) ||
-    (tg?.botToken as string | undefined) ||
-    process.env.TELEGRAM_BOT_TOKEN
-  );
+  const fromAcc = accounts && Object.values(accounts).find((a) => a?.botToken)?.botToken;
+  return (fromAcc as string | undefined) || process.env.TELEGRAM_BOT_TOKEN;
 }
 
 export function createTelegramSetupWizard(): ChannelSetupWizard {
@@ -26,7 +23,7 @@ export function createTelegramSetupWizard(): ChannelSetupWizard {
     },
     envShortcut: {
       envVar: 'TELEGRAM_BOT_TOKEN',
-      configPath: 'channels.telegram.botToken',
+      configPath: 'channels.telegram.accounts.default.botToken',
     },
     credentials: [
       {

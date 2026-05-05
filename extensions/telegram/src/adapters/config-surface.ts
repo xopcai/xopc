@@ -4,11 +4,16 @@ import type { ChannelConfigSurfaceAdapter } from '@xopcai/xopc/channels/plugins/
 export const telegramConfigSurface: ChannelConfigSurfaceAdapter = {
   buildConfigSurface(cfg: Config): Record<string, unknown> {
     const telegram = cfg.channels?.telegram as Record<string, unknown> | undefined;
+    const accounts = telegram?.accounts as Record<string, { botToken?: string }> | undefined;
+    const defTok =
+      accounts?.default && typeof accounts.default === 'object'
+        ? accounts.default.botToken
+        : undefined;
     return {
       enabled: telegram?.enabled,
       // Send the real token to the authenticated settings UI.
       // The web UI is responsible for masking it by default.
-      botToken: typeof telegram?.botToken === 'string' ? telegram.botToken : '',
+      botToken: typeof defTok === 'string' ? defTok : '',
       allowFrom: telegram?.allowFrom || [],
       groupAllowFrom: telegram?.groupAllowFrom || [],
       apiRoot: telegram?.apiRoot || '',
