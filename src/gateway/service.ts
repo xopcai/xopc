@@ -18,12 +18,7 @@ import { resolveGatewayAuth, assertGatewayAuthConfigured, validateToken, extract
 import { assertGatewayAuthNotKnownWeak } from './security/known-weak-secrets.js';
 import { auditGatewayConfig } from './security/audit.js';
 import { getModelRegistry } from '../providers/index.js';
-import {
-  createLogger,
-  getLogDir,
-  getLogStats,
-  inboundCorrelationMetadataFromAsyncLogContext,
-} from '../utils/logger.js';
+import { createLogger, getLogDir, getLogStats } from '../utils/logger.js';
 import {
   resolveConfigPath,
   resolveCronJobsPath,
@@ -49,7 +44,6 @@ import {
   type MarketplaceCategoryOption,
   type MarketplacePackageDetail,
   type SkillsStoreListParams,
-  type SkillsStoreListResponse,
   type UnifiedMarketplaceListResponse,
   type UnifiedMarketplacePackageDetail,
 } from '../agent/skills/skills-marketplace.js';
@@ -59,31 +53,19 @@ import type { SkillCatalogEntry } from '../agent/agent-manager.js';
 import type { SkillMarkdownPreviewPayload } from '../agent/skills/types.js';
 import type { ManagedSkillListItem } from '../agent/skills/managed-store.js';
 
-const log = createLogger('GatewayService');
 import { PACKAGE_VERSION } from '../package-version.js';
 import { buildSessionKey, parseSessionKey } from '../routing/session-key.js';
 import { getDefaultAgentId } from '../routing/resolve-route.js';
-import { prependEnvelopeTimestamp } from '../channels/envelope-timestamp.js';
 import { scheduleGatewayUpdateCheck } from '../infra/update-startup.js';
 import { restartGatewayProcessWithFreshPid } from './respawn.js';
-import { MAX_CHAT_ATTACHMENTS } from './chat-limits.js';
+import { getDistinctSessionChatIds } from './service/session-chat-ids.js';
+import { runGatewayAgent } from './service/run-gateway-agent.js';
+import { GatewaySseHub } from './service/sse-hub.js';
+import type { GatewayServiceConfig, ServiceEvent } from './service/types.js';
 
-// ========== SSE Event System ==========
+export type { GatewayServiceConfig, ServiceEvent } from './service/types.js';
 
-export interface ServiceEvent {
-  id: string;
-  type: string;
-  payload: unknown;
-}
-
-type EventListener = (event: ServiceEvent) => Promise<void> | void;
-
-const EVENT_BUFFER_SIZE = 200; // ring buffer per subscriber for Last-Event-ID replay
-
-export interface GatewayServiceConfig {
-  configPath?: string;
-  enableHotReload?: boolean;
-}
+const log = createLogger('GatewayService');
 
 export class GatewayService {
   private bus: MessageBus;
@@ -103,10 +85,7 @@ export class GatewayService {
   // Authentication
   private auth: ResolvedGatewayAuth;
 
-  // SSE event system
-  private eventCounter = 0;
-  private subscribers = new Map<string, EventListener>();
-  private eventBuffers = new Map<string, ServiceEvent[]>();
+  private readonly sse = new GatewaySseHub();
 
   // Agent run relay for resuming SSE streams
   public readonly runRelay = new AgentRunRelay();
@@ -738,10 +717,8 @@ export class GatewayService {
   }
 
   /**
-   * Run agent with a message and stream events
-   */
-  /**
-   * @param runOptions.signal — When set (e.g. client disconnect), aborts in-flight generation and persists partial output.
+   * Run agent with a message and stream events.
+   * `runOptions.signal` — When set (e.g. client disconnect), aborts in-flight generation and persists partial output.
    */
   async *runAgent(
     message: string,
@@ -757,149 +734,31 @@ export class GatewayService {
     thinking?: string,
     runOptions?: { signal?: AbortSignal },
   ): AsyncGenerator<{ type: string; content?: string; status?: string; runId?: string }, { status: string; summary: string }, unknown> {
-    const cappedAttachments =
-      attachments && attachments.length > MAX_CHAT_ATTACHMENTS
-        ? attachments.slice(0, MAX_CHAT_ATTACHMENTS)
-        : attachments;
-    if (attachments && cappedAttachments && attachments.length > cappedAttachments.length) {
-      log.debug(
-        { dropped: attachments.length - cappedAttachments.length, max: MAX_CHAT_ATTACHMENTS },
-        'Attachments capped for webchat',
-      );
+    const iter = runGatewayAgent(
+      {
+        config: this.config,
+        agentService: this.agentService,
+        bus: this.bus,
+        runRelay: this.runRelay,
+        runAbortControllers: this.runAbortControllers,
+        activeWebchatRunBySession: this.activeWebchatRunBySession,
+        sessionManager: this.sessionManager,
+        emit: (type, payload) => this.sse.emit(type, payload),
+      },
+      message,
+      channel,
+      chatId,
+      attachments,
+      thinking,
+      runOptions,
+    );
+
+    let step = await iter.next();
+    while (!step.done) {
+      yield step.value as { type: string; content?: string; status?: string; runId?: string };
+      step = await iter.next();
     }
-
-    const runId = crypto.randomUUID();
-
-    // For webchat, register the run in the relay before yielding the first event
-    if (channel === 'webchat') {
-      const parsedKey = parseSessionKey(chatId);
-      const sessionKey = parsedKey ? chatId : buildSessionKey({
-        agentId: getDefaultAgentId(this.config),
-        source: 'webchat',
-        accountId: 'default',
-        peerKind: 'direct',
-        peerId: chatId,
-      });
-      this.runRelay.ensureRun(runId, sessionKey);
-      this.runAbortControllers.set(runId, new AbortController());
-    }
-
-    const statusEvent = { type: 'status', status: 'accepted', runId };
-    if (channel === 'webchat') this.runRelay.publish(runId, statusEvent);
-    yield statusEvent;
-
-    try {
-      // For 'webchat' channel (web UI), process through agent service
-      if (channel === 'webchat') {
-        // Determine session key: if chatId is already a valid session key, use it directly
-        // Otherwise, build a new session key from the chatId
-        const parsedKey = parseSessionKey(chatId);
-        const sessionKey = parsedKey ? chatId : buildSessionKey({
-          agentId: getDefaultAgentId(this.config),
-          source: 'webchat',
-          accountId: 'default',
-          peerKind: 'direct',
-          peerId: chatId,
-        });
-
-        const timezone = this.agentService.resolveUserTimezoneForSession(sessionKey);
-        // Keep UI clean: persist raw user text (no envelope timestamp),
-        // but include a stamped variant for the model so it has a stable "now".
-        // Skip for slash commands — parseSlashCommand requires lines starting with '/'.
-        const stampedMessage = message.trimStart().startsWith('/')
-          ? message
-          : prependEnvelopeTimestamp(message, timezone);
-        const prepared = await this.agentService.prepareInboundAttachments(sessionKey, cappedAttachments);
-
-        // Persist before streaming so a mid-turn refresh still sees text + attachment refs on disk.
-        try {
-          await this._saveUserMessage(sessionKey, message, prepared);
-        } catch (err) {
-          log.error({ err, sessionKey }, 'Failed to save user message');
-        }
-
-        const runAbort = this.runAbortControllers.get(runId);
-        if (!runAbort) {
-          throw new Error('run abort controller missing for webchat');
-        }
-        const mergedSignal = runOptions?.signal
-          ? AbortSignal.any([runOptions.signal, runAbort.signal])
-          : runAbort.signal;
-
-        this.activeWebchatRunBySession.set(sessionKey, runId);
-        let streamError: string | undefined;
-        try {
-          this.emit('agent.stream', { sessionKey, event: statusEvent });
-          const eventStream = this.agentService.processDirectStreaming(stampedMessage, sessionKey, prepared, thinking, {
-            signal: mergedSignal,
-          });
-
-          for await (const event of eventStream) {
-            this.runRelay.publish(runId, event);
-            this.emit('agent.stream', { sessionKey, event });
-            yield event as { type: string; content?: string; status?: string; runId?: string };
-          }
-
-          this.runRelay.complete(runId);
-          try {
-            const metaAfter = await this.sessionManager.getSessionMetadata(sessionKey);
-            if (metaAfter?.name) {
-              this.emit('session.updated', { key: sessionKey, name: metaAfter.name });
-            }
-          } catch {
-            /* ignore */
-          }
-          return {
-            status: mergedSignal.aborted ? 'aborted' : 'ok',
-            summary: mergedSignal.aborted ? 'Interrupted' : 'Message processed successfully',
-          };
-        } catch (error) {
-          log.error({ error }, 'Agent processing failed');
-          streamError = error instanceof Error ? error.message : 'Unknown error';
-          const errorEvent = { type: 'error', content: `Error: ${streamError}` };
-          this.runRelay.publish(runId, errorEvent);
-          this.emit('agent.stream', { sessionKey, event: errorEvent });
-          this.runRelay.complete(runId);
-          yield errorEvent;
-          return { status: 'error', summary: streamError };
-        } finally {
-          this.activeWebchatRunBySession.delete(sessionKey);
-          this.runAbortControllers.delete(runId);
-          const assistantPlainText = this.agentService.getLastAssistantPlainText(sessionKey);
-          await this.agentService.emitWebchatTurnComplete({
-            sessionKey,
-            inboundUserText: message,
-            assistantPlainText,
-            aborted: mergedSignal.aborted,
-            ...(streamError !== undefined ? { streamError } : {}),
-          });
-        }
-      }
-
-      // Send message through bus for other channels (telegram, etc.)
-      const correlationMeta = inboundCorrelationMetadataFromAsyncLogContext();
-      await this.bus.publishInbound({
-        channel,
-        sender_id: 'gateway',
-        chat_id: chatId,
-        content: message,
-        ...(correlationMeta ? { metadata: correlationMeta } : {}),
-      });
-
-      // Wait for and collect response
-      // This is simplified - in production we'd need proper session tracking
-      yield { type: 'token', content: 'Processing...\n' };
-
-      // Simulate processing delay
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      yield { type: 'token', content: 'Done\n' };
-
-      return { status: 'ok', summary: 'Message processed' };
-    } catch (error) {
-      log.error({ error }, 'Agent run failed');
-      throw error;
-    }
+    return step.value;
   }
 
   /** Abort an in-flight webchat agent run (matches `runId` from SSE `status`). */
@@ -1305,100 +1164,22 @@ export class GatewayService {
    * Subscribe to server-pushed events.
    * Returns a cleanup function to unsubscribe.
    */
-  subscribe(sessionId: string, listener: EventListener): () => void {
-    this.subscribers.set(sessionId, listener);
-    if (!this.eventBuffers.has(sessionId)) {
-      this.eventBuffers.set(sessionId, []);
-    }
-    log.debug({ sessionId }, 'Event subscriber added');
-
-    return () => {
-      this.subscribers.delete(sessionId);
-      // Keep buffer for a while in case they reconnect
-      setTimeout(() => {
-        if (!this.subscribers.has(sessionId)) {
-          this.eventBuffers.delete(sessionId);
-        }
-      }, 5 * 60_000); // 5 min grace
-      log.debug({ sessionId }, 'Event subscriber removed');
-    };
+  subscribe(sessionId: string, listener: (event: ServiceEvent) => Promise<void> | void): () => void {
+    return this.sse.subscribe(sessionId, listener);
   }
 
   /**
    * Emit an event to all subscribers.
    */
   emit(type: string, payload: unknown): void {
-    const id = String(++this.eventCounter);
-    const event: ServiceEvent = { id, type, payload };
-
-    for (const [sessionId, listener] of this.subscribers) {
-      // Buffer the event
-      const buf = this.eventBuffers.get(sessionId) || [];
-      buf.push(event);
-      if (buf.length > EVENT_BUFFER_SIZE) buf.shift();
-      this.eventBuffers.set(sessionId, buf);
-
-      // Deliver
-      try {
-        listener(event);
-      } catch (err) {
-        log.warn({ sessionId, err }, 'Failed to deliver event to subscriber');
-      }
-    }
+    this.sse.emit(type, payload);
   }
 
   /**
    * Get events since a given event id (for Last-Event-ID reconnection).
    */
   getEventsSince(sessionId: string, lastEventId: string): ServiceEvent[] {
-    const buf = this.eventBuffers.get(sessionId);
-    if (!buf) return [];
-
-    const idx = buf.findIndex((e) => e.id === lastEventId);
-    if (idx === -1) return buf; // can't find cursor — send everything in buffer
-    return buf.slice(idx + 1);
-  }
-
-  /**
-   * Save user message to session for webchat (fire-and-forget).
-   * Called at the start of runAgent to ensure message survives page refresh.
-   */
-  private async _saveUserMessage(
-    sessionKey: string,
-    message: string,
-    attachments?: Array<{
-      type: string;
-      mimeType?: string;
-      data?: string;
-      name?: string;
-      size?: number;
-      workspaceRelativePath?: string;
-    }>,
-  ): Promise<void> {
-    // Load existing messages
-    const existingMessages = await this.sessionManager.loadMessages(sessionKey);
-
-    // Build user message (marker stripped in SessionStore.convertMessages for API clients)
-    const userMessage = {
-      role: 'user' as const,
-      content: [{ type: 'text' as const, text: message }],
-      attachments: attachments?.map((a) => ({
-        type: a.type,
-        mimeType: a.mimeType,
-        name: a.name,
-        size: a.size,
-        workspaceRelativePath: a.workspaceRelativePath,
-        // Note: we don't store data (base64) to keep session file small
-      })),
-      timestamp: Date.now(),
-      /** Dropped before `agent.prompt` so we don't duplicate the turn; not exposed via GET session */
-      webchatEarlySave: true as const,
-    };
-
-    // Append and save
-    const updatedMessages = [...existingMessages, userMessage];
-    await this.sessionManager.saveMessages(sessionKey, updatedMessages);
-    log.debug({ sessionKey, messageCount: updatedMessages.length }, 'User message saved');
+    return this.sse.getEventsSince(sessionId, lastEventId);
   }
 
   // ========== Session Management API ==========
@@ -1541,45 +1322,7 @@ export class GatewayService {
       peerId?: string;
     }>
   > {
-    const result = await this.sessionManager.listSessions({
-      limit: 1000,
-      sortBy: 'lastAccessedAt',
-      sortOrder: 'desc',
-      ...(channel ? { channel } : {}),
-    });
-
-    // Group by channel:chatId to get unique pairs
-    const seen = new Set<string>();
-    const chatIds: Array<{
-      channel: string;
-      chatId: string;
-      lastActive: string;
-      accountId?: string;
-      peerKind?: string;
-      peerId?: string;
-    }> = [];
-
-    for (const session of result.items) {
-      const key = `${session.sourceChannel}:${session.sourceChatId}`;
-      if (!seen.has(key) && session.sourceChannel && session.sourceChatId) {
-        seen.add(key);
-        const r = session.routing;
-        chatIds.push({
-          channel: session.sourceChannel,
-          chatId: session.sourceChatId,
-          lastActive: session.lastAccessedAt,
-          ...(r
-            ? {
-                accountId: r.accountId,
-                peerKind: r.peerKind,
-                peerId: r.peerId,
-              }
-            : {}),
-        });
-      }
-    }
-
-    return chatIds;
+    return getDistinctSessionChatIds(this.sessionManager, channel);
   }
 
   /**
