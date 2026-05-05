@@ -1022,6 +1022,12 @@
     "marketplaceDownloads": "下载",
     "marketplaceVersion": "最新版本",
     "sectionBuiltinList": "内置技能",
+    "categoryLabel": {
+      "creative": "创意与设计",
+      "documents": "文档处理",
+      "tools": "工具与实用程序",
+      "meta": "元技能"
+    },
     "filterAll": "全部",
     "filterGlobal": "全局",
     "filterWorkspace": "工作区",

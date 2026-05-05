@@ -543,6 +543,7 @@ export class AgentManager {
         directoryId,
         name: s.name,
         description: s.description,
+        category: s.category,
         source: s.source,
         path: s.baseDir,
         managed,

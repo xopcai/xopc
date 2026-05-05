@@ -382,6 +382,7 @@ export function SkillsPage() {
 
   const [mainTab, setMainTab] = useState<MainTab>(initialTab);
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>(initialSourceFilter);
+  const [builtinCategoryFilter, setBuiltinCategoryFilter] = useState('');
 
   const [installOpen, setInstallOpen] = useState(false);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
@@ -727,6 +728,43 @@ export function SkillsPage() {
       return blob.includes(q);
     });
   }, [catalog, searchQuery, mainTab, sourceFilter]);
+
+  /** Category display order for consistent pill ordering. */
+  const CATEGORY_ORDER = ['creative', 'documents', 'tools', 'meta'] as const;
+
+  /** Deduplicated categories present in the currently filtered list, in display order. */
+  const builtinCategories = useMemo(() => {
+    const seen = new Set<string>();
+    const ordered: string[] = [];
+    for (const entry of filteredCatalog) {
+      const cat = entry.category;
+      if (!cat || seen.has(cat)) continue;
+      seen.add(cat);
+      ordered.push(cat);
+    }
+    return ordered.sort((a, b) => {
+      const ai = CATEGORY_ORDER.indexOf(a as typeof CATEGORY_ORDER[number]);
+      const bi = CATEGORY_ORDER.indexOf(b as typeof CATEGORY_ORDER[number]);
+      if (ai >= 0 && bi >= 0) return ai - bi;
+      if (ai >= 0) return -1;
+      if (bi >= 0) return 1;
+      return a.localeCompare(b);
+    });
+  }, [filteredCatalog]);
+
+  const categoryLabel = useCallback(
+    (cat: string): string => {
+      const labels = sk.categoryLabel as Record<string, string> | undefined;
+      return labels?.[cat] || cat;
+    },
+    [sk.categoryLabel],
+  );
+
+  /** Apply category pill filter on top of the existing filtered list. */
+  const categoryFilteredCatalog = useMemo(() => {
+    if (!builtinCategoryFilter) return filteredCatalog;
+    return filteredCatalog.filter((r) => r.category === builtinCategoryFilter);
+  }, [filteredCatalog, builtinCategoryFilter]);
 
   const runUpload = async (file: File) => {
     setActionFeedback(null);
@@ -1344,10 +1382,6 @@ export function SkillsPage() {
             </>
           ) : (
             <>
-              <p className="text-xs font-medium uppercase tracking-wide text-fg-subtle">
-                {mainTab === 'builtin' ? sk.sectionBuiltinList : sk.sectionUser}
-              </p>
-
               {loading ? (
                 <div
                   className="overflow-hidden rounded-2xl border border-edge-subtle bg-surface-base dark:border-edge-subtle"
@@ -1367,112 +1401,166 @@ export function SkillsPage() {
                   {sk.noSearchResults}
                 </div>
               ) : (
-                <div className="overflow-hidden rounded-2xl border border-edge-subtle bg-surface-base dark:border-edge-subtle">
-                  {filteredCatalog.map((row) => (
-                    <article
-                      key={`${row.directoryId}-${row.path}`}
-                      className={cn(
-                        'group relative flex items-center gap-4 border-b border-edge-subtle px-4 py-3.5 last:border-b-0',
-                        'transition-colors hover:bg-surface-hover/50 dark:hover:bg-surface-hover/25',
-                      )}
+                <>
+                  {builtinCategories.length > 1 ? (
+                    <div
+                      role="tablist"
+                      aria-label={sk.marketplaceCategoriesAria}
+                      className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 pt-0.5 [scrollbar-width:thin]"
                     >
                       <button
                         type="button"
+                        role="tab"
+                        aria-selected={builtinCategoryFilter === ''}
                         className={cn(
-                          'flex min-w-0 flex-1 cursor-pointer items-center gap-4 rounded-lg text-left outline-none',
+                          'shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
                           interaction.focusRingPanel,
+                          builtinCategoryFilter === ''
+                            ? 'border-fg bg-fg text-surface-panel dark:border-fg dark:bg-fg dark:text-surface-base'
+                            : 'border-edge bg-surface-panel text-fg-muted hover:border-edge-strong hover:text-fg dark:border-edge dark:bg-surface-hover/40',
                         )}
-                        onClick={() => void openSkillDetail(row)}
+                        onClick={() => setBuiltinCategoryFilter('')}
                       >
-                        <SkillCardIcon name={row.name} />
-                        <div className="min-w-0 flex-1 pr-2">
-                          <h3 className="text-[15px] font-semibold leading-snug tracking-tight text-fg">
-                            {row.name}
-                          </h3>
-                          <p
-                            className="mt-0.5 truncate text-sm leading-relaxed text-fg-muted"
-                            title={row.description ? row.description : undefined}
-                          >
-                            {row.description || '—'}
-                          </p>
-                          {mainTab !== 'builtin' || row.managed ? (
-                            <div className="mt-1.5 flex flex-wrap gap-1.5 text-[11px] text-fg-subtle">
-                              {mainTab !== 'builtin' ? (
-                                <span className="rounded-md bg-surface-hover/60 px-2 py-0.5 dark:bg-surface-active/50">
-                                  {sourceLabel(row.source)}
-                                </span>
-                              ) : null}
-                              {row.managed ? (
-                                <span className="rounded-md bg-surface-hover/60 px-2 py-0.5 dark:bg-surface-active/50">
-                                  {sk.col.managed}: {sk.yes}
-                                </span>
-                              ) : null}
-                              {row.hub ? (
-                                <span
-                                  className="max-w-full truncate rounded-md bg-surface-hover/60 px-2 py-0.5 font-mono text-[10px] dark:bg-surface-active/50"
-                                  title={`${row.hub.source}${row.hub.ref ? `\nref: ${row.hub.ref}` : ''}\nupdated: ${row.hub.updatedAt}`}
-                                >
-                                  {sk.hubRemote} ·{' '}
-                                  {row.hub.kind === 'git' ? sk.hubKindGit : sk.hubKindArchive} ·{' '}
-                                  {row.hub.source.length > 48
-                                    ? `${row.hub.source.slice(0, 48)}…`
-                                    : row.hub.source}
-                                </span>
-                              ) : null}
-                            </div>
-                          ) : null}
-                        </div>
+                        {sk.marketplaceCategoryAll}
                       </button>
-                      <div
-                        className="flex shrink-0 items-center gap-1"
-                        onClick={(e) => e.stopPropagation()}
-                        role="presentation"
-                      >
-                        {row.managed ? (
-                          <DropdownMenu.Root>
-                            <DropdownMenu.Trigger asChild>
-                              <button
-                                type="button"
-                                className={cn(
-                                  'flex size-9 items-center justify-center rounded-lg text-fg-muted hover:bg-surface-hover hover:text-fg',
-                                  interaction.focusRingPanel,
-                                )}
-                                aria-label={sk.col.actions}
-                              >
-                                <MoreVertical className="size-4" strokeWidth={1.75} />
-                              </button>
-                            </DropdownMenu.Trigger>
-                            <DropdownMenu.Portal>
-                              <DropdownMenu.Content
-                                className="z-50 min-w-[8rem] rounded-xl border border-edge bg-surface-panel p-1 shadow-popover dark:border-edge"
-                                sideOffset={4}
-                                align="end"
-                              >
-                                <DropdownMenu.Item
-                                  className={cn(
-                                    'flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-red-600 outline-none',
-                                    'hover:bg-red-50 data-[highlighted]:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40',
-                                  )}
-                                  onSelect={() => {
-                                    setConfirmId(row.directoryId);
-                                    setConfirmOpen(true);
-                                  }}
+                      {builtinCategories.map((cat) => {
+                        const selected = builtinCategoryFilter === cat;
+                        return (
+                          <button
+                            key={cat}
+                            type="button"
+                            role="tab"
+                            aria-selected={selected}
+                            className={cn(
+                              'max-w-[14rem] shrink-0 truncate rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
+                              interaction.focusRingPanel,
+                              selected
+                                ? 'border-fg bg-fg text-surface-panel dark:border-fg dark:bg-fg dark:text-surface-base'
+                                : 'border-edge bg-surface-panel text-fg-muted hover:border-edge-strong hover:text-fg dark:border-edge dark:bg-surface-hover/40',
+                            )}
+                            title={categoryLabel(cat)}
+                            onClick={() => setBuiltinCategoryFilter(cat)}
+                          >
+                            {categoryLabel(cat)}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : null}
+                  {categoryFilteredCatalog.length === 0 ? (
+                    <div className="rounded-2xl border border-dashed border-edge py-16 text-center text-sm text-fg-muted">
+                      {sk.noSearchResults}
+                    </div>
+                  ) : (
+                    <div className="overflow-hidden rounded-2xl border border-edge-subtle bg-surface-base dark:border-edge-subtle">
+                      {categoryFilteredCatalog.map((row, i, arr) => (
+                          <article
+                            key={`${row.directoryId}-${row.path}`}
+                            className={cn(
+                              'group relative flex items-center gap-4 border-b border-edge-subtle px-4 py-3.5',
+                              i === arr.length - 1 && 'border-b-0',
+                              'transition-colors hover:bg-surface-hover/50 dark:hover:bg-surface-hover/25',
+                            )}
+                          >
+                            <button
+                              type="button"
+                              className={cn(
+                                'flex min-w-0 flex-1 cursor-pointer items-center gap-4 rounded-lg text-left outline-none',
+                                interaction.focusRingPanel,
+                              )}
+                              onClick={() => void openSkillDetail(row)}
+                            >
+                              <SkillCardIcon name={row.name} />
+                              <div className="min-w-0 flex-1 pr-2">
+                                <h3 className="text-[15px] font-semibold leading-snug tracking-tight text-fg">
+                                  {row.name}
+                                </h3>
+                                <p
+                                  className="mt-0.5 truncate text-sm leading-relaxed text-fg-muted"
+                                  title={row.description ? row.description : undefined}
                                 >
-                                  <Trash2 className="size-4" strokeWidth={1.75} aria-hidden />
-                                  {sk.delete}
-                                </DropdownMenu.Item>
-                              </DropdownMenu.Content>
-                            </DropdownMenu.Portal>
-                          </DropdownMenu.Root>
-                        ) : null}
-                        <SkillEnableSwitch
-                          checked={enabledOverride[row.name] ?? row.enabled}
-                          onChange={(next) => void onSkillToggle(row.name, next)}
-                        />
+                                  {row.description || '—'}
+                                </p>
+                                {mainTab !== 'builtin' || row.managed ? (
+                                  <div className="mt-1.5 flex flex-wrap gap-1.5 text-[11px] text-fg-subtle">
+                                    {mainTab !== 'builtin' ? (
+                                      <span className="rounded-md bg-surface-hover/60 px-2 py-0.5 dark:bg-surface-active/50">
+                                        {sourceLabel(row.source)}
+                                      </span>
+                                    ) : null}
+                                    {row.managed ? (
+                                      <span className="rounded-md bg-surface-hover/60 px-2 py-0.5 dark:bg-surface-active/50">
+                                        {sk.col.managed}: {sk.yes}
+                                      </span>
+                                    ) : null}
+                                    {row.hub ? (
+                                      <span
+                                        className="max-w-full truncate rounded-md bg-surface-hover/60 px-2 py-0.5 font-mono text-[10px] dark:bg-surface-active/50"
+                                        title={`${row.hub.source}${row.hub.ref ? `\nref: ${row.hub.ref}` : ''}\nupdated: ${row.hub.updatedAt}`}
+                                      >
+                                        {sk.hubRemote} ·{' '}
+                                        {row.hub.kind === 'git' ? sk.hubKindGit : sk.hubKindArchive} ·{' '}
+                                        {row.hub.source.length > 48
+                                          ? `${row.hub.source.slice(0, 48)}…`
+                                          : row.hub.source}
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                ) : null}
+                              </div>
+                            </button>
+                            <div
+                              className="flex shrink-0 items-center gap-1"
+                              onClick={(e) => e.stopPropagation()}
+                              role="presentation"
+                            >
+                              {row.managed ? (
+                                <DropdownMenu.Root>
+                                  <DropdownMenu.Trigger asChild>
+                                    <button
+                                      type="button"
+                                      className={cn(
+                                        'flex size-9 items-center justify-center rounded-lg text-fg-muted hover:bg-surface-hover hover:text-fg',
+                                        interaction.focusRingPanel,
+                                      )}
+                                      aria-label={sk.col.actions}
+                                    >
+                                      <MoreVertical className="size-4" strokeWidth={1.75} />
+                                    </button>
+                                  </DropdownMenu.Trigger>
+                                  <DropdownMenu.Portal>
+                                    <DropdownMenu.Content
+                                      className="z-50 min-w-[8rem] rounded-xl border border-edge bg-surface-panel p-1 shadow-popover dark:border-edge"
+                                      sideOffset={4}
+                                      align="end"
+                                    >
+                                      <DropdownMenu.Item
+                                        className={cn(
+                                          'flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-red-600 outline-none',
+                                          'hover:bg-red-50 data-[highlighted]:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40',
+                                        )}
+                                        onSelect={() => {
+                                          setConfirmId(row.directoryId);
+                                          setConfirmOpen(true);
+                                        }}
+                                      >
+                                        <Trash2 className="size-4" strokeWidth={1.75} aria-hidden />
+                                        {sk.delete}
+                                      </DropdownMenu.Item>
+                                    </DropdownMenu.Content>
+                                  </DropdownMenu.Portal>
+                                </DropdownMenu.Root>
+                              ) : null}
+                              <SkillEnableSwitch
+                                checked={enabledOverride[row.name] ?? row.enabled}
+                                onChange={(next) => void onSkillToggle(row.name, next)}
+                              />
+                            </div>
+                          </article>
+                        ))}
                       </div>
-                    </article>
-                  ))}
-                </div>
+                  )}
+                </>
               )}
             </>
           )}

@@ -1022,6 +1022,12 @@
     "marketplaceDownloads": "Downloads",
     "marketplaceVersion": "Latest",
     "sectionBuiltinList": "Built-in skills",
+    "categoryLabel": {
+      "creative": "Creative & Design",
+      "documents": "Documents",
+      "tools": "Tools & Utilities",
+      "meta": "Meta"
+    },
     "filterAll": "All",
     "filterGlobal": "Global",
     "filterWorkspace": "Workspace",
