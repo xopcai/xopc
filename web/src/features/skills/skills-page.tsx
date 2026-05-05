@@ -1,25 +1,16 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import type { LucideIcon } from 'lucide-react';
 import {
-  BookOpen,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   FileArchive,
-  FileText,
-  FileType,
   Funnel,
   Info,
   MoreVertical,
-  Package,
   Plus,
-  Presentation,
-  Puzzle,
   RefreshCw,
   Search,
-  Sparkles,
-  Table2,
   Trash2,
   X,
 } from 'lucide-react';
@@ -51,37 +42,57 @@ function interpolate(template: string, params: Record<string, string | number>):
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => String(params[key] ?? ''));
 }
 
-/** Distinct glyph per skill id — avoids duplicate “first letter” collisions (e.g. create-skill vs install-skill-dependency). */
-function resolveSkillIcon(name: string): LucideIcon {
-  const n = name.toLowerCase().replace(/_/g, '-');
-  if (n.includes('find-skill')) return Search;
-  if (n.includes('install') && (n.includes('depend') || n.includes('dependency'))) return Package;
-  if (n.includes('create-skill')) return Sparkles;
-  if (n === 'docx' || n.endsWith('-docx')) return FileText;
-  if (n === 'pdf' || n.endsWith('-pdf')) return FileType;
-  if (n === 'pptx' || n.includes('pptx')) return Presentation;
-  if (n === 'xlsx' || n.includes('xlsx')) return Table2;
-  if (n.includes('markdown') || n.includes('md')) return BookOpen;
-  return Puzzle;
+/** Pastel tile + saturated letter (light / dark pairs), stable per skill name hash. */
+const SKILL_INITIAL_PALETTE: { light: string; dark: string }[] = [
+  { light: 'bg-sky-100 text-sky-800', dark: 'dark:bg-sky-950/55 dark:text-sky-200' },
+  { light: 'bg-violet-100 text-violet-800', dark: 'dark:bg-violet-950/55 dark:text-violet-200' },
+  { light: 'bg-emerald-100 text-emerald-800', dark: 'dark:bg-emerald-950/55 dark:text-emerald-200' },
+  { light: 'bg-orange-100 text-orange-800', dark: 'dark:bg-orange-950/55 dark:text-orange-200' },
+  { light: 'bg-rose-100 text-rose-800', dark: 'dark:bg-rose-950/55 dark:text-rose-200' },
+  { light: 'bg-amber-100 text-amber-900', dark: 'dark:bg-amber-950/55 dark:text-amber-200' },
+  { light: 'bg-cyan-100 text-cyan-800', dark: 'dark:bg-cyan-950/55 dark:text-cyan-200' },
+  { light: 'bg-indigo-100 text-indigo-800', dark: 'dark:bg-indigo-950/55 dark:text-indigo-200' },
+  { light: 'bg-fuchsia-100 text-fuchsia-800', dark: 'dark:bg-fuchsia-950/55 dark:text-fuchsia-200' },
+  { light: 'bg-teal-100 text-teal-800', dark: 'dark:bg-teal-950/55 dark:text-teal-200' },
+];
+
+function hashSkillNameKey(name: string): number {
+  let h = 0;
+  for (let i = 0; i < name.length; i += 1) {
+    h = (Math.imul(31, h) + name.charCodeAt(i)) | 0;
+  }
+  return Math.abs(h);
+}
+
+/** First letter or digit (Unicode letters included); skips leading punctuation in slugs. */
+function skillInitialLetter(name: string): string {
+  const t = name.trim();
+  if (!t) return '?';
+  const m = t.match(/[\p{L}\p{N}]/u);
+  if (m) {
+    const ch = m[0];
+    return ch.toLocaleUpperCase('en-US');
+  }
+  return t[0];
 }
 
 function SkillCardIcon({ name, className }: { name: string; className?: string }) {
-  const Icon = resolveSkillIcon(name);
+  const initial = skillInitialLetter(name);
+  const pair = SKILL_INITIAL_PALETTE[hashSkillNameKey(name) % SKILL_INITIAL_PALETTE.length];
   return (
     <div
       className={cn(
-        'flex size-11 shrink-0 items-center justify-center rounded-xl',
-        'bg-surface-hover/90 shadow-surface ring-1 ring-inset ring-edge/35 dark:bg-surface-active/80 dark:ring-edge/50',
-        'transition-[transform,box-shadow] duration-200 ease-out group-hover:ring-edge/55 dark:group-hover:ring-edge/65',
+        'flex size-11 shrink-0 items-center justify-center rounded-xl font-semibold tracking-tight shadow-surface',
+        'text-[1.05rem] ring-1 ring-inset ring-black/[0.06] dark:ring-white/[0.1]',
+        'transition-[transform,box-shadow] duration-200 ease-out group-hover:ring-black/[0.1] dark:group-hover:ring-white/[0.14]',
         'group-hover:-translate-y-px',
+        pair.light,
+        pair.dark,
         className,
       )}
       aria-hidden
     >
-      <Icon
-        className="size-[1.35rem] text-fg-muted transition-colors duration-200 group-hover:text-fg"
-        strokeWidth={1.75}
-      />
+      {initial}
     </div>
   );
 }
@@ -341,15 +352,15 @@ export function SkillsPage() {
   );
 
   const openMarketplaceDetail = useCallback(
-    async (name: string) => {
+    async (packageId: string, listTitle?: string) => {
       setDetailSource('store');
       setDetailOpen(true);
-      setDetailTitle(name);
+      setDetailTitle(listTitle?.trim() || packageId);
       setDetailMarkdown('');
       setDetailError(null);
       setDetailLoading(true);
       try {
-        const pkg = await getMarketplacePackageDetail(name);
+        const pkg = await getMarketplacePackageDetail(packageId);
         setDetailTitle(pkg.name);
         const readme = pkg.readme?.trim();
         if (readme) {
@@ -916,8 +927,8 @@ export function SkillsPage() {
                 <>
                   <div className="overflow-hidden rounded-2xl border border-edge-subtle bg-surface-base dark:border-edge-subtle">
                     {mpPayload.items.map((row) => {
-                      const installed = isSkillInstalledByName(row.name);
-                      const busy = installingMarketName === row.name;
+                      const installed = isSkillInstalledByName(row.id);
+                      const busy = installingMarketName === row.id;
                       return (
                         <article
                           key={row.id}
@@ -932,9 +943,9 @@ export function SkillsPage() {
                               'flex min-w-0 flex-1 cursor-pointer items-start gap-4 rounded-xl text-left outline-none',
                               interaction.focusRingPanel,
                             )}
-                            onClick={() => void openMarketplaceDetail(row.name)}
+                            onClick={() => void openMarketplaceDetail(row.id, row.name)}
                           >
-                            <SkillCardIcon name={row.name} />
+                            <SkillCardIcon name={row.id} />
                             <div className="min-w-0 flex-1 pr-2">
                               <h3 className="text-[15px] font-semibold leading-snug tracking-tight text-fg">
                                 {row.name}
@@ -971,7 +982,7 @@ export function SkillsPage() {
                               variant={installed ? 'secondary' : 'primary'}
                               className="min-w-[6.5rem]"
                               disabled={busy || mpLoading}
-                              onClick={() => void onMarketInstall(row.name)}
+                              onClick={() => void onMarketInstall(row.id)}
                             >
                               {busy ? sk.uploading : installed ? sk.marketplaceReinstall : sk.marketplaceInstall}
                             </Button>
@@ -1172,11 +1183,11 @@ export function SkillsPage() {
           <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[60] bg-scrim" />
           <Dialog.Content
             className={cn(
-              'xopc-dialog-content fixed left-1/2 top-1/2 z-[60] flex max-h-[min(90vh,56rem)] w-[min(100%-2rem,min(92vw,56rem))] -translate-x-1/2 -translate-y-1/2 flex-col',
-              'rounded-2xl border border-edge bg-surface-panel shadow-float dark:border-edge',
+              'xopc-dialog-content fixed left-1/2 top-1/2 z-[60] flex h-[min(88vh,44rem)] max-h-[min(92vh,56rem)] w-[min(100%-2rem,min(92vw,56rem))]',
+              '-translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-panel shadow-float dark:border-edge',
             )}
           >
-            <div className="group flex shrink-0 items-center gap-3 border-b border-edge px-4 py-3">
+            <div className="group flex min-h-[3.25rem] shrink-0 items-center gap-3 border-b border-edge px-4 py-3">
               <SkillCardIcon name={detailTitle || '?'} />
               <Dialog.Title className="min-w-0 flex-1 truncate text-base font-semibold text-fg">
                 {detailTitle || '—'}
@@ -1194,23 +1205,33 @@ export function SkillsPage() {
                 </button>
               </Dialog.Close>
             </div>
-            <div className="flex shrink-0 items-start gap-2 border-b border-blue-200/80 bg-blue-50/95 px-4 py-2.5 text-sm text-fg dark:border-blue-900/50 dark:bg-blue-950/45">
+            <div className="flex min-h-[3.25rem] shrink-0 items-start gap-2 border-b border-blue-200/80 bg-blue-50/95 px-4 py-2.5 text-sm text-fg dark:border-blue-900/50 dark:bg-blue-950/45">
               <Info className="mt-0.5 size-4 shrink-0 text-blue-600 dark:text-blue-400" strokeWidth={1.75} aria-hidden />
-              <p className="leading-relaxed">
+              <p className="min-w-0 leading-relaxed">
                 {detailSource === 'store' ? sk.detailModalBannerStore : sk.detailModalBanner}
               </p>
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+            <div className="min-h-0 min-w-0 flex-1 overflow-auto px-4 py-4">
               {detailLoading ? (
-                <div className="space-y-2" aria-busy="true">
-                  <div className="h-4 w-2/3 animate-pulse rounded bg-surface-hover" />
-                  <div className="h-4 w-full animate-pulse rounded bg-surface-hover" />
-                  <div className="h-4 w-5/6 animate-pulse rounded bg-surface-hover" />
+                <div
+                  className="flex h-full min-h-[14rem] flex-col gap-2.5 py-1"
+                  aria-busy="true"
+                  aria-label={sk.loading}
+                >
+                  {Array.from({ length: 10 }, (_, i) => (
+                    <div
+                      key={i}
+                      className={cn(
+                        'h-4 animate-pulse rounded-md bg-surface-hover dark:bg-surface-active/50',
+                        i % 3 === 0 ? 'w-[92%]' : i % 3 === 1 ? 'w-full' : 'w-4/5',
+                      )}
+                    />
+                  ))}
                 </div>
               ) : detailError ? (
                 <p className="text-sm text-red-600 dark:text-red-400">{detailError}</p>
               ) : (
-                <div className="markdown-content min-w-0">
+                <div className="markdown-content min-w-0 break-words">
                   <MarkdownView content={detailMarkdown} />
                 </div>
               )}

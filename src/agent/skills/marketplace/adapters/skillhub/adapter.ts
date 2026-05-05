@@ -11,13 +11,35 @@ import {
   batchGetSkillHubSkills,
   getDefaultSkillSlugs,
   getSkillHubSkill,
+  getSkillHubSkillFileText,
   getSkillHubSkillFiles,
+  pickSkillHubDocFilePath,
   downloadSkillHubZipBuffer,
   searchSkillHubSkills,
   type SkillHubSkill,
 } from './registry-client.js';
 
 import type { SkillsMarketplaceAdapter } from '../../adapter.types.js';
+
+function isPipelineOnlyChangelog(text: string | null | undefined): boolean {
+  if (!text?.trim()) return true;
+  return /^synced by skillhub pipeline\.?$/i.test(text.trim());
+}
+
+function skillHubFallbackReadmeMarkdown(detail: {
+  skill: SkillHubSkill;
+  latestVersion: { version: string };
+}): string {
+  const s = detail.skill;
+  const title = s.displayName?.trim() || s.slug;
+  const zh = s.summary_zh?.trim();
+  const en = s.summary?.trim();
+  const body =
+    zh && en && zh !== en
+      ? `${zh}\n\n${en}`
+      : zh || en || '_No description._';
+  return `## ${title}\n\n**${s.slug}** · v${detail.latestVersion.version}\n\n${body}`;
+}
 
 function convertSkillHubToPackageListItem(detail: SkillHubSkill): MarketplacePackageListItem {
   return {
@@ -112,12 +134,37 @@ export const skillhubMarketplaceAdapter: SkillsMarketplaceAdapter = {
 
   async getPackageDetail(_config, packageName) {
     const detail = await getSkillHubSkill(packageName);
+    const slug = detail.skill.slug;
+    const version = detail.latestVersion.version;
+    const changelog = detail.latestVersion.changelog;
+
+    let readme: string | null = null;
+    try {
+      const { files } = await getSkillHubSkillFiles(slug, version);
+      const docPath = pickSkillHubDocFilePath(files);
+      if (docPath) {
+        readme = await getSkillHubSkillFileText(slug, docPath, version);
+      }
+    } catch {
+      readme = null;
+    }
+
+    const trimmed = readme?.trim() ?? '';
+    if (!trimmed) {
+      readme = skillHubFallbackReadmeMarkdown(detail);
+    } else {
+      readme = trimmed;
+      if (changelog?.trim() && !isPipelineOnlyChangelog(changelog)) {
+        readme = `${trimmed}\n\n---\n\n## Changelog\n\n${changelog.trim()}`;
+      }
+    }
+
     return {
       id: detail.skill.slug,
       name: detail.skill.slug,
       type: 'skill',
       description: detail.skill.summary_zh || detail.skill.summary,
-      readme: detail.latestVersion?.changelog ?? null,
+      readme,
       downloads: detail.skill.stats.downloads,
       author: {
         username: detail.owner.handle,

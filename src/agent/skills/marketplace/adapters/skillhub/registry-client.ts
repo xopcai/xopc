@@ -7,6 +7,93 @@ import { MAX_SKILL_ZIP_BYTES } from '../../../managed-store.js';
 
 const SKILLHUB_API_BASE = 'https://api.skillhub.cn';
 
+/** Max bytes when fetching SKILL.md / README for marketplace preview (redirects to COS). */
+export const MAX_SKILLHUB_README_BYTES = 512 * 1024;
+
+function basenameSkillPath(p: string): string {
+  const norm = p.replace(/\\/g, '/');
+  const parts = norm.split('/');
+  return parts[parts.length - 1] || norm;
+}
+
+/**
+ * Prefer SKILL.md, then README.md, then HOW_TO_USE.md (basename match, any directory depth).
+ */
+export function pickSkillHubDocFilePath(files: SkillHubFile[]): string | null {
+  const rows = files.map((f) => ({
+    path: f.path.replace(/\\/g, '/'),
+    base: basenameSkillPath(f.path).toLowerCase(),
+  }));
+  const firstBase = (name: string) => rows.find((r) => r.base === name.toLowerCase());
+  const skillMd = firstBase('SKILL.md') ?? firstBase('skill.md');
+  if (skillMd) return skillMd.path;
+  const readme = firstBase('README.md') ?? firstBase('readme.md');
+  if (readme) return readme.path;
+  const how = firstBase('HOW_TO_USE.md');
+  if (how) return how.path;
+  return null;
+}
+
+function assertSkillHubReadmeResponseUrl(finalUrl: string): void {
+  let u: URL;
+  try {
+    u = new URL(finalUrl);
+  } catch {
+    throw new Error('Invalid SkillHub file response URL');
+  }
+  if (u.protocol !== 'https:') {
+    throw new Error('SkillHub file response must use HTTPS');
+  }
+  const host = u.hostname.toLowerCase();
+  if (host === 'api.skillhub.cn') return;
+  if (host.endsWith('.myqcloud.com')) return;
+  throw new Error('SkillHub file redirect host is not allowlisted');
+}
+
+/**
+ * Fetches a single text file from the registry (follows redirect to COS when applicable).
+ */
+export async function getSkillHubSkillFileText(
+  slug: string,
+  filePath: string,
+  version?: string,
+): Promise<string> {
+  const enc = encodeURIComponent(slug.trim());
+  const normPath = filePath.replace(/\\/g, '/');
+  const sp = new URLSearchParams({ path: normPath });
+  if (version?.trim()) sp.set('version', version.trim());
+  const url = `${SKILLHUB_API_BASE}/api/v1/skills/${enc}/file?${sp.toString()}`;
+  const res = await fetch(url, {
+    redirect: 'follow',
+    headers: { Accept: 'text/markdown,text/plain,*/*' },
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    let msg = `SkillHub file request failed (${res.status})`;
+    try {
+      const j = JSON.parse(text) as { message?: string; error?: string };
+      if (typeof j.message === 'string') msg = j.message;
+      else if (typeof j.error === 'string') msg = j.error;
+    } catch {
+      if (text) msg = text.slice(0, 200);
+    }
+    throw new Error(msg);
+  }
+  assertSkillHubReadmeResponseUrl(res.url);
+  const len = res.headers.get('content-length');
+  if (len) {
+    const n = Number(len);
+    if (Number.isFinite(n) && n > MAX_SKILLHUB_README_BYTES) {
+      throw new Error(`SkillHub file exceeds maximum size (${MAX_SKILLHUB_README_BYTES} bytes)`);
+    }
+  }
+  const ab = await res.arrayBuffer();
+  if (ab.byteLength > MAX_SKILLHUB_README_BYTES) {
+    throw new Error(`SkillHub file exceeds maximum size (${MAX_SKILLHUB_README_BYTES} bytes)`);
+  }
+  return new TextDecoder('utf-8').decode(ab);
+}
+
 /** skillhub.cn skill metadata */
 export interface SkillHubSkill {
   slug: string;
