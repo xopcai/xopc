@@ -206,19 +206,22 @@ export function useChatSession() {
     });
 
   useEffect(() => {
+    if (!decodedKey) return;
     const active = activeStreamSessionKeyRef.current;
-    if (!decodedKey) return;
-    if (!active || decodedKey === active) return;
-    setStreamingMsg(null);
-    setProgress(null);
-    setStreaming(false);
-    setSending(false);
+    // Hash session changed (or no stream for this chat): clear stream UI and the
+    // guard refs used by `loadSessionById` so returning to a chat always refetches
+    // from the gateway. Leaving refs set while `MessageSender` still drains another
+    // session caused the load to be skipped and stale messages until full reload.
+    if (!active || decodedKey !== active) {
+      activeStreamSessionKeyRef.current = null;
+      sendingRef.current = false;
+      streamingRef.current = false;
+      setStreamingMsg(null);
+      setProgress(null);
+      setStreaming(false);
+      setSending(false);
+    }
   }, [decodedKey]);
-
-  useEffect(() => {
-    if (!decodedKey) return;
-    void tryResumeAgentRun(decodedKey);
-  }, [decodedKey, tryResumeAgentRun]);
 
   const displayMessages = useMemo(() => {
     if (!streamingMsg) return messages;

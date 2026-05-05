@@ -30,6 +30,8 @@ function wheelDeltaImpliesTowardOlderMessages(e: WheelEvent): boolean {
 export interface UseChatScrollViewportArgs {
   hasToken: boolean;
   showSessionLoading: boolean;
+  /** When this changes (after navigation), pin to bottom and force-scroll — prior session may have been mid-scroll. */
+  sessionKey: string | null;
   sending: boolean;
   chatMessages: Message[];
   hasMore: boolean;
@@ -51,6 +53,7 @@ export interface UseChatScrollViewportResult {
 export function useChatScrollViewport({
   hasToken,
   showSessionLoading,
+  sessionKey,
   sending,
   chatMessages,
   hasMore,
@@ -138,6 +141,22 @@ export function useChatScrollViewport({
       requestAnimationFrame(() => scrollToBottom(false, true));
     });
   }, [showSessionLoading, hasToken, scrollToBottom]);
+
+  useLayoutEffect(() => {
+    if (!hasToken) return;
+    if (showSessionLoading) return;
+    listScrollMetricsRef.current = { first: undefined, len: 0, scrollHeight: 0 };
+    atBottomRef.current = true;
+    setAtBottom(true);
+    const el = scrollRef.current;
+    if (el) {
+      el.scrollTop = el.scrollHeight;
+    }
+    requestAnimationFrame(() => {
+      scrollToBottom(false, true);
+      requestAnimationFrame(() => scrollToBottom(false, true));
+    });
+  }, [sessionKey, hasToken, showSessionLoading, scrollToBottom]);
 
   useEffect(() => {
     if (!sending) return;
