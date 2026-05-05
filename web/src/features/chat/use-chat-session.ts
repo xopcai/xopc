@@ -19,6 +19,7 @@ import { useChatFollowUpClarify } from '@/features/chat/use-chat-follow-up-clari
 import { useChatSessionAgents } from '@/features/chat/use-chat-session-agents';
 import { useChatSessionLoad } from '@/features/chat/use-chat-session-load';
 import { useChatSessionStreaming } from '@/features/chat/use-chat-session-streaming';
+import { useChatAgentRunIndicatorStore } from '@/stores/chat-agent-run-indicator-store';
 
 export function useChatSession() {
   const navigate = useNavigate();
@@ -372,6 +373,15 @@ export function useChatSession() {
     refreshModelThinkingSupport,
     resolveAgentIdForPost,
   ]);
+
+  useEffect(() => {
+    const set = useChatAgentRunIndicatorStore.getState().setFocusedAgentRun;
+    if (!sessionKey) {
+      set(null, false);
+      return;
+    }
+    set(sessionKey, streaming || sending);
+  }, [sessionKey, streaming, sending]);
 
   sendMessageRef.current = sendMessage;
 

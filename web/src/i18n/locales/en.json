@@ -357,6 +357,7 @@
     "taskListStartChat": "Start a chat",
     "appMenuAria": "App menu and settings",
     "taskSessionMenuAria": "Session actions",
+    "taskSessionAgentRunning": "Assistant is still responding",
     "taskRename": "Rename",
     "taskCopyChatId": "Copy chat ID",
     "taskDeleteTask": "Delete task",

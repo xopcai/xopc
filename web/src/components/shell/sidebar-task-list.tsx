@@ -21,6 +21,7 @@ import { Button } from '@/components/ui/button';
 import { SlidingSegmented } from '@/components/ui/sliding-segmented';
 import { fetchChatAgents } from '@/features/chat/chat-agents-api';
 import { isWebUiSessionKey } from '@/features/chat/session-manager';
+import { useSidebarSessionAgentRun } from '@/features/chat/use-sidebar-session-agent-run';
 import { AgentAvatarDisplay } from '@/features/settings/agents/agent-avatar-display';
 import { agentAvatarFromOptions, resolveSessionAgentId } from '@/features/sessions/session-agent-resolve';
 import {
@@ -101,6 +102,7 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
   sessionAgentAvatar?: string;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const agentRunActive = useSidebarSessionAgentRun(session.key);
   const title = sessionTitle(session, defaultUnnamedTitle);
   const isPinned = session.status === 'pinned';
 
@@ -138,12 +140,27 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
         title={title}
         onClick={() => onNavigate?.()}
       >
-        <AgentAvatarDisplay
-          agentId={sessionAgentId}
-          avatar={sessionAgentAvatar}
-          size={24}
-          className="size-6 shrink-0 ring-1 ring-edge/60 dark:ring-edge"
-        />
+        <span className="relative shrink-0">
+          <AgentAvatarDisplay
+            agentId={sessionAgentId}
+            avatar={sessionAgentAvatar}
+            size={24}
+            className="size-6 shrink-0 ring-1 ring-edge/60 dark:ring-edge"
+          />
+          {agentRunActive ? (
+            <span
+              className="pointer-events-none absolute -bottom-0.5 -right-0.5 flex size-2.5 items-center justify-center"
+              title={sb.taskSessionAgentRunning}
+              aria-label={sb.taskSessionAgentRunning}
+            >
+              <span className="absolute size-full animate-ping rounded-full bg-accent/70" aria-hidden />
+              <span
+                className="relative size-2 rounded-full bg-accent shadow-sm ring-2 ring-surface-panel dark:ring-surface-base"
+                aria-hidden
+              />
+            </span>
+          ) : null}
+        </span>
         {showSourceChannelIcon ? (
           <>
             <span
