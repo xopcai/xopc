@@ -1023,6 +1023,7 @@
     "marketplaceVersion": "最新版本",
     "sectionBuiltinList": "内置技能",
     "categoryLabel": {
+      "business": "创业与商业",
       "creative": "创意与设计",
       "documents": "文档处理",
       "tools": "工具与实用程序",

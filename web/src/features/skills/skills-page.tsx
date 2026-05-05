@@ -730,7 +730,7 @@ export function SkillsPage() {
   }, [catalog, searchQuery, mainTab, sourceFilter]);
 
   /** Category display order for consistent pill ordering. */
-  const CATEGORY_ORDER = ['creative', 'documents', 'tools', 'meta'] as const;
+  const CATEGORY_ORDER = ['business', 'creative', 'documents', 'tools', 'meta'] as const;
 
   /** Deduplicated categories present in the currently filtered list, in display order. */
   const builtinCategories = useMemo(() => {
