@@ -5,6 +5,7 @@ import { useGatewayStore } from '@/stores/gateway-store';
 import type {
   MarketplaceCategoryItem,
   MarketplacePackageDetailPayload,
+  SkillMarkdownPreviewPayload,
   SkillsMarketplacePayload,
   SkillsPayload,
 } from '@/features/skills/skill.types';
@@ -183,21 +184,29 @@ export async function installMarketplaceSkill(opts: {
   return data.payload;
 }
 
-export async function getSkillMarkdown(skillName: string): Promise<{ name: string; markdown: string }> {
+export async function getSkillMarkdown(skillName: string): Promise<SkillMarkdownPreviewPayload> {
   const res = await apiFetch(apiUrl(`/api/skills/${encodeURIComponent(skillName)}/content`), {
     cache: 'no-store',
   });
   if (!res.ok) {
     throw new Error(await readErrorMessage(res));
   }
-  const data = (await res.json()) as {
-    ok?: boolean;
-    payload?: { name: string; markdown: string };
-  };
-  if (!data.payload?.markdown) {
+  const data = (await res.json()) as { ok?: boolean; payload?: SkillMarkdownPreviewPayload };
+  const p = data.payload;
+  if (
+    !p ||
+    typeof p.name !== 'string' ||
+    typeof p.description !== 'string' ||
+    typeof p.bodyMarkdown !== 'string' ||
+    typeof p.disableModelInvocation !== 'boolean' ||
+    !p.metadata ||
+    typeof p.metadata !== 'object' ||
+    typeof p.metadata.name !== 'string' ||
+    typeof p.metadata.description !== 'string'
+  ) {
     throw new Error('Invalid response');
   }
-  return data.payload;
+  return p;
 }
 
 export interface MarketplaceProviderInfo {

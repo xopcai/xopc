@@ -167,6 +167,17 @@ export interface Skill {
   content: string;
 }
 
+/** GET /api/skills/:name/content — body without YAML frontmatter plus parsed metadata for the gateway console. */
+export interface SkillMarkdownPreviewPayload {
+  name: string;
+  description: string;
+  bodyMarkdown: string;
+  disableModelInvocation: boolean;
+  metadata: SkillMetadata;
+  toolConditions?: SkillToolConditions;
+  requiredEnvVarNames?: string[];
+}
+
 export interface SkillEntry {
   skill: Skill;
   metadata: SkillMetadata;

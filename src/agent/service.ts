@@ -51,6 +51,7 @@ import { AgentOrchestrator, AgentEventHandler } from './orchestration/index.js';
 import { runAgentTurnWithModelFallbacks } from './orchestration/run-agent-turn-with-fallbacks.js';
 import { FeedbackCoordinator } from './feedback/index.js';
 import { AgentManager, type SkillCatalogEntry } from './agent-manager.js';
+import type { SkillMarkdownPreviewPayload } from './skills/types.js';
 import { extractAgentUserPlainText } from './memory/user-message-text.js';
 import { inboundMessageLogRequestId } from './service-inbound-utils.js';
 import type { AgentServiceConfig, StreamHandle } from './service.types.js';
@@ -450,7 +451,7 @@ export class AgentService {
     return this.agentManager.getSkillCatalog();
   }
 
-  getSkillMarkdownSource(skillName: string): { name: string; markdown: string } | null {
+  getSkillMarkdownSource(skillName: string): SkillMarkdownPreviewPayload | null {
     return this.agentManager.getSkillMarkdownSource(skillName);
   }
 

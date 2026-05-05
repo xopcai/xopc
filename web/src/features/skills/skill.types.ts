@@ -10,6 +10,60 @@ export interface SkillHubProvenance {
   updatedAt: string;
 }
 
+export type SkillOsId = 'darwin' | 'linux' | 'win32';
+
+export interface SkillRequiresApi {
+  bins?: string[];
+  env?: string[];
+  anyBins?: string[];
+}
+
+export interface SkillInstallSpecApi {
+  id?: string;
+  kind: string;
+  package?: string;
+  formula?: string;
+  module?: string;
+  url?: string;
+  bins?: string[];
+  label?: string;
+  os?: SkillOsId[];
+}
+
+export interface SkillMetadataApi {
+  name: string;
+  description: string;
+  emoji?: string;
+  homepage?: string;
+  os?: SkillOsId[];
+  requires?: SkillRequiresApi;
+  install?: SkillInstallSpecApi[];
+  xopc?: {
+    emoji?: string;
+    requires?: SkillRequiresApi;
+    install?: SkillInstallSpecApi[];
+    os?: SkillOsId[];
+  };
+}
+
+export interface SkillToolConditionsApi {
+  requiresTools: string[];
+  requiresToolsets: string[];
+  fallbackForTools: string[];
+  fallbackForToolsets: string[];
+}
+
+/** GET /api/skills/:name/content — matches gateway `SkillMarkdownPreviewPayload`. */
+export interface SkillMarkdownPreviewPayload {
+  name: string;
+  description: string;
+  bodyMarkdown: string;
+  disableModelInvocation: boolean;
+  metadata: SkillMetadataApi;
+  toolConditions?: SkillToolConditionsApi;
+  requiredEnvVarNames?: string[];
+}
+
 export interface SkillCatalogEntry {
   directoryId: string;
   name: string;
@@ -74,6 +128,8 @@ export interface MarketplacePackageDetailPayload {
   type: string;
   description: string;
   readme: string | null;
+  /** Present for SkillHub SKILL.md (and similar) so the UI can render structured meta + body. */
+  skillDocPreview?: SkillMarkdownPreviewPayload;
   downloads: number;
   author: { username: string; avatarUrl: string | null };
   latestVersion: {
@@ -81,4 +137,5 @@ export interface MarketplacePackageDetailPayload {
     changelog: string | null;
     publishedAt: string;
   };
+  provider?: 'store' | 'skillhub';
 }
