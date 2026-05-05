@@ -1023,6 +1023,7 @@
     "marketplaceVersion": "Latest",
     "sectionBuiltinList": "Built-in skills",
     "categoryLabel": {
+      "business": "Business",
       "creative": "Creative & Design",
       "documents": "Documents",
       "tools": "Tools & Utilities",
