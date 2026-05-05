@@ -9,7 +9,6 @@ import {
   type RefObject,
 } from 'react';
 
-import { CHAT_SCROLL_UNPIN_BEYOND_PX, chatScrollDistanceFromBottom } from '@/features/chat/chat-scroll-geometry';
 import { ChatWelcomeSpotlight } from '@/features/chat/chat-welcome-spotlight';
 import { MessageBubble } from '@/features/chat/message-bubble';
 import type { Message, ProgressState, ReasoningLevel } from '@/features/chat/messages.types';
@@ -84,18 +83,25 @@ export const MessageList = memo(function MessageList({
   const pinToBottomRef = useRef(pinToBottom);
   pinToBottomRef.current = pinToBottom;
 
+  const pinnedScrollRafRef = useRef<number | null>(null);
+
+  /** While `pinToBottom` is true, do not gate on viewport distance — new rows inflate `scrollHeight` before `scrollTop` catches up, which falsely reads as “scrolled up”. */
   const scrollLastToEnd = useCallback(() => {
-    const scrollEl = scrollElementRef.current;
-    if (
-      scrollEl &&
-      chatScrollDistanceFromBottom(scrollEl) > CHAT_SCROLL_UNPIN_BEYOND_PX + 1
-    ) {
-      return;
-    }
     const c = virtualizer.options.count;
     if (c === 0) return;
     virtualizer.scrollToIndex(c - 1, { align: 'end', behavior: 'auto' });
-  }, [virtualizer, scrollElementRef]);
+  }, [virtualizer]);
+
+  const schedulePinnedScroll = useCallback(() => {
+    if (pinnedScrollRafRef.current != null) {
+      cancelAnimationFrame(pinnedScrollRafRef.current);
+    }
+    pinnedScrollRafRef.current = requestAnimationFrame(() => {
+      pinnedScrollRafRef.current = null;
+      if (!pinToBottomRef.current) return;
+      scrollLastToEnd();
+    });
+  }, [scrollLastToEnd]);
 
   /** User clicked “scroll to bottom” or list length changed while pinned — height may not change. */
   useLayoutEffect(() => {
@@ -110,18 +116,18 @@ export const MessageList = memo(function MessageList({
     if (!el) return;
 
     const ro = new ResizeObserver(() => {
-      requestAnimationFrame(() => {
-        if (!pinToBottomRef.current) return;
-        scrollLastToEnd();
-      });
+      schedulePinnedScroll();
     });
     ro.observe(el);
-    requestAnimationFrame(() => {
-      if (!pinToBottomRef.current) return;
-      scrollLastToEnd();
-    });
-    return () => ro.disconnect();
-  }, [pinToBottom, list.length, scrollLastToEnd]);
+    schedulePinnedScroll();
+    return () => {
+      ro.disconnect();
+      if (pinnedScrollRafRef.current != null) {
+        cancelAnimationFrame(pinnedScrollRafRef.current);
+        pinnedScrollRafRef.current = null;
+      }
+    };
+  }, [pinToBottom, list.length, schedulePinnedScroll]);
 
   if (showWelcome) {
     if (welcomeOverlay) {

@@ -73,6 +73,9 @@ export function useChatScrollViewport({
     scrollHeight: number;
   }>({ first: undefined, len: 0, scrollHeight: 0 });
 
+  /** Coalesce pinned follow-scroll to one rAF per burst (many SSE updates per frame). */
+  const followTailRafRef = useRef<number | null>(null);
+
   useEffect(() => {
     atBottomRef.current = atBottom;
   }, [atBottom]);
@@ -87,6 +90,10 @@ export function useChatScrollViewport({
         setAtBottom(false);
       }
       return;
+    }
+    /** Instant follow-the-tail: avoid waiting a frame when transcript/virtual height grows (streaming). */
+    if (force && !smooth) {
+      el.scrollTop = el.scrollHeight;
     }
     requestAnimationFrame(() => {
       el.scrollTo({ top: el.scrollHeight, behavior: smooth ? 'smooth' : 'auto' });
@@ -242,10 +249,32 @@ export function useChatScrollViewport({
     };
   }, [hasToken, showSessionLoading]);
 
-  useEffect(() => {
+  /**
+   * Transcript grew while pinned: `scrollHeight` jumps before `scrollTop` is corrected, so
+   * `chatScrollDistanceFromBottom` is temporarily large — `scrollToBottom(false)` would mis-treat
+   * that as “user left the bottom” and clear `atBottom`. Force keeps follow-the-tail behavior
+   * (same idea as Cursor / VS Code chat stick-to-bottom).
+   *
+   * `useLayoutEffect` + coalesced rAF: align with virtual row layout before paint; batch rapid
+   * stream chunks into one scroll pass per frame where possible.
+   */
+  useLayoutEffect(() => {
     if (showSessionLoading) return;
     if (!atBottom) return;
-    scrollToBottom(false);
+
+    if (followTailRafRef.current != null) {
+      cancelAnimationFrame(followTailRafRef.current);
+    }
+    followTailRafRef.current = requestAnimationFrame(() => {
+      followTailRafRef.current = null;
+      scrollToBottom(false, true);
+    });
+    return () => {
+      if (followTailRafRef.current != null) {
+        cancelAnimationFrame(followTailRafRef.current);
+        followTailRafRef.current = null;
+      }
+    };
   }, [chatMessages, atBottom, scrollToBottom, showSessionLoading]);
 
   useLayoutEffect(() => {
