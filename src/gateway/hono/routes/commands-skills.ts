@@ -36,7 +36,8 @@ export function registerCommandsSkillsRoutes(authenticated: Hono, deps: Authenti
   // ========== Skills (managed global skills under ~/.xopc/skills) ==========
 
   authenticated.get('/api/skills', (c) => {
-    const payload = service.getSkillsApi();
+    const lang = c.req.query('lang')?.trim() || undefined;
+    const payload = service.getSkillsApi(lang);
     return c.json({ ok: true, payload });
   });
 
@@ -51,7 +52,8 @@ export function registerCommandsSkillsRoutes(authenticated: Hono, deps: Authenti
     } catch {
       return c.json({ ok: false, error: 'Invalid skill name' }, 400);
     }
-    const data = service.getSkillMarkdownSource(skillName);
+    const lang = c.req.query('lang')?.trim() || undefined;
+    const data = service.getSkillMarkdownSource(skillName, lang);
     if (!data) {
       return c.json({ ok: false, error: 'Skill not found' }, 404);
     }

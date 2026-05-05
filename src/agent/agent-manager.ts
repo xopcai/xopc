@@ -39,6 +39,7 @@ import type { SessionStore } from '../session/store.js';
 import { isValidSkillEnvVarName } from './skills/required-env-vars.js';
 import type { SessionContext } from './session/session-context.js';
 import type { Skill, SkillMarkdownPreviewPayload } from './skills/types.js';
+import { resolveLocalizedSkillMarkdown, resolveLocalizedSkillMeta } from './skills/skill-view-path.js';
 import { createSkillConfigManager } from './skills/config.js';
 import { isUnderManagedSkillsDir } from './skills/managed-store.js';
 import { loadSkillsLock, type SkillHubLockEntry } from './skills/hub-lock.js';
@@ -507,11 +508,19 @@ export class AgentManager {
   }
 
   /**
-   * Structured SKILL.md preview for the gateway console (body after frontmatter + parsed metadata).
+   * Structured SKILL.md preview for the gateway console.
+   * When `lang` is provided (e.g. "zh"), tries SKILL-{lang}.md first; falls back to SKILL.md.
    */
-  getSkillMarkdownSource(skillName: string): SkillMarkdownPreviewPayload | null {
+  getSkillMarkdownSource(skillName: string, lang?: string): SkillMarkdownPreviewPayload | null {
     const skill = this.getWorkspaceRuntime(this.baseWorkspacePath).skillManager.findSkill(skillName);
     if (!skill) return null;
+
+    // Try localized file for display
+    if (lang) {
+      const localized = resolveLocalizedSkillMarkdown(skill, lang);
+      if (localized) return localized;
+    }
+
     return {
       name: skill.name,
       description: skill.description,
@@ -529,7 +538,7 @@ export class AgentManager {
     return loadBootstrapFiles(bootstrapDir);
   }
 
-  getSkillCatalog(): SkillCatalogEntry[] {
+  getSkillCatalog(lang?: string): SkillCatalogEntry[] {
     const skillsConfig = createSkillConfigManager(resolveStateDir()).load();
     const lock = loadSkillsLock();
     return this.getWorkspaceRuntime(this.baseWorkspacePath).skillManager.getSkills().map((s) => {
@@ -539,10 +548,14 @@ export class AgentManager {
       const enabled = !(skillsConfig.entries?.[s.name]?.enabled === false);
       const hubKey = managed ? basename(base) : '';
       const hub = managed && hubKey ? lock.entries[hubKey] : undefined;
+
+      // Attempt localized name/description for display
+      const localized = lang ? resolveLocalizedSkillMeta(s, lang) : null;
+
       return {
         directoryId,
-        name: s.name,
-        description: s.description,
+        name: localized?.name ?? s.name,
+        description: localized?.description ?? s.description,
         category: s.category,
         source: s.source,
         path: s.baseDir,

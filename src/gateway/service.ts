@@ -1205,15 +1205,15 @@ export class GatewayService {
     return this.cronService;
   }
 
-  getSkillsApi(): { catalog: SkillCatalogEntry[]; managed: ManagedSkillListItem[] } {
+  getSkillsApi(lang?: string): { catalog: SkillCatalogEntry[]; managed: ManagedSkillListItem[] } {
     return {
-      catalog: this.agentService.getSkillCatalog(),
+      catalog: this.agentService.getSkillCatalog(lang),
       managed: listManagedSkillDirs(),
     };
   }
 
-  getSkillMarkdownSource(skillName: string): SkillMarkdownPreviewPayload | null {
-    return this.agentService.getSkillMarkdownSource(skillName);
+  getSkillMarkdownSource(skillName: string, lang?: string): SkillMarkdownPreviewPayload | null {
+    return this.agentService.getSkillMarkdownSource(skillName, lang);
   }
 
   deleteManagedSkill(skillId: string): void {

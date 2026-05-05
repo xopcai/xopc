@@ -389,7 +389,7 @@ export function GlobalCommandPaletteHost() {
 
           const [commands, skillsPayload, sessions, files] = await Promise.all([
             fetchCommandsCached(),
-            getSkillsCached(),
+            getSkillsCached(language),
             listSessions({ search: q || undefined, limit: 8, offset: 0 }).catch(() => ({ items: [] })),
             (async () => {
               const sk = chatSessionKey?.trim();

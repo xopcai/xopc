@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { listSkillNamesInWire } from '@/features/chat/composer-editor-wire';
 import { fetchCommandsCached, getSkillsCached } from '@/features/chat/command-palette-api';
+import { useLocaleStore } from '@/stores/locale-store';
 import type { PaletteItem, SlashRange } from '@/features/chat/command-palette.types';
 import { FILE_WIRE_TAIL_BODY } from '@/features/chat/file-wire-pattern';
 import { paletteDefaultTiebreak } from '@/features/chat/palette-default-order';
@@ -31,7 +32,7 @@ function atFileTokenSpanContainingIndex(text: string, index: number): { start: n
 
 /** Max rows when filtering (flat list, by relevance). */
 const MAX_FLAT_PALETTE_ITEMS = 20;
-/** When grouped (empty query), rows per section before “Show N more”. */
+/** When grouped (empty query), rows per section before "Show N more". */
 const GROUPED_INITIAL_PER_SECTION = 3;
 
 export function detectSlashRange(text: string, cursor: number): SlashRange | null {
@@ -50,7 +51,7 @@ export function detectSlashRange(text: string, cursor: number): SlashRange | nul
     return null;
   }
   const token = match[0];
-  // Wire `/skill:name` is rendered as a pill, not an active slash palette — otherwise the list stays open with no matches and blocks typing.
+  // Wire `/skill:name` is rendered as a pill, not an active slash palette - otherwise the list stays open with no matches and blocks typing.
   if (token.startsWith('/skill:')) {
     return null;
   }
@@ -117,9 +118,10 @@ export function useCommandPalette(
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [allItems, setAllItems] = useState<PaletteItem[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
-  /** Grouped (empty) palette: each section can expand independently after “Show N more”. */
+  /** Grouped (empty) palette: each section can expand independently after "Show N more". */
   const [groupedSkillsExpanded, setGroupedSkillsExpanded] = useState(false);
   const [groupedCommandsExpanded, setGroupedCommandsExpanded] = useState(false);
+  const language = useLocaleStore((s) => s.language);
 
   const slashRange = useMemo(
     () => (options?.isComposing ? null : detectSlashRange(value, cursor)),
@@ -147,7 +149,7 @@ export function useCommandPalette(
     (async () => {
       try {
         setLoadError(null);
-        const [commands, skillsPayload] = await Promise.all([fetchCommandsCached(), getSkillsCached()]);
+        const [commands, skillsPayload] = await Promise.all([fetchCommandsCached(), getSkillsCached(language)]);
         if (cancelled) return;
 
         const commandItems: PaletteItem[] = commands.map((c) => ({
@@ -318,7 +320,7 @@ export function useCommandPalette(
   return {
     open: paletteActive,
     slashRange,
-    /** False when `/` is not at position 0 — palette may still list skills. */
+    /** False when `/` is not at position 0 - palette may still list skills. */
     commandsAllowed,
     /** `true` when the slash token has no filter text: show Skills / Commands sections. */
     grouped,
