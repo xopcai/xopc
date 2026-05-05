@@ -288,6 +288,9 @@ function matchesQuery(entry: ParsedLogEntry, query: LogQuery): boolean {
 // Query API
 // ============================================
 
+/** Cap matched rows before sort/slice so query stays bounded on huge log dirs. */
+const QUERY_LOGS_MAX_MATCHED = 25_000;
+
 /**
  * Query logs across multiple files
  */
@@ -305,20 +308,14 @@ export async function queryLogs(query: LogQuery = {}): Promise<LogEntry[]> {
     relevantFiles = getLogFilesForRange(fromDate, toDate);
   }
 
-  // Query each file
+  // Collect all matches (files are newest-first; lines in each file are time-asc).
+  // Do not stop at `limit` while streaming — that only captured the oldest tail of
+  // early files and made "newest first" wrong after sort.
   for (const file of relevantFiles) {
+    if (results.length >= QUERY_LOGS_MAX_MATCHED) break;
     for await (const entry of streamLogFile(file.path, query)) {
       results.push(entry);
-
-      // Early exit if limit reached
-      const limit = query.limit || 100;
-      if (results.length >= limit) {
-        break;
-      }
-    }
-
-    if (query.limit && results.length >= query.limit) {
-      break;
+      if (results.length >= QUERY_LOGS_MAX_MATCHED) break;
     }
   }
 

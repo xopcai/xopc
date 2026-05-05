@@ -17,6 +17,7 @@ import {
   parseLogLevelsParam,
   REFRESH_MS,
   segmentValueFromLevels,
+  sortLogsByTimeDesc,
 } from '@/features/logs/logs-page-lib';
 import { messages } from '@/i18n/messages';
 import type { StoredLanguage } from '@/lib/storage';
@@ -162,7 +163,7 @@ export function useLogsPage(language: StoredLanguage) {
       try {
         const result = await queryLogs({ ...queryParams, offset: 0 });
         if (cancelled) return;
-        setLogs(result.logs);
+        setLogs(sortLogsByTimeDesc(result.logs));
         setHasMore(result.logs.length === PAGE_LIMIT);
       } catch (e) {
         if (!cancelled) {
@@ -224,7 +225,7 @@ export function useLogsPage(language: StoredLanguage) {
       void (async () => {
         try {
           const result = await queryLogs({ ...queryParams, offset: 0 });
-          setLogs(result.logs);
+          setLogs(sortLogsByTimeDesc(result.logs));
           setHasMore(result.logs.length === PAGE_LIMIT);
           const st = await getLogStats();
           setStats(st);
@@ -267,7 +268,7 @@ export function useLogsPage(language: StoredLanguage) {
       setError(null);
       try {
         const result = await queryLogs({ ...queryParams, offset: logs.length });
-        setLogs((prev) => [...prev, ...result.logs]);
+        setLogs((prev) => sortLogsByTimeDesc([...prev, ...result.logs]));
         setHasMore(result.logs.length === PAGE_LIMIT);
       } catch (e) {
         setError(e instanceof Error ? e.message : L.loadError);
@@ -283,7 +284,7 @@ export function useLogsPage(language: StoredLanguage) {
       setError(null);
       try {
         const result = await queryLogs({ ...queryParams, offset: 0 });
-        setLogs(result.logs);
+        setLogs(sortLogsByTimeDesc(result.logs));
         setHasMore(result.logs.length === PAGE_LIMIT);
         const [st, fileList] = await Promise.all([getLogStats(), getLogFiles()]);
         setStats(st);
