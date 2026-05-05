@@ -1,0 +1,23 @@
+{
+  "workspace": {
+    "title": "Project Files",
+    "currentWorkspace": "Current Workspace",
+    "openFiles": "Project Files",
+    "preview": "Preview",
+    "download": "Download",
+    "copyPath": "Copy Path",
+    "pathCopied": "Path copied",
+    "edit": "Edit",
+    "viewing": "Viewing",
+    "saved": "Saved",
+    "saving": "Saving…",
+    "emptyDir": "No files",
+    "loadError": "Failed to load",
+    "close": "Close",
+    "resizeHandleAria": "Resize project files panel",
+    "lastModified": "Modified",
+    "openElsewhereHint": "Preview may be limited or unavailable. Download the file or open it with another app.",
+    "cannotPreviewType": "This file type can't be previewed here.",
+    "openSystemApp": "Open with default app"
+  }
+}

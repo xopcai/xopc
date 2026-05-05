@@ -1,0 +1,23 @@
+{
+  "workspace": {
+    "title": "项目文件",
+    "currentWorkspace": "当前工作区",
+    "openFiles": "项目文件",
+    "preview": "预览",
+    "download": "下载",
+    "copyPath": "复制路径",
+    "pathCopied": "路径已复制",
+    "edit": "编辑",
+    "viewing": "查看中",
+    "saved": "已保存",
+    "saving": "保存中…",
+    "emptyDir": "暂无文件",
+    "loadError": "加载失败",
+    "close": "关闭",
+    "resizeHandleAria": "调整项目文件区域宽度",
+    "lastModified": "修改时间",
+    "openElsewhereHint": "预览可能受限或不可用。请下载文件或使用其他应用打开。",
+    "cannotPreviewType": "无法在预览中打开此类型的文件。",
+    "openSystemApp": "用默认应用打开"
+  }
+}

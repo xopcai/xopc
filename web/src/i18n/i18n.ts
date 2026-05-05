@@ -3,8 +3,7 @@ import { initReactI18next } from 'react-i18next';
 
 import { getLanguage } from '@/lib/storage';
 
-import en from './locales/en.json' with { type: 'json' };
-import zh from './locales/zh.json' with { type: 'json' };
+import { en, zh } from './locales/bundle';
 
 void i18n.use(initReactI18next).init({
   resources: {
