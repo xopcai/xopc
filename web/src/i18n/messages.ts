@@ -53,6 +53,7 @@ export type HeartbeatSettingsMessages = MessageBundle['heartbeatSettings'];
 export type WebSearchSettingsMessages = MessageBundle['webSearchSettings'];
 export type AgentsSettingsMessages = MessageBundle['agentsSettings'];
 export type ChatMessages = MessageBundle['chat'];
+export type LogsMessages = MessageBundle['logs'];
 
 export function messages(lang: StoredLanguage) {
   return bundles[lang];
