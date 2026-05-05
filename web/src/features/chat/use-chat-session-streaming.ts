@@ -242,7 +242,9 @@ export function useChatSessionStreaming(deps: {
       sessionMgrRef,
       applyLoadedSessionSnapshot,
       finalizeMessage,
-      fq,
+      fq.dismissClarify,
+      fq.makeOnClarifyRequest,
+      fq.onClarifyToolEnd,
     ],
   );
 
@@ -394,7 +396,9 @@ export function useChatSessionStreaming(deps: {
       sessionMgrRef,
       applyLoadedSessionSnapshot,
       finalizeMessage,
-      fq,
+      fq.dismissClarify,
+      fq.makeOnClarifyRequest,
+      fq.onClarifyToolEnd,
       createNewSession,
     ],
   );
