@@ -1,12 +1,16 @@
 /**
- * HTTP client for the public xopc-store REST API (skills marketplace).
- * Used by the gateway to proxy catalog/install (browser cannot call store directly due to CORS).
+ * HTTP client for the public xopc-store-compatible REST API (packages list, detail, zip download).
+ * Used by the store marketplace adapter and SSRF-safe download helpers.
+ *
+ * Facade: {@link ../../../skills-marketplace.js}.
  */
 
-import type { Config } from '../../config/schema.js';
-import { isValidSkillId, MAX_SKILL_ZIP_BYTES } from './managed-store.js';
+import type { Config } from '../../../../../config/schema.js';
+import { isValidSkillId, MAX_SKILL_ZIP_BYTES } from '../../../managed-store.js';
 
 const DEFAULT_STORE_BASE = 'https://store.xopc.ai';
+
+export type SkillsMarketplaceProvider = 'store' | 'skillhub';
 
 export interface SkillsStoreListParams {
   q?: string;
@@ -26,6 +30,9 @@ export interface SkillsStorePackageListItem {
   latestVersion?: string;
   updatedAt: string;
 }
+
+/** Unified marketplace package list item (works for all adapters). */
+export type MarketplacePackageListItem = SkillsStorePackageListItem;
 
 export interface SkillsStoreListResponse {
   items: SkillsStorePackageListItem[];
@@ -209,4 +216,30 @@ export function skillIdForMarketplaceInstall(packageName: string): string | unde
   const trimmed = packageName.trim();
   if (!trimmed) return undefined;
   return isValidSkillId(trimmed) ? trimmed : undefined;
+}
+
+/**
+ * Unified marketplace list response (adapter fills `provider`).
+ */
+export interface UnifiedMarketplaceListResponse {
+  items: MarketplacePackageListItem[];
+  meta: { page: number; pageSize: number; total: number; totalPages: number };
+  provider: SkillsMarketplaceProvider;
+}
+
+/**
+ * Unified marketplace package detail response.
+ */
+export interface UnifiedMarketplacePackageDetail extends MarketplacePackageDetail {
+  provider: SkillsMarketplaceProvider;
+  /** SkillHub-specific fields */
+  skillHubInfo?: {
+    category: string;
+    installs: number;
+    stars: number;
+    securityReports?: {
+      keen?: { status: string; statusText: string; reportUrl?: string };
+      sanbu?: { status: string; statusText: string; reportUrl?: string };
+    };
+  };
 }

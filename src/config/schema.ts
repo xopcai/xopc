@@ -453,6 +453,8 @@ export const GatewayConfigSchema = z.object({
   heartbeat: HeartbeatConfigSchema.optional(),
   maxSseConnections: z.number().optional(),
   corsOrigins: z.array(z.string()).optional(),
+  /** Skills marketplace provider: `store` (store.xopc.ai) or `skillhub` (skillhub.cn). */
+  skillsMarketplaceProvider: z.enum(['store', 'skillhub']).optional(),
   /** Base URL for the xopc skills marketplace (public REST API). */
   skillsStoreBaseUrl: z.string().url().optional(),
 }).default({
@@ -468,6 +470,7 @@ export const GatewayConfigSchema = z.object({
   },
   maxSseConnections: 100,
   corsOrigins: [],
+  skillsMarketplaceProvider: 'skillhub',
   skillsStoreBaseUrl: 'https://store.xopc.ai',
 });
 
