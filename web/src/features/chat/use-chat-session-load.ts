@@ -12,7 +12,19 @@ import {
   type ReasoningLevel,
 } from '@/features/chat/messages.types';
 import { modelSupportsReasoning } from '@/features/chat/model-capabilities';
+import { pendingAgentRunStorageKey } from '@/features/chat/message-sender';
 import type { SessionManager } from '@/features/chat/session-manager';
+
+function hasPendingWebchatAgentRun(chatId: string): boolean {
+  try {
+    const raw = globalThis.sessionStorage?.getItem(pendingAgentRunStorageKey(chatId));
+    if (!raw) return false;
+    const pr = JSON.parse(raw) as { runId?: unknown };
+    return typeof pr.runId === 'string' && pr.runId.trim().length > 0;
+  } catch {
+    return false;
+  }
+}
 
 export function useChatSessionLoad(deps: {
   sessionMgrRef: RefObject<SessionManager>;
@@ -129,7 +141,7 @@ export function useChatSessionLoad(deps: {
         ) {
           return;
         }
-        if (o === 0) {
+        if (o === 0 && !hasPendingWebchatAgentRun(k)) {
           dismissClarifyOnSessionLoad();
         }
         loadingSessionRef.current = true;

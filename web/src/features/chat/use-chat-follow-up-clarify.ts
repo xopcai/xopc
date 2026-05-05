@@ -123,10 +123,12 @@ export function useChatFollowUpClarify(options: {
 
   useEffect(() => {
     if (!decodedKey) return;
-    if (decodedKey !== sessionKeyRef.current) {
+    // While `sessionKey` is still null during route hydration, `sessionKeyRef` can
+    // lag the URL — treating that as a mismatch cleared every clarify prompt.
+    if (sessionKey != null && sessionKey !== decodedKey) {
       setClarifyPrompt(null);
     }
-  }, [decodedKey, sessionKeyRef]);
+  }, [decodedKey, sessionKey]);
 
   const dismissClarify = useCallback(() => {
     setClarifyPrompt(null);

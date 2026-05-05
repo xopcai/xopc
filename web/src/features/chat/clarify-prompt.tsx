@@ -1,6 +1,8 @@
 import { useCallback, useState } from 'react';
 
+import { Button } from '@/components/ui/button';
 import { MarkdownView } from '@/features/chat/markdown/markdown-view';
+import { cn } from '@/lib/cn';
 
 export type ClarifyPromptState = {
   requestId: string;
@@ -41,25 +43,33 @@ export function ClarifyPrompt({ prompt, submitting, onSubmit }: ClarifyPromptPro
       {hasChoices ? (
         <div className="flex flex-wrap gap-2">
           {prompt.choices!.map((c) => (
-            <button
+            <Button
               key={c}
               type="button"
+              variant="secondary"
               disabled={submitting}
-              className="rounded-md border border-edge bg-surface-panel px-3 py-1.5 text-left text-fg transition hover:bg-surface-muted disabled:opacity-50"
+              className={cn(
+                'min-h-9 justify-start rounded-lg px-3 py-2 text-left text-sm font-normal shadow-none',
+                'hover:border-edge',
+              )}
               onClick={() => pick(c)}
             >
               {c}
-            </button>
+            </Button>
           ))}
           {prompt.default ? (
-            <button
+            <Button
               type="button"
+              variant="ghost"
               disabled={submitting}
-              className="rounded-md border border-dashed border-edge px-3 py-1.5 text-fg-muted hover:bg-surface-muted disabled:opacity-50"
+              className={cn(
+                'min-h-9 justify-start rounded-lg border border-dashed border-edge px-3 py-2 text-left text-sm font-normal text-fg-muted',
+                'hover:border-edge hover:text-fg',
+              )}
               onClick={() => pick(prompt.default!)}
             >
               Default: {prompt.default}
-            </button>
+            </Button>
           ) : null}
         </div>
       ) : (
@@ -81,22 +91,24 @@ export function ClarifyPrompt({ prompt, submitting, onSubmit }: ClarifyPromptPro
             placeholder="Your answer…"
             className="min-w-0 flex-1 rounded-md border border-edge bg-surface-panel px-3 py-2 text-fg placeholder:text-fg-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
           />
-          <button
+          <Button
             type="submit"
+            variant="primary"
             disabled={submitting || !freeText.trim()}
-            className="shrink-0 rounded-md bg-accent px-4 py-2 font-medium text-white hover:opacity-90 disabled:opacity-40"
+            className="shrink-0 rounded-lg px-4 py-2 shadow-surface"
           >
             Send
-          </button>
+          </Button>
           {prompt.default ? (
-            <button
+            <Button
               type="button"
+              variant="secondary"
               disabled={submitting}
-              className="shrink-0 rounded-md border border-edge px-3 py-2 text-fg-muted hover:bg-surface-muted disabled:opacity-50"
+              className="shrink-0 rounded-lg px-3 py-2 text-sm font-normal text-fg-muted shadow-none hover:text-fg"
               onClick={() => pick(prompt.default!)}
             >
               Use default
-            </button>
+            </Button>
           ) : null}
         </form>
       )}
