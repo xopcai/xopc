@@ -3,8 +3,6 @@ import { MessageBusShutdownError, type MessageBus, type InboundMessage } from '.
 import { type Config, getAgentDefaultModelRef } from '../config/schema.js';
 import { maybeAutoTitleSessionStore } from '../session/session-title.js';
 import type { ChannelManager } from '../channels/manager.js';
-import { INTERNAL_OUTBOUND_DROP_CHANNEL } from '../channels/internal-outbound.js';
-
 import { existsSync, readFileSync } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -31,8 +29,7 @@ import { ExtensionHookRunner } from '../extensions/index.js';
 import { loadBootstrapFiles, extractTextContent } from './context/workspace.js';
 import { SessionTracker } from './session/tracker.js';
 import { ModelManager } from './models/index.js';
-import { commandRegistry, initializeCommands } from '../chat-commands/index.js';
-import { parseSlashCommand } from '../chat-commands/command-parse.js';
+import { initializeCommands } from '../chat-commands/index.js';
 import { ProgressFeedbackManager } from './lifecycle/progress.js';
 import { HookHandler } from './lifecycle/hook-handler.js';
 import { ToolErrorTracker } from './tools/error-tracker.js';
@@ -48,59 +45,42 @@ import { CompactionLifecycleHandler } from './lifecycle/handlers/compaction.js';
 import { MessageRouter, CommandHandler, StreamManager } from './messaging/index.js';
 import { SessionContextManager, SessionLifecycleManager, type SessionContext } from './session/index.js';
 import { AgentOrchestrator, AgentEventHandler } from './orchestration/index.js';
-import { runAgentTurnWithModelFallbacks } from './orchestration/run-agent-turn-with-fallbacks.js';
 import { FeedbackCoordinator } from './feedback/index.js';
 import { AgentManager, type SkillCatalogEntry } from './agent-manager.js';
 import type { SkillMarkdownPreviewPayload } from './skills/types.js';
-import { extractAgentUserPlainText } from './memory/user-message-text.js';
 import { inboundMessageLogRequestId } from './service-inbound-utils.js';
 import type { AgentServiceConfig, StreamHandle } from './service.types.js';
 import {
   runProcessDirectStreaming,
   type ProcessDirectStreamingDeps,
 } from './service/process-direct-streaming.js';
+import { reconcileManagedDreamingCronJobs } from './service/reconcile-dreaming-cron.js';
+import { parseOutboundSessionKey } from './service/parse-outbound-session-key.js';
+import { runBtwQuery } from './service/btw-query.js';
+import { formatSessionContextReport } from './service/session-context-report.js';
+import { buildDirectUserMessageContent } from './service/build-direct-message-content.js';
+import { maybeEmitWebchatTts } from './service/webchat-tts.js';
+import { runProcessDirect, type RunProcessDirectDeps } from './service/process-direct-one-shot.js';
 
 import {
   resolveAgentHomeDir,
   resolveDefaultAgentId,
 } from './agent-scope.js';
-import { parseSessionKey as parseRoutingSessionKey } from '../routing/session-key.js';
 import { extractProfileAgentId, resolveAgentBootstrapDir } from '../config/agent-profile.js';
 import { DEFAULT_ACK_MAX_CHARS, NO_REPLY, shouldSilence } from '../heartbeat/tokens.js';
 import { createTypingController, type TypingController } from './lifecycle/typing.js';
 import { cleanTrailingErrors, sanitizeMessages } from './memory/message-sanitizer.js';
-import {
-  DREAMING_CRON_NAME,
-  DREAMING_CRON_TAG,
-  DREAMING_SWEEP_TOKEN,
-  DREAMING_LIGHT_CRON_NAME,
-  DREAMING_LIGHT_SWEEP_TOKEN,
-  DREAMING_REM_CRON_NAME,
-  DREAMING_REM_SWEEP_TOKEN,
-} from './memory/dreaming/constants.js';
-import { resolveDreamingConfig } from './memory/dreaming/config.js';
 import {
   tryApplySessionTranscriptHygiene,
   tryApplySessionTranscriptHygieneForPersistence,
 } from './transcript/transcript-hygiene.js';
 import {
   persistInboundAttachmentsToWorkspace,
-  formatInboundFileTextBlock,
   type InternalAttachmentRoots,
 } from '../channels/attachments/inbound-persist.js';
-import { expandAtFileMentionsInPlainText } from './context/expand-at-file-mentions.js';
-import { resolveInboundImageContentParts } from './image/inbound-image-handling.js';
-import { getDefaultModelSync, resolveModel } from '../providers/index.js';
-import { complete, type UserMessage } from '@mariozechner/pi-ai';
 import { resolveEffectiveAgentProfileForSession } from '../config/agent-profile.js';
-import type { CompactionResult } from './memory/compaction.js';
-import { persistOutboundTtsAudio } from '../channels/attachments/outbound-tts-persist.js';
-import { compressAudio } from '../voice/tts/audio.js';
-import { speak } from '../voice/tts/index.js';
-import { mergeTtsConfigFromAppConfig } from '../voice/tts/merge-config.js';
 import { applyConfigOverrides } from '../config/runtime-overrides.js';
-import { shouldUseTTS, getChannelOutputFormat } from '../voice/tts/service.js';
-import { isTTSAvailable } from '../voice/tts/factory.js';
+import type { CompactionResult } from './memory/compaction.js';
 
 export type { AgentServiceConfig, AgentContext, StreamHandle } from './service.types.js';
 
@@ -593,102 +573,7 @@ export class AgentService {
     if (!cron) {
       return;
     }
-    const cfg = this.effectiveAppConfig();
-    const dreaming = resolveDreamingConfig(cfg);
-    const jobs = await cron.listJobs();
-    const managed = jobs.filter(
-      (job) => job.name?.includes?.(DREAMING_CRON_TAG) ?? false,
-    );
-
-    // Phase definitions: name → { token, schedule, phaseEnabled }.
-    const phaseSpecs: Array<{
-      cronName: string;
-      token: string;
-      schedule: string;
-      phaseEnabled: boolean;
-    }> = [
-      {
-        cronName: DREAMING_LIGHT_CRON_NAME,
-        token: DREAMING_LIGHT_SWEEP_TOKEN,
-        schedule: dreaming.phases.light.cron,
-        phaseEnabled: dreaming.phases.light.enabled,
-      },
-      {
-        cronName: DREAMING_CRON_NAME,
-        token: DREAMING_SWEEP_TOKEN,
-        schedule: dreaming.phases.deep.cron,
-        phaseEnabled: dreaming.phases.deep.enabled,
-      },
-      {
-        cronName: DREAMING_REM_CRON_NAME,
-        token: DREAMING_REM_SWEEP_TOKEN,
-        schedule: dreaming.phases.rem.cron,
-        phaseEnabled: dreaming.phases.rem.enabled,
-      },
-    ];
-
-    if (!dreaming.enabled) {
-      // Remove all managed dreaming jobs when globally disabled.
-      for (const job of managed) {
-        await cron.removeJob(job.id).catch(() => {});
-      }
-      return;
-    }
-
-    // Reconcile each phase independently.
-    for (const spec of phaseSpecs) {
-      const phaseJobs = managed.filter((job) => job.name === spec.cronName);
-
-      if (!spec.phaseEnabled) {
-        for (const job of phaseJobs) {
-          await cron.removeJob(job.id).catch(() => {});
-        }
-        continue;
-      }
-
-      const desiredPayload = { kind: 'agentTurn' as const, message: spec.token };
-
-      if (phaseJobs.length === 0) {
-        await cron.addJob(spec.schedule, {
-          name: spec.cronName,
-          timezone: dreaming.timezone,
-          sessionTarget: 'isolated' as const,
-          payload: desiredPayload,
-          enabled: true,
-        } as any);
-        continue;
-      }
-
-      const primary = phaseJobs[0]!;
-      // Prune duplicates (best-effort).
-      for (const dup of phaseJobs.slice(1)) {
-        await cron.removeJob(dup.id).catch(() => {});
-      }
-
-      // Patch if schedule/payload/timezone/name drifted.
-      const payloadMessage =
-        primary.payload?.kind === 'agentTurn'
-          ? primary.payload.message
-          : (primary.payload as any)?.text;
-      const needsUpdate =
-        primary.schedule !== spec.schedule ||
-        (dreaming.timezone ?? null) !== (primary.timezone ?? null) ||
-        primary.sessionTarget !== 'isolated' ||
-        payloadMessage !== spec.token ||
-        primary.enabled !== true ||
-        primary.name !== spec.cronName;
-
-      if (needsUpdate) {
-        await cron.updateJob(primary.id, {
-          schedule: spec.schedule,
-          timezone: dreaming.timezone ?? undefined,
-          sessionTarget: 'isolated',
-          name: spec.cronName,
-          payload: desiredPayload,
-          enabled: true,
-        } as any);
-      }
-    }
+    await reconcileManagedDreamingCronJobs(cron, this.effectiveAppConfig());
   }
 
   /**
@@ -747,34 +632,7 @@ export class AgentService {
   }
 
   private parseSessionKey(sessionKey: string): { channel: string; chatId: string } {
-    const parts = sessionKey.split(':').filter(Boolean);
-    const first = parts[0] || 'cli';
-
-    // Heartbeat sessions use keys like `heartbeat:main` / `heartbeat:isolated:ts` — not a real channel id.
-    // Route tool outbounds to configured delivery target, or a synthetic channel that ChannelManager drops.
-    if (first === 'heartbeat') {
-      const hb = this.config.config?.gateway?.heartbeat;
-      const target = hb?.target?.trim();
-      const targetChatId = hb?.targetChatId?.trim();
-      if (target && targetChatId) {
-        return { channel: target, chatId: targetChatId };
-      }
-      return { channel: INTERNAL_OUTBOUND_DROP_CHANNEL, chatId: parts.slice(1).join(':') || 'heartbeat' };
-    }
-
-    const parsed = parseRoutingSessionKey(sessionKey);
-    if (parsed) {
-      return { channel: parsed.source, chatId: parsed.peerId };
-    }
-
-    if (first === 'cron') {
-      return { channel: INTERNAL_OUTBOUND_DROP_CHANNEL, chatId: parts.slice(1).join(':') || 'cron' };
-    }
-
-    return {
-      channel: first,
-      chatId: parts.slice(1).join(':') || 'direct',
-    };
+    return parseOutboundSessionKey(sessionKey, this.config.config);
   }
 
   private initSessionContext(
@@ -803,92 +661,6 @@ export class AgentService {
     this.setupSessionEventHandling(sessionKey);
 
     return context;
-  }
-
-  private async buildMessageContent(
-    content: string,
-    attachments?: Array<{
-      type: string;
-      mimeType?: string;
-      data?: string;
-      name?: string;
-      size?: number;
-      workspaceRelativePath?: string;
-    }>,
-    sessionKey?: string,
-  ): Promise<Array<{ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }>> {
-    const messageContent: Array<
-      { type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }
-    > = [];
-
-    const sk = sessionKey ?? '';
-
-    if (content.trim()) {
-      let textPart = content;
-      if (/@file:/.test(textPart)) {
-        const wsKey = sk !== '' ? sk : 'cli:direct';
-        const root = this.agentManager.getResolvedWorkspaceForSession(wsKey);
-        textPart = await expandAtFileMentionsInPlainText(textPart, root);
-      }
-      messageContent.push({ type: 'text', text: textPart });
-    }
-
-    if (!attachments?.length) {
-      return messageContent;
-    }
-
-    const modelRef =
-      sk !== ''
-        ? this.modelManager.getModelForSession(sk)
-        : getAgentDefaultModelRef(this.config.config!) ?? getDefaultModelSync(this.config.config);
-    const cfg = this.config.config;
-
-    const storageRoot =
-      sk !== ''
-        ? resolveAgentHomeDir(this.config.config!, extractProfileAgentId(sk, this.config.config!))
-        : resolveAgentHomeDir(this.config.config!, resolveDefaultAgentId(this.config.config!));
-
-    let i = 0;
-    while (i < attachments.length) {
-      const att = attachments[i]!;
-      const isImage =
-        att.type === 'image' ||
-        att.type === 'photo' ||
-        Boolean(att.mimeType?.startsWith('image/'));
-
-      if (isImage) {
-        const group: Array<{ data: string; mimeType: string }> = [];
-        while (i < attachments.length) {
-          const a = attachments[i]!;
-          const img =
-            a.type === 'image' || a.type === 'photo' || Boolean(a.mimeType?.startsWith('image/'));
-          if (!img) {
-            break;
-          }
-          if (!a.data || a.data.length === 0) {
-            i += 1;
-            continue;
-          }
-          group.push({ data: a.data, mimeType: a.mimeType || 'image/png' });
-          i += 1;
-        }
-        if (group.length > 0) {
-          const parts = await resolveInboundImageContentParts({
-            modelRef: modelRef || getDefaultModelSync(cfg),
-            cfg,
-            userTextForContext: content.trim() ? content : '',
-            images: group,
-          });
-          messageContent.push(...parts);
-        }
-      } else {
-        const fileBlock = formatInboundFileTextBlock(att, storageRoot);
-        messageContent.push({ type: 'text', text: fileBlock });
-        i += 1;
-      }
-    }
-
-    return messageContent;
   }
 
   /**
@@ -957,84 +729,13 @@ export class AgentService {
    * One-shot LLM answer for /btw: uses transcript as background only; does not persist to session.
    */
   async btwQuery(sessionKey: string, question: string): Promise<{ text: string; error?: string }> {
-    const q = question.trim();
-    if (!q) {
-      return { text: '', error: 'Empty question.' };
-    }
-    const messages = await this.sessionStore.load(sessionKey);
-    const modelRef = this.modelManager.getModelForSession(sessionKey);
-    let model;
-    try {
-      model = resolveModel(modelRef);
-    } catch (err) {
-      const em = err instanceof Error ? err.message : String(err);
-      log.warn({ err, modelRef, errorMessage: em }, 'btwQuery: model resolve failed');
-      return { text: '', error: `Could not resolve model: ${modelRef}` };
-    }
-
-    const background = this.formatMessagesForBtw(messages.slice(-40));
-    const systemBlock = [
-      'You are answering an ephemeral /btw side question about the current conversation.',
-      'Use the conversation only as background context.',
-      'Answer only the side question. Do not continue or complete any unfinished task from the conversation.',
-      'Do not use tools, shell, or file writes unless the question explicitly requires a tiny code snippet.',
-      'If the question can be answered briefly, answer briefly.',
-    ].join('\n');
-
-    const userPrompt = [
-      systemBlock,
-      '',
-      '---',
-      'Conversation background (read-only):',
-      background || '(empty)',
-      '',
-      '---',
-      'Side question:',
-      q,
-    ].join('\n');
-
-    const userMessage: UserMessage = { role: 'user', content: userPrompt, timestamp: Date.now() };
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 90_000);
-    try {
-      const out = await complete(model, { messages: [userMessage] }, {
-        maxTokens: 2048,
-        temperature: 0.4,
-        signal: controller.signal as AbortSignal,
-      });
-      const text = Array.isArray(out.content)
-        ? out.content
-            .filter((c): c is { type: 'text'; text: string } => c.type === 'text' && typeof (c as { text?: unknown }).text === 'string')
-            .map((c) => c.text || '')
-            .join('')
-        : '';
-      return { text: text.trim() };
-    } catch (err) {
-      const em = err instanceof Error ? err.message : String(err);
-      log.warn({ err, sessionKey, errorMessage: em }, 'btwQuery failed');
-      return { text: '', error: em };
-    } finally {
-      clearTimeout(timeoutId);
-    }
-  }
-
-  private formatMessagesForBtw(messages: AgentMessage[]): string {
-    return messages
-      .map((m) => {
-        const role = m.role;
-        let body = '';
-        if (typeof m.content === 'string') {
-          body = m.content;
-        } else if (Array.isArray(m.content)) {
-          body = m.content
-            .filter((c): c is { type: 'text'; text: string } => c.type === 'text')
-            .map((c) => c.text || '')
-            .join('\n');
-        }
-        const line = `[${role}]: ${body}`;
-        return line.length > 4000 ? `${line.slice(0, 4000)}…` : line;
-      })
-      .join('\n\n');
+    return runBtwQuery({
+      sessionKey,
+      question,
+      sessionStore: this.sessionStore,
+      modelForSession: this.modelManager.getModelForSession(sessionKey),
+      log,
+    });
   }
 
   /** Markdown or JSON summary for /context (prompt assembly is approximated from config + transcript stats). */
@@ -1064,58 +765,23 @@ export class AgentService {
             .join(', ') || '(none explicitly true)'
         : '(see agents.defaults.tools in config)';
 
-    const payload: Record<string, unknown> = {
+    return formatSessionContextReport({
       sessionKey,
+      mode,
       model,
       workspacePath: workspace,
       agentId: profile.agentId,
       messageCount: messages.length,
       contextWindowNominal: cw,
       estimatedTranscriptTokens: estTokens,
-      approxWindowUsage: cw > 0 ? estTokens / cw : null,
       thinkingDefault: defaults?.thinkingDefault,
       reasoningDefault: defaults?.reasoningDefault,
       verboseDefault: defaults?.verboseDefault,
       compaction,
-      toolsFlagsOn: toolsSummary,
+      toolsFlagsSummary: toolsSummary,
       windowStats: stats.windowStats,
       compactionRunStats: stats.compactionStats,
-    };
-
-    if (mode === 'json') {
-      return JSON.stringify(payload, null, 2);
-    }
-
-    const lines: string[] = [
-      '📎 *Context overview*',
-      '',
-      `• Session: \`${sessionKey}\``,
-      `• Model: \`${model}\``,
-      `• Agent profile: \`${profile.agentId}\``,
-      `• Workspace: \`${workspace}\``,
-      `• Messages: ${messages.length}`,
-      `• Est. transcript tokens (rough): ${estTokens}`,
-      `• Nominal context budget (4× maxTokens): ${cw}`,
-    ];
-    if (cw > 0) {
-      lines.push(`• Approx. usage vs budget: ${((estTokens / cw) * 100).toFixed(1)}%`);
-    }
-    lines.push(
-      `• Thinking / reasoning / verbose defaults: ${defaults?.thinkingDefault ?? '—'} / ${defaults?.reasoningDefault ?? '—'} / ${defaults?.verboseDefault ?? '—'}`,
-      `• Tools (true flags): ${toolsSummary}`,
-      '',
-      '_Full system prompt, skills, and memory blocks are assembled at agent runtime; use Web settings or logs for deep inspection._',
-    );
-
-    if (mode === 'detail') {
-      lines.push('', '*Compaction config (agents.defaults.compaction):*', '```json');
-      lines.push(JSON.stringify(compaction ?? {}, null, 2));
-      lines.push('```', '', '*Window stats:*', '```json');
-      lines.push(JSON.stringify(stats.windowStats ?? {}, null, 2));
-      lines.push('```');
-    }
-
-    return lines.join('\n');
+    });
   }
 
   getSessionStats(sessionKey: string, messages: AgentMessage[]) {
@@ -1396,9 +1062,27 @@ export class AgentService {
       agentOrchestrator: this.agentOrchestrator,
       commandHandler: this.commandHandler,
       prepareInboundAttachments: (sk, att) => this.prepareInboundAttachments(sk, att),
-      buildMessageContent: (text, prepared, sk) => this.buildMessageContent(text, prepared, sk),
+      buildMessageContent: (text, prepared, sk) =>
+        buildDirectUserMessageContent({
+          content: text,
+          attachments: prepared,
+          sessionKey: sk,
+          config: this.config.config!,
+          agentManager: this.agentManager,
+          modelManager: this.modelManager,
+        }),
       persistAgentSessionMessages: (sk) => this.persistAgentSessionMessages(sk),
-      maybeEmitWebchatTts: (sk, hadVoice) => this.maybeEmitWebchatTts(sk, hadVoice),
+      maybeEmitWebchatTts: (sk, hadVoice) =>
+        maybeEmitWebchatTts(
+          {
+            config: this.config.config,
+            agentManager: this.agentManager,
+            sessionStore: this.sessionStore,
+            log,
+          },
+          sk,
+          hadVoice,
+        ),
       endDirectRequestContext: () => this.endDirectRequestContext(),
     };
   }
@@ -1436,94 +1120,30 @@ export class AgentService {
     }
   }
 
-  /**
-   * Generate TTS for webchat when config allows, persist under agent home `tts/`, attach to last assistant turn.
-   */
-  private async maybeEmitWebchatTts(
-    sessionKey: string,
-    hadInboundVoice: boolean,
-  ): Promise<{ type: 'tts_audio'; workspaceRelativePath: string; mimeType: string; name: string } | null> {
-    const ttsConfig = mergeTtsConfigFromAppConfig(this.config.config?.tts);
-    if (!isTTSAvailable(ttsConfig)) {
-      return null;
+  private createRunProcessDirectDeps(): RunProcessDirectDeps {
+    const cfg = this.config.config;
+    if (!cfg) {
+      throw new Error('AgentService requires config.config');
     }
-    const decision = shouldUseTTS(ttsConfig, hadInboundVoice);
-    if (!decision.useTTS) {
-      return null;
-    }
-    const text = this.agentManager.getLastAssistantContent(sessionKey)?.trim();
-    if (!text) {
-      return null;
-    }
-    try {
-      const webOut = getChannelOutputFormat('webchat');
-      const fmt = webOut.format as 'opus' | 'mp3' | 'wav';
-      const ttsResult = await speak(text, ttsConfig, {
-        appConfig: this.config.config,
-        tts: { format: fmt },
-      });
-      const { buffer, format } = await compressAudio(
-        Buffer.from(ttsResult.audio),
-        ttsResult.format,
-        webOut.format === 'mp3' ? 'mp3' : 'opus',
-      );
-      const normalizedMime =
-        format === 'opus' || format === 'ogg'
-          ? 'audio/ogg'
-          : format === 'mp3' || format === 'mpeg'
-            ? 'audio/mpeg'
-            : format === 'wav'
-              ? 'audio/wav'
-              : `audio/${format}`;
-      const persisted = await persistOutboundTtsAudio(
-        resolveAgentHomeDir(this.config.config!, extractProfileAgentId(sessionKey, this.config.config!)),
-        sessionKey,
-        buffer,
-        format,
-      );
-      await this.appendAttachmentToLastAssistant(sessionKey, {
-        type: 'audio',
-        mimeType: normalizedMime,
-        name: persisted.name,
-        size: persisted.size,
-        workspaceRelativePath: persisted.workspaceRelativePath,
-      });
-      return {
-        type: 'tts_audio',
-        workspaceRelativePath: persisted.workspaceRelativePath,
-        mimeType: normalizedMime,
-        name: persisted.name,
-      };
-    } catch (err) {
-      log.warn({ err, sessionKey }, 'Webchat TTS failed');
-      return null;
-    }
-  }
-
-  private async appendAttachmentToLastAssistant(
-    sessionKey: string,
-    att: {
-      type: string;
-      mimeType: string;
-      name: string;
-      size: number;
-      workspaceRelativePath: string;
-    },
-  ): Promise<void> {
-    const loaded = await this.sessionStore.load(sessionKey);
-    for (let i = loaded.length - 1; i >= 0; i--) {
-      const m = loaded[i] as { role?: string; attachments?: unknown[] };
-      if (m.role === 'assistant') {
-        const prev = (m.attachments ?? []) as Array<{ workspaceRelativePath?: string }>;
-        if (prev.some((x) => x.workspaceRelativePath === att.workspaceRelativePath)) {
-          return;
-        }
-        const next = [...prev, att];
-        loaded[i] = { ...m, attachments: next } as unknown as AgentMessage;
-        await this.sessionStore.save(sessionKey, loaded);
-        return;
-      }
-    }
+    return {
+      log,
+      config: cfg,
+      parseSessionKey: (sk) => this.parseSessionKey(sk),
+      initSessionContext: (sk, channel, chatId) => {
+        void this.initSessionContext(sk, channel, chatId);
+      },
+      hydrateSessionWorkspaceFromStore: (sk) => this.hydrateSessionWorkspaceFromStore(sk),
+      hydrateSessionModelFromStore: (sk) => this.hydrateSessionModelFromStore(sk),
+      agentManager: this.agentManager,
+      sessionStore: this.sessionStore,
+      prepareLoadedSessionMessages: (sk, msgs) => this.prepareLoadedSessionMessages(sk, msgs),
+      modelManager: this.modelManager,
+      applyResolvedThinkingLevel: (sk, t) => this.applyResolvedThinkingLevel(sk, t),
+      prepareInboundAttachments: (sk, att) => this.prepareInboundAttachments(sk, att),
+      commandHandler: this.commandHandler,
+      persistAgentSessionMessages: (sk) => this.persistAgentSessionMessages(sk),
+      endDirectRequestContext: () => this.endDirectRequestContext(),
+    };
   }
 
   async processDirect(
@@ -1539,74 +1159,12 @@ export class AgentService {
     }>,
     thinking?: string,
   ): Promise<string> {
-    const { channel, chatId } = this.parseSessionKey(sessionKey);
-    this.initSessionContext(sessionKey, channel, chatId);
-
-    try {
-      await this.hydrateSessionWorkspaceFromStore(sessionKey);
-      // Get or create agent for this session
-      const agent = this.agentManager.getOrCreateAgent(sessionKey);
-
-      await this.hydrateSessionModelFromStore(sessionKey);
-
-      const loaded = await this.sessionStore.load(sessionKey);
-      agent.state.messages = this.prepareLoadedSessionMessages(sessionKey, loaded);
-
-      await this.modelManager.applyModelForSession(agent, sessionKey);
-      await this.applyResolvedThinkingLevel(sessionKey, thinking);
-
-      const prepared = await this.prepareInboundAttachments(sessionKey, attachments);
-
-      const cmd = parseSlashCommand(content);
-      if (cmd && commandRegistry.has(cmd.command)) {
-        const { aggregatedText } = await this.commandHandler.executeCommandAndAggregateReply(cmd.command, cmd.args, {
-          sessionKey,
-          channel,
-          chatId,
-          senderId: '',
-          isGroup: false,
-        });
-        await this.persistAgentSessionMessages(sessionKey);
-        return aggregatedText;
-      }
-
-      const textForDirect = content.trimStart().startsWith('/skill:')
-        ? this.agentManager.expandSkillUserText(content)
-        : content;
-      const messageContent = await this.buildMessageContent(textForDirect, prepared, sessionKey);
-
-      const userMessage = {
-        role: 'user' as const,
-        content: messageContent,
-        timestamp: Date.now(),
-      };
-      const userPlain = extractAgentUserPlainText(userMessage);
-      const userMessageForModel = await this.agentManager.applyMemoryPrefetchToUserMessage(
-        userMessage,
-        sessionKey,
-      );
-
-      await runAgentTurnWithModelFallbacks({
-        agent,
-        sessionKey,
-        modelManager: this.modelManager,
-        userMessage: userMessageForModel,
-        log,
-        getConfig: () => this.config.config,
-        beforeUserPrompt: () => this.agentManager.beginBackgroundReviewUserTurn(sessionKey),
-      });
-
-      this.agentManager.afterAgentTurn(sessionKey, userPlain);
-      this.agentManager.scheduleBackgroundReviewAfterUserTurn(sessionKey);
-
-      const response = this.agentManager.getLastAssistantContent(sessionKey) || '';
-      await this.persistAgentSessionMessages(sessionKey);
-
-      return response;
-    } finally {
-      this.endDirectRequestContext();
-      // Don't unsubscribe here - keep the session agent alive for future messages
-    }
+    return runProcessDirect(this.createRunProcessDirectDeps(), {
+      content,
+      sessionKey,
+      attachments,
+      thinking,
+    });
   }
 
   private async handleInboundMessage(msg: InboundMessage): Promise<void> {
