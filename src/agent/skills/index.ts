@@ -121,7 +121,7 @@ function discoverSkills(dir: string, source: 'builtin' | 'workspace' | 'global')
           }
 
           if (existsSync(skillMdPath) && !shouldIgnore(skillRelPath, currentIgnoredPaths)) {
-            const skill = loadSkillFromFile(skillMdPath, source);
+            const skill = loadSkillFromFile(skillMdPath, source, dir);
             if (skill) skills.push(skill);
           }
 
@@ -135,7 +135,7 @@ function discoverSkills(dir: string, source: 'builtin' | 'workspace' | 'global')
   return skills;
 }
 
-function loadSkillFromFile(filePath: string, source: 'builtin' | 'workspace' | 'global'): Skill | null {
+function loadSkillFromFile(filePath: string, source: 'builtin' | 'workspace' | 'global', rootDir?: string): Skill | null {
   try {
     const rawContent = readFileSync(filePath, 'utf-8');
     const { frontmatter, content } = parseFrontmatter(rawContent);
@@ -146,6 +146,17 @@ function loadSkillFromFile(filePath: string, source: 'builtin' | 'workspace' | '
     const description = frontmatter.description as string | undefined;
     if (!description?.trim()) return null;
 
+    // Derive category from directory path: skills/creative/algorithmic-art → 'creative'
+    // Only assign a category when the skill is nested at least two levels below rootDir.
+    let category: string | undefined;
+    if (rootDir) {
+      const relDir = toPosixPath(relative(rootDir, skillDir));
+      const segments = relDir.split('/');
+      if (segments.length > 1) {
+        category = segments[0];
+      }
+    }
+
     const metadata = parseSkillMetadata(frontmatter);
     const toolConditions = parseSkillToolConditions(frontmatter);
     const requiredEnvVarNames = parseRequiredEnvVarNames(frontmatter);
@@ -153,6 +164,7 @@ function loadSkillFromFile(filePath: string, source: 'builtin' | 'workspace' | '
     return {
       name,
       description: description.trim(),
+      category,
       filePath,
       baseDir: skillDir,
       source,

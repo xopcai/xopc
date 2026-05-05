@@ -147,6 +147,8 @@ export interface Skill {
   name: string;
   /** Skill description */
   description: string;
+  /** Category derived from parent directory (e.g. skills/creative/algorithmic-art → 'creative') */
+  category?: string;
   /** Path to SKILL.md file */
   filePath: string;
   /** Base directory of the skill */

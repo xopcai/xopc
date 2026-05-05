@@ -68,6 +68,8 @@ export interface SkillCatalogEntry {
   directoryId: string;
   name: string;
   description: string;
+  /** Category derived from parent directory (e.g. skills/creative/algorithmic-art → 'creative') */
+  category?: string;
   source: 'builtin' | 'workspace' | 'global' | 'extra';
   path: string;
   managed: boolean;
