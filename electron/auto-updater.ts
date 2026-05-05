@@ -88,6 +88,13 @@ export function initAutoUpdater(mainWindow: BrowserWindow): void {
     if (updateDownloadedPendingInstall) {
       return;
     }
+    // A new metadata fetch can start while a previous check's download is still running
+    // (electron-updater clears its internal check promise once the first check returns).
+    // Do not clobber download UI or risk a transient fetch failure surfacing as `error`.
+    if (currentStatus.state === 'downloading') {
+      log.debug('Ignoring checking-for-update while download in progress');
+      return;
+    }
     log.info('Checking for updates...');
     setStatus({ state: 'checking' });
   });
@@ -158,15 +165,11 @@ export function initAutoUpdater(mainWindow: BrowserWindow): void {
   });
 
   setTimeout(() => {
-    void autoUpdater.checkForUpdates().catch((err) => {
-      log.warn({ err }, 'Initial update check failed');
-    });
+    checkForUpdates(false);
   }, CHECK_DELAY_MS);
 
   checkTimer = setInterval(() => {
-    void autoUpdater.checkForUpdates().catch((err) => {
-      log.warn({ err }, 'Periodic update check failed');
-    });
+    checkForUpdates(false);
   }, CHECK_INTERVAL_MS);
 
   log.info('Auto-updater initialized');
@@ -189,9 +192,16 @@ export function checkForUpdates(manual = false): void {
     log.debug('Skipping update check: downloaded update awaiting install');
     return;
   }
+  // After `update-available`, autoDownload runs asynchronously while `checkForUpdatesPromise`
+  // is already cleared — another check can run in parallel. A failing second metadata fetch
+  // emits `error` and replaces "new version" / progress UI with a spurious error.
+  if (currentStatus.state === 'downloading' || currentStatus.state === 'available') {
+    log.debug({ state: currentStatus.state, manual }, 'Skipping update check: update fetch or download already in progress');
+    return;
+  }
   lastCheckWasManual = manual;
   void autoUpdater.checkForUpdates().catch((err) => {
-    log.warn({ err }, `${manual ? 'Manual' : 'Periodic'} update check failed`);
+    log.warn({ err, manual }, 'Update check failed');
   });
 }
 

@@ -144,7 +144,10 @@ export function AboutDialog({
                         window.open(RELEASES_URL, '_blank', 'noopener,noreferrer');
                       }
                     }}
-                    disabled={isElectron && electron?.state === 'checking'}
+                    disabled={
+                      isElectron &&
+                      ['checking', 'available', 'downloading', 'downloaded'].includes(electron?.state ?? '')
+                    }
                   >
                     {isElectron && electron?.state === 'checking' ? (
                       <span className="flex items-center gap-1">
