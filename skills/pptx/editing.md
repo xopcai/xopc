@@ -114,7 +114,7 @@ Slide order is in `ppt/presentation.xml` → `<p:sldIdLst>`.
 
 **Subagents:** If available, use them here (after completing step 4). Each slide is a separate XML file, so subagents can edit in parallel. In your prompt to subagents, include:
 - The slide file path(s) to edit
-- **"Apply precise XML edits (search-and-replace or patch); avoid ad-hoc sed unless you verify output"**
+- **"Use the Edit tool for all changes"**
 - The formatting rules and common pitfalls below
 
 For each slide:
@@ -122,7 +122,7 @@ For each slide:
 2. Identify ALL placeholder content—text, images, charts, icons, captions
 3. Replace each placeholder with final content
 
-**Prefer targeted search-and-replace on XML over bulk sed or one-off Python** for simple replacements—name the exact old and new strings so edits stay traceable.
+**Use the Edit tool, not sed or Python scripts.** The Edit tool forces specificity about what to replace and where, yielding better reliability.
 
 ### Formatting Rules
 
@@ -184,7 +184,7 @@ Copy `<a:pPr>` from the original paragraph to preserve line spacing. Use `b="1"`
 
 ### Smart Quotes
 
-Handled automatically by unpack/pack. Some editors convert smart quotes to ASCII when saving; if typography looks wrong, fix with XML entities below.
+Handled automatically by unpack/pack. But the Edit tool converts smart quotes to ASCII.
 
 **When adding new text with quotes, use XML entities:**
 

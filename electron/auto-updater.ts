@@ -1,4 +1,4 @@
-import { app, type BrowserWindow } from 'electron';
+import { app, autoUpdater as electronBuiltinAutoUpdater, type BrowserWindow } from 'electron';
 import electronUpdater from 'electron-updater';
 import type { UpdateInfo, ProgressInfo } from 'electron-updater';
 
@@ -211,6 +211,19 @@ export function quitAndInstall(): void {
     return;
   }
   log.info('Quitting and installing update...');
+  // macOS: electron-updater shows `update-downloaded` as soon as the zip is on disk, then feeds
+  // Squirrel.Mac via a localhost proxy (`MacUpdater.updateDownloaded`). Squirrel's own
+  // `update-downloaded` can arrive slightly later. `MacUpdater.quitAndInstall` only registers a
+  // listener when `squirrelDownloadedUpdate` is still false and `autoInstallOnAppQuit` is true —
+  // it does not call `checkForUpdates` again, so a fast click can miss the event and appear to do
+  // nothing. Nudge the built-in autoUpdater so `update-downloaded` / install reliably fires.
+  if (process.platform === 'darwin') {
+    try {
+      void electronBuiltinAutoUpdater.checkForUpdates();
+    } catch (e) {
+      log.warn({ err: e }, 'Built-in autoUpdater.checkForUpdates before quitAndInstall failed');
+    }
+  }
   autoUpdater.quitAndInstall(false, true);
 }
 
