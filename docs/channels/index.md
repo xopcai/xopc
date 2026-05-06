@@ -1,6 +1,6 @@
 # Channels
 
-xopc can connect assistants to **Telegram**, **Weixin (WeChat)**, and the **gateway Web chat**. Other channel types may appear if you install extensions that register them.
+xopc can connect assistants to **Telegram**, **Weixin (WeChat)**, **Feishu (Lark)**, **DingTalk**, and the **gateway Web chat**. Other channel types may appear if you install extensions that register them.
 
 All channel settings live under the **`channels`** object in `~/.xopc/xopc.json` (or the file pointed to by `XOPC_CONFIG`).
 
@@ -10,7 +10,8 @@ All channel settings live under the **`channels`** object in `~/.xopc/xopc.json`
 |---------|--------|----------|
 | **Telegram** | ✅ | Bot token or multi-account JSON, streaming, voice, documents |
 | **Weixin (WeChat)** | ✅ | QR login on the gateway host, DM policies, optional per-account JSON |
-| **Feishu (Lark)** | ✅ | Socket Mode / Webhook, cards, doc/wiki/drive tools (opt-in) |
+| **Feishu (Lark)** | ✅ | Socket Mode / Webhook, cards, doc/wiki/drive tools (opt-in); QR app setup in gateway console |
+| **DingTalk** | ✅ | Stream robot, device QR registration, DM/group policies (bundled plugin) |
 | **Web UI** | ✅ | Gateway console chat (browser), same HTTP API as other clients |
 
 ## Pages
@@ -18,6 +19,7 @@ All channel settings live under the **`channels`** object in `~/.xopc/xopc.json`
 - [Telegram](./telegram.md)
 - [Weixin (WeChat)](./weixin.md)
 - [Feishu (Lark)](./feishu.md)
+- [DingTalk](./dingtalk.md)
 - [Web UI](./webui.md)
 
 ## Extensions and channels

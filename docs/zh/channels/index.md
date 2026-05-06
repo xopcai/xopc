@@ -1,6 +1,6 @@
 # 消息通道
 
-xopc 可将助手接入 **Telegram**、**微信（Weixin）** 以及 **网关 Web 聊天**。若安装第三方扩展，还可能出现其它 `channels.<id>` 配置块。
+xopc 可将助手接入 **Telegram**、**微信（Weixin）**、**飞书（Feishu / Lark）**、**钉钉（DingTalk）** 以及 **网关 Web 聊天**。若安装第三方扩展，还可能出现其它 `channels.<id>` 配置块。
 
 所有通道相关设置都在 `~/.xopc/xopc.json`（或由 `XOPC_CONFIG` 指定的文件）的 **`channels`** 下。
 
@@ -10,7 +10,8 @@ xopc 可将助手接入 **Telegram**、**微信（Weixin）** 以及 **网关 We
 |------|------|------|
 | **Telegram** | ✅ | Bot Token 或多账号 JSON、流式、语音、文档 |
 | **微信（Weixin）** | ✅ | 在网关所在机扫码登录、私聊策略、可选按账号 JSON |
-| **飞书（Feishu / Lark）** | ✅ | Socket Mode / Webhook、卡片、文档/知识库/云盘工具（可选开） |
+| **飞书（Feishu / Lark）** | ✅ | Socket Mode / Webhook、卡片、文档/知识库/云盘工具（可选开）；控制台支持扫码创建应用 |
+| **钉钉（DingTalk）** | ✅ | Stream 机器人、设备扫码注册、私聊/群策略（内置扩展） |
 | **网页（Web UI）** | ✅ | 网关控制台内嵌聊天，与其它客户端共用 HTTP API |
 
 ## 分页
@@ -18,6 +19,7 @@ xopc 可将助手接入 **Telegram**、**微信（Weixin）** 以及 **网关 We
 - [Telegram](./telegram.md)
 - [微信（Weixin）](./weixin.md)
 - [飞书（Feishu / Lark）](./feishu.md)
+- [钉钉（DingTalk）](./dingtalk.md)
 - [网页（Web UI）](./webui.md)
 
 ## 扩展与通道

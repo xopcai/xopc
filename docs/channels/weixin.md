@@ -6,7 +6,7 @@ When the gateway is running, the React console includes a dedicated **IM channel
 
 - **Route:** `#/channels` (sidebar: **IM 频道** / *IM channels*).
 - **Requires:** a saved **gateway token** (settings) so the UI can call authenticated APIs.
-- **Supported here:** **Weixin** and **Telegram** only.
+- **Supported here:** **Weixin**, **Telegram**, **Feishu (Lark)**, and **DingTalk** (plus remove/disable flows per card).
 
 ### Weixin login
 
