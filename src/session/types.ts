@@ -94,11 +94,30 @@ export interface SessionMetadata {
    * Distinct from `sourceChannel` (routing namespace).
    */
   sessionType?: string;
+  /**
+   * Stable transcript document id (wrapped on-disk format), aligned with OpenClaw `sessionId`.
+   */
+  transcriptId?: string;
+  /** First activity time for this session row (ISO), from transcript header when available. */
+  sessionStartedAt?: string;
+  /** Last transcript write / interaction (ISO), updated on each persist. */
+  lastInteractionAt?: string;
+}
+
+/** Summary of wrapped transcript (no duplicate message bodies). */
+export interface SessionTranscriptSummary {
+  id: string;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+  compactionCount: number;
 }
 
 /** Session detail (metadata + messages) */
 export interface SessionDetail extends SessionMetadata {
   messages: Message[];
+  /** Present when loaded with `includeTranscriptSummary` (gateway `?include=transcript`). */
+  transcriptSummary?: SessionTranscriptSummary;
 }
 
 /** Session index file structure */

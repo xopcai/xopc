@@ -21,6 +21,7 @@ import type {
   GlobalSessionStats,
   ExportFormat,
   SessionExport,
+  SessionTranscriptSummary,
 } from './types.js';
 import { SessionStatus } from './types.js';
 import type { Message } from './types.js';
@@ -376,12 +377,35 @@ export class SessionStore {
     return out;
   }
 
+  private normalizeLoadedMessages(messages: AgentMessage[], logCtx?: { key: string }): AgentMessage[] {
+    if (hasProblematicMessages(messages)) {
+      const cleaned = cleanTrailingErrors(messages);
+      if (cleaned.length !== messages.length) {
+        log.info(
+          { ...logCtx, original: messages.length, cleaned: cleaned.length },
+          'Cleaned problematic messages on load',
+        );
+      }
+      return cleaned;
+    }
+    return messages;
+  }
+
   private async scanSessionFile(key: string): Promise<SessionMetadata | null> {
-    const messages = await this.loadMessages(key);
+    const { jsonPath } = this.sessionPathsForKey(key);
+    let raw: string;
+    try {
+      raw = await readFile(jsonPath, 'utf-8');
+    } catch {
+      return null;
+    }
+    const { messages: rawMessages, envelope } = parseStoredTranscriptJson(raw);
+    const messages = this.normalizeLoadedMessages(rawMessages, { key });
     if (messages.length === 0) return null;
 
-    const { jsonPath } = this.sessionPathsForKey(key);
     const stats = await stat(jsonPath);
+    const sessionStartedAt = envelope?.createdAt ?? stats.birthtime.toISOString();
+    const lastInteractionAt = envelope?.updatedAt ?? stats.mtime.toISOString();
 
     const { channel, chatId } = this.parseSessionKey(key);
     const routing = this.extractRoutingFromKey(key, channel);
@@ -400,6 +424,9 @@ export class SessionStore {
       compactedCount: 0,
       sourceChannel: channel,
       sourceChatId: chatId,
+      ...(envelope?.id ? { transcriptId: envelope.id } : {}),
+      sessionStartedAt,
+      lastInteractionAt,
       routing,
       ...(isCronSession
         ? {
@@ -522,15 +549,33 @@ export class SessionStore {
     };
   }
 
-  async get(key: string): Promise<SessionDetail | null> {
+  async get(
+    key: string,
+    options?: { includeTranscriptSummary?: boolean },
+  ): Promise<SessionDetail | null> {
     const metadata = await this.getMetadata(key);
     if (!metadata) return null;
 
     const messages = await this.loadMessages(key);
 
+    let transcriptSummary: SessionTranscriptSummary | undefined;
+    if (options?.includeTranscriptSummary) {
+      const env = await this.loadTranscriptDocument(key);
+      if (env) {
+        transcriptSummary = {
+          id: env.id,
+          version: env.version,
+          createdAt: env.createdAt,
+          updatedAt: env.updatedAt,
+          compactionCount: env.compactions?.length ?? 0,
+        };
+      }
+    }
+
     return {
       ...metadata,
       messages: this.convertMessages(messages),
+      ...(transcriptSummary ? { transcriptSummary } : {}),
     };
   }
 
@@ -672,17 +717,7 @@ export class SessionStore {
       try {
         const data = await readFile(path, 'utf-8');
         const { messages } = parseStoredTranscriptJson(data);
-        if (hasProblematicMessages(messages)) {
-          const cleaned = cleanTrailingErrors(messages);
-          if (cleaned.length !== messages.length) {
-            log.info(
-              { key, original: messages.length, cleaned: cleaned.length },
-              'Cleaned problematic messages on load'
-            );
-          }
-          return cleaned;
-        }
-        return messages;
+        return this.normalizeLoadedMessages(messages, { key });
       } catch {
         return null;
       }
@@ -799,6 +834,9 @@ export class SessionStore {
         estimatedTokens: this.estimateTokens(messages),
         updatedAt: now,
         lastAccessedAt: now,
+        transcriptId: doc.id,
+        sessionStartedAt: prev.sessionStartedAt ?? doc.createdAt,
+        lastInteractionAt: now,
         routing: routing || prev.routing,
         ...(isCronSession
           ? {
@@ -833,6 +871,9 @@ export class SessionStore {
         createdAt: now,
         updatedAt: now,
         lastAccessedAt: now,
+        transcriptId: doc.id,
+        sessionStartedAt: doc.createdAt,
+        lastInteractionAt: now,
         messageCount: messages.length,
         estimatedTokens: this.estimateTokens(messages),
         compactedCount: 0,

@@ -15,6 +15,7 @@ import type {
 import type { Message } from './types.js';
 import type { CompactionConfig, CompactionResult } from '../agent/memory/compaction.js';
 import type { XopcSessionTranscriptV1 } from './transcript-format.js';
+import { applySessionPatchToMetadata, type SessionPatchBody } from './patch-metadata.js';
 import type { WindowConfig } from '../agent/memory/window.js';
 import type { Config } from '../config/schema.js';
 
@@ -84,12 +85,35 @@ export class SessionManager extends EventEmitter {
     };
   }
 
-  async getSession(key: string): Promise<SessionDetail | null> {
-    const session = await this.store.get(key);
+  async getSession(
+    key: string,
+    options?: { includeTranscriptSummary?: boolean },
+  ): Promise<SessionDetail | null> {
+    const session = await this.store.get(key, options);
     if (session) {
       this.emit('sessionAccessed', { key });
     }
     return session;
+  }
+
+  /**
+   * OpenClaw-style `sessions.patch`: partial metadata (name, tags, customData shallow merge).
+   */
+  async patchSession(
+    key: string,
+    patch: SessionPatchBody,
+  ): Promise<{ ok: true } | { ok: false; error: string }> {
+    const meta = await this.store.getMetadata(key);
+    if (!meta) {
+      return { ok: false, error: 'Session not found' };
+    }
+    const updates = applySessionPatchToMetadata(meta, patch);
+    if (Object.keys(updates).length === 0) {
+      return { ok: true };
+    }
+    await this.store.updateMetadata(key, updates);
+    this.emit('sessionUpdated', { key });
+    return { ok: true };
   }
 
   async getSessionMetadata(key: string): Promise<SessionMetadata | null> {
