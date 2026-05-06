@@ -452,8 +452,8 @@ export function useChatSession() {
         void tryResumeAgentRun(d.sessionKey, latestMessagesRef.current ?? []);
       });
     };
-    window.addEventListener('agent-stream', onAgentStream as EventListener);
-    return () => window.removeEventListener('agent-stream', onAgentStream as EventListener);
+    window.addEventListener('agent-stream', onAgentStream);
+    return () => window.removeEventListener('agent-stream', onAgentStream);
   }, [tryResumeAgentRun]);
 
   useEffect(() => {

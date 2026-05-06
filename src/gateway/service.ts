@@ -44,7 +44,6 @@ import {
   listMarketplacePackages,
   resolveSkillsMarketplaceProvider,
   type MarketplaceCategoryOption,
-  type MarketplacePackageDetail,
   type SkillsStoreListParams,
   type UnifiedMarketplaceListResponse,
   type UnifiedMarketplacePackageDetail,
