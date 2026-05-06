@@ -119,7 +119,7 @@ export const JobDataSchema = z
       }
     }).optional(),
     maxRetries: z.number().int().min(0).max(10).default(3),
-    timeout: z.number().int().min(1000).max(300000).default(60000),
+    timeout: z.number().int().min(1000).max(300000).default(180000),
     created_at: z.string().datetime(),
     updated_at: z.string().datetime(),
     sessionTarget: z.enum(['main', 'isolated']).optional(),
