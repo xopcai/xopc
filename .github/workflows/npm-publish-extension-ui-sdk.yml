@@ -1,9 +1,11 @@
 # Publish @xopcai/extension-ui-sdk when packages/extension-ui-sdk/package.json "version" changes on main.
+# Manual: gh workflow run npm-publish-extension-ui-sdk.yml --ref main
 # Requires NPM_TOKEN secret with publish access (same as root npm-publish workflow).
 
 name: npm Publish extension-ui-sdk
 
 on:
+  workflow_dispatch:
   push:
     branches: [main, master]
     paths:
@@ -31,6 +33,18 @@ jobs:
         run: |
           PKG=packages/extension-ui-sdk/package.json
           NEW=$(jq -r .version "$PKG")
+
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            if [[ -z "$NEW" || "$NEW" == "null" ]]; then
+              echo "::error::Missing version in $PKG"
+              exit 1
+            fi
+            echo "old=(workflow_dispatch)" >> "$GITHUB_OUTPUT"
+            echo "new=$NEW" >> "$GITHUB_OUTPUT"
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
           BEFORE="${{ github.event.before }}"
 
           if [[ -z "$NEW" || "$NEW" == "null" ]]; then
