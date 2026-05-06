@@ -167,6 +167,8 @@ export interface SessionExport {
   exportedAt: string;
   metadata: SessionMetadata;
   messages: Message[];
+  /** Full on-disk rows (LLM + `kind: 'context'`) for audit / round-trip. */
+  transcriptRows: TranscriptStoredRow[];
 }
 
 /** On-disk pre-compaction snapshot (OpenClaw-style checkpoint list). */

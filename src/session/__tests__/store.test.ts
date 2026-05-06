@@ -441,6 +441,18 @@ describe('SessionStore', () => {
       expect(detail?.transcriptRows?.length).toBe(2);
       expect((detail!.transcriptRows![1] as { kind: string }).kind).toBe('context');
     });
+
+    it('json exportSession includes transcriptRows', async () => {
+      const key = 'main:webchat:default:direct:exportctx';
+      await store.saveMessages(key, [{ role: 'user', content: 'hi' }]);
+      await store.appendTranscriptContextEntry(key, { text: 'export_note', id: 'n1' });
+      const json = await store.exportSession(key, 'json');
+      const parsed = JSON.parse(json) as { transcriptRows?: unknown[]; messages?: unknown[] };
+      expect(Array.isArray(parsed.transcriptRows)).toBe(true);
+      expect(parsed.transcriptRows!.length).toBe(2);
+      expect((parsed.transcriptRows![1] as { kind: string }).kind).toBe('context');
+      expect(parsed.messages).toHaveLength(1);
+    });
   });
 
 });
