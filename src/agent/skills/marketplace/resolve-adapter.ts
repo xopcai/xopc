@@ -14,7 +14,7 @@ export function resolveSkillsMarketplaceProvider(config: Config): SkillsMarketpl
   if (fromConfig === 'skillhub' || fromConfig === 'store') {
     return fromConfig;
   }
-  return 'store';
+  return 'skillhub';
 }
 
 export function getMarketplaceProviderDisplayName(provider: SkillsMarketplaceProvider): string {
