@@ -150,6 +150,11 @@ export class GatewayService {
       error: registry.getError() || 'none' 
     }, 'ModelRegistry initialized');
 
+    // Session index + files shared with AgentService (webchat `/goal` metadata must match GET /api/goals/webchat).
+    this.sessionManager = new SessionManager({
+      config: this.config,
+    });
+
     // Initialize agent service with extension registry
     const modelConfig = this.config.agents?.defaults?.model;
     const cronRef: { service?: CronService } = {};
@@ -157,6 +162,10 @@ export class GatewayService {
       workspace: this.workspacePath,
       model: typeof modelConfig === 'string' ? modelConfig : modelConfig?.primary,
       config: this.config,
+      sessionStore: this.sessionManager.getStore(),
+      onSessionMetadataUpdated: (sessionKey) => {
+        this.sessionManager.emit('sessionUpdated', { key: sessionKey });
+      },
       extensionRegistry: this.extensionLoader?.getRegistry(),
       getCronService: () => cronRef.service,
       gatewayClarify: {
@@ -206,11 +215,6 @@ export class GatewayService {
       messageBus: this.bus,
     });
     cronRef.service = this.cronService;
-
-    // Initialize session manager
-    this.sessionManager = new SessionManager({
-      config: this.config,
-    });
 
     this.agentService.setPersistentGoalWebchatContinuationScheduler((sessionKey, message) => {
       queueMicrotask(() => {

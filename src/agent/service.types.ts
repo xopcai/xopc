@@ -1,6 +1,7 @@
 import type { ThinkingLevel } from '@mariozechner/pi-agent-core';
 
 import type { Config, AgentDefaults } from '../config/schema.js';
+import type { SessionStore } from '../session/store.js';
 import type { CronService } from '../cron/index.js';
 import type { ExtensionRegistryImpl as ExtensionRegistry } from '../extensions/index.js';
 import type { GatewayClarifyRequestFn } from './tools/clarify-tool.js';
@@ -25,6 +26,16 @@ export interface AgentServiceConfig {
     requestClarification: GatewayClarifyRequestFn;
   };
   getCronService?: () => CronService | undefined;
+  /**
+   * Gateway: reuse the gateway `SessionManager` store so web API and agent share one index + files.
+   * When omitted, `AgentService` creates its own `SessionStore` (CLI / embedded).
+   */
+  sessionStore?: SessionStore;
+  /**
+   * Gateway: invoked after `sessionStore.updateMetadata` from built-in `/goal` APIs (store does not emit).
+   * Wire to `sessionManager.emit('sessionUpdated', { key })` so the console refetches.
+   */
+  onSessionMetadataUpdated?: (sessionKey: string) => void;
 }
 
 export interface AgentContext {

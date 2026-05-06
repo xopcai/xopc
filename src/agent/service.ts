@@ -137,6 +137,9 @@ export class AgentService {
   /** Concurrent inbound / direct-stream turns per session (Hermes-style /goal mid-flight guard). */
   private inboundTurnDepthBySession = new Map<string, number>();
 
+  /** Gateway: notify UI after direct `SessionStore.updateMetadata` (no SessionManager emit). */
+  private onSessionMetadataUpdated?: (sessionKey: string) => void;
+
   // Track event unsubscribers per session
   private sessionUnsubscribers: Map<string, () => void> = new Map();
 
@@ -148,6 +151,7 @@ export class AgentService {
   constructor(bus: MessageBus, config: AgentServiceConfig) {
     this.bus = bus;
     this.config = config;
+    this.onSessionMetadataUpdated = config.onSessionMetadataUpdated;
     this.agentId = `agent-${Date.now()}`;
     this.workspaceDir = config.workspace;
 
@@ -167,7 +171,7 @@ export class AgentService {
     initializeCommands();
     log.debug('Command system initialized');
 
-    this.sessionStore = this.createSessionStore();
+    this.sessionStore = config.sessionStore ?? this.createSessionStore();
     const appCfgForPaths = this.config.config;
     if (!appCfgForPaths) {
       throw new Error('AgentService requires config.config for session paths');
@@ -567,7 +571,10 @@ export class AgentService {
   }): PersistentGoalApis {
     return {
       getSessionMetadata: (k) => this.sessionStore.getMetadata(k),
-      updateSessionMetadata: (k, u) => this.sessionStore.updateMetadata(k, u),
+      updateSessionMetadata: async (k, u) => {
+        await this.sessionStore.updateMetadata(k, u);
+        this.onSessionMetadataUpdated?.(k);
+      },
       loadMessages: (k) => this.sessionStore.loadMessages(k),
       saveMessages: (k, m) => this.sessionStore.saveMessages(k, m),
       scheduleContinuation: (sk, msg) => {
