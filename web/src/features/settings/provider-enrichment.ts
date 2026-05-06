@@ -216,7 +216,6 @@ export const PROVIDER_ENRICHMENT: Record<string, ProviderEnrichment> = {
   },
   minimax: {
     apiKeyUrl: 'https://platform.minimax.io/user-center/basic-information/interface-key',
-    apiKeyUrlCn: 'https://platform.minimaxi.com/user-center/basic-information/interface-key',
     pricingUrl: 'https://platform.minimax.io/docs/guides/models-intro',
     docsUrl: 'https://platform.minimax.io/docs/guides/quickstart-preparation',
     description: 'MiniMax — Chinese multimodal model with strong text and audio capabilities.',
@@ -240,10 +239,9 @@ export const PROVIDER_ENRICHMENT: Record<string, ProviderEnrichment> = {
     envVars: ['MINIMAX_CN_API_KEY', 'MINIMAX_API_KEY'],
   },
   'kimi-coding': {
-    apiKeyUrl: 'https://platform.moonshot.ai/console/api-keys',
-    apiKeyUrlCn: 'https://platform.moonshot.cn/console/api-keys',
-    pricingUrl: 'https://platform.moonshot.ai/docs/pricing/chat',
-    docsUrl: 'https://platform.moonshot.ai/docs',
+    apiKeyUrl: 'https://platform.kimi.com/console/api-keys',
+    pricingUrl: 'https://platform.kimi.com/docs/pricing/chat',
+    docsUrl: 'https://platform.kimi.com/docs',
     description: 'Kimi Coding — Moonshot model optimized for code generation tasks.',
     descriptionZh: 'Kimi Coding，Moonshot 专为代码生成优化的模型。',
     bestFor: ['coding', 'chinese'],
