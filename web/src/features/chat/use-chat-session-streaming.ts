@@ -1,6 +1,12 @@
 import { useCallback, type Dispatch, type RefObject, type SetStateAction } from 'react';
 import { flushSync } from 'react-dom';
 
+import {
+  clearLiveSessionCache,
+  initLiveSessionCache,
+  liveSessionCacheApplyHydratedTail,
+  seedLiveSessionCacheIfEmpty,
+} from '@/features/chat/active-session-live-cache';
 import { mergeConsecutiveAssistantMessages } from '@/features/chat/agent-messages';
 import { createAgentStreamMessagingCallbacks } from '@/features/chat/agent-stream-messaging-callbacks';
 import type { WireAttachment } from '@/features/chat/composer.types';
@@ -50,9 +56,11 @@ export function useChatSessionStreaming(deps: {
     chatId: string,
     data: { messages: Message[]; hasMore: boolean; name?: string },
   ) => void;
-  loadSessionById: (key: string, offset?: number) => Promise<void>;
+  loadSessionById: (key: string, offset?: number) => Promise<Message[] | undefined>;
   createNewSession: () => Promise<void>;
   pollSessionNameAfterTurn: () => Promise<void>;
+  /** Latest committed messages (synced each render) for resume cache seeding. */
+  latestMessagesRef: RefObject<Message[]>;
 }) {
   const {
     sessionKey,
@@ -79,10 +87,12 @@ export function useChatSessionStreaming(deps: {
     loadSessionById,
     createNewSession,
     pollSessionNameAfterTurn,
+    latestMessagesRef,
   } = deps;
 
   const finalizeMessage = useCallback(
     (opts?: { skipSteeringQueueFlush?: boolean }) => {
+      const cacheKey = activeStreamSessionKeyRef.current ?? sessionKeyRef.current;
       let finalMsg: Message | null = null;
       flushSync(() => {
         setStreamingMsg((prev) => {
@@ -121,6 +131,7 @@ export function useChatSessionStreaming(deps: {
           void loadSessionById(syncKey, 0);
         }, 400);
       }
+      if (cacheKey) clearLiveSessionCache(cacheKey);
     },
     [
       setStreamingMsg,
@@ -142,7 +153,7 @@ export function useChatSessionStreaming(deps: {
   );
 
   const tryResumeAgentRun = useCallback(
-    async (chatId: string) => {
+    async (chatId: string, loadedMessages?: Message[]) => {
       const sender = senderRef.current;
       if (sender.isSending) {
         return;
@@ -165,21 +176,30 @@ export function useChatSessionStreaming(deps: {
       setSending(true);
       setStreaming(true);
       setProgress(null);
+      seedLiveSessionCacheIfEmpty(
+        chatId,
+        loadedMessages ?? latestMessagesRef.current ?? [],
+        true,
+        true,
+      );
       let hydratedResumeTail = false;
       const hydrateResumeTailAssistant = () => {
         if (hydratedResumeTail) return;
         hydratedResumeTail = true;
         let extractedTail: Message | null = null;
+        let committedWithoutTail: Message[] = [];
         flushSync(() => {
           setMessages((prev) => {
             if (prev.length === 0) return prev;
             const last = prev[prev.length - 1];
             if (last?.role !== 'assistant') return prev;
             extractedTail = cloneMessageForRender(last);
-            return prev.slice(0, -1);
+            committedWithoutTail = prev.slice(0, -1);
+            return committedWithoutTail;
           });
           if (extractedTail) {
             setStreamingMsg((prev) => prev ?? extractedTail);
+            liveSessionCacheApplyHydratedTail(chatId, committedWithoutTail, extractedTail);
           }
         });
       };
@@ -213,6 +233,7 @@ export function useChatSessionStreaming(deps: {
         if ((err as Error).name !== 'AbortError') {
           console.error('[chat] resume failed:', err);
         }
+        clearLiveSessionCache(chatId);
         activeResumeRunIdRef.current = null;
         sendingRef.current = false;
         streamingRef.current = false;
@@ -245,6 +266,7 @@ export function useChatSessionStreaming(deps: {
       fq.dismissClarify,
       fq.makeOnClarifyRequest,
       fq.onClarifyToolEnd,
+      latestMessagesRef,
     ],
   );
 
@@ -326,15 +348,25 @@ export function useChatSessionStreaming(deps: {
       setSending(true);
       setError(null);
       fq.dismissClarify();
-      setMessages((m) => [
-        ...m,
-        {
-          role: 'user',
-          content: content ? [{ type: 'text', text: content }] : [],
-          attachments,
-          timestamp: Date.now(),
-        },
-      ]);
+      setMessages((m) => {
+        const next = [
+          ...m,
+          {
+            role: 'user',
+            content: content ? [{ type: 'text', text: content }] : [],
+            attachments,
+            timestamp: Date.now(),
+          },
+        ] as Message[];
+        initLiveSessionCache(chatId, {
+          messages: next,
+          streamingMsg: null,
+          progress: null,
+          sending: true,
+          streaming: false,
+        });
+        return next;
+      });
 
       try {
         const sendStreamCallbacks = createAgentStreamMessagingCallbacks({
@@ -363,6 +395,7 @@ export function useChatSessionStreaming(deps: {
         await sender.send(content, chatId, attachments, effectiveThinking, sendStreamCallbacks);
       } catch (err) {
         if ((err as Error).name !== 'AbortError') {
+          clearLiveSessionCache(chatId);
           setError(err instanceof Error ? err.message : 'Send failed');
           setStreamingMsg(null);
           setStreaming(false);
@@ -400,6 +433,7 @@ export function useChatSessionStreaming(deps: {
       fq.makeOnClarifyRequest,
       fq.onClarifyToolEnd,
       createNewSession,
+      latestMessagesRef,
     ],
   );
 

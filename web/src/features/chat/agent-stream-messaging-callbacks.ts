@@ -1,5 +1,12 @@
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 
+import {
+  clearLiveSessionCache,
+  getLiveSessionCache,
+  liveSessionCacheMutateStreaming,
+  liveSessionCacheSetFlags,
+  liveSessionCacheSetProgress,
+} from '@/features/chat/active-session-live-cache';
 import type { MessagingCallbacks } from '@/features/chat/message-sender';
 import type { Message, ProgressState } from '@/features/chat/messages.types';
 import type { SessionManager } from '@/features/chat/session-manager';
@@ -7,9 +14,7 @@ import {
   appendThinkingDelta,
   appendTextDelta,
   appendToolStart,
-  cloneMessageForRender,
   completeTool,
-  ensureAssistantMessage,
   finalizeStreamingThinking,
   startThinkingSegment,
 } from '@/features/chat/streaming';
@@ -86,6 +91,7 @@ export function createAgentStreamMessagingCallbacks(opts: {
   };
 
   const onBackgroundTerminal = () => {
+    clearLiveSessionCache(chatId);
     activeStreamSessionKeyRef.current = null;
     if (clearResumeRunIdOnBackgroundTerminal) {
       activeResumeRunIdRef.current = null;
@@ -99,79 +105,83 @@ export function createAgentStreamMessagingCallbacks(opts: {
     reloadSessionSnapshot();
   };
 
+  const applyStreamingToReact = () => {
+    const snap = getLiveSessionCache(chatId);
+    const bubble = snap?.streamingMsg;
+    if (!bubble) return;
+    setStreamingMsg(bubble);
+  };
+
   return {
     onStreamStart: () => {
-      if (!shouldApplyStreamUpdate(chatId)) return;
       beforeAssistantDelta();
+      liveSessionCacheMutateStreaming(chatId, () => {});
+      liveSessionCacheSetFlags(chatId, { streaming: true });
+      if (!shouldApplyStreamUpdate(chatId)) return;
       if (setStreamingOnStreamStart) {
         setStreaming(true);
       }
-      setStreamingMsg((prev) => cloneMessageForRender(ensureAssistantMessage(prev, Date.now())));
+      applyStreamingToReact();
+      setStreaming(true);
     },
     onToken: (delta) => {
-      if (!shouldApplyStreamUpdate(chatId)) return;
       beforeAssistantDelta();
-      setStreamingMsg((prev) => {
-        const msg = ensureAssistantMessage(prev, Date.now());
+      liveSessionCacheMutateStreaming(chatId, (msg) => {
         appendTextDelta(msg.content, delta);
-        return cloneMessageForRender(msg);
       });
+      if (!shouldApplyStreamUpdate(chatId)) return;
+      applyStreamingToReact();
       setStreaming(true);
     },
     onThinking: (c, isDelta) => {
-      if (!shouldApplyStreamUpdate(chatId)) return;
       beforeAssistantDelta();
-      setStreamingMsg((prev) => {
-        const msg = ensureAssistantMessage(prev, Date.now());
+      liveSessionCacheMutateStreaming(chatId, (msg) => {
         if (!isDelta && c === '') startThinkingSegment(msg.content);
         else appendThinkingDelta(msg.content, c, isDelta);
-        return cloneMessageForRender(msg);
       });
+      if (!shouldApplyStreamUpdate(chatId)) return;
+      applyStreamingToReact();
     },
     onThinkingEnd: () => {
-      if (!shouldApplyStreamUpdate(chatId)) return;
       beforeAssistantDelta();
-      setStreamingMsg((prev) => {
-        if (!prev) return prev;
-        const msg = ensureAssistantMessage(prev, Date.now());
+      liveSessionCacheMutateStreaming(chatId, (msg) => {
         finalizeStreamingThinking(msg.content);
-        return cloneMessageForRender(msg);
       });
+      if (!shouldApplyStreamUpdate(chatId)) return;
+      applyStreamingToReact();
     },
     onToolStart: (toolName, args) => {
-      if (!shouldApplyStreamUpdate(chatId)) return;
       beforeAssistantDelta();
-      setStreamingMsg((prev) => {
-        const msg = ensureAssistantMessage(prev, Date.now());
+      liveSessionCacheMutateStreaming(chatId, (msg) => {
         appendToolStart(msg.content, toolName, args);
-        return cloneMessageForRender(msg);
       });
+      if (!shouldApplyStreamUpdate(chatId)) return;
+      applyStreamingToReact();
       setStreaming(true);
     },
     onToolEnd: (toolName, isErr, result) => {
-      if (!shouldApplyStreamUpdate(chatId)) return;
       if (toolName === 'clarify') {
         fq.onClarifyToolEnd();
       }
       beforeAssistantDelta();
-      setStreamingMsg((prev) => {
-        const msg = ensureAssistantMessage(prev, Date.now());
+      liveSessionCacheMutateStreaming(chatId, (msg) => {
         completeTool(msg.content, toolName, isErr, result);
-        return cloneMessageForRender(msg);
       });
+      if (!shouldApplyStreamUpdate(chatId)) return;
+      applyStreamingToReact();
     },
     onProgress: (p) => {
+      liveSessionCacheSetProgress(chatId, p);
       if (!shouldApplyStreamUpdate(chatId)) return;
       setProgress(p);
     },
     onTtsAudio: (p) => {
-      if (!shouldApplyStreamUpdate(chatId)) return;
-      setStreamingMsg((prev) => {
-        const msg = ensureAssistantMessage(prev, Date.now());
+      beforeAssistantDelta();
+      liveSessionCacheMutateStreaming(chatId, (msg) => {
         const rel = p.workspaceRelativePath?.replace(/\\/g, '/').trim();
         const existing = msg.attachments ?? [];
         if (rel && existing.some((a) => a.workspaceRelativePath?.replace(/\\/g, '/').trim() === rel)) {
-          return cloneMessageForRender(msg);
+          return;
         }
         const nextAtt = {
           name: p.name,
@@ -181,8 +191,9 @@ export function createAgentStreamMessagingCallbacks(opts: {
           size: 0,
         };
         msg.attachments = [...existing, nextAtt];
-        return cloneMessageForRender(msg);
       });
+      if (!shouldApplyStreamUpdate(chatId)) return;
+      applyStreamingToReact();
     },
     onClarifyRequest: fq.makeOnClarifyRequest(chatId),
     onResult: () => {
@@ -201,6 +212,7 @@ export function createAgentStreamMessagingCallbacks(opts: {
         onBackgroundTerminal();
         return;
       }
+      clearLiveSessionCache(chatId);
       if (clearResumeRunIdOnVisibleError) {
         activeResumeRunIdRef.current = null;
       }

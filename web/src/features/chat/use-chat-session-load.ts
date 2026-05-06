@@ -12,19 +12,8 @@ import {
   type ReasoningLevel,
 } from '@/features/chat/messages.types';
 import { modelSupportsReasoning } from '@/features/chat/model-capabilities';
-import { pendingAgentRunStorageKey } from '@/features/chat/message-sender';
+import { hasPendingAgentRunForChat } from '@/features/chat/message-sender';
 import type { SessionManager } from '@/features/chat/session-manager';
-
-function hasPendingWebchatAgentRun(chatId: string): boolean {
-  try {
-    const raw = globalThis.sessionStorage?.getItem(pendingAgentRunStorageKey(chatId));
-    if (!raw) return false;
-    const pr = JSON.parse(raw) as { runId?: unknown };
-    return typeof pr.runId === 'string' && pr.runId.trim().length > 0;
-  } catch {
-    return false;
-  }
-}
 
 export function useChatSessionLoad(deps: {
   sessionMgrRef: RefObject<SessionManager>;
@@ -131,17 +120,17 @@ export function useChatSessionLoad(deps: {
   );
 
   const loadSessionById = useCallback(
-    async (key: string, offset = 0) => {
-      const runBody = async (k: string, o: number): Promise<void> => {
+    async (key: string, offset = 0): Promise<Message[] | undefined> => {
+      const runBody = async (k: string, o: number): Promise<Message[] | undefined> => {
         if (
           o === 0 &&
           k === sessionKeyRef.current &&
           (sendingRef.current || streamingRef.current) &&
           activeStreamSessionKeyRef.current === k
         ) {
-          return;
+          return undefined;
         }
-        if (o === 0 && !hasPendingWebchatAgentRun(k)) {
+        if (o === 0 && !hasPendingAgentRunForChat(k)) {
           dismissClarifyOnSessionLoad();
         }
         loadingSessionRef.current = true;
@@ -162,14 +151,15 @@ export function useChatSessionLoad(deps: {
             } catch {
               /* gateway may be older */
             }
-          } else {
-            setMessages((prev) => {
-              const existing = new Set(prev.map((m) => m.timestamp));
-              const prepended = loaded.filter((m) => !existing.has(m.timestamp));
-              return mergeConsecutiveAssistantMessages([...prepended, ...prev]);
-            });
-            setHasMore(more);
+            return loaded;
           }
+          setMessages((prev) => {
+            const existing = new Set(prev.map((m) => m.timestamp));
+            const prepended = loaded.filter((m) => !existing.has(m.timestamp));
+            return mergeConsecutiveAssistantMessages([...prepended, ...prev]);
+          });
+          setHasMore(more);
+          return undefined;
         } catch {
           if (o === 0) {
             setError('Failed to load session');
@@ -178,7 +168,7 @@ export function useChatSessionLoad(deps: {
             const target = withMsgs[0] ?? sessions[0];
             if (target) {
               navigateToSession(target.key);
-              await runBody(target.key, 0);
+              return await runBody(target.key, 0);
             } else {
               try {
                 const aid = resolveAgentIdForPost();
@@ -203,6 +193,7 @@ export function useChatSessionLoad(deps: {
               }
             }
           }
+          return undefined;
         } finally {
           loadingSessionRef.current = false;
         }
@@ -216,7 +207,7 @@ export function useChatSessionLoad(deps: {
       loadTailRef.current = prev.then(() => tailGate);
       await prev;
       try {
-        await runBody(key, offset);
+        return await runBody(key, offset);
       } finally {
         releaseTail();
       }
