@@ -2,7 +2,7 @@
  * HTTP client for api.skillhub.cn (registry: detail, files, versions, batch, skillsets, download).
  */
 
-import { fetch } from 'undici';
+import { fetch, type RequestInit } from 'undici';
 import { MAX_SKILL_ZIP_BYTES } from '../../../managed-store.js';
 
 const SKILLHUB_API_BASE = 'https://api.skillhub.cn';
@@ -198,8 +198,7 @@ export async function listSkillHubRegistryCategories(): Promise<SkillHubRegistry
   );
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function fetchJson<T>(url: string, init?: any): Promise<T> {
+async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, {
     ...init,
     headers: {

@@ -13,6 +13,30 @@ const root = path.join(__dirname, '..');
 const extensionsRoot = path.join(root, 'extensions');
 const outPath = path.join(root, 'src/generated/bundled-channel-plugins.ts');
 
+/** True if the extension declares a path that exists on disk (TypeScript sources often use .ts while imports use .js). */
+function bundledChannelModuleExists(dir, moduleRel) {
+  const rel = moduleRel.replace(/^\.\//, '');
+  const abs = path.join(extensionsRoot, dir, rel);
+  if (fs.existsSync(abs)) {
+    return true;
+  }
+  if (rel.endsWith('.js')) {
+    const stem = abs.slice(0, -'.js'.length);
+    for (const ext of ['.ts', '.tsx', '.mts', '.cts']) {
+      if (fs.existsSync(stem + ext)) {
+        return true;
+      }
+    }
+  } else if (!/\.[cm]?[jt]sx?$/i.test(path.basename(rel))) {
+    for (const ext of ['.ts', '.tsx', '.js', '.mts', '.cts']) {
+      if (fs.existsSync(abs + ext)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 function readBundledEntries() {
   const entries = [];
   if (!fs.existsSync(extensionsRoot)) {
@@ -38,11 +62,19 @@ function readBundledEntries() {
       continue;
     }
     const moduleRel = typeof bc.module === 'string' && bc.module.trim() ? bc.module.trim() : 'src/index.js';
+    const moduleRelNorm = moduleRel.replace(/^\.\//, '');
+    if (!bundledChannelModuleExists(dirent.name, moduleRelNorm)) {
+      console.warn(
+        `Skipping extensions/${dirent.name}: bundled channel entry file missing (${moduleRel}). ` +
+          'Restore extension sources or remove xopc.bundledChannel from package.json.',
+      );
+      continue;
+    }
     const order = typeof bc.order === 'number' && Number.isFinite(bc.order) ? bc.order : 0;
     entries.push({
       dir: dirent.name,
       exportName: bc.export.trim(),
-      moduleRel: moduleRel.replace(/^\.\//, ''),
+      moduleRel: moduleRelNorm,
       order,
     });
   }
@@ -109,5 +141,16 @@ const entries = readBundledEntries();
 const source = buildSource(entries);
 
 fs.mkdirSync(path.dirname(outPath), { recursive: true });
+// Remove accidental tsc/js emit siblings so imports of `bundled-channel-plugins.js` resolve to the .ts source.
+const staleEmitBase = path.join(path.dirname(outPath), 'bundled-channel-plugins');
+for (const ext of ['.js', '.js.map', '.d.ts', '.d.ts.map']) {
+  try {
+    fs.unlinkSync(staleEmitBase + ext);
+  } catch (err) {
+    if (err && err.code !== 'ENOENT') {
+      throw err;
+    }
+  }
+}
 fs.writeFileSync(outPath, source, 'utf8');
 console.log('Wrote', path.relative(root, outPath), `(${entries.length} bundled channel(s))`);

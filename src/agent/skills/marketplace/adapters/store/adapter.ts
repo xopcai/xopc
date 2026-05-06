@@ -1,4 +1,3 @@
-import type { Config } from '../../../../../config/schema.js';
 import {
   downloadSkillZipBuffer,
   fetchMarketplacePackageDetail,
