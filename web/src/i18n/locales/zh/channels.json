@@ -239,7 +239,19 @@
     "channelStable": "稳定版",
     "channelBeta": "测试版",
     "channelDev": "开发版",
-    "updateChannelHint": "测试版与开发版会较早收到构建；日常使用建议稳定版。"
+    "updateChannelHint": "测试版与开发版会较早收到构建；日常使用建议稳定版。",
+    "mobilePairTitle": "移动应用配对",
+    "mobilePairSubtitle": "使用移动客户端扫描后即可连接网关：会使用下方网关地址与同本控制台一致的 Bearer 访问令牌。",
+    "mobilePairBaseUrlLabel": "配对用的网关地址",
+    "mobilePairBaseUrlHint": "请填写手机能访问的地址（例如局域网 IP 与端口），可能与桌面浏览器当前地址不一致。",
+    "mobilePairLocalhostWarning": "当前地址看起来像本机 localhost。局域网内的手机默认无法直连，请在网关监听局域网并改用 http://<本机局域网IP>:<端口>。",
+    "mobilePairSecurityNote": "二维码含访问令牌，请在可信环境中展示，留意周围摄像头与他人。",
+    "mobilePairEncoding": "生成二维码中…",
+    "mobilePairImageError": "无法生成二维码，可复制配对链接。",
+    "mobilePairCopyLink": "复制配对链接",
+    "mobilePairCopied": "已复制配对链接",
+    "mobilePairSchemeHint": "应用注册的格式：xopc://gateway/mobile-connect?baseUrl=…&token=…",
+    "mobilePairInvalidBaseUrl": "请输入以 http:// 或 https:// 开头的完整网关地址（无需路径）。"
   },
   "heartbeatSettings": {
     "needToken": "请先保存网关访问令牌后再加载或修改心跳选项。",
