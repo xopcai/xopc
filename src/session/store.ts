@@ -22,6 +22,8 @@ import type {
   ExportFormat,
   SessionExport,
   SessionTranscriptSummary,
+  CompactionCheckpointSummary,
+  CompactionCheckpointDetail,
 } from './types.js';
 import { SessionStatus } from './types.js';
 import type { Message } from './types.js';
@@ -35,6 +37,14 @@ import {
   type TranscriptCompactionRecord,
   type XopcSessionTranscriptV1,
 } from './transcript-format.js';
+import {
+  buildSessionContextForLlm,
+  isTranscriptContextEntry,
+  mergeLlmMessagesPreservingContextRows,
+  type TranscriptStoredRow,
+  type XopcTranscriptContextEntry,
+} from './session-context-for-llm.js';
+import { normalizeCompactionCheckpointId } from './compaction-checkpoints.js';
 
 const log = createLogger('SessionStore');
 
@@ -791,9 +801,9 @@ export class SessionStore {
    * Persist transcript JSON + merge session row into the index. Caller must hold {@link runStoreMutation} (or be nested under it).
    * Transcript is stored as a versioned document (pi-style header) with stable {@link XopcSessionTranscriptV1.id}.
    */
-  private async writeSessionTranscriptAndUpdateIndex(
+  private async writeSessionTranscriptFromStoredRows(
     key: string,
-    messages: AgentMessage[],
+    storedRows: TranscriptStoredRow[],
     options?: { appendCompaction?: TranscriptCompactionRecord },
   ): Promise<void> {
     const { dir, jsonPath } = this.sessionPathsForKey(key);
@@ -809,12 +819,13 @@ export class SessionStore {
     }
 
     const doc = buildTranscriptEnvelope({
-      messages,
+      storedRows,
       previous,
       appendCompaction: options?.appendCompaction,
     });
     await writeTextAtomic(jsonPath, JSON.stringify(doc, null, 2));
 
+    const llmMessages = buildSessionContextForLlm(storedRows);
     const index = await this.loadIndex();
     const existingIdx = index.sessions.findIndex((s) => s.key === key);
     const now = new Date().toISOString();
@@ -830,8 +841,8 @@ export class SessionStore {
         ...prev,
         sourceChannel: channel,
         sourceChatId: chatId,
-        messageCount: messages.length,
-        estimatedTokens: this.estimateTokens(messages),
+        messageCount: llmMessages.length,
+        estimatedTokens: this.estimateTokens(llmMessages),
         updatedAt: now,
         lastAccessedAt: now,
         transcriptId: doc.id,
@@ -858,8 +869,8 @@ export class SessionStore {
           : {}),
         stats: {
           ...prev.stats,
-          messageCount: messages.length,
-          tokenCount: this.estimateTokens(messages),
+          messageCount: llmMessages.length,
+          tokenCount: this.estimateTokens(llmMessages),
           lastTurnAt: Date.now(),
         },
       };
@@ -874,8 +885,8 @@ export class SessionStore {
         transcriptId: doc.id,
         sessionStartedAt: doc.createdAt,
         lastInteractionAt: now,
-        messageCount: messages.length,
-        estimatedTokens: this.estimateTokens(messages),
+        messageCount: llmMessages.length,
+        estimatedTokens: this.estimateTokens(llmMessages),
         compactedCount: 0,
         sourceChannel: channel,
         sourceChatId: chatId,
@@ -893,8 +904,8 @@ export class SessionStore {
             }
           : {}),
         stats: {
-          messageCount: messages.length,
-          tokenCount: this.estimateTokens(messages),
+          messageCount: llmMessages.length,
+          tokenCount: this.estimateTokens(llmMessages),
           lastTurnAt: Date.now(),
         },
       });
@@ -904,6 +915,54 @@ export class SessionStore {
     await this.saveIndex();
 
     invalidateSessionSearchIndexCache();
+  }
+
+  private async writeSessionTranscriptAndUpdateIndex(
+    key: string,
+    messages: AgentMessage[],
+    options?: { appendCompaction?: TranscriptCompactionRecord },
+  ): Promise<void> {
+    const { jsonPath } = this.sessionPathsForKey(key);
+    let storedRows: TranscriptStoredRow[] = messages;
+    try {
+      const raw = await readFile(jsonPath, 'utf-8');
+      const parsed = parseStoredTranscriptJson(raw);
+      if (parsed.rows.some((r) => isTranscriptContextEntry(r))) {
+        storedRows = mergeLlmMessagesPreservingContextRows(parsed.rows, messages);
+      }
+    } catch {
+      /* new session or unreadable */
+    }
+    await this.writeSessionTranscriptFromStoredRows(key, storedRows, options);
+  }
+
+  /**
+   * Append a persisted-only transcript row (`kind: 'context'`), visible on disk and in session search
+   * after stripping, but never returned from {@link loadMessages}.
+   */
+  async appendTranscriptContextEntry(
+    key: string,
+    entry: Omit<XopcTranscriptContextEntry, 'kind'> & Partial<Pick<XopcTranscriptContextEntry, 'kind'>>,
+  ): Promise<void> {
+    return this.runStoreMutation(async () => {
+      this.invalidateIndexCache();
+      const { jsonPath } = this.sessionPathsForKey(key);
+      let rows: TranscriptStoredRow[] = [];
+      try {
+        const raw = await readFile(jsonPath, 'utf-8');
+        rows = parseStoredTranscriptJson(raw).rows;
+      } catch {
+        /* new file */
+      }
+      const row: XopcTranscriptContextEntry = {
+        kind: 'context',
+        id: typeof entry.id === 'string' ? entry.id : undefined,
+        text: typeof entry.text === 'string' ? entry.text : undefined,
+        data: entry.data,
+        createdAt: entry.createdAt ?? new Date().toISOString(),
+      };
+      await this.writeSessionTranscriptFromStoredRows(key, [...rows, row], {});
+    });
   }
 
   async saveMessages(key: string, messages: AgentMessage[]): Promise<void> {
@@ -1023,6 +1082,103 @@ export class SessionStore {
       totalTokensAfter: 0,
       lastCompactionAt: undefined,
     };
+  }
+
+  /**
+   * List pre-compaction transcript snapshots for a session (newest first).
+   */
+  async listCompactionCheckpoints(key: string): Promise<CompactionCheckpointSummary[]> {
+    const safeKey = this.sanitizeKey(key);
+    const dir = join(this.sessionsDir, resolveSessionShardRelativePath(key));
+    const prefix = this.checkpointBasenamePrefix(safeKey);
+    let names: string[];
+    try {
+      names = await readdir(dir);
+    } catch {
+      return [];
+    }
+    const files = names.filter((n) => n.startsWith(prefix) && n.endsWith('.json'));
+    const rows = await Promise.all(
+      files.map(async (name) => {
+        const p = join(dir, name);
+        try {
+          const s = await stat(p);
+          const id = name.slice(prefix.length, -'.json'.length);
+          if (!normalizeCompactionCheckpointId(id)) {
+            return null;
+          }
+          return {
+            id: normalizeCompactionCheckpointId(id)!,
+            sizeBytes: s.size,
+            modifiedAt: new Date(s.mtimeMs).toISOString(),
+          } satisfies CompactionCheckpointSummary;
+        } catch {
+          return null;
+        }
+      }),
+    );
+    const valid = rows.filter((r): r is CompactionCheckpointSummary => r !== null);
+    valid.sort((a, b) => b.modifiedAt.localeCompare(a.modifiedAt));
+    return valid;
+  }
+
+  /**
+   * Metadata for a single compaction checkpoint file.
+   */
+  async getCompactionCheckpointDetail(
+    key: string,
+    checkpointId: string,
+  ): Promise<CompactionCheckpointDetail | null> {
+    const id = normalizeCompactionCheckpointId(checkpointId);
+    if (!id) {
+      return null;
+    }
+    const safeKey = this.sanitizeKey(key);
+    const dir = join(this.sessionsDir, resolveSessionShardRelativePath(key));
+    const fname = `${this.checkpointBasenamePrefix(safeKey)}${id}.json`;
+    const cpPath = join(dir, fname);
+    if (!existsSync(cpPath)) {
+      return null;
+    }
+    try {
+      const raw = await readFile(cpPath, 'utf-8');
+      const { messages } = parseStoredTranscriptJson(raw);
+      const norm = this.normalizeLoadedMessages(messages, { key });
+      const s = await stat(cpPath);
+      return {
+        id,
+        sizeBytes: s.size,
+        modifiedAt: new Date(s.mtimeMs).toISOString(),
+        messageCount: norm.length,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Restore main transcript from a pre-compaction snapshot (then re-wrap + index sync).
+   * Does not delete the checkpoint file.
+   */
+  async restoreCompactionCheckpoint(key: string, checkpointId: string): Promise<void> {
+    const id = normalizeCompactionCheckpointId(checkpointId);
+    if (!id) {
+      throw new Error('Invalid checkpoint id');
+    }
+    return this.runStoreMutation(async () => {
+      const safeKey = this.sanitizeKey(key);
+      const dir = join(this.sessionsDir, resolveSessionShardRelativePath(key));
+      const fname = `${this.checkpointBasenamePrefix(safeKey)}${id}.json`;
+      const cpPath = join(dir, fname);
+      if (!existsSync(cpPath)) {
+        throw new Error(`Checkpoint not found: ${id}`);
+      }
+      const { jsonPath } = this.sessionPathsForKey(key);
+      await copyFile(cpPath, jsonPath);
+      const messages = await this.loadMessages(key);
+      await this.writeSessionTranscriptAndUpdateIndex(key, messages);
+      log.info({ key, checkpointId: id }, 'Session transcript restored from compaction checkpoint');
+    });
   }
 
   // ========== MemoryStore API Aliases ==========

@@ -29,7 +29,14 @@ export {
   type ExportFormat,
   type SessionExport,
   type SessionTranscriptSummary,
+  type CompactionCheckpointSummary,
+  type CompactionCheckpointDetail,
 } from './types.js';
+
+export { normalizeCompactionCheckpointId } from './compaction-checkpoints.js';
+
+export { shouldSkipWebchatInboundByAbortCutoff } from './abort-cutoff.js';
+export { stripTrailingWebchatEarlySaveUserIfPresent } from './strip-webchat-early-save.js';
 
 export type { CompactionConfig, CompactionResult } from '../agent/memory/compaction.js';
 export type { WindowConfig } from '../agent/memory/window.js';
@@ -51,6 +58,14 @@ export {
   parseStoredTranscriptJson,
   buildTranscriptEnvelope,
 } from './transcript-format.js';
+export {
+  buildSessionContextForLlm,
+  isTranscriptContextEntry,
+  mergeLlmMessagesPreservingContextRows,
+  transcriptRowsFromJsonArray,
+  type TranscriptStoredRow,
+  type XopcTranscriptContextEntry,
+} from './session-context-for-llm.js';
 export type {
   XopcSessionTranscriptV1,
   TranscriptCompactionRecord,

@@ -25,6 +25,8 @@ interface AgentRequestBody {
   chatId?: string;
   /** Alias for `chatId` (gateway console + extension clients). */
   sessionKey?: string;
+  /** Epoch ms when the client started this send (abort cutoff / stale POST drop). */
+  clientCreatedAtMs?: number;
   /** When true and `channel` is `webchat`, start a new peer id (new session). */
   newSession?: boolean;
   thinking?: string;
@@ -79,6 +81,10 @@ export function createAgentSSEHandler(config: SSEHandlerConfig) {
     }
 
     const { message, channel = 'webchat', attachments, thinking } = body;
+    const clientCreatedAtMs =
+      typeof body.clientCreatedAtMs === 'number' && Number.isFinite(body.clientCreatedAtMs)
+        ? body.clientCreatedAtMs
+        : undefined;
     const newSession = Boolean(body.newSession);
     let chatId = 'default';
     if (newSession && channel === 'webchat') {
@@ -146,6 +152,7 @@ export function createAgentSSEHandler(config: SSEHandlerConfig) {
 
       const generator = service.runAgent(message, channel, chatId, attachments, thinking, {
         signal: clientAbort.signal,
+        ...(clientCreatedAtMs !== undefined ? { clientCreatedAtMs } : {}),
       });
       try {
         let finalResult: { status: string; summary: string } | undefined;
@@ -193,6 +200,7 @@ export function createAgentSSEHandler(config: SSEHandlerConfig) {
 
       const generator = service.runAgent(message, channel, chatId, attachments, thinking, {
         signal: clientAbort.signal,
+        ...(clientCreatedAtMs !== undefined ? { clientCreatedAtMs } : {}),
       });
 
       let eventId = 0;

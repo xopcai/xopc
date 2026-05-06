@@ -15,6 +15,7 @@ import type {
 import type { Message } from './types.js';
 import type { CompactionConfig, CompactionResult } from '../agent/memory/compaction.js';
 import type { XopcSessionTranscriptV1 } from './transcript-format.js';
+import type { XopcTranscriptContextEntry } from './session-context-for-llm.js';
 import { applySessionPatchToMetadata, type SessionPatchBody } from './patch-metadata.js';
 import type { WindowConfig } from '../agent/memory/window.js';
 import type { Config } from '../config/schema.js';
@@ -290,6 +291,17 @@ export class SessionManager extends EventEmitter {
     return this.store.saveMessages(key, messages);
   }
 
+  /**
+   * Append `kind: 'context'` transcript row (persisted, excluded from {@link loadMessages} / LLM).
+   */
+  async appendTranscriptContextEntry(
+    key: string,
+    entry: Omit<XopcTranscriptContextEntry, 'kind'> & Partial<Pick<XopcTranscriptContextEntry, 'kind'>>,
+  ): Promise<void> {
+    await this.store.appendTranscriptContextEntry(key, entry);
+    this.emit('sessionUpdated', { key });
+  }
+
   /** Delete session data */
   async delete(key: string): Promise<void> {
     await this.store.delete(key);
@@ -319,6 +331,19 @@ export class SessionManager extends EventEmitter {
   /** Compaction stats for a session */
   async getCompactionStats(key: string) {
     return this.store.getCompactionStats(key);
+  }
+
+  /** List pre-compaction transcript snapshots (newest first). */
+  listCompactionCheckpoints(key: string) {
+    return this.store.listCompactionCheckpoints(key);
+  }
+
+  getCompactionCheckpointDetail(key: string, checkpointId: string) {
+    return this.store.getCompactionCheckpointDetail(key, checkpointId);
+  }
+
+  restoreCompactionCheckpoint(key: string, checkpointId: string) {
+    return this.store.restoreCompactionCheckpoint(key, checkpointId);
   }
 
   /** Estimate token usage for messages */

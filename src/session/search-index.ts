@@ -37,16 +37,13 @@ export class SessionSearchIndex {
         if (!trimmed) {
           continue;
         }
-        let parsed: unknown;
         try {
-          parsed = JSON.parse(raw);
+          JSON.parse(raw);
         } catch {
           continue;
         }
-        const { messages, envelope } = Array.isArray(parsed)
-          ? { messages: parsed as AgentMessage[], envelope: null }
-          : parseStoredTranscriptJson(raw);
-        if (!Array.isArray(parsed) && !envelope && messages.length === 0) {
+        const { messages, envelope } = parseStoredTranscriptJson(raw);
+        if (!envelope && messages.length === 0) {
           continue;
         }
 

@@ -10,6 +10,7 @@ import {
 } from '../../channels/attachments/voice-stt-webchat.js';
 import {
   resolveEffectiveReasoningLevel,
+  stripTrailingWebchatEarlySaveUserIfPresent,
   type SessionConfigStore,
   type SessionStore,
 } from '../../session/index.js';
@@ -456,6 +457,13 @@ export async function* runProcessDirectStreaming(
     // Slash-only turns never hydrate the early-saved user row into pi-agent state; persisting here would
     // write an empty/stale transcript over the gateway `SessionManager` copy (and break e.g. `/goal`).
     if (!ranSlashCommand) {
+      if (userAborted && channel === 'webchat') {
+        try {
+          await stripTrailingWebchatEarlySaveUserIfPresent(sessionStore, sessionKey);
+        } catch (stripErr) {
+          log.warn({ err: stripErr, sessionKey }, 'Failed to strip trailing webchat early-save after abort');
+        }
+      }
       await persistAgentSessionMessages(sessionKey);
     }
 
