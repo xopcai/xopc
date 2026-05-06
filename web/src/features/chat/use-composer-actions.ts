@@ -59,6 +59,8 @@ export interface UseComposerActionsOptions {
   resetEditor: () => void;
   clearAttachments: () => void;
   clearEditFollowUpRef: () => void;
+  /** After a draft is committed (send, queue, interrupt); used for input history. */
+  onUserTextCommitted?: (text: string) => void;
 }
 
 export interface UseComposerActionsReturn {
@@ -87,6 +89,7 @@ export function useComposerActions(options: UseComposerActionsOptions): UseCompo
     resetEditor,
     clearAttachments,
     clearEditFollowUpRef,
+    onUserTextCommitted,
   } = options;
 
   const readers = {
@@ -109,6 +112,7 @@ export function useComposerActions(options: UseComposerActionsOptions): UseCompo
       draft.attachments.length > 0 ? draft.attachments : undefined,
       getThinkingLevel(),
     );
+    onUserTextCommitted?.(draft.text);
     resetEditor();
     clearAttachments();
   }, [
@@ -117,6 +121,7 @@ export function useComposerActions(options: UseComposerActionsOptions): UseCompo
     stopVoiceRecording,
     onSend,
     getThinkingLevel,
+    onUserTextCommitted,
     resetEditor,
     clearAttachments,
     getTextValue,
@@ -140,6 +145,7 @@ export function useComposerActions(options: UseComposerActionsOptions): UseCompo
         draft.attachments.length > 0 ? draft.attachments : undefined,
         getThinkingLevel(),
       );
+      onUserTextCommitted?.(draft.text);
       clearEditFollowUpRef();
       resetEditor();
       clearAttachments();
@@ -156,6 +162,7 @@ export function useComposerActions(options: UseComposerActionsOptions): UseCompo
       draft.text,
       draft.attachments.length > 0 ? draft.attachments : undefined,
     );
+    onUserTextCommitted?.(draft.text);
     resetEditor();
     clearAttachments();
   }, [
@@ -169,6 +176,7 @@ export function useComposerActions(options: UseComposerActionsOptions): UseCompo
     getThinkingLevel,
     m.followUpQueueMaxReached,
     clearEditFollowUpRef,
+    onUserTextCommitted,
     resetEditor,
     clearAttachments,
     getTextValue,
@@ -189,6 +197,7 @@ export function useComposerActions(options: UseComposerActionsOptions): UseCompo
       draft.text,
       draft.attachments.length > 0 ? draft.attachments : undefined,
     );
+    onUserTextCommitted?.(draft.text);
 
     if (editingFollowUpId) {
       clearEditFollowUpRef();
@@ -204,6 +213,7 @@ export function useComposerActions(options: UseComposerActionsOptions): UseCompo
     editingFollowUpId,
     onPendingFollowUpRemove,
     onSteeringInterrupt,
+    onUserTextCommitted,
     clearEditFollowUpRef,
     resetEditor,
     clearAttachments,

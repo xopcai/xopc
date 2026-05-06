@@ -14,6 +14,11 @@ import { AtMentionPicker } from '@/features/chat/at-mention-picker';
 import { CommandPalette } from '@/features/chat/command-palette';
 import type { PendingFollowUp } from '@/features/chat/pending-follow-up.types';
 import type { PaletteItem } from '@/features/chat/command-palette.types';
+import {
+  getComposerInputHistory,
+  recordComposerInputHistory,
+} from '@/features/chat/composer-input-history';
+import { getWireCaretOffset } from '@/features/chat/composer-editor-wire';
 import { interpolate, type WireAttachment } from '@/features/chat/composer.types';
 import { formatFilePathForWire } from '@/features/chat/file-wire-pattern';
 import {
@@ -128,10 +133,27 @@ export const ChatComposer = memo(function ChatComposer({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const lastLoadedEditFollowUpIdRef = useRef<string | null>(null);
   const busyRef = useRef(false);
+  const inputHistoryWalkRef = useRef<{ index: number; stash: string } | null>(null);
   const onSendRef = useRef(onSend);
   const thinkingLevelRef = useRef(thinkingLevel);
   onSendRef.current = onSend;
   thinkingLevelRef.current = thinkingLevel;
+
+  const clearInputHistoryWalk = useCallback(() => {
+    inputHistoryWalkRef.current = null;
+  }, []);
+
+  const onUserTextCommitted = useCallback(
+    (text: string) => {
+      recordComposerInputHistory(sessionKey, text);
+      clearInputHistoryWalk();
+    },
+    [sessionKey, clearInputHistoryWalk],
+  );
+
+  useEffect(() => {
+    clearInputHistoryWalk();
+  }, [sessionKey, clearInputHistoryWalk]);
 
   const att = useComposerAttachments({ chat: m.chat });
   const onExternalTextReplace = useCallback(() => {
@@ -170,7 +192,10 @@ export const ChatComposer = memo(function ChatComposer({
     runBusy,
     chat: m.chat,
     getAttachmentCount: () => att.attachmentsRef.current.length,
-    onAutoSend: (text, w, level) => onSendRef.current(text, w, level),
+    onAutoSend: (text, w, level) => {
+      onSendRef.current(text, w, level);
+      onUserTextCommitted(text);
+    },
     wireAttachmentsPayload: att.wireAttachmentsPayload,
     getTextValue: () => editor.valueRef.current,
     getThinkingLevel: () => thinkingLevelRef.current,
@@ -206,7 +231,61 @@ export const ChatComposer = memo(function ChatComposer({
     },
     clearAttachments: att.clearAttachments,
     clearEditFollowUpRef,
+    onUserTextCommitted,
   });
+
+  const tryInputHistoryArrow = useCallback(
+    (dir: 'up' | 'down'): boolean => {
+      const sk = sessionKey?.trim();
+      if (!sk) return false;
+      const history = getComposerInputHistory(sk);
+      if (history.length === 0) return false;
+
+      const walk = inputHistoryWalkRef.current;
+      const el = editor.editorRef.current;
+      const caret = el ? getWireCaretOffset(el) : 0;
+      const value = editor.valueRef.current;
+
+      if (dir === 'up') {
+        if (walk == null) {
+          if (caret !== 0) return false;
+          inputHistoryWalkRef.current = { index: 0, stash: value };
+          const line = history[0];
+          if (!line) return false;
+          editor.resetEditor({ nextText: line, caretOffset: line.length, focus: true });
+          return true;
+        }
+        if (walk.index >= history.length - 1) return true;
+        walk.index += 1;
+        const line = history[walk.index];
+        if (!line) return false;
+        editor.resetEditor({ nextText: line, caretOffset: line.length, focus: true });
+        return true;
+      }
+
+      if (walk == null) return false;
+      walk.index -= 1;
+      if (walk.index < 0) {
+        const stash = walk.stash;
+        inputHistoryWalkRef.current = null;
+        editor.resetEditor({ nextText: stash, caretOffset: stash.length, focus: true });
+        return true;
+      }
+      const line = history[walk.index];
+      if (!line) return false;
+      editor.resetEditor({ nextText: line, caretOffset: line.length, focus: true });
+      return true;
+    },
+    [sessionKey, editor.resetEditor, editor.editorRef, editor.valueRef],
+  );
+
+  const onWireInputClearWalk = useCallback(
+    (wire: string, caret: number) => {
+      inputHistoryWalkRef.current = null;
+      editor.onWireInput(wire, caret);
+    },
+    [editor.onWireInput],
+  );
 
   const replaceRange = (text: string, start: number, end: number, insert: string) =>
     text.slice(0, start) + insert + text.slice(end);
@@ -265,7 +344,9 @@ export const ChatComposer = memo(function ChatComposer({
 
     const accepts = item.acceptsArgs === true;
     if (!accepts) {
-      onSend(`/${item.name}`, undefined, thinkingLevel);
+      const cmd = `/${item.name}`;
+      onSend(cmd, undefined, thinkingLevel);
+      onUserTextCommitted(cmd);
       att.clearAttachments();
       editor.resetEditor();
       return;
@@ -370,6 +451,7 @@ export const ChatComposer = memo(function ChatComposer({
     adjustHeight: editor.adjustHeight,
     editorRef: editor.editorRef,
     resetEditor: editor.resetEditor,
+    tryInputHistoryArrow,
   };
 
   const runBusyState = runBusy;
@@ -531,7 +613,7 @@ export const ChatComposer = memo(function ChatComposer({
                   : m.chat.inputPlaceholderSteering
                 : m.chat.inputPlaceholder
             }
-            onWireInput={editor.onWireInput}
+            onWireInput={onWireInputClearWalk}
             adjustHeight={editor.adjustHeight}
             processFiles={att.processFiles}
             setIsComposing={editor.setIsComposing}

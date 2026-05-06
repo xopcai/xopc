@@ -35,6 +35,7 @@ export type ComposerKbdContext = {
   adjustHeight: () => void;
   editorRef: MutableRefObject<HTMLDivElement | null>;
   resetEditor: (opts?: { nextText?: string; caretOffset?: number; focus?: boolean }) => void;
+  tryInputHistoryArrow?: (dir: 'up' | 'down') => boolean;
 };
 
 export const ChatComposerInput = memo(function ChatComposerInput({
@@ -180,6 +181,14 @@ export const ChatComposerInput = memo(function ChatComposerInput({
               const next = k.replaceRange(v, range.start, range.end, '');
               k.resetEditor({ nextText: next, caretOffset: range.start, focus: true });
             }
+            return;
+          }
+        }
+        if (!k.isComposing && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+          const dir = e.key === 'ArrowUp' ? 'up' : 'down';
+          if (k.tryInputHistoryArrow?.(dir)) {
+            e.preventDefault();
+            k.adjustHeight();
             return;
           }
         }
