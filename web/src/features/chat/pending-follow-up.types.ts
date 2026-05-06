@@ -2,6 +2,9 @@
 
 export const MAX_PENDING_FOLLOW_UPS = 10;
 
+/** Idle after a turn ends before auto-sending the next queued follow-up (keep in sync with streaming hook). */
+export const FOLLOW_UP_AUTO_SEND_IDLE_MS = 72;
+
 export type PendingFollowUpAttachment = {
   type: string;
   mimeType?: string;

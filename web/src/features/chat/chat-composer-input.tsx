@@ -23,6 +23,8 @@ export type ComposerKbdContext = {
   applyAtMentionItem: (item: AtMentionItem, opts?: { stayOpen?: boolean }) => void;
   send: () => void;
   runBusy: boolean;
+  /** Treat like runBusy for Enter: queue rows waiting to flush after the model went idle. */
+  pendingFollowUpsCount: number;
   flushSteeringDraft?: () => void | Promise<void>;
   interruptDraft?: () => void;
   editingFollowUpId: string | null;
@@ -202,10 +204,15 @@ export const ChatComposerInput = memo(function ChatComposerInput({
           document.execCommand('insertText', false, '\n');
           return;
         }
-        if (e.key === 'Enter' && !e.shiftKey && !k.isComposing) {
+        const nativeComposing =
+          typeof KeyboardEvent !== 'undefined' &&
+          e.nativeEvent instanceof KeyboardEvent &&
+          e.nativeEvent.isComposing;
+        if (e.key === 'Enter' && !e.shiftKey && !k.isComposing && !nativeComposing) {
           e.preventDefault();
           const hasDraft = Boolean(k.valueRef.current.trim() || k.attachmentsLen > 0);
-          if (k.runBusy) {
+          const steerKbdBusy = k.runBusy || k.pendingFollowUpsCount > 0;
+          if (steerKbdBusy) {
             if ((e.metaKey || e.ctrlKey) && hasDraft) {
               k.interruptDraft?.();
               return;

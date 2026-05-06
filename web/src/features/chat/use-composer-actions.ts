@@ -130,7 +130,7 @@ export function useComposerActions(options: UseComposerActionsOptions): UseCompo
   ]);
 
   const flushSteeringDraft = useCallback(async () => {
-    if (!runBusy) return;
+    if (!runBusy && pendingFollowUpsCount === 0) return;
     const draft = harvestDraft({
       voiceRecording,
       stopVoiceRecording,
