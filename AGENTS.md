@@ -348,6 +348,7 @@ cd web && pnpm run build                  # → ../dist/gateway/static/root (gat
 - **Model input:** Use `SessionStore.loadMessages` / `sessionStore.load` (they apply `buildSessionContextForLlm`). If you parse transcript JSON yourself, run `buildSessionContextForLlm(rows)` before passing history to pi-agent or any provider.
 - **Webchat abort cutoff:** `POST /api/agent` accepts optional `clientCreatedAtMs`. When it is **omitted**, `abortCutoffTimestamp` does **not** drop stale POSTs (clients must send send-time for skip semantics).
 - **Audit rows on disk:** `kind: 'context'` entries persist for ops/UI via `GET /api/sessions/:key?include=transcriptRows` (comma-separated with `transcript` if you also want `transcriptSummary`).
+- **JSON export:** `SessionStore.exportSession(..., 'json')` includes `transcriptRows` (full on-disk order) alongside API-shaped `messages` (LLM-only). Session text search indexes `context` row `text` / `id` tokens as well.
 
 | Area | Primary locations |
 |------|-------------------|

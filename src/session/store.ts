@@ -1237,8 +1237,7 @@ export class SessionStore {
   // ========== Export/Import ==========
 
   /**
-   * JSON export uses API-shaped `detail.messages` (LLM-only). On-disk `kind: 'context'` rows are
-   * not included unless the export format is extended later.
+   * JSON export includes API-shaped `messages` (LLM-only) plus `transcriptRows` (full on-disk order).
    */
   async exportSession(key: string, format: ExportFormat): Promise<string> {
     const detail = await this.get(key);
@@ -1247,11 +1246,13 @@ export class SessionStore {
     }
 
     if (format === 'json') {
+      const transcriptRows = await this.loadTranscriptRows(key);
       const exportData: SessionExport = {
         version: INDEX_VERSION,
         exportedAt: new Date().toISOString(),
         metadata: detail,
         messages: detail.messages,
+        transcriptRows,
       };
       return JSON.stringify(exportData, null, 2);
     } else {

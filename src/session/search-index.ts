@@ -10,6 +10,7 @@ import type { AgentMessage } from '@mariozechner/pi-agent-core';
 import { FILENAMES } from '../config/paths.js';
 import { fileStemToSessionKey } from './session-file-key.js';
 import { parseStoredTranscriptJson } from './transcript-format.js';
+import { isTranscriptContextEntry, type TranscriptStoredRow } from './session-context-for-llm.js';
 
 interface IndexedSession {
   key: string;
@@ -42,14 +43,14 @@ export class SessionSearchIndex {
         } catch {
           continue;
         }
-        const { messages, envelope } = parseStoredTranscriptJson(raw);
+        const { messages, rows, envelope } = parseStoredTranscriptJson(raw);
         if (!envelope && messages.length === 0) {
           continue;
         }
 
         const key = this.extractSessionKeyFromPath(file);
-        // Index LLM-only messages; `kind: 'context'` rows are excluded by parse → messages.
         const wordIndex = this.buildWordIndex(messages);
+        this.mergeContextTextIntoWordIndex(wordIndex, rows, messages.length);
 
         const indexed: IndexedSession = { key, messages, wordIndex };
         this.sessions.set(key, indexed);
@@ -143,6 +144,32 @@ export class SessionSearchIndex {
     }
 
     return index;
+  }
+
+  /** Index `kind: 'context'` `text` / `id` so session search matches audit rows (synthetic slot indices). */
+  private mergeContextTextIntoWordIndex(
+    wordIndex: Map<string, Set<number>>,
+    rows: TranscriptStoredRow[],
+    llmMessageCount: number,
+  ): void {
+    let slot = 0;
+    for (const r of rows) {
+      if (!isTranscriptContextEntry(r)) continue;
+      const parts: string[] = [];
+      if (typeof r.text === 'string' && r.text.trim()) parts.push(r.text);
+      if (typeof r.id === 'string' && r.id.trim()) parts.push(r.id);
+      const blob = parts.join(' ');
+      if (!blob.trim()) continue;
+      const words = tokenizeWords(blob);
+      const idx = llmMessageCount + slot;
+      slot += 1;
+      for (const word of words) {
+        if (!wordIndex.has(word)) {
+          wordIndex.set(word, new Set());
+        }
+        wordIndex.get(word)!.add(idx);
+      }
+    }
   }
 
   private mergeIntoGlobalIndex(sessionKey: string, wordIndex: Map<string, Set<number>>): void {
