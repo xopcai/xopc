@@ -28,6 +28,7 @@ export {
   type SessionStats,
   type ExportFormat,
   type SessionExport,
+  type SessionTranscriptSummary,
 } from './types.js';
 
 export type { CompactionConfig, CompactionResult } from '../agent/memory/compaction.js';
@@ -54,3 +55,5 @@ export type {
   XopcSessionTranscriptV1,
   TranscriptCompactionRecord,
 } from './transcript-format.js';
+
+export { applySessionPatchToMetadata, type SessionPatchBody } from './patch-metadata.js';

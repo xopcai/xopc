@@ -17,6 +17,19 @@ export interface SessionMetadata {
   routing?: {
     agentId?: string;
   };
+  customData?: Record<string, unknown>;
+  /** Stable wrapped-transcript id (same as on-disk envelope id). */
+  transcriptId?: string;
+  sessionStartedAt?: string;
+  lastInteractionAt?: string;
+}
+
+export interface SessionTranscriptSummary {
+  id: string;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+  compactionCount: number;
 }
 
 export interface SessionDetail extends SessionMetadata {
@@ -25,6 +38,7 @@ export interface SessionDetail extends SessionMetadata {
     content: string | unknown[];
     timestamp?: string;
   }>;
+  transcriptSummary?: SessionTranscriptSummary;
 }
 
 export interface SessionListQuery {

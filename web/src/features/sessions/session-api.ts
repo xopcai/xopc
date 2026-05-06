@@ -55,9 +55,36 @@ export async function getSessionStats(): Promise<SessionStats> {
   return fetchJson<SessionStats>(apiUrl('/api/sessions/stats'));
 }
 
-export async function getSessionDetail(key: string): Promise<SessionDetail> {
-  const data = await fetchJson<{ session: SessionDetail }>(apiUrl(`/api/sessions/${encodeURIComponent(key)}`));
+export async function getSessionDetail(
+  key: string,
+  options?: { includeTranscript?: boolean },
+): Promise<SessionDetail> {
+  const qs = options?.includeTranscript ? '?include=transcript' : '';
+  const data = await fetchJson<{ session: SessionDetail }>(
+    apiUrl(`/api/sessions/${encodeURIComponent(key)}${qs}`),
+  );
   if (!data.session) throw new Error('Session not found');
+  return data.session;
+}
+
+export type SessionPatchPayload = {
+  name?: string;
+  tags?: string[];
+  replaceTags?: boolean;
+  customData?: Record<string, unknown>;
+};
+
+export async function patchSession(
+  key: string,
+  patch: SessionPatchPayload,
+): Promise<SessionDetail> {
+  const data = await fetchJson<{ ok: boolean; session?: SessionDetail; error?: string }>(
+    apiUrl(`/api/sessions/${encodeURIComponent(key)}`),
+    { method: 'PATCH', body: JSON.stringify(patch) },
+  );
+  if (!data.ok || !data.session) {
+    throw new Error(data.error || 'PATCH session failed');
+  }
   return data.session;
 }
 

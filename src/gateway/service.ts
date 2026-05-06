@@ -14,6 +14,7 @@ import { ConfigHotReloader } from '../config/reload.js';
 import { SessionManager } from '../session/index.js';
 import type { Config } from '../config/schema.js';
 import type { SessionListQuery, ExportFormat } from '../session/types.js';
+import type { SessionPatchBody } from '../session/patch-metadata.js';
 import { resolveGatewayAuth, assertGatewayAuthConfigured, validateToken, extractToken, type ResolvedGatewayAuth } from './auth.js';
 import { assertGatewayAuthNotKnownWeak } from './security/known-weak-secrets.js';
 import { auditGatewayConfig } from './security/audit.js';
@@ -1202,8 +1203,21 @@ export class GatewayService {
   /**
    * Get a single session by key
    */
-  async getSession(key: string) {
-    return this.sessionManager.getSession(key);
+  async getSession(
+    key: string,
+    options?: { includeTranscriptSummary?: boolean },
+  ) {
+    return this.sessionManager.getSession(key, options);
+  }
+
+  /**
+   * Partial session metadata update (OpenClaw-style sessions.patch subset).
+   */
+  async patchSession(
+    key: string,
+    body: SessionPatchBody,
+  ): Promise<{ ok: true } | { ok: false; error: string }> {
+    return this.sessionManager.patchSession(key, body);
   }
 
   /**

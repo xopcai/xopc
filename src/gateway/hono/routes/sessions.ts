@@ -141,11 +141,48 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
   // GET /api/sessions/:key - Get single session (must be after /stats and /chat-ids)
   authenticated.get('/api/sessions/:key', async (c) => {
     const key = c.req.param('key');
-    const session = await service.getSession(key);
+    const includeRaw = c.req.query('include') ?? '';
+    const includeTranscript = includeRaw
+      .split(',')
+      .map((s) => s.trim())
+      .includes('transcript');
+    const session = await service.getSession(key, {
+      includeTranscriptSummary: includeTranscript,
+    });
     if (!session) {
       return c.json({ error: 'Session not found' }, 404);
     }
     return c.json({ session });
+  });
+
+  // PATCH /api/sessions/:key - Partial metadata (name, tags, customData); OpenClaw-style patch subset
+  authenticated.patch('/api/sessions/:key', async (c) => {
+    const key = c.req.param('key');
+    const body = await c.req.json().catch(() => ({}));
+    const patch: {
+      name?: string;
+      tags?: string[];
+      replaceTags?: boolean;
+      customData?: Record<string, unknown>;
+    } = {};
+    if (typeof body.name === 'string') {
+      patch.name = body.name;
+    }
+    if (Array.isArray(body.tags)) {
+      patch.tags = body.tags;
+    }
+    if (typeof body.replaceTags === 'boolean') {
+      patch.replaceTags = body.replaceTags;
+    }
+    if (body.customData !== undefined && typeof body.customData === 'object' && body.customData !== null) {
+      patch.customData = body.customData as Record<string, unknown>;
+    }
+    const result = await service.patchSession(key, patch);
+    if (result.ok === false) {
+      return c.json({ ok: false, error: result.error }, 404);
+    }
+    const session = await service.getSession(key);
+    return c.json({ ok: true, session });
   });
 
   // GET /api/sessions/:key/export - Export session (must be before /:key)
@@ -239,7 +276,14 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
     if (!key.startsWith('subagent:')) {
       return c.json({ error: 'Not a subagent session' }, 400);
     }
-    const session = await service.getSession(key);
+    const includeRaw = c.req.query('include') ?? '';
+    const includeTranscript = includeRaw
+      .split(',')
+      .map((s) => s.trim())
+      .includes('transcript');
+    const session = await service.getSession(key, {
+      includeTranscriptSummary: includeTranscript,
+    });
     if (!session) {
       return c.json({ error: 'Subagent session not found' }, 404);
     }

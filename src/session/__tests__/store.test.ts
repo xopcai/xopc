@@ -298,6 +298,36 @@ describe('SessionStore', () => {
       expect(loaded).toHaveLength(2);
     });
 
+    it('writes OpenClaw-style lifecycle fields on the session index', async () => {
+      const key = 'main:telegram:default:dm:lifecycleidx';
+      await store.saveMessages(key, [{ role: 'user', content: 'one' }]);
+      const meta1 = await store.getMetadata(key);
+      expect(meta1?.transcriptId).toBeDefined();
+      expect(meta1?.transcriptId).toBe((await store.loadTranscriptDocument(key))?.id);
+      expect(meta1?.sessionStartedAt).toBeDefined();
+      expect(meta1?.lastInteractionAt).toBeDefined();
+      const started = meta1!.sessionStartedAt!;
+
+      await store.saveMessages(key, [
+        { role: 'user', content: 'one' },
+        { role: 'assistant', content: 'two' },
+      ]);
+      const meta2 = await store.getMetadata(key);
+      expect(meta2?.transcriptId).toBe(meta1?.transcriptId);
+      expect(meta2?.sessionStartedAt).toBe(started);
+      expect(typeof meta2?.lastInteractionAt).toBe('string');
+    });
+
+    it('includes transcriptSummary on get when requested', async () => {
+      const key = 'main:telegram:default:dm:sumtest';
+      await store.saveMessages(key, [{ role: 'user', content: 'z' }]);
+      const detail = await store.get(key, { includeTranscriptSummary: true });
+      expect(detail?.transcriptSummary?.id).toBeDefined();
+      expect(detail?.transcriptSummary?.compactionCount).toBe(0);
+      const bare = await store.get(key);
+      expect(bare?.transcriptSummary).toBeUndefined();
+    });
+
     it('loads legacy bare-array transcript files', async () => {
       const key = 'main:telegram:default:dm:legacyarr';
       const safeKey = key.replace(/[^a-zA-Z0-9_-]/g, '_');
