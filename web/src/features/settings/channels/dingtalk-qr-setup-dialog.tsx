@@ -1,7 +1,7 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { ExternalLink, X } from 'lucide-react';
 import QRCode from 'qrcode';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -16,11 +16,13 @@ export function DingtalkQrSetupDialog({
   onOpenChange,
   ch,
   onSetupSuccess,
+  moreSettings,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   ch: ChannelsSettingsMessages;
   onSetupSuccess: (result: { clientId: string }) => void;
+  moreSettings?: ReactNode;
 }) {
   const [busy, setBusy] = useState(false);
   const [sessionKey, setSessionKey] = useState<string | null>(null);
@@ -28,21 +30,18 @@ export function DingtalkQrSetupDialog({
   const [error, setError] = useState<string | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [qrGenFailed, setQrGenFailed] = useState(false);
-  const [showStart, setShowStart] = useState(true);
 
   const startScan = useCallback(async () => {
     setError(null);
     setSessionKey(null);
     setQrUrl(null);
     setBusy(true);
-    setShowStart(false);
     try {
       const result = await fetchDingtalkSetupStart();
       setQrUrl(result.qrUrl);
       setSessionKey(result.sessionKey);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Start failed');
-      setShowStart(true);
     } finally {
       setBusy(false);
     }
@@ -55,10 +54,11 @@ export function DingtalkQrSetupDialog({
       setError(null);
       setQrDataUrl(null);
       setQrGenFailed(false);
-      setShowStart(true);
       setBusy(false);
+      return;
     }
-  }, [open]);
+    void startScan();
+  }, [open, startScan]);
 
   useEffect(() => {
     if (!sessionKey) return;
@@ -85,7 +85,6 @@ export function DingtalkQrSetupDialog({
           } else {
             setError(status.message);
             setQrUrl(null);
-            setShowStart(true);
           }
           return;
         }
@@ -97,7 +96,6 @@ export function DingtalkQrSetupDialog({
           setError(status.message);
           setSessionKey(null);
           setQrUrl(null);
-          setShowStart(true);
         }
       } catch (e) {
         if (!cancelled) {
@@ -107,7 +105,6 @@ export function DingtalkQrSetupDialog({
           setError(e instanceof Error ? e.message : 'Request failed');
           setSessionKey(null);
           setQrUrl(null);
-          setShowStart(true);
         }
       }
     };
@@ -181,26 +178,10 @@ export function DingtalkQrSetupDialog({
             <p className="mt-1.5 text-sm text-fg-muted">{ch.dingtalkQrModalSubtitle}</p>
           </div>
 
-          {showStart && !showQr ? (
-            <div className="mt-6 flex flex-col items-center gap-4">
-              <Button
-                type="button"
-                variant="primary"
-                className="h-11 w-full rounded-full"
-                disabled={busy}
-                onClick={() => void startScan()}
-              >
-                {busy ? ch.dingtalkQrStarting : ch.dingtalkQrStartButton}
-              </Button>
-            </div>
-          ) : null}
-
           <div className="mt-6 flex min-h-[200px] flex-col items-center justify-center">
             {busy && !showQr ? <p className="text-sm text-fg-muted">{ch.dingtalkQrStarting}</p> : null}
 
-            {error ? (
-              <p className="text-center text-sm text-red-600 dark:text-red-400">{error}</p>
-            ) : null}
+            {error ? <p className="text-center text-sm text-red-600 dark:text-red-400">{error}</p> : null}
 
             {showQr && qrUrl && !error ? (
               <div className="flex w-full flex-col items-center gap-3">
@@ -233,18 +214,20 @@ export function DingtalkQrSetupDialog({
             ) : null}
           </div>
 
-          {showQr ? (
-            <div className="mt-6">
-              <Button
-                type="button"
-                variant="secondary"
-                className="h-11 w-full rounded-full border-0 bg-fg text-surface-panel hover:opacity-90 dark:bg-fg dark:text-surface-panel"
-                disabled={busy}
-                onClick={() => void startScan()}
-              >
-                {busy ? ch.dingtalkQrStarting : ch.dingtalkQrRegenerate}
-              </Button>
-            </div>
+          <div className="mt-6">
+            <Button
+              type="button"
+              variant="secondary"
+              className="h-11 w-full rounded-full border-0 bg-fg text-surface-panel hover:opacity-90 dark:bg-fg dark:text-surface-panel"
+              disabled={busy}
+              onClick={() => void startScan()}
+            >
+              {busy ? ch.dingtalkQrStarting : ch.dingtalkQrRegenerate}
+            </Button>
+          </div>
+
+          {moreSettings ? (
+            <div className="mt-6 border-t border-edge-subtle pt-4 dark:border-edge-subtle">{moreSettings}</div>
           ) : null}
         </Dialog.Content>
       </Dialog.Portal>

@@ -5,7 +5,7 @@ import { docsGuidePageUrl } from '@/navigation';
 
 import { ChannelImHubCard } from './channel-im-hub-card';
 import { ChannelsRemoveChannelDialog } from './channels-remove-channel-dialog';
-import { DingtalkChannelSettingsDialog } from './dingtalk-channel-settings-dialog';
+import { DingtalkMoreSettingsSection } from './dingtalk-more-settings-section';
 import { DingtalkQrSetupDialog } from './dingtalk-qr-setup-dialog';
 import { FeishuChannelSettingsDialog } from './feishu-channel-settings-dialog';
 import { FeishuQrSetupDialog } from './feishu-qr-setup-dialog';
@@ -45,8 +45,6 @@ export function ChannelsSettingsPanel() {
     setFeishuQrSetupOpen,
     dingtalkModalOpen,
     setDingtalkModalOpen,
-    dingtalkQrSetupOpen,
-    setDingtalkQrSetupOpen,
     feishuSetupSuccessBanner,
     dingtalkSetupSuccessBanner,
     tgAdvanced,
@@ -138,6 +136,30 @@ export function ChannelsSettingsPanel() {
   const telegramConfigured = isTelegramConfigured(tg);
   const feishuConfigured = isFeishuConfigured(fs);
   const dingtalkConfigured = isDingtalkConfigured(dt);
+
+  const dingtalkMoreSettings = (
+    <DingtalkMoreSettingsSection
+      ch={ch}
+      form={form}
+      baseline={baseline}
+      showDingtalkSecret={showDingtalkSecret}
+      setShowDingtalkSecret={setShowDingtalkSecret}
+      dingtalkCopied={dingtalkCopied}
+      copyDingtalkSecret={copyDingtalkSecret}
+      updateDingtalk={updateDingtalk}
+      updateChannelAgentRoute={updateChannelAgentRoute}
+      dingtalkAccountsDraft={dingtalkAccountsDraft}
+      setDingtalkAccountsDraft={setDingtalkAccountsDraft}
+      dingtalkAccountsError={dingtalkAccountsError}
+      onDingtalkAccountsBlur={onDingtalkAccountsBlur}
+      dmOpts={dmOpts}
+      groupOpts={groupOpts}
+      chatAgents={chatAgents}
+      saving={saving}
+      dirty={dirty}
+      save={save}
+    />
+  );
 
   const weixinMoreSettings = (
     <WeixinMoreSettingsSection
@@ -264,13 +286,6 @@ export function ChannelsSettingsPanel() {
         onSetupSuccess={handleFeishuQrSetupSuccess}
       />
 
-      <DingtalkQrSetupDialog
-        open={dingtalkQrSetupOpen}
-        onOpenChange={setDingtalkQrSetupOpen}
-        ch={ch}
-        onSetupSuccess={handleDingtalkQrSetupSuccess}
-      />
-
       <TelegramChannelSettingsDialog
         open={telegramModalOpen}
         onOpenChange={setTelegramModalOpen}
@@ -328,29 +343,12 @@ export function ChannelsSettingsPanel() {
         onOpenQrSetup={() => setFeishuQrSetupOpen(true)}
       />
 
-      <DingtalkChannelSettingsDialog
+      <DingtalkQrSetupDialog
         open={dingtalkModalOpen}
         onOpenChange={setDingtalkModalOpen}
         ch={ch}
-        form={form}
-        baseline={baseline}
-        showDingtalkSecret={showDingtalkSecret}
-        setShowDingtalkSecret={setShowDingtalkSecret}
-        dingtalkCopied={dingtalkCopied}
-        copyDingtalkSecret={copyDingtalkSecret}
-        updateDingtalk={updateDingtalk}
-        updateChannelAgentRoute={updateChannelAgentRoute}
-        dingtalkAccountsDraft={dingtalkAccountsDraft}
-        setDingtalkAccountsDraft={setDingtalkAccountsDraft}
-        dingtalkAccountsError={dingtalkAccountsError}
-        onDingtalkAccountsBlur={onDingtalkAccountsBlur}
-        dmOpts={dmOpts}
-        groupOpts={groupOpts}
-        chatAgents={chatAgents}
-        saving={saving}
-        dirty={dirty}
-        save={save}
-        onOpenQrSetup={() => setDingtalkQrSetupOpen(true)}
+        onSetupSuccess={handleDingtalkQrSetupSuccess}
+        moreSettings={dingtalkMoreSettings}
       />
 
       <ChannelsRemoveChannelDialog
