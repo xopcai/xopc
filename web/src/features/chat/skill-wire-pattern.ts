@@ -19,3 +19,10 @@ export const SKILL_WIRE_TRAILING_PLAIN_RE = new RegExp(`(\\/skill:${SKILL_ID_IN_
 
 /** EOW: last `/skill:id` plus trailing spaces */
 export const SKILL_WIRE_TRAILING_EOW_WS_RE = new RegExp(`(\\/skill:${SKILL_ID_IN_WIRE})([ \\t\\f\\v]*)$`);
+
+const SKILL_ID_STANDALONE_RE = new RegExp(`^${SKILL_ID_IN_WIRE}$`);
+
+/** Validates a skill id for `/skill:` wire tokens and URL `?skill=` seeds (trimmed). */
+export function isValidSkillWireId(id: string): boolean {
+  return SKILL_ID_STANDALONE_RE.test(id.trim());
+}

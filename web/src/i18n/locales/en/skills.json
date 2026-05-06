@@ -24,6 +24,8 @@
     "marketplaceLoadFailed": "Failed to load marketplace",
     "marketplaceEmpty": "No packages match your search.",
     "marketplaceInstall": "Install",
+    "previewUseInChat": "Use in chat",
+    "previewUseInChatBusy": "Installing…",
     "marketplaceReinstall": "Reinstall",
     "marketplaceInstalled": "Installed",
     "marketplaceReinstallConfirm": "This skill is already installed. Replace it with the version from the store?",

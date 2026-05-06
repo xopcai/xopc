@@ -8,8 +8,8 @@ import { hitRank, sortHits } from '@/features/search/global-command-palette/rank
 import { buildRouteSeeds } from '@/features/search/global-command-palette/routes-provider';
 import { buildQuickSettingHits } from '@/features/search/global-command-palette/settings-provider';
 import { fetchCommandsCached, getSkillsCached } from '@/features/chat/command-palette-api';
-import type { CommandEntry } from '@/features/chat/command-palette.types';
 import { dispatchFillChatComposer } from '@/features/chat/fill-composer-dispatch';
+import { wireTextForSlashCommandEntry } from '@/features/chat/slash-command-wire-text';
 import { searchWorkspaceFiles } from '@/features/chat/at-mention-api';
 import { listSessions } from '@/features/sessions/session-api';
 import { fetchGatewayAgents } from '@/features/settings/agents-admin-api';
@@ -86,13 +86,6 @@ function iconFor(hit: GlobalHit) {
     default:
       return null;
   }
-}
-
-function wireTextForSlashCommand(c: CommandEntry): string {
-  if (c.acceptsArgs) {
-    return `/${c.name} `;
-  }
-  return `/${c.name}`;
 }
 
 function fillChatComposerWithNavigate(
@@ -412,7 +405,7 @@ export function GlobalCommandPaletteHost() {
             groupLabel: 'Commands',
             keywords: [c.id, ...(c.aliases ?? []), c.category ?? ''],
             run: () => {
-              fillChatComposerWithNavigate(wireTextForSlashCommand(c), pathname, navigate, close);
+              fillChatComposerWithNavigate(wireTextForSlashCommandEntry(c), pathname, navigate, close);
             },
           }));
 
