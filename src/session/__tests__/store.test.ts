@@ -372,6 +372,65 @@ describe('SessionStore', () => {
       });
       expect(doc?.messages.length).toBeLessThan(msgs.length);
     });
+
+    it('lists and restores compaction checkpoints', async () => {
+      const key = 'main:telegram:default:dm:cpapi';
+      const msgs = Array.from({ length: 12 }, (_, i) => ({
+        role: 'user' as const,
+        content: `m-${i}`,
+        timestamp: Date.now() + i,
+      }));
+      await store.saveMessages(key, msgs);
+      const result = {
+        summary: 's',
+        firstKeptIndex: 8,
+        tokensBefore: 8000,
+        tokensAfter: 500,
+        compacted: true,
+      };
+      await store.applyCompaction(key, msgs, result);
+      const list = await store.listCompactionCheckpoints(key);
+      expect(list.length).toBeGreaterThanOrEqual(1);
+      const cpId = list[0]!.id;
+      const detail = await store.getCompactionCheckpointDetail(key, cpId);
+      expect(detail?.messageCount).toBe(msgs.length);
+
+      const afterCompact = await store.loadMessages(key);
+      expect(afterCompact.length).toBeLessThan(msgs.length);
+
+      await store.restoreCompactionCheckpoint(key, cpId);
+      const restored = await store.loadMessages(key);
+      expect(restored.length).toBe(msgs.length);
+    });
+  });
+
+  describe('transcript context rows', () => {
+    it('appendTranscriptContextEntry keeps row on disk but loadMessages returns LLM only', async () => {
+      const key = 'main:webchat:default:direct:ctxrow1';
+      await store.saveMessages(key, [{ role: 'user', content: 'hi' }]);
+      await store.appendTranscriptContextEntry(key, { text: 'audit', id: 'e1' });
+      const llm = await store.loadMessages(key);
+      expect(llm).toHaveLength(1);
+      const doc = await store.loadTranscriptDocument(key);
+      expect(doc?.messages.length).toBe(2);
+      const row = doc!.messages[1] as { kind?: string };
+      expect(row.kind).toBe('context');
+    });
+
+    it('saveMessages preserves context positions when updating LLM tail', async () => {
+      const key = 'main:webchat:default:direct:ctxrow2';
+      await store.saveMessages(key, [{ role: 'user', content: 'u' }]);
+      await store.appendTranscriptContextEntry(key, { text: 'mid' });
+      await store.saveMessages(key, [
+        { role: 'user', content: 'u' },
+        { role: 'assistant', content: 'a' },
+      ]);
+      const doc = await store.loadTranscriptDocument(key);
+      expect(doc?.messages).toHaveLength(3);
+      expect((doc!.messages[0] as { role: string }).role).toBe('user');
+      expect((doc!.messages[1] as { kind: string }).kind).toBe('context');
+      expect((doc!.messages[2] as { role: string }).role).toBe('assistant');
+    });
   });
 
 });

@@ -726,6 +726,13 @@ export class AgentService {
   }
 
   /**
+   * Drop in-memory agent so the next turn reloads transcript from disk (e.g. after checkpoint restore).
+   */
+  evictSessionAgent(sessionKey: string): void {
+    this.agentManager.removeAgent(sessionKey);
+  }
+
+  /**
    * One-shot LLM answer for /btw: uses transcript as background only; does not persist to session.
    */
   async btwQuery(sessionKey: string, question: string): Promise<{ text: string; error?: string }> {

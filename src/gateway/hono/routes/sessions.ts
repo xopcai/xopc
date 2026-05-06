@@ -138,6 +138,81 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
     return c.json({ ok: true, payload: { messages } });
   });
 
+  // POST /api/sessions/:key/transcript/context — append persisted-only `kind: 'context'` row (not in LLM context)
+  authenticated.post('/api/sessions/:key/transcript/context', async (c) => {
+    const key = c.req.param('key');
+    const meta = await service.sessionManagerInstance.getSessionMetadata(key);
+    if (!meta) {
+      return c.json({ ok: false, error: 'Session not found' }, 404);
+    }
+    const body = await c.req.json().catch(() => ({}));
+    const id = typeof body.id === 'string' && body.id.trim() ? body.id.trim() : undefined;
+    const text = typeof body.text === 'string' ? body.text : undefined;
+    const data =
+      body.data !== undefined && typeof body.data === 'object' && body.data !== null && !Array.isArray(body.data)
+        ? (body.data as Record<string, unknown>)
+        : undefined;
+    await service.sessionManagerInstance.appendTranscriptContextEntry(key, { id, text, data });
+    return c.json({ ok: true });
+  });
+
+  // GET /api/sessions/:key/compaction/checkpoints — list pre-compaction snapshots (OpenClaw-style)
+  authenticated.get('/api/sessions/:key/compaction/checkpoints', async (c) => {
+    const key = c.req.param('key');
+    const meta = await service.sessionManagerInstance.getSessionMetadata(key);
+    if (!meta) {
+      return c.json({ ok: false, error: 'Session not found' }, 404);
+    }
+    const checkpoints = await service.listSessionCompactionCheckpoints(key);
+    return c.json({ ok: true, payload: { checkpoints } });
+  });
+
+  authenticated.get('/api/sessions/:key/compaction/checkpoints/:checkpointId', async (c) => {
+    const key = c.req.param('key');
+    const checkpointId = c.req.param('checkpointId');
+    const checkpoint = await service.getSessionCompactionCheckpoint(key, checkpointId);
+    if (!checkpoint) {
+      return c.json({ ok: false, error: 'Checkpoint not found' }, 404);
+    }
+    return c.json({ ok: true, payload: { checkpoint } });
+  });
+
+  authenticated.post('/api/sessions/:key/compaction/restore', async (c) => {
+    const key = c.req.param('key');
+    const body = await c.req.json().catch(() => ({}));
+    const checkpointId = typeof body.checkpointId === 'string' ? body.checkpointId.trim() : '';
+    if (!checkpointId) {
+      return c.json({ ok: false, error: 'checkpointId required' }, 400);
+    }
+    try {
+      await service.restoreSessionCompactionCheckpoint(key, checkpointId);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes('not found') || msg.includes('Invalid')) {
+        return c.json({ ok: false, error: msg }, 404);
+      }
+      return c.json({ ok: false, error: msg }, 500);
+    }
+    const session = await service.getSession(key);
+    if (!session) {
+      return c.json({ ok: false, error: 'Session not found' }, 404);
+    }
+    return c.json({ ok: true, session });
+  });
+
+  authenticated.post('/api/sessions/:key/compaction/run', async (c) => {
+    const key = c.req.param('key');
+    const session = await service.getSession(key);
+    if (!session) {
+      return c.json({ ok: false, error: 'Session not found' }, 404);
+    }
+    const body = await c.req.json().catch(() => ({}));
+    const instructions = typeof body.instructions === 'string' ? body.instructions : undefined;
+    const force = typeof body.force === 'boolean' ? body.force : true;
+    const result = await service.runSessionCompaction(key, { instructions, force });
+    return c.json({ ok: true, payload: { result } });
+  });
+
   // GET /api/sessions/:key - Get single session (must be after /stats and /chat-ids)
   authenticated.get('/api/sessions/:key', async (c) => {
     const key = c.req.param('key');

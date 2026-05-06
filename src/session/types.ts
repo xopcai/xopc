@@ -102,6 +102,11 @@ export interface SessionMetadata {
   sessionStartedAt?: string;
   /** Last transcript write / interaction (ISO), updated on each persist. */
   lastInteractionAt?: string;
+  /**
+   * Epoch ms when the last webchat run was aborted (`POST /api/agent/abort`).
+   * Used with `clientCreatedAtMs` on the next POST /api/agent to drop stale queued sends.
+   */
+  abortCutoffTimestamp?: number;
 }
 
 /** Summary of wrapped transcript (no duplicate message bodies). */
@@ -158,4 +163,15 @@ export interface SessionExport {
   exportedAt: string;
   metadata: SessionMetadata;
   messages: Message[];
+}
+
+/** On-disk pre-compaction snapshot (OpenClaw-style checkpoint list). */
+export interface CompactionCheckpointSummary {
+  id: string;
+  sizeBytes: number;
+  modifiedAt: string;
+}
+
+export interface CompactionCheckpointDetail extends CompactionCheckpointSummary {
+  messageCount: number;
 }

@@ -11,6 +11,7 @@ import {
   createLogger,
   inboundCorrelationMetadataFromAsyncLogContext,
 } from '../../utils/logger.js';
+import { shouldSkipWebchatInboundByAbortCutoff } from '../../session/abort-cutoff.js';
 
 import type { AgentRunRelay } from '../agent-run-relay.js';
 import { MAX_CHAT_ATTACHMENTS } from '../chat-limits.js';
@@ -52,7 +53,7 @@ export async function *runGatewayAgent(
     size?: number;
   }>,
   thinking?: string,
-  runOptions?: { signal?: AbortSignal },
+  runOptions?: { signal?: AbortSignal; clientCreatedAtMs?: number },
 ): AsyncGenerator<RunGatewayAgentYield, { status: string; summary: string }, unknown> {
   const cappedAttachments =
     attachments && attachments.length > MAX_CHAT_ATTACHMENTS
@@ -77,9 +78,11 @@ export async function *runGatewayAgent(
     emit,
   } = deps;
 
+  let webchatSessionKey: string | undefined;
+  let webchatStaleSkip = false;
   if (channel === 'webchat') {
     const parsedKey = parseSessionKey(chatId);
-    const sessionKey = parsedKey
+    webchatSessionKey = parsedKey
       ? chatId
       : buildSessionKey({
           agentId: getDefaultAgentId(config),
@@ -88,7 +91,14 @@ export async function *runGatewayAgent(
           peerKind: 'direct',
           peerId: chatId,
         });
-    runRelay.ensureRun(runId, sessionKey);
+    const meta = await sessionManager.getSessionMetadata(webchatSessionKey);
+    webchatStaleSkip = shouldSkipWebchatInboundByAbortCutoff(meta, runOptions?.clientCreatedAtMs);
+    if (!webchatStaleSkip && meta?.abortCutoffTimestamp !== undefined) {
+      await sessionManager
+        .updateSessionMetadata(webchatSessionKey, { abortCutoffTimestamp: undefined })
+        .catch(() => {});
+    }
+    runRelay.ensureRun(runId, webchatSessionKey);
     runAbortControllers.set(runId, new AbortController());
   }
 
@@ -97,17 +107,17 @@ export async function *runGatewayAgent(
   yield statusEvent;
 
   try {
-    if (channel === 'webchat') {
-      const parsedKey = parseSessionKey(chatId);
-      const sessionKey = parsedKey
-        ? chatId
-        : buildSessionKey({
-            agentId: getDefaultAgentId(config),
-            source: 'webchat',
-            accountId: 'default',
-            peerKind: 'direct',
-            peerId: chatId,
-          });
+    if (channel === 'webchat' && webchatSessionKey) {
+      if (webchatStaleSkip) {
+        runRelay.complete(runId);
+        runAbortControllers.delete(runId);
+        return {
+          status: 'skipped',
+          summary: 'Stale inbound after abort (clientCreatedAtMs before cutoff)',
+        };
+      }
+
+      const sessionKey = webchatSessionKey;
 
       const timezone = agentService.resolveUserTimezoneForSession(sessionKey);
       const stampedMessage = message.trimStart().startsWith('/')

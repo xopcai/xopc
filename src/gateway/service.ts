@@ -15,6 +15,7 @@ import { SessionManager } from '../session/index.js';
 import type { Config } from '../config/schema.js';
 import type { SessionListQuery, ExportFormat } from '../session/types.js';
 import type { SessionPatchBody } from '../session/patch-metadata.js';
+import type { CompactionResult } from '../agent/memory/compaction.js';
 import { resolveGatewayAuth, assertGatewayAuthConfigured, validateToken, extractToken, type ResolvedGatewayAuth } from './auth.js';
 import { assertGatewayAuthNotKnownWeak } from './security/known-weak-secrets.js';
 import { auditGatewayConfig } from './security/audit.js';
@@ -733,7 +734,7 @@ export class GatewayService {
       size?: number;
     }>,
     thinking?: string,
-    runOptions?: { signal?: AbortSignal },
+    runOptions?: { signal?: AbortSignal; clientCreatedAtMs?: number },
   ): AsyncGenerator<{ type: string; content?: string; status?: string; runId?: string }, { status: string; summary: string }, unknown> {
     const iter = runGatewayAgent(
       {
@@ -765,14 +766,28 @@ export class GatewayService {
   /** Abort an in-flight webchat agent run (matches `runId` from SSE `status`). */
   abortAgentRun(runId: string): boolean {
     this.clarifyBridge.cancelForRun(runId);
+    const keysToMark: string[] = [];
     for (const [sk, id] of this.activeWebchatRunBySession) {
       if (id === runId) {
-        this.activeWebchatRunBySession.delete(sk);
+        keysToMark.push(sk);
       }
+    }
+    for (const sk of keysToMark) {
+      this.activeWebchatRunBySession.delete(sk);
+    }
+    const relaySk = this.runRelay.getSessionKey(runId);
+    if (relaySk && !keysToMark.includes(relaySk)) {
+      keysToMark.push(relaySk);
     }
     const c = this.runAbortControllers.get(runId);
     if (!c) {
       return false;
+    }
+    const cutoffTs = Date.now();
+    for (const sk of keysToMark) {
+      void this.sessionManager
+        .updateSessionMetadata(sk, { abortCutoffTimestamp: cutoffTs })
+        .catch(() => {});
     }
     c.abort();
     return true;
@@ -1218,6 +1233,26 @@ export class GatewayService {
     body: SessionPatchBody,
   ): Promise<{ ok: true } | { ok: false; error: string }> {
     return this.sessionManager.patchSession(key, body);
+  }
+
+  async listSessionCompactionCheckpoints(key: string) {
+    return this.sessionManager.listCompactionCheckpoints(key);
+  }
+
+  async getSessionCompactionCheckpoint(key: string, checkpointId: string) {
+    return this.sessionManager.getCompactionCheckpointDetail(key, checkpointId);
+  }
+
+  async restoreSessionCompactionCheckpoint(key: string, checkpointId: string): Promise<void> {
+    await this.sessionManager.restoreCompactionCheckpoint(key, checkpointId);
+    this.agentService.evictSessionAgent(key);
+  }
+
+  async runSessionCompaction(
+    key: string,
+    options?: { instructions?: string; force?: boolean },
+  ): Promise<CompactionResult> {
+    return this.agentService.compactSession(key, options);
   }
 
   /**

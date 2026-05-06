@@ -12,14 +12,15 @@ import {
 describe('transcript-format', () => {
   it('parses legacy JSON array', () => {
     const raw = JSON.stringify([{ role: 'user', content: 'hi' }] as AgentMessage[]);
-    const { messages, envelope } = parseStoredTranscriptJson(raw);
+    const { messages, rows, envelope } = parseStoredTranscriptJson(raw);
     expect(envelope).toBeNull();
     expect(messages).toHaveLength(1);
+    expect(rows).toHaveLength(1);
   });
 
   it('parses wrapped v1 document', () => {
     const doc = buildTranscriptEnvelope({
-      messages: [{ role: 'user', content: 'x' }] as AgentMessage[],
+      storedRows: [{ role: 'user', content: 'x' }] as AgentMessage[],
       previous: null,
     });
     const round = parseStoredTranscriptJson(JSON.stringify(doc));
@@ -27,13 +28,28 @@ describe('transcript-format', () => {
     expect(round.messages).toEqual(doc.messages);
   });
 
+  it('strips kind:context from messages (LLM view) but keeps rows', () => {
+    const stored: AgentMessage[] = [{ role: 'user', content: [{ type: 'text', text: 'u' }] } as AgentMessage];
+    const doc = buildTranscriptEnvelope({
+      storedRows: [
+        ...stored,
+        { kind: 'context', text: 'audit', createdAt: '2026-01-01T00:00:00.000Z' },
+      ],
+      previous: null,
+    });
+    const round = parseStoredTranscriptJson(JSON.stringify(doc));
+    expect(round.rows).toHaveLength(2);
+    expect(round.messages).toHaveLength(1);
+    expect(round.messages[0].role).toBe('user');
+  });
+
   it('preserves id and merges compactions', () => {
     const first = buildTranscriptEnvelope({
-      messages: [{ role: 'user', content: 'a' }] as AgentMessage[],
+      storedRows: [{ role: 'user', content: 'a' }] as AgentMessage[],
       previous: null,
     });
     const second = buildTranscriptEnvelope({
-      messages: [{ role: 'user', content: 'a' }] as AgentMessage[],
+      storedRows: [{ role: 'user', content: 'a' }] as AgentMessage[],
       previous: first,
       appendCompaction: {
         at: '2026-01-01T00:00:00.000Z',
@@ -47,7 +63,7 @@ describe('transcript-format', () => {
     expect(second.compactions).toHaveLength(1);
 
     const third = buildTranscriptEnvelope({
-      messages: second.messages,
+      storedRows: second.messages,
       previous: second,
       appendCompaction: {
         at: '2026-01-02T00:00:00.000Z',

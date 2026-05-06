@@ -58,6 +58,8 @@ export class MessageSender {
         ? attachments.slice(0, MAX_CHAT_ATTACHMENTS)
         : attachments;
 
+    const clientCreatedAtMs = Date.now();
+
     const res = await apiFetch(apiUrl('/api/agent'), {
       method: 'POST',
       headers: { Accept: 'text/event-stream' },
@@ -67,6 +69,7 @@ export class MessageSender {
         chatId,
         attachments: capped,
         thinking: thinkingLevel,
+        clientCreatedAtMs,
       }),
       signal: this._abort.signal,
     });
