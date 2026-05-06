@@ -6,6 +6,7 @@
  */
 
 import type { Config } from '../config/schema.js';
+import type { PersistentGoalApis } from '../agent/goals/persistent-goal-apis.js';
 import type { AgentMessage } from '@mariozechner/pi-agent-core';
 import type {
   ThinkLevel,
@@ -228,6 +229,9 @@ export interface CommandContext {
 
   /** Abort in-flight assistant generation and channel streaming for this session (e.g. /abort) */
   abortCurrentTurn?(): Promise<void>;
+
+  /** Session store + continuation scheduling for built-in persistent `/goal` (when wired). */
+  persistentGoalApis?: PersistentGoalApis;
 }
 
 export type PlatformFeature = 

@@ -67,6 +67,7 @@ export async function runProcessDirect(
         chatId,
         senderId: '',
         isGroup: false,
+        inboundMetadata: {},
       });
       await deps.persistAgentSessionMessages(input.sessionKey);
       return aggregatedText;

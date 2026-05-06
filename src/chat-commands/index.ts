@@ -13,6 +13,7 @@ import { registerTTSCommands } from './builtins/tts.js';
 import { registerThinkingCommands } from './builtins/thinking.js';
 import { registerConfigCommand } from './builtins/config.js';
 import { registerContextCommands } from './builtins/context.js';
+import { registerGoalCommand } from './builtins/goal.js';
 
 // Types
 export type {
@@ -71,6 +72,7 @@ export { registerTTSCommands } from './builtins/tts.js';
 export { registerThinkingCommands } from './builtins/thinking.js';
 export { registerConfigCommand } from './builtins/config.js';
 export { registerContextCommands } from './builtins/context.js';
+export { registerGoalCommand } from './builtins/goal.js';
 
 /**
  * Initialize the command system with all built-in commands
@@ -83,4 +85,5 @@ export function initializeCommands(): void {
   registerContextCommands();
   registerTTSCommands();
   registerThinkingCommands();
+  registerGoalCommand();
 }

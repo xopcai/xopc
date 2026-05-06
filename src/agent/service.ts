@@ -54,6 +54,9 @@ import {
   runProcessDirectStreaming,
   type ProcessDirectStreamingDeps,
 } from './service/process-direct-streaming.js';
+import { parseSessionKey as parseRoutingSessionKey } from '../routing/session-key.js';
+import { handlePersistentGoalPostTurn } from './goals/post-turn.js';
+import type { PersistentGoalApis } from './goals/persistent-goal-apis.js';
 import { reconcileManagedDreamingCronJobs } from './service/reconcile-dreaming-cron.js';
 import { parseOutboundSessionKey } from './service/parse-outbound-session-key.js';
 import { runBtwQuery } from './service/btw-query.js';
@@ -127,6 +130,12 @@ export class AgentService {
     string,
     (event: { type: string; [key: string]: unknown }) => void
   >();
+
+  /** Gateway: drain `processDirectStreaming` for webchat continuations (Hermes FIFO-style). */
+  private persistentGoalWebchatContinuationScheduler?: (sessionKey: string, message: string) => void;
+  private directStreamOutcomeBySession = new Map<string, { skipPersistentGoalPostTurn: boolean }>();
+  /** Concurrent inbound / direct-stream turns per session (Hermes-style /goal mid-flight guard). */
+  private inboundTurnDepthBySession = new Map<string, number>();
 
   // Track event unsubscribers per session
   private sessionUnsubscribers: Map<string, () => void> = new Map();
@@ -244,6 +253,7 @@ export class AgentService {
       bus,
       sessionStore: this.sessionStore,
       sessionConfigStore: this.sessionConfigStore,
+      getPersistentGoalApisForCommand: (routing) => this.getPersistentGoalApisForCommand(routing),
       applySessionThinkingLevel: (sessionKey: string, level: ThinkLevel) => {
         this.agentManager.setThinkingLevel(sessionKey, level as ThinkingLevel);
       },
@@ -497,22 +507,151 @@ export class AgentService {
     return this.agentManager.getLastAssistantContent(sessionKey) ?? '';
   }
 
-  /**
-   * Notify extensions after a webchat direct stream ends (Gateway calls after session run lock is released).
-   */
-  async emitWebchatTurnComplete(payload: {
+  /** Gateway only: webchat continuations bypass the bus and reuse `runGatewayAgent`. */
+  setPersistentGoalWebchatContinuationScheduler(
+    fn: ((sessionKey: string, message: string) => void) | undefined,
+  ): void {
+    this.persistentGoalWebchatContinuationScheduler = fn;
+  }
+
+  beginInboundTurn(sessionKey: string): void {
+    this.inboundTurnDepthBySession.set(
+      sessionKey,
+      (this.inboundTurnDepthBySession.get(sessionKey) ?? 0) + 1,
+    );
+  }
+
+  endInboundTurn(sessionKey: string): void {
+    const n = (this.inboundTurnDepthBySession.get(sessionKey) ?? 1) - 1;
+    if (n <= 0) {
+      this.inboundTurnDepthBySession.delete(sessionKey);
+    } else {
+      this.inboundTurnDepthBySession.set(sessionKey, n);
+    }
+  }
+
+  getInboundTurnDepth(sessionKey: string): number {
+    return this.inboundTurnDepthBySession.get(sessionKey) ?? 0;
+  }
+
+  schedulePersistentGoalContinuation(
+    sessionKey: string,
+    message: string,
+    routing: { channel: string; chatId: string; inboundMetadata?: Record<string, unknown> },
+  ): void {
+    const parsed = parseRoutingSessionKey(sessionKey);
+    if (parsed?.source === 'webchat' && this.persistentGoalWebchatContinuationScheduler) {
+      this.persistentGoalWebchatContinuationScheduler(sessionKey, message);
+      return;
+    }
+    queueMicrotask(() => {
+      void this.bus
+        .publishInbound({
+          channel: routing.channel,
+          chat_id: routing.chatId,
+          sender_id: 'persistent-goal',
+          content: message,
+          metadata: { sessionKey, ...routing.inboundMetadata },
+        })
+        .catch((err) => {
+          log.warn({ err, sessionKey }, 'Persistent goal: publishInbound failed');
+        });
+    });
+  }
+
+  getPersistentGoalApisForCommand(routing: {
     sessionKey: string;
+    channel: string;
+    chatId: string;
+    inboundMetadata?: Record<string, unknown>;
+  }): PersistentGoalApis {
+    return {
+      getSessionMetadata: (k) => this.sessionStore.getMetadata(k),
+      updateSessionMetadata: (k, u) => this.sessionStore.updateMetadata(k, u),
+      loadMessages: (k) => this.sessionStore.loadMessages(k),
+      saveMessages: (k, m) => this.sessionStore.saveMessages(k, m),
+      scheduleContinuation: (sk, msg) => {
+        this.schedulePersistentGoalContinuation(sk, msg, {
+          channel: routing.channel,
+          chatId: routing.chatId,
+          inboundMetadata: routing.inboundMetadata,
+        });
+      },
+      inboundConcurrentDepth: (sk) => this.getInboundTurnDepth(sk),
+    };
+  }
+
+  recordPersistentGoalStreamOutcome(
+    sessionKey: string,
+    outcome: { skipPersistentGoalPostTurn: boolean },
+  ): void {
+    this.directStreamOutcomeBySession.set(sessionKey, outcome);
+  }
+
+  takePersistentGoalStreamOutcome(sessionKey: string): { skipPersistentGoalPostTurn: boolean } | undefined {
+    const v = this.directStreamOutcomeBySession.get(sessionKey);
+    this.directStreamOutcomeBySession.delete(sessionKey);
+    return v;
+  }
+
+  /**
+   * After any assistant-visible turn (webchat direct stream or bus-driven channels): extension hook + built-in `/goal` post-turn.
+   */
+  async emitSessionTurnComplete(payload: {
+    sessionKey: string;
+    channel: string;
+    chatId: string;
     inboundUserText: string;
     assistantPlainText: string;
     aborted: boolean;
     streamError?: string;
+    skipPersistentGoalPostTurn?: boolean;
+    outboundMetadata?: Record<string, unknown>;
   }): Promise<void> {
     await this.hookHandler.triggerWithSessionKey(payload.sessionKey, 'webchat_turn_complete', {
       sessionKey: payload.sessionKey,
+      channel: payload.channel,
+      chatId: payload.chatId,
       inboundUserText: payload.inboundUserText,
       assistantPlainText: payload.assistantPlainText,
       aborted: payload.aborted,
       ...(payload.streamError !== undefined ? { streamError: payload.streamError } : {}),
+    });
+
+    const apis = this.getPersistentGoalApisForCommand({
+      sessionKey: payload.sessionKey,
+      channel: payload.channel,
+      chatId: payload.chatId,
+      inboundMetadata: payload.outboundMetadata,
+    });
+
+    const src = parseRoutingSessionKey(payload.sessionKey)?.source;
+    const isWebchat = src === 'webchat';
+    const publishVerdict =
+      !isWebchat && payload.channel !== 'cli'
+        ? async (text: string) => {
+            await this.bus.publishOutbound({
+              channel: payload.channel,
+              chat_id: payload.chatId,
+              content: text,
+              type: 'message',
+              metadata: {
+                accountId: payload.outboundMetadata?.accountId,
+                threadId: payload.outboundMetadata?.threadId,
+              },
+            });
+          }
+        : undefined;
+
+    await handlePersistentGoalPostTurn({
+      apis,
+      sessionKey: payload.sessionKey,
+      assistantPlainText: payload.assistantPlainText,
+      aborted: payload.aborted,
+      ...(payload.streamError !== undefined ? { streamError: payload.streamError } : {}),
+      skipPersistentGoalPostTurn: payload.skipPersistentGoalPostTurn ?? false,
+      config: this.effectiveAppConfig(),
+      publishVerdictToChannel: publishVerdict,
     });
   }
 
@@ -1079,6 +1218,7 @@ export class AgentService {
           modelManager: this.modelManager,
         }),
       persistAgentSessionMessages: (sk) => this.persistAgentSessionMessages(sk),
+      recordPersistentGoalStreamOutcome: (sk, o) => this.recordPersistentGoalStreamOutcome(sk, o),
       maybeEmitWebchatTts: (sk, hadVoice) =>
         maybeEmitWebchatTts(
           {
@@ -1204,6 +1344,8 @@ export class AgentService {
 
       /** Declared on the function so `finally` can clear typing after outbound (TTS + send). */
       let typingController: TypingController | null = null;
+      let inboundTurnArmed = false;
+      let busProcessFailed: string | undefined;
 
       try {
         if (msg.channel === 'system') {
@@ -1218,6 +1360,7 @@ export class AgentService {
             chatId: sessionContext.chatId,
             senderId: sessionContext.senderId,
             isGroup: sessionContext.isGroup,
+            inboundMetadata: msg.metadata,
           });
 
           if (handled) {
@@ -1274,7 +1417,14 @@ export class AgentService {
           }
         }
 
-        await this.agentOrchestrator.process(msg, sessionContext);
+        this.beginInboundTurn(sessionContext.sessionKey);
+        inboundTurnArmed = true;
+        try {
+          await this.agentOrchestrator.process(msg, sessionContext);
+        } catch (procErr) {
+          busProcessFailed = procErr instanceof Error ? procErr.message : String(procErr);
+          throw procErr;
+        }
       } finally {
         await this.sessionLifecycleManager.endSession(sessionContext);
         await this.streamManager.end();
@@ -1283,6 +1433,33 @@ export class AgentService {
         } finally {
           // After outbound (incl. TTS); previously we cleared typing right after LLM finished, so Weixin showed typing_off before the message.
           await typingController?.stop();
+        }
+        if (inboundTurnArmed) {
+          const meta = msg.metadata as Record<string, unknown> | undefined;
+          const assistantPlainText = this.getLastAssistantPlainText(sessionContext.sessionKey) ?? '';
+          try {
+            await this.emitSessionTurnComplete({
+              sessionKey: sessionContext.sessionKey,
+              channel: sessionContext.channel,
+              chatId: sessionContext.chatId,
+              inboundUserText: msg.content,
+              assistantPlainText,
+              aborted: false,
+              ...(busProcessFailed !== undefined ? { streamError: busProcessFailed } : {}),
+              skipPersistentGoalPostTurn: false,
+              outboundMetadata: {
+                accountId: meta?.accountId,
+                threadId: meta?.threadId,
+              },
+            });
+          } catch (turnErr) {
+            const em = turnErr instanceof Error ? turnErr.message : String(turnErr);
+            log.warn(
+              { err: turnErr, sessionKey: sessionContext.sessionKey },
+              `Session turn complete failed: ${em}`,
+            );
+          }
+          this.endInboundTurn(sessionContext.sessionKey);
         }
         this.feedbackCoordinator.endTask();
         this.sessionContextManager.clearContext();

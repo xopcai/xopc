@@ -139,6 +139,7 @@ export async function *runGatewayAgent(
         ? AbortSignal.any([runOptions.signal, runAbort.signal])
         : runAbort.signal;
 
+      agentService.beginInboundTurn(sessionKey);
       activeWebchatRunBySession.set(sessionKey, runId);
       let streamError: string | undefined;
       try {
@@ -179,13 +180,26 @@ export async function *runGatewayAgent(
         activeWebchatRunBySession.delete(sessionKey);
         runAbortControllers.delete(runId);
         const assistantPlainText = agentService.getLastAssistantPlainText(sessionKey);
-        await agentService.emitWebchatTurnComplete({
-          sessionKey,
-          inboundUserText: message,
-          assistantPlainText,
-          aborted: mergedSignal.aborted,
-          ...(streamError !== undefined ? { streamError } : {}),
-        });
+        const streamOutcome = agentService.takePersistentGoalStreamOutcome(sessionKey);
+        try {
+          await agentService.emitSessionTurnComplete({
+            sessionKey,
+            channel: 'webchat',
+            chatId: sessionKey,
+            inboundUserText: message,
+            assistantPlainText,
+            aborted: mergedSignal.aborted,
+            ...(streamError !== undefined ? { streamError } : {}),
+            skipPersistentGoalPostTurn: streamOutcome?.skipPersistentGoalPostTurn ?? false,
+            outboundMetadata: {},
+          });
+        } catch (goalErr) {
+          log.warn(
+            { err: goalErr, sessionKey },
+            `Session turn complete failed: ${goalErr instanceof Error ? goalErr.message : String(goalErr)}`,
+          );
+        }
+        agentService.endInboundTurn(sessionKey);
       }
     }
 

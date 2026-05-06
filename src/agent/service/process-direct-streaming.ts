@@ -87,6 +87,11 @@ export interface ProcessDirectStreamingDeps {
     sessionKey: string,
   ) => Promise<Array<{ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }>>;
   persistAgentSessionMessages: (sessionKey: string) => Promise<void>;
+  /** Direct stream path — gates built-in persistent `/goal` post-turn when a slash command handled the turn. */
+  recordPersistentGoalStreamOutcome?: (
+    sessionKey: string,
+    outcome: { skipPersistentGoalPostTurn: boolean },
+  ) => void;
   maybeEmitWebchatTts: (
     sessionKey: string,
     hadInboundVoice: boolean,
@@ -130,6 +135,7 @@ export async function* runProcessDirectStreaming(
     prepareInboundAttachments,
     buildMessageContent,
     persistAgentSessionMessages,
+    recordPersistentGoalStreamOutcome,
     maybeEmitWebchatTts,
     endDirectRequestContext,
   } = deps;
@@ -329,6 +335,7 @@ export async function* runProcessDirectStreaming(
               chatId,
               senderId: context.senderId,
               isGroup: context.isGroup,
+              inboundMetadata: {},
             },
           );
           if (aggregatedText?.trim()) {
@@ -336,7 +343,7 @@ export async function* runProcessDirectStreaming(
             pushEvent({ type: 'token', content: webchatSlashReceipt });
           } else if (channel === 'webchat') {
             webchatSlashReceipt =
-              'Command finished with no assistant text. For `/goal`, that usually means the goal was saved; the assistant will not run until your next normal message (or an auto-continuation after an assistant reply).';
+              'Command finished with no assistant text. If you used `/goal`, a follow-up turn may still be scheduled automatically.';
             pushEvent({ type: 'token', content: webchatSlashReceipt });
           }
         } catch (cmdErr) {
@@ -345,19 +352,6 @@ export async function* runProcessDirectStreaming(
           webchatSlashReceipt = `Command error: ${em}`;
           pushEvent({ type: 'token', content: webchatSlashReceipt });
         }
-        pushEvent({ type: '__done__' });
-        agentDone = true;
-      } else if (commandInfo.command === 'goal') {
-        // `/goal` is provided by the `standing-goal` bundled extension; avoid silent LLM fallback.
-        ranSlashCommand = true;
-        webchatSlashReceipt =
-          'The /goal command is not available: the `standing-goal` extension is not loaded.\n\n' +
-          'Fix: add `"standing-goal"` to `extensions.enabled` in your xopc config (or remove it from `extensions.disabled`), then restart the gateway. ' +
-          'If you use a strict allowlist, include `standing-goal` in `extensions.enabled`.';
-        pushEvent({
-          type: 'token',
-          content: webchatSlashReceipt,
-        });
         pushEvent({ type: '__done__' });
         agentDone = true;
       }
@@ -473,6 +467,8 @@ export async function* runProcessDirectStreaming(
         yield ttsAudioEvent;
       }
     }
+
+    recordPersistentGoalStreamOutcome?.(sessionKey, { skipPersistentGoalPostTurn: ranSlashCommand });
   } finally {
     if (channel === 'webchat') {
       unregisterWebchatSsePublisher(sessionKey);

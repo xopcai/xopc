@@ -22,6 +22,18 @@ export function hasPendingAgentRunForChat(chatId: string): boolean {
   }
 }
 
+/** Persist run id for sidebar + `tryResumeAgentRun` (POST body or gateway `/api/events` `agent.stream`). */
+export function setPendingAgentRun(chatId: string, runId: string): void {
+  const id = runId.trim();
+  if (!id) return;
+  try {
+    sessionStorage.setItem(pendingAgentRunStorageKey(chatId), JSON.stringify({ runId: id }));
+    dispatchPendingAgentRunChanged(chatId);
+  } catch {
+    /* ignore */
+  }
+}
+
 export type MessagingCallbacks = {
   onStreamStart: () => void;
   onToken: (delta: string) => void;
@@ -287,15 +299,7 @@ export class MessageSender {
     switch (event) {
       case 'status':
         if (typeof parsed.runId === 'string' && this._sseChatId) {
-          try {
-            sessionStorage.setItem(
-              pendingAgentRunStorageKey(this._sseChatId),
-              JSON.stringify({ runId: parsed.runId }),
-            );
-            dispatchPendingAgentRunChanged(this._sseChatId);
-          } catch {
-            /* ignore */
-          }
+          setPendingAgentRun(this._sseChatId, parsed.runId);
         }
         cb?.onStreamStart();
         break;

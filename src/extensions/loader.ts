@@ -406,7 +406,7 @@ export class ExtensionLoader {
     this._runtimeContext = ctx;
     // ExtensionApi snapshots `runtime` at construction and is tied to this loader's registry.
     // CLI bootstrap loads extensions with `{ bus }` first; a global cache hit would reuse that
-    // api for the gateway loader (no sessionManager, wrong registry) — breaks e.g. `/goal`.
+    // api for the gateway loader (no sessionManager, wrong registry) — breaks extensions that need SessionManager.
     this.cache.invalidate();
   }
 

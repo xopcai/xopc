@@ -507,6 +507,9 @@ export interface AgentEndContext extends HookContext {
 /** Payload for {@link ExtensionHookEvent} `webchat_turn_complete` (also passed as `event` fields + ctx.sessionKey). */
 export interface WebchatTurnCompleteEvent extends HookContext {
   sessionKey: string;
+  /** Channel id (e.g. `telegram:default`, `webchat`) when the turn is not webchat-only. */
+  channel?: string;
+  chatId?: string;
   /** Raw inbound user text from the POST body (before model envelope). */
   inboundUserText: string;
   /** Last assistant visible text after persistence (may be empty). */

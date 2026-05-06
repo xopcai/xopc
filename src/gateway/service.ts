@@ -212,6 +212,12 @@ export class GatewayService {
       config: this.config,
     });
 
+    this.agentService.setPersistentGoalWebchatContinuationScheduler((sessionKey, message) => {
+      queueMicrotask(() => {
+        void this.drainScheduledWebchatContinuation(sessionKey, message);
+      });
+    });
+
     this.heartbeatService = new HeartbeatService({
       agentService: this.agentService,
       messageBus: this.bus,
@@ -225,6 +231,13 @@ export class GatewayService {
       messageBus: this.bus,
       heartbeatService: this.heartbeatService,
       getDefaultCronAgentId: () => getDefaultAgentId(this.config),
+    });
+  }
+
+  /** Hermes-style: after HTTP sets a goal, enqueue the goal text as the next user turn. */
+  enqueueWebchatPersistentGoalKickoff(sessionKey: string, goalText: string): void {
+    queueMicrotask(() => {
+      void this.drainScheduledWebchatContinuation(sessionKey, goalText);
     });
   }
 
