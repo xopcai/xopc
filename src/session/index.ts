@@ -43,3 +43,14 @@ export {
 } from './session-title.js';
 
 export { messagesToClientHistory, flattenMessageContent, type ClientHistoryMessage } from './client-history.js';
+
+export {
+  XOPC_SESSION_TRANSCRIPT_TYPE,
+  CURRENT_SESSION_TRANSCRIPT_VERSION,
+  parseStoredTranscriptJson,
+  buildTranscriptEnvelope,
+} from './transcript-format.js';
+export type {
+  XopcSessionTranscriptV1,
+  TranscriptCompactionRecord,
+} from './transcript-format.js';

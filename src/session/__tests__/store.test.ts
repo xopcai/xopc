@@ -1,10 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtemp, rm } from 'fs/promises';
-import { join } from 'path';
+import { dirname, join } from 'path';
 import { tmpdir } from 'os';
-import { existsSync } from 'fs';
+import { existsSync, mkdirSync, writeFileSync } from 'fs';
 import { ConfigSchema } from '../../config/schema.js';
 import { SessionStore } from '../store.js';
+import { resolveSessionShardRelativePath } from '../shard-path.js';
 
 const testConfig = ConfigSchema.parse({});
 
@@ -273,6 +274,73 @@ describe('SessionStore', () => {
       const activeSessions = await store.list({ status: 'active' });
       expect(activeSessions.items).toHaveLength(1);
       expect(activeSessions.items[0].key).toBe('main:telegram:default:dm:2');
+    });
+  });
+
+  describe('transcript envelope (pi-style)', () => {
+    it('persists versioned document with stable id across saves', async () => {
+      const key = 'main:telegram:default:dm:envtest';
+      await store.saveMessages(key, [{ role: 'user', content: 'a' }]);
+      const doc1 = await store.loadTranscriptDocument(key);
+      expect(doc1).not.toBeNull();
+      expect(doc1?.type).toBe('xopc_session_transcript');
+      expect(doc1?.version).toBe(1);
+      expect(doc1?.id?.length).toBeGreaterThan(0);
+      const id1 = doc1!.id;
+
+      await store.saveMessages(key, [
+        { role: 'user', content: 'a' },
+        { role: 'assistant', content: 'b' },
+      ]);
+      const doc2 = await store.loadTranscriptDocument(key);
+      expect(doc2?.id).toBe(id1);
+      const loaded = await store.loadMessages(key);
+      expect(loaded).toHaveLength(2);
+    });
+
+    it('loads legacy bare-array transcript files', async () => {
+      const key = 'main:telegram:default:dm:legacyarr';
+      const safeKey = key.replace(/[^a-zA-Z0-9_-]/g, '_');
+      const jsonPath = join(
+        tempDir,
+        '.sessions',
+        resolveSessionShardRelativePath(key),
+        `${safeKey}.json`,
+      );
+      mkdirSync(dirname(jsonPath), { recursive: true });
+      writeFileSync(jsonPath, JSON.stringify([{ role: 'user', content: 'legacy only' }]));
+
+      const loaded = await store.loadMessages(key);
+      expect(loaded).toHaveLength(1);
+      expect((loaded[0] as { content?: string }).content).toBe('legacy only');
+      expect(await store.loadTranscriptDocument(key)).toBeNull();
+    });
+
+    it('appends compaction record when applyCompaction runs', async () => {
+      const key = 'main:telegram:default:dm:comptest';
+      const msgs = Array.from({ length: 12 }, (_, i) => ({
+        role: 'user' as const,
+        content: `line-${i}`,
+        timestamp: Date.now() + i,
+      }));
+      await store.saveMessages(key, msgs);
+      const result = {
+        summary: 'condensed topic',
+        firstKeptIndex: 8,
+        tokensBefore: 9000,
+        tokensAfter: 1200,
+        compacted: true,
+      };
+      await store.applyCompaction(key, msgs, result);
+      const doc = await store.loadTranscriptDocument(key);
+      expect(doc?.compactions).toHaveLength(1);
+      expect(doc?.compactions?.[0]).toMatchObject({
+        summary: 'condensed topic',
+        firstKeptIndex: 8,
+        tokensBefore: 9000,
+        tokensAfter: 1200,
+      });
+      expect(doc?.messages.length).toBeLessThan(msgs.length);
     });
   });
 

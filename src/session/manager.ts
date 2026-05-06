@@ -14,6 +14,7 @@ import type {
 } from './types.js';
 import type { Message } from './types.js';
 import type { CompactionConfig, CompactionResult } from '../agent/memory/compaction.js';
+import type { XopcSessionTranscriptV1 } from './transcript-format.js';
 import type { WindowConfig } from '../agent/memory/window.js';
 import type { Config } from '../config/schema.js';
 
@@ -253,6 +254,11 @@ export class SessionManager extends EventEmitter {
   /** Load messages for a session key */
   async loadMessages(key: string) {
     return this.store.loadMessages(key);
+  }
+
+  /** Wrapped transcript document (stable id, compaction history); null for legacy bare-array files. */
+  async loadTranscriptDocument(key: string): Promise<XopcSessionTranscriptV1 | null> {
+    return this.store.loadTranscriptDocument(key);
   }
 
   /** Save messages for a session key */
