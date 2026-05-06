@@ -74,6 +74,8 @@ export function useChatSessionLoad(deps: {
 
   /** Serialize session loads so rapid route changes (A→B→A) never drop the final `loadSession` fetch. */
   const loadTailRef = useRef(Promise.resolve<void>(undefined));
+  /** Bumps when a new title poll starts so rapid `finalizeMessage` calls (e.g. `/goal` multi-turn) do not stack 8×N `limit=1` fetches. */
+  const sessionNamePollGenRef = useRef(0);
 
   const refreshModelThinkingSupport = useCallback(async (modelId: string) => {
     const gen = ++thinkingSupportGenRef.current;
@@ -89,12 +91,20 @@ export function useChatSessionLoad(deps: {
   const pollSessionNameAfterTurn = useCallback(async () => {
     const key = sessionKeyRef.current;
     if (!key) return;
-    for (let i = 0; i < 8; i++) {
-      await new Promise<void>((r) => setTimeout(r, i === 0 ? 500 : 700));
+    if (sessionNameRef.current?.trim()) return;
+
+    const gen = ++sessionNamePollGenRef.current;
+    const maxAttempts = 5;
+    const delaysMs = [700, 900, 900, 1000, 1000];
+
+    for (let i = 0; i < maxAttempts; i++) {
+      await new Promise<void>((r) => setTimeout(r, delaysMs[i] ?? 900));
+      if (gen !== sessionNamePollGenRef.current) return;
       if (sessionKeyRef.current !== key) return;
       if (sessionNameRef.current?.trim()) return;
       try {
         const name = await sessionMgrRef.current.fetchSessionName(key);
+        if (gen !== sessionNamePollGenRef.current) return;
         if (name) {
           setSessionName(name);
           return;
