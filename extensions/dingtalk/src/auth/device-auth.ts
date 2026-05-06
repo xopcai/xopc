@@ -130,14 +130,31 @@ export async function pollDingtalkRegistration(params: {
   };
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new Error('DingTalk registration cancelled.'));
+      return;
+    }
+    const id = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    const onAbort = () => {
+      clearTimeout(id);
+      signal?.removeEventListener('abort', onAbort);
+      reject(new Error('DingTalk registration cancelled.'));
+    };
+    signal?.addEventListener('abort', onAbort);
+  });
 }
 
 export async function waitForDingtalkRegistrationSuccess(params: {
   deviceCode: string;
   intervalSeconds: number;
   expiresInSeconds: number;
+  /** When aborted (e.g. Ctrl+C), rejects with "DingTalk registration cancelled." */
+  signal?: AbortSignal;
 }): Promise<{ clientId: string; clientSecret: string }> {
   const RETRY_WINDOW_MS = 2 * 60 * 1000;
   const startedAt = Date.now();
@@ -146,7 +163,7 @@ export async function waitForDingtalkRegistrationSuccess(params: {
   let retryStart = 0;
 
   while (Date.now() - startedAt < timeoutMs) {
-    await sleep(intervalMs);
+    await sleep(intervalMs, params.signal);
     let polled;
     try {
       polled = await pollDingtalkRegistration({ deviceCode: params.deviceCode });
