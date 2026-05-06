@@ -5,7 +5,7 @@
 
 import type { ChannelCapabilities } from './plugin-types.js';
 
-export const CHAT_CHANNEL_ORDER = ['telegram', 'weixin', 'feishu'] as const;
+export const CHAT_CHANNEL_ORDER = ['telegram', 'weixin', 'feishu', 'dingtalk'] as const;
 
 export type ChatChannelId = (typeof CHAT_CHANNEL_ORDER)[number];
 
@@ -53,6 +53,16 @@ const FEISHU_CAPABILITIES: ChannelCapabilities = {
   reply: true,
 };
 
+const DINGTALK_CAPABILITIES: ChannelCapabilities = {
+  chatTypes: ['direct', 'group'],
+  reactions: false,
+  threads: false,
+  media: false,
+  polls: false,
+  nativeCommands: false,
+  blockStreaming: true,
+};
+
 const CHAT_CHANNEL_META: Record<ChatChannelId, ChatChannelMeta> = {
   telegram: {
     id: 'telegram',
@@ -79,6 +89,16 @@ const CHAT_CHANNEL_META: Record<ChatChannelId, ChatChannelMeta> = {
     label: 'Feishu',
     description: 'Feishu/Lark enterprise messaging (Socket Mode)',
     capabilities: FEISHU_CAPABILITIES,
+    dock: {
+      outbound: { textChunkLimit: 4000 },
+      queue: { debounceMs: 0 },
+    },
+  },
+  dingtalk: {
+    id: 'dingtalk',
+    label: 'DingTalk',
+    description: 'DingTalk enterprise robot (Stream mode)',
+    capabilities: DINGTALK_CAPABILITIES,
     dock: {
       outbound: { textChunkLimit: 4000 },
       queue: { debounceMs: 0 },

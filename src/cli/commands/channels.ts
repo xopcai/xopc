@@ -106,6 +106,10 @@ function createChannelsCommand(ctx: CLIContext): Command {
       });
 
       if (!result.ok) {
+        if (result.cancelled) {
+          process.exitCode = 130;
+          return;
+        }
         console.error(result.message || 'Login failed');
         process.exitCode = 1;
       }

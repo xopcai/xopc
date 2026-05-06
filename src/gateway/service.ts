@@ -654,6 +654,19 @@ export class GatewayService {
   }
 
   /**
+   * After DingTalk WebUI QR setup: `channels.dingtalk` was written directly to disk; reload into memory
+   * and apply channel plugins (same baseline as PATCH /api/config).
+   */
+  async afterDingtalkCredentialsPersisted(): Promise<void> {
+    const next = loadConfig(this.configPath);
+    this.config = next;
+    this.agentService.applyAgentDefaultsFromConfig(next);
+    this.configReloader?.syncCurrentConfig(next);
+    await this.handleChannelsReload(next);
+    log.info('DingTalk config applied after QR setup');
+  }
+
+  /**
    * Save current config to disk
    */
   /**

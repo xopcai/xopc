@@ -34,6 +34,9 @@ export async function deliverOutboundMessage(
 
   const normalizedPayload = normalizePayloadForPlugin(msg, plugin);
 
+  const outboundMeta =
+    msg.metadata && typeof msg.metadata === 'object' ? (msg.metadata as Record<string, unknown>) : undefined;
+
   if (msg.type === 'typing_on' || msg.type === 'typing_off') {
     if (outbound.sendPayload) {
       return outbound.sendPayload({
@@ -45,6 +48,7 @@ export async function deliverOutboundMessage(
         replyToId: msg.replyToMessageId,
         accountId: msg.metadata?.accountId as string ?? undefined,
         silent: msg.silent,
+        outboundMetadata: outboundMeta,
         payload: normalizedPayload,
       });
     }
@@ -62,6 +66,7 @@ export async function deliverOutboundMessage(
     accountId: msg.metadata?.accountId as string ?? undefined,
     silent: msg.silent,
     audioAsVoice: msg.audioAsVoice,
+    outboundMetadata: outboundMeta,
   };
 
   if (outbound.sendPayload) {

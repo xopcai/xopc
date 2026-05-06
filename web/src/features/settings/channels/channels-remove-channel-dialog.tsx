@@ -16,7 +16,7 @@ export function ChannelsRemoveChannelDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   ch: ChannelsSettingsMessages;
-  removeTarget: 'weixin' | 'telegram' | 'feishu' | null;
+  removeTarget: 'weixin' | 'telegram' | 'feishu' | 'dingtalk' | null;
   onCancel: () => void;
   saving: boolean;
   onConfirmRemove: () => void;
@@ -41,7 +41,9 @@ export function ChannelsRemoveChannelDialog({
                     ? ch.weixinTitle
                     : removeTarget === 'telegram'
                       ? ch.telegramTitle
-                      : ch.feishuTitle,
+                      : removeTarget === 'feishu'
+                        ? ch.feishuTitle
+                        : ch.dingtalkTitle,
                 )
               : '\u00a0'}
           </Dialog.Description>
