@@ -10,6 +10,18 @@ export function pendingAgentRunStorageKey(chatId: string): string {
   return `xopc:pendingRun:${chatId}`;
 }
 
+/** True when sessionStorage still holds a runId for a webchat session (in-flight or resumable). */
+export function hasPendingAgentRunForChat(chatId: string): boolean {
+  try {
+    const raw = globalThis.sessionStorage?.getItem(pendingAgentRunStorageKey(chatId));
+    if (!raw) return false;
+    const pr = JSON.parse(raw) as { runId?: unknown };
+    return typeof pr.runId === 'string' && pr.runId.trim().length > 0;
+  } catch {
+    return false;
+  }
+}
+
 export type MessagingCallbacks = {
   onStreamStart: () => void;
   onToken: (delta: string) => void;
@@ -41,6 +53,15 @@ export class MessageSender {
 
   get isSending() {
     return !!this._abort;
+  }
+
+  /** Chat id for the in-flight POST `/api/agent` or `/api/agent/resume` body, if any. */
+  get activeChatId(): string {
+    return this._sseChatId;
+  }
+
+  isStreamingFor(chatId: string): boolean {
+    return !!this._abort && this._sseChatId === chatId;
   }
 
   async send(

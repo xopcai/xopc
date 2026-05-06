@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 
+import { getLiveSessionCache } from '@/features/chat/active-session-live-cache';
 import {
   DEFAULT_REASONING,
   DEFAULT_THINKING,
@@ -12,7 +13,7 @@ import {
   type ProgressState,
   type ReasoningLevel,
 } from '@/features/chat/messages.types';
-import { MessageSender } from '@/features/chat/message-sender';
+import { hasPendingAgentRunForChat, MessageSender } from '@/features/chat/message-sender';
 import type { PendingFollowUp } from '@/features/chat/pending-follow-up.types';
 import { SessionManager } from '@/features/chat/session-manager';
 import { useChatFollowUpClarify } from '@/features/chat/use-chat-follow-up-clarify';
@@ -64,6 +65,11 @@ export function useChatSession() {
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const messagesLenRef = useRef(0);
+  const latestMessagesRef = useRef<Message[]>([]);
+
+  useEffect(() => {
+    latestMessagesRef.current = messages;
+  }, [messages]);
 
   useEffect(() => {
     streamingRef.current = streaming;
@@ -178,6 +184,21 @@ export function useChatSession() {
     setModelSupportsThinking,
   });
 
+  const restoreLiveCacheIfNeeded = useCallback((key: string) => {
+    const snap = getLiveSessionCache(key);
+    if (!snap) return false;
+    if (!hasPendingAgentRunForChat(key) && !senderRef.current.isStreamingFor(key)) return false;
+    setMessages(snap.messages);
+    setStreamingMsg(snap.streamingMsg);
+    setProgress(snap.progress);
+    setStreaming(snap.streaming);
+    setSending(snap.sending);
+    sendingRef.current = snap.sending;
+    streamingRef.current = snap.streaming;
+    activeStreamSessionKeyRef.current = key;
+    return true;
+  }, []);
+
   const { tryResumeAgentRun, sendMessage, interruptAndSend, abort, deleteMessageRound, retryUserMessageRound } =
     useChatSessionStreaming({
       sessionKey,
@@ -204,6 +225,7 @@ export function useChatSession() {
       loadSessionById,
       createNewSession,
       pollSessionNameAfterTurn,
+      latestMessagesRef,
     });
 
   useEffect(() => {
@@ -315,9 +337,11 @@ export function useChatSession() {
             }
           }
         } else if (decodedKey) {
-          await loadSessionById(decodedKey, 0);
+          const loaded = await loadSessionById(decodedKey, 0);
           if (!cancelled && gen === initGenRef.current) {
-            await tryResumeAgentRun(decodedKey);
+            restoreLiveCacheIfNeeded(decodedKey);
+            const seed = getLiveSessionCache(decodedKey)?.messages ?? loaded ?? [];
+            await tryResumeAgentRun(decodedKey, seed);
           }
         } else {
           const sessions = await sessionMgrRef.current.loadSessions();
@@ -325,11 +349,13 @@ export function useChatSession() {
           const withMsgs = sessions.filter((s) => (s.messageCount ?? 0) > 0);
           const target = withMsgs[0] ?? sessions[0];
           if (target) {
-            await loadSessionById(target.key, 0);
+            const loaded = await loadSessionById(target.key, 0);
             if (cancelled || gen !== initGenRef.current) return;
+            restoreLiveCacheIfNeeded(target.key);
+            const seed = getLiveSessionCache(target.key)?.messages ?? loaded ?? [];
             const keyFromUrl = sessionMgrRef.current.parseSessionFromHash();
             if (!keyFromUrl) navigateToSession(target.key);
-            await tryResumeAgentRun(target.key);
+            await tryResumeAgentRun(target.key, seed);
           } else {
             const aid = resolveAgentIdForPost();
             const session = await sessionMgrRef.current.createSession(
@@ -372,6 +398,7 @@ export function useChatSession() {
     tryResumeAgentRun,
     refreshModelThinkingSupport,
     resolveAgentIdForPost,
+    restoreLiveCacheIfNeeded,
   ]);
 
   useEffect(() => {
