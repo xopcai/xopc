@@ -72,6 +72,9 @@ importers:
       cron-parser:
         specifier: ^5.5.0
         version: 5.5.0
+      dingtalk-stream:
+        specifier: ^2.1.4
+        version: 2.1.5
       dotenv:
         specifier: ^17.4.2
         version: 17.4.2

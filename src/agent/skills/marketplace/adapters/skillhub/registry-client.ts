@@ -198,8 +198,7 @@ export async function listSkillHubRegistryCategories(): Promise<SkillHubRegistry
   );
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function fetchJson<T>(url: string, init?: any): Promise<T> {
+async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, {
     ...init,
     headers: {
