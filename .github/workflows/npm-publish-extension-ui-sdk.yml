@@ -1,0 +1,105 @@
+# Publish @xopcai/extension-ui-sdk when packages/extension-ui-sdk/package.json "version" changes on main.
+# Requires NPM_TOKEN secret with publish access (same as root npm-publish workflow).
+
+name: npm Publish extension-ui-sdk
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'packages/extension-ui-sdk/package.json'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: npm-publish-extension-ui-sdk
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Detect version change
+        id: version
+        run: |
+          PKG=packages/extension-ui-sdk/package.json
+          NEW=$(jq -r .version "$PKG")
+          BEFORE="${{ github.event.before }}"
+
+          if [[ -z "$NEW" || "$NEW" == "null" ]]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "new=" >> "$GITHUB_OUTPUT"
+            echo "::error::Missing version in $PKG"
+            exit 1
+          fi
+
+          OLD=""
+          if [[ "$BEFORE" =~ ^0+$ ]]; then
+            if git rev-parse --verify HEAD~1 >/dev/null 2>&1; then
+              OLD=$(git show "HEAD~1:$PKG" | jq -r .version)
+            fi
+          elif git cat-file -e "${BEFORE}:$PKG" 2>/dev/null; then
+            OLD=$(git show "${BEFORE}:$PKG" | jq -r .version)
+          fi
+
+          echo "old=${OLD:-}" >> "$GITHUB_OUTPUT"
+          echo "new=$NEW" >> "$GITHUB_OUTPUT"
+          if [[ "$OLD" != "$NEW" ]]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Skip (version unchanged)
+        if: steps.version.outputs.changed != 'true'
+        run: |
+          echo "Skipping publish: version field unchanged (${{ steps.version.outputs.old }} → ${{ steps.version.outputs.new }})."
+
+      - name: Install pnpm
+        if: steps.version.outputs.changed == 'true'
+        uses: pnpm/action-setup@v5
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        if: steps.version.outputs.changed == 'true'
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        if: steps.version.outputs.changed == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck extension-ui-sdk
+        if: steps.version.outputs.changed == 'true'
+        run: pnpm -C packages/extension-ui-sdk run typecheck
+
+      - name: Determine npm dist-tag
+        if: steps.version.outputs.changed == 'true'
+        id: npm-tag
+        run: |
+          NEW="${{ steps.version.outputs.new }}"
+          if [[ "$NEW" == *"-beta"* ]]; then
+            echo "tag=beta" >> "$GITHUB_OUTPUT"
+          elif [[ "$NEW" == *"-dev"* ]] || [[ "$NEW" == *"-alpha"* ]]; then
+            echo "tag=dev" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=latest" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish @xopcai/extension-ui-sdk
+        if: steps.version.outputs.changed == 'true'
+        run: pnpm publish --access public --no-git-checks --tag ${{ steps.npm-tag.outputs.tag }}
+        working-directory: packages/extension-ui-sdk
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
