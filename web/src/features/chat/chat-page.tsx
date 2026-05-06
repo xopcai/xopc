@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 
+import { fetchCommandsCached } from '@/features/chat/command-palette-api';
 import { ChatComposer } from '@/features/chat/chat-composer';
 import { ChatFollowUpChips } from '@/features/chat/chat-follow-up-chips';
 import { ChatPageHeaderRegistration } from '@/features/chat/chat-page-header-registration';
@@ -15,12 +17,19 @@ import { cn } from '@/lib/cn';
 import { useChatAgentRunIndicatorStore } from '@/stores/chat-agent-run-indicator-store';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
+import { isValidSkillWireId } from '@/features/chat/skill-wire-pattern';
+import { wireTextForSlashCommandEntry } from '@/features/chat/slash-command-wire-text';
 import { useWorkspaceEditorAgentStore } from '@/stores/workspace-editor-agent-store';
 
 export function ChatPage() {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const token = useGatewayStore((s) => s.token);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
+  /** Dedupe applying the same `?skill=` / `?slash=` seed for a session (StrictMode-safe). */
+  const routeComposerSeedMarkerRef = useRef<string | null>(null);
 
   const modelSetup = useNeedsModelSetup(Boolean(token));
 
@@ -28,6 +37,88 @@ export function ChatPage() {
   const [welcomeDraftSeed, setWelcomeDraftSeed] = useState<{ id: number; text: string } | null>(null);
 
   const { auth, session, messages: msgSlice, stream, followUp, clarify, agents } = useChatSession();
+
+  const skillQuery = searchParams.get('skill')?.trim() ?? '';
+  const slashQuery = searchParams.get('slash')?.trim() ?? '';
+
+  useEffect(() => {
+    routeComposerSeedMarkerRef.current = null;
+  }, [session.sessionKey]);
+
+  useEffect(() => {
+    if (!auth.hasToken) return;
+    if (!skillQuery && !slashQuery) return;
+    if (session.showSessionLoading || session.sessionRoutePending) return;
+    if (!session.sessionKey) return;
+
+    const stripRouteComposerParams = () => {
+      const next = new URLSearchParams(searchParams);
+      next.delete('skill');
+      next.delete('slash');
+      const qs = next.toString();
+      navigate({ pathname: location.pathname, search: qs ? `?${qs}` : '' }, { replace: true });
+    };
+
+    /** After session + clear effect; same idea as `fillChatComposerWithNavigate` (rAF / microtask). */
+    const applyWireSeed = (text: string, marker: string) => {
+      if (routeComposerSeedMarkerRef.current === marker) return;
+      routeComposerSeedMarkerRef.current = marker;
+      queueMicrotask(() => {
+        welcomeDraftSeq.current += 1;
+        setWelcomeDraftSeed({ id: welcomeDraftSeq.current, text });
+        stripRouteComposerParams();
+      });
+    };
+
+    if (skillQuery) {
+      if (!isValidSkillWireId(skillQuery)) {
+        stripRouteComposerParams();
+        return;
+      }
+      const marker = `${session.sessionKey}:skill:${skillQuery}`;
+      applyWireSeed(`/skill:${skillQuery} `, marker);
+      return;
+    }
+
+    const slashNameRe = /^[a-zA-Z][a-zA-Z0-9_-]*$/;
+    if (!slashNameRe.test(slashQuery)) {
+      stripRouteComposerParams();
+      return;
+    }
+    const marker = `${session.sessionKey}:slash:${slashQuery}`;
+    if (routeComposerSeedMarkerRef.current === marker) return;
+    queueMicrotask(() => {
+      void (async () => {
+        try {
+          const cmds = await fetchCommandsCached();
+          const needle = slashQuery.toLowerCase();
+          const c = cmds.find(
+            (x) =>
+              x.name.toLowerCase() === needle ||
+              (Array.isArray(x.aliases) && x.aliases.some((a) => a.toLowerCase() === needle)),
+          );
+          if (c) {
+            if (routeComposerSeedMarkerRef.current === marker) return;
+            routeComposerSeedMarkerRef.current = marker;
+            welcomeDraftSeq.current += 1;
+            setWelcomeDraftSeed({ id: welcomeDraftSeq.current, text: wireTextForSlashCommandEntry(c) });
+          }
+        } finally {
+          stripRouteComposerParams();
+        }
+      })();
+    });
+  }, [
+    auth.hasToken,
+    skillQuery,
+    slashQuery,
+    searchParams,
+    session.showSessionLoading,
+    session.sessionRoutePending,
+    session.sessionKey,
+    navigate,
+    location.pathname,
+  ]);
 
   useEffect(() => {
     return () => {

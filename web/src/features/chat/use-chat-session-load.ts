@@ -26,7 +26,7 @@ export function useChatSessionLoad(deps: {
   messagesLenRef: RefObject<number>;
   thinkingSupportGenRef: RefObject<number>;
 
-  navigateToSession: (key: string, replace?: boolean) => void;
+  navigateToSession: (key: string, replace?: boolean, search?: string) => void;
   resolveAgentIdForPost: () => string | undefined;
   dismissClarifyOnSessionLoad: () => void;
 

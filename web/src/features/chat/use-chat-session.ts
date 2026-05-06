@@ -22,6 +22,20 @@ import { useChatSessionLoad } from '@/features/chat/use-chat-session-load';
 import { useChatSessionStreaming } from '@/features/chat/use-chat-session-streaming';
 import { useChatAgentRunIndicatorStore } from '@/stores/chat-agent-run-indicator-store';
 
+/** Keep only composer deep-link params when replacing `/chat/new?…` with `/chat/:key?…`. */
+function searchParamsForComposerHandoff(search: string): string {
+  const raw = search.startsWith('?') ? search.slice(1) : search;
+  if (!raw) return '';
+  const sp = new URLSearchParams(raw);
+  const next = new URLSearchParams();
+  const skill = sp.get('skill');
+  const slash = sp.get('slash');
+  if (skill) next.set('skill', skill);
+  if (slash) next.set('slash', slash);
+  const out = next.toString();
+  return out ? `?${out}` : '';
+}
+
 export function useChatSession() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -112,8 +126,9 @@ export function useChatSession() {
   );
 
   const navigateToSession = useCallback(
-    (key: string, replace = true) => {
-      navigate(`/chat/${encodeURIComponent(key)}`, { replace });
+    (key: string, replace = true, search?: string) => {
+      const s = search ?? '';
+      navigate({ pathname: `/chat/${encodeURIComponent(key)}`, search: s }, { replace });
     },
     [navigate],
   );
@@ -306,7 +321,7 @@ export function useChatSession() {
             setSessionName(empty.name ?? null);
             setMessages([]);
             setHasMore(false);
-            navigateToSession(empty.key);
+            navigateToSession(empty.key, true, searchParamsForComposerHandoff(location.search));
             try {
               const cfg = await sessionMgrRef.current.loadSessionAgentConfig(empty.key);
               setSessionModel(cfg.model);
@@ -325,7 +340,7 @@ export function useChatSession() {
             setSessionName(session.name ?? null);
             setMessages([]);
             setHasMore(false);
-            navigateToSession(session.key);
+            navigateToSession(session.key, true, searchParamsForComposerHandoff(location.search));
             try {
               const cfg = await sessionMgrRef.current.loadSessionAgentConfig(session.key);
               setSessionModel(cfg.model);
@@ -399,6 +414,7 @@ export function useChatSession() {
     refreshModelThinkingSupport,
     resolveAgentIdForPost,
     restoreLiveCacheIfNeeded,
+    location.search,
   ]);
 
   useEffect(() => {

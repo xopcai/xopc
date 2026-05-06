@@ -110,6 +110,8 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
     runDelete,
     onMarketInstall,
     isSkillInstalledByName,
+    usingSkillInChatName,
+    onUseSkillInChat,
   } = vm;
 
   const setPageHeader = usePageHeaderStore((s) => s.setPageHeader);
@@ -842,6 +844,19 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
                   </Button>
                   <Button
                     type="button"
+                    variant="secondary"
+                    disabled={
+                      !detailTitle ||
+                      detailLoading ||
+                      usingSkillInChatName === detailTitle ||
+                      installingMarketName === detailTitle
+                    }
+                    onClick={() => void onUseSkillInChat()}
+                  >
+                    {usingSkillInChatName === detailTitle ? sk.previewUseInChatBusy : sk.previewUseInChat}
+                  </Button>
+                  <Button
+                    type="button"
                     variant={isSkillInstalledByName(detailTitle) ? 'secondary' : 'primary'}
                     disabled={!detailTitle || installingMarketName === detailTitle}
                     onClick={() => {
@@ -857,18 +872,33 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
                   </Button>
                 </>
               ) : (
-                <Button
-                  type="button"
-                  variant="primary"
-                  disabled={!detailTitle || togglingSkillName === detailTitle}
-                  onClick={async () => {
-                    if (!detailTitle) return;
-                    const ok = await onSkillToggle(detailTitle, !detailEnabled);
-                    if (ok) setDetailOpen(false);
-                  }}
-                >
-                  {detailEnabled ? sk.detailModalDisable : sk.detailModalEnable}
-                </Button>
+                <>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    disabled={
+                      !detailTitle ||
+                      detailLoading ||
+                      usingSkillInChatName === detailTitle ||
+                      togglingSkillName === detailTitle
+                    }
+                    onClick={() => void onUseSkillInChat()}
+                  >
+                    {usingSkillInChatName === detailTitle ? sk.previewUseInChatBusy : sk.previewUseInChat}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="primary"
+                    disabled={!detailTitle || togglingSkillName === detailTitle}
+                    onClick={async () => {
+                      if (!detailTitle) return;
+                      const ok = await onSkillToggle(detailTitle, !detailEnabled);
+                      if (ok) setDetailOpen(false);
+                    }}
+                  >
+                    {detailEnabled ? sk.detailModalDisable : sk.detailModalEnable}
+                  </Button>
+                </>
               )}
             </div>
           </Dialog.Content>

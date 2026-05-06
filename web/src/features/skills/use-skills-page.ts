@@ -7,7 +7,7 @@ import {
   type ChangeEvent,
   type DragEvent,
 } from 'react';
-import { useLocation, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 
 import {
   deleteSkill,
@@ -47,6 +47,7 @@ export function useSkillsPage() {
   const sk = m.skills;
   const token = useGatewayStore((st) => st.token);
   const hasToken = Boolean(token);
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [catalog, setCatalog] = useState<SkillCatalogEntry[]>([]);
@@ -103,6 +104,7 @@ export function useSkillsPage() {
     provider?: 'store' | 'skillhub';
   } | null>(null);
   const [installingMarketName, setInstallingMarketName] = useState<string | null>(null);
+  const [usingSkillInChatName, setUsingSkillInChatName] = useState<string | null>(null);
   const [marketCategoryId, setMarketCategoryId] = useState('');
   const [mpCategories, setMpCategories] = useState<MarketplaceCategoryItem[]>([]);
   const [mpCategoriesError, setMpCategoriesError] = useState<string | null>(null);
@@ -583,6 +585,34 @@ export function useSkillsPage() {
     [catalog],
   );
 
+  const onUseSkillInChat = useCallback(async () => {
+    const name = detailTitle.trim();
+    if (!name) return;
+    setActionFeedback(null);
+    const needsMarketInstall = detailSource === 'store' && !isSkillInstalledByName(name);
+    if (needsMarketInstall) setUsingSkillInChatName(name);
+    try {
+      if (needsMarketInstall) {
+        await installMarketplaceSkill({ name, overwrite: false });
+        await load({ silent: true });
+      }
+      setDetailOpen(false);
+      navigate(`/chat/new?skill=${encodeURIComponent(name)}`);
+    } catch (e) {
+      showFeedback('error', e instanceof Error ? e.message : sk.uploadFailed);
+    } finally {
+      setUsingSkillInChatName(null);
+    }
+  }, [
+    detailTitle,
+    detailSource,
+    isSkillInstalledByName,
+    load,
+    navigate,
+    showFeedback,
+    sk.uploadFailed,
+  ]);
+
   const onMarketInstall = useCallback(
     async (name: string) => {
       const installed = isSkillInstalledByName(name);
@@ -677,6 +707,8 @@ export function useSkillsPage() {
     mpError,
     mpPayload,
     installingMarketName,
+    usingSkillInChatName,
+    onUseSkillInChat,
     marketCategoryId,
     setMarketCategoryId,
     mpCategories,
