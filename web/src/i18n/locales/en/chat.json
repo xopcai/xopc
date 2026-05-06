@@ -295,7 +295,10 @@
       "detailsToggle": "Judge details",
       "lastVerdict": "Last verdict",
       "lastReason": "Reason",
-      "loadFailed": "Could not load goal state."
+      "loadFailed": "Could not load goal state.",
+      "collapseAria": "Collapse goal bar",
+      "expandAria": "Expand standing goal",
+      "pillTitle": "{{status}} · {{turns}} — click to expand"
     },
     "atMention": {
       "noResults": "No matches",

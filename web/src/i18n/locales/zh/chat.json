@@ -295,7 +295,10 @@
       "detailsToggle": "裁判详情",
       "lastVerdict": "上次判定",
       "lastReason": "说明",
-      "loadFailed": "无法加载目标状态。"
+      "loadFailed": "无法加载目标状态。",
+      "collapseAria": "收起目标条",
+      "expandAria": "展开持久目标",
+      "pillTitle": "{{status}} · {{turns}} — 点击展开"
     },
     "atMention": {
       "noResults": "无匹配项",
