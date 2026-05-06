@@ -20,6 +20,7 @@ import {
 } from '@/features/chat/composer-input-history';
 import { getWireCaretOffset } from '@/features/chat/composer-editor-wire';
 import { interpolate, type WireAttachment } from '@/features/chat/composer.types';
+import type { Message } from '@/features/chat/messages.types';
 import { formatFilePathForWire } from '@/features/chat/file-wire-pattern';
 import {
   browseDirFromQuery,
@@ -91,6 +92,7 @@ export const ChatComposer = memo(function ChatComposer({
   showModelSelector,
   onModelChange,
   modelDisabled,
+  contextUsageMessages,
 }: {
   disabled: boolean;
   sending: boolean;
@@ -103,6 +105,8 @@ export const ChatComposer = memo(function ChatComposer({
   showModelSelector: boolean;
   onModelChange: (modelId: string) => void;
   modelDisabled: boolean;
+  /** Messages in the active session (for context-window ring). */
+  contextUsageMessages: readonly Message[];
   thinkingLevel: string;
   showThinkingSelector: boolean;
   onThinkingChange: (level: string) => void;
@@ -183,6 +187,8 @@ export const ChatComposer = memo(function ChatComposer({
   });
 
   shouldSyncSelectionRef.current = palette.open || atPicker.open || atRangeRaw != null;
+
+  const composerDraftChars = useMemo(() => editor.value.length, [editor.value]);
 
   const runBusy = sending || streaming;
   busyRef.current = runBusy;
@@ -649,6 +655,8 @@ export const ChatComposer = memo(function ChatComposer({
           showModelSelector={showModelSelector}
           onModelChange={onModelChange}
           modelDisabled={modelDisabled}
+          contextUsageMessages={contextUsageMessages}
+          composerDraftChars={composerDraftChars}
         />
       </div>
     </div>
