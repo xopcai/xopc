@@ -29,7 +29,6 @@ import { SessionStatus } from './types.js';
 import type { Message } from './types.js';
 import { SessionCompactor, type CompactionConfig, type CompactionResult } from '../agent/memory/compaction.js';
 import { SlidingWindow, type WindowConfig } from '../agent/memory/window.js';
-import { cleanTrailingErrors, hasProblematicMessages } from '../agent/memory/message-sanitizer.js';
 import { invalidateSessionSearchIndexCache } from './search-index-cache.js';
 import {
   buildTranscriptEnvelope,
@@ -387,20 +386,6 @@ export class SessionStore {
     return out;
   }
 
-  private normalizeLoadedMessages(messages: AgentMessage[], logCtx?: { key: string }): AgentMessage[] {
-    if (hasProblematicMessages(messages)) {
-      const cleaned = cleanTrailingErrors(messages);
-      if (cleaned.length !== messages.length) {
-        log.info(
-          { ...logCtx, original: messages.length, cleaned: cleaned.length },
-          'Cleaned problematic messages on load',
-        );
-      }
-      return cleaned;
-    }
-    return messages;
-  }
-
   private async scanSessionFile(key: string): Promise<SessionMetadata | null> {
     const { jsonPath } = this.sessionPathsForKey(key);
     let raw: string;
@@ -409,8 +394,7 @@ export class SessionStore {
     } catch {
       return null;
     }
-    const { messages: rawMessages, envelope } = parseStoredTranscriptJson(raw);
-    const messages = this.normalizeLoadedMessages(rawMessages, { key });
+    const { messages, envelope } = parseStoredTranscriptJson(raw);
     if (messages.length === 0) return null;
 
     const stats = await stat(jsonPath);
@@ -744,7 +728,7 @@ export class SessionStore {
       try {
         const data = await readFile(path, 'utf-8');
         const { messages } = parseStoredTranscriptJson(data);
-        return this.normalizeLoadedMessages(messages, { key });
+        return messages;
       } catch {
         return null;
       }
@@ -768,8 +752,7 @@ export class SessionStore {
   }
 
   /**
-   * Load the versioned transcript document (stable id, compaction history) if the on-disk file uses the wrapped format.
-   * Legacy bare-array transcripts return null.
+   * Load the versioned transcript document (stable id, compaction history), or null if missing/invalid.
    */
   async loadTranscriptDocument(key: string): Promise<XopcSessionTranscriptV1 | null> {
     const { jsonPath } = this.sessionPathsForKey(key);
@@ -1160,13 +1143,12 @@ export class SessionStore {
     try {
       const raw = await readFile(cpPath, 'utf-8');
       const { messages } = parseStoredTranscriptJson(raw);
-      const norm = this.normalizeLoadedMessages(messages, { key });
       const s = await stat(cpPath);
       return {
         id,
         sizeBytes: s.size,
         modifiedAt: new Date(s.mtimeMs).toISOString(),
-        messageCount: norm.length,
+        messageCount: messages.length,
       };
     } catch {
       return null;

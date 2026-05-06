@@ -20,17 +20,24 @@ describe('SessionSearchIndex', () => {
     }
   });
 
-  it('indexes flat session json and finds keywords', async () => {
+  it('indexes wrapped session transcript and finds keywords', async () => {
     root = join(tmpdir(), `xopc-sess-${Date.now()}`);
     mkdirSync(root, { recursive: true });
     writeFileSync(join(root, FILENAMES.SESSIONS_INDEX), JSON.stringify({ version: '1', lastUpdated: '', sessions: [] }));
     const stem = 'main_webchat_default_direct_testuser';
     writeFileSync(
       join(root, `${stem}.json`),
-      JSON.stringify([
-        { role: 'user', content: 'remember the alpha project deadline', timestamp: 1 },
-        { role: 'assistant', content: 'Noted.', timestamp: 2 },
-      ]),
+      JSON.stringify({
+        type: 'xopc_session_transcript',
+        version: 1,
+        id: '00000000-0000-4000-8000-000000000001',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-02T00:00:00.000Z',
+        messages: [
+          { role: 'user', content: 'remember the alpha project deadline', timestamp: 1 },
+          { role: 'assistant', content: 'Noted.', timestamp: 2 },
+        ],
+      }),
     );
 
     const idx = new SessionSearchIndex();
