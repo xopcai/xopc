@@ -9,6 +9,7 @@ import type { AgentMessage } from '@mariozechner/pi-agent-core';
 
 import { FILENAMES } from '../config/paths.js';
 import { fileStemToSessionKey } from './session-file-key.js';
+import { parseStoredTranscriptJson } from './transcript-format.js';
 
 interface IndexedSession {
   key: string;
@@ -32,8 +33,20 @@ export class SessionSearchIndex {
     for (const file of files) {
       try {
         const raw = await readFile(file, 'utf-8');
-        const messages = JSON.parse(raw) as AgentMessage[];
-        if (!Array.isArray(messages)) {
+        const trimmed = raw.trim();
+        if (!trimmed) {
+          continue;
+        }
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(raw);
+        } catch {
+          continue;
+        }
+        const { messages, envelope } = Array.isArray(parsed)
+          ? { messages: parsed as AgentMessage[], envelope: null }
+          : parseStoredTranscriptJson(raw);
+        if (!Array.isArray(parsed) && !envelope && messages.length === 0) {
           continue;
         }
 

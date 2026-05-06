@@ -28,6 +28,12 @@ import { SessionCompactor, type CompactionConfig, type CompactionResult } from '
 import { SlidingWindow, type WindowConfig } from '../agent/memory/window.js';
 import { cleanTrailingErrors, hasProblematicMessages } from '../agent/memory/message-sanitizer.js';
 import { invalidateSessionSearchIndexCache } from './search-index-cache.js';
+import {
+  buildTranscriptEnvelope,
+  parseStoredTranscriptJson,
+  type TranscriptCompactionRecord,
+  type XopcSessionTranscriptV1,
+} from './transcript-format.js';
 
 const log = createLogger('SessionStore');
 
@@ -665,7 +671,7 @@ export class SessionStore {
     const readAndNormalize = async (path: string): Promise<AgentMessage[] | null> => {
       try {
         const data = await readFile(path, 'utf-8');
-        const messages = JSON.parse(data) as AgentMessage[];
+        const { messages } = parseStoredTranscriptJson(data);
         if (hasProblematicMessages(messages)) {
           const cleaned = cleanTrailingErrors(messages);
           if (cleaned.length !== messages.length) {
@@ -697,6 +703,20 @@ export class SessionStore {
       return archived ?? [];
     }
     return [];
+  }
+
+  /**
+   * Load the versioned transcript document (stable id, compaction history) if the on-disk file uses the wrapped format.
+   * Legacy bare-array transcripts return null.
+   */
+  async loadTranscriptDocument(key: string): Promise<XopcSessionTranscriptV1 | null> {
+    const { jsonPath } = this.sessionPathsForKey(key);
+    try {
+      const raw = await readFile(jsonPath, 'utf-8');
+      return parseStoredTranscriptJson(raw).envelope;
+    } catch {
+      return null;
+    }
   }
 
   /**
@@ -734,15 +754,31 @@ export class SessionStore {
 
   /**
    * Persist transcript JSON + merge session row into the index. Caller must hold {@link runStoreMutation} (or be nested under it).
+   * Transcript is stored as a versioned document (pi-style header) with stable {@link XopcSessionTranscriptV1.id}.
    */
   private async writeSessionTranscriptAndUpdateIndex(
     key: string,
     messages: AgentMessage[],
+    options?: { appendCompaction?: TranscriptCompactionRecord },
   ): Promise<void> {
     const { dir, jsonPath } = this.sessionPathsForKey(key);
 
     await mkdir(dir, { recursive: true });
-    await writeTextAtomic(jsonPath, JSON.stringify(messages, null, 2));
+
+    let previous: XopcSessionTranscriptV1 | null = null;
+    try {
+      const raw = await readFile(jsonPath, 'utf-8');
+      previous = parseStoredTranscriptJson(raw).envelope;
+    } catch {
+      /* new session or unreadable */
+    }
+
+    const doc = buildTranscriptEnvelope({
+      messages,
+      previous,
+      appendCompaction: options?.appendCompaction,
+    });
+    await writeTextAtomic(jsonPath, JSON.stringify(doc, null, 2));
 
     const index = await this.loadIndex();
     const existingIdx = index.sessions.findIndex((s) => s.key === key);
@@ -883,7 +919,15 @@ export class SessionStore {
       const { jsonPath } = this.sessionPathsForKey(key);
       await this.captureCompactionCheckpointIfExists(key, jsonPath);
 
-      await this.writeSessionTranscriptAndUpdateIndex(key, compacted);
+      await this.writeSessionTranscriptAndUpdateIndex(key, compacted, {
+        appendCompaction: {
+          at: new Date().toISOString(),
+          summary: result.summary,
+          firstKeptIndex: result.firstKeptIndex,
+          tokensBefore: result.tokensBefore,
+          tokensAfter: result.tokensAfter,
+        },
+      });
 
       const metadata = await this.getMetadata(key);
       if (metadata) {
