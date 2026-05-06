@@ -3,6 +3,7 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { fetchCommandsCached } from '@/features/chat/command-palette-api';
 import { ChatComposer } from '@/features/chat/chat-composer';
+import { ChatGoalBanner } from '@/features/chat/chat-goal-banner';
 import { ChatFollowUpChips } from '@/features/chat/chat-follow-up-chips';
 import { ChatPageHeaderRegistration } from '@/features/chat/chat-page-header-registration';
 import { ChatSseStatus } from '@/features/chat/chat-sse-status';
@@ -17,6 +18,7 @@ import { cn } from '@/lib/cn';
 import { useChatAgentRunIndicatorStore } from '@/stores/chat-agent-run-indicator-store';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
+import { isWebUiSessionKey } from '@/features/chat/session-manager';
 import { isValidSkillWireId } from '@/features/chat/skill-wire-pattern';
 import { wireTextForSlashCommandEntry } from '@/features/chat/slash-command-wire-text';
 import { useWorkspaceEditorAgentStore } from '@/stores/workspace-editor-agent-store';
@@ -214,6 +216,16 @@ export function ChatPage() {
       />
 
       <div className="mx-auto flex min-h-0 w-full max-w-[var(--max-width-chat)] flex-1 flex-col">
+        {session.sessionKey &&
+        isWebUiSessionKey(session.sessionKey) &&
+        !session.showSessionLoading &&
+        !session.sessionRoutePending ? (
+          <ChatGoalBanner
+            sessionKey={session.sessionKey}
+            streaming={stream.streaming}
+            sending={stream.sending}
+          />
+        ) : null}
         <div className="flex min-h-0 min-w-0 flex-1 flex-col px-3 sm:px-5 xl:px-6">
           <div className="flex min-h-0 flex-1 flex-col">
             <div
