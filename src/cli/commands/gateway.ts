@@ -63,6 +63,7 @@ function createGatewayCommand(_ctx: CLIContext): Command {
       formatExamples([
         'xopc gateway                   # Start gateway (foreground, default)',
         'xopc gateway --background      # Start gateway in background',
+        'xopc gateway --host 0.0.0.0    # Listen on all interfaces (LAN / mobile)',
         'xopc gateway --port 8080       # Custom port',
         'xopc gateway --force           # Force kill existing process',
         'xopc gateway stop             # Stop gateway',
@@ -76,8 +77,11 @@ function createGatewayCommand(_ctx: CLIContext): Command {
         'xopc gateway token --generate # Generate new token',
       ])
     )
-    .option('--host <address>', 'Host to bind to', '127.0.0.1')
-    .option('--port <number>', 'Port to listen on', '18790')
+    .option(
+      '--host <address>',
+      'Host to bind to (defaults to gateway.host in config, else 127.0.0.1). Use 0.0.0.0 for LAN access.',
+    )
+    .option('--port <number>', 'Port to listen on (defaults to gateway.port in config, else 18790)')
     .option('--token <token>', 'Authentication token')
     .option('--force', 'Force kill existing process on port', false)
     .option('--no-hot-reload', 'Disable config hot reload')
@@ -97,11 +101,23 @@ function createGatewayCommand(_ctx: CLIContext): Command {
     .addCommand(createServiceStatusCommand())
     .action(async (options) => {
       const ctx = getContextWithOpts();
-      const port = parseInt(options.port, 10);
-      const host = options.host;
+      const config = loadConfig(ctx.configPath);
+
+      const hostFromFlag =
+        typeof options.host === 'string' && options.host.trim().length > 0 ? options.host.trim() : undefined;
+      const portRaw = options.port as string | number | undefined;
+      const portFromFlag =
+        portRaw !== undefined && portRaw !== null && String(portRaw).trim().length > 0
+          ? parseInt(String(portRaw), 10)
+          : undefined;
+
+      const host = hostFromFlag ?? config.gateway.host ?? '127.0.0.1';
+      const port =
+        portFromFlag !== undefined && Number.isFinite(portFromFlag)
+          ? portFromFlag
+          : (typeof config.gateway.port === 'number' ? config.gateway.port : 18790);
 
       await ensureGatewayReady(ctx.configPath, ctx.workspacePath, host, port);
-      const config = loadConfig(ctx.configPath);
 
       // --force: Force free port
       if (options.force) {
