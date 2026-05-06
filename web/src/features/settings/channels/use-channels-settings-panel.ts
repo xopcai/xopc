@@ -35,16 +35,19 @@ export function useChannelsSettingsPanel() {
   const [weixinModalOpen, setWeixinModalOpen] = useState(false);
   const [telegramModalOpen, setTelegramModalOpen] = useState(false);
   const [feishuModalOpen, setFeishuModalOpen] = useState(false);
-  const [removeTarget, setRemoveTarget] = useState<'weixin' | 'telegram' | 'feishu' | null>(null);
+  const [dingtalkModalOpen, setDingtalkModalOpen] = useState(false);
+  const [removeTarget, setRemoveTarget] = useState<'weixin' | 'telegram' | 'feishu' | 'dingtalk' | null>(null);
   const [weixinSuccessBanner, setWeixinSuccessBanner] = useState<string | null>(null);
-  const [feishuQrSetupOpen, setFeishuQrSetupOpen] = useState(false);
   const [feishuSetupSuccessBanner, setFeishuSetupSuccessBanner] = useState<string | null>(null);
+  const [dingtalkSetupSuccessBanner, setDingtalkSetupSuccessBanner] = useState<string | null>(null);
   const [tgAdvanced, setTgAdvanced] = useState(false);
   const [showToken, setShowToken] = useState(false);
   const [showFeishuSecret, setShowFeishuSecret] = useState(false);
   const [showFeishuWebhookSecrets, setShowFeishuWebhookSecrets] = useState(false);
+  const [showDingtalkSecret, setShowDingtalkSecret] = useState(false);
   const [copied, setCopied] = useState(false);
   const [feishuCopied, setFeishuCopied] = useState(false);
+  const [dingtalkCopied, setDingtalkCopied] = useState(false);
   const [feishuWebhookCopied, setFeishuWebhookCopied] = useState(false);
 
   const [tgAccountsDraft, setTgAccountsDraft] = useState('');
@@ -53,6 +56,8 @@ export function useChannelsSettingsPanel() {
   const [wxAccountsError, setWxAccountsError] = useState('');
   const [feishuAccountsDraft, setFeishuAccountsDraft] = useState('');
   const [feishuAccountsError, setFeishuAccountsError] = useState('');
+  const [dingtalkAccountsDraft, setDingtalkAccountsDraft] = useState('');
+  const [dingtalkAccountsError, setDingtalkAccountsError] = useState('');
 
   const { data: chatAgents } = useSWR(hasToken ? 'gateway-chat-agents-ch' : null, fetchChatAgents, {
     revalidateOnFocus: false,
@@ -89,6 +94,8 @@ export function useChannelsSettingsPanel() {
       setWxAccountsError('');
       setFeishuAccountsDraft(JSON.stringify(parsed.feishu?.accounts ?? {}, null, 2));
       setFeishuAccountsError('');
+      setDingtalkAccountsDraft(JSON.stringify(parsed.dingtalk?.accounts ?? {}, null, 2));
+      setDingtalkAccountsError('');
       setSaveOk(false);
     }
   }, [hasToken, parsed, dirty]);
@@ -98,10 +105,17 @@ export function useChannelsSettingsPanel() {
     swrError instanceof Error ? swrError.message : swrError ? String(swrError) : null;
 
   const updateChannelAgentRoute = useCallback(
-    (channel: 'telegram' | 'weixin' | 'feishu', accountId: string, agentId: string) => {
+    (channel: 'telegram' | 'weixin' | 'feishu' | 'dingtalk', accountId: string, agentId: string) => {
       setForm((f) => {
         if (!f) return null;
-        const k = channel === 'telegram' ? 'telegram' : channel === 'weixin' ? 'weixin' : 'feishu';
+        const k =
+          channel === 'telegram'
+            ? 'telegram'
+            : channel === 'weixin'
+              ? 'weixin'
+              : channel === 'feishu'
+                ? 'feishu'
+                : 'dingtalk';
         return {
           ...f,
           channelAgentRoutes: {
@@ -126,6 +140,10 @@ export function useChannelsSettingsPanel() {
     setForm((f) => (f ? { ...f, feishu: { ...f.feishu, ...patch } } : null));
   }, []);
 
+  const updateDingtalk = useCallback((patch: Partial<ChannelsSettingsState['dingtalk']>) => {
+    setForm((f) => (f ? { ...f, dingtalk: { ...f.dingtalk, ...patch } } : null));
+  }, []);
+
   const save = useCallback(async (): Promise<boolean> => {
     if (!form || saving) return false;
     setSaving(true);
@@ -142,6 +160,8 @@ export function useChannelsSettingsPanel() {
       setWxAccountsError('');
       setFeishuAccountsDraft(JSON.stringify(baselineClone.feishu?.accounts ?? {}, null, 2));
       setFeishuAccountsError('');
+      setDingtalkAccountsDraft(JSON.stringify(baselineClone.dingtalk?.accounts ?? {}, null, 2));
+      setDingtalkAccountsError('');
       setSaveOk(true);
       window.setTimeout(() => setSaveOk(false), 2500);
       return true;
@@ -154,7 +174,7 @@ export function useChannelsSettingsPanel() {
   }, [form, saving, ch.saveError]);
 
   const toggleChannelEnabled = useCallback(
-    async (which: 'weixin' | 'telegram' | 'feishu', enabled: boolean) => {
+    async (which: 'weixin' | 'telegram' | 'feishu' | 'dingtalk', enabled: boolean) => {
       if (!form || saving) return;
       const prev = form;
       const next: ChannelsSettingsState =
@@ -162,7 +182,9 @@ export function useChannelsSettingsPanel() {
           ? { ...form, weixin: { ...form.weixin, enabled } }
           : which === 'telegram'
             ? { ...form, telegram: { ...form.telegram, enabled } }
-            : { ...form, feishu: { ...form.feishu, enabled } };
+            : which === 'feishu'
+              ? { ...form, feishu: { ...form.feishu, enabled } }
+              : { ...form, dingtalk: { ...form.dingtalk, enabled } };
       setForm(next);
       setSaving(true);
       setError(null);
@@ -174,6 +196,7 @@ export function useChannelsSettingsPanel() {
         setTgAccountsDraft(JSON.stringify(baselineClone.telegram.accounts ?? {}, null, 2));
         setWxAccountsDraft(JSON.stringify(baselineClone.weixin.accounts ?? {}, null, 2));
         setFeishuAccountsDraft(JSON.stringify(baselineClone.feishu?.accounts ?? {}, null, 2));
+        setDingtalkAccountsDraft(JSON.stringify(baselineClone.dingtalk?.accounts ?? {}, null, 2));
       } catch (e) {
         setError(e instanceof Error ? e.message : ch.saveError);
         setForm(prev);
@@ -192,7 +215,9 @@ export function useChannelsSettingsPanel() {
         ? { ...form, weixin: defaults.weixin }
         : removeTarget === 'telegram'
           ? { ...form, telegram: defaults.telegram }
-          : { ...form, feishu: defaults.feishu };
+          : removeTarget === 'feishu'
+            ? { ...form, feishu: defaults.feishu }
+            : { ...form, dingtalk: defaults.dingtalk };
     setSaving(true);
     setError(null);
     try {
@@ -206,6 +231,8 @@ export function useChannelsSettingsPanel() {
       setWxAccountsError('');
       setFeishuAccountsDraft(JSON.stringify(baselineClone.feishu?.accounts ?? {}, null, 2));
       setFeishuAccountsError('');
+      setDingtalkAccountsDraft(JSON.stringify(baselineClone.dingtalk?.accounts ?? {}, null, 2));
+      setDingtalkAccountsError('');
       setRemoveTarget(null);
       setSaveOk(true);
       window.setTimeout(() => setSaveOk(false), 2500);
@@ -237,6 +264,27 @@ export function useChannelsSettingsPanel() {
     },
     [updateFeishu, mutate, ch.feishuQrSetupSuccess],
   );
+
+  const handleDingtalkQrSetupSuccess = useCallback(
+    (result: { clientId: string }) => {
+      updateDingtalk({
+        clientId: result.clientId,
+        enabled: true,
+      });
+      void mutate();
+      setDingtalkSetupSuccessBanner(ch.dingtalkQrSetupSuccess);
+      window.setTimeout(() => setDingtalkSetupSuccessBanner(null), 4000);
+    },
+    [updateDingtalk, mutate, ch.dingtalkQrSetupSuccess],
+  );
+
+  const copyDingtalkSecret = useCallback(async () => {
+    const t = form?.dingtalk?.clientSecret;
+    if (!t) return;
+    await navigator.clipboard.writeText(t).catch(() => {});
+    setDingtalkCopied(true);
+    window.setTimeout(() => setDingtalkCopied(false), 2000);
+  }, [form]);
 
   const copyFeishuSecret = useCallback(async () => {
     const t = form?.feishu?.appSecret;
@@ -322,6 +370,26 @@ export function useChannelsSettingsPanel() {
     }
   }, [form, feishuAccountsDraft, updateFeishu, ch.jsonObjectAccounts, ch.jsonInvalid]);
 
+  const onDingtalkAccountsBlur = useCallback(() => {
+    if (!form) return;
+    const raw = dingtalkAccountsDraft.trim();
+    if (!raw) {
+      updateDingtalk({ accounts: {} });
+      setDingtalkAccountsError('');
+      return;
+    }
+    try {
+      const parsedJson = JSON.parse(raw) as unknown;
+      if (typeof parsedJson !== 'object' || parsedJson === null || Array.isArray(parsedJson)) {
+        throw new Error(ch.jsonObjectAccounts);
+      }
+      updateDingtalk({ accounts: parsedJson as ChannelsSettingsState['dingtalk']['accounts'] });
+      setDingtalkAccountsError('');
+    } catch (err) {
+      setDingtalkAccountsError(err instanceof Error ? err.message : ch.jsonInvalid);
+    }
+  }, [form, dingtalkAccountsDraft, updateDingtalk, ch.jsonObjectAccounts, ch.jsonInvalid]);
+
   const dmOpts = useMemo(
     () =>
       (['pairing', 'allowlist', 'open', 'disabled'] as DmPolicy[]).map((value) => ({
@@ -378,13 +446,14 @@ export function useChannelsSettingsPanel() {
     setTelegramModalOpen,
     feishuModalOpen,
     setFeishuModalOpen,
+    dingtalkModalOpen,
+    setDingtalkModalOpen,
     removeTarget,
     setRemoveTarget,
     weixinSuccessBanner,
     setWeixinSuccessBanner,
-    feishuQrSetupOpen,
-    setFeishuQrSetupOpen,
     feishuSetupSuccessBanner,
+    dingtalkSetupSuccessBanner,
     tgAdvanced,
     setTgAdvanced,
     showToken,
@@ -393,8 +462,11 @@ export function useChannelsSettingsPanel() {
     setShowFeishuSecret,
     showFeishuWebhookSecrets,
     setShowFeishuWebhookSecrets,
+    showDingtalkSecret,
+    setShowDingtalkSecret,
     copied,
     feishuCopied,
+    dingtalkCopied,
     feishuWebhookCopied,
     tgAccountsDraft,
     setTgAccountsDraft,
@@ -405,21 +477,28 @@ export function useChannelsSettingsPanel() {
     feishuAccountsDraft,
     setFeishuAccountsDraft,
     feishuAccountsError,
+    dingtalkAccountsDraft,
+    setDingtalkAccountsDraft,
+    dingtalkAccountsError,
     chatAgents,
     updateChannelAgentRoute,
     updateTelegram,
     updateWeixin,
     updateFeishu,
+    updateDingtalk,
     save,
     toggleChannelEnabled,
     removeChannel,
     copyToken,
     handleFeishuQrSetupSuccess,
+    handleDingtalkQrSetupSuccess,
     copyFeishuSecret,
+    copyDingtalkSecret,
     copyFeishuWebhookConfig,
     onTgAccountsBlur,
     onWxAccountsBlur,
     onFeishuAccountsBlur,
+    onDingtalkAccountsBlur,
     dmOpts,
     groupOpts,
     replyOpts,

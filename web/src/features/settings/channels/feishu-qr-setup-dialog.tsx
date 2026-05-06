@@ -1,15 +1,15 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { ExternalLink, X } from 'lucide-react';
 import QRCode from 'qrcode';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 
 import { Button } from '@/components/ui/button';
 import {
   fetchFeishuSetupStart,
   fetchFeishuSetupStatus,
 } from '@/features/settings/channels-config-api';
-import { cn } from '@/lib/cn';
 import type { ChannelsSettingsMessages } from '@/i18n/messages';
+import { cn } from '@/lib/cn';
 
 type FeishuDomain = 'feishu' | 'lark';
 
@@ -18,11 +18,13 @@ export function FeishuQrSetupDialog({
   onOpenChange,
   ch,
   onSetupSuccess,
+  moreSettings,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   ch: ChannelsSettingsMessages;
   onSetupSuccess: (result: { appId: string; domain: string; openId?: string }) => void;
+  moreSettings?: ReactNode;
 }) {
   const [busy, setBusy] = useState(false);
   const [domain, setDomain] = useState<FeishuDomain>('feishu');
@@ -31,25 +33,23 @@ export function FeishuQrSetupDialog({
   const [error, setError] = useState<string | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [qrGenFailed, setQrGenFailed] = useState(false);
-  const [showDomainPicker, setShowDomainPicker] = useState(true);
 
-  const startScan = useCallback(async () => {
+  const startScan = useCallback(async (d: FeishuDomain) => {
+    setDomain(d);
     setError(null);
     setSessionKey(null);
     setQrUrl(null);
     setBusy(true);
-    setShowDomainPicker(false);
     try {
-      const result = await fetchFeishuSetupStart({ domain });
+      const result = await fetchFeishuSetupStart({ domain: d });
       setQrUrl(result.qrUrl);
       setSessionKey(result.sessionKey);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Start failed');
-      setShowDomainPicker(true);
     } finally {
       setBusy(false);
     }
-  }, [domain]);
+  }, []);
 
   useEffect(() => {
     if (!open) {
@@ -58,10 +58,12 @@ export function FeishuQrSetupDialog({
       setError(null);
       setQrDataUrl(null);
       setQrGenFailed(false);
-      setShowDomainPicker(true);
+      setDomain('feishu');
       setBusy(false);
+      return;
     }
-  }, [open]);
+    void startScan('feishu');
+  }, [open, startScan]);
 
   useEffect(() => {
     if (!sessionKey) return;
@@ -92,7 +94,6 @@ export function FeishuQrSetupDialog({
           } else {
             setError(status.message);
             setQrUrl(null);
-            setShowDomainPicker(true);
           }
           return;
         }
@@ -104,7 +105,6 @@ export function FeishuQrSetupDialog({
           setError(status.message);
           setSessionKey(null);
           setQrUrl(null);
-          setShowDomainPicker(true);
         }
       } catch (e) {
         if (!cancelled) {
@@ -114,7 +114,6 @@ export function FeishuQrSetupDialog({
           setError(e instanceof Error ? e.message : 'Request failed');
           setSessionKey(null);
           setQrUrl(null);
-          setShowDomainPicker(true);
         }
       }
     };
@@ -158,6 +157,10 @@ export function FeishuQrSetupDialog({
   }, [qrUrl]);
 
   const showQr = Boolean(qrUrl && sessionKey);
+  /** Keep pill visible for the whole open session so region toggles do not collapse the modal. */
+  const showRegionSwitch = open;
+  /** True until the first QR session is ready (covers first paint before useEffect + region switches). */
+  const qrFrameLoading = open && !error && !showQr;
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -188,84 +191,104 @@ export function FeishuQrSetupDialog({
             <p className="mt-1.5 text-sm text-fg-muted">{ch.feishuQrModalSubtitle}</p>
           </div>
 
-          {showDomainPicker && !showQr ? (
-            <div className="mt-6 flex flex-col items-center gap-4">
-              <div className="flex w-full flex-col gap-1.5">
-                <label className="text-sm font-medium text-fg" htmlFor="feishu-qr-domain">
-                  {ch.feishuQrDomainLabel}
-                </label>
-                <select
-                  id="feishu-qr-domain"
-                  className="w-full rounded-lg border border-edge bg-surface px-3 py-2 text-sm text-fg outline-none focus:ring-2 focus:ring-accent/40"
-                  value={domain}
-                  onChange={(e) => setDomain(e.target.value as FeishuDomain)}
-                >
-                  <option value="feishu">feishu (open.feishu.cn) — China</option>
-                  <option value="lark">lark (open.larksuite.com) — International</option>
-                </select>
-              </div>
-              <Button
-                type="button"
-                variant="primary"
-                className="h-11 w-full rounded-full"
-                disabled={busy}
-                onClick={() => void startScan()}
-              >
-                {busy ? ch.feishuQrStarting : ch.feishuQrStartButton}
-              </Button>
-            </div>
-          ) : null}
-
-          <div className="mt-6 flex min-h-[200px] flex-col items-center justify-center">
-            {busy && !showQr ? <p className="text-sm text-fg-muted">{ch.feishuQrStarting}</p> : null}
-
+          <div className="mt-6 flex min-h-[17.5rem] flex-col items-center justify-center gap-3">
             {error ? (
               <p className="text-center text-sm text-red-600 dark:text-red-400">{error}</p>
             ) : null}
 
-            {showQr && qrUrl && !error ? (
+            {!error && (showQr || qrFrameLoading) ? (
               <div className="flex w-full flex-col items-center gap-3">
-                <p className="text-sm text-fg-muted">{ch.feishuQrScanHint}</p>
-                {qrDataUrl && !qrGenFailed ? (
-                  <img
-                    src={qrDataUrl}
-                    alt=""
-                    className="h-52 w-52 rounded-lg border border-edge-subtle bg-white object-contain p-3 dark:border-edge"
-                  />
-                ) : null}
-                {!qrDataUrl && !qrGenFailed ? (
-                  <p className="text-sm text-fg-muted">{ch.feishuQrEncoding}</p>
-                ) : null}
-                {qrGenFailed ? (
-                  <div className="flex w-full flex-col items-center gap-3">
-                    <p className="max-w-[16rem] text-center text-sm text-fg-muted">{ch.feishuQrImageError}</p>
-                    <a
-                      href={qrUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-1.5 text-sm text-accent underline-offset-2 hover:underline"
-                    >
-                      <ExternalLink className="size-3.5 shrink-0" />
-                      {ch.feishuQrOpenLink}
-                    </a>
-                  </div>
-                ) : null}
+                <p className="text-sm text-fg-muted">
+                  {qrFrameLoading ? ch.feishuQrStarting : ch.feishuQrScanHint}
+                </p>
+                <div
+                  className={cn(
+                    'relative flex h-52 w-52 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-edge-subtle bg-white p-3 dark:border-edge',
+                    qrFrameLoading && 'bg-surface-muted/40 dark:bg-surface-base',
+                  )}
+                >
+                  {qrFrameLoading ? (
+                    <div
+                      className="absolute inset-3 animate-pulse rounded-md bg-surface-muted dark:bg-surface-hover"
+                      aria-hidden
+                    />
+                  ) : null}
+                  {showQr && qrUrl && !error && qrDataUrl && !qrGenFailed ? (
+                    <img src={qrDataUrl} alt="" className="relative z-[1] size-full object-contain" />
+                  ) : null}
+                  {showQr && qrUrl && !error && !qrDataUrl && !qrGenFailed && !qrFrameLoading ? (
+                    <p className="relative z-[1] px-2 text-center text-sm text-fg-muted">{ch.feishuQrEncoding}</p>
+                  ) : null}
+                  {showQr && qrUrl && !error && qrGenFailed ? (
+                    <div className="relative z-[1] flex size-full flex-col items-center justify-center gap-2 px-1">
+                      <p className="text-center text-xs text-fg-muted">{ch.feishuQrImageError}</p>
+                      <a
+                        href={qrUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 text-xs text-accent underline-offset-2 hover:underline"
+                      >
+                        <ExternalLink className="size-3 shrink-0" />
+                        {ch.feishuQrOpenLink}
+                      </a>
+                    </div>
+                  ) : null}
+                </div>
               </div>
             ) : null}
           </div>
 
-          {showQr ? (
-            <div className="mt-6">
-              <Button
-                type="button"
-                variant="secondary"
-                className="h-11 w-full rounded-full border-0 bg-fg text-surface-panel hover:opacity-90 dark:bg-fg dark:text-surface-panel"
-                disabled={busy}
-                onClick={() => void startScan()}
-              >
-                {busy ? ch.feishuQrStarting : ch.feishuQrRegenerate}
-              </Button>
+          {showRegionSwitch ? (
+            <div
+              className="mx-auto mt-4 flex w-full max-w-[20rem] justify-center px-1"
+              role="group"
+              aria-label={ch.feishuRegionSwitchAria}
+            >
+              <div className="inline-flex w-full rounded-full border border-edge bg-surface-muted/60 p-1 dark:border-edge dark:bg-surface-base">
+                <button
+                  type="button"
+                  disabled={busy}
+                  className={cn(
+                    'min-w-0 flex-1 rounded-full px-3 py-2 text-center text-sm font-medium transition-colors',
+                    domain === 'feishu'
+                      ? 'bg-surface-panel text-fg shadow-sm dark:bg-surface-panel'
+                      : 'text-fg-muted hover:text-fg',
+                  )}
+                  onClick={() => void startScan('feishu')}
+                >
+                  {ch.feishuRegionChina}
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  className={cn(
+                    'min-w-0 flex-1 rounded-full px-3 py-2 text-center text-sm font-medium transition-colors',
+                    domain === 'lark'
+                      ? 'bg-surface-panel text-fg shadow-sm dark:bg-surface-panel'
+                      : 'text-fg-muted hover:text-fg',
+                  )}
+                  onClick={() => void startScan('lark')}
+                >
+                  {ch.feishuRegionInternational}
+                </button>
+              </div>
             </div>
+          ) : null}
+
+          <div className="mt-6">
+            <Button
+              type="button"
+              variant="secondary"
+              className="h-11 w-full rounded-full border-0 bg-fg text-surface-panel hover:opacity-90 dark:bg-fg dark:text-surface-panel"
+              disabled={busy}
+              onClick={() => void startScan(domain)}
+            >
+              {busy ? ch.feishuQrStarting : ch.feishuQrRegenerate}
+            </Button>
+          </div>
+
+          {moreSettings ? (
+            <div className="mt-6 border-t border-edge-subtle pt-4 dark:border-edge-subtle">{moreSettings}</div>
           ) : null}
         </Dialog.Content>
       </Dialog.Portal>

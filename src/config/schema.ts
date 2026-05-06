@@ -286,6 +286,8 @@ export {
 export type { TelegramConfig } from '../../extensions/telegram/src/config-schema.js';
 export { WeixinAccountConfigSchema, WeixinConfigSchema } from '../../extensions/weixin/src/config-schema.js';
 export type { WeixinConfig } from '../../extensions/weixin/src/config-schema.js';
+export { DingtalkConfigSchema } from '../../extensions/dingtalk/src/config-schema.js';
+export type { DingtalkConfig } from '../../extensions/dingtalk/src/config-schema.js';
 
 // ============================================
 // Session Routing Configuration

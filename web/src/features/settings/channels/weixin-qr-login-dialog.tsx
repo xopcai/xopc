@@ -149,6 +149,8 @@ export function WeixinQrLoginDialog({
   }, [qrcodeUrl]);
 
   const showQr = Boolean(qrcodeUrl && sessionKey);
+  /** True while waiting for a new login session (first open, regenerate). Keeps modal height stable. */
+  const qrFrameLoading = open && !error && !showQr;
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -179,34 +181,52 @@ export function WeixinQrLoginDialog({
             <p className="mt-1.5 text-sm text-fg-muted">{ch.weixinQrModalSubtitle}</p>
           </div>
 
-          <div className="mt-6 flex min-h-[200px] flex-col items-center justify-center">
-            {busy && !showQr ? <p className="text-sm text-fg-muted">{ch.weixinQrLoginBusy}</p> : null}
+          <div className="mt-6 flex min-h-[17.5rem] flex-col items-center justify-center gap-3">
             {error ? <p className="text-center text-sm text-red-600 dark:text-red-400">{error}</p> : null}
-            {hint && !error ? <p className="mb-3 text-center text-sm text-accent">{hint}</p> : null}
-            {showQr && qrcodeUrl && !error ? (
+
+            {!error && (showQr || qrFrameLoading) ? (
               <div className="flex w-full flex-col items-center gap-3">
-                {qrDataUrl && !qrGenFailed ? (
-                  <img
-                    src={qrDataUrl}
-                    alt=""
-                    className="h-52 w-52 rounded-lg border border-edge-subtle bg-white object-contain p-3 dark:border-edge"
-                  />
-                ) : null}
-                {!qrDataUrl && !qrGenFailed ? <p className="text-sm text-fg-muted">{ch.weixinQrEncoding}</p> : null}
-                {qrGenFailed ? (
-                  <div className="flex w-full flex-col items-center gap-3">
-                    <p className="max-w-[16rem] text-center text-sm text-fg-muted">{ch.weixinQrImageError}</p>
-                    <a
-                      href={qrcodeUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-1.5 text-sm text-accent underline-offset-2 hover:underline"
-                    >
-                      <ExternalLink className="size-3.5 shrink-0" />
-                      {ch.weixinQrOpenLink}
-                    </a>
-                  </div>
-                ) : null}
+                <p
+                  className={cn(
+                    'min-h-[1.25rem] text-center text-sm',
+                    hint && !qrFrameLoading ? 'text-accent' : 'text-fg-muted',
+                  )}
+                >
+                  {qrFrameLoading ? ch.weixinQrLoginBusy : hint ?? '\u00a0'}
+                </p>
+                <div
+                  className={cn(
+                    'relative flex h-52 w-52 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-edge-subtle bg-white p-3 dark:border-edge',
+                    qrFrameLoading && 'bg-surface-muted/40 dark:bg-surface-base',
+                  )}
+                >
+                  {qrFrameLoading ? (
+                    <div
+                      className="absolute inset-3 animate-pulse rounded-md bg-surface-muted dark:bg-surface-hover"
+                      aria-hidden
+                    />
+                  ) : null}
+                  {showQr && qrcodeUrl && !error && qrDataUrl && !qrGenFailed ? (
+                    <img src={qrDataUrl} alt="" className="relative z-[1] size-full object-contain" />
+                  ) : null}
+                  {showQr && qrcodeUrl && !error && !qrDataUrl && !qrGenFailed && !qrFrameLoading ? (
+                    <p className="relative z-[1] px-2 text-center text-sm text-fg-muted">{ch.weixinQrEncoding}</p>
+                  ) : null}
+                  {showQr && qrcodeUrl && !error && qrGenFailed ? (
+                    <div className="relative z-[1] flex size-full flex-col items-center justify-center gap-2 px-1">
+                      <p className="text-center text-xs text-fg-muted">{ch.weixinQrImageError}</p>
+                      <a
+                        href={qrcodeUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 text-xs text-accent underline-offset-2 hover:underline"
+                      >
+                        <ExternalLink className="size-3 shrink-0" />
+                        {ch.weixinQrOpenLink}
+                      </a>
+                    </div>
+                  ) : null}
+                </div>
               </div>
             ) : null}
           </div>

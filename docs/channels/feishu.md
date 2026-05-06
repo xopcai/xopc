@@ -5,6 +5,22 @@ Feishu/Lark is configured under **`channels.feishu`**. The channel supports two 
 - **`websocket`** (default): Feishu Socket Mode.
 - **`webhook`**: a local HTTP server that receives Feishu events. Requires webhook secrets.
 
+## Gateway console — IM channels
+
+On **`#/channels`** (sidebar **IM channels**), you can onboard Feishu when the gateway is running and a **gateway token** is saved in settings.
+
+- **Configure / Edit** opens a **QR setup** dialog that **starts immediately** for the **China (Feishu)** tenant by default.
+- A **capsule control under the QR** switches **Feishu (China)** vs **Lark (international)**; switching starts a new scan for that domain.
+- After a successful scan, the gateway writes **`appId`**, **`appSecret`**, and **`domain`** into `channels.feishu` (merging with existing fields such as `connectionMode`, defaulting new installs to **`websocket`**).
+- Full manual fields (webhook secrets, tools, policies, multi-account JSON, …) live under **Advanced** in the same dialog and are saved with **Save**.
+
+### Setup API (authenticated)
+
+- `POST /api/channels/feishu/setup/start` — JSON body optional: `{ "domain": "feishu" | "lark" }` (omit or any other value → `feishu`). Returns `sessionKey` and `qrUrl`.
+- `GET /api/channels/feishu/setup/:sessionKey` — poll until done; on success the server persists credentials as above.
+
+You can still create or manage the app entirely in the Feishu / Lark console (below) if you prefer not to use QR setup.
+
 ## Create and configure a Feishu app
 
 In Feishu Open Platform (or Lark Developer):

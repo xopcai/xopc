@@ -5,6 +5,7 @@ import { apiUrl } from '@/lib/url';
 import {
   extractChannelAgentRoutes,
   mergeChannelAgentBindings,
+  dingtalkRoutingAccountIds,
   feishuRoutingAccountIds,
   telegramRoutingAccountIds,
   weixinRoutingAccountIds,
@@ -49,7 +50,7 @@ export function emptyTelegramAccount(accountId: string): TelegramAccount {
 export function defaultChannelsState(): ChannelsSettingsState {
   return {
     bindingsFull: [],
-    channelAgentRoutes: { telegram: {}, weixin: {}, feishu: {} },
+    channelAgentRoutes: { telegram: {}, weixin: {}, feishu: {}, dingtalk: {} },
     defaultAgentId: 'main',
     telegram: {
       enabled: false,
@@ -103,6 +104,22 @@ export function defaultChannelsState(): ChannelsSettingsState {
       actions: { reactions: true },
       accounts: {},
     },
+    dingtalk: {
+      enabled: false,
+      defaultAccount: '',
+      clientId: '',
+      clientSecret: '',
+      dmPolicy: 'pairing',
+      groupPolicy: 'open',
+      allowFrom: [],
+      groupAllowFrom: [],
+      requireMention: false,
+      debug: false,
+      endpoint: 'https://api.dingtalk.com',
+      historyLimit: 50,
+      textChunkLimit: 4000,
+      accounts: {},
+    },
   };
 }
 
@@ -112,6 +129,7 @@ export function normalizeChannelsFromConfig(config: unknown): ChannelsSettingsSt
   const tg = ch.telegram as Record<string, unknown> | undefined;
   const wx = ch.weixin as Record<string, unknown> | undefined;
   const fs = ch.feishu as Record<string, unknown> | undefined;
+  const dt = ch.dingtalk as Record<string, unknown> | undefined;
 
   const telegramAccounts = tg?.accounts;
   let accounts: Record<string, TelegramAccount> =
@@ -219,12 +237,32 @@ export function normalizeChannelsFromConfig(config: unknown): ChannelsSettingsSt
           ? ({ ...(fs.accounts as Record<string, any>) } as any)
           : {},
     },
+    dingtalk: {
+      enabled: Boolean(dt?.enabled),
+      defaultAccount: typeof dt?.defaultAccount === 'string' ? dt.defaultAccount : '',
+      clientId: typeof dt?.clientId === 'string' ? dt.clientId : '',
+      clientSecret: typeof dt?.clientSecret === 'string' ? dt.clientSecret : '',
+      dmPolicy: (dt?.dmPolicy as DmPolicy) || 'pairing',
+      groupPolicy: (dt?.groupPolicy as GroupPolicy) || 'open',
+      allowFrom: Array.isArray(dt?.allowFrom) ? [...(dt.allowFrom as (string | number)[])] : [],
+      groupAllowFrom: Array.isArray(dt?.groupAllowFrom) ? [...(dt.groupAllowFrom as (string | number)[])] : [],
+      requireMention: dt?.requireMention === true,
+      debug: Boolean(dt?.debug),
+      endpoint: typeof dt?.endpoint === 'string' && dt.endpoint.trim() ? dt.endpoint.trim() : 'https://api.dingtalk.com',
+      historyLimit: typeof dt?.historyLimit === 'number' ? dt.historyLimit : 50,
+      textChunkLimit: typeof dt?.textChunkLimit === 'number' ? dt.textChunkLimit : 4000,
+      accounts:
+        dt?.accounts && typeof dt.accounts === 'object' && !Array.isArray(dt.accounts)
+          ? ({ ...(dt.accounts as Record<string, unknown>) } as ChannelsSettingsState['dingtalk']['accounts'])
+          : {},
+    },
   };
 
   const tgIds = telegramRoutingAccountIds(base.telegram);
   const wxIds = weixinRoutingAccountIds(base.weixin);
   const fsIds = feishuRoutingAccountIds(base.feishu);
-  const channelAgentRoutes = extractChannelAgentRoutes(bindingsRaw, tgIds, wxIds, fsIds, defaultAgentId);
+  const dtIds = dingtalkRoutingAccountIds(base.dingtalk);
+  const channelAgentRoutes = extractChannelAgentRoutes(bindingsRaw, tgIds, wxIds, fsIds, dtIds, defaultAgentId);
 
   return {
     ...base,
@@ -270,12 +308,14 @@ export async function patchChannelsSettings(state: ChannelsSettingsState): Promi
   const tg = state.telegram;
   const wx = state.weixin;
   const fs = state.feishu;
+  const dt = state.dingtalk;
   const mergedBindings = mergeChannelAgentBindings(
     state.bindingsFull,
     state.channelAgentRoutes,
     telegramRoutingAccountIds(tg),
     weixinRoutingAccountIds(wx),
     feishuRoutingAccountIds(fs),
+    dingtalkRoutingAccountIds(dt),
     state.defaultAgentId,
   );
   const weixinRouteTag: string | number | null = (() => {
@@ -342,6 +382,22 @@ export async function patchChannelsSettings(state: ChannelsSettingsState): Promi
           actions: (fs as any).actions,
           accounts: fs.accounts,
         },
+        dingtalk: {
+          enabled: dt.enabled,
+          defaultAccount: dt.defaultAccount || undefined,
+          clientId: dt.clientId,
+          clientSecret: dt.clientSecret || undefined,
+          dmPolicy: dt.dmPolicy,
+          groupPolicy: dt.groupPolicy,
+          allowFrom: dt.allowFrom,
+          groupAllowFrom: dt.groupAllowFrom.length ? dt.groupAllowFrom : undefined,
+          requireMention: dt.requireMention,
+          debug: dt.debug,
+          endpoint: dt.endpoint?.trim() ? dt.endpoint : undefined,
+          historyLimit: dt.historyLimit,
+          textChunkLimit: dt.textChunkLimit,
+          accounts: dt.accounts,
+        },
       },
     }),
   });
@@ -382,5 +438,34 @@ export async function fetchFeishuSetupStatus(sessionKey: string): Promise<Feishu
     ok: boolean;
     payload: { status: FeishuSetupStatusPayload };
   }>(apiUrl(`/api/channels/feishu/setup/${encodeURIComponent(sessionKey)}`));
+  return res.payload.status;
+}
+
+// ---------------------------------------------------------------------------
+// DingTalk QR app registration
+// ---------------------------------------------------------------------------
+
+export type DingtalkSetupStatusPayload =
+  | { phase: 'polling' }
+  | { phase: 'done'; ok: true; clientId: string }
+  | { phase: 'done'; ok: false; message: string }
+  | { phase: 'unknown'; message: string };
+
+export async function fetchDingtalkSetupStart(): Promise<{ sessionKey: string; qrUrl: string }> {
+  const res = await fetchJson<{
+    ok: boolean;
+    payload: { sessionKey: string; qrUrl: string };
+  }>(apiUrl('/api/channels/dingtalk/setup/start'), {
+    method: 'POST',
+    body: JSON.stringify({}),
+  });
+  return res.payload;
+}
+
+export async function fetchDingtalkSetupStatus(sessionKey: string): Promise<DingtalkSetupStatusPayload> {
+  const res = await fetchJson<{
+    ok: boolean;
+    payload: { status: DingtalkSetupStatusPayload };
+  }>(apiUrl(`/api/channels/dingtalk/setup/${encodeURIComponent(sessionKey)}`));
   return res.payload.status;
 }

@@ -12,7 +12,7 @@ overrides:
   lodash: ^4.18.0
   '@xmldom/xmldom': ^0.8.12
   defu: ^6.1.5
-  basic-ftp: ^5.3.0
+  basic-ftp: ^5.3.1
   picomatch: ^4.0.4
   vitepress>vite: 5.4.21
   axios: ^1.15.1
@@ -72,6 +72,9 @@ importers:
       cron-parser:
         specifier: ^5.5.0
         version: 5.5.0
+      dingtalk-stream:
+        specifier: ^2.1.4
+        version: 2.1.5
       dotenv:
         specifier: ^17.4.2
         version: 17.4.2
@@ -217,6 +220,25 @@ importers:
       '@xopcai/xopc':
         specifier: workspace:*
         version: link:../..
+    devDependencies:
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
+  extensions/dingtalk:
+    dependencies:
+      '@xopcai/xopc':
+        specifier: workspace:*
+        version: link:../..
+      dingtalk-stream:
+        specifier: ^2.1.4
+        version: 2.1.5
+      qrcode-terminal:
+        specifier: ^0.12.0
+        version: 0.12.0
+      zod:
+        specifier: ^4.3.6
+        version: 4.3.6
     devDependencies:
       typescript:
         specifier: ^5.9.3
@@ -3767,8 +3789,8 @@ packages:
     engines: {node: '>=6.0.0'}
     hasBin: true
 
-  basic-ftp@5.3.0:
-    resolution: {integrity: sha512-5K9eNNn7ywHPsYnFwjKgYH8Hf8B5emh7JKcPaVjjrMJFQQwGpwowEnZNEtHs7DfR7hCZsmaK3VA4HUK0YarT+w==}
+  basic-ftp@5.3.1:
+    resolution: {integrity: sha512-bopVNp6ugyA150DDuZfPFdt1KZ5a94ZDiwX4hMgZDzF+GttD80lEy8kj98kbyhLXnPvhtIo93mdnLIjpCAeeOw==}
     engines: {node: '>=10.0.0'}
 
   bidi-js@1.0.3:
@@ -4093,6 +4115,9 @@ packages:
 
   dijkstrajs@1.0.3:
     resolution: {integrity: sha512-qiSlmBq9+BCdCA/L46dw8Uy93mloxsPSbwnm5yrKn2vMPiy8KyAskTF6zuV/j5BMsmOGZDPs7KjU+mjb670kfA==}
+
+  dingtalk-stream@2.1.5:
+    resolution: {integrity: sha512-6H3tSc/mE6hMj4RBB5ntkI4ycC498RobmtMxfLS8eBTRPjBZlhUdDYEHA0asOoTLSzC2PHqupr4D4HVoaU7bRQ==}
 
   dir-compare@4.2.0:
     resolution: {integrity: sha512-2xMCmOoMrdQIPHdsTawECdNPwlVFB9zGcz3kuhmBO6U3oU+UQjsue0i8ayLKpgBcm+hcXPMVSGUN9d+pvJ6+VQ==}
@@ -8230,7 +8255,7 @@ snapshots:
 
   '@larksuiteoapi/node-sdk@1.62.0':
     dependencies:
-      axios: 1.16.0
+      axios: 1.16.0(debug@4.4.3)
       lodash.identity: 3.0.0
       lodash.merge: 4.6.2
       lodash.pickby: 4.6.0
@@ -9917,7 +9942,7 @@ snapshots:
       '@vueuse/shared': 12.8.2(typescript@6.0.3)
       vue: 3.5.33(typescript@6.0.3)
     optionalDependencies:
-      axios: 1.16.0
+      axios: 1.16.0(debug@4.4.3)
       focus-trap: 7.8.0
       qrcode: 1.5.4
     transitivePeerDependencies:
@@ -10064,9 +10089,9 @@ snapshots:
 
   atomic-sleep@1.0.0: {}
 
-  axios@1.16.0:
+  axios@1.16.0(debug@4.4.3):
     dependencies:
-      follow-redirects: 1.16.0
+      follow-redirects: 1.16.0(debug@4.4.3)
       form-data: 4.0.5
       proxy-from-env: 2.1.0
     transitivePeerDependencies:
@@ -10080,7 +10105,7 @@ snapshots:
 
   baseline-browser-mapping@2.10.21: {}
 
-  basic-ftp@5.3.0: {}
+  basic-ftp@5.3.1: {}
 
   bidi-js@1.0.3:
     dependencies:
@@ -10393,6 +10418,16 @@ snapshots:
   devtools-protocol@0.0.1612613: {}
 
   dijkstrajs@1.0.3: {}
+
+  dingtalk-stream@2.1.5:
+    dependencies:
+      axios: 1.16.0(debug@4.4.3)
+      debug: 4.4.3
+      ws: 8.20.0
+    transitivePeerDependencies:
+      - bufferutil
+      - supports-color
+      - utf-8-validate
 
   dir-compare@4.2.0:
     dependencies:
@@ -10890,7 +10925,9 @@ snapshots:
     dependencies:
       tabbable: 6.4.0
 
-  follow-redirects@1.16.0: {}
+  follow-redirects@1.16.0(debug@4.4.3):
+    optionalDependencies:
+      debug: 4.4.3
 
   form-data@4.0.5:
     dependencies:
@@ -10994,7 +11031,7 @@ snapshots:
 
   get-uri@6.0.5:
     dependencies:
-      basic-ftp: 5.3.0
+      basic-ftp: 5.3.1
       data-uri-to-buffer: 6.0.2
       debug: 4.4.3
     transitivePeerDependencies:

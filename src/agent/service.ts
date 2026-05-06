@@ -1388,6 +1388,8 @@ export class AgentService {
                 metadata: {
                   accountId: msg.metadata?.accountId,
                   threadId: msg.metadata?.threadId,
+                  sessionWebhook: msg.metadata?.sessionWebhook,
+                  conversationId: msg.metadata?.conversationId,
                 },
               });
             },
@@ -1400,6 +1402,8 @@ export class AgentService {
                 metadata: {
                   accountId: msg.metadata?.accountId,
                   threadId: msg.metadata?.threadId,
+                  sessionWebhook: msg.metadata?.sessionWebhook,
+                  conversationId: msg.metadata?.conversationId,
                 },
               });
             },
@@ -1647,6 +1651,8 @@ export class AgentService {
         accountId: msg.metadata?.accountId,
         threadId: msg.metadata?.threadId,
         transcribedVoice: sessionContext.metadata?.transcribedVoice,
+        sessionWebhook: msg.metadata?.sessionWebhook,
+        conversationId: msg.metadata?.conversationId,
       },
     });
   }

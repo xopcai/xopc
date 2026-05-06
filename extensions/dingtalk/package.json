@@ -1,0 +1,39 @@
+{
+  "name": "@xopcai/xopc-extension-dingtalk",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Bundled DingTalk channel (Stream mode; not published to npm).",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./*": "./dist/*"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "dingtalk-stream": "^2.1.4",
+    "qrcode-terminal": "^0.12.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  },
+  "peerDependencies": {
+    "@xopcai/xopc": "workspace:*"
+  },
+  "xopc": {
+    "bundledChannel": {
+      "export": "dingtalkPlugin",
+      "order": 35
+    }
+  },
+  "keywords": ["xopc", "dingtalk"],
+  "license": "MIT"
+}

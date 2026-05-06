@@ -7,23 +7,26 @@ import {
 } from '@/features/settings/channel-bindings-merge';
 
 describe('channel-bindings-merge', () => {
-  it('extractChannelAgentRoutes maps telegram and weixin account rules', () => {
+  it('extractChannelAgentRoutes maps telegram, weixin, feishu, and dingtalk account rules', () => {
     const bindings: BindingRuleWire[] = [
       { agentId: 'Alpha', match: { channel: 'telegram', accountId: 'acc1' } },
       { agentId: 'Beta', match: { channel: 'weixin', accountId: 'wx1' } },
       { agentId: 'Gamma', match: { channel: 'feishu', accountId: 'fs1' } },
+      { agentId: 'Delta', match: { channel: 'dingtalk', accountId: 'dt1' } },
     ];
-    const r = extractChannelAgentRoutes(bindings, ['acc1'], ['wx1'], ['fs1'], 'main');
+    const r = extractChannelAgentRoutes(bindings, ['acc1'], ['wx1'], ['fs1'], ['dt1'], 'main');
     expect(r.telegram.acc1).toBe('alpha');
     expect(r.weixin.wx1).toBe('beta');
     expect(r.feishu.fs1).toBe('gamma');
+    expect(r.dingtalk.dt1).toBe('delta');
   });
 
   it('extractChannelAgentRoutes falls back to defaultAgentId', () => {
-    const r = extractChannelAgentRoutes([], ['t1'], ['w1'], ['f1'], 'DEFAULT');
+    const r = extractChannelAgentRoutes([], ['t1'], ['w1'], ['f1'], ['d1'], 'DEFAULT');
     expect(r.telegram.t1).toBe('default');
     expect(r.weixin.w1).toBe('default');
     expect(r.feishu.f1).toBe('default');
+    expect(r.dingtalk.d1).toBe('default');
   });
 
   it('mergeChannelAgentBindings replaces managed ui:route rules and preserves other bindings', () => {
@@ -33,8 +36,9 @@ describe('channel-bindings-merge', () => {
     ];
     const next = mergeChannelAgentBindings(
       previous,
-      { telegram: { a1: 'agent1' }, weixin: {}, feishu: {} },
+      { telegram: { a1: 'agent1' }, weixin: {}, feishu: {}, dingtalk: {} },
       ['a1'],
+      [],
       [],
       [],
       'main',

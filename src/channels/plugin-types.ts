@@ -315,6 +315,8 @@ export interface ChannelOutboundContext {
   accountId?: string | null;
   silent?: boolean;
   audioAsVoice?: boolean;
+  /** Echo of `OutboundMessage.metadata` for channel-specific delivery (e.g. DingTalk session webhook). */
+  outboundMetadata?: Record<string, unknown>;
 }
 
 export interface ChannelOutboundPayloadContext extends ChannelOutboundContext {
