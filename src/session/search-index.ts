@@ -48,6 +48,7 @@ export class SessionSearchIndex {
         }
 
         const key = this.extractSessionKeyFromPath(file);
+        // Index LLM-only messages; `kind: 'context'` rows are excluded by parse → messages.
         const wordIndex = this.buildWordIndex(messages);
 
         const indexed: IndexedSession = { key, messages, wordIndex };

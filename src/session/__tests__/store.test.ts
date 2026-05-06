@@ -431,6 +431,16 @@ describe('SessionStore', () => {
       expect((doc!.messages[1] as { kind: string }).kind).toBe('context');
       expect((doc!.messages[2] as { role: string }).role).toBe('assistant');
     });
+
+    it('get(..., includeTranscriptRows) returns full rows while messages stay LLM-only', async () => {
+      const key = 'main:webchat:default:direct:ctxrow3';
+      await store.saveMessages(key, [{ role: 'user', content: 'x' }]);
+      await store.appendTranscriptContextEntry(key, { text: 'note' });
+      const detail = await store.get(key, { includeTranscriptRows: true });
+      expect(detail?.messages).toHaveLength(1);
+      expect(detail?.transcriptRows?.length).toBe(2);
+      expect((detail!.transcriptRows![1] as { kind: string }).kind).toBe('context');
+    });
   });
 
 });

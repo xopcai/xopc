@@ -788,6 +788,12 @@ export class GatewayService {
       void this.sessionManager
         .updateSessionMetadata(sk, { abortCutoffTimestamp: cutoffTs })
         .catch(() => {});
+      void this.sessionManager
+        .appendTranscriptContextEntry(sk, {
+          text: 'Webchat agent run aborted',
+          data: { runId, abortCutoffTimestamp: cutoffTs },
+        })
+        .catch(() => {});
     }
     c.abort();
     return true;
@@ -1220,7 +1226,7 @@ export class GatewayService {
    */
   async getSession(
     key: string,
-    options?: { includeTranscriptSummary?: boolean },
+    options?: { includeTranscriptSummary?: boolean; includeTranscriptRows?: boolean },
   ) {
     return this.sessionManager.getSession(key, options);
   }
@@ -1252,7 +1258,21 @@ export class GatewayService {
     key: string,
     options?: { instructions?: string; force?: boolean },
   ): Promise<CompactionResult> {
-    return this.agentService.compactSession(key, options);
+    const result = await this.agentService.compactSession(key, options);
+    if (result.compacted) {
+      void this.sessionManager
+        .appendTranscriptContextEntry(key, {
+          text: 'Session transcript compacted',
+          data: {
+            firstKeptIndex: result.firstKeptIndex,
+            tokensBefore: result.tokensBefore,
+            tokensAfter: result.tokensAfter,
+            summaryPreview: result.summary.slice(0, 500),
+          },
+        })
+        .catch(() => {});
+    }
+    return result;
   }
 
   /**

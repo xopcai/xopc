@@ -217,12 +217,17 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
   authenticated.get('/api/sessions/:key', async (c) => {
     const key = c.req.param('key');
     const includeRaw = c.req.query('include') ?? '';
-    const includeTranscript = includeRaw
-      .split(',')
-      .map((s) => s.trim())
-      .includes('transcript');
+    const includeSet = new Set(
+      includeRaw
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean),
+    );
+    const includeTranscript = includeSet.has('transcript');
+    const includeTranscriptRows = includeSet.has('transcriptRows');
     const session = await service.getSession(key, {
       includeTranscriptSummary: includeTranscript,
+      includeTranscriptRows,
     });
     if (!session) {
       return c.json({ error: 'Session not found' }, 404);
@@ -268,7 +273,8 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
     return c.json(result);
   });
 
-  // DELETE /api/sessions/:key/messages — delete a range of messages by index (before whole-session DELETE)
+  // DELETE /api/sessions/:key/messages — delete a range by **LLM message indices** (same order as
+  // `loadMessages` / session `messages`), not raw on-disk row indices when `kind: 'context'` rows exist.
   authenticated.delete('/api/sessions/:key/messages', async (c) => {
     const key = c.req.param('key');
     const body = await c.req.json().catch(() => ({}));
@@ -352,12 +358,15 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
       return c.json({ error: 'Not a subagent session' }, 400);
     }
     const includeRaw = c.req.query('include') ?? '';
-    const includeTranscript = includeRaw
-      .split(',')
-      .map((s) => s.trim())
-      .includes('transcript');
+    const includeSet = new Set(
+      includeRaw
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean),
+    );
     const session = await service.getSession(key, {
-      includeTranscriptSummary: includeTranscript,
+      includeTranscriptSummary: includeSet.has('transcript'),
+      includeTranscriptRows: includeSet.has('transcriptRows'),
     });
     if (!session) {
       return c.json({ error: 'Subagent session not found' }, 404);

@@ -1,5 +1,7 @@
 // Session management types
 
+import type { TranscriptStoredRow } from './session-context-for-llm.js';
+
 export interface Message {
   role: 'system' | 'user' | 'assistant' | 'tool' | 'toolResult';
   /** Plain string or structured content blocks (tool calls, multimodal). */
@@ -123,6 +125,8 @@ export interface SessionDetail extends SessionMetadata {
   messages: Message[];
   /** Present when loaded with `includeTranscriptSummary` (gateway `?include=transcript`). */
   transcriptSummary?: SessionTranscriptSummary;
+  /** Present when loaded with `include=transcriptRows` (full on-disk rows, LLM + `kind: 'context'`). */
+  transcriptRows?: TranscriptStoredRow[];
 }
 
 /** Session index file structure */

@@ -343,6 +343,12 @@ cd web && pnpm run build                  # → ../dist/gateway/static/root (gat
 
 ## When Making Changes
 
+### Session transcript (LLM vs on-disk rows)
+
+- **Model input:** Use `SessionStore.loadMessages` / `sessionStore.load` (they apply `buildSessionContextForLlm`). If you parse transcript JSON yourself, run `buildSessionContextForLlm(rows)` before passing history to pi-agent or any provider.
+- **Webchat abort cutoff:** `POST /api/agent` accepts optional `clientCreatedAtMs`. When it is **omitted**, `abortCutoffTimestamp` does **not** drop stale POSTs (clients must send send-time for skip semantics).
+- **Audit rows on disk:** `kind: 'context'` entries persist for ops/UI via `GET /api/sessions/:key?include=transcriptRows` (comma-separated with `transcript` if you also want `transcriptSummary`).
+
 | Area | Primary locations |
 |------|-------------------|
 | Agent | `src/agent/service.ts`, `src/agent/tools/`, `src/agent/context/`, `src/agent/lifecycle/` |
@@ -356,7 +362,8 @@ cd web && pnpm run build                  # → ../dist/gateway/static/root (gat
 | Logging | `src/utils/logger.ts` (barrel) → `src/utils/logger/`; conventions: [Logging conventions](#logging-conventions) |
 | Log Manager | `web/src/` (logs feature / pages) |
 | Tests | Colocated `__tests__` |
+| Session store / transcript | `src/session/store.ts`, `src/session/transcript-format.ts`, `src/session/session-context-for-llm.ts` |
 
 ---
 
-_Last updated: 2026-04-12_
+_Last updated: 2026-05-06_

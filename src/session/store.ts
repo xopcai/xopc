@@ -561,7 +561,7 @@ export class SessionStore {
 
   async get(
     key: string,
-    options?: { includeTranscriptSummary?: boolean },
+    options?: { includeTranscriptSummary?: boolean; includeTranscriptRows?: boolean },
   ): Promise<SessionDetail | null> {
     const metadata = await this.getMetadata(key);
     if (!metadata) return null;
@@ -582,11 +582,28 @@ export class SessionStore {
       }
     }
 
+    let transcriptRows: TranscriptStoredRow[] | undefined;
+    if (options?.includeTranscriptRows) {
+      transcriptRows = await this.loadTranscriptRows(key);
+    }
+
     return {
       ...metadata,
       messages: this.convertMessages(messages),
       ...(transcriptSummary ? { transcriptSummary } : {}),
+      ...(transcriptRows !== undefined ? { transcriptRows } : {}),
     };
+  }
+
+  /** Full on-disk transcript rows (LLM messages + optional `kind: 'context'`). */
+  async loadTranscriptRows(key: string): Promise<TranscriptStoredRow[]> {
+    const { jsonPath } = this.sessionPathsForKey(key);
+    try {
+      const raw = await readFile(jsonPath, 'utf-8');
+      return parseStoredTranscriptJson(raw).rows;
+    } catch {
+      return [];
+    }
   }
 
   async getMetadata(key: string): Promise<SessionMetadata | null> {
@@ -1219,6 +1236,10 @@ export class SessionStore {
 
   // ========== Export/Import ==========
 
+  /**
+   * JSON export uses API-shaped `detail.messages` (LLM-only). On-disk `kind: 'context'` rows are
+   * not included unless the export format is extended later.
+   */
   async exportSession(key: string, format: ExportFormat): Promise<string> {
     const detail = await this.get(key);
     if (!detail) {
