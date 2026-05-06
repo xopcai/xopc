@@ -30,6 +30,7 @@ import { join } from 'path';
 import { effectiveWorkspacePathForSession } from '../session/session-workspace.js';
 import { wrapMarkdownExportAsHtml } from '../session/chat-export.js';
 import type { CompactionResult } from '../agent/memory/compaction.js';
+import type { PersistentGoalApis } from '../agent/goals/persistent-goal-apis.js';
 
 const log = createLogger('CommandContext');
 
@@ -72,6 +73,8 @@ export interface CommandContextDeps {
     sessionKey: string,
     mode: 'list' | 'detail' | 'json',
   ) => Promise<string>;
+
+  persistentGoalApis?: PersistentGoalApis;
 }
 
 export class CommandContextImpl implements CommandContext {
@@ -83,6 +86,7 @@ export class CommandContextImpl implements CommandContext {
   readonly isGroup: boolean;
   readonly config: Config;
   readonly abortCurrentTurn?: () => Promise<void>;
+  readonly persistentGoalApis?: PersistentGoalApis;
 
   private deps: CommandContextDeps;
 
@@ -102,6 +106,8 @@ export class CommandContextImpl implements CommandContext {
         await run();
       };
     }
+
+    this.persistentGoalApis = deps.persistentGoalApis;
   }
 
   // === Reply API ===

@@ -20,6 +20,7 @@ import {
   getFileName,
   shouldReadWorkspaceFileAsBase64Path,
 } from '@/features/file-preview';
+import { showComposerNotification } from '@/features/chat/composer-notifications';
 import { useWorkspaceTree } from '@/features/workspace/use-workspace-tree';
 import { cn } from '@/lib/cn';
 import { messages } from '@/i18n/messages';
@@ -60,7 +61,6 @@ export const WorkspaceColumn = memo(function WorkspaceColumn() {
       : workspaceAgentId.trim()
         ? { agentId: workspaceAgentId.trim() }
         : undefined;
-  const [pathCopiedFlash, setPathCopiedFlash] = useState(false);
 
   const onWorkspaceResizePointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
@@ -104,7 +104,6 @@ export const WorkspaceColumn = memo(function WorkspaceColumn() {
     if (!open) {
       reset();
       setPreviewPath(null);
-      setPathCopiedFlash(false);
       return;
     }
     setPreviewPath(null);
@@ -166,8 +165,7 @@ export const WorkspaceColumn = memo(function WorkspaceColumn() {
         case 'copyPath':
           try {
             await navigator.clipboard.writeText(entry.absolutePath ?? entry.path);
-            setPathCopiedFlash(true);
-            window.setTimeout(() => setPathCopiedFlash(false), 2000);
+            showComposerNotification('success', m.workspace.pathCopied, undefined, { duration: 2500 });
           } catch {
             /* ignore */
           }
@@ -176,7 +174,7 @@ export const WorkspaceColumn = memo(function WorkspaceColumn() {
           break;
       }
     },
-    [setPreviewPath, workspaceReadOpts],
+    [m.workspace.pathCopied, setPreviewPath, workspaceReadOpts],
   );
 
   return (
@@ -264,15 +262,6 @@ export const WorkspaceColumn = memo(function WorkspaceColumn() {
                 <X className="size-4" strokeWidth={1.75} />
               </Button>
             </div>
-
-            <p className="shrink-0 border-b border-edge px-4 py-2 text-xs text-fg-muted dark:border-edge">
-              {m.workspace.currentWorkspace}
-              {pathCopiedFlash ? (
-                <span className="mt-1 block text-green-600 dark:text-green-400">
-                  {m.workspace.pathCopied}
-                </span>
-              ) : null}
-            </p>
 
             {error ? (
               <p className="shrink-0 px-4 py-2 text-xs text-red-600 dark:text-red-400">

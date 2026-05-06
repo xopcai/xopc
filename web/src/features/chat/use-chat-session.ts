@@ -13,7 +13,7 @@ import {
   type ProgressState,
   type ReasoningLevel,
 } from '@/features/chat/messages.types';
-import { hasPendingAgentRunForChat, MessageSender } from '@/features/chat/message-sender';
+import { hasPendingAgentRunForChat, MessageSender, setPendingAgentRun } from '@/features/chat/message-sender';
 import type { PendingFollowUp } from '@/features/chat/pending-follow-up.types';
 import { SessionManager } from '@/features/chat/session-manager';
 import { useChatFollowUpClarify } from '@/features/chat/use-chat-follow-up-clarify';
@@ -425,6 +425,33 @@ export function useChatSession() {
     }
     set(sessionKey, streaming || sending);
   }, [sessionKey, streaming, sending]);
+
+  /**
+   * `/goal` (and similar) schedule a follow-up webchat run without a browser POST. Those runs still
+   * broadcast `agent.stream` on `/api/events`; subscribe in `GatewaySseConnection`, then mirror POST
+   * behaviour: persist `runId` and resume SSE so tokens/tools appear in the open chat.
+   */
+  useEffect(() => {
+    const onAgentStream = (e: Event) => {
+      const d = (e as CustomEvent<{ sessionKey?: string; event?: unknown }>).detail;
+      if (!d?.sessionKey) return;
+      const inner = d.event as { type?: string; runId?: string } | undefined;
+      if (!inner || inner.type !== 'status' || typeof inner.runId !== 'string' || !inner.runId.trim()) {
+        return;
+      }
+      setPendingAgentRun(d.sessionKey, inner.runId);
+      if (sessionKeyRef.current !== d.sessionKey) return;
+      if (senderRef.current.isStreamingFor(d.sessionKey)) return;
+
+      queueMicrotask(() => {
+        if (sessionKeyRef.current !== d.sessionKey) return;
+        if (senderRef.current.isStreamingFor(d.sessionKey)) return;
+        void tryResumeAgentRun(d.sessionKey, latestMessagesRef.current ?? []);
+      });
+    };
+    window.addEventListener('agent-stream', onAgentStream as EventListener);
+    return () => window.removeEventListener('agent-stream', onAgentStream as EventListener);
+  }, [tryResumeAgentRun]);
 
   sendMessageRef.current = sendMessage;
 

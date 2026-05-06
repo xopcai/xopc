@@ -48,6 +48,7 @@ export class GatewaySseConnection {
     });
 
     for (const evt of [
+      'agent.stream',
       'config.reload',
       'channels.status',
       'message.sent',

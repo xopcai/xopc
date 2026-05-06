@@ -623,6 +623,18 @@ export const UpdateAutoConfigSchema = z
   .strict()
   .optional();
 
+/** Persistent `/goal` (Ralph loop) — Hermes-aligned defaults. */
+export const GoalsConfigSchema = z
+  .object({
+    /** Max continuation turns before auto-pause (Hermes default 20). */
+    maxTurns: z.number().int().min(1).max(500).default(20),
+    /** Optional judge model ref; defaults to `agents.defaults.model`. */
+    judgeModelRef: z.string().optional(),
+  })
+  .strict();
+
+export type GoalsConfig = z.infer<typeof GoalsConfigSchema>;
+
 export const UpdateConfigSchema = z
   .object({
     /** Check for updates on gateway startup. Default true. */
@@ -649,6 +661,7 @@ export const ConfigSchema = z.object({
   gateway: GatewayConfigSchema,
   tools: ToolsConfigSchema,
   cron: CronConfigSchema,
+  goals: GoalsConfigSchema.optional(),
   extensions: ExtensionsConfigSchema.default({}),
   modelsDev: ModelsDevConfigSchema,
   stt: STTConfigSchema.optional(),
@@ -746,6 +759,9 @@ export const ConfigSchema = z.object({
     defaultTimezone: 'UTC',
     historyRetentionDays: 7,
     enableMetrics: true,
+  },
+  goals: {
+    maxTurns: 20,
   },
   extensions: {
     allow: [],

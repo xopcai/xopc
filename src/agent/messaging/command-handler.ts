@@ -13,6 +13,7 @@ import type { CompactionResult } from '../memory/compaction.js';
 import { createLogger } from '../../utils/logger.js';
 import { commandRegistry, createCommandContext } from '../../chat-commands/index.js';
 import { getAllProviders, getModelsByProvider, getProviderDisplayName } from '../../providers/index.js';
+import type { PersistentGoalApis } from '../goals/persistent-goal-apis.js';
 
 const log = createLogger('CommandHandler');
 
@@ -27,6 +28,8 @@ export interface CommandContext {
   chatId: string;
   senderId: string;
   isGroup: boolean;
+  /** From inbound message metadata (thread/account, etc.) for `/goal` continuation routing. */
+  inboundMetadata?: Record<string, unknown>;
 }
 
 export interface CommandHandlerConfig {
@@ -54,6 +57,13 @@ export interface CommandHandlerConfig {
     sessionKey: string,
     mode: 'list' | 'detail' | 'json',
   ) => Promise<string>;
+
+  getPersistentGoalApisForCommand: (routing: {
+    sessionKey: string;
+    channel: string;
+    chatId: string;
+    inboundMetadata?: Record<string, unknown>;
+  }) => PersistentGoalApis;
 }
 
 export class CommandHandler {
@@ -69,6 +79,7 @@ export class CommandHandler {
   private compactSession?: CommandHandlerConfig['compactSession'];
   private btwQuery?: CommandHandlerConfig['btwQuery'];
   private getSessionContextReport?: CommandHandlerConfig['getSessionContextReport'];
+  private getPersistentGoalApisForCommand: CommandHandlerConfig['getPersistentGoalApisForCommand'];
 
   constructor(handlerConfig: CommandHandlerConfig) {
     this.config = handlerConfig.config;
@@ -83,6 +94,7 @@ export class CommandHandler {
     this.compactSession = handlerConfig.compactSession;
     this.btwQuery = handlerConfig.btwQuery;
     this.getSessionContextReport = handlerConfig.getSessionContextReport;
+    this.getPersistentGoalApisForCommand = handlerConfig.getPersistentGoalApisForCommand;
   }
 
   /** Replace config reference after hot reload or gateway PATCH so commands see current defaults. */
@@ -198,6 +210,12 @@ export class CommandHandler {
       compactSession: this.compactSession,
       btwQuery: this.btwQuery,
       getSessionContextReport: this.getSessionContextReport,
+      persistentGoalApis: this.getPersistentGoalApisForCommand({
+        sessionKey: context.sessionKey,
+        channel: context.channel,
+        chatId: context.chatId,
+        inboundMetadata: context.inboundMetadata,
+      }),
     });
 
     const result = await commandRegistry.execute(commandName, cmdCtx, args);
@@ -334,6 +352,12 @@ export class CommandHandler {
       compactSession: this.compactSession,
       btwQuery: this.btwQuery,
       getSessionContextReport: this.getSessionContextReport,
+      persistentGoalApis: this.getPersistentGoalApisForCommand({
+        sessionKey: context.sessionKey,
+        channel: context.channel,
+        chatId: context.chatId,
+        inboundMetadata: context.inboundMetadata,
+      }),
     });
 
     const result = await commandRegistry.execute(commandName, wrapped, args);

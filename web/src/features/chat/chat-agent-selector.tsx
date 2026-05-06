@@ -98,9 +98,9 @@ export function ChatAgentSelector({
             selectComboboxTriggerFocusClass,
             'disabled:cursor-not-allowed disabled:opacity-50',
             'dark:border-edge-subtle dark:hover:bg-surface-hover/55',
-            // Compact header: shrink-to-fit label, max ~10ch text + chrome; drop combobox min-w-[10rem].
+            // Compact header: shrink-to-fit label, max ~15ch text + chrome; drop combobox min-w-[10rem].
             compact &&
-              'min-w-0 max-w-[min(calc(10ch+3rem),calc(100vw-8rem))] py-1.5 text-[13px]',
+              'min-w-0 max-w-[min(calc(15ch+3rem),calc(100vw-8rem))] py-1.5 text-[13px]',
             className,
           )}
         >
@@ -110,7 +110,7 @@ export function ChatAgentSelector({
           <span
             className={cn(
               'min-w-0 truncate text-left',
-              compact ? 'max-w-[10ch] shrink' : 'flex-1',
+              compact ? 'max-w-[15ch] shrink' : 'flex-1',
             )}
           >
             {label}
