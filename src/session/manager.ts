@@ -281,7 +281,7 @@ export class SessionManager extends EventEmitter {
     return this.store.loadMessages(key);
   }
 
-  /** Wrapped transcript document (stable id, compaction history); null for legacy bare-array files. */
+  /** Wrapped transcript document (stable id, compaction history); null if missing or not a valid envelope. */
   async loadTranscriptDocument(key: string): Promise<XopcSessionTranscriptV1 | null> {
     return this.store.loadTranscriptDocument(key);
   }

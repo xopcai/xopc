@@ -55,8 +55,17 @@ function normalizeTranscriptEnvelope(o: Record<string, unknown>): XopcSessionTra
   const updatedAt = o.updatedAt as string;
   const createdAt = typeof o.createdAt === 'string' ? o.createdAt : updatedAt;
   const rawCompactions = Array.isArray(o.compactions) ? o.compactions : [];
-  const compactions = rawCompactions.filter(isCompactionRecord);
-  const rows = transcriptRowsFromJsonArray(o.messages as unknown[]);
+  if (rawCompactions.length > 0 && rawCompactions.some((x) => !isCompactionRecord(x))) {
+    return null;
+  }
+  const compactions = rawCompactions as TranscriptCompactionRecord[];
+
+  const rawMsgs = o.messages as unknown[];
+  const rows = transcriptRowsFromJsonArray(rawMsgs);
+  if (rows.length !== rawMsgs.length) {
+    return null;
+  }
+
   return {
     type: XOPC_SESSION_TRANSCRIPT_TYPE,
     version: o.version as number,
@@ -81,8 +90,8 @@ function isCompactionRecord(x: unknown): x is TranscriptCompactionRecord {
 }
 
 /**
- * Parse stored transcript JSON: legacy bare `AgentMessage[]` or wrapped {@link XopcSessionTranscriptV1}.
- * `messages` is {@link buildSessionContextForLlm} of `rows` (LLM-only) for backward-compatible call sites.
+ * Parse stored transcript JSON: only wrapped {@link XopcSessionTranscriptV1} documents are accepted.
+ * `messages` is {@link buildSessionContextForLlm} of `rows` (LLM-only).
  */
 export function parseStoredTranscriptJson(raw: string): {
   rows: TranscriptStoredRow[];
@@ -96,23 +105,11 @@ export function parseStoredTranscriptJson(raw: string): {
     return { rows: [], messages: [], envelope: null };
   }
 
-  if (Array.isArray(parsed)) {
-    const rows = transcriptRowsFromJsonArray(parsed);
-    const messages = buildSessionContextForLlm(rows);
-    return { rows, messages, envelope: null };
-  }
-
-  if (parsed && typeof parsed === 'object') {
-    const o = parsed as Record<string, unknown>;
-    const envelope = normalizeTranscriptEnvelope(o);
+  if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+    const envelope = normalizeTranscriptEnvelope(parsed as Record<string, unknown>);
     if (envelope) {
       const messages = buildSessionContextForLlm(envelope.messages);
       return { rows: envelope.messages, messages, envelope };
-    }
-    if (Array.isArray(o.messages)) {
-      const rows = transcriptRowsFromJsonArray(o.messages as unknown[]);
-      const messages = buildSessionContextForLlm(rows);
-      return { rows, messages, envelope: null };
     }
   }
 

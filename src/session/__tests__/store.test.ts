@@ -328,8 +328,8 @@ describe('SessionStore', () => {
       expect(bare?.transcriptSummary).toBeUndefined();
     });
 
-    it('loads legacy bare-array transcript files', async () => {
-      const key = 'main:telegram:default:dm:legacyarr';
+    it('ignores bare-array transcript files on disk (not a wrapped document)', async () => {
+      const key = 'main:telegram:default:dm:bareonly';
       const safeKey = key.replace(/[^a-zA-Z0-9_-]/g, '_');
       const jsonPath = join(
         tempDir,
@@ -338,11 +338,10 @@ describe('SessionStore', () => {
         `${safeKey}.json`,
       );
       mkdirSync(dirname(jsonPath), { recursive: true });
-      writeFileSync(jsonPath, JSON.stringify([{ role: 'user', content: 'legacy only' }]));
+      writeFileSync(jsonPath, JSON.stringify([{ role: 'user', content: 'ignored' }]));
 
       const loaded = await store.loadMessages(key);
-      expect(loaded).toHaveLength(1);
-      expect((loaded[0] as { content?: string }).content).toBe('legacy only');
+      expect(loaded).toHaveLength(0);
       expect(await store.loadTranscriptDocument(key)).toBeNull();
     });
 

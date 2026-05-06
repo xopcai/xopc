@@ -345,6 +345,7 @@ cd web && pnpm run build                  # → ../dist/gateway/static/root (gat
 
 ### Session transcript (LLM vs on-disk rows)
 
+- **On-disk format:** Session JSON files must be a wrapped `xopc_session_transcript` document (see `src/session/transcript-format.ts`). Bare message arrays and partial objects are rejected at parse time.
 - **Model input:** Use `SessionStore.loadMessages` / `sessionStore.load` (they apply `buildSessionContextForLlm`). If you parse transcript JSON yourself, run `buildSessionContextForLlm(rows)` before passing history to pi-agent or any provider.
 - **Webchat abort cutoff:** `POST /api/agent` accepts optional `clientCreatedAtMs`. When it is **omitted**, `abortCutoffTimestamp` does **not** drop stale POSTs (clients must send send-time for skip semantics).
 - **Audit rows on disk:** `kind: 'context'` entries persist for ops/UI via `GET /api/sessions/:key?include=transcriptRows` (comma-separated with `transcript` if you also want `transcriptSummary`).

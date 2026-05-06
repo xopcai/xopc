@@ -10,12 +10,12 @@ import {
 } from '../transcript-format.js';
 
 describe('transcript-format', () => {
-  it('parses legacy JSON array', () => {
+  it('rejects bare JSON array (not a wrapped transcript)', () => {
     const raw = JSON.stringify([{ role: 'user', content: 'hi' }] as AgentMessage[]);
     const { messages, rows, envelope } = parseStoredTranscriptJson(raw);
     expect(envelope).toBeNull();
-    expect(messages).toHaveLength(1);
-    expect(rows).toHaveLength(1);
+    expect(messages).toHaveLength(0);
+    expect(rows).toHaveLength(0);
   });
 
   it('parses wrapped v1 document', () => {
@@ -76,7 +76,7 @@ describe('transcript-format', () => {
     expect(third.compactions).toHaveLength(2);
   });
 
-  it('filters invalid compaction entries on parse', () => {
+  it('rejects transcript when compactions array contains invalid entries', () => {
     const raw = JSON.stringify({
       type: XOPC_SESSION_TRANSCRIPT_TYPE,
       version: CURRENT_SESSION_TRANSCRIPT_VERSION,
@@ -87,6 +87,6 @@ describe('transcript-format', () => {
       compactions: [{ at: 1 }, { incomplete: true }],
     });
     const { envelope } = parseStoredTranscriptJson(raw);
-    expect(envelope?.compactions).toBeUndefined();
+    expect(envelope).toBeNull();
   });
 });

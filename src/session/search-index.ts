@@ -44,7 +44,7 @@ export class SessionSearchIndex {
           continue;
         }
         const { messages, rows, envelope } = parseStoredTranscriptJson(raw);
-        if (!envelope && messages.length === 0) {
+        if (!envelope) {
           continue;
         }
 
