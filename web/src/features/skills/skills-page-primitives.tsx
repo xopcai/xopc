@@ -47,3 +47,24 @@ export function SkillListRowSkeleton() {
     </div>
   );
 }
+
+/** Taller row — matches marketplace cards (meta pills + install button) to avoid layout jump after fetch. */
+export function MarketplaceSkillListRowSkeleton() {
+  const skel =
+    'animate-pulse motion-reduce:animate-none rounded-md bg-surface-hover dark:bg-surface-active/50';
+  return (
+    <div className="flex items-center gap-4 px-4 py-3.5" aria-hidden>
+      <div className={cn('size-11 shrink-0 rounded-xl', skel)} />
+      <div className="min-w-0 flex-1 space-y-2 pr-2">
+        <div className={cn('h-4 max-w-[12rem]', skel)} />
+        <div className={cn('h-3 w-full max-w-xl rounded', skel)} />
+        <div className="flex flex-wrap gap-1.5 pt-0.5">
+          <div className={cn('h-5 w-[5.5rem] rounded-md', skel)} />
+          <div className={cn('h-5 w-16 rounded-md', skel)} />
+          <div className={cn('h-5 w-14 rounded-md', skel)} />
+        </div>
+      </div>
+      <div className={cn('h-9 min-w-[6.5rem] shrink-0 rounded-lg', skel)} />
+    </div>
+  );
+}

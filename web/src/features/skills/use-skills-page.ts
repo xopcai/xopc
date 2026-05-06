@@ -1,10 +1,19 @@
-import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type DragEvent } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useState,
+  type ChangeEvent,
+  type DragEvent,
+} from 'react';
 import { useLocation, useSearchParams } from 'react-router-dom';
 
 import {
   deleteSkill,
   getMarketplaceCategories,
   getMarketplacePackageDetail,
+  getMarketplaceProvider,
   getMarketplaceSkills,
   getSkillMarkdown,
   getSkills,
@@ -97,6 +106,8 @@ export function useSkillsPage() {
   const [marketCategoryId, setMarketCategoryId] = useState('');
   const [mpCategories, setMpCategories] = useState<MarketplaceCategoryItem[]>([]);
   const [mpCategoriesError, setMpCategoriesError] = useState<string | null>(null);
+  const [mpCategoriesLoading, setMpCategoriesLoading] = useState(false);
+  const [marketplaceProviderId, setMarketplaceProviderId] = useState<'store' | 'skillhub' | null>(null);
 
   const load = useCallback(
     async (opts?: { silent?: boolean }): Promise<{ ok: true } | { ok: false; message: string }> => {
@@ -128,6 +139,24 @@ export function useSkillsPage() {
   }, [hasToken, load]);
 
   useEffect(() => {
+    if (!hasToken) {
+      setMarketplaceProviderId(null);
+      return;
+    }
+    let cancelled = false;
+    void getMarketplaceProvider()
+      .then((info) => {
+        if (!cancelled) setMarketplaceProviderId(info.provider);
+      })
+      .catch(() => {
+        if (!cancelled) setMarketplaceProviderId(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [hasToken]);
+
+  useEffect(() => {
     const nextQ = searchParams.get('q') ?? '';
     const nextTabRaw = searchParams.get('tab');
     const nextSourceRaw = searchParams.get('source');
@@ -153,10 +182,27 @@ export function useSkillsPage() {
     setMarketPage(1);
   }, [searchQuery, marketSort, mainTab, marketCategoryId]);
 
+  /** Before paint: avoid one frame of empty/stale list then skeleton (useEffect runs too late). */
+  useLayoutEffect(() => {
+    if (!hasToken || mainTab !== 'marketplace') return;
+    setMpLoading(true);
+  }, [hasToken, mainTab, marketCategoryId, marketPage, marketSort, searchQuery]);
+
+  useLayoutEffect(() => {
+    if (!hasToken || mainTab !== 'marketplace') return;
+    setMpCategoriesLoading(true);
+  }, [hasToken, mainTab]);
+
+  useEffect(() => {
+    if (mainTab === 'marketplace') return;
+    setMpCategories([]);
+    setMpCategoriesError(null);
+    setMpCategoriesLoading(false);
+  }, [mainTab]);
+
   useEffect(() => {
     if (!hasToken || mainTab !== 'marketplace') return;
     let cancelled = false;
-    setMpLoading(true);
     setMpError(null);
     void getMarketplaceSkills({
       q: searchQuery.trim() || undefined,
@@ -203,9 +249,13 @@ export function useSkillsPage() {
           setMpCategories([]);
           setMpCategoriesError(e instanceof Error ? e.message : sk.marketplaceCategoriesFailed);
         }
+      })
+      .finally(() => {
+        if (!cancelled) setMpCategoriesLoading(false);
       });
     return () => {
       cancelled = true;
+      setMpCategoriesLoading(false);
     };
   }, [hasToken, mainTab, sk.marketplaceCategoriesFailed]);
 
@@ -631,6 +681,8 @@ export function useSkillsPage() {
     setMarketCategoryId,
     mpCategories,
     mpCategoriesError,
+    mpCategoriesLoading,
+    marketplaceProviderId,
     builtinTabStats,
     userTabStats,
     detailEnabled,

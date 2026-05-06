@@ -21,7 +21,11 @@ import { interaction } from '@/lib/interaction';
 import { SkillCardIcon } from '@/features/skills/skill-card-icon';
 import { SkillCatalogStructuredPreview } from '@/features/skills/skill-catalog-structured-preview';
 import { SkillsPageHeaderEnd } from '@/features/skills/skills-page-header-end';
-import { SkillEnableSwitch, SkillListRowSkeleton } from '@/features/skills/skills-page-primitives';
+import {
+  MarketplaceSkillListRowSkeleton,
+  SkillEnableSwitch,
+  SkillListRowSkeleton,
+} from '@/features/skills/skills-page-primitives';
 import { SKILL_LIST_SKELETON_COUNT } from '@/features/skills/skills-page.constants';
 import { interpolate } from '@/features/skills/skills-page.utils';
 import type { SkillsPageVm } from '@/features/skills/use-skills-page';
@@ -82,6 +86,8 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
     setMarketCategoryId,
     mpCategories,
     mpCategoriesError,
+    mpCategoriesLoading,
+    marketplaceProviderId,
     builtinTabStats,
     userTabStats,
     detailEnabled,
@@ -195,13 +201,17 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
 
         <section className="flex flex-col gap-4">
           <div className="flex flex-col gap-3 border-b border-edge-subtle pb-3 sm:flex-row sm:items-center sm:justify-between dark:border-edge-subtle">
-            <div className="flex gap-1" role="tablist" aria-label={sk.skillsNavAria}>
+            <div
+              className="flex flex-wrap gap-x-1 gap-y-1"
+              role="tablist"
+              aria-label={sk.skillsNavAria}
+            >
               <button
                 type="button"
                 role="tab"
                 aria-selected={mainTab === 'marketplace'}
                 className={cn(
-                  'relative rounded-md px-3 py-2 text-sm font-medium transition-colors',
+                  'relative max-w-full rounded-md px-3 py-2 text-left text-sm font-medium transition-colors sm:text-center',
                   mainTab === 'marketplace' ? 'text-fg' : 'text-fg-muted hover:text-fg',
                   mainTab === 'marketplace' &&
                     'after:absolute after:bottom-0 after:left-1/2 after:h-0.5 after:w-9 after:-translate-x-1/2 after:rounded-full after:bg-accent',
@@ -209,6 +219,9 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
                 onClick={() => setMainTab('marketplace')}
               >
                 {sk.tabMarketplace}
+                {marketplaceProviderId ? (
+                  <span className="font-normal text-fg-muted">({marketplaceProviderId})</span>
+                ) : null}
               </button>
               <button
                 type="button"
@@ -247,7 +260,7 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
             </div>
             <div
               className={cn(
-                'flex min-w-0 items-center gap-2',
+                'flex min-h-9 min-w-0 items-center gap-2',
                 mainTab === 'user'
                   ? 'flex-nowrap overflow-x-auto pb-0.5 sm:justify-end'
                   : 'flex-wrap sm:justify-end',
@@ -343,66 +356,75 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
                   </DropdownMenu.Portal>
                 </DropdownMenu.Root>
               ) : null}
+              {mainTab === 'builtin' ? (
+                <div className="h-9 min-w-[9rem] shrink-0" aria-hidden />
+              ) : null}
             </div>
           </div>
 
           {mainTab === 'marketplace' ? (
             <>
-              <div className="flex items-center justify-between">
-                <p className="text-xs font-medium uppercase tracking-wide text-fg-subtle">
-                  {sk.sectionMarketplace}
-                </p>
-                <span className="rounded-md bg-surface-hover/60 px-2 py-0.5 text-[11px] text-fg-subtle dark:bg-surface-active/50">
-                  {mpPayload?.provider === 'skillhub'
-                    ? 'SkillHub (skillhub.cn)'
-                    : 'xopc Store (store.xopc.ai)'}
-                </span>
+              <div
+                className={cn(
+                  '-mx-1 flex min-h-[2.75rem] items-center gap-2 overflow-x-auto px-1 pb-1 pt-0.5 [scrollbar-width:thin]',
+                  !mpCategoriesLoading && mpCategories.length === 0 && 'min-h-0 pb-0 pt-0',
+                )}
+                role={mpCategories.length > 0 || mpCategoriesLoading ? 'tablist' : undefined}
+                aria-label={
+                  mpCategories.length > 0 || mpCategoriesLoading ? sk.marketplaceCategoriesAria : undefined
+                }
+              >
+                {mpCategories.length > 0 ? (
+                  <>
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={marketCategoryId === ''}
+                      className={cn(
+                        'shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
+                        interaction.focusRingPanel,
+                        marketCategoryId === ''
+                          ? 'border-fg bg-fg text-surface-panel dark:border-fg dark:bg-fg dark:text-surface-base'
+                          : 'border-edge bg-surface-panel text-fg-muted hover:border-edge-strong hover:text-fg dark:border-edge dark:bg-surface-hover/40',
+                      )}
+                      onClick={() => setMarketCategoryId('')}
+                    >
+                      {sk.marketplaceCategoryAll}
+                    </button>
+                    {mpCategories.map((c) => {
+                      const selected = marketCategoryId === c.id;
+                      return (
+                        <button
+                          key={c.id}
+                          type="button"
+                          role="tab"
+                          aria-selected={selected}
+                          className={cn(
+                            'max-w-[14rem] shrink-0 truncate rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
+                            interaction.focusRingPanel,
+                            selected
+                              ? 'border-fg bg-fg text-surface-panel dark:border-fg dark:bg-fg dark:text-surface-base'
+                              : 'border-edge bg-surface-panel text-fg-muted hover:border-edge-strong hover:text-fg dark:border-edge dark:bg-surface-hover/40',
+                          )}
+                          title={c.label}
+                          onClick={() => setMarketCategoryId(c.id)}
+                        >
+                          {c.label}
+                        </button>
+                      );
+                    })}
+                  </>
+                ) : mpCategoriesLoading ? (
+                  <div className="flex gap-2 px-1" aria-hidden>
+                    {Array.from({ length: 5 }, (_, i) => (
+                      <div
+                        key={i}
+                        className="h-8 w-[4.5rem] shrink-0 animate-pulse rounded-full bg-surface-hover motion-reduce:animate-none dark:bg-surface-active/50"
+                      />
+                    ))}
+                  </div>
+                ) : null}
               </div>
-              {mpCategories.length > 0 ? (
-                <div
-                  role="tablist"
-                  aria-label={sk.marketplaceCategoriesAria}
-                  className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 pt-0.5 [scrollbar-width:thin]"
-                >
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={marketCategoryId === ''}
-                    className={cn(
-                      'shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
-                      interaction.focusRingPanel,
-                      marketCategoryId === ''
-                        ? 'border-fg bg-fg text-surface-panel dark:border-fg dark:bg-fg dark:text-surface-base'
-                        : 'border-edge bg-surface-panel text-fg-muted hover:border-edge-strong hover:text-fg dark:border-edge dark:bg-surface-hover/40',
-                    )}
-                    onClick={() => setMarketCategoryId('')}
-                  >
-                    {sk.marketplaceCategoryAll}
-                  </button>
-                  {mpCategories.map((c) => {
-                    const selected = marketCategoryId === c.id;
-                    return (
-                      <button
-                        key={c.id}
-                        type="button"
-                        role="tab"
-                        aria-selected={selected}
-                        className={cn(
-                          'max-w-[14rem] shrink-0 truncate rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
-                          interaction.focusRingPanel,
-                          selected
-                            ? 'border-fg bg-fg text-surface-panel dark:border-fg dark:bg-fg dark:text-surface-base'
-                            : 'border-edge bg-surface-panel text-fg-muted hover:border-edge-strong hover:text-fg dark:border-edge dark:bg-surface-hover/40',
-                        )}
-                        title={c.label}
-                        onClick={() => setMarketCategoryId(c.id)}
-                      >
-                        {c.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              ) : null}
               {mpCategoriesError ? (
                 <p className="text-xs text-red-600 dark:text-red-400" role="alert">
                   {mpCategoriesError}
@@ -415,7 +437,7 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
                   aria-label={sk.loading}
                 >
                   {Array.from({ length: SKILL_LIST_SKELETON_COUNT }, (_, i) => (
-                    <SkillListRowSkeleton key={i} />
+                    <MarketplaceSkillListRowSkeleton key={i} />
                   ))}
                 </div>
               ) : mpError ? (
@@ -439,14 +461,14 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
                         <article
                           key={row.id}
                           className={cn(
-                            'group relative flex flex-col gap-3 border-b border-edge-subtle px-4 py-3.5 last:border-b-0 sm:flex-row sm:items-center',
+                            'group relative flex items-center gap-4 border-b border-edge-subtle px-4 py-3.5 last:border-b-0',
                             'transition-colors hover:bg-surface-hover/50 dark:hover:bg-surface-hover/25',
                           )}
                         >
                           <button
                             type="button"
                             className={cn(
-                              'flex min-w-0 flex-1 cursor-pointer items-start gap-4 rounded-xl text-left outline-none',
+                              'flex min-w-0 flex-1 cursor-pointer items-center gap-4 rounded-lg text-left outline-none',
                               interaction.focusRingPanel,
                             )}
                             onClick={() => void openMarketplaceDetail(row.id, row.name)}
@@ -457,8 +479,8 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
                                 {row.name}
                               </h3>
                               <p
-                                className="mt-0.5 line-clamp-2 text-sm leading-relaxed text-fg-muted"
-                                title={row.description || undefined}
+                                className="mt-0.5 truncate text-sm leading-relaxed text-fg-muted"
+                                title={row.description ? row.description : undefined}
                               >
                                 {row.description || '—'}
                               </p>

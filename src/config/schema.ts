@@ -729,6 +729,7 @@ export const ConfigSchema = z.object({
     },
     maxSseConnections: 100,
     corsOrigins: [],
+    skillsMarketplaceProvider: 'skillhub' as const,
     skillsStoreBaseUrl: 'https://store.xopc.ai',
   },
   tools: {
