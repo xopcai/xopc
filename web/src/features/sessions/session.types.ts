@@ -39,6 +39,8 @@ export interface SessionDetail extends SessionMetadata {
     timestamp?: string;
   }>;
   transcriptSummary?: SessionTranscriptSummary;
+  /** When `GET ...?include=transcriptRows` — full on-disk rows (LLM + `kind: 'context'`). */
+  transcriptRows?: unknown[];
 }
 
 export interface SessionListQuery {

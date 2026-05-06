@@ -22,4 +22,16 @@ describe('shouldSkipWebchatInboundByAbortCutoff', () => {
   it('returns false when client time is after cutoff', () => {
     expect(shouldSkipWebchatInboundByAbortCutoff({ abortCutoffTimestamp: 100 }, 101)).toBe(false);
   });
+
+  describe('contract: clientCreatedAtMs optional', () => {
+    it('does not skip when cutoff is set but clientCreatedAtMs is omitted (non-stale clients)', () => {
+      expect(shouldSkipWebchatInboundByAbortCutoff({ abortCutoffTimestamp: 1_700_000_000_000 }, undefined)).toBe(
+        false,
+      );
+    });
+
+    it('does not skip when cutoff is set but clientCreatedAtMs is NaN', () => {
+      expect(shouldSkipWebchatInboundByAbortCutoff({ abortCutoffTimestamp: 100 }, NaN)).toBe(false);
+    });
+  });
 });

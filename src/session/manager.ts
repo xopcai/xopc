@@ -88,7 +88,7 @@ export class SessionManager extends EventEmitter {
 
   async getSession(
     key: string,
-    options?: { includeTranscriptSummary?: boolean },
+    options?: { includeTranscriptSummary?: boolean; includeTranscriptRows?: boolean },
   ): Promise<SessionDetail | null> {
     const session = await this.store.get(key, options);
     if (session) {
