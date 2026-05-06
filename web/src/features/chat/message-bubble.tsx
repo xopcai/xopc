@@ -29,6 +29,7 @@ import {
 } from '@/features/chat/assistant-message-artifacts';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/cn';
+import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
 import { interaction } from '@/lib/interaction';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -376,36 +377,30 @@ export const MessageBubble = memo(function MessageBubble({
       setInlineImagePreview(att);
     }
   }, []);
-  const handleCopyPlain = useCallback(async () => {
+  const handleCopyPlain = useCallback(() => {
     if (!copyPlainText) return;
-    try {
-      await navigator.clipboard.writeText(copyPlainText);
+    void copyTextToClipboard(copyPlainText).then((ok) => {
+      if (!ok) return;
       setCopyFeedback('plain');
       window.setTimeout(() => setCopyFeedback((f) => (f === 'plain' ? null : f)), 2000);
-    } catch {
-      /* clipboard denied or unavailable */
-    }
+    });
   }, [copyPlainText]);
-  const handleCopyMd = useCallback(async () => {
+  const handleCopyMd = useCallback(() => {
     if (!copyMarkdown) return;
-    try {
-      await navigator.clipboard.writeText(copyMarkdown);
+    void copyTextToClipboard(copyMarkdown).then((ok) => {
+      if (!ok) return;
       setCopyFeedback('markdown');
       window.setTimeout(() => setCopyFeedback((f) => (f === 'markdown' ? null : f)), 2000);
-    } catch {
-      /* clipboard denied or unavailable */
-    }
+    });
   }, [copyMarkdown]);
 
-  const handleCopyUserMessage = useCallback(async () => {
+  const handleCopyUserMessage = useCallback(() => {
     if (!userCopyText) return;
-    try {
-      await navigator.clipboard.writeText(userCopyText);
+    void copyTextToClipboard(userCopyText).then((ok) => {
+      if (!ok) return;
       setCopyFeedback('user');
       window.setTimeout(() => setCopyFeedback((f) => (f === 'user' ? null : f)), 2000);
-    } catch {
-      /* clipboard denied or unavailable */
-    }
+    });
   }, [userCopyText]);
 
   const openDeleteConfirm = useCallback(() => {
@@ -602,7 +597,7 @@ export const MessageBubble = memo(function MessageBubble({
               <button
                 type="button"
                 className={cn(userMessageFooterAction, 'size-8 px-0')}
-                onClick={() => void handleCopyUserMessage()}
+                onClick={handleCopyUserMessage}
                 disabled={!userCopyText}
                 title={copyFeedback === 'user' ? m.chat.messageCopied : m.chat.userMessageCopy}
                 aria-label={copyFeedback === 'user' ? m.chat.messageCopied : m.chat.userMessageCopy}
@@ -633,7 +628,7 @@ export const MessageBubble = memo(function MessageBubble({
             <button
               type="button"
               className={messageActionIconButton}
-              onClick={() => void handleCopyPlain()}
+              onClick={handleCopyPlain}
               disabled={!copyPlainText}
               title={copyFeedback === 'plain' ? m.chat.messageCopied : m.chat.messageCopyPlainText}
               aria-label={copyFeedback === 'plain' ? m.chat.messageCopied : m.chat.messageCopyPlainText}
@@ -647,7 +642,7 @@ export const MessageBubble = memo(function MessageBubble({
             <button
               type="button"
               className={messageActionIconButton}
-              onClick={() => void handleCopyMd()}
+              onClick={handleCopyMd}
               title={copyFeedback === 'markdown' ? m.chat.messageCopied : m.chat.messageCopyMarkdown}
               aria-label={copyFeedback === 'markdown' ? m.chat.messageCopied : m.chat.messageCopyMarkdown}
             >
