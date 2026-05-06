@@ -54,6 +54,8 @@ export function useChatSession() {
   const sessionNameRef = useRef<string | null>(null);
   const thinkingSupportGenRef = useRef(0);
   const userAbortedRef = useRef(false);
+  /** Previous `streaming || sending` to detect idle edge for resuming background webchat runs. */
+  const streamBusyRef = useRef(false);
 
   const sendMessageRef = useRef<
     (
@@ -452,6 +454,22 @@ export function useChatSession() {
     window.addEventListener('agent-stream', onAgentStream as EventListener);
     return () => window.removeEventListener('agent-stream', onAgentStream as EventListener);
   }, [tryResumeAgentRun]);
+
+  useEffect(() => {
+    const busy = streaming || sending;
+    const wasBusy = streamBusyRef.current;
+    streamBusyRef.current = busy;
+    if (!wasBusy || busy) return;
+
+    const key = sessionKeyRef.current;
+    if (!key) return;
+    queueMicrotask(() => {
+      if (sessionKeyRef.current !== key) return;
+      if (senderRef.current.isStreamingFor(key)) return;
+      if (!hasPendingAgentRunForChat(key)) return;
+      void tryResumeAgentRun(key, latestMessagesRef.current ?? []);
+    });
+  }, [streaming, sending, tryResumeAgentRun]);
 
   sendMessageRef.current = sendMessage;
 

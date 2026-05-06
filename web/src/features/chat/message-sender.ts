@@ -62,6 +62,8 @@ export type MessagingCallbacks = {
 export class MessageSender {
   private _abort?: AbortController;
   private _sseChatId = '';
+  /** `runId` from the `status` event for this POST/resume body; do not clear a newer pending run (scheduled continuation). */
+  private _trackedRunId?: string;
 
   get isSending() {
     return !!this._abort;
@@ -83,6 +85,7 @@ export class MessageSender {
     thinkingLevel?: string,
     callbacks?: MessagingCallbacks,
   ): Promise<void> {
+    this._trackedRunId = undefined;
     this._abort = new AbortController();
     this._sseChatId = chatId;
 
@@ -166,6 +169,7 @@ export class MessageSender {
   }
 
   async resume(runId: string, chatId: string, callbacks?: MessagingCallbacks): Promise<void> {
+    this._trackedRunId = undefined;
     this._abort = new AbortController();
     this._sseChatId = chatId;
 
@@ -237,12 +241,22 @@ export class MessageSender {
     const chatId = this._sseChatId;
     if (chatId) {
       try {
-        sessionStorage.removeItem(pendingAgentRunStorageKey(chatId));
+        const key = pendingAgentRunStorageKey(chatId);
+        const raw = sessionStorage.getItem(key);
+        if (raw) {
+          const pr = JSON.parse(raw) as { runId?: string };
+          const stored = typeof pr?.runId === 'string' ? pr.runId : '';
+          if (this._trackedRunId && stored && stored !== this._trackedRunId) {
+            return;
+          }
+        }
+        sessionStorage.removeItem(key);
+        dispatchPendingAgentRunChanged(chatId);
       } catch {
         /* ignore */
       }
-      dispatchPendingAgentRunChanged(chatId);
     }
+    this._trackedRunId = undefined;
   }
 
   private async _consumeSSE(body: ReadableStream<Uint8Array>, callbacks?: MessagingCallbacks): Promise<void> {
@@ -299,6 +313,7 @@ export class MessageSender {
     switch (event) {
       case 'status':
         if (typeof parsed.runId === 'string' && this._sseChatId) {
+          this._trackedRunId = parsed.runId;
           setPendingAgentRun(this._sseChatId, parsed.runId);
         }
         cb?.onStreamStart();
