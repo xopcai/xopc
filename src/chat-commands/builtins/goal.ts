@@ -13,6 +13,7 @@ import {
   PERSISTENT_GOAL_CUSTOM_KEY,
   type PersistentGoalState,
 } from '../../agent/goals/state.js';
+import { applyPersistentGoalUserAction } from '../../agent/goals/patch-from-user-action.js';
 
 function statusLine(state: NonNullable<ReturnType<typeof readPersistentGoal>>): string {
   const turns = `${state.turnsUsed}/${state.maxTurns} turns`;
@@ -78,40 +79,40 @@ const goalCommand: CommandDefinition = {
 
     if (lower === 'pause') {
       const meta = await apis.getSessionMetadata(ctx.sessionKey);
-      const s = readPersistentGoal(meta?.customData as Record<string, unknown> | undefined);
-      if (!s || s.status === 'cleared') {
-        return { content: 'No goal set.', success: true };
-      }
-      if (s.status !== 'active') {
-        return { content: statusLine(s), success: true };
-      }
-      const next = { ...s, status: 'paused' as const, pausedReason: 'user-paused' };
-      const r = await patchGoalMetadata(ctx, (base) =>
-        mergeCustomDataPatch(base, { [PERSISTENT_GOAL_CUSTOM_KEY]: serializePersistentGoal(next) }),
+      const applied = applyPersistentGoalUserAction(
+        meta?.customData as Record<string, unknown> | undefined,
+        'pause',
       );
+      if (applied.kind === 'error') {
+        return { content: applied.error, success: false };
+      }
+      if (applied.kind === 'noop') {
+        return { content: applied.message, success: true };
+      }
+      const r = await patchGoalMetadata(ctx, () => applied.customData);
       if (!r.ok) return { content: 'error' in r ? r.error : 'Failed', success: false };
-      return { content: `⏸ Goal paused: ${next.goal}`, success: true };
+      const s = readPersistentGoal(applied.customData);
+      return { content: `⏸ Goal paused: ${s?.goal ?? ''}`, success: true };
     }
 
     if (lower === 'resume') {
       const meta = await apis.getSessionMetadata(ctx.sessionKey);
-      const s = readPersistentGoal(meta?.customData as Record<string, unknown> | undefined);
-      if (!s || s.status === 'cleared') {
-        return { content: 'No goal to resume.', success: true };
-      }
-      const next = {
-        ...s,
-        status: 'active' as const,
-        pausedReason: undefined,
-        turnsUsed: 0,
-      };
-      const r = await patchGoalMetadata(ctx, (base) =>
-        mergeCustomDataPatch(base, { [PERSISTENT_GOAL_CUSTOM_KEY]: serializePersistentGoal(next) }),
+      const applied = applyPersistentGoalUserAction(
+        meta?.customData as Record<string, unknown> | undefined,
+        'resume',
       );
+      if (applied.kind === 'error') {
+        return { content: applied.error, success: false };
+      }
+      if (applied.kind === 'noop') {
+        return { content: applied.message, success: true };
+      }
+      const r = await patchGoalMetadata(ctx, () => applied.customData);
       if (!r.ok) return { content: 'error' in r ? r.error : 'Failed', success: false };
+      const s = readPersistentGoal(applied.customData);
       return {
         content:
-          `▶ Goal resumed: ${next.goal}\n` +
+          `▶ Goal resumed: ${s?.goal ?? ''}\n` +
           'Send any message to continue, or wait — the next assistant turn will pick up from here.',
         success: true,
       };
@@ -120,11 +121,17 @@ const goalCommand: CommandDefinition = {
     if (lower === 'clear' || lower === 'stop' || lower === 'done') {
       const meta = await apis.getSessionMetadata(ctx.sessionKey);
       const had = !!readPersistentGoal(meta?.customData as Record<string, unknown> | undefined);
-      const r = await patchGoalMetadata(ctx, (base) => {
-        const b = { ...base };
-        delete b[PERSISTENT_GOAL_CUSTOM_KEY];
-        return b;
-      });
+      const applied = applyPersistentGoalUserAction(
+        meta?.customData as Record<string, unknown> | undefined,
+        'clear',
+      );
+      if (applied.kind === 'error') {
+        return { content: applied.error, success: false };
+      }
+      if (applied.kind === 'noop') {
+        return { content: applied.message, success: true };
+      }
+      const r = await patchGoalMetadata(ctx, () => applied.customData);
       if (!r.ok) return { content: 'error' in r ? r.error : 'Failed', success: false };
       return { content: had ? '✓ Goal cleared.' : 'No active goal.', success: true };
     }

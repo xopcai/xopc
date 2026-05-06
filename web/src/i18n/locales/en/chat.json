@@ -281,6 +281,22 @@
       "commandsSection": "Commands",
       "showGroupedMore": "Show {{count}} more"
     },
+    "goal": {
+      "heading": "Standing goal",
+      "turns": "{{used}} / {{max}} turns",
+      "statusActive": "Active",
+      "statusPaused": "Paused",
+      "statusDone": "Done",
+      "agentRunning": "Agent run in progress…",
+      "pause": "Pause",
+      "resume": "Resume",
+      "clear": "Clear",
+      "restart": "Restart budget",
+      "detailsToggle": "Judge details",
+      "lastVerdict": "Last verdict",
+      "lastReason": "Reason",
+      "loadFailed": "Could not load goal state."
+    },
     "atMention": {
       "noResults": "No matches",
       "placeholder": "Search files…",

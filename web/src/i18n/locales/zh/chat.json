@@ -281,6 +281,22 @@
       "commandsSection": "命令",
       "showGroupedMore": "显示另外 {{count}} 条"
     },
+    "goal": {
+      "heading": "持久目标 (/goal)",
+      "turns": "{{used}} / {{max}} 轮",
+      "statusActive": "进行中",
+      "statusPaused": "已暂停",
+      "statusDone": "已完成",
+      "agentRunning": "智能体运行中…",
+      "pause": "暂停",
+      "resume": "继续",
+      "clear": "清除",
+      "restart": "重置预算并重跑",
+      "detailsToggle": "裁判详情",
+      "lastVerdict": "上次判定",
+      "lastReason": "说明",
+      "loadFailed": "无法加载目标状态。"
+    },
     "atMention": {
       "noResults": "无匹配项",
       "placeholder": "搜索文件…",
