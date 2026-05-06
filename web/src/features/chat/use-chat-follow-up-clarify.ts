@@ -9,13 +9,21 @@ import {
 } from 'react';
 
 import type { ClarifyPromptState } from '@/features/chat/clarify-prompt';
-import type { ProgressState } from '@/features/chat/messages.types';
+import {
+  clearFollowUpQueueSnapshot,
+  readFollowUpQueueSnapshot,
+  writeFollowUpQueueSnapshot,
+} from '@/features/chat/follow-up-queue-storage';
 import {
   suggestFollowUpsFromAssistantMessage,
   type FollowUpSuggestionId,
 } from '@/features/chat/follow-up-suggestions';
-import type { Message } from '@/features/chat/messages.types';
-import { MAX_PENDING_FOLLOW_UPS, type PendingFollowUp } from '@/features/chat/pending-follow-up.types';
+import type { Message, ProgressState } from '@/features/chat/messages.types';
+import {
+  FOLLOW_UP_AUTO_SEND_IDLE_MS,
+  MAX_PENDING_FOLLOW_UPS,
+  type PendingFollowUp,
+} from '@/features/chat/pending-follow-up.types';
 import { apiFetch } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
@@ -54,14 +62,19 @@ export type ChatFollowUpClarifyApi = {
   clearFollowUpSuggestions: () => void;
   onClarifyToolEnd: () => void;
   makeOnClarifyRequest: (chatId: string) => (payload: ClarifyPromptState) => void;
-  /** Dequeue next pending follow-up and send it (used after assistant turn finalizes). */
-  flushSteeringQueue: () => void;
+  /**
+   * Dequeue next pending follow-up and send it (awaits POST+SSE; used after assistant turn finalizes).
+   * When `forChatId` is set, no-op if the user navigated away (avoids dequeuing the wrong session's ref).
+   */
+  flushSteeringQueue: (forChatId?: string | null) => Promise<void>;
 };
 
 export function useChatFollowUpClarify(options: {
   sessionKey: string | null;
   decodedKey: string | undefined;
   sessionKeyRef: MutableRefObject<string | null>;
+  /** Same ref as `sendMessage` guard — must match before dequeuing a follow-up. */
+  activeStreamSessionKeyRef: MutableRefObject<string | null>;
   sendingRef: MutableRefObject<boolean>;
   streamingRef: MutableRefObject<boolean>;
   setSending: (v: boolean) => void;
@@ -79,6 +92,7 @@ export function useChatFollowUpClarify(options: {
     sessionKey,
     decodedKey,
     sessionKeyRef,
+    activeStreamSessionKeyRef,
     sendingRef,
     streamingRef,
     setSending,
@@ -101,25 +115,96 @@ export function useChatFollowUpClarify(options: {
   const [editingFollowUpId, setEditingFollowUpId] = useState<string | null>(null);
   const editingFollowUpIdRef = useRef<string | null>(null);
   const [followUpSuggestions, setFollowUpSuggestions] = useState<FollowUpSuggestionId[]>([]);
+  const followUpSuggestionsRef = useRef<FollowUpSuggestionId[]>([]);
+  /** Last `#/chat/:id` segment (decoded); drives flush-save on sidebar navigation before `sessionKey` catches up. */
+  const followUpPrevDecodedKeyRef = useRef<string | undefined>(undefined);
+  /** Last `sessionKey` from loaded session; flush-save when it changes so debounce cancellation cannot drop data. */
+  const followUpPrevLoadedSessionRef = useRef<string | null>(null);
 
   useEffect(() => {
     clarifyPromptRef.current = clarifyPrompt;
   }, [clarifyPrompt]);
 
+  /** Hash route changed: persist the queue for the session we are leaving (URL is source of truth). */
   useEffect(() => {
-    pendingFollowUpsRef.current = [];
-    setPendingFollowUps([]);
-    setFollowUpSuggestions([]);
-    setEditingFollowUpId(null);
-  }, [sessionKey]);
+    const prevRoute = followUpPrevDecodedKeyRef.current;
+    if (prevRoute != null && prevRoute !== decodedKey) {
+      writeFollowUpQueueSnapshot(prevRoute, {
+        pending: structuredClone(pendingFollowUpsRef.current),
+        suggestions: [...followUpSuggestionsRef.current],
+        editingId: editingFollowUpIdRef.current,
+      });
+    }
+    followUpPrevDecodedKeyRef.current = decodedKey;
+    setSteeringFollowUpId(null);
+  }, [decodedKey]);
 
+  /**
+   * When the loaded session id changes, sync-write the previous id's queue (covers debounce cleanup
+   * when `sessionKey` catches up to the URL in the same navigation).
+   * When URL and loaded session match, hydrate from localStorage.
+   */
   useEffect(() => {
-    pendingFollowUpsRef.current = pendingFollowUps;
-  }, [pendingFollowUps]);
+    const prevLoaded = followUpPrevLoadedSessionRef.current;
+    if (prevLoaded != null && prevLoaded !== sessionKey) {
+      writeFollowUpQueueSnapshot(prevLoaded, {
+        pending: structuredClone(pendingFollowUpsRef.current),
+        suggestions: [...followUpSuggestionsRef.current],
+        editingId: editingFollowUpIdRef.current,
+      });
+    }
+    followUpPrevLoadedSessionRef.current = sessionKey;
 
+    if (!sessionKey && !decodedKey) {
+      pendingFollowUpsRef.current = [];
+      setPendingFollowUps([]);
+      followUpSuggestionsRef.current = [];
+      setFollowUpSuggestions([]);
+      setEditingFollowUpId(null);
+      return;
+    }
+    if (!sessionKey || !decodedKey || sessionKey !== decodedKey) {
+      return;
+    }
+
+    const snap = readFollowUpQueueSnapshot(sessionKey);
+    if (snap) {
+      const pending = structuredClone(snap.pending);
+      const suggestions = [...snap.suggestions];
+      pendingFollowUpsRef.current = pending;
+      setPendingFollowUps(pending);
+      followUpSuggestionsRef.current = suggestions;
+      setFollowUpSuggestions(suggestions);
+      setEditingFollowUpId(snap.editingId);
+    } else {
+      pendingFollowUpsRef.current = [];
+      setPendingFollowUps([]);
+      followUpSuggestionsRef.current = [];
+      setFollowUpSuggestions([]);
+      setEditingFollowUpId(null);
+    }
+  }, [sessionKey, decodedKey]);
+
+  /**
+   * Debounced persist. While `sessionRoutePending`, the in-memory queue still belongs to
+   * `sessionKey` (loaded), not `decodedKey` (URL) — write under `sessionKey` so we do not clobber the target chat.
+   */
   useEffect(() => {
-    editingFollowUpIdRef.current = editingFollowUpId;
-  }, [editingFollowUpId]);
+    const diskKey =
+      sessionKey != null && decodedKey != null && sessionKey !== decodedKey
+        ? sessionKey
+        : (sessionKey ?? decodedKey ?? null);
+    if (!diskKey) return;
+    const t = window.setTimeout(() => {
+      if (sessionKeyRef.current !== diskKey) return;
+      writeFollowUpQueueSnapshot(diskKey, {
+        pending: structuredClone(pendingFollowUpsRef.current),
+        suggestions: [...followUpSuggestionsRef.current],
+        editingId: editingFollowUpIdRef.current,
+      });
+    }, 280);
+    return () => window.clearTimeout(t);
+  }, [sessionKey, decodedKey, pendingFollowUps, followUpSuggestions, editingFollowUpId, sessionKeyRef]);
 
   useEffect(() => {
     if (!decodedKey) return;
@@ -135,24 +220,31 @@ export function useChatFollowUpClarify(options: {
   }, []);
 
   const clearPendingFollowUps = useCallback(() => {
+    const key = sessionKeyRef.current;
+    if (key) clearFollowUpQueueSnapshot(key);
     pendingFollowUpsRef.current = [];
     setPendingFollowUps([]);
     setEditingFollowUpId(null);
-  }, []);
+  }, [sessionKeyRef]);
 
   const dismissClarifyAndClearPending = useCallback(() => {
+    const key = sessionKeyRef.current;
+    if (key) clearFollowUpQueueSnapshot(key);
     pendingFollowUpsRef.current = [];
     setPendingFollowUps([]);
     setClarifyPrompt(null);
     setEditingFollowUpId(null);
-  }, []);
+  }, [sessionKeyRef]);
 
   const clearFollowUpSuggestions = useCallback(() => {
+    followUpSuggestionsRef.current = [];
     setFollowUpSuggestions([]);
   }, []);
 
   const refreshFollowUpSuggestions = useCallback((appended: Message) => {
-    setFollowUpSuggestions(suggestFollowUpsFromAssistantMessage(appended));
+    const next = suggestFollowUpsFromAssistantMessage(appended);
+    followUpSuggestionsRef.current = next;
+    setFollowUpSuggestions(next);
   }, []);
 
   const onClarifyToolEnd = useCallback(() => {
@@ -172,7 +264,14 @@ export function useChatFollowUpClarify(options: {
     [shouldApplyStreamUpdate, sendingRef, streamingRef, setSending, setStreaming, setProgress],
   );
 
-  const flushSteeringQueue = useCallback(() => {
+  const flushSteeringQueue = useCallback(async (forChatId?: string | null) => {
+    const routeSk = sessionKeyRef.current;
+    if (forChatId != null && forChatId !== routeSk) {
+      return;
+    }
+    const sk = routeSk;
+    if (!sk) return;
+
     let q = pendingFollowUpsRef.current;
     while (q.length > 0 && !q[0].text.trim() && !q[0].attachments?.length) {
       q = q.slice(1);
@@ -182,14 +281,61 @@ export function useChatFollowUpClarify(options: {
       setPendingFollowUps([]);
       return;
     }
+    if (q.length !== pendingFollowUpsRef.current.length) {
+      pendingFollowUpsRef.current = q;
+      setPendingFollowUps(q);
+    }
+
     const [first, ...rest] = q;
+    const trimmed = first.text?.trim() ?? '';
+    const atts = first.attachments;
+    if (!trimmed && !atts?.length) return;
+
+    // Mirror `sendMessage` early return — never dequeue if send would no-op (drops otherwise).
+    if (
+      activeStreamSessionKeyRef.current === sk &&
+      (sendingRef.current || streamingRef.current)
+    ) {
+      return;
+    }
+
     if (editingFollowUpIdRef.current === first.id) {
       setEditingFollowUpId(null);
     }
     pendingFollowUpsRef.current = rest;
     setPendingFollowUps(rest);
-    void sendMessageRef.current(first.text, first.attachments, first.thinkingLevel);
-  }, [sendMessageRef]);
+    await sendMessageRef.current(first.text, first.attachments, first.thinkingLevel);
+  }, [sendMessageRef, sessionKeyRef, activeStreamSessionKeyRef, sendingRef, streamingRef]);
+
+  /**
+   * After hydration or returning to a chat, resume the auto-send chain if the queue has rows and the
+   * session is idle (covers skipped `finalizeMessage` timeouts when switching chats mid-delay).
+   */
+  useEffect(() => {
+    if (!sessionKey || sessionKey !== decodedKey) return;
+    if (clarifyPrompt) return;
+    if (pendingFollowUps.length === 0) return;
+    if (sendingRef.current || streamingRef.current) return;
+    const first = pendingFollowUps[0];
+    if (!first || (!first.text.trim() && !first.attachments?.length)) return;
+
+    const tid = window.setTimeout(() => {
+      if (sessionKeyRef.current !== sessionKey) return;
+      if (sendingRef.current || streamingRef.current) return;
+      if (clarifyPromptRef.current) return;
+      void flushSteeringQueue(sessionKey);
+    }, FOLLOW_UP_AUTO_SEND_IDLE_MS);
+    return () => window.clearTimeout(tid);
+  }, [
+    sessionKey,
+    decodedKey,
+    clarifyPrompt,
+    pendingFollowUps,
+    flushSteeringQueue,
+    sendingRef,
+    streamingRef,
+    sessionKeyRef,
+  ]);
 
   const addPendingFollowUp = useCallback(
     (
@@ -331,6 +477,7 @@ export function useChatFollowUpClarify(options: {
     (text: string) => {
       const t = text.trim();
       if (!t) return;
+      followUpSuggestionsRef.current = [];
       setFollowUpSuggestions([]);
       if (sendingRef.current || streamingRef.current) {
         if (pendingFollowUpsRef.current.length >= MAX_PENDING_FOLLOW_UPS) {
@@ -366,6 +513,10 @@ export function useChatFollowUpClarify(options: {
       setClarifySubmitting(false);
     }
   }, [setError]);
+
+  pendingFollowUpsRef.current = pendingFollowUps;
+  followUpSuggestionsRef.current = followUpSuggestions;
+  editingFollowUpIdRef.current = editingFollowUpId;
 
   return {
     clarifyPrompt,

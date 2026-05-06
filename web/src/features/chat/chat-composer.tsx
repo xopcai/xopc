@@ -439,6 +439,7 @@ export const ChatComposer = memo(function ChatComposer({
     applyAtMentionItem,
     send: actions.send,
     runBusy,
+    pendingFollowUpsCount: pendingFollowUps.length,
     flushSteeringDraft: actions.flushSteeringDraft,
     interruptDraft: actions.interruptDraft,
     editingFollowUpId,
@@ -487,7 +488,7 @@ export const ChatComposer = memo(function ChatComposer({
         </div>
       ) : null}
 
-      {runBusyState && pendingFollowUps.length > 0 ? (
+      {pendingFollowUps.length > 0 ? (
         <div className="max-h-[min(30vh,11rem)] shrink-0 overflow-y-auto overflow-x-hidden border-b border-edge-subtle/80 [scrollbar-gutter:stable] dark:border-edge-subtle/70">
           <ChatPendingFollowUpStack
             items={pendingFollowUps}
@@ -507,7 +508,7 @@ export const ChatComposer = memo(function ChatComposer({
         <div
           className={cn(
             'flex flex-wrap gap-2 border-b border-edge-subtle/90 bg-surface-hover/20 px-4 pb-2 dark:border-edge-subtle',
-            runBusyState && pendingFollowUps.length > 0 ? 'pt-2' : 'pt-3',
+            pendingFollowUps.length > 0 ? 'pt-2' : 'pt-3',
           )}
         >
           {att.attachments.map((a, index) => (
