@@ -6,8 +6,8 @@
 <h1 align="center">xopc</h1>
 
 <p align="center">
-  <strong>超轻量级个人 AI 助手。</strong><br />
-  基于 <strong>Node.js</strong> 与 <strong>TypeScript</strong>、在本地运行的 AI 助手—面向<strong>超级个体</strong>的平台。
+  <strong>The OPC workstation that grows with you.</strong><br />
+  面向<strong>一人公司（OPC）</strong>的超轻量级<strong>个人 AI 助手</strong>。
 </p>
 
 <p align="center">
@@ -40,8 +40,8 @@
 
 | | |
 | --- | --- |
-| **超级个体栈** | 自管一体化平台：终端、网关、即时通讯、cron、技能—拼装工作流，而非依赖托管黑盒。 |
-| **终端优先** | `agent` 交互模式、`-m` 单次提问、结合 cron 的定时任务。 |
+| **OPC 原生** | 一人公司 AI 工作站：从 solo 创始人到规模化—智能体、网关、频道、cron、技能，一切尽在掌控。 |
+| **与你共同成长** | 从单条 CLI 命令起步；随需求演进添加频道、扩展、cron——无供应商锁定。 |
 | **网关 + Web 控制台** | REST、SSE、WebSocket；React 控制台（Vite + Tailwind v4）。 |
 | **频道** | **Telegram**（多账号、流式、语音、文件、策略）；**微信**（网关所在机扫码登录、`channels.weixin`）；另含网关自带的 **网页** 对话界面。 |
 | **模型** | OpenAI、Anthropic、Google、Groq、DeepSeek、OpenRouter、Ollama、Bedrock、Vertex、OAuth、本地推理等——配置切换，无需改代码。 |

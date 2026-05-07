@@ -3,8 +3,8 @@ layout: home
 
 hero:
   name: xopc
-  text: 超轻量级个人 AI 助手
-  tagline: 基于 Node.js + TypeScript、在本地运行的 AI 助手—面向超级个体的平台。
+  text: OPC 工作站
+  tagline: 与你共同成长的一人公司 AI 工作站。
   image:
     src: /logo.svg
     alt: xopc
@@ -17,8 +17,11 @@ hero:
       link: https://github.com/xopcai/xopc
 
 features:
-  - title: 🚀 轻量快速
-    details: 基于 Node.js + TypeScript 构建，依赖最少
+  - title: 🚀 OPC 原生
+    details: "专为一人公司设计：智能体、网关、频道、cron、技能——一切尽在掌控。"
+    link: /zh/getting-started
+  - title: 📈 与你共同成长
+    details: 从 CLI 起步；随需求演进添加频道、扩展、cron——无供应商锁定
     link: /zh/getting-started
   - title: 🔌 扩展系统
     details: 后端钩子与扩展能力；可选 manifest ui，在网关网页控制台沙箱 iframe 中运行（@xopcai/extension-ui-sdk）
@@ -27,7 +30,7 @@ features:
     details: 核心自带 Telegram、微信（Weixin）与网关网页聊天/控制台，并可在控制台中加载扩展的 manifest ui 面板；更多通道可通过扩展接入。
     link: /zh/channels
   - title: 💻 本地优先
-    details: 本地运行、完全掌控—为自管栈的超级个体而设计
+    details: 本地运行、完全掌控——专为自管技术栈的一人公司打造
     link: /zh/configuration
   - title: 🔧 内置工具
     details: 文件操作、网页搜索、Shell 执行等

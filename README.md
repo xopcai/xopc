@@ -6,8 +6,8 @@
 <h1 align="center">xopc</h1>
 
 <p align="center">
-  <strong>Ultra-lightweight personal AI assistant.</strong><br />
-  A <strong>Node.js</strong> + <strong>TypeScript</strong> based AI agent that runs locally—for <strong>super individuals</strong>.
+  <strong>The OPC workstation that grows with you.</strong><br />
+  Ultra-lightweight <strong>personal AI assistant</strong> for <strong>One Person Companies</strong>.
 </p>
 
 <p align="center">
@@ -40,8 +40,8 @@
 
 | | |
 | --- | --- |
-| **Super-individual stack** | One platform you own: terminal, gateway, IM, cron, skills—compose your workflow without a hosted black box. |
-| **Terminal-first** | Interactive `agent` mode, one-shot `-m` messages, cron-backed automations. |
+| **OPC-native** | One Person Company AI workstation: from solo founder to scale—agent, gateway, channels, cron, skills, all in your control. |
+| **Grow with you** | Start with a single CLI command; add channels, extensions, and cron as your needs evolve—no vendor lock-in. |
 | **Gateway + Web UI** | REST, SSE, and WebSocket APIs; React console (Vite + Tailwind v4) for chat and ops. |
 | **Channels** | **Telegram** (multi-account, streaming, voice, documents) and **WeChat (Weixin)** (QR login, policies); **Web** console with the gateway. |
 | **Models** | OpenAI, Anthropic, Google, Groq, DeepSeek, OpenRouter, Ollama, Bedrock, Vertex, OAuth flows, and more — switch in config, no code change. |
