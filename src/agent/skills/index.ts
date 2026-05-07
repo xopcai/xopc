@@ -8,15 +8,7 @@ import { formatSkillsForPrompt } from './format-skills-prompt.js';
 import { parseRequiredEnvVarNames } from './required-env-vars.js';
 import { parseSkillMetadata } from './parse-skill-metadata.js';
 import { parseSkillToolConditions } from './skill-tool-gating.js';
-import type {
-  Skill,
-  SkillMetadata,
-  SkillDiagnostic,
-  LoadSkillsResult,
-  SkillConfig,
-  SkillInstallSpec,
-  SkillsConfig,
-} from './types.js';
+import type { Skill, SkillDiagnostic, LoadSkillsResult, SkillConfig, SkillsConfig } from './types.js';
 
 const log = createLogger('SkillLoader');
 

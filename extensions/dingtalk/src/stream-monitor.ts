@@ -41,13 +41,14 @@ export async function runDingtalkStreamMonitor(deps: DingtalkStreamMonitorDeps):
   const { accountId, clientId, clientSecret, endpoint } = account;
 
   const mod = await import('dingtalk-stream');
-  const DWClient = mod.DWClient as new (opts: Record<string, unknown>) => {
+  type StreamClient = {
     connect(): Promise<void>;
-    disconnect(): Promise<void>;
+    disconnect(): void | Promise<void>;
     registerCallbackListener(topic: string, cb: (res: Record<string, unknown>) => void | Promise<void>): void;
     socketCallBackResponse(messageId: string, body: Record<string, unknown>): void;
     socket?: { readyState?: number };
   };
+  const DWClient = mod.DWClient as unknown as new (opts: Record<string, unknown>) => StreamClient;
   const { TOPIC_ROBOT } = mod as { TOPIC_ROBOT: string };
 
   const client = new DWClient({
@@ -115,7 +116,6 @@ export async function runDingtalkStreamMonitor(deps: DingtalkStreamMonitorDeps):
       senderId,
       senderName: typeof data.senderNick === 'string' ? data.senderNick : undefined,
       isGroup,
-      isDm: !isGroup,
     });
     if (access && access.allowed === false) {
       log.debug({ accountId, reason: access.reason }, 'DingTalk inbound denied');

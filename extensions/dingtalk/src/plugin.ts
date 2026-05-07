@@ -18,6 +18,7 @@ import type {
   ChannelSecurityContext,
   ChatType,
 } from '@xopcai/xopc/channels/plugin-types.js';
+import type { ChannelMeta } from '@xopcai/xopc/channels/plugins/types.core.js';
 import type { ChannelCliLoginAdapter } from '@xopcai/xopc/channels/plugins/types.adapters.js';
 import type { ChannelOnboardAdapter } from '@xopcai/xopc/channels/plugins/types.adapters.js';
 import { createLogger } from '@xopcai/xopc/utils/logger.js';
@@ -41,7 +42,7 @@ export class DingtalkChannelPlugin implements ChannelPlugin<ResolvedDingtalkAcco
     configPrefixes: ['channels.dingtalk'],
   };
 
-  readonly meta = {
+  readonly meta: ChannelMeta = {
     id: 'dingtalk',
     label: 'DingTalk',
     selectionLabel: 'DingTalk (钉钉)',
@@ -49,7 +50,7 @@ export class DingtalkChannelPlugin implements ChannelPlugin<ResolvedDingtalkAcco
     blurb: 'DingTalk enterprise robot via Stream mode (QR app registration).',
     order: 35,
     aliases: ['dd', 'ding'],
-  } as const;
+  };
 
   readonly capabilities: ChannelCapabilities = {
     chatTypes: ['direct', 'group'] as ChatType[],
@@ -79,10 +80,6 @@ export class DingtalkChannelPlugin implements ChannelPlugin<ResolvedDingtalkAcco
   readonly cliLogin: ChannelCliLoginAdapter = dingtalkCliLoginAdapter;
   readonly outbound = createDingtalkOutboundAdapter();
   readonly doctor: ChannelDoctorAdapter = createDingtalkDoctorAdapter();
-
-  readonly mentions = {
-    stripPatterns: () => ['@[^\\s]+'],
-  };
 
   private bus!: MessageBus;
   private cfg!: Config;
