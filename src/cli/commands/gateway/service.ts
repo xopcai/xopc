@@ -73,14 +73,13 @@ export function createInstallCommand(): Command {
           console.log('   sudo systemctl enable xopc-gateway');
           console.log('   sudo systemctl start xopc-gateway');
         } else if (platform === 'darwin') {
-          console.log('🍎 Installing launchd service...');
+          console.log('🍎 Installing LaunchAgent (user)...');
           console.log('');
-          console.log('To install manually, create a launchd plist file:');
-          console.log('   sudo nano /Library/LaunchDaemons/com.xopcai.xopc.gateway.plist');
+          console.log('To install manually, create a plist file:');
+          console.log('   nano ~/Library/LaunchAgents/ai.xopc.xopc.gateway.plist');
           console.log('');
           console.log('Then run:');
-          console.log('   sudo launchctl load /Library/LaunchDaemons/com.xopcai.xopc.gateway.plist');
-          console.log('   sudo launchctl start com.xopcai.xopc.gateway');
+          console.log('   launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/ai.xopc.xopc.gateway.plist');
         } else if (platform === 'win32') {
           console.log('🪟 Installing Windows service...');
           console.log('');
@@ -120,7 +119,9 @@ export function createUninstallCommand(): Command {
         console.log('');
         console.log('To uninstall manually:');
         console.log('   Linux: sudo systemctl stop xopc-gateway && sudo systemctl disable xopc-gateway');
-        console.log('   macOS: sudo launchctl unload /Library/LaunchDaemons/com.xopcai.xopc.gateway.plist');
+        console.log(
+          '   macOS: launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/ai.xopc.xopc.gateway.plist',
+        );
         console.log('   Windows: sc stop xopc-gateway && sc delete xopc-gateway');
         process.exit(0);
       } catch (err) {
@@ -148,7 +149,9 @@ export function createServiceStartCommand(): Command {
       console.log('');
       console.log('To start manually:');
       console.log('   Linux: sudo systemctl start xopc-gateway');
-      console.log('   macOS: sudo launchctl start com.xopcai.xopc.gateway');
+      console.log(
+        '   macOS: launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/ai.xopc.xopc.gateway.plist',
+      );
       console.log('   Windows: sc start xopc-gateway');
       process.exit(0);
     });
