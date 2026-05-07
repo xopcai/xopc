@@ -41,8 +41,8 @@ export function WeixinMoreSettingsSection({
   save: () => Promise<boolean>;
 }) {
   return (
-    <details className="group overflow-hidden rounded-full border border-edge-subtle bg-surface-base open:pb-3 dark:border-edge">
-      <summary className="cursor-pointer list-none rounded-full px-3 py-2.5 text-sm font-medium text-fg transition-colors hover:bg-surface-hover group-open:rounded-b-none [&::-webkit-details-marker]:hidden">
+    <details className="group rounded-xl border border-edge-subtle bg-surface-base open:pb-3 dark:border-edge">
+      <summary className="cursor-pointer list-none rounded-xl px-3 py-2.5 text-sm font-medium text-fg transition-colors hover:bg-surface-hover group-open:rounded-b-none [&::-webkit-details-marker]:hidden">
         <span className="inline-flex items-center gap-2">
           <ChevronDown className="size-4 shrink-0 text-fg-muted transition-transform group-open:rotate-180" />
           {ch.advancedShow}
