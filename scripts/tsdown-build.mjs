@@ -36,7 +36,7 @@ if (existsSync(srcTpl)) {
 // (tsdown emits `dist/extensions/<id>/src/**` but does not copy JSON assets)
 const extensionsRoot = join(root, 'extensions');
 const distExtensionsRoot = join(root, 'dist/extensions');
-for (const extId of ['telegram', 'weixin', 'feishu']) {
+for (const extId of ['telegram', 'weixin', 'feishu', 'dingtalk']) {
   const srcManifest = join(extensionsRoot, extId, 'xopc.extension.json');
   const destDir = join(distExtensionsRoot, extId);
   const destManifest = join(destDir, 'xopc.extension.json');

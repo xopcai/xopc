@@ -1,0 +1,17 @@
+{
+  "id": "dingtalk",
+  "name": "DingTalk Channel",
+  "description": "Bundled DingTalk Stream channel (ships inside @xopcai/xopc dist/)",
+  "version": "0.0.1",
+  "kind": "channel",
+  "main": "src/index.ts",
+  "channels": ["dingtalk"],
+  "activation": {
+    "onChannels": ["dingtalk"],
+    "onCapabilities": ["channel"]
+  },
+  "setup": {
+    "providers": [],
+    "requiresRuntime": true
+  }
+}

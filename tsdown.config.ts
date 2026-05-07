@@ -16,6 +16,8 @@ export default defineConfig({
     './extensions/weixin/src/**/*.ts',
     './extensions/feishu/src/**/*.ts',
     '!./extensions/feishu/src/**/__tests__/**/*.ts',
+    './extensions/dingtalk/src/**/*.ts',
+    '!./extensions/dingtalk/src/**/__tests__/**/*.ts',
   ],
   outDir: 'dist',
   root: '.',
