@@ -7,7 +7,7 @@ import { ChannelImHubCard } from './channel-im-hub-card';
 import { ChannelsRemoveChannelDialog } from './channels-remove-channel-dialog';
 import { DingtalkMoreSettingsSection } from './dingtalk-more-settings-section';
 import { DingtalkQrSetupDialog } from './dingtalk-qr-setup-dialog';
-import { FeishuChannelSettingsDialog } from './feishu-channel-settings-dialog';
+import { FeishuMoreSettingsSection } from './feishu-more-settings-section';
 import { FeishuQrSetupDialog } from './feishu-qr-setup-dialog';
 import { TelegramChannelSettingsDialog } from './telegram-channel-settings-dialog';
 import { useChannelsSettingsPanel } from './use-channels-settings-panel';
@@ -41,8 +41,6 @@ export function ChannelsSettingsPanel() {
     setRemoveTarget,
     weixinSuccessBanner,
     setWeixinSuccessBanner,
-    feishuQrSetupOpen,
-    setFeishuQrSetupOpen,
     dingtalkModalOpen,
     setDingtalkModalOpen,
     feishuSetupSuccessBanner,
@@ -136,6 +134,34 @@ export function ChannelsSettingsPanel() {
   const telegramConfigured = isTelegramConfigured(tg);
   const feishuConfigured = isFeishuConfigured(fs);
   const dingtalkConfigured = isDingtalkConfigured(dt);
+
+  const feishuMoreSettings = (
+    <FeishuMoreSettingsSection
+      ch={ch}
+      form={form}
+      baseline={baseline}
+      showFeishuSecret={showFeishuSecret}
+      setShowFeishuSecret={setShowFeishuSecret}
+      showFeishuWebhookSecrets={showFeishuWebhookSecrets}
+      setShowFeishuWebhookSecrets={setShowFeishuWebhookSecrets}
+      feishuCopied={feishuCopied}
+      feishuWebhookCopied={feishuWebhookCopied}
+      copyFeishuSecret={copyFeishuSecret}
+      copyFeishuWebhookConfig={copyFeishuWebhookConfig}
+      updateFeishu={updateFeishu}
+      updateChannelAgentRoute={updateChannelAgentRoute}
+      feishuAccountsDraft={feishuAccountsDraft}
+      setFeishuAccountsDraft={setFeishuAccountsDraft}
+      feishuAccountsError={feishuAccountsError}
+      onFeishuAccountsBlur={onFeishuAccountsBlur}
+      dmOpts={dmOpts}
+      groupOpts={groupOpts}
+      chatAgents={chatAgents}
+      saving={saving}
+      dirty={dirty}
+      save={save}
+    />
+  );
 
   const dingtalkMoreSettings = (
     <DingtalkMoreSettingsSection
@@ -279,13 +305,6 @@ export function ChannelsSettingsPanel() {
         moreSettings={weixinMoreSettings}
       />
 
-      <FeishuQrSetupDialog
-        open={feishuQrSetupOpen}
-        onOpenChange={setFeishuQrSetupOpen}
-        ch={ch}
-        onSetupSuccess={handleFeishuQrSetupSuccess}
-      />
-
       <TelegramChannelSettingsDialog
         open={telegramModalOpen}
         onOpenChange={setTelegramModalOpen}
@@ -314,33 +333,12 @@ export function ChannelsSettingsPanel() {
         save={save}
       />
 
-      <FeishuChannelSettingsDialog
+      <FeishuQrSetupDialog
         open={feishuModalOpen}
         onOpenChange={setFeishuModalOpen}
         ch={ch}
-        form={form}
-        baseline={baseline}
-        showFeishuSecret={showFeishuSecret}
-        setShowFeishuSecret={setShowFeishuSecret}
-        showFeishuWebhookSecrets={showFeishuWebhookSecrets}
-        setShowFeishuWebhookSecrets={setShowFeishuWebhookSecrets}
-        feishuCopied={feishuCopied}
-        feishuWebhookCopied={feishuWebhookCopied}
-        copyFeishuSecret={copyFeishuSecret}
-        copyFeishuWebhookConfig={copyFeishuWebhookConfig}
-        updateFeishu={updateFeishu}
-        updateChannelAgentRoute={updateChannelAgentRoute}
-        feishuAccountsDraft={feishuAccountsDraft}
-        setFeishuAccountsDraft={setFeishuAccountsDraft}
-        feishuAccountsError={feishuAccountsError}
-        onFeishuAccountsBlur={onFeishuAccountsBlur}
-        dmOpts={dmOpts}
-        groupOpts={groupOpts}
-        chatAgents={chatAgents}
-        saving={saving}
-        dirty={dirty}
-        save={save}
-        onOpenQrSetup={() => setFeishuQrSetupOpen(true)}
+        onSetupSuccess={handleFeishuQrSetupSuccess}
+        moreSettings={feishuMoreSettings}
       />
 
       <DingtalkQrSetupDialog
