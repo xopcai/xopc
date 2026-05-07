@@ -39,7 +39,6 @@ export function useChannelsSettingsPanel() {
   const [removeTarget, setRemoveTarget] = useState<'weixin' | 'telegram' | 'feishu' | 'dingtalk' | null>(null);
   const [weixinSuccessBanner, setWeixinSuccessBanner] = useState<string | null>(null);
   const [feishuQrSetupOpen, setFeishuQrSetupOpen] = useState(false);
-  const [dingtalkQrSetupOpen, setDingtalkQrSetupOpen] = useState(false);
   const [feishuSetupSuccessBanner, setFeishuSetupSuccessBanner] = useState<string | null>(null);
   const [dingtalkSetupSuccessBanner, setDingtalkSetupSuccessBanner] = useState<string | null>(null);
   const [tgAdvanced, setTgAdvanced] = useState(false);
@@ -456,8 +455,6 @@ export function useChannelsSettingsPanel() {
     setWeixinSuccessBanner,
     feishuQrSetupOpen,
     setFeishuQrSetupOpen,
-    dingtalkQrSetupOpen,
-    setDingtalkQrSetupOpen,
     feishuSetupSuccessBanner,
     dingtalkSetupSuccessBanner,
     tgAdvanced,
