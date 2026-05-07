@@ -75,6 +75,8 @@ export function useChatScrollViewport({
 
   /** Coalesce pinned follow-scroll to one rAF per burst (many SSE updates per frame). */
   const followTailRafRef = useRef<number | null>(null);
+  /** Last `scrollTop` after follow logic / user scroll — detects upward moves when `atBottom` state lags one frame. */
+  const lastFollowLayoutScrollTopRef = useRef(0);
 
   useEffect(() => {
     atBottomRef.current = atBottom;
@@ -125,6 +127,8 @@ export function useChatScrollViewport({
       setAtBottom(true);
     }
 
+    lastFollowLayoutScrollTopRef.current = scrollTop;
+
     if (scrollTop < 100 && !atBottomRef.current && hasMore && !loadingMore) {
       void loadMoreMessages();
     }
@@ -142,6 +146,7 @@ export function useChatScrollViewport({
     const el = scrollRef.current;
     if (el) {
       el.scrollTop = el.scrollHeight;
+      lastFollowLayoutScrollTopRef.current = el.scrollTop;
     }
     requestAnimationFrame(() => {
       scrollToBottom(false, true);
@@ -158,6 +163,7 @@ export function useChatScrollViewport({
     const el = scrollRef.current;
     if (el) {
       el.scrollTop = el.scrollHeight;
+      lastFollowLayoutScrollTopRef.current = el.scrollTop;
     }
     requestAnimationFrame(() => {
       scrollToBottom(false, true);
@@ -255,19 +261,52 @@ export function useChatScrollViewport({
    * that as “user left the bottom” and clear `atBottom`. Force keeps follow-the-tail behavior
    * (same idea as Cursor / VS Code chat stick-to-bottom).
    *
+   * Gate on `atBottomRef` (sync from `onScroll` / wheel unpin) plus `scrollTop` trend: when SSE
+   * batches ahead of React state, `atBottom` can still be true while the user has already scrolled
+   * up — without this, follow-scroll yanks the viewport back to the tail on every chunk.
+   *
    * `useLayoutEffect` + coalesced rAF: align with virtual row layout before paint; batch rapid
    * stream chunks into one scroll pass per frame where possible.
    */
   useLayoutEffect(() => {
     if (showSessionLoading) return;
-    if (!atBottom) return;
+
+    const el = scrollRef.current;
+    if (!el) return;
+
+    if (!atBottomRef.current) {
+      lastFollowLayoutScrollTopRef.current = el.scrollTop;
+      return;
+    }
+
+    const st = el.scrollTop;
+    const prevSt = lastFollowLayoutScrollTopRef.current;
+
+    /**
+     * User nudged toward older messages: `scrollTop` dropped. Do not gate on `fromBottom > UNPIN`
+     * — a small upward scroll can still leave `fromBottom` within UNPIN while `onScroll` coalesces,
+     * and follow-scroll + virtual `pinToBottom` would otherwise keep yanking to the tail.
+     * Do not use `fromBottom > UNPIN` alone here: after content height grows, `fromBottom` is
+     * temporarily large before `scrollToBottom` runs; that is not "user reading history".
+     */
+    if (st < prevSt - 1.5) {
+      if (atBottomRef.current) {
+        atBottomRef.current = false;
+        setAtBottom(false);
+      }
+      lastFollowLayoutScrollTopRef.current = st;
+      return;
+    }
 
     if (followTailRafRef.current != null) {
       cancelAnimationFrame(followTailRafRef.current);
     }
     followTailRafRef.current = requestAnimationFrame(() => {
       followTailRafRef.current = null;
+      const root = scrollRef.current;
+      if (!root || !atBottomRef.current) return;
       scrollToBottom(false, true);
+      lastFollowLayoutScrollTopRef.current = root.scrollTop;
     });
     return () => {
       if (followTailRafRef.current != null) {
@@ -275,7 +314,7 @@ export function useChatScrollViewport({
         followTailRafRef.current = null;
       }
     };
-  }, [chatMessages, atBottom, scrollToBottom, showSessionLoading]);
+  }, [chatMessages, scrollToBottom, showSessionLoading]);
 
   useLayoutEffect(() => {
     const el = scrollRef.current;
