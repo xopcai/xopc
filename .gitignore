@@ -20,6 +20,8 @@ extensions/**/src/**/*.js.map
 extensions/**/src/**/*.d.ts
 extensions/**/src/**/*.d.ts.map
 
+extensions/synapse
+
 # Logs
 *.log
 npm-debug.log*
