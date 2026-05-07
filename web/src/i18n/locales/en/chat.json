@@ -267,6 +267,7 @@
     "executionElapsedTitle": "Elapsed time for this run",
     "messageCopyPlainText": "Copy plain text",
     "messageCopyMarkdown": "Copy Markdown",
+    "codeBlockCopy": "Copy",
     "messageCopied": "Copied",
     "userMessageCopy": "Copy message",
     "userMessageRetry": "Retry",

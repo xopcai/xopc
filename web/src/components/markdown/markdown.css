@@ -68,6 +68,144 @@
   border: 1px solid var(--color-edge);
 }
 
+/* Fenced blocks: toolbar + body (injected by MarkdownView) */
+.markdown-code-block {
+  margin: 0 0 1em;
+  border: 1px solid var(--color-edge);
+  border-radius: var(--radius-xl);
+  /* `overflow: hidden` prevents `position: sticky` on the header from reaching the chat scrollport */
+  overflow: visible;
+  background: var(--color-surface-hover);
+}
+
+.markdown-code-block-header {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-height: 2.25rem;
+  padding: 0.35rem 0.65rem 0.35rem 0.85rem;
+  border-bottom: 1px solid var(--color-edge);
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  /* Darker than code pane (`surface-hover`) — opaque toolbar strip */
+  background: var(--color-surface-active);
+}
+
+.markdown-code-block-lang {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.35;
+  letter-spacing: 0.02em;
+  color: var(--color-fg-muted);
+  text-transform: lowercase;
+  user-select: none;
+}
+
+.markdown-code-copy-btn {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.45rem;
+  margin: 0;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-active);
+  color: var(--color-fg-muted);
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.25;
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    background-color 0.15s ease,
+    transform 0.12s ease;
+}
+
+.markdown-code-copy-btn:hover {
+  color: var(--color-fg);
+  background: var(--color-surface-panel);
+}
+
+.markdown-code-copy-btn:active {
+  transform: scale(0.97);
+}
+
+.markdown-code-copy-btn:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.markdown-code-copy-inner {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+}
+
+.markdown-code-copy-btn svg {
+  pointer-events: none;
+}
+
+.markdown-code-copy-label {
+  white-space: nowrap;
+}
+
+.markdown-body .markdown-code-block > pre {
+  margin: 0;
+  border: none;
+  border-radius: 0 0 var(--radius-xl) var(--radius-xl);
+  background: var(--color-surface-hover);
+}
+
+html.dark .markdown-code-block {
+  border-color: var(--color-edge);
+  background: #0d1117;
+}
+
+html.dark .markdown-code-block-header {
+  /* Opaque, darker than `#0d1117` code pane */
+  background: #06080b;
+  border-bottom-color: var(--color-edge);
+}
+
+html.dark .markdown-code-block-lang {
+  color: var(--color-fg-muted);
+}
+
+html.dark .markdown-body .markdown-code-block > pre {
+  background: #0d1117;
+}
+
+html.dark .markdown-code-copy-btn {
+  color: var(--color-fg-subtle);
+  background: #06080b;
+}
+
+html.dark .markdown-code-copy-btn:hover {
+  color: var(--color-fg);
+  background: #121820;
+}
+
+/**
+ * Chat scroll container (`.chat-messages`) uses top padding (`py-4` / `pt-5` in `chat-page.tsx`).
+ * Without offset, `position: sticky; top: 0` aligns to the content box below that padding, leaving a gap.
+ */
+.chat-messages .markdown-code-block-header {
+  top: -1rem;
+}
+
+.chat-messages.chat-messages--compact-welcome .markdown-code-block-header {
+  top: -1.25rem;
+}
+
 .markdown-body pre code {
   background: transparent;
   padding: 0;
@@ -155,6 +293,14 @@
 
 .markdown-body.markdown-compact pre {
   margin-bottom: 0.75em;
+}
+
+.markdown-body.markdown-compact .markdown-code-block {
+  margin-bottom: 0.75em;
+}
+
+.markdown-body.markdown-compact .markdown-code-block > pre {
+  margin-bottom: 0;
 }
 
 /* GitHub Dark hljs when app shell is dark (`html.dark`), scoped to markdown preview */

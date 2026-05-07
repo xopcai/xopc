@@ -267,6 +267,7 @@
     "executionElapsedTitle": "本次执行已耗时",
     "messageCopyPlainText": "复制纯文本",
     "messageCopyMarkdown": "复制 Markdown 格式",
+    "codeBlockCopy": "复制",
     "messageCopied": "已复制",
     "userMessageCopy": "复制消息",
     "userMessageRetry": "重试",

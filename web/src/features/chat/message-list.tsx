@@ -193,9 +193,10 @@ export const MessageList = memo(function MessageList({
             key={virtualRow.key}
             data-index={virtualRow.index}
             ref={virtualizer.measureElement}
-            className="absolute left-0 top-0 w-full min-w-0"
+            className="absolute left-0 w-full min-w-0"
             style={{
-              transform: `translateY(${virtualRow.start}px)`,
+              /** `transform` would create a containing block and break `position: sticky` in markdown code blocks. */
+              top: virtualRow.start,
             }}
           >
             <MessageBubble
