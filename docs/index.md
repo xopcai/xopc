@@ -3,8 +3,8 @@ layout: home
 
 hero:
   name: xopc
-  text: Ultra-Lightweight Personal AI Assistant
-  tagline: A Node.js + TypeScript based AI agent that runs locally—for super individuals.
+  text: The OPC Workstation
+  tagline: The AI workstation that grows with you—for One Person Companies.
   image:
     src: /logo.svg
     alt: xopc
@@ -17,8 +17,11 @@ hero:
       link: https://github.com/xopcai/xopc
 
 features:
-  - title: 🚀 Lightweight & Fast
-    details: Built on Node.js + TypeScript with minimal dependencies
+  - title: 🚀 OPC-Native
+    details: "Designed for One Person Companies: agent, gateway, channels, cron, skills—all in your control."
+    link: /getting-started
+  - title: 📈 Grows With You
+    details: Start with CLI; expand with channels, extensions, and cron as your needs evolve
     link: /getting-started
   - title: 🔌 Extension System
     details: Backend hooks plus optional Gateway Web UI in sandboxed iframes via manifest ui and @xopcai/extension-ui-sdk
@@ -27,7 +30,7 @@ features:
     details: Bundled Telegram & WeChat (Weixin), gateway web chat and console, plus optional extension UI panels (manifest ui); more channels via extensions.
     link: /channels
   - title: 💻 Local First
-    details: Run locally with full control—built for super individuals who own their stack
+    details: Run locally with full control—built for OPCs who own their stack
     link: /configuration
   - title: 🔧 Built-in Tools
     details: File operations, web search, shell execution, and more
