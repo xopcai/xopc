@@ -34,7 +34,9 @@ function resolveGuiDomain(): string {
 function resolveLaunchAgentPlistPath(env: GatewayServiceEnv): string {
   const home = os.homedir();
   const libraryPath = path.join(home, 'Library', 'LaunchAgents');
-  const label = env.XOPC_PROFILE ? `ai.xopc.gateway.${env.XOPC_PROFILE}` : 'ai.xopc.gateway';
+  const label = env.XOPC_PROFILE
+    ? `ai.xopc.xopc.gateway.${env.XOPC_PROFILE}`
+    : 'ai.xopc.xopc.gateway';
   return path.join(libraryPath, `${label}.plist`);
 }
 
@@ -185,16 +187,16 @@ export function isLaunchdAvailable(): boolean {
  * LaunchAgent service implementation
  */
 export const launchdService: GatewayService = {
-  label: 'ai.xopc.gateway',
-  loadedText: 'ai.xopc.gateway',
-  notLoadedText: 'ai.xopc.gateway',
+  label: 'ai.xopc.xopc.gateway',
+  loadedText: 'ai.xopc.xopc.gateway',
+  notLoadedText: 'ai.xopc.xopc.gateway',
 
   async install(args: GatewayServiceInstallArgs): Promise<void> {
     const plistPath = resolveLaunchAgentPlistPath(args.env);
     const logDir = resolveLogDir();
     const label = args.env.XOPC_PROFILE
-      ? `ai.xopc.gateway.${args.env.XOPC_PROFILE}`
-      : 'ai.xopc.gateway';
+      ? `ai.xopc.xopc.gateway.${args.env.XOPC_PROFILE}`
+      : 'ai.xopc.xopc.gateway';
 
     // Ensure directories exist
     await mkdir(path.dirname(plistPath), { recursive: true });

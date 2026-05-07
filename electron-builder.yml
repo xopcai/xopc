@@ -1,4 +1,4 @@
-appId: com.xopcai.xopc
+appId: ai.xopc.xopc
 productName: xopc
 
 # Workaround for electron-builder 26.x + pnpm compatibility
