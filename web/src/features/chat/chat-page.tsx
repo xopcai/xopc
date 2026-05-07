@@ -335,6 +335,7 @@ export function ChatPage() {
                 modelDisabled={
                   session.showSessionLoading || session.sessionRoutePending || stream.streaming
                 }
+                contextUsageMessages={msgSlice.items}
               />
             </div>
           </div>

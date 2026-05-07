@@ -1,6 +1,8 @@
 import { Ban, File as FileIcon, Mic, Send, Sparkles, Square } from 'lucide-react';
 import { memo } from 'react';
 
+import type { Message } from '@/features/chat/messages.types';
+import { ModelContextRing } from '@/features/chat/model-context-ring';
 import { ModelSelector } from '@/features/chat/model-selector';
 import { SessionWorkingDirectoryControl } from '@/features/chat/session-working-directory-control';
 import type { SessionManager } from '@/features/chat/session-manager';
@@ -48,6 +50,9 @@ export interface ComposerToolbarProps {
   showModelSelector: boolean;
   onModelChange: (modelId: string) => void;
   modelDisabled: boolean;
+  /** For context-window ring next to the model selector. */
+  contextUsageMessages: readonly Message[];
+  composerDraftChars: number;
 }
 
 export const ComposerToolbar = memo(function ComposerToolbar({
@@ -76,6 +81,8 @@ export const ComposerToolbar = memo(function ComposerToolbar({
   showModelSelector,
   onModelChange,
   modelDisabled,
+  contextUsageMessages,
+  composerDraftChars,
 }: ComposerToolbarProps) {
   const ThinkingIcon = thinkingIcon(thinkingLevel as ThinkingLevel);
 
@@ -134,19 +141,28 @@ export const ComposerToolbar = memo(function ComposerToolbar({
 
       <div className="ml-auto flex min-w-0 items-center gap-2">
         {showModelSelector ? (
-          <div className="min-w-0 w-fit max-w-[min(20rem,calc(100vw-10rem))] shrink-0">
-            <ModelSelector
-              value={sessionModel}
+          <div className="flex min-w-0 items-center gap-1.5">
+            <div className="min-w-0 w-fit max-w-[min(20rem,calc(100vw-10rem))] shrink-0">
+              <ModelSelector
+                value={sessionModel}
+                disabled={modelDisabled}
+                placeholder={m.modelPlaceholder}
+                searchPlaceholder={m.modelSearchPlaceholder}
+                noMatches={m.modelNoMatches}
+                compact
+                showProviderInTrigger={false}
+                contentSide="top"
+                contentAlign="end"
+                showProviderSettingsFooter
+                onChange={onModelChange}
+              />
+            </div>
+            <ModelContextRing
+              sessionModel={sessionModel}
+              messages={contextUsageMessages}
+              draftChars={composerDraftChars}
+              chat={m}
               disabled={modelDisabled}
-              placeholder={m.modelPlaceholder}
-              searchPlaceholder={m.modelSearchPlaceholder}
-              noMatches={m.modelNoMatches}
-              compact
-              showProviderInTrigger={false}
-              contentSide="top"
-              contentAlign="end"
-              showProviderSettingsFooter
-              onChange={onModelChange}
             />
           </div>
         ) : null}
