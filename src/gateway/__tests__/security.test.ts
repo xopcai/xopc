@@ -56,6 +56,7 @@ describe('Gateway Security Fixes', () => {
         headers: { Origin: 'null' },
       });
       expect(res.status).toBe(503);
+      expect(res.headers.get('Access-Control-Allow-Origin')).toBe('null');
     });
   });
 

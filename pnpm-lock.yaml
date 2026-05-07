@@ -279,6 +279,19 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
+  extensions/synapse:
+    dependencies:
+      '@xopcai/extension-ui-sdk':
+        specifier: workspace:*
+        version: link:../../packages/extension-ui-sdk
+    devDependencies:
+      esbuild:
+        specifier: ^0.28.0
+        version: 0.28.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
   extensions/telegram:
     dependencies:
       '@grammyjs/runner':
