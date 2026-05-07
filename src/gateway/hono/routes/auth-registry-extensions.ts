@@ -27,6 +27,14 @@ const EXTENSION_ASSET_CSP =
   "object-src 'none'; " +
   "form-action 'none'";
 
+/** Sandboxed extension iframes send `Origin: null`; echo it (and real origins) so every status includes ACAO. */
+function extensionUiAssetCorsAllowOrigin(c: { req: { header: (name: string) => string | undefined } }): string {
+  const origin = c.req.header('origin');
+  if (origin === 'null') return 'null';
+  if (origin) return origin;
+  return '*';
+}
+
 function rewriteExtensionAssetHtml(html: string, extensionId: string, assetPath: string): string {
   const assetDir = assetPath.includes('/') ? assetPath.slice(0, assetPath.lastIndexOf('/') + 1) : '';
   const assetBase = `/api/extensions/${extensionId}/assets/${assetDir}`;
@@ -60,16 +68,19 @@ function rewriteExtensionAssetHtml(html: string, extensionId: string, assetPath:
  */
 export function registerPublicExtensionAssetRoutes(app: Hono, service: GatewayService): void {
   app.get('/api/extensions/:id/assets/*', async (c) => {
+    const acao = extensionUiAssetCorsAllowOrigin(c);
+    const corsHdr = { 'Access-Control-Allow-Origin': acao } as const;
+
     const extensionId = c.req.param('id');
     const loader = service.getExtensionLoader();
     if (!loader) {
-      return c.json({ error: 'Extensions unavailable' }, 503);
+      return c.json({ error: 'Extensions unavailable' }, 503, corsHdr);
     }
 
     const discovered = loader.discoverExtensions();
     const ext = discovered.find((e) => e.id === extensionId);
     if (!ext || !ext.manifest.ui) {
-      return c.json({ error: 'Extension not found or has no UI' }, 404);
+      return c.json({ error: 'Extension not found or has no UI' }, 404, corsHdr);
     }
 
     const prefix = `/api/extensions/${extensionId}/assets/`;
@@ -78,22 +89,22 @@ export function registerPublicExtensionAssetRoutes(app: Hono, service: GatewaySe
     try {
       assetPath = decodeURIComponent(assetPathEncoded);
     } catch {
-      return c.json({ error: 'Invalid asset path' }, 400);
+      return c.json({ error: 'Invalid asset path' }, 400, corsHdr);
     }
 
     if (!assetPath || assetPath.includes('..')) {
-      return c.json({ error: 'Invalid asset path' }, 400);
+      return c.json({ error: 'Invalid asset path' }, 400, corsHdr);
     }
 
     const root = resolve(ext.path);
     const fullPath = resolve(root, assetPath);
     const rel = relative(root, fullPath);
     if (rel.startsWith('..') || rel === '') {
-      return c.json({ error: 'Path traversal denied' }, 403);
+      return c.json({ error: 'Path traversal denied' }, 403, corsHdr);
     }
 
     if (!existsSync(fullPath) || !statSync(fullPath).isFile()) {
-      return c.json({ error: 'Not found' }, 404);
+      return c.json({ error: 'Not found' }, 404, corsHdr);
     }
 
     const rawContent = readFileSync(fullPath);
@@ -110,7 +121,7 @@ export function registerPublicExtensionAssetRoutes(app: Hono, service: GatewaySe
         'Content-Security-Policy': EXTENSION_ASSET_CSP,
         'Cache-Control': 'no-store',
         'X-Content-Type-Options': 'nosniff',
-        'Access-Control-Allow-Origin': 'null',
+        'Access-Control-Allow-Origin': acao,
       },
     });
   });
