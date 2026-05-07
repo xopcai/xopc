@@ -89,26 +89,29 @@ export const MessageList = memo(function MessageList({
 
   const pinnedScrollRafRef = useRef<number | null>(null);
 
-  /** While `pinToBottom` is true, do not gate on viewport distance — new rows inflate `scrollHeight` before `scrollTop` catches up, which falsely reads as “scrolled up”. */
-  const scrollLastToEnd = useCallback(() => {
-    const c = virtualizer.options.count;
-    if (c === 0) return;
-    const scrollEl = scrollElementRef.current;
-    if (!scrollEl) {
+  /**
+   * `layoutPin`: after refresh / session load the virtualizer often underestimates `scrollHeight`;
+   * `fromBottom` is then large even though we intend to sit on the tail — skipping here left the
+   * viewport stuck above the last bubble. `resizeObserver`: keep the near-tail guard so RO does
+   * not yank when `pinToBottom` is stale (stream end).
+   */
+  const scrollLastToEnd = useCallback(
+    (source: 'layoutPin' | 'resizeObserver' = 'resizeObserver') => {
+      const c = virtualizer.options.count;
+      if (c === 0) return;
+      const scrollEl = scrollElementRef.current;
+      if (!scrollEl) {
+        virtualizer.scrollToIndex(c - 1, { align: 'end', behavior: 'auto' });
+        return;
+      }
+      const fromBottom = chatScrollDistanceFromBottom(scrollEl);
+      /** Already aligned to tail (avoid virtualizer / RO jitter). */
+      if (fromBottom <= 1) return;
+      if (source === 'resizeObserver' && fromBottom > CHAT_SCROLL_UNPIN_BEYOND_PX) return;
       virtualizer.scrollToIndex(c - 1, { align: 'end', behavior: 'auto' });
-      return;
-    }
-    const fromBottom = chatScrollDistanceFromBottom(scrollEl);
-    /** Already aligned to tail (avoid virtualizer / RO jitter). */
-    if (fromBottom <= 1) return;
-    /**
-     * When `streaming` flips false, RO mounts and used to call `schedulePinnedScroll` immediately.
-     * If `pinToBottom` is briefly stale while the user is reading history, `scrollToIndex` yanks to
-     * max scroll — feels like jumping to the last assistant bubble. Only nudge when near the tail.
-     */
-    if (fromBottom > CHAT_SCROLL_UNPIN_BEYOND_PX) return;
-    virtualizer.scrollToIndex(c - 1, { align: 'end', behavior: 'auto' });
-  }, [virtualizer, scrollElementRef]);
+    },
+    [virtualizer, scrollElementRef],
+  );
 
   const schedulePinnedScroll = useCallback(() => {
     if (pinnedScrollRafRef.current != null) {
@@ -124,7 +127,7 @@ export const MessageList = memo(function MessageList({
   /** User clicked “scroll to bottom” or list length changed while pinned — height may not change. */
   useLayoutEffect(() => {
     if (!pinToBottom || list.length === 0) return;
-    scrollLastToEnd();
+    scrollLastToEnd('layoutPin');
   }, [pinToBottom, list.length, scrollLastToEnd]);
 
   /**
