@@ -13,6 +13,10 @@ import { ChatWelcomeSpotlight } from '@/features/chat/chat-welcome-spotlight';
 import { MessageBubble } from '@/features/chat/message-bubble';
 import type { Message, ProgressState, ReasoningLevel } from '@/features/chat/messages.types';
 import { isLastUserMessageInThread } from '@/features/chat/user-message-plain-text';
+import {
+  CHAT_SCROLL_UNPIN_BEYOND_PX,
+  chatScrollDistanceFromBottom,
+} from '@/features/chat/chat-scroll-geometry';
 import { messageRowKey } from '@/features/chat/thinking-blocks';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -89,8 +93,22 @@ export const MessageList = memo(function MessageList({
   const scrollLastToEnd = useCallback(() => {
     const c = virtualizer.options.count;
     if (c === 0) return;
+    const scrollEl = scrollElementRef.current;
+    if (!scrollEl) {
+      virtualizer.scrollToIndex(c - 1, { align: 'end', behavior: 'auto' });
+      return;
+    }
+    const fromBottom = chatScrollDistanceFromBottom(scrollEl);
+    /** Already aligned to tail (avoid virtualizer / RO jitter). */
+    if (fromBottom <= 1) return;
+    /**
+     * When `streaming` flips false, RO mounts and used to call `schedulePinnedScroll` immediately.
+     * If `pinToBottom` is briefly stale while the user is reading history, `scrollToIndex` yanks to
+     * max scroll — feels like jumping to the last assistant bubble. Only nudge when near the tail.
+     */
+    if (fromBottom > CHAT_SCROLL_UNPIN_BEYOND_PX) return;
     virtualizer.scrollToIndex(c - 1, { align: 'end', behavior: 'auto' });
-  }, [virtualizer]);
+  }, [virtualizer, scrollElementRef]);
 
   const schedulePinnedScroll = useCallback(() => {
     if (pinnedScrollRafRef.current != null) {
@@ -109,9 +127,15 @@ export const MessageList = memo(function MessageList({
     scrollLastToEnd();
   }, [pinToBottom, list.length, scrollLastToEnd]);
 
-  /** Virtual row heights grow after first paint; keep pinned without waiting for `chatMessages` identity changes. */
+  /**
+   * Virtual row heights grow after first paint; keep pinned without waiting for `chatMessages` identity changes.
+   * While `streaming`, tail-follow is driven by `useChatScrollViewport` on `chatMessages` updates; observing the
+   * full list height here fires on every token resize and repeatedly calls `scrollToIndex`, which stacks with
+   * `scrollToBottom` and feels like continuous scrolling even when already at the tail.
+   */
   useEffect(() => {
     if (!pinToBottom || list.length === 0) return;
+    if (streaming) return;
     const el = contentRef.current;
     if (!el) return;
 
@@ -119,7 +143,6 @@ export const MessageList = memo(function MessageList({
       schedulePinnedScroll();
     });
     ro.observe(el);
-    schedulePinnedScroll();
     return () => {
       ro.disconnect();
       if (pinnedScrollRafRef.current != null) {
@@ -127,7 +150,7 @@ export const MessageList = memo(function MessageList({
         pinnedScrollRafRef.current = null;
       }
     };
-  }, [pinToBottom, list.length, schedulePinnedScroll]);
+  }, [pinToBottom, list.length, schedulePinnedScroll, streaming]);
 
   if (showWelcome) {
     if (welcomeOverlay) {
