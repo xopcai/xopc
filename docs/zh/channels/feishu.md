@@ -5,6 +5,22 @@
 - **`websocket`**（默认）：飞书 Socket Mode。
 - **`webhook`**：本地 HTTP server 接收飞书事件（需要 webhook 密钥）。
 
+## 网关控制台 — 即时通讯
+
+在网关运行且已在设置中保存 **网关访问令牌** 时，可在 **`#/channels`**（侧栏 **即时通讯**）中配置飞书。
+
+- **配置 / 编辑** 会打开 **扫码创建应用** 弹窗，并**默认立即**为 **国内（飞书）** 租户发起流程。
+- 二维码下方的 **胶囊切换** 可在 **国内（飞书）** 与 **国际（Lark）** 之间切换；切换后会重新生成二维码并发起新的注册会话。
+- 扫码成功后，网关会把 **`appId`**、**`appSecret`**、**`domain`** 合并写入 `channels.feishu`（保留已有字段，如 `connectionMode`；新装默认 **`websocket`**）。
+- Webhook 密钥、工具开关、策略、多账号 JSON 等完整表单项在弹窗的 **高级选项** 中，通过 **保存** 写入。
+
+### 设置相关 API（需登录）
+
+- `POST /api/channels/feishu/setup/start` — 可选 JSON：`{ "domain": "feishu" | "lark" }`（缺省或非 `lark` 时按国内 `feishu`）。返回 `sessionKey` 与 `qrUrl`。
+- `GET /api/channels/feishu/setup/:sessionKey` — 轮询直至结束；成功时由服务端按上文规则落盘凭据。
+
+若不想使用扫码创建，仍可在开放平台中完全手动创建应用并按下文配置（与此前文档一致）。
+
 ## 创建并配置飞书应用
 
 在飞书开放平台（或 Lark Developer）中：

@@ -22,8 +22,8 @@ Open `http://localhost:18790` in your browser (or your configured bind address).
 
 ## Sidebar: filter sessions by channel
 
-The sidebar session list can show **Web** / **Telegram** / **Weixin** sessions:
+The sidebar session list can show **Web** / **Telegram** / **Weixin** / **Feishu** / **DingTalk** sessions:
 
 - **Web** — lists sessions whose keys are treated as web UI sessions (client-side filter after `GET /api/sessions`).
-- **Telegram** / **Weixin** — `GET /api/sessions?channel=telegram` or `channel=weixin`, matching `SessionMetadata.sourceChannel`.
+- **Other channels** — `GET /api/sessions?channel=<id>` (e.g. `telegram`, `weixin`, `feishu`, `dingtalk`), matching `SessionMetadata.sourceChannel`.
 
