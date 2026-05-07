@@ -152,6 +152,7 @@ export function useChatSession() {
     sessionKey,
     decodedKey,
     sessionKeyRef,
+    activeStreamSessionKeyRef,
     sendingRef,
     streamingRef,
     setSending,

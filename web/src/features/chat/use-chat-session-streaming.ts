@@ -1,4 +1,4 @@
-import { useCallback, type Dispatch, type RefObject, type SetStateAction } from 'react';
+import { useCallback, useRef, type Dispatch, type RefObject, type SetStateAction } from 'react';
 import { flushSync } from 'react-dom';
 
 import {
@@ -13,7 +13,10 @@ import type { WireAttachment } from '@/features/chat/composer.types';
 import type { Message, ProgressState } from '@/features/chat/messages.types';
 import { extractUserMessagePlainText, messageAttachmentsToWire } from '@/features/chat/user-message-plain-text';
 import { pendingAgentRunStorageKey, MessageSender } from '@/features/chat/message-sender';
-import type { PendingFollowUp } from '@/features/chat/pending-follow-up.types';
+import {
+  FOLLOW_UP_AUTO_SEND_IDLE_MS,
+  type PendingFollowUp,
+} from '@/features/chat/pending-follow-up.types';
 import type { SessionManager } from '@/features/chat/session-manager';
 import {
   cloneMessageForRender,
@@ -90,6 +93,9 @@ export function useChatSessionStreaming(deps: {
     latestMessagesRef,
   } = deps;
 
+  const flushSteeringQueueRef = useRef(fq.flushSteeringQueue);
+  flushSteeringQueueRef.current = fq.flushSteeringQueue;
+
   const finalizeMessage = useCallback(
     (opts?: { skipSteeringQueueFlush?: boolean }) => {
       const cacheKey = activeStreamSessionKeyRef.current ?? sessionKeyRef.current;
@@ -119,15 +125,20 @@ export function useChatSessionStreaming(deps: {
       fq.dismissClarify();
       void pollSessionNameAfterTurn();
       if (!opts?.skipSteeringQueueFlush) {
-        queueMicrotask(() => {
-          fq.flushSteeringQueue();
-        });
+        const flushFor = cacheKey ?? sessionKeyRef.current;
+        if (flushFor) {
+          window.setTimeout(() => {
+            void flushSteeringQueueRef.current(flushFor);
+          }, FOLLOW_UP_AUTO_SEND_IDLE_MS);
+        }
       }
       /** Persisted transcript includes `thinking` blocks the SSE path may omit (e.g. `reasoningLevel: off` strips thinking events). Re-sync from gateway so history matches server JSON. */
       const syncKey = sessionKeyRef.current;
       if (syncKey) {
         window.setTimeout(() => {
           if (sessionKeyRef.current !== syncKey) return;
+          if (sendingRef.current || streamingRef.current) return;
+          if (fq.pendingFollowUpsRef.current.length > 0) return;
           void loadSessionById(syncKey, 0);
         }, 400);
       }
@@ -146,7 +157,7 @@ export function useChatSessionStreaming(deps: {
       sessionKeyRef,
       fq.dismissClarify,
       fq.refreshFollowUpSuggestions,
-      fq.flushSteeringQueue,
+      fq.pendingFollowUpsRef,
       pollSessionNameAfterTurn,
       loadSessionById,
     ],
