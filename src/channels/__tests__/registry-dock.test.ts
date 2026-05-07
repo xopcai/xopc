@@ -10,6 +10,7 @@ import { getChannelDock, getDockForBuiltinChannel } from '../dock.js';
 describe('registry', () => {
   it('orders builtin chat channels', () => {
     expect(CHAT_CHANNEL_ORDER).toContain('telegram');
+    expect(CHAT_CHANNEL_ORDER).toContain('dingtalk');
   });
 
   it('getChatChannelMeta returns telegram', () => {
@@ -22,6 +23,7 @@ describe('registry', () => {
   it('isChatChannelId narrows', () => {
     expect(isChatChannelId('telegram')).toBe(true);
     expect(isChatChannelId('feishu')).toBe(true);
+    expect(isChatChannelId('dingtalk')).toBe(true);
     expect(isChatChannelId('unknown')).toBe(false);
   });
 
@@ -45,6 +47,12 @@ describe('dock', () => {
 
   it('getChannelDock exposes feishu limits', () => {
     const d = getChannelDock('feishu');
+    expect(d?.outbound?.textChunkLimit).toBe(4000);
+    expect(d?.queue?.debounceMs).toBe(0);
+  });
+
+  it('getChannelDock exposes dingtalk limits', () => {
+    const d = getChannelDock('dingtalk');
     expect(d?.outbound?.textChunkLimit).toBe(4000);
     expect(d?.queue?.debounceMs).toBe(0);
   });

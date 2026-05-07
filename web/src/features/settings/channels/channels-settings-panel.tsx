@@ -1,17 +1,19 @@
-import { ExternalLink, MessageSquare, Send } from 'lucide-react';
+import { ExternalLink, MessageCircle, MessageSquare, Send } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { docsGuidePageUrl } from '@/navigation';
 
 import { ChannelImHubCard } from './channel-im-hub-card';
 import { ChannelsRemoveChannelDialog } from './channels-remove-channel-dialog';
+import { DingtalkChannelSettingsDialog } from './dingtalk-channel-settings-dialog';
+import { DingtalkQrSetupDialog } from './dingtalk-qr-setup-dialog';
 import { FeishuChannelSettingsDialog } from './feishu-channel-settings-dialog';
 import { FeishuQrSetupDialog } from './feishu-qr-setup-dialog';
 import { TelegramChannelSettingsDialog } from './telegram-channel-settings-dialog';
 import { useChannelsSettingsPanel } from './use-channels-settings-panel';
 import { WeixinQrLoginDialog } from './weixin-qr-login-dialog';
 import { WeixinMoreSettingsSection } from './weixin-more-settings-section';
-import { isFeishuConfigured, isTelegramConfigured, isWeixinConfigured } from './utils';
+import { isDingtalkConfigured, isFeishuConfigured, isTelegramConfigured, isWeixinConfigured } from './utils';
 
 export function ChannelsSettingsPanel() {
   const ctx = useChannelsSettingsPanel();
@@ -41,7 +43,12 @@ export function ChannelsSettingsPanel() {
     setWeixinSuccessBanner,
     feishuQrSetupOpen,
     setFeishuQrSetupOpen,
+    dingtalkModalOpen,
+    setDingtalkModalOpen,
+    dingtalkQrSetupOpen,
+    setDingtalkQrSetupOpen,
     feishuSetupSuccessBanner,
+    dingtalkSetupSuccessBanner,
     tgAdvanced,
     setTgAdvanced,
     showToken,
@@ -50,8 +57,11 @@ export function ChannelsSettingsPanel() {
     setShowFeishuSecret,
     showFeishuWebhookSecrets,
     setShowFeishuWebhookSecrets,
+    showDingtalkSecret,
+    setShowDingtalkSecret,
     copied,
     feishuCopied,
+    dingtalkCopied,
     feishuWebhookCopied,
     tgAccountsDraft,
     setTgAccountsDraft,
@@ -62,21 +72,28 @@ export function ChannelsSettingsPanel() {
     feishuAccountsDraft,
     setFeishuAccountsDraft,
     feishuAccountsError,
+    dingtalkAccountsDraft,
+    setDingtalkAccountsDraft,
+    dingtalkAccountsError,
     chatAgents,
     updateChannelAgentRoute,
     updateTelegram,
     updateWeixin,
     updateFeishu,
+    updateDingtalk,
     save,
     toggleChannelEnabled,
     removeChannel,
     copyToken,
     handleFeishuQrSetupSuccess,
+    handleDingtalkQrSetupSuccess,
     copyFeishuSecret,
+    copyDingtalkSecret,
     copyFeishuWebhookConfig,
     onTgAccountsBlur,
     onWxAccountsBlur,
     onFeishuAccountsBlur,
+    onDingtalkAccountsBlur,
     dmOpts,
     groupOpts,
     replyOpts,
@@ -116,9 +133,11 @@ export function ChannelsSettingsPanel() {
   const wx = form.weixin;
   const tg = form.telegram;
   const fs = form.feishu;
+  const dt = form.dingtalk;
   const weixinConfigured = isWeixinConfigured(wx);
   const telegramConfigured = isTelegramConfigured(tg);
   const feishuConfigured = isFeishuConfigured(fs);
+  const dingtalkConfigured = isDingtalkConfigured(dt);
 
   const weixinMoreSettings = (
     <WeixinMoreSettingsSection
@@ -165,6 +184,11 @@ export function ChannelsSettingsPanel() {
           {feishuSetupSuccessBanner}
         </div>
       ) : null}
+      {dingtalkSetupSuccessBanner ? (
+        <div className="rounded-xl border border-success/30 bg-success-soft px-4 py-3 text-sm text-success">
+          {dingtalkSetupSuccessBanner}
+        </div>
+      ) : null}
 
       <div className="flex flex-col gap-3">
         <ChannelImHubCard
@@ -206,6 +230,19 @@ export function ChannelsSettingsPanel() {
           onRemove={() => setRemoveTarget('feishu')}
           ch={ch}
         />
+        <ChannelImHubCard
+          icon={<MessageCircle className="size-6 text-accent" strokeWidth={1.75} />}
+          title={ch.dingtalkTitle}
+          subtitle={ch.dingtalkSubtitle}
+          configured={dingtalkConfigured}
+          enabled={dt.enabled}
+          toggleDisabled={saving}
+          onToggle={(next) => void toggleChannelEnabled('dingtalk', next)}
+          onConfigure={() => setDingtalkModalOpen(true)}
+          onEdit={() => setDingtalkModalOpen(true)}
+          onRemove={() => setRemoveTarget('dingtalk')}
+          ch={ch}
+        />
       </div>
 
       <WeixinQrLoginDialog
@@ -225,6 +262,13 @@ export function ChannelsSettingsPanel() {
         onOpenChange={setFeishuQrSetupOpen}
         ch={ch}
         onSetupSuccess={handleFeishuQrSetupSuccess}
+      />
+
+      <DingtalkQrSetupDialog
+        open={dingtalkQrSetupOpen}
+        onOpenChange={setDingtalkQrSetupOpen}
+        ch={ch}
+        onSetupSuccess={handleDingtalkQrSetupSuccess}
       />
 
       <TelegramChannelSettingsDialog
@@ -282,6 +326,31 @@ export function ChannelsSettingsPanel() {
         dirty={dirty}
         save={save}
         onOpenQrSetup={() => setFeishuQrSetupOpen(true)}
+      />
+
+      <DingtalkChannelSettingsDialog
+        open={dingtalkModalOpen}
+        onOpenChange={setDingtalkModalOpen}
+        ch={ch}
+        form={form}
+        baseline={baseline}
+        showDingtalkSecret={showDingtalkSecret}
+        setShowDingtalkSecret={setShowDingtalkSecret}
+        dingtalkCopied={dingtalkCopied}
+        copyDingtalkSecret={copyDingtalkSecret}
+        updateDingtalk={updateDingtalk}
+        updateChannelAgentRoute={updateChannelAgentRoute}
+        dingtalkAccountsDraft={dingtalkAccountsDraft}
+        setDingtalkAccountsDraft={setDingtalkAccountsDraft}
+        dingtalkAccountsError={dingtalkAccountsError}
+        onDingtalkAccountsBlur={onDingtalkAccountsBlur}
+        dmOpts={dmOpts}
+        groupOpts={groupOpts}
+        chatAgents={chatAgents}
+        saving={saving}
+        dirty={dirty}
+        save={save}
+        onOpenQrSetup={() => setDingtalkQrSetupOpen(true)}
       />
 
       <ChannelsRemoveChannelDialog

@@ -123,10 +123,44 @@ export interface FeishuConfig {
   accounts: Record<string, FeishuAccount>;
 }
 
+export interface DingtalkAccount {
+  name?: string;
+  enabled?: boolean;
+  clientId?: string;
+  clientSecret?: string;
+  dmPolicy?: DmPolicy;
+  groupPolicy?: GroupPolicy;
+  allowFrom?: (string | number)[];
+  groupAllowFrom?: (string | number)[];
+  requireMention?: boolean;
+  debug?: boolean;
+  endpoint?: string;
+  historyLimit?: number;
+  textChunkLimit?: number;
+}
+
+export interface DingtalkConfig {
+  enabled: boolean;
+  defaultAccount?: string;
+  clientId: string;
+  clientSecret: string;
+  dmPolicy: DmPolicy;
+  groupPolicy: GroupPolicy;
+  allowFrom: (string | number)[];
+  groupAllowFrom: (string | number)[];
+  requireMention: boolean;
+  debug: boolean;
+  endpoint: string;
+  historyLimit: number;
+  textChunkLimit: number;
+  accounts: Record<string, DingtalkAccount>;
+}
+
 export interface ChannelsSettingsState {
   telegram: TelegramConfig;
   weixin: WeixinConfig;
   feishu: FeishuConfig;
+  dingtalk: DingtalkConfig;
   /** Full bindings array last loaded from the gateway (merge base for saves). */
   bindingsFull: BindingRuleWire[];
   channelAgentRoutes: ChannelAgentRoutes;

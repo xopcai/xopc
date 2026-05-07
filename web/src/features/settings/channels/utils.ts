@@ -45,3 +45,7 @@ export function isWeixinConfigured(wx: ChannelsSettingsState['weixin']): boolean
 export function isFeishuConfigured(fs: ChannelsSettingsState['feishu']): boolean {
   return Boolean(fs.appId?.trim() && fs.appSecret?.trim()) || Object.keys(fs.accounts ?? {}).length > 0;
 }
+
+export function isDingtalkConfigured(dt: ChannelsSettingsState['dingtalk']): boolean {
+  return Boolean(dt.clientId?.trim() && dt.clientSecret?.trim()) || Object.keys(dt.accounts ?? {}).length > 0;
+}
