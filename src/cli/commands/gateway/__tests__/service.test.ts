@@ -136,7 +136,8 @@ describe('Gateway Service Commands', () => {
       const cmd = createInstallCommand();
       await cmd.parseAsync(['node', 'test']);
 
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('launchd'));
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('LaunchAgent'));
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('launchctl bootstrap'));
     });
 
     it('should show Windows instructions on win32', async () => {
@@ -185,7 +186,7 @@ describe('Gateway Service Commands', () => {
 
       expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Uninstalling'));
       expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('systemctl stop'));
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('launchctl unload'));
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('launchctl bootout'));
       expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('sc delete'));
       expect(processExitSpy).toHaveBeenCalledWith(0);
     });
