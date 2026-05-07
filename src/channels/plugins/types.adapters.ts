@@ -83,7 +83,7 @@ export interface ChannelCliLoginAdapter {
     timeoutMs?: number;
     accountId?: string;
     writeConfig?: boolean;
-  }): Promise<{ ok: boolean; message?: string; accountId?: string }>;
+  }): Promise<{ ok: boolean; message?: string; accountId?: string; cancelled?: boolean }>;
 }
 
 /** Snapshot of channel-specific settings for gateway `/api/config` (implementations should redact secrets). */

@@ -32,10 +32,17 @@ async function configureDingtalk(config: Config): Promise<Config> {
     if (!keep) return config;
   }
 
-  const { clientId, clientSecret } = await promptDingtalkCredentials({ timeoutMs: 480_000 });
-  const next = mergeDingtalkCredentialsIntoConfig(config, { clientId, clientSecret });
-  console.log('\nDingTalk configuration complete.\n');
-  return next;
+  try {
+    const { clientId, clientSecret } = await promptDingtalkCredentials({ timeoutMs: 480_000 });
+    const next = mergeDingtalkCredentialsIntoConfig(config, { clientId, clientSecret });
+    console.log('\nDingTalk configuration complete.\n');
+    return next;
+  } catch (e) {
+    if (e instanceof Error && e.message === 'DingTalk registration cancelled.') {
+      return config;
+    }
+    throw e;
+  }
 }
 
 export const dingtalkOnboardAdapter: ChannelOnboardAdapter = {

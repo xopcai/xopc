@@ -15,6 +15,11 @@ export async function promptDingtalkCredentials(params: {
   let clientSecret = '';
 
   if (useScan) {
+    const ac = new AbortController();
+    const onSigint = () => {
+      ac.abort();
+    };
+    process.once('SIGINT', onSigint);
     try {
       const begin = await beginDingtalkRegistration();
       console.log('\nScan with DingTalk to create / link the app:\n');
@@ -22,22 +27,30 @@ export async function promptDingtalkCredentials(params: {
       if (begin.userCode) {
         console.log(`\nUser code: ${begin.userCode}\n`);
       }
+      console.log('Waiting for registration (Ctrl+C to cancel)…\n');
       const expireSec = Math.min(begin.expiresInSeconds, Math.max(60, Math.floor(params.timeoutMs / 1000)));
       const creds = await waitForDingtalkRegistrationSuccess({
         deviceCode: begin.deviceCode,
         intervalSeconds: begin.intervalSeconds,
         expiresInSeconds: expireSec,
+        signal: ac.signal,
       });
       clientId = creds.clientId;
       clientSecret = creds.clientSecret;
       console.log('\nRegistration succeeded.\n');
     } catch (e) {
       const em = e instanceof Error ? e.message : String(e);
+      if (em === 'DingTalk registration cancelled.') {
+        console.log('\nCancelled.\n');
+        throw e;
+      }
       console.log(`\nQR registration failed: ${em}\n`);
       const fallback = await confirm({ message: 'Enter Client ID / Secret manually instead?', default: true });
       if (!fallback) {
         throw e;
       }
+    } finally {
+      process.off('SIGINT', onSigint);
     }
   }
 

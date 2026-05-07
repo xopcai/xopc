@@ -37,13 +37,20 @@ export const dingtalkCliLoginAdapter: ChannelCliLoginAdapter = {
     console.log('DingTalk setup');
     console.log(`${'='.repeat(50)}\n`);
 
-    const { clientId, clientSecret } = await promptDingtalkCredentials({ timeoutMs });
-    const next = mergeDingtalkCredentialsIntoConfig(config, { clientId, clientSecret });
+    try {
+      const { clientId, clientSecret } = await promptDingtalkCredentials({ timeoutMs });
+      const next = mergeDingtalkCredentialsIntoConfig(config, { clientId, clientSecret });
 
-    if (writeConfig) {
-      writeConfigToPath(configPath, next);
+      if (writeConfig) {
+        writeConfigToPath(configPath, next);
+      }
+
+      return { ok: true, message: 'DingTalk credentials saved.', accountId: 'default' };
+    } catch (e) {
+      if (e instanceof Error && e.message === 'DingTalk registration cancelled.') {
+        return { ok: false, cancelled: true };
+      }
+      throw e;
     }
-
-    return { ok: true, message: 'DingTalk credentials saved.', accountId: 'default' };
   },
 };
