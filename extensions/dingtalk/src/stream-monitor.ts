@@ -57,7 +57,10 @@ export async function runDingtalkStreamMonitor(deps: DingtalkStreamMonitorDeps):
     debug: account.debug,
     endpoint: endpoint || 'https://api.dingtalk.com',
     autoReconnect: true,
-    keepAlive: true,
+    // dingtalk-stream does not clear its ws ping interval on socket close; during
+    // reconnect the next tick can call ping() while readyState is CONNECTING and crash.
+    // Server SYSTEM KEEPALIVE messages still refresh liveness without ws-level pings.
+    keepAlive: false,
   });
 
   const onAbort = async () => {
