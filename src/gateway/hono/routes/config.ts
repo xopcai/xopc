@@ -943,14 +943,15 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
       (config as { providers?: Record<string, Record<string, unknown>> }).providers = cfgProviders;
     }
 
-    // Update STT config
+    // PATCH `stt` writes to tools.media.audio; PATCH `tts` writes to messages.tts.
     if (body.stt !== undefined) {
-      config.stt = body.stt;
+      config.tools = config.tools ?? {};
+      config.tools.media = config.tools.media ?? {};
+      (config.tools.media as Record<string, unknown>).audio = body.stt;
     }
-
-    // Update TTS config
     if (body.tts !== undefined) {
-      config.tts = body.tts;
+      config.messages = config.messages ?? {};
+      (config.messages as Record<string, unknown>).tts = body.tts;
     }
 
     const toolsPatchErr = applyToolsWebPatch(config, body as Record<string, unknown>);

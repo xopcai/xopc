@@ -1,34 +1,30 @@
 /**
- * STT Types and Interfaces
+ * STT public types — data shapes consumed by downstream code (channels,
+ * schema validation, gateway payloads).
+ *
+ * Provider implementations live behind `MediaUnderstandingProvider.transcribeAudio`
+ * (see src/media-understanding/types.ts).
  */
 
 export interface STTResult {
-  /** Transcribed text */
+  /** Transcribed text. */
   text: string;
-  /** Provider that performed the transcription */
+  /** Provider that performed the transcription (e.g. "alibaba", "openai"). */
   provider: string;
-  /** Audio duration in seconds (if available) */
+  /** Audio duration in seconds (if reported). */
   duration?: number;
-  /** Language detected (if available) */
+  /** Detected language (if reported). */
   language?: string;
 }
 
 export interface STTOptions {
-  /** Language hint (e.g., 'zh', 'en') */
+  /** Language hint (e.g. 'zh', 'en'). */
   language?: string;
-  /** Model to use (provider-specific) */
+  /** Model id (provider-specific). */
   model?: string;
 }
 
-export interface STTProvider {
-  /** Provider name */
-  name: string;
-  /** Transcribe audio buffer to text */
-  transcribe(audioBuffer: Buffer, options?: STTOptions): Promise<STTResult>;
-  /** Check if provider is configured */
-  isConfigured(): boolean;
-}
-
+/** STTConfig consumed by the schema and downstream wiring. */
 export interface STTConfig {
   enabled: boolean;
   provider: 'alibaba' | 'openai';
@@ -44,6 +40,8 @@ export interface STTConfig {
     enabled: boolean;
     order: ('alibaba' | 'openai')[];
   };
+  /** Hard timeout per provider call (ms). Default 60s. */
+  timeoutMs?: number;
 }
 
 export type STTProviderAttemptOutcome = 'success' | 'skipped' | 'failed';
@@ -70,9 +68,6 @@ export interface STTResultWithTracking extends STTResult {
   attemptedProviders: string[];
 }
 
-/**
- * Default STT configuration
- */
 export const DEFAULT_STT_CONFIG: STTConfig = {
   enabled: false,
   provider: 'alibaba',
@@ -86,4 +81,5 @@ export const DEFAULT_STT_CONFIG: STTConfig = {
     enabled: true,
     order: ['alibaba', 'openai'],
   },
+  timeoutMs: 60_000,
 };

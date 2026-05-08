@@ -16,17 +16,24 @@ function defaultStt(): SttSettings {
   };
 }
 
+// Defaults intentionally mirror src/config/schema.ts (TTSConfigSchema /
+// TTSEdgeConfigSchema) and extensions/tts-local-cli/xopc.extension.json so a
+// PATCH /api/config round-trip never silently overrides backend defaults.
 function defaultTts(): TtsSettings {
   return {
     enabled: false,
     provider: 'openai',
     trigger: 'always',
-    maxTextLength: 4096,
-    timeoutMs: 30000,
+    maxTextLength: 512,
+    timeoutMs: 60000,
     alibaba: { model: 'qwen-tts', voice: 'Cherry' },
     openai: { model: 'tts-1', voice: 'alloy' },
-    edge: { voice: 'zh-CN-XiaoxiaoNeural' },
+    edge: { voice: 'en-US-MichelleNeural' },
     minimax: { model: 'speech-2.8-hd', voice: 'male-qn-qingse' },
+    'tts-local-cli': {
+      command: '',
+      outputFormat: 'wav',
+    },
   };
 }
 
@@ -60,14 +67,15 @@ function mergeStt(raw: unknown): SttSettings {
   };
 }
 
-function isTtsProviderId(v: unknown): v is TtsSettings['provider'] {
-  return v === 'openai' || v === 'alibaba' || v === 'edge' || v === 'minimax';
+/** Provider id is open string — extension SpeechProviderPlugins (e.g. tts-local-cli) are allowed. */
+function normalizeTtsProvider(v: unknown): string {
+  return typeof v === 'string' && v.trim().length > 0 ? v.trim() : 'openai';
 }
 
 function mergeTts(raw: unknown): TtsSettings {
   const d = defaultTts();
   if (!isRecord(raw)) return d;
-  const provider = isTtsProviderId(raw.provider) ? raw.provider : 'openai';
+  const provider = normalizeTtsProvider(raw.provider);
   const trigger =
     raw.trigger === 'off' ||
     raw.trigger === 'always' ||
@@ -75,6 +83,10 @@ function mergeTts(raw: unknown): TtsSettings {
     raw.trigger === 'tagged'
       ? raw.trigger
       : 'always';
+  // Per-provider buckets: keep built-in defaults, plus passthrough for any
+  // extension-provider key (e.g. `tts-local-cli`) so unknown plugins survive
+  // a round-trip through the UI without losing their config.
+  const localCliRaw = raw['tts-local-cli'];
   return {
     enabled: Boolean(raw.enabled),
     provider,
@@ -89,6 +101,9 @@ function mergeTts(raw: unknown): TtsSettings {
     openai: isRecord(raw.openai) ? { ...d.openai, ...raw.openai } : d.openai,
     edge: isRecord(raw.edge) ? { ...d.edge, ...raw.edge } : d.edge,
     minimax: isRecord(raw.minimax) ? { ...d.minimax, ...raw.minimax } : d.minimax,
+    'tts-local-cli': isRecord(localCliRaw)
+      ? { ...d['tts-local-cli'], ...localCliRaw }
+      : d['tts-local-cli'],
   };
 }
 

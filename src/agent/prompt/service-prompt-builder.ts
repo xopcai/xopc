@@ -78,7 +78,7 @@ export class SystemPromptBuilder {
             );
       const trimmed = options.systemPromptOverride.trim();
       let fullPrompt = skillPrompt.trim() ? `${trimmed}\n\n${skillPrompt}` : trimmed;
-      const ttsMerged = mergeTtsConfigFromAppConfig(this.config.tts);
+      const ttsMerged = mergeTtsConfigFromAppConfig(this.config.messages?.tts);
       const reg = options.registeredToolNames ?? [];
       const ttsHint = buildTtsSystemPromptHint({
         enabled: ttsMerged.enabled,
@@ -102,7 +102,7 @@ export class SystemPromptBuilder {
 
     const workspaceBootstrapFiles = bootstrapFiles.map((f) => toWorkspaceBootstrapFile(f, ws));
 
-    const ttsMerged = mergeTtsConfigFromAppConfig(this.config.tts);
+    const ttsMerged = mergeTtsConfigFromAppConfig(this.config.messages?.tts);
     const reg = options?.registeredToolNames ?? [];
     const ttsSystemHint = buildTtsSystemPromptHint({
       enabled: ttsMerged.enabled,

@@ -345,6 +345,72 @@ api.registerTool({
 });
 ```
 
+### Speech providers (TTS) {#speech-providers}
+
+Extensions can register a **`SpeechProviderPlugin`** so the TTS chain can call
+new vendors or local binaries without forking core. Built-in providers
+(`openai`, `alibaba`, `edge`, `minimax`) and the bundled local-CLI provider
+(`tts-local-cli`) all use the same plugin shape — see
+`src/voice/tts/speech-provider-types.ts` for the full interface.
+
+Two ways to ship a provider:
+
+#### 1. Use the bundled `tts-local-cli` extension
+
+For any local TTS binary (mlx-audio, sherpa-onnx-tts, piper, …), enable the
+bundled extension and configure the shell command in your `xopc.json`:
+
+```json
+{
+  "messages": {
+    "tts": {
+      "enabled": true,
+      "provider": "tts-local-cli",
+      "tts-local-cli": {
+        "command": "mlx_audio.tts.generate --text \"{{Text}}\" --file_prefix {{OutputBase}}",
+        "outputFormat": "wav",
+        "timeoutMs": 120000
+      }
+    }
+  }
+}
+```
+
+Placeholders inside `command`: **`{{Text}}`**, **`{{OutputPath}}`**,
+**`{{OutputDir}}`**, **`{{OutputBase}}`** (case-insensitive). The provider
+spawns the binary, scans `OutputDir` for the produced audio file, and returns
+its bytes. See [`docs/voice.md`](./voice.md) → *Local CLI TTS* for the full
+config schema.
+
+#### 2. Write a custom `SpeechProviderPlugin`
+
+Create a new extension and self-register the plugin on module load (this is
+the same pattern the bundled providers in `src/voice/tts/providers/*-speech.ts`
+use):
+
+```typescript
+import { registerSpeechProvider } from 'xopc/voice/tts/speech-registry';
+import type { SpeechProviderPlugin } from 'xopc/voice/tts/speech-provider-types';
+
+const myProvider: SpeechProviderPlugin = {
+  id: 'my-vendor',
+  resolveConfig: (ctx) => ctx.rawConfig,
+  isConfigured: (ctx) => Boolean(ctx.providerConfig.apiKey),
+  async synthesize(req) {
+    // ... call vendor API, return { audioBuffer, outputFormat, fileExtension }
+  },
+  // Optional: synthesizeStream for streaming consumers (Telegram drafts).
+  // If omitted, the orchestrator wraps `synthesize` as a single-chunk stream.
+};
+
+registerSpeechProvider(myProvider);
+```
+
+Then list this provider id under `messages.tts.provider` (or in
+`messages.tts.fallback.order`) and the chain will pick it up. Outbound HTTP
+calls **must** go through `src/media-shared/http/` (SSRF guard + key rotation
+are mandatory). See `docs/voice-rearchitecture.md` for the full design.
+
 ### Hooks
 
 Hooks intercept and modify behavior at lifecycle points:

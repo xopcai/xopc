@@ -33,7 +33,7 @@ export async function maybeEmitWebchatTts(
   sessionKey: string,
   hadInboundVoice: boolean,
 ): Promise<WebchatTtsResult | null> {
-  const ttsConfig = mergeTtsConfigFromAppConfig(deps.config?.tts);
+  const ttsConfig = mergeTtsConfigFromAppConfig(deps.config?.messages?.tts);
   if (!isTTSAvailable(ttsConfig)) {
     return null;
   }

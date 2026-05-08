@@ -80,22 +80,28 @@ xopc onboard
       }
     }
   },
-  "stt": {
-    "enabled": true,
-    "provider": "alibaba",
-    "alibaba": {
-      "apiKey": "${DASHSCOPE_API_KEY}",
-      "model": "paraformer-v1"
+  "tools": {
+    "media": {
+      "audio": {
+        "enabled": true,
+        "provider": "alibaba",
+        "alibaba": {
+          "apiKey": "${DASHSCOPE_API_KEY}",
+          "model": "paraformer-v2"
+        }
+      }
     }
   },
-  "tts": {
-    "enabled": true,
-    "provider": "openai",
-    "trigger": "inbound",
-    "openai": {
-      "apiKey": "${OPENAI_API_KEY}",
-      "model": "tts-1",
-      "voice": "alloy"
+  "messages": {
+    "tts": {
+      "enabled": true,
+      "provider": "openai",
+      "trigger": "inbound",
+      "openai": {
+        "apiKey": "${OPENAI_API_KEY}",
+        "model": "tts-1",
+        "voice": "alloy"
+      }
     }
   },
   "heartbeat": {
@@ -414,54 +420,60 @@ HTTP API 网关配置。
 
 ---
 
-### stt
+### tools.media.audio (STT)
 
-语音转文字（STT）配置。
+语音转文字（STT）配置。位于 **`tools.media.audio`** 路径下（网关 REST 仍以
+`stt` 字段名暴露，便于表单与脚本兼容）。
 
 | 字段 | 类型 | 默认值 | 说明 |
 |-------|------|---------|------|
 | `enabled` | boolean | `false` | 启用 STT |
-| `provider` | string | `alibaba` | 服务商：`alibaba`, `openai` |
+| `provider` | string | `alibaba` | 主服务商：`alibaba`、`openai` |
 | `alibaba` | object | - | 阿里云 DashScope 配置 |
 | `openai` | object | - | OpenAI Whisper 配置 |
 | `fallback` | object | - | 回退配置 |
+| `timeoutMs` | number | `60000` | 单次调用 HTTP 超时（毫秒） |
 
-#### stt.alibaba
-
-| 字段 | 类型 | 默认值 | 说明 |
-|-------|------|---------|------|
-| `apiKey` | string | - | DashScope API 密钥 |
-| `model` | string | `paraformer-v1` | 模型：`paraformer-v1`, `paraformer-8k-v1` |
-
-#### stt.openai
+#### tools.media.audio.alibaba
 
 | 字段 | 类型 | 默认值 | 说明 |
 |-------|------|---------|------|
-| `apiKey` | string | - | OpenAI API 密钥 |
-| `model` | string | `whisper-1` | 模型：`whisper-1` |
+| `apiKey` | string | - | DashScope API 密钥（环境变量：`DASHSCOPE_API_KEY`） |
+| `model` | string | `paraformer-v2` | 模型 id |
 
-#### stt.fallback
+#### tools.media.audio.openai
+
+| 字段 | 类型 | 默认值 | 说明 |
+|-------|------|---------|------|
+| `apiKey` | string | - | OpenAI API 密钥（环境变量：`OPENAI_API_KEY`） |
+| `model` | string | `whisper-1` | Whisper 模型 id |
+
+#### tools.media.audio.fallback
 
 | 字段 | 类型 | 默认值 | 说明 |
 |-------|------|---------|------|
 | `enabled` | boolean | `true` | 启用回退 |
 | `order` | array | `["alibaba", "openai"]` | 回退顺序 |
 
-失败时会按顺序尝试各 provider，并记录结构化 **attempts**（provider、结果、耗时、原因）便于诊断。
+失败时会按顺序尝试各 provider，并记录结构化 **attempts**（provider、结果、耗时、原因）便于诊断。所有 HTTP 调用都走共享的 `media-shared/http` 底盘，启用了 **SSRF 防护**（`fetchWithTimeoutGuarded`）。
 
 **示例：**
 ```json
 {
-  "stt": {
-    "enabled": true,
-    "provider": "alibaba",
-    "alibaba": {
-      "apiKey": "${DASHSCOPE_API_KEY}",
-      "model": "paraformer-v1"
-    },
-    "fallback": {
-      "enabled": true,
-      "order": ["alibaba", "openai"]
+  "tools": {
+    "media": {
+      "audio": {
+        "enabled": true,
+        "provider": "alibaba",
+        "alibaba": {
+          "apiKey": "${DASHSCOPE_API_KEY}",
+          "model": "paraformer-v2"
+        },
+        "fallback": {
+          "enabled": true,
+          "order": ["alibaba", "openai"]
+        }
+      }
     }
   }
 }
@@ -469,59 +481,92 @@ HTTP API 网关配置。
 
 ---
 
-### tts
+### messages.tts (TTS)
 
-文字转语音（TTS）配置；启用时还会注册智能体工具 **`text_to_speech`**。
+文字转语音（TTS）配置。位于 **`messages.tts`** 路径下（网关 REST 仍以 `tts`
+字段名暴露）。启用时还会注册智能体工具 **`text_to_speech`**。
 
 | 字段 | 类型 | 默认值 | 说明 |
 |-------|------|---------|------|
 | `enabled` | boolean | `false` | 启用 TTS |
-| `provider` | string | `openai` | 主服务商：`openai`, `alibaba`, `edge` |
-| `trigger` | string | `always` | `off`, `always`, `inbound`, `tagged`（历史值 `auto` 会当作 `inbound`） |
-| `maxTextLength` | number | `512` | 送入各 TTS 提供方的最大字符数（可按 provider 上限调高） |
-| `timeoutMs` | number | `30000` | 单次请求超时（毫秒） |
+| `provider` | string | `openai` | 主服务商：`openai`、`alibaba`、`edge`、`minimax`、`tts-local-cli`，或任何已注册的 SpeechProviderPlugin id |
+| `trigger` | string | `always` | `off`、`always`、`inbound`、`tagged` |
+| `maxTextLength` | number | `512` | 送入各 TTS 提供方的最大字符数。保守默认值兼顾所有内置 provider（阿里 qwen-tts 上限 512）；如主用 provider 上限更高可上调。 |
+| `timeoutMs` | number | `60000` | 单次请求 HTTP 超时（毫秒）。范围 `1000`–`180000`。MiniMax 内部会自动提到 ≥150s 走异步轮询。 |
 | `fallback` | object | - | 失败时的回退顺序 |
 | `summarization` | object | - | 超长文本在 TTS 前经 LLM 摘要 |
 | `modelOverrides` | object | - | 是否允许模型使用 `[[tts:...]]` 指令 |
 | `openai` | object | - | OpenAI TTS |
 | `alibaba` | object | - | 阿里云 DashScope TTS |
-| `edge` | object | - | Edge TTS（无需 API Key） |
+| `edge` | object | - | Microsoft Edge TTS（无需 API Key） |
+| `minimax` | object | - | MiniMax T2A 异步 TTS |
+| `tts-local-cli` | object | - | 本地 CLI provider（内置扩展） |
 
-#### tts.openai
-
-| 字段 | 类型 | 默认值 | 说明 |
-|-------|------|---------|------|
-| `apiKey` | string | - | OpenAI API 密钥 |
-| `model` | string | `tts-1` | 模型：`tts-1`, `tts-1-hd` |
-| `voice` | string | `alloy` | 音色：`alloy`, `echo`, `fable`, `onyx`, `nova`, `shimmer` |
-
-#### tts.alibaba
+#### messages.tts.openai
 
 | 字段 | 类型 | 默认值 | 说明 |
 |-------|------|---------|------|
-| `apiKey` | string | - | DashScope API 密钥 |
+| `apiKey` | string | - | OpenAI API 密钥（环境变量：`OPENAI_API_KEY`） |
+| `baseUrl` | string | `https://api.openai.com/v1` | 覆盖 base URL（环境变量：`OPENAI_TTS_BASE_URL`），用于 OpenAI 兼容厂商 |
+| `model` | string | `tts-1` | 模型：`tts-1`、`tts-1-hd`、`gpt-4o-mini-tts` |
+| `voice` | string | `alloy` | 音色：`alloy`、`echo`、`fable`、`onyx`、`nova`、`shimmer`、`coral`、`verse` … |
+
+#### messages.tts.alibaba
+
+| 字段 | 类型 | 默认值 | 说明 |
+|-------|------|---------|------|
+| `apiKey` | string | - | DashScope API 密钥（环境变量：`DASHSCOPE_API_KEY`） |
 | `model` | string | `qwen-tts` | TTS 模型 id |
-| `voice` | string | `Cherry` | 音色 id |
+| `voice` | string | `longxiaochun` | 音色 id（`Cherry`、`Ethan`、`longxiaochun`、`longxiaobai` …） |
 
-#### tts.edge
+#### messages.tts.edge
 
 | 字段 | 类型 | 默认值 | 说明 |
 |-------|------|---------|------|
 | `enabled` | boolean | `true` | 为 `false` 时从链中排除 Edge |
-| `voice` | string | `en-US-MichelleNeural` | Edge 音色 |
+| `voice` | string | `en-US-MichelleNeural` | Edge 音色 id |
 | `lang` | string | `en-US` | BCP-47 语言 |
-| `outputFormat` | string | 见 schema | Edge 输出格式字符串 |
+| `outputFormat` | string | `audio-24khz-48kbitrate-mono-mp3` | Edge 输出格式字符串 |
 | `proxy` | string | - | 可选 HTTP(S) 代理 |
-| `timeoutMs` | number | - | 仅针对 Edge 的超时覆盖 |
 
-#### tts.fallback
+#### messages.tts.minimax
+
+| 字段 | 类型 | 默认值 | 说明 |
+|-------|------|---------|------|
+| `apiKey` | string | - | MiniMax API 密钥（环境变量：`MINIMAX_API_KEY`） |
+| `baseUrl` | string | `https://api.minimaxi.com/v1` | 覆盖 base URL |
+| `model` | string | `speech-2.8-hd` | 模型 id（`speech-2.8-hd`、`speech-2.8-turbo` …） |
+| `voice` | string | `male-qn-qingse` | 音色 id |
+| `groupId` | string | - | 企业版前向兼容字段 |
+
+#### messages.tts.tts-local-cli
+
+由内置扩展 **`tts-local-cli`** 提供（权威 JSON Schema 见
+`extensions/tts-local-cli/xopc.extension.json`）。spawn 任意本地 TTS 二进制
+（mlx-audio、sherpa-onnx-tts、piper 等）并读取产物文件。
+
+| 字段 | 类型 | 默认值 | 说明 |
+|-------|------|---------|------|
+| `command` | string | **必填** | Shell 命令模板；占位符 `{{Text}}`、`{{OutputPath}}`、`{{OutputDir}}`、`{{OutputBase}}`（大小写不敏感） |
+| `args` | string[] | `[]` | 在解析后的 command 末尾追加的额外参数 |
+| `cwd` | string | - | spawn 进程的工作目录 |
+| `outputFormat` | enum | `wav` | CLI 产物的文件扩展名：`mp3` \| `opus` \| `wav` |
+| `timeoutMs` | number | `120000` | 强制 kill 的超时（毫秒） |
+| `env` | object | - | 合入 spawn 进程 env 的额外变量（`Record<string,string>`） |
+
+Voice 设置 UI 暴露常用字段（`command`、`cwd`、`outputFormat`、`timeoutMs`）；
+`args` 与 `env` 属高级字段 — 请直接编辑 `~/.xopc/xopc.json` 设置。
+
+#### messages.tts.fallback
 
 | 字段 | 类型 | 默认值 | 说明 |
 |-------|------|---------|------|
 | `enabled` | boolean | `true` | 启用回退 |
-| `order` | array | `["openai","alibaba","edge"]` | 顺序（会与主 provider 去重） |
+| `order` | array | `["openai","alibaba","edge","minimax"]` | 顺序（会与主 provider 去重） |
 
-#### tts.summarization
+回退列表接受**任意已注册 SpeechProviderPlugin 的 id**，包括扩展 provider（如 `tts-local-cli`）。
+
+#### messages.tts.summarization
 
 | 字段 | 类型 | 默认值 | 说明 |
 |-------|------|---------|------|

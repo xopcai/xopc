@@ -438,6 +438,11 @@ export type WebToolsConfig = z.infer<typeof WebToolsConfigSchema>;
 
 export const ToolsConfigSchema = z.object({
   web: WebToolsConfigSchema.optional(),
+  /**
+   * Per-capability media providers. Currently only `audio` (STT) is wired;
+   * `image` / `video` slots are reserved for future capabilities.
+   */
+  media: z.lazy(() => ToolsMediaConfigSchema),
 }).default({
   web: {
     search: {
@@ -629,6 +634,22 @@ export const TTSConfigSchema = z.object({
 });
 
 // ============================================
+// messages.* — delivery / presentation concerns
+// ============================================
+
+export const MessagesConfigSchema = z.object({
+  /** Voice (text-to-speech) output configuration. */
+  tts: TTSConfigSchema.optional(),
+}).optional();
+
+export const ToolsMediaAudioConfigSchema = STTConfigSchema;
+
+export const ToolsMediaConfigSchema = z.object({
+  /** Audio (speech-to-text) capability provider config. */
+  audio: ToolsMediaAudioConfigSchema.optional(),
+}).optional();
+
+// ============================================
 // Provider Configs (capability providers: image / audio / video)
 // ============================================
 
@@ -782,8 +803,8 @@ export const ConfigSchema = z.object({
   /** Per-vendor capability provider config (image / audio / video). */
   providers: ProvidersConfigSchema.optional(),
   modelsDev: ModelsDevConfigSchema,
-  stt: STTConfigSchema.optional(),
-  tts: TTSConfigSchema.optional(),
+  /** Delivery / presentation concerns (currently `tts`). */
+  messages: MessagesConfigSchema,
   update: UpdateConfigSchema,
 }).default({
   agents: {
@@ -895,59 +916,9 @@ export const ConfigSchema = z.object({
   modelsDev: {
     enabled: true,
   },
-  stt: {
-    enabled: false,
-    provider: 'alibaba',
-    alibaba: {
-      model: 'paraformer-v2',
-    },
-    openai: {
-      model: 'whisper-1',
-    },
-    fallback: {
-      enabled: true,
-      order: ['alibaba', 'openai'],
-    },
-  },
-  tts: {
-    enabled: false,
-    provider: 'openai',
-    trigger: 'always',
-    fallback: {
-      enabled: true,
-      order: ['openai', 'alibaba', 'minimax', 'edge'],
-    },
-    maxTextLength: 4096,
-    timeoutMs: 30000,
-    modelOverrides: {
-      enabled: true,
-      allowText: true,
-      allowProvider: false,
-      allowVoice: true,
-      allowModelId: true,
-      allowVoiceSettings: false,
-      allowNormalization: false,
-      allowSeed: false,
-    },
-    alibaba: {
-      model: 'qwen-tts',
-      voice: 'Cherry',
-    },
-    openai: {
-      model: 'tts-1',
-      voice: 'alloy',
-    },
-    edge: {
-      enabled: true,
-      voice: 'en-US-MichelleNeural',
-      lang: 'en-US',
-      outputFormat: 'audio-24khz-48kbitrate-mono-mp3',
-    },
-    minimax: {
-      model: 'speech-2.8-hd',
-      voice: 'male-qn-qingse',
-    },
-  },
+  // messages.tts / tools.media.audio start undefined; the factory layer fills
+  // in provider-level defaults (model/voice) on demand. Fresh configs don't
+  // ship with enabled providers so they never make surprise STT/TTS calls.
 });
 
 export type Config = z.infer<typeof ConfigSchema>;

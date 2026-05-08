@@ -1,75 +1,51 @@
 /**
- * STT Provider Factory
+ * STT factory — registry-driven provider chain construction.
+ *
+ * Resolves STTConfig slices into `AudioProviderResolvedConfig` arrays that are
+ * consumed by `runAudioTranscription`. The two side-effect imports below
+ * register the built-in MediaUnderstanding providers (alibaba + openai) with
+ * the registry on first use.
  */
 
-import type { STTProvider, STTConfig } from './types.js';
-import { OpenAIProvider } from './openai.js';
-import { AlibabaProvider } from './alibaba.js';
 import { createLogger } from '../../utils/logger.js';
+
+import './openai-transcription.js'; // side-effect: register openai
+import './alibaba-transcription.js'; // side-effect: register alibaba
+import { getMediaUnderstandingProvider } from '../../media-understanding/registry.js';
+import type { AudioProviderResolvedConfig } from '../../media-understanding/audio-transcription-runner.js';
+import type { STTConfig } from './types.js';
 
 const log = createLogger('STT:Factory');
 
-export function createSTTProvider(config: STTConfig): STTProvider {
-  if (!config.enabled) {
-    throw new Error('STT is not enabled');
+/** Resolve a single STT provider config slice → runner-shaped resolved config, or null when unavailable. */
+export function resolveSTTProviderConfig(
+  providerId: STTConfig['provider'],
+  config: STTConfig,
+): AudioProviderResolvedConfig | null {
+  const plugin = getMediaUnderstandingProvider(providerId);
+  if (!plugin || typeof plugin.transcribeAudio !== 'function') {
+    log.warn(
+      { providerId },
+      `STT provider "${providerId}" is not registered or does not implement transcribeAudio`,
+    );
+    return null;
   }
-
-  const provider = config.provider;
-
-  switch (provider) {
-    case 'openai': {
-      const apiKey = config.openai?.apiKey || process.env.OPENAI_API_KEY;
-      if (!apiKey) {
-        throw new Error('OpenAI API key not configured');
-      }
-      return new OpenAIProvider({
-        apiKey,
-        model: config.openai?.model,
-      });
-    }
-
-    case 'alibaba': {
-      const apiKey = config.alibaba?.apiKey || process.env.DASHSCOPE_API_KEY;
-      if (!apiKey) {
-        throw new Error('Alibaba DashScope API key not configured');
-      }
-      return new AlibabaProvider({
-        apiKey,
-        model: config.alibaba?.model,
-      });
-    }
-
-    default:
-      throw new Error(`Unknown STT provider: ${provider}`);
+  const slice = providerId === 'openai' ? config.openai : config.alibaba;
+  const apiKey =
+    slice?.apiKey ??
+    (providerId === 'openai' ? process.env.OPENAI_API_KEY : process.env.DASHSCOPE_API_KEY);
+  if (!apiKey) {
+    log.debug({ providerId }, `STT provider "${providerId}" missing API key; skipping`);
+    return null;
   }
+  return {
+    id: providerId,
+    apiKey,
+    ...(slice?.model ? { model: slice.model } : {}),
+  };
 }
 
-/**
- * Create providers for fallback chain
- */
-export function createFallbackProviders(config: STTConfig): STTProvider[] {
-  if (!config.enabled) {
-    return [];
-  }
-
-  const providers: STTProvider[] = [];
-  const order = config.fallback?.order || [config.provider];
-
-  for (const providerName of order) {
-    try {
-      const providerConfig: STTConfig = {
-        ...config,
-        provider: providerName,
-      };
-      providers.push(createSTTProvider(providerConfig));
-    } catch (error) {
-      log.warn({ provider: providerName, error }, 'Failed to create provider for fallback');
-    }
-  }
-
-  return providers;
-}
-
+/** Resolve provider order (primary first, then fallback chain — deduped). */
 export function resolveSTTProviderOrder(
   primary: STTConfig['provider'],
   fallback?: STTConfig['fallback'],
@@ -86,10 +62,18 @@ export function resolveSTTProviderOrder(
   return order;
 }
 
-export function tryCreateSTTProvider(config: STTConfig): STTProvider | null {
-  try {
-    return createSTTProvider(config);
-  } catch {
-    return null;
+/** Build the full chain of resolved provider configs in priority order. */
+export function resolveSTTProviderChain(config: STTConfig): AudioProviderResolvedConfig[] {
+  if (!config.enabled) {
+    return [];
   }
+  const order = resolveSTTProviderOrder(config.provider, config.fallback);
+  const chain: AudioProviderResolvedConfig[] = [];
+  for (const providerId of order) {
+    const resolved = resolveSTTProviderConfig(providerId, config);
+    if (resolved) {
+      chain.push(resolved);
+    }
+  }
+  return chain;
 }

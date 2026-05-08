@@ -59,7 +59,7 @@ export function createTextToSpeechTool(deps: TextToSpeechToolDeps): AgentTool {
       }
 
       const cfg = deps.getConfig();
-      const ttsConfig = mergeTtsConfigFromAppConfig(cfg?.tts);
+      const ttsConfig = mergeTtsConfigFromAppConfig(cfg?.messages?.tts);
       if (!ttsConfig.enabled) {
         return {
           content: [{ type: 'text', text: 'TTS is not enabled in configuration.' }],

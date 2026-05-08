@@ -123,8 +123,8 @@ export async function buildSafeWebConfigPayload(service: GatewayService) {
     update: {
       channel: config.update?.channel ?? 'stable',
     },
-    stt: config.stt,
-    tts: config.tts,
+    stt: config.tools?.media?.audio,
+    tts: config.messages?.tts,
     tools: safeToolsWebForGet(config),
     bindings: Array.isArray(config.bindings) ? config.bindings : [],
   };

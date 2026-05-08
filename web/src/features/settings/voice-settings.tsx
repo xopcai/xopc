@@ -224,6 +224,23 @@ export function VoiceSettingsPanel() {
     [],
   );
 
+  const updateTtsLocalCli = useCallback(
+    (patch: Partial<NonNullable<VoiceSettingsState['tts']['tts-local-cli']>>) => {
+      setForm((f) =>
+        f
+          ? {
+              ...f,
+              tts: {
+                ...f.tts,
+                'tts-local-cli': { ...f.tts['tts-local-cli'], ...patch },
+              },
+            }
+          : null,
+      );
+    },
+    [],
+  );
+
   const save = useCallback(async () => {
     if (!form || saving) return;
     setSaving(true);
@@ -331,6 +348,7 @@ export function VoiceSettingsPanel() {
           updateTtsOpenai={updateTtsOpenai}
           updateTtsEdge={updateTtsEdge}
           updateTtsMinimax={updateTtsMinimax}
+          updateTtsLocalCli={updateTtsLocalCli}
         />
       </div>
 
@@ -495,6 +513,7 @@ function TtsSection({
   updateTtsOpenai,
   updateTtsEdge,
   updateTtsMinimax,
+  updateTtsLocalCli,
 }: {
   v: VoiceSettingsMessages;
   tts: VoiceSettingsState['tts'];
@@ -504,6 +523,7 @@ function TtsSection({
   updateTtsOpenai: (p: Partial<NonNullable<VoiceSettingsState['tts']['openai']>>) => void;
   updateTtsEdge: (p: Partial<NonNullable<VoiceSettingsState['tts']['edge']>>) => void;
   updateTtsMinimax: (p: Partial<NonNullable<VoiceSettingsState['tts']['minimax']>>) => void;
+  updateTtsLocalCli: (p: Partial<NonNullable<VoiceSettingsState['tts']['tts-local-cli']>>) => void;
 }) {
   const triggerDesc = (t: string) => {
     if (t === 'off') return v.tts.triggerDescOff;
@@ -570,14 +590,13 @@ function TtsSection({
                 <select
                   className={selectClassName()}
                   value={tts.provider}
-                  onChange={(e) =>
-                    updateTts({ provider: e.target.value as VoiceSettingsState['tts']['provider'] })
-                  }
+                  onChange={(e) => updateTts({ provider: e.target.value })}
                 >
                   <option value="openai">{v.tts.providerOpenai}</option>
                   <option value="alibaba">{v.stt.alibaba}</option>
                   <option value="minimax">MiniMax</option>
                   <option value="edge">{v.tts.providerEdge}</option>
+                  <option value="tts-local-cli">{v.tts.providerLocalCli}</option>
                 </select>
               </div>
             </div>
@@ -736,6 +755,82 @@ function TtsSection({
                   ))}
                 </select>
                 <p className="text-xs text-fg-subtle">{v.tts.edgeHint}</p>
+              </div>
+            ) : null}
+
+            {tts.provider === 'tts-local-cli' ? (
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="flex flex-col gap-1.5 sm:col-span-2">
+                  <FieldLabel>{v.tts.localCli.command}</FieldLabel>
+                  <input
+                    className={cn(inputClassName(), 'font-mono text-xs')}
+                    type="text"
+                    autoComplete="off"
+                    spellCheck={false}
+                    value={tts['tts-local-cli']?.command ?? ''}
+                    onChange={(e) => updateTtsLocalCli({ command: e.target.value })}
+                    placeholder={v.tts.localCli.commandPlaceholder}
+                  />
+                  <p className="text-xs text-fg-subtle">{v.tts.localCli.commandDesc}</p>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <FieldLabel>{v.tts.localCli.cwd}</FieldLabel>
+                  <input
+                    className={cn(inputClassName(), 'font-mono text-xs')}
+                    type="text"
+                    autoComplete="off"
+                    spellCheck={false}
+                    value={tts['tts-local-cli']?.cwd ?? ''}
+                    onChange={(e) => updateTtsLocalCli({ cwd: e.target.value })}
+                    placeholder="/path/to/cwd"
+                  />
+                  <p className="text-xs text-fg-subtle">{v.tts.localCli.cwdDesc}</p>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <FieldLabel>{v.tts.localCli.outputFormat}</FieldLabel>
+                  <select
+                    className={selectClassName()}
+                    value={tts['tts-local-cli']?.outputFormat ?? 'wav'}
+                    onChange={(e) =>
+                      updateTtsLocalCli({
+                        outputFormat: e.target.value as 'mp3' | 'opus' | 'wav',
+                      })
+                    }
+                  >
+                    <option value="wav">wav</option>
+                    <option value="mp3">mp3</option>
+                    <option value="opus">opus</option>
+                  </select>
+                  <p className="text-xs text-fg-subtle">{v.tts.localCli.outputFormatDesc}</p>
+                </div>
+                <div className="flex flex-col gap-1.5 sm:col-span-2">
+                  <FieldLabel>{v.tts.localCli.timeoutMs}</FieldLabel>
+                  <input
+                    className={inputClassName()}
+                    type="number"
+                    min={0}
+                    step={1000}
+                    value={
+                      typeof tts['tts-local-cli']?.timeoutMs === 'number'
+                        ? String(tts['tts-local-cli'].timeoutMs)
+                        : ''
+                    }
+                    onChange={(e) => {
+                      const raw = e.target.value.trim();
+                      if (raw === '') {
+                        updateTtsLocalCli({ timeoutMs: undefined });
+                        return;
+                      }
+                      const num = Number(raw);
+                      if (Number.isFinite(num) && num >= 0) {
+                        updateTtsLocalCli({ timeoutMs: num });
+                      }
+                    }}
+                    placeholder="30000"
+                  />
+                  <p className="text-xs text-fg-subtle">{v.tts.localCli.timeoutMsDesc}</p>
+                </div>
+                <p className="text-xs text-fg-subtle sm:col-span-2">{v.tts.localCli.hint}</p>
               </div>
             ) : null}
           </>
