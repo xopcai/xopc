@@ -1,0 +1,22 @@
+{
+  "name": "xopc-extension-tts-local-cli",
+  "version": "1.0.0",
+  "description": "Local CLI TTS provider — pipe text to any local binary (mlx, sherpa-onnx, piper, etc.)",
+  "main": "index.ts",
+  "private": true,
+  "type": "module",
+  "xopc": {
+    "extension": true,
+    "id": "tts-local-cli",
+    "name": "Local CLI TTS",
+    "kind": "speech-provider"
+  },
+  "keywords": [
+    "xopc",
+    "xopc-extension",
+    "tts",
+    "speech",
+    "local"
+  ],
+  "license": "MIT"
+}

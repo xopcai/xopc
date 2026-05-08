@@ -448,7 +448,7 @@ export function createInboundProcessor(deps: InboundProcessorDeps) {
       message.voice &&
       botEarly &&
       botTokenEarly &&
-      sttService.isSTTAvailable(config?.stt)
+      sttService.isSTTAvailable(config?.tools?.media?.audio)
     ) {
       voiceProbeText = await downloadAndTranscribeTelegramVoice({
         voice: message.voice,
@@ -456,7 +456,7 @@ export function createInboundProcessor(deps: InboundProcessorDeps) {
         botToken: botTokenEarly,
         accountApiRoot: accountApiRootEarly,
         sttService,
-        sttConfig: config?.stt,
+        sttConfig: config?.tools?.media?.audio,
       });
     }
 
@@ -535,7 +535,7 @@ export function createInboundProcessor(deps: InboundProcessorDeps) {
         message,
         sttService,
         mediaUtils,
-        config?.stt,
+        config?.tools?.media?.audio,
         voiceProbeText || undefined,
       );
       attachments = mediaResult.attachments;

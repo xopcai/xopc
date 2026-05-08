@@ -46,13 +46,16 @@ describe('appendTtsReadinessNote', () => {
   });
 
   it('appends setup hint when TTS enabled but no provider works', () => {
+    // Schema v2: TTS lives under `messages.tts`, not the top-level `tts` key.
     const cfg = {
-      tts: {
-        enabled: true,
-        provider: 'openai' as const,
-        trigger: 'always' as const,
-        edge: { enabled: false },
-        fallback: { enabled: false, order: [] as ('openai' | 'alibaba' | 'edge' | 'minimax')[] },
+      messages: {
+        tts: {
+          enabled: true,
+          provider: 'openai' as const,
+          trigger: 'always' as const,
+          edge: { enabled: false },
+          fallback: { enabled: false, order: [] as ('openai' | 'alibaba' | 'edge' | 'minimax')[] },
+        },
       },
     } as unknown as Config;
 
@@ -62,7 +65,8 @@ describe('appendTtsReadinessNote', () => {
   });
 
   it('does not append when TTS disabled', () => {
-    const cfg = { tts: { enabled: false } } as unknown as Config;
+    // Schema v2: messages.tts (was top-level `tts`).
+    const cfg = { messages: { tts: { enabled: false } } } as unknown as Config;
     expect(appendTtsReadinessNote('Done', cfg)).toBe('Done');
   });
 });

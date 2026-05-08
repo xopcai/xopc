@@ -1,5 +1,28 @@
-import type { TTSProvider, TtsDirectiveParseResult, TtsDirectiveOverrides, TTSModelOverrideConfig } from './types.js';
+/**
+ * TTS directive parser.
+ *
+ * Parses `[[tts:key=value]]` and `[[tts:text]]...[[/tts:text]]` blocks.
+ *
+ * Per-provider key handling (voice/model/speed) is delegated to each
+ * `SpeechProviderPlugin.parseDirectiveToken`. The parser:
+ *   1. Pulls out the `text` block and the global `provider` token here (these
+ *      are cross-provider concerns).
+ *   2. For every other token, asks each registered provider via
+ *      `parseDirectiveToken({ key, value, policy })`. The first provider whose
+ *      result has `handled === true` wins; its returned overrides are merged
+ *      into `overrides[provider.id]`.
+ *   3. Tokens that no provider handles produce a warning (helps catch typos).
+ *
+ * Adding a new provider with a new directive key (e.g. `[[tts:emotion=happy]]`)
+ * requires no change to this file — the provider's own `parseDirectiveToken`
+ * declares which keys it owns.
+ */
+
 import { createLogger } from '../../utils/logger.js';
+
+import './providers/index.js'; // side-effect: register built-in providers
+import { listSpeechProviders } from './speech-registry.js';
+import type { TTSModelOverrideConfig, TTSProvider, TtsDirectiveOverrides, TtsDirectiveParseResult } from './types.js';
 
 const log = createLogger('TTS:Directives');
 
@@ -10,13 +33,39 @@ function isValidProvider(value: string): value is TTSProvider {
 }
 
 function parseNumber(value: string): number | undefined {
-  const parsed = parseFloat(value);
-  return isFinite(parsed) ? parsed : undefined;
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+/**
+ * Apply a provider-handled override into the bucket for `providerId`. Mutates
+ * `overrides` in place. Maps the SpeechProviderOverrides keys (model/voice/speed)
+ * onto the per-provider bucket in TtsDirectiveOverrides.
+ */
+function recordProviderOverride(
+  overrides: TtsDirectiveOverrides,
+  providerId: string,
+  patch: { model?: string; voice?: string; speed?: number },
+): void {
+  if (!isValidProvider(providerId)) {
+    return;
+  }
+  const bucket = (overrides[providerId] as Record<string, unknown> | undefined) ?? {};
+  if (patch.voice !== undefined) {
+    bucket.voice = patch.voice;
+  }
+  if (patch.model !== undefined) {
+    bucket.model = patch.model;
+  }
+  if (patch.speed !== undefined) {
+    bucket.speed = patch.speed;
+  }
+  (overrides as Record<string, unknown>)[providerId] = bucket;
 }
 
 export function parseTtsDirectives(
   text: string,
-  policy: TTSModelOverrideConfig = { enabled: true }
+  policy: TTSModelOverrideConfig = { enabled: true },
 ): TtsDirectiveParseResult {
   if (!policy.enabled) {
     return {
@@ -32,8 +81,9 @@ export function parseTtsDirectives(
   let cleanedText = text;
   let hasDirective = false;
 
+  // 1. Pull out [[tts:text]]...[[/tts:text]] blocks (cross-provider concern).
   const textBlockRegex = /\[\[tts:text\]\]([\s\S]*?)\[\[\/tts:text\]\]/gi;
-  cleanedText = cleanedText.replace(textBlockRegex, (match, inner: string) => {
+  cleanedText = cleanedText.replace(textBlockRegex, (_match, inner: string) => {
     hasDirective = true;
     if (policy.allowText && overrides.ttsText === undefined) {
       overrides.ttsText = inner.trim();
@@ -41,101 +91,86 @@ export function parseTtsDirectives(
     return '';
   });
 
+  const providers = listSpeechProviders();
+
+  // 2. Parse [[tts:key=value ...]] tokens.
   const directiveRegex = /\[\[tts:([^\]]+)\]\]/gi;
-  cleanedText = cleanedText.replace(directiveRegex, (match, body: string) => {
+  cleanedText = cleanedText.replace(directiveRegex, (_match, body: string) => {
     hasDirective = true;
     const tokens = body.split(/\s+/).filter(Boolean);
 
     for (const token of tokens) {
       const eqIndex = token.indexOf('=');
-      if (eqIndex === -1) continue;
-
+      if (eqIndex === -1) {
+        continue;
+      }
       const key = token.slice(0, eqIndex).toLowerCase().trim();
       const value = token.slice(eqIndex + 1).trim();
+      if (!key || !value) {
+        continue;
+      }
 
-      if (!key || !value) continue;
-
-      try {
-        switch (key) {
-          case 'provider':
-            if (policy.allowProvider) {
-              if (isValidProvider(value)) {
-                overrides.provider = value;
-              } else {
-                warnings.push(`Invalid provider "${value}"`);
-              }
-            }
-            break;
-
-          case 'voice':
-          case 'openai_voice':
-          case 'openaivoice':
-            if (policy.allowVoice) {
-              overrides.openai = { ...overrides.openai, voice: value };
-            }
-            break;
-
-          case 'model':
-          case 'modelid':
-          case 'model_id':
-          case 'openai_model':
-          case 'openaimodel':
-            if (policy.allowModelId) {
-              overrides.openai = { ...overrides.openai, model: value };
-            }
-            break;
-
-          case 'speed':
-            if (policy.allowVoiceSettings) {
-              const speed = parseNumber(value);
-              if (speed !== undefined && speed >= 0.25 && speed <= 4.0) {
-                (overrides as Record<string, unknown>).speed = speed;
-              } else {
-                warnings.push(`Invalid speed "${value}" (must be 0.25-4.0)`);
-              }
-            }
-            break;
-
-          case 'alibaba_voice':
-          case 'alibabavoice':
-            if (policy.allowVoice) {
-              overrides.alibaba = { ...overrides.alibaba, voice: value };
-            }
-            break;
-
-          case 'alibaba_model':
-          case 'alibabamodel':
-            if (policy.allowModelId) {
-              overrides.alibaba = { ...overrides.alibaba, model: value };
-            }
-            break;
-
-          case 'edge_voice':
-          case 'edgevoice':
-            if (policy.allowVoice) {
-              overrides.edge = { ...overrides.edge, voice: value };
-            }
-            break;
-
-          case 'minimax_voice':
-          case 'minimaxvoice':
-            if (policy.allowVoice) {
-              overrides.minimax = { ...overrides.minimax, voice: value };
-            }
-            break;
-
-          case 'minimax_model':
-          case 'minimaxmodel':
-            if (policy.allowModelId) {
-              overrides.minimax = { ...overrides.minimax, model: value };
-            }
-            break;
-
-          default:
-            break;
+      // Cross-provider: provider switch.
+      if (key === 'provider') {
+        if (!policy.allowProvider) {
+          continue;
         }
-      } catch (err) {
-        warnings.push(`Error parsing "${key}": ${err instanceof Error ? err.message : String(err)}`);
+        if (isValidProvider(value)) {
+          overrides.provider = value;
+        } else {
+          warnings.push(`Invalid provider "${value}"`);
+        }
+        continue;
+      }
+
+      // Cross-provider: speed (validated globally with shared 0.25-4.0 range).
+      // Per-provider plugins may also accept their own `speed` token.
+      if (key === 'speed') {
+        if (!policy.allowVoiceSettings) {
+          continue;
+        }
+        const speed = parseNumber(value);
+        if (speed !== undefined && speed >= 0.25 && speed <= 4.0) {
+          (overrides as Record<string, unknown>).speed = speed;
+        } else {
+          warnings.push(`Invalid speed "${value}" (must be 0.25-4.0)`);
+        }
+        continue;
+      }
+
+      // Per-provider: ask each registered plugin. First handled wins.
+      let handled = false;
+      for (const plugin of providers) {
+        if (typeof plugin.parseDirectiveToken !== 'function') {
+          continue;
+        }
+        const result = plugin.parseDirectiveToken({
+          key,
+          value,
+          policy: {
+            enabled: policy.enabled ?? true,
+            allowText: policy.allowText ?? false,
+            allowProvider: policy.allowProvider ?? false,
+            allowVoice: policy.allowVoice ?? false,
+            allowModelId: policy.allowModelId ?? false,
+            allowVoiceSettings: policy.allowVoiceSettings ?? false,
+            allowNormalization: policy.allowNormalization ?? false,
+            allowSeed: policy.allowSeed ?? false,
+          },
+        });
+        if (result.handled) {
+          handled = true;
+          if (result.warnings) {
+            warnings.push(...result.warnings);
+          }
+          if (result.overrides) {
+            recordProviderOverride(overrides, plugin.id, result.overrides);
+          }
+          break;
+        }
+      }
+      if (!handled) {
+        warnings.push(`Unknown TTS directive key "${key}"`);
       }
     }
 
@@ -195,7 +230,7 @@ export function buildTtsSystemPromptHint(config: {
 
   switch (config.trigger) {
     case 'inbound':
-      hints.push('Only use TTS when the user\'s last message includes audio/voice.');
+      hints.push("Only use TTS when the user's last message includes audio/voice.");
       break;
     case 'tagged':
       hints.push('Only use TTS when you include [[tts]] or [[tts:text]] tags.');

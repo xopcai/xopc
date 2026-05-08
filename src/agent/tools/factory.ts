@@ -230,7 +230,7 @@ export class AgentToolsFactory {
       // Note: TTS is NOT handled by send_message tool anymore
       // TTS is applied at the ChannelManager dispatch layer
       createMessageTool(bus, () => this.deps.getCurrentContext()),
-      ...(mergeTtsConfigFromAppConfig(cfg?.tts).enabled
+      ...(mergeTtsConfigFromAppConfig(cfg?.messages?.tts).enabled
         ? [
             createTextToSpeechTool({
               bus,

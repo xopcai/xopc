@@ -60,7 +60,7 @@ const ttsCommand: CommandDefinition = {
   ],
   handler: async (ctx: CommandContext, args: string) => {
     const config = ctx.getConfig?.();
-    const ttsConfig = config?.tts;
+    const ttsConfig = config?.messages?.tts;
 
     // Get current TTS status
     const isEnabled = ttsConfig?.enabled ?? false;

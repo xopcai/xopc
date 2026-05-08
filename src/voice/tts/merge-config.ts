@@ -12,7 +12,7 @@ function normalizeTtsTrigger(raw: unknown): TTSConfig['trigger'] {
   return DEFAULT_TTS_CONFIG.trigger;
 }
 
-export function mergeTtsConfigFromAppConfig(tts: Config['tts'] | undefined): TTSConfig {
+export function mergeTtsConfigFromAppConfig(tts: Partial<TTSConfig> | undefined): TTSConfig {
   const p = (tts ?? {}) as Partial<TTSConfig>;
   return {
     ...DEFAULT_TTS_CONFIG,
@@ -58,7 +58,7 @@ export function formatTtsSetupHint(): string {
  * Append readiness / setup guidance when TTS is enabled but unavailable.
  */
 export function appendTtsReadinessNote(content: string, appConfig: Config | undefined): string {
-  const effective = mergeTtsConfigFromAppConfig(appConfig?.tts);
+  const effective = mergeTtsConfigFromAppConfig(appConfig?.messages?.tts);
   if (!effective.enabled) {
     return content;
   }

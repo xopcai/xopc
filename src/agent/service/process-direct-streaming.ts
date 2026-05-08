@@ -292,7 +292,7 @@ export async function* runProcessDirectStreaming(
       reasoningLevel = await resolveEffectiveReasoningLevel(sessionConfigStore, sessionKey, defReason);
     }
 
-    const sttCfg = mergeSttConfigFromAppConfig(getConfig()?.stt);
+    const sttCfg = mergeSttConfigFromAppConfig(getConfig()?.tools?.media?.audio);
     const { text: mergedUserText, inboundVoice } = await mergeVoiceTranscriptsIntoUserText(
       attachmentRootsForSession(sessionKey),
       prepared,

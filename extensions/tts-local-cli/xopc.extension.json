@@ -1,0 +1,43 @@
+{
+  "id": "tts-local-cli",
+  "name": "Local CLI TTS",
+  "description": "Pipe text to any local TTS binary (mlx-audio, sherpa-onnx-tts, piper, ...).",
+  "version": "1.0.0",
+  "kind": "speech-provider",
+  "main": "index.ts",
+  "configSchema": {
+    "type": "object",
+    "required": ["command"],
+    "properties": {
+      "command": {
+        "type": "string",
+        "description": "Shell command template. Supports {{Text}}, {{OutputPath}}, {{OutputDir}}, {{OutputBase}} placeholders."
+      },
+      "args": {
+        "type": "array",
+        "items": { "type": "string" },
+        "description": "Extra args appended after the parsed command."
+      },
+      "outputFormat": {
+        "type": "string",
+        "enum": ["mp3", "opus", "wav"],
+        "default": "wav",
+        "description": "Expected output format. Defines {{OutputPath}} extension."
+      },
+      "timeoutMs": {
+        "type": "number",
+        "default": 120000,
+        "description": "Hard kill timeout in ms."
+      },
+      "cwd": {
+        "type": "string",
+        "description": "Working directory for the spawned process."
+      },
+      "env": {
+        "type": "object",
+        "additionalProperties": { "type": "string" },
+        "description": "Extra env vars merged into the process env."
+      }
+    }
+  }
+}

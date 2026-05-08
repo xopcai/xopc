@@ -27,23 +27,32 @@ xopc supports voice in multiple transports:
 
 ## Quick start
 
+Voice config lives under **`messages.tts`** (TTS) and **`tools.media.audio`**
+(STT).
+
 Minimal `~/.xopc/xopc.json` (keys may also come from env — see below):
 
 ```json
 {
-  "stt": {
-    "enabled": true,
-    "provider": "alibaba",
-    "alibaba": {
-      "apiKey": "your-dashscope-api-key"
+  "tools": {
+    "media": {
+      "audio": {
+        "enabled": true,
+        "provider": "alibaba",
+        "alibaba": {
+          "apiKey": "your-dashscope-api-key"
+        }
+      }
     }
   },
-  "tts": {
-    "enabled": true,
-    "provider": "openai",
-    "trigger": "inbound",
-    "openai": {
-      "apiKey": "your-openai-api-key"
+  "messages": {
+    "tts": {
+      "enabled": true,
+      "provider": "openai",
+      "trigger": "inbound",
+      "openai": {
+        "apiKey": "your-openai-api-key"
+      }
     }
   }
 }
@@ -55,17 +64,19 @@ Minimal `~/.xopc/xopc.json` (keys may also come from env — see below):
 
 ## STT configuration
 
+> All STT examples below show the inner shape only. Wrap each block in
+> `{ "tools": { "media": { "audio": { ... } } } }` when editing
+> `~/.xopc/xopc.json` directly.
+
 ### Alibaba Paraformer (often used for Chinese)
 
 ```json
 {
-  "stt": {
-    "enabled": true,
-    "provider": "alibaba",
-    "alibaba": {
-      "apiKey": "your-dashscope-api-key",
-      "model": "paraformer-v2"
-    }
+  "enabled": true,
+  "provider": "alibaba",
+  "alibaba": {
+    "apiKey": "your-dashscope-api-key",
+    "model": "paraformer-v2"
   }
 }
 ```
@@ -76,13 +87,11 @@ See DashScope docs for current model IDs (`paraformer-v2`, etc.).
 
 ```json
 {
-  "stt": {
-    "enabled": true,
-    "provider": "openai",
-    "openai": {
-      "apiKey": "your-openai-api-key",
-      "model": "whisper-1"
-    }
+  "enabled": true,
+  "provider": "openai",
+  "openai": {
+    "apiKey": "your-openai-api-key",
+    "model": "whisper-1"
   }
 }
 ```
@@ -93,13 +102,11 @@ If the primary provider errors, xopc tries other providers in `fallback.order`. 
 
 ```json
 {
-  "stt": {
+  "enabled": true,
+  "provider": "alibaba",
+  "fallback": {
     "enabled": true,
-    "provider": "alibaba",
-    "fallback": {
-      "enabled": true,
-      "order": ["alibaba", "openai"]
-    }
+    "order": ["alibaba", "openai"]
   }
 }
 ```
@@ -123,19 +130,21 @@ When the bot requires an @mention in a **supergroup/group**, **voice-only** mess
 
 Legacy **`auto`** in config files is treated as **`inbound`**.
 
+> All TTS examples below show the inner shape only. Wrap each block in
+> `{ "messages": { "tts": { ... } } }` when editing `~/.xopc/xopc.json`
+> directly.
+
 ### OpenAI TTS
 
 ```json
 {
-  "tts": {
-    "enabled": true,
-    "provider": "openai",
-    "trigger": "inbound",
-    "openai": {
-      "apiKey": "your-openai-api-key",
-      "model": "tts-1",
-      "voice": "alloy"
-    }
+  "enabled": true,
+  "provider": "openai",
+  "trigger": "inbound",
+  "openai": {
+    "apiKey": "your-openai-api-key",
+    "model": "tts-1",
+    "voice": "alloy"
   }
 }
 ```
@@ -147,15 +156,13 @@ Legacy **`auto`** in config files is treated as **`inbound`**.
 
 ```json
 {
-  "tts": {
-    "enabled": true,
-    "provider": "alibaba",
-    "trigger": "inbound",
-    "alibaba": {
-      "apiKey": "your-dashscope-api-key",
-      "model": "qwen-tts",
-      "voice": "Cherry"
-    }
+  "enabled": true,
+  "provider": "alibaba",
+  "trigger": "inbound",
+  "alibaba": {
+    "apiKey": "your-dashscope-api-key",
+    "model": "qwen-tts",
+    "voice": "Cherry"
   }
 }
 ```
@@ -164,31 +171,51 @@ Legacy **`auto`** in config files is treated as **`inbound`**.
 
 ```json
 {
-  "tts": {
+  "enabled": true,
+  "provider": "edge",
+  "edge": {
     "enabled": true,
-    "provider": "edge",
-    "edge": {
-      "enabled": true,
-      "voice": "en-US-MichelleNeural",
-      "lang": "en-US"
-    }
+    "voice": "en-US-MichelleNeural",
+    "lang": "en-US"
   }
 }
 ```
 
 Set `"edge": { "enabled": false }` to take Edge out of rotation.
 
+### Local CLI TTS (offline, bring-your-own binary)
+
+For offline / on-device models (mlx-audio, sherpa-onnx-tts, piper, …), enable
+the **`tts-local-cli`** extension and configure the shell command. The provider
+spawns the binary, captures the produced audio file, and returns its bytes.
+
+```json
+{
+  "enabled": true,
+  "provider": "tts-local-cli",
+  "trigger": "inbound",
+  "tts-local-cli": {
+    "command": "mlx_audio.tts.generate --model mlx-community/Kokoro-82M-bf16 --text \"{{Text}}\" --file_prefix {{OutputBase}}",
+    "cwd": "/Users/me/work",
+    "outputFormat": "wav",
+    "timeoutMs": 90000
+  }
+}
+```
+
+Placeholders inside `command`: `{{Text}}`, `{{OutputPath}}`, `{{OutputDir}}`,
+`{{OutputBase}}` (case-insensitive). See `extensions/tts-local-cli/` for the
+provider source and `xopc.extension.json` for the full config schema.
+
 ### Provider fallback (TTS)
 
 ```json
 {
-  "tts": {
+  "enabled": true,
+  "provider": "openai",
+  "fallback": {
     "enabled": true,
-    "provider": "openai",
-    "fallback": {
-      "enabled": true,
-      "order": ["openai", "alibaba", "edge"]
-    }
+    "order": ["openai", "alibaba", "edge"]
   }
 }
 ```
@@ -198,17 +225,15 @@ Failed attempts are logged with per-provider latency and reason; successful synt
 ### Long text and `maxTextLength`
 
 - **`maxTextLength`**: hard cap for text passed into providers (default in schema is **512** to stay within conservative provider limits; raise if your primary provider allows more).
-- **`summarization`**: when enabled (default **on**), text longer than the threshold is shortened with a **small LLM** pass before TTS. Set the model in `tts.summarization.model` or with env **`XOPC_TTS_SUMMARIZE_MODEL`**.
+- **`summarization`**: when enabled (default **on**), text longer than the threshold is shortened with a **small LLM** pass before TTS. Set the model in `messages.tts.summarization.model` or with env **`XOPC_TTS_SUMMARIZE_MODEL`**.
 
 ```json
 {
-  "tts": {
-    "summarization": {
-      "enabled": true,
-      "threshold": 512,
-      "targetLength": 512,
-      "model": "openai/gpt-4o-mini"
-    }
+  "summarization": {
+    "enabled": true,
+    "threshold": 512,
+    "targetLength": 512,
+    "model": "openai/gpt-4o-mini"
   }
 }
 ```
@@ -221,7 +246,7 @@ When `modelOverrides` is enabled (default), the model may use directives such as
 
 ## Agent tool: `text_to_speech`
 
-When **`tts.enabled`** is true, the agent may register the **`text_to_speech`** tool. It synthesizes audio and **publishes an outbound voice message** for the current session (in addition to normal auto-TTS on the outbound path).
+When **`messages.tts.enabled`** is true, the agent may register the **`text_to_speech`** tool. It synthesizes audio and **publishes an outbound voice message** for the current session (in addition to normal auto-TTS on the outbound path).
 
 Use for explicit read-aloud requests; avoid spamming voice on every reply. Normal replies still go through **`send_message`**; the tool description and system **Voice (TTS)** section explain the split.
 
@@ -261,7 +286,7 @@ Outbound encoding is chosen per channel (for example Telegram **Opus** voice not
 |----------|---------|
 | `DASHSCOPE_API_KEY` | Alibaba DashScope (STT/TTS) |
 | `OPENAI_API_KEY` | OpenAI (STT/TTS/summarization) |
-| `XOPC_TTS_SUMMARIZE_MODEL` | Optional model ref for TTS summarization when `tts.summarization.model` is unset |
+| `XOPC_TTS_SUMMARIZE_MODEL` | Optional model ref for TTS summarization when `messages.tts.summarization.model` is unset |
 
 ---
 
@@ -311,8 +336,8 @@ User sends voice
 
 ### No voice reply
 
-1. `tts.enabled` and trigger mode (`inbound` needs inbound voice; `tagged` needs `[[tts]]`)  
-2. `maxTextLength` / summarization failures (check logs)  
+1. `messages.tts.enabled` and trigger mode (`inbound` needs inbound voice; `tagged` needs `[[tts]]`)
+2. `maxTextLength` / summarization failures (check logs)
 3. No provider in the fallback chain configured (Edge can unblock keyless tests)
 
 ### Diagnose last TTS
@@ -323,7 +348,9 @@ Use **`/tts status`** or inspect logs for provider attempts and `TTS:StatusTrack
 
 ## API reference (conceptual)
 
-### STT
+STT lives at **`tools.media.audio`**; TTS lives at **`messages.tts`**.
+
+### STT (`tools.media.audio`)
 
 ```typescript
 interface STTConfig {
@@ -332,21 +359,23 @@ interface STTConfig {
   alibaba?: { apiKey?: string; model?: string };
   openai?: { apiKey?: string; model?: string };
   fallback?: { enabled: boolean; order: ('alibaba' | 'openai')[] };
+  /** Hard timeout per provider call (ms). Default 60s. */
+  timeoutMs?: number;
 }
 ```
 
 Transcribe results may include **`attempts`**, **`fallbackFrom`**, **`attemptedProviders`** metadata for diagnostics.
 
-### TTS
+### TTS (`messages.tts`)
 
 ```typescript
 interface TTSConfig {
   enabled: boolean;
-  provider: 'openai' | 'alibaba' | 'edge';
+  provider: 'openai' | 'alibaba' | 'edge' | 'minimax' | 'tts-local-cli' | string;
   trigger: 'off' | 'always' | 'inbound' | 'tagged';
   maxTextLength?: number;
   timeoutMs?: number;
-  fallback?: { enabled: boolean; order: ('openai' | 'alibaba' | 'edge')[] };
+  fallback?: { enabled: boolean; order: string[] };
   summarization?: {
     enabled?: boolean;
     threshold?: number;
@@ -357,8 +386,15 @@ interface TTSConfig {
   openai?: { apiKey?: string; model?: string; voice?: string };
   alibaba?: { apiKey?: string; model?: string; voice?: string };
   edge?: { enabled?: boolean; voice?: string; lang?: string; /* … */ };
+  minimax?: { apiKey?: string; model?: string; voice?: string };
+  /** Per-extension provider config (e.g. tts-local-cli). */
+  [providerId: string]: unknown;
 }
 ```
+
+`provider` is now a string instead of a fixed enum: any registered
+`SpeechProviderPlugin` (built-in or extension-loaded — see
+[extensions.md](./extensions.md#speech-providers)) can be selected.
 
 Speak results may include **`attempts`**, **`fallbackFrom`**, **`wasSummarized`**, and similar fields for diagnostics.
 

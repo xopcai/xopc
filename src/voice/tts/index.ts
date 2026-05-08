@@ -46,27 +46,49 @@ export type {
   TTSSummarizationConfig,
 } from './types.js';
 
+// Re-export the registered SpeechProviderPlugin instances + UI constants.
+// The legacy BaseTTSProvider / *Provider OOP classes were removed in v2.0 —
+// new providers implement SpeechProviderPlugin directly (see speech-provider-types.ts).
 export {
-  BaseTTSProvider,
-  type BaseProviderConfig,
-  OpenAIProvider,
-  type OpenAIProviderConfig,
+  openAiSpeechProvider,
+  alibabaSpeechProvider,
+  edgeSpeechProvider,
+  minimaxSpeechProvider,
   OPENAI_TTS_MODELS,
   OPENAI_TTS_VOICES,
-  isValidOpenAIVoice,
-  isValidOpenAIModel,
-  AlibabaProvider,
-  type AlibabaProviderConfig,
-  EdgeProvider,
-  type EdgeProviderConfig,
-  inferEdgeExtension,
+  MINIMAX_TTS_MODELS,
+  MINIMAX_TTS_VOICES,
 } from './providers/index.js';
 
+export type {
+  SpeechProviderPlugin,
+  SpeechProviderId,
+  SpeechProviderConfig,
+  SpeechSynthesisRequest,
+  SpeechSynthesisResult,
+  SpeechSynthesisStreamRequest,
+  SpeechSynthesisStreamResult,
+  SpeechVoiceOption,
+  SpeechModelOverridePolicy,
+  SpeechDirectiveTokenParseContext,
+  SpeechDirectiveTokenParseResult,
+} from './speech-provider-types.js';
+
 export {
-  createTTSProviderChain,
-  createSingleProvider,
+  registerSpeechProvider,
+  getSpeechProvider,
+  listSpeechProviders,
+} from './speech-registry.js';
+
+export {
+  resolveSpeechProvider,
+  resolveSpeechProviderChain,
   resolveProviderOrder,
+  listRegisteredSpeechProviderIds,
+  type ResolvedSpeechProvider,
 } from './factory.js';
+
+export { speakStream, type SpeakStreamResult } from './speak-core.js';
 
 export {
   TTSService,

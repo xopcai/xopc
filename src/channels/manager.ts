@@ -489,7 +489,7 @@ export class ChannelManager {
     if (!msg.content?.trim()) return msg;
     if (msg.mediaUrl) return msg;
     
-    const ttsConfig = mergeTtsConfigFromAppConfig(this.config.tts);
+    const ttsConfig = mergeTtsConfigFromAppConfig(this.config.messages?.tts);
     if (!ttsConfig.enabled) return msg;
 
     const inboundAudio = msg.metadata?.transcribedVoice === true;

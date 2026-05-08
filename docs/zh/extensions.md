@@ -482,6 +482,69 @@ api.registerTool({
 });
 ```
 
+### 语音 Provider (TTS) {#speech-providers}
+
+扩展可以注册 **`SpeechProviderPlugin`**，让 TTS 链接入新的服务商或本地二进制
+而无需 fork 主仓。内置 provider（`openai`、`alibaba`、`edge`、`minimax`）和
+内置的本地 CLI provider（`tts-local-cli`）共用同一份插件契约 — 完整接口见
+`src/voice/tts/speech-provider-types.ts`。
+
+提供 provider 的两种方式：
+
+#### 1. 直接使用内置 `tts-local-cli` 扩展
+
+针对任意本地 TTS 二进制（mlx-audio、sherpa-onnx-tts、piper 等），启用内置
+扩展并在 `xopc.json` 中配置 shell 命令：
+
+```json
+{
+  "messages": {
+    "tts": {
+      "enabled": true,
+      "provider": "tts-local-cli",
+      "tts-local-cli": {
+        "command": "mlx_audio.tts.generate --text \"{{Text}}\" --file_prefix {{OutputBase}}",
+        "outputFormat": "wav",
+        "timeoutMs": 120000
+      }
+    }
+  }
+}
+```
+
+`command` 内可用占位符：**`{{Text}}`**、**`{{OutputPath}}`**、
+**`{{OutputDir}}`**、**`{{OutputBase}}`**（大小写不敏感）。Provider 会启动
+该二进制、扫描 `OutputDir` 找到产物文件并把字节回传。完整字段说明见
+[`docs/zh/voice.md`](./voice.md) → *本地 CLI TTS*。
+
+#### 2. 编写自定义 `SpeechProviderPlugin`
+
+新建一个扩展，在模块加载时自注册插件（与 `src/voice/tts/providers/*-speech.ts`
+中的内置 provider 模式一致）：
+
+```typescript
+import { registerSpeechProvider } from 'xopc/voice/tts/speech-registry';
+import type { SpeechProviderPlugin } from 'xopc/voice/tts/speech-provider-types';
+
+const myProvider: SpeechProviderPlugin = {
+  id: 'my-vendor',
+  resolveConfig: (ctx) => ctx.rawConfig,
+  isConfigured: (ctx) => Boolean(ctx.providerConfig.apiKey),
+  async synthesize(req) {
+    // … 调用厂商 API，返回 { audioBuffer, outputFormat, fileExtension }
+  },
+  // 可选：synthesizeStream 用于流式消费方（Telegram draft）。
+  // 不实现时，编排层会用 wrapBufferAsStream 把 synthesize 包成单 chunk 流。
+};
+
+registerSpeechProvider(myProvider);
+```
+
+随后在 `messages.tts.provider`（或 `messages.tts.fallback.order`）里写上
+该 provider id，TTS 链就会拾取到它。所有出站 HTTP 调用**必须**走
+`src/media-shared/http/`（**SSRF 守卫 + API Key 轮换** 是强制要求）。完整
+设计见 `docs/voice-rearchitecture.md`。
+
 ### 钩子 (Hooks)
 
 钩子允许扩展在各个生命周期点拦截和修改行为：

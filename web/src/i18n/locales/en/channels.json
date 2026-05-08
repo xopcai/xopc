@@ -220,8 +220,21 @@
       "provider": "TTS provider",
       "providerOpenai": "OpenAI TTS",
       "providerEdge": "Microsoft Edge (free)",
+      "providerLocalCli": "Local CLI (offline)",
       "voice": "Voice",
-      "edgeHint": "Microsoft Edge TTS — no API key required."
+      "edgeHint": "Microsoft Edge TTS — no API key required.",
+      "localCli": {
+        "command": "CLI command",
+        "commandDesc": "Shell template; placeholders: {{Text}}, {{OutputBase}}.",
+        "commandPlaceholder": "mlx_audio.tts.generate --text \"{{Text}}\" --file_prefix {{OutputBase}}",
+        "cwd": "Working directory",
+        "cwdDesc": "Optional. Defaults to the gateway working directory.",
+        "outputFormat": "Output format",
+        "outputFormatDesc": "File extension produced by the CLI (mp3, wav, opus, …).",
+        "timeoutMs": "Timeout (ms)",
+        "timeoutMsDesc": "Per-call timeout override; leave blank to inherit the TTS default.",
+        "hint": "Provided by the bundled `tts-local-cli` extension. Enable the extension and configure the binary on PATH."
+      }
     },
     "notes": {
       "title": "Note",
