@@ -1,0 +1,40 @@
+{
+  "name": "@xopcai/xopc-extension-openai",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Bundled OpenAI image-generation provider sources (compiled with core into dist/extensions/; not published to npm).",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./*": "./dist/*"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  },
+  "peerDependencies": {
+    "@xopcai/xopc": "workspace:*"
+  },
+  "xopc": {
+    "bundledImageGenerationProvider": {
+      "module": "src/image-generation-provider.js",
+      "export": "buildOpenAIImageGenerationProvider",
+      "order": 10
+    }
+  },
+  "keywords": [
+    "xopc",
+    "xopc-extension",
+    "openai",
+    "image-generation"
+  ],
+  "license": "MIT"
+}

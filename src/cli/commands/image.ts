@@ -1,3 +1,5 @@
+import { mkdir, writeFile } from 'node:fs/promises';
+import { join, resolve as resolvePath } from 'node:path';
 import { Command } from 'commander';
 import { loadConfig, saveConfig } from '../../config/loader.js';
 import { parseModelRef, type AgentModelConfig } from '../../config/schema.js';
@@ -6,6 +8,11 @@ import {
   resolveAgentModelFallbackValues,
 } from '../../config/model-input.js';
 import { isProviderConfigured } from '../../providers/index.js';
+import {
+  generateImage,
+  getImageGenerationProvider,
+  listImageGenerationProvidersSummary,
+} from '../../agent/image/index.js';
 import { register, formatExamples, type CLIContext } from '../registry.js';
 import { colors } from '../utils/colors.js';
 import { getContextWithOpts } from '../index.js';
@@ -323,67 +330,74 @@ function createImageCommand(_ctx: CLIContext): Command {
 
   cmd
     .command('providers')
-    .description('List image-capable providers and configuration status')
+    .description('List registered image-generation providers and their capabilities')
     .option('--json', 'Output as JSON')
     .action(async (opts: { json?: boolean }) => {
-      const imageProviders: Record<string, { generation: string[]; understanding: string[] }> = {
-        openai: {
-          generation: ['gpt-image-1', 'dall-e-3', 'dall-e-2'],
-          understanding: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo'],
-        },
-        anthropic: {
-          generation: [],
-          understanding: ['claude-sonnet-4-5', 'claude-haiku-3-5'],
-        },
-        google: {
-          generation: [],
-          understanding: ['gemini-2.0-flash', 'gemini-1.5-pro'],
-        },
-        dashscope: {
-          generation: ['wan2.6-t2i'],
-          understanding: ['qwen-vl-max', 'qwen2.5-vl-72b-instruct'],
-        },
-      };
+      const configPath = getContextWithOpts().configPath;
+      const config = loadConfig(configPath);
 
-      const results: Array<{
-        provider: string;
-        configured: boolean;
-        generation: string[];
-        understanding: string[];
-      }> = [];
-      for (const [providerId, capabilities] of Object.entries(imageProviders)) {
-        const configured = await isProviderConfigured(providerId);
-        results.push({ provider: providerId, configured, ...capabilities });
-      }
+      const summaries = listImageGenerationProvidersSummary(config);
+      const rows = summaries.map((s) => {
+        const provider = getImageGenerationProvider(s.id, config);
+        let configured = false;
+        try {
+          configured = provider?.isConfigured?.({ cfg: config }) === true;
+        } catch {
+          configured = false;
+        }
+        return {
+          id: s.id,
+          label: s.label ?? s.id,
+          defaultModel: s.defaultModel ?? null,
+          models: s.models,
+          aliases: s.aliases ?? [],
+          capabilities: s.capabilities ?? null,
+          configured,
+        };
+      });
 
       if (opts.json) {
-        console.log(JSON.stringify(results, null, 2));
+        console.log(JSON.stringify(rows, null, 2));
         return;
       }
 
       console.log('');
-      console.log(colors.cyan('Image-capable providers'));
+      console.log(colors.cyan('Image-generation providers'));
       console.log('═'.repeat(60));
 
-      for (const row of results) {
-        const statusIcon = row.configured ? colors.green('OK') : colors.yellow('?');
-        const statusText = row.configured ? 'configured' : 'not configured';
+      if (rows.length === 0) {
         console.log('');
-        console.log(`  ${statusIcon} ${row.provider} (${statusText})`);
+        console.log(
+          colors.yellow(
+            '  No image-generation providers registered. Check `extensions/<vendor>/` and bundled.ts.',
+          ),
+        );
+        console.log('');
+        return;
+      }
 
-        if (row.generation.length > 0) {
-          console.log(`     Generation: ${row.generation.map((m) => `${row.provider}/${m}`).join(', ')}`);
+      for (const row of rows) {
+        const statusIcon = row.configured ? colors.green('OK') : colors.yellow('?');
+        const statusText = row.configured ? 'configured' : 'missing API key';
+        console.log('');
+        console.log(`  ${statusIcon} ${row.label} (${row.id}) — ${statusText}`);
+        if (row.defaultModel) console.log(`     Default: ${row.defaultModel}`);
+        if (row.models.length > 0) {
+          console.log(`     Models:  ${row.models.map((m) => `${row.id}/${m}`).join(', ')}`);
         }
-        if (row.understanding.length > 0) {
-          console.log(
-            `     Understanding: ${row.understanding.map((m) => `${row.provider}/${m}`).join(', ')}`,
-          );
+        if (row.aliases.length > 0) {
+          console.log(`     Aliases: ${row.aliases.join(', ')}`);
         }
       }
 
       console.log('');
       console.log('═'.repeat(60));
-      console.log(colors.gray('Use "xopc auth set <provider>" to configure API keys.'));
+      console.log(
+        colors.gray(
+          'Use `xopc image set-generation <provider/model>` to set the primary model, ' +
+            '`xopc auth set <provider>` to configure API keys.',
+        ),
+      );
       console.log('');
     });
 
@@ -410,6 +424,169 @@ function createImageCommand(_ctx: CLIContext): Command {
       await saveConfig(config, configPath);
       console.log(colors.green(`Max image size set to: ${mb} MB`));
     });
+
+  cmd
+    .command('set-timeout <ms>')
+    .description('Set the per-request timeout (ms) for image generation; 0 to clear')
+    .action(async (msStr: string) => {
+      const ms = parseInt(msStr, 10);
+      if (Number.isNaN(ms) || ms < 0) {
+        console.error(colors.red('Timeout must be a non-negative integer (ms).'));
+        process.exit(1);
+      }
+
+      const configPath = getContextWithOpts().configPath;
+      const config = loadConfig(configPath);
+      if (!config.agents) config.agents = { defaults: {} } as typeof config.agents;
+      if (!config.agents.defaults) config.agents.defaults = {} as typeof config.agents.defaults;
+
+      const current = config.agents.defaults.imageGenerationModel;
+      const primary = resolveAgentModelPrimaryValue(current);
+      const fallbacks = resolveAgentModelFallbackValues(current);
+      const autoProviderFallback =
+        typeof current === 'object' && current !== null && !Array.isArray(current)
+          ? (current as { autoProviderFallback?: boolean }).autoProviderFallback === true
+          : false;
+
+      if (ms === 0) {
+        // Clear timeout but keep other knobs.
+        if (primary && fallbacks.length === 0 && !autoProviderFallback) {
+          config.agents.defaults.imageGenerationModel = primary;
+        } else if (primary || fallbacks.length > 0) {
+          config.agents.defaults.imageGenerationModel = {
+            ...(primary ? { primary } : {}),
+            ...(fallbacks.length > 0 ? { fallbacks } : {}),
+            ...(autoProviderFallback ? { autoProviderFallback: true } : {}),
+          };
+        } else {
+          delete (config.agents.defaults as Record<string, unknown>).imageGenerationModel;
+        }
+        await saveConfig(config, configPath);
+        console.log(colors.green('Image generation timeout cleared.'));
+        return;
+      }
+
+      config.agents.defaults.imageGenerationModel = {
+        ...(primary ? { primary } : {}),
+        ...(fallbacks.length > 0 ? { fallbacks } : {}),
+        ...(autoProviderFallback ? { autoProviderFallback: true } : {}),
+        timeoutMs: ms,
+      };
+      await saveConfig(config, configPath);
+      console.log(colors.green(`Image generation timeout set to: ${ms}ms`));
+    });
+
+  cmd
+    .command('set-auto-fallback <on-or-off>')
+    .description('Enable / disable sweeping every configured provider when primary chain fails')
+    .action(async (value: string) => {
+      const v = value.trim().toLowerCase();
+      const enable = v === 'on' || v === 'true' || v === '1' || v === 'yes';
+      const disable = v === 'off' || v === 'false' || v === '0' || v === 'no';
+      if (!enable && !disable) {
+        console.error(colors.red('Value must be "on" or "off".'));
+        process.exit(1);
+      }
+
+      const configPath = getContextWithOpts().configPath;
+      const config = loadConfig(configPath);
+      if (!config.agents) config.agents = { defaults: {} } as typeof config.agents;
+      if (!config.agents.defaults) config.agents.defaults = {} as typeof config.agents.defaults;
+
+      const current = config.agents.defaults.imageGenerationModel;
+      const primary = resolveAgentModelPrimaryValue(current);
+      const fallbacks = resolveAgentModelFallbackValues(current);
+      const timeoutMs =
+        typeof current === 'object' && current !== null && !Array.isArray(current)
+          ? (current as { timeoutMs?: number }).timeoutMs
+          : undefined;
+
+      if (disable) {
+        if (primary && fallbacks.length === 0 && !timeoutMs) {
+          config.agents.defaults.imageGenerationModel = primary;
+        } else if (primary || fallbacks.length > 0 || timeoutMs) {
+          config.agents.defaults.imageGenerationModel = {
+            ...(primary ? { primary } : {}),
+            ...(fallbacks.length > 0 ? { fallbacks } : {}),
+            ...(timeoutMs ? { timeoutMs } : {}),
+          };
+        } else {
+          delete (config.agents.defaults as Record<string, unknown>).imageGenerationModel;
+        }
+        await saveConfig(config, configPath);
+        console.log(colors.green('Image generation auto-fallback disabled.'));
+        return;
+      }
+
+      config.agents.defaults.imageGenerationModel = {
+        ...(primary ? { primary } : {}),
+        ...(fallbacks.length > 0 ? { fallbacks } : {}),
+        ...(timeoutMs ? { timeoutMs } : {}),
+        autoProviderFallback: true,
+      };
+      await saveConfig(config, configPath);
+      console.log(colors.green('Image generation auto-fallback enabled.'));
+    });
+
+  cmd
+    .command('generate <prompt...>')
+    .description('Generate one or more images and save them to disk')
+    .option('--model <ref>', 'Model ref (provider/model); falls back to configured primary')
+    .option('--size <size>', 'Image size, e.g. 1024x1024')
+    .option('--count <n>', 'Number of images to generate', (v) => parseInt(v, 10), 1)
+    .option('--output <dir>', 'Output directory (default: ./generated-images)')
+    .option('--timeout <ms>', 'Per-call timeout (ms)', (v) => parseInt(v, 10))
+    .action(
+      async (
+        promptParts: string[],
+        opts: { model?: string; size?: string; count?: number; output?: string; timeout?: number },
+      ) => {
+        const prompt = promptParts.join(' ').trim();
+        if (!prompt) {
+          console.error(colors.red('Prompt is required.'));
+          process.exit(1);
+        }
+
+        const configPath = getContextWithOpts().configPath;
+        const config = loadConfig(configPath);
+        const outputDir = resolvePath(opts.output ?? './generated-images');
+        await mkdir(outputDir, { recursive: true });
+
+        const count = Number.isFinite(opts.count) && (opts.count ?? 0) > 0 ? Math.floor(opts.count!) : 1;
+
+        try {
+          const result = await generateImage({
+            prompt,
+            cfg: config,
+            ...(opts.model ? { modelRef: opts.model } : {}),
+            ...(opts.size ? { size: opts.size } : {}),
+            count,
+            ...(typeof opts.timeout === 'number' && opts.timeout > 0 ? { timeoutMs: opts.timeout } : {}),
+          });
+
+          const writtenPaths: string[] = [];
+          for (let i = 0; i < result.images.length; i++) {
+            const img = result.images[i];
+            const fileName = img.fileName?.trim() || `image-${i + 1}.png`;
+            const full = join(outputDir, fileName);
+            await writeFile(full, img.buffer);
+            writtenPaths.push(full);
+          }
+
+          console.log('');
+          console.log(
+            colors.green(
+              `Generated ${result.images.length} image${result.images.length === 1 ? '' : 's'} (model: ${result.model}).`,
+            ),
+          );
+          for (const p of writtenPaths) console.log(`  - ${p}`);
+          console.log('');
+        } catch (err) {
+          console.error(colors.red(`Image generation failed: ${err instanceof Error ? err.message : String(err)}`));
+          process.exit(1);
+        }
+      },
+    );
 
   return cmd;
 }

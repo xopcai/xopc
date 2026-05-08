@@ -5,6 +5,7 @@
     "agent-defaults": "Agent defaults",
     "providers": "Providers",
     "models": "Models",
+    "image-models": "Image Generation",
     "channels": "Channels",
     "voice": "Voice",
     "gateway": "Gateway",
@@ -183,6 +184,24 @@
     "connections": "Connections",
     "data": "Sessions & logs",
     "extensions": "Extensions"
+  },
+  "imageModelsSettings": {
+    "title": "Image Generation",
+    "subtitle": "Tune runtime behaviour and inspect registered providers. Pick the primary model + fallback chain in Agent defaults.",
+    "refresh": "Refresh",
+    "crossLinkHint": "Primary model and fallback chain live in Settings → Agent defaults (they edit the same agents.defaults.imageGenerationModel field).",
+    "timeoutLabel": "Timeout (ms)",
+    "timeoutHint": "Hard cap for one generation attempt; leave empty for the gateway default (120000 ms).",
+    "autoFallbackLabel": "Auto-fallback to any configured provider",
+    "autoFallbackHint": "After the primary chain fails, sweep every other configured provider before giving up.",
+    "save": "Save",
+    "saved": "Saved.",
+    "providersTitle": "Registered providers",
+    "providersEmpty": "No image-generation providers registered.",
+    "configured": "Configured",
+    "missingKey": "Missing API key",
+    "defaultModel": "Default",
+    "modelsLabel": "Models"
   },
   "appearanceSettings": {
     "pageTitle": "Preferences",

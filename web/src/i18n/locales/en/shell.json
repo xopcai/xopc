@@ -19,6 +19,7 @@
     "settingsAppearance": "Preferences",
     "settingsProviders": "Providers",
     "settingsModels": "Models",
+    "settingsImageModels": "Image Generation",
     "settingsChannels": "Channels",
     "settingsVoice": "Voice",
     "settingsGateway": "Gateway",

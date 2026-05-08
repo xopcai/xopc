@@ -5,6 +5,7 @@
     "agent-defaults": "智能体默认配置",
     "providers": "服务商",
     "models": "模型",
+    "image-models": "图像生成",
     "channels": "消息通道",
     "voice": "语音",
     "gateway": "网关",
@@ -183,6 +184,24 @@
     "connections": "连接",
     "data": "会话与日志",
     "extensions": "扩展"
+  },
+  "imageModelsSettings": {
+    "title": "图像生成",
+    "subtitle": "调整运行参数并查看已注册的 Provider。主用模型与降级链请在「智能体默认配置」里设置。",
+    "refresh": "刷新",
+    "crossLinkHint": "主用模型与降级链位于「设置 → 智能体默认配置」（与本页编辑的是同一份 agents.defaults.imageGenerationModel）。",
+    "timeoutLabel": "超时（毫秒）",
+    "timeoutHint": "单次生成的最大耗时，留空使用网关默认值（120000 毫秒）。",
+    "autoFallbackLabel": "失败时遍历所有已配置的 Provider",
+    "autoFallbackHint": "主链全部失败后，再依次尝试其他已配置的 Provider，直到全部失败为止。",
+    "save": "保存",
+    "saved": "已保存。",
+    "providersTitle": "已注册的 Provider",
+    "providersEmpty": "尚未注册任何图像生成 Provider。",
+    "configured": "已配置",
+    "missingKey": "缺少 API Key",
+    "defaultModel": "默认模型",
+    "modelsLabel": "模型"
   },
   "appearanceSettings": {
     "pageTitle": "偏好设置",

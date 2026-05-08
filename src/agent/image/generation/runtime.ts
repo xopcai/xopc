@@ -1,145 +1,276 @@
-import { parseModelRef } from '../../../config/schema.js';
 import type { Config } from '../../../config/schema.js';
+import { PROVIDER_ENV_MAP } from '../../../providers/env-keys.js';
+import { createLogger } from '../../../utils/logger.js';
 import {
-  resolveAgentModelFallbackValues,
-  resolveAgentModelPrimaryValue,
-} from '../../../config/model-input.js';
+  buildMediaGenerationNormalizationMetadata,
+  buildNoCapabilityModelConfiguredMessage,
+  recordCapabilityCandidateFailure,
+  resolveCapabilityModelCandidates,
+  throwCapabilityGenerationFailure,
+  type CapabilityProviderCandidate,
+} from '../../media-generation/index.js';
+import { describeFailoverError, isFailoverError, type FallbackAttempt } from '../../failover-error.js';
+import { OPENAI_DEFAULT_IMAGE_MODEL } from './constants.js';
+import { parseImageGenerationModelRef } from './model-ref.js';
+import { resolveImageGenerationOverrides } from './normalization.js';
 import {
   getImageGenerationProvider,
+  listImageGenerationProviders,
   listImageGenerationProvidersSummary as listProvidersSummaryFromRegistry,
+  type ImageGenerationProvider,
+  type ImageGenerationProviderSummary,
 } from './provider-registry.js';
-import { OPENAI_DEFAULT_IMAGE_MODEL } from './constants.js';
-import type { ImageGenFallbackAttempt, ImageGenerationResult, ImageGenerationSourceImage } from './types.js';
+import type {
+  ImageGenerationProviderCapabilities,
+  ImageGenerationCapabilitiesLegacy,
+  ImageGenerationRequest,
+  ImageGenerationSourceImage,
+} from './types.js';
 
-import './openai-generate.js';
-import './dashscope-generate.js';
-import './minimax-generate.js';
+// Side-effect: registers every bundled image-generation provider listed in
+// src/generated/bundled-image-generation-providers.ts (regenerated via
+// `pnpm run generate:bundled-image-providers`). Vendor implementations live
+// under extensions/<vendor>/src/image-generation-provider.ts.
+import './bundled.js';
 
-export type GenerateImageParams = {
-  cfg?: Config;
-  prompt: string;
-  modelOverride?: string;
-  count?: number;
-  size?: string;
-  signal?: AbortSignal;
-  inputImages?: ImageGenerationSourceImage[];
-};
+export type {
+  GenerateImageParams,
+  GenerateImageRuntimeResult,
+  ImageGenerationRuntimeDeps,
+} from './runtime-types.js';
 
-export type GenerateImageRuntimeResult = {
-  images: ImageGenerationResult['images'];
-  provider: string;
-  model: string;
-  attempts: ImageGenFallbackAttempt[];
-};
+import type {
+  GenerateImageParams,
+  GenerateImageRuntimeResult,
+  ImageGenerationRuntimeDeps,
+} from './runtime-types.js';
 
-function parseCandidates(params: {
-  cfg: Config | undefined;
-  modelOverride?: string;
-}): Array<{ provider: string; model: string }> {
-  const candidates: Array<{ provider: string; model: string }> = [];
-  const seen = new Set<string>();
-  const add = (raw: string | undefined) => {
-    const p = raw?.trim();
-    if (!p) {
-      return;
-    }
-    const parsed = parseModelRef(p);
-    if (!parsed) {
-      return;
-    }
-    const key = `${parsed.provider}/${parsed.model}`;
-    if (seen.has(key)) {
-      return;
-    }
-    seen.add(key);
-    candidates.push(parsed);
-  };
+const log = createLogger('ImageGen');
 
-  add(params.modelOverride);
-  add(resolveAgentModelPrimaryValue(params.cfg?.agents?.defaults?.imageGenerationModel));
-  for (const f of resolveAgentModelFallbackValues(params.cfg?.agents?.defaults?.imageGenerationModel)) {
-    add(f);
-  }
+/**
+ * Generate one or more images, walking the candidate model list with
+ * structured failover. See {@link GenerateImageParams} / {@link GenerateImageRuntimeResult}.
+ */
+export async function generateImage(
+  params: GenerateImageParams,
+  deps: ImageGenerationRuntimeDeps = {},
+): Promise<GenerateImageRuntimeResult> {
+  const listProviders = (cfg?: Config) =>
+    (deps.listProviders ?? listImageGenerationProviders)(cfg);
+  const getProvider = (id: string, cfg?: Config) =>
+    (deps.getProvider ?? getImageGenerationProvider)(id, cfg);
+
+  const candidates = resolveCapabilityModelCandidates({
+    cfg: params.cfg,
+    modelConfig: params.cfg?.agents?.defaults?.imageGenerationModel,
+    modelOverride: params.modelOverride,
+    parseModelRef: parseImageGenerationModelRef,
+    agentDir: params.agentDir,
+    listProviders: (cfg) => listProviders(cfg).map(toCapabilityCandidate),
+    autoProviderFallback: params.autoProviderFallback,
+  });
+
   if (candidates.length === 0) {
-    add(`openai/${OPENAI_DEFAULT_IMAGE_MODEL}`);
-  }
-  return candidates;
-}
-
-export async function generateImage(params: GenerateImageParams): Promise<GenerateImageRuntimeResult> {
-  const candidates = parseCandidates({ cfg: params.cfg, modelOverride: params.modelOverride });
-  if (candidates.length === 0) {
-    throw new Error(
-      'No image-generation model configured. Set agents.defaults.imageGenerationModel.primary or fallbacks (e.g. openai/gpt-image-1 or dashscope/wan2.6-t2i).',
-    );
+    throw new Error(buildNoImageGenerationModelConfiguredMessage(params.cfg, deps));
   }
 
-  const wantsEdit = Boolean(params.inputImages?.length);
-  const attempts: ImageGenFallbackAttempt[] = [];
+  const attempts: FallbackAttempt[] = [];
   let lastError: unknown;
 
   for (const candidate of candidates) {
-    const provider = getImageGenerationProvider(candidate.provider);
+    const startedAt = Date.now();
+    const provider = getProvider(candidate.provider, params.cfg);
     if (!provider) {
       const errorMessage = `Image generation provider not registered: ${candidate.provider}`;
       attempts.push({
         provider: candidate.provider,
         model: candidate.model,
         error: errorMessage,
+        reason: 'config',
       });
       lastError = new Error(errorMessage);
-      continue;
-    }
-
-    if (wantsEdit && provider.capabilities?.supportsEdit === false) {
-      const errorMessage = `Image-to-image not supported for provider: ${candidate.provider}`;
-      attempts.push({
-        provider: candidate.provider,
-        model: candidate.model,
-        error: errorMessage,
-      });
-      lastError = new Error(errorMessage);
+      log.warn(
+        { provider: candidate.provider, model: candidate.model, phase: 'candidate_skipped' },
+        `image-generation candidate skipped: ${errorMessage}`,
+      );
       continue;
     }
 
     try {
-      const result = await provider.generateImage({
-        provider: candidate.provider,
-        model: candidate.model,
-        prompt: params.prompt,
-        cfg: params.cfg,
-        count: params.count,
+      const sanitized = resolveImageGenerationOverrides({
+        provider,
         size: params.size,
-        signal: params.signal,
+        aspectRatio: params.aspectRatio,
+        resolution: params.resolution,
+        quality: params.quality,
+        outputFormat: params.outputFormat,
+        background: params.background,
         inputImages: params.inputImages,
       });
+
+      const request = buildProviderRequest({
+        provider,
+        candidate,
+        params,
+        sanitized,
+      });
+
+      log.debug(
+        {
+          provider: candidate.provider,
+          model: candidate.model,
+          phase: 'provider_invoked',
+          normalizationCount: sanitized.normalization
+            ? Object.keys(sanitized.normalization).length
+            : 0,
+          ignoredCount: sanitized.ignoredOverrides.length,
+        },
+        `image-generation provider invoked: ${candidate.provider}/${candidate.model}`,
+      );
+
+      const result = await provider.generateImage(request);
       if (!result.images?.length) {
-        throw new Error('Image generation returned no images');
+        throw new Error('Image generation provider returned no images.');
       }
+
+      const normalizationMetadata = buildMediaGenerationNormalizationMetadata({
+        normalization: sanitized.normalization as Record<string, unknown> | undefined,
+      });
+
       return {
         images: result.images,
         provider: candidate.provider,
         model: result.model ?? candidate.model,
         attempts,
+        ...(sanitized.normalization ? { normalization: sanitized.normalization } : {}),
+        ignoredOverrides: sanitized.ignoredOverrides,
+        metadata: { ...(result.metadata ?? {}), ...normalizationMetadata },
       };
     } catch (err) {
       lastError = err;
-      attempts.push({
+      const durationMs = Date.now() - startedAt;
+      recordCapabilityCandidateFailure({
+        attempts,
         provider: candidate.provider,
         model: candidate.model,
-        error: err instanceof Error ? err.message : String(err),
+        error: err,
+        durationMs,
       });
+      const last = attempts[attempts.length - 1];
+      const description = isFailoverError(err) ? describeFailoverError(err) : undefined;
+      log.warn(
+        {
+          err,
+          provider: candidate.provider,
+          model: candidate.model,
+          status: last?.status,
+          reason: last?.reason,
+          durationMs,
+          phase: 'candidate_failed',
+          attemptCount: attempts.length,
+        },
+        `image-generation candidate failed: ${candidate.provider}/${candidate.model}: ${
+          description ?? last?.error ?? (err instanceof Error ? err.message : String(err))
+        }`,
+      );
     }
   }
 
-  const summary = attempts.map((a) => `${a.provider}/${a.model}: ${a.error}`).join(' | ');
-  throw new Error(`All image generation models failed (${attempts.length}): ${summary}`, {
-    cause: lastError instanceof Error ? lastError : undefined,
+  return throwCapabilityGenerationFailure({
+    capabilityLabel: 'image generation',
+    attempts,
+    lastError,
   });
 }
 
-export function listImageGenerationProvidersSummary(): ReturnType<
-  typeof listProvidersSummaryFromRegistry
-> {
-  return listProvidersSummaryFromRegistry();
+export function listImageGenerationProvidersSummary(
+  cfg?: Config,
+): ImageGenerationProviderSummary[] {
+  return listProvidersSummaryFromRegistry(cfg);
 }
+
+// ============================================
+// Helpers
+// ============================================
+
+function buildProviderRequest(input: {
+  provider: ImageGenerationProvider;
+  candidate: { provider: string; model: string };
+  params: GenerateImageParams;
+  sanitized: ReturnType<typeof resolveImageGenerationOverrides>;
+}): ImageGenerationRequest {
+  const { provider, candidate, params, sanitized } = input;
+  const inputImages = params.inputImages
+    ? cloneInputImages(params.inputImages)
+    : undefined;
+  return {
+    provider: provider.id,
+    model: candidate.model,
+    prompt: params.prompt,
+    ...(params.cfg ? { cfg: params.cfg } : {}),
+    ...(params.agentDir ? { agentDir: params.agentDir } : {}),
+    ...(params.authStore ? { authStore: params.authStore } : {}),
+    ...(typeof params.timeoutMs === 'number' ? { timeoutMs: params.timeoutMs } : {}),
+    ...(params.signal ? { signal: params.signal } : {}),
+    ...(typeof params.count === 'number' ? { count: params.count } : {}),
+    ...(sanitized.size !== undefined ? { size: sanitized.size } : {}),
+    ...(sanitized.aspectRatio !== undefined ? { aspectRatio: sanitized.aspectRatio } : {}),
+    ...(sanitized.resolution !== undefined ? { resolution: sanitized.resolution } : {}),
+    ...(sanitized.quality !== undefined ? { quality: sanitized.quality } : {}),
+    ...(sanitized.outputFormat !== undefined ? { outputFormat: sanitized.outputFormat } : {}),
+    ...(sanitized.background !== undefined ? { background: sanitized.background } : {}),
+    ...(inputImages ? { inputImages } : {}),
+    ...(params.providerOptions ? { providerOptions: params.providerOptions } : {}),
+  };
+}
+
+function cloneInputImages(images: ImageGenerationSourceImage[]): ImageGenerationSourceImage[] {
+  return images.map((img) => ({
+    buffer: img.buffer,
+    mimeType: img.mimeType,
+    ...(img.fileName ? { fileName: img.fileName } : {}),
+    ...(img.metadata ? { metadata: img.metadata } : {}),
+  }));
+}
+
+function toCapabilityCandidate(provider: ImageGenerationProvider): CapabilityProviderCandidate {
+  return {
+    id: provider.id,
+    ...(provider.aliases ? { aliases: provider.aliases } : {}),
+    defaultModel: provider.defaultModel ?? null,
+    models: provider.models ?? [],
+    isConfigured: provider.isConfigured,
+  };
+}
+
+function buildNoImageGenerationModelConfiguredMessage(
+  cfg: Config | undefined,
+  deps: ImageGenerationRuntimeDeps,
+): string {
+  const list = (deps.listProviders ?? listImageGenerationProviders)(cfg);
+  return buildNoCapabilityModelConfiguredMessage({
+    capabilityLabel: 'image-generation',
+    modelConfigKey: 'imageGenerationModel',
+    providers: list.map(toCapabilityCandidate),
+    getProviderEnvVars: deps.getProviderEnvVars ?? ((id) => PROVIDER_ENV_MAP[id]),
+  });
+}
+
+// Touch capability + legacy types so they remain part of the public surface
+// callers can rely on (avoids accidental removal from re-exports).
+export type {
+  ImageGenerationCapabilitiesLegacy,
+  ImageGenerationProviderCapabilities,
+};
+// Re-export OPENAI_DEFAULT_IMAGE_MODEL only as a documented anchor for
+// downstream callers that wired against it; do NOT use it as a hard fallback.
+export { OPENAI_DEFAULT_IMAGE_MODEL };
+
+// Re-export the provider-registry surface that gateway routes / CLI consume
+// through this single barrel module. NOTE: `listImageGenerationProvidersSummary`
+// is implemented locally above (it overlays cfg-aware `configured` flags), so
+// it must not be re-exported from the registry to avoid a name clash.
+export {
+  getImageGenerationProvider,
+  listImageGenerationProviders,
+} from './provider-registry.js';

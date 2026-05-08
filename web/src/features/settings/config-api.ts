@@ -63,6 +63,10 @@ export interface AgentDefaultsState {
   imageModelFallbacks: string[];
   imageGenerationModel: string;
   imageGenerationModelFallbacks: string[];
+  /** Per-call timeout (ms) for image generation; null = inherit gateway default. */
+  imageGenerationModelTimeoutMs: number | null;
+  /** Sweep every configured provider when primary chain fails. */
+  imageGenerationModelAutoProviderFallback: boolean;
   mediaMaxMb: number | undefined;
   maxTokens: number;
   temperature: number;
@@ -480,6 +484,13 @@ export function parseAgentDefaultsFromConfig(cfg: unknown): AgentDefaultsState {
     imageModelFallbacks: imageModelFallbacksFromApi,
     imageGenerationModel: normalizeModelRef(d.imageGenerationModel),
     imageGenerationModelFallbacks: imageGenerationModelFallbacksFromApi,
+    imageGenerationModelTimeoutMs:
+      typeof d.imageGenerationModelTimeoutMs === 'number' &&
+      Number.isFinite(d.imageGenerationModelTimeoutMs) &&
+      d.imageGenerationModelTimeoutMs > 0
+        ? d.imageGenerationModelTimeoutMs
+        : null,
+    imageGenerationModelAutoProviderFallback: d.imageGenerationModelAutoProviderFallback === true,
     mediaMaxMb: typeof d.mediaMaxMb === 'number' && !Number.isNaN(d.mediaMaxMb) ? d.mediaMaxMb : undefined,
     maxTokens: typeof d.maxTokens === 'number' ? d.maxTokens : 8192,
     temperature: typeof d.temperature === 'number' ? d.temperature : 0.7,
@@ -571,10 +582,23 @@ export async function patchAgentDefaults(state: AgentDefaultsState): Promise<voi
       : state.imageModel || '';
 
   const imageGenFbs = state.imageGenerationModelFallbacks.map((s) => s.trim()).filter(Boolean);
-  const imageGenerationModelField =
-    imageGenFbs.length > 0 && state.imageGenerationModel.trim()
-      ? { primary: state.imageGenerationModel.trim(), fallbacks: imageGenFbs }
-      : state.imageGenerationModel || '';
+  const imageGenPrimary = state.imageGenerationModel.trim();
+  const imageGenTimeoutMs =
+    typeof state.imageGenerationModelTimeoutMs === 'number' &&
+    state.imageGenerationModelTimeoutMs > 0
+      ? Math.floor(state.imageGenerationModelTimeoutMs)
+      : null;
+  const imageGenAuto = state.imageGenerationModelAutoProviderFallback === true;
+  const imageGenerationModelField: unknown = (() => {
+    const obj: Record<string, unknown> = {};
+    if (imageGenPrimary) obj.primary = imageGenPrimary;
+    if (imageGenFbs.length > 0) obj.fallbacks = imageGenFbs;
+    if (imageGenTimeoutMs) obj.timeoutMs = imageGenTimeoutMs;
+    if (imageGenAuto) obj.autoProviderFallback = true;
+    if (Object.keys(obj).length === 0) return '';
+    if (Object.keys(obj).length === 1 && typeof obj.primary === 'string') return obj.primary;
+    return obj;
+  })();
 
   const maxTaskDurationMs: number | null =
     state.maxTaskDurationMinutes === undefined || state.maxTaskDurationMinutes === null

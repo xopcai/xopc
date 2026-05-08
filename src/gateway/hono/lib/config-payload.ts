@@ -11,7 +11,12 @@ import { bundledChannelPlugins } from '../../../generated/bundled-channel-plugin
 import { getAllProviders, isProviderConfigured } from '../../../providers/index.js';
 import type { GatewayService } from '../../service.js';
 import { safeToolsWebForGet } from '../../config-tools-web.js';
-import { agentModelFallbacksToArray, agentModelRefToString } from './agent-model.js';
+import {
+  agentImageGenerationModelAutoProviderFallback,
+  agentImageGenerationModelTimeoutMs,
+  agentModelFallbacksToArray,
+  agentModelRefToString,
+} from './agent-model.js';
 
 /** Sanitized config snapshot for GET/PATCH `/api/config` (matches persisted `service.currentConfig`). */
 export async function buildSafeWebConfigPayload(service: GatewayService) {
@@ -50,6 +55,12 @@ export async function buildSafeWebConfigPayload(service: GatewayService) {
         imageModelFallbacks: agentModelFallbacksToArray(config.agents?.defaults?.imageModel),
         imageGenerationModel: agentModelRefToString(config.agents?.defaults?.imageGenerationModel) ?? null,
         imageGenerationModelFallbacks: agentModelFallbacksToArray(
+          config.agents?.defaults?.imageGenerationModel,
+        ),
+        imageGenerationModelTimeoutMs: agentImageGenerationModelTimeoutMs(
+          config.agents?.defaults?.imageGenerationModel,
+        ),
+        imageGenerationModelAutoProviderFallback: agentImageGenerationModelAutoProviderFallback(
           config.agents?.defaults?.imageGenerationModel,
         ),
         mediaMaxMb: config.agents?.defaults?.mediaMaxMb,
