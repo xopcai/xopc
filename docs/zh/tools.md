@@ -210,7 +210,7 @@
 
 ### `web_extract`
 
-抓取 HTML 或 JSON、去掉明显噪声后，用配置的抽取模型生成偏 Markdown 的结果。可选 `instruction`、`maxLength`（默认来自配置或约 15000 字符）。
+抓取 HTML 或 JSON、去掉明显噪声后，用配置的抽取模型生成偏 Markdown 的结果。可选 `instruction`、`maxLength`（默认来自配置或约 15000 字符）。**超大页面**会按块分段抽取，避免单次把整页塞进模型（内部仍有体积上限）。
 
 **配置：** `agents.defaults.webExtract.model` 或 `XOPC_WEB_EXTRACT_MODEL`。
 
@@ -331,12 +331,24 @@ TTS 开启时注册。用于需要语音播报的场景；一般仍以文字回�
 
 | 工具 | 作用 |
 |------|------|
-| `browser_navigate` | 打开 http(s)（默认拦 localhost/内网段） |
+| `browser_navigate` | 打开 http(s)；默认拦截 localhost / 私网段 |
+| `browser_back` | 浏览器后退；可选 `waitFor`（`load` / `domcontentloaded` / `networkidle`） |
 | `browser_snapshot` | 页面或选择器的无障碍快照 |
 | `browser_click` | 通过 `selector` / `text` / `role` 点击 |
-| `browser_type` | 向输入框输入 |
+| `browser_type` | 输入（`selector` 或 `label`；可选 `pressEnter`） |
 | `browser_scroll` | 页面或元素滚动 |
-| `browser_screenshot` | 视口或元素截图（有大小限制） |
+| `browser_press` | 按键或组合键（如 `Enter`、`Control+A`） |
+| `browser_screenshot` | 视口或元素截图（有大小限制）；可选视觉描述提示 |
+| `browser_console` | 在页面上下文执行 JS 表达式（可选参数 `javascript`） |
+| `browser_get_images` | 列出范围内图片 URL（可选 `selector`、`maxImages`） |
+| `browser_dialog` | 接受/关闭待处理的 JS 对话框（`alert` / `confirm` / `prompt` / `beforeunload`）；需 CDP 监督器 |
+| `browser_vision` | 截图并由视觉模型分析；需配置 `agents.defaults.imageModel` |
+| `browser_cdp` | 发送原始 Chrome DevTools Protocol 命令（高级用法） |
+| `browser_close` | 关闭本会话的浏览器标签 |
+
+**URL 策略：** 拒绝带内嵌凭据的 URL、指向**云元数据 / IMDS** 及链路本地地址的导航（即使允许私网也仍拦截），以及查询串里疑似 **API Key / Token 外泄** 的模式。`agents.defaults.browser.allowPrivateUrls` 仅放宽**私网 IP** 拦截；元数据与可疑凭据模式仍拦截。
+
+**运行后端：** `agents.defaults.browser.cloudProvider` — `local`（默认 Playwright）、`browserbase`、`browser-use`。可选 `cdpUrl` 直连 CDP WebSocket，绕过云厂商封装。单次操作超时：`commandTimeout`（秒）。**对话框：** `dialogPolicy`（`must_respond` \| `auto_dismiss` \| `auto_accept`）与 `dialogTimeoutSeconds` 配合 CDP 监督器。
 
 每会话独立标签；`agents.defaults.browser.headless` 在启用时默认可为 true。
 
@@ -404,4 +416,4 @@ TTS 开启时注册。用于需要语音播报的场景；一般仍以文字回�
 
 ---
 
-_最后更新：2026-04-17_
+_最后更新：2026-05-08_

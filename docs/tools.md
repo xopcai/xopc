@@ -210,7 +210,7 @@ Fetches a URL and returns page content for the agent (HTTP client; timeouts appl
 
 ### `web_extract`
 
-Fetches HTML or JSON, reduces boilerplate, then runs a configured extraction model to return markdown-oriented output. Optional `instruction` and `maxLength` (default from config or about 15000 characters).
+Fetches HTML or JSON, reduces boilerplate, then runs a configured extraction model to return markdown-oriented output. Optional `instruction` and `maxLength` (default from config or about 15000 characters). Very large pages are processed in **chunks** so extraction can complete without loading the entire document into one model call (internal size limits still apply).
 
 **Config:** `agents.defaults.webExtract.model` or `XOPC_WEB_EXTRACT_MODEL`.
 
@@ -333,12 +333,24 @@ Registered when `agents.defaults.browser.enabled` is true. Install browsers once
 
 | Tool | Purpose |
 |------|---------|
-| `browser_navigate` | Open http(s) URL (localhost/private ranges blocked) |
+| `browser_navigate` | Open http(s); by default blocks localhost/private ranges |
+| `browser_back` | History back; optional `waitFor` (`load` / `domcontentloaded` / `networkidle`) |
 | `browser_snapshot` | Accessibility-oriented snapshot (page or selector) |
 | `browser_click` | Click by `selector`, `text`, or `role` |
-| `browser_type` | Type into a field |
+| `browser_type` | Type into a field (`selector` or `label`; optional `pressEnter`) |
 | `browser_scroll` | Scroll page or element |
-| `browser_screenshot` | Viewport or element (size-limited) |
+| `browser_press` | Press a key or combo (e.g. `Enter`, `Control+A`) |
+| `browser_screenshot` | Viewport or element (size-limited); optional vision hint |
+| `browser_console` | Evaluate a JS expression in the page context (optional `javascript`) |
+| `browser_get_images` | List image URLs in scope (optional `selector`, `maxImages`) |
+| `browser_dialog` | Accept/dismiss a pending JS dialog (`alert` / `confirm` / `prompt` / `beforeunload`); needs CDP supervisor |
+| `browser_vision` | Screenshot + vision model analysis; needs `agents.defaults.imageModel` |
+| `browser_cdp` | Send a raw Chrome DevTools Protocol command (advanced) |
+| `browser_close` | Close the session browser tab |
+
+**URL policy:** Navigation rejects URLs that embed credentials, target **cloud metadata / IMDS** hosts and link-local ranges (always, even if private URLs are allowed), or contain patterns that look like **API keys or tokens** in the query (anti-exfiltration). Set `agents.defaults.browser.allowPrivateUrls` to skip **private-IP** blocking only; metadata and suspicious token patterns remain blocked.
+
+**Backends:** `agents.defaults.browser.cloudProvider` — `local` (default Playwright), `browserbase`, or `browser-use`. Optional `cdpUrl` connects directly to a CDP WebSocket and bypasses the cloud provider. Per-tab timeouts: `commandTimeout` (seconds). **Dialogs:** `dialogPolicy` (`must_respond` \| `auto_dismiss` \| `auto_accept`) and `dialogTimeoutSeconds` interact with the CDP supervisor.
 
 Uses a per-session tab; `agents.defaults.browser.headless` defaults to true when enabled.
 
@@ -406,4 +418,4 @@ Configure verbosity under `progress` in config (e.g. `level`, `streamToolProgres
 
 ---
 
-_Last updated: 2026-04-17_
+_Last updated: 2026-05-08_

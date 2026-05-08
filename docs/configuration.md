@@ -154,7 +154,7 @@ The same optional keys can appear under **`agents.defaults`** for global default
 | `max_tokens` | number | `8192` | Maximum output tokens |
 | `temperature` | number | `0.7` | Temperature (0-2) |
 | `max_tool_iterations` | number | `20` | Max tool call iterations |
-| `imageModel` | string \| object | — | Vision model for the `image` tool and for **describing** inbound images when the session model does not support vision. Same formats as `model` (string or `{ primary, fallbacks }`). See [Image & vision](image-multimodal.md). |
+| `imageModel` | string \| object | — | Vision model for the `image` and `browser_vision` tools and for **describing** inbound images when the session model does not support vision. Same formats as `model` (string or `{ primary, fallbacks }`). See [Image & vision](image-multimodal.md). |
 | `imageGenerationModel` | string \| object | — | Image generation chain for `image_generate` (e.g. `openai/gpt-image-1`, `dashscope/wan2.6-t2i`). Same formats as `model`. See [Image & vision](image-multimodal.md). |
 | `mediaMaxMb` | number | — | Optional. Max size in **MB** when the `image` tool loads files from disk or URLs. |
 
@@ -206,6 +206,21 @@ Cross-session transcript search via the `session_search` tool (when session pers
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `summaryModel` | string | — | Model ref for per-session summaries (e.g. `openai/gpt-4o-mini`). Overrides env `XOPC_SESSION_SEARCH_MODEL` when set. |
+
+#### agents.defaults.browser
+
+Playwright-based **`browser_*`** tools when `enabled` is true. Install Chromium once for local mode: `npx playwright install chromium`. Tool behavior and URL policy: [Tools — Browser](tools.md#browser-optional).
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `enabled` | boolean | — | When `true`, registers browser automation tools. |
+| `headless` | boolean | `true` (when browser enabled) | Run browser without a visible window. |
+| `allowPrivateUrls` | boolean | — | When `true`, allows navigation to private IP ranges; **cloud metadata / IMDS** and suspicious token-in-URL patterns stay blocked. |
+| `commandTimeout` | number | `30` | Seconds per browser command (minimum `5`). |
+| `cloudProvider` | string | — | `local` \| `browserbase` \| `browser-use`. Omit or `local` for in-process Playwright. |
+| `cdpUrl` | string | — | Optional WebSocket URL to an existing browser (CDP); bypasses `cloudProvider` when set. |
+| `dialogPolicy` | string | — | `must_respond` \| `auto_dismiss` \| `auto_accept` — how JS dialogs are handled with the CDP supervisor. |
+| `dialogTimeoutSeconds` | number | `300` | Timeout for auto dialog handling (minimum `1`). |
 
 ---
 
