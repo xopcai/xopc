@@ -13,10 +13,7 @@ import { ChatWelcomeSpotlight } from '@/features/chat/chat-welcome-spotlight';
 import { MessageBubble } from '@/features/chat/message-bubble';
 import type { Message, ProgressState, ReasoningLevel } from '@/features/chat/messages.types';
 import { isLastUserMessageInThread } from '@/features/chat/user-message-plain-text';
-import {
-  CHAT_SCROLL_UNPIN_BEYOND_PX,
-  chatScrollDistanceFromBottom,
-} from '@/features/chat/chat-scroll-geometry';
+import { chatScrollDistanceFromBottom } from '@/features/chat/chat-scroll-geometry';
 import { messageRowKey } from '@/features/chat/thinking-blocks';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -90,28 +87,25 @@ export const MessageList = memo(function MessageList({
   const pinnedScrollRafRef = useRef<number | null>(null);
 
   /**
-   * `layoutPin`: after refresh / session load the virtualizer often underestimates `scrollHeight`;
-   * `fromBottom` is then large even though we intend to sit on the tail — skipping here left the
-   * viewport stuck above the last bubble. `resizeObserver`: keep the near-tail guard so RO does
-   * not yank when `pinToBottom` is stale (stream end).
+   * Pin correction after virtual height / row layout changes. Do not gate on small `fromBottom`
+   * during ResizeObserver: when a stream finishes the last bubble grows while `scrollTop` is fixed,
+   * `fromBottom` spikes — a former “near-tail only” guard wrongly skipped scroll and left the tail
+   * above the real bottom. Use `scrollTop = scrollHeight` so we match the viewport tail even when
+   * `scrollToIndex` lags measured row sizes.
    */
-  const scrollLastToEnd = useCallback(
-    (source: 'layoutPin' | 'resizeObserver' = 'resizeObserver') => {
-      const c = virtualizer.options.count;
-      if (c === 0) return;
-      const scrollEl = scrollElementRef.current;
-      if (!scrollEl) {
-        virtualizer.scrollToIndex(c - 1, { align: 'end', behavior: 'auto' });
-        return;
-      }
-      const fromBottom = chatScrollDistanceFromBottom(scrollEl);
-      /** Already aligned to tail (avoid virtualizer / RO jitter). */
-      if (fromBottom <= 1) return;
-      if (source === 'resizeObserver' && fromBottom > CHAT_SCROLL_UNPIN_BEYOND_PX) return;
+  const scrollLastToEnd = useCallback(() => {
+    const c = virtualizer.options.count;
+    if (c === 0) return;
+    const scrollEl = scrollElementRef.current;
+    if (!scrollEl) {
       virtualizer.scrollToIndex(c - 1, { align: 'end', behavior: 'auto' });
-    },
-    [virtualizer, scrollElementRef],
-  );
+      return;
+    }
+    const fromBottom = chatScrollDistanceFromBottom(scrollEl);
+    /** Already aligned to tail (avoid virtualizer / RO jitter). */
+    if (fromBottom <= 1) return;
+    scrollEl.scrollTop = scrollEl.scrollHeight;
+  }, [virtualizer, scrollElementRef]);
 
   const schedulePinnedScroll = useCallback(() => {
     if (pinnedScrollRafRef.current != null) {
@@ -127,7 +121,7 @@ export const MessageList = memo(function MessageList({
   /** User clicked “scroll to bottom” or list length changed while pinned — height may not change. */
   useLayoutEffect(() => {
     if (!pinToBottom || list.length === 0) return;
-    scrollLastToEnd('layoutPin');
+    scrollLastToEnd();
   }, [pinToBottom, list.length, scrollLastToEnd]);
 
   /**

@@ -75,8 +75,9 @@ export function useChatScrollViewport({
 
   /** Coalesce pinned follow-scroll to one rAF per burst (many SSE updates per frame). */
   const followTailRafRef = useRef<number | null>(null);
-  /** Last `scrollTop` after follow logic / user scroll — detects upward moves when `atBottom` state lags one frame. */
+  /** Last `scrollTop` / `scrollHeight` after follow — detects user upward scroll vs layout clamp when content shrinks (e.g. SSE end removes streaming chrome). */
   const lastFollowLayoutScrollTopRef = useRef(0);
+  const lastFollowLayoutScrollHeightRef = useRef(0);
 
   useEffect(() => {
     atBottomRef.current = atBottom;
@@ -128,6 +129,7 @@ export function useChatScrollViewport({
     }
 
     lastFollowLayoutScrollTopRef.current = scrollTop;
+    lastFollowLayoutScrollHeightRef.current = scrollHeight;
 
     if (scrollTop < 100 && !atBottomRef.current && hasMore && !loadingMore) {
       void loadMoreMessages();
@@ -147,6 +149,7 @@ export function useChatScrollViewport({
     if (el) {
       el.scrollTop = el.scrollHeight;
       lastFollowLayoutScrollTopRef.current = el.scrollTop;
+      lastFollowLayoutScrollHeightRef.current = el.scrollHeight;
     }
     requestAnimationFrame(() => {
       scrollToBottom(false, true);
@@ -164,6 +167,7 @@ export function useChatScrollViewport({
     if (el) {
       el.scrollTop = el.scrollHeight;
       lastFollowLayoutScrollTopRef.current = el.scrollTop;
+      lastFollowLayoutScrollHeightRef.current = el.scrollHeight;
     }
     requestAnimationFrame(() => {
       scrollToBottom(false, true);
@@ -276,11 +280,14 @@ export function useChatScrollViewport({
 
     if (!atBottomRef.current) {
       lastFollowLayoutScrollTopRef.current = el.scrollTop;
+      lastFollowLayoutScrollHeightRef.current = el.scrollHeight;
       return;
     }
 
     const st = el.scrollTop;
+    const sh = el.scrollHeight;
     const prevSt = lastFollowLayoutScrollTopRef.current;
+    const prevSh = lastFollowLayoutScrollHeightRef.current;
 
     /**
      * User nudged toward older messages: `scrollTop` dropped. Do not gate on `fromBottom > UNPIN`
@@ -288,14 +295,24 @@ export function useChatScrollViewport({
      * and follow-scroll + virtual `pinToBottom` would otherwise keep yanking to the tail.
      * Do not use `fromBottom > UNPIN` alone here: after content height grows, `fromBottom` is
      * temporarily large before `scrollToBottom` runs; that is not "user reading history".
+     *
+     * When SSE finishes, the last bubble / virtual list often **shrinks** (progress UI, layout).
+     * The browser then **clamps** `scrollTop` downward while we stay visually at the tail — that is
+     * not a user gesture; treating it as scroll-up cleared `atBottom` and stopped tail follow.
      */
     if (st < prevSt - 1.5) {
-      if (atBottomRef.current) {
-        atBottomRef.current = false;
-        setAtBottom(false);
+      const contentShrunk = sh < prevSh - 1;
+      if (!contentShrunk) {
+        if (atBottomRef.current) {
+          atBottomRef.current = false;
+          setAtBottom(false);
+        }
+        lastFollowLayoutScrollTopRef.current = st;
+        lastFollowLayoutScrollHeightRef.current = sh;
+        return;
       }
       lastFollowLayoutScrollTopRef.current = st;
-      return;
+      lastFollowLayoutScrollHeightRef.current = sh;
     }
 
     if (followTailRafRef.current != null) {
@@ -307,6 +324,7 @@ export function useChatScrollViewport({
       if (!root || !atBottomRef.current) return;
       scrollToBottom(false, true);
       lastFollowLayoutScrollTopRef.current = root.scrollTop;
+      lastFollowLayoutScrollHeightRef.current = root.scrollHeight;
     });
     return () => {
       if (followTailRafRef.current != null) {
