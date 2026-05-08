@@ -1,0 +1,55 @@
+{
+  "id": "synapse",
+  "name": "Synapse 看板",
+  "description": "人 × AI Agent 协作看板。创建意图，Agent 自动推进，你在关键节点决策。",
+  "version": "0.1.0",
+  "kind": "utility",
+  "main": "index.ts",
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "demoMode": {
+        "type": "boolean",
+        "default": true,
+        "description": "启用演示模式（使用模拟数据）"
+      },
+      "autoAdvance": {
+        "type": "boolean",
+        "default": true,
+        "description": "演示模式下自动推进进度"
+      }
+    }
+  },
+  "ui": {
+    "main": "ui/panel.html",
+    "icon": "ui/icon.svg",
+    "permissions": [
+      "theme",
+      "notification",
+      "storage",
+      "agent.send",
+      "agent.subscribe",
+      "config.read",
+      "config.write"
+    ],
+    "contributions": {
+      "pages": [
+        {
+          "id": "synapse.board",
+          "title": "Synapse 看板",
+          "path": "/apps/synapse",
+          "entrypoint": "ui/panel.html",
+          "showInNav": true,
+          "navIcon": "columns-3"
+        }
+      ],
+      "settingsPanels": [
+        {
+          "id": "synapse.settings",
+          "title": "Synapse 设置",
+          "entrypoint": "ui/settings.html"
+        }
+      ]
+    }
+  }
+}

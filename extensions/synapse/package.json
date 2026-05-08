@@ -1,0 +1,23 @@
+{
+  "name": "xopc-extension-synapse",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "index.ts",
+  "xopc": {
+    "extension": true,
+    "id": "synapse",
+    "name": "Synapse 看板",
+    "kind": "utility"
+  },
+  "scripts": {
+    "build:ui": "node scripts/build-ui.mjs"
+  },
+  "dependencies": {
+    "@xopcai/extension-ui-sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.0",
+    "typescript": "^5.9.3"
+  }
+}
