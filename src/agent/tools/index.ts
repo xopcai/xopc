@@ -30,7 +30,7 @@ export {
   type FindToolDetails,
 } from './find.js';
 
-export { createWebSearchTool, webFetchTool } from './web.js';
+export { createWebSearchTool, createWebFetchTool } from './web.js';
 export {
   createWebExtractTool,
   stripHtmlBoilerplate,

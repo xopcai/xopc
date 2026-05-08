@@ -1,9 +1,11 @@
 // Web search and fetch tools
 import { Type } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core';
+
 import type { Config } from '../../config/schema.js';
 import { SearchProviderRegistry } from './search/registry.js';
 import { resolveWebSearchConfig } from './search/resolve-config.js';
+import { checkUrlSafety, checkWebsiteBlocklist } from './url-safety.js';
 
 // =============================================================================
 // Web Search Tool
@@ -106,66 +108,87 @@ async function extractReadableText(html: string, pageUrl: string): Promise<strin
 
 type WebFetchParams = { url: string; maxChars?: number };
 
-export const webFetchTool: AgentTool = {
-  name: 'web_fetch',
-  description: 'Fetch and extract readable content from a URL (HTML via Readability; plain text as-is).',
-  parameters: WebFetchSchema,
-  label: '🌐 Web Fetch',
+export function createWebFetchTool(getConfig: () => Config | undefined): AgentTool {
+  return {
+    name: 'web_fetch',
+    description: 'Fetch and extract readable content from a URL (HTML via Readability; plain text as-is).',
+    parameters: WebFetchSchema,
+    label: '🌐 Web Fetch',
 
-  async execute(
-    _toolCallId: string,
-    params: any,
-    signal?: AbortSignal,
-  ): Promise<AgentToolResult<{}>> {
-    try {
-      const p = params as WebFetchParams;
-      const response = await fetch(p.url, { signal });
+    async execute(
+      _toolCallId: string,
+      params: any,
+      signal?: AbortSignal,
+    ): Promise<AgentToolResult<{}>> {
+      try {
+        const p = params as WebFetchParams;
 
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
+        // SSRF protection
+        const safety = checkUrlSafety(p.url);
+        if (!safety.safe) {
+          return {
+            content: [{ type: 'text', text: `Blocked: ${safety.reason}` }],
+            details: {},
+          };
+        }
 
-      const html = await response.text();
-      if (html.length > MAX_FETCH_CHARS) {
-        throw new Error('Response too large');
-      }
-      const maxChars = p.maxChars || 10000;
-      const contentType = response.headers.get('content-type') ?? '';
-      const looksHtml =
-        /html|xml/i.test(contentType) || /^[\s\n]*</.test(html.slice(0, Math.min(500, html.length)));
+        // Website blocklist check
+        const blocked = checkWebsiteBlocklist(p.url, getConfig()?.tools?.web?.blocklist);
+        if (blocked) {
+          return {
+            content: [{ type: 'text', text: `Blocked: ${blocked.message}` }],
+            details: {},
+          };
+        }
 
-      let text: string;
-      if (looksHtml) {
-        try {
-          text = await extractReadableText(html, p.url);
-          if (!text || text.length < 40) {
+        const response = await fetch(p.url, { signal });
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        const html = await response.text();
+        if (html.length > MAX_FETCH_CHARS) {
+          throw new Error('Response too large');
+        }
+        const maxChars = p.maxChars || 10000;
+        const contentType = response.headers.get('content-type') ?? '';
+        const looksHtml =
+          /html|xml/i.test(contentType) || /^[\s\n]*</.test(html.slice(0, Math.min(500, html.length)));
+
+        let text: string;
+        if (looksHtml) {
+          try {
+            text = await extractReadableText(html, p.url);
+            if (!text || text.length < 40) {
+              text = stripHtmlFallback(html);
+            }
+          } catch {
             text = stripHtmlFallback(html);
           }
-        } catch {
-          text = stripHtmlFallback(html);
+        } else {
+          text = html.trim();
         }
-      } else {
-        text = html.trim();
-      }
 
-      if (text.length > maxChars) {
-        text = text.substring(0, maxChars) + '\n\n[truncated...]';
-      }
+        if (text.length > maxChars) {
+          text = text.substring(0, maxChars) + '\n\n[truncated...]';
+        }
 
-      return {
-        content: [{ type: 'text', text }],
-        details: {},
-      };
-    } catch (error) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `Fetch error: ${error instanceof Error ? error.message : String(error)}`,
-          },
-        ],
-        details: {},
-      };
-    }
-  },
-} as any;
+        return {
+          content: [{ type: 'text', text }],
+          details: {},
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Fetch error: ${error instanceof Error ? error.message : String(error)}`,
+            },
+          ],
+          details: {},
+        };
+      }
+    },
+  } as any;
+}

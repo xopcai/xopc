@@ -59,3 +59,71 @@ export const BrowserScreenshotSchema = Type.Object({
     Type.String({ description: 'What to look for in the screenshot (passed to the vision model)' }),
   ),
 });
+
+export const BrowserBackSchema = Type.Object({
+  waitFor: Type.Optional(
+    Type.Union(
+      [Type.Literal('load'), Type.Literal('domcontentloaded'), Type.Literal('networkidle')],
+      { description: 'Wait condition after going back (default: domcontentloaded)' },
+    ),
+  ),
+});
+
+export const BrowserPressSchema = Type.Object({
+  key: Type.String({
+    description:
+      'Key or key combination to press, e.g. "Enter", "Tab", "Escape", "ArrowDown", "Control+A", "Shift+Enter"',
+  }),
+});
+
+export const BrowserConsoleSchema = Type.Object({
+  javascript: Type.Optional(
+    Type.String({
+      description:
+        'JavaScript expression to evaluate in the page context. The return value is serialized to JSON.',
+    }),
+  ),
+});
+
+export const BrowserGetImagesSchema = Type.Object({
+  selector: Type.Optional(
+    Type.String({ description: 'CSS selector to limit image extraction scope. Omit for full page.' }),
+  ),
+  maxImages: Type.Optional(
+    Type.Number({ description: 'Max images to return (default: 20)', default: 20 }),
+  ),
+});
+
+export const BrowserCloseSchema = Type.Object({});
+
+export const BrowserVisionSchema = Type.Object({
+  prompt: Type.Optional(
+    Type.String({
+      description:
+        'What to analyze in the screenshot (default: describe the visible UI state). Requires `agents.defaults.imageModel` to be configured.',
+    }),
+  ),
+  selector: Type.Optional(
+    Type.String({ description: 'CSS selector to screenshot a specific element. Omit for full page.' }),
+  ),
+});
+
+export const BrowserDialogSchema = Type.Object({
+  action: Type.Union([Type.Literal('accept'), Type.Literal('dismiss')], {
+    description: 'Whether to accept or dismiss the dialog',
+  }),
+  promptText: Type.Optional(
+    Type.String({ description: 'Text to enter into a prompt() dialog before accepting' }),
+  ),
+});
+
+export const BrowserCdpSchema = Type.Object({
+  method: Type.String({
+    description: 'CDP method name, e.g. "Runtime.evaluate", "Page.captureScreenshot"',
+  }),
+  params: Type.Optional(
+    Type.Record(Type.String(), Type.Unknown(), {
+      description: 'CDP method parameters as a JSON object',
+    }),
+  ),
+});

@@ -180,6 +180,18 @@ export const AgentDefaultsSchema = z.object({
       enabled: z.boolean().optional(),
       /** Default true when browser tools are enabled. */
       headless: z.boolean().optional(),
+      /** When true, skip private-IP blocking for browser navigation (cloud metadata endpoints are always blocked). */
+      allowPrivateUrls: z.boolean().optional(),
+      /** Browser command timeout in seconds (default: 30). */
+      commandTimeout: z.number().min(5).optional(),
+      /** Cloud browser backend: 'local' (default Playwright), 'browserbase', or 'browser-use'. */
+      cloudProvider: z.enum(['local', 'browserbase', 'browser-use']).optional(),
+      /** Direct CDP WebSocket endpoint URL (bypasses cloud provider). */
+      cdpUrl: z.string().optional(),
+      /** JS dialog handling policy: 'must_respond' (agent must act), 'auto_dismiss', or 'auto_accept'. */
+      dialogPolicy: z.enum(['must_respond', 'auto_dismiss', 'auto_accept']).optional(),
+      /** Dialog auto-dismiss/accept timeout in seconds (default: 300). */
+      dialogTimeoutSeconds: z.number().min(1).optional(),
     })
     .optional(),
   /** Sub-agent delegation (`delegate_task`). Opt-in. */
@@ -380,10 +392,21 @@ export const WebSearchConfigSchema = z.object({
 
 export type WebSearchConfig = z.infer<typeof WebSearchConfigSchema>;
 
+export const WebsiteBlocklistSchema = z.object({
+  /** Master switch. Default false (no blocking). */
+  enabled: z.boolean().default(false),
+  /** Domain patterns to block (e.g. "example.com", "*.evil.org"). */
+  domains: z.array(z.string()).default([]),
+});
+
+export type WebsiteBlocklistConfig = z.infer<typeof WebsiteBlocklistSchema>;
+
 export const WebToolsConfigSchema = z.object({
   /** Search result HTML fallback: cn → Bing, otherwise DuckDuckGo */
   region: z.enum(['cn', 'global']).optional(),
   search: WebSearchConfigSchema.optional(),
+  /** Domain blocklist for web_fetch / web_extract / browser tools. */
+  blocklist: WebsiteBlocklistSchema.optional(),
 });
 
 export type WebToolsConfig = z.infer<typeof WebToolsConfigSchema>;

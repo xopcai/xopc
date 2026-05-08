@@ -76,6 +76,18 @@ export interface AgentDefaultsState {
   browserEnabled: boolean;
   /** Headless Chromium when browser tools are on (`agents.defaults.browser.headless`, default true). */
   browserHeadless: boolean;
+  /** Skip private-IP blocking (cloud metadata always blocked). */
+  browserAllowPrivateUrls: boolean;
+  /** Per-command timeout in seconds (default 30). */
+  browserCommandTimeout: number | undefined;
+  /** Browser backend: local, browserbase, or browser-use. */
+  browserCloudProvider: 'local' | 'browserbase' | 'browser-use';
+  /** Direct CDP WebSocket endpoint URL. */
+  browserCdpUrl: string;
+  /** JS dialog handling policy. */
+  browserDialogPolicy: 'must_respond' | 'auto_dismiss' | 'auto_accept';
+  /** Dialog auto-timeout in seconds (default 300). */
+  browserDialogTimeout: number | undefined;
   thinkingDefault: string;
   reasoningDefault: string;
   verboseDefault: string;
@@ -180,17 +192,72 @@ function truthyBrowserFlag(v: unknown): boolean {
   return v === true || v === 'true' || v === 1;
 }
 
-function parseBrowserFromDefaults(d: Record<string, unknown>): Pick<AgentDefaultsState, 'browserEnabled' | 'browserHeadless'> {
+type BrowserFieldsPick = Pick<
+  AgentDefaultsState,
+  | 'browserEnabled'
+  | 'browserHeadless'
+  | 'browserAllowPrivateUrls'
+  | 'browserCommandTimeout'
+  | 'browserCloudProvider'
+  | 'browserCdpUrl'
+  | 'browserDialogPolicy'
+  | 'browserDialogTimeout'
+>;
+
+function parseBrowserFromDefaults(d: Record<string, unknown>): BrowserFieldsPick {
   const browser = d.browser;
   if (!browser || typeof browser !== 'object' || Array.isArray(browser)) {
-    return { browserEnabled: false, browserHeadless: true };
+    return {
+      browserEnabled: false,
+      browserHeadless: true,
+      browserAllowPrivateUrls: false,
+      browserCommandTimeout: undefined,
+      browserCloudProvider: 'local',
+      browserCdpUrl: '',
+      browserDialogPolicy: 'auto_dismiss',
+      browserDialogTimeout: undefined,
+    };
   }
   const b = browser as Record<string, unknown>;
   const enabled = truthyBrowserFlag(b.enabled);
   const headlessRaw = b.headless;
   const headless =
     headlessRaw === false || headlessRaw === 'false' || headlessRaw === 0 ? false : true;
-  return { browserEnabled: enabled, browserHeadless: headless };
+
+  const allowPrivateUrls = truthyBrowserFlag(b.allowPrivateUrls);
+
+  const commandTimeout =
+    typeof b.commandTimeout === 'number' && Number.isFinite(b.commandTimeout) && b.commandTimeout >= 5
+      ? Math.floor(b.commandTimeout)
+      : undefined;
+
+  const cpRaw = b.cloudProvider;
+  const cloudProvider: AgentDefaultsState['browserCloudProvider'] =
+    cpRaw === 'browserbase' || cpRaw === 'browser-use' ? cpRaw : 'local';
+
+  const cdpUrl = typeof b.cdpUrl === 'string' ? b.cdpUrl : '';
+
+  const dpRaw = b.dialogPolicy;
+  const dialogPolicy: AgentDefaultsState['browserDialogPolicy'] =
+    dpRaw === 'must_respond' || dpRaw === 'auto_accept' ? dpRaw : 'auto_dismiss';
+
+  const dialogTimeout =
+    typeof b.dialogTimeoutSeconds === 'number' &&
+    Number.isFinite(b.dialogTimeoutSeconds) &&
+    b.dialogTimeoutSeconds >= 1
+      ? Math.floor(b.dialogTimeoutSeconds)
+      : undefined;
+
+  return {
+    browserEnabled: enabled,
+    browserHeadless: headless,
+    browserAllowPrivateUrls: allowPrivateUrls,
+    browserCommandTimeout: commandTimeout,
+    browserCloudProvider: cloudProvider,
+    browserCdpUrl: cdpUrl,
+    browserDialogPolicy: dialogPolicy,
+    browserDialogTimeout: dialogTimeout,
+  };
 }
 
 function parseCompaction(raw: unknown): AgentDefaultsCompactionState {
@@ -398,7 +465,7 @@ export function parseAgentDefaultsFromConfig(cfg: unknown): AgentDefaultsState {
     Array.isArray(igf) && igf.every((x) => typeof x === 'string')
       ? igf
       : normalizeModelFallbacks(d.imageGenerationModel);
-  const { browserEnabled, browserHeadless } = parseBrowserFromDefaults(d);
+  const browserFields = parseBrowserFromDefaults(d);
   const maxTaskMs =
     typeof d.maxTaskDurationMs === 'number' && Number.isFinite(d.maxTaskDurationMs)
       ? d.maxTaskDurationMs
@@ -421,8 +488,7 @@ export function parseAgentDefaultsFromConfig(cfg: unknown): AgentDefaultsState {
     maxRequestsPerTurn: typeof d.maxRequestsPerTurn === 'number' ? d.maxRequestsPerTurn : 50,
     maxToolFailuresPerTurn: typeof d.maxToolFailuresPerTurn === 'number' ? d.maxToolFailuresPerTurn : 3,
     workspace: typeof d.workspace === 'string' ? d.workspace : '~/.xopc/workspace',
-    browserEnabled,
-    browserHeadless,
+    ...browserFields,
     thinkingDefault: typeof d.thinkingDefault === 'string' ? d.thinkingDefault : 'medium',
     reasoningDefault: typeof d.reasoningDefault === 'string' ? d.reasoningDefault : 'stream',
     verboseDefault: typeof d.verboseDefault === 'string' ? d.verboseDefault : 'full',
@@ -544,6 +610,12 @@ export async function patchAgentDefaults(state: AgentDefaultsState): Promise<voi
     browser: {
       enabled: state.browserEnabled,
       headless: state.browserHeadless,
+      allowPrivateUrls: state.browserAllowPrivateUrls,
+      commandTimeout: state.browserCommandTimeout ?? null,
+      cloudProvider: state.browserCloudProvider === 'local' ? null : state.browserCloudProvider,
+      cdpUrl: state.browserCdpUrl.trim() || null,
+      dialogPolicy: state.browserDialogPolicy === 'auto_dismiss' ? null : state.browserDialogPolicy,
+      dialogTimeoutSeconds: state.browserDialogTimeout ?? null,
     },
     thinkingDefault: state.thinkingDefault,
     reasoningDefault: state.reasoningDefault,
