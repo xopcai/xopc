@@ -155,7 +155,7 @@ xopc onboard
 | `max_tokens` | number | `8192` | 最大输出 tokens |
 | `temperature` | number | `0.7` | 温度参数 (0-2) |
 | `max_tool_iterations` | number | `20` | 最大工具调用次数 |
-| `imageModel` | string \| object | — | `image` 工具及**主模型不支持视觉**时对入站图做描述的视觉模型。格式与 `model` 相同（字符串或 `{ primary, fallbacks }`）。详见 [图像与视觉](image-multimodal.md)。 |
+| `imageModel` | string \| object | — | `image`、`browser_vision` 工具及**主模型不支持视觉**时对入站图做描述的视觉模型。格式与 `model` 相同（字符串或 `{ primary, fallbacks }`）。详见 [图像与视觉](image-multimodal.md)。 |
 | `imageGenerationModel` | string \| object | — | `image_generate` 的文生图模型链（如 `openai/gpt-image-1`、`dashscope/wan2.6-t2i`）。格式与 `model` 相同。详见 [图像与视觉](image-multimodal.md)。 |
 | `mediaMaxMb` | number | — | 可选。`image` 工具从路径或 URL 加载单张图片时的最大体积（**MB**）。 |
 
@@ -207,6 +207,21 @@ xopc onboard
 | 字段 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
 | `summaryModel` | string | — | 按会话摘要所用模型（如 `openai/gpt-4o-mini`）。设置后优先于环境变量 `XOPC_SESSION_SEARCH_MODEL`。 |
+
+#### agents.defaults.browser
+
+基于 Playwright 的 **`browser_*`** 工具；`enabled` 为 `true` 时注册。本机模式需先安装 Chromium：`npx playwright install chromium`。工具列表与 URL 策略见 [工具说明](./tools.md)中的「浏览器（可选）」一节。
+
+| 字段 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `enabled` | boolean | — | 为 `true` 时注册浏览器自动化工具。 |
+| `headless` | boolean | 启用浏览器时多为 `true` | 无界面运行浏览器。 |
+| `allowPrivateUrls` | boolean | — | 为 `true` 时允许导航到私网 IP；**云元数据 / IMDS** 与 URL 内可疑凭据模式仍拦截。 |
+| `commandTimeout` | number | `30` | 单次浏览器命令超时（秒，最小 `5`）。 |
+| `cloudProvider` | string | — | `local` \| `browserbase` \| `browser-use`；省略或 `local` 为进程内 Playwright。 |
+| `cdpUrl` | string | — | 可选：已有浏览器的 CDP WebSocket 地址；设置时绕过 `cloudProvider`。 |
+| `dialogPolicy` | string | — | `must_respond` \| `auto_dismiss` \| `auto_accept`，配合 CDP 监督器处理 JS 对话框。 |
+| `dialogTimeoutSeconds` | number | `300` | 自动处理对话框相关超时（秒，最小 `1`）。 |
 
 ---
 
