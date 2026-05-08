@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { mapSizeToMinimaxAspectRatio } from '../minimax-generate.js';
+import { mapSizeToMinimaxAspectRatio } from '../../../../../extensions/minimax/src/image-generation-provider.js';
 
 describe('mapSizeToMinimaxAspectRatio', () => {
   it('defaults to 1:1', () => {

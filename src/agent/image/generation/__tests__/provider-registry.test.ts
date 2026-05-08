@@ -8,7 +8,7 @@ import {
   type ImageGenerationProvider,
 } from '../provider-registry.js';
 
-function createMockProvider(id: string): ImageGenerationProvider {
+function createMockProvider(id: string, overrides?: Partial<ImageGenerationProvider>): ImageGenerationProvider {
   return {
     id,
     label: `Mock ${id}`,
@@ -20,6 +20,7 @@ function createMockProvider(id: string): ImageGenerationProvider {
         model: `${id}-default`,
       };
     },
+    ...overrides,
   };
 }
 
@@ -52,21 +53,32 @@ describe('ImageGenerationProvider registry', () => {
     expect(providers.map((p) => p.id).sort()).toEqual(['a', 'b']);
   });
 
-  it('lists provider summaries', () => {
-    registerImageGenerationProvider(createMockProvider('openai'));
+  it('lists provider summaries with new optional fields', () => {
+    registerImageGenerationProvider(
+      createMockProvider('openai', { aliases: ['openai-images'], capabilities: { generate: { maxCount: 4 } } }),
+    );
     const summaries = listImageGenerationProvidersSummary();
     expect(summaries).toHaveLength(1);
-    expect(summaries[0]).toEqual({
+    expect(summaries[0]).toMatchObject({
       id: 'openai',
+      label: 'Mock openai',
       defaultModel: 'openai-default',
       models: ['openai-default', 'openai-v2'],
+      aliases: ['openai-images'],
     });
+    expect(summaries[0]?.capabilities).toBeDefined();
   });
 
   it('throws on empty provider id', () => {
     expect(() =>
       registerImageGenerationProvider({ ...createMockProvider('x'), id: '' }),
     ).toThrow('Image generation provider id is required');
+  });
+
+  it('throws on reserved provider id', () => {
+    expect(() =>
+      registerImageGenerationProvider({ ...createMockProvider('x'), id: '__proto__' }),
+    ).toThrow(/reserved/);
   });
 
   it('overwrites provider with same id', () => {
@@ -76,5 +88,28 @@ describe('ImageGenerationProvider registry', () => {
     registerImageGenerationProvider(first);
     registerImageGenerationProvider(second);
     expect(getImageGenerationProvider('dup')?.label).toBe('Updated');
+  });
+
+  it('resolves a provider by alias (case-insensitive)', () => {
+    registerImageGenerationProvider(createMockProvider('vendor', { aliases: ['Vendor-Images'] }));
+    expect(getImageGenerationProvider('vendor-images')?.id).toBe('vendor');
+    expect(getImageGenerationProvider('VENDOR-IMAGES')?.id).toBe('vendor');
+  });
+
+  it('drops stale alias entries when a provider is re-registered without that alias', () => {
+    registerImageGenerationProvider(createMockProvider('vendor', { aliases: ['old-alias'] }));
+    expect(getImageGenerationProvider('old-alias')?.id).toBe('vendor');
+    registerImageGenerationProvider(createMockProvider('vendor', { aliases: ['new-alias'] }));
+    expect(getImageGenerationProvider('old-alias')).toBeUndefined();
+    expect(getImageGenerationProvider('new-alias')?.id).toBe('vendor');
+  });
+
+  it('skips providers disabled via cfg.extensions[<id>].enabled = false', () => {
+    registerImageGenerationProvider(createMockProvider('openai'));
+    registerImageGenerationProvider(createMockProvider('dashscope'));
+    const cfg = { extensions: { openai: { enabled: false } } } as any;
+    expect(getImageGenerationProvider('openai', cfg)).toBeUndefined();
+    expect(getImageGenerationProvider('dashscope', cfg)?.id).toBe('dashscope');
+    expect(listImageGenerationProviders(cfg).map((p) => p.id)).toEqual(['dashscope']);
   });
 });

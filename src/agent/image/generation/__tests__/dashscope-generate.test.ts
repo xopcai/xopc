@@ -5,7 +5,7 @@ import {
   mapSizeToDashScopeFormat,
   resolveDashScopeImageGenerationUrl,
   resolveDashScopeImageRegion,
-} from '../dashscope-generate.js';
+} from '../../../../../extensions/dashscope/src/image-generation-provider.js';
 
 let savedBase: string | undefined;
 let savedRegion: string | undefined;
@@ -59,6 +59,28 @@ describe('resolveDashScopeImageGenerationUrl', () => {
     process.env.DASHSCOPE_IMAGE_REGION = 'us-east-1';
     expect(resolveDashScopeImageRegion()).toBe('us');
     expect(resolveDashScopeImageGenerationUrl()).toBe(DASHSCOPE_IMAGE_ENDPOINTS.us);
+  });
+
+  it('honours cfg.providers.dashscope.imageBaseUrl over env', () => {
+    process.env.DASHSCOPE_IMAGE_BASE_URL = 'https://env.example.com/api';
+    const req = {
+      provider: 'dashscope',
+      model: 'wan2.6-t2i',
+      prompt: 'p',
+      cfg: { providers: { dashscope: { imageBaseUrl: 'https://cfg.example.com/api/' } } } as any,
+    } as any;
+    expect(resolveDashScopeImageGenerationUrl(req)).toBe('https://cfg.example.com/api');
+  });
+
+  it('honours cfg.providers.dashscope.region for endpoint mapping', () => {
+    const req = {
+      provider: 'dashscope',
+      model: 'wan2.6-t2i',
+      prompt: 'p',
+      cfg: { providers: { dashscope: { region: 'singapore' } } } as any,
+    } as any;
+    expect(resolveDashScopeImageRegion(req)).toBe('singapore');
+    expect(resolveDashScopeImageGenerationUrl(req)).toBe(DASHSCOPE_IMAGE_ENDPOINTS.singapore);
   });
 });
 

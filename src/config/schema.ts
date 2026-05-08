@@ -18,6 +18,31 @@ export const AgentModelRefSchema = z.union([
 
 export type AgentModelConfig = z.infer<typeof AgentModelRefSchema>;
 
+/**
+ * Image-generation model ref. Superset of {@link AgentModelRefSchema} with
+ * runtime knobs (`timeoutMs`, `autoProviderFallback`) used by the
+ * image-generation runtime; falls back to a plain string for backward
+ * compatibility with old configs.
+ */
+export const AgentImageGenerationModelSchema = z.union([
+  z.string(),
+  z
+    .object({
+      primary: z.string().optional(),
+      fallbacks: z.array(z.string()).optional(),
+      /** Hard cap for the whole generation attempt (ms). */
+      timeoutMs: z.number().int().positive().optional(),
+      /**
+       * When all `primary + fallbacks` candidates fail, sweep every other
+       * configured provider before giving up.
+       */
+      autoProviderFallback: z.boolean().optional(),
+    })
+    .strict(),
+]);
+
+export type AgentImageGenerationModelConfig = z.infer<typeof AgentImageGenerationModelSchema>;
+
 export const AgentDefaultsSchema = z.object({
   /** Parent directory: each agent’s Markdown root is `<expanded>/<agentId>/` (e.g. `.../workspace/main`). */
   workspace: z.string().default('~/.xopc/workspace'),
@@ -30,8 +55,8 @@ export const AgentDefaultsSchema = z.object({
   ]).default(''), // Empty default - will be resolved dynamically at runtime
   /** Vision / image understanding model (provider/model). Falls back to heuristics when unset. */
   imageModel: AgentModelRefSchema.optional(),
-  /** Image generation model (provider/model), e.g. openai/gpt-image-1. Thin REST wrapper; OpenAI supported. */
-  imageGenerationModel: AgentModelRefSchema.optional(),
+  /** Image generation model (provider/model), e.g. openai/gpt-image-1. Supports plugin-based providers (OpenAI / DashScope / MiniMax / Google / Fal). */
+  imageGenerationModel: AgentImageGenerationModelSchema.optional(),
   /** Max image size for image tool loads (MB). */
   mediaMaxMb: z.number().positive().optional(),
   maxTokens: z.number().default(8192),
@@ -604,6 +629,72 @@ export const TTSConfigSchema = z.object({
 });
 
 // ============================================
+// Provider Configs (capability providers: image / audio / video)
+// ============================================
+
+/**
+ * Optional Azure OpenAI overrides used when an OpenAI image-generation
+ * request should hit an Azure deployment instead of `api.openai.com`.
+ *
+ * URL template (when present):
+ *   `https://<resource>.openai.azure.com/openai/deployments/<deployment>/images/generations?api-version=<apiVersion>`
+ */
+export const ProviderAzureConfigSchema = z
+  .object({
+    /** Azure resource name (subdomain before `.openai.azure.com`). */
+    resource: z.string().min(1).optional(),
+    /** Azure deployment id (configured per model). */
+    deployment: z.string().min(1).optional(),
+    /** Azure REST API version, e.g. `2024-08-01-preview`. */
+    apiVersion: z.string().min(1).optional(),
+  })
+  .strict();
+
+/** Per-vendor request overrides applied by the provider HTTP layer. */
+export const ProviderRequestOverridesSchema = z
+  .object({
+    /** Hard cap for a single HTTP call (ms). */
+    timeoutMs: z.number().int().positive().optional(),
+    /** Extra headers merged into every outbound request. */
+    headers: z.record(z.string(), z.string()).optional(),
+  })
+  .strict();
+
+/**
+ * Generic per-vendor provider config — used by image / audio / video
+ * capability providers via `cfg.providers.<id>`. Kept loose (`.strict()` but
+ * everything optional) so adding a new vendor never requires a config
+ * migration.
+ */
+export const ProviderAuthConfigSchema = z
+  .object({
+    /** Static API key (api-key / azure-key modes). */
+    apiKey: z.string().optional(),
+    /** Override the default REST base URL. */
+    baseUrl: z.string().url().optional(),
+    /** Vendor region (DashScope: `beijing` / `singapore`; AWS: region id). */
+    region: z.string().optional(),
+    /** Image-only base URL override (DashScope splits image vs LLM). */
+    imageBaseUrl: z.string().url().optional(),
+    /** Per-vendor request overrides. */
+    request: ProviderRequestOverridesSchema.optional(),
+    /** Azure OpenAI deployment overrides; only consumed by OpenAI image provider. */
+    azure: ProviderAzureConfigSchema.optional(),
+  })
+  .strict();
+
+export type ProviderAuthConfig = z.infer<typeof ProviderAuthConfigSchema>;
+
+/**
+ * `cfg.providers.<id>` is keyed by provider id (`openai`, `dashscope`,
+ * `minimax`, `google`, `fal`, …). Every entry is optional and validated by
+ * {@link ProviderAuthConfigSchema}.
+ */
+export const ProvidersConfigSchema = z.record(z.string(), ProviderAuthConfigSchema);
+
+export type ProvidersConfig = z.infer<typeof ProvidersConfigSchema>;
+
+// ============================================
 // Extension Configs 
 // ============================================
 
@@ -688,6 +779,8 @@ export const ConfigSchema = z.object({
   cron: CronConfigSchema,
   goals: GoalsConfigSchema.optional(),
   extensions: ExtensionsConfigSchema.default({}),
+  /** Per-vendor capability provider config (image / audio / video). */
+  providers: ProvidersConfigSchema.optional(),
   modelsDev: ModelsDevConfigSchema,
   stt: STTConfigSchema.optional(),
   tts: TTSConfigSchema.optional(),

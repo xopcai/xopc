@@ -21,6 +21,17 @@
       "*": ["./node_modules/*"]
     }
   },
-  "include": ["src/**/*", "extensions/telegram/src/**/*", "extensions/weixin/src/**/*"],
+  "include": [
+    "src/**/*",
+    "extensions/telegram/src/**/*",
+    "extensions/weixin/src/**/*",
+    "extensions/feishu/src/**/*",
+    "extensions/dingtalk/src/**/*",
+    "extensions/openai/src/**/*",
+    "extensions/dashscope/src/**/*",
+    "extensions/minimax/src/**/*",
+    "extensions/google/src/**/*",
+    "extensions/fal/src/**/*"
+  ],
   "exclude": ["node_modules", "dist", "**/__tests__/**/*"]
 }

@@ -43,3 +43,48 @@ export function normalizePatchAgentModel(v: unknown): unknown {
   }
   return v;
 }
+
+/** Read `timeoutMs` from an image-generation model ref (only set when ref is an object). */
+export function agentImageGenerationModelTimeoutMs(ref: unknown): number | null {
+  if (!ref || typeof ref !== 'object' || Array.isArray(ref)) return null;
+  const v = (ref as { timeoutMs?: unknown }).timeoutMs;
+  return typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : null;
+}
+
+/** Read `autoProviderFallback` from an image-generation model ref. Defaults to false. */
+export function agentImageGenerationModelAutoProviderFallback(ref: unknown): boolean {
+  if (!ref || typeof ref !== 'object' || Array.isArray(ref)) return false;
+  return (ref as { autoProviderFallback?: unknown }).autoProviderFallback === true;
+}
+
+/**
+ * PATCH body normalizer for `agents.defaults.imageGenerationModel`. Accepts:
+ *
+ *   - `string` → kept as plain string ref.
+ *   - `{ primary, fallbacks?, timeoutMs?, autoProviderFallback? }` → object form.
+ *
+ * Drops empty/blank values so the persisted config stays clean.
+ */
+export function normalizePatchAgentImageGenerationModel(v: unknown): unknown {
+  if (v === undefined) return undefined;
+  if (typeof v === 'string') return v;
+  if (typeof v !== 'object' || v === null || Array.isArray(v)) return v;
+  const o = v as Record<string, unknown>;
+  const primary = typeof o.primary === 'string' ? o.primary.trim() : '';
+  const fallbacks = Array.isArray(o.fallbacks)
+    ? o.fallbacks
+        .filter((x): x is string => typeof x === 'string' && x.trim().length > 0)
+        .map((x) => x.trim())
+    : [];
+  const out: Record<string, unknown> = {};
+  if (primary) out.primary = primary;
+  if (fallbacks.length > 0) out.fallbacks = fallbacks;
+  if (typeof o.timeoutMs === 'number' && Number.isFinite(o.timeoutMs) && o.timeoutMs > 0) {
+    out.timeoutMs = Math.floor(o.timeoutMs);
+  }
+  if (o.autoProviderFallback === true) out.autoProviderFallback = true;
+  // Drop to plain string when no extra knobs are set (matches legacy shape).
+  if (Object.keys(out).length === 0) return undefined;
+  if (Object.keys(out).length === 1 && typeof out.primary === 'string') return out.primary;
+  return out;
+}

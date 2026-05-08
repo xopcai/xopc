@@ -4,7 +4,10 @@ import { type Config, BindingsConfigSchema } from '../../../config/schema.js';
 import { CredentialResolver } from '../../../auth/credentials.js';
 import { applyToolsWebPatch } from '../../config-tools-web.js';
 import { buildSafeWebConfigPayload } from '../lib/config-payload.js';
-import { normalizePatchAgentModel } from '../lib/agent-model.js';
+import {
+  normalizePatchAgentImageGenerationModel,
+  normalizePatchAgentModel,
+} from '../lib/agent-model.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
 export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
@@ -83,9 +86,13 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
         if (v === '' || v === null) {
           delete (config.agents.defaults as Record<string, unknown>).imageGenerationModel;
         } else {
-          config.agents.defaults.imageGenerationModel = normalizePatchAgentModel(
-            v,
-          ) as Config['agents']['defaults']['imageGenerationModel'];
+          const normalized = normalizePatchAgentImageGenerationModel(v);
+          if (normalized === undefined) {
+            delete (config.agents.defaults as Record<string, unknown>).imageGenerationModel;
+          } else {
+            config.agents.defaults.imageGenerationModel =
+              normalized as Config['agents']['defaults']['imageGenerationModel'];
+          }
         }
       }
       if (body.agents.defaults.mediaMaxMb !== undefined) {
@@ -898,6 +905,42 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
           await resolver.saveApiKey(key, apiKey, { profileName: 'default' });
         }
       }
+    }
+
+    // Structured per-vendor provider config (cfg.providers.<id>) for capability
+    // providers (image / audio / video). Distinct from `body.providers` above
+    // which targets the LLM-side credential resolver.
+    if (body.providersConfig && typeof body.providersConfig === 'object' && !Array.isArray(body.providersConfig)) {
+      const cfgProviders = (config as { providers?: Record<string, Record<string, unknown>> }).providers ?? {};
+      for (const [vendorId, raw] of Object.entries(body.providersConfig as Record<string, unknown>)) {
+        if (!vendorId || typeof vendorId !== 'string') continue;
+        if (raw === null) {
+          delete cfgProviders[vendorId];
+          continue;
+        }
+        if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
+        const next = (cfgProviders[vendorId] ?? {}) as Record<string, unknown>;
+        const patch = raw as Record<string, unknown>;
+        for (const field of ['apiKey', 'baseUrl', 'region', 'imageBaseUrl'] as const) {
+          if (patch[field] === null || patch[field] === '') {
+            delete next[field];
+          } else if (typeof patch[field] === 'string') {
+            next[field] = (patch[field] as string).trim();
+          }
+        }
+        if (patch.azure === null) {
+          delete next.azure;
+        } else if (patch.azure && typeof patch.azure === 'object' && !Array.isArray(patch.azure)) {
+          next.azure = { ...(next.azure as Record<string, unknown> ?? {}), ...(patch.azure as Record<string, unknown>) };
+        }
+        if (patch.request === null) {
+          delete next.request;
+        } else if (patch.request && typeof patch.request === 'object' && !Array.isArray(patch.request)) {
+          next.request = { ...(next.request as Record<string, unknown> ?? {}), ...(patch.request as Record<string, unknown>) };
+        }
+        cfgProviders[vendorId] = next;
+      }
+      (config as { providers?: Record<string, Record<string, unknown>> }).providers = cfgProviders;
     }
 
     // Update STT config

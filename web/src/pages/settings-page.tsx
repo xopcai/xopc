@@ -4,6 +4,7 @@ import { AppearanceSettingsPanel } from '@/features/settings/appearance-settings
 import { GatewaySettingsPanel } from '@/features/settings/gateway-settings';
 import { HeartbeatSettingsPanel } from '@/features/settings/heartbeat-settings';
 import { ModelsSettingsPanel } from '@/features/settings/models-settings';
+import { ImageModelsSettingsPanel } from '@/features/settings/image-models-settings';
 import { VoiceSettingsPanel } from '@/features/settings/voice-settings';
 import { WebSearchSettingsPanel } from '@/features/settings/web-search-settings';
 import { SystemSettingsPanel } from '@/features/settings/system-settings-panel';
@@ -20,6 +21,7 @@ const SECTIONS: SettingsSectionId[] = [
   'agent-defaults',
   'providers',
   'models',
+  'image-models',
   'voice',
   'gateway',
   'heartbeat',
@@ -61,6 +63,10 @@ export function SettingsPage() {
 
   if (id === 'models') {
     return <ModelsSettingsPanel />;
+  }
+
+  if (id === 'image-models') {
+    return <ImageModelsSettingsPanel />;
   }
 
   if (id === 'voice') {

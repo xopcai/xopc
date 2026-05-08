@@ -17,6 +17,7 @@ const SETTINGS_SECTION_TO_TAB: Record<SettingsSectionId, Tab> = {
   agents: 'settingsAgents',
   providers: 'settingsProviders',
   models: 'settingsModels',
+  'image-models': 'settingsImageModels',
   channels: 'channels',
   voice: 'settingsVoice',
   gateway: 'settingsGateway',
@@ -34,6 +35,7 @@ const TAB_TO_SETTINGS_SECTION: Record<
   | 'settingsAgents'
   | 'settingsProviders'
   | 'settingsModels'
+  | 'settingsImageModels'
   | 'settingsChannels'
   | 'settingsVoice'
   | 'settingsGateway'
@@ -51,6 +53,7 @@ const TAB_TO_SETTINGS_SECTION: Record<
   settingsAgents: 'agents',
   settingsProviders: 'providers',
   settingsModels: 'models',
+  settingsImageModels: 'image-models',
   settingsChannels: 'channels',
   settingsVoice: 'voice',
   settingsGateway: 'gateway',
@@ -92,7 +95,13 @@ export const SETTINGS_SHELL_NAV_GROUPS: readonly SettingsShellNavGroup[] = [
   { id: 'general', tabs: ['settingsAppearance', 'settingsSystem'] },
   {
     id: 'ai',
-    tabs: ['settingsProviders', 'settingsModels', 'settingsAgentDefaults', 'settingsSearch'],
+    tabs: [
+      'settingsProviders',
+      'settingsModels',
+      'settingsImageModels',
+      'settingsAgentDefaults',
+      'settingsSearch',
+    ],
   },
   { id: 'automation', tabs: ['settingsDreams'] },
   {

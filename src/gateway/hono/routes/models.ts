@@ -7,7 +7,10 @@ import {
   validateModelsConfig,
 } from '../../../config/models-json.js';
 import { testApiKeyResolution } from '../../../config/resolve-config-value.js';
-import { listImageGenerationProvidersSummary } from '../../../agent/image/generation/runtime.js';
+import {
+  getImageGenerationProvider,
+  listImageGenerationProvidersSummary,
+} from '../../../agent/image/generation/runtime.js';
 import {
   getAllModels,
   getAvailableModels,
@@ -175,8 +178,50 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
 
   // GET /api/image/providers — registered image generation providers and models (not in LLM model registry)
   authenticated.get('/api/image/providers', (c) => {
-    const providers = listImageGenerationProvidersSummary();
+    const cfg = deps.service.currentConfig;
+    const summaries = listImageGenerationProvidersSummary(cfg);
+    const providers = summaries.map((p) => {
+      const provider = getImageGenerationProvider(p.id, cfg);
+      let configured = false;
+      try {
+        configured = provider?.isConfigured?.({ cfg }) === true;
+      } catch {
+        configured = false;
+      }
+      return { ...p, configured };
+    });
     return c.json({ ok: true, payload: { providers } });
+  });
+
+  // POST /api/image/providers/:id/test — lightweight credential probe; does NOT
+  // hit the vendor (no quota burn). Returns `{ ok, configured, reason }`.
+  authenticated.post('/api/image/providers/:id/test', (c) => {
+    const id = c.req.param('id');
+    const cfg = deps.service.currentConfig;
+    const provider = getImageGenerationProvider(id, cfg);
+    if (!provider) {
+      return c.json(
+        { ok: false, error: { message: `Image generation provider not found: ${id}` } },
+        404,
+      );
+    }
+    let configured = false;
+    let reason: string | undefined;
+    try {
+      configured = provider.isConfigured?.({ cfg }) === true;
+      if (!configured) reason = 'Missing API key (set via config or environment).';
+    } catch (err) {
+      reason = err instanceof Error ? err.message : String(err);
+    }
+    return c.json({
+      ok: true,
+      payload: {
+        id: provider.id,
+        configured,
+        ...(reason ? { reason } : {}),
+        defaultModel: provider.defaultModel ?? null,
+      },
+    });
   });
 
   // GET /api/providers - Get ALL available providers and models
