@@ -26,7 +26,12 @@
     "settingsHeartbeat": "Heartbeat",
     "settingsSearch": "Web search",
     "settingsDreams": "Dreams",
-    "settingsAgentDefaults": "Agent defaults",
+    "settingsAgentChat": "Chat",
+    "settingsAgentWorkspace": "Workspace",
+    "settingsAgentBrowser": "Browser",
+    "settingsAgentRuntime": "Runtime",
+    "settingsAgentTools": "Tools & skills",
+    "settingsAgentSystemPrompt": "System prompt",
     "settingsAgents": "Agents",
     "settingsSystem": "System"
   },

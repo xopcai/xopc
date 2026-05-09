@@ -4,8 +4,10 @@ import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
 import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
+import { AgentDefaultsImageModelChainsSection } from '@/features/settings/agents/agent-defaults-panels/image-model-chains-section';
 import {
   fetchAgentDefaults,
+  parseParamsJsonForSave,
   patchAgentDefaults,
   type AgentDefaultsState,
 } from '@/features/settings/config-api';
@@ -40,6 +42,17 @@ function inputClass(): string {
 }
 
 const PROVIDERS_SWR_KEY = '/api/image/providers';
+
+function pickImageDefaultsSlice(s: AgentDefaultsState) {
+  return {
+    imageModel: s.imageModel,
+    imageModelFallbacks: s.imageModelFallbacks,
+    imageGenerationModel: s.imageGenerationModel,
+    imageGenerationModelFallbacks: s.imageGenerationModelFallbacks,
+    imageGenerationModelTimeoutMs: s.imageGenerationModelTimeoutMs,
+    imageGenerationModelAutoProviderFallback: s.imageGenerationModelAutoProviderFallback,
+  };
+}
 
 async function fetchImageProviders(): Promise<ImageGenProviderSummary[]> {
   const res = await fetchJson<{
@@ -83,6 +96,10 @@ export function ImageModelsSettingsPanel() {
     void reload();
   }, [reload]);
 
+  const patchAgentDefaultsLocal = useCallback((patch: Partial<AgentDefaultsState>) => {
+    setState((s) => (s ? { ...s, ...patch } : null));
+  }, []);
+
   // Provider catalogue (from /api/image/providers).
   const { data: providers = [], mutate: refreshProviders } = useSWR<ImageGenProviderSummary[]>(
     hasToken ? PROVIDERS_SWR_KEY : null,
@@ -93,15 +110,10 @@ export function ImageModelsSettingsPanel() {
   // Tie config-payload SWR cache so other panels see our edits.
   const gwSwr = useGatewayConfigSwr(false);
 
-  // Only the knobs unique to this panel are dirty-tracked; the primary model +
-  // fallback chain belong to /settings/agent-defaults to avoid two panels
-  // racing on the same `agents.defaults.imageGenerationModel` field.
   const dirty = useMemo(() => {
     if (!state || !baseline) return false;
     return (
-      state.imageGenerationModelTimeoutMs !== baseline.imageGenerationModelTimeoutMs ||
-      state.imageGenerationModelAutoProviderFallback !==
-        baseline.imageGenerationModelAutoProviderFallback
+      JSON.stringify(pickImageDefaultsSlice(state)) !== JSON.stringify(pickImageDefaultsSlice(baseline))
     );
   }, [state, baseline]);
 
@@ -110,18 +122,30 @@ export function ImageModelsSettingsPanel() {
     setSaving(true);
     setError(undefined);
     try {
+      try {
+        void parseParamsJsonForSave(state.paramsJson);
+      } catch (e) {
+        setError(
+          e instanceof SyntaxError
+            ? m.agentSettings.advanced.paramsInvalidJson
+            : e instanceof Error
+              ? e.message
+              : m.agentSettings.advanced.paramsInvalidJson,
+        );
+        return;
+      }
       await patchAgentDefaults(state);
       setBaseline(state);
       setSavedFlash(true);
       window.setTimeout(() => setSavedFlash(false), 1500);
-      // Refresh shared SWR cache so models / agent-defaults panels stay in sync.
+      // Refresh shared SWR cache so models / agent defaults panels stay in sync.
       void gwSwr.mutate?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setSaving(false);
     }
-  }, [state, gwSwr]);
+  }, [state, gwSwr, m.agentSettings]);
 
   if (!hasToken) {
     return (
@@ -163,6 +187,13 @@ export function ImageModelsSettingsPanel() {
           {error}
         </div>
       ) : null}
+
+      <AgentDefaultsImageModelChainsSection
+        form={state}
+        update={patchAgentDefaultsLocal}
+        a={m.agentSettings}
+        chat={m.chat}
+      />
 
       <SettingsFormSection>
         <SettingsFormSectionHeader icon={ImageIcon} title={t.title} subtitle={t.subtitle} />

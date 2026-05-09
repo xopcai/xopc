@@ -26,6 +26,8 @@ import {
   type ProviderConfig,
   type ValidationResult,
 } from '../models-json-api';
+import { AgentDefaultsChatModelFallbacksSection } from '../agents/agent-defaults-panels/chat-model-fallbacks-section';
+import { useAgentDefaultsForm } from '../agents/use-agent-defaults-form';
 
 import { ModelEditDialogContent } from './models-model-edit-dialog';
 import { ProviderAddDialog } from './models-provider-add-dialog';
@@ -40,6 +42,7 @@ export function ModelsSettingsPanel() {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const ms = m.modelsSettings;
+  const agentVm = useAgentDefaultsForm(m.agentSettings);
   const token = useGatewayStore((st) => st.token);
   const hasToken = Boolean(token);
 
@@ -110,6 +113,18 @@ export function ModelsSettingsPanel() {
     [config, baseline],
   );
 
+  const agentPanelProps = useMemo(() => {
+    if (!agentVm.form) return null;
+    return {
+      form: agentVm.form,
+      update: agentVm.update,
+      a: m.agentSettings,
+      chat: m.chat,
+    };
+  }, [agentVm.form, agentVm.update, m.agentSettings, m.chat]);
+
+  const combinedDirty = dirty || agentVm.dirty;
+
   const stats = useMemo(() => {
     const ids = Object.keys(config.providers);
     let models = 0;
@@ -171,19 +186,33 @@ export function ModelsSettingsPanel() {
   };
 
   const runSave = async () => {
-    if (saving) return;
-    setSaving(true);
+    if (saving || agentVm.saving) return;
+    const hadJsonDirty = dirty;
+    const hadAgentDirty = agentVm.dirty;
+    if (!hadJsonDirty && !hadAgentDirty) return;
+
     setError(null);
     setSaveOk(false);
     try {
-      await saveModelsJson(config);
-      setBaseline(structuredClone(config));
+      if (hadJsonDirty) {
+        setSaving(true);
+        try {
+          await saveModelsJson(config);
+          setBaseline(structuredClone(config));
+          setValidation(null);
+        } finally {
+          setSaving(false);
+        }
+      }
+      if (hadAgentDirty && agentVm.form) {
+        const agentOk = await agentVm.save();
+        if (!agentOk) {
+          throw new Error(m.agentSettings.saveError);
+        }
+      }
       setSaveOk(true);
-      setValidation(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : ms.saveError);
-    } finally {
-      setSaving(false);
     }
   };
 
@@ -332,10 +361,10 @@ export function ModelsSettingsPanel() {
           type="button"
           variant="secondary"
           className="inline-flex min-h-9 min-w-[7.5rem] justify-center"
-          onClick={runSave}
-          disabled={loading || saving || !dirty}
+          onClick={() => void runSave()}
+          disabled={loading || saving || agentVm.saving || !combinedDirty}
         >
-          {saving ? (
+          {saving || agentVm.saving ? (
             <>
               <Loader2 className="mr-1 size-4 animate-spin" />
               {ms.saving}
@@ -385,8 +414,8 @@ export function ModelsSettingsPanel() {
         </div>
       </div>
 
-      {dirty ? <p className="text-xs text-amber-800 dark:text-amber-200">{ms.unsavedHint}</p> : null}
-      {saveOk ? (
+      {combinedDirty ? <p className="text-xs text-amber-800 dark:text-amber-200">{ms.unsavedHint}</p> : null}
+      {saveOk || agentVm.saveOk ? (
         <p className="text-xs text-emerald-700 dark:text-emerald-400" role="status">
           {ms.saved}
         </p>
@@ -395,6 +424,12 @@ export function ModelsSettingsPanel() {
         <p className="flex items-center gap-1 text-sm text-red-600 dark:text-red-400" role="alert">
           <AlertCircle className="size-4 shrink-0" />
           {error}
+        </p>
+      ) : null}
+      {agentVm.error ? (
+        <p className="flex items-center gap-1 text-sm text-red-600 dark:text-red-400" role="alert">
+          <AlertCircle className="size-4 shrink-0" />
+          {agentVm.error}
         </p>
       ) : null}
 
@@ -460,6 +495,12 @@ export function ModelsSettingsPanel() {
           setTestResults={setTestResults}
         />
       )}
+
+      {agentPanelProps ? (
+        <div className="mt-10 border-t border-edge-subtle pt-8 dark:border-edge">
+          <AgentDefaultsChatModelFallbacksSection {...agentPanelProps} />
+        </div>
+      ) : null}
 
       <ProviderAddDialog
         open={providerDialogOpen}

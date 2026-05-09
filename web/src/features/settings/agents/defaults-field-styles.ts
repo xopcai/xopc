@@ -13,3 +13,7 @@ export function inputClassName(): string {
 export function selectClassName(): string {
   return cn(selectControlBaseClass, nativeSelectMaxWidthClass);
 }
+
+/** Compact secondary actions (e.g. agent defaults: skills allowlist mode, tools disable presets). */
+export const agentDefaultsQuickActionButtonClass =
+  'h-auto shrink-0 px-2.5 py-1.5 text-xs font-medium';

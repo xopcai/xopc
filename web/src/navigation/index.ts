@@ -13,7 +13,12 @@ const SETTINGS_SECTION_TO_TAB: Record<SettingsSectionId, Tab> = {
   appearance: 'settingsAppearance',
   system: 'settingsSystem',
   agent: 'settingsAgents',
-  'agent-defaults': 'settingsAgentDefaults',
+  'agent-chat': 'settingsAgentChat',
+  'agent-workspace': 'settingsAgentWorkspace',
+  'agent-browser': 'settingsAgentBrowser',
+  'agent-runtime': 'settingsAgentRuntime',
+  'agent-tools': 'settingsAgentTools',
+  'agent-system-prompt': 'settingsAgentSystemPrompt',
   agents: 'settingsAgents',
   providers: 'settingsProviders',
   models: 'settingsModels',
@@ -31,7 +36,12 @@ const SETTINGS_SECTION_TO_TAB: Record<SettingsSectionId, Tab> = {
 const TAB_TO_SETTINGS_SECTION: Record<
   | 'settingsAppearance'
   | 'settingsSystem'
-  | 'settingsAgentDefaults'
+  | 'settingsAgentChat'
+  | 'settingsAgentWorkspace'
+  | 'settingsAgentBrowser'
+  | 'settingsAgentRuntime'
+  | 'settingsAgentTools'
+  | 'settingsAgentSystemPrompt'
   | 'settingsAgents'
   | 'settingsProviders'
   | 'settingsModels'
@@ -49,7 +59,12 @@ const TAB_TO_SETTINGS_SECTION: Record<
 > = {
   settingsAppearance: 'appearance',
   settingsSystem: 'system',
-  settingsAgentDefaults: 'agent-defaults',
+  settingsAgentChat: 'agent-chat',
+  settingsAgentWorkspace: 'agent-workspace',
+  settingsAgentBrowser: 'agent-browser',
+  settingsAgentRuntime: 'agent-runtime',
+  settingsAgentTools: 'agent-tools',
+  settingsAgentSystemPrompt: 'agent-system-prompt',
   settingsAgents: 'agents',
   settingsProviders: 'providers',
   settingsModels: 'models',
@@ -76,9 +91,10 @@ export function tabToSettingsSection(tab: Tab): SettingsSectionId | null {
 /** Group keys for `messages(lang).settingsNavGroups` — left rail sections + sort order. */
 export type SettingsNavGroupId =
   | 'general'
-  | 'ai'
+  | 'models'
+  | 'agent'
+  | 'gateway'
   | 'automation'
-  | 'connections'
   | 'data';
 
 export type SettingsShellNavGroup = {
@@ -87,27 +103,35 @@ export type SettingsShellNavGroup = {
 };
 
 /**
- * Task-centric groups: general → AI → automation → connections → data; extensions render last via
- * `ExtensionSettingsNav`. Cron, skills, and channels route under `/settings/...`.
- * See `settingsNavGroups` copy in i18n.
+ * Settings rail: general → models & media (chat, image, voice, search, providers, registry) →
+ * remaining default-agent slices → gateway (HTTP + heartbeat) → automation → data.
+ * Extensions append via `ExtensionSettingsNav`.
  */
 export const SETTINGS_SHELL_NAV_GROUPS: readonly SettingsShellNavGroup[] = [
   { id: 'general', tabs: ['settingsAppearance', 'settingsSystem'] },
   {
-    id: 'ai',
+    id: 'models',
     tabs: [
+      'settingsAgentChat',
+      'settingsImageModels',
+      'settingsVoice',
+      'settingsSearch',
       'settingsProviders',
       'settingsModels',
-      'settingsImageModels',
-      'settingsAgentDefaults',
-      'settingsSearch',
     ],
   },
-  { id: 'automation', tabs: ['settingsDreams'] },
   {
-    id: 'connections',
-    tabs: ['settingsVoice', 'settingsGateway', 'settingsHeartbeat'],
+    id: 'agent',
+    tabs: [
+      'settingsAgentWorkspace',
+      'settingsAgentBrowser',
+      'settingsAgentRuntime',
+      'settingsAgentTools',
+      'settingsAgentSystemPrompt',
+    ],
   },
+  { id: 'gateway', tabs: ['settingsGateway', 'settingsHeartbeat'] },
+  { id: 'automation', tabs: ['settingsDreams'] },
   { id: 'data', tabs: ['sessions', 'logs'] },
 ] as const;
 

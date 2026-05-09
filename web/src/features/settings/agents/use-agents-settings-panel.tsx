@@ -162,7 +162,7 @@ export function useAgentsSettingsPanel() {
     if (searchParams.get('panel') !== 'defaults') {
       return;
     }
-    navigate('/settings/agent-defaults', {
+    navigate('/settings/agent-chat', {
       replace: true,
       state: { [SETTINGS_BACK_PATH_STATE_KEY]: AGENTS_APP_LIST_PATH },
     });

@@ -218,6 +218,14 @@ const router = createHashRouter([
             element: <RedirectLegacySettingsAgentsDetail />,
           },
           {
+            path: 'agent-defaults',
+            element: <Navigate to="/settings/agent-chat" replace />,
+          },
+          {
+            path: 'agent-models',
+            element: <Navigate to="/settings/models" replace />,
+          },
+          {
             path: 'extensions/debug',
             element: (
               <Suspense fallback={<SettingsRouteFallback />}>

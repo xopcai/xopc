@@ -1,1 +1,1 @@
-export { AgentSettingsPanel } from './agents/defaults-panel';
+export { AgentChatDefaultsPage as AgentSettingsPanel } from './agents/agent-defaults-split-pages';

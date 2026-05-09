@@ -1,16 +1,23 @@
 import { Navigate, useParams } from 'react-router-dom';
 
+import {
+  AgentBrowserDefaultsPage,
+  AgentChatDefaultsPage,
+  AgentRuntimeDefaultsPage,
+  AgentSystemPromptDefaultsPage,
+  AgentToolsDefaultsPage,
+  AgentWorkspaceDefaultsPage,
+} from '@/features/settings/agents';
 import { AppearanceSettingsPanel } from '@/features/settings/appearance-settings';
+import { DreamingSettingsPanel } from '@/features/settings/dreaming-settings';
 import { GatewaySettingsPanel } from '@/features/settings/gateway-settings';
 import { HeartbeatSettingsPanel } from '@/features/settings/heartbeat-settings';
-import { ModelsSettingsPanel } from '@/features/settings/models-settings';
 import { ImageModelsSettingsPanel } from '@/features/settings/image-models-settings';
+import { ModelsSettingsPanel } from '@/features/settings/models-settings';
+import { ProvidersSettingsPanel } from '@/features/settings/providers-settings';
+import { SystemSettingsPanel } from '@/features/settings/system-settings-panel';
 import { VoiceSettingsPanel } from '@/features/settings/voice-settings';
 import { WebSearchSettingsPanel } from '@/features/settings/web-search-settings';
-import { SystemSettingsPanel } from '@/features/settings/system-settings-panel';
-import { DreamingSettingsPanel } from '@/features/settings/dreaming-settings';
-import { AgentSettingsPanel } from '@/features/settings/agents';
-import { ProvidersSettingsPanel } from '@/features/settings/providers-settings';
 import { messages } from '@/i18n/messages';
 import type { SettingsSectionId } from '@/navigation';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -18,7 +25,12 @@ import { useLocaleStore } from '@/stores/locale-store';
 const SECTIONS: SettingsSectionId[] = [
   'appearance',
   'system',
-  'agent-defaults',
+  'agent-chat',
+  'agent-workspace',
+  'agent-browser',
+  'agent-runtime',
+  'agent-tools',
+  'agent-system-prompt',
   'providers',
   'models',
   'image-models',
@@ -53,8 +65,28 @@ export function SettingsPage() {
     return <SystemSettingsPanel />;
   }
 
-  if (id === 'agent-defaults') {
-    return <AgentSettingsPanel />;
+  if (id === 'agent-chat') {
+    return <AgentChatDefaultsPage />;
+  }
+
+  if (id === 'agent-workspace') {
+    return <AgentWorkspaceDefaultsPage />;
+  }
+
+  if (id === 'agent-browser') {
+    return <AgentBrowserDefaultsPage />;
+  }
+
+  if (id === 'agent-runtime') {
+    return <AgentRuntimeDefaultsPage />;
+  }
+
+  if (id === 'agent-tools') {
+    return <AgentToolsDefaultsPage />;
+  }
+
+  if (id === 'agent-system-prompt') {
+    return <AgentSystemPromptDefaultsPage />;
   }
 
   if (id === 'providers') {
