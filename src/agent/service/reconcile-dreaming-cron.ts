@@ -1,7 +1,7 @@
 import type { Config } from '../../config/schema.js';
 import type { CronService } from '../../cron/index.js';
+import type { JobWithNextRun } from '../../cron/types.js';
 import {
-  DREAMING_CRON_TAG,
   DREAMING_SWEEP_TOKEN,
   DREAMING_LIGHT_CRON_NAME,
   DREAMING_LIGHT_SWEEP_TOKEN,
@@ -10,6 +10,20 @@ import {
   DREAMING_REM_SWEEP_TOKEN,
 } from '../memory/dreaming/constants.js';
 import { resolveDreamingConfig } from '../memory/dreaming/config.js';
+
+const DREAMING_SWEEP_TOKENS = new Set<string>([
+  DREAMING_LIGHT_SWEEP_TOKEN,
+  DREAMING_SWEEP_TOKEN,
+  DREAMING_REM_SWEEP_TOKEN,
+]);
+
+function dreamingSweepTokenFromJob(job: JobWithNextRun): string | undefined {
+  if (job.payload?.kind !== 'agentTurn') {
+    return undefined;
+  }
+  const msg = job.payload.message;
+  return typeof msg === 'string' && DREAMING_SWEEP_TOKENS.has(msg) ? msg : undefined;
+}
 
 /**
  * Reconcile managed Dreaming cron jobs against the current effective config.
@@ -20,7 +34,8 @@ export async function reconcileManagedDreamingCronJobs(
 ): Promise<void> {
   const dreaming = resolveDreamingConfig(effectiveConfig);
   const jobs = await cron.listJobs();
-  const managed = jobs.filter((job) => job.name?.includes?.(DREAMING_CRON_TAG) ?? false);
+  /** Match by sweep token — job names omit `[managed-by=…]`, so name-only matching never saw these jobs and re-added them every reconcile. */
+  const managed = jobs.filter((job) => dreamingSweepTokenFromJob(job) !== undefined);
 
   const phaseSpecs: Array<{
     cronName: string;
@@ -56,7 +71,7 @@ export async function reconcileManagedDreamingCronJobs(
   }
 
   for (const spec of phaseSpecs) {
-    const phaseJobs = managed.filter((job) => job.name === spec.cronName);
+    const phaseJobs = managed.filter((job) => dreamingSweepTokenFromJob(job) === spec.token);
 
     if (!spec.phaseEnabled) {
       for (const job of phaseJobs) {
