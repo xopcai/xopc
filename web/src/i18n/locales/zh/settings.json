@@ -214,6 +214,7 @@
     "colorSchemeDescription": "界面的视觉风格。",
     "colorSchemeDefault": "默认",
     "colorSchemeLightGreen": "浅绿",
+    "colorSchemeModernMono": "mono/单色",
     "fontScaleTitle": "对话字号",
     "fontScaleDescription": "调整对话与阅读区域的文字大小。",
     "fontScaleCompact": "小",

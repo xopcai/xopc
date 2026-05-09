@@ -10,6 +10,23 @@ function preferenceCardClassName() {
 
 /** Mini preview swatch that shows what a color scheme looks like. */
 function SchemePreviewSwatch({ scheme }: { scheme: ColorScheme }) {
+  if (scheme === 'mono') {
+    return (
+      <div className="flex h-10 w-full overflow-hidden rounded-md border border-edge-subtle">
+        <div className="flex flex-1 flex-col gap-1 bg-[#ffffff] p-1.5">
+          <div className="h-1 w-8 rounded-full bg-[#111111]" />
+          <div className="h-1 w-5 rounded-full bg-[#e5e7eb]" />
+        </div>
+        <div className="w-1.5 bg-[#111111]" />
+        <div className="flex flex-1 flex-col gap-1 bg-[#f5f5f5] p-1.5">
+          <div className="h-1 w-6 rounded-full bg-[#111111]" />
+          <div className="h-1 w-9 rounded-full bg-[#6b7280]" />
+          <div className="h-1 w-4 rounded-full bg-[#e5e7eb]" />
+        </div>
+      </div>
+    );
+  }
+
   if (scheme === 'emerald') {
     return (
       <div className="flex h-10 w-full overflow-hidden rounded-md border border-edge-subtle">
@@ -45,10 +62,11 @@ function SchemePreviewSwatch({ scheme }: { scheme: ColorScheme }) {
 
 const COLOR_SCHEME_OPTIONS: {
   value: ColorScheme;
-  labelKey: 'colorSchemeDefault' | 'colorSchemeLightGreen';
+  labelKey: 'colorSchemeDefault' | 'colorSchemeLightGreen' | 'colorSchemeModernMono';
 }[] = [
   { value: 'default', labelKey: 'colorSchemeDefault' },
   { value: 'emerald', labelKey: 'colorSchemeLightGreen' },
+  { value: 'mono', labelKey: 'colorSchemeModernMono' },
 ];
 
 function ColorSchemeSelector() {

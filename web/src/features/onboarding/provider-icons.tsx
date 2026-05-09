@@ -113,6 +113,9 @@ export function ProviderLogo({ providerId, className }: { providerId: string; cl
       return <MiniMaxIcon {...props} />;
     case 'kimi-coding':
       return <KimiCodingIcon {...props} />;
+    case 'moonshotai':
+    case 'moonshotai-cn':
+      return <KimiCodingIcon {...props} />;
     case 'openai':
       return <OpenAIIcon {...props} />;
     case 'anthropic':

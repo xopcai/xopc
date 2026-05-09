@@ -171,11 +171,13 @@ export interface ValidationResult {
 const PROVIDER_ID_REGEX = /^[a-z0-9]([a-z0-9-_]*[a-z0-9])?$/;
 /** pi-ai KnownProvider ids — overriding in models.json requires baseUrl (see validation below). */
 const RESERVED_PROVIDER_IDS = new Set([
-	'amazon-bedrock', 'anthropic', 'azure-openai-responses', 'cerebras', 'github-copilot',
+	'amazon-bedrock', 'anthropic', 'azure-openai-responses', 'cerebras',
+	'cloudflare-ai-gateway', 'cloudflare-workers-ai', 'deepseek', 'fireworks', 'github-copilot',
 	'google', 'google-antigravity', 'google-gemini-cli', 'google-vertex', 'groq',
-	'huggingface', 'kimi-coding', 'minimax', 'minimax-cn', 'mistral',
+	'huggingface', 'kimi-coding', 'minimax', 'minimax-cn', 'mistral', 'moonshotai', 'moonshotai-cn',
 	'openai', 'openai-codex', 'opencode', 'opencode-go', 'openrouter',
-	'vercel-ai-gateway', 'xai', 'zai',
+	'together', 'vercel-ai-gateway', 'xai', 'xiaomi', 'xiaomi-token-plan-ams', 'xiaomi-token-plan-cn',
+	'xiaomi-token-plan-sgp', 'zai',
 ]);
 
 // ============================================

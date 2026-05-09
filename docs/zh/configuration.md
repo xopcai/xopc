@@ -246,25 +246,51 @@ xopc onboard
 }
 ```
 
-**支持的服务商：**
+**内置服务商 id** 与 **`@earendil-works/pi-ai` 的 `KnownProvider`** 一致；环境变量名以仓库 **`src/providers/env-keys.ts`** 的 **`PROVIDER_ENV_MAP`** 为准，下表与之同步。其它厂商（如仅 DashScope HTTP 能力）一般在 **`models.json`** 中配置。
 
-| 服务商 | 环境变量 |
-|--------|----------|
-| `openai` | `OPENAI_API_KEY` |
-| `anthropic` | `ANTHROPIC_API_KEY` |
-| `google` | `GOOGLE_API_KEY` 或 `GEMINI_API_KEY` |
-| `groq` | `GROQ_API_KEY` |
-| `deepseek` | `DEEPSEEK_API_KEY` |
-| `minimax` | `MINIMAX_API_KEY` |
-| `xai` | `XAI_API_KEY` |
-| `mistral` | `MISTRAL_API_KEY` |
+| 服务商 id | 环境变量（按 `PROVIDER_ENV_MAP` 顺序检测） |
+|-----------|---------------------------------------------|
+| `amazon-bedrock` | `AWS_ACCESS_KEY_ID`、`AWS_SECRET_ACCESS_KEY`、`AWS_REGION` 等（见 pi-ai / AWS SDK） |
+| `anthropic` | `ANTHROPIC_OAUTH_TOKEN`、`ANTHROPIC_API_KEY` |
+| `azure-openai-responses` | `AZURE_OPENAI_API_KEY`、`AZURE_OPENAI_BASE_URL` |
+| `cloudflare-ai-gateway` | `CLOUDFLARE_API_KEY`（模型 `baseUrl` 可能还需账号/网关 id，见 pi-ai） |
+| `cloudflare-workers-ai` | `CLOUDFLARE_API_KEY` |
 | `cerebras` | `CEREBRAS_API_KEY` |
+| `dashscope` | `DASHSCOPE_API_KEY`（文生图/STT/TTS；非 pi-ai LLM `KnownProvider`） |
+| `deepseek` | `DEEPSEEK_API_KEY` |
+| `fireworks` | `FIREWORKS_API_KEY` |
+| `github-copilot` | `COPILOT_GITHUB_TOKEN`、`GH_TOKEN`、`GITHUB_TOKEN`、`GITHUB_COPILOT_TOKEN` |
+| `google` | `GEMINI_API_KEY`、`GOOGLE_API_KEY` |
+| `google-antigravity` | `ANTIGRAVITY_API_KEY` |
+| `google-gemini-cli` | `GEMINI_CLI_TOKEN`、`GOOGLE_TOKEN` |
+| `google-vertex` | `GOOGLE_CLOUD_API_KEY`、`GOOGLE_CLOUD_PROJECT`、`GOOGLE_CLOUD_LOCATION` |
+| `groq` | `GROQ_API_KEY` |
+| `huggingface` | `HF_TOKEN`、`HUGGINGFACE_TOKEN` |
+| `kimi-coding` | `KIMI_API_KEY`、`MOONSHOT_API_KEY` |
+| `minimax` | `MINIMAX_API_KEY` |
+| `minimax-cn` | `MINIMAX_CN_API_KEY`、`MINIMAX_API_KEY` |
+| `mistral` | `MISTRAL_API_KEY` |
+| `moonshotai` | `MOONSHOT_API_KEY` |
+| `moonshotai-cn` | `MOONSHOT_API_KEY` |
+| `openai` | `OPENAI_API_KEY` |
+| `openai-codex` | *（无静态 env 映射—使用 OAuth / `xopc auth login openai-codex`）* |
+| `opencode` | `OPENCODE_API_KEY` |
+| `opencode-go` | `OPENCODE_API_KEY` |
 | `openrouter` | `OPENROUTER_API_KEY` |
-| `huggingface` | `HF_TOKEN` 或 `HUGGINGFACE_TOKEN` |
+| `together` | `TOGETHER_API_KEY` |
+| `vercel-ai-gateway` | `AI_GATEWAY_API_KEY`、`VERCEL_AI_GATEWAY_API_KEY` |
+| `xai` | `XAI_API_KEY` |
+| `xiaomi` | `XIAOMI_API_KEY` |
+| `xiaomi-token-plan-cn` | `XIAOMI_TOKEN_PLAN_CN_API_KEY` |
+| `xiaomi-token-plan-ams` | `XIAOMI_TOKEN_PLAN_AMS_API_KEY` |
+| `xiaomi-token-plan-sgp` | `XIAOMI_TOKEN_PLAN_SGP_API_KEY` |
+| `zai` | `ZAI_API_KEY` |
+
+小米四条线的区别见 [模型文档 — 内置 LLM](/zh/models#内置-llm-服务商pi-ai)。
 
 > **注意:** 环境变量优先于配置文件中的值。
 
-查看 [模型文档](/zh/models) 了解自定义服务商配置。
+查看 [模型文档](/zh/models) 了解自定义服务商与 `models.json`。
 
 ---
 
@@ -644,10 +670,18 @@ xopc 支持环境变量存储敏感数据：
 |------|------|
 | `OPENAI_API_KEY` | OpenAI API 密钥 |
 | `ANTHROPIC_API_KEY` | Anthropic API 密钥 |
-| `GOOGLE_API_KEY` | Google AI API 密钥 |
+| `ANTHROPIC_OAUTH_TOKEN` | Anthropic OAuth 令牌（若使用 OAuth） |
+| `GOOGLE_API_KEY` / `GEMINI_API_KEY` | Google AI（Gemini）密钥 |
 | `GROQ_API_KEY` | Groq API 密钥 |
+| `CEREBRAS_API_KEY` | Cerebras API 密钥 |
 | `DEEPSEEK_API_KEY` | DeepSeek API 密钥 |
 | `MINIMAX_API_KEY` | MiniMax API 密钥 |
+| `MOONSHOT_API_KEY` | 月之暗面 / Kimi 系（详见 `PROVIDER_ENV_MAP` 中 `moonshotai*` 与 `kimi-coding`） |
+| `FIREWORKS_API_KEY` | Fireworks AI |
+| `TOGETHER_API_KEY` | Together AI |
+| `CLOUDFLARE_API_KEY` | Cloudflare Workers AI / AI Gateway |
+| `XIAOMI_API_KEY` | 小米 MiMo 按量；Token 套餐见 `XIAOMI_TOKEN_PLAN_*_API_KEY` |
+| `AI_GATEWAY_API_KEY` | Vercel AI Gateway（亦支持 `VERCEL_AI_GATEWAY_API_KEY`） |
 | `DASHSCOPE_API_KEY` | 阿里云 DashScope API 密钥（STT/TTS） |
 | `XOPC_TTS_SUMMARIZE_MODEL` | 未配置 `tts.summarization.model` 时，TTS 长文本摘要使用的模型引用 |
 | `TELEGRAM_BOT_TOKEN` | Telegram bot token |

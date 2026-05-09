@@ -214,6 +214,7 @@
     "colorSchemeDescription": "Visual style of the interface.",
     "colorSchemeDefault": "Default",
     "colorSchemeLightGreen": "Light green",
+    "colorSchemeModernMono": "Mono",
     "fontScaleTitle": "Conversation text size",
     "fontScaleDescription": "Adjust text size in chat and reading areas.",
     "fontScaleCompact": "Small",

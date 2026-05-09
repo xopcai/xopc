@@ -244,23 +244,47 @@ Configure LLM provider API keys. Use environment variable references:
 }
 ```
 
-**Built-in provider ids** match **`@earendil-works/pi-ai` KnownProvider** (see `src/providers/env-keys.ts` **`PROVIDER_ENV_MAP`** for env var names). Other vendors (e.g. DashScope chat) belong in **`models.json`**, not as built-in keys here.
+**Built-in provider ids** match **`@earendil-works/pi-ai` `KnownProvider`**. Env var names are defined in **`src/providers/env-keys.ts`** (`PROVIDER_ENV_MAP`); the table below mirrors that file. Other vendors (e.g. DashScope-only HTTP APIs) use **`models.json`**, not `xopc.json` → `providers`, unless you add a custom id there.
 
-| Provider (examples) | Environment variables |
-|---------------------|------------------------|
-| `openai` | `OPENAI_API_KEY` |
+| Provider id | Environment variables (first match wins where listed) |
+|---------------|-----------------------------------------------------------|
+| `amazon-bedrock` | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` (and other AWS envs per pi-ai / SDK) |
 | `anthropic` | `ANTHROPIC_OAUTH_TOKEN`, `ANTHROPIC_API_KEY` |
+| `azure-openai-responses` | `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_BASE_URL` |
+| `cloudflare-ai-gateway` | `CLOUDFLARE_API_KEY` (model URLs may also need account/gateway ids—see pi-ai model `baseUrl`) |
+| `cloudflare-workers-ai` | `CLOUDFLARE_API_KEY` |
+| `cerebras` | `CEREBRAS_API_KEY` |
+| `dashscope` | `DASHSCOPE_API_KEY` (image/STT/TTS; not an LLM `KnownProvider` in pi-ai) |
 | `deepseek` | `DEEPSEEK_API_KEY` |
-| `google` | `GOOGLE_API_KEY` or `GEMINI_API_KEY` |
+| `fireworks` | `FIREWORKS_API_KEY` |
+| `github-copilot` | `COPILOT_GITHUB_TOKEN`, `GH_TOKEN`, `GITHUB_TOKEN`, `GITHUB_COPILOT_TOKEN` |
+| `google` | `GEMINI_API_KEY`, `GOOGLE_API_KEY` |
+| `google-antigravity` | `ANTIGRAVITY_API_KEY` |
+| `google-gemini-cli` | `GEMINI_CLI_TOKEN`, `GOOGLE_TOKEN` |
+| `google-vertex` | `GOOGLE_CLOUD_API_KEY`, `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION` |
 | `groq` | `GROQ_API_KEY` |
+| `huggingface` | `HF_TOKEN`, `HUGGINGFACE_TOKEN` |
+| `kimi-coding` | `KIMI_API_KEY`, `MOONSHOT_API_KEY` |
 | `minimax` | `MINIMAX_API_KEY` |
 | `minimax-cn` | `MINIMAX_CN_API_KEY`, `MINIMAX_API_KEY` |
-| `xai` | `XAI_API_KEY` |
 | `mistral` | `MISTRAL_API_KEY` |
-| `cerebras` | `CEREBRAS_API_KEY` |
+| `moonshotai` | `MOONSHOT_API_KEY` |
+| `moonshotai-cn` | `MOONSHOT_API_KEY` |
+| `openai` | `OPENAI_API_KEY` |
+| `openai-codex` | *(no env map row—use OAuth / `xopc auth login openai-codex`)* |
+| `opencode` | `OPENCODE_API_KEY` |
+| `opencode-go` | `OPENCODE_API_KEY` |
 | `openrouter` | `OPENROUTER_API_KEY` |
-| `huggingface` | `HF_TOKEN` or `HUGGINGFACE_TOKEN` |
+| `together` | `TOGETHER_API_KEY` |
 | `vercel-ai-gateway` | `AI_GATEWAY_API_KEY`, `VERCEL_AI_GATEWAY_API_KEY` |
+| `xai` | `XAI_API_KEY` |
+| `xiaomi` | `XIAOMI_API_KEY` |
+| `xiaomi-token-plan-cn` | `XIAOMI_TOKEN_PLAN_CN_API_KEY` |
+| `xiaomi-token-plan-ams` | `XIAOMI_TOKEN_PLAN_AMS_API_KEY` |
+| `xiaomi-token-plan-sgp` | `XIAOMI_TOKEN_PLAN_SGP_API_KEY` |
+| `zai` | `ZAI_API_KEY` |
+
+For **why there are four Xiaomi ids**, see [Models — Built-in LLM providers](/models#built-in-llm-providers-pi-ai).
 
 > **Note:** Environment variables take priority over config file values.
 
@@ -649,10 +673,17 @@ xopc supports environment variables for sensitive data:
 | `OPENAI_API_KEY` | OpenAI API key |
 | `ANTHROPIC_API_KEY` | Anthropic API key |
 | `ANTHROPIC_OAUTH_TOKEN` | Anthropic OAuth token (when used) |
-| `GOOGLE_API_KEY` | Google AI API key |
+| `GOOGLE_API_KEY` / `GEMINI_API_KEY` | Google AI (Gemini) API keys |
 | `GROQ_API_KEY` | Groq API key |
+| `CEREBRAS_API_KEY` | Cerebras API key |
+| `DEEPSEEK_API_KEY` | DeepSeek API key |
 | `MINIMAX_API_KEY` | MiniMax API key |
-| `AI_GATEWAY_API_KEY` | Vercel AI Gateway (primary name in pi-ai) |
+| `MOONSHOT_API_KEY` | Moonshot / Kimi-family keys (see `PROVIDER_ENV_MAP` for `moonshotai*` vs `kimi-coding`) |
+| `FIREWORKS_API_KEY` | Fireworks AI |
+| `TOGETHER_API_KEY` | Together AI |
+| `CLOUDFLARE_API_KEY` | Cloudflare Workers AI / AI Gateway |
+| `XIAOMI_API_KEY` | Xiaomi MiMo (API billing); token-plan variants use `XIAOMI_TOKEN_PLAN_*_API_KEY` |
+| `AI_GATEWAY_API_KEY` | Vercel AI Gateway (alias `VERCEL_AI_GATEWAY_API_KEY`) |
 | `DASHSCOPE_API_KEY` | Alibaba DashScope (STT/TTS, image gen) |
 | `XOPC_TTS_SUMMARIZE_MODEL` | Model ref for TTS long-text summarization when `tts.summarization.model` is unset |
 | `TELEGRAM_BOT_TOKEN` | Telegram bot token |
