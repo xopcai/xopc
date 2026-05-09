@@ -65,7 +65,7 @@ async function fetchImageProviders(): Promise<ImageGenProviderSummary[]> {
 export function ImageModelsSettingsPanel() {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
-  const t = (m as unknown as { imageModelsSettings: Record<string, string> }).imageModelsSettings;
+  const t = m.imageModelsSettings;
   const token = useGatewayStore((st) => st.token);
   const hasToken = Boolean(token);
 
@@ -148,6 +148,13 @@ export function ImageModelsSettingsPanel() {
     }
   }, [state, gwSwr, m.agentSettings]);
 
+  const onDiscard = useCallback(() => {
+    if (!baseline) return;
+    setState(structuredClone(baseline));
+    setError(undefined);
+    setSavedFlash(false);
+  }, [baseline]);
+
   if (!hasToken) {
     return (
       <div className="mx-auto w-full max-w-app-main px-4 py-8 text-sm text-fg-muted">
@@ -166,21 +173,32 @@ export function ImageModelsSettingsPanel() {
 
   return (
     <div className="mx-auto flex w-full max-w-app-main flex-col gap-6 px-4 py-8">
-      <header className="flex items-start justify-between gap-4">
+      <header className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-fg">{t.title}</h1>
+          <h1 className="text-lg font-semibold tracking-tight text-fg">{t.title}</h1>
           <p className="mt-1 text-sm text-fg-muted">{t.subtitle}</p>
         </div>
-        <Button
-          variant="ghost"
-          onClick={() => {
-            void reload();
-            void refreshProviders();
-          }}
-        >
-          <RefreshCw className="size-3.5" />
-          <span className="ml-1.5">{t.refresh}</span>
-        </Button>
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => {
+              void reload();
+              void refreshProviders();
+            }}
+          >
+            <RefreshCw className="size-3.5" />
+            <span className="ml-1.5">{t.refresh}</span>
+          </Button>
+          {savedFlash ? <span className="text-sm text-fg-muted">{t.saved}</span> : null}
+          <Button type="button" variant="secondary" onClick={onDiscard} disabled={!dirty || saving}>
+            {t.discard}
+          </Button>
+          <Button type="button" variant="primary" onClick={() => void onSave()} disabled={!dirty || saving}>
+            {saving ? <Loader2 className="size-3.5 animate-spin" /> : <Save className="size-3.5" />}
+            <span className="ml-1.5">{saving ? t.saving : t.save}</span>
+          </Button>
+        </div>
       </header>
 
       {error ? (
@@ -244,15 +262,6 @@ export function ImageModelsSettingsPanel() {
               <span className="text-xs text-fg-subtle">{t.autoFallbackHint}</span>
             </span>
           </label>
-          <div className="flex items-center gap-2 pt-2">
-            <Button onClick={onSave} disabled={!dirty || saving}>
-              {saving ? <Loader2 className="size-3.5 animate-spin" /> : <Save className="size-3.5" />}
-              <span className="ml-1.5">{t.save}</span>
-            </Button>
-            {savedFlash ? (
-              <span className="text-xs text-accent-fg">{t.saved}</span>
-            ) : null}
-          </div>
         </div>
       </SettingsFormSection>
 

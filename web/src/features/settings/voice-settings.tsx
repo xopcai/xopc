@@ -260,6 +260,13 @@ export function VoiceSettingsPanel() {
     }
   }, [form, saving, v.saveError]);
 
+  const discard = useCallback(() => {
+    if (!baseline) return;
+    setForm(structuredClone(baseline));
+    setError(null);
+    setSaveOk(false);
+  }, [baseline]);
+
   if (!hasToken) {
     return (
       <div className="mx-auto flex w-full max-w-app-main flex-col gap-3 px-4 py-8">
@@ -317,8 +324,11 @@ export function VoiceSettingsPanel() {
             <ExternalLink className="size-3.5" />
           </a>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
           {saveOk ? <span className="text-sm text-fg-muted">{v.saved}</span> : null}
+          <Button type="button" variant="secondary" disabled={!dirty || saving} onClick={discard}>
+            {v.discard}
+          </Button>
           <Button type="button" variant="primary" disabled={!dirty || saving} onClick={() => void save()}>
             {saving ? v.saving : v.save}
           </Button>

@@ -31,6 +31,7 @@ export function DingtalkMoreSettingsSection({
   saving,
   dirty,
   save,
+  discard,
 }: {
   ch: ChannelsSettingsMessages;
   form: ChannelsSettingsState;
@@ -55,6 +56,7 @@ export function DingtalkMoreSettingsSection({
   saving: boolean;
   dirty: boolean;
   save: () => Promise<boolean>;
+  discard: () => void;
 }) {
   const inputClassName = channelsInputClassName;
   const dt = form.dingtalk;
@@ -288,17 +290,22 @@ export function DingtalkMoreSettingsSection({
           </div>
         </div>
 
-        <Button
-          type="button"
-          variant="primary"
-          className="w-full"
-          disabled={!dirty || saving}
-          onClick={async () => {
-            await save();
-          }}
-        >
-          {saving ? ch.saving : ch.save}
-        </Button>
+        <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+          <Button type="button" variant="secondary" className="w-full sm:w-auto" disabled={!dirty || saving} onClick={discard}>
+            {ch.discard}
+          </Button>
+          <Button
+            type="button"
+            variant="primary"
+            className="w-full sm:w-auto"
+            disabled={!dirty || saving}
+            onClick={async () => {
+              await save();
+            }}
+          >
+            {saving ? ch.saving : ch.save}
+          </Button>
+        </div>
       </div>
     </details>
   );

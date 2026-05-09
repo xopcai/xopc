@@ -218,6 +218,19 @@ export function HeartbeatSettingsPanel() {
     setForm((f) => (f ? { ...f, ...patch } : null));
   }, []);
 
+  const discardConfiguration = useCallback(() => {
+    if (!baseline) return;
+    setForm(structuredClone(baseline));
+    setSaveConfigOk(false);
+    setError(null);
+  }, [baseline]);
+
+  const discardDocument = useCallback(() => {
+    setDoc(docBaseline);
+    setSaveDocOk(false);
+    setError(null);
+  }, [docBaseline]);
+
   const saveConfiguration = useCallback(async () => {
     if (!form || savingConfig) return;
     setSavingConfig(true);
@@ -358,6 +371,14 @@ export function HeartbeatSettingsPanel() {
           {saveConfigOk ? <span className="text-sm text-fg-muted">{h.savedConfig}</span> : null}
           <Button
             type="button"
+            variant="secondary"
+            disabled={!dirtyConfig || savingConfig}
+            onClick={discardConfiguration}
+          >
+            {h.discard}
+          </Button>
+          <Button
+            type="button"
             variant="primary"
             disabled={!dirtyConfig || savingConfig}
             onClick={() => void saveConfiguration()}
@@ -380,6 +401,9 @@ export function HeartbeatSettingsPanel() {
         />
         <div className="mt-4 flex flex-wrap items-center gap-2">
           {saveDocOk ? <span className="text-sm text-fg-muted">{h.savedDoc}</span> : null}
+          <Button type="button" variant="secondary" disabled={!dirtyDoc || savingDoc} onClick={discardDocument}>
+            {h.discard}
+          </Button>
           <Button
             type="button"
             variant="primary"

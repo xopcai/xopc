@@ -46,6 +46,7 @@ export function TelegramChannelSettingsDialog({
   saving,
   dirty,
   save,
+  discard,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -72,6 +73,7 @@ export function TelegramChannelSettingsDialog({
   saving: boolean;
   dirty: boolean;
   save: () => Promise<boolean>;
+  discard: () => void;
 }) {
   const inputClassName = channelsInputClassName;
   const tg = form.telegram;
@@ -217,6 +219,9 @@ export function TelegramChannelSettingsDialog({
           <div className="mt-8 flex flex-wrap justify-end gap-2 border-t border-edge-subtle pt-4 dark:border-edge-subtle">
             <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>
               {ch.modalCancel}
+            </Button>
+            <Button type="button" variant="secondary" disabled={!dirty || saving} onClick={discard}>
+              {ch.discard}
             </Button>
             <Button
               type="button"

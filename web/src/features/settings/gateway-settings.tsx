@@ -111,6 +111,14 @@ export function GatewaySettingsPanel() {
     }
   }, [form, saving, g.saveError]);
 
+  const discard = useCallback(() => {
+    if (!baseline) return;
+    dirtyRef.current = false;
+    setForm(structuredClone(baseline));
+    setError(null);
+    setSaveOk(false);
+  }, [baseline]);
+
   const copyAccessToken = useCallback(async () => {
     const t = form?.auth.token;
     if (!t) return;
@@ -166,8 +174,11 @@ export function GatewaySettingsPanel() {
             <ExternalLink className="size-3.5" />
           </a>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
           {saveOk ? <span className="text-sm text-fg-muted">{g.saved}</span> : null}
+          <Button type="button" variant="secondary" disabled={!dirty || saving} onClick={discard}>
+            {g.discard}
+          </Button>
           <Button type="button" variant="primary" disabled={!dirty || saving} onClick={() => void save()}>
             {saving ? g.saving : g.save}
           </Button>

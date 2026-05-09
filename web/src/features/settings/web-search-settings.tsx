@@ -115,6 +115,9 @@ export function WebSearchSettingsPanel() {
     setSaveOk(false);
     try {
       await patchWebSearchSettings(form);
+      const next = structuredClone(form);
+      setBaseline(next);
+      setForm(next);
       dirtyRef.current = false;
       setSaveOk(true);
       window.setTimeout(() => setSaveOk(false), 2500);
@@ -124,6 +127,14 @@ export function WebSearchSettingsPanel() {
       setSaving(false);
     }
   }, [form, saving, w.saveError]);
+
+  const discard = useCallback(() => {
+    if (!baseline) return;
+    dirtyRef.current = false;
+    setForm(structuredClone(baseline));
+    setError(null);
+    setSaveOk(false);
+  }, [baseline]);
 
   if (!hasToken) {
     return (
@@ -170,8 +181,11 @@ export function WebSearchSettingsPanel() {
             <ExternalLink className="size-3.5" />
           </a>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
           {saveOk ? <span className="text-sm text-fg-muted">{w.saved}</span> : null}
+          <Button type="button" variant="secondary" disabled={!dirty || saving} onClick={discard}>
+            {w.discard}
+          </Button>
           <Button type="button" variant="primary" disabled={!dirty || saving} onClick={() => void save()}>
             {saving ? w.saving : w.save}
           </Button>

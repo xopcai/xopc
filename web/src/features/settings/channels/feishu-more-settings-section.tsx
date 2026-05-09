@@ -35,6 +35,7 @@ export function FeishuMoreSettingsSection({
   saving,
   dirty,
   save,
+  discard,
 }: {
   ch: ChannelsSettingsMessages;
   form: ChannelsSettingsState;
@@ -63,6 +64,7 @@ export function FeishuMoreSettingsSection({
   saving: boolean;
   dirty: boolean;
   save: () => Promise<boolean>;
+  discard: () => void;
 }) {
   const inputClassName = channelsInputClassName;
   const fs = form.feishu;
@@ -484,17 +486,22 @@ export function FeishuMoreSettingsSection({
           </div>
         </div>
 
-        <Button
-          type="button"
-          variant="primary"
-          className="w-full"
-          disabled={!dirty || saving}
-          onClick={async () => {
-            await save();
-          }}
-        >
-          {saving ? ch.saving : ch.save}
-        </Button>
+        <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+          <Button type="button" variant="secondary" className="w-full sm:w-auto" disabled={!dirty || saving} onClick={discard}>
+            {ch.discard}
+          </Button>
+          <Button
+            type="button"
+            variant="primary"
+            className="w-full sm:w-auto"
+            disabled={!dirty || saving}
+            onClick={async () => {
+              await save();
+            }}
+          >
+            {saving ? ch.saving : ch.save}
+          </Button>
+        </div>
       </div>
     </details>
   );

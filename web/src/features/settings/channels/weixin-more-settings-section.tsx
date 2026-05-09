@@ -23,6 +23,7 @@ export function WeixinMoreSettingsSection({
   saving,
   dirty,
   save,
+  discard,
 }: {
   ch: ChannelsSettingsMessages;
   wx: ChannelsSettingsState['weixin'];
@@ -39,6 +40,7 @@ export function WeixinMoreSettingsSection({
   saving: boolean;
   dirty: boolean;
   save: () => Promise<boolean>;
+  discard: () => void;
 }) {
   return (
     <details className="group rounded-xl border border-edge-subtle bg-surface-base open:pb-3 dark:border-edge">
@@ -77,17 +79,22 @@ export function WeixinMoreSettingsSection({
             routingDisabled={saving}
           />
         </div>
-        <Button
-          type="button"
-          variant="primary"
-          className="w-full"
-          disabled={!dirty || saving}
-          onClick={async () => {
-            await save();
-          }}
-        >
-          {saving ? ch.saving : ch.save}
-        </Button>
+        <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+          <Button type="button" variant="secondary" className="w-full sm:w-auto" disabled={!dirty || saving} onClick={discard}>
+            {ch.discard}
+          </Button>
+          <Button
+            type="button"
+            variant="primary"
+            className="w-full sm:w-auto"
+            disabled={!dirty || saving}
+            onClick={async () => {
+              await save();
+            }}
+          >
+            {saving ? ch.saving : ch.save}
+          </Button>
+        </div>
       </div>
     </details>
   );

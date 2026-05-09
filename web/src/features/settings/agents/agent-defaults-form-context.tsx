@@ -1,4 +1,13 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 
 import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
 import {
@@ -7,26 +16,38 @@ import {
   patchAgentDefaults,
   type AgentDefaultsState,
 } from '@/features/settings/config-api';
-import type { MessageBundle } from '@/i18n/messages';
+import { messages, type MessageBundle } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
+import { useLocaleStore } from '@/stores/locale-store';
 
-export type UseAgentDefaultsFormResult = {
-  hasToken: boolean;
-  loading: boolean;
-  fetchError: string | null;
+type AgentDefaultsFormContextValue = {
   form: AgentDefaultsState | null;
   update: (patch: Partial<AgentDefaultsState>) => void;
+  save: () => Promise<void>;
+  discard: () => void;
   dirty: boolean;
   saving: boolean;
-  saveOk: boolean;
   error: string | null;
-  setError: (e: string | null) => void;
-  save: () => Promise<boolean>;
-  discard: () => void;
-  mutate: ReturnType<typeof useGatewayConfigSwr>['mutate'];
+  saveOk: boolean;
+  loading: boolean;
+  fetchError: string | null;
+  hasToken: boolean;
+  mutate: () => void;
+  pageTitle: string;
+  a: MessageBundle['agentSettings'];
+  chat: MessageBundle['chat'];
+  logsLoading: string;
+  mSettingsSections: MessageBundle['settingsSections'];
+  agentsMessages: MessageBundle['agentsSettings'];
 };
 
-export function useAgentDefaultsForm(a: MessageBundle['agentSettings']): UseAgentDefaultsFormResult {
+const AgentDefaultsFormContext = createContext<AgentDefaultsFormContextValue | null>(null);
+
+export function AgentDefaultsFormProvider({ children }: { children: ReactNode }) {
+  const language = useLocaleStore((s) => s.language);
+  const m = messages(language);
+  const a = m.agentSettings;
+  const chat = m.chat;
   const token = useGatewayStore((st) => st.token);
   const hasToken = Boolean(token);
 
@@ -54,9 +75,8 @@ export function useAgentDefaultsForm(a: MessageBundle['agentSettings']): UseAgen
     }
     if (parsed === null) return;
     if (!dirtyRef.current) {
-      const snapshot = structuredClone(parsed);
-      setForm(snapshot);
-      setBaseline(structuredClone(snapshot));
+      setForm(parsed);
+      setBaseline(parsed);
     }
   }, [hasToken, parsed]);
 
@@ -74,8 +94,8 @@ export function useAgentDefaultsForm(a: MessageBundle['agentSettings']): UseAgen
     setForm((f) => (f ? { ...f, ...patch } : null));
   }, []);
 
-  const save = useCallback(async (): Promise<boolean> => {
-    if (!form || saving) return false;
+  const save = useCallback(async () => {
+    if (!form || saving) return;
     setSaving(true);
     setError(null);
     setSaveOk(false);
@@ -90,17 +110,14 @@ export function useAgentDefaultsForm(a: MessageBundle['agentSettings']): UseAgen
               ? e.message
               : a.advanced.paramsInvalidJson,
         );
-        return false;
+        return;
       }
       await patchAgentDefaults(form);
       dirtyRef.current = false;
-      setBaseline(structuredClone(form));
       setSaveOk(true);
       window.setTimeout(() => setSaveOk(false), 2500);
-      return true;
     } catch (e) {
       setError(e instanceof Error ? e.message : a.saveError);
-      return false;
     } finally {
       setSaving(false);
     }
@@ -114,19 +131,58 @@ export function useAgentDefaultsForm(a: MessageBundle['agentSettings']): UseAgen
     setSaveOk(false);
   }, [baseline]);
 
-  return {
-    hasToken,
-    loading,
-    fetchError,
-    form,
-    update,
-    dirty,
-    saving,
-    saveOk,
-    error,
-    setError,
-    save,
-    discard,
-    mutate,
-  };
+  const pageTitle = m.settingsSections['agent-defaults'];
+
+  const value = useMemo(
+    () => ({
+      form,
+      update,
+      save,
+      discard,
+      dirty,
+      saving,
+      error,
+      saveOk,
+      loading,
+      fetchError,
+      hasToken,
+      mutate,
+      pageTitle,
+      a,
+      chat,
+      logsLoading: m.logs.loading,
+      mSettingsSections: m.settingsSections,
+      agentsMessages: m.agentsSettings,
+    }),
+    [
+      form,
+      update,
+      save,
+      discard,
+      dirty,
+      saving,
+      error,
+      saveOk,
+      loading,
+      fetchError,
+      hasToken,
+      mutate,
+      pageTitle,
+      a,
+      chat,
+      m.logs.loading,
+      m.settingsSections,
+      m.agentsSettings,
+    ],
+  );
+
+  return <AgentDefaultsFormContext.Provider value={value}>{children}</AgentDefaultsFormContext.Provider>;
+}
+
+export function useAgentDefaultsForm(): AgentDefaultsFormContextValue {
+  const v = useContext(AgentDefaultsFormContext);
+  if (!v) {
+    throw new Error('useAgentDefaultsForm must be used within AgentDefaultsFormProvider');
+  }
+  return v;
 }
