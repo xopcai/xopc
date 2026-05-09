@@ -38,8 +38,13 @@
   --color-accent-soft: #eff6ff;
   --color-accent-fg: #2563eb;
 
-  /* Native checkbox checked fill — neutral gray (not brand blue); keeps forms calm vs primary CTAs */
-  --color-checkbox-accent: #3c3c43;
+  /**
+   * Checkbox checked fill (used with custom `appearance: none` + tick).
+   * Light: graphite — clear on white without reading as a harsh black slab.
+   */
+  --color-checkbox-accent: #4a4a52;
+  /** SVG tick on filled checkboxes (white stroke). */
+  --checkbox-icon-tick: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none'%3E%3Cpath d='M2.5 6.2 5 8.7 9.5 3.8' stroke='%23ffffff' stroke-width='1.85' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 
   /* Semantic */
   --color-success: #059669;
@@ -92,7 +97,8 @@ html.dark {
   --color-accent-soft: rgb(30 58 138 / 0.55);
   --color-accent-fg: #60a5fa;
 
-  --color-checkbox-accent: #c7c7cc;
+  /* Dark: mid neutral (not near-white) so a white tick stays legible without another blue hotspot. */
+  --color-checkbox-accent: #6a6a72;
 
   --color-success: #34d399;
   --color-success-soft: rgb(6 78 59 / 0.5);
@@ -203,16 +209,60 @@ html.dark {
     outline-offset: 0;
     box-shadow: none;
   }
+
+  /**
+   * Global `<input type="checkbox">` — custom control so checked state is a clear tick on a
+   * themed fill (avoids WebKit/Blink accent-color reading as a flat black/gray tile).
+   */
+  input[type='checkbox'] {
+    appearance: none;
+    -webkit-appearance: none;
+    display: inline-block;
+    vertical-align: middle;
+    flex-shrink: 0;
+    width: 1rem;
+    height: 1rem;
+    cursor: pointer;
+    border: 1px solid var(--color-edge);
+    border-radius: 0.25rem;
+    background-color: var(--color-surface-panel);
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 0.7rem 0.7rem;
+    transition:
+      border-color 0.15s ease,
+      background-color 0.15s ease,
+      box-shadow 0.15s ease;
+  }
+
+  input[type='checkbox']:hover:not(:disabled) {
+    border-color: var(--color-edge-strong);
+  }
+
+  input[type='checkbox']:checked {
+    background-color: var(--color-checkbox-accent);
+    border-color: var(--color-checkbox-accent);
+    background-image: var(--checkbox-icon-tick);
+  }
+
+  input[type='checkbox']:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+
+  input[type='checkbox']:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
 }
 
 @layer components {
   /**
-   * Native `<input type="checkbox">` — restrained checked color via `accent-color`.
-   * Do not use `text-accent` on checkboxes (it reads as loud brand fill).
+   * Explicit checkbox utility — inherits global checkbox styling (do not re-apply `border-*`
+   * here or it overrides `:checked` from the base layer).
    */
   .ui-checkbox {
-    @apply size-4 shrink-0 cursor-pointer rounded border border-edge bg-surface-panel;
-    accent-color: var(--color-checkbox-accent);
+    @apply size-4 shrink-0 cursor-pointer rounded;
   }
 
   .ui-checkbox:disabled {
@@ -538,7 +588,8 @@ html[data-color-scheme='mono'] {
   --color-accent-soft: #f3f4f6;
   --color-accent-fg: #111111;
 
-  --color-checkbox-accent: #111111;
+  /* Mono light: near-primary text; tick breaks the “solid tile” look vs bare native fill. */
+  --color-checkbox-accent: #242424;
 
   --color-success: #10b981;
   --color-success-soft: #d1fae5;
@@ -588,7 +639,8 @@ html.dark[data-color-scheme='mono'] {
   --color-accent-soft: rgb(255 255 255 / 0.08);
   --color-accent-fg: #e4e4e7;
 
-  --color-checkbox-accent: #a1a1aa;
+  /* Dark mono: mid gray fill + white tick (avoids light-gray “cement block”). */
+  --color-checkbox-accent: #71717a;
 
   --color-success: #34d399;
   --color-success-soft: rgb(6 78 59 / 0.45);
