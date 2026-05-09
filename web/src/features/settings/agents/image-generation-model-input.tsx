@@ -13,7 +13,13 @@ import { apiFetch } from '@/lib/fetch';
 import { interaction } from '@/lib/interaction';
 import { apiUrl } from '@/lib/url';
 
-export type ImageProviderSummary = { id: string; defaultModel?: string; models: string[] };
+export type ImageProviderSummary = {
+  id: string;
+  defaultModel?: string;
+  models: string[];
+  /** From gateway: provider has resolvable API credentials. */
+  configured?: boolean;
+};
 
 async function fetchImageGenerationProviders(): Promise<ImageProviderSummary[]> {
   const res = await apiFetch(apiUrl('/api/image/providers'));
@@ -22,10 +28,10 @@ async function fetchImageGenerationProviders(): Promise<ImageProviderSummary[]> 
   return data.payload?.providers ?? [];
 }
 
-function buildModelIds(providers: ImageProviderSummary[]): string[] {
+function modelIdsForProviders(providerList: ImageProviderSummary[]): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
-  for (const p of providers) {
+  for (const p of providerList) {
     const models = p.models.length > 0 ? p.models : p.defaultModel ? [p.defaultModel] : [];
     for (const m of models) {
       const id = `${p.id}/${m}`;
@@ -36,6 +42,16 @@ function buildModelIds(providers: ImageProviderSummary[]): string[] {
     }
   }
   return out;
+}
+
+/** Only image-generation providers the gateway marks as configured (credentials available). */
+function buildConfiguredModelIds(providers: ImageProviderSummary[], currentValueTrimmed: string): string[] {
+  const configuredOnly = providers.filter((p) => p.configured === true);
+  const fromRegistry = modelIdsForProviders(configuredOnly);
+  if (!currentValueTrimmed || fromRegistry.includes(currentValueTrimmed)) {
+    return fromRegistry;
+  }
+  return [currentValueTrimmed, ...fromRegistry];
 }
 
 function idsMatchingQuery(ids: string[], query: string): string[] {
@@ -60,6 +76,8 @@ export function ImageGenerationModelInput({
   placeholder,
   searchPlaceholder,
   noMatches,
+  registryEmptyHint,
+  outOfFilterNote,
   className,
   onChange,
 }: {
@@ -68,6 +86,10 @@ export function ImageGenerationModelInput({
   placeholder: string;
   searchPlaceholder: string;
   noMatches: string;
+  /** When every provider is unconfigured and there is no current value. */
+  registryEmptyHint?: string;
+  /** Current value uses a provider that is not configured (still listed so you can change it). */
+  outOfFilterNote?: string;
   className?: string;
   onChange: (modelId: string) => void;
 }) {
@@ -78,8 +100,20 @@ export function ImageGenerationModelInput({
     revalidateOnFocus: false,
   });
 
-  const allIds = useMemo(() => buildModelIds(providers ?? []), [providers]);
+  const valueTrimmed = value.trim();
+  const configuredOnlyIds = useMemo(
+    () => modelIdsForProviders((providers ?? []).filter((p) => p.configured === true)),
+    [providers],
+  );
+  const allIds = useMemo(
+    () => buildConfiguredModelIds(providers ?? [], valueTrimmed),
+    [providers, valueTrimmed],
+  );
   const filtered = useMemo(() => idsMatchingQuery(allIds, query), [allIds, query]);
+  const showOutOfFilterNote =
+    Boolean(outOfFilterNote) &&
+    Boolean(valueTrimmed) &&
+    !configuredOnlyIds.includes(valueTrimmed);
 
   const label = value.trim() ? value : placeholder;
   const titleText = value.trim() || placeholder;
@@ -95,29 +129,30 @@ export function ImageGenerationModelInput({
   );
 
   return (
-    <Popover.Root open={open} onOpenChange={handleOpenChange} modal={false}>
-      <Popover.Trigger asChild>
-        <button
-          type="button"
-          disabled={disabled || isLoading}
-          title={isLoading ? '…' : titleText}
-          className={cn(
-            comboboxTriggerLayoutClass,
-            'items-center gap-2 rounded-lg border border-edge-subtle bg-surface-panel px-3 py-2 text-left text-sm font-normal text-fg',
-            interaction.transition,
-            'hover:border-edge hover:bg-surface-hover/45',
-            selectComboboxTriggerFocusClass,
-            'disabled:cursor-not-allowed disabled:opacity-50',
-            'dark:border-edge-subtle dark:hover:bg-surface-hover/55',
-            className,
-          )}
-          aria-haspopup="listbox"
-          aria-expanded={open}
-        >
-          <span className="min-w-0 truncate">{isLoading ? '…' : label}</span>
-          <ChevronsUpDown className="h-4 w-4 shrink-0 text-fg-subtle opacity-70" aria-hidden />
-        </button>
-      </Popover.Trigger>
+    <div className="flex min-w-0 flex-col gap-1">
+      <Popover.Root open={open} onOpenChange={handleOpenChange} modal={false}>
+        <Popover.Trigger asChild>
+          <button
+            type="button"
+            disabled={disabled || isLoading}
+            title={isLoading ? '…' : titleText}
+            className={cn(
+              comboboxTriggerLayoutClass,
+              'items-center gap-2 rounded-lg border border-edge-subtle bg-surface-panel px-3 py-2 text-left text-sm font-normal text-fg',
+              interaction.transition,
+              'hover:border-edge hover:bg-surface-hover/45',
+              selectComboboxTriggerFocusClass,
+              'disabled:cursor-not-allowed disabled:opacity-50',
+              'dark:border-edge-subtle dark:hover:bg-surface-hover/55',
+              className,
+            )}
+            aria-haspopup="listbox"
+            aria-expanded={open}
+          >
+            <span className="min-w-0 truncate">{isLoading ? '…' : label}</span>
+            <ChevronsUpDown className="h-4 w-4 shrink-0 text-fg-subtle opacity-70" aria-hidden />
+          </button>
+        </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content
           className="z-50 w-[min(22rem,calc(100vw-2rem))] rounded-xl border border-edge-subtle bg-surface-panel p-1 shadow-elevated dark:border-edge-subtle"
@@ -144,7 +179,9 @@ export function ImageGenerationModelInput({
               </div>
             ) : null}
             {!error && allIds.length === 0 && !isLoading ? (
-              <div className="px-2 py-3 text-center text-xs text-fg-muted">{noMatches}</div>
+              <div className="px-2 py-3 text-center text-xs text-fg-muted">
+                {registryEmptyHint ?? noMatches}
+              </div>
             ) : null}
             {!error && allIds.length > 0 && filtered.length === 0 ? (
               <div className="px-2 py-3 text-center text-xs text-fg-muted">{noMatches}</div>
@@ -172,6 +209,10 @@ export function ImageGenerationModelInput({
           </div>
         </Popover.Content>
       </Popover.Portal>
-    </Popover.Root>
+      </Popover.Root>
+      {showOutOfFilterNote ? (
+        <p className="text-xs text-amber-700 dark:text-amber-400/90">{outOfFilterNote}</p>
+      ) : null}
+    </div>
   );
 }

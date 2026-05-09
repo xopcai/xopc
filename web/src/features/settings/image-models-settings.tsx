@@ -83,8 +83,9 @@ export function ImageModelsSettingsPanel() {
     setError(undefined);
     try {
       const fresh = await fetchAgentDefaults();
-      setState(fresh);
-      setBaseline(fresh);
+      const snapshot = structuredClone(fresh);
+      setState(snapshot);
+      setBaseline(structuredClone(snapshot));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -107,8 +108,8 @@ export function ImageModelsSettingsPanel() {
     { revalidateOnFocus: false },
   );
 
-  // Tie config-payload SWR cache so other panels see our edits.
-  const gwSwr = useGatewayConfigSwr(false);
+  // Tie config-payload SWR cache so other panels see our edits after save.
+  const gwSwr = useGatewayConfigSwr(hasToken);
 
   const dirty = useMemo(() => {
     if (!state || !baseline) return false;
@@ -135,7 +136,7 @@ export function ImageModelsSettingsPanel() {
         return;
       }
       await patchAgentDefaults(state);
-      setBaseline(state);
+      setBaseline(structuredClone(state));
       setSavedFlash(true);
       window.setTimeout(() => setSavedFlash(false), 1500);
       // Refresh shared SWR cache so models / agent defaults panels stay in sync.
@@ -213,10 +214,14 @@ export function ImageModelsSettingsPanel() {
               onChange={(e) => {
                 const raw = e.target.value.trim();
                 const next = raw === '' ? null : Math.max(0, Math.floor(Number(raw)));
-                setState({
-                  ...state,
-                  imageGenerationModelTimeoutMs: next && next > 0 ? next : null,
-                });
+                setState((prev) =>
+                  prev
+                    ? {
+                        ...prev,
+                        imageGenerationModelTimeoutMs: next && next > 0 ? next : null,
+                      }
+                    : null,
+                );
               }}
             />
             <p className="text-xs text-fg-subtle">{t.timeoutHint}</p>
@@ -227,10 +232,11 @@ export function ImageModelsSettingsPanel() {
               className="mt-0.5"
               checked={state.imageGenerationModelAutoProviderFallback}
               onChange={(e) =>
-                setState({
-                  ...state,
-                  imageGenerationModelAutoProviderFallback: e.target.checked,
-                })
+                setState((prev) =>
+                  prev
+                    ? { ...prev, imageGenerationModelAutoProviderFallback: e.target.checked }
+                    : null,
+                )
               }
             />
             <span className="flex flex-col gap-0.5">

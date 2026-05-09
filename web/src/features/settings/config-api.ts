@@ -432,6 +432,21 @@ function parseParamsJson(raw: unknown): string {
   if (raw === undefined || raw === null) {
     return '';
   }
+  if (typeof raw === 'string') {
+    const t = raw.trim();
+    if (!t) {
+      return '';
+    }
+    try {
+      const parsed: unknown = JSON.parse(t);
+      if (parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return JSON.stringify(parsed, null, 2);
+      }
+    } catch {
+      return t;
+    }
+    return '';
+  }
   if (typeof raw === 'object' && !Array.isArray(raw)) {
     try {
       return JSON.stringify(raw, null, 2);
@@ -440,6 +455,32 @@ function parseParamsJson(raw: unknown): string {
     }
   }
   return '';
+}
+
+function readImageGenerationTimeoutMsFromDefaults(d: Record<string, unknown>): number | null {
+  const flat = d.imageGenerationModelTimeoutMs;
+  if (typeof flat === 'number' && Number.isFinite(flat) && flat > 0) {
+    return Math.floor(flat);
+  }
+  const igm = d.imageGenerationModel;
+  if (igm && typeof igm === 'object' && !Array.isArray(igm)) {
+    const tm = (igm as { timeoutMs?: unknown }).timeoutMs;
+    if (typeof tm === 'number' && Number.isFinite(tm) && tm > 0) {
+      return Math.floor(tm);
+    }
+  }
+  return null;
+}
+
+function readImageGenerationAutoProviderFallbackFromDefaults(d: Record<string, unknown>): boolean {
+  if (d.imageGenerationModelAutoProviderFallback === true) {
+    return true;
+  }
+  const igm = d.imageGenerationModel;
+  if (igm && typeof igm === 'object' && !Array.isArray(igm)) {
+    return (igm as { autoProviderFallback?: unknown }).autoProviderFallback === true;
+  }
+  return false;
 }
 
 /** Parse `agents.defaults` from a gateway config root object. */
@@ -484,13 +525,8 @@ export function parseAgentDefaultsFromConfig(cfg: unknown): AgentDefaultsState {
     imageModelFallbacks: imageModelFallbacksFromApi,
     imageGenerationModel: normalizeModelRef(d.imageGenerationModel),
     imageGenerationModelFallbacks: imageGenerationModelFallbacksFromApi,
-    imageGenerationModelTimeoutMs:
-      typeof d.imageGenerationModelTimeoutMs === 'number' &&
-      Number.isFinite(d.imageGenerationModelTimeoutMs) &&
-      d.imageGenerationModelTimeoutMs > 0
-        ? d.imageGenerationModelTimeoutMs
-        : null,
-    imageGenerationModelAutoProviderFallback: d.imageGenerationModelAutoProviderFallback === true,
+    imageGenerationModelTimeoutMs: readImageGenerationTimeoutMsFromDefaults(d),
+    imageGenerationModelAutoProviderFallback: readImageGenerationAutoProviderFallbackFromDefaults(d),
     mediaMaxMb: typeof d.mediaMaxMb === 'number' && !Number.isNaN(d.mediaMaxMb) ? d.mediaMaxMb : undefined,
     maxTokens: typeof d.maxTokens === 'number' ? d.maxTokens : 8192,
     temperature: typeof d.temperature === 'number' ? d.temperature : 0.7,
