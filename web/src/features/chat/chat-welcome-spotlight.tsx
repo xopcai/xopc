@@ -1,6 +1,7 @@
 import { FileBarChart, FolderOpen, Globe, MessageCircle, PenLine } from 'lucide-react';
 import { memo, useId, useMemo, useState } from 'react';
 
+import { BrandLogo } from '@/components/shell/brand-logo';
 import type { ChatMessages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
@@ -40,12 +41,7 @@ export const ChatWelcomeSpotlight = memo(function ChatWelcomeSpotlight({
   return (
     <div className="flex flex-col gap-3.5 pb-2 sm:gap-4 sm:pb-3">
       <div className="flex flex-col items-center gap-1.5 px-1 pt-8 text-center sm:gap-2 sm:pt-10">
-        <div
-          className="flex size-10 items-center justify-center rounded-xl bg-accent-soft text-lg shadow-surface ring-1 ring-edge-subtle/80 dark:ring-edge-subtle sm:size-11 sm:text-xl"
-          aria-hidden
-        >
-          🤖
-        </div>
+        <BrandLogo className="size-12 shrink-0 sm:size-14" aria-hidden />
         <h1 className="text-balance text-lg font-semibold tracking-tight text-fg sm:text-xl">{s.headline}</h1>
         <p className="max-w-md text-pretty text-sm leading-snug text-fg-muted sm:text-[0.9375rem]">{s.tagline}</p>
       </div>
