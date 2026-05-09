@@ -1,2 +1,9 @@
 export { AgentsSettingsPanel } from './agents-settings-panel';
-export { AgentSettingsPanel } from './defaults-panel';
+export {
+  AgentBrowserDefaultsPage,
+  AgentChatDefaultsPage,
+  AgentRuntimeDefaultsPage,
+  AgentSystemPromptDefaultsPage,
+  AgentToolsDefaultsPage,
+  AgentWorkspaceDefaultsPage,
+} from './agent-defaults-split-pages';

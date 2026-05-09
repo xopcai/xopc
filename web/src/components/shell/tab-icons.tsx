@@ -1,9 +1,11 @@
 import type { LucideIcon } from 'lucide-react';
 import {
+  Brain,
   Clock,
   Cloud,
   Cpu,
   FileText,
+  Folder,
   FolderOpen,
   Globe,
   Heart,
@@ -11,6 +13,7 @@ import {
   Layers,
   MessageSquare,
   Mic,
+  ScrollText,
   Moon,
   Palette,
   Plug,
@@ -18,6 +21,7 @@ import {
   Shield,
   SlidersHorizontal,
   Users,
+  Wrench,
 } from 'lucide-react';
 
 import type { Tab } from '@/i18n/messages';
@@ -32,7 +36,12 @@ const TAB_ICONS: Record<Tab, LucideIcon> = {
   logs: FileText,
   settingsAppearance: Palette,
   settingsSystem: Shield,
-  settingsAgentDefaults: SlidersHorizontal,
+  settingsAgentChat: SlidersHorizontal,
+  settingsAgentWorkspace: Folder,
+  settingsAgentBrowser: Globe,
+  settingsAgentRuntime: Brain,
+  settingsAgentTools: Wrench,
+  settingsAgentSystemPrompt: ScrollText,
   settingsAgents: Users,
   settingsProviders: Cloud,
   settingsModels: Cpu,

@@ -4,9 +4,7 @@ import { fetchSkillsCatalog, type SkillCatalogRow } from '@/features/settings/ag
 
 import type { AgentPanel } from '../utils';
 
-export function useAgentsSkillsCatalog(options: { panel: AgentPanel; hasToken: boolean }) {
-  const { panel, hasToken } = options;
-
+export function useSkillsCatalogLoad(enabled: boolean, hasToken: boolean) {
   const [skillCatalog, setSkillCatalog] = useState<SkillCatalogRow[]>([]);
   const [skillsCatalogLoading, setSkillsCatalogLoading] = useState(false);
 
@@ -16,7 +14,7 @@ export function useAgentsSkillsCatalog(options: { panel: AgentPanel; hasToken: b
   );
 
   useEffect(() => {
-    if (panel !== 'skills' || !hasToken) {
+    if (!enabled || !hasToken) {
       return;
     }
     let cancelled = false;
@@ -40,11 +38,15 @@ export function useAgentsSkillsCatalog(options: { panel: AgentPanel; hasToken: b
     return () => {
       cancelled = true;
     };
-  }, [panel, hasToken]);
+  }, [enabled, hasToken]);
 
   return {
     catalogForPick,
     skillCatalog,
     skillsCatalogLoading,
   };
+}
+
+export function useAgentsSkillsCatalog(options: { panel: AgentPanel; hasToken: boolean }) {
+  return useSkillsCatalogLoad(options.panel === 'skills', options.hasToken);
 }
