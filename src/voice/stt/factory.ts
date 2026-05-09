@@ -2,15 +2,14 @@
  * STT factory — registry-driven provider chain construction.
  *
  * Resolves STTConfig slices into `AudioProviderResolvedConfig` arrays that are
- * consumed by `runAudioTranscription`. The two side-effect imports below
- * register the built-in MediaUnderstanding providers (alibaba + openai) with
- * the registry on first use.
+ * consumed by `runAudioTranscription`. Side-effect import of `./providers/index.js`
+ * ensures all built-in STT providers self-register with the media-understanding
+ * registry before the first lookup.
  */
 
 import { createLogger } from '../../utils/logger.js';
 
-import './openai-transcription.js'; // side-effect: register openai
-import './alibaba-transcription.js'; // side-effect: register alibaba
+import './providers/index.js'; // side-effect: register built-in STT providers
 import { getMediaUnderstandingProvider } from '../../media-understanding/registry.js';
 import type { AudioProviderResolvedConfig } from '../../media-understanding/audio-transcription-runner.js';
 import type { STTConfig } from './types.js';

@@ -15,13 +15,13 @@
 
 import OpenAI from 'openai';
 
-import { createLogger } from '../../utils/logger.js';
-import { registerMediaUnderstandingProvider } from '../../media-understanding/registry.js';
+import { registerMediaUnderstandingProvider } from '../../../media-understanding/registry.js';
 import type {
   AudioTranscriptionRequest,
   AudioTranscriptionResult,
   MediaUnderstandingProvider,
-} from '../../media-understanding/types.js';
+} from '../../../media-understanding/types.js';
+import { createLogger } from '../../../utils/logger.js';
 
 const log = createLogger('STT:OpenAI');
 

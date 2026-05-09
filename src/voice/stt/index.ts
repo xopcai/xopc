@@ -6,8 +6,7 @@
  * `isSTTAvailable()` API surface is preserved for channel adapters.
  */
 
-import './openai-transcription.js'; // side-effect: register openai with media-understanding registry
-import './alibaba-transcription.js'; // side-effect: register alibaba
+import './providers/index.js'; // side-effect: register built-in STT providers
 
 import type { STTConfig, STTOptions, STTResult } from './types.js';
 import { transcribe } from './transcribe-core.js';
@@ -51,8 +50,7 @@ export type {
   STTProviderFailureReason,
 } from './types.js';
 
-export { openAiTranscriptionProvider } from './openai-transcription.js';
-export { alibabaTranscriptionProvider } from './alibaba-transcription.js';
+export { openAiTranscriptionProvider, alibabaTranscriptionProvider } from './providers/index.js';
 
 export {
   resolveSTTProviderConfig,
