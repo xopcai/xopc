@@ -185,7 +185,7 @@
   "settingsNavGroups": {
     "general": "General",
     "models": "Models & media",
-    "agent": "Default agent",
+    "agent": "Agent defaults",
     "gateway": "Gateway",
     "automation": "Automation",
     "data": "Sessions & logs",
