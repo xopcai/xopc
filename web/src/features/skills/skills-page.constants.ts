@@ -7,4 +7,4 @@ export const SOURCE_FILTER_SET = new Set<SourceFilter>(['all', 'global', 'worksp
 export const SKILL_LIST_SKELETON_COUNT = 6;
 
 /** Category display order for consistent pill ordering on the built-in tab. */
-export const BUILTIN_SKILL_CATEGORY_ORDER = ['business', 'creative', 'documents', 'tools', 'meta'] as const;
+export const BUILTIN_SKILL_CATEGORY_ORDER = ['business', 'creative', 'documents', 'tools'] as const;
