@@ -18,9 +18,11 @@ import {
   resolveApiKeyForProvider,
 } from '@xopcai/xopc/providers/auth-runtime/index.js';
 import {
+  pickTimeoutMsOrFallback,
   postJsonRequest,
+  privateNetworkPolicyToSsrfGuardOptions,
   resolveProviderHttpRequestConfig,
-} from '@xopcai/xopc/providers/http/index.js';
+} from '@xopcai/xopc/media-shared/http/index.js';
 import { createLogger } from '@xopcai/xopc/utils/logger.js';
 import {
   imageFileExtensionForMimeType,
@@ -211,14 +213,14 @@ export async function generateGoogleImages(params: {
     'Google Gemini image generation request',
   );
 
-  const res = await postJsonRequest({
-    providerId: 'google',
-    url,
+  const timeoutMs = pickTimeoutMsOrFallback(req.timeoutMs, httpDefaults.timeoutMs, DEFAULT_TIMEOUT_MS);
+  const res = await postJsonRequest(url, {
+    label: 'google',
+    timeoutMs,
+    signal: req.signal,
     body,
     headers,
-    timeoutMs: req.timeoutMs,
-    providerDefaultTimeoutMs: httpDefaults.timeoutMs,
-    signal: req.signal,
+    ...privateNetworkPolicyToSsrfGuardOptions(),
   });
 
   const rawText = await res.text();

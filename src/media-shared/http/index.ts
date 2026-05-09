@@ -1,7 +1,6 @@
 /**
- * Public surface of the media-shared HTTP layer.
- * Voice (TTS) and media-understanding (STT/image/video) providers depend on
- * this barrel. Direct deep imports are discouraged.
+ * Shared provider HTTP barrel (voice, STT/TTS, image-generation extensions).
+ * Capability modules import this surface; direct deep imports are discouraged.
  */
 
 export {
@@ -13,12 +12,40 @@ export {
 } from './api-key-rotation.js';
 
 export {
+  TimeoutAbortError,
+  isTimeoutAbortError,
+  pickEffectiveTimeoutMs,
+  pickTimeoutMsOrFallback,
+  resolveDeadline,
+  type DeadlineInput,
+  type ResolvedDeadline,
+} from './deadline.js';
+
+export {
+  BlockedPrivateNetworkError,
+  assertNotPrivateNetwork,
+  classifyHost,
+  defaultPolicy as defaultPrivateNetworkPolicy,
+  privateNetworkPolicyToSsrfGuardOptions,
+  type HostClass,
+  type PrivateNetworkPolicy,
+} from './private-network.js';
+
+export {
+  resolveProviderHttpRequestConfig,
+  type ResolvedProviderHttpDefaults,
+  type ResolveProviderHttpRequestConfigOptions,
+} from './resolve-provider-http-request-config.js';
+
+export {
   ProviderHttpError,
+  assertOk,
   assertOkOrThrowHttpError,
   assertOkOrThrowProviderError,
   createProviderHttpError,
   extractProviderErrorDetail,
   extractProviderRequestId,
+  extractVendorErrorFields,
   formatProviderErrorPayload,
   formatProviderHttpErrorMessage,
   readResponseTextLimited,

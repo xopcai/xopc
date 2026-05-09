@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { ProviderHttpError } from '../../providers/http/assert-ok.js';
-import { TimeoutAbortError } from '../../providers/http/deadline.js';
+import { ProviderHttpError, TimeoutAbortError } from '../../media-shared/http/index.js';
 import {
   FailoverError,
   classifyAttemptError,
@@ -33,12 +32,10 @@ describe('reasonFromHttpStatus', () => {
 describe('classifyAttemptError', () => {
   it('classifies ProviderHttpError using HTTP status + code', () => {
     const e = new ProviderHttpError({
+      label: 'https://api.openai.com',
       status: 429,
-      statusText: 'Too Many Requests',
-      url: 'https://api.openai.com',
       code: 'rate_limit',
-      bodyPreview: '',
-      message: 'Rate limited',
+      messageOverride: 'Rate limited',
     });
     expect(classifyAttemptError(e)).toEqual({
       reason: 'rate_limit',

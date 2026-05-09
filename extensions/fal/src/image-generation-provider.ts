@@ -18,9 +18,11 @@ import {
   resolveApiKeyForProvider,
 } from '@xopcai/xopc/providers/auth-runtime/index.js';
 import {
+  pickTimeoutMsOrFallback,
   postJsonRequest,
+  privateNetworkPolicyToSsrfGuardOptions,
   resolveProviderHttpRequestConfig,
-} from '@xopcai/xopc/providers/http/index.js';
+} from '@xopcai/xopc/media-shared/http/index.js';
 import { createLogger } from '@xopcai/xopc/utils/logger.js';
 import {
   imageFileExtensionForMimeType,
@@ -198,14 +200,14 @@ async function submitFalRequest(params: {
     'Fal.ai queue submit',
   );
 
-  const res = await postJsonRequest({
-    providerId: 'fal',
-    url,
+  const timeoutMs = pickTimeoutMsOrFallback(req.timeoutMs, httpDefaultTimeoutMs, DEFAULT_TIMEOUT_MS);
+  const res = await postJsonRequest(url, {
+    label: 'fal',
+    timeoutMs,
+    signal: req.signal,
     body,
     headers,
-    timeoutMs: req.timeoutMs,
-    providerDefaultTimeoutMs: httpDefaultTimeoutMs,
-    signal: req.signal,
+    ...privateNetworkPolicyToSsrfGuardOptions(),
   });
 
   const text = await res.text();

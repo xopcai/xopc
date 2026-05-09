@@ -13,6 +13,8 @@
 
 import { isIP } from 'node:net';
 
+import type { SsrfGuardOptions } from './ssrf-guard.js';
+
 export interface PrivateNetworkPolicy {
   /** Permit 127.0.0.0/8, ::1, localhost. Default false. */
   allowLoopback?: boolean;
@@ -31,6 +33,15 @@ export class BlockedPrivateNetworkError extends Error {
     this.url = url;
     this.host = host;
   }
+}
+
+/** Map URL-layer private-network policy into SSRF guard options for `fetchWithTimeoutGuarded`. */
+export function privateNetworkPolicyToSsrfGuardOptions(policy?: PrivateNetworkPolicy): SsrfGuardOptions {
+  const p = policy === undefined ? defaultPolicy() : policy;
+  return {
+    allowPrivateNetwork: Boolean(p.allowPrivate || p.allowLoopback),
+    hostnameAllowlist: p.allowHosts,
+  };
 }
 
 export function defaultPolicy(): PrivateNetworkPolicy {

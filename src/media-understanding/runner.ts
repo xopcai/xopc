@@ -38,7 +38,6 @@ import type {
   ImageDescriptionResult,
   MediaCapability,
   MediaUnderstandingAttachmentDecision,
-  MediaUnderstandingDecision,
   MediaUnderstandingKind,
   MediaUnderstandingModelDecision,
   MediaUnderstandingOutput,

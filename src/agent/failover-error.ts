@@ -11,8 +11,7 @@
  * Step 1: pure model. Step 2 wires it into the new image-generation runtime.
  */
 
-import { ProviderHttpError } from '../providers/http/index.js';
-import { isTimeoutAbortError } from '../providers/http/deadline.js';
+import { ProviderHttpError, isTimeoutAbortError } from '../media-shared/http/index.js';
 
 /**
  * Coarse failure category. UI / LLM should branch on this rather than

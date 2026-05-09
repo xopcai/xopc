@@ -26,7 +26,7 @@ import {
 } from './schemas.js';
 import { assertBrowserUrlAllowed, checkPostRedirectUrl, containsApiKeyPattern } from './url-policy.js';
 import type { CdpSupervisor } from './cdp-supervisor.js';
-import { truncateSnapshotAtBoundary, snapshotSummaryHeader } from './snapshot-helpers.js';
+import { truncateSnapshotAtBoundary } from './snapshot-helpers.js';
 
 const DEFAULT_SNAPSHOT_MAX = 30_000;
 /** Compact snapshot attached to navigate results — keep short to avoid bloating tool output. */
