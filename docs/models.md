@@ -4,6 +4,29 @@ xopc supports custom model providers via `~/.xopc/models.json`.
 
 **Built-in catalog:** First-class provider IDs match **`@earendil-works/pi-ai` `KnownProvider`** (the same set the CLI and gateway UI surface for API keys). Other vendors (e.g. DashScope-compatible chat with provider id **`dashscope`**) are configured with a **`providers.<id>`** block: `baseUrl`, `apiKey`, and `api` (often `openai-completions`). See `.docs/provider-alignment-plan.md` for examples.
 
+## Built-in LLM providers (pi-ai)
+
+The **gateway console** (Settings → Providers) and **`xopc models`** use the same built-in ids as pi-ai. **Environment variable names** are centralized in `src/providers/env-keys.ts` (`PROVIDER_ENV_MAP`). For a single table aligned with `xopc.json` → **`providers`**, see [Configuration — `providers`](/configuration#providers).
+
+Included built-ins cover, among others: **OpenAI**, **Anthropic**, **Google** / **Vertex**, **Azure OpenAI**, **AWS Bedrock**, **DeepSeek**, **Groq**, **xAI**, **Mistral**, **Cerebras**, **OpenRouter**, **Vercel AI Gateway**, **Zhipu z.ai**, **MiniMax** (intl + CN), **Kimi for coding**, **Moonshot** (`moonshotai`, `moonshotai-cn`), **Hugging Face**, **Fireworks**, **Together**, **OpenCode** / **OpenCode Go**, **Cloudflare Workers AI** and **Cloudflare AI Gateway**, **GitHub Copilot**, **OpenAI Codex** (OAuth), **Google Gemini CLI** / **Antigravity** (token or key flows), and **Xiaomi MiMo** (see below). **DashScope** (`dashscope`) is an xopc env id for image/STT/TTS HTTP APIs, not an LLM `KnownProvider` in pi-ai.
+
+### Xiaomi MiMo (`xiaomi` and `xiaomi-token-plan-*`)
+
+Xiaomi ships **four** provider ids—different **API endpoints and products**, not redundant copies:
+
+| Provider id | Use case | API host (pi-ai defaults) | Env var (typical) |
+|-------------|-----------|----------------------------|-------------------|
+| `xiaomi` | Pay-as-you-go API billing | `api.xiaomimimo.com` | `XIAOMI_API_KEY` |
+| `xiaomi-token-plan-cn` | Token plan · China | `token-plan-cn.xiaomimimo.com` | `XIAOMI_TOKEN_PLAN_CN_API_KEY` |
+| `xiaomi-token-plan-ams` | Token plan · Amsterdam | `token-plan-ams.xiaomimimo.com` | `XIAOMI_TOKEN_PLAN_AMS_API_KEY` |
+| `xiaomi-token-plan-sgp` | Token plan · Singapore | `token-plan-sgp.xiaomimimo.com` | `XIAOMI_TOKEN_PLAN_SGP_API_KEY` |
+
+Keys are created in the **[MiMo open platform](https://platform.xiaomimimo.com/#/console/api-keys)**. Pick the **model ref** whose `provider/` prefix matches the key you were given.
+
+### OAuth vs API key (LLM)
+
+Several providers support **OAuth** (browser login, stored under `~/.xopc/credentials/oauth/` or auth profiles). **`openai-codex`** is **OAuth-only** for normal Codex access (no static vendor API key in the Providers UI). **`github-copilot`** may use a GitHub token via env vars or OAuth depending on your setup—see `PROVIDER_ENV_MAP`.
+
 ---
 
 ## Quick Start

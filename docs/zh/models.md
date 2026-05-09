@@ -2,8 +2,34 @@
 
 xopc 通过 `~/.xopc/models.json` 支持自定义模型服务商。
 
+**内置目录：** 与 **`@earendil-works/pi-ai` 的 `KnownProvider`** 一致；CLI 与网关 **设置 → 服务商** 对内置 id 的密钥、OAuth 与环境变量提示与此对齐。其它厂商（如仅用于文生图/STT/TTS 的 **`dashscope`**）在 **`models.json`** 里用 `providers.<id>` 配置 `baseUrl`、`apiKey`、`api` 等。
+
+## 内置 LLM 服务商（pi-ai）
+
+内置 **provider id** 与 pi-ai 一致；环境变量名以仓库内 **`src/providers/env-keys.ts`** 的 **`PROVIDER_ENV_MAP`** 为准。与 **`xopc.json` → `providers`** 对应的汇总表见 [配置说明 — `providers`](/zh/configuration#providers)。
+
+当前内置覆盖（节选）：**OpenAI**、**Anthropic**、**Google / Vertex**、**Azure OpenAI**、**AWS Bedrock**、**DeepSeek**、**Groq**、**xAI**、**Mistral**、**Cerebras**、**OpenRouter**、**Vercel AI Gateway**、**智谱 z.ai**、**MiniMax**（国际/国内）、**Kimi Coding**、**Moonshot**（`moonshotai` / `moonshotai-cn`）、**Hugging Face**、**Fireworks**、**Together**、**OpenCode / OpenCode Go**、**Cloudflare Workers AI** 与 **Cloudflare AI Gateway**、**GitHub Copilot**、**OpenAI Codex**（OAuth）、**Google Gemini CLI / Antigravity**、**小米 MiMo**（见下）。**`dashscope`** 为 xopc 侧文生图/语音等 HTTP 能力的环境 id，不是 pi-ai 的 LLM `KnownProvider`。
+
+### 小米 MiMo（`xiaomi` 与 `xiaomi-token-plan-*`）
+
+小米提供 **四个** 内置 id，对应 **不同接口与计费产品**，并非重复项：
+
+| Provider id | 用途 | 接口域（pi-ai 默认） | 典型环境变量 |
+|-------------|------|----------------------|--------------|
+| `xiaomi` | 按量 API 计费 | `api.xiaomimimo.com` | `XIAOMI_API_KEY` |
+| `xiaomi-token-plan-cn` | Token 套餐 · 中国 | `token-plan-cn.xiaomimimo.com` | `XIAOMI_TOKEN_PLAN_CN_API_KEY` |
+| `xiaomi-token-plan-ams` | Token 套餐 · 阿姆斯特丹 | `token-plan-ams.xiaomimimo.com` | `XIAOMI_TOKEN_PLAN_AMS_API_KEY` |
+| `xiaomi-token-plan-sgp` | Token 套餐 · 新加坡 | `token-plan-sgp.xiaomimimo.com` | `XIAOMI_TOKEN_PLAN_SGP_API_KEY` |
+
+密钥在 **[MiMo 开放平台](https://platform.xiaomimimo.com/#/console/api-keys)** 创建；模型引用 **`provider/model`** 中的 `provider` 须与所持有密钥类型一致。
+
+### OAuth 与 API Key（LLM）
+
+部分服务商支持 **OAuth**（浏览器登录，凭据在 `~/.xopc/credentials/oauth/` 或 auth profiles）。**`openai-codex`** 正常使用为 **仅 OAuth**，网关「服务商」里不按静态厂商 API Key 配置。**`github-copilot`** 可使用环境变量中的 GitHub 类 token 或 OAuth，详见 `PROVIDER_ENV_MAP`。
+
 ## 目录
 
+- [内置 LLM 服务商（pi-ai）](#内置-llm-服务商pi-ai)
 - [快速开始](#快速开始)
 - [配置](#配置)
 - [支持的 API](#支持的-api)

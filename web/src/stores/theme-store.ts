@@ -4,11 +4,12 @@ import { persist } from 'zustand/middleware';
 export type ThemePreference = 'light' | 'dark' | 'system';
 
 /** Visual color scheme — orthogonal to light/dark mode. */
-export type ColorScheme = 'default' | 'emerald';
+export type ColorScheme = 'default' | 'emerald' | 'mono';
 
 export const COLOR_SCHEMES: { value: ColorScheme; labelEn: string; labelZh: string }[] = [
   { value: 'default', labelEn: 'Default', labelZh: '默认' },
   { value: 'emerald', labelEn: 'Light green', labelZh: '浅绿' },
+  { value: 'mono', labelEn: 'Mono', labelZh: 'mono/单色' },
 ];
 
 const DEFAULT_COLOR_SCHEME: ColorScheme = 'default';
@@ -17,10 +18,12 @@ const THEME_META_COLOR: Record<'light' | 'dark', Record<ColorScheme, string>> = 
   light: {
     default: '#f5f5f7',
     emerald: '#f0fdf4',
+    mono: '#ffffff',
   },
   dark: {
     default: '#1c1c1e',
     emerald: '#000000',
+    mono: '#101010',
   },
 };
 
@@ -54,7 +57,8 @@ function prefersReducedMotion(): boolean {
 }
 
 function normalizeColorScheme(value: unknown): ColorScheme {
-  return value === 'default' || value === 'emerald' ? value : DEFAULT_COLOR_SCHEME;
+  if (value === 'cal') return 'mono';
+  return value === 'default' || value === 'emerald' || value === 'mono' ? value : DEFAULT_COLOR_SCHEME;
 }
 
 /** Apply light/dark + color scheme on `<html>`. Uses View Transitions when available for a softer cross-fade. */
