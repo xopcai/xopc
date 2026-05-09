@@ -8,54 +8,101 @@ function preferenceCardClassName() {
   return cn('rounded-xl border border-edge-subtle bg-surface-base px-4 py-1 sm:px-5');
 }
 
-/** Mini preview swatch that shows what a color scheme looks like. */
-function SchemePreviewSwatch({ scheme }: { scheme: ColorScheme }) {
-  if (scheme === 'mono') {
-    return (
-      <div className="flex h-10 w-full overflow-hidden rounded-md border border-edge-subtle">
-        <div className="flex flex-1 flex-col gap-1 bg-[#ffffff] p-1.5">
-          <div className="h-1 w-8 rounded-full bg-[#111111]" />
-          <div className="h-1 w-5 rounded-full bg-[#e5e7eb]" />
-        </div>
-        <div className="w-1.5 bg-[#111111]" />
-        <div className="flex flex-1 flex-col gap-1 bg-[#f5f5f5] p-1.5">
-          <div className="h-1 w-6 rounded-full bg-[#111111]" />
-          <div className="h-1 w-9 rounded-full bg-[#6b7280]" />
-          <div className="h-1 w-4 rounded-full bg-[#e5e7eb]" />
-        </div>
-      </div>
-    );
-  }
+/**
+ * Mini chrome preview per globals.css tokens — left: light, right: dark for the same palette.
+ */
+const SCHEME_PREVIEW: Record<
+  ColorScheme,
+  { light: { canvas: string; panel: string; accent: string; fg: string; muted: string }; dark: { canvas: string; panel: string; accent: string; fg: string; muted: string } }
+> = {
+  default: {
+    light: {
+      canvas: '#f5f5f7',
+      panel: '#ffffff',
+      accent: '#2563eb',
+      fg: '#1d1d1f',
+      muted: '#d2d2d7',
+    },
+    dark: {
+      canvas: '#1c1c1e',
+      panel: '#2c2c2e',
+      accent: '#3b82f6',
+      fg: '#f5f5f7',
+      muted: '#48484a',
+    },
+  },
+  emerald: {
+    light: {
+      canvas: '#f0fdf4',
+      panel: '#ffffff',
+      accent: '#059669',
+      fg: '#052e16',
+      muted: '#86efac',
+    },
+    dark: {
+      canvas: '#000000',
+      panel: '#0a0a0a',
+      accent: '#10b981',
+      fg: '#d1fae5',
+      muted: '#134e2a',
+    },
+  },
+  mono: {
+    light: {
+      canvas: '#ffffff',
+      panel: '#f5f5f5',
+      accent: '#111111',
+      fg: '#111111',
+      muted: '#e5e7eb',
+    },
+    dark: {
+      canvas: '#101010',
+      panel: '#1a1a1a',
+      accent: '#737373',
+      fg: '#fafafa',
+      muted: '#333333',
+    },
+  },
+};
 
-  if (scheme === 'emerald') {
-    return (
-      <div className="flex h-10 w-full overflow-hidden rounded-md border border-edge-subtle">
-        <div className="flex flex-1 flex-col gap-1 bg-[#0a0a0a] p-1.5">
-          <div className="h-1 w-8 rounded-full bg-[#134e2a]" />
-          <div className="h-1 w-5 rounded-full bg-[#134e2a]" />
-        </div>
-        <div className="w-1.5 bg-[#10b981]" />
-        <div className="flex flex-1 flex-col gap-1 bg-[#000000] p-1.5">
-          <div className="h-1 w-6 rounded-full bg-[#34d399]" />
-          <div className="h-1 w-9 rounded-full bg-[#065f46]" />
-          <div className="h-1 w-4 rounded-full bg-[#065f46]" />
-        </div>
-      </div>
-    );
-  }
-
+function SchemePreviewHalf({
+  canvas,
+  panel,
+  accent,
+  fg,
+  muted,
+}: {
+  canvas: string;
+  panel: string;
+  accent: string;
+  fg: string;
+  muted: string;
+}) {
   return (
-    <div className="flex h-10 w-full overflow-hidden rounded-md border border-edge-subtle">
-      <div className="flex flex-1 flex-col gap-1 bg-[#f5f5f7] p-1.5">
-        <div className="h-1 w-8 rounded-full bg-[#d2d2d7]" />
-        <div className="h-1 w-5 rounded-full bg-[#d2d2d7]" />
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col justify-center gap-1 p-1.5" style={{ backgroundColor: canvas }}>
+      <div
+        className="flex flex-col gap-0.5 rounded-sm border p-1"
+        style={{ backgroundColor: panel, borderColor: muted }}
+      >
+        <div className="flex items-center gap-1">
+          <div className="h-1 w-1 shrink-0 rounded-full" style={{ backgroundColor: accent }} />
+          <div className="h-1 min-w-0 flex-1 rounded-full" style={{ backgroundColor: fg, opacity: 0.85 }} />
+        </div>
+        <div className="h-1 w-2/3 max-w-[70%] rounded-full" style={{ backgroundColor: muted }} />
+        <div className="h-1 w-1/2 max-w-[55%] rounded-full" style={{ backgroundColor: muted }} />
       </div>
-      <div className="w-1.5 bg-[#2563eb]" />
-      <div className="flex flex-1 flex-col gap-1 bg-[#ffffff] p-1.5">
-        <div className="h-1 w-6 rounded-full bg-[#1d1d1f]" />
-        <div className="h-1 w-9 rounded-full bg-[#d2d2d7]" />
-        <div className="h-1 w-4 rounded-full bg-[#d2d2d7]" />
-      </div>
+    </div>
+  );
+}
+
+/** Side-by-side light (left) and dark (right) samples for one color scheme. */
+function SchemePreviewSwatch({ scheme }: { scheme: ColorScheme }) {
+  const { light, dark } = SCHEME_PREVIEW[scheme];
+  return (
+    <div className="flex h-11 w-full overflow-hidden rounded-md border border-edge-subtle">
+      <SchemePreviewHalf {...light} />
+      <div className="w-px shrink-0 bg-black/12 dark:bg-white/12" aria-hidden />
+      <SchemePreviewHalf {...dark} />
     </div>
   );
 }
