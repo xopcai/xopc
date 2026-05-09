@@ -260,6 +260,8 @@ Use **`xopc agents list`**, **`xopc agents add`**, **`xopc agents delete`** to m
 | `XOPC_LOG_LEVEL` | `trace` … `fatal` (default `info`) |
 | `XOPC_LOG_DIR`, `XOPC_LOG_CONSOLE`, `XOPC_LOG_FILE`, `XOPC_LOG_RETENTION_DAYS` | Logging |
 | `XOPC_PRETTY_LOGS` | Dev-friendly log formatting |
+| `XOPC_GOOGLE_ANTIGRAVITY_OAUTH_CLIENT_ID`, `XOPC_GOOGLE_ANTIGRAVITY_OAUTH_CLIENT_SECRET` | Google Antigravity OAuth (Cloud Code–style desktop client; required for `xopc auth` / gateway OAuth on that provider — set locally, never commit) |
+| `XOPC_GOOGLE_GEMINI_CLI_OAUTH_CLIENT_ID`, `XOPC_GOOGLE_GEMINI_CLI_OAUTH_CLIENT_SECRET` | Google Gemini CLI (Cloud Code Assist) OAuth — same as above |
 
 ---
 
