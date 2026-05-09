@@ -22,14 +22,14 @@ import {
   ProviderHttpError,
   fetchWithTimeoutGuarded,
   postJsonRequest,
-} from '../../media-shared/http/index.js';
-import { createLogger } from '../../utils/logger.js';
-import { registerMediaUnderstandingProvider } from '../../media-understanding/registry.js';
+} from '../../../media-shared/http/index.js';
+import { registerMediaUnderstandingProvider } from '../../../media-understanding/registry.js';
 import type {
   AudioTranscriptionRequest,
   AudioTranscriptionResult,
   MediaUnderstandingProvider,
-} from '../../media-understanding/types.js';
+} from '../../../media-understanding/types.js';
+import { createLogger } from '../../../utils/logger.js';
 
 const log = createLogger('STT:Alibaba');
 
