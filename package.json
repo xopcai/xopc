@@ -92,6 +92,7 @@
       "happy-dom": "^20.8.9",
       "protobufjs": "^7.5.5",
       "fast-xml-parser": "^5.5.7",
+      "fast-xml-builder": ">=1.1.7",
       "flatted": "^3.4.2",
       "lodash": "^4.18.0",
       "@xmldom/xmldom": "^0.8.12",
