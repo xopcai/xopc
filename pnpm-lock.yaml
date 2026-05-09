@@ -215,6 +215,16 @@ importers:
         specifier: ^3.5.33
         version: 3.5.33(typescript@6.0.3)
 
+  extensions/dashscope:
+    dependencies:
+      '@xopcai/xopc':
+        specifier: workspace:*
+        version: link:../..
+    devDependencies:
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
   extensions/demo-provider:
     dependencies:
       '@xopcai/xopc':
@@ -250,6 +260,16 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
+  extensions/fal:
+    dependencies:
+      '@xopcai/xopc':
+        specifier: workspace:*
+        version: link:../..
+    devDependencies:
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
   extensions/feishu:
     dependencies:
       '@larksuiteoapi/node-sdk':
@@ -266,6 +286,16 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
+  extensions/google:
+    dependencies:
+      '@xopcai/xopc':
+        specifier: workspace:*
+        version: link:../..
+    devDependencies:
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
   extensions/hello:
     dependencies:
       '@xopcai/extension-ui-sdk':
@@ -275,6 +305,26 @@ importers:
       esbuild:
         specifier: ^0.28.0
         version: 0.28.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
+  extensions/minimax:
+    dependencies:
+      '@xopcai/xopc':
+        specifier: workspace:*
+        version: link:../..
+    devDependencies:
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
+  extensions/openai:
+    dependencies:
+      '@xopcai/xopc':
+        specifier: workspace:*
+        version: link:../..
+    devDependencies:
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -316,6 +366,8 @@ importers:
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
+
+  extensions/tts-local-cli: {}
 
   extensions/weixin:
     dependencies:
