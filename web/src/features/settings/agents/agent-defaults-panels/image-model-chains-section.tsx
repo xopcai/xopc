@@ -22,6 +22,9 @@ export function AgentDefaultsImageModelChainsSection(props: AgentDefaultsPanelPr
             placeholder={chat.modelPlaceholder}
             searchPlaceholder={chat.modelSearchPlaceholder}
             noMatches={chat.modelNoMatches}
+            capabilitiesFilter="vision"
+            registryEmptyHint={a.visionRegistryEmpty}
+            outOfFilterNote={a.visionOutOfFilterNote}
             onChange={(modelId) => update({ imageModel: modelId })}
           />
         </AgentDefaultsField>
@@ -35,6 +38,9 @@ export function AgentDefaultsImageModelChainsSection(props: AgentDefaultsPanelPr
                     placeholder={chat.modelPlaceholder}
                     searchPlaceholder={chat.modelSearchPlaceholder}
                     noMatches={chat.modelNoMatches}
+                    capabilitiesFilter="vision"
+                    registryEmptyHint={a.visionRegistryEmpty}
+                    outOfFilterNote={a.visionOutOfFilterNote}
                     onChange={(modelId) => {
                       const next = [...form.imageModelFallbacks];
                       next[idx] = modelId;
@@ -74,6 +80,8 @@ export function AgentDefaultsImageModelChainsSection(props: AgentDefaultsPanelPr
             placeholder={chat.modelPlaceholder}
             searchPlaceholder={chat.modelSearchPlaceholder}
             noMatches={chat.modelNoMatches}
+            registryEmptyHint={a.imageGenRegistryEmpty}
+            outOfFilterNote={a.imageGenOutOfFilterNote}
             onChange={(modelId) => update({ imageGenerationModel: modelId })}
           />
         </AgentDefaultsField>
@@ -90,6 +98,8 @@ export function AgentDefaultsImageModelChainsSection(props: AgentDefaultsPanelPr
                     placeholder={chat.modelPlaceholder}
                     searchPlaceholder={chat.modelSearchPlaceholder}
                     noMatches={chat.modelNoMatches}
+                    registryEmptyHint={a.imageGenRegistryEmpty}
+                    outOfFilterNote={a.imageGenOutOfFilterNote}
                     onChange={(modelId) => {
                       const next = [...form.imageGenerationModelFallbacks];
                       next[idx] = modelId;

@@ -29,12 +29,49 @@ function modelsMatchingQuery(models: ConfiguredModel[], query: string): Configur
   });
 }
 
+function buildPickerModels(
+  models: ConfiguredModel[],
+  capabilitiesFilter: 'vision' | undefined,
+  valueTrimmed: string,
+): ConfiguredModel[] {
+  if (capabilitiesFilter !== 'vision') {
+    return models;
+  }
+  const visionOk = models.filter((m) => m.vision === true);
+  if (!valueTrimmed) {
+    return visionOk;
+  }
+  if (visionOk.some((m) => m.id === valueTrimmed)) {
+    return visionOk;
+  }
+  const current = models.find((m) => m.id === valueTrimmed);
+  if (current) {
+    return [current, ...visionOk];
+  }
+  const slash = valueTrimmed.indexOf('/');
+  const provider = slash >= 0 ? valueTrimmed.slice(0, slash) : '';
+  const mid = slash >= 0 ? valueTrimmed.slice(slash + 1) : valueTrimmed;
+  const synthetic: ConfiguredModel = {
+    id: valueTrimmed,
+    name: mid || valueTrimmed,
+    provider: provider || '—',
+    vision: false,
+  };
+  return [synthetic, ...visionOk];
+}
+
 export function ModelSelector({
   value,
   disabled,
   placeholder,
   searchPlaceholder,
   noMatches,
+  /** When set, only models matching the capability appear (plus current value if missing). */
+  capabilitiesFilter,
+  /** Shown under a row that is the current value but fails `capabilitiesFilter` (e.g. not flagged vision). */
+  outOfFilterNote,
+  /** When `capabilitiesFilter` yields an empty registry and no current value to prepend. */
+  registryEmptyHint,
   compact,
   showProviderInTrigger = true,
   contentSide = 'bottom',
@@ -50,6 +87,9 @@ export function ModelSelector({
   placeholder: string;
   searchPlaceholder: string;
   noMatches: string;
+  capabilitiesFilter?: 'vision';
+  outOfFilterNote?: string;
+  registryEmptyHint?: string;
   compact?: boolean;
   /** When false, trigger shows model name only (dropdown rows still include provider). */
   showProviderInTrigger?: boolean;
@@ -74,13 +114,24 @@ export function ModelSelector({
     revalidateOnFocus: false,
   });
 
-  const filtered = useMemo(() => modelsMatchingQuery(models, query), [models, query]);
-  const selected = models.find((m) => m.id === value);
+  const valueTrimmed = value.trim();
+  const pickerModels = useMemo(
+    () => buildPickerModels(models, capabilitiesFilter, valueTrimmed),
+    [models, capabilitiesFilter, valueTrimmed],
+  );
+
+  const filtered = useMemo(() => modelsMatchingQuery(pickerModels, query), [pickerModels, query]);
+  const selected = useMemo(
+    () => models.find((m) => m.id === value) ?? pickerModels.find((m) => m.id === value),
+    [models, pickerModels, value],
+  );
   const label = selected
     ? showProviderInTrigger
       ? `${selected.name} (${selected.provider})`
       : selected.name
     : value || placeholder;
+
+  const showRegistryEmpty = !error && capabilitiesFilter === 'vision' && pickerModels.length === 0;
 
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
@@ -132,30 +183,49 @@ export function ModelSelector({
                 {error instanceof Error ? error.message : 'Failed to load models'}
               </div>
             ) : null}
-            {!error && filtered.length === 0 ? (
+            {!error && showRegistryEmpty ? (
+              <div className="px-2 py-3 text-center text-xs text-fg-muted">
+                {registryEmptyHint ?? noMatches}
+              </div>
+            ) : null}
+            {!error && !showRegistryEmpty && filtered.length === 0 ? (
               <div className="px-2 py-3 text-center text-xs text-fg-muted">{noMatches}</div>
             ) : null}
-            {filtered.map((model) => (
-              <button
-                key={model.id}
-                type="button"
-                className={cn(
-                  'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-fg hover:bg-surface-hover',
-                  model.id === value && 'bg-surface-hover/90 font-medium dark:bg-surface-hover/70',
-                )}
-                onClick={() => {
-                  onChange(model.id);
-                  setOpen(false);
-                  setQuery('');
-                }}
-              >
-                <Check className={cn('h-4 w-4 shrink-0', model.id !== value && 'invisible')} aria-hidden />
-                <span className="min-w-0 flex-1 truncate">
-                  <span className="font-medium">{model.name}</span>{' '}
-                  <span className="text-fg-muted">({model.provider})</span>
-                </span>
-              </button>
-            ))}
+            {filtered.map((model) => {
+              const showOutOfFilterHint =
+                Boolean(outOfFilterNote) &&
+                capabilitiesFilter === 'vision' &&
+                model.vision !== true &&
+                model.id === valueTrimmed;
+              return (
+                <button
+                  key={model.id}
+                  type="button"
+                  className={cn(
+                    'flex w-full flex-col gap-0.5 rounded-md px-2 py-1.5 text-left text-sm text-fg hover:bg-surface-hover',
+                    model.id === value && 'bg-surface-hover/90 font-medium dark:bg-surface-hover/70',
+                  )}
+                  onClick={() => {
+                    onChange(model.id);
+                    setOpen(false);
+                    setQuery('');
+                  }}
+                >
+                  <span className="flex w-full min-w-0 items-center gap-2">
+                    <Check className={cn('h-4 w-4 shrink-0', model.id !== value && 'invisible')} aria-hidden />
+                    <span className="min-w-0 flex-1 truncate">
+                      <span className="font-medium">{model.name}</span>{' '}
+                      <span className="text-fg-muted">({model.provider})</span>
+                    </span>
+                  </span>
+                  {showOutOfFilterHint ? (
+                    <span className="pl-6 text-[11px] leading-snug text-amber-700 dark:text-amber-300">
+                      {outOfFilterNote}
+                    </span>
+                  ) : null}
+                </button>
+              );
+            })}
           </div>
           {showProviderSettingsFooter ? (
             <div className="mt-1 border-t border-edge-subtle pt-1">

@@ -53,8 +53,9 @@ export function useAgentDefaultsForm(a: MessageBundle['agentSettings']): UseAgen
     }
     if (parsed === null) return;
     if (!dirtyRef.current) {
-      setForm(parsed);
-      setBaseline(parsed);
+      const snapshot = structuredClone(parsed);
+      setForm(snapshot);
+      setBaseline(structuredClone(snapshot));
     }
   }, [hasToken, parsed]);
 
@@ -92,6 +93,7 @@ export function useAgentDefaultsForm(a: MessageBundle['agentSettings']): UseAgen
       }
       await patchAgentDefaults(form);
       dirtyRef.current = false;
+      setBaseline(structuredClone(form));
       setSaveOk(true);
       window.setTimeout(() => setSaveOk(false), 2500);
       return true;
