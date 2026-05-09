@@ -4,7 +4,7 @@
  * OAuth credential resolution and refresh.
  */
 
-import type { OAuthCredentials } from '@mariozechner/pi-ai';
+import type { OAuthCredentials } from '@earendil-works/pi-ai';
 import { loadAuthProfileStore, saveAuthProfileStore } from './store.js';
 
 /** Resolve API key for a profile (handles OAuth refresh) */

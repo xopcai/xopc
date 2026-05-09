@@ -4,7 +4,7 @@
  *  Complete extension API with strong typing, security, and provider support.
  */
 
-import type { AgentTool } from '@mariozechner/pi-agent-core';
+import type { AgentTool } from '@earendil-works/pi-agent-core';
 import type { Command } from 'commander';
 import type {
   ExtensionApi,

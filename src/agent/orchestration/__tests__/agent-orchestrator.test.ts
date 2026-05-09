@@ -8,7 +8,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AgentOrchestrator } from '../agent-orchestrator.js';
 import type { InboundMessage } from '../../../infra/bus/index.js';
-import type { AgentMessage } from '@mariozechner/pi-agent-core';
+import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import type { SessionStore, SessionConfigStore } from '../../../session/index.js';
 import type { ModelManager } from '../../models/index.js';
 import type { AgentEventHandler } from '../agent-event-handler.js';

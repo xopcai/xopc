@@ -2,7 +2,7 @@
 import { Type } from '@sinclair/typebox';
 import { readFile } from 'fs/promises';
 import { basename } from 'node:path';
-import { AgentTool, type AgentToolResult } from '@mariozechner/pi-agent-core';
+import { AgentTool, type AgentToolResult } from '@earendil-works/pi-agent-core';
 import { checkFileSafety } from '../prompt/safety.js';
 import { resolvePathUnderWorkspace } from './tool-paths.js';
 import type { MessageBus, OutboundMessage } from '../../infra/bus/index.js';

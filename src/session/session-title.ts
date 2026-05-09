@@ -2,8 +2,8 @@
  * LLM-generated session titles (webchat and any path using SessionStore).
  */
 
-import type { AgentMessage } from '@mariozechner/pi-agent-core';
-import { complete, type UserMessage } from '@mariozechner/pi-ai';
+import type { AgentMessage } from '@earendil-works/pi-agent-core';
+import { complete, type UserMessage } from '@earendil-works/pi-ai';
 
 import { stripInboundFileMetadataFromText } from '../channels/attachments/inbound-persist.js';
 import { stripEnvelopeTimestampPrefix } from '../channels/envelope-timestamp.js';

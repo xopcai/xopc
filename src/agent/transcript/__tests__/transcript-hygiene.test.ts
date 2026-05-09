@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import type { AgentMessage } from '@mariozechner/pi-agent-core';
-import type { Api, Model } from '@mariozechner/pi-ai';
+import type { AgentMessage } from '@earendil-works/pi-agent-core';
+import type { Api, Model } from '@earendil-works/pi-ai';
 import { sanitizeToolUseResultPairing } from '../session-transcript-repair.js';
 import { stripToolMessages } from '../strip-tool-messages.js';
 import {

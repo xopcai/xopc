@@ -27,7 +27,7 @@ export type {
 } from '../types/index.js';
 
 // ============================================================================
-// Tools (re-exported from @mariozechner/pi-agent-core)
+// Tools (re-exported from @earendil-works/pi-agent-core)
 // ============================================================================
 
 export type {

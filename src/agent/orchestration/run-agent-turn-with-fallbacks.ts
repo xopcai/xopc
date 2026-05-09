@@ -3,8 +3,8 @@
  * Used by channel orchestrator, gateway webchat stream, and direct CLI-style turns.
  */
 
-import type { Agent, AgentMessage } from '@mariozechner/pi-agent-core';
-import type { Model, Api } from '@mariozechner/pi-ai';
+import type { Agent, AgentMessage } from '@earendil-works/pi-agent-core';
+import type { Model, Api } from '@earendil-works/pi-ai';
 
 import type { Config } from '../../config/schema.js';
 import { resolveModel } from '../../providers/index.js';

@@ -3,7 +3,7 @@
  * external providers add instructions, prefetch/sync, and optional tools.
  */
 
-import type { AgentTool } from '@mariozechner/pi-agent-core';
+import type { AgentTool } from '@earendil-works/pi-agent-core';
 
 export interface MemoryProviderInitOptions {
   workspace?: string;

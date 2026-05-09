@@ -1,6 +1,6 @@
 /**
  * Provider → environment variable resolution (no credentials module dependency).
- * Keys align with pi-ai KnownProvider + @mariozechner/pi-ai getEnvApiKey where applicable.
+ * Keys align with pi-ai KnownProvider + @earendil-works/pi-ai getEnvApiKey where applicable.
  */
 
 export const PROVIDER_ENV_MAP: Record<string, string[]> = {

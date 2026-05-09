@@ -179,7 +179,7 @@ xopc agent -m "Continue our discussion" -s my-session
 
 ## tui
 
-Interactive terminal UI for chatting with the agent (streaming, tools, thinking). Built on `@mariozechner/pi-tui`.
+Interactive terminal UI for chatting with the agent (streaming, tools, thinking). Built on `@earendil-works/pi-tui`.
 
 **Quick start:**
 

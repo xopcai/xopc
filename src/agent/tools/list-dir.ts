@@ -1,6 +1,6 @@
 // List Directory Tool
 import { Type } from '@sinclair/typebox';
-import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core';
+import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 import { readdir } from 'fs/promises';
 import { resolvePathUnderWorkspace } from './tool-paths.js';
 

@@ -1,4 +1,4 @@
-import type { Component, SelectItem, TUI } from '@mariozechner/pi-tui';
+import type { Component, SelectItem, TUI } from '@earendil-works/pi-tui';
 
 import type { TuiBackend } from './tui-backend.js';
 import { SearchableSelectList } from './components/searchable-select-list.js';

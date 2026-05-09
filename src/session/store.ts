@@ -10,7 +10,7 @@ import { resolveDefaultAgentId } from '../agent/agent-scope.js';
 import type { Config } from '../config/schema.js';
 import { resolveSessionShardRelativePath } from './shard-path.js';
 import { parseSessionKey as parseRoutingSessionKey } from '../routing/session-key.js';
-import type { AgentMessage } from '@mariozechner/pi-agent-core';
+import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import { createLogger } from '../utils/logger.js';
 import type {
   SessionMetadata,

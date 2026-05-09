@@ -1,6 +1,6 @@
 // Curated memory tool — agent home `memories/MEMORY.md` + `USER.md` (session snapshot + live edits)
 import { Type } from '@sinclair/typebox';
-import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core';
+import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 
 import type { BuiltinMemoryStore } from '../memory/builtin-memory-store.js';
 

@@ -1,6 +1,6 @@
 # Terminal UI (`xopc tui`)
 
-The **`tui`** command opens a full-screen terminal chat interface powered by [`@mariozechner/pi-tui`](https://www.npmjs.com/package/@mariozechner/pi-tui). It streams assistant output, tool calls, and thinking blocks similarly to the gateway Web UI, but entirely in the terminal.
+The **`tui`** command opens a full-screen terminal chat interface powered by [`@earendil-works/pi-tui`](https://www.npmjs.com/package/@earendil-works/pi-tui). It streams assistant output, tool calls, and thinking blocks similarly to the gateway Web UI, but entirely in the terminal.
 
 For CLI flags and one-liners, see also [CLI Reference — tui](./cli.md#tui).
 

@@ -1,6 +1,6 @@
 # 终端界面（`xopc tui`）
 
-**`tui`** 命令会打开全屏终端对话界面，底层使用 [`@mariozechner/pi-tui`](https://www.npmjs.com/package/@mariozechner/pi-tui)。流式展示助手回复、工具调用与思考块，体验上接近网关网页聊天，但完全在终端内完成。
+**`tui`** 命令会打开全屏终端对话界面，底层使用 [`@earendil-works/pi-tui`](https://www.npmjs.com/package/@earendil-works/pi-tui)。流式展示助手回复、工具调用与思考块，体验上接近网关网页聊天，但完全在终端内完成。
 
 命令行参数与速查见 [CLI 命令参考 — tui](./cli.md#tui)。
 

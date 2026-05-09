@@ -32,7 +32,7 @@
   <a href="https://xopcai.github.io/xopc/zh/cli">CLI</a>
 </p>
 
-**CLI**、**HTTP/WebSocket 网关**与 **React** 控制台，核心自带 **Telegram**、**微信（Weixin）** 频道插件（含网页控制台）。飞书、Slack、Discord 等走自定义 `ChannelPlugin` 扩展。通过 [@mariozechner/pi-ai](https://github.com/mariozechner/pi-ai) 支持 **20+** 大模型厂商，并提供**扩展**与 **SKILL.md** 技能，**无需改核心**即可扩展。
+**CLI**、**HTTP/WebSocket 网关**与 **React** 控制台，核心自带 **Telegram**、**微信（Weixin）** 频道插件（含网页控制台）。飞书、Slack、Discord 等走自定义 `ChannelPlugin` 扩展。通过 [@earendil-works/pi-ai](https://github.com/earendil-works/pi-mono) 支持 **20+** 大模型厂商，并提供**扩展**与 **SKILL.md** 技能，**无需改核心**即可扩展。
 
 ---
 
@@ -192,8 +192,8 @@ pnpm run lint
 
 ## 致谢
 
-- LLM 接入：[@mariozechner/pi-ai](https://github.com/mariozechner/pi-ai)
-- Agent 运行时：[@mariozechner/pi-agent-core](https://github.com/mariozechner/pi-mono)
+- LLM 接入：[@earendil-works/pi-ai](https://github.com/earendil-works/pi-mono)
+- Agent 运行时：[@earendil-works/pi-agent-core](https://github.com/earendil-works/pi-mono)
 
 ---
 

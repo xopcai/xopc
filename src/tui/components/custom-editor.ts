@@ -1,4 +1,4 @@
-import { Editor, getKeybindings, Key, matchesKey, parseKey } from '@mariozechner/pi-tui';
+import { Editor, getKeybindings, Key, matchesKey, parseKey } from '@earendil-works/pi-tui';
 
 /**
  * Extended editor with additional key bindings for the TUI.

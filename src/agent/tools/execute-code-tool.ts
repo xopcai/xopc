@@ -6,7 +6,7 @@
 import { Script, createContext } from 'node:vm';
 
 import { Type } from '@sinclair/typebox';
-import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core';
+import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 
 /** Default script wall time when `timeout` omitted (30 minutes). */
 const DEFAULT_TIMEOUT_SEC = 30 * 60;

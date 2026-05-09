@@ -2,7 +2,7 @@
  * Resolve effective thinking level: request override > session store > agent default.
  */
 
-import type { ThinkingLevel } from '@mariozechner/pi-agent-core';
+import type { ThinkingLevel } from '@earendil-works/pi-agent-core';
 import type { SessionConfigStore } from './config-store.js';
 import { resolveThinkingLevel, resolveReasoningLevel } from './config-store.js';
 import {

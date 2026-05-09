@@ -7,8 +7,8 @@
  * Optional \`text_to_speech\` tool sends explicit voice when TTS is enabled.
  */
 
-import type { AgentTool } from '@mariozechner/pi-agent-core';
-import type { Model, Api } from '@mariozechner/pi-ai';
+import type { AgentTool } from '@earendil-works/pi-agent-core';
+import type { Model, Api } from '@earendil-works/pi-ai';
 import type { Config } from '../../config/schema.js';
 import type { MessageBus } from '../../infra/bus/index.js';
 import {

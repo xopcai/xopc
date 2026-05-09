@@ -32,7 +32,7 @@
 | Metric | Value |
 |--------|-------|
 | Core | TypeScript on Node.js **>= 22** |
-| LLM layer | **~23** built-in providers via `@mariozechner/pi-ai` (`KnownProvider`); more via `models.json` |
+| LLM layer | **~23** built-in providers via `@earendil-works/pi-ai` (`KnownProvider`); more via `models.json` |
 | Tests | **vitest** (`src/**/__tests__/*.test.ts`) |
 
 ---
@@ -54,7 +54,7 @@ Examples: `pnpm run dev -- agent -i` · `pnpm run dev -- agent -m "Hello"`
 
 | Area | Stack |
 |------|--------|
-| Agent | `@mariozechner/pi-agent-core`, `@mariozechner/pi-ai` |
+| Agent | `@earendil-works/pi-agent-core`, `@earendil-works/pi-ai` |
 | CLI | `commander` |
 | Config | `zod` |
 | Tools (schemas) | `@sinclair/typebox` |
@@ -89,7 +89,7 @@ Also present (follow local patterns): `auth/`, `chat-commands/` (in-chat slash c
 
 ## Model Registry Architecture
 
-`src/providers/index.ts` sits on **`@mariozechner/pi-ai`**: resolve models, map API keys from config/env, expose provider lists to CLI/UI. The built-in provider id set matches upstream **`KnownProvider`**; **`PROVIDER_META`** adds display names and categories (common / specialty / enterprise / oauth). Extra vendors are added only when present in `models.json`. Keys load at process start—restart after credential changes.
+`src/providers/index.ts` sits on **`@earendil-works/pi-ai`**: resolve models, map API keys from config/env, expose provider lists to CLI/UI. The built-in provider id set matches upstream **`KnownProvider`**; **`PROVIDER_META`** adds display names and categories (common / specialty / enterprise / oauth). Extra vendors are added only when present in `models.json`. Keys load at process start—restart after credential changes.
 
 | Function | Purpose |
 |----------|---------|
@@ -196,7 +196,7 @@ import { DraftStreamManager } from '@xopcai/xopc/channels/telegram/draft-stream.
 |------|--------|
 | New CLI command | `src/cli/commands/<name>.ts` + register + import in `src/cli/index.ts` |
 | New tool | `src/agent/tools/<area>.ts` → export from `src/agent/tools/index.ts` → wire in `AgentService` |
-| New provider | Prefer upstream **`pi-ai`**; else OpenRouter / Vercel AI Gateway for custom bases. See [pi-ai](https://github.com/mariozechner/pi-ai). |
+| New provider | Prefer upstream **`pi-ai`**; else OpenRouter / Vercel AI Gateway for custom bases. See [pi-ai](https://github.com/earendil-works/pi-mono). |
 | New channel plugin | `ChannelPlugin` + optional `defineChannelPluginEntry` → `bundled.ts` if shipping in core |
 | New gateway console screen | `web/src/pages/<name>.tsx` or `web/src/features/<area>/`; register route in `web/src/app.tsx`; follow [Web UI](#web-ui). |
 | Dependencies | **`pnpm` only** — never commit `package-lock.json` (use `pnpm-lock.yaml`). |

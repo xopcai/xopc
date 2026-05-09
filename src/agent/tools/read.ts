@@ -1,6 +1,6 @@
 // Read file tool
 import { Type } from '@sinclair/typebox';
-import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core';
+import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 import { readFile, stat } from 'fs/promises';
 import { checkFileSafety } from '../prompt/safety.js';
 import { truncateHead, formatSize, DEFAULT_MAX_BYTES } from './truncate.js';

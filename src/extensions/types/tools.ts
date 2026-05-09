@@ -1,14 +1,14 @@
 /**
  * Extension System - Tool Types
  *
- * Tool definitions re-exported from @mariozechner/pi-agent-core.
+ * Tool definitions re-exported from @earendil-works/pi-agent-core.
  */
 
 import type {
   AgentTool,
   AgentToolResult,
   AgentToolUpdateCallback,
-} from '@mariozechner/pi-agent-core';
+} from '@earendil-works/pi-agent-core';
 
 // Re-export core tool types
 export type { AgentTool, AgentToolResult, AgentToolUpdateCallback };

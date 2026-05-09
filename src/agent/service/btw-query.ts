@@ -1,5 +1,5 @@
-import type { AgentMessage } from '@mariozechner/pi-agent-core';
-import { complete, type UserMessage } from '@mariozechner/pi-ai';
+import type { AgentMessage } from '@earendil-works/pi-agent-core';
+import { complete, type UserMessage } from '@earendil-works/pi-ai';
 
 import type { SessionStore } from '../../session/index.js';
 import { resolveModel } from '../../providers/index.js';

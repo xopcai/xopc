@@ -1,5 +1,5 @@
-import type { UserMessage } from '@mariozechner/pi-ai';
-import { complete } from '@mariozechner/pi-ai';
+import type { UserMessage } from '@earendil-works/pi-ai';
+import { complete } from '@earendil-works/pi-ai';
 
 import { resolveModel } from '../../providers/index.js';
 

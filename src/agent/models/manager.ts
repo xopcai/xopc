@@ -5,8 +5,8 @@
  * when a provider fails.
  */
 
-import { Agent, type AgentMessage } from '@mariozechner/pi-agent-core';
-import type { Model, Api } from '@mariozechner/pi-ai';
+import { Agent, type AgentMessage } from '@earendil-works/pi-agent-core';
+import type { Model, Api } from '@earendil-works/pi-ai';
 import { type Config, getAgentDefaultModelRef } from '../../config/schema.js';
 import { createLogger } from '../../utils/logger.js';
 import { resolveModel, getAllModels as getAllModelsFromProviders, getDefaultModelSync } from '../../providers/index.js';

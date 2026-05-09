@@ -9,7 +9,7 @@ import { resolveAgentHomeDir } from '../agent-scope.js';
 import { extractProfileAgentId } from '../../config/agent-profile.js';
 import type { AgentManager } from '../agent-manager.js';
 import type { SessionStore } from '../../session/index.js';
-import type { AgentMessage } from '@mariozechner/pi-agent-core';
+import type { AgentMessage } from '@earendil-works/pi-agent-core';
 
 export type WebchatTtsResult = {
   type: 'tts_audio';

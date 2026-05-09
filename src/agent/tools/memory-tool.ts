@@ -1,6 +1,6 @@
 // Memory search tools for xopc agent
 import { Type } from '@sinclair/typebox';
-import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core';
+import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 import { memorySearch, memoryGet } from '../prompt/memory/index.js';
 import { recordDreamingRecalls } from '../memory/dreaming/short-term-store.js';
 

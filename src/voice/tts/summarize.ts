@@ -1,5 +1,5 @@
-import { complete, type UserMessage } from '@mariozechner/pi-ai';
-import type { Api, Model } from '@mariozechner/pi-ai';
+import { complete, type UserMessage } from '@earendil-works/pi-ai';
+import type { Api, Model } from '@earendil-works/pi-ai';
 
 import type { Config } from '../../config/schema.js';
 import { getDefaultModelSync, resolveModel } from '../../providers/index.js';

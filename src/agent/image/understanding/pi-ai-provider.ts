@@ -1,4 +1,4 @@
-import { complete, type Api, type Context, type Model } from '@mariozechner/pi-ai';
+import { complete, type Api, type Context, type Model } from '@earendil-works/pi-ai';
 import { resolveModel, getApiKey } from '../../../providers/index.js';
 import { coerceImageAssistantText } from '../image-helpers.js';
 import { registerImageUnderstandingProvider } from './provider-registry.js';

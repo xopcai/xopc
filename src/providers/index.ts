@@ -8,7 +8,7 @@ import {
 	getProviders as getPiAiProviders,
 	type Model,
 	type Api,
-} from '@mariozechner/pi-ai';
+} from '@earendil-works/pi-ai';
 import type { Config } from '../config/schema.js';
 import { getModelRegistry } from './model-registry.js';
 import { CredentialResolver, resolveApiKey, hasCredentials } from '../auth/credentials.js';
@@ -254,7 +254,7 @@ export async function getAvailableModels(): Promise<readonly Model<Api>[]> {
 	return available;
 }
 
-export type { Model, Api } from '@mariozechner/pi-ai';
+export type { Model, Api } from '@earendil-works/pi-ai';
 
 export type ProviderCategory = 'common' | 'specialty' | 'oauth' | 'enterprise' | 'extension';
 

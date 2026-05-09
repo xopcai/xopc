@@ -1,5 +1,5 @@
-import type { AgentToolResult } from '@mariozechner/pi-agent-core';
-import type { AssistantMessage } from '@mariozechner/pi-ai';
+import type { AgentToolResult } from '@earendil-works/pi-agent-core';
+import type { AssistantMessage } from '@earendil-works/pi-ai';
 import type { Config } from '../../config/schema.js';
 import { extractTextContent } from '../context/workspace.js';
 import type { ImageAttempt } from './image-model-fallback.js';

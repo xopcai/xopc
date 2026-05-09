@@ -1,6 +1,6 @@
 import { readFileSync, statSync } from 'fs';
 import { Type } from '@sinclair/typebox';
-import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core';
+import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 
 import { resolveStateDir } from '../../config/paths.js';
 import { createSkillConfigManager, isSkillEnabled } from '../skills/config.js';

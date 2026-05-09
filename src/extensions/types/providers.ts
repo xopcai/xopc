@@ -4,7 +4,7 @@
  *  Provider plugin system for customizable LLM backends.
  */
 
-import type { AgentMessage } from '@mariozechner/pi-agent-core';
+import type { AgentMessage } from '@earendil-works/pi-agent-core';
 
 // ============================================================================
 // Provider Plugin Interface

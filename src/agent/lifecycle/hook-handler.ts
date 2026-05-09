@@ -4,7 +4,7 @@
  * Encapsulates all hook-related logic for the agent service.
  */
 
-import type { AgentMessage } from '@mariozechner/pi-agent-core';
+import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import type { ExtensionHookRunner } from '../../extensions/index.js';
 import { createHookContext, type HookContext } from '../../extensions/index.js';
 import { createLogger } from '../../utils/logger.js';

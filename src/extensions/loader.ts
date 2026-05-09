@@ -24,7 +24,7 @@ import {
 import type { Config } from '../config/config-surface.js';
 import type { MessageBus } from '../infra/bus/index.js';
 import type { SessionManager } from '../session/manager.js';
-import type { AgentTool } from '@mariozechner/pi-agent-core';
+import type { AgentTool } from '@earendil-works/pi-agent-core';
 import type {
   ExtensionApi,
   ExtensionModule,
