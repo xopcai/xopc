@@ -7,7 +7,7 @@
 
 import type { Config } from '../config/schema.js';
 import type { PersistentGoalApis } from '../agent/goals/persistent-goal-apis.js';
-import type { AgentMessage } from '@mariozechner/pi-agent-core';
+import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import type {
   ThinkLevel,
   ReasoningLevel,

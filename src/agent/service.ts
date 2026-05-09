@@ -1,4 +1,4 @@
-import type { AgentEvent, AgentMessage, ThinkingLevel } from '@mariozechner/pi-agent-core';
+import type { AgentEvent, AgentMessage, ThinkingLevel } from '@earendil-works/pi-agent-core';
 import { MessageBusShutdownError, type MessageBus, type InboundMessage } from '../infra/bus/index.js';
 import { type Config, getAgentDefaultModelRef } from '../config/schema.js';
 import { maybeAutoTitleSessionStore } from '../session/session-title.js';
@@ -1253,7 +1253,7 @@ export class AgentService {
 
   /**
    * Queue a steering user message into pi-agent's in-flight run (delivered after current tool work, before the next LLM call).
-   * See `Agent.steer` in `@mariozechner/pi-agent-core`.
+   * See `Agent.steer` in `@earendil-works/pi-agent-core`.
    */
   async steerWebchatSession(sessionKey: string, text: string): Promise<boolean> {
     const trimmed = text.trim();

@@ -1,4 +1,4 @@
-import type { ThinkingLevel } from '@mariozechner/pi-agent-core';
+import type { ThinkingLevel } from '@earendil-works/pi-agent-core';
 
 import type { Config, AgentDefaults } from '../config/schema.js';
 import type { SessionStore } from '../session/store.js';

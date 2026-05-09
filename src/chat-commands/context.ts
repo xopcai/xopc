@@ -18,7 +18,7 @@ import type {
 } from './types.js';
 import { getSessionDisplayName } from './session-key.js';
 import type { Config } from '../config/schema.js';
-import type { AgentMessage } from '@mariozechner/pi-agent-core';
+import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import type { MessageBus } from '../infra/bus/index.js';
 import type { SessionStore, SessionConfigStore } from '../session/index.js';
 import { createLogger } from '../utils/logger.js';

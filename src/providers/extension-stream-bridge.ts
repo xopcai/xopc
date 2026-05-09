@@ -6,8 +6,8 @@ import {
 	type Api,
 	type Context,
 	type SimpleStreamOptions,
-} from '@mariozechner/pi-ai';
-import type { StreamFn } from '@mariozechner/pi-agent-core';
+} from '@earendil-works/pi-ai';
+import type { StreamFn } from '@earendil-works/pi-agent-core';
 import type { ProviderStreamParams } from '../extensions/types/providers.js';
 import { getProviderRegistry } from './plugin-registry.js';
 import { EXTENSION_PROVIDER_BASE_URL } from './index.js';

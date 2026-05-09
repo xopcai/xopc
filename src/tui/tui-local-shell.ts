@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 
-import type { Component } from '@mariozechner/pi-tui';
-import { SelectList } from '@mariozechner/pi-tui';
+import type { Component } from '@earendil-works/pi-tui';
+import { SelectList } from '@earendil-works/pi-tui';
 
 import { selectListTheme } from './theme.js';
 

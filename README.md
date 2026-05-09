@@ -32,7 +32,7 @@
   <a href="https://xopcai.github.io/xopc/cli">CLI</a>
 </p>
 
-**CLI**, **HTTP/WebSocket gateway** with a **React** console, bundled **Telegram** & **WeChat (Weixin)** channel plugins (plus web console). Other chat surfaces: custom `ChannelPlugin` extensions. **20+ LLM providers** via [@mariozechner/pi-ai](https://github.com/mariozechner/pi-ai), plus **extensions** and **SKILL.md** skills—extend without forking core.
+**CLI**, **HTTP/WebSocket gateway** with a **React** console, bundled **Telegram** & **WeChat (Weixin)** channel plugins (plus web console). Other chat surfaces: custom `ChannelPlugin` extensions. **20+ LLM providers** via [@earendil-works/pi-ai](https://github.com/earendil-works/pi-mono), plus **extensions** and **SKILL.md** skills—extend without forking core.
 
 ---
 
@@ -242,8 +242,8 @@ Minimal example:
 
 ## Credits
 
-- LLM layer: [@mariozechner/pi-ai](https://github.com/mariozechner/pi-ai)
-- Agent runtime: [@mariozechner/pi-agent-core](https://github.com/mariozechner/pi-mono)
+- LLM layer: [@earendil-works/pi-ai](https://github.com/earendil-works/pi-mono)
+- Agent runtime: [@earendil-works/pi-agent-core](https://github.com/earendil-works/pi-mono)
 
 ---
 

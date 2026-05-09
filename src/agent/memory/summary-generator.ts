@@ -9,8 +9,8 @@
  * - Usage statistics
  */
 
-import type { AgentMessage } from '@mariozechner/pi-agent-core';
-import type { ToolResultMessage, Message } from '@mariozechner/pi-ai';
+import type { AgentMessage } from '@earendil-works/pi-agent-core';
+import type { ToolResultMessage, Message } from '@earendil-works/pi-ai';
 import { createLogger } from '../../utils/logger.js';
 
 const log = createLogger('SummaryGenerator');

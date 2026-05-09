@@ -7,7 +7,7 @@ import {
   type SelectListTheme,
   truncateToWidth,
   visibleWidth,
-} from '@mariozechner/pi-tui';
+} from '@earendil-works/pi-tui';
 
 import {
   findWordBoundaryIndex,

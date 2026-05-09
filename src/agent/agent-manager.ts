@@ -10,8 +10,8 @@ import {
   type AgentMessage,
   type AgentEvent,
   type ThinkingLevel,
-} from '@mariozechner/pi-agent-core';
-import type { Model, Api } from '@mariozechner/pi-ai';
+} from '@earendil-works/pi-agent-core';
+import type { Model, Api } from '@earendil-works/pi-ai';
 import { type Config, getAgentDefaultModelRef } from '../config/schema.js';
 import { applyConfigOverrides } from '../config/runtime-overrides.js';
 import {

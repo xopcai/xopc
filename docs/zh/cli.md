@@ -195,7 +195,7 @@ xopc agent -m "Continue our discussion" -s my-session
 
 ## tui
 
-全屏终端里与智能体对话（流式输出、工具、思考块），基于 `@mariozechner/pi-tui`。
+全屏终端里与智能体对话（流式输出、工具、思考块），基于 `@earendil-works/pi-tui`。
 
 **快速开始：**
 

@@ -3,8 +3,8 @@
  * Subset: no image/async paths here.
  */
 
-import type { AgentMessage } from '@mariozechner/pi-agent-core';
-import type { Api, Model } from '@mariozechner/pi-ai';
+import type { AgentMessage } from '@earendil-works/pi-agent-core';
+import type { Api, Model } from '@earendil-works/pi-ai';
 import { createLogger } from '../../utils/logger.js';
 import { resolveTranscriptPolicy, type TranscriptPolicy } from './transcript-policy.js';
 import { dropThinkingBlocks } from './thinking.js';

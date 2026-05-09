@@ -9,7 +9,7 @@ import type { Config } from '../../config/config-surface.js';
 import type { Config as FullConfig } from '../../config/schema.js';
 import type { MessageBus } from '../../infra/bus/index.js';
 import type { TypedEventBus } from './events.js';
-import type { AgentTool } from '@mariozechner/pi-agent-core';
+import type { AgentTool } from '@earendil-works/pi-agent-core';
 import type { ExtensionHookEvent, ExtensionHookHandler, HookOptions, HookHandlerMap } from './hooks.js';
 import type { ChannelPlugin } from '../../channels/plugin-types.js';
 import type { SessionMetadata } from '../../session/types.js';

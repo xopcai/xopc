@@ -1,6 +1,6 @@
 // Edit file tool
 import { Type } from '@sinclair/typebox';
-import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core';
+import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 import { readFile, writeFile, stat } from 'fs/promises';
 import { checkFileSafety } from '../prompt/safety.js';
 import { resolvePathUnderWorkspace } from './tool-paths.js';

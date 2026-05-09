@@ -3,7 +3,7 @@
  * and await {@link Agent.waitForIdle} so a subsequent {@link Agent.prompt} is allowed.
  */
 
-import type { Agent } from '@mariozechner/pi-agent-core';
+import type { Agent } from '@earendil-works/pi-agent-core';
 
 import type { Config } from '../../config/schema.js';
 

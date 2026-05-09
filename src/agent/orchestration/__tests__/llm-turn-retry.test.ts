@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import type { AgentMessage } from '@mariozechner/pi-agent-core';
+import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import {
   isTransientLlmErrorMessage,
   stripTrailingErrorAssistantMessages,
@@ -55,7 +55,7 @@ describe('llm-turn-retry', () => {
       },
       continue: continueFn,
       waitForIdle,
-    } as unknown as import('@mariozechner/pi-agent-core').Agent;
+    } as unknown as import('@earendil-works/pi-agent-core').Agent;
 
     await maybeRetryTurnAfterTransientLlmFailure(agent, {
       sessionKey: 'sk',
@@ -86,12 +86,12 @@ describe('llm-turn-retry', () => {
     expect(
       isAssistantTurnFailed({
         state: { messages: [user, okAssistant] },
-      } as unknown as import('@mariozechner/pi-agent-core').Agent),
+      } as unknown as import('@earendil-works/pi-agent-core').Agent),
     ).toBe(false);
     expect(
       isAssistantTurnFailed({
         state: { messages: [user, errAssistant] },
-      } as unknown as import('@mariozechner/pi-agent-core').Agent),
+      } as unknown as import('@earendil-works/pi-agent-core').Agent),
     ).toBe(true);
   });
 
@@ -106,7 +106,7 @@ describe('llm-turn-retry', () => {
     expect(
       isAssistantTurnAborted({
         state: { messages: [user, aborted] },
-      } as unknown as import('@mariozechner/pi-agent-core').Agent),
+      } as unknown as import('@earendil-works/pi-agent-core').Agent),
     ).toBe(true);
   });
 });

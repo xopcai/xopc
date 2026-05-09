@@ -244,7 +244,7 @@ Configure LLM provider API keys. Use environment variable references:
 }
 ```
 
-**Built-in provider ids** match **`@mariozechner/pi-ai` KnownProvider** (see `src/providers/env-keys.ts` **`PROVIDER_ENV_MAP`** for env var names). Other vendors (e.g. DashScope chat) belong in **`models.json`**, not as built-in keys here.
+**Built-in provider ids** match **`@earendil-works/pi-ai` KnownProvider** (see `src/providers/env-keys.ts` **`PROVIDER_ENV_MAP`** for env var names). Other vendors (e.g. DashScope chat) belong in **`models.json`**, not as built-in keys here.
 
 | Provider (examples) | Environment variables |
 |---------------------|------------------------|

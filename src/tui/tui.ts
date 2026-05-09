@@ -10,7 +10,7 @@ import {
   ProcessTerminal,
   Text,
   TUI,
-} from '@mariozechner/pi-tui';
+} from '@earendil-works/pi-tui';
 
 import type { TuiBackend, TuiEvent } from './tui-backend.js';
 import { EmbeddedBackend } from './backends/embedded-backend.js';

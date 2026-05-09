@@ -1,5 +1,5 @@
-import { Agent, type ThinkingLevel } from '@mariozechner/pi-agent-core';
-import type { Api, Model } from '@mariozechner/pi-ai';
+import { Agent, type ThinkingLevel } from '@earendil-works/pi-agent-core';
+import type { Api, Model } from '@earendil-works/pi-ai';
 
 import type { Config } from '../config/schema.js';
 import type { MessageBus } from '../infra/bus/index.js';

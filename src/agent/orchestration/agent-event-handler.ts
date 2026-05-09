@@ -5,7 +5,7 @@
  * progress updates, error tracking, and lifecycle events.
  */
 
-import type { AgentEvent } from '@mariozechner/pi-agent-core';
+import type { AgentEvent } from '@earendil-works/pi-agent-core';
 import type { SessionContext } from '../session/session-context.js';
 import type { ProgressFeedbackManager } from '../lifecycle/progress.js';
 import type { ToolErrorTracker } from '../tools/error-tracker.js';

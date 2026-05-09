@@ -1,5 +1,5 @@
 import { Type } from '@sinclair/typebox';
-import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core';
+import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 
 import { createDelegateChildHandle, type DelegateChildHandleOptions } from '../child-agent-factory.js';
 
@@ -60,7 +60,7 @@ const DelegateTaskSchema = Type.Object({
 
 export interface DelegateToolDeps {
   workspace: string;
-  getSubagentModel: () => import('@mariozechner/pi-ai').Model<import('@mariozechner/pi-ai').Api>;
+  getSubagentModel: () => import('@earendil-works/pi-ai').Model<import('@earendil-works/pi-ai').Api>;
   bus: import('../../infra/bus/index.js').MessageBus;
   getConfig: () => import('../../config/schema.js').Config | undefined;
   getCurrentContext?: () => { sessionKey?: string; channel?: string; accountId?: string; to?: string; threadId?: string | number } | null;

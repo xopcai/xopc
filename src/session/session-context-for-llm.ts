@@ -6,7 +6,7 @@
  * {@link buildSessionContextForLlm} first (or use {@link SessionStore.loadMessages}, which already does).
  */
 
-import type { AgentMessage } from '@mariozechner/pi-agent-core';
+import type { AgentMessage } from '@earendil-works/pi-agent-core';
 
 /** Persisted-only row: never sent to the model as a chat message. */
 export interface XopcTranscriptContextEntry {

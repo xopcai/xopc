@@ -11,7 +11,7 @@
  * - Invalid tool_call_id references
  */
 
-import type { AgentMessage } from '@mariozechner/pi-agent-core';
+import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import { createLogger } from '../../utils/logger.js';
 
 const log = createLogger('MessageSanitizer');

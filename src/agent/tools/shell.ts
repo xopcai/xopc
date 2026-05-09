@@ -1,6 +1,6 @@
 // Shell tool - executes commands with output truncation
 import { Type } from '@sinclair/typebox';
-import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core';
+import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 import { spawn } from 'child_process';
 import { prepareSafeToolEnv } from '../sandbox/sanitize-env-vars.js';
 import { checkShellSafety } from '../prompt/safety.js';

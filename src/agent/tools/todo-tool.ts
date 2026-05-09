@@ -1,5 +1,5 @@
 import { Type } from '@sinclair/typebox';
-import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core';
+import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 
 const VALID_STATUSES = new Set(['pending', 'in_progress', 'completed', 'cancelled']);
 

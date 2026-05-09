@@ -29,7 +29,7 @@ This page describes how xopc is structured and how the main pieces fit together.
 │                            │                                │
 │  ┌─────────────────────────────────────────────────────┐   │
 │  │                   Providers                          │   │
-│  │            @mariozechner/pi-ai (20+ providers)      │   │
+│  │            @earendil-works/pi-ai (20+ providers)      │   │
 │  └─────────────────────────────────────────────────────┘   │
 │                            │                                │
 └────────────────────────────┼────────────────────────────────┘
@@ -146,8 +146,8 @@ User Reply / Channel Response
 |-------|------------|
 | Runtime | Node.js 22+ |
 | Language | TypeScript 5.x |
-| LLM SDK | @mariozechner/pi-ai |
-| Agent Framework | @mariozechner/pi-agent-core |
+| LLM SDK | @earendil-works/pi-ai |
+| Agent Framework | @earendil-works/pi-agent-core |
 | CLI | Commander.js |
 | Validation | Zod (config) + TypeBox (tools) |
 | Logging | Pino |

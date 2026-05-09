@@ -1,4 +1,4 @@
-import type { AgentEvent, AgentMessage } from '@mariozechner/pi-agent-core';
+import type { AgentEvent, AgentMessage } from '@earendil-works/pi-agent-core';
 
 import type { Config } from '../../config/schema.js';
 import type { InternalAttachmentRoots } from '../../channels/attachments/inbound-persist.js';

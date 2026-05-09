@@ -1,5 +1,5 @@
 import { Type } from '@sinclair/typebox';
-import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core';
+import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 import type { MessageBus, OutboundMessage } from '../../infra/bus/index.js';
 import { createLogger } from '../../utils/logger.js';
 

@@ -5,7 +5,7 @@
  * via Agent.continue() after stripping the failed assistant message.
  */
 
-import type { Agent, AgentMessage } from '@mariozechner/pi-agent-core';
+import type { Agent, AgentMessage } from '@earendil-works/pi-agent-core';
 
 const TRANSIENT_LLM_ERROR_SUBSTRINGS = [
   'fetch failed',

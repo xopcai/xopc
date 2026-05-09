@@ -1,6 +1,6 @@
 // Agent tool for managing scheduled cron jobs (CronService-backed)
 import { Type } from '@sinclair/typebox';
-import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core';
+import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 
 import type { CronService } from '../../cron/index.js';
 import type { CronPayload, JobData, JobExecution, JobWithNextRun } from '../../cron/types.js';

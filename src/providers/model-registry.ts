@@ -2,7 +2,7 @@
  * Model Registry - manages built-in and custom models from models.json
  * 
  * Features:
- * - Loads built-in models from @mariozechner/pi-ai
+ * - Loads built-in models from @earendil-works/pi-ai
  * - Loads custom models from ~/.xopc/models.json
  * - Supports provider baseUrl/headers overrides
  * - Supports per-model overrides (modelOverrides)
@@ -16,7 +16,7 @@ import {
 	getProviders as getPiAiProviders,
 	type Model,
 	type KnownProvider,
-} from '@mariozechner/pi-ai';
+} from '@earendil-works/pi-ai';
 import { existsSync, readFileSync } from 'fs';
 import { resolveConfigValue, resolveHeaders } from '../config/resolve-config-value.js';
 import { getModelsJsonPath } from '../config/models-json.js';

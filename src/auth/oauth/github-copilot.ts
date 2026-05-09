@@ -1,5 +1,5 @@
 /**
- * GitHub Copilot OAuth — delegated to @mariozechner/pi-ai (device code flow).
+ * GitHub Copilot OAuth — delegated to @earendil-works/pi-ai (device code flow).
  */
 
 export {
@@ -8,4 +8,4 @@ export {
 	loginGitHubCopilot,
 	normalizeDomain,
 	refreshGitHubCopilotToken,
-} from '@mariozechner/pi-ai/oauth';
+} from '@earendil-works/pi-ai/oauth';

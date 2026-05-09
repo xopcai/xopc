@@ -7,7 +7,7 @@ import { EventEmitter } from 'node:events';
 import { once } from 'node:events';
 import type { AddressInfo } from 'node:net';
 
-import type { AgentTool } from '@mariozechner/pi-agent-core';
+import type { AgentTool } from '@earendil-works/pi-agent-core';
 
 import { Hono } from 'hono';
 import { serve } from '@hono/node-server';

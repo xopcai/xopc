@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core';
+import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 
 import { buildSandboxToolMap, createExecuteCodeTool, SANDBOX_ALLOWED_TOOLS } from '../execute-code-tool.js';
 

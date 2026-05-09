@@ -29,7 +29,7 @@
 │                            │                                │
 │  ┌─────────────────────────────────────────────────────┐   │
 │  │                   Providers                          │   │
-│  │            @mariozechner/pi-ai (20+ providers)      │   │
+│  │            @earendil-works/pi-ai (20+ providers)      │   │
 │  └─────────────────────────────────────────────────────┘   │
 │                            │                                │
 └────────────────────────────┼────────────────────────────────┘
@@ -146,8 +146,8 @@ Telegram、微信、网页聊天及扩展提供的通道，共用进入智能体
 |------|------|
 | 运行时 | Node.js 22+ |
 | 语言 | TypeScript 5.x |
-| LLM SDK | @mariozechner/pi-ai |
-| 智能体框架（pi-agent-core） | @mariozechner/pi-agent-core |
+| LLM SDK | @earendil-works/pi-ai |
+| 智能体框架（pi-agent-core） | @earendil-works/pi-agent-core |
 | CLI | Commander.js |
 | 验证 | Zod (配置) + TypeBox (工具) |
 | 日志 | Pino |

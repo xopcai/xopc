@@ -7,7 +7,7 @@
  * - Error tracking (for reliability)
  */
 
-import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core';
+import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 import { createLogger } from '../../utils/logger.js';
 import { executeWithTimeout, TimeoutError } from '../lifecycle/timeout-wrapper.js';
 import { withRetry } from '../../infra/retry.js';
