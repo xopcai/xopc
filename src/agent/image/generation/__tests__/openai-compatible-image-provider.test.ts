@@ -42,7 +42,7 @@ function buildProvider(overrides?: Partial<Parameters<typeof createOpenAiCompati
     capabilities: baseCaps,
     isConfigured: () => true,
     resolveApiKey: () => 'sk-test',
-    resolveEndpoint: () => ({ baseUrl: 'https://api.example.com/v1' }),
+    resolveEndpoint: () => ({ baseUrl: 'https://example.com/v1' }),
     defaultTimeoutMs: 5_000,
     ...overrides,
   });
@@ -74,7 +74,7 @@ describe('createOpenAiCompatibleImageProvider', () => {
     expect(result.images[0]?.buffer.equals(PNG_HEADER)).toBe(true);
     expect(result.images[0]?.revisedPrompt).toBe('rewritten');
     expect(calls).toHaveLength(1);
-    expect(calls[0]?.url).toBe('https://api.example.com/v1/images/generations');
+    expect(calls[0]?.url).toBe('https://example.com/v1/images/generations');
     const headers = calls[0]?.init.headers as Record<string, string>;
     expect(headers['authorization']).toBe('Bearer sk-test');
     expect(headers['content-type']).toBe('application/json');
@@ -100,7 +100,7 @@ describe('createOpenAiCompatibleImageProvider', () => {
       inputImages: [{ buffer: PNG_HEADER, mimeType: 'image/png', fileName: 'in.png' }],
     } as ImageGenerationRequest);
 
-    expect(calls[0]?.url).toBe('https://api.example.com/v1/images/edits');
+    expect(calls[0]?.url).toBe('https://example.com/v1/images/edits');
     expect(calls[0]?.init.body).toBeInstanceOf(FormData);
     const headers = calls[0]?.init.headers as Record<string, string>;
     // multipart helper strips content-type so the runtime sets the boundary.
@@ -120,7 +120,7 @@ describe('createOpenAiCompatibleImageProvider', () => {
 
     const provider = buildProvider({
       resolveEndpoint: () => ({
-        baseUrl: 'https://azure.example.com/openai',
+        baseUrl: 'https://example.com/openai',
         generationsPath: '/images/generations:submit',
         headers: { 'x-custom': 'yes' },
         authorization: { kind: 'header', headerName: 'api-key' },
@@ -133,7 +133,7 @@ describe('createOpenAiCompatibleImageProvider', () => {
       prompt: 'p',
     } as ImageGenerationRequest);
 
-    expect(calls[0]?.url).toBe('https://azure.example.com/openai/images/generations:submit');
+    expect(calls[0]?.url).toBe('https://example.com/openai/images/generations:submit');
     const headers = calls[0]?.init.headers as Record<string, string>;
     expect(headers['api-key']).toBe('sk-test');
     expect(headers['authorization']).toBeUndefined();

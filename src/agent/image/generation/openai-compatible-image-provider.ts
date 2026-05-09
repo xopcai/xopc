@@ -3,24 +3,23 @@
  *
  * Many image providers (OpenAI, Azure OpenAI, OpenAI-compatible gateways)
  * speak the same `/images/generations` and `/images/edits` REST shape.
- * This factory wraps that wire format on top of `provider-http`, normalization,
+ * This factory wraps that wire format on top of shared provider HTTP, normalization,
  * and auth-runtime so vendor modules only need to declare:
  *   - id / aliases / models / capabilities
  *   - baseUrl resolution
  *   - apiKey resolution
  *   - optional request body / response transforms
  *
- * Step 2 keeps the factory inside `src/agent/image/generation/`. Step 3 will
- * lift it to a stable path that vendor extensions can import without the
- * deep relative path.
  */
 
 import { createLogger } from '../../../utils/logger.js';
 import {
+  pickTimeoutMsOrFallback,
   postJsonRequest,
   postMultipartRequest,
+  privateNetworkPolicyToSsrfGuardOptions,
   resolveProviderHttpRequestConfig,
-} from '../../../providers/http/index.js';
+} from '../../../media-shared/http/index.js';
 import {
   imageAssetFromBase64,
   imageFileExtensionForMimeType,
@@ -225,14 +224,18 @@ async function postGenerateRequest(
     ? params.buildGenerateRequestBody(params.req, baseBody)
     : baseBody;
 
-  const res = await postJsonRequest({
-    providerId: params.providerId,
-    url: params.url,
+  const timeoutMs = pickTimeoutMsOrFallback(
+    params.req.timeoutMs,
+    params.httpDefaults.timeoutMs,
+    DEFAULT_TIMEOUT_MS,
+  );
+  const res = await postJsonRequest(params.url, {
+    label: params.providerId,
+    timeoutMs,
+    signal: params.req.signal,
     body,
     headers: params.headers,
-    timeoutMs: params.req.timeoutMs,
-    providerDefaultTimeoutMs: params.httpDefaults.timeoutMs,
-    signal: params.req.signal,
+    ...privateNetworkPolicyToSsrfGuardOptions(),
   });
   return await res.json();
 }
@@ -254,20 +257,38 @@ async function postEditRequest(
     ? params.buildEditFormFields(params.req, fields)
     : fields;
 
-  const res = await postMultipartRequest({
-    providerId: params.providerId,
-    url: params.url,
-    headers: params.headers,
-    fields: merged,
-    files: inputImages.map((img, idx) => ({
-      field: idx === 0 ? 'image' : `image[${idx}]`,
-      buffer: img.buffer,
-      mimeType: img.mimeType || DEFAULT_OUTPUT_MIME,
-      fileName: pickEditFileName(img, idx),
-    })),
-    timeoutMs: params.req.timeoutMs,
-    providerDefaultTimeoutMs: params.httpDefaults.timeoutMs,
+  const form = new FormData();
+  for (const [k, v] of Object.entries(merged)) {
+    if (typeof v === 'string') form.append(k, v);
+  }
+  for (let idx = 0; idx < inputImages.length; idx++) {
+    const img = inputImages[idx]!;
+    const field = idx === 0 ? 'image' : `image[${idx}]`;
+    const u8 = img.buffer instanceof Uint8Array ? img.buffer : new Uint8Array(img.buffer);
+    const copy = new Uint8Array(u8.byteLength);
+    copy.set(u8);
+    form.append(
+      field,
+      new Blob([copy], { type: img.mimeType || DEFAULT_OUTPUT_MIME }),
+      pickEditFileName(img, idx),
+    );
+  }
+
+  const headers = new Headers(params.headers);
+  headers.delete('content-type');
+
+  const timeoutMs = pickTimeoutMsOrFallback(
+    params.req.timeoutMs,
+    params.httpDefaults.timeoutMs,
+    DEFAULT_TIMEOUT_MS,
+  );
+  const res = await postMultipartRequest(params.url, {
+    label: params.providerId,
+    timeoutMs,
     signal: params.req.signal,
+    body: form,
+    headers,
+    ...privateNetworkPolicyToSsrfGuardOptions(),
   });
   return await res.json();
 }

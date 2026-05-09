@@ -26,7 +26,7 @@ export interface OAuthRefreshOptions {
   /**
    * HTTP transport. Defaults to global `fetch`. Tests inject a mock;
    * production usually uses the SSRF-protected `postJsonRequest` from
-   * `src/providers/http/`.
+   * `src/media-shared/http/`.
    */
   fetcher?: typeof fetch;
   /** Hard timeout for the refresh request (ms). Default 30s. */

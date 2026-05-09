@@ -9,9 +9,11 @@ import {
   resolveApiKeyForProvider,
 } from '@xopcai/xopc/providers/auth-runtime/index.js';
 import {
+  pickTimeoutMsOrFallback,
   postJsonRequest,
+  privateNetworkPolicyToSsrfGuardOptions,
   resolveProviderHttpRequestConfig,
-} from '@xopcai/xopc/providers/http/index.js';
+} from '@xopcai/xopc/media-shared/http/index.js';
 import { createLogger } from '@xopcai/xopc/utils/logger.js';
 import { MINIMAX_DEFAULT_IMAGE_MODEL } from '@xopcai/xopc/agent/image/generation/constants.js';
 import type {
@@ -137,9 +139,11 @@ export async function generateMinimaxImages(params: {
     'MiniMax image generation request',
   );
 
-  const res = await postJsonRequest({
-    providerId: 'minimax',
-    url,
+  const timeoutMs = pickTimeoutMsOrFallback(req.timeoutMs, httpDefaults.timeoutMs, DEFAULT_TIMEOUT_MS);
+  const res = await postJsonRequest(url, {
+    label: 'minimax',
+    timeoutMs,
+    signal: req.signal,
     body: {
       model,
       prompt: req.prompt,
@@ -150,9 +154,7 @@ export async function generateMinimaxImages(params: {
       ...httpDefaults.headers,
       authorization: `Bearer ${apiKey}`,
     },
-    timeoutMs: req.timeoutMs,
-    providerDefaultTimeoutMs: httpDefaults.timeoutMs,
-    signal: req.signal,
+    ...privateNetworkPolicyToSsrfGuardOptions(),
   });
 
   const rawText = await res.text();

@@ -47,8 +47,6 @@ export type {
 } from './types.js';
 
 // Re-export the registered SpeechProviderPlugin instances + UI constants.
-// The legacy BaseTTSProvider / *Provider OOP classes were removed in v2.0 —
-// new providers implement SpeechProviderPlugin directly (see speech-provider-types.ts).
 export {
   openAiSpeechProvider,
   alibabaSpeechProvider,

@@ -34,6 +34,18 @@ export interface ResolvedDeadline {
  * - Negative / zero / non-finite values are ignored.
  * - Returns undefined when no valid timeout is supplied.
  */
+/**
+ * Effective positive timeout for outbound provider calls, or `fallbackMs` when
+ * neither per-call nor provider-default timeouts are set.
+ */
+export function pickTimeoutMsOrFallback(
+  timeoutMs: number | undefined,
+  providerDefaultMs: number | undefined,
+  fallbackMs: number,
+): number {
+  return pickEffectiveTimeoutMs({ timeoutMs, providerDefaultMs }) ?? fallbackMs;
+}
+
 export function pickEffectiveTimeoutMs(input: DeadlineInput): number | undefined {
   const candidates: number[] = [];
   if (typeof input.timeoutMs === 'number' && Number.isFinite(input.timeoutMs) && input.timeoutMs > 0) {

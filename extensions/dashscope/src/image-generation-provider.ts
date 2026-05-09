@@ -10,9 +10,11 @@ import {
   resolveApiKeyForProvider,
 } from '@xopcai/xopc/providers/auth-runtime/index.js';
 import {
+  pickTimeoutMsOrFallback,
   postJsonRequest,
+  privateNetworkPolicyToSsrfGuardOptions,
   resolveProviderHttpRequestConfig,
-} from '@xopcai/xopc/providers/http/index.js';
+} from '@xopcai/xopc/media-shared/http/index.js';
 import { createLogger } from '@xopcai/xopc/utils/logger.js';
 import { DASHSCOPE_DEFAULT_IMAGE_MODEL } from '@xopcai/xopc/agent/image/generation/constants.js';
 import { imageFileExtensionForMimeType } from '@xopcai/xopc/agent/image/generation/image-assets.js';
@@ -205,17 +207,17 @@ export async function generateDashScopeImages(params: {
     'DashScope image generation request',
   );
 
-  const response = await postJsonRequest({
-    providerId: 'dashscope',
-    url,
+  const timeoutMs = pickTimeoutMsOrFallback(req.timeoutMs, httpDefaults.timeoutMs, DEFAULT_TIMEOUT_MS);
+  const response = await postJsonRequest(url, {
+    label: 'dashscope',
+    timeoutMs,
+    signal: req.signal,
     body,
     headers: {
       ...httpDefaults.headers,
       authorization: `Bearer ${apiKey}`,
     },
-    timeoutMs: req.timeoutMs,
-    providerDefaultTimeoutMs: httpDefaults.timeoutMs,
-    signal: req.signal,
+    ...privateNetworkPolicyToSsrfGuardOptions(),
   });
 
   let data: DashScopeT2IResponse;

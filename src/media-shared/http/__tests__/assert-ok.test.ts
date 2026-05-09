@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { ProviderHttpError, assertOk } from '../assert-ok.js';
+import { ProviderHttpError, assertOk } from '../provider-http-errors.js';
 
 function jsonResponse(body: unknown, status: number, statusText = 'Bad Request'): Response {
   return new Response(JSON.stringify(body), {
