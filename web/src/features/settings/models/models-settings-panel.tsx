@@ -216,6 +216,18 @@ export function ModelsSettingsPanel() {
     }
   };
 
+  const runDiscard = useCallback(() => {
+    setConfig(structuredClone(baseline));
+    setValidation(null);
+    setSaveOk(false);
+    setError(null);
+    if (showRawJson) {
+      setRawText(JSON.stringify(baseline, null, 2));
+      setRawError(null);
+    }
+    agentVm.discard();
+  }, [baseline, showRawJson, agentVm.discard]);
+
   const runReload = async () => {
     setReloading(true);
     setError(null);
@@ -356,6 +368,15 @@ export function ModelsSettingsPanel() {
           ) : (
             ms.validate
           )}
+        </Button>
+        <Button
+          type="button"
+          variant="secondary"
+          className="inline-flex min-h-9 min-w-[7.5rem] justify-center"
+          onClick={runDiscard}
+          disabled={loading || saving || agentVm.saving || !combinedDirty}
+        >
+          {ms.discard}
         </Button>
         <Button
           type="button"

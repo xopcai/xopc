@@ -173,6 +173,22 @@ export function useChannelsSettingsPanel() {
     }
   }, [form, saving, ch.saveError]);
 
+  const discard = useCallback(() => {
+    if (!baseline) return;
+    const b = structuredClone(baseline);
+    setForm(b);
+    setTgAccountsDraft(JSON.stringify(b.telegram.accounts ?? {}, null, 2));
+    setTgAccountsError('');
+    setWxAccountsDraft(JSON.stringify(b.weixin.accounts ?? {}, null, 2));
+    setWxAccountsError('');
+    setFeishuAccountsDraft(JSON.stringify(b.feishu?.accounts ?? {}, null, 2));
+    setFeishuAccountsError('');
+    setDingtalkAccountsDraft(JSON.stringify(b.dingtalk?.accounts ?? {}, null, 2));
+    setDingtalkAccountsError('');
+    setError(null);
+    setSaveOk(false);
+  }, [baseline]);
+
   const toggleChannelEnabled = useCallback(
     async (which: 'weixin' | 'telegram' | 'feishu' | 'dingtalk', enabled: boolean) => {
       if (!form || saving) return;
@@ -487,6 +503,7 @@ export function useChannelsSettingsPanel() {
     updateFeishu,
     updateDingtalk,
     save,
+    discard,
     toggleChannelEnabled,
     removeChannel,
     copyToken,

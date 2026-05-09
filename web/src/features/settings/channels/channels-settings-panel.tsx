@@ -78,6 +78,7 @@ export function ChannelsSettingsPanel() {
     updateFeishu,
     updateDingtalk,
     save,
+    discard,
     toggleChannelEnabled,
     removeChannel,
     copyToken,
@@ -160,6 +161,7 @@ export function ChannelsSettingsPanel() {
       saving={saving}
       dirty={dirty}
       save={save}
+      discard={discard}
     />
   );
 
@@ -184,6 +186,7 @@ export function ChannelsSettingsPanel() {
       saving={saving}
       dirty={dirty}
       save={save}
+      discard={discard}
     />
   );
 
@@ -204,6 +207,7 @@ export function ChannelsSettingsPanel() {
       saving={saving}
       dirty={dirty}
       save={save}
+      discard={discard}
     />
   );
 
@@ -331,6 +335,7 @@ export function ChannelsSettingsPanel() {
         saving={saving}
         dirty={dirty}
         save={save}
+        discard={discard}
       />
 
       <FeishuQrSetupDialog

@@ -5,13 +5,17 @@ import { Button } from '@/components/ui/button';
 import { extractObjectDefaults, SchemaForm, type JsonSchema } from '@/components/ui/schema-form';
 import { apiFetch, fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
+import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
+import { useLocaleStore } from '@/stores/locale-store';
 
 type ExtensionDetailResponse = {
   manifest: { configSchema?: JsonSchema };
 };
 
 export function ExtensionAutoSettings({ extensionId }: { extensionId: string }) {
+  const language = useLocaleStore((s) => s.language);
+  const a = messages(language).agentSettings;
   const hasToken = useGatewayStore((s) => Boolean(s.token));
   const { data: detail, error: detailError } = useSWR(
     hasToken && extensionId ? `ext-detail-${extensionId}` : null,
@@ -114,7 +118,7 @@ export function ExtensionAutoSettings({ extensionId }: { extensionId: string }) 
         <h2 className="text-sm font-semibold text-fg">Configuration</h2>
         <div className="flex flex-wrap items-center gap-2">
           {saveSuccess ? (
-            <span className="text-xs text-emerald-600 dark:text-emerald-400">Saved</span>
+            <span className="text-xs text-emerald-600 dark:text-emerald-400">{a.saved}</span>
           ) : null}
           {saveError ? <span className="text-xs text-red-600 dark:text-red-400">{saveError}</span> : null}
           <Button
@@ -124,7 +128,7 @@ export function ExtensionAutoSettings({ extensionId }: { extensionId: string }) 
             disabled={!isDirty}
             onClick={handleDiscard}
           >
-            Discard
+            {a.discard}
           </Button>
           <Button
             type="button"
@@ -141,7 +145,7 @@ export function ExtensionAutoSettings({ extensionId }: { extensionId: string }) 
             disabled={!isDirty || saving}
             onClick={() => void handleSave()}
           >
-            {saving ? 'Saving…' : 'Save'}
+            {saving ? a.saving : a.save}
           </Button>
         </div>
       </div>

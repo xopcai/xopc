@@ -64,8 +64,11 @@ export function AgentDefaultsRouteLayout(props: {
           <p className="mt-1 text-sm leading-relaxed text-fg-muted">{intro}</p>
           <p className="mt-1 text-xs text-fg-subtle">{a.sectionDesc}</p>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
           {vm.saveOk ? <span className="text-sm text-fg-muted">{a.saved}</span> : null}
+          <Button type="button" variant="secondary" disabled={!vm.dirty || vm.saving} onClick={vm.discard}>
+            {a.discard}
+          </Button>
           <Button type="button" variant="primary" disabled={!vm.dirty || vm.saving} onClick={() => void vm.save()}>
             {vm.saving ? a.saving : a.save}
           </Button>

@@ -22,6 +22,7 @@ export type UseAgentDefaultsFormResult = {
   error: string | null;
   setError: (e: string | null) => void;
   save: () => Promise<boolean>;
+  discard: () => void;
   mutate: ReturnType<typeof useGatewayConfigSwr>['mutate'];
 };
 
@@ -105,6 +106,14 @@ export function useAgentDefaultsForm(a: MessageBundle['agentSettings']): UseAgen
     }
   }, [form, saving, a.saveError, a.advanced]);
 
+  const discard = useCallback(() => {
+    if (!baseline) return;
+    dirtyRef.current = false;
+    setForm(structuredClone(baseline));
+    setError(null);
+    setSaveOk(false);
+  }, [baseline]);
+
   return {
     hasToken,
     loading,
@@ -117,6 +126,7 @@ export function useAgentDefaultsForm(a: MessageBundle['agentSettings']): UseAgen
     error,
     setError,
     save,
+    discard,
     mutate,
   };
 }
