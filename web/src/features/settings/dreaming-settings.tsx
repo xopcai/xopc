@@ -368,30 +368,34 @@ export function DreamingSettingsPanel() {
           <p className="mt-1 text-sm text-fg-muted">{t.subtitle}</p>
         </div>
         <div className="flex shrink-0 items-center justify-end gap-2">
-          <select
-            className="rounded-lg border border-edge bg-surface-panel px-2 py-1.5 text-xs text-fg"
-            value={runPhase}
-            onChange={(e) => setRunPhase(e.target.value as DreamingPhaseId)}
-            disabled={!hasToken || runBusy}
-          >
-            <option value="light">Light</option>
-            <option value="deep">Deep</option>
-            <option value="rem">REM</option>
-          </select>
-          <Button
-            variant="secondary"
-            className="px-2.5 py-1.5 text-xs"
-            disabled={!hasToken || runBusy}
-            onClick={() => void doRunNow(runPhase)}
-            title={t.runNowHint}
-          >
-            {runBusy ? (
-              <Loader2 className="mr-2 size-4 animate-spin" aria-hidden />
-            ) : (
-              <Play className="mr-2 size-4" aria-hidden />
-            )}
-            {t.runNow}
-          </Button>
+          {cfgFromGateway.enabled ? (
+            <>
+              <select
+                className="rounded-lg border border-edge bg-surface-panel px-2 py-1.5 text-xs text-fg"
+                value={runPhase}
+                onChange={(e) => setRunPhase(e.target.value as DreamingPhaseId)}
+                disabled={!hasToken || runBusy}
+              >
+                <option value="light">Light</option>
+                <option value="deep">Deep</option>
+                <option value="rem">REM</option>
+              </select>
+              <Button
+                variant="secondary"
+                className="px-2.5 py-1.5 text-xs"
+                disabled={!hasToken || runBusy}
+                onClick={() => void doRunNow(runPhase)}
+                title={t.runNowHint}
+              >
+                {runBusy ? (
+                  <Loader2 className="mr-2 size-4 animate-spin" aria-hidden />
+                ) : (
+                  <Play className="mr-2 size-4" aria-hidden />
+                )}
+                {t.runNow}
+              </Button>
+            </>
+          ) : null}
           <Button
             variant="secondary"
             className="px-2.5 py-1.5 text-xs"
