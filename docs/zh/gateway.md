@@ -14,6 +14,16 @@ xopc gateway --port 18790
 
 网关默认在前台运行，按 `Ctrl+C` 停止。
 
+### 后台运行
+
+需要终端立刻返回、网关常驻后台时：
+
+```bash
+xopc gateway --background
+```
+
+启动成功后会打印 **PID** 与 **URL**。之后用 **`xopc gateway status`**、**`xopc gateway stop`**、**`xopc gateway restart`**、**`xopc gateway logs`** 管理进程（见下文 [进程管理命令](#进程管理命令)）。
+
 ### 强制启动（终止现有进程）
 
 如果端口已被占用，使用 `--force` 自动终止现有进程：
@@ -374,7 +384,7 @@ GET /health
 
 `GET` / `PATCH` **`/api/config`**（需认证）会返回智能体默认项，其中包括 **`imageModel`**、**`imageGenerationModel`** 以及 **`imageModelFallbacks`**、**`imageGenerationModelFallbacks`**；`PATCH` 对图像字段支持与对话 **`model`** 相同的 **`{ primary, fallbacks }`** 对象形式。详见 [图像与视觉](image-multimodal.md)。
 
-**扩展 UI：** manifest **`ui`**、**`@xopcai/extension-ui-sdk`**、`/api/events` 转发与权限说明见 [扩展系统 — 网关控制台：扩展 UI](zh/extensions.md#gateway-extension-ui)。
+**扩展 UI：** manifest **`ui`**、**`@xopcai/extension-ui-sdk`**、`/api/events` 转发与权限说明见 [扩展系统 — 网关控制台：扩展 UI](extensions.md#gateway-extension-ui)。
 
 ## 错误响应
 
