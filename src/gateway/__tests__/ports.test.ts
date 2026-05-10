@@ -1,3 +1,4 @@
+import net from 'node:net';
 import { describe, it, expect } from 'vitest';
 import { parseLsofOutput, checkPortAvailable } from '../ports.js';
 
@@ -28,8 +29,22 @@ describe('Ports', () => {
 
   describe('checkPortAvailable', () => {
     it('should return true for available port', async () => {
-      // Use a high port number unlikely to be in use
-      const available = await checkPortAvailable(54321);
+      const server = net.createServer();
+      const port = await new Promise<number>((resolve, reject) => {
+        server.once('error', reject);
+        server.listen(0, '0.0.0.0', () => {
+          const addr = server.address();
+          if (addr && typeof addr === 'object') {
+            resolve(addr.port);
+          } else {
+            reject(new Error('expected socket address with port'));
+          }
+        });
+      });
+      await new Promise<void>((resolve, reject) => {
+        server.close((err) => (err ? reject(err) : resolve()));
+      });
+      const available = await checkPortAvailable(port);
       expect(available).toBe(true);
     });
   });
