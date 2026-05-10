@@ -1,6 +1,6 @@
 import type { Component, SelectItem, TUI } from '@earendil-works/pi-tui';
 
-import type { TuiBackend } from './tui-backend.js';
+import type { TuiBackend, TuiModelChoice } from './tui-backend.js';
 import { SearchableSelectList } from './components/searchable-select-list.js';
 import { searchableSelectListTheme, theme } from './theme.js';
 
@@ -19,6 +19,8 @@ export type PickerServices = {
   clearChatForSessionSwitch: () => void;
   /** Load transcript after switching session or on connect. */
   loadSessionHistory: () => Promise<void>;
+  /** Keeps Ctrl+P model cycle list in sync with the picker catalog. */
+  setModelChoices: (models: TuiModelChoice[]) => void;
 };
 
 function openSearchableOverlay(svc: PickerServices, list: SearchableSelectList, title: string) {
@@ -28,13 +30,14 @@ function openSearchableOverlay(svc: PickerServices, list: SearchableSelectList, 
     svc.tui.requestRender();
   };
   svc.openOverlay(list);
-  svc.chatLog.addSystem(theme.dim(`${title} (↑/↓ ctrl+n ctrl+p · type to filter · Esc)`));
+  svc.chatLog.addSystem(theme.dim(`${title} (↑/↓ · type to filter · Esc)`));
   svc.tui.requestRender();
 }
 
 /** Ctrl+L — pick model, sends `/switch provider/id`. */
 export async function openModelPickerOverlay(svc: PickerServices): Promise<void> {
   const models = await svc.client.listModels();
+  svc.setModelChoices(models);
   if (models.length === 0) {
     svc.chatLog.addSystem('No models available from gateway.');
     svc.tui.requestRender();

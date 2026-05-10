@@ -1,6 +1,7 @@
-import type { TUI } from '@earendil-works/pi-tui';
+import type { KeybindingsManager, TUI } from '@earendil-works/pi-tui';
 
 import type { ChatLog } from './components/chat-log.js';
+import { formatXopcTuiHotkeys } from './format-tui-hotkeys.js';
 import type { StreamAssembler } from './stream-assembler.js';
 import type { TuiState } from './tui-types.js';
 
@@ -33,6 +34,7 @@ export function getSlashCommands(_isLocal: boolean): SlashCommandDef[] {
     { name: 'export', description: 'Export session (markdown/html/json)' },
     { name: 'settings', description: 'Show current settings' },
     { name: 'start', description: 'Show welcome message' },
+    { name: 'hotkeys', description: 'Show resolved keyboard shortcuts (pi-style)' },
   ];
 }
 
@@ -42,15 +44,21 @@ export function formatTuiHelpText(isLocal: boolean): string {
   for (const c of commands) {
     lines.push(`  /${c.name} — ${c.description}`);
   }
-  lines.push('', 'Keyboard shortcuts:');
+  lines.push('', 'Keyboard shortcuts (defaults align with pi coding-agent where noted):');
   lines.push('  Escape — Abort active run');
+  lines.push('  Shift+Tab — Cycle /think level');
+  lines.push('  Ctrl+P / Shift+Ctrl+P — Next / previous model (/switch)');
   lines.push('  Ctrl+L — Model picker');
-  lines.push('  Ctrl+P — Session picker');
+  lines.push('  Ctrl+Shift+P — Session picker');
   lines.push('  Ctrl+O — Toggle tool output');
-  lines.push('  Ctrl+T — Toggle thinking display');
-  lines.push('  Ctrl+C — Clear input; empty line: warn, then press again within 1s to exit');
-  lines.push('  Ctrl+D — Exit');
+  lines.push('  Ctrl+T — Toggle thinking block display');
+  lines.push('  Ctrl+G — Edit draft in $EDITOR');
+  lines.push('  Ctrl+Z — Suspend to shell (Unix)');
+  lines.push('  Ctrl+V (mac/Linux) / Alt+V (Win) — Clipboard image (stub in xopc)');
+  lines.push('  Ctrl+C — Clear input; repeat within ~1s to exit when empty');
+  lines.push('  Ctrl+D — Exit when input empty');
   lines.push('  !cmd — Local shell (gated; runs on this machine)');
+  lines.push('', 'Use /hotkeys for the resolved binding list from the active keymap.');
   return lines.join('\n');
 }
 
@@ -64,6 +72,7 @@ export type CommandHandlerDeps = {
   sendMessage: (text: string) => void;
   requestExit: () => void;
   updateFooter: () => void;
+  keybindings: KeybindingsManager;
 };
 
 export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: string) => void {
@@ -77,6 +86,7 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: strin
     sendMessage,
     requestExit,
     updateFooter,
+    keybindings,
   } = deps;
 
   return (input: string) => {
@@ -87,6 +97,11 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: strin
     switch (normalizedCommand) {
       case 'help':
         chatLog.addSystem(formatTuiHelpText(isLocalMode));
+        tui.requestRender();
+        return;
+      case 'hotkeys':
+      case 'keys':
+        chatLog.addSystem(formatXopcTuiHotkeys(keybindings));
         tui.requestRender();
         return;
       case 'exit':
