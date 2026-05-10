@@ -300,6 +300,17 @@
     "toolsSave": "保存工具禁用",
     "toolsClearEntry": "清除本智能体的额外禁用",
     "toolsLockedByDefaults": "已在默认中禁用",
+    "toolsDisableGroups": {
+      "unknown": "自定义（不在内置列表）",
+      "workspace": "工作区与搜索",
+      "execution": "执行",
+      "web": "网络",
+      "messaging": "通道与出站",
+      "memory": "记忆与会话",
+      "media": "视觉与生成",
+      "extensions": "扩展",
+      "misc": "其他内置"
+    },
     "toolDescriptions": {
       "read_file": "读取工作区内的文本与小文件（路径限制在工作区沙箱内）。",
       "write_file": "在工作区创建新文件或覆盖已有文件。",

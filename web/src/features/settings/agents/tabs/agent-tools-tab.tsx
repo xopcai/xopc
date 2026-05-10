@@ -1,11 +1,14 @@
 import { Wrench } from 'lucide-react';
+import { useCallback, useMemo } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 
 import { Button } from '@/components/ui/button';
 import type { GatewayAgentRow } from '@/features/settings/agents-admin-api';
+import type { BuiltinToolUiGroupKey } from '@/features/settings/agents/builtin-tool-disable-groups';
+import { BuiltinToolsDisableUi } from '@/features/settings/agents/builtin-tools-disable-ui';
 import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/settings/settings-form-section';
-import { cn } from '@/lib/cn';
-import type { AgentsSettingsMessages } from '@/i18n/messages';
+import { messages, type AgentsSettingsMessages } from '@/i18n/messages';
+import { useLocaleStore } from '@/stores/locale-store';
 
 export function AgentToolsTab(props: {
   a: AgentsSettingsMessages;
@@ -30,6 +33,30 @@ export function AgentToolsTab(props: {
     hideInlineSave,
   } = props;
 
+  const language = useLocaleStore((s) => s.language);
+  const adv = messages(language).agentSettings.advanced;
+
+  const defaultsDisableSet = useMemo(
+    () => new Set(selected.tools.defaultsDisable.map((s) => String(s).trim()).filter(Boolean)),
+    [selected.tools.defaultsDisable],
+  );
+
+  const onDisableSetChange = useCallback(
+    (next: Set<string>) => {
+      setToolEntryDisable(next);
+    },
+    [setToolEntryDisable],
+  );
+
+  const groups = a.toolsDisableGroups;
+  const getGroupTitle = useCallback((key: BuiltinToolUiGroupKey) => groups[key], [groups]);
+
+  const getToolDescription = useCallback(
+    (tid: string) =>
+      tid in a.toolDescriptions ? a.toolDescriptions[tid as keyof typeof a.toolDescriptions] : '',
+    [a.toolDescriptions],
+  );
+
   return (
     <SettingsFormSection className="flex min-h-0 flex-1 flex-col">
       <SettingsFormSectionHeader
@@ -39,57 +66,29 @@ export function AgentToolsTab(props: {
         subtitle={a.toolsHint}
       />
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-        <ul className="flex flex-col gap-2.5 pr-1" role="list">
-          {(data.builtinToolIds.length ? data.builtinToolIds : []).map((tid) => {
-            const disabledByDefault = selected.tools.defaultsDisable.includes(tid);
-            const checked = disabledByDefault ? false : !toolEntryDisable.has(tid);
-            const desc =
-              tid in a.toolDescriptions ? a.toolDescriptions[tid as keyof typeof a.toolDescriptions] : '';
-            return (
-              <li
-                key={tid}
-                className={cn(
-                  'rounded-xl border border-edge-subtle bg-surface-panel/60 px-3 py-2.5 dark:border-edge-subtle',
-                  disabledByDefault && 'opacity-60',
-                )}
-              >
-                <label
-                  className={cn('flex cursor-pointer gap-3 text-sm', disabledByDefault && 'cursor-not-allowed')}
-                >
-                  <input
-                    type="checkbox"
-                    className="mt-1 shrink-0 rounded border-edge"
-                    checked={checked}
-                    disabled={disabledByDefault || busy}
-                    onChange={() => {
-                      if (disabledByDefault) {
-                        return;
-                      }
-                      setToolEntryDisable((prev) => {
-                        const next = new Set(prev);
-                        if (next.has(tid)) {
-                          next.delete(tid);
-                        } else {
-                          next.add(tid);
-                        }
-                        return next;
-                      });
-                    }}
-                  />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                      <span className="font-mono text-xs font-medium text-fg">{tid}</span>
-                      {disabledByDefault ? (
-                        <span className="text-xs text-fg-muted">({a.toolsLockedByDefaults})</span>
-                      ) : null}
-                    </div>
-                    {desc ? <p className="mt-1 text-xs leading-relaxed text-fg-muted">{desc}</p> : null}
-                  </div>
-                </label>
-              </li>
-            );
-          })}
-        </ul>
+        <BuiltinToolsDisableUi
+          mode="agentEntry"
+          builtinToolIds={data.builtinToolIds}
+          loading={false}
+          disableSet={toolEntryDisable}
+          onDisableSetChange={onDisableSetChange}
+          defaultsDisableSet={defaultsDisableSet}
+          getToolDescription={getToolDescription}
+          getGroupTitle={getGroupTitle}
+          quickActionsDisabled={busy}
+          labels={{
+            loadingBuiltin: adv.toolsDisableLoadingBuiltin,
+            emptyBuiltin: adv.toolsDisableEmptyBuiltin,
+            quickActionsLabel: adv.toolsDisableQuickActionsLabel,
+            quickEnableAll: adv.toolsDisableQuickEnableAll,
+            quickDisableAll: adv.toolsDisableQuickDisableAll,
+            quickReadOnlyWorkspace: adv.toolsDisableQuickReadOnlyWorkspace,
+            quickHighRiskOff: adv.toolsDisableQuickHighRiskOff,
+            quickNoOutbound: adv.toolsDisableQuickNoOutbound,
+            notInBuiltin: adv.toolsDisableNotInBuiltin,
+            lockedByDefaults: a.toolsLockedByDefaults,
+          }}
+        />
       </div>
       <div className="mt-4 flex shrink-0 flex-wrap gap-2">
         {!hideInlineSave ? (
