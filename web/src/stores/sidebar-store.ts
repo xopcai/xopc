@@ -3,7 +3,8 @@ import { create } from 'zustand';
 const STORAGE_KEY = 'xopc-web-sidebar-collapsed';
 const WIDTH_STORAGE_KEY = 'xopc-web-sidebar-expanded-width-px';
 
-export const SIDEBAR_EXPANDED_WIDTH_MIN = 200;
+/** Room for traffic-light inset + toggle + search + back/forward on Electron (sidebar chrome row). */
+export const SIDEBAR_EXPANDED_WIDTH_MIN = 248;
 export const SIDEBAR_EXPANDED_WIDTH_MAX = 480;
 export const SIDEBAR_EXPANDED_WIDTH_DEFAULT = 256;
 
@@ -33,12 +34,12 @@ function clampExpandedWidthPx(px: number): number {
 function readExpandedWidthPx(): number {
   try {
     const raw = globalThis.localStorage?.getItem(WIDTH_STORAGE_KEY);
-    if (raw == null) return SIDEBAR_EXPANDED_WIDTH_DEFAULT;
+    if (raw == null) return clampExpandedWidthPx(SIDEBAR_EXPANDED_WIDTH_DEFAULT);
     const n = Number.parseInt(raw, 10);
-    if (!Number.isFinite(n)) return SIDEBAR_EXPANDED_WIDTH_DEFAULT;
+    if (!Number.isFinite(n)) return clampExpandedWidthPx(SIDEBAR_EXPANDED_WIDTH_DEFAULT);
     return clampExpandedWidthPx(n);
   } catch {
-    return SIDEBAR_EXPANDED_WIDTH_DEFAULT;
+    return clampExpandedWidthPx(SIDEBAR_EXPANDED_WIDTH_DEFAULT);
   }
 }
 
