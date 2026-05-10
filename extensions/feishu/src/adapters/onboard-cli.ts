@@ -7,6 +7,7 @@
 import { confirm, input, select } from '@inquirer/prompts';
 
 import type { Config } from '@xopcai/xopc/config/schema.js';
+import { mergeDistinctSenderIds } from '@xopcai/xopc/channels/pairing/index.js';
 import type { ChannelOnboardAdapter } from '@xopcai/xopc/channels/plugins/types.adapters.js';
 
 import {
@@ -165,7 +166,11 @@ async function configureFeishu(config: Config): Promise<Config> {
   const dmPolicy = await select<DmPolicy>({
     message: 'DM (private chat) policy:',
     choices: [
-      { value: 'pairing', name: 'pairing  [recommended]', description: 'New users must /pair before chatting' },
+      {
+        value: 'pairing',
+        name: 'pairing  [recommended]',
+        description: 'Pairing code for new users; scanner pre-seeded after QR create',
+      },
       { value: 'allowlist', name: 'allowlist', description: 'Only allowlisted users can DM' },
       { value: 'open', name: 'open', description: 'Anyone can DM (not recommended)' },
       { value: 'disabled', name: 'disabled', description: 'Disable DMs' },
@@ -252,6 +257,13 @@ async function configureFeishu(config: Config): Promise<Config> {
         ? { doc: true, wiki: true, drive: true, perm: false, bitable: true, scopes: true }
         : { doc: true, wiki: true, drive: true, perm: true, bitable: true, scopes: true };
 
+  const extras =
+    ownerOpenId?.trim() && (dmPolicy === 'pairing' || dmPolicy === 'allowlist') ? [ownerOpenId.trim()] : [];
+  const mergedAllowFrom = mergeDistinctSenderIds(
+    allowFrom ?? (existing?.allowFrom as Array<string | number> | undefined) ?? [],
+    extras,
+  );
+
   const nextFeishu: Record<string, unknown> = {
     ...(existing ?? {}),
     enabled: true,
@@ -270,7 +282,7 @@ async function configureFeishu(config: Config): Promise<Config> {
       : {}),
     dmPolicy,
     groupPolicy,
-    allowFrom: allowFrom ?? (existing?.allowFrom as any) ?? [],
+    allowFrom: mergedAllowFrom,
     groupAllowFrom: groupAllowFrom ?? (existing?.groupAllowFrom as any) ?? [],
     requireMention,
     renderMode,

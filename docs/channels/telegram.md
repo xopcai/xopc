@@ -44,11 +44,12 @@ When the gateway is running, the React console includes a dedicated **IM channel
 
 ## Access control policies
 
-**DM Policies** (`dmPolicy`):
-- `pairing` - Require pairing with user
-- `allowlist` - Only allow specified users
-- `open` - Allow all users
-- `disabled` - Disable DMs
+**DM policies** (`dmPolicy`):
+
+- **`pairing`** — Unknown senders are blocked from the agent until their **numeric Telegram user id** is allowed. Allow sources: `allowFrom` in config **and** paired ids in **`~/.xopc/credentials/xopc-telegram-<account>-allowFrom.json`** (override base dir with **`XOPC_CREDENTIALS_DIR`**). First DM receives a **pairing code**; the owner runs **`xopc channels pairing approve --channel telegram --account <id> <CODE>`** on the gateway host. See [DM pairing](./index.md#dm-pairing) and [CLI — channels](../cli.md#channels).
+- **`allowlist`** — Same allow merge, but **no** pairing message; unknown users are dropped.
+- **`open`** — All users can DM.
+- **`disabled`** — DMs off.
 
 **Group Policies** (`groupPolicy`):
 - `open` - Allow all groups

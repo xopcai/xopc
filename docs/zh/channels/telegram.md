@@ -44,11 +44,12 @@
 
 ## 访问控制策略
 
-**DM 策略** (`dmPolicy`)：
-- `pairing` - 需要与用户配对
-- `allowlist` - 仅允许指定用户
-- `open` - 允许所有用户
-- `disabled` - 禁用私聊
+**DM 策略**（`dmPolicy`）：
+
+- **`pairing`** — 未在允许列表中的用户 **不会** 进入智能体。允许来源：`xopc.json` 中的 **`allowFrom`**，以及 **`~/.xopc/credentials/xopc-telegram-<账号>-allowFrom.json`** 里已批准的 id（可用 **`XOPC_CREDENTIALS_DIR`** 覆盖目录）。首次私聊会收到 **配对码**；管理员在网关所在机执行 **`xopc channels pairing approve --channel telegram --account <账号> <配对码>`**。详见 [DM 私聊配对](./index.md#dm-pairing) 与 [CLI — channels](../cli.md#channels)。
+- **`allowlist`** — 同样合并配置与凭证文件中的 id，但 **不** 发配对码；未命中则丢弃。
+- **`open`** — 任意用户可私聊。
+- **`disabled`** — 关闭私聊。
 
 **群组策略** (`groupPolicy`)：
 - `open` - 允许所有群

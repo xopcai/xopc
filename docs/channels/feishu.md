@@ -130,6 +130,12 @@ Recommended (if you enable those features):
 }
 ```
 
+## DM pairing
+
+When **`dmPolicy`** is **`pairing`**, private chats use the merged allow list from **`allowFrom` in config** plus **`~/.xopc/credentials/xopc-feishu-<account>-allowFrom.json`** (see [DM pairing](./index.md#dm-pairing)). Unknown users receive a **pairing code** in Feishu; approve with **`xopc channels pairing approve --channel feishu [--account <id>] <CODE>`** on the gateway host.
+
+**Gateway console QR setup:** when scan-to-create succeeds, the scanner’s **`open_id`** is **merged into `channels.feishu.allowFrom`** in `xopc.json` (deduped) so that user can DM the bot immediately while **`dmPolicy`** stays **`pairing`** (default if unset). Others still go through pairing approval.
+
 ## Webhook mode (requires `encryptKey` + `verificationToken`)
 
 ```json

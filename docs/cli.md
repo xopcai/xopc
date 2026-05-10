@@ -31,6 +31,7 @@ pnpm run dev -- <command>
 |---------|-------------|
 | `setup` | Initialize config and workspace |
 | `onboard` | Interactive setup wizard |
+| `channels` | Channel login (`channels login`) and DM pairing approval (`channels pairing approve`) |
 | `agents` | Manage multi-agent entries in config (`list`, add, delete) |
 | `agent` | Chat with Agent |
 | `tui` | Full-screen terminal UI (gateway or `--local` embedded) — see [TUI](./tui.md) |
@@ -110,6 +111,41 @@ xopc onboard --channels
 - Configure messaging channels (Telegram, Weixin QR via channel menu, …)
 - Apply gateway defaults with auto-generated token when missing
 - At the end (interactive): choose **Terminal UI (embedded)** or **Gateway (background)** or exit
+
+---
+
+## channels
+
+Messaging channel **login** (QR / credentials flows) and **DM pairing approval** on the machine where you run the CLI (same host as the gateway when approving Feishu / DingTalk / Weixin pairing codes).
+
+### channels login
+
+```bash
+xopc channels login
+xopc channels login --channel weixin
+xopc channels login --channel feishu
+xopc channels login --channel dingtalk
+xopc channels login --account <account-id>
+```
+
+See channel docs under [Channels](./channels/index.md) for what each integration expects.
+
+### channels pairing approve
+
+When **`dmPolicy`** is **`pairing`** for Telegram, Feishu, DingTalk, or Weixin, unknown users get a **one-time pairing code** in chat. The bot owner approves it on the host:
+
+```bash
+xopc channels pairing approve --channel telegram --account default AB12CD34
+xopc channels pairing approve --channel feishu --account default AB12CD34
+xopc channels pairing approve --channel dingtalk AB12CD34
+xopc channels pairing approve --channel weixin AB12CD34
+```
+
+- **`--channel`**: `telegram` \| `feishu` \| `dingtalk` \| `weixin` (required).
+- **`--account`**: config account id (default: `default` when omitted).
+- **`<code>`**: 8-character code from the user’s DM.
+
+On success, the sender id is appended to the channel **allowFrom credential file** (merged with config `allowFrom` at runtime). File layout is documented in [Channels — DM pairing](./channels/index.md#dm-pairing).
 
 ---
 

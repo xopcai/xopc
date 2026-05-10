@@ -353,7 +353,12 @@ xopc onboard
 | `accounts.<id>.allowFrom` | array | `[]` | 允许的用户 ID |
 | `accounts.<id>.streamMode` | string | `partial` | 流式模式 |
 
-**DM 策略**: `pairing` | `allowlist` | `open` | `disabled`
+**DM 策略**（`pairing` \| `allowlist` \| `open` \| `disabled`）：
+
+- **`pairing`**（推荐）：未在允许列表中的用户 **不会** 进入智能体管线。允许来源包括配置里的 **`allowFrom`**，以及执行 **`xopc channels pairing approve`** 后写入的 **各通道凭证目录下的 allowFrom 文件**（与配置在运行时合并）。用户首次私聊会收到 **配对码**。详见 [消息通道 — DM 私聊配对](./channels/index.md#dm-pairing) 与 [CLI — channels](./cli.md#channels)。
+- **`allowlist`**：同样合并配置与凭证文件中的 id，但 **不会** 发送配对码；未命中则静默丢弃。
+- **`open`**：任意用户可私聊（公开机器人上慎用）。
+- **`disabled`**：不接受私聊。
 
 **群组策略**: `open` | `allowlist` | `disabled`
 

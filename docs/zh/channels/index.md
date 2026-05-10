@@ -30,6 +30,35 @@ xopc 可将助手接入 **Telegram**、**微信（Weixin）**、**飞书（Feish
 
 其它 CLI 命令与扩展加载的关系见 [扩展系统 — 何时加载扩展](../extensions.md#何时加载扩展)。
 
+## DM 私聊配对 {#dm-pairing}
+
+**Telegram、飞书、钉钉、微信** 在 **`dmPolicy` 为 `pairing`** 时，私聊是否放行由 **合并后的允许列表** 决定：
+
+1. 配置文件 **`xopc.json`** 里对应账号 / 通道块的 **`allowFrom`**；
+2. 磁盘上 **已配对用户** 的 JSON 凭证（与配置在运行时合并）。
+
+若发送方不在允许列表中，机器人会回复 **一次性配对码**，并提示管理员在本机执行：
+
+```bash
+xopc channels pairing approve --channel <telegram|feishu|dingtalk|weixin> [--account <id>] <配对码>
+```
+
+命令说明见 **[CLI — channels](../cli.md#channels)**。请在 **存有凭证文件的主机**（一般为网关所在机）上执行 `approve`。
+
+**凭证文件目录**：未设置 **`XOPC_CREDENTIALS_DIR`** 时，Telegram / 飞书 / 钉钉 使用 **`~/.xopc/credentials/`**（若设置了该环境变量则为其值）。
+
+| 通道 | 允许名单文件 | 待审批配对 |
+|------|----------------|------------|
+| Telegram | `xopc-telegram-<account>-allowFrom.json` | `xopc-telegram-<account>-pairing.json` |
+| 飞书 | `xopc-feishu-<account>-allowFrom.json` | `xopc-feishu-<account>-pairing.json` |
+| 钉钉 | `xopc-dingtalk-<account>-allowFrom.json` | `xopc-dingtalk-<account>-pairing.json` |
+
+**微信** 使用 **`~/.xopc/weixin/credentials/`**（同样可被 **`XOPC_CREDENTIALS_DIR`** 覆盖为其它根目录）：`xopc-weixin-<account>-allowFrom.json` 与 `xopc-weixin-<account>-pairing.json`。
+
+**`allowlist`**：未命中列表则直接丢弃，**不会**发配对码。**`open`**：私聊不做限制。**`disabled`**：不接受私聊。
+
+**飞书网关控制台扫码创建应用：** 会把扫码人的 **`open_id`** 写入 **`channels.feishu.allowFrom`**，在默认 **`pairing`** 下该用户可立刻私聊。**钉钉** 设备注册接口不返回扫码人 id，需在 **`channels.dingtalk.allowFrom`** 手工预置或使用 **`pairing approve`**。
+
 ## 与网关启动顺序的关系
 
 使用 **`xopc gateway`** 时，Telegram / 微信 / 飞书 / 钉钉 等外连通道可能在 **HTTP 监听成功之后** 才执行 **`start()`**，减轻错误 `apiRoot` 或外网不通时拖住整个网关控制台的情况。说明见 [网关 — 频道启动与 HTTP 监听顺序](../gateway.md#频道启动与-http-监听顺序) 与 [配置 — 频道连接延后](../configuration.md#频道连接延后)。

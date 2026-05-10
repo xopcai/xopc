@@ -10,6 +10,7 @@ import fs from 'node:fs';
 import { confirm, input, select } from '@inquirer/prompts';
 
 import type { Config } from '@xopcai/xopc/config/schema.js';
+import { mergeDistinctSenderIds } from '@xopcai/xopc/channels/pairing/index.js';
 import type { ChannelCliLoginAdapter } from '@xopcai/xopc/channels/plugins/types.adapters.js';
 
 import {
@@ -147,7 +148,11 @@ async function promptSecurityPolicies(ownerOpenId?: string): Promise<{
   const dmPolicy = await select<DmPolicy>({
     message: 'DM (private chat) policy:',
     choices: [
-      { value: 'pairing', name: 'pairing  [recommended]', description: 'New users must /pair' },
+      {
+        value: 'pairing',
+        name: 'pairing  [recommended]',
+        description: 'Pairing code for new users; scanner pre-seeded after QR create',
+      },
       { value: 'allowlist', name: 'allowlist', description: 'Only allowlisted users' },
       { value: 'open', name: 'open', description: 'Anyone can DM' },
       { value: 'disabled', name: 'disabled', description: 'Disable DMs' },
@@ -189,7 +194,11 @@ async function promptSecurityPolicies(ownerOpenId?: string): Promise<{
     default: true,
   });
 
-  return { dmPolicy, groupPolicy, allowFrom, groupAllowFrom, requireMention };
+  const extras =
+    ownerOpenId?.trim() && (dmPolicy === 'pairing' || dmPolicy === 'allowlist') ? [ownerOpenId.trim()] : [];
+  const mergedAllowFrom = mergeDistinctSenderIds(allowFrom, extras);
+
+  return { dmPolicy, groupPolicy, allowFrom: mergedAllowFrom, groupAllowFrom, requireMention };
 }
 
 export const feishuCliLoginAdapter: ChannelCliLoginAdapter = {
