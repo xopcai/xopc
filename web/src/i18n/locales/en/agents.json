@@ -300,6 +300,17 @@
     "toolsSave": "Save tool disables",
     "toolsClearEntry": "Clear per-agent disables",
     "toolsLockedByDefaults": "disabled in defaults",
+    "toolsDisableGroups": {
+      "unknown": "Custom ids (not in built-in list)",
+      "workspace": "Workspace & search",
+      "execution": "Execution",
+      "web": "Web",
+      "messaging": "Channels & outbound",
+      "memory": "Memory & sessions",
+      "media": "Vision & generation",
+      "extensions": "Extensions",
+      "misc": "Other built-ins"
+    },
     "toolDescriptions": {
       "read_file": "Read text and small files inside the agent workspace (paths are restricted to the workspace sandbox).",
       "write_file": "Create new files or overwrite existing ones under the workspace.",
