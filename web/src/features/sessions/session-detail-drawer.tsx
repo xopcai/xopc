@@ -1,10 +1,11 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 
+import { Button } from '@/components/ui/button';
 import type { SessionDetail } from '@/features/sessions/session.types';
 import { AgentAvatarDisplay } from '@/features/settings/agents/agent-avatar-display';
-import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/cn';
+import { SETTINGS_SHELL_CONTENT_Z, SETTINGS_SHELL_OVERLAY_Z } from '@/lib/settings-shell-dialog-layer';
 
 function previewContent(content: string | unknown[]): string {
   if (typeof content === 'string') {
@@ -64,10 +65,13 @@ export function SessionDetailDrawer({
   return (
     <Dialog.Root open={open} onOpenChange={(v) => !v && onClose()}>
       <Dialog.Portal>
-        <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-50 bg-scrim" />
+        <Dialog.Overlay
+          className={cn('xopc-dialog-overlay fixed inset-0 bg-scrim', SETTINGS_SHELL_OVERLAY_Z)}
+        />
         <Dialog.Content
           className={cn(
-            'xopc-drawer-right fixed right-0 top-0 z-50 flex h-full w-full max-w-lg flex-col border-l border-edge bg-surface-panel shadow-popover outline-none',
+            'xopc-drawer-right fixed right-0 top-0 flex h-full w-full max-w-lg flex-col border-l border-edge bg-surface-panel shadow-popover outline-none',
+            SETTINGS_SHELL_CONTENT_Z,
             'dark:border-edge',
           )}
           aria-describedby={undefined}

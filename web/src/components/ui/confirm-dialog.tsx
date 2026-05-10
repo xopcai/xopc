@@ -2,6 +2,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/cn';
+import { SETTINGS_SHELL_CONTENT_Z, SETTINGS_SHELL_OVERLAY_Z } from '@/lib/settings-shell-dialog-layer';
 
 export type ConfirmDialogProps = {
   open: boolean;
@@ -33,10 +34,16 @@ export function ConfirmDialog({
       }}
     >
       <Dialog.Portal>
-        <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[70] bg-scrim backdrop-blur-[1px]" />
+        <Dialog.Overlay
+          className={cn(
+            'xopc-dialog-overlay fixed inset-0 bg-scrim backdrop-blur-[1px]',
+            SETTINGS_SHELL_OVERLAY_Z,
+          )}
+        />
         <Dialog.Content
           className={cn(
-            'fixed left-1/2 top-1/2 z-[70] w-[min(100%-2rem,28rem)] -translate-x-1/2 -translate-y-1/2',
+            'fixed left-1/2 top-1/2 w-[min(100%-2rem,28rem)] -translate-x-1/2 -translate-y-1/2',
+            SETTINGS_SHELL_CONTENT_Z,
             'rounded-2xl border border-edge bg-surface-panel p-6 shadow-popover outline-none dark:border-edge',
           )}
           onOpenAutoFocus={(e) => e.preventDefault()}

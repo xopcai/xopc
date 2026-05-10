@@ -2,9 +2,10 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/cn';
 import { LOG_LEVELS, type LogLevel } from '@/features/logs/log.types';
 import type { LogsMessages } from '@/i18n/messages';
+import { cn } from '@/lib/cn';
+import { SETTINGS_SHELL_CONTENT_Z, SETTINGS_SHELL_OVERLAY_Z } from '@/lib/settings-shell-dialog-layer';
 
 type Props = {
   L: LogsMessages;
@@ -32,10 +33,13 @@ export function LogsFiltersDialog({
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-50 bg-scrim" />
+        <Dialog.Overlay
+          className={cn('xopc-dialog-overlay fixed inset-0 bg-scrim', SETTINGS_SHELL_OVERLAY_Z)}
+        />
         <Dialog.Content
           className={cn(
-            'xopc-dialog-content fixed left-1/2 top-1/2 z-50 flex max-h-[min(32rem,90vh)] w-[min(100%-2rem,22rem)] -translate-x-1/2 -translate-y-1/2 flex-col rounded-xl border border-edge bg-surface-panel shadow-popover outline-none',
+            'xopc-dialog-content fixed left-1/2 top-1/2 flex max-h-[min(32rem,90vh)] w-[min(100%-2rem,22rem)] -translate-x-1/2 -translate-y-1/2 flex-col rounded-xl border border-edge bg-surface-panel shadow-popover outline-none',
+            SETTINGS_SHELL_CONTENT_Z,
             'dark:border-edge',
           )}
           aria-describedby="log-filters-desc"

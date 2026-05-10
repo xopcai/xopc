@@ -10,6 +10,7 @@ import {
 } from '@/features/settings/channels-config-api';
 import type { ChannelsSettingsMessages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
+import { SETTINGS_SHELL_CONTENT_Z, SETTINGS_SHELL_OVERLAY_Z } from '@/lib/settings-shell-dialog-layer';
 
 type FeishuDomain = 'feishu' | 'lark';
 
@@ -165,10 +166,16 @@ export function FeishuQrSetupDialog({
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[60] bg-scrim backdrop-blur-[1px]" />
+        <Dialog.Overlay
+          className={cn(
+            'xopc-dialog-overlay fixed inset-0 bg-scrim backdrop-blur-[1px]',
+            SETTINGS_SHELL_OVERLAY_Z,
+          )}
+        />
         <Dialog.Content
           className={cn(
-            'fixed left-1/2 top-1/2 z-[60] max-h-[min(90vh,52rem)] w-[min(100%-2rem,32rem)] -translate-x-1/2 -translate-y-1/2',
+            'fixed left-1/2 top-1/2 max-h-[min(90vh,52rem)] w-[min(100%-2rem,32rem)] -translate-x-1/2 -translate-y-1/2',
+            SETTINGS_SHELL_CONTENT_Z,
             'overflow-y-auto rounded-2xl border border-edge bg-surface-panel p-6 shadow-popover outline-none dark:border-edge',
           )}
           onOpenAutoFocus={(e) => e.preventDefault()}

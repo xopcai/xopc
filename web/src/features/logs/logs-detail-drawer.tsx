@@ -2,10 +2,11 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { ClipboardCopy, X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/cn';
 import { LogDetailBody } from '@/features/logs/log-detail-body';
 import type { LogEntry } from '@/features/logs/log.types';
 import type { LogsMessages } from '@/i18n/messages';
+import { cn } from '@/lib/cn';
+import { SETTINGS_SHELL_CONTENT_Z, SETTINGS_SHELL_OVERLAY_Z } from '@/lib/settings-shell-dialog-layer';
 
 type Props = {
   L: LogsMessages;
@@ -20,10 +21,13 @@ export function LogsDetailDrawer({ L, log, onClose, copiedDetail, onCopiedMessag
   return (
     <Dialog.Root open={log !== null} onOpenChange={(open) => !open && onClose()}>
       <Dialog.Portal>
-        <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-50 bg-scrim" />
+        <Dialog.Overlay
+          className={cn('xopc-dialog-overlay fixed inset-0 bg-scrim', SETTINGS_SHELL_OVERLAY_Z)}
+        />
         <Dialog.Content
           className={cn(
-            'xopc-drawer-right fixed right-0 top-0 z-50 flex h-full w-full max-w-lg flex-col border-l border-edge bg-surface-panel shadow-popover outline-none',
+            'xopc-drawer-right fixed right-0 top-0 flex h-full w-full max-w-lg flex-col border-l border-edge bg-surface-panel shadow-popover outline-none',
+            SETTINGS_SHELL_CONTENT_Z,
             'dark:border-edge',
           )}
           aria-describedby={undefined}

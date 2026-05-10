@@ -1,9 +1,10 @@
 import * as Popover from '@radix-ui/react-popover';
 
-import { cn } from '@/lib/cn';
 import { formatStatsLine } from '@/features/logs/logs-page-lib';
 import { LOG_LEVELS, type LogStats } from '@/features/logs/log.types';
 import type { LogsMessages } from '@/i18n/messages';
+import { cn } from '@/lib/cn';
+import { SETTINGS_SHELL_POPOVER_Z } from '@/lib/settings-shell-dialog-layer';
 
 type Props = {
   L: LogsMessages;
@@ -33,7 +34,8 @@ export function LogsStatsPopover({ L, stats }: Props) {
             align="start"
             sideOffset={6}
             className={cn(
-              'z-50 w-[min(calc(100vw-2rem),20rem)] rounded-xl border border-edge bg-surface-panel p-3 shadow-popover outline-none',
+              'w-[min(calc(100vw-2rem),20rem)] rounded-xl border border-edge bg-surface-panel p-3 shadow-popover outline-none',
+              SETTINGS_SHELL_POPOVER_Z,
               'dark:border-edge',
             )}
           >

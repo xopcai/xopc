@@ -3,8 +3,9 @@ import { MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
 import type { ReactNode } from 'react';
 
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/cn';
 import type { ChannelsSettingsMessages } from '@/i18n/messages';
+import { cn } from '@/lib/cn';
+import { SETTINGS_SHELL_POPOVER_Z } from '@/lib/settings-shell-dialog-layer';
 
 export type ChannelImHubCardProps = {
   icon: ReactNode;
@@ -68,7 +69,10 @@ export function ChannelImHubCard({
             </DropdownMenu.Trigger>
             <DropdownMenu.Portal>
               <DropdownMenu.Content
-                className="z-[70] min-w-[11rem] rounded-xl border border-edge bg-surface-panel p-1 shadow-popover dark:border-edge"
+                className={cn(
+                  'min-w-[11rem] rounded-xl border border-edge bg-surface-panel p-1 shadow-popover dark:border-edge',
+                  SETTINGS_SHELL_POPOVER_Z,
+                )}
                 sideOffset={6}
                 align="end"
               >
