@@ -1,18 +1,19 @@
 import {
   CombinedAutocompleteProvider,
   Container,
-  getKeybindings,
-  isKeyRelease,
-  Key,
   Loader,
-  matchesKey,
-  parseKey,
   ProcessTerminal,
+  setKeybindings,
   Text,
   TUI,
 } from '@earendil-works/pi-tui';
+import { mkdtempSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { spawnSync } from 'node:child_process';
 
-import type { TuiBackend, TuiEvent } from './tui-backend.js';
+import type { ThinkLevel } from '../agent/transcript/thinking-types.js';
+import type { TuiBackend, TuiEvent, TuiModelChoice } from './tui-backend.js';
 import { EmbeddedBackend } from './backends/embedded-backend.js';
 import { GatewaySseBackend } from './backends/gateway-sse-backend.js';
 import {
@@ -22,6 +23,7 @@ import {
 } from './tui-agent-events.js';
 import { ChatLog } from './components/chat-log.js';
 import { CustomEditor } from './components/custom-editor.js';
+import { TuiBottomBar } from './components/tui-bottom-bar.js';
 import { StreamAssembler } from './stream-assembler.js';
 import { createTuiCommandHandler, getSlashCommands } from './tui-commands.js';
 import { createLocalShellRunner } from './tui-local-shell.js';
@@ -42,6 +44,7 @@ import { installTuiStdioFilter } from './tui-stdio-filter.js';
 import { withTuiSuspended } from './tui-suspend.js';
 import { editorTheme, theme } from './theme.js';
 import { createInitialState, type TuiOptions, type TuiResult, type TuiState } from './tui-types.js';
+import { createXopcTuiKeybindingsManager } from './xopc-tui-keybindings.js';
 
 export type { TuiOptions, TuiResult };
 
@@ -56,12 +59,22 @@ export {
 
 export { withTuiSuspended } from './tui-suspend.js';
 
-function matchesCtrlCSequence(data: string): boolean {
-  if (isKeyRelease(data)) return false;
-  if (data === '\x03') return true;
-  if (parseKey(data) === 'ctrl+c') return true;
-  const kb = getKeybindings();
-  return matchesKey(data, Key.ctrl('c')) || kb.matches(data, 'tui.input.copy');
+const THINK_LEVEL_CYCLE: ThinkLevel[] = [
+  'off',
+  'minimal',
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+  'adaptive',
+];
+
+function nextThinkLevel(current: string | undefined): ThinkLevel {
+  const c = (current ?? 'medium').toLowerCase();
+  const idx = THINK_LEVEL_CYCLE.indexOf(c as ThinkLevel);
+  const mediumIdx = THINK_LEVEL_CYCLE.indexOf('medium');
+  const base = idx >= 0 ? idx : mediumIdx >= 0 ? mediumIdx : 0;
+  return THINK_LEVEL_CYCLE[(base + 1) % THINK_LEVEL_CYCLE.length]!;
 }
 
 export async function runTui(opts: TuiOptions): Promise<TuiResult> {
@@ -77,6 +90,11 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     ? new EmbeddedBackend()
     : new GatewaySseBackend({ url: opts.url ?? 'http://localhost:3120', token: opts.token });
 
+  const keybindings = createXopcTuiKeybindingsManager();
+  setKeybindings(keybindings);
+
+  let modelChoices: TuiModelChoice[] = [];
+
   const tui = new TUI(new ProcessTerminal());
   const dedupeBackspace = createBackspaceDeduper();
   tui.addInputListener((data) => {
@@ -89,15 +107,15 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
 
   const header = new Text('', 1, 0);
   const statusContainer = new Container();
-  const footer = new Text('', 1, 0);
+  const bottomBar = new TuiBottomBar(() => state, () => opts.thinking);
   const chatLog = new ChatLog();
-  const editor = new CustomEditor(tui, editorTheme);
+  const editor = new CustomEditor(tui, editorTheme, keybindings);
   const root = new Container();
   root.addChild(header);
   root.addChild(chatLog);
   root.addChild(statusContainer);
-  root.addChild(footer);
   root.addChild(editor);
+  root.addChild(bottomBar);
   tui.addChild(root);
   tui.setFocus(editor);
 
@@ -111,7 +129,6 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     ),
   );
 
-  let statusText: Text | null = null;
   let statusLoader: Loader | null = null;
   let statusStartedAt: number | null = null;
   let lastActivityStatus = '';
@@ -141,7 +158,6 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
       }
       if (!statusLoader) {
         statusContainer.clear();
-        statusText = null;
         statusLoader = new Loader(
           tui,
           (spinner) => theme.accent(spinner),
@@ -168,17 +184,11 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
       }
       statusLoader?.stop();
       statusLoader = null;
-      if (!statusText) {
-        statusContainer.clear();
-        statusText = new Text('', 1, 0);
-        statusContainer.addChild(statusText);
-      }
-      const text = state.activityStatus
-        ? `${state.connectionStatus} | ${state.activityStatus}`
-        : state.connectionStatus;
-      statusText.setText(theme.dim(text));
+      statusContainer.clear();
     }
     lastActivityStatus = state.activityStatus;
+    bottomBar.invalidate();
+    tui.requestRender();
   };
 
   const setActivityStatus = (status: string) => {
@@ -199,18 +209,17 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
   };
 
   const updateFooter = () => {
-    const modelLabel = state.sessionInfo.model
-      ? state.sessionInfo.modelProvider
-        ? `${state.sessionInfo.modelProvider}/${state.sessionInfo.model}`
-        : state.sessionInfo.model
-      : 'unknown';
-    const tokens =
-      state.sessionInfo.totalTokens != null ? `${state.sessionInfo.totalTokens} tokens` : '';
-    const thinking = state.showThinking ? 'thinking:on' : '';
-    const parts = [`session ${state.currentSessionKey}`, modelLabel, thinking, tokens].filter(
-      Boolean,
-    );
-    footer.setText(theme.dim(parts.join(' | ')));
+    bottomBar.invalidate();
+  };
+
+  const refreshModelChoices = async () => {
+    try {
+      modelChoices = await client.listModels();
+    } catch {
+      modelChoices = [];
+    }
+    bottomBar.invalidate();
+    tui.requestRender();
   };
 
   const refreshSessionInfo = async () => {
@@ -255,6 +264,91 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     await client.abortChat({ sessionKey: state.currentSessionKey, runId }).catch(() => {});
   };
 
+  const resolveModelChoiceIndex = (): number => {
+    if (modelChoices.length === 0) return -1;
+    const p = state.sessionInfo.modelProvider;
+    const m = state.sessionInfo.model;
+    if (p && m) {
+      const byParts = modelChoices.findIndex((x) => x.provider === p && x.id === m);
+      if (byParts >= 0) return byParts;
+    }
+    if (m?.includes('/')) {
+      const [a, b] = m.split('/', 2);
+      const bySlash = modelChoices.findIndex((x) => x.provider === a && x.id === b);
+      if (bySlash >= 0) return bySlash;
+    }
+    return 0;
+  };
+
+  const cycleModel = (dir: 'forward' | 'backward') => {
+    if (modelChoices.length === 0) {
+      void refreshModelChoices().then(() => {
+        if (modelChoices.length === 0) {
+          chatLog.addSystem('No models available to cycle.');
+          tui.requestRender();
+          return;
+        }
+        cycleModel(dir);
+      });
+      return;
+    }
+    const idx = resolveModelChoiceIndex();
+    const base = idx >= 0 ? idx : 0;
+    const delta = dir === 'forward' ? 1 : -1;
+    const next = modelChoices[(base + delta + modelChoices.length) % modelChoices.length]!;
+    sendMessage(`/switch ${next.provider}/${next.id}`);
+  };
+
+  const handleCtrlZ = () => {
+    if (process.platform === 'win32') {
+      chatLog.addSystem('Suspend (Ctrl+Z) is not supported on Windows.');
+      tui.requestRender();
+      return;
+    }
+    const suspendKeepAlive = setInterval(() => {}, 2 ** 30);
+    const ignoreSigint = () => {};
+    process.on('SIGINT', ignoreSigint);
+    process.once('SIGCONT', () => {
+      clearInterval(suspendKeepAlive);
+      process.removeListener('SIGINT', ignoreSigint);
+      tui.start();
+      tui.setFocus(editor);
+      tui.requestRender(true);
+    });
+    try {
+      tui.stop();
+      process.kill(0, 'SIGTSTP');
+    } catch {
+      clearInterval(suspendKeepAlive);
+      process.removeListener('SIGINT', ignoreSigint);
+    }
+  };
+
+  const openExternalEditor = () => {
+    const dir = mkdtempSync(join(tmpdir(), 'xopc-tui-edit-'));
+    const filePath = join(dir, 'message.md');
+    writeFileSync(filePath, editor.getText(), 'utf8');
+    const editorBin = process.env.EDITOR || process.env.VISUAL || 'vi';
+    void (async () => {
+      await withTuiSuspended(tui, async () => {
+        spawnSync(editorBin, [filePath], { stdio: 'inherit' });
+      });
+      try {
+        const next = readFileSync(filePath, 'utf8');
+        editor.setText(next.replace(/\r\n/g, '\n'));
+      } catch {
+        // ignore
+      }
+      try {
+        unlinkSync(filePath);
+      } catch {
+        // ignore
+      }
+      tui.setFocus(editor);
+      tui.requestRender(true);
+    })();
+  };
+
   const sendMessage = (text: string) => {
     if (state.activeRunId) {
       chatLog.addSystem('A response is still in progress. Use /abort or press Escape to cancel.');
@@ -291,6 +385,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     sendMessage,
     requestExit,
     updateFooter,
+    keybindings,
   });
 
   const { runLocalShellLine } = createLocalShellRunner({
@@ -344,38 +439,6 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     }
   };
 
-  const pickerSvc = {
-    tui,
-    editor,
-    openOverlay,
-    closeOverlay,
-    chatLog,
-    client,
-    sendMessage,
-    refreshSessionInfo,
-    updateHeader,
-    state,
-    setSessionKey,
-    clearChatForSessionSwitch,
-    loadSessionHistory,
-  };
-
-  editor.onEscape = () => void abortActive();
-  editor.onCtrlD = () => requestExit();
-  editor.onCtrlL = () => void openModelPickerOverlay(pickerSvc);
-  editor.onCtrlP = () => void openSessionPickerOverlay(pickerSvc);
-  editor.onCtrlO = () => {
-    state.toolsExpanded = !state.toolsExpanded;
-    chatLog.setToolsExpanded(state.toolsExpanded);
-    setActivityStatus(state.toolsExpanded ? 'tools expanded' : 'tools collapsed');
-    tui.requestRender();
-  };
-  editor.onCtrlT = () => {
-    state.showThinking = !state.showThinking;
-    updateFooter();
-    tui.requestRender();
-  };
-
   const handleCtrlC = () => {
     const now = Date.now();
     const decision = resolveCtrlCAction({
@@ -397,13 +460,62 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     setActivityStatus('press ctrl+c again to exit');
     tui.requestRender();
   };
-  editor.onCtrlC = handleCtrlC;
 
-  tui.addInputListener((data) => {
-    if (!matchesCtrlCSequence(data)) return undefined;
-    handleCtrlC();
-    return { consume: true };
+  const setModelChoices = (models: TuiModelChoice[]) => {
+    modelChoices = models;
+  };
+
+  const pickerSvc = {
+    tui,
+    editor,
+    openOverlay,
+    closeOverlay,
+    chatLog,
+    client,
+    sendMessage,
+    refreshSessionInfo,
+    updateHeader,
+    state,
+    setSessionKey,
+    clearChatForSessionSwitch,
+    loadSessionHistory,
+    setModelChoices,
+  };
+
+  editor.onEscape = () => void abortActive();
+  editor.onCtrlD = () => requestExit();
+
+  editor.onAction('app.clear', handleCtrlC);
+  editor.onAction('app.exit', () => requestExit());
+  editor.onAction('app.suspend', handleCtrlZ);
+  editor.onAction('app.thinking.cycle', () => {
+    const cur = state.sessionInfo.thinkingLevel ?? opts.thinking ?? 'medium';
+    sendMessage(`/think ${nextThinkLevel(cur)}`);
   });
+  editor.onAction('app.model.cycleForward', () => cycleModel('forward'));
+  editor.onAction('app.model.cycleBackward', () => cycleModel('backward'));
+  editor.onAction('app.model.select', () => void openModelPickerOverlay(pickerSvc));
+  editor.onAction('app.session.resume', () => void openSessionPickerOverlay(pickerSvc));
+  editor.onAction('app.tools.expand', () => {
+    state.toolsExpanded = !state.toolsExpanded;
+    chatLog.setToolsExpanded(state.toolsExpanded);
+    setActivityStatus(state.toolsExpanded ? 'tools expanded' : 'tools collapsed');
+    tui.requestRender();
+  });
+  editor.onAction('app.thinking.toggle', () => {
+    state.showThinking = !state.showThinking;
+    updateFooter();
+    tui.requestRender();
+  });
+  editor.onAction('app.editor.external', openExternalEditor);
+  editor.onPasteImage = () => {
+    chatLog.addSystem(
+      theme.dim(
+        'Clipboard image paste is not implemented in xopc TUI yet. Paste a file path or use the gateway UI.',
+      ),
+    );
+    tui.requestRender();
+  };
 
   streamWatchdogId = setInterval(() => {
     if (!state.activeRunId) return;
@@ -434,6 +546,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     touchStreamingActivity();
     void (async () => {
       await refreshSessionInfo();
+      await refreshModelChoices();
       await loadSessionHistory();
       updateHeader();
       updateFooter();
