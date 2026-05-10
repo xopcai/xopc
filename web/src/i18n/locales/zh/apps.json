@@ -62,7 +62,9 @@
     "marketplaceReinstallConfirm": "用商店版本覆盖当前已安装的扩展？",
     "marketplaceInstallFailed": "安装失败。",
     "marketplaceUninstallFailed": "卸载失败。",
-    "marketplaceRestartHint": "若涉及频道插件或卸载残留，请重启网关以完全生效。"
+    "marketplaceRestartHint": "若涉及频道插件或卸载残留，请重启网关以完全生效。",
+    "marketplaceBuiltin": "内置",
+    "marketplaceBuiltinManageHint": "请到「内置」页启用或停用。"
   },
   "extensionUi": {
     "permissionTitle": "是否允许「{{name}}」？",

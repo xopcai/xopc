@@ -1,6 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { ArrowLeft, CheckCircle, Loader2, Package, Search, Trash2, X } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 
 import { MarkdownView } from '@/components/markdown/markdown-view';
@@ -10,6 +10,7 @@ import {
   uninstallExtensionFromDisk,
 } from '@/features/extensions/extension-marketplace-api';
 import { useExtensions } from '@/features/extensions/extension-provider';
+import type { ExtensionApiRow } from '@/features/extensions/types';
 import { messages, type MessageBundle } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { fetchJson } from '@/lib/fetch';
@@ -31,6 +32,17 @@ type RegistryEntry = {
 };
 
 type MarketplaceResponse = { ok: boolean; extensions: RegistryEntry[] };
+
+/** Same catalog id on disk: bundled vs user/global/workspace. */
+function extensionInstallKind(
+  extensions: ExtensionApiRow[],
+  catalogId: string,
+): 'absent' | 'bundled' | 'user' {
+  const row = extensions.find((x) => x.id === catalogId);
+  if (!row) return 'absent';
+  if (row.source === 'bundled') return 'bundled';
+  return 'user';
+}
 
 export function ExtensionMarketplacePanel({ className }: { className?: string }) {
   const language = useLocaleStore((s) => s.language);
@@ -63,8 +75,6 @@ export function ExtensionMarketplacePanel({ className }: { className?: string })
     },
     { revalidateOnFocus: false },
   );
-
-  const installedIds = useMemo(() => new Set(extensions.map((e) => e.id)), [extensions]);
 
   const refetchExtensions = useCallback(() => {
     void mutate('gateway-extensions-list');
@@ -148,19 +158,31 @@ export function ExtensionMarketplacePanel({ className }: { className?: string })
             <li className="text-sm text-fg-muted">{copy.marketplaceEmpty}</li>
           ) : (
             extensionsList.map((e) => {
-              const installed = installedIds.has(e.id);
+              const kind = extensionInstallKind(extensions, e.id);
               const busy = rowBusy === e.id;
               return (
-                <li
-                  key={e.id}
-                  className="rounded-xl border border-edge bg-surface-base p-4 shadow-surface"
-                >
-                  <div className="flex flex-wrap items-start gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setDetailPkg(e.id)}
-                      className="min-w-0 flex-1 rounded-lg text-left transition-colors hover:bg-surface-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                    >
+                <li key={e.id} className="list-none">
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`${e.name}, ${copy.marketplaceDetailTitle}`}
+                    onClick={() => setDetailPkg(e.id)}
+                    onKeyDown={(ev) => {
+                      if (ev.key === 'Enter' || ev.key === ' ') {
+                        ev.preventDefault();
+                        setDetailPkg(e.id);
+                      }
+                    }}
+                    className={cn(
+                      'flex w-full cursor-pointer flex-wrap items-start gap-3 rounded-xl border border-edge bg-surface-base p-4 text-left shadow-surface',
+                      'transition-[transform,background-color,border-color,box-shadow] duration-150 ease-out',
+                      'hover:border-edge-subtle hover:bg-surface-hover/40',
+                      'active:scale-[0.992] active:bg-surface-hover/55',
+                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
+                      'dark:hover:bg-surface-hover/25 dark:active:bg-surface-hover/35',
+                    )}
+                  >
+                    <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <h3 className="font-semibold text-fg">{e.name}</h3>
                         {e.verified ? (
@@ -191,9 +213,17 @@ export function ExtensionMarketplacePanel({ className }: { className?: string })
                         <Package className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
                         <code className="rounded bg-surface-panel px-1 py-0.5">{e.npmPackage}</code>
                       </p>
-                    </button>
-                    <div className="flex shrink-0 flex-col items-end gap-2 sm:min-w-[7.5rem]">
-                      {installed ? (
+                    </div>
+                    <div
+                      className="flex shrink-0 flex-col items-end gap-2 sm:min-w-[9rem]"
+                      onClick={(ev) => ev.stopPropagation()}
+                      onKeyDown={(ev) => ev.stopPropagation()}
+                    >
+                      {kind === 'bundled' ? (
+                        <span className="rounded-md bg-surface-hover px-2 py-1 text-[11px] font-medium text-fg-muted">
+                          {copy.marketplaceBuiltin}
+                        </span>
+                      ) : kind === 'user' ? (
                         <>
                           <span className="text-[11px] font-medium text-fg-muted">
                             {copy.marketplaceInstalled}
@@ -209,6 +239,7 @@ export function ExtensionMarketplacePanel({ className }: { className?: string })
                             }}
                             className={cn(
                               'inline-flex items-center justify-center gap-1.5 rounded-lg border border-edge px-3 py-2 text-xs font-medium text-fg',
+                              'transition-colors active:scale-[0.98] active:bg-surface-hover/80',
                               'hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
                               'disabled:pointer-events-none disabled:opacity-50',
                             )}
@@ -232,6 +263,7 @@ export function ExtensionMarketplacePanel({ className }: { className?: string })
                           }}
                           className={cn(
                             'inline-flex w-full items-center justify-center rounded-lg bg-accent px-3 py-2 text-xs font-medium text-accent-fg',
+                            'transition-[transform,opacity] active:scale-[0.98] active:opacity-90',
                             'hover:opacity-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
                             'disabled:pointer-events-none disabled:opacity-50',
                           )}
@@ -255,7 +287,7 @@ export function ExtensionMarketplacePanel({ className }: { className?: string })
         <ExtensionMarketplaceDetailDialog
           packageName={detailPkg}
           copy={copy}
-          installedIds={installedIds}
+          extensions={extensions}
           onClose={() => setDetailPkg(null)}
           onInstall={runInstall}
           onUninstall={runUninstall}
@@ -268,14 +300,14 @@ export function ExtensionMarketplacePanel({ className }: { className?: string })
 function ExtensionMarketplaceDetailDialog({
   packageName,
   copy,
-  installedIds,
+  extensions,
   onClose,
   onInstall,
   onUninstall,
 }: {
   packageName: string;
   copy: MessageBundle['appsPage'];
-  installedIds: Set<string>;
+  extensions: ExtensionApiRow[];
   onClose: () => void;
   onInstall: (name: string, overwrite: boolean) => Promise<void>;
   onUninstall: (id: string) => Promise<void>;
@@ -289,7 +321,8 @@ function ExtensionMarketplaceDetailDialog({
     { revalidateOnFocus: false },
   );
 
-  const installed = installedIds.has(packageName);
+  const installKind = extensionInstallKind(extensions, packageName);
+  const userInstalled = installKind === 'user';
 
   const readmeMd =
     data?.readme?.trim() ||
@@ -364,53 +397,59 @@ function ExtensionMarketplaceDetailDialog({
 
           {data ? (
             <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-edge-subtle px-5 py-4">
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => {
-                  if (installed) {
-                    if (!window.confirm(copy.marketplaceReinstallConfirm)) return;
-                  }
-                  setBusy(true);
-                  void onInstall(packageName, installed)
-                    .catch(() => {
-                      /* parent sets actionError */
-                    })
-                    .finally(() => setBusy(false));
-                }}
-                className={cn(
-                  'inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium',
-                  'bg-accent text-accent-fg hover:opacity-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-                  'disabled:pointer-events-none disabled:opacity-50',
-                )}
-              >
-                {busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
-                {installed ? copy.marketplaceReinstall : copy.marketplaceInstall}
-              </button>
-              {installed ? (
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => {
-                    if (!window.confirm(copy.marketplaceUninstallConfirm)) return;
-                    setBusy(true);
-                    void onUninstall(packageName)
-                      .then(() => onClose())
-                      .catch(() => {
-                        /* parent */
-                      })
-                      .finally(() => setBusy(false));
-                  }}
-                  className={cn(
-                    'inline-flex items-center justify-center gap-1.5 rounded-lg border border-edge px-3 py-2 text-sm font-medium text-fg',
-                    'hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-                    'disabled:pointer-events-none disabled:opacity-50',
-                  )}
-                >
-                  <Trash2 className="size-4 shrink-0" aria-hidden />
-                  {copy.marketplaceUninstall}
-                </button>
-              ) : null}
+              {installKind === 'bundled' ? (
+                <p className="w-full text-sm leading-relaxed text-fg-muted">{copy.marketplaceBuiltinManageHint}</p>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => {
+                      if (userInstalled) {
+                        if (!window.confirm(copy.marketplaceReinstallConfirm)) return;
+                      }
+                      setBusy(true);
+                      void onInstall(packageName, userInstalled)
+                        .catch(() => {
+                          /* parent sets actionError */
+                        })
+                        .finally(() => setBusy(false));
+                    }}
+                    className={cn(
+                      'inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium',
+                      'bg-accent text-accent-fg hover:opacity-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+                      'disabled:pointer-events-none disabled:opacity-50',
+                    )}
+                  >
+                    {busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
+                    {userInstalled ? copy.marketplaceReinstall : copy.marketplaceInstall}
+                  </button>
+                  {userInstalled ? (
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => {
+                        if (!window.confirm(copy.marketplaceUninstallConfirm)) return;
+                        setBusy(true);
+                        void onUninstall(packageName)
+                          .then(() => onClose())
+                          .catch(() => {
+                            /* parent */
+                          })
+                          .finally(() => setBusy(false));
+                      }}
+                      className={cn(
+                        'inline-flex items-center justify-center gap-1.5 rounded-lg border border-edge px-3 py-2 text-sm font-medium text-fg',
+                        'hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+                        'disabled:pointer-events-none disabled:opacity-50',
+                      )}
+                    >
+                      <Trash2 className="size-4 shrink-0" aria-hidden />
+                      {copy.marketplaceUninstall}
+                    </button>
+                  ) : null}
+                </>
+              )}
             </div>
           ) : null}
         </Dialog.Content>
