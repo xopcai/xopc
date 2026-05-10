@@ -148,7 +148,7 @@ export function createExtensionDevCommand(): Command {
         }
 
         const ctx = getContextWithOpts();
-        const config = loadConfig(ctx.configPath);
+        loadConfig(ctx.configPath);
         const extensionsDir = resolveExtensionsDir();
         const symlinkPath = setupDevSymlink(extensionDir, extensionsDir, manifest.id);
 
