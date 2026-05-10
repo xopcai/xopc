@@ -57,6 +57,9 @@ export class TuiBottomBar implements Component {
     if (state.sessionInfo.totalTokens != null) {
       leftParts.push(formatTokens(state.sessionInfo.totalTokens));
     }
+    if (state.messageFollowUpQueue.length > 0) {
+      leftParts.push(`Q${state.messageFollowUpQueue.length}`);
+    }
     let statsLeft = leftParts.join(' · ');
 
     const modelId = state.sessionInfo.model ?? 'unknown';

@@ -18,7 +18,9 @@ export type XopcTuiAppKeybinding =
   | 'app.thinking.toggle'
   | 'app.session.resume'
   | 'app.editor.external'
-  | 'app.clipboard.pasteImage';
+  | 'app.clipboard.pasteImage'
+  | 'app.message.followUp'
+  | 'app.message.dequeue';
 
 declare module '@earendil-works/pi-tui' {
   interface Keybindings {
@@ -35,6 +37,8 @@ declare module '@earendil-works/pi-tui' {
     'app.session.resume': true;
     'app.editor.external': true;
     'app.clipboard.pasteImage': true;
+    'app.message.followUp': true;
+    'app.message.dequeue': true;
   }
 }
 
@@ -77,6 +81,14 @@ export const XOPC_TUI_KEYBINDINGS = {
     defaultKeys: process.platform === 'win32' ? 'alt+v' : 'ctrl+v',
     description: 'Paste image from clipboard (placeholder)',
   },
+  'app.message.followUp': {
+    defaultKeys: 'alt+enter',
+    description: 'Queue message while busy (or submit when idle)',
+  },
+  'app.message.dequeue': {
+    defaultKeys: 'alt+up',
+    description: 'Restore queued messages to editor',
+  },
 } as const satisfies KeybindingDefinitions;
 
 /** Order for `/hotkeys` and docs (pi-style UX). */
@@ -94,6 +106,8 @@ export const XOPC_TUI_HOTKEY_ORDER: XopcTuiAppKeybinding[] = [
   'app.thinking.toggle',
   'app.editor.external',
   'app.clipboard.pasteImage',
+  'app.message.followUp',
+  'app.message.dequeue',
 ];
 
 export function createXopcTuiKeybindingsManager(): KeybindingsManager {

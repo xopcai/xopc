@@ -9,5 +9,7 @@ describe('formatXopcTuiHotkeys', () => {
     const text = formatXopcTuiHotkeys(km);
     expect(text).toContain('Next model');
     expect(text).toContain('Session picker');
+    expect(text).toContain('Queue message');
+    expect(text).toContain('Restore queued');
   });
 });

@@ -408,10 +408,61 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     handleBangLine: runLocalShellLine,
   });
 
-  editor.onSubmit = createSubmitBurstCoalescer({
+  const submitBurst = createSubmitBurstCoalescer({
     submit: submitCore,
     enabled: shouldEnableWindowsGitBashPasteFallback(),
   });
+  editor.onSubmit = submitBurst;
+
+  const flushFollowUpQueue = () => {
+    if (state.exitRequested) return;
+    if (state.activeRunId) return;
+    const next = state.messageFollowUpQueue.shift();
+    if (next === undefined) return;
+    sendMessage(next);
+  };
+
+  const isAgentBusy = () =>
+    state.activeRunId != null || busyStates.has(state.activityStatus);
+
+  const handleFollowUp = () => {
+    const text = editor.getText().trim();
+    if (!text) return;
+    if (isAgentBusy()) {
+      editor.addToHistory(text);
+      state.messageFollowUpQueue.push(text);
+      editor.setText('');
+      chatLog.addSystem(
+        theme.dim(
+          `Queued follow-up (${state.messageFollowUpQueue.length} in queue). Next sends when this reply finishes.`,
+        ),
+      );
+      bottomBar.invalidate();
+      tui.requestRender();
+      return;
+    }
+    submitBurst(text);
+  };
+
+  const handleDequeue = () => {
+    if (state.messageFollowUpQueue.length === 0) {
+      chatLog.addSystem(theme.dim('No queued messages to restore.'));
+      tui.requestRender();
+      return;
+    }
+    const queued = [...state.messageFollowUpQueue];
+    state.messageFollowUpQueue.length = 0;
+    const current = editor.getText().trim();
+    const combined = [queued.join('\n\n'), current].filter(Boolean).join('\n\n');
+    editor.setText(combined);
+    chatLog.addSystem(
+      theme.dim(
+        `Restored ${queued.length} queued message${queued.length > 1 ? 's' : ''} to editor.`,
+      ),
+    );
+    bottomBar.invalidate();
+    tui.requestRender();
+  };
 
   const setSessionKey = (key: string) => {
     state.currentSessionKey = key;
@@ -422,6 +473,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     chatLog.clearAll();
     clearPendingToolCallIds();
     state.historyLoaded = false;
+    state.messageFollowUpQueue.length = 0;
   };
 
   const loadSessionHistory = async () => {
@@ -516,6 +568,8 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     );
     tui.requestRender();
   };
+  editor.onAction('app.message.followUp', handleFollowUp);
+  editor.onAction('app.message.dequeue', handleDequeue);
 
   streamWatchdogId = setInterval(() => {
     if (!state.activeRunId) return;
@@ -532,12 +586,23 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     );
     state.activeRunId = null;
     setActivityStatus('idle');
+    flushFollowUpQueue();
     tui.requestRender();
   }, 5000);
 
   client.onEvent = (evt: TuiEvent) => {
     const data = (evt.data ?? {}) as Record<string, unknown>;
-    dispatchAgentSSE(evt.event, data, state, chatLog, assembler, tui, setActivityStatus, touchStreamingActivity);
+    dispatchAgentSSE(
+      evt.event,
+      data,
+      state,
+      chatLog,
+      assembler,
+      tui,
+      setActivityStatus,
+      touchStreamingActivity,
+      flushFollowUpQueue,
+    );
   };
 
   client.onConnected = () => {

@@ -28,6 +28,8 @@ export function dispatchAgentSSE(
   tui: TUI,
   setActivityStatus: (status: string) => void,
   touchStreamingActivity?: () => void,
+  /** Called when a run ends (result/error) so the TUI can flush follow-up queue, etc. */
+  onRunEnded?: () => void,
 ): void {
   if (STREAM_TOUCH_EVENTS.has(event)) {
     touchStreamingActivity?.();
@@ -114,6 +116,7 @@ export function dispatchAgentSSE(
       chatLog.addSystem(`❌ ${errorContent}`);
       state.activeRunId = null;
       setActivityStatus('idle');
+      onRunEnded?.();
       tui.requestRender();
       break;
     }
@@ -124,6 +127,7 @@ export function dispatchAgentSSE(
       }
       state.activeRunId = null;
       setActivityStatus('idle');
+      onRunEnded?.();
       tui.requestRender();
       break;
     }
