@@ -9,6 +9,7 @@ import { cn } from '@/lib/cn';
 import { ExtensionSettingsNav } from '@/features/extensions/extension-settings-nav';
 import { pathForTab, SETTINGS_SHELL_NAV_GROUPS } from '@/navigation';
 import { isElectron } from '@/lib/electron-env';
+import { electronDarwinTitlebarLeftPad, isElectronDarwin } from '@/lib/electron-window-chrome';
 import { AGENTS_APP_LIST_PATH } from '@/features/settings/agents/agents-app-path';
 import { resolveSettingsBackTarget } from '@/features/settings/settings-nav-state';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -108,7 +109,16 @@ export const SettingsPageLayout = memo(function SettingsPageLayout() {
           } as CSSProperties
         }
       >
-        <div className={cn('shrink-0 px-4 pb-2 pt-4', APP_CHROME_DRAG_CLASS)}>{backControl}</div>
+        <div
+          className={cn(
+            'shrink-0 pb-2 pt-4',
+            APP_CHROME_DRAG_CLASS,
+            electronDarwinTitlebarLeftPad(),
+            isElectronDarwin() ? 'pr-4' : 'px-4',
+          )}
+        >
+          {backControl}
+        </div>
 
         {/* Grouped vertical nav (mobile: capped height + scroll; desktop: fills rail). */}
         <div className="flex min-h-0 flex-1 flex-col md:min-h-0">
