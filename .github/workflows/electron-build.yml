@@ -7,7 +7,7 @@
 #
 # Coverage (GitHub-hosted runners):
 #   - macOS: Apple Silicon runner builds both Intel (x64) + arm64 in one job
-#   - Windows: x64 + arm64 (separate runners)
+#   - Windows: x64 + arm64 (separate runners; release job merges both `latest.yml` so auto-update works)
 #   - Linux: x64 (AppImage+deb) + arm64 AppImage only on ubuntu-24.04-arm (deb/fpm on arm64 CI is unreliable).
 #
 # Triggers:
@@ -179,12 +179,20 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
       - name: Download all build artifacts
         uses: actions/download-artifact@v8
         with:
           pattern: xopc-electron-*
           path: release-assets
           merge-multiple: true
+
+      # Windows x64 and arm64 each emit `latest.yml`; upload basename collision would leave
+      # only one manifest on the release and break electron-updater for the other arch.
+      - name: Merge Windows Electron latest.yml
+        run: ruby scripts/merge-windows-electron-latest-yml.rb release-assets
 
       - name: Publish release assets
         env:

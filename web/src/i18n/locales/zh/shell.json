@@ -134,6 +134,7 @@
     "dismissHint": "不再提醒此版本",
     "reminderElectronReady": "新版本 v{{version}} 已就绪，重启应用以安装。",
     "reminderDownloading": "正在下载更新… {{percent}}%",
+    "reminderElectronUpdateError": "桌面版更新失败：{{detail}}",
     "reminderNpm": "网关有新版本 v{{version}} 可用。",
     "updateNow": "立即更新",
     "updateRunning": "正在更新…",

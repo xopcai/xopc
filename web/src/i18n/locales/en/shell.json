@@ -134,6 +134,7 @@
     "dismissHint": "Do not show this reminder again for this version",
     "reminderElectronReady": "Update v{{version}} is ready. Restart the app to install.",
     "reminderDownloading": "Downloading update… {{percent}}%",
+    "reminderElectronUpdateError": "Desktop update failed: {{detail}}",
     "reminderNpm": "A new version v{{version}} is available for the gateway.",
     "updateNow": "Update now",
     "updateRunning": "Updating…",
