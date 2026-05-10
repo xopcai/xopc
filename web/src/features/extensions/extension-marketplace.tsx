@@ -262,9 +262,9 @@ export function ExtensionMarketplacePanel({ className }: { className?: string })
                             });
                           }}
                           className={cn(
-                            'inline-flex w-full items-center justify-center rounded-lg bg-accent px-3 py-2 text-xs font-medium text-accent-fg',
-                            'transition-[transform,opacity] active:scale-[0.98] active:opacity-90',
-                            'hover:opacity-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+                            'inline-flex w-full items-center justify-center rounded-lg bg-accent px-3 py-2 text-xs font-medium text-white',
+                            'shadow-surface transition-[transform,background-color] active:scale-[0.98]',
+                            'hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
                             'disabled:pointer-events-none disabled:opacity-50',
                           )}
                         >
@@ -417,7 +417,8 @@ function ExtensionMarketplaceDetailDialog({
                     }}
                     className={cn(
                       'inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium',
-                      'bg-accent text-accent-fg hover:opacity-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+                      'bg-accent text-white shadow-surface hover:bg-accent-hover',
+                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
                       'disabled:pointer-events-none disabled:opacity-50',
                     )}
                   >

@@ -5,21 +5,19 @@ import { join, resolve } from 'node:path';
 import { Command } from 'commander';
 import semver from 'semver';
 
-import { resolveDefaultAgentId } from '../../agent/agent-scope.js';
 import {
   downloadExtensionStoreZipBuffer,
   resolveExtensionZipDownloadUrl,
   resolveExtensionsStoreBaseUrl,
 } from '../../agent/skills/marketplace/adapters/store/store-api-client.js';
 import { loadConfig } from '../../config/loader.js';
-import { resolveWorkspaceExtensionsDir } from '../../config/paths.js';
+import { resolveExtensionsDir } from '../../config/paths.js';
 import type { InstallResult } from '../../extensions/install.js';
 import {
   installExtensionFromStoreZip,
   installFromLocal,
   installFromNpm,
   peekExtensionIdFromStoreZip,
-  resolveExtensionsDir,
 } from '../../extensions/install.js';
 import { getExtensionLockfileManager } from '../../extensions/lockfile.js';
 import * as marketplace from '../../extensions/marketplace.js';
@@ -145,13 +143,12 @@ export function createExtensionInstallCommand(): Command {
   return new Command('extension:install')
     .alias('ext:install')
     .description(
-      'Install extension from xopc-store (store.xopc.ai), npm, or a local directory',
+      'Install extension from xopc-store (store.xopc.ai), npm, or a local directory into ~/.xopc/extensions',
     )
     .argument(
       '<target>',
       'npm spec, path, store:id, or store-shaped id (npm is tried first; use --store / store: for store-only)',
     )
-    .option('--global', 'Install into global extensions directory', false)
     .option('--store', 'Install from xopc-store only (fail if not an extension package)', false)
     .option('--npm', 'Install from npm only', false)
     .option(
@@ -162,14 +159,11 @@ export function createExtensionInstallCommand(): Command {
     .action(
       async (
         target: string,
-        opts: { global: boolean; store: boolean; npm: boolean; force: boolean },
+        opts: { store: boolean; npm: boolean; force: boolean },
       ) => {
         const ctx = getContextWithOpts();
         const cfg = loadConfig(ctx.configPath);
-        const agentId = resolveDefaultAgentId(cfg);
-        const targetDir = opts.global
-          ? resolveExtensionsDir(ctx.workspacePath, true)
-          : resolveWorkspaceExtensionsDir(cfg, agentId);
+        const targetDir = resolveExtensionsDir();
         const lock = getExtensionLockfileManager();
 
         let installTarget = target.trim();
@@ -410,16 +404,12 @@ export function createExtensionPublishCommand(): Command {
 export function createExtensionUpdateCommand(): Command {
   return new Command('extension:update')
     .alias('ext:update')
-    .description('Re-install extension(s) from the lockfile (npm or xopc-store)')
+    .description('Re-install extension(s) from the lockfile (npm or xopc-store) under ~/.xopc/extensions')
     .argument('[extensionId]', 'Specific extension id (default: all in lockfile)')
-    .option('--global', 'Use global extensions directory', false)
-    .action(async (extensionId: string | undefined, opts: { global: boolean }) => {
+    .action(async (extensionId: string | undefined) => {
       const ctx = getContextWithOpts();
       const cfg = loadConfig(ctx.configPath);
-      const agentId = resolveDefaultAgentId(cfg);
-      const targetDir = opts.global
-        ? resolveExtensionsDir(ctx.workspacePath, true)
-        : resolveWorkspaceExtensionsDir(cfg, agentId);
+      const targetDir = resolveExtensionsDir();
       const storeBase = resolveExtensionsStoreBaseUrl(cfg);
 
       const lock = getExtensionLockfileManager();

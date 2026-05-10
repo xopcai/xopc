@@ -18,11 +18,8 @@ xopc 提供了一个轻量级但功能强大的扩展系统。
 **方式一：使用 CLI（推荐）**
 
 ```bash
-# 从 npm 安装到 workspace
+# 从 npm 安装（目录 ~/.xopc/extensions）
 xopc extension install xopc-extension-hello
-
-# 安装到 global（跨项目共享）
-xopc extension install xopc-extension-hello --global
 
 # 从本地目录安装
 xopc extension install ./my-local-extension

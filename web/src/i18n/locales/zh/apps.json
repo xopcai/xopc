@@ -1,13 +1,13 @@
 {
   "appsPage": {
     "title": "应用",
-    "subtitle": "扩展市场、随 xopc 分发的内置扩展，以及全局（~/.xopc/extensions）与工作区（.extensions）安装。与技能页类似，可用 ?tab=marketplace | builtin | user。",
+    "subtitle": "扩展市场、内置扩展；用户扩展由 CLI 或商店安装到 ~/.xopc/extensions。与技能页类似，可用 ?tab=marketplace | builtin | user。",
     "tabMarketplace": "扩展市场",
     "tabBuiltin": "内置",
     "tabUser": "用户安装",
     "appsNavAria": "应用分区",
     "emptyBuiltin": "网关未发现任何内置扩展（可检查网关日志与 dist/extensions 下的清单）。",
-    "emptyUser": "未发现全局或工作区扩展。请安装到 ~/.xopc/extensions 或工作区 .extensions。",
+    "emptyUser": "未发现用户安装的扩展。请通过扩展市场或 CLI 安装到 ~/.xopc/extensions。",
     "searchPlaceholder": "搜索应用",
     "noSearchResults": "没有符合筛选的应用。",
     "statusEnabled": "已启用",

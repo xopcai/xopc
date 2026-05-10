@@ -262,7 +262,9 @@ export function resolveExtensionsLockPath(): string {
 }
 
 /**
- * Per-agent extension install directory (`…/agent/extensions/`), not under the markdown workspace.
+ * Per-agent extensions directory (`…/agents/<id>/agent/extensions/`) — used for discovery of
+ * legacy or manually placed copies. CLI, web store, and `extension:dev` symlink installs use
+ * {@link resolveExtensionsDir} (`~/.xopc/extensions`) only.
  */
 export function resolveWorkspaceExtensionsDir(config: Config, agentId: string): string {
   return join(resolveAgentDir(config, agentId), 'extensions');

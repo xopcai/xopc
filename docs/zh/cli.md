@@ -453,39 +453,26 @@ xopc extension install @scope/my-extension
 xopc extension install my-extension@1.0.0
 ```
 
-**安装到 global**（跨项目共享）：
+**从本地目录安装**（同样安装到 `~/.xopc/extensions`）：
 ```bash
-xopc extension install <package-name> --global
-
-# 示例
-xopc extension install xopc-extension-telegram --global
-```
-
-**从本地目录安装**：
-```bash
-# 安装到 workspace
 xopc extension install ./my-local-extension
-
-# 安装到 global
-xopc extension install ./my-local-extension --global
 ```
 
 **参数**：
 
 | 参数 | 描述 |
 |------|------|
-| `--global` | 安装到全局目录 (~/.xopc/extensions/) |
 | `--timeout <ms>` | 安装超时时间（默认 120000ms） |
 
 **安装流程**：
 1. 下载/复制扩展文件
 2. 验证 `xopc.extension.json` 清单
 3. 安装依赖（如有 `package.json` 依赖）
-4. 复制到目标目录 (workspace/.extensions/ 或 ~/.xopc/extensions/)
+4. 复制到 `~/.xopc/extensions/<id>/`
 
-**三级存储说明**：
-- Workspace (./.extensions/)：项目私有，优先级最高
-- Global (~/.xopc/extensions/)：用户级共享
+**扩展发现优先级**（加载时；CLI/Web 安装目录为全局）：
+- 工作区 / agent 扩展目录（若存在旧数据或手动放置）
+- Global (`~/.xopc/extensions/`)
 - Bundled：内置扩展，优先级最低
 
 ### 移除扩展

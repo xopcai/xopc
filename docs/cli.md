@@ -388,11 +388,8 @@ xopc extension list
 ### Install Extension
 
 ```bash
-# Install from npm to workspace (default)
+# Install from npm (always under ~/.xopc/extensions)
 xopc extension install xopc-extension-telegram
-
-# Install to global (shared across projects)
-xopc extension install xopc-extension-telegram --global
 
 # Install from local directory
 xopc extension install ./my-local-extension
@@ -405,7 +402,6 @@ xopc extension install slow-extension --timeout 300000
 
 | Parameter | Description |
 |-----------|-------------|
-| `--global` | Install to global directory |
 | `--timeout <ms>` | Installation timeout |
 
 ### Remove Extension

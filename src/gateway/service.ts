@@ -30,7 +30,7 @@ import {
   resolveCronJobsPath,
   resolveStateDir,
   resolveAgentDir,
-  resolveWorkspaceExtensionsDir,
+  resolveExtensionsDir,
 } from '../config/paths.js';
 import { AgentRunRelay, type RelayEvent } from './agent-run-relay.js';
 import { ClarifyBridge, type ClarifyBridgeRequest } from './clarify-bridge.js';
@@ -279,10 +279,9 @@ export class GatewayService {
    */
   private initializeExtensionLoader(): void {
     try {
-      const aid = getDefaultAgentId(this.config);
       this.extensionLoader = new ExtensionLoader({
         workspaceDir: this.workspacePath,
-        extensionsDir: resolveWorkspaceExtensionsDir(this.config, aid),
+        extensionsDir: resolveExtensionsDir(),
       });
       this.extensionLoader.setConfig(this.config as Parameters<ExtensionLoader['setConfig']>[0]);
     } catch (error) {
@@ -1387,7 +1386,7 @@ export class GatewayService {
   }
 
   /**
-   * Install an extension from xopc-store into the default agent extensions directory,
+   * Install an extension from xopc-store into the global extensions directory (`~/.xopc/extensions`),
    * append its id to `extensions.enabled`, refresh the loader, and emit `config.reload`.
    */
   async installExtensionFromMarketplace(opts: {
@@ -1400,7 +1399,7 @@ export class GatewayService {
       throw new Error('Package name is required');
     }
     const storeBase = resolveExtensionsStoreBaseUrl(this.config);
-    const targetDir = resolveWorkspaceExtensionsDir(this.config, getDefaultAgentId(this.config));
+    const targetDir = resolveExtensionsDir();
     mkdirSync(targetDir, { recursive: true });
 
     const { downloadUrl, version } = await resolveExtensionZipDownloadUrl(

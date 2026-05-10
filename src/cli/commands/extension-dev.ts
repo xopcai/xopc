@@ -11,10 +11,8 @@ import { join, resolve } from 'node:path';
 
 import { Command } from 'commander';
 
-import { resolveDefaultAgentId } from '../../agent/agent-scope.js';
 import { loadConfig } from '../../config/loader.js';
-import { resolveConfigPath } from '../../config/paths.js';
-import { resolveWorkspaceExtensionsDir } from '../../config/paths.js';
+import { resolveConfigPath, resolveExtensionsDir } from '../../config/paths.js';
 import { checkEngineCompatibility } from '../../extensions/engine-check.js';
 import type { ExtensionManifest } from '../../extensions/types/index.js';
 import { normalizeExtensionManifest } from '../../extensions/normalize-manifest.js';
@@ -151,8 +149,7 @@ export function createExtensionDevCommand(): Command {
 
         const ctx = getContextWithOpts();
         const config = loadConfig(ctx.configPath);
-        const agentId = resolveDefaultAgentId(config);
-        const extensionsDir = resolveWorkspaceExtensionsDir(config, agentId);
+        const extensionsDir = resolveExtensionsDir();
         const symlinkPath = setupDevSymlink(extensionDir, extensionsDir, manifest.id);
 
         console.log(
