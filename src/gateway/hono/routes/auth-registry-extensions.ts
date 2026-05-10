@@ -406,6 +406,78 @@ export function registerAuthRegistryExtensionsRoutes(authenticated: Hono, deps: 
     }
   });
 
+  authenticated.get('/api/marketplace/packages/:pkgName', async (c) => {
+    const raw = c.req.param('pkgName');
+    if (!raw) {
+      return c.json({ ok: false, error: 'Missing package name' }, 400);
+    }
+    let pkgName: string;
+    try {
+      pkgName = decodeURIComponent(raw);
+    } catch {
+      return c.json({ ok: false, error: 'Invalid package name' }, 400);
+    }
+    try {
+      const payload = await service.fetchExtensionMarketplacePackageDetail(pkgName);
+      return c.json({ ok: true, payload });
+    } catch (err) {
+      return c.json(
+        { ok: false, error: err instanceof Error ? err.message : 'Marketplace request failed' },
+        502,
+      );
+    }
+  });
+
+  authenticated.post('/api/marketplace/install', strictRateLimitMiddleware, async (c) => {
+    let body: { name?: unknown; version?: unknown; overwrite?: unknown };
+    try {
+      body = (await c.req.json()) as typeof body;
+    } catch {
+      return c.json({ ok: false, error: 'Invalid JSON' }, 400);
+    }
+    const name = typeof body.name === 'string' ? body.name.trim() : '';
+    const version = typeof body.version === 'string' ? body.version.trim() : undefined;
+    const overwrite =
+      body.overwrite === true || body.overwrite === 'true' || body.overwrite === '1';
+    if (!name) {
+      return c.json(
+        { ok: false, error: 'Expected { name: string, version?: string, overwrite?: boolean }' },
+        400,
+      );
+    }
+    try {
+      const payload = await service.installExtensionFromMarketplace({ name, version, overwrite });
+      return c.json({ ok: true, payload });
+    } catch (err) {
+      return c.json(
+        { ok: false, error: err instanceof Error ? err.message : 'Install failed' },
+        400,
+      );
+    }
+  });
+
+  authenticated.post('/api/marketplace/uninstall', strictRateLimitMiddleware, async (c) => {
+    let body: { extensionId?: unknown };
+    try {
+      body = (await c.req.json()) as typeof body;
+    } catch {
+      return c.json({ ok: false, error: 'Invalid JSON' }, 400);
+    }
+    const extensionId = typeof body.extensionId === 'string' ? body.extensionId.trim() : '';
+    if (!extensionId) {
+      return c.json({ ok: false, error: 'Expected { extensionId: string }' }, 400);
+    }
+    try {
+      const payload = await service.uninstallUserExtension(extensionId);
+      return c.json({ ok: true, payload });
+    } catch (err) {
+      return c.json(
+        { ok: false, error: err instanceof Error ? err.message : 'Uninstall failed' },
+        400,
+      );
+    }
+  });
+
   // POST /api/registry/reload — reload gateway config and refresh model list for clients
   authenticated.post('/api/registry/reload', async (c) => {
     try {
