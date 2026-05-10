@@ -97,6 +97,8 @@ export interface TuiState {
   /** Last Ctrl+C timestamp for double-press exit (see `resolveCtrlCAction`). */
   lastCtrlCAt: number;
   exitRequested: boolean;
+  /** Queued via Alt+Enter while a run is active; flushed FIFO when the run ends. */
+  messageFollowUpQueue: string[];
 }
 
 export function createInitialState(sessionKey: string): TuiState {
@@ -113,5 +115,6 @@ export function createInitialState(sessionKey: string): TuiState {
     showThinking: false,
     lastCtrlCAt: 0,
     exitRequested: false,
+    messageFollowUpQueue: [],
   };
 }

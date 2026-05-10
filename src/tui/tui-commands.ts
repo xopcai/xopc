@@ -54,6 +54,8 @@ export function formatTuiHelpText(isLocal: boolean): string {
   lines.push('  Ctrl+T — Toggle thinking block display');
   lines.push('  Ctrl+G — Edit draft in $EDITOR');
   lines.push('  Ctrl+Z — Suspend to shell (Unix)');
+  lines.push('  Alt+Enter — Queue follow-up while busy (same as Enter when idle)');
+  lines.push('  Alt+Up — Restore queued messages into the editor');
   lines.push('  Ctrl+V (mac/Linux) / Alt+V (Win) — Clipboard image (stub in xopc)');
   lines.push('  Ctrl+C — Clear input; repeat within ~1s to exit when empty');
   lines.push('  Ctrl+D — Exit when input empty');
@@ -140,6 +142,7 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: strin
         void abortActive().then(() => {
           assembler.clear();
           chatLog.clearAll();
+          state.messageFollowUpQueue.length = 0;
           tui.requestRender();
           sendMessage(input);
         });
