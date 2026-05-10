@@ -7,7 +7,7 @@
 
 <p align="center">
   <strong>与你共同成长的 OPC 工作站。</strong><br />
-  面向<strong>一人公司</strong>的轻量<strong>个人 AI 助手</strong> —— <strong>本地部署</strong>、<strong>密钥自备（BYOK）</strong>，用扩展就能加能力，不必 fork 核心代码。
+  面向<strong>一人公司</strong>的轻量<strong>个人 AI 助手</strong> —— <strong>本地部署</strong>、<strong>密钥自备（BYOK）</strong>，靠插件扩展能力，不必改核心代码。
 </p>
 
 <p align="center">
@@ -32,7 +32,7 @@
   <a href="https://xopcai.github.io/xopc/zh/cli">CLI</a>
 </p>
 
-**xopc** 是一套**自托管**的智能体方案：**命令行（CLI）**、全屏**终端界面（TUI）**、带 **React 管理台**的 **HTTP/WebSocket 网关**，以及可选的 **Electron** 桌面端（**macOS / Windows / Linux**），并内置 **Telegram、微信、飞书/Lark、钉钉** 等聊天机器人插件。大模型侧基于 **[@earendil-works/pi-ai](https://github.com/earendil-works/pi-mono)**，对接 **20+** 家厂商。可通过**扩展**接入更多工具、频道和模型；配合 **SKILL.md** 管理技能；网关前台也能用 **`@xopcai/xopc/extension-ui-sdk`** 做界面扩展。
+**xopc** 是一套可**装在自己机器上**的智能体工具链：**命令行（CLI）**、全屏**终端界面（TUI）**、带网页后台的 **HTTP/WebSocket 网关**（控制台用 **React** 编写），以及可选的 **Electron** 桌面版（**macOS / Windows / Linux**），并内置 **Telegram、微信、飞书/Lark、钉钉** 等机器人插件。模型调用基于 **[@earendil-works/pi-ai](https://github.com/earendil-works/pi-mono)**，可对接 **20+** 家厂商。通过**扩展**加工具、接新机器人、接新模型；用 **SKILL.md** 管理技能；网页端还能用 **`@xopcai/xopc/extension-ui-sdk`** 做界面扩展。
 
 ---
 
@@ -40,29 +40,31 @@
 
 | | |
 | --- | --- |
-| **数据留在身边** | 服务跑在你自己的机器上；只要不接外网机器人和联网工具，数据默认不出本机。也**不必**绑定某一家公有云才能用。 |
+| **数据留在身边** | 服务跑在你自己电脑上；不接入会主动访问外网的机器人或联网插件时，数据默认不出本机。也**不必**绑死某一家公有云。 |
 | **BYOK** | API Key、OAuth 等写在配置文件（`~/.xopc/xopc.json`）和环境变量里 —— 可用 DeepSeek(推荐)、 OpenAI、Anthropic、Google、**Ollama / LM Studio / vLLM**、Bedrock、Azure、OpenRouter、各类网关等。 |
-| **多种用法** | **`xopc tui`**（全屏终端）、**`xopc agent`**（命令行里一问一答）、**浏览器里开网关控制台**、**Electron 桌面**（同一套界面）。 |
-| **聊天机器人** | 内置 **Telegram**、**微信**、**飞书/Lark**、**钉钉**，外加网关自带的**网页对话**；支持私聊、群聊的访问控制（配对、白名单等）。 |
-| **图片与语音** | **图片**：识图、按配置的生图。**语音**：语音转文字 / 文字转语音（如 Telegram、网关等场景），详见文档。 |
-| **可扩展** | **服务端**：`ChannelPlugin`、工具、cron、自定义模型接入。**界面**：用 **`@xopcai/xopc/extension-ui-sdk`** 改网关控制台。 |
+| **多种用法** | **`xopc tui`**（全屏终端）、**`xopc agent`**（命令行里多轮聊）、**浏览器开网关网页**、**Electron 桌面版**（同一套界面）。 |
+| **聊天机器人** | 内置 **Telegram**、**微信**、**飞书/Lark**、**钉钉**，以及网关自带的**网页对话**；私聊、群聊可做访问控制（配对、白名单等）。 |
+| **图片与语音** | **图片**：识图、按需生图。**语音**：语音转文字、文字转语音（如 Telegram、网关等），详见文档。 |
+| **可扩展** | **服务端**：`ChannelPlugin`、工具、定时任务（cron）、自定义模型接入。**界面**：用 **`@xopcai/xopc/extension-ui-sdk`** 扩展网关网页。 |
 
 ---
 
+<a id="install"></a>
+
 ## 安装
 
-**环境要求：** Node.js **≥ 22**（跑 CLI 和网关都要）。从本仓库开发时建议用 **pnpm**。
+**环境：** Node.js **≥ 22**（跑 CLI、起网关都需要）。在本仓库里开发时建议用 **pnpm**。
 
 ```bash
 npm install -g @xopcai/xopc
 # 或: pnpm add -g @xopcai/xopc
 ```
 
-**装好以后：** 建议先跑一次交互式向导，把模型、密钥、频道等配齐。
+**装好后，**建议先跑一遍配置向导，把模型、密钥、机器人等一次配齐。
 
 ```bash
 xopc onboard
-# 只想快速配模型: xopc onboard --quick
+# 只想快速选模型: xopc onboard --quick
 ```
 
 ---
@@ -72,7 +74,7 @@ xopc onboard
 ## 快速上手
 
 ```bash
-# 全屏终端 UI：智能体跑在本机，可以不单独起网关
+# 全屏终端：对话在本地跑，不必先起网关
 xopc tui --local
 
 # 命令行里多轮对话
@@ -81,47 +83,66 @@ xopc agent -i
 # 只问一句
 xopc agent -m "总结最近 5 条提交"
 
-# 网关：REST/SSE + 内置网页控制台（具体地址看终端日志或 gateway 配置）
+# 网关：REST/SSE + 内置网页控制台（地址看终端输出或配置里的 gateway）
 xopc gateway
 
-# 同一网关，后台常驻（会打印 PID/地址；停止用 `xopc gateway stop`）
+# 同一套网关，后台常驻（会打印 PID 和地址；停服：xopc gateway stop）
 xopc gateway --background
 ```
 
-**克隆源码参与开发：**
+**从源码开发：**
 
 ```bash
 git clone https://github.com/xopcai/xopc.git && cd xopc
-pnpm install && pnpm run dev -- agent -i   # 开发时不用先 pnpm run build
-pnpm run build                              # 打正式包：Node + 网页 → dist/
+pnpm install && pnpm run dev -- agent -i   # 开发阶段不必先 build
+pnpm run build                              # 构建发布：Node + 网页 → dist/
 ```
 
-**Electron 桌面版**（把网关和界面打成一个安装包）：本地执行 `pnpm run electron:build`，输出在 `dist/release/`（常见后缀：`.dmg`、`.exe`、`.AppImage`、`.deb`）。流水线会按平台出包；正式安装包见 [GitHub Releases](https://github.com/xopcai/xopc/releases)。
+---
+
+<a id="electron-desktop"></a>
+
+## Electron 桌面版
+
+### 从 GitHub Releases 下载
+
+1. 打开 **[GitHub Releases](https://github.com/xopcai/xopc/releases)**。
+2. 在最新版本里选本机系统对应的安装包（常见：**macOS** 用 `.dmg` / `.zip`，**Windows** 用 `.exe`，**Linux** 用 `.AppImage` / `.deb`）。
+3. 像平时装软件一样安装或运行。macOS 若用语音相关功能，首次可能会要**麦克风**权限。
+
+暂时没有适合你系统的安装包时，可先按上文 **[安装](#安装)** 装命令行版，再用 **`xopc gateway`**；需要桌面安装包可自行 **[从源码打包](#electron-desktop)**。
+
+### 从源码打包
+
+```bash
+pnpm install
+pnpm run electron:build   # 输出在 dist/release/
+```
 
 ---
 
-## 选哪种用法？
+## 怎么用？
 
-| 用法 | 命令 / 操作 | 适合谁 |
+| 方式 | 怎么用 | 适合谁 |
 | --- | --- | --- |
-| **TUI** | `xopc tui`、`xopc tui --local` 或 `xopc tui --url …` | 喜欢全屏终端、或要连远程网关 |
+| **TUI** | `xopc tui`、`xopc tui --local` 或 `xopc tui --url …` | 喜欢全屏终端，或要连远程网关 |
 | **CLI** | `xopc agent -i` / `xopc agent -m "…"` | 写脚本、只要一个普通终端 |
-| **网页** | 先 `xopc gateway`（前台）或 `xopc gateway --background`（后台），再用浏览器打开控制台地址 | 多人共用一台网关、习惯浏览器、要改设置 |
-| **Electron** | 装 Release 里的安装包，或本地 `pnpm run electron:build` | 要原生窗口（macOS / Windows / Linux） |
+| **网页** | 先 `xopc gateway`（前台）或 `xopc gateway --background`（后台），浏览器打开控制台地址 | 多人共用一台网关、习惯浏览器、要改各项设置 |
+| **Electron** | **[Releases 下载安装包](#electron-desktop)** 或本地打包 | 要系统原生窗口（macOS / Windows / Linux） |
 
 ---
 
-## 内置频道（配置项）
+## 内置频道（怎么配）
 
-在 **`~/.xopc/xopc.json`** 里配置 **`channels.*`**（路径可用环境变量 `XOPC_CONFIG` / `XOPC_CONFIG_PATH` 覆盖）。各 IM 机器人都要**先起网关**；微信需在**跑网关的那台电脑**上扫码登录。
+在 **`~/.xopc/xopc.json`** 里写 **`channels.*`**（配置文件路径可用环境变量 `XOPC_CONFIG` / `XOPC_CONFIG_PATH` 改掉）。各聊天机器人都要**先启动网关**；微信要在**跑网关的那台电脑**上扫码。
 
-| 频道 | 配置节 | 说明 |
+| 频道 | 对应配置 | 说明 |
 | --- | --- | --- |
-| **Telegram** | `channels.telegram` | 多账号、流式输出、语音、文件；私聊/群聊策略 |
-| **微信（Weixin）** | `channels.weixin` | 在网关机器上扫码；私聊/群聊策略 |
+| **Telegram** | `channels.telegram` | 多账号、流式回复、语音、文件；私聊/群聊策略 |
+| **微信** | `channels.weixin` | 在装网关的机器上扫码；私聊/群聊策略 |
 | **飞书 / Lark** | `channels.feishu` | 机器人、Webhook 等，见文档 |
 | **钉钉** | `channels.dingtalk` | Stream 模式；应用凭证见文档 |
-| **网页** | *（随网关）* | React 管理台里的对话，不是第三方 IM |
+| **网页** | *（随网关）* | 网关网页里的对话，不是单独再装一个 IM |
 
 字段说明与安全默认值：**[频道](https://xopcai.github.io/xopc/zh/channels)**、**[配置](https://xopcai.github.io/xopc/zh/configuration)**。
 
@@ -129,30 +150,30 @@ pnpm run build                              # 打正式包：Node + 网页 → d
 
 ## 本地部署与 BYOK
 
-- **密钥自己管：** 在配置里写 `providers.*`，再配合各厂商的环境变量（见 **[模型](https://xopcai.github.io/xopc/zh/models)**）。
-- **完全离线推理：** 把默认模型指到 **Ollama**、**LM Studio**、**vLLM** 等兼容 OpenAI 接口的本地服务，可以不接公网大模型。
-- **可选工具**（例如浏览器自动化）默认**关着**，要用再在配置里打开，并按需装 Playwright Chromium 等。
+- **密钥自己管：** 配置里写 `providers.*`，再配合各厂商环境变量（见 **[模型](https://xopcai.github.io/xopc/zh/models)**）。
+- **纯本地推理：** 把默认模型指到 **Ollama**、**LM Studio**、**vLLM** 等兼容 OpenAI 接口的本地服务，可以不接公网大模型。
+- **可选工具**（如浏览器自动化）默认**关闭**，要用再在配置里打开，并按需安装 Playwright Chromium 等。
 
 ---
 
-## CLI 与网关
+## 常用操作速查
 
 | 想做什么 | 怎么做 |
 | --- | --- |
 | 在终端里聊 | `xopc tui --local` 或 `xopc agent -i` |
-| 打开网页控制台 | `xopc gateway`，再按日志或配置里的地址访问 |
-| 网关后台常驻 | `xopc gateway --background`；需要时查 `xopc gateway status`、停 `xopc gateway stop`、重启 `xopc gateway restart`、看日志 `xopc gateway logs` |
-| 接 Telegram / 微信 / 飞书 / 钉钉 | 配好 `channels.*` 并运行网关；微信执行：`xopc channels login --channel weixin` |
-| 重新跑一遍向导 | `xopc onboard` |
-| 定时任务 | 在配置里打开 `cron` |
+| 打开网页控制台 | `xopc gateway`，按终端或配置里的地址打开 |
+| 网关放后台跑 | `xopc gateway --background`；可查 `xopc gateway status`、停 `xopc gateway stop`、重启 `xopc gateway restart`、看日志 `xopc gateway logs` |
+| 接 Telegram / 微信 / 飞书 / 钉钉 | 配好 `channels.*` 并启动网关；微信：`xopc channels login --channel weixin` |
+| 再跑一遍配置向导 | `xopc onboard` |
+| 定时任务 | 在配置里启用 `cron` |
 
-全部子命令见 **[CLI 参考](https://xopcai.github.io/xopc/zh/cli)**。
+更多子命令见 **[CLI 参考](https://xopcai.github.io/xopc/zh/cli)**。
 
 ---
 
 ## 安全
 
-从聊天软件进来的消息一律当成**不可信输入**。没摸清风险前，私聊建议用 **pairing（配对）** 或 **allowlist（白名单）**。网关监听地址、访问令牌（token）别泄露 —— 详见 **[频道](https://xopcai.github.io/xopc/zh/channels)**。
+从微信、Telegram 等渠道进来的消息都当作**不可信内容**。没摸清风险前，私聊建议用 **pairing（配对）** 或 **allowlist（白名单）**。网关监听地址、访问令牌（token）不要泄露 —— 详见 **[频道](https://xopcai.github.io/xopc/zh/channels)**。
 
 ---
 
@@ -167,14 +188,14 @@ pnpm run build                              # 打正式包：Node + 网页 → d
 | [扩展](https://xopcai.github.io/xopc/zh/extensions) | 扩展机制 |
 | [工具](https://xopcai.github.io/xopc/zh/tools) | 内置工具 |
 | [技能](https://xopcai.github.io/xopc/zh/skills) | SKILL.md |
-| [语音](https://xopcai.github.io/xopc/zh/voice) | 语音转文字 / 文字转语音 |
+| [语音](https://xopcai.github.io/xopc/zh/voice) | 语音转文字、文字转语音 |
 | [架构](https://xopcai.github.io/xopc/zh/architecture) | 整体结构 |
 
 ---
 
-## 大模型厂商（概览）
+## 大模型厂商
 
-**DeepSeek**（推荐）、OpenAI、Anthropic、Google、Groq、OpenRouter、Mistral、xAI、Bedrock、Azure、Vertex、Vercel AI Gateway、OAuth（如 Copilot/Codex）以及本地推理栈（经 pi-ai 统一接入）。详情：**[模型](https://xopcai.github.io/xopc/zh/models)**。
+**DeepSeek**（推荐）、OpenAI、Anthropic、Google、Groq、OpenRouter、Mistral、xAI、Bedrock、Azure、Vertex、Vercel AI Gateway、OAuth（如 Copilot/Codex）以及本地推理（由 pi-ai 统一接入）。详情：**[模型](https://xopcai.github.io/xopc/zh/models)**。
 
 ---
 
@@ -187,7 +208,7 @@ xopc skills list
 xopc skills install <名称>
 ```
 
-服务端扩展可以带**工具**、**新频道**、**自定义模型**；网关**界面**扩展用 **`@xopcai/xopc/extension-ui-sdk`**（代码在 `packages/extension-ui-sdk/`）。详见 **[扩展](https://xopcai.github.io/xopc/zh/extensions)**、**[技能](https://xopcai.github.io/xopc/zh/skills)**。
+扩展里可以带**工具**、**新聊天频道**、**自定义模型**；要改网关网页界面用 **`@xopcai/xopc/extension-ui-sdk`**（代码在 `packages/extension-ui-sdk/`）。详见 **[扩展](https://xopcai.github.io/xopc/zh/extensions)**、**[技能](https://xopcai.github.io/xopc/zh/skills)**。
 
 ---
 
@@ -219,7 +240,7 @@ xopc skills install <名称>
 }
 ```
 
-需要微信、飞书、钉钉时，再加上 **`channels.weixin`**、**`channels.feishu`**、**`channels.dingtalk`** —— 完整字段见 **[配置](https://xopcai.github.io/xopc/zh/configuration)** 与 **[频道](https://xopcai.github.io/xopc/zh/channels)**。
+要用微信、飞书、钉钉，再补上 **`channels.weixin`**、**`channels.feishu`**、**`channels.dingtalk`** —— 完整字段见 **[配置](https://xopcai.github.io/xopc/zh/configuration)** 与 **[频道](https://xopcai.github.io/xopc/zh/channels)**。
 
 ---
 
@@ -240,7 +261,7 @@ src/
 web/             # 网关控制台（React + Vite）
 ```
 
-给贡献者的约定与说明：**[AGENTS.md](./AGENTS.md)**。
+参与贡献请先读：**[AGENTS.md](./AGENTS.md)**。
 
 ---
 
@@ -260,6 +281,7 @@ pnpm run lint
 
 - 大模型接入层：[@earendil-works/pi-ai](https://github.com/earendil-works/pi-mono)
 - 智能体运行时：[@earendil-works/pi-agent-core](https://github.com/earendil-works/pi-mono)
+- 灵感来自 [openclaw/openclaw](https://github.com/openclaw/openclaw) 与 [NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent)
 
 ---
 
