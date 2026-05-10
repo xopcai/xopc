@@ -62,7 +62,9 @@
     "marketplaceReinstallConfirm": "Overwrite the existing install with the marketplace version?",
     "marketplaceInstallFailed": "Install failed.",
     "marketplaceUninstallFailed": "Uninstall failed.",
-    "marketplaceRestartHint": "Restart the gateway to fully apply channel plugins or unload removed code."
+    "marketplaceRestartHint": "Restart the gateway to fully apply channel plugins or unload removed code.",
+    "marketplaceBuiltin": "Built-in",
+    "marketplaceBuiltinManageHint": "Toggle on the Built-in tab."
   },
   "extensionUi": {
     "permissionTitle": "Allow “{{name}}”?",
