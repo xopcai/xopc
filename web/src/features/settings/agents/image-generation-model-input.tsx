@@ -10,6 +10,7 @@ import {
 } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
 import { apiFetch } from '@/lib/fetch';
+import { SETTINGS_SHELL_POPOVER_Z } from '@/lib/settings-shell-dialog-layer';
 import { interaction } from '@/lib/interaction';
 import { apiUrl } from '@/lib/url';
 
@@ -155,7 +156,10 @@ export function ImageGenerationModelInput({
         </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content
-          className="z-50 w-[min(22rem,calc(100vw-2rem))] rounded-xl border border-edge-subtle bg-surface-panel p-1 shadow-elevated dark:border-edge-subtle"
+          className={cn(
+            'w-[min(22rem,calc(100vw-2rem))] rounded-xl border border-edge-subtle bg-surface-panel p-1 shadow-elevated dark:border-edge-subtle',
+            SETTINGS_SHELL_POPOVER_Z,
+          )}
           side="bottom"
           sideOffset={4}
           align="end"

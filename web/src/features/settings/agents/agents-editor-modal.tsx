@@ -3,8 +3,9 @@ import { X } from 'lucide-react';
 import type { ReactNode } from 'react';
 
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/cn';
 import type { AgentsSettingsMessages } from '@/i18n/messages';
+import { cn } from '@/lib/cn';
+import { SETTINGS_SHELL_CONTENT_Z, SETTINGS_SHELL_OVERLAY_Z } from '@/lib/settings-shell-dialog-layer';
 
 import { AgentsEditorSidebar } from './agents-editor-sidebar';
 import type { AgentPanel } from './utils';
@@ -42,10 +43,13 @@ export function AgentsEditorModal(props: {
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[60] bg-scrim" />
+        <Dialog.Overlay
+          className={cn('xopc-dialog-overlay fixed inset-0 bg-scrim', SETTINGS_SHELL_OVERLAY_Z)}
+        />
         <Dialog.Content
           className={cn(
-            'xopc-dialog-content fixed z-[60] flex flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-popover dark:border-edge',
+            'xopc-dialog-content fixed flex flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-popover dark:border-edge',
+            SETTINGS_SHELL_CONTENT_Z,
             /* Desktop: roomy editor; inner panels scroll. Small viewports stay inset. */
             'inset-4 h-[calc(100dvh-2rem)] max-h-[calc(100dvh-2rem)] min-h-0',
             'sm:inset-auto sm:left-1/2 sm:top-1/2 sm:h-[min(88vh,48rem)] sm:max-h-[min(88vh,48rem)] sm:min-h-[32rem] sm:w-[min(100%-2rem,58rem)] sm:-translate-x-1/2 sm:-translate-y-1/2',

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/cn';
+import { SETTINGS_SHELL_CONTENT_Z, SETTINGS_SHELL_OVERLAY_Z } from '@/lib/settings-shell-dialog-layer';
 import { type ModelsSettingsMessages } from '@/i18n/messages';
 
 import {
@@ -85,10 +86,13 @@ export function ProviderAddDialog({ open, onOpenChange, presetKey, onConfirm, m 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-50 bg-scrim" />
+        <Dialog.Overlay
+          className={cn('xopc-dialog-overlay fixed inset-0 bg-scrim', SETTINGS_SHELL_OVERLAY_Z)}
+        />
         <Dialog.Content
           className={cn(
-            'xopc-dialog-content fixed left-1/2 top-1/2 z-50 max-h-[min(90vh,640px)] w-[min(100%-2rem,32rem)] -translate-x-1/2 -translate-y-1/2',
+            'xopc-dialog-content fixed left-1/2 top-1/2 max-h-[min(90vh,640px)] w-[min(100%-2rem,32rem)] -translate-x-1/2 -translate-y-1/2',
+            SETTINGS_SHELL_CONTENT_Z,
             'overflow-y-auto rounded-xl border border-edge bg-surface-panel p-4 shadow-popover dark:border-edge',
           )}
           onOpenAutoFocus={(e) => e.preventDefault()}

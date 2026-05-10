@@ -4,8 +4,13 @@ import type { FormEvent } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { ModelSelector } from '@/features/chat/model-selector';
-import { cn } from '@/lib/cn';
 import type { AgentsSettingsMessages, ChatMessages } from '@/i18n/messages';
+import { cn } from '@/lib/cn';
+import {
+  SETTINGS_SHELL_CONTENT_Z,
+  SETTINGS_SHELL_OVERLAY_Z,
+  SETTINGS_SHELL_POPOVER_Z,
+} from '@/lib/settings-shell-dialog-layer';
 
 import { agentsSettingsInputClass } from './utils';
 
@@ -53,10 +58,13 @@ export function CreateAgentDialog(props: {
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[60] bg-scrim" />
+        <Dialog.Overlay
+          className={cn('xopc-dialog-overlay fixed inset-0 bg-scrim', SETTINGS_SHELL_OVERLAY_Z)}
+        />
         <Dialog.Content
           className={cn(
-            'xopc-dialog-content fixed left-1/2 top-1/2 z-[60] max-h-[min(90vh,640px)] w-[min(100%-2rem,28rem)] -translate-x-1/2 -translate-y-1/2',
+            'xopc-dialog-content fixed left-1/2 top-1/2 max-h-[min(90vh,640px)] w-[min(100%-2rem,28rem)] -translate-x-1/2 -translate-y-1/2',
+            SETTINGS_SHELL_CONTENT_Z,
             'overflow-y-auto rounded-xl border border-edge bg-surface-panel p-4 shadow-popover dark:border-edge',
           )}
           onOpenAutoFocus={(e) => e.preventDefault()}
@@ -140,7 +148,7 @@ export function CreateAgentDialog(props: {
               <div className="flex flex-wrap items-stretch gap-2">
                 <ModelSelector
                   className="min-w-0 flex-1"
-                  popoverContentClassName="z-[70]"
+                  popoverContentClassName={SETTINGS_SHELL_POPOVER_Z}
                   value={createModel}
                   disabled={busy}
                   placeholder={chat.modelPlaceholder}

@@ -2,6 +2,7 @@ import * as Popover from '@radix-ui/react-popover';
 import { ExternalLink, Info, X } from 'lucide-react';
 
 import { cn } from '@/lib/cn';
+import { SETTINGS_SHELL_POPOVER_Z } from '@/lib/settings-shell-dialog-layer';
 import type { StoredLanguage } from '@/lib/storage';
 
 import { PROVIDER_ENRICHMENT } from './provider-enrichment';
@@ -37,7 +38,8 @@ export function ProviderInfoPopover({ providerId, language }: ProviderInfoPopove
           align="start"
           sideOffset={6}
           className={cn(
-            'z-50 w-64 rounded-xl border border-edge bg-surface-panel p-3 shadow-md',
+            'w-64 rounded-xl border border-edge bg-surface-panel p-3 shadow-md',
+            SETTINGS_SHELL_POPOVER_Z,
             'data-[state=open]:animate-in data-[state=closed]:animate-out',
             'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
             'data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95',

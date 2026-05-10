@@ -12,8 +12,13 @@ import {
   saveAgentBootstrapFileContent,
 } from '@/features/settings/agents-admin-api';
 import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/settings/settings-form-section';
-import { cn } from '@/lib/cn';
 import type { AgentsSettingsMessages, ChatMessages } from '@/i18n/messages';
+import { cn } from '@/lib/cn';
+import {
+  SETTINGS_SHELL_CONTENT_Z,
+  SETTINGS_SHELL_OVERLAY_Z,
+  SETTINGS_SHELL_POPOVER_Z,
+} from '@/lib/settings-shell-dialog-layer';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useThemeStore } from '@/stores/theme-store';
 
@@ -246,10 +251,13 @@ export function AgentOverviewTab(props: {
 
         <Dialog.Root open={avatarDialogOpen} onOpenChange={setAvatarDialogOpen}>
           <Dialog.Portal>
-            <Dialog.Overlay className="fixed inset-0 z-[70] bg-scrim backdrop-blur-[2px]" />
+            <Dialog.Overlay
+              className={cn('fixed inset-0 bg-scrim backdrop-blur-[2px]', SETTINGS_SHELL_OVERLAY_Z)}
+            />
             <Dialog.Content
               className={cn(
-                'fixed left-1/2 top-1/2 z-[71] w-[min(calc(100vw-2rem),26rem)] max-h-[min(90dvh,36rem)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-xl border border-edge bg-surface-panel p-4 shadow-popover dark:border-edge',
+                'fixed left-1/2 top-1/2 w-[min(calc(100vw-2rem),26rem)] max-h-[min(90dvh,36rem)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-xl border border-edge bg-surface-panel p-4 shadow-popover dark:border-edge',
+                SETTINGS_SHELL_CONTENT_Z,
               )}
               onOpenAutoFocus={(e) => e.preventDefault()}
             >
@@ -361,7 +369,7 @@ export function AgentOverviewTab(props: {
             <div className="flex flex-wrap items-stretch gap-2">
               <ModelSelector
                 className="min-w-0 flex-1"
-                popoverContentClassName="z-[70]"
+                popoverContentClassName={SETTINGS_SHELL_POPOVER_Z}
                 value={editModel}
                 disabled={busy}
                 placeholder={chat.modelPlaceholder}

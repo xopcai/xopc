@@ -35,9 +35,10 @@ import {
   segmentedThumbBaseClassName,
   segmentedTrackClassName,
 } from '@/components/ui/segmented-styles';
+import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
-import { messages } from '@/i18n/messages';
+import { SETTINGS_SHELL_CONTENT_Z, SETTINGS_SHELL_OVERLAY_Z } from '@/lib/settings-shell-dialog-layer';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
@@ -598,8 +599,15 @@ export function SessionsPage() {
 
       <Dialog.Root open={confirmOpen} onOpenChange={setConfirmOpen}>
         <Dialog.Portal>
-          <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[60] bg-scrim" />
-          <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-[60] w-[min(100%-2rem,24rem)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-edge bg-surface-panel p-4 shadow-popover dark:border-edge">
+          <Dialog.Overlay
+            className={cn('xopc-dialog-overlay fixed inset-0 bg-scrim', SETTINGS_SHELL_OVERLAY_Z)}
+          />
+          <Dialog.Content
+            className={cn(
+              'xopc-dialog-content fixed left-1/2 top-1/2 w-[min(100%-2rem,24rem)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-edge bg-surface-panel p-4 shadow-popover dark:border-edge',
+              SETTINGS_SHELL_CONTENT_Z,
+            )}
+          >
             <Dialog.Title className="text-base font-semibold text-fg">{s.deleteSessionTitle}</Dialog.Title>
             <p className="mt-2 text-sm text-fg-muted">
               {confirmKey
