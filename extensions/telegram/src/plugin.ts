@@ -28,6 +28,12 @@ import { generateSessionKey } from '@xopcai/xopc/chat-commands/session-key.js';
 import { submitClarifyChoiceFromChannel } from '@xopcai/xopc/gateway/clarify-runtime.js';
 
 import { createLogger } from '@xopcai/xopc/utils/logger.js';
+import { createTimeoutAbortSignal } from './timeout-abort.js';
+
+/** Bound initial `getMe` so a bad `apiRoot` or unreachable API cannot block gateway startup for minutes. */
+const TELEGRAM_GETME_TIMEOUT_MS = 20_000;
+/** grammY per-request ceiling; must exceed long-poll `getUpdates` (~30s) but avoid multi-minute hangs on bad hosts. */
+const TELEGRAM_CLIENT_TIMEOUT_SECONDS = 75;
 import { createInboundDebouncer } from '@xopcai/xopc/infra/debounce.js';
 import { getChatChannelMeta } from '@xopcai/xopc/channels/registry.js';
 import { getMimeType } from '@xopcai/xopc/channels/media.js';
@@ -320,9 +326,18 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
     this.accountManager.markStarting(account.accountId);
 
     try {
-      const botConfig = account.apiRoot ? { client: { apiRoot: account.apiRoot } } : undefined;
-      const bot = new Bot(account.botToken, botConfig);
-      const me = await bot.api.getMe();
+      const client = {
+        timeoutSeconds: TELEGRAM_CLIENT_TIMEOUT_SECONDS,
+        ...(account.apiRoot ? { apiRoot: account.apiRoot } : {}),
+      };
+      const bot = new Bot(account.botToken, { client });
+      const getMeSignal = createTimeoutAbortSignal(TELEGRAM_GETME_TIMEOUT_MS);
+      let me;
+      try {
+        me = await bot.api.getMe(getMeSignal.signal);
+      } finally {
+        getMeSignal.dispose();
+      }
 
       const runner = run(bot, {
         runner: {
@@ -346,6 +361,18 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
       this.setupMessageHandler(account.accountId, bot);
 
       log.info({ accountId: account.accountId, username: me.username }, 'Telegram account started');
+    } catch (err) {
+      const em = err instanceof Error ? err.message : String(err);
+      log.warn(
+        { accountId: account.accountId, apiRootConfigured: !!account.apiRoot, errorMessage: em },
+        `Telegram account not started (check token, network, or apiRoot): ${em}`,
+      );
+      this.accountManager.updateStatus({
+        accountId: account.accountId,
+        running: false,
+        mode: 'stopped',
+        lastError: em.slice(0, 400),
+      });
     } finally {
       this.accountManager.markStartComplete(account.accountId);
     }

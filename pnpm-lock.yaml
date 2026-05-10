@@ -357,6 +357,9 @@ importers:
       '@xopcai/xopc':
         specifier: workspace:*
         version: link:../..
+      abort-controller:
+        specifier: ^3.0.0
+        version: 3.0.0
       grammy:
         specifier: ^1.42.0
         version: 1.42.0(encoding@0.1.13)
