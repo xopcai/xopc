@@ -62,6 +62,8 @@ mac:
   notarize: true
 
 win:
+  # If you Authenticode-sign NSIS builds, set `publisherName` to that cert's Subject (not the Apple
+  # "Developer ID Application: …" string from CSC_*), or desktop updates will fail verification.
   target:
     - nsis
 
