@@ -1,4 +1,6 @@
 import crypto from 'crypto';
+import { existsSync, mkdirSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
 import { AgentService } from '../agent/service.js';
 import { ChannelManager } from '../channels/manager.js';
 import { CHAT_CHANNEL_ORDER } from '../channels/registry.js';
@@ -9,6 +11,8 @@ import { getWorkspacePath } from '../config/schema.js';
 import { CronService } from '../cron/index.js';
 import { computeBundledExtensionExtensionsPatch } from '../extensions/bundled-extension-activation.js';
 import { ExtensionLoader } from '../extensions/index.js';
+import { installExtensionFromStoreZip, peekExtensionIdFromStoreZip } from '../extensions/install.js';
+import { getExtensionLockfileManager } from '../extensions/lockfile.js';
 import { HeartbeatService, heartbeatRunnerConfigFromConfig } from './heartbeat/index.js';
 import { ConfigHotReloader } from '../config/reload.js';
 import { SessionManager } from '../session/index.js';
@@ -48,6 +52,13 @@ import {
   type UnifiedMarketplaceListResponse,
   type UnifiedMarketplacePackageDetail,
 } from '../agent/skills/skills-marketplace.js';
+import {
+  downloadExtensionStoreZipBuffer,
+  fetchMarketplacePackageDetail,
+  resolveExtensionZipDownloadUrl,
+  resolveExtensionsStoreBaseUrl,
+  type MarketplacePackageDetail,
+} from '../agent/skills/marketplace/adapters/store/store-api-client.js';
 import { createSkillConfigManager } from '../agent/skills/config.js';
 import { removeSkillsLockEntry } from '../agent/skills/hub-lock.js';
 import type { SkillCatalogEntry } from '../agent/agent-manager.js';
@@ -1315,6 +1326,178 @@ export class GatewayService {
   }): Promise<{ skillId: string; path: string }> {
     const { buffer, skillId } = await downloadFromMarketplace(this.config, opts.name, opts.version);
     return this.installManagedSkillZip(buffer, { skillId, overwrite: opts.overwrite ?? false });
+  }
+
+  /**
+   * xopc-store extension package preview (type must be `extension`).
+   */
+  async fetchExtensionMarketplacePackageDetail(packageName: string): Promise<MarketplacePackageDetail> {
+    const base = resolveExtensionsStoreBaseUrl(this.config);
+    const detail = await fetchMarketplacePackageDetail(base, packageName.trim());
+    if (detail.type !== 'extension') {
+      throw new Error(
+        `Package "${packageName}" is not an extension (store type: ${detail.type}).`,
+      );
+    }
+    return detail;
+  }
+
+  private mergeExtensionEnabledIntoConfig(extensionId: string): Config {
+    const id = extensionId.trim();
+    const prevExt = this.config.extensions;
+    const baseExt =
+      prevExt && typeof prevExt === 'object' && !Array.isArray(prevExt)
+        ? { ...(prevExt as Record<string, unknown>) }
+        : {};
+    const enabledRaw = baseExt.enabled;
+    const enabled = Array.isArray(enabledRaw)
+      ? [...enabledRaw.filter((x): x is string => typeof x === 'string')]
+      : [];
+    if (!enabled.includes(id)) enabled.push(id);
+
+    const disabledRaw = baseExt.disabled;
+    const nextExt: Record<string, unknown> = { ...baseExt, enabled };
+    if (Array.isArray(disabledRaw)) {
+      const next = disabledRaw.filter((x): x is string => typeof x === 'string' && x !== id);
+      if (next.length > 0) nextExt.disabled = next;
+      else delete nextExt.disabled;
+    }
+
+    return {
+      ...this.config,
+      extensions: nextExt,
+    } as Config;
+  }
+
+  private mergeExtensionRemovedFromEnabledConfig(extensionId: string): Config {
+    const id = extensionId.trim();
+    const prevExt = this.config.extensions;
+    const baseExt =
+      prevExt && typeof prevExt === 'object' && !Array.isArray(prevExt)
+        ? { ...(prevExt as Record<string, unknown>) }
+        : {};
+    const enabledRaw = baseExt.enabled;
+    const enabled = Array.isArray(enabledRaw)
+      ? enabledRaw.filter((x): x is string => typeof x === 'string' && x !== id)
+      : [];
+    return {
+      ...this.config,
+      extensions: { ...baseExt, enabled },
+    } as Config;
+  }
+
+  /**
+   * Install an extension from xopc-store into the default agent extensions directory,
+   * append its id to `extensions.enabled`, refresh the loader, and emit `config.reload`.
+   */
+  async installExtensionFromMarketplace(opts: {
+    name: string;
+    version?: string;
+    overwrite?: boolean;
+  }): Promise<{ extensionId: string; version: string; requiresGatewayRestart: boolean }> {
+    const packageName = opts.name.trim();
+    if (!packageName) {
+      throw new Error('Package name is required');
+    }
+    const storeBase = resolveExtensionsStoreBaseUrl(this.config);
+    const targetDir = resolveWorkspaceExtensionsDir(this.config, getDefaultAgentId(this.config));
+    mkdirSync(targetDir, { recursive: true });
+
+    const { downloadUrl, version } = await resolveExtensionZipDownloadUrl(
+      storeBase,
+      packageName,
+      opts.version,
+    );
+    const buf = await downloadExtensionStoreZipBuffer(storeBase, downloadUrl);
+
+    if (opts.overwrite) {
+      const peekId = peekExtensionIdFromStoreZip(buf);
+      if (peekId && existsSync(join(targetDir, peekId))) {
+        rmSync(join(targetDir, peekId), { recursive: true, force: true });
+      }
+    }
+
+    const result = await installExtensionFromStoreZip(buf, targetDir);
+    if (!result.ok || !result.extensionId) {
+      throw new Error(result.error ?? 'Extension install failed');
+    }
+
+    const lock = getExtensionLockfileManager();
+    await lock.upsert(result.extensionId, {
+      name: result.extensionId,
+      version,
+      resolved: packageName,
+      source: 'store',
+    });
+
+    const nextConfig = this.mergeExtensionEnabledIntoConfig(result.extensionId);
+    const saved = await this.saveConfig(nextConfig);
+    if (!saved.saved) {
+      throw new Error(saved.error ?? 'Failed to save config after extension install');
+    }
+
+    const channelIdsBefore = new Set(this.channelManager.getAllPlugins().map((p) => p.id));
+    let requiresGatewayRestart = false;
+    try {
+      if (this.extensionLoader) {
+        this.extensionLoader.invalidateManifestCache();
+        await this.extensionLoader.loadByActivationPlan();
+        const reg = this.extensionLoader.getRegistry();
+        for (const p of reg.channelPlugins) {
+          if (!channelIdsBefore.has(p.id)) {
+            requiresGatewayRestart = true;
+            break;
+          }
+        }
+      }
+    } catch (err) {
+      const em = err instanceof Error ? err.message : String(err);
+      log.warn({ err, errorMessage: em }, `Extension loader refresh after marketplace install failed: ${em}`);
+      requiresGatewayRestart = true;
+    }
+
+    this.emit('config.reload', { section: 'extensions', source: 'marketplace-install' });
+    return { extensionId: result.extensionId, version, requiresGatewayRestart };
+  }
+
+  /**
+   * Remove a user-installed (global or per-agent extensions dir) extension from disk and config.
+   */
+  async uninstallUserExtension(extensionId: string): Promise<{ requiresGatewayRestart: boolean }> {
+    const id = extensionId.trim();
+    if (!id) {
+      throw new Error('extensionId is required');
+    }
+    const loader = this.extensionLoader;
+    if (!loader) {
+      throw new Error('Extensions unavailable');
+    }
+    const discovered = loader.discoverExtensions();
+    const ext = discovered.find((e) => e.id === id);
+    if (!ext) {
+      throw new Error(`Extension not found: ${id}`);
+    }
+    if (ext.source === 'bundled') {
+      throw new Error('Built-in extensions cannot be uninstalled from the marketplace UI');
+    }
+    if (existsSync(ext.path)) {
+      rmSync(ext.path, { recursive: true, force: true });
+    }
+    await getExtensionLockfileManager().remove(id);
+    const nextConfig = this.mergeExtensionRemovedFromEnabledConfig(id);
+    const saved = await this.saveConfig(nextConfig);
+    if (!saved.saved) {
+      throw new Error(saved.error ?? 'Failed to save config after extension uninstall');
+    }
+    try {
+      loader.invalidateManifestCache();
+      await loader.loadByActivationPlan();
+    } catch (err) {
+      const em = err instanceof Error ? err.message : String(err);
+      log.warn({ err, errorMessage: em }, `Extension loader refresh after uninstall failed: ${em}`);
+    }
+    this.emit('config.reload', { section: 'extensions', source: 'marketplace-uninstall' });
+    return { requiresGatewayRestart: true };
   }
 
   getSkillsMarketplaceProvider(): { provider: string; displayName: string } {

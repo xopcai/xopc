@@ -54,6 +54,8 @@ const ROUTE_SCOPE_REQUIREMENTS: ReadonlyArray<{ prefix: string; scope: OperatorS
   { prefix: '/api/agents', scope: WRITE_SCOPE },
   { prefix: '/api/workspace', scope: WRITE_SCOPE },
   { prefix: '/api/skills', scope: WRITE_SCOPE },
+  { prefix: '/api/marketplace/install', scope: ADMIN_SCOPE },
+  { prefix: '/api/marketplace/uninstall', scope: ADMIN_SCOPE },
   { prefix: '/api/commands', scope: WRITE_SCOPE },
   { prefix: '/api/host-fs', scope: WRITE_SCOPE },
 
