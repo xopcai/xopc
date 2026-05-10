@@ -2,11 +2,13 @@ import { X } from 'lucide-react';
 import { memo, useCallback, useEffect, useState, type CSSProperties } from 'react';
 
 import { APP_CHROME_NO_DRAG_CLASS, APP_TOP_HEADER_BAR_CLASS } from '@/components/shell/app-chrome';
+import { CommandPaletteSearchButton } from '@/components/shell/command-palette-search-button';
 import { SidebarRailToggleButton } from '@/components/shell/sidebar-rail-toggle-button';
 import { SidebarNav } from '@/components/shell/sidebar';
 import { Button } from '@/components/ui/button';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
+import { electronDarwinTitlebarLeftPad, isElectronDarwin } from '@/lib/electron-window-chrome';
 import { useAppShellStore } from '@/stores/app-shell-store';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useSidebarStore } from '@/stores/sidebar-store';
@@ -19,6 +21,7 @@ const MD_MIN = '(min-width: 768px)';
  *
  * Small viewports (`max-md`): fixed overlay drawer + `transform` (GPU-friendly); main column
  * stays full width. Tablet+ (`md+`): flex sibling with width transition on `.app-sidebar-push`.
+ * `md+` collapsed: rail width `0` (no icon strip); expand control lives in `PrimaryAppHeader`.
  */
 export const SidebarColumn = memo(function SidebarColumn() {
   const language = useLocaleStore((s) => s.language);
@@ -28,7 +31,6 @@ export const SidebarColumn = memo(function SidebarColumn() {
   const setExpandedWidthPx = useSidebarStore((s) => s.setExpandedWidthPx);
   const mobileNavOpen = useAppShellStore((s) => s.mobileNavOpen);
   const setMobileNavOpen = useAppShellStore((s) => s.setMobileNavOpen);
-  const navCollapsed = sidebarCollapsed && !mobileNavOpen;
   const [widthResizing, setWidthResizing] = useState(false);
 
   const onSidebarResizePointerDown = useCallback(
@@ -113,8 +115,9 @@ export const SidebarColumn = memo(function SidebarColumn() {
           mobileNavOpen ? 'max-md:translate-x-0' : 'max-md:-translate-x-full',
           // Tablet+: in-flow rail
           'md:relative md:h-full md:translate-x-0',
-          sidebarCollapsed ? 'md:w-[4.5rem]' : 'app-sidebar-expanded-width',
+          sidebarCollapsed ? 'md:w-0 md:min-w-0 md:max-w-0 md:overflow-hidden md:border-0' : 'app-sidebar-expanded-width',
         )}
+        aria-hidden={sidebarCollapsed && !mobileNavOpen ? true : undefined}
         style={
           !sidebarCollapsed
             ? ({
@@ -126,8 +129,12 @@ export const SidebarColumn = memo(function SidebarColumn() {
         <div
           className={cn(
             'flex bg-surface-base',
-            sidebarCollapsed ? 'justify-center gap-1 px-1.5' : 'justify-end gap-1.5 px-4',
             APP_TOP_HEADER_BAR_CLASS,
+            electronDarwinTitlebarLeftPad(),
+            sidebarCollapsed
+              ? 'justify-center gap-1 px-1.5 max-md:flex'
+              : cn('justify-start gap-1.5', isElectronDarwin() ? 'pr-4' : 'px-4'),
+            sidebarCollapsed && 'md:hidden',
           )}
         >
           {mobileNavOpen ? (
@@ -142,10 +149,14 @@ export const SidebarColumn = memo(function SidebarColumn() {
               <X className="size-4" strokeWidth={1.5} aria-hidden />
             </Button>
           ) : null}
-          {/* md+: expand lives in main column when collapsed; here only show collapse when expanded */}
-          {!sidebarCollapsed ? <SidebarRailToggleButton variant="sidebar" /> : null}
+          {!sidebarCollapsed ? (
+            <>
+              <SidebarRailToggleButton variant="sidebar" />
+              <CommandPaletteSearchButton className="inline-flex" />
+            </>
+          ) : null}
         </div>
-        <SidebarNav collapsed={navCollapsed} onNavigate={() => setMobileNavOpen(false)} />
+        <SidebarNav collapsed={false} onNavigate={() => setMobileNavOpen(false)} />
         {!sidebarCollapsed ? (
           <div
             role="separator"

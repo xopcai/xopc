@@ -1,6 +1,8 @@
 import { ExternalLink } from 'lucide-react';
 
 import { BrandLogo } from '@/components/shell/brand-logo';
+import { cn } from '@/lib/cn';
+import { isElectronWin32 } from '@/lib/electron-window-chrome';
 import { GatewayTokenForm } from '@/components/shell/gateway-token-form';
 import { PreferenceSelectFields } from '@/components/shell/preference-select-fields';
 import { messages } from '@/i18n/messages';
@@ -22,7 +24,10 @@ export function GatewayConnectLanding() {
   return (
     <div className="relative flex min-h-full flex-1 flex-col bg-surface-base">
       <div
-        className="absolute right-3 top-3 z-10 sm:right-4 sm:top-4"
+        className={cn(
+          'absolute top-3 z-10 sm:top-4',
+          isElectronWin32() ? 'right-36 sm:right-40' : 'right-3 sm:right-4',
+        )}
         role="group"
         aria-label={appearanceLabel}
       >

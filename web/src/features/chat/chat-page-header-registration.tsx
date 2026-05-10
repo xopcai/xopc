@@ -12,6 +12,7 @@ import { usePageHeaderStore } from '@/stores/page-header-store';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useSidebarStore } from '@/stores/sidebar-store';
 import { useWorkspacePanelStore } from '@/stores/workspace-panel-store';
+import { isElectronDarwin } from '@/lib/electron-window-chrome';
 
 const MAX_MD = '(max-width: 767px)';
 
@@ -55,7 +56,9 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
     return () => mq.removeEventListener('change', onChange);
   }, []);
 
-  const showNewChatLink = isMobileLayout ? !mobileNavOpen : sidebarCollapsed;
+  const showNewChatLink = isMobileLayout
+    ? !mobileNavOpen
+    : sidebarCollapsed && !isElectronDarwin();
 
   useLayoutEffect(() => {
     setPageHeader({

@@ -2,7 +2,18 @@ import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { BrowserWindow, Menu, app, dialog, globalShortcut, ipcMain, session, shell } from 'electron';
+import {
+  BrowserWindow,
+  Menu,
+  app,
+  dialog,
+  globalShortcut,
+  ipcMain,
+  nativeTheme,
+  session,
+  shell,
+  type BrowserWindowConstructorOptions,
+} from 'electron';
 
 /** Before config loader initializes pino (thread-stream worker path breaks when bundled under `out/main/`). */
 import './thread-stream-bundle-shim.js';
@@ -29,6 +40,58 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 /** Track the main window for gateway exit notifications. */
 let mainWindow: BrowserWindow | null = null;
+
+/** Matches gateway console `h-14` (56px) with Windows `titleBarOverlay`. */
+const WIN_TITLEBAR_OVERLAY_HEIGHT = 56;
+
+function win32TitleBarOverlayColors(): { color: string; symbolColor: string; height: number } {
+  const dark = nativeTheme.shouldUseDarkColors;
+  return {
+    color: dark ? '#1c1c1e' : '#f5f5f7',
+    symbolColor: dark ? '#f5f5f7' : '#1d1d1f',
+    height: WIN_TITLEBAR_OVERLAY_HEIGHT,
+  };
+}
+
+function browserWindowChromeOptions(): Pick<BrowserWindowConstructorOptions, 'titleBarStyle' | 'titleBarOverlay'> {
+  if (process.platform === 'darwin') {
+    return { titleBarStyle: 'hiddenInset' };
+  }
+  if (process.platform === 'win32') {
+    return {
+      titleBarStyle: 'hidden',
+      titleBarOverlay: win32TitleBarOverlayColors(),
+    };
+  }
+  return {};
+}
+
+const MACOS_WINDOW_BUTTON_X = 16;
+const MACOS_WINDOW_BUTTON_Y = 19;
+
+function applyDarwinWindowButtonPosition(win: BrowserWindow): void {
+  if (process.platform !== 'darwin') return;
+  try {
+    if (win.isFullScreen()) {
+      win.setWindowButtonPosition(null);
+    } else {
+      win.setWindowButtonPosition({ x: MACOS_WINDOW_BUTTON_X, y: MACOS_WINDOW_BUTTON_Y });
+    }
+  } catch {
+    /* hiddenInset / OS build may not support custom placement */
+  }
+}
+
+let winTitleBarThemeListenerAttached = false;
+
+function ensureWin32TitleBarOverlayThemeSync(): void {
+  if (winTitleBarThemeListenerAttached || process.platform !== 'win32') return;
+  winTitleBarThemeListenerAttached = true;
+  nativeTheme.on('updated', () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    mainWindow.setTitleBarOverlay(win32TitleBarOverlayColors());
+  });
+}
 
 const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
@@ -241,7 +304,7 @@ function createWindow(): void {
     height: 800,
     minWidth: 800,
     minHeight: 560,
-    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
+    ...browserWindowChromeOptions(),
     ...(!app.isPackaged && existsSync(devWindowIcon) ? { icon: devWindowIcon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.cjs'),
@@ -251,6 +314,25 @@ function createWindow(): void {
   });
 
   mainWindow = win;
+
+  if (process.platform === 'darwin') {
+    applyDarwinWindowButtonPosition(win);
+    win.once('ready-to-show', () => {
+      applyDarwinWindowButtonPosition(win);
+    });
+    win.on('enter-full-screen', () => {
+      try {
+        win.setWindowButtonPosition(null);
+      } catch {
+        /* ignore */
+      }
+    });
+    win.on('leave-full-screen', () => {
+      applyDarwinWindowButtonPosition(win);
+    });
+  }
+
+  ensureWin32TitleBarOverlayThemeSync();
 
   Menu.setApplicationMenu(buildAppMenu(win));
 
