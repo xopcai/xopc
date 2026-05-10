@@ -1,18 +1,7 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import {
-  ArrowLeft,
-  Check,
-  ExternalLink,
-  Loader2,
-  Plus,
-  Search,
-  Settings,
-  X,
-} from 'lucide-react';
+import { ArrowLeft, Check, ExternalLink, Plus, Search, Settings, X } from 'lucide-react';
 import { useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useSWRConfig } from 'swr';
-
 import {
   extensionExposesGatewayShellUi,
   useExtensions,
@@ -24,8 +13,6 @@ import type { ExtensionApiRow, PageContribution } from '@/features/extensions/ty
 import { messages } from '@/i18n/messages';
 import type { MessageBundle } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
-import { fetchJson } from '@/lib/fetch';
-import { apiUrl } from '@/lib/url';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
@@ -39,13 +26,18 @@ export function AppsPage() {
   const clearPageHeader = usePageHeaderStore((s) => s.clearPageHeader);
   const extensions = useExtensions();
   const loading = useExtensionsLoading();
-  const { mutate } = useSWRConfig();
   const [tab, setTab] = useState<AppsTab>('all');
   const [search, setSearch] = useState('');
   const [detail, setDetail] = useState<ExtensionApiRow | null>(null);
 
+  /** Hide bundled extensions here: Apps enable/disable does not align with channel / image runtime yet. */
+  const userManagedExtensions = useMemo(
+    () => extensions.filter((e) => e.source !== 'bundled'),
+    [extensions],
+  );
+
   const filtered = useMemo(() => {
-    let list = extensions;
+    let list = userManagedExtensions;
     if (tab === 'ui') list = list.filter((e) => e.hasUi);
     if (tab === 'backend') list = list.filter((e) => !e.hasUi);
     const q = search.trim().toLowerCase();
@@ -61,14 +53,14 @@ export function AppsPage() {
       if (a.hasUi !== b.hasUi) return a.hasUi ? -1 : 1;
       return (a.name || a.id).localeCompare(b.name || b.id, language);
     });
-  }, [extensions, tab, search, language]);
+  }, [userManagedExtensions, tab, search, language]);
 
   /** Keep dialog + cards in sync after SWR refetch (detail was a stale row reference). */
   useEffect(() => {
     setDetail((prev) => {
       if (!prev) return prev;
       const next = extensions.find((e) => e.id === prev.id);
-      if (!next) return null;
+      if (!next || next.source === 'bundled') return null;
       const eligPrev = activationEligibleFor(prev);
       const eligNext = activationEligibleFor(next);
       if (eligPrev === eligNext && prev.active === next.active) return prev;
@@ -120,7 +112,7 @@ export function AppsPage() {
               label={m.appsPage.tabMarketplace}
             />
           </div>
-          {tab !== 'marketplace' && extensions.length > 0 ? (
+          {tab !== 'marketplace' && userManagedExtensions.length > 0 ? (
             <div className="relative w-full sm:max-w-xs">
               <Search
                 className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-muted"
@@ -140,8 +132,10 @@ export function AppsPage() {
 
         {tab === 'marketplace' ? (
           <ExtensionMarketplacePanel />
-        ) : extensions.length === 0 ? (
-          <EmptyAppsState message={m.appsPage.empty} />
+        ) : userManagedExtensions.length === 0 ? (
+          <EmptyAppsState
+            message={extensions.some((e) => e.source === 'bundled') ? m.appsPage.bundledHiddenHint : m.appsPage.empty}
+          />
         ) : filtered.length === 0 ? (
           <p className="rounded-xl border border-dashed border-edge-subtle bg-surface-hover/30 px-4 py-8 text-center text-sm text-fg-muted dark:bg-surface-hover/15">
             {m.appsPage.noSearchResults}
@@ -161,15 +155,7 @@ export function AppsPage() {
       </div>
 
       {detail ? (
-        <ExtensionDetailDialog
-          key={detail.id}
-          extension={detail}
-          copy={m.appsPage}
-          onClose={() => setDetail(null)}
-          onAfterToggle={async () => {
-            await mutate('gateway-extensions-list');
-          }}
-        />
+        <ExtensionDetailDialog key={detail.id} extension={detail} copy={m.appsPage} onClose={() => setDetail(null)} />
       ) : null}
     </div>
   );
@@ -293,16 +279,11 @@ function ExtensionDetailDialog({
   extension: ext,
   copy,
   onClose,
-  onAfterToggle,
 }: {
   extension: ExtensionApiRow;
   copy: AppsPageCopy;
   onClose: () => void;
-  onAfterToggle: () => void | Promise<void>;
 }) {
-  const [saving, setSaving] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
   const pages = ext.ui?.contributions?.pages ?? [];
   const settingsPanels = ext.ui?.contributions?.settingsPanels ?? [];
   const chatWidgets = ext.ui?.contributions?.chatWidgets ?? [];
@@ -315,25 +296,6 @@ function ExtensionDetailDialog({
     : ext.hasConfigSchema
       ? `/settings/ext/${ext.id}`
       : null;
-
-  const eligible = activationEligibleFor(ext);
-  const isBundled = ext.source === 'bundled';
-
-  const toggleBundled = async (next: boolean) => {
-    setErrorMessage(null);
-    setSaving(true);
-    try {
-      await fetchJson<{ ok: true; payload: { requiresGatewayRestart: boolean } }>(
-        apiUrl('/api/extensions/bundled/activation'),
-        { method: 'POST', body: JSON.stringify({ extensionId: ext.id, enabled: next }) },
-      );
-      await onAfterToggle();
-    } catch (e) {
-      setErrorMessage(e instanceof Error ? e.message : copy.toggleError);
-    } finally {
-      setSaving(false);
-    }
-  };
 
   return (
     <Dialog.Root defaultOpen onOpenChange={(o) => !o && onClose()}>
@@ -385,36 +347,6 @@ function ExtensionDetailDialog({
                   <p className="mt-1 text-xs text-fg-muted">v{ext.version}</p>
                 ) : null}
               </div>
-              {isBundled ? (
-                <div className="flex w-full flex-col items-stretch gap-2 sm:w-auto sm:items-end">
-                  <button
-                    type="button"
-                    disabled={saving}
-                    aria-busy={saving}
-                    onClick={() => void toggleBundled(!eligible)}
-                    className={cn(
-                      'relative inline-flex max-w-full rounded-full py-1.5 text-sm font-medium',
-                      'transition-[color,background-color,border-color,opacity] duration-200 ease-out',
-                      'focus-visible:outline-none focus-visible:ring-2 motion-reduce:transition-none',
-                      eligible
-                        ? 'border-2 border-red-500/50 text-red-600 hover:bg-red-500/10 focus-visible:ring-red-500/40 dark:text-red-400'
-                        : 'border-2 border-transparent bg-accent text-white hover:opacity-90 focus-visible:ring-accent',
-                      saving && 'cursor-wait opacity-80',
-                    )}
-                  >
-                    <span className="block whitespace-nowrap px-4 text-center leading-none">
-                      {eligible ? copy.actionDisable : copy.actionEnable}
-                    </span>
-                    <Loader2
-                      className={cn(
-                        'pointer-events-none absolute right-2 top-1/2 size-3 -translate-y-1/2 text-current opacity-90',
-                        saving ? 'animate-spin' : 'invisible',
-                      )}
-                      aria-hidden
-                    />
-                  </button>
-                </div>
-              ) : null}
             </div>
 
             <p className="mt-5 text-sm leading-relaxed text-fg">
@@ -427,13 +359,7 @@ function ExtensionDetailDialog({
 
             <p className="mt-2 text-xs text-fg-muted">{bundledRunCaption(ext, copy)}</p>
 
-            {errorMessage ? (
-              <p className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-fg" role="alert">
-                {errorMessage}
-              </p>
-            ) : null}
-
-            {!isBundled ? (
+            {ext.source !== 'bundled' ? (
               <p className="mt-4 rounded-lg border border-edge-subtle bg-surface-hover/40 px-3 py-2 text-xs text-fg-muted dark:bg-surface-hover/20">
                 {copy.cliManageHint}
               </p>

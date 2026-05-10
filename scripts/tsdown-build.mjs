@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -33,16 +33,21 @@ if (existsSync(srcTpl)) {
 }
 
 // Bundled extension manifests: `extensions/*/xopc.extension.json` → `dist/extensions/<id>/xopc.extension.json`
-// (tsdown emits `dist/extensions/<id>/src/**` but does not copy JSON assets)
+// (tsdown emits `dist/extensions/<id>/src/**` but does not copy JSON assets). Copy for every built
+// extension dir so Apps / discoverExtensions parity matches dev (not only the four channel plugins).
 const extensionsRoot = join(root, 'extensions');
 const distExtensionsRoot = join(root, 'dist/extensions');
-for (const extId of ['telegram', 'weixin', 'feishu', 'dingtalk']) {
-  const srcManifest = join(extensionsRoot, extId, 'xopc.extension.json');
-  const destDir = join(distExtensionsRoot, extId);
-  const destManifest = join(destDir, 'xopc.extension.json');
-  if (existsSync(srcManifest) && existsSync(destDir)) {
-    mkdirSync(destDir, { recursive: true });
-    cpSync(srcManifest, destManifest);
+if (existsSync(extensionsRoot) && existsSync(distExtensionsRoot)) {
+  for (const dirent of readdirSync(extensionsRoot, { withFileTypes: true })) {
+    if (!dirent.isDirectory() || dirent.name.startsWith('.')) continue;
+    const extId = dirent.name;
+    const srcManifest = join(extensionsRoot, extId, 'xopc.extension.json');
+    const destDir = join(distExtensionsRoot, extId);
+    const destManifest = join(destDir, 'xopc.extension.json');
+    if (existsSync(srcManifest) && existsSync(destDir)) {
+      mkdirSync(destDir, { recursive: true });
+      cpSync(srcManifest, destManifest);
+    }
   }
 }
 

@@ -1,8 +1,9 @@
 {
   "appsPage": {
     "title": "Apps",
-    "subtitle": "Discovered extensions in one place — open a card for details and built-in enable/disable.",
+    "subtitle": "Global and workspace extensions only. Built-in channels and image generation: Settings → Channels and Settings → Images.",
     "empty": "No extensions discovered.",
+    "bundledHiddenHint": "Built-in channel and image integrations are not listed here. Configure them under Settings → Channels and Settings → Images.",
     "tabAll": "All",
     "tabWithUi": "With UI",
     "tabBackend": "Backend only",
@@ -24,9 +25,7 @@
     "providerOther": "Other",
     "detailSectionFeatures": "Capabilities",
     "detailNoDescription": "No description was provided for this extension.",
-    "actionEnable": "Enable",
-    "actionDisable": "Disable",
-    "restartNote": "Built-in on/off updates your config. Restart the gateway process so extension code fully loads or unloads.",
+    "restartNote": "Some extension changes require restarting the gateway for code to fully load.",
     "cliManageHint": "This copy is not bundled with xopc — install, remove, and upgrades are done via the CLI or filesystem.",
     "backendOnlyHint": "This extension has no Gateway UI; tools and hooks still run when enabled.",
     "badgePages": "{{count}} page(s)",
@@ -38,9 +37,7 @@
     "runStateLive": "Running",
     "runStatePendingOn": "Enabled in config",
     "runStatePendingOff": "Disabled in config",
-    "runStateOff": "Off",
-    "toggleSaving": "Saving…",
-    "toggleError": "Could not update this extension."
+    "runStateOff": "Off"
   },
   "extensionUi": {
     "permissionTitle": "Allow “{{name}}”?",
