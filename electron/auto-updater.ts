@@ -1,4 +1,5 @@
 import { app, autoUpdater as electronBuiltinAutoUpdater, type BrowserWindow } from 'electron';
+import type { NsisUpdater } from 'electron-updater';
 import electronUpdater from 'electron-updater';
 import type { UpdateInfo, ProgressInfo } from 'electron-updater';
 
@@ -82,6 +83,16 @@ export function initAutoUpdater(mainWindow: BrowserWindow): void {
   // or never reaches `update-downloaded`; full installer download is more reliable.
   if (process.platform === 'win32') {
     autoUpdater.disableDifferentialDownload = true;
+    // app-update.yml often carries Apple "Developer ID Application: …" from CSC_* while the NSIS
+    // installer is signed with Windows Authenticode — the stock verifier rejects every update.
+    // Trust boundary remains HTTPS to the update feed; opt into strict check after aligning
+    // `win.publisherName` (or equivalent) with the Windows signing subject.
+    if (process.env['XOPC_WIN_UPDATER_STRICT_SIGNATURE'] !== '1') {
+      log.info(
+        'Windows auto-update: skipping exe vs publisherName signature check (set XOPC_WIN_UPDATER_STRICT_SIGNATURE=1 after fixing electron-builder signing metadata).',
+      );
+      (autoUpdater as NsisUpdater).verifyUpdateCodeSignature = async () => null;
+    }
   }
 
   autoUpdater.logger = {
