@@ -1,7 +1,9 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { ArrowLeft, Check, ExternalLink, Plus, Search, Settings, X } from 'lucide-react';
 import { useEffect, useLayoutEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
+
+import { parseAppsMainTab, type AppsMainTab } from '@/features/apps/apps-page.constants';
 import {
   extensionExposesGatewayShellUi,
   useExtensions,
@@ -17,7 +19,6 @@ import { usePageHeaderStore } from '@/stores/page-header-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
 type AppsPageCopy = MessageBundle['appsPage'];
-type AppsTab = 'all' | 'ui' | 'backend' | 'marketplace';
 
 export function AppsPage() {
   const language = useLocaleStore((s) => s.language);
@@ -26,21 +27,51 @@ export function AppsPage() {
   const clearPageHeader = usePageHeaderStore((s) => s.clearPageHeader);
   const extensions = useExtensions();
   const loading = useExtensionsLoading();
-  const [tab, setTab] = useState<AppsTab>('all');
-  const [search, setSearch] = useState('');
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const initialTab = parseAppsMainTab(searchParams.get('tab'));
+  const initialQ = searchParams.get('q') ?? '';
+  const [mainTab, setMainTab] = useState<AppsMainTab>(initialTab);
+  const [search, setSearch] = useState(initialQ);
   const [detail, setDetail] = useState<ExtensionApiRow | null>(null);
 
-  /** Hide bundled extensions here: Apps enable/disable does not align with channel / image runtime yet. */
-  const userManagedExtensions = useMemo(
+  useEffect(() => {
+    const nextTab = parseAppsMainTab(searchParams.get('tab'));
+    const nextQ = searchParams.get('q') ?? '';
+    setMainTab((prev) => (prev === nextTab ? prev : nextTab));
+    setSearch((prev) => (prev === nextQ ? prev : nextQ));
+  }, [searchParams]);
+
+  useEffect(() => {
+    setSearchParams(
+      (prev) => {
+        const params = new URLSearchParams(prev);
+        const qq = search.trim();
+        if (qq) params.set('q', qq);
+        else params.delete('q');
+        if (mainTab !== 'marketplace') params.set('tab', mainTab);
+        else params.delete('tab');
+        if (params.toString() === prev.toString()) return prev;
+        return params;
+      },
+      { replace: true },
+    );
+  }, [mainTab, search, setSearchParams]);
+
+  const bundledExtensions = useMemo(
+    () => extensions.filter((e) => e.source === 'bundled'),
+    [extensions],
+  );
+  const userExtensions = useMemo(
     () => extensions.filter((e) => e.source !== 'bundled'),
     [extensions],
   );
 
+  const listForTab = mainTab === 'builtin' ? bundledExtensions : userExtensions;
+
   const filtered = useMemo(() => {
-    let list = userManagedExtensions;
-    if (tab === 'ui') list = list.filter((e) => e.hasUi);
-    if (tab === 'backend') list = list.filter((e) => !e.hasUi);
     const q = search.trim().toLowerCase();
+    let list = listForTab;
     if (q) {
       list = list.filter(
         (e) =>
@@ -53,14 +84,14 @@ export function AppsPage() {
       if (a.hasUi !== b.hasUi) return a.hasUi ? -1 : 1;
       return (a.name || a.id).localeCompare(b.name || b.id, language);
     });
-  }, [userManagedExtensions, tab, search, language]);
+  }, [listForTab, search, language]);
 
   /** Keep dialog + cards in sync after SWR refetch (detail was a stale row reference). */
   useEffect(() => {
     setDetail((prev) => {
       if (!prev) return prev;
       const next = extensions.find((e) => e.id === prev.id);
-      if (!next || next.source === 'bundled') return null;
+      if (!next) return null;
       const eligPrev = activationEligibleFor(prev);
       const eligNext = activationEligibleFor(next);
       if (eligPrev === eligNext && prev.active === next.active) return prev;
@@ -81,9 +112,11 @@ export function AppsPage() {
     return () => clearPageHeader();
   }, [clearPageHeader, m.appsPage.title, setPageHeader]);
 
-  if (loading && tab !== 'marketplace') {
+  if (loading && mainTab !== 'marketplace') {
     return <AppsPageSkeleton />;
   }
+
+  const showSearch = mainTab !== 'marketplace' && listForTab.length > 0;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-surface-panel">
@@ -93,27 +126,59 @@ export function AppsPage() {
           <p className="mt-1 text-sm text-fg-muted">{m.appsPage.subtitle}</p>
         </header>
 
-        <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex flex-wrap gap-2">
-            <TabChip active={tab === 'all'} onClick={() => setTab('all')} label={m.appsPage.tabAll} />
-            <TabChip
-              active={tab === 'ui'}
-              onClick={() => setTab('ui')}
-              label={m.appsPage.tabWithUi}
-            />
-            <TabChip
-              active={tab === 'backend'}
-              onClick={() => setTab('backend')}
-              label={m.appsPage.tabBackend}
-            />
-            <TabChip
-              active={tab === 'marketplace'}
-              onClick={() => setTab('marketplace')}
-              label={m.appsPage.tabMarketplace}
-            />
+        <div className="mb-5 flex flex-col gap-3 border-b border-edge-subtle pb-3 sm:flex-row sm:items-center sm:justify-between dark:border-edge-subtle">
+          <div
+            className="flex flex-wrap gap-x-1 gap-y-1"
+            role="tablist"
+            aria-label={m.appsPage.appsNavAria}
+          >
+            <button
+              type="button"
+              role="tab"
+              aria-selected={mainTab === 'marketplace'}
+              className={cn(
+                'relative max-w-full rounded-md px-3 py-2 text-left text-sm font-medium transition-colors sm:text-center',
+                mainTab === 'marketplace' ? 'text-fg' : 'text-fg-muted hover:text-fg',
+                mainTab === 'marketplace' &&
+                  'after:absolute after:bottom-0 after:left-1/2 after:h-0.5 after:w-9 after:-translate-x-1/2 after:rounded-full after:bg-accent',
+              )}
+              onClick={() => setMainTab('marketplace')}
+            >
+              {m.appsPage.tabMarketplace}
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={mainTab === 'builtin'}
+              className={cn(
+                'relative rounded-md px-3 py-2 text-sm font-medium transition-colors',
+                mainTab === 'builtin' ? 'text-fg' : 'text-fg-muted hover:text-fg',
+                mainTab === 'builtin' &&
+                  'after:absolute after:bottom-0 after:left-1/2 after:h-0.5 after:w-9 after:-translate-x-1/2 after:rounded-full after:bg-accent',
+              )}
+              onClick={() => setMainTab('builtin')}
+            >
+              {m.appsPage.tabBuiltin}
+              <span className="ml-1 tabular-nums text-fg-muted">({bundledExtensions.length})</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={mainTab === 'user'}
+              className={cn(
+                'relative rounded-md px-3 py-2 text-sm font-medium transition-colors',
+                mainTab === 'user' ? 'text-fg' : 'text-fg-muted hover:text-fg',
+                mainTab === 'user' &&
+                  'after:absolute after:bottom-0 after:left-1/2 after:h-0.5 after:w-9 after:-translate-x-1/2 after:rounded-full after:bg-accent',
+              )}
+              onClick={() => setMainTab('user')}
+            >
+              {m.appsPage.tabUser}
+              <span className="ml-1 tabular-nums text-fg-muted">({userExtensions.length})</span>
+            </button>
           </div>
-          {tab !== 'marketplace' && userManagedExtensions.length > 0 ? (
-            <div className="relative w-full sm:max-w-xs">
+          {showSearch ? (
+            <div className="relative w-full min-w-0 sm:max-w-xs">
               <Search
                 className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-muted"
                 aria-hidden
@@ -130,12 +195,12 @@ export function AppsPage() {
           ) : null}
         </div>
 
-        {tab === 'marketplace' ? (
+        {mainTab === 'marketplace' ? (
           <ExtensionMarketplacePanel />
-        ) : userManagedExtensions.length === 0 ? (
-          <EmptyAppsState
-            message={extensions.some((e) => e.source === 'bundled') ? m.appsPage.bundledHiddenHint : m.appsPage.empty}
-          />
+        ) : mainTab === 'builtin' && bundledExtensions.length === 0 ? (
+          <EmptyAppsState message={m.appsPage.emptyBuiltin} />
+        ) : mainTab === 'user' && userExtensions.length === 0 ? (
+          <EmptyAppsState message={m.appsPage.emptyUser} />
         ) : filtered.length === 0 ? (
           <p className="rounded-xl border border-dashed border-edge-subtle bg-surface-hover/30 px-4 py-8 text-center text-sm text-fg-muted dark:bg-surface-hover/15">
             {m.appsPage.noSearchResults}
@@ -147,6 +212,7 @@ export function AppsPage() {
                 key={ext.id}
                 extension={ext}
                 copy={m.appsPage}
+                showSourceBadge={mainTab === 'user'}
                 onOpen={() => setDetail(ext)}
               />
             ))}
@@ -161,32 +227,6 @@ export function AppsPage() {
   );
 }
 
-function TabChip({
-  active,
-  onClick,
-  label,
-}: {
-  active: boolean;
-  onClick: () => void;
-  label: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        'rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-        active
-          ? 'border-accent/40 bg-accent-soft text-accent-fg'
-          : 'border-edge bg-surface-base text-fg-muted hover:bg-surface-hover hover:text-fg',
-      )}
-    >
-      {label}
-    </button>
-  );
-}
-
 function activationEligibleFor(ext: ExtensionApiRow): boolean {
   return ext.activationEligible ?? ext.active;
 }
@@ -196,6 +236,12 @@ function providerLabel(ext: ExtensionApiRow, copy: AppsPageCopy): string {
   if (ext.source === 'global') return copy.providerGlobal;
   if (ext.source === 'workspace') return copy.providerWorkspace;
   return copy.providerOther;
+}
+
+function installSourceBadgeLabel(ext: ExtensionApiRow, copy: AppsPageCopy): string {
+  if (ext.source === 'global') return copy.badgeSourceGlobal;
+  if (ext.source === 'workspace') return copy.badgeSourceWorkspace;
+  return copy.badgeSourceOther;
 }
 
 function bundledRunCaption(ext: ExtensionApiRow, copy: AppsPageCopy): string {
@@ -209,13 +255,17 @@ function bundledRunCaption(ext: ExtensionApiRow, copy: AppsPageCopy): string {
 function ExtensionAppCard({
   extension: ext,
   copy,
+  showSourceBadge,
   onOpen,
 }: {
   extension: ExtensionApiRow;
   copy: AppsPageCopy;
+  /** When true, show a short global/workspace/other pill (user-installed tab). */
+  showSourceBadge: boolean;
   onOpen: () => void;
 }) {
   const eligible = activationEligibleFor(ext);
+  const uiTitle = ext.hasUi ? copy.cardTooltipHasUi : copy.cardTooltipNoUi;
 
   return (
     <button
@@ -260,12 +310,22 @@ function ExtensionAppCard({
             {ext.description?.trim() || copy.cardNoDescription}
           </p>
           <div className="mt-2 flex flex-wrap gap-1.5">
-            <span className="rounded-md bg-surface-hover px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-fg-muted">
+            <span
+              title={uiTitle}
+              className="rounded-md bg-surface-hover px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-fg-muted"
+            >
               {ext.hasUi ? copy.badgeKindUi : copy.badgeKindBackend}
             </span>
             {ext.source === 'bundled' ? (
               <span className="rounded-md bg-surface-hover px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-fg-muted">
                 {copy.badgeBundled}
+              </span>
+            ) : showSourceBadge ? (
+              <span
+                title={providerLabel(ext, copy)}
+                className="rounded-md bg-surface-hover px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-fg-muted"
+              >
+                {installSourceBadgeLabel(ext, copy)}
               </span>
             ) : null}
           </div>
@@ -359,11 +419,15 @@ function ExtensionDetailDialog({
 
             <p className="mt-2 text-xs text-fg-muted">{bundledRunCaption(ext, copy)}</p>
 
-            {ext.source !== 'bundled' ? (
+            {ext.source === 'bundled' ? (
+              <p className="mt-4 rounded-lg border border-edge-subtle bg-surface-hover/40 px-3 py-2 text-xs text-fg-muted dark:bg-surface-hover/20">
+                {copy.builtinConfigHint}
+              </p>
+            ) : (
               <p className="mt-4 rounded-lg border border-edge-subtle bg-surface-hover/40 px-3 py-2 text-xs text-fg-muted dark:bg-surface-hover/20">
                 {copy.cliManageHint}
               </p>
-            ) : null}
+            )}
 
             {ext.hasUi && (pages.length > 0 || settingsPanels.length > 0 || chatWidgets.length > 0) ? (
               <section className="mt-8">
