@@ -30,3 +30,7 @@ Usually you only configure **`channels.telegram`** or **`channels.weixin`**; the
 
 For how extension loading interacts with other CLI commands, see [Extensions — When extensions load](../extensions.md#when-extensions-load).
 
+## Gateway startup order
+
+When you run **`xopc gateway`**, Telegram / Weixin / Feishu / DingTalk may **`start()`** only **after** HTTP is listening, so misconfigured API roots or slow `getMe` do not block the Web console. See [Gateway — Channel startup and HTTP listen order](../gateway.md#channel-startup-and-http-listen-order) and [Configuration — Channel connect defer](../configuration.md#channel-connect-defer).
+

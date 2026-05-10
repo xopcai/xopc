@@ -51,6 +51,7 @@ export class WeixinChannelPlugin implements ChannelPlugin<ResolvedWeixinAccount>
     docsPath: '/channels/weixin',
     blurb: 'WeChat via Tencent ilink bot API (QR login, direct chat).',
     order: 3,
+    deferConnectUntilAfterListen: true,
   } as const;
 
   readonly capabilities: ChannelCapabilities = {

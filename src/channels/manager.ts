@@ -69,6 +69,8 @@ export class ChannelManager {
   private _lastHeartbeatRestartAt = new Map<string, number>();
   private readonly healthMonitor = new ChannelHealthMonitor();
   private sessionModelHooks?: ChannelPluginSessionModelHooks;
+  /** Plugins that skipped `start()` until `startDeferredConnects()` (see `ChannelMeta.deferConnectUntilAfterListen`). */
+  private deferredConnectPending = new Set<string>();
 
   constructor(config: Config, bus: MessageBus) {
     this.bus = bus;
@@ -174,31 +176,90 @@ export class ChannelManager {
     }
   }
   
-  async start(): Promise<void> {
+  /**
+   * Channel ids that would run and declare `meta.deferConnectUntilAfterListen` (for logging / metrics).
+   */
+  listDeferConnectChannelIds(cfg: Config): string[] {
+    const out: string[] = [];
+    for (const [id, plugin] of this.plugins) {
+      const channelConfig = asChannelConfig(cfg.channels?.[id]);
+      if (!this.shouldRunChannelPlugin(plugin, channelConfig)) continue;
+      if (plugin.meta.deferConnectUntilAfterListen === true) {
+        out.push(id);
+      }
+    }
+    return out;
+  }
+
+  /**
+   * Phase 1: start every enabled channel except those in `deferConnectPluginIds` (they stay pending).
+   */
+  async start(options?: { deferConnectPluginIds?: ReadonlySet<string> }): Promise<void> {
     if (!this.initialized) {
       throw new Error('Channels not initialized');
     }
-    
+
     if (this.running) {
       log.warn({ pluginCount: this.plugins.size }, 'start() called while channels already running — skipping');
       return;
     }
-    
+
+    const deferIds = options?.deferConnectPluginIds ?? new Set<string>();
+    this.deferredConnectPending.clear();
+
     const startPromises: Promise<void>[] = [];
-    
+
     for (const [id, plugin] of this.plugins) {
       const channelConfig = asChannelConfig(this.config.channels?.[id]);
       if (!this.shouldRunChannelPlugin(plugin, channelConfig)) continue;
+
+      if (deferIds.has(id)) {
+        this.deferredConnectPending.add(id);
+        log.info({ channel: id }, 'Channel connect deferred until HTTP listen');
+        continue;
+      }
 
       const startPromise = this.startPlugin(plugin, {}).catch((err) => {
         log.error({ channel: id, err }, 'Failed to start channel plugin');
       });
       startPromises.push(startPromise);
     }
-    
+
     await Promise.allSettled(startPromises);
     this.running = true;
-    log.info('All channel plugins started');
+    log.info(
+      { deferred: [...this.deferredConnectPending] },
+      this.deferredConnectPending.size > 0
+        ? 'Channel plugins started (deferred connects pending)'
+        : 'All channel plugins started',
+    );
+  }
+
+  /** Phase 2: run `start()` for channels deferred at `start()`. No-op if none pending. */
+  async startDeferredConnects(): Promise<void> {
+    if (this.deferredConnectPending.size === 0) {
+      return;
+    }
+    if (!this.running) {
+      log.warn('startDeferredConnects called before channel phase-1 start; skipping');
+      return;
+    }
+    const ids = [...this.deferredConnectPending];
+    this.deferredConnectPending.clear();
+    const startPromises: Promise<void>[] = [];
+    for (const id of ids) {
+      const plugin = this.plugins.get(id);
+      if (!plugin) continue;
+      const channelConfig = asChannelConfig(this.config.channels?.[id]);
+      if (!this.shouldRunChannelPlugin(plugin, channelConfig)) continue;
+      startPromises.push(
+        this.startPlugin(plugin, {}).catch((err) => {
+          log.error({ channel: id, err }, 'Failed to start deferred channel plugin');
+        }),
+      );
+    }
+    await Promise.allSettled(startPromises);
+    log.info({ channels: ids }, 'Deferred channel connects completed');
   }
   
   private async startPlugin(
@@ -239,7 +300,9 @@ export class ChannelManager {
   
   async stop(): Promise<void> {
     if (!this.running) return;
-    
+
+    this.deferredConnectPending.clear();
+
     const stopPromises: Promise<void>[] = [];
     
     for (const id of this.initializedPluginIds) {

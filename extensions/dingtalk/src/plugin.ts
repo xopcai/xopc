@@ -50,6 +50,7 @@ export class DingtalkChannelPlugin implements ChannelPlugin<ResolvedDingtalkAcco
     blurb: 'DingTalk enterprise robot via Stream mode (QR app registration).',
     order: 35,
     aliases: ['dd', 'ding'],
+    deferConnectUntilAfterListen: true,
   };
 
   readonly capabilities: ChannelCapabilities = {

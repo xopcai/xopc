@@ -171,6 +171,17 @@ Uses file-based locking instead of PID files:
 └─────────────────────────────────────────┘
 ```
 
+### Channel startup and HTTP listen order {#channel-startup-and-http-listen-order}
+
+`GatewayServer` (foreground `xopc gateway`) defers **outbound connect** for some channel plugins until **after** the Node HTTP server reports listening:
+
+1. **Phase 1** — All channels run **`init()`**; channels that do **not** defer run **`start()`** immediately. Session manager, cron, heartbeat, and the agent service start as today. The **outbound drain loop** starts only after phase 2 when defer is active (so Telegram et al. are not raced by queued sends).
+2. **Phase 2** — In the HTTP **`listen`** callback, deferred channels run **`start()`**, then **pending outbound replay**, then the outbound processor.
+
+Bundled messaging channels (**Telegram**, **Weixin**, **Feishu**, **DingTalk**) declare deferral in plugin metadata. Override behavior with **`gateway.channelConnectDeferMode`** / **`channelConnectDeferIds`** / **`channelConnectDeferSkipIds`** — see [Configuration — Channel connect defer](configuration.md#channel-connect-defer).
+
+Structured metrics are logged at **`info`** with `phase: "gateway.channel_startup"` and `stage: "phase1"` or `"phase2"` (millisecond fields, defer mode/source, and deferred channel ids).
+
 ### Process Respawn
 
 On restart:
@@ -538,6 +549,9 @@ Unauthorized WebSocket request bursts are throttled and can trigger forced socke
 | `auth.password` | unset | Password credential |
 | `auth.rateLimit.*` | see defaults above | Failed-auth rate limiter config |
 | `corsOrigins` | `[]` | Allowed browser origins |
+| `channelConnectDeferMode` | *(unset → `auto`)* | `auto` / `off` / `explicit` — see [Configuration](configuration.md#channel-connect-defer) |
+| `channelConnectDeferIds` | - | Explicit defer list when mode is `explicit` |
+| `channelConnectDeferSkipIds` | - | Subtract from auto or explicit defer sets |
 
 ---
 

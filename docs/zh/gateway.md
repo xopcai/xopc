@@ -213,6 +213,17 @@ lsof -i :18790
 xopc gateway --force
 ```
 
+## 频道启动与 HTTP 监听顺序 {#频道启动与-http-监听顺序}
+
+使用前台 **`xopc gateway`**（`GatewayServer`）时，部分外连型通道会把 **`ChannelPlugin.start()`**（建立 Telegram polling、飞书 Socket 等）放到 **HTTP 已成功 `listen` 之后**，让 REST 与静态控制台先就绪：
+
+1. **阶段一**：所有通道执行 **`init()`**；未延后列表中的通道立刻 **`start()`**。会话、cron、heartbeat、智能体服务与原先一致。若启用了延后策略，**出站消费循环**会在阶段二之后再启动，避免与尚未 `start` 的通道抢跑。
+2. **阶段二**：在 HTTP **`listen`** 回调中，对延后通道执行 **`start()`**，再 **重放持久化出站队列**，最后启动出站处理器。
+
+内置消息通道（**Telegram、微信、飞书、钉钉**）在插件 meta 中声明延后；可通过 **`gateway.channelConnectDeferMode`** / **`channelConnectDeferIds`** / **`channelConnectDeferSkipIds`** 覆盖，详见 [配置说明 — 频道连接延后](configuration.md#频道连接延后)。
+
+启动时会输出结构化 **`info`** 日志：`phase: "gateway.channel_startup"`，`stage: "phase1"` 或 `"phase2"`，含各阶段毫秒数、`channelConnectDeferMode`、`channelConnectDeferSource` 与 `deferredChannelIds`。
+
 ## API 端点
 
 ### 发送消息
@@ -587,6 +598,9 @@ WebSocket 上重复未授权请求会触发限流，并在阈值后主动断开�
 | `auth.password` | 未设置 | password 凭证 |
 | `auth.rateLimit.*` | 见上方示例默认值 | 认证失败限流配置 |
 | `corsOrigins` | `[]` | 允许的浏览器来源 |
+| `channelConnectDeferMode` | 未写视为 `auto` | `auto` / `off` / `explicit`，见 [配置 — 频道连接延后](configuration.md#频道连接延后) |
+| `channelConnectDeferIds` | - | `explicit` 模式下的延后通道 id 列表 |
+| `channelConnectDeferSkipIds` | - | 从自动或显式延后集合中剔除的 id |
 
 ## 锁文件
 

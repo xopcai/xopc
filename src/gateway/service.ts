@@ -58,13 +58,24 @@ import { PACKAGE_VERSION } from '../package-version.js';
 import { buildSessionKey, parseSessionKey } from '../routing/session-key.js';
 import { getDefaultAgentId } from '../routing/resolve-route.js';
 import { scheduleGatewayUpdateCheck } from '../infra/update-startup.js';
+import { resolveChannelConnectDeferSet } from './resolve-channel-connect-defer.js';
 import { restartGatewayProcessWithFreshPid } from './respawn.js';
 import { getDistinctSessionChatIds } from './service/session-chat-ids.js';
 import { runGatewayAgent } from './service/run-gateway-agent.js';
 import { GatewaySseHub } from './service/sse-hub.js';
-import type { GatewayServiceConfig, ServiceEvent } from './service/types.js';
+import type {
+  GatewayChannelStartupPhase1Metrics,
+  GatewayChannelStartupPhase2Metrics,
+  GatewayServiceConfig,
+  ServiceEvent,
+} from './service/types.js';
 
-export type { GatewayServiceConfig, ServiceEvent } from './service/types.js';
+export type {
+  GatewayChannelStartupPhase1Metrics,
+  GatewayChannelStartupPhase2Metrics,
+  GatewayServiceConfig,
+  ServiceEvent,
+} from './service/types.js';
 
 const log = createLogger('GatewayService');
 
@@ -101,6 +112,11 @@ export class GatewayService {
 
   /** When set (e.g. by `GatewayServer`), `triggerGatewayProcessRestart` can stop HTTP then exit. */
   private gatewayShutdownForRestart: (() => Promise<void>) | null = null;
+
+  /** Snapshot for phase-2 metrics / logs (ids deferred at phase-1 `start()`). */
+  private lastDeferredChannelConnectIds: string[] = [];
+  private lastChannelConnectDeferMode: 'auto' | 'off' | 'explicit' = 'auto';
+  private lastChannelConnectDeferSource: 'off' | 'explicit' | 'meta' = 'off';
 
   private readonly clarifyBridge = new ClarifyBridge();
 
@@ -319,10 +335,61 @@ export class GatewayService {
 
     await this.loadExtensionsAndRegisterChannels();
 
-    // Start channels (initialize first, then start)
+    // Start channels: init all; optional defer for meta.deferConnectUntilAfterListen (GatewayServer)
+    const phase1StartedAt = performance.now();
+    const t0 = performance.now();
     await this.channelManager.initialize();
-    await this.channelManager.start();
-    await this.channelManager.replayPendingOutboundMessages();
+    const channelInitMs = performance.now() - t0;
+
+    const t1 = performance.now();
+    const deferResolution = resolveChannelConnectDeferSet({
+      config: this.config,
+      channelManager: this.channelManager,
+      deferChannelConnectUntilAfterHttp: this.serviceConfig.deferChannelConnectUntilAfterHttp === true,
+    });
+    const deferConnect = deferResolution.deferPluginIds;
+    const deferPlanMs = performance.now() - t1;
+    this.lastDeferredChannelConnectIds = [...deferConnect];
+    this.lastChannelConnectDeferMode = deferResolution.mode;
+    this.lastChannelConnectDeferSource = deferResolution.source;
+
+    if (deferConnect.size > 0) {
+      log.info({ channels: [...deferConnect] }, 'Deferring channel outbound connect until HTTP listen');
+    }
+
+    const t2 = performance.now();
+    await this.channelManager.start(
+      deferConnect.size > 0 ? { deferConnectPluginIds: deferConnect } : undefined,
+    );
+    const channelPhase1StartMs = performance.now() - t2;
+
+    let replayOutboundMs: number | null = null;
+    if (this.serviceConfig.deferChannelConnectUntilAfterHttp !== true) {
+      const tr = performance.now();
+      await this.channelManager.replayPendingOutboundMessages();
+      replayOutboundMs = performance.now() - tr;
+    }
+
+    const channelStartupPhase1TotalMs = performance.now() - phase1StartedAt;
+    const gwDeferMode = this.config.gateway?.channelConnectDeferMode ?? 'auto';
+    const phase1Metrics: GatewayChannelStartupPhase1Metrics = {
+      deferChannelConnectUntilAfterHttp: this.serviceConfig.deferChannelConnectUntilAfterHttp === true,
+      channelConnectDeferMode: this.serviceConfig.deferChannelConnectUntilAfterHttp
+        ? deferResolution.mode
+        : gwDeferMode,
+      channelConnectDeferSource: deferResolution.source,
+      deferredChannelIds: this.lastDeferredChannelConnectIds,
+      deferredChannelCount: this.lastDeferredChannelConnectIds.length,
+      channelInitMs: Math.round(channelInitMs),
+      deferPlanMs: Math.round(deferPlanMs),
+      channelPhase1StartMs: Math.round(channelPhase1StartMs),
+      replayOutboundMs: replayOutboundMs === null ? null : Math.round(replayOutboundMs),
+      channelStartupPhase1TotalMs: Math.round(channelStartupPhase1TotalMs),
+    };
+    log.info(
+      { phase: 'gateway.channel_startup', stage: 'phase1', ...phase1Metrics },
+      'Gateway channel startup phase-1 complete',
+    );
 
     // Initialize session manager
     await this.sessionManager.initialize();
@@ -352,10 +419,12 @@ export class GatewayService {
       log.error({ err }, 'Agent service error');
     });
 
-    // Start outbound message processor
-    this.startOutboundProcessor().catch((err) => {
-      log.error({ err }, 'Outbound processor error');
-    });
+    // Outbound drain: after deferred channel connects when using HTTP lifecycle (avoid racing Telegram).
+    if (this.serviceConfig.deferChannelConnectUntilAfterHttp !== true) {
+      this.startOutboundProcessor().catch((err) => {
+        log.error({ err }, 'Outbound processor error');
+      });
+    }
 
     // Setup config hot reload
     if (this.serviceConfig.enableHotReload !== false) {
@@ -370,6 +439,58 @@ export class GatewayService {
     });
 
     log.debug('Gateway service started');
+  }
+
+  /**
+   * Called by `GatewayServer` when the HTTP listener is bound. Starts channels that
+   * opted into `meta.deferConnectUntilAfterListen`, then replays outbound queue.
+   */
+  async onHttpListening(): Promise<void> {
+    if (this.serviceConfig.deferChannelConnectUntilAfterHttp !== true) {
+      return;
+    }
+    const listenStartedAt = performance.now();
+    try {
+      const tDef = performance.now();
+      await this.channelManager.startDeferredConnects();
+      const channelPhase2DeferredMs = performance.now() - tDef;
+
+      const tr = performance.now();
+      await this.channelManager.replayPendingOutboundMessages();
+      const replayOutboundMs = performance.now() - tr;
+
+      this.startOutboundProcessor().catch((err) => {
+        log.error({ err }, 'Outbound processor error');
+      });
+      this.emit('channels.status', { channels: this.getChannelsStatus() });
+
+      const onHttpListeningTotalMs = performance.now() - listenStartedAt;
+      const phase2Metrics: GatewayChannelStartupPhase2Metrics = {
+        channelConnectDeferMode: this.lastChannelConnectDeferMode,
+        channelConnectDeferSource: this.lastChannelConnectDeferSource,
+        deferredChannelIds: this.lastDeferredChannelConnectIds,
+        channelPhase2DeferredMs: Math.round(channelPhase2DeferredMs),
+        replayOutboundMs: Math.round(replayOutboundMs),
+        onHttpListeningTotalMs: Math.round(onHttpListeningTotalMs),
+      };
+      log.info(
+        { phase: 'gateway.channel_startup', stage: 'phase2', ...phase2Metrics },
+        'Gateway channel startup phase-2 complete (HTTP listening)',
+      );
+    } catch (err) {
+      const em = err instanceof Error ? err.message : String(err);
+      log.error(
+        {
+          err,
+          errorMessage: em,
+          phase: 'gateway.channel_startup',
+          stage: 'phase2',
+          deferredChannelIds: this.lastDeferredChannelConnectIds,
+          elapsedMs: Math.round(performance.now() - listenStartedAt),
+        },
+        `Deferred channel startup after HTTP listen failed: ${em}`,
+      );
+    }
   }
 
   async stop(): Promise<void> {
@@ -403,6 +524,10 @@ export class GatewayService {
     // Unblock `consumeOutbound()` / `consumeInbound()` waiters before stopping channels (CLI agent does the same).
     this.running = false;
     this.bus.shutdown();
+
+    this.lastDeferredChannelConnectIds = [];
+    this.lastChannelConnectDeferMode = 'auto';
+    this.lastChannelConnectDeferSource = 'off';
 
     await this.channelManager.stop();
 
