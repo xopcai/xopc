@@ -17,6 +17,7 @@ import {
   agentModelFallbacksToArray,
   agentModelRefToString,
 } from './agent-model.js';
+import { buildSafeProvidersConfigForWeb } from './safe-providers-config.js';
 
 /** Sanitized config snapshot for GET/PATCH `/api/config` (matches persisted `service.currentConfig`). */
 export async function buildSafeWebConfigPayload(service: GatewayService) {
@@ -101,6 +102,8 @@ export async function buildSafeWebConfigPayload(service: GatewayService) {
         ]),
       ),
     ),
+    /** Masked `cfg.providers` for capability keys (image / STT / etc.). */
+    providersConfig: buildSafeProvidersConfigForWeb(config.providers),
     gateway: {
       host: config.gateway?.host,
       port: config.gateway?.port,

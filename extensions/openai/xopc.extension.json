@@ -1,0 +1,8 @@
+{
+  "id": "openai",
+  "name": "OpenAI (images)",
+  "description": "DALL·E / GPT image APIs. Configure API keys and optional base URL under Settings → Images, or here — both edit the same providers.openai entry.",
+  "version": "1.0.0",
+  "kind": "image-generation",
+  "main": "src/index.ts"
+}

@@ -10,6 +10,12 @@ export type {
   ImageGenerationProviderConfiguredContext,
   ImageGenerationProviderSummary,
 } from './provider-registry.js';
+export type {
+  ImageProviderUiBaseUrlPreset,
+  ImageProviderUiMetadata,
+  ImageProviderUiPresetKind,
+  ImageProviderUiRegionOption,
+} from './image-provider-ui.js';
 
 // ============================================
 // Capability dimensions (Step 2 — new model)

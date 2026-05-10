@@ -69,6 +69,19 @@ describe('ImageGenerationProvider registry', () => {
     expect(summaries[0]?.capabilities).toBeDefined();
   });
 
+  it('includes gateway ui metadata on summaries when the provider defines it', () => {
+    registerImageGenerationProvider(
+      createMockProvider('acme', {
+        ui: {
+          regions: [{ value: 'eu', label: 'EU', imageBaseUrl: 'https://acme.example/gen' }],
+        },
+      }),
+    );
+    const summaries = listImageGenerationProvidersSummary();
+    expect(summaries[0]?.ui?.regions?.[0]?.value).toBe('eu');
+    expect(summaries[0]?.ui?.regions?.[0]?.imageBaseUrl).toContain('acme');
+  });
+
   it('throws on empty provider id', () => {
     expect(() =>
       registerImageGenerationProvider({ ...createMockProvider('x'), id: '' }),

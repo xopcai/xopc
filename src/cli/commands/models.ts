@@ -73,8 +73,12 @@ function createModelsCommand(_ctx: CLIContext): Command {
         'dall-e-3',
         'dall-e-2',
         'wan2.6-t2i',
+        'wan2.7-image-pro',
+        'wan2.7-image',
         'wan2.1-t2i-turbo',
         'wan2.1-t2i-plus',
+        'image-01',
+        'image-01-live',
       ]);
       const VISION_IDS = new Set([
         'gpt-4o',

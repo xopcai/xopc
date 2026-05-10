@@ -224,14 +224,14 @@ describe('buildNoCapabilityModelConfiguredMessage', () => {
       modelConfigKey: 'imageGenerationModel',
       providers: [
         { id: 'openai', defaultModel: 'gpt-image-1' },
-        { id: 'dashscope', defaultModel: 'wan2.6-t2i' },
+        { id: 'dashscope', defaultModel: 'wan2.7-image-pro' },
       ],
       getProviderEnvVars: (id) => (id === 'openai' ? ['OPENAI_API_KEY'] : ['DASHSCOPE_API_KEY']),
     });
     expect(msg).toContain('No image-generation model configured');
     expect(msg).toContain('agents.defaults.imageGenerationModel');
     expect(msg).toContain('- openai default=gpt-image-1 (env: OPENAI_API_KEY)');
-    expect(msg).toContain('- dashscope default=wan2.6-t2i (env: DASHSCOPE_API_KEY)');
+    expect(msg).toContain('- dashscope default=wan2.7-image-pro (env: DASHSCOPE_API_KEY)');
   });
 
   it('omits the providers section when none registered', () => {

@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   DASHSCOPE_IMAGE_ENDPOINTS,
   mapSizeToDashScopeFormat,
+  mapSizeToWan27Format,
   resolveDashScopeImageGenerationUrl,
   resolveDashScopeImageRegion,
 } from '../../../../../extensions/dashscope/src/image-generation-provider.js';
@@ -97,5 +98,26 @@ describe('mapSizeToDashScopeFormat', () => {
 
   it('passes through star format', () => {
     expect(mapSizeToDashScopeFormat('1280*1280')).toBe('1280*1280');
+  });
+});
+
+describe('mapSizeToWan27Format', () => {
+  it('defaults to 2K for wan2.7-image-pro', () => {
+    expect(mapSizeToWan27Format(undefined, 'wan2.7-image-pro')).toBe('2K');
+    expect(mapSizeToWan27Format('', 'wan2.7-image-pro')).toBe('2K');
+  });
+
+  it('accepts 1K/2K/4K presets on pro', () => {
+    expect(mapSizeToWan27Format('4k', 'wan2.7-image-pro')).toBe('4K');
+    expect(mapSizeToWan27Format('1K', 'wan2.7-image-pro')).toBe('1K');
+  });
+
+  it('maps 4K to 2K on wan2.7-image (non-pro)', () => {
+    expect(mapSizeToWan27Format('4K', 'wan2.7-image')).toBe('2K');
+    expect(mapSizeToWan27Format('2K', 'wan2.7-image')).toBe('2K');
+  });
+
+  it('converts WxH to star pixels', () => {
+    expect(mapSizeToWan27Format('1024x1024', 'wan2.7-image-pro')).toBe('1024*1024');
   });
 });

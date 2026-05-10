@@ -272,6 +272,17 @@ export const PROVIDER_ENRICHMENT: Record<string, ProviderEnrichment> = {
     aliases: ['moonshot cn', 'kimi cn'],
     envVars: ['MOONSHOT_API_KEY'],
   },
+  fal: {
+    apiKeyUrl: 'https://fal.ai/dashboard/keys',
+    pricingUrl: 'https://fal.ai/pricing',
+    docsUrl: 'https://fal.ai/docs',
+    description: 'fal — serverless image and media generation APIs.',
+    descriptionZh: 'fal：无服务器图像与媒体生成 API。',
+    bestFor: ['image', 'video'],
+    freeTier: true,
+    aliases: ['fal ai', 'fal.ai'],
+    envVars: ['FAL_KEY', 'FAL_API_KEY'],
+  },
   fireworks: {
     apiKeyUrl: 'https://fireworks.ai/account/api-keys',
     pricingUrl: 'https://fireworks.ai/pricing',

@@ -4,13 +4,20 @@
  * Routes: /settings/ext/:extensionId, /settings/ext/:extensionId/:panelId
  */
 
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
+
+import { ExtensionImageProviderSettings } from '@/features/settings/extension-image-provider-settings';
+import { messages } from '@/i18n/messages';
+import { useLocaleStore } from '@/stores/locale-store';
 
 import { ExtensionAutoSettings } from './extension-auto-settings';
 import { ExtensionIframeHost } from './extension-iframe-host';
 import { useExtensions } from './extension-provider';
 
 export function ExtensionSettingsPage() {
+  const language = useLocaleStore((s) => s.language);
+  const m = messages(language);
+  const xm = m.extensionImageGen;
   const { extensionId, panelId } = useParams<{ extensionId: string; panelId?: string }>();
   const extensions = useExtensions();
 
@@ -33,9 +40,10 @@ export function ExtensionSettingsPage() {
     : panels?.[0];
 
   const hasIframe = Boolean(panel && extension.ui);
-  const hasAuto = Boolean(extension.hasConfigSchema);
+  const hasAutoForm = Boolean(extension.hasConfigSchema);
+  const isImageGeneration = extension.kind === 'image-generation';
 
-  if (!hasAuto && !hasIframe) {
+  if (!hasAutoForm && !hasIframe && !isImageGeneration) {
     return (
       <SettingsPanelNotFound
         message={`Extension "${extensionId}" has no settings panels or config schema.`}
@@ -48,7 +56,20 @@ export function ExtensionSettingsPage() {
   return (
     <div className="mx-auto flex w-full max-w-app-main flex-col gap-3 px-4 py-8">
       <h1 className="text-lg font-semibold text-fg">{title}</h1>
-      <ExtensionAutoSettings extensionId={extensionId} />
+      {isImageGeneration ? (
+        <div className="flex flex-col gap-2 rounded-lg border border-edge-subtle bg-surface-base px-4 py-3 text-sm">
+          <p className="leading-relaxed text-fg-muted">{xm.banner}</p>
+          <Link
+            to="/settings/image-models"
+            className="w-fit font-medium text-accent hover:underline"
+            title={m.imageModelsSettings.imageModelsLinkTitle}
+          >
+            {xm.openImageModels}
+          </Link>
+        </div>
+      ) : null}
+      {isImageGeneration ? <ExtensionImageProviderSettings extensionId={extensionId} /> : null}
+      {hasAutoForm ? <ExtensionAutoSettings extensionId={extensionId} /> : null}
       {hasIframe && panel && extension.ui ? (
         <div className="overflow-hidden rounded-xl border border-edge bg-surface-base">
           <ExtensionIframeHost

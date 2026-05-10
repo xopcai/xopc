@@ -15,16 +15,25 @@ import {
   isProviderApiKeyConfigured,
   resolveAuthProfileForProvider,
 } from '@xopcai/xopc/providers/auth-runtime/index.js';
-import { OPENAI_DEFAULT_IMAGE_MODEL } from '@xopcai/xopc/agent/image/generation/constants.js';
 import { createOpenAiCompatibleImageProvider } from '@xopcai/xopc/agent/image/generation/openai-compatible-image-provider.js';
 import type { OpenAiCompatibleEndpointResolution } from '@xopcai/xopc/agent/image/generation/openai-compatible-image-provider.js';
 import type {
   ImageGenerationProvider,
   ImageGenerationProviderCapabilities,
   ImageGenerationRequest,
+  ImageProviderUiMetadata,
 } from '@xopcai/xopc/agent/image/generation/types.js';
 
 const OPENAI_DEFAULT_BASE_URL = 'https://api.openai.com/v1';
+
+/** Image models exposed by this extension (OpenAI Images API + compatible hosts). */
+export const OPENAI_IMAGE_MODELS: readonly string[] = ['gpt-image-1', 'dall-e-3', 'dall-e-2'];
+export const OPENAI_DEFAULT_IMAGE_MODEL = OPENAI_IMAGE_MODELS[0]!;
+
+const OPENAI_IMAGE_UI: ImageProviderUiMetadata = {
+  baseUrlPresets: [{ value: OPENAI_DEFAULT_BASE_URL, label: 'OpenAI API (default)' }],
+  baseUrlPresetKind: 'openai',
+};
 
 const OPENAI_CAPABILITIES: ImageGenerationProviderCapabilities = {
   generate: { maxCount: 4, supportsSize: true },
@@ -90,8 +99,9 @@ export function buildOpenAIImageGenerationProvider(): ImageGenerationProvider {
     id: 'openai',
     label: 'OpenAI',
     defaultModel: OPENAI_DEFAULT_IMAGE_MODEL,
-    models: [OPENAI_DEFAULT_IMAGE_MODEL, 'dall-e-3', 'dall-e-2'],
+    models: [...OPENAI_IMAGE_MODELS],
     capabilities: OPENAI_CAPABILITIES,
+    ui: OPENAI_IMAGE_UI,
     isConfigured: (ctx) =>
       isProviderApiKeyConfigured({ providerId: 'openai', cfg: ctx.cfg }),
     resolveApiKey: (req) => {

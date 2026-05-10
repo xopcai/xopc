@@ -32,20 +32,26 @@ import type {
   ImageGenerationProviderCapabilities,
   ImageGenerationRequest,
   ImageGenerationResult,
+  ImageProviderUiMetadata,
 } from '@xopcai/xopc/agent/image/generation/types.js';
 
 const log = createLogger('ImageGen:Google');
 
 const DEFAULT_GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com';
+const GOOGLE_IMAGE_UI: ImageProviderUiMetadata = {
+  baseUrlPresets: [{ value: DEFAULT_GEMINI_BASE_URL, label: 'Google AI (default)' }],
+  baseUrlPresetKind: 'google',
+};
 const DEFAULT_GEMINI_API_VERSION = 'v1beta';
-export const GOOGLE_DEFAULT_IMAGE_MODEL = 'gemini-2.5-flash-image-preview';
 const DEFAULT_TIMEOUT_MS = 180_000;
 
-const GEMINI_IMAGE_MODELS = [
-  GOOGLE_DEFAULT_IMAGE_MODEL,
+/** Gemini image-capable model ids for this extension. */
+export const GOOGLE_IMAGE_MODELS: readonly string[] = [
+  'gemini-2.5-flash-image-preview',
   'gemini-3-pro-image-preview',
   'gemini-3-flash-image-preview',
-] as const;
+];
+export const GOOGLE_DEFAULT_IMAGE_MODEL = GOOGLE_IMAGE_MODELS[0]!;
 
 const GOOGLE_CAPABILITIES: ImageGenerationProviderCapabilities = {
   generate: { maxCount: 4, supportsSize: true, supportsAspectRatio: true },
@@ -275,8 +281,9 @@ export function buildGoogleImageGenerationProvider(): ImageGenerationProvider {
     aliases: ['gemini'],
     label: 'Google Gemini',
     defaultModel: GOOGLE_DEFAULT_IMAGE_MODEL,
-    models: [...GEMINI_IMAGE_MODELS],
+    models: [...GOOGLE_IMAGE_MODELS],
     capabilities: GOOGLE_CAPABILITIES,
+    ui: GOOGLE_IMAGE_UI,
     isConfigured: (ctx) =>
       isProviderApiKeyConfigured({ providerId: 'google', cfg: ctx.cfg }),
     async generateImage(req) {
