@@ -14,15 +14,19 @@ marked.use(
   }),
 );
 
-const MARKED_OPTIONS: MarkedOptions = {
+const MARKED_OPTIONS = {
   gfm: true,
   breaks: false,
-};
+  async: false as const,
+} satisfies MarkedOptions;
 
 /**
  * Parse markdown to HTML string.
  * Output MUST be passed through DOMPurify before dangerouslySetInnerHTML.
  */
-export function parseMarkdown(text: string, overrides?: Partial<MarkedOptions>): string {
-  return marked.parse(text, { ...MARKED_OPTIONS, ...overrides }) as string;
+export function parseMarkdown(
+  text: string,
+  overrides?: Partial<Omit<MarkedOptions, 'async'>>,
+): string {
+  return marked.parse(text, { ...MARKED_OPTIONS, ...overrides, async: false });
 }
