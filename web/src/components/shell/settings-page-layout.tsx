@@ -13,7 +13,7 @@ import { electronDarwinTitlebarLeftPad, isElectronDarwin } from '@/lib/electron-
 import { AGENTS_APP_LIST_PATH } from '@/features/settings/agents/agents-app-path';
 import { resolveSettingsBackTarget } from '@/features/settings/settings-nav-state';
 import { useLocaleStore } from '@/stores/locale-store';
-import { useSidebarStore } from '@/stores/sidebar-store';
+import { useSettingsRailStore } from '@/stores/settings-rail-store';
 
 /** Aligned with `SidebarNav` secondary links (§4.3 — same rail rhythm as main app sidebar). */
 function settingsNavLinkClass({ isActive }: { isActive: boolean }) {
@@ -39,8 +39,8 @@ export const SettingsPageLayout = memo(function SettingsPageLayout() {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const location = useLocation();
-  const expandedWidthPx = useSidebarStore((s) => s.expandedWidthPx);
-  const setExpandedWidthPx = useSidebarStore((s) => s.setExpandedWidthPx);
+  const settingsRailWidthPx = useSettingsRailStore((s) => s.widthPx);
+  const setSettingsRailWidthPx = useSettingsRailStore((s) => s.setWidthPx);
   const [widthResizing, setWidthResizing] = useState(false);
 
   const onSettingsRailResizePointerDown = useCallback(
@@ -50,10 +50,10 @@ export const SettingsPageLayout = memo(function SettingsPageLayout() {
       el.setPointerCapture(e.pointerId);
       setWidthResizing(true);
       const startX = e.clientX;
-      const startW = useSidebarStore.getState().expandedWidthPx;
+      const startW = useSettingsRailStore.getState().widthPx;
       const pid = e.pointerId;
       const onMove = (ev: PointerEvent) => {
-        setExpandedWidthPx(startW + (ev.clientX - startX));
+        setSettingsRailWidthPx(startW + (ev.clientX - startX));
       };
       const onDone = () => {
         try {
@@ -70,7 +70,7 @@ export const SettingsPageLayout = memo(function SettingsPageLayout() {
       window.addEventListener('pointerup', onDone);
       window.addEventListener('pointercancel', onDone);
     },
-    [setExpandedWidthPx],
+    [setSettingsRailWidthPx],
   );
 
   const backTo = resolveSettingsBackTarget(location.state);
@@ -105,7 +105,7 @@ export const SettingsPageLayout = memo(function SettingsPageLayout() {
         )}
         style={
           {
-            '--sidebar-expanded-px': `${expandedWidthPx}px`,
+            '--settings-rail-px': `${settingsRailWidthPx}px`,
           } as CSSProperties
         }
       >

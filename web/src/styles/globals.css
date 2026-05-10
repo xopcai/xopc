@@ -366,11 +366,11 @@ html.dark {
   }
 }
 
-/* Settings full-page left rail: shares `--sidebar-expanded-px` with app sidebar (md+). */
+/* Settings full-page left rail: own `--settings-rail-px` (narrower min/max than app sidebar). */
 @media (min-width: 768px) {
   .settings-page-rail {
     transform: translateZ(0);
-    width: var(--sidebar-expanded-px, 16rem);
+    width: var(--settings-rail-px, 14.25rem);
     transition: width 280ms cubic-bezier(0.22, 1, 0.36, 1);
   }
 }
