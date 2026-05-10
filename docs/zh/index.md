@@ -26,8 +26,8 @@ features:
   - title: 🔌 扩展系统
     details: 后端钩子与扩展能力；可选 manifest ui，在网关网页控制台沙箱 iframe 中运行（@xopcai/extension-ui-sdk）
     link: /zh/extensions
-  - title: 🌐 多通道支持
-    details: 核心自带 Telegram、微信（Weixin）与网关网页聊天/控制台，并可在控制台中加载扩展的 manifest ui 面板；更多通道可通过扩展接入。
+  - title: 🌐 多频道
+    details: 内置 Telegram、微信、飞书/Lark、钉钉与网关网页对话/控制台；可加载扩展的 manifest ui 面板；更多频道可通过扩展接入。
     link: /zh/channels
   - title: 💻 本地优先
     details: 本地运行、完全掌控——专为自管技术栈的一人公司打造
@@ -47,7 +47,7 @@ features:
   - title: 🎤 语音消息
     details: 支持通过 Telegram 收发语音消息（STT/TTS）
     link: /zh/voice
-  - title: 🤖 多服务商
-    details: 20+ 家 LLM 服务商：OpenAI、Anthropic、Google、Groq、DeepSeek、Ollama 等
+  - title: 🤖 多模型厂商
+    details: 20+ 家：DeepSeek（推荐）、OpenAI、Anthropic、Google、Groq、Ollama、OpenRouter 等
     link: /zh/models
 ---

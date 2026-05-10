@@ -8,7 +8,9 @@ xopc supports custom model providers via `~/.xopc/models.json`.
 
 The **gateway console** (Settings → Providers) and **`xopc models`** use the same built-in ids as pi-ai. **Environment variable names** are centralized in `src/providers/env-keys.ts` (`PROVIDER_ENV_MAP`). For a single table aligned with `xopc.json` → **`providers`**, see [Configuration — `providers`](/configuration#providers).
 
-Included built-ins cover, among others: **OpenAI**, **Anthropic**, **Google** / **Vertex**, **Azure OpenAI**, **AWS Bedrock**, **DeepSeek**, **Groq**, **xAI**, **Mistral**, **Cerebras**, **OpenRouter**, **Vercel AI Gateway**, **Zhipu z.ai**, **MiniMax** (intl + CN), **Kimi for coding**, **Moonshot** (`moonshotai`, `moonshotai-cn`), **Hugging Face**, **Fireworks**, **Together**, **OpenCode** / **OpenCode Go**, **Cloudflare Workers AI** and **Cloudflare AI Gateway**, **GitHub Copilot**, **OpenAI Codex** (OAuth), **Google Gemini CLI** / **Antigravity** (token or key flows), and **Xiaomi MiMo** (see below). **DashScope** (`dashscope`) is an xopc env id for image/STT/TTS HTTP APIs, not an LLM `KnownProvider` in pi-ai.
+**Default chat models:** **DeepSeek** is a common first choice in docs and `xopc onboard`; set **`providers.deepseek`** (or env vars from `PROVIDER_ENV_MAP`) for BYOK keys.
+
+Included built-ins cover, among others: **DeepSeek**, **OpenAI**, **Anthropic**, **Google** / **Vertex**, **Azure OpenAI**, **AWS Bedrock**, **Groq**, **xAI**, **Mistral**, **Cerebras**, **OpenRouter**, **Vercel AI Gateway**, **Zhipu z.ai**, **MiniMax** (intl + CN), **Kimi for coding**, **Moonshot** (`moonshotai`, `moonshotai-cn`), **Hugging Face**, **Fireworks**, **Together**, **OpenCode** / **OpenCode Go**, **Cloudflare Workers AI** and **Cloudflare AI Gateway**, **GitHub Copilot**, **OpenAI Codex** (OAuth), **Google Gemini CLI** / **Antigravity** (token or key flows), and **Xiaomi MiMo** (see below). **DashScope** (`dashscope`) is an xopc env id for image/STT/TTS HTTP APIs, not an LLM `KnownProvider` in pi-ai.
 
 ### Xiaomi MiMo (`xiaomi` and `xiaomi-token-plan-*`)
 

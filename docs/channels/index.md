@@ -26,7 +26,7 @@ All channel settings live under the **`channels`** object in `~/.xopc/xopc.json`
 
 Third-party channel types from extensions also use `channels.<id>` blocks when their README says so.
 
-Usually you only configure **`channels.telegram`** or **`channels.weixin`**; the matching pieces load automatically. To **block** a specific extension id, add it under **`extensions.disabled`**.
+Configure **`channels.telegram`**, **`channels.weixin`**, **`channels.feishu`**, **`channels.dingtalk`**, etc., as needed; the gateway loads matching plugins from config. To **block** a specific extension id, add it under **`extensions.disabled`**.
 
 For how extension loading interacts with other CLI commands, see [Extensions — When extensions load](../extensions.md#when-extensions-load).
 

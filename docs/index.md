@@ -24,10 +24,10 @@ features:
     details: Start with CLI; expand with channels, extensions, and cron as your needs evolve
     link: /getting-started
   - title: 🔌 Extension System
-    details: Backend hooks plus optional Gateway Web UI in sandboxed iframes via manifest ui and @xopcai/extension-ui-sdk
+    details: Backend hooks plus optional gateway Web UI in sandboxed iframes (manifest ui) via @xopcai/extension-ui-sdk
     link: /extensions
   - title: 🌐 Multi-Channel
-    details: Bundled Telegram & WeChat (Weixin), gateway web chat and console, plus optional extension UI panels (manifest ui); more channels via extensions.
+    details: Bundled Telegram, WeChat (Weixin), Feishu/Lark, DingTalk, gateway web chat and console; optional extension UI panels; more channels via extensions.
     link: /channels
   - title: 💻 Local First
     details: Run locally with full control—built for OPCs who own their stack
@@ -48,6 +48,6 @@ features:
     details: STT/TTS support for voice communication via Telegram
     link: /voice
   - title: 🤖 Multi-Provider
-    details: "20+ LLM providers: OpenAI, Anthropic, Google, Groq, DeepSeek, Ollama and more"
+    details: "20+ LLM providers: DeepSeek (recommended), OpenAI, Anthropic, Google, Groq, Ollama, OpenRouter, and more"
     link: /models
 ---

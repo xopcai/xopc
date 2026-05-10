@@ -1,15 +1,13 @@
 # Getting Started
 
-Install **xopc**, add at least one LLM provider key, then run the CLI or gateway. This page covers a first-time setup from scratch.
+Install **xopc**, add at least one LLM provider key, then use the **CLI**, **TUI**, **gateway** (browser console), or the **Electron** app. This page walks through a first install from scratch.
 
 ## 1. Prerequisites
 
-Before you begin, ensure you have:
+- **Node.js** **22** or newer (`node -v`)
+- **pnpm**: required only when [building from source](#option-2-build-from-source) in this repo (`pnpm --version`)
 
-- **Node.js**: Version **22.0.0** or newer (`node -v`)
-- **pnpm**: Recommended package manager (`pnpm --version`)
-
-> **Note:** This project uses `pnpm`. Do NOT use `npm` for package management.
+End users can install the published CLI with **`npm install -g @xopcai/xopc`** (or `pnpm add -g`).
 
 ## 2. Installation
 
@@ -41,10 +39,10 @@ xopc onboard
 
 The wizard will guide you through:
 1. Creating the primary Markdown workspace directory (typically `~/.xopc/workspace/main/` when using default config)
-2. Generating default `config.json`
-3. Selecting an LLM provider and entering API key
-4. Configuring messaging channels (Telegram)
-5. Setting up Gateway WebUI
+2. Generating default **`~/.xopc/xopc.json`**
+3. Choosing an LLM provider and API key (**DeepSeek** is a good default for many setups)
+4. Optional messaging channels (**Telegram**, **WeChat (Weixin)**, **Feishu/Lark**, **DingTalk**)
+5. Gateway Web console (and optional **`xopc tui`** vs gateway choice at the end)
 
 ### Quick Setup
 
@@ -77,31 +75,35 @@ Edit `~/.xopc/xopc.json` directly:
 
 > **Tip:** Use environment variables for API keys (e.g., `ANTHROPIC_API_KEY`).
 
-## 4. First Interaction
+## 4. First chat (CLI or TUI)
 
-### Single Message Mode
-
-Send a single message and get a response:
+### One-shot (`agent`)
 
 ```bash
 xopc agent -m "Explain what an LLM is in one sentence."
-# or: pnpm run dev -- agent -m "Explain what an LLM is"
+# from a dev clone: pnpm run dev -- agent -m "…"
 ```
 
-### Interactive Mode
-
-Start a continuous conversation:
+### Interactive TTY (`agent -i`)
 
 ```bash
 xopc agent -i
-# or: pnpm run dev -- agent -i
+# from a dev clone: pnpm run dev -- agent -i
 ```
 
-You'll see a `You:` prompt. Type messages and press Enter. Exit with `Ctrl+C`.
+You’ll see a `You:` prompt. **Ctrl+C** to exit.
 
-## 5. Running with Channels
+### Full-screen TUI (no gateway required)
 
-### Telegram Setup
+```bash
+xopc tui --local
+```
+
+See [Terminal UI (TUI)](./tui.md) for gateway-connected mode (`xopc tui`) and session flags.
+
+## 5. Gateway, background mode, and channels
+
+### Telegram (example)
 
 1. **Get Bot Token**: Open Telegram, search [@BotFather](https://t.me/BotFather), send `/newbot`
 
@@ -120,20 +122,43 @@ You'll see a `You:` prompt. Type messages and press Enter. Exit with `Ctrl+C`.
 }
 ```
 
-3. **Start Gateway**:
+3. **Start the gateway** (foreground — logs show the URL and token):
 
 ```bash
 xopc gateway
-# or: pnpm run dev -- gateway
+# from a dev clone: pnpm run dev -- gateway
 ```
 
-4. **Chat**: Open Telegram and message your bot
+4. **Chat** in Telegram, or open the **Web console** in a browser (default port is often **18790** unless you changed `gateway.port`).
 
-### Web UI
+### Run the gateway in the background
 
-Access the Web UI at `http://localhost:18790` after starting the gateway.
+```bash
+xopc gateway --background
+```
 
-## 6. What's Next?
+Then use **`xopc gateway status`**, **`xopc gateway stop`**, **`xopc gateway restart`**, and **`xopc gateway logs`** as needed. See [Gateway](./gateway.md).
+
+### Web console URL
+
+After `xopc gateway`, open the URL printed in the terminal (commonly `http://localhost:18790` if that is your configured port).
+
+### Other bundled channels
+
+**WeChat**, **Feishu/Lark**, and **DingTalk** are configured under **`channels.*`** in the same JSON file. See [Channels](./channels/index.md).
+
+## 6. Electron desktop (optional)
+
+Prebuilt **macOS / Windows / Linux** installers are published on **[GitHub Releases](https://github.com/xopcai/xopc/releases)** when available. They bundle the gateway and the same React console as the browser UI.
+
+To build locally from a clone:
+
+```bash
+pnpm install
+pnpm run electron:build   # outputs under dist/release/
+```
+
+## 7. What's Next?
 
 Explore these guides to unlock more features:
 
@@ -144,7 +169,8 @@ Explore these guides to unlock more features:
 | [Extensions](/extensions) | Extend functionality |
 | [Skills](/skills) | Add domain-specific knowledge |
 | [Tools](/tools) | Built-in tools reference |
-| [Channels](/channels) | Multi-channel setup |
+| [Channels](/channels) | Telegram, WeChat, Feishu, DingTalk, web chat |
+| [TUI](/tui) | Full-screen terminal UI |
 | [Routing](/routing-system) | Session keys and agent bindings |
 | [Models](/models) | LLM provider configuration |
 

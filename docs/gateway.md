@@ -16,6 +16,16 @@ Default port: `18790`
 
 The gateway runs in foreground mode by default. Press `Ctrl+C` to stop.
 
+### Background mode
+
+Detach a gateway process so your shell returns immediately (prints **PID** and **URL**):
+
+```bash
+xopc gateway --background
+```
+
+Manage it with **`xopc gateway status`**, **`xopc gateway stop`**, **`xopc gateway restart`**, and **`xopc gateway logs`** (see [Process management commands](#process-management-commands) below).
+
 ### Force Start
 
 If the port is already in use:
