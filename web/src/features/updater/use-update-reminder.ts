@@ -34,8 +34,17 @@ export type UpdateReminderView =
   | { kind: 'none' }
   | { kind: 'electron-ready'; version: string }
   | { kind: 'electron-downloading'; percent: number }
+  | { kind: 'electron-error'; message: string }
   | { kind: 'npm-restart-required'; version: string }
   | { kind: 'npm'; version: string; channel: string | null };
+
+const ELECTRON_ERROR_PREVIEW_LEN = 160;
+
+function truncateElectronErrorMessage(message: string): string {
+  const t = message.trim();
+  if (t.length <= ELECTRON_ERROR_PREVIEW_LEN) return t;
+  return `${t.slice(0, ELECTRON_ERROR_PREVIEW_LEN - 1)}…`;
+}
 
 /**
  * Single source of truth for update reminder bars (left + right rails).
@@ -46,6 +55,7 @@ export function useUpdateReminder() {
     useUpdateStatus();
   const [dismissed, setDismissed] = useState<Dismissed>(readDismissed);
   const [hideDownloading, setHideDownloading] = useState(false);
+  const [hideElectronError, setHideElectronError] = useState(false);
   const [pendingNpmRestartVersion, setPendingNpmRestartVersion] = useState<string | null>(() => {
     if (typeof window === 'undefined' || isElectronEnv) return null;
     try {
@@ -62,6 +72,12 @@ export function useUpdateReminder() {
   useEffect(() => {
     if (electron?.state !== 'downloading') {
       setHideDownloading(false);
+    }
+  }, [electron?.state]);
+
+  useEffect(() => {
+    if (electron?.state !== 'error') {
+      setHideElectronError(false);
     }
   }, [electron?.state]);
 
@@ -145,6 +161,9 @@ export function useUpdateReminder() {
     if (isElectron && electron?.state === 'downloading' && !hideDownloading) {
       return { kind: 'electron-downloading', percent: Math.round(electron.percent ?? 0) };
     }
+    if (isElectron && electron?.state === 'error' && electron.message && !hideElectronError) {
+      return { kind: 'electron-error', message: truncateElectronErrorMessage(electron.message) };
+    }
     if (
       !isElectron &&
       pendingNpmRestartVersion &&
@@ -165,6 +184,7 @@ export function useUpdateReminder() {
     dismissed.electronReady,
     electron,
     hideDownloading,
+    hideElectronError,
     isElectron,
     npm,
     pendingNpmRestartVersion,
@@ -173,6 +193,10 @@ export function useUpdateReminder() {
   const dismiss = useCallback(() => {
     if (show.kind === 'electron-downloading') {
       setHideDownloading(true);
+      return;
+    }
+    if (show.kind === 'electron-error') {
+      setHideElectronError(true);
       return;
     }
     if (show.kind === 'npm-restart-required') {

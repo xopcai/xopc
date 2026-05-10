@@ -76,6 +76,13 @@ export function initAutoUpdater(mainWindow: BrowserWindow): void {
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
   autoUpdater.allowPrerelease = false;
+  // NSIS: avoid web-installer path; not used for our generic full .exe feed.
+  autoUpdater.disableWebInstaller = true;
+  // Windows: differential/blockmap against custom generic mirrors often fails verification
+  // or never reaches `update-downloaded`; full installer download is more reliable.
+  if (process.platform === 'win32') {
+    autoUpdater.disableDifferentialDownload = true;
+  }
 
   autoUpdater.logger = {
     info: (message: string) => log.info(message),

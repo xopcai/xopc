@@ -1,4 +1,4 @@
-import { Download, Loader2, RefreshCw, X } from 'lucide-react';
+import { AlertCircle, Download, Loader2, RefreshCw, X } from 'lucide-react';
 import { useCallback, useState } from 'react';
 
 import type { UpdateReminderController } from '@/features/updater/use-update-reminder';
@@ -129,6 +129,33 @@ export function UpdateReminderBar({
             <X className="h-4 w-4" />
           </button>
         </div>
+      </div>
+    );
+  }
+
+  if (show.kind === 'electron-error') {
+    return (
+      <div
+        className={cn(
+          'relative flex min-h-10 w-full min-w-0 items-center justify-center border-b border-red-500/20 bg-red-500/10 px-10 py-2 text-sm text-fg sm:px-12',
+          compact && 'text-xs',
+        )}
+      >
+        <div className="flex max-w-[min(100%,52rem)] items-center justify-center gap-2 text-center">
+          <AlertCircle className="h-4 w-4 shrink-0 text-red-500 dark:text-red-400" aria-hidden />
+          <span className="min-w-0 break-words">
+            {t.reminderElectronUpdateError.replace('{{detail}}', show.message)}
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={dismiss}
+          className={actionsRight}
+          aria-label={t.dismissAria}
+          title={t.dismissHint}
+        >
+          <X className="h-4 w-4" />
+        </button>
       </div>
     );
   }
