@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 
 import { listJobs, updateJob, type CronJob } from '@/features/cron/cron-api';
+import { isDreamingManagedCronJob } from '@/features/cron/cron-dreaming-jobs';
 import type { GatewayAgentRow, GatewayAgentsPayload } from '@/features/settings/agents-admin-api';
 
 import type { AgentPanel } from '../utils';
@@ -25,7 +26,9 @@ export function useAgentsCronJobs(options: {
     if (!data || !selected) {
       return [];
     }
-    return cronJobs.filter((j) => jobMatchesAgent(j, selected.id, data.defaultId));
+    return cronJobs.filter(
+      (j) => !isDreamingManagedCronJob(j) && jobMatchesAgent(j, selected.id, data.defaultId),
+    );
   }, [cronJobs, data, selected]);
 
   useEffect(() => {

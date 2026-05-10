@@ -34,12 +34,16 @@ import {
   startOfLocalWeekMonday,
 } from '@/features/cron/cron-page-lib';
 import { CronPageHeaderActions } from '@/features/cron/cron-page-header-actions';
+import { isDreamingManagedCronJob } from '@/features/cron/cron-dreaming-jobs';
 import { CronRunHistorySection } from '@/features/cron/cron-run-history-section';
+import { CronSystemTasksPanel } from '@/features/cron/cron-system-tasks-panel';
 import { CronTasksPanel } from '@/features/cron/cron-tasks-panel';
 import { getCronTemplateCopy } from '@/features/cron/cron-template-i18n';
 import type { CronTemplateFilter } from '@/features/cron/cron-template-library';
 import { CronTemplatePickerDialog } from '@/features/cron/cron-template-picker-dialog';
 import { cronTemplateById } from '@/features/cron/cron-templates';
+import { fetchGatewayConfigSwrResponse } from '@/features/gateway/gateway-config-swr';
+import { normalizeHeartbeatFromConfig } from '@/features/settings/heartbeat-config-api';
 import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -58,7 +62,7 @@ export function CronPage() {
   const localeTag = language === 'zh' ? 'zh-CN' : 'en-US';
 
   const [jobs, setJobs] = useState<CronJob[]>([]);
-  const [mainTab, setMainTab] = useState<'tasks' | 'history'>('tasks');
+  const [mainTab, setMainTab] = useState<'myTasks' | 'systemTasks' | 'history'>('myTasks');
   const [jobSort, setJobSort] = useState<'created_desc' | 'created_asc'>('created_desc');
   const [historyRange, setHistoryRange] = useState<'day' | 'week' | 'month'>('day');
   const [historyJobFilter, setHistoryJobFilter] = useState('');
@@ -74,6 +78,7 @@ export function CronPage() {
   const [sessionChatIds, setSessionChatIds] = useState<SessionChatId[]>([]);
   const [chatAgents, setChatAgents] = useState<ChatAgentOption[]>([]);
   const [loading, setLoading] = useState(false);
+  const [gatewayConfigRaw, setGatewayConfigRaw] = useState<unknown>(null);
   const [error, setError] = useState<string | null>(null);
   const [runHistory, setRunHistory] = useState<CronRunHistoryRow[]>([]);
   const [runHistoryLoading, setRunHistoryLoading] = useState(false);
@@ -189,15 +194,17 @@ export function CronPage() {
 
   const loadAux = useCallback(async () => {
     try {
-      const [ch, mods, cfg, agentsPayload] = await Promise.all([
+      const [ch, mods, cfg, cfgFull, agentsPayload] = await Promise.all([
         getChannels(),
         getModels(),
         getConfig(),
+        fetchGatewayConfigSwrResponse(),
         fetchChatAgents().catch(() => null),
       ]);
       setChannels(ch);
       setAvailableModels(mods);
       setDefaultModel(cfg.model || '');
+      setGatewayConfigRaw(cfgFull.payload?.config ?? null);
       if (agentsPayload) {
         setChatAgents(agentsPayload.items);
       }
@@ -211,6 +218,17 @@ export function CronPage() {
     void loadJobs();
     void loadAux();
   }, [hasToken, loadJobs, loadAux]);
+
+  useEffect(() => {
+    if (!hasToken) return;
+    const onReload = () => {
+      void fetchGatewayConfigSwrResponse().then((r) => {
+        setGatewayConfigRaw(r.payload?.config ?? null);
+      });
+    };
+    window.addEventListener('config-reload', onReload);
+    return () => window.removeEventListener('config-reload', onReload);
+  }, [hasToken]);
 
   useEffect(() => {
     if (!hasToken || mainTab !== 'history') return;
@@ -569,15 +587,29 @@ export function CronPage() {
     [c.execStatusCancelled, c.execStatusFailed, c.execStatusRunning, c.execStatusSuccess],
   );
 
-  const sortedJobs = useMemo(() => {
-    const arr = [...jobs];
-    arr.sort((a, b) => {
-      const ta = new Date(a.created_at).getTime();
-      const tb = new Date(b.created_at).getTime();
-      return jobSort === 'created_desc' ? tb - ta : ta - tb;
-    });
-    return arr;
-  }, [jobs, jobSort]);
+  const userCronJobs = useMemo(() => jobs.filter((j) => !isDreamingManagedCronJob(j)), [jobs]);
+  const systemCronJobs = useMemo(() => jobs.filter((j) => isDreamingManagedCronJob(j)), [jobs]);
+
+  const sortJobsByCreated = useCallback(
+    (arr: CronJob[]) => {
+      const next = [...arr];
+      next.sort((a, b) => {
+        const ta = new Date(a.created_at).getTime();
+        const tb = new Date(b.created_at).getTime();
+        return jobSort === 'created_desc' ? tb - ta : ta - tb;
+      });
+      return next;
+    },
+    [jobSort],
+  );
+
+  const sortedUserJobs = useMemo(() => sortJobsByCreated(userCronJobs), [sortJobsByCreated, userCronJobs]);
+  const sortedSystemJobs = useMemo(() => sortJobsByCreated(systemCronJobs), [sortJobsByCreated, systemCronJobs]);
+
+  const heartbeatFromConfig = useMemo(
+    () => normalizeHeartbeatFromConfig(gatewayConfigRaw),
+    [gatewayConfigRaw],
+  );
 
   const filteredRunHistory = useMemo(() => {
     const now = new Date();
@@ -700,14 +732,14 @@ export function CronPage() {
           jobs={jobs}
         />
 
-        {mainTab === 'tasks' ? (
+        {mainTab === 'myTasks' ? (
           <CronTasksPanel
             c={c}
             localeTag={localeTag}
             scheduleBadgeLabels={scheduleBadgeLabels}
             loading={loading}
-            jobsCount={jobs.length}
-            sortedJobs={sortedJobs}
+            jobsCount={userCronJobs.length}
+            sortedJobs={sortedUserJobs}
             templateCategoryFilter={templateCategoryFilter}
             onTemplateCategoryFilterChange={setTemplateCategoryFilter}
             onSelectTemplate={applyCronTemplate}
@@ -721,6 +753,35 @@ export function CronPage() {
             onToggle={(j, en) => void onToggle(j, en)}
             onEdit={(j) => openForm(j)}
             onAddJob={() => openForm()}
+            onRunNow={(j) => {
+              setConfirmAction('run');
+              setConfirmJobId(j.id);
+              setConfirmOpen(true);
+            }}
+            onDelete={(j) => {
+              setConfirmAction('delete');
+              setConfirmJobId(j.id);
+              setConfirmOpen(true);
+            }}
+          />
+        ) : mainTab === 'systemTasks' ? (
+          <CronSystemTasksPanel
+            c={c}
+            language={language}
+            localeTag={localeTag}
+            scheduleBadgeLabels={scheduleBadgeLabels}
+            loading={loading}
+            sortedSystemJobs={sortedSystemJobs}
+            heartbeat={heartbeatFromConfig}
+            keepAwake={keepAwake}
+            wakeSupported={wakeSupported}
+            onWakeUnsupportedClick={() => setError(c.wakeLockUnavailable)}
+            onKeepAwakeToggle={() => setKeepAwake((v) => !v)}
+            absorbCardClickJobIdRef={absorbCardClickJobIdRef}
+            scheduleAbsorbNextMenuCardClick={scheduleAbsorbNextMenuCardClick}
+            onOpenDetail={(j) => void openDetail(j)}
+            onToggle={(j, en) => void onToggle(j, en)}
+            onEdit={(j) => openForm(j)}
             onRunNow={(j) => {
               setConfirmAction('run');
               setConfirmJobId(j.id);
