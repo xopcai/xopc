@@ -9,7 +9,7 @@ import type { ElectronUpdateState } from '@/features/updater/use-update-status';
 import { messages } from '@/i18n/messages';
 import { webBuildInfo } from '@/lib/build-info';
 import { cn } from '@/lib/cn';
-import { apiFetch } from '@/lib/fetch';
+import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 import { useLocaleStore } from '@/stores/locale-store';
 
@@ -64,9 +64,7 @@ export function AboutDialog({
     setGatewayVersion(null);
     void (async () => {
       try {
-        const res = await apiFetch(apiUrl('/health'));
-        if (!res.ok) throw new Error('health');
-        const data = (await res.json()) as GatewayHealth;
+        const data = await fetchJson<GatewayHealth>(apiUrl('/health'));
         if (!cancelled) {
           setGatewayVersion(typeof data.version === 'string' ? data.version : null);
         }
