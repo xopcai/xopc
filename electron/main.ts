@@ -237,8 +237,8 @@ function createWindow(): void {
   }
 
   const win = new BrowserWindow({
-    width: 1100,
-    height: 720,
+    width: 1200,
+    height: 800,
     minWidth: 800,
     minHeight: 560,
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
