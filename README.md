@@ -96,7 +96,26 @@ pnpm install && pnpm run dev -- agent -i   # no build needed for dev CLI
 pnpm run build                              # Node + web console → dist/
 ```
 
-**Electron desktop** (packaged gateway + UI): build artifacts with `pnpm run electron:build` (outputs under `dist/release/` — e.g. `.dmg`, `.exe`, `.AppImage`, `.deb`). CI also produces per-OS builds; check [GitHub Releases](https://github.com/xopcai/xopc/releases) when published.
+---
+
+<a id="electron-desktop"></a>
+
+## Electron desktop app
+
+### Install from GitHub Releases
+
+1. Open **[GitHub Releases](https://github.com/xopcai/xopc/releases)** for this repo.
+2. Pick the asset for your OS (typical names: **`.dmg`** / **`.zip`** on macOS, **`.exe`** on Windows, **`.AppImage`** / **`.deb`** on Linux).
+3. Install or run it like any desktop application. On macOS, first launch may ask for **microphone** access if you use voice in chat.
+
+If your platform has no published build yet, use **`xopc gateway`** + npm CLI, or build from source below.
+
+### Build from source (developers)
+
+```bash
+pnpm install
+pnpm run electron:build   # artifacts under dist/release/
+```
 
 ---
 
@@ -107,7 +126,7 @@ pnpm run build                              # Node + web console → dist/
 | **TUI** | `xopc tui`, `xopc tui --local`, or `xopc tui --url …` | Full-screen terminal UX, optional remote gateway |
 | **CLI** | `xopc agent -i` / `xopc agent -m "…"` | Scripting and minimal TTY |
 | **Web** | `xopc gateway` (foreground) or `xopc gateway --background`, then open the console URL | Sharing one gateway, browser chat, settings |
-| **Electron** | Install a release build or `pnpm run electron:build` | Desktop app (macOS / Windows / Linux) |
+| **Electron** | **[Install from Releases](#electron-desktop)** or build from source | Desktop app (macOS / Windows / Linux) |
 
 ---
 
@@ -260,6 +279,7 @@ pnpm run lint
 
 - LLM layer: [@earendil-works/pi-ai](https://github.com/earendil-works/pi-mono)
 - Agent runtime: [@earendil-works/pi-agent-core](https://github.com/earendil-works/pi-mono)
+- Inspired by [openclaw/openclaw](https://github.com/openclaw/openclaw) and [NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent)
 
 ---
 
