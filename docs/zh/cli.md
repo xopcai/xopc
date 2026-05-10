@@ -36,6 +36,7 @@ pnpm run dev -- <command>
 |------|------|
 | `setup` | 初始化配置文件和工作区目录 |
 | `onboard` | 交互式设置向导（LLM、渠道、Gateway） |
+| `channels` | 渠道登录（`channels login`）与私聊配对批准（`channels pairing approve`） |
 | `agents` | 管理 `config.json` 中的多个智能体（`agents.list`：列出、添加、删除） |
 | `agent` | 与智能体对话 |
 | `tui` | 全屏终端对话界面（连网关或 `--local` 嵌入式）— 详见 [TUI](./tui.md) |
@@ -118,6 +119,41 @@ xopc onboard --gateway
 - 配置消息渠道（Telegram、在渠道菜单中可选 Weixin 扫码等）
 - 应用 Gateway 默认设置（令牌缺失则自动生成）
 - 交互结束前可选择：**终端 UI（本地嵌入）**、**后台启动 Gateway**，或稍后手动启动
+
+---
+
+## channels
+
+在运行 CLI 的机器上（与网关同机时才能批准飞书/钉钉/微信侧收到的配对码）完成渠道 **登录**（扫码 / 凭证流）以及 **私聊配对批准**。
+
+### channels login
+
+```bash
+xopc channels login
+xopc channels login --channel weixin
+xopc channels login --channel feishu
+xopc channels login --channel dingtalk
+xopc channels login --account <account-id>
+```
+
+各通道字段与控制台流程见 **[消息通道](./channels/index.md)**。
+
+### channels pairing approve
+
+当 Telegram、飞书、钉钉或微信的 **`dmPolicy`** 为 **`pairing`** 时，未在允许列表中的用户会在私聊里收到 **一次性配对码**。管理员在主机上执行：
+
+```bash
+xopc channels pairing approve --channel telegram --account default AB12CD34
+xopc channels pairing approve --channel feishu --account default AB12CD34
+xopc channels pairing approve --channel dingtalk AB12CD34
+xopc channels pairing approve --channel weixin AB12CD34
+```
+
+- **`--channel`**：必填，`telegram` \| `feishu` \| `dingtalk` \| `weixin`。
+- **`--account`**：配置中的账号 id（省略时一般为 `default`）。
+- **`<code>`**：用户消息中的 8 位配对码。
+
+成功后，该发送方 id 会写入对应通道的 **allowFrom 凭证文件**（与配置里的 `allowFrom` 在运行时合并）。文件路径说明见 **[消息通道 — DM 私聊配对](./channels/index.md#dm-pairing)**。
 
 ---
 

@@ -28,18 +28,8 @@ import { generateSessionKey } from '@xopcai/xopc/chat-commands/session-key.js';
 import { submitClarifyChoiceFromChannel } from '@xopcai/xopc/gateway/clarify-runtime.js';
 
 import { createLogger } from '@xopcai/xopc/utils/logger.js';
+import { issuePairingChallenge, resolveStandardPairingPath } from '@xopcai/xopc/channels/pairing/index.js';
 import { createTimeoutAbortSignal } from './timeout-abort.js';
-
-/** Bound initial `getMe` so a bad `apiRoot` or unreachable API cannot block gateway startup for minutes. */
-const TELEGRAM_GETME_TIMEOUT_MS = 20_000;
-/** grammY per-request ceiling; must exceed long-poll `getUpdates` (~30s) but avoid multi-minute hangs on bad hosts. */
-const TELEGRAM_CLIENT_TIMEOUT_SECONDS = 75;
-
-function trimOptionalRootUrl(value: string | undefined): string | undefined {
-  const t = value?.trim();
-  if (!t) return undefined;
-  return t.replace(/\/$/, '');
-}
 import { createInboundDebouncer } from '@xopcai/xopc/infra/debounce.js';
 import { getChatChannelMeta } from '@xopcai/xopc/channels/registry.js';
 import { getMimeType } from '@xopcai/xopc/channels/media.js';
@@ -72,6 +62,17 @@ import { normalizeTelegramDeliveryChatId } from './delivery-chat-id.js';
 import { telegramConfigSurface } from './adapters/config-surface.js';
 import { telegramOnboardAdapter } from './adapters/onboard-cli.js';
 import { TelegramConfigSchema } from './config-schema.js';
+
+/** Bound initial `getMe` so a bad `apiRoot` or unreachable API cannot block gateway startup for minutes. */
+const TELEGRAM_GETME_TIMEOUT_MS = 20_000;
+/** grammY per-request ceiling; must exceed long-poll `getUpdates` (~30s) but avoid multi-minute hangs on bad hosts. */
+const TELEGRAM_CLIENT_TIMEOUT_SECONDS = 75;
+
+function trimOptionalRootUrl(value: string | undefined): string | undefined {
+  const t = value?.trim();
+  if (!t) return undefined;
+  return t.replace(/\/$/, '');
+}
 
 const log = createLogger('TelegramPlugin');
 
@@ -534,6 +535,29 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
     const accessResult = this.security.checkAccess?.(securityCtx, account, this.cfg);
 
     if (!accessResult?.allowed) {
+      if (!isGroup && accessResult?.reason === 'pairing-required') {
+        const cid = ctx.chat?.id;
+        const bot = cid != null ? this.accountManager.getBot(accountId) : undefined;
+        if (bot && cid != null && senderId) {
+          void issuePairingChallenge({
+            channel: 'telegram',
+            pairingFilePath: resolveStandardPairingPath('telegram', accountId),
+            accountId,
+            senderId,
+            senderIdLine: `Your Telegram user id: ${senderId}`,
+            sendPairingReply: async (text) => {
+              await bot.api.sendMessage(cid, text);
+            },
+            onCreated: ({ code }) => {
+              log.info({ accountId, senderId, code }, 'Telegram DM pairing code issued');
+            },
+            onReplyError: (err) => {
+              log.warn({ err, accountId, chatId: String(cid) }, 'Telegram pairing reply failed');
+            },
+          });
+        }
+        return;
+      }
       log.warn(
         {
           accountId,

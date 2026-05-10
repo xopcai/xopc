@@ -35,8 +35,8 @@
 }
 ```
 
-- **`dmPolicy`**：`pairing` | `allowlist` | `open` | `disabled`
-- **`allowFrom`**：在需要白名单式私聊策略时，填写允许的 wxid / openid。
+- **`dmPolicy`**：`pairing` \| `allowlist` \| `open` \| `disabled`。选 **`pairing`** 时，未在允许列表中的用户会在私聊收到 **配对码**；在保存凭证的主机上执行 **`xopc channels pairing approve --channel weixin [--account <id>] <配对码>`**（见 [DM 私聊配对](./index.md#dm-pairing)）。
+- **`allowFrom`**：配置中直接允许的 wxid / openid。已通过 **`pairing approve`** 写入的 id 在 **`~/.xopc/weixin/credentials/xopc-weixin-<账号>-allowFrom.json`** 中，与配置合并；同目录下 **`xopc-weixin-<账号>-pairing.json`** 保存待审批请求。
 - **`accounts`**：可选，按账号覆盖（名称、`cdnBaseUrl`、`routeTag`、策略等）。
 
 修改凭据后若网关已在运行，请按你的部署方式**重启或热加载**。

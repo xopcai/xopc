@@ -1,10 +1,12 @@
 import type { MessageBus } from '@xopcai/xopc/infra/bus/index.js';
 import type { ChannelSecurityContext } from '@xopcai/xopc/channels/plugin-types.js';
+import { issuePairingChallenge, resolveStandardPairingPath } from '@xopcai/xopc/channels/pairing/index.js';
 import { generateSessionKey } from '@xopcai/xopc/chat-commands/session-key.js';
 import { createLogger } from '@xopcai/xopc/utils/logger.js';
 
 import type { ResolvedDingtalkAccount } from './accounts.js';
 import { checkAndMarkDingtalkMessage } from './dedupe.js';
+import { sendDingtalkTextMessage } from './send-text.js';
 
 const log = createLogger('DingTalkStream');
 
@@ -121,7 +123,31 @@ export async function runDingtalkStreamMonitor(deps: DingtalkStreamMonitorDeps):
       isGroup,
     });
     if (access && access.allowed === false) {
-      log.debug({ accountId, reason: access.reason }, 'DingTalk inbound denied');
+      if (!isGroup && access.reason === 'pairing-required' && sessionWebhook) {
+        try {
+          await issuePairingChallenge({
+            channel: 'dingtalk',
+            pairingFilePath: resolveStandardPairingPath('dingtalk', accountId),
+            accountId,
+            senderId,
+            senderIdLine: `Your DingTalk sender id: ${senderId}`,
+            sendPairingReply: async (text) => {
+              await sendDingtalkTextMessage({
+                config: { clientId, clientSecret },
+                sessionWebhook,
+                text,
+              });
+            },
+            onReplyError: (err) => {
+              log.warn({ err, accountId, senderId }, 'DingTalk pairing reply failed');
+            },
+          });
+        } catch (err) {
+          log.warn({ err, accountId }, 'DingTalk pairing prompt failed');
+        }
+      } else {
+        log.debug({ accountId, reason: access.reason }, 'DingTalk inbound denied');
+      }
       return;
     }
 

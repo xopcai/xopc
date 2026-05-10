@@ -1,5 +1,6 @@
 import { Command } from 'commander';
 
+import { approveChannelPairingFromCli, type PairingCliChannel } from '../../channels/pairing/index.js';
 import { resolveConfigPath } from '../../config/paths.js';
 import {
   getChannelPlugin,
@@ -43,8 +44,11 @@ function createChannelsCommand(ctx: CLIContext): Command {
         'xopc channels login --channel weixin',
         'xopc channels login --channel feishu',
         'xopc channels login --account my-bot-id',
+        'xopc channels pairing approve --channel telegram ABC12XYZ',
       ]),
     );
+
+  const PAIRING_CHANNELS = new Set<PairingCliChannel>(['telegram', 'feishu', 'dingtalk', 'weixin']);
 
   cmd
     .command('login')
@@ -115,6 +119,37 @@ function createChannelsCommand(ctx: CLIContext): Command {
       }
     });
 
+  cmd
+    .command('pairing')
+    .description('Approve DM pairing requests (updates channel allowFrom credential files)')
+    .addCommand(
+      new Command('approve')
+        .description('Approve a pairing code shown to the user in Telegram / Feishu / DingTalk / Weixin DMs')
+        .requiredOption('--channel <id>', 'telegram | feishu | dingtalk | weixin')
+        .option('--account <id>', 'Bot account id from config', 'default')
+        .argument('<code>', 'Pairing code from the user message')
+        .action((code: string, options: { channel?: string; account?: string }) => {
+          const ch = (options.channel ?? '').trim().toLowerCase() as PairingCliChannel;
+          if (!PAIRING_CHANNELS.has(ch)) {
+            console.error('Invalid --channel. Use: telegram, feishu, dingtalk, or weixin.');
+            process.exitCode = 1;
+            return;
+          }
+          const accountId = (options.account ?? 'default').trim() || 'default';
+          const result = approveChannelPairingFromCli({
+            channel: ch,
+            accountId,
+            code: String(code ?? '').trim(),
+          });
+          if (result.ok === false) {
+            console.error(result.error);
+            process.exitCode = 1;
+            return;
+          }
+          console.log(`Approved. Sender id added to allowFrom store: ${result.senderId}`);
+        }),
+    );
+
   return cmd;
 }
 
@@ -128,6 +163,7 @@ register({
     examples: [
       'xopc channels login',
       'xopc channels login --account my-account-id',
+      'xopc channels pairing approve --channel feishu --account default ABC12XYZ',
     ],
   },
 });

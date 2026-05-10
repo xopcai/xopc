@@ -22,6 +22,7 @@ import type { ChannelMeta } from '@xopcai/xopc/channels/plugins/types.core.js';
 import type { ChannelCliLoginAdapter } from '@xopcai/xopc/channels/plugins/types.adapters.js';
 import type { ChannelOnboardAdapter } from '@xopcai/xopc/channels/plugins/types.adapters.js';
 import { createLogger } from '@xopcai/xopc/utils/logger.js';
+import { readAllowFromIdsSync, resolveStandardAllowFromPath } from '@xopcai/xopc/channels/pairing/index.js';
 import { evaluateAccess, resolveDmPolicy, resolveGroupPolicy } from '@xopcai/xopc/channels/security.js';
 
 import { DingtalkConfigSchema, type DingtalkConfig } from './config-schema.js';
@@ -105,8 +106,11 @@ export class DingtalkChannelPlugin implements ChannelPlugin<ResolvedDingtalkAcco
     resolveGroupPolicy: ({ account }) => resolveGroupPolicy(account.groupPolicy, 'open'),
     checkAccess: (ctx: ChannelSecurityContext, account: ResolvedDingtalkAccount, _cfg: Config) => {
       const isDm = !ctx.isGroup;
+      const storeAllow = isDm
+        ? readAllowFromIdsSync(resolveStandardAllowFromPath('dingtalk', account.accountId))
+        : [];
       const baseAllowFrom = isDm ? account.allowFrom : account.groupAllowFrom ?? account.allowFrom;
-      const allowFrom = [...(baseAllowFrom ?? [])];
+      const allowFrom = [...(baseAllowFrom ?? []), ...storeAllow];
       if (isDm) {
         return evaluateAccess({
           context: {

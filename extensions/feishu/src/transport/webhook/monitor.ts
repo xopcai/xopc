@@ -13,6 +13,7 @@ import type { ResolvedFeishuAccount } from '../../state/accounts.js';
 import { createFeishuDedupe } from '../reliability/dedupe.js';
 import { stripFeishuMentions } from '../text/mentions.js';
 import { recordFeishuMessageBinding } from '../../state/message-bindings.js';
+import { sendFeishuPairingPromptIfNeeded } from '../../pairing/feishu-pairing-prompt.js';
 import { createFeishuLarkSdkPinoLogger } from '../client/lark-sdk-logger.js';
 
 const log = createLogger('FeishuWebhook');
@@ -207,7 +208,19 @@ export function createFeishuWebhookMonitor(deps: FeishuWebhookMonitorDeps) {
       isGroup,
       threadId,
     });
-    if (access && !access.allowed) return;
+    if (access && !access.allowed) {
+      if (!isGroup && access.reason === 'pairing-required') {
+        await sendFeishuPairingPromptIfNeeded({
+          account,
+          messageId,
+          threadId: typeof threadId === 'string' && threadId.trim() ? threadId : undefined,
+          senderId,
+          senderName,
+          isGroup,
+        });
+      }
+      return;
+    }
 
     await bus.publishInbound({
       channel: 'feishu',

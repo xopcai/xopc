@@ -68,6 +68,10 @@ Used by the device-registration client (defaults are suitable for the public Din
 | `endpoint` | Optional API override for advanced deployments. |
 | `debug` | Extra logging when enabled. |
 
+**`dmPolicy: pairing`**: unknown DM senders get a **pairing code** over the Stream session; merge rules and credential paths are the same as other standard channels — see [DM pairing](./index.md#dm-pairing). Approve with **`xopc channels pairing approve --channel dingtalk [--account <id>] <CODE>`** on the host that stores **`~/.xopc/credentials/xopc-dingtalk-<account>-allowFrom.json`**.
+
+**Gateway / CLI QR registration** does not return the scanner’s user id from DingTalk’s API, so **no automatic `allowFrom` pre-seed** there: add core users under **`channels.dingtalk.allowFrom`** (or approve pairing once) so they can use the bot right after credentials are saved.
+
 ## Multi-account (`accounts`)
 
 Use `channels.dingtalk.accounts.<id>` for per-account overrides (`clientId`, `clientSecret`, policies, limits, `endpoint`, etc.). Set `defaultAccount` when more than one account exists.

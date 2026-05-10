@@ -5,6 +5,7 @@ import { generateSessionKey } from '@xopcai/xopc/chat-commands/session-key.js';
 import { createLogger } from '@xopcai/xopc/utils/logger.js';
 
 import type { ResolvedFeishuAccount } from '../../state/accounts.js';
+import { sendFeishuPairingPromptIfNeeded } from '../../pairing/feishu-pairing-prompt.js';
 import { createFeishuClient } from '../client/client.js';
 import { createFeishuDedupe } from '../reliability/dedupe.js';
 import { stripFeishuMentions } from '../text/mentions.js';
@@ -231,10 +232,21 @@ export function createFeishuSocketModeMonitor(deps: FeishuSocketModeMonitorDeps)
 
     const access = security.checkAccess(securityCtx);
     if (access && !access.allowed) {
-      log.warn(
-        { accountId: account.accountId, chatId, senderId, reason: access.reason },
-        'Feishu: message dropped by channel security',
-      );
+      if (!isGroup && access.reason === 'pairing-required') {
+        await sendFeishuPairingPromptIfNeeded({
+          account,
+          messageId,
+          threadId: typeof threadId === 'string' && threadId.trim() ? threadId : undefined,
+          senderId,
+          senderName,
+          isGroup,
+        });
+      } else {
+        log.warn(
+          { accountId: account.accountId, chatId, senderId, reason: access.reason },
+          'Feishu: message dropped by channel security',
+        );
+      }
       return;
     }
 

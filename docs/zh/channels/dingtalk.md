@@ -68,6 +68,10 @@ xopc channels login --channel dingtalk
 | `endpoint` | 可选，自定义 API 入口（高级部署）。 |
 | `debug` | 开启后额外日志。 |
 
+**`dmPolicy: pairing`**：未允许的私聊用户会在单聊里收到 **配对码**；合并规则与 Telegram / 飞书 一致（配置 **`allowFrom`** + **`~/.xopc/credentials/xopc-dingtalk-<账号>-allowFrom.json`**），详见 [DM 私聊配对](./index.md#dm-pairing)。在网关所在机执行 **`xopc channels pairing approve --channel dingtalk [--account <账号>] <配对码>`**。
+
+**网关 / CLI 扫码注册** 不会从钉钉接口带回扫码人的 **用户 id**，因此 **不会自动写入 `allowFrom`**：请在 **`channels.dingtalk.allowFrom`** 中预置核心用户 staffId，或配对批准一次，以便配完凭据后立刻可用。
+
 ## 多账号（`accounts`）
 
 使用 `channels.dingtalk.accounts.<id>` 覆盖单账号的 `clientId`、`clientSecret`、策略、条数限制、`endpoint` 等。多账号时请设置 `defaultAccount`。

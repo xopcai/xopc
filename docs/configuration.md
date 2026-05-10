@@ -351,7 +351,12 @@ Multi-account Telegram configuration:
 | `accounts.<id>.allowFrom` | array | `[]` | Allowed user IDs |
 | `accounts.<id>.streamMode` | string | `partial` | Stream mode |
 
-**DM Policies**: `pairing` | `allowlist` | `open` | `disabled`
+**DM policies** (`pairing` \| `allowlist` \| `open` \| `disabled`):
+
+- **`pairing`** (recommended): unknown users are **not** passed to the agent until their Telegram / Feishu / DingTalk / Weixin **sender id** is allowed. Allow sources are **`allowFrom` in config** plus entries in the **per-channel credential file** created after you run **`xopc channels pairing approve`**. First contact receives a **pairing code** in DM. See [Channels — DM pairing](./channels/index.md#dm-pairing) and [CLI — `channels`](./cli.md#channels).
+- **`allowlist`**: same merge rules as pairing for the allow list, but **no** pairing code message; unknown senders are dropped.
+- **`open`**: any user can DM (avoid on public bots).
+- **`disabled`**: DMs are rejected.
 
 **Group Policies**: `open` | `allowlist` | `disabled`
 

@@ -5,6 +5,7 @@ import { randomBytes } from 'node:crypto';
 import type { Config } from '@xopcai/xopc/config/schema.js';
 import type { MessageBus } from '@xopcai/xopc/infra/bus/index.js';
 import { generateSessionKey } from '@xopcai/xopc/chat-commands/session-key.js';
+import { issuePairingChallenge, resolveWeixinPairingPath } from '@xopcai/xopc/channels/pairing/index.js';
 import { evaluateAccess } from '@xopcai/xopc/channels/security.js';
 import type { WeixinMessage } from '../api/types.js';
 import { MessageItemType } from '../api/types.js';
@@ -14,6 +15,7 @@ import { downloadMediaFromItem } from '../media/media-download.js';
 import { logger } from '../util/logger.js';
 import { resolveWeixinRootDir } from '../storage/state-dir.js';
 import { handleSlashCommand } from './slash-commands.js';
+import { sendMessageWeixin } from './send.js';
 import {
   setContextToken,
   weixinMessageToMsgContext,
@@ -116,9 +118,38 @@ export async function processWeixinInboundMessage(
     allowFrom: mergedAllow,
   });
   if (!access.allowed) {
-    logger.info(
-      `weixin: dropped message from=${senderId} dmPolicy=${deps.account.dmPolicy ?? 'pairing'} reason=${access.reason ?? 'not allowed'}`,
-    );
+    if (access.reason === 'pairing-required' && deps.token) {
+      try {
+        await issuePairingChallenge({
+          channel: 'weixin',
+          pairingFilePath: resolveWeixinPairingPath(deps.accountId),
+          accountId: deps.accountId,
+          senderId,
+          senderIdLine: `Your Weixin user id: ${senderId}`,
+          sendPairingReply: async (text) => {
+            await sendMessageWeixin({
+              to: senderId,
+              text,
+              opts: {
+                baseUrl: deps.baseUrl,
+                token: deps.token,
+                contextToken: full.context_token,
+                routeTag: deps.routeTag,
+              },
+            });
+          },
+          onReplyError: (err) => {
+            logger.warn(`weixin pairing reply failed from=${senderId} err=${String(err)}`);
+          },
+        });
+      } catch (err) {
+        logger.warn(`weixin pairing prompt failed from=${senderId} err=${String(err)}`);
+      }
+    } else {
+      logger.info(
+        `weixin: dropped message from=${senderId} dmPolicy=${deps.account.dmPolicy ?? 'pairing'} reason=${access.reason ?? 'not allowed'}`,
+      );
+    }
     return;
   }
 

@@ -126,16 +126,20 @@ function evaluateDmAccess(params: {
   if (policy === 'disabled') return { allowed: false, reason: 'DM is disabled', policy };
   if (policy === 'open') return { allowed: true, policy };
 
-  if (policy === 'pairing') return { allowed: true, policy };
-
-  if (policy === 'allowlist') {
+  if (policy === 'pairing' || policy === 'allowlist') {
     const match = resolveAllowlistMatchSimple({
       allowFrom,
       senderId: context.senderId,
       senderName: context.senderName,
       allowNameMatching: params.allowNameMatching,
     });
-    return { allowed: match.allowed, reason: match.allowed ? undefined : 'Not in DM allowlist', policy, match };
+    if (match.allowed) {
+      return { allowed: true, policy, match };
+    }
+    if (policy === 'pairing') {
+      return { allowed: false, reason: 'pairing-required', policy, match };
+    }
+    return { allowed: false, reason: 'Not in DM allowlist', policy, match };
   }
   return { allowed: false, reason: 'Unknown policy', policy: policy as DmPolicy };
 }

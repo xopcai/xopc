@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 
 import type { Hono } from 'hono';
 
+import { mergeDistinctSenderIds } from '../../../channels/pairing/index.js';
 import { writeTextAtomic } from '../../../infra/write-file-atomic.js';
 import type { GatewayService } from '../../service.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
@@ -63,6 +64,9 @@ async function startDingtalkSetupPolling(sessionKey: string, service: GatewaySer
         channels?: Record<string, unknown>;
       };
       const existing = (config.channels?.dingtalk ?? {}) as Record<string, unknown>;
+      const dmPolicy =
+        typeof existing.dmPolicy === 'string' && existing.dmPolicy.trim() ? existing.dmPolicy : 'pairing';
+      const allowFrom = Array.isArray(existing.allowFrom) ? existing.allowFrom : [];
 
       config.channels = {
         ...config.channels,
@@ -71,6 +75,8 @@ async function startDingtalkSetupPolling(sessionKey: string, service: GatewaySer
           enabled: true,
           clientId: creds.clientId,
           clientSecret: creds.clientSecret,
+          dmPolicy,
+          allowFrom,
         },
       };
 
@@ -114,6 +120,12 @@ async function startFeishuSetupPolling(sessionKey: string, service: GatewayServi
         channels?: Record<string, unknown>;
       };
       const existingFeishu = (config.channels?.feishu ?? {}) as Record<string, unknown>;
+      const dmPolicy =
+        typeof existingFeishu.dmPolicy === 'string' && existingFeishu.dmPolicy.trim()
+          ? existingFeishu.dmPolicy
+          : 'pairing';
+      const preseedOpenId = outcome.result.openId?.trim();
+      const allowFrom = mergeDistinctSenderIds(existingFeishu.allowFrom, preseedOpenId ? [preseedOpenId] : []);
 
       config.channels = {
         ...config.channels,
@@ -124,6 +136,8 @@ async function startFeishuSetupPolling(sessionKey: string, service: GatewayServi
           appSecret: outcome.result.appSecret,
           domain: outcome.result.domain,
           connectionMode: (existingFeishu.connectionMode as string) || 'websocket',
+          dmPolicy,
+          allowFrom,
         },
       };
 

@@ -130,6 +130,12 @@
 }
 ```
 
+## 私聊配对（`pairing`）
+
+当 **`dmPolicy` 为 `pairing`** 时，私聊是否放行由配置中的 **`allowFrom`** 与 **`~/.xopc/credentials/xopc-feishu-<账号>-allowFrom.json`** 合并决定（见 [DM 私聊配对](./index.md#dm-pairing)）。未在列表中的用户会在飞书里收到 **配对码**；在网关所在机执行 **`xopc channels pairing approve --channel feishu [--account <账号>] <配对码>`**。
+
+**网关控制台扫码创建应用：** 成功后会把扫码人的 **`open_id`** 自动 **合并进 `xopc.json` 的 `channels.feishu.allowFrom`**（去重），在保持默认 **`pairing`** 的前提下，**该用户可立刻私聊使用**；其他人仍走配对批准流程。
+
 ## Webhook 模式（需要 `encryptKey` + `verificationToken`）
 
 ```json
