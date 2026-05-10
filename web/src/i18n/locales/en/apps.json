@@ -1,13 +1,13 @@
 {
   "appsPage": {
     "title": "Apps",
-    "subtitle": "Marketplace, built-ins shipped with xopc, and extensions under ~/.xopc/extensions or your workspace. URL: ?tab=marketplace | builtin | user.",
+    "subtitle": "Marketplace, built-ins, and user extensions (CLI / store install to ~/.xopc/extensions). URL: ?tab=marketplace | builtin | user.",
     "tabMarketplace": "Marketplace",
     "tabBuiltin": "Built-in",
     "tabUser": "Installed",
     "appsNavAria": "Apps sections",
     "emptyBuiltin": "No built-in extensions were discovered by the gateway (check gateway logs and dist/extensions manifests).",
-    "emptyUser": "No global or workspace extensions found. Install under ~/.xopc/extensions or workspace/.extensions.",
+    "emptyUser": "No user-installed extensions found. Install from the marketplace or CLI into ~/.xopc/extensions.",
     "searchPlaceholder": "Search apps",
     "noSearchResults": "No apps match your filters.",
     "statusEnabled": "Enabled",

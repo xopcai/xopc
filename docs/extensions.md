@@ -20,11 +20,8 @@ xopc provides a lightweight but powerful extension system for customizing and ex
 **Using CLI (recommended):**
 
 ```bash
-# Install from npm to workspace
+# Install from npm (~/.xopc/extensions)
 xopc extension install xopc-extension-hello
-
-# Install to global (shared across projects)
-xopc extension install xopc-extension-hello --global
 
 # Install from local directory
 xopc extension install ./my-local-extension

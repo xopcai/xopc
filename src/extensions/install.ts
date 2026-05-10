@@ -22,7 +22,90 @@ import {
   resolveExtensionsDir as resolveGlobalExtensionsDir,
   resolveBundledExtensionsDir,
 } from '../config/paths.js';
+import { createLogger } from '../utils/logger.js';
 import { MAX_EXTENSION_STORE_ZIP_BYTES } from './store-zip-limits.js';
+
+const log = createLogger('ExtensionInstall');
+
+const NPM_INSTALL_ENV = process.env.XOPC_EXTENSION_NPM_INSTALL?.trim().toLowerCase();
+
+function extractExecSyncOutput(error: unknown): string {
+  if (!error || typeof error !== 'object') return '';
+  const o = error as { stderr?: Buffer | string; stdout?: Buffer | string; message?: string };
+  const read = (x?: Buffer | string | null) => {
+    if (x == null) return '';
+    return Buffer.isBuffer(x) ? x.toString('utf8') : x;
+  };
+  const stderr = read(o.stderr).trim();
+  const stdout = read(o.stdout).trim();
+  if (stderr) return stderr;
+  if (stdout) return stdout;
+  return typeof o.message === 'string' ? o.message.trim() : '';
+}
+
+function truncateOutput(text: string, max = 4500): string {
+  const t = text.trim();
+  if (t.length <= max) return t;
+  return `…${t.slice(-max)}`;
+}
+
+/**
+ * Install production `node_modules` for an unpacked extension (package.json dependencies).
+ * Uses pnpm when `pnpm-lock.yaml` is present, otherwise npm. Set `XOPC_EXTENSION_NPM_INSTALL=skip`
+ * to skip (extensions must ship runnable code or you install deps manually).
+ */
+function installExtensionProdDependencies(extensionDir: string): { ok: true } | { ok: false; error: string } {
+  if (NPM_INSTALL_ENV === 'skip' || NPM_INSTALL_ENV === '0' || NPM_INSTALL_ENV === 'false') {
+    log.warn(
+      { extensionDir, XOPC_EXTENSION_NPM_INSTALL: process.env.XOPC_EXTENSION_NPM_INSTALL },
+      'Skipping extension dependency install (XOPC_EXTENSION_NPM_INSTALL)',
+    );
+    return { ok: true };
+  }
+
+  const execOpts = {
+    cwd: extensionDir,
+    timeout: 300_000,
+    encoding: 'utf-8' as const,
+    stdio: ['ignore', 'pipe', 'pipe'] as ('ignore' | 'pipe')[],
+    maxBuffer: 20 * 1024 * 1024,
+    env: process.env,
+    ...(process.platform === 'win32'
+      ? { shell: (process.env.ComSpec && process.env.ComSpec.trim()) || 'cmd.exe' }
+      : {}),
+  };
+
+  const run = (label: string, command: string): { ok: true } | { ok: false; error: string } => {
+    try {
+      execSync(command, execOpts);
+      return { ok: true };
+    } catch (err) {
+      const out = truncateOutput(extractExecSyncOutput(err));
+      const hint =
+        label === 'npm'
+          ? ' Check that Node.js/npm is on PATH, the registry is reachable, and peer/engine rules allow install.'
+          : ' Check that pnpm is on PATH or remove pnpm-lock.yaml to use npm instead.';
+      return {
+        ok: false,
+        error: `${label} install failed.${hint}${out ? `\n\n${out}` : ''}`,
+      };
+    }
+  };
+
+  const usePnpm = existsSync(join(extensionDir, 'pnpm-lock.yaml'));
+  if (usePnpm) {
+    const pnpm = run('pnpm', 'pnpm install --prod --no-frozen-lockfile');
+    if (pnpm.ok) return pnpm;
+    const npmFallback = run('npm', 'npm install --omit=dev --no-audit --no-fund');
+    if (npmFallback.ok) {
+      log.warn({ extensionDir }, 'pnpm failed; extension dependencies installed with npm instead');
+      return { ok: true };
+    }
+    return npmFallback;
+  }
+
+  return run('npm', 'npm install --omit=dev --no-audit --no-fund');
+}
 
 export interface InstallOptions {
   source: 'npm' | 'local';
@@ -381,19 +464,10 @@ async function installFromDirectory(
   // Install dependencies if package.json exists and has dependencies
   if (packageJson?.dependencies && Object.keys(packageJson.dependencies).length > 0) {
     console.log(`📦 Installing dependencies...`);
-    try {
-      execSync('npm install --omit=dev --silent', {
-        cwd: targetDir,
-        timeout: 120000,
-        stdio: 'inherit',
-      });
-    } catch (error) {
-      // Clean up on failure
+    const depResult = installExtensionProdDependencies(targetDir);
+    if (depResult.ok === false) {
       rmSync(targetDir, { recursive: true, force: true });
-      return {
-        ok: false,
-        error: `Failed to install dependencies: ${error instanceof Error ? error.message : String(error)}`,
-      };
+      return { ok: false, error: depResult.error };
     }
   }
 
