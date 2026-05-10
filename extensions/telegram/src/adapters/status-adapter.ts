@@ -1,5 +1,6 @@
 import type { ChannelAccountSnapshot, ChannelStatusAdapter } from '@xopcai/xopc/channels/plugin-types.js';
 import type { TelegramAccountManager } from '../account-manager.js';
+import { createTimeoutAbortSignal } from '../timeout-abort.js';
 import type { TelegramResolvedAccount } from './types.js';
 
 export function createTelegramStatusAdapter(options: {
@@ -29,11 +30,14 @@ export function createTelegramStatusAdapter(options: {
       const bot = accountManager.getBot(account.accountId);
       if (!bot) throw new Error('Bot not initialized');
       try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), timeoutMs);
-        const me = await bot.api.getMe();
-        clearTimeout(timeout);
-        return { ok: true, username: me.username, id: me.id };
+        const ms = Math.min(Math.max(timeoutMs ?? 10_000, 3_000), 60_000);
+        const { signal, dispose } = createTimeoutAbortSignal(ms);
+        try {
+          const me = await bot.api.getMe(signal);
+          return { ok: true, username: me.username, id: me.id };
+        } finally {
+          dispose();
+        }
       } catch (err) {
         return { ok: false, error: String(err) };
       }

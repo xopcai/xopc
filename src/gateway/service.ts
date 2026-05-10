@@ -80,6 +80,9 @@ export class GatewayService {
   private sessionManager: SessionManager;
   private running = false;
   private configReloader: ConfigHotReloader | null = null;
+  /** In-flight coalesced apply after PATCH/save (Telegram `getMe` must not block HTTP). */
+  private channelReloadFlushPromise: Promise<void> | null = null;
+  private channelReloadPending = false;
   private startTime = Date.now();
   private workspacePath: string;
 
@@ -385,6 +388,11 @@ export class GatewayService {
       this.configReloader = null;
     }
 
+    if (this.channelReloadFlushPromise) {
+      await this.channelReloadFlushPromise.catch(() => {});
+      this.channelReloadFlushPromise = null;
+    }
+
     // Stop heartbeat service
     this.heartbeatService.stop();
 
@@ -496,10 +504,29 @@ export class GatewayService {
     log.debug('Channels config reloaded');
   }
 
-  /** After persisting config to disk: align plugins + debounced reload baseline (watchers skip duplicate diffs). */
-  private async syncChannelPluginsAfterPersist(): Promise<void> {
-    await this.handleChannelsReload(this.config);
-    this.configReloader?.syncCurrentConfig(this.config);
+  /**
+   * Apply channel plugins for the latest persisted `this.config` without blocking `saveConfig` HTTP handlers.
+   * Coalesces rapid saves so Telegram/Weixin do not stop/start repeatedly.
+   */
+  private scheduleChannelPluginsAfterPersist(): void {
+    this.channelReloadPending = true;
+    if (this.channelReloadFlushPromise) return;
+    this.channelReloadFlushPromise = (async () => {
+      try {
+        while (this.channelReloadPending) {
+          this.channelReloadPending = false;
+          await this.handleChannelsReload(this.config);
+        }
+      } catch (err) {
+        const em = err instanceof Error ? err.message : String(err);
+        log.error({ err, errorMessage: em }, `Channel reload after persist failed: ${em}`);
+      } finally {
+        this.channelReloadFlushPromise = null;
+        if (this.channelReloadPending) {
+          this.scheduleChannelPluginsAfterPersist();
+        }
+      }
+    })();
   }
 
   /**
@@ -682,12 +709,14 @@ export class GatewayService {
       const em = err instanceof Error ? err.message : String(err);
       log.warn({ err, errorMessage: em }, `Dreaming cron reconcile after save failed: ${em}`);
     });
+    // Align watcher baseline before channel hooks run so fs `change` does not re-apply the same diff concurrently.
+    this.configReloader?.syncCurrentConfig(this.config);
   }
 
   async saveConfig(config: Config): Promise<{ saved: boolean; error?: string }> {
     try {
       await this.writeConfigAndReloadFromDisk(config);
-      await this.syncChannelPluginsAfterPersist();
+      this.scheduleChannelPluginsAfterPersist();
       return { saved: true };
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);
@@ -736,7 +765,7 @@ export class GatewayService {
       this.config = { ...this.config, ...updates };
 
       await this.writeConfigAndReloadFromDisk(this.config);
-      await this.syncChannelPluginsAfterPersist();
+      this.scheduleChannelPluginsAfterPersist();
 
       log.debug('Configuration updated successfully');
       return { updated: true };
