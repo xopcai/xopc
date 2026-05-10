@@ -4,6 +4,7 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ExternalLink,
   FileArchive,
   Funnel,
   Info,
@@ -27,7 +28,7 @@ import {
   SkillListRowSkeleton,
 } from '@/features/skills/skills-page-primitives';
 import { SKILL_LIST_SKELETON_COUNT } from '@/features/skills/skills-page.constants';
-import { interpolate } from '@/features/skills/skills-page.utils';
+import { interpolate, skillHubPublicSkillPageUrl } from '@/features/skills/skills-page.utils';
 import type { SkillsPageVm } from '@/features/skills/use-skills-page';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 
@@ -459,6 +460,8 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
                     {mpPayload.items.map((row) => {
                       const installed = isSkillInstalledByName(row.id);
                       const busy = installingMarketName === row.id;
+                      const skillhubPageUrl =
+                        marketplaceProviderId === 'skillhub' ? skillHubPublicSkillPageUrl(row.id) : null;
                       return (
                         <article
                           key={row.id}
@@ -467,17 +470,32 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
                             'transition-colors hover:bg-surface-hover/50 dark:hover:bg-surface-hover/25',
                           )}
                         >
-                          <button
-                            type="button"
+                          <div
+                            role="button"
+                            tabIndex={0}
                             className={cn(
-                              'flex min-w-0 flex-1 cursor-pointer items-center gap-4 rounded-lg text-left outline-none',
+                              'flex min-w-0 flex-1 cursor-pointer items-start gap-4 rounded-lg text-left outline-none',
                               interaction.focusRingPanel,
                             )}
-                            onClick={() => void openMarketplaceDetail(row.id, row.name)}
+                            aria-labelledby={`mp-skill-title-${row.id}`}
+                            onClick={(e) => {
+                              if ((e.target as HTMLElement).closest('a[href]')) return;
+                              void openMarketplaceDetail(row.id, row.name);
+                            }}
+                            onKeyDown={(e) => {
+                              if ((e.target as HTMLElement).closest('a[href]')) return;
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                void openMarketplaceDetail(row.id, row.name);
+                              }
+                            }}
                           >
                             <SkillCardIcon name={row.id} />
                             <div className="min-w-0 flex-1 pr-2">
-                              <h3 className="text-[15px] font-semibold leading-snug tracking-tight text-fg">
+                              <h3
+                                id={`mp-skill-title-${row.id}`}
+                                className="text-[15px] font-semibold leading-snug tracking-tight text-fg"
+                              >
                                 {row.name}
                               </h3>
                               <p
@@ -514,9 +532,27 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
                                     {sk.marketplaceInstalled}
                                   </span>
                                 ) : null}
+                                {skillhubPageUrl ? (
+                                  <a
+                                    href={skillhubPageUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className={cn(
+                                      'inline-flex items-center gap-0.5 rounded-md bg-surface-hover/60 px-2 py-0.5 dark:bg-surface-active/50',
+                                      'hover:bg-surface-hover/80 hover:text-fg-muted dark:hover:bg-surface-active/70',
+                                      interaction.focusRingPanel,
+                                    )}
+                                    aria-label={sk.marketplaceOpenOnSkillhubAria}
+                                    onClick={(e) => e.stopPropagation()}
+                                    onKeyDown={(e) => e.stopPropagation()}
+                                  >
+                                    <ExternalLink className="size-3 shrink-0" strokeWidth={2} aria-hidden />
+                                    {sk.marketplaceOpenOnSkillhub}
+                                  </a>
+                                ) : null}
                               </div>
                             </div>
-                          </button>
+                          </div>
                           <div className="flex shrink-0 justify-end sm:pl-2">
                             <Button
                               type="button"

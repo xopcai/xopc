@@ -33,6 +33,8 @@
     "marketplacePageNext": "Next page",
     "marketplacePageStatus": "Page {{page}} of {{totalPages}} · {{total}} packages",
     "marketplaceAuthor": "Author",
+    "marketplaceOpenOnSkillhub": "Open on SkillHub",
+    "marketplaceOpenOnSkillhubAria": "Open this skill on skillhub.cn in a new tab",
     "marketplaceDownloads": "Downloads",
     "marketplaceVersion": "Latest",
     "sectionBuiltinList": "Built-in skills",
