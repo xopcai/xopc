@@ -34,6 +34,12 @@ import { createTimeoutAbortSignal } from './timeout-abort.js';
 const TELEGRAM_GETME_TIMEOUT_MS = 20_000;
 /** grammY per-request ceiling; must exceed long-poll `getUpdates` (~30s) but avoid multi-minute hangs on bad hosts. */
 const TELEGRAM_CLIENT_TIMEOUT_SECONDS = 75;
+
+function trimOptionalRootUrl(value: string | undefined): string | undefined {
+  const t = value?.trim();
+  if (!t) return undefined;
+  return t.replace(/\/$/, '');
+}
 import { createInboundDebouncer } from '@xopcai/xopc/infra/debounce.js';
 import { getChatChannelMeta } from '@xopcai/xopc/channels/registry.js';
 import { getMimeType } from '@xopcai/xopc/channels/media.js';
@@ -283,8 +289,26 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
     const accounts = telegramCfg.accounts as Record<string, any> | undefined;
     if (!accounts || Object.keys(accounts).length === 0) return;
 
+    const channelApiRoot = trimOptionalRootUrl(
+      typeof telegramCfg.apiRoot === 'string' ? telegramCfg.apiRoot : undefined,
+    );
+    const channelProxy =
+      typeof telegramCfg.proxy === 'string' && telegramCfg.proxy.trim()
+        ? telegramCfg.proxy.trim()
+        : undefined;
+
     for (const [id, account] of Object.entries(accounts)) {
-      this.accountManager.registerAccount({ ...account, accountId: id });
+      const accApiRoot = trimOptionalRootUrl(
+        typeof account.apiRoot === 'string' ? account.apiRoot : undefined,
+      );
+      const accProxy =
+        typeof account.proxy === 'string' && account.proxy.trim() ? account.proxy.trim() : undefined;
+      this.accountManager.registerAccount({
+        ...account,
+        accountId: id,
+        ...(accApiRoot || channelApiRoot ? { apiRoot: accApiRoot || channelApiRoot } : {}),
+        ...(accProxy || channelProxy ? { proxy: accProxy || channelProxy } : {}),
+      });
     }
   }
 

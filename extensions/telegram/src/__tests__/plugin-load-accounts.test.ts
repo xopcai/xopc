@@ -103,4 +103,51 @@ describe('TelegramChannelPlugin loadAccounts', () => {
 
     expect(plugin.config.listAccountIds(cfg)).toEqual([]);
   });
+
+  it('inherits channels.telegram.apiRoot into each account when account omits apiRoot', async () => {
+    const cfg = {
+      channels: {
+        telegram: {
+          ...baseTelegramConfig(),
+          apiRoot: 'https://tg.xopc.ai/',
+        },
+      },
+    } as Config;
+
+    const plugin = new TelegramChannelPlugin();
+    await plugin.init({
+      bus,
+      config: cfg,
+      channelConfig: cfg.channels?.telegram as Record<string, unknown>,
+    });
+
+    const acc = plugin.config.resolveAccount(cfg, 'default');
+    expect(acc.apiRoot).toBe('https://tg.xopc.ai');
+  });
+
+  it('keeps per-account apiRoot over channel-level apiRoot', async () => {
+    const cfg = {
+      channels: {
+        telegram: {
+          ...baseTelegramConfig(),
+          apiRoot: 'https://tg.xopc.ai',
+          accounts: {
+            default: {
+              ...baseTelegramConfig().accounts!.default,
+              apiRoot: 'https://api.telegram.org',
+            },
+          },
+        },
+      },
+    } as Config;
+
+    const plugin = new TelegramChannelPlugin();
+    await plugin.init({
+      bus,
+      config: cfg,
+      channelConfig: cfg.channels?.telegram as Record<string, unknown>,
+    });
+
+    expect(plugin.config.resolveAccount(cfg, 'default').apiRoot).toBe('https://api.telegram.org');
+  });
 });
