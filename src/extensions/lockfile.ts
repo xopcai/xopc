@@ -12,7 +12,7 @@ const log = createLogger('ExtensionLockfile');
 // Types
 // ============================================
 
-export type ExtensionSource = 'npm' | 'local' | 'git';
+export type ExtensionSource = 'npm' | 'local' | 'git' | 'store';
 
 export interface ExtensionLockEntry {
   /** Extension ID */

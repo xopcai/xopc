@@ -1,10 +1,11 @@
 /**
  * Extension Installation Module
- * Supports installing from npm packages and local directories
+ * Supports installing from npm packages, local directories, and xopc-store zips
  * Supports three-tier storage: workspace, global, bundled
  */
 
 import { execSync } from 'child_process';
+import AdmZip from 'adm-zip';
 import {
   existsSync,
   mkdirSync,
@@ -12,13 +13,16 @@ import {
   cpSync,
   rmSync,
   readdirSync,
+  mkdtempSync,
+  writeFileSync,
 } from 'fs';
-import { join, isAbsolute, resolve } from 'path';
+import { dirname, join, isAbsolute, resolve, sep } from 'path';
 import { tmpdir } from 'os';
 import {
   resolveExtensionsDir as resolveGlobalExtensionsDir,
   resolveBundledExtensionsDir,
 } from '../config/paths.js';
+import { MAX_EXTENSION_STORE_ZIP_BYTES } from './store-zip-limits.js';
 
 export interface InstallOptions {
   source: 'npm' | 'local';
@@ -49,6 +53,166 @@ interface ExtensionManifest {
   name?: string;
   version?: string;
   main?: string;
+}
+
+function isSafeZipPath(name: string): boolean {
+  if (!name) return false;
+  const normalized = name.replace(/\\/g, '/');
+  if (normalized.includes('..')) return false;
+  if (normalized.startsWith('/') || /^\w:/.test(normalized)) return false;
+  for (const p of normalized.split('/')) {
+    if (p === '..') return false;
+  }
+  return true;
+}
+
+function isIgnorableZipEntry(name: string): boolean {
+  const n = name.replace(/\\/g, '/');
+  if (n.startsWith('__MACOSX/')) return true;
+  const segments = n.split('/').filter(Boolean);
+  for (const s of segments) {
+    if (s === '.DS_Store' || s === 'Thumbs.db' || s === 'desktop.ini') return true;
+    if (s.startsWith('._')) return true;
+  }
+  return false;
+}
+
+function inferExtensionStripPrefix(primaryManifestPath: string): string {
+  const norm = primaryManifestPath.replace(/\\/g, '/');
+  const lower = norm.toLowerCase();
+  const suff = 'xopc.extension.json';
+  if (lower === suff) return '';
+  if (!lower.endsWith(suff)) return '';
+  return norm.slice(0, norm.length - suff.length);
+}
+
+/** Read `id` from the shallowest xopc.extension.json in a store zip (for --force / preflight). */
+export function peekExtensionIdFromStoreZip(buffer: Buffer): string | undefined {
+  if (buffer.length > MAX_EXTENSION_STORE_ZIP_BYTES) return undefined;
+  let zip: AdmZip;
+  try {
+    zip = new AdmZip(buffer);
+  } catch {
+    return undefined;
+  }
+  const entries = zip
+    .getEntries()
+    .filter((e) => !e.isDirectory && e.entryName && !isIgnorableZipEntry(e.entryName));
+  const safeEntries = entries.filter((e) => isSafeZipPath(e.entryName));
+  const names = safeEntries.map((e) => e.entryName.replace(/\\/g, '/'));
+  const manifestPaths = names.filter((n) => /(^|\/)xopc\.extension\.json$/i.test(n));
+  const shallow = manifestPaths.filter((n) => n.split('/').filter(Boolean).length <= 2);
+  if (shallow.length === 0) return undefined;
+  shallow.sort((a, b) => a.length - b.length);
+  const path = shallow[0];
+  const entry = safeEntries.find((e) => e.entryName.replace(/\\/g, '/') === path);
+  if (!entry) return undefined;
+  try {
+    const raw = entry.getData().toString('utf8');
+    const m = JSON.parse(raw) as { id?: string };
+    const id = typeof m.id === 'string' ? m.id.trim() : '';
+    if (!id || id.includes('/') || id.includes('\\')) return undefined;
+    return id;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Install an extension from an xopc-store zip buffer (layout: manifest at archive root
+ * or under a single top-level folder).
+ */
+export async function installExtensionFromStoreZip(
+  buffer: Buffer,
+  extensionsDir: string,
+): Promise<InstallResult> {
+  if (buffer.length > MAX_EXTENSION_STORE_ZIP_BYTES) {
+    return {
+      ok: false,
+      error: `Extension zip exceeds maximum size (${MAX_EXTENSION_STORE_ZIP_BYTES} bytes)`,
+    };
+  }
+
+  const zip = new AdmZip(buffer);
+  const entries = zip
+    .getEntries()
+    .filter((e) => !e.isDirectory && e.entryName && !isIgnorableZipEntry(e.entryName));
+  const safeEntries = entries.filter((e) => isSafeZipPath(e.entryName));
+  if (safeEntries.length === 0) {
+    return { ok: false, error: 'Zip is empty or invalid' };
+  }
+
+  const names = safeEntries.map((e) => e.entryName.replace(/\\/g, '/'));
+  const manifestPaths = names.filter((n) => /(^|\/)xopc\.extension\.json$/i.test(n));
+  if (manifestPaths.length === 0) {
+    return { ok: false, error: 'Zip must contain xopc.extension.json' };
+  }
+  const shallow = manifestPaths.filter((n) => n.split('/').filter(Boolean).length <= 2);
+  if (shallow.length === 0) {
+    return {
+      ok: false,
+      error:
+        'xopc.extension.json is nested too deeply; use a zip with manifest at archive root or one folder (e.g. my-ext/xopc.extension.json)',
+    };
+  }
+  shallow.sort((a, b) => a.length - b.length);
+  const stripPrefix = inferExtensionStripPrefix(shallow[0]);
+  if (stripPrefix) {
+    const prefixNorm = stripPrefix.replace(/\\/g, '/');
+    const outside = names.filter((n) => !n.startsWith(prefixNorm) && !isIgnorableZipEntry(n));
+    if (outside.length > 0) {
+      return {
+        ok: false,
+        error: `Invalid zip: expected all files under "${prefixNorm.replace(/\/$/, '')}/", but found "${outside[0]}".`,
+      };
+    }
+  }
+
+  const tmpRoot = mkdtempSync(join(tmpdir(), 'xopc-ext-zip-'));
+  const destResolved = resolve(tmpRoot);
+  try {
+    for (const e of safeEntries) {
+      const norm = e.entryName.replace(/\\/g, '/');
+      let rel: string;
+      if (stripPrefix) {
+        const prefixNorm = stripPrefix.replace(/\\/g, '/');
+        if (!norm.startsWith(prefixNorm)) {
+          return {
+            ok: false,
+            error: `Zip entry outside extension prefix "${prefixNorm.replace(/\/$/, '')}": ${norm}`,
+          };
+        }
+        rel = norm.slice(prefixNorm.length).replace(/^\//, '');
+      } else {
+        rel = norm;
+      }
+      if (!rel || rel.includes('..')) {
+        return { ok: false, error: `Refusing unsafe zip entry path: ${e.entryName}` };
+      }
+      const targetPath = join(tmpRoot, rel);
+      const resolvedTarget = resolve(targetPath);
+      if (!resolvedTarget.startsWith(destResolved + sep) && resolvedTarget !== destResolved) {
+        return {
+          ok: false,
+          error: `Refusing unsafe zip path (possible traversal): ${e.entryName}`,
+        };
+      }
+      mkdirSync(dirname(targetPath), { recursive: true });
+      writeFileSync(targetPath, e.getData());
+    }
+
+    if (!existsSync(join(tmpRoot, 'xopc.extension.json'))) {
+      return { ok: false, error: 'Extracted content is missing xopc.extension.json' };
+    }
+
+    return await installFromDirectory(tmpRoot, extensionsDir);
+  } finally {
+    try {
+      rmSync(tmpRoot, { recursive: true, force: true });
+    } catch {
+      // ignore
+    }
+  }
 }
 
 /**

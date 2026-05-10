@@ -1,9 +1,14 @@
 /**
- * Curated extension registry (Phase 2) — fetch, cache, search.
+ * Extension marketplace catalog from xopc-store (`GET /api/v1/packages?type=extension`).
+ * Base URL: `XOPC_SKILLS_STORE_URL` → `gateway.skillsStoreBaseUrl` → `https://store.xopc.ai`.
  */
 
-const DEFAULT_REGISTRY_URL =
-  'https://raw.githubusercontent.com/xopcai/extension-registry/main/registry.json';
+import { loadConfig } from '../config/loader.js';
+import { createLogger } from '../utils/logger.js';
+
+const log = createLogger('ExtensionMarketplace');
+
+const DEFAULT_STORE_BASE = 'https://store.xopc.ai';
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
 export interface RegistryEntry {
@@ -27,13 +32,85 @@ export interface ExtensionRegistryFile {
 let cache: { at: number; data: ExtensionRegistryFile } | null = null;
 let lastStale: ExtensionRegistryFile | null = null;
 
-export function getRegistryUrl(): string {
-  const u = process.env.XOPC_EXTENSION_REGISTRY_URL?.trim();
-  return u && u.length > 0 ? u : DEFAULT_REGISTRY_URL;
+/** Resolved xopc-store base (same order as skills marketplace). */
+export function getExtensionMarketplaceStoreBaseUrl(): string {
+  return normalizeStoreBaseUrl();
 }
 
 function emptyRegistry(): ExtensionRegistryFile {
   return { version: 1, extensions: [] };
+}
+
+function normalizeStoreBaseUrl(): string {
+  const env = process.env.XOPC_SKILLS_STORE_URL?.trim();
+  if (env) {
+    try {
+      return new URL(env).toString().replace(/\/$/, '');
+    } catch {
+      // fall through
+    }
+  }
+  try {
+    const fromCfg = loadConfig().gateway?.skillsStoreBaseUrl?.trim();
+    if (fromCfg) {
+      try {
+        return new URL(fromCfg).toString().replace(/\/$/, '');
+      } catch {
+        // fall through
+      }
+    }
+  } catch {
+    /* ignore config load edge cases */
+  }
+  return DEFAULT_STORE_BASE;
+}
+
+function titleCaseSlug(slug: string): string {
+  return slug
+    .split('-')
+    .filter(Boolean)
+    .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
+    .join(' ');
+}
+
+async function fetchExtensionCatalogFromStore(): Promise<RegistryEntry[] | null> {
+  const base = normalizeStoreBaseUrl();
+  const listUrl = `${base}/api/v1/packages?type=extension&pageSize=200`;
+  try {
+    const res = await fetch(listUrl, { signal: AbortSignal.timeout(20_000) });
+    if (!res.ok) {
+      log.warn({ status: res.status, url: listUrl }, 'Store extension catalog request failed');
+      return null;
+    }
+    const raw = (await res.json()) as {
+      items?: Array<{
+        name?: string;
+        description?: string | null;
+        latestVersion?: string;
+        author?: { username?: string | null };
+      }>;
+    };
+    const items = Array.isArray(raw.items) ? raw.items : [];
+    const extensions: RegistryEntry[] = [];
+    for (const it of items) {
+      const name = typeof it.name === 'string' ? it.name.trim() : '';
+      if (!name) continue;
+      const author = it.author?.username ?? undefined;
+      extensions.push({
+        id: name,
+        name: titleCaseSlug(name),
+        description: typeof it.description === 'string' ? it.description : undefined,
+        npmPackage: name,
+        version: typeof it.latestVersion === 'string' ? it.latestVersion : undefined,
+        author,
+        verified: author === 'xopcai',
+      });
+    }
+    return extensions.length > 0 ? extensions : null;
+  } catch (err) {
+    log.warn({ err, url: listUrl }, 'Store extension catalog fetch failed');
+    return null;
+  }
 }
 
 export async function fetchRegistry(forceRefresh = false): Promise<ExtensionRegistryFile> {
@@ -42,58 +119,21 @@ export async function fetchRegistry(forceRefresh = false): Promise<ExtensionRegi
     return cache.data;
   }
 
-  const url = getRegistryUrl();
-  try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(20_000) });
-    if (!res.ok) {
-      throw new Error(`HTTP ${res.status}`);
-    }
-    const raw = (await res.json()) as unknown;
-    const data = normalizeRegistry(raw);
+  const storeBase = normalizeStoreBaseUrl();
+  const fromStore = await fetchExtensionCatalogFromStore();
+  if (fromStore && fromStore.length > 0) {
+    const data: ExtensionRegistryFile = { version: 1, extensions: fromStore };
     lastStale = data;
     cache = { at: now, data };
+    log.debug({ count: fromStore.length, storeBase }, 'Loaded extension catalog from xopc-store');
     return data;
-  } catch {
-    if (lastStale) {
-      return lastStale;
-    }
-    return emptyRegistry();
   }
-}
 
-function normalizeRegistry(raw: unknown): ExtensionRegistryFile {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
-    return emptyRegistry();
+  log.warn({ storeBase }, 'Extension catalog from xopc-store was empty or unreachable');
+  if (lastStale) {
+    return lastStale;
   }
-  const o = raw as Record<string, unknown>;
-  const version = typeof o.version === 'number' ? o.version : 1;
-  const list = Array.isArray(o.extensions) ? o.extensions : [];
-  const extensions: RegistryEntry[] = [];
-  for (const item of list) {
-    if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
-    const e = item as Record<string, unknown>;
-    const id = typeof e.id === 'string' ? e.id : '';
-    const name = typeof e.name === 'string' ? e.name : '';
-    const npmPackage = typeof e.npmPackage === 'string' ? e.npmPackage : '';
-    if (!id || !name || !npmPackage) continue;
-    extensions.push({
-      id,
-      name,
-      description: typeof e.description === 'string' ? e.description : undefined,
-      npmPackage,
-      version: typeof e.version === 'string' ? e.version : undefined,
-      categories: Array.isArray(e.categories)
-        ? e.categories.filter((x): x is string => typeof x === 'string')
-        : undefined,
-      tags: Array.isArray(e.tags)
-        ? e.tags.filter((x): x is string => typeof x === 'string')
-        : undefined,
-      verified: typeof e.verified === 'boolean' ? e.verified : undefined,
-      homepage: typeof e.homepage === 'string' ? e.homepage : undefined,
-      author: typeof e.author === 'string' ? e.author : undefined,
-    });
-  }
-  return { version, extensions };
+  return emptyRegistry();
 }
 
 function matchesKeyword(entry: RegistryEntry, keyword: string): boolean {

@@ -9,6 +9,7 @@ import { colors } from '../utils/colors.js';
 import { createExtensionPackCommand } from './extension-pack.js';
 import { createExtensionDevCommand } from './extension-dev.js';
 import {
+  createExtensionInstallCommand,
   createExtensionPublishCommand,
   createExtensionSearchCommand,
   createExtensionUpdateCommand,
@@ -216,6 +217,7 @@ export function registerExtensionCommands(program: Command): void {
         'after',
         `
 Related commands:
+  xopc extension:install  store: / npm / path; npm first for ambiguous ids (alias: ext:install)
   xopc extension:list     List installed extensions  (alias: ext:list)
   xopc extension:freeze   Lock extension versions    (alias: ext:freeze)
   xopc extension:health   Health check               (alias: ext:health)
@@ -239,6 +241,7 @@ Related commands:
   program.addCommand(createExtensionAuditCommand());
   program.addCommand(createExtensionPackCommand());
   program.addCommand(createExtensionDevCommand());
+  program.addCommand(createExtensionInstallCommand());
   program.addCommand(createExtensionSearchCommand());
   program.addCommand(createExtensionPublishCommand());
   program.addCommand(createExtensionUpdateCommand());
