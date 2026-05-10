@@ -1,5 +1,11 @@
 export { GatewayServer, type GatewayServerConfig } from './server.js';
-export { GatewayService, type GatewayServiceConfig, type ServiceEvent } from './service.js';
+export {
+  GatewayService,
+  type GatewayChannelStartupPhase1Metrics,
+  type GatewayChannelStartupPhase2Metrics,
+  type GatewayServiceConfig,
+  type ServiceEvent,
+} from './service.js';
 
 export { acquireGatewayLock, GatewayLockError, type GatewayLockHandle } from './lock.js';
 export { runGatewayLoop, type RunGatewayLoopOptions } from './run-loop.js';

@@ -19,6 +19,11 @@ export interface ChannelMeta {
   quickstartAllowFrom?: boolean;
   forceAccountBinding?: boolean;
   preferOver?: string[];
+  /**
+   * When true and the gateway uses HTTP lifecycle, `ChannelManager` skips `start()` for this
+   * plugin until after the HTTP server is listening (OpenClaw-style: control plane first).
+   */
+  deferConnectUntilAfterListen?: boolean;
 }
 
 export interface ChannelCapabilities {

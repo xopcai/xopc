@@ -422,6 +422,25 @@ HTTP API 网关配置。
 - 不带 `Origin` 的非浏览器请求（CLI/服务间）由认证中间件校验。
 - `corsOrigins` 配置为 `"*"` 虽可用，但会在启动安全审计日志中提示风险。
 
+#### 频道连接延后
+
+相关字段在 **`gateway`** 下：`channelConnectDeferMode`、`channelConnectDeferIds`、`channelConnectDeferSkipIds`。使用 **`xopc gateway`**（`GatewayServer` 启动路径）时，部分外连型通道（Telegram、微信、飞书、钉钉）可将 **`ChannelPlugin.start()`** 延后到 **HTTP 端口已成功监听之后**，让控制台与 REST 先可用。是否延后由通道插件 **`meta.deferConnectUntilAfterListen`** 声明；可用下列配置覆盖。
+
+| 字段 | 类型 | 默认值 | 说明 |
+|-------|------|---------|------|
+| `channelConnectDeferMode` | `"auto"` \| `"off"` \| `"explicit"` | 未写视为 `auto` | **`auto`**：延后集合 = 已启用且插件 meta 要求延后的通道，再减去 `channelConnectDeferSkipIds`。 **`off`**：不延后，全部在第一阶段 `start()`。 **`explicit`**：仅延后 `channelConnectDeferIds` 中的 id（列表为空则等价于不延后任何通道）。 |
+| `channelConnectDeferIds` | string[] | - | 最多 24 项；仅在 **`explicit`** 模式下使用。 |
+| `channelConnectDeferSkipIds` | string[] | - | 最多 24 项；在 **`auto`** 或 **`explicit`** 算出集合后再剔除这些 id。 |
+
+启动阶段会打结构化日志（`phase: "gateway.channel_startup"`）：
+
+- **`stage: "phase1"`**：含 `channelInitMs`、`deferPlanMs`、`channelPhase1StartMs`、`replayOutboundMs`（若在 listen 后重放则为 `null`）、`channelConnectDeferMode`、`channelConnectDeferSource`（`meta` \| `explicit` \| `off`）、`deferredChannelIds` 等。
+- **`stage: "phase2"`**：HTTP 监听成功后：`channelPhase2DeferredMs`、`replayOutboundMs`、`onHttpListeningTotalMs` 及同样的 defer 模式快照。
+
+检索示例：日志中带 `gateway.channel_startup` 或文案 `phase-1 complete` / `phase-2 complete`。
+
+更多说明见 [网关 — 频道启动与 HTTP 监听顺序](gateway.md#频道启动与-http-监听顺序)。
+
 ---
 
 ### tools

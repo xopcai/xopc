@@ -68,6 +68,7 @@ export class FeishuChannelPlugin implements ChannelPlugin<ResolvedFeishuAccount>
     docsPath: '/channels/feishu',
     blurb: 'Feishu/Lark enterprise messaging (Socket Mode).',
     order: 4,
+    deferConnectUntilAfterListen: true,
   } as const;
 
   readonly capabilities: ChannelCapabilities = {

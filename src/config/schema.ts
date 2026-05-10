@@ -501,6 +501,8 @@ export const HeartbeatConfigSchema = z
     includeSystemPromptSection: false,
   });
 
+export const GatewayChannelConnectDeferModeSchema = z.enum(['auto', 'off', 'explicit']);
+
 export const GatewayConfigSchema = z.object({
   host: z.string().optional(),
   port: z.number().optional(),
@@ -508,6 +510,17 @@ export const GatewayConfigSchema = z.object({
   heartbeat: HeartbeatConfigSchema.optional(),
   maxSseConnections: z.number().optional(),
   corsOrigins: z.array(z.string()).optional(),
+  /**
+   * How channel `start()` is split around HTTP listen when using `GatewayServer`.
+   * - `auto` (default): defer ids come from channel plugin `meta.deferConnectUntilAfterListen` + enabled config.
+   * - `off`: always start all channels in phase1 (troubleshooting / strict ordering).
+   * - `explicit`: defer only `channelConnectDeferIds` (empty = defer none).
+   */
+  channelConnectDeferMode: GatewayChannelConnectDeferModeSchema.optional(),
+  /** When `channelConnectDeferMode` is `explicit`, these channel plugin ids are deferred until after listen. */
+  channelConnectDeferIds: z.array(z.string().min(1)).max(24).optional(),
+  /** Removed from the defer set (applied after `auto` or `explicit` resolution). */
+  channelConnectDeferSkipIds: z.array(z.string().min(1)).max(24).optional(),
   /** Skills marketplace provider: `store` (store.xopc.ai) or `skillhub` (skillhub.cn). */
   skillsMarketplaceProvider: z.enum(['store', 'skillhub']).optional(),
   /** Base URL for the xopc skills marketplace (public REST API). */

@@ -87,6 +87,7 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
     docsPath: '/channels/telegram',
     blurb: TELEGRAM_REGISTRY_META.description,
     order: 0,
+    deferConnectUntilAfterListen: true,
   } as const;
 
   readonly capabilities = TELEGRAM_REGISTRY_META.capabilities;

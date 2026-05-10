@@ -30,3 +30,7 @@ xopc 可将助手接入 **Telegram**、**微信（Weixin）**、**飞书（Feish
 
 其它 CLI 命令与扩展加载的关系见 [扩展系统 — 何时加载扩展](../extensions.md#何时加载扩展)。
 
+## 与网关启动顺序的关系
+
+使用 **`xopc gateway`** 时，Telegram / 微信 / 飞书 / 钉钉 等外连通道可能在 **HTTP 监听成功之后** 才执行 **`start()`**，减轻错误 `apiRoot` 或外网不通时拖住整个网关控制台的情况。说明见 [网关 — 频道启动与 HTTP 监听顺序](../gateway.md#频道启动与-http-监听顺序) 与 [配置 — 频道连接延后](../configuration.md#频道连接延后)。
+

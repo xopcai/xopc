@@ -21,6 +21,7 @@ export class GatewayServer {
     this.service = new GatewayService({
       configPath: config.configPath,
       enableHotReload: config.enableHotReload,
+      deferChannelConnectUntilAfterHttp: true,
     });
   }
 
@@ -42,13 +43,19 @@ export class GatewayServer {
     });
 
     // Create Node.js HTTP server (no WebSocket upgrade needed)
-    this.server = serve({
-      fetch: app.fetch,
-      port: this.config.port,
-      hostname: this.config.host,
-    }, () => {
-      console.log(`[GatewayServer] Gateway server running at http://${this.config.host}:${this.config.port}`);
-    });
+    this.server = serve(
+      {
+        fetch: app.fetch,
+        port: this.config.port,
+        hostname: this.config.host,
+      },
+      () => {
+        console.log(`[GatewayServer] Gateway server running at http://${this.config.host}:${this.config.port}`);
+        void this.service.onHttpListening().catch((err) => {
+          console.error('[GatewayServer] Deferred channel startup failed:', err);
+        });
+      },
+    );
   }
 
   async close(opts?: { reason?: string; restartExpectedMs?: number | null }): Promise<void> {

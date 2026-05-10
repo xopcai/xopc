@@ -420,6 +420,25 @@ Security behavior:
 - Non-browser requests without `Origin` are validated by the auth middleware instead.
 - Setting `corsOrigins` to `"*"` is allowed but flagged by startup security audit logs.
 
+#### Channel connect defer
+
+Fields live under **`gateway.*`** (`channelConnectDeferMode`, `channelConnectDeferIds`, `channelConnectDeferSkipIds`). When you run **`xopc gateway`** (the `GatewayServer` path), outbound-heavy channel plugins (Telegram, Weixin, Feishu, DingTalk) can defer **`ChannelPlugin.start()`** until **after** the HTTP listener has bound, so the control plane and static UI come up first. Plugin authors opt in via **`meta.deferConnectUntilAfterListen`** on the channel plugin.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `channelConnectDeferMode` | `"auto"` \| `"off"` \| `"explicit"` | *(unset →)* `auto` | **`auto`** — defer set = enabled channels whose plugin meta requests defer, minus `channelConnectDeferSkipIds`. **`off`** — never defer; all channels `start()` in phase 1. **`explicit`** — defer only ids listed in `channelConnectDeferIds` (empty list → defer none). |
+| `channelConnectDeferIds` | string[] | - | Max 24 entries. Used when `channelConnectDeferMode` is **`explicit`**. |
+| `channelConnectDeferSkipIds` | string[] | - | Max 24 entries. Removed from the defer set after **`auto`** or **`explicit`** resolution. |
+
+Startup logs (structured, `phase: "gateway.channel_startup"`):
+
+- **`stage: "phase1"`** — includes `channelInitMs`, `deferPlanMs`, `channelPhase1StartMs`, `replayOutboundMs` (or `null` when replay runs after listen), `channelConnectDeferMode`, `channelConnectDeferSource` (`meta` \| `explicit` \| `off`), and `deferredChannelIds`.
+- **`stage: "phase2"`** — after HTTP listen: `channelPhase2DeferredMs`, `replayOutboundMs`, `onHttpListeningTotalMs`, plus the same defer mode/source snapshot.
+
+Useful filters: `gateway.channel_startup` or `phase-1 complete` / `phase-2 complete` in log text.
+
+See also [Gateway — Channel startup and HTTP listen order](gateway.md#channel-startup-and-http-listen-order).
+
 ---
 
 ### tools
