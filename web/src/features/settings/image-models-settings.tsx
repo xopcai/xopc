@@ -3,7 +3,14 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
+import { useExtensions } from '@/features/extensions/extension-provider';
 import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
+import { fetchImageProvidersList } from '@/features/settings/fetch-image-providers';
+import {
+  ImageProviderCredentialsPanel,
+  type ImageProviderCredentialsPanelMessages,
+} from '@/features/settings/image-provider-credentials-panel';
+import { IMAGE_PROVIDERS_SWR_KEY } from '@/features/settings/image-providers-swr-key';
 import { AgentDefaultsImageModelChainsSection } from '@/features/settings/agents/agent-defaults-panels/image-model-chains-section';
 import {
   fetchAgentDefaults,
@@ -15,23 +22,13 @@ import {
   SettingsFormSection,
   SettingsFormSectionHeader,
 } from '@/features/settings/settings-form-section';
+import { useImageProviderCredentials } from '@/features/settings/use-image-provider-credentials';
 import { settingsInputFocusClass } from '@/lib/form-field-width';
-import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 import { cn } from '@/lib/cn';
-import { messages } from '@/i18n/messages';
+import { messages, type MessageBundle } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
-
-interface ImageGenProviderSummary {
-  id: string;
-  label?: string;
-  defaultModel?: string;
-  models: string[];
-  aliases?: string[];
-  configured?: boolean;
-  capabilities?: unknown;
-}
 
 function inputClass(): string {
   return cn(
@@ -41,7 +38,7 @@ function inputClass(): string {
   );
 }
 
-const PROVIDERS_SWR_KEY = '/api/image/providers';
+const imageProvidersSwrKey = () => apiUrl(IMAGE_PROVIDERS_SWR_KEY);
 
 function pickImageDefaultsSlice(s: AgentDefaultsState) {
   return {
@@ -54,12 +51,50 @@ function pickImageDefaultsSlice(s: AgentDefaultsState) {
   };
 }
 
-async function fetchImageProviders(): Promise<ImageGenProviderSummary[]> {
-  const res = await fetchJson<{
-    ok?: boolean;
-    payload?: { providers?: ImageGenProviderSummary[] };
-  }>(apiUrl(PROVIDERS_SWR_KEY));
-  return res?.payload?.providers ?? [];
+function panelMessagesFromBundle(t: MessageBundle['imageModelsSettings']): ImageProviderCredentialsPanelMessages {
+  return {
+    credentialsIntro: t.credentialsIntro,
+    regionHint: t.regionHint,
+    endpointPresetsHint: t.endpointPresetsHint,
+    apiKeyLabel: t.apiKeyLabel,
+    optionalPlaceholder: t.optionalPlaceholder,
+    regionLabel: t.regionLabel,
+    baseUrlLabel: t.baseUrlLabel,
+    imageBaseUrlLabel: t.imageBaseUrlLabel,
+    saveCredentials: t.saveCredentials,
+    savingCredentials: t.savingCredentials,
+    credentialsSaved: t.credentialsSaved,
+    discardCredentials: t.discardCredentials,
+    credentialsNothingToSave: t.credentialsNothingToSave,
+    credentialsSaveError: t.credentialsSaveError,
+    regionPresetDefault: t.regionPresetDefault,
+    regionPresetCustom: t.regionPresetCustom,
+    baseUrlPresetDefault: t.baseUrlPresetDefault,
+    baseUrlPresetCustom: t.baseUrlPresetCustom,
+    openExtensionSettings: t.openExtensionSettings,
+    openImageModelsPage: t.openImageModelsPage,
+    extensionSettingsLinkTitle: t.extensionSettingsLinkTitle,
+    imageModelsLinkTitle: t.imageModelsLinkTitle,
+    configured: t.configured,
+    missingKey: t.missingKey,
+    defaultModel: t.defaultModel,
+    modelsLabel: t.modelsLabel,
+    imageBaseUrlPresetHint: t.imageBaseUrlPresetHint,
+    dashscopeRegion_beijing: t.dashscopeRegion_beijing,
+    dashscopeRegion_singapore: t.dashscopeRegion_singapore,
+    dashscopeRegion_us: t.dashscopeRegion_us,
+    apiKeyMaskedHelp: t.apiKeyMaskedHelp,
+    apiKeyCopy: t.apiKeyCopy,
+    apiKeyCopied: t.apiKeyCopied,
+    apiKeyShow: t.apiKeyShow,
+    apiKeyHide: t.apiKeyHide,
+    apiKeyNotInConfigFile: t.apiKeyNotInConfigFile,
+    apiKeyRevealFailed: t.apiKeyRevealFailed,
+    minimaxClusterLabel: t.minimaxClusterLabel,
+    minimaxClusterHint: t.minimaxClusterHint,
+    falQueueBaseLabel: t.falQueueBaseLabel,
+    falQueueBaseHint: t.falQueueBaseHint,
+  };
 }
 
 export function ImageModelsSettingsPanel() {
@@ -69,13 +104,15 @@ export function ImageModelsSettingsPanel() {
   const token = useGatewayStore((st) => st.token);
   const hasToken = Boolean(token);
 
-  // Load + persist agent defaults (image-generation knobs).
   const [state, setState] = useState<AgentDefaultsState | null>(null);
   const [baseline, setBaseline] = useState<AgentDefaultsState | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
+
+  const extensions = useExtensions();
+  const extensionIds = useMemo(() => new Set(extensions.map((e) => e.id)), [extensions]);
 
   const reload = useCallback(async () => {
     if (!hasToken) return;
@@ -101,15 +138,15 @@ export function ImageModelsSettingsPanel() {
     setState((s) => (s ? { ...s, ...patch } : null));
   }, []);
 
-  // Provider catalogue (from /api/image/providers).
-  const { data: providers = [], mutate: refreshProviders } = useSWR<ImageGenProviderSummary[]>(
-    hasToken ? PROVIDERS_SWR_KEY : null,
-    fetchImageProviders,
+  const { data: providers = [], mutate: refreshProviders } = useSWR(
+    hasToken ? imageProvidersSwrKey() : null,
+    fetchImageProvidersList,
     { revalidateOnFocus: false },
   );
 
-  // Tie config-payload SWR cache so other panels see our edits after save.
   const gwSwr = useGatewayConfigSwr(hasToken);
+
+  const cred = useImageProviderCredentials(providers);
 
   const dirty = useMemo(() => {
     if (!state || !baseline) return false;
@@ -117,6 +154,18 @@ export function ImageModelsSettingsPanel() {
       JSON.stringify(pickImageDefaultsSlice(state)) !== JSON.stringify(pickImageDefaultsSlice(baseline))
     );
   }, [state, baseline]);
+
+  const anyDirty = dirty || cred.credDirty;
+
+  useEffect(() => {
+    if (!anyDirty) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [anyDirty]);
 
   const onSave = useCallback(async () => {
     if (!state) return;
@@ -139,7 +188,6 @@ export function ImageModelsSettingsPanel() {
       setBaseline(structuredClone(state));
       setSavedFlash(true);
       window.setTimeout(() => setSavedFlash(false), 1500);
-      // Refresh shared SWR cache so models / agent defaults panels stay in sync.
       void gwSwr.mutate?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -154,6 +202,16 @@ export function ImageModelsSettingsPanel() {
     setError(undefined);
     setSavedFlash(false);
   }, [baseline]);
+
+  const panelMsg = useMemo(() => panelMessagesFromBundle(t), [t]);
+  const apiKeyLinkLabels = useMemo(
+    () => ({
+      getApiKey: m.providersSettings.getApiKey,
+      getApiKeyIntl: m.providersSettings.getApiKeyIntl,
+      getApiKeyCn: m.providersSettings.getApiKeyCn,
+    }),
+    [m.providersSettings],
+  );
 
   if (!hasToken) {
     return (
@@ -185,6 +243,7 @@ export function ImageModelsSettingsPanel() {
             onClick={() => {
               void reload();
               void refreshProviders();
+              void gwSwr.mutate?.();
             }}
           >
             <RefreshCw className="size-3.5" />
@@ -270,41 +329,24 @@ export function ImageModelsSettingsPanel() {
         {providers.length === 0 ? (
           <p className="text-sm text-fg-muted">{t.providersEmpty}</p>
         ) : (
-          <div className="flex flex-col gap-3">
-            {providers.map((p) => (
-              <div
-                key={p.id}
-                className="rounded-lg border border-edge bg-surface-panel px-4 py-3"
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold text-fg">{p.label ?? p.id}</span>
-                    <span className="text-xs text-fg-subtle">({p.id})</span>
-                  </div>
-                  {p.configured ? (
-                    <span className="rounded-full bg-accent-soft px-2 py-0.5 text-xs font-medium text-accent-fg">
-                      {t.configured}
-                    </span>
-                  ) : (
-                    <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-300">
-                      {t.missingKey}
-                    </span>
-                  )}
-                </div>
-                {p.defaultModel ? (
-                  <p className="mt-1 text-xs text-fg-subtle">
-                    <span className="text-fg-muted">{t.defaultModel}:</span> {p.id}/{p.defaultModel}
-                  </p>
-                ) : null}
-                {p.models.length > 0 ? (
-                  <p className="mt-0.5 text-xs text-fg-subtle">
-                    <span className="text-fg-muted">{t.modelsLabel}:</span>{' '}
-                    {p.models.map((mm) => `${p.id}/${mm}`).join(', ')}
-                  </p>
-                ) : null}
-              </div>
-            ))}
-          </div>
+          <ImageProviderCredentialsPanel
+            summaries={providers}
+            credDraft={cred.credDraft}
+            credDirty={cred.credDirty}
+            credSaving={cred.credSaving}
+            credError={cred.credError}
+            credSavedFlash={cred.credSavedFlash}
+            credNoopFlash={cred.credNoopFlash}
+            updateCredRow={cred.updateCredRow}
+            onDiscardCredentials={cred.onDiscardCredentials}
+            onSaveCredentials={() => void cred.saveCredentials(t.credentialsSaveError)}
+            extensionIds={extensionIds}
+            showExtensionLinks
+            showImageModelsLink={false}
+            language={language}
+            apiKeyLinkLabels={apiKeyLinkLabels}
+            messages={panelMsg}
+          />
         )}
       </SettingsFormSection>
     </div>

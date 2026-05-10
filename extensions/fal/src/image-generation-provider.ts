@@ -32,23 +32,31 @@ import type {
   ImageGenerationProviderCapabilities,
   ImageGenerationRequest,
   ImageGenerationResult,
+  ImageProviderUiMetadata,
 } from '@xopcai/xopc/agent/image/generation/types.js';
 
 const log = createLogger('ImageGen:Fal');
 
 const DEFAULT_FAL_QUEUE_BASE_URL = 'https://queue.fal.run';
+const FAL_IMAGE_UI: ImageProviderUiMetadata = {
+  baseUrlPresets: [
+    { value: DEFAULT_FAL_QUEUE_BASE_URL, label: 'Fal queue (default)' },
+    { value: 'https://fal.run', label: 'Fal direct (fal.run)' },
+  ],
+  baseUrlPresetKind: 'fal',
+};
 export const FAL_DEFAULT_IMAGE_MODEL = 'fal-ai/flux/schnell';
 const DEFAULT_TIMEOUT_MS = 600_000; // queue + inference (10 min)
 const DEFAULT_POLL_INTERVAL_MS = 1500;
 const MAX_POLL_INTERVAL_MS = 5000;
 
-const FAL_IMAGE_MODELS = [
+export const FAL_IMAGE_MODELS: readonly string[] = [
   FAL_DEFAULT_IMAGE_MODEL,
   'fal-ai/flux/dev',
   'fal-ai/flux-pro/v1.1',
   'fal-ai/flux-pro/v1.1-ultra',
   'fal-ai/nano-banana',
-] as const;
+];
 
 const FAL_CAPABILITIES: ImageGenerationProviderCapabilities = {
   generate: { maxCount: 4, supportsSize: true, supportsAspectRatio: true },
@@ -393,6 +401,7 @@ export function buildFalImageGenerationProvider(): ImageGenerationProvider {
     defaultModel: FAL_DEFAULT_IMAGE_MODEL,
     models: [...FAL_IMAGE_MODELS],
     capabilities: FAL_CAPABILITIES,
+    ui: FAL_IMAGE_UI,
     isConfigured: (ctx) =>
       isProviderApiKeyConfigured({ providerId: 'fal', cfg: ctx.cfg }),
     async generateImage(req) {

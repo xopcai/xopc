@@ -15,20 +15,36 @@ import {
   resolveProviderHttpRequestConfig,
 } from '@xopcai/xopc/media-shared/http/index.js';
 import { createLogger } from '@xopcai/xopc/utils/logger.js';
-import { MINIMAX_DEFAULT_IMAGE_MODEL } from '@xopcai/xopc/agent/image/generation/constants.js';
 import type {
   ImageGenerationProvider,
   ImageGenerationProviderCapabilities,
   ImageGenerationRequest,
   ImageGenerationResult,
+  ImageProviderUiMetadata,
 } from '@xopcai/xopc/agent/image/generation/types.js';
 
 const log = createLogger('ImageGen:MiniMax');
+
+/**
+ * MiniMax `POST /v1/image_generation` model names (vendor OpenAPI enum).
+ * Default: `image-01`. `image-01-live` is the alternate enum value on the same API.
+ * @see https://platform.minimax.io/docs/api-reference/image-generation-i2i
+ */
+export const MINIMAX_IMAGE_MODELS: readonly string[] = ['image-01', 'image-01-live'];
+export const MINIMAX_DEFAULT_IMAGE_MODEL = MINIMAX_IMAGE_MODELS[0]!;
 
 /** CN region (default for `minimax` ids registered in mainland China). */
 const MINIMAX_CN_BASE_URL = 'https://api.minimaxi.com';
 /** International region (used when the configured key matches `*_INTL_*`). */
 const MINIMAX_INTL_BASE_URL = 'https://api.minimax.io';
+
+const MINIMAX_IMAGE_UI: ImageProviderUiMetadata = {
+  baseUrlPresets: [
+    { value: MINIMAX_CN_BASE_URL, label: 'China (api.minimaxi.com)' },
+    { value: MINIMAX_INTL_BASE_URL, label: 'International (api.minimax.io)' },
+  ],
+  baseUrlPresetKind: 'minimax',
+};
 
 const DEFAULT_TIMEOUT_MS = 120_000;
 
@@ -191,8 +207,9 @@ export function buildMinimaxImageGenerationProvider(): ImageGenerationProvider {
     id: 'minimax',
     label: 'MiniMax',
     defaultModel: MINIMAX_DEFAULT_IMAGE_MODEL,
-    models: [MINIMAX_DEFAULT_IMAGE_MODEL],
+    models: [...MINIMAX_IMAGE_MODELS],
     capabilities: MINIMAX_CAPABILITIES,
+    ui: MINIMAX_IMAGE_UI,
     isConfigured: (ctx) => isProviderApiKeyConfigured({ providerId: 'minimax', cfg: ctx.cfg }),
     async generateImage(req) {
       const apiKey = resolveApiKeyForProvider({ providerId: 'minimax', cfg: req.cfg });

@@ -24,6 +24,7 @@ import {
   imageAssetFromBase64,
   imageFileExtensionForMimeType,
 } from './image-assets.js';
+import type { ImageProviderUiMetadata } from './image-provider-ui.js';
 import type {
   GeneratedImageAsset,
   ImageGenerationProvider,
@@ -109,6 +110,8 @@ export interface OpenAiCompatibleImageProviderOptions {
   /** Default count clamp. Provider may also enforce via `capabilities.generate.maxCount`. */
   defaultCount?: number;
   defaultSize?: string;
+  /** Gateway console presets for `cfg.providers.<id>.baseUrl`. */
+  ui?: ImageProviderUiMetadata;
 }
 
 export function createOpenAiCompatibleImageProvider(
@@ -126,6 +129,7 @@ export function createOpenAiCompatibleImageProvider(
     models: options.models,
     capabilities: options.capabilities,
     isConfigured: options.isConfigured,
+    ...(options.ui ? { ui: options.ui } : {}),
     async generateImage(req): Promise<ImageGenerationResult> {
       const apiKey = options.resolveApiKey(req) ?? null;
       const endpoint = options.resolveEndpoint(req);

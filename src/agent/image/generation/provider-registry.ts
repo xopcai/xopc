@@ -1,4 +1,5 @@
 import type { Config } from '../../../config/schema.js';
+import type { ImageProviderUiMetadata } from './image-provider-ui.js';
 import type {
   ImageGenerationCapabilitiesLegacy,
   ImageGenerationProviderCapabilities,
@@ -31,6 +32,8 @@ export interface ImageGenerationProvider {
    * MUST NOT touch keychain or trigger OS prompts.
    */
   isConfigured?: (ctx: ImageGenerationProviderConfiguredContext) => boolean;
+  /** Gateway console presets (regions / base URLs); defined by each bundled extension. */
+  ui?: ImageProviderUiMetadata;
   generateImage(req: ImageGenerationRequest): Promise<ImageGenerationResult>;
 }
 
@@ -122,6 +125,7 @@ export interface ImageGenerationProviderSummary {
   models: string[];
   aliases?: string[];
   capabilities?: ImageGenerationProviderCapabilities | ImageGenerationCapabilitiesLegacy;
+  ui?: ImageProviderUiMetadata;
 }
 
 export function listImageGenerationProvidersSummary(
@@ -134,6 +138,7 @@ export function listImageGenerationProvidersSummary(
     models: provider.models ?? (provider.defaultModel ? [provider.defaultModel] : []),
     ...(provider.aliases?.length ? { aliases: [...provider.aliases] } : {}),
     ...(provider.capabilities ? { capabilities: provider.capabilities } : {}),
+    ...(provider.ui ? { ui: provider.ui } : {}),
   }));
 }
 

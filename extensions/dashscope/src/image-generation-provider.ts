@@ -16,16 +16,32 @@ import {
   resolveProviderHttpRequestConfig,
 } from '@xopcai/xopc/media-shared/http/index.js';
 import { createLogger } from '@xopcai/xopc/utils/logger.js';
-import { DASHSCOPE_DEFAULT_IMAGE_MODEL } from '@xopcai/xopc/agent/image/generation/constants.js';
 import { imageFileExtensionForMimeType } from '@xopcai/xopc/agent/image/generation/image-assets.js';
 import type {
   ImageGenerationProvider,
   ImageGenerationProviderCapabilities,
   ImageGenerationRequest,
   ImageGenerationResult,
+  ImageProviderUiMetadata,
 } from '@xopcai/xopc/agent/image/generation/types.js';
 
 const log = createLogger('ImageGen:DashScope');
+
+/**
+ * Wan image model ids for **HTTP synchronous** `multimodal-generation/generation`.
+ * - **2.7** (`wan2.7-image-pro` / `wan2.7-image`): see Wan 2.7 image API (size presets 1K/2K/4K, `thinking_mode`, …).
+ * - **2.6** (`wan2.6-t2i`): legacy Wan 2.6 T2I (`prompt_extend`, pixel `宽*高`, …).
+ * Wan 2.5 and earlier async-only models are not listed here.
+ * @see https://www.alibabacloud.com/help/en/model-studio/wan-image-generation-and-editing-api-reference
+ * @see https://www.alibabacloud.com/help/en/model-studio/text-to-image-v2-api-reference
+ * @see https://www.alibabacloud.com/help/en/model-studio/model-pricing
+ */
+export const DASHSCOPE_IMAGE_MODELS: readonly string[] = [
+  'wan2.7-image-pro',
+  'wan2.7-image',
+  'wan2.6-t2i',
+];
+export const DASHSCOPE_DEFAULT_IMAGE_MODEL = DASHSCOPE_IMAGE_MODELS[0]!;
 
 const DEFAULT_TIMEOUT_MS = 180_000;
 
@@ -33,7 +49,7 @@ const DASHSCOPE_CAPABILITIES: ImageGenerationProviderCapabilities = {
   generate: { maxCount: 4, supportsSize: true },
   edit: { enabled: false },
   geometry: {
-    sizes: ['1280x1280', '1024x1024', '1280x720', '720x1280', '1024x1536', '1536x1024'],
+    sizes: ['2K', '1K', '4K', '1280x1280', '1024x1024', '1280x720', '720x1280', '1024x1536', '1536x1024'],
   },
   output: {
     formats: ['png', 'jpeg', 'webp'],
@@ -49,6 +65,19 @@ export const DASHSCOPE_IMAGE_ENDPOINTS = {
   singapore: 'https://dashscope-intl.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation',
   us: 'https://dashscope-us.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation',
 } as const;
+
+/** Gateway console region presets (must match {@link DASHSCOPE_IMAGE_ENDPOINTS}). */
+const DASHSCOPE_IMAGE_UI: ImageProviderUiMetadata = {
+  regions: [
+    { value: 'beijing', label: 'China (Beijing)', imageBaseUrl: DASHSCOPE_IMAGE_ENDPOINTS.beijing },
+    {
+      value: 'singapore',
+      label: 'International (Singapore)',
+      imageBaseUrl: DASHSCOPE_IMAGE_ENDPOINTS.singapore,
+    },
+    { value: 'us', label: 'United States (Virginia)', imageBaseUrl: DASHSCOPE_IMAGE_ENDPOINTS.us },
+  ],
+};
 
 export type DashScopeImageRegion = keyof typeof DASHSCOPE_IMAGE_ENDPOINTS;
 
@@ -115,6 +144,30 @@ export function mapSizeToDashScopeFormat(size?: string): string {
   return '1280*1280';
 }
 
+export function isWan27ImageModel(model: string): boolean {
+  const m = model.trim().toLowerCase();
+  return m === 'wan2.7-image-pro' || m === 'wan2.7-image';
+}
+
+/**
+ * Map tool `size` to Wan 2.7 `parameters.size` (1K / 2K / 4K presets or `宽*高` pixels).
+ * `wan2.7-image` does not support 4K — falls back to 2K.
+ */
+export function mapSizeToWan27Format(size: string | undefined, modelId: string): string {
+  const id = modelId.trim().toLowerCase();
+  if (!size?.trim()) return '2K';
+  const s = size.trim();
+  const preset = s.toUpperCase();
+  if (preset === '1K' || preset === '2K' || preset === '4K') {
+    if (preset === '4K' && id === 'wan2.7-image') return '2K';
+    return preset;
+  }
+  if (s.includes('*')) return s.replace(/\s/g, '');
+  const dim = /^(\d+)\s*[xX]\s*(\d+)$/.exec(s);
+  if (dim) return `${dim[1]}*${dim[2]}`;
+  return '2K';
+}
+
 type DashScopeT2IResponse = {
   code?: string;
   message?: string;
@@ -176,6 +229,21 @@ export async function generateDashScopeImages(params: {
 
   const n = Math.min(4, Math.max(1, req.count ?? 1));
   const model = req.model?.trim() || DASHSCOPE_DEFAULT_IMAGE_MODEL;
+  const parameters = isWan27ImageModel(model)
+    ? {
+        size: mapSizeToWan27Format(req.size, model),
+        n,
+        watermark: false,
+        thinking_mode: true,
+      }
+    : {
+        prompt_extend: true,
+        watermark: false,
+        n,
+        negative_prompt: '',
+        size: mapSizeToDashScopeFormat(req.size),
+      };
+
   const body = {
     model,
     input: {
@@ -186,13 +254,7 @@ export async function generateDashScopeImages(params: {
         },
       ],
     },
-    parameters: {
-      prompt_extend: true,
-      watermark: false,
-      n,
-      negative_prompt: '',
-      size: mapSizeToDashScopeFormat(req.size),
-    },
+    parameters,
   };
 
   const url = resolveDashScopeImageGenerationUrl(req);
@@ -256,8 +318,9 @@ export function buildDashScopeImageGenerationProvider(): ImageGenerationProvider
     id: 'dashscope',
     label: 'DashScope (Alibaba)',
     defaultModel: DASHSCOPE_DEFAULT_IMAGE_MODEL,
-    models: [DASHSCOPE_DEFAULT_IMAGE_MODEL],
+    models: [...DASHSCOPE_IMAGE_MODELS],
     capabilities: DASHSCOPE_CAPABILITIES,
+    ui: DASHSCOPE_IMAGE_UI,
     isConfigured: (ctx) =>
       isProviderApiKeyConfigured({ providerId: 'dashscope', cfg: ctx.cfg }),
     async generateImage(req) {

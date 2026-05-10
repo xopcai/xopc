@@ -1,0 +1,8 @@
+{
+  "id": "minimax",
+  "name": "MiniMax (images)",
+  "description": "MiniMax image generation. Configure API keys and cluster (CN vs international) under Settings → Images, or here — both edit the same providers.minimax entry.",
+  "version": "1.0.0",
+  "kind": "image-generation",
+  "main": "src/index.ts"
+}

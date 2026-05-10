@@ -10,7 +10,6 @@ import {
   type CapabilityProviderCandidate,
 } from '../../media-generation/index.js';
 import { describeFailoverError, isFailoverError, type FallbackAttempt } from '../../failover-error.js';
-import { OPENAI_DEFAULT_IMAGE_MODEL } from './constants.js';
 import { parseImageGenerationModelRef } from './model-ref.js';
 import { resolveImageGenerationOverrides } from './normalization.js';
 import {
@@ -262,10 +261,6 @@ export type {
   ImageGenerationCapabilitiesLegacy,
   ImageGenerationProviderCapabilities,
 };
-// Re-export OPENAI_DEFAULT_IMAGE_MODEL only as a documented anchor for
-// downstream callers that wired against it; do NOT use it as a hard fallback.
-export { OPENAI_DEFAULT_IMAGE_MODEL };
-
 // Re-export the provider-registry surface that gateway routes / CLI consume
 // through this single barrel module. NOTE: `listImageGenerationProvidersSummary`
 // is implemented locally above (it overlays cfg-aware `configured` flags), so

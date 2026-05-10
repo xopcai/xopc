@@ -50,7 +50,7 @@ const ImageGenerateToolSchema = Type.Object({
   model: Type.Optional(
     Type.String({
       description:
-        'Optional provider/model override, e.g. openai/gpt-image-1 / dashscope/wan2.6-t2i / minimax/image-01.',
+        'Optional provider/model override, e.g. openai/gpt-image-1 / dashscope/wan2.7-image-pro / minimax/image-01.',
     }),
   ),
   filename: Type.Optional(Type.String({ description: 'Optional basename hint for saved files.' })),

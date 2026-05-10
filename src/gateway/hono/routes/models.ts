@@ -6,6 +6,7 @@ import {
   saveModelsJson,
   validateModelsConfig,
 } from '../../../config/models-json.js';
+import type { Config } from '../../../config/schema.js';
 import { testApiKeyResolution } from '../../../config/resolve-config-value.js';
 import {
   getImageGenerationProvider,
@@ -24,6 +25,15 @@ import { CredentialResolver } from '../../../auth/credentials.js';
 import { getProviderRegistry } from '../../../providers/plugin-registry.js';
 import type { ProviderModelDefinition } from '../../../extensions/types/providers.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
+
+/** Plaintext key only when persisted under `cfg.providers.<id>.apiKey` (not env / credential store). */
+function readProviderApiKeyFromConfigFileOnly(cfg: Config, providerId: string): string | undefined {
+  const id = providerId.trim().toLowerCase();
+  const bucket = cfg.providers?.[id];
+  if (!bucket || typeof bucket !== 'object' || Array.isArray(bucket)) return undefined;
+  const k = (bucket as { apiKey?: unknown }).apiKey;
+  return typeof k === 'string' && k.trim() ? k.trim() : undefined;
+}
 
 function mapPluginModel(providerId: string, model: ProviderModelDefinition, available: boolean) {
   return {
@@ -223,6 +233,35 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
       },
     });
   });
+
+  /**
+   * POST /api/image/providers/:id/reveal-api-key — return `cfg.providers.<id>.apiKey` plaintext for the
+   * gateway console (same auth as PATCH /api/config). Does not resolve env vars or credential files.
+   */
+  authenticated.post(
+    '/api/image/providers/:id/reveal-api-key',
+    strictRateLimitMiddleware,
+    async (c) => {
+      const rawId = c.req.param('id');
+      const cfg = deps.service.currentConfig;
+      const provider = getImageGenerationProvider(rawId, cfg);
+      if (!provider) {
+        return c.json(
+          { ok: false, error: { message: `Image generation provider not found: ${rawId}` } },
+          404,
+        );
+      }
+      const apiKey = readProviderApiKeyFromConfigFileOnly(cfg, provider.id);
+      return c.json({
+        ok: true,
+        payload: {
+          id: provider.id,
+          apiKey: apiKey ?? null,
+          source: apiKey ? ('config' as const) : ('none' as const),
+        },
+      });
+    },
+  );
 
   // GET /api/providers - Get ALL available providers and models
   authenticated.get('/api/providers', async (c) => {
