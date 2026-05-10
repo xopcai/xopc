@@ -6,6 +6,7 @@
  */
 
 import type { Config } from '../../../../../config/schema.js';
+import { MAX_EXTENSION_STORE_ZIP_BYTES } from '../../../../../extensions/store-zip-limits.js';
 import { isValidSkillId, MAX_SKILL_ZIP_BYTES } from '../../../managed-store.js';
 import type { SkillMarkdownPreviewPayload } from '../../../types.js';
 
@@ -74,6 +75,24 @@ export function resolveSkillsStoreBaseUrl(config: Config): string {
   return DEFAULT_STORE_BASE;
 }
 
+export { MAX_EXTENSION_STORE_ZIP_BYTES };
+
+/**
+ * Base URL for extension downloads (defaults to skills store host — usually store.xopc.ai).
+ * Override with `XOPC_EXTENSIONS_STORE_URL`.
+ */
+export function resolveExtensionsStoreBaseUrl(config: Config): string {
+  const env = process.env.XOPC_EXTENSIONS_STORE_URL?.trim();
+  if (env) {
+    try {
+      return normalizeBaseUrl(new URL(env).toString());
+    } catch {
+      // fall through
+    }
+  }
+  return resolveSkillsStoreBaseUrl(config);
+}
+
 function normalizeBaseUrl(url: string): string {
   return url.replace(/\/$/, '');
 }
@@ -84,7 +103,8 @@ export function getStoreOrigin(baseUrl: string): string {
 }
 
 /**
- * Allow only HTTPS URLs whose origin matches the configured store base (SSRF guard).
+ * Allow download URLs whose origin matches the configured store base (SSRF guard).
+ * Production store is HTTPS-only; local dev (`http://localhost` / `127.0.0.1`) may use HTTP.
  */
 export function assertDownloadUrlAllowed(downloadUrl: string, storeBaseUrl: string): URL {
   let u: URL;
@@ -93,12 +113,19 @@ export function assertDownloadUrlAllowed(downloadUrl: string, storeBaseUrl: stri
   } catch {
     throw new Error('Invalid download URL from store');
   }
-  if (u.protocol !== 'https:') {
+  const allowed = new URL(storeBaseUrl);
+  const localHttpDev =
+    allowed.protocol === 'http:' &&
+    (allowed.hostname === 'localhost' || allowed.hostname === '127.0.0.1');
+  if (localHttpDev) {
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') {
+      throw new Error('Download URL must use HTTP or HTTPS');
+    }
+  } else if (u.protocol !== 'https:') {
     throw new Error('Download URL must use HTTPS');
   }
-  const allowed = new URL(storeBaseUrl);
   if (u.host !== allowed.host) {
-    throw new Error('Download URL host does not match skills store');
+    throw new Error('Download URL host does not match configured store host');
   }
   return u;
 }
@@ -224,6 +251,74 @@ export async function downloadSkillZipBuffer(
   const buf = Buffer.from(ab);
   if (buf.length > MAX_SKILL_ZIP_BYTES) {
     throw new Error(`Zip exceeds maximum size (${MAX_SKILL_ZIP_BYTES} bytes)`);
+  }
+  return buf;
+}
+
+/** GET /api/v1/packages/:name — subset used for extension installs. */
+export interface StorePublishedPackageHead {
+  name: string;
+  type: string;
+  latestVersion: {
+    version: string;
+    downloadUrl: string;
+  };
+}
+
+export async function resolveExtensionZipDownloadUrl(
+  storeBaseUrl: string,
+  packageName: string,
+  version?: string,
+): Promise<{ downloadUrl: string; version: string }> {
+  const base = normalizeBaseUrl(storeBaseUrl);
+  const enc = encodeURIComponent(packageName.trim());
+  const meta = await fetchJson<StorePublishedPackageHead>(`${base}/api/v1/packages/${enc}`);
+  if (meta.type !== 'extension') {
+    throw new Error(
+      `Package "${packageName}" has type "${meta.type}" (expected extension). ` +
+        'Use `xopc skills install` for skills.',
+    );
+  }
+  if (version?.trim()) {
+    const v = encodeURIComponent(version.trim());
+    const detail = await fetchJson<{ downloadUrl: string; version: string }>(
+      `${base}/api/v1/packages/${enc}/versions/${v}`,
+    );
+    if (!detail.downloadUrl) {
+      throw new Error('Store version has no download URL');
+    }
+    assertDownloadUrlAllowed(detail.downloadUrl, base);
+    return { downloadUrl: detail.downloadUrl, version: detail.version };
+  }
+  const lv = meta.latestVersion;
+  if (!lv?.downloadUrl) {
+    throw new Error('Package has no published version');
+  }
+  assertDownloadUrlAllowed(lv.downloadUrl, base);
+  return { downloadUrl: lv.downloadUrl, version: lv.version };
+}
+
+export async function downloadExtensionStoreZipBuffer(
+  storeBaseUrl: string,
+  downloadUrl: string,
+): Promise<Buffer> {
+  const base = normalizeBaseUrl(storeBaseUrl);
+  assertDownloadUrlAllowed(downloadUrl, base);
+  const res = await fetch(downloadUrl, { redirect: 'follow' });
+  if (!res.ok) {
+    throw new Error(`Failed to download extension archive (${res.status})`);
+  }
+  const len = res.headers.get('content-length');
+  if (len) {
+    const n = Number(len);
+    if (Number.isFinite(n) && n > MAX_EXTENSION_STORE_ZIP_BYTES) {
+      throw new Error(`Zip exceeds maximum size (${MAX_EXTENSION_STORE_ZIP_BYTES} bytes)`);
+    }
+  }
+  const ab = await res.arrayBuffer();
+  const buf = Buffer.from(ab);
+  if (buf.length > MAX_EXTENSION_STORE_ZIP_BYTES) {
+    throw new Error(`Zip exceeds maximum size (${MAX_EXTENSION_STORE_ZIP_BYTES} bytes)`);
   }
   return buf;
 }

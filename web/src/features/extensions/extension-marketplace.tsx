@@ -75,7 +75,7 @@ export function ExtensionMarketplacePanel({ className }: { className?: string })
       ) : (
         <ul className="flex flex-col gap-3">
           {extensions.length === 0 ? (
-            <li className="text-sm text-fg-muted">No extensions in registry.</li>
+            <li className="text-sm text-fg-muted">No extensions from xopc-store.</li>
           ) : (
             extensions.map((e) => (
               <li

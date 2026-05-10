@@ -17,10 +17,17 @@ describe('store-api-client (xopc Store HTTP)', () => {
       expect(u.hostname).toBe('store.xopc.ai');
     });
 
-    it('rejects HTTP', () => {
+    it('rejects HTTP for production store base', () => {
       expect(() =>
         assertDownloadUrlAllowed('http://store.xopc.ai/files/x.zip', storeBase),
       ).toThrow(/HTTPS/);
+    });
+
+    it('allows HTTP when store base is local dev', () => {
+      const local = 'http://localhost:5173';
+      const u = assertDownloadUrlAllowed('http://localhost:5173/files/a.zip', local);
+      expect(u.protocol).toBe('http:');
+      expect(u.host).toBe('localhost:5173');
     });
 
     it('rejects a different host (SSRF guard)', () => {
