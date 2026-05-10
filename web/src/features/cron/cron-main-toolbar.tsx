@@ -12,8 +12,8 @@ type CronCopy = MessageBundle['cron'];
 
 export type CronMainToolbarProps = {
   c: CronCopy;
-  mainTab: 'tasks' | 'history';
-  onMainTabChange: (tab: 'tasks' | 'history') => void;
+  mainTab: 'myTasks' | 'systemTasks' | 'history';
+  onMainTabChange: (tab: 'myTasks' | 'systemTasks' | 'history') => void;
   jobSort: 'created_desc' | 'created_asc';
   onJobSortChange: (sort: 'created_desc' | 'created_asc') => void;
   historyRange: 'day' | 'week' | 'month';
@@ -45,14 +45,26 @@ export function CronMainToolbar({
         <button
           type="button"
           role="tab"
-          aria-selected={mainTab === 'tasks'}
+          aria-selected={mainTab === 'myTasks'}
           className={cn(
             'rounded-md px-3 py-2 text-sm font-medium transition-colors',
-            mainTab === 'tasks' ? 'text-fg' : 'text-fg-muted hover:text-fg',
+            mainTab === 'myTasks' ? 'text-fg' : 'text-fg-muted hover:text-fg',
           )}
-          onClick={() => onMainTabChange('tasks')}
+          onClick={() => onMainTabChange('myTasks')}
         >
           {c.tabMyTasks}
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={mainTab === 'systemTasks'}
+          className={cn(
+            'rounded-md px-3 py-2 text-sm font-medium transition-colors',
+            mainTab === 'systemTasks' ? 'text-fg' : 'text-fg-muted hover:text-fg',
+          )}
+          onClick={() => onMainTabChange('systemTasks')}
+        >
+          {c.tabSystemTasks}
         </button>
         <button
           type="button"
@@ -75,7 +87,7 @@ export function CronMainToolbar({
             : 'flex-wrap sm:justify-end',
         )}
       >
-        {mainTab === 'tasks' ? (
+        {mainTab === 'myTasks' || mainTab === 'systemTasks' ? (
           <select
             className={cronToolbarSelectClass}
             value={jobSort}
@@ -85,7 +97,8 @@ export function CronMainToolbar({
             <option value="created_desc">{c.sortCreatedDesc}</option>
             <option value="created_asc">{c.sortCreatedAsc}</option>
           </select>
-        ) : (
+        ) : null}
+        {mainTab === 'history' ? (
           <>
             <div className={cn(segmentedTrackClassName, 'shrink-0')} role="group" aria-label={c.runHistoryTitle}>
               {(['day', 'week', 'month'] as const).map((r) => (
@@ -130,7 +143,7 @@ export function CronMainToolbar({
               <option value="running">{c.execStatusRunning}</option>
             </select>
           </>
-        )}
+        ) : null}
       </div>
     </div>
   );
