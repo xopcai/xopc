@@ -257,7 +257,9 @@ export function FilePreviewBody(props: FilePreviewBodyProps) {
         <img
           src={src}
           alt=""
-          className={context === 'workspace' ? 'max-h-[min(100%,calc(100dvh-9rem))] w-auto max-w-full object-contain' : 'max-h-full max-w-full object-contain'}
+          className={
+            context === 'workspace' ? 'max-h-[min(100%,calc(100dvh-9rem))] w-auto max-w-full object-contain' : 'max-h-full max-w-full object-contain'
+          }
         />
       </div>
     );
