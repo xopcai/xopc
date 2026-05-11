@@ -4,6 +4,14 @@ import { complete } from '@earendil-works/pi-ai';
 import { resolveModel } from '../../providers/index.js';
 
 import { DEFAULT_JUDGE_TIMEOUT_MS, truncateGoalText } from './judge.js';
+import type { GoalUiLocale } from './goal-locale.js';
+import {
+  goalUiLocaleOrFallback,
+  judgeReasonText,
+  judgeResponseLanguageNote,
+  JUDGE_REASON_EN,
+  localizeJudgeReasonText,
+} from './goal-locale.js';
 
 const GOAL_TRUNC = 4000;
 const RESPONSE_SNIPPET = 4000;
@@ -65,15 +73,22 @@ export async function decomposeGoalChecklist(opts: {
   judgeModelRef: string;
   signal?: AbortSignal;
   judgeTimeoutMs?: number;
+  uiLocale?: GoalUiLocale;
 }): Promise<DecomposeChecklistResult> {
+  const locale = goalUiLocaleOrFallback(opts.uiLocale);
   const goal = opts.goal.trim();
-  if (!goal) return { items: [], parseFailed: false, errorReason: 'empty goal' };
+  if (!goal)
+    return { items: [], parseFailed: false, errorReason: judgeReasonText('empty_goal', locale) };
 
   let model: ReturnType<typeof resolveModel>;
   try {
     model = resolveModel(opts.judgeModelRef);
   } catch {
-    return { items: [], parseFailed: false, errorReason: 'judge model not configured' };
+    return {
+      items: [],
+      parseFailed: false,
+      errorReason: judgeReasonText('judge_model_not_configured', locale),
+    };
   }
 
   const timeoutMs =
@@ -87,7 +102,9 @@ export async function decomposeGoalChecklist(opts: {
   try {
     const user: UserMessage = {
       role: 'user',
-      content: `${DECOMPOSE_SYSTEM}\n\n${DECOMPOSE_USER.replace('{goal}', truncateGoalText(goal, GOAL_TRUNC))}`,
+      content:
+        `${DECOMPOSE_SYSTEM}\n\n${DECOMPOSE_USER.replace('{goal}', truncateGoalText(goal, GOAL_TRUNC))}` +
+        judgeResponseLanguageNote(locale),
       timestamp: Date.now(),
     };
     const result = await complete(model, { messages: [user] }, { maxTokens: 2000, temperature: 0, signal: merged });
@@ -100,9 +117,19 @@ export async function decomposeGoalChecklist(opts: {
       }
     }
     const data = extractJsonObject(text);
-    if (!data) return { items: [], parseFailed: true, errorReason: 'decompose reply was not JSON' };
+    if (!data)
+      return {
+        items: [],
+        parseFailed: true,
+        errorReason: judgeReasonText('decompose_reply_not_json', locale),
+      };
     const rawItems = data.items ?? data.checklist;
-    if (!Array.isArray(rawItems)) return { items: [], parseFailed: true, errorReason: 'missing items array' };
+    if (!Array.isArray(rawItems))
+      return {
+        items: [],
+        parseFailed: true,
+        errorReason: judgeReasonText('missing_items_array', locale),
+      };
     const items: { text: string }[] = [];
     for (const row of rawItems) {
       if (typeof row === 'string') {
@@ -113,10 +140,15 @@ export async function decomposeGoalChecklist(opts: {
         if (t) items.push({ text: t });
       }
     }
-    if (!items.length) return { items: [], parseFailed: true, errorReason: 'empty checklist' };
+    if (!items.length)
+      return { items: [], parseFailed: true, errorReason: judgeReasonText('empty_checklist', locale) };
     return { items, parseFailed: false };
   } catch {
-    return { items: [], parseFailed: false, errorReason: 'decompose call failed' };
+    return {
+      items: [],
+      parseFailed: false,
+      errorReason: judgeReasonText('decompose_call_failed', locale),
+    };
   } finally {
     clearTimeout(timer);
   }
@@ -147,13 +179,19 @@ export async function evaluateGoalChecklistJudge(opts: {
   judgeModelRef: string;
   signal?: AbortSignal;
   judgeTimeoutMs?: number;
+  uiLocale?: GoalUiLocale;
 }): Promise<EvaluateChecklistResult> {
+  const locale = goalUiLocaleOrFallback(opts.uiLocale);
   let model: ReturnType<typeof resolveModel>;
   try {
     model = resolveModel(opts.judgeModelRef);
   } catch {
     return {
-      parsed: { updates: [], newItems: [], reason: 'judge model not configured' },
+      parsed: {
+        updates: [],
+        newItems: [],
+        reason: judgeReasonText('judge_model_not_configured', locale),
+      },
       parseFailed: false,
     };
   }
@@ -176,7 +214,7 @@ export async function evaluateGoalChecklistJudge(opts: {
   try {
     const user: UserMessage = {
       role: 'user',
-      content: `${EVALUATE_CHECKLIST_SYSTEM}\n\n${userBody}`,
+      content: `${EVALUATE_CHECKLIST_SYSTEM}\n\n${userBody}` + judgeResponseLanguageNote(locale),
       timestamp: Date.now(),
     };
     const result = await complete(model, { messages: [user] }, { maxTokens: 1500, temperature: 0, signal: merged });
@@ -191,13 +229,19 @@ export async function evaluateGoalChecklistJudge(opts: {
     const data = extractJsonObject(text);
     if (!data) {
       return {
-        parsed: { updates: [], newItems: [], reason: 'judge reply was not JSON' },
+        parsed: {
+          updates: [],
+          newItems: [],
+          reason: judgeReasonText('judge_reply_not_json', locale),
+        },
         parseFailed: true,
       };
     }
     const updatesRaw = data.updates;
     const newRaw = data.new_items ?? data.newItems;
-    const reason = typeof data.reason === 'string' ? data.reason.trim() : 'no reason provided';
+    const trimmed = typeof data.reason === 'string' ? data.reason.trim() : '';
+    const inner = trimmed || JUDGE_REASON_EN.no_reason_provided;
+    const reason = localizeJudgeReasonText(inner, locale);
     const updates: ChecklistJudgeUpdate[] = [];
     if (Array.isArray(updatesRaw)) {
       for (const u of updatesRaw) {
@@ -224,10 +268,21 @@ export async function evaluateGoalChecklistJudge(opts: {
         }
       }
     }
-    return { parsed: { updates, newItems, reason: reason || 'no reason provided' }, parseFailed: false };
+    return {
+      parsed: {
+        updates,
+        newItems,
+        reason: reason || judgeReasonText('no_reason_provided', locale),
+      },
+      parseFailed: false,
+    };
   } catch {
     return {
-      parsed: { updates: [], newItems: [], reason: 'judge call failed' },
+      parsed: {
+        updates: [],
+        newItems: [],
+        reason: judgeReasonText('judge_call_failed', locale),
+      },
       parseFailed: false,
     };
   } finally {

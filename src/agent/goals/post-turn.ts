@@ -5,6 +5,7 @@ import { getAgentDefaultModelRef } from '../../config/schema.js';
 import { createLogger } from '../../utils/logger.js';
 
 import { evaluateAfterTurnHermesLike } from './evaluate-turn.js';
+import { resolveGoalUiLocale } from './goal-locale.js';
 import type { PersistentGoalApis } from './persistent-goal-apis.js';
 import {
   PERSISTENT_GOAL_CUSTOM_KEY,
@@ -101,6 +102,7 @@ export async function handlePersistentGoalPostTurn(opts: {
   const decision = await evaluateAfterTurnHermesLike(state, assistantPlainText, judgeRef, signal, {
     goalsSlice: goalsCfg,
     historyExcerpt,
+    uiLocale: resolveGoalUiLocale(state),
   });
 
   const baseCustom = { ...(meta.customData as Record<string, unknown> | undefined) };

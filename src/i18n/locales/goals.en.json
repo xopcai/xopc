@@ -1,0 +1,34 @@
+{
+  "continuation": {
+    "plain": "[Continuing toward your standing goal]\nGoal: {{goal}}\n\nContinue working toward this goal. Take the next concrete step. If you believe the goal is complete, state so explicitly and stop. If you are blocked and need input from the user, say so clearly and stop.",
+    "checklist": "[Continuing toward your standing goal]\nGoal: {{goal}}\n\nChecklist progress ({{done}}/{{total}} done):\n{{checklist}}\n\nWork on the unchecked items above. Do not declare items done yourself — a judge marks them based on evidence in your output. If an item is genuinely impossible in this environment, explain why so the judge can mark it impossible. If you are blocked on a remaining item and need user input, say so clearly and stop."
+  },
+  "judge": {
+    "responseLanguageNote": ""
+  },
+  "judgeReason": {
+    "empty_goal": "empty goal",
+    "empty_response": "empty response (nothing to evaluate)",
+    "judge_model_not_configured": "judge model not configured",
+    "judge_call_failed": "judge call failed",
+    "judge_returned_empty": "judge returned empty response",
+    "judge_reply_not_json": "judge reply was not JSON",
+    "no_reason_provided": "no reason provided",
+    "decompose_reply_not_json": "decompose reply was not JSON",
+    "missing_items_array": "missing items array",
+    "empty_checklist": "empty checklist",
+    "decompose_call_failed": "decompose call failed"
+  },
+  "checklistProgressSuffix": " — {{done}}/{{total}} done",
+  "evaluate": {
+    "pauseBudget": "⏸ Goal paused — {{turnsUsed}}/{{maxTurns}} turns used. Use /goal resume to keep going, or /goal clear to stop.",
+    "pauseParse": "⏸ Goal paused — the judge returned unparseable output {{failures}} turns in a row. Configure a stricter model under `goals.judgeModelRef` in your xopc config, then /goal resume.",
+    "goalAchieved": "✓ Goal achieved: {{reason}}",
+    "continuingWithProgress": "↻ Continuing toward goal ({{turnsUsed}}/{{maxTurns}}{{progressSuffix}}): {{reason}}",
+    "continuing": "↻ Continuing toward goal ({{turnsUsed}}/{{maxTurns}}): {{reason}}",
+    "checklistReady": "⊙ Checklist ready ({{n}} criteria). Use /subgoal to view or edit. Continuing...",
+    "decomposedReason": "decomposed into {{n}} items",
+    "decomposeFallbackReason": "decompose: {{detail}}",
+    "noChecklistFallback": "decompose produced no checklist"
+  }
+}
