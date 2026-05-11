@@ -47,6 +47,19 @@ describe('collectAssistantWorkspaceOutputPaths', () => {
     expect(collectAssistantWorkspaceOutputPaths(content)).toEqual([]);
   });
 
+  it('collects workspace paths from assistant text (bold filenames)', () => {
+    const content: MessageContent[] = [
+      {
+        type: 'text',
+        text: '- **`guide.html`**\n- **`travel-plan-shanghai-hangzhou.html`**',
+      },
+    ];
+    const paths = collectAssistantWorkspaceOutputPaths(content);
+    expect(paths.map((p) => p.workspaceRelativePath).sort()).toEqual(
+      ['guide.html', 'travel-plan-shanghai-hangzhou.html'].sort(),
+    );
+  });
+
   it('skips failed or running tools', () => {
     const content: MessageContent[] = [
       {

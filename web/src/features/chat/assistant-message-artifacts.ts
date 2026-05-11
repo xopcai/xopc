@@ -1,5 +1,9 @@
 import type { ImageContent, MessageAttachment, MessageContent } from '@/features/chat/messages.types';
-import { extractFilePathsFromToolResult, type ExtractedFilePath } from '@/features/chat/tool-result-file-paths';
+import {
+  extractFilePathsFromToolResult,
+  extractWorkspaceRelativeMentionsFromAssistantMarkdown,
+  type ExtractedFilePath,
+} from '@/features/chat/tool-result-file-paths';
 
 /**
  * Tool names that typically add or change workspace files on success.
@@ -59,6 +63,16 @@ export function collectAssistantWorkspaceOutputPaths(
       continue;
     }
     mergeExtractedPaths(out, extractFilePathsFromToolResult(text));
+  }
+  for (const b of content) {
+    if (b.type !== 'text') {
+      continue;
+    }
+    const narrative = (b.text ?? '').trim();
+    if (!narrative) {
+      continue;
+    }
+    mergeExtractedPaths(out, extractWorkspaceRelativeMentionsFromAssistantMarkdown(narrative));
   }
   return out;
 }

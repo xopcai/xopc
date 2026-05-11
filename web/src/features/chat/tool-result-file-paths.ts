@@ -246,6 +246,48 @@ function scanTextForPaths(text: string, out: ExtractedFilePath[]): void {
   }
 }
 
+/** Path shape inside `**…**`, `` `…` ``, or `[text](…)` — same extensions as tool-result scanning. */
+function assistantMarkdownRelativePathInner(): string {
+  const ext = extensionPattern();
+  return `(?:[A-Za-z0-9_.-]+\\/)*[A-Za-z0-9_.-]+\\.(?:${ext})`;
+}
+
+/**
+ * Workspace-relative file paths mentioned in assistant markdown (bold, inline code, relative links).
+ * Used so “两个文件已就绪：**`guide.html`**” style copy still gets preview chips beside the answer.
+ */
+export function extractWorkspaceRelativeMentionsFromAssistantMarkdown(fullText: string): ExtractedFilePath[] {
+  const inner = assistantMarkdownRelativePathInner();
+  const cap = `(${inner})`;
+  const patterns = [
+    new RegExp(`\\*\\*${cap}\\*\\*`, 'gi'),
+    new RegExp('`' + cap + '`', 'gi'),
+    new RegExp(`\\]\\(${cap}\\)`, 'gi'),
+  ];
+  const out: ExtractedFilePath[] = [];
+  for (const re of patterns) {
+    re.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(fullText)) !== null) {
+      const raw = m[1]?.trim().replace(/^<|>$/g, '');
+      if (raw) {
+        try {
+          pushWorkspaceRelativePath(decodeURIComponent(raw), out, fullText);
+        } catch {
+          pushWorkspaceRelativePath(raw, out, fullText);
+        }
+      }
+    }
+  }
+  const seen = new Set<string>();
+  return out.filter((p) => {
+    const k = p.workspaceRelativePath ?? p.absolutePath;
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+}
+
 /** True if `abs` is the on-disk file for workspace-relative `rel` (dedupe "Saved: /.../a.png" vs "media/.../a.png"). */
 function absolutePathSameAsWorkspaceRelative(abs: string, rel: string): boolean {
   const a = abs.trim().replace(/\\/g, '/');
