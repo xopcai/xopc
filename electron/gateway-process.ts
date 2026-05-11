@@ -79,14 +79,14 @@ function tryListenOnce(hostname: string, port: number): Promise<boolean> {
 /**
  * CLI entry for the gateway subprocess.
  * Packaged: esbuild bundle at `out/server/index.js` (self-contained).
- * Dev: tsdown output at `dist/src/cli/index.js` (resolves deps from node_modules).
+ * Dev: tsdown output at `dist/src/cli/bin.js` (resolves deps from node_modules).
  */
 export function resolveCliEntry(): string {
   if (app.isPackaged) {
     return join(app.getAppPath(), 'out/server/index.js');
   }
   const mainDir = dirname(fileURLToPath(import.meta.url));
-  return join(mainDir, '../../dist/src/cli/index.js');
+  return join(mainDir, '../../dist/src/cli/bin.js');
 }
 
 export function isCliBundlePresent(): boolean {

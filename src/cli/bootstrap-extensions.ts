@@ -7,10 +7,18 @@ import { ExtensionLoader } from '../extensions/index.js';
 import { registerExtensionCliProgram } from '../extensions/sdk/channel-helpers.js';
 import { createDefaultContext } from './registry.js';
 
+function argvRequestsVersionOnly(argv: string[]): boolean {
+  return argv.includes('--version') || argv.includes('-V');
+}
+
 /**
  * Load extensions that may register CLI commands (manifest-only skip when nothing would activate).
  */
 export async function registerExtensionCliCommands(program: Command): Promise<void> {
+  if (argvRequestsVersionOnly(process.argv)) {
+    return;
+  }
+
   const ctx = createDefaultContext(process.argv, {});
   const config = loadConfig(ctx.configPath);
   const workspace = getWorkspacePath(config) || ctx.workspacePath;

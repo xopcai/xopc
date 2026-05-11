@@ -110,7 +110,7 @@ if command -v pnpm &> /dev/null; then
   pnpm run dev -- skills test --skills-dir "$SKILLS_DIR" --format "$FORMAT" $OPTIONS
   TEST_EXIT_CODE=$?
 elif command -v npx &> /dev/null; then
-  npx tsx src/cli/index.ts skills test --skills-dir "$SKILLS_DIR" --format "$FORMAT" $OPTIONS
+  npx tsx src/cli/bin.ts skills test --skills-dir "$SKILLS_DIR" --format "$FORMAT" $OPTIONS
   TEST_EXIT_CODE=$?
 else
   echo -e "${RED}✗ Neither pnpm nor npx found${NC}"
