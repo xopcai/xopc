@@ -77,17 +77,22 @@ export function registerAgentStreamRoutes(authenticated: Hono, deps: Authenticat
       );
     }
     const body = await c.req.json().catch(() => null);
-    const answer =
+    const skip =
+      body &&
+      typeof body === 'object' &&
+      (body as { skip?: unknown }).skip === true;
+    const rawAnswer =
       body && typeof body === 'object' && typeof (body as { answer?: unknown }).answer === 'string'
-        ? (body as { answer: string }).answer.trim()
+        ? (body as { answer: string }).answer
         : '';
-    if (!answer) {
+    const answer = typeof rawAnswer === 'string' ? rawAnswer.trim() : '';
+    if (!skip && !answer) {
       return c.json(
         { ok: false, error: { code: 'BAD_REQUEST', message: 'Missing answer field' } },
         400,
       );
     }
-    const handled = service.submitClarifyResponse(requestId, answer);
+    const handled = service.submitClarifyResponse(requestId, skip ? '' : answer);
     if (!handled) {
       return c.json(
         { ok: false, error: { code: 'NOT_FOUND', message: 'No pending clarification with this ID' } },

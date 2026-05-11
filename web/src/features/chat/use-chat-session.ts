@@ -161,7 +161,6 @@ export function useChatSession() {
     modelSupportsThinking,
     thinkingLevel,
     shouldApplyStreamUpdate,
-    setError,
     sendMessageRef,
   });
 
@@ -529,7 +528,9 @@ export function useChatSession() {
     clarify: {
       clarifyPrompt: fq.clarifyPrompt,
       clarifySubmitting: fq.clarifySubmitting,
+      clarifySubmitError: fq.clarifySubmitError,
       submitClarifyAnswer: fq.submitClarifyAnswer,
+      cancelClarifyAnswer: fq.cancelClarifyAnswer,
     },
     agents: {
       chatAgents: chatAgentsData,
