@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { extractFilePathsFromToolResult, looksLikeAbsoluteFilePath } from '@/features/chat/tool-result-file-paths';
+import {
+  extractFilePathsFromToolResult,
+  extractWorkspaceRelativeMentionsFromAssistantMarkdown,
+  looksLikeAbsoluteFilePath,
+} from '@/features/chat/tool-result-file-paths';
 import { extractWebSearchLinksFromToolResult } from '@/features/chat/web-search-tool-result-links';
 
 describe('looksLikeAbsoluteFilePath', () => {
@@ -53,6 +57,19 @@ describe('extractFilePathsFromToolResult', () => {
   it('does not treat Python/code snippets as Windows paths (avoids false resolve-path 403)', () => {
     const snippet = String.raw`s:\n        result = analyze_stock(code, with_minute=args.minute, realtime_cache=realtime_cache)\n        results.append(result)\n    \n    if args.json`;
     expect(extractFilePathsFromToolResult(snippet)).toEqual([]);
+  });
+
+  it('extracts workspace-relative names from assistant markdown (bold, code, links)', () => {
+    const md = [
+      '两个文件已就绪：',
+      '- **`guide.html`** ← 清单',
+      '- **`travel-plan-shanghai-hangzhou.html`** ← 标题',
+      'Also `docs/readme.md` and [open](subdir/page.html).',
+    ].join('\n');
+    const paths = extractWorkspaceRelativeMentionsFromAssistantMarkdown(md);
+    expect(paths.map((p) => p.workspaceRelativePath).sort()).toEqual(
+      ['docs/readme.md', 'guide.html', 'subdir/page.html', 'travel-plan-shanghai-hangzhou.html'].sort(),
+    );
   });
 
   it('strips "File written:" so the line is not used as a workspace relative path (404)', () => {
