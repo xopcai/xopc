@@ -32,7 +32,7 @@
   <a href="https://xopcai.github.io/xopc/zh/cli">CLI</a>
 </p>
 
-**xopc** 是一套可**装在自己机器上**的智能体工具链：**命令行（CLI）**、全屏**终端界面（TUI）**、带网页后台的 **HTTP/WebSocket 网关**（控制台用 **React** 编写），以及可选的 **Electron** 桌面版（**macOS / Windows / Linux**），并内置 **Telegram、微信、飞书/Lark、钉钉** 等机器人插件。模型调用基于 **[@earendil-works/pi-ai](https://github.com/earendil-works/pi-mono)**，可对接 **20+** 家厂商。通过**扩展**加工具、接新机器人、接新模型；用 **SKILL.md** 管理技能；网页端还能用 **`@xopcai/xopc/extension-ui-sdk`** 做界面扩展。
+**xopc** 是一套可**装在自己机器上**的智能体工具链：**命令行（CLI）**、全屏**终端界面（TUI）**、带网页后台的 **HTTP/SSE 网关**（REST JSON API，流式与实时更新走 **Server-Sent Events**；控制台用 **React** 编写），以及可选的 **Electron** 桌面版（**macOS / Windows / Linux**），并内置 **Telegram、微信、飞书/Lark、钉钉** 等机器人插件。模型调用基于 **[@earendil-works/pi-ai](https://github.com/earendil-works/pi-mono)**，可对接 **20+** 家厂商。通过**扩展**加工具、接新机器人、接新模型；用 **SKILL.md** 管理技能；网页端还能用 **`@xopcai/xopc/extension-ui-sdk`** 做界面扩展。
 
 ---
 
@@ -259,7 +259,7 @@ src/
 ├── cli/         # 命令行入口与各子命令
 ├── config/      # 配置 schema 与加载
 ├── cron/        # 定时任务
-├── gateway/     # HTTP/WebSocket 服务
+├── gateway/     # HTTP + SSE 网关服务
 ├── providers/   # 模型注册
 ├── session/     # 会话
 ├── tui/         # 终端 UI（pi-tui）

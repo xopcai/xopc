@@ -573,9 +573,9 @@ Content-Type: application/json
 
 已认证 API 会做 operator scope 校验（`operator.read`、`operator.write`、`operator.admin`）。当前默认授予完整 operator scopes，这一层为后续细粒度权限收敛做准备。
 
-### WebSocket 未授权洪泛防护
+### 认证失败限流
 
-WebSocket 上重复未授权请求会触发限流，并在阈值后主动断开连接，降低滥用风险。
+同一客户端 IP 的重复认证失败由 `gateway.auth.rateLimit`（启用时）统计；超过阈值后网关返回 **429 Too Many Requests** 并携带 `Retry-After`，以降低撞库与滥用风险。
 
 ## 配置
 

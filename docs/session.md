@@ -278,7 +278,7 @@ To prevent memory issues:
 ### Sessions Not Loading in Web UI
 
 1. Check gateway is running: `xopc gateway status`
-2. Verify WebSocket connection in browser console
+2. In the browser devtools **Network** tab, confirm REST calls to `/api/sessions` succeed and, if the UI uses live updates, that **`GET /api/events`** (SSE) stays connected
 3. Check for errors in gateway logs
 
 ### Session Index Corrupted
@@ -306,21 +306,21 @@ xopc session list --limit 1000
 
 ## API Reference
 
-### WebSocket API Methods
+The gateway exposes sessions under **`/api/sessions`** (authenticated JSON over HTTP). There is **no WebSocket** surface for the console; live UI updates use **SSE** on **`GET /api/events`** where applicable.
 
-| Method | Description |
-|--------|-------------|
-| `session.list` | List sessions with pagination |
-| `session.get` | Get session details |
-| `session.delete` | Delete a session |
-| `session.rename` | Rename a session |
-| `session.tag` | Add tags |
-| `session.untag` | Remove tags |
-| `session.archive` | Archive session |
-| `session.unarchive` | Unarchive session |
-| `session.pin` | Pin session |
-| `session.unpin` | Unpin session |
-| `session.search` | Search sessions |
-| `session.searchIn` | Search within session |
-| `session.export` | Export session |
-| `session.stats` | Get statistics |
+### Gateway HTTP routes (summary)
+
+| Operation | HTTP |
+|-----------|------|
+| List / filter / search | `GET /api/sessions` (`status`, `search`, `channel`, `limit`, `offset`, …) |
+| Stats | `GET /api/sessions/stats` |
+| Get session | `GET /api/sessions/:key` |
+| Update metadata (e.g. tags) | `PATCH /api/sessions/:key` |
+| Create session | `POST /api/sessions` |
+| Rename | `POST /api/sessions/:key/rename` |
+| Archive / unarchive | `POST /api/sessions/:key/archive` · `POST /api/sessions/:key/unarchive` |
+| Pin / unpin | `POST /api/sessions/:key/pin` · `POST /api/sessions/:key/unpin` |
+| Export | `GET /api/sessions/:key/export` |
+| Delete | `DELETE /api/sessions/:key` |
+
+Search inside transcript text from the CLI: `xopc session grep <sessionKey> <pattern>`.

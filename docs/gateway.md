@@ -522,9 +522,9 @@ Notes:
 Authenticated API routes enforce operator scopes (`operator.read`, `operator.write`, `operator.admin`) internally.
 Current authenticated users are granted default operator scopes, and this layer prepares the gateway for future per-connection scoped auth.
 
-### WebSocket Flood Guard
+### Failed authentication rate limiting
 
-Unauthorized WebSocket request bursts are throttled and can trigger forced socket close to limit abuse.
+Repeated failed authentication attempts from a client IP are governed by `gateway.auth.rateLimit` (when enabled). The gateway responds with **429 Too Many Requests** and a `Retry-After` header after thresholds are exceeded, reducing brute-force and abuse risk.
 
 ---
 
@@ -620,7 +620,7 @@ open http://localhost:18790/
 ```
 
 **Features:**
-- Real-time chat with WebSocket
+- Real-time chat via **SSE** (`POST /api/agent` streams the assistant; `GET /api/events` for broadcast updates)
 - Session management
 - Configuration dialog
 - Log viewer
