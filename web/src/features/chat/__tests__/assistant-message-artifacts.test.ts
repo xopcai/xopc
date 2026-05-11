@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { collectAssistantWorkspaceOutputPaths } from '@/features/chat/assistant-message-artifacts';
+import {
+  collectAssistantWorkspaceOutputPaths,
+  filterAssistantAttachmentsDedupedAgainstWorkspacePaths,
+} from '@/features/chat/assistant-message-artifacts';
 import type { MessageContent } from '@/features/chat/messages.types';
 
 describe('collectAssistantWorkspaceOutputPaths', () => {
@@ -58,6 +61,40 @@ describe('collectAssistantWorkspaceOutputPaths', () => {
     expect(paths.map((p) => p.workspaceRelativePath).sort()).toEqual(
       ['guide.html', 'travel-plan-shanghai-hangzhou.html'].sort(),
     );
+  });
+
+  it('dedupes write_file absolute path against the same file in assistant markdown', () => {
+    const content: MessageContent[] = [
+      {
+        type: 'tool_use',
+        id: 'w1',
+        name: 'write_file',
+        input: { path: 'hangzhou-trip.html' },
+        status: 'done',
+        result: 'File written: /Users/x/ws/hangzhou-trip.html',
+      },
+      {
+        type: 'text',
+        text: 'Done. **`hangzhou-trip.html`**',
+      },
+    ];
+    const paths = collectAssistantWorkspaceOutputPaths(content);
+    expect(paths).toHaveLength(1);
+    expect(paths[0]?.workspaceRelativePath).toBe('hangzhou-trip.html');
+  });
+
+  it('filterAssistantAttachmentsDedupedAgainstWorkspacePaths removes duplicate document chips', () => {
+    const paths = collectAssistantWorkspaceOutputPaths([
+      {
+        type: 'text',
+        text: '**`hangzhou-trip.html`**',
+      },
+    ]);
+    const next = filterAssistantAttachmentsDedupedAgainstWorkspacePaths(
+      [{ name: 'hangzhou-trip.html', mimeType: 'text/html', type: 'file' }],
+      paths,
+    );
+    expect(next).toBeUndefined();
   });
 
   it('skips failed or running tools', () => {

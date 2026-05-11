@@ -289,7 +289,7 @@ export function extractWorkspaceRelativeMentionsFromAssistantMarkdown(fullText: 
 }
 
 /** True if `abs` is the on-disk file for workspace-relative `rel` (dedupe "Saved: /.../a.png" vs "media/.../a.png"). */
-function absolutePathSameAsWorkspaceRelative(abs: string, rel: string): boolean {
+export function absolutePathSameAsWorkspaceRelative(abs: string, rel: string): boolean {
   const a = abs.trim().replace(/\\/g, '/');
   const r = rel.trim().replace(/\\/g, '/').replace(/^\/+/, '');
   if (!r || a.length < r.length) return false;
