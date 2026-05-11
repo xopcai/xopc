@@ -25,7 +25,7 @@ function boundaryOk(rest: string, endExclusive: number): boolean {
 
 function canStartSlashCommandAt(wire: string, i: number): boolean {
   if (wire[i] !== '/') return false;
-  if (i > 0 && !/\s/.test(wire[i - 1]!)) return false;
+  if (i > 0 && !/\s/.test(wire[i - 1])) return false;
   return true;
 }
 
