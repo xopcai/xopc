@@ -889,18 +889,40 @@ export class ExtensionLoader {
     return null;
   }
 
-  private async loadModule(
-    extensionPath: string,
-    manifest: ExtensionManifest,
-  ): Promise<ExtensionModule | null> {
-    // Determine entry point - .ts files prioritized for development
-    const entryPoints = [
+  /**
+   * Build candidate extension entry paths. After `tsdown`, manifests may still
+   * point at `*.ts` while the shipped tree only contains the emitted `*.js`.
+   */
+  private moduleEntryCandidates(manifest: ExtensionManifest): string[] {
+    const raw = [
       manifest.main,
       'index.ts',
       'index.js',
       'extension.ts',
       'extension.js',
     ].filter(Boolean) as string[];
+
+    const out: string[] = [];
+    for (const entry of raw) {
+      out.push(entry);
+      if (entry.endsWith('.tsx')) {
+        out.push(`${entry.slice(0, -4)}.js`);
+      } else if (entry.endsWith('.ts')) {
+        out.push(`${entry.slice(0, -3)}.js`);
+      } else if (entry.endsWith('.mts')) {
+        out.push(`${entry.slice(0, -4)}.mjs`);
+      } else if (entry.endsWith('.cts')) {
+        out.push(`${entry.slice(0, -4)}.cjs`);
+      }
+    }
+    return [...new Set(out)];
+  }
+
+  private async loadModule(
+    extensionPath: string,
+    manifest: ExtensionManifest,
+  ): Promise<ExtensionModule | null> {
+    const entryPoints = this.moduleEntryCandidates(manifest);
 
     for (const entry of entryPoints) {
       const fullPath = isAbsolute(entry) ? entry : join(extensionPath, entry);

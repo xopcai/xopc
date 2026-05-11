@@ -194,7 +194,7 @@ async function resolveUpdateCommandArgv(
   }
 
   if (execPath && root) {
-    const candidates = [join(root, 'dist/src/cli/index.js'), join(root, 'dist/index.js')];
+    const candidates = [join(root, 'dist/src/cli/bin.js'), join(root, 'dist/index.js')];
     for (const candidate of candidates) {
       try {
         await access(candidate);

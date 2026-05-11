@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Bundle the gateway CLI into a single ESM file under out/server/index.js for Electron packaging.
- * Run after `pnpm run build` so dist/src/cli/index.js exists. Invoked by electron:server:build.
+ * Run after `pnpm run build` so dist/src/cli/bin.js exists. Invoked by electron:server:build.
  */
 import * as esbuild from 'esbuild';
 import { existsSync } from 'node:fs';
@@ -9,7 +9,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const entry = join(root, 'dist/src/cli/index.js');
+const entry = join(root, 'dist/src/cli/bin.js');
 const outfile = join(root, 'out/server/index.js');
 
 if (!existsSync(entry)) {

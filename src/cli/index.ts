@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import './agent-chat-log-level-preset.js';
+/** Command wiring and `program.parse`; executable entry is `bin.ts` (log preset before logger init). */
 import { Command } from 'commander';
 import { registry, createDefaultContext, type CLIContext } from './registry.js';
 import pkg from '../../package.json' with { type: 'json' };

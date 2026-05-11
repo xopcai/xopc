@@ -20,7 +20,7 @@
     "./*": "./dist/src/*"
   },
   "bin": {
-    "xopc": "./dist/src/cli/index.js"
+    "xopc": "./dist/src/cli/bin.js"
   },
   "files": [
     "dist",
@@ -40,15 +40,15 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "build:web": "pnpm -C web run build",
     "dev:web": "pnpm -C web run dev",
-    "dev": "tsx src/cli/index.ts",
-    "start": "node dist/src/cli/index.js",
+    "dev": "tsx src/cli/bin.ts",
+    "start": "node dist/src/cli/bin.js",
     "test": "vitest run src extensions/telegram/src extensions/feishu/src extensions/dingtalk/src extensions/openai/src extensions/dashscope/src extensions/minimax/src extensions/google/src extensions/fal/src",
     "test:skills": "vitest run src/agent/skills/__tests__",
     "test:skills:regression": "./scripts/test-skills.sh",
     "test:skills:all": "npm run test:skills && npm run test:skills:regression",
-    "skills:test": "tsx src/cli/index.ts skills test",
-    "skills:validate": "tsx src/cli/index.ts skills test validate",
-    "skills:security": "tsx src/cli/index.ts skills test security",
+    "skills:test": "tsx src/cli/bin.ts skills test",
+    "skills:validate": "tsx src/cli/bin.ts skills test validate",
+    "skills:security": "tsx src/cli/bin.ts skills test security",
     "lint": "eslint && pnpm -C web run lint",
     "release:patch": "bash scripts/release-patch.sh",
     "prepublishOnly": "npm test && npm run test:skills:all && npm run build",
