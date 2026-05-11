@@ -6,6 +6,8 @@ import {
   type GoalChecklistItem,
 } from './checklist-types.js';
 
+import type { GoalUiLocale } from './goal-locale.js';
+
 /** Persisted under `SessionMetadata.customData.persistentGoal`. */
 export const PERSISTENT_GOAL_CUSTOM_KEY = 'persistentGoal';
 
@@ -27,6 +29,8 @@ export interface PersistentGoalState {
   /** After first successful decomposition, checklist drives Phase-B judging. */
   decomposed?: boolean;
   checklist?: GoalChecklistItem[];
+  /** Gateway console language: drives judge `reason` language and system messages. */
+  uiLocale?: GoalUiLocale;
 }
 
 export function defaultMaxTurns(cfg: { maxTurns?: number } | undefined): number {
@@ -96,6 +100,7 @@ export function readPersistentGoal(customData: Record<string, unknown> | undefin
         ? Math.max(0, Math.floor(o.consecutiveParseFailures))
         : 0;
     const decomposed = Boolean(o.decomposed);
+    const uiLocale = o.uiLocale === 'zh' || o.uiLocale === 'en' ? o.uiLocale : undefined;
     const checklistRaw = o.checklist;
     const checklist: GoalChecklistItem[] = [];
     if (Array.isArray(checklistRaw)) {
@@ -118,6 +123,7 @@ export function readPersistentGoal(customData: Record<string, unknown> | undefin
       consecutiveParseFailures,
       decomposed: decomposed || undefined,
       checklist: checklist.length ? checklist : undefined,
+      uiLocale,
     };
   }
 
@@ -138,6 +144,7 @@ export function serializePersistentGoal(s: PersistentGoalState): Record<string, 
     ...(s.judgeModelRef ? { judgeModelRef: s.judgeModelRef } : {}),
     ...(s.consecutiveParseFailures ? { consecutiveParseFailures: s.consecutiveParseFailures } : {}),
     ...(s.decomposed ? { decomposed: true } : {}),
+    ...(s.uiLocale ? { uiLocale: s.uiLocale } : {}),
     ...(s.checklist?.length
       ? {
           checklist: s.checklist.map((it) => ({

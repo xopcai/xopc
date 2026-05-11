@@ -11,6 +11,7 @@ import {
   applyPersistentGoalUserAction,
   type PersistentGoalUserAction,
 } from '../../../agent/goals/patch-from-user-action.js';
+import { mergePersistentGoalUiLocale, normalizeGoalUiLocale } from '../../../agent/goals/goal-locale.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 import { applyChecklistUserMutation } from '../../../agent/goals/checklist-user.js';
 
@@ -28,7 +29,15 @@ export function registerGoalsRoutes(authenticated: Hono, deps: AuthenticatedRout
     if (!sessionKey) {
       return c.json({ ok: false, error: 'Missing sessionKey' }, 400);
     }
-    const m = await sm.getSessionMetadata(sessionKey);
+    const uiLocale = normalizeGoalUiLocale(c.req.query('uiLocale'));
+    let m = await sm.getSessionMetadata(sessionKey);
+    if (uiLocale && m) {
+      const merged = mergePersistentGoalUiLocale(m.customData as Record<string, unknown> | undefined, uiLocale);
+      if (merged !== m.customData) {
+        await sm.updateSessionMetadata(sessionKey, { customData: merged });
+        m = await sm.getSessionMetadata(sessionKey);
+      }
+    }
     const goal = readPersistentGoal(m?.customData as Record<string, unknown> | undefined);
     return c.json({ ok: true, sessionKey, persistentGoal: goal });
   });
@@ -59,7 +68,12 @@ export function registerGoalsRoutes(authenticated: Hono, deps: AuthenticatedRout
         const persistentGoal = readPersistentGoal(meta.customData as Record<string, unknown> | undefined);
         return c.json({ ok: true, sessionKey, noop: true, message: applied.message, persistentGoal });
       }
-      await sm.updateSessionMetadata(sessionKey, { customData: applied.customData });
+      const uiLocale = normalizeGoalUiLocale(body.uiLocale);
+      const customData =
+        uiLocale != null
+          ? (mergePersistentGoalUiLocale(applied.customData, uiLocale) ?? applied.customData)
+          : applied.customData;
+      await sm.updateSessionMetadata(sessionKey, { customData });
       const m2 = await sm.getSessionMetadata(sessionKey);
       const persistentGoal = readPersistentGoal(m2?.customData as Record<string, unknown> | undefined);
       if (applied.kickoff) {
@@ -97,6 +111,8 @@ export function registerGoalsRoutes(authenticated: Hono, deps: AuthenticatedRout
           ? cfg().goals!.judgeModelRef!.trim()
           : undefined;
 
+    const uiLocale = normalizeGoalUiLocale(body.uiLocale);
+
     const next = {
       goal: goalText,
       status: 'active' as const,
@@ -107,6 +123,7 @@ export function registerGoalsRoutes(authenticated: Hono, deps: AuthenticatedRout
       decomposed: false,
       consecutiveParseFailures: 0,
       ...(judgeModelRef ? { judgeModelRef } : {}),
+      ...(uiLocale ? { uiLocale } : {}),
     };
 
     const base = { ...(meta.customData as Record<string, unknown> | undefined) };
@@ -180,7 +197,12 @@ export function registerGoalsRoutes(authenticated: Hono, deps: AuthenticatedRout
       const persistentGoal = readPersistentGoal(meta.customData as Record<string, unknown> | undefined);
       return c.json({ ok: true, sessionKey, noop: true, message: mutation.message, persistentGoal });
     }
-    await sm.updateSessionMetadata(sessionKey, { customData: mutation.customData });
+    const uiLocale = normalizeGoalUiLocale(body.uiLocale);
+    const customData =
+      uiLocale != null
+        ? (mergePersistentGoalUiLocale(mutation.customData, uiLocale) ?? mutation.customData)
+        : mutation.customData;
+    await sm.updateSessionMetadata(sessionKey, { customData });
     const m2 = await sm.getSessionMetadata(sessionKey);
     const persistentGoal = readPersistentGoal(m2?.customData as Record<string, unknown> | undefined);
     return c.json({ ok: true, sessionKey, op, persistentGoal });

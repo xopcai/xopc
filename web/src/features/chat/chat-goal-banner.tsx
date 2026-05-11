@@ -41,6 +41,17 @@ function statusLabel(
   return g.status;
 }
 
+function verdictLabel(
+  v: WebchatPersistentGoalWire['lastVerdict'],
+  t: ReturnType<typeof messages>['chat']['goal'],
+): string {
+  if (v === 'done') return t.verdictDone;
+  if (v === 'continue') return t.verdictContinue;
+  if (v === 'skipped') return t.verdictSkipped;
+  if (v === 'decompose') return t.verdictDecompose;
+  return v ?? '';
+}
+
 function collapsedStorageKey(sk: string): string {
   return `xopc:goalBannerCollapsed:${sk}`;
 }
@@ -92,14 +103,14 @@ export function ChatGoalBanner({ sessionKey, streaming, sending }: ChatGoalBanne
   const refetch = useCallback(async () => {
     try {
       setError(null);
-      const res = await fetchWebchatGoal(sessionKey);
+      const res = await fetchWebchatGoal(sessionKey, { uiLocale: language });
       setGoal(res.persistentGoal);
     } catch (e) {
       setError(e instanceof Error ? e.message : t.loadFailed);
     } finally {
       setLoaded(true);
     }
-  }, [sessionKey, t.loadFailed]);
+  }, [sessionKey, t.loadFailed, language]);
 
   useEffect(() => {
     setLoaded(false);
@@ -128,7 +139,7 @@ export function ChatGoalBanner({ sessionKey, streaming, sending }: ChatGoalBanne
     setMutationBusy(true);
     setError(null);
     try {
-      await postWebchatGoalAction(sessionKey, action);
+      await postWebchatGoalAction(sessionKey, action, { uiLocale: language });
       await refetch();
     } catch (e) {
       setError(e instanceof Error ? e.message : t.loadFailed);
@@ -141,7 +152,7 @@ export function ChatGoalBanner({ sessionKey, streaming, sending }: ChatGoalBanne
     setMutationBusy(true);
     setError(null);
     try {
-      await postWebchatChecklistMutation(sessionKey, mutation);
+      await postWebchatChecklistMutation(sessionKey, mutation, { uiLocale: language });
       setNewCriterion('');
       await refetch();
     } catch (e) {
@@ -413,7 +424,8 @@ export function ChatGoalBanner({ sessionKey, streaming, sending }: ChatGoalBanne
               <div className="mt-1 space-y-1 rounded-md border border-edge bg-surface-panel px-2 py-1.5 text-xs text-fg-muted">
                 {g.lastVerdict ? (
                   <div>
-                    <span className="font-medium text-fg">{t.lastVerdict}:</span> {g.lastVerdict}
+                    <span className="font-medium text-fg">{t.lastVerdict}:</span>{' '}
+                    {verdictLabel(g.lastVerdict, t)}
                   </div>
                 ) : null}
                 {g.lastReason ? (

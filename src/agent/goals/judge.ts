@@ -3,6 +3,15 @@ import { complete } from '@earendil-works/pi-ai';
 
 import { resolveModel } from '../../providers/index.js';
 
+import type { GoalUiLocale } from './goal-locale.js';
+import {
+  goalUiLocaleOrFallback,
+  judgeFreeformBuiltinMessages,
+  JUDGE_REASON_EN,
+  judgeResponseLanguageNote,
+  localizeJudgeReasonText,
+} from './goal-locale.js';
+
 const JUDGE_RESPONSE_SNIPPET_CHARS = 4000;
 
 /** Mirrors `hermes_cli/goals.py` — strict judge, JSON-only reply. */
@@ -38,7 +47,7 @@ export function parseJudgeResponseFailOpen(raw: string): {
   parseFailed: boolean;
 } {
   if (!raw?.trim()) {
-    return { done: false, reason: 'judge returned empty response', parseFailed: true };
+    return { done: false, reason: JUDGE_REASON_EN.judge_returned_empty, parseFailed: true };
   }
 
   let text = raw.trim();
@@ -64,7 +73,7 @@ export function parseJudgeResponseFailOpen(raw: string): {
   }
 
   if (!data || typeof data !== 'object') {
-    return { done: false, reason: 'judge reply was not JSON', parseFailed: true };
+    return { done: false, reason: JUDGE_REASON_EN.judge_reply_not_json, parseFailed: true };
   }
 
   const doneVal = data.done;
@@ -75,7 +84,7 @@ export function parseJudgeResponseFailOpen(raw: string): {
     done = Boolean(doneVal);
   }
   const reason = typeof data.reason === 'string' ? data.reason.trim() : '';
-  return { done, reason: reason || 'no reason provided', parseFailed: false };
+  return { done, reason: reason || JUDGE_REASON_EN.no_reason_provided, parseFailed: false };
 }
 
 export type GoalJudgeVerdict = 'done' | 'continue' | 'skipped';
@@ -89,26 +98,30 @@ export async function judgeGoalHermesStyle(
   lastResponse: string,
   judgeModelRef: string,
   signal?: AbortSignal,
-  opts?: { judgeTimeoutMs?: number },
+  opts?: { judgeTimeoutMs?: number; uiLocale?: GoalUiLocale },
 ): Promise<{ verdict: GoalJudgeVerdict; reason: string; parseFailed: boolean }> {
+  const locale = goalUiLocaleOrFallback(opts?.uiLocale);
+  const b = judgeFreeformBuiltinMessages(locale);
+
   if (!goal.trim()) {
-    return { verdict: 'skipped', reason: 'empty goal', parseFailed: false };
+    return { verdict: 'skipped', reason: b.emptyGoal, parseFailed: false };
   }
   if (!lastResponse.trim()) {
-    return { verdict: 'continue', reason: 'empty response (nothing to evaluate)', parseFailed: false };
+    return { verdict: 'continue', reason: b.emptyResponse, parseFailed: false };
   }
 
   let model: ReturnType<typeof resolveModel>;
   try {
     model = resolveModel(judgeModelRef);
   } catch {
-    return { verdict: 'continue', reason: 'judge model not configured', parseFailed: false };
+    return { verdict: 'continue', reason: b.noModel, parseFailed: false };
   }
 
-  const userContent = JUDGE_USER_PROMPT_TEMPLATE.replace('{goal}', truncateGoalText(goal, 2000)).replace(
-    '{response}',
-    truncateGoalText(lastResponse, JUDGE_RESPONSE_SNIPPET_CHARS),
-  );
+  const userContent =
+    JUDGE_USER_PROMPT_TEMPLATE.replace('{goal}', truncateGoalText(goal, 2000)).replace(
+      '{response}',
+      truncateGoalText(lastResponse, JUDGE_RESPONSE_SNIPPET_CHARS),
+    ) + judgeResponseLanguageNote(locale);
 
   const timeoutMs =
     typeof opts?.judgeTimeoutMs === 'number' && Number.isFinite(opts.judgeTimeoutMs)
@@ -141,9 +154,10 @@ export async function judgeGoalHermesStyle(
       }
     }
     const { done, reason, parseFailed } = parseJudgeResponseFailOpen(text);
-    return { verdict: done ? 'done' : 'continue', reason, parseFailed };
+    const reasonOut = localizeJudgeReasonText(reason, locale);
+    return { verdict: done ? 'done' : 'continue', reason: reasonOut, parseFailed };
   } catch {
-    return { verdict: 'continue', reason: 'judge call failed', parseFailed: false };
+    return { verdict: 'continue', reason: b.callFailed, parseFailed: false };
   } finally {
     clearTimeout(timer);
   }

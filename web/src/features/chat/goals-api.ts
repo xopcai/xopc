@@ -1,5 +1,6 @@
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
+import type { StoredLanguage } from '@/lib/storage';
 
 /** Mirrors server checklist rows for UI. */
 export type WebchatChecklistItemWire = {
@@ -25,6 +26,8 @@ export type WebchatPersistentGoalWire = {
   decomposed?: boolean;
   consecutiveParseFailures?: number;
   checklist?: WebchatChecklistItemWire[];
+  /** Gateway console language — drives judge reason language and system copy. */
+  uiLocale?: 'en' | 'zh';
 };
 
 export type GoalWebchatAction = 'pause' | 'resume' | 'clear' | 'restart';
@@ -71,29 +74,36 @@ export type PostWebchatChecklistResponse =
       persistentGoal: WebchatPersistentGoalWire | null;
     };
 
-export async function fetchWebchatGoal(sessionKey: string): Promise<GetWebchatGoalResponse> {
+export async function fetchWebchatGoal(
+  sessionKey: string,
+  opts?: { uiLocale?: StoredLanguage },
+): Promise<GetWebchatGoalResponse> {
   const q = new URLSearchParams({ sessionKey });
+  if (opts?.uiLocale) q.set('uiLocale', opts.uiLocale);
   return fetchJson<GetWebchatGoalResponse>(apiUrl(`/api/goals/webchat?${q.toString()}`));
 }
 
 export async function postWebchatGoalAction(
   sessionKey: string,
   action: GoalWebchatAction,
+  opts?: { uiLocale?: StoredLanguage },
 ): Promise<PostWebchatGoalActionResponse> {
   return fetchJson<PostWebchatGoalActionResponse>(apiUrl('/api/goals/webchat'), {
     method: 'POST',
-    body: JSON.stringify({ sessionKey, action }),
+    body: JSON.stringify({ sessionKey, action, ...(opts?.uiLocale ? { uiLocale: opts.uiLocale } : {}) }),
   });
 }
 
 export async function postWebchatChecklistMutation(
   sessionKey: string,
   mutation: ChecklistMutationOp,
+  opts?: { uiLocale?: StoredLanguage },
 ): Promise<PostWebchatChecklistResponse> {
   const body: Record<string, unknown> = { sessionKey, op: mutation.op };
   if (mutation.op === 'add') body.text = mutation.text;
   if (mutation.op === 'remove' || mutation.op === 'mark') body.index = mutation.index;
   if (mutation.op === 'mark') body.status = mutation.status;
+  if (opts?.uiLocale) body.uiLocale = opts.uiLocale;
   return fetchJson<PostWebchatChecklistResponse>(apiUrl('/api/goals/webchat/checklist'), {
     method: 'POST',
     body: JSON.stringify(body),

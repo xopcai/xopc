@@ -95,6 +95,7 @@ export function applyPersistentGoalUserAction(
     lastTurnAt: 0,
     consecutiveParseFailures: 0,
     ...(judgeModelRef ? { judgeModelRef } : {}),
+    ...(s.uiLocale ? { uiLocale: s.uiLocale } : {}),
     ...(s.checklist?.length
       ? {
           checklist: s.checklist.map((it) => ({ ...it })),

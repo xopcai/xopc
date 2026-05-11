@@ -2,33 +2,27 @@ import type { GoalsConfig } from '../../config/schema.js';
 
 import { decomposeGoalChecklist, evaluateGoalChecklistJudge } from './checklist-judge.js';
 import { allChecklistTerminal, checklistCounts, CHECKLIST_ITEM_PENDING } from './checklist-types.js';
+import {
+  buildContinuationPromptFromState,
+  checklistProgressSuffix,
+  CONTINUATION_PROMPT_TEMPLATE_EN,
+  CONTINUATION_PROMPT_WITH_CHECKLIST_TEMPLATE_EN,
+  goalEvaluateUserCopy,
+  resolveGoalUiLocale,
+  type GoalUiLocale,
+} from './goal-locale.js';
 import { judgeGoalHermesStyle } from './judge.js';
 import {
   applyJudgeChecklistUpdates,
-  renderChecklistPlain,
   renderChecklistNumbered,
   type PersistentGoalState,
 } from './state.js';
 
-/** Hermes `CONTINUATION_PROMPT_TEMPLATE` (exact wording). */
-export const CONTINUATION_PROMPT_TEMPLATE =
-  '[Continuing toward your standing goal]\n' +
-  'Goal: {goal}\n\n' +
-  'Continue working toward this goal. Take the next concrete step. ' +
-  'If you believe the goal is complete, state so explicitly and stop. ' +
-  'If you are blocked and need input from the user, say so clearly and stop.';
+/** Hermes `CONTINUATION_PROMPT_TEMPLATE` (English; parity / tests). */
+export const CONTINUATION_PROMPT_TEMPLATE = CONTINUATION_PROMPT_TEMPLATE_EN;
 
-/** Hermes `CONTINUATION_PROMPT_WITH_CHECKLIST_TEMPLATE` (exact wording). */
-export const CONTINUATION_PROMPT_WITH_CHECKLIST_TEMPLATE =
-  '[Continuing toward your standing goal]\n' +
-  'Goal: {goal}\n\n' +
-  'Checklist progress ({done}/{total} done):\n' +
-  '{checklist}\n\n' +
-  'Work on the unchecked items above. Do not declare items done yourself ' +
-  '— a judge marks them based on evidence in your output. If an item is ' +
-  'genuinely impossible in this environment, explain why so the judge can ' +
-  'mark it impossible. If you are blocked on a remaining item and need ' +
-  'user input, say so clearly and stop.';
+/** Hermes `CONTINUATION_PROMPT_WITH_CHECKLIST_TEMPLATE` (English; parity / tests). */
+export const CONTINUATION_PROMPT_WITH_CHECKLIST_TEMPLATE = CONTINUATION_PROMPT_WITH_CHECKLIST_TEMPLATE_EN;
 
 export type GoalsEvaluateConfigSlice = Pick<
   GoalsConfig,
@@ -51,33 +45,6 @@ function cloneState(s: PersistentGoalState): PersistentGoalState {
   };
 }
 
-function buildContinuationPrompt(s: PersistentGoalState): string {
-  const cl = s.checklist ?? [];
-  if (cl.length) {
-    const { total, completed, impossible } = checklistCounts(cl);
-    const done = completed + impossible;
-    return CONTINUATION_PROMPT_WITH_CHECKLIST_TEMPLATE.replace('{goal}', s.goal)
-      .replace('{done}', String(done))
-      .replace('{total}', String(total))
-      .replace('{checklist}', renderChecklistPlain(cl));
-  }
-  return CONTINUATION_PROMPT_TEMPLATE.replace('{goal}', s.goal);
-}
-
-function parsePauseMessage(turnsUsed: number, maxTurns: number): string {
-  return (
-    `⏸ Goal paused — ${turnsUsed}/${maxTurns} turns used. ` +
-    'Use /goal resume to keep going, or /goal clear to stop.'
-  );
-}
-
-function parseFailurePauseMessage(failures: number): string {
-  return (
-    `⏸ Goal paused — the judge returned unparseable output ${failures} turns in a row. ` +
-    'Configure a stricter model under `goals.judgeModelRef` in your xopc config, then /goal resume.'
-  );
-}
-
 /**
  * Hermes `GoalManager.evaluate_after_turn` equivalent (minus SessionDB I/O).
  */
@@ -86,8 +53,11 @@ export async function evaluateAfterTurnHermesLike(
   lastResponse: string,
   judgeModelRef: string,
   signal?: AbortSignal,
-  opts?: { goalsSlice?: Partial<GoalsEvaluateConfigSlice>; historyExcerpt?: string },
+  opts?: { goalsSlice?: Partial<GoalsEvaluateConfigSlice>; historyExcerpt?: string; uiLocale?: GoalUiLocale },
 ): Promise<GoalPostTurnDecision> {
+  const locale = opts?.uiLocale ?? resolveGoalUiLocale(state);
+  const copy = goalEvaluateUserCopy(locale);
+
   if (state.status !== 'active') {
     return {
       newState: state,
@@ -126,7 +96,7 @@ export async function evaluateAfterTurnHermesLike(
       continuationPrompt: null,
       verdict: 'continue',
       reason,
-      message: parseFailurePauseMessage(n),
+      message: copy.pauseParse(n),
     };
   };
 
@@ -140,7 +110,7 @@ export async function evaluateAfterTurnHermesLike(
       continuationPrompt: null,
       verdict: 'continue',
       reason,
-      message: parsePauseMessage(next.turnsUsed, next.maxTurns),
+      message: copy.pauseBudget(next.turnsUsed, next.maxTurns),
     };
   };
 
@@ -151,6 +121,7 @@ export async function evaluateAfterTurnHermesLike(
       judgeModelRef,
       signal,
       judgeTimeoutMs,
+      uiLocale: locale,
     });
     next.decomposed = true;
     if (!dec.parseFailed && dec.items.length > 0) {
@@ -162,22 +133,22 @@ export async function evaluateAfterTurnHermesLike(
         addedAt: now,
       }));
       next.lastVerdict = 'decompose';
-      next.lastReason = `decomposed into ${dec.items.length} items`;
+      next.lastReason = copy.decomposedReason(dec.items.length);
       resetParse();
       const budgetEarly = pauseIfBudget(next.lastReason);
       if (budgetEarly) return budgetEarly;
       return {
         newState: next,
         shouldContinue: true,
-        continuationPrompt: buildContinuationPrompt(next),
+        continuationPrompt: buildContinuationPromptFromState(next, locale),
         verdict: 'decompose',
         reason: next.lastReason ?? '',
-        message:
-          `⊙ Checklist ready (${dec.items.length} criteria). ` +
-          'Use /subgoal to view or edit. Continuing...',
+        message: copy.checklistReady(dec.items.length),
       };
     }
-    next.lastReason = dec.errorReason ? `decompose: ${dec.errorReason}` : 'decompose produced no checklist';
+    next.lastReason = dec.errorReason
+      ? copy.decomposeFallbackReason(dec.errorReason)
+      : copy.noChecklistFallback();
   }
 
   // ── Phase B: checklist judge ──
@@ -191,6 +162,7 @@ export async function evaluateAfterTurnHermesLike(
       judgeModelRef,
       signal,
       judgeTimeoutMs,
+      uiLocale: locale,
     });
 
     if (evalResult.parseFailed) {
@@ -215,7 +187,7 @@ export async function evaluateAfterTurnHermesLike(
         continuationPrompt: null,
         verdict: 'done',
         reason: evalResult.parsed.reason,
-        message: `✓ Goal achieved: ${evalResult.parsed.reason}`,
+        message: copy.goalAchieved(evalResult.parsed.reason),
       };
     }
 
@@ -227,20 +199,28 @@ export async function evaluateAfterTurnHermesLike(
 
     const { total, completed, impossible } = checklistCounts(next.checklist ?? []);
     const done = completed + impossible;
-    const progress = total ? ` — ${done}/${total} done` : '';
+    const progressSuffix = checklistProgressSuffix(done, total, locale);
 
     return {
       newState: next,
       shouldContinue: true,
-      continuationPrompt: buildContinuationPrompt(next),
+      continuationPrompt: buildContinuationPromptFromState(next, locale),
       verdict: 'continue',
       reason: evalResult.parsed.reason,
-      message: `↻ Continuing toward goal (${next.turnsUsed}/${next.maxTurns}${progress}): ${evalResult.parsed.reason}`,
+      message: copy.continuingWithProgress(
+        next.turnsUsed,
+        next.maxTurns,
+        progressSuffix,
+        evalResult.parsed.reason,
+      ),
     };
   }
 
   // ── Freeform judge (no checklist) ──
-  const j = await judgeGoalHermesStyle(state.goal, lastResponse, judgeModelRef, signal, { judgeTimeoutMs });
+  const j = await judgeGoalHermesStyle(state.goal, lastResponse, judgeModelRef, signal, {
+    judgeTimeoutMs,
+    uiLocale: locale,
+  });
   next.lastVerdict = j.verdict === 'skipped' ? 'skipped' : j.verdict;
   next.lastReason = j.reason;
 
@@ -255,7 +235,7 @@ export async function evaluateAfterTurnHermesLike(
       continuationPrompt: null,
       verdict: 'done',
       reason: j.reason,
-      message: `✓ Goal achieved: ${j.reason}`,
+      message: copy.goalAchieved(j.reason),
     };
   }
 
@@ -268,9 +248,9 @@ export async function evaluateAfterTurnHermesLike(
   return {
     newState: next,
     shouldContinue: true,
-    continuationPrompt: buildContinuationPrompt(next),
+    continuationPrompt: buildContinuationPromptFromState(next, locale),
     verdict: 'continue',
     reason: j.reason,
-    message: `↻ Continuing toward goal (${next.turnsUsed}/${next.maxTurns}): ${j.reason}`,
+    message: copy.continuing(next.turnsUsed, next.maxTurns, j.reason),
   };
 }
