@@ -1,4 +1,4 @@
-/** Wire format: `/skill:name`, `@file:path`. DOM shows pills. */
+/** Wire format: `/skill:name`, `@file:path`, `/${slashCommand}`. DOM shows pills. */
 
 import {
   FILE_COMPOSER_HEAD_RE,
@@ -9,6 +9,14 @@ import {
   pathFromFileWireMatch,
   wireTextEndsWithCompleteFileToken,
 } from '@/features/chat/file-wire-pattern';
+import {
+  collectSlashCommandWireRanges,
+  partStartsWithCompleteSlashCommand,
+  slashCommandEowSuffixAtEnd,
+  slashCommandPlainSuffixAtEnd,
+  trySlashCommandTokenAt,
+  wireEndsWithCompleteSlashCommandToken,
+} from '@/features/chat/slash-command-wire';
 import {
   SKILL_ID_IN_WIRE,
   SKILL_WIRE_TRAILING_EOW_WS_RE,
@@ -27,6 +35,10 @@ function isSkillPill(el: HTMLElement): boolean {
 
 function isFilePill(el: HTMLElement): boolean {
   return Boolean(el.dataset.file);
+}
+
+function isSlashCommandPill(el: HTMLElement): boolean {
+  return el.dataset.slashCommand != null && el.dataset.slashCommand !== '';
 }
 
 function filePillLabel(relativePath: string): string {
@@ -48,8 +60,14 @@ function joinComposerWireParts(parts: string[]): string {
       const last = out[out.length - 1];
       const first = part[0];
       if (!/\s/.test(last) && !/\s/.test(first)) {
-        const endsWithWire = wireTextEndsWithCompleteFileToken(out) || /\/skill:\S+$/.test(out);
-        const startsWithWire = part.startsWith('@file:') || part.startsWith('/skill:');
+        const endsWithWire =
+          wireTextEndsWithCompleteFileToken(out) ||
+          /\/skill:\S+$/.test(out) ||
+          wireEndsWithCompleteSlashCommandToken(out);
+        const startsWithWire =
+          part.startsWith('@file:') ||
+          part.startsWith('/skill:') ||
+          partStartsWithCompleteSlashCommand(part);
         if (endsWithWire || startsWithWire) {
           out += ' ';
         }
@@ -71,6 +89,9 @@ function serializeWalk(node: Node, out: string[]): void {
     } else if (isFilePill(el)) {
       const filePath = el.dataset.file ?? '';
       if (filePath) out.push(`@file:${formatFilePathForWire(filePath)}`);
+    } else if (isSlashCommandPill(el)) {
+      const k = el.dataset.slashCommand ?? '';
+      if (k) out.push(`/${k}`);
     } else if (el.tagName === 'BR') {
       out.push('\n');
     } else {
@@ -166,6 +187,16 @@ function appendFilePill(root: HTMLElement, relativePath: string): void {
   root.appendChild(document.createTextNode(ZWSP));
 }
 
+function appendSlashCommandPill(root: HTMLElement, matchedKey: string): void {
+  const span = document.createElement('span');
+  span.contentEditable = 'false';
+  span.dataset.slashCommand = matchedKey;
+  span.className = 'chat-command-pill';
+  span.textContent = `/${matchedKey}`;
+  root.appendChild(span);
+  root.appendChild(document.createTextNode(ZWSP));
+}
+
 function collectWireTokenRanges(wire: string): Array<{ start: number; end: number }> {
   const ranges: Array<{ start: number; end: number }> = [];
   const pushAll = (re: RegExp) => {
@@ -177,6 +208,9 @@ function collectWireTokenRanges(wire: string): Array<{ start: number; end: numbe
   };
   pushAll(skillWireTokenRe());
   pushAll(fileWireTokenRe());
+  for (const r of collectSlashCommandWireRanges(wire)) {
+    ranges.push(r);
+  }
   ranges.sort((a, b) => a.start - b.start);
   return ranges;
 }
@@ -212,6 +246,12 @@ export function removeTrailingSkillTokenBeforeCaret(wire: string, caret: number)
     if (hit) return hit;
   }
 
+  const cmdPlain = slashCommandPlainSuffixAtEnd(head);
+  if (cmdPlain) {
+    const start = cmdPlain.tokenStart;
+    return { wire: wire.slice(0, start) + wire.slice(caret), caret: start };
+  }
+
   if (caret === wire.length) {
     const eowMatchers = [SKILL_WIRE_TRAILING_EOW_WS_RE, FILE_WIRE_TRAILING_EOW_WS_RE];
     for (const re of eowMatchers) {
@@ -221,6 +261,11 @@ export function removeTrailingSkillTokenBeforeCaret(wire: string, caret: number)
         const start = head.length - full.length;
         return { wire: wire.slice(0, start) + wire.slice(caret), caret: start };
       }
+    }
+    const cmdEow = slashCommandEowSuffixAtEnd(head);
+    if (cmdEow) {
+      const start = cmdEow.tokenStart;
+      return { wire: wire.slice(0, start) + wire.slice(caret), caret: start };
     }
   }
 
@@ -258,7 +303,12 @@ export function handleComposerBackspace(root: HTMLElement): boolean {
   return true;
 }
 
-const TOKEN_START_RE = /^(?:\/skill:|@file:)/;
+function wireTokenMayStartAt(w: string, j: number): boolean {
+  const tail = w.slice(j);
+  if (SKILL_HEAD_RE.test(tail)) return true;
+  if (FILE_COMPOSER_HEAD_RE.test(tail)) return true;
+  return trySlashCommandTokenAt(w, j) != null;
+}
 
 function consumeNextToken(root: HTMLElement, w: string, i: number): number {
   const rest = w.slice(i);
@@ -279,13 +329,19 @@ function consumeNextToken(root: HTMLElement, w: string, i: number): number {
       apply: () => appendFilePill(root, pathFromFileWireMatch(fileM)),
     });
   }
+  const cmdHit = trySlashCommandTokenAt(w, i);
+  if (cmdHit) {
+    cands.push({
+      len: cmdHit.len,
+      apply: () => appendSlashCommandPill(root, cmdHit.matchedKey),
+    });
+  }
 
   if (cands.length === 0) {
     let j = i + 1;
     while (j < w.length) {
-      const tail = w.slice(j);
-      if (TOKEN_START_RE.test(tail)) break;
-      j++;
+      if (wireTokenMayStartAt(w, j)) break;
+      j += 1;
     }
     const chunk = w.slice(i, j);
     if (chunk) root.appendChild(document.createTextNode(chunk));

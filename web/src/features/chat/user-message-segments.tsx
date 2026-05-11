@@ -2,12 +2,14 @@ import { memo, useMemo } from 'react';
 
 import { fileWireTokenRe, formatFilePathForWire, pathFromFileWireMatch } from '@/features/chat/file-wire-pattern';
 import { MarkdownView } from '@/features/chat/markdown/markdown-view';
+import { collectSlashCommandWireRanges } from '@/features/chat/slash-command-wire';
 import { skillWireTokenRe } from '@/features/chat/skill-wire-pattern';
 
 export type MessageSegment =
   | { kind: 'text'; text: string }
   | { kind: 'skill'; name: string }
-  | { kind: 'file'; path: string };
+  | { kind: 'file'; path: string }
+  | { kind: 'command'; name: string };
 
 export type SkillWireSegment = { kind: 'text'; text: string } | { kind: 'skill'; name: string };
 
@@ -17,7 +19,7 @@ function fileBubbleLabel(path: string): string {
   return `@${base}`;
 }
 
-/** Parse `/skill:` and `@file:` wire tokens. */
+/** Parse `/skill:`, `@file:`, and registered `/slashCommand` wire tokens. */
 export function parseMessageSegments(text: string): MessageSegment[] {
   type Hit = { start: number; end: number; seg: MessageSegment };
   const hits: Hit[] = [];
@@ -30,8 +32,15 @@ export function parseMessageSegments(text: string): MessageSegment[] {
   };
   add(skillWireTokenRe(), (m) => ({ kind: 'skill', name: m[1] ?? '' }));
   add(fileWireTokenRe(), (m) => ({ kind: 'file', path: pathFromFileWireMatch(m) }));
+  for (const r of collectSlashCommandWireRanges(text)) {
+    hits.push({
+      start: r.start,
+      end: r.end,
+      seg: { kind: 'command', name: text.slice(r.start + 1, r.end) },
+    });
+  }
 
-  hits.sort((a, b) => a.start - b.start);
+  hits.sort((a, b) => (a.start !== b.start ? a.start - b.start : b.end - a.end));
   const out: MessageSegment[] = [];
   let last = 0;
   for (const h of hits) {
@@ -61,6 +70,11 @@ export function parseSkillWireSegments(text: string): SkillWireSegment[] {
       const prev = merged[merged.length - 1];
       if (prev?.kind === 'text') prev.text += p.text;
       else merged.push(p);
+    } else if (p.kind === 'command') {
+      const chunk = `/${p.name}`;
+      const prev = merged[merged.length - 1];
+      if (prev?.kind === 'text') prev.text += chunk;
+      else merged.push({ kind: 'text', text: chunk });
     } else {
       const chunk = `@file:${formatFilePathForWire(p.path)}`;
       const prev = merged[merged.length - 1];
@@ -88,6 +102,14 @@ export const UserMessageSegments = memo(function UserMessageSegments({ text }: {
       {parts.map((p, i) =>
         p.kind === 'skill' ? (
           <span key={`skill-${i}-${p.name}`} className="chat-skill-pill max-w-full shrink-0" data-skill={p.name}>
+            /{p.name}
+          </span>
+        ) : p.kind === 'command' ? (
+          <span
+            key={`cmd-${i}-${p.name}`}
+            className="chat-command-pill max-w-full shrink-0"
+            data-slash-command={p.name}
+          >
             /{p.name}
           </span>
         ) : p.kind === 'file' ? (

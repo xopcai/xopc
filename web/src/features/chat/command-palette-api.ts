@@ -4,6 +4,7 @@ import { apiUrl } from '@/lib/url';
 import { getSkills } from '@/features/skills/skill-api';
 
 import type { CommandEntry } from '@/features/chat/command-palette.types';
+import { refreshSlashCommandWireIndex } from '@/features/chat/slash-command-wire';
 
 async function readErrorMessage(res: Response): Promise<string> {
   const j = (await res.json().catch(() => ({}))) as { error?: unknown };
@@ -38,6 +39,7 @@ let _skillsInflightLang: string | undefined;
 export async function fetchCommandsCached(forceRefresh = false): Promise<CommandEntry[]> {
   const now = Date.now();
   if (!forceRefresh && _commandsCache && now < _commandsExpiry) {
+    refreshSlashCommandWireIndex(_commandsCache);
     return _commandsCache;
   }
   if (_commandsInflight) return _commandsInflight;
@@ -46,7 +48,12 @@ export async function fetchCommandsCached(forceRefresh = false): Promise<Command
     .then((commands) => {
       _commandsCache = commands;
       _commandsExpiry = Date.now() + CACHE_TTL_MS;
+      refreshSlashCommandWireIndex(commands);
       return commands;
+    })
+    .catch((err) => {
+      refreshSlashCommandWireIndex([]);
+      throw err;
     })
     .finally(() => {
       _commandsInflight = null;

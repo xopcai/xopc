@@ -12,6 +12,7 @@ import type { AtMentionItem } from '@/features/chat/at-mention-api';
 import { recordRecentAtPath } from '@/features/chat/at-mention-recent';
 import { AtMentionPicker } from '@/features/chat/at-mention-picker';
 import { CommandPalette } from '@/features/chat/command-palette';
+import { fetchCommandsCached } from '@/features/chat/command-palette-api';
 import type { PendingFollowUp } from '@/features/chat/pending-follow-up.types';
 import type { PaletteItem } from '@/features/chat/command-palette.types';
 import {
@@ -132,6 +133,9 @@ export const ChatComposer = memo(function ChatComposer({
 }) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
+  useEffect(() => {
+    void fetchCommandsCached();
+  }, []);
   const shouldSyncSelectionRef = useRef(false);
   const commandPalettePanelRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
