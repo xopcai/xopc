@@ -55,7 +55,7 @@ export const ChatFollowUpChips = memo(function ChatFollowUpChips({
 }: {
   suggestions: FollowUpSuggestionId[];
   disabled?: boolean;
-  onPick: (text: string) => void;
+  onPick: (id: FollowUpSuggestionId) => void;
 }) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
@@ -82,7 +82,7 @@ export const ChatFollowUpChips = memo(function ChatFollowUpChips({
               interaction.focusRingPanel,
               'disabled:pointer-events-none disabled:opacity-50',
             )}
-            onClick={() => onPick(label)}
+            onClick={() => onPick(id)}
           >
             {label}
           </button>

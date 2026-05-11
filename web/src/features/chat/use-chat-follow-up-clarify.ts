@@ -15,6 +15,7 @@ import {
   writeFollowUpQueueSnapshot,
 } from '@/features/chat/follow-up-queue-storage';
 import {
+  followUpPromptForSuggestionId,
   suggestFollowUpsFromAssistantMessage,
   type FollowUpSuggestionId,
 } from '@/features/chat/follow-up-suggestions';
@@ -53,7 +54,7 @@ export type ChatFollowUpClarifyApi = {
   movePendingFollowUp: (id: string, dir: 'up' | 'down') => void;
   reorderPendingFollowUp: (fromIndex: number, toIndex: number) => void;
   steerPendingFollowUp: (id: string) => Promise<void>;
-  pickFollowUpSuggestion: (text: string) => void;
+  pickFollowUpSuggestion: (id: FollowUpSuggestionId) => void;
   submitClarifyAnswer: (answer: string) => Promise<void>;
   dismissClarify: () => void;
   clearPendingFollowUps: () => void;
@@ -474,8 +475,8 @@ export function useChatFollowUpClarify(options: {
   }, [sessionKeyRef]);
 
   const pickFollowUpSuggestion = useCallback(
-    (text: string) => {
-      const t = text.trim();
+    (id: FollowUpSuggestionId) => {
+      const t = followUpPromptForSuggestionId(id).trim();
       if (!t) return;
       followUpSuggestionsRef.current = [];
       setFollowUpSuggestions([]);
