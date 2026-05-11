@@ -12,6 +12,7 @@ import {
   type PersistentGoalUserAction,
 } from '../../../agent/goals/patch-from-user-action.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
+import { applyChecklistUserMutation } from '../../../agent/goals/checklist-user.js';
 
 function isGoalAction(x: unknown): x is PersistentGoalUserAction {
   return x === 'pause' || x === 'resume' || x === 'clear' || x === 'restart';
@@ -103,6 +104,8 @@ export function registerGoalsRoutes(authenticated: Hono, deps: AuthenticatedRout
       maxTurns,
       createdAt: Date.now(),
       lastTurnAt: 0,
+      decomposed: false,
+      consecutiveParseFailures: 0,
       ...(judgeModelRef ? { judgeModelRef } : {}),
     };
 
@@ -115,5 +118,71 @@ export function registerGoalsRoutes(authenticated: Hono, deps: AuthenticatedRout
     const persistentGoal = readPersistentGoal(m2?.customData as Record<string, unknown> | undefined);
     deps.service.enqueueWebchatPersistentGoalKickoff(sessionKey, goalText);
     return c.json({ ok: true, sessionKey, persistentGoal });
+  });
+
+  /** Checklist CRUD for standing goals (`/subgoal` parity for webchat). */
+  authenticated.post('/api/goals/webchat/checklist', async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
+    const sessionKey = typeof body.sessionKey === 'string' ? body.sessionKey.trim() : '';
+    if (!sessionKey) {
+      return c.json({ ok: false, error: 'Missing sessionKey' }, 400);
+    }
+    const op = typeof body.op === 'string' ? body.op.trim().toLowerCase() : '';
+    const meta = await sm.getSessionMetadata(sessionKey);
+    if (!meta) {
+      return c.json({ ok: false, error: 'Session not found' }, 404);
+    }
+
+    let mutation: ReturnType<typeof applyChecklistUserMutation> | null = null;
+    if (op === 'reset') {
+      mutation = applyChecklistUserMutation(meta.customData as Record<string, unknown> | undefined, {
+        type: 'reset',
+      });
+    } else if (op === 'add') {
+      const text = typeof body.text === 'string' ? body.text : '';
+      mutation = applyChecklistUserMutation(meta.customData as Record<string, unknown> | undefined, {
+        type: 'add',
+        text,
+      });
+    } else if (op === 'remove') {
+      const index =
+        typeof body.index === 'number' && Number.isFinite(body.index) ? Math.floor(body.index) : undefined;
+      if (index === undefined || index < 1) {
+        return c.json({ ok: false, error: 'Missing or invalid index (1-based)' }, 400);
+      }
+      mutation = applyChecklistUserMutation(meta.customData as Record<string, unknown> | undefined, {
+        type: 'remove',
+        index1Based: index,
+      });
+    } else if (op === 'mark') {
+      const index =
+        typeof body.index === 'number' && Number.isFinite(body.index) ? Math.floor(body.index) : undefined;
+      const status = typeof body.status === 'string' ? body.status.trim().toLowerCase() : '';
+      if (index === undefined || index < 1) {
+        return c.json({ ok: false, error: 'Missing or invalid index (1-based)' }, 400);
+      }
+      if (status !== 'pending' && status !== 'completed' && status !== 'impossible') {
+        return c.json({ ok: false, error: 'status must be pending, completed, or impossible' }, 400);
+      }
+      mutation = applyChecklistUserMutation(meta.customData as Record<string, unknown> | undefined, {
+        type: 'mark',
+        index1Based: index,
+        status,
+      });
+    } else {
+      return c.json({ ok: false, error: 'Invalid op (add|remove|mark|reset)' }, 400);
+    }
+
+    if (mutation.kind === 'error') {
+      return c.json({ ok: false, error: mutation.error }, 400);
+    }
+    if (mutation.kind === 'noop') {
+      const persistentGoal = readPersistentGoal(meta.customData as Record<string, unknown> | undefined);
+      return c.json({ ok: true, sessionKey, noop: true, message: mutation.message, persistentGoal });
+    }
+    await sm.updateSessionMetadata(sessionKey, { customData: mutation.customData });
+    const m2 = await sm.getSessionMetadata(sessionKey);
+    const persistentGoal = readPersistentGoal(m2?.customData as Record<string, unknown> | undefined);
+    return c.json({ ok: true, sessionKey, op, persistentGoal });
   });
 }

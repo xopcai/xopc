@@ -780,6 +780,17 @@ export const GoalsConfigSchema = z
     maxTurns: z.number().int().min(1).max(500).default(20),
     /** Optional judge model ref; defaults to `agents.defaults.model`. */
     judgeModelRef: z.string().optional(),
+    /**
+     * When true (default), first post-turn runs a decomposition judge to build a checklist;
+     * subsequent turns evaluate progress per item (Hermes-style). When false, use legacy freeform judge only.
+     */
+    checklistMode: z.boolean().default(true),
+    /** Auto-pause after this many consecutive judge JSON/tool parse failures (Hermes default 3). */
+    maxConsecutiveParseFailures: z.number().int().min(1).max(20).default(3),
+    /** Judge LLM call timeout in ms (Hermes uses 60s). */
+    judgeTimeoutMs: z.number().int().min(5_000).max(120_000).default(60_000),
+    /** Max characters of recent transcript JSON passed to the checklist judge as extra context. */
+    checklistHistoryChars: z.number().int().min(0).max(100_000).default(24_000),
   })
   .strict();
 
@@ -914,6 +925,10 @@ export const ConfigSchema = z.object({
   },
   goals: {
     maxTurns: 20,
+    checklistMode: true,
+    maxConsecutiveParseFailures: 3,
+    judgeTimeoutMs: 60_000,
+    checklistHistoryChars: 24_000,
   },
   extensions: {
     allow: [],

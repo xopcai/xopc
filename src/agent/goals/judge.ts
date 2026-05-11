@@ -23,18 +23,22 @@ export const JUDGE_SYSTEM_PROMPT =
 export const JUDGE_USER_PROMPT_TEMPLATE =
   'Goal:\n{goal}\n\n' + "Agent's most recent response:\n{response}\n\n" + 'Is the goal satisfied?';
 
-const DEFAULT_JUDGE_TIMEOUT_MS = 30_000;
+export const DEFAULT_JUDGE_TIMEOUT_MS = 60_000;
 
-function truncate(text: string, limit: number): string {
+export function truncateGoalText(text: string, limit: number): string {
   if (!text) return '';
   if (text.length <= limit) return text;
   return text.slice(0, limit) + '… [truncated]';
 }
 
 /** Parse judge JSON — fail-open to **continue** (Hermes semantics). */
-export function parseJudgeResponseFailOpen(raw: string): { done: boolean; reason: string } {
+export function parseJudgeResponseFailOpen(raw: string): {
+  done: boolean;
+  reason: string;
+  parseFailed: boolean;
+} {
   if (!raw?.trim()) {
-    return { done: false, reason: 'judge returned empty response' };
+    return { done: false, reason: 'judge returned empty response', parseFailed: true };
   }
 
   let text = raw.trim();
@@ -60,7 +64,7 @@ export function parseJudgeResponseFailOpen(raw: string): { done: boolean; reason
   }
 
   if (!data || typeof data !== 'object') {
-    return { done: false, reason: 'judge reply was not JSON' };
+    return { done: false, reason: 'judge reply was not JSON', parseFailed: true };
   }
 
   const doneVal = data.done;
@@ -71,7 +75,7 @@ export function parseJudgeResponseFailOpen(raw: string): { done: boolean; reason
     done = Boolean(doneVal);
   }
   const reason = typeof data.reason === 'string' ? data.reason.trim() : '';
-  return { done, reason: reason || 'no reason provided' };
+  return { done, reason: reason || 'no reason provided', parseFailed: false };
 }
 
 export type GoalJudgeVerdict = 'done' | 'continue' | 'skipped';
@@ -85,28 +89,33 @@ export async function judgeGoalHermesStyle(
   lastResponse: string,
   judgeModelRef: string,
   signal?: AbortSignal,
-): Promise<{ verdict: GoalJudgeVerdict; reason: string }> {
+  opts?: { judgeTimeoutMs?: number },
+): Promise<{ verdict: GoalJudgeVerdict; reason: string; parseFailed: boolean }> {
   if (!goal.trim()) {
-    return { verdict: 'skipped', reason: 'empty goal' };
+    return { verdict: 'skipped', reason: 'empty goal', parseFailed: false };
   }
   if (!lastResponse.trim()) {
-    return { verdict: 'continue', reason: 'empty response (nothing to evaluate)' };
+    return { verdict: 'continue', reason: 'empty response (nothing to evaluate)', parseFailed: false };
   }
 
   let model: ReturnType<typeof resolveModel>;
   try {
     model = resolveModel(judgeModelRef);
   } catch {
-    return { verdict: 'continue', reason: 'judge model not configured' };
+    return { verdict: 'continue', reason: 'judge model not configured', parseFailed: false };
   }
 
-  const userContent = JUDGE_USER_PROMPT_TEMPLATE.replace('{goal}', truncate(goal, 2000)).replace(
+  const userContent = JUDGE_USER_PROMPT_TEMPLATE.replace('{goal}', truncateGoalText(goal, 2000)).replace(
     '{response}',
-    truncate(lastResponse, JUDGE_RESPONSE_SNIPPET_CHARS),
+    truncateGoalText(lastResponse, JUDGE_RESPONSE_SNIPPET_CHARS),
   );
 
+  const timeoutMs =
+    typeof opts?.judgeTimeoutMs === 'number' && Number.isFinite(opts.judgeTimeoutMs)
+      ? Math.max(5_000, Math.min(120_000, Math.floor(opts.judgeTimeoutMs)))
+      : DEFAULT_JUDGE_TIMEOUT_MS;
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), DEFAULT_JUDGE_TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   const merged = signal ? AbortSignal.any([signal, controller.signal]) : controller.signal;
 
   try {
@@ -131,10 +140,10 @@ export async function judgeGoalHermesStyle(
         }
       }
     }
-    const { done, reason } = parseJudgeResponseFailOpen(text);
-    return { verdict: done ? 'done' : 'continue', reason };
+    const { done, reason, parseFailed } = parseJudgeResponseFailOpen(text);
+    return { verdict: done ? 'done' : 'continue', reason, parseFailed };
   } catch {
-    return { verdict: 'continue', reason: 'judge call failed' };
+    return { verdict: 'continue', reason: 'judge call failed', parseFailed: false };
   } finally {
     clearTimeout(timer);
   }

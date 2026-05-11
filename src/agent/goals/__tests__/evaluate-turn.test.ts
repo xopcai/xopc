@@ -14,7 +14,11 @@ const baseState = {
 
 describe('evaluateAfterTurnHermesLike', () => {
   it('pauses when turn budget is exhausted', async () => {
-    vi.spyOn(judge, 'judgeGoalHermesStyle').mockResolvedValue({ verdict: 'continue', reason: 'more work' });
+    vi.spyOn(judge, 'judgeGoalHermesStyle').mockResolvedValue({
+      verdict: 'continue',
+      reason: 'more work',
+      parseFailed: false,
+    });
     const s0 = { ...baseState, turnsUsed: 2, maxTurns: 3 };
     const d = await evaluateAfterTurnHermesLike(s0, 'step', 'openai/gpt-4o-mini');
     expect(d.newState?.status).toBe('paused');
@@ -24,7 +28,11 @@ describe('evaluateAfterTurnHermesLike', () => {
   });
 
   it('continues when under budget and judge says continue', async () => {
-    vi.spyOn(judge, 'judgeGoalHermesStyle').mockResolvedValue({ verdict: 'continue', reason: 'keep going' });
+    vi.spyOn(judge, 'judgeGoalHermesStyle').mockResolvedValue({
+      verdict: 'continue',
+      reason: 'keep going',
+      parseFailed: false,
+    });
     const d = await evaluateAfterTurnHermesLike({ ...baseState }, 'progress', 'openai/gpt-4o-mini');
     expect(d.shouldContinue).toBe(true);
     expect(d.continuationPrompt).toContain('[Continuing toward your standing goal]');
@@ -33,11 +41,37 @@ describe('evaluateAfterTurnHermesLike', () => {
   });
 
   it('marks done when judge says done', async () => {
-    vi.spyOn(judge, 'judgeGoalHermesStyle').mockResolvedValue({ verdict: 'done', reason: 'shipped' });
+    vi.spyOn(judge, 'judgeGoalHermesStyle').mockResolvedValue({
+      verdict: 'done',
+      reason: 'shipped',
+      parseFailed: false,
+    });
     const d = await evaluateAfterTurnHermesLike({ ...baseState }, 'Done!', 'openai/gpt-4o-mini');
     expect(d.newState?.status).toBe('done');
     expect(d.shouldContinue).toBe(false);
     expect(d.message).toContain('Goal achieved');
+    vi.restoreAllMocks();
+  });
+
+  it('pauses after consecutive judge parse failures (Hermes-style)', async () => {
+    vi.spyOn(judge, 'judgeGoalHermesStyle').mockResolvedValue({
+      verdict: 'continue',
+      reason: 'judge reply was not JSON',
+      parseFailed: true,
+    });
+    const s0 = { ...baseState, turnsUsed: 0, maxTurns: 20, decomposed: true };
+    const d1 = await evaluateAfterTurnHermesLike(s0, 'step', 'openai/gpt-4o-mini', undefined, {
+      goalsSlice: { maxConsecutiveParseFailures: 2, checklistMode: false },
+    });
+    expect(d1.newState?.consecutiveParseFailures).toBe(1);
+    expect(d1.shouldContinue).toBe(true);
+
+    const d2 = await evaluateAfterTurnHermesLike(d1.newState!, 'step', 'openai/gpt-4o-mini', undefined, {
+      goalsSlice: { maxConsecutiveParseFailures: 2, checklistMode: false },
+    });
+    expect(d2.newState?.status).toBe('paused');
+    expect(d2.shouldContinue).toBe(false);
+    expect(d2.message).toContain('unparseable');
     vi.restoreAllMocks();
   });
 });
