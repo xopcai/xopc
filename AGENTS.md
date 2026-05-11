@@ -27,7 +27,7 @@
 
 ## Project Overview
 
-**xopc** (`@xopcai/xopc`) is a personal AI assistant on Node.js + TypeScript: CLI, HTTP/WebSocket **gateway**, and a **React** gateway console (`web/`). Channels (e.g. Telegram) load as extensions; additional backends appear in config/registry as the project evolves.
+**xopc** (`@xopcai/xopc`) is a personal AI assistant on Node.js + TypeScript: CLI, HTTP/SSE **gateway** (REST + Server-Sent Events), and a **React** gateway console (`web/`). Channels (e.g. Telegram) load as extensions; additional backends appear in config/registry as the project evolves.
 
 | Metric | Value |
 |--------|-------|
@@ -71,7 +71,7 @@ Examples: `pnpm run dev -- agent -i` · `pnpm run dev -- agent -m "Hello"`
 |------|------|
 | `agent/` | `AgentService`, tools, memory, orchestration (core entry files at root; helpers grouped under `context/`, `lifecycle/`, `prompt/`, `transcript/` — transcript hygiene, thinking-level types, etc.) |
 | `channels/` | `ChannelPlugin`, manager, inbound/outbound, `attachments/`, `plugins/bundled.ts` |
-| `gateway/` | HTTP/WebSocket server, API for UI; `heartbeat/` keep-alive service |
+| `gateway/` | HTTP + SSE server, API for UI; `heartbeat/` keep-alive service |
 | `cli/` | Commands (self-registration via `registry`) |
 | `config/` | Schema, loader, paths |
 | `providers/` | `resolveModel`, API keys, pi-ai bridge |
@@ -213,7 +213,7 @@ import { DraftStreamManager } from '@xopcai/xopc/channels/telegram/draft-stream.
 | `providers` | LLM API keys |
 | `agents.defaults` | Default model, limits, temperature |
 | `channels` | Telegram and other channel configs |
-| `gateway` | HTTP/WebSocket |
+| `gateway` | HTTP + SSE |
 | `cron` | Scheduled jobs |
 | `extensions` | Enable/disable extensions |
 

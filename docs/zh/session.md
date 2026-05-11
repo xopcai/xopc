@@ -278,7 +278,7 @@ interface Message {
 ### Web UI 无法加载会话
 
 1. 检查 gateway 是否运行：`xopc gateway status`
-2. 在浏览器控制台验证 WebSocket 连接
+2. 在浏览器开发者工具 **Network** 中确认对 `/api/sessions` 的 REST 请求是否成功；若界面依赖实时推送，再确认 **`GET /api/events`**（SSE）是否保持连接
 3. 检查 gateway 日志中的错误
 
 ### 会话索引损坏
@@ -306,21 +306,21 @@ xopc session list --limit 1000
 
 ## API 参考
 
-### WebSocket API 方法
+网关在 **`/api/sessions`** 下提供会话相关的 **HTTP JSON API**（需认证）。控制台没有用于会话的 **WebSocket**；需要实时推送时使用 **`GET /api/events`** 的 **SSE**。
 
-| 方法 | 描述 |
+### 网关 HTTP 路由（摘要）
+
+| 操作 | HTTP |
 |------|------|
-| `session.list` | 分页列出会话 |
-| `session.get` | 获取会话详情 |
-| `session.delete` | 删除会话 |
-| `session.rename` | 重命名会话 |
-| `session.tag` | 添加标签 |
-| `session.untag` | 移除标签 |
-| `session.archive` | 归档会话 |
-| `session.unarchive` | 取消归档 |
-| `session.pin` | 置顶会话 |
-| `session.unpin` | 取消置顶 |
-| `session.search` | 搜索会话 |
-| `session.searchIn` | 会话内搜索 |
-| `session.export` | 导出会话 |
-| `session.stats` | 获取统计信息 |
+| 列出 / 筛选 / 搜索 | `GET /api/sessions`（`status`、`search`、`channel`、`limit`、`offset` 等） |
+| 统计 | `GET /api/sessions/stats` |
+| 获取会话 | `GET /api/sessions/:key` |
+| 更新元数据（如标签） | `PATCH /api/sessions/:key` |
+| 创建会话 | `POST /api/sessions` |
+| 重命名 | `POST /api/sessions/:key/rename` |
+| 归档 / 取消归档 | `POST /api/sessions/:key/archive` · `POST /api/sessions/:key/unarchive` |
+| 置顶 / 取消置顶 | `POST /api/sessions/:key/pin` · `POST /api/sessions/:key/unpin` |
+| 导出 | `GET /api/sessions/:key/export` |
+| 删除 | `DELETE /api/sessions/:key` |
+
+在会话正文里搜索可用 CLI：`xopc session grep <sessionKey> <pattern>`。

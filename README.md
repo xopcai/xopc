@@ -32,7 +32,7 @@
   <a href="https://xopcai.github.io/xopc/cli">CLI</a>
 </p>
 
-**xopc** is a self-hosted agent stack: **CLI**, full-screen **terminal UI (TUI)**, **HTTP/WebSocket gateway** with a **React** console, optional **Electron** desktop (**macOS**, **Windows**, **Linux**), and bundled **channel** plugins (Telegram, WeChat, Feishu/Lark, DingTalk). LLMs are wired through **[@earendil-works/pi-ai](https://github.com/earendil-works/pi-mono)** (20+ providers). Add **extensions** (tools, channels, providers) and **SKILL.md** skills — plus **gateway UI** extensions via the extension UI SDK.
+**xopc** is a self-hosted agent stack: **CLI**, full-screen **terminal UI (TUI)**, **HTTP/SSE gateway** (REST JSON APIs plus Server-Sent Events for streaming and live updates) with a **React** console, optional **Electron** desktop (**macOS**, **Windows**, **Linux**), and bundled **channel** plugins (Telegram, WeChat, Feishu/Lark, DingTalk). LLMs are wired through **[@earendil-works/pi-ai](https://github.com/earendil-works/pi-mono)** (20+ providers). Add **extensions** (tools, channels, providers) and **SKILL.md** skills — plus **gateway UI** extensions via the extension UI SDK.
 
 ---
 
@@ -266,7 +266,7 @@ src/
 ├── cli/         # Commands
 ├── config/      # Schema and loader
 ├── cron/        # Scheduled tasks
-├── gateway/     # HTTP/WebSocket server
+├── gateway/     # HTTP + SSE gateway server
 ├── providers/   # Model registry
 ├── session/     # Sessions
 ├── tui/         # Terminal UI (pi-tui)
