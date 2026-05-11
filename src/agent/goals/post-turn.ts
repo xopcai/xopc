@@ -15,6 +15,17 @@ import {
 
 const log = createLogger('PersistentGoal');
 
+function buildHistoryExcerpt(messages: AgentMessage[], maxChars: number): string {
+  if (maxChars <= 0) return '';
+  try {
+    const raw = JSON.stringify(messages);
+    if (raw.length <= maxChars) return raw;
+    return raw.slice(-maxChars);
+  } catch {
+    return '';
+  }
+}
+
 function resolveJudgeModelRef(config: Config | undefined, storedJudge?: string): string | undefined {
   const fromCfg = config?.goals?.judgeModelRef?.trim();
   if (fromCfg) return fromCfg;
@@ -74,7 +85,23 @@ export async function handlePersistentGoalPostTurn(opts: {
     return;
   }
 
-  const decision = await evaluateAfterTurnHermesLike(state, assistantPlainText, judgeRef, signal);
+  const goalsCfg = config?.goals;
+  const historyCap = goalsCfg?.checklistHistoryChars ?? 24_000;
+  let historyExcerpt = '';
+  try {
+    const msgs = await apis.loadMessages(sessionKey);
+    historyExcerpt = buildHistoryExcerpt(msgs, historyCap);
+  } catch (err) {
+    log.debug(
+      { err, sessionKey },
+      `Persistent goal: could not load messages for judge context: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+
+  const decision = await evaluateAfterTurnHermesLike(state, assistantPlainText, judgeRef, signal, {
+    goalsSlice: goalsCfg,
+    historyExcerpt,
+  });
 
   const baseCustom = { ...(meta.customData as Record<string, unknown> | undefined) };
 

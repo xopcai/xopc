@@ -68,6 +68,7 @@ export function applyPersistentGoalUserAction(
       status: 'active',
       pausedReason: undefined,
       turnsUsed: 0,
+      consecutiveParseFailures: 0,
     };
     return {
       kind: 'updated',
@@ -92,7 +93,14 @@ export function applyPersistentGoalUserAction(
     maxTurns,
     createdAt: Date.now(),
     lastTurnAt: 0,
+    consecutiveParseFailures: 0,
     ...(judgeModelRef ? { judgeModelRef } : {}),
+    ...(s.checklist?.length
+      ? {
+          checklist: s.checklist.map((it) => ({ ...it })),
+          decomposed: true,
+        }
+      : {}),
   };
   return {
     kind: 'updated',

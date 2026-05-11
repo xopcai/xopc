@@ -48,7 +48,7 @@ const goalCommand: CommandDefinition = {
   id: 'system.goal',
   name: 'goal',
   description:
-    'Set or manage a standing goal (Hermes-style): status, pause, resume, clear; auto-continues until done or budget hit',
+    'Set or manage a standing goal (Hermes-style): checklist + judge loop; /subgoal edits criteria; pause, resume, clear',
   category: 'system',
   scope: ['global', 'private', 'group'],
   acceptsArgs: true,
@@ -157,6 +157,8 @@ const goalCommand: CommandDefinition = {
       maxTurns,
       createdAt: Date.now(),
       lastTurnAt: 0,
+      decomposed: false,
+      consecutiveParseFailures: 0,
       ...(judgeModelRef ? { judgeModelRef } : {}),
     };
 
@@ -171,7 +173,7 @@ const goalCommand: CommandDefinition = {
       content:
         `⊙ Goal set (${next.maxTurns}-turn budget): ${next.goal}\n` +
         "I'll keep working until the goal is done, you pause/clear it, or the budget is exhausted.\n" +
-        'Controls: /goal status · /goal pause · /goal resume · /goal clear',
+        'Controls: /goal status · /goal pause · /goal resume · /goal clear · /subgoal',
       success: true,
     };
   },
