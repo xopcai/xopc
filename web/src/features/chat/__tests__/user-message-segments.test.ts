@@ -1,5 +1,19 @@
 import { describe, it, expect } from 'vitest';
+import type { CommandEntry } from '@/features/chat/command-palette.types';
+import { refreshSlashCommandWireIndex } from '@/features/chat/slash-command-wire';
 import { parseMessageSegments, parseSkillWireSegments } from '@/features/chat/user-message-segments';
+
+const cmdFixtures: CommandEntry[] = [
+  {
+    id: 'session.clear',
+    name: 'clear',
+    aliases: [],
+    description: '',
+    category: 'session',
+    acceptsArgs: false,
+    examples: [],
+  },
+];
 
 describe('parseMessageSegments', () => {
   it('parses @file: tokens', () => {
@@ -28,6 +42,14 @@ describe('parseMessageSegments', () => {
 
   it('treats removed wire prefixes as plain text', () => {
     expect(parseMessageSegments('a @doc:notes/x.md b')).toEqual([{ kind: 'text', text: 'a @doc:notes/x.md b' }]);
+  });
+
+  it('parses registered slash commands', () => {
+    refreshSlashCommandWireIndex(cmdFixtures);
+    expect(parseMessageSegments('/clear please')).toEqual([
+      { kind: 'command', name: 'clear' },
+      { kind: 'text', text: ' please' },
+    ]);
   });
 });
 

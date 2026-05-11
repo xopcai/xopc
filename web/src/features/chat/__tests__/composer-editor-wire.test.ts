@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
-import { describe, it, expect } from 'vitest';
+import { beforeEach, describe, it, expect } from 'vitest';
+import type { CommandEntry } from '@/features/chat/command-palette.types';
 import { formatFilePathForWire } from '@/features/chat/file-wire-pattern';
 import {
   applyWireToEditor,
@@ -9,6 +10,7 @@ import {
   removeTrailingSkillTokenBeforeCaret,
   serializeEditorToWire,
 } from '@/features/chat/composer-editor-wire';
+import { refreshSlashCommandWireIndex } from '@/features/chat/slash-command-wire';
 
 describe('removeSkillTokenAtOrBeforeCaret', () => {
   it('removes token when caret is at end of token', () => {
@@ -56,6 +58,31 @@ describe('removeTrailingSkillTokenBeforeCaret', () => {
     const w = '/skill:foo bar';
     // Caret immediately after the space between skill and "bar"
     expect(removeTrailingSkillTokenBeforeCaret(w, '/skill:foo '.length)).toBeNull();
+  });
+});
+
+const slashCmdFixtures: CommandEntry[] = [
+  {
+    id: 'session.clear',
+    name: 'clear',
+    aliases: [],
+    description: '',
+    category: 'session',
+    acceptsArgs: true,
+    examples: [],
+  },
+];
+
+describe('slash command pills', () => {
+  beforeEach(() => {
+    refreshSlashCommandWireIndex(slashCmdFixtures);
+  });
+
+  it('round-trips /clear via pill DOM', () => {
+    const root = document.createElement('div');
+    applyWireToEditor(root, '/clear ');
+    expect(root.querySelector('.chat-command-pill')).toBeTruthy();
+    expect(serializeEditorToWire(root)).toBe('/clear ');
   });
 });
 

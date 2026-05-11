@@ -307,6 +307,18 @@ html.dark {
     color: rgb(196 196 122);
   }
 
+  /** Slash commands from palette (`/help`, `/new`, …) — composer + user bubble. */
+  .chat-command-pill {
+    @apply inline-flex max-w-full shrink-0 items-center rounded-full px-2.5 py-0.5 align-baseline text-[0.9375rem] font-medium leading-5;
+    background-color: color-mix(in oklab, var(--color-accent-soft) 88%, transparent);
+    color: var(--color-accent-fg);
+  }
+
+  html.dark .chat-command-pill {
+    background-color: color-mix(in oklab, var(--color-accent-soft) 55%, transparent);
+    color: var(--color-accent-fg);
+  }
+
   .chat-file-pill {
     display: inline-flex;
     align-items: center;
