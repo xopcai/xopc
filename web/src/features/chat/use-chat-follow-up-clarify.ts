@@ -31,6 +31,7 @@ import { apiUrl } from '@/lib/url';
 export type ChatFollowUpClarifyApi = {
   clarifyPrompt: ClarifyPromptState | null;
   clarifySubmitting: boolean;
+  clarifySubmitError: string | null;
   clarifyPromptRef: MutableRefObject<ClarifyPromptState | null>;
   pendingFollowUps: PendingFollowUp[];
   pendingFollowUpsRef: MutableRefObject<PendingFollowUp[]>;
@@ -56,6 +57,7 @@ export type ChatFollowUpClarifyApi = {
   steerPendingFollowUp: (id: string) => Promise<void>;
   pickFollowUpSuggestion: (id: FollowUpSuggestionId) => void;
   submitClarifyAnswer: (answer: string) => Promise<void>;
+  cancelClarifyAnswer: () => Promise<void>;
   dismissClarify: () => void;
   clearPendingFollowUps: () => void;
   dismissClarifyAndClearPending: () => void;
@@ -84,7 +86,6 @@ export function useChatFollowUpClarify(options: {
   modelSupportsThinking: boolean;
   thinkingLevel: string;
   shouldApplyStreamUpdate: (streamSessionKey: string) => boolean;
-  setError: (msg: string | null) => void;
   sendMessageRef: MutableRefObject<
     (content: string, attachments?: PendingFollowUp['attachments'], levelOverride?: string) => Promise<void>
   >;
@@ -102,12 +103,12 @@ export function useChatFollowUpClarify(options: {
     modelSupportsThinking,
     thinkingLevel,
     shouldApplyStreamUpdate,
-    setError,
     sendMessageRef,
   } = options;
 
   const [clarifyPrompt, setClarifyPrompt] = useState<ClarifyPromptState | null>(null);
   const [clarifySubmitting, setClarifySubmitting] = useState(false);
+  const [clarifySubmitError, setClarifySubmitError] = useState<string | null>(null);
   const clarifyPromptRef = useRef<ClarifyPromptState | null>(null);
 
   const [pendingFollowUps, setPendingFollowUps] = useState<PendingFollowUp[]>([]);
@@ -217,6 +218,7 @@ export function useChatFollowUpClarify(options: {
   }, [decodedKey, sessionKey]);
 
   const dismissClarify = useCallback(() => {
+    setClarifySubmitError(null);
     setClarifyPrompt(null);
   }, []);
 
@@ -233,6 +235,7 @@ export function useChatFollowUpClarify(options: {
     if (key) clearFollowUpQueueSnapshot(key);
     pendingFollowUpsRef.current = [];
     setPendingFollowUps([]);
+    setClarifySubmitError(null);
     setClarifyPrompt(null);
     setEditingFollowUpId(null);
   }, [sessionKeyRef]);
@@ -249,6 +252,7 @@ export function useChatFollowUpClarify(options: {
   }, []);
 
   const onClarifyToolEnd = useCallback(() => {
+    setClarifySubmitError(null);
     setClarifyPrompt(null);
   }, []);
 
@@ -260,6 +264,7 @@ export function useChatFollowUpClarify(options: {
       setSending(false);
       setStreaming(false);
       setProgress(null);
+      setClarifySubmitError(null);
       setClarifyPrompt(payload);
     },
     [shouldApplyStreamUpdate, sendingRef, streamingRef, setSending, setStreaming, setProgress],
@@ -499,6 +504,7 @@ export function useChatFollowUpClarify(options: {
     const p = clarifyPromptRef.current;
     if (!p) return;
     setClarifySubmitting(true);
+    setClarifySubmitError(null);
     try {
       const res = await apiFetch(apiUrl(`/api/clarify/${encodeURIComponent(p.requestId)}`), {
         method: 'POST',
@@ -507,13 +513,38 @@ export function useChatFollowUpClarify(options: {
       });
       if (!res.ok) {
         const j = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
-        setError(j.error?.message ?? res.statusText ?? 'Clarify failed');
+        setClarifySubmitError(j.error?.message ?? res.statusText ?? 'Clarify failed');
+        return;
       }
       setClarifyPrompt(null);
+      setClarifySubmitError(null);
     } finally {
       setClarifySubmitting(false);
     }
-  }, [setError]);
+  }, []);
+
+  const cancelClarifyAnswer = useCallback(async () => {
+    const p = clarifyPromptRef.current;
+    if (!p) return;
+    setClarifySubmitting(true);
+    setClarifySubmitError(null);
+    try {
+      const res = await apiFetch(apiUrl(`/api/clarify/${encodeURIComponent(p.requestId)}`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ skip: true }),
+      });
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
+        setClarifySubmitError(j.error?.message ?? res.statusText ?? 'Clarify failed');
+        return;
+      }
+      setClarifyPrompt(null);
+      setClarifySubmitError(null);
+    } finally {
+      setClarifySubmitting(false);
+    }
+  }, []);
 
   pendingFollowUpsRef.current = pendingFollowUps;
   followUpSuggestionsRef.current = followUpSuggestions;
@@ -522,6 +553,7 @@ export function useChatFollowUpClarify(options: {
   return {
     clarifyPrompt,
     clarifySubmitting,
+    clarifySubmitError,
     clarifyPromptRef,
     pendingFollowUps,
     pendingFollowUpsRef,
@@ -538,6 +570,7 @@ export function useChatFollowUpClarify(options: {
     steerPendingFollowUp,
     pickFollowUpSuggestion,
     submitClarifyAnswer,
+    cancelClarifyAnswer,
     dismissClarify,
     clearPendingFollowUps,
     dismissClarifyAndClearPending,

@@ -3,7 +3,8 @@ import { createLogger } from '../utils/logger.js';
 
 const log = createLogger('gateway:clarify');
 
-const CLARIFY_TIMEOUT_MS = 5 * 60 * 1000;
+/** User inactivity window before pending clarification is rejected (web/Telegram, etc.). */
+export const CLARIFY_USER_RESPONSE_TIMEOUT_MS = 5 * 60 * 1000;
 
 export interface ClarifyBridgeRequest {
   question: string;
@@ -62,7 +63,7 @@ export class ClarifyBridge {
         if (entry) {
           entry.reject(new Error('Clarification timeout: user did not respond within 5 minutes'));
         }
-      }, CLARIFY_TIMEOUT_MS);
+      }, CLARIFY_USER_RESPONSE_TIMEOUT_MS);
 
       this.pending.set(requestId, {
         runId: runId ?? '',

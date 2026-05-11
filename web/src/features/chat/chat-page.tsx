@@ -285,7 +285,10 @@ export function ChatPage() {
               <ClarifyPrompt
                 prompt={clarify.clarifyPrompt}
                 submitting={clarify.clarifySubmitting}
+                submitError={clarify.clarifySubmitError}
+                labels={m.chat}
                 onSubmit={clarify.submitClarifyAnswer}
+                onCancel={clarify.cancelClarifyAnswer}
               />
               <div className="mx-auto w-full max-w-[var(--max-width-chat)] px-3 sm:px-5 xl:px-6">
                 <ChatFollowUpChips
