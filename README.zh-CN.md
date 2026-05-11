@@ -60,6 +60,12 @@ npm install -g @xopcai/xopc
 # 或: pnpm add -g @xopcai/xopc
 ```
 
+**中国大陆用户**可在 `npm install` 时加上 `--registry=https://registry.npmmirror.com`，例如：
+
+```bash
+npm install -g @xopcai/xopc --registry=https://registry.npmmirror.com
+```
+
 **装好后，**建议先跑一遍配置向导，把模型、密钥、机器人等一次配齐。
 
 ```bash

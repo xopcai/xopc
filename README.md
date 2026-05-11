@@ -58,6 +58,21 @@ npm install -g @xopcai/xopc
 # or: pnpm add -g @xopcai/xopc
 ```
 
+**China / slow access to `registry.npmjs.org`:** many projects (for example [cnpm](https://github.com/cnpm/cnpm#install)) suggest installing from the [China mirror](https://registry.npmmirror.com) ([npmmirror.com](https://npmmirror.com/)). One-off install:
+
+```bash
+npm install <package> --registry=https://registry.npmmirror.com
+```
+
+For this CLI or a git clone of this repo:
+
+```bash
+npm install -g @xopcai/xopc --registry=https://registry.npmmirror.com
+pnpm install --registry=https://registry.npmmirror.com
+```
+
+To make the mirror the default: `npm config set registry https://registry.npmmirror.com` (reset: `npm config delete registry`).
+
 **First run:** interactive onboarding (models, keys, channels).
 
 ```bash
