@@ -304,6 +304,8 @@ function createWindow(): void {
     height: 800,
     minWidth: 800,
     minHeight: 560,
+    /** Allows renderer `Element.requestFullscreen()` (file preview) like Chromium. */
+    fullscreenable: true,
     ...browserWindowChromeOptions(),
     ...(!app.isPackaged && existsSync(devWindowIcon) ? { icon: devWindowIcon } : {}),
     webPreferences: {

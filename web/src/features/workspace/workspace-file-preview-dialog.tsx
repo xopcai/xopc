@@ -1,7 +1,13 @@
-import { Copy, Download, Eye, Pencil, X } from 'lucide-react';
-import { useCallback } from 'react';
+import { Copy, Download, Eye, Maximize2, Minimize2, Pencil, X } from 'lucide-react';
+import { useCallback, useEffect } from 'react';
 
-import { FilePreviewBody, getFileExtension, getFileName, useWorkspaceFilePreviewState } from '@/features/file-preview';
+import {
+  FilePreviewBody,
+  getFileExtension,
+  getFileName,
+  useFilePreviewFullscreen,
+  useWorkspaceFilePreviewState,
+} from '@/features/file-preview';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 import { messages } from '@/i18n/messages';
@@ -35,6 +41,7 @@ export function WorkspaceFilePreviewPanel({
   const resolvedTheme = useThemeStore((s) => s.resolved);
 
   const state = useWorkspaceFilePreviewState({ filePath, sessionKey, agentId });
+  const { rootRef, active, enter, exit } = useFilePreviewFullscreen();
 
   const ext = filePath ? getFileExtension(filePath) : '';
   const name = filePath ? getFileName(filePath) : '';
@@ -46,12 +53,18 @@ export function WorkspaceFilePreviewPanel({
     void navigator.clipboard.writeText(filePath);
   }, [filePath]);
 
+  const canPreviewFullscreen = Boolean(filePath && !state.loading && !state.loadError);
+
+  useEffect(() => {
+    if (!filePath) void exit();
+  }, [filePath, exit]);
+
   if (!filePath) {
     return null;
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-surface-panel">
+    <div ref={rootRef} className="flex h-full min-h-0 flex-col bg-surface-panel">
       <div className="flex shrink-0 items-start gap-2 border-b border-edge px-4 py-2 dark:border-edge">
         <div className="min-w-0 flex-1">
           <h2
@@ -94,6 +107,20 @@ export function WorkspaceFilePreviewPanel({
               onClick={() => state.setHtmlCodeMode((v) => !v)}
             >
               {state.htmlCodeMode ? <Eye className="size-4" /> : <Pencil className="size-4" />}
+            </button>
+          ) : null}
+          {canPreviewFullscreen ? (
+            <button
+              type="button"
+              className={cn(
+                'inline-flex size-9 shrink-0 items-center justify-center rounded-md text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg',
+                interaction.focusRingPanel,
+              )}
+              title={active ? m.chat.attachmentPreviewExitFullscreen : m.chat.attachmentPreviewFullscreen}
+              aria-label={active ? m.chat.attachmentPreviewExitFullscreen : m.chat.attachmentPreviewFullscreen}
+              onClick={() => void (active ? exit() : enter())}
+            >
+              {active ? <Minimize2 className="size-4" strokeWidth={1.75} /> : <Maximize2 className="size-4" strokeWidth={1.75} />}
             </button>
           ) : null}
           <button

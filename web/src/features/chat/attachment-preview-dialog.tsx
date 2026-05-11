@@ -1,12 +1,13 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { Download, X } from 'lucide-react';
+import { Download, Maximize2, Minimize2, X } from 'lucide-react';
+import { useEffect } from 'react';
 
 import type { MessageAttachment } from '@/features/chat/messages.types';
 import {
   getAttachmentBinaryPayload,
   type AttachmentPreviewFileType,
 } from '@/features/chat/attachment-utils-core';
-import { FilePreviewBody, useAttachmentPreviewResolved } from '@/features/file-preview';
+import { FilePreviewBody, useAttachmentPreviewResolved, useFilePreviewFullscreen } from '@/features/file-preview';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 import { messages } from '@/i18n/messages';
@@ -43,10 +44,17 @@ export function AttachmentPreviewDialog({
   const language = useLocaleStore((s) => s.language);
   const labels = messages(language).chat;
   const resolved = useAttachmentPreviewResolved({ open, attachment, authToken, sessionKey, language });
+  const { rootRef, active, enter, exit } = useFilePreviewFullscreen();
 
   const { preview, fileType, hasExtractedText, showExtractedText } = resolved;
   const showToggle =
     fileType !== 'image' && fileType !== 'text' && fileType !== 'pptx' && hasExtractedText;
+
+  const canPreviewFullscreen = Boolean(preview && !resolved.loading && !resolved.loadError);
+
+  useEffect(() => {
+    if (!open) void exit();
+  }, [open, exit]);
 
   const handleDownload = () => {
     if (!preview) return;
@@ -93,6 +101,7 @@ export function AttachmentPreviewDialog({
           />
 
           <div
+            ref={rootRef}
             className={cn(
               'flex h-full min-h-0 w-[min(100%,var(--max-width-app-main))] shrink-0 flex-col overflow-hidden',
               'bg-surface-panel sm:border-x sm:border-edge dark:sm:border-edge',
@@ -136,6 +145,17 @@ export function AttachmentPreviewDialog({
                         {labels.attachmentPreviewText}
                       </button>
                     </div>
+                  ) : null}
+                  {canPreviewFullscreen ? (
+                    <button
+                      type="button"
+                      className="rounded-md p-2 text-fg-muted hover:bg-surface-hover hover:text-fg"
+                      title={active ? labels.attachmentPreviewExitFullscreen : labels.attachmentPreviewFullscreen}
+                      aria-label={active ? labels.attachmentPreviewExitFullscreen : labels.attachmentPreviewFullscreen}
+                      onClick={() => void (active ? exit() : enter())}
+                    >
+                      {active ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+                    </button>
                   ) : null}
                   <button
                     type="button"
