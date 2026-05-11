@@ -24,6 +24,7 @@ import { UsageBadge } from '@/features/chat/usage-badge';
 import { ToolResultFileLinks } from '@/features/chat/tool-result-file-links';
 import {
   collectAssistantWorkspaceOutputPaths,
+  filterAssistantAttachmentsDedupedAgainstWorkspacePaths,
   imageBlockToMessageAttachment,
   imageContentBlocksToAttachments,
 } from '@/features/chat/assistant-message-artifacts';
@@ -344,6 +345,14 @@ export const MessageBubble = memo(function MessageBubble({
     isAssistant &&
     (assistantWorkspacePaths.length > 0 || assistantImageAttachments.length > 0);
 
+  const attachmentsForBubble = useMemo(() => {
+    if (!isAssistant) return message.attachments;
+    return filterAssistantAttachmentsDedupedAgainstWorkspacePaths(
+      message.attachments,
+      assistantWorkspacePaths,
+    );
+  }, [isAssistant, message.attachments, assistantWorkspacePaths]);
+
   const progressForMeta =
     reasoningHidden && progress?.stage === 'thinking' ? null : progress;
 
@@ -533,10 +542,10 @@ export const MessageBubble = memo(function MessageBubble({
               </div>
             ) : null}
 
-            {message.attachments?.length ? (
+            {attachmentsForBubble?.length ? (
               isUser ? (
                 <AttachmentRenderer
-                  attachments={message.attachments}
+                  attachments={attachmentsForBubble}
                   authToken={authToken}
                   sessionKey={sessionKey}
                   layout="user"
@@ -544,7 +553,7 @@ export const MessageBubble = memo(function MessageBubble({
                 />
               ) : (
                 <AttachmentRenderer
-                  attachments={message.attachments}
+                  attachments={attachmentsForBubble}
                   authToken={authToken}
                   sessionKey={sessionKey}
                   layout="assistant"

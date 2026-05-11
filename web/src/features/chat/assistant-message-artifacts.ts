@@ -1,7 +1,9 @@
 import type { ImageContent, MessageAttachment, MessageContent } from '@/features/chat/messages.types';
 import {
+  absolutePathSameAsWorkspaceRelative,
   extractFilePathsFromToolResult,
   extractWorkspaceRelativeMentionsFromAssistantMarkdown,
+  looksLikeAbsoluteFilePath,
   type ExtractedFilePath,
 } from '@/features/chat/tool-result-file-paths';
 
@@ -25,16 +27,100 @@ function normalizeToolResultString(result: string | undefined | unknown): string
   }
 }
 
+function normalizeWorkspaceRel(s: string | undefined): string {
+  return (s ?? '').replace(/\\/g, '/').replace(/^\/+/, '').trim();
+}
+
+function pathsIndicateSameWorkspaceArtifact(a: ExtractedFilePath, b: ExtractedFilePath): boolean {
+  const ar = normalizeWorkspaceRel(a.workspaceRelativePath);
+  const br = normalizeWorkspaceRel(b.workspaceRelativePath);
+  const aa = a.absolutePath;
+  const ba = b.absolutePath;
+
+  if (ar && br) return ar === br;
+  if (ar && looksLikeAbsoluteFilePath(ba)) return absolutePathSameAsWorkspaceRelative(ba, ar);
+  if (br && looksLikeAbsoluteFilePath(aa)) return absolutePathSameAsWorkspaceRelative(aa, br);
+  if (looksLikeAbsoluteFilePath(aa) && looksLikeAbsoluteFilePath(ba)) {
+    return aa.replace(/\\/g, '/').trim() === ba.replace(/\\/g, '/').trim();
+  }
+  return aa === ba;
+}
+
+/** Prefer workspace-relative entries so preview uses stable `workspaceRelativePath`. */
+function preferExtractedPath(existing: ExtractedFilePath, incoming: ExtractedFilePath): ExtractedFilePath {
+  if (incoming.workspaceRelativePath && !existing.workspaceRelativePath) {
+    return incoming;
+  }
+  return existing;
+}
+
 function mergeExtractedPaths(accum: ExtractedFilePath[], from: readonly ExtractedFilePath[]): void {
-  const seen = new Set(accum.map((p) => p.workspaceRelativePath ?? p.absolutePath));
   for (const p of from) {
-    const k = p.workspaceRelativePath ?? p.absolutePath;
-    if (seen.has(k)) {
+    const idx = accum.findIndex((e) => pathsIndicateSameWorkspaceArtifact(e, p));
+    if (idx >= 0) {
+      accum[idx] = preferExtractedPath(accum[idx], p);
       continue;
     }
-    seen.add(k);
     accum.push(p);
   }
+}
+
+function isDocumentLikeAssistantAttachment(att: MessageAttachment): boolean {
+  if (att.type === 'voice' || att.type === 'audio' || att.type === 'image') {
+    return false;
+  }
+  if (att.mimeType?.startsWith('image/') || att.mimeType?.startsWith('audio/')) {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Drop document attachments that are already listed in the “Message output” workspace path strip
+ * (same turn often carries both tool-derived paths and wire `attachments` with the same file).
+ */
+export function filterAssistantAttachmentsDedupedAgainstWorkspacePaths(
+  attachments: MessageAttachment[] | undefined,
+  workspacePaths: readonly ExtractedFilePath[],
+): MessageAttachment[] | undefined {
+  if (!attachments?.length || !workspacePaths.length) {
+    return attachments;
+  }
+  const filtered = attachments.filter((att) => {
+    if (!isDocumentLikeAssistantAttachment(att)) {
+      return true;
+    }
+    return !attachmentOverlapsWorkspaceOutputPaths(att, workspacePaths);
+  });
+  return filtered.length === attachments.length ? attachments : filtered.length ? filtered : undefined;
+}
+
+function fileNameKey(path: string): string {
+  const n = path.replace(/\\/g, '/').split('/').filter(Boolean);
+  return (n[n.length - 1] ?? path).trim().toLowerCase();
+}
+
+function attachmentOverlapsWorkspaceOutputPaths(
+  att: MessageAttachment,
+  paths: readonly ExtractedFilePath[],
+): boolean {
+  const attRel = normalizeWorkspaceRel(att.workspaceRelativePath);
+  const attName = (att.name ?? '').trim().toLowerCase();
+  for (const p of paths) {
+    const pr = normalizeWorkspaceRel(p.workspaceRelativePath);
+    if (pr && attRel && attRel === pr) {
+      return true;
+    }
+    if (pr && !attRel && attName && fileNameKey(pr) === attName) {
+      return true;
+    }
+    if (looksLikeAbsoluteFilePath(p.absolutePath) && attRel) {
+      if (absolutePathSameAsWorkspaceRelative(p.absolutePath, attRel)) {
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 /**
