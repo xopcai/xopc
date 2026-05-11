@@ -21,7 +21,7 @@ async function requestFullscreen(el: Element): Promise<void> {
   const anyEl = el as FsElement;
   try {
     if (typeof el.requestFullscreen === 'function') {
-      await el.requestFullscreen({ navigationUI: 'hide' } as FullscreenOptions);
+      await el.requestFullscreen({ navigationUI: 'hide' });
       return;
     }
   } catch {
