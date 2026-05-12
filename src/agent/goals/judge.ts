@@ -1,7 +1,7 @@
 import type { UserMessage } from '@earendil-works/pi-ai';
 import { complete } from '@earendil-works/pi-ai';
 
-import { resolveModel } from '../../providers/index.js';
+import { getApiKey, resolveModel } from '../../providers/index.js';
 
 import type { GoalUiLocale } from './goal-locale.js';
 import {
@@ -13,6 +13,62 @@ import {
 } from './goal-locale.js';
 
 const JUDGE_RESPONSE_SNIPPET_CHARS = 4000;
+
+/**
+ * Extract visible text from a pi-ai `AssistantMessage.content` array.
+ * Handles `TextContent` (`type: 'text'`) and falls back to `ThinkingContent`
+ * (`type: 'thinking'`) when the text blocks are empty — reasoning models
+ * (DeepSeek-R1, Qwen-thinking, etc.) may place the entire response inside
+ * thinking blocks, leaving the text portion blank.
+ */
+export function extractAssistantText(content: unknown): string {
+  if (!Array.isArray(content)) return '';
+
+  let textParts = '';
+  let thinkingParts = '';
+
+  for (const block of content) {
+    if (!block || typeof block !== 'object') continue;
+    const typed = block as Record<string, unknown>;
+    const blockType = typed.type;
+    if (blockType === 'text' && typeof typed.text === 'string') {
+      textParts += typed.text;
+    } else if (blockType === 'thinking') {
+      const thinking =
+        typeof typed.thinking === 'string'
+          ? typed.thinking
+          : typeof typed.text === 'string'
+            ? typed.text
+            : '';
+      thinkingParts += thinking;
+    }
+  }
+
+  // Prefer text blocks; fall back to thinking blocks when text is empty.
+  return textParts.trim() ? textParts : thinkingParts;
+}
+
+/**
+ * Strip markdown code fences (opening AND closing) from raw model output.
+ * Handles `` ```json ``, `` ``` ``, and trailing `` ``` `` with optional whitespace.
+ */
+export function stripCodeFences(raw: string): string {
+  let text = raw.trim();
+
+  // Remove opening code fence: ```<optional-lang>\n
+  const openMatch = text.match(/^`{3,}[^\n]*\n?/);
+  if (openMatch) {
+    text = text.slice(openMatch[0].length);
+  }
+
+  // Remove closing code fence: \n```<optional-whitespace>
+  const closeMatch = text.match(/\n?`{3,}\s*$/);
+  if (closeMatch) {
+    text = text.slice(0, -closeMatch[0].length);
+  }
+
+  return text.trim();
+}
 
 /** Mirrors `hermes_cli/goals.py` — strict judge, JSON-only reply. */
 export const JUDGE_SYSTEM_PROMPT =
@@ -40,6 +96,30 @@ export function truncateGoalText(text: string, limit: number): string {
   return text.slice(0, limit) + '… [truncated]';
 }
 
+export async function resolveGoalJudgeApiKey(
+  model: ReturnType<typeof resolveModel>,
+): Promise<string | undefined> {
+  try {
+    return await getApiKey(model.provider);
+  } catch {
+    return undefined;
+  }
+}
+
+export function getAssistantMessageErrorReason(message: unknown): string | null {
+  if (!message || typeof message !== 'object') return null;
+
+  const record = message as Record<string, unknown>;
+  const stopReason = record.stopReason;
+  const errorMessage = typeof record.errorMessage === 'string' ? record.errorMessage.trim() : '';
+
+  if (stopReason === 'error') {
+    return errorMessage || 'Judge model call failed.';
+  }
+
+  return null;
+}
+
 /** Parse judge JSON — fail-open to **continue** (Hermes semantics). */
 export function parseJudgeResponseFailOpen(raw: string): {
   done: boolean;
@@ -50,12 +130,7 @@ export function parseJudgeResponseFailOpen(raw: string): {
     return { done: false, reason: JUDGE_REASON_EN.judge_returned_empty, parseFailed: true };
   }
 
-  let text = raw.trim();
-  if (text.startsWith('```')) {
-    text = text.replace(/^`+/, '');
-    const nl = text.indexOf('\n');
-    if (nl !== -1) text = text.slice(nl + 1);
-  }
+  const text = stripCodeFences(raw);
 
   let data: Record<string, unknown> | null = null;
   try {
@@ -138,21 +213,20 @@ export async function judgeGoalHermesStyle(
       timestamp: Date.now(),
     };
 
+    const apiKey = await resolveGoalJudgeApiKey(model);
     const result = await complete(
       model,
       {
         messages: [combinedUser],
       },
-      { maxTokens: 200, temperature: 0, signal: merged },
+      { apiKey, maxTokens: 200, temperature: 0, signal: merged },
     );
-    let text = '';
-    if (Array.isArray(result.content)) {
-      for (const c of result.content) {
-        if (c && typeof c === 'object' && (c as { type?: string }).type === 'text') {
-          text += String((c as { text?: string }).text || '');
-        }
-      }
+    const errorReason = getAssistantMessageErrorReason(result);
+    if (errorReason) {
+      return { verdict: 'continue', reason: b.callFailed, parseFailed: false };
     }
+
+    const text = extractAssistantText(result.content);
     const { done, reason, parseFailed } = parseJudgeResponseFailOpen(text);
     const reasonOut = localizeJudgeReasonText(reason, locale);
     return { verdict: done ? 'done' : 'continue', reason: reasonOut, parseFailed };

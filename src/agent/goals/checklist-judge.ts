@@ -3,7 +3,14 @@ import { complete } from '@earendil-works/pi-ai';
 
 import { resolveModel } from '../../providers/index.js';
 
-import { DEFAULT_JUDGE_TIMEOUT_MS, truncateGoalText } from './judge.js';
+import {
+  DEFAULT_JUDGE_TIMEOUT_MS,
+  extractAssistantText,
+  getAssistantMessageErrorReason,
+  resolveGoalJudgeApiKey,
+  stripCodeFences,
+  truncateGoalText,
+} from './judge.js';
 import type { GoalUiLocale } from './goal-locale.js';
 import {
   goalUiLocaleOrFallback,
@@ -40,12 +47,7 @@ const EVALUATE_CHECKLIST_SYSTEM = (
 
 function extractJsonObject(raw: string): Record<string, unknown> | null {
   if (!raw?.trim()) return null;
-  let text = raw.trim();
-  if (text.startsWith('```')) {
-    text = text.replace(/^`+/, '');
-    const nl = text.indexOf('\n');
-    if (nl !== -1) text = text.slice(nl + 1);
-  }
+  const text = stripCodeFences(raw);
   try {
     const data = JSON.parse(text) as unknown;
     return data && typeof data === 'object' && !Array.isArray(data) ? (data as Record<string, unknown>) : null;
@@ -107,15 +109,22 @@ export async function decomposeGoalChecklist(opts: {
         judgeResponseLanguageNote(locale),
       timestamp: Date.now(),
     };
-    const result = await complete(model, { messages: [user] }, { maxTokens: 2000, temperature: 0, signal: merged });
-    let text = '';
-    if (Array.isArray(result.content)) {
-      for (const c of result.content) {
-        if (c && typeof c === 'object' && (c as { type?: string }).type === 'text') {
-          text += String((c as { text?: string }).text || '');
-        }
-      }
+    const apiKey = await resolveGoalJudgeApiKey(model);
+    const result = await complete(
+      model,
+      { messages: [user] },
+      { apiKey, maxTokens: 2000, temperature: 0, signal: merged },
+    );
+    const errorReason = getAssistantMessageErrorReason(result);
+    if (errorReason) {
+      return {
+        items: [],
+        parseFailed: false,
+        errorReason: judgeReasonText('decompose_call_failed', locale),
+      };
     }
+
+    const text = extractAssistantText(result.content);
     const data = extractJsonObject(text);
     if (!data)
       return {
@@ -217,15 +226,25 @@ export async function evaluateGoalChecklistJudge(opts: {
       content: `${EVALUATE_CHECKLIST_SYSTEM}\n\n${userBody}` + judgeResponseLanguageNote(locale),
       timestamp: Date.now(),
     };
-    const result = await complete(model, { messages: [user] }, { maxTokens: 1500, temperature: 0, signal: merged });
-    let text = '';
-    if (Array.isArray(result.content)) {
-      for (const c of result.content) {
-        if (c && typeof c === 'object' && (c as { type?: string }).type === 'text') {
-          text += String((c as { text?: string }).text || '');
-        }
-      }
+    const apiKey = await resolveGoalJudgeApiKey(model);
+    const result = await complete(
+      model,
+      { messages: [user] },
+      { apiKey, maxTokens: 1500, temperature: 0, signal: merged },
+    );
+    const errorReason = getAssistantMessageErrorReason(result);
+    if (errorReason) {
+      return {
+        parsed: {
+          updates: [],
+          newItems: [],
+          reason: judgeReasonText('judge_call_failed', locale),
+        },
+        parseFailed: false,
+      };
     }
+
+    const text = extractAssistantText(result.content);
     const data = extractJsonObject(text);
     if (!data) {
       return {
