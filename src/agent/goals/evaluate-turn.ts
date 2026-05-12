@@ -1,7 +1,7 @@
 import type { GoalsConfig } from '../../config/schema.js';
 
 import { decomposeGoalChecklist, evaluateGoalChecklistJudge } from './checklist-judge.js';
-import { allChecklistTerminal, checklistCounts, CHECKLIST_ITEM_PENDING } from './checklist-types.js';
+import { allChecklistTerminal, checklistCounts } from './checklist-types.js';
 import {
   buildContinuationPromptFromState,
   checklistProgressSuffix,
@@ -14,6 +14,7 @@ import {
 import { judgeGoalHermesStyle } from './judge.js';
 import {
   applyJudgeChecklistUpdates,
+  mergeDecomposedChecklistItems,
   renderChecklistNumbered,
   type PersistentGoalState,
 } from './state.js';
@@ -125,15 +126,11 @@ export async function evaluateAfterTurnHermesLike(
     });
     next.decomposed = true;
     if (!dec.parseFailed && dec.items.length > 0) {
-      const now = Date.now();
-      next.checklist = dec.items.map((it) => ({
-        text: it.text,
-        status: CHECKLIST_ITEM_PENDING,
-        addedBy: 'judge' as const,
-        addedAt: now,
-      }));
+      const prior = next.checklist ?? [];
+      next.checklist = mergeDecomposedChecklistItems(prior, dec.items);
+      const mergedCount = next.checklist.length;
       next.lastVerdict = 'decompose';
-      next.lastReason = copy.decomposedReason(dec.items.length);
+      next.lastReason = copy.decomposedReason(mergedCount);
       resetParse();
       const budgetEarly = pauseIfBudget(next.lastReason);
       if (budgetEarly) return budgetEarly;
@@ -143,7 +140,7 @@ export async function evaluateAfterTurnHermesLike(
         continuationPrompt: buildContinuationPromptFromState(next, locale),
         verdict: 'decompose',
         reason: next.lastReason ?? '',
-        message: copy.checklistReady(dec.items.length),
+        message: copy.checklistReady(mergedCount),
       };
     }
     next.lastReason = dec.errorReason

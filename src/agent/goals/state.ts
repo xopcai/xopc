@@ -190,6 +190,33 @@ export function renderChecklistNumbered(items: GoalChecklistItem[]): string {
   return lines.join('\n');
 }
 
+/**
+ * After LLM decomposition, keep existing checklist rows (e.g. user-added acceptance criteria)
+ * and append judge-generated items, skipping duplicate text (case-insensitive trim).
+ */
+export function mergeDecomposedChecklistItems(
+  existing: GoalChecklistItem[],
+  decomposedTexts: { text: string }[],
+): GoalChecklistItem[] {
+  const now = Date.now();
+  const next = existing.map((it) => ({ ...it }));
+  const seen = new Set(next.map((it) => it.text.trim().toLowerCase()));
+  for (const row of decomposedTexts) {
+    const t = row.text.trim();
+    if (!t) continue;
+    const key = t.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    next.push({
+      text: t,
+      status: CHECKLIST_ITEM_PENDING,
+      addedBy: 'judge',
+      addedAt: now,
+    });
+  }
+  return next;
+}
+
 export function applyJudgeChecklistUpdates(
   items: GoalChecklistItem[],
   parsed: {

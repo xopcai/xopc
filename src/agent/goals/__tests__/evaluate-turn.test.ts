@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import * as judge from '../judge.js';
+import { CHECKLIST_ITEM_PENDING } from '../checklist-types.js';
+import * as checklistJudge from '../checklist-judge.js';
 import { evaluateAfterTurnHermesLike } from '../evaluate-turn.js';
+import * as judge from '../judge.js';
 
 const baseState = {
   goal: 'Ship the widget',
@@ -50,6 +52,34 @@ describe('evaluateAfterTurnHermesLike', () => {
     expect(d.newState?.status).toBe('done');
     expect(d.shouldContinue).toBe(false);
     expect(d.message).toContain('Goal achieved');
+    vi.restoreAllMocks();
+  });
+
+  it('merges decomposition with user checklist instead of replacing', async () => {
+    vi.spyOn(checklistJudge, 'decomposeGoalChecklist').mockResolvedValue({
+      items: [{ text: 'Judge item' }],
+      parseFailed: false,
+    });
+    const s0 = {
+      ...baseState,
+      turnsUsed: 0,
+      maxTurns: 20,
+      decomposed: false,
+      checklist: [
+        {
+          text: 'User acceptance item',
+          status: CHECKLIST_ITEM_PENDING,
+          addedBy: 'user' as const,
+          addedAt: 99,
+        },
+      ],
+    };
+    const d = await evaluateAfterTurnHermesLike(s0, 'did work', 'openai/gpt-4o-mini');
+    expect(d.verdict).toBe('decompose');
+    const cl = d.newState?.checklist ?? [];
+    expect(cl.map((x) => x.text)).toEqual(['User acceptance item', 'Judge item']);
+    expect(cl[0]!.addedBy).toBe('user');
+    expect(cl[1]!.addedBy).toBe('judge');
     vi.restoreAllMocks();
   });
 
