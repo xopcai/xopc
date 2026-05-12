@@ -2,8 +2,8 @@
  * Model Commands
  * 
  * Built-in commands for model management:
- * - /models - List available models
- * - /switch - Switch to a different model
+ * - /models - List models with display names and `provider/model` refs for /switch
+ * - /switch - Switch model using the ref from /models
  * - /usage - Show token usage statistics
  */
 
@@ -14,7 +14,7 @@ const modelsCommand: CommandDefinition = {
   id: 'model.list',
   name: 'models',
   aliases: ['model'],
-  description: 'List available AI models',
+  description: 'List models with display names and `provider/model` refs for /switch',
   category: 'model',
   scope: ['global', 'private', 'group'],
   handler: async (ctx: CommandContext) => {
@@ -39,21 +39,24 @@ const modelsCommand: CommandDefinition = {
       byProvider.get(m.provider)!.push(m);
     }
     
-    // Build text response
-    const lines: string[] = ['🤖 Available Models:\n'];
-    
+    /** `m.id` from listModels is always `serviceId/modelId` (canonical `/switch` ref). */
+    const lines: string[] = [
+      '🤖 Available models (use the `provider/model` ref with `/switch`):\n',
+    ];
+
     for (const [provider, providerModels] of byProvider) {
       lines.push(`**${provider}**`);
       for (const m of providerModels.slice(0, 5)) {
         const indicator = m.id === currentModel ? '▶️' : '  ';
-        lines.push(`${indicator} ${m.name}`);
+        lines.push(`${indicator} ${m.name} — \`${m.id}\``);
       }
       if (providerModels.length > 5) {
-        lines.push(`   ... and ${providerModels.length - 5} more`);
+        lines.push(`   … and ${providerModels.length - 5} more in this provider`);
       }
       lines.push('');
     }
-    
+
+    lines.push('_Copy the ref in backticks after each name, then: `/switch provider/model-id`._');
     const content = lines.join('\n');
     
     // Create UI component if supported
@@ -89,7 +92,7 @@ const modelsCommand: CommandDefinition = {
 const switchCommand: CommandDefinition = {
   id: 'model.switch',
   name: 'switch',
-  description: 'Switch to a different model (usage: /switch <model-id>)',
+  description: 'Switch model — pass the `provider/model` ref shown by /models',
   category: 'model',
   scope: ['global', 'private', 'group'],
   acceptsArgs: true,
@@ -97,7 +100,11 @@ const switchCommand: CommandDefinition = {
   handler: async (ctx: CommandContext, args: string) => {
     if (!args.trim()) {
       return {
-        content: '❌ Please specify a model ID.\nUsage: /switch <model-id>\nExample: /switch openai/gpt-4o',
+        content:
+          '❌ Missing model ref.\n\n' +
+          '**Usage:** `/switch provider/model-id`\n\n' +
+          'Run `/models` — each line shows a display name and a `provider/model` ref in backticks. Copy that ref.\n\n' +
+          '**Example:** `/switch openai/gpt-4o`',
         success: false,
       };
     }
@@ -110,12 +117,17 @@ const switchCommand: CommandDefinition = {
     if (success) {
       const modelName = modelId.split('/').pop() || modelId;
       return {
-        content: `✅ Switched to model: *${modelName}*\n\nThis model will be used for your next message.`,
+        content:
+          `✅ Switched to *\`${modelId}\`* (${modelName}).\n\n` +
+          'This model will be used for your next message.',
         success: true,
       };
     } else {
       return {
-        content: `❌ Failed to switch to model: ${modelId}\nPlease check the model ID and try again.`,
+        content:
+          `❌ Could not switch to \`${modelId}\`.\n\n` +
+          'Use the exact `provider/model` ref from `/models` (not only the display name). ' +
+          '**Example:** `/switch anthropic/claude-sonnet-4-20250514`',
         success: false,
       };
     }
