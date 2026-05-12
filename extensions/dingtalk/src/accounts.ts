@@ -82,7 +82,7 @@ export function resolveDingtalkAccount(cfg: Config, accountId?: string | null): 
     configured,
     clientId,
     clientSecret,
-    dmPolicy: merged.dmPolicy ?? 'pairing',
+    dmPolicy: merged.dmPolicy ?? 'open',
     groupPolicy: merged.groupPolicy ?? 'open',
     allowFrom: merged.allowFrom ?? [],
     groupAllowFrom: merged.groupAllowFrom ?? merged.allowFrom ?? [],

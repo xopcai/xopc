@@ -5,7 +5,7 @@ export const WeixinAccountConfigSchema = z.object({
   enabled: z.boolean().optional(),
   cdnBaseUrl: z.string().optional(),
   routeTag: z.union([z.string(), z.number()]).optional(),
-  dmPolicy: z.enum(['pairing', 'allowlist', 'open', 'disabled']).default('pairing'),
+  dmPolicy: z.enum(['pairing', 'allowlist', 'open', 'disabled']).default('open'),
   allowFrom: z.array(z.string()).default([]),
   streamMode: z.enum(['off', 'partial', 'block']).optional(),
   debug: z.boolean().optional(),
@@ -13,7 +13,7 @@ export const WeixinAccountConfigSchema = z.object({
 
 export const WeixinConfigSchema = z.object({
   enabled: z.boolean().default(false),
-  dmPolicy: z.enum(['pairing', 'allowlist', 'open', 'disabled']).default('pairing'),
+  dmPolicy: z.enum(['pairing', 'allowlist', 'open', 'disabled']).default('open'),
   allowFrom: z.array(z.string()).default([]),
   debug: z.boolean().default(false),
   streamMode: z.enum(['off', 'partial', 'block']).optional(),

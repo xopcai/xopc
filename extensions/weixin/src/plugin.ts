@@ -127,7 +127,7 @@ export class WeixinChannelPlugin implements ChannelPlugin<ResolvedWeixinAccount>
 
   security = {
     resolveDmPolicy: ({ account }: { account: ResolvedWeixinAccount }) =>
-      resolveDmPolicy(account.dmPolicy, 'pairing'),
+      resolveDmPolicy(account.dmPolicy, 'open'),
     checkAccess: (ctx: ChannelSecurityContext, account: ResolvedWeixinAccount, _cfg: Config) => {
       const allowFrom = [...(account.allowFrom ?? []), ...readFrameworkAllowFromList(account.accountId)];
       return evaluateAccess({

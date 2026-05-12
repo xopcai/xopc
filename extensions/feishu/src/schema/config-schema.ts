@@ -24,7 +24,7 @@ export const FeishuAccountConfigSchema = z.object({
   encryptKey: z.string().optional(),
 
   /** Access control */
-  dmPolicy: z.enum(['pairing', 'allowlist', 'open', 'disabled']).default('pairing').optional(),
+  dmPolicy: z.enum(['pairing', 'allowlist', 'open', 'disabled']).default('open').optional(),
   groupPolicy: z.enum(['open', 'disabled', 'allowlist']).default('allowlist').optional(),
   allowFrom: z.array(z.union([z.string(), z.number()])).optional(),
   groupAllowFrom: z.array(z.union([z.string(), z.number()])).optional(),
@@ -100,7 +100,7 @@ export const FeishuConfigSchema = z
   verificationToken: z.string().optional(),
   encryptKey: z.string().optional(),
 
-  dmPolicy: z.enum(['pairing', 'allowlist', 'open', 'disabled']).default('pairing').optional(),
+  dmPolicy: z.enum(['pairing', 'allowlist', 'open', 'disabled']).default('open').optional(),
   groupPolicy: z.enum(['open', 'disabled', 'allowlist']).default('allowlist').optional(),
   allowFrom: z.array(z.union([z.string(), z.number()])).default([]).optional(),
   groupAllowFrom: z.array(z.union([z.string(), z.number()])).default([]).optional(),

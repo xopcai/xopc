@@ -235,7 +235,7 @@ export function resolveWeixinAccount(cfg: Config, accountId?: string | null): Re
     enabled: channelEnabled && accountCfg.enabled !== false,
     configured: Boolean(token),
     name: accountCfg.name?.trim() || undefined,
-    dmPolicy: accountCfg.dmPolicy ?? 'pairing',
+    dmPolicy: accountCfg.dmPolicy ?? 'open',
     allowFrom: accountCfg.allowFrom ?? [],
     streamMode: accountCfg.streamMode,
     routeTag,

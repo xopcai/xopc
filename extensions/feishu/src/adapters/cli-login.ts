@@ -148,16 +148,16 @@ async function promptSecurityPolicies(ownerOpenId?: string): Promise<{
   const dmPolicy = await select<DmPolicy>({
     message: 'DM (private chat) policy:',
     choices: [
+      { value: 'open', name: 'open  [default]', description: 'Anyone can DM the bot after setup' },
       {
         value: 'pairing',
-        name: 'pairing  [recommended]',
-        description: 'Pairing code for new users; scanner pre-seeded after QR create',
+        name: 'pairing',
+        description: 'New users need `xopc channels pairing approve`',
       },
       { value: 'allowlist', name: 'allowlist', description: 'Only allowlisted users' },
-      { value: 'open', name: 'open', description: 'Anyone can DM' },
       { value: 'disabled', name: 'disabled', description: 'Disable DMs' },
     ],
-    default: 'pairing',
+    default: 'open',
   });
 
   let allowFrom: Array<string | number> = [];

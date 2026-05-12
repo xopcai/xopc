@@ -102,7 +102,7 @@ export class DingtalkChannelPlugin implements ChannelPlugin<ResolvedDingtalkAcco
   };
 
   security: ChannelSecurityAdapter<ResolvedDingtalkAccount> = {
-    resolveDmPolicy: ({ account }) => resolveDmPolicy(account.dmPolicy, 'pairing'),
+    resolveDmPolicy: ({ account }) => resolveDmPolicy(account.dmPolicy, 'open'),
     resolveGroupPolicy: ({ account }) => resolveGroupPolicy(account.groupPolicy, 'open'),
     checkAccess: (ctx: ChannelSecurityContext, account: ResolvedDingtalkAccount, _cfg: Config) => {
       const isDm = !ctx.isGroup;

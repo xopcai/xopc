@@ -21,7 +21,7 @@ export function mergeDingtalkCredentialsIntoConfig(
         enabled: true,
         clientId: creds.clientId,
         clientSecret: creds.clientSecret,
-        dmPolicy: policies?.dmPolicy ?? prev.dmPolicy ?? 'pairing',
+        dmPolicy: policies?.dmPolicy ?? prev.dmPolicy ?? 'open',
         groupPolicy: policies?.groupPolicy ?? prev.groupPolicy ?? 'open',
         allowFrom: policies?.allowFrom ?? prev.allowFrom ?? [],
         groupAllowFrom: policies?.groupAllowFrom ?? prev.groupAllowFrom ?? [],
