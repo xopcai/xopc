@@ -3,6 +3,10 @@ import { ChevronUp, ListChecks, Target } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import {
+  computeGoalWallElapsedMs,
+  formatExecutionElapsedMs,
+} from '@/features/chat/format-execution-elapsed';
+import {
   fetchWebchatGoal,
   postWebchatChecklistMutation,
   postWebchatGoalAction,
@@ -75,6 +79,7 @@ export function ChatGoalBanner({ sessionKey, streaming, sending }: ChatGoalBanne
   const [collapsed, setCollapsed] = useState(false);
   const [newCriterion, setNewCriterion] = useState('');
   const prevStreamingRef = useRef(false);
+  const [, bumpGoalClock] = useState(0);
 
   useEffect(() => {
     try {
@@ -135,6 +140,13 @@ export function ChatGoalBanner({ sessionKey, streaming, sending }: ChatGoalBanne
     }
   }, [streaming, sending, refetch]);
 
+  const goalStatus = goal?.status;
+  useEffect(() => {
+    if (collapsed || !goalStatus || goalStatus === 'done' || goalStatus === 'cleared') return;
+    const id = window.setInterval(() => bumpGoalClock((n) => n + 1), 1000);
+    return () => clearInterval(id);
+  }, [goalStatus, collapsed]);
+
   const runAction = async (action: GoalWebchatAction) => {
     setMutationBusy(true);
     setError(null);
@@ -174,6 +186,8 @@ export function ChatGoalBanner({ sessionKey, streaming, sending }: ChatGoalBanne
   const { total: clTotal, done: clDone } = checklistStats(g);
   const clLine =
     clTotal > 0 ? t.checklistProgress.replace('{{done}}', String(clDone)).replace('{{total}}', String(clTotal)) : '';
+  const elapsedMs = computeGoalWallElapsedMs(g, Date.now());
+  const elapsedStr = formatExecutionElapsedMs(elapsedMs, language);
   const pillTitle = t.pillTitle.replace('{{status}}', statusShort).replace('{{turns}}', turnsShort);
 
   if (collapsed) {
@@ -242,6 +256,9 @@ export function ChatGoalBanner({ sessionKey, streaming, sending }: ChatGoalBanne
               {clTotal > 0 ? (
                 <span className="rounded-full bg-surface-panel px-1.5 py-0.5 text-fg">{clLine}</span>
               ) : null}
+              <span className="text-fg-muted">
+                {t.elapsedLabel}: <span className="text-fg">{elapsedStr}</span>
+              </span>
               {agentBusy ? <span className="text-accent">{t.agentRunning}</span> : null}
             </div>
             <p className="mt-1 line-clamp-2 text-sm leading-snug text-fg" title={g.goal}>
