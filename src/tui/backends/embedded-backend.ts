@@ -1,4 +1,5 @@
 import { AgentService } from '../../agent/index.js';
+import { parseModelRef } from '../../agent/models/selection.js';
 import { messagesToClientHistory } from '../../session/client-history.js';
 import { prependEnvelopeTimestamp } from '../../channels/envelope-timestamp.js';
 import { loadConfig, getWorkspacePath } from '../../config/index.js';
@@ -160,11 +161,29 @@ export class EmbeddedBackend implements TuiBackend {
     return [];
   }
 
-  async getSessionInfo(_sessionKey: string): Promise<SessionInfo> {
-    const config = loadConfig();
-    const modelConfig = config.agents?.defaults?.model;
-    const model = typeof modelConfig === 'string' ? modelConfig : modelConfig?.primary;
-    return { model: model ?? undefined };
+  async getSessionInfo(sessionKey: string): Promise<SessionInfo> {
+    if (!this.agent) {
+      const config = loadConfig();
+      const modelConfig = config.agents?.defaults?.model;
+      const model = typeof modelConfig === 'string' ? modelConfig : modelConfig?.primary;
+      return { model: model ?? undefined };
+    }
+    try {
+      const cfg = await this.agent.getSessionAgentConfig(sessionKey);
+      const parsed = parseModelRef(cfg.model);
+      return {
+        model: parsed?.model ?? cfg.model,
+        modelProvider: parsed?.provider,
+        thinkingLevel: cfg.thinkingLevel,
+      };
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      log.warn({ err, sessionKey, errorMessage }, `getSessionInfo failed: ${errorMessage}`);
+      const config = loadConfig();
+      const modelConfig = config.agents?.defaults?.model;
+      const model = typeof modelConfig === 'string' ? modelConfig : modelConfig?.primary;
+      return { model: model ?? undefined };
+    }
   }
 
   async listModels(): Promise<TuiModelChoice[]> {

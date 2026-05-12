@@ -1,4 +1,5 @@
 import { prependEnvelopeTimestamp } from '../../channels/envelope-timestamp.js';
+import { parseModelRef } from '../../agent/models/selection.js';
 import { createLogger } from '../../utils/logger.js';
 import { consumeSSEStream, parseSSEData } from '../sse-consumer.js';
 import type {
@@ -217,34 +218,73 @@ export class GatewaySseBackend implements TuiBackend {
   }
 
   async getSessionInfo(sessionKey: string): Promise<SessionInfo> {
+    const out: SessionInfo = {};
     try {
-      const res = await gatewayFetch(
-        this.baseUrl,
-        `/api/sessions/${encodeURIComponent(sessionKey)}`,
-        this.token,
-      );
-      if (!res.ok) return {};
-      const json = (await res.json()) as {
-        session?: {
-          name?: string;
-          estimatedTokens?: number;
-          customData?: Record<string, unknown>;
+      const sessionPath = `/api/sessions/${encodeURIComponent(sessionKey)}`;
+      const [sessionRes, agentCfgRes] = await Promise.all([
+        gatewayFetch(this.baseUrl, sessionPath, this.token),
+        gatewayFetch(this.baseUrl, `${sessionPath}/agent-config`, this.token),
+      ]);
+
+      type SessionRow = {
+        name?: string;
+        estimatedTokens?: number;
+        customData?: Record<string, unknown>;
+      };
+      let session: SessionRow | undefined;
+
+      if (sessionRes.ok) {
+        const json = (await sessionRes.json()) as { session?: SessionRow };
+        session = json.session;
+        if (session) {
+          if (session.name) out.displayName = session.name;
+          if (session.estimatedTokens != null) out.totalTokens = session.estimatedTokens;
+        }
+      }
+
+      if (agentCfgRes.ok) {
+        const json = (await agentCfgRes.json()) as {
+          ok?: boolean;
+          payload?: { model?: string; thinkingLevel?: string };
         };
-      };
-      const s = json.session;
-      if (!s) return {};
-      return {
-        displayName: s.name,
-        totalTokens: s.estimatedTokens ?? undefined,
-        model:
-          typeof s.customData?.model === 'string'
-            ? s.customData.model
-            : typeof s.customData?.modelRef === 'string'
-              ? s.customData.modelRef
-              : undefined,
-        modelProvider:
-          typeof s.customData?.modelProvider === 'string' ? s.customData.modelProvider : undefined,
-      };
+        const p = json.payload;
+        if (p?.model && typeof p.model === 'string') {
+          const parsed = parseModelRef(p.model);
+          if (parsed) {
+            out.model = parsed.model;
+            out.modelProvider = parsed.provider;
+          } else {
+            out.model = p.model;
+          }
+        }
+        if (p?.thinkingLevel && typeof p.thinkingLevel === 'string') {
+          out.thinkingLevel = p.thinkingLevel;
+        }
+      }
+
+      if (!out.model && session?.customData) {
+        const cd = session.customData;
+        const ref =
+          typeof cd.model === 'string'
+            ? cd.model
+            : typeof cd.modelRef === 'string'
+              ? cd.modelRef
+              : undefined;
+        if (ref) {
+          const parsed = parseModelRef(ref);
+          if (parsed) {
+            out.model = parsed.model;
+            out.modelProvider = parsed.provider;
+          } else {
+            out.model = ref;
+          }
+        }
+        if (!out.modelProvider && typeof cd.modelProvider === 'string') {
+          out.modelProvider = cd.modelProvider;
+        }
+      }
+
+      return out;
     } catch {
       return {};
     }

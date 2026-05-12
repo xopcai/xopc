@@ -586,9 +586,21 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     );
     state.activeRunId = null;
     setActivityStatus('idle');
+    void refreshSessionInfo().finally(() => {
+      updateFooter();
+      tui.requestRender();
+    });
     flushFollowUpQueue();
     tui.requestRender();
   }, 5000);
+
+  const onAgentRunEnded = () => {
+    void refreshSessionInfo().finally(() => {
+      updateFooter();
+      tui.requestRender();
+    });
+    flushFollowUpQueue();
+  };
 
   client.onEvent = (evt: TuiEvent) => {
     const data = (evt.data ?? {}) as Record<string, unknown>;
@@ -601,7 +613,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
       tui,
       setActivityStatus,
       touchStreamingActivity,
-      flushFollowUpQueue,
+      onAgentRunEnded,
     );
   };
 
