@@ -18,7 +18,7 @@ export function getSlashCommands(_isLocal: boolean): SlashCommandDef[] {
     { name: 'thinking', description: 'Toggle thinking display (or Ctrl+T)' },
     { name: 'exit', description: 'Exit the TUI' },
     { name: 'models', description: 'List available models' },
-    { name: 'switch', description: 'Switch model (e.g. /switch openai/gpt-4o)' },
+    { name: 'switch', description: 'Switch model — copy `provider/model` from /models' },
     { name: 'usage', description: 'Show token usage statistics' },
     { name: 'new', description: 'Start a new session' },
     { name: 'clear', description: 'Clear current session' },

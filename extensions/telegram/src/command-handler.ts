@@ -103,8 +103,8 @@ export function createTelegramCommandHandler(deps: TelegramCommandHandlerDeps) {
         '👋 *Welcome to xopc!*\n\n' +
         'I am your AI assistant. Here are the available commands:\n\n' +
         '🤖 *Model Selection*\n' +
-        '/models - Select a model to use\n' +
-        '/switch \u003cmodel-id\u003e - Switch to a specific model\n\n' +
+        '/models - List models (name + `provider/model` ref for /switch)\n' +
+        '/switch \u003cprovider/model-id\u003e - Same ref as shown in /models\n\n' +
         '📊 *Session Management*\n' +
         '/new - Start a new session (archive current)\n' +
         '/list - List all your sessions\n' +

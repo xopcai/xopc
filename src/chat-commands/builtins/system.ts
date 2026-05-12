@@ -59,7 +59,7 @@ const startCommand: CommandDefinition = {
       'I am your AI assistant. Here\'s what I can do:\n\n' +
       '🤖 *AI Chat* - Just send a message to start chatting\n' +
       '📊 *Session Management* - Use /new, /list, /usage\n' +
-      '🔧 *Model Selection* - Use /models, /switch\n\n' +
+      '🔧 *Model Selection* - `/models` shows names and `provider/model` refs; `/switch` uses that ref\n\n' +
       'Type /help to see all available commands.';
 
     return {
