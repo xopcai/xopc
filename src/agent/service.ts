@@ -804,6 +804,7 @@ export class AgentService {
 
     this.sessionContextManager.setContext(context);
     this.feedbackCoordinator.setContext(context);
+    this.agentManager.getOrCreateAgent(sessionKey);
     this.setupSessionEventHandling(sessionKey);
 
     return context;
@@ -1343,6 +1344,10 @@ export class AgentService {
 
       this.sessionContextManager.setContext(sessionContext);
       this.feedbackCoordinator.setContext(sessionContext);
+
+      // `subscribeToSession` requires an Agent instance; without this the first inbound never
+      // registers `message_update` streaming (second turn behaved differently).
+      this.agentManager.getOrCreateAgent(sessionContext.sessionKey);
 
       // Setup event handling for this session
       this.setupSessionEventHandling(sessionContext.sessionKey);

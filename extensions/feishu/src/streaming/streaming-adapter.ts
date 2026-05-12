@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import type {
   ChannelStreamHandle,
   ChannelStreamingAdapter,
@@ -11,6 +13,37 @@ import { getFeishuBindingByMessageId, recordFeishuMessageBinding } from '../stat
 import { createFeishuClient } from '../transport/client/client.js';
 
 const log = createLogger('FeishuStreaming');
+
+/** Normalize CardKit `card.create` responses (SDK / OpenAPI envelope shapes differ). */
+function extractFeishuCardKitCreateCardId(raw: unknown): string | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const o = raw as Record<string, unknown>;
+  const tryId = (v: unknown): string | undefined => {
+    if (typeof v !== 'string') return undefined;
+    const t = v.trim();
+    return t.length > 0 ? t : undefined;
+  };
+
+  const fromData = (data: unknown): string | undefined => {
+    if (!data || typeof data !== 'object') return undefined;
+    const d = data as Record<string, unknown>;
+    return tryId(d.card_id) ?? tryId(d.cardId);
+  };
+
+  return (
+    fromData(o.data) ??
+    (o.data && typeof o.data === 'object' ? fromData((o.data as Record<string, unknown>).data) : undefined) ??
+    tryId(o.card_id)
+  );
+}
+
+function feishuOpenApiOk(res: unknown): boolean {
+  if (res === null || res === undefined) return false;
+  if (typeof res !== 'object') return true;
+  const code = (res as Record<string, unknown>).code;
+  if (code === undefined || code === null) return true;
+  return Number(code) === 0;
+}
 
 export function createFeishuStreamingAdapter(getConfig: () => Config): ChannelStreamingAdapter {
   return {
@@ -40,7 +73,7 @@ export function createFeishuStreamingAdapter(getConfig: () => Config): ChannelSt
       let ready: Promise<void> | null = null;
       let cardId: string | undefined;
       let cardSeq = 0;
-      const cardElementId = 'md_1';
+      const cardElementId = `md_${randomUUID().replace(/-/g, '')}`;
       let fallbackSent = false;
 
       const renderMode = account.renderMode ?? 'auto';
@@ -134,12 +167,11 @@ export function createFeishuStreamingAdapter(getConfig: () => Config): ChannelSt
         try {
           await edit(text);
         } catch (err) {
-          // Don't crash the agent loop. In card mode, card streaming can fail due to missing CardKit scopes;
-          // fall back to sending a plain text reply so the user never gets stuck on "Thinking…".
+          // Don't crash the agent loop. CardKit updates can fail (scopes, element conflicts); plain
+          // `im.message.update` can also fail for some message states — always fall back to a text
+          // reply so the user is not stuck on "Thinking…".
           log.warn({ err, accountId: account.accountId, messageId, mode: preferCard ? 'card' : 'text' }, 'Feishu streaming edit failed');
-          if (preferCard) {
-            await sendFallbackText(text);
-          }
+          await sendFallbackText(text);
         }
       };
 
@@ -166,35 +198,64 @@ export function createFeishuStreamingAdapter(getConfig: () => Config): ChannelSt
             },
           };
 
-          const c = await (api as any).cardkit.v1.card.create({
-            data: { type: 'card_json', data: JSON.stringify(cardSpec) },
-          });
-          cardId = c?.data?.card_id ?? c?.card_id ?? undefined;
+          let created: unknown;
+          try {
+            created = await (api as any).cardkit.v1.card.create({
+              data: { type: 'card_json', data: JSON.stringify(cardSpec) },
+            });
+          } catch (err) {
+            log.warn({ err, accountId: account.accountId }, 'Feishu cardkit.card.create threw; falling back to text stream');
+            created = null;
+          }
 
-          const res = options.replyToMessageId
-            ? await (api as any).im.message.reply({
-                path: { message_id: options.replyToMessageId },
-                data: {
-                  msg_type: 'interactive',
-                  content: JSON.stringify({ type: 'card', data: { card_id: cardId } }),
-                  ...(options.threadId ? { reply_in_thread: true } : {}),
-                },
-              })
-            : await (api as any).im.message.create({
-                params: { receive_id_type },
-                data: {
-                  receive_id: options.chatId,
-                  msg_type: 'interactive',
-                  content: JSON.stringify({ type: 'card', data: { card_id: cardId } }),
-                },
-              });
-          messageId = res?.data?.message_id ?? res?.message_id ?? undefined;
-          if (messageId) recordBindingIfReply(messageId);
-          log.info(
-            { accountId: account.accountId, chatId: options.chatId, messageId, mode: 'card' },
-            'Feishu streaming started',
-          );
-          return;
+          const apiOk = feishuOpenApiOk(created);
+          cardId = apiOk ? extractFeishuCardKitCreateCardId(created) : undefined;
+
+          if (!apiOk) {
+            log.warn(
+              {
+                accountId: account.accountId,
+                code: (created as Record<string, unknown> | null)?.code,
+                msg: (created as Record<string, unknown> | null)?.msg,
+              },
+              'Feishu cardkit.card.create returned non-zero code; falling back to text stream',
+            );
+          } else if (!cardId) {
+            log.warn(
+              { accountId: account.accountId, responsePreview: JSON.stringify(created).slice(0, 400) },
+              'Feishu cardkit.card.create returned no card_id; falling back to text stream',
+            );
+          }
+
+          if (cardId) {
+            const res = options.replyToMessageId
+              ? await (api as any).im.message.reply({
+                  path: { message_id: options.replyToMessageId },
+                  data: {
+                    msg_type: 'interactive',
+                    content: JSON.stringify({ type: 'card', data: { card_id: cardId } }),
+                    ...(options.threadId ? { reply_in_thread: true } : {}),
+                  },
+                })
+              : await (api as any).im.message.create({
+                  params: { receive_id_type },
+                  data: {
+                    receive_id: options.chatId,
+                    msg_type: 'interactive',
+                    content: JSON.stringify({ type: 'card', data: { card_id: cardId } }),
+                  },
+                });
+            messageId = res?.data?.message_id ?? res?.message_id ?? undefined;
+            if (messageId) recordBindingIfReply(messageId);
+            log.info(
+              { accountId: account.accountId, chatId: options.chatId, messageId, mode: 'card' },
+              'Feishu streaming started',
+            );
+            return;
+          }
+
+          // Clear so downstream edits use im.message.update (text), not CardKit.
+          cardId = undefined;
         }
 
         const res = options.replyToMessageId
