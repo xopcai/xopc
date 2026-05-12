@@ -127,7 +127,7 @@ export class FeishuChannelPlugin implements ChannelPlugin<ResolvedFeishuAccount>
 
   security: ChannelSecurityAdapter<ResolvedFeishuAccount> = {
     resolveDmPolicy: ({ account }: { account: ResolvedFeishuAccount }) =>
-      resolveDmPolicy(account.dmPolicy, 'pairing'),
+      resolveDmPolicy(account.dmPolicy, 'open'),
     resolveGroupPolicy: ({ account }: { account: ResolvedFeishuAccount }) =>
       resolveGroupPolicy(account.groupPolicy, 'allowlist'),
     checkAccess: (ctx: ChannelSecurityContext, account: ResolvedFeishuAccount, _cfg: Config) => {

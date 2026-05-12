@@ -638,7 +638,7 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
           if (!config.channels.weixin) {
             config.channels.weixin = {
               enabled: false,
-              dmPolicy: 'pairing',
+              dmPolicy: 'open',
               allowFrom: [],
               debug: false,
               historyLimit: 50,
@@ -679,7 +679,7 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
               appSecret: '',
               domain: 'feishu',
               connectionMode: 'websocket',
-              dmPolicy: 'pairing',
+              dmPolicy: 'open',
               groupPolicy: 'allowlist',
               allowFrom: [],
               groupAllowFrom: [],
@@ -756,7 +756,7 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
               enabled: false,
               clientId: '',
               clientSecret: '',
-              dmPolicy: 'pairing',
+              dmPolicy: 'open',
               groupPolicy: 'open',
               allowFrom: [],
               groupAllowFrom: [],
