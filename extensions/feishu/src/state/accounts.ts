@@ -126,7 +126,7 @@ export function resolveFeishuAccount(cfg: Config, accountId?: string | null): Re
     webhookPath: (merged as any).webhookPath,
     verificationToken: (merged as any).verificationToken,
     encryptKey: (merged as any).encryptKey,
-    dmPolicy: (merged.dmPolicy ?? 'pairing') as any,
+    dmPolicy: (merged.dmPolicy ?? 'open') as any,
     groupPolicy: (merged.groupPolicy ?? 'allowlist') as any,
     allowFrom: merged.allowFrom,
     groupAllowFrom: merged.groupAllowFrom,

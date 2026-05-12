@@ -65,7 +65,7 @@ async function startDingtalkSetupPolling(sessionKey: string, service: GatewaySer
       };
       const existing = (config.channels?.dingtalk ?? {}) as Record<string, unknown>;
       const dmPolicy =
-        typeof existing.dmPolicy === 'string' && existing.dmPolicy.trim() ? existing.dmPolicy : 'pairing';
+        typeof existing.dmPolicy === 'string' && existing.dmPolicy.trim() ? existing.dmPolicy : 'open';
       const allowFrom = Array.isArray(existing.allowFrom) ? existing.allowFrom : [];
 
       config.channels = {
@@ -123,7 +123,7 @@ async function startFeishuSetupPolling(sessionKey: string, service: GatewayServi
       const dmPolicy =
         typeof existingFeishu.dmPolicy === 'string' && existingFeishu.dmPolicy.trim()
           ? existingFeishu.dmPolicy
-          : 'pairing';
+          : 'open';
       const preseedOpenId = outcome.result.openId?.trim();
       const allowFrom = mergeDistinctSenderIds(existingFeishu.allowFrom, preseedOpenId ? [preseedOpenId] : []);
 

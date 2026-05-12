@@ -6,7 +6,7 @@ export const weixinConfigSurface: ChannelConfigSurfaceAdapter = {
     const weixin = cfg.channels?.weixin as Record<string, unknown> | undefined;
     return {
       enabled: weixin?.enabled ?? false,
-      dmPolicy: weixin?.dmPolicy || 'pairing',
+      dmPolicy: weixin?.dmPolicy || 'open',
       allowFrom: weixin?.allowFrom || [],
       debug: weixin?.debug ?? false,
       streamMode: weixin?.streamMode ?? 'partial',

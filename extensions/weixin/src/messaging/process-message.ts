@@ -114,7 +114,7 @@ export async function processWeixinInboundMessage(
       isGroup: false,
       isDm: true,
     },
-    dmPolicy: deps.account.dmPolicy ?? 'pairing',
+    dmPolicy: deps.account.dmPolicy ?? 'open',
     allowFrom: mergedAllow,
   });
   if (!access.allowed) {
@@ -147,7 +147,7 @@ export async function processWeixinInboundMessage(
       }
     } else {
       logger.info(
-        `weixin: dropped message from=${senderId} dmPolicy=${deps.account.dmPolicy ?? 'pairing'} reason=${access.reason ?? 'not allowed'}`,
+        `weixin: dropped message from=${senderId} dmPolicy=${deps.account.dmPolicy ?? 'open'} reason=${access.reason ?? 'not allowed'}`,
       );
     }
     return;
