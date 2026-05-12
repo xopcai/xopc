@@ -333,7 +333,8 @@
       "loadFailed": "Could not load goal state.",
       "collapseAria": "Collapse goal bar",
       "expandAria": "Expand standing goal",
-      "pillTitle": "{{status}} · {{turns}} — click to expand"
+      "pillTitle": "{{status}} · {{turns}} — click to expand",
+      "elapsedLabel": "Run time"
     },
     "atMention": {
       "noResults": "No matches",

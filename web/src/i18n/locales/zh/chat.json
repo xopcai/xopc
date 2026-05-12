@@ -333,7 +333,8 @@
       "loadFailed": "无法加载目标状态。",
       "collapseAria": "收起目标条",
       "expandAria": "展开持久目标",
-      "pillTitle": "{{status}} · {{turns}} — 点击展开"
+      "pillTitle": "{{status}} · {{turns}} — 点击展开",
+      "elapsedLabel": "用时"
     },
     "atMention": {
       "noResults": "无匹配项",
