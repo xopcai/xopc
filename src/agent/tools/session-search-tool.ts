@@ -7,6 +7,7 @@ import type { Config } from '../../config/schema.js';
 import { getDefaultModelSync, resolveModel } from '../../providers/index.js';
 import { getOrLoadSessionSearchIndex } from '../../session/search-index-cache.js';
 import type { SessionStore } from '../../session/store.js';
+import { readAgentMessageContent } from '../memory/agent-message-access.js';
 import { createLogger } from '../../utils/logger.js';
 
 const log = createLogger('session-search-tool');
@@ -59,7 +60,7 @@ function formatMessagesForSummary(messages: AgentMessage[]): string {
   let total = 0;
   for (const msg of messages) {
     const role = String(msg.role || 'unknown').toUpperCase();
-    const text = extractTextFromContent(msg.content);
+    const text = extractTextFromContent(readAgentMessageContent(msg));
     const line = `${role}: ${text}`;
     if (total + line.length > MAX_SUMMARY_CHARS) {
       lines.push('… [truncated]');

@@ -13,6 +13,7 @@
 
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import { createLogger } from '../../utils/logger.js';
+import { readAgentMessageContent } from './agent-message-access.js';
 
 const log = createLogger('MessageSanitizer');
 
@@ -77,7 +78,7 @@ function hasValidContent(message: AgentMessage): boolean {
     if (Array.isArray(msg.toolCalls) && msg.toolCalls.length > 0) return true;
   }
 
-  const content = message.content;
+  const content = readAgentMessageContent(message);
 
   // String content must be non-empty
   if (typeof content === 'string') {

@@ -1,5 +1,6 @@
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 
+import { readAgentMessageContent } from './agent-message-access.js';
 import { buildMemoryContextBlock } from './context-fence.js';
 import type { MemoryManager } from './manager.js';
 
@@ -24,7 +25,7 @@ export async function injectPrefetchIntoUserMessage(
   }
 
   const prefix = `${block}\n\n`;
-  const c = userMessage.content;
+  const c = readAgentMessageContent(userMessage);
 
   if (typeof c === 'string') {
     return { ...userMessage, content: prefix + c } as AgentMessage;

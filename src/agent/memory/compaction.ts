@@ -1,5 +1,6 @@
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import { complete, type Model, type Api, type UserMessage } from '@earendil-works/pi-ai';
+import { readAgentMessageContent } from './agent-message-access.js';
 import { generateStructuredSummary, formatSummaryAsText, type ConversationSummary } from './summary-generator.js';
 
 export interface CompactionResult {
@@ -51,11 +52,12 @@ function estimateTokens(text: string): number {
 
 function estimateMessageTokens(msg: AgentMessage): number {
   let text = '';
-  
-  if (typeof msg.content === 'string') {
-    text = msg.content;
-  } else if (Array.isArray(msg.content)) {
-    text = msg.content
+  const raw = readAgentMessageContent(msg);
+
+  if (typeof raw === 'string') {
+    text = raw;
+  } else if (Array.isArray(raw)) {
+    text = raw
       .filter(c => c.type === 'text')
       .map(c => (c as { text?: string }).text || '')
       .join('\n');
@@ -382,9 +384,10 @@ Summary:`;
     return messages
       .map(m => {
         const role = m.role;
-        const content = typeof m.content === 'string' 
-          ? m.content 
-          : (m.content as Array<{ type: string; text?: string }>).filter(c => c.type === 'text').map(c => c.text || '').join('\n');
+        const raw = readAgentMessageContent(m);
+        const content = typeof raw === 'string'
+          ? raw
+          : (raw as Array<{ type: string; text?: string }>).filter(c => c.type === 'text').map(c => c.text || '').join('\n');
         return `[${role}]: ${content}`;
       })
       .join('\n\n');
@@ -395,9 +398,10 @@ Summary:`;
       .filter(m => m.role === 'user')
       .slice(-5)
       .map(m => {
-        if (typeof m.content === 'string') return m.content;
-        if (Array.isArray(m.content)) {
-          return m.content
+        const raw = readAgentMessageContent(m);
+        if (typeof raw === 'string') return raw;
+        if (Array.isArray(raw)) {
+          return raw
             .filter(c => c.type === 'text')
             .map(c => (c as { text?: string }).text || '')
             .join('\n');

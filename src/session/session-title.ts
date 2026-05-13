@@ -10,6 +10,7 @@ import { stripEnvelopeTimestampPrefix } from '../channels/envelope-timestamp.js'
 import { isCronSessionKey, parseSessionKey } from '../routing/session-key.js';
 import { resolveModel } from '../providers/index.js';
 import { createLogger } from '../utils/logger.js';
+import { readAgentMessageContent } from '../agent/memory/agent-message-access.js';
 import type { SessionStore } from './store.js';
 
 const log = createLogger('SessionAutoTitle');
@@ -18,10 +19,11 @@ const MAX_TITLE_LEN = 80;
 
 /** Collect visible text from any content block that exposes `text` (pi-ai / OpenAI / Anthropic shapes). */
 function extractTextFromMessage(m: AgentMessage): string {
-  if (typeof m.content === 'string') return m.content.trim();
-  if (Array.isArray(m.content)) {
+  const raw = readAgentMessageContent(m);
+  if (typeof raw === 'string') return raw.trim();
+  if (Array.isArray(raw)) {
     const parts: string[] = [];
-    for (const c of m.content) {
+    for (const c of raw) {
       if (c && typeof c === 'object') {
         const o = c as unknown as Record<string, unknown>;
         const type = typeof o.type === 'string' ? o.type : '';
