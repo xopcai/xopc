@@ -10,16 +10,16 @@ import { normalizeAgentId } from '../../../agent/agent-scope.js';
 import {
   deleteAgentAvatarFile,
   finalizeCreateAgentDirs,
-  listAgentBootstrapFiles,
+  listAgentProfileFiles,
   listGatewayAgents,
   prepareCreateAgent,
   prepareDeleteAgent,
   prepareUpdateAgent,
   readAgentAvatarFile,
-  readAgentBootstrapFile,
+  readAgentProfileFile,
   runAfterDeletePurge,
   writeAgentAvatarFromBase64,
-  writeAgentBootstrapFile,
+  writeAgentProfileFile,
 } from '../../agents-admin.js';
 import {
   resolveImageGenerationCapabilities,
@@ -205,7 +205,7 @@ export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRou
 
   authenticated.get('/api/agents/:id/files', async (c) => {
     const id = normalizeAgentId(c.req.param('id') ?? '');
-    const res = await listAgentBootstrapFiles(service.currentConfig as Config, id);
+    const res = await listAgentProfileFiles(service.currentConfig as Config, id);
     if (res.ok === false) {
       return c.json({ ok: false, error: { message: res.error } }, res.status ?? 400);
     }
@@ -215,7 +215,7 @@ export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRou
   authenticated.get('/api/agents/:id/files/:name', async (c) => {
     const id = normalizeAgentId(c.req.param('id') ?? '');
     const name = decodeURIComponent(c.req.param('name') ?? '');
-    const res = await readAgentBootstrapFile(service.currentConfig as Config, id, name);
+    const res = await readAgentProfileFile(service.currentConfig as Config, id, name);
     if (res.ok === false) {
       return c.json({ ok: false, error: { message: res.error } }, res.status ?? 400);
     }
@@ -232,7 +232,7 @@ export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRou
     } catch {
       return c.json({ ok: false, error: { message: 'Invalid JSON' } }, 400);
     }
-    const res = await writeAgentBootstrapFile(service.currentConfig as Config, id, name, content);
+    const res = await writeAgentProfileFile(service.currentConfig as Config, id, name, content);
     if (res.ok === false) {
       return c.json({ ok: false, error: { message: res.error } }, res.status ?? 400);
     }

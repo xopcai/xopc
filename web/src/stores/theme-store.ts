@@ -87,7 +87,7 @@ function applyDomTheme(mode: 'light' | 'dark', scheme: ColorScheme, useViewTrans
 }
 
 /** Sync DOM from localStorage before React paint (zustand persist hydrates async). */
-export function bootstrapTheme() {
+export function hydrateThemeFromStorage() {
   try {
     const raw = localStorage.getItem('xopc-web-theme');
     let pref: ThemePreference = 'system';

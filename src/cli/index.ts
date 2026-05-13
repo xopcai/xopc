@@ -4,7 +4,7 @@ import { Command } from 'commander';
 import { registry, createDefaultContext, type CLIContext } from './registry.js';
 import pkg from '../../package.json' with { type: 'json' };
 import { flushAndClose } from '../utils/logger.js'; // Import flushAndClose for graceful shutdown
-import { registerExtensionCliCommands } from './bootstrap-extensions.js';
+import { registerExtensionCliCommands } from './extension-cli-register.js';
 
 // Import order determines display order in help
 import './commands/setup.js';

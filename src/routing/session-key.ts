@@ -117,6 +117,41 @@ export function parseSessionKey(sessionKey: string | undefined | null): ParsedSe
   
   const parts = raw.split(':').filter(Boolean);
 
+  /**
+   * Alternate encoding used in some installs / tests: `gateway:{agentId}:{source}:{accountId}:{peerKind}:{peerId}…`
+   * (distinct from normal `{agentId}:{source}:…` where the first segment is the agent id.)
+   */
+  if (parts.length >= 6 && parts[0]?.toLowerCase() === 'gateway') {
+    const agentId = parts[1] ?? '';
+    const source = parts[2] ?? '';
+    const accountId = parts[3] ?? '';
+    const peerKind = parts[4] ?? '';
+    const peerId = parts[5] ?? '';
+    const rest = parts.slice(6);
+    const result: ParsedSessionKey = {
+      agentId: agentId.toLowerCase(),
+      source: source.toLowerCase(),
+      accountId: accountId.toLowerCase(),
+      peerKind: peerKind.toLowerCase(),
+      peerId: peerId.toLowerCase(),
+    };
+    let i = 0;
+    while (i < rest.length) {
+      const marker = rest[i]?.toLowerCase();
+      const value = rest[i + 1];
+      if (marker === 'thread' && value) {
+        result.threadId = value.toLowerCase();
+        i += 2;
+      } else if (marker === 'scope' && value) {
+        result.scopeId = value.toLowerCase();
+        i += 2;
+      } else {
+        i++;
+      }
+    }
+    return result;
+  }
+
   if (parts.length < 5) {
     return null;
   }

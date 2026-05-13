@@ -8,7 +8,7 @@ import { register, formatExamples, type CLIContext } from '../registry.js';
 import { getContextWithOpts } from '../index.js';
 import { runGatewayLoop } from '../../gateway/run-loop.js';
 import { forceFreePortAndWait, checkPortAvailable } from '../../gateway/ports.js';
-import { seedMainAgentBootstrap } from '../../agent/context/workspace-seed.js';
+import { seedMainAgentProfileMarkdown } from '../../agent/context/workspace-seed.js';
 import { initWorkspace } from '../utils/init-workspace.js';
 import {
   createTokenCommand,
@@ -51,7 +51,7 @@ async function ensureGatewayReady(
     console.log('');
     console.log('💡 Tip: run `xopc onboard` anytime to configure models, channels, and more.');
     console.log('');
-    seedMainAgentBootstrap(result.config);
+    seedMainAgentProfileMarkdown(result.config);
   }
 }
 

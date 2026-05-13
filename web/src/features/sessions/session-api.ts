@@ -36,7 +36,7 @@ const listSessionsInflight = new Map<string, Promise<PaginatedResult<SessionMeta
 
 /**
  * List sessions (paginated). Concurrent calls with the same query share one HTTP request so the
- * sidebar and chat bootstrap do not triple-fetch the first page on load.
+ * sidebar and chat initial fetch do not triple-fetch the first page on load.
  */
 export async function listSessions(query?: SessionListQuery): Promise<PaginatedResult<SessionMetadata>> {
   const key = listSessionsDedupeKey(query);

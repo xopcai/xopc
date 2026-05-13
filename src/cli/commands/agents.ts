@@ -22,7 +22,7 @@ import {
   pruneAgentConfig,
   removeAgentDirsFromDisk,
 } from '../../commands/agents.config.js';
-import { seedWorkspaceBootstrapFiles } from '../../agent/context/workspace-seed.js';
+import { seedWorkspaceProfileMarkdownFiles } from '../../agent/context/workspace-seed.js';
 import { colors } from '../utils/colors.js';
 
 function requireNonMain(id: string): void {
@@ -104,7 +104,7 @@ export function registerAgentsCli(program: Command): void {
         const adPath = resolveAgentDir(next, agentId);
         await mkdir(wsPath, { recursive: true });
         await mkdir(adPath, { recursive: true });
-        seedWorkspaceBootstrapFiles(wsPath, { displayName: name.trim() });
+        seedWorkspaceProfileMarkdownFiles(wsPath, { displayName: name.trim() });
 
         const payload = { agentId, workspace: wsPath, agentDir: adPath, model: opts.model };
         if (opts.json) {

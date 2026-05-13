@@ -104,8 +104,8 @@ export interface ToolFactoryDeps {
 export interface CreateCoreToolsOptions {
   /** Workspace root for file/shell tools (defaults to factory workspace). */
   workspace?: string;
-  /** `…/agents/<id>/bootstrap` — used so `read_file` can find SOUL.md etc. by filename. */
-  bootstrapDir?: string;
+  /** Resolved Markdown workspace root: `read_file` resolves bare SOUL.md / IDENTITY.md here. */
+  profileMarkdownRoot?: string;
   /** Tool `name` values to omit (e.g. `shell`, `extensions` for extension tools). */
   disabledTools?: Set<string>;
   /** Optional primary model for image tool heuristics. */
@@ -170,7 +170,7 @@ export class AgentToolsFactory {
 
     const optionalTools = [imageTool, imageGenerateTool].filter((t) => t != null) as any[];
 
-    const readTool = createReadFileTool(workspace, { bootstrapDir: options?.bootstrapDir });
+    const readTool = createReadFileTool(workspace, { profileMarkdownRoot: options?.profileMarkdownRoot });
     const writeTool = createWriteFileTool(workspace);
     const editTool = createEditFileTool(workspace);
     const listDir = createListDirTool(workspace);

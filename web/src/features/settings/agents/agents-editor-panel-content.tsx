@@ -2,7 +2,7 @@ import type { Dispatch, FormEvent, MutableRefObject, SetStateAction } from 'reac
 
 import type { ChannelStatus, CronJob, SessionChatId } from '@/features/cron/cron-api';
 import type {
-  fetchAgentBootstrapFiles,
+  fetchAgentProfileFiles,
   GatewayAgentRow,
   GatewayAgentsPayload,
   GatewayConfigBinding,
@@ -40,21 +40,21 @@ export type AgentsEditorPanelContentProps = {
   onSetDefault: () => void;
   onSaveAgentEdits: () => void;
   onDelete: (purge: boolean) => void;
-  overviewSaveBootstrapRef: MutableRefObject<(() => Promise<void>) | null>;
+  overviewSaveProfileMarkdownRef: MutableRefObject<(() => Promise<void>) | null>;
   profileSaveRef: MutableRefObject<(() => Promise<void>) | null>;
-  setOverviewBootstrapDirty: (v: boolean) => void;
+  setOverviewProfileMarkdownDirty: (v: boolean) => void;
   setProfileDirty: (v: boolean) => void;
   filesLoading: boolean;
-  files: Awaited<ReturnType<typeof fetchAgentBootstrapFiles>> | null;
+  files: Awaited<ReturnType<typeof fetchAgentProfileFiles>> | null;
   activeFile: string | null;
   setActiveFile: (v: string | null) => void;
-  bootstrapViewMode: 'edit' | 'preview';
-  setBootstrapViewMode: (v: 'edit' | 'preview') => void;
+  filesViewMode: 'edit' | 'preview';
+  setFilesViewMode: (v: 'edit' | 'preview') => void;
   fileDraft: string;
   setFileDraft: (v: string) => void;
   fileSaving: boolean;
-  bootstrapFileLoading: boolean;
-  bootstrapEditorNonce: number;
+  profileFileLoading: boolean;
+  profileEditorNonce: number;
   toolEntryDisable: Set<string>;
   setToolEntryDisable: Dispatch<SetStateAction<Set<string>>>;
   onSaveTools: () => void;
@@ -106,21 +106,21 @@ export function AgentsEditorPanelContent({
   onSetDefault,
   onSaveAgentEdits,
   onDelete,
-  overviewSaveBootstrapRef,
+  overviewSaveProfileMarkdownRef,
   profileSaveRef,
-  setOverviewBootstrapDirty,
+  setOverviewProfileMarkdownDirty,
   setProfileDirty,
   filesLoading,
   files,
   activeFile,
   setActiveFile,
-  bootstrapViewMode,
-  setBootstrapViewMode,
+  filesViewMode,
+  setFilesViewMode,
   fileDraft,
   setFileDraft,
   fileSaving,
-  bootstrapFileLoading,
-  bootstrapEditorNonce,
+  profileFileLoading,
+  profileEditorNonce,
   toolEntryDisable,
   setToolEntryDisable,
   onSaveTools,
@@ -175,8 +175,8 @@ export function AgentsEditorPanelContent({
         onSaveAgentEdits={onSaveAgentEdits}
         onDelete={onDelete}
         hideInlineSave
-        saveBootstrapRef={overviewSaveBootstrapRef}
-        onBootstrapDirtyChange={setOverviewBootstrapDirty}
+        saveProfileMarkdownRef={overviewSaveProfileMarkdownRef}
+        onProfileMarkdownDirtyChange={setOverviewProfileMarkdownDirty}
       />
     );
   }
@@ -195,13 +195,13 @@ export function AgentsEditorPanelContent({
         files={files}
         activeFile={activeFile}
         setActiveFile={setActiveFile}
-        bootstrapViewMode={bootstrapViewMode}
-        setBootstrapViewMode={setBootstrapViewMode}
+        filesViewMode={filesViewMode}
+        setFilesViewMode={setFilesViewMode}
         fileDraft={fileDraft}
         setFileDraft={setFileDraft}
         fileSaving={fileSaving}
-        bootstrapFileLoading={bootstrapFileLoading}
-        bootstrapEditorNonce={bootstrapEditorNonce}
+        profileFileLoading={profileFileLoading}
+        profileEditorNonce={profileEditorNonce}
       />
     );
   }

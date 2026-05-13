@@ -177,6 +177,17 @@ describe('session-key', () => {
       });
     });
 
+    it('should parse gateway-prefixed console keys (agent in segment 2)', () => {
+      const parsed = parseSessionKey('gateway:main:webchat:default:direct:chat_1');
+      expect(parsed).toEqual({
+        agentId: 'main',
+        source: 'webchat',
+        accountId: 'default',
+        peerKind: 'direct',
+        peerId: 'chat_1',
+      });
+    });
+
     it('should return null for invalid keys', () => {
       expect(parseSessionKey(null)).toBeNull();
       expect(parseSessionKey('')).toBeNull();

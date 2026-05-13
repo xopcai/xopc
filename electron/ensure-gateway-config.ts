@@ -25,7 +25,7 @@ export function getElectronUserPaths(): ElectronUserPaths {
 
 /**
  * Ensure config exists under userData with a persisted gateway token and workspace path.
- * Returns the gateway auth token for the UI (?token= / localStorage bootstrap).
+ * Returns the gateway auth token for the UI (?token= / localStorage initial cache).
  */
 export async function ensureGatewayConfigForElectron(paths: ElectronUserPaths): Promise<{
   port: number;

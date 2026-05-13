@@ -3,7 +3,7 @@ import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
 import type {
-  AgentBootstrapFileEntry,
+  AgentProfileFileEntry,
   GatewayAgentRow,
   GatewayAgentsPayload,
   GatewayConfigBinding,
@@ -11,7 +11,7 @@ import type {
 } from './types/agent-gateway';
 
 export type {
-  AgentBootstrapFileEntry,
+  AgentProfileFileEntry,
   GatewayAgentRow,
   GatewayAgentsPayload,
   GatewayAgentSkillsInfo,
@@ -21,8 +21,10 @@ export type {
 } from './types/agent-gateway';
 
 function normalizeAgentRow(raw: GatewayAgentRow): GatewayAgentRow {
+  const profileDir = typeof raw.profileDir === 'string' ? raw.profileDir.trim() : '';
   return {
     ...raw,
+    profileDir,
     ...(typeof raw.avatar === 'string' && raw.avatar.trim() ? { avatar: raw.avatar.trim() } : {}),
     skills: raw.skills ?? { defaults: [] },
     tools: raw.tools ?? { defaultsDisable: [], entryDisable: [], effectiveDisable: [] },
@@ -159,26 +161,24 @@ export async function fetchSkillsCatalog(): Promise<SkillCatalogRow[]> {
   return Array.isArray(c) ? c : [];
 }
 
-export async function fetchAgentBootstrapFiles(agentId: string): Promise<{
+export async function fetchAgentProfileFiles(agentId: string): Promise<{
   agentId: string;
-  bootstrapDir: string;
-  files: AgentBootstrapFileEntry[];
+  profileDir: string;
+  files: AgentProfileFileEntry[];
 }> {
   const res = await fetchJson<{
     ok?: boolean;
-    payload?: { agentId: string; bootstrapDir: string; files: AgentBootstrapFileEntry[] };
+    payload?: { agentId: string; profileDir?: string; files: AgentProfileFileEntry[] };
   }>(apiUrl(`/api/agents/${encodeURIComponent(agentId)}/files`));
   const p = res.payload;
-  if (!p?.files || !p.bootstrapDir) {
+  const profileDir = typeof p?.profileDir === 'string' ? p.profileDir.trim() : '';
+  if (!p?.files || !profileDir) {
     throw new Error('Invalid files list response');
   }
-  return p;
+  return { agentId: p.agentId, profileDir, files: p.files };
 }
 
-export async function fetchAgentBootstrapFileContent(
-  agentId: string,
-  name: string,
-): Promise<string> {
+export async function fetchAgentProfileFileContent(agentId: string, name: string): Promise<string> {
   const res = await fetchJson<{ ok?: boolean; payload?: { content?: string } }>(
     apiUrl(`/api/agents/${encodeURIComponent(agentId)}/files/${encodeURIComponent(name)}`),
   );
@@ -189,11 +189,7 @@ export async function fetchAgentBootstrapFileContent(
   return c;
 }
 
-export async function saveAgentBootstrapFileContent(
-  agentId: string,
-  name: string,
-  content: string,
-): Promise<void> {
+export async function saveAgentProfileFileContent(agentId: string, name: string, content: string): Promise<void> {
   await fetchJson(
     apiUrl(`/api/agents/${encodeURIComponent(agentId)}/files/${encodeURIComponent(name)}`),
     {

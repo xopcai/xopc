@@ -9,8 +9,8 @@ import {
   SettingsFormSectionHeader,
 } from '@/features/settings/settings-form-section';
 import {
-  fetchAgentBootstrapFileContent,
-  saveAgentBootstrapFileContent,
+  fetchAgentProfileFileContent,
+  saveAgentProfileFileContent,
 } from '@/features/settings/agents-admin-api';
 import { cn } from '@/lib/cn';
 import type { AgentsSettingsMessages } from '@/i18n/messages';
@@ -28,7 +28,7 @@ import {
   detectSoulTemplate,
   SOUL_TEMPLATES,
   CREATURE_PRESETS,
-} from '../bootstrap-parser';
+} from '../agent-profile-markdown';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -70,7 +70,7 @@ export function AgentPersonaTab({ a, agentId }: PersonaTabProps) {
   const agentIdRef = useRef(agentId);
   agentIdRef.current = agentId;
 
-  // ---- Load bootstrap files on mount / agentId change ----
+  // ---- Load profile Markdown files on mount / agentId change ----
   useEffect(() => {
     let cancelled = false;
     initialLoadDoneRef.current = false;
@@ -79,8 +79,8 @@ export function AgentPersonaTab({ a, agentId }: PersonaTabProps) {
     const loadAll = async () => {
       try {
         const [identityMd, soulMd] = await Promise.all([
-          fetchAgentBootstrapFileContent(agentId, 'IDENTITY.md').catch(() => ''),
-          fetchAgentBootstrapFileContent(agentId, 'SOUL.md').catch(() => ''),
+          fetchAgentProfileFileContent(agentId, 'IDENTITY.md').catch(() => ''),
+          fetchAgentProfileFileContent(agentId, 'SOUL.md').catch(() => ''),
         ]);
         if (cancelled) return;
 
@@ -110,7 +110,7 @@ export function AgentPersonaTab({ a, agentId }: PersonaTabProps) {
     const currentAgent = agentIdRef.current;
     setSaving(true);
     try {
-      await saveAgentBootstrapFileContent(currentAgent, fileName, content);
+      await saveAgentProfileFileContent(currentAgent, fileName, content);
     } finally {
       setSaving(false);
     }

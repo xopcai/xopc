@@ -56,14 +56,14 @@
 
 ## 磁盘上的状态目录与工作空间
 
-运行时数据（配置、凭据、按智能体划分的会话、作为工具 cwd 与用户内容的 Markdown **工作空间**、以及位于 `agents/<id>/bootstrap/` 的人格 Markdown）位于仓库之外的 **状态目录**（默认 `~/.xopc`）。路径总览（bootstrap、智能体主目录、迁移）见 [磁盘与目录布局](disk-layout.md)。初始化、环境变量与默认路径说明见 [状态目录与工作空间布局](workspace.md)。
+运行时数据（配置、凭据、按智能体划分的会话、作为工具 cwd 与用户内容的 Markdown **工作空间**，以及位于该工作区根下的 **profile Markdown**）位于仓库之外的 **状态目录**（默认 `~/.xopc`）。路径总览（profile Markdown、智能体主目录、迁移）见 [磁盘与目录布局](disk-layout.md)。初始化、环境变量与默认路径说明见 [状态目录与工作空间布局](workspace.md)。
 
 ## 智能体与 Prompt
 
 **AgentService** 负责：
 
 1. 接收来自通道或 Web 控制台的用户消息。  
-2. 从各智能体目录下的 **bootstrap** Markdown（`SOUL.md`、`USER.md`、`AGENTS.md`、`TOOLS.md` 等）与可选记忆片段组装系统 Prompt。  
+2. 从各智能体 **Markdown 工作空间根** 下的 **profile Markdown**（`SOUL.md`、`USER.md`、`AGENTS.md`、`TOOLS.md` 等）与可选记忆片段组装系统 Prompt。  
 3. 持久化 **会话** transcript，并在配置开启时做 **压缩**。  
 4. 执行 **内置与扩展工具**，对耗时步骤给出进度反馈。
 
@@ -114,11 +114,11 @@ Telegram、微信、网页聊天及扩展提供的通道，共用进入智能体
 ┌─────────────────────┐
 │   AgentService      │
 │  ┌───────────────┐  │
-│  │ 加载引导文件  │  │ ← SOUL.md, USER.md, TOOLS.md, AGENTS.md
+│  │ 加载 profile  │  │ ← SOUL.md, USER.md, TOOLS.md, AGENTS.md
 │  └───────┬───────┘  │
 │          ▼          │
 │  ┌───────────────┐  │
-│  │ 构建 Prompt   │  │ ← 引导文件、托管快照、memory_search / memory_get 等
+│  │ 构建 Prompt   │  │ ← profile Markdown、托管快照、memory_search / memory_get 等
 │  └───────┬───────┘  │
 │          ▼          │
 │  ┌───────────────┐  │

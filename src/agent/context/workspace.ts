@@ -1,5 +1,5 @@
 /**
- * Workspace bootstrap files (names, load order, system prompt assembly) and
+ * Agent profile Markdown at the workspace root (filenames, load order, system prompt assembly) and
  * small helpers for message content extraction.
  */
 
@@ -11,7 +11,7 @@ import { parseFrontmatter } from '../../markdown/frontmatter.js';
 const log = createLogger('Workspace');
 
 // =============================================================================
-// Bootstrap filenames & types
+// Profile Markdown filenames & types (SOUL.md, IDENTITY.md, … at workspace root)
 // =============================================================================
 
 export const DEFAULT_AGENTS_FILENAME = 'AGENTS.md';
@@ -22,7 +22,7 @@ export const DEFAULT_USER_FILENAME = 'USER.md';
 export const DEFAULT_HEARTBEAT_FILENAME = 'HEARTBEAT.md';
 export const DEFAULT_MEMORY_FILENAME = 'MEMORY.md';
 
-export type WorkspaceBootstrapFileName =
+export type AgentProfileMarkdownFilename =
   | typeof DEFAULT_AGENTS_FILENAME
   | typeof DEFAULT_SOUL_FILENAME
   | typeof DEFAULT_TOOLS_FILENAME
@@ -32,9 +32,9 @@ export type WorkspaceBootstrapFileName =
   | typeof DEFAULT_MEMORY_FILENAME;
 
 /**
- * Order for loading bootstrap files into the system prompt (persona / user before repo guide, etc.).
+ * Order for loading profile Markdown files into the system prompt (persona / user before repo guide, etc.).
  */
-export const BOOTSTRAP_FILES: readonly WorkspaceBootstrapFileName[] = [
+export const AGENT_PROFILE_MARKDOWN_SYSTEM_FILES: readonly AgentProfileMarkdownFilename[] = [
   DEFAULT_SOUL_FILENAME,
   DEFAULT_IDENTITY_FILENAME,
   DEFAULT_USER_FILENAME,
@@ -44,8 +44,8 @@ export const BOOTSTRAP_FILES: readonly WorkspaceBootstrapFileName[] = [
   DEFAULT_MEMORY_FILENAME,
 ];
 
-export interface WorkspaceBootstrapFile {
-  name: WorkspaceBootstrapFileName;
+export interface WorkspaceProfileMarkdownFile {
+  name: AgentProfileMarkdownFilename;
   path: string;
   content?: string;
   missing: boolean;
@@ -59,15 +59,15 @@ export function stripFrontMatter(content: string): string {
 }
 
 // =============================================================================
-// Load & truncate bootstrap files for system prompt
+// Load & truncate profile Markdown for system prompt
 // =============================================================================
 
 /** Maximum characters to inject from workspace files into system prompt */
-export const BOOTSTRAP_MAX_CHARS = 20_000;
+export const PROFILE_MARKDOWN_MAX_CHARS = 20_000;
 
-/** Bootstrap truncation: fraction of `maxChars` kept from the start of the file */
+/** Profile Markdown truncation: fraction of `maxChars` kept from the start of the file */
 const HEAD_TRUNCATION_RATIO = 0.7;
-/** Bootstrap truncation: fraction of `maxChars` kept from the end of the file */
+/** Profile Markdown truncation: fraction of `maxChars` kept from the end of the file */
 const TAIL_TRUNCATION_RATIO = 0.2;
 
 export interface TruncateResult {
@@ -81,7 +81,7 @@ export interface TruncateResult {
  * Keeps head (HEAD_TRUNCATION_RATIO, 70%) and tail (TAIL_TRUNCATION_RATIO, 20%) with a
  * truncation marker in between; the remainder is reserved for the marker.
  */
-export function truncateBootstrapContent(content: string, maxChars: number): TruncateResult {
+export function truncateProfileMarkdownContent(content: string, maxChars: number): TruncateResult {
   const trimmed = content.trimEnd();
   if (trimmed.length <= maxChars) {
     return {
@@ -110,18 +110,18 @@ export function truncateBootstrapContent(content: string, maxChars: number): Tru
   };
 }
 
-export interface BootstrapFile {
-  name: WorkspaceBootstrapFileName;
+export interface ProfileMarkdownFile {
+  name: AgentProfileMarkdownFilename;
   path?: string;
   content: string;
   missing?: boolean;
 }
 
 /**
- * Convert BootstrapFile to WorkspaceBootstrapFile format (adds required path field).
+ * Convert {@link ProfileMarkdownFile} to {@link WorkspaceProfileMarkdownFile} (adds required path field).
  */
-export function toWorkspaceBootstrapFile(file: BootstrapFile, workspace: string): {
-  name: WorkspaceBootstrapFileName;
+export function toWorkspaceProfileMarkdownFile(file: ProfileMarkdownFile, workspace: string): {
+  name: AgentProfileMarkdownFilename;
   path: string;
   content?: string;
   missing: boolean;
@@ -135,15 +135,15 @@ export function toWorkspaceBootstrapFile(file: BootstrapFile, workspace: string)
 }
 
 /**
- * Load bootstrap persona Markdown from `bootstrapDir` (agent home `bootstrap/`).
+ * Load profile Markdown from the agent's resolved Markdown workspace root (`markdownWorkspaceRoot`).
  */
-export function loadBootstrapFiles(bootstrapDir: string): BootstrapFile[] {
-  const files: BootstrapFile[] = [];
+export function loadProfileMarkdownFiles(markdownWorkspaceRoot: string): ProfileMarkdownFile[] {
+  const files: ProfileMarkdownFile[] = [];
   let loadedCount = 0;
   let missingCount = 0;
 
-  for (const filename of BOOTSTRAP_FILES) {
-    const filePath = join(bootstrapDir, filename);
+  for (const filename of AGENT_PROFILE_MARKDOWN_SYSTEM_FILES) {
+    const filePath = join(markdownWorkspaceRoot, filename);
 
     if (existsSync(filePath)) {
       try {
@@ -151,7 +151,7 @@ export function loadBootstrapFiles(bootstrapDir: string): BootstrapFile[] {
 
         content = stripFrontMatter(content);
 
-        const result = truncateBootstrapContent(content, BOOTSTRAP_MAX_CHARS);
+        const result = truncateProfileMarkdownContent(content, PROFILE_MARKDOWN_MAX_CHARS);
 
         if (result.content) {
           files.push({
@@ -168,17 +168,17 @@ export function loadBootstrapFiles(bootstrapDir: string): BootstrapFile[] {
                 originalLength: result.originalLength,
                 keptLength: result.content.length,
               },
-              'Bootstrap file truncated in system prompt (too long)',
+              'Profile Markdown truncated in system prompt (too long)',
             );
           } else {
-            log.debug({ file: filename, path: filePath }, 'Bootstrap file loaded');
+            log.debug({ file: filename, path: filePath }, 'Profile Markdown file loaded');
           }
         }
       } catch (err) {
-        log.warn({ file: filename, err }, 'Failed to load bootstrap file');
+        log.warn({ file: filename, err }, 'Failed to load profile Markdown file');
       }
     } else {
-      const hint = join(bootstrapDir, filename);
+      const hint = join(markdownWorkspaceRoot, filename);
       files.push({
         name: filename,
         content: `[MISSING] Create this file at: ${hint}`,
@@ -186,11 +186,11 @@ export function loadBootstrapFiles(bootstrapDir: string): BootstrapFile[] {
         path: resolve(hint),
       });
       missingCount++;
-      log.debug({ file: filename }, 'Bootstrap file missing');
+      log.debug({ file: filename }, 'Profile Markdown file missing');
     }
   }
 
-  log.debug({ loaded: loadedCount, missing: missingCount, dir: bootstrapDir }, 'Bootstrap files loaded');
+  log.debug({ loaded: loadedCount, missing: missingCount, dir: markdownWorkspaceRoot }, 'Profile Markdown scan done');
 
   return files;
 }

@@ -6,8 +6,8 @@ import {
   SettingsFormSectionHeader,
 } from '@/features/settings/settings-form-section';
 import {
-  fetchAgentBootstrapFileContent,
-  saveAgentBootstrapFileContent,
+  fetchAgentProfileFileContent,
+  saveAgentProfileFileContent,
 } from '@/features/settings/agents-admin-api';
 import { cn } from '@/lib/cn';
 import type { AgentsSettingsMessages } from '@/i18n/messages';
@@ -21,7 +21,7 @@ import {
   TIMEZONE_OPTIONS,
   PRONOUNS_PRESETS,
   detectBrowserTimezone,
-} from '../bootstrap-parser';
+} from '../agent-profile-markdown';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -69,7 +69,7 @@ export function AgentProfileTab({ a, agentId, saveRef, onDirtyChange }: ProfileT
     const currentAgent = agentIdRef.current;
     setSaving(true);
     try {
-      await saveAgentBootstrapFileContent(currentAgent, 'USER.md', content);
+      await saveAgentProfileFileContent(currentAgent, 'USER.md', content);
     } finally {
       setSaving(false);
     }
@@ -107,7 +107,7 @@ export function AgentProfileTab({ a, agentId, saveRef, onDirtyChange }: ProfileT
 
     const load = async () => {
       try {
-        const userMd = await fetchAgentBootstrapFileContent(agentId, 'USER.md').catch(() => '');
+        const userMd = await fetchAgentProfileFileContent(agentId, 'USER.md').catch(() => '');
         if (cancelled) return;
 
         const parsedUser = parseUserMarkdown(userMd);

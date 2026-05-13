@@ -9,9 +9,9 @@ For narrative setup (init, templates, env vars), see [State directory & workspac
 | Area | Role |
 |------|------|
 | **State directory** | Global config, credentials, logs, cron, global skills/extensions cache, managed tooling. |
-| **Agent home** `<stateDir>/agents/<agentId>/` | Per-agent runtime: transcripts, bootstrap persona Markdown, curated memory, inbound/TTS blobs, session tooling config. |
+| **Agent home** `<stateDir>/agents/<agentId>/` | Per-agent runtime: transcripts, curated memory, inbound/TTS blobs, session tooling config. (Profile Markdown such as `SOUL.md` lives at the **Markdown workspace** root — see below.) |
 | **Agent dir** `…/agents/<agentId>/agent/` | Process state: `agent.json`, per-agent credentials, IPC inbox, pid/socket, small machine state, extension installs, outbound crash-recovery queue. |
-| **Markdown workspace** | User project tree: tool `cwd`, daily `memory/*.md`, `media/generated`, user `skills/`, arbitrary files. **Not** the primary home for persona files or internal agent state. |
+| **Markdown workspace** | User project tree: tool `cwd`, profile Markdown (`SOUL.md`, …), daily `memory/*.md`, `media/generated`, user `skills/`, arbitrary files. |
 
 Paths below use `~/.xopc` as the default state root; override with `XOPC_STATE_DIR`, `XOPC_PROFILE`, or `XOPC_HOME` (see [workspace.md](workspace.md#environment-variables-quick-reference)).
 
@@ -36,14 +36,14 @@ Resolved by `resolveAgentHomeDir(config, agentId)`. Typical layout:
 
 | Path | Purpose |
 |------|---------|
-| `bootstrap/` | Persona and bootstrap Markdown: `SOUL.md`, `IDENTITY.md`, `USER.md`, `TOOLS.md`, `AGENTS.md`, `HEARTBEAT.md`, `MEMORY.md` (system-prompt bootstrap, separate from curated `memories/`), `CONTEXT.md`, `SKILLS.md`, `BOOTSTRAP.md`. Used when building the agent system prompt. Gateway heartbeat text defaults to `bootstrap/HEARTBEAT.md` when present. |
+| *(profile Markdown)* | At the **resolved Markdown workspace root** (see [Markdown workspace](#markdown-workspace)): `SOUL.md`, `IDENTITY.md`, `USER.md`, `TOOLS.md`, `AGENTS.md`, `HEARTBEAT.md`, `MEMORY.md` (system prompt stack; separate from curated `memories/`), optional `CONTEXT.md`, `SKILLS.md`, and `BOOTSTRAP.md` (origin story; not part of the default system-prompt load order). Gateway heartbeat text defaults to `HEARTBEAT.md` in that root when present. |
 | `sessions/` | Transcript store (shards, `index.json`, `archive/`), per-session overrides under `sessions/config/`. |
 | `memories/` | Curated structured store (`MEMORY.md`, `USER.md`; entries separated by a fixed delimiter — `BuiltinMemoryStore`). |
 | `inbound/` | Persisted inbound attachments (non-image binaries); transcript paths use `inbound/...` relative to agent home. |
 | `tts/` | Cached outbound TTS audio per session. |
 | `agent/` | See **Agent dir** below. |
 
-Seeding: `xopc init` / `xopc agents add` create `bootstrap/` files and workspace layout from built-in templates (see [Workspace templates](reference/templates.md)).
+Seeding: `xopc init` / `xopc agents add` copy missing profile Markdown templates into the **Markdown workspace** root (see [Workspace templates](reference/templates.md)).
 
 ## Agent dir: `agents/<agentId>/agent/`
 
@@ -72,14 +72,14 @@ Resolved by `resolveAgentWorkspaceDir(config, agentId)` — often **`<stateDir>/
 | `skills/` | User-authored skills. |
 | *arbitrary files* | `read` / `write` / `edit` tool targets. |
 
-Internal state is **not** written here on new installs. This tree is the only supported layout: persona and machine state live under `agents/<id>/` (see table at top). There is **no** automatic import from older “everything under the markdown workspace” layouts—use `xopc setup` / `xopc onboard` for bootstrap templates, and move any old data yourself if you are upgrading from another fork.
+Internal state is **not** written here on new installs. This tree is the only supported layout: persona Markdown and machine state follow the table at top. There is **no** automatic import from older “everything under the markdown workspace” layouts—use `xopc setup` / `xopc onboard` for profile Markdown templates, and move any old data yourself if you are upgrading from another fork.
 
 Inbound / TTS attachments in transcripts use relative paths under `inbound/` and `tts/` **only** (resolved from agent home).
 
 ## Operations helpers
 
 - `listAgentWorkspaceDirs(config)` — all Markdown workspace roots for agents listed in config (CLI / advanced use).
-- `listAgentBootstrapDirs(config)` — all `bootstrap/` roots for backup or editors.
+- `listAgentProfileMarkdownDirs(config)` — same roots as `listAgentWorkspaceDirs` (profile Markdown lives in the workspace root; useful for backup or editors).
 
 ## See also
 
