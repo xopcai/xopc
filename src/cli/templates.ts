@@ -25,10 +25,10 @@ export const TEMPLATE_FILES = [
 export type TemplateFile = (typeof TEMPLATE_FILES)[number];
 
 /**
- * Files that belong in …/agents/<id>/bootstrap/.
- * Seeded by seedWorkspaceBootstrapFiles / seedMainAgentBootstrap.
+ * Profile Markdown templates (system-prompt stack, excluding BOOTSTRAP.md).
+ * Seeded by seedWorkspaceProfileMarkdownFiles / seedMainAgentProfileMarkdown.
  */
-export const BOOTSTRAP_TEMPLATE_FILES: readonly TemplateFile[] = [
+export const PROFILE_MARKDOWN_TEMPLATE_FILES: readonly TemplateFile[] = [
   'SOUL.md',
   'IDENTITY.md',
   'USER.md',
@@ -39,7 +39,7 @@ export const BOOTSTRAP_TEMPLATE_FILES: readonly TemplateFile[] = [
 ];
 
 /**
- * Onboarding guide template (seeded under bootstrap/, not the markdown workspace root).
+ * Onboarding guide template (seeded into the Markdown workspace root as `BOOTSTRAP.md`).
  */
 export const WORKSPACE_TEMPLATE_FILES: readonly TemplateFile[] = ['BOOTSTRAP.md'];
 

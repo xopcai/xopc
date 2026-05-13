@@ -14,6 +14,7 @@ import { GlobalCommandPaletteHost } from '@/features/search/global-command-palet
 import { GatewaySseBridge } from '@/features/gateway/gateway-sse-bridge';
 import { DreamingOverlay } from '@/features/dreaming/dreaming-overlay';
 import { WorkspacePreviewDialog } from '@/features/workspace/workspace-preview-dialog';
+import { OnboardingDialog } from '@/components/shell/onboarding-dialog';
 import { cn } from '@/lib/cn';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -138,6 +139,7 @@ export function AppShell() {
       <GlobalCommandPaletteHost />
       <ExtensionNotificationListener />
       <TokenDialog />
+      <OnboardingDialog />
       <ElectronGatewayExitBanner />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <UpdateReminderBar reminder={updateReminder} />

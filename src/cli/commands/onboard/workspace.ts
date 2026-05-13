@@ -2,7 +2,7 @@
  * Workspace Setup for Onboarding
  *
  * Mirrors `src/cli/utils/workspace.ts`: workspace root + memory/ only.
- * Bootstrap Markdown is seeded via seedMainAgentBootstrap.
+ * Profile Markdown is seeded via seedMainAgentProfileMarkdown.
  */
 
 import { existsSync, mkdirSync } from 'fs';

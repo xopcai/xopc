@@ -14,14 +14,14 @@ export function AgentFilesTab(props: {
   files: { files: { name: string; missing: boolean }[] } | null;
   activeFile: string | null;
   setActiveFile: (name: string) => void;
-  bootstrapViewMode: 'edit' | 'preview';
-  setBootstrapViewMode: (m: 'edit' | 'preview') => void;
+  filesViewMode: 'edit' | 'preview';
+  setFilesViewMode: (m: 'edit' | 'preview') => void;
   fileDraft: string;
   setFileDraft: (v: string) => void;
   fileSaving: boolean;
-  bootstrapFileLoading: boolean;
-  /** Bumps when bootstrap file body is loaded from the server (remounts CodeMirror). */
-  bootstrapEditorNonce: number;
+  profileFileLoading: boolean;
+  /** Bumps when profile Markdown body is loaded from the server (remounts CodeMirror). */
+  profileEditorNonce: number;
 }) {
   const {
     a,
@@ -29,13 +29,13 @@ export function AgentFilesTab(props: {
     files,
     activeFile,
     setActiveFile,
-    bootstrapViewMode,
-    setBootstrapViewMode,
+    filesViewMode,
+    setFilesViewMode,
     fileDraft,
     setFileDraft,
     fileSaving,
-    bootstrapFileLoading,
-    bootstrapEditorNonce,
+    profileFileLoading,
+    profileEditorNonce,
   } = props;
 
   const isDark = useThemeStore((s) => s.resolved === 'dark');
@@ -49,7 +49,7 @@ export function AgentFilesTab(props: {
         <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
           <nav
             className="flex shrink-0 flex-row flex-wrap gap-x-0.5 gap-y-0 border-b border-edge-subtle"
-            aria-label={a.tabFiles}
+            aria-label={a.navCoreFiles}
           >
             {files.files.map((f) => (
               <button
@@ -76,33 +76,33 @@ export function AgentFilesTab(props: {
                   <div
                     className="inline-flex rounded-lg border border-edge bg-surface-panel p-0.5"
                     role="group"
-                    aria-label={a.filesBootstrapEdit}
+                    aria-label={`${a.filesMarkdownEdit} / ${a.filesMarkdownPreview}`}
                   >
                     <button
                       type="button"
                       className={cn(
                         'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium',
-                        bootstrapViewMode === 'edit'
+                        filesViewMode === 'edit'
                           ? 'bg-accent-soft text-accent-fg'
                           : 'text-fg-muted hover:bg-surface-hover',
                       )}
-                      onClick={() => setBootstrapViewMode('edit')}
+                      onClick={() => setFilesViewMode('edit')}
                     >
                       <SquarePen className="size-3.5 shrink-0" aria-hidden />
-                      {a.filesBootstrapEdit}
+                      {a.filesMarkdownEdit}
                     </button>
                     <button
                       type="button"
                       className={cn(
                         'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium',
-                        bootstrapViewMode === 'preview'
+                        filesViewMode === 'preview'
                           ? 'bg-accent-soft text-accent-fg'
                           : 'text-fg-muted hover:bg-surface-hover',
                       )}
-                      onClick={() => setBootstrapViewMode('preview')}
+                      onClick={() => setFilesViewMode('preview')}
                     >
                       <Eye className="size-3.5 shrink-0" aria-hidden />
-                      {a.filesBootstrapPreview}
+                      {a.filesMarkdownPreview}
                     </button>
                   </div>
                   <div className="flex flex-wrap items-center gap-2 text-xs text-fg-muted">
@@ -110,16 +110,16 @@ export function AgentFilesTab(props: {
                     <span>{a.filesAutoSaveHint}</span>
                   </div>
                 </div>
-                {bootstrapViewMode === 'edit' ? (
+                {filesViewMode === 'edit' ? (
                   <div
                     className={cn(
                       agentsSettingsInputClass(),
                       'flex min-h-0 flex-1 flex-col overflow-hidden p-0',
-                      bootstrapFileLoading && 'pointer-events-none opacity-60',
+                      profileFileLoading && 'pointer-events-none opacity-60',
                     )}
                   >
                     <MarkdownEditor
-                      key={`${activeFile ?? 'file'}-${bootstrapEditorNonce}`}
+                      key={`${activeFile ?? 'file'}-${profileEditorNonce}`}
                       initialContent={fileDraft}
                       onChange={setFileDraft}
                       isDark={isDark}
@@ -131,7 +131,7 @@ export function AgentFilesTab(props: {
                     className={cn(
                       agentsSettingsInputClass(),
                       'min-h-0 flex-1 overflow-y-auto text-sm',
-                      bootstrapFileLoading && 'pointer-events-none opacity-60',
+                      profileFileLoading && 'pointer-events-none opacity-60',
                     )}
                   >
                     <MarkdownView content={fileDraft} className="text-sm" />

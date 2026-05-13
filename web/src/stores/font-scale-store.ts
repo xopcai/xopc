@@ -10,7 +10,7 @@ function applyDomFontScale(pref: FontScalePreference) {
 }
 
 /** Sync DOM from localStorage before React paint (zustand persist hydrates async). */
-export function bootstrapFontScale() {
+export function hydrateFontScaleFromStorage() {
   try {
     const raw = localStorage.getItem('xopc-web-font-scale');
     let pref: FontScalePreference = 'default';

@@ -1,13 +1,13 @@
 import {
   createGatewayAgent,
   deleteGatewayAgent,
-  fetchAgentBootstrapFileContent,
-  fetchAgentBootstrapFiles,
+  fetchAgentProfileFileContent,
+  fetchAgentProfileFiles,
   fetchGatewayAgents,
   fetchGatewayConfigBindings,
   fetchSkillsCatalog,
   patchGatewayBindings,
-  saveAgentBootstrapFileContent,
+  saveAgentProfileFileContent,
   updateGatewayAgent,
 } from '@/features/settings/agents-admin-api';
 import {
@@ -44,9 +44,9 @@ export const settingsApi = {
     fetchGatewayConfigBindings,
     patchGatewayBindings,
     fetchSkillsCatalog,
-    fetchAgentBootstrapFiles,
-    fetchAgentBootstrapFileContent,
-    saveAgentBootstrapFileContent,
+    fetchAgentProfileFiles,
+    fetchAgentProfileFileContent,
+    saveAgentProfileFileContent,
   },
   agentDefaults: {
     fetchAgentDefaults,

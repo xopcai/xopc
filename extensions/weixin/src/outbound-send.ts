@@ -18,7 +18,7 @@ import {
   type ResolvedWeixinAccount,
 } from './auth/accounts.js';
 import { downloadRemoteImageToTemp } from './cdn/upload.js';
-import { ensureWeixinContextTokenForOutbound } from './messaging/context-token-bootstrap.js';
+import { ensureWeixinContextTokenForOutbound } from './messaging/context-token-init.js';
 import {
   findAccountIdsByContextToken,
   findContextTokenEntriesByPeer,

@@ -1,7 +1,7 @@
 /**
  * System Prompt Builder - Builds the complete system prompt
  *
- * Combines base system prompt with skill prompts and bootstrap files.
+ * Combines base system prompt with skill prompts and profile Markdown.
  * This is the refactored version for AgentService modularization.
  */
 
@@ -13,11 +13,11 @@ import type { SkillManager } from '../skills/skill-manager.js';
 import { createSkillConfigManager } from '../skills/config.js';
 import { selectSkillsVisibleInPrompt } from '../skills/format-skills-prompt.js';
 import { resolveStateDir } from '../../config/paths.js';
-import type { BootstrapFile } from '../context/workspace.js';
+import type { ProfileMarkdownFile } from '../context/workspace.js';
 import { buildSystemPrompt as buildBaseSystemPrompt } from './system-prompt.js';
 import { mergeTtsConfigFromAppConfig } from '../../voice/tts/merge-config.js';
 import { buildTtsSystemPromptHint } from '../../voice/tts/directives.js';
-import { toWorkspaceBootstrapFile, DEFAULT_USER_FILENAME } from '../context/workspace.js';
+import { toWorkspaceProfileMarkdownFile, DEFAULT_USER_FILENAME } from '../context/workspace.js';
 import type { MemorySnapshot } from '../memory/types.js';
 import { createLogger } from '../../utils/logger.js';
 
@@ -26,7 +26,7 @@ const log = createLogger('SystemPromptBuilder');
 export interface SystemPromptBuildOptions {
   curatedMemorySnapshot?: MemorySnapshot;
   externalMemoryInstructions?: string;
-  /** Per-agent workspace (bootstrap paths and base prompt). */
+  /** Per-agent workspace (profile Markdown paths and base prompt). */
   workspaceOverride?: string;
   /** When set, replaces the default base system prompt (skills still appended unless empty). */
   systemPromptOverride?: string;
@@ -65,7 +65,7 @@ export class SystemPromptBuilder {
   /**
    * Build the complete system prompt with all components
    */
-  build(bootstrapFiles: BootstrapFile[], options?: SystemPromptBuildOptions): string {
+  build(profileMarkdownFiles: ProfileMarkdownFile[], options?: SystemPromptBuildOptions): string {
     const ws = options?.workspaceOverride ?? this.workspace;
 
     if (options?.systemPromptOverride?.trim()) {
@@ -98,9 +98,9 @@ export class SystemPromptBuilder {
 
     const curatedMemorySnapshot = options?.curatedMemorySnapshot;
     const externalMemoryInstructions = options?.externalMemoryInstructions;
-    const userTimezone = this.extractTimezone(bootstrapFiles, curatedMemorySnapshot?.user, ws);
+    const userTimezone = this.extractTimezone(profileMarkdownFiles, curatedMemorySnapshot?.user, ws);
 
-    const workspaceBootstrapFiles = bootstrapFiles.map((f) => toWorkspaceBootstrapFile(f, ws));
+    const workspaceProfileMarkdownFiles = profileMarkdownFiles.map((f) => toWorkspaceProfileMarkdownFile(f, ws));
 
     const ttsMerged = mergeTtsConfigFromAppConfig(this.config.messages?.tts);
     const reg = options?.registeredToolNames ?? [];
@@ -113,7 +113,7 @@ export class SystemPromptBuilder {
     });
 
     const basePrompt = buildBaseSystemPrompt(ws, {
-      bootstrapFiles: workspaceBootstrapFiles,
+      profileMarkdownFiles: workspaceProfileMarkdownFiles,
       heartbeatEnabled,
       availableTools: this.getSkillNamesForSkillsSection({
         skillAllowlist: options?.skillAllowlist,
@@ -150,16 +150,16 @@ export class SystemPromptBuilder {
   /**
    * Rebuild the system prompt with current skills
    */
-  rebuild(bootstrapFiles: BootstrapFile[], options?: SystemPromptBuildOptions): string {
+  rebuild(profileMarkdownFiles: ProfileMarkdownFile[], options?: SystemPromptBuildOptions): string {
     this.skillManager.reload();
-    return this.build(bootstrapFiles, options);
+    return this.build(profileMarkdownFiles, options);
   }
 
   /**
-   * Extract user timezone from curated snapshot, bootstrap USER.md, or workspace file.
+   * Extract user timezone from curated snapshot, profile USER.md, or workspace file.
    */
   private extractTimezone(
-    bootstrapFiles: BootstrapFile[],
+    profileMarkdownFiles: ProfileMarkdownFile[],
     curatedUserBlock?: string,
     workspaceDir?: string,
   ): string | undefined {
@@ -171,7 +171,7 @@ export class SystemPromptBuilder {
       }
     }
 
-    const userFile = bootstrapFiles.find(f => f.name === DEFAULT_USER_FILENAME);
+    const userFile = profileMarkdownFiles.find(f => f.name === DEFAULT_USER_FILENAME);
     if (userFile && !userFile.missing && userFile.content) {
       const match = userFile.content.match(/Timezone:\s*(.+)/i);
       if (match) {
@@ -218,17 +218,17 @@ export class SystemPromptBuilder {
    * Get the base system prompt without skills
    */
   getBasePrompt(
-    bootstrapFiles: BootstrapFile[],
+    profileMarkdownFiles: ProfileMarkdownFile[],
     options?: { curatedMemorySnapshot?: MemorySnapshot; externalMemoryInstructions?: string; workspaceOverride?: string },
   ): string {
     const ws = options?.workspaceOverride ?? this.workspace;
-    const workspaceBootstrapFiles = bootstrapFiles.map((f) => toWorkspaceBootstrapFile(f, ws));
+    const workspaceProfileMarkdownFiles = profileMarkdownFiles.map((f) => toWorkspaceProfileMarkdownFile(f, ws));
 
     const snap = options?.curatedMemorySnapshot;
     return buildBaseSystemPrompt(ws, {
-      bootstrapFiles: workspaceBootstrapFiles,
+      profileMarkdownFiles: workspaceProfileMarkdownFiles,
       heartbeatEnabled: this.config.gateway?.heartbeat?.includeSystemPromptSection ?? false,
-      userTimezone: this.extractTimezone(bootstrapFiles, snap?.user, ws),
+      userTimezone: this.extractTimezone(profileMarkdownFiles, snap?.user, ws),
       curatedMemorySnapshot: snap,
       externalMemoryInstructions: options?.externalMemoryInstructions,
     });

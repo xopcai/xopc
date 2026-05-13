@@ -186,7 +186,7 @@ export class SessionStore {
 
   private buildDefaultMetadata(key: string): SessionMetadata {
     const { channel, chatId } = this.parseSessionKey(key);
-    const routing = this.extractRoutingFromKey(key, channel);
+    const routing = this.extractRoutingFromKey(key);
     const isCronSession = channel === 'cron';
     const isHeartbeatSession = channel === 'heartbeat';
     const now = new Date().toISOString();
@@ -215,44 +215,35 @@ export class SessionStore {
 
   private parseSessionKey(key: string): { channel: string; chatId: string } {
     const parts = key.split(':');
-    if (parts.length >= 5) {
-      const parsed = parseRoutingSessionKey(key);
-      if (parsed?.source === 'cron') {
-        return { channel: 'cron', chatId: parsed.peerId };
-      }
-      return { channel: parts[1] ?? 'unknown', chatId: parts.slice(2).join(':') };
-    }
     if (parts.length >= 2 && parts[0] === 'heartbeat') {
       return { channel: 'heartbeat', chatId: parts.slice(1).join(':') };
+    }
+    const parsed = parseRoutingSessionKey(key);
+    if (parsed) {
+      if (parsed.source === 'cron') {
+        return { channel: 'cron', chatId: parsed.peerId };
+      }
+      return {
+        channel: parsed.source,
+        chatId: [parsed.accountId, parsed.peerKind, parsed.peerId].join(':'),
+      };
     }
     return { channel: 'unknown', chatId: key };
   }
 
-  private extractRoutingFromKey(key: string, channel: string): SessionMetadata['routing'] {
-    const parts = key.split(':');
-    if (parts.length < 5) {
+  private extractRoutingFromKey(key: string): SessionMetadata['routing'] {
+    const parsed = parseRoutingSessionKey(key);
+    if (!parsed) {
       return undefined;
     }
-    const [agentId, source, accountId, peerKind, peerId, ...rest] = parts;
-    let threadId: string | undefined;
-    let scopeId: string | undefined;
-    for (let i = 0; i < rest.length; i++) {
-      if (rest[i] === 'thread' && rest[i + 1]) {
-        threadId = rest[i + 1];
-        i++;
-      } else if (rest[i] === 'scope' && rest[i + 1]) {
-        scopeId = rest[i + 1];
-        i++;
-      }
-    }
     return {
-      agentId: agentId?.toLowerCase() || 'main',
-      source: source?.toLowerCase() || channel,
-      accountId: accountId?.toLowerCase() || 'default',
-      peerKind: peerKind?.toLowerCase() || 'dm',
-      peerId: peerId?.toLowerCase() || 'unknown',
-      threadId,
-      scopeId,
+      agentId: parsed.agentId?.toLowerCase() || 'main',
+      source: parsed.source?.toLowerCase() || 'unknown',
+      accountId: parsed.accountId?.toLowerCase() || 'default',
+      peerKind: parsed.peerKind?.toLowerCase() || 'dm',
+      peerId: parsed.peerId?.toLowerCase() || 'unknown',
+      threadId: parsed.threadId,
+      scopeId: parsed.scopeId,
     };
   }
 
@@ -373,16 +364,19 @@ export class SessionStore {
       sessions = sessions.filter((s) => statuses.includes(s.status));
     }
     if (query.channel) {
-      const channels = query.channel
+      const rawChannels = query.channel
         .split(',')
-        .map((c) => c.trim())
+        .map((c) => c.trim().toLowerCase())
         .filter(Boolean);
+      /** `ui` is a legacy console source; treat as webchat when filtering web sessions. */
+      const channels = [...new Set(rawChannels.flatMap((c) => (c === 'webchat' ? ['webchat', 'ui'] : [c])))];
       if (channels.length === 0) {
         sessions = [];
       } else if (channels.length === 1) {
-        sessions = sessions.filter((s) => s.sourceChannel === channels[0]);
+        const ch = channels[0]!;
+        sessions = sessions.filter((s) => (s.sourceChannel ?? '').toLowerCase() === ch);
       } else {
-        sessions = sessions.filter((s) => channels.includes(s.sourceChannel));
+        sessions = sessions.filter((s) => channels.includes((s.sourceChannel ?? '').toLowerCase()));
       }
     }
     if (query.tags?.length) {

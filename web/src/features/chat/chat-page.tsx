@@ -12,7 +12,6 @@ import { ScrollToBottomButton } from '@/features/chat/scroll-to-bottom-button';
 import { useChatScrollViewport } from '@/features/chat/use-chat-scroll-viewport';
 import { useChatSession } from '@/features/chat/use-chat-session';
 import { ClarifyPrompt } from '@/features/chat/clarify-prompt';
-import { OnboardingCard, useNeedsModelSetup } from '@/features/onboarding';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { useChatAgentRunIndicatorStore } from '@/stores/chat-agent-run-indicator-store';
@@ -32,8 +31,6 @@ export function ChatPage() {
   const [searchParams] = useSearchParams();
   /** Dedupe applying the same `?skill=` / `?slash=` seed for a session (StrictMode-safe). */
   const routeComposerSeedMarkerRef = useRef<string | null>(null);
-
-  const modelSetup = useNeedsModelSetup(Boolean(token));
 
   const welcomeDraftSeq = useRef(0);
   const [welcomeDraftSeed, setWelcomeDraftSeed] = useState<{ id: number; text: string } | null>(null);
@@ -165,20 +162,9 @@ export function ChatPage() {
     return () => setWorkspaceEditorAgentId('');
   }, [auth.hasToken, agents.displayAgentId, setWorkspaceEditorAgentId]);
 
-  const showInlineOnboarding =
-    Boolean(token) &&
-    modelSetup.ready &&
-    modelSetup.needsSetup &&
-    !modelSetup.guideDismissed &&
-    !session.showSessionLoading &&
-    !stream.streaming;
-
   /** Match `MessageList` empty welcome: tighter vertical padding so the first screen fits without scrolling. */
   const compactWelcomeLayout =
-    !session.showSessionLoading &&
-    msgSlice.items.length === 0 &&
-    !stream.streaming &&
-    !showInlineOnboarding;
+    !session.showSessionLoading && msgSlice.items.length === 0 && !stream.streaming;
 
   const chatHeadline = useMemo(() => {
     const titleKey =
@@ -260,14 +246,6 @@ export function ChatPage() {
                     scrollElementRef={scrollRef}
                     pinToBottom={atBottom}
                     onPickWelcomePrompt={onPickWelcomePrompt}
-                    welcomeOverlay={
-                      showInlineOnboarding ? (
-                        <OnboardingCard
-                          onComplete={() => void modelSetup.refresh()}
-                          onDismiss={modelSetup.dismissPermanently}
-                        />
-                      ) : undefined
-                    }
                     onDeleteRound={stream.deleteMessageRound}
                     onRetryUserMessageRound={stream.retryUserMessageRound}
                     deleteRoundDisabled={stream.streaming || stream.sending}

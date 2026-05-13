@@ -1,7 +1,7 @@
 /**
  * System Prompt Builder - Enhanced version with workspace context integration
  * 
- * Integrates workspace bootstrap files:
+ * Integrates profile Markdown files at the workspace root:
  * - SOUL.md for persona and tone
  * - USER.md for user context
  * - IDENTITY.md for agent identity
@@ -10,7 +10,7 @@
  * - Memory search integration in prompt
  */
 
-import type { WorkspaceBootstrapFile } from '../context/workspace.js';
+import type { WorkspaceProfileMarkdownFile } from '../context/workspace.js';
 import {
   DEFAULT_SOUL_FILENAME,
   DEFAULT_USER_FILENAME,
@@ -44,8 +44,8 @@ const PROMPT_MAX_CHARS = {
 export type MemoryCitationsMode = 'on' | 'off' | 'source-only';
 
 export interface SystemPromptOptions {
-  /** Workspace bootstrap files */
-  bootstrapFiles: WorkspaceBootstrapFile[];
+  /** Workspace profile Markdown files (SOUL, USER, …) */
+  profileMarkdownFiles: WorkspaceProfileMarkdownFile[];
   /** Which sections to include. Defaults to "full". */
   promptMode?: PromptMode;
   /** Whether heartbeat is enabled */
@@ -83,8 +83,8 @@ export interface SystemPromptOptions {
  * 
  * If SOUL.md is present, embody its persona and tone
  */
-function buildSoulSection(bootstrapFiles: WorkspaceBootstrapFile[]): string {
-  const soulFile = bootstrapFiles.find(f => f.name === DEFAULT_SOUL_FILENAME);
+function buildSoulSection(profileMarkdownFiles: WorkspaceProfileMarkdownFile[]): string {
+  const soulFile = profileMarkdownFiles.find(f => f.name === DEFAULT_SOUL_FILENAME);
   if (!soulFile || soulFile.missing || !soulFile.content) {
     return '';
   }
@@ -104,8 +104,8 @@ _Embody this persona unless higher-priority instructions override it._
 /**
  * Build USER.md section - user context
  */
-function buildUserSection(bootstrapFiles: WorkspaceBootstrapFile[]): string {
-  const userFile = bootstrapFiles.find(f => f.name === DEFAULT_USER_FILENAME);
+function buildUserSection(profileMarkdownFiles: WorkspaceProfileMarkdownFile[]): string {
+  const userFile = profileMarkdownFiles.find(f => f.name === DEFAULT_USER_FILENAME);
   if (!userFile || userFile.missing || !userFile.content) {
     return '';
   }
@@ -152,8 +152,8 @@ ${body}`;
 /**
  * Build IDENTITY.md section - agent identity
  */
-function buildIdentitySection(bootstrapFiles: WorkspaceBootstrapFile[]): string {
-  const identityFile = bootstrapFiles.find(f => f.name === DEFAULT_IDENTITY_FILENAME);
+function buildIdentitySection(profileMarkdownFiles: WorkspaceProfileMarkdownFile[]): string {
+  const identityFile = profileMarkdownFiles.find(f => f.name === DEFAULT_IDENTITY_FILENAME);
   if (!identityFile || identityFile.missing || !identityFile.content) {
     return '';
   }
@@ -170,8 +170,8 @@ ${truncated}
 /**
  * Build AGENTS.md section - development guidelines
  */
-function buildAgentsSection(bootstrapFiles: WorkspaceBootstrapFile[]): string {
-  const agentsFile = bootstrapFiles.find(f => f.name === DEFAULT_AGENTS_FILENAME);
+function buildAgentsSection(profileMarkdownFiles: WorkspaceProfileMarkdownFile[]): string {
+  const agentsFile = profileMarkdownFiles.find(f => f.name === DEFAULT_AGENTS_FILENAME);
   if (!agentsFile || agentsFile.missing || !agentsFile.content) {
     return '';
   }
@@ -188,8 +188,8 @@ ${truncated}
 /**
  * Build TOOLS.md section - local tool notes
  */
-function buildToolsSection(bootstrapFiles: WorkspaceBootstrapFile[]): string {
-  const toolsFile = bootstrapFiles.find(f => f.name === DEFAULT_TOOLS_FILENAME);
+function buildToolsSection(profileMarkdownFiles: WorkspaceProfileMarkdownFile[]): string {
+  const toolsFile = profileMarkdownFiles.find(f => f.name === DEFAULT_TOOLS_FILENAME);
   if (!toolsFile || toolsFile.missing || !toolsFile.content) {
     return '';
   }
@@ -207,7 +207,7 @@ ${truncated}
  * Build HEARTBEAT.md section - task polling
  */
 function buildHeartbeatSection(
-  bootstrapFiles: WorkspaceBootstrapFile[],
+  profileMarkdownFiles: WorkspaceProfileMarkdownFile[],
   enabled: boolean,
   customPrompt?: string,
   userTimezone?: string
@@ -225,7 +225,7 @@ ${customPrompt}
   }
 
   // Try to load from HEARTBEAT.md
-  const heartbeatFile = bootstrapFiles.find(f => f.name === DEFAULT_HEARTBEAT_FILENAME);
+  const heartbeatFile = profileMarkdownFiles.find(f => f.name === DEFAULT_HEARTBEAT_FILENAME);
   if (!heartbeatFile || heartbeatFile.missing || !heartbeatFile.content) {
     // Default heartbeat behavior with timezone-aware quiet hours
     let quietHoursNote = '';
@@ -262,11 +262,11 @@ _Read HEARTBEAT.md for current tasks. If nothing needs attention, reply: HEARTBE
  * Before answering anything about prior work, decisions, dates, people, preferences, or todos: run memory_search
  */
 function buildMemorySection(
-  bootstrapFiles: WorkspaceBootstrapFile[],
+  profileMarkdownFiles: WorkspaceProfileMarkdownFile[],
   citationsMode: MemoryCitationsMode = 'on',
   hasCuratedSnapshot = false,
 ): string {
-  const memoryFile = bootstrapFiles.find(f => f.name === DEFAULT_MEMORY_FILENAME);
+  const memoryFile = profileMarkdownFiles.find(f => f.name === DEFAULT_MEMORY_FILENAME);
   const hasWorkspaceMemoryFile = !!(memoryFile && !memoryFile.missing);
 
   if (!hasWorkspaceMemoryFile && !hasCuratedSnapshot) {
@@ -289,7 +289,7 @@ function buildMemorySection(
 ${citationInstruction}
 
 Before answering anything about prior work, decisions, dates, people, preferences, or todos:
-1. Run \`memory_search\` on bootstrap MEMORY.md, agent-home \`memories/*.md\`, and workspace \`memory/*.md\`
+1. Run \`memory_search\` on profile MEMORY.md, agent-home \`memories/*.md\`, and workspace \`memory/*.md\`
 2. For **other chat sessions** / cross-session history, use \`session_search\` with keywords (or omit \`query\` to list recent sessions)
 3. Use \`memory_get\` to pull only the needed lines from files
 4. If low confidence after search, say you checked
@@ -483,7 +483,7 @@ export function buildSystemPrompt(
   options: SystemPromptOptions
 ): string {
   const {
-    bootstrapFiles,
+    profileMarkdownFiles,
     promptMode = 'full',
     heartbeatEnabled = false,
     heartbeatPrompt,
@@ -512,8 +512,8 @@ export function buildSystemPrompt(
 
   // 1. Identity and persona (non-minimal only)
   if (!isMinimal) {
-    sections.push(buildIdentitySection(bootstrapFiles));
-    sections.push(buildSoulSection(bootstrapFiles));
+    sections.push(buildIdentitySection(profileMarkdownFiles));
+    sections.push(buildSoulSection(profileMarkdownFiles));
   }
 
   // 2. Curated memory snapshot (non-minimal; frozen at session start)
@@ -528,7 +528,7 @@ export function buildSystemPrompt(
 
   // 3. User context — workspace USER.md unless curated user block is active
   if (!isMinimal && !curatedUserFrozen) {
-    sections.push(buildUserSection(bootstrapFiles));
+    sections.push(buildUserSection(profileMarkdownFiles));
   }
 
   // 4. Time (non-minimal only)
@@ -538,7 +538,7 @@ export function buildSystemPrompt(
 
   // 5. Memory section (non-minimal only)
   if (!isMinimal) {
-    sections.push(buildMemorySection(bootstrapFiles, memoryCitationsMode, hasCuratedSnapshot));
+    sections.push(buildMemorySection(profileMarkdownFiles, memoryCitationsMode, hasCuratedSnapshot));
   }
 
   // 6. Skills
@@ -563,18 +563,18 @@ export function buildSystemPrompt(
   sections.push(PROMPT_CACHE_BOUNDARY);
 
   // 9. Heartbeat
-  sections.push(buildHeartbeatSection(bootstrapFiles, heartbeatEnabled, heartbeatPrompt, userTimezone));
+  sections.push(buildHeartbeatSection(profileMarkdownFiles, heartbeatEnabled, heartbeatPrompt, userTimezone));
 
   // 10. Working directory
   sections.push(buildWorkingDirSection(workspaceDir));
 
   // 11. Tools (non-minimal only)
   if (!isMinimal) {
-    sections.push(buildToolsSection(bootstrapFiles));
+    sections.push(buildToolsSection(profileMarkdownFiles));
   }
 
   // 12. Agents guidelines
-  sections.push(buildAgentsSection(bootstrapFiles));
+  sections.push(buildAgentsSection(profileMarkdownFiles));
 
   // 13. Messaging
   sections.push(buildMessagingSection(channels, isMinimal));
@@ -596,32 +596,32 @@ export function buildSystemPrompt(
  */
 function _buildMinimalSystemPrompt(
   workspaceDir: string,
-  bootstrapFiles: WorkspaceBootstrapFile[]
+  profileMarkdownFiles: WorkspaceProfileMarkdownFile[]
 ): string {
   return buildSystemPrompt(workspaceDir, {
-    bootstrapFiles,
+    profileMarkdownFiles,
     promptMode: 'minimal',
     heartbeatEnabled: false,
   });
 }
 
 /**
- * Get bootstrap file by name (Internal)
+ * Get profile Markdown file by name (Internal)
  */
-function _getBootstrapFile(
-  bootstrapFiles: WorkspaceBootstrapFile[],
+function _getProfileMarkdownFile(
+  profileMarkdownFiles: WorkspaceProfileMarkdownFile[],
   name: string
-): WorkspaceBootstrapFile | undefined {
-  return bootstrapFiles.find(f => f.name === name);
+): WorkspaceProfileMarkdownFile | undefined {
+  return profileMarkdownFiles.find(f => f.name === name);
 }
 
 /**
- * Check if specific bootstrap file exists and is loaded (Internal)
+ * Check if specific profile Markdown file exists and is loaded (Internal)
  */
-function _hasBootstrapFile(
-  bootstrapFiles: WorkspaceBootstrapFile[],
+function _hasProfileMarkdownFile(
+  profileMarkdownFiles: WorkspaceProfileMarkdownFile[],
   name: string
 ): boolean {
-  const file = bootstrapFiles.find(f => f.name === name);
+  const file = profileMarkdownFiles.find(f => f.name === name);
   return !!file && !file.missing && !!file.content;
 }

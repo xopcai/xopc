@@ -33,7 +33,7 @@ import { usePageHeaderStore } from '@/stores/page-header-store';
 import type { AgentsEditorPanelContentProps } from './agents-editor-panel-content';
 import { AgentsSettingsToolbar } from './agents-settings-toolbar';
 import { agentListDisplayName } from './agent-display-names';
-import { useAgentsBootstrapFiles } from './hooks/use-agents-bootstrap-files';
+import { useAgentProfileFiles } from './hooks/use-agent-profile-files';
 import { useAgentsChannelBindings } from './hooks/use-agents-channel-bindings';
 import { useAgentsCronJobs } from './hooks/use-agents-cron-jobs';
 import { useAgentsSkillsCatalog } from './hooks/use-agents-skills-catalog';
@@ -104,7 +104,7 @@ export function useAgentsSettingsPanel() {
   const [editDescription, setEditDescription] = useState('');
 
   const profileSaveRef = useRef<(() => Promise<void>) | null>(null);
-  const [overviewBootstrapDirty, setOverviewBootstrapDirty] = useState(false);
+  const [overviewProfileMarkdownDirty, setOverviewProfileMarkdownDirty] = useState(false);
   const [profileDirty, setProfileDirty] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
 
@@ -198,7 +198,7 @@ export function useAgentsSettingsPanel() {
     [data, selectedId],
   );
 
-  const bootstrap = useAgentsBootstrapFiles({
+  const profileFiles = useAgentProfileFiles({
     panel,
     selectedId,
     hasToken,
@@ -522,7 +522,7 @@ export function useAgentsSettingsPanel() {
     if (footerSaveNotApplicable) return false;
     switch (panel) {
       case 'overview':
-        return overviewRestDirty || overviewBootstrapDirty;
+        return overviewRestDirty || overviewProfileMarkdownDirty;
       case 'profile':
         return profileDirty;
       default:
@@ -542,7 +542,7 @@ export function useAgentsSettingsPanel() {
       case 'overview':
         await Promise.all([
           onSaveAgentEdits(),
-          bootstrap.overviewSaveBootstrapRef.current?.() ?? Promise.resolve(),
+          profileFiles.overviewSaveProfileMarkdownRef.current?.() ?? Promise.resolve(),
         ]);
         showSavedFlash();
         break;
@@ -559,7 +559,7 @@ export function useAgentsSettingsPanel() {
         showSavedFlash();
         break;
       case 'files':
-        bootstrap.saveBootstrapDebounced.flush();
+        profileFiles.saveProfileMarkdownDebounced.flush();
         showSavedFlash();
         break;
       default:
@@ -601,21 +601,21 @@ export function useAgentsSettingsPanel() {
       if (!selected) return;
       void onDelete(selected, purge);
     },
-    overviewSaveBootstrapRef: bootstrap.overviewSaveBootstrapRef,
+    overviewSaveProfileMarkdownRef: profileFiles.overviewSaveProfileMarkdownRef,
     profileSaveRef,
-    setOverviewBootstrapDirty,
+    setOverviewProfileMarkdownDirty,
     setProfileDirty,
-    filesLoading: bootstrap.filesLoading,
-    files: bootstrap.files,
-    activeFile: bootstrap.activeFile,
-    setActiveFile: bootstrap.setActiveFile,
-    bootstrapViewMode: bootstrap.bootstrapViewMode,
-    setBootstrapViewMode: bootstrap.setBootstrapViewMode,
-    fileDraft: bootstrap.fileDraft,
-    setFileDraft: bootstrap.setFileDraft,
-    fileSaving: bootstrap.fileSaving,
-    bootstrapFileLoading: bootstrap.bootstrapFileLoading,
-    bootstrapEditorNonce: bootstrap.bootstrapEditorNonce,
+    filesLoading: profileFiles.filesLoading,
+    files: profileFiles.files,
+    activeFile: profileFiles.activeFile,
+    setActiveFile: profileFiles.setActiveFile,
+    filesViewMode: profileFiles.filesViewMode,
+    setFilesViewMode: profileFiles.setFilesViewMode,
+    fileDraft: profileFiles.fileDraft,
+    setFileDraft: profileFiles.setFileDraft,
+    fileSaving: profileFiles.fileSaving,
+    profileFileLoading: profileFiles.profileFileLoading,
+    profileEditorNonce: profileFiles.profileEditorNonce,
     toolEntryDisable: toolsSkills.toolEntryDisable,
     setToolEntryDisable: toolsSkills.setToolEntryDisable,
     onSaveTools: () => void onSaveTools(),

@@ -7,7 +7,7 @@ import {
   prepareCreateAgent,
   prepareDeleteAgent,
   prepareUpdateAgent,
-  readAgentBootstrapFile,
+  readAgentProfileFile,
 } from '../agents-admin.js';
 
 function minimalConfig(overrides: Partial<Config> = {}): Config {
@@ -158,9 +158,9 @@ describe('agents-admin', () => {
     expect(r.ok).toBe(false);
   });
 
-  it('readAgentBootstrapFile rejects unsupported filename', async () => {
+  it('readAgentProfileFile rejects unsupported filename', async () => {
     const cfg = minimalConfig();
-    const r = await readAgentBootstrapFile(cfg, 'main', '../../../etc/passwd');
+    const r = await readAgentProfileFile(cfg, 'main', '../../../etc/passwd');
     expect(r.ok).toBe(false);
   });
 });

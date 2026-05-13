@@ -2,7 +2,7 @@
 title: "USER.md Template"
 summary: "User profile record"
 read_when:
-  - Bootstrapping a workspace manually
+  - Setting up a workspace manually
 ---
 
 # USER.md - About Your Human

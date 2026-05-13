@@ -3,14 +3,14 @@ import type { Dispatch, SetStateAction } from 'react';
 import { useDebouncedCallback } from 'use-debounce';
 
 import {
-  fetchAgentBootstrapFileContent,
-  fetchAgentBootstrapFiles,
-  saveAgentBootstrapFileContent,
+  fetchAgentProfileFileContent,
+  fetchAgentProfileFiles,
+  saveAgentProfileFileContent,
 } from '@/features/settings/agents-admin-api';
 
 import type { AgentPanel } from '../utils';
 
-export function useAgentsBootstrapFiles(options: {
+export function useAgentProfileFiles(options: {
   panel: AgentPanel;
   selectedId: string | null;
   hasToken: boolean;
@@ -20,14 +20,14 @@ export function useAgentsBootstrapFiles(options: {
 }) {
   const { panel, selectedId, hasToken, dataAgentsLength, saveErrorMessage, setError } = options;
 
-  const [files, setFiles] = useState<Awaited<ReturnType<typeof fetchAgentBootstrapFiles>> | null>(null);
+  const [files, setFiles] = useState<Awaited<ReturnType<typeof fetchAgentProfileFiles>> | null>(null);
   const [filesLoading, setFilesLoading] = useState(false);
   const [activeFile, setActiveFile] = useState<string | null>(null);
   const [fileDraft, setFileDraft] = useState('');
   const [fileSaving, setFileSaving] = useState(false);
-  const [bootstrapViewMode, setBootstrapViewMode] = useState<'edit' | 'preview'>('edit');
-  const [bootstrapFileLoading, setBootstrapFileLoading] = useState(false);
-  const [bootstrapEditorNonce, setBootstrapEditorNonce] = useState(0);
+  const [filesViewMode, setFilesViewMode] = useState<'edit' | 'preview'>('edit');
+  const [profileFileLoading, setProfileFileLoading] = useState(false);
+  const [profileEditorNonce, setProfileEditorNonce] = useState(0);
 
   const fileDraftRef = useRef(fileDraft);
   fileDraftRef.current = fileDraft;
@@ -35,11 +35,11 @@ export function useAgentsBootstrapFiles(options: {
   selectedIdRef.current = selectedId;
   const activeFileRef = useRef(activeFile);
   activeFileRef.current = activeFile;
-  const overviewSaveBootstrapRef = useRef<(() => Promise<void>) | null>(null);
-  const bootstrapFileKeyRef = useRef('');
-  const bootstrapSyncedRef = useRef('');
+  const overviewSaveProfileMarkdownRef = useRef<(() => Promise<void>) | null>(null);
+  const profileFileKeyRef = useRef('');
+  const profileSyncedRef = useRef('');
 
-  const saveBootstrapDebounced = useDebouncedCallback(
+  const saveProfileMarkdownDebounced = useDebouncedCallback(
     async () => {
       const sid = selectedIdRef.current;
       const name = activeFileRef.current;
@@ -47,18 +47,18 @@ export function useAgentsBootstrapFiles(options: {
         return;
       }
       const key = `${sid}:${name}`;
-      if (key !== bootstrapFileKeyRef.current) {
+      if (key !== profileFileKeyRef.current) {
         return;
       }
       const draft = fileDraftRef.current;
-      if (draft === bootstrapSyncedRef.current) {
+      if (draft === profileSyncedRef.current) {
         return;
       }
       setFileSaving(true);
       setError(null);
       try {
-        await saveAgentBootstrapFileContent(sid, name, draft);
-        bootstrapSyncedRef.current = draft;
+        await saveAgentProfileFileContent(sid, name, draft);
+        profileSyncedRef.current = draft;
         setFiles((prev) => {
           if (!prev || prev.agentId !== sid) {
             return prev;
@@ -77,12 +77,12 @@ export function useAgentsBootstrapFiles(options: {
     800,
   );
 
-  const flushBootstrapSaveRef = useRef(saveBootstrapDebounced.flush);
-  flushBootstrapSaveRef.current = saveBootstrapDebounced.flush;
+  const flushProfileSaveRef = useRef(saveProfileMarkdownDebounced.flush);
+  flushProfileSaveRef.current = saveProfileMarkdownDebounced.flush;
 
   useEffect(() => {
     return () => {
-      flushBootstrapSaveRef.current();
+      flushProfileSaveRef.current();
     };
   }, []);
 
@@ -92,7 +92,7 @@ export function useAgentsBootstrapFiles(options: {
     }
     let cancelled = false;
     setFilesLoading(true);
-    void fetchAgentBootstrapFiles(selectedId)
+    void fetchAgentProfileFiles(selectedId)
       .then((f) => {
         if (!cancelled) {
           setFiles(f);
@@ -118,56 +118,56 @@ export function useAgentsBootstrapFiles(options: {
       return;
     }
     let cancelled = false;
-    saveBootstrapDebounced.flush();
-    setBootstrapFileLoading(true);
-    void fetchAgentBootstrapFileContent(selectedId, activeFile)
+    saveProfileMarkdownDebounced.flush();
+    setProfileFileLoading(true);
+    void fetchAgentProfileFileContent(selectedId, activeFile)
       .then((c) => {
         if (cancelled) {
           return;
         }
         const key = `${selectedId}:${activeFile}`;
-        bootstrapFileKeyRef.current = key;
-        bootstrapSyncedRef.current = c;
+        profileFileKeyRef.current = key;
+        profileSyncedRef.current = c;
         setFileDraft(c);
-        setBootstrapEditorNonce((n) => n + 1);
+        setProfileEditorNonce((n) => n + 1);
       })
       .catch(() => {
         if (!cancelled) {
           const key = `${selectedId}:${activeFile}`;
-          bootstrapFileKeyRef.current = key;
-          bootstrapSyncedRef.current = '';
+          profileFileKeyRef.current = key;
+          profileSyncedRef.current = '';
           setFileDraft('');
-          setBootstrapEditorNonce((n) => n + 1);
+          setProfileEditorNonce((n) => n + 1);
         }
       })
       .finally(() => {
         if (!cancelled) {
-          setBootstrapFileLoading(false);
+          setProfileFileLoading(false);
         }
       });
     return () => {
       cancelled = true;
     };
-  }, [activeFile, selectedId, hasToken, saveBootstrapDebounced]);
+  }, [activeFile, selectedId, hasToken, saveProfileMarkdownDebounced]);
 
   useEffect(() => {
-    if (!activeFile || !selectedId || bootstrapFileLoading) {
+    if (!activeFile || !selectedId || profileFileLoading) {
       return;
     }
-    saveBootstrapDebounced();
-  }, [fileDraft, activeFile, selectedId, bootstrapFileLoading, saveBootstrapDebounced]);
+    saveProfileMarkdownDebounced();
+  }, [fileDraft, activeFile, selectedId, profileFileLoading, saveProfileMarkdownDebounced]);
 
   useEffect(() => {
     if (panel !== 'files') {
       return;
     }
     return () => {
-      saveBootstrapDebounced.flush();
+      saveProfileMarkdownDebounced.flush();
     };
-  }, [panel, saveBootstrapDebounced]);
+  }, [panel, saveProfileMarkdownDebounced]);
 
   useEffect(() => {
-    setBootstrapViewMode('edit');
+    setFilesViewMode('edit');
   }, [activeFile, selectedId]);
 
   return {
@@ -179,11 +179,11 @@ export function useAgentsBootstrapFiles(options: {
     fileDraft,
     setFileDraft,
     fileSaving,
-    bootstrapViewMode,
-    setBootstrapViewMode,
-    bootstrapFileLoading,
-    bootstrapEditorNonce,
-    overviewSaveBootstrapRef,
-    saveBootstrapDebounced,
+    filesViewMode,
+    setFilesViewMode,
+    profileFileLoading,
+    profileEditorNonce,
+    overviewSaveProfileMarkdownRef,
+    saveProfileMarkdownDebounced,
   };
 }

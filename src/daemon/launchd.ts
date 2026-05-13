@@ -229,7 +229,7 @@ export const launchdService: GatewayService = {
     await writeFile(plistPath, plist, 'utf8');
     args.stdout?.write(`Written: ${plistPath}\n`);
 
-    // Bootstrap the agent
+    // Load the LaunchAgent via launchctl
     const domain = resolveGuiDomain();
     await launchctl(['bootstrap', domain, plistPath]);
 

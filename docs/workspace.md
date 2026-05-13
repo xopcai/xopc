@@ -1,6 +1,6 @@
 # State Directory & Workspace Layout
 
-For a concise map of **bootstrap**, **agent home**, and the **Markdown workspace**, see [On-disk layout](disk-layout.md).
+For a concise map of **profile Markdown**, **agent home**, and the **Markdown workspace**, see [On-disk layout](disk-layout.md).
 
 xopc keeps **machine-local state** under a single **state directory** (the “Agent OS” root) and, inside it, **per-agent** trees for transcripts, inbox, inbound/TTS blobs, curated memory, and runtime files. Separately, the **agent workspace** is the Markdown root the runtime uses as tool `cwd`, for daily `memory/` notes, user files, and extensions under that tree.
 
@@ -50,11 +50,11 @@ Session storage is **not** under the Markdown workspace directory; it always use
 
 With a normal config, each agent gets an explicit **`workspace`** path or inherits **`join(agents.defaults.workspace, <agentId>)`**, or falls back to **`<stateDir>/workspace/<agentId>`** when `agents.defaults.workspace` is unset.
 
-When the CLI runs **without** a loaded config file, **`XOPC_WORKSPACE`** wins if set (full path to the primary agent’s Markdown root); otherwise the primary Markdown tree defaults to **`<stateDir>/workspace/main`**. **`xopc init`** creates **`agents/<id>/`**, the Markdown workspace, and seeds bootstrap files from built-in templates (filenames in [Workspace templates](/reference/templates)) only when missing. **`xopc agents add`** updates **`agents.list`**, creates directories, and seeds a new workspace (see [CLI](cli.md#agents)).
+When the CLI runs **without** a loaded config file, **`XOPC_WORKSPACE`** wins if set (full path to the primary agent’s Markdown root); otherwise the primary Markdown tree defaults to **`<stateDir>/workspace/main`**. **`xopc init`** creates **`agents/<id>/`**, the Markdown workspace, and seeds profile Markdown from built-in templates (filenames in [Workspace templates](/reference/templates)) only when missing. **`xopc agents add`** updates **`agents.list`**, creates directories, and seeds a new workspace (see [CLI](cli.md#agents)).
 
-### Bootstrap Markdown (persona & memory index)
+### Profile Markdown (persona & memory index)
 
-These files are loaded into the system prompt in a **fixed order** with length limits; edit them under each agent’s `bootstrap/` folder.
+These files are loaded into the system prompt in a **fixed order** with length limits; edit them in that agent’s **Markdown workspace** root.
 
 | File | Role |
 |------|------|
@@ -74,14 +74,14 @@ These files are loaded into the system prompt in a **fixed order** with length l
 | Path | Role |
 |------|------|
 | `memory/` | Dated or topical memory snippets (e.g. `YYYY-MM-DD.md`); used with memory tools. |
-| `.state/` | Machine state: `workspace.json` (bootstrap seed metadata), `skills-cache.json`, etc. |
+| `.state/` | Machine state: `workspace.json` (profile Markdown seed metadata), `skills-cache.json`, etc. |
 | `.extensions/` | Per-workspace extension install/cache paths (when used by the extension loader). |
 
 Per-session overrides (`sessions/config/` JSON), **inbound** blobs (`inbound/`), **TTS** cache (`tts/`), and the **curated** store (`memories/`) live under **`agents/<agentId>/`** (agent home), not under this Markdown tree.
 
 ### Curated memory (`agents/<agentId>/memories/`) {#curated-memory}
 
-Separate from bootstrap `MEMORY.md` (under `agents/<id>/bootstrap/`) and from workspace `memory/*.md` (searchable snippets), **`agents/<agentId>/memories/`** holds **bounded, §-delimited** entries in `MEMORY.md` (agent notes) and `USER.md` (user profile). A frozen snapshot is injected into the system prompt when enhanced memory is enabled; the agent can update live files via the **`curated_memory`** tool. Behavior and limits are configured under **`agents.defaults.memory`** ([Configuration](configuration.md)).
+Separate from workspace-root profile **`MEMORY.md`** and from workspace `memory/*.md` (searchable snippets), **`agents/<agentId>/memories/`** holds **bounded, §-delimited** entries in `MEMORY.md` (agent notes) and `USER.md` (user profile). A frozen snapshot is injected into the system prompt when enhanced memory is enabled; the agent can update live files via the **`curated_memory`** tool. Behavior and limits are configured under **`agents.defaults.memory`** ([Configuration](configuration.md)).
 
 ## Which path is “the” workspace at runtime?
 
@@ -91,7 +91,7 @@ Two related ideas:
 
 2. **CLI** (no explicit `--workspace` on the root command) — **`XOPC_WORKSPACE`** if set, otherwise **`<stateDir>/workspace/main`** (or your profile/state dir equivalent).
 
-After `xopc init`, bootstrap files for `main` live under **`agents.defaults.workspace/main`** when that parent is set (schema default `~/.xopc/workspace` → `~/.xopc/workspace/main`), or under **`<stateDir>/workspace/main`** when it is not. Per-list **`agents.list[].workspace`** overrides the derived path for that agent.
+After `xopc init`, profile Markdown for `main` lives under **`agents.defaults.workspace/main`** when that parent is set (schema default `~/.xopc/workspace` → `~/.xopc/workspace/main`), or under **`<stateDir>/workspace/main`** when it is not. Per-list **`agents.list[].workspace`** overrides the derived path for that agent.
 
 ## Environment variables (quick reference)
 

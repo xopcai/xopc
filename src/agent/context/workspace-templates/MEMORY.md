@@ -2,7 +2,7 @@
 title: "MEMORY.md Template"
 summary: "Long-term memory structure for agents"
 read_when:
-  - Bootstrapping a workspace manually
+  - Setting up a workspace manually
 ---
 
 # MEMORY.md - Long-Term Memory

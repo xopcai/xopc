@@ -8,8 +8,8 @@ import { MarkdownView } from '@/components/markdown/markdown-view';
 import { ModelSelector } from '@/features/chat/model-selector';
 import type { GatewayAgentRow } from '@/features/settings/agents-admin-api';
 import {
-  fetchAgentBootstrapFileContent,
-  saveAgentBootstrapFileContent,
+  fetchAgentProfileFileContent,
+  saveAgentProfileFileContent,
 } from '@/features/settings/agents-admin-api';
 import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/settings/settings-form-section';
 import type { AgentsSettingsMessages, ChatMessages } from '@/i18n/messages';
@@ -33,7 +33,7 @@ import {
   detectSoulTemplate,
   SOUL_TEMPLATES,
   CREATURE_PRESETS,
-} from '../bootstrap-parser';
+} from '../agent-profile-markdown';
 
 export function AgentOverviewTab(props: {
   a: AgentsSettingsMessages;
@@ -52,10 +52,10 @@ export function AgentOverviewTab(props: {
   onSaveAgentEdits: () => void;
   onDelete: (purge: boolean) => void;
   hideInlineSave?: boolean;
-  /** Parent writes a save-bootstrap callback into this ref so the modal footer can trigger it. */
-  saveBootstrapRef?: MutableRefObject<(() => Promise<void>) | null>;
-  /** Called when bootstrap-file dirty state changes. */
-  onBootstrapDirtyChange?: (dirty: boolean) => void;
+  /** Parent writes a save callback for IDENTITY/SOUL Markdown into this ref (modal footer). */
+  saveProfileMarkdownRef?: MutableRefObject<(() => Promise<void>) | null>;
+  /** Called when IDENTITY/SOUL editor dirty state changes. */
+  onProfileMarkdownDirtyChange?: (dirty: boolean) => void;
 }) {
   const {
     a,
@@ -74,16 +74,16 @@ export function AgentOverviewTab(props: {
     onSaveAgentEdits,
     onDelete,
     hideInlineSave,
-    saveBootstrapRef,
-    onBootstrapDirtyChange,
+    saveProfileMarkdownRef,
+    onProfileMarkdownDirtyChange,
   } = props;
 
   const language = useLocaleStore((s) => s.language);
   const isDark = useThemeStore((s) => s.resolved === 'dark');
 
-  // ---- Bootstrap file state ----
-  const [bootstrapLoading, setBootstrapLoading] = useState(true);
-  const [, setBootstrapSaving] = useState(false);
+  // ---- Profile Markdown (IDENTITY / SOUL) ----
+  const [profileMarkdownLoading, setProfileMarkdownLoading] = useState(true);
+  const [, setProfileMarkdownSaving] = useState(false);
 
   const [identity, setIdentity] = useState<IdentityFields>({
     name: '',
@@ -110,13 +110,13 @@ export function AgentOverviewTab(props: {
     if (!selected) return;
     let cancelled = false;
     initialLoadDoneRef.current = false;
-    setBootstrapLoading(true);
+    setProfileMarkdownLoading(true);
 
     const load = async () => {
       try {
         const [identityMd, soulMd] = await Promise.all([
-          fetchAgentBootstrapFileContent(selected.id, 'IDENTITY.md').catch(() => ''),
-          fetchAgentBootstrapFileContent(selected.id, 'SOUL.md').catch(() => ''),
+          fetchAgentProfileFileContent(selected.id, 'IDENTITY.md').catch(() => ''),
+          fetchAgentProfileFileContent(selected.id, 'SOUL.md').catch(() => ''),
         ]);
         if (cancelled) return;
         const parsedIdentity = parseIdentityMarkdown(identityMd);
@@ -128,7 +128,7 @@ export function AgentOverviewTab(props: {
         setSoulEditorNonce((n) => n + 1);
       } finally {
         if (!cancelled) {
-          setBootstrapLoading(false);
+          setProfileMarkdownLoading(false);
           initialLoadDoneRef.current = true;
         }
       }
@@ -140,12 +140,12 @@ export function AgentOverviewTab(props: {
   }, [selected?.id]);
 
   // ---- Save helpers (manual save only, triggered by footer button) ----
-  const saveBootstrapFile = useCallback(async (fileName: string, content: string) => {
-    setBootstrapSaving(true);
+  const saveProfileMarkdownFile = useCallback(async (fileName: string, content: string) => {
+    setProfileMarkdownSaving(true);
     try {
-      await saveAgentBootstrapFileContent(agentIdRef.current, fileName, content);
+      await saveAgentProfileFileContent(agentIdRef.current, fileName, content);
     } finally {
-      setBootstrapSaving(false);
+      setProfileMarkdownSaving(false);
     }
   }, []);
 
@@ -157,30 +157,30 @@ export function AgentOverviewTab(props: {
 
   // Expose save function to parent for the footer save button
   useEffect(() => {
-    if (!saveBootstrapRef) return;
-    saveBootstrapRef.current = async () => {
+    if (!saveProfileMarkdownRef) return;
+    saveProfileMarkdownRef.current = async () => {
       await Promise.all([
-        saveBootstrapFile('IDENTITY.md', serializeIdentityMarkdown(identityRef.current)),
-        saveBootstrapFile('SOUL.md', soulContentRef.current),
+        saveProfileMarkdownFile('IDENTITY.md', serializeIdentityMarkdown(identityRef.current)),
+        saveProfileMarkdownFile('SOUL.md', soulContentRef.current),
       ]);
       // Reset snapshots after successful save
       identitySnapshotRef.current = JSON.stringify(identityRef.current);
       soulSnapshotRef.current = soulContentRef.current;
       // Manually notify parent since state didn't change (only snapshot did)
-      onBootstrapDirtyChange?.(false);
+      onProfileMarkdownDirtyChange?.(false);
     };
     return () => {
-      saveBootstrapRef.current = null;
+      saveProfileMarkdownRef.current = null;
     };
-  }, [saveBootstrapRef, saveBootstrapFile, onBootstrapDirtyChange]);
+  }, [saveProfileMarkdownRef, saveProfileMarkdownFile, onProfileMarkdownDirtyChange]);
 
-  // Notify parent when bootstrap dirty state changes
+  // Notify parent when profile markdown dirty state changes
   useEffect(() => {
-    if (!onBootstrapDirtyChange) return;
+    if (!onProfileMarkdownDirtyChange) return;
     const identityDirty = JSON.stringify(identity) !== identitySnapshotRef.current;
     const soulDirty = soulCustomContent !== soulSnapshotRef.current;
-    onBootstrapDirtyChange(identityDirty || soulDirty);
-  }, [identity, soulCustomContent, onBootstrapDirtyChange]);
+    onProfileMarkdownDirtyChange(identityDirty || soulDirty);
+  }, [identity, soulCustomContent, onProfileMarkdownDirtyChange]);
 
   const updateIdentity = useCallback((patch: Partial<IdentityFields>) => {
     setIdentity((prev) => ({ ...prev, ...patch }));
@@ -403,7 +403,7 @@ export function AgentOverviewTab(props: {
       </SettingsFormSection>
 
       {/* ===== Section 3: Personality & Style ===== */}
-      {bootstrapLoading ? (
+      {profileMarkdownLoading ? (
         <p className="text-sm text-fg-muted">{a.loading}</p>
       ) : (
         <SettingsFormSection>

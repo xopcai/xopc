@@ -2,7 +2,7 @@
 title: "IDENTITY.md Template"
 summary: "Agent identity record"
 read_when:
-  - Bootstrapping a workspace manually
+  - Setting up a workspace manually
 ---
 
 # IDENTITY.md - Who Am I?

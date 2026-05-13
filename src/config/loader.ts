@@ -13,7 +13,7 @@ const log = createLogger('ConfigLoader');
  * dependency: loader → validate-channel-configs → bundled-channel-plugins →
  * telegram/command-handler → providers → sync-provider-auth → loader.
  *
- * Call {@link registerChannelConfigValidator} once during app bootstrap
+ * Call {@link registerChannelConfigValidator} once during application startup
  * (after all channel plugins are loaded) to enable validation.
  */
 let channelConfigValidator: ((cfg: Config) => void) | null = null;

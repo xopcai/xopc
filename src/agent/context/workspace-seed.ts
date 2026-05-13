@@ -1,5 +1,5 @@
 /**
- * Seed bootstrap persona Markdown files into the workspace root (OpenClaw-aligned).
+ * Seed profile Markdown files into the workspace root (OpenClaw-aligned).
  * Resolution order per file: `XOPC_TEMPLATE_PATH` or repo `docs/reference/templates`, then bundled `./workspace-templates/`.
  */
 
@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 import type { Config } from '../../config/schema.js';
 import { DEFAULT_AGENT_ID, resolveAgentWorkspaceDir } from '../agent-scope.js';
 import { WORKSPACE_FILES } from '../../config/paths.js';
-import { BOOTSTRAP_FILES } from './workspace.js';
+import { AGENT_PROFILE_MARKDOWN_SYSTEM_FILES } from './workspace.js';
 import { createLogger } from '../../utils/logger.js';
 
 const log = createLogger('WorkspaceSeed');
@@ -19,13 +19,13 @@ const log = createLogger('WorkspaceSeed');
 /** Marker in bundled/reference `IDENTITY.md` templates; replaced on agent creation when a display name is known. */
 export const IDENTITY_NAME_PLACEHOLDER = '_(pick something you like)_';
 
-export type SeedWorkspaceBootstrapOptions = {
+export type SeedWorkspaceProfileMarkdownOptions = {
   /** Fills the **Name** line in `IDENTITY.md` when the template still contains the placeholder. */
   displayName?: string;
 };
 
 /** Files to copy when seeding a new agent workspace (includes `BOOTSTRAP.md`, not part of system-prompt load order). */
-const SEED_FILENAMES: readonly string[] = [...BOOTSTRAP_FILES, WORKSPACE_FILES.BOOTSTRAP];
+const SEED_FILENAMES: readonly string[] = [...AGENT_PROFILE_MARKDOWN_SYSTEM_FILES, WORKSPACE_FILES.BOOTSTRAP];
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -89,13 +89,13 @@ function personalizeIdentityTemplate(content: string, displayName?: string): str
 }
 
 /**
- * OpenClaw-aligned: seed bootstrap persona Markdown files into the workspace root.
+ * OpenClaw-aligned: seed profile Markdown into the workspace root.
  * Does not overwrite existing files (per-agent persona stays independent after first edit).
  * On a brand-new workspace, also attempts `git init` (silently skips when git is unavailable).
  */
-export function seedWorkspaceBootstrapFiles(
+export function seedWorkspaceProfileMarkdownFiles(
   workspaceDir: string,
-  options?: SeedWorkspaceBootstrapOptions,
+  options?: SeedWorkspaceProfileMarkdownOptions,
 ): void {
   const isBrandNew = !existsSync(workspaceDir);
   mkdirSync(workspaceDir, { recursive: true });
@@ -116,7 +116,7 @@ export function seedWorkspaceBootstrapFiles(
   }
 
   if (seeded > 0) {
-    log.info({ workspaceDir, seeded }, 'Seeded bootstrap Markdown files');
+    log.info({ workspaceDir, seeded }, 'Seeded profile Markdown files');
   }
 
   ensureGitRepo(workspaceDir, isBrandNew);
@@ -139,12 +139,9 @@ function ensureGitRepo(workspaceDir: string, isBrandNew: boolean): void {
 }
 
 /**
- * Ensure default (`main`) agent bootstrap has the same reference templates as the markdown workspace (missing files only).
+ * Ensure default (`main`) agent workspace has reference profile Markdown templates (missing files only).
+ * OpenClaw-aligned: files live in the workspace root directory.
  */
-/**
- * Ensure default agent workspace has bootstrap reference templates (missing files only).
- * OpenClaw-aligned: bootstrap files live in the workspace root directory.
- */
-export function seedMainAgentBootstrap(cfg: Config): void {
-  seedWorkspaceBootstrapFiles(resolveAgentWorkspaceDir(cfg, DEFAULT_AGENT_ID));
+export function seedMainAgentProfileMarkdown(cfg: Config): void {
+  seedWorkspaceProfileMarkdownFiles(resolveAgentWorkspaceDir(cfg, DEFAULT_AGENT_ID));
 }

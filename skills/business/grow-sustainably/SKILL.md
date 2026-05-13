@@ -48,7 +48,7 @@ Make more than you spend: your company can keep going forever. Make less: you wi
 
 ## Fundraising (If You Must)
 
-- **Bootstrap first.** Profitability gives you leverage in any fundraising conversation.
+- **Establish profitability first.** Profitability gives you leverage in any fundraising conversation.
 - **Consider Regulation Crowdfunding.** Turn your customers into investors, aligning stakeholders. Gumroad did this on March 15, 2021.
 - **New VC alternatives exist:** Earnest Capital, Indie.vc, Tinyseed Fund — firms investing in sustainable businesses.
 - **If you take VC:** profitability means lower dilution and retained control. Shopify and 1Password raised VC only after being profitable for years.

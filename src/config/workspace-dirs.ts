@@ -7,8 +7,8 @@ import { getDefaultAgentId } from '../routing/resolve-route.js';
  * defined in `config.agents.list`, plus the default agent.
  * Useful for file watchers, doctor checks, and batch workspace operations.
  *
- * OpenClaw-aligned: bootstrap / persona files live in the workspace root,
- * so this single list covers both workspace and bootstrap directories.
+ * OpenClaw-aligned: profile / persona files live in the workspace root,
+ * so this single list covers both workspace and profile Markdown directories.
  */
 export function listAgentWorkspaceDirs(config: Config): string[] {
   const dirs = new Set<string>();
@@ -27,8 +27,8 @@ export function listAgentWorkspaceDirs(config: Config): string[] {
 }
 
 /**
- * OpenClaw-aligned: bootstrap files live in the workspace root, so bootstrap dirs = workspace dirs.
+ * OpenClaw-aligned: profile Markdown files live in the workspace root, so profile dirs match workspace dirs.
  */
-export function listAgentBootstrapDirs(config: Config): string[] {
+export function listAgentProfileMarkdownDirs(config: Config): string[] {
   return listAgentWorkspaceDirs(config);
 }

@@ -7,7 +7,12 @@ import { apiUrl } from '@/lib/url';
 
 /** Web UI chat sessions use segment `webchat` (same as `ui`). */
 export function isWebUiSessionKey(key: string): boolean {
-  return key.startsWith('gateway:') || key.includes(':gateway:') || key.includes(':webchat:');
+  return (
+    key.startsWith('gateway:') ||
+    key.includes(':gateway:') ||
+    key.includes(':webchat:') ||
+    key.includes(':ui:')
+  );
 }
 
 /**

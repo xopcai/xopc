@@ -17,7 +17,7 @@ export type GatewayAgentRow = {
   /** From `IDENTITY.md` when gateway enriches `/api/agents`. */
   avatar?: string;
   workspace: string;
-  bootstrapDir: string;
+  profileDir: string;
   model?: { primary?: string; fallbacks?: string[] };
   isDefault: boolean;
   skills: GatewayAgentSkillsInfo;
@@ -58,7 +58,7 @@ export type SkillCatalogRow = {
   };
 };
 
-export type AgentBootstrapFileEntry = {
+export type AgentProfileFileEntry = {
   name: string;
   missing: boolean;
   size?: number;

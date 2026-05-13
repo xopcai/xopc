@@ -9,7 +9,7 @@ import { setupModel as runModelSetup } from './onboard/model.js';
 import { colors } from '../utils/colors.js';
 import { acquireGatewayLock, GatewayLockError } from '../../gateway/lock.js';
 import { setupChannels as runChannelOnboard, getChannelConfigurators } from './onboard/channels/index.js';
-import { seedMainAgentBootstrap } from '../../agent/context/workspace-seed.js';
+import { seedMainAgentProfileMarkdown } from '../../agent/context/workspace-seed.js';
 import { initWorkspace } from '../utils/init-workspace.js';
 import { ConfigSchema } from '../../config/schema.js';
 import { isWeixinOnboardConfigured } from '../../../extensions/weixin/src/adapters/onboard-cli.js';
@@ -119,7 +119,7 @@ async function runOnboard(
   // Save config once at the end
   await saveConfig(config as Config, configPath);
 
-  seedMainAgentBootstrap(config as Config);
+  seedMainAgentProfileMarkdown(config as Config);
 
   console.log('\n' + '═'.repeat(50));
   console.log('\n🎉 Setup Complete!\n');
@@ -174,7 +174,7 @@ async function runOnboard(
   console.log('  Config:', configPath);
   console.log('  Workspace:', workspacePath);
   if (runFullWizard) {
-    console.log('  Bootstrap:', join(workspacePath, 'BOOTSTRAP.md'));
+    console.log('  BOOTSTRAP.md (origin story):', join(workspacePath, 'BOOTSTRAP.md'));
   }
 
   if (isInteractive() && didConfigurableSteps) {

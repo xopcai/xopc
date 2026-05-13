@@ -15,8 +15,8 @@ import {
   resolveUserPath,
   validateAgentIdForNewAgent,
 } from '../agent/agent-scope.js';
-import { BOOTSTRAP_FILES } from '../agent/context/workspace.js';
-import { seedWorkspaceBootstrapFiles } from '../agent/context/workspace-seed.js';
+import { AGENT_PROFILE_MARKDOWN_SYSTEM_FILES } from '../agent/context/workspace.js';
+import { seedWorkspaceProfileMarkdownFiles } from '../agent/context/workspace-seed.js';
 import {
   applyAgentConfig,
   findAgentEntryIndex,
@@ -29,8 +29,8 @@ import { resolveEffectiveAgentProfile } from '../config/agent-profile.js';
 import { GATEWAY_BUILTIN_TOOL_IDS } from './agent-builtin-tools.js';
 import { isPathUnderWorkspace, resolveWorkspaceSafePath } from './workspace-editor-path.js';
 
-const EDITABLE_BOOTSTRAP_NAMES = new Set<string>([
-  ...BOOTSTRAP_FILES,
+const EDITABLE_PROFILE_MARKDOWN_NAMES = new Set<string>([
+  ...AGENT_PROFILE_MARKDOWN_SYSTEM_FILES,
   WORKSPACE_FILES.BOOTSTRAP,
   WORKSPACE_FILES.CONTEXT,
   WORKSPACE_FILES.SKILLS,
@@ -43,7 +43,8 @@ export type GatewayAgentRow = {
   /** Value from `IDENTITY.md` **Avatar:** line when present (may be URL, `xopc:…`, etc.). */
   avatar?: string;
   workspace: string;
-  bootstrapDir: string;
+  /** Absolute directory where profile Markdown (SOUL.md, IDENTITY.md, …) is read for this agent. */
+  profileDir: string;
   model?: { primary?: string; fallbacks?: string[] };
   isDefault: boolean;
   skills: {
@@ -78,7 +79,7 @@ function collectAgentIdsForList(cfg: Config): string[] {
   return [...ids];
 }
 
-/** Extract `**Avatar:**` value from bootstrap IDENTITY.md (same line shape as the gateway console parser). */
+/** Extract `**Avatar:**` value from profile IDENTITY.md (same line shape as the gateway console parser). */
 export function extractAvatarFromIdentityMarkdown(content: string): string | undefined {
   for (const line of content.split('\n')) {
     const match = line.match(/^[-*]\s+\*\*Avatar:\*\*\s*(.*)/i);
@@ -121,7 +122,7 @@ export async function listGatewayAgents(cfg: Config): Promise<GatewayAgentsListR
       ...(entry?.description?.trim() ? { description: entry.description.trim() } : {}),
       ...(avatar ? { avatar } : {}),
       workspace: profile.resolvedWorkspacePath,
-      bootstrapDir: resolveAgentWorkspaceDir(cfg, id),
+      profileDir: resolveAgentWorkspaceDir(cfg, id),
       ...(model ? { model } : {}),
       isDefault: id === defaultId,
       skills: {
@@ -206,7 +207,7 @@ export async function finalizeCreateAgentDirs(cfg: Config, agentId: string): Pro
   const id = normalizeAgentId(agentId);
   const entry = listAgentEntries(cfg).find((e) => normalizeAgentId(e.id) === id);
   const displayName = entry?.name?.trim() || id;
-  seedWorkspaceBootstrapFiles(wsPath, { displayName });
+    seedWorkspaceProfileMarkdownFiles(wsPath, { displayName });
 }
 
 export type UpdateAgentBody = {
@@ -350,7 +351,7 @@ export type AgentFileEntry = {
   updatedAtMs?: number;
 };
 
-async function bootstrapRootReal(cfg: Config, agentId: string): Promise<string> {
+async function profileMarkdownRootReal(cfg: Config, agentId: string): Promise<string> {
   const dir = resolveAgentWorkspaceDir(cfg, agentId);
   await mkdir(dir, { recursive: true });
   try {
@@ -361,22 +362,22 @@ async function bootstrapRootReal(cfg: Config, agentId: string): Promise<string> 
 }
 
 function assertAllowedFile(name: string): AgentAdminResult<never> | null {
-  if (!name || name.includes('/') || name.includes('\\') || !EDITABLE_BOOTSTRAP_NAMES.has(name)) {
+  if (!name || name.includes('/') || name.includes('\\') || !EDITABLE_PROFILE_MARKDOWN_NAMES.has(name)) {
     return { ok: false, error: `unsupported file "${name}"`, status: 400 };
   }
   return null;
 }
 
-export async function listAgentBootstrapFiles(
+export async function listAgentProfileFiles(
   cfg: Config,
   agentId: string,
-): Promise<AgentAdminResult<{ agentId: string; bootstrapDir: string; files: AgentFileEntry[] }>> {
+): Promise<AgentAdminResult<{ agentId: string; profileDir: string; files: AgentFileEntry[] }>> {
   const id = normalizeAgentId(agentId);
   if (collectAgentIdsForList(cfg).every((x) => x !== id)) {
     return { ok: false, error: `agent "${id}" not found`, status: 404 };
   }
-  const root = await bootstrapRootReal(cfg, id);
-  const names = [...EDITABLE_BOOTSTRAP_NAMES];
+  const root = await profileMarkdownRootReal(cfg, id);
+  const names = [...EDITABLE_PROFILE_MARKDOWN_NAMES];
   const files: AgentFileEntry[] = [];
   for (const name of names.sort((a, b) => a.localeCompare(b))) {
     const abs = resolveWorkspaceSafePath(root, name);
@@ -399,10 +400,10 @@ export async function listAgentBootstrapFiles(
     }
   }
   files.sort((a, b) => a.name.localeCompare(b.name));
-  return { ok: true, data: { agentId: id, bootstrapDir: root, files } };
+  return { ok: true, data: { agentId: id, profileDir: root, files } };
 }
 
-export async function readAgentBootstrapFile(
+export async function readAgentProfileFile(
   cfg: Config,
   agentId: string,
   name: string,
@@ -415,7 +416,7 @@ export async function readAgentBootstrapFile(
   if (collectAgentIdsForList(cfg).every((x) => x !== id)) {
     return { ok: false, error: `agent "${id}" not found`, status: 404 };
   }
-  const root = await bootstrapRootReal(cfg, id);
+  const root = await profileMarkdownRootReal(cfg, id);
   const abs = resolveWorkspaceSafePath(root, name);
   if (!abs) {
     return { ok: false, error: 'invalid path', status: 400 };
@@ -428,7 +429,7 @@ export async function readAgentBootstrapFile(
   }
 }
 
-export async function writeAgentBootstrapFile(
+export async function writeAgentProfileFile(
   cfg: Config,
   agentId: string,
   name: string,
@@ -442,21 +443,21 @@ export async function writeAgentBootstrapFile(
   if (collectAgentIdsForList(cfg).every((x) => x !== id)) {
     return { ok: false, error: `agent "${id}" not found`, status: 404 };
   }
-  const root = await bootstrapRootReal(cfg, id);
+  const root = await profileMarkdownRootReal(cfg, id);
   const abs = resolveWorkspaceSafePath(root, name);
   if (!abs) {
     return { ok: false, error: 'invalid path', status: 400 };
   }
-  const rootReal = await bootstrapRootReal(cfg, id);
+  const rootReal = await profileMarkdownRootReal(cfg, id);
   if (!isPathUnderWorkspace(rootReal, abs)) {
-    return { ok: false, error: 'path escapes bootstrap root', status: 400 };
+    return { ok: false, error: 'path escapes profile markdown root', status: 400 };
   }
   await writeFile(abs, content, 'utf-8');
   return { ok: true, data: { agentId: id, path: abs } };
 }
 
 // ---------------------------------------------------------------------------
-// Binary agent avatar (bootstrap dir, not a markdown bootstrap file)
+// Binary agent avatar (profile markdown root dir, not a SOUL/IDENTITY markdown file)
 // ---------------------------------------------------------------------------
 
 const AGENT_AVATAR_MAX_BYTES = 512 * 1024;
@@ -515,7 +516,7 @@ export async function readAgentAvatarFile(
     return missingAgent;
   }
   const id = normalizeAgentId(agentId);
-  const root = await bootstrapRootReal(cfg, id);
+  const root = await profileMarkdownRootReal(cfg, id);
   for (const name of agentAvatarFilenames()) {
     const abs = resolveWorkspaceSafePath(root, name);
     if (!abs) {
@@ -568,8 +569,8 @@ export async function writeAgentAvatarFromBase64(
     return { ok: false, error: 'file content does not match declared image type', status: 400 };
   }
 
-  const root = await bootstrapRootReal(cfg, id);
-  const rootReal = await bootstrapRootReal(cfg, id);
+  const root = await profileMarkdownRootReal(cfg, id);
+  const rootReal = await profileMarkdownRootReal(cfg, id);
   const targetName = `${AGENT_AVATAR_BASENAME}${ext}`;
   const abs = resolveWorkspaceSafePath(root, targetName);
   if (!abs || !isPathUnderWorkspace(rootReal, abs)) {
@@ -605,15 +606,15 @@ function extMatchesDetectedMime(
   return detected === mimeToExtToMime(ext);
 }
 
-/** Remove any `agent-avatar.*` in the agent bootstrap dir. Idempotent: ok even when no file existed. */
+/** Remove any `agent-avatar.*` in the agent profile markdown root. Idempotent: ok even when no file existed. */
 export async function deleteAgentAvatarFile(cfg: Config, agentId: string): Promise<AgentAdminResult<{ agentId: string }>> {
   const missingAgent = assertAgentExistsForAvatar(cfg, agentId);
   if (missingAgent) {
     return missingAgent;
   }
   const id = normalizeAgentId(agentId);
-  const root = await bootstrapRootReal(cfg, id);
-  const rootReal = await bootstrapRootReal(cfg, id);
+  const root = await profileMarkdownRootReal(cfg, id);
+  const rootReal = await profileMarkdownRootReal(cfg, id);
   for (const name of agentAvatarFilenames()) {
     const abs = resolveWorkspaceSafePath(root, name);
     if (!abs || !isPathUnderWorkspace(rootReal, abs)) {

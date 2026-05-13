@@ -23,7 +23,7 @@ import { createLogger } from '../../utils/logger.js';
 import { colors } from '../utils/colors.js';
 import { getContextWithOpts } from '../index.js';
 import { initWorkspace } from '../utils/init-workspace.js';
-import { seedMainAgentBootstrap } from '../../agent/context/workspace-seed.js';
+import { seedMainAgentProfileMarkdown } from '../../agent/context/workspace-seed.js';
 
 const log = createLogger('ExtensionDev');
 const MANIFEST = 'xopc.extension.json';
@@ -53,7 +53,7 @@ async function ensureGatewayReady(
     console.log(`   Config:    ${configPath}`);
     console.log(`   Workspace: ${workspacePath}`);
     console.log('');
-    seedMainAgentBootstrap(result.config);
+    seedMainAgentProfileMarkdown(result.config);
   }
 }
 

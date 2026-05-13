@@ -156,7 +156,7 @@ export function parseFrontmatterBlock(content: string): ParsedFrontmatter {
   return merged;
 }
 
-// --- Full-document YAML frontmatter (body split) — used by skills, workspace bootstrap ---
+// --- Full-document YAML frontmatter (body split) — used by skills, profile Markdown seeding ---
 
 export interface FrontmatterSplit<T = Record<string, unknown>> {
   frontmatter: T;

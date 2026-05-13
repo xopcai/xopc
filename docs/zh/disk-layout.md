@@ -9,9 +9,9 @@
 | 区域 | 作用 |
 |------|------|
 | **状态目录** | 全局配置、凭据、日志、cron、全局 skills/extensions、托管工具链等。 |
-| **智能体主目录** `<stateDir>/agents/<agentId>/` | 按 `agentId` 隔离的运行时数据：会话 transcript、bootstrap 人格 Markdown、托管记忆、入站/TTS 落盘、会话级配置等。 |
+| **智能体主目录** `<stateDir>/agents/<agentId>/` | 按 `agentId` 隔离的运行时数据：会话 transcript、托管记忆、入站/TTS 落盘、会话级配置等。（`SOUL.md` 等 **profile Markdown** 位于 **Markdown 工作空间** 根目录 — 见下文。） |
 | **智能体状态目录** `…/agents/<agentId>/agent/` | 进程状态：`agent.json`、各智能体凭据、IPC 收件箱、pid/socket、小型机器状态、扩展安装、出站崩溃恢复队列。 |
-| **Markdown 工作空间** | 用户项目树：工具 **cwd**、每日 `memory/*.md`、`media/generated`、用户 `skills/`、任意用户文件。**不再**作为人格文件或内部状态的主存放位置。 |
+| **Markdown 工作空间** | 用户项目树：工具 **cwd**、profile Markdown（`SOUL.md` 等）、每日 `memory/*.md`、`media/generated`、用户 `skills/`、任意用户文件。 |
 
 下文默认状态根为 `~/.xopc/`；可用 `XOPC_STATE_DIR`、`XOPC_PROFILE`、`XOPC_HOME` 覆盖（见 [workspace.md 环境变量](workspace.md#环境变量速查)）。
 
@@ -36,14 +36,14 @@
 
 | 路径 | 用途 |
 |------|------|
-| `bootstrap/` | 人格与引导 Markdown：`SOUL.md`、`IDENTITY.md`、`USER.md`、`TOOLS.md`、`AGENTS.md`、`HEARTBEAT.md`、`MEMORY.md`（写入系统提示的引导文件，与托管 `memories/` 不同）、`CONTEXT.md`、`SKILLS.md`、`BOOTSTRAP.md`。用于组装智能体系统提示；网关心跳文案默认读取 `bootstrap/HEARTBEAT.md`（若存在）。 |
+| *(profile Markdown)* | 位于 **解析后的 Markdown 工作空间根**（见 [Markdown 工作空间](#markdown-工作空间)）：`SOUL.md`、`IDENTITY.md`、`USER.md`、`TOOLS.md`、`AGENTS.md`、`HEARTBEAT.md`、`MEMORY.md`（系统提示栈；与托管 `memories/` 不同）、可选 `CONTEXT.md`、`SKILLS.md`，以及 **`BOOTSTRAP.md`**（起源说明；**不在**默认系统提示加载顺序中）。网关心跳文案默认读取该根下的 `HEARTBEAT.md`（若存在）。 |
 | `sessions/` | 会话 transcript（分片、`index.json`、`archive/`）、`sessions/config/` 下按会话配置。 |
 | `memories/` | 托管结构化存储（`MEMORY.md`、`USER.md`，条目以固定分隔符分段 — `BuiltinMemoryStore`）。 |
 | `inbound/` | 入站附件（非图片二进制）落盘；transcript 中相对路径为相对 agent home 的 `inbound/...`。 |
 | `tts/` | 按会话缓存的出站 TTS 音频。 |
 | `agent/` | 见下节 **智能体状态目录**。 |
 
-种子目录：`xopc init` / `xopc agents add` 会按内置模板创建 `bootstrap/` 与工作区骨架（参见 [工作区模板](/zh/reference/templates)）。
+种子：`xopc init` / `xopc agents add` 将缺失的 profile Markdown 模板复制到 **Markdown 工作空间根**（参见 [工作区模板](/zh/reference/templates)）。
 
 ## 智能体状态目录：`agents/<agentId>/agent/`
 
@@ -72,14 +72,14 @@
 | `skills/` | 用户自建技能。 |
 | *任意文件* | `read` / `write` / `edit` 等工具操作对象。 |
 
-新安装不会把内部状态写回 Markdown 工作区。本版本只支持文首表格中的 **单一目录树**：人设与机器状态均在 `agents/<id>/` 下，**不会**从「全部堆在 Markdown 工作区里」的旧布局自动迁移；bootstrap 请用 `xopc setup` / `xopc onboard`，其他数据需自行搬迁。
+新安装不会把内部状态写回 Markdown 工作区。本版本只支持文首表格中的 **单一目录树**：人设 Markdown 与机器状态按上表分布；**不会**从「全部堆在 Markdown 工作区里」的旧布局自动迁移；profile Markdown 请用 `xopc setup` / `xopc onboard`，其他数据需自行搬迁。
 
-会话里引用的入站附件 / TTS 路径仅支持相对 `inbound/`、`tts/`（相对 agent home解析）。
+会话里引用的入站附件 / TTS 路径仅支持相对 `inbound/`、`tts/`（相对 agent home 解析）。
 
 ## 运维辅助 API
 
 - `listAgentWorkspaceDirs(config)` — 列出配置中各智能体的 Markdown 工作区根路径（CLI / 进阶用法）。
-- `listAgentBootstrapDirs(config)` — 列出所有 `bootstrap/` 根，便于备份或外部编辑器挂载。
+- `listAgentProfileMarkdownDirs(config)` — 与 `listAgentWorkspaceDirs` 相同根路径（profile Markdown 在工作区根；便于备份或外部编辑器挂载）。
 
 ## 另见
 

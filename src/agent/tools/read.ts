@@ -5,8 +5,8 @@ import { readFile, stat } from 'fs/promises';
 import { checkFileSafety } from '../prompt/safety.js';
 import { truncateHead, formatSize, DEFAULT_MAX_BYTES } from './truncate.js';
 import {
-  isBareBootstrapFileName,
-  resolveBootstrapPathIfBareName,
+  isBareProfileMarkdownFileName,
+  resolveProfileMarkdownPathIfBareName,
   resolvePathUnderWorkspace,
 } from './tool-paths.js';
 
@@ -19,8 +19,8 @@ const ReadFileSchema = Type.Object({
 });
 
 export interface CreateReadFileToolOptions {
-  /** When set and the path is a bare bootstrap name (e.g. SOUL.md), try this dir if not in workspace. */
-  bootstrapDir?: string;
+  /** When set and the path is a bare profile filename (e.g. SOUL.md), try this root if not in workspace. */
+  profileMarkdownRoot?: string;
 }
 
 type ReadFileParams = {
@@ -35,7 +35,7 @@ export function createReadFileTool(
   return {
     name: 'read_file',
     description:
-      'Read file contents. Relative paths are from the current agent workspace; persona files (SOUL.md, etc.) may live in agent bootstrap and are found automatically when given by filename.',
+      'Read file contents. Relative paths are from the current agent workspace; profile Markdown (SOUL.md, etc.) is found automatically when given by filename.',
     parameters: ReadFileSchema,
     label: '📄 Read',
 
@@ -44,14 +44,14 @@ export function createReadFileTool(
       params: any,
       _signal?: AbortSignal,
     ): Promise<AgentToolResult<{}>> {
-      return executeReadFile(workspace, options?.bootstrapDir, params as ReadFileParams);
+      return executeReadFile(workspace, options?.profileMarkdownRoot, params as ReadFileParams);
     },
   } as any;
 }
 
 async function executeReadFile(
   workspace: string,
-  bootstrapDir: string | undefined,
+  profileMarkdownRoot: string | undefined,
   params: ReadFileParams,
 ): Promise<AgentToolResult<{}>> {
   try {
@@ -68,10 +68,10 @@ async function executeReadFile(
       const code = (e as NodeJS.ErrnoException)?.code;
       if (
         code === 'ENOENT' &&
-        bootstrapDir &&
-        isBareBootstrapFileName(params.path)
+        profileMarkdownRoot &&
+        isBareProfileMarkdownFileName(params.path)
       ) {
-        const alt = resolveBootstrapPathIfBareName(params.path, bootstrapDir);
+        const alt = resolveProfileMarkdownPathIfBareName(params.path, profileMarkdownRoot);
         try {
           stats = await stat(alt);
           normalized = alt;

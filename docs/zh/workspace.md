@@ -1,6 +1,6 @@
 # 状态目录与工作空间布局
 
-**bootstrap、agent 主目录与 Markdown 工作区**的简明路径表见 [磁盘与目录布局](disk-layout.md)。
+**profile Markdown、agent 主目录与 Markdown 工作区**的简明路径表见 [磁盘与目录布局](disk-layout.md)。
 
 xopc 在单一 **状态目录**（“Agent OS” 根）下保存本机状态；其下有 **按智能体划分** 的目录树（会话、收件箱、入站/TTS、托管记忆、运行时文件等）。**工作空间（workspace）** 是 Markdown 根目录：工具 `cwd`、按日的 `memory/` 笔记、用户文件，以及其下的扩展安装路径。
 
@@ -54,7 +54,7 @@ CLI **未**加载到配置文件时，优先 **`XOPC_WORKSPACE`**（主智能体
 
 ### 引导用 Markdown（人格与记忆索引）
 
-这些文件按 **固定顺序** 进入系统提示（有长度限制），在各智能体的 `bootstrap/` 下编辑。
+这些文件按 **固定顺序** 进入系统提示（有长度限制），在各智能体的 **Markdown 工作空间根** 下编辑。
 
 | 文件 | 作用 |
 |------|------|
@@ -81,7 +81,7 @@ CLI **未**加载到配置文件时，优先 **`XOPC_WORKSPACE`**（主智能体
 
 ### 托管记忆（`agents/<agentId>/memories/`） {#curated-memory}
 
-与 `agents/<id>/bootstrap/` 下的引导用 `MEMORY.md` 以及工作区内可检索的 `memory/*.md` 不同，**`agents/<agentId>/memories/`** 使用 **`MEMORY.md`（助手笔记）** 与 **`USER.md`（用户画像）** 存放 **有上限、以 § 分隔** 的条目。在启用增强记忆时，会话开始会注入 **冻结快照**；运行中可通过 **`curated_memory`** 工具读写磁盘上的最新内容。开关与字符上限见 **`agents.defaults.memory`**（[配置参考](configuration.md)）。
+与工作区根下 profile 用的 **`MEMORY.md`** 以及工作区内可检索的 `memory/*.md` 不同，**`agents/<agentId>/memories/`** 使用 **`MEMORY.md`（助手笔记）** 与 **`USER.md`（用户画像）** 存放 **有上限、以 § 分隔** 的条目。在启用增强记忆时，会话开始会注入 **冻结快照**；运行中可通过 **`curated_memory`** 工具读写磁盘上的最新内容。开关与字符上限见 **`agents.defaults.memory`**（[配置参考](configuration.md)）。
 
 ## 运行时到底用哪个「工作空间」？
 

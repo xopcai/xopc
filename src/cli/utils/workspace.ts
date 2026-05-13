@@ -42,7 +42,7 @@ export function getWorkspaceStatus(configPath: string, workspacePath: string): W
 
 /**
  * Create markdown workspace root and memory/ only.
- * Persona Markdown is seeded under …/agents/<id>/bootstrap/ via seedMainAgentBootstrap.
+ * Persona Markdown is seeded into the Markdown workspace root via seedMainAgentProfileMarkdown.
  */
 export function setupWorkspace(workspacePath: string): void {
   if (!existsSync(workspacePath)) {

@@ -1,9 +1,8 @@
 /**
- * Bidirectional parser for bootstrap Markdown files.
+ * Bidirectional parser for agent profile Markdown (IDENTITY.md, USER.md, SOUL.md).
  *
- * Converts structured form fields ↔ Markdown content for IDENTITY.md, USER.md
- * and SOUL.md so that the persona tab can present friendly form inputs while
- * keeping the underlying Markdown format compatible with the agent runtime.
+ * Converts structured form fields ↔ Markdown so the settings UI can use friendly
+ * inputs while keeping the on-disk format compatible with the agent runtime.
  */
 
 // ---------------------------------------------------------------------------
@@ -85,7 +84,7 @@ export function serializeIdentityMarkdown(fields: IdentityFields): string {
 }
 
 // ---------------------------------------------------------------------------
-// USER.md (bootstrap)
+// USER.md (human side of the profile)
 // ---------------------------------------------------------------------------
 
 export interface UserFields {
@@ -103,7 +102,7 @@ const USER_DEFAULTS: UserFields = {
 };
 
 /**
- * Parse bootstrap USER.md content into structured fields.
+ * Parse USER.md content into structured fields.
  *
  * Handles the template format:
  *   - **Name:** value

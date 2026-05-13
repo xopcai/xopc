@@ -375,7 +375,7 @@ Run \`xopc skills list\` to see all available skills.
     const workspaceState = {
       version: 1,
       agentId,
-      bootstrapSeededAt: new Date().toISOString(),
+      profileMarkdownSeededAt: new Date().toISOString(),
     };
     await writeTextAtomic(workspaceStatePath, JSON.stringify(workspaceState, null, 2));
     log.info({ path: workspaceStatePath }, 'Created workspace state');
