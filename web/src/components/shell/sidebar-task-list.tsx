@@ -20,7 +20,7 @@ import { SessionChannelIcon } from '@/components/shell/session-channel-icon';
 import { Button } from '@/components/ui/button';
 import { SlidingSegmented } from '@/components/ui/sliding-segmented';
 import { fetchChatAgents } from '@/features/chat/chat-agents-api';
-import { isWebUiSessionKey } from '@/features/chat/session-manager';
+import { isWebUiSessionKey, WEB_UI_SESSION_SOURCE_CHANNELS } from '@/features/chat/session-manager';
 import { useSidebarSessionAgentRun } from '@/features/chat/use-sidebar-session-agent-run';
 import { AgentAvatarDisplay } from '@/features/settings/agents/agent-avatar-display';
 import { agentAvatarFromOptions, resolveSessionAgentId } from '@/features/sessions/session-agent-resolve';
@@ -298,7 +298,11 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
     ]) => {
       const offset = pageIndex * PAGE_SIZE;
       if (filter === 'web') {
-        const result = await listSessions({ limit: PAGE_SIZE, offset });
+        const result = await listSessions({
+          channel: WEB_UI_SESSION_SOURCE_CHANNELS,
+          limit: PAGE_SIZE,
+          offset,
+        });
         return {
           items: result.items.filter((s) => isWebUiSessionKey(s.key)),
           hasMore: result.hasMore,
