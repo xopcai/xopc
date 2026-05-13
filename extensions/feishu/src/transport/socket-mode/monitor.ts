@@ -1,4 +1,4 @@
-import type { MessageBus } from '@xopcai/xopc/infra/bus/index.js';
+import type { InboundMessage } from '@xopcai/xopc/channels/transport-types.js';
 import type { Config } from '@xopcai/xopc/config/schema.js';
 import type { ChannelSecurityContext } from '@xopcai/xopc/channels/plugin-types.js';
 import { generateSessionKey } from '@xopcai/xopc/chat-commands/session-key.js';
@@ -8,6 +8,7 @@ import type { ResolvedFeishuAccount } from '../../state/accounts.js';
 import { sendFeishuPairingPromptIfNeeded } from '../../pairing/feishu-pairing-prompt.js';
 import { createFeishuClient } from '../client/client.js';
 import { createFeishuDedupe } from '../reliability/dedupe.js';
+import type { FeishuInboundWork } from '../reliability/inbound-pipeline.js';
 import { stripFeishuMentions } from '../text/mentions.js';
 import { computeBackoffMs } from './retry.js';
 import { getFeishuBindingByMessageId, recordFeishuMessageBinding } from '../../state/message-bindings.js';
@@ -17,7 +18,9 @@ const log = createLogger('FeishuSocketMode');
 export interface FeishuSocketModeMonitorDeps {
   account: ResolvedFeishuAccount;
   config: Config;
-  bus: MessageBus;
+  enqueueInbound: (work: FeishuInboundWork) => Promise<void>;
+  /** Used when `account.inboundDebounceMs` is unset. */
+  inboundDebounceDefaultMs: number;
   abortSignal: AbortSignal;
   security: {
     checkAccess: (ctx: ChannelSecurityContext) => { allowed: boolean; reason?: string } | undefined;
@@ -25,9 +28,27 @@ export interface FeishuSocketModeMonitorDeps {
 }
 
 export function createFeishuSocketModeMonitor(deps: FeishuSocketModeMonitorDeps) {
-  const { account, config: _config, bus, abortSignal, security } = deps;
+  const { account, config: _config, enqueueInbound, inboundDebounceDefaultMs, abortSignal, security } = deps;
   const dedupe = createFeishuDedupe();
   let lastEventAt = 0;
+
+  function resolveTextDebounceMs(): number {
+    if (typeof account.inboundDebounceMs === 'number' && Number.isFinite(account.inboundDebounceMs)) {
+      return Math.max(0, Math.trunc(account.inboundDebounceMs));
+    }
+    return Math.max(0, Math.trunc(inboundDebounceDefaultMs));
+  }
+
+  async function pushInbound(kind: FeishuInboundWork['kind'], inbound: InboundMessage): Promise<void> {
+    const debounceMs = kind === 'text' ? resolveTextDebounceMs() : 0;
+    await enqueueInbound({
+      kind,
+      accountId: account.accountId,
+      chatId: inbound.chat_id,
+      debounceMs,
+      inbound,
+    });
+  }
 
   async function handleReactionEvent(kind: 'created' | 'deleted', event: any, api: any): Promise<void> {
     const msgId = event?.event?.message_id ?? event?.message_id ?? '';
@@ -60,7 +81,7 @@ export function createFeishuSocketModeMonitor(deps: FeishuSocketModeMonitorDeps)
     const senderId = userOpenId || binding.senderId;
     const preview = reacted ? extractFeishuMessagePreview(reacted) : '';
 
-    await bus.publishInbound({
+    await pushInbound('reaction', {
       channel: 'feishu',
       sender_id: senderId,
       chat_id: binding.chatId,
@@ -107,7 +128,7 @@ export function createFeishuSocketModeMonitor(deps: FeishuSocketModeMonitorDeps)
       extracted?.trim() ||
       `[card action: ${String(action?.tag ?? 'unknown')}]`;
 
-    await bus.publishInbound({
+    await pushInbound('card_action', {
       channel: 'feishu',
       sender_id: senderId || 'unknown',
       chat_id: chatId || senderId || 'unknown',
@@ -145,7 +166,7 @@ export function createFeishuSocketModeMonitor(deps: FeishuSocketModeMonitorDeps)
         accountId: account.accountId,
       });
 
-    await bus.publishInbound({
+    await pushInbound('recall', {
       channel: 'feishu',
       sender_id: binding?.senderId ?? 'system',
       chat_id: chatId || binding?.chatId || 'unknown',
@@ -258,7 +279,7 @@ export function createFeishuSocketModeMonitor(deps: FeishuSocketModeMonitorDeps)
       }
     }
 
-    await bus.publishInbound({
+    await pushInbound('text', {
       channel: 'feishu',
       sender_id: senderId,
       chat_id: chatId,
@@ -269,6 +290,7 @@ export function createFeishuSocketModeMonitor(deps: FeishuSocketModeMonitorDeps)
         messageId,
         threadId,
         isGroup,
+        feishuEventType: 'im.message.receive_v1',
         raw: event,
       },
     });
