@@ -13,7 +13,7 @@
  */
 import { join } from 'node:path';
 import { homedir } from 'node:os';
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 
 import { resolveStateDir } from '../paths-state.js';
 import { resolveDefaultAgentWorkspaceDir } from '../workspace-defaults.js';

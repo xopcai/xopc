@@ -31,7 +31,7 @@ xopc 使用 **profile Markdown** 模板定义智能体行为与知识。执行 `
 
 **BOOTSTRAP.md** 也会在新建智能体时一并复制，但**不在**上述系统提示链中（仅作首次运行 / 人工说明）。
 
-**CONTEXT.md**、**SKILLS.md** **不在**默认写入系统提示的列表中。`xopc init` 仍可能在 **工作区根** 下**生成**这两个文件。`onboard` / `agents add` 的种子流程只复制上文列表及 **BOOTSTRAP.md**，**不会**自动从本文档目录带入 `CONTEXT.md` / `SKILLS.md`（需自行放入工作区根）。
+**CONTEXT.md**、**SKILLS.md** **不在**默认写入系统提示的列表中。`xopc init` **不会**在工作区根下创建这两个文件；需要时可自行放在工作区根。`onboard` / `agents add` 的种子流程只复制上文列表及 **BOOTSTRAP.md**，**不会**自动从本文档目录带入 `CONTEXT.md` / `SKILLS.md`（需自行放入工作区根）。
 
 ## 记忆系统
 

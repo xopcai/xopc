@@ -5,7 +5,6 @@ import { existsSync } from 'node:fs';
 import lockfile from 'proper-lockfile';
 
 import { writeTextAtomic } from '../../infra/write-file-atomic.js';
-import { FILENAMES } from '../../config/paths.js';
 
 export type SessionsJsonMap<T> = Record<string, T>;
 
