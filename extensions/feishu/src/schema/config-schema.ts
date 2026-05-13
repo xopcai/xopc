@@ -38,6 +38,9 @@ export const FeishuAccountConfigSchema = z.object({
   typingIndicator: z.boolean().optional(),
   reactionNotifications: z.enum(['off', 'own', 'all']).optional(),
 
+  /** Coalesce rapid `im.message.receive_v1` per chat (ms). Use 0 to disable. */
+  inboundDebounceMs: z.number().int().min(0).max(10_000).optional(),
+
   /** Streaming */
   streaming: z.boolean().optional(),
   blockStreamingCoalesce: z
@@ -109,6 +112,8 @@ export const FeishuConfigSchema = z
   historyLimit: z.number().int().min(0).default(50).optional(),
   textChunkLimit: z.number().int().positive().default(4000).optional(),
   reactionNotifications: z.enum(['off', 'own', 'all']).optional(),
+
+  inboundDebounceMs: z.number().int().min(0).max(10_000).optional(),
 
   streaming: z.boolean().optional(),
   blockStreamingCoalesce: z

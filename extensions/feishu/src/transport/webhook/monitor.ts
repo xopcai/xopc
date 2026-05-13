@@ -1,9 +1,9 @@
 import crypto from 'node:crypto';
 import * as http from 'node:http';
 
+import type { InboundMessage } from '@xopcai/xopc/channels/transport-types.js';
 import * as lark from '@larksuiteoapi/node-sdk';
 
-import type { MessageBus } from '@xopcai/xopc/infra/bus/index.js';
 import type { Config } from '@xopcai/xopc/config/schema.js';
 import type { ChannelSecurityContext } from '@xopcai/xopc/channels/plugin-types.js';
 import { generateSessionKey } from '@xopcai/xopc/chat-commands/session-key.js';
@@ -11,6 +11,7 @@ import { createLogger } from '@xopcai/xopc/utils/logger.js';
 
 import type { ResolvedFeishuAccount } from '../../state/accounts.js';
 import { createFeishuDedupe } from '../reliability/dedupe.js';
+import type { FeishuInboundWork } from '../reliability/inbound-pipeline.js';
 import { stripFeishuMentions } from '../text/mentions.js';
 import { recordFeishuMessageBinding } from '../../state/message-bindings.js';
 import { sendFeishuPairingPromptIfNeeded } from '../../pairing/feishu-pairing-prompt.js';
@@ -132,7 +133,8 @@ function text(res: http.ServerResponse, status: number, body: string) {
 export interface FeishuWebhookMonitorDeps {
   account: ResolvedFeishuAccount;
   config: Config;
-  bus: MessageBus;
+  enqueueInbound: (work: FeishuInboundWork) => Promise<void>;
+  inboundDebounceDefaultMs: number;
   abortSignal: AbortSignal;
   security: {
     checkAccess: (ctx: ChannelSecurityContext) => { allowed: boolean; reason?: string } | undefined;
@@ -140,7 +142,7 @@ export interface FeishuWebhookMonitorDeps {
 }
 
 export function createFeishuWebhookMonitor(deps: FeishuWebhookMonitorDeps) {
-  const { account, bus, abortSignal, security } = deps;
+  const { account, abortSignal, security, enqueueInbound, inboundDebounceDefaultMs } = deps;
   const dedupe = createFeishuDedupe();
 
   const encryptKey = (account.encryptKey ?? '').trim();
@@ -153,6 +155,24 @@ export function createFeishuWebhookMonitor(deps: FeishuWebhookMonitorDeps) {
   const path = (account.webhookPath ?? '/feishu/events').trim() || '/feishu/events';
   const l = lark as any;
   const sdkLogger = createFeishuLarkSdkPinoLogger(account.accountId);
+
+  function resolveTextDebounceMs(): number {
+    if (typeof account.inboundDebounceMs === 'number' && Number.isFinite(account.inboundDebounceMs)) {
+      return Math.max(0, Math.trunc(account.inboundDebounceMs));
+    }
+    return Math.max(0, Math.trunc(inboundDebounceDefaultMs));
+  }
+
+  async function pushText(inbound: InboundMessage): Promise<void> {
+    const debounceMs = resolveTextDebounceMs();
+    await enqueueInbound({
+      kind: 'text',
+      accountId: account.accountId,
+      chatId: inbound.chat_id,
+      debounceMs,
+      inbound,
+    });
+  }
 
   async function handleMessageReceive(event: any): Promise<void> {
     const msg = event?.event?.message ?? event?.message ?? event?.data?.message;
@@ -222,7 +242,7 @@ export function createFeishuWebhookMonitor(deps: FeishuWebhookMonitorDeps) {
       return;
     }
 
-    await bus.publishInbound({
+    await pushText({
       channel: 'feishu',
       sender_id: senderId,
       chat_id: chatId,

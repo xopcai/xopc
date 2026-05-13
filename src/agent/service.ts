@@ -1365,6 +1365,10 @@ export class AgentService {
           return;
         }
 
+        if (this.channelManagerRef && msg.channel !== 'cli') {
+          await this.channelManagerRef.dispatchInboundMessageAction(msg);
+        }
+
         if (isCommand && command) {
           const handled = await this.commandHandler.executeCommand(command, commandArgs || '', {
             sessionKey: sessionContext.sessionKey,

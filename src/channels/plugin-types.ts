@@ -604,6 +604,8 @@ export interface ChannelMessageActionContext {
   senderId: string;
   chatId: string;
   accountId: string;
+  /** Channel-specific fields (e.g. Feishu card raw payload). */
+  metadata?: Record<string, unknown>;
 }
 
 export interface ChannelMessageActionAdapter {

@@ -30,6 +30,8 @@ export interface ResolvedFeishuAccount {
   renderMode?: 'auto' | 'raw' | 'card';
 
   reactionNotifications?: 'off' | 'own' | 'all';
+  /** Per-chat inbound debounce (ms); undefined = use channel plugin default. */
+  inboundDebounceMs?: number;
 
   /** Opt-in: only `true` enables Feishu streaming (Thinking… + incremental updates). */
   streaming: boolean;
@@ -76,6 +78,7 @@ function resolveRootAccount(section: FeishuConfig): FeishuAccountConfig {
     textChunkLimit: section.textChunkLimit,
     renderMode: (section as any).renderMode,
     reactionNotifications: section.reactionNotifications,
+    inboundDebounceMs: (section as any).inboundDebounceMs,
     streaming: section.streaming,
     blockStreamingCoalesce: section.blockStreamingCoalesce,
     tools: section.tools,
@@ -135,6 +138,7 @@ export function resolveFeishuAccount(cfg: Config, accountId?: string | null): Re
     textChunkLimit: typeof merged.textChunkLimit === 'number' ? merged.textChunkLimit : 4000,
     renderMode: (merged as any).renderMode,
     reactionNotifications: merged.reactionNotifications,
+    inboundDebounceMs: (merged as any).inboundDebounceMs as number | undefined,
     streaming: merged.streaming === true,
     blockStreamingCoalesce: merged.blockStreamingCoalesce as any,
     tools: merged.tools,

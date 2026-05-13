@@ -4,7 +4,7 @@
 
 import type { Config } from '../config/index.js';
 import type { MessageBus } from '../infra/bus/index.js';
-import type { OutboundMessage } from './transport-types.js';
+import type { InboundMessage, OutboundMessage } from './transport-types.js';
 import type {
   ChannelPlugin,
   ChannelPluginInitOptions,
@@ -117,6 +117,58 @@ export class ChannelManager {
   
   getPlugin(id: string): ChannelPlugin | undefined {
     return this.plugins.get(id);
+  }
+
+  /**
+   * Optional channel hook before AgentService consumes an inbound message (e.g. Feishu card actions).
+   */
+  async dispatchInboundMessageAction(msg: InboundMessage): Promise<void> {
+    const plugin = this.plugins.get(msg.channel);
+    const handle = plugin?.actions?.handleAction;
+    if (!handle) {
+      return;
+    }
+
+    const meta = msg.metadata as Record<string, unknown> | undefined;
+    if (msg.channel !== 'feishu' || meta?.feishuEventType !== 'card.action.trigger') {
+      return;
+    }
+
+    const cardAction = meta.cardAction as Record<string, unknown> | undefined;
+    const actionTag =
+      cardAction && typeof cardAction.tag === 'string' && cardAction.tag.trim()
+        ? cardAction.tag.trim()
+        : 'feishu.card_action';
+    const cardCtx = meta.cardContext as Record<string, unknown> | undefined;
+    const openMsg =
+      cardCtx && typeof cardCtx.open_message_id === 'string' ? cardCtx.open_message_id.trim() : '';
+    const fallbackMsgId = typeof meta.messageId === 'string' ? meta.messageId.trim() : '';
+    const messageId = openMsg || fallbackMsgId;
+    const accountId = typeof meta.accountId === 'string' && meta.accountId.trim() ? meta.accountId.trim() : 'default';
+
+    try {
+      await handle({
+        action: actionTag,
+        data: JSON.stringify({
+          cardAction: meta.cardAction,
+          cardContext: meta.cardContext,
+          cardActionText: meta.cardActionText,
+        }),
+        messageId,
+        senderId: msg.sender_id,
+        chatId: msg.chat_id,
+        accountId,
+        metadata: {
+          feishuEventType: meta.feishuEventType,
+          raw: meta.raw,
+          sessionKey: meta.sessionKey,
+          userContent: msg.content,
+        },
+      });
+    } catch (err) {
+      const em = err instanceof Error ? err.message : String(err);
+      log.error({ err, channel: msg.channel, accountId, em }, 'dispatchInboundMessageAction failed');
+    }
   }
   
   getAllPlugins(): ChannelPlugin[] {

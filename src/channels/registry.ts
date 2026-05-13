@@ -91,7 +91,7 @@ const CHAT_CHANNEL_META: Record<ChatChannelId, ChatChannelMeta> = {
     capabilities: FEISHU_CAPABILITIES,
     dock: {
       outbound: { textChunkLimit: 4000 },
-      queue: { debounceMs: 0 },
+      queue: { debounceMs: 350 },
     },
   },
   dingtalk: {

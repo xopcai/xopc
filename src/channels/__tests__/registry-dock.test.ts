@@ -48,7 +48,7 @@ describe('dock', () => {
   it('getChannelDock exposes feishu limits', () => {
     const d = getChannelDock('feishu');
     expect(d?.outbound?.textChunkLimit).toBe(4000);
-    expect(d?.queue?.debounceMs).toBe(0);
+    expect(d?.queue?.debounceMs).toBe(350);
   });
 
   it('getChannelDock exposes dingtalk limits', () => {
