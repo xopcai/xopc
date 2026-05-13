@@ -10,6 +10,12 @@ export function isWebUiSessionKey(key: string): boolean {
   return key.startsWith('gateway:') || key.includes(':gateway:') || key.includes(':webchat:');
 }
 
+/**
+ * `GET /api/sessions?channel=…` filters on {@link SessionMetadata.sourceChannel}. Web console uses
+ * `webchat`; older installs may still have `gateway` in the session key.
+ */
+export const WEB_UI_SESSION_SOURCE_CHANNELS = 'webchat,gateway';
+
 type SessionAgentConfig = {
   thinkingLevel: string;
   model: string;
@@ -23,18 +29,33 @@ const _sessionLoadInflight = new Map<string, Promise<{ messages: Message[]; hasM
 
 /** Session list + history via REST; auth from `apiFetch` (gateway token store). */
 export class SessionManager {
-  /** Same first page as sidebar (`limit=20&offset=0`) so `listSessions` in-flight dedupe applies. */
+  /**
+   * All web-console sessions (webchat + legacy gateway source), paginated on the server by
+   * `channel` so we are not limited to the first N rows of the global mixed-channel list.
+   */
   async loadSessions(): Promise<SessionInfo[]> {
-    const data = await listSessions({ limit: 20, offset: 0 });
-    return data.items
-      .filter((s) => isWebUiSessionKey(s.key))
-      .map((s) => ({
-        key: s.key,
-        name: s.name,
-        updatedAt: s.updatedAt,
-        messageCount: s.messageCount,
-      }))
-      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+    const pageSize = 100;
+    const out: SessionInfo[] = [];
+    let offset = 0;
+    for (let page = 0; page < 100; page++) {
+      const data = await listSessions({
+        channel: WEB_UI_SESSION_SOURCE_CHANNELS,
+        limit: pageSize,
+        offset,
+      });
+      for (const s of data.items) {
+        if (!isWebUiSessionKey(s.key)) continue;
+        out.push({
+          key: s.key,
+          name: s.name,
+          updatedAt: s.updatedAt,
+          messageCount: s.messageCount,
+        });
+      }
+      if (!data.hasMore) break;
+      offset += pageSize;
+    }
+    return out.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
   }
 
   async loadSessionAgentConfig(sessionKey: string): Promise<SessionAgentConfig> {
