@@ -29,7 +29,8 @@ export const FILENAMES = {
   CONFIG: 'xopc.json',
   MODELS_JSON: 'models.json',
   AGENT_JSON: 'agent.json',
-  SESSIONS_INDEX: 'index.json',
+  /** OpenClaw-aligned session key → entry map (flat `sessions/` dir). */
+  SESSIONS_MAP: 'sessions.json',
   EXTENSIONS_LOCK: 'extensions-lock.json',
   CREDENTIALS_PROFILES: 'auth-profiles.json',
   CRON_JOBS: 'jobs.json',
@@ -127,29 +128,35 @@ export function resolveAgentAuthProfilesPath(config: Config, agentId: string): s
 }
 
 /**
- * Agent session store root. Transcript files are stored in subfolders (users/…, system/heartbeat, …), not as a flat list.
+ * Agent session store root: `stateDir/agents/<id>/sessions/` (flat `sessions.json` + `*.jsonl`).
  */
 export function resolveSessionsDir(config: Config, agentId: string): string {
   return resolveSessionsDirScoped(config, agentId);
 }
 
 /**
- * Resolve the sessions index file path
+ * Resolve the OpenClaw-aligned `sessions.json` path for an agent.
  */
-export function resolveSessionsIndexPath(config: Config, agentId: string): string {
-  return join(resolveSessionsDir(config, agentId), FILENAMES.SESSIONS_INDEX);
+export function resolveSessionsMapPath(config: Config, agentId: string): string {
+  return join(resolveSessionsDir(config, agentId), FILENAMES.SESSIONS_MAP);
 }
 
 /**
- * Resolve the sessions archive directory
+ * Resolve the sessions archive directory (optional secondary storage).
  */
 export function resolveSessionsArchiveDir(config: Config, agentId: string): string {
   return join(resolveSessionsDir(config, agentId), 'archive');
 }
 
+import {
+  resolveSessionFilePath,
+  resolveSessionTranscriptPathInDir,
+} from '../session/parity/transcript-paths.js';
+
+export { resolveSessionFilePath, resolveSessionTranscriptPathInDir };
+
 /**
- * Resolve a session transcript file path, with optional topic sharding.
- * Topic IDs are URL-encoded when they are strings to prevent path traversal.
+ * Resolve a session transcript JSONL path (OpenClaw naming: `{sessionId}.jsonl` or topic variant).
  */
 export function resolveSessionTranscriptPath(
   config: Config,
@@ -157,39 +164,7 @@ export function resolveSessionTranscriptPath(
   agentId: string,
   topicId?: string | number,
 ): string {
-  const safeTopicId =
-    typeof topicId === 'string'
-      ? encodeURIComponent(topicId)
-      : typeof topicId === 'number'
-        ? String(topicId)
-        : undefined;
-  const fileName =
-    safeTopicId !== undefined
-      ? `${sessionId}-topic-${safeTopicId}.jsonl`
-      : `${sessionId}.jsonl`;
-  return join(resolveSessionsDir(config, agentId), fileName);
-}
-
-/**
- * Resolve a session transcript path within an explicit sessions directory.
- * Useful when the caller already holds a resolved sessions dir (e.g. from config).
- */
-export function resolveSessionTranscriptPathInDir(
-  sessionId: string,
-  sessionsDir: string,
-  topicId?: string | number,
-): string {
-  const safeTopicId =
-    typeof topicId === 'string'
-      ? encodeURIComponent(topicId)
-      : typeof topicId === 'number'
-        ? String(topicId)
-        : undefined;
-  const fileName =
-    safeTopicId !== undefined
-      ? `${sessionId}-topic-${safeTopicId}.jsonl`
-      : `${sessionId}.jsonl`;
-  return join(sessionsDir, fileName);
+  return resolveSessionTranscriptPathInDir(sessionId, resolveSessionsDir(config, agentId), topicId);
 }
 
 /**

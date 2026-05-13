@@ -12,6 +12,7 @@
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import type { ToolResultMessage, Message } from '@earendil-works/pi-ai';
 import { createLogger } from '../../utils/logger.js';
+import { readAgentMessageContent } from './agent-message-access.js';
 
 const log = createLogger('SummaryGenerator');
 
@@ -76,7 +77,7 @@ function categorizeToolOperation(toolName: string): 'read' | 'write' | 'search' 
 /**
  * Extract text content from message
  */
-function extractTextContent(content: AgentMessage['content']): string {
+function extractTextContent(content: unknown): string {
   if (typeof content === 'string') {
     return content;
   }
@@ -149,7 +150,7 @@ export function generateStructuredSummary(
   for (const msg of messages) {
     // Extract user requests
     if (msg.role === 'user') {
-      const text = extractTextContent(msg.content);
+      const text = extractTextContent(readAgentMessageContent(msg));
       if (text.trim().length > 20) {
         summary.userRequests.push(text.slice(0, 500)); // Limit each request length
       }
@@ -192,7 +193,7 @@ export function generateStructuredSummary(
         .find((tc: ToolCallSummary) => tc.toolName === toolName && !tc.timestamp); // Match by name, prefer unmatched
       
       if (toolCall) {
-        const resultText = extractTextContent(toolMsg.content);
+        const resultText = extractTextContent(readAgentMessageContent(toolMsg));
         
         // Detect failure from result content
         const isError = resultText.toLowerCase().includes('error') || 
@@ -254,7 +255,7 @@ export function generateStructuredSummary(
  * Extract key decisions from assistant message
  */
 function extractKeyDecisions(msg: AgentMessage): string[] {
-  const content = extractTextContent(msg.content);
+  const content = extractTextContent(readAgentMessageContent(msg));
   const decisions: string[] = [];
 
   // Look for decision patterns

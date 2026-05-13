@@ -2,7 +2,7 @@
  * Transcript rows persisted on disk may include non-LLM entries (e.g. `kind: 'context'`).
  * {@link buildSessionContextForLlm} is the single choke point for provider-facing history.
  *
- * Do not pass raw `parseStoredTranscriptJson(...).rows` into pi-agent / providers — always run
+ * Do not pass raw on-disk JSONL rows into pi-agent / providers — always run
  * {@link buildSessionContextForLlm} first (or use {@link SessionStore.loadMessages}, which already does).
  */
 

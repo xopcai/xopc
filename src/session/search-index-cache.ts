@@ -22,7 +22,7 @@ export function invalidateSessionSearchIndexCache(): void {
 }
 
 export async function getOrLoadSessionSearchIndex(sessionsRoot: string): Promise<SessionSearchIndex> {
-  const indexPath = join(sessionsRoot, FILENAMES.SESSIONS_INDEX);
+  const indexPath = join(sessionsRoot, FILENAMES.SESSIONS_MAP);
   let mtime = 0;
   try {
     mtime = (await stat(indexPath)).mtimeMs;

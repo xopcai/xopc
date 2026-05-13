@@ -1,6 +1,7 @@
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import { complete, type UserMessage } from '@earendil-works/pi-ai';
 
+import { readAgentMessageContent } from '../memory/agent-message-access.js';
 import type { SessionStore } from '../../session/index.js';
 import { resolveModel } from '../../providers/index.js';
 
@@ -11,10 +12,11 @@ function formatMessagesForBtw(messages: AgentMessage[]): string {
     .map((m) => {
       const role = m.role;
       let body = '';
-      if (typeof m.content === 'string') {
-        body = m.content;
-      } else if (Array.isArray(m.content)) {
-        body = m.content
+      const raw = readAgentMessageContent(m);
+      if (typeof raw === 'string') {
+        body = raw;
+      } else if (Array.isArray(raw)) {
+        body = raw
           .filter((c): c is { type: 'text'; text: string } => c.type === 'text')
           .map((c) => c.text || '')
           .join('\n');
