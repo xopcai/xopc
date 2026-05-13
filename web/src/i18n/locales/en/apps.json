@@ -32,7 +32,13 @@
     "detailNoDescription": "No description was provided for this extension.",
     "restartNote": "Some extension changes require restarting the gateway for code to fully load.",
     "cliManageHint": "This copy is not bundled with xopc — install, remove, and upgrades are done via the CLI or filesystem.",
-    "builtinConfigHint": "Channels and image keys are managed under Settings → Channels and Settings → Images. Built-in enable/disable in config is not shown here until it matches runtime behavior.",
+    "builtinConfigHint": "Channels and image provider keys are managed under Settings → Channels and Settings → Images.",
+    "builtinRuntimeToggle": "Gateway runtime",
+    "builtinToggleEnable": "Enable",
+    "builtinToggleDisable": "Disable",
+    "builtinToggleBusy": "Saving…",
+    "builtinToggleFailed": "Could not update built-in extension.",
+    "builtinToggleRestartHint": "Restart the gateway so extension code fully loads or unloads.",
     "backendOnlyHint": "This extension has no Gateway UI; tools and hooks still run when enabled.",
     "badgePages": "{{count}} page(s)",
     "badgeSettings": "{{count}} settings",
@@ -64,7 +70,8 @@
     "marketplaceUninstallFailed": "Uninstall failed.",
     "marketplaceRestartHint": "Restart the gateway to fully apply channel plugins or unload removed code.",
     "marketplaceBuiltin": "Built-in",
-    "marketplaceBuiltinManageHint": "Toggle on the Built-in tab."
+    "marketplaceBuiltinManageHint": "This package ships with xopc — it is not installed from the store. Use the Built-in tab to open its UI or change enablement.",
+    "marketplaceBuiltinGoBuiltin": "Open Built-in tab"
   },
   "extensionUi": {
     "permissionTitle": "Allow “{{name}}”?",

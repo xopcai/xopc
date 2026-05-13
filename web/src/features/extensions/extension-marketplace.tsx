@@ -1,6 +1,7 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { ArrowLeft, CheckCircle, Loader2, Package, Search, Trash2, X } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import useSWR, { useSWRConfig } from 'swr';
 
 import { MarkdownView } from '@/components/markdown/markdown-view';
@@ -398,7 +399,16 @@ function ExtensionMarketplaceDetailDialog({
           {data ? (
             <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-edge-subtle px-5 py-4">
               {installKind === 'bundled' ? (
-                <p className="w-full text-sm leading-relaxed text-fg-muted">{copy.marketplaceBuiltinManageHint}</p>
+                <div className="flex w-full flex-col items-stretch gap-2">
+                  <p className="text-sm leading-relaxed text-fg-muted">{copy.marketplaceBuiltinManageHint}</p>
+                  <Link
+                    to="/apps?tab=builtin"
+                    onClick={onClose}
+                    className="inline-flex w-fit items-center justify-center rounded-lg border border-edge px-3 py-2 text-sm font-medium text-fg hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                  >
+                    {copy.marketplaceBuiltinGoBuiltin}
+                  </Link>
+                </div>
               ) : (
                 <>
                   <button
