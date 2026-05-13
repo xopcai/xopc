@@ -1,15 +1,18 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { ArrowLeft, Check, ExternalLink, Plus, Search, Settings, X } from 'lucide-react';
-import { useEffect, useLayoutEffect, useMemo, useState } from 'react';
+import { ArrowLeft, Check, ExternalLink, Loader2, Plus, Search, Settings, X } from 'lucide-react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { useSWRConfig } from 'swr';
 
+import { Button } from '@/components/ui/button';
 import { parseAppsMainTab, type AppsMainTab } from '@/features/apps/apps-page.constants';
 import {
-  extensionExposesGatewayShellUi,
+  extensionShellUiReachable,
   useExtensions,
   useExtensionsLoading,
 } from '@/features/extensions/extension-provider';
 import { ExtensionMarketplacePanel } from '@/features/extensions/extension-marketplace';
+import { postBundledExtensionActivation } from '@/features/extensions/extension-marketplace-api';
 import { extensionPagePath } from '@/features/extensions/extension-paths';
 import type { ExtensionApiRow, PageContribution } from '@/features/extensions/types';
 import { messages } from '@/i18n/messages';
@@ -344,6 +347,33 @@ function ExtensionDetailDialog({
   copy: AppsPageCopy;
   onClose: () => void;
 }) {
+  const { mutate } = useSWRConfig();
+  const [bundledToggleBusy, setBundledToggleBusy] = useState(false);
+  const [bundledToggleErr, setBundledToggleErr] = useState<string | null>(null);
+  const [bundledRestartHint, setBundledRestartHint] = useState(false);
+
+  const bundledConfiguredOn = ext.active === true || ext.activationEligible === true;
+
+  const onBundledActivationToggle = useCallback(async () => {
+    if (ext.source !== 'bundled') return;
+    setBundledToggleErr(null);
+    setBundledRestartHint(false);
+    setBundledToggleBusy(true);
+    try {
+      const { requiresGatewayRestart } = await postBundledExtensionActivation({
+        extensionId: ext.id,
+        enabled: !bundledConfiguredOn,
+      });
+      await mutate('gateway-extensions-list');
+      window.dispatchEvent(new CustomEvent('config-reload'));
+      setBundledRestartHint(requiresGatewayRestart);
+    } catch (e) {
+      setBundledToggleErr(e instanceof Error ? e.message : copy.builtinToggleFailed);
+    } finally {
+      setBundledToggleBusy(false);
+    }
+  }, [bundledConfiguredOn, copy.builtinToggleFailed, ext.id, ext.source, mutate]);
+
   const pages = ext.ui?.contributions?.pages ?? [];
   const settingsPanels = ext.ui?.contributions?.settingsPanels ?? [];
   const chatWidgets = ext.ui?.contributions?.chatWidgets ?? [];
@@ -420,9 +450,40 @@ function ExtensionDetailDialog({
             <p className="mt-2 text-xs text-fg-muted">{bundledRunCaption(ext, copy)}</p>
 
             {ext.source === 'bundled' ? (
-              <p className="mt-4 rounded-lg border border-edge-subtle bg-surface-hover/40 px-3 py-2 text-xs text-fg-muted dark:bg-surface-hover/20">
-                {copy.builtinConfigHint}
-              </p>
+              <>
+                <p className="mt-4 rounded-lg border border-edge-subtle bg-surface-hover/40 px-3 py-2 text-xs text-fg-muted dark:bg-surface-hover/20">
+                  {copy.builtinConfigHint}
+                </p>
+                <div className="mt-3 rounded-lg border border-edge-subtle bg-surface-hover/40 px-3 py-3 dark:bg-surface-hover/20">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-xs font-medium text-fg">{copy.builtinRuntimeToggle}</span>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      disabled={bundledToggleBusy}
+                      onClick={() => void onBundledActivationToggle()}
+                      className="shrink-0 py-1.5 text-xs"
+                    >
+                      {bundledToggleBusy ? (
+                        <>
+                          <Loader2 className="mr-1.5 size-3.5 shrink-0 animate-spin" aria-hidden />
+                          {copy.builtinToggleBusy}
+                        </>
+                      ) : bundledConfiguredOn ? (
+                        copy.builtinToggleDisable
+                      ) : (
+                        copy.builtinToggleEnable
+                      )}
+                    </Button>
+                  </div>
+                  {bundledToggleErr ? (
+                    <p className="mt-2 text-xs text-rose-600 dark:text-rose-400">{bundledToggleErr}</p>
+                  ) : null}
+                  {bundledRestartHint ? (
+                    <p className="mt-2 text-xs text-fg-muted">{copy.builtinToggleRestartHint}</p>
+                  ) : null}
+                </div>
+              </>
             ) : (
               <p className="mt-4 rounded-lg border border-edge-subtle bg-surface-hover/40 px-3 py-2 text-xs text-fg-muted dark:bg-surface-hover/20">
                 {copy.cliManageHint}
@@ -457,7 +518,7 @@ function ExtensionDetailDialog({
               </section>
             ) : null}
 
-            {extensionExposesGatewayShellUi(ext) && (openPath || settingsPath) ? (
+            {extensionShellUiReachable(ext) && (openPath || settingsPath) ? (
               <div className="mt-6 flex flex-wrap gap-2 border-t border-edge-subtle pt-4">
                 {openPath ? (
                   <Link

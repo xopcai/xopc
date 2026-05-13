@@ -18,8 +18,14 @@ export type ExtensionMarketplacePackageDetail = {
 
 async function readErrorMessage(res: Response): Promise<string> {
   try {
-    const j = (await res.json()) as { error?: string; message?: string };
+    const j = (await res.json()) as {
+      error?: string | { message?: string };
+      message?: string;
+    };
     if (typeof j.error === 'string') return j.error;
+    if (j.error && typeof j.error === 'object' && typeof j.error.message === 'string') {
+      return j.error.message;
+    }
     if (typeof j.message === 'string') return j.message;
   } catch {
     /* ignore */
@@ -66,6 +72,30 @@ export async function installExtensionFromMarketplace(opts: {
   };
   if (!data.ok || !data.payload?.extensionId) {
     throw new Error(data.error ?? 'Invalid response');
+  }
+  return data.payload;
+}
+
+/** Persist `extensions.enabled` / `extensions.disabled` for a bundled extension (gateway may need restart to load code). */
+export async function postBundledExtensionActivation(opts: {
+  extensionId: string;
+  enabled: boolean;
+}): Promise<{ requiresGatewayRestart: boolean }> {
+  const res = await apiFetch(apiUrl('/api/extensions/bundled/activation'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ extensionId: opts.extensionId.trim(), enabled: opts.enabled }),
+  });
+  if (!res.ok) {
+    throw new Error(await readErrorMessage(res));
+  }
+  const data = (await res.json()) as {
+    ok?: boolean;
+    error?: { message?: string };
+    payload?: { requiresGatewayRestart: boolean };
+  };
+  if (!data.ok || !data.payload) {
+    throw new Error(data.error?.message ?? 'Invalid response');
   }
   return data.payload;
 }
