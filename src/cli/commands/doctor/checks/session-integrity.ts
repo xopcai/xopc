@@ -1,36 +1,12 @@
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { resolveDefaultAgentId } from '../../../../agent/agent-scope.js';
 import { loadConfig } from '../../../../config/loader.js';
-import { resolveSessionsDir, resolveSessionsIndexPath } from '../../../../config/paths.js';
-import { resolveSessionShardRelativePath } from '../../../../session/shard-path.js';
-import type { SessionIndex, SessionMetadata } from '../../../../session/types.js';
+import { FILENAMES, resolveSessionsDir } from '../../../../config/paths.js';
+import { resolveSessionFilePath } from '../../../../session/parity/transcript-paths.js';
+import type { XopcSessionDiskEntry } from '../../../../session/parity/xopc-session-disk-entry.js';
 import type { CheckResult, DoctorContext } from '../types.js';
-
-function sanitizeSessionKeyToFileStem(key: string): string {
-  return key.replace(/[^a-zA-Z0-9_-]/g, '_');
-}
-
-function findSessionFileInDir(baseDir: string, safeStem: string): boolean {
-  if (!existsSync(baseDir)) return false;
-  const entries = readdirSync(baseDir, { withFileTypes: true });
-  for (const entry of entries) {
-    if (entry.isFile() && entry.name === `${safeStem}.json`) return true;
-    if (entry.isDirectory() && entry.name !== 'archive') {
-      if (findSessionFileInDir(join(baseDir, entry.name), safeStem)) return true;
-    }
-  }
-  return false;
-}
-
-function transcriptExists(sessionsDir: string, key: string): boolean {
-  const safeStem = sanitizeSessionKeyToFileStem(key);
-  const shard = resolveSessionShardRelativePath(key);
-  const primary = join(sessionsDir, shard, `${safeStem}.json`);
-  if (existsSync(primary)) return true;
-  return findSessionFileInDir(sessionsDir, safeStem);
-}
 
 export async function checkSessionIntegrity(ctx: DoctorContext): Promise<CheckResult> {
   if (!ctx.options.deep) {
@@ -67,8 +43,8 @@ export async function checkSessionIntegrity(ctx: DoctorContext): Promise<CheckRe
   }
 
   const agentId = resolveDefaultAgentId(config);
-  const indexPath = resolveSessionsIndexPath(config, agentId);
   const sessionsDir = resolveSessionsDir(config, agentId);
+  const mapPath = join(sessionsDir, FILENAMES.SESSIONS_MAP);
 
   if (!existsSync(sessionsDir)) {
     return {
@@ -80,50 +56,64 @@ export async function checkSessionIntegrity(ctx: DoctorContext): Promise<CheckRe
     };
   }
 
-  if (!existsSync(indexPath)) {
+  if (!existsSync(mapPath)) {
     return {
       id: 'session-integrity',
       label: 'Sessions',
       status: 'warn',
-      message: 'Session index file is missing.',
-      hints: [indexPath],
+      message: '`sessions.json` is missing.',
+      hints: [mapPath],
     };
   }
 
-  let index: SessionIndex;
+  let map: Record<string, XopcSessionDiskEntry>;
   try {
-    index = JSON.parse(readFileSync(indexPath, 'utf-8')) as SessionIndex;
+    const parsed = JSON.parse(readFileSync(mapPath, 'utf-8')) as unknown;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      throw new Error('invalid');
+    }
+    map = parsed as Record<string, XopcSessionDiskEntry>;
   } catch {
     return {
       id: 'session-integrity',
       label: 'Sessions',
       status: 'warn',
-      message: 'Session index is not valid JSON.',
-      hints: [indexPath],
+      message: '`sessions.json` is not valid JSON.',
+      hints: [mapPath],
     };
   }
 
-  const sessions: SessionMetadata[] = Array.isArray(index.sessions) ? index.sessions : [];
-  const sorted = [...sessions].sort(
-    (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
-  );
+  const keys = Object.keys(map);
+  const sorted = [...keys].sort((a, b) => {
+    const ta = map[a]?.updatedAt ?? 0;
+    const tb = map[b]?.updatedAt ?? 0;
+    return tb - ta;
+  });
   const sample = sorted.slice(0, 20);
   if (sample.length === 0) {
     return {
       id: 'session-integrity',
       label: 'Sessions',
       status: 'pass',
-      message: 'Session index is valid; no sessions to sample.',
+      message: '`sessions.json` is valid; no sessions to sample.',
       hints: [],
     };
   }
 
   const missing: string[] = [];
-  for (const s of sample) {
-    const key = s.key?.trim();
-    if (!key) continue;
-    if (!transcriptExists(sessionsDir, key)) {
-      missing.push(key);
+  for (const sessionKey of sample) {
+    const entry = map[sessionKey];
+    if (!entry?.sessionId) {
+      missing.push(sessionKey);
+      continue;
+    }
+    try {
+      const p = resolveSessionFilePath(entry.sessionId, entry, { sessionsDir });
+      if (!existsSync(p)) {
+        missing.push(sessionKey);
+      }
+    } catch {
+      missing.push(sessionKey);
     }
   }
 
@@ -141,7 +131,7 @@ export async function checkSessionIntegrity(ctx: DoctorContext): Promise<CheckRe
     id: 'session-integrity',
     label: 'Sessions',
     status: 'pass',
-    message: `Sampled ${sample.length} recent session(s); transcript files are present.`,
+    message: `Sampled ${sample.length} recent session(s); JSONL transcripts are present.`,
     hints: [],
   };
 }

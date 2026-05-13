@@ -129,13 +129,6 @@ export interface SessionDetail extends SessionMetadata {
   transcriptRows?: TranscriptStoredRow[];
 }
 
-/** Session index file structure */
-export interface SessionIndex {
-  version: string;
-  lastUpdated: string;
-  sessions: SessionMetadata[];
-}
-
 /** Session list query parameters */
 export interface SessionListQuery {
   status?: SessionStatus | SessionStatus[];

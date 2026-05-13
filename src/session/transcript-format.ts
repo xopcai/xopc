@@ -1,24 +1,14 @@
 /**
- * On-disk session transcript shape inspired by pi-mono coding-agent session files:
- * versioned document + stable id + optional compaction audit trail (vs only mutating messages).
+ * API-level transcript summary types (on-disk format is pi-coding-agent JSONL + `sessions.json`).
  */
 
-import { randomUUID } from 'node:crypto';
-
-import type { AgentMessage } from '@earendil-works/pi-agent-core';
-
-import {
-  buildSessionContextForLlm,
-  transcriptRowsFromJsonArray,
-  type TranscriptStoredRow,
-} from './session-context-for-llm.js';
+import type { TranscriptStoredRow } from './session-context-for-llm.js';
 
 export const XOPC_SESSION_TRANSCRIPT_TYPE = 'xopc_session_transcript' as const;
 
-/** Bump when the envelope schema changes (load path must tolerate older versions). */
 export const CURRENT_SESSION_TRANSCRIPT_VERSION = 1;
 
-/** Record appended when context compaction runs (pi `CompactionEntry`-style audit). */
+/** Record appended when context compaction runs (mirrors pi `CompactionEntry` audit fields). */
 export interface TranscriptCompactionRecord {
   at: string;
   summary: string;
@@ -27,119 +17,13 @@ export interface TranscriptCompactionRecord {
   tokensAfter: number;
 }
 
+/** Synthetic document shape returned by {@link SessionStore.loadTranscriptDocument} for API parity. */
 export interface XopcSessionTranscriptV1 {
   type: typeof XOPC_SESSION_TRANSCRIPT_TYPE;
   version: number;
-  /** Stable id for this transcript file (survives rewrites; like pi session header id). */
   id: string;
   createdAt: string;
   updatedAt: string;
-  /**
-   * Transcript rows: normal {@link AgentMessage} plus optional `kind: 'context'` entries
-   * (see {@link buildSessionContextForLlm}).
-   */
   messages: TranscriptStoredRow[];
   compactions?: TranscriptCompactionRecord[];
-}
-
-function normalizeTranscriptEnvelope(o: Record<string, unknown>): XopcSessionTranscriptV1 | null {
-  if (
-    o.type !== XOPC_SESSION_TRANSCRIPT_TYPE ||
-    typeof o.version !== 'number' ||
-    typeof o.id !== 'string' ||
-    typeof o.updatedAt !== 'string' ||
-    !Array.isArray(o.messages)
-  ) {
-    return null;
-  }
-  const updatedAt = o.updatedAt as string;
-  const createdAt = typeof o.createdAt === 'string' ? o.createdAt : updatedAt;
-  const rawCompactions = Array.isArray(o.compactions) ? o.compactions : [];
-  if (rawCompactions.length > 0 && rawCompactions.some((x) => !isCompactionRecord(x))) {
-    return null;
-  }
-  const compactions = rawCompactions as TranscriptCompactionRecord[];
-
-  const rawMsgs = o.messages as unknown[];
-  const rows = transcriptRowsFromJsonArray(rawMsgs);
-  if (rows.length !== rawMsgs.length) {
-    return null;
-  }
-
-  return {
-    type: XOPC_SESSION_TRANSCRIPT_TYPE,
-    version: o.version as number,
-    id: o.id as string,
-    createdAt,
-    updatedAt,
-    messages: rows,
-    ...(compactions.length > 0 ? { compactions } : {}),
-  };
-}
-
-function isCompactionRecord(x: unknown): x is TranscriptCompactionRecord {
-  if (!x || typeof x !== 'object') return false;
-  const r = x as Record<string, unknown>;
-  return (
-    typeof r.at === 'string' &&
-    typeof r.summary === 'string' &&
-    typeof r.firstKeptIndex === 'number' &&
-    typeof r.tokensBefore === 'number' &&
-    typeof r.tokensAfter === 'number'
-  );
-}
-
-/**
- * Parse stored transcript JSON: only wrapped {@link XopcSessionTranscriptV1} documents are accepted.
- * `messages` is {@link buildSessionContextForLlm} of `rows` (LLM-only).
- */
-export function parseStoredTranscriptJson(raw: string): {
-  rows: TranscriptStoredRow[];
-  messages: AgentMessage[];
-  envelope: XopcSessionTranscriptV1 | null;
-} {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    return { rows: [], messages: [], envelope: null };
-  }
-
-  if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-    const envelope = normalizeTranscriptEnvelope(parsed as Record<string, unknown>);
-    if (envelope) {
-      const messages = buildSessionContextForLlm(envelope.messages);
-      return { rows: envelope.messages, messages, envelope };
-    }
-  }
-
-  return { rows: [], messages: [], envelope: null };
-}
-
-export function buildTranscriptEnvelope(params: {
-  /** Full on-disk rows (LLM messages + optional `kind: 'context'`). */
-  storedRows: TranscriptStoredRow[];
-  previous: XopcSessionTranscriptV1 | null;
-  appendCompaction?: TranscriptCompactionRecord;
-}): XopcSessionTranscriptV1 {
-  const now = new Date().toISOString();
-  const id = params.previous?.id ?? randomUUID();
-  const createdAt = params.previous?.createdAt ?? now;
-  const compactions = [...(params.previous?.compactions ?? [])];
-  if (params.appendCompaction) {
-    compactions.push(params.appendCompaction);
-  }
-
-  const doc: XopcSessionTranscriptV1 = {
-    type: XOPC_SESSION_TRANSCRIPT_TYPE,
-    version: CURRENT_SESSION_TRANSCRIPT_VERSION,
-    id,
-    createdAt,
-    updatedAt: now,
-    messages: params.storedRows,
-  };
-  if (compactions.length > 0) {
-    doc.compactions = compactions;
-  }
-  return doc;
 }

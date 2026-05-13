@@ -1,16 +1,17 @@
 /**
- * In-memory inverted index over session transcript JSON files on disk.
+ * In-memory inverted index over session transcripts (`sessions.json` + JSONL).
  */
 
-import { readdir, readFile } from 'node:fs/promises';
-import { basename, join } from 'node:path';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 
 import { FILENAMES } from '../config/paths.js';
-import { fileStemToSessionKey } from './session-file-key.js';
-import { parseStoredTranscriptJson } from './transcript-format.js';
+import { resolveSessionFilePath } from './parity/transcript-paths.js';
+import { readTranscriptRowsFromFile, rowsToLlmMessages } from './parity/jsonl-transcript-io.js';
 import { isTranscriptContextEntry, type TranscriptStoredRow } from './session-context-for-llm.js';
+import type { XopcSessionDiskEntry } from './parity/xopc-session-disk-entry.js';
 
 interface IndexedSession {
   key: string;
@@ -23,53 +24,55 @@ export class SessionSearchIndex {
   private globalWordIndex = new Map<string, Set<string>>();
 
   /**
-   * Scan `sessionsRoot` (same root as {@link SessionStore}: sharded `*.json`, excludes index/archive).
+   * Scan `sessionsRoot` (flat `sessions.json` + per-session `.jsonl` transcripts).
    */
   async buildIndex(sessionsRoot: string): Promise<void> {
     this.sessions.clear();
     this.globalWordIndex.clear();
 
-    const files = await this.findSessionJsonFiles(sessionsRoot);
+    const mapPath = join(sessionsRoot, FILENAMES.SESSIONS_MAP);
+    let raw: string;
+    try {
+      raw = await readFile(mapPath, 'utf-8');
+    } catch {
+      return;
+    }
+    let map: Record<string, XopcSessionDiskEntry>;
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        return;
+      }
+      map = parsed as Record<string, XopcSessionDiskEntry>;
+    } catch {
+      return;
+    }
 
-    for (const file of files) {
+    for (const [sessionKey, entry] of Object.entries(map)) {
+      if (!entry?.sessionId) {
+        continue;
+      }
       try {
-        const raw = await readFile(file, 'utf-8');
-        const trimmed = raw.trim();
-        if (!trimmed) {
-          continue;
-        }
-        try {
-          JSON.parse(raw);
-        } catch {
-          continue;
-        }
-        const { messages, rows, envelope } = parseStoredTranscriptJson(raw);
-        if (!envelope) {
-          continue;
-        }
-
-        const key = this.extractSessionKeyFromPath(file);
+        const transcriptPath = resolveSessionFilePath(entry.sessionId, entry, { sessionsDir: sessionsRoot });
+        const rows = await readTranscriptRowsFromFile(transcriptPath);
+        const messages = rowsToLlmMessages(rows);
         const wordIndex = this.buildWordIndex(messages);
         this.mergeContextTextIntoWordIndex(wordIndex, rows, messages.length);
-
-        const indexed: IndexedSession = { key, messages, wordIndex };
-        this.sessions.set(key, indexed);
-        this.mergeIntoGlobalIndex(key, wordIndex);
+        const indexed: IndexedSession = { key: sessionKey, messages, wordIndex };
+        this.sessions.set(sessionKey, indexed);
+        this.mergeIntoGlobalIndex(sessionKey, wordIndex);
       } catch {
-        /* skip bad files */
+        /* skip */
       }
     }
   }
 
   search(query: string, limit = 10): Array<{ key: string; score: number }> {
     const queryWords = tokenizeWords(query);
-
     if (queryWords.length === 0) {
       return [];
     }
-
     const scores = new Map<string, number>();
-
     for (const word of queryWords) {
       const matchingSessions = this.globalWordIndex.get(word);
       if (!matchingSessions) {
@@ -79,7 +82,6 @@ export class SessionSearchIndex {
         scores.set(sessionKey, (scores.get(sessionKey) || 0) + 1);
       }
     }
-
     return Array.from(scores.entries())
       .map(([key, score]) => ({ key, score: score / queryWords.length }))
       .sort((a, b) => b.score - a.score)
@@ -90,51 +92,11 @@ export class SessionSearchIndex {
     return this.sessions.get(key)?.messages ?? [];
   }
 
-  private extractSessionKeyFromPath(filePath: string): string {
-    const base = basename(filePath, '.json');
-    return fileStemToSessionKey(base);
-  }
-
-  private async findSessionJsonFiles(dir: string): Promise<string[]> {
-    const files: string[] = [];
-
-    const walk = async (rel: string): Promise<void> => {
-      const abs = join(dir, rel);
-      let entries;
-      try {
-        entries = await readdir(abs, { withFileTypes: true });
-      } catch {
-        return;
-      }
-
-      for (const ent of entries) {
-        const childRel = rel ? join(rel, ent.name) : ent.name;
-        if (ent.isDirectory()) {
-          if (ent.name === 'archive') {
-            continue;
-          }
-          await walk(childRel);
-        } else if (
-          ent.name.endsWith('.json') &&
-          ent.name !== FILENAMES.SESSIONS_INDEX &&
-          !ent.name.endsWith('.meta.json')
-        ) {
-          files.push(join(dir, childRel));
-        }
-      }
-    };
-
-    await walk('');
-    return files;
-  }
-
   private buildWordIndex(messages: AgentMessage[]): Map<string, Set<number>> {
     const index = new Map<string, Set<number>>();
-
     for (let i = 0; i < messages.length; i++) {
-      const text = extractIndexableText(messages[i]?.content);
+      const text = extractIndexableText((messages[i] as { content?: unknown }).content);
       const words = tokenizeWords(text);
-
       for (const word of words) {
         if (!index.has(word)) {
           index.set(word, new Set());
@@ -142,11 +104,9 @@ export class SessionSearchIndex {
         index.get(word)!.add(i);
       }
     }
-
     return index;
   }
 
-  /** Index `kind: 'context'` `text` / `id` so session search matches audit rows (synthetic slot indices). */
   private mergeContextTextIntoWordIndex(
     wordIndex: Map<string, Set<number>>,
     rows: TranscriptStoredRow[],
@@ -154,12 +114,20 @@ export class SessionSearchIndex {
   ): void {
     let slot = 0;
     for (const r of rows) {
-      if (!isTranscriptContextEntry(r)) continue;
+      if (!isTranscriptContextEntry(r)) {
+        continue;
+      }
       const parts: string[] = [];
-      if (typeof r.text === 'string' && r.text.trim()) parts.push(r.text);
-      if (typeof r.id === 'string' && r.id.trim()) parts.push(r.id);
+      if (typeof r.text === 'string' && r.text.trim()) {
+        parts.push(r.text);
+      }
+      if (typeof r.id === 'string' && r.id.trim()) {
+        parts.push(r.id);
+      }
       const blob = parts.join(' ');
-      if (!blob.trim()) continue;
+      if (!blob.trim()) {
+        continue;
+      }
       const words = tokenizeWords(blob);
       const idx = llmMessageCount + slot;
       slot += 1;
@@ -185,7 +153,7 @@ export class SessionSearchIndex {
 function tokenizeWords(text: string): string[] {
   return text
     .toLowerCase()
-    .split(/\W+/)
+    .split(/[\W_]+/)
     .map((w) => w.trim())
     .filter(Boolean);
 }

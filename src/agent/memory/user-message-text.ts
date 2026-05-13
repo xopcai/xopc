@@ -1,10 +1,11 @@
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 
+import { readAgentMessageContent } from './agent-message-access.js';
 import { extractTextContent } from '../context/workspace.js';
 
 /** Plain text from a user-role agent message (string or parts array). */
 export function extractAgentUserPlainText(message: AgentMessage): string {
-  const c = message.content;
+  const c = readAgentMessageContent(message);
   if (typeof c === 'string') {
     return c;
   }

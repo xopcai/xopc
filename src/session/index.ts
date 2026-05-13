@@ -8,8 +8,6 @@ export {
   getOrLoadSessionSearchIndex,
   invalidateSessionSearchIndexCache,
 } from './search-index-cache.js';
-export { fileStemToSessionKey } from './session-file-key.js';
-export { resolveSessionShardRelativePath, sanitizeSessionPathSegment } from './shard-path.js';
 export { SessionConfigStore, resolveThinkingLevel, resolveReasoningLevel, resolveVerboseLevel } from './config-store.js';
 export { resolveEffectiveThinkingLevel, resolveEffectiveReasoningLevel } from './thinking-resolve.js';
 export type { SessionAgentConfig } from './config-store.js';
@@ -22,7 +20,6 @@ export {
   SessionStatus,
   type SessionMetadata,
   type SessionDetail,
-  type SessionIndex,
   type SessionListQuery,
   type PaginatedResult,
   type SessionStats,
@@ -55,8 +52,6 @@ export { messagesToClientHistory, flattenMessageContent, type ClientHistoryMessa
 export {
   XOPC_SESSION_TRANSCRIPT_TYPE,
   CURRENT_SESSION_TRANSCRIPT_VERSION,
-  parseStoredTranscriptJson,
-  buildTranscriptEnvelope,
 } from './transcript-format.js';
 export {
   buildSessionContextForLlm,
@@ -66,9 +61,6 @@ export {
   type TranscriptStoredRow,
   type XopcTranscriptContextEntry,
 } from './session-context-for-llm.js';
-export type {
-  XopcSessionTranscriptV1,
-  TranscriptCompactionRecord,
-} from './transcript-format.js';
+export type { XopcSessionTranscriptV1, TranscriptCompactionRecord } from './transcript-format.js';
 
 export { applySessionPatchToMetadata, type SessionPatchBody } from './patch-metadata.js';
