@@ -16,7 +16,6 @@ export { ENV_VARS, resolveHomeDir, resolveStateDir } from './paths-state.js';
 export { resolveDefaultAgentWorkspaceDir } from './workspace-defaults.js';
 export {
   resolveAgentWorkspaceDir,
-  resolveAgentBootstrapDir,
   resolveAgentDir as resolveAgentDirFromConfig,
   resolveAgentHomeDir as resolveAgentHomeDirFromConfig,
   resolveSessionsDir as resolveSessionsDirFromConfig,
@@ -114,17 +113,10 @@ export function resolveWorkspaceFile(config: Config, filename: string, agentId: 
 }
 
 /**
- * Resolve the agent's private credentials directory
- */
-export function resolveAgentCredentialsDir(config: Config, agentId: string): string {
-  return join(resolveAgentDir(config, agentId), 'credentials');
-}
-
-/**
- * Resolve agent's private auth-profiles.json path
+ * OpenClaw-aligned: per-agent auth-profiles.json directly under agent dir (no credentials subdirectory).
  */
 export function resolveAgentAuthProfilesPath(config: Config, agentId: string): string {
-  return join(resolveAgentCredentialsDir(config, agentId), FILENAMES.CREDENTIALS_PROFILES);
+  return join(resolveAgentDir(config, agentId), FILENAMES.CREDENTIALS_PROFILES);
 }
 
 /**
@@ -379,24 +371,24 @@ export function resolveAgentMetadataPath(config: Config, agentId: string): strin
 }
 
 /**
- * Resolve per-agent machine state directory (`…/agent/state/`), not under the markdown workspace.
+ * OpenClaw-aligned: workspace setup state directory (`<workspace>/.xopc/`).
  */
 export function resolveWorkspaceStateDir(config: Config, agentId: string): string {
-  return join(resolveAgentDir(config, agentId), 'state');
+  return join(resolveAgentWorkspaceDir(config, agentId), '.xopc');
 }
 
 /**
- * Resolve the workspace state file path
+ * OpenClaw-aligned: workspace setup state file (`<workspace>/.xopc/workspace-state.json`).
  */
 export function resolveWorkspaceStatePath(config: Config, agentId: string): string {
   return join(resolveWorkspaceStateDir(config, agentId), FILENAMES.WORKSPACE_STATE);
 }
 
 /**
- * Resolve the skills cache file path
+ * Resolve the skills cache file path (internal agent state, under agent dir).
  */
 export function resolveSkillsCachePath(config: Config, agentId: string): string {
-  return join(resolveWorkspaceStateDir(config, agentId), FILENAMES.SKILLS_CACHE);
+  return join(resolveAgentDir(config, agentId), 'state', FILENAMES.SKILLS_CACHE);
 }
 
 /**

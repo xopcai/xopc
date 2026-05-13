@@ -9,7 +9,6 @@ import { loadConfig, saveConfig } from '../../config/loader.js';
 import { resolveConfigPath } from '../../config/paths.js';
 import {
   normalizeAgentId,
-  resolveAgentBootstrapDir,
   resolveAgentDir,
   resolveAgentWorkspaceDir,
   resolveDefaultAgentId,
@@ -103,12 +102,9 @@ export function registerAgentsCli(program: Command): void {
 
         const wsPath = resolveAgentWorkspaceDir(next, agentId);
         const adPath = resolveAgentDir(next, agentId);
-        const bootstrapPath = resolveAgentBootstrapDir(next, agentId);
         await mkdir(wsPath, { recursive: true });
         await mkdir(adPath, { recursive: true });
-        await mkdir(join(adPath, 'credentials'), { recursive: true });
-        await mkdir(bootstrapPath, { recursive: true });
-        seedWorkspaceBootstrapFiles(bootstrapPath, { displayName: name.trim() });
+        seedWorkspaceBootstrapFiles(wsPath, { displayName: name.trim() });
 
         const payload = { agentId, workspace: wsPath, agentDir: adPath, model: opts.model };
         if (opts.json) {

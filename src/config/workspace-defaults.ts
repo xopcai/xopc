@@ -1,11 +1,13 @@
 import { join } from 'node:path';
 
 import { expandWorkspacePathString } from './workspace-path.js';
-import { resolveStateDir } from './paths-state.js';
+import { ENV_VARS, resolveStateDir } from './paths-state.js';
 
 /**
- * Default Markdown workspace for the primary agent when `agents.defaults.workspace` is unset and
- * there is no per-list `workspace` — `<stateDir>/workspace/main`, unless `XOPC_WORKSPACE` is set.
+ * Default Markdown workspace for the primary agent.
+ *
+ * OpenClaw-aligned: `<stateDir>/workspace` (no `/main` suffix).
+ * When `XOPC_PROFILE` is set (and not `default`), returns `<stateDir>/workspace-<profile>`.
  */
 export function resolveDefaultAgentWorkspaceDir(
   env: NodeJS.ProcessEnv = process.env,
@@ -14,6 +16,10 @@ export function resolveDefaultAgentWorkspaceDir(
   if (fromEnv) {
     return expandWorkspacePathString(fromEnv);
   }
-  // Leaf `main` must match DEFAULT_AGENT_ID in agent-scope.ts (avoid importing it here → cycle).
-  return join(resolveStateDir(env), 'workspace', 'main');
+  const stateDir = resolveStateDir(env);
+  const profile = env[ENV_VARS.PROFILE]?.trim();
+  if (profile && profile.toLowerCase() !== 'default') {
+    return join(stateDir, `workspace-${profile}`);
+  }
+  return join(stateDir, 'workspace');
 }

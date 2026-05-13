@@ -9,7 +9,6 @@ import {
   DEFAULT_AGENT_ID,
   listAgentEntries,
   normalizeAgentId,
-  resolveAgentBootstrapDir,
   resolveAgentDir,
   resolveAgentWorkspaceDir,
   resolveDefaultAgentId,
@@ -110,7 +109,7 @@ export async function listGatewayAgents(cfg: Config): Promise<GatewayAgentsListR
     const entryDisable = entry?.tools?.disable ?? [];
     let avatar: string | undefined;
     try {
-      const identityPath = join(resolveAgentBootstrapDir(cfg, id), WORKSPACE_FILES.IDENTITY);
+      const identityPath = join(resolveAgentWorkspaceDir(cfg, id), WORKSPACE_FILES.IDENTITY);
       const content = await readFile(identityPath, 'utf-8');
       avatar = extractAvatarFromIdentityMarkdown(content);
     } catch {
@@ -122,7 +121,7 @@ export async function listGatewayAgents(cfg: Config): Promise<GatewayAgentsListR
       ...(entry?.description?.trim() ? { description: entry.description.trim() } : {}),
       ...(avatar ? { avatar } : {}),
       workspace: profile.resolvedWorkspacePath,
-      bootstrapDir: resolveAgentBootstrapDir(cfg, id),
+      bootstrapDir: resolveAgentWorkspaceDir(cfg, id),
       ...(model ? { model } : {}),
       isDefault: id === defaultId,
       skills: {
@@ -202,15 +201,12 @@ export function prepareCreateAgent(
 export async function finalizeCreateAgentDirs(cfg: Config, agentId: string): Promise<void> {
   const wsPath = resolveAgentWorkspaceDir(cfg, agentId);
   const adPath = resolveAgentDir(cfg, agentId);
-  const bootstrapPath = resolveAgentBootstrapDir(cfg, agentId);
   await mkdir(wsPath, { recursive: true });
   await mkdir(adPath, { recursive: true });
-  await mkdir(join(adPath, 'credentials'), { recursive: true });
-  await mkdir(bootstrapPath, { recursive: true });
   const id = normalizeAgentId(agentId);
   const entry = listAgentEntries(cfg).find((e) => normalizeAgentId(e.id) === id);
   const displayName = entry?.name?.trim() || id;
-  seedWorkspaceBootstrapFiles(bootstrapPath, { displayName });
+  seedWorkspaceBootstrapFiles(wsPath, { displayName });
 }
 
 export type UpdateAgentBody = {
@@ -355,7 +351,7 @@ export type AgentFileEntry = {
 };
 
 async function bootstrapRootReal(cfg: Config, agentId: string): Promise<string> {
-  const dir = resolveAgentBootstrapDir(cfg, agentId);
+  const dir = resolveAgentWorkspaceDir(cfg, agentId);
   await mkdir(dir, { recursive: true });
   try {
     return await realpath(dir);
