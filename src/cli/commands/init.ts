@@ -327,48 +327,6 @@ _Review and update this periodically from daily memory files._
     log.info({ path: memoryPath }, 'Created MEMORY.md');
   }
 
-  // CONTEXT.md - Current context
-  const contextPath = join(workspaceDir, WORKSPACE_FILES.CONTEXT);
-  if (!existsSync(contextPath)) {
-    const contextContent = `# CONTEXT.md - Current Focus
-
-> Current working context; update when you switch projects
-
-## Active Project
-
-- **Project:**
-- **Path:**
-- **Goal:**
-- **Stack:**
-
-## Recent Decisions
-
-## Pending
-`;
-    await writeFile(contextPath, contextContent, 'utf-8');
-    log.info({ path: contextPath }, 'Created CONTEXT.md');
-  }
-
-  // SKILLS.md - Skills index (auto-maintained)
-  const skillsPath = join(workspaceDir, WORKSPACE_FILES.SKILLS);
-  if (!existsSync(skillsPath)) {
-    const skillsContent = `# SKILLS.md - Active Skills
-
-> Active skills for this workspace (auto-maintained)
-
-## Activated
-
-| Skill | Version | Activated At |
-|-------|---------|-------------|
-
-## Available
-
-Run \`xopc skills list\` to see all available skills.
-`;
-    await writeFile(skillsPath, skillsContent, 'utf-8');
-    log.info({ path: skillsPath }, 'Created SKILLS.md');
-  }
-
   // Workspace state file (per-agent machine state, not under markdown workspace)
   const workspaceStatePath = resolveWorkspaceStatePath(cfg, agentId);
   if (!existsSync(workspaceStatePath)) {

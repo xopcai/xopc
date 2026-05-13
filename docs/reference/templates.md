@@ -31,7 +31,7 @@ These files are read from the **Markdown workspace root** (when present) and ass
 
 **BOOTSTRAP.md** is also copied when seeding a new agent; it is **not** part of that load list (first-run / manual guidance only).
 
-**CONTEXT.md** and **SKILLS.md** are **not** part of the default system-prompt profile list, so they are **not** injected automatically. `xopc init` may still **create** them in the workspace root. The seed used by `onboard` / `agents add` copies the files listed above plus **`BOOTSTRAP.md`** only—it does **not** add `CONTEXT.md` / `SKILLS.md` from this docs folder unless you place them yourself.
+**CONTEXT.md** and **SKILLS.md** are **not** part of the default system-prompt profile list, so they are **not** injected automatically. `xopc init` does **not** create them; add them at the workspace root yourself if you want. The seed used by `onboard` / `agents add` copies the files listed above plus **`BOOTSTRAP.md`** only—it does **not** add `CONTEXT.md` / `SKILLS.md` from this docs folder unless you place them yourself.
 
 ## Memory System
 

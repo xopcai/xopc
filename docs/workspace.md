@@ -65,9 +65,9 @@ These files are loaded into the system prompt in a **fixed order** with length l
 | `AGENTS.md` | Safety and collaboration guidelines. |
 | `HEARTBEAT.md` | Heartbeat / proactive check configuration (empty or comment-only skips calls). |
 | `MEMORY.md` | Curated long-term memory index. |
-| `CONTEXT.md` | Current focus / active project (maintained by you or the agent). |
-| `SKILLS.md` | Workspace skills index (can be auto-maintained). |
 | `BOOTSTRAP.md` | Optional onboarding tips; often created by `onboard` / template setup, not always by `init`. |
+
+Other root Markdown files (for example `CONTEXT.md` or `SKILLS.md`) are optional and are **not** loaded into the default system prompt unless you wire them in yourself (e.g. read via tools or custom workflow).
 
 ### Subdirectories and dot folders
 
