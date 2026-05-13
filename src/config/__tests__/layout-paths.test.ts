@@ -6,7 +6,7 @@
  *  2. Default workspace at `~/.xopc/workspace` (no `/main`)
  *  3. Non-default agent workspace at `~/.xopc/workspace-<id>`
  *  4. Profile workspace at `~/.xopc/workspace-<profile>`
- *  5. Bootstrap files live in workspace root (no separate bootstrap dir)
+ *  5. Profile Markdown files live in workspace root (no separate persona Markdown directory)
  *  6. Workspace state at `<workspace>/.xopc/workspace-state.json`
  *  7. Auth profiles at `agents/<id>/agent/auth-profiles.json` (no credentials subdir)
  *  8. Git init on brand-new workspace (tested in workspace-seed.test.ts)
@@ -117,8 +117,8 @@ describe('Layout alignment: Phase 1 — State Root & Workspace Paths', () => {
 });
 
 describe('Layout alignment: Phase 2 — Agent Internal Paths', () => {
-  it('#5: no resolveAgentBootstrapDir exists (bootstrap in workspace root)', async () => {
-    // Verify resolveAgentBootstrapDir is not exported from paths or agent-scope.
+  it('#5: no legacy persona-dir resolver export (profile Markdown in workspace root)', async () => {
+    // Verify removed misnamed path helper is not re-exported from paths or agent-scope.
     const pathsMod = await import('../paths.js');
     const scopeMod = await import('../../agent/agent-scope.js');
     expect('resolveAgentBootstrapDir' in pathsMod).toBe(false);

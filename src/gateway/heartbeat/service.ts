@@ -61,7 +61,7 @@ export interface HeartbeatServiceDeps {
   messageBus: MessageBus;
   cronService: CronService;
   sessionStore: SessionStore;
-  /** Current app config (for HEARTBEAT.md path under agent home `bootstrap/`). */
+  /** Current app config (for HEARTBEAT.md path under the agent Markdown workspace). */
   getConfig: () => Config;
 }
 

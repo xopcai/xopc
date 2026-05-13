@@ -17,7 +17,7 @@ let _gatewayConfigInflight: Promise<GatewayConfigApiResponse> | null = null;
 
 /**
  * GET /api/config. Concurrent in-flight calls share one HTTP request (e.g. onboarding + SWR
- * on settings, or chat bootstrap + `fetchChatAgents` fallback) so a full refresh does not
+ * on settings, or chat initial load + `fetchChatAgents` fallback) so a full refresh does not
  * duplicate the same payload fetch.
  */
 export async function fetchGatewayConfigSwrResponse(): Promise<GatewayConfigApiResponse> {

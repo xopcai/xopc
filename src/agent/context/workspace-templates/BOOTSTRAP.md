@@ -2,7 +2,7 @@
 title: "BOOTSTRAP.md Template"
 summary: "First-run ritual for new agents"
 read_when:
-  - Bootstrapping a workspace manually
+  - Setting up a workspace manually
 ---
 
 # BOOTSTRAP.md - Hello, World
@@ -54,7 +54,7 @@ Guide them through whichever they pick.
 
 ## When You're Done
 
-Delete this file. You don't need a bootstrap script anymore — you're you now.
+Delete this file. You don't need a setup script anymore — you're you now.
 
 ---
 

@@ -1,5 +1,5 @@
 export type {
-  AgentBootstrapFileEntry,
+  AgentProfileFileEntry,
   GatewayAgentRow,
   GatewayAgentsPayload,
   GatewayAgentSkillsInfo,

@@ -24,6 +24,7 @@ export function useNeedsModelSetup(enabled: boolean) {
   const {
     data: modelsData,
     isLoading: modelsLoading,
+    error: modelsError,
     mutate: mutateModels,
   } = useSWR(enabled ? CONFIGURED_MODELS_SWR_KEY : null, fetchConfiguredModelsCached, {
     revalidateOnFocus: false,
@@ -34,10 +35,11 @@ export function useNeedsModelSetup(enabled: boolean) {
   const needsSetup = useMemo(() => {
     if (!enabled || !ready) return false;
     if (configError) return true;
+    if (modelsError) return true;
     const configNeeds = needsModelOrProviders(configData?.payload?.config);
-    const noUsableModels = Array.isArray(modelsData) && modelsData.length === 0;
+    const noUsableModels = !Array.isArray(modelsData) || modelsData.length === 0;
     return configNeeds || noUsableModels;
-  }, [enabled, ready, configError, configData, modelsData]);
+  }, [enabled, ready, configError, configData, modelsData, modelsError]);
 
   const refresh = useCallback(async () => {
     await Promise.all([mutateConfig(), mutateModels()]);

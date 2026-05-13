@@ -197,7 +197,7 @@ xopc onboard
 | 字段 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
 | `enabled` | boolean | `true` | 总开关。为 `false` 时：无 curated 快照、无 `curated_memory` 工具、不加载外部 memory 提供方、不做 prefetch/sync。 |
-| `useEnhancedSystem` | boolean | `true` | 为 `false` 时：关闭 curated 快照与 `curated_memory`；工作区引导里的根目录 `MEMORY.md` 仍会通过 bootstrap 参与提示。 |
+| `useEnhancedSystem` | boolean | `true` | 为 `false` 时：关闭 curated 快照与 `curated_memory`；工作区根目录 profile 的 `MEMORY.md` 仍会参与系统提示。 |
 | `userProfileEnabled` | boolean | `true` | 为 `false` 时：系统提示不包含 `USER.md`；`curated_memory` 不能修改 `user` 目标（仍可读）。 |
 | `memoryCharLimit` | number | `2200` | `MEMORY.md` 条目合计字符上限。 |
 | `userCharLimit` | number | `1375` | `USER.md` 条目合计字符上限。 |

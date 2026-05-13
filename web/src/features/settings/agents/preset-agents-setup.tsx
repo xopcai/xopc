@@ -4,7 +4,7 @@ import { SkipForward, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   createGatewayAgent,
-  saveAgentBootstrapFileContent,
+  saveAgentProfileFileContent,
   updateGatewayAgent,
 } from '@/features/settings/agents-admin-api';
 import { messages } from '@/i18n/messages';
@@ -74,8 +74,8 @@ export function PresetAgentsSetup({ existingAgentIds, onComplete, onSkip }: Pres
           description: language === 'zh' ? preset.descriptionZh : preset.descriptionEn,
         });
 
-        await saveAgentBootstrapFileContent(preset.id, 'IDENTITY.md', preset.identityMd);
-        await saveAgentBootstrapFileContent(preset.id, 'SOUL.md', preset.soulMd);
+        await saveAgentProfileFileContent(preset.id, 'IDENTITY.md', preset.identityMd);
+        await saveAgentProfileFileContent(preset.id, 'SOUL.md', preset.soulMd);
 
         const disables = preset.toolsDisable;
         if (disables && disables.length > 0) {
