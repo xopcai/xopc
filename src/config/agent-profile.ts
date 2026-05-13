@@ -11,7 +11,7 @@ import { resolveAgentWorkspaceDir } from '../agent/agent-scope.js';
 import { getDefaultAgentId, agentExists } from '../routing/resolve-route.js';
 import { parseSessionKey } from '../routing/session-key.js';
 
-export { resolveAgentBootstrapDir, resolveAgentWorkspaceDir } from '../agent/agent-scope.js';
+export { resolveAgentWorkspaceDir } from '../agent/agent-scope.js';
 
 export type { AgentModelConfig };
 
