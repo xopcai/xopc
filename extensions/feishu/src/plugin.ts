@@ -12,6 +12,7 @@ import type { MessageBus } from '@xopcai/xopc/infra/bus/index.js';
 import type {
   ChannelCapabilities,
   ChannelDoctorAdapter,
+  ChannelMessageActionAdapter,
   ChannelOutboundAdapter,
   ChannelPlugin,
   ChannelPluginDefaults,
@@ -51,6 +52,8 @@ import { createFeishuDirectoryAdapter } from './directory/directory-adapter.js';
 import { feishuWhoAmI } from './tools/tools.js';
 import { feishuCliLoginAdapter } from './adapters/cli-login.js';
 import { feishuOnboardAdapter } from './adapters/onboard-cli.js';
+import { handleFeishuChannelMessageAction } from './actions/message-action-handler.js';
+import { createFeishuInboundPipeline, type FeishuInboundWork } from './transport/reliability/inbound-pipeline.js';
 
 const log = createLogger('FeishuPlugin');
 
@@ -84,7 +87,7 @@ export class FeishuChannelPlugin implements ChannelPlugin<ResolvedFeishuAccount>
   } as any;
 
   readonly defaults: ChannelPluginDefaults = {
-    queue: { debounceMs: 0 },
+    queue: { debounceMs: 350 },
     outbound: { textChunkLimit: 4000 },
     streaming: {
       blockStreamingCoalesce: {
@@ -111,6 +114,7 @@ export class FeishuChannelPlugin implements ChannelPlugin<ResolvedFeishuAccount>
   private bus!: MessageBus;
   private cfg!: Config;
   private abortControllers = new Map<string, AbortController>();
+  private inboundPipeline?: ReturnType<typeof createFeishuInboundPipeline>;
 
   config = {
     listAccountIds: (cfg: Config) => listFeishuAccountIds(cfg),
@@ -176,10 +180,8 @@ export class FeishuChannelPlugin implements ChannelPlugin<ResolvedFeishuAccount>
 
   directory = createFeishuDirectoryAdapter();
 
-  actions = {
-    async handleAction(_ctx: any): Promise<void> {
-      // TODO: Wire interactive card actions (card.action.trigger) to this adapter.
-    },
+  actions: ChannelMessageActionAdapter = {
+    handleAction: handleFeishuChannelMessageAction,
   };
 
   agentTools = [
@@ -279,6 +281,14 @@ export class FeishuChannelPlugin implements ChannelPlugin<ResolvedFeishuAccount>
   async init(options: ChannelPluginInitOptions): Promise<void> {
     this.bus = options.bus;
     this.cfg = options.config;
+    const defaultDebounce = this.defaults.queue?.debounceMs ?? 350;
+    this.inboundPipeline = createFeishuInboundPipeline({
+      bus: this.bus,
+      defaultDebounceMs: defaultDebounce,
+      onError: (err, items) => {
+        log.error({ err, count: items.length }, 'Feishu inbound pipeline flush failed');
+      },
+    });
     log.debug('Feishu plugin initialized');
   }
 
@@ -297,10 +307,20 @@ export class FeishuChannelPlugin implements ChannelPlugin<ResolvedFeishuAccount>
       const ac = new AbortController();
       this.abortControllers.set(accountId, ac);
 
+      const defaultDebounce = this.defaults.queue?.debounceMs ?? 350;
+      const enqueueInbound = (work: FeishuInboundWork) => {
+        const p = this.inboundPipeline;
+        if (!p) {
+          return this.bus.publishInbound(work.inbound);
+        }
+        return p.enqueue(work);
+      };
+
       const monitor = createFeishuSocketModeMonitor({
         account,
         config: this.cfg,
-        bus: this.bus,
+        enqueueInbound,
+        inboundDebounceDefaultMs: defaultDebounce,
         abortSignal: ac.signal,
         security: {
           checkAccess: (ctx: ChannelSecurityContext) => this.security.checkAccess?.(ctx, account, this.cfg),
@@ -312,7 +332,8 @@ export class FeishuChannelPlugin implements ChannelPlugin<ResolvedFeishuAccount>
           ? createFeishuWebhookMonitor({
               account,
               config: this.cfg,
-              bus: this.bus,
+              enqueueInbound,
+              inboundDebounceDefaultMs: defaultDebounce,
               abortSignal: ac.signal,
               security: {
                 checkAccess: (ctx: ChannelSecurityContext) =>
@@ -334,6 +355,11 @@ export class FeishuChannelPlugin implements ChannelPlugin<ResolvedFeishuAccount>
   }
 
   async stop(accountId?: string): Promise<void> {
+    try {
+      await this.inboundPipeline?.flushAll();
+    } catch (err) {
+      log.warn({ err }, 'Feishu inbound pipeline flushAll failed');
+    }
     const ids = accountId ? [accountId] : [...this.abortControllers.keys()];
     for (const id of ids) {
       const ac = this.abortControllers.get(id);
