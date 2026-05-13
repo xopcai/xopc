@@ -3,7 +3,6 @@
  */
 
 import { mkdir } from 'node:fs/promises';
-import { join } from 'node:path';
 import { Command } from 'commander';
 import { loadConfig, saveConfig } from '../../config/loader.js';
 import { resolveConfigPath } from '../../config/paths.js';

@@ -36,7 +36,7 @@
 
 | 路径 | 用途 |
 |------|------|
-| *(profile Markdown)* | 位于 **解析后的 Markdown 工作空间根**（见 [Markdown 工作空间](#markdown-工作空间)）：`SOUL.md`、`IDENTITY.md`、`USER.md`、`TOOLS.md`、`AGENTS.md`、`HEARTBEAT.md`、`MEMORY.md`（系统提示栈；与托管 `memories/` 不同）、可选 `CONTEXT.md`、`SKILLS.md`，以及 **`BOOTSTRAP.md`**（起源说明；**不在**默认系统提示加载顺序中）。网关心跳文案默认读取该根下的 `HEARTBEAT.md`（若存在）。 |
+| *(profile Markdown)* | 位于 **解析后的 Markdown 工作空间根**（见 [Markdown 工作空间](#markdown-工作空间)）：`SOUL.md`、`IDENTITY.md`、`USER.md`、`TOOLS.md`、`AGENTS.md`、`HEARTBEAT.md`、`MEMORY.md`（系统提示栈；与托管 `memories/` 不同），以及 **`BOOTSTRAP.md`**（起源说明；**不在**默认系统提示加载顺序中）。可自行在根目录添加其他 Markdown（例如 `CONTEXT.md`）。网关心跳文案默认读取该根下的 `HEARTBEAT.md`（若存在）。 |
 | `sessions/` | 会话 transcript（分片、`index.json`、`archive/`）、`sessions/config/` 下按会话配置。 |
 | `memories/` | 托管结构化存储（`MEMORY.md`、`USER.md`，条目以固定分隔符分段 — `BuiltinMemoryStore`）。 |
 | `inbound/` | 入站附件（非图片二进制）落盘；transcript 中相对路径为相对 agent home 的 `inbound/...`。 |

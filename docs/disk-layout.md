@@ -36,7 +36,7 @@ Resolved by `resolveAgentHomeDir(config, agentId)`. Typical layout:
 
 | Path | Purpose |
 |------|---------|
-| *(profile Markdown)* | At the **resolved Markdown workspace root** (see [Markdown workspace](#markdown-workspace)): `SOUL.md`, `IDENTITY.md`, `USER.md`, `TOOLS.md`, `AGENTS.md`, `HEARTBEAT.md`, `MEMORY.md` (system prompt stack; separate from curated `memories/`), optional `CONTEXT.md`, `SKILLS.md`, and `BOOTSTRAP.md` (origin story; not part of the default system-prompt load order). Gateway heartbeat text defaults to `HEARTBEAT.md` in that root when present. |
+| *(profile Markdown)* | At the **resolved Markdown workspace root** (see [Markdown workspace](#markdown-workspace)): `SOUL.md`, `IDENTITY.md`, `USER.md`, `TOOLS.md`, `AGENTS.md`, `HEARTBEAT.md`, `MEMORY.md` (system prompt stack; separate from curated `memories/`), and `BOOTSTRAP.md` (origin story; not part of the default system-prompt load order). You may add other root Markdown files (e.g. `CONTEXT.md`) yourself. Gateway heartbeat text defaults to `HEARTBEAT.md` in that root when present. |
 | `sessions/` | Transcript store (shards, `index.json`, `archive/`), per-session overrides under `sessions/config/`. |
 | `memories/` | Curated structured store (`MEMORY.md`, `USER.md`; entries separated by a fixed delimiter — `BuiltinMemoryStore`). |
 | `inbound/` | Persisted inbound attachments (non-image binaries); transcript paths use `inbound/...` relative to agent home. |

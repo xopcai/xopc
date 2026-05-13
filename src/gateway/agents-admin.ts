@@ -32,8 +32,6 @@ import { isPathUnderWorkspace, resolveWorkspaceSafePath } from './workspace-edit
 const EDITABLE_PROFILE_MARKDOWN_NAMES = new Set<string>([
   ...AGENT_PROFILE_MARKDOWN_SYSTEM_FILES,
   WORKSPACE_FILES.BOOTSTRAP,
-  WORKSPACE_FILES.CONTEXT,
-  WORKSPACE_FILES.SKILLS,
 ]);
 
 export type GatewayAgentRow = {
