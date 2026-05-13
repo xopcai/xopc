@@ -24,13 +24,7 @@ export function resolveStateDir(env: NodeJS.ProcessEnv = process.env): string {
     return env[ENV_VARS.STATE_DIR]!;
   }
 
-  const profile = env[ENV_VARS.PROFILE];
   const home = resolveHomeDir(env);
-
-  if (profile && profile !== 'default') {
-    return join(home, `.xopc-${profile}`);
-  }
-
   return join(home, '.xopc');
 }
 

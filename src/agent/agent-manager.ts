@@ -16,7 +16,7 @@ import { type Config, getAgentDefaultModelRef } from '../config/schema.js';
 import { applyConfigOverrides } from '../config/runtime-overrides.js';
 import {
   type EffectiveAgentProfile,
-  resolveAgentBootstrapDir,
+  resolveAgentWorkspaceDir as resolveAgentWorkspaceDirFromProfile,
   resolveEffectiveAgentProfileForSession,
 } from '../config/agent-profile.js';
 import { expandWorkspacePathString } from '../config/workspace-path.js';
@@ -534,8 +534,8 @@ export class AgentManager {
 
   private loadBootstrapForProfile(profile: EffectiveAgentProfile): BootstrapFile[] {
     const cfg = this.config.config!;
-    const bootstrapDir = resolveAgentBootstrapDir(cfg, profile.agentId);
-    return loadBootstrapFiles(bootstrapDir);
+    const workspaceDir = resolveAgentWorkspaceDirFromProfile(cfg, profile.agentId);
+    return loadBootstrapFiles(workspaceDir);
   }
 
   getSkillCatalog(lang?: string): SkillCatalogEntry[] {
@@ -827,7 +827,7 @@ export class AgentManager {
     const bootstrapFiles = this.loadBootstrapForProfile(profile);
     const tools = this.toolsFactory.createAllTools({
       workspace: resolvedWorkspacePath,
-      bootstrapDir: resolveAgentBootstrapDir(this.config.config!, profile.agentId),
+      bootstrapDir: resolveAgentWorkspaceDirFromProfile(this.config.config!, profile.agentId),
       disabledTools: profile.tools.disable,
       getPrimaryModel: () => this.resolveModelStringToModel(modelRef),
       getBuiltinMemoryStore: () => rt.builtinMemoryStore,

@@ -172,7 +172,7 @@ export function resolveAgentWorkspaceDir(cfg: Config, agentId: string): string {
     return resolveDefaultAgentWorkspaceDir(process.env);
   }
   const stateDir = resolveStateDir(process.env);
-  return join(stateDir, 'workspace', id);
+  return join(stateDir, `workspace-${id}`);
 }
 
 /**
@@ -191,11 +191,6 @@ export function resolveAgentDir(cfg: Config, agentId: string): string {
 /** Parent of `sessions/` and `agent/`: `<stateDir>/agents/<id>/`. */
 export function resolveAgentHomeDir(cfg: Config, agentId: string): string {
   return join(resolveStateDir(process.env), 'agents', normalizeAgentId(agentId));
-}
-
-/** Bootstrap / persona Markdown (SOUL, AGENTS, …) under agent home — not the markdown project workspace. */
-export function resolveAgentBootstrapDir(cfg: Config, agentId: string): string {
-  return join(resolveAgentHomeDir(cfg, agentId), 'bootstrap');
 }
 
 export function resolveSessionsDir(cfg: Config, agentId: string): string {

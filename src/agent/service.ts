@@ -69,7 +69,7 @@ import {
   resolveAgentHomeDir,
   resolveDefaultAgentId,
 } from './agent-scope.js';
-import { extractProfileAgentId, resolveAgentBootstrapDir } from '../config/agent-profile.js';
+import { extractProfileAgentId, resolveAgentWorkspaceDir as resolveAgentWorkspaceDirFromProfile } from '../config/agent-profile.js';
 import { DEFAULT_ACK_MAX_CHARS, NO_REPLY, shouldSilence } from '../heartbeat/tokens.js';
 import { createTypingController, type TypingController } from './lifecycle/typing.js';
 import { cleanTrailingErrors, sanitizeMessages } from './memory/message-sanitizer.js';
@@ -157,7 +157,7 @@ export class AgentService {
 
     if (config.config) {
       const aid = resolveDefaultAgentId(config.config);
-      this.bootstrapFiles = loadBootstrapFiles(resolveAgentBootstrapDir(config.config, aid));
+      this.bootstrapFiles = loadBootstrapFiles(resolveAgentWorkspaceDirFromProfile(config.config, aid));
     } else {
       this.bootstrapFiles = [];
     }

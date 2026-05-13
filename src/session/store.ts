@@ -10,7 +10,7 @@ import { loadEntriesFromFile } from './parity/load-jsonl-entries.js';
 
 import type { Config } from '../config/schema.js';
 import { resolveSessionsDir, FILENAMES } from '../config/paths.js';
-import { resolveDefaultAgentId } from '../agent/agent-scope.js';
+import { resolveDefaultAgentId, listAgentEntries } from '../agent/agent-scope.js';
 import { parseSessionKey as parseRoutingSessionKey } from '../routing/session-key.js';
 import { createLogger } from '../utils/logger.js';
 import { SessionCompactor, type CompactionConfig, type CompactionResult } from '../agent/memory/compaction.js';
@@ -67,6 +67,8 @@ export class SessionStore {
   private compactor: SessionCompactor;
   private storeMutationDepth = 0;
   private storeMutationChain: Promise<void> = Promise.resolve();
+  /** Cache of per-agent sessions dirs to avoid re-resolution on every call. */
+  private agentSessionsDirCache = new Map<string, string>();
 
   constructor(
     private options: SessionStoreOptions,
@@ -83,6 +85,34 @@ export class SessionStore {
 
   getSessionsRoot(): string {
     return this.sessionsDir;
+  }
+
+  /**
+   * OpenClaw-aligned: resolve the sessions directory for a given session key.
+   * Extracts agentId from the session key and routes to `agents/<agentId>/sessions/`.
+   * Falls back to the default sessions directory when agentId cannot be parsed
+   * or when `sessionsDir` was explicitly provided in options.
+   */
+  private resolveSessionsDirForKey(sessionKey: string): string {
+    if (this.options.sessionsDir) {
+      return this.sessionsDir;
+    }
+    const parsed = parseRoutingSessionKey(sessionKey);
+    if (!parsed) {
+      return this.sessionsDir;
+    }
+    const agentId = parsed.agentId;
+    const cached = this.agentSessionsDirCache.get(agentId);
+    if (cached) {
+      return cached;
+    }
+    const resolved = resolveSessionsDir(this.options.config, agentId);
+    this.agentSessionsDirCache.set(agentId, resolved);
+    return resolved;
+  }
+
+  private resolveStorePathForKey(sessionKey: string): string {
+    return join(this.resolveSessionsDirForKey(sessionKey), FILENAMES.SESSIONS_MAP);
   }
 
   private async runStoreMutation<T>(fn: () => Promise<T>): Promise<T> {
@@ -110,16 +140,47 @@ export class SessionStore {
     log.debug('Session store initialized (sessions.json + JSONL)');
   }
 
-  private transcriptPathForEntry(entry: XopcSessionDiskEntry): string {
-    return resolveSessionFilePath(entry.sessionId, entry, { sessionsDir: this.sessionsDir });
+  private transcriptPathForEntry(entry: XopcSessionDiskEntry, sessionsDir?: string): string {
+    return resolveSessionFilePath(entry.sessionId, entry, { sessionsDir: sessionsDir ?? this.sessionsDir });
+  }
+
+  private async readMapForKey(sessionKey: string): Promise<Record<string, XopcSessionDiskEntry>> {
+    const storePath = this.resolveStorePathForKey(sessionKey);
+    return readSessionsJsonFile<XopcSessionDiskEntry>(storePath);
   }
 
   private async readMap(): Promise<Record<string, XopcSessionDiskEntry>> {
     return readSessionsJsonFile<XopcSessionDiskEntry>(this.storePath);
   }
 
+  /**
+   * OpenClaw-aligned: read sessions.json from ALL known agents and merge into a single map.
+   * Used by aggregation queries (list, getByAgent, getByAccount, etc.) so the gateway UI
+   * can display sessions across all agents.
+   */
+  private async readAllMaps(): Promise<Record<string, XopcSessionDiskEntry>> {
+    if (this.options.sessionsDir) {
+      return this.readMap();
+    }
+    const agents = listAgentEntries(this.options.config);
+    const defaultId = resolveDefaultAgentId(this.options.config);
+    const agentIds = new Set<string>([defaultId, ...agents.map((a) => a.id)]);
+
+    const merged: Record<string, XopcSessionDiskEntry> = {};
+    for (const id of agentIds) {
+      const dir = resolveSessionsDir(this.options.config, id);
+      const path = join(dir, FILENAMES.SESSIONS_MAP);
+      if (!existsSync(path)) {
+        continue;
+      }
+      const map = await readSessionsJsonFile<XopcSessionDiskEntry>(path);
+      Object.assign(merged, map);
+    }
+    return merged;
+  }
+
   private async getDiskEntry(sessionKey: string): Promise<XopcSessionDiskEntry | undefined> {
-    const map = await this.readMap();
+    const map = await this.readMapForKey(sessionKey);
     return map[sessionKey];
   }
 
@@ -197,7 +258,10 @@ export class SessionStore {
 
   /** Ensure sessions.json has an entry and transcript file exist for `sessionKey`. */
   private async ensureSession(sessionKey: string): Promise<XopcSessionDiskEntry> {
-    return withSessionsJsonLock(this.storePath, async (map) => {
+    const keyStorePath = this.resolveStorePathForKey(sessionKey);
+    const keySessionsDir = this.resolveSessionsDirForKey(sessionKey);
+    await mkdir(keySessionsDir, { recursive: true });
+    return withSessionsJsonLock(keyStorePath, async (map) => {
       const existing = map[sessionKey] as XopcSessionDiskEntry | undefined;
       if (existing?.pluginExtensions?.xopc?.metadata) {
         return existing;
@@ -218,7 +282,7 @@ export class SessionStore {
           pluginExtensions: { xopc: { metadata } },
         };
         map[sessionKey] = entry as Record<string, unknown>;
-        const abs = resolveSessionTranscriptPathInDir(sessionId, this.sessionsDir);
+        const abs = resolveSessionTranscriptPathInDir(sessionId, keySessionsDir);
         await writeTranscriptJsonl({
           absPath: abs,
           sessionId,
@@ -245,7 +309,7 @@ export class SessionStore {
   }
 
   async getByAgent(agentId: string): Promise<SessionMetadata[]> {
-    const map = await this.readMap();
+    const map = await this.readAllMaps();
     const out: SessionMetadata[] = [];
     for (const [key, e] of Object.entries(map)) {
       const m = this.metadataFromEntry(key, e);
@@ -257,7 +321,7 @@ export class SessionStore {
   }
 
   async getByAccount(accountId: string): Promise<SessionMetadata[]> {
-    const map = await this.readMap();
+    const map = await this.readAllMaps();
     const out: SessionMetadata[] = [];
     for (const [key, e] of Object.entries(map)) {
       const m = this.metadataFromEntry(key, e);
@@ -269,7 +333,7 @@ export class SessionStore {
   }
 
   async getByPeer(peerKind: string, peerId: string): Promise<SessionMetadata[]> {
-    const map = await this.readMap();
+    const map = await this.readAllMaps();
     const out: SessionMetadata[] = [];
     for (const [key, e] of Object.entries(map)) {
       const m = this.metadataFromEntry(key, e);
@@ -281,7 +345,7 @@ export class SessionStore {
   }
 
   async getMainSession(channel: string, accountId: string): Promise<SessionMetadata | null> {
-    const map = await this.readMap();
+    const map = await this.readAllMaps();
     for (const [key, e] of Object.entries(map)) {
       const m = this.metadataFromEntry(key, e);
       if (
@@ -301,7 +365,7 @@ export class SessionStore {
   }
 
   async list(query: SessionListQuery = {}): Promise<PaginatedResult<SessionMetadata>> {
-    const map = await this.readMap();
+    const map = await this.readAllMaps();
     let sessions = Object.entries(map).map(([k, e]) => this.metadataFromEntry(k, e));
 
     if (query.status) {
@@ -389,7 +453,7 @@ export class SessionStore {
     if (!entry) {
       return [];
     }
-    const path = this.transcriptPathForEntry(entry);
+    const path = this.transcriptPathForEntry(entry, this.resolveSessionsDirForKey(key));
     return readTranscriptRowsFromFile(path);
   }
 
@@ -403,7 +467,8 @@ export class SessionStore {
 
   async updateMetadata(key: string, updates: Partial<SessionMetadata>): Promise<void> {
     return this.runStoreMutation(async () => {
-      await withSessionsJsonLock(this.storePath, async (map) => {
+      const keyStorePath = this.resolveStorePathForKey(key);
+      await withSessionsJsonLock(keyStorePath, async (map) => {
         const entry = map[key] as XopcSessionDiskEntry | undefined;
         if (!entry?.pluginExtensions?.xopc?.metadata) {
           throw new Error(`Session not found: ${key}`);
@@ -424,8 +489,10 @@ export class SessionStore {
       if (!entry) {
         return false;
       }
-      const abs = this.transcriptPathForEntry(entry);
-      await withSessionsJsonLock(this.storePath, async (map) => {
+      const keySessionsDir = this.resolveSessionsDirForKey(key);
+      const abs = this.transcriptPathForEntry(entry, keySessionsDir);
+      const keyStorePath = this.resolveStorePathForKey(key);
+      await withSessionsJsonLock(keyStorePath, async (map) => {
         delete map[key];
       });
       try {
@@ -488,7 +555,8 @@ export class SessionStore {
     if (!entry) {
       return;
     }
-    const abs = this.transcriptPathForEntry(entry);
+    const keySessionsDir = this.resolveSessionsDirForKey(key);
+    const abs = this.transcriptPathForEntry(entry, keySessionsDir);
     if (existsSync(abs)) {
       try {
         archiveFileOnDisk(abs, 'deleted');
@@ -498,10 +566,10 @@ export class SessionStore {
     }
   }
 
-  private async findMostRecentDeletedTranscript(sessionId: string): Promise<string | null> {
+  private async findMostRecentDeletedTranscript(sessionId: string, sessionsDir: string): Promise<string | null> {
     let names: string[];
     try {
-      names = await readdir(this.sessionsDir);
+      names = await readdir(sessionsDir);
     } catch {
       return null;
     }
@@ -509,7 +577,7 @@ export class SessionStore {
     const hits = names.filter((n) => n.startsWith(prefix) && n.endsWith('Z'));
     hits.sort().reverse();
     const first = hits[0];
-    return first ? join(this.sessionsDir, first) : null;
+    return first ? join(sessionsDir, first) : null;
   }
 
   private async moveFromArchive(key: string): Promise<void> {
@@ -517,11 +585,12 @@ export class SessionStore {
     if (!entry) {
       return;
     }
-    const target = resolveSessionTranscriptPathInDir(entry.sessionId, this.sessionsDir);
+    const keySessionsDir = this.resolveSessionsDirForKey(key);
+    const target = resolveSessionTranscriptPathInDir(entry.sessionId, keySessionsDir);
     if (existsSync(target)) {
       return;
     }
-    const src = await this.findMostRecentDeletedTranscript(entry.sessionId);
+    const src = await this.findMostRecentDeletedTranscript(entry.sessionId, keySessionsDir);
     if (!src) {
       return;
     }
@@ -538,13 +607,14 @@ export class SessionStore {
     if (!entry) {
       return [];
     }
-    const primary = this.transcriptPathForEntry(entry);
+    const keySessionsDir = this.resolveSessionsDirForKey(key);
+    const primary = this.transcriptPathForEntry(entry, keySessionsDir);
     if (existsSync(primary)) {
       const rows = await readTranscriptRowsFromFile(primary);
       return rowsToLlmMessages(rows);
     }
     if (options?.fromArchive) {
-      const archived = await this.findMostRecentDeletedTranscript(entry.sessionId);
+      const archived = await this.findMostRecentDeletedTranscript(entry.sessionId, keySessionsDir);
       if (!archived) {
         return [];
       }
@@ -559,7 +629,7 @@ export class SessionStore {
     if (!entry) {
       return null;
     }
-    const path = this.transcriptPathForEntry(entry);
+    const path = this.transcriptPathForEntry(entry, this.resolveSessionsDirForKey(key));
     if (!existsSync(path)) {
       return null;
     }
@@ -602,7 +672,8 @@ export class SessionStore {
     opts?: { appendCompaction?: TranscriptCompactionRecord },
   ): Promise<void> {
     const entry = await this.ensureSession(key);
-    const abs = this.transcriptPathForEntry(entry);
+    const keySessionsDir = this.resolveSessionsDirForKey(key);
+    const abs = this.transcriptPathForEntry(entry, keySessionsDir);
     const llm = rowsToLlmMessages(rows);
     const now = Date.now();
     await writeTranscriptJsonl({
@@ -612,7 +683,8 @@ export class SessionStore {
       rows,
       appendCompaction: opts?.appendCompaction,
     });
-    await withSessionsJsonLock(this.storePath, async (map) => {
+    const keyStorePath = this.resolveStorePathForKey(key);
+    await withSessionsJsonLock(keyStorePath, async (map) => {
       const e = map[key] as XopcSessionDiskEntry | undefined;
       if (!e?.pluginExtensions?.xopc?.metadata) {
         return;
@@ -643,7 +715,8 @@ export class SessionStore {
       if (!disk) {
         return;
       }
-      const path = this.transcriptPathForEntry(disk);
+      const keySessionsDir = this.resolveSessionsDirForKey(key);
+      const path = this.transcriptPathForEntry(disk, keySessionsDir);
       const prev = existsSync(path) ? await readTranscriptRowsFromFile(path) : [];
       const row: XopcTranscriptContextEntry = {
         kind: 'context',
@@ -686,12 +759,12 @@ export class SessionStore {
     return `${sessionId}.checkpoint.`;
   }
 
-  private async pruneCompactionCheckpoints(sessionId: string): Promise<void> {
+  private async pruneCompactionCheckpoints(sessionId: string, sessionsDir: string): Promise<void> {
     const MAX = 15;
     const prefix = this.checkpointBasename(sessionId);
     let names: string[];
     try {
-      names = await readdir(this.sessionsDir);
+      names = await readdir(sessionsDir);
     } catch {
       return;
     }
@@ -701,12 +774,12 @@ export class SessionStore {
     }
     const stats = await Promise.all(
       candidates.map(async (name) => {
-        const p = join(this.sessionsDir, name);
+        const p = join(sessionsDir, name);
         try {
           const s = await stat(p);
           return { p, mtimeMs: s.mtimeMs };
         } catch {
-          return { p: join(this.sessionsDir, name), mtimeMs: 0 };
+          return { p: join(sessionsDir, name), mtimeMs: 0 };
         }
       }),
     );
@@ -720,15 +793,15 @@ export class SessionStore {
     }
   }
 
-  private async captureCompactionCheckpoint(sessionId: string, transcriptAbs: string): Promise<void> {
+  private async captureCompactionCheckpoint(sessionId: string, transcriptAbs: string, sessionsDir: string): Promise<void> {
     if (!existsSync(transcriptAbs)) {
       return;
     }
     const id = randomUUID();
-    const dest = join(this.sessionsDir, `${sessionId}.checkpoint.${id}.jsonl`);
+    const dest = join(sessionsDir, `${sessionId}.checkpoint.${id}.jsonl`);
     try {
       await copyFile(transcriptAbs, dest);
-      await this.pruneCompactionCheckpoints(sessionId);
+      await this.pruneCompactionCheckpoints(sessionId, sessionsDir);
     } catch (err) {
       log.warn({ err, sessionId }, 'Compaction checkpoint copy failed');
     }
@@ -745,8 +818,9 @@ export class SessionStore {
       if (!entry) {
         return compacted;
       }
-      const abs = this.transcriptPathForEntry(entry);
-      await this.captureCompactionCheckpoint(entry.sessionId, abs);
+      const keySessionsDir = this.resolveSessionsDirForKey(key);
+      const abs = this.transcriptPathForEntry(entry, keySessionsDir);
+      await this.captureCompactionCheckpoint(entry.sessionId, abs, keySessionsDir);
       const prev = await this.loadTranscriptRows(key);
       const merged = mergeLlmMessagesPreservingContextRows(prev, compacted);
       await this.writeTranscriptAndSyncIndex(key, merged, {
@@ -802,18 +876,19 @@ export class SessionStore {
     if (!entry) {
       return [];
     }
+    const keySessionsDir = this.resolveSessionsDirForKey(key);
     const sessionId = entry.sessionId;
     const prefix = this.checkpointBasename(sessionId);
     let names: string[];
     try {
-      names = await readdir(this.sessionsDir);
+      names = await readdir(keySessionsDir);
     } catch {
       return [];
     }
     const files = names.filter((n) => n.startsWith(prefix) && n.endsWith('.jsonl'));
     const rows = await Promise.all(
       files.map(async (name) => {
-        const p = join(this.sessionsDir, name);
+        const p = join(keySessionsDir, name);
         const parsed = parseCompactionCheckpointTranscriptFileName(name);
         const id = parsed?.checkpointId;
         if (!id || !normalizeCompactionCheckpointId(id)) {
@@ -848,8 +923,9 @@ export class SessionStore {
     if (!entry) {
       return null;
     }
+    const keySessionsDir = this.resolveSessionsDirForKey(key);
     const fname = `${this.checkpointBasename(entry.sessionId)}${id}.jsonl`;
-    const cpPath = join(this.sessionsDir, fname);
+    const cpPath = join(keySessionsDir, fname);
     if (!existsSync(cpPath)) {
       return null;
     }
@@ -878,11 +954,12 @@ export class SessionStore {
       if (!entry) {
         throw new Error(`Session not found: ${key}`);
       }
-      const cpPath = join(this.sessionsDir, `${this.checkpointBasename(entry.sessionId)}${id}.jsonl`);
+      const keySessionsDir = this.resolveSessionsDirForKey(key);
+      const cpPath = join(keySessionsDir, `${this.checkpointBasename(entry.sessionId)}${id}.jsonl`);
       if (!existsSync(cpPath)) {
         throw new Error(`Checkpoint not found: ${id}`);
       }
-      const target = this.transcriptPathForEntry(entry);
+      const target = this.transcriptPathForEntry(entry, keySessionsDir);
       await copyFile(cpPath, target);
       const messages = await this.loadMessages(key);
       await this.saveMessages(key, messages);

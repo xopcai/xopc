@@ -21,7 +21,6 @@ import {
   resolveInboxPendingDir,
   resolveInboxProcessedDir,
   resolveAgentHomeDir,
-  resolveAgentBootstrapDir,
   resolveWorkspaceStateDir,
   resolveWorkspaceStatePath,
   WORKSPACE_FILES,
@@ -142,11 +141,11 @@ export async function initCommand(options: InitOptions = {}): Promise<void> {
  * Create default workspace files for an agent
  */
 async function createWorkspaceFiles(cfg: Config, agentId: string): Promise<void> {
-  const bootstrapDir = resolveAgentBootstrapDir(cfg, agentId);
-  await mkdir(bootstrapDir, { recursive: true });
+  const workspaceDir = resolveAgentWorkspaceDir(cfg, agentId);
+  await mkdir(workspaceDir, { recursive: true });
 
   // SOUL.md - Agent personality and values
-  const soulPath = join(bootstrapDir, WORKSPACE_FILES.SOUL);
+  const soulPath = join(workspaceDir, WORKSPACE_FILES.SOUL);
   if (!existsSync(soulPath)) {
     const soulContent = `# SOUL.md - Who You Are
 
@@ -179,7 +178,7 @@ _This file is yours to evolve. As you learn who you are, update it._
   }
 
   // IDENTITY.md - Agent identity definition
-  const identityPath = join(bootstrapDir, WORKSPACE_FILES.IDENTITY);
+  const identityPath = join(workspaceDir, WORKSPACE_FILES.IDENTITY);
   if (!existsSync(identityPath)) {
     const identityContent = `# IDENTITY.md - Who Am I?
 
@@ -205,7 +204,7 @@ _This file is yours to evolve. As you learn who you are, update it._
   }
 
   // USER.md - User information (empty template)
-  const userPath = join(bootstrapDir, WORKSPACE_FILES.USER);
+  const userPath = join(workspaceDir, WORKSPACE_FILES.USER);
   if (!existsSync(userPath)) {
     const userContent = `# USER.md - About Your Human
 
@@ -226,7 +225,7 @@ _(What do they care about? What projects are they working on? Build this over ti
   }
 
   // AGENTS.md - Behavior guidelines
-  const agentsPath = join(bootstrapDir, WORKSPACE_FILES.AGENTS);
+  const agentsPath = join(workspaceDir, WORKSPACE_FILES.AGENTS);
   if (!existsSync(agentsPath)) {
     const agentsContent = `# AGENTS.md - Behavior Guidelines
 
@@ -269,7 +268,7 @@ You have access to your human's stuff. That doesn't mean you _share_ their stuff
   }
 
   // TOOLS.md - Tool usage notes
-  const toolsPath = join(bootstrapDir, WORKSPACE_FILES.TOOLS);
+  const toolsPath = join(workspaceDir, WORKSPACE_FILES.TOOLS);
   if (!existsSync(toolsPath)) {
     const toolsContent = `# TOOLS.md - Local Notes
 
@@ -291,7 +290,7 @@ Skills are shared. Your setup is yours.
   }
 
   // HEARTBEAT.md - Heartbeat tasks (empty = no heartbeat)
-  const heartbeatPath = join(bootstrapDir, WORKSPACE_FILES.HEARTBEAT);
+  const heartbeatPath = join(workspaceDir, WORKSPACE_FILES.HEARTBEAT);
   if (!existsSync(heartbeatPath)) {
     const heartbeatContent = `# HEARTBEAT.md
 
@@ -304,7 +303,7 @@ Skills are shared. Your setup is yours.
   }
 
   // MEMORY.md - Long-term memory (empty initially)
-  const memoryPath = join(bootstrapDir, WORKSPACE_FILES.MEMORY);
+  const memoryPath = join(workspaceDir, WORKSPACE_FILES.MEMORY);
   if (!existsSync(memoryPath)) {
     const memoryContent = `# MEMORY.md - Long-Term Memory
 
@@ -329,7 +328,7 @@ _Review and update this periodically from daily memory files._
   }
 
   // CONTEXT.md - Current context
-  const contextPath = join(bootstrapDir, WORKSPACE_FILES.CONTEXT);
+  const contextPath = join(workspaceDir, WORKSPACE_FILES.CONTEXT);
   if (!existsSync(contextPath)) {
     const contextContent = `# CONTEXT.md - Current Focus
 
@@ -351,7 +350,7 @@ _Review and update this periodically from daily memory files._
   }
 
   // SKILLS.md - Skills index (auto-maintained)
-  const skillsPath = join(bootstrapDir, WORKSPACE_FILES.SKILLS);
+  const skillsPath = join(workspaceDir, WORKSPACE_FILES.SKILLS);
   if (!existsSync(skillsPath)) {
     const skillsContent = `# SKILLS.md - Active Skills
 
