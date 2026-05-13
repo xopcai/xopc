@@ -10,15 +10,17 @@ import { useParams } from 'react-router-dom';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 
 import { ExtensionIframeHost } from './extension-iframe-host';
-import { useUiExtensions } from './extension-provider';
+import { extensionShellUiReachable, useExtensions } from './extension-provider';
 
 export function ExtensionPage() {
   const { extensionId, pageId } = useParams<{ extensionId: string; pageId?: string }>();
-  const uiExtensions = useUiExtensions();
+  const extensions = useExtensions();
   const setPageHeader = usePageHeaderStore((s) => s.setPageHeader);
   const clearPageHeader = usePageHeaderStore((s) => s.clearPageHeader);
 
-  const extension = extensionId ? uiExtensions.find((ext) => ext.id === extensionId) : undefined;
+  const extension = extensionId
+    ? extensions.find((ext) => ext.id === extensionId && extensionShellUiReachable(ext))
+    : undefined;
   const pages = extension?.ui?.contributions?.pages;
   const page =
     extensionId && pages?.length
