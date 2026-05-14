@@ -54,7 +54,7 @@ export function useSkillsPage() {
 
   const mprovRaw = searchParams.get(MARKETPLACE_PROVIDER_PARAM);
   const urlMarketProvider =
-    mprovRaw === 'store' || mprovRaw === 'skillhub' ? (mprovRaw as 'store' | 'skillhub') : null;
+    mprovRaw === 'store' || mprovRaw === 'skillhub' ? mprovRaw : null;
 
   const [catalog, setCatalog] = useState<SkillCatalogEntry[]>([]);
   const [loading, setLoading] = useState(false);
