@@ -1,9 +1,6 @@
 import { Command } from 'commander';
-import { createLogger } from '../../../utils/logger.js';
-import { getContextWithOpts } from '../../index.js';
 import { spawn, execSync } from 'child_process';
-
-const _log = createLogger('GatewayLogsCommand');
+import { getContextWithOpts } from '../../index.js';
 
 /**
  * Create logs subcommand

@@ -1,11 +1,15 @@
 import { Command } from 'commander';
 import { existsSync } from 'fs';
 import { writeTextAtomic } from '../../infra/write-file-atomic.js';
-import { loadConfig } from '../../config/index.js';
-import { createLogger } from '../../utils/logger.js';
 import { register, formatExamples, type CLIContext } from '../registry.js';
 
-const log = createLogger('ConfigCommand');
+async function loadConfigDeps() {
+  const [{ loadConfig }, { createLogger }] = await Promise.all([
+    import('../../config/index.js'),
+    import('../../utils/logger.js'),
+  ]);
+  return { loadConfig, log: createLogger('ConfigCommand') };
+}
 
 function getNestedValue(obj: any, path: string): any {
   return path.split('.').reduce((current: any, key: string) => {
@@ -48,7 +52,8 @@ function createConfigCommand(ctx: CLIContext): Command {
   cmd
     .command('get <path>')
     .description('Get a config value by dot path')
-    .action((path: string) => {
+    .action(async (path: string) => {
+      const { loadConfig, log } = await loadConfigDeps();
       if (!existsSync(ctx.configPath)) {
         log.error('Config file not found. Run: xopc onboard');
         process.exit(1);
@@ -69,6 +74,7 @@ function createConfigCommand(ctx: CLIContext): Command {
     .command('set <path> <value>')
     .description('Set a config value by dot path')
     .action(async (path: string, value: string) => {
+      const { loadConfig, log } = await loadConfigDeps();
       if (!existsSync(ctx.configPath)) {
         log.error('Config file not found. Run: xopc onboard');
         process.exit(1);
@@ -93,6 +99,7 @@ function createConfigCommand(ctx: CLIContext): Command {
     .command('unset <path>')
     .description('Remove a config value by dot path')
     .action(async (path: string) => {
+      const { loadConfig, log } = await loadConfigDeps();
       if (!existsSync(ctx.configPath)) {
         log.error('Config file not found. Run: xopc onboard');
         process.exit(1);
@@ -118,14 +125,15 @@ function createConfigCommand(ctx: CLIContext): Command {
   cmd
     .command('show')
     .description('Show full configuration (sensitive values masked)')
-    .action(() => {
+    .action(async () => {
+      const { loadConfig, log } = await loadConfigDeps();
       if (!existsSync(ctx.configPath)) {
         log.warn('No config file found. Run: xopc onboard');
         return;
       }
 
       const config = loadConfig(ctx.configPath);
-      
+
       const maskedConfig = JSON.stringify(config, (key, value) => {
         if (key === 'api_key' || key === 'token') {
           return value ? '********' : value;
@@ -142,6 +150,7 @@ function createConfigCommand(ctx: CLIContext): Command {
     .option('--generate', 'Generate a new token')
     .option('--show', 'Show the current token (unmasked)')
     .action(async (options) => {
+      const { loadConfig, log } = await loadConfigDeps();
       if (!existsSync(ctx.configPath)) {
         log.error('Config file not found. Run: xopc onboard');
         process.exit(1);

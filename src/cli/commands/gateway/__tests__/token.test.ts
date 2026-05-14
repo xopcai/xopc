@@ -28,6 +28,20 @@ vi.mock('../../index.js', () => ({
   })),
 }));
 
+// Logger config reads HOME at module load. Since the action dynamic-imports
+// logger.js after process.env.HOME='/root' is set above, real init would try
+// to mkdir /root/.xopc/logs and fail. Stub the surface the action uses.
+vi.mock('../../../../utils/logger.js', () => ({
+  createLogger: () => ({
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn(),
+    trace: vi.fn(),
+    fatal: vi.fn(),
+  }),
+}));
+
 describe('Gateway Token Command', () => {
   let consoleLogSpy: ReturnType<typeof vi.spyOn>;
   let consoleErrorSpy: ReturnType<typeof vi.spyOn>;

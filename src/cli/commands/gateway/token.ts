@@ -1,11 +1,7 @@
 import { Command } from 'commander';
 import crypto from 'crypto';
-import { loadConfig, saveConfig } from '../../../config/index.js';
 import { resolveConfigPath } from '../../../config/paths.js';
-import { createLogger } from '../../../utils/logger.js';
 import { getContextWithOpts } from '../../index.js';
-
-const log = createLogger('GatewayTokenCommand');
 
 /**
  * Create the token subcommand for managing gateway authentication token.
@@ -18,6 +14,11 @@ export function createTokenCommand(): Command {
     .action(async (options) => {
       const ctx = getContextWithOpts();
       const configPath = ctx.configPath || resolveConfigPath();
+      const [{ loadConfig, saveConfig }, { createLogger }] = await Promise.all([
+        import('../../../config/index.js'),
+        import('../../../utils/logger.js'),
+      ]);
+      const log = createLogger('GatewayTokenCommand');
 
       try {
         const config = loadConfig(configPath);
