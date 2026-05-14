@@ -43,6 +43,7 @@ import { validateSessionId } from './parity/session-id.js';
 import { readSessionsJsonFile, withSessionsJsonLock } from './parity/sessions-json-file.js';
 import type { XopcSessionDiskEntry } from './parity/xopc-session-disk-entry.js';
 import {
+  persistMergedTranscriptRows,
   readTranscriptRowsFromFile,
   rowsToLlmMessages,
   writeTranscriptJsonl,
@@ -670,7 +671,7 @@ export class SessionStore {
     const abs = this.transcriptPathForEntry(entry, keySessionsDir);
     const llm = rowsToLlmMessages(rows);
     const now = Date.now();
-    await writeTranscriptJsonl({
+    await persistMergedTranscriptRows({
       absPath: abs,
       sessionId: entry.sessionId,
       cwd: process.cwd(),

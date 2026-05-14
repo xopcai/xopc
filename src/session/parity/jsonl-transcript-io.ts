@@ -1,14 +1,19 @@
 import { randomUUID } from 'node:crypto';
+import { existsSync } from 'node:fs';
+import path from 'node:path';
 
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import {
   CURRENT_SESSION_VERSION,
   type CompactionEntry,
   type CustomEntry,
+  type SessionEntry,
   type SessionMessageEntry,
+  SessionManager,
 } from '@earendil-works/pi-coding-agent';
 
 import { loadEntriesFromFile } from './load-jsonl-entries.js';
+import { withTranscriptFileLock } from './transcript-file-lock.js';
 
 import { writeTextAtomic } from '../../infra/write-file-atomic.js';
 import type { TranscriptCompactionRecord } from '../transcript-format.js';
@@ -85,10 +90,19 @@ function agentMessageToEntry(
   };
 }
 
-/**
- * Serialize transcript rows to a pi-coding-agent JSONL file (linear chain).
- */
-export async function writeTranscriptJsonl(params: {
+function transcriptRowsStrictPrefix(prev: TranscriptStoredRow[], merged: TranscriptStoredRow[]): boolean {
+  if (merged.length < prev.length) {
+    return false;
+  }
+  for (let i = 0; i < prev.length; i++) {
+    if (JSON.stringify(prev[i]) !== JSON.stringify(merged[i])) {
+      return false;
+    }
+  }
+  return true;
+}
+
+async function writeTranscriptJsonlUnlocked(params: {
   absPath: string;
   sessionId: string;
   cwd: string;
@@ -129,6 +143,106 @@ export async function writeTranscriptJsonl(params: {
 
   const body = `${lines.join('\n')}\n`;
   await writeTextAtomic(params.absPath, body);
+}
+
+/**
+ * Map the current session branch to the same {@link TranscriptStoredRow} projection as
+ * {@link readTranscriptRowsFromFile} (messages + xopc context custom rows only).
+ */
+function branchPathToTranscriptRows(branch: SessionEntry[]): TranscriptStoredRow[] {
+  const rows: TranscriptStoredRow[] = [];
+  for (const e of branch) {
+    if (e.type === 'message' && 'message' in e && e.message) {
+      rows.push(e.message as AgentMessage);
+      continue;
+    }
+    if (e.type === 'custom') {
+      const ctx = customEntryToContextRow(e as CustomEntry);
+      if (ctx) {
+        rows.push(ctx);
+      }
+    }
+  }
+  return rows;
+}
+
+/**
+ * Persist the in-memory {@link SessionManager} graph with an atomic rewrite of the JSONL file.
+ * Ensures durability even when pi would otherwise defer `_persist` until the first assistant message.
+ */
+export async function writeAtomicSessionManagerSnapshot(
+  sessionManager: SessionManager,
+  absPath: string,
+): Promise<void> {
+  const header = sessionManager.getHeader();
+  if (!header || header.type !== 'session') {
+    throw new Error('SessionManager: missing session header for snapshot');
+  }
+  const entries = sessionManager.getEntries();
+  const body = `${JSON.stringify(header)}\n${entries.map((e) => JSON.stringify(e)).join('\n')}\n`;
+  await writeTextAtomic(absPath, body);
+}
+
+/**
+ * Serialize transcript rows to a pi-coding-agent JSONL file (linear chain).
+ * Always rewrites the file; guarded by a cross-process transcript lock.
+ */
+export async function writeTranscriptJsonl(params: {
+  absPath: string;
+  sessionId: string;
+  cwd: string;
+  rows: TranscriptStoredRow[];
+  appendCompaction?: TranscriptCompactionRecord;
+}): Promise<void> {
+  await withTranscriptFileLock(params.absPath, async () => {
+    await writeTranscriptJsonlUnlocked(params);
+  });
+}
+
+/**
+ * Persist merged transcript rows with append optimization (strict prefix → tail append).
+ * Intended for hot paths that already merged prior rows with new LLM state.
+ */
+export async function persistMergedTranscriptRows(params: {
+  absPath: string;
+  sessionId: string;
+  cwd: string;
+  rows: TranscriptStoredRow[];
+  appendCompaction?: TranscriptCompactionRecord;
+}): Promise<void> {
+  await withTranscriptFileLock(params.absPath, async () => {
+    const prev = existsSync(params.absPath) ? await readTranscriptRowsFromFile(params.absPath) : [];
+    if (
+      params.appendCompaction ||
+      params.rows.length <= prev.length ||
+      !transcriptRowsStrictPrefix(prev, params.rows)
+    ) {
+      await writeTranscriptJsonlUnlocked(params);
+      return;
+    }
+    const sessionDir = path.dirname(params.absPath);
+    const sm = SessionManager.open(params.absPath, sessionDir, params.cwd);
+    const branchRows = branchPathToTranscriptRows(sm.getBranch());
+    if (JSON.stringify(branchRows) !== JSON.stringify(prev)) {
+      await writeTranscriptJsonlUnlocked(params);
+      return;
+    }
+    const tail = params.rows.slice(prev.length);
+    for (const row of tail) {
+      if (isTranscriptContextEntry(row)) {
+        sm.appendCustomEntry(XOPC_CONTEXT_CUSTOM_TYPE, {
+          kind: 'context',
+          id: row.id,
+          text: row.text,
+          data: row.data,
+          createdAt: row.createdAt,
+        });
+      } else {
+        sm.appendMessage(row as Parameters<SessionManager['appendMessage']>[0]);
+      }
+    }
+    await writeAtomicSessionManagerSnapshot(sm, params.absPath);
+  });
 }
 
 function customEntryToContextRow(entry: CustomEntry): XopcTranscriptContextEntry | null {
