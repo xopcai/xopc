@@ -1,7 +1,14 @@
 import type { Hono } from 'hono';
 
 import { commandRegistry } from '../../../chat-commands/index.js';
+import type { SkillsMarketplaceProvider } from '../../../agent/skills/skills-marketplace.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
+
+function parseMarketplaceProviderQuery(raw: string | undefined): SkillsMarketplaceProvider | undefined {
+  const v = raw?.trim().toLowerCase();
+  if (v === 'store' || v === 'skillhub') return v;
+  return undefined;
+}
 
 export function registerCommandsSkillsRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const { service } = deps;
@@ -101,14 +108,18 @@ export function registerCommandsSkillsRoutes(authenticated: Hono, deps: Authenti
     const sort =
       sortRaw === 'newest' || sortRaw === 'downloads' ? sortRaw : undefined;
     const category = c.req.query('category')?.trim() ?? '';
+    const provider = parseMarketplaceProviderQuery(c.req.query('provider'));
     try {
-      const payload = await service.fetchSkillsMarketplaceCatalog({
-        q: q || undefined,
-        page,
-        pageSize,
-        sort,
-        category: category || undefined,
-      });
+      const payload = await service.fetchSkillsMarketplaceCatalog(
+        {
+          q: q || undefined,
+          page,
+          pageSize,
+          sort,
+          category: category || undefined,
+        },
+        provider,
+      );
       return c.json({ ok: true, payload });
     } catch (err) {
       return c.json(
@@ -124,8 +135,9 @@ export function registerCommandsSkillsRoutes(authenticated: Hono, deps: Authenti
   });
 
   authenticated.get('/api/skills/marketplace/categories', async (c) => {
+    const provider = parseMarketplaceProviderQuery(c.req.query('provider'));
     try {
-      const payload = await service.fetchSkillsMarketplaceCategories();
+      const payload = await service.fetchSkillsMarketplaceCategories(provider);
       return c.json({ ok: true, payload });
     } catch (err) {
       return c.json(
@@ -147,7 +159,8 @@ export function registerCommandsSkillsRoutes(authenticated: Hono, deps: Authenti
       return c.json({ ok: false, error: 'Invalid package name' }, 400);
     }
     try {
-      const payload = await service.fetchSkillsMarketplacePackageDetail(pkgName);
+      const provider = parseMarketplaceProviderQuery(c.req.query('provider'));
+      const payload = await service.fetchSkillsMarketplacePackageDetail(pkgName, provider);
       return c.json({ ok: true, payload });
     } catch (err) {
       return c.json(
@@ -158,7 +171,7 @@ export function registerCommandsSkillsRoutes(authenticated: Hono, deps: Authenti
   });
 
   authenticated.post('/api/skills/marketplace/install', async (c) => {
-    let body: { name?: unknown; version?: unknown; overwrite?: unknown };
+    let body: { name?: unknown; version?: unknown; overwrite?: unknown; provider?: unknown };
     try {
       body = (await c.req.json()) as typeof body;
     } catch {
@@ -170,11 +183,14 @@ export function registerCommandsSkillsRoutes(authenticated: Hono, deps: Authenti
       body.overwrite === true ||
       body.overwrite === 'true' ||
       body.overwrite === '1';
+    const provider = parseMarketplaceProviderQuery(
+      typeof body.provider === 'string' ? body.provider : undefined,
+    );
     if (!name) {
       return c.json({ ok: false, error: 'Expected { name: string, version?: string, overwrite?: boolean }' }, 400);
     }
     try {
-      const payload = await service.installSkillFromMarketplace({ name, version, overwrite });
+      const payload = await service.installSkillFromMarketplace({ name, version, overwrite, provider });
       return c.json({ ok: true, payload });
     } catch (err) {
       return c.json(

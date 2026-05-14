@@ -88,7 +88,8 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
     mpCategories,
     mpCategoriesError,
     mpCategoriesLoading,
-    marketplaceProviderId,
+    marketBrowseProvider,
+    setMarketBrowseProvider,
     builtinTabStats,
     userTabStats,
     detailEnabled,
@@ -222,9 +223,6 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
                 onClick={() => setMainTab('marketplace')}
               >
                 {sk.tabMarketplace}
-                {marketplaceProviderId ? (
-                  <span className="font-normal text-fg-muted">({marketplaceProviderId})</span>
-                ) : null}
               </button>
               <button
                 type="button"
@@ -314,23 +312,50 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
                 </DropdownMenu.Root>
               ) : null}
               {mainTab === 'marketplace' ? (
-                <DropdownMenu.Root>
-                  <DropdownMenu.Trigger asChild>
-                    <button
-                      type="button"
-                      className={cn(
-                        'inline-flex h-9 min-h-9 min-w-[9rem] shrink-0 items-center gap-1.5 rounded-lg border border-edge bg-surface-panel px-2.5 text-xs font-medium text-fg shadow-surface',
-                        interaction.transition,
-                        interaction.focusRingPanel,
-                      )}
-                    >
-                      <Funnel className="size-3.5 text-fg-muted" strokeWidth={1.75} aria-hidden />
-                      <span>
-                        {marketSort === 'newest' ? sk.marketplaceSortNewest : sk.marketplaceSortDownloads}
-                      </span>
-                      <ChevronDown className="size-3.5 text-fg-subtle" strokeWidth={1.75} aria-hidden />
-                    </button>
-                  </DropdownMenu.Trigger>
+                <>
+                  <div
+                    className="inline-flex h-9 shrink-0 rounded-lg border border-edge bg-surface-panel p-0.5 shadow-surface"
+                    role="group"
+                    aria-label={sk.marketplaceBrowseSwitchAria}
+                  >
+                    {(['skillhub', 'store'] as const).map((id) => {
+                      const selected = marketBrowseProvider === id;
+                      return (
+                        <button
+                          key={id}
+                          type="button"
+                          className={cn(
+                            'rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors',
+                            interaction.focusRingPanel,
+                            selected
+                              ? 'bg-fg text-surface-panel dark:bg-fg dark:text-surface-base'
+                              : 'text-fg-muted hover:text-fg',
+                          )}
+                          aria-pressed={selected}
+                          onClick={() => setMarketBrowseProvider(id)}
+                        >
+                          {id === 'skillhub' ? sk.marketplaceBrowseSkillhub : sk.marketplaceBrowseStore}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <DropdownMenu.Root>
+                    <DropdownMenu.Trigger asChild>
+                      <button
+                        type="button"
+                        className={cn(
+                          'inline-flex h-9 min-h-9 min-w-[9rem] shrink-0 items-center gap-1.5 rounded-lg border border-edge bg-surface-panel px-2.5 text-xs font-medium text-fg shadow-surface',
+                          interaction.transition,
+                          interaction.focusRingPanel,
+                        )}
+                      >
+                        <Funnel className="size-3.5 text-fg-muted" strokeWidth={1.75} aria-hidden />
+                        <span>
+                          {marketSort === 'newest' ? sk.marketplaceSortNewest : sk.marketplaceSortDownloads}
+                        </span>
+                        <ChevronDown className="size-3.5 text-fg-subtle" strokeWidth={1.75} aria-hidden />
+                      </button>
+                    </DropdownMenu.Trigger>
                   <DropdownMenu.Portal>
                     <DropdownMenu.Content
                       className="z-50 min-w-[10rem] rounded-xl border border-edge bg-surface-panel p-1 shadow-popover dark:border-edge"
@@ -358,6 +383,7 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
                     </DropdownMenu.Content>
                   </DropdownMenu.Portal>
                 </DropdownMenu.Root>
+                </>
               ) : null}
               {mainTab === 'builtin' ? (
                 <div className="h-9 min-w-[9rem] shrink-0" aria-hidden />
@@ -461,7 +487,7 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
                       const installed = isSkillInstalledByName(row.id);
                       const busy = installingMarketName === row.id;
                       const skillhubPageUrl =
-                        marketplaceProviderId === 'skillhub' ? skillHubPublicSkillPageUrl(row.id) : null;
+                        marketBrowseProvider === 'skillhub' ? skillHubPublicSkillPageUrl(row.id) : null;
                       return (
                         <article
                           key={row.id}
@@ -897,7 +923,7 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
                     disabled={!detailTitle || installingMarketName === detailTitle}
                     onClick={() => {
                       if (!detailTitle) return;
-                      void onMarketInstall(detailTitle);
+                      void onMarketInstall(detailTitle, { useDetailProvider: true });
                     }}
                   >
                     {installingMarketName === detailTitle
