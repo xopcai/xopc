@@ -72,8 +72,8 @@
 
   /* Main column under AppShell <main> — docs/design/ui-design-system.md §13.1 Web */
   --max-width-app-main: 72rem;
-  /** Chat column (message list + composer); wider than app main for long threads. */
-  --max-width-chat: 80rem;
+  /** Chat column (message list + composer); aligned with app main width. */
+  --max-width-chat: var(--max-width-app-main);
 }
 
 /* Dark — Apple-style elevated grays + rim light via borders (see design spec §2.3) */

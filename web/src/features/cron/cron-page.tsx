@@ -49,6 +49,7 @@ import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 import { useThemeStore } from '@/stores/theme-store';
+import { isElectronCronDisplayWakeAvailable } from '@/lib/electron-env';
 
 export function CronPage() {
   const language = useLocaleStore((s) => s.language);
@@ -69,8 +70,10 @@ export function CronPage() {
   const [historyStatusFilter, setHistoryStatusFilter] = useState('');
   const [keepAwake, setKeepAwake] = useState(false);
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
+  const wakeModeRef = useRef<'none' | 'electron' | 'navigator'>('none');
   const keepAwakeRef = useRef(keepAwake);
   const wakeSupported = typeof navigator !== 'undefined' && 'wakeLock' in navigator;
+  const keepAwakeFeatureAvailable = wakeSupported || isElectronCronDisplayWakeAvailable();
 
   const [channels, setChannels] = useState<ChannelStatus[]>([]);
   const [availableModels, setAvailableModels] = useState<{ id: string; name: string; provider: string }[]>([]);
@@ -236,21 +239,46 @@ export function CronPage() {
   }, [hasToken, mainTab, loadRunHistoryOnly]);
 
   const releaseWakeLock = useCallback(async () => {
+    if (wakeModeRef.current === 'electron') {
+      try {
+        await window.electronAPI?.cron?.setDisplaySleepPrevented?.(false);
+      } catch {
+        /* ignore */
+      }
+      wakeModeRef.current = 'none';
+      return;
+    }
     try {
       await wakeLockRef.current?.release();
     } catch {
       /* ignore */
     }
     wakeLockRef.current = null;
+    wakeModeRef.current = 'none';
   }, []);
 
   const acquireWakeLock = useCallback(async () => {
+    const electronWake =
+      typeof window !== 'undefined' ? window.electronAPI?.cron?.setDisplaySleepPrevented : undefined;
+    if (electronWake) {
+      try {
+        await electronWake(true);
+        wakeModeRef.current = 'electron';
+        return;
+      } catch {
+        setError(c.wakeLockUnavailable);
+        setKeepAwake(false);
+        return;
+      }
+    }
     if (!wakeSupported) return;
     try {
       const sentinel = await navigator.wakeLock.request('screen');
       wakeLockRef.current = sentinel;
+      wakeModeRef.current = 'navigator';
       sentinel.addEventListener('release', () => {
         wakeLockRef.current = null;
+        wakeModeRef.current = 'none';
       });
     } catch {
       setError(c.wakeLockUnavailable);
@@ -744,7 +772,7 @@ export function CronPage() {
             onTemplateCategoryFilterChange={setTemplateCategoryFilter}
             onSelectTemplate={applyCronTemplate}
             keepAwake={keepAwake}
-            wakeSupported={wakeSupported}
+            wakeSupported={keepAwakeFeatureAvailable}
             onWakeUnsupportedClick={() => setError(c.wakeLockUnavailable)}
             onKeepAwakeToggle={() => setKeepAwake((v) => !v)}
             absorbCardClickJobIdRef={absorbCardClickJobIdRef}
@@ -774,7 +802,7 @@ export function CronPage() {
             sortedSystemJobs={sortedSystemJobs}
             heartbeat={heartbeatFromConfig}
             keepAwake={keepAwake}
-            wakeSupported={wakeSupported}
+            wakeSupported={keepAwakeFeatureAvailable}
             onWakeUnsupportedClick={() => setError(c.wakeLockUnavailable)}
             onKeepAwakeToggle={() => setKeepAwake((v) => !v)}
             absorbCardClickJobIdRef={absorbCardClickJobIdRef}

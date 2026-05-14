@@ -99,6 +99,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
       return () => ipcRenderer.removeListener('menu:toggle-palette', handler);
     },
   },
+  cron: {
+    setDisplaySleepPrevented: (enabled: boolean) =>
+      ipcRenderer.invoke('cron:set-prevent-display-sleep', enabled) as Promise<void>,
+  },
   system: {
     getBehavior: () => ipcRenderer.invoke('system-settings:get-behavior'),
     setBehavior: (patch: {
