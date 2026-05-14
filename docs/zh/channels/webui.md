@@ -22,8 +22,8 @@ xopc gateway --port 18790
 
 ## 侧栏：按通道过滤会话
 
-侧栏会话列表可显示 **网页** / **Telegram** / **微信** / **飞书** / **钉钉** 会话：
+侧栏会话列表可显示 **网页** / **Telegram** / **微信** / **飞书** 会话：
 
 - **网页** — 前端在 `GET /api/sessions` 返回结果上做客户端过滤。
-- **其它通道** — `GET /api/sessions?channel=<id>`（如 `telegram`、`weixin`、`feishu`、`dingtalk`），匹配 `SessionMetadata.sourceChannel`。
+- **其它通道** — `GET /api/sessions?channel=<id>`（如 `telegram`、`weixin`、`feishu`），匹配 `SessionMetadata.sourceChannel`。
 

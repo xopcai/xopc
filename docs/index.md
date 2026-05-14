@@ -27,7 +27,7 @@ features:
     details: Backend hooks plus optional gateway Web UI in sandboxed iframes (manifest ui) via @xopcai/extension-ui-sdk
     link: /extensions
   - title: 🌐 Multi-Channel
-    details: Bundled Telegram, WeChat (Weixin), Feishu/Lark, DingTalk, gateway web chat and console; optional extension UI panels; more channels via extensions.
+    details: Bundled Telegram, WeChat (Weixin), Feishu/Lark, gateway web chat and console; optional extension UI panels; more channels via extensions.
     link: /channels
   - title: 💻 Local First
     details: Run locally with full control—built for OPCs who own their stack

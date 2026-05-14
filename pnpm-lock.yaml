@@ -79,9 +79,6 @@ importers:
       cron-parser:
         specifier: ^5.5.0
         version: 5.5.0
-      dingtalk-stream:
-        specifier: ^2.1.4
-        version: 2.1.5
       dotenv:
         specifier: ^17.4.2
         version: 17.4.2
@@ -246,25 +243,6 @@ importers:
       '@xopcai/xopc':
         specifier: workspace:*
         version: link:../..
-    devDependencies:
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
-
-  extensions/dingtalk:
-    dependencies:
-      '@xopcai/xopc':
-        specifier: workspace:*
-        version: link:../..
-      dingtalk-stream:
-        specifier: ^2.1.4
-        version: 2.1.5
-      qrcode-terminal:
-        specifier: ^0.12.0
-        version: 0.12.0
-      zod:
-        specifier: ^4.3.6
-        version: 4.3.6
     devDependencies:
       typescript:
         specifier: ^5.9.3
@@ -4384,9 +4362,6 @@ packages:
 
   dijkstrajs@1.0.3:
     resolution: {integrity: sha512-qiSlmBq9+BCdCA/L46dw8Uy93mloxsPSbwnm5yrKn2vMPiy8KyAskTF6zuV/j5BMsmOGZDPs7KjU+mjb670kfA==}
-
-  dingtalk-stream@2.1.5:
-    resolution: {integrity: sha512-6H3tSc/mE6hMj4RBB5ntkI4ycC498RobmtMxfLS8eBTRPjBZlhUdDYEHA0asOoTLSzC2PHqupr4D4HVoaU7bRQ==}
 
   dir-compare@4.2.0:
     resolution: {integrity: sha512-2xMCmOoMrdQIPHdsTawECdNPwlVFB9zGcz3kuhmBO6U3oU+UQjsue0i8ayLKpgBcm+hcXPMVSGUN9d+pvJ6+VQ==}
@@ -8721,7 +8696,7 @@ snapshots:
 
   '@larksuiteoapi/node-sdk@1.62.0':
     dependencies:
-      axios: 1.16.0(debug@4.4.3)
+      axios: 1.16.0
       lodash.identity: 3.0.0
       lodash.merge: 4.6.2
       lodash.pickby: 4.6.0
@@ -10450,7 +10425,7 @@ snapshots:
       '@vueuse/shared': 12.8.2(typescript@6.0.3)
       vue: 3.5.33(typescript@6.0.3)
     optionalDependencies:
-      axios: 1.16.0(debug@4.4.3)
+      axios: 1.16.0
       focus-trap: 7.8.0
       qrcode: 1.5.4
     transitivePeerDependencies:
@@ -10601,9 +10576,9 @@ snapshots:
 
   atomic-sleep@1.0.0: {}
 
-  axios@1.16.0(debug@4.4.3):
+  axios@1.16.0:
     dependencies:
-      follow-redirects: 1.16.0(debug@4.4.3)
+      follow-redirects: 1.16.0
       form-data: 4.0.5
       proxy-from-env: 2.1.0
     transitivePeerDependencies:
@@ -10947,16 +10922,6 @@ snapshots:
   diff@8.0.4: {}
 
   dijkstrajs@1.0.3: {}
-
-  dingtalk-stream@2.1.5:
-    dependencies:
-      axios: 1.16.0(debug@4.4.3)
-      debug: 4.4.3
-      ws: 8.20.1
-    transitivePeerDependencies:
-      - bufferutil
-      - supports-color
-      - utf-8-validate
 
   dir-compare@4.2.0:
     dependencies:
@@ -11501,9 +11466,7 @@ snapshots:
     dependencies:
       tabbable: 6.4.0
 
-  follow-redirects@1.16.0(debug@4.4.3):
-    optionalDependencies:
-      debug: 4.4.3
+  follow-redirects@1.16.0: {}
 
   form-data@4.0.5:
     dependencies:

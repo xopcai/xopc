@@ -429,7 +429,7 @@ HTTP API 网关配置。
 
 #### 频道连接延后
 
-相关字段在 **`gateway`** 下：`channelConnectDeferMode`、`channelConnectDeferIds`、`channelConnectDeferSkipIds`。使用 **`xopc gateway`**（`GatewayServer` 启动路径）时，部分外连型通道（Telegram、微信、飞书、钉钉）可将 **`ChannelPlugin.start()`** 延后到 **HTTP 端口已成功监听之后**，让控制台与 REST 先可用。是否延后由通道插件 **`meta.deferConnectUntilAfterListen`** 声明；可用下列配置覆盖。
+相关字段在 **`gateway`** 下：`channelConnectDeferMode`、`channelConnectDeferIds`、`channelConnectDeferSkipIds`。使用 **`xopc gateway`**（`GatewayServer` 启动路径）时，部分外连型通道（Telegram、微信、飞书）可将 **`ChannelPlugin.start()`** 延后到 **HTTP 端口已成功监听之后**，让控制台与 REST 先可用。是否延后由通道插件 **`meta.deferConnectUntilAfterListen`** 声明；可用下列配置覆盖。
 
 | 字段 | 类型 | 默认值 | 说明 |
 |-------|------|---------|------|

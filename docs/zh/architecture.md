@@ -50,7 +50,7 @@
 | **CLI** | `agent`、`tui`、`gateway`、`config`、`onboard`、扩展管理等命令行入口。 |
 | **Agent** | 运行模型、工具、记忆、技能与单次对话的会话逻辑。 |
 | **Gateway** | HTTP 服务与静态 **Web 控制台**（聊天、设置、日志、频道、cron 等）。 |
-| **Channels** | 内置机器人（Telegram、微信、飞书/Lark、钉钉）与网关网页对话共用一套出站管道。 |
+| **Channels** | 内置机器人（Telegram、微信、飞书/Lark）与网关网页对话共用一套出站管道。 |
 | **Extensions** | 可选增强（工具、钩子、频道、控制台面板），来自工作区、`~/.xopc/extensions/` 或与安装包捆绑。 |
 | **Config** | 单一 JSON（默认 `~/.xopc/xopc.json`）与环境变量中的密钥。 |
 

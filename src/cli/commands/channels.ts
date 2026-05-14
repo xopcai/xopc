@@ -48,7 +48,7 @@ function createChannelsCommand(ctx: CLIContext): Command {
       ]),
     );
 
-  const PAIRING_CHANNELS = new Set<PairingCliChannel>(['telegram', 'feishu', 'dingtalk', 'weixin']);
+  const PAIRING_CHANNELS = new Set<PairingCliChannel>(['telegram', 'feishu', 'weixin']);
 
   cmd
     .command('login')
@@ -124,14 +124,14 @@ function createChannelsCommand(ctx: CLIContext): Command {
     .description('Approve DM pairing requests (updates channel allowFrom credential files)')
     .addCommand(
       new Command('approve')
-        .description('Approve a pairing code shown to the user in Telegram / Feishu / DingTalk / Weixin DMs')
-        .requiredOption('--channel <id>', 'telegram | feishu | dingtalk | weixin')
+        .description('Approve a pairing code shown to the user in Telegram / Feishu / Weixin DMs')
+        .requiredOption('--channel <id>', 'telegram | feishu | weixin')
         .option('--account <id>', 'Bot account id from config', 'default')
         .argument('<code>', 'Pairing code from the user message')
         .action((code: string, options: { channel?: string; account?: string }) => {
           const ch = (options.channel ?? '').trim().toLowerCase() as PairingCliChannel;
           if (!PAIRING_CHANNELS.has(ch)) {
-            console.error('Invalid --channel. Use: telegram, feishu, dingtalk, or weixin.');
+            console.error('Invalid --channel. Use: telegram, feishu, or weixin.');
             process.exitCode = 1;
             return;
           }

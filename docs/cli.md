@@ -116,7 +116,7 @@ xopc onboard --channels
 
 ## channels
 
-Messaging channel **login** (QR / credentials flows) and **DM pairing approval** on the machine where you run the CLI (same host as the gateway when approving Feishu / DingTalk / Weixin pairing codes).
+Messaging channel **login** (QR / credentials flows) and **DM pairing approval** on the machine where you run the CLI (same host as the gateway when approving Feishu / Weixin pairing codes).
 
 ### channels login
 
@@ -124,7 +124,7 @@ Messaging channel **login** (QR / credentials flows) and **DM pairing approval**
 xopc channels login
 xopc channels login --channel weixin
 xopc channels login --channel feishu
-xopc channels login --channel dingtalk
+xopc channels login --channel feishu
 xopc channels login --account <account-id>
 ```
 
@@ -132,16 +132,16 @@ See channel docs under [Channels](./channels/index.md) for what each integration
 
 ### channels pairing approve
 
-When **`dmPolicy`** is **`pairing`** for Telegram, Feishu, DingTalk, or Weixin, unknown users get a **one-time pairing code** in chat. The bot owner approves it on the host:
+When **`dmPolicy`** is **`pairing`** for Telegram, Feishu, or Weixin, unknown users get a **one-time pairing code** in chat. The bot owner approves it on the host:
 
 ```bash
 xopc channels pairing approve --channel telegram --account default AB12CD34
 xopc channels pairing approve --channel feishu --account default AB12CD34
-xopc channels pairing approve --channel dingtalk AB12CD34
+xopc channels pairing approve --channel feishu AB12CD34
 xopc channels pairing approve --channel weixin AB12CD34
 ```
 
-- **`--channel`**: `telegram` \| `feishu` \| `dingtalk` \| `weixin` (required).
+- **`--channel`**: `telegram` \| `feishu` \| `weixin` (required).
 - **`--account`**: config account id (default: `default` when omitted).
 - **`<code>`**: 8-character code from the user’s DM.
 

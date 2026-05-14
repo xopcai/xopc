@@ -37,31 +37,16 @@ export function feishuRoutingAccountIds(fs: { appId?: string; appSecret?: string
   return [];
 }
 
-export function dingtalkRoutingAccountIds(dt: {
-  clientId?: string;
-  clientSecret?: string;
-  accounts?: Record<string, unknown>;
-}): string[] {
-  const keys = Object.keys(dt.accounts ?? {});
-  if (keys.length > 0) return [...keys].sort();
-  if (typeof dt.clientId === 'string' && dt.clientId.trim() && typeof dt.clientSecret === 'string' && dt.clientSecret.trim()) {
-    return ['default'];
-  }
-  return [];
-}
-
 export function extractChannelAgentRoutes(
   bindings: BindingRuleWire[],
   telegramAccountIds: string[],
   weixinAccountIds: string[],
   feishuAccountIds: string[],
-  dingtalkAccountIds: string[],
   defaultAgentId: string,
 ): ChannelAgentRoutesState {
   const telegram: Record<string, string> = {};
   const weixin: Record<string, string> = {};
   const feishu: Record<string, string> = {};
-  const dingtalk: Record<string, string> = {};
 
   for (const id of telegramAccountIds) {
     const rule = bindings.find(
@@ -92,17 +77,7 @@ export function extractChannelAgentRoutes(
     feishu[id] = (rule?.agentId ?? defaultAgentId).trim().toLowerCase();
   }
 
-  for (const id of dingtalkAccountIds) {
-    const rule = bindings.find(
-      (r) =>
-        normAcc(r.match?.channel) === 'dingtalk' &&
-        normAcc(r.match?.accountId) === normAcc(id) &&
-        isSimpleAccountOnlyRule(r),
-    );
-    dingtalk[id] = (rule?.agentId ?? defaultAgentId).trim().toLowerCase();
-  }
-
-  return { telegram, weixin, feishu, dingtalk };
+  return { telegram, weixin, feishu };
 }
 
 export function mergeChannelAgentBindings(
@@ -111,13 +86,11 @@ export function mergeChannelAgentBindings(
   telegramAccountIds: string[],
   weixinAccountIds: string[],
   feishuAccountIds: string[],
-  dingtalkAccountIds: string[],
   defaultAgentId: string,
 ): BindingRuleWire[] {
   const tgAcc = new Set(telegramAccountIds.map(normAcc));
   const wxAcc = new Set(weixinAccountIds.map(normAcc));
   const fsAcc = new Set(feishuAccountIds.map(normAcc));
-  const dtAcc = new Set(dingtalkAccountIds.map(normAcc));
 
   const filtered = previous.filter((r) => {
     if (r.id?.startsWith('ui:route:account:')) return false;
@@ -128,7 +101,6 @@ export function mergeChannelAgentBindings(
     if (ch === 'telegram' && tgAcc.has(acc)) return false;
     if (ch === 'weixin' && wxAcc.has(acc)) return false;
     if (ch === 'feishu' && fsAcc.has(acc)) return false;
-    if (ch === 'dingtalk' && dtAcc.has(acc)) return false;
     return true;
   });
 
@@ -164,17 +136,6 @@ export function mergeChannelAgentBindings(
       priority: 45,
       enabled: true,
       match: { channel: 'feishu', accountId: acc },
-    });
-  }
-
-  for (const acc of dingtalkAccountIds) {
-    const agentId = (routes.dingtalk[acc] ?? routes.dingtalk[normAcc(acc)] ?? defaultAgentId).trim().toLowerCase();
-    added.push({
-      id: `ui:route:account:dingtalk:${acc}`,
-      agentId,
-      priority: 45,
-      enabled: true,
-      match: { channel: 'dingtalk', accountId: acc },
     });
   }
 

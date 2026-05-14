@@ -21,7 +21,7 @@ export function approveChannelPairingFromCli(params: {
   if (params.channel === 'weixin') {
     pairingPath = resolveWeixinPairingPath(accountId);
     allowPath = resolveWeixinAllowFromPath(accountId);
-  } else if (params.channel === 'telegram' || params.channel === 'feishu' || params.channel === 'dingtalk') {
+  } else if (params.channel === 'telegram' || params.channel === 'feishu') {
     pairingPath = resolveStandardPairingPath(params.channel, accountId);
     allowPath = resolveStandardAllowFromPath(params.channel, accountId);
   } else {

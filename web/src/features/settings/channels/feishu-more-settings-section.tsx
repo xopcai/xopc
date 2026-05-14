@@ -50,7 +50,7 @@ export function FeishuMoreSettingsSection({
   copyFeishuWebhookConfig: () => Promise<void>;
   updateFeishu: (patch: Partial<ChannelsSettingsState['feishu']>) => void;
   updateChannelAgentRoute: (
-    channel: 'telegram' | 'weixin' | 'feishu' | 'dingtalk',
+    channel: 'telegram' | 'weixin' | 'feishu',
     accountId: string,
     agentId: string,
   ) => void;

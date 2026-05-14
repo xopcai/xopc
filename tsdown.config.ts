@@ -16,8 +16,6 @@ export default defineConfig({
     './extensions/weixin/src/**/*.ts',
     './extensions/feishu/src/**/*.ts',
     '!./extensions/feishu/src/**/__tests__/**/*.ts',
-    './extensions/dingtalk/src/**/*.ts',
-    '!./extensions/dingtalk/src/**/__tests__/**/*.ts',
     './extensions/openai/src/**/*.ts',
     '!./extensions/openai/src/**/__tests__/**/*.ts',
     './extensions/dashscope/src/**/*.ts',

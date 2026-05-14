@@ -23,7 +23,6 @@ export type MessageSource =
   | 'telegram'
   | 'weixin'
   | 'feishu'
-  | 'dingtalk'
   | 'webui'
   | 'cli'
   | 'api'

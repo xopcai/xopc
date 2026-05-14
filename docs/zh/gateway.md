@@ -230,7 +230,7 @@ xopc gateway --force
 1. **阶段一**：所有通道执行 **`init()`**；未延后列表中的通道立刻 **`start()`**。会话、cron、heartbeat、智能体服务与原先一致。若启用了延后策略，**出站消费循环**会在阶段二之后再启动，避免与尚未 `start` 的通道抢跑。
 2. **阶段二**：在 HTTP **`listen`** 回调中，对延后通道执行 **`start()`**，再 **重放持久化出站队列**，最后启动出站处理器。
 
-内置消息通道（**Telegram、微信、飞书、钉钉**）在插件 meta 中声明延后；可通过 **`gateway.channelConnectDeferMode`** / **`channelConnectDeferIds`** / **`channelConnectDeferSkipIds`** 覆盖，详见 [配置说明 — 频道连接延后](configuration.md#频道连接延后)。
+内置消息通道（**Telegram、微信、飞书**）在插件 meta 中声明延后；可通过 **`gateway.channelConnectDeferMode`** / **`channelConnectDeferIds`** / **`channelConnectDeferSkipIds`** 覆盖，详见 [配置说明 — 频道连接延后](configuration.md#频道连接延后)。
 
 启动时会输出结构化 **`info`** 日志：`phase: "gateway.channel_startup"`，`stage: "phase1"` 或 `"phase2"`，含各阶段毫秒数、`channelConnectDeferMode`、`channelConnectDeferSource` 与 `deferredChannelIds`。
 
