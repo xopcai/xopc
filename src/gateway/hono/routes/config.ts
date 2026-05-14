@@ -115,12 +115,63 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
           if (!config.agents.defaults.browser) {
             config.agents.defaults.browser = { enabled: false, headless: true };
           }
-          const target = config.agents.defaults.browser;
+          const target = config.agents.defaults.browser as Record<string, unknown>;
           if (br.enabled !== undefined) {
-            target.enabled = Boolean(br.enabled);
+            if (br.enabled === null) delete target.enabled;
+            else target.enabled = Boolean(br.enabled);
           }
           if (br.headless !== undefined) {
-            target.headless = Boolean(br.headless);
+            if (br.headless === null) delete target.headless;
+            else target.headless = Boolean(br.headless);
+          }
+          if (br.allowPrivateUrls !== undefined) {
+            if (br.allowPrivateUrls === null) delete target.allowPrivateUrls;
+            else target.allowPrivateUrls = Boolean(br.allowPrivateUrls);
+          }
+          if (br.commandTimeout !== undefined) {
+            if (br.commandTimeout === null) {
+              delete target.commandTimeout;
+            } else if (typeof br.commandTimeout === 'number' && Number.isFinite(br.commandTimeout)) {
+              const n = Math.floor(br.commandTimeout);
+              if (n >= 5 && n <= 900) {
+                target.commandTimeout = n;
+              }
+            }
+          }
+          if (br.cloudProvider !== undefined) {
+            if (br.cloudProvider === null || br.cloudProvider === '') {
+              delete target.cloudProvider;
+            } else if (br.cloudProvider === 'browserbase' || br.cloudProvider === 'browser-use') {
+              target.cloudProvider = br.cloudProvider;
+            }
+          }
+          if (br.cdpUrl !== undefined) {
+            if (br.cdpUrl === null || br.cdpUrl === '') {
+              delete target.cdpUrl;
+            } else if (typeof br.cdpUrl === 'string') {
+              target.cdpUrl = br.cdpUrl.trim();
+            }
+          }
+          if (br.dialogPolicy !== undefined) {
+            if (br.dialogPolicy === null) {
+              delete target.dialogPolicy;
+            } else if (
+              br.dialogPolicy === 'must_respond' ||
+              br.dialogPolicy === 'auto_dismiss' ||
+              br.dialogPolicy === 'auto_accept'
+            ) {
+              target.dialogPolicy = br.dialogPolicy;
+            }
+          }
+          if (br.dialogTimeoutSeconds !== undefined) {
+            if (br.dialogTimeoutSeconds === null) {
+              delete target.dialogTimeoutSeconds;
+            } else if (typeof br.dialogTimeoutSeconds === 'number' && Number.isFinite(br.dialogTimeoutSeconds)) {
+              const n = Math.floor(br.dialogTimeoutSeconds);
+              if (n >= 1 && n <= 86_400) {
+                target.dialogTimeoutSeconds = n;
+              }
+            }
           }
         }
       }
