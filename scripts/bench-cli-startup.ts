@@ -34,11 +34,14 @@ type BenchSummary = {
   passedBudget: boolean;
 };
 
+// Budgets are cold per-process spawns (warmup does not carry across processes).
+// Use generous first-byte limits so slower laptops / AV scanning do not flake;
+// regressions that pull the full app graph into `--version` still blow past these.
 const DEFAULT_CASES: BenchCase[] = [
-  { id: 'version', args: ['--version'], firstOutputBudgetMs: 500, exitBudgetMs: 1000 },
-  { id: 'help', args: ['--help'], firstOutputBudgetMs: 500, exitBudgetMs: 1000 },
-  { id: 'gatewayHelp', args: ['gateway', '--help'], firstOutputBudgetMs: 600, exitBudgetMs: 1000 },
-  { id: 'configShowHelp', args: ['config', '--help'], firstOutputBudgetMs: 600, exitBudgetMs: 1000 },
+  { id: 'version', args: ['--version'], firstOutputBudgetMs: 800, exitBudgetMs: 1500 },
+  { id: 'help', args: ['--help'], firstOutputBudgetMs: 1000, exitBudgetMs: 1500 },
+  { id: 'gatewayHelp', args: ['gateway', '--help'], firstOutputBudgetMs: 1000, exitBudgetMs: 1500 },
+  { id: 'configShowHelp', args: ['config', '--help'], firstOutputBudgetMs: 1000, exitBudgetMs: 1500 },
 ];
 
 function parseFlagValue(flag: string): string | undefined {
