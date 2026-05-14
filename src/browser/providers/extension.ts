@@ -148,12 +148,58 @@ export class ExtensionBrowserProvider {
       });
     });
 
+    const wssEmitter = this.wss as import('node:events').EventEmitter;
+
     await new Promise<void>((resolve, reject) => {
-      this.server!.listen(this.config.port, this.config.host, () => {
+      let settled = false;
+
+      const disposeFailedStart = async () => {
+        if (this.wss) {
+          try {
+            (this.wss as { close: (cb?: () => void) => void }).close();
+          } catch {
+            /* */
+          }
+          this.wss = null;
+        }
+        if (this.server) {
+          await new Promise<void>((r) => {
+            this.server!.close(() => r());
+          });
+          this.server = null;
+        }
+      };
+
+      const onStartError = (err: Error) => {
+        if (settled) return;
+        settled = true;
+        this.server!.removeListener('error', onStartError);
+        wssEmitter.removeListener('error', onStartError);
+        void disposeFailedStart().then(() => reject(err));
+      };
+
+      const onListening = () => {
+        if (settled) return;
+        settled = true;
+        this.server!.removeListener('error', onStartError);
+        wssEmitter.removeListener('error', onStartError);
+
         log.info({ port: this.config.port, host: this.config.host }, 'Extension WS server started');
+
+        const onRuntimeError = (err: Error) => {
+          log.error({ err }, 'Extension WS bridge runtime error');
+        };
+        this.server!.on('error', onRuntimeError);
+        wssEmitter.on('error', onRuntimeError);
+
         resolve();
-      });
-      this.server!.on('error', reject);
+      };
+
+      // `listen` failures may surface on `http.Server` or on `ws` WebSocketServer; only
+      // attaching `server.on('error')` leaves `error` on `wss` unhandled (process crash).
+      this.server!.on('error', onStartError);
+      wssEmitter.on('error', onStartError);
+      this.server!.listen(this.config.port, this.config.host, onListening);
     });
   }
 

@@ -565,17 +565,32 @@ export class GatewayService {
     const browser = (this.config.agents?.defaults as Record<string, unknown> | undefined)?.browser as Record<string, unknown> | undefined;
     if (browser?.backend !== 'extension') return;
 
+    const ext = browser.extension as Record<string, unknown> | undefined;
+    const port = typeof ext?.port === 'number' ? ext.port : 19820;
+    const host = typeof ext?.host === 'string' && ext.host ? ext.host : '127.0.0.1';
+
     try {
       const { acquireExtensionBrowserServer } = await import('../browser/providers/extension-ws-acquire.js');
-      const ext = browser.extension as Record<string, unknown> | undefined;
-      const port = typeof ext?.port === 'number' ? ext.port : 19820;
-      const host = typeof ext?.host === 'string' && ext.host ? ext.host : '127.0.0.1';
       const { provider, release } = await acquireExtensionBrowserServer({ port, host });
       this.browserExtensionProvider = provider;
       this.browserExtensionRelease = release;
       log.info({ port, host }, 'Browser extension WS server started');
     } catch (err) {
-      log.error({ err }, 'Failed to start browser extension WS server');
+      const code = err && typeof err === 'object' && 'code' in err ? (err as { code: unknown }).code : undefined;
+      log.error(
+        {
+          err,
+          phase: 'browser_extension_ws',
+          ...(code === 'EADDRINUSE'
+            ? {
+                bindPort: port,
+                bindHost: host,
+                hint: 'Another process holds this port (default 19820). Stop it or set agents.defaults.browser.extension.port.',
+              }
+            : {}),
+        },
+        `Failed to start browser extension WS server: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   }
 
