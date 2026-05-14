@@ -5,7 +5,7 @@ import {
   checkPostRedirectUrl,
   containsApiKeyPattern,
   isAlwaysBlockedUrl,
-} from '../browser/url-policy.js';
+} from '../url-policy.js';
 
 describe('assertBrowserUrlAllowed', () => {
   it('allows public https URL', () => {

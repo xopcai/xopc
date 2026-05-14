@@ -99,6 +99,8 @@ export class GatewayService {
   private channelManager: ChannelManager;
   private cronService: CronService;
   private extensionLoader: ExtensionLoader | null = null;
+  private browserExtensionProvider: import('../browser/providers/extension.js').ExtensionBrowserProvider | null = null;
+  private browserExtensionRelease: (() => Promise<void>) | null = null;
   private heartbeatService: HeartbeatService;
   private sessionManager: SessionManager;
   private running = false;
@@ -425,6 +427,9 @@ export class GatewayService {
 
     this.heartbeatService.start(heartbeatRunnerConfigFromConfig(this.config));
 
+    // Start browser extension WS server if configured
+    await this.startBrowserExtensionServerIfNeeded();
+
     // Start agent service (runs in background)
     this.agentService.start().catch((err) => {
       log.error({ err }, 'Agent service error');
@@ -528,6 +533,13 @@ export class GatewayService {
     // Stop heartbeat service
     this.heartbeatService.stop();
 
+    // Stop browser extension WS server (shared acquire/release with BrowserManager)
+    if (this.browserExtensionRelease) {
+      await this.browserExtensionRelease();
+      this.browserExtensionRelease = null;
+    }
+    this.browserExtensionProvider = null;
+
     registerClarifyBridge(null);
     this.clarifyBridge.dispose();
     this.agentService.stop();
@@ -546,6 +558,25 @@ export class GatewayService {
     await this.cronService.stop();
 
     log.debug('Gateway service stopped');
+  }
+
+  /** Start the browser extension WS server when backend is 'extension'. */
+  private async startBrowserExtensionServerIfNeeded(): Promise<void> {
+    const browser = (this.config.agents?.defaults as Record<string, unknown> | undefined)?.browser as Record<string, unknown> | undefined;
+    if (browser?.backend !== 'extension') return;
+
+    try {
+      const { acquireExtensionBrowserServer } = await import('../browser/providers/extension-ws-acquire.js');
+      const ext = browser.extension as Record<string, unknown> | undefined;
+      const port = typeof ext?.port === 'number' ? ext.port : 19820;
+      const host = typeof ext?.host === 'string' && ext.host ? ext.host : '127.0.0.1';
+      const { provider, release } = await acquireExtensionBrowserServer({ port, host });
+      this.browserExtensionProvider = provider;
+      this.browserExtensionRelease = release;
+      log.info({ port, host }, 'Browser extension WS server started');
+    } catch (err) {
+      log.error({ err }, 'Failed to start browser extension WS server');
+    }
   }
 
   /**

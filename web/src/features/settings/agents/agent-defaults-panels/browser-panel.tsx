@@ -1,13 +1,77 @@
-import { Globe } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import { Globe, Plug, PlugZap, Unplug } from 'lucide-react';
 
+import { apiFetch } from '@/lib/fetch';
+import { apiUrl } from '@/lib/url';
 import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/settings/settings-form-section';
+import type { MessageBundle } from '@/i18n/messages';
 
 import { AgentDefaultsField } from '../agent-defaults-field';
 import type { AgentDefaultsPanelProps } from '../agent-defaults-panel-props';
 import { inputClassName, selectClassName } from '../defaults-field-styles';
 
+type ExtensionStatusMessages = Pick<
+  MessageBundle['agentSettings'],
+  'browserExtensionConnected' | 'browserExtensionWaiting' | 'browserExtensionServerOff'
+>;
+
+type ExtensionStatus = 'connected' | 'waiting' | 'off' | 'unknown';
+
+/** Poll gateway for extension connection status via `/api/browser/extension-status`. */
+function useExtensionStatus(enabled: boolean): ExtensionStatus {
+  const [status, setStatus] = useState<ExtensionStatus>(enabled ? 'unknown' : 'off');
+
+  const checkStatus = useCallback(async () => {
+    if (!enabled) {
+      setStatus('off');
+      return;
+    }
+    try {
+      const res = await apiFetch(apiUrl('/api/browser/extension-status'), { signal: AbortSignal.timeout(3000) });
+      if (!res.ok) {
+        setStatus('off');
+        return;
+      }
+      const data = (await res.json()) as { running?: boolean; connected?: boolean };
+      if (data.running) {
+        setStatus(data.connected ? 'connected' : 'waiting');
+      } else {
+        setStatus('off');
+      }
+    } catch {
+      setStatus('off');
+    }
+  }, [enabled]);
+
+  useEffect(() => {
+    checkStatus();
+    const interval = setInterval(checkStatus, 5000);
+    return () => clearInterval(interval);
+  }, [checkStatus]);
+
+  return status;
+}
+
+function ExtensionStatusBadge({ status, messages }: { status: ExtensionStatus; messages: ExtensionStatusMessages }) {
+  const config: Record<ExtensionStatus, { icon: typeof Plug; color: string; label: string }> = {
+    connected: { icon: PlugZap, color: 'text-green-500', label: messages.browserExtensionConnected },
+    waiting: { icon: Plug, color: 'text-amber-500', label: messages.browserExtensionWaiting },
+    off: { icon: Unplug, color: 'text-fg-muted', label: messages.browserExtensionServerOff },
+    unknown: { icon: Unplug, color: 'text-fg-muted', label: '…' },
+  };
+  const { icon: Icon, color, label } = config[status];
+  return (
+    <div className={`flex items-center gap-1.5 text-xs ${color}`}>
+      <Icon className="size-3.5" />
+      <span>{label}</span>
+    </div>
+  );
+}
+
 export function AgentDefaultsBrowserPanel(props: AgentDefaultsPanelProps) {
   const { a, form, update } = props;
+
+  const extensionStatus = useExtensionStatus(form.browserBackend === 'extension');
 
   return (
     <div className="flex flex-col gap-5">
@@ -62,20 +126,21 @@ export function AgentDefaultsBrowserPanel(props: AgentDefaultsPanelProps) {
               />
             </AgentDefaultsField>
           </div>
+
+          {/* Backend mode selector */}
           <div className="grid gap-5 sm:grid-cols-2">
-            <AgentDefaultsField label={a.label.browserCloudProvider} description={a.desc.browserCloudProvider}>
+            <AgentDefaultsField label={a.label.browserBackend} description={a.desc.browserBackend}>
               <select
                 className={selectClassName()}
-                value={form.browserCloudProvider}
+                value={form.browserBackend}
                 onChange={(e) =>
-                  update({
-                    browserCloudProvider: e.target.value as 'local' | 'browserbase' | 'browser-use',
-                  })
+                  update({ browserBackend: e.target.value as 'local' | 'cdp' | 'cloud' | 'extension' })
                 }
               >
-                <option value="local">{a.browserCloudProviderLocal}</option>
-                <option value="browserbase">{a.browserCloudProviderBrowserbase}</option>
-                <option value="browser-use">{a.browserCloudProviderBrowserUse}</option>
+                <option value="local">{a.browserBackendLocal}</option>
+                <option value="cdp">{a.browserBackendCdp}</option>
+                <option value="cloud">{a.browserBackendCloud}</option>
+                <option value="extension">{a.browserBackendExtension}</option>
               </select>
             </AgentDefaultsField>
             <AgentDefaultsField label={a.label.browserDialogPolicy} description={a.desc.browserDialogPolicy}>
@@ -97,17 +162,50 @@ export function AgentDefaultsBrowserPanel(props: AgentDefaultsPanelProps) {
               </select>
             </AgentDefaultsField>
           </div>
+
+          {/* Conditional fields based on backend mode */}
+          {form.browserBackend === 'cloud' && (
+            <div className="grid gap-5 sm:grid-cols-2">
+              <AgentDefaultsField label={a.label.browserCloudProvider} description={a.desc.browserCloudProvider}>
+                <select
+                  className={selectClassName()}
+                  value={form.browserCloudProvider}
+                  onChange={(e) =>
+                    update({
+                      browserCloudProvider: e.target.value as 'local' | 'browserbase' | 'browser-use',
+                    })
+                  }
+                >
+                  <option value="browserbase">{a.browserCloudProviderBrowserbase}</option>
+                  <option value="browser-use">{a.browserCloudProviderBrowserUse}</option>
+                </select>
+              </AgentDefaultsField>
+            </div>
+          )}
+
+          {form.browserBackend === 'cdp' && (
+            <div className="grid gap-5 sm:grid-cols-2">
+              <AgentDefaultsField label={a.label.browserCdpUrl} description={a.desc.browserCdpUrl}>
+                <input
+                  type="text"
+                  className={inputClassName()}
+                  value={form.browserCdpUrl}
+                  placeholder="ws://localhost:9222"
+                  onChange={(e) => update({ browserCdpUrl: e.target.value })}
+                  autoComplete="off"
+                />
+              </AgentDefaultsField>
+            </div>
+          )}
+
+          {form.browserBackend === 'extension' && (
+            <div className="flex items-center gap-3 rounded-md border border-edge bg-surface-raised px-4 py-3">
+              <ExtensionStatusBadge status={extensionStatus} messages={a} />
+              <span className="text-xs text-fg-muted">ws://127.0.0.1:19820/browser-ext</span>
+            </div>
+          )}
+
           <div className="grid gap-5 sm:grid-cols-2">
-            <AgentDefaultsField label={a.label.browserCdpUrl} description={a.desc.browserCdpUrl}>
-              <input
-                type="text"
-                className={inputClassName()}
-                value={form.browserCdpUrl}
-                placeholder="ws://localhost:9222"
-                onChange={(e) => update({ browserCdpUrl: e.target.value })}
-                autoComplete="off"
-              />
-            </AgentDefaultsField>
             <AgentDefaultsField label={a.label.browserDialogTimeout} description={a.desc.browserDialogTimeout}>
               <input
                 type="number"
