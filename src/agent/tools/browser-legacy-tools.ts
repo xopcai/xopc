@@ -2,14 +2,14 @@ import type { Static } from '@sinclair/typebox';
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 import type { Locator, Page } from 'playwright-core';
 
-import type { Config } from '../../../config/schema.js';
-import { describeImages } from '../../image/understanding/runtime.js';
-import { buildImageToolTextResult } from '../../image/image-helpers.js';
-import { runWithImageModelFallback } from '../../image/image-model-fallback.js';
-import { resolveImageModelConfigForTool } from '../image-tool.js';
-import { checkWebsiteBlocklist } from '../url-safety.js';
-import type { BrowserManager } from './manager.js';
-import { resolveBrowserCommandTimeoutMs } from './browser-command-timeout.js';
+import type { Config } from '../../config/schema.js';
+import { describeImages } from '../image/understanding/runtime.js';
+import { buildImageToolTextResult } from '../image/image-helpers.js';
+import { runWithImageModelFallback } from '../image/image-model-fallback.js';
+import { resolveImageModelConfigForTool } from './image-tool.js';
+import { checkWebsiteBlocklist } from './url-safety.js';
+import type { BrowserManager } from '../../browser/manager.js';
+import { resolveBrowserCommandTimeoutMs } from '../../browser/browser-command-timeout.js';
 import {
   BrowserBackSchema,
   BrowserCdpSchema,
@@ -25,10 +25,10 @@ import {
   BrowserSnapshotSchema,
   BrowserTypeSchema,
   BrowserVisionSchema,
-} from './schemas.js';
-import { assertBrowserUrlAllowed, checkPostRedirectUrl, containsApiKeyPattern } from './url-policy.js';
-import type { CdpSupervisor } from './cdp-supervisor.js';
-import { truncateSnapshotAtBoundary } from './snapshot-helpers.js';
+} from '../../browser/schemas.js';
+import { assertBrowserUrlAllowed, checkPostRedirectUrl, containsApiKeyPattern } from '../../browser/url-policy.js';
+import type { CdpSupervisor } from '../../browser/cdp-supervisor.js';
+import { truncateSnapshotAtBoundary } from '../../browser/snapshot-helpers.js';
 
 const DEFAULT_SNAPSHOT_MAX = 30_000;
 /** Compact snapshot attached to navigate results — keep short to avoid bloating tool output. */
@@ -111,7 +111,7 @@ export function createBrowserTools(deps: CreateBrowserToolsDeps): AgentTool[] {
     name: 'browser_navigate',
     label: '🌐 Browser Navigate',
     description:
-      'Navigate the headless browser to a URL. The page persists for this chat session.\n' +
+      'Navigate the browser to a URL. The page persists for this chat session.\n' +
       'Call `browser_snapshot` after navigation to inspect the UI. Only http(s) public URLs; private IPs and localhost are blocked.',
     parameters: BrowserNavigateSchema,
 

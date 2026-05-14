@@ -198,21 +198,33 @@ export const AgentDefaultsSchema = z.object({
     })
     .optional(),
   /**
-   * Headless Playwright tools (`browser_*`). Opt-in. Install browsers once: `npx playwright install chromium`.
+   * Browser capability via unified `browser_use` tool. Enabled by default (set `enabled: false` to disable).
+   * Install browsers once: `npx playwright install chromium`.
    */
   browser: z
     .object({
       enabled: z.boolean().optional(),
-      /** Default true when browser tools are enabled. */
+      /** Run browser in headless mode (default: false — visible window). */
       headless: z.boolean().optional(),
       /** When true, skip private-IP blocking for browser navigation (cloud metadata endpoints are always blocked). */
       allowPrivateUrls: z.boolean().optional(),
       /** Browser command timeout in seconds (default: 30). */
       commandTimeout: z.number().min(5).optional(),
+      /** Browser backend mode: 'local' (Playwright), 'cdp', 'cloud', or 'extension' (Chrome Extension bridge). */
+      backend: z.enum(['local', 'cdp', 'cloud', 'extension']).optional(),
       /** Cloud browser backend: 'local' (default Playwright), 'browserbase', or 'browser-use'. */
       cloudProvider: z.enum(['local', 'browserbase', 'browser-use']).optional(),
       /** Direct CDP WebSocket endpoint URL (bypasses cloud provider). */
       cdpUrl: z.string().optional(),
+      /** Chrome Extension bridge settings (only used when backend = 'extension'). */
+      extension: z.object({
+        /** WebSocket server port. Default: 19820. */
+        port: z.number().min(1024).max(65535).optional(),
+        /** Host to bind. Default: 127.0.0.1. */
+        host: z.string().optional(),
+        /** Timeout waiting for extension connection (ms). Default: 30000. */
+        connectionTimeout: z.number().min(1000).optional(),
+      }).optional(),
       /** JS dialog handling policy: 'must_respond' (agent must act), 'auto_dismiss', or 'auto_accept'. */
       dialogPolicy: z.enum(['must_respond', 'auto_dismiss', 'auto_accept']).optional(),
       /** Dialog auto-dismiss/accept timeout in seconds (default: 300). */

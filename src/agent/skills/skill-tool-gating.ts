@@ -7,22 +7,7 @@ import type { Skill, SkillToolConditions } from './types.js';
 /** Maps logical toolset ids to xopc {@link AgentTool} names (all must be present for the toolset to count as available). */
 export const SKILL_TOOLSET_TOOLS: Record<string, readonly string[]> = {
   web: ['web_search', 'web_fetch', 'web_extract'],
-  browser: [
-    'browser_navigate',
-    'browser_snapshot',
-    'browser_click',
-    'browser_type',
-    'browser_scroll',
-    'browser_screenshot',
-    'browser_back',
-    'browser_press',
-    'browser_console',
-    'browser_get_images',
-    'browser_close',
-    'browser_vision',
-    'browser_dialog',
-    'browser_cdp',
-  ],
+  browser: ['browser_use'],
   terminal: ['shell'],
   vision: ['image'],
   image_gen: ['image_generate'],

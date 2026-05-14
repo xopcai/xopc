@@ -1,8 +1,9 @@
 import type { Browser, BrowserContext, Page } from 'playwright-core';
 
-import { createLogger } from '../../../utils/logger.js';
+import { createLogger } from '../utils/logger.js';
 
-import type { BrowserBackend, CloudBrowserProvider, CloudBrowserProviderConfig } from './providers/types.js';
+import type { BrowserBackend, CloudBrowserProvider, CloudBrowserProviderConfig, ExtensionConnectionConfig } from './providers/types.js';
+import type { ExtensionBrowserProvider } from './providers/extension.js';
 
 const log = createLogger('browser-manager');
 
@@ -25,6 +26,8 @@ export class BrowserManager {
   private browser: Browser | null = null;
   private context: BrowserContext | null = null;
   private cloudProvider: CloudBrowserProvider | null = null;
+  private extensionProvider: ExtensionBrowserProvider | null = null;
+  private extensionRelease: (() => Promise<void>) | null = null;
   private pages = new Map<string, { page: Page; lastUsed: number }>();
   private readonly options: BrowserManagerOptions;
   private activeBackendMode: BrowserBackend['mode'] | null = null;
@@ -49,10 +52,14 @@ export class BrowserManager {
     }
   }
 
-  async ensureBrowser(): Promise<BrowserContext> {
-    if (this.context) return this.context;
+  /**
+   * Ensure Playwright context or Chrome Extension provider is ready.
+   * Extension mode does not create a Playwright {@link BrowserContext}.
+   */
+  async ensureConnected(): Promise<void> {
+    if (this.context || this.extensionProvider) return;
 
-    const backend = this.options.getBackend?.() ?? { mode: 'local' as const, headless: true };
+    const backend = this.options.getBackend?.() ?? { mode: 'local' as const, headless: false };
 
     switch (backend.mode) {
       case 'cdp':
@@ -61,14 +68,25 @@ export class BrowserManager {
       case 'cloud':
         await this._connectViaCloud(backend.config);
         break;
+      case 'extension':
+        await this._connectViaExtension(backend.config);
+        break;
       case 'local':
       default:
-        await this._launchLocal(backend.mode === 'local' ? backend.headless : this.options.getHeadless() !== false);
+        await this._launchLocal(backend.mode === 'local' ? backend.headless : this.options.getHeadless() === true);
         break;
     }
 
     this.activeBackendMode = backend.mode;
-    return this.context!;
+  }
+
+  /** @deprecated Use {@link ensureConnected}. */
+  async ensureBrowser(): Promise<BrowserContext> {
+    await this.ensureConnected();
+    if (!this.context) {
+      throw new Error('ensureBrowser: no Playwright context (extension backend uses ensureConnected + registry bridge)');
+    }
+    return this.context;
   }
 
   private async _launchLocal(headless: boolean): Promise<void> {
@@ -119,7 +137,23 @@ export class BrowserManager {
     log.info({ mode: 'cloud', provider: config.type }, `Browser connected (${config.type})`);
   }
 
+  private async _connectViaExtension(config?: ExtensionConnectionConfig): Promise<void> {
+    const { acquireExtensionBrowserServer } = await import('./providers/extension-ws-acquire.js');
+    const { provider, release } = await acquireExtensionBrowserServer(config);
+    this.extensionProvider = provider;
+    this.extensionRelease = release;
+    log.info({ port: config?.port ?? 19820 }, 'Extension WS server ready, waiting for Chrome Extension...');
+    await provider.waitForConnection();
+    // Extension mode does not use Playwright — context stays null.
+    // The action registry dispatches directly via extensionProvider.sendCommand().
+    log.info({ mode: 'extension' }, 'Browser connected (Chrome Extension)');
+  }
+
   async getPage(taskId: string): Promise<Page> {
+    if (this.extensionProvider) {
+      throw new Error('BrowserManager.getPage is not used in Chrome Extension backend mode');
+    }
+
     this.evictIdlePages();
 
     const existing = this.pages.get(taskId);
@@ -136,18 +170,30 @@ export class BrowserManager {
       }
     }
 
-    const ctx = await this.ensureBrowser();
+    await this.ensureConnected();
+    const ctx = this.context;
+    if (!ctx) {
+      throw new Error('BrowserManager: Playwright context missing after ensureConnected');
+    }
     const page = await ctx.newPage();
     this.pages.set(taskId, { page, lastUsed: Date.now() });
     return page;
   }
 
   async closePage(taskId: string): Promise<void> {
+    if (this.extensionProvider) {
+      return;
+    }
     const entry = this.pages.get(taskId);
     if (entry) {
       await entry.page.close().catch(() => {});
       this.pages.delete(taskId);
     }
+  }
+
+  /** Get the extension provider (only available in extension mode). */
+  getExtensionProvider(): ExtensionBrowserProvider | null {
+    return this.extensionProvider;
   }
 
   async shutdown(): Promise<void> {
@@ -160,6 +206,12 @@ export class BrowserManager {
       await this.cloudProvider.disconnect().catch(() => {});
       this.cloudProvider = null;
     }
+
+    if (this.extensionRelease) {
+      await this.extensionRelease().catch(() => {});
+      this.extensionRelease = null;
+    }
+    this.extensionProvider = null;
 
     await this.context?.close().catch(() => {});
     await this.browser?.close().catch(() => {});

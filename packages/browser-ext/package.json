@@ -1,0 +1,19 @@
+{
+  "name": "@xopcai/browser-ext",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Chrome Extension bridge for xopc browser automation — connects to xopc via WebSocket, executes commands in real Chrome via CDP.",
+  "type": "module",
+  "scripts": {
+    "icons": "node scripts/render-icons.mjs",
+    "dev": "node scripts/render-icons.mjs && vite build --watch",
+    "build": "node scripts/render-icons.mjs && vite build",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@resvg/resvg-js": "^2.6.2",
+    "@types/chrome": "^0.0.287",
+    "typescript": "^5.9.3",
+    "vite": "^6.0.0"
+  }
+}
