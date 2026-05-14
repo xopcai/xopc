@@ -7,7 +7,9 @@ import { describeImages } from '../../image/understanding/runtime.js';
 import { buildImageToolTextResult } from '../../image/image-helpers.js';
 import { runWithImageModelFallback } from '../../image/image-model-fallback.js';
 import { resolveImageModelConfigForTool } from '../image-tool.js';
+import { checkWebsiteBlocklist } from '../url-safety.js';
 import type { BrowserManager } from './manager.js';
+import { resolveBrowserCommandTimeoutMs } from './browser-command-timeout.js';
 import {
   BrowserBackSchema,
   BrowserCdpSchema,
@@ -31,15 +33,18 @@ import { truncateSnapshotAtBoundary } from './snapshot-helpers.js';
 const DEFAULT_SNAPSHOT_MAX = 30_000;
 /** Compact snapshot attached to navigate results — keep short to avoid bloating tool output. */
 const AUTO_SNAPSHOT_MAX = 8_000;
-const NAV_TIMEOUT_MS = 30_000;
 const MAX_SCREENSHOT_BYTES = 6 * 1024 * 1024;
 
 export interface CreateBrowserToolsDeps {
   getManager: () => BrowserManager;
+  /** Page for the current task, with dialog supervision attached. */
+  getPageForTask: () => Promise<Page>;
   getTaskId: () => string;
   getConfig: () => Config | undefined;
-  /** Optional CDP Supervisor for dialog handling and raw CDP access. */
+  /** CDP supervisor for `browser_dialog` (per-session). */
   getSupervisor?: () => CdpSupervisor | undefined;
+  /** Clear per-session supervisor state when `browser_close` runs. */
+  notifyBrowserPageClosed?: (taskId: string) => void;
 }
 
 function resolveClickLocator(page: Page, params: Static<typeof BrowserClickSchema>): Locator {
@@ -83,10 +88,11 @@ async function ariaSnapshotFor(
   page: Page,
   selector: string | undefined,
   maxLength: number,
+  actionTimeoutMs: number,
 ): Promise<string> {
   const loc = selector?.trim() ? page.locator(selector.trim()).first() : page.locator('body');
-  await loc.waitFor({ state: 'attached', timeout: 15_000 });
-  let text = await loc.ariaSnapshot({ mode: 'ai', timeout: 15_000 });
+  await loc.waitFor({ state: 'attached', timeout: actionTimeoutMs });
+  let text = await loc.ariaSnapshot({ mode: 'ai', timeout: actionTimeoutMs });
   if (!text || !text.trim()) {
     text = '(empty snapshot)';
   }
@@ -98,7 +104,8 @@ async function ariaSnapshotFor(
 }
 
 export function createBrowserTools(deps: CreateBrowserToolsDeps): AgentTool[] {
-  const pageFor = () => deps.getManager().getPage(deps.getTaskId());
+  const pageFor = () => deps.getPageForTask();
+  const toMs = () => resolveBrowserCommandTimeoutMs(deps.getConfig());
 
   const navigate: any = {
     name: 'browser_navigate',
@@ -125,16 +132,24 @@ export function createBrowserTools(deps: CreateBrowserToolsDeps): AgentTool[] {
           details: { blocked: true },
         };
       }
+      const block = checkWebsiteBlocklist(p.url, cfg?.tools?.web?.blocklist);
+      if (block) {
+        return {
+          content: [{ type: 'text', text: block.message }],
+          details: { blocked: true, rule: block.rule },
+        };
+      }
       assertBrowserUrlAllowed(p.url, { allowPrivateUrls: allowPrivate });
 
       if (signal?.aborted) {
         throw new Error('aborted');
       }
       const page = await pageFor();
+      const navTimeout = toMs();
       const waitUntil = p.waitFor ?? 'domcontentloaded';
       await page.goto(p.url, {
         waitUntil,
-        timeout: NAV_TIMEOUT_MS,
+        timeout: navTimeout,
       });
       const title = await page.title();
       const finalUrl = page.url();
@@ -150,13 +165,21 @@ export function createBrowserTools(deps: CreateBrowserToolsDeps): AgentTool[] {
             details: { blocked: true, originalUrl: p.url, redirectedTo: finalUrl },
           };
         }
+        const redirectDomainBlock = checkWebsiteBlocklist(finalUrl, cfg?.tools?.web?.blocklist);
+        if (redirectDomainBlock) {
+          await page.goto('about:blank').catch(() => {});
+          return {
+            content: [{ type: 'text', text: redirectDomainBlock.message }],
+            details: { blocked: true, originalUrl: p.url, redirectedTo: finalUrl, rule: redirectDomainBlock.rule },
+          };
+        }
       }
 
       // Auto-snapshot after navigation so the agent can act immediately
       // without a separate browser_snapshot call (hermes-agent pattern).
       let snapshotText = '';
       try {
-        snapshotText = await ariaSnapshotFor(page, undefined, AUTO_SNAPSHOT_MAX);
+        snapshotText = await ariaSnapshotFor(page, undefined, AUTO_SNAPSHOT_MAX, toMs());
       } catch {
         // Non-fatal — navigation succeeded; snapshot is a bonus.
       }
@@ -187,8 +210,9 @@ export function createBrowserTools(deps: CreateBrowserToolsDeps): AgentTool[] {
       const page = await pageFor();
       const p = params as { selector?: string; maxLength?: number };
       const maxLength = p.maxLength ?? DEFAULT_SNAPSHOT_MAX;
+      const actionTimeout = toMs();
       try {
-        const text = await ariaSnapshotFor(page, p.selector, maxLength);
+        const text = await ariaSnapshotFor(page, p.selector, maxLength, actionTimeout);
         return {
           content: [{ type: 'text', text }],
           details: { length: text.length },
@@ -215,9 +239,10 @@ export function createBrowserTools(deps: CreateBrowserToolsDeps): AgentTool[] {
         throw new Error('aborted');
       }
       const page = await pageFor();
+      const actionTimeout = toMs();
       try {
         const loc = resolveClickLocator(page, params as any);
-        await loc.click({ timeout: 15_000 });
+        await loc.click({ timeout: actionTimeout });
         return {
           content: [{ type: 'text', text: 'Click succeeded.' }],
           details: { ok: true },
@@ -244,11 +269,12 @@ export function createBrowserTools(deps: CreateBrowserToolsDeps): AgentTool[] {
         throw new Error('aborted');
       }
       const page = await pageFor();
+      const actionTimeout = toMs();
       try {
         const p = params as { selector?: string; label?: string; text: string; pressEnter?: boolean };
         const loc = resolveTypeLocator(page, p);
-        await loc.clear({ timeout: 5000 }).catch(() => {});
-        await loc.fill(p.text, { timeout: 15_000 });
+        await loc.clear({ timeout: Math.min(5_000, actionTimeout) }).catch(() => {});
+        await loc.fill(p.text, { timeout: actionTimeout });
         if (p.pressEnter) {
           await page.keyboard.press('Enter');
         }
@@ -307,14 +333,15 @@ export function createBrowserTools(deps: CreateBrowserToolsDeps): AgentTool[] {
       const page = await pageFor();
       const cfg = deps.getConfig();
       let buf: Buffer;
+      const actionTimeout = toMs();
       try {
         const p = params as { selector?: string; description?: string };
         if (p.selector?.trim()) {
           const loc = page.locator(p.selector.trim()).first();
-          await loc.waitFor({ state: 'visible', timeout: 15_000 });
-          buf = await loc.screenshot({ type: 'png', timeout: 15_000 });
+          await loc.waitFor({ state: 'visible', timeout: actionTimeout });
+          buf = await loc.screenshot({ type: 'png', timeout: actionTimeout });
         } else {
-          buf = await page.screenshot({ type: 'png', fullPage: false, timeout: 15_000 });
+          buf = await page.screenshot({ type: 'png', fullPage: false, timeout: actionTimeout });
         }
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
@@ -402,8 +429,9 @@ export function createBrowserTools(deps: CreateBrowserToolsDeps): AgentTool[] {
       const page = await pageFor();
       const p = params as { waitFor?: 'domcontentloaded' | 'load' | 'networkidle' };
       const waitUntil = p.waitFor ?? 'domcontentloaded';
+      const navTimeout = toMs();
       try {
-        const response = await page.goBack({ waitUntil, timeout: NAV_TIMEOUT_MS });
+        const response = await page.goBack({ waitUntil, timeout: navTimeout });
         if (!response) {
           return {
             content: [{ type: 'text', text: 'No previous page in history.' }],
@@ -594,6 +622,7 @@ export function createBrowserTools(deps: CreateBrowserToolsDeps): AgentTool[] {
       }
       const taskId = deps.getTaskId();
       await deps.getManager().closePage(taskId);
+      deps.notifyBrowserPageClosed?.(taskId);
       return {
         content: [{ type: 'text', text: 'Browser page closed.' }],
         details: { ok: true },
@@ -631,13 +660,14 @@ export function createBrowserTools(deps: CreateBrowserToolsDeps): AgentTool[] {
       }
 
       let buf: Buffer;
+      const actionTimeout = toMs();
       try {
         if (p.selector?.trim()) {
           const loc = page.locator(p.selector.trim()).first();
-          await loc.waitFor({ state: 'visible', timeout: 15_000 });
-          buf = await loc.screenshot({ type: 'png', timeout: 15_000 });
+          await loc.waitFor({ state: 'visible', timeout: actionTimeout });
+          buf = await loc.screenshot({ type: 'png', timeout: actionTimeout });
         } else {
-          buf = await page.screenshot({ type: 'png', fullPage: false, timeout: 15_000 });
+          buf = await page.screenshot({ type: 'png', fullPage: false, timeout: actionTimeout });
         }
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);

@@ -9,6 +9,7 @@
 
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 import type { Model, Api } from '@earendil-works/pi-ai';
+import type { Page } from 'playwright-core';
 import type { Config } from '../../config/schema.js';
 import type { MessageBus } from '../../infra/bus/index.js';
 import {
@@ -41,7 +42,12 @@ import { parseSessionKey as parseRoutingSessionKey } from '../../routing/session
 import type { GatewayClarifyRequestFn } from './clarify-tool.js';
 import { createImageTool } from './image-tool.js';
 import { createImageGenerateTool } from './image-generate-tool.js';
-import { BrowserManager, createBrowserTools } from './browser/index.js';
+import {
+  BrowserManager,
+  CdpSupervisor,
+  createBrowserTools,
+  resolveBrowserBackendFromConfig,
+} from './browser/index.js';
 import { createDelegateTool } from './delegate-tool.js';
 import { buildSandboxToolMap, createExecuteCodeTool } from './execute-code-tool.js';
 import { createCronjobTool } from './cronjob-tool.js';
@@ -118,13 +124,43 @@ export interface CreateCoreToolsOptions {
 
 export class AgentToolsFactory {
   private browserManager: BrowserManager | null = null;
+  /** One dialog/console supervisor per chat session (browser tab). */
+  private readonly browserTaskSupervisors = new Map<string, CdpSupervisor>();
 
   constructor(private deps: ToolFactoryDeps) {}
+
+  private browserSupervisorForTask(taskId: string): CdpSupervisor {
+    let s = this.browserTaskSupervisors.get(taskId);
+    if (!s) {
+      const b = this.deps.getConfig?.()?.agents?.defaults?.browser;
+      const dialogPolicy =
+        b?.dialogPolicy === 'must_respond' || b?.dialogPolicy === 'auto_accept' || b?.dialogPolicy === 'auto_dismiss'
+          ? b.dialogPolicy
+          : 'auto_dismiss';
+      const dialogTimeoutSeconds =
+        typeof b?.dialogTimeoutSeconds === 'number' &&
+        Number.isFinite(b.dialogTimeoutSeconds) &&
+        b.dialogTimeoutSeconds >= 1
+          ? Math.floor(b.dialogTimeoutSeconds)
+          : 300;
+      s = new CdpSupervisor({ dialogPolicy, dialogTimeoutSeconds });
+      this.browserTaskSupervisors.set(taskId, s);
+    }
+    return s;
+  }
+
+  private async acquireBrowserPage(): Promise<Page> {
+    const taskId = this.deps.getCurrentContext()?.sessionKey ?? 'default';
+    const page = await this.ensureBrowserManager().getPage(taskId);
+    this.browserSupervisorForTask(taskId).attach(page);
+    return page;
+  }
 
   private ensureBrowserManager(): BrowserManager {
     if (!this.browserManager) {
       this.browserManager = new BrowserManager({
         getHeadless: () => this.deps.getConfig?.()?.agents?.defaults?.browser?.headless !== false,
+        getBackend: () => resolveBrowserBackendFromConfig(this.deps.getConfig?.()),
       });
     }
     return this.browserManager;
@@ -137,10 +173,12 @@ export class AgentToolsFactory {
     }
     await this.browserManager.shutdown();
     this.browserManager = null;
+    this.browserTaskSupervisors.clear();
   }
 
   /** Drop the tab for a session when its agent instance is removed. */
   async closeBrowserPageForSession(sessionKey: string): Promise<void> {
+    this.browserTaskSupervisors.delete(sessionKey);
     await this.browserManager?.closePage(sessionKey);
   }
 
@@ -271,8 +309,14 @@ export class AgentToolsFactory {
       ...(cfg?.agents?.defaults?.browser?.enabled === true
         ? createBrowserTools({
             getManager: () => this.ensureBrowserManager(),
+            getPageForTask: () => this.acquireBrowserPage(),
             getTaskId: () => this.deps.getCurrentContext()?.sessionKey ?? 'default',
             getConfig: () => this.deps.getConfig?.(),
+            getSupervisor: () =>
+              this.browserSupervisorForTask(this.deps.getCurrentContext()?.sessionKey ?? 'default'),
+            notifyBrowserPageClosed: (taskId) => {
+              this.browserTaskSupervisors.delete(taskId);
+            },
           })
         : []),
       ...(cfg?.agents?.defaults?.delegate?.enabled === true && primary

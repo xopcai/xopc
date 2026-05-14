@@ -72,10 +72,43 @@ export async function buildSafeWebConfigPayload(service: GatewayService) {
         thinkingDefault: config.agents?.defaults?.thinkingDefault,
         reasoningDefault: config.agents?.defaults?.reasoningDefault,
         verboseDefault: config.agents?.defaults?.verboseDefault,
-        browser: {
-          enabled: config.agents?.defaults?.browser?.enabled === true,
-          headless: config.agents?.defaults?.browser?.headless !== false,
-        },
+        browser: (() => {
+          const br = config.agents?.defaults?.browser;
+          if (!br || typeof br !== 'object') {
+            return {
+              enabled: false,
+              headless: true,
+              allowPrivateUrls: false,
+              commandTimeout: null,
+              cloudProvider: null,
+              cdpUrl: null,
+              dialogPolicy: null,
+              dialogTimeoutSeconds: null,
+            };
+          }
+          return {
+            enabled: br.enabled === true,
+            headless: br.headless !== false,
+            allowPrivateUrls: br.allowPrivateUrls === true,
+            commandTimeout:
+              typeof br.commandTimeout === 'number' && Number.isFinite(br.commandTimeout)
+                ? Math.floor(br.commandTimeout)
+                : null,
+            cloudProvider:
+              br.cloudProvider === 'browserbase' || br.cloudProvider === 'browser-use' ? br.cloudProvider : null,
+            cdpUrl: typeof br.cdpUrl === 'string' && br.cdpUrl.trim() ? br.cdpUrl.trim() : null,
+            dialogPolicy:
+              br.dialogPolicy === 'must_respond' ||
+              br.dialogPolicy === 'auto_accept' ||
+              br.dialogPolicy === 'auto_dismiss'
+                ? br.dialogPolicy
+                : null,
+            dialogTimeoutSeconds:
+              typeof br.dialogTimeoutSeconds === 'number' && Number.isFinite(br.dialogTimeoutSeconds)
+                ? Math.floor(br.dialogTimeoutSeconds)
+                : null,
+          };
+        })(),
         maxTaskDurationMs: config.agents?.defaults?.maxTaskDurationMs,
         maxRequestsPerTurn: config.agents?.defaults?.maxRequestsPerTurn,
         maxToolFailuresPerTurn: config.agents?.defaults?.maxToolFailuresPerTurn,

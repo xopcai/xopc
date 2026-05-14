@@ -1,4 +1,6 @@
 export { BrowserManager, type BrowserManagerOptions } from './manager.js';
+export { resolveBrowserBackendFromConfig } from './backend-from-config.js';
+export { resolveBrowserCommandTimeoutMs } from './browser-command-timeout.js';
 export { createBrowserTools, type CreateBrowserToolsDeps } from './tools.js';
 export {
   assertBrowserUrlAllowed,
