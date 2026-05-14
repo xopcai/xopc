@@ -105,8 +105,21 @@ export async function patchSkillEnabled(skillName: string, enabled: boolean): Pr
   }
 }
 
-export async function getMarketplaceCategories(): Promise<{ items: MarketplaceCategoryItem[] }> {
-  const res = await apiFetch(apiUrl('/api/skills/marketplace/categories'), { cache: 'no-store' });
+function appendMarketplaceProvider(sp: URLSearchParams, provider?: 'store' | 'skillhub') {
+  if (provider === 'store' || provider === 'skillhub') {
+    sp.set('provider', provider);
+  }
+}
+
+export async function getMarketplaceCategories(opts?: {
+  provider?: 'store' | 'skillhub';
+}): Promise<{ items: MarketplaceCategoryItem[] }> {
+  const sp = new URLSearchParams();
+  appendMarketplaceProvider(sp, opts?.provider);
+  const qs = sp.toString();
+  const res = await apiFetch(apiUrl(`/api/skills/marketplace/categories${qs ? `?${qs}` : ''}`), {
+    cache: 'no-store',
+  });
   if (!res.ok) {
     throw new Error(await readErrorMessage(res));
   }
@@ -123,6 +136,7 @@ export async function getMarketplaceSkills(params: {
   pageSize?: number;
   sort?: 'downloads' | 'newest';
   category?: string;
+  provider?: 'store' | 'skillhub';
 }): Promise<SkillsMarketplacePayload & { provider?: string }> {
   const sp = new URLSearchParams();
   if (params.q?.trim()) sp.set('q', params.q.trim());
@@ -130,6 +144,7 @@ export async function getMarketplaceSkills(params: {
   if (params.pageSize != null) sp.set('pageSize', String(params.pageSize));
   if (params.sort) sp.set('sort', params.sort);
   if (params.category?.trim()) sp.set('category', params.category.trim());
+  appendMarketplaceProvider(sp, params.provider);
   const qs = sp.toString();
   const res = await apiFetch(apiUrl(`/api/skills/marketplace${qs ? `?${qs}` : ''}`), {
     cache: 'no-store',
@@ -146,9 +161,13 @@ export async function getMarketplaceSkills(params: {
 
 export async function getMarketplacePackageDetail(
   packageName: string,
+  opts?: { provider?: 'store' | 'skillhub' },
 ): Promise<MarketplacePackageDetailPayload> {
   const enc = encodeURIComponent(packageName);
-  const res = await apiFetch(apiUrl(`/api/skills/marketplace/packages/${enc}`), {
+  const sp = new URLSearchParams();
+  appendMarketplaceProvider(sp, opts?.provider);
+  const qs = sp.toString();
+  const res = await apiFetch(apiUrl(`/api/skills/marketplace/packages/${enc}${qs ? `?${qs}` : ''}`), {
     cache: 'no-store',
   });
   if (!res.ok) {
@@ -165,6 +184,7 @@ export async function installMarketplaceSkill(opts: {
   name: string;
   version?: string;
   overwrite?: boolean;
+  provider?: 'store' | 'skillhub';
 }): Promise<{ skillId: string; path: string }> {
   const res = await apiFetch(apiUrl('/api/skills/marketplace/install'), {
     method: 'POST',

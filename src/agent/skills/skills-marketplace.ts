@@ -4,8 +4,10 @@
  */
 
 import type { Config } from '../../config/schema.js';
+import type { SkillsMarketplaceProvider } from './marketplace/adapters/store/store-api-client.js';
 import {
   getMarketplaceAdapter,
+  getMarketplaceAdapterForProvider,
   getMarketplaceProviderDisplayName,
   resolveSkillsMarketplaceProvider,
 } from './marketplace/resolve-adapter.js';
@@ -28,31 +30,42 @@ export type {
   UnifiedMarketplacePackageDetail,
 } from './marketplace/adapters/store/store-api-client.js';
 
+function marketplaceAdapter(config: Config, provider?: SkillsMarketplaceProvider) {
+  if (provider === 'store' || provider === 'skillhub') {
+    return getMarketplaceAdapterForProvider(provider);
+  }
+  return getMarketplaceAdapter(config);
+}
+
 export async function listMarketplaceCategories(
   config: Config,
+  provider?: SkillsMarketplaceProvider,
 ): Promise<{ items: MarketplaceCategoryOption[] }> {
-  const items = await getMarketplaceAdapter(config).listCategories(config);
+  const items = await marketplaceAdapter(config, provider).listCategories(config);
   return { items };
 }
 
 export async function listMarketplacePackages(
   config: Config,
   params: SkillsStoreListParams,
+  provider?: SkillsMarketplaceProvider,
 ): Promise<UnifiedMarketplaceListResponse> {
-  return getMarketplaceAdapter(config).listPackages(config, params);
+  return marketplaceAdapter(config, provider).listPackages(config, params);
 }
 
 export async function getMarketplacePackageDetail(
   config: Config,
   packageName: string,
+  provider?: SkillsMarketplaceProvider,
 ): Promise<UnifiedMarketplacePackageDetail> {
-  return getMarketplaceAdapter(config).getPackageDetail(config, packageName);
+  return marketplaceAdapter(config, provider).getPackageDetail(config, packageName);
 }
 
 export async function downloadFromMarketplace(
   config: Config,
   packageName: string,
   version?: string,
+  provider?: SkillsMarketplaceProvider,
 ): Promise<{ buffer: Buffer; skillId: string; version: string }> {
-  return getMarketplaceAdapter(config).downloadPackage(config, packageName, version);
+  return marketplaceAdapter(config, provider).downloadPackage(config, packageName, version);
 }

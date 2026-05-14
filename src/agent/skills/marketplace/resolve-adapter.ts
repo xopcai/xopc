@@ -27,12 +27,15 @@ export function getMarketplaceProviderDisplayName(provider: SkillsMarketplacePro
   }
 }
 
-export function getMarketplaceAdapter(config: Config): SkillsMarketplaceAdapter {
-  const id = resolveSkillsMarketplaceProvider(config);
+export function getMarketplaceAdapterForProvider(id: SkillsMarketplaceProvider): SkillsMarketplaceAdapter {
   switch (id) {
     case 'skillhub':
       return skillhubMarketplaceAdapter;
-    default:
+    case 'store':
       return storeMarketplaceAdapter;
   }
+}
+
+export function getMarketplaceAdapter(config: Config): SkillsMarketplaceAdapter {
+  return getMarketplaceAdapterForProvider(resolveSkillsMarketplaceProvider(config));
 }
