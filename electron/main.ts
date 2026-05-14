@@ -30,6 +30,7 @@ import { registerAgentIpc } from './ipc/agent-ipc.js';
 import { registerFileIpc } from './ipc/file-ipc.js';
 import { registerSearchIpc } from './ipc/search-ipc.js';
 import { initElectronShellPreferences, registerSystemSettingsIpc, stopAllPowerSaveBlockers } from './ipc/system-settings-ipc.js';
+import { registerCronDisplayWakeIpc, stopCronDisplayWakeBlocker } from './ipc/cron-display-wake-ipc.js';
 import { registerUpdaterIpc } from './ipc/updater-ipc.js';
 import { getLoadingPageDataUrl } from './loading-page.js';
 import { hasPendingInstall, initAutoUpdater, stopAutoUpdater } from './auto-updater.js';
@@ -414,6 +415,7 @@ app.whenReady().then(async () => {
   registerSearchIpc(ipcMain);
   registerAgentIpc(ipcMain);
   registerSystemSettingsIpc(ipcMain);
+  registerCronDisplayWakeIpc(ipcMain);
   registerUpdaterIpc(ipcMain);
 
   const hotkey = process.platform === 'darwin' ? 'Command+Shift+Space' : 'Control+Shift+Space';
@@ -445,6 +447,7 @@ app.on('before-quit', () => {
   destroyTray();
   globalShortcut.unregisterAll();
   stopAllPowerSaveBlockers();
+  stopCronDisplayWakeBlocker();
   stopGatewayProcess();
   stopAutoUpdater();
 });

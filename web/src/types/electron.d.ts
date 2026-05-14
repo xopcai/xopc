@@ -77,6 +77,10 @@ export interface ElectronMenuAPI {
   onTogglePalette(callback: () => void): () => void;
 }
 
+export interface ElectronCronDisplayWakeAPI {
+  setDisplaySleepPrevented(enabled: boolean): Promise<void>;
+}
+
 export interface ElectronSystemSettingsAPI {
   getBehavior(): Promise<SystemSettingsBehavior>;
   setBehavior(patch: {
@@ -102,6 +106,7 @@ export interface ElectronAPI {
   gateway?: ElectronGatewayShellAPI;
   platform: 'darwin' | 'win32' | 'linux';
   menu?: ElectronMenuAPI;
+  cron?: ElectronCronDisplayWakeAPI;
   system?: ElectronSystemSettingsAPI;
 }
 
