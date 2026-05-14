@@ -176,7 +176,12 @@ export class SessionManager {
 
   updateUrl(sessionKey: string): void {
     const newHash = `#/chat/${encodeURIComponent(sessionKey)}`;
-    if (location.hash !== newHash) history.replaceState(null, '', newHash);
+    if (location.hash !== newHash) {
+      const s = window.history.state;
+      const next =
+        s && typeof s === 'object' && !Array.isArray(s) ? { ...(s as Record<string, unknown>) } : s;
+      history.replaceState(next, '', newHash);
+    }
   }
 
   parseSessionFromHash(): string | null {
