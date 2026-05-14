@@ -71,9 +71,9 @@
   --shadow-popover: 0 8px 32px rgb(0 0 0 / 0.12), 0 2px 12px rgb(0 0 0 / 0.08);
 
   /* Main column under AppShell <main> — docs/design/ui-design-system.md §13.1 Web */
-  --max-width-app-main: 56rem;
+  --max-width-app-main: 72rem;
   /** Chat column (message list + composer); wider than app main for long threads. */
-  --max-width-chat: 64rem;
+  --max-width-chat: 80rem;
 }
 
 /* Dark — Apple-style elevated grays + rim light via borders (see design spec §2.3) */
