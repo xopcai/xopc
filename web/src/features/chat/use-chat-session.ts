@@ -128,7 +128,7 @@ export function useChatSession() {
   );
 
   const navigateToSession = useCallback(
-    (key: string, replace = true, search?: string) => {
+    (key: string, replace = false, search?: string) => {
       const s = search ?? '';
       navigate({ pathname: `/chat/${encodeURIComponent(key)}`, search: s }, { replace });
     },
@@ -371,7 +371,7 @@ export function useChatSession() {
             restoreLiveCacheIfNeeded(target.key);
             const seed = getLiveSessionCache(target.key)?.messages ?? loaded ?? [];
             const keyFromUrl = sessionMgrRef.current.parseSessionFromHash();
-            if (!keyFromUrl) navigateToSession(target.key);
+            if (!keyFromUrl) navigateToSession(target.key, true);
             await tryResumeAgentRun(target.key, seed);
           } else {
             const aid = resolveAgentIdForPost();
