@@ -78,16 +78,22 @@ export interface AgentDefaultsState {
   workspace: string;
   /** Playwright `browser_*` tools (`agents.defaults.browser.enabled`). */
   browserEnabled: boolean;
-  /** Headless Chromium when browser tools are on (`agents.defaults.browser.headless`, default true). */
+  /** Headless Chromium when browser tools are on (`agents.defaults.browser.headless`; default false = visible window). */
   browserHeadless: boolean;
   /** Skip private-IP blocking (cloud metadata always blocked). */
   browserAllowPrivateUrls: boolean;
   /** Per-command timeout in seconds (default 30). */
   browserCommandTimeout: number | undefined;
-  /** Browser backend: local, browserbase, or browser-use. */
+  /** Browser backend mode: local, cdp, cloud, or extension. */
+  browserBackend: 'local' | 'cdp' | 'cloud' | 'extension';
+  /** Cloud browser backend: local, browserbase, or browser-use. */
   browserCloudProvider: 'local' | 'browserbase' | 'browser-use';
   /** Direct CDP WebSocket endpoint URL. */
   browserCdpUrl: string;
+  /** Chrome Extension bridge port (default 19820). */
+  browserExtensionPort: number | undefined;
+  /** Chrome Extension bridge host (default 127.0.0.1). */
+  browserExtensionHost: string;
   /** JS dialog handling policy. */
   browserDialogPolicy: 'must_respond' | 'auto_dismiss' | 'auto_accept';
   /** Dialog auto-timeout in seconds (default 300). */
@@ -202,8 +208,11 @@ type BrowserFieldsPick = Pick<
   | 'browserHeadless'
   | 'browserAllowPrivateUrls'
   | 'browserCommandTimeout'
+  | 'browserBackend'
   | 'browserCloudProvider'
   | 'browserCdpUrl'
+  | 'browserExtensionPort'
+  | 'browserExtensionHost'
   | 'browserDialogPolicy'
   | 'browserDialogTimeout'
 >;
@@ -213,11 +222,14 @@ function parseBrowserFromDefaults(d: Record<string, unknown>): BrowserFieldsPick
   if (!browser || typeof browser !== 'object' || Array.isArray(browser)) {
     return {
       browserEnabled: false,
-      browserHeadless: true,
+      browserHeadless: false,
       browserAllowPrivateUrls: false,
       browserCommandTimeout: undefined,
+      browserBackend: 'local',
       browserCloudProvider: 'local',
       browserCdpUrl: '',
+      browserExtensionPort: undefined,
+      browserExtensionHost: '127.0.0.1',
       browserDialogPolicy: 'auto_dismiss',
       browserDialogTimeout: undefined,
     };
@@ -226,7 +238,7 @@ function parseBrowserFromDefaults(d: Record<string, unknown>): BrowserFieldsPick
   const enabled = truthyBrowserFlag(b.enabled);
   const headlessRaw = b.headless;
   const headless =
-    headlessRaw === false || headlessRaw === 'false' || headlessRaw === 0 ? false : true;
+    headlessRaw === true || headlessRaw === 'true' || headlessRaw === 1 ? true : false;
 
   const allowPrivateUrls = truthyBrowserFlag(b.allowPrivateUrls);
 
@@ -235,11 +247,25 @@ function parseBrowserFromDefaults(d: Record<string, unknown>): BrowserFieldsPick
       ? Math.floor(b.commandTimeout)
       : undefined;
 
+  const backendRaw = b.backend;
+  const backend: AgentDefaultsState['browserBackend'] =
+    backendRaw === 'cdp' || backendRaw === 'cloud' || backendRaw === 'extension' ? backendRaw : 'local';
+
   const cpRaw = b.cloudProvider;
   const cloudProvider: AgentDefaultsState['browserCloudProvider'] =
     cpRaw === 'browserbase' || cpRaw === 'browser-use' ? cpRaw : 'local';
 
   const cdpUrl = typeof b.cdpUrl === 'string' ? b.cdpUrl : '';
+
+  // Extension config
+  const ext = (typeof b.extension === 'object' && b.extension && !Array.isArray(b.extension))
+    ? b.extension as Record<string, unknown>
+    : {};
+  const extensionPort =
+    typeof ext.port === 'number' && Number.isFinite(ext.port) && ext.port >= 1024 && ext.port <= 65535
+      ? Math.floor(ext.port)
+      : undefined;
+  const extensionHost = typeof ext.host === 'string' && ext.host ? ext.host : '127.0.0.1';
 
   const dpRaw = b.dialogPolicy;
   const dialogPolicy: AgentDefaultsState['browserDialogPolicy'] =
@@ -257,8 +283,11 @@ function parseBrowserFromDefaults(d: Record<string, unknown>): BrowserFieldsPick
     browserHeadless: headless,
     browserAllowPrivateUrls: allowPrivateUrls,
     browserCommandTimeout: commandTimeout,
+    browserBackend: backend,
     browserCloudProvider: cloudProvider,
     browserCdpUrl: cdpUrl,
+    browserExtensionPort: extensionPort,
+    browserExtensionHost: extensionHost,
     browserDialogPolicy: dialogPolicy,
     browserDialogTimeout: dialogTimeout,
   };
@@ -672,8 +701,15 @@ export async function patchAgentDefaults(state: AgentDefaultsState): Promise<voi
       headless: state.browserHeadless,
       allowPrivateUrls: state.browserAllowPrivateUrls,
       commandTimeout: state.browserCommandTimeout ?? null,
+      backend: state.browserBackend === 'local' ? null : state.browserBackend,
       cloudProvider: state.browserCloudProvider === 'local' ? null : state.browserCloudProvider,
       cdpUrl: state.browserCdpUrl.trim() || null,
+      extension: state.browserBackend === 'extension'
+        ? {
+            port: state.browserExtensionPort ?? null,
+            host: state.browserExtensionHost === '127.0.0.1' ? null : state.browserExtensionHost,
+          }
+        : null,
       dialogPolicy: state.browserDialogPolicy === 'auto_dismiss' ? null : state.browserDialogPolicy,
       dialogTimeoutSeconds: state.browserDialogTimeout ?? null,
     },

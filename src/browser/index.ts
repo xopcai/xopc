@@ -1,7 +1,6 @@
 export { BrowserManager, type BrowserManagerOptions } from './manager.js';
 export { resolveBrowserBackendFromConfig } from './backend-from-config.js';
 export { resolveBrowserCommandTimeoutMs } from './browser-command-timeout.js';
-export { createBrowserTools, type CreateBrowserToolsDeps } from './tools.js';
 export {
   assertBrowserUrlAllowed,
   checkPostRedirectUrl,
@@ -34,3 +33,18 @@ export {
   BrowserTypeSchema,
   BrowserVisionSchema,
 } from './schemas.js';
+
+export { createBrowserActionRegistry } from './actions/registry.js';
+export type {
+  BrowserActionName,
+  BrowserActionContext,
+  BrowserActionHandler,
+  BrowserActionRegistry as BrowserActionRegistryType,
+  BrowserActionResult,
+  BrowserArtifact,
+  BrowserDiagnostics,
+} from './actions/types.js';
+
+export { parseBrowserPipeline, type PipelineDocument, type PipelineStep } from './pipeline/schema.js';
+export { runBrowserPipeline, validateBrowserPipeline } from './pipeline/runner.js';
+export { resolveTemplate, resolveTemplateDeep } from './pipeline/template.js';

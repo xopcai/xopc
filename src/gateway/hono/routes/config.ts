@@ -13,6 +13,26 @@ import type { AuthenticatedRouteDeps } from './deps.js';
 export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const { service, strictRateLimitMiddleware } = deps;
 
+  // Browser extension bridge status — gateway-side check so frontend doesn't cross-origin fetch.
+  authenticated.get('/api/browser/extension-status', async (c) => {
+    const config: Config = service.currentConfig as Config;
+    const browser = config?.agents?.defaults?.browser;
+    const backend = (browser as Record<string, unknown> | undefined)?.backend;
+    if (backend !== 'extension') {
+      return c.json({ running: false, connected: false, backend: backend ?? 'local' });
+    }
+    const ext = (browser as Record<string, unknown>)?.extension as Record<string, unknown> | undefined;
+    const port = (typeof ext?.port === 'number' ? ext.port : 19820);
+    const host = (typeof ext?.host === 'string' && ext.host ? ext.host : '127.0.0.1');
+    try {
+      const res = await fetch(`http://${host}:${port}/`, { signal: AbortSignal.timeout(2000) });
+      const data = (await res.json()) as { ok?: boolean; connected?: boolean };
+      return c.json({ running: Boolean(data.ok), connected: Boolean(data.connected), backend: 'extension' });
+    } catch {
+      return c.json({ running: false, connected: false, backend: 'extension' });
+    }
+  });
+
   authenticated.post('/api/config/reload', strictRateLimitMiddleware, async (c) => {
     const result = await service.reloadConfig();
     return c.json({ ok: true, payload: result });
@@ -113,7 +133,7 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
         } else if (typeof b === 'object' && !Array.isArray(b)) {
           const br = b as Record<string, unknown>;
           if (!config.agents.defaults.browser) {
-            config.agents.defaults.browser = { enabled: false, headless: true };
+            config.agents.defaults.browser = { enabled: false, headless: false };
           }
           const target = config.agents.defaults.browser as Record<string, unknown>;
           if (br.enabled !== undefined) {
@@ -138,6 +158,13 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
               }
             }
           }
+          if (br.backend !== undefined) {
+            if (br.backend === null || br.backend === '' || br.backend === 'local') {
+              delete target.backend;
+            } else if (br.backend === 'cdp' || br.backend === 'cloud' || br.backend === 'extension') {
+              target.backend = br.backend;
+            }
+          }
           if (br.cloudProvider !== undefined) {
             if (br.cloudProvider === null || br.cloudProvider === '') {
               delete target.cloudProvider;
@@ -150,6 +177,25 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
               delete target.cdpUrl;
             } else if (typeof br.cdpUrl === 'string') {
               target.cdpUrl = br.cdpUrl.trim();
+            }
+          }
+          if (br.extension !== undefined) {
+            if (br.extension === null) {
+              delete target.extension;
+            } else if (typeof br.extension === 'object' && !Array.isArray(br.extension)) {
+              const ext = br.extension as Record<string, unknown>;
+              const extTarget: Record<string, unknown> = {};
+              if (typeof ext.port === 'number' && ext.port >= 1024 && ext.port <= 65535) {
+                extTarget.port = Math.floor(ext.port);
+              }
+              if (typeof ext.host === 'string' && ext.host && ext.host !== '127.0.0.1') {
+                extTarget.host = ext.host;
+              }
+              if (Object.keys(extTarget).length > 0) {
+                target.extension = extTarget;
+              } else {
+                delete target.extension;
+              }
             }
           }
           if (br.dialogPolicy !== undefined) {

@@ -45,9 +45,9 @@ import { createImageGenerateTool } from './image-generate-tool.js';
 import {
   BrowserManager,
   CdpSupervisor,
-  createBrowserTools,
   resolveBrowserBackendFromConfig,
-} from './browser/index.js';
+} from '../../browser/index.js';
+import { createBrowserUseTool } from './browser/tool/browser-use-tool.js';
 import { createDelegateTool } from './delegate-tool.js';
 import { buildSandboxToolMap, createExecuteCodeTool } from './execute-code-tool.js';
 import { createCronjobTool } from './cronjob-tool.js';
@@ -151,7 +151,12 @@ export class AgentToolsFactory {
 
   private async acquireBrowserPage(): Promise<Page> {
     const taskId = this.deps.getCurrentContext()?.sessionKey ?? 'default';
-    const page = await this.ensureBrowserManager().getPage(taskId);
+    const mgr = this.ensureBrowserManager();
+    await mgr.ensureConnected();
+    if (mgr.getExtensionProvider()) {
+      return null as unknown as Page;
+    }
+    const page = await mgr.getPage(taskId);
     this.browserSupervisorForTask(taskId).attach(page);
     return page;
   }
@@ -159,7 +164,7 @@ export class AgentToolsFactory {
   private ensureBrowserManager(): BrowserManager {
     if (!this.browserManager) {
       this.browserManager = new BrowserManager({
-        getHeadless: () => this.deps.getConfig?.()?.agents?.defaults?.browser?.headless !== false,
+        getHeadless: () => this.deps.getConfig?.()?.agents?.defaults?.browser?.headless === true,
         getBackend: () => resolveBrowserBackendFromConfig(this.deps.getConfig?.()),
       });
     }
@@ -306,18 +311,20 @@ export class AgentToolsFactory {
             }),
           ]
         : []),
-      ...(cfg?.agents?.defaults?.browser?.enabled === true
-        ? createBrowserTools({
-            getManager: () => this.ensureBrowserManager(),
-            getPageForTask: () => this.acquireBrowserPage(),
-            getTaskId: () => this.deps.getCurrentContext()?.sessionKey ?? 'default',
-            getConfig: () => this.deps.getConfig?.(),
-            getSupervisor: () =>
-              this.browserSupervisorForTask(this.deps.getCurrentContext()?.sessionKey ?? 'default'),
-            notifyBrowserPageClosed: (taskId) => {
-              this.browserTaskSupervisors.delete(taskId);
-            },
-          })
+      ...(cfg?.agents?.defaults?.browser?.enabled !== false
+        ? [
+            createBrowserUseTool({
+              getManager: () => this.ensureBrowserManager(),
+              getPageForTask: () => this.acquireBrowserPage(),
+              getTaskId: () => this.deps.getCurrentContext()?.sessionKey ?? 'default',
+              getConfig: () => this.deps.getConfig?.(),
+              getSupervisor: () =>
+                this.browserSupervisorForTask(this.deps.getCurrentContext()?.sessionKey ?? 'default'),
+              notifyBrowserPageClosed: (taskId) => {
+                this.browserTaskSupervisors.delete(taskId);
+              },
+            }),
+          ]
         : []),
       ...(cfg?.agents?.defaults?.delegate?.enabled === true && primary
         ? [

@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { width: 280px; padding: 16px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 13px; color: #1e293b; background: #fff; }
+    h1 { font-size: 14px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+    h1 .logo { width: 20px; height: 20px; flex-shrink: 0; }
+    .status-row { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; padding: 8px 10px; background: #f8fafc; border-radius: 6px; border: 1px solid #e2e8f0; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .dot.connected { background: #22c55e; box-shadow: 0 0 4px rgba(34, 197, 94, 0.4); }
+    .dot.disconnected { background: #ef4444; }
+    .server-url { font-size: 11px; color: #64748b; margin-top: 4px; word-break: break-all; }
+    .actions { display: flex; gap: 8px; margin-top: 12px; }
+    button { flex: 1; padding: 6px 12px; border-radius: 6px; border: 1px solid #e2e8f0; background: #f8fafc; font-size: 12px; cursor: pointer; transition: all 0.15s; }
+    button:hover { background: #e2e8f0; }
+    button.primary { background: #3b82f6; color: white; border-color: #3b82f6; }
+    button.primary:hover { background: #2563eb; }
+    button.danger { color: #ef4444; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <h1><img class="logo" src="icons/icon-32.png" width="20" height="20" alt="" /> xopc Browser Bridge</h1>
+  <div class="status-row">
+    <span id="status-dot" class="dot disconnected"></span>
+    <span id="status-label">Checking...</span>
+  </div>
+  <div class="server-url" id="server-url">ws://127.0.0.1:19820/browser-ext</div>
+  <div class="actions">
+    <button id="btn-connect" class="primary hidden">Connect</button>
+    <button id="btn-disconnect" class="danger hidden">Disconnect</button>
+  </div>
+  <script type="module" src="dist/popup.js"></script>
+</body>
+</html>

@@ -1,6 +1,6 @@
 import type { BrowserContext, Page } from 'playwright-core';
 
-import { createLogger } from '../../../utils/logger.js';
+import { createLogger } from '../utils/logger.js';
 
 const log = createLogger('BrowserLifecycle');
 

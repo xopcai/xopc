@@ -77,7 +77,7 @@ export async function buildSafeWebConfigPayload(service: GatewayService) {
           if (!br || typeof br !== 'object') {
             return {
               enabled: false,
-              headless: true,
+              headless: false,
               allowPrivateUrls: false,
               commandTimeout: null,
               cloudProvider: null,
@@ -88,15 +88,22 @@ export async function buildSafeWebConfigPayload(service: GatewayService) {
           }
           return {
             enabled: br.enabled === true,
-            headless: br.headless !== false,
+            headless: br.headless === true,
             allowPrivateUrls: br.allowPrivateUrls === true,
             commandTimeout:
               typeof br.commandTimeout === 'number' && Number.isFinite(br.commandTimeout)
                 ? Math.floor(br.commandTimeout)
                 : null,
+            backend:
+              br.backend === 'cdp' || br.backend === 'cloud' || br.backend === 'extension'
+                ? br.backend
+                : null,
             cloudProvider:
               br.cloudProvider === 'browserbase' || br.cloudProvider === 'browser-use' ? br.cloudProvider : null,
             cdpUrl: typeof br.cdpUrl === 'string' && br.cdpUrl.trim() ? br.cdpUrl.trim() : null,
+            extension: br.extension && typeof br.extension === 'object' && !Array.isArray(br.extension)
+              ? br.extension
+              : null,
             dialogPolicy:
               br.dialogPolicy === 'must_respond' ||
               br.dialogPolicy === 'auto_accept' ||

@@ -44,8 +44,21 @@ export interface CdpConnectionConfig {
   wsEndpoint: string;
 }
 
+/** Configuration for the xopc Chrome Extension bridge backend. */
+export interface ExtensionConnectionConfig {
+  /** WebSocket server port. Default: 19820. */
+  port?: number;
+  /** Host to bind. Default: 127.0.0.1. */
+  host?: string;
+  /** Timeout waiting for extension to connect (ms). Default: 30000. */
+  connectionTimeout?: number;
+  /** Default command timeout (ms). Default: 30000. */
+  commandTimeout?: number;
+}
+
 /** Union of all backend connection modes. */
 export type BrowserBackend =
   | { mode: 'local'; headless: boolean }
   | { mode: 'cdp'; config: CdpConnectionConfig }
-  | { mode: 'cloud'; config: CloudBrowserProviderConfig };
+  | { mode: 'cloud'; config: CloudBrowserProviderConfig }
+  | { mode: 'extension'; config?: ExtensionConnectionConfig };

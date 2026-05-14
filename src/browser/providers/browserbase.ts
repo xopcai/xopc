@@ -1,6 +1,6 @@
 import type { Browser, BrowserContext } from 'playwright-core';
 
-import { createLogger } from '../../../../utils/logger.js';
+import { createLogger } from '../../utils/logger.js';
 
 import type { CloudBrowserProvider, CloudBrowserProviderConfig } from './types.js';
 

@@ -1,4 +1,4 @@
-import type { Config } from '../../../config/schema.js';
+import type { Config } from '../config/schema.js';
 
 const DEFAULT_MS = 30_000;
 const MIN_SEC = 5;
