@@ -32,7 +32,7 @@
   <a href="https://xopcai.github.io/xopc/zh/cli">CLI</a>
 </p>
 
-**xopc** 是一套可**装在自己机器上**的智能体工具链：**命令行（CLI）**、全屏**终端界面（TUI）**、带网页后台的 **HTTP/SSE 网关**（REST JSON API，流式与实时更新走 **Server-Sent Events**；控制台用 **React** 编写），以及可选的 **Electron** 桌面版（**macOS / Windows / Linux**），并内置 **Telegram、微信、飞书/Lark、钉钉** 等机器人插件。模型调用基于 **[@earendil-works/pi-ai](https://github.com/earendil-works/pi-mono)**，可对接 **20+** 家厂商。通过**扩展**加工具、接新机器人、接新模型；用 **SKILL.md** 管理技能；网页端还能用 **`@xopcai/xopc/extension-ui-sdk`** 做界面扩展。
+**xopc** 是一套可**装在自己机器上**的智能体工具链：**命令行（CLI）**、全屏**终端界面（TUI）**、带网页后台的 **HTTP/SSE 网关**（REST JSON API，流式与实时更新走 **Server-Sent Events**；控制台用 **React** 编写），以及可选的 **Electron** 桌面版（**macOS / Windows / Linux**），并内置 **Telegram、微信、飞书/Lark** 等机器人插件。模型调用基于 **[@earendil-works/pi-ai](https://github.com/earendil-works/pi-mono)**，可对接 **20+** 家厂商。通过**扩展**加工具、接新机器人、接新模型；用 **SKILL.md** 管理技能；网页端还能用 **`@xopcai/xopc/extension-ui-sdk`** 做界面扩展。
 
 ---
 
@@ -43,7 +43,7 @@
 | **数据留在身边** | 服务跑在你自己电脑上；不接入会主动访问外网的机器人或联网插件时，数据默认不出本机。也**不必**绑死某一家公有云。 |
 | **BYOK** | API Key、OAuth 等写在配置文件（`~/.xopc/xopc.json`）和环境变量里 —— 可用 DeepSeek(推荐)、 OpenAI、Anthropic、Google、**Ollama / LM Studio / vLLM**、Bedrock、Azure、OpenRouter、各类网关等。 |
 | **多种用法** | **`xopc tui`**（全屏终端）、**`xopc agent`**（命令行里多轮聊）、**浏览器开网关网页**、**Electron 桌面版**（同一套界面）。 |
-| **聊天机器人** | 内置 **Telegram**、**微信**、**飞书/Lark**、**钉钉**，以及网关自带的**网页对话**；私聊、群聊可做访问控制（配对、白名单等）。 |
+| **聊天机器人** | 内置 **Telegram**、**微信**、**飞书/Lark**，以及网关自带的**网页对话**；私聊、群聊可做访问控制（配对、白名单等）。 |
 | **图片与语音** | **图片**：识图、按需生图。**语音**：语音转文字、文字转语音（如 Telegram、网关等），详见文档。 |
 | **可扩展** | **服务端**：`ChannelPlugin`、工具、定时任务（cron）、自定义模型接入。**界面**：用 **`@xopcai/xopc/extension-ui-sdk`** 扩展网关网页。 |
 
@@ -147,7 +147,6 @@ pnpm run electron:build   # 输出在 dist/release/
 | **Telegram** | `channels.telegram` | 多账号、流式回复、语音、文件；私聊/群聊策略 |
 | **微信** | `channels.weixin` | 在装网关的机器上扫码；私聊/群聊策略 |
 | **飞书 / Lark** | `channels.feishu` | 机器人、Webhook 等，见文档 |
-| **钉钉** | `channels.dingtalk` | Stream 模式；应用凭证见文档 |
 | **网页** | *（随网关）* | 网关网页里的对话，不是单独再装一个 IM |
 
 字段说明与安全默认值：**[频道](https://xopcai.github.io/xopc/zh/channels)**、**[配置](https://xopcai.github.io/xopc/zh/configuration)**。
@@ -169,7 +168,7 @@ pnpm run electron:build   # 输出在 dist/release/
 | 在终端里聊 | `xopc tui --local` 或 `xopc agent -i` |
 | 打开网页控制台 | `xopc gateway`，按终端或配置里的地址打开 |
 | 网关放后台跑 | `xopc gateway --background`；可查 `xopc gateway status`、停 `xopc gateway stop`、重启 `xopc gateway restart`、看日志 `xopc gateway logs` |
-| 接 Telegram / 微信 / 飞书 / 钉钉 | 配好 `channels.*` 并启动网关；微信：`xopc channels login --channel weixin` |
+| 接 Telegram / 微信 / 飞书 | 配好 `channels.*` 并启动网关；微信：`xopc channels login --channel weixin` |
 | 再跑一遍配置向导 | `xopc onboard` |
 | 定时任务 | 在配置里启用 `cron` |
 
@@ -246,7 +245,7 @@ xopc skills install <名称>
 }
 ```
 
-要用微信、飞书、钉钉，再补上 **`channels.weixin`**、**`channels.feishu`**、**`channels.dingtalk`** —— 完整字段见 **[配置](https://xopcai.github.io/xopc/zh/configuration)** 与 **[频道](https://xopcai.github.io/xopc/zh/channels)**。
+要用微信、飞书，再补上 **`channels.weixin`**、**`channels.feishu`** —— 完整字段见 **[配置](https://xopcai.github.io/xopc/zh/configuration)** 与 **[频道](https://xopcai.github.io/xopc/zh/channels)**。
 
 ---
 

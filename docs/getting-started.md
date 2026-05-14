@@ -41,7 +41,7 @@ The wizard will guide you through:
 1. Creating the primary Markdown workspace directory (typically `~/.xopc/workspace/main/` when using default config)
 2. Generating default **`~/.xopc/xopc.json`**
 3. Choosing an LLM provider and API key (**DeepSeek** is a good default for many setups)
-4. Optional messaging channels (**Telegram**, **WeChat (Weixin)**, **Feishu/Lark**, **DingTalk**)
+4. Optional messaging channels (**Telegram**, **WeChat (Weixin)**, **Feishu/Lark**)
 5. Gateway Web console (and optional **`xopc tui`** vs gateway choice at the end)
 
 ### Quick Setup
@@ -145,7 +145,7 @@ After `xopc gateway`, open the URL printed in the terminal (commonly `http://loc
 
 ### Other bundled channels
 
-**WeChat**, **Feishu/Lark**, and **DingTalk** are configured under **`channels.*`** in the same JSON file. See [Channels](./channels/index.md).
+**WeChat** and **Feishu/Lark** are configured under **`channels.*`** in the same JSON file. See [Channels](./channels/index.md).
 
 ## 6. Electron desktop (optional)
 
@@ -169,7 +169,7 @@ Explore these guides to unlock more features:
 | [Extensions](/extensions) | Extend functionality |
 | [Skills](/skills) | Add domain-specific knowledge |
 | [Tools](/tools) | Built-in tools reference |
-| [Channels](/channels) | Telegram, WeChat, Feishu, DingTalk, web chat |
+| [Channels](/channels) | Telegram, WeChat, Feishu, web chat |
 | [TUI](/tui) | Full-screen terminal UI |
 | [Routing](/routing-system) | Session keys and agent bindings |
 | [Models](/models) | LLM provider configuration |

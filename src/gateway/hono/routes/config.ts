@@ -840,54 +840,6 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
           if (fs.accounts !== undefined) fsTarget.accounts = fs.accounts;
         }
       }
-
-      if ('dingtalk' in patchChannels) {
-        const dtRaw = patchChannels.dingtalk;
-        if (dtRaw === null) {
-          if (config.channels) delete config.channels.dingtalk;
-        } else if (typeof dtRaw === 'object' && !Array.isArray(dtRaw)) {
-          const dt = dtRaw as Record<string, unknown>;
-          if (!config.channels) config.channels = {} as any;
-          if (!config.channels.dingtalk) {
-            config.channels.dingtalk = {
-              enabled: false,
-              clientId: '',
-              clientSecret: '',
-              dmPolicy: 'open',
-              groupPolicy: 'open',
-              allowFrom: [],
-              groupAllowFrom: [],
-              requireMention: false,
-              historyLimit: 50,
-              textChunkLimit: 4000,
-              accounts: {},
-            };
-          }
-          const dtTarget = config.channels.dingtalk as Record<string, unknown>;
-          if (dt.enabled !== undefined) dtTarget.enabled = dt.enabled;
-          if (dt.defaultAccount !== undefined) {
-            const da = dt.defaultAccount;
-            if (da === null || da === '') delete dtTarget.defaultAccount;
-            else dtTarget.defaultAccount = String(da);
-          }
-          if (dt.clientId !== undefined) dtTarget.clientId = dt.clientId;
-          if (dt.clientSecret !== undefined) dtTarget.clientSecret = dt.clientSecret;
-          if (dt.dmPolicy !== undefined) dtTarget.dmPolicy = dt.dmPolicy;
-          if (dt.groupPolicy !== undefined) dtTarget.groupPolicy = dt.groupPolicy;
-          if (dt.allowFrom !== undefined) dtTarget.allowFrom = dt.allowFrom;
-          if (dt.groupAllowFrom !== undefined) {
-            const ga = dt.groupAllowFrom;
-            if (ga === null || (Array.isArray(ga) && ga.length === 0)) delete dtTarget.groupAllowFrom;
-            else dtTarget.groupAllowFrom = ga;
-          }
-          if (dt.requireMention !== undefined) dtTarget.requireMention = dt.requireMention;
-          if (dt.debug !== undefined) dtTarget.debug = dt.debug;
-          if (dt.endpoint !== undefined) dtTarget.endpoint = dt.endpoint;
-          if (dt.historyLimit !== undefined) dtTarget.historyLimit = dt.historyLimit;
-          if (dt.textChunkLimit !== undefined) dtTarget.textChunkLimit = dt.textChunkLimit;
-          if (dt.accounts !== undefined) dtTarget.accounts = dt.accounts;
-        }
-      }
     }
     
     // Update gateway heartbeat (partial merge)

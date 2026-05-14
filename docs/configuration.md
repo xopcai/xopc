@@ -353,7 +353,7 @@ Multi-account Telegram configuration:
 
 **DM policies** (`pairing` \| `allowlist` \| `open` \| `disabled`):
 
-- **`pairing`** (recommended): unknown users are **not** passed to the agent until their Telegram / Feishu / DingTalk / Weixin **sender id** is allowed. Allow sources are **`allowFrom` in config** plus entries in the **per-channel credential file** created after you run **`xopc channels pairing approve`**. First contact receives a **pairing code** in DM. See [Channels — DM pairing](./channels/index.md#dm-pairing) and [CLI — `channels`](./cli.md#channels).
+- **`pairing`** (recommended): unknown users are **not** passed to the agent until their Telegram / Feishu / Weixin **sender id** is allowed. Allow sources are **`allowFrom` in config** plus entries in the **per-channel credential file** created after you run **`xopc channels pairing approve`**. First contact receives a **pairing code** in DM. See [Channels — DM pairing](./channels/index.md#dm-pairing) and [CLI — `channels`](./cli.md#channels).
 - **`allowlist`**: same merge rules as pairing for the allow list, but **no** pairing code message; unknown senders are dropped.
 - **`open`**: any user can DM (avoid on public bots).
 - **`disabled`**: DMs are rejected.
@@ -427,7 +427,7 @@ Security behavior:
 
 #### Channel connect defer
 
-Fields live under **`gateway.*`** (`channelConnectDeferMode`, `channelConnectDeferIds`, `channelConnectDeferSkipIds`). When you run **`xopc gateway`** (the `GatewayServer` path), outbound-heavy channel plugins (Telegram, Weixin, Feishu, DingTalk) can defer **`ChannelPlugin.start()`** until **after** the HTTP listener has bound, so the control plane and static UI come up first. Plugin authors opt in via **`meta.deferConnectUntilAfterListen`** on the channel plugin.
+Fields live under **`gateway.*`** (`channelConnectDeferMode`, `channelConnectDeferIds`, `channelConnectDeferSkipIds`). When you run **`xopc gateway`** (the `GatewayServer` path), outbound-heavy channel plugins (Telegram, Weixin, Feishu) can defer **`ChannelPlugin.start()`** until **after** the HTTP listener has bound, so the control plane and static UI come up first. Plugin authors opt in via **`meta.deferConnectUntilAfterListen`** on the channel plugin.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
