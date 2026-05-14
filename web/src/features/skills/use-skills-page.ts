@@ -3,6 +3,7 @@ import {
   useEffect,
   useLayoutEffect,
   useMemo,
+  useRef,
   useState,
   type ChangeEvent,
   type DragEvent,
@@ -32,6 +33,7 @@ import { fileToZipUpload } from '@/features/skills/skill-upload-zip';
 import {
   BUILTIN_SKILL_CATEGORY_ORDER,
   MAIN_TAB_SET,
+  MARKETPLACE_PROVIDER_PARAM,
   SOURCE_FILTER_SET,
   type MainTab,
   type SourceFilter,
@@ -49,6 +51,10 @@ export function useSkillsPage() {
   const hasToken = Boolean(token);
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+
+  const mprovRaw = searchParams.get(MARKETPLACE_PROVIDER_PARAM);
+  const urlMarketProvider =
+    mprovRaw === 'store' || mprovRaw === 'skillhub' ? (mprovRaw as 'store' | 'skillhub') : null;
 
   const [catalog, setCatalog] = useState<SkillCatalogEntry[]>([]);
   const [loading, setLoading] = useState(false);
@@ -109,7 +115,9 @@ export function useSkillsPage() {
   const [mpCategories, setMpCategories] = useState<MarketplaceCategoryItem[]>([]);
   const [mpCategoriesError, setMpCategoriesError] = useState<string | null>(null);
   const [mpCategoriesLoading, setMpCategoriesLoading] = useState(false);
-  const [marketplaceProviderId, setMarketplaceProviderId] = useState<'store' | 'skillhub' | null>(null);
+  const [marketBrowseProvider, setMarketBrowseProvider] = useState<'store' | 'skillhub' | null>(null);
+  const marketplaceDetailProviderRef = useRef<'store' | 'skillhub' | null>(null);
+  const prevMarketBrowseProviderRef = useRef<'store' | 'skillhub' | null>(null);
 
   const load = useCallback(
     async (opts?: { silent?: boolean }): Promise<{ ok: true } | { ok: false; message: string }> => {
@@ -142,21 +150,33 @@ export function useSkillsPage() {
 
   useEffect(() => {
     if (!hasToken) {
-      setMarketplaceProviderId(null);
+      setMarketBrowseProvider(null);
+      marketplaceDetailProviderRef.current = null;
       return;
     }
+    if (urlMarketProvider) {
+      setMarketBrowseProvider(urlMarketProvider);
+    }
+  }, [hasToken, urlMarketProvider]);
+
+  useEffect(() => {
+    if (!hasToken || urlMarketProvider != null) return;
     let cancelled = false;
     void getMarketplaceProvider()
       .then((info) => {
-        if (!cancelled) setMarketplaceProviderId(info.provider);
+        if (!cancelled) {
+          setMarketBrowseProvider((prev) => (prev != null ? prev : info.provider));
+        }
       })
       .catch(() => {
-        if (!cancelled) setMarketplaceProviderId(null);
+        if (!cancelled) {
+          setMarketBrowseProvider((prev) => (prev != null ? prev : 'skillhub'));
+        }
       });
     return () => {
       cancelled = true;
     };
-  }, [hasToken]);
+  }, [hasToken, urlMarketProvider]);
 
   useEffect(() => {
     const nextQ = searchParams.get('q') ?? '';
@@ -182,18 +202,30 @@ export function useSkillsPage() {
   useEffect(() => {
     if (mainTab !== 'marketplace') return;
     setMarketPage(1);
-  }, [searchQuery, marketSort, mainTab, marketCategoryId]);
+  }, [searchQuery, marketSort, mainTab, marketCategoryId, marketBrowseProvider]);
+
+  useEffect(() => {
+    if (mainTab !== 'marketplace' || !marketBrowseProvider) {
+      prevMarketBrowseProviderRef.current = marketBrowseProvider;
+      return;
+    }
+    const prev = prevMarketBrowseProviderRef.current;
+    prevMarketBrowseProviderRef.current = marketBrowseProvider;
+    if (prev != null && prev !== marketBrowseProvider) {
+      setMarketCategoryId('');
+    }
+  }, [mainTab, marketBrowseProvider]);
 
   /** Before paint: avoid one frame of empty/stale list then skeleton (useEffect runs too late). */
   useLayoutEffect(() => {
     if (!hasToken || mainTab !== 'marketplace') return;
     setMpLoading(true);
-  }, [hasToken, mainTab, marketCategoryId, marketPage, marketSort, searchQuery]);
+  }, [hasToken, mainTab, marketCategoryId, marketPage, marketSort, searchQuery, marketBrowseProvider]);
 
   useLayoutEffect(() => {
     if (!hasToken || mainTab !== 'marketplace') return;
     setMpCategoriesLoading(true);
-  }, [hasToken, mainTab]);
+  }, [hasToken, mainTab, marketBrowseProvider]);
 
   useEffect(() => {
     if (mainTab === 'marketplace') return;
@@ -203,7 +235,7 @@ export function useSkillsPage() {
   }, [mainTab]);
 
   useEffect(() => {
-    if (!hasToken || mainTab !== 'marketplace') return;
+    if (!hasToken || mainTab !== 'marketplace' || !marketBrowseProvider) return;
     let cancelled = false;
     setMpError(null);
     void getMarketplaceSkills({
@@ -212,6 +244,7 @@ export function useSkillsPage() {
       pageSize: 20,
       sort: marketSort,
       category: marketCategoryId.trim() || undefined,
+      provider: marketBrowseProvider,
     })
       .then((payload) => {
         if (!cancelled) setMpPayload(payload);
@@ -236,13 +269,14 @@ export function useSkillsPage() {
     marketSort,
     searchQuery,
     sk.marketplaceLoadFailed,
+    marketBrowseProvider,
   ]);
 
   useEffect(() => {
-    if (!hasToken || mainTab !== 'marketplace') return;
+    if (!hasToken || mainTab !== 'marketplace' || !marketBrowseProvider) return;
     let cancelled = false;
     setMpCategoriesError(null);
-    void getMarketplaceCategories()
+    void getMarketplaceCategories({ provider: marketBrowseProvider })
       .then((r) => {
         if (!cancelled) setMpCategories(r.items);
       })
@@ -259,7 +293,7 @@ export function useSkillsPage() {
       cancelled = true;
       setMpCategoriesLoading(false);
     };
-  }, [hasToken, mainTab, sk.marketplaceCategoriesFailed]);
+  }, [hasToken, mainTab, sk.marketplaceCategoriesFailed, marketBrowseProvider]);
 
   useEffect(() => {
     if (!marketCategoryId.trim() || mpCategories.length === 0) return;
@@ -284,6 +318,11 @@ export function useSkillsPage() {
         } else {
           params.delete('mcat');
         }
+        if (mainTab === 'marketplace' && marketBrowseProvider) {
+          params.set(MARKETPLACE_PROVIDER_PARAM, marketBrowseProvider);
+        } else {
+          params.delete(MARKETPLACE_PROVIDER_PARAM);
+        }
         if (params.toString() === prev.toString()) {
           return prev;
         }
@@ -291,7 +330,7 @@ export function useSkillsPage() {
       },
       { replace: true },
     );
-  }, [mainTab, marketCategoryId, searchQuery, setSearchParams, sourceFilter]);
+  }, [mainTab, marketCategoryId, marketBrowseProvider, searchQuery, setSearchParams, sourceFilter]);
 
   const showFeedback = useCallback((kind: 'success' | 'error', message: string, durationMs = 5000) => {
     setActionFeedback({ kind, message });
@@ -324,6 +363,9 @@ export function useSkillsPage() {
 
   const openMarketplaceDetail = useCallback(
     async (packageId: string, listTitle?: string) => {
+      const browse = marketBrowseProvider;
+      if (!browse) return;
+      marketplaceDetailProviderRef.current = browse;
       setDetailSource('store');
       setDetailOpen(true);
       setDetailTitle(listTitle?.trim() || packageId);
@@ -333,7 +375,7 @@ export function useSkillsPage() {
       setDetailError(null);
       setDetailLoading(true);
       try {
-        const pkg = await getMarketplacePackageDetail(packageId);
+        const pkg = await getMarketplacePackageDetail(packageId, { provider: browse });
         setDetailTitle(pkg.name);
         if (pkg.skillDocPreview) {
           setDetailMarketplacePreview(pkg.skillDocPreview);
@@ -356,7 +398,7 @@ export function useSkillsPage() {
         setDetailLoading(false);
       }
     },
-    [sk.detailLoadFailed, sk.marketplaceNoReadme],
+    [marketBrowseProvider, sk.detailLoadFailed, sk.marketplaceNoReadme],
   );
 
   const onSkillToggle = useCallback(
@@ -593,7 +635,12 @@ export function useSkillsPage() {
     if (needsMarketInstall) setUsingSkillInChatName(name);
     try {
       if (needsMarketInstall) {
-        await installMarketplaceSkill({ name, overwrite: false });
+        const mp = marketplaceDetailProviderRef.current ?? marketBrowseProvider;
+        await installMarketplaceSkill({
+          name,
+          overwrite: false,
+          ...(mp ? { provider: mp } : {}),
+        });
         await load({ silent: true });
       }
       setDetailOpen(false);
@@ -611,10 +658,11 @@ export function useSkillsPage() {
     navigate,
     showFeedback,
     sk.uploadFailed,
+    marketBrowseProvider,
   ]);
 
   const onMarketInstall = useCallback(
-    async (name: string) => {
+    async (name: string, opts?: { useDetailProvider?: boolean }) => {
       const installed = isSkillInstalledByName(name);
       if (installed) {
         const ok = window.confirm(sk.marketplaceReinstallConfirm);
@@ -623,7 +671,14 @@ export function useSkillsPage() {
       setActionFeedback(null);
       setInstallingMarketName(name);
       try {
-        await installMarketplaceSkill({ name, overwrite: installed });
+        const p = opts?.useDetailProvider
+          ? marketplaceDetailProviderRef.current ?? marketBrowseProvider
+          : marketBrowseProvider;
+        await installMarketplaceSkill({
+          name,
+          overwrite: installed,
+          ...(p ? { provider: p } : {}),
+        });
         await load({ silent: true });
         showFeedback('success', sk.installSuccess);
         setDetailOpen(false);
@@ -637,6 +692,7 @@ export function useSkillsPage() {
     [
       isSkillInstalledByName,
       load,
+      marketBrowseProvider,
       showFeedback,
       sk.installSuccess,
       sk.marketplaceReinstallConfirm,
@@ -714,7 +770,8 @@ export function useSkillsPage() {
     mpCategories,
     mpCategoriesError,
     mpCategoriesLoading,
-    marketplaceProviderId,
+    marketBrowseProvider,
+    setMarketBrowseProvider,
     builtinTabStats,
     userTabStats,
     detailEnabled,

@@ -48,6 +48,7 @@ import {
   listMarketplacePackages,
   resolveSkillsMarketplaceProvider,
   type MarketplaceCategoryOption,
+  type SkillsMarketplaceProvider,
   type SkillsStoreListParams,
   type UnifiedMarketplaceListResponse,
   type UnifiedMarketplacePackageDetail,
@@ -1306,24 +1307,38 @@ export class GatewayService {
     return result;
   }
 
-  async fetchSkillsMarketplaceCatalog(params: SkillsStoreListParams): Promise<UnifiedMarketplaceListResponse> {
-    return listMarketplacePackages(this.config, params);
+  async fetchSkillsMarketplaceCatalog(
+    params: SkillsStoreListParams,
+    provider?: SkillsMarketplaceProvider,
+  ): Promise<UnifiedMarketplaceListResponse> {
+    return listMarketplacePackages(this.config, params, provider);
   }
 
-  async fetchSkillsMarketplaceCategories(): Promise<{ items: MarketplaceCategoryOption[] }> {
-    return listMarketplaceCategories(this.config);
+  async fetchSkillsMarketplaceCategories(
+    provider?: SkillsMarketplaceProvider,
+  ): Promise<{ items: MarketplaceCategoryOption[] }> {
+    return listMarketplaceCategories(this.config, provider);
   }
 
-  async fetchSkillsMarketplacePackageDetail(packageName: string): Promise<UnifiedMarketplacePackageDetail> {
-    return getMarketplacePackageDetail(this.config, packageName);
+  async fetchSkillsMarketplacePackageDetail(
+    packageName: string,
+    provider?: SkillsMarketplaceProvider,
+  ): Promise<UnifiedMarketplacePackageDetail> {
+    return getMarketplacePackageDetail(this.config, packageName, provider);
   }
 
   async installSkillFromMarketplace(opts: {
     name: string;
     version?: string;
     overwrite?: boolean;
+    provider?: SkillsMarketplaceProvider;
   }): Promise<{ skillId: string; path: string }> {
-    const { buffer, skillId } = await downloadFromMarketplace(this.config, opts.name, opts.version);
+    const { buffer, skillId } = await downloadFromMarketplace(
+      this.config,
+      opts.name,
+      opts.version,
+      opts.provider,
+    );
     return this.installManagedSkillZip(buffer, { skillId, overwrite: opts.overwrite ?? false });
   }
 
