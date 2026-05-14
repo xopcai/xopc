@@ -375,71 +375,60 @@ xopc cron trigger <task-id>
 
 ---
 
-## extension
+## extensions
 
-Manage extensions. Supports three-tier storage: workspace → global → bundled.
+Manage extensions. Installed extensions live under `~/.xopc/extensions`; discovery still follows workspace → global → bundled priority.
 
 ### List Extensions
 
 ```bash
-xopc extension list
+xopc extensions list
+xopc extensions list --json
 ```
 
 ### Install Extension
 
 ```bash
 # Install from npm (always under ~/.xopc/extensions)
-xopc extension install xopc-extension-telegram
+xopc extensions install xopc-extension-telegram
 
 # Install from local directory
-xopc extension install ./my-local-extension
+xopc extensions install ./my-local-extension
 
-# Set timeout (default 120 seconds)
-xopc extension install slow-extension --timeout 300000
+# Install from xopc-store only
+xopc extensions install --store telegram
 ```
 
 **Parameters:**
 
 | Parameter | Description |
 |-----------|-------------|
-| `--timeout <ms>` | Installation timeout |
+| `--store` | Install from xopc-store only |
+| `--npm` | Install from npm only |
+| `-f, --force` | Replace an existing store/local install |
 
-### Remove Extension
+### Health, Audit, and Verify
 
 ```bash
-xopc extension remove <extension-id>
-# Or
-xopc extension uninstall <extension-id>
+xopc extensions health
+xopc extensions audit
+xopc extensions verify [extension-id]
 ```
 
-### View Extension Details
+### Search, Update, and Freeze
 
 ```bash
-xopc extension info <extension-id>
+xopc extensions search [keyword]
+xopc extensions update [extension-id]
+xopc extensions freeze
 ```
 
-### Create Extension
+### Develop, Package, and Publish
 
 ```bash
-xopc extension create <extension-id> [options]
-```
-
-**Parameters:**
-
-| Parameter | Description |
-|-----------|-------------|
-| `--name <name>` | Extension display name |
-| `--description <desc>` | Extension description |
-| `--kind <kind>` | Extension type: `channel`, `provider`, `memory`, `tool`, `utility` |
-
-**Examples:**
-
-```bash
-# Create a tool extension
-xopc extension create weather-tool --name "Weather Tool" --kind tool
-
-# Create a channel extension
-xopc extension create discord-channel --name "Discord Channel" --kind channel
+xopc extensions dev ./my-local-extension
+xopc extensions pack ./my-local-extension
+xopc extensions publish ./my-local-extension --dry-run
 ```
 
 ---
@@ -694,9 +683,9 @@ case "$1" in
     shift
     xopc cron "$@"
     ;;
-  extension)
+  extensions)
     shift
-    xopc extension "$@"
+    xopc extensions "$@"
     ;;
   skills)
     shift

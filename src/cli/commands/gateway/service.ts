@@ -1,16 +1,23 @@
 import { Command } from 'commander';
-import { loadConfig } from '../../../config/index.js';
 import { resolveConfigPath } from '../../../config/paths.js';
-import { createLogger } from '../../../utils/logger.js';
 import { getContextWithOpts } from '../../index.js';
-import {
-  resolveGatewayService,
-  isDaemonAvailableAsync,
-  getPlatformName,
-} from '../../../daemon/index.js';
-import { buildGatewayInstallPlan } from '../../../daemon/install-plan.js';
 
-const log = createLogger('GatewayServiceCommand');
+async function loadServiceDeps() {
+  const [{ loadConfig }, { createLogger }, daemon, { buildGatewayInstallPlan }] = await Promise.all([
+    import('../../../config/index.js'),
+    import('../../../utils/logger.js'),
+    import('../../../daemon/index.js'),
+    import('../../../daemon/install-plan.js'),
+  ]);
+  return {
+    loadConfig,
+    log: createLogger('GatewayServiceCommand'),
+    resolveGatewayService: daemon.resolveGatewayService,
+    isDaemonAvailableAsync: daemon.isDaemonAvailableAsync,
+    getPlatformName: daemon.getPlatformName,
+    buildGatewayInstallPlan,
+  };
+}
 
 /**
  * Create service install subcommand
@@ -21,6 +28,14 @@ export function createInstallCommand(): Command {
     .action(async () => {
       const ctx = getContextWithOpts();
       const configPath = ctx.configPath || resolveConfigPath();
+      const {
+        loadConfig,
+        log,
+        resolveGatewayService,
+        isDaemonAvailableAsync,
+        getPlatformName,
+        buildGatewayInstallPlan,
+      } = await loadServiceDeps();
       const config = loadConfig(configPath);
       const port = config?.gateway?.port || 18790;
       const host = config?.gateway?.host || '0.0.0.0';
@@ -109,6 +124,7 @@ export function createUninstallCommand(): Command {
     .action(async () => {
       const ctx = getContextWithOpts();
       const _configPath = ctx.configPath || resolveConfigPath();
+      const { log, resolveGatewayService } = await loadServiceDeps();
 
       console.log('🔧 Uninstalling gateway system service...');
 
@@ -141,6 +157,7 @@ export function createServiceStartCommand(): Command {
     .action(async () => {
       const ctx = getContextWithOpts();
       const configPath = ctx.configPath || resolveConfigPath();
+      const { loadConfig } = await loadServiceDeps();
       const config = loadConfig(configPath);
       const port = config?.gateway?.port || 18790;
 

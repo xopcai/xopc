@@ -1,15 +1,11 @@
 import { Command } from 'commander';
 
-import { loadConfig } from '../../../config/index.js';
 import { resolveConfigPath } from '../../../config/paths.js';
 import { getContextWithOpts } from '../../index.js';
-import { acquireGatewayLock, GatewayLockError } from '../../../gateway/lock.js';
 import {
-  callGatewayApi,
   addGatewayClientOptions,
   parseGatewayClientOptions,
-  resolveGatewayUrl,
-} from '../../utils/gateway-client.js';
+} from '../../utils/gateway-client-options.js';
 
 interface StatusResponse {
   status: string;
@@ -39,6 +35,15 @@ export function createStatusCommand(): Command {
   cmd.action(async (options) => {
     const ctx = getContextWithOpts();
     const configPath = ctx.configPath || resolveConfigPath();
+    const [
+      { loadConfig },
+      { acquireGatewayLock, GatewayLockError },
+      { callGatewayApi, resolveGatewayUrl },
+    ] = await Promise.all([
+      import('../../../config/index.js'),
+      import('../../../gateway/lock.js'),
+      import('../../utils/gateway-client.js'),
+    ]);
     const config = loadConfig(configPath);
     const port = config?.gateway?.port ?? 18790;
     const clientOpts = { ...parseGatewayClientOptions(options as Record<string, unknown>), configPath };

@@ -1,12 +1,6 @@
 import { Command } from 'commander';
-import { loadConfig } from '../../../config/index.js';
 import { resolveConfigPath } from '../../../config/paths.js';
-import { createLogger } from '../../../utils/logger.js';
 import { getContextWithOpts } from '../../index.js';
-import { acquireGatewayLock } from '../../../gateway/lock.js';
-import { forceFreePortAndWait, listPortListeners } from '../../../gateway/ports.js';
-
-const _log = createLogger('GatewayStopCommand');
 
 /**
  * Create stop subcommand
@@ -18,6 +12,15 @@ export function createStopCommand(): Command {
     .option('--timeout <ms>', 'Timeout before force kill', '5000')
     .action(async (options) => {
       const ctx = getContextWithOpts();
+      const [
+        { loadConfig },
+        { acquireGatewayLock },
+        { forceFreePortAndWait, listPortListeners },
+      ] = await Promise.all([
+        import('../../../config/index.js'),
+        import('../../../gateway/lock.js'),
+        import('../../../gateway/ports.js'),
+      ]);
       const config = loadConfig(ctx.configPath);
       const port = config?.gateway?.port || 18790;
 

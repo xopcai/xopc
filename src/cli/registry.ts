@@ -102,6 +102,25 @@ export class CommandRegistry {
     }
   }
 
+  installOne(
+    program: Command,
+    name: string,
+    ctx: CLIContext,
+    getCtx?: () => CLIContext,
+  ): boolean {
+    this.initialized = true;
+    const def = this.findByName(name);
+    if (!def || def.metadata?.hidden) return false;
+    try {
+      const cmd = def.factory(ctx, getCtx);
+      program.addCommand(cmd);
+      return true;
+    } catch (error) {
+      console.error(`Failed to register command "${def.id}":`, error);
+      return false;
+    }
+  }
+
   getStats(): { total: number; byCategory: Record<string, number> } {
     const byCategory: Record<string, number> = {};
     for (const cmd of this.commands) {

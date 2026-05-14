@@ -22,8 +22,7 @@ const log = createLogger('ExtensionCommands');
 // ============================================
 
 export function createExtensionListCommand(): Command {
-  return new Command('extension:list')
-    .alias('ext:list')
+  return new Command('list')
     .description('List installed extensions')
     .option('--json', 'Output as JSON')
     .action(async (options) => {
@@ -64,8 +63,7 @@ export function createExtensionListCommand(): Command {
 // ============================================
 
 export function createExtensionFreezeCommand(): Command {
-  return new Command('extension:freeze')
-    .alias('ext:freeze')
+  return new Command('freeze')
     .description('Lock current extension versions')
     .action(async () => {
       try {
@@ -86,8 +84,7 @@ export function createExtensionFreezeCommand(): Command {
 // ============================================
 
 export function createExtensionHealthCommand(): Command {
-  return new Command('extension:health')
-    .alias('ext:health')
+  return new Command('health')
     .description('Check extension health')
     .option('--json', 'Output as JSON')
     .action(async (options) => {
@@ -119,8 +116,7 @@ export function createExtensionHealthCommand(): Command {
 // ============================================
 
 export function createExtensionVerifyCommand(): Command {
-  return new Command('extension:verify')
-    .alias('ext:verify')
+  return new Command('verify')
     .description('Verify extension integrity')
     .argument('[extension]', 'Specific extension to verify (default: all)')
     .action(async (extensionId) => {
@@ -166,8 +162,7 @@ export function createExtensionVerifyCommand(): Command {
 // ============================================
 
 export function createExtensionAuditCommand(): Command {
-  return new Command('extension:audit')
-    .alias('ext:audit')
+  return new Command('audit')
     .description('Audit extensions for security issues')
     .action(async () => {
       try {
@@ -183,7 +178,7 @@ export function createExtensionAuditCommand(): Command {
           }
           console.log();
           console.log('These extensions are installed but not in the lockfile.');
-          console.log('Run `xopc extension:freeze` to add them.');
+          console.log('Run `xopc extensions freeze` to add them.');
         } else {
           console.log(colors.green('✓'), 'No orphaned extensions found');
         }
@@ -210,39 +205,19 @@ export function createExtensionAuditCommand(): Command {
 // ============================================
 
 export function registerExtensionCommands(program: Command): void {
-  program.addCommand(
-    new Command('extension')
-      .description('Extension lockfile and health tools')
-      .addHelpText(
-        'after',
-        `
-Related commands:
-  xopc extension:install  store: / npm / path → ~/.xopc/extensions (alias: ext:install)
-  xopc extension:list     List installed extensions  (alias: ext:list)
-  xopc extension:freeze   Lock extension versions    (alias: ext:freeze)
-  xopc extension:health   Health check               (alias: ext:health)
-  xopc extension:verify   Verify integrity           (alias: ext:verify)
-  xopc extension:audit    Security audit             (alias: ext:audit)
-  xopc extension:pack     Package extension .tgz     (alias: ext:pack)
-  xopc extension:dev      Dev mode (symlink + optional gateway) (alias: ext:dev)
-  xopc extension:search   Search extension registry   (alias: ext:search)
-  xopc extension:publish  Publish extension to npm    (alias: ext:publish)
-  xopc extension:update   Update installed extensions (alias: ext:update)
-`
-      )
-      .action((_opts, cmd) => {
-        cmd.help();
-      })
-  );
-  program.addCommand(createExtensionListCommand());
-  program.addCommand(createExtensionFreezeCommand());
-  program.addCommand(createExtensionHealthCommand());
-  program.addCommand(createExtensionVerifyCommand());
-  program.addCommand(createExtensionAuditCommand());
-  program.addCommand(createExtensionPackCommand());
-  program.addCommand(createExtensionDevCommand());
-  program.addCommand(createExtensionInstallCommand());
-  program.addCommand(createExtensionSearchCommand());
-  program.addCommand(createExtensionPublishCommand());
-  program.addCommand(createExtensionUpdateCommand());
+  const extensions = new Command('extensions')
+    .description('Manage extensions')
+    .addCommand(createExtensionListCommand())
+    .addCommand(createExtensionFreezeCommand())
+    .addCommand(createExtensionHealthCommand())
+    .addCommand(createExtensionVerifyCommand())
+    .addCommand(createExtensionAuditCommand())
+    .addCommand(createExtensionPackCommand())
+    .addCommand(createExtensionDevCommand())
+    .addCommand(createExtensionInstallCommand())
+    .addCommand(createExtensionSearchCommand())
+    .addCommand(createExtensionPublishCommand())
+    .addCommand(createExtensionUpdateCommand());
+
+  program.addCommand(extensions);
 }

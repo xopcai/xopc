@@ -1,11 +1,6 @@
 import { Command } from 'commander';
 import { spawn } from 'child_process';
-import { loadConfig } from '../../../config/index.js';
-import { createLogger } from '../../../utils/logger.js';
 import { getContextWithOpts } from '../../index.js';
-import { forceFreePortAndWait, listPortListeners } from '../../../gateway/ports.js';
-
-const _log = createLogger('GatewayRestartCommand');
 
 /**
  * Create restart subcommand
@@ -16,6 +11,10 @@ export function createRestartCommand(): Command {
     .option('--force', 'Force restart (kill if needed)', false)
     .action(async (options) => {
       const ctx = getContextWithOpts();
+      const [{ loadConfig }, { forceFreePortAndWait, listPortListeners }] = await Promise.all([
+        import('../../../config/index.js'),
+        import('../../../gateway/ports.js'),
+      ]);
       const config = loadConfig(ctx.configPath);
       const port = config?.gateway?.port || 18790;
       const host = config?.gateway?.host || '0.0.0.0';

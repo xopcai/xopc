@@ -1,15 +1,9 @@
-import { Command } from 'commander';
 import { spawn } from 'child_process';
-import { GatewayServer } from '../../gateway/index.js';
-import { loadConfig } from '../../config/index.js';
-import { resolveConfigPath } from '../../config/paths.js';
-import { createLogger } from '../../utils/logger.js';
+
+import { Command } from 'commander';
+
 import { register, formatExamples, type CLIContext } from '../registry.js';
 import { getContextWithOpts } from '../index.js';
-import { runGatewayLoop } from '../../gateway/run-loop.js';
-import { forceFreePortAndWait, checkPortAvailable } from '../../gateway/ports.js';
-import { seedMainAgentProfileMarkdown } from '../../agent/context/workspace-seed.js';
-import { initWorkspace } from '../utils/init-workspace.js';
 import {
   createTokenCommand,
   createStatusCommand,
@@ -25,14 +19,16 @@ import {
   createServiceStatusCommand,
 } from './gateway/index.js';
 
-const _log = createLogger('GatewayCommand');
-
 async function ensureGatewayReady(
   configPath: string,
   workspacePath: string,
   gatewayHost: string,
   gatewayPort: number,
 ): Promise<void> {
+  const [{ initWorkspace }, { seedMainAgentProfileMarkdown }] = await Promise.all([
+    import('../utils/init-workspace.js'),
+    import('../../agent/context/workspace-seed.js'),
+  ]);
   const result = await initWorkspace({
     configPath,
     workspacePath,
@@ -101,6 +97,13 @@ function createGatewayCommand(_ctx: CLIContext): Command {
     .addCommand(createServiceStatusCommand())
     .action(async (options) => {
       const ctx = getContextWithOpts();
+      const [{ loadConfig }, { resolveConfigPath }, { runGatewayLoop }, gatewayPorts] = await Promise.all([
+        import('../../config/index.js'),
+        import('../../config/paths.js'),
+        import('../../gateway/run-loop.js'),
+        import('../../gateway/ports.js'),
+      ]);
+      const { checkPortAvailable, forceFreePortAndWait } = gatewayPorts;
       const config = loadConfig(ctx.configPath);
 
       const hostFromFlag =
@@ -206,6 +209,7 @@ function createGatewayCommand(_ctx: CLIContext): Command {
         configPath: ctx.configPath || resolveConfigPath(),
         port,
         start: async () => {
+          const { GatewayServer } = await import('../../gateway/index.js');
           const server = new GatewayServer({
             host,
             port,

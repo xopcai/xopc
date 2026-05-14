@@ -1,14 +1,13 @@
 import { Command } from 'commander';
 
-import { loadConfig } from '../../../config/index.js';
 import { resolveConfigPath } from '../../../config/paths.js';
 import {
-  callGatewayApi,
   addGatewayClientOptions,
   parseGatewayClientOptions,
-  resolveGatewayToken,
-} from '../../utils/gateway-client.js';
+} from '../../utils/gateway-client-options.js';
 import { getContextWithOpts } from '../../index.js';
+
+type GatewayClientModule = typeof import('../../utils/gateway-client.js');
 
 interface ProbeTarget {
   label: string;
@@ -41,6 +40,7 @@ function resolveProbeTargets(opts: { url?: string; port: number }): ProbeTarget[
 }
 
 async function probeTarget(
+  callGatewayApi: GatewayClientModule['callGatewayApi'],
   target: ProbeTarget,
   token?: string,
   timeoutMs?: number,
@@ -89,6 +89,10 @@ export function createProbeCommand(): Command {
   cmd.action(async (options) => {
     const ctx = getContextWithOpts();
     const configPath = ctx.configPath || resolveConfigPath();
+    const [{ loadConfig }, { callGatewayApi, resolveGatewayToken }] = await Promise.all([
+      import('../../../config/index.js'),
+      import('../../utils/gateway-client.js'),
+    ]);
     const config = loadConfig(configPath);
     const port = config?.gateway?.port ?? 18790;
 
@@ -98,7 +102,7 @@ export function createProbeCommand(): Command {
     const results: ProbeResultEntry[] = [];
 
     for (const target of targets) {
-      const result = await probeTarget(target, token, clientOpts.timeoutMs);
+      const result = await probeTarget(callGatewayApi, target, token, clientOpts.timeoutMs);
       results.push(result);
     }
 

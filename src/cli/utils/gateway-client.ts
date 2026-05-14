@@ -2,20 +2,18 @@
  * Gateway API client — CLI-side HTTP client for gateway REST routes.
  */
 
-import type { Command } from 'commander';
-
 import { loadConfig } from '../../config/index.js';
 import { resolveConfigPath } from '../../config/paths.js';
 import { createLogger } from '../../utils/logger.js';
+import type { GatewayClientOptions } from './gateway-client-options.js';
+
+export type { GatewayClientOptions } from './gateway-client-options.js';
+export {
+  addGatewayClientOptions,
+  parseGatewayClientOptions,
+} from './gateway-client-options.js';
 
 const log = createLogger('GatewayClient');
-
-export interface GatewayClientOptions {
-  url?: string;
-  token?: string;
-  timeoutMs?: number;
-  json?: boolean;
-}
 
 export interface GatewayCallResult<T = unknown> {
   ok: boolean;
@@ -124,26 +122,3 @@ export async function callGatewayApi<T = unknown>(
   }
 }
 
-export function addGatewayClientOptions(cmd: Command): Command {
-  return cmd
-    .option('--url <url>', 'Gateway HTTP URL (defaults to config or http://127.0.0.1:18790)')
-    .option('--token <token>', 'Gateway auth token')
-    .option('--timeout <ms>', 'Request timeout in ms', '10000')
-    .option('--json', 'Output raw JSON', false);
-}
-
-export function parseGatewayClientOptions(opts: Record<string, unknown>): GatewayClientOptions {
-  const rawTimeout = opts.timeout;
-  const timeoutMs =
-    typeof rawTimeout === 'string'
-      ? Number.parseInt(rawTimeout, 10) || 10_000
-      : typeof rawTimeout === 'number' && Number.isFinite(rawTimeout)
-        ? rawTimeout
-        : 10_000;
-  return {
-    url: typeof opts.url === 'string' ? opts.url : undefined,
-    token: typeof opts.token === 'string' ? opts.token : undefined,
-    timeoutMs,
-    json: Boolean(opts.json),
-  };
-}

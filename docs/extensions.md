@@ -8,7 +8,7 @@ xopc provides a lightweight but powerful extension system for customizing and ex
 - **Activation from config** — extensions load when you enable them, configure related channels or providers, or satisfy rules declared in each extension’s `xopc.extension.json` (see [When extensions load](#when-extensions-load)).
 - **Extension SDK** — `@xopcai/xopc/extension-sdk` (and optional subpaths such as `extension-sdk/core`, `extension-sdk/lazy`).
 - **TypeScript** — extensions are plain TypeScript/JavaScript modules; no separate compile step for the loader.
-- **Install sources** — npm package, local folder, or Git URL via `xopc extension install`.
+- **Install sources** — npm package, local folder, or xopc-store package via `xopc extensions install`.
 - **Gateway console UI (optional)** — a `ui` block in the manifest can add panels in the Web console; iframe code uses **`@xopcai/extension-ui-sdk`** (see [Gateway console: Extension UI](#gateway-console-extension-ui-iframe)).
 
 ---
@@ -21,16 +21,16 @@ xopc provides a lightweight but powerful extension system for customizing and ex
 
 ```bash
 # Install from npm (~/.xopc/extensions)
-xopc extension install xopc-extension-hello
+xopc extensions install xopc-extension-hello
 
 # Install from local directory
-xopc extension install ./my-local-extension
+xopc extensions install ./my-local-extension
 
 # View installed extensions
-xopc extension list
+xopc extensions list
 
-# Remove extension
-xopc extension remove hello
+# Check extension health
+xopc extensions health
 ```
 
 ### Enable Extension
@@ -56,23 +56,20 @@ Configure in `~/.xopc/xopc.json`:
 | `[extension-id]` | `object \| boolean` | Extension-specific configuration |
 
 **Activation vs `enabled`:** The **gateway** and **`xopc agent`** load extensions using the rules in [When extensions load](#when-extensions-load). You do **not** have to list every channel extension under `extensions.enabled` if activation is already triggered by **`channels.telegram`** / **`channels.weixin`**, or by an env var named in the extension manifest (for example `TELEGRAM_BOT_TOKEN`). To **force-disable** an extension, add its id to **`extensions.disabled`**.
-
-### Create New Extension
+### Develop Extension Locally
 
 ```bash
-xopc extension create my-extension --name "My Extension" --kind utility
+xopc extensions dev ./my-extension
+xopc extensions pack ./my-extension
 ```
 
-**Supported kinds:** `channel` | `provider` | `memory` | `tool` | `utility` | `tts` | `image-generation` | `web-search`
-
-This creates:
+A valid extension project includes:
 - `package.json` - npm config
-- `index.ts` - Extension entry (TypeScript)
-- `xopc.extension.json` - Extension manifest
-- `README.md` - Documentation template
+- `index.ts` or `index.js` - extension entry
+- `xopc.extension.json` - extension manifest
+- `README.md` - documentation
 
 ---
-
 ## Three-tier Storage Architecture
 
 xopc supports three-tier extension storage:
@@ -687,50 +684,51 @@ npm publish --access public
 
 ## CLI Command Reference
 
-### extension install
+### extensions install
 
 ```bash
 # Install from npm
-xopc extension install <package-name>
+xopc extensions install <package-name>
 
-# Install specific version
-xopc extension install my-extension@1.0.0
+# Install a specific version
+xopc extensions install my-extension@1.0.0
 
-# Install from local directory
-xopc extension install ./local-extension-dir
+# Install from a local directory
+xopc extensions install ./local-extension-dir
 
-# Set timeout (default 120 seconds)
-xopc extension install slow-extension --timeout 300000
+# Install from xopc-store only
+xopc extensions install --store weather
 ```
 
-### extension list
+### extensions list
 
 ```bash
-xopc extension list
+xopc extensions list
+xopc extensions list --json
 ```
 
-### extension remove / uninstall
+### extensions health / audit / verify
 
 ```bash
-xopc extension remove <extension-id>
-xopc extension uninstall <extension-id>
+xopc extensions health
+xopc extensions audit
+xopc extensions verify [extension-id]
 ```
 
-### extension info
+### extensions dev / pack / publish
 
 ```bash
-xopc extension info <extension-id>
+xopc extensions dev ./local-extension-dir
+xopc extensions pack ./local-extension-dir
+xopc extensions publish ./local-extension-dir --dry-run
 ```
 
-### extension create
+### extensions search / update / freeze
 
 ```bash
-xopc extension create <extension-id> [options]
-
-Options:
-  --name <name>           Extension display name
-  --description <desc>    Extension description
-  --kind <kind>          Extension type: channel|provider|memory|tool|utility
+xopc extensions search [keyword]
+xopc extensions update [extension-id]
+xopc extensions freeze
 ```
 
 ---

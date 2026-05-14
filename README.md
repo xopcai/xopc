@@ -215,8 +215,8 @@ Treat inbound chat messages as **untrusted input**. Prefer **pairing** or **allo
 ## Extensions & skills
 
 ```bash
-xopc extension install xopc-extension-weather
-xopc extension create my-extension --kind tool
+xopc extensions install xopc-extension-weather
+xopc extensions dev ./my-extension
 xopc skills list
 xopc skills install <name>
 ```

@@ -208,8 +208,8 @@ pnpm run electron:build   # 输出在 dist/release/
 ## 扩展与技能
 
 ```bash
-xopc extension install xopc-extension-weather
-xopc extension create my-extension --kind tool
+xopc extensions install xopc-extension-weather
+xopc extensions dev ./my-extension
 xopc skills list
 xopc skills install <名称>
 ```
