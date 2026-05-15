@@ -74,6 +74,28 @@ export type PostWebchatChecklistResponse =
       persistentGoal: WebchatPersistentGoalWire | null;
     };
 
+export type WebchatGoalRunVerdict = 'done' | 'continue' | 'skipped' | 'inactive' | 'decompose';
+
+export type WebchatGoalRunWire = {
+  id: string;
+  at: number;
+  goalTitle: string;
+  turnsUsed: number;
+  maxTurns: number;
+  verdict: WebchatGoalRunVerdict;
+  statusAfter: 'active' | 'paused' | 'done' | 'cleared';
+  reason?: string;
+  willContinue: boolean;
+  checklistProgress?: { done: number; total: number };
+  assistantPreview?: string;
+};
+
+export type GetWebchatGoalRunsResponse = {
+  ok: true;
+  sessionKey: string;
+  runs: WebchatGoalRunWire[];
+};
+
 export async function fetchWebchatGoal(
   sessionKey: string,
   opts?: { uiLocale?: StoredLanguage },
@@ -108,4 +130,15 @@ export async function postWebchatChecklistMutation(
     method: 'POST',
     body: JSON.stringify(body),
   });
+}
+
+export async function fetchWebchatGoalRuns(
+  sessionKey: string,
+  opts?: { limit?: number },
+): Promise<GetWebchatGoalRunsResponse> {
+  const q = new URLSearchParams({ sessionKey });
+  if (opts?.limit != null && Number.isFinite(opts.limit)) {
+    q.set('limit', String(Math.min(500, Math.max(1, Math.floor(opts.limit)))));
+  }
+  return fetchJson<GetWebchatGoalRunsResponse>(apiUrl(`/api/goals/webchat/runs?${q.toString()}`));
 }

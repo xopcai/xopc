@@ -5,6 +5,7 @@ import { getAgentDefaultModelRef } from '../../config/schema.js';
 import { createLogger } from '../../utils/logger.js';
 
 import { evaluateAfterTurnHermesLike } from './evaluate-turn.js';
+import { appendGoalRun } from './goal-run-store.js';
 import { resolveGoalUiLocale } from './goal-locale.js';
 import type { PersistentGoalApis } from './persistent-goal-apis.js';
 import {
@@ -112,6 +113,22 @@ export async function handlePersistentGoalPostTurn(opts: {
       [PERSISTENT_GOAL_CUSTOM_KEY]: serializePersistentGoal(decision.newState),
     });
     await apis.updateSessionMetadata(sessionKey, { customData: merged });
+  }
+
+  if (config) {
+    try {
+      await appendGoalRun({
+        config,
+        sessionKey,
+        decision,
+        assistantPlainText,
+      });
+    } catch (err) {
+      log.warn(
+        { err, sessionKey },
+        `Persistent goal: goal run append failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
   }
 
   if (decision.message) {

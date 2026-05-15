@@ -8,10 +8,13 @@ import {
 } from '@/features/chat/format-execution-elapsed';
 import {
   fetchWebchatGoal,
+  fetchWebchatGoalRuns,
   postWebchatChecklistMutation,
   postWebchatGoalAction,
   type GoalWebchatAction,
   type WebchatChecklistItemWire,
+  type WebchatGoalRunVerdict,
+  type WebchatGoalRunWire,
   type WebchatPersistentGoalWire,
 } from '@/features/chat/goals-api';
 import { messages } from '@/i18n/messages';
@@ -56,6 +59,21 @@ function verdictLabel(
   return v ?? '';
 }
 
+function runVerdictLabel(v: WebchatGoalRunVerdict, t: ReturnType<typeof messages>['chat']['goal']): string {
+  if (v === 'inactive') return t.verdictInactive;
+  return verdictLabel(v, t);
+}
+
+function statusAfterLabel(
+  s: WebchatGoalRunWire['statusAfter'],
+  t: ReturnType<typeof messages>['chat']['goal'],
+): string {
+  if (s === 'active') return t.statusActive;
+  if (s === 'paused') return t.statusPaused;
+  if (s === 'done') return t.statusDone;
+  return s;
+}
+
 function collapsedStorageKey(sk: string): string {
   return `xopc:goalBannerCollapsed:${sk}`;
 }
@@ -75,6 +93,10 @@ export function ChatGoalBanner({ sessionKey, streaming, sending }: ChatGoalBanne
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [runsOpen, setRunsOpen] = useState(false);
+  const [runs, setRuns] = useState<WebchatGoalRunWire[]>([]);
+  const [runsLoading, setRunsLoading] = useState(false);
+  const [runsError, setRunsError] = useState<string | null>(null);
   const [mutationBusy, setMutationBusy] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [newCriterion, setNewCriterion] = useState('');
@@ -140,6 +162,26 @@ export function ChatGoalBanner({ sessionKey, streaming, sending }: ChatGoalBanne
     }
   }, [streaming, sending, refetch]);
 
+  useEffect(() => {
+    if (!runsOpen) return;
+    let cancelled = false;
+    setRunsLoading(true);
+    setRunsError(null);
+    void fetchWebchatGoalRuns(sessionKey, { limit: 40 })
+      .then((res) => {
+        if (!cancelled) setRuns(res.runs);
+      })
+      .catch((e) => {
+        if (!cancelled) setRunsError(e instanceof Error ? e.message : t.runHistoryLoadFailed);
+      })
+      .finally(() => {
+        if (!cancelled) setRunsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [runsOpen, sessionKey, goal?.turnsUsed, goal?.lastTurnAt, goal?.lastVerdict, t.runHistoryLoadFailed]);
+
   const goalStatus = goal?.status;
   useEffect(() => {
     if (collapsed || !goalStatus || goalStatus === 'done' || goalStatus === 'cleared') return;
@@ -191,13 +233,20 @@ export function ChatGoalBanner({ sessionKey, streaming, sending }: ChatGoalBanne
   const pillTitle = t.pillTitle.replace('{{status}}', statusShort).replace('{{turns}}', turnsShort);
 
   if (collapsed) {
+    /* Zero layout height + FAB pinned to chat column corner (no full-width sticky row). */
     return (
-      <div className="pointer-events-none sticky top-0 z-20 flex shrink-0 justify-end px-3 pb-1 pt-2 sm:px-5 xl:px-6">
-        <div className="pointer-events-auto mx-auto w-full max-w-[var(--max-width-chat)] flex justify-end">
+      <div className="relative h-0 shrink-0 overflow-visible">
+        <div
+          className={cn(
+            'pointer-events-none absolute z-30',
+            'right-[max(0.75rem,env(safe-area-inset-right,0px))] top-[max(0.5rem,env(safe-area-inset-top,0px))]',
+            'sm:right-[max(1.25rem,env(safe-area-inset-right,0px))] xl:right-[max(1.5rem,env(safe-area-inset-right,0px))]',
+          )}
+        >
           <button
             type="button"
             className={cn(
-              'flex h-11 min-w-11 max-w-[min(100%,16rem)] items-center gap-1.5 rounded-full bg-surface-panel px-2.5 py-1 text-left shadow-elevated',
+              'pointer-events-auto flex h-11 min-w-11 max-w-[min(calc(100vw-1.5rem),16rem)] items-center gap-1.5 rounded-full border border-edge/60 bg-surface-panel/95 px-2.5 py-1 text-left shadow-elevated backdrop-blur-sm',
               'transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
             )}
             title={`${pillTitle}${clLine ? ` · ${clLine}` : ''}\n${g.goal}`}
@@ -454,6 +503,72 @@ export function ChatGoalBanner({ sessionKey, streaming, sending }: ChatGoalBanne
             ) : null}
           </div>
         )}
+        <div>
+          <button
+            type="button"
+            className="text-xs text-fg-muted underline-offset-2 hover:underline"
+            onClick={() => setRunsOpen((o) => !o)}
+          >
+            {t.runHistory}
+          </button>
+          {runsOpen ? (
+            <div className="mt-1 max-h-52 space-y-2 overflow-y-auto rounded-md border border-edge bg-surface-panel px-2 py-2 text-xs text-fg-muted">
+              {runsLoading ? <p className="text-fg-muted">{t.runHistoryLoading}</p> : null}
+              {runsError ? <p className="text-destructive">{runsError}</p> : null}
+              {!runsLoading && !runsError && runs.length === 0 ? (
+                <p className="text-fg-muted">{t.runHistoryEmpty}</p>
+              ) : null}
+              {!runsLoading && runs.length > 0 ? (
+                <ul className="space-y-2">
+                  {runs.map((r) => (
+                    <li key={r.id} className="rounded-md border border-edge/80 bg-surface-muted/40 px-2 py-1.5 dark:bg-surface-muted/25">
+                      <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5 text-[10px] text-fg-muted">
+                        <time dateTime={new Date(r.at).toISOString()}>
+                          {new Intl.DateTimeFormat(language === 'zh' ? 'zh-CN' : 'en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          }).format(r.at)}
+                        </time>
+                        <span>
+                          {t.runHistoryTurns.replace('{{used}}', String(r.turnsUsed)).replace('{{max}}', String(r.maxTurns))}
+                        </span>
+                      </div>
+                      <div className="mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5 text-[11px] text-fg">
+                        <span>{runVerdictLabel(r.verdict, t)}</span>
+                        <span className="text-fg-muted">·</span>
+                        <span>{statusAfterLabel(r.statusAfter, t)}</span>
+                        <span className="text-fg-muted">·</span>
+                        <span>{r.willContinue ? t.runHistoryContinue : t.runHistoryStop}</span>
+                        {r.checklistProgress ? (
+                          <>
+                            <span className="text-fg-muted">·</span>
+                            <span>
+                              {t.checklistProgress
+                                .replace('{{done}}', String(r.checklistProgress.done))
+                                .replace('{{total}}', String(r.checklistProgress.total))}
+                            </span>
+                          </>
+                        ) : null}
+                      </div>
+                      {r.reason ? (
+                        <p className="mt-1 whitespace-pre-wrap break-words text-fg-muted">
+                          <span className="font-medium text-fg">{t.lastReason}:</span> {r.reason}
+                        </p>
+                      ) : null}
+                      {r.assistantPreview ? (
+                        <p className="mt-1 line-clamp-3 break-words text-[10px] leading-snug text-fg-muted">
+                          {r.assistantPreview}
+                        </p>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
         {error ? <p className="text-xs text-destructive">{error}</p> : null}
       </div>
     </div>
