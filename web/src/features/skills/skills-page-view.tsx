@@ -8,6 +8,7 @@ import {
   FileArchive,
   Funnel,
   Info,
+  Loader2,
   MoreVertical,
   Star,
   Trash2,
@@ -459,7 +460,7 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
                   {mpCategoriesError}
                 </p>
               ) : null}
-              {mpLoading ? (
+              {!mpPayload && !mpError ? (
                 <div
                   className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
                   aria-busy="true"
@@ -469,20 +470,39 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
                     <MarketplaceSkillCardSkeleton key={i} />
                   ))}
                 </div>
-              ) : mpError ? (
+              ) : mpError && !mpPayload ? (
                 <div
                   className="rounded-xl border border-edge bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-edge dark:bg-red-950/40 dark:text-red-300"
                   role="alert"
                 >
                   {mpError}
                 </div>
-              ) : !mpPayload || mpPayload.items.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-edge py-16 text-center text-sm text-fg-muted">
-                  {sk.marketplaceEmpty}
-                </div>
-              ) : (
-                <>
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              ) : mpPayload ? (
+                <div className="relative">
+                  {mpLoading ? (
+                    <div
+                      className="pointer-events-none absolute inset-0 z-[1] flex justify-center bg-surface-panel/40 pt-[min(28vh,7.5rem)] backdrop-blur-[1px] motion-reduce:backdrop-blur-none dark:bg-surface-base/35"
+                      aria-busy="true"
+                      aria-label={sk.loading}
+                    >
+                      <Loader2
+                        className="size-8 shrink-0 animate-spin text-accent motion-reduce:animate-none"
+                        strokeWidth={2}
+                        aria-hidden
+                      />
+                    </div>
+                  ) : null}
+                  {mpPayload.items.length === 0 ? (
+                    <div className="rounded-2xl border border-dashed border-edge py-16 text-center text-sm text-fg-muted">
+                      {sk.marketplaceEmpty}
+                    </div>
+                  ) : (
+                    <div
+                      className={cn(
+                        'grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3',
+                        mpLoading && 'pointer-events-none opacity-[0.52] motion-reduce:opacity-100',
+                      )}
+                    >
                     {mpPayload.items.map((row) => {
                       const installed = isSkillInstalledByName(row.id);
                       const busy = installingMarketName === row.id;
@@ -630,44 +650,47 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
                         </article>
                       );
                     })}
-                  </div>
-                  <div className="flex flex-col items-center justify-between gap-3 sm:flex-row">
-                    <p className="text-center text-xs text-fg-muted sm:text-left">
-                      {interpolate(sk.marketplacePageStatus, {
-                        page: mpPayload.meta.page,
-                        totalPages: mpPayload.meta.totalPages,
-                        total: mpPayload.meta.total,
-                      })}
-                    </p>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        className="h-9 gap-1 px-2"
-                        disabled={mpLoading || marketPage <= 1}
-                        aria-label={sk.marketplacePagePrev}
-                        onClick={() => setMarketPage((p) => Math.max(1, p - 1))}
-                      >
-                        <ChevronLeft className="size-4" strokeWidth={1.75} aria-hidden />
-                        <span className="sr-only sm:not-sr-only">{sk.marketplacePagePrev}</span>
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        className="h-9 gap-1 px-2"
-                        disabled={mpLoading || marketPage >= mpPayload.meta.totalPages}
-                        aria-label={sk.marketplacePageNext}
-                        onClick={() =>
-                          setMarketPage((p) => Math.min(mpPayload.meta.totalPages, p + 1))
-                        }
-                      >
-                        <span className="sr-only sm:not-sr-only">{sk.marketplacePageNext}</span>
-                        <ChevronRight className="size-4" strokeWidth={1.75} aria-hidden />
-                      </Button>
                     </div>
-                  </div>
-                </>
-              )}
+                  )}
+                  {mpPayload.items.length > 0 ? (
+                    <div className="mt-3 flex flex-col items-center justify-between gap-3 sm:flex-row">
+                      <p className="text-center text-xs text-fg-muted sm:text-left">
+                        {interpolate(sk.marketplacePageStatus, {
+                          page: mpPayload.meta.page,
+                          totalPages: mpPayload.meta.totalPages,
+                          total: mpPayload.meta.total,
+                        })}
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          className="h-9 gap-1 px-2"
+                          disabled={mpLoading || marketPage <= 1}
+                          aria-label={sk.marketplacePagePrev}
+                          onClick={() => setMarketPage((p) => Math.max(1, p - 1))}
+                        >
+                          <ChevronLeft className="size-4" strokeWidth={1.75} aria-hidden />
+                          <span className="sr-only sm:not-sr-only">{sk.marketplacePagePrev}</span>
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          className="h-9 gap-1 px-2"
+                          disabled={mpLoading || marketPage >= mpPayload.meta.totalPages}
+                          aria-label={sk.marketplacePageNext}
+                          onClick={() =>
+                            setMarketPage((p) => Math.min(mpPayload.meta.totalPages, p + 1))
+                          }
+                        >
+                          <span className="sr-only sm:not-sr-only">{sk.marketplacePageNext}</span>
+                          <ChevronRight className="size-4" strokeWidth={1.75} aria-hidden />
+                        </Button>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
             </>
           ) : (
             <>
