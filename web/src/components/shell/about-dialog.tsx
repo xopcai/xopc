@@ -1,11 +1,11 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { AlertCircle, CheckCircle, Download, Loader2, RefreshCw, X } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { BrandLogo } from '@/components/shell/brand-logo';
 import { XOPC_ELECTRON_UPDATE_RECHECK_EVENT } from '@/features/updater/use-update-reminder';
 import { useUpdateStatus } from '@/features/updater/use-update-status';
-import type { ElectronUpdateState } from '@/features/updater/use-update-status';
+import type { ElectronUpdateState, NpmUpdateStatus } from '@/features/updater/use-update-status';
 import { messages } from '@/i18n/messages';
 import { webBuildInfo } from '@/lib/build-info';
 import { cn } from '@/lib/cn';
@@ -14,7 +14,6 @@ import { apiUrl } from '@/lib/url';
 import { useLocaleStore } from '@/stores/locale-store';
 
 const REPO_URL = 'https://github.com/xopcai/xopc';
-const RELEASES_URL = 'https://github.com/xopcai/xopc/releases';
 
 type GatewayHealth = {
   version?: string;
@@ -49,14 +48,49 @@ export function AboutDialog({
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const d = m.aboutDialog;
-  const { isElectron, electron, electronCheck } = useUpdateStatus();
+  const tp = m.updatePanel;
+  const { isElectron, electron, electronCheck, checkNow, npm, runNpmUpdate, npmUpdateRunning } = useUpdateStatus();
 
   const [gatewayVersion, setGatewayVersion] = useState<string | null>(null);
   const [manualCheckTriggered, setManualCheckTriggered] = useState(false);
+  const [npmCheckBusy, setNpmCheckBusy] = useState(false);
+  const [npmCheckFailed, setNpmCheckFailed] = useState(false);
 
   useEffect(() => {
-    if (!open) setManualCheckTriggered(false);
+    if (!open) {
+      setManualCheckTriggered(false);
+      setNpmCheckBusy(false);
+      setNpmCheckFailed(false);
+    }
   }, [open]);
+
+  const handleNpmUpgrade = useCallback(async () => {
+    const panel = messages(language).updatePanel;
+    const r = await runNpmUpdate();
+    if (r.ok) {
+      window.dispatchEvent(
+        new CustomEvent('extension-notification', {
+          detail: {
+            type: 'success',
+            title: panel.updateSuccess,
+            message: panel.updateSuccessDetail,
+          },
+        }),
+      );
+      return;
+    }
+    const title =
+      r.error === 'git-checkout'
+        ? panel.updateErrorGit
+        : r.error === 'busy'
+          ? panel.updateErrorBusy
+          : panel.updateErrorFailed;
+    window.dispatchEvent(
+      new CustomEvent('extension-notification', {
+        detail: { type: 'error' as const, title, message: r.message },
+      }),
+    );
+  }, [runNpmUpdate, language]);
 
   useEffect(() => {
     if (!open) return;
@@ -139,15 +173,28 @@ export function AboutDialog({
                         setManualCheckTriggered(true);
                         electronCheck();
                       } else {
-                        window.open(RELEASES_URL, '_blank', 'noopener,noreferrer');
+                        setManualCheckTriggered(true);
+                        setNpmCheckFailed(false);
+                        setNpmCheckBusy(true);
+                        void (async () => {
+                          const ok = await checkNow();
+                          setNpmCheckBusy(false);
+                          if (!ok) setNpmCheckFailed(true);
+                        })();
                       }
                     }}
                     disabled={
-                      isElectron &&
-                      ['checking', 'available', 'downloading', 'downloaded'].includes(electron?.state ?? '')
+                      (isElectron &&
+                        ['checking', 'available', 'downloading', 'downloaded'].includes(electron?.state ?? '')) ||
+                      (!isElectron && (npmCheckBusy || npmUpdateRunning))
                     }
                   >
                     {isElectron && electron?.state === 'checking' ? (
+                      <span className="flex items-center gap-1">
+                        <Loader2 className="size-3 animate-spin" />
+                        {d.checkUpdatesChecking}
+                      </span>
+                    ) : !isElectron && npmCheckBusy ? (
                       <span className="flex items-center gap-1">
                         <Loader2 className="size-3 animate-spin" />
                         {d.checkUpdatesChecking}
@@ -164,6 +211,17 @@ export function AboutDialog({
                   version={electron?.version}
                   percent={electron?.percent}
                   d={d}
+                />
+              )}
+              {!isElectron && manualCheckTriggered && (
+                <NpmAboutUpdateHint
+                  checking={npmCheckBusy}
+                  checkFailed={npmCheckFailed}
+                  npm={npm}
+                  npmUpdateRunning={npmUpdateRunning}
+                  onUpgrade={handleNpmUpgrade}
+                  d={d}
+                  tp={tp}
                 />
               )}
 
@@ -277,4 +335,82 @@ function ElectronUpdateHint({
     );
   }
   return null;
+}
+
+function NpmAboutUpdateHint({
+  checking,
+  checkFailed,
+  npm,
+  npmUpdateRunning,
+  onUpgrade,
+  d,
+  tp,
+}: {
+  checking: boolean;
+  checkFailed: boolean;
+  npm: NpmUpdateStatus | null;
+  npmUpdateRunning: boolean;
+  onUpgrade: () => void;
+  d: {
+    checkUpdatesChecking: string;
+    checkUpdatesUpToDate: string;
+    checkUpdatesError: string;
+  };
+  tp: {
+    reminderNpm: string;
+    updateNow: string;
+    updateRunning: string;
+  };
+}) {
+  if (checking) {
+    return (
+      <p className="flex items-center gap-2 text-[12px] text-fg-muted">
+        <Loader2 className="size-3.5 animate-spin" />
+        <span>{d.checkUpdatesChecking}</span>
+      </p>
+    );
+  }
+  if (checkFailed) {
+    return (
+      <p className="flex items-center gap-2 text-[12px] text-red-500 dark:text-red-400">
+        <AlertCircle className="size-3.5" />
+        <span>{d.checkUpdatesError}</span>
+      </p>
+    );
+  }
+  if (npmUpdateRunning) {
+    return (
+      <p className="flex items-center gap-2 text-[12px] text-fg-muted">
+        <Loader2 className="size-3.5 animate-spin" />
+        <span>{tp.updateRunning}</span>
+      </p>
+    );
+  }
+  if (npm?.updateAvailable && npm.latestVersion) {
+    return (
+      <div className="space-y-2">
+        <p className="flex items-start gap-2 text-[12px] text-accent-fg">
+          <RefreshCw className="mt-0.5 size-3.5 shrink-0" />
+          <span>{tp.reminderNpm.replace('{{version}}', npm.latestVersion)}</span>
+        </p>
+        <button
+          type="button"
+          onClick={onUpgrade}
+          className={cn(
+            'w-full rounded-lg bg-accent px-3 py-1.5 text-center text-xs font-medium text-white',
+            'hover:bg-accent/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
+            'disabled:pointer-events-none disabled:opacity-50',
+          )}
+        >
+          {tp.updateNow}
+        </button>
+      </div>
+    );
+  }
+  return (
+    <p className="flex items-center gap-2 text-[12px] text-green-600 dark:text-green-400">
+      <CheckCircle className="size-3.5" />
+      <span>{d.checkUpdatesUpToDate}</span>
+    </p>
+  );
 }
