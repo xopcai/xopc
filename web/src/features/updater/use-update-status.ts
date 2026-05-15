@@ -85,7 +85,8 @@ if (import.meta.env.DEV && typeof window !== 'undefined') {
 }
 
 export function useUpdateStatus(): UpdateStatus & {
-  checkNow: () => Promise<void>;
+  /** Resolves true when the server returned a fresh npm status payload. */
+  checkNow: () => Promise<boolean>;
   runNpmUpdate: () => Promise<NpmUpdateRunResult>;
   npmUpdateRunning: boolean;
   electronCheck: () => void;
@@ -178,16 +179,19 @@ export function useUpdateStatus(): UpdateStatus & {
     [],
   );
 
-  const checkNow = useCallback(async () => {
-    if (isEffectiveElectron) return;
+  const checkNow = useCallback(async (): Promise<boolean> => {
+    if (isEffectiveElectron) return false;
     try {
       const res = await apiFetch(apiUrl('/api/update/check'), { method: 'POST' });
-      if (res.ok) {
-        const json = (await res.json()) as { payload?: NpmUpdateStatus };
-        if (json.payload) setNpm(json.payload);
+      if (!res.ok) return false;
+      const json = (await res.json()) as { payload?: NpmUpdateStatus };
+      if (json.payload) {
+        setNpm(json.payload);
+        return true;
       }
+      return false;
     } catch {
-      /* silent */
+      return false;
     }
   }, [isEffectiveElectron]);
 
