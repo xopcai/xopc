@@ -167,7 +167,7 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-surface-panel">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-surface-panel">
       <div className="mx-auto flex w-full max-w-app-main flex-col gap-6 px-4 py-6 sm:px-8">
         {actionFeedback ? (
           <div
