@@ -48,7 +48,12 @@ export function initGatewayFromWindow(): void {
   if (urlToken) {
     useGatewayStore.getState().setGatewayToken(urlToken);
     const clean = window.location.pathname + window.location.hash;
-    window.history.replaceState({}, '', clean);
+    const prev = window.history.state;
+    const nextState =
+      prev && typeof prev === 'object' && !Array.isArray(prev)
+        ? { ...(prev as Record<string, unknown>) }
+        : prev;
+    window.history.replaceState(nextState, '', clean);
     return;
   }
   const stored = getToken();

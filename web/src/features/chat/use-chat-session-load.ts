@@ -177,7 +177,7 @@ export function useChatSessionLoad(deps: {
             const withMsgs = sessions.filter((s) => (s.messageCount ?? 0) > 0);
             const target = withMsgs[0] ?? sessions[0];
             if (target) {
-              navigateToSession(target.key);
+              navigateToSession(target.key, true);
               return await runBody(target.key, 0);
             } else {
               try {
@@ -185,7 +185,7 @@ export function useChatSessionLoad(deps: {
                 const session = await sessionMgrRef.current.createSession(
                   aid ? { agentId: aid } : undefined,
                 );
-                navigateToSession(session.key);
+                navigateToSession(session.key, true);
                 setSessionKey(session.key);
                 setMessages([]);
                 setHasMore(false);
