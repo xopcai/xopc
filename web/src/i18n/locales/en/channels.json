@@ -270,7 +270,7 @@
   },
   "heartbeatSettings": {
     "needToken": "Save a gateway token to load and edit heartbeat options.",
-    "subtitle": "Periodic agent wake, optional delivery to a channel, and HEARTBEAT.md in your workspace. Stored in the gateway config file and workspace.",
+    "subtitle": "Periodic agent wake, optional delivery to a channel, and HEARTBEAT.md under the default agent's profile directory. Stored in the gateway config file and agents/<id>/profile/.",
     "docsLink": "Heartbeat documentation",
     "loadError": "Failed to load heartbeat settings",
     "loading": "Loading…",

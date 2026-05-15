@@ -2,7 +2,7 @@
  * Agent path and list resolution (config is the single source of truth).
  */
 
-import { join, resolve } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 
 import type { Config } from '../config/schema.js';
 import { resolveStateDir } from '../config/paths-state.js';
@@ -191,6 +191,17 @@ export function resolveAgentDir(cfg: Config, agentId: string): string {
 /** Parent of `sessions/` and `agent/`: `<stateDir>/agents/<id>/`. */
 export function resolveAgentHomeDir(cfg: Config, agentId: string): string {
   return join(resolveStateDir(process.env), 'agents', normalizeAgentId(agentId));
+}
+
+/** Profile Markdown + gateway avatar files: `<stateDir>/agents/<id>/profile/`. */
+export function resolveAgentProfileDir(cfg: Config, agentId: string): string {
+  return join(resolveAgentHomeDir(cfg, agentId), 'profile');
+}
+
+/** Resolved path for a single profile Markdown basename (e.g. `SOUL.md`). */
+export function resolveAgentProfileMarkdownPath(cfg: Config, agentId: string, filename: string): string {
+  const base = basename(filename.trim().replace(/\\/g, '/'));
+  return join(resolveAgentProfileDir(cfg, agentId), base);
 }
 
 export function resolveSessionsDir(cfg: Config, agentId: string): string {

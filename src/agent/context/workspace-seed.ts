@@ -1,5 +1,5 @@
 /**
- * Seed profile Markdown files into the workspace root (OpenClaw-aligned).
+ * Seed profile Markdown files into `agents/<agentId>/profile/` (and optionally `git init` the Markdown workspace).
  * Resolution order per file: `XOPC_TEMPLATE_PATH` or repo `docs/reference/templates`, then bundled `./workspace-templates/`.
  */
 
@@ -9,7 +9,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import type { Config } from '../../config/schema.js';
-import { DEFAULT_AGENT_ID, resolveAgentWorkspaceDir } from '../agent-scope.js';
+import { DEFAULT_AGENT_ID, resolveAgentProfileDir, resolveAgentWorkspaceDir } from '../agent-scope.js';
 import { WORKSPACE_FILES } from '../../config/paths.js';
 import { AGENT_PROFILE_MARKDOWN_SYSTEM_FILES } from './workspace.js';
 import { createLogger } from '../../utils/logger.js';
@@ -24,7 +24,7 @@ export type SeedWorkspaceProfileMarkdownOptions = {
   displayName?: string;
 };
 
-/** Files to copy when seeding a new agent workspace (includes `BOOTSTRAP.md`, not part of system-prompt load order). */
+/** Files to copy when seeding a new agent (includes `BOOTSTRAP.md`, not part of system-prompt load order). */
 const SEED_FILENAMES: readonly string[] = [...AGENT_PROFILE_MARKDOWN_SYSTEM_FILES, WORKSPACE_FILES.BOOTSTRAP];
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -89,20 +89,24 @@ function personalizeIdentityTemplate(content: string, displayName?: string): str
 }
 
 /**
- * OpenClaw-aligned: seed profile Markdown into the workspace root.
- * Does not overwrite existing files (per-agent persona stays independent after first edit).
- * On a brand-new workspace, also attempts `git init` (silently skips when git is unavailable).
+ * Seed profile Markdown into `profileDir` (`agents/<id>/profile/`).
+ * When `markdownWorkspaceDir` is set, runs `git init` on a brand-new Markdown workspace only (never under `profile/`).
+ * Does not overwrite existing files.
  */
-export function seedWorkspaceProfileMarkdownFiles(
-  workspaceDir: string,
+export function seedAgentProfileMarkdownFiles(
+  profileDir: string,
+  markdownWorkspaceDir: string,
   options?: SeedWorkspaceProfileMarkdownOptions,
 ): void {
-  const isBrandNew = !existsSync(workspaceDir);
-  mkdirSync(workspaceDir, { recursive: true });
+  const wsPreExisted = existsSync(markdownWorkspaceDir);
+  mkdirSync(profileDir, { recursive: true });
+  mkdirSync(markdownWorkspaceDir, { recursive: true });
+
+  const isBrandNewWorkspace = !wsPreExisted;
 
   let seeded = 0;
   for (const name of SEED_FILENAMES) {
-    const targetPath = join(workspaceDir, name);
+    const targetPath = join(profileDir, name);
     const tpl = readTemplate(name);
     if (!tpl) {
       log.warn({ name }, 'Missing workspace template file; skip seeding');
@@ -116,32 +120,34 @@ export function seedWorkspaceProfileMarkdownFiles(
   }
 
   if (seeded > 0) {
-    log.info({ workspaceDir, seeded }, 'Seeded profile Markdown files');
+    log.info({ profileDir, seeded }, 'Seeded profile Markdown files');
   }
 
-  ensureGitRepo(workspaceDir, isBrandNew);
+  ensureGitRepo(markdownWorkspaceDir, isBrandNewWorkspace);
 }
 
-/** Attempt `git init` on a brand-new workspace; silently skip on failure. */
-function ensureGitRepo(workspaceDir: string, isBrandNew: boolean): void {
+/** Attempt `git init` on a brand-new Markdown workspace; silently skip on failure. */
+function ensureGitRepo(markdownWorkspaceDir: string, isBrandNew: boolean): void {
   if (!isBrandNew) {
     return;
   }
-  if (existsSync(join(workspaceDir, '.git'))) {
+  if (existsSync(join(markdownWorkspaceDir, '.git'))) {
     return;
   }
   try {
-    execFileSync('git', ['init'], { cwd: workspaceDir, stdio: 'ignore', timeout: 5_000 });
-    log.info({ workspaceDir }, 'Initialized git repo in workspace');
+    execFileSync('git', ['init'], { cwd: markdownWorkspaceDir, stdio: 'ignore', timeout: 5_000 });
+    log.info({ markdownWorkspaceDir }, 'Initialized git repo in Markdown workspace');
   } catch {
-    log.debug({ workspaceDir }, 'git init skipped (git not available or failed)');
+    log.debug({ markdownWorkspaceDir }, 'git init skipped (git not available or failed)');
   }
 }
 
 /**
- * Ensure default (`main`) agent workspace has reference profile Markdown templates (missing files only).
- * OpenClaw-aligned: files live in the workspace root directory.
+ * Ensure default (`main`) agent has reference profile Markdown templates (missing files only).
  */
 export function seedMainAgentProfileMarkdown(cfg: Config): void {
-  seedWorkspaceProfileMarkdownFiles(resolveAgentWorkspaceDir(cfg, DEFAULT_AGENT_ID));
+  seedAgentProfileMarkdownFiles(
+    resolveAgentProfileDir(cfg, DEFAULT_AGENT_ID),
+    resolveAgentWorkspaceDir(cfg, DEFAULT_AGENT_ID),
+  );
 }

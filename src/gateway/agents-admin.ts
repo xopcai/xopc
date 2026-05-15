@@ -10,13 +10,14 @@ import {
   listAgentEntries,
   normalizeAgentId,
   resolveAgentDir,
+  resolveAgentProfileDir,
   resolveAgentWorkspaceDir,
   resolveDefaultAgentId,
   resolveUserPath,
   validateAgentIdForNewAgent,
 } from '../agent/agent-scope.js';
 import { AGENT_PROFILE_MARKDOWN_SYSTEM_FILES } from '../agent/context/workspace.js';
-import { seedWorkspaceProfileMarkdownFiles } from '../agent/context/workspace-seed.js';
+import { seedAgentProfileMarkdownFiles } from '../agent/context/workspace-seed.js';
 import {
   applyAgentConfig,
   findAgentEntryIndex,
@@ -41,7 +42,7 @@ export type GatewayAgentRow = {
   /** Value from `IDENTITY.md` **Avatar:** line when present (may be URL, `xopc:…`, etc.). */
   avatar?: string;
   workspace: string;
-  /** Absolute directory where profile Markdown (SOUL.md, IDENTITY.md, …) is read for this agent. */
+  /** Absolute directory for profile Markdown (`SOUL.md`, …) and gateway avatars: `agents/<id>/profile/`. */
   profileDir: string;
   model?: { primary?: string; fallbacks?: string[] };
   isDefault: boolean;
@@ -108,7 +109,7 @@ export async function listGatewayAgents(cfg: Config): Promise<GatewayAgentsListR
     const entryDisable = entry?.tools?.disable ?? [];
     let avatar: string | undefined;
     try {
-      const identityPath = join(resolveAgentWorkspaceDir(cfg, id), WORKSPACE_FILES.IDENTITY);
+      const identityPath = join(resolveAgentProfileDir(cfg, id), WORKSPACE_FILES.IDENTITY);
       const content = await readFile(identityPath, 'utf-8');
       avatar = extractAvatarFromIdentityMarkdown(content);
     } catch {
@@ -120,7 +121,7 @@ export async function listGatewayAgents(cfg: Config): Promise<GatewayAgentsListR
       ...(entry?.description?.trim() ? { description: entry.description.trim() } : {}),
       ...(avatar ? { avatar } : {}),
       workspace: profile.resolvedWorkspacePath,
-      profileDir: resolveAgentWorkspaceDir(cfg, id),
+      profileDir: resolveAgentProfileDir(cfg, id),
       ...(model ? { model } : {}),
       isDefault: id === defaultId,
       skills: {
@@ -199,13 +200,15 @@ export function prepareCreateAgent(
 
 export async function finalizeCreateAgentDirs(cfg: Config, agentId: string): Promise<void> {
   const wsPath = resolveAgentWorkspaceDir(cfg, agentId);
+  const profilePath = resolveAgentProfileDir(cfg, agentId);
   const adPath = resolveAgentDir(cfg, agentId);
   await mkdir(wsPath, { recursive: true });
+  await mkdir(profilePath, { recursive: true });
   await mkdir(adPath, { recursive: true });
   const id = normalizeAgentId(agentId);
   const entry = listAgentEntries(cfg).find((e) => normalizeAgentId(e.id) === id);
   const displayName = entry?.name?.trim() || id;
-    seedWorkspaceProfileMarkdownFiles(wsPath, { displayName });
+  seedAgentProfileMarkdownFiles(profilePath, wsPath, { displayName });
 }
 
 export type UpdateAgentBody = {
@@ -350,7 +353,7 @@ export type AgentFileEntry = {
 };
 
 async function profileMarkdownRootReal(cfg: Config, agentId: string): Promise<string> {
-  const dir = resolveAgentWorkspaceDir(cfg, agentId);
+  const dir = resolveAgentProfileDir(cfg, agentId);
   await mkdir(dir, { recursive: true });
   try {
     return await realpath(dir);

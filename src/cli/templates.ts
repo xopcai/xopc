@@ -26,7 +26,7 @@ export type TemplateFile = (typeof TEMPLATE_FILES)[number];
 
 /**
  * Profile Markdown templates (system-prompt stack, excluding BOOTSTRAP.md).
- * Seeded by seedWorkspaceProfileMarkdownFiles / seedMainAgentProfileMarkdown.
+ * Seeded by seedAgentProfileMarkdownFiles / seedMainAgentProfileMarkdown.
  */
 export const PROFILE_MARKDOWN_TEMPLATE_FILES: readonly TemplateFile[] = [
   'SOUL.md',

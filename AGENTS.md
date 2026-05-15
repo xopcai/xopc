@@ -219,7 +219,7 @@ import { DraftStreamManager } from '@xopcai/xopc/channels/telegram/draft-stream.
 
 ### Multiple agents (`agents.list`)
 
-Runtime behavior (model, workspace, tools, prompts per **session key** agent id) is driven by the main config file (`xopc.json` by default) — `agents.defaults` merged with the matching entry in **`agents.list`**. Default agent id: **`agents.default`**, else a `list` entry with **`default: true`**, else the first enabled entry, else **`main`**. On-disk paths (`~/.xopc/agents/<id>/`, Markdown workspace roots) resolve from the same config via **`src/agent/agent-scope.ts`**.
+Runtime behavior (model, workspace, tools, prompts per **session key** agent id) is driven by the main config file (`xopc.json` by default) — `agents.defaults` merged with the matching entry in **`agents.list`**. Default agent id: **`agents.default`**, else a `list` entry with **`default: true`**, else the first enabled entry, else **`main`**. On-disk paths (`~/.xopc/agents/<id>/` including **`profile/`** Markdown, Markdown workspace roots) resolve from the same config via **`src/agent/agent-scope.ts`**.
 
 Use **`xopc agents list`**, **`xopc agents add`**, **`xopc agents delete`** to manage `agents.list` and initialize directories — there is no separate agent registry outside config.
 
