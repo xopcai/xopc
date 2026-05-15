@@ -1,9 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtemp, rm } from 'fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
 
 import { ConfigSchema } from '../../config/schema.js';
+import { FILENAMES } from '../../config/paths.js';
 import { SessionStore } from '../store.js';
 
 const testConfig = ConfigSchema.parse({});
@@ -91,6 +92,20 @@ describe('SessionStore', () => {
       const telegramSessions = await store.list({ channel: 'telegram' });
       expect(telegramSessions.items).toHaveLength(1);
       expect(telegramSessions.items[0].sourceChannel).toBe('telegram');
+    });
+
+    it('lists webchat when sessions.json metadata omits sourceChannel (rehydrate from session key)', async () => {
+      const key = 'main:webchat:default:direct:meta-gap';
+      await store.saveMessages(key, [{ role: 'user', content: 'x', timestamp: Date.now() }]);
+      const mapPath = join(store.getSessionsRoot(), FILENAMES.SESSIONS_MAP);
+      const raw = JSON.parse(await readFile(mapPath, 'utf-8')) as Record<string, { pluginExtensions?: { xopc?: { metadata?: Record<string, unknown> } } }>;
+      const meta = raw[key]?.pluginExtensions?.xopc?.metadata;
+      expect(meta).toBeDefined();
+      delete meta!.sourceChannel;
+      await writeFile(mapPath, JSON.stringify(raw));
+
+      const listed = await store.list({ channel: 'webchat,gateway' });
+      expect(listed.items.some((s) => s.key === key)).toBe(true);
     });
 
     it('should list sessions with status filter', async () => {
