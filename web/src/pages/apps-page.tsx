@@ -122,7 +122,7 @@ export function AppsPage() {
   const showSearch = mainTab !== 'marketplace' && listForTab.length > 0;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-surface-panel">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-surface-panel">
       <div className="mx-auto w-full max-w-app-main px-4 py-8">
         <header className="mb-6">
           <h1 className="text-xl font-semibold text-fg">{m.appsPage.title}</h1>
@@ -576,7 +576,7 @@ function ContributionBadge({
 
 function AppsPageSkeleton() {
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-surface-panel">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-surface-panel">
       <div className="mx-auto w-full max-w-app-main px-4 py-8">
         <div className="mb-6 h-8 w-40 max-w-full animate-pulse rounded-md bg-surface-hover" />
         <div className="mb-2 h-4 w-full max-w-md animate-pulse rounded bg-surface-hover" />
