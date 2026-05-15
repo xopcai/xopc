@@ -37,6 +37,7 @@ function hasSrcAttribute(openTag: string): boolean {
  * For the gateway console, we use:
  * - `script-src 'self'` + optional SHA-256 hashes for inline scripts (no unsafe-inline)
  * - `style-src 'self' 'unsafe-inline'` (Tailwind + runtime style injection)
+ * - `media-src 'self' blob:` (chat voice previews / recorded clips use blob URLs)
  * - `frame-ancestors 'none'` (prevent clickjacking)
  * - `base-uri 'none'` (prevent base tag hijacking)
  * - `object-src 'none'` (prevent plugin execution)
@@ -59,6 +60,7 @@ export function buildGatewayConsoleCspHeader(options?: {
     scriptSrc,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob: https:",
+    "media-src 'self' blob: data:",
     "font-src 'self'",
     `connect-src ${connectSrc}`,
     "worker-src 'self'",
