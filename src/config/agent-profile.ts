@@ -22,7 +22,7 @@ export interface EffectiveAgentTools {
 
 export interface EffectiveAgentProfile {
   agentId: string;
-  /** Resolved absolute workspace path for profile Markdown, attachments, memories. */
+  /** Resolved absolute Markdown workspace path (tool cwd, attachments, daily memory/, …). */
   resolvedWorkspacePath: string;
   /** Primary model ref (provider/model); may be empty → runtime default. */
   primaryModelRef: string | undefined;

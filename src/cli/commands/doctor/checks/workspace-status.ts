@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { resolveDefaultAgentId, resolveAgentWorkspaceDir } from '../../../../agent/agent-scope.js';
+import { resolveDefaultAgentId, resolveAgentProfileDir, resolveAgentWorkspaceDir } from '../../../../agent/agent-scope.js';
 import { loadConfig } from '../../../../config/loader.js';
 import { WORKSPACE_FILES } from '../../../../config/paths.js';
 import type { CheckResult, DoctorContext } from '../types.js';
@@ -32,7 +32,10 @@ export async function checkWorkspaceStatus(ctx: DoctorContext): Promise<CheckRes
 
   const agentId = resolveDefaultAgentId(config);
   const root = resolveAgentWorkspaceDir(config, agentId);
+  const profileRoot = resolveAgentProfileDir(config, agentId);
   const hints: string[] = [];
+
+  const hasProfileFile = (name: string): boolean => existsSync(join(profileRoot, name));
 
   if (!existsSync(root)) {
     return {
@@ -44,26 +47,34 @@ export async function checkWorkspaceStatus(ctx: DoctorContext): Promise<CheckRes
     };
   }
 
-  const soul = join(root, WORKSPACE_FILES.SOUL);
-  const identity = join(root, WORKSPACE_FILES.IDENTITY);
+  if (!existsSync(profileRoot)) {
+    return {
+      id: 'workspace-status',
+      label: 'Workspace',
+      status: 'warn',
+      message: 'Agent profile directory is missing.',
+      hints: [profileRoot, 'Run: xopc onboard'],
+    };
+  }
+
   const missing: string[] = [];
-  if (!existsSync(soul)) missing.push(WORKSPACE_FILES.SOUL);
-  if (!existsSync(identity)) missing.push(WORKSPACE_FILES.IDENTITY);
+  if (!hasProfileFile(WORKSPACE_FILES.SOUL)) missing.push(WORKSPACE_FILES.SOUL);
+  if (!hasProfileFile(WORKSPACE_FILES.IDENTITY)) missing.push(WORKSPACE_FILES.IDENTITY);
 
   if (missing.length > 0) {
     return {
       id: 'workspace-status',
       label: 'Workspace',
       status: 'warn',
-      message: `Essential workspace files missing: ${missing.join(', ')}.`,
-      hints: [root, 'Run: xopc onboard'],
+      message: `Essential profile files missing: ${missing.join(', ')}.`,
+      hints: [profileRoot, root, 'Run: xopc onboard'],
     };
   }
 
-  if (!existsSync(join(root, WORKSPACE_FILES.USER))) {
+  if (!hasProfileFile(WORKSPACE_FILES.USER)) {
     hints.push(`${WORKSPACE_FILES.USER} is optional; add a user profile for better context.`);
   }
-  if (!existsSync(join(root, WORKSPACE_FILES.TOOLS))) {
+  if (!hasProfileFile(WORKSPACE_FILES.TOOLS)) {
     hints.push(`${WORKSPACE_FILES.TOOLS} is optional; add tool notes if you use many tools.`);
   }
 
@@ -76,7 +87,7 @@ export async function checkWorkspaceStatus(ctx: DoctorContext): Promise<CheckRes
       id: 'workspace-status',
       label: 'Workspace',
       status: 'pass',
-      message: 'Essential workspace files are present.',
+      message: 'Markdown workspace and essential profile files are present.',
       hints,
     };
   }
@@ -85,7 +96,7 @@ export async function checkWorkspaceStatus(ctx: DoctorContext): Promise<CheckRes
     id: 'workspace-status',
     label: 'Workspace',
     status: 'pass',
-    message: 'Workspace directory and essential files look good.',
-    hints: [root],
+      message: 'Markdown workspace and essential profile files look good.',
+      hints: [profileRoot, root],
   };
 }

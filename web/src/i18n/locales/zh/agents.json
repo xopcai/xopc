@@ -266,7 +266,7 @@
     "tabChannels": "通道",
     "tabCron": "定时",
     "selectAgent": "智能体",
-    "selectAgentHint": "选择要编辑的智能体。人设 Markdown（SOUL.md、IDENTITY.md 等）从该条目解析后的 Markdown 工作区读取。",
+    "selectAgentHint": "选择要编辑的智能体。人设 Markdown（SOUL.md、IDENTITY.md 等）从该智能体目录 `agents/<id>/profile/` 读取。",
     "agent": "智能体",
     "defaultBadge": "默认",
     "setDefault": "设为默认",

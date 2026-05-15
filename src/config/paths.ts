@@ -7,6 +7,8 @@ import type { Config } from './schema.js';
 import {
   resolveAgentDir as resolveAgentDirScoped,
   resolveAgentHomeDir as resolveAgentHomeScoped,
+  resolveAgentProfileDir as resolveAgentProfileDirScoped,
+  resolveAgentProfileMarkdownPath as resolveAgentProfileMarkdownPathScoped,
   resolveAgentWorkspaceDir,
   resolveSessionsDir as resolveSessionsDirScoped,
 } from '../agent/agent-scope.js';
@@ -103,11 +105,21 @@ export function resolveAgentHomeDir(config: Config, agentId: string): string {
   return resolveAgentHomeScoped(config, agentId);
 }
 
+/** Agent profile Markdown root: `stateDir/agents/<id>/profile/`. */
+export function resolveAgentProfileDir(config: Config, agentId: string): string {
+  return resolveAgentProfileDirScoped(config, agentId);
+}
+
+/** Single file under {@link resolveAgentProfileDir} (basename only). */
+export function resolveAgentProfileMarkdownPath(config: Config, agentId: string, filename: string): string {
+  return resolveAgentProfileMarkdownPathScoped(config, agentId, filename);
+}
+
 /**
- * Resolve a specific workspace file path
+ * Resolve a profile system Markdown path (SOUL.md, …) under the agent `profile/` directory.
  */
 export function resolveWorkspaceFile(config: Config, filename: string, agentId: string): string {
-  return join(resolveAgentWorkspaceDir(config, agentId), filename);
+  return join(resolveAgentProfileDirScoped(config, agentId), filename);
 }
 
 /**

@@ -56,14 +56,14 @@ This page describes how xopc is structured and how the main pieces fit together.
 
 ## State directory & workspace on disk
 
-Runtime data (config, credentials, per-agent sessions, the Markdown **workspace** used as tool cwd and user content, and per-agent **profile Markdown** at the resolved workspace root — `SOUL.md`, `IDENTITY.md`, …) lives outside the git repo under the **state directory** (default `~/.xopc`). For a filesystem map (profile Markdown, agent home, Markdown workspace), see [On-disk layout](disk-layout.md). For setup, env overrides, and how `agents.defaults.workspace` relates to default paths, see [State directory & workspace layout](workspace.md).
+Runtime data (config, credentials, per-agent sessions, the Markdown **workspace** used as tool cwd and user content, and per-agent **profile Markdown** under **`agents/<id>/profile/`** — `SOUL.md`, `IDENTITY.md`, …) lives outside the git repo under the **state directory** (default `~/.xopc`). For a filesystem map (profile Markdown, agent home, Markdown workspace), see [On-disk layout](disk-layout.md). For setup, env overrides, and how `agents.defaults.workspace` relates to default paths, see [State directory & workspace layout](workspace.md).
 
 ## Agent and prompt
 
 **AgentService** is the runtime that:
 
 1. Accepts user messages from channels or the Web console.
-2. Builds the system prompt from **profile Markdown** in each agent’s resolved Markdown workspace (`SOUL.md`, `USER.md`, `AGENTS.md`, `TOOLS.md`, …) plus optional memory snippets.
+2. Builds the system prompt from **profile Markdown** under each agent’s **`agents/<id>/profile/`** directory (`SOUL.md`, `USER.md`, `AGENTS.md`, `TOOLS.md`, …) plus optional memory snippets.
 3. Persists **session** transcripts and runs **compaction** when configured.
 4. Runs **built-in and extension tools** with progress feedback for long steps.
 
@@ -114,7 +114,7 @@ User (Telegram/Gateway/CLI)
 ┌─────────────────────┐
 │   AgentService      │
 │  ┌───────────────┐  │
-│  │ Load profile Markdown │  │ ← SOUL.md, USER.md, TOOLS.md, AGENTS.md
+│  │ Load profile Markdown │  │ ← `agents/<id>/profile/` (SOUL.md, USER.md, TOOLS.md, AGENTS.md, …)
 │  └───────┬───────┘  │
 │          ▼          │
 │  ┌───────────────┐  │

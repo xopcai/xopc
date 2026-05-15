@@ -28,6 +28,8 @@ export interface SystemPromptBuildOptions {
   externalMemoryInstructions?: string;
   /** Per-agent workspace (profile Markdown paths and base prompt). */
   workspaceOverride?: string;
+  /** Canonical profile dir (`agents/<id>/profile/`); used for path hints and USER.md disk fallback. */
+  profileMarkdownPathRoot?: string;
   /** When set, replaces the default base system prompt (skills still appended unless empty). */
   systemPromptOverride?: string;
   /** Explicit skill XML block; wins over {@link skillAllowlist}. */
@@ -67,6 +69,7 @@ export class SystemPromptBuilder {
    */
   build(profileMarkdownFiles: ProfileMarkdownFile[], options?: SystemPromptBuildOptions): string {
     const ws = options?.workspaceOverride ?? this.workspace;
+    const profilePathRoot = options?.profileMarkdownPathRoot ?? ws;
 
     if (options?.systemPromptOverride?.trim()) {
       const skillPrompt =
@@ -98,9 +101,16 @@ export class SystemPromptBuilder {
 
     const curatedMemorySnapshot = options?.curatedMemorySnapshot;
     const externalMemoryInstructions = options?.externalMemoryInstructions;
-    const userTimezone = this.extractTimezone(profileMarkdownFiles, curatedMemorySnapshot?.user, ws);
+    const userTimezone = this.extractTimezone(
+      profileMarkdownFiles,
+      curatedMemorySnapshot?.user,
+      ws,
+      profilePathRoot,
+    );
 
-    const workspaceProfileMarkdownFiles = profileMarkdownFiles.map((f) => toWorkspaceProfileMarkdownFile(f, ws));
+    const workspaceProfileMarkdownFiles = profileMarkdownFiles.map((f) =>
+      toWorkspaceProfileMarkdownFile(f, profilePathRoot),
+    );
 
     const ttsMerged = mergeTtsConfigFromAppConfig(this.config.messages?.tts);
     const reg = options?.registeredToolNames ?? [];
@@ -156,14 +166,16 @@ export class SystemPromptBuilder {
   }
 
   /**
-   * Extract user timezone from curated snapshot, profile USER.md, or workspace file.
+   * Extract user timezone from curated snapshot, profile USER.md on disk, or loaded profile snapshot.
    */
   private extractTimezone(
     profileMarkdownFiles: ProfileMarkdownFile[],
     curatedUserBlock?: string,
     workspaceDir?: string,
+    profilePathRoot?: string,
   ): string | undefined {
     const ws = workspaceDir ?? this.workspace;
+    const prof = profilePathRoot ?? ws;
     if (curatedUserBlock?.trim()) {
       const m = curatedUserBlock.match(/Timezone:\s*(.+)/i);
       if (m) {
@@ -179,10 +191,10 @@ export class SystemPromptBuilder {
       }
     }
 
-    const path = join(ws, DEFAULT_USER_FILENAME);
-    if (existsSync(path)) {
+    const primaryPath = join(prof, DEFAULT_USER_FILENAME);
+    if (existsSync(primaryPath)) {
       try {
-        const raw = readFileSync(path, 'utf-8');
+        const raw = readFileSync(primaryPath, 'utf-8');
         const match = raw.match(/Timezone:\s*(.+)/i);
         if (match) {
           return match[1].trim();
@@ -219,16 +231,24 @@ export class SystemPromptBuilder {
    */
   getBasePrompt(
     profileMarkdownFiles: ProfileMarkdownFile[],
-    options?: { curatedMemorySnapshot?: MemorySnapshot; externalMemoryInstructions?: string; workspaceOverride?: string },
+    options?: {
+      curatedMemorySnapshot?: MemorySnapshot;
+      externalMemoryInstructions?: string;
+      workspaceOverride?: string;
+      profileMarkdownPathRoot?: string;
+    },
   ): string {
     const ws = options?.workspaceOverride ?? this.workspace;
-    const workspaceProfileMarkdownFiles = profileMarkdownFiles.map((f) => toWorkspaceProfileMarkdownFile(f, ws));
+    const profilePathRoot = options?.profileMarkdownPathRoot ?? ws;
+    const workspaceProfileMarkdownFiles = profileMarkdownFiles.map((f) =>
+      toWorkspaceProfileMarkdownFile(f, profilePathRoot),
+    );
 
     const snap = options?.curatedMemorySnapshot;
     return buildBaseSystemPrompt(ws, {
       profileMarkdownFiles: workspaceProfileMarkdownFiles,
       heartbeatEnabled: this.config.gateway?.heartbeat?.includeSystemPromptSection ?? false,
-      userTimezone: this.extractTimezone(profileMarkdownFiles, snap?.user, ws),
+      userTimezone: this.extractTimezone(profileMarkdownFiles, snap?.user, ws, profilePathRoot),
       curatedMemorySnapshot: snap,
       externalMemoryInstructions: options?.externalMemoryInstructions,
     });

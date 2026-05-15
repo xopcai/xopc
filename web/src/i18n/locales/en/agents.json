@@ -266,7 +266,7 @@
     "tabChannels": "Channels",
     "tabCron": "Cron",
     "selectAgent": "Agent",
-    "selectAgentHint": "Choose an entry to edit. Profile Markdown (SOUL.md, IDENTITY.md, …) is read from that agent's resolved Markdown workspace.",
+    "selectAgentHint": "Choose an entry to edit. Profile Markdown (SOUL.md, IDENTITY.md, …) is read from that agent's `agents/<id>/profile/` directory.",
     "agent": "Agent",
     "defaultBadge": "default",
     "setDefault": "Set as default",

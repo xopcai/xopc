@@ -21,6 +21,7 @@ import {
   resolveInboxPendingDir,
   resolveInboxProcessedDir,
   resolveAgentHomeDir,
+  resolveAgentProfileDir,
   resolveWorkspaceStateDir,
   resolveWorkspaceStatePath,
   WORKSPACE_FILES,
@@ -79,6 +80,7 @@ export async function initCommand(options: InitOptions = {}): Promise<void> {
   // Create agent directory structure: agents/<id>/{sessions,agent/}, workspace aside
   // ============================================
   await mkdir(resolveAgentHomeDir(cfg, agentId), { recursive: true });
+  await mkdir(resolveAgentProfileDir(cfg, agentId), { recursive: true });
   await mkdir(resolveSessionsDir(cfg, agentId), { recursive: true });
   await mkdir(join(resolveSessionsDir(cfg, agentId), 'archive'), { recursive: true });
   await mkdir(resolveAgentDir(cfg, agentId), { recursive: true });
@@ -142,10 +144,12 @@ export async function initCommand(options: InitOptions = {}): Promise<void> {
  */
 async function createWorkspaceFiles(cfg: Config, agentId: string): Promise<void> {
   const workspaceDir = resolveAgentWorkspaceDir(cfg, agentId);
+  const profileDir = resolveAgentProfileDir(cfg, agentId);
   await mkdir(workspaceDir, { recursive: true });
+  await mkdir(profileDir, { recursive: true });
 
   // SOUL.md - Agent personality and values
-  const soulPath = join(workspaceDir, WORKSPACE_FILES.SOUL);
+  const soulPath = join(profileDir, WORKSPACE_FILES.SOUL);
   if (!existsSync(soulPath)) {
     const soulContent = `# SOUL.md - Who You Are
 
@@ -178,7 +182,7 @@ _This file is yours to evolve. As you learn who you are, update it._
   }
 
   // IDENTITY.md - Agent identity definition
-  const identityPath = join(workspaceDir, WORKSPACE_FILES.IDENTITY);
+  const identityPath = join(profileDir, WORKSPACE_FILES.IDENTITY);
   if (!existsSync(identityPath)) {
     const identityContent = `# IDENTITY.md - Who Am I?
 
@@ -204,7 +208,7 @@ _This file is yours to evolve. As you learn who you are, update it._
   }
 
   // USER.md - User information (empty template)
-  const userPath = join(workspaceDir, WORKSPACE_FILES.USER);
+  const userPath = join(profileDir, WORKSPACE_FILES.USER);
   if (!existsSync(userPath)) {
     const userContent = `# USER.md - About Your Human
 
@@ -225,7 +229,7 @@ _(What do they care about? What projects are they working on? Build this over ti
   }
 
   // AGENTS.md - Behavior guidelines
-  const agentsPath = join(workspaceDir, WORKSPACE_FILES.AGENTS);
+  const agentsPath = join(profileDir, WORKSPACE_FILES.AGENTS);
   if (!existsSync(agentsPath)) {
     const agentsContent = `# AGENTS.md - Behavior Guidelines
 
@@ -268,7 +272,7 @@ You have access to your human's stuff. That doesn't mean you _share_ their stuff
   }
 
   // TOOLS.md - Tool usage notes
-  const toolsPath = join(workspaceDir, WORKSPACE_FILES.TOOLS);
+  const toolsPath = join(profileDir, WORKSPACE_FILES.TOOLS);
   if (!existsSync(toolsPath)) {
     const toolsContent = `# TOOLS.md - Local Notes
 
@@ -290,7 +294,7 @@ Skills are shared. Your setup is yours.
   }
 
   // HEARTBEAT.md - Heartbeat tasks (empty = no heartbeat)
-  const heartbeatPath = join(workspaceDir, WORKSPACE_FILES.HEARTBEAT);
+  const heartbeatPath = join(profileDir, WORKSPACE_FILES.HEARTBEAT);
   if (!existsSync(heartbeatPath)) {
     const heartbeatContent = `# HEARTBEAT.md
 
@@ -303,7 +307,7 @@ Skills are shared. Your setup is yours.
   }
 
   // MEMORY.md - Long-term memory (empty initially)
-  const memoryPath = join(workspaceDir, WORKSPACE_FILES.MEMORY);
+  const memoryPath = join(profileDir, WORKSPACE_FILES.MEMORY);
   if (!existsSync(memoryPath)) {
     const memoryContent = `# MEMORY.md - Long-Term Memory
 

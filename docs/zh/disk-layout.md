@@ -9,9 +9,9 @@
 | 区域 | 作用 |
 |------|------|
 | **状态目录** | 全局配置、凭据、日志、cron、全局 skills/extensions、托管工具链等。 |
-| **智能体主目录** `<stateDir>/agents/<agentId>/` | 按 `agentId` 隔离的运行时数据：会话 transcript、托管记忆、入站/TTS 落盘、会话级配置等。（`SOUL.md` 等 **profile Markdown** 位于 **Markdown 工作空间** 根目录 — 见下文。） |
+| **智能体主目录** `<stateDir>/agents/<agentId>/` | 按 `agentId` 隔离的运行时数据：会话 transcript、托管记忆、**`profile/`** 下的 profile Markdown（`SOUL.md` 等）、入站/TTS 落盘、会话级配置等。 |
 | **智能体状态目录** `…/agents/<agentId>/agent/` | 进程状态：`agent.json`、各智能体凭据、IPC 收件箱、pid/socket、小型机器状态、扩展安装、出站崩溃恢复队列。 |
-| **Markdown 工作空间** | 用户项目树：工具 **cwd**、profile Markdown（`SOUL.md` 等）、每日 `memory/*.md`、`media/generated`、用户 `skills/`、任意用户文件。 |
+| **Markdown 工作空间** | 用户项目树：工具 **cwd**、每日 `memory/*.md`、`media/generated`、用户 `skills/`、任意用户文件。 |
 
 下文默认状态根为 `~/.xopc/`；可用 `XOPC_STATE_DIR`、`XOPC_PROFILE`、`XOPC_HOME` 覆盖（见 [workspace.md 环境变量](workspace.md#环境变量速查)）。
 
@@ -36,14 +36,14 @@
 
 | 路径 | 用途 |
 |------|------|
-| *(profile Markdown)* | 位于 **解析后的 Markdown 工作空间根**（见 [Markdown 工作空间](#markdown-工作空间)）：`SOUL.md`、`IDENTITY.md`、`USER.md`、`TOOLS.md`、`AGENTS.md`、`HEARTBEAT.md`、`MEMORY.md`（系统提示栈；与托管 `memories/` 不同），以及 **`BOOTSTRAP.md`**（起源说明；**不在**默认系统提示加载顺序中）。可自行在根目录添加其他 Markdown（例如 `CONTEXT.md`）。网关心跳文案默认读取该根下的 `HEARTBEAT.md`（若存在）。 |
+| `profile/` | 系统提示用 profile Markdown：`SOUL.md`、`IDENTITY.md`、`USER.md`、`TOOLS.md`、`AGENTS.md`、`HEARTBEAT.md`、`MEMORY.md`（与托管 `memories/` 不同）、`BOOTSTRAP.md`（默认不注入），以及网关可选 `agent-avatar.*`。 |
 | `sessions/` | 会话 transcript（分片、`index.json`、`archive/`）、`sessions/config/` 下按会话配置。 |
 | `memories/` | 托管结构化存储（`MEMORY.md`、`USER.md`，条目以固定分隔符分段 — `BuiltinMemoryStore`）。 |
 | `inbound/` | 入站附件（非图片二进制）落盘；transcript 中相对路径为相对 agent home 的 `inbound/...`。 |
 | `tts/` | 按会话缓存的出站 TTS 音频。 |
 | `agent/` | 见下节 **智能体状态目录**。 |
 
-种子：`xopc init` / `xopc agents add` 将缺失的 profile Markdown 模板复制到 **Markdown 工作空间根**（参见 [工作区模板](/zh/reference/templates)）。
+种子：`xopc init` / `xopc agents add` 将缺失的 profile Markdown 模板复制到 **`agents/<agentId>/profile/`**（参见 [工作区模板](/zh/reference/templates)）。
 
 ## 智能体状态目录：`agents/<agentId>/agent/`
 

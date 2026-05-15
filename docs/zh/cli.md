@@ -76,7 +76,7 @@ xopc setup --workspace ~/my-workspace
 
 **功能**：
 - 创建 `~/.xopc/xopc.json`（如果不存在）
-- 创建工作区目录并生成引导文件（AGENTS.md、BOOTSTRAP.md 等）
+- 创建工作区目录并在 `agents/<id>/profile/` 生成引导文件（AGENTS.md、BOOTSTRAP.md 等）
 
 ---
 

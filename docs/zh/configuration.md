@@ -137,7 +137,7 @@ xopc onboard
 | `default` | boolean | 可选。为 `true` 时，在**未**设置顶层 **`agents.default`** 的情况下将该条目标记为默认 agent。 |
 | `name` | string | 显示名称。 |
 | `enabled` | boolean | 默认 `true`。为 `false` 时该 id 不参与路由默认，且有效配置解析会回退到默认 agent。 |
-| `workspace` | string | 可选。该 agent 的 **Markdown 工作区**根路径（支持 `~`）。工具 `cwd`、按日的 `memory/` 与用户文件在此。引导 Markdown、入站/TTS 与托管 `memories/` 解析在 **`agents/<id>/`**（agent 主目录），不在此目录内。 |
+| `workspace` | string | 可选。该 agent 的 **Markdown 工作区**根路径（支持 `~`）。工具 `cwd`、按日的 `memory/` 与用户文件在此。profile Markdown（`SOUL.md` 等）位于 **`agents/<id>/profile/`**。入站/TTS 与托管 `memories/` 解析在 **`agents/<id>/`**（agent 主目录），不在此目录内。 |
 | `agentDir` | string | 可选。覆盖 **内部** agent 状态目录（凭证、`agent.json`、收件箱、pid 等），默认 `<stateDir>/agents/<id>/agent`。 |
 | `model` | string \| object | 同 `agents.defaults.model`（字符串或 `{ primary, fallbacks }`）。 |
 | `thinkingDefault` | string | 可选：`off`、`minimal`、`low`、`medium`、`high`、`xhigh`、`adaptive`。 |
@@ -197,7 +197,7 @@ xopc onboard
 | 字段 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
 | `enabled` | boolean | `true` | 总开关。为 `false` 时：无 curated 快照、无 `curated_memory` 工具、不加载外部 memory 提供方、不做 prefetch/sync。 |
-| `useEnhancedSystem` | boolean | `true` | 为 `false` 时：关闭 curated 快照与 `curated_memory`；工作区根目录 profile 的 `MEMORY.md` 仍会参与系统提示。 |
+| `useEnhancedSystem` | boolean | `true` | 为 `false` 时：关闭 curated 快照与 `curated_memory`；**`agents/<id>/profile/MEMORY.md`** 仍会参与系统提示。 |
 | `userProfileEnabled` | boolean | `true` | 为 `false` 时：系统提示不包含 `USER.md`；`curated_memory` 不能修改 `user` 目标（仍可读）。 |
 | `memoryCharLimit` | number | `2200` | `MEMORY.md` 条目合计字符上限。 |
 | `userCharLimit` | number | `1375` | `USER.md` 条目合计字符上限。 |

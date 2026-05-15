@@ -136,7 +136,7 @@ Each entry must include **`id`**. Other fields are optional overrides (same shap
 | `default` | boolean | Optional. When `true`, marks this entry as the default agent when top-level **`agents.default`** is unset. |
 | `name` | string | Display name. |
 | `enabled` | boolean | Default `true`. When `false`, the id is ignored for routing defaults and effective profile resolution falls back to the default agent. |
-| `workspace` | string | Per-agent **Markdown workspace** root (`~` expanded). Tool `cwd`, profile Markdown (`SOUL.md`, …), daily `memory/`, and user files. Inbound/TTS blobs and curated `memories/` live under **`agents/<id>/`** (agent home), not as siblings of unrelated trees inside this directory. |
+| `workspace` | string | Per-agent **Markdown workspace** root (`~` expanded). Tool `cwd`, daily `memory/`, and user files. Profile Markdown (`SOUL.md`, …) lives under **`agents/<id>/profile/`**. Inbound/TTS blobs and curated `memories/` live under **`agents/<id>/`** (agent home), not as siblings of unrelated trees inside this directory. |
 | `agentDir` | string | Optional. Overrides the **internal** agent state directory (`credentials`, `agent.json`, inbox, pid) — default `<stateDir>/agents/<id>/agent`. |
 | `model` | string \| object | Same as `agents.defaults.model` (string or `{ primary, fallbacks }`). |
 | `thinkingDefault` | string | Optional. One of `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `adaptive`. |
@@ -196,7 +196,7 @@ Curated long-term memory under **`agents/<agentId>/memories/`** (`MEMORY.md` / `
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `enabled` | boolean | `true` | Master switch. When `false`: no curated snapshot, no `curated_memory` tool, no external memory provider, no prefetch/sync. |
-| `useEnhancedSystem` | boolean | `true` | When `false`: disable curated snapshot and `curated_memory`; workspace-root profile `MEMORY.md` still applies. |
+| `useEnhancedSystem` | boolean | `true` | When `false`: disable curated snapshot and `curated_memory`; **`agents/<id>/profile/MEMORY.md`** still applies. |
 | `userProfileEnabled` | boolean | `true` | When `false`: omit `USER.md` from the system prompt; `curated_memory` cannot mutate the `user` target (read still allowed). |
 | `memoryCharLimit` | number | `2200` | Max characters for `MEMORY.md` entries (total). |
 | `userCharLimit` | number | `1375` | Max characters for `USER.md` entries (total). |

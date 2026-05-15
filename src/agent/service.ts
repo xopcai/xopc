@@ -67,9 +67,14 @@ import { runProcessDirect, type RunProcessDirectDeps } from './service/process-d
 
 import {
   resolveAgentHomeDir,
+  resolveAgentProfileDir,
   resolveDefaultAgentId,
 } from './agent-scope.js';
-import { extractProfileAgentId, resolveAgentWorkspaceDir as resolveAgentWorkspaceDirFromProfile } from '../config/agent-profile.js';
+import {
+  extractProfileAgentId,
+  resolveAgentWorkspaceDir as resolveAgentWorkspaceDirFromProfile,
+  resolveEffectiveAgentProfileForSession,
+} from '../config/agent-profile.js';
 import { DEFAULT_ACK_MAX_CHARS, NO_REPLY, shouldSilence } from '../heartbeat/tokens.js';
 import { createTypingController, type TypingController } from './lifecycle/typing.js';
 import { cleanTrailingErrors, sanitizeMessages } from './memory/message-sanitizer.js';
@@ -81,7 +86,6 @@ import {
   persistInboundAttachmentsToWorkspace,
   type InternalAttachmentRoots,
 } from '../channels/attachments/inbound-persist.js';
-import { resolveEffectiveAgentProfileForSession } from '../config/agent-profile.js';
 import { applyConfigOverrides } from '../config/runtime-overrides.js';
 import type { CompactionResult } from './memory/compaction.js';
 
@@ -157,7 +161,8 @@ export class AgentService {
 
     if (config.config) {
       const aid = resolveDefaultAgentId(config.config);
-      this.profileMarkdownFiles = loadProfileMarkdownFiles(resolveAgentWorkspaceDirFromProfile(config.config, aid));
+      const profileDir = resolveAgentProfileDir(config.config, aid);
+      this.profileMarkdownFiles = loadProfileMarkdownFiles(profileDir);
     } else {
       this.profileMarkdownFiles = [];
     }
@@ -1175,12 +1180,14 @@ export class AgentService {
 
   /**
    * Best-effort timezone resolution for webchat envelope timestamps.
-   * Reads `USER.md` in the resolved workspace and extracts a `Timezone:` line.
+   * Reads `USER.md` under the agent `profile/` directory and extracts a `Timezone:` line.
    */
   resolveUserTimezoneForSession(sessionKey: string): string | undefined {
     try {
-      const workspace = this.agentManager.getResolvedWorkspaceForSession(sessionKey);
-      const userPath = join(workspace, 'USER.md');
+      const cfg = this.effectiveAppConfig();
+      if (!cfg) return undefined;
+      const { agentId } = resolveEffectiveAgentProfileForSession(cfg, sessionKey);
+      const userPath = join(resolveAgentProfileDir(cfg, agentId), 'USER.md');
       if (!existsSync(userPath)) return undefined;
       const raw = readFileSync(userPath, 'utf-8');
       const match = raw.match(/Timezone:\s*(.+)/i);

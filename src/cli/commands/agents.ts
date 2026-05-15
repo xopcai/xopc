@@ -9,6 +9,7 @@ import { resolveConfigPath } from '../../config/paths.js';
 import {
   normalizeAgentId,
   resolveAgentDir,
+  resolveAgentProfileDir,
   resolveAgentWorkspaceDir,
   resolveDefaultAgentId,
   DEFAULT_AGENT_ID,
@@ -21,7 +22,7 @@ import {
   pruneAgentConfig,
   removeAgentDirsFromDisk,
 } from '../../commands/agents.config.js';
-import { seedWorkspaceProfileMarkdownFiles } from '../../agent/context/workspace-seed.js';
+import { seedAgentProfileMarkdownFiles } from '../../agent/context/workspace-seed.js';
 import { colors } from '../utils/colors.js';
 
 function requireNonMain(id: string): void {
@@ -101,9 +102,11 @@ export function registerAgentsCli(program: Command): void {
 
         const wsPath = resolveAgentWorkspaceDir(next, agentId);
         const adPath = resolveAgentDir(next, agentId);
+        const profilePath = resolveAgentProfileDir(next, agentId);
         await mkdir(wsPath, { recursive: true });
         await mkdir(adPath, { recursive: true });
-        seedWorkspaceProfileMarkdownFiles(wsPath, { displayName: name.trim() });
+        await mkdir(profilePath, { recursive: true });
+        seedAgentProfileMarkdownFiles(profilePath, wsPath, { displayName: name.trim() });
 
         const payload = { agentId, workspace: wsPath, agentDir: adPath, model: opts.model };
         if (opts.json) {

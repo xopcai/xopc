@@ -1,6 +1,8 @@
 /**
- * Agent profile Markdown at the workspace root (filenames, load order, system prompt assembly) and
+ * Agent profile Markdown (filenames, load order, system prompt assembly) and
  * small helpers for message content extraction.
+ *
+ * Canonical on-disk root: `agents/<agentId>/profile/`.
  */
 
 import { readFileSync, existsSync } from 'fs';
@@ -11,7 +13,7 @@ import { parseFrontmatter } from '../../markdown/frontmatter.js';
 const log = createLogger('Workspace');
 
 // =============================================================================
-// Profile Markdown filenames & types (SOUL.md, IDENTITY.md, … at workspace root)
+// Profile Markdown filenames & types (SOUL.md, IDENTITY.md, … under `profile/`)
 // =============================================================================
 
 export const DEFAULT_AGENTS_FILENAME = 'AGENTS.md';
@@ -119,8 +121,9 @@ export interface ProfileMarkdownFile {
 
 /**
  * Convert {@link ProfileMarkdownFile} to {@link WorkspaceProfileMarkdownFile} (adds required path field).
+ * @param pathFallbackDir — used when `file.path` is absent (e.g. canonical `profile/` root).
  */
-export function toWorkspaceProfileMarkdownFile(file: ProfileMarkdownFile, workspace: string): {
+export function toWorkspaceProfileMarkdownFile(file: ProfileMarkdownFile, pathFallbackDir: string): {
   name: AgentProfileMarkdownFilename;
   path: string;
   content?: string;
@@ -128,22 +131,22 @@ export function toWorkspaceProfileMarkdownFile(file: ProfileMarkdownFile, worksp
 } {
   return {
     name: file.name,
-    path: file.path || join(workspace, file.name),
+    path: file.path || join(pathFallbackDir, file.name),
     content: file.missing ? undefined : file.content,
     missing: file.missing ?? false,
   };
 }
 
 /**
- * Load profile Markdown from the agent's resolved Markdown workspace root (`markdownWorkspaceRoot`).
+ * Load profile Markdown from `profileDir` (`agents/<agentId>/profile/`).
  */
-export function loadProfileMarkdownFiles(markdownWorkspaceRoot: string): ProfileMarkdownFile[] {
+export function loadProfileMarkdownFiles(profileDir: string): ProfileMarkdownFile[] {
   const files: ProfileMarkdownFile[] = [];
   let loadedCount = 0;
   let missingCount = 0;
 
   for (const filename of AGENT_PROFILE_MARKDOWN_SYSTEM_FILES) {
-    const filePath = join(markdownWorkspaceRoot, filename);
+    const filePath = join(profileDir, filename);
 
     if (existsSync(filePath)) {
       try {
@@ -178,7 +181,7 @@ export function loadProfileMarkdownFiles(markdownWorkspaceRoot: string): Profile
         log.warn({ file: filename, err }, 'Failed to load profile Markdown file');
       }
     } else {
-      const hint = join(markdownWorkspaceRoot, filename);
+      const hint = join(profileDir, filename);
       files.push({
         name: filename,
         content: `[MISSING] Create this file at: ${hint}`,
@@ -190,7 +193,7 @@ export function loadProfileMarkdownFiles(markdownWorkspaceRoot: string): Profile
     }
   }
 
-  log.debug({ loaded: loadedCount, missing: missingCount, dir: markdownWorkspaceRoot }, 'Profile Markdown scan done');
+  log.debug({ loaded: loadedCount, missing: missingCount, profileDir }, 'Profile Markdown scan done');
 
   return files;
 }

@@ -50,11 +50,11 @@ xopc 在单一 **状态目录**（“Agent OS” 根）下保存本机状态；�
 
 在常规配置下，每个智能体可有显式 **`workspace`**，或继承 **`join(agents.defaults.workspace, <agentId>)`**，否则回退到 **`<状态目录>/workspace/<agentId>`**（未设置 `agents.defaults.workspace` 时）。
 
-CLI **未**加载到配置文件时，优先 **`XOPC_WORKSPACE`**（主智能体 Markdown 根的完整路径）；否则主 Markdown 树默认为 **`<状态目录>/workspace/main`**。**`xopc init`** 会创建 **`agents/<id>/`**、Markdown 工作区，并按 [工作区模板](/zh/reference/templates) 中的文件名种子化引导文件（仅当文件尚不存在时写入）。**`xopc agents add`** 更新 **`agents.list`** 并初始化新工作区（见 [CLI](cli.md#agents)）。
+CLI **未**加载到配置文件时，优先 **`XOPC_WORKSPACE`**（主智能体 Markdown 根的完整路径）；否则主 Markdown 树默认为 **`<状态目录>/workspace/main`**。**`xopc init`** 会创建 **`agents/<id>/`**、Markdown 工作区，并按 [工作区模板](/zh/reference/templates) 将缺失的 profile 文件写入 **`agents/<id>/profile/`**（仅当文件尚不存在时）。**`xopc agents add`** 更新 **`agents.list`** 并初始化目录与 profile 种子（见 [CLI](cli.md#agents)）。
 
 ### 引导用 Markdown（人格与记忆索引）
 
-这些文件按 **固定顺序** 进入系统提示（有长度限制），在各智能体的 **Markdown 工作空间根** 下编辑。
+这些文件按 **固定顺序** 进入系统提示（有长度限制）。路径：**`agents/<agentId>/profile/`**（文件名不变）。
 
 | 文件 | 作用 |
 |------|------|
@@ -81,7 +81,7 @@ CLI **未**加载到配置文件时，优先 **`XOPC_WORKSPACE`**（主智能体
 
 ### 托管记忆（`agents/<agentId>/memories/`） {#curated-memory}
 
-与工作区根下 profile 用的 **`MEMORY.md`** 以及工作区内可检索的 `memory/*.md` 不同，**`agents/<agentId>/memories/`** 使用 **`MEMORY.md`（助手笔记）** 与 **`USER.md`（用户画像）** 存放 **有上限、以 § 分隔** 的条目。在启用增强记忆时，会话开始会注入 **冻结快照**；运行中可通过 **`curated_memory`** 工具读写磁盘上的最新内容。开关与字符上限见 **`agents.defaults.memory`**（[配置参考](configuration.md)）。
+与 **`agents/<agentId>/profile/MEMORY.md`**（系统提示用 profile 索引）以及工作区内可检索的 `memory/*.md` 不同，**`agents/<agentId>/memories/`** 使用 **`MEMORY.md`（助手笔记）** 与 **`USER.md`（用户画像）** 存放 **有上限、以 § 分隔** 的条目。在启用增强记忆时，会话开始会注入 **冻结快照**；运行中可通过 **`curated_memory`** 工具读写磁盘上的最新内容。开关与字符上限见 **`agents.defaults.memory`**（[配置参考](configuration.md)）。
 
 ## 运行时到底用哪个「工作空间」？
 
@@ -91,7 +91,7 @@ CLI **未**加载到配置文件时，优先 **`XOPC_WORKSPACE`**（主智能体
 
 2. **CLI**（根命令未传 `--workspace` 时）— 优先 **`XOPC_WORKSPACE`**，否则 **`<状态目录>/workspace/main`**（或等价 profile 路径）。
 
-`xopc init` 后，`main` 的 Markdown 默认在 **`agents.defaults.workspace/main`**（配置里默认父路径为 `~/.xopc/workspace` 时即 `~/.xopc/workspace/main`），或未设置父路径时在 **`<状态目录>/workspace/main`**。列表项 **`agents.list[].workspace`** 可覆盖该智能体的解析路径。
+`xopc init` 后，`main` 的 profile Markdown 默认在 **`~/.xopc/agents/main/profile/`**；Markdown 工作区仍在 **`agents.defaults.workspace/main`**（配置父路径为 `~/.xopc/workspace` 时即 `~/.xopc/workspace/main`），或未设置父路径时在 **`<状态目录>/workspace/main`**。列表项 **`agents.list[].workspace`** 仅覆盖该智能体的 **Markdown** 解析路径。
 
 ## 环境变量速查
 
