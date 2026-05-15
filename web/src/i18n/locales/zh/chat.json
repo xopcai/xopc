@@ -334,7 +334,15 @@
       "collapseAria": "收起目标条",
       "expandAria": "展开持久目标",
       "pillTitle": "{{status}} · {{turns}} — 点击展开",
-      "elapsedLabel": "用时"
+      "elapsedLabel": "用时",
+      "runHistory": "运行记录",
+      "runHistoryEmpty": "暂无记录。目标为进行中时，每次助手回复后会追加一条。",
+      "runHistoryLoading": "加载中…",
+      "runHistoryLoadFailed": "无法加载运行记录。",
+      "runHistoryTurns": "{{used}} / {{max}} 轮",
+      "runHistoryContinue": "将继续",
+      "runHistoryStop": "不继续",
+      "verdictInactive": "未激活"
     },
     "atMention": {
       "noResults": "无匹配项",

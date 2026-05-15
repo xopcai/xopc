@@ -201,7 +201,7 @@ export function ChatPage() {
         chatAgentDisabled={session.showSessionLoading || session.sessionRoutePending || stream.streaming}
       />
 
-      <div className="mx-auto flex min-h-0 w-full max-w-[var(--max-width-chat)] flex-1 flex-col">
+      <div className="relative mx-auto flex min-h-0 w-full max-w-[var(--max-width-chat)] flex-1 flex-col">
         {session.sessionKey &&
         isWebUiSessionKey(session.sessionKey) &&
         !session.showSessionLoading &&
