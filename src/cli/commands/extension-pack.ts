@@ -198,8 +198,7 @@ function printDiagnostics(d: PackDiagnostic[]): void {
 }
 
 export function createExtensionPackCommand(): Command {
-  return new Command('extension:pack')
-    .alias('ext:pack')
+  return new Command('pack')
     .description('Package an extension as a .tgz archive for distribution')
     .argument('[dir]', 'Extension directory (default: current working directory)', '.')
     .option('--out <dir>', 'Output directory for the .tgz (default: extension directory)', '')

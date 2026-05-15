@@ -140,8 +140,7 @@ async function installExtensionFromStoreWithLock(params: {
 }
 
 export function createExtensionInstallCommand(): Command {
-  return new Command('extension:install')
-    .alias('ext:install')
+  return new Command('install')
     .description(
       'Install extension from xopc-store (store.xopc.ai), npm, or a local directory into ~/.xopc/extensions',
     )
@@ -301,8 +300,7 @@ export function createExtensionInstallCommand(): Command {
 }
 
 export function createExtensionSearchCommand(): Command {
-  return new Command('extension:search')
-    .alias('ext:search')
+  return new Command('search')
     .description('Search extensions listed on xopc-store')
     .argument('[keyword]', 'Search text (omit to list all)', '')
     .option('--category <cat>', 'Filter by category')
@@ -356,8 +354,7 @@ export function createExtensionSearchCommand(): Command {
 }
 
 export function createExtensionPublishCommand(): Command {
-  return new Command('extension:publish')
-    .alias('ext:publish')
+  return new Command('publish')
     .description('Publish extension to npm (public)')
     .argument('[directory]', 'Extension root', '.')
     .option('--dry-run', 'npm publish --dry-run', false)
@@ -402,8 +399,7 @@ export function createExtensionPublishCommand(): Command {
 }
 
 export function createExtensionUpdateCommand(): Command {
-  return new Command('extension:update')
-    .alias('ext:update')
+  return new Command('update')
     .description('Re-install extension(s) from the lockfile (npm or xopc-store) under ~/.xopc/extensions')
     .argument('[extensionId]', 'Specific extension id (default: all in lockfile)')
     .action(async (extensionId: string | undefined) => {

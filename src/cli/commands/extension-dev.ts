@@ -128,8 +128,7 @@ function shouldIgnorePath(relativePath: string): boolean {
 }
 
 export function createExtensionDevCommand(): Command {
-  return new Command('extension:dev')
-    .alias('ext:dev')
+  return new Command('dev')
     .description('Symlink an extension into the workspace for live development (optional file watch + gateway)')
     .argument('[dir]', 'Extension directory (default: current working directory)', '.')
     .option('--port <number>', 'Gateway port', '18790')

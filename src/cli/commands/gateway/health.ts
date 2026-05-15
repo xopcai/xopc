@@ -1,10 +1,9 @@
 import { Command } from 'commander';
 
 import {
-  callGatewayApi,
   addGatewayClientOptions,
   parseGatewayClientOptions,
-} from '../../utils/gateway-client.js';
+} from '../../utils/gateway-client-options.js';
 import { getContextWithOpts } from '../../index.js';
 import { resolveConfigPath } from '../../../config/paths.js';
 
@@ -41,6 +40,7 @@ export function createHealthCommand(): Command {
   cmd.action(async (options) => {
     const ctx = getContextWithOpts();
     const configPath = ctx.configPath || resolveConfigPath();
+    const { callGatewayApi } = await import('../../utils/gateway-client.js');
     const clientOpts = { ...parseGatewayClientOptions(options as Record<string, unknown>), configPath };
 
     const healthResult = await callGatewayApi<HealthResponse>('GET', '/api/health', {

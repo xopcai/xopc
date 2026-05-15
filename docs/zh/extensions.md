@@ -8,7 +8,7 @@ xopc 提供了一个轻量级但功能强大的扩展系统。
 - **按配置激活** — 根据 `xopc.extension.json` 与当前 **配置 / 环境** 决定加载哪些扩展（见 [何时加载扩展](#何时加载扩展)）。
 - **Extension SDK** — 使用 `@xopcai/xopc/extension-sdk`（可选用 `extension-sdk/core`、`extension-sdk/lazy` 等子路径）。
 - **TypeScript** — 扩展为普通 TS/JS 模块，由运行时直接加载，无需单独编译步骤。
-- **安装来源** — 通过 `xopc extension install` 支持 npm 包、本地目录或 Git 地址。
+- **安装来源** — 通过 `xopc extensions install` 支持 npm 包、本地目录或 xopc-store 扩展。
 - **网关控制台 UI（可选）** — manifest 中可声明 **`ui`**，在 Web 控制台沙箱 iframe 中运行；iframe 侧使用 **`@xopcai/extension-ui-sdk`**（见 [网关控制台：扩展 UI](#gateway-extension-ui)）。
 
 ## 快速开始
@@ -19,16 +19,16 @@ xopc 提供了一个轻量级但功能强大的扩展系统。
 
 ```bash
 # 从 npm 安装（目录 ~/.xopc/extensions）
-xopc extension install xopc-extension-hello
+xopc extensions install xopc-extension-hello
 
 # 从本地目录安装
-xopc extension install ./my-local-extension
+xopc extensions install ./my-local-extension
 
 # 查看已安装扩展
-xopc extension list
+xopc extensions list
 
-# 移除扩展
-xopc extension remove hello
+# 检查扩展健康状态
+xopc extensions health
 ```
 
 **方式二：手动安装**
@@ -91,20 +91,18 @@ git clone https://github.com/your/extension.git
 - 扩展 ID 作为 key 可以配置扩展特定的选项
 - 如果扩展不需要配置，可以设为 `true`
 
-### 创建新扩展
+### 本地开发扩展
 
 ```bash
-# 创建扩展脚手架
-xopc extension create my-extension --name "My Extension" --kind utility
-
-# 支持的 kind: channel|provider|memory|tool|utility|tts|image-generation|web-search
+xopc extensions dev ./my-extension
+xopc extensions pack ./my-extension
 ```
 
-这将创建：
+一个有效的扩展项目通常包含：
 - `package.json` - npm 配置
-- `index.ts` - 扩展入口（TypeScript，推荐使用 `@xopcai/xopc/extension-sdk`）
+- `index.ts` 或 `index.js` - 扩展入口
 - `xopc.extension.json` - 扩展清单
-- `README.md` - 文档模板
+- `README.md` - 文档
 
 ---
 
@@ -297,95 +295,68 @@ xopc 仓库中的 **Hello** 示例演示了扩展 UI 的完整链路。若你提
 
 ## CLI 命令参考
 
-### extension install
+### extensions install
 
 安装扩展。
 
 ```bash
 # 从 npm 安装
-xopc extension install <package-name>
+xopc extensions install <package-name>
 
 # 安装特定版本
-xopc extension install my-extension@1.0.0
+xopc extensions install my-extension@1.0.0
 
 # 从本地目录安装
-xopc extension install ./local-extension-dir
-xopc extension install /absolute/path/to/extension
+xopc extensions install ./local-extension-dir
+xopc extensions install /absolute/path/to/extension
 
-# 设置超时时间（默认 120 秒）
-xopc extension install slow-extension --timeout 300000
+# 仅从 xopc-store 安装
+xopc extensions install --store weather
 ```
 
 **安装流程**：
-1. 下载/复制扩展文件
+1. 下载或复制扩展文件
 2. 验证 `xopc.extension.json` 清单
 3. 安装依赖（如有 `package.json` 依赖）
-4. 复制到工作区 `.extensions/` 目录
+4. 安装到 `~/.xopc/extensions/<id>/`
 
-### extension list
+### extensions list
 
 列出所有已安装扩展。
 
 ```bash
-xopc extension list
+xopc extensions list
+xopc extensions list --json
 ```
 
-**输出示例**：
-```
-📦 Installed Extensions
+### extensions health / audit / verify
 
-════════════════════════════════════════════════════════════
-
-  📁 Telegram Channel
-     ID: telegram-channel
-     Version: 1.2.0
-     Path: /home/user/.xopc/workspace/.extensions/telegram-channel
-
-  📁 My Custom Extension
-     ID: my-custom-extension
-     Version: 0.1.0
-     Path: /home/user/.xopc/workspace/.extensions/my-custom-extension
-```
-
-### extension remove / uninstall
-
-移除已安装扩展。
+检查健康状态、安全问题和完整性。
 
 ```bash
-xopc extension remove <extension-id>
-xopc extension uninstall <extension-id>
+xopc extensions health
+xopc extensions audit
+xopc extensions verify [extension-id]
 ```
 
-**注意**：移除扩展后，如果已启用，还需要从配置文件中删除。
+### extensions dev / pack / publish
 
-### extension info
-
-查看扩展详情。
+本地开发、打包和发布扩展。
 
 ```bash
-xopc extension info <extension-id>
+xopc extensions dev ./local-extension-dir
+xopc extensions pack ./local-extension-dir
+xopc extensions publish ./local-extension-dir --dry-run
 ```
 
-### extension create
+### extensions search / update / freeze
 
-创建新扩展脚手架。
+搜索、更新和锁定扩展版本。
 
 ```bash
-xopc extension create <extension-id> [options]
-
-Options:
-  --name <name>           扩展显示名称
-  --description <desc>    扩展描述
-  --kind <kind>          扩展类型: channel|provider|memory|tool|utility
-```
-
-**示例**：
-```bash
-# 创建一个工具类扩展
-xopc extension create weather-tool --name "Weather Tool" --kind tool
-
-# 创建一个通道类扩展
-xopc extension create discord-channel --name "Discord Channel" --kind channel
+xopc extensions search [keyword]
+xopc extensions update [extension-id]
+xopc extensions freeze
 ```
 
 ## 扩展结构

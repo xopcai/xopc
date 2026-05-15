@@ -412,148 +412,92 @@ xopc cron trigger <task-id>
 
 ---
 
-## extension
+## extensions
 
-管理扩展。支持三级存储：workspace (./.extensions/) → global (~/.xopc/extensions/) → bundled。
+管理扩展。CLI/Web 安装目录为 `~/.xopc/extensions`，加载时仍按 workspace → global → bundled 的优先级发现扩展。
 
 ### 列出扩展
 
 ```bash
-xopc extension list
-```
-
-**输出示例**：
-```
-📦 Installed Extensions
-
-══════════════════════════════════════════════════════════════════════
-
-  📁 Workspace (./.extensions/)
-    • My Custom Extension @ 0.1.0
-      ID: my-custom-extension
-
-  🌐 Global (~/.xopc/extensions/)
-    • Telegram Channel @ 1.2.0
-      ID: telegram-channel
-
-  📦 Bundled (built-in)
-    • Discord Channel @ 2.0.0
-      ID: discord-channel
+xopc extensions list
+xopc extensions list --json
 ```
 
 ### 安装扩展
 
-**从 npm 安装到 workspace**（默认）：
+**从 npm 安装**：
 ```bash
-xopc extension install <package-name>
+xopc extensions install <package-name>
 
 # 示例
-xopc extension install xopc-extension-telegram
-xopc extension install @scope/my-extension
-xopc extension install my-extension@1.0.0
+xopc extensions install xopc-extension-telegram
+xopc extensions install @scope/my-extension
+xopc extensions install my-extension@1.0.0
 ```
 
-**从本地目录安装**（同样安装到 `~/.xopc/extensions`）：
+**从本地目录安装**（安装到 `~/.xopc/extensions`）：
 ```bash
-xopc extension install ./my-local-extension
+xopc extensions install ./my-local-extension
+```
+
+**仅从 xopc-store 安装**：
+```bash
+xopc extensions install --store telegram
 ```
 
 **参数**：
 
 | 参数 | 描述 |
 |------|------|
-| `--timeout <ms>` | 安装超时时间（默认 120000ms） |
+| `--store` | 仅从 xopc-store 安装 |
+| `--npm` | 仅从 npm 安装 |
+| `-f, --force` | 替换已有的 store / 本地安装 |
 
 **安装流程**：
-1. 下载/复制扩展文件
+1. 下载或复制扩展文件
 2. 验证 `xopc.extension.json` 清单
 3. 安装依赖（如有 `package.json` 依赖）
-4. 复制到 `~/.xopc/extensions/<id>/`
+4. 安装到 `~/.xopc/extensions/<id>/`
 
-**扩展发现优先级**（加载时；CLI/Web 安装目录为全局）：
+**扩展发现优先级**（加载时）：
 - 工作区 / agent 扩展目录（若存在旧数据或手动放置）
 - Global (`~/.xopc/extensions/`)
 - Bundled：内置扩展，优先级最低
 
-### 移除扩展
+### 健康检查、审计和校验
 
 ```bash
-xopc extension remove <extension-id>
-# 或
-xopc extension uninstall <extension-id>
+xopc extensions health
+xopc extensions audit
+xopc extensions verify [extension-id]
 ```
 
-**示例**：
-```bash
-xopc extension remove telegram-channel
-```
-
-**注意**：
-- 优先从 workspace 移除，如不存在则从 global 移除
-- 移除后如果已启用，还需要从配置文件中删除
-
-### 查看扩展详情
+### 搜索、更新和锁定
 
 ```bash
-xopc extension info <extension-id>
+xopc extensions search [keyword]
+xopc extensions update [extension-id]
+xopc extensions freeze
 ```
 
-**示例**：
-```bash
-xopc extension info telegram-channel
-```
-
-**输出**：
-```
-📦 Extension: Telegram Channel
-
-  ID: telegram-channel
-  Version: 1.2.0
-  Kind: channel
-  Description: Telegram channel integration
-  Path: /home/user/.xopc/workspace/.extensions/telegram-channel
-```
-
-### 创建扩展
-
-创建新插件脚手架。
+### 本地开发、打包和发布
 
 ```bash
-xopc extension create <extension-id> [options]
+xopc extensions dev ./my-local-extension
+xopc extensions pack ./my-local-extension
+xopc extensions publish ./my-local-extension --dry-run
 ```
 
-**参数**：
-
-| 参数 | 描述 |
-|------|------|
-| `--name <name>` | 扩展显示名称 |
-| `--description <desc>` | 扩展描述 |
-| `--kind <kind>` | 扩展类型: `channel`, `provider`, `memory`, `tool`, `utility` |
-
-**示例**：
-
-```bash
-# 创建工具类插件
-xopc extension create weather-tool --name "Weather Tool" --kind tool
-
-# 创建通道类插件
-xopc extension create discord-channel --name "Discord Channel" --kind channel
-
-# 创建内存类插件
-xopc extension create redis-memory --name "Redis Memory" --kind memory
+**本地扩展结构**：
+```
+my-extension/
+├── package.json          # npm 配置
+├── index.ts              # 扩展入口（TypeScript）
+├── xopc.extension.json   # 扩展清单
+└── README.md             # 文档
 ```
 
-**生成的文件**：
-```
-.extensions/
-└── my-extension/
-    ├── package.json          # npm 配置
-    ├── index.ts              # 扩展入口（TypeScript）
-    ├── xopc.extension.json   # 扩展清单
-    └── README.md             # 文档模板
-```
-
-**注意**：脚手架生成的扩展入口为 TypeScript，安装后由 xopc 运行时直接加载，无需单独编译扩展包。
+**注意**：`extensions dev` 会将本地扩展软链到工作区，适合联调；`extensions pack` 可打包为 `.tgz` 用于分发。
 
 ---
 
@@ -603,7 +547,7 @@ xopc image set-max-size 10
 xopc --help
 xopc agent --help
 xopc gateway --help
-xopc extension --help
+xopc extensions --help
 ```
 
 ---
@@ -729,9 +673,9 @@ case "$1" in
     shift
     xopc cron "$@"
     ;;
-  extension)
+  extensions)
     shift
-    xopc extension "$@"
+    xopc extensions "$@"
     ;;
   skills)
     shift
