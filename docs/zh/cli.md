@@ -124,7 +124,7 @@ xopc onboard --gateway
 
 ## channels
 
-在运行 CLI 的机器上（与网关同机时才能批准飞书/钉钉/微信侧收到的配对码）完成渠道 **登录**（扫码 / 凭证流）以及 **私聊配对批准**。
+在运行 CLI 的机器上（与网关同机时才能批准飞书/微信侧收到的配对码）完成渠道 **登录**（扫码 / 凭证流）以及 **私聊配对批准**。
 
 ### channels login
 
@@ -132,7 +132,7 @@ xopc onboard --gateway
 xopc channels login
 xopc channels login --channel weixin
 xopc channels login --channel feishu
-xopc channels login --channel dingtalk
+xopc channels login --channel feishu
 xopc channels login --account <account-id>
 ```
 
@@ -140,16 +140,16 @@ xopc channels login --account <account-id>
 
 ### channels pairing approve
 
-当 Telegram、飞书、钉钉或微信的 **`dmPolicy`** 为 **`pairing`** 时，未在允许列表中的用户会在私聊里收到 **一次性配对码**。管理员在主机上执行：
+当 Telegram、飞书或微信的 **`dmPolicy`** 为 **`pairing`** 时，未在允许列表中的用户会在私聊里收到 **一次性配对码**。管理员在主机上执行：
 
 ```bash
 xopc channels pairing approve --channel telegram --account default AB12CD34
 xopc channels pairing approve --channel feishu --account default AB12CD34
-xopc channels pairing approve --channel dingtalk AB12CD34
+xopc channels pairing approve --channel feishu AB12CD34
 xopc channels pairing approve --channel weixin AB12CD34
 ```
 
-- **`--channel`**：必填，`telegram` \| `feishu` \| `dingtalk` \| `weixin`。
+- **`--channel`**：必填，`telegram` \| `feishu` \| `weixin`。
 - **`--account`**：配置中的账号 id（省略时一般为 `default`）。
 - **`<code>`**：用户消息中的 8 位配对码。
 

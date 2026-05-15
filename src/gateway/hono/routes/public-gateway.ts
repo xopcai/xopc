@@ -39,8 +39,6 @@ export function registerPublicGatewayRoutes(app: Hono, service: GatewayService):
         'GET  /api/channels/weixin/login/:sessionKey',
         'POST /api/channels/feishu/setup/start',
         'GET  /api/channels/feishu/setup/:sessionKey',
-        'POST /api/channels/dingtalk/setup/start',
-        'GET  /api/channels/dingtalk/setup/:sessionKey',
         'GET  /api/config',
         'GET  /api/agents',
         'POST /api/agents',

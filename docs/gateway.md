@@ -188,7 +188,7 @@ Uses file-based locking instead of PID files:
 1. **Phase 1** — All channels run **`init()`**; channels that do **not** defer run **`start()`** immediately. Session manager, cron, heartbeat, and the agent service start as today. The **outbound drain loop** starts only after phase 2 when defer is active (so Telegram et al. are not raced by queued sends).
 2. **Phase 2** — In the HTTP **`listen`** callback, deferred channels run **`start()`**, then **pending outbound replay**, then the outbound processor.
 
-Bundled messaging channels (**Telegram**, **Weixin**, **Feishu**, **DingTalk**) declare deferral in plugin metadata. Override behavior with **`gateway.channelConnectDeferMode`** / **`channelConnectDeferIds`** / **`channelConnectDeferSkipIds`** — see [Configuration — Channel connect defer](configuration.md#channel-connect-defer).
+Bundled messaging channels (**Telegram**, **Weixin**, **Feishu**) declare deferral in plugin metadata. Override behavior with **`gateway.channelConnectDeferMode`** / **`channelConnectDeferIds`** / **`channelConnectDeferSkipIds`** — see [Configuration — Channel connect defer](configuration.md#channel-connect-defer).
 
 Structured metrics are logged at **`info`** with `phase: "gateway.channel_startup"` and `stage: "phase1"` or `"phase2"` (millisecond fields, defer mode/source, and deferred channel ids).
 

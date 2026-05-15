@@ -50,7 +50,7 @@ This page describes how xopc is structured and how the main pieces fit together.
 | **CLI** | Commands such as `agent`, `tui`, `gateway`, `config`, `onboard`, and extension management. |
 | **Agent** | Runs the model, tools, memory, skills, and session handling for each conversation. |
 | **Gateway** | HTTP server and static **Web console** (chat, settings, logs, channels, cron, …). |
-| **Channels** | Bundled bots (Telegram, Weixin, Feishu/Lark, DingTalk) and gateway web chat share one outbound pipeline. |
+| **Channels** | Bundled bots (Telegram, Weixin, Feishu/Lark) and gateway web chat share one outbound pipeline. |
 | **Extensions** | Optional add-ons (tools, hooks, channels, console panels) from your workspace, `~/.xopc/extensions/`, or the install bundle. |
 | **Config** | Single JSON file (default `~/.xopc/xopc.json`) plus environment variables for secrets. |
 

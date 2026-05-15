@@ -27,7 +27,6 @@
     "extensions/telegram/src/**/*",
     "extensions/weixin/src/**/*",
     "extensions/feishu/src/**/*",
-    "extensions/dingtalk/src/**/*",
     "extensions/openai/src/**/*",
     "extensions/dashscope/src/**/*",
     "extensions/minimax/src/**/*",

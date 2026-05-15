@@ -40,7 +40,7 @@ xopc onboard
 1. 创建主 Markdown 工作区（默认常见路径如 `~/.xopc/workspace/main/`）
 2. 生成默认 **`~/.xopc/xopc.json`**
 3. 选择大模型厂商并填 API Key（**DeepSeek** 对多数场景很合适）
-4. 按需配置 **Telegram、微信、飞书/Lark、钉钉** 等机器人（可跳过）
+4. 按需配置 **Telegram、微信、飞书/Lark** 等机器人（可跳过）
 5. 网关网页控制台，以及结束时可选 **TUI** 或 **网关** 用法提示
 
 ### 快速生成文件（无交互）
@@ -138,7 +138,7 @@ xopc gateway --background
 
 ### 其它内置频道
 
-**微信、飞书/Lark、钉钉** 同样在 **`channels.*`** 里配置，并需**先起网关**。总览与私聊策略见 **[频道](./channels/index.md)**。
+**微信、飞书/Lark** 同样在 **`channels.*`** 里配置，并需**先起网关**。总览与私聊策略见 **[频道](./channels/index.md)**。
 
 ## 6. Electron 桌面版（可选）
 
@@ -160,7 +160,7 @@ pnpm run electron:build   # 产物在 dist/release/
 | [扩展](/zh/extensions) | 插件与加载时机 |
 | [技能](/zh/skills) | SKILL.md |
 | [工具](/zh/tools) | 内置工具 |
-| [频道](/zh/channels) | Telegram、微信、飞书、钉钉、网页对话 |
+| [频道](/zh/channels) | Telegram、微信、飞书、网页对话 |
 | [TUI](/zh/tui) | 全屏终端 |
 | [路由](/zh/routing-system) | 会话 key 与智能体绑定 |
 | [模型](/zh/models) | 厂商与密钥 |

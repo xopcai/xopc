@@ -27,7 +27,7 @@ features:
     details: 后端钩子与扩展能力；可选 manifest ui，在网关网页控制台沙箱 iframe 中运行（@xopcai/extension-ui-sdk）
     link: /zh/extensions
   - title: 🌐 多频道
-    details: 内置 Telegram、微信、飞书/Lark、钉钉与网关网页对话/控制台；可加载扩展的 manifest ui 面板；更多频道可通过扩展接入。
+    details: 内置 Telegram、微信、飞书/Lark 与网关网页对话/控制台；可加载扩展的 manifest ui 面板；更多频道可通过扩展接入。
     link: /zh/channels
   - title: 💻 本地优先
     details: 本地运行、完全掌控——专为自管技术栈的一人公司打造

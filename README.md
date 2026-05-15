@@ -32,7 +32,7 @@
   <a href="https://xopcai.github.io/xopc/cli">CLI</a>
 </p>
 
-**xopc** is a self-hosted agent stack: **CLI**, full-screen **terminal UI (TUI)**, **HTTP/SSE gateway** (REST JSON APIs plus Server-Sent Events for streaming and live updates) with a **React** console, optional **Electron** desktop (**macOS**, **Windows**, **Linux**), and bundled **channel** plugins (Telegram, WeChat, Feishu/Lark, DingTalk). LLMs are wired through **[@earendil-works/pi-ai](https://github.com/earendil-works/pi-mono)** (20+ providers). Add **extensions** (tools, channels, providers) and **SKILL.md** skills — plus **gateway UI** extensions via the extension UI SDK.
+**xopc** is a self-hosted agent stack: **CLI**, full-screen **terminal UI (TUI)**, **HTTP/SSE gateway** (REST JSON APIs plus Server-Sent Events for streaming and live updates) with a **React** console, optional **Electron** desktop (**macOS**, **Windows**, **Linux**), and bundled **channel** plugins (Telegram, WeChat, Feishu/Lark). LLMs are wired through **[@earendil-works/pi-ai](https://github.com/earendil-works/pi-mono)** (20+ providers). Add **extensions** (tools, channels, providers) and **SKILL.md** skills — plus **gateway UI** extensions via the extension UI SDK.
 
 ---
 
@@ -43,7 +43,7 @@
 | **Local-first** | You run the process; data stays on your machine unless you configure outbound channels or tools. No mandatory vendor cloud for the runtime. |
 | **BYOK** | API keys and OAuth profiles live in your config (`~/.xopc/xopc.json`) and environment — **DeepSeek** (recommended), OpenAI, Anthropic, Google, **Ollama / LM Studio / vLLM**, Bedrock, Azure, OpenRouter, gateways, and more. |
 | **Surfaces** | **`xopc tui`** (rich terminal UI), **`xopc agent`** (TTY chat), **gateway + browser UI**, **Electron** app with the same console. |
-| **Channels** | **Telegram**, **WeChat (Weixin)**, **Feishu/Lark**, **DingTalk** (bundled) + **web** chat in the gateway; DM/group **policies** (pairing, allowlist, …). |
+| **Channels** | **Telegram**, **WeChat (Weixin)**, **Feishu/Lark** (bundled) + **web** chat in the gateway; DM/group **policies** (pairing, allowlist, …). |
 | **Media** | **Images** (vision + generation where configured) and **voice** (STT/TTS) — e.g. Telegram and gateway paths; see docs. |
 | **Extensible** | **Backend**: `ChannelPlugin`, tools, providers, cron. **UI**: customize the gateway console with **`@xopcai/xopc/extension-ui-sdk`**. |
 
@@ -154,7 +154,6 @@ Enable and configure under **`channels.*`** in **`~/.xopc/xopc.json`** (override
 | **Telegram** | `channels.telegram` | Multi-account, streaming, voice, documents; DM/group policies |
 | **WeChat (Weixin)** | `channels.weixin` | QR login on gateway host; DM/group policies |
 | **Feishu / Lark** | `channels.feishu` | Bot / webhook style setup per docs |
-| **DingTalk** | `channels.dingtalk` | Stream mode; app credentials per docs |
 | **Web** | *(gateway)* | React SPA served with the gateway — not a separate IM |
 
 Full field reference and security defaults: **[Channels](https://xopcai.github.io/xopc/channels)** and **[Configuration](https://xopcai.github.io/xopc/configuration)**.
@@ -176,7 +175,7 @@ Full field reference and security defaults: **[Channels](https://xopcai.github.i
 | Terminal chat | `xopc tui --local` or `xopc agent -i` |
 | Web console | `xopc gateway` → open the URL from logs / config |
 | Gateway in background | `xopc gateway --background` — then `xopc gateway status`, `xopc gateway stop`, `xopc gateway restart`, `xopc gateway logs` as needed |
-| Telegram / WeChat / Feishu / DingTalk | Configure `channels.*`, run gateway; WeChat: `xopc channels login --channel weixin` on the gateway host |
+| Telegram / WeChat / Feishu | Configure `channels.*`, run gateway; WeChat: `xopc channels login --channel weixin` on the gateway host |
 | Onboarding | `xopc onboard` |
 | Schedules | Enable `cron` in config |
 
@@ -253,7 +252,7 @@ Default path: **`~/.xopc/xopc.json`**.
 }
 ```
 
-Add **`channels.weixin`**, **`channels.feishu`**, **`channels.dingtalk`** as needed — see the **[configuration](https://xopcai.github.io/xopc/configuration)** and **[channels](https://xopcai.github.io/xopc/channels)** docs for full schemas.
+Add **`channels.weixin`** and **`channels.feishu`** as needed — see the **[configuration](https://xopcai.github.io/xopc/configuration)** and **[channels](https://xopcai.github.io/xopc/channels)** docs for full schemas.
 
 ---
 

@@ -4,7 +4,6 @@ import { cn } from '@/lib/cn';
 
 const BRAND_IMG_BY_CHANNEL: Record<string, string> = {
   // Static assets in `web/public` (served as `/…` in Vite + gateway static root).
-  dingtalk: '/channel-icons/dingtalk.svg',
   feishu: '/channel-icons/feishu.svg',
   lark: '/channel-icons/lark.svg',
   telegram: '/channel-icons/telegram.svg',
