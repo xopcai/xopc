@@ -334,7 +334,15 @@
       "collapseAria": "Collapse goal bar",
       "expandAria": "Expand standing goal",
       "pillTitle": "{{status}} · {{turns}} — click to expand",
-      "elapsedLabel": "Run time"
+      "elapsedLabel": "Run time",
+      "runHistory": "Run history",
+      "runHistoryEmpty": "No runs recorded yet. Runs appear after each assistant reply while the goal is active.",
+      "runHistoryLoading": "Loading…",
+      "runHistoryLoadFailed": "Could not load run history.",
+      "runHistoryTurns": "{{used}} / {{max}} turns",
+      "runHistoryContinue": "Continues",
+      "runHistoryStop": "Stops",
+      "verdictInactive": "Inactive"
     },
     "atMention": {
       "noResults": "No matches",

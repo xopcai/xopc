@@ -12,6 +12,7 @@ import {
   type PersistentGoalUserAction,
 } from '../../../agent/goals/patch-from-user-action.js';
 import { mergePersistentGoalUiLocale, normalizeGoalUiLocale } from '../../../agent/goals/goal-locale.js';
+import { listGoalRuns } from '../../../agent/goals/goal-run-store.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 import { applyChecklistUserMutation } from '../../../agent/goals/checklist-user.js';
 
@@ -40,6 +41,23 @@ export function registerGoalsRoutes(authenticated: Hono, deps: AuthenticatedRout
     }
     const goal = readPersistentGoal(m?.customData as Record<string, unknown> | undefined);
     return c.json({ ok: true, sessionKey, persistentGoal: goal });
+  });
+
+  authenticated.get('/api/goals/webchat/runs', async (c) => {
+    const sessionKey = c.req.query('sessionKey')?.trim();
+    if (!sessionKey) {
+      return c.json({ ok: false, error: 'Missing sessionKey' }, 400);
+    }
+    const limitRaw = c.req.query('limit')?.trim();
+    let limit = 50;
+    if (limitRaw) {
+      const n = Number.parseInt(limitRaw, 10);
+      if (Number.isFinite(n)) {
+        limit = Math.min(500, Math.max(1, n));
+      }
+    }
+    const runs = await listGoalRuns(cfg(), sessionKey, { limit });
+    return c.json({ ok: true, sessionKey, runs });
   });
 
   authenticated.post('/api/goals/webchat', async (c) => {
