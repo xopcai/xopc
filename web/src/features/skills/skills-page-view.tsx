@@ -23,9 +23,9 @@ import { SkillCardIcon } from '@/features/skills/skill-card-icon';
 import { SkillCatalogStructuredPreview } from '@/features/skills/skill-catalog-structured-preview';
 import { SkillsPageHeaderEnd } from '@/features/skills/skills-page-header-end';
 import {
-  MarketplaceSkillListRowSkeleton,
+  MarketplaceSkillCardSkeleton,
+  SkillCatalogCardSkeleton,
   SkillEnableSwitch,
-  SkillListRowSkeleton,
 } from '@/features/skills/skills-page-primitives';
 import { SKILL_LIST_SKELETON_COUNT } from '@/features/skills/skills-page.constants';
 import { interpolate, skillHubPublicSkillPageUrl } from '@/features/skills/skills-page.utils';
@@ -461,12 +461,12 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
               ) : null}
               {mpLoading ? (
                 <div
-                  className="overflow-hidden rounded-2xl border border-edge-subtle bg-surface-base dark:border-edge-subtle"
+                  className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
                   aria-busy="true"
                   aria-label={sk.loading}
                 >
                   {Array.from({ length: SKILL_LIST_SKELETON_COUNT }, (_, i) => (
-                    <MarketplaceSkillListRowSkeleton key={i} />
+                    <MarketplaceSkillCardSkeleton key={i} />
                   ))}
                 </div>
               ) : mpError ? (
@@ -482,7 +482,7 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
                 </div>
               ) : (
                 <>
-                  <div className="overflow-hidden rounded-2xl border border-edge-subtle bg-surface-base dark:border-edge-subtle">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                     {mpPayload.items.map((row) => {
                       const installed = isSkillInstalledByName(row.id);
                       const busy = installingMarketName === row.id;
@@ -492,103 +492,140 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
                         <article
                           key={row.id}
                           className={cn(
-                            'group relative flex items-center gap-4 border-b border-edge-subtle px-4 py-3.5 last:border-b-0',
-                            'transition-colors hover:bg-surface-hover/50 dark:hover:bg-surface-hover/25',
+                            'group flex h-full flex-col rounded-xl border border-edge-subtle bg-surface-base p-4',
+                            'transition-colors hover:border-accent/40 hover:bg-surface-hover',
+                            'dark:border-edge-subtle',
                           )}
                         >
                           <div
                             role="button"
                             tabIndex={0}
                             className={cn(
-                              'flex min-w-0 flex-1 cursor-pointer items-start gap-4 rounded-lg text-left outline-none',
+                              'flex min-h-0 flex-1 cursor-pointer flex-col rounded-lg text-left outline-none',
                               interaction.focusRingPanel,
                             )}
                             aria-labelledby={`mp-skill-title-${row.id}`}
                             onClick={(e) => {
-                              if ((e.target as HTMLElement).closest('a[href]')) return;
+                              const el = e.target as HTMLElement;
+                              if (el.closest('a[href]') || el.closest('button')) return;
                               void openMarketplaceDetail(row.id, row.name);
                             }}
                             onKeyDown={(e) => {
-                              if ((e.target as HTMLElement).closest('a[href]')) return;
+                              const el = e.target as HTMLElement;
+                              if (el.closest('a[href]') || el.closest('button')) return;
                               if (e.key === 'Enter' || e.key === ' ') {
                                 e.preventDefault();
                                 void openMarketplaceDetail(row.id, row.name);
                               }
                             }}
                           >
-                            <SkillCardIcon name={row.id} />
-                            <div className="min-w-0 flex-1 pr-2">
-                              <h3
-                                id={`mp-skill-title-${row.id}`}
-                                className="text-[15px] font-semibold leading-snug tracking-tight text-fg"
-                              >
-                                {row.name}
-                              </h3>
-                              <p
-                                className="mt-0.5 truncate text-sm leading-relaxed text-fg-muted"
-                                title={row.description ? row.description : undefined}
-                              >
-                                {row.description || '—'}
-                              </p>
-                              <div className="mt-1.5 flex flex-wrap gap-1.5 text-[11px] text-fg-subtle">
-                                <span className="rounded-md bg-surface-hover/60 px-2 py-0.5 dark:bg-surface-active/50">
-                                  {sk.marketplaceAuthor}: {row.author.username}
-                                </span>
-                                <span className="rounded-md bg-surface-hover/60 px-2 py-0.5 dark:bg-surface-active/50">
-                                  {sk.marketplaceDownloads}: {row.downloads}
-                                </span>
-                                {row.stars != null && row.stars > 0 ? (
-                                  <span className="inline-flex items-center gap-0.5 rounded-md bg-surface-hover/60 px-2 py-0.5 dark:bg-surface-active/50">
-                                    <Star className="size-3 shrink-0 text-amber-600 dark:text-amber-400" strokeWidth={2} aria-hidden />
-                                    {row.stars}
-                                  </span>
-                                ) : null}
-                                {row.sourceLabel ? (
-                                  <span className="rounded-md bg-surface-hover/60 px-2 py-0.5 dark:bg-surface-active/50">
-                                    {sk.marketplaceSource}: {row.sourceLabel}
-                                  </span>
-                                ) : null}
-                                {row.latestVersion ? (
-                                  <span className="rounded-md bg-surface-hover/60 px-2 py-0.5 font-mono text-[10px] dark:bg-surface-active/50">
-                                    {sk.marketplaceVersion}: {row.latestVersion}
-                                  </span>
-                                ) : null}
-                                {installed ? (
-                                  <span className="rounded-md bg-emerald-500/15 px-2 py-0.5 text-emerald-800 dark:text-emerald-200">
-                                    {sk.marketplaceInstalled}
-                                  </span>
-                                ) : null}
-                                {skillhubPageUrl ? (
-                                  <a
-                                    href={skillhubPageUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className={cn(
-                                      'inline-flex items-center gap-0.5 rounded-md bg-surface-hover/60 px-2 py-0.5 dark:bg-surface-active/50',
-                                      'hover:bg-surface-hover/80 hover:text-fg-muted dark:hover:bg-surface-active/70',
-                                      interaction.focusRingPanel,
-                                    )}
-                                    aria-label={sk.marketplaceOpenOnSkillhubAria}
-                                    onClick={(e) => e.stopPropagation()}
-                                    onKeyDown={(e) => e.stopPropagation()}
+                            <div className="flex items-start gap-3">
+                              <SkillCardIcon name={row.id} />
+                              <div className="flex min-w-0 flex-1 flex-col gap-2">
+                                <div className="flex items-start justify-between gap-2">
+                                  <h3
+                                    id={`mp-skill-title-${row.id}`}
+                                    className="min-w-0 flex-1 truncate text-[15px] font-semibold leading-snug tracking-tight text-fg"
                                   >
-                                    <ExternalLink className="size-3 shrink-0" strokeWidth={2} aria-hidden />
-                                    {sk.marketplaceOpenOnSkillhub}
-                                  </a>
-                                ) : null}
+                                    {row.name}
+                                  </h3>
+                                  <div className="flex shrink-0 items-center gap-1">
+                                    {skillhubPageUrl ? (
+                                      <a
+                                        href={skillhubPageUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className={cn(
+                                          'inline-flex size-8 shrink-0 items-center justify-center rounded-lg border border-edge bg-surface-panel text-fg-muted',
+                                          'hover:bg-surface-hover hover:text-fg dark:border-edge',
+                                          interaction.focusRingPanel,
+                                        )}
+                                        aria-label={sk.marketplaceOpenOnSkillhubAria}
+                                        title={sk.marketplaceOpenOnSkillhub}
+                                      >
+                                        <ExternalLink className="size-3.5" strokeWidth={2} aria-hidden />
+                                      </a>
+                                    ) : null}
+                                    <div className="inline-flex shrink-0" onClick={(e) => e.stopPropagation()}>
+                                      <Button
+                                        type="button"
+                                        variant="secondary"
+                                        className="h-8 shrink-0 whitespace-nowrap px-2.5 text-xs font-medium"
+                                        disabled={busy || mpLoading}
+                                        onClick={() => void onMarketInstall(row.id)}
+                                      >
+                                        {busy
+                                          ? sk.uploading
+                                          : installed
+                                            ? sk.marketplaceReinstall
+                                            : sk.marketplaceInstall}
+                                      </Button>
+                                    </div>
+                                  </div>
+                                </div>
+                                <p
+                                  className="line-clamp-2 text-sm leading-relaxed text-fg-muted"
+                                  title={row.description ? row.description : undefined}
+                                >
+                                  {row.description || '—'}
+                                </p>
+                                <div className="mt-auto min-h-[2.625rem] space-y-1 text-[11px] leading-snug text-fg-muted">
+                                  <p
+                                    className="line-clamp-1"
+                                    title={`${sk.marketplaceAuthor}: ${row.author.username} · ${sk.marketplaceDownloads}: ${row.downloads}${
+                                      row.stars != null && row.stars > 0 ? ` · ★${row.stars}` : ''
+                                    }${installed ? ` · ${sk.marketplaceInstalled}` : ''}`}
+                                  >
+                                    <span className="text-fg-subtle">{sk.marketplaceAuthor}</span>{' '}
+                                    <span className="text-fg">{row.author.username}</span>
+                                    <span className="text-fg-subtle"> · </span>
+                                    <span>
+                                      {sk.marketplaceDownloads}: {row.downloads}
+                                    </span>
+                                    {row.stars != null && row.stars > 0 ? (
+                                      <>
+                                        <span className="text-fg-subtle"> · </span>
+                                        <span className="inline-flex items-center gap-0.5 text-fg-muted">
+                                          <Star className="size-3 shrink-0 text-amber-600 dark:text-amber-400" strokeWidth={2} aria-hidden />
+                                          {row.stars}
+                                        </span>
+                                      </>
+                                    ) : null}
+                                    {installed ? (
+                                      <>
+                                        <span className="text-fg-subtle"> · </span>
+                                        <span className="text-emerald-700 dark:text-emerald-400">{sk.marketplaceInstalled}</span>
+                                      </>
+                                    ) : null}
+                                  </p>
+                                  <p
+                                    className="line-clamp-1 min-h-[1.125rem] font-mono text-[10px] text-fg-subtle"
+                                    title={
+                                      [
+                                        row.latestVersion ? `${sk.marketplaceVersion}: ${row.latestVersion}` : '',
+                                        row.sourceLabel ? `${sk.marketplaceSource}: ${row.sourceLabel}` : '',
+                                      ]
+                                        .filter(Boolean)
+                                        .join(' · ') || undefined
+                                    }
+                                  >
+                                    {row.latestVersion ? (
+                                      <>
+                                        {sk.marketplaceVersion}: {row.latestVersion}
+                                      </>
+                                    ) : null}
+                                    {row.latestVersion && row.sourceLabel ? (
+                                      <span className="text-fg-subtle"> · </span>
+                                    ) : null}
+                                    {row.sourceLabel ? (
+                                      <>
+                                        {sk.marketplaceSource}: {row.sourceLabel}
+                                      </>
+                                    ) : null}
+                                  </p>
+                                </div>
                               </div>
                             </div>
-                          </div>
-                          <div className="flex shrink-0 justify-end sm:pl-2">
-                            <Button
-                              type="button"
-                              variant={installed ? 'secondary' : 'primary'}
-                              className="min-w-[6.5rem]"
-                              disabled={busy || mpLoading}
-                              onClick={() => void onMarketInstall(row.id)}
-                            >
-                              {busy ? sk.uploading : installed ? sk.marketplaceReinstall : sk.marketplaceInstall}
-                            </Button>
                           </div>
                         </article>
                       );
@@ -636,12 +673,12 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
             <>
               {loading ? (
                 <div
-                  className="overflow-hidden rounded-2xl border border-edge-subtle bg-surface-base dark:border-edge-subtle"
+                  className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
                   aria-busy="true"
                   aria-label={sk.loading}
                 >
                   {Array.from({ length: SKILL_LIST_SKELETON_COUNT }, (_, i) => (
-                    <SkillListRowSkeleton key={i} />
+                    <SkillCatalogCardSkeleton key={i} />
                   ))}
                 </div>
               ) : catalog.length === 0 ? (
@@ -704,65 +741,67 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
                       {sk.noSearchResults}
                     </div>
                   ) : (
-                    <div className="overflow-hidden rounded-2xl border border-edge-subtle bg-surface-base dark:border-edge-subtle">
-                      {categoryFilteredCatalog.map((row, i, arr) => (
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                      {categoryFilteredCatalog.map((row) => (
                         <article
                           key={`${row.directoryId}-${row.path}`}
                           className={cn(
-                            'group relative flex items-center gap-4 border-b border-edge-subtle px-4 py-3.5',
-                            i === arr.length - 1 && 'border-b-0',
-                            'transition-colors hover:bg-surface-hover/50 dark:hover:bg-surface-hover/25',
+                            'group flex h-full flex-col overflow-hidden rounded-xl border border-edge-subtle bg-surface-base',
+                            'transition-colors hover:border-accent/40 hover:bg-surface-hover',
+                            'dark:border-edge-subtle',
                           )}
                         >
                           <button
                             type="button"
                             className={cn(
-                              'flex min-w-0 flex-1 cursor-pointer items-center gap-4 rounded-lg text-left outline-none',
+                              'flex min-h-0 flex-1 cursor-pointer flex-col gap-3 p-4 pb-3 text-left outline-none',
                               interaction.focusRingPanel,
                             )}
                             onClick={() => void openSkillDetail(row)}
                           >
-                            <SkillCardIcon name={row.name} />
-                            <div className="min-w-0 flex-1 pr-2">
-                              <h3 className="text-[15px] font-semibold leading-snug tracking-tight text-fg">
-                                {row.name}
-                              </h3>
-                              <p
-                                className="mt-0.5 truncate text-sm leading-relaxed text-fg-muted"
-                                title={row.description ? row.description : undefined}
-                              >
-                                {row.description || '—'}
-                              </p>
-                              {mainTab !== 'builtin' || row.managed ? (
-                                <div className="mt-1.5 flex flex-wrap gap-1.5 text-[11px] text-fg-subtle">
-                                  {mainTab !== 'builtin' ? (
-                                    <span className="rounded-md bg-surface-hover/60 px-2 py-0.5 dark:bg-surface-active/50">
-                                      {sourceLabel(row.source)}
-                                    </span>
-                                  ) : null}
-                                  {row.managed ? (
-                                    <span className="rounded-md bg-surface-hover/60 px-2 py-0.5 dark:bg-surface-active/50">
-                                      {sk.col.managed}: {sk.yes}
-                                    </span>
-                                  ) : null}
-                                  {row.hub ? (
-                                    <span
-                                      className="max-w-full truncate rounded-md bg-surface-hover/60 px-2 py-0.5 font-mono text-[10px] dark:bg-surface-active/50"
-                                      title={`${row.hub.source}${row.hub.ref ? `\nref: ${row.hub.ref}` : ''}\nupdated: ${row.hub.updatedAt}`}
-                                    >
-                                      {sk.hubRemote} ·{' '}
-                                      {row.hub.kind === 'git' ? sk.hubKindGit : sk.hubKindArchive} ·{' '}
-                                      {row.hub.source.length > 48
-                                        ? `${row.hub.source.slice(0, 48)}…`
-                                        : row.hub.source}
-                                    </span>
-                                  ) : null}
-                                </div>
-                              ) : null}
+                            <div className="flex gap-3">
+                              <SkillCardIcon name={row.name} />
+                              <div className="min-w-0 flex-1">
+                                <h3 className="text-[15px] font-semibold leading-snug tracking-tight text-fg">
+                                  {row.name}
+                                </h3>
+                                <p
+                                  className="mt-0.5 line-clamp-2 text-sm leading-relaxed text-fg-muted"
+                                  title={row.description ? row.description : undefined}
+                                >
+                                  {row.description || '—'}
+                                </p>
+                                {mainTab !== 'builtin' || row.managed ? (
+                                  <div className="mt-1.5 flex flex-wrap gap-1.5 text-[11px] text-fg-subtle">
+                                    {mainTab !== 'builtin' ? (
+                                      <span className="rounded-md bg-surface-hover/60 px-2 py-0.5 dark:bg-surface-active/50">
+                                        {sourceLabel(row.source)}
+                                      </span>
+                                    ) : null}
+                                    {row.managed ? (
+                                      <span className="rounded-md bg-surface-hover/60 px-2 py-0.5 dark:bg-surface-active/50">
+                                        {sk.col.managed}: {sk.yes}
+                                      </span>
+                                    ) : null}
+                                    {row.hub ? (
+                                      <span
+                                        className="max-w-full break-all rounded-md bg-surface-hover/60 px-2 py-0.5 font-mono text-[10px] leading-snug dark:bg-surface-active/50 line-clamp-2"
+                                        title={`${row.hub.source}${row.hub.ref ? `\nref: ${row.hub.ref}` : ''}\nupdated: ${row.hub.updatedAt}`}
+                                      >
+                                        {sk.hubRemote} ·{' '}
+                                        {row.hub.kind === 'git' ? sk.hubKindGit : sk.hubKindArchive} ·{' '}
+                                        {row.hub.source.length > 48
+                                          ? `${row.hub.source.slice(0, 48)}…`
+                                          : row.hub.source}
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                ) : null}
+                              </div>
                             </div>
                           </button>
                           <div
-                            className="flex shrink-0 items-center gap-1"
+                            className="flex shrink-0 items-center justify-end gap-1 border-t border-edge-subtle px-4 py-3 dark:border-edge-subtle"
                             onClick={(e) => e.stopPropagation()}
                             role="presentation"
                           >
