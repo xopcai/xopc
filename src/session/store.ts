@@ -293,10 +293,15 @@ export class SessionStore {
 
   private metadataFromEntry(sessionKey: string, entry: XopcSessionDiskEntry): SessionMetadata {
     const base = entry.pluginExtensions?.xopc?.metadata ?? this.buildDefaultMetadata(sessionKey);
+    const { channel: keySource, chatId: keyChatId } = this.parseSessionKey(sessionKey);
+    const diskSc = typeof base.sourceChannel === 'string' ? base.sourceChannel.trim() : '';
+    const diskChat = typeof base.sourceChatId === 'string' ? base.sourceChatId.trim() : '';
     return {
       ...base,
       key: sessionKey,
       transcriptId: entry.sessionId,
+      sourceChannel: diskSc || keySource,
+      sourceChatId: diskChat || keyChatId,
     };
   }
 
@@ -369,8 +374,19 @@ export class SessionStore {
         .split(',')
         .map((c) => c.trim().toLowerCase())
         .filter(Boolean);
-      /** `ui` is a legacy console source; treat as webchat when filtering web sessions. */
-      const channels = [...new Set(rawChannels.flatMap((c) => (c === 'webchat' ? ['webchat', 'ui'] : [c])))];
+      /**
+       * `ui` is a legacy console source; treat as webchat when filtering web sessions.
+       * `webui` matches slash-command normalization to `gateway` (see `chat-commands/session-key.ts`).
+       */
+      const channels = [
+        ...new Set(
+          rawChannels.flatMap((c) => {
+            if (c === 'webchat') return ['webchat', 'ui'];
+            if (c === 'gateway') return ['gateway', 'webui'];
+            return [c];
+          }),
+        ),
+      ];
       if (channels.length === 0) {
         sessions = [];
       } else if (channels.length === 1) {
