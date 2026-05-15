@@ -3,6 +3,17 @@
 # Requires a clean git working tree. Uses remote GIT_REMOTE (default: origin).
 set -euo pipefail
 
+# Explicit checks: do not rely on set -e alone (pnpm/npm script chains can be subtle).
+run_release_step() {
+  local label="$1"
+  shift
+  echo "==> ${label}"
+  if ! "$@"; then
+    echo "error: ${label} failed; release aborted (no version bump, commit, tag, or push)." >&2
+    exit 1
+  fi
+}
+
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 REMOTE="${GIT_REMOTE:-origin}"
@@ -19,14 +30,9 @@ if git rev-parse "$TAG" >/dev/null 2>&1; then
   exit 1
 fi
 
-echo "==> pnpm run build"
-pnpm run build
-
-echo "==> pnpm test"
-pnpm test
-
-echo "==> pnpm run lint"
-pnpm run lint
+run_release_step "pnpm run build" pnpm run build
+run_release_step "pnpm test" pnpm test
+run_release_step "pnpm run lint" pnpm run lint
 
 NEXT_VER="$(node "$ROOT/scripts/bump-patch-version.mjs")"
 TAG="v${NEXT_VER}"
