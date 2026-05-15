@@ -10,6 +10,8 @@ import { colors } from '../utils/colors.js';
 import { acquireGatewayLock, GatewayLockError } from '../../gateway/lock.js';
 import { setupChannels as runChannelOnboard, getChannelConfigurators } from './onboard/channels/index.js';
 import { seedMainAgentProfileMarkdown } from '../../agent/context/workspace-seed.js';
+import { resolveDefaultAgentId, resolveAgentProfileDir } from '../../agent/agent-scope.js';
+import { WORKSPACE_FILES } from '../../config/paths.js';
 import { initWorkspace } from '../utils/init-workspace.js';
 import { ConfigSchema } from '../../config/schema.js';
 import { isWeixinOnboardConfigured } from '../../../extensions/weixin/src/adapters/onboard-cli.js';
@@ -174,7 +176,10 @@ async function runOnboard(
   console.log('  Config:', configPath);
   console.log('  Workspace:', workspacePath);
   if (runFullWizard) {
-    console.log('  BOOTSTRAP.md (origin story):', join(workspacePath, 'BOOTSTRAP.md'));
+    console.log(
+      '  BOOTSTRAP.md (origin story):',
+      join(resolveAgentProfileDir(config as Config, resolveDefaultAgentId(config as Config)), WORKSPACE_FILES.BOOTSTRAP),
+    );
   }
 
   if (isInteractive() && didConfigurableSteps) {

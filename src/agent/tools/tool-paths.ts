@@ -1,7 +1,10 @@
 import { basename, isAbsolute, normalize, resolve } from 'node:path';
 import { AGENT_PROFILE_MARKDOWN_SYSTEM_FILES } from '../context/workspace.js';
+import { WORKSPACE_FILES } from '../../config/paths.js';
 
-const PROFILE_SYSTEM_MARKDOWN_NAME_LOWER = new Set(AGENT_PROFILE_MARKDOWN_SYSTEM_FILES.map((f) => f.toLowerCase()));
+const PROFILE_SYSTEM_MARKDOWN_NAME_LOWER = new Set(
+  [...AGENT_PROFILE_MARKDOWN_SYSTEM_FILES, WORKSPACE_FILES.BOOTSTRAP].map((f) => f.toLowerCase()),
+);
 
 /**
  * Paths from the model: relative paths are under `workspaceRoot`; absolute paths are normalized.

@@ -14,6 +14,7 @@ import {
 import type { Model, Api } from '@earendil-works/pi-ai';
 import { type Config, getAgentDefaultModelRef } from '../config/schema.js';
 import { applyConfigOverrides } from '../config/runtime-overrides.js';
+import { resolveAgentProfileDir } from './agent-scope.js';
 import {
   type EffectiveAgentProfile,
   resolveAgentWorkspaceDir as resolveAgentWorkspaceDirFromProfile,
@@ -534,8 +535,8 @@ export class AgentManager {
 
   private loadProfileMarkdownForProfile(profile: EffectiveAgentProfile): ProfileMarkdownFile[] {
     const cfg = this.config.config!;
-    const workspaceDir = resolveAgentWorkspaceDirFromProfile(cfg, profile.agentId);
-    return loadProfileMarkdownFiles(workspaceDir);
+    const profileDir = resolveAgentProfileDir(cfg, profile.agentId);
+    return loadProfileMarkdownFiles(profileDir);
   }
 
   getSkillCatalog(lang?: string): SkillCatalogEntry[] {
@@ -571,6 +572,7 @@ export class AgentManager {
    * After ~/.xopc/skills.json changes (enable/disable), refresh `<available_skills>` on active agents.
    */
   refreshSkillsAfterSkillConfigChange(): void {
+    const cfg = this.config.config!;
     const touched = new Set<string>();
     for (const instance of this.agents.values()) {
       const rt = this.getWorkspaceRuntime(instance.resolvedWorkspacePath);
@@ -583,6 +585,7 @@ export class AgentManager {
         curatedMemorySnapshot: instance.curatedMemorySnapshot,
         externalMemoryInstructions: rt.memoryManager.buildExternalSystemPrompt(),
         workspaceOverride: instance.resolvedWorkspacePath,
+        profileMarkdownPathRoot: resolveAgentProfileDir(cfg, instance.effectiveProfile.agentId),
         systemPromptOverride: instance.effectiveProfile.systemPromptOverride,
         skillAllowlist: instance.effectiveProfile.skillsAllowlist,
         registeredToolNames: instance.registeredToolNames,
@@ -596,6 +599,7 @@ export class AgentManager {
    * Reload skills from disk and refresh system prompt on all active Agent instances.
    */
   refreshSkillsAfterDiskChange(): void {
+    const cfg = this.config.config!;
     // Reload every workspace SkillManager first. When there are no active agent sessions
     // (e.g. gateway UI only), the loop below runs zero times — without this, `getSkillCatalog()`
     // and delete flows still see stale in-memory skills after ~/.xopc/skills changes.
@@ -614,6 +618,7 @@ export class AgentManager {
         curatedMemorySnapshot: instance.curatedMemorySnapshot,
         externalMemoryInstructions: rt.memoryManager.buildExternalSystemPrompt(),
         workspaceOverride: instance.resolvedWorkspacePath,
+        profileMarkdownPathRoot: resolveAgentProfileDir(cfg, instance.effectiveProfile.agentId),
         systemPromptOverride: instance.effectiveProfile.systemPromptOverride,
         skillAllowlist: instance.effectiveProfile.skillsAllowlist,
         registeredToolNames: instance.registeredToolNames,
@@ -827,7 +832,7 @@ export class AgentManager {
     const profileMarkdownFiles = this.loadProfileMarkdownForProfile(profile);
     const tools = this.toolsFactory.createAllTools({
       workspace: resolvedWorkspacePath,
-      profileMarkdownRoot: resolveAgentWorkspaceDirFromProfile(this.config.config!, profile.agentId),
+      profileMarkdownRoot: resolveAgentProfileDir(this.config.config!, profile.agentId),
       disabledTools: profile.tools.disable,
       getPrimaryModel: () => this.resolveModelStringToModel(modelRef),
       getBuiltinMemoryStore: () => rt.builtinMemoryStore,
@@ -845,6 +850,7 @@ export class AgentManager {
           curatedMemorySnapshot,
           externalMemoryInstructions: rt.memoryManager.buildExternalSystemPrompt(),
           workspaceOverride: resolvedWorkspacePath,
+          profileMarkdownPathRoot: resolveAgentProfileDir(this.config.config!, profile.agentId),
           systemPromptOverride: profile.systemPromptOverride,
           skillAllowlist: profile.skillsAllowlist,
           registeredToolNames,

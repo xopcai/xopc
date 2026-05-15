@@ -42,7 +42,7 @@ Memory files support dynamic updates:
 
 The agent can search and read memories via `memory_search` and `memory_get` tools.
 
-**Curated memory** (optional): **`agents/<agentId>/memories/MEMORY.md`** and **`USER.md`** hold bounded, tool-edited entries separate from workspace-root profile **`MEMORY.md`**. See [Curated memory](../workspace.md#curated-memory) and [Configuration](../configuration.md) (`agents.defaults.memory`).
+**Curated memory** (optional): **`agents/<agentId>/memories/MEMORY.md`** and **`USER.md`** hold bounded, tool-edited entries separate from **`agents/<agentId>/profile/MEMORY.md`** (system-prompt profile index). See [Curated memory](../workspace.md#curated-memory) and [Configuration](../configuration.md) (`agents.defaults.memory`).
 
 ## See also
 

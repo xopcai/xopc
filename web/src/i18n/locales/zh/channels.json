@@ -270,7 +270,7 @@
   },
   "heartbeatSettings": {
     "needToken": "请先保存网关访问令牌后再加载或修改心跳选项。",
-    "subtitle": "定时唤醒智能体、可选投递到消息通道，以及工作区中的 HEARTBEAT.md。配置写入网关配置文件与工作区文件。",
+    "subtitle": "定时唤醒智能体、可选投递到消息通道，以及默认智能体 `profile/` 目录下的 HEARTBEAT.md。配置写入网关配置文件与 `agents/<id>/profile/`。",
     "docsLink": "心跳机制文档",
     "loadError": "加载心跳设置失败",
     "loading": "加载中…",

@@ -96,7 +96,7 @@ export const AgentDefaultsSchema = z.object({
     .object({
       /** Master switch: curated snapshot, `curated_memory`, prefetch, and external provider. Default true. */
       enabled: z.boolean().optional(),
-      /** When false, use workspace-root profile MEMORY.md only (no curated snapshot / tool). Default true. */
+      /** When false, use `agents/<id>/profile/MEMORY.md` only (no curated snapshot / tool). Default true. */
       useEnhancedSystem: z.boolean().optional(),
       /** Include USER.md in snapshot. Default true. */
       userProfileEnabled: z.boolean().optional(),
