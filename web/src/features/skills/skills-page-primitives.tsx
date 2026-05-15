@@ -33,38 +33,57 @@ export function SkillEnableSwitch({
   );
 }
 
-export function SkillListRowSkeleton() {
-  const skel =
-    'animate-pulse motion-reduce:animate-none rounded-md bg-surface-hover dark:bg-surface-active/50';
+const skelBar =
+  'animate-pulse motion-reduce:animate-none rounded-md bg-surface-hover dark:bg-surface-active/50';
+
+/** Matches built-in / user skill cards in the catalog grid. */
+export function SkillCatalogCardSkeleton() {
   return (
-    <div className="flex items-center gap-4 px-4 py-3.5" aria-hidden>
-      <div className={cn('size-11 shrink-0 rounded-xl', skel)} />
-      <div className="min-w-0 flex-1 space-y-2">
-        <div className={cn('h-4 max-w-[10rem]', skel)} />
-        <div className={cn('h-3 w-full max-w-xl rounded', skel)} />
+    <div
+      className="flex h-full min-h-[10.5rem] flex-col gap-3 rounded-xl border border-edge-subtle bg-surface-base p-4 dark:border-edge-subtle"
+      aria-hidden
+    >
+      <div className="flex min-h-0 flex-1 gap-3">
+        <div className={cn('size-11 shrink-0 rounded-xl', skelBar)} />
+        <div className="min-w-0 flex-1 space-y-2">
+          <div className={cn('h-4 w-32', skelBar)} />
+          <div className={cn('h-3 w-full', skelBar)} />
+          <div className={cn('h-3 w-4/5', skelBar)} />
+        </div>
       </div>
-      <div className={cn('h-6 w-10 shrink-0 rounded-full', skel)} />
+      <div className="mt-auto flex justify-end gap-2 border-t border-edge-subtle pt-3 dark:border-edge-subtle">
+        <div className={cn('size-9 rounded-lg', skelBar)} />
+        <div className={cn('h-6 w-10 shrink-0 rounded-full', skelBar)} />
+      </div>
     </div>
   );
 }
 
-/** Taller row — matches marketplace cards (meta pills + install button) to avoid layout jump after fetch. */
-export function MarketplaceSkillListRowSkeleton() {
-  const skel =
-    'animate-pulse motion-reduce:animate-none rounded-md bg-surface-hover dark:bg-surface-active/50';
+/** Matches marketplace skill cards (title row actions + meta). */
+export function MarketplaceSkillCardSkeleton() {
   return (
-    <div className="flex items-center gap-4 px-4 py-3.5" aria-hidden>
-      <div className={cn('size-11 shrink-0 rounded-xl', skel)} />
-      <div className="min-w-0 flex-1 space-y-2 pr-2">
-        <div className={cn('h-4 max-w-[12rem]', skel)} />
-        <div className={cn('h-3 w-full max-w-xl rounded', skel)} />
-        <div className="flex flex-wrap gap-1.5 pt-0.5">
-          <div className={cn('h-5 w-[5.5rem] rounded-md', skel)} />
-          <div className={cn('h-5 w-16 rounded-md', skel)} />
-          <div className={cn('h-5 w-14 rounded-md', skel)} />
+    <div
+      className="flex h-full min-h-[10.5rem] flex-col rounded-xl border border-edge-subtle bg-surface-base p-4 dark:border-edge-subtle"
+      aria-hidden
+    >
+      <div className="flex min-h-0 flex-1 items-start gap-3">
+        <div className={cn('size-11 shrink-0 rounded-xl', skelBar)} />
+        <div className="flex min-w-0 flex-1 flex-col gap-2">
+          <div className="flex items-start justify-between gap-2">
+            <div className={cn('h-4 min-w-0 flex-1', skelBar)} />
+            <div className="flex shrink-0 gap-1">
+              <div className={cn('size-8 shrink-0 rounded-lg', skelBar)} />
+              <div className={cn('h-8 w-[4.5rem] shrink-0 rounded-lg', skelBar)} />
+            </div>
+          </div>
+          <div className={cn('h-3 w-full', skelBar)} />
+          <div className={cn('h-3 w-[92%]', skelBar)} />
+          <div className="mt-auto space-y-1 pt-0.5">
+            <div className={cn('h-3 w-full', skelBar)} />
+            <div className={cn('h-2.5 w-4/5', skelBar)} />
+          </div>
         </div>
       </div>
-      <div className={cn('h-9 min-w-[6.5rem] shrink-0 rounded-lg', skel)} />
     </div>
   );
 }
