@@ -17,7 +17,6 @@ import { applyConfigOverrides } from '../config/runtime-overrides.js';
 import { resolveAgentProfileDir } from './agent-scope.js';
 import {
   type EffectiveAgentProfile,
-  resolveAgentWorkspaceDir as resolveAgentWorkspaceDirFromProfile,
   resolveEffectiveAgentProfileForSession,
 } from '../config/agent-profile.js';
 import { expandWorkspacePathString } from '../config/workspace-path.js';

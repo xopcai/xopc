@@ -72,7 +72,6 @@ import {
 } from './agent-scope.js';
 import {
   extractProfileAgentId,
-  resolveAgentWorkspaceDir as resolveAgentWorkspaceDirFromProfile,
   resolveEffectiveAgentProfileForSession,
 } from '../config/agent-profile.js';
 import { DEFAULT_ACK_MAX_CHARS, NO_REPLY, shouldSilence } from '../heartbeat/tokens.js';
