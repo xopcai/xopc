@@ -97,7 +97,7 @@ export function CronTasksPanel({
         </div>
       ) : jobsCount === 0 ? (
         <div className="flex flex-col gap-6 rounded-2xl bg-surface-base px-4 py-8 dark:bg-surface-hover/25 sm:px-6 sm:py-10">
-          <div className="w-full max-w-3xl">
+          <div className="w-full max-w-6xl">
             <CronTemplateLibrary
               cron={c}
               localeTag={localeTag}
