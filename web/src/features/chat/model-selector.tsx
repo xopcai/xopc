@@ -98,7 +98,7 @@ export function ModelSelector({
   contentAlign?: 'start' | 'center' | 'end';
   /** Merged onto the trigger button (e.g. full width in wide forms). */
   className?: string;
-  /** Merged onto `Popover.Content` — use e.g. `z-[70]` when the trigger sits inside a `z-[60]` dialog. */
+  /** Merged onto `Popover.Content` — use `SETTINGS_SHELL_MODAL_POPOVER_Z` inside settings-shell modals. */
   popoverContentClassName?: string;
   showProviderSettingsFooter?: boolean;
   onChange: (modelId: string) => void;

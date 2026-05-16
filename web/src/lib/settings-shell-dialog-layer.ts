@@ -15,3 +15,6 @@ export const SETTINGS_SHELL_CONTENT_Z = 'z-[76]';
 
 /** Popovers/menus portaled above the settings panel but below modal tier. */
 export const SETTINGS_SHELL_POPOVER_Z = 'z-[74]';
+
+/** Popovers/menus opened from controls inside a settings-shell modal (`CONTENT` is z-[76]). */
+export const SETTINGS_SHELL_MODAL_POPOVER_Z = 'z-[77]';

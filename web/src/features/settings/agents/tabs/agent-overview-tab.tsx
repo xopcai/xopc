@@ -16,8 +16,8 @@ import type { AgentsSettingsMessages, ChatMessages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import {
   SETTINGS_SHELL_CONTENT_Z,
+  SETTINGS_SHELL_MODAL_POPOVER_Z,
   SETTINGS_SHELL_OVERLAY_Z,
-  SETTINGS_SHELL_POPOVER_Z,
 } from '@/lib/settings-shell-dialog-layer';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useThemeStore } from '@/stores/theme-store';
@@ -369,7 +369,7 @@ export function AgentOverviewTab(props: {
             <div className="flex flex-wrap items-stretch gap-2">
               <ModelSelector
                 className="min-w-0 flex-1"
-                popoverContentClassName={SETTINGS_SHELL_POPOVER_Z}
+                popoverContentClassName={SETTINGS_SHELL_MODAL_POPOVER_Z}
                 value={editModel}
                 disabled={busy}
                 placeholder={chat.modelPlaceholder}
