@@ -6,21 +6,12 @@ import { Button } from '@/components/ui/button';
 import type { CronJob } from '@/features/cron/cron-api';
 import { CronJobCard } from '@/features/cron/cron-job-card';
 import type { HeartbeatSettingsState } from '@/features/settings/heartbeat-settings.types';
-import type { MessageBundle } from '@/i18n/messages';
+import { formatIntervalMsLabel } from '@/features/scheduling/interval/format-interval-label';
+import { messages, type MessageBundle } from '@/i18n/messages';
 import type { StoredLanguage } from '@/lib/storage';
 import { cn } from '@/lib/cn';
 
 type CronCopy = MessageBundle['cron'];
-
-/** Localized duration phrase for interpolation into `c.systemHeartbeatEvery`. */
-function heartbeatIntervalValuePhrase(ms: number, lang: StoredLanguage): string {
-  const sec = Math.max(1, Math.round(ms / 1000));
-  if (sec < 120) return lang === 'zh' ? `${sec} 秒` : `${sec} seconds`;
-  const min = Math.round(sec / 60);
-  if (min < 120) return lang === 'zh' ? `${min} 分钟` : `${min} minutes`;
-  const hr = Math.round(min / 60);
-  return lang === 'zh' ? `${hr} 小时` : `${hr} hours`;
-}
 
 export type CronSystemTasksPanelProps = {
   c: CronCopy;
@@ -63,7 +54,11 @@ export function CronSystemTasksPanel({
   onRunNow,
   onDelete,
 }: CronSystemTasksPanelProps) {
-  const hbInterval = heartbeatIntervalValuePhrase(heartbeat.intervalMs, language);
+  const hbInterval = formatIntervalMsLabel(
+    heartbeat.intervalMs,
+    localeTag,
+    messages(language).heartbeatSettings.intervalPresets,
+  );
 
   return (
     <section aria-labelledby="cron-system-tasks-panel" className="flex flex-col gap-4">

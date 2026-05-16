@@ -2,9 +2,12 @@ import { AlarmClock } from 'lucide-react';
 
 import type { GatewayAgentRow } from '@/features/settings/agents-admin-api';
 import { cronJobBodyText, type CronJob } from '@/features/cron/cron-api';
+import { ScheduleSummary } from '@/features/scheduling/schedule-summary';
 import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/settings/settings-form-section';
 import { cn } from '@/lib/cn';
 import type { AgentsSettingsMessages } from '@/i18n/messages';
+import { messages } from '@/i18n/messages';
+import { useLocaleStore } from '@/stores/locale-store';
 
 import { agentsSettingsInputClass } from '../utils';
 
@@ -18,6 +21,10 @@ export function AgentCronTab(props: {
   onSetCronJobAgent: (job: CronJob, agentKey: string) => void;
 }) {
   const { a, data, busy, cronLoading, agentCronJobs, onSetCronJobAgent } = props;
+  const language = useLocaleStore((s) => s.language);
+  const m = messages(language);
+  const localeTag = language === 'zh' ? 'zh-CN' : 'en-US';
+  const scheduleBadgeLabels = m.cron.scheduleBadge;
 
   return (
     <SettingsFormSection className="flex min-h-0 flex-1 flex-col overflow-y-auto">
@@ -48,7 +55,22 @@ export function AgentCronTab(props: {
                 const value = usesDefaultAgent ? '' : job.agentId!.trim().toLowerCase();
                 return (
                   <tr key={job.id} className="border-b border-edge-subtle">
-                    <td className="py-2 pr-3 font-mono text-xs">{job.schedule}</td>
+                    <td className="py-2 pr-3">
+                      <div className="flex flex-col gap-0.5">
+                        <ScheduleSummary
+                          kind="cron"
+                          expression={job.schedule}
+                          locale={localeTag}
+                          labels={scheduleBadgeLabels}
+                          timezone={job.timezone}
+                          nextRun={job.next_run}
+                          className="text-sm font-medium text-fg"
+                        />
+                        <span className="truncate font-mono text-[0.65rem] text-fg-subtle" title={job.schedule}>
+                          {job.schedule}
+                        </span>
+                      </div>
+                    </td>
                     <td className="max-w-[12rem] truncate py-2 pr-3 text-xs" title={cronJobBodyText(job)}>
                       {cronJobBodyText(job)}
                     </td>
