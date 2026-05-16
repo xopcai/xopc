@@ -769,33 +769,101 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
                         <article
                           key={`${row.directoryId}-${row.path}`}
                           className={cn(
-                            'group flex h-full flex-col overflow-hidden rounded-xl border border-edge-subtle bg-surface-base',
+                            'group flex h-full flex-col rounded-xl border border-edge-subtle bg-surface-base p-4',
                             'transition-colors hover:border-accent/40 hover:bg-surface-hover',
                             'dark:border-edge-subtle',
                           )}
                         >
-                          <button
-                            type="button"
+                          <div
+                            role="button"
+                            tabIndex={0}
                             className={cn(
-                              'flex min-h-0 flex-1 cursor-pointer flex-col gap-3 p-4 pb-3 text-left outline-none',
+                              'flex min-h-0 flex-1 cursor-pointer flex-col rounded-lg text-left outline-none',
                               interaction.focusRingPanel,
                             )}
-                            onClick={() => void openSkillDetail(row)}
+                            aria-labelledby={`catalog-skill-title-${row.directoryId}`}
+                            onClick={(e) => {
+                              const el = e.target as HTMLElement;
+                              if (el.closest('button')) return;
+                              void openSkillDetail(row);
+                            }}
+                            onKeyDown={(e) => {
+                              const el = e.target as HTMLElement;
+                              if (el.closest('button')) return;
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                void openSkillDetail(row);
+                              }
+                            }}
                           >
-                            <div className="flex gap-3">
+                            <div className="flex items-start gap-3">
                               <SkillCardIcon name={row.name} />
-                              <div className="min-w-0 flex-1">
-                                <h3 className="text-[15px] font-semibold leading-snug tracking-tight text-fg">
-                                  {row.name}
-                                </h3>
+                              <div className="flex min-w-0 flex-1 flex-col gap-2">
+                                <div className="flex items-start justify-between gap-2">
+                                  <h3
+                                    id={`catalog-skill-title-${row.directoryId}`}
+                                    className="min-w-0 flex-1 truncate text-[15px] font-semibold leading-snug tracking-tight text-fg"
+                                  >
+                                    {row.name}
+                                  </h3>
+                                  <div
+                                    className="flex shrink-0 items-center gap-1"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <div className="inline-flex shrink-0">
+                                      <SkillEnableSwitch
+                                        checked={enabledOverride[row.name] ?? row.enabled}
+                                        onChange={(next) => void onSkillToggle(row.name, next)}
+                                      />
+                                    </div>
+                                    {row.managed ? (
+                                      <DropdownMenu.Root>
+                                        <DropdownMenu.Trigger asChild>
+                                          <button
+                                            type="button"
+                                            className={cn(
+                                              'inline-flex size-8 shrink-0 items-center justify-center rounded-lg border border-edge bg-surface-panel text-fg-muted',
+                                              'hover:bg-surface-hover hover:text-fg dark:border-edge',
+                                              interaction.focusRingPanel,
+                                            )}
+                                            aria-label={sk.col.actions}
+                                          >
+                                            <MoreVertical className="size-3.5" strokeWidth={2} aria-hidden />
+                                          </button>
+                                        </DropdownMenu.Trigger>
+                                        <DropdownMenu.Portal>
+                                          <DropdownMenu.Content
+                                            className="z-50 min-w-[8rem] rounded-xl border border-edge bg-surface-panel p-1 shadow-popover dark:border-edge"
+                                            sideOffset={4}
+                                            align="end"
+                                          >
+                                            <DropdownMenu.Item
+                                              className={cn(
+                                                'flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-red-600 outline-none',
+                                                'hover:bg-red-50 data-[highlighted]:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40',
+                                              )}
+                                              onSelect={() => {
+                                                setConfirmId(row.directoryId);
+                                                setConfirmOpen(true);
+                                              }}
+                                            >
+                                              <Trash2 className="size-4" strokeWidth={1.75} aria-hidden />
+                                              {sk.delete}
+                                            </DropdownMenu.Item>
+                                          </DropdownMenu.Content>
+                                        </DropdownMenu.Portal>
+                                      </DropdownMenu.Root>
+                                    ) : null}
+                                  </div>
+                                </div>
                                 <p
-                                  className="mt-0.5 line-clamp-2 text-sm leading-relaxed text-fg-muted"
+                                  className="line-clamp-2 text-sm leading-relaxed text-fg-muted"
                                   title={row.description ? row.description : undefined}
                                 >
                                   {row.description || '—'}
                                 </p>
                                 {mainTab !== 'builtin' || row.managed ? (
-                                  <div className="mt-1.5 flex flex-wrap gap-1.5 text-[11px] text-fg-subtle">
+                                  <div className="flex flex-wrap gap-1.5 text-[11px] text-fg-subtle">
                                     {mainTab !== 'builtin' ? (
                                       <span className="rounded-md bg-surface-hover/60 px-2 py-0.5 dark:bg-surface-active/50">
                                         {sourceLabel(row.source)}
@@ -822,53 +890,6 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
                                 ) : null}
                               </div>
                             </div>
-                          </button>
-                          <div
-                            className="flex shrink-0 items-center justify-end gap-1 border-t border-edge-subtle px-4 py-3 dark:border-edge-subtle"
-                            onClick={(e) => e.stopPropagation()}
-                            role="presentation"
-                          >
-                            {row.managed ? (
-                              <DropdownMenu.Root>
-                                <DropdownMenu.Trigger asChild>
-                                  <button
-                                    type="button"
-                                    className={cn(
-                                      'flex size-9 items-center justify-center rounded-lg text-fg-muted hover:bg-surface-hover hover:text-fg',
-                                      interaction.focusRingPanel,
-                                    )}
-                                    aria-label={sk.col.actions}
-                                  >
-                                    <MoreVertical className="size-4" strokeWidth={1.75} />
-                                  </button>
-                                </DropdownMenu.Trigger>
-                                <DropdownMenu.Portal>
-                                  <DropdownMenu.Content
-                                    className="z-50 min-w-[8rem] rounded-xl border border-edge bg-surface-panel p-1 shadow-popover dark:border-edge"
-                                    sideOffset={4}
-                                    align="end"
-                                  >
-                                    <DropdownMenu.Item
-                                      className={cn(
-                                        'flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-red-600 outline-none',
-                                        'hover:bg-red-50 data-[highlighted]:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40',
-                                      )}
-                                      onSelect={() => {
-                                        setConfirmId(row.directoryId);
-                                        setConfirmOpen(true);
-                                      }}
-                                    >
-                                      <Trash2 className="size-4" strokeWidth={1.75} aria-hidden />
-                                      {sk.delete}
-                                    </DropdownMenu.Item>
-                                  </DropdownMenu.Content>
-                                </DropdownMenu.Portal>
-                              </DropdownMenu.Root>
-                            ) : null}
-                            <SkillEnableSwitch
-                              checked={enabledOverride[row.name] ?? row.enabled}
-                              onChange={(next) => void onSkillToggle(row.name, next)}
-                            />
                           </div>
                         </article>
                       ))}
