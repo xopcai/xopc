@@ -19,10 +19,7 @@ import { SettingsFormSection } from '@/features/settings/settings-form-section';
 import { nativeSelectMaxWidthClass, selectControlBaseClass, settingsInputFocusClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
 import { messages, type HeartbeatSettingsMessages } from '@/i18n/messages';
-import {
-  HEARTBEAT_INTERVAL_PRESET_MS,
-  HEARTBEAT_INTERVAL_PRESET_MS_ORDER,
-} from '@/features/settings/heartbeat-interval-presets';
+import { ScheduleField } from '@/features/scheduling/schedule-field';
 import { docsGuidePageUrl } from '@/navigation';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -50,32 +47,6 @@ function workspacePathFromConfig(cfg: unknown): string {
   if (!defaults || typeof defaults !== 'object' || Array.isArray(defaults)) return '';
   const w = (defaults as { workspace?: unknown }).workspace;
   return typeof w === 'string' ? w : '';
-}
-
-function intervalPresetLabel(
-  ms: number,
-  p: HeartbeatSettingsMessages['intervalPresets'],
-): string {
-  switch (ms) {
-    case 30_000:
-      return p.every30s;
-    case 60_000:
-      return p.every1min;
-    case 300_000:
-      return p.every5min;
-    case 600_000:
-      return p.every10min;
-    case 900_000:
-      return p.every15min;
-    case 1_800_000:
-      return p.every30min;
-    case 3_600_000:
-      return p.every1h;
-    case 7_200_000:
-      return p.every2h;
-    default:
-      return String(ms);
-  }
 }
 
 export function HeartbeatSettingsPanel() {
@@ -444,20 +415,6 @@ function HeartbeatConfigFields({
   const targetTrim = form.target.trim();
   const showCustomChannel = Boolean(targetTrim && !channelNames.has(targetTrim));
 
-  const intervalPresetSelectValue = useMemo(
-    () => (HEARTBEAT_INTERVAL_PRESET_MS.has(form.intervalMs) ? String(form.intervalMs) : ''),
-    [form.intervalMs],
-  );
-
-  const [intervalSecondsDraft, setIntervalSecondsDraft] = useState<string | null>(null);
-  const intervalSecondsCommitted = Math.max(1, Math.round(form.intervalMs / 1000));
-  const intervalSecondsInputValue =
-    intervalSecondsDraft !== null ? intervalSecondsDraft : String(intervalSecondsCommitted);
-
-  useEffect(() => {
-    setIntervalSecondsDraft(null);
-  }, [form.intervalMs]);
-
   return (
     <div className="space-y-4">
       <label className="flex cursor-pointer items-center gap-2 text-sm text-fg">
@@ -470,59 +427,14 @@ function HeartbeatConfigFields({
         {h.enable}
       </label>
 
-      <div className="flex flex-col gap-2">
-        <div className="text-sm font-medium text-fg">{h.interval}</div>
-        <div className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-fg-muted">{h.intervalSecondsLabel}</span>
-          <div className="flex gap-2">
-            <input
-              type="number"
-              min={1}
-              step={1}
-              className={cn(inputCn(), 'min-w-0 flex-1')}
-              value={intervalSecondsInputValue}
-              onChange={(e) => {
-                const next = e.target.value;
-                setIntervalSecondsDraft(next);
-                const raw = parseInt(next, 10);
-                if (Number.isFinite(raw) && raw >= 1) {
-                  update({ intervalMs: raw * 1000 });
-                }
-              }}
-              onBlur={() => {
-                if (intervalSecondsDraft === null) return;
-                const raw = parseInt(intervalSecondsDraft, 10);
-                if (!Number.isFinite(raw) || raw < 1) {
-                  update({ intervalMs: 1000 });
-                } else {
-                  update({ intervalMs: raw * 1000 });
-                }
-                setIntervalSecondsDraft(null);
-              }}
-            />
-            <select
-              className={cn(selectCn(), 'max-w-[11rem] shrink-0 text-xs')}
-              value={intervalPresetSelectValue}
-              onChange={(e) => {
-                const v = e.target.value;
-                if (v) {
-                  update({ intervalMs: parseInt(v, 10) });
-                  setIntervalSecondsDraft(null);
-                }
-              }}
-            >
-              <option value="">{h.intervalPresets.custom}</option>
-              {HEARTBEAT_INTERVAL_PRESET_MS_ORDER.map((ms) => (
-                <option key={ms} value={String(ms)}>
-                  {intervalPresetLabel(ms, h.intervalPresets)}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-        <p className="text-xs text-fg-muted">{h.intervalHintPreset}</p>
-        <p className="text-xs text-fg-subtle">{h.intervalHint}</p>
-      </div>
+      <ScheduleField
+        kind="interval"
+        label={h.interval}
+        valueMs={form.intervalMs}
+        onChangeMs={(intervalMs) => update({ intervalMs })}
+        labels={{ secondsLabel: h.intervalSecondsLabel, presets: h.intervalPresets }}
+        hint={`${h.intervalHintPreset} ${h.intervalHint}`}
+      />
 
       <div className="border-t border-edge-subtle pt-4">
         <div className="mb-2 text-sm font-medium text-fg">{h.deliveryTitle}</div>
@@ -651,76 +563,20 @@ function HeartbeatConfigFields({
       </label>
 
       <div className="border-t border-edge-subtle pt-4">
-        <div className="mb-2 text-sm font-medium text-fg">{h.activeHoursTitle}</div>
-        {form.activeHours ? (
-          <div className="grid gap-3 sm:grid-cols-3">
-            <div>
-              <div className="mb-1 text-xs text-fg">{h.activeStart}</div>
-              <input
-                className={inputCn()}
-                value={form.activeHours.start}
-                onChange={(e) =>
-                  update({
-                    activeHours: { ...form.activeHours!, start: e.target.value },
-                  })
-                }
-                placeholder="09:00"
-              />
-            </div>
-            <div>
-              <div className="mb-1 text-xs text-fg">{h.activeEnd}</div>
-              <input
-                className={inputCn()}
-                value={form.activeHours.end}
-                onChange={(e) =>
-                  update({
-                    activeHours: { ...form.activeHours!, end: e.target.value },
-                  })
-                }
-                placeholder="22:00"
-              />
-            </div>
-            <div>
-              <div className="mb-1 text-xs text-fg">{h.activeTimezone}</div>
-              <input
-                className={inputCn()}
-                value={form.activeHours.timezone}
-                onChange={(e) =>
-                  update({
-                    activeHours: { ...form.activeHours!, timezone: e.target.value },
-                  })
-                }
-                placeholder="Asia/Shanghai"
-              />
-            </div>
-          </div>
-        ) : (
-          <Button
-            type="button"
-            variant="secondary"
-            className="text-sm"
-            onClick={() =>
-              update({
-                activeHours: { start: '09:00', end: '22:00', timezone: '' },
-              })
-            }
-          >
-            {h.addActiveHours}
-          </Button>
-        )}
-        {form.activeHours ? (
-          <div className="mt-2 flex flex-wrap gap-2">
-            <Button
-              type="button"
-              variant="secondary"
-              className="text-xs"
-              onClick={() => update({ activeHours: null })}
-            >
-              {h.clearActiveHours}
-            </Button>
-          </div>
-        ) : null}
-        <p className="mt-2 text-xs text-fg-subtle">{h.activeHoursHint}</p>
+        <ScheduleField
+          kind="active-hours"
+          label={h.activeHoursTitle}
+          value={form.activeHours}
+          onChange={(activeHours) => update({ activeHours })}
+          labels={{
+            start: h.activeStart,
+            end: h.activeEnd,
+            timezone: h.activeTimezone,
+            add: h.addActiveHours,
+            clear: h.clearActiveHours,
+          }}
+          hint={h.activeHoursHint}
+        />
       </div>
     </div>
   );
