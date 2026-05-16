@@ -36,29 +36,6 @@ export function SkillEnableSwitch({
 const skelBar =
   'animate-pulse motion-reduce:animate-none rounded-md bg-surface-hover dark:bg-surface-active/50';
 
-/** Matches built-in / user skill cards in the catalog grid. */
-export function SkillCatalogCardSkeleton() {
-  return (
-    <div
-      className="flex h-full min-h-[10.5rem] flex-col gap-3 rounded-xl border border-edge-subtle bg-surface-base p-4 dark:border-edge-subtle"
-      aria-hidden
-    >
-      <div className="flex min-h-0 flex-1 gap-3">
-        <div className={cn('size-11 shrink-0 rounded-xl', skelBar)} />
-        <div className="min-w-0 flex-1 space-y-2">
-          <div className={cn('h-4 w-32', skelBar)} />
-          <div className={cn('h-3 w-full', skelBar)} />
-          <div className={cn('h-3 w-4/5', skelBar)} />
-        </div>
-      </div>
-      <div className="mt-auto flex justify-end gap-2 border-t border-edge-subtle pt-3 dark:border-edge-subtle">
-        <div className={cn('size-9 rounded-lg', skelBar)} />
-        <div className={cn('h-6 w-10 shrink-0 rounded-full', skelBar)} />
-      </div>
-    </div>
-  );
-}
-
 /** Matches marketplace skill cards (title row actions + meta). */
 export function MarketplaceSkillCardSkeleton() {
   return (
@@ -86,4 +63,9 @@ export function MarketplaceSkillCardSkeleton() {
       </div>
     </div>
   );
+}
+
+/** Matches built-in / user skill cards (title-row actions, same as marketplace). */
+export function SkillCatalogCardSkeleton() {
+  return <MarketplaceSkillCardSkeleton />;
 }

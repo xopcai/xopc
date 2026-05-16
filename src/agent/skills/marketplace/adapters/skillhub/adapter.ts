@@ -26,6 +26,7 @@ import {
   cachedListSkillHubRegistryCategories,
 } from './skillhub-fetch-cache.js';
 
+import { sortMarketplaceCategories } from '../../marketplace-category-order.js';
 import type { SkillsMarketplaceAdapter } from '../../adapter.types.js';
 
 /** Batch size for POST /api/v1/skills/batch (slug lists from default discovery). */
@@ -130,9 +131,10 @@ export const skillhubMarketplaceAdapter: SkillsMarketplaceAdapter = {
             if (label) map.set(label, { id: label, label });
           }
         }
-        return Array.from(map.values())
-          .filter((c) => c.id.trim() && c.label.trim())
-          .sort(sortByLabel);
+        return sortMarketplaceCategories(
+          Array.from(map.values()).filter((c) => c.id.trim() && c.label.trim()),
+          sortByLabel,
+        );
       }
     } catch {
       /* fall through: registry-backed catalog */
@@ -153,13 +155,12 @@ export const skillhubMarketplaceAdapter: SkillsMarketplaceAdapter = {
         if (!label) continue;
         options.push({ id: key, label });
       }
-      options.sort((a, b) => {
+      return sortMarketplaceCategories(options, (a, b) => {
         const oa = taxByKey.get(a.id)?.sortOrder ?? 999;
         const ob = taxByKey.get(b.id)?.sortOrder ?? 999;
         if (oa !== ob) return oa - ob;
         return sortByLabel(a, b);
       });
-      return options;
     } catch {
       return [];
     }
