@@ -127,6 +127,8 @@ Terminal walkthrough — click the badge to play ([@micjoyce](https://asciinema.
 
 ### Install from GitHub Releases
 
+<video controls src="https://xopc.ai/xopc-demo.mp4" width="100%"></video>
+
 1. Open **[GitHub Releases](https://github.com/xopcai/xopc/releases)** for this repo.
 2. Pick the asset for your OS (typical names: **`.dmg`** / **`.zip`** on macOS, **`.exe`** on Windows, **`.AppImage`** / **`.deb`** on Linux).
 3. Install or run it like any desktop application. On macOS, first launch may ask for **microphone** access if you use voice in chat.
