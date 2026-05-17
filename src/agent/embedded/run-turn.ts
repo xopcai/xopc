@@ -7,11 +7,7 @@ import { createLogger } from '../../utils/logger.js';
 import { guardSessionManager, type GuardedPiTranscriptManager } from './session-tool-result-guard-wrapper.js';
 import { prepareSessionManagerForRun } from './session-manager-init.js';
 import { prewarmSessionFile } from './session-manager-cache.js';
-import {
-  abortEmbeddedRun,
-  registerEmbeddedRun,
-  unregisterEmbeddedRun,
-} from './runs.js';
+import { registerEmbeddedRun, unregisterEmbeddedRun } from './runs.js';
 import { subscribeEmbeddedSessionEvents, lastAssistantPlainText } from './subscribe-session.js';
 import type { RunXopcEmbeddedTurnParams, RunXopcEmbeddedTurnResult } from './types.js';
 import { xopcToolsToDefinitions } from './xopc-tools-bridge.js';
