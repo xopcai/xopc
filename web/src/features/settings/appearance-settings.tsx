@@ -63,6 +63,22 @@ const SCHEME_PREVIEW: Record<
       muted: '#333333',
     },
   },
+  clay: {
+    light: {
+      canvas: '#fffaf0',
+      panel: '#ffffff',
+      accent: '#1a3a3a',
+      fg: '#0a0a0a',
+      muted: '#e5e5e5',
+    },
+    dark: {
+      canvas: '#0a1a1a',
+      panel: '#1a2a2a',
+      accent: '#ffb084',
+      fg: '#fffaf0',
+      muted: '#2a3a3a',
+    },
+  },
 };
 
 function SchemePreviewHalf({
@@ -109,11 +125,16 @@ function SchemePreviewSwatch({ scheme }: { scheme: ColorScheme }) {
 
 const COLOR_SCHEME_OPTIONS: {
   value: ColorScheme;
-  labelKey: 'colorSchemeDefault' | 'colorSchemeLightGreen' | 'colorSchemeModernMono';
+  labelKey:
+    | 'colorSchemeDefault'
+    | 'colorSchemeLightGreen'
+    | 'colorSchemeModernMono'
+    | 'colorSchemeClay';
 }[] = [
   { value: 'default', labelKey: 'colorSchemeDefault' },
   { value: 'emerald', labelKey: 'colorSchemeLightGreen' },
   { value: 'mono', labelKey: 'colorSchemeModernMono' },
+  { value: 'clay', labelKey: 'colorSchemeClay' },
 ];
 
 function ColorSchemeSelector() {
@@ -129,7 +150,7 @@ function ColorSchemeSelector() {
         <div className="text-sm font-semibold text-fg">{a.colorSchemeTitle}</div>
         <p className="mt-0.5 text-xs text-fg-muted">{a.colorSchemeDescription}</p>
       </div>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {COLOR_SCHEME_OPTIONS.map(({ value, labelKey }) => {
           const isSelected = colorScheme === value;
           return (
