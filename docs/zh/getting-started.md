@@ -2,6 +2,20 @@
 
 装好 **xopc**、配上至少一家大模型厂商的密钥后，就可以用 **命令行**、**全屏终端（TUI）**、**网关网页控制台** 或 **Electron 桌面版**。本页从「第一次安装」讲起。
 
+## 终端演示
+
+[![asciinema](https://asciinema.org/a/PlH1sYqOiV3malzu.svg)](https://asciinema.org/a/PlH1sYqOiV3malzu)
+
+点击徽章在 [asciinema.org](https://asciinema.org/a/PlH1sYqOiV3malzu) 观看短演示（[@micjoyce](https://asciinema.org/~micjoyce)）。
+
+本地回放（需安装 [asciinema CLI](https://docs.asciinema.org/manual/cli/installation/)）：
+
+```bash
+asciinema play docs/asciinema/quick-start.cast
+```
+
+仓库内保留 [`.cast` 源文件](./asciinema/quick-start.cast) 作备份。
+
 ## 1. 环境要求
 
 - **Node.js**：**22** 及以上（`node -v`）
