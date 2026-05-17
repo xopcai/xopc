@@ -158,6 +158,10 @@ xopc gateway --background
 
 **macOS / Windows / Linux** 的安装包见 **[GitHub Releases](https://github.com/xopcai/xopc/releases)**（有发版时）。与浏览器里打开的是同一套网关 + 网页控制台。
 
+<video controls playsinline width="100%" style="max-width: 960px; border-radius: 8px;">
+  <source src="https://xopc.ai/xopc-demo.mp4" type="video/mp4" />
+</video>
+
 在本仓库里自行打包：
 
 ```bash
