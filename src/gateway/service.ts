@@ -15,7 +15,7 @@ import { installExtensionFromStoreZip, peekExtensionIdFromStoreZip } from '../ex
 import { getExtensionLockfileManager } from '../extensions/lockfile.js';
 import { HeartbeatService, heartbeatRunnerConfigFromConfig } from './heartbeat/index.js';
 import { ConfigHotReloader } from '../config/reload.js';
-import { SessionManager } from '../session/index.js';
+import { SessionIndex } from '../session/index.js';
 import type { Config } from '../config/schema.js';
 import type { SessionListQuery, ExportFormat } from '../session/types.js';
 import type { SessionPatchBody } from '../session/patch-metadata.js';
@@ -104,7 +104,7 @@ export class GatewayService {
   /** `${host}:${port}` when the gateway holds the extension bridge listener. */
   private browserExtensionBindKey: string | null = null;
   private heartbeatService: HeartbeatService;
-  private sessionManager: SessionManager;
+  private sessionIndex: SessionIndex;
   private running = false;
   private configReloader: ConfigHotReloader | null = null;
   /** In-flight coalesced apply after PATCH/save (Telegram `getMe` must not block HTTP). */
@@ -185,7 +185,7 @@ export class GatewayService {
     }, 'ModelRegistry initialized');
 
     // Session index + files shared with AgentService (webchat `/goal` metadata must match GET /api/goals/webchat).
-    this.sessionManager = new SessionManager({
+    this.sessionIndex = new SessionIndex({
       config: this.config,
     });
 
@@ -196,9 +196,12 @@ export class GatewayService {
       workspace: this.workspacePath,
       model: typeof modelConfig === 'string' ? modelConfig : modelConfig?.primary,
       config: this.config,
-      sessionStore: this.sessionManager.getStore(),
+      sessionStore: this.sessionIndex.getStore(),
       onSessionMetadataUpdated: (sessionKey) => {
-        this.sessionManager.emit('sessionUpdated', { key: sessionKey });
+        this.sessionIndex.emit('sessionUpdated', { key: sessionKey });
+      },
+      onSessionTranscriptUpdated: (sessionKey) => {
+        this.emit('session.transcript_updated', { key: sessionKey });
       },
       extensionRegistry: this.extensionLoader?.getRegistry(),
       getCronService: () => cronRef.service,
@@ -251,16 +254,25 @@ export class GatewayService {
     cronRef.service = this.cronService;
 
     this.agentService.setPersistentGoalWebchatContinuationScheduler((sessionKey, message) => {
-      queueMicrotask(() => {
+      const scheduleWhenIdle = () => {
+        if (this.agentService.getInboundTurnDepth(sessionKey) > 0) {
+          setTimeout(scheduleWhenIdle, 50);
+          return;
+        }
+        if (this.activeWebchatRunBySession.has(sessionKey)) {
+          setTimeout(scheduleWhenIdle, 50);
+          return;
+        }
         void this.drainScheduledWebchatContinuation(sessionKey, message);
-      });
+      };
+      queueMicrotask(scheduleWhenIdle);
     });
 
     this.heartbeatService = new HeartbeatService({
       agentService: this.agentService,
       messageBus: this.bus,
       cronService: this.cronService,
-      sessionStore: this.sessionManager.getStore(),
+      sessionStore: this.sessionIndex.getStore(),
       getConfig: () => this.config,
     });
 
@@ -339,7 +351,7 @@ export class GatewayService {
     if (this.extensionLoader) {
       this.extensionLoader.setRuntimeContext({
         bus: this.bus,
-        sessionManager: this.sessionManager,
+        sessionManager: this.sessionIndex,
         scheduleWebchatContinuation: (sessionKey: string, continuationMessage: string) => {
           queueMicrotask(() => {
             void this.drainScheduledWebchatContinuation(sessionKey, continuationMessage);
@@ -407,18 +419,18 @@ export class GatewayService {
     );
 
     // Initialize session manager
-    await this.sessionManager.initialize();
+    await this.sessionIndex.initialize();
     log.debug('Session manager initialized');
 
     this.cronService.setDeps({
       agentService: this.agentService,
       messageBus: this.bus,
       heartbeatService: this.heartbeatService,
-      sessionStore: this.sessionManager.getStore(),
+      sessionStore: this.sessionIndex.getStore(),
       getDefaultCronAgentId: () => getDefaultAgentId(this.config),
     });
 
-    this.sessionManager.on('sessionUpdated', (data: { key: string; name?: string; tags?: string[] }) => {
+    this.sessionIndex.on('sessionUpdated', (data: { key: string; name?: string; tags?: string[] }) => {
       this.emit('session.updated', { key: data.key, name: data.name, tags: data.tags });
     });
 
@@ -1007,7 +1019,7 @@ export class GatewayService {
         runRelay: this.runRelay,
         runAbortControllers: this.runAbortControllers,
         activeWebchatRunBySession: this.activeWebchatRunBySession,
-        sessionManager: this.sessionManager,
+        sessionIndex: this.sessionIndex,
         emit: (type, payload) => this.sse.emit(type, payload),
       },
       message,
@@ -1048,10 +1060,10 @@ export class GatewayService {
     }
     const cutoffTs = Date.now();
     for (const sk of keysToMark) {
-      void this.sessionManager
+      void this.sessionIndex
         .updateSessionMetadata(sk, { abortCutoffTimestamp: cutoffTs })
         .catch(() => {});
-      void this.sessionManager
+      void this.sessionIndex
         .appendTranscriptContextEntry(sk, {
           text: 'Webchat agent run aborted',
           data: { runId, abortCutoffTimestamp: cutoffTs },
@@ -1059,15 +1071,20 @@ export class GatewayService {
         .catch(() => {});
     }
     c.abort();
+    for (const sk of keysToMark) {
+      void import('../agent/embedded/runs.js').then(({ abortEmbeddedRun }) => abortEmbeddedRun(sk));
+    }
     return true;
   }
 
   /** Background drain for extension-initiated webchat turns (`scheduleWebchatContinuation`). */
   private async drainScheduledWebchatContinuation(sessionKey: string, message: string): Promise<void> {
     try {
-      const gen = this.runAgent(message, 'webchat', sessionKey, undefined, undefined, undefined);
+      const gen = this.runAgent(message, 'webchat', sessionKey, undefined, undefined, {
+        clientCreatedAtMs: Date.now(),
+      });
       for await (const _ of gen) {
-        // Relay + persistence; no HTTP client attached.
+        // Relay + `agent.stream` broadcast; UI attaches via pending runId + resume.
       }
     } catch (err) {
       log.warn({ err, sessionKey }, 'Scheduled webchat continuation failed');
@@ -1600,8 +1617,13 @@ export class GatewayService {
     this.agentService.refreshSkillsAfterSkillConfigChange();
   }
 
-  get sessionManagerInstance(): SessionManager {
-    return this.sessionManager;
+  get sessionIndexInstance(): SessionIndex {
+    return this.sessionIndex;
+  }
+
+  /** @deprecated Use {@link sessionIndexInstance}. */
+  get sessionManagerInstance(): SessionIndex {
+    return this.sessionIndex;
   }
 
   async getSessionAgentConfig(sessionKey: string) {
@@ -1659,7 +1681,7 @@ export class GatewayService {
    * List sessions with query filters
    */
   async listSessions(query?: SessionListQuery) {
-    return this.sessionManager.listSessions(query);
+    return this.sessionIndex.listSessions(query);
   }
 
   /**
@@ -1667,7 +1689,7 @@ export class GatewayService {
    * Subagent sessions have keys starting with 'subagent:'.
    */
   async listSubagents(query?: SessionListQuery) {
-    return this.sessionManager.listSubagents(query);
+    return this.sessionIndex.listSubagents(query);
   }
 
   /**
@@ -1677,7 +1699,7 @@ export class GatewayService {
     key: string,
     options?: { includeTranscriptSummary?: boolean; includeTranscriptRows?: boolean },
   ) {
-    return this.sessionManager.getSession(key, options);
+    return this.sessionIndex.getSession(key, options);
   }
 
   /**
@@ -1687,19 +1709,19 @@ export class GatewayService {
     key: string,
     body: SessionPatchBody,
   ): Promise<{ ok: true } | { ok: false; error: string }> {
-    return this.sessionManager.patchSession(key, body);
+    return this.sessionIndex.patchSession(key, body);
   }
 
   async listSessionCompactionCheckpoints(key: string) {
-    return this.sessionManager.listCompactionCheckpoints(key);
+    return this.sessionIndex.listCompactionCheckpoints(key);
   }
 
   async getSessionCompactionCheckpoint(key: string, checkpointId: string) {
-    return this.sessionManager.getCompactionCheckpointDetail(key, checkpointId);
+    return this.sessionIndex.getCompactionCheckpointDetail(key, checkpointId);
   }
 
   async restoreSessionCompactionCheckpoint(key: string, checkpointId: string): Promise<void> {
-    await this.sessionManager.restoreCompactionCheckpoint(key, checkpointId);
+    await this.sessionIndex.restoreCompactionCheckpoint(key, checkpointId);
     this.agentService.evictSessionAgent(key);
   }
 
@@ -1709,7 +1731,7 @@ export class GatewayService {
   ): Promise<CompactionResult> {
     const result = await this.agentService.compactSession(key, options);
     if (result.compacted) {
-      void this.sessionManager
+      void this.sessionIndex
         .appendTranscriptContextEntry(key, {
           text: 'Session transcript compacted',
           data: {
@@ -1728,7 +1750,7 @@ export class GatewayService {
    * Delete a session
    */
   async deleteSession(key: string): Promise<{ deleted: boolean }> {
-    const result = await this.sessionManager.deleteSession(key);
+    const result = await this.sessionIndex.deleteSession(key);
     return { deleted: result };
   }
 
@@ -1736,14 +1758,14 @@ export class GatewayService {
    * Delete multiple sessions
    */
   async deleteSessions(keys: string[]): Promise<{ success: string[]; failed: string[] }> {
-    return this.sessionManager.deleteSessions(keys);
+    return this.sessionIndex.deleteSessions(keys);
   }
 
   /**
    * Rename a session
    */
   async renameSession(key: string, name: string): Promise<{ renamed: boolean }> {
-    await this.sessionManager.renameSession(key, name);
+    await this.sessionIndex.renameSession(key, name);
     return { renamed: true };
   }
 
@@ -1751,7 +1773,7 @@ export class GatewayService {
    * Tag a session
    */
   async tagSession(key: string, tags: string[]): Promise<{ tagged: boolean }> {
-    await this.sessionManager.tagSession(key, tags);
+    await this.sessionIndex.tagSession(key, tags);
     return { tagged: true };
   }
 
@@ -1759,7 +1781,7 @@ export class GatewayService {
    * Remove tags from a session
    */
   async untagSession(key: string, tags: string[]): Promise<{ untagged: boolean }> {
-    await this.sessionManager.untagSession(key, tags);
+    await this.sessionIndex.untagSession(key, tags);
     return { untagged: true };
   }
 
@@ -1767,7 +1789,7 @@ export class GatewayService {
    * Archive a session
    */
   async archiveSession(key: string): Promise<{ archived: boolean }> {
-    await this.sessionManager.archiveSession(key);
+    await this.sessionIndex.archiveSession(key);
     return { archived: true };
   }
 
@@ -1775,7 +1797,7 @@ export class GatewayService {
    * Unarchive a session
    */
   async unarchiveSession(key: string): Promise<{ unarchived: boolean }> {
-    await this.sessionManager.unarchiveSession(key);
+    await this.sessionIndex.unarchiveSession(key);
     return { unarchived: true };
   }
 
@@ -1783,7 +1805,7 @@ export class GatewayService {
    * Pin a session
    */
   async pinSession(key: string): Promise<{ pinned: boolean }> {
-    await this.sessionManager.pinSession(key);
+    await this.sessionIndex.pinSession(key);
     return { pinned: true };
   }
 
@@ -1791,7 +1813,7 @@ export class GatewayService {
    * Unpin a session
    */
   async unpinSession(key: string): Promise<{ unpinned: boolean }> {
-    await this.sessionManager.unpinSession(key);
+    await this.sessionIndex.unpinSession(key);
     return { unpinned: true };
   }
 
@@ -1799,21 +1821,21 @@ export class GatewayService {
    * Search sessions
    */
   async searchSessions(query: string) {
-    return this.sessionManager.searchSessions(query);
+    return this.sessionIndex.searchSessions(query);
   }
 
   /**
    * Search within a session
    */
   async searchInSession(key: string, keyword: string) {
-    return this.sessionManager.searchInSession(key, keyword);
+    return this.sessionIndex.searchInSession(key, keyword);
   }
 
   /**
    * Export a session
    */
   async exportSession(key: string, format: ExportFormat): Promise<{ content: string }> {
-    const content = await this.sessionManager.exportSession(key, format);
+    const content = await this.sessionIndex.exportSession(key, format);
     return { content };
   }
 
@@ -1821,7 +1843,7 @@ export class GatewayService {
    * Get session statistics
    */
   async getSessionStats() {
-    return this.sessionManager.getStats();
+    return this.sessionIndex.getStats();
   }
 
   /**
@@ -1840,7 +1862,7 @@ export class GatewayService {
       peerId?: string;
     }>
   > {
-    return getDistinctSessionChatIds(this.sessionManager, channel);
+    return getDistinctSessionChatIds(this.sessionIndex, channel);
   }
 
   /**

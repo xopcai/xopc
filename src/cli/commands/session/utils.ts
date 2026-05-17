@@ -4,12 +4,12 @@
 
 import { getSessionManager } from '../../utils/session.js';
 import { getContextWithOpts } from '../../index.js';
-import type { SessionManager } from '../../../session/index.js';
+import type { SessionIndex } from '../../../session/index.js';
 
 /**
  * Get initialized session manager
  */
-export async function getManager(): Promise<SessionManager> {
+export async function getManager(): Promise<SessionIndex> {
   getContextWithOpts();
   return getSessionManager();
 }

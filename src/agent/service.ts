@@ -10,6 +10,7 @@ import { join } from 'node:path';
 import {
   SessionStore,
   SessionConfigStore,
+  onSessionTranscriptUpdate,
   resolveEffectiveThinkingLevel,
   resolveEffectiveReasoningLevel,
   effectiveWorkspacePathForSession,
@@ -76,11 +77,8 @@ import {
 } from '../config/agent-profile.js';
 import { DEFAULT_ACK_MAX_CHARS, NO_REPLY, shouldSilence } from '../heartbeat/tokens.js';
 import { createTypingController, type TypingController } from './lifecycle/typing.js';
-import { cleanTrailingErrors, sanitizeMessages } from './memory/message-sanitizer.js';
-import {
-  tryApplySessionTranscriptHygiene,
-  tryApplySessionTranscriptHygieneForPersistence,
-} from './transcript/transcript-hygiene.js';
+import { cleanTrailingErrors } from './memory/message-sanitizer.js';
+import { tryApplySessionTranscriptHygiene } from './transcript/transcript-hygiene.js';
 import {
   persistInboundAttachmentsToWorkspace,
   type InternalAttachmentRoots,
@@ -133,6 +131,8 @@ export class AgentService {
     string,
     (event: { type: string; [key: string]: unknown }) => void
   >();
+  private embeddedStreamTextBySession = new Map<string, string>();
+  private lastAssistantPlainTextBySession = new Map<string, string>();
 
   /** Gateway: drain `processDirectStreaming` for webchat continuations (Hermes FIFO-style). */
   private persistentGoalWebchatContinuationScheduler?: (sessionKey: string, message: string) => void;
@@ -142,6 +142,7 @@ export class AgentService {
 
   /** Gateway: notify UI after direct `SessionStore.updateMetadata` (no SessionManager emit). */
   private onSessionMetadataUpdated?: (sessionKey: string) => void;
+  private onSessionTranscriptUpdated?: (sessionKey: string) => void;
 
   // Track event unsubscribers per session
   private sessionUnsubscribers: Map<string, () => void> = new Map();
@@ -155,6 +156,7 @@ export class AgentService {
     this.bus = bus;
     this.config = config;
     this.onSessionMetadataUpdated = config.onSessionMetadataUpdated;
+    this.onSessionTranscriptUpdated = config.onSessionTranscriptUpdated;
     this.agentId = `agent-${Date.now()}`;
     this.workspaceDir = config.workspace;
 
@@ -176,6 +178,18 @@ export class AgentService {
     log.debug('Command system initialized');
 
     this.sessionStore = config.sessionStore ?? this.createSessionStore();
+    onSessionTranscriptUpdate((update) => {
+      void this.sessionStore.syncSessionsJsonFromTranscriptUpdate(update).catch((err) => {
+        log.warn(
+          { err, sessionFile: update.sessionFile, sessionKey: update.sessionKey },
+          'Transcript index sync failed',
+        );
+      });
+      const sk = update.sessionKey?.trim();
+      if (sk) {
+        this.onSessionTranscriptUpdated?.(sk);
+      }
+    });
     const appCfgForPaths = this.config.config;
     if (!appCfgForPaths) {
       throw new Error('AgentService requires config.config for session paths');
@@ -253,6 +267,24 @@ export class AgentService {
       getAgentInternalStorageRootForSession: (sessionKey: string) =>
         resolveAgentHomeDir(this.config.config!, extractProfileAgentId(sessionKey, this.config.config!)),
       enqueueAutoTitle: (sessionKey: string) => this.enqueueMaybeAutoTitleAfterPersist(sessionKey),
+      onEmbeddedStreamEvent: (sessionKey, event) => {
+        const ctx = this.sessionContextManager.getContext();
+        if (!ctx || ctx.sessionKey !== sessionKey) {
+          return;
+        }
+        if (event.type === 'token') {
+          const prev = this.embeddedStreamTextBySession.get(sessionKey) ?? '';
+          const next = prev + event.content;
+          this.embeddedStreamTextBySession.set(sessionKey, next);
+          this.streamManager.update(next);
+        }
+      },
+      onEmbeddedTurnComplete: (sessionKey, text) => {
+        if (text?.trim()) {
+          this.lastAssistantPlainTextBySession.set(sessionKey, text.trim());
+        }
+        this.embeddedStreamTextBySession.delete(sessionKey);
+      },
     });
 
     this.messageRouter = new MessageRouter();
@@ -512,7 +544,11 @@ export class AgentService {
 
   /** Last assistant visible plain text for a session (e.g. after a webchat stream). */
   getLastAssistantPlainText(sessionKey: string): string {
-    return this.agentManager.getLastAssistantContent(sessionKey) ?? '';
+    return (
+      this.lastAssistantPlainTextBySession.get(sessionKey) ??
+      this.agentManager.getLastAssistantContent(sessionKey) ??
+      ''
+    );
   }
 
   /** Gateway only: webchat continuations bypass the bus and reuse `runGatewayAgent`. */
@@ -581,6 +617,24 @@ export class AgentService {
       },
       loadMessages: (k) => this.sessionStore.loadMessages(k),
       saveMessages: (k, m) => this.sessionStore.saveMessages(k, m),
+      appendAssistantReceipt: async (k, text) => {
+        const trimmed = text.trim();
+        if (!trimmed) return;
+        const { absPath } = await this.sessionStore.resolveTranscriptPath(k);
+        const workspaceDir = this.agentManager.getResolvedWorkspaceForSession(k);
+        const { appendPiTranscriptMessage } = await import('../session/parity/jsonl-transcript-io.js');
+        await appendPiTranscriptMessage({
+          absPath,
+          cwd: workspaceDir,
+          message: {
+            role: 'assistant',
+            content: [{ type: 'text', text: trimmed }],
+            timestamp: Date.now(),
+          } as AgentMessage,
+          sessionKey: k,
+        });
+        this.notifyWebchatTranscriptAppend(k, trimmed);
+      },
       scheduleContinuation: (sk, msg) => {
         this.schedulePersistentGoalContinuation(sk, msg, {
           channel: routing.channel,
@@ -654,6 +708,13 @@ export class AgentService {
           }
         : undefined;
 
+    let runtimeSessionModelRef: string | undefined;
+    try {
+      runtimeSessionModelRef = this.modelManager.getModelForSession(payload.sessionKey);
+    } catch {
+      runtimeSessionModelRef = undefined;
+    }
+
     await handlePersistentGoalPostTurn({
       apis,
       sessionKey: payload.sessionKey,
@@ -662,6 +723,7 @@ export class AgentService {
       ...(payload.streamError !== undefined ? { streamError: payload.streamError } : {}),
       skipPersistentGoalPostTurn: payload.skipPersistentGoalPostTurn ?? false,
       config: this.effectiveAppConfig(),
+      runtimeSessionModelRef,
       publishVerdictToChannel: publishVerdict,
     });
   }
@@ -730,23 +792,6 @@ export class AgentService {
    * Persist agent messages with the same sanitizer + transcript hygiene as AgentOrchestrator.
    * Uses persistence hygiene so `thinking` blocks remain on disk for the web UI (LLM load path still drops them).
    */
-  private async persistAgentSessionMessages(sessionKey: string): Promise<void> {
-    const raw = this.agentManager.getMessages(sessionKey);
-    if (!raw) {
-      return;
-    }
-    const { messages } = sanitizeMessages(raw);
-    let toSave = messages;
-    try {
-      const model = this.modelManager.getResolvedModelForSession(sessionKey);
-      toSave = tryApplySessionTranscriptHygieneForPersistence(messages, model);
-    } catch (err) {
-      log.warn({ err, sessionKey }, 'Transcript hygiene on save skipped');
-    }
-    await this.sessionStore.save(sessionKey, toSave);
-    this.enqueueMaybeAutoTitleAfterPersist(sessionKey);
-  }
-
   /**
    * Fire-and-forget: `maybeAutoTitleSessionStore` no-ops for cron/heartbeat keys.
    * Runs after persist so the store has the latest transcript; does not block SSE / callers.
@@ -869,7 +914,6 @@ export class AgentService {
       options?.force ?? true,
     );
     if (result.compacted) {
-      await this.sessionStore.save(sessionKey, await this.sessionStore.load(sessionKey));
       this.agentManager.removeAgent(sessionKey);
     }
     log.info({ sessionKey, result }, 'Manual compaction complete');
@@ -1211,15 +1255,12 @@ export class AgentService {
       agentManager: this.agentManager,
       hydrateSessionWorkspaceFromStore: (sk) => this.hydrateSessionWorkspaceFromStore(sk),
       hydrateSessionModelFromStore: (sk) => this.hydrateSessionModelFromStore(sk),
-      agentEventHandler: this.agentEventHandler,
       sessionStore: this.sessionStore,
-      prepareLoadedSessionMessages: (sk, msgs) => this.prepareLoadedSessionMessages(sk, msgs),
       modelManager: this.modelManager,
       applyResolvedThinkingLevel: (sk, t) => this.applyResolvedThinkingLevel(sk, t),
       getConfig: () => this.effectiveAppConfig(),
       sessionConfigStore: this.sessionConfigStore,
       attachmentRootsForSession: (sk) => this.attachmentRootsForSession(sk),
-      agentOrchestrator: this.agentOrchestrator,
       commandHandler: this.commandHandler,
       prepareInboundAttachments: (sk, att) => this.prepareInboundAttachments(sk, att),
       buildMessageContent: (text, prepared, sk) =>
@@ -1231,8 +1272,16 @@ export class AgentService {
           agentManager: this.agentManager,
           modelManager: this.modelManager,
         }),
-      persistAgentSessionMessages: (sk) => this.persistAgentSessionMessages(sk),
       recordPersistentGoalStreamOutcome: (sk, o) => this.recordPersistentGoalStreamOutcome(sk, o),
+      onTurnComplete: (sk, text) => {
+        if (text?.trim()) {
+          this.lastAssistantPlainTextBySession.set(sk, text.trim());
+        }
+        this.enqueueMaybeAutoTitleAfterPersist(sk);
+      },
+      reloadWebchatTranscript: (sk) => {
+        this.onSessionTranscriptUpdated?.(sk);
+      },
       maybeEmitWebchatTts: (sk, hadVoice) =>
         maybeEmitWebchatTts(
           {
@@ -1258,6 +1307,15 @@ export class AgentService {
     }
   }
 
+  /** Push assistant text to an in-flight webchat stream and notify gateway listeners. */
+  notifyWebchatTranscriptAppend(sessionKey: string, assistantText: string): void {
+    const trimmed = assistantText.trim();
+    if (trimmed) {
+      this.enqueueWebchatSseEvent(sessionKey, { type: 'token', content: trimmed });
+    }
+    this.onSessionTranscriptUpdated?.(sessionKey);
+  }
+
   /**
    * Queue a steering user message into pi-agent's in-flight run (delivered after current tool work, before the next LLM call).
    * See `Agent.steer` in `@earendil-works/pi-agent-core`.
@@ -1266,15 +1324,8 @@ export class AgentService {
     const trimmed = text.trim();
     if (!trimmed) return false;
     try {
-      await this.hydrateSessionWorkspaceFromStore(sessionKey);
-      const agent = this.agentManager.getOrCreateAgent(sessionKey);
-      const msg: AgentMessage = {
-        role: 'user',
-        content: [{ type: 'text', text: trimmed }],
-        timestamp: Date.now(),
-      };
-      agent.steer(msg);
-      return true;
+      const { queueEmbeddedSteer } = await import('./embedded/runs.js');
+      return await queueEmbeddedSteer(sessionKey, trimmed);
     } catch (err) {
       log.warn({ err, sessionKey }, 'steerWebchatSession failed');
       return false;
@@ -1297,12 +1348,16 @@ export class AgentService {
       hydrateSessionModelFromStore: (sk) => this.hydrateSessionModelFromStore(sk),
       agentManager: this.agentManager,
       sessionStore: this.sessionStore,
-      prepareLoadedSessionMessages: (sk, msgs) => this.prepareLoadedSessionMessages(sk, msgs),
       modelManager: this.modelManager,
       applyResolvedThinkingLevel: (sk, t) => this.applyResolvedThinkingLevel(sk, t),
       prepareInboundAttachments: (sk, att) => this.prepareInboundAttachments(sk, att),
       commandHandler: this.commandHandler,
-      persistAgentSessionMessages: (sk) => this.persistAgentSessionMessages(sk),
+      onTurnComplete: (sk, text) => {
+        if (text?.trim()) {
+          this.lastAssistantPlainTextBySession.set(sk, text.trim());
+        }
+        this.enqueueMaybeAutoTitleAfterPersist(sk);
+      },
       endDirectRequestContext: () => this.endDirectRequestContext(),
     };
   }
@@ -1498,14 +1553,10 @@ export class AgentService {
     log.debug({ sessionKey: context.sessionKey }, 'Processing system message');
 
     await this.hydrateSessionWorkspaceFromStore(context.sessionKey);
-
-    // Get or create agent for this session
-    const agent = this.agentManager.getOrCreateAgent(context.sessionKey);
+    await this.hydrateSessionModelFromStore(context.sessionKey);
 
     const messages = await this.sessionStore.load(context.sessionKey);
     await this.checkAndCompact(context.sessionKey, messages);
-    const refreshedMessages = await this.sessionStore.load(context.sessionKey);
-    agent.state.messages = this.prepareLoadedSessionMessages(context.sessionKey, refreshedMessages);
 
     const systemMessage: AgentMessage = {
       role: 'user',
@@ -1514,11 +1565,19 @@ export class AgentService {
     };
 
     try {
-      await agent.prompt(systemMessage);
-      await agent.waitForIdle();
+      const { runEmbeddedTurnForSession } = await import('./embedded/run-for-session.js');
+      const result = await runEmbeddedTurnForSession({
+        sessionKey: context.sessionKey,
+        userMessage: systemMessage,
+        sessionStore: this.sessionStore,
+        agentManager: this.agentManager,
+        modelManager: this.modelManager,
+        getConfig: () => this.effectiveAppConfig(),
+      });
 
-      const finalContent = this.agentManager.getLastAssistantContent(context.sessionKey);
+      const finalContent = result.lastAssistantText ?? this.getLastAssistantPlainText(context.sessionKey);
       if (finalContent) {
+        this.lastAssistantPlainTextBySession.set(context.sessionKey, finalContent);
         const hookResult = await this.hookHandler.runMessageSending(
           context.chatId,
           finalContent,
@@ -1533,8 +1592,7 @@ export class AgentService {
           });
         }
       }
-
-      await this.persistAgentSessionMessages(context.sessionKey);
+      this.enqueueMaybeAutoTitleAfterPersist(context.sessionKey);
     } catch (error) {
       const em = error instanceof Error ? error.message : String(error);
       log.error(
@@ -1636,7 +1694,7 @@ export class AgentService {
       return;
     }
 
-    const finalContent = this.agentManager.getLastAssistantContent(sessionContext.sessionKey);
+    const finalContent = this.getLastAssistantPlainText(sessionContext.sessionKey);
     if (!finalContent?.trim()) return;
 
     const ackMax =

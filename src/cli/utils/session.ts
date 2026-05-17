@@ -2,16 +2,16 @@
  * Session management utilities for CLI commands
  */
 
-import { SessionManager } from '../../session/index.js';
+import { SessionIndex } from '../../session/index.js';
 import { loadConfig } from '../../config/loader.js';
 
 /**
  * Get initialized SessionManager instance
  * Eliminates repeated initialization boilerplate
  */
-export async function getSessionManager(): Promise<SessionManager> {
+export async function getSessionIndex(): Promise<SessionIndex> {
   const config = loadConfig();
-  const manager = new SessionManager({ config });
+  const manager = new SessionIndex({ config });
   await manager.initialize();
   return manager;
 }
@@ -19,11 +19,14 @@ export async function getSessionManager(): Promise<SessionManager> {
 /**
  * Get session manager and handle errors consistently
  */
-export async function getSessionManagerSafe(): Promise<
-  { manager: SessionManager; error: null } | { manager: null; error: Error }
+/** @deprecated Use {@link getSessionIndex}. */
+export const getSessionManager = getSessionIndex;
+
+export async function getSessionIndexSafe(): Promise<
+  { manager: SessionIndex; error: null } | { manager: null; error: Error }
 > {
   try {
-    const manager = await getSessionManager();
+    const manager = await getSessionIndex();
     return { manager, error: null };
   } catch (error) {
     return { manager: null, error: error as Error };

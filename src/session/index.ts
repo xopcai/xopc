@@ -1,6 +1,11 @@
 // Session module exports
 
-export { SessionManager } from './manager.js';
+export { SessionIndex, type SessionIndexConfig } from './manager.js';
+export {
+  onSessionTranscriptUpdate,
+  emitSessionTranscriptUpdate,
+  type SessionTranscriptUpdate,
+} from './transcript-events.js';
 export { SessionStore } from './store.js';
 export type { SessionStoreOptions } from './store.js';
 export { SessionSearchIndex } from './search-index.js';
@@ -33,7 +38,6 @@ export {
 export { normalizeCompactionCheckpointId } from './compaction-checkpoints.js';
 
 export { shouldSkipWebchatInboundByAbortCutoff } from './abort-cutoff.js';
-export { stripTrailingWebchatEarlySaveUserIfPresent } from './strip-webchat-early-save.js';
 
 export type { CompactionConfig, CompactionResult } from '../agent/memory/compaction.js';
 export type { WindowConfig } from '../agent/memory/window.js';
