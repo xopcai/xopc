@@ -36,6 +36,8 @@ export interface AgentServiceConfig {
    * Wire to `sessionManager.emit('sessionUpdated', { key })` so the console refetches.
    */
   onSessionMetadataUpdated?: (sessionKey: string) => void;
+  /** Gateway: transcript JSONL append (goal verdict, slash receipt, background turns). */
+  onSessionTranscriptUpdated?: (sessionKey: string) => void;
 }
 
 export interface AgentContext {

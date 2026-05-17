@@ -6,7 +6,7 @@ import type { Config } from '../../config/schema.js';
 import type { MessageBus } from '../../infra/bus/index.js';
 import { buildSessionKey, parseSessionKey } from '../../routing/session-key.js';
 import { getDefaultAgentId } from '../../routing/resolve-route.js';
-import type { SessionManager } from '../../session/index.js';
+import type { SessionIndex } from '../../session/index.js';
 import {
   createLogger,
   inboundCorrelationMetadataFromAsyncLogContext,
@@ -15,8 +15,6 @@ import { shouldSkipWebchatInboundByAbortCutoff } from '../../session/abort-cutof
 
 import type { AgentRunRelay } from '../agent-run-relay.js';
 import { MAX_CHAT_ATTACHMENTS } from '../chat-limits.js';
-import { saveWebchatUserMessage } from './save-webchat-user-message.js';
-
 const log = createLogger('GatewayService');
 
 export type RunGatewayAgentYield = {
@@ -33,7 +31,7 @@ export type RunGatewayAgentDeps = {
   runRelay: AgentRunRelay;
   runAbortControllers: Map<string, AbortController>;
   activeWebchatRunBySession: Map<string, string>;
-  sessionManager: SessionManager;
+  sessionIndex: SessionIndex;
   emit: (type: string, payload: unknown) => void;
 };
 
@@ -74,9 +72,10 @@ export async function *runGatewayAgent(
     runRelay,
     runAbortControllers,
     activeWebchatRunBySession,
-    sessionManager,
+    sessionIndex: sessionIndexFromDeps,
     emit,
   } = deps;
+  const sessionIndex = sessionIndexFromDeps;
 
   let webchatSessionKey: string | undefined;
   let webchatStaleSkip = false;
@@ -91,10 +90,10 @@ export async function *runGatewayAgent(
           peerKind: 'direct',
           peerId: chatId,
         });
-    const meta = await sessionManager.getSessionMetadata(webchatSessionKey);
+    const meta = await sessionIndex.getSessionMetadata(webchatSessionKey);
     webchatStaleSkip = shouldSkipWebchatInboundByAbortCutoff(meta, runOptions?.clientCreatedAtMs);
     if (!webchatStaleSkip && meta?.abortCutoffTimestamp !== undefined) {
-      await sessionManager
+      await sessionIndex
         .updateSessionMetadata(webchatSessionKey, { abortCutoffTimestamp: undefined })
         .catch(() => {});
     }
@@ -125,12 +124,6 @@ export async function *runGatewayAgent(
         : prependEnvelopeTimestamp(message, timezone);
       const prepared = await agentService.prepareInboundAttachments(sessionKey, cappedAttachments);
 
-      try {
-        await saveWebchatUserMessage(sessionManager, sessionKey, message, prepared);
-      } catch (err) {
-        log.error({ err, sessionKey }, 'Failed to save user message');
-      }
-
       const runAbort = runAbortControllers.get(runId);
       if (!runAbort) {
         throw new Error('run abort controller missing for webchat');
@@ -156,7 +149,7 @@ export async function *runGatewayAgent(
 
         runRelay.complete(runId);
         try {
-          const metaAfter = await sessionManager.getSessionMetadata(sessionKey);
+          const metaAfter = await sessionIndex.getSessionMetadata(sessionKey);
           if (metaAfter?.name) {
             emit('session.updated', { key: sessionKey, name: metaAfter.name });
           }

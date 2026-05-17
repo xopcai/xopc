@@ -5,7 +5,7 @@
  * to response generation.
  */
 
-import type { Agent, AgentMessage } from '@earendil-works/pi-agent-core';
+import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import type { Config } from '../../config/schema.js';
 import type { InboundMessage } from '../../infra/bus/index.js';
 import type { SessionConfigStore, SessionStore } from '../../session/index.js';
@@ -16,14 +16,11 @@ import type { SessionContext } from '../session/session-context.js';
 import type { AgentEventHandler } from './agent-event-handler.js';
 import type { FeedbackCoordinator } from '../feedback/feedback-coordinator.js';
 import type { AgentManager } from '../agent-manager.js';
-import { sanitizeMessages, cleanTrailingErrors } from '../memory/message-sanitizer.js';
-import {
-  tryApplySessionTranscriptHygiene,
-  tryApplySessionTranscriptHygieneForPersistence,
-} from '../transcript/transcript-hygiene.js';
 import { createLogger } from '../../utils/logger.js';
 import { extractAgentUserPlainText } from '../memory/user-message-text.js';
-import { runAgentTurnWithModelFallbacks } from './run-agent-turn-with-fallbacks.js';
+import { abortEmbeddedRun } from '../embedded/runs.js';
+import { runEmbeddedTurnForSession } from '../embedded/run-for-session.js';
+import type { EmbeddedStreamEvent } from '../embedded/types.js';
 import {
   persistInboundAttachmentsToWorkspace,
   formatInboundFileTextBlock,
@@ -65,6 +62,10 @@ export interface AgentOrchestratorConfig {
   enqueueAutoTitle?: (sessionKey: string) => void;
   /** For per-turn timeout via `agents.defaults.maxTaskDurationMs`. */
   getConfig?: () => Config | undefined;
+  /** Channel streaming: token/tool events from pi embedded session. */
+  onEmbeddedStreamEvent?: (sessionKey: string, event: EmbeddedStreamEvent) => void;
+  /** Called after a successful embedded turn with assistant plain text. */
+  onEmbeddedTurnComplete?: (sessionKey: string, lastAssistantText?: string) => void;
 }
 
 export class AgentOrchestrator {
@@ -82,6 +83,8 @@ export class AgentOrchestrator {
   private getAgentInternalStorageRootForSession: (sessionKey: string) => string;
   private enqueueAutoTitle?: (sessionKey: string) => void;
   private getConfig?: () => Config | undefined;
+  private onEmbeddedStreamEvent?: (sessionKey: string, event: EmbeddedStreamEvent) => void;
+  private onEmbeddedTurnComplete?: (sessionKey: string, lastAssistantText?: string) => void;
 
   constructor(config: AgentOrchestratorConfig) {
     this.agentManager = config.agentManager;
@@ -100,6 +103,8 @@ export class AgentOrchestrator {
       ((sk) => this.getWorkspaceRootForSession?.(sk) ?? this.workspaceRoot);
     this.enqueueAutoTitle = config.enqueueAutoTitle;
     this.getConfig = config.getConfig;
+    this.onEmbeddedStreamEvent = config.onEmbeddedStreamEvent;
+    this.onEmbeddedTurnComplete = config.onEmbeddedTurnComplete;
   }
 
   private async hydrateSessionModelFromStore(sessionKey: string): Promise<void> {
@@ -165,29 +170,8 @@ export class AgentOrchestrator {
       }
     }
 
-    // Get or create agent for this session
-    const agent = this.agentManager.getOrCreateAgent(sessionKey);
-
     try {
       await this.hydrateSessionModelFromStore(sessionKey);
-
-      // 1. Load session history
-      let messages = await this.sessionStore.load(sessionKey);
-
-      // Clean any trailing errors from previous sessions (defensive)
-      messages = cleanTrailingErrors(messages);
-
-      try {
-        const model = this.modelManager.getResolvedModelForSession(sessionKey);
-        messages = tryApplySessionTranscriptHygiene(messages, model);
-      } catch (err) {
-        log.warn({ err, sessionKey }, 'Transcript hygiene skipped (model resolve failed)');
-      }
-
-      agent.state.messages = messages;
-
-      // 2. Apply model configuration for session
-      await this.modelManager.applyModelForSession(agent, sessionKey);
 
       const thinkingDefault =
         this.getThinkingDefaultForSession?.(sessionKey) ?? this.getThinkingDefault();
@@ -199,7 +183,7 @@ export class AgentOrchestrator {
       );
       this.agentManager.setThinkingLevel(sessionKey, thinkingLevel);
 
-      // 3. Persist inbound files (Telegram, etc.) under agent home, then build user message
+      // Persist inbound files (Telegram, etc.) under agent home, then build user message
       const storageRoot = this.getAgentInternalStorageRootForSession(sessionKey);
       const persistedAttachments = await persistInboundAttachmentsToWorkspace(
         storageRoot,
@@ -219,29 +203,30 @@ export class AgentOrchestrator {
         sessionKey,
       );
 
-      // 4. Start task feedback
       this.feedbackCoordinator.startTask();
 
-      // 5. Execute agent
-      await this.executeAgent(agent, userMessageForModel, context);
+      const turnResult = await runEmbeddedTurnForSession({
+        sessionKey,
+        userMessage: userMessageForModel,
+        sessionStore: this.sessionStore,
+        agentManager: this.agentManager,
+        modelManager: this.modelManager,
+        thinkingOverride: thinkingLevel,
+        getConfig: this.getConfig,
+        beforeTurn: () => this.agentManager.beginBackgroundReviewUserTurn(sessionKey),
+        onEvent: (event) => this.onEmbeddedStreamEvent?.(sessionKey, event),
+      });
 
       this.agentManager.afterAgentTurn(sessionKey, userPlainForMemory);
       this.agentManager.scheduleBackgroundReviewAfterUserTurn(sessionKey);
 
-      // 6. Sanitize messages before saving (remove error messages, empty content)
-      const rawMessages = agent.state.messages;
-      const { messages: sanitizedMessages, removed } = sanitizeMessages(rawMessages);
-
-      if (removed > 0) {
-        log.info({ sessionKey, removed }, 'Removed problematic messages before saving');
+      if (turnResult.ok) {
+        this.onEmbeddedTurnComplete?.(sessionKey, turnResult.lastAssistantText);
+        this.enqueueAutoTitle?.(sessionKey);
+      } else if (turnResult.errorMessage) {
+        log.warn({ sessionKey, errorMessage: turnResult.errorMessage }, 'Embedded inbound turn failed');
       }
 
-      // 7. Save session messages (transcript hygiene)
-      await this.saveSessionSnapshot(sessionKey, sanitizedMessages);
-
-      this.enqueueAutoTitle?.(sessionKey);
-
-      // 8. End task feedback
       this.feedbackCoordinator.endTask();
 
     } catch (error) {
@@ -249,50 +234,6 @@ export class AgentOrchestrator {
       this.feedbackCoordinator.endTask();
       throw error;
     }
-  }
-
-  /**
-   * Transcript hygiene + persist. Expects messages already passed through {@link sanitizeMessages}.
-   * Keeps thinking blocks on disk for UI; agent load path applies full hygiene including dropThinking.
-   */
-  private async saveSessionSnapshot(sessionKey: string, messages: AgentMessage[]): Promise<void> {
-    let toPersist = messages;
-    try {
-      const model = this.modelManager.getResolvedModelForSession(sessionKey);
-      toPersist = tryApplySessionTranscriptHygieneForPersistence(messages, model);
-    } catch (err) {
-      log.warn({ err, sessionKey }, 'Transcript hygiene on save skipped');
-    }
-    await this.sessionStore.save(sessionKey, toPersist);
-  }
-
-  /**
-   * Execute the agent with a user message (primary model, then `agents.defaults.model.fallbacks` on failure).
-   */
-  private async executeAgent(
-    agent: Agent,
-    userMessage: AgentMessage,
-    context: SessionContext
-  ): Promise<void> {
-    const sessionKey = context.sessionKey;
-    await runAgentTurnWithModelFallbacks({
-      agent,
-      sessionKey,
-      modelManager: this.modelManager,
-      userMessage,
-      log,
-      getConfig: this.getConfig,
-      beforeUserPrompt: () => this.agentManager.beginBackgroundReviewUserTurn(sessionKey),
-      afterUserPrompt: async () => {
-        try {
-          const { messages: sanitizedTurn } = sanitizeMessages(agent.state.messages);
-          await this.saveSessionSnapshot(sessionKey, sanitizedTurn);
-          log.debug({ sessionKey }, 'User message saved immediately after prompt');
-        } catch (err) {
-          log.warn({ err, sessionKey }, 'Failed to save user message immediately');
-        }
-      },
-    });
   }
 
   /**
@@ -424,9 +365,8 @@ export class AgentOrchestrator {
    * Abort current agent execution for a session
    */
   abort(sessionKey: string): void {
+    void abortEmbeddedRun(sessionKey);
     const agent = this.agentManager.getAgent(sessionKey);
-    if (agent) {
-      agent.abort();
-    }
+    agent?.abort();
   }
 }

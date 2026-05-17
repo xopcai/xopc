@@ -1,7 +1,7 @@
-import type { SessionManager } from '../../session/index.js';
+import type { SessionIndex } from '../../session/index.js';
 
 export async function getDistinctSessionChatIds(
-  sessionManager: SessionManager,
+  sessionIndex: SessionIndex,
   channel?: string,
 ): Promise<
   Array<{
@@ -13,7 +13,7 @@ export async function getDistinctSessionChatIds(
     peerId?: string;
   }>
 > {
-  const result = await sessionManager.listSessions({
+  const result = await sessionIndex.listSessions({
     limit: 1000,
     sortBy: 'lastAccessedAt',
     sortOrder: 'desc',
