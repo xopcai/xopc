@@ -60,6 +60,7 @@
     "docs:preview": "vitepress preview docs",
     "docs:extension-sdk": "pnpm -C packages/extension-ui-sdk run docs",
     "build:extensions-ui": "node scripts/build-extensions-ui.mjs",
+    "pack:browser-ext": "pnpm -C packages/browser-ext run pack",
     "electron:dev": "cross-env ELECTRON_ENTRY=out/main/index.js electron-vite dev",
     "electron:vite:build": "cross-env ELECTRON_ENTRY=out/main/index.js electron-vite build",
     "electron:package": "node scripts/electron-builder.mjs",
