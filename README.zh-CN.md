@@ -106,7 +106,7 @@ pnpm run build                              # 构建发布：Node + 网页 → d
 
 ---
 
-## 终端演示
+## 演示
 
 [![asciinema](https://asciinema.org/a/PlH1sYqOiV3malzu.svg)](https://asciinema.org/a/PlH1sYqOiV3malzu)
 
@@ -119,6 +119,8 @@ pnpm run build                              # 构建发布：Node + 网页 → d
 ## Electron 桌面版
 
 ### 从 GitHub Releases 下载
+
+<video controls src="https://xopc.ai/xopc-demo.mp4" width="100%"></video>
 
 1. 打开 **[GitHub Releases](https://github.com/xopcai/xopc/releases)**。
 2. 在最新版本里选本机系统对应的安装包（常见：**macOS** 用 `.dmg` / `.zip`，**Windows** 用 `.exe`，**Linux** 用 `.AppImage` / `.deb`）。
