@@ -2,6 +2,20 @@
 
 Install **xopc**, add at least one LLM provider key, then use the **CLI**, **TUI**, **gateway** (browser console), or the **Electron** app. This page walks through a first install from scratch.
 
+## Terminal demo
+
+[![asciinema](https://asciinema.org/a/PlH1sYqOiV3malzu.svg)](https://asciinema.org/a/PlH1sYqOiV3malzu)
+
+Click the badge to watch a short terminal walkthrough on [asciinema.org](https://asciinema.org/a/PlH1sYqOiV3malzu) ([@micjoyce](https://asciinema.org/~micjoyce)).
+
+Replay the same recording locally (requires [asciinema CLI](https://docs.asciinema.org/manual/cli/installation/)):
+
+```bash
+asciinema play docs/asciinema/quick-start.cast
+```
+
+The [`.cast` source](./asciinema/quick-start.cast) is kept in this repo as a backup.
+
 ## 1. Prerequisites
 
 - **Node.js** **22** or newer (`node -v`)
