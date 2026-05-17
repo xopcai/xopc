@@ -135,6 +135,7 @@ function sanitizeToolCallBlock(block: RawToolCallBlock): RawToolCallBlock {
 function makeMissingToolResult(params: {
   toolCallId: string;
   toolName?: string;
+  text?: string;
 }): Extract<AgentMessage, { role: "toolResult" }> {
   return {
     role: "toolResult",
@@ -143,7 +144,9 @@ function makeMissingToolResult(params: {
     content: [
       {
         type: "text",
-        text: "[xopc] missing tool result in session history; inserted synthetic error result for transcript repair.",
+        text:
+          params.text ??
+          "[xopc] missing tool result in session history; inserted synthetic error result for transcript repair.",
       },
     ],
     isError: true,

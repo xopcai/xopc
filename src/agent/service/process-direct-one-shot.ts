@@ -1,15 +1,17 @@
+import crypto from 'node:crypto';
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 
 import { parseSlashCommand } from '../../chat-commands/command-parse.js';
 import { commandRegistry } from '../../chat-commands/index.js';
 import type { CommandHandler } from '../messaging/command-handler.js';
 import { extractAgentUserPlainText } from '../memory/user-message-text.js';
-import { runAgentTurnWithModelFallbacks } from '../orchestration/run-agent-turn-with-fallbacks.js';
+import { runEmbeddedTurnForSession } from '../embedded/run-for-session.js';
 import type { ProcessDirectStreamLog } from './process-direct-streaming.js';
 import type { AgentManager } from '../agent-manager.js';
 import type { ModelManager } from '../models/index.js';
 import type { SessionStore } from '../../session/index.js';
 import type { Config } from '../../config/schema.js';
+import { appendPiTranscriptMessage } from '../../session/parity/jsonl-transcript-io.js';
 import { buildDirectUserMessageContent, type DirectInboundAttachment } from './build-direct-message-content.js';
 
 export type RunProcessDirectDeps = {
@@ -21,7 +23,6 @@ export type RunProcessDirectDeps = {
   hydrateSessionModelFromStore: (sessionKey: string) => Promise<void>;
   agentManager: AgentManager;
   sessionStore: SessionStore;
-  prepareLoadedSessionMessages: (sessionKey: string, messages: AgentMessage[]) => AgentMessage[];
   modelManager: ModelManager;
   applyResolvedThinkingLevel: (sessionKey: string, thinking?: string | null) => Promise<void>;
   prepareInboundAttachments: (
@@ -29,7 +30,7 @@ export type RunProcessDirectDeps = {
     attachments?: DirectInboundAttachment[],
   ) => Promise<DirectInboundAttachment[] | undefined>;
   commandHandler: Pick<CommandHandler, 'executeCommandAndAggregateReply'>;
-  persistAgentSessionMessages: (sessionKey: string) => Promise<void>;
+  onTurnComplete?: (sessionKey: string, lastAssistantText?: string) => void;
   endDirectRequestContext: () => void;
 };
 
@@ -47,14 +48,7 @@ export async function runProcessDirect(
 
   try {
     await deps.hydrateSessionWorkspaceFromStore(input.sessionKey);
-    const agent = deps.agentManager.getOrCreateAgent(input.sessionKey);
-
     await deps.hydrateSessionModelFromStore(input.sessionKey);
-
-    const loaded = await deps.sessionStore.load(input.sessionKey);
-    agent.state.messages = deps.prepareLoadedSessionMessages(input.sessionKey, loaded);
-
-    await deps.modelManager.applyModelForSession(agent, input.sessionKey);
     await deps.applyResolvedThinkingLevel(input.sessionKey, input.thinking);
 
     const prepared = await deps.prepareInboundAttachments(input.sessionKey, input.attachments);
@@ -69,8 +63,21 @@ export async function runProcessDirect(
         isGroup: false,
         inboundMetadata: {},
       });
-      await deps.persistAgentSessionMessages(input.sessionKey);
-      return aggregatedText;
+      if (aggregatedText?.trim()) {
+        const { absPath } = await deps.sessionStore.resolveTranscriptPath(input.sessionKey);
+        const workspaceDir = deps.agentManager.getResolvedWorkspaceForSession(input.sessionKey);
+        await appendPiTranscriptMessage({
+          absPath,
+          cwd: workspaceDir,
+          message: {
+            role: 'assistant',
+            content: [{ type: 'text', text: aggregatedText.trim() }],
+            timestamp: Date.now(),
+          } as AgentMessage,
+          sessionKey: input.sessionKey,
+        });
+      }
+      return aggregatedText ?? '';
     }
 
     const textForDirect = input.content.trimStart().startsWith('/skill:')
@@ -96,23 +103,25 @@ export async function runProcessDirect(
       input.sessionKey,
     );
 
-    await runAgentTurnWithModelFallbacks({
-      agent,
+    const result = await runEmbeddedTurnForSession({
       sessionKey: input.sessionKey,
-      modelManager: deps.modelManager,
+      runId: crypto.randomUUID(),
       userMessage: userMessageForModel,
-      log: deps.log,
+      sessionStore: deps.sessionStore,
+      agentManager: deps.agentManager,
+      modelManager: deps.modelManager,
       getConfig: () => deps.config,
-      beforeUserPrompt: () => deps.agentManager.beginBackgroundReviewUserTurn(input.sessionKey),
+      beforeTurn: () => deps.agentManager.beginBackgroundReviewUserTurn(input.sessionKey),
     });
 
     deps.agentManager.afterAgentTurn(input.sessionKey, userPlain);
     deps.agentManager.scheduleBackgroundReviewAfterUserTurn(input.sessionKey);
 
-    const response = deps.agentManager.getLastAssistantContent(input.sessionKey) || '';
-    await deps.persistAgentSessionMessages(input.sessionKey);
+    if (result.lastAssistantText) {
+      deps.onTurnComplete?.(input.sessionKey, result.lastAssistantText);
+    }
 
-    return response;
+    return result.lastAssistantText ?? '';
   } finally {
     deps.endDirectRequestContext();
   }

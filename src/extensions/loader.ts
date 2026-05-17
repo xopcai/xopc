@@ -23,7 +23,7 @@ import {
 } from '../config/paths.js';
 import type { Config } from '../config/config-surface.js';
 import type { MessageBus } from '../infra/bus/index.js';
-import type { SessionManager } from '../session/manager.js';
+import type { SessionIndex } from '../session/manager.js';
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 import type {
   ExtensionApi,
@@ -262,7 +262,7 @@ export class ExtensionLoader {
   private _appConfig?: Config;
   private _runtimeContext?: {
     bus: MessageBus;
-    sessionManager?: SessionManager;
+    sessionManager?: SessionIndex;
     scheduleWebchatContinuation?: (sessionKey: string, message: string) => void;
   };
   
@@ -400,7 +400,7 @@ export class ExtensionLoader {
    */
   setRuntimeContext(ctx: {
     bus: MessageBus;
-    sessionManager?: SessionManager;
+    sessionManager?: SessionIndex;
     scheduleWebchatContinuation?: (sessionKey: string, message: string) => void;
   }): void {
     this._runtimeContext = ctx;

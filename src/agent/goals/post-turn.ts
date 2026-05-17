@@ -2,6 +2,7 @@ import type { AgentMessage } from '@earendil-works/pi-agent-core';
 
 import type { Config } from '../../config/schema.js';
 import { getAgentDefaultModelRef } from '../../config/schema.js';
+import { resolveEffectiveAgentProfileForSession } from '../../config/agent-profile.js';
 import { createLogger } from '../../utils/logger.js';
 
 import { evaluateAfterTurnHermesLike } from './evaluate-turn.js';
@@ -28,24 +29,26 @@ function buildHistoryExcerpt(messages: AgentMessage[], maxChars: number): string
   }
 }
 
-function resolveJudgeModelRef(config: Config | undefined, storedJudge?: string): string | undefined {
+function resolveJudgeModelRef(
+  config: Config | undefined,
+  sessionKey: string,
+  storedJudge?: string,
+  runtimeSessionModelRef?: string,
+): string | undefined {
   const fromCfg = config?.goals?.judgeModelRef?.trim();
   if (fromCfg) return fromCfg;
   if (storedJudge?.trim()) return storedJudge.trim();
+  if (config) {
+    const profile = resolveEffectiveAgentProfileForSession(config, sessionKey);
+    if (profile.primaryModelRef?.trim()) return profile.primaryModelRef.trim();
+  }
+  if (runtimeSessionModelRef?.trim()) return runtimeSessionModelRef.trim();
   if (config) return getAgentDefaultModelRef(config);
   return undefined;
 }
 
 async function appendAssistantLine(apis: PersistentGoalApis, sessionKey: string, text: string): Promise<void> {
-  const trimmed = text.trim();
-  if (!trimmed) return;
-  const loaded = await apis.loadMessages(sessionKey);
-  const assistantMsg = {
-    role: 'assistant' as const,
-    content: [{ type: 'text' as const, text: trimmed }],
-    timestamp: Date.now(),
-  } as AgentMessage;
-  await apis.saveMessages(sessionKey, [...loaded, assistantMsg]);
+  await apis.appendAssistantReceipt(sessionKey, text);
 }
 
 export async function handlePersistentGoalPostTurn(opts: {
@@ -56,6 +59,8 @@ export async function handlePersistentGoalPostTurn(opts: {
   streamError?: string;
   skipPersistentGoalPostTurn: boolean;
   config: Config | undefined;
+  /** Active session model (overrides, per-agent defaults) when goals/global defaults are unset. */
+  runtimeSessionModelRef?: string;
   signal?: AbortSignal;
   /** Hermes-style: verdict line also sent as a normal outbound message (non-webchat). */
   publishVerdictToChannel?: (text: string) => Promise<void>;
@@ -68,6 +73,7 @@ export async function handlePersistentGoalPostTurn(opts: {
     streamError,
     skipPersistentGoalPostTurn,
     config,
+    runtimeSessionModelRef,
     signal,
     publishVerdictToChannel,
   } = opts;
@@ -81,7 +87,7 @@ export async function handlePersistentGoalPostTurn(opts: {
   const state = readPersistentGoal(meta.customData as Record<string, unknown> | undefined);
   if (!state || state.status !== 'active') return;
 
-  const judgeRef = resolveJudgeModelRef(config, state.judgeModelRef);
+  const judgeRef = resolveJudgeModelRef(config, sessionKey, state.judgeModelRef, runtimeSessionModelRef);
   if (!judgeRef) {
     log.warn({ sessionKey }, 'Persistent goal: no judge model ref; skipping post-turn');
     return;

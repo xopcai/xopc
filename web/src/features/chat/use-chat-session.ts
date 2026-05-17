@@ -279,6 +279,17 @@ export function useChatSession() {
   }, [sessionKey]);
 
   useEffect(() => {
+    const handler = (e: Event) => {
+      const d = (e as CustomEvent<{ key?: string }>).detail;
+      if (!d?.key || d.key !== sessionKey) return;
+      if (sendingRef.current || streamingRef.current) return;
+      void loadSessionById(sessionKey, 0);
+    };
+    window.addEventListener('session-transcript-updated', handler);
+    return () => window.removeEventListener('session-transcript-updated', handler);
+  }, [sessionKey, loadSessionById]);
+
+  useEffect(() => {
     const onConfigReload = () => {
       const key = sessionKeyRef.current;
       if (!key) return;

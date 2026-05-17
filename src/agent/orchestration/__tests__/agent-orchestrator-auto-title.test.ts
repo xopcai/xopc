@@ -11,8 +11,8 @@ import type { AgentManager } from '../../agent-manager.js';
 import type { SessionConfigStore } from '../../../session/index.js';
 import type { SessionContext } from '../../session/session-context.js';
 
-vi.mock('../run-agent-turn-with-fallbacks.js', () => ({
-  runAgentTurnWithModelFallbacks: vi.fn().mockResolvedValue(undefined),
+vi.mock('../../embedded/run-for-session.js', () => ({
+  runEmbeddedTurnForSession: vi.fn().mockResolvedValue({ ok: true, lastAssistantText: 'hello' }),
 }));
 
 describe('AgentOrchestrator enqueueAutoTitle', () => {
@@ -43,6 +43,8 @@ describe('AgentOrchestrator enqueueAutoTitle', () => {
     mockAgentManager = {
       getOrCreateAgent: vi.fn().mockReturnValue(mockAgent),
       setThinkingLevel: vi.fn(),
+      expandSkillUserText: (t: string) => t,
+      getResolvedWorkspaceForSession: () => '/tmp',
       applyMemoryPrefetchToUserMessage: vi.fn().mockImplementation(async (m) => m),
       afterAgentTurn: vi.fn(),
       beginBackgroundReviewUserTurn: vi.fn(),
@@ -56,6 +58,7 @@ describe('AgentOrchestrator enqueueAutoTitle', () => {
 
     mockModelManager = {
       applyModelForSession: vi.fn().mockResolvedValue(undefined),
+      getModelForSession: vi.fn().mockReturnValue('openai/gpt-4'),
       getCurrentModel: vi.fn().mockReturnValue('test-model'),
       getResolvedModelForSession: vi.fn().mockReturnValue({ id: 'm' }),
       getFallbackCandidatesForSession: vi.fn().mockReturnValue([
@@ -77,7 +80,7 @@ describe('AgentOrchestrator enqueueAutoTitle', () => {
     };
   });
 
-  it('calls enqueueAutoTitle once after final saveSessionSnapshot in process()', async () => {
+  it('calls enqueueAutoTitle once after embedded turn in process()', async () => {
     const orchestrator = new AgentOrchestrator({
       agentManager: mockAgentManager as AgentManager,
       sessionStore: mockSessionStore as SessionStore,
@@ -109,7 +112,6 @@ describe('AgentOrchestrator enqueueAutoTitle', () => {
 
     expect(enqueueAutoTitle).toHaveBeenCalledTimes(1);
     expect(enqueueAutoTitle).toHaveBeenCalledWith('main:telegram:default:dm:999');
-    expect(mockSessionStore.save).toHaveBeenCalled();
   });
 
   it('does not require enqueueAutoTitle when omitted', async () => {

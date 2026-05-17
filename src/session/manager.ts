@@ -20,9 +20,9 @@ import { applySessionPatchToMetadata, type SessionPatchBody } from './patch-meta
 import type { WindowConfig } from '../agent/memory/window.js';
 import type { Config } from '../config/schema.js';
 
-const log = createLogger('SessionManager');
+const log = createLogger('SessionIndex');
 
-export interface SessionManagerConfig {
+export interface SessionIndexConfig {
   config: Config;
   agentId?: string;
   sessionsDir?: string;
@@ -30,10 +30,10 @@ export interface SessionManagerConfig {
   compactionConfig?: Partial<CompactionConfig>;
 }
 
-export class SessionManager extends EventEmitter {
+export class SessionIndex extends EventEmitter {
   private store: SessionStore;
 
-  constructor(config: SessionManagerConfig) {
+  constructor(config: SessionIndexConfig) {
     super();
     this.store = new SessionStore(
       {
@@ -286,7 +286,9 @@ export class SessionManager extends EventEmitter {
     return this.store.loadTranscriptDocument(key);
   }
 
-  /** Save messages for a session key */
+  /**
+   * @deprecated Runtime turns must use PiTranscriptManager.appendMessage. Compaction/admin only.
+   */
   async saveMessages(key: string, messages: any[]) {
     return this.store.saveMessages(key, messages);
   }

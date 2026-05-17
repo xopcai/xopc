@@ -15,6 +15,7 @@ import {
 import { loadEntriesFromFile } from './load-jsonl-entries.js';
 import { withTranscriptFileLock } from './transcript-file-lock.js';
 
+import { emitSessionTranscriptUpdate } from '../transcript-events.js';
 import { writeTextAtomic } from '../../infra/write-file-atomic.js';
 import type { TranscriptCompactionRecord } from '../transcript-format.js';
 import {
@@ -268,6 +269,52 @@ function customEntryToContextRow(entry: CustomEntry): XopcTranscriptContextEntry
 /**
  * Load full transcript rows from a JSONL path (pi session file).
  */
+/**
+ * Append one `xopc:transcript-row` context entry via pi SessionManager (OpenClaw-aligned append path).
+ */
+/** Append one LLM message row via pi SessionManager (slash receipts, goals, etc.). */
+export async function appendPiTranscriptMessage(params: {
+  absPath: string;
+  cwd: string;
+  message: import('@earendil-works/pi-agent-core').AgentMessage;
+  sessionKey?: string;
+}): Promise<void> {
+  await withTranscriptFileLock(params.absPath, async () => {
+    const sessionDir = path.dirname(params.absPath);
+    const sm = SessionManager.open(params.absPath, sessionDir, params.cwd);
+    sm.appendMessage(params.message as Parameters<SessionManager['appendMessage']>[0]);
+    await writeAtomicSessionManagerSnapshot(sm, params.absPath);
+    emitSessionTranscriptUpdate({
+      sessionFile: params.absPath,
+      sessionKey: params.sessionKey,
+    });
+  });
+}
+
+export async function appendPiTranscriptContextEntry(params: {
+  absPath: string;
+  cwd: string;
+  entry: XopcTranscriptContextEntry;
+  sessionKey?: string;
+}): Promise<void> {
+  await withTranscriptFileLock(params.absPath, async () => {
+    const sessionDir = path.dirname(params.absPath);
+    const sm = SessionManager.open(params.absPath, sessionDir, params.cwd);
+    sm.appendCustomEntry(XOPC_CONTEXT_CUSTOM_TYPE, {
+      kind: 'context',
+      id: params.entry.id,
+      text: params.entry.text,
+      data: params.entry.data,
+      createdAt: params.entry.createdAt ?? new Date().toISOString(),
+    });
+    await writeAtomicSessionManagerSnapshot(sm, params.absPath);
+    emitSessionTranscriptUpdate({
+      sessionFile: params.absPath,
+      sessionKey: params.sessionKey,
+    });
+  });
+}
+
 export async function readTranscriptRowsFromFile(absPath: string): Promise<TranscriptStoredRow[]> {
   const entries = loadEntriesFromFile(absPath);
   const rows: TranscriptStoredRow[] = [];

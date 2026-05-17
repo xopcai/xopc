@@ -43,11 +43,13 @@ import { validateSessionId } from './parity/session-id.js';
 import { readSessionsJsonFile, withSessionsJsonLock } from './parity/sessions-json-file.js';
 import type { XopcSessionDiskEntry } from './parity/xopc-session-disk-entry.js';
 import {
+  appendPiTranscriptContextEntry,
   persistMergedTranscriptRows,
   readTranscriptRowsFromFile,
   rowsToLlmMessages,
   writeTranscriptJsonl,
 } from './parity/jsonl-transcript-io.js';
+import type { SessionTranscriptUpdate } from './transcript-events.js';
 
 const log = createLogger('SessionStore');
 
@@ -246,6 +248,16 @@ export class SessionStore {
       threadId: parsed.threadId,
       scopeId: parsed.scopeId,
     };
+  }
+
+  /** Resolve on-disk transcript path; creates session row + empty JSONL when missing. */
+  async resolveTranscriptPath(
+    sessionKey: string,
+  ): Promise<{ sessionId: string; absPath: string; sessionsDir: string }> {
+    const entry = await this.ensureSession(sessionKey);
+    const sessionsDir = this.resolveSessionsDirForKey(sessionKey);
+    const absPath = this.transcriptPathForEntry(entry, sessionsDir);
+    return { sessionId: entry.sessionId, absPath, sessionsDir };
   }
 
   /** Ensure sessions.json has an entry and transcript file exist for `sessionKey`. */
@@ -716,6 +728,38 @@ export class SessionStore {
     invalidateSessionSearchIndexCache();
   }
 
+  /** Incremental sessions.json stats after guard append (OpenClaw transcript-events). */
+  async syncSessionsJsonFromTranscriptUpdate(update: SessionTranscriptUpdate): Promise<void> {
+    const sessionKey = update.sessionKey?.trim();
+    if (!sessionKey || !existsSync(update.sessionFile)) {
+      return;
+    }
+    return this.runStoreMutation(async () => {
+      const rows = await readTranscriptRowsFromFile(update.sessionFile);
+      const llm = rowsToLlmMessages(rows);
+      const keyStorePath = this.resolveStorePathForKey(sessionKey);
+      await withSessionsJsonLock(keyStorePath, async (map) => {
+        const e = map[sessionKey] as XopcSessionDiskEntry | undefined;
+        if (!e?.pluginExtensions?.xopc?.metadata) {
+          return;
+        }
+        const meta = e.pluginExtensions.xopc.metadata;
+        meta.messageCount = llm.length;
+        meta.estimatedTokens = this.estimateTokens(llm);
+        meta.updatedAt = new Date().toISOString();
+        meta.lastAccessedAt = meta.updatedAt;
+        meta.stats = {
+          messageCount: llm.length,
+          tokenCount: this.estimateTokens(llm),
+          lastTurnAt: Date.now(),
+        };
+        e.updatedAt = Date.now();
+        map[sessionKey] = e as Record<string, unknown>;
+      });
+      invalidateSessionSearchIndexCache();
+    });
+  }
+
   async appendTranscriptContextEntry(
     key: string,
     entry: Omit<XopcTranscriptContextEntry, 'kind'> & Partial<Pick<XopcTranscriptContextEntry, 'kind'>>,
@@ -727,8 +771,7 @@ export class SessionStore {
         return;
       }
       const keySessionsDir = this.resolveSessionsDirForKey(key);
-      const path = this.transcriptPathForEntry(disk, keySessionsDir);
-      const prev = existsSync(path) ? await readTranscriptRowsFromFile(path) : [];
+      const absPath = this.transcriptPathForEntry(disk, keySessionsDir);
       const row: XopcTranscriptContextEntry = {
         kind: 'context',
         id: typeof entry.id === 'string' ? entry.id : undefined,
@@ -736,10 +779,41 @@ export class SessionStore {
         data: entry.data,
         createdAt: entry.createdAt ?? new Date().toISOString(),
       };
-      await this.writeTranscriptAndSyncIndex(key, [...prev, row]);
+      await appendPiTranscriptContextEntry({
+        absPath,
+        cwd: process.cwd(),
+        entry: row,
+        sessionKey: key,
+      });
+      const rows = existsSync(absPath) ? await readTranscriptRowsFromFile(absPath) : [];
+      const llm = rowsToLlmMessages(rows);
+      const keyStorePath = this.resolveStorePathForKey(key);
+      await withSessionsJsonLock(keyStorePath, async (map) => {
+        const e = map[key] as XopcSessionDiskEntry | undefined;
+        if (!e?.pluginExtensions?.xopc?.metadata) {
+          return;
+        }
+        const meta = e.pluginExtensions.xopc.metadata;
+        meta.messageCount = llm.length;
+        meta.estimatedTokens = this.estimateTokens(llm);
+        meta.updatedAt = new Date().toISOString();
+        meta.lastAccessedAt = meta.updatedAt;
+        meta.stats = {
+          messageCount: llm.length,
+          tokenCount: this.estimateTokens(llm),
+          lastTurnAt: Date.now(),
+        };
+        e.updatedAt = Date.now();
+        map[key] = e as Record<string, unknown>;
+      });
+      invalidateSessionSearchIndexCache();
     });
   }
 
+  /**
+   * @deprecated Runtime agent turns must persist via {@link guardSessionManager} + appendMessage.
+   * Retained for compaction, tests, and admin tools until fully removed.
+   */
   async saveMessages(key: string, messages: AgentMessage[]): Promise<void> {
     return this.runStoreMutation(async () => {
       await this.ensureSession(key);
@@ -986,6 +1060,7 @@ export class SessionStore {
     return this.loadMessages(key, options);
   }
 
+  /** @deprecated See {@link saveMessages}. */
   async save(key: string, messages: AgentMessage[]): Promise<void> {
     return this.saveMessages(key, messages);
   }

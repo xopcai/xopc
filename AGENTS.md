@@ -347,9 +347,11 @@ cd web && pnpm run build                  # → ../dist/gateway/static/root (gat
 
 ### Session transcript (LLM vs on-disk rows)
 
-- **On-disk format:** Session JSON files must be a wrapped `xopc_session_transcript` document (see `src/session/transcript-format.ts`). Bare message arrays and partial objects are rejected at parse time.
-- **Model input:** Use `SessionStore.loadMessages` / `sessionStore.load` (they apply `buildSessionContextForLlm`). If you parse transcript JSON yourself, run `buildSessionContextForLlm(rows)` before passing history to pi-agent or any provider.
-- **Webchat abort cutoff:** `POST /api/agent` accepts optional `clientCreatedAtMs`. When it is **omitted**, `abortCutoffTimestamp` does **not** drop stale POSTs (clients must send send-time for skip semantics).
+- **Runtime write path (authoritative):** Gateway, channels, and CLI turns use `runXopcEmbeddedTurn` → `guardSessionManager` → pi `SessionManager.appendMessage` / `appendCustomEntry('xopc:transcript-row', …)` on per-session `*.jsonl`. Each user, assistant, and toolResult row is appended during the turn (OpenClaw-aligned). Do **not** add turn-end `SessionStore.save` / `saveMessages` on agent paths.
+- **Index:** `SessionIndex` (`src/session/manager.ts`, formerly `SessionManager`) owns `sessions.json` metadata only; `onSessionTranscriptUpdate` bumps counts after appends.
+- **On-disk format:** Live transcripts are pi JSONL session files; wrapped `xopc_session_transcript` JSON remains for export/legacy tooling (see `src/session/transcript-format.ts`).
+- **Model input:** Use `SessionStore.loadMessages` / `sessionStore.load` (they apply `buildSessionContextForLlm`). If you parse transcript JSON yourself, run `buildSessionContextForLlm(rows)` before passing history to the LLM.
+- **Webchat abort cutoff:** `POST /api/agent` accepts optional `clientCreatedAtMs`. When it is **omitted**, `abortCutoffTimestamp` does **not** drop stale POSTs (clients must send send-time for skip semantics). Abort uses `abortEmbeddedRun` + context rows via `appendCustomEntry`.
 - **Audit rows on disk:** `kind: 'context'` entries persist for ops/UI via `GET /api/sessions/:key?include=transcriptRows` (comma-separated with `transcript` if you also want `transcriptSummary`).
 - **JSON export:** `SessionStore.exportSession(..., 'json')` includes `transcriptRows` (full on-disk order) alongside API-shaped `messages` (LLM-only). Session text search indexes `context` row `text` / `id` tokens as well.
 

@@ -53,6 +53,7 @@ export class GatewaySseConnection {
       'channels.status',
       'message.sent',
       'session.updated',
+      'session.transcript_updated',
       'session.created',
       'dreaming.phase.start',
       'dreaming.phase.end',
