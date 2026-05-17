@@ -10,26 +10,75 @@ import {
 } from '../lib/agent-model.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
+const DEFAULT_EXTENSION_PORT = 19820;
+const DEFAULT_EXTENSION_HOST = '127.0.0.1';
+
+function isLoopbackHost(host: string): boolean {
+  const h = host.trim().toLowerCase();
+  return h === '127.0.0.1' || h === 'localhost' || h === '::1' || h === '[::1]';
+}
+
+function parseExtensionProbePort(raw: string | undefined): number | undefined {
+  if (!raw) return undefined;
+  const n = Number.parseInt(raw, 10);
+  if (!Number.isFinite(n) || n < 1024 || n > 65_535) return undefined;
+  return n;
+}
+
+function resolveExtensionStatusTarget(
+  browser: Record<string, unknown> | undefined,
+  query: { probe?: string; host?: string; port?: string },
+): { host: string; port: number; backend: string } | null {
+  const backend = typeof browser?.backend === 'string' ? browser.backend : 'local';
+  const probe = query.probe === '1' || query.probe === 'true';
+  if (!probe && backend !== 'extension') {
+    return null;
+  }
+
+  const ext = browser?.extension as Record<string, unknown> | undefined;
+  const configPort =
+    typeof ext?.port === 'number' && ext.port >= 1024 && ext.port <= 65_535
+      ? Math.floor(ext.port)
+      : DEFAULT_EXTENSION_PORT;
+  const configHost =
+    typeof ext?.host === 'string' && ext.host.trim() ? ext.host.trim() : DEFAULT_EXTENSION_HOST;
+
+  const port = parseExtensionProbePort(query.port) ?? configPort;
+  const host =
+    typeof query.host === 'string' && query.host.trim() ? query.host.trim() : configHost;
+  if (!isLoopbackHost(host)) {
+    return null;
+  }
+
+  return { host, port, backend: probe && backend !== 'extension' ? 'extension' : backend };
+}
+
 export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const { service, strictRateLimitMiddleware } = deps;
 
   // Browser extension bridge status — gateway-side check so frontend doesn't cross-origin fetch.
   authenticated.get('/api/browser/extension-status', async (c) => {
     const config: Config = service.currentConfig as Config;
-    const browser = config?.agents?.defaults?.browser;
-    const backend = (browser as Record<string, unknown> | undefined)?.backend;
-    if (backend !== 'extension') {
-      return c.json({ running: false, connected: false, backend: backend ?? 'local' });
+    const browser = config?.agents?.defaults?.browser as Record<string, unknown> | undefined;
+    const target = resolveExtensionStatusTarget(browser, {
+      probe: c.req.query('probe'),
+      host: c.req.query('host'),
+      port: c.req.query('port'),
+    });
+    if (!target) {
+      const backend = typeof browser?.backend === 'string' ? browser.backend : 'local';
+      return c.json({ running: false, connected: false, backend });
     }
-    const ext = (browser as Record<string, unknown>)?.extension as Record<string, unknown> | undefined;
-    const port = (typeof ext?.port === 'number' ? ext.port : 19820);
-    const host = (typeof ext?.host === 'string' && ext.host ? ext.host : '127.0.0.1');
     try {
-      const res = await fetch(`http://${host}:${port}/`, { signal: AbortSignal.timeout(2000) });
+      const res = await fetch(`http://${target.host}:${target.port}/`, { signal: AbortSignal.timeout(2000) });
       const data = (await res.json()) as { ok?: boolean; connected?: boolean };
-      return c.json({ running: Boolean(data.ok), connected: Boolean(data.connected), backend: 'extension' });
+      return c.json({
+        running: Boolean(data.ok),
+        connected: Boolean(data.connected),
+        backend: target.backend,
+      });
     } catch {
-      return c.json({ running: false, connected: false, backend: 'extension' });
+      return c.json({ running: false, connected: false, backend: target.backend });
     }
   });
 

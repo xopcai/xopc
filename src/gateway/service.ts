@@ -101,6 +101,8 @@ export class GatewayService {
   private extensionLoader: ExtensionLoader | null = null;
   private browserExtensionProvider: import('../browser/providers/extension.js').ExtensionBrowserProvider | null = null;
   private browserExtensionRelease: (() => Promise<void>) | null = null;
+  /** `${host}:${port}` when the gateway holds the extension bridge listener. */
+  private browserExtensionBindKey: string | null = null;
   private heartbeatService: HeartbeatService;
   private sessionManager: SessionManager;
   private running = false;
@@ -539,6 +541,7 @@ export class GatewayService {
       this.browserExtensionRelease = null;
     }
     this.browserExtensionProvider = null;
+    this.browserExtensionBindKey = null;
 
     registerClarifyBridge(null);
     this.clarifyBridge.dispose();
@@ -562,18 +565,52 @@ export class GatewayService {
 
   /** Start the browser extension WS server when backend is 'extension'. */
   private async startBrowserExtensionServerIfNeeded(): Promise<void> {
-    const browser = (this.config.agents?.defaults as Record<string, unknown> | undefined)?.browser as Record<string, unknown> | undefined;
-    if (browser?.backend !== 'extension') return;
+    await this.reconcileBrowserExtensionServer();
+  }
+
+  /**
+   * Start/stop/rebind the Chrome extension bridge when `agents.defaults.browser` changes.
+   * PATCH saves update config in memory without re-running gateway startup, so this must run on save too.
+   */
+  async reconcileBrowserExtensionServer(): Promise<void> {
+    const browser = (this.config.agents?.defaults as Record<string, unknown> | undefined)?.browser as
+      | Record<string, unknown>
+      | undefined;
+    const wantsExtension = browser?.backend === 'extension';
+
+    if (!wantsExtension) {
+      if (this.browserExtensionRelease) {
+        await this.browserExtensionRelease();
+        this.browserExtensionRelease = null;
+        this.browserExtensionProvider = null;
+        this.browserExtensionBindKey = null;
+        log.debug('Browser extension WS server stopped (backend is not extension)');
+      }
+      return;
+    }
 
     const ext = browser.extension as Record<string, unknown> | undefined;
     const port = typeof ext?.port === 'number' ? ext.port : 19820;
     const host = typeof ext?.host === 'string' && ext.host ? ext.host : '127.0.0.1';
+    const bindKey = `${host}:${port}`;
+
+    if (this.browserExtensionRelease && this.browserExtensionBindKey === bindKey) {
+      return;
+    }
+
+    if (this.browserExtensionRelease) {
+      await this.browserExtensionRelease();
+      this.browserExtensionRelease = null;
+      this.browserExtensionProvider = null;
+      this.browserExtensionBindKey = null;
+    }
 
     try {
       const { acquireExtensionBrowserServer } = await import('../browser/providers/extension-ws-acquire.js');
       const { provider, release } = await acquireExtensionBrowserServer({ port, host });
       this.browserExtensionProvider = provider;
       this.browserExtensionRelease = release;
+      this.browserExtensionBindKey = bindKey;
       log.info({ port, host }, 'Browser extension WS server started');
     } catch (err) {
       const code = err && typeof err === 'object' && 'code' in err ? (err as { code: unknown }).code : undefined;
@@ -669,6 +706,7 @@ export class GatewayService {
     log.debug('Reloading agent defaults...');
     this.config = newConfig;
     this.agentService.applyAgentDefaultsFromConfig(newConfig);
+    void this.reconcileBrowserExtensionServer();
     this.emit('config.reload', { section: 'agents' });
     log.debug('Agent defaults reloaded');
   }
@@ -870,6 +908,7 @@ export class GatewayService {
     await writeConfigToDisk(configToWrite, this.configPath);
     this.config = loadConfig(this.configPath);
     this.agentService.applyAgentDefaultsFromConfig(this.config);
+    await this.reconcileBrowserExtensionServer();
     // Hot-apply: reconcile managed dreaming cron jobs immediately after config persists.
     await this.agentService.reconcileDreamingNow().catch((err) => {
       const em = err instanceof Error ? err.message : String(err);

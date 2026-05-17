@@ -18,16 +18,29 @@ type ExtensionStatusMessages = Pick<
 type ExtensionStatus = 'connected' | 'waiting' | 'off' | 'unknown';
 
 /** Poll gateway for extension connection status via `/api/browser/extension-status`. */
-function useExtensionStatus(enabled: boolean): ExtensionStatus {
+function useExtensionStatus(
+  enabled: boolean,
+  host: string,
+  port: number | undefined,
+): ExtensionStatus {
   const [status, setStatus] = useState<ExtensionStatus>(enabled ? 'unknown' : 'off');
+
+  useEffect(() => {
+    setStatus(enabled ? 'unknown' : 'off');
+  }, [enabled]);
 
   const checkStatus = useCallback(async () => {
     if (!enabled) {
       setStatus('off');
       return;
     }
+    const params = new URLSearchParams({ probe: '1' });
+    if (host) params.set('host', host);
+    if (port !== undefined) params.set('port', String(port));
     try {
-      const res = await apiFetch(apiUrl('/api/browser/extension-status'), { signal: AbortSignal.timeout(3000) });
+      const res = await apiFetch(apiUrl(`/api/browser/extension-status?${params}`), {
+        signal: AbortSignal.timeout(3000),
+      });
       if (!res.ok) {
         setStatus('off');
         return;
@@ -41,11 +54,11 @@ function useExtensionStatus(enabled: boolean): ExtensionStatus {
     } catch {
       setStatus('off');
     }
-  }, [enabled]);
+  }, [enabled, host, port]);
 
   useEffect(() => {
-    checkStatus();
-    const interval = setInterval(checkStatus, 5000);
+    void checkStatus();
+    const interval = setInterval(() => void checkStatus(), 5000);
     return () => clearInterval(interval);
   }, [checkStatus]);
 
@@ -71,7 +84,11 @@ function ExtensionStatusBadge({ status, messages }: { status: ExtensionStatus; m
 export function AgentDefaultsBrowserPanel(props: AgentDefaultsPanelProps) {
   const { a, form, update } = props;
 
-  const extensionStatus = useExtensionStatus(form.browserBackend === 'extension');
+  const extensionStatus = useExtensionStatus(
+    form.browserBackend === 'extension',
+    form.browserExtensionHost,
+    form.browserExtensionPort,
+  );
 
   return (
     <div className="flex flex-col gap-5">
