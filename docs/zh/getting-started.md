@@ -6,16 +6,6 @@
 
 [![asciinema](https://asciinema.org/a/PlH1sYqOiV3malzu.svg)](https://asciinema.org/a/PlH1sYqOiV3malzu)
 
-点击徽章在 [asciinema.org](https://asciinema.org/a/PlH1sYqOiV3malzu) 观看短演示（[@micjoyce](https://asciinema.org/~micjoyce)）。
-
-本地回放（需安装 [asciinema CLI](https://docs.asciinema.org/manual/cli/installation/)）：
-
-```bash
-asciinema play docs/asciinema/quick-start.cast
-```
-
-仓库内保留 [`.cast` 源文件](./asciinema/quick-start.cast) 作备份。
-
 ## 1. 环境要求
 
 - **Node.js**：**22** 及以上（`node -v`）

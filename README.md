@@ -117,8 +117,6 @@ pnpm run build                              # Node + web console → dist/
 
 [![asciinema](https://asciinema.org/a/PlH1sYqOiV3malzu.svg)](https://asciinema.org/a/PlH1sYqOiV3malzu)
 
-Terminal walkthrough — click the badge to play ([@micjoyce](https://asciinema.org/~micjoyce) on asciinema.org). Local replay: `asciinema play docs/asciinema/quick-start.cast`.
-
 ---
 
 <a id="electron-desktop"></a>
@@ -127,7 +125,7 @@ Terminal walkthrough — click the badge to play ([@micjoyce](https://asciinema.
 
 ### Install from GitHub Releases
 
-<video controls src="https://xopc.ai/xopc-demo.mp4" width="100%"></video>
+[![Electron desktop demo](./docs/assets/electron-demo-poster.jpg)](https://xopc.ai/xopc-demo.mp4)
 
 1. Open **[GitHub Releases](https://github.com/xopcai/xopc/releases)** for this repo.
 2. Pick the asset for your OS (typical names: **`.dmg`** / **`.zip`** on macOS, **`.exe`** on Windows, **`.AppImage`** / **`.deb`** on Linux).
