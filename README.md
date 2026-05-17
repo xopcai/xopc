@@ -113,6 +113,14 @@ pnpm run build                              # Node + web console → dist/
 
 ---
 
+## Demo
+
+[![asciinema](https://asciinema.org/a/PlH1sYqOiV3malzu.svg)](https://asciinema.org/a/PlH1sYqOiV3malzu)
+
+Terminal walkthrough — click the badge to play ([@micjoyce](https://asciinema.org/~micjoyce) on asciinema.org). Local replay: `asciinema play docs/asciinema/quick-start.cast`.
+
+---
+
 <a id="electron-desktop"></a>
 
 ## Electron desktop app

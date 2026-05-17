@@ -106,6 +106,14 @@ pnpm run build                              # 构建发布：Node + 网页 → d
 
 ---
 
+## 终端演示
+
+[![asciinema](https://asciinema.org/a/PlH1sYqOiV3malzu.svg)](https://asciinema.org/a/PlH1sYqOiV3malzu)
+
+点击徽章播放 ([@micjoyce](https://asciinema.org/~micjoyce) · [asciinema.org](https://asciinema.org/a/PlH1sYqOiV3malzu))。本地回放：`asciinema play docs/asciinema/quick-start.cast`。
+
+---
+
 <a id="electron-desktop"></a>
 
 ## Electron 桌面版
