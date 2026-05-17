@@ -32,7 +32,6 @@ export async function runEmbeddedTurnForSession(
 
   await params.beforeTurn?.();
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const agent = (agentManager as any).getOrCreateAgent(sessionKey) as {
     state: {
       tools: RunXopcEmbeddedTurnParams['tools'];
@@ -40,7 +39,6 @@ export async function runEmbeddedTurnForSession(
       thinkingLevel?: ThinkingLevel;
     };
   };
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const mm = modelManager as any;
   await mm.applyModelForSession(agent, sessionKey);
 
