@@ -8,9 +8,12 @@
     "icons": "node scripts/render-icons.mjs",
     "dev": "node scripts/render-icons.mjs && vite build --watch",
     "build": "node scripts/render-icons.mjs && vite build",
+    "pack": "pnpm run build && node scripts/pack-zip.mjs",
+    "pack:zip": "node scripts/pack-zip.mjs",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
+    "adm-zip": "^0.5.17",
     "@resvg/resvg-js": "^2.6.2",
     "@types/chrome": "^0.0.287",
     "typescript": "^5.9.3",
