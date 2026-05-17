@@ -125,8 +125,6 @@ pnpm run build                              # Node + web console → dist/
 
 ### Install from GitHub Releases
 
-[![Electron desktop demo](./docs/assets/electron-demo-poster.jpg)](https://xopc.ai/xopc-demo.mp4)
-
 1. Open **[GitHub Releases](https://github.com/xopcai/xopc/releases)** for this repo.
 2. Pick the asset for your OS (typical names: **`.dmg`** / **`.zip`** on macOS, **`.exe`** on Windows, **`.AppImage`** / **`.deb`** on Linux).
 3. Install or run it like any desktop application. On macOS, first launch may ask for **microphone** access if you use voice in chat.

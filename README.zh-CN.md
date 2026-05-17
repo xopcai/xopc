@@ -118,8 +118,6 @@ pnpm run build                              # 构建发布：Node + 网页 → d
 
 ### 从 GitHub Releases 下载
 
-[![Electron 桌面版演示](./docs/assets/electron-demo-poster.jpg)](https://xopc.ai/xopc-demo.mp4)
-
 1. 打开 **[GitHub Releases](https://github.com/xopcai/xopc/releases)**。
 2. 在最新版本里选本机系统对应的安装包（常见：**macOS** 用 `.dmg` / `.zip`，**Windows** 用 `.exe`，**Linux** 用 `.AppImage` / `.deb`）。
 3. 像平时装软件一样安装或运行。macOS 若用语音相关功能，首次可能会要**麦克风**权限。
