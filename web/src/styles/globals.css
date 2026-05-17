@@ -674,6 +674,106 @@ html.dark[data-color-scheme='mono'] {
   --radius-xl: 1rem;
 }
 
+/*
+ * Clay-inspired — cream canvas (#fffaf0), near-black ink CTAs, generous radii, Inter stack.
+ * html[data-color-scheme="clay"] / html.dark[data-color-scheme="clay"]
+ */
+html[data-color-scheme='clay'] {
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Microsoft YaHei", 微软雅黑,
+    sans-serif;
+
+  --color-surface-base: #fffaf0;
+  --color-surface-panel: #ffffff;
+  --color-surface-hover: #faf5e8;
+  --color-surface-active: #f5f0e0;
+
+  --color-fg: #0a0a0a;
+  --color-fg-muted: #6a6a6a;
+  --color-fg-subtle: #9a9a9a;
+  --color-fg-disabled: #c8c4bc;
+
+  --color-edge-subtle: #f0ebe0;
+  --color-edge: #e5e5e5;
+  --color-edge-strong: #d8d3c8;
+
+  --color-accent: #0a0a0a;
+  --color-accent-hover: #1a1a1a;
+  --color-accent-soft: #f5f0e0;
+  --color-accent-fg: #1a3a3a;
+
+  --color-checkbox-accent: #0a0a0a;
+
+  --color-success: #22c55e;
+  --color-success-soft: #dcfce7;
+  --color-danger: #ef4444;
+  --color-danger-soft: #fee2e2;
+  --color-warning: #f59e0b;
+  --color-warning-soft: #fef3c7;
+
+  --color-scrim: rgb(10 10 10 / 0.36);
+
+  --shadow-surface: none;
+  --shadow-elevated: 0 2px 8px rgb(10 10 10 / 0.04);
+  --shadow-float: 0 4px 16px rgb(10 10 10 / 0.06);
+  --shadow-popover: 0 8px 24px rgb(10 10 10 / 0.08);
+
+  --radius-sm: 0.375rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.5rem;
+}
+
+html[data-color-scheme='clay'] body {
+  letter-spacing: -0.01em;
+}
+
+html.dark[data-color-scheme='clay'] {
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Microsoft YaHei", 微软雅黑,
+    sans-serif;
+
+  --color-surface-base: #0a1a1a;
+  --color-surface-panel: #1a2a2a;
+  --color-surface-hover: #243636;
+  --color-surface-active: #2e4040;
+
+  --color-fg: #fffaf0;
+  --color-fg-muted: #a4d4c5;
+  --color-fg-subtle: #6a8a80;
+  --color-fg-disabled: #4a5a56;
+
+  --color-edge-subtle: #1f2f2f;
+  --color-edge: #2a3a3a;
+  --color-edge-strong: #3a4a4a;
+
+  --color-accent: #ffb084;
+  --color-accent-hover: #ffc9a8;
+  --color-accent-soft: rgb(26 58 58 / 0.55);
+  --color-accent-fg: #ffb084;
+
+  --color-checkbox-accent: #a4d4c5;
+
+  --color-success: #34d399;
+  --color-success-soft: rgb(6 78 59 / 0.45);
+  --color-danger: #f87171;
+  --color-danger-soft: rgb(127 29 29 / 0.45);
+  --color-warning: #fbbf24;
+  --color-warning-soft: rgb(113 63 18 / 0.45);
+
+  --color-scrim: rgb(0 0 0 / 0.65);
+
+  --shadow-surface: 0 0 0 1px rgb(164 212 197 / 0.08);
+  --shadow-elevated: 0 8px 28px rgb(0 0 0 / 0.55);
+  --shadow-float: 0 12px 40px rgb(0 0 0 / 0.6);
+  --shadow-popover: 0 16px 48px rgb(0 0 0 / 0.55);
+
+  --radius-sm: 0.375rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.5rem;
+}
+
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
