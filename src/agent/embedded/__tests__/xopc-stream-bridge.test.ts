@@ -51,7 +51,6 @@ describe('wrapStreamFnForXopcExtensions', () => {
       id: 'demo',
       name: 'Demo Provider',
       models: [{ id: 'demo-model', name: 'Demo' }],
-      // eslint-disable-next-line require-yield
       createStream: vi.fn(async function* () {
         return;
       }) as never,
