@@ -1,12 +1,18 @@
 import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
-import { type postWebchatChecklistMutation, type WebchatPersistentGoalWire } from '@/features/chat/goals-api';
+import {
+  type postWebchatChecklistMutation,
+  type WebchatChecklistItemWire,
+  type WebchatPersistentGoalWire,
+} from '@/features/chat/goals-api';
 import { cn } from '@/lib/cn';
 
 import { itemMarker, type GoalMessages } from './chat-goal-banner-utils';
 
 type ChecklistMutation = Parameters<typeof postWebchatChecklistMutation>[1];
+
+type ChecklistItemWithIndex = WebchatChecklistItemWire & { index1Based: number };
 
 type Props = {
   goal: WebchatPersistentGoalWire;
@@ -16,36 +22,76 @@ type Props = {
   onMutate: (m: ChecklistMutation) => void | Promise<void>;
 };
 
+type GoalMessagesWithChecklistBoardCopy = GoalMessages & {
+  pendingGroup?: string;
+  completedGroup?: string;
+  impossibleGroup?: string;
+  judgeGenerated?: string;
+  userAdded?: string;
+  evidenceLabel?: string;
+};
+
+function groupedItems(items: WebchatChecklistItemWire[]): {
+  pending: ChecklistItemWithIndex[];
+  completed: ChecklistItemWithIndex[];
+  impossible: ChecklistItemWithIndex[];
+} {
+  const groups = {
+    pending: [] as ChecklistItemWithIndex[],
+    completed: [] as ChecklistItemWithIndex[],
+    impossible: [] as ChecklistItemWithIndex[],
+  };
+  items.forEach((item, index) => {
+    groups[item.status].push({ ...item, index1Based: index + 1 });
+  });
+  return groups;
+}
+
 export function GoalChecklist({ goal, canEdit, mutationBusy, t, onMutate }: Props) {
   const [newCriterion, setNewCriterion] = useState('');
   const items = goal.checklist ?? [];
+  const groups = groupedItems(items);
+  const copy = t as GoalMessagesWithChecklistBoardCopy;
 
-  return (
-    <div className="rounded-xl bg-surface-muted/70 px-2.5 py-2 dark:bg-surface-muted/40">
-      <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-fg-muted">{t.checklistHeading}</p>
-      {items.length === 0 ? (
-        <p className="text-xs text-fg-muted">{t.checklistEmpty}</p>
-      ) : (
-        <ul className="max-h-36 space-y-1.5 overflow-y-auto pr-0.5 text-xs">
-          {items.map((it, i) => {
-            const n = i + 1;
-            return (
-              <li
-                key={`${n}-${it.text.slice(0, 24)}`}
-                className="flex items-start gap-2 rounded-md border border-transparent px-1 py-0.5 hover:border-edge/60"
-              >
+  const renderGroup = (title: string, rows: ChecklistItemWithIndex[]) => {
+    if (rows.length === 0) return null;
+    return (
+      <section className="space-y-1">
+        <div className="flex items-center justify-between text-[10px] font-medium uppercase tracking-wide text-fg-muted">
+          <span>{title}</span>
+          <span>{rows.length}</span>
+        </div>
+        <ul className="space-y-1.5">
+          {rows.map((it) => (
+            <li
+              key={`${it.index1Based}-${it.text.slice(0, 24)}`}
+              className="rounded-md border border-transparent px-1.5 py-1 hover:border-edge/60 hover:bg-surface-panel/70"
+            >
+              <div className="flex items-start gap-2">
                 <span className="mt-0.5 w-4 shrink-0 text-center text-fg-muted" title={it.status}>
                   {itemMarker(it)}
                 </span>
-                <span className="min-w-0 flex-1 text-fg">{it.text}</span>
+                <div className="min-w-0 flex-1">
+                  <p className="break-words text-fg">{it.text}</p>
+                  <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] text-fg-muted">
+                    <span className="rounded-full bg-surface-panel px-1.5 py-0.5">
+                      {it.addedBy === 'user' ? (copy.userAdded ?? 'User') : (copy.judgeGenerated ?? 'Judge')}
+                    </span>
+                    {it.evidence ? (
+                      <span className="min-w-0 break-words">
+                        {(copy.evidenceLabel ?? 'Evidence')}: {it.evidence}
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
                 {canEdit && it.status === 'pending' ? (
-                  <span className="flex shrink-0 gap-0.5">
+                  <span className="flex shrink-0 flex-wrap justify-end gap-0.5">
                     <Button
                       type="button"
                       variant="ghost"
                       className="h-7 px-1.5 text-[11px] text-accent"
                       disabled={mutationBusy}
-                      onClick={() => void onMutate({ op: 'mark', index: n, status: 'completed' })}
+                      onClick={() => void onMutate({ op: 'mark', index: it.index1Based, status: 'completed' })}
                     >
                       {t.markDone}
                     </Button>
@@ -54,7 +100,7 @@ export function GoalChecklist({ goal, canEdit, mutationBusy, t, onMutate }: Prop
                       variant="ghost"
                       className="h-7 px-1.5 text-[11px] text-fg-muted"
                       disabled={mutationBusy}
-                      onClick={() => void onMutate({ op: 'mark', index: n, status: 'impossible' })}
+                      onClick={() => void onMutate({ op: 'mark', index: it.index1Based, status: 'impossible' })}
                     >
                       {t.markBlocked}
                     </Button>
@@ -63,16 +109,31 @@ export function GoalChecklist({ goal, canEdit, mutationBusy, t, onMutate }: Prop
                       variant="ghost"
                       className="h-7 px-1.5 text-[11px] text-destructive"
                       disabled={mutationBusy}
-                      onClick={() => void onMutate({ op: 'remove', index: n })}
+                      onClick={() => void onMutate({ op: 'remove', index: it.index1Based })}
                     >
                       {t.removeItem}
                     </Button>
                   </span>
                 ) : null}
-              </li>
-            );
-          })}
+              </div>
+            </li>
+          ))}
         </ul>
+      </section>
+    );
+  };
+
+  return (
+    <div className="rounded-xl bg-surface-muted/70 px-2.5 py-2 dark:bg-surface-muted/40">
+      <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-fg-muted">{t.checklistHeading}</p>
+      {items.length === 0 ? (
+        <p className="text-xs text-fg-muted">{t.checklistEmpty}</p>
+      ) : (
+        <div className="max-h-48 space-y-2 overflow-y-auto pr-0.5 text-xs">
+          {renderGroup(copy.pendingGroup ?? 'Pending', groups.pending)}
+          {renderGroup(copy.completedGroup ?? 'Completed', groups.completed)}
+          {renderGroup(copy.impossibleGroup ?? 'Blocked', groups.impossible)}
+        </div>
       )}
       {canEdit ? (
         <div className="mt-2 flex gap-1.5">
