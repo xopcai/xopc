@@ -1,4 +1,5 @@
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
+import { flushSync } from 'react-dom';
 
 import {
   clearLiveSessionCache,
@@ -18,6 +19,8 @@ import {
   finalizeStreamingThinking,
   startThinkingSegment,
 } from '@/features/chat/streaming';
+
+const STREAMING_REACT_COMMIT_INTERVAL_MS = 50;
 
 export type AgentStreamFqCallbacks = {
   dismissClarify: () => void;
@@ -90,7 +93,49 @@ export function createAgentStreamMessagingCallbacks(opts: {
       .catch(() => {});
   };
 
+  let streamingReactCommitTimer: number | null = null;
+  let lastStreamingReactCommitAt = 0;
+
+  const readStreamingBubble = () => getLiveSessionCache(chatId)?.streamingMsg ?? null;
+
+  const cancelScheduledStreamingCommit = () => {
+    if (streamingReactCommitTimer === null) return;
+    window.clearTimeout(streamingReactCommitTimer);
+    streamingReactCommitTimer = null;
+  };
+
+  const applyStreamingToReact = () => {
+    streamingReactCommitTimer = null;
+    const bubble = readStreamingBubble();
+    if (!bubble) return;
+    lastStreamingReactCommitAt = performance.now();
+    setStreamingMsg(bubble);
+  };
+
+  const flushStreamingToReact = () => {
+    cancelScheduledStreamingCommit();
+    const bubble = readStreamingBubble();
+    if (!bubble) return;
+    lastStreamingReactCommitAt = performance.now();
+    flushSync(() => setStreamingMsg(bubble));
+  };
+
+  const scheduleStreamingToReact = () => {
+    const elapsedMs = performance.now() - lastStreamingReactCommitAt;
+    if (elapsedMs >= STREAMING_REACT_COMMIT_INTERVAL_MS) {
+      cancelScheduledStreamingCommit();
+      applyStreamingToReact();
+      return;
+    }
+    if (streamingReactCommitTimer !== null) return;
+    streamingReactCommitTimer = window.setTimeout(
+      applyStreamingToReact,
+      STREAMING_REACT_COMMIT_INTERVAL_MS - elapsedMs,
+    );
+  };
+
   const onBackgroundTerminal = () => {
+    cancelScheduledStreamingCommit();
     clearLiveSessionCache(chatId);
     activeStreamSessionKeyRef.current = null;
     if (clearResumeRunIdOnBackgroundTerminal) {
@@ -105,13 +150,6 @@ export function createAgentStreamMessagingCallbacks(opts: {
     reloadSessionSnapshot();
   };
 
-  const applyStreamingToReact = () => {
-    const snap = getLiveSessionCache(chatId);
-    const bubble = snap?.streamingMsg;
-    if (!bubble) return;
-    setStreamingMsg(bubble);
-  };
-
   return {
     onStreamStart: () => {
       beforeAssistantDelta();
@@ -123,6 +161,7 @@ export function createAgentStreamMessagingCallbacks(opts: {
       }
       applyStreamingToReact();
       setStreaming(true);
+      streamingRef.current = true;
     },
     onToken: (delta) => {
       beforeAssistantDelta();
@@ -130,8 +169,11 @@ export function createAgentStreamMessagingCallbacks(opts: {
         appendTextDelta(msg.content, delta);
       });
       if (!shouldApplyStreamUpdate(chatId)) return;
-      applyStreamingToReact();
-      setStreaming(true);
+      scheduleStreamingToReact();
+      if (!streamingRef.current) {
+        setStreaming(true);
+        streamingRef.current = true;
+      }
     },
     onThinking: (c, isDelta) => {
       beforeAssistantDelta();
@@ -140,7 +182,7 @@ export function createAgentStreamMessagingCallbacks(opts: {
         else appendThinkingDelta(msg.content, c, isDelta);
       });
       if (!shouldApplyStreamUpdate(chatId)) return;
-      applyStreamingToReact();
+      scheduleStreamingToReact();
     },
     onThinkingEnd: () => {
       beforeAssistantDelta();
@@ -148,7 +190,7 @@ export function createAgentStreamMessagingCallbacks(opts: {
         finalizeStreamingThinking(msg.content);
       });
       if (!shouldApplyStreamUpdate(chatId)) return;
-      applyStreamingToReact();
+      flushStreamingToReact();
     },
     onToolStart: (toolName, args) => {
       beforeAssistantDelta();
@@ -156,8 +198,9 @@ export function createAgentStreamMessagingCallbacks(opts: {
         appendToolStart(msg.content, toolName, args);
       });
       if (!shouldApplyStreamUpdate(chatId)) return;
-      applyStreamingToReact();
+      flushStreamingToReact();
       setStreaming(true);
+      streamingRef.current = true;
     },
     onToolEnd: (toolName, isErr, result) => {
       if (toolName === 'clarify') {
@@ -168,7 +211,7 @@ export function createAgentStreamMessagingCallbacks(opts: {
         completeTool(msg.content, toolName, isErr, result);
       });
       if (!shouldApplyStreamUpdate(chatId)) return;
-      applyStreamingToReact();
+      flushStreamingToReact();
     },
     onProgress: (p) => {
       liveSessionCacheSetProgress(chatId, p);
@@ -193,7 +236,7 @@ export function createAgentStreamMessagingCallbacks(opts: {
         msg.attachments = [...existing, nextAtt];
       });
       if (!shouldApplyStreamUpdate(chatId)) return;
-      applyStreamingToReact();
+      flushStreamingToReact();
     },
     onClarifyRequest: fq.makeOnClarifyRequest(chatId),
     onResult: () => {
@@ -202,9 +245,11 @@ export function createAgentStreamMessagingCallbacks(opts: {
         return;
       }
       if (userAbortedRef.current) {
+        cancelScheduledStreamingCommit();
         userAbortedRef.current = false;
         return;
       }
+      flushStreamingToReact();
       finalizeMessage();
     },
     onError: (msg) => {
@@ -212,6 +257,7 @@ export function createAgentStreamMessagingCallbacks(opts: {
         onBackgroundTerminal();
         return;
       }
+      cancelScheduledStreamingCommit();
       clearLiveSessionCache(chatId);
       if (clearResumeRunIdOnVisibleError) {
         activeResumeRunIdRef.current = null;

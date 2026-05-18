@@ -3,12 +3,13 @@ import { Target } from 'lucide-react';
 import type { WebchatPersistentGoalWire } from '@/features/chat/goals-api';
 import { cn } from '@/lib/cn';
 
-import type { GoalMessages } from './chat-goal-banner-utils';
+import { phaseLabel, type GoalMessages, type GoalUiPhase } from './chat-goal-banner-utils';
 
 type Props = {
   goal: WebchatPersistentGoalWire;
   agentBusy: boolean;
   pillTitle: string;
+  phase: GoalUiPhase;
   statusShort: string;
   turnsShort: string;
   clLine: string;
@@ -17,7 +18,7 @@ type Props = {
 };
 
 /** Zero layout height + FAB pinned to chat column corner (no full-width sticky row). */
-export function GoalCollapsedFab({ goal, agentBusy, pillTitle, statusShort, turnsShort, clLine, t, onExpand }: Props) {
+export function GoalCollapsedFab({ goal, agentBusy, pillTitle, phase, statusShort, turnsShort, clLine, t, onExpand }: Props) {
   return (
     <div className="relative h-0 shrink-0 overflow-visible">
       <div
@@ -33,7 +34,7 @@ export function GoalCollapsedFab({ goal, agentBusy, pillTitle, statusShort, turn
             'pointer-events-auto flex h-11 min-w-11 max-w-[min(calc(100vw-1.5rem),16rem)] items-center gap-1.5 rounded-full border border-edge/60 bg-surface-panel/95 px-2.5 py-1 text-left shadow-elevated backdrop-blur-sm',
             'transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
           )}
-          title={`${pillTitle}${clLine ? ` · ${clLine}` : ''}\n${goal.goal}`}
+          title={`${pillTitle}${clLine ? ` · ${clLine}` : ''}${goal.lastVerdict ? `\n${t.lastVerdict}: ${goal.lastVerdict}` : ''}${goal.lastReason ? `\n${t.lastReason}: ${goal.lastReason}` : ''}\n${goal.goal}`}
           aria-label={t.expandAria}
           onClick={onExpand}
         >
@@ -53,7 +54,9 @@ export function GoalCollapsedFab({ goal, agentBusy, pillTitle, statusShort, turn
             )}
           </span>
           <span className="min-w-0 flex-1 pr-0.5">
-            <span className="block truncate text-[10px] font-medium leading-tight text-fg">{statusShort}</span>
+            <span className="block truncate text-[10px] font-medium leading-tight text-fg">
+              {phaseLabel(phase, t)} · {statusShort}
+            </span>
             <span className="block truncate text-[10px] leading-tight text-fg-muted">
               {clLine ? `${turnsShort} · ${clLine}` : turnsShort}
             </span>
