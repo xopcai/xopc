@@ -115,7 +115,7 @@ export function ChatAgentSelector({
           >
             {label}
           </span>
-          <ChevronsUpDown className="h-4 w-4 shrink-0 text-fg-subtle opacity-70" aria-hidden />
+          <ChevronsUpDown className="size-4 shrink-0 text-fg-subtle opacity-70" aria-hidden />
         </button>
       </Popover.Trigger>
       <Popover.Portal>
@@ -145,7 +145,7 @@ export function ChatAgentSelector({
           </div>
           <ul className="max-h-[min(16rem,calc(100vh-10rem))] overflow-y-auto p-1" role="listbox">
             {filtered.length === 0 ? (
-              <li className="px-2 py-2 text-sm text-fg-muted">{noMatches}</li>
+              <li className="p-2 text-sm text-fg-muted">{noMatches}</li>
             ) : (
               filtered.map((a) => {
                 const isSel = a.id === value;

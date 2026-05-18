@@ -417,7 +417,7 @@ export function AgentOverviewTab(props: {
                   key={template.id}
                   type="button"
                   className={cn(
-                    'flex flex-col items-center gap-1.5 rounded-xl border-2 px-3 py-3 text-center transition-all',
+                    'flex flex-col items-center gap-1.5 rounded-xl border-2 p-3 text-center transition-all',
                     soulTemplate === template.id
                       ? 'border-accent bg-accent-soft/40 shadow-sm'
                       : 'border-edge hover:border-accent/40 hover:bg-surface-hover',

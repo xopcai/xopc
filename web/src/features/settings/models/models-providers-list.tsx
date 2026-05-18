@@ -116,7 +116,7 @@ export function ModelsProvidersList({
               </div>
 
               {isEx ? (
-                <div className="space-y-4 px-3 py-3">
+                <div className="space-y-4 p-3">
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div>
                       <label className="mb-1 block text-xs font-medium text-fg-muted">{ms.baseUrl}</label>

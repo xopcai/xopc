@@ -140,7 +140,7 @@ export function AgentDefaultsSkillsAllowlistPanel(props: AgentDefaultsPanelProps
                   !restrictMode && 'pointer-events-none opacity-50',
                 )}
               >
-                <ul className="flex flex-col gap-2.5 text-sm" role="list">
+                <ul className="flex flex-col gap-2.5 text-sm">
                   {rowsToRender.filter((s) => rowId(s)).map((s) => {
                     const id = rowId(s);
                     const on = restrictMode && allowSet.has(id);

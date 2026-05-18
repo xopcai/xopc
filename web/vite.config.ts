@@ -2,8 +2,9 @@ import { execSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import babel from '@rolldown/plugin-babel';
 import tailwindcss from '@tailwindcss/vite';
-import react from '@vitejs/plugin-react-swc';
+import react, { reactCompilerPreset } from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 
 import webPkg from './package.json' with { type: 'json' };
@@ -25,7 +26,11 @@ export default defineConfig({
     __XOPC_WEB_COMMIT__: JSON.stringify(process.env.VITE_XOPC_WEB_COMMIT ?? tryGitSha()),
     __XOPC_WEB_BUILD_TIME__: JSON.stringify(process.env.VITE_XOPC_WEB_BUILD_TIME ?? new Date().toISOString()),
   },
-  plugins: [react(), tailwindcss()],
+  plugins: [
+    react(),
+    babel({ presets: [reactCompilerPreset()] }),
+    tailwindcss(),
+  ],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, 'src'),

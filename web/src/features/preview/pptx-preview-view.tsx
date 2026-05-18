@@ -29,8 +29,8 @@ export function PptxPreviewView({ text, slideLabel, emptySlideLabel }: PptxPrevi
         className="mb-2 border-b border-edge-subtle pb-2 dark:border-edge"
         role="status"
       >
-        {parsed.notes.map((n, i) => (
-          <p key={i} className="text-xs text-fg-muted">
+        {parsed.notes.map((n) => (
+          <p key={n} className="text-xs text-fg-muted">
             {n}
           </p>
         ))}

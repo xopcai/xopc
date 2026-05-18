@@ -241,6 +241,7 @@ export function WorkingDirectoryPickerModal({
                   key={e.absolutePath}
                   type="button"
                   role="option"
+                  aria-selected={false}
                   disabled={!e.isDirectory}
                   className={cn(
                     'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm',

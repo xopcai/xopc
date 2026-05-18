@@ -643,9 +643,9 @@ export const MessageBubble = memo(function MessageBubble({
               aria-label={copyFeedback === 'plain' ? m.chat.messageCopied : m.chat.messageCopyPlainText}
             >
               {copyFeedback === 'plain' ? (
-                <Check className="h-4 w-4 text-fg-muted" strokeWidth={1.75} aria-hidden />
+                <Check className="size-4 text-fg-muted" strokeWidth={1.75} aria-hidden />
               ) : (
-                <Copy className="h-4 w-4" strokeWidth={1.75} aria-hidden />
+                <Copy className="size-4" strokeWidth={1.75} aria-hidden />
               )}
             </button>
             <button
@@ -656,9 +656,9 @@ export const MessageBubble = memo(function MessageBubble({
               aria-label={copyFeedback === 'markdown' ? m.chat.messageCopied : m.chat.messageCopyMarkdown}
             >
               {copyFeedback === 'markdown' ? (
-                <Check className="h-4 w-4 text-fg-muted" strokeWidth={1.75} aria-hidden />
+                <Check className="size-4 text-fg-muted" strokeWidth={1.75} aria-hidden />
               ) : (
-                <FileCode2 className="h-4 w-4" strokeWidth={1.75} aria-hidden />
+                <FileCode2 className="size-4" strokeWidth={1.75} aria-hidden />
               )}
             </button>
           </div>

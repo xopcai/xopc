@@ -7,8 +7,11 @@ import {
   fetchAgentProfileFiles,
   saveAgentProfileFileContent,
 } from '@/features/settings/agents-admin-api';
+import { useAsyncResource } from '@/lib/use-async-resource';
 
 import type { AgentPanel } from '../utils';
+
+type ProfileFiles = Awaited<ReturnType<typeof fetchAgentProfileFiles>>;
 
 export function useAgentProfileFiles(options: {
   panel: AgentPanel;
@@ -20,8 +23,15 @@ export function useAgentProfileFiles(options: {
 }) {
   const { panel, selectedId, hasToken, dataAgentsLength, saveErrorMessage, setError } = options;
 
-  const [files, setFiles] = useState<Awaited<ReturnType<typeof fetchAgentProfileFiles>> | null>(null);
-  const [filesLoading, setFilesLoading] = useState(false);
+  const filesEnabled = panel === 'files' && !!selectedId && hasToken;
+  const filesResource = useAsyncResource(
+    () => (selectedId ? fetchAgentProfileFiles(selectedId) : Promise.resolve(null as ProfileFiles | null)),
+    [panel, selectedId, hasToken, dataAgentsLength],
+    { enabled: filesEnabled, initial: null as ProfileFiles | null, errorData: null },
+  );
+  const files = filesResource.data;
+  const setFiles = filesResource.setData;
+  const filesLoading = filesResource.loading;
   const [activeFile, setActiveFile] = useState<string | null>(null);
   const [fileDraft, setFileDraft] = useState('');
   const [fileSaving, setFileSaving] = useState(false);
@@ -85,33 +95,6 @@ export function useAgentProfileFiles(options: {
       flushProfileSaveRef.current();
     };
   }, []);
-
-  useEffect(() => {
-    if (panel !== 'files' || !selectedId || !hasToken) {
-      return;
-    }
-    let cancelled = false;
-    setFilesLoading(true);
-    void fetchAgentProfileFiles(selectedId)
-      .then((f) => {
-        if (!cancelled) {
-          setFiles(f);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setFiles(null);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setFilesLoading(false);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [panel, selectedId, hasToken, dataAgentsLength]);
 
   useEffect(() => {
     if (!activeFile || !selectedId || !hasToken) {

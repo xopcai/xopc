@@ -1,44 +1,18 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 
 import { fetchSkillsCatalog, type SkillCatalogRow } from '@/features/settings/agents-admin-api';
+import { useAsyncResource } from '@/lib/use-async-resource';
 
 import type { AgentPanel } from '../utils';
 
 export function useSkillsCatalogLoad(enabled: boolean, hasToken: boolean) {
-  const [skillCatalog, setSkillCatalog] = useState<SkillCatalogRow[]>([]);
-  const [skillsCatalogLoading, setSkillsCatalogLoading] = useState(false);
-
-  const catalogForPick = useMemo(
-    () => skillCatalog.filter((s) => s.enabled !== false),
-    [skillCatalog],
+  const { data: skillCatalog, loading: skillsCatalogLoading } = useAsyncResource(
+    () => fetchSkillsCatalog(),
+    [enabled, hasToken],
+    { enabled: enabled && hasToken, initial: [] as SkillCatalogRow[], errorData: [] },
   );
 
-  useEffect(() => {
-    if (!enabled || !hasToken) {
-      return;
-    }
-    let cancelled = false;
-    setSkillsCatalogLoading(true);
-    void fetchSkillsCatalog()
-      .then((rows) => {
-        if (!cancelled) {
-          setSkillCatalog(rows);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setSkillCatalog([]);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setSkillsCatalogLoading(false);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [enabled, hasToken]);
+  const catalogForPick = useMemo(() => skillCatalog.filter((s) => s.enabled !== false), [skillCatalog]);
 
   return {
     catalogForPick,

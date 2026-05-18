@@ -188,7 +188,7 @@ export function BuiltinToolsDisableUi(props: BuiltinToolsDisableUiProps) {
                 <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-fg-muted">
                   {getGroupTitle(groupKey)}
                 </h4>
-                <ul className="flex flex-col gap-2.5" role="list">
+                <ul className="flex flex-col gap-2.5">
                   {ids.map((tid) => {
                     const unknown = mode === 'defaults' && groupKey === 'unknown';
                     const lockedByDefault = mode === 'agentEntry' && defaultsLock.has(tid);

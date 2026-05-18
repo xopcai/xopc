@@ -65,5 +65,5 @@ export function HtmlWorkspaceEditor({
     };
   }, [isDark]);
 
-  return <div ref={containerRef} className={`h-full w-full overflow-hidden ${className ?? ''}`} />;
+  return <div ref={containerRef} className={`size-full overflow-hidden ${className ?? ''}`} />;
 }

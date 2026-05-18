@@ -463,8 +463,8 @@ export function ModelsSettingsPanel() {
             {validation.valid ? ms.validationWarnings : ms.validationErrors}
           </p>
           <ul className="list-inside list-disc space-y-0.5 text-xs text-amber-900 dark:text-amber-200">
-            {validation.errors.map((err, i) => (
-              <li key={`${err.path}-${i}`}>
+            {validation.errors.map((err) => (
+              <li key={`${err.path}-${err.severity}-${err.message}`}>
                 {err.path}: {err.message} ({err.severity})
               </li>
             ))}

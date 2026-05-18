@@ -212,7 +212,7 @@ export const CommandPalette = memo(function CommandPalette({
 
   const listBody =
     totalRows === 0 ? (
-      <div className="px-2.5 py-2.5 text-xs leading-normal text-fg-muted">{noResults}</div>
+      <div className="p-2.5 text-xs leading-normal text-fg-muted">{noResults}</div>
     ) : grouped ? (
       <>
         {groupedHasSkills ? (

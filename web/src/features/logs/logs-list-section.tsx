@@ -62,13 +62,12 @@ export function LogsListSection({ L, logs, loading, hasMore, onSelectLog, onLoad
           </p>
           <ul
             className="divide-y divide-edge-subtle overflow-hidden rounded-xl border border-edge bg-surface-panel font-mono text-sm leading-6 dark:divide-edge dark:border-edge"
-            role="list"
           >
-            {logs.map((log, idx) => {
+            {logs.map((log) => {
               const lv = log.level ?? 'info';
               const rid = typeof log.requestId === 'string' ? log.requestId.trim() : '';
               return (
-                <li key={`${log.timestamp}-${idx}`}>
+                <li key={`${log.timestamp}-${log.requestId ?? log.message ?? ''}`}>
                   <button
                     type="button"
                     onClick={() => onSelectLog(log)}
