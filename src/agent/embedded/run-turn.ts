@@ -10,7 +10,8 @@ import { prewarmSessionFile } from './session-manager-cache.js';
 import { registerEmbeddedRun, unregisterEmbeddedRun } from './runs.js';
 import { subscribeEmbeddedSessionEvents, lastAssistantPlainText } from './subscribe-session.js';
 import type { RunXopcEmbeddedTurnParams, RunXopcEmbeddedTurnResult } from './types.js';
-import { createEmbeddedAuthStorage } from './xopc-auth-storage.js';
+import { applyXopcProviderApiKey, createEmbeddedAuthStorage } from './xopc-auth-storage.js';
+import { wrapStreamFnForXopcExtensions } from './xopc-stream-bridge.js';
 import { xopcToolsToDefinitions } from './xopc-tools-bridge.js';
 import {
   isAssistantTurnAborted,
@@ -92,18 +93,22 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
     const toolDefs = xopcToolsToDefinitions(tools);
     const toolNames = tools.map((t) => t.name);
 
+    const authStorage = createEmbeddedAuthStorage();
+    applyXopcProviderApiKey(authStorage, resolvedModel.provider);
+
     const { session } = await createAgentSession({
       cwd: workspaceDir,
       model: resolvedModel,
       thinkingLevel: thinkingLevel ?? 'medium',
       sessionManager: piSm,
       settingsManager,
-      authStorage: createEmbeddedAuthStorage(),
+      authStorage,
       noTools: 'builtin',
       customTools: toolDefs,
       tools: toolNames,
     });
 
+    session.agent.streamFn = wrapStreamFnForXopcExtensions(session.agent.streamFn);
     session.agent.state.systemPrompt = systemPrompt;
 
     if (onEvent) {
