@@ -20,3 +20,18 @@ export function createEmbeddedAuthStorage(): AuthStorage {
   auth.setFallbackResolver(resolveXopcProviderApiKey);
   return auth;
 }
+
+/**
+ * pi-coding-agent's {@link ModelRegistry.getApiKeyAndHeaders} reads the auth storage with
+ * `includeFallback: false`, so {@link createEmbeddedAuthStorage}'s fallback resolver alone
+ * never fires for xopc-managed providers (e.g. `local-qwen` in xopc's `models.json`).
+ *
+ * Inject the resolved key as a runtime override (highest-priority, in-memory only) before
+ * the session starts so request-time auth resolution finds it.
+ */
+export function applyXopcProviderApiKey(auth: AuthStorage, providerId: string): void {
+  const key = resolveXopcProviderApiKey(providerId);
+  if (key && key !== 'extension-managed') {
+    auth.setRuntimeApiKey(providerId, key);
+  }
+}
