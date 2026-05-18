@@ -1,1 +1,0 @@
-export { AgentsSettingsPanel } from './agents';

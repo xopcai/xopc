@@ -35,7 +35,7 @@ export function ChannelImHubCard({
   ch,
 }: ChannelImHubCardProps) {
   return (
-    <div className="flex flex-col gap-3 rounded-2xl border border-edge bg-surface-base px-4 py-4 dark:border-edge sm:flex-row sm:items-center sm:gap-4">
+    <div className="flex flex-col gap-3 rounded-2xl border border-edge bg-surface-base p-4 dark:border-edge sm:flex-row sm:items-center sm:gap-4">
       <div className="flex min-w-0 flex-1 items-start gap-4">
         <div className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-surface-hover" aria-hidden>
           {icon}

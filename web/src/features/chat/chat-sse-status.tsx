@@ -43,7 +43,7 @@ export const ChatSseStatus = memo(function ChatSseStatus() {
     return (
       <div className="flex items-center gap-2 border-b border-amber-100 bg-amber-50 px-4 py-2 text-sm text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/50 dark:text-amber-200">
         <span
-          className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-amber-500 border-t-transparent"
+          className="inline-block size-3 animate-spin rounded-full border-2 border-amber-500 border-t-transparent"
           aria-hidden
         />
         <span>

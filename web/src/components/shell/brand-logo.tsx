@@ -41,8 +41,8 @@ export function BrandLogo({ alt, className, 'aria-hidden': ariaHidden }: BrandLo
         strokeWidth={3.2}
         strokeLinecap="round"
       >
-        {RING_PATHS.map((d, i) => (
-          <path key={i} d={d} />
+        {RING_PATHS.map((d) => (
+          <path key={d} d={d} />
         ))}
       </g>
       <path className="[fill:var(--color-fg)] [fill-opacity:0.82]" d={HUB_PATH} />

@@ -141,7 +141,7 @@ export function CronJobFormDialog(props: CronJobFormDialogProps) {
                   {formMode === 'edit' ? c.editJob : c.addJob}
                 </Dialog.Title>
                 <Dialog.Close asChild>
-                  <Button type="button" variant="ghost" className="h-9 w-9 shrink-0 p-0" aria-label={c.close}>
+                  <Button type="button" variant="ghost" className="size-9 shrink-0 p-0" aria-label={c.close}>
                     <X className="size-5" strokeWidth={1.75} />
                   </Button>
                 </Dialog.Close>

@@ -165,7 +165,7 @@ function BooleanField({
     <label className="flex items-center gap-2 text-sm text-fg">
       <input
         type="checkbox"
-        className="h-4 w-4 rounded border border-edge"
+        className="size-4 rounded border border-edge"
         checked={value}
         disabled={disabled}
         onChange={(e) => onChange(e.target.checked)}

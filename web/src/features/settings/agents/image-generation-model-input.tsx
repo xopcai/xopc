@@ -151,7 +151,7 @@ export function ImageGenerationModelInput({
             aria-expanded={open}
           >
             <span className="min-w-0 truncate">{isLoading ? '…' : label}</span>
-            <ChevronsUpDown className="h-4 w-4 shrink-0 text-fg-subtle opacity-70" aria-hidden />
+            <ChevronsUpDown className="size-4 shrink-0 text-fg-subtle opacity-70" aria-hidden />
           </button>
         </Popover.Trigger>
       <Popover.Portal>
@@ -178,7 +178,7 @@ export function ImageGenerationModelInput({
           />
           <div className="max-h-60 overflow-auto" role="listbox" aria-label={searchPlaceholder}>
             {error ? (
-              <div className="px-2 py-2 text-xs text-red-600 dark:text-red-400">
+              <div className="p-2 text-xs text-red-600 dark:text-red-400">
                 {error instanceof Error ? error.message : 'Failed to load image providers'}
               </div>
             ) : null}
@@ -206,7 +206,7 @@ export function ImageGenerationModelInput({
                   setQuery('');
                 }}
               >
-                <Check className={cn('h-4 w-4 shrink-0', id !== value && 'invisible')} aria-hidden />
+                <Check className={cn('size-4 shrink-0', id !== value && 'invisible')} aria-hidden />
                 <span className="min-w-0 flex-1 truncate text-sm font-medium">{id}</span>
               </button>
             ))}

@@ -56,7 +56,7 @@ export function CronJobDetailDrawer({
         <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[60] bg-scrim" />
         <Dialog.Content
           className={cn(
-            'xopc-drawer-right fixed right-0 top-0 z-[60] flex h-full w-full max-w-lg flex-col border-l border-edge bg-surface-panel shadow-popover outline-none',
+            'xopc-drawer-right fixed right-0 top-0 z-[60] flex size-full max-w-lg flex-col border-l border-edge bg-surface-panel shadow-popover outline-none',
             'dark:border-edge',
           )}
           aria-describedby={undefined}
@@ -66,7 +66,7 @@ export function CronJobDetailDrawer({
               {detailJob?.name?.trim() || detailJob?.id || '—'}
             </Dialog.Title>
             <Dialog.Close asChild>
-              <Button type="button" variant="ghost" className="h-9 w-9 shrink-0 p-0" aria-label={c.close}>
+              <Button type="button" variant="ghost" className="size-9 shrink-0 p-0" aria-label={c.close}>
                 <X className="size-5" strokeWidth={1.75} />
               </Button>
             </Dialog.Close>

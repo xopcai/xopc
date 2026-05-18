@@ -105,7 +105,7 @@ export function UpdateReminderBar({
         )}
       >
         <div className="flex max-w-[min(100%,48rem)] items-center justify-center gap-2 text-center">
-          <Download className="h-4 w-4 shrink-0 text-accent" aria-hidden />
+          <Download className="size-4 shrink-0 text-accent" aria-hidden />
           <span className="min-w-0">
             {t.reminderElectronReady.replace('{{version}}', show.version)}
           </span>
@@ -116,7 +116,7 @@ export function UpdateReminderBar({
             onClick={electronQuitAndInstall}
             className="rounded bg-accent px-2.5 py-1 text-xs font-medium text-white hover:bg-accent/90"
           >
-            <RefreshCw className="mr-1 inline h-3 w-3" />
+            <RefreshCw className="mr-1 inline size-3" />
             {t.restartToUpdate}
           </button>
           <button
@@ -126,7 +126,7 @@ export function UpdateReminderBar({
             aria-label={t.dismissAria}
             title={t.dismissHint}
           >
-            <X className="h-4 w-4" />
+            <X className="size-4" />
           </button>
         </div>
       </div>
@@ -142,7 +142,7 @@ export function UpdateReminderBar({
         )}
       >
         <div className="flex max-w-[min(100%,52rem)] items-center justify-center gap-2 text-center">
-          <AlertCircle className="h-4 w-4 shrink-0 text-red-500 dark:text-red-400" aria-hidden />
+          <AlertCircle className="size-4 shrink-0 text-red-500 dark:text-red-400" aria-hidden />
           <span className="min-w-0 break-words">
             {t.reminderElectronUpdateError.replace('{{detail}}', show.message)}
           </span>
@@ -154,7 +154,7 @@ export function UpdateReminderBar({
           aria-label={t.dismissAria}
           title={t.dismissHint}
         >
-          <X className="h-4 w-4" />
+          <X className="size-4" />
         </button>
       </div>
     );
@@ -169,7 +169,7 @@ export function UpdateReminderBar({
         )}
       >
         <div className="flex max-w-full items-center justify-center gap-2 text-center">
-          <Download className="h-4 w-4 shrink-0 animate-pulse" aria-hidden />
+          <Download className="size-4 shrink-0 animate-pulse" aria-hidden />
           <span>
             {t.reminderDownloading.replace('{{percent}}', String(show.percent))}
           </span>
@@ -186,7 +186,7 @@ export function UpdateReminderBar({
           className={cn(actionsRight, 'sm:right-2')}
           aria-label={t.dismissAria}
         >
-          <X className="h-4 w-4" />
+          <X className="size-4" />
         </button>
       </div>
     );
@@ -209,9 +209,9 @@ export function UpdateReminderBar({
             className="inline-flex shrink-0 items-center gap-1 rounded bg-accent px-2.5 py-1 text-xs font-medium text-white hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {restartBusy ? (
-              <Loader2 className="h-3 w-3 shrink-0 animate-spin" aria-hidden />
+              <Loader2 className="size-3 shrink-0 animate-spin" aria-hidden />
             ) : (
-              <RefreshCw className="h-3 w-3 shrink-0" aria-hidden />
+              <RefreshCw className="size-3 shrink-0" aria-hidden />
             )}
             {t.restartGateway}
           </button>
@@ -223,7 +223,7 @@ export function UpdateReminderBar({
           aria-label={t.dismissAria}
           title={t.dismissHint}
         >
-          <X className="h-4 w-4" />
+          <X className="size-4" />
         </button>
       </div>
     );
@@ -253,9 +253,9 @@ export function UpdateReminderBar({
             className="inline-flex shrink-0 items-center gap-1 rounded bg-accent px-2.5 py-1 text-xs font-medium text-white hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {npmUpdateRunning ? (
-              <Loader2 className="h-3 w-3 shrink-0 animate-spin" aria-hidden />
+              <Loader2 className="size-3 shrink-0 animate-spin" aria-hidden />
             ) : (
-              <RefreshCw className="h-3 w-3 shrink-0" aria-hidden />
+              <RefreshCw className="size-3 shrink-0" aria-hidden />
             )}
             {npmUpdateRunning ? t.updateRunning : t.updateNow}
           </button>
@@ -267,7 +267,7 @@ export function UpdateReminderBar({
           aria-label={t.dismissAria}
           title={t.dismissHint}
         >
-          <X className="h-4 w-4" />
+          <X className="size-4" />
         </button>
       </div>
     );

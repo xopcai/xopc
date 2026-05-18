@@ -100,7 +100,7 @@ export const ChatPendingFollowUpStack = memo(function ChatPendingFollowUpStack({
               )}
               title={m.chat.followUpQueueDrag}
             >
-              <GripVertical className="h-3.5 w-3.5 text-fg-muted" aria-hidden />
+              <GripVertical className="size-3.5 text-fg-muted" aria-hidden />
             </div>
             <button
               type="button"
@@ -117,7 +117,7 @@ export const ChatPendingFollowUpStack = memo(function ChatPendingFollowUpStack({
             >
               {item.attachments?.length ? (
                 <span className="inline-flex max-w-full items-center gap-1">
-                  <FileIcon className="h-3 w-3 shrink-0 text-fg-muted" aria-hidden />
+                  <FileIcon className="size-3 shrink-0 text-fg-muted" aria-hidden />
                   <span className="truncate">{preview}</span>
                 </span>
               ) : (
@@ -141,7 +141,7 @@ export const ChatPendingFollowUpStack = memo(function ChatPendingFollowUpStack({
                   onMove(item.id, 'up');
                 }}
               >
-                <ChevronUp className="h-3.5 w-3.5" aria-hidden />
+                <ChevronUp className="size-3.5" aria-hidden />
               </button>
               <button
                 type="button"
@@ -159,7 +159,7 @@ export const ChatPendingFollowUpStack = memo(function ChatPendingFollowUpStack({
                   onMove(item.id, 'down');
                 }}
               >
-                <ChevronDown className="h-3.5 w-3.5" aria-hidden />
+                <ChevronDown className="size-3.5" aria-hidden />
               </button>
               <button
                 type="button"
@@ -177,7 +177,7 @@ export const ChatPendingFollowUpStack = memo(function ChatPendingFollowUpStack({
                   onSteer(item.id);
                 }}
               >
-                <Sparkles className={cn('h-3.5 w-3.5', isSteering && 'animate-pulse')} aria-hidden />
+                <Sparkles className={cn('size-3.5', isSteering && 'animate-pulse')} aria-hidden />
               </button>
               <button
                 type="button"
@@ -194,7 +194,7 @@ export const ChatPendingFollowUpStack = memo(function ChatPendingFollowUpStack({
                   onRemove(item.id);
                 }}
               >
-                <X className="h-3.5 w-3.5" aria-hidden />
+                <X className="size-3.5" aria-hidden />
               </button>
             </div>
           </div>

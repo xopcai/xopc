@@ -6,6 +6,7 @@ import { useLocaleStore } from '@/stores/locale-store';
 import type { PaletteItem, SlashRange } from '@/features/chat/command-palette.types';
 import { FILE_WIRE_TAIL_BODY } from '@/features/chat/file-wire-pattern';
 import { paletteDefaultTiebreak } from '@/features/chat/palette-default-order';
+import { useAsyncResource } from '@/lib/use-async-resource';
 
 /** Same boundary as `@file:` wire tokens (quoted or unquoted); path `/` is not slash-palette. */
 const AT_FILE_TOKEN_AT_INDEX = new RegExp(`^@file:${FILE_WIRE_TAIL_BODY}`, 'u');
@@ -116,8 +117,6 @@ export function useCommandPalette(
   options?: { suppress?: boolean; isComposing?: boolean },
 ) {
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const [allItems, setAllItems] = useState<PaletteItem[]>([]);
-  const [loadError, setLoadError] = useState<string | null>(null);
   /** Grouped (empty) palette: each section can expand independently after "Show N more". */
   const [groupedSkillsExpanded, setGroupedSkillsExpanded] = useState(false);
   const [groupedCommandsExpanded, setGroupedCommandsExpanded] = useState(false);
@@ -142,50 +141,39 @@ export function useCommandPalette(
     }
   }, [paletteActive]);
 
-  useEffect(() => {
-    if (!paletteActive) return;
-
-    let cancelled = false;
-    (async () => {
-      try {
-        setLoadError(null);
-        const [commands, skillsPayload] = await Promise.all([fetchCommandsCached(), getSkillsCached(language)]);
-        if (cancelled) return;
-
-        const commandItems: PaletteItem[] = commands.map((c) => ({
-          kind: 'command' as const,
-          id: `cmd:${c.id}`,
-          name: c.name,
-          description: c.description,
-          category: c.category,
-          aliases: c.aliases,
-          acceptsArgs: c.acceptsArgs,
+  const itemsResource = useAsyncResource(
+    async () => {
+      const [commands, skillsPayload] = await Promise.all([fetchCommandsCached(), getSkillsCached(language)]);
+      const commandItems: PaletteItem[] = commands.map((c) => ({
+        kind: 'command' as const,
+        id: `cmd:${c.id}`,
+        name: c.name,
+        description: c.description,
+        category: c.category,
+        aliases: c.aliases,
+        acceptsArgs: c.acceptsArgs,
+      }));
+      const skillItems: PaletteItem[] = skillsPayload.catalog
+        .filter((s) => s.enabled && !s.disableModelInvocation)
+        .map((s) => ({
+          kind: 'skill' as const,
+          id: `skill:${s.name}`,
+          name: s.name,
+          description: s.description,
+          category: 'skill',
+          source: s.source,
         }));
-
-        const skillItems: PaletteItem[] = skillsPayload.catalog
-          .filter((s) => s.enabled && !s.disableModelInvocation)
-          .map((s) => ({
-            kind: 'skill' as const,
-            id: `skill:${s.name}`,
-            name: s.name,
-            description: s.description,
-            category: 'skill',
-            source: s.source,
-          }));
-
-        setAllItems([...skillItems, ...commandItems]);
-      } catch (e) {
-        if (!cancelled) {
-          setLoadError(e instanceof Error ? e.message : String(e));
-          setAllItems([]);
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [paletteActive]);
+      return [...skillItems, ...commandItems];
+    },
+    [paletteActive, language],
+    { enabled: paletteActive, initial: [] as PaletteItem[], errorData: [] },
+  );
+  const allItems = itemsResource.data;
+  const loadError = itemsResource.error == null
+    ? null
+    : itemsResource.error instanceof Error
+      ? itemsResource.error.message
+      : String(itemsResource.error);
 
   const query = slashRange?.query ?? '';
 

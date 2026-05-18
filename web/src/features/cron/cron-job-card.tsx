@@ -88,7 +88,7 @@ export function CronJobCard({
             <Button
               type="button"
               variant="ghost"
-              className="h-8 w-8 shrink-0 p-0"
+              className="size-8 shrink-0 p-0"
               aria-label={c.jobCardMenuAria}
               onClick={(e) => e.stopPropagation()}
             >

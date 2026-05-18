@@ -47,7 +47,6 @@ export function AgentsSettingsToolbar({
         />
         <input
           type="search"
-          role="searchbox"
           enterKeyHint="search"
           value={listSearchQuery}
           onChange={(e) => onListSearchQueryChange(e.target.value)}

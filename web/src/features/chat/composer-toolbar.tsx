@@ -115,7 +115,7 @@ export const ComposerToolbar = memo(function ComposerToolbar({
         }
         onClick={onPickFiles}
       >
-        <FileIcon className="h-4 w-4" />
+        <FileIcon className="size-4" />
       </button>
 
       {showThinkingSelector ? (
@@ -123,7 +123,7 @@ export const ComposerToolbar = memo(function ComposerToolbar({
           className="inline-flex min-h-8 items-center gap-1 rounded-full bg-surface-hover px-2.5 py-1 text-xs dark:bg-surface-hover/80"
           title={`${m.thinkingLevelLabel}: ${m.thinkingLevels[thinkingLevel as ThinkingLevel] ?? thinkingLevel}`}
         >
-          <ThinkingIcon className="h-3.5 w-3.5 shrink-0 text-accent-fg" aria-hidden />
+          <ThinkingIcon className="size-3.5 shrink-0 text-accent-fg" aria-hidden />
           <select
             className="max-w-[min(6.5rem,30vw)] cursor-pointer appearance-none bg-transparent pl-0 pr-0 text-[0.8125rem] font-medium text-fg focus:outline-none"
             value={thinkingLevel}
@@ -184,7 +184,7 @@ export const ComposerToolbar = memo(function ComposerToolbar({
             aria-label={voiceRecording ? m.voiceRecordingStop : m.voiceRecording}
             onClick={() => void onToggleVoice()}
           >
-            <Mic className={cn('h-4 w-4 stroke-[1.75]', voiceRecording && 'animate-pulse')} />
+            <Mic className={cn('size-4 stroke-[1.75]', voiceRecording && 'animate-pulse')} />
           </button>
 
           {runBusy ? (
@@ -202,7 +202,7 @@ export const ComposerToolbar = memo(function ComposerToolbar({
                   aria-label={m.steeringInterruptSend}
                   onClick={() => void onInterrupt()}
                 >
-                  <Send className="h-4 w-4 stroke-[1.75]" />
+                  <Send className="size-4 stroke-[1.75]" />
                 </button>
               ) : null}
               <button
@@ -217,7 +217,7 @@ export const ComposerToolbar = memo(function ComposerToolbar({
                 aria-label={m.abort}
                 onClick={onAbort}
               >
-                <Square className="h-4 w-4 stroke-[1.75]" />
+                <Square className="size-4 stroke-[1.75]" />
               </button>
             </>
           ) : (
@@ -236,7 +236,7 @@ export const ComposerToolbar = memo(function ComposerToolbar({
               aria-label={m.sendMessage}
               onClick={onSend}
             >
-              <Send className="h-4 w-4 stroke-[1.75]" />
+              <Send className="size-4 stroke-[1.75]" />
             </button>
           )}
         </div>

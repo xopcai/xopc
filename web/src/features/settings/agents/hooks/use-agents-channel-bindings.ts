@@ -12,6 +12,7 @@ import {
   type GatewayAgentRow,
   type GatewayConfigBinding,
 } from '@/features/settings/agents-admin-api';
+import { useAsyncResource } from '@/lib/use-async-resource';
 
 import type { AgentPanel } from '../utils';
 import { buildNewBindingMatch } from '../utils';
@@ -39,12 +40,33 @@ export function useAgentsChannelBindings(options: {
 
   const [allBindings, setAllBindings] = useState<GatewayConfigBinding[]>([]);
   const [newBindChannel, setNewBindChannel] = useState('');
-  const [bindChannelStatuses, setBindChannelStatuses] = useState<ChannelStatus[]>([]);
-  const [bindChannelsLoading, setBindChannelsLoading] = useState(false);
-  const [bindSessionChats, setBindSessionChats] = useState<SessionChatId[]>([]);
-  const [bindSessionsLoading, setBindSessionsLoading] = useState(false);
+  const channelsEnabled = panel === 'channels' && hasToken;
+  const channelsResource = useAsyncResource(
+    () => getChannels(),
+    [panel, hasToken],
+    { enabled: channelsEnabled, initial: [] as ChannelStatus[], errorData: [] },
+  );
+  const bindChannelStatuses = channelsResource.data;
+  const bindChannelsLoading = channelsResource.loading;
+
+  const trimmedBindChannel = newBindChannel.trim();
+  const sessionsEnabled = channelsEnabled && trimmedBindChannel.length > 0;
+  const sessionsResource = useAsyncResource(
+    () => getSessionChatIds(trimmedBindChannel),
+    [panel, hasToken, trimmedBindChannel],
+    { enabled: sessionsEnabled, initial: [] as SessionChatId[], errorData: [] },
+  );
+  const bindSessionChats = sessionsResource.data;
+  const bindSessionsLoading = sessionsResource.loading;
+  const setBindSessionChats = sessionsResource.setData;
+
   const [newBindSessionIdx, setNewBindSessionIdx] = useState<number | null>(null);
   const [newBindCustomPeer, setNewBindCustomPeer] = useState('');
+
+  // Reset session selection when the channel changes (separate from the fetch effect).
+  useEffect(() => {
+    setNewBindSessionIdx(null);
+  }, [trimmedBindChannel]);
 
   const agentBindings = useMemo(() => {
     if (!selected) {
@@ -61,33 +83,6 @@ export function useAgentsChannelBindings(options: {
   }, [panel, hasToken, bindingsFromConfig]);
 
   useEffect(() => {
-    if (panel !== 'channels' || !hasToken) {
-      return;
-    }
-    let cancelled = false;
-    setBindChannelsLoading(true);
-    void getChannels()
-      .then((list) => {
-        if (!cancelled) {
-          setBindChannelStatuses(list);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setBindChannelStatuses([]);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setBindChannelsLoading(false);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [panel, hasToken]);
-
-  useEffect(() => {
     if (bindChannelsLoading || panel !== 'channels' || bindChannelStatuses.length === 0) {
       return;
     }
@@ -100,45 +95,11 @@ export function useAgentsChannelBindings(options: {
     });
   }, [bindChannelsLoading, panel, bindChannelStatuses]);
 
-  useEffect(() => {
-    if (panel !== 'channels' || !hasToken) {
-      return;
-    }
-    const ch = newBindChannel.trim();
-    if (!ch) {
-      setBindSessionChats([]);
-      return;
-    }
-    let cancelled = false;
-    setNewBindSessionIdx(null);
-    setBindSessionsLoading(true);
-    void getSessionChatIds(ch)
-      .then((ids) => {
-        if (!cancelled) {
-          setBindSessionChats(ids);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setBindSessionChats([]);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setBindSessionsLoading(false);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [panel, hasToken, newBindChannel]);
-
   const refreshBindSessions = useCallback(() => {
     const ch = newBindChannel.trim();
     if (!ch) {
       return;
     }
-    setBindSessionsLoading(true);
     void getSessionChatIds(ch)
       .then((ids) => {
         setBindSessionChats(ids);
@@ -147,11 +108,8 @@ export function useAgentsChannelBindings(options: {
       .catch(() => {
         setBindSessionChats([]);
         setNewBindSessionIdx(null);
-      })
-      .finally(() => {
-        setBindSessionsLoading(false);
       });
-  }, [newBindChannel]);
+  }, [newBindChannel, setBindSessionChats]);
 
   const useManualChannel = !bindChannelsLoading && bindChannelStatuses.length === 0;
   const bindingsLoading = panel === 'channels' && hasToken && gatewayCfgLoading;

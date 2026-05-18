@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "lint": "eslint",
     "lint:fix": "eslint --fix",
-    "type-check": "tsc -b --noEmit"
+    "type-check": "tsc -b --noEmit",
+    "react-doctor": "npx --yes react-doctor@latest --project @xopc/web --yes --offline --fail-on=error"
   },
   "dependencies": {
     "@codemirror/commands": "^6.10.3",
@@ -54,13 +55,17 @@
     "zustand": "^5.0.12"
   },
   "devDependencies": {
+    "@babel/core": "^7.29.0",
+    "@rolldown/plugin-babel": "^0.2.3",
     "@tailwindcss/vite": "^4.2.4",
+    "@types/babel__core": "^7.20.5",
     "@types/marked": "^6.0.0",
     "@types/qrcode": "^1.5.6",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@types/three": "^0.184.0",
-    "@vitejs/plugin-react-swc": "^4.3.0",
+    "@vitejs/plugin-react": "^6",
+    "babel-plugin-react-compiler": "1",
     "eslint": "^10.2.1",
     "tailwindcss": "^4.2.4",
     "typescript": "^6.0.3",

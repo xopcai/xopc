@@ -52,7 +52,7 @@ export function CronRunHistorySection({
         <Button
           type="button"
           variant="ghost"
-          className="h-9 w-9 shrink-0 p-0"
+          className="size-9 shrink-0 p-0"
           disabled={runHistoryLoading}
           title={c.refresh}
           aria-label={c.refresh}

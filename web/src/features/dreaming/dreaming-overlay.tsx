@@ -91,7 +91,7 @@ export function DreamingOverlay() {
         className="pointer-events-none fixed inset-0 z-[90] opacity-0"
         aria-hidden
       >
-        <canvas ref={canvasRef} className="h-full w-full" />
+        <canvas ref={canvasRef} className="size-full" />
       </div>
     );
   }
@@ -110,7 +110,7 @@ export function DreamingOverlay() {
       aria-label={phase ? PHASE_LABELS[phase] : undefined}
     >
       {/* Three.js canvas — always pointer-events-none */}
-      <canvas ref={canvasRef} className="pointer-events-none h-full w-full" />
+      <canvas ref={canvasRef} className="pointer-events-none size-full" />
 
       {/* Phase indicator pill + dismiss button */}
       <div className="pointer-events-auto absolute bottom-6 left-1/2 flex -translate-x-1/2 items-center gap-3">

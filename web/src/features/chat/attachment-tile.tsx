@@ -145,9 +145,9 @@ export function AttachmentTile({
             )}
           >
             {isExcel ? (
-              <FileSpreadsheet className="h-8 w-8 shrink-0 text-fg-subtle" aria-hidden />
+              <FileSpreadsheet className="size-8 shrink-0 text-fg-subtle" aria-hidden />
             ) : (
-              <FileText className="h-8 w-8 shrink-0 text-fg-subtle" aria-hidden />
+              <FileText className="size-8 shrink-0 text-fg-subtle" aria-hidden />
             )}
             <span className="min-w-0 flex-1">
               <span className="block truncate text-fg">{displayName}</span>
@@ -167,7 +167,7 @@ export function AttachmentTile({
         <button
           type="button"
           className={cn(
-            'absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full border border-edge bg-surface-panel text-fg-muted shadow-surface hover:text-fg dark:border-edge',
+            'absolute -right-1 -top-1 flex size-5 items-center justify-center rounded-full border border-edge bg-surface-panel text-fg-muted shadow-surface hover:text-fg dark:border-edge',
             interaction.transition,
             interaction.press,
             interaction.focusRingPanel,
@@ -179,7 +179,7 @@ export function AttachmentTile({
           title={m.chat.attachmentPreviewRemove}
           aria-label={m.chat.attachmentPreviewRemove}
         >
-          <X className="h-3 w-3" />
+          <X className="size-3" />
         </button>
       ) : null}
     </div>

@@ -108,7 +108,7 @@ export function AgentSkillsTab(props: {
             skillsInherit && 'opacity-50',
           )}
         >
-          <ul className="flex flex-col gap-2.5 text-sm" role="list">
+          <ul className="flex flex-col gap-2.5 text-sm">
             {catalogForPick.map((s) => {
               const id = s.name || s.directoryId;
               const on = skillsInherit ? isCheckedInheritMode(id) : skillsPick.has(id);

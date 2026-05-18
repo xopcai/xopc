@@ -66,7 +66,7 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
         <Link
           to="/chat/new"
           className={cn(
-            'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-surface-panel text-sm font-medium leading-none text-fg transition-colors hover:bg-surface-hover',
+            'inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-surface-panel text-sm font-medium leading-none text-fg transition-colors hover:bg-surface-hover',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
             APP_CHROME_NO_DRAG_CLASS,
           )}

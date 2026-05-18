@@ -106,7 +106,7 @@ function FilePreviewPptxSlidePane({
 
   const innerScrollClass =
     layout === 'workspace'
-      ? 'min-h-0 flex-1 overflow-auto px-2 py-2'
+      ? 'min-h-0 flex-1 overflow-auto p-2'
       : 'min-h-0 flex-1 overflow-auto rounded-lg border border-edge-subtle p-4 dark:border-edge';
 
   return (
@@ -199,7 +199,7 @@ export function FilePreviewBody(props: FilePreviewBodyProps) {
     body = <p className="px-4 py-6 text-sm text-fg-muted">{m.chat.loading}</p>;
   } else if (loadError) {
     body = (
-      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto px-4 py-4">
+      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto p-4">
         {baseAlternativesBar}
         <p className="text-sm text-red-600 dark:text-red-400">
           {(context === 'workspace' ? m.workspace.loadError : m.chat.attachmentPreviewLoadError) + ': ' + loadError}
@@ -234,7 +234,7 @@ export function FilePreviewBody(props: FilePreviewBodyProps) {
     );
   } else if (previewKind === 'binaryOnly' && binaryBuffer) {
     body = (
-      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto px-4 py-4">
+      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto p-4">
         <PreviewOpenAlternativesBar
           message={
             context === 'workspace'
@@ -284,7 +284,7 @@ export function FilePreviewBody(props: FilePreviewBodyProps) {
       );
     } else if (pptxError) {
       body = (
-        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto px-4 py-4">
+        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto p-4">
           {baseAlternativesBar}
           <p className="text-sm text-red-600 dark:text-red-400">
             {(context === 'workspace' ? m.workspace.loadError : m.chat.attachmentPreviewLoadError) + ': ' + pptxError}
@@ -314,7 +314,7 @@ export function FilePreviewBody(props: FilePreviewBodyProps) {
   } else if (binaryBuffer && (previewKind === 'pdf' || previewKind === 'docx')) {
     if (binaryRenderError) {
       body = (
-        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto px-4 py-4">
+        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto p-4">
           {baseAlternativesBar}
           <p className="text-sm text-red-600 dark:text-red-400">
             {(context === 'workspace' ? m.workspace.loadError : m.chat.attachmentPreviewLoadError) + ': ' + binaryRenderError}

@@ -64,7 +64,7 @@ export function SearchSourceList({ blocks }: SearchSourceListProps) {
             : undefined;
 
           return (
-            <li key={`${source.url}-${index}`} className="flex min-w-0 gap-2.5">
+            <li key={source.url} className="flex min-w-0 gap-2.5">
               <span className="mt-0.5 shrink-0 text-xs text-fg-disabled">{index + 1}.</span>
               <div className="min-w-0 flex-1">
                 <div className="flex min-w-0 flex-wrap items-start gap-1.5">
@@ -72,7 +72,7 @@ export function SearchSourceList({ blocks }: SearchSourceListProps) {
                     <img
                       src={faviconUrl}
                       alt=""
-                      className="mt-0.5 h-3.5 w-3.5 shrink-0 rounded-sm"
+                      className="mt-0.5 size-3.5 shrink-0 rounded-sm"
                       aria-hidden
                     />
                   ) : null}

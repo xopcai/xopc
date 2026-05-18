@@ -1,0 +1,171 @@
+import { Activity, Loader2, Moon, Sparkles, Sun } from 'lucide-react';
+
+import { type DreamingGatewayStatus } from '@/features/settings/dreaming-api';
+import {
+  PanelHeading,
+  PhaseLastRunBlock,
+  PhaseStatusCard,
+  StatCell,
+  isoShort,
+  lockStatusLabel,
+  phasePanelClass,
+  sectionHeaderTightClass,
+  sectionTightClass,
+  type DreamingSettingsI18n,
+} from '@/features/settings/dreaming-settings-shared';
+import { LastRunStructuredView } from '@/features/settings/dreaming-settings-shared';
+import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/settings/settings-form-section';
+import { formatCronExpressionLabel, type ScheduleBadgeLabels } from '@/features/scheduling/cron/format-cron-label';
+import { ScheduleSummary } from '@/features/scheduling/schedule-summary';
+import { cn } from '@/lib/cn';
+
+type Props = {
+  t: DreamingSettingsI18n;
+  data: DreamingGatewayStatus | undefined;
+  isLoading: boolean;
+  localeTag: string;
+  scheduleBadgeLabels: ScheduleBadgeLabels;
+};
+
+export function DreamingRuntimeSection({ t, data, isLoading, localeTag, scheduleBadgeLabels }: Props) {
+  const lockLabel = data ? lockStatusLabel(data.lock, t) : null;
+
+  return (
+    <SettingsFormSection className={cn('min-w-0', sectionTightClass)}>
+      <SettingsFormSectionHeader
+        className={sectionHeaderTightClass}
+        icon={Activity}
+        title={t.runtimeTitle}
+        subtitle={t.runtimeHint}
+        trailing={isLoading ? <Loader2 className="size-4 shrink-0 animate-spin text-fg-muted" aria-hidden /> : null}
+      />
+
+      <div className="space-y-3">
+        <div className={phasePanelClass}>
+          <PanelHeading label={t.subsectionSchedule} className="mb-2" />
+          <dl className="grid grid-cols-2 gap-x-3 gap-y-2 sm:grid-cols-4">
+            <StatCell label={t.enabled}>{data ? (data.config.enabled ? t.on : t.off) : '—'}</StatCell>
+            <StatCell label={t.lock}>
+              <span className={lockLabel?.className}>{lockLabel ? lockLabel.text : '—'}</span>
+            </StatCell>
+            <StatCell label={t.timezone}>{data ? data.config.timezone || '—' : '—'}</StatCell>
+            <StatCell label={t.schedule} className="col-span-2 sm:col-span-2">
+              {data ? (
+                <ScheduleSummary
+                  kind="cron"
+                  expression={data.config.frequency}
+                  locale={localeTag}
+                  labels={scheduleBadgeLabels}
+                  timezone={data.config.timezone || undefined}
+                />
+              ) : (
+                '—'
+              )}
+              {data?.config.frequency ? (
+                <p className="mt-0.5 truncate font-mono text-[0.65rem] text-fg-subtle" title={data.config.frequency}>
+                  {data.config.frequency}
+                </p>
+              ) : null}
+            </StatCell>
+          </dl>
+        </div>
+
+        <div className={phasePanelClass}>
+          <PanelHeading label={t.subsectionStore} className="mb-2" />
+          <dl className="grid grid-cols-2 gap-x-3 gap-y-2 sm:grid-cols-4">
+            <StatCell label={t.storeEntries}>{data ? String(data.store.entryCount) : '—'}</StatCell>
+            <StatCell label={t.storePromoted}>{data ? String(data.store.promotedCount) : '—'}</StatCell>
+            <StatCell label={t.storeUpdatedAt}>{data ? isoShort(data.store.updatedAt) : '—'}</StatCell>
+            <StatCell label={t.storeLastPromotedAt}>{data ? isoShort(data.store.lastPromotedAt) : '—'}</StatCell>
+          </dl>
+        </div>
+
+        {data?.config?.phases ? (
+          <div>
+            <PanelHeading label={t.subsectionPhases} className="mb-2" />
+            <div className="grid gap-2 sm:grid-cols-3">
+              <PhaseStatusCard
+                icon={<Sun className="size-4 text-amber-500" />}
+                label="Light"
+                enabled={data.config.phases.light.enabled}
+                cron={data.config.phases.light.cron}
+                scheduleSummary={formatCronExpressionLabel(
+                  data.config.phases.light.cron,
+                  localeTag,
+                  scheduleBadgeLabels,
+                  { timezone: data.config.timezone || undefined },
+                )}
+                details={`lookback=${data.config.phases.light.lookbackDays}d, limit=${data.config.phases.light.limit}, dedupe=${data.config.phases.light.dedupeSimilarity}`}
+                t={t}
+              />
+              <PhaseStatusCard
+                icon={<Moon className="size-4 text-indigo-500" />}
+                label="Deep"
+                enabled={data.config.phases.deep.enabled}
+                cron={data.config.phases.deep.cron}
+                scheduleSummary={formatCronExpressionLabel(
+                  data.config.phases.deep.cron,
+                  localeTag,
+                  scheduleBadgeLabels,
+                  { timezone: data.config.timezone || undefined },
+                )}
+                details={`minScore=${data.config.phases.deep.minScore}, recalls≥${data.config.phases.deep.minRecallCount}, limit=${data.config.phases.deep.limit}, halfLife=${data.config.phases.deep.recencyHalfLifeDays}d`}
+                t={t}
+              />
+              <PhaseStatusCard
+                icon={<Sparkles className="size-4 text-purple-500" />}
+                label="REM"
+                enabled={data.config.phases.rem.enabled}
+                cron={data.config.phases.rem.cron}
+                scheduleSummary={formatCronExpressionLabel(
+                  data.config.phases.rem.cron,
+                  localeTag,
+                  scheduleBadgeLabels,
+                  { timezone: data.config.timezone || undefined },
+                )}
+                details={`lookback=${data.config.phases.rem.lookbackDays}d, limit=${data.config.phases.rem.limit}, strength≥${data.config.phases.rem.minPatternStrength}`}
+                t={t}
+              />
+            </div>
+          </div>
+        ) : null}
+
+        <div className={phasePanelClass}>
+          <PanelHeading label={t.subsectionLastRun} className="mb-2" />
+          <p className="mb-2 text-xs text-fg-muted">{t.lastRunBlockHint}</p>
+          {data?.lastRun?.exists ? (
+            <div className="space-y-2">
+              {data.lastRun.parseError ? (
+                <p className="text-sm text-amber-600 dark:text-amber-400" role="alert">
+                  {t.lastRunParseError}
+                  {': '}
+                  {data.lastRun.parseError}
+                </p>
+              ) : null}
+              {data.lastRun.record ? (
+                <div className="rounded-lg border border-edge-subtle/80 bg-surface-panel/50 p-2.5">
+                  <LastRunStructuredView t={t} r={data.lastRun.record} />
+                </div>
+              ) : null}
+              {data.lastRun.raw !== undefined && data.lastRun.raw !== null ? (
+                <details className="group rounded-lg border border-edge-subtle">
+                  <summary className="cursor-pointer list-none px-2.5 py-1.5 text-xs font-medium text-fg-muted marker:hidden [&::-webkit-details-marker]:hidden">
+                    <span className="underline decoration-edge underline-offset-2 group-open:text-fg">{t.lastRunRaw}</span>
+                  </summary>
+                  <pre className="max-h-40 overflow-auto border-t border-edge-subtle p-2.5 text-xs text-fg-muted">
+                    {JSON.stringify(data.lastRun.raw, null, 2)}
+                  </pre>
+                </details>
+              ) : null}
+            </div>
+          ) : (
+            <p className="text-xs text-fg-muted">{t.lastRunEmpty}</p>
+          )}
+        </div>
+
+        <PhaseLastRunBlock label={t.subsectionLightLastRun} lastRun={data?.lightLastRun} t={t} />
+        <PhaseLastRunBlock label={t.subsectionRemLastRun} lastRun={data?.remLastRun} t={t} />
+      </div>
+    </SettingsFormSection>
+  );
+}

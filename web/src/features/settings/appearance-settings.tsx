@@ -101,11 +101,11 @@ function SchemePreviewHalf({
         style={{ backgroundColor: panel, borderColor: muted }}
       >
         <div className="flex items-center gap-1">
-          <div className="h-1 w-1 shrink-0 rounded-full" style={{ backgroundColor: accent }} />
+          <div className="size-1 shrink-0 rounded-full" style={{ backgroundColor: accent }} />
           <div className="h-1 min-w-0 flex-1 rounded-full" style={{ backgroundColor: fg, opacity: 0.85 }} />
         </div>
         <div className="h-1 w-2/3 max-w-[70%] rounded-full" style={{ backgroundColor: muted }} />
-        <div className="h-1 w-1/2 max-w-[55%] rounded-full" style={{ backgroundColor: muted }} />
+        <div className="size-1/2 max-w-[55%] rounded-full" style={{ backgroundColor: muted }} />
       </div>
     </div>
   );

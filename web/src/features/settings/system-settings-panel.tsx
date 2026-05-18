@@ -222,7 +222,7 @@ export function SystemSettingsPanel() {
               return (
                 <li
                   key={key}
-                  className="flex flex-col gap-2 rounded-xl border border-edge-subtle bg-surface-panel/60 px-3 py-3 sm:flex-row sm:items-center sm:justify-between"
+                  className="flex flex-col gap-2 rounded-xl border border-edge-subtle bg-surface-panel/60 p-3 sm:flex-row sm:items-center sm:justify-between"
                 >
                   <div className="min-w-0 flex-1">
                     <div className="text-sm font-medium text-fg">{permLabel.title}</div>

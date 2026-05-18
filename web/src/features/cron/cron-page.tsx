@@ -1,55 +1,43 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 
-import { fetchChatAgents, type ChatAgentOption } from '@/features/chat/chat-agents-api';
-import type { CronDelivery, CronJob, CronJobExecution, CronPayload, CronRunHistoryRow } from '@/features/cron/cron-api';
 import {
   addJob,
-  cronJobBodyText,
-  getAllRunsHistory,
-  getChannels,
-  getConfig,
   getHistory,
   getJob,
-  getModels,
-  getSessionChatIds,
-  listJobs,
   removeJob,
   runJob,
   toggleJob,
   updateJob,
-  type ChannelStatus,
-  type SessionChatId,
+  type CronDelivery,
+  type CronJob,
+  type CronJobExecution,
+  type CronPayload,
 } from '@/features/cron/cron-api';
 import { CronConfirmActionDialog } from '@/features/cron/cron-confirm-action-dialog';
 import { CronJobDetailDrawer } from '@/features/cron/cron-job-detail-drawer';
 import { CronJobFormDialog } from '@/features/cron/cron-job-form-dialog';
 import { CronMainToolbar } from '@/features/cron/cron-main-toolbar';
-import {
-  DEFAULT_SCHEDULE,
-  RUN_HISTORY_FETCH_LIMIT,
-  pushRecentWorkspaceDirForCron,
-  startOfLocalDay,
-  startOfLocalMonth,
-  startOfLocalWeekMonday,
-} from '@/features/cron/cron-page-lib';
 import { CronPageHeaderActions } from '@/features/cron/cron-page-header-actions';
-import { isDreamingManagedCronJob } from '@/features/cron/cron-dreaming-jobs';
 import { CronRunHistorySection } from '@/features/cron/cron-run-history-section';
 import { CronSystemTasksPanel } from '@/features/cron/cron-system-tasks-panel';
 import { CronTasksPanel } from '@/features/cron/cron-tasks-panel';
-import { getCronTemplateCopy } from '@/features/cron/cron-template-i18n';
 import type { CronTemplateFilter } from '@/features/cron/cron-template-library';
 import { CronTemplatePickerDialog } from '@/features/cron/cron-template-picker-dialog';
-import { cronTemplateById } from '@/features/cron/cron-templates';
-import { fetchGatewayConfigSwrResponse } from '@/features/gateway/gateway-config-swr';
-import { normalizeHeartbeatFromConfig } from '@/features/settings/heartbeat-config-api';
+import { useCronJobForm } from '@/features/cron/use-cron-job-form';
+import { useCronKeepAwake } from '@/features/cron/use-cron-keep-awake';
+import {
+  filterRunHistory,
+  sortJobsByCreated,
+  useCronPageData,
+  type HistoryRange,
+  type JobSort,
+} from '@/features/cron/use-cron-page-data';
 import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 import { useThemeStore } from '@/stores/theme-store';
-import { isElectronCronDisplayWakeAvailable } from '@/lib/electron-env';
 
 export function CronPage() {
   const language = useLocaleStore((s) => s.language);
@@ -62,48 +50,32 @@ export function CronPage() {
   const isDark = resolvedTheme === 'dark';
   const localeTag = language === 'zh' ? 'zh-CN' : 'en-US';
 
-  const [jobs, setJobs] = useState<CronJob[]>([]);
   const [mainTab, setMainTab] = useState<'myTasks' | 'systemTasks' | 'history'>('myTasks');
-  const [jobSort, setJobSort] = useState<'created_desc' | 'created_asc'>('created_desc');
-  const [historyRange, setHistoryRange] = useState<'day' | 'week' | 'month'>('day');
+  const [jobSort, setJobSort] = useState<JobSort>('created_desc');
+  const [historyRange, setHistoryRange] = useState<HistoryRange>('day');
   const [historyJobFilter, setHistoryJobFilter] = useState('');
   const [historyStatusFilter, setHistoryStatusFilter] = useState('');
-  const [keepAwake, setKeepAwake] = useState(false);
-  const wakeLockRef = useRef<WakeLockSentinel | null>(null);
-  const wakeModeRef = useRef<'none' | 'electron' | 'navigator'>('none');
-  const keepAwakeRef = useRef(keepAwake);
-  const wakeSupported = typeof navigator !== 'undefined' && 'wakeLock' in navigator;
-  const keepAwakeFeatureAvailable = wakeSupported || isElectronCronDisplayWakeAvailable();
 
-  const [channels, setChannels] = useState<ChannelStatus[]>([]);
-  const [availableModels, setAvailableModels] = useState<{ id: string; name: string; provider: string }[]>([]);
-  const [defaultModel, setDefaultModel] = useState('');
-  const [sessionChatIds, setSessionChatIds] = useState<SessionChatId[]>([]);
-  const [chatAgents, setChatAgents] = useState<ChatAgentOption[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [gatewayConfigRaw, setGatewayConfigRaw] = useState<unknown>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [runHistory, setRunHistory] = useState<CronRunHistoryRow[]>([]);
-  const [runHistoryLoading, setRunHistoryLoading] = useState(false);
+  const data = useCronPageData({
+    hasToken,
+    failMessages: { failedToLoadJobs: c.failedToLoadJobs },
+    isHistoryTab: mainTab === 'history',
+  });
+  const { setError } = data;
 
-  const [formOpen, setFormOpen] = useState(false);
-  const [formMode, setFormMode] = useState<'add' | 'edit'>('add');
-  const [formJobId, setFormJobId] = useState<string | null>(null);
-  const [formName, setFormName] = useState('');
-  const [formSchedule, setFormSchedule] = useState(DEFAULT_SCHEDULE);
-  const [formChannel, setFormChannel] = useState('local');
-  const [formChatId, setFormChatId] = useState('');
-  const [formMessage, setFormMessage] = useState('');
-  const [formMessageMdMode, setFormMessageMdMode] = useState<'edit' | 'preview'>('edit');
-  const [messageEditorNonce, setMessageEditorNonce] = useState(0);
-  const [formSessionTarget, setFormSessionTarget] = useState<'main' | 'isolated'>('main');
-  const [formAgentId, setFormAgentId] = useState('');
-  const [formAgentLocalOnly, setFormAgentLocalOnly] = useState(false);
-  const [formWorkingDirectory, setFormWorkingDirectory] = useState('');
-  const [formWdModalOpen, setFormWdModalOpen] = useState(false);
-  const [formModel, setFormModel] = useState('');
-  const [formSubmitting, setFormSubmitting] = useState(false);
-  const formModelUserTouched = useRef(false);
+  const keepAwakeHook = useCronKeepAwake({ onUnavailable: () => setError(c.wakeLockUnavailable) });
+
+  const defaultModelForForm = useCallback(
+    () => data.defaultModel || (data.availableModels.length > 0 ? data.availableModels[0].id : ''),
+    [data.defaultModel, data.availableModels],
+  );
+
+  const form = useCronJobForm({
+    m,
+    defaultModelForForm,
+    channels: data.channels,
+    chatAgents: data.chatAgents,
+  });
 
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailJob, setDetailJob] = useState<CronJob | null>(null);
@@ -128,10 +100,6 @@ export function CronPage() {
     }, 400);
   }, []);
 
-  const defaultModelForForm = useCallback(() => {
-    return defaultModel || (availableModels.length > 0 ? availableModels[0].id : '');
-  }, [defaultModel, availableModels]);
-
   const hasElectronFolderPicker =
     typeof window !== 'undefined' && Boolean(window.electronAPI?.file?.openDirectory);
 
@@ -141,380 +109,74 @@ export function CronPage() {
     return null;
   }, []);
 
-  const applyCronWorkingDirectory = useCallback(async (path: string) => {
-    const t = path.trim();
-    if (!t) return;
-    pushRecentWorkspaceDirForCron(t);
-    setFormWorkingDirectory(t);
-  }, []);
-
-  const cronAgentSelectOptions = useMemo(() => {
-    const ids = new Set(chatAgents.map((a) => a.id));
-    const out: ChatAgentOption[] = [...chatAgents];
-    const extra = formAgentId.trim().toLowerCase();
-    if (extra && !ids.has(extra)) {
-      out.push({ id: extra });
-    }
-    return out;
-  }, [chatAgents, formAgentId]);
-
-  const needsDeliveryChat =
-    formChannel !== 'local' && (formSessionTarget === 'main' || (formSessionTarget === 'isolated' && !formAgentLocalOnly));
-
-  const showChannelPicker =
-    formSessionTarget === 'main' || (formSessionTarget === 'isolated' && !formAgentLocalOnly);
-
-  const canSubmit =
-    Boolean(formName.trim()) &&
-    Boolean(formSchedule.trim()) &&
-    Boolean(formMessage.trim()) &&
-    (!needsDeliveryChat || Boolean(formChatId.trim()));
-
-  const loadRunHistoryOnly = useCallback(async () => {
-    setRunHistoryLoading(true);
-    try {
-      const rows = await getAllRunsHistory(RUN_HISTORY_FETCH_LIMIT);
-      setRunHistory(rows);
-    } catch {
-      /* ignore */
-    } finally {
-      setRunHistoryLoading(false);
-    }
-  }, []);
-
-  const loadJobs = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const list = await listJobs();
-      setJobs(list);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : c.failedToLoadJobs);
-    } finally {
-      setLoading(false);
-    }
-  }, [c.failedToLoadJobs]);
-
-  const loadAux = useCallback(async () => {
-    try {
-      const [ch, mods, cfg, cfgFull, agentsPayload] = await Promise.all([
-        getChannels(),
-        getModels(),
-        getConfig(),
-        fetchGatewayConfigSwrResponse(),
-        fetchChatAgents().catch(() => null),
-      ]);
-      setChannels(ch);
-      setAvailableModels(mods);
-      setDefaultModel(cfg.model || '');
-      setGatewayConfigRaw(cfgFull.payload?.config ?? null);
-      if (agentsPayload) {
-        setChatAgents(agentsPayload.items);
-      }
-    } catch {
-      /* non-fatal */
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!hasToken) return;
-    void loadJobs();
-    void loadAux();
-  }, [hasToken, loadJobs, loadAux]);
-
-  useEffect(() => {
-    if (!hasToken) return;
-    const onReload = () => {
-      void fetchGatewayConfigSwrResponse().then((r) => {
-        setGatewayConfigRaw(r.payload?.config ?? null);
-      });
-    };
-    window.addEventListener('config-reload', onReload);
-    return () => window.removeEventListener('config-reload', onReload);
-  }, [hasToken]);
-
-  useEffect(() => {
-    if (!hasToken || mainTab !== 'history') return;
-    void loadRunHistoryOnly();
-  }, [hasToken, mainTab, loadRunHistoryOnly]);
-
-  const releaseWakeLock = useCallback(async () => {
-    if (wakeModeRef.current === 'electron') {
-      try {
-        await window.electronAPI?.cron?.setDisplaySleepPrevented?.(false);
-      } catch {
-        /* ignore */
-      }
-      wakeModeRef.current = 'none';
-      return;
-    }
-    try {
-      await wakeLockRef.current?.release();
-    } catch {
-      /* ignore */
-    }
-    wakeLockRef.current = null;
-    wakeModeRef.current = 'none';
-  }, []);
-
-  const acquireWakeLock = useCallback(async () => {
-    const electronWake =
-      typeof window !== 'undefined' ? window.electronAPI?.cron?.setDisplaySleepPrevented : undefined;
-    if (electronWake) {
-      try {
-        await electronWake(true);
-        wakeModeRef.current = 'electron';
-        return;
-      } catch {
-        setError(c.wakeLockUnavailable);
-        setKeepAwake(false);
-        return;
-      }
-    }
-    if (!wakeSupported) return;
-    try {
-      const sentinel = await navigator.wakeLock.request('screen');
-      wakeLockRef.current = sentinel;
-      wakeModeRef.current = 'navigator';
-      sentinel.addEventListener('release', () => {
-        wakeLockRef.current = null;
-        wakeModeRef.current = 'none';
-      });
-    } catch {
-      setError(c.wakeLockUnavailable);
-      setKeepAwake(false);
-    }
-  }, [c.wakeLockUnavailable, wakeSupported]);
-
-  keepAwakeRef.current = keepAwake;
-
-  useEffect(() => {
-    if (!keepAwake) {
-      void releaseWakeLock();
-      return;
-    }
-    void acquireWakeLock();
-    const onVis = () => {
-      if (document.visibilityState === 'visible' && keepAwakeRef.current) void acquireWakeLock();
-    };
-    document.addEventListener('visibilitychange', onVis);
-    return () => {
-      document.removeEventListener('visibilitychange', onVis);
-      void releaseWakeLock();
-    };
-  }, [keepAwake, acquireWakeLock, releaseWakeLock]);
-
-  useEffect(() => {
-    if (!formOpen || formMode !== 'add' || formModelUserTouched.current) return;
-    const next = defaultModelForForm();
-    if (next) setFormModel(next);
-  }, [formOpen, formMode, defaultModelForForm]);
-
-  useEffect(() => {
-    if (!formOpen || formMode !== 'add') return;
-    const valid = new Set(['local', ...channels.map((x) => x.name)]);
-    if (!valid.has(formChannel)) setFormChannel('local');
-  }, [channels, formChannel, formMode, formOpen]);
-
-  useEffect(() => {
-    if (formChannel === 'local') {
-      setSessionChatIds([]);
-      return;
-    }
-    let cancelled = false;
-    void getSessionChatIds(formChannel).then((ids) => {
-      if (!cancelled) setSessionChatIds(ids);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [formChannel, formOpen]);
-
-  const openForm = useCallback(
-    (job?: CronJob) => {
-      formModelUserTouched.current = false;
-      setFormOpen(true);
-      setFormMode(job ? 'edit' : 'add');
-      setFormJobId(job?.id ?? null);
-
-      if (job) {
-        setFormName(job.name || '');
-        setFormSchedule((job.schedule && String(job.schedule).trim()) || DEFAULT_SCHEDULE);
-        const bodyText = cronJobBodyText(job);
-        setFormMessage(bodyText ?? '');
-        setFormSessionTarget(job.sessionTarget || 'main');
-        setFormAgentId(
-          (job.sessionTarget || 'main') === 'isolated' && job.agentId?.trim()
-            ? job.agentId.trim().toLowerCase()
-            : '',
-        );
-        setFormWorkingDirectory(
-          (job.sessionTarget || 'main') === 'isolated' && job.workingDirectory?.trim()
-            ? job.workingDirectory.trim()
-            : '',
-        );
-        const fromPayload =
-          job.payload?.kind === 'agentTurn' && job.payload.model?.trim() ? job.payload.model.trim() : '';
-        const stored = job.model?.trim() || fromPayload;
-        setFormModel(stored || defaultModelForForm());
-        const hasLocalChannel = job.delivery?.channel === 'local';
-        const agentLocalOnly =
-          (job.sessionTarget || 'main') === 'isolated' &&
-          !hasLocalChannel &&
-          (!job.delivery?.to || job.delivery.mode === 'none');
-        setFormAgentLocalOnly(agentLocalOnly);
-
-        if (hasLocalChannel) {
-          setFormChannel('local');
-          setFormChatId('');
-        } else if (job.delivery && job.delivery.mode !== 'none' && job.delivery.to) {
-          setFormChannel(job.delivery.channel || 'telegram');
-          setFormChatId(job.delivery.to || '');
-        } else if (!agentLocalOnly) {
-          const parts = bodyText.split(':');
-          const knownChannels = ['telegram', 'cli', 'gateway', 'local'];
-          if (parts.length >= 3 && knownChannels.includes(parts[0])) {
-            setFormChannel(parts[0]);
-            setFormChatId(parts[1]);
-            setFormMessage(parts.slice(2).join(':'));
-          } else {
-            setFormChannel('telegram');
-            setFormChatId('');
-          }
-        } else {
-          setFormChannel('telegram');
-          setFormChatId('');
-        }
-      } else {
-        setFormName('');
-        setFormSchedule(DEFAULT_SCHEDULE);
-        setFormChannel('local');
-        setFormChatId('');
-        setFormMessage('');
-        setFormSessionTarget('main');
-        setFormAgentId('');
-        setFormWorkingDirectory('');
-        setFormAgentLocalOnly(false);
-        setFormModel(defaultModelForForm());
-      }
-      setFormMessageMdMode('edit');
-      setMessageEditorNonce((n) => n + 1);
-    },
-    [defaultModelForForm],
-  );
-
-  const setMessageMdMode = useCallback((mode: 'edit' | 'preview') => {
-    setFormMessageMdMode(mode);
-    if (mode === 'edit') {
-      setMessageEditorNonce((n) => n + 1);
-    }
-  }, []);
-
-  const applyCronTemplate = useCallback(
+  const onSelectTemplate = useCallback(
     (templateId: string) => {
-      const def = cronTemplateById(templateId);
-      const copy = def ? getCronTemplateCopy(m.cron, templateId) : undefined;
-      if (!def || !copy) return;
-      formModelUserTouched.current = false;
-      setFormMode('add');
-      setFormJobId(null);
-      setFormName(copy.title);
-      setFormSchedule(def.defaultSchedule);
-      setFormMessage(copy.prompt);
-      setFormSessionTarget(def.defaultSessionTarget);
-      setFormChannel('local');
-      setFormChatId('');
-      setFormAgentLocalOnly(false);
-      setFormAgentId('');
-      setFormWorkingDirectory('');
-      setFormModel(defaultModelForForm());
-      setFormMessageMdMode('edit');
-      setMessageEditorNonce((n) => n + 1);
-      setTemplatePickerOpen(false);
-      setFormOpen(true);
+      const ok = form.applyCronTemplate(templateId);
+      if (ok) setTemplatePickerOpen(false);
     },
-    [defaultModelForForm, m.cron],
+    [form],
   );
-
-  const closeForm = useCallback(() => {
-    setFormOpen(false);
-    setFormMode('add');
-    setFormJobId(null);
-    setFormName('');
-    setFormSchedule(DEFAULT_SCHEDULE);
-    setFormChannel('local');
-    setFormChatId('');
-    setFormMessage('');
-    setFormSessionTarget('main');
-    setFormAgentId('');
-    setFormWorkingDirectory('');
-    setFormWdModalOpen(false);
-    setFormAgentLocalOnly(false);
-    setFormModel('');
-    setFormMessageMdMode('edit');
-    formModelUserTouched.current = false;
-  }, []);
 
   const submitForm = async () => {
-    if (!formName.trim()) {
+    if (!form.formName.trim()) {
       setError(c.nameRequired);
       return;
     }
-    if (!formSchedule.trim() || !formMessage.trim()) {
+    if (!form.formSchedule.trim() || !form.formMessage.trim()) {
       setError(c.scheduleRequired);
       return;
     }
-    if (needsDeliveryChat && !formChatId.trim()) {
+    if (form.needsDeliveryChat && !form.formChatId.trim()) {
       setError(c.chatIdRequired);
       return;
     }
 
-    setFormSubmitting(true);
+    form.setFormSubmitting(true);
     setError(null);
     try {
-      const message = formMessage.trim();
+      const message = form.formMessage.trim();
       let delivery: CronDelivery;
-      if (formSessionTarget === 'isolated' && formAgentLocalOnly) {
+      if (form.formSessionTarget === 'isolated' && form.formAgentLocalOnly) {
         delivery = { mode: 'none' };
-      } else if (formChannel === 'local') {
+      } else if (form.formChannel === 'local') {
         delivery = { mode: 'direct', channel: 'local' };
       } else {
-        delivery = { mode: 'direct', channel: formChannel, to: formChatId.trim() };
+        delivery = { mode: 'direct', channel: form.formChannel, to: form.formChatId.trim() };
       }
 
       const payload: CronPayload =
-        formSessionTarget === 'isolated'
+        form.formSessionTarget === 'isolated'
           ? {
               kind: 'agentTurn',
               message,
-              ...(formModel.trim() ? { model: formModel.trim() } : {}),
+              ...(form.formModel.trim() ? { model: form.formModel.trim() } : {}),
             }
           : { kind: 'systemEvent', text: message };
 
-      const modelTrimmed = formModel.trim();
-      const agentIdTrim = formAgentId.trim().toLowerCase();
-      const agentIdForEdit = formSessionTarget === 'main' ? null : agentIdTrim || null;
-      const wdTrim = formWorkingDirectory.trim();
+      const modelTrimmed = form.formModel.trim();
+      const agentIdTrim = form.formAgentId.trim().toLowerCase();
+      const agentIdForEdit = form.formSessionTarget === 'main' ? null : agentIdTrim || null;
+      const wdTrim = form.formWorkingDirectory.trim();
       const jobData = {
-        name: formName.trim(),
-        schedule: formSchedule.trim(),
-        sessionTarget: formSessionTarget,
-        model: formSessionTarget === 'isolated' && modelTrimmed ? modelTrimmed : undefined,
+        name: form.formName.trim(),
+        schedule: form.formSchedule.trim(),
+        sessionTarget: form.formSessionTarget,
+        model: form.formSessionTarget === 'isolated' && modelTrimmed ? modelTrimmed : undefined,
         delivery,
         payload,
-        ...(formMode === 'edit'
+        ...(form.formMode === 'edit'
           ? {
               agentId: agentIdForEdit,
-              workingDirectory: formSessionTarget === 'isolated' ? wdTrim || null : null,
+              workingDirectory: form.formSessionTarget === 'isolated' ? wdTrim || null : null,
             }
           : {
-              ...(formSessionTarget === 'isolated' && agentIdTrim ? { agentId: agentIdTrim } : {}),
-              ...(formSessionTarget === 'isolated' && wdTrim ? { workingDirectory: wdTrim } : {}),
+              ...(form.formSessionTarget === 'isolated' && agentIdTrim ? { agentId: agentIdTrim } : {}),
+              ...(form.formSessionTarget === 'isolated' && wdTrim ? { workingDirectory: wdTrim } : {}),
             }),
       };
 
-      if (formMode === 'edit' && formJobId) {
-        await updateJob(formJobId, jobData);
+      if (form.formMode === 'edit' && form.formJobId) {
+        await updateJob(form.formJobId, jobData);
       } else {
         const { schedule: sched, agentId, workingDirectory, ...rest } = jobData;
         await addJob(sched, {
@@ -523,19 +185,19 @@ export function CronPage() {
           ...(workingDirectory ? { workingDirectory } : {}),
         });
       }
-      closeForm();
-      await loadJobs();
-      await loadAux();
+      form.closeForm();
+      await data.loadJobs();
+      await data.loadAux();
     } catch (e) {
       setError(
         e instanceof Error
           ? e.message
-          : formMode === 'edit'
+          : form.formMode === 'edit'
             ? c.failedToUpdateJob
             : c.failedToCreateJob,
       );
     } finally {
-      setFormSubmitting(false);
+      form.setFormSubmitting(false);
     }
   };
 
@@ -560,8 +222,8 @@ export function CronPage() {
   const onToggle = async (job: CronJob, enabled: boolean) => {
     try {
       await toggleJob(job.id, enabled);
-      await loadJobs();
-      await loadAux();
+      await data.loadJobs();
+      await data.loadAux();
     } catch (e) {
       setError(e instanceof Error ? e.message : c.failedToToggleJob);
     }
@@ -584,9 +246,9 @@ export function CronPage() {
           setDetailJob(null);
         }
       }
-      await loadJobs();
-      await loadAux();
-      await loadRunHistoryOnly();
+      await data.loadJobs();
+      await data.loadAux();
+      await data.loadRunHistoryOnly();
     } catch (e) {
       setError(e instanceof Error ? e.message : c.actionFailed);
     }
@@ -595,7 +257,7 @@ export function CronPage() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
-      if (formOpen) closeForm();
+      if (form.formOpen) form.closeForm();
       else if (detailOpen) {
         setDetailOpen(false);
         setDetailJob(null);
@@ -603,7 +265,7 @@ export function CronPage() {
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [formOpen, detailOpen, closeForm]);
+  }, [form, detailOpen]);
 
   const statusLabels = useMemo(
     () => ({
@@ -615,90 +277,36 @@ export function CronPage() {
     [c.execStatusCancelled, c.execStatusFailed, c.execStatusRunning, c.execStatusSuccess],
   );
 
-  const userCronJobs = useMemo(() => jobs.filter((j) => !isDreamingManagedCronJob(j)), [jobs]);
-  const systemCronJobs = useMemo(() => jobs.filter((j) => isDreamingManagedCronJob(j)), [jobs]);
+  const sortedUserJobs = useMemo(() => sortJobsByCreated(data.userCronJobs, jobSort), [data.userCronJobs, jobSort]);
+  const sortedSystemJobs = useMemo(() => sortJobsByCreated(data.systemCronJobs, jobSort), [data.systemCronJobs, jobSort]);
 
-  const sortJobsByCreated = useCallback(
-    (arr: CronJob[]) => {
-      const next = [...arr];
-      next.sort((a, b) => {
-        const ta = new Date(a.created_at).getTime();
-        const tb = new Date(b.created_at).getTime();
-        return jobSort === 'created_desc' ? tb - ta : ta - tb;
-      });
-      return next;
-    },
-    [jobSort],
+  const filteredRunHistory = useMemo(
+    () => filterRunHistory(data.runHistory, historyRange, historyJobFilter, historyStatusFilter),
+    [data.runHistory, historyRange, historyJobFilter, historyStatusFilter],
   );
-
-  const sortedUserJobs = useMemo(() => sortJobsByCreated(userCronJobs), [sortJobsByCreated, userCronJobs]);
-  const sortedSystemJobs = useMemo(() => sortJobsByCreated(systemCronJobs), [sortJobsByCreated, systemCronJobs]);
-
-  const heartbeatFromConfig = useMemo(
-    () => normalizeHeartbeatFromConfig(gatewayConfigRaw),
-    [gatewayConfigRaw],
-  );
-
-  const filteredRunHistory = useMemo(() => {
-    const now = new Date();
-    const from =
-      historyRange === 'day'
-        ? startOfLocalDay(now)
-        : historyRange === 'week'
-          ? startOfLocalWeekMonday(now)
-          : startOfLocalMonth(now);
-    return runHistory.filter((row) => {
-      if (new Date(row.startedAt) < from) return false;
-      if (historyJobFilter && row.jobId !== historyJobFilter) return false;
-      if (historyStatusFilter && row.status !== historyStatusFilter) return false;
-      return true;
-    });
-  }, [runHistory, historyRange, historyJobFilter, historyStatusFilter]);
 
   const scheduleBadgeLabels = c.scheduleBadge;
-
-  const refreshAll = useCallback(() => {
-    void loadJobs();
-    void loadAux();
-    void loadRunHistoryOnly();
-  }, [loadJobs, loadAux, loadRunHistoryOnly]);
 
   const setPageHeader = usePageHeaderStore((s) => s.setPageHeader);
   const clearPageHeader = usePageHeaderStore((s) => s.clearPageHeader);
   const { pathname } = useLocation();
   const inSettingsShell = pathname.startsWith('/settings/');
 
-  const handleFormSessionTargetChange = useCallback(
-    (target: 'main' | 'isolated', defaultModelFallback: () => string, currentModel: string) => {
-      setFormSessionTarget(target);
-      if (target === 'main') {
-        setFormAgentLocalOnly(false);
-        setFormAgentId('');
-        setFormWorkingDirectory('');
-      } else if (target === 'isolated' && !currentModel) setFormModel(defaultModelFallback());
-    },
-    [],
-  );
-
-  const refreshRecipientsList = useCallback(() => {
-    void getSessionChatIds(formChannel).then(setSessionChatIds);
-  }, [formChannel]);
-
   const cronHeaderEnd = useMemo(
     () => (
       <CronPageHeaderActions
         c={c}
-        loading={loading}
-        runHistoryLoading={runHistoryLoading}
-        onRefresh={refreshAll}
+        loading={data.loading}
+        runHistoryLoading={data.runHistoryLoading}
+        onRefresh={data.refreshAll}
         onOpenTemplatePicker={() => {
           setTemplateCategoryFilter('all');
           setTemplatePickerOpen(true);
         }}
-        onAddJob={() => openForm()}
+        onAddJob={() => form.openForm()}
       />
     ),
-    [c, loading, openForm, refreshAll, runHistoryLoading],
+    [c, data.loading, data.runHistoryLoading, data.refreshAll, form],
   );
 
   useLayoutEffect(() => {
@@ -723,12 +331,12 @@ export function CronPage() {
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-surface-panel">
       <div className="mx-auto flex w-full max-w-app-main flex-col gap-6 px-4 py-6 sm:px-8">
-        {error ? (
+        {data.error ? (
           <div
             className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200"
             role="alert"
           >
-            {error}
+            {data.error}
           </div>
         ) : null}
 
@@ -757,7 +365,7 @@ export function CronPage() {
           onHistoryJobFilterChange={setHistoryJobFilter}
           historyStatusFilter={historyStatusFilter}
           onHistoryStatusFilterChange={setHistoryStatusFilter}
-          jobs={jobs}
+          jobs={data.jobs}
         />
 
         {mainTab === 'myTasks' ? (
@@ -765,22 +373,22 @@ export function CronPage() {
             c={c}
             localeTag={localeTag}
             scheduleBadgeLabels={scheduleBadgeLabels}
-            loading={loading}
-            jobsCount={userCronJobs.length}
+            loading={data.loading}
+            jobsCount={data.userCronJobs.length}
             sortedJobs={sortedUserJobs}
             templateCategoryFilter={templateCategoryFilter}
             onTemplateCategoryFilterChange={setTemplateCategoryFilter}
-            onSelectTemplate={applyCronTemplate}
-            keepAwake={keepAwake}
-            wakeSupported={keepAwakeFeatureAvailable}
+            onSelectTemplate={onSelectTemplate}
+            keepAwake={keepAwakeHook.keepAwake}
+            wakeSupported={keepAwakeHook.featureAvailable}
             onWakeUnsupportedClick={() => setError(c.wakeLockUnavailable)}
-            onKeepAwakeToggle={() => setKeepAwake((v) => !v)}
+            onKeepAwakeToggle={() => keepAwakeHook.setKeepAwake((v) => !v)}
             absorbCardClickJobIdRef={absorbCardClickJobIdRef}
             scheduleAbsorbNextMenuCardClick={scheduleAbsorbNextMenuCardClick}
             onOpenDetail={(j) => void openDetail(j)}
             onToggle={(j, en) => void onToggle(j, en)}
-            onEdit={(j) => openForm(j)}
-            onAddJob={() => openForm()}
+            onEdit={(j) => form.openForm(j)}
+            onAddJob={() => form.openForm()}
             onRunNow={(j) => {
               setConfirmAction('run');
               setConfirmJobId(j.id);
@@ -798,18 +406,18 @@ export function CronPage() {
             language={language}
             localeTag={localeTag}
             scheduleBadgeLabels={scheduleBadgeLabels}
-            loading={loading}
+            loading={data.loading}
             sortedSystemJobs={sortedSystemJobs}
-            heartbeat={heartbeatFromConfig}
-            keepAwake={keepAwake}
-            wakeSupported={keepAwakeFeatureAvailable}
+            heartbeat={data.heartbeatFromConfig}
+            keepAwake={keepAwakeHook.keepAwake}
+            wakeSupported={keepAwakeHook.featureAvailable}
             onWakeUnsupportedClick={() => setError(c.wakeLockUnavailable)}
-            onKeepAwakeToggle={() => setKeepAwake((v) => !v)}
+            onKeepAwakeToggle={() => keepAwakeHook.setKeepAwake((v) => !v)}
             absorbCardClickJobIdRef={absorbCardClickJobIdRef}
             scheduleAbsorbNextMenuCardClick={scheduleAbsorbNextMenuCardClick}
             onOpenDetail={(j) => void openDetail(j)}
             onToggle={(j, en) => void onToggle(j, en)}
-            onEdit={(j) => openForm(j)}
+            onEdit={(j) => form.openForm(j)}
             onRunNow={(j) => {
               setConfirmAction('run');
               setConfirmJobId(j.id);
@@ -824,11 +432,11 @@ export function CronPage() {
         ) : (
           <CronRunHistorySection
             c={c}
-            runHistoryLoading={runHistoryLoading}
-            runHistory={runHistory}
+            runHistoryLoading={data.runHistoryLoading}
+            runHistory={data.runHistory}
             filteredRunHistory={filteredRunHistory}
-            jobs={jobs}
-            onRefreshHistory={() => void loadRunHistoryOnly()}
+            jobs={data.jobs}
+            onRefreshHistory={() => void data.loadRunHistoryOnly()}
             onOpenJobDetail={(j) => void openDetail(j)}
             statusLabels={statusLabels}
           />
@@ -836,59 +444,52 @@ export function CronPage() {
       </div>
 
       <CronJobFormDialog
-        open={formOpen}
-        onRequestClose={closeForm}
+        open={form.formOpen}
+        onRequestClose={form.closeForm}
         c={c}
         chatM={chatM}
         agentsMessages={m.agentsSettings}
         isDark={isDark}
-        channels={channels}
-        sessionChatIds={sessionChatIds}
-        cronAgentSelectOptions={cronAgentSelectOptions}
+        channels={data.channels}
+        sessionChatIds={form.sessionChatIds}
+        cronAgentSelectOptions={form.cronAgentSelectOptions}
         hasElectronFolderPicker={hasElectronFolderPicker}
         openNativeFolderPicker={openNativeFolderPickerCron}
-        applyWorkingDirectory={applyCronWorkingDirectory}
-        wdModalOpen={formWdModalOpen}
-        onWdModalOpenChange={setFormWdModalOpen}
+        applyWorkingDirectory={form.applyWorkingDirectory}
+        wdModalOpen={form.formWdModalOpen}
+        onWdModalOpenChange={form.setFormWdModalOpen}
         defaultModelResolver={defaultModelForForm}
-        formMode={formMode}
-        formJobId={formJobId}
-        formName={formName}
-        onFormNameChange={setFormName}
-        formSchedule={formSchedule}
-        onFormScheduleChange={setFormSchedule}
-        formSubmitting={formSubmitting}
-        formSessionTarget={formSessionTarget}
-        onFormSessionTargetChange={handleFormSessionTargetChange}
-        formAgentLocalOnly={formAgentLocalOnly}
-        onFormAgentLocalOnlyChange={setFormAgentLocalOnly}
-        formModel={formModel}
-        onFormModelUserChange={(id) => {
-          formModelUserTouched.current = true;
-          setFormModel(id);
-        }}
-        formAgentId={formAgentId}
-        onFormAgentIdChange={setFormAgentId}
-        formWorkingDirectory={formWorkingDirectory}
-        onFormWorkingDirectoryChange={setFormWorkingDirectory}
-        formChannel={formChannel}
-        onFormChannelChange={(v) => {
-          setFormChannel(v);
-          if (v === 'local') setFormAgentLocalOnly(false);
-          setFormChatId('');
-        }}
-        formChatId={formChatId}
-        onFormChatIdChange={setFormChatId}
-        formMessage={formMessage}
-        onFormMessageChange={setFormMessage}
-        formMessageMdMode={formMessageMdMode}
-        onSetMessageMdMode={setMessageMdMode}
-        messageEditorNonce={messageEditorNonce}
-        needsDeliveryChat={needsDeliveryChat}
-        showChannelPicker={showChannelPicker}
-        canSubmit={canSubmit}
+        formMode={form.formMode}
+        formJobId={form.formJobId}
+        formName={form.formName}
+        onFormNameChange={form.setFormName}
+        formSchedule={form.formSchedule}
+        onFormScheduleChange={form.setFormSchedule}
+        formSubmitting={form.formSubmitting}
+        formSessionTarget={form.formSessionTarget}
+        onFormSessionTargetChange={form.handleFormSessionTargetChange}
+        formAgentLocalOnly={form.formAgentLocalOnly}
+        onFormAgentLocalOnlyChange={form.setFormAgentLocalOnly}
+        formModel={form.formModel}
+        onFormModelUserChange={form.handleFormModelUserChange}
+        formAgentId={form.formAgentId}
+        onFormAgentIdChange={form.setFormAgentId}
+        formWorkingDirectory={form.formWorkingDirectory}
+        onFormWorkingDirectoryChange={form.setFormWorkingDirectory}
+        formChannel={form.formChannel}
+        onFormChannelChange={form.handleFormChannelChange}
+        formChatId={form.formChatId}
+        onFormChatIdChange={form.setFormChatId}
+        formMessage={form.formMessage}
+        onFormMessageChange={form.setFormMessage}
+        formMessageMdMode={form.formMessageMdMode}
+        onSetMessageMdMode={form.setMessageMdMode}
+        messageEditorNonce={form.messageEditorNonce}
+        needsDeliveryChat={form.needsDeliveryChat}
+        showChannelPicker={form.showChannelPicker}
+        canSubmit={form.canSubmit}
         onSubmit={() => void submitForm()}
-        onRefreshRecipients={refreshRecipientsList}
+        onRefreshRecipients={form.refreshRecipientsList}
       />
 
       <CronTemplatePickerDialog
@@ -902,7 +503,7 @@ export function CronPage() {
         scheduleBadgeLabels={scheduleBadgeLabels}
         categoryFilter={templateCategoryFilter}
         onCategoryFilterChange={setTemplateCategoryFilter}
-        onSelectTemplate={applyCronTemplate}
+        onSelectTemplate={onSelectTemplate}
       />
 
       <CronJobDetailDrawer

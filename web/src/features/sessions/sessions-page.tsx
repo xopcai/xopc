@@ -459,7 +459,7 @@ export function SessionsPage() {
             ].map(([value, label]) => (
               <div
                 key={label}
-                className="rounded-xl bg-surface-base px-3 py-3 dark:bg-surface-hover/30"
+                className="rounded-xl bg-surface-base p-3 dark:bg-surface-hover/30"
               >
                 <div className="text-lg font-semibold tabular-nums text-fg">{value}</div>
                 <div className="text-xs text-fg-muted">{label}</div>

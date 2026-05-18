@@ -432,7 +432,7 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="flex flex-col gap-1.5 px-4 pt-2">
           <div className="pl-3 text-xs font-normal leading-5 text-fg-subtle">{sb.tasksHeading}</div>
-          <div className="rounded-xl bg-surface-panel px-3 py-3">
+          <div className="rounded-xl bg-surface-panel p-3">
             <p className="text-xs leading-relaxed text-fg-muted">{sb.taskListNeedToken}</p>
             <Button
               type="button"
@@ -504,7 +504,7 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
           </div>
         ) : (
           <div className="px-4 pb-2">
-            <p className="rounded-xl bg-surface-panel px-3 py-3 text-xs leading-relaxed text-fg-muted">
+            <p className="rounded-xl bg-surface-panel p-3 text-xs leading-relaxed text-fg-muted">
               {sb.taskListEmpty}
             </p>
           </div>

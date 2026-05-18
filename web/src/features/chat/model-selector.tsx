@@ -153,7 +153,7 @@ export function ModelSelector({
           )}
         >
           <span className="min-w-0 truncate">{isLoading ? '…' : label}</span>
-          <ChevronsUpDown className="h-4 w-4 shrink-0 text-fg-subtle opacity-70" aria-hidden />
+          <ChevronsUpDown className="size-4 shrink-0 text-fg-subtle opacity-70" aria-hidden />
         </button>
       </Popover.Trigger>
       <Popover.Portal>
@@ -179,7 +179,7 @@ export function ModelSelector({
           />
           <div className="max-h-60 overflow-auto">
             {error ? (
-              <div className="px-2 py-2 text-xs text-red-600 dark:text-red-400">
+              <div className="p-2 text-xs text-red-600 dark:text-red-400">
                 {error instanceof Error ? error.message : 'Failed to load models'}
               </div>
             ) : null}
@@ -212,7 +212,7 @@ export function ModelSelector({
                   }}
                 >
                   <span className="flex w-full min-w-0 items-center gap-2">
-                    <Check className={cn('h-4 w-4 shrink-0', model.id !== value && 'invisible')} aria-hidden />
+                    <Check className={cn('size-4 shrink-0', model.id !== value && 'invisible')} aria-hidden />
                     <span className="min-w-0 flex-1 truncate">
                       <span className="font-medium">{model.name}</span>{' '}
                       <span className="text-fg-muted">({model.provider})</span>
@@ -232,7 +232,7 @@ export function ModelSelector({
               <button
                 type="button"
                 className={cn(
-                  'flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm font-medium text-accent',
+                  'flex w-full items-center gap-2 rounded-md p-2 text-left text-sm font-medium text-accent',
                   interaction.transition,
                   'hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
                 )}
@@ -242,7 +242,7 @@ export function ModelSelector({
                   setQuery('');
                 }}
               >
-                <Settings2 className="h-4 w-4 shrink-0 opacity-90" aria-hidden />
+                <Settings2 className="size-4 shrink-0 opacity-90" aria-hidden />
                 <span className="min-w-0">{m.modelProviderSettingsLink}</span>
               </button>
             </div>

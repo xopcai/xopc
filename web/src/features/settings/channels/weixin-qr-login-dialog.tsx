@@ -203,7 +203,7 @@ export function WeixinQrLoginDialog({
                 </p>
                 <div
                   className={cn(
-                    'relative flex h-52 w-52 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-edge-subtle bg-white p-3 dark:border-edge',
+                    'relative flex size-52 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-edge-subtle bg-white p-3 dark:border-edge',
                     qrFrameLoading && 'bg-surface-muted/40 dark:bg-surface-base',
                   )}
                 >

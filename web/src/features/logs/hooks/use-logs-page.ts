@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import {
@@ -23,41 +23,191 @@ import { messages } from '@/i18n/messages';
 import type { StoredLanguage } from '@/lib/storage';
 import { useGatewayStore } from '@/stores/gateway-store';
 
+type Stats = Awaited<ReturnType<typeof getLogStats>>;
+
+type Filters = {
+  searchInput: string;
+  debouncedSearch: string;
+  selectedLevels: Set<LogLevel>;
+  moduleFilter: string;
+  dateFrom: string;
+  dateTo: string;
+  autoRefresh: boolean;
+};
+
+type FiltersAction =
+  | { type: 'setSearchInput'; value: string }
+  | { type: 'setDebouncedSearch'; value: string }
+  | { type: 'setLevels'; value: Set<LogLevel> }
+  | { type: 'toggleLevel'; level: LogLevel }
+  | { type: 'setModule'; value: string }
+  | { type: 'setDateFrom'; value: string }
+  | { type: 'setDateTo'; value: string }
+  | { type: 'setAutoRefresh'; value: boolean }
+  | { type: 'syncFromUrl'; payload: Omit<Filters, 'debouncedSearch'> & { debouncedSearch: string } }
+  | { type: 'clearAll' };
+
+function filtersReducer(state: Filters, action: FiltersAction): Filters {
+  switch (action.type) {
+    case 'setSearchInput':
+      return state.searchInput === action.value ? state : { ...state, searchInput: action.value };
+    case 'setDebouncedSearch':
+      return state.debouncedSearch === action.value ? state : { ...state, debouncedSearch: action.value };
+    case 'setLevels':
+      return isSameLogLevelSet(state.selectedLevels, action.value) ? state : { ...state, selectedLevels: action.value };
+    case 'toggleLevel': {
+      const next = new Set(state.selectedLevels);
+      if (next.has(action.level)) next.delete(action.level);
+      else next.add(action.level);
+      return { ...state, selectedLevels: next };
+    }
+    case 'setModule':
+      return state.moduleFilter === action.value ? state : { ...state, moduleFilter: action.value };
+    case 'setDateFrom':
+      return state.dateFrom === action.value ? state : { ...state, dateFrom: action.value };
+    case 'setDateTo':
+      return state.dateTo === action.value ? state : { ...state, dateTo: action.value };
+    case 'setAutoRefresh':
+      return state.autoRefresh === action.value ? state : { ...state, autoRefresh: action.value };
+    case 'syncFromUrl': {
+      const p = action.payload;
+      const same =
+        state.searchInput === p.searchInput &&
+        state.debouncedSearch === p.debouncedSearch &&
+        isSameLogLevelSet(state.selectedLevels, p.selectedLevels) &&
+        state.moduleFilter === p.moduleFilter &&
+        state.dateFrom === p.dateFrom &&
+        state.dateTo === p.dateTo &&
+        state.autoRefresh === p.autoRefresh;
+      return same ? state : { ...state, ...p };
+    }
+    case 'clearAll':
+      return {
+        searchInput: '',
+        debouncedSearch: '',
+        selectedLevels: new Set(),
+        moduleFilter: '',
+        dateFrom: '',
+        dateTo: '',
+        autoRefresh: state.autoRefresh,
+      };
+  }
+}
+
+type Data = {
+  logs: LogEntry[];
+  loading: boolean;
+  error: string | null;
+  hasMore: boolean;
+  modules: string[];
+  files: LogFile[];
+  stats: Stats | null;
+  logDir: string | null;
+};
+
+type DataAction =
+  | { type: 'queryStart' }
+  | { type: 'querySuccess'; logs: LogEntry[]; hasMore: boolean }
+  | { type: 'queryError'; message: string; resetLogs?: boolean }
+  | { type: 'appendSuccess'; logs: LogEntry[]; hasMore: boolean }
+  | { type: 'metaSuccess'; modules: string[]; stats: Stats; files: LogFile[] }
+  | { type: 'filesSuccess'; files: LogFile[]; logDir: string | null }
+  | { type: 'filesClear' }
+  | { type: 'liveTick'; logs: LogEntry[]; hasMore: boolean; stats: Stats }
+  | { type: 'refreshAllSuccess'; logs: LogEntry[]; hasMore: boolean; stats: Stats; files: LogFile[] };
+
+const initialData: Data = {
+  logs: [],
+  loading: false,
+  error: null,
+  hasMore: false,
+  modules: [],
+  files: [],
+  stats: null,
+  logDir: null,
+};
+
+function dataReducer(state: Data, action: DataAction): Data {
+  switch (action.type) {
+    case 'queryStart':
+      return { ...state, loading: true, error: null, logs: [] };
+    case 'querySuccess':
+      return { ...state, loading: false, logs: sortLogsByTimeDesc(action.logs), hasMore: action.hasMore };
+    case 'queryError':
+      return action.resetLogs
+        ? { ...state, loading: false, error: action.message, logs: [], hasMore: false }
+        : { ...state, loading: false, error: action.message };
+    case 'appendSuccess':
+      return {
+        ...state,
+        loading: false,
+        logs: sortLogsByTimeDesc([...state.logs, ...action.logs]),
+        hasMore: action.hasMore,
+      };
+    case 'metaSuccess':
+      return { ...state, modules: action.modules, stats: action.stats, files: action.files };
+    case 'filesSuccess':
+      return { ...state, files: action.files, logDir: action.logDir };
+    case 'filesClear':
+      return { ...state, files: [] };
+    case 'liveTick':
+      return {
+        ...state,
+        logs: sortLogsByTimeDesc(action.logs),
+        hasMore: action.hasMore,
+        stats: action.stats,
+      };
+    case 'refreshAllSuccess':
+      return {
+        ...state,
+        loading: false,
+        logs: sortLogsByTimeDesc(action.logs),
+        hasMore: action.hasMore,
+        stats: action.stats,
+        files: action.files,
+      };
+  }
+}
+
 export function useLogsPage(language: StoredLanguage) {
   const L = messages(language).logs;
   const token = useGatewayStore((st) => st.token);
   const hasToken = Boolean(token);
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const initialSearch = searchParams.get('q') ?? '';
-  const initialLevels = parseLogLevelsParam(searchParams.get('level'));
-  const initialModule = searchParams.get('module') ?? '';
-  const initialFrom = searchParams.get('from') ?? '';
-  const initialTo = searchParams.get('to') ?? '';
-  const initialAutoRefresh = searchParams.get('live') === '1';
-
-  const [logs, setLogs] = useState<LogEntry[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [hasMore, setHasMore] = useState(false);
-
-  const [searchInput, setSearchInput] = useState(initialSearch);
-  const [debouncedSearch, setDebouncedSearch] = useState(initialSearch.trim());
-  const [selectedLevels, setSelectedLevels] = useState<Set<LogLevel>>(initialLevels);
-  const [moduleFilter, setModuleFilter] = useState(initialModule);
-  const [dateFrom, setDateFrom] = useState(initialFrom);
-  const [dateTo, setDateTo] = useState(initialTo);
-
-  const [modules, setModules] = useState<string[]>([]);
-  const [files, setFiles] = useState<LogFile[]>([]);
-  const [stats, setStats] = useState<Awaited<ReturnType<typeof getLogStats>> | null>(null);
+  const searchParamsInitRef = useRef(searchParams);
+  const [filters, dispatchFilters] = useReducer(filtersReducer, undefined as never, (): Filters => {
+    const sp = searchParamsInitRef.current;
+    const initialSearch = sp.get('q') ?? '';
+    return {
+      searchInput: initialSearch,
+      debouncedSearch: initialSearch.trim(),
+      selectedLevels: parseLogLevelsParam(sp.get('level')),
+      moduleFilter: sp.get('module') ?? '',
+      dateFrom: sp.get('from') ?? '',
+      dateTo: sp.get('to') ?? '',
+      autoRefresh: sp.get('live') === '1',
+    };
+  });
+  const [data, dispatchData] = useReducer(dataReducer, initialData);
 
   const [selectedLog, setSelectedLog] = useState<LogEntry | null>(null);
   const [filesOpen, setFilesOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [logDir, setLogDir] = useState<string | null>(null);
-  const [autoRefresh, setAutoRefresh] = useState(initialAutoRefresh);
   const [copiedDetail, setCopiedDetail] = useState<'json' | 'message' | null>(null);
+
+  const { searchInput, debouncedSearch, selectedLevels, moduleFilter, dateFrom, dateTo, autoRefresh } = filters;
+  const { logs, loading, error, hasMore, modules, files, stats, logDir } = data;
+
+  const setSearchInput = useCallback((value: string) => dispatchFilters({ type: 'setSearchInput', value }), []);
+  const setSelectedLevels = useCallback(
+    (value: Set<LogLevel>) => dispatchFilters({ type: 'setLevels', value }),
+    [],
+  );
+  const setModuleFilter = useCallback((value: string) => dispatchFilters({ type: 'setModule', value }), []);
+  const setDateFrom = useCallback((value: string) => dispatchFilters({ type: 'setDateFrom', value }), []);
+  const setDateTo = useCallback((value: string) => dispatchFilters({ type: 'setDateTo', value }), []);
+  const setAutoRefresh = useCallback((value: boolean) => dispatchFilters({ type: 'setAutoRefresh', value }), []);
 
   const levelSegment = useMemo(() => segmentValueFromLevels(selectedLevels), [selectedLevels]);
 
@@ -66,7 +216,7 @@ export function useLogsPage(language: StoredLanguage) {
       setFiltersOpen(true);
       return;
     }
-    setSelectedLevels(levelsForPreset(value));
+    dispatchFilters({ type: 'setLevels', value: levelsForPreset(value) });
   };
 
   const hasActiveFilters =
@@ -83,26 +233,24 @@ export function useLogsPage(language: StoredLanguage) {
     (dateFrom || dateTo ? 1 : 0);
 
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(searchInput.trim()), 300);
+    const t = setTimeout(() => dispatchFilters({ type: 'setDebouncedSearch', value: searchInput.trim() }), 300);
     return () => clearTimeout(t);
   }, [searchInput]);
 
   useEffect(() => {
     const nextQ = searchParams.get('q') ?? '';
-    const nextModule = searchParams.get('module') ?? '';
-    const nextFrom = searchParams.get('from') ?? '';
-    const nextTo = searchParams.get('to') ?? '';
-    const nextAutoRefresh = searchParams.get('live') === '1';
-    const nextLevels = parseLogLevelsParam(searchParams.get('level'));
-    const nextDebouncedQ = nextQ.trim();
-
-    setSearchInput((prev) => (prev === nextQ ? prev : nextQ));
-    setDebouncedSearch((prev) => (prev === nextDebouncedQ ? prev : nextDebouncedQ));
-    setSelectedLevels((prev) => (isSameLogLevelSet(nextLevels, prev) ? prev : nextLevels));
-    setModuleFilter((prev) => (prev === nextModule ? prev : nextModule));
-    setDateFrom((prev) => (prev === nextFrom ? prev : nextFrom));
-    setDateTo((prev) => (prev === nextTo ? prev : nextTo));
-    setAutoRefresh((prev) => (prev === nextAutoRefresh ? prev : nextAutoRefresh));
+    dispatchFilters({
+      type: 'syncFromUrl',
+      payload: {
+        searchInput: nextQ,
+        debouncedSearch: nextQ.trim(),
+        selectedLevels: parseLogLevelsParam(searchParams.get('level')),
+        moduleFilter: searchParams.get('module') ?? '',
+        dateFrom: searchParams.get('from') ?? '',
+        dateTo: searchParams.get('to') ?? '',
+        autoRefresh: searchParams.get('live') === '1',
+      },
+    });
   }, [searchParams]);
 
   useEffect(() => {
@@ -156,23 +304,20 @@ export function useLogsPage(language: StoredLanguage) {
   useEffect(() => {
     if (!hasToken) return;
     let cancelled = false;
+    dispatchData({ type: 'queryStart' });
     (async () => {
-      setLoading(true);
-      setError(null);
-      setLogs([]);
       try {
         const result = await queryLogs({ ...queryParams, offset: 0 });
         if (cancelled) return;
-        setLogs(sortLogsByTimeDesc(result.logs));
-        setHasMore(result.logs.length === PAGE_LIMIT);
+        dispatchData({ type: 'querySuccess', logs: result.logs, hasMore: result.logs.length === PAGE_LIMIT });
       } catch (e) {
         if (!cancelled) {
-          setError(e instanceof Error ? e.message : L.loadError);
-          setLogs([]);
-          setHasMore(false);
+          dispatchData({
+            type: 'queryError',
+            message: e instanceof Error ? e.message : L.loadError,
+            resetLogs: true,
+          });
         }
-      } finally {
-        if (!cancelled) setLoading(false);
       }
     })();
     return () => {
@@ -186,11 +331,7 @@ export function useLogsPage(language: StoredLanguage) {
     (async () => {
       try {
         const [mods, st, fileList] = await Promise.all([getLogModules(), getLogStats(), getLogFiles()]);
-        if (!cancelled) {
-          setModules(mods);
-          setStats(st);
-          setFiles(fileList);
-        }
+        if (!cancelled) dispatchData({ type: 'metaSuccess', modules: mods, stats: st, files: fileList });
       } catch {
         /* optional */
       }
@@ -206,12 +347,9 @@ export function useLogsPage(language: StoredLanguage) {
     (async () => {
       try {
         const [list, dir] = await Promise.all([getLogFiles(), getLogDir()]);
-        if (!cancelled) {
-          setFiles(list);
-          setLogDir(dir);
-        }
+        if (!cancelled) dispatchData({ type: 'filesSuccess', files: list, logDir: dir });
       } catch {
-        if (!cancelled) setFiles([]);
+        if (!cancelled) dispatchData({ type: 'filesClear' });
       }
     })();
     return () => {
@@ -225,10 +363,8 @@ export function useLogsPage(language: StoredLanguage) {
       void (async () => {
         try {
           const result = await queryLogs({ ...queryParams, offset: 0 });
-          setLogs(sortLogsByTimeDesc(result.logs));
-          setHasMore(result.logs.length === PAGE_LIMIT);
           const st = await getLogStats();
-          setStats(st);
+          dispatchData({ type: 'liveTick', logs: result.logs, hasMore: result.logs.length === PAGE_LIMIT, stats: st });
         } catch {
           /* ignore */
         }
@@ -243,56 +379,37 @@ export function useLogsPage(language: StoredLanguage) {
     return () => clearTimeout(t);
   }, [copiedDetail]);
 
-  const clearFilters = () => {
-    setSearchInput('');
-    setDebouncedSearch('');
-    setSelectedLevels(new Set());
-    setModuleFilter('');
-    setDateFrom('');
-    setDateTo('');
-  };
-
-  const toggleDialogLevel = (level: LogLevel) => {
-    setSelectedLevels((prev) => {
-      const next = new Set(prev);
-      if (next.has(level)) next.delete(level);
-      else next.add(level);
-      return next;
-    });
-  };
+  const clearFilters = () => dispatchFilters({ type: 'clearAll' });
+  const toggleDialogLevel = (level: LogLevel) => dispatchFilters({ type: 'toggleLevel', level });
 
   const handleLoadMore = () => {
     if (loading || !hasMore) return;
     void (async () => {
-      setLoading(true);
-      setError(null);
+      dispatchData({ type: 'queryStart' });
       try {
         const result = await queryLogs({ ...queryParams, offset: logs.length });
-        setLogs((prev) => sortLogsByTimeDesc([...prev, ...result.logs]));
-        setHasMore(result.logs.length === PAGE_LIMIT);
+        dispatchData({ type: 'appendSuccess', logs: result.logs, hasMore: result.logs.length === PAGE_LIMIT });
       } catch (e) {
-        setError(e instanceof Error ? e.message : L.loadError);
-      } finally {
-        setLoading(false);
+        dispatchData({ type: 'queryError', message: e instanceof Error ? e.message : L.loadError });
       }
     })();
   };
 
   const refreshAll = () => {
     void (async () => {
-      setLoading(true);
-      setError(null);
+      dispatchData({ type: 'queryStart' });
       try {
         const result = await queryLogs({ ...queryParams, offset: 0 });
-        setLogs(sortLogsByTimeDesc(result.logs));
-        setHasMore(result.logs.length === PAGE_LIMIT);
         const [st, fileList] = await Promise.all([getLogStats(), getLogFiles()]);
-        setStats(st);
-        setFiles(fileList);
+        dispatchData({
+          type: 'refreshAllSuccess',
+          logs: result.logs,
+          hasMore: result.logs.length === PAGE_LIMIT,
+          stats: st,
+          files: fileList,
+        });
       } catch (e) {
-        setError(e instanceof Error ? e.message : L.loadError);
-      } finally {
-        setLoading(false);
+        dispatchData({ type: 'queryError', message: e instanceof Error ? e.message : L.loadError });
       }
     })();
   };

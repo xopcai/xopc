@@ -30,7 +30,7 @@ export const SkillsPageHeaderEnd = memo(function SkillsPageHeaderEnd({
       <Button
         type="button"
         variant="ghost"
-        className="h-9 w-9 shrink-0 p-0"
+        className="size-9 shrink-0 p-0"
         disabled={loading}
         title={sk.reloadRuntime}
         aria-label={sk.reloadDiskAria}
@@ -45,8 +45,7 @@ export const SkillsPageHeaderEnd = memo(function SkillsPageHeaderEnd({
           aria-hidden
         />
         <input
-          type="text"
-          role="searchbox"
+          type="search"
           enterKeyHint="search"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
