@@ -1,6 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { ArrowLeft, Check, ExternalLink, Loader2, Plus, Search, Settings, X } from 'lucide-react';
-import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useSWRConfig } from 'swr';
 
@@ -38,12 +38,16 @@ export function AppsPage() {
   const [search, setSearch] = useState(initialQ);
   const [detail, setDetail] = useState<ExtensionApiRow | null>(null);
 
-  useEffect(() => {
+  // Sync URL → local state during render so the URL→state→URL effect chain doesn't add a render.
+  const searchParamsKey = searchParams.toString();
+  const trackedSearchParamsKeyRef = useRef(searchParamsKey);
+  if (trackedSearchParamsKeyRef.current !== searchParamsKey) {
+    trackedSearchParamsKeyRef.current = searchParamsKey;
     const nextTab = parseAppsMainTab(searchParams.get('tab'));
     const nextQ = searchParams.get('q') ?? '';
     setMainTab((prev) => (prev === nextTab ? prev : nextTab));
     setSearch((prev) => (prev === nextQ ? prev : nextQ));
-  }, [searchParams]);
+  }
 
   useEffect(() => {
     setSearchParams(
@@ -582,8 +586,8 @@ function AppsPageSkeleton() {
         <div className="mb-2 h-4 w-full max-w-md animate-pulse rounded bg-surface-hover" />
         <div className="mb-5 h-9 w-full max-w-lg animate-pulse rounded-full bg-surface-hover" />
         <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {[0, 1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="h-36 animate-pulse rounded-xl border border-edge bg-surface-base" />
+          {(['ap0', 'ap1', 'ap2', 'ap3', 'ap4', 'ap5'] as const).map((k) => (
+            <div key={k} className="h-36 animate-pulse rounded-xl border border-edge bg-surface-base" />
           ))}
         </div>
       </div>

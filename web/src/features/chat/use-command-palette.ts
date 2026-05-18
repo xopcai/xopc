@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { listSkillNamesInWire } from '@/features/chat/composer-editor-wire';
 import { fetchCommandsCached, getSkillsCached } from '@/features/chat/command-palette-api';
@@ -284,15 +284,15 @@ export function useCommandPalette(
     };
   }, [allItems, commandsAllowed, grouped, groupedCommandsExpanded, groupedSkillsExpanded, query, value]);
 
-  useEffect(() => {
+  const trackedQueryForIndexRef = useRef(query);
+  if (trackedQueryForIndexRef.current !== query) {
+    trackedQueryForIndexRef.current = query;
     setSelectedIndex(0);
-  }, [query]);
-
-  useEffect(() => {
-    if (selectedIndex >= items.length) {
-      setSelectedIndex(Math.max(0, items.length - 1));
-    }
-  }, [items.length, selectedIndex]);
+  } else if (selectedIndex >= items.length && items.length > 0) {
+    setSelectedIndex(items.length - 1);
+  } else if (selectedIndex !== 0 && items.length === 0) {
+    setSelectedIndex(0);
+  }
 
   const onNavigate = useCallback(
     (dir: 'up' | 'down') => {

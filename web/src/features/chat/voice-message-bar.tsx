@@ -50,6 +50,11 @@ export function VoiceMessageBar({
   }, [att.durationSeconds]);
 
   const [duration, setDuration] = useState(hintDuration);
+  const trackedHintRef = useRef(hintDuration);
+  if (trackedHintRef.current !== hintDuration) {
+    trackedHintRef.current = hintDuration;
+    setDuration(hintDuration);
+  }
   const [current, setCurrent] = useState(0);
 
   const syncDurationFromElement = useCallback(() => {
@@ -94,9 +99,6 @@ export function VoiceMessageBar({
     };
   }, [att, sessionKey]);
 
-  useEffect(() => {
-    setDuration(hintDuration);
-  }, [hintDuration]);
 
   const toggle = useCallback(() => {
     const el = audioRef.current;

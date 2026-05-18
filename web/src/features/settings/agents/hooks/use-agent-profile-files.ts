@@ -149,9 +149,14 @@ export function useAgentProfileFiles(options: {
     };
   }, [panel, saveProfileMarkdownDebounced]);
 
-  useEffect(() => {
+  const trackedViewModeKeyRef = useRef({ activeFile, selectedId });
+  if (
+    trackedViewModeKeyRef.current.activeFile !== activeFile ||
+    trackedViewModeKeyRef.current.selectedId !== selectedId
+  ) {
+    trackedViewModeKeyRef.current = { activeFile, selectedId };
     setFilesViewMode('edit');
-  }, [activeFile, selectedId]);
+  }
 
   return {
     files,

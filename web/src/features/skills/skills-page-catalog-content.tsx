@@ -3,7 +3,7 @@ import { MoreVertical, Trash2 } from 'lucide-react';
 
 import { SkillCardIcon } from '@/features/skills/skill-card-icon';
 import { SkillCatalogCardSkeleton, SkillEnableSwitch } from '@/features/skills/skills-page-primitives';
-import { SKILL_LIST_SKELETON_COUNT } from '@/features/skills/skills-page.constants';
+import { SKILL_LIST_SKELETON_KEYS } from '@/features/skills/skills-page.constants';
 import type { SkillsPageVm } from '@/features/skills/use-skills-page';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
@@ -55,8 +55,8 @@ export function SkillsPageCatalogContent(p: Props) {
         aria-busy="true"
         aria-label={sk.loading}
       >
-        {Array.from({ length: SKILL_LIST_SKELETON_COUNT }, (_, i) => (
-          <SkillCatalogCardSkeleton key={i} />
+        {SKILL_LIST_SKELETON_KEYS.map((k) => (
+          <SkillCatalogCardSkeleton key={k} />
         ))}
       </div>
     );
@@ -171,8 +171,10 @@ export function SkillsPageCatalogContent(p: Props) {
                         {row.name}
                       </h3>
                       <div
+                        role="group"
                         className="flex shrink-0 items-center gap-1"
                         onClick={(e) => e.stopPropagation()}
+                        onKeyDown={(e) => e.stopPropagation()}
                       >
                         <div className="inline-flex shrink-0">
                           <SkillEnableSwitch

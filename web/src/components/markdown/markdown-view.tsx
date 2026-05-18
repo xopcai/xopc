@@ -192,6 +192,7 @@ function MarkdownViewImpl({
     <div ref={hostRef}>
       <div
         className={['markdown-body', compact ? 'markdown-compact' : '', className ?? ''].filter(Boolean).join(' ')}
+        // safeHtml is sanitized via DOMPurify above; the external-link hook hardens cross-origin anchors.
         dangerouslySetInnerHTML={{ __html: safeHtml }}
       />
     </div>

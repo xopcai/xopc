@@ -243,11 +243,15 @@ export function GlobalCommandPaletteHost() {
     window.setTimeout(() => inputRef.current?.focus(), 50);
   }, [open]);
 
-  useEffect(() => {
-    setSelectedIndex((i) =>
-      Math.min(i, Math.max(0, displayedLayerRows.length > 0 ? displayedLayerRows.length - 1 : 0)),
-    );
-  }, [displayedLayerRows.length, paletteLayer, query]);
+  // Clamp selection index during render when the row count or layer/query changes
+  // so it stays valid without a follow-up effect render.
+  const clampKey = `${paletteLayer}|${query}|${String(displayedLayerRows.length)}`;
+  const trackedClampKeyRef = useRef(clampKey);
+  if (trackedClampKeyRef.current !== clampKey) {
+    trackedClampKeyRef.current = clampKey;
+    const max = Math.max(0, displayedLayerRows.length - 1);
+    if (selectedIndex > max) setSelectedIndex(max);
+  }
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {

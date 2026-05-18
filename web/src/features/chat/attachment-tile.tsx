@@ -29,17 +29,15 @@ export function AttachmentTile({
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const missingAuthHintId = useId();
-  const [hydrated, setHydrated] = useState<MessageAttachment | null>(null);
+  // Hydration is keyed by the attachment reference: when the prop changes we
+  // simply ignore stale hydrated data instead of round-tripping through a reset effect.
+  const [hydration, setHydration] = useState<{ src: MessageAttachment; data: MessageAttachment } | null>(null);
 
-  const effective = hydrated ?? attachment;
+  const effective = hydration?.src === attachment ? hydration.data : attachment;
 
   const needsGatewayBinary =
     Boolean(attachment.workspaceRelativePath) && !getAttachmentBinaryPayload(attachment);
   const showMissingAuthHint = needsGatewayBinary && !String(authToken ?? '').trim();
-
-  useEffect(() => {
-    setHydrated(null);
-  }, [attachment]);
 
   useEffect(() => {
     const base = attachment;
@@ -57,12 +55,15 @@ export function AttachmentTile({
       if (!result.ok || cancelled) return;
       const b64 = result.base64;
       const isImg = base.mimeType?.startsWith('image/') || base.type === 'image';
-      setHydrated({
-        ...base,
-        content: b64,
-        data: b64,
-        preview: isImg ? b64 : base.preview,
-        type: isImg ? 'image' : 'document',
+      setHydration({
+        src: base,
+        data: {
+          ...base,
+          content: b64,
+          data: b64,
+          preview: isImg ? b64 : base.preview,
+          type: isImg ? 'image' : 'document',
+        },
       });
     })();
 

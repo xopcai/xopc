@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { pendingAgentRunStorageKey } from '@/features/chat/message-sender';
 import { PENDING_AGENT_RUN_CHANGED_EVENT } from '@/features/chat/pending-agent-run-events';
@@ -21,10 +21,11 @@ export function useSidebarSessionAgentRun(sessionKey: string): boolean {
     (s) => s.focusedSessionKey === sessionKey && s.focusedAgentRunActive,
   );
   const [storageActive, setStorageActive] = useState(() => readPendingFromStorage(sessionKey));
-
-  useEffect(() => {
+  const trackedKeyRef = useRef(sessionKey);
+  if (trackedKeyRef.current !== sessionKey) {
+    trackedKeyRef.current = sessionKey;
     setStorageActive(readPendingFromStorage(sessionKey));
-  }, [sessionKey]);
+  }
 
   useEffect(() => {
     const onChanged = (e: Event) => {

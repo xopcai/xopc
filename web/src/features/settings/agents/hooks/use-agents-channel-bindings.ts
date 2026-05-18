@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Dispatch, FormEvent, SetStateAction } from 'react';
 
 import {
@@ -64,9 +64,11 @@ export function useAgentsChannelBindings(options: {
   const [newBindCustomPeer, setNewBindCustomPeer] = useState('');
 
   // Reset session selection when the channel changes (separate from the fetch effect).
-  useEffect(() => {
+  const trackedBindChannelRef = useRef(trimmedBindChannel);
+  if (trackedBindChannelRef.current !== trimmedBindChannel) {
+    trackedBindChannelRef.current = trimmedBindChannel;
     setNewBindSessionIdx(null);
-  }, [trimmedBindChannel]);
+  }
 
   const agentBindings = useMemo(() => {
     if (!selected) {

@@ -57,6 +57,7 @@ export function ExtensionIframeHost({
   const gatewayToken = useGatewayStore((s) => s.token);
   const resolved = useThemeStore((s) => s.resolved);
   const displayName = extensionName?.trim() || extensionId;
+  const iframeTitle = title?.trim() || `Extension ${extensionId}`;
   const permsKey = useMemo(
     () => JSON.stringify([...(permissions ?? [])].sort()),
     [permissions],
@@ -66,13 +67,13 @@ export function ExtensionIframeHost({
 
   const [allowed, setAllowed] = useState(() => hasUiGrant(extensionId, permList));
   const [dialogOpen, setDialogOpen] = useState(() => !hasUiGrant(extensionId, permList));
-
-  useEffect(() => {
-    const list = permissions ?? [];
-    const ok = hasUiGrant(extensionId, list);
+  const trackedGrantKeyRef = useRef({ id: extensionId, k: permsKey });
+  if (trackedGrantKeyRef.current.id !== extensionId || trackedGrantKeyRef.current.k !== permsKey) {
+    trackedGrantKeyRef.current = { id: extensionId, k: permsKey };
+    const ok = hasUiGrant(extensionId, permList);
     setAllowed(ok);
     setDialogOpen(!ok);
-  }, [extensionId, permsKey]);
+  }
   const [reloadKey, setReloadKey] = useState(0);
   const [loadError, setLoadError] = useState(false);
 
@@ -184,7 +185,7 @@ export function ExtensionIframeHost({
         key={`${extensionId}-${entrypoint}-${reloadKey}`}
         ref={iframeRef}
         className={className}
-        title={title ?? `Extension ${extensionId}`}
+        title={iframeTitle}
         src={src}
         style={style}
         sandbox={EXTENSION_IFRAME_SANDBOX}

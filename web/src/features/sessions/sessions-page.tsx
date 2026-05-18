@@ -9,7 +9,7 @@ import {
   Pin,
   Search,
 } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
 
@@ -104,7 +104,11 @@ export function SessionsPage() {
     return () => clearTimeout(t);
   }, [searchInput]);
 
-  useEffect(() => {
+  // Sync URL → local state during render so the URL→state→URL effect chain doesn't add a render.
+  const searchParamsKey = searchParams.toString();
+  const trackedSearchParamsKeyRef = useRef(searchParamsKey);
+  if (trackedSearchParamsKeyRef.current !== searchParamsKey) {
+    trackedSearchParamsKeyRef.current = searchParamsKey;
     const nextQ = searchParams.get('q') ?? '';
     const nextStatusRaw = searchParams.get('status');
     const nextViewRaw = searchParams.get('view');
@@ -122,7 +126,7 @@ export function SessionsPage() {
     setStatusFilter((prev) => (prev === nextStatus ? prev : nextStatus));
     setViewMode((prev) => (prev === nextView ? prev : nextView));
     setChannelFilter((prev) => (prev === nextChannel ? prev : nextChannel));
-  }, [searchParams]);
+  }
 
   useEffect(() => {
     const params = new URLSearchParams(searchParams);

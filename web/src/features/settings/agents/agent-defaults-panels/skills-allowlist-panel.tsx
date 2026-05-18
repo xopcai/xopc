@@ -159,6 +159,7 @@ export function AgentDefaultsSkillsAllowlistPanel(props: AgentDefaultsPanelProps
                             checked={on}
                             disabled={!restrictMode}
                             onChange={() => toggleId(id, !on)}
+                            aria-label={id}
                           />
                           <div className="min-w-0 flex-1 overflow-hidden">
                             <div className="truncate font-mono text-xs font-medium text-fg" title={id}>

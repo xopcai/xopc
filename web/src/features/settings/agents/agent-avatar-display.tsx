@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 
 import { cn } from '@/lib/cn';
 import { apiUrl } from '@/lib/url';
@@ -52,10 +52,11 @@ export function AgentAvatarDisplay(props: {
     [agentId, avatar, token, size],
   );
   const [src, setSrc] = useState(primarySrc);
-
-  useEffect(() => {
+  const trackedPrimaryRef = useRef(primarySrc);
+  if (trackedPrimaryRef.current !== primarySrc) {
+    trackedPrimaryRef.current = primarySrc;
     setSrc(primarySrc);
-  }, [primarySrc]);
+  }
 
   return (
     <img
