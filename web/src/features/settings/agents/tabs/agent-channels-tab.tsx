@@ -79,9 +79,9 @@ export function AgentChannelsTab(props: {
         <p className="text-sm text-fg-muted">{a.channelsNone}</p>
       ) : (
         <ul className="flex flex-col gap-2 text-sm">
-          {agentBindings.map((b, i) => (
+          {agentBindings.map((b) => (
             <li
-              key={`${b.match.channel}-${i}`}
+              key={`${b.match.channel}-${matchSummary(b.match)}`}
               className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-edge bg-surface-panel px-3 py-2"
             >
               <span className="font-mono text-xs">{matchSummary(b.match)}</span>
@@ -160,7 +160,7 @@ export function AgentChannelsTab(props: {
               >
                 <option value="">{a.channelsPeerAny}</option>
                 {bindSessionChats.map((item, idx) => (
-                  <option key={`${item.channel}-${item.chatId}-${idx}`} value={String(idx)}>
+                  <option key={`${item.channel}-${item.chatId}`} value={String(idx)}>
                     {formatRecipientOptionLabel(item, lastActiveLabels)}
                   </option>
                 ))}

@@ -27,7 +27,7 @@ export function ChatPage() {
   const m = messages(language);
   const token = useGatewayStore((s) => s.token);
   const navigate = useNavigate();
-  const location = useLocation();
+  const { pathname } = useLocation();
   const [searchParams] = useSearchParams();
   /** Dedupe applying the same `?skill=` / `?slash=` seed for a session (StrictMode-safe). */
   const routeComposerSeedMarkerRef = useRef<string | null>(null);
@@ -55,7 +55,7 @@ export function ChatPage() {
       next.delete('skill');
       next.delete('slash');
       const qs = next.toString();
-      navigate({ pathname: location.pathname, search: qs ? `?${qs}` : '' }, { replace: true });
+      navigate({ pathname, search: qs ? `?${qs}` : '' }, { replace: true });
     };
 
     /** After session + clear effect; same idea as `fillChatComposerWithNavigate` (rAF / microtask). */
@@ -116,7 +116,7 @@ export function ChatPage() {
     session.sessionRoutePending,
     session.sessionKey,
     navigate,
-    location.pathname,
+    pathname,
   ]);
 
   useEffect(() => {

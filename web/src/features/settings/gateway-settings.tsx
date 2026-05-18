@@ -374,7 +374,7 @@ function MobileGatewayPairCard({
             <img
               src={qrDataUrl}
               alt=""
-              className="h-56 w-56 rounded-lg border border-edge-subtle bg-white object-contain p-3 dark:border-edge"
+              className="size-56 rounded-lg border border-edge-subtle bg-white object-contain p-3 dark:border-edge"
             />
           ) : null}
           {!qrDataUrl && !qrGenFailed ? <p className="text-sm text-fg-muted">{g.mobilePairEncoding}</p> : null}

@@ -523,19 +523,19 @@ export const ChatComposer = memo(function ChatComposer({
         >
           {att.attachments.map((a, index) => (
             <div
-              key={`${a.name}-${index}`}
+              key={a.id ?? `${a.name}-${a.size}-${a.mimeType}-${a.content?.slice(0, 16) ?? ''}`}
               className="flex max-w-[200px] items-center gap-1.5 rounded-lg bg-surface-hover px-2 py-1 text-xs dark:bg-surface-hover/80"
             >
               {a.mimeType?.startsWith('image/') && a.content ? (
                 <img
                   src={`data:${a.mimeType};base64,${a.content}`}
                   alt=""
-                  className="h-6 w-6 rounded object-cover"
+                  className="size-6 rounded object-cover"
                 />
               ) : a.type === 'voice' || a.mimeType?.startsWith('audio/') ? (
-                <Mic className="h-3.5 w-3.5 shrink-0 text-accent-fg" aria-hidden />
+                <Mic className="size-3.5 shrink-0 text-accent-fg" aria-hidden />
               ) : (
-                <FileIcon className="h-3.5 w-3.5 shrink-0 text-fg-muted" />
+                <FileIcon className="size-3.5 shrink-0 text-fg-muted" />
               )}
               <span className="min-w-0 flex-1 truncate">{a.name}</span>
               <span className="text-fg-disabled">{formatFileSize(a.size)}</span>

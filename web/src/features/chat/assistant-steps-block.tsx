@@ -284,9 +284,9 @@ export function buildStepsRoundCompleteSummary(
 
 const AssistantStepsHeaderStatusIcon = memo(function AssistantStepsHeaderStatusIcon({ active }: { active: boolean }) {
   if (active) {
-    return <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin text-accent-fg" aria-hidden />;
+    return <Loader2 className="mt-0.5 size-4 shrink-0 animate-spin text-accent-fg" aria-hidden />;
   }
-  return <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />;
+  return <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />;
 });
 
 /**
@@ -478,7 +478,7 @@ export function AssistantStepsBlock({
         </div>
         <span className="flex items-start justify-end">{headerDurationRight}</span>
         <ChevronDown
-          className={cn('mt-0.5 h-4 w-4 shrink-0 text-fg-muted transition-transform', expanded && 'rotate-180')}
+          className={cn('mt-0.5 size-4 shrink-0 text-fg-muted transition-transform', expanded && 'rotate-180')}
           aria-hidden
         />
       </button>
@@ -787,9 +787,9 @@ function StepRow({
       <div className="flex min-w-0 gap-2.5">
         <div className="mt-0.5 shrink-0">
           {streaming ? (
-            <Loader2 className="h-4 w-4 animate-spin text-fg-muted" aria-hidden />
+            <Loader2 className="size-4 animate-spin text-fg-muted" aria-hidden />
           ) : (
-            <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" aria-hidden />
+            <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400" aria-hidden />
           )}
         </div>
         <div className="min-w-0 flex-1 space-y-1">
@@ -840,11 +840,11 @@ function StepRow({
     <div className="flex min-w-0 gap-2.5">
       <div className="mt-0.5 shrink-0">
         {isStreaming ? (
-          <Loader2 className="h-4 w-4 animate-spin text-fg-muted" aria-hidden />
+          <Loader2 className="size-4 animate-spin text-fg-muted" aria-hidden />
         ) : isError ? (
-          <XCircle className="h-4 w-4 text-red-600 dark:text-red-400" aria-hidden />
+          <XCircle className="size-4 text-red-600 dark:text-red-400" aria-hidden />
         ) : (
-          <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" aria-hidden />
+          <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400" aria-hidden />
         )}
       </div>
       <div className="min-w-0 flex-1 space-y-1.5">

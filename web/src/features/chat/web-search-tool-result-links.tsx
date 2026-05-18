@@ -93,7 +93,7 @@ export function WebSearchToolResultLinks({ links }: { links: WebSearchResultLink
           )}
           title={url}
         >
-          <ExternalLink className="h-3.5 w-3.5 shrink-0 opacity-70" strokeWidth={1.75} aria-hidden />
+          <ExternalLink className="size-3.5 shrink-0 opacity-70" strokeWidth={1.75} aria-hidden />
           <span className="min-w-0 truncate">{title}</span>
         </a>
       ))}

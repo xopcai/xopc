@@ -16,7 +16,7 @@ function secondaryNavClass({ isActive }: { isActive: boolean }, collapsed: boole
     'flex w-full items-center text-sm font-medium leading-6 transition-colors duration-200 ease-out',
     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
     collapsed
-      ? 'justify-center rounded-xl px-2 py-2.5'
+      ? 'justify-center rounded-xl p-2.5'
       : 'gap-2 rounded-lg px-3 py-2 text-left',
     isActive
       ? 'bg-accent-soft text-accent-fg'

@@ -35,7 +35,7 @@ export function SidebarFooter({
       className={cn(
         'flex shrink-0 flex-col',
         collapsed && 'mt-auto',
-        collapsed ? 'items-center px-1 py-2' : 'px-3 py-3',
+        collapsed ? 'items-center px-1 py-2' : 'p-3',
       )}
     >
       <Popover.Root open={open} onOpenChange={setOpen}>
@@ -63,7 +63,7 @@ export function SidebarFooter({
             <button
               type="button"
               className={cn(
-                'flex w-full min-w-0 items-center gap-2 rounded-xl px-1 py-1 text-left outline-none transition-colors duration-150 ease-out',
+                'flex w-full min-w-0 items-center gap-2 rounded-xl p-1 text-left outline-none transition-colors duration-150 ease-out',
                 'hover:bg-surface-active/70',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
                 open && 'bg-surface-active/70',

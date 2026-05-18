@@ -154,7 +154,7 @@ export function AttachmentPreviewDialog({
                       aria-label={active ? labels.attachmentPreviewExitFullscreen : labels.attachmentPreviewFullscreen}
                       onClick={() => void (active ? exit() : enter())}
                     >
-                      {active ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+                      {active ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
                     </button>
                   ) : null}
                   <button
@@ -164,7 +164,7 @@ export function AttachmentPreviewDialog({
                     aria-label={labels.attachmentPreviewDownload}
                     onClick={handleDownload}
                   >
-                    <Download className="h-4 w-4" />
+                    <Download className="size-4" />
                   </button>
                   <Dialog.Close asChild>
                     <button
@@ -173,7 +173,7 @@ export function AttachmentPreviewDialog({
                       title={labels.attachmentPreviewClose}
                       aria-label={labels.attachmentPreviewClose}
                     >
-                      <X className="h-4 w-4" />
+                      <X className="size-4" />
                     </button>
                   </Dialog.Close>
                 </div>

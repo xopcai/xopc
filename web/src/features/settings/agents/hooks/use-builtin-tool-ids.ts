@@ -1,37 +1,15 @@
-import { useEffect, useState } from 'react';
-
 import { fetchGatewayAgents } from '@/features/settings/agents-admin-api';
+import { useAsyncResource } from '@/lib/use-async-resource';
 
 export function useBuiltinToolIdsLoad(enabled: boolean, hasToken: boolean) {
-  const [builtinToolIds, setBuiltinToolIds] = useState<string[]>([]);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    if (!enabled || !hasToken) {
-      return;
-    }
-    let cancelled = false;
-    setLoading(true);
-    void fetchGatewayAgents()
-      .then((p) => {
-        if (!cancelled) {
-          setBuiltinToolIds(Array.isArray(p.builtinToolIds) ? p.builtinToolIds : []);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setBuiltinToolIds([]);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [enabled, hasToken]);
+  const { data: builtinToolIds, loading } = useAsyncResource(
+    async () => {
+      const p = await fetchGatewayAgents();
+      return Array.isArray(p.builtinToolIds) ? p.builtinToolIds : [];
+    },
+    [enabled, hasToken],
+    { enabled: enabled && hasToken, initial: [] as string[], errorData: [] },
+  );
 
   return { builtinToolIds, loading };
 }

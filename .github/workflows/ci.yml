@@ -48,6 +48,40 @@ jobs:
       - name: CLI bootstrap import guard
         run: pnpm run test:startup:imports
 
+  react-doctor:
+    name: React Doctor (web)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          # Need history so `--diff` can compare against the base branch on PRs.
+          fetch-depth: 0
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v5
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # PR: scan only changed files vs base branch — fast feedback, blocks regressions.
+      # Push to main: full scan — surface drift in the dashboard.
+      - name: Run react-doctor (PR diff)
+        if: github.event_name == 'pull_request'
+        run: npx react-doctor@latest --project @xopc/web --yes --offline --fail-on=error --annotations --diff origin/${{ github.base_ref }}
+
+      - name: Run react-doctor (full scan)
+        if: github.event_name != 'pull_request'
+        run: npx react-doctor@latest --project @xopc/web --yes --offline --fail-on=error --annotations
+
   test:
     name: Test
     runs-on: ubuntu-latest

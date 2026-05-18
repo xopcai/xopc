@@ -41,7 +41,7 @@ export function LogsStatsPopover({ L, stats }: Props) {
           >
             <p className="text-xs font-medium text-fg">{L.statsDetailTitle}</p>
             <p className="mt-1 text-xs leading-5 text-fg-muted">{L.statsHint}</p>
-            <ul className="mt-3 flex flex-col gap-1.5" role="list">
+            <ul className="mt-3 flex flex-col gap-1.5">
               {LOG_LEVELS.map((lv) => {
                 const n = stats.byLevel?.[lv] ?? 0;
                 if (n === 0) return null;

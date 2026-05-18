@@ -47,7 +47,7 @@ export function LogsFiltersDialog({
           <div className="flex shrink-0 items-center justify-between gap-2 border-b border-edge px-4 py-3 dark:border-edge">
             <Dialog.Title className="text-base font-semibold tracking-tight text-fg">{L.filtersDialogTitle}</Dialog.Title>
             <Dialog.Close asChild>
-              <Button type="button" variant="ghost" className="h-9 w-9 shrink-0 p-0" aria-label={L.close}>
+              <Button type="button" variant="ghost" className="size-9 shrink-0 p-0" aria-label={L.close}>
                 <X className="size-5" strokeWidth={1.75} />
               </Button>
             </Dialog.Close>
@@ -55,7 +55,7 @@ export function LogsFiltersDialog({
           <div id="log-filters-desc" className="sr-only">
             {L.filtersDialogDesc}
           </div>
-          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+          <div className="min-h-0 flex-1 overflow-y-auto p-4">
             <p className="text-xs font-medium text-fg-muted">{L.timeRange}</p>
             <div className="mt-2 flex flex-col gap-3">
               <div>
@@ -67,7 +67,7 @@ export function LogsFiltersDialog({
                   type="datetime-local"
                   value={dateFrom}
                   onChange={(e) => onDateFromChange(e.target.value)}
-                  className="w-full rounded-xl border border-edge bg-surface-base px-2 py-2 text-sm text-fg dark:border-edge"
+                  className="w-full rounded-xl border border-edge bg-surface-base p-2 text-sm text-fg dark:border-edge"
                 />
               </div>
               <div>
@@ -79,7 +79,7 @@ export function LogsFiltersDialog({
                   type="datetime-local"
                   value={dateTo}
                   onChange={(e) => onDateToChange(e.target.value)}
-                  className="w-full rounded-xl border border-edge bg-surface-base px-2 py-2 text-sm text-fg dark:border-edge"
+                  className="w-full rounded-xl border border-edge bg-surface-base p-2 text-sm text-fg dark:border-edge"
                 />
               </div>
             </div>

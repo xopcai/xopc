@@ -41,12 +41,12 @@ export function CronTemplatePickerDialog({
             <div className="flex shrink-0 items-center justify-end border-b border-edge px-4 py-3">
               <Dialog.Title className="sr-only">{c.fromTemplate}</Dialog.Title>
               <Dialog.Close asChild>
-                <Button type="button" variant="ghost" className="h-9 w-9 shrink-0 p-0" aria-label={c.close}>
+                <Button type="button" variant="ghost" className="size-9 shrink-0 p-0" aria-label={c.close}>
                   <X className="size-5" strokeWidth={1.75} />
                 </Button>
               </Dialog.Close>
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+            <div className="min-h-0 flex-1 overflow-y-auto p-4">
               <CronTemplateLibrary
                 cron={c}
                 localeTag={localeTag}

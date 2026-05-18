@@ -83,11 +83,11 @@ export const ChatWelcomeSpotlight = memo(function ChatWelcomeSpotlight({
           id={panelId}
           role="region"
           aria-label={selectedCategory.title}
-          className="flex flex-col gap-1.5 rounded-xl border border-edge bg-surface-base/80 px-2.5 py-2.5 dark:bg-surface-hover/20"
+          className="flex flex-col gap-1.5 rounded-xl border border-edge bg-surface-base/80 p-2.5 dark:bg-surface-hover/20"
         >
           <ul className="flex flex-col gap-1">
-            {selectedCategory.scenarios.map((ex, i) => (
-              <li key={i}>
+            {selectedCategory.scenarios.map((ex) => (
+              <li key={ex.prompt}>
                 <button
                   type="button"
                   onClick={() => onPickPrompt(ex.prompt)}

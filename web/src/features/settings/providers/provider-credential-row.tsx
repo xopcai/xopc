@@ -291,7 +291,7 @@ export function ProviderCredentialRow({
 
   return (
     <div className="bg-surface-panel">
-      <div className="flex items-center gap-3 px-3 py-3 sm:px-4">
+      <div className="flex items-center gap-3 p-3 sm:px-4">
         <div
           className="flex size-8 shrink-0 items-center justify-center rounded-md bg-surface-hover/80 dark:bg-surface-hover/50"
           aria-hidden
@@ -318,7 +318,7 @@ export function ProviderCredentialRow({
         <Button
           type="button"
           variant="ghost"
-          className="h-9 w-9 shrink-0 p-0"
+          className="size-9 shrink-0 p-0"
           aria-expanded={expanded}
           aria-controls={detailsId}
           aria-label={labels.expandRowDetails}
@@ -332,7 +332,7 @@ export function ProviderCredentialRow({
         <div
           id={detailsId}
           role="region"
-          className="space-y-3 border-t border-edge-subtle bg-surface-base/40 px-3 py-3 dark:bg-surface-base/20 sm:px-4"
+          className="space-y-3 border-t border-edge-subtle bg-surface-base/40 p-3 dark:bg-surface-base/20 sm:px-4"
         >
           {row.supportsApiKey !== false ? (
             <div className="flex flex-col gap-2">

@@ -36,7 +36,7 @@ export function LogsFilesDialog({ L, open, onOpenChange, files, logDir }: Props)
               {L.logFiles}
             </Dialog.Title>
             <Dialog.Close asChild>
-              <Button type="button" variant="ghost" className="h-9 w-9 shrink-0 p-0" aria-label={L.close}>
+              <Button type="button" variant="ghost" className="size-9 shrink-0 p-0" aria-label={L.close}>
                 <X className="size-5" strokeWidth={1.75} />
               </Button>
             </Dialog.Close>
@@ -45,7 +45,7 @@ export function LogsFilesDialog({ L, open, onOpenChange, files, logDir }: Props)
             {files.length === 0 ? (
               <p className="text-sm text-fg-muted">{L.filesEmpty}</p>
             ) : (
-              <ul className="flex flex-col gap-2" role="list">
+              <ul className="flex flex-col gap-2">
                 {files.map((f) => (
                   <li
                     key={f.name}

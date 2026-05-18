@@ -26,7 +26,7 @@ export function LogsDetailDrawer({ L, log, onClose, copiedDetail, onCopiedMessag
         />
         <Dialog.Content
           className={cn(
-            'xopc-drawer-right fixed right-0 top-0 flex h-full w-full max-w-lg flex-col border-l border-edge bg-surface-panel shadow-popover outline-none',
+            'xopc-drawer-right fixed right-0 top-0 flex size-full max-w-lg flex-col border-l border-edge bg-surface-panel shadow-popover outline-none',
             SETTINGS_SHELL_CONTENT_Z,
             'dark:border-edge',
           )}
@@ -63,13 +63,13 @@ export function LogsDetailDrawer({ L, log, onClose, copiedDetail, onCopiedMessag
                 </>
               ) : null}
               <Dialog.Close asChild>
-                <Button type="button" variant="ghost" className="h-9 w-9 shrink-0 p-0" aria-label={L.close}>
+                <Button type="button" variant="ghost" className="size-9 shrink-0 p-0" aria-label={L.close}>
                   <X className="size-5" strokeWidth={1.75} />
                 </Button>
               </Dialog.Close>
             </div>
           </div>
-          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 font-mono text-sm leading-relaxed">
+          <div className="min-h-0 flex-1 overflow-y-auto p-4 font-mono text-sm leading-relaxed">
             {log ? (
               <LogDetailBody
                 log={log}

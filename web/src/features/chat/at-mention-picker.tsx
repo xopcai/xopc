@@ -42,16 +42,16 @@ function NameWithHighlights({ name, query }: { name: string; query: string }) {
   }
   const parts: ReactNode[] = [];
   let last = 0;
-  ranges.forEach(([a, b], idx) => {
+  ranges.forEach(([a, b]) => {
     if (a > last) {
       parts.push(
-        <span key={`t-${idx}-pre`} className="font-medium text-fg">
+        <span key={`pre-${a}`} className="font-medium text-fg">
           {name.slice(last, a)}
         </span>,
       );
     }
     parts.push(
-      <span key={`h-${idx}`} className="font-semibold text-accent-fg">
+      <span key={`hl-${a}-${b}`} className="font-semibold text-accent-fg">
         {name.slice(a, b)}
       </span>,
     );
@@ -206,7 +206,7 @@ export const AtMentionPicker = memo(function AtMentionPicker({
           <>
             {items.map((item, i) => (
               <div
-                key={`${item.relativePath}-${item.name}-${i}`}
+                key={`${item.relativePath}-${item.name}`}
                 id={`at-mention-${i}`}
                 role="option"
                 aria-selected={selectedIndex === i}

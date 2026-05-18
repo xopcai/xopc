@@ -49,7 +49,7 @@ function InlineWorkspaceImageThumb({
       type="button"
       onClick={onOpen}
       className={cn(
-        'group relative h-20 w-20 overflow-hidden rounded-lg border border-edge-subtle text-left',
+        'group relative size-20 overflow-hidden rounded-lg border border-edge-subtle text-left',
         interaction.press,
         interaction.focusRingPanel,
         'hover:border-accent',
@@ -58,9 +58,9 @@ function InlineWorkspaceImageThumb({
       title={workspaceRel}
       aria-label={workspaceRel}
     >
-      <img src={url} className="h-full w-full object-cover" alt="" />
+      <img src={url} className="size-full object-cover" alt="" />
       <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors group-hover:bg-black/25">
-        <Eye className="h-4 w-4 text-white opacity-0 transition-opacity group-hover:opacity-100" strokeWidth={1.75} />
+        <Eye className="size-4 text-white opacity-0 transition-opacity group-hover:opacity-100" strokeWidth={1.75} />
       </div>
     </button>
   );
@@ -159,9 +159,9 @@ export function ToolResultFileLinks({
               )}
               title={p.absolutePath}
             >
-              <File className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
+              <File className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
               <span className="min-w-0 truncate">{p.fileName}</span>
-              <Eye className="h-3 w-3 shrink-0 opacity-60" strokeWidth={1.75} aria-hidden />
+              <Eye className="size-3 shrink-0 opacity-60" strokeWidth={1.75} aria-hidden />
             </button>
           ))}
         </div>

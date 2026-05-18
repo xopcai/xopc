@@ -70,7 +70,7 @@ export function SessionDetailDrawer({
         />
         <Dialog.Content
           className={cn(
-            'xopc-drawer-right fixed right-0 top-0 flex h-full w-full max-w-lg flex-col border-l border-edge bg-surface-panel shadow-popover outline-none',
+            'xopc-drawer-right fixed right-0 top-0 flex size-full max-w-lg flex-col border-l border-edge bg-surface-panel shadow-popover outline-none',
             SETTINGS_SHELL_CONTENT_Z,
             'dark:border-edge',
           )}
@@ -91,7 +91,7 @@ export function SessionDetailDrawer({
               </Dialog.Title>
             </div>
             <Dialog.Close asChild>
-              <Button type="button" variant="ghost" className="h-9 w-9 shrink-0 p-0" aria-label={labels.close}>
+              <Button type="button" variant="ghost" className="size-9 shrink-0 p-0" aria-label={labels.close}>
                 <X className="size-5" strokeWidth={1.75} />
               </Button>
             </Dialog.Close>
@@ -117,9 +117,9 @@ export function SessionDetailDrawer({
                   {labels.detailMessages}
                 </h3>
                 <ul className="space-y-3">
-                  {session.messages.map((msg, i) => (
+                  {session.messages.map((msg) => (
                     <li
-                      key={`${msg.timestamp ?? i}-${i}`}
+                      key={`${msg.timestamp ?? ''}-${msg.role}-${previewContent(msg.content).slice(0, 24)}`}
                       className="rounded-lg border border-edge-subtle bg-surface-hover/50 p-2 dark:border-edge"
                     >
                       <div className="mb-1 text-[10px] font-medium uppercase text-fg-subtle">{msg.role}</div>
