@@ -315,6 +315,7 @@ export function ImageModelsSettingsPanel() {
                     : null,
                 )
               }
+              aria-label={t.autoFallbackLabel}
             />
             <span className="flex flex-col gap-0.5">
               <span className="font-medium text-fg">{t.autoFallbackLabel}</span>

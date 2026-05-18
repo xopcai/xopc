@@ -270,6 +270,7 @@ export function CronJobFormDialog(props: CronJobFormDialogProps) {
                           className={cn('ui-checkbox', 'mt-0.5')}
                           checked={formAgentLocalOnly}
                           onChange={(e) => onFormAgentLocalOnlyChange(e.target.checked)}
+                          aria-label={c.agentLocalOnly}
                         />
                         <span>
                           <span className="text-sm font-medium text-fg">{c.agentLocalOnly}</span>

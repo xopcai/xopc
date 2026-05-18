@@ -216,6 +216,7 @@ export function ExtensionMarketplacePanel({ className }: { className?: string })
                       </p>
                     </div>
                     <div
+                      role="group"
                       className="flex shrink-0 flex-col items-end gap-2 sm:min-w-[9rem]"
                       onClick={(ev) => ev.stopPropagation()}
                       onKeyDown={(ev) => ev.stopPropagation()}

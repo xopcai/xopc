@@ -64,7 +64,7 @@ export function GoalRunsHistory({ sessionKey, goal, language, t }: Props) {
                   className="rounded-md border border-edge/80 bg-surface-muted/40 px-2 py-1.5 dark:bg-surface-muted/25"
                 >
                   <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5 text-[10px] text-fg-muted">
-                    <time dateTime={new Date(r.at).toISOString()}>
+                    <time suppressHydrationWarning dateTime={new Date(r.at).toISOString()}>
                       {new Intl.DateTimeFormat(language === 'zh' ? 'zh-CN' : 'en-US', {
                         month: 'short',
                         day: 'numeric',

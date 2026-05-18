@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Globe, Plug, PlugZap, Unplug } from 'lucide-react';
 
 import { apiFetch } from '@/lib/fetch';
@@ -24,10 +24,11 @@ function useExtensionStatus(
   port: number | undefined,
 ): ExtensionStatus {
   const [status, setStatus] = useState<ExtensionStatus>(enabled ? 'unknown' : 'off');
-
-  useEffect(() => {
+  const trackedEnabledRef = useRef(enabled);
+  if (trackedEnabledRef.current !== enabled) {
+    trackedEnabledRef.current = enabled;
     setStatus(enabled ? 'unknown' : 'off');
-  }, [enabled]);
+  }
 
   const checkStatus = useCallback(async () => {
     if (!enabled) {

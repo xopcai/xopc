@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { SkipForward, Sparkles } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -33,12 +33,6 @@ export function PresetAgentsSetup({ existingAgentIds, onComplete, onSkip }: Pres
   const [creating, setCreating] = useState(false);
   const [progress, setProgress] = useState<{ current: number; total: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (availablePresets.length === 0) {
-      onComplete();
-    }
-  }, [availablePresets, onComplete]);
 
   const toggleAgent = (id: string) => {
     setSelected((prev) => {
@@ -198,6 +192,7 @@ function PresetAgentCard(props: {
         disabled={disabled}
         onChange={onToggle}
         className="mt-1 shrink-0 accent-accent"
+        aria-label={preset.name}
       />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">

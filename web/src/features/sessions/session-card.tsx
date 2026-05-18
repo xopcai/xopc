@@ -158,6 +158,7 @@ export function SessionCard({
       </div>
 
       <div
+        role="group"
         className="flex flex-wrap items-center gap-0.5 border-t border-edge-subtle/80 bg-surface-hover/25 p-2 dark:border-edge-subtle"
         onClick={(e) => e.stopPropagation()}
         onKeyDown={(e) => e.stopPropagation()}

@@ -75,6 +75,7 @@ export function WorkspaceFilePreviewPanel({
           </h2>
           {!state.loading && state.mtimeMs != null ? (
             <p
+              suppressHydrationWarning
               className="mt-0.5 truncate text-xs leading-tight text-fg-muted"
               title={new Date(state.mtimeMs).toISOString()}
             >

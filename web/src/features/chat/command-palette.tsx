@@ -44,19 +44,21 @@ function highlightFuzzyName(name: string, q: string): ReactNode {
   // Subsequence: greedily mark chars that match query in order.
   const out: ReactNode[] = [];
   let qi = 0;
-  for (let i = 0; i < name.length; i += 1) {
-    const ch = name.charAt(i);
+  let pos = 0;
+  for (const ch of name) {
     const nq = needle[qi];
+    const charKey = `${String(pos)}-${ch}`;
     if (nq !== undefined && ch.toLowerCase() === nq) {
       out.push(
-        <span key={i} className="text-accent-fg">
+        <span key={charKey} className="text-accent-fg">
           {ch}
         </span>,
       );
       qi += 1;
     } else {
-      out.push(<Fragment key={i}>{ch}</Fragment>);
+      out.push(<Fragment key={charKey}>{ch}</Fragment>);
     }
+    pos += 1;
   }
   return <>{out}</>;
 }

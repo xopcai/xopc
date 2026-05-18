@@ -86,10 +86,12 @@ export function useWorkspaceFilePreviewState({
   const [pptxTruncated, setPptxTruncated] = useState(false);
   const [pptxError, setPptxError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const trackedFilePathForModeRef = useRef(filePath);
+  if (trackedFilePathForModeRef.current !== filePath) {
+    trackedFilePathForModeRef.current = filePath;
     setMarkdownEditMode(false);
     setHtmlCodeMode(false);
-  }, [filePath]);
+  }
 
   useEffect(() => {
     setPptxText(null);

@@ -93,7 +93,10 @@ export function AgentProfileTab({ a, agentId, saveRef, onDirtyChange }: ProfileT
     };
   }, [saveRef, saveFile, onDirtyChange]);
 
-  // Notify parent when dirty state changes
+  // Notify parent when dirty state changes.
+  // Lifting `user` state into the parent would be a much larger refactor (the dirty
+  // check needs the snapshot ref and the form is co-located here), so this effect
+  // remains the bridge for the dirty signal until that refactor lands.
   useEffect(() => {
     if (!onDirtyChange) return;
     onDirtyChange(JSON.stringify(user) !== userSnapshotRef.current);

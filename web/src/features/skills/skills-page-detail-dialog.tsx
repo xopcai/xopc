@@ -9,6 +9,19 @@ import type { SkillsPageVm } from '@/features/skills/use-skills-page';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 
+const SKELETON_LINE_WIDTHS = [
+  { id: 's0', width: 'w-[92%]' },
+  { id: 's1', width: 'w-full' },
+  { id: 's2', width: 'w-4/5' },
+  { id: 's3', width: 'w-[92%]' },
+  { id: 's4', width: 'w-full' },
+  { id: 's5', width: 'w-4/5' },
+  { id: 's6', width: 'w-[92%]' },
+  { id: 's7', width: 'w-full' },
+  { id: 's8', width: 'w-4/5' },
+  { id: 's9', width: 'w-[92%]' },
+] as const;
+
 type Props = Pick<
   SkillsPageVm,
   | 'sk'
@@ -119,12 +132,12 @@ export function SkillsPageDetailDialog(p: Props) {
           <div className="min-h-0 min-w-0 flex-1 overflow-auto p-4">
             {detailLoading ? (
               <div className="flex h-full min-h-[14rem] flex-col gap-2.5 py-1" aria-busy="true" aria-label={sk.loading}>
-                {Array.from({ length: 10 }, (_, i) => (
+                {SKELETON_LINE_WIDTHS.map((entry) => (
                   <div
-                    key={i}
+                    key={entry.id}
                     className={cn(
                       'h-4 animate-pulse rounded-md bg-surface-hover dark:bg-surface-active/50',
-                      i % 3 === 0 ? 'w-[92%]' : i % 3 === 1 ? 'w-full' : 'w-4/5',
+                      entry.width,
                     )}
                   />
                 ))}

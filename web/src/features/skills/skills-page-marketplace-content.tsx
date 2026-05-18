@@ -3,7 +3,7 @@ import { ChevronLeft, ChevronRight, ExternalLink, Loader2, Star } from 'lucide-r
 import { Button } from '@/components/ui/button';
 import { SkillCardIcon } from '@/features/skills/skill-card-icon';
 import { MarketplaceSkillCardSkeleton } from '@/features/skills/skills-page-primitives';
-import { SKILL_LIST_SKELETON_COUNT } from '@/features/skills/skills-page.constants';
+import { SKILL_LIST_SKELETON_KEYS } from '@/features/skills/skills-page.constants';
 import { interpolate, skillHubPublicSkillPageUrl } from '@/features/skills/skills-page.utils';
 import type { SkillsPageVm } from '@/features/skills/use-skills-page';
 import { cn } from '@/lib/cn';
@@ -101,9 +101,9 @@ export function SkillsPageMarketplaceContent(p: Props) {
           </>
         ) : mpCategoriesLoading ? (
           <div className="flex gap-2 px-1" aria-hidden>
-            {Array.from({ length: 5 }, (_, i) => (
+            {(['p0', 'p1', 'p2', 'p3', 'p4'] as const).map((k) => (
               <div
-                key={i}
+                key={k}
                 className="h-8 w-[4.5rem] shrink-0 animate-pulse rounded-full bg-surface-hover motion-reduce:animate-none dark:bg-surface-active/50"
               />
             ))}
@@ -121,8 +121,8 @@ export function SkillsPageMarketplaceContent(p: Props) {
           aria-busy="true"
           aria-label={sk.loading}
         >
-          {Array.from({ length: SKILL_LIST_SKELETON_COUNT }, (_, i) => (
-            <MarketplaceSkillCardSkeleton key={i} />
+          {SKILL_LIST_SKELETON_KEYS.map((k) => (
+            <MarketplaceSkillCardSkeleton key={k} />
           ))}
         </div>
       ) : mpError && !mpPayload ? (
@@ -221,7 +221,12 @@ export function SkillsPageMarketplaceContent(p: Props) {
                                   <ExternalLink className="size-3.5" strokeWidth={2} aria-hidden />
                                 </a>
                               ) : null}
-                              <div className="inline-flex shrink-0" onClick={(e) => e.stopPropagation()}>
+                              <div
+                                role="group"
+                                className="inline-flex shrink-0"
+                                onClick={(e) => e.stopPropagation()}
+                                onKeyDown={(e) => e.stopPropagation()}
+                              >
                                 <Button
                                   type="button"
                                   variant="secondary"

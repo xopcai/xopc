@@ -136,6 +136,7 @@ export function AgentSkillsTab(props: {
                           return next;
                         });
                       }}
+                      aria-label={id}
                     />
                     <div className="min-w-0 flex-1 overflow-hidden">
                       <div className="truncate font-mono text-xs font-medium text-fg" title={id}>

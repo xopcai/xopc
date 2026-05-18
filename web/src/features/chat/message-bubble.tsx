@@ -449,6 +449,7 @@ export const MessageBubble = memo(function MessageBubble({
           <div className="mb-2 flex w-full min-w-0 flex-wrap items-center justify-end gap-x-2 gap-y-0.5 text-xs">
             {message.timestamp ? (
               <time
+                suppressHydrationWarning
                 className="shrink-0 tabular-nums text-fg-disabled"
                 dateTime={new Date(message.timestamp).toISOString()}
               >
@@ -469,7 +470,11 @@ export const MessageBubble = memo(function MessageBubble({
         {!isUser && showMeta ? (
           <div className="mb-2 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs text-fg-disabled">
             {message.timestamp ? (
-              <time className="tabular-nums" dateTime={new Date(message.timestamp).toISOString()}>
+              <time
+                suppressHydrationWarning
+                className="tabular-nums"
+                dateTime={new Date(message.timestamp).toISOString()}
+              >
                 {formatTime(message.timestamp)}
               </time>
             ) : null}
