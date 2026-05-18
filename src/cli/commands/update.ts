@@ -130,8 +130,11 @@ function createUpdateCommand(_ctx: CLIContext): Command {
 
         const installArgs = buildInstallArgs(packageManager, spec);
 
+        // Gateway / auto-update spawn this CLI with XOPC_AUTO_UPDATE=1 after acquiring the lock.
         const { acquireUpdateLock } = await import('../../infra/update-lock.js');
-        const lock = await acquireUpdateLock('cli');
+        const lock = process.env.XOPC_AUTO_UPDATE
+          ? { release: async () => {} }
+          : await acquireUpdateLock('cli');
         if (!lock) {
           const message = 'Another update is already in progress. Try again later.';
           if (options.json) {
