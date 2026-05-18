@@ -10,6 +10,7 @@ import { prewarmSessionFile } from './session-manager-cache.js';
 import { registerEmbeddedRun, unregisterEmbeddedRun } from './runs.js';
 import { subscribeEmbeddedSessionEvents, lastAssistantPlainText } from './subscribe-session.js';
 import type { RunXopcEmbeddedTurnParams, RunXopcEmbeddedTurnResult } from './types.js';
+import { createEmbeddedAuthStorage } from './xopc-auth-storage.js';
 import { xopcToolsToDefinitions } from './xopc-tools-bridge.js';
 import {
   isAssistantTurnAborted,
@@ -97,6 +98,7 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
       thinkingLevel: thinkingLevel ?? 'medium',
       sessionManager: piSm,
       settingsManager,
+      authStorage: createEmbeddedAuthStorage(),
       noTools: 'builtin',
       customTools: toolDefs,
       tools: toolNames,
