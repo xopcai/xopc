@@ -1,0 +1,79 @@
+# Applied to pull requests by .github/workflows/labeler.yml
+'area:agent':
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'src/agent/**'
+
+'area:gateway':
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'src/gateway/**'
+
+'area:web-ui':
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'web/**'
+
+'area:cli-tui':
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'src/cli/**'
+
+'area:electron':
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'electron/**'
+          - '.github/workflows/electron-build.yml'
+
+'area:channels':
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'src/channels/**'
+          - 'extensions/telegram/**'
+          - 'extensions/weixin/**'
+
+'area:session':
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'src/session/**'
+
+'area:providers':
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'src/providers/**'
+
+'area:config':
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'src/config/**'
+
+'area:extensions':
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'src/extensions/**'
+          - 'extensions/sdk/**'
+
+'area:skills':
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'skills/**'
+          - '.github/workflows/skills-test.yml'
+
+'area:voice':
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'src/voice/**'
+
+'area:ci-release':
+  - changed-files:
+      - any-glob-to-any-file:
+          - '.github/workflows/**'
+          - 'package.json'
+          - 'pnpm-lock.yaml'
+
+'type:docs':
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'docs/**'
+          - '**/*.md'
+          - 'AGENTS.md'

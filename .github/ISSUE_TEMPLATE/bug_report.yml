@@ -1,0 +1,142 @@
+name: Bug report
+description: Report something that is broken or regressed
+title: "[Bug]: "
+labels: ["type:bug", "status:needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Please fill in as much as you can so we can reproduce it.
+        **Do not paste API keys, bot tokens, or full config files.**
+
+        For usage questions, use [Discussions → Q&A](https://github.com/xopcai/xopc/discussions/categories/q-a) instead.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: One or two sentences describing the problem
+      placeholder: "Agent loops forever when browser tool reads a Chinese page…"
+    validations:
+      required: true
+
+  - type: input
+    id: xopc-version
+    attributes:
+      label: xopc version
+      description: Output of `xopc --version` or your npm package version (e.g. from `npm list -g @xopcai/xopc`)
+      placeholder: "0.x.x"
+    validations:
+      required: true
+
+  - type: input
+    id: node-version
+    attributes:
+      label: Node.js version
+      description: Output of `node --version` (requires Node ≥ 22)
+      placeholder: "v22.x.x"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - macOS
+        - Windows
+        - Linux
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Where did this happen?
+      description: The entry point you were using
+      options:
+        - CLI (`xopc agent`, other CLI commands)
+        - TUI (`xopc tui`)
+        - Gateway web UI (browser console)
+        - Electron desktop app
+        - Telegram channel
+        - WeChat (Weixin) channel
+        - Feishu / Lark channel
+        - Cron / scheduled job
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: model
+    attributes:
+      label: Model (optional)
+      description: Provider and model id if relevant (no API keys)
+      placeholder: "deepseek/deepseek-chat, anthropic/claude-sonnet-4, ollama/llama3, …"
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Numbered steps from a clean or known state
+      placeholder: |
+        1. Start gateway with `xopc gateway`
+        2. Open web UI and start a chat with …
+        3. Enable browser tool and ask to …
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs (optional)
+      description: Relevant log lines with `XOPC_LOG_LEVEL=debug` — redact secrets
+      render: shell
+
+  - type: checkboxes
+    id: regression
+    attributes:
+      label: Regression
+      options:
+        - label: This worked in an earlier version
+    validations:
+      required: false
+
+  - type: input
+    id: last-working
+    attributes:
+      label: Last known good version (if regression)
+      placeholder: "0.x.y"
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: How severe is this for you?
+      options:
+        - Blocker — cannot use xopc at all
+        - Major — core path broken
+        - Moderate — annoying but I have a workaround
+        - Minor — edge case or cosmetic
+    validations:
+      required: true
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else?
+      description: Screenshots, extensions/skills enabled, browser tool, channel policies, etc.
