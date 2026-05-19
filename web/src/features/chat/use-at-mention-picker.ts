@@ -190,15 +190,21 @@ export function useAtMentionPicker(
     };
   }, [pickerActive, debouncedQuery, options.sessionKey]);
 
-  useEffect(() => {
+  const rangeStart = atRange?.start;
+  const rangeEnd = atRange?.end;
+  const trackedIndexKeyRef = useRef({ s: rangeStart, e: rangeEnd, q: debouncedQuery });
+  if (
+    trackedIndexKeyRef.current.s !== rangeStart ||
+    trackedIndexKeyRef.current.e !== rangeEnd ||
+    trackedIndexKeyRef.current.q !== debouncedQuery
+  ) {
+    trackedIndexKeyRef.current = { s: rangeStart, e: rangeEnd, q: debouncedQuery };
     setSelectedIndex(0);
-  }, [atRange?.start, atRange?.end, debouncedQuery]);
-
-  useEffect(() => {
-    if (selectedIndex >= items.length) {
-      setSelectedIndex(Math.max(0, items.length - 1));
-    }
-  }, [items.length, selectedIndex]);
+  } else if (selectedIndex >= items.length && items.length > 0) {
+    setSelectedIndex(items.length - 1);
+  } else if (selectedIndex !== 0 && items.length === 0) {
+    setSelectedIndex(0);
+  }
 
   const onNavigate = useCallback(
     (dir: 'up' | 'down') => {

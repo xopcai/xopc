@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 
 import { HEARTBEAT_INTERVAL_PRESET_MS_ORDER } from '@/features/scheduling/interval/interval-presets';
 import type { IntervalPresetLabels } from '@/features/scheduling/interval/format-interval-label';
@@ -68,12 +68,13 @@ export function IntervalSchedulePicker({
   );
 
   const [secondsDraft, setSecondsDraft] = useState<string | null>(null);
+  const trackedValueMsRef = useRef(valueMs);
+  if (trackedValueMsRef.current !== valueMs) {
+    trackedValueMsRef.current = valueMs;
+    setSecondsDraft(null);
+  }
   const secondsCommitted = Math.max(minSeconds, Math.round(valueMs / 1000));
   const secondsInputValue = secondsDraft !== null ? secondsDraft : String(secondsCommitted);
-
-  useEffect(() => {
-    setSecondsDraft(null);
-  }, [valueMs]);
 
   return (
     <div className="flex flex-col gap-1">

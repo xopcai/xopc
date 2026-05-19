@@ -32,6 +32,7 @@ export function OnboardingModelSelect({
               className="mt-1"
               checked={checked}
               onChange={() => onSelectedChange(mod.id)}
+              aria-label={mod.name || mod.id}
             />
             <span className="min-w-0 flex-1">
               <span className="block text-sm font-medium text-fg">{mod.name || mod.id}</span>

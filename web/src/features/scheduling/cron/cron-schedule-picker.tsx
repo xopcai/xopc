@@ -13,6 +13,8 @@ import { formControlBorderFocusClass, selectControlBaseClass } from '@/lib/form-
 export type { IntervalKind, PickerState, SchedulePickerMode } from '@/features/scheduling/cron/cron-expression';
 export { buildCronFromPickerState, cronExpressionToPickerState } from '@/features/scheduling/cron/cron-expression';
 
+const MINUTE_VALUES: readonly number[] = Array.from({ length: 60 }, (_, idx) => idx);
+
 export type CronSchedulePickerLabels = {
   scheduleTimeLabel: string;
   modeNoRepeat: string;
@@ -291,9 +293,9 @@ export function CronSchedulePicker({
                 }}
                 aria-label={labels.minuteAtHour}
               >
-                {Array.from({ length: 60 }, (_, i) => (
-                  <option key={i} value={i}>
-                    {String(i).padStart(2, '0')}
+                {MINUTE_VALUES.map((m) => (
+                  <option key={m} value={m}>
+                    {String(m).padStart(2, '0')}
                   </option>
                 ))}
               </select>
@@ -371,9 +373,9 @@ export function CronSchedulePicker({
             }}
             aria-label={labels.minuteAtHour}
           >
-            {Array.from({ length: 60 }, (_, i) => (
-              <option key={i} value={i}>
-                {String(i).padStart(2, '0')}
+            {MINUTE_VALUES.map((m) => (
+              <option key={m} value={m}>
+                {String(m).padStart(2, '0')}
               </option>
             ))}
           </select>
