@@ -1,7 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ChevronUp, ListChecks } from 'lucide-react';
-
-import { Button } from '@/components/ui/button';
 import {
   computeGoalWallElapsedMs,
   formatExecutionElapsedMs,
@@ -14,20 +11,17 @@ import {
   type WebchatPersistentGoalWire,
 } from '@/features/chat/goals-api';
 import { messages } from '@/i18n/messages';
-import { cn } from '@/lib/cn';
 import { useLocaleStore } from '@/stores/locale-store';
 
 import { GoalActions } from './chat-goal-banner-actions';
 import { GoalChecklist } from './chat-goal-banner-checklist';
 import { GoalCollapsedFab } from './chat-goal-banner-collapsed-fab';
 import { GoalDetailsToggle } from './chat-goal-banner-details';
+import { GoalLatestRun } from './chat-goal-latest-run';
+import { GoalMissionHeader } from './chat-goal-mission-header';
+import { GoalProgressMeter } from './chat-goal-progress-meter';
 import { GoalRunsHistory } from './chat-goal-banner-runs-history';
-import {
-  checklistStats,
-  collapsedStorageKey,
-  shouldShowGoal,
-  statusLabel,
-} from './chat-goal-banner-utils';
+import { checklistStats, collapsedStorageKey, goalUiPhase, shouldShowGoal, statusLabel } from './chat-goal-banner-utils';
 
 type ChatGoalBannerProps = {
   sessionKey: string;
@@ -145,7 +139,6 @@ export function ChatGoalBanner({ sessionKey, streaming, sending }: ChatGoalBanne
   }
 
   const g = goal;
-  const turnPct = g.maxTurns > 0 ? Math.min(100, (100 * g.turnsUsed) / g.maxTurns) : 0;
   const agentBusy = streaming || sending;
   const turnsShort = `${g.turnsUsed}/${g.maxTurns}`;
   const statusShort = statusLabel(g, t);
@@ -154,6 +147,7 @@ export function ChatGoalBanner({ sessionKey, streaming, sending }: ChatGoalBanne
     clTotal > 0 ? t.checklistProgress.replace('{{done}}', String(clDone)).replace('{{total}}', String(clTotal)) : '';
   const elapsedMs = computeGoalWallElapsedMs(g, Date.now());
   const elapsedStr = formatExecutionElapsedMs(elapsedMs, language);
+  const phase = goalUiPhase(g, agentBusy);
   const pillTitle = t.pillTitle.replace('{{status}}', statusShort).replace('{{turns}}', turnsShort);
 
   if (collapsed) {
@@ -162,6 +156,7 @@ export function ChatGoalBanner({ sessionKey, streaming, sending }: ChatGoalBanne
         goal={g}
         agentBusy={agentBusy}
         pillTitle={pillTitle}
+        phase={phase}
         statusShort={statusShort}
         turnsShort={turnsShort}
         clLine={clLine}
@@ -176,50 +171,18 @@ export function ChatGoalBanner({ sessionKey, streaming, sending }: ChatGoalBanne
   return (
     <div className="shrink-0 w-full px-3 pt-1.5 sm:px-5 sm:pt-2 xl:px-6">
       <div className="mx-auto flex w-full max-w-[var(--max-width-chat)] flex-col gap-2.5 rounded-2xl bg-surface-panel px-3 py-2.5 shadow-elevated sm:px-4 sm:py-3">
-        <div className="flex min-w-0 flex-wrap items-start justify-between gap-2">
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2 text-xs text-fg-muted">
-              <ListChecks className="size-3.5 shrink-0 text-accent" aria-hidden />
-              <span className="font-medium text-fg">{t.heading}</span>
-              <span
-                className={cn(
-                  'rounded-full border px-1.5 py-0.5',
-                  g.status === 'active' && 'border-accent/40 text-accent',
-                  g.status === 'paused' && 'border-edge text-fg-muted',
-                  g.status === 'done' && 'border-edge text-fg-muted',
-                )}
-              >
-                {statusShort}
-              </span>
-              <span>{t.turns.replace('{{used}}', String(g.turnsUsed)).replace('{{max}}', String(g.maxTurns))}</span>
-              {clTotal > 0 ? (
-                <span className="rounded-full bg-surface-panel px-1.5 py-0.5 text-fg">{clLine}</span>
-              ) : null}
-              <span className="text-fg-muted">
-                {t.elapsedLabel}: <span className="text-fg">{elapsedStr}</span>
-              </span>
-              {agentBusy ? <span className="text-accent">{t.agentRunning}</span> : null}
-            </div>
-            <p className="mt-1 line-clamp-2 text-sm leading-snug text-fg" title={g.goal}>
-              {g.goal}
-            </p>
-          </div>
-          <div className="flex shrink-0 items-center gap-1">
-            <Button
-              type="button"
-              variant="ghost"
-              className="size-8 shrink-0 rounded-full p-0 text-fg-muted hover:text-fg"
-              aria-label={t.collapseAria}
-              onClick={() => setCollapsedPersist(true)}
-            >
-              <ChevronUp className="size-4" aria-hidden />
-            </Button>
-          </div>
-        </div>
+        <GoalMissionHeader
+          goal={g}
+          phase={phase}
+          statusShort={statusShort}
+          turnsShort={turnsShort}
+          clLine={clLine}
+          elapsedStr={elapsedStr}
+          t={t}
+          onCollapse={() => setCollapsedPersist(true)}
+        />
 
-        <div className="h-1 overflow-hidden rounded-full bg-surface-elevated">
-          <div className="h-full rounded-full bg-accent/70 transition-[width]" style={{ width: `${turnPct}%` }} />
-        </div>
+        <GoalProgressMeter goal={g} t={t} />
 
         <GoalChecklist goal={g} canEdit={canEditChecklist} mutationBusy={mutationBusy} t={t} onMutate={runChecklist} />
 
@@ -233,6 +196,7 @@ export function ChatGoalBanner({ sessionKey, streaming, sending }: ChatGoalBanne
         />
 
         <GoalDetailsToggle goal={g} t={t} />
+        <GoalLatestRun sessionKey={sessionKey} goal={g} language={language} t={t} />
         <GoalRunsHistory sessionKey={sessionKey} goal={g} language={language} t={t} />
         {error ? <p className="text-xs text-destructive">{error}</p> : null}
       </div>
