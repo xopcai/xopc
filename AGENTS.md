@@ -200,6 +200,7 @@ import { DraftStreamManager } from '@xopcai/xopc/channels/telegram/draft-stream.
 | New channel plugin | `ChannelPlugin` + optional `defineChannelPluginEntry` → `bundled.ts` if shipping in core |
 | New gateway console screen | `web/src/pages/<name>.tsx` or `web/src/features/<area>/`; register route in `web/src/app.tsx`; follow [Web UI](#web-ui). |
 | Dependencies | **`pnpm` only** — never commit `package-lock.json` (use `pnpm-lock.yaml`). |
+| GitHub issues / PRs | Templates under `.github/ISSUE_TEMPLATE/`; process in **[CONTRIBUTING.md](./CONTRIBUTING.md)**; sync labels with `./scripts/sync-github-labels.sh` |
 | Electron desktop | Packaged app: `pnpm run build && pnpm run electron:build`. The **main process** runs minimal shell code; first-time `userData` config init uses **Zod (`ConfigSchema`) only** via `initWorkspace({ skipChannelPluginValidation: true })` so it does not load bundled channel plugins. **Channel plugin `configSchema.validate`** still runs when the **gateway subprocess** (`out/server/index.js`) starts. |
 
 ---

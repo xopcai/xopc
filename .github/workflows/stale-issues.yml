@@ -1,0 +1,29 @@
+name: Stale issues
+
+on:
+  schedule:
+    - cron: '0 8 * * 1'
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+jobs:
+  stale:
+    name: Mark and close inactive needs-info issues
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/stale@v9
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          only-issue-labels: 'status:needs-info'
+          stale-issue-label: 'status:needs-info'
+          days-before-stale: 14
+          days-before-close: 7
+          stale-issue-message: >
+            This issue has been labeled `status:needs-info` and has had no activity
+            for 14 days. It will be closed in 7 days if there is no further response.
+            Comment here with the requested details to keep it open.
+          close-issue-message: >
+            Closed due to inactivity. If the problem still exists, please open a new
+            issue using the bug report template with full reproduction details.

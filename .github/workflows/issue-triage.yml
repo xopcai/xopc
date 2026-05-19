@@ -1,0 +1,34 @@
+name: Issue triage
+
+on:
+  issues:
+    types: [opened, reopened]
+
+permissions:
+  issues: write
+
+jobs:
+  add-needs-triage:
+    name: Label new issues
+    runs-on: ubuntu-latest
+    steps:
+      - name: Add status:needs-triage
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const label = 'status:needs-triage';
+            const { owner, repo } = context.repo;
+            const issue_number = context.payload.issue.number;
+
+            try {
+              await github.rest.issues.addLabels({
+                owner,
+                repo,
+                issue_number,
+                labels: [label],
+              });
+            } catch (err) {
+              core.warning(
+                `Could not add ${label}. Run scripts/sync-github-labels.sh on the repo first. ${err}`,
+              );
+            }

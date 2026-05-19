@@ -1,0 +1,42 @@
+[
+  { "name": "type:bug", "color": "d73a4a", "description": "Something is not working as expected" },
+  { "name": "type:enhancement", "color": "a2eeef", "description": "New feature or improvement" },
+  { "name": "type:docs", "color": "0075ca", "description": "Documentation only changes" },
+  { "name": "type:question", "color": "d876e3", "description": "Usage or configuration question" },
+  { "name": "type:regression", "color": "b60205", "description": "Worked before, broken after an upgrade" },
+  { "name": "type:security", "color": "000000", "description": "Security-related (use private advisory for reports)" },
+  { "name": "type:chore", "color": "cfd3d7", "description": "CI, dependencies, or internal maintenance" },
+
+  { "name": "area:agent", "color": "1d76db", "description": "Agent runtime, tools, memory, goals" },
+  { "name": "area:gateway", "color": "1d76db", "description": "HTTP/SSE gateway and APIs" },
+  { "name": "area:web-ui", "color": "1d76db", "description": "Gateway console (web/)" },
+  { "name": "area:cli-tui", "color": "1d76db", "description": "CLI and terminal UI" },
+  { "name": "area:electron", "color": "1d76db", "description": "Electron desktop app" },
+  { "name": "area:channels", "color": "1d76db", "description": "Channel plugins (Telegram, WeChat, Feishu, …)" },
+  { "name": "area:session", "color": "1d76db", "description": "Sessions, transcripts, JSONL store" },
+  { "name": "area:providers", "color": "1d76db", "description": "LLM providers, API keys, OAuth" },
+  { "name": "area:config", "color": "1d76db", "description": "xopc.json schema and configuration" },
+  { "name": "area:extensions", "color": "1d76db", "description": "Extensions and extension SDK" },
+  { "name": "area:skills", "color": "1d76db", "description": "Skills marketplace and SKILL.md" },
+  { "name": "area:voice", "color": "1d76db", "description": "Speech STT/TTS" },
+  { "name": "area:ci-release", "color": "1d76db", "description": "CI workflows and releases" },
+
+  { "name": "priority:P0", "color": "b60205", "description": "Critical: data loss, cannot start, or security" },
+  { "name": "priority:P1", "color": "d93f0b", "description": "Major: core path broken without easy workaround" },
+  { "name": "priority:P2", "color": "fbca04", "description": "Moderate: broken but workaround exists" },
+  { "name": "priority:P3", "color": "0e8a16", "description": "Minor: edge case or polish" },
+
+  { "name": "status:needs-triage", "color": "ededed", "description": "Awaiting maintainer triage" },
+  { "name": "status:needs-info", "color": "d876e3", "description": "Waiting for reporter to provide more details" },
+  { "name": "status:confirmed", "color": "0e8a16", "description": "Reproduced or accepted; ready to schedule" },
+  { "name": "status:in-progress", "color": "1d76db", "description": "Actively being worked on" },
+  { "name": "status:blocked", "color": "e99695", "description": "Blocked on upstream or a decision" },
+
+  { "name": "roadmap", "color": "5319e7", "description": "Larger initiative aligned with product direction" },
+
+  { "name": "good first issue", "color": "7057ff", "description": "Good for newcomers" },
+  { "name": "help wanted", "color": "008672", "description": "Extra attention or community help welcome" },
+  { "name": "duplicate", "color": "cfd3d7", "description": "Duplicate of another issue or PR" },
+  { "name": "invalid", "color": "e4e669", "description": "Not actionable or does not belong here" },
+  { "name": "wontfix", "color": "ffffff", "description": "Will not be addressed" }
+]
