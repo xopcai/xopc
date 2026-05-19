@@ -279,7 +279,13 @@ src/
 web/             # Gateway console (React + Vite)
 ```
 
-Contributor notes: **[AGENTS.md](./AGENTS.md)**.
+Contributor notes: **[AGENTS.md](./AGENTS.md)** · **[CONTRIBUTING.md](./CONTRIBUTING.md)** (issues, labels, PRs).
+
+---
+
+## Reporting issues
+
+Use the [bug report](https://github.com/xopcai/xopc/issues/new?template=bug_report.yml) or [feature request](https://github.com/xopcai/xopc/issues/new?template=feature_request.yml) templates. For configuration and usage questions, prefer [Discussions → Q&A](https://github.com/xopcai/xopc/discussions/categories/q-a). Security issues: [private advisory](https://github.com/xopcai/xopc/security/advisories/new), not a public issue. See **[CONTRIBUTING.md](./CONTRIBUTING.md)** for labels and triage.
 
 ---
 

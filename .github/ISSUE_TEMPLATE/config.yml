@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Q&A and usage questions
+    url: https://github.com/xopcai/xopc/discussions/categories/q-a
+    about: Ask about configuration and how to use xopc (preferred over a blank issue)
+  - name: Security vulnerability
+    url: https://github.com/xopcai/xopc/security/advisories/new
+    about: Report security issues privately — do not open a public issue

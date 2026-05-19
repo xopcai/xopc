@@ -272,7 +272,13 @@ src/
 web/             # 网关控制台（React + Vite）
 ```
 
-参与贡献请先读：**[AGENTS.md](./AGENTS.md)**。
+参与贡献请先读：**[AGENTS.md](./AGENTS.md)** · **[CONTRIBUTING.md](./CONTRIBUTING.md)**（Issue / PR 流程，英文）。
+
+---
+
+## 反馈问题
+
+请使用 [Bug 模板](https://github.com/xopcai/xopc/issues/new?template=bug_report.yml) 或 [功能建议模板](https://github.com/xopcai/xopc/issues/new?template=feature_request.yml)。配置与使用问题请优先发 [Discussions → Q&A](https://github.com/xopcai/xopc/discussions/categories/q-a)。安全问题请走 [私有 advisory](https://github.com/xopcai/xopc/security/advisories/new)。详见 **[CONTRIBUTING.md](./CONTRIBUTING.md)**。
 
 ---
 
