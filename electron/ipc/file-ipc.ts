@@ -54,6 +54,11 @@ export function registerFileIpc(ipcMain: IpcMain): void {
     return { error: err || undefined };
   });
 
+  ipcMain.handle('shell:show-item-in-folder', async (_, filePath: string) => {
+    shell.showItemInFolder(filePath);
+    return { success: true as const };
+  });
+
   ipcMain.handle('file:watch', async (event, filePath: string) => {
     if (watchers.has(filePath)) return;
     const w = fsWatch(filePath, async () => {

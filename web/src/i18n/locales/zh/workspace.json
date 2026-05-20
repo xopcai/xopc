@@ -18,6 +18,7 @@
     "lastModified": "修改时间",
     "openElsewhereHint": "预览可能受限或不可用。请下载文件或使用其他应用打开。",
     "cannotPreviewType": "无法在预览中打开此类型的文件。",
-    "openSystemApp": "用默认应用打开"
+    "openSystemApp": "用默认应用打开",
+    "revealInFolder": "打开所在目录"
   }
 }

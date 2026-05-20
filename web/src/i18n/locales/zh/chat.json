@@ -131,6 +131,16 @@
     "composerStageExecuting": "执行中…",
     "composerStageAnalyzing": "分析中…",
     "attachFile": "添加附件",
+    "fileReference": {
+      "externalBadge": "外部文件",
+      "externalDescription": "这个文件不在当前工作区内，因此不能直接在工作区编辑器中编辑。",
+      "browserExternalDescription": "当前运行在浏览器中，无法直接打开本地文件。你可以复制路径后在系统中打开。",
+      "missingDescription": "文件当前不可用，可能已被移动、删除，或属于另一个运行环境。",
+      "invalidDescription": "无法识别这个文件路径。",
+      "openExternal": "默认应用打开",
+      "revealInFolder": "打开所在目录",
+      "copyPath": "复制路径"
+    },
     "workingDirectory": {
       "selectWorkingDirectory": "选择工作目录",
       "chooseFolder": "选择目录…",
