@@ -87,7 +87,7 @@ function summarizeToolUses(content: MessageContent[]): ToolUseSummary[] {
 
 function findTriggeringUserIndex(messages: Message[], assistantIndex: number): number {
   for (let i = assistantIndex - 1; i >= 0; i--) {
-    if (isUserRole(messages[i]!.role)) return i;
+    if (isUserRole(messages[i].role)) return i;
   }
   return -1;
 }
@@ -121,12 +121,12 @@ export function buildFollowUpContextPack(input: BuildFollowUpContextInput): Foll
   }
 
   const userIdx = findTriggeringUserIndex(messages, assistantIndex);
-  const userMsg = userIdx >= 0 ? messages[userIdx]! : null;
+  const userMsg = userIdx >= 0 ? messages[userIdx] : null;
   const userTextRaw = userMsg ? collectPlainTextFromContent(userMsg.content) : '';
 
   const priorUsers: string[] = [];
   for (let i = userIdx - 1; i >= 0 && priorUsers.length < 2; i--) {
-    const m = messages[i]!;
+    const m = messages[i];
     if (!isUserRole(m.role)) continue;
     const t = collectPlainTextFromContent(m.content);
     if (t) priorUsers.unshift(truncate(t, MAX_RECENT_USER_SNIPPET));
@@ -134,7 +134,7 @@ export function buildFollowUpContextPack(input: BuildFollowUpContextInput): Foll
 
   let recentAssistantSnippet = '';
   for (let i = assistantIndex - 1; i >= 0; i--) {
-    const m = messages[i]!;
+    const m = messages[i];
     if (m.role !== 'assistant') continue;
     const t = collectPlainTextFromContent(m.content);
     if (t) {
