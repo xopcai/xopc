@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   extractFilePathsFromToolResult,
   extractWorkspaceRelativeMentionsFromAssistantMarkdown,
+  isBareProfileMarkdownFileName,
   looksLikeAbsoluteFilePath,
 } from '@/features/chat/tool-result-file-paths';
 import { extractWebSearchLinksFromToolResult } from '@/features/chat/web-search-tool-result-links';
@@ -40,18 +41,21 @@ describe('extractFilePathsFromToolResult', () => {
     expect(extractFilePathsFromToolResult(text)).toEqual([]);
   });
 
-  it('strips list_dir f/d/? line prefix so paths are not `f <name>` in the API', () => {
+  it('does not promote list_dir f/d/? lines to workspace-relative file chips', () => {
     const text = JSON.stringify({
       content: [{ type: 'text', text: 'f test.txt' }],
       details: {},
     });
-    expect(extractFilePathsFromToolResult(text)).toEqual([
-      expect.objectContaining({
-        fileName: 'test.txt',
-        workspaceRelativePath: 'test.txt',
-        absolutePath: 'rel:test.txt',
-      }),
-    ]);
+    expect(extractFilePathsFromToolResult(text)).toEqual([]);
+  });
+
+  it('does not treat bare profile markdown filenames as workspace-relative paths', () => {
+    expect(isBareProfileMarkdownFileName('IDENTITY.md')).toBe(true);
+    const text = JSON.stringify({
+      content: [{ type: 'text', text: 'f IDENTITY.md' }],
+      details: {},
+    });
+    expect(extractFilePathsFromToolResult(text)).toEqual([]);
   });
 
   it('does not treat Python/code snippets as Windows paths (avoids false resolve-path 403)', () => {

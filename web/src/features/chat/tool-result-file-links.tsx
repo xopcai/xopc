@@ -1,10 +1,13 @@
-import { AlertCircle, Copy, ExternalLink, Eye, File, FolderOpen } from 'lucide-react';
+import { AlertCircle, Copy, ExternalLink, Eye, File, FolderOpen, Settings2 } from 'lucide-react';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 import {
   fetchWorkspaceFileBlob,
   resolveFileReferenceAction,
   resolveWorkspaceFileReference,
+  type FileReferenceLocationKind,
+  type FileReferenceScope,
   type WorkspaceFileReference,
 } from '@/features/workspace/workspace-api';
 import { messages } from '@/i18n/messages';
@@ -100,7 +103,21 @@ function FileReferenceActionButton({
   );
 }
 
-function ExternalFileCard({
+function isOffWorkspaceScope(scope: FileReferenceScope): boolean {
+  return scope === 'external' || scope === 'agent-profile' || scope === 'session-artifact';
+}
+
+function locationKindBadgeLabel(
+  kind: FileReferenceLocationKind | undefined,
+  m: ReturnType<typeof messages>['chat']['fileReference'],
+): string | null {
+  if (!kind) {
+    return m.externalBadge;
+  }
+  return m.locationKind[kind] ?? m.externalBadge;
+}
+
+function OffWorkspaceFileCard({
   path,
   refInfo,
   sessionKey,
@@ -109,6 +126,7 @@ function ExternalFileCard({
   refInfo: WorkspaceFileReference;
   sessionKey?: string | null;
 }) {
+  const navigate = useNavigate();
   const language = useLocaleStore((s) => s.language);
   const m = messages(language).chat.fileReference;
   const canUseSystemShell = isElectron() && Boolean(window.electronAPI?.shell);
@@ -136,13 +154,23 @@ function ExternalFileCard({
 
   const isMissing = refInfo.scope === 'missing';
   const isInvalid = refInfo.scope === 'invalid';
+  const offWorkspace = isOffWorkspaceScope(refInfo.scope) && refInfo.exists;
   const description = isMissing
     ? m.missingDescription
     : isInvalid
       ? m.invalidDescription
-      : canUseSystemShell
-        ? m.externalDescription
-        : m.browserExternalDescription;
+      : offWorkspace
+        ? canUseSystemShell
+          ? m.offWorkspaceBaseDescription
+          : m.browserOffWorkspaceDescription
+        : canUseSystemShell
+          ? m.externalDescription
+          : m.browserExternalDescription;
+
+  const badge =
+    offWorkspace || refInfo.scope === 'external' || refInfo.scope === 'agent-profile'
+      ? locationKindBadgeLabel(refInfo.locationKind, m)
+      : null;
 
   return (
     <div
@@ -161,14 +189,21 @@ function ExternalFileCard({
           <File className="size-3.5 shrink-0 text-accent" strokeWidth={1.75} aria-hidden />
         )}
         <span className="min-w-0 truncate font-medium">{path.fileName || refInfo.displayName}</span>
-        {refInfo.scope === 'external' ? (
+        {badge ? (
           <span className="shrink-0 rounded bg-surface-muted px-1.5 py-0.5 text-[10px] text-fg-muted">
-            {m.externalBadge}
+            {badge}
           </span>
         ) : null}
       </div>
       <p className="line-clamp-2 text-[11px] leading-snug text-fg-muted">{description}</p>
       <div className="flex min-w-0 flex-wrap items-center gap-1 pt-0.5">
+        {refInfo.manageRoute ? (
+          <FileReferenceActionButton
+            icon={<Settings2 className="size-3" strokeWidth={1.75} aria-hidden />}
+            label={m.openInSettings}
+            onClick={() => navigate(refInfo.manageRoute!)}
+          />
+        ) : null}
         {canUseSystemShell && refInfo.capabilities.includes('openExternal') ? (
           <FileReferenceActionButton
             icon={<ExternalLink className="size-3" strokeWidth={1.75} aria-hidden />}
@@ -302,7 +337,7 @@ export function ToolResultFileLinks({
       {nonWorkspacePaths.length > 0 ? (
         <div className="flex flex-col gap-1.5">
           {nonWorkspacePaths.map((p) => (
-            <ExternalFileCard
+            <OffWorkspaceFileCard
               key={p.absolutePath}
               path={p}
               refInfo={p.refInfo}

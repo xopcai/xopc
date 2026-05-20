@@ -161,12 +161,40 @@ function pushPath(
   });
 }
 
+/** Align with `AGENT_PROFILE_MARKDOWN_SYSTEM_FILES` + BOOTSTRAP in `src/agent/tools/tool-paths.ts`. */
+const PROFILE_SYSTEM_MARKDOWN_NAME_LOWER = new Set(
+  [
+    'SOUL.md',
+    'IDENTITY.md',
+    'USER.md',
+    'TOOLS.md',
+    'AGENTS.md',
+    'HEARTBEAT.md',
+    'MEMORY.md',
+    'BOOTSTRAP.md',
+  ].map((f) => f.toLowerCase()),
+);
+
+export function isBareProfileMarkdownFileName(path: string): boolean {
+  const b = getFileName(path.replace(/\\/g, '/'));
+  if (!b || b === '.' || b === '..') return false;
+  return PROFILE_SYSTEM_MARKDOWN_NAME_LOWER.has(b.toLowerCase());
+}
+
+/** Single-line `list_dir` / `read_multiple` entry (`f name`, `d name`, `? name`). */
+function isListDirStyleEntryLine(s: string): boolean {
+  const t = s.trim();
+  if (t.includes('\n') || t.includes('\r')) return false;
+  return /^[fd?] .+$/i.test(t);
+}
+
 function looksLikeWorkspaceRelativeFilePath(s: string): boolean {
   const t = s.trim().replace(/\\/g, '/');
   if (t.length < 4 || t.includes('..')) return false;
   if (t.startsWith('/') || /^[A-Za-z]:/i.test(t) || t.startsWith('\\\\')) return false;
   // `https://site.com/page.html` is a URL, not `media/foo.html`
   if (/^[a-z][a-z0-9+.-]*:/i.test(t)) return false;
+  if (isBareProfileMarkdownFileName(t)) return false;
   return /\.(png|jpe?g|gif|webp|bmp|svg|pdf|docx?|xlsx?|pptx?|txt|md|json|html?|css|mjs?|cjs|js|ts|mp3|wav|ogg|m4a|mp4|mov|webm)$/i.test(
     t,
   );
@@ -192,6 +220,21 @@ function pushWorkspaceRelativePath(rel: string, out: ExtractedFilePath[], _fullT
 
 function collectPathsFromJson(obj: unknown, out: ExtractedFilePath[], fullText: string): void {
   if (typeof obj === 'string') {
+    if (isListDirStyleEntryLine(obj)) {
+      const norm = stripListDirLinePrefix(stripFileToolResultLinePrefix(obj))
+        .trim()
+        .replace(/\\/g, '/');
+      if (looksLikeAbsoluteFilePath(norm) && /\.[a-z0-9]+$/i.test(norm)) {
+        const i = fullText.indexOf(obj);
+        if (i >= 0) {
+          pushPath(norm, out, fullText, i, i + obj.length);
+        } else {
+          pushPath(norm, out, fullText, 0, 0);
+        }
+      }
+      return;
+    }
+
     const norm = stripListDirLinePrefix(stripFileToolResultLinePrefix(obj))
       .trim()
       .replace(/\\/g, '/');

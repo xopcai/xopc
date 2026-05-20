@@ -134,6 +134,17 @@
     "fileReference": {
       "externalBadge": "External",
       "externalDescription": "This file is outside the current workspace, so it cannot be edited in the workspace editor.",
+      "offWorkspaceBaseDescription": "This file is outside the current session workspace and cannot be opened in the workspace editor.",
+      "browserOffWorkspaceDescription": "This file is outside the current session workspace. Copy the path and open it from your system or desktop app.",
+      "locationKind": {
+        "agent-profile": "Agent profile",
+        "xopc-skills": "Skills",
+        "xopc-config": "App config",
+        "xopc-agents": "Agent data",
+        "xopc-sessions": "Session data",
+        "host": "On this computer"
+      },
+      "openInSettings": "Open in settings",
       "browserExternalDescription": "This file is outside the current workspace. In the browser, copy the path and open it from your system.",
       "missingDescription": "This file is currently unavailable. It may have been moved, deleted, or created in another runtime environment.",
       "invalidDescription": "This file path could not be resolved.",

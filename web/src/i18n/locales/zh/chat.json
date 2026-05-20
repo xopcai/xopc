@@ -134,6 +134,17 @@
     "fileReference": {
       "externalBadge": "外部文件",
       "externalDescription": "这个文件不在当前工作区内，因此不能直接在工作区编辑器中编辑。",
+      "offWorkspaceBaseDescription": "此文件不在当前会话工作区内，无法在工作区编辑器中打开。",
+      "browserOffWorkspaceDescription": "此文件不在当前会话工作区内。请复制路径后在系统或桌面客户端中打开。",
+      "locationKind": {
+        "agent-profile": "智能体配置",
+        "xopc-skills": "Skills",
+        "xopc-config": "应用配置",
+        "xopc-agents": "智能体数据",
+        "xopc-sessions": "会话数据",
+        "host": "本机文件"
+      },
+      "openInSettings": "在设置中打开",
       "browserExternalDescription": "当前运行在浏览器中，无法直接打开本地文件。你可以复制路径后在系统中打开。",
       "missingDescription": "文件当前不可用，可能已被移动、删除，或属于另一个运行环境。",
       "invalidDescription": "无法识别这个文件路径。",

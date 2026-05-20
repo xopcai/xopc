@@ -1,6 +1,21 @@
 import { randomUUID } from 'node:crypto';
 
-export type FileReferenceScope = 'workspace' | 'external' | 'agent-profile' | 'session-artifact' | 'missing' | 'invalid';
+export type FileReferenceScope =
+  | 'workspace'
+  | 'external'
+  | 'agent-profile'
+  | 'session-artifact'
+  | 'missing'
+  | 'invalid';
+
+/** Where an off-workspace file lives (UI badge + manage deep link). */
+export type FileReferenceLocationKind =
+  | 'agent-profile'
+  | 'xopc-skills'
+  | 'xopc-config'
+  | 'xopc-agents'
+  | 'xopc-sessions'
+  | 'host';
 
 export type FileReferenceCapability =
   | 'preview'
@@ -15,6 +30,7 @@ export interface RegisteredFileReference {
   absolutePath: string;
   sessionKey?: string;
   scope: FileReferenceScope;
+  locationKind?: FileReferenceLocationKind;
   capabilities: FileReferenceCapability[];
   expiresAt: number;
 }
@@ -23,6 +39,7 @@ export interface RegisterFileReferenceInput {
   absolutePath: string;
   sessionKey?: string;
   scope: FileReferenceScope;
+  locationKind?: FileReferenceLocationKind;
   capabilities: FileReferenceCapability[];
   ttlMs?: number;
 }
@@ -40,6 +57,7 @@ export class FileReferenceRegistry {
       absolutePath: input.absolutePath,
       sessionKey: input.sessionKey?.trim() || undefined,
       scope: input.scope,
+      locationKind: input.locationKind,
       capabilities: [...new Set(input.capabilities)],
       expiresAt: Date.now() + (input.ttlMs ?? DEFAULT_TTL_MS),
     };
