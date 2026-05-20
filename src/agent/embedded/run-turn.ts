@@ -1,6 +1,12 @@
 import { existsSync } from 'node:fs';
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
-import { createAgentSession, SessionManager, SettingsManager } from '@earendil-works/pi-coding-agent';
+import {
+  createAgentSession,
+  DefaultResourceLoader,
+  getAgentDir,
+  SessionManager,
+  SettingsManager,
+} from '@earendil-works/pi-coding-agent';
 import type { Model, Api } from '@earendil-works/pi-ai';
 
 import { createLogger } from '../../utils/logger.js';
@@ -21,6 +27,38 @@ import {
 import { runAgentTurnWithTimeout, resolveAgentTurnTimeoutMs } from '../orchestration/run-agent-turn-with-timeout.js';
 
 const log = createLogger('EmbeddedRun');
+const LOG_PREVIEW_MAX_CHARS = 300;
+
+function truncateForLog(value: string, maxChars = LOG_PREVIEW_MAX_CHARS): string {
+  return value.length > maxChars ? `${value.slice(0, maxChars)}…` : value;
+}
+
+function extractTextFromContent(content: unknown): string {
+  if (typeof content === 'string') {
+    return content;
+  }
+  if (!Array.isArray(content)) {
+    return '';
+  }
+  return content
+    .filter((block): block is { type: string; text: string } => {
+      return !!block && typeof block === 'object' && (block as { type?: string }).type === 'text';
+    })
+    .map((block) => block.text)
+    .join('');
+}
+
+function getLastUserMessagePreview(messages: readonly { role?: string; content?: unknown }[]): string | undefined {
+  for (let messageIndex = messages.length - 1; messageIndex >= 0; messageIndex--) {
+    const message = messages[messageIndex];
+    if (message?.role !== 'user') {
+      continue;
+    }
+    const text = extractTextFromContent(message.content).trim();
+    return text ? truncateForLog(text) : undefined;
+  }
+  return undefined;
+}
 
 /** xopc compacts via {@link SessionStore}; disable pi-coding-agent auto-compaction (unsafe without usage). */
 function createEmbeddedSettingsManager(cwd: string): SettingsManager {
@@ -96,6 +134,14 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
     const authStorage = createEmbeddedAuthStorage();
     applyXopcProviderApiKey(authStorage, resolvedModel.provider);
 
+    const resourceLoader = new DefaultResourceLoader({
+      cwd: workspaceDir,
+      agentDir: getAgentDir(),
+      settingsManager,
+      systemPrompt,
+    });
+    await resourceLoader.reload();
+
     const { session } = await createAgentSession({
       cwd: workspaceDir,
       model: resolvedModel,
@@ -103,13 +149,29 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
       sessionManager: piSm,
       settingsManager,
       authStorage,
+      resourceLoader,
       noTools: 'builtin',
       customTools: toolDefs,
       tools: toolNames,
     });
 
-    session.agent.streamFn = wrapStreamFnForXopcExtensions(session.agent.streamFn);
-    session.agent.state.systemPrompt = systemPrompt;
+    const streamFnWithXopcExtensions = wrapStreamFnForXopcExtensions(session.agent.streamFn);
+    const loggingStreamFn: typeof session.agent.streamFn = (streamModel, context, options) => {
+      log.debug(
+        {
+          sessionKey,
+          runId,
+          modelRef: `${streamModel.provider}/${streamModel.id}`,
+          systemPromptLength: context.systemPrompt?.length ?? 0,
+          messageCount: context.messages.length,
+          toolCount: context.tools?.length ?? 0,
+          lastUserMessagePreview: getLastUserMessagePreview(context.messages),
+        },
+        'Sending messages to AI',
+      );
+      return streamFnWithXopcExtensions(streamModel, context, options);
+    };
+    session.agent.streamFn = loggingStreamFn;
 
     if (onEvent) {
       unsubscribe = subscribeEmbeddedSessionEvents(session, onEvent);
