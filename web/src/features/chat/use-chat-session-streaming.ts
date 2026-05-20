@@ -112,8 +112,14 @@ export function useChatSessionStreaming(deps: {
       });
       const appended = finalMsg;
       if (appended && hasRenderableAssistantContent(appended)) {
-        setMessages((m) => mergeConsecutiveAssistantMessages([...m, appended]));
-        fq.refreshFollowUpSuggestions(appended);
+        const prior = latestMessagesRef.current ?? [];
+        const merged = mergeConsecutiveAssistantMessages([...prior, appended]);
+        setMessages(merged);
+        fq.refreshFollowUpSuggestions({
+          appended,
+          messages: merged,
+          clarifyActive: Boolean(fq.clarifyPromptRef.current),
+        });
       }
       setStreaming(false);
       setProgress(null);
