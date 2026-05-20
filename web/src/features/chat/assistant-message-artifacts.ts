@@ -11,7 +11,11 @@ import {
  * Tool names that typically add or change workspace files on success.
  * (Avoid broad listing tools like `list_dir` / `read_file` whose output is not a stable “generated file” set.)
  */
-const TOOL_NAMES_WITH_WORKSPACE_OUTPUT = new Set<string>(['write_file', 'edit_file', 'image_generate']);
+export const TOOL_NAMES_WITH_WORKSPACE_OUTPUT = new Set<string>([
+  'write_file',
+  'edit_file',
+  'image_generate',
+]);
 
 function normalizeToolResultString(result: string | undefined | unknown): string {
   if (result == null) {
@@ -150,15 +154,33 @@ export function collectAssistantWorkspaceOutputPaths(
     }
     mergeExtractedPaths(out, extractFilePathsFromToolResult(text));
   }
+
+  const writerRelKeys = new Set(
+    out.map((p) => normalizeWorkspaceRel(p.workspaceRelativePath)).filter(Boolean),
+  );
+  for (const p of out) {
+    if (looksLikeAbsoluteFilePath(p.absolutePath)) {
+      const base = fileNameKey(p.absolutePath);
+      if (base) writerRelKeys.add(base);
+    }
+  }
+
   for (const b of content) {
     if (b.type !== 'text') {
       continue;
     }
     const narrative = (b.text ?? '').trim();
-    if (!narrative) {
+    if (!narrative || writerRelKeys.size === 0) {
       continue;
     }
-    mergeExtractedPaths(out, extractWorkspaceRelativeMentionsFromAssistantMarkdown(narrative));
+    const mentions = extractWorkspaceRelativeMentionsFromAssistantMarkdown(narrative);
+    const matched = mentions.filter((m) => {
+      const rel = normalizeWorkspaceRel(m.workspaceRelativePath);
+      if (rel && writerRelKeys.has(rel)) return true;
+      const name = fileNameKey(rel || m.fileName);
+      return name.length > 0 && writerRelKeys.has(name);
+    });
+    mergeExtractedPaths(out, matched);
   }
   return out;
 }

@@ -44,6 +44,14 @@ export type FileReferenceScope =
   | 'missing'
   | 'invalid';
 
+export type FileReferenceLocationKind =
+  | 'agent-profile'
+  | 'xopc-skills'
+  | 'xopc-config'
+  | 'xopc-agents'
+  | 'xopc-sessions'
+  | 'host';
+
 export type FileReferenceCapability =
   | 'preview'
   | 'edit'
@@ -57,6 +65,8 @@ export type WorkspaceFileReference = {
   inputPath: string;
   displayName: string;
   scope: FileReferenceScope;
+  locationKind?: FileReferenceLocationKind;
+  manageRoute?: string;
   exists: boolean;
   isDirectory?: boolean;
   absolutePath?: string;

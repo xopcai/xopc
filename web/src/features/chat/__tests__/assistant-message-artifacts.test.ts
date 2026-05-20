@@ -50,17 +50,14 @@ describe('collectAssistantWorkspaceOutputPaths', () => {
     expect(collectAssistantWorkspaceOutputPaths(content)).toEqual([]);
   });
 
-  it('collects workspace paths from assistant text (bold filenames)', () => {
+  it('does not collect assistant markdown paths without a writer tool in the same turn', () => {
     const content: MessageContent[] = [
       {
         type: 'text',
-        text: '- **`guide.html`**\n- **`travel-plan-shanghai-hangzhou.html`**',
+        text: '- **`guide.html`**\n- **`IDENTITY.md`**',
       },
     ];
-    const paths = collectAssistantWorkspaceOutputPaths(content);
-    expect(paths.map((p) => p.workspaceRelativePath).sort()).toEqual(
-      ['guide.html', 'travel-plan-shanghai-hangzhou.html'].sort(),
-    );
+    expect(collectAssistantWorkspaceOutputPaths(content)).toEqual([]);
   });
 
   it('dedupes write_file absolute path against the same file in assistant markdown', () => {
@@ -85,6 +82,14 @@ describe('collectAssistantWorkspaceOutputPaths', () => {
 
   it('filterAssistantAttachmentsDedupedAgainstWorkspacePaths removes duplicate document chips', () => {
     const paths = collectAssistantWorkspaceOutputPaths([
+      {
+        type: 'tool_use',
+        id: 'w1',
+        name: 'write_file',
+        input: { path: 'hangzhou-trip.html' },
+        status: 'done',
+        result: 'File written: /Users/x/ws/hangzhou-trip.html',
+      },
       {
         type: 'text',
         text: '**`hangzhou-trip.html`**',

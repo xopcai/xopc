@@ -1,6 +1,6 @@
 import type { Hono } from 'hono';
 import { readdir, readFile, stat, writeFile } from 'node:fs/promises';
-import { basename, isAbsolute, join, resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 
 import { extractProfileAgentId } from '../../../config/agent-profile.js';
 import { type Config, getWorkspacePath } from '../../../config/schema.js';
@@ -22,6 +22,14 @@ import {
 } from '../../workspace-editor-path.js';
 import { listWorkspaceRelativeFilesFsFallback } from '../../workspace-fs-file-list.js';
 import { runRipgrepInDirectory, runRipgrepListFiles } from '../../workspace-ripgrep.js';
+import {
+  buildFilePathClassifierContext,
+  classifyFileLocation,
+  displayNameForPath,
+  fileRefSessionKeysMatch,
+  looksLikeHostAbsolutePath,
+  resolveFileReferenceCandidate,
+} from '../../file-path-classifier.js';
 import {
   fileReferenceRegistry,
   type FileReferenceCapability,
@@ -148,13 +156,6 @@ async function resolveEditorWorkspaceRootAsync(
   return resolveEditorWorkspaceRoot(cfg, agentIdRaw);
 }
 
-function looksLikeHostAbsolutePath(pathRaw: string): boolean {
-  const p = pathRaw.trim();
-  if (!p) return false;
-  if (/^[a-z][a-z0-9+.-]*:/i.test(p) && !/^[A-Za-z]:[\\/]/.test(p)) return false;
-  return isAbsolute(p) || /^[A-Za-z]:[\\/]/.test(p) || p.startsWith('\\\\');
-}
-
 function fileReferenceCapabilities(scope: FileReferenceScope, isDirectory: boolean): FileReferenceCapability[] {
   if (scope === 'workspace') {
     return isDirectory
@@ -162,7 +163,7 @@ function fileReferenceCapabilities(scope: FileReferenceScope, isDirectory: boole
       : ['preview', 'edit', 'openExternal', 'revealInFolder', 'copyPath'];
   }
   if (scope === 'external' || scope === 'agent-profile' || scope === 'session-artifact') {
-    return ['openExternal', 'revealInFolder', 'copyPath', 'importToWorkspace'];
+    return ['openExternal', 'revealInFolder', 'copyPath'];
   }
   if (scope === 'missing') return ['copyPath'];
   return [];
@@ -481,11 +482,11 @@ export function registerWorkspaceRoutes(authenticated: Hono, deps: Authenticated
     }
 
     const workspaceRoot = ws.root;
-    const isAbs = looksLikeHostAbsolutePath(rawPath);
-    const candidate = isAbs ? resolve(rawPath) : resolveWorkspaceSafePath(workspaceRoot, rawPath);
-    const displayName = basename(rawPath.replace(/\\/g, '/')) || rawPath;
+    const classifierCtx = { ...buildFilePathClassifierContext(service.currentConfig, sessionKey), workspaceRoot };
+    const displayName = displayNameForPath(rawPath);
+    const { candidate, invalid } = await resolveFileReferenceCandidate(rawPath, workspaceRoot, classifierCtx);
 
-    if (!candidate) {
+    if (!candidate || invalid) {
       return c.json({
         ok: true,
         payload: {
@@ -507,6 +508,7 @@ export function registerWorkspaceRoutes(authenticated: Hono, deps: Authenticated
     }
 
     if (!st) {
+      const isAbs = looksLikeHostAbsolutePath(rawPath);
       return c.json({
         ok: true,
         payload: {
@@ -521,14 +523,16 @@ export function registerWorkspaceRoutes(authenticated: Hono, deps: Authenticated
       });
     }
 
-    const inWorkspace = isPathUnderWorkspace(workspaceRoot, candidate);
-    const scope: FileReferenceScope = inWorkspace ? 'workspace' : 'external';
+    const classified = classifyFileLocation(candidate, classifierCtx);
+    const { scope, locationKind, manageRoute } = classified;
+    const inWorkspace = scope === 'workspace';
     const isDirectory = st.isDirectory();
     const capabilities = fileReferenceCapabilities(scope, isDirectory);
     const ref = fileReferenceRegistry.register({
       absolutePath: candidate,
       sessionKey: sessionKey || undefined,
       scope,
+      locationKind,
       capabilities,
     });
 
@@ -539,6 +543,8 @@ export function registerWorkspaceRoutes(authenticated: Hono, deps: Authenticated
         inputPath: rawPath,
         displayName,
         scope,
+        locationKind,
+        manageRoute,
         exists: true,
         isDirectory,
         absolutePath: candidate,
@@ -561,7 +567,7 @@ export function registerWorkspaceRoutes(authenticated: Hono, deps: Authenticated
     }
 
     const sessionKey = typeof c.req.query('sessionKey') === 'string' ? c.req.query('sessionKey')!.trim() : '';
-    if ((ref.sessionKey || '') !== sessionKey) {
+    if (!fileRefSessionKeysMatch(ref.sessionKey, sessionKey)) {
       return c.json({ ok: false, error: { code: 'FILE_REF_FORBIDDEN', message: 'File reference forbidden' } }, 403);
     }
 
