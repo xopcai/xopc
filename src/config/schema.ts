@@ -531,6 +531,21 @@ export const HeartbeatConfigSchema = z
 
 export const GatewayChannelConnectDeferModeSchema = z.enum(['auto', 'off', 'explicit']);
 
+export const TunnelConfigSchema = z
+  .object({
+    enabled: z.boolean().default(false),
+    brokerUrl: z.string().url().default('https://frp.xopc.ai/api'),
+    autoStart: z.boolean().default(false),
+    subdomain: z.string().optional(),
+  })
+  .default({
+    enabled: false,
+    brokerUrl: 'https://frp.xopc.ai/api',
+    autoStart: false,
+  });
+
+export type TunnelConfig = z.infer<typeof TunnelConfigSchema>;
+
 export const GatewayConfigSchema = z.object({
   host: z.string().optional(),
   port: z.number().optional(),
@@ -848,6 +863,7 @@ export const ConfigSchema = z.object({
   session: SessionConfigSchema,
   channels: ChannelsConfigSchema,
   gateway: GatewayConfigSchema,
+  tunnel: TunnelConfigSchema.optional(),
   tools: ToolsConfigSchema,
   cron: CronConfigSchema,
   goals: GoalsConfigSchema.optional(),
