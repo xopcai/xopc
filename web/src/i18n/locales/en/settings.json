@@ -16,6 +16,7 @@
     "voice": "Voice",
     "gateway": "Gateway",
     "heartbeat": "Heartbeat",
+    "tunnel": "Remote access",
     "search": "Web search",
     "dreams": "Dreams",
     "agents": "Agents",

@@ -27,6 +27,7 @@ const SETTINGS_SECTION_TO_TAB: Record<SettingsSectionId, Tab> = {
   voice: 'settingsVoice',
   gateway: 'settingsGateway',
   heartbeat: 'settingsHeartbeat',
+  tunnel: 'settingsTunnel',
   search: 'settingsSearch',
   dreams: 'settingsDreams',
   cron: 'cron',
@@ -50,6 +51,7 @@ const TAB_TO_SETTINGS_SECTION: Record<
   | 'settingsVoice'
   | 'settingsGateway'
   | 'settingsHeartbeat'
+  | 'settingsTunnel'
   | 'settingsSearch'
   | 'settingsDreams'
   | 'cron'
@@ -73,6 +75,7 @@ const TAB_TO_SETTINGS_SECTION: Record<
   settingsVoice: 'voice',
   settingsGateway: 'gateway',
   settingsHeartbeat: 'heartbeat',
+  settingsTunnel: 'tunnel',
   settingsSearch: 'search',
   settingsDreams: 'dreams',
   cron: 'cron',
@@ -130,7 +133,7 @@ export const SETTINGS_SHELL_NAV_GROUPS: readonly SettingsShellNavGroup[] = [
       'settingsAgentSystemPrompt',
     ],
   },
-  { id: 'gateway', tabs: ['settingsGateway', 'settingsHeartbeat'] },
+  { id: 'gateway', tabs: ['settingsGateway', 'settingsHeartbeat', 'settingsTunnel'] },
   { id: 'automation', tabs: ['settingsDreams'] },
   { id: 'data', tabs: ['sessions', 'logs'] },
 ] as const;

@@ -27,6 +27,7 @@
     "settingsVoice": "语音",
     "settingsGateway": "网关",
     "settingsHeartbeat": "心跳",
+    "settingsTunnel": "远程访问",
     "settingsSearch": "网络搜索",
     "settingsDreams": "梦境",
     "settingsAgentChat": "对话",

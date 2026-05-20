@@ -9,6 +9,7 @@ import {
   FolderOpen,
   Globe,
   Heart,
+  Radio,
   Image as ImageIcon,
   Layers,
   MessageSquare,
@@ -50,6 +51,7 @@ const TAB_ICONS: Record<Tab, LucideIcon> = {
   settingsVoice: Mic,
   settingsGateway: Globe,
   settingsHeartbeat: Heart,
+  settingsTunnel: Radio,
   settingsSearch: Search,
   settingsDreams: Moon,
 };

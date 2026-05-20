@@ -1,0 +1,28 @@
+{
+  "tunnelSettings": {
+    "title": "远程访问",
+    "subtitle": "通过公网隧道让手机 App 在任何网络下连接本机 gateway。",
+    "needToken": "请先使用有效的 gateway 令牌登录后再管理远程访问。",
+    "statusTitle": "状态",
+    "loading": "正在加载隧道状态…",
+    "statusConnected": "已连接",
+    "statusConnecting": "连接中…",
+    "statusError": "错误",
+    "statusOff": "未开启",
+    "uptime": "运行时间",
+    "lanHint": "若需同时生成局域网 + 隧道双地址 QR，请在「网关」设置中将 host 设为 0.0.0.0。",
+    "qrTitle": "手机扫码",
+    "qrHint": "隧道开启后，使用 xopc 手机 App 扫描下方二维码。",
+    "qrLoading": "正在生成二维码…",
+    "qrInactive": "请先开启隧道以显示二维码。",
+    "start": "开启远程访问",
+    "stop": "断开连接",
+    "copyUrl": "复制公网地址",
+    "copied": "已复制",
+    "refreshQr": "刷新二维码",
+    "optionsTitle": "选项",
+    "autoStart": "gateway 启动时自动开启隧道",
+    "deeplinkTitle": "深链内容",
+    "brokerNote": "流量经 frp.xopc.ai 转发，请妥善保管 gateway 令牌。"
+  }
+}

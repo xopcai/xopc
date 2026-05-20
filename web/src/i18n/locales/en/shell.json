@@ -27,6 +27,7 @@
     "settingsVoice": "Voice",
     "settingsGateway": "Gateway",
     "settingsHeartbeat": "Heartbeat",
+    "settingsTunnel": "Remote access",
     "settingsSearch": "Web search",
     "settingsDreams": "Dreams",
     "settingsAgentChat": "Chat",
