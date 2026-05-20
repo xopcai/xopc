@@ -20,7 +20,6 @@ import {
   suggestFollowUps,
   type FollowUpSuggestionId,
 } from '@/features/chat/follow-up-suggestions';
-import type { FollowUpPromptLocale } from '@/features/chat/follow-up-prompts';
 import { useLocaleStore } from '@/stores/locale-store';
 import type { Message, ProgressState } from '@/features/chat/messages.types';
 import {
@@ -254,7 +253,7 @@ export function useChatFollowUpClarify(options: {
 
   const refreshFollowUpSuggestions = useCallback(
     (input: { appended: Message; messages: Message[]; clarifyActive?: boolean }) => {
-      const locale = useLocaleStore.getState().language as FollowUpPromptLocale;
+      const locale = useLocaleStore.getState().language;
       const ctx = buildFollowUpContextPack({
         messages: input.messages,
         appendedAssistant: input.appended,
@@ -498,7 +497,7 @@ export function useChatFollowUpClarify(options: {
 
   const pickFollowUpSuggestion = useCallback(
     (id: FollowUpSuggestionId) => {
-      const locale = useLocaleStore.getState().language as FollowUpPromptLocale;
+      const locale = useLocaleStore.getState().language;
       const t = followUpPromptForSuggestionId(id, locale).trim();
       if (!t) return;
       followUpSuggestionsRef.current = [];
