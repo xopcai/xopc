@@ -10,7 +10,11 @@ import {
 import { EXTENSION_PROVIDER_BASE_URL } from '../../../providers/index.js';
 import type { ProviderPlugin } from '../../../extensions/types/providers.js';
 
-const FAKE_CONTEXT = { messages: [] } as unknown as Context;
+const FAKE_CONTEXT = {
+  systemPrompt: 'You are xopc.',
+  messages: [],
+  tools: [{ name: 'search', description: 'Search', parameters: {} }],
+} as unknown as Context;
 
 function makeBuiltinModel(): Model<Api> {
   return {
@@ -66,4 +70,55 @@ describe('wrapStreamFnForXopcExtensions', () => {
     expect(fakePlugin.createStream).toHaveBeenCalledTimes(1);
   });
 
+  it('passes prompt context and stream options to extension providers', () => {
+    const fakePlugin: ProviderPlugin = {
+      id: 'demo',
+      name: 'Demo Provider',
+      models: [{ id: 'demo-model', name: 'Demo' }],
+      createStream: vi.fn(async function* () {
+        return;
+      }) as never,
+    } as ProviderPlugin;
+    getProviderRegistry().register(fakePlugin);
+
+    const original = vi.fn(() => ({}) as never);
+    const wrapped = wrapStreamFnForXopcExtensions(original as never);
+    const signal = new AbortController().signal;
+
+    wrapped(makeExtensionModel('demo'), FAKE_CONTEXT, {
+      temperature: 0.2,
+      maxTokens: 123,
+      apiKey: 'extension-managed',
+      sessionId: 'session-1',
+      reasoning: 'medium',
+      headers: { 'x-test': '1' },
+      timeoutMs: 1000,
+      maxRetries: 1,
+      metadata: { requestId: 'request-1' },
+      cacheRetention: 'short',
+      transport: 'sse',
+      signal,
+    } as never);
+
+    expect(fakePlugin.createStream).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: 'demo-model',
+        systemPrompt: 'You are xopc.',
+        messages: FAKE_CONTEXT.messages,
+        tools: FAKE_CONTEXT.tools,
+        temperature: 0.2,
+        maxTokens: 123,
+        apiKey: 'extension-managed',
+        sessionId: 'session-1',
+        reasoning: 'medium',
+        headers: { 'x-test': '1' },
+        timeoutMs: 1000,
+        maxRetries: 1,
+        metadata: { requestId: 'request-1' },
+        cacheRetention: 'short',
+        transport: 'sse',
+        signal,
+      }),
+    );
+  });
 });

@@ -77,6 +77,8 @@ export interface ProviderCapabilities {
 export interface ProviderStreamParams {
   /** Model ID */
   model: string;
+  /** System prompt supplied to the provider request */
+  systemPrompt?: string;
   /** Chat messages */
   messages: Array<AgentMessage>;
   /** Temperature (0-2) */
@@ -85,6 +87,31 @@ export interface ProviderStreamParams {
   maxTokens?: number;
   /** Tools/function definitions */
   tools?: unknown[];
+  /** API key resolved for this provider, when available */
+  apiKey?: string;
+  /** Session identifier for provider-side caching/routing */
+  sessionId?: string;
+  /** Reasoning/thinking level requested by the agent runtime */
+  reasoning?: string;
+  /** Custom HTTP headers requested by the agent runtime */
+  headers?: Record<string, string>;
+  /** Request timeout in milliseconds */
+  timeoutMs?: number;
+  /** Maximum provider retry attempts */
+  maxRetries?: number;
+  /** Provider request metadata */
+  metadata?: Record<string, unknown>;
+  /** Prompt cache retention preference */
+  cacheRetention?: string;
+  /** Preferred transport, if the provider supports multiple transports */
+  transport?: string;
+  /** Custom token budgets for thinking levels */
+  thinkingBudgets?: {
+    minimal?: number;
+    low?: number;
+    medium?: number;
+    high?: number;
+  };
   /** Stop sequences */
   stop?: string[];
   /** Presence penalty */

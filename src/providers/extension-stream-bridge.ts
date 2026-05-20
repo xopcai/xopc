@@ -44,6 +44,32 @@ function parseToolArguments(raw: string | undefined): Record<string, unknown> {
 	}
 }
 
+function collectExtraStreamOptions(options?: SimpleStreamOptions): Record<string, unknown> | undefined {
+	if (!options) return undefined;
+	const knownOptionKeys = new Set([
+		'temperature',
+		'maxTokens',
+		'signal',
+		'apiKey',
+		'transport',
+		'cacheRetention',
+		'sessionId',
+		'onPayload',
+		'onResponse',
+		'headers',
+		'timeoutMs',
+		'maxRetries',
+		'maxRetryDelayMs',
+		'metadata',
+		'reasoning',
+		'thinkingBudgets',
+	]);
+	const entries = Object.entries(options as Record<string, unknown>).filter(([key, value]) => {
+		return !knownOptionKeys.has(key) && value !== undefined;
+	});
+	return entries.length > 0 ? Object.fromEntries(entries) : undefined;
+}
+
 /** Wraps {@link streamSimple} so extension-registered models use the plugin `createStream()` path. */
 export function createExtensionAwareStreamFn(): StreamFn {
 	return ((model: Model<Api>, context: Context, options?: SimpleStreamOptions) => {
@@ -56,15 +82,28 @@ export function createExtensionAwareStreamFn(): StreamFn {
 			return streamSimple(model, context, options);
 		}
 
-		log.info({ prefix: 'ExtensionStreamBridge', msg: 'Streaming via extension provider' });
+		log.info({ provider: model.provider, modelId: model.id }, 'Streaming via extension provider');
 
 		const stream = createAssistantMessageEventStream();
 
 		const params: ProviderStreamParams = {
 			model: model.id,
+			systemPrompt: context.systemPrompt,
 			messages: context.messages as unknown as ProviderStreamParams['messages'],
+			tools: context.tools as unknown as ProviderStreamParams['tools'],
 			temperature: options?.temperature,
 			maxTokens: options?.maxTokens,
+			apiKey: options?.apiKey,
+			sessionId: options?.sessionId,
+			reasoning: options?.reasoning,
+			headers: options?.headers,
+			timeoutMs: options?.timeoutMs,
+			maxRetries: options?.maxRetries,
+			metadata: options?.metadata,
+			cacheRetention: options?.cacheRetention,
+			transport: options?.transport,
+			thinkingBudgets: options?.thinkingBudgets,
+			extra: collectExtraStreamOptions(options),
 			signal: options?.signal,
 		};
 
