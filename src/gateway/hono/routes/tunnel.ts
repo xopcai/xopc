@@ -21,7 +21,6 @@ export function registerTunnelRoutes(authenticated: Hono, deps: AuthenticatedRou
     await configureTunnelFromService(deps);
     const gateway = deps.service.currentConfig.gateway;
     const port = gateway.port ?? 18790;
-    const host = gateway.host ?? '127.0.0.1';
     const token =
       extractToken({
         authorization: c.req.header('authorization') ?? undefined,
