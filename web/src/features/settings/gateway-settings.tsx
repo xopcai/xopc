@@ -1,7 +1,7 @@
 import { AlertCircle, Check, Copy, ExternalLink, Eye, EyeOff, Loader2, Server, Smartphone } from 'lucide-react';
 import QRCode from 'qrcode';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router';
+import { Link } from 'react-router-dom';
 import useSWR, { useSWRConfig } from 'swr';
 
 import { Button } from '@/components/ui/button';
