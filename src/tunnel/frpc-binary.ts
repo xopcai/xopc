@@ -30,6 +30,7 @@ function frpcDownloadUrls(): string[] {
   const base = `frp_${FRPC_VERSION}_${platform}_${arch}`;
   return [
     `https://github.com/fatedier/frp/releases/download/v${FRPC_VERSION}/${base}.tar.gz`,
+    `https://ghfast.top/https://github.com/fatedier/frp/releases/download/v${FRPC_VERSION}/${base}.tar.gz`,
     `https://frp.xopc.ai/bin/${base}.tar.gz`,
   ];
 }
