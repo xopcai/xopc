@@ -54,7 +54,7 @@ When the CLI runs **without** a loaded config file, **`XOPC_WORKSPACE`** wins if
 
 ### Profile Markdown (persona & memory index)
 
-These files are loaded into the system prompt in a **fixed order** with length limits. Location: **`agents/<agentId>/profile/`** (same filenames).
+These files are injected into the system prompt as **Project Context** (OpenClaw-aligned bootstrap). Location: **`agents/<agentId>/profile/`** (same filenames). Runtime loads them on each agent run; agents should not manually reread SOUL/USER/MEMORY at session start unless the user asks or context is incomplete.
 
 | File | Role |
 |------|------|
@@ -62,10 +62,12 @@ These files are loaded into the system prompt in a **fixed order** with length l
 | `IDENTITY.md` | Name, tone, boundaries. |
 | `USER.md` | Notes about the human user. |
 | `TOOLS.md` | Environment-specific tool hints (hosts, devices, …). |
-| `AGENTS.md` | Safety and collaboration guidelines. |
-| `HEARTBEAT.md` | Heartbeat / proactive check configuration (empty or comment-only skips calls). |
-| `MEMORY.md` | Curated long-term memory index. |
-| `BOOTSTRAP.md` | Optional onboarding tips; often created by `onboard` / template setup, not always by `init`. |
+| `AGENTS.md` | Session Startup, Red Lines, and collaboration guidelines. |
+| `HEARTBEAT.md` | Heartbeat / proactive check configuration (dynamic Project Context when enabled). |
+| `MEMORY.md` | Curated long-term memory index (main session only; omitted for subagent/cron). |
+| `BOOTSTRAP.md` | Optional onboarding tips; injected only while the file exists. |
+
+On `/new` and `/reset`, xopc may also prepend recent **`memory/YYYY-MM-DD.md`** excerpts to the first user turn (`agents.defaults.startupContext`). **`agents/<id>/memories/`** is **not** injected into the prompt; use the `curated_memory` tool for live read/write.
 
 Other root Markdown files (for example `CONTEXT.md` or `SKILLS.md`) are optional and are **not** loaded into the default system prompt unless you wire them in yourself (e.g. read via tools or custom workflow).
 

@@ -27,7 +27,9 @@ import { resolveModel, getDefaultModelSync, getApiKeySync } from '../providers/i
 import { createExtensionAwareStreamFn } from '../providers/extension-stream-bridge.js';
 import { CredentialResolver } from '../auth/credentials.js';
 import { resolveBundledSkillsDir, resolveStateDir } from '../config/paths.js';
-import { loadProfileMarkdownFiles, extractTextContent, type ProfileMarkdownFile } from './context/workspace.js';
+import { loadProfileMarkdownFiles, extractTextContent } from './context/workspace.js';
+import { resolveBootstrapContextSync } from './bootstrap/bootstrap-files.js';
+import type { EmbeddedContextFile } from './bootstrap/types.js';
 import { SkillManager } from './skills/index.js';
 import { SystemPromptBuilder } from './prompt/service-prompt-builder.js';
 import { AgentToolsFactory } from './tools/factory.js';
@@ -49,13 +51,12 @@ import { BuiltinMemoryStore } from './memory/builtin-memory-store.js';
 import { createMemoryManagerFromConfig } from './memory/create-memory-manager.js';
 import { injectPrefetchIntoUserMessage } from './memory/inject-prefetch.js';
 import {
-  isCuratedMemoryInPrompt,
   isMemorySubsystemEnabled,
   resolveBuiltinMemoryStoreConfig,
   shouldInjectMemoryPrefetchThisTurn,
+  shouldRegisterCuratedMemoryTool,
 } from './memory/memory-config.js';
 import type { MemoryManager } from './memory/manager.js';
-import type { MemorySnapshot } from './memory/types.js';
 import { extractAgentUserPlainText } from './memory/user-message-text.js';
 import { resolveBackgroundReviewSettings } from './background-review/settings.js';
 import { runBackgroundReviewTurn } from './background-review/run-background-review.js';
@@ -115,8 +116,6 @@ export interface AgentInstance {
   sessionKey: string;
   createdAt: number;
   lastUsedAt: number;
-  /** Curated agent-home `memories/` snapshot frozen at agent creation (prefix cache). */
-  curatedMemorySnapshot: MemorySnapshot;
   effectiveProfile: EffectiveAgentProfile;
   resolvedWorkspacePath: string;
   /** Tool names registered on this agent (for skill indexing / tool gating). */
@@ -532,10 +531,27 @@ export class AgentManager {
     };
   }
 
-  private loadProfileMarkdownForProfile(profile: EffectiveAgentProfile): ProfileMarkdownFile[] {
+  private loadProfileMarkdownForProfile(profile: EffectiveAgentProfile): ReturnType<typeof loadProfileMarkdownFiles> {
     const cfg = this.config.config!;
     const profileDir = resolveAgentProfileDir(cfg, profile.agentId);
     return loadProfileMarkdownFiles(profileDir);
+  }
+
+  private resolveContextFilesForSession(
+    sessionKey: string,
+    profile: EffectiveAgentProfile,
+    excludeHeartbeat?: boolean,
+  ): EmbeddedContextFile[] {
+    const cfg = this.config.config!;
+    const profileDir = resolveAgentProfileDir(cfg, profile.agentId);
+    const heartbeatEnabled = cfg.gateway?.heartbeat?.includeSystemPromptSection ?? false;
+    const { contextFiles } = resolveBootstrapContextSync({
+      profileDir,
+      config: cfg,
+      sessionKey,
+      excludeHeartbeat: excludeHeartbeat ?? !heartbeatEnabled,
+    });
+    return contextFiles;
   }
 
   getSkillCatalog(lang?: string): SkillCatalogEntry[] {
@@ -579,9 +595,11 @@ export class AgentManager {
         rt.skillManager.refreshPromptFromConfig();
         touched.add(instance.resolvedWorkspacePath);
       }
-      const profileMarkdownFiles = this.loadProfileMarkdownForProfile(instance.effectiveProfile);
-      const newPrompt = rt.systemPromptBuilder.build(profileMarkdownFiles, {
-        curatedMemorySnapshot: instance.curatedMemorySnapshot,
+      const contextFiles = this.resolveContextFilesForSession(
+        instance.sessionKey,
+        instance.effectiveProfile,
+      );
+      const newPrompt = rt.systemPromptBuilder.build(contextFiles, {
         externalMemoryInstructions: rt.memoryManager.buildExternalSystemPrompt(),
         workspaceOverride: instance.resolvedWorkspacePath,
         profileMarkdownPathRoot: resolveAgentProfileDir(cfg, instance.effectiveProfile.agentId),
@@ -612,9 +630,11 @@ export class AgentManager {
       if (!touched.has(instance.resolvedWorkspacePath)) {
         touched.add(instance.resolvedWorkspacePath);
       }
-      const profileMarkdownFiles = this.loadProfileMarkdownForProfile(instance.effectiveProfile);
-      const newPrompt = rt.systemPromptBuilder.rebuild(profileMarkdownFiles, {
-        curatedMemorySnapshot: instance.curatedMemorySnapshot,
+      const contextFiles = this.resolveContextFilesForSession(
+        instance.sessionKey,
+        instance.effectiveProfile,
+      );
+      const newPrompt = rt.systemPromptBuilder.rebuild(contextFiles, {
         externalMemoryInstructions: rt.memoryManager.buildExternalSystemPrompt(),
         workspaceOverride: instance.resolvedWorkspacePath,
         profileMarkdownPathRoot: resolveAgentProfileDir(cfg, instance.effectiveProfile.agentId),
@@ -662,19 +682,15 @@ export class AgentManager {
         .catch((err) => log.warn({ err, sessionKey }, 'memory initializeAll failed'));
     }
 
-    const curatedOn = isCuratedMemoryInPrompt(cfg);
-    if (curatedOn) {
+    if (isMemorySubsystemEnabled(cfg) && shouldRegisterCuratedMemoryTool(cfg)) {
       rt.builtinMemoryStore.loadFromDiskSync();
     }
-    const snap = curatedOn ? rt.builtinMemoryStore.getSnapshot() : { memory: '', user: '' };
-    const curatedMemorySnapshot: MemorySnapshot = { memory: snap.memory, user: snap.user };
 
     const { agent, registeredToolNames } = this.createAgentForProfile(
       sessionKey,
       profile,
       resolvedPath,
       rt,
-      curatedMemorySnapshot,
     );
 
     this.agents.set(sessionKey, {
@@ -682,7 +698,6 @@ export class AgentManager {
       sessionKey,
       createdAt: Date.now(),
       lastUsedAt: Date.now(),
-      curatedMemorySnapshot,
       effectiveProfile: profile,
       resolvedWorkspacePath: resolvedPath,
       registeredToolNames,
@@ -819,16 +834,15 @@ export class AgentManager {
   }
 
   private createAgentForProfile(
-    _sessionKey: string,
+    sessionKey: string,
     profile: EffectiveAgentProfile,
     resolvedWorkspacePath: string,
     rt: WorkspaceRuntime,
-    curatedMemorySnapshot: MemorySnapshot,
   ): { agent: Agent; registeredToolNames: string[] } {
     const modelRef = profile.primaryModelRef?.trim() || this.defaultModel;
     const model = this.resolveModelStringToModel(modelRef);
 
-    const profileMarkdownFiles = this.loadProfileMarkdownForProfile(profile);
+    const contextFiles = this.resolveContextFilesForSession(sessionKey, profile);
     const tools = this.toolsFactory.createAllTools({
       workspace: resolvedWorkspacePath,
       profileMarkdownRoot: resolveAgentProfileDir(this.config.config!, profile.agentId),
@@ -845,8 +859,7 @@ export class AgentManager {
 
     const agent = new Agent({
       initialState: {
-        systemPrompt: rt.systemPromptBuilder.build(profileMarkdownFiles, {
-          curatedMemorySnapshot,
+        systemPrompt: rt.systemPromptBuilder.build(contextFiles, {
           externalMemoryInstructions: rt.memoryManager.buildExternalSystemPrompt(),
           workspaceOverride: resolvedWorkspacePath,
           profileMarkdownPathRoot: resolveAgentProfileDir(this.config.config!, profile.agentId),

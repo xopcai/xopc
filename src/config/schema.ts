@@ -71,6 +71,24 @@ export const AgentDefaultsSchema = z.object({
   thinkingDefault: z.enum(['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'adaptive']).optional(),
   reasoningDefault: z.enum(['off', 'on', 'stream']).optional(),
   verboseDefault: z.enum(['off', 'on', 'full']).optional(),
+  bootstrapMaxChars: z.number().int().positive().optional(),
+  bootstrapTotalMaxChars: z.number().int().positive().optional(),
+  bootstrapPromptTruncationWarning: z.enum(['off', 'once', 'always']).optional(),
+  startupContext: z
+    .object({
+      enabled: z.boolean().optional(),
+      applyOn: z.array(z.enum(['new', 'reset'])).optional(),
+      dailyMemoryDays: z.number().int().min(1).optional(),
+      maxFileBytes: z.number().int().positive().optional(),
+      maxFileChars: z.number().int().positive().optional(),
+      maxTotalChars: z.number().int().positive().optional(),
+    })
+    .optional(),
+  contextLimits: z
+    .object({
+      postCompactionMaxChars: z.number().int().positive().optional(),
+    })
+    .optional(),
   compaction: z.object({
     enabled: z.boolean().default(true),
     mode: z.enum(['default', 'safeguard']).default('default'),
@@ -81,6 +99,7 @@ export const AgentDefaultsSchema = z.object({
     // Dual-strategy compaction
     evictionWindow: z.number().min(0.1).max(0.5).default(0.2),
     retentionWindow: z.number().min(3).max(20).default(6),
+    postCompactionSections: z.array(z.string()).optional(),
   }).optional(),
   pruning: z.object({
     enabled: z.boolean().default(true),
@@ -94,9 +113,9 @@ export const AgentDefaultsSchema = z.object({
    */
   memory: z
     .object({
-      /** Master switch: curated snapshot, `curated_memory`, prefetch, and external provider. Default true. */
+      /** Master switch: `curated_memory` tool, prefetch, and external provider. Default true. */
       enabled: z.boolean().optional(),
-      /** When false, use `agents/<id>/profile/MEMORY.md` only (no curated snapshot / tool). Default true. */
+      /** When false, disable curated_memory tool and memory subsystem helpers. Default true. */
       useEnhancedSystem: z.boolean().optional(),
       /** Include USER.md in snapshot. Default true. */
       userProfileEnabled: z.boolean().optional(),

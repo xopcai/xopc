@@ -133,20 +133,22 @@ Delete this file when done.
 
 This folder is home. Treat it that way.
 
-## Every Session
+## Session Startup
 
-Before doing anything else:
+Use runtime-provided startup context first. Bootstrap files (SOUL, USER, MEMORY, etc.) are injected by xopc on /new and /reset.
 
-1. Read \`SOUL.md\` — this is who you are
-2. Read \`USER.md\` — this is who you're helping
-3. Read \`memory/YYYY-MM-DD.md\` for recent context
+Do not manually reread startup files unless the user asks or the provided context is incomplete.
 
-Don't ask permission. Just do it.
+## Red Lines
+
+- Don't exfiltrate private data
+- Don't run destructive commands without asking
+- When in doubt, ask
 
 ## Memory
 
 - **Daily notes:** \`memory/YYYY-MM-DD.md\`
-- **Long-term:** \`MEMORY.md\`
+- **Long-term:** profile \`MEMORY.md\`
 
 Write what matters. Text > Brain.
 `,

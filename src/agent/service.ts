@@ -27,7 +27,7 @@ import {
 } from './transcript/thinking-types.js';
 import { createLogger, runWithLogContext, updateAsyncLogContext } from '../utils/logger.js';
 import { ExtensionHookRunner } from '../extensions/index.js';
-import { loadProfileMarkdownFiles, extractTextContent } from './context/workspace.js';
+import { extractTextContent } from './context/workspace.js';
 import { SessionTracker } from './session/tracker.js';
 import { ModelManager } from './models/index.js';
 import { initializeCommands } from '../chat-commands/index.js';
@@ -97,7 +97,6 @@ export class AgentService {
   private running = false;
   private agentId: string;
   private workspaceDir: string;
-  private profileMarkdownFiles: ReturnType<typeof loadProfileMarkdownFiles> = [];
   private channelManagerRef: ChannelManager | null = null;
   private bus: MessageBus;
   private config: AgentServiceConfig;
@@ -159,14 +158,6 @@ export class AgentService {
     this.onSessionTranscriptUpdated = config.onSessionTranscriptUpdated;
     this.agentId = `agent-${Date.now()}`;
     this.workspaceDir = config.workspace;
-
-    if (config.config) {
-      const aid = resolveDefaultAgentId(config.config);
-      const profileDir = resolveAgentProfileDir(config.config, aid);
-      this.profileMarkdownFiles = loadProfileMarkdownFiles(profileDir);
-    } else {
-      this.profileMarkdownFiles = [];
-    }
 
     this.sessionTracker = new SessionTracker();
     this.modelManager = new ModelManager({
