@@ -20,6 +20,8 @@ import type { Config } from '../config/schema.js';
 import type { SessionListQuery, ExportFormat } from '../session/types.js';
 import type { SessionPatchBody } from '../session/patch-metadata.js';
 import type { CompactionResult } from '../agent/memory/compaction.js';
+import { maybeAutoStartTunnelFromConfig } from '../tunnel/gateway-lifecycle.js';
+import { wireTunnelEventsToGateway } from '../tunnel/gateway-lifecycle.js';
 import { resolveGatewayAuth, assertGatewayAuthConfigured, validateToken, extractToken, type ResolvedGatewayAuth } from './auth.js';
 import { assertGatewayAuthNotKnownWeak } from './security/known-weak-secrets.js';
 import { auditGatewayConfig } from './security/audit.js';
@@ -468,7 +470,14 @@ export class GatewayService {
       },
     });
 
+    wireTunnelEventsToGateway(this);
+
     log.debug('Gateway service started');
+  }
+
+  /** After HTTP is listening: honor `tunnel.autoStart` (CLI / GatewayServer). */
+  private async runTunnelAutoStartIfConfigured(): Promise<void> {
+    await maybeAutoStartTunnelFromConfig(this.config, this.getAuthToken());
   }
 
   /**
@@ -476,6 +485,8 @@ export class GatewayService {
    * opted into `meta.deferConnectUntilAfterListen`, then replays outbound queue.
    */
   async onHttpListening(): Promise<void> {
+    await this.runTunnelAutoStartIfConfigured();
+
     if (this.serviceConfig.deferChannelConnectUntilAfterHttp !== true) {
       return;
     }

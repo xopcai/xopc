@@ -266,7 +266,12 @@
     "mobilePairCopyLink": "复制配对链接",
     "mobilePairCopied": "已复制配对链接",
     "mobilePairSchemeHint": "应用注册的格式：xopc://gateway/mobile-connect?baseUrl=…&token=…",
-    "mobilePairInvalidBaseUrl": "请输入以 http:// 或 https:// 开头的完整网关地址（无需路径）。"
+    "mobilePairInvalidBaseUrl": "请输入以 http:// 或 https:// 开头的完整网关地址（无需路径）。",
+    "mobilePairTunnelActive": "远程访问已开启。二维码包含隧道地址，并在可用时附带局域网地址。",
+    "mobilePairTunnelPublicUrl": "隧道地址",
+    "mobilePairTunnelLanUrl": "局域网地址（已写入二维码）",
+    "mobilePairTunnelHint": "开启远程访问后，配对二维码将自动使用隧道地址。",
+    "mobilePairOpenTunnelSettings": "打开远程访问设置"
   },
   "heartbeatSettings": {
     "needToken": "请先保存网关访问令牌后再加载或修改心跳选项。",

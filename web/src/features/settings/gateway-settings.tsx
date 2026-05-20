@@ -1,6 +1,8 @@
 import { AlertCircle, Check, Copy, ExternalLink, Eye, EyeOff, Loader2, Server, Smartphone } from 'lucide-react';
 import QRCode from 'qrcode';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router';
+import useSWR, { useSWRConfig } from 'swr';
 
 import { Button } from '@/components/ui/button';
 import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
@@ -9,6 +11,7 @@ import {
   patchGatewaySettings,
   type GatewaySettingsState,
 } from '@/features/settings/gateway-config-api';
+import { fetchTunnelQr, fetchTunnelStatus } from '@/features/tunnel/tunnel-api';
 import { settingsInputFocusClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
 import {
@@ -280,6 +283,28 @@ function MobileGatewayPairCard({
   g: GatewaySettingsMessages;
   gatewayToken: string;
 }) {
+  const hasToken = Boolean(gatewayToken);
+  const { mutate: globalMutate } = useSWRConfig();
+  const { data: tunnelStatus } = useSWR(hasToken ? 'gateway-pair-tunnel-status' : null, fetchTunnelStatus, {
+    refreshInterval: 60_000,
+  });
+
+  useEffect(() => {
+    const onTunnelStatus = () => {
+      void globalMutate('gateway-pair-tunnel-status');
+      void globalMutate('gateway-pair-tunnel-qr');
+    };
+    window.addEventListener('tunnel-status', onTunnelStatus);
+    return () => window.removeEventListener('tunnel-status', onTunnelStatus);
+  }, [globalMutate]);
+  const tunnelActive =
+    tunnelStatus?.state === 'connected' && Boolean(tunnelStatus.publicUrl?.trim());
+  const { data: tunnelQr } = useSWR(
+    tunnelActive && hasToken ? 'gateway-pair-tunnel-qr' : null,
+    fetchTunnelQr,
+    { refreshInterval: 15_000 },
+  );
+
   const [pairBaseUrl, setPairBaseUrl] = useState(getBaseUrl);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [qrGenFailed, setQrGenFailed] = useState(false);
@@ -296,9 +321,17 @@ function MobileGatewayPairCard({
   }, [trimmedBase]);
 
   const deepLink = useMemo(() => {
-    if (!gatewayToken || !baseOk) return '';
-    return buildMobileGatewayPairDeepLink({ baseUrl: trimmedBase, gatewayToken });
-  }, [baseOk, gatewayToken, trimmedBase]);
+    if (!gatewayToken) return '';
+    if (tunnelActive && tunnelQr?.qrPayload?.trim()) {
+      return tunnelQr.qrPayload.trim();
+    }
+    if (!baseOk) return '';
+    return buildMobileGatewayPairDeepLink({
+      baseUrl: trimmedBase,
+      gatewayToken,
+      lanUrl: null,
+    });
+  }, [baseOk, gatewayToken, trimmedBase, tunnelActive, tunnelQr?.qrPayload]);
 
   useEffect(() => {
     if (!deepLink) {
@@ -343,30 +376,61 @@ function MobileGatewayPairCard({
         <Smartphone className="size-4 text-accent" strokeWidth={1.75} />
         {g.mobilePairTitle}
       </div>
-      <p className="text-xs text-fg-subtle">{g.mobilePairSubtitle}</p>
+      <p className="text-xs text-fg-subtle">
+        {tunnelActive ? g.mobilePairTunnelActive : g.mobilePairSubtitle}
+      </p>
 
-      <div className="space-y-1.5">
-        <label className="text-sm font-medium text-fg" htmlFor="gateway-mobile-pair-base">
-          {g.mobilePairBaseUrlLabel}
-        </label>
-        <input
-          id="gateway-mobile-pair-base"
-          className={cn(inputClassName(), 'font-mono text-xs')}
-          type="text"
-          autoComplete="off"
-          spellCheck={false}
-          value={pairBaseUrl}
-          onChange={(e) => setPairBaseUrl(e.target.value)}
-        />
-        <p className="text-xs text-fg-subtle">{g.mobilePairBaseUrlHint}</p>
-        {!baseOk ? <p className="text-xs text-amber-800 dark:text-amber-200">{g.mobilePairInvalidBaseUrl}</p> : null}
-        {localhostWarn ? (
-          <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
-            {g.mobilePairLocalhostWarning}
+      {tunnelActive ? (
+        <div className="space-y-2 rounded-lg border border-edge bg-surface-panel px-3 py-3">
+          <div>
+            <div className="text-xs font-medium text-fg-muted">{g.mobilePairTunnelPublicUrl}</div>
+            <div className="mt-0.5 break-all font-mono text-xs text-fg">{tunnelStatus?.publicUrl}</div>
+          </div>
+          {tunnelQr?.lanUrl ? (
+            <div>
+              <div className="text-xs font-medium text-fg-muted">{g.mobilePairTunnelLanUrl}</div>
+              <div className="mt-0.5 break-all font-mono text-xs text-fg">{tunnelQr.lanUrl}</div>
+            </div>
+          ) : null}
+        </div>
+      ) : (
+        <>
+          <p className="text-xs text-fg-subtle">
+            {g.mobilePairTunnelHint}{' '}
+            <Link
+              to="/settings/tunnel"
+              className="text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+            >
+              {g.mobilePairOpenTunnelSettings}
+            </Link>
           </p>
-        ) : null}
-        <p className="text-xs text-fg-subtle">{g.mobilePairSecurityNote}</p>
-      </div>
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-fg" htmlFor="gateway-mobile-pair-base">
+              {g.mobilePairBaseUrlLabel}
+            </label>
+            <input
+              id="gateway-mobile-pair-base"
+              className={cn(inputClassName(), 'font-mono text-xs')}
+              type="text"
+              autoComplete="off"
+              spellCheck={false}
+              value={pairBaseUrl}
+              onChange={(e) => setPairBaseUrl(e.target.value)}
+            />
+            <p className="text-xs text-fg-subtle">{g.mobilePairBaseUrlHint}</p>
+            {!baseOk ? (
+              <p className="text-xs text-amber-800 dark:text-amber-200">{g.mobilePairInvalidBaseUrl}</p>
+            ) : null}
+            {localhostWarn ? (
+              <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+                {g.mobilePairLocalhostWarning}
+              </p>
+            ) : null}
+          </div>
+        </>
+      )}
+
+      <p className="text-xs text-fg-subtle">{g.mobilePairSecurityNote}</p>
 
       {deepLink ? (
         <div className="flex flex-col items-center gap-3 sm:items-start">
