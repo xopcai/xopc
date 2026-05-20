@@ -10,7 +10,7 @@ export function isMemorySubsystemEnabled(config: Config | undefined): boolean {
   return config?.agents?.defaults?.memory?.enabled !== false;
 }
 
-/** Curated snapshot + `curated_memory` tool (agent home `memories/`). */
+/** Curated memory tool + agent-home `memories/` store (not injected into system prompt). */
 export function isCuratedMemoryInPrompt(config: Config | undefined): boolean {
   const m = config?.agents?.defaults?.memory;
   if (m?.enabled === false) {
