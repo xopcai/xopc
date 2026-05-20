@@ -8,6 +8,7 @@ import type {
   ToolUseContent,
 } from '@/features/chat/messages.types';
 import { formatStepRoundDuration } from '@/features/chat/step-round-duration';
+import { TOOL_NAMES_WITH_WORKSPACE_OUTPUT } from '@/features/chat/assistant-message-artifacts';
 import { ToolResultFileLinks } from '@/features/chat/tool-result-file-links';
 import { extractFilePathsFromToolResult } from '@/features/chat/tool-result-file-paths';
 import {
@@ -760,6 +761,9 @@ function StepRow({
 
   const extractedFilePaths = useMemo(() => {
     if (block.type !== 'tool_use' || block.status === 'running' || block.status === 'error') {
+      return [];
+    }
+    if (!TOOL_NAMES_WITH_WORKSPACE_OUTPUT.has(block.name)) {
       return [];
     }
     if (!toolResultText) {
