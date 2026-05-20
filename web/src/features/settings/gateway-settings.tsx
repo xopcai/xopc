@@ -1,8 +1,5 @@
-import { AlertCircle, Check, Copy, ExternalLink, Eye, EyeOff, Loader2, Server, Smartphone } from 'lucide-react';
-import QRCode from 'qrcode';
+import { AlertCircle, Check, Copy, ExternalLink, Eye, EyeOff, Loader2, Server } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
-import useSWR, { useSWRConfig } from 'swr';
 
 import { Button } from '@/components/ui/button';
 import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
@@ -11,14 +8,8 @@ import {
   patchGatewaySettings,
   type GatewaySettingsState,
 } from '@/features/settings/gateway-config-api';
-import { fetchTunnelQr, fetchTunnelStatus } from '@/features/tunnel/tunnel-api';
 import { settingsInputFocusClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
-import {
-  buildMobileGatewayPairDeepLink,
-  getBaseUrl,
-  isLoopbackHttpOrigin,
-} from '@/lib/url';
 import { messages, type GatewaySettingsMessages } from '@/i18n/messages';
 import { docsGuidePageUrl } from '@/navigation';
 import { useGatewayStore } from '@/stores/gateway-store';
@@ -252,8 +243,6 @@ export function GatewaySettingsPanel() {
             {g.changeToken}
           </Button>
 
-          {token ? <MobileGatewayPairCard g={g} gatewayToken={token} /> : null}
-
           <div className="space-y-2 border-t border-edge pt-4">
             <label className="text-sm font-medium text-fg" htmlFor="gateway-update-channel">
               {g.updateChannel}
@@ -272,191 +261,6 @@ export function GatewaySettingsPanel() {
           </div>
         </div>
       </section>
-    </div>
-  );
-}
-
-function MobileGatewayPairCard({
-  g,
-  gatewayToken,
-}: {
-  g: GatewaySettingsMessages;
-  gatewayToken: string;
-}) {
-  const hasToken = Boolean(gatewayToken);
-  const { mutate: globalMutate } = useSWRConfig();
-  const { data: tunnelStatus } = useSWR(hasToken ? 'gateway-pair-tunnel-status' : null, fetchTunnelStatus, {
-    refreshInterval: 60_000,
-  });
-
-  useEffect(() => {
-    const onTunnelStatus = () => {
-      void globalMutate('gateway-pair-tunnel-status');
-      void globalMutate('gateway-pair-tunnel-qr');
-    };
-    window.addEventListener('tunnel-status', onTunnelStatus);
-    return () => window.removeEventListener('tunnel-status', onTunnelStatus);
-  }, [globalMutate]);
-  const tunnelActive =
-    tunnelStatus?.state === 'connected' && Boolean(tunnelStatus.publicUrl?.trim());
-  const { data: tunnelQr } = useSWR(
-    tunnelActive && hasToken ? 'gateway-pair-tunnel-qr' : null,
-    fetchTunnelQr,
-    { refreshInterval: 15_000 },
-  );
-
-  const [pairBaseUrl, setPairBaseUrl] = useState(getBaseUrl);
-  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
-  const [qrGenFailed, setQrGenFailed] = useState(false);
-  const [linkCopied, setLinkCopied] = useState(false);
-
-  const trimmedBase = pairBaseUrl.trim();
-  const baseOk = useMemo(() => {
-    try {
-      const u = new URL(trimmedBase);
-      return u.protocol === 'http:' || u.protocol === 'https:';
-    } catch {
-      return false;
-    }
-  }, [trimmedBase]);
-
-  const deepLink = useMemo(() => {
-    if (!gatewayToken) return '';
-    if (tunnelActive && tunnelQr?.qrPayload?.trim()) {
-      return tunnelQr.qrPayload.trim();
-    }
-    if (!baseOk) return '';
-    return buildMobileGatewayPairDeepLink({
-      baseUrl: trimmedBase,
-      gatewayToken,
-      lanUrl: null,
-    });
-  }, [baseOk, gatewayToken, trimmedBase, tunnelActive, tunnelQr?.qrPayload]);
-
-  useEffect(() => {
-    if (!deepLink) {
-      setQrDataUrl(null);
-      setQrGenFailed(false);
-      return;
-    }
-    let cancelled = false;
-    setQrGenFailed(false);
-    void QRCode.toDataURL(deepLink, {
-      width: 216,
-      margin: 2,
-      errorCorrectionLevel: 'M',
-      color: { dark: '#000000ff', light: '#ffffffff' },
-    })
-      .then((url) => {
-        if (!cancelled) setQrDataUrl(url);
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setQrGenFailed(true);
-          setQrDataUrl(null);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [deepLink]);
-
-  const localhostWarn = baseOk && isLoopbackHttpOrigin(trimmedBase);
-
-  const copyDeepLink = useCallback(async () => {
-    if (!deepLink) return;
-    await navigator.clipboard.writeText(deepLink).catch(() => {});
-    setLinkCopied(true);
-    window.setTimeout(() => setLinkCopied(false), 2000);
-  }, [deepLink]);
-
-  return (
-    <div className="space-y-3 border-t border-edge pt-4">
-      <div className="flex items-center gap-2 text-sm font-semibold text-fg">
-        <Smartphone className="size-4 text-accent" strokeWidth={1.75} />
-        {g.mobilePairTitle}
-      </div>
-      <p className="text-xs text-fg-subtle">
-        {tunnelActive ? g.mobilePairTunnelActive : g.mobilePairSubtitle}
-      </p>
-
-      {tunnelActive ? (
-        <div className="space-y-2 rounded-lg border border-edge bg-surface-panel px-3 py-3">
-          <div>
-            <div className="text-xs font-medium text-fg-muted">{g.mobilePairTunnelPublicUrl}</div>
-            <div className="mt-0.5 break-all font-mono text-xs text-fg">{tunnelStatus?.publicUrl}</div>
-          </div>
-          {tunnelQr?.lanUrl ? (
-            <div>
-              <div className="text-xs font-medium text-fg-muted">{g.mobilePairTunnelLanUrl}</div>
-              <div className="mt-0.5 break-all font-mono text-xs text-fg">{tunnelQr.lanUrl}</div>
-            </div>
-          ) : null}
-        </div>
-      ) : (
-        <>
-          <p className="text-xs text-fg-subtle">
-            {g.mobilePairTunnelHint}{' '}
-            <Link
-              to="/settings/tunnel"
-              className="text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
-            >
-              {g.mobilePairOpenTunnelSettings}
-            </Link>
-          </p>
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium text-fg" htmlFor="gateway-mobile-pair-base">
-              {g.mobilePairBaseUrlLabel}
-            </label>
-            <input
-              id="gateway-mobile-pair-base"
-              className={cn(inputClassName(), 'font-mono text-xs')}
-              type="text"
-              autoComplete="off"
-              spellCheck={false}
-              value={pairBaseUrl}
-              onChange={(e) => setPairBaseUrl(e.target.value)}
-            />
-            <p className="text-xs text-fg-subtle">{g.mobilePairBaseUrlHint}</p>
-            {!baseOk ? (
-              <p className="text-xs text-amber-800 dark:text-amber-200">{g.mobilePairInvalidBaseUrl}</p>
-            ) : null}
-            {localhostWarn ? (
-              <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
-                {g.mobilePairLocalhostWarning}
-              </p>
-            ) : null}
-          </div>
-        </>
-      )}
-
-      <p className="text-xs text-fg-subtle">{g.mobilePairSecurityNote}</p>
-
-      {deepLink ? (
-        <div className="flex flex-col items-center gap-3 sm:items-start">
-          {qrDataUrl && !qrGenFailed ? (
-            <img
-              src={qrDataUrl}
-              alt=""
-              className="size-56 rounded-lg border border-edge-subtle bg-white object-contain p-3 dark:border-edge"
-            />
-          ) : null}
-          {!qrDataUrl && !qrGenFailed ? <p className="text-sm text-fg-muted">{g.mobilePairEncoding}</p> : null}
-          {qrGenFailed ? <p className="text-center text-sm text-fg-muted sm:text-left">{g.mobilePairImageError}</p> : null}
-          <Button
-            type="button"
-            variant="secondary"
-            className="w-full sm:w-auto"
-            disabled={!deepLink}
-            onClick={() => void copyDeepLink()}
-          >
-            {linkCopied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-            {linkCopied ? g.mobilePairCopied : g.mobilePairCopyLink}
-          </Button>
-        </div>
-      ) : null}
-
-      <p className="break-all font-mono text-[10px] leading-relaxed text-fg-subtle">{g.mobilePairSchemeHint}</p>
     </div>
   );
 }
