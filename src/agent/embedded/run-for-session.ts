@@ -8,6 +8,7 @@ import type { SessionStore } from '../../session/store.js';
 import { resolveAgentTurnTimeoutMs } from '../orchestration/run-agent-turn-with-timeout.js';
 import { runXopcEmbeddedTurn } from './run-turn.js';
 import type { EmbeddedStreamEvent, RunXopcEmbeddedTurnParams, RunXopcEmbeddedTurnResult } from './types.js';
+import { applyStartupContextToUserMessage } from '../reply/apply-turn-user-enrichment.js';
 
 export type RunEmbeddedForSessionParams = {
   sessionKey: string;
@@ -22,6 +23,9 @@ export type RunEmbeddedForSessionParams = {
   getConfig?: () => Config | undefined;
   beforeTurn?: () => void | Promise<void>;
   afterTurn?: (userPlain: string) => void | Promise<void>;
+  startupAction?: 'new' | 'reset';
+  forceStartupContext?: boolean;
+  applyStartupContext?: boolean;
 };
 
 export async function runEmbeddedTurnForSession(
@@ -50,10 +54,23 @@ export async function runEmbeddedTurnForSession(
   const workspaceDir = agentManager.getResolvedWorkspaceForSession(sessionKey);
   const config = params.getConfig?.();
 
+  let userMessageForTurn = userMessage;
+  if (params.applyStartupContext !== false) {
+    userMessageForTurn = await applyStartupContextToUserMessage({
+      userMessage,
+      sessionKey,
+      workspaceDir,
+      cfg: config,
+      sessionStore,
+      startupAction: params.startupAction,
+      force: params.forceStartupContext,
+    });
+  }
+
   const result = await runXopcEmbeddedTurn({
     sessionKey,
     runId,
-    userMessage,
+    userMessage: userMessageForTurn,
     model,
     modelRef,
     tools,

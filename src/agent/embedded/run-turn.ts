@@ -25,6 +25,7 @@ import {
   maybeRetryTurnAfterTransientLlmFailure,
 } from '../orchestration/llm-turn-retry.js';
 import { runAgentTurnWithTimeout, resolveAgentTurnTimeoutMs } from '../orchestration/run-agent-turn-with-timeout.js';
+import { applySystemPromptOverrideToSession } from './system-prompt-override.js';
 
 const log = createLogger('EmbeddedRun');
 const LOG_PREVIEW_MAX_CHARS = 300;
@@ -138,7 +139,7 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
       cwd: workspaceDir,
       agentDir: getAgentDir(),
       settingsManager,
-      systemPrompt,
+      noContextFiles: true,
     });
     await resourceLoader.reload();
 
@@ -154,6 +155,8 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
       customTools: toolDefs,
       tools: toolNames,
     });
+
+    applySystemPromptOverrideToSession(session, systemPrompt);
 
     const streamFnWithXopcExtensions = wrapStreamFnForXopcExtensions(session.agent.streamFn);
     const loggingStreamFn: typeof session.agent.streamFn = (streamModel, context, options) => {

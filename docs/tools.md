@@ -261,7 +261,7 @@ Loads a labeled snippet from a memory file.
 
 ### `curated_memory`
 
-Read/write curated files under **`agents/<agentId>/memories/`** (`MEMORY.md`, `USER.md`, section boundaries per format). The system prompt holds a **snapshot from session start**; this tool reads and writes **live** disk state. Disabled when `agents.defaults.memory.enabled` is false or `useEnhancedSystem` is false. If `userProfileEnabled` is false, profile writes are rejected (reads may still work).
+Read/write curated files under **`agents/<agentId>/memories/`** (`MEMORY.md`, `USER.md`, section boundaries per format). These files are **not** injected into the system prompt; use this tool for live read/write. Disabled when `agents.defaults.memory.enabled` is false or `useEnhancedSystem` is false. If `userProfileEnabled` is false, profile writes are rejected (reads may still work).
 
 See [Configuration](configuration.md) and [Curated memory](workspace.md#curated-memory).
 

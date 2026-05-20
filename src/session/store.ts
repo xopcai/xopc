@@ -11,6 +11,8 @@ import { loadEntriesFromFile } from './parity/load-jsonl-entries.js';
 import type { Config } from '../config/schema.js';
 import { resolveSessionsDir, FILENAMES } from '../config/paths.js';
 import { resolveDefaultAgentId, listAgentEntries } from '../agent/agent-scope.js';
+import { resolveEffectiveAgentProfileForSession } from '../config/agent-profile.js';
+import { readPostCompactionContext } from '../agent/reply/post-compaction-context.js';
 import { parseSessionKey as parseRoutingSessionKey } from '../routing/session-key.js';
 import { createLogger } from '../utils/logger.js';
 import { SessionCompactor, type CompactionConfig, type CompactionResult } from '../agent/memory/compaction.js';
@@ -925,6 +927,7 @@ export class SessionStore {
         { key, tokensBefore: result.tokensBefore, tokensAfter: result.tokensAfter, keptMessages: compacted.length },
         'Session compacted',
       );
+      await this.injectPostCompactionContext(key);
       return compacted;
     });
   }
@@ -1192,6 +1195,38 @@ export class SessionStore {
       return parts.join('');
     }
     return '';
+  }
+
+  private async injectPostCompactionContext(key: string): Promise<void> {
+    const contextText = readPostCompactionContext({
+      cfg: this.options.config,
+      sessionKey: key,
+    });
+    if (!contextText?.trim()) {
+      return;
+    }
+    const entry = await this.getDiskEntry(key);
+    if (!entry) {
+      return;
+    }
+    const keySessionsDir = this.resolveSessionsDirForKey(key);
+    const abs = this.transcriptPathForEntry(entry, keySessionsDir);
+    const workspaceDir = resolveEffectiveAgentProfileForSession(this.options.config, key).resolvedWorkspacePath;
+    try {
+      await appendPiTranscriptContextEntry({
+        absPath: abs,
+        cwd: workspaceDir,
+        sessionKey: key,
+        entry: {
+          kind: 'context',
+          id: `post-compaction-${Date.now()}`,
+          text: contextText,
+          createdAt: new Date().toISOString(),
+        },
+      });
+    } catch (err) {
+      log.warn({ err, key }, 'Post-compaction context injection failed');
+    }
   }
 
   private convertMessages(messages: AgentMessage[]): Message[] {
