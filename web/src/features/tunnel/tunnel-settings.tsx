@@ -1,5 +1,4 @@
 import { Check, Copy, Globe, Loader2, Power, RefreshCw } from 'lucide-react';
-import QRCode from 'qrcode';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import useSWR from 'swr';
 
@@ -7,14 +6,15 @@ import { Button } from '@/components/ui/button';
 import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
 import { revalidateGatewayConfig } from '@/features/gateway/gateway-config-swr';
 import { SettingsFormSection } from '@/features/settings/settings-form-section';
+import { MobilePairQrSection } from '@/features/tunnel/mobile-pair-qr-section';
 import {
-  fetchTunnelQr,
   fetchTunnelStatus,
   patchTunnelConfig,
   startTunnel,
   stopTunnel,
   type TunnelStatusResponse,
 } from '@/features/tunnel/tunnel-api';
+import { useMobilePairQr } from '@/features/tunnel/use-mobile-pair-qr';
 import { cn } from '@/lib/cn';
 import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
@@ -58,9 +58,9 @@ export function TunnelSettingsPanel() {
   const [starting, setStarting] = useState(false);
   const [stopping, setStopping] = useState(false);
   const [savingAutoStart, setSavingAutoStart] = useState(false);
-  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
-  const [qrPayload, setQrPayload] = useState('');
   const [linkCopied, setLinkCopied] = useState(false);
+
+  const pairQr = useMobilePairQr(token ?? '');
 
   const { data: cfgData } = useGatewayConfigSwr(hasToken);
   const tunnelCfg = useMemo(() => {
@@ -88,63 +88,33 @@ export function TunnelSettingsPanel() {
     return () => window.removeEventListener('tunnel-status', onTunnelStatus);
   }, [mutStatus]);
 
-  const refreshQr = useCallback(async (payload?: string) => {
-    try {
-      const qr = payload ? { qrPayload: payload } : await fetchTunnelQr();
-      setQrPayload(qr.qrPayload);
-      if (!qr.qrPayload) {
-        setQrDataUrl(null);
-        return;
-      }
-      const url = await QRCode.toDataURL(qr.qrPayload, {
-        width: 216,
-        margin: 2,
-        errorCorrectionLevel: 'M',
-        color: { dark: '#000000ff', light: '#ffffffff' },
-      });
-      setQrDataUrl(url);
-    } catch {
-      setQrDataUrl(null);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (status?.enabled && status.state === 'connected') {
-      void refreshQr();
-    } else if (!status?.enabled) {
-      setQrDataUrl(null);
-      setQrPayload('');
-    }
-  }, [status?.enabled, status?.state, refreshQr]);
-
   const handleStart = useCallback(async () => {
     setActionError(null);
     setStarting(true);
     try {
       const res = await startTunnel();
       await mutStatus();
-      await refreshQr(res.qrPayload);
+      await pairQr.refreshQr(res.qrPayload);
     } catch (e) {
       setActionError(e instanceof Error ? e.message : String(e));
     } finally {
       setStarting(false);
     }
-  }, [mutStatus, refreshQr]);
+  }, [mutStatus, pairQr.refreshQr]);
 
   const handleStop = useCallback(async () => {
     setActionError(null);
     setStopping(true);
     try {
       await stopTunnel();
-      setQrDataUrl(null);
-      setQrPayload('');
+      await pairQr.refreshQr();
       await mutStatus();
     } catch (e) {
       setActionError(e instanceof Error ? e.message : String(e));
     } finally {
       setStopping(false);
     }
-  }, [mutStatus]);
+  }, [mutStatus, pairQr.refreshQr]);
 
   const toggleAutoStart = useCallback(async () => {
     setSavingAutoStart(true);
@@ -224,19 +194,7 @@ export function TunnelSettingsPanel() {
         <p className="text-xs text-fg-subtle">{t.lanHint}</p>
       </SettingsFormSection>
 
-      <SettingsFormSection>
-        <h2 className="mb-3 text-sm font-semibold text-fg">{t.qrTitle}</h2>
-        {qrDataUrl ? (
-          <img
-            src={qrDataUrl}
-            alt=""
-            className="size-56 rounded-lg border border-edge-subtle bg-white object-contain p-3 dark:border-edge"
-          />
-        ) : (
-          <p className="text-sm text-fg-muted">{st.enabled ? t.qrLoading : t.qrInactive}</p>
-        )}
-        <p className="text-xs text-fg-subtle">{t.qrHint}</p>
-      </SettingsFormSection>
+      <MobilePairQrSection pairQr={pairQr} />
 
       <div className="flex flex-wrap gap-2">
         {!st.enabled ? (
@@ -257,7 +215,7 @@ export function TunnelSettingsPanel() {
           </Button>
         ) : null}
         {st.enabled ? (
-          <Button type="button" variant="ghost" onClick={() => void refreshQr()}>
+          <Button type="button" variant="ghost" onClick={() => void pairQr.refreshQr()}>
             <RefreshCw className="size-4" />
             {t.refreshQr}
           </Button>
@@ -279,13 +237,6 @@ export function TunnelSettingsPanel() {
       </SettingsFormSection>
 
       {actionError ? <p className="text-sm text-red-600 dark:text-red-400">{actionError}</p> : null}
-
-      {qrPayload ? (
-        <details className="rounded-lg border border-edge bg-surface-panel px-3 py-2">
-          <summary className="cursor-pointer text-xs font-medium text-fg-muted">{t.deeplinkTitle}</summary>
-          <p className="mt-2 break-all font-mono text-[10px] leading-relaxed text-fg-subtle">{qrPayload}</p>
-        </details>
-      ) : null}
 
       <div className="flex items-start gap-2 rounded-lg border border-edge-subtle bg-surface-panel px-3 py-2 text-xs text-fg-subtle">
         <Globe className="mt-0.5 size-4 shrink-0 text-accent" />
