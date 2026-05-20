@@ -1,6 +1,6 @@
 import type { Hono } from 'hono';
 import { readdir, readFile, stat, writeFile } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { basename, isAbsolute, join, resolve } from 'node:path';
 
 import { extractProfileAgentId } from '../../../config/agent-profile.js';
 import { type Config, getWorkspacePath } from '../../../config/schema.js';
@@ -22,6 +22,11 @@ import {
 } from '../../workspace-editor-path.js';
 import { listWorkspaceRelativeFilesFsFallback } from '../../workspace-fs-file-list.js';
 import { runRipgrepInDirectory, runRipgrepListFiles } from '../../workspace-ripgrep.js';
+import {
+  fileReferenceRegistry,
+  type FileReferenceCapability,
+  type FileReferenceScope,
+} from '../../file-reference-registry.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 import type { GatewayService } from '../../service.js';
 
@@ -141,6 +146,30 @@ async function resolveEditorWorkspaceRootAsync(
     }
   }
   return resolveEditorWorkspaceRoot(cfg, agentIdRaw);
+}
+
+function looksLikeHostAbsolutePath(pathRaw: string): boolean {
+  const p = pathRaw.trim();
+  if (!p) return false;
+  if (/^[a-z][a-z0-9+.-]*:/i.test(p) && !/^[A-Za-z]:[\\/]/.test(p)) return false;
+  return isAbsolute(p) || /^[A-Za-z]:[\\/]/.test(p) || p.startsWith('\\\\');
+}
+
+function fileReferenceCapabilities(scope: FileReferenceScope, isDirectory: boolean): FileReferenceCapability[] {
+  if (scope === 'workspace') {
+    return isDirectory
+      ? ['openExternal', 'revealInFolder', 'copyPath']
+      : ['preview', 'edit', 'openExternal', 'revealInFolder', 'copyPath'];
+  }
+  if (scope === 'external' || scope === 'agent-profile' || scope === 'session-artifact') {
+    return ['openExternal', 'revealInFolder', 'copyPath', 'importToWorkspace'];
+  }
+  if (scope === 'missing') return ['copyPath'];
+  return [];
+}
+
+function isFileReferenceAction(action: unknown): action is 'openExternal' | 'revealInFolder' {
+  return action === 'openExternal' || action === 'revealInFolder';
 }
 
 export function registerWorkspaceRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
@@ -354,6 +383,7 @@ export function registerWorkspaceRoutes(authenticated: Hono, deps: Authenticated
         payload: {
           content,
           path: toWorkspaceRelativePosix(workspaceRoot, abs),
+          absolutePath: abs,
           mtimeMs: st.mtimeMs,
         },
       });
@@ -431,6 +461,133 @@ export function registerWorkspaceRoutes(authenticated: Hono, deps: Authenticated
     }
     const rel = toWorkspaceRelativePosix(workspaceRoot, normalized);
     return c.json({ ok: true, payload: { workspaceRelativePath: rel } });
+  });
+
+  authenticated.get('/api/workspace/editor/resolve-reference', async (c) => {
+    const rawPath = typeof c.req.query('path') === 'string' ? c.req.query('path')!.trim() : '';
+    if (!rawPath) {
+      return c.json({ ok: false, error: { code: 'INVALID_PATH', message: 'Missing path' } }, 400);
+    }
+
+    const sessionKey = typeof c.req.query('sessionKey') === 'string' ? c.req.query('sessionKey')!.trim() : '';
+    const ws = await resolveEditorWorkspaceRootAsync(
+      service,
+      service.currentConfig,
+      sessionKey,
+      c.req.query('agentId'),
+    );
+    if (ws.ok === false) {
+      return c.json({ ok: false, error: { code: 'WORKSPACE_RESOLUTION_FAILED', message: ws.message } }, 400);
+    }
+
+    const workspaceRoot = ws.root;
+    const isAbs = looksLikeHostAbsolutePath(rawPath);
+    const candidate = isAbs ? resolve(rawPath) : resolveWorkspaceSafePath(workspaceRoot, rawPath);
+    const displayName = basename(rawPath.replace(/\\/g, '/')) || rawPath;
+
+    if (!candidate) {
+      return c.json({
+        ok: true,
+        payload: {
+          inputPath: rawPath,
+          displayName,
+          scope: 'invalid' satisfies FileReferenceScope,
+          exists: false,
+          capabilities: [] as FileReferenceCapability[],
+          errorCode: 'INVALID_PATH',
+        },
+      });
+    }
+
+    let st: Awaited<ReturnType<typeof stat>> | null = null;
+    try {
+      st = await stat(candidate);
+    } catch {
+      st = null;
+    }
+
+    if (!st) {
+      return c.json({
+        ok: true,
+        payload: {
+          inputPath: rawPath,
+          displayName,
+          scope: 'missing' satisfies FileReferenceScope,
+          exists: false,
+          absolutePath: isAbs ? candidate : undefined,
+          capabilities: fileReferenceCapabilities('missing', false),
+          errorCode: 'FILE_NOT_FOUND',
+        },
+      });
+    }
+
+    const inWorkspace = isPathUnderWorkspace(workspaceRoot, candidate);
+    const scope: FileReferenceScope = inWorkspace ? 'workspace' : 'external';
+    const isDirectory = st.isDirectory();
+    const capabilities = fileReferenceCapabilities(scope, isDirectory);
+    const ref = fileReferenceRegistry.register({
+      absolutePath: candidate,
+      sessionKey: sessionKey || undefined,
+      scope,
+      capabilities,
+    });
+
+    return c.json({
+      ok: true,
+      payload: {
+        fileRefId: ref.id,
+        inputPath: rawPath,
+        displayName,
+        scope,
+        exists: true,
+        isDirectory,
+        absolutePath: candidate,
+        workspaceRelativePath: inWorkspace ? toWorkspaceRelativePosix(workspaceRoot, candidate) : undefined,
+        capabilities,
+        mtimeMs: st.mtimeMs,
+      },
+    });
+  });
+
+  authenticated.post('/api/workspace/file-ref/:id/resolve-action', async (c) => {
+    const id = c.req.param('id')?.trim() ?? '';
+    if (!id) {
+      return c.json({ ok: false, error: { code: 'INVALID_FILE_REF', message: 'Missing file reference' } }, 400);
+    }
+
+    const ref = fileReferenceRegistry.resolve(id);
+    if (!ref) {
+      return c.json({ ok: false, error: { code: 'FILE_REF_EXPIRED', message: 'File reference expired' } }, 404);
+    }
+
+    const sessionKey = typeof c.req.query('sessionKey') === 'string' ? c.req.query('sessionKey')!.trim() : '';
+    if ((ref.sessionKey || '') !== sessionKey) {
+      return c.json({ ok: false, error: { code: 'FILE_REF_FORBIDDEN', message: 'File reference forbidden' } }, 403);
+    }
+
+    const body = (await c.req.json().catch(() => ({}))) as { action?: unknown };
+    const action = body.action;
+    if (!isFileReferenceAction(action)) {
+      return c.json({ ok: false, error: { code: 'INVALID_ACTION', message: 'Invalid action' } }, 400);
+    }
+    if (!ref.capabilities.includes(action)) {
+      return c.json({ ok: false, error: { code: 'ACTION_NOT_ALLOWED', message: 'Action not allowed' } }, 403);
+    }
+
+    let st: Awaited<ReturnType<typeof stat>>;
+    try {
+      st = await stat(ref.absolutePath);
+    } catch {
+      return c.json({ ok: false, error: { code: 'FILE_NOT_FOUND', message: 'File not found' } }, 404);
+    }
+
+    return c.json({
+      ok: true,
+      payload: {
+        absolutePath: ref.absolutePath,
+        isDirectory: st.isDirectory(),
+      },
+    });
   });
 
   /**

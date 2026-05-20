@@ -1,4 +1,4 @@
-import { Copy, Download, Eye, Maximize2, Minimize2, Pencil, X } from 'lucide-react';
+import { Copy, Download, Eye, FolderOpen, Maximize2, Minimize2, Pencil, X } from 'lucide-react';
 import { useCallback, useEffect } from 'react';
 
 import {
@@ -136,6 +136,20 @@ export function WorkspaceFilePreviewPanel({
           >
             <Copy className="size-4" />
           </button>
+          {state.canRevealInFolder ? (
+            <button
+              type="button"
+              className={cn(
+                'inline-flex size-9 shrink-0 items-center justify-center rounded-md text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg',
+                interaction.focusRingPanel,
+              )}
+              title={m.workspace.revealInFolder}
+              aria-label={m.workspace.revealInFolder}
+              onClick={() => void state.onRevealInFolder()}
+            >
+              <FolderOpen className="size-4" />
+            </button>
+          ) : null}
           <button
             type="button"
             className="inline-flex size-9 shrink-0 items-center justify-center rounded-md text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg disabled:opacity-50"

@@ -16,7 +16,7 @@ interface ListResponse {
 
 interface ReadResponse {
   ok: boolean;
-  payload: { content: string; path: string; mtimeMs?: number };
+  payload: { content: string; path: string; absolutePath?: string; mtimeMs?: number };
 }
 
 interface ReadBase64Response {
@@ -35,6 +35,38 @@ export type WorkspaceEditorRequestOptions = {
   /** When set, lists/reads/writes that agent's Markdown workspace (`resolveAgentWorkspaceDir`). */
   agentId?: string;
 };
+
+export type FileReferenceScope =
+  | 'workspace'
+  | 'external'
+  | 'agent-profile'
+  | 'session-artifact'
+  | 'missing'
+  | 'invalid';
+
+export type FileReferenceCapability =
+  | 'preview'
+  | 'edit'
+  | 'openExternal'
+  | 'revealInFolder'
+  | 'copyPath'
+  | 'importToWorkspace';
+
+export type WorkspaceFileReference = {
+  fileRefId?: string;
+  inputPath: string;
+  displayName: string;
+  scope: FileReferenceScope;
+  exists: boolean;
+  isDirectory?: boolean;
+  absolutePath?: string;
+  workspaceRelativePath?: string;
+  capabilities: FileReferenceCapability[];
+  mtimeMs?: number;
+  errorCode?: string;
+};
+
+export type FileReferenceAction = 'openExternal' | 'revealInFolder';
 
 function editorQuery(dir: string, options?: WorkspaceEditorRequestOptions): string {
   const params = new URLSearchParams();
@@ -65,7 +97,7 @@ export async function listWorkspaceDir(
 export async function readWorkspaceFile(
   path: string,
   options?: WorkspaceEditorRequestOptions,
-): Promise<{ content: string; path: string; mtimeMs?: number }> {
+): Promise<{ content: string; path: string; absolutePath?: string; mtimeMs?: number }> {
   const params = new URLSearchParams({ path });
   const sk = options?.sessionKey?.trim();
   if (sk) {
@@ -125,6 +157,54 @@ export async function resolveWorkspaceAbsoluteToRelative(
     return null;
   }
   return data.payload.workspaceRelativePath;
+}
+
+export async function resolveWorkspaceFileReference(
+  path: string,
+  options?: WorkspaceEditorRequestOptions,
+): Promise<WorkspaceFileReference | null> {
+  const params = new URLSearchParams({ path });
+  const sk = options?.sessionKey?.trim();
+  if (sk) {
+    params.set('sessionKey', sk);
+  } else {
+    const aid = options?.agentId?.trim();
+    if (aid) params.set('agentId', aid);
+  }
+  const res = await apiFetch(apiUrl(`/api/workspace/editor/resolve-reference?${params.toString()}`));
+  if (!res.ok) return null;
+  const data = (await res.json()) as { ok?: boolean; payload?: WorkspaceFileReference };
+  return data.ok && data.payload ? data.payload : null;
+}
+
+export async function resolveFileReferenceAction(
+  fileRefId: string,
+  action: FileReferenceAction,
+  options?: WorkspaceEditorRequestOptions,
+): Promise<{ absolutePath: string; isDirectory: boolean } | null> {
+  const params = new URLSearchParams();
+  const sk = options?.sessionKey?.trim();
+  if (sk) {
+    params.set('sessionKey', sk);
+  } else {
+    const aid = options?.agentId?.trim();
+    if (aid) params.set('agentId', aid);
+  }
+  const qs = params.toString();
+  const res = await apiFetch(
+    apiUrl(`/api/workspace/file-ref/${encodeURIComponent(fileRefId)}/resolve-action${qs ? `?${qs}` : ''}`),
+    {
+      method: 'POST',
+      body: JSON.stringify({ action }),
+    },
+  );
+  if (!res.ok) return null;
+  const data = (await res.json()) as {
+    ok?: boolean;
+    payload?: { absolutePath?: string; isDirectory?: boolean };
+  };
+  if (!data.ok || typeof data.payload?.absolutePath !== 'string') return null;
+  return { absolutePath: data.payload.absolutePath, isDirectory: Boolean(data.payload.isDirectory) };
 }
 
 /** Fetch raw file bytes from the workspace (authenticated; use blob / object URL for images). */

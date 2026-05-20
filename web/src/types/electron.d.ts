@@ -38,6 +38,7 @@ export interface ElectronGatewayShellAPI {
 
 export interface ElectronShellAPI {
   openPath(filePath: string): Promise<{ error?: string }>;
+  showItemInFolder(filePath: string): Promise<{ success: boolean }>;
 }
 
 export type TccTriState = 'granted' | 'denied' | 'unknown';

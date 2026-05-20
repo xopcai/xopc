@@ -195,15 +195,24 @@ function collectPathsFromJson(obj: unknown, out: ExtractedFilePath[], fullText: 
     const norm = stripListDirLinePrefix(stripFileToolResultLinePrefix(obj))
       .trim()
       .replace(/\\/g, '/');
-    if (looksLikeWorkspaceRelativeFilePath(norm)) {
-      pushWorkspaceRelativePath(obj, out, fullText);
-    } else if (looksLikeAbsoluteFilePath(norm) && /\.[a-z0-9]+$/i.test(norm)) {
+    if (looksLikeAbsoluteFilePath(norm) && /\.[a-z0-9]+$/i.test(norm)) {
       const i = fullText.indexOf(obj);
       if (i >= 0) {
         pushPath(norm, out, fullText, i, i + obj.length);
       } else {
         pushPath(norm, out, fullText, 0, 0);
       }
+      return;
+    }
+
+    const before = out.length;
+    scanTextForPaths(norm, out);
+    if (out.length > before) {
+      return;
+    }
+
+    if (looksLikeWorkspaceRelativeFilePath(norm)) {
+      pushWorkspaceRelativePath(obj, out, fullText);
     }
     return;
   }
