@@ -17,6 +17,7 @@ import { registerLogsRoutes } from './logs.js';
 import { registerModelsRoutes } from './models.js';
 import { registerSessionsRoutes } from './sessions.js';
 import { registerStatusRoutes } from './status.js';
+import { registerTunnelRoutes } from './tunnel.js';
 import { registerUpdateRoutes } from './update.js';
 import { registerWorkspaceRoutes } from './workspace.js';
 
@@ -37,6 +38,7 @@ export function registerAuthenticatedRoutes(authenticated: Hono, deps: Authentic
   registerSessionsRoutes(authenticated, deps);
   registerGoalsRoutes(authenticated, deps);
   registerLogsRoutes(authenticated, deps);
+  registerTunnelRoutes(authenticated, deps);
   registerExtensionGatewayRoutes(authenticated, deps);
   registerUpdateRoutes(authenticated, deps);
 }
