@@ -9,6 +9,7 @@ import enProviders from './en/providers.json' with { type: 'json' };
 import enSessions from './en/sessions.json' with { type: 'json' };
 import enSettings from './en/settings.json' with { type: 'json' };
 import enShell from './en/shell.json' with { type: 'json' };
+import enTunnel from './en/tunnel.json' with { type: 'json' };
 import enSkills from './en/skills.json' with { type: 'json' };
 import enWorkspace from './en/workspace.json' with { type: 'json' };
 
@@ -23,6 +24,7 @@ import zhProviders from './zh/providers.json' with { type: 'json' };
 import zhSessions from './zh/sessions.json' with { type: 'json' };
 import zhSettings from './zh/settings.json' with { type: 'json' };
 import zhShell from './zh/shell.json' with { type: 'json' };
+import zhTunnel from './zh/tunnel.json' with { type: 'json' };
 import zhSkills from './zh/skills.json' with { type: 'json' };
 import zhWorkspace from './zh/workspace.json' with { type: 'json' };
 
@@ -39,6 +41,7 @@ export const en = {
   ...enSessions,
   ...enSettings,
   ...enShell,
+  ...enTunnel,
   ...enSkills,
   ...enWorkspace,
 };
@@ -56,6 +59,7 @@ export const zh = {
   ...zhSessions,
   ...zhSettings,
   ...zhShell,
+  ...zhTunnel,
   ...zhSkills,
   ...zhWorkspace,
 };

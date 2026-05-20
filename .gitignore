@@ -69,3 +69,6 @@ docs/.vitepress/cache/
 # Worktrees
 .worktrees/
 .docs
+
+# frpc binaries (pnpm run electron:frpc:download before electron:build)
+electron/resources/frpc/

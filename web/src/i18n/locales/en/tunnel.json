@@ -1,0 +1,28 @@
+{
+  "tunnelSettings": {
+    "title": "Remote access",
+    "subtitle": "Expose this gateway on the internet so the mobile app can connect from anywhere.",
+    "needToken": "Sign in to the gateway (valid token) to manage remote access.",
+    "statusTitle": "Status",
+    "loading": "Loading tunnel status…",
+    "statusConnected": "Connected",
+    "statusConnecting": "Connecting…",
+    "statusError": "Error",
+    "statusOff": "Off",
+    "uptime": "Uptime",
+    "lanHint": "For LAN + tunnel QR, set gateway host to 0.0.0.0 in Gateway settings.",
+    "qrTitle": "Mobile QR code",
+    "qrHint": "Scan with the xopc mobile app after the tunnel is active.",
+    "qrLoading": "Generating QR…",
+    "qrInactive": "Start the tunnel to show a QR code.",
+    "start": "Start remote access",
+    "stop": "Disconnect",
+    "copyUrl": "Copy public URL",
+    "copied": "Copied",
+    "refreshQr": "Refresh QR",
+    "optionsTitle": "Options",
+    "autoStart": "Start tunnel when gateway launches",
+    "deeplinkTitle": "Deep link payload",
+    "brokerNote": "Traffic is proxied via frp.xopc.ai. Keep your gateway token private."
+  }
+}

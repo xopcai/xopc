@@ -18,6 +18,7 @@ export type Tab =
   | 'settingsVoice'
   | 'settingsGateway'
   | 'settingsHeartbeat'
+  | 'settingsTunnel'
   | 'settingsSearch'
   | 'settingsDreams'
   | 'settingsAgentChat'
@@ -45,6 +46,7 @@ export type SettingsSectionId =
   | 'voice'
   | 'gateway'
   | 'heartbeat'
+  | 'tunnel'
   | 'search'
   | 'dreams'
   | 'agents'
@@ -62,6 +64,7 @@ export type ChannelsSettingsMessages = MessageBundle['channelsSettings'];
 export type VoiceSettingsMessages = MessageBundle['voiceSettings'];
 export type GatewaySettingsMessages = MessageBundle['gatewaySettings'];
 export type HeartbeatSettingsMessages = MessageBundle['heartbeatSettings'];
+export type TunnelSettingsMessages = MessageBundle['tunnelSettings'];
 export type WebSearchSettingsMessages = MessageBundle['webSearchSettings'];
 export type AgentsSettingsMessages = MessageBundle['agentsSettings'];
 export type ChatMessages = MessageBundle['chat'];
