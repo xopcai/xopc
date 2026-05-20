@@ -1,25 +1,9 @@
-import type { FollowUpSuggestionId } from '@/features/chat/follow-up-suggestions';
+import { FOLLOW_UP_SUGGESTION_IDS, type FollowUpSuggestionId } from '@/features/chat/follow-up-suggestions';
 import type { PendingFollowUp, PendingFollowUpAttachment } from '@/features/chat/pending-follow-up.types';
 
 const STORAGE_PREFIX = 'xopc.chat.followUpQueue:v1:';
 
-const KNOWN_SUGGESTION_IDS = new Set<string>([
-  'code_error_handling',
-  'code_refactor',
-  'code_explain',
-  'code_optimize',
-  'web_more_details',
-  'web_find_sources',
-  'date_shorter_summary',
-  'date_main_risks',
-  'email_make_formal',
-  'email_shorten',
-  'generic_simpler_terms',
-  'generic_concrete_example',
-  'generic_bullet_points',
-  'generic_create_table',
-  'what_next',
-]);
+const KNOWN_SUGGESTION_IDS = new Set<string>(FOLLOW_UP_SUGGESTION_IDS);
 
 function coerceStoredSuggestionIds(raw: unknown): FollowUpSuggestionId[] {
   if (!Array.isArray(raw)) return [];

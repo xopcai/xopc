@@ -1,111 +1,47 @@
-import type { Message, MessageContent } from '@/features/chat/messages.types';
+import type { FollowUpContextPack } from '@/features/chat/follow-up-context';
+export { followUpPromptForSuggestionId } from '@/features/chat/follow-up-prompts';
+export type { FollowUpPromptLocale } from '@/features/chat/follow-up-prompts';
+export {
+  FOLLOW_UP_SUGGESTION_IDS,
+  type FollowUpSuggestionId,
+} from '@/features/chat/follow-up-suggestions.types';
 
-const MAX_ASSISTANT_CHARS = 1200;
+import {
+  FOLLOW_UP_SUGGESTION_IDS,
+  type FollowUpSuggestionId,
+} from '@/features/chat/follow-up-suggestions.types';
+import type { Message } from '@/features/chat/messages.types';
+import { buildFollowUpContextPack } from '@/features/chat/follow-up-context';
 
-/** Stable ids; labels come from i18n (`messages.chat.followUpChip*`). */
-export type FollowUpSuggestionId =
-  | 'code_error_handling'
-  | 'code_refactor'
-  | 'code_explain'
-  | 'code_optimize'
-  | 'web_more_details'
-  | 'web_find_sources'
-  | 'date_shorter_summary'
-  | 'date_main_risks'
-  | 'email_make_formal'
-  | 'email_shorten'
-  | 'generic_simpler_terms'
-  | 'generic_concrete_example'
-  | 'generic_bullet_points'
-  | 'generic_create_table'
-  | 'what_next';
+type FollowUpFamily = 'code' | 'web' | 'email' | 'date' | 'generic' | 'meta' | 'ops' | 'workflow' | 'learn';
 
-type FollowUpFamily = 'code' | 'web' | 'email' | 'date' | 'generic' | 'meta';
-
-const ALL_IDS: readonly FollowUpSuggestionId[] = [
-  'code_error_handling',
-  'code_refactor',
-  'code_explain',
-  'code_optimize',
-  'web_more_details',
-  'web_find_sources',
-  'date_shorter_summary',
-  'date_main_risks',
-  'email_make_formal',
-  'email_shorten',
-  'generic_simpler_terms',
-  'generic_concrete_example',
-  'generic_bullet_points',
-  'generic_create_table',
-  'what_next',
-];
+const ALL_IDS = FOLLOW_UP_SUGGESTION_IDS;
 
 function familyOf(id: FollowUpSuggestionId): FollowUpFamily {
   if (id.startsWith('code_')) return 'code';
-  if (id.startsWith('web_')) return 'web';
+  if (id.startsWith('web_') || id === 'research_deeper') return 'web';
   if (id.startsWith('email_')) return 'email';
   if (id.startsWith('date_')) return 'date';
+  if (id.startsWith('learn_')) return 'learn';
+  if (id.startsWith('wf_')) return 'workflow';
+  if (id.startsWith('ops_')) return 'ops';
   if (id === 'what_next') return 'meta';
   return 'generic';
 }
 
 const BASE_FAMILY_MAX: Record<FollowUpFamily, number> = {
-  code: 3,
+  code: 2,
   web: 2,
-  email: 2,
-  date: 2,
-  generic: 3,
+  email: 1,
+  date: 1,
+  generic: 2,
   meta: 1,
+  ops: 1,
+  workflow: 1,
+  learn: 2,
 };
 
-/** Tighten dominant families when several content types fire so mixed replies get mixed chips. */
-function familyMaxForSignals(s: Signals): Record<FollowUpFamily, number> {
-  const m = { ...BASE_FAMILY_MAX };
-  if (s.code && s.web) m.code = Math.min(m.code, 2);
-  if (s.code && s.email) m.code = Math.min(m.code, 2);
-  if (s.code && s.date) m.code = Math.min(m.code, 2);
-  if (s.web && s.email) {
-    m.web = Math.min(m.web, 1);
-    m.email = Math.min(m.email, 1);
-  }
-  return m;
-}
-
-export function followUpPromptForSuggestionId(id: FollowUpSuggestionId): string {
-  const prompts: Record<FollowUpSuggestionId, string> = {
-    code_error_handling:
-      'Add error handling and edge cases for the code or approach you described.',
-    code_refactor: 'Refactor that code for readability while preserving behavior.',
-    code_explain: 'Explain that code step by step.',
-    code_optimize: 'Suggest performance optimizations for that code.',
-    web_more_details:
-      'Search for more details online and summarize what you find in the context of this answer.',
-    web_find_sources:
-      'Find reliable primary or secondary sources online and cite them briefly.',
-    date_shorter_summary: 'Give a shorter summary focusing on the key dates and outcomes.',
-    date_main_risks: 'What are the main risks or unknowns related to this timeline or plan?',
-    email_make_formal: 'Rewrite the email or message in a more formal professional tone.',
-    email_shorten: 'Shorten the email or message while keeping the essential meaning.',
-    generic_simpler_terms: 'Explain that again in simpler terms for a non-expert reader.',
-    generic_concrete_example: 'Give a concrete example that illustrates the main idea.',
-    generic_bullet_points: 'Summarize the answer as concise bullet points.',
-    generic_create_table: 'Present the main structured information as a Markdown table.',
-    what_next: 'What should I do next based on your answer?',
-  };
-  return prompts[id];
-}
-
-function collectAssistantPlainText(content: MessageContent[]): string {
-  const parts: string[] = [];
-  for (const b of content) {
-    if (b.type === 'text' && b.text?.trim()) {
-      parts.push(b.text.trim());
-    }
-  }
-  return parts.join('\n').trim();
-}
-
-type Signals = {
+type ContentSignals = {
   code: boolean;
   web: boolean;
   email: boolean;
@@ -115,13 +51,69 @@ type Signals = {
   substantial: boolean;
 };
 
-function detectSignals(slice: string, lower: string): Signals {
-  const code =
-    /\b(function|class|const |def |import |export |async |await |interface |type |public |private |protected |#include|namespace )\b/.test(
-      lower,
+type DerivedSignals = ContentSignals & {
+  taskDebug: boolean;
+  taskImplement: boolean;
+  taskReview: boolean;
+  taskPlan: boolean;
+  taskConfig: boolean;
+  taskResearch: boolean;
+  taskCompare: boolean;
+  taskTest: boolean;
+  taskGit: boolean;
+  assistantAlreadyBullets: boolean;
+  assistantAlreadyTable: boolean;
+  assistantAlreadyShort: boolean;
+  assistantOffersOptions: boolean;
+  userLangZh: boolean;
+  toolsUsedWebSearch: boolean;
+  toolsUsedWrite: boolean;
+  toolsUsedShell: boolean;
+  toolsUsedBrowser: boolean;
+  anyToolError: boolean;
+  taskEducational: boolean;
+  hasRealCode: boolean;
+};
+
+const CODE_KEYWORD_RE =
+  /\b(function|class|const |def |import |export |async |await |interface |type |public |private |protected |#include|namespace )\b/;
+
+const CODE_KEYWORD_RE2 = /\b(return |if \(|for \(|while \(|\.map\(|\.filter\(|fn )\b/;
+
+/** Fenced blocks or keywords that indicate actual source code — not diagram-only ``` fences. */
+function detectHasRealCode(slice: string, lower: string): boolean {
+  if (CODE_KEYWORD_RE.test(lower) || CODE_KEYWORD_RE2.test(lower)) return true;
+
+  const fences = [...slice.matchAll(/```[\w-]*\n?([\s\S]*?)```/g)];
+  for (const match of fences) {
+    const inner = (match[1] ?? '').trim();
+    if (inner.length < 4) continue;
+    const innerLower = inner.toLowerCase();
+    if (CODE_KEYWORD_RE.test(innerLower) || CODE_KEYWORD_RE2.test(innerLower)) return true;
+    if (/[{};]/.test(inner) && /\n/.test(inner)) return true;
+  }
+  return false;
+}
+
+function detectEducational(slice: string, assistantText: string): boolean {
+  const edu =
+    /通俗|类比|简单来说|是怎么回事|是什么[？?]|工作流程|三步走|第一步|第二步|第三步|想象一下|就像.{0,12}一样|开卷考试|死记硬背|生活中的类比/i.test(
+      slice,
     ) ||
-    /\b(return |if \(|for \(|while \(|\.map\(|\.filter\(|fn )\b/.test(lower) ||
-    /```/.test(slice);
+    /\b(RAG|LLM|embedding|vector\s*database|retrieval[- ]augmented)\b/i.test(slice) ||
+    /检索增强|向量|知识库|大模型|幻觉|开卷|闭卷|索引|嵌入/i.test(slice) ||
+    /讲讲|解释一下|什么是|科普|入门|通俗/i.test(slice);
+
+  const invitesDeeper =
+    /想深入了解|深入了解|技术实现|怎么搭建|如何搭建|搭建一个|有什么想|还想了解|比如具体/i.test(
+      assistantText,
+    );
+
+  return edu || invitesDeeper;
+}
+
+function detectContentSignals(slice: string, lower: string): ContentSignals {
+  const code = detectHasRealCode(slice, lower);
 
   const web =
     /https?:\/\//i.test(slice) ||
@@ -157,63 +149,358 @@ function detectSignals(slice: string, lower: string): Signals {
   return { code, web, email, date, list, table, substantial };
 }
 
-function scoreIds(s: Signals): Map<FollowUpSuggestionId, number> {
+function cjkRatio(text: string): number {
+  if (!text.length) return 0;
+  let cjk = 0;
+  for (const ch of text) {
+    if (/[\u4e00-\u9fff\u3400-\u4dbf]/.test(ch)) cjk += 1;
+  }
+  return cjk / text.length;
+}
+
+function detectDerived(ctx: FollowUpContextPack, content: ContentSignals): DerivedSignals {
+  const combined = [ctx.userText, ctx.assistantText, ...ctx.recentUserTexts, ctx.recentAssistantSnippet]
+    .filter(Boolean)
+    .join('\n');
+  const assistantLower = ctx.assistantText.toLowerCase();
+  const userLower = ctx.userText.toLowerCase();
+
+  const toolsUsedWebSearch = ctx.assistantToolUses.some(
+    (t) => t.name === 'web_search' && t.status === 'done',
+  );
+  const toolsUsedWrite = ctx.assistantToolUses.some(
+    (t) => (t.name === 'write_file' || t.name === 'edit_file') && t.status === 'done',
+  );
+  const toolsUsedShell = ctx.assistantToolUses.some((t) => t.name === 'shell');
+  const toolsUsedBrowser = ctx.assistantToolUses.some(
+    (t) => t.name === 'browser_use' || t.name.startsWith('browser_'),
+  );
+  const anyToolError = ctx.assistantToolUses.some((t) => t.status === 'error');
+
+  const taskDebug =
+    /\b(error|exception|traceback|failed|failure|panic|stack trace|typeerror|referenceerror|syntaxerror)\b/i.test(
+      combined,
+    ) ||
+    /报错|异常|失败|错误|堆栈/.test(combined) ||
+    anyToolError ||
+    ctx.assistantToolUses.some((t) => /error|exit code|failed/i.test(t.resultPreview ?? ''));
+
+  const taskImplement =
+    toolsUsedWrite ||
+    /\b(implement|add a|create a|write a|build a|实现|添加|写一个|新增)\b/i.test(userLower);
+
+  const taskReview =
+    /\b(review|check for issues|audit|inspect|审查|检查|看看有没有问题)\b/i.test(userLower) ||
+    /\bdiff\b|pull request|\bPR\b|改动文件|代码审查/i.test(assistantLower);
+
+  const taskEducational = detectEducational(combined, ctx.assistantText);
+  const hasRealCode = detectHasRealCode(combined, combined.toLowerCase());
+
+  const taskPlan =
+    (/\b(plan|steps|how to|roadmap|计划|步骤|怎么做|方案)\b/i.test(userLower) ||
+      /\n\s*\d+\.\s/.test(ctx.assistantText)) &&
+    !taskEducational;
+
+  const taskConfig =
+    /xopc\.json|agents\.list|providers|gateway\.|channels\.|cron\.enabled|配置|通道|telegram|weixin/i.test(
+      combined,
+    );
+
+  const taskResearch =
+    toolsUsedWebSearch ||
+    /\b(search|look up|find sources|资料|查一下|检索|来源)\b/i.test(userLower);
+
+  const taskCompare =
+    /\b(compare|versus|\bvs\.?\b|which is better|哪个好|还是|对比|利弊)\b/i.test(userLower) ||
+    /\b(option a|option b|either\b)/i.test(assistantLower);
+
+  const taskTest =
+    /\b(test|tests|vitest|jest|pytest|coverage|单元测试|测试用例)\b/i.test(combined);
+
+  const taskGit =
+    /\b(git|commit|branch|merge|rebase|pull request|\bPR\b|提交|分支)\b/i.test(combined);
+
+  const assistantTrim = ctx.assistantText.trim();
+  const assistantAlreadyBullets = /^[-*•]|\n[-*•]|\n\d+\.\s/m.test(assistantTrim);
+  const assistantAlreadyTable = /\|[^\n]+\|[^\n]+\|/.test(assistantTrim);
+  const assistantAlreadyShort = assistantTrim.length < 120;
+  const assistantOffersOptions =
+    /\b(you can|either\b|options?:|可选|你可以|或者)\b/i.test(assistantLower);
+
+  const userLangZh = ctx.locale === 'zh' || cjkRatio(combined) > 0.12;
+
+  return {
+    ...content,
+    code: content.code && hasRealCode,
+    taskEducational,
+    hasRealCode,
+    taskDebug,
+    taskImplement,
+    taskReview,
+    taskPlan,
+    taskConfig,
+    taskResearch,
+    taskCompare,
+    taskTest,
+    taskGit,
+    assistantAlreadyBullets,
+    assistantAlreadyTable,
+    assistantAlreadyShort,
+    assistantOffersOptions,
+    userLangZh,
+    toolsUsedWebSearch,
+    toolsUsedWrite,
+    toolsUsedShell,
+    toolsUsedBrowser,
+    anyToolError,
+  };
+}
+
+function familyMaxForSignals(s: DerivedSignals): Record<FollowUpFamily, number> {
+  const m = { ...BASE_FAMILY_MAX };
+  if (s.code && s.web) m.code = Math.min(m.code, 2);
+  if (s.code && s.email) m.code = Math.min(m.code, 2);
+  if (s.code && s.date) m.code = Math.min(m.code, 2);
+  if (s.web && s.email) {
+    m.web = Math.min(m.web, 1);
+    m.email = Math.min(m.email, 1);
+  }
+  if (s.taskConfig) m.ops = 1;
+  if (s.taskGit || s.taskTest) m.workflow = 1;
+  if (s.taskEducational) {
+    m.code = 0;
+    m.learn = 2;
+  }
+  return m;
+}
+
+function isIdAllowed(id: FollowUpSuggestionId, ctx: FollowUpContextPack, d: DerivedSignals): boolean {
+  const { capabilities: cap } = ctx;
+  if (id === 'web_more_details' || id === 'web_find_sources' || id === 'research_deeper') {
+    if (!cap.capWebSearch) return false;
+  }
+  if (id === 'web_verify_claim' && !cap.capWebSearch) return false;
+  if (id === 'wf_run_checks' && !cap.capShell) return false;
+  if (id === 'wf_git_commit' && !cap.capShell) return false;
+  if (id === 'code_add_tests' || id === 'code_fix_error') {
+    if (!cap.capShell && !d.toolsUsedWrite) return false;
+  }
+  if (id === 'ops_schedule_cron' && !cap.capCron) return false;
+  return true;
+}
+
+function multiply(m: Map<FollowUpSuggestionId, number>, id: FollowUpSuggestionId, factor: number) {
+  if (!m.has(id)) return;
+  m.set(id, (m.get(id) ?? 0) * factor);
+}
+
+function scoreIds(ctx: FollowUpContextPack, d: DerivedSignals): Map<FollowUpSuggestionId, number> {
+  const combined = [ctx.userText, ctx.assistantText, ...ctx.recentUserTexts].filter(Boolean).join('\n');
   const m = new Map<FollowUpSuggestionId, number>();
-  for (const id of ALL_IDS) m.set(id, 0);
+  for (const id of ALL_IDS) {
+    if (isIdAllowed(id, ctx, d)) m.set(id, 0);
+  }
 
-  const add = (id: FollowUpSuggestionId, v: number) => m.set(id, (m.get(id) ?? 0) + v);
+  const add = (id: FollowUpSuggestionId, v: number) => {
+    if (!m.has(id)) return;
+    m.set(id, (m.get(id) ?? 0) + v);
+  };
 
-  if (s.code) {
+  if (d.code) {
     add('code_error_handling', 52);
     add('code_explain', 51);
     add('code_refactor', 50);
     add('code_optimize', 49);
+    add('code_add_tests', 48);
+    add('code_fix_error', 47);
   }
-  if (s.web) {
+  if (d.web) {
     add('web_more_details', 48);
     add('web_find_sources', 47);
+    add('web_verify_claim', 46);
   }
-  if (s.email) {
+  if (d.email) {
     add('email_make_formal', 46);
     add('email_shorten', 45);
+    if (d.userLangZh) {
+      add('email_make_formal', 3);
+      add('email_shorten', 3);
+    }
   }
-  if (s.date) {
+  if (d.date) {
     add('date_shorter_summary', 44);
     add('date_main_risks', 43);
   }
 
-  if (s.list) {
+  if (d.list) {
     add('generic_bullet_points', 28);
     add('generic_create_table', 26);
     add('generic_simpler_terms', 18);
+    add('generic_action_checklist', 24);
   }
-  if (s.table) {
+  if (d.table) {
     add('generic_bullet_points', 22);
     add('generic_simpler_terms', 20);
     add('generic_create_table', 16);
+    add('generic_action_checklist', 18);
   }
 
-  if (s.substantial) {
+  if (d.substantial) {
     add('generic_simpler_terms', 14);
     add('generic_concrete_example', 12);
     add('generic_bullet_points', 10);
+    add('generic_assumptions', 10);
+    add('generic_action_checklist', 12);
   } else {
     add('generic_simpler_terms', 8);
     add('generic_concrete_example', 6);
   }
 
-  // Slight boost when nothing else matched so chips stay useful.
-  if (!s.code && !s.web && !s.email && !s.date && !s.list && !s.table) {
+  if (!d.code && !d.web && !d.email && !d.date && !d.list && !d.table) {
     add('generic_concrete_example', 6);
+    add('research_deeper', 5);
   }
+
+  if (d.taskDebug) {
+    add('code_fix_error', 24);
+    add('code_error_handling', 15);
+    add('code_explain', 8);
+  }
+  if (d.taskImplement) {
+    add('code_add_tests', 16);
+    add('wf_run_checks', 14);
+    add('code_refactor', 6);
+  }
+  if (d.taskReview) {
+    add('code_refactor', 14);
+    add('wf_verify_acceptance', 12);
+    add('generic_assumptions', 8);
+  }
+  if (d.taskPlan) {
+    add('generic_action_checklist', 20);
+    add('what_next', 8);
+    add('date_main_risks', 6);
+  }
+  if (d.taskConfig) {
+    add('ops_fix_config', 22);
+    add('ops_channel_next', 10);
+  }
+  if (d.taskResearch) {
+    add('research_deeper', 18);
+    add('web_find_sources', 10);
+    add('web_verify_claim', 8);
+  }
+  if (d.taskEducational) {
+    add('learn_technical_detail', 50);
+    add('learn_build_walkthrough', 49);
+    add('learn_compare_alternatives', 48);
+    add('generic_concrete_example', 42);
+    add('research_deeper', 38);
+    add('web_more_details', 36);
+    if (/技术实现|实现细节|原理|架构/i.test(ctx.assistantText) || /技术实现/i.test(ctx.userText)) {
+      add('learn_technical_detail', 12);
+    }
+    if (/搭建|部署|动手|实践|demo/i.test(combined)) {
+      add('learn_build_walkthrough', 14);
+    }
+    if (/对比|相比|区别|vs|或者/i.test(ctx.assistantText)) {
+      add('learn_compare_alternatives', 10);
+    }
+  }
+  if (d.taskCompare) add('wf_compare_options', 24);
+  if (d.taskTest) {
+    add('wf_run_checks', 20);
+    add('code_add_tests', 12);
+  }
+  if (d.taskGit) {
+    add('wf_git_commit', 22);
+    add('code_refactor', 5);
+  }
+
+  if (d.toolsUsedWebSearch) add('web_verify_claim', 12);
+  if (d.toolsUsedWrite) {
+    add('code_add_tests', 14);
+    add('wf_run_checks', 12);
+    add('wf_git_commit', 10);
+  }
+  if (d.toolsUsedShell && d.taskDebug) add('code_fix_error', 10);
+  if (d.toolsUsedShell && !d.taskDebug) add('wf_run_checks', 8);
+  if (d.toolsUsedBrowser) add('web_verify_claim', 6);
+  if (d.anyToolError) add('code_fix_error', 12);
+
+  if (/xopc\.json|agents\.list|providers|gateway|workspace/i.test(ctx.userText)) {
+    add('ops_fix_config', 16);
+  }
+  if (/telegram|weixin|channel|通道|gateway/i.test(ctx.userText)) {
+    add('ops_channel_next', 22);
+  }
+  if (/cron|定时|schedule|每天|remind/i.test(ctx.userText)) {
+    add('ops_schedule_cron', 20);
+  }
+
+  const recentHasEmail =
+    ctx.recentUserTexts.some((t) => detectContentSignals(t, t.toLowerCase()).email) ||
+    detectContentSignals(ctx.recentAssistantSnippet, ctx.recentAssistantSnippet.toLowerCase()).email;
+  if (recentHasEmail && d.assistantAlreadyShort) {
+    add('email_make_formal', 12);
+    add('email_shorten', 12);
+  }
+  const recentHasCode = ctx.recentUserTexts.some(
+    (t) => detectContentSignals(t, t.toLowerCase()).code,
+  );
+  if (recentHasCode && !d.code) add('code_explain', 10);
+
+  if (ctx.priorTurnCount <= 1) {
+    for (const id of ALL_IDS) {
+      if (id.startsWith('generic_')) add(id, 4);
+    }
+  }
+  if (ctx.priorTurnCount >= 3) {
+    add('what_next', 4);
+    add('generic_assumptions', 6);
+  }
+
+  if (ctx.userHasAttachments) add('generic_simpler_terms', 6);
 
   add('what_next', 40);
 
-  // Down-rank generic prompts when the reply is strongly code-centric (family caps still allow one generic).
-  if (s.code && !s.web && !s.email) {
+  if (d.assistantAlreadyBullets) multiply(m, 'generic_bullet_points', 0.2);
+  if (d.assistantAlreadyTable) multiply(m, 'generic_create_table', 0.2);
+  if (d.assistantAlreadyShort) multiply(m, 'generic_simpler_terms', 0.3);
+  if (d.taskResearch && d.toolsUsedWebSearch) {
     for (const id of ALL_IDS) {
-      if (id.startsWith('generic_')) m.set(id, (m.get(id) ?? 0) * 0.55);
+      if (id.startsWith('generic_')) multiply(m, id, 0.5);
     }
+  }
+  if (d.code && !d.web && !d.email) {
+    for (const id of ALL_IDS) {
+      if (id.startsWith('generic_')) multiply(m, id, 0.55);
+    }
+  }
+  if (d.toolsUsedWebSearch) {
+    multiply(m, 'web_more_details', 0.35);
+    multiply(m, 'research_deeper', 0.35);
+    multiply(m, 'web_verify_claim', 0.5);
+  }
+  if (d.taskDebug) {
+    multiply(m, 'code_explain', 0.85);
+    multiply(m, 'code_refactor', 0.85);
+    multiply(m, 'code_optimize', 0.85);
+    multiply(m, 'code_error_handling', 1.15);
+    multiply(m, 'code_fix_error', 1.15);
+  }
+  if (d.assistantOffersOptions) multiply(m, 'wf_compare_options', 1.2);
+  if (d.taskEducational && !d.hasRealCode) {
+    for (const id of ALL_IDS) {
+      if (id.startsWith('code_')) multiply(m, id, 0.06);
+    }
+    multiply(m, 'generic_action_checklist', 0.15);
+    multiply(m, 'generic_simpler_terms', 0.25);
+    multiply(m, 'code_explain', 0.06);
+  }
+  if (!d.substantial) {
+    multiply(m, 'date_shorter_summary', 0.7);
+    multiply(m, 'email_shorten', 0.7);
   }
 
   return m;
@@ -221,9 +508,13 @@ function scoreIds(s: Signals): Map<FollowUpSuggestionId, number> {
 
 function selectFollowUps(
   scores: Map<FollowUpSuggestionId, number>,
-  signals: Signals,
+  signals: DerivedSignals,
 ): FollowUpSuggestionId[] {
-  const ranked = [...ALL_IDS].sort((a, b) => (scores.get(b) ?? 0) - (scores.get(a) ?? 0));
+  const ranked = [...scores.keys()].sort((a, b) => {
+    const diff = (scores.get(b) ?? 0) - (scores.get(a) ?? 0);
+    if (diff !== 0) return diff;
+    return ALL_IDS.indexOf(a) - ALL_IDS.indexOf(b);
+  });
   const familyMax = familyMaxForSignals(signals);
 
   const familyUsed: Record<FollowUpFamily, number> = {
@@ -233,12 +524,16 @@ function selectFollowUps(
     date: 0,
     generic: 0,
     meta: 0,
+    ops: 0,
+    workflow: 0,
+    learn: 0,
   };
   const picked: FollowUpSuggestionId[] = [];
   const pickedSet = new Set<FollowUpSuggestionId>();
 
   const tryPick = (id: FollowUpSuggestionId): boolean => {
     if (picked.length >= 4 || pickedSet.has(id)) return false;
+    if (!scores.has(id)) return false;
     const fam = familyOf(id);
     if (familyUsed[fam] >= familyMax[fam]) return false;
     picked.push(id);
@@ -260,7 +555,6 @@ function selectFollowUps(
     tryPick(id);
   }
 
-  // Prefer "what next" last in the row when both appear.
   const metaIdx = picked.indexOf('what_next');
   if (metaIdx >= 0 && metaIdx < picked.length - 1) {
     const [wn] = picked.splice(metaIdx, 1);
@@ -271,18 +565,39 @@ function selectFollowUps(
 }
 
 /**
+ * Score follow-up chips from a full context pack (phase-1 heuristic).
+ */
+export function suggestFollowUps(ctx: FollowUpContextPack): FollowUpSuggestionId[] {
+  if (ctx.clarifyActive) return [];
+
+  const combinedSlice = [ctx.userText, ctx.assistantText, ...ctx.recentUserTexts].filter(Boolean).join('\n');
+  if (!combinedSlice.trim()) return [];
+
+  const content = detectContentSignals(combinedSlice, combinedSlice.toLowerCase());
+  const derived = detectDerived(ctx, content);
+  const scores = scoreIds(ctx, derived);
+  return selectFollowUps(scores, derived);
+}
+
+/**
  * Cheap follow-up prompts after an assistant turn (no extra LLM call).
- * Returns stable ids for chip UI; translate via i18n at render time.
- * Send text for the model: {@link followUpPromptForSuggestionId}.
+ * Prefer {@link suggestFollowUps} with {@link buildFollowUpContextPack} when transcript is available.
  */
 export function suggestFollowUpsFromAssistantMessage(msg: Message): FollowUpSuggestionId[] {
   if (msg.role !== 'assistant') return [];
-  const raw = collectAssistantPlainText(msg.content);
-  if (!raw) return [];
-  const slice = raw.length > MAX_ASSISTANT_CHARS ? `${raw.slice(0, MAX_ASSISTANT_CHARS)}…` : raw;
-  const lower = slice.toLowerCase();
-
-  const signals = detectSignals(slice, lower);
-  const scores = scoreIds(signals);
-  return selectFollowUps(scores, signals);
+  const ctx = buildFollowUpContextPack({
+    messages: [msg],
+    appendedAssistant: msg,
+  });
+  if (!ctx) return [];
+  return suggestFollowUps(ctx);
 }
+
+export { buildFollowUpContextPack, collectPlainTextFromContent } from '@/features/chat/follow-up-context';
+export type {
+  BuildFollowUpContextInput,
+  FollowUpCapabilities,
+  FollowUpContextPack,
+  ToolUseSummary,
+} from '@/features/chat/follow-up-context';
+export { DEFAULT_FOLLOW_UP_CAPABILITIES } from '@/features/chat/follow-up-context';

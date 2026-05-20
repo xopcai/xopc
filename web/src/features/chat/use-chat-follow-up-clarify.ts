@@ -15,10 +15,13 @@ import {
   writeFollowUpQueueSnapshot,
 } from '@/features/chat/follow-up-queue-storage';
 import {
+  buildFollowUpContextPack,
   followUpPromptForSuggestionId,
-  suggestFollowUpsFromAssistantMessage,
+  suggestFollowUps,
   type FollowUpSuggestionId,
 } from '@/features/chat/follow-up-suggestions';
+import type { FollowUpPromptLocale } from '@/features/chat/follow-up-prompts';
+import { useLocaleStore } from '@/stores/locale-store';
 import type { Message, ProgressState } from '@/features/chat/messages.types';
 import {
   FOLLOW_UP_AUTO_SEND_IDLE_MS,
@@ -61,7 +64,11 @@ export type ChatFollowUpClarifyApi = {
   dismissClarify: () => void;
   clearPendingFollowUps: () => void;
   dismissClarifyAndClearPending: () => void;
-  refreshFollowUpSuggestions: (appended: Message) => void;
+  refreshFollowUpSuggestions: (input: {
+    appended: Message;
+    messages: Message[];
+    clarifyActive?: boolean;
+  }) => void;
   clearFollowUpSuggestions: () => void;
   onClarifyToolEnd: () => void;
   makeOnClarifyRequest: (chatId: string) => (payload: ClarifyPromptState) => void;
@@ -245,11 +252,21 @@ export function useChatFollowUpClarify(options: {
     setFollowUpSuggestions([]);
   }, []);
 
-  const refreshFollowUpSuggestions = useCallback((appended: Message) => {
-    const next = suggestFollowUpsFromAssistantMessage(appended);
-    followUpSuggestionsRef.current = next;
-    setFollowUpSuggestions(next);
-  }, []);
+  const refreshFollowUpSuggestions = useCallback(
+    (input: { appended: Message; messages: Message[]; clarifyActive?: boolean }) => {
+      const locale = useLocaleStore.getState().language as FollowUpPromptLocale;
+      const ctx = buildFollowUpContextPack({
+        messages: input.messages,
+        appendedAssistant: input.appended,
+        locale,
+        clarifyActive: input.clarifyActive ?? Boolean(clarifyPromptRef.current),
+      });
+      const next = ctx ? suggestFollowUps(ctx) : [];
+      followUpSuggestionsRef.current = next;
+      setFollowUpSuggestions(next);
+    },
+    [],
+  );
 
   const onClarifyToolEnd = useCallback(() => {
     setClarifySubmitError(null);
@@ -481,7 +498,8 @@ export function useChatFollowUpClarify(options: {
 
   const pickFollowUpSuggestion = useCallback(
     (id: FollowUpSuggestionId) => {
-      const t = followUpPromptForSuggestionId(id).trim();
+      const locale = useLocaleStore.getState().language as FollowUpPromptLocale;
+      const t = followUpPromptForSuggestionId(id, locale).trim();
       if (!t) return;
       followUpSuggestionsRef.current = [];
       setFollowUpSuggestions([]);
