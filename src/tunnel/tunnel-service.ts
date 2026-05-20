@@ -8,8 +8,13 @@ import { ensureFrpcBinary } from './frpc-binary.js';
 import { writeFrpcConfig } from './frpc-config.js';
 import { type FrpcProcessHandle, spawnFrpcProcess } from './frpc-process.js';
 import { buildMobileConnectQrPayload, resolveLanGatewayUrl } from './tunnel-qr.js';
-import { clearTunnelState, loadTunnelState, saveTunnelState } from './tunnel-state.js';
-import type { PersistedTunnelState, TunnelQrPayload, TunnelStatus } from './tunnel-types.js';
+import {
+  canResumePersistedTunnel,
+  persistedFromRegistration,
+  registrationFromPersisted,
+} from './tunnel-persist.js';
+import { loadTunnelState, saveTunnelState, updateTunnelState } from './tunnel-state.js';
+import type { PersistedTunnelState, TunnelQrPayload, TunnelRegistration, TunnelStatus } from './tunnel-types.js';
 
 const log = createLogger('Tunnel');
 
@@ -97,16 +102,9 @@ export class TunnelService extends EventEmitter {
     const persisted = loadTunnelState();
     const broker = new TunnelBrokerClient(resolveBrokerApiBase(cfg.brokerUrl));
 
-    let registration;
+    let registration: TunnelRegistration;
     try {
-      registration = await broker.register({
-        brokerUrl: resolveBrokerApiBase(cfg.brokerUrl),
-        registrationSecret: cfg.registrationSecret,
-        gatewayVersion: PACKAGE_VERSION,
-        platform: platformLabel(),
-        gatewayTokenHash: hashGatewayToken(gatewayToken),
-        preferredSubdomain: persisted?.subdomain,
-      });
+      registration = await this.resolveRegistration(broker, cfg, gatewayToken, persisted);
     } catch (err) {
       this.state = 'error';
       this.lastError = err instanceof Error ? err.message : String(err);
@@ -114,15 +112,7 @@ export class TunnelService extends EventEmitter {
       throw err;
     }
 
-    const state: PersistedTunnelState = {
-      tunnelId: registration.tunnelId,
-      tunnelToken: registration.tunnelToken,
-      subdomain: registration.subdomain,
-      publicUrl: registration.publicUrl,
-      frpcAuthToken: registration.frpc.authToken,
-      registeredAt: new Date().toISOString(),
-      enabled: true,
-    };
+    const state = persistedFromRegistration(registration);
     saveTunnelState(state);
 
     const configPath = writeFrpcConfig(registration, gatewayPort);
@@ -139,23 +129,53 @@ export class TunnelService extends EventEmitter {
   async stop(): Promise<void> {
     this.stopping = true;
     this.clearHeartbeat();
-    const persisted = loadTunnelState();
-    const cfg = this.serviceConfig;
-    if (persisted && cfg) {
-      const broker = new TunnelBrokerClient(resolveBrokerApiBase(cfg.brokerUrl));
-      await broker.deregister(persisted.tunnelId, persisted.tunnelToken).catch((err) => {
-        log.warn({ err }, 'Tunnel deregister failed');
-      });
-    }
     if (this.frpcHandle) {
       await this.frpcHandle.kill();
       this.frpcHandle = null;
     }
-    clearTunnelState();
+    updateTunnelState({ enabled: false });
     this.state = 'disconnected';
     this.connectedSince = null;
     this.startContext = null;
     this.emit('tunnel:disconnected');
+  }
+
+  /**
+   * Reuse Broker registration when possible so subdomain and URLs stay stable across stop/start.
+   */
+  private async resolveRegistration(
+    broker: TunnelBrokerClient,
+    cfg: TunnelServiceConfig,
+    gatewayToken: string,
+    persisted: PersistedTunnelState | null,
+  ): Promise<TunnelRegistration> {
+    if (canResumePersistedTunnel(persisted)) {
+      try {
+        await broker.heartbeat(persisted.tunnelId, persisted.tunnelToken);
+        const resumed = registrationFromPersisted(persisted);
+        if (resumed) {
+          log.info(
+            { tunnelId: persisted.tunnelId, subdomain: persisted.subdomain, phase: 'tunnel_resume' },
+            'Resumed tunnel from persisted credentials',
+          );
+          return resumed;
+        }
+      } catch (err) {
+        log.info(
+          { err, tunnelId: persisted.tunnelId, phase: 'tunnel_resume' },
+          'Persisted tunnel not resumable — registering again',
+        );
+      }
+    }
+
+    return broker.register({
+      brokerUrl: resolveBrokerApiBase(cfg.brokerUrl),
+      registrationSecret: cfg.registrationSecret,
+      gatewayVersion: PACKAGE_VERSION,
+      platform: platformLabel(),
+      gatewayTokenHash: hashGatewayToken(gatewayToken),
+      preferredSubdomain: persisted?.subdomain,
+    });
   }
 
   private async spawnAndWait(
@@ -246,15 +266,7 @@ export class TunnelService extends EventEmitter {
             gatewayTokenHash: hashGatewayToken(ctx.gatewayToken),
             preferredSubdomain: state.subdomain,
           });
-          const next: PersistedTunnelState = {
-            tunnelId: registration.tunnelId,
-            tunnelToken: registration.tunnelToken,
-            subdomain: registration.subdomain,
-            publicUrl: registration.publicUrl,
-            frpcAuthToken: registration.frpc.authToken,
-            registeredAt: new Date().toISOString(),
-            enabled: true,
-          };
+          const next = persistedFromRegistration(registration);
           saveTunnelState(next);
           const frpcBin = await ensureFrpcBinary();
           const configPath = writeFrpcConfig(registration, ctx.gatewayPort);

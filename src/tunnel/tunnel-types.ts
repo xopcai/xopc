@@ -21,6 +21,11 @@ export type PersistedTunnelState = {
   frpcAuthToken: string;
   registeredAt: string;
   enabled?: boolean;
+  /** Saved on register so stop/start can resume without re-registering. */
+  frpcServerAddr?: string;
+  frpcServerPort?: number;
+  proxyName?: string;
+  heartbeatIntervalMs?: number;
 };
 
 export type TunnelStatus = {
