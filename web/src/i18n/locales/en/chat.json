@@ -131,6 +131,16 @@
     "composerStageExecuting": "Executing…",
     "composerStageAnalyzing": "Analyzing…",
     "attachFile": "Attach file",
+    "fileReference": {
+      "externalBadge": "External",
+      "externalDescription": "This file is outside the current workspace, so it cannot be edited in the workspace editor.",
+      "browserExternalDescription": "This file is outside the current workspace. In the browser, copy the path and open it from your system.",
+      "missingDescription": "This file is currently unavailable. It may have been moved, deleted, or created in another runtime environment.",
+      "invalidDescription": "This file path could not be resolved.",
+      "openExternal": "Open",
+      "revealInFolder": "Show in folder",
+      "copyPath": "Copy path"
+    },
     "workingDirectory": {
       "selectWorkingDirectory": "Select working directory",
       "chooseFolder": "Choose folder…",

@@ -56,6 +56,9 @@ export type WorkspaceFilePreviewState = {
 
   canOpenWithSystemApp: boolean;
   onOpenWithSystemApp: () => Promise<void>;
+
+  canRevealInFolder: boolean;
+  onRevealInFolder: () => Promise<void>;
 };
 
 export function useWorkspaceFilePreviewState({
@@ -152,10 +155,11 @@ export function useWorkspaceFilePreviewState({
       loadBinary('image');
     } else {
       void readWorkspaceFile(filePath, readOpts)
-        .then(({ content: text, mtimeMs: mt }) => {
+        .then(({ content: text, mtimeMs: mt, absolutePath }) => {
           if (cancelled) return;
           setTextContent(text);
           setPreviewKind('text');
+          setHostAbsolutePath(typeof absolutePath === 'string' && absolutePath.length > 0 ? absolutePath : null);
           setMtimeMs(typeof mt === 'number' && Number.isFinite(mt) ? mt : null);
         })
         .catch((err) => {
@@ -279,6 +283,15 @@ export function useWorkspaceFilePreviewState({
     await window.electronAPI.shell.openPath(p);
   }, [hostAbsolutePath]);
 
+  const canRevealInFolder =
+    isElectron() && Boolean(hostAbsolutePath) && Boolean(window.electronAPI?.shell?.showItemInFolder);
+
+  const onRevealInFolder = useCallback(async () => {
+    const p = hostAbsolutePath;
+    if (!p || !window.electronAPI?.shell?.showItemInFolder) return;
+    await window.electronAPI.shell.showItemInFolder(p);
+  }, [hostAbsolutePath]);
+
   return {
     previewKind,
     loading,
@@ -306,6 +319,9 @@ export function useWorkspaceFilePreviewState({
 
     canOpenWithSystemApp,
     onOpenWithSystemApp,
+
+    canRevealInFolder,
+    onRevealInFolder,
   };
 }
 
