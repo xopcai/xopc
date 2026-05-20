@@ -78,7 +78,15 @@ export function TunnelSettingsPanel() {
     error: statusErr,
     isLoading,
     mutate: mutStatus,
-  } = useSWR(hasToken ? 'tunnel-status' : null, fetchTunnelStatus, { refreshInterval: 10_000 });
+  } = useSWR(hasToken ? 'tunnel-status' : null, fetchTunnelStatus, { refreshInterval: 60_000 });
+
+  useEffect(() => {
+    const onTunnelStatus = () => {
+      void mutStatus();
+    };
+    window.addEventListener('tunnel-status', onTunnelStatus);
+    return () => window.removeEventListener('tunnel-status', onTunnelStatus);
+  }, [mutStatus]);
 
   const refreshQr = useCallback(async (payload?: string) => {
     try {

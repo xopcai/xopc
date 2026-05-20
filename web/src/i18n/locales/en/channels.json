@@ -266,7 +266,12 @@
     "mobilePairCopyLink": "Copy pairing link",
     "mobilePairCopied": "Copied pairing link",
     "mobilePairSchemeHint": "Format registered by apps: xopc://gateway/mobile-connect?baseUrl=…&token=…",
-    "mobilePairInvalidBaseUrl": "Enter an absolute gateway URL starting with http:// or https:// (no path required)."
+    "mobilePairInvalidBaseUrl": "Enter an absolute gateway URL starting with http:// or https:// (no path required).",
+    "mobilePairTunnelActive": "Remote access is on. The QR includes your tunnel URL and LAN address when available.",
+    "mobilePairTunnelPublicUrl": "Tunnel URL",
+    "mobilePairTunnelLanUrl": "LAN URL (in QR)",
+    "mobilePairTunnelHint": "Turn on remote access to auto-fill the tunnel URL for pairing.",
+    "mobilePairOpenTunnelSettings": "Open Remote access settings"
   },
   "heartbeatSettings": {
     "needToken": "Save a gateway token to load and edit heartbeat options.",
