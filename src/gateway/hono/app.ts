@@ -168,7 +168,6 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   }, RATE_LIMIT_CLEANUP_INTERVAL);
 
   const strictRateLimitMiddleware = createMiddleware(async (c, next) => {
-    /*
     const clientIp = c.req.header('x-forwarded-for')?.split(',')[0]?.trim()
       ?? c.req.header('x-real-ip')
       ?? 'unknown';
@@ -181,12 +180,12 @@ export function createHonoApp(config: HonoAppConfig): Hono {
 
     const result = limiter.consume();
     if (!result.allowed) {
+      log.warn({ clientIp, retryAfterMs: result.retryAfterMs }, 'Rate limit exceeded');
       c.header('Retry-After', String(Math.ceil(result.retryAfterMs / 1000)));
       return c.json({ error: 'Too many requests' }, 429);
     }
 
     c.header('X-RateLimit-Remaining', String(result.remaining));
-    */
     await next();
   });
 

@@ -36,3 +36,10 @@ export {
   auditGatewayConfig,
   type SecurityAuditFinding,
 } from './audit.js';
+export {
+  wrapExternalContent,
+  wrapWebContent,
+  detectSuspiciousPatterns,
+  type ExternalContentSource,
+  type WrapExternalContentOptions,
+} from './external-content.js';
