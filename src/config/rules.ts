@@ -59,7 +59,11 @@ export const BASE_RELOAD_RULES: ReloadRule[] = [
   { prefix: 'gateway.host', kind: 'restart', description: 'Host address' },
   { prefix: 'gateway.port', kind: 'restart', description: 'Port number' },
   { prefix: 'gateway.auth', kind: 'restart', description: 'Authentication settings' },
-  { prefix: 'gateway.cors', kind: 'restart', description: 'CORS settings' },
+  { prefix: 'gateway.corsOrigins', kind: 'restart', description: 'CORS settings' },
+  { prefix: 'gateway.maxSseConnections', kind: 'restart', description: 'SSE connection limit' },
+  { prefix: 'gateway.channelConnectDeferMode', kind: 'restart', description: 'Channel connect defer mode' },
+  { prefix: 'gateway.channelConnectDeferIds', kind: 'restart', description: 'Explicit channel connect defer list' },
+  { prefix: 'gateway.channelConnectDeferSkipIds', kind: 'restart', description: 'Channel connect defer skip list' },
   {
     prefix: 'gateway.skillsStoreBaseUrl',
     kind: 'restart',

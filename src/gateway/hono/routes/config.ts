@@ -958,6 +958,43 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
         }
       }
     }
+    if (body.gateway?.host !== undefined) {
+      if (typeof body.gateway.host !== 'string' || !body.gateway.host.trim()) {
+        return c.json({ ok: false, error: { message: 'gateway.host must be a non-empty string' } }, 400);
+      }
+      if (!config.gateway) {
+        config.gateway = {
+          host: body.gateway.host.trim(),
+          port: 18790,
+          heartbeat: { enabled: true, intervalMs: 1_800_000, includeSystemPromptSection: false },
+          maxSseConnections: 100,
+          corsOrigins: [],
+        };
+      } else {
+        config.gateway.host = body.gateway.host.trim();
+      }
+    }
+    if (body.gateway?.port !== undefined) {
+      if (
+        typeof body.gateway.port !== 'number' ||
+        !Number.isFinite(body.gateway.port) ||
+        body.gateway.port < 1 ||
+        body.gateway.port > 65535
+      ) {
+        return c.json({ ok: false, error: { message: 'gateway.port must be an integer from 1 to 65535' } }, 400);
+      }
+      if (!config.gateway) {
+        config.gateway = {
+          host: '127.0.0.1',
+          port: Math.floor(body.gateway.port),
+          heartbeat: { enabled: true, intervalMs: 1_800_000, includeSystemPromptSection: false },
+          maxSseConnections: 100,
+          corsOrigins: [],
+        };
+      } else {
+        config.gateway.port = Math.floor(body.gateway.port);
+      }
+    }
     if (body.gateway?.auth !== undefined) {
       if (!config.gateway) {
         config.gateway = {
@@ -965,17 +1002,172 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
           port: 18790,
           heartbeat: { enabled: true, intervalMs: 1_800_000, includeSystemPromptSection: false },
           maxSseConnections: 100,
-          corsOrigins: ['*'],
+          corsOrigins: [],
         };
       }
       if (!config.gateway.auth) config.gateway.auth = { mode: 'token' };
       const a = body.gateway.auth;
       if (a.mode !== undefined) {
+        if (a.mode !== 'none' && a.mode !== 'token' && a.mode !== 'password') {
+          return c.json({ ok: false, error: { message: 'gateway.auth.mode must be none, token, or password' } }, 400);
+        }
         config.gateway.auth.mode = a.mode;
       }
       if (a.token !== undefined) {
-        config.gateway.auth.token = a.token;
+        if (a.token === null || (typeof a.token === 'string' && !a.token.trim())) {
+          delete config.gateway.auth.token;
+        } else if (typeof a.token === 'string') {
+          config.gateway.auth.token = a.token;
+        }
       }
+      if (a.password !== undefined) {
+        if (a.password === null || (typeof a.password === 'string' && !a.password.trim())) {
+          delete config.gateway.auth.password;
+        } else if (
+          typeof a.password === 'string' &&
+          a.password !== '***' &&
+          a.password !== '••••••••••••'
+        ) {
+          config.gateway.auth.password = a.password;
+        }
+      }
+      if (a.rateLimit !== undefined && typeof a.rateLimit === 'object' && a.rateLimit !== null) {
+        const rlIn = a.rateLimit as Record<string, unknown>;
+        if (!config.gateway.auth.rateLimit) {
+          config.gateway.auth.rateLimit = {
+            enabled: true,
+            maxAttempts: 5,
+            windowMs: 900_000,
+            blockDurationMs: 300_000,
+          };
+        }
+        const rl = config.gateway.auth.rateLimit!;
+        if (rlIn.enabled !== undefined) rl.enabled = Boolean(rlIn.enabled);
+        if (typeof rlIn.maxAttempts === 'number' && Number.isFinite(rlIn.maxAttempts)) {
+          rl.maxAttempts = Math.max(1, Math.floor(rlIn.maxAttempts));
+        }
+        if (typeof rlIn.windowMs === 'number' && Number.isFinite(rlIn.windowMs) && rlIn.windowMs > 0) {
+          rl.windowMs = Math.floor(rlIn.windowMs);
+        }
+        if (
+          typeof rlIn.blockDurationMs === 'number' &&
+          Number.isFinite(rlIn.blockDurationMs) &&
+          rlIn.blockDurationMs > 0
+        ) {
+          rl.blockDurationMs = Math.floor(rlIn.blockDurationMs);
+        }
+      }
+    }
+    if (body.gateway?.corsOrigins !== undefined) {
+      if (!Array.isArray(body.gateway.corsOrigins)) {
+        return c.json({ ok: false, error: { message: 'gateway.corsOrigins must be an array' } }, 400);
+      }
+      if (!config.gateway) {
+        config.gateway = {
+          host: '0.0.0.0',
+          port: 18790,
+          heartbeat: { enabled: true, intervalMs: 1_800_000, includeSystemPromptSection: false },
+          maxSseConnections: 100,
+          corsOrigins: [],
+        };
+      }
+      config.gateway.corsOrigins = body.gateway.corsOrigins
+        .filter((x): x is string => typeof x === 'string' && x.trim().length > 0)
+        .map((x) => x.trim());
+    }
+    if (body.gateway?.maxSseConnections !== undefined) {
+      if (
+        typeof body.gateway.maxSseConnections !== 'number' ||
+        !Number.isFinite(body.gateway.maxSseConnections) ||
+        body.gateway.maxSseConnections < 1
+      ) {
+        return c.json(
+          { ok: false, error: { message: 'gateway.maxSseConnections must be a positive integer' } },
+          400,
+        );
+      }
+      if (!config.gateway) {
+        config.gateway = {
+          host: '127.0.0.1',
+          port: 18790,
+          heartbeat: { enabled: true, intervalMs: 1_800_000, includeSystemPromptSection: false },
+          maxSseConnections: Math.floor(body.gateway.maxSseConnections),
+          corsOrigins: [],
+        };
+      } else {
+        config.gateway.maxSseConnections = Math.floor(body.gateway.maxSseConnections);
+      }
+    }
+    if (body.gateway?.channelConnectDeferMode !== undefined) {
+      const mode = body.gateway.channelConnectDeferMode;
+      if (mode !== 'auto' && mode !== 'off' && mode !== 'explicit') {
+        return c.json(
+          {
+            ok: false,
+            error: { message: 'gateway.channelConnectDeferMode must be auto, off, or explicit' },
+          },
+          400,
+        );
+      }
+      if (!config.gateway) {
+        config.gateway = {
+          host: '127.0.0.1',
+          port: 18790,
+          heartbeat: { enabled: true, intervalMs: 1_800_000, includeSystemPromptSection: false },
+          maxSseConnections: 100,
+          corsOrigins: [],
+        };
+      }
+      config.gateway.channelConnectDeferMode = mode;
+    }
+    const parseDeferIdList = (raw: unknown): string[] | null => {
+      if (!Array.isArray(raw)) return null;
+      const ids = raw
+        .filter((x): x is string => typeof x === 'string' && x.trim().length > 0)
+        .map((x) => x.trim());
+      if (ids.length > 24) return null;
+      return ids;
+    };
+    if (body.gateway?.channelConnectDeferIds !== undefined) {
+      const ids = parseDeferIdList(body.gateway.channelConnectDeferIds);
+      if (ids === null) {
+        return c.json(
+          { ok: false, error: { message: 'gateway.channelConnectDeferIds must be an array of up to 24 strings' } },
+          400,
+        );
+      }
+      if (!config.gateway) {
+        config.gateway = {
+          host: '127.0.0.1',
+          port: 18790,
+          heartbeat: { enabled: true, intervalMs: 1_800_000, includeSystemPromptSection: false },
+          maxSseConnections: 100,
+          corsOrigins: [],
+        };
+      }
+      config.gateway.channelConnectDeferIds = ids;
+    }
+    if (body.gateway?.channelConnectDeferSkipIds !== undefined) {
+      const ids = parseDeferIdList(body.gateway.channelConnectDeferSkipIds);
+      if (ids === null) {
+        return c.json(
+          {
+            ok: false,
+            error: { message: 'gateway.channelConnectDeferSkipIds must be an array of up to 24 strings' },
+          },
+          400,
+        );
+      }
+      if (!config.gateway) {
+        config.gateway = {
+          host: '127.0.0.1',
+          port: 18790,
+          heartbeat: { enabled: true, intervalMs: 1_800_000, includeSystemPromptSection: false },
+          maxSseConnections: 100,
+          corsOrigins: [],
+        };
+      }
+      config.gateway.channelConnectDeferSkipIds = ids;
     }
 
     if (body.update !== undefined && typeof body.update === 'object' && body.update !== null) {
