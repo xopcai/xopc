@@ -8,24 +8,26 @@ describe('tunnel-qr', () => {
     expect(resolveLanGatewayUrl('localhost', 18790)).toBeNull();
   });
 
-  it('builds mobile-connect payload with tunnel and lan', () => {
+  it('builds mobile-connect payload with tunnel, lan, and pairing secret', () => {
     const qr = buildMobileConnectQrPayload({
       publicUrl: 'https://abc123.frp.xopc.ai',
       lanUrl: 'http://192.168.1.10:18790',
-      gatewayToken: 'secret',
+      pairingSecret: 'pair-secret-abc',
     });
     expect(qr.qrPayload).toContain('xopc://gateway/mobile-connect');
     expect(qr.qrPayload).toContain('baseUrl=');
     expect(qr.qrPayload).toContain('lanUrl=');
-    expect(qr.qrPayload).toContain('token=secret');
+    expect(qr.qrPayload).toContain('ps=pair-secret-abc');
+    expect(qr.qrPayload).not.toContain('token=');
   });
 
   it('omits lanUrl param when not on LAN', () => {
     const qr = buildMobileConnectQrPayload({
       publicUrl: 'https://abc123.frp.xopc.ai',
       lanUrl: null,
-      gatewayToken: 't',
+      pairingSecret: 'ps1',
     });
     expect(qr.qrPayload).not.toContain('lanUrl=');
+    expect(qr.qrPayload).toContain('ps=ps1');
   });
 });

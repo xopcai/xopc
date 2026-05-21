@@ -70,15 +70,6 @@ export function TunnelSettingsPanel() {
   const pairQr = useMobilePairQr(token ?? '');
 
   const { data: cfgData } = useGatewayConfigSwr(hasToken);
-  const tunnelCfg = useMemo(() => {
-    const c = cfgData?.payload?.config;
-    if (!c || typeof c !== 'object' || Array.isArray(c)) return { autoStart: false };
-    const tunnel = (c as { tunnel?: unknown }).tunnel;
-    if (!tunnel || typeof tunnel !== 'object' || Array.isArray(tunnel)) return { autoStart: false };
-    return {
-      autoStart: Boolean((tunnel as { autoStart?: unknown }).autoStart),
-    };
-  }, [cfgData]);
 
   const {
     data: status,
@@ -86,6 +77,17 @@ export function TunnelSettingsPanel() {
     isLoading,
     mutate: mutStatus,
   } = useSWR(hasToken ? 'tunnel-status' : null, fetchTunnelStatus, { refreshInterval: 60_000 });
+
+  const autoStartEnabled = useMemo(() => {
+    const c = cfgData?.payload?.config;
+    if (c && typeof c === 'object' && !Array.isArray(c)) {
+      const tunnel = (c as { tunnel?: unknown }).tunnel;
+      if (tunnel && typeof tunnel === 'object' && !Array.isArray(tunnel)) {
+        if ((tunnel as { autoStart?: unknown }).autoStart === true) return true;
+      }
+    }
+    return status?.config?.autoStart === true;
+  }, [cfgData, status?.config?.autoStart]);
 
   useEffect(() => {
     const onTunnelStatus = () => {
@@ -167,7 +169,7 @@ export function TunnelSettingsPanel() {
   );
 
   const toggleAutoStart = useCallback(() => {
-    if (tunnelCfg.autoStart) {
+    if (autoStartEnabled) {
       void applyAutoStart(false);
       return;
     }
@@ -180,7 +182,7 @@ export function TunnelSettingsPanel() {
       return;
     }
     setAutoStartConfirmOpen(true);
-  }, [applyAutoStart, status?.canAutoStart, status?.consentRequired, t, tunnelCfg.autoStart]);
+  }, [applyAutoStart, status?.canAutoStart, status?.consentRequired, t, autoStartEnabled]);
 
   const handleRelease = useCallback(async () => {
     setReleaseConfirmOpen(false);
@@ -223,11 +225,11 @@ export function TunnelSettingsPanel() {
     lastHeartbeatAt: null,
     lastError: null,
     consentRequired: true,
-    config: { autoStart: tunnelCfg.autoStart, brokerUrl: 'https://frp.xopc.ai/api' },
+    config: { autoStart: autoStartEnabled, brokerUrl: 'https://frp.xopc.ai/api' },
   };
 
   const showConsentExpired =
-    status?.consentRequired && (st.enabled || tunnelCfg.autoStart || status?.consent?.acceptedAt);
+    status?.consentRequired && (st.enabled || autoStartEnabled || status?.consent?.acceptedAt);
 
   return (
     <div className="mx-auto flex w-full max-w-app-main flex-col gap-6 px-4 py-8">
@@ -330,19 +332,19 @@ export function TunnelSettingsPanel() {
         <label
           className={cn(
             'flex items-center gap-3 text-sm text-fg',
-            !tunnelCfg.autoStart && !status?.canAutoStart ? 'cursor-not-allowed opacity-60' : 'cursor-pointer',
+            !autoStartEnabled && !status?.canAutoStart ? 'cursor-not-allowed opacity-60' : 'cursor-pointer',
           )}
         >
           <input
             type="checkbox"
             className="size-4 rounded border-edge accent-accent"
-            checked={tunnelCfg.autoStart}
-            disabled={savingAutoStart || (!tunnelCfg.autoStart && !status?.canAutoStart)}
+            checked={autoStartEnabled}
+            disabled={savingAutoStart || (!autoStartEnabled && !status?.canAutoStart)}
             onChange={toggleAutoStart}
           />
           {t.autoStart}
         </label>
-        {!status?.canAutoStart && !tunnelCfg.autoStart ? (
+        {!status?.canAutoStart && !autoStartEnabled ? (
           <p className="mt-2 text-xs text-fg-subtle">{t.autoStartHint}</p>
         ) : null}
       </SettingsFormSection>

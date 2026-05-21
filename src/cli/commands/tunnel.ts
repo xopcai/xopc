@@ -10,6 +10,7 @@ import {
 } from '../../tunnel/consent.js';
 import { resolveTunnelBrokerUrl, resolveTunnelRegistrationSecret } from '../../tunnel/env.js';
 import { ensureFrpcBinary, getTunnelService } from '../../tunnel/index.js';
+import { resolveFrpSubdomainHost, resolveTunnelE2eConfig } from '../../tunnel/tunnel-e2e-config.js';
 import { applyTunnelConsentToConfig, setTunnelEnabledInConfig } from '../../tunnel/tunnel-config.js';
 import { loadTunnelState } from '../../tunnel/tunnel-state.js';
 import { formatExamples, register, type CLIContext } from '../registry.js';
@@ -43,6 +44,8 @@ function configureTunnel(ctx: CLIContext): void {
     registrationSecret: resolveTunnelRegistrationSecret(),
     autoStart: config.tunnel?.autoStart ?? false,
     gatewayHost: host,
+    e2e: resolveTunnelE2eConfig(config.tunnel),
+    frpSubdomainHost: resolveFrpSubdomainHost(resolveTunnelBrokerUrl(config.tunnel?.brokerUrl)),
   });
 }
 
@@ -231,8 +234,7 @@ function createTunnelCommand(ctx: CLIContext): Command {
       configureTunnel(ctx);
       const config = loadConfig(ctx.configPath);
       const { port, host } = resolveGatewayPortHost(config);
-      const token = resolveGatewayToken(config);
-      const qr = getTunnelService().buildQr(port, host, token);
+      const qr = getTunnelService().buildQr(port, host);
       if (!qr.qrPayload) {
         console.error('No active tunnel. Run: xopc tunnel start');
         process.exit(1);

@@ -12,8 +12,9 @@ export function resolveFrpcConfigPath(tunnelId: string): string {
 
 export function writeFrpcConfig(
   registration: TunnelRegistration,
-  gatewayPort: number,
+  localPort: number,
   localHost = '127.0.0.1',
+  mode: 'http' | 'https' = 'http',
 ): string {
   const configPath = resolveFrpcConfigPath(registration.tunnelId);
   const { frpc } = registration;
@@ -28,9 +29,9 @@ transport.heartbeatTimeout = 30
 
 [[proxies]]
 name = "${frpc.proxyName}"
-type = "http"
+type = "${mode}"
 localIP = "${localHost}"
-localPort = ${gatewayPort}
+localPort = ${localPort}
 subdomain = "${registration.subdomain}"
 `;
   writeFileSync(configPath, toml, 'utf8');
