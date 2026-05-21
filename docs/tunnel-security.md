@@ -7,6 +7,17 @@ Remote access exposes your **local gateway** on the public internet via FRP (`fr
 - Tunnel is **off** on install and on gateway / Electron startup.
 - **frpc** is downloaded only when you start remote access (`tunnel start` or the settings UI).
 - Electron release builds **do not** bundle frpc.
+- Cached binary: `{stateDir}/bin/frpc` (default `~/.xopc/bin/frpc`; honors `XOPC_STATE_DIR`).
+- While a tunnel is active, the gateway sets `XOPC_FRPC_PATH` to the resolved binary; it is cleared on stop.
+
+## Prefetch (optional)
+
+```bash
+pnpm run electron:frpc:download   # current OS/arch → ~/.xopc/bin
+node scripts/download-frpc-binaries.mjs --all   # all platforms (mirrors / CI)
+```
+
+Prefetch is not required; the first tunnel start downloads if the cache is missing.
 
 ## Consent (versioned)
 
@@ -18,6 +29,8 @@ Before the first start (and again when we bump the consent version), you must ac
 - **CLI:** interactive prompt, or `xopc tunnel start --accept-risk` / `xopc tunnel consent`
 
 If the notice text changes, the version string is bumped and existing consent is invalidated until you re-accept.
+
+On gateway load, invalid consent clears `tunnel.enabled` and `tunnel.autoStart` in config (persisted automatically).
 
 ## Configuration flags
 

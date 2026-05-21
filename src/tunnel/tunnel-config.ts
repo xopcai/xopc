@@ -66,3 +66,24 @@ export function setTunnelEnabledInConfig(config: Config, enabled: boolean): void
   }
   config.tunnel.enabled = enabled;
 }
+
+/**
+ * Clear stale tunnel flags when consent is missing or outdated (Phase 2: config/runtime alignment).
+ * Returns true when `config.tunnel` was modified.
+ */
+export function sanitizeTunnelConfig(config: Config): boolean {
+  const tunnel = config.tunnel;
+  if (!tunnel) return false;
+  if (hasValidTunnelConsent(config)) return false;
+
+  let changed = false;
+  if (tunnel.enabled) {
+    tunnel.enabled = false;
+    changed = true;
+  }
+  if (tunnel.autoStart) {
+    tunnel.autoStart = false;
+    changed = true;
+  }
+  return changed;
+}

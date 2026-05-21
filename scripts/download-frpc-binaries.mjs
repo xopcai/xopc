@@ -1,15 +1,20 @@
 #!/usr/bin/env node
 /**
- * Download frpc binaries into electron/resources/frpc/{platform}_{arch}/.
+ * Prefetch frpc into the xopc state bin directory (~/.xopc/bin by default).
+ * Optional — tunnel start downloads on demand if missing.
+ *
  * Usage:
  *   node scripts/download-frpc-binaries.mjs
  *   node scripts/download-frpc-binaries.mjs --all
  *   node scripts/download-frpc-binaries.mjs --platform darwin --arch arm64
+ *
+ * Env: XOPC_STATE_DIR overrides ~/.xopc
  */
 import { chmodSync, copyFileSync, createWriteStream, existsSync, mkdirSync, rmSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import { spawn } from 'node:child_process';
 import { pipeline } from 'node:stream/promises';
-import { join } from 'node:path';
 
 const FRP_VERSION = '0.62.1';
 
@@ -23,6 +28,11 @@ const ALL_TARGETS = [
   ['linux', 'arm64'],
   ['windows', 'amd64'],
 ];
+
+function resolveStateBinDir() {
+  const stateDir = process.env.XOPC_STATE_DIR?.trim() || join(homedir(), '.xopc');
+  return join(stateDir, 'bin');
+}
 
 function parseArgs() {
   const all = process.argv.includes('--all');
@@ -76,7 +86,7 @@ async function downloadOne(platform, arch) {
     `https://ghfast.top/https://github.com/fatedier/frp/releases/download/v${FRP_VERSION}/${folder}.tar.gz`,
     `https://frp.xopc.ai/bin/${folder}.tar.gz`,
   ];
-  const destDir = join('electron', 'resources', 'frpc', `${platform}_${arch}`);
+  const destDir = resolveStateBinDir();
   const ext = platform === 'windows' ? '.exe' : '';
   const destBin = join(destDir, `frpc${ext}`);
   if (existsSync(destBin)) {
@@ -84,7 +94,7 @@ async function downloadOne(platform, arch) {
     return;
   }
   mkdirSync(destDir, { recursive: true });
-  const archivePath = join(destDir, '_frpc.tgz');
+  const archivePath = join(destDir, `_frpc-${platform}-${arch}.tgz`);
   let lastErr;
   for (const url of urls) {
     try {

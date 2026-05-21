@@ -4,7 +4,7 @@ import { EventEmitter } from 'node:events';
 import { PACKAGE_VERSION } from '../package-version.js';
 import { createLogger } from '../utils/logger.js';
 import { TunnelBrokerClient, resolveBrokerApiBase } from './broker-client.js';
-import { ensureFrpcBinary } from './frpc-binary.js';
+import { clearFrpcPathForProcess, ensureFrpcBinary, publishFrpcPathForProcess } from './frpc-binary.js';
 import { writeFrpcConfig } from './frpc-config.js';
 import { type FrpcProcessHandle, spawnFrpcProcess } from './frpc-process.js';
 import { buildMobileConnectQrPayload, resolveLanGatewayUrl } from './tunnel-qr.js';
@@ -99,6 +99,7 @@ export class TunnelService extends EventEmitter {
     this.emit('tunnel:connecting');
 
     const frpcBin = await ensureFrpcBinary();
+    publishFrpcPathForProcess(frpcBin);
     const persisted = loadTunnelState();
     const broker = new TunnelBrokerClient(resolveBrokerApiBase(cfg.brokerUrl));
 
@@ -133,6 +134,7 @@ export class TunnelService extends EventEmitter {
       await this.frpcHandle.kill();
       this.frpcHandle = null;
     }
+    clearFrpcPathForProcess();
     updateTunnelState({ enabled: false });
     this.state = 'disconnected';
     this.connectedSince = null;

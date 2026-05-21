@@ -27,6 +27,8 @@ function authHeaders(): Record<string, string> {
 type TunnelStatusPayload = {
   enabled: boolean;
   state?: string;
+  consentRequired?: boolean;
+  canAutoStart?: boolean;
   config?: { autoStart?: boolean };
 };
 
@@ -43,16 +45,33 @@ async function fetchTunnelStatus(): Promise<TunnelStatusPayload | null> {
   }
 }
 
+function isTunnelAlreadyActive(status: TunnelStatusPayload): boolean {
+  const state = status.state;
+  return (
+    state === 'connected' ||
+    state === 'connecting' ||
+    state === 'reconnecting' ||
+    status.enabled
+  );
+}
+
 export async function maybeAutoStartTunnel(): Promise<void> {
   const status = await fetchTunnelStatus();
-  if (!status?.config?.autoStart || status.enabled) return;
+  if (!status?.config?.autoStart) return;
+  if (status.consentRequired) return;
+  if (!status.canAutoStart) return;
+  if (isTunnelAlreadyActive(status)) return;
   if (!embeddedGatewayPort || !embeddedGatewayToken) return;
   try {
-    await fetch(`http://127.0.0.1:${embeddedGatewayPort}/api/tunnel/start`, {
+    const res = await fetch(`http://127.0.0.1:${embeddedGatewayPort}/api/tunnel/start`, {
       method: 'POST',
       headers: { ...authHeaders(), 'Content-Type': 'application/json' },
       body: '{}',
     });
+    if (!res.ok) {
+      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      console.error('[Electron] Auto-start tunnel failed:', body.error ?? res.status);
+    }
   } catch (err) {
     console.error('[Electron] Auto-start tunnel failed:', err);
   }

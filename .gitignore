@@ -70,5 +70,5 @@ docs/.vitepress/cache/
 .worktrees/
 .docs
 
-# frpc binaries (pnpm run electron:frpc:download before electron:build)
+# Optional local frpc prefetch (scripts/download-frpc-binaries.mjs → ~/.xopc/bin)
 electron/resources/frpc/

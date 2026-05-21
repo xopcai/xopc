@@ -8,7 +8,7 @@ import {
   hasValidTunnelConsent,
   TunnelConsentError,
 } from '../consent.js';
-import { mergeTunnelConfigPatch } from '../tunnel-config.js';
+import { mergeTunnelConfigPatch, sanitizeTunnelConfig } from '../tunnel-config.js';
 
 function baseConfig(overrides?: Partial<Config['tunnel']>): Config {
   return {
@@ -63,6 +63,17 @@ describe('tunnel consent', () => {
     );
     expect(on.valid).toBe(true);
     expect(on.canAutoStart).toBe(true);
+  });
+
+  it('sanitizeTunnelConfig clears enabled and autoStart when consent invalid', () => {
+    const cfg = baseConfig({
+      enabled: true,
+      autoStart: true,
+      consent: { version: 'old', acceptedAt: new Date().toISOString() },
+    });
+    expect(sanitizeTunnelConfig(cfg)).toBe(true);
+    expect(cfg.tunnel?.enabled).toBe(false);
+    expect(cfg.tunnel?.autoStart).toBe(false);
   });
 
   it('mergeTunnelConfigPatch rejects autoStart without enabled', () => {
