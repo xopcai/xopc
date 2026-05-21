@@ -1,11 +1,17 @@
 import { powerMonitor } from 'electron';
 
+import {
+  mapTunnelTrayStatus,
+  pollIntervalForTunnelTrayStatus,
+  type TunnelTrayStatus,
+} from './tunnel-tray-status.js';
 import { updateTrayTunnelStatus } from './tray.js';
 
 let embeddedGatewayPort: number | null = null;
 let embeddedGatewayToken: string | null = null;
 let tunnelPollTimer: ReturnType<typeof setInterval> | null = null;
-let lastTunnelTrayStatus: 'connected' | 'disconnected' | 'connecting' | null = null;
+let lastTunnelTrayStatus: TunnelTrayStatus | null = null;
+let tunnelPollIntervalMs = 30_000;
 
 export function setEmbeddedGatewayCredentials(port: number, token: string): void {
   embeddedGatewayPort = port;
@@ -18,17 +24,20 @@ function authHeaders(): Record<string, string> {
     : {};
 }
 
-async function fetchTunnelStatus(): Promise<{
+type TunnelStatusPayload = {
   enabled: boolean;
+  state?: string;
   config?: { autoStart?: boolean };
-} | null> {
+};
+
+async function fetchTunnelStatus(): Promise<TunnelStatusPayload | null> {
   if (!embeddedGatewayPort || !embeddedGatewayToken) return null;
   try {
     const res = await fetch(`http://127.0.0.1:${embeddedGatewayPort}/api/tunnel/status`, {
       headers: authHeaders(),
     });
     if (!res.ok) return null;
-    return (await res.json()) as { enabled: boolean; config?: { autoStart?: boolean } };
+    return (await res.json()) as TunnelStatusPayload;
   } catch {
     return null;
   }
@@ -49,25 +58,35 @@ export async function maybeAutoStartTunnel(): Promise<void> {
   }
 }
 
-function mapTrayStatus(data: { enabled: boolean; state?: string }): 'connected' | 'disconnected' | 'connecting' {
-  if (data.enabled) return 'connected';
-  if (data.state === 'connecting' || data.state === 'reconnecting') return 'connecting';
-  return 'disconnected';
-}
-
-export function startTunnelStatusPolling(): void {
-  stopTunnelStatusPolling();
+function scheduleTunnelPoll(runImmediately: boolean): void {
+  if (tunnelPollTimer) {
+    clearInterval(tunnelPollTimer);
+    tunnelPollTimer = null;
+  }
   const poll = async () => {
     const data = await fetchTunnelStatus();
     if (!data) return;
-    const next = mapTrayStatus(data as { enabled: boolean; state?: string });
+    const next = mapTunnelTrayStatus(data);
     if (next !== lastTunnelTrayStatus) {
       lastTunnelTrayStatus = next;
       updateTrayTunnelStatus(next);
     }
+    const desiredInterval = pollIntervalForTunnelTrayStatus(next);
+    if (desiredInterval !== tunnelPollIntervalMs) {
+      tunnelPollIntervalMs = desiredInterval;
+      scheduleTunnelPoll(false);
+      return;
+    }
   };
-  void poll();
-  tunnelPollTimer = setInterval(() => void poll(), 30_000);
+  if (runImmediately) void poll();
+  tunnelPollTimer = setInterval(() => void poll(), tunnelPollIntervalMs);
+}
+
+export function startTunnelStatusPolling(): void {
+  stopTunnelStatusPolling();
+  tunnelPollIntervalMs = 30_000;
+  lastTunnelTrayStatus = null;
+  scheduleTunnelPoll(true);
 }
 
 export function stopTunnelStatusPolling(): void {
