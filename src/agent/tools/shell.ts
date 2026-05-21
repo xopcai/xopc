@@ -2,7 +2,7 @@
 import { Type } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 import { spawn } from 'child_process';
-import { prepareSafeToolEnv } from '../sandbox/sanitize-env-vars.js';
+import { evaluateExecPolicy } from '../sandbox/exec-policy.js';
 import { checkShellSafety } from '../prompt/safety.js';
 import { createWriteStream } from 'fs';
 
@@ -78,10 +78,26 @@ export function createShellTool(
       _signal?: AbortSignal,
     ): Promise<AgentToolResult<ShellDetails>> {
       const p = params as { command: string };
+
+      // Legacy safety check (kept for backward compat; exec-policy is the primary gate)
       const safety = checkShellSafety(p.command);
       if (!safety.allowed) {
         return {
           content: [{ type: 'text', text: `🚫 ${safety.message}` }],
+          details: { exitCode: null, timedOut: false, truncated: false },
+        };
+      }
+
+      // Sandbox exec-policy check (path + command injection + env sanitization)
+      const passthroughNames = options?.getSkillPassthroughEnvVarNames?.() ?? [];
+      const policy = evaluateExecPolicy({
+        command: p.command,
+        cwd,
+        allowedEnvVars: passthroughNames,
+      });
+      if (!policy.allowed) {
+        return {
+          content: [{ type: 'text', text: `🚫 Sandbox: ${policy.reason}` }],
           details: { exitCode: null, timedOut: false, truncated: false },
         };
       }
@@ -95,17 +111,20 @@ export function createShellTool(
         let tempStream: ReturnType<typeof createWriteStream> | null = null;
         const useTempFile = false; // Disabled - stream directly
 
+        const effectiveTimeoutSec = Math.min(
+          MAX_SHELL_TIMEOUT,
+          Math.ceil(policy.timeoutMs / 1000),
+        );
         const timeout = setTimeout(() => {
           timedOut = true;
           proc.kill('SIGKILL');
-        }, MAX_SHELL_TIMEOUT * 1000);
+        }, effectiveTimeoutSec * 1000);
 
-        const passthroughNames = options?.getSkillPassthroughEnvVarNames?.() ?? [];
         const proc = spawn(p.command, [], {
           shell: true,
-          cwd,
+          cwd: policy.effectiveCwd,
           env: {
-            ...prepareSafeToolEnv(process.env, { allowedVars: passthroughNames }),
+            ...policy.sanitizedEnv,
             COLUMNS: '200',
           },
         });

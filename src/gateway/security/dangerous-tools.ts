@@ -28,6 +28,8 @@ export const DEFAULT_GATEWAY_HTTP_TOOL_DENY: readonly string[] = [
   'cron',
   // Gateway control plane — prevents gateway reconfiguration via HTTP
   'gateway',
+  // Node command relay can reach system.run on paired hosts
+  'nodes',
 ] as const;
 
 const DANGEROUS_TOOL_SET: ReadonlySet<string> = new Set(DEFAULT_GATEWAY_HTTP_TOOL_DENY);

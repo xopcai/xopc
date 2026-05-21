@@ -40,11 +40,23 @@ function extractTokenFromHeader(authHeader: string | null): string | null {
 }
 
 /**
- * Extract token from query parameter
+ * Extract token from query parameter.
+ *
+ * SECURITY: query-string tokens leak into server logs, Referer headers, and
+ * browser history. We accept them only for SSE/WebSocket connections where
+ * the `Authorization` header cannot be set by `EventSource`. For normal REST
+ * requests prefer the `Authorization: Bearer <token>` header.
  */
 function extractTokenFromQuery(url: string): string | null {
   const parsed = new URL(url);
   return parsed.searchParams.get('token');
+}
+
+/** Paths where query-string token auth is acceptable (SSE / WebSocket). */
+const QUERY_TOKEN_ALLOWED_PATHS = new Set(['/api/events', '/api/ws']);
+
+function isQueryTokenAllowedPath(path: string): boolean {
+  return QUERY_TOKEN_ALLOWED_PATHS.has(path) || path.startsWith('/api/events');
 }
 
 /**
@@ -69,9 +81,19 @@ export function auth(config?: AuthConfig) {
       get: (name: string) => c.req.header(name) ?? undefined,
     });
 
-    // Try header first, then query param
+    // Try header first, then query param (only for SSE/WS paths)
     const authHeader = extractTokenFromHeader(c.req.header('authorization'));
-    const queryToken = extractTokenFromQuery(c.req.url);
+    const requestPath = new URL(c.req.url).pathname;
+    const queryToken = isQueryTokenAllowedPath(requestPath)
+      ? extractTokenFromQuery(c.req.url)
+      : null;
+
+    if (!authHeader && queryToken === null && new URL(c.req.url).searchParams.has('token')) {
+      log.warn(
+        { path: requestPath, method: c.req.method, clientIp },
+        'Token in query string rejected: use Authorization header for this endpoint',
+      );
+    }
 
     const providedToken = authHeader || queryToken;
 
