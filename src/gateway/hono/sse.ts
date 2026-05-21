@@ -92,7 +92,17 @@ export function createAgentSSEHandler(config: SSEHandlerConfig) {
     } else {
       const sk = typeof body.sessionKey === 'string' && body.sessionKey.trim() ? body.sessionKey.trim() : '';
       const cid = typeof body.chatId === 'string' && body.chatId.trim() ? body.chatId.trim() : '';
-      chatId = sk || cid || 'default';
+      const rawChatId = sk || cid || 'default';
+
+      // Validate sessionKey / chatId format to prevent cross-session access
+      if (rawChatId !== 'default' && !/^[a-zA-Z0-9][a-zA-Z0-9._:@\-]{0,255}$/.test(rawChatId)) {
+        log.warn({ rawChatId: rawChatId.slice(0, 64) }, 'Rejected invalid chatId format');
+        return c.json({
+          ok: false,
+          error: { code: 'BAD_REQUEST', message: 'Invalid session key format' },
+        }, 400);
+      }
+      chatId = rawChatId;
     }
 
     updateAsyncLogContext({ sessionId: String(chatId) });

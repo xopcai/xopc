@@ -5,6 +5,18 @@
 import { createExtensionClient } from '@xopcai/extension-ui-sdk';
 
 /* ═══════════════════════════════════
+   Security: HTML escape to prevent XSS
+   ═══════════════════════════════════ */
+function escapeHtml(unsafe: string): string {
+  return unsafe
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+/* ═══════════════════════════════════
    Types
    ═══════════════════════════════════ */
 interface Agent {
@@ -287,11 +299,11 @@ function renderBoard() {
     if (!cs.length) { el.innerHTML='<div style="padding:16px 8px;text-align:center;color:var(--s-t);font-size:11px;">暂无任务</div>'; return; }
     el.innerHTML = cs.map(c=>{
       const lc = c.l==='p0'?'p0':c.l==='p1'?'p1':'p2';
-      const ags = c.ag.map(a=>{const dt=a.s==='active'?'ac':'gr';return`<span class="ca">${a.ic}<span class="dot ${dt}"></span></span>`}).join('');
-      const pg = c.pr>0&&c.pr<100?`<div class="pm"><div class="f" style="width:${c.pr}%"></div></div>`:'';
-      const ah = c.al?`<span class="tag al">⚠️ ${c.al}</span>`:'';
-      const ts = c.tg.map(t=>`<span class="tag">${t}</span>`).join('');
-      return `<div class="card"><div class="pl ${lc}">${c.l.toUpperCase()}</div><div class="ctt">${c.t}</div><div class="cd">${c.d}</div>${pg}<div class="cag">${ags}</div><div class="cf"><div class="tgs">${ts}${ah}</div><span>#${c.i}</span></div></div>`;
+      const ags = c.ag.map(a=>{const dt=a.s==='active'?'ac':'gr';return`<span class="ca">${escapeHtml(a.ic)}<span class="dot ${dt}"></span></span>`}).join('');
+      const pg = c.pr>0&&c.pr<100?`<div class="pm"><div class="f" style="width:${Math.min(100, Math.max(0, c.pr))}%"></div></div>`:'';
+      const ah = c.al?`<span class="tag al">⚠️ ${escapeHtml(c.al)}</span>`:'';
+      const ts = c.tg.map(t=>`<span class="tag">${escapeHtml(t)}</span>`).join('');
+      return `<div class="card"><div class="pl ${lc}">${escapeHtml(c.l.toUpperCase())}</div><div class="ctt">${escapeHtml(c.t)}</div><div class="cd">${escapeHtml(c.d)}</div>${pg}<div class="cag">${ags}</div><div class="cf"><div class="tgs">${ts}${ah}</div><span>#${c.i}</span></div></div>`;
     }).join('');
   });
   // Column counts
@@ -303,15 +315,15 @@ function renderDecisions() {
   if (!el) return;
   if (!state.decisions.length) { el.innerHTML='<div style="padding:12px;text-align:center;color:var(--s-t);font-size:11px;">✅ 无待决策</div>'; return; }
   el.innerHTML = state.decisions.map(d=>{
-    const bs = d.b.map(b=>`<button class="${b.c}" onclick="window.__synapse_resolve(${d.i},'${b.m}')">${b.l}</button>`).join('');
-    return `<div class="di" id="dc_${d.i}"><div class="dl l${d.l==='p0'?0:1}">${d.l.toUpperCase()}</div><div class="dt">${d.t}</div><div class="dx">${d.x}</div><div class="db">${bs}</div></div>`;
+    const bs = d.b.map(b=>`<button class="${escapeHtml(b.c)}" onclick="window.__synapse_resolve(${d.i},'${escapeHtml(b.m)}')">${escapeHtml(b.l)}</button>`).join('');
+    return `<div class="di" id="dc_${d.i}"><div class="dl l${d.l==='p0'?0:1}">${escapeHtml(d.l.toUpperCase())}</div><div class="dt">${escapeHtml(d.t)}</div><div class="dx">${escapeHtml(d.x)}</div><div class="db">${bs}</div></div>`;
   }).join('');
 }
 
 function renderActivity() {
   const el = document.getElementById('al');
   if (!el) return;
-  el.innerHTML = state.activity.slice(0,12).map(a=>`<div class="ai"><span class="t">${a.t}</span><span class="c">${a.x}${a.nb?'<span class="nb">NEW</span>':''}</span></div>`).join('');
+  el.innerHTML = state.activity.slice(0,12).map(a=>`<div class="ai"><span class="t">${escapeHtml(a.t)}</span><span class="c">${escapeHtml(a.x)}${a.nb?'<span class="nb">NEW</span>':''}</span></div>`).join('');
 }
 
 function renderDock() {
@@ -322,7 +334,7 @@ function renderDock() {
     if (i===state.agents.length-1) { const d=document.createElement('div');d.className='dd';el.appendChild(d); }
     const d2 = document.createElement('div'); d2.className='d2';
     const rg = ag.status==='active'?'on':'off';
-    d2.innerHTML = `<div class="bx">${ag.icon}<div class="rg ${rg}"></div></div><div class="lb">${ag.label}</div>`;
+    d2.innerHTML = `<div class="bx">${escapeHtml(ag.icon)}<div class="rg ${rg}"></div></div><div class="lb">${escapeHtml(ag.label)}</div>`;
     d2.title = `@${ag.name}: ${ag.narrative}`;
     el.appendChild(d2);
   });
@@ -374,7 +386,7 @@ function simTick() {
     const tp=[{t:'数据库连接池优化',l:'p1',d:'连接池不够，高峰期有等待',tg:['后端','性能']},{t:'错误页面样式统一',l:'p2',d:'404/500 页面样式统一',tg:['前端','UI']},{t:'日志采集接入',l:'p1',d:'接入新的日志采集系统',tg:['运维']}];
     const p=tp[Math.floor(Math.random()*tp.length)];
     state.cards.push({i:newId(),c:0,t:p.t,l:p.l as any,d:p.d,ag:[{ic:'💡',n:'tech-lead',s:'idle',p:0}],tg:p.tg,pr:0});
-    state.activity.unshift({t,x:`📋 新任务「${p.t}」已创建`,nb:true});
+    state.activity.unshift({t,x:`📋 新任务「${escapeHtml(p.t)}」已创建`,nb:true});
   }
 
   // Add activity
@@ -445,7 +457,7 @@ function createTask() {
     const d = (mo.querySelector('#mtDesc') as HTMLTextAreaElement).value.trim();
     const pr = (mo.querySelector('#mtPriority') as HTMLSelectElement).value as 'p0'|'p1'|'p2';
     state.cards.push({ i:newId(), c:0, t, l:pr, d:d||'无描述', ag:[{ic:'💡',n:'tech-lead',s:'idle',p:0}], tg:[], pr:0 });
-    state.activity.unshift({ t: nowTime(), x:`📋 手动创建「${t}」`, nb:true });
+    state.activity.unshift({ t: nowTime(), x:`📋 手动创建「${escapeHtml(t)}」`, nb:true });
     mo.remove(); renderAll(); showToast('✅ 任务已创建');
   });
 }
@@ -466,11 +478,11 @@ function createIntent() {
     if (!txt) { showToast('⚠️ 请输入描述'); return; }
     mo.remove();
     const title = txt.length>20 ? txt.slice(0,20)+'...' : txt;
-    state.activity.unshift({ t:nowTime(), x:`<span class="hl">@michael</span> 创建意图「${title}」`, nb:true });
+    state.activity.unshift({ t:nowTime(), x:`@michael 创建意图「${escapeHtml(title)}」`, nb:true });
     state.cards.push({ i:newId(), c:0, t:title, l:'p1', d:txt, ag:[{ic:'💡',n:'tech-lead',s:'active',p:10}], tg:['意图'], pr:10 });
     const tl = state.agents.find(a=>a.id==='tl');
     if (tl) { tl.status='active'; tl.narrative=`正在分析「${title}」...`; }
-    state.activity.unshift({ t:nowTime(), x:`<span class="hl">@tech-lead</span> 开始拆解「${title}」`, nb:true });
+    state.activity.unshift({ t:nowTime(), x:`@tech-lead 开始拆解「${escapeHtml(title)}」`, nb:true });
     renderAll(); showToast('🤖 @tech-lead 正在拆解...');
     // Simulate: after 3s, add sub-tasks
     setTimeout(()=>{
@@ -490,22 +502,22 @@ function showCardDetail(card: Card) {
   const lvlLabel = { p0:'🔴 紧急', p1:'🟡 重要', p2:'🔵 常规' }[card.l] ?? card.l;
   const ags = card.ag.map(a => {
     const st = a.s === 'active' ? '🟢 工作中' : a.s === 'done' ? '✅ 已完成' : '⚪ 等待';
-    return `<div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12px;">${a.ic} <span style="font-weight:500;">@${a.n}</span> <span style="color:var(--s-t);">${st}</span></div>`;
+    return `<div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12px;">${escapeHtml(a.ic)} <span style="font-weight:500;">@${escapeHtml(a.n)}</span> <span style="color:var(--s-t);">${st}</span></div>`;
   }).join('') || '<span style="font-size:12px;color:var(--s-t);">暂未分派</span>';
-  const tgs = card.tg.length ? card.tg.map(t=>`<span style="font-size:10px;padding:2px 8px;border-radius:4px;background:var(--s-bh);color:var(--s-s);">${t}</span>`).join(' ') : '<span style="font-size:12px;color:var(--s-t);">无标签</span>';
+  const tgs = card.tg.length ? card.tg.map(t=>`<span style="font-size:10px;padding:2px 8px;border-radius:4px;background:var(--s-bh);color:var(--s-s);">${escapeHtml(t)}</span>`).join(' ') : '<span style="font-size:12px;color:var(--s-t);">无标签</span>';
   const nextCol = card.c < 3 ? card.c + 1 : null;
   const progBar = card.pr > 0 || card.pr === 0
     ? `<div style="margin-bottom:12px;"><div style="display:flex;justify-content:space-between;margin-bottom:4px;font-size:11px;color:var(--s-t);"><span>进度</span><span style="font-weight:600;">${card.pr}%</span></div><div style="height:6px;border-radius:3px;background:var(--s-bs);overflow:hidden;"><div style="height:100%;border-radius:3px;background:${card.pr>=100?'var(--s-g)':'var(--s-ac)'};width:${card.pr}%;transition:width .6s;"></div></div></div>`
     : '';
-  const alertHtml = card.al ? `<div style="margin-top:10px;padding:8px 12px;border-radius:6px;background:var(--s-r2);color:var(--s-r);font-size:12px;font-weight:600;">⚠️ ${card.al}</div>` : '';
+  const alertHtml = card.al ? `<div style="margin-top:10px;padding:8px 12px;border-radius:6px;background:var(--s-r2);color:var(--s-r);font-size:12px;font-weight:600;">⚠️ ${escapeHtml(card.al)}</div>` : '';
 
   showModal(`<div class="mo-c" style="max-width:440px;">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
-      <span style="font-size:10px;font-weight:700;letter-spacing:.05em;color:var(--s-${card.l==='p0'?'r':card.l==='p1'?'y':'b'});">${lvlLabel}</span>
-      <span style="font-size:11px;color:var(--s-t);">#${card.i} · ${col}</span>
+      <span style="font-size:10px;font-weight:700;letter-spacing:.05em;color:var(--s-${card.l==='p0'?'r':card.l==='p1'?'y':'b'});">${escapeHtml(lvlLabel)}</span>
+      <span style="font-size:11px;color:var(--s-t);">#${card.i} · ${escapeHtml(col)}</span>
     </div>
-    <h3 style="margin:0 0 10px;">${card.t}</h3>
-    <p style="font-size:13px;color:var(--s-s);line-height:1.7;margin-bottom:14px;">${card.d}</p>
+    <h3 style="margin:0 0 10px;">${escapeHtml(card.t)}</h3>
+    <p style="font-size:13px;color:var(--s-s);line-height:1.7;margin-bottom:14px;">${escapeHtml(card.d)}</p>
     ${progBar}
     <div style="margin-bottom:14px;">
       <div style="font-size:11px;font-weight:600;color:var(--s-t);margin-bottom:6px;">参与 Agent</div>
@@ -529,7 +541,7 @@ window['__synapse_moveCard'] = (cardId: number, toCol: number) => {
   if (!card) return;
   card.c = toCol as Card['c'];
   if (toCol === 3) { card.pr = 100; card.ag.forEach(a => { a.s = 'done'; a.p = 100; }); }
-  state.activity.unshift({ t:nowTime(), x:`🔄 「${card.t}」已移至 ${['待办','进行中','审查中','已完成'][toCol]}`, nb:true });
+  state.activity.unshift({ t:nowTime(), x:`🔄 「${escapeHtml(card.t)}」已移至 ${['待办','进行中','审查中','已完成'][toCol]}`, nb:true });
   renderAll(); showToast(`✅ 已移至 ${['待办','进行中','审查中','已完成'][toCol]}`);
 };
 
@@ -623,5 +635,5 @@ async function main() {
 }
 
 main().catch(e => {
-  document.body.innerHTML = `<pre style="padding:16px;color:#c00;">${String(e)}</pre>`;
+  document.body.innerHTML = `<pre style="padding:16px;color:#c00;">${escapeHtml(String(e))}</pre>`;
 });

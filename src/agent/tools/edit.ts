@@ -4,6 +4,7 @@ import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 import { readFile, writeFile, stat } from 'fs/promises';
 import { checkFileSafety } from '../prompt/safety.js';
 import { resolvePathUnderWorkspace } from './tool-paths.js';
+import { evaluateFilePolicy } from '../sandbox/exec-policy.js';
 import { normalizeToLF, restoreLineEndings, normalizeForFuzzyMatch, fuzzyFindText, stripBom, generateDiffString } from './edit-diff.js';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
@@ -38,6 +39,16 @@ export function createEditFileTool(workspace: string): AgentTool {
         const p = params as EditFileParams;
         const safety = checkFileSafety('write', p.path);
         if (!safety.allowed) return { content: [{ type: 'text', text: `🚫 ${safety.message}` }], details: {} };
+
+        // Sandbox path-policy check (blocked dirs, symlink escape, config protection)
+        const pathPolicy = evaluateFilePolicy({
+          operation: 'edit',
+          path: p.path,
+          workspaceRoot: workspace,
+        });
+        if (!pathPolicy.allowed) {
+          return { content: [{ type: 'text', text: `🚫 Sandbox: ${pathPolicy.reason}` }], details: {} };
+        }
 
         const normalized = resolvePathUnderWorkspace(p.path, workspace);
         const stats = await stat(normalized);

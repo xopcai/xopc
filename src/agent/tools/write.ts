@@ -5,6 +5,7 @@ import { writeFile, mkdir } from 'fs/promises';
 import { dirname } from 'path';
 import { checkFileSafety } from '../prompt/safety.js';
 import { resolvePathUnderWorkspace } from './tool-paths.js';
+import { evaluateFilePolicy } from '../sandbox/exec-policy.js';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
@@ -32,6 +33,16 @@ export function createWriteFileTool(workspace: string): AgentTool {
         const safety = checkFileSafety('write', p.path);
         if (!safety.allowed) {
           return { content: [{ type: 'text', text: `🚫 ${safety.message}` }], details: {} };
+        }
+
+        // Sandbox path-policy check (blocked dirs, symlink escape, config protection)
+        const pathPolicy = evaluateFilePolicy({
+          operation: 'write',
+          path: p.path,
+          workspaceRoot: workspace,
+        });
+        if (!pathPolicy.allowed) {
+          return { content: [{ type: 'text', text: `🚫 Sandbox: ${pathPolicy.reason}` }], details: {} };
         }
 
         const contentBytes = Buffer.byteLength(p.content, 'utf-8');

@@ -8,6 +8,9 @@ const PROFILE_SYSTEM_MARKDOWN_NAME_LOWER = new Set(
 
 /**
  * Paths from the model: relative paths are under `workspaceRoot`; absolute paths are normalized.
+ *
+ * Security: resolves `..` traversal and normalizes the path. For absolute paths the caller
+ * should additionally run sandbox path-policy validation when enforcement is enabled.
  */
 export function resolvePathUnderWorkspace(userPath: string, workspaceRoot: string): string {
   const t = userPath.trim();
