@@ -66,6 +66,52 @@ export class TunnelBrokerClient {
       log.warn({ tunnelId, status: res.status }, 'Tunnel deregister returned non-OK');
     }
   }
+
+  async setDnsChallenge(input: {
+    tunnelId: string;
+    tunnelToken: string;
+    subdomain: string;
+    txtValue: string;
+  }): Promise<{ recordId: string; fqdn: string }> {
+    const res = await fetch(this.apiUrl('/dns/challenge'), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Tunnel-Token': input.tunnelToken,
+      },
+      body: JSON.stringify({
+        tunnelId: input.tunnelId,
+        subdomain: input.subdomain,
+        txtValue: input.txtValue,
+      }),
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      throw new Error(`Broker DNS challenge failed: ${res.status} ${body.slice(0, 200)}`);
+    }
+    return (await res.json()) as { recordId: string; fqdn: string };
+  }
+
+  async cleanupDnsChallenge(input: {
+    tunnelId: string;
+    tunnelToken: string;
+    recordId: string;
+  }): Promise<void> {
+    const res = await fetch(this.apiUrl('/dns/cleanup'), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Tunnel-Token': input.tunnelToken,
+      },
+      body: JSON.stringify({
+        tunnelId: input.tunnelId,
+        recordId: input.recordId,
+      }),
+    });
+    if (!res.ok && res.status !== 404) {
+      log.warn({ recordId: input.recordId, status: res.status }, 'Broker DNS cleanup returned non-OK');
+    }
+  }
 }
 
 export function resolveBrokerApiBase(brokerUrl: string): string {

@@ -536,6 +536,18 @@ export const TunnelConsentSchema = z.object({
   acceptedAt: z.string().min(1),
 });
 
+export const TunnelE2eSchema = z
+  .object({
+    enabled: z.boolean().default(true),
+    tlsPort: z.number().int().min(1024).max(65535).default(18791),
+    staging: z.boolean().default(false),
+  })
+  .default({
+    enabled: true,
+    tlsPort: 18791,
+    staging: false,
+  });
+
 export const TunnelConfigSchema = z
   .object({
     enabled: z.boolean().default(false),
@@ -543,6 +555,7 @@ export const TunnelConfigSchema = z
     autoStart: z.boolean().default(false),
     subdomain: z.string().optional(),
     consent: TunnelConsentSchema.optional(),
+    e2e: TunnelE2eSchema.optional(),
   })
   .default({
     enabled: false,

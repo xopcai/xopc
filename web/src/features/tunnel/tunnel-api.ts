@@ -21,6 +21,22 @@ export type TunnelStatusResponse = {
   config: {
     autoStart: boolean;
     brokerUrl: string;
+    e2e?: {
+      enabled: boolean;
+      tlsPort: number;
+      staging: boolean;
+    };
+  };
+  cert?: {
+    status: 'no_cert' | 'healthy' | 'expiring_soon' | 'critical' | 'renewal_failed';
+    domain: string | null;
+    issuedAt: string | null;
+    expiresAt: string | null;
+    daysUntilExpiry: number | null;
+    autoRenewal: boolean;
+    renewalFailed?: boolean;
+    lastRenewalError?: string | null;
+    lastRenewalErrorAt?: string | null;
   };
 };
 
@@ -35,6 +51,12 @@ export type TunnelQrResponse = {
   qrPayload: string;
   publicUrl: string | null;
   lanUrl: string | null;
+  expiresAt?: string;
+};
+
+export type TunnelPairResponse = {
+  pairingSecret: string;
+  expiresAt: string;
 };
 
 export async function fetchTunnelStatus(): Promise<TunnelStatusResponse> {
@@ -61,6 +83,13 @@ export async function stopTunnel(opts?: { release?: boolean }): Promise<{ ok: bo
 
 export async function fetchTunnelQr(): Promise<TunnelQrResponse> {
   return fetchJson<TunnelQrResponse>(apiUrl('/api/tunnel/qr'));
+}
+
+export async function createTunnelPair(): Promise<TunnelPairResponse> {
+  return fetchJson<TunnelPairResponse>(apiUrl('/api/tunnel/pair'), {
+    method: 'POST',
+    body: JSON.stringify({}),
+  });
 }
 
 export async function patchTunnelConfig(patch: {

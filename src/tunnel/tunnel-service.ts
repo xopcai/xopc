@@ -8,6 +8,7 @@ import { clearFrpcPathForProcess, ensureFrpcBinary, publishFrpcPathForProcess } 
 import { writeFrpcConfig } from './frpc-config.js';
 import { type FrpcProcessHandle, spawnFrpcProcess } from './frpc-process.js';
 import { buildMobileConnectQrPayload, resolveLanGatewayUrl } from './tunnel-qr.js';
+import { createPairingSecret } from './pairing.js';
 import {
   canResumePersistedTunnel,
   persistedFromRegistration,
@@ -16,6 +17,10 @@ import {
 import { clearTunnelState, loadTunnelState, saveTunnelState, updateTunnelState } from './tunnel-state.js';
 import { logTunnelAudit } from './tunnel-audit.js';
 import type { PersistedTunnelState, TunnelQrPayload, TunnelRegistration, TunnelStatus } from './tunnel-types.js';
+import type { ResolvedTunnelE2eConfig } from './tunnel-e2e-config.js';
+import { getCertStatusSummary } from './acme-cert-store.js';
+import type { AcmeConfig } from './acme-client.js';
+import { startTunnelTlsServer, stopTunnelTlsServer } from './tls-server.js';
 
 const log = createLogger('Tunnel');
 
@@ -24,6 +29,9 @@ export type TunnelServiceConfig = {
   registrationSecret: string;
   autoStart: boolean;
   gatewayHost: string;
+  e2e: ResolvedTunnelE2eConfig;
+  frpSubdomainHost: string;
+  gatewayFetch?: typeof fetch;
 };
 
 export function hashGatewayToken(token: string): string {
@@ -43,6 +51,7 @@ export function getTunnelService(): TunnelService {
 
 export class TunnelService extends EventEmitter {
   private serviceConfig: TunnelServiceConfig | null = null;
+  private pendingGatewayFetch: typeof fetch | undefined;
   private frpcHandle: FrpcProcessHandle | null = null;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private connectedSince: string | null = null;
@@ -54,7 +63,17 @@ export class TunnelService extends EventEmitter {
   private startContext: { gatewayPort: number; gatewayToken: string } | null = null;
 
   configure(cfg: TunnelServiceConfig): void {
-    this.serviceConfig = cfg;
+    this.serviceConfig = {
+      ...cfg,
+      gatewayFetch: cfg.gatewayFetch ?? this.pendingGatewayFetch ?? this.serviceConfig?.gatewayFetch,
+    };
+  }
+
+  setGatewayFetch(fetchFn: typeof fetch): void {
+    this.pendingGatewayFetch = fetchFn;
+    if (this.serviceConfig) {
+      this.serviceConfig.gatewayFetch = fetchFn;
+    }
   }
 
   getStatus(): TunnelStatus {
@@ -72,20 +91,28 @@ export class TunnelService extends EventEmitter {
       config: {
         autoStart: cfg?.autoStart ?? false,
         brokerUrl: cfg?.brokerUrl ?? 'https://frp.xopc.ai/api',
+        e2e: {
+          enabled: cfg?.e2e.enabled ?? true,
+          tlsPort: cfg?.e2e.tlsPort ?? 18791,
+          staging: cfg?.e2e.staging ?? false,
+        },
       },
+      cert: getCertStatusSummary(),
     };
   }
 
-  buildQr(gatewayPort: number, gatewayHost: string, gatewayToken: string): TunnelQrPayload {
+  buildQr(gatewayPort: number, gatewayHost: string): TunnelQrPayload {
     const persisted = loadTunnelState();
     const publicUrl = persisted?.publicUrl ?? null;
     if (!publicUrl) {
       return { qrPayload: '', publicUrl: null, lanUrl: null };
     }
+    const { secret, expiresAt } = createPairingSecret();
     return buildMobileConnectQrPayload({
       publicUrl,
       lanUrl: resolveLanGatewayUrl(gatewayHost, gatewayPort),
-      gatewayToken,
+      pairingSecret: secret,
+      expiresAt: expiresAt.toISOString(),
     });
   }
 
@@ -117,7 +144,13 @@ export class TunnelService extends EventEmitter {
     const state = persistedFromRegistration(registration);
     saveTunnelState(state);
 
-    const configPath = writeFrpcConfig(registration, gatewayPort);
+    const { frpcLocalPort, frpcMode } = await this.prepareFrpcTarget(
+      broker,
+      registration,
+      cfg,
+      gatewayPort,
+    );
+    const configPath = writeFrpcConfig(registration, frpcLocalPort, '127.0.0.1', frpcMode);
     await this.spawnAndWait(frpcBin, configPath, broker, state, registration.heartbeatIntervalMs);
 
     this.state = 'connected';
@@ -125,7 +158,7 @@ export class TunnelService extends EventEmitter {
     this.reconnectAttempt = 0;
     this.emit('tunnel:connected');
 
-    const qr = this.buildQr(gatewayPort, cfg.gatewayHost, gatewayToken);
+    const qr = this.buildQr(gatewayPort, cfg.gatewayHost);
     logTunnelAudit(
       'tunnel.start',
       {
@@ -143,6 +176,7 @@ export class TunnelService extends EventEmitter {
     const release = opts?.release === true;
     this.stopping = true;
     this.clearHeartbeat();
+    stopTunnelTlsServer();
     if (this.frpcHandle) {
       await this.frpcHandle.kill();
       this.frpcHandle = null;
@@ -312,7 +346,13 @@ export class TunnelService extends EventEmitter {
           const next = persistedFromRegistration(registration);
           saveTunnelState(next);
           const frpcBin = await ensureFrpcBinary();
-          const configPath = writeFrpcConfig(registration, ctx.gatewayPort);
+          const { frpcLocalPort, frpcMode } = await this.prepareFrpcTarget(
+            broker,
+            registration,
+            cfg,
+            ctx.gatewayPort,
+          );
+          const configPath = writeFrpcConfig(registration, frpcLocalPort, '127.0.0.1', frpcMode);
           await this.spawnAndWait(frpcBin, configPath, broker, next, registration.heartbeatIntervalMs);
         } catch (reErr) {
           this.lastError = reErr instanceof Error ? reErr.message : String(reErr);
@@ -330,5 +370,34 @@ export class TunnelService extends EventEmitter {
       clearInterval(this.heartbeatTimer);
       this.heartbeatTimer = null;
     }
+  }
+
+  private async prepareFrpcTarget(
+    broker: TunnelBrokerClient,
+    registration: TunnelRegistration,
+    cfg: TunnelServiceConfig,
+    gatewayPort: number,
+  ): Promise<{ frpcLocalPort: number; frpcMode: 'http' | 'https' }> {
+    if (!cfg.e2e.enabled) {
+      return { frpcLocalPort: gatewayPort, frpcMode: 'http' };
+    }
+
+    const acmeConfig: AcmeConfig = {
+      broker,
+      tunnelId: registration.tunnelId,
+      tunnelToken: registration.tunnelToken,
+      subdomain: registration.subdomain,
+      frpSubdomainHost: cfg.frpSubdomainHost,
+      staging: cfg.e2e.staging,
+    };
+
+    await startTunnelTlsServer({
+      tlsPort: cfg.e2e.tlsPort,
+      gatewayPort,
+      acmeConfig,
+      fetch: cfg.gatewayFetch,
+    });
+
+    return { frpcLocalPort: cfg.e2e.tlsPort, frpcMode: 'https' };
   }
 }

@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 
-import { fetchTunnelQr, fetchTunnelStatus, type TunnelQrResponse, type TunnelStatusResponse } from '@/features/tunnel/tunnel-api';
-import { encodeMobilePairQr } from '@/features/tunnel/mobile-pair-qr';
 import {
-  buildMobileGatewayPairDeepLink,
-  getBaseUrl,
-  isLoopbackHttpOrigin,
-} from '@/lib/url';
+  createTunnelPair,
+  fetchTunnelQr,
+  fetchTunnelStatus,
+  type TunnelQrResponse,
+  type TunnelStatusResponse,
+} from '@/features/tunnel/tunnel-api';
+import { encodeMobilePairQr } from '@/features/tunnel/mobile-pair-qr';
+import { buildMobileGatewayPairDeepLink, getBaseUrl, isLoopbackHttpOrigin } from '@/lib/url';
 
 export type MobilePairQrState = {
   tunnelActive: boolean;
@@ -39,6 +41,7 @@ export function useMobilePairQr(gatewayToken: string): MobilePairQrState {
     const onTunnelStatus = () => {
       void globalMutate('tunnel-status');
       void globalMutate('tunnel-qr');
+      void globalMutate('tunnel-pair');
     };
     window.addEventListener('tunnel-status', onTunnelStatus);
     return () => window.removeEventListener('tunnel-status', onTunnelStatus);
@@ -50,7 +53,13 @@ export function useMobilePairQr(gatewayToken: string): MobilePairQrState {
   const { data: tunnelQr, mutate: mutTunnelQr } = useSWR(
     tunnelActive && hasToken ? 'tunnel-qr' : null,
     fetchTunnelQr,
-    { refreshInterval: 15_000 },
+    { refreshInterval: 4 * 60_000 },
+  );
+
+  const { data: lanPair, mutate: mutLanPair } = useSWR(
+    !tunnelActive && hasToken ? 'tunnel-pair' : null,
+    createTunnelPair,
+    { refreshInterval: 4 * 60_000 },
   );
 
   const [pairBaseUrl, setPairBaseUrl] = useState(getBaseUrl);
@@ -75,13 +84,13 @@ export function useMobilePairQr(gatewayToken: string): MobilePairQrState {
     if (tunnelActive && tunnelQr?.qrPayload?.trim()) {
       return tunnelQr.qrPayload.trim();
     }
-    if (!baseOk) return '';
+    if (!baseOk || !lanPair?.pairingSecret) return '';
     return buildMobileGatewayPairDeepLink({
       baseUrl: trimmedBase,
-      gatewayToken,
+      pairingSecret: lanPair.pairingSecret,
       lanUrl: null,
     });
-  }, [baseOk, gatewayToken, manualPayload, trimmedBase, tunnelActive, tunnelQr?.qrPayload]);
+  }, [baseOk, gatewayToken, lanPair?.pairingSecret, manualPayload, trimmedBase, tunnelActive, tunnelQr?.qrPayload]);
 
   useEffect(() => {
     if (!deepLink) {
@@ -116,9 +125,11 @@ export function useMobilePairQr(gatewayToken: string): MobilePairQrState {
       setManualPayload('');
       if (tunnelActive) {
         await mutTunnelQr();
+      } else {
+        await mutLanPair();
       }
     },
-    [mutTunnelQr, tunnelActive, tunnelQr?.lanUrl, tunnelStatus?.publicUrl],
+    [mutLanPair, mutTunnelQr, tunnelActive, tunnelQr?.lanUrl, tunnelStatus?.publicUrl],
   );
 
   const localhostWarn = baseOk && isLoopbackHttpOrigin(trimmedBase);

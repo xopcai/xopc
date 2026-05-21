@@ -1,8 +1,10 @@
 import type { Config } from '../config/schema.js';
 import { createLogger } from '../utils/logger.js';
 import { hasValidTunnelConsent } from './consent.js';
+import { subscribeCertStatus } from './acme-cert-store.js';
 import { resolveTunnelBrokerUrl, resolveTunnelRegistrationSecret } from './env.js';
 import { getTunnelService } from './tunnel-service.js';
+import { resolveFrpSubdomainHost, resolveTunnelE2eConfig } from './tunnel-e2e-config.js';
 import { fetchTunnelWellKnown } from './well-known.js';
 
 const log = createLogger('Tunnel');
@@ -25,6 +27,11 @@ export function wireTunnelEventsToGateway(service: TunnelEventSink): void {
   tunnel.on('tunnel:connected', publish);
   tunnel.on('tunnel:disconnected', publish);
   tunnel.on('tunnel:error', publish);
+
+  subscribeCertStatus((cert) => {
+    service.emit('tunnel.cert.status', cert);
+    publish();
+  });
 }
 
 export async function configureTunnelFromGatewayConfig(config: Config): Promise<void> {
@@ -57,6 +64,8 @@ export async function configureTunnelFromGatewayConfig(config: Config): Promise<
     registrationSecret,
     autoStart: config.tunnel?.autoStart ?? false,
     gatewayHost: gateway.host ?? '127.0.0.1',
+    e2e: resolveTunnelE2eConfig(config.tunnel),
+    frpSubdomainHost: resolveFrpSubdomainHost(brokerUrl),
   });
 }
 

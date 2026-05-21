@@ -192,6 +192,22 @@ export async function buildSafeWebConfigPayload(service: GatewayService) {
         : [],
     },
     cron: { enabled: config.cron?.enabled },
+    tunnel: {
+      enabled: config.tunnel?.enabled === true,
+      autoStart: config.tunnel?.autoStart === true,
+      brokerUrl: config.tunnel?.brokerUrl ?? 'https://frp.xopc.ai/api',
+      consent: config.tunnel?.consent
+        ? {
+            version: config.tunnel.consent.version,
+            acceptedAt: config.tunnel.consent.acceptedAt,
+          }
+        : undefined,
+      e2e: {
+        enabled: config.tunnel?.e2e?.enabled ?? true,
+        tlsPort: config.tunnel?.e2e?.tlsPort ?? 18791,
+        staging: config.tunnel?.e2e?.staging ?? false,
+      },
+    },
     update: {
       channel: config.update?.channel ?? 'stable',
     },

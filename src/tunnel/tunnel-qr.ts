@@ -36,16 +36,18 @@ export function resolveLanGatewayUrl(gatewayHost: string, gatewayPort: number): 
 export function buildMobileConnectQrPayload(input: {
   publicUrl: string;
   lanUrl: string | null;
-  gatewayToken: string;
+  pairingSecret: string;
+  expiresAt?: string;
 }): TunnelQrPayload {
   const params = new URLSearchParams();
   params.set('baseUrl', input.publicUrl);
   if (input.lanUrl) params.set('lanUrl', input.lanUrl);
-  if (input.gatewayToken) params.set('token', input.gatewayToken);
+  if (input.pairingSecret) params.set('ps', input.pairingSecret);
   const qrPayload = `xopc://gateway/mobile-connect?${params.toString()}`;
   return {
     qrPayload,
     publicUrl: input.publicUrl,
     lanUrl: input.lanUrl,
+    expiresAt: input.expiresAt,
   };
 }

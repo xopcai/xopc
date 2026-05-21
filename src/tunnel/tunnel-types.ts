@@ -40,6 +40,22 @@ export type TunnelStatus = {
   config: {
     autoStart: boolean;
     brokerUrl: string;
+    e2e: {
+      enabled: boolean;
+      tlsPort: number;
+      staging: boolean;
+    };
+  };
+  cert: {
+    status: 'no_cert' | 'healthy' | 'expiring_soon' | 'critical' | 'renewal_failed';
+    domain: string | null;
+    issuedAt: string | null;
+    expiresAt: string | null;
+    daysUntilExpiry: number | null;
+    autoRenewal: boolean;
+    renewalFailed: boolean;
+    lastRenewalError: string | null;
+    lastRenewalErrorAt: string | null;
   };
 };
 
@@ -47,4 +63,5 @@ export type TunnelQrPayload = {
   qrPayload: string;
   publicUrl: string | null;
   lanUrl: string | null;
+  expiresAt?: string;
 };

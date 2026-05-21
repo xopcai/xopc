@@ -11,6 +11,10 @@ import {
 import { hashGatewayToken } from '../../../tunnel/tunnel-service.js';
 import { configureTunnelFromGatewayConfig } from '../../../tunnel/gateway-lifecycle.js';
 import { getTunnelService } from '../../../tunnel/index.js';
+import { getCertStatusSummary } from '../../../tunnel/acme-cert-store.js';
+import { createPairingSecret, consumePairingSecret } from '../../../tunnel/pairing.js';
+import { consumePairingExchangeFailLimit } from '../../../tunnel/pairing-rate-limit.js';
+import { loadTunnelState } from '../../../tunnel/tunnel-state.js';
 import { logTunnelAudit } from '../../../tunnel/tunnel-audit.js';
 import {
   applyTunnelConsentToConfig,
@@ -18,6 +22,8 @@ import {
 } from '../../../tunnel/tunnel-config.js';
 import { consumeTunnelMutationLimit } from '../../../tunnel/tunnel-rate-limit.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
+import type { GatewayService } from '../../service.js';
+import { getClientIpFromHeaders } from '../../auth-rate-limit.js';
 
 async function configureTunnelFromService(deps: AuthenticatedRouteDeps): Promise<void> {
   await configureTunnelFromGatewayConfig(deps.service.currentConfig);
@@ -68,9 +74,85 @@ function createTunnelMutationRateLimitMiddleware(): MiddlewareHandler {
   };
 }
 
+export function registerTunnelPublicRoutes(app: Hono, service: GatewayService): void {
+  app.post('/api/tunnel/exchange-token', async (c) => {
+    const clientIp =
+      getClientIpFromHeaders({
+        get: (name: string) => c.req.header(name) ?? undefined,
+      }) ?? 'unknown';
+
+    let body: { pairingSecret?: unknown };
+    try {
+      body = (await c.req.json()) as { pairingSecret?: unknown };
+    } catch {
+      return c.json({ error: 'Invalid JSON body' }, 400);
+    }
+
+    const pairingSecret = typeof body.pairingSecret === 'string' ? body.pairingSecret.trim() : '';
+    if (!pairingSecret) {
+      return c.json({ error: 'pairingSecret required' }, 400);
+    }
+
+    if (!consumePairingSecret(pairingSecret)) {
+      const limited = consumePairingExchangeFailLimit(clientIp);
+      if (!limited.allowed) {
+        c.header('Retry-After', String(Math.ceil(limited.retryAfterMs / 1000)));
+      }
+      logTunnelAudit(
+        'tunnel.exchange_token',
+        { ok: false, clientIp, phase: 'pairing_exchange' },
+        'Pairing exchange denied: invalid or expired secret',
+      );
+      return c.json({ error: 'Invalid or expired pairing secret', code: 'PAIRING_INVALID' }, 401);
+    }
+
+    const token = service.getAuthToken();
+    if (!token) {
+      return c.json({ error: 'Gateway token not configured' }, 500);
+    }
+
+    const persisted = loadTunnelState();
+    const gateway = service.currentConfig.gateway;
+    const host = gateway.host ?? '127.0.0.1';
+    const port = gateway.port ?? 18790;
+    const lanHost = host === '0.0.0.0' || host === '::' ? '127.0.0.1' : host;
+    const lanUrl =
+      lanHost === '127.0.0.1' || lanHost === 'localhost' ? null : `http://${lanHost}:${port}`.replace(/\/+$/, '');
+
+    logTunnelAudit(
+      'tunnel.exchange_token',
+      { ok: true, clientIp, subdomain: persisted?.subdomain ?? null, phase: 'pairing_exchange' },
+      'Pairing secret exchanged for gateway token',
+    );
+
+    return c.json({
+      token,
+      baseUrl: persisted?.publicUrl ?? null,
+      lanUrl,
+    });
+  });
+}
+
 export function registerTunnelRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const tunnel = getTunnelService();
   const tunnelMutationLimit = createTunnelMutationRateLimitMiddleware();
+
+  authenticated.post('/api/tunnel/pair', tunnelMutationLimit, async (c) => {
+    await configureTunnelFromService(deps);
+    const token = requireGatewayToken(c);
+    if (!token) return c.json({ error: 'Gateway token required' }, 401);
+
+    const { secret, expiresAt } = createPairingSecret();
+    logTunnelAudit(
+      'tunnel.pair',
+      {
+        expiresAt: expiresAt.toISOString(),
+        gatewayTokenHash: hashGatewayToken(token).slice(0, 12),
+      },
+      'Mobile pairing session created',
+    );
+    return c.json({ pairingSecret: secret, expiresAt: expiresAt.toISOString() });
+  });
 
   authenticated.get('/api/tunnel/status', async (c) => {
     await configureTunnelFromService(deps);
@@ -170,7 +252,22 @@ export function registerTunnelRoutes(authenticated: Hono, deps: AuthenticatedRou
     const host = gateway.host ?? '127.0.0.1';
     const token = requireGatewayToken(c);
     if (!token) return c.json({ error: 'Gateway token required' }, 401);
-    const qr = tunnel.buildQr(port, host, token);
+    const qr = tunnel.buildQr(port, host);
     return c.json(qr);
+  });
+
+  authenticated.get('/api/tunnel/cert-status', async (c) => {
+    await configureTunnelFromService(deps);
+    const config = deps.service.currentConfig as Config;
+    const cert = getCertStatusSummary();
+    const e2e = config.tunnel?.e2e;
+    return c.json({
+      ...cert,
+      e2e: {
+        enabled: e2e?.enabled ?? true,
+        tlsPort: e2e?.tlsPort ?? 18791,
+        staging: e2e?.staging ?? false,
+      },
+    });
   });
 }
