@@ -52,8 +52,11 @@ export async function startTunnel(): Promise<TunnelStartResponse> {
   });
 }
 
-export async function stopTunnel(): Promise<{ ok: boolean }> {
-  return fetchJson<{ ok: boolean }>(apiUrl('/api/tunnel/stop'), { method: 'POST' });
+export async function stopTunnel(opts?: { release?: boolean }): Promise<{ ok: boolean; released?: boolean }> {
+  return fetchJson<{ ok: boolean; released?: boolean }>(apiUrl('/api/tunnel/stop'), {
+    method: 'POST',
+    body: JSON.stringify({ release: opts?.release === true }),
+  });
 }
 
 export async function fetchTunnelQr(): Promise<TunnelQrResponse> {

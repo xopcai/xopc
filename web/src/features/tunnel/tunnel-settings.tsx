@@ -64,6 +64,8 @@ export function TunnelSettingsPanel() {
   const [linkCopied, setLinkCopied] = useState(false);
   const [consentOpen, setConsentOpen] = useState(false);
   const [autoStartConfirmOpen, setAutoStartConfirmOpen] = useState(false);
+  const [releaseConfirmOpen, setReleaseConfirmOpen] = useState(false);
+  const [releasing, setReleasing] = useState(false);
 
   const pairQr = useMobilePairQr(token ?? '');
 
@@ -180,6 +182,22 @@ export function TunnelSettingsPanel() {
     setAutoStartConfirmOpen(true);
   }, [applyAutoStart, status?.canAutoStart, status?.consentRequired, t, tunnelCfg.autoStart]);
 
+  const handleRelease = useCallback(async () => {
+    setReleaseConfirmOpen(false);
+    setActionError(null);
+    setReleasing(true);
+    try {
+      await stopTunnel({ release: true });
+      await pairQr.refreshQr();
+      await mutStatus();
+      void revalidateGatewayConfig();
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setReleasing(false);
+    }
+  }, [mutStatus, pairQr.refreshQr]);
+
   const copyLink = useCallback(async () => {
     if (!status?.publicUrl) return;
     await navigator.clipboard.writeText(status.publicUrl).catch(() => {});
@@ -289,7 +307,23 @@ export function TunnelSettingsPanel() {
             {t.refreshQr}
           </Button>
         ) : null}
+        {st.subdomain || st.publicUrl ? (
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={releasing || stopping}
+            className="border-danger/40 text-danger hover:bg-danger/10"
+            onClick={() => setReleaseConfirmOpen(true)}
+          >
+            {releasing ? <Loader2 className="size-4 animate-spin" /> : null}
+            {t.release}
+          </Button>
+        ) : null}
       </div>
+
+      {st.subdomain || st.publicUrl ? (
+        <p className="text-xs text-fg-subtle">{t.releaseHint}</p>
+      ) : null}
 
       <SettingsFormSection>
         <h2 className="mb-3 text-sm font-semibold text-fg">{t.optionsTitle}</h2>
@@ -344,6 +378,17 @@ export function TunnelSettingsPanel() {
           void applyAutoStart(true);
         }}
         onCancel={() => setAutoStartConfirmOpen(false)}
+      />
+
+      <ConfirmDialog
+        open={releaseConfirmOpen}
+        title={t.releaseConfirmTitle}
+        description={t.releaseConfirmBody}
+        confirmLabel={t.releaseConfirmLabel}
+        cancelLabel={t.consentCancel}
+        destructive
+        onConfirm={() => void handleRelease()}
+        onCancel={() => setReleaseConfirmOpen(false)}
       />
     </div>
   );

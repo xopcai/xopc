@@ -31,6 +31,9 @@ export {
   resolveTunnelBrokerUrl,
   resolveTunnelRegistrationSecret,
 } from './env.js';
+export { logTunnelAudit } from './tunnel-audit.js';
+export type { TunnelAuditEvent } from './tunnel-audit.js';
+export { consumeTunnelMutationLimit, resetTunnelMutationLimitsForTests } from './tunnel-rate-limit.js';
 export { getTunnelService, hashGatewayToken, TunnelService } from './tunnel-service.js';
 export type { TunnelServiceConfig } from './tunnel-service.js';
 export { buildMobileConnectQrPayload, resolveLanGatewayUrl } from './tunnel-qr.js';
