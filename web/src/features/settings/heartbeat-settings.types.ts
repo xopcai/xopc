@@ -7,6 +7,7 @@ export interface HeartbeatActiveHoursForm {
 export interface HeartbeatSettingsState {
   enabled: boolean;
   intervalMs: number;
+  includeSystemPromptSection: boolean;
   target: string;
   targetChatId: string;
   prompt: string;

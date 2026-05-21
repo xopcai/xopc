@@ -147,13 +147,31 @@ export async function buildSafeWebConfigPayload(service: GatewayService) {
     gateway: {
       host: config.gateway?.host,
       port: config.gateway?.port,
+      corsOrigins: Array.isArray(config.gateway?.corsOrigins) ? config.gateway.corsOrigins : [],
       auth: {
         mode: config.gateway?.auth?.mode || 'token',
         token: config.gateway?.auth?.token || '',
+        password: config.gateway?.auth?.password ? '••••••••••••' : '',
+        rateLimit: {
+          enabled: config.gateway?.auth?.rateLimit?.enabled !== false,
+          maxAttempts:
+            typeof config.gateway?.auth?.rateLimit?.maxAttempts === 'number'
+              ? config.gateway.auth.rateLimit.maxAttempts
+              : 5,
+          windowMs:
+            typeof config.gateway?.auth?.rateLimit?.windowMs === 'number'
+              ? config.gateway.auth.rateLimit.windowMs
+              : 900_000,
+          blockDurationMs:
+            typeof config.gateway?.auth?.rateLimit?.blockDurationMs === 'number'
+              ? config.gateway.auth.rateLimit.blockDurationMs
+              : 300_000,
+        },
       },
       heartbeat: {
         enabled: config.gateway?.heartbeat?.enabled,
         intervalMs: config.gateway?.heartbeat?.intervalMs,
+        includeSystemPromptSection: config.gateway?.heartbeat?.includeSystemPromptSection === true,
         target: config.gateway?.heartbeat?.target,
         targetChatId: config.gateway?.heartbeat?.targetChatId,
         prompt: config.gateway?.heartbeat?.prompt,
@@ -161,6 +179,17 @@ export async function buildSafeWebConfigPayload(service: GatewayService) {
         isolatedSession: config.gateway?.heartbeat?.isolatedSession,
         activeHours: config.gateway?.heartbeat?.activeHours,
       },
+      maxSseConnections:
+        typeof config.gateway?.maxSseConnections === 'number'
+          ? config.gateway.maxSseConnections
+          : 100,
+      channelConnectDeferMode: config.gateway?.channelConnectDeferMode ?? 'auto',
+      channelConnectDeferIds: Array.isArray(config.gateway?.channelConnectDeferIds)
+        ? config.gateway.channelConnectDeferIds
+        : [],
+      channelConnectDeferSkipIds: Array.isArray(config.gateway?.channelConnectDeferSkipIds)
+        ? config.gateway.channelConnectDeferSkipIds
+        : [],
     },
     cron: { enabled: config.cron?.enabled },
     update: {

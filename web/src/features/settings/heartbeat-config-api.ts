@@ -29,6 +29,7 @@ export function normalizeHeartbeatFromConfig(config: unknown): HeartbeatSettings
   return {
     enabled: Boolean(hb.enabled ?? true),
     intervalMs: typeof hb.intervalMs === 'number' && Number.isFinite(hb.intervalMs) ? hb.intervalMs : 1_800_000,
+    includeSystemPromptSection: hb.includeSystemPromptSection === true,
     target: typeof hb.target === 'string' ? hb.target : '',
     targetChatId: typeof hb.targetChatId === 'string' ? hb.targetChatId : '',
     prompt: typeof hb.prompt === 'string' ? hb.prompt : '',
@@ -43,6 +44,7 @@ function buildHeartbeatPayload(state: HeartbeatSettingsState): Record<string, un
   const p: Record<string, unknown> = {
     enabled: state.enabled,
     intervalMs: state.intervalMs,
+    includeSystemPromptSection: state.includeSystemPromptSection,
   };
   if (state.target.trim()) p.target = state.target.trim();
   else p.target = null;
