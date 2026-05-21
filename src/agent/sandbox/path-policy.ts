@@ -173,7 +173,10 @@ export function validatePath(
 
   // --- Pass 3: allowed-roots enforcement ---
   if (options?.allowedRoots && options.allowedRoots.length > 0) {
-    const normalizedRoots = options.allowedRoots.map((r) => normalizePosixPath(resolve(r)));
+    // Resolve roots the same way as the target so symlink prefixes (e.g. /home on macOS) match.
+    const normalizedRoots = options.allowedRoots.map((r) =>
+      normalizePosixPath(resolveCanonicalPath(resolve(r))),
+    );
     const insideAllowedRoot = normalizedRoots.some((root) =>
       isPathInsideOrEqual(root, canonicalNormalized),
     );
