@@ -35,29 +35,47 @@ function parseArgs() {
   return { targets: all ? ALL_TARGETS : [[platform, arch]] };
 }
 
-function extractTarGz(archivePath, destDir, innerPath, destBin) {
+function extractTarGz(archivePath, destDir, folder, destBin) {
+  const ext = destBin.endsWith('.exe') ? '.exe' : '';
+  const innerName = `frpc${ext}`;
+  const innerPath = `${folder}/${innerName}`;
   return new Promise((resolve, reject) => {
-    const child = spawn('tar', ['xzf', archivePath, '-C', destDir, innerPath, '--strip-components=1'], {
+    const tmp = join(destDir, '_extract');
+    mkdirSync(tmp, { recursive: true });
+    const child = spawn('tar', ['xzf', archivePath, '-C', tmp, innerPath], {
       stdio: 'ignore',
     });
     child.on('error', reject);
     child.on('exit', (code) => {
-      if (code === 0) resolve();
-      else reject(new Error(`tar exited ${code}`));
+      if (code !== 0) {
+        reject(new Error(`tar exited ${code}`));
+        return;
+      }
+      const extracted = join(tmp, innerPath);
+      if (!existsSync(extracted)) {
+        reject(new Error(`missing ${innerPath} in archive`));
+        return;
+      }
+      copyFileSync(extracted, destBin);
+      rmSync(tmp, { recursive: true, force: true });
+      resolve();
     });
-  }).then(() => {
-    if (existsSync(join(destDir, 'frpc')) && !existsSync(destBin)) {
-      copyFileSync(join(destDir, 'frpc'), destBin);
-    }
-    if (existsSync(join(destDir, 'frpc.exe')) && !existsSync(destBin)) {
-      copyFileSync(join(destDir, 'frpc.exe'), destBin);
-    }
   });
+}
+
+async function downloadToFile(url, destPath) {
+  const res = await fetch(url);
+  if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
+  await pipeline(res.body, createWriteStream(destPath));
 }
 
 async function downloadOne(platform, arch) {
   const folder = `frp_${FRP_VERSION}_${platform}_${arch}`;
-  const url = `https://github.com/fatedier/frp/releases/download/v${FRP_VERSION}/${folder}.tar.gz`;
+  const urls = [
+    `https://github.com/fatedier/frp/releases/download/v${FRP_VERSION}/${folder}.tar.gz`,
+    `https://ghfast.top/https://github.com/fatedier/frp/releases/download/v${FRP_VERSION}/${folder}.tar.gz`,
+    `https://frp.xopc.ai/bin/${folder}.tar.gz`,
+  ];
   const destDir = join('electron', 'resources', 'frpc', `${platform}_${arch}`);
   const ext = platform === 'windows' ? '.exe' : '';
   const destBin = join(destDir, `frpc${ext}`);
@@ -67,12 +85,19 @@ async function downloadOne(platform, arch) {
   }
   mkdirSync(destDir, { recursive: true });
   const archivePath = join(destDir, '_frpc.tgz');
-  console.log(`fetch ${url}`);
-  const res = await fetch(url);
-  if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
-  await pipeline(res.body, createWriteStream(archivePath));
-  const innerPath = `${folder}/frpc${ext}`;
-  await extractTarGz(archivePath, destDir, innerPath, destBin);
+  let lastErr;
+  for (const url of urls) {
+    try {
+      console.log(`fetch ${url}`);
+      await downloadToFile(url, archivePath);
+      lastErr = undefined;
+      break;
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+  if (lastErr) throw lastErr;
+  await extractTarGz(archivePath, destDir, folder, destBin);
   if (platform !== 'windows') chmodSync(destBin, 0o755);
   rmSync(archivePath, { force: true });
   console.log(`ok ${destBin}`);

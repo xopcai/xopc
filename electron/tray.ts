@@ -52,12 +52,15 @@ function buildContextMenu(actions: TrayActions): Menu {
 }
 
 /** Update tray menu tunnel status line (Electron has no per-item label API). */
-export function updateTrayTunnelStatus(status: 'connected' | 'disconnected' | 'connecting'): void {
+export function updateTrayTunnelStatus(
+  status: 'connected' | 'disconnected' | 'connecting' | 'error',
+): void {
   if (!tray || !currentActions) return;
   const labelMap: Record<string, string> = {
     connected: 'Remote Access: Connected ✓',
     disconnected: 'Remote Access: Off',
-    connecting: 'Remote Access: Connecting…',
+    connecting: 'Remote Access: Reconnecting…',
+    error: 'Remote Access: Error',
   };
   const newLabel = labelMap[status] ?? labelMap.disconnected;
   if (newLabel === currentTunnelLabel) return;

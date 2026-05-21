@@ -64,6 +64,11 @@ export async function ensureFrpcBinary(): Promise<string> {
   const ext = process.platform === 'win32' ? '.exe' : '';
   const binName = `frpc${ext}`;
 
+  const fromEnv = process.env.XOPC_FRPC_PATH?.trim();
+  if (fromEnv && existsSync(fromEnv)) {
+    return fromEnv;
+  }
+
   if (typeof process.resourcesPath === 'string') {
     const electronPath = join(process.resourcesPath, 'bin', binName);
     if (existsSync(electronPath)) return electronPath;
