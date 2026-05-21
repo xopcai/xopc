@@ -60,6 +60,16 @@ async function downloadToFile(url: string, destPath: string): Promise<void> {
   await pipeline(res.body as unknown as NodeJS.ReadableStream, createWriteStream(destPath));
 }
 
+/** Set after a successful tunnel start so subprocesses can resolve the same binary. */
+export function publishFrpcPathForProcess(binPath: string): void {
+  process.env.XOPC_FRPC_PATH = binPath;
+}
+
+/** Clear runtime frpc path when the tunnel stops (no bundled Electron binary). */
+export function clearFrpcPathForProcess(): void {
+  delete process.env.XOPC_FRPC_PATH;
+}
+
 export async function ensureFrpcBinary(): Promise<string> {
   const ext = process.platform === 'win32' ? '.exe' : '';
   const binName = `frpc${ext}`;
@@ -67,11 +77,6 @@ export async function ensureFrpcBinary(): Promise<string> {
   const fromEnv = process.env.XOPC_FRPC_PATH?.trim();
   if (fromEnv && existsSync(fromEnv)) {
     return fromEnv;
-  }
-
-  if (typeof process.resourcesPath === 'string') {
-    const electronPath = join(process.resourcesPath, 'bin', binName);
-    if (existsSync(electronPath)) return electronPath;
   }
 
   const cacheDir = resolveBinDir();

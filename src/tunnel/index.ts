@@ -11,9 +11,15 @@ export { TunnelBrokerClient, resolveBrokerApiBase } from './broker-client.js';
 export {
   applyTunnelConsentToConfig,
   mergeTunnelConfigPatch,
+  sanitizeTunnelConfig,
   setTunnelEnabledInConfig,
 } from './tunnel-config.js';
-export { ensureFrpcBinary, FRPC_VERSION } from './frpc-binary.js';
+export {
+  clearFrpcPathForProcess,
+  ensureFrpcBinary,
+  FRPC_VERSION,
+  publishFrpcPathForProcess,
+} from './frpc-binary.js';
 export {
   configureTunnelFromGatewayConfig,
   maybeAutoStartTunnelFromConfig,

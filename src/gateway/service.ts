@@ -22,6 +22,7 @@ import type { SessionPatchBody } from '../session/patch-metadata.js';
 import type { CompactionResult } from '../agent/memory/compaction.js';
 import { maybeAutoStartTunnelFromConfig } from '../tunnel/gateway-lifecycle.js';
 import { wireTunnelEventsToGateway } from '../tunnel/gateway-lifecycle.js';
+import { sanitizeTunnelConfig } from '../tunnel/tunnel-config.js';
 import { resolveGatewayAuth, assertGatewayAuthConfigured, validateToken, extractToken, type ResolvedGatewayAuth } from './auth.js';
 import { assertGatewayAuthNotKnownWeak } from './security/known-weak-secrets.js';
 import { auditGatewayConfig } from './security/audit.js';
@@ -145,6 +146,12 @@ export class GatewayService {
     this.bus = new MessageBus();
     this.configPath = serviceConfig.configPath || resolveConfigPath();
     this.config = loadConfig(this.configPath);
+    if (sanitizeTunnelConfig(this.config)) {
+      void writeConfigToDisk(this.config, this.configPath).catch((err) => {
+        const em = err instanceof Error ? err.message : String(err);
+        log.warn({ err, phase: 'tunnel_sanitize', errorMessage: em }, `Tunnel config sanitize persist failed: ${em}`);
+      });
+    }
 
     // Initialize authentication
     this.auth = resolveGatewayAuth({
@@ -930,6 +937,9 @@ export class GatewayService {
   private async writeConfigAndReloadFromDisk(configToWrite: Config): Promise<void> {
     await writeConfigToDisk(configToWrite, this.configPath);
     this.config = loadConfig(this.configPath);
+    if (sanitizeTunnelConfig(this.config)) {
+      await writeConfigToDisk(this.config, this.configPath);
+    }
     this.agentService.applyAgentDefaultsFromConfig(this.config);
     await this.reconcileBrowserExtensionServer();
     // Hot-apply: reconcile managed dreaming cron jobs immediately after config persists.

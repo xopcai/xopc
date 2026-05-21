@@ -9,7 +9,7 @@ import {
   TunnelConsentError,
 } from '../../tunnel/consent.js';
 import { resolveTunnelBrokerUrl, resolveTunnelRegistrationSecret } from '../../tunnel/env.js';
-import { getTunnelService } from '../../tunnel/index.js';
+import { ensureFrpcBinary, getTunnelService } from '../../tunnel/index.js';
 import { applyTunnelConsentToConfig, setTunnelEnabledInConfig } from '../../tunnel/tunnel-config.js';
 import { loadTunnelState } from '../../tunnel/tunnel-state.js';
 import { formatExamples, register, type CLIContext } from '../registry.js';
@@ -101,8 +101,23 @@ function createTunnelCommand(ctx: CLIContext): Command {
         'xopc tunnel status',
         'xopc tunnel qr',
         'xopc tunnel consent',
+        'xopc tunnel prefetch',
       ]),
     );
+
+  cmd
+    .command('prefetch')
+    .description('Download frpc to the state bin directory without starting the tunnel')
+    .action(async () => {
+      try {
+        const path = await ensureFrpcBinary();
+        console.log(`frpc ready at ${path}`);
+      } catch (err) {
+        const em = err instanceof Error ? err.message : String(err);
+        log.error({ err }, `frpc prefetch failed: ${em}`);
+        process.exit(1);
+      }
+    });
 
   cmd
     .command('consent')
