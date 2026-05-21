@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { Resolver } from 'node:dns/promises';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { Agent, fetch as undiciFetch } from 'undici';
+import { Agent, fetch as undiciFetch, type RequestInit } from 'undici';
 
 import { resolveStateDir } from '../config/paths.js';
 import { createLogger } from '../utils/logger.js';
