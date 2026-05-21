@@ -1,4 +1,18 @@
+export {
+  assertTunnelMayStart,
+  CURRENT_TUNNEL_CONSENT_VERSION,
+  getTunnelConsentState,
+  hasValidTunnelConsent,
+  TUNNEL_CONSENT_REQUIRED_CODE,
+  TUNNEL_RISK_SUMMARY_LINES,
+  TunnelConsentError,
+} from './consent.js';
 export { TunnelBrokerClient, resolveBrokerApiBase } from './broker-client.js';
+export {
+  applyTunnelConsentToConfig,
+  mergeTunnelConfigPatch,
+  setTunnelEnabledInConfig,
+} from './tunnel-config.js';
 export { ensureFrpcBinary, FRPC_VERSION } from './frpc-binary.js';
 export {
   configureTunnelFromGatewayConfig,

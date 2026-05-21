@@ -33,8 +33,6 @@ files:
 extraMetadata:
   main: out/main/index.js
 
-afterPack: scripts/electron-afterpack-frpc.mjs
-
 extraResources:
   - from: node_modules/@vscode/ripgrep/bin
     to: bin

@@ -1,8 +1,11 @@
 {
   "tunnelSettings": {
     "title": "Remote access",
-    "subtitle": "Expose this gateway on the internet so the mobile app can connect from anywhere.",
+    "subtitle": "Expose this gateway on the internet so the mobile app can connect from anywhere. Off by default for your security.",
     "needToken": "Sign in to the gateway (valid token) to manage remote access.",
+    "riskBannerTitle": "Security notice",
+    "riskBannerBody": "Remote access exposes your gateway on the public internet. Only enable when you understand the risks.",
+    "consentExpiredBanner": "The remote access security notice was updated. Re-confirm before starting the tunnel or enabling auto-start.",
     "statusTitle": "Status",
     "loading": "Loading tunnel status…",
     "statusConnected": "Connected",
@@ -33,7 +36,20 @@
     "refreshQr": "Refresh QR",
     "optionsTitle": "Options",
     "autoStart": "Start tunnel when gateway launches",
+    "autoStartHint": "Available after you start remote access once and accept the security notice.",
+    "autoStartConfirmTitle": "Start tunnel on every gateway launch?",
+    "autoStartConfirmBody": "Your gateway will be reachable from the internet whenever it runs. Only enable if you accept that risk.",
+    "autoStartConfirmLabel": "Enable auto-start",
+    "consentTitle": "Enable remote access",
+    "consentIntro": "Read carefully before exposing your gateway:",
+    "consentBullet1": "A public URL lets anyone who obtains it use your gateway Bearer token.",
+    "consentBullet2": "Traffic is proxied via frp.xopc.ai (third-party infrastructure).",
+    "consentBullet3": "Use a strong token; stop the tunnel when you do not need remote access.",
+    "consentCheckbox": "I understand these risks and want to enable remote access",
+    "consentConfirm": "Accept and start",
+    "consentReconfirm": "Accept and continue",
+    "consentCancel": "Cancel",
     "deeplinkTitle": "Deep link payload",
-    "brokerNote": "Traffic is proxied via frp.xopc.ai. Keep your gateway token private."
+    "brokerNote": "Traffic is proxied via frp.xopc.ai. Keep your gateway token private. See docs/tunnel-security.md."
   }
 }

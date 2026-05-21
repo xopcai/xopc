@@ -1,13 +1,24 @@
 import { Command } from 'commander';
 
-import { loadConfig } from '../../config/index.js';
+import { loadConfig, saveConfig } from '../../config/index.js';
 import { createLogger } from '../../utils/logger.js';
+import {
+  assertTunnelMayStart,
+  hasValidTunnelConsent,
+  TUNNEL_RISK_SUMMARY_LINES,
+  TunnelConsentError,
+} from '../../tunnel/consent.js';
 import { resolveTunnelBrokerUrl, resolveTunnelRegistrationSecret } from '../../tunnel/env.js';
 import { getTunnelService } from '../../tunnel/index.js';
+import { applyTunnelConsentToConfig, setTunnelEnabledInConfig } from '../../tunnel/tunnel-config.js';
 import { loadTunnelState } from '../../tunnel/tunnel-state.js';
 import { formatExamples, register, type CLIContext } from '../registry.js';
 
 const log = createLogger('TunnelCommand');
+
+function isInteractive(): boolean {
+  return Boolean(process.stdin.isTTY && process.stdout.isTTY);
+}
 
 function resolveGatewayPortHost(config: ReturnType<typeof loadConfig>): { port: number; host: string } {
   return {
@@ -26,14 +37,56 @@ function resolveGatewayToken(config: ReturnType<typeof loadConfig>): string {
 
 function configureTunnel(ctx: CLIContext): void {
   const config = loadConfig(ctx.configPath);
-  const { port, host } = resolveGatewayPortHost(config);
+  const { host } = resolveGatewayPortHost(config);
   getTunnelService().configure({
     brokerUrl: resolveTunnelBrokerUrl(config.tunnel?.brokerUrl),
     registrationSecret: resolveTunnelRegistrationSecret(),
     autoStart: config.tunnel?.autoStart ?? false,
     gatewayHost: host,
   });
-  void port;
+}
+
+async function ensureCliTunnelConsent(
+  ctx: CLIContext,
+  opts: { acceptRisk?: boolean; yes?: boolean },
+): Promise<void> {
+  const config = loadConfig(ctx.configPath);
+  if (hasValidTunnelConsent(config)) return;
+
+  if (opts.acceptRisk) {
+    applyTunnelConsentToConfig(config);
+    await saveConfig(config, ctx.configPath);
+    return;
+  }
+
+  if (opts.yes) {
+    throw new TunnelConsentError(
+      'Security consent not recorded. Run without --yes and confirm, or pass --accept-risk after reading the risks.',
+    );
+  }
+
+  if (!isInteractive()) {
+    throw new TunnelConsentError(
+      'Security consent required. Run interactively, use --accept-risk, or accept in gateway settings.',
+    );
+  }
+
+  const { confirm } = await import('@inquirer/prompts');
+  console.log('');
+  console.log('⚠️  Remote access security notice');
+  for (const line of TUNNEL_RISK_SUMMARY_LINES) {
+    console.log(`   • ${line}`);
+  }
+  console.log('');
+  const accepted = await confirm({
+    message: 'I understand these risks and want to enable remote access',
+    default: false,
+  });
+  if (!accepted) {
+    throw new TunnelConsentError('Remote access not started (consent declined).');
+  }
+  applyTunnelConsentToConfig(config);
+  await saveConfig(config, ctx.configPath);
 }
 
 function createTunnelCommand(ctx: CLIContext): Command {
@@ -43,18 +96,38 @@ function createTunnelCommand(ctx: CLIContext): Command {
       'after',
       formatExamples([
         'xopc tunnel start',
+        'xopc tunnel start --accept-risk',
         'xopc tunnel stop',
         'xopc tunnel status',
         'xopc tunnel qr',
+        'xopc tunnel consent',
       ]),
     );
 
   cmd
+    .command('consent')
+    .description('Record acceptance of the remote access security notice')
+    .option('--accept-risk', 'Non-interactive: record consent without prompts')
+    .action(async (opts: { acceptRisk?: boolean }) => {
+      await ensureCliTunnelConsent(ctx, { acceptRisk: opts.acceptRisk, yes: false });
+      console.log('Tunnel security consent recorded.');
+    });
+
+  cmd
     .command('start')
     .description('Register tunnel, start frpc, print connection info')
-    .action(async () => {
+    .option('--yes', 'Skip interactive consent prompt when consent is already recorded')
+    .option(
+      '--accept-risk',
+      'Record security consent and start (non-interactive; read risks in docs/tunnel-security.md first)',
+    )
+    .action(async (opts: { yes?: boolean; acceptRisk?: boolean }) => {
       configureTunnel(ctx);
+      await ensureCliTunnelConsent(ctx, { acceptRisk: opts.acceptRisk, yes: opts.yes });
+
       const config = loadConfig(ctx.configPath);
+      assertTunnelMayStart(config);
+
       const { port, host } = resolveGatewayPortHost(config);
       const token = resolveGatewayToken(config);
       const tunnel = getTunnelService();
@@ -62,6 +135,9 @@ function createTunnelCommand(ctx: CLIContext): Command {
       console.log('🚀 Starting tunnel...');
       try {
         const qr = await tunnel.start(port, token);
+        setTunnelEnabledInConfig(config, true);
+        await saveConfig(config, ctx.configPath);
+
         const status = tunnel.getStatus();
         console.log('');
         console.log('✅ Tunnel is active');
@@ -83,10 +159,13 @@ function createTunnelCommand(ctx: CLIContext): Command {
 
   cmd
     .command('stop')
-    .description('Stop frpc and deregister tunnel')
+    .description('Stop frpc (keeps broker registration for stable subdomain)')
     .action(async () => {
       configureTunnel(ctx);
       await getTunnelService().stop();
+      const config = loadConfig(ctx.configPath);
+      setTunnelEnabledInConfig(config, false);
+      await saveConfig(config, ctx.configPath);
       console.log('Tunnel stopped.');
     });
 
@@ -95,9 +174,20 @@ function createTunnelCommand(ctx: CLIContext): Command {
     .description('Show tunnel status')
     .action(() => {
       configureTunnel(ctx);
+      const config = loadConfig(ctx.configPath);
       const status = getTunnelService().getStatus();
       const persisted = loadTunnelState();
-      console.log(JSON.stringify({ ...status, persistedSubdomain: persisted?.subdomain ?? null }, null, 2));
+      console.log(
+        JSON.stringify(
+          {
+            ...status,
+            persistedSubdomain: persisted?.subdomain ?? null,
+            consentValid: hasValidTunnelConsent(config),
+          },
+          null,
+          2,
+        ),
+      );
     });
 
   cmd

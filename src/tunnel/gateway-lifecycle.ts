@@ -1,5 +1,6 @@
 import type { Config } from '../config/schema.js';
 import { createLogger } from '../utils/logger.js';
+import { hasValidTunnelConsent } from './consent.js';
 import { resolveTunnelBrokerUrl, resolveTunnelRegistrationSecret } from './env.js';
 import { getTunnelService } from './tunnel-service.js';
 import { fetchTunnelWellKnown } from './well-known.js';
@@ -67,6 +68,22 @@ export async function maybeAutoStartTunnelFromConfig(
   gatewayToken: string | undefined,
 ): Promise<void> {
   if (!config.tunnel?.autoStart) return;
+
+  if (!hasValidTunnelConsent(config)) {
+    log.warn(
+      { phase: 'tunnel_autostart', consentVersion: config.tunnel?.consent?.version ?? null },
+      'tunnel.autoStart skipped: security consent required or outdated',
+    );
+    return;
+  }
+
+  if (config.tunnel.enabled !== true) {
+    log.debug(
+      { phase: 'tunnel_autostart' },
+      'tunnel.autoStart skipped: tunnel.enabled is false (start remote access once)',
+    );
+    return;
+  }
 
   const gateway = config.gateway ?? {};
   const port = gateway.port ?? 18790;

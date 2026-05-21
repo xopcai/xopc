@@ -531,12 +531,18 @@ export const HeartbeatConfigSchema = z
 
 export const GatewayChannelConnectDeferModeSchema = z.enum(['auto', 'off', 'explicit']);
 
+export const TunnelConsentSchema = z.object({
+  version: z.string().min(1),
+  acceptedAt: z.string().min(1),
+});
+
 export const TunnelConfigSchema = z
   .object({
     enabled: z.boolean().default(false),
     brokerUrl: z.string().url().default('https://frp.xopc.ai/api'),
     autoStart: z.boolean().default(false),
     subdomain: z.string().optional(),
+    consent: TunnelConsentSchema.optional(),
   })
   .default({
     enabled: false,

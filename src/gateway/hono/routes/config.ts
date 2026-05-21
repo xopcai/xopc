@@ -3,6 +3,7 @@ import type { Hono } from 'hono';
 import { type Config, BindingsConfigSchema } from '../../../config/schema.js';
 import { CredentialResolver } from '../../../auth/credentials.js';
 import { applyToolsWebPatch } from '../../config-tools-web.js';
+import { mergeTunnelConfigPatch } from '../../../tunnel/tunnel-config.js';
 import { buildSafeWebConfigPayload } from '../lib/config-payload.js';
 import {
   normalizePatchAgentImageGenerationModel,
@@ -1247,6 +1248,16 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
     const toolsPatchErr = applyToolsWebPatch(config, body as Record<string, unknown>);
     if (toolsPatchErr) {
       return c.json({ ok: false, error: { message: toolsPatchErr } }, 400);
+    }
+
+    if (body.tunnel !== undefined) {
+      if (!body.tunnel || typeof body.tunnel !== 'object' || Array.isArray(body.tunnel)) {
+        return c.json({ ok: false, error: { message: 'tunnel must be an object' } }, 400);
+      }
+      const tunnelResult = mergeTunnelConfigPatch(config, body.tunnel as Record<string, unknown>);
+      if (tunnelResult.ok === false) {
+        return c.json({ ok: false, error: { message: tunnelResult.message } }, 400);
+      }
     }
 
     if (body.bindings !== undefined) {
