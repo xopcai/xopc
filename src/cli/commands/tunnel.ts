@@ -175,13 +175,32 @@ function createTunnelCommand(ctx: CLIContext): Command {
   cmd
     .command('stop')
     .description('Stop frpc (keeps broker registration for stable subdomain)')
-    .action(async () => {
+    .option(
+      '--release',
+      'Deregister from broker and clear saved subdomain (next start gets a new public URL)',
+    )
+    .option('--yes', 'Skip confirmation when using --release')
+    .action(async (opts: { release?: boolean; yes?: boolean }) => {
       configureTunnel(ctx);
-      await getTunnelService().stop();
+      if (opts.release) {
+        if (!opts.yes && isInteractive()) {
+          const { confirm } = await import('@inquirer/prompts');
+          const ok = await confirm({
+            message:
+              'Release will revoke the public URL and subdomain on the broker. Continue?',
+            default: false,
+          });
+          if (!ok) {
+            console.log('Cancelled.');
+            return;
+          }
+        }
+      }
+      const { released } = await getTunnelService().stop({ release: opts.release });
       const config = loadConfig(ctx.configPath);
       setTunnelEnabledInConfig(config, false);
       await saveConfig(config, ctx.configPath);
-      console.log('Tunnel stopped.');
+      console.log(released ? 'Tunnel stopped and broker registration released.' : 'Tunnel stopped.');
     });
 
   cmd

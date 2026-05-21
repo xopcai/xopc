@@ -57,7 +57,16 @@ On gateway load, invalid consent clears `tunnel.enabled` and `tunnel.autoStart` 
 
 - `POST /api/tunnel/consent` — record acceptance (authenticated)
 - `POST /api/tunnel/start` — returns `403` + `TUNNEL_CONSENT_REQUIRED` if consent is missing or outdated
+- `POST /api/tunnel/stop` — body `{ "release": false }` (default) keeps broker registration; `release: true` deregisters and clears `tunnel.json`
 - `GET /api/tunnel/status` — includes `consentRequired`, `canAutoStart`
+
+Mutating tunnel endpoints are rate-limited per gateway token (12 calls / 5 minutes). Denied starts and consent/start/stop/release are written to logs with prefix `TunnelAudit`.
+
+## CLI
+
+- `xopc tunnel stop` — stop frpc, keep subdomain
+- `xopc tunnel stop --release` — deregister and clear saved URL (interactive confirm; `--yes` to skip)
+- `xopc tunnel prefetch` — download frpc only, no tunnel exposure
 
 ## Advanced
 

@@ -13,7 +13,8 @@ import {
   persistedFromRegistration,
   registrationFromPersisted,
 } from './tunnel-persist.js';
-import { loadTunnelState, saveTunnelState, updateTunnelState } from './tunnel-state.js';
+import { clearTunnelState, loadTunnelState, saveTunnelState, updateTunnelState } from './tunnel-state.js';
+import { logTunnelAudit } from './tunnel-audit.js';
 import type { PersistedTunnelState, TunnelQrPayload, TunnelRegistration, TunnelStatus } from './tunnel-types.js';
 
 const log = createLogger('Tunnel');
@@ -124,10 +125,22 @@ export class TunnelService extends EventEmitter {
     this.reconnectAttempt = 0;
     this.emit('tunnel:connected');
 
-    return this.buildQr(gatewayPort, cfg.gatewayHost, gatewayToken);
+    const qr = this.buildQr(gatewayPort, cfg.gatewayHost, gatewayToken);
+    logTunnelAudit(
+      'tunnel.start',
+      {
+        subdomain: registration.subdomain,
+        publicUrl: registration.publicUrl,
+        tunnelId: registration.tunnelId,
+        gatewayTokenHash: hashGatewayToken(gatewayToken).slice(0, 12),
+      },
+      'Remote access tunnel started',
+    );
+    return qr;
   }
 
-  async stop(): Promise<void> {
+  async stop(opts?: { release?: boolean }): Promise<{ released: boolean }> {
+    const release = opts?.release === true;
     this.stopping = true;
     this.clearHeartbeat();
     if (this.frpcHandle) {
@@ -135,11 +148,39 @@ export class TunnelService extends EventEmitter {
       this.frpcHandle = null;
     }
     clearFrpcPathForProcess();
-    updateTunnelState({ enabled: false });
+
+    let released = false;
+    const persisted = loadTunnelState();
+    const cfg = this.serviceConfig;
+    if (release && persisted && cfg) {
+      const broker = new TunnelBrokerClient(resolveBrokerApiBase(cfg.brokerUrl));
+      try {
+        await broker.deregister(persisted.tunnelId, persisted.tunnelToken);
+        released = true;
+      } catch (err) {
+        const em = err instanceof Error ? err.message : String(err);
+        log.warn({ err, tunnelId: persisted.tunnelId, phase: 'tunnel_release' }, `Tunnel deregister failed: ${em}`);
+      }
+      clearTunnelState();
+      logTunnelAudit(
+        'tunnel.release',
+        { tunnelId: persisted.tunnelId, subdomain: persisted.subdomain },
+        'Released tunnel registration and cleared local credentials',
+      );
+    } else {
+      updateTunnelState({ enabled: false });
+      logTunnelAudit(
+        'tunnel.stop',
+        { tunnelId: persisted?.tunnelId ?? null, subdomain: persisted?.subdomain ?? null },
+        'Remote access tunnel stopped (registration retained)',
+      );
+    }
+
     this.state = 'disconnected';
     this.connectedSince = null;
     this.startContext = null;
     this.emit('tunnel:disconnected');
+    return { released };
   }
 
   /**
