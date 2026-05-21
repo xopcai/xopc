@@ -1,8 +1,11 @@
 {
   "tunnelSettings": {
     "title": "远程访问",
-    "subtitle": "通过公网隧道让手机 App 在任何网络下连接本机 gateway。",
+    "subtitle": "通过公网隧道让手机 App 在任何网络下连接本机 gateway。默认关闭以保护安全。",
     "needToken": "请先使用有效的 gateway 令牌登录后再管理远程访问。",
+    "riskBannerTitle": "安全提示",
+    "riskBannerBody": "远程访问会把 gateway 暴露到公网。仅在充分理解风险后开启。",
+    "consentExpiredBanner": "远程访问安全说明已更新。请重新确认后再开启隧道或启用「启动时自动开启」。",
     "statusTitle": "状态",
     "loading": "正在加载隧道状态…",
     "statusConnected": "已连接",
@@ -33,7 +36,20 @@
     "refreshQr": "刷新二维码",
     "optionsTitle": "选项",
     "autoStart": "gateway 启动时自动开启隧道",
+    "autoStartHint": "需先成功开启一次远程访问并接受安全说明。",
+    "autoStartConfirmTitle": "每次启动 gateway 都开启隧道？",
+    "autoStartConfirmBody": "只要 gateway 在运行，就可能从公网访问。请确认你能接受该风险。",
+    "autoStartConfirmLabel": "启用自动开启",
+    "consentTitle": "开启远程访问",
+    "consentIntro": "在暴露 gateway 之前请仔细阅读：",
+    "consentBullet1": "公网 URL 可能被他人用来使用你的 gateway Bearer 令牌。",
+    "consentBullet2": "流量经 frp.xopc.ai 转发（第三方基础设施）。",
+    "consentBullet3": "请使用强令牌；不需要远程访问时请关闭隧道。",
+    "consentCheckbox": "我已理解上述风险，并希望开启远程访问",
+    "consentConfirm": "接受并开启",
+    "consentReconfirm": "接受并继续",
+    "consentCancel": "取消",
     "deeplinkTitle": "深链内容",
-    "brokerNote": "流量经 frp.xopc.ai 转发，请妥善保管 gateway 令牌。"
+    "brokerNote": "流量经 frp.xopc.ai 转发，请妥善保管 gateway 令牌。详见 docs/tunnel-security.md。"
   }
 }

@@ -67,7 +67,7 @@
     "electron:server:build": "node scripts/build-electron-server.mjs",
     "electron:frpc:download": "node scripts/download-frpc-binaries.mjs",
     "electron:frpc:download:all": "node scripts/download-frpc-binaries.mjs --all",
-    "electron:build": "pnpm run electron:frpc:download && pnpm run electron:vite:build && pnpm run electron:server:build && pnpm run electron:package",
+    "electron:build": "pnpm run electron:vite:build && pnpm run electron:server:build && pnpm run electron:package",
     "electron:preview": "cross-env ELECTRON_ENTRY=out/main/index.js electron-vite preview"
   },
   "keywords": [

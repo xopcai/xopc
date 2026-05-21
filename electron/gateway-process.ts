@@ -131,11 +131,6 @@ export function spawnGatewayProcess(opts: GatewayProcessOptions): ChildProcess {
         ...(isPackaged
           ? {
               XOPC_UI_STATIC_ROOT: join(app.getAppPath(), 'dist/gateway/static/root'),
-              XOPC_FRPC_PATH: join(
-                process.resourcesPath,
-                'bin',
-                process.platform === 'win32' ? 'frpc.exe' : 'frpc',
-              ),
             }
           : {}),
       },
