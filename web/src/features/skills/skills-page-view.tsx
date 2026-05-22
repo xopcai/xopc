@@ -34,6 +34,7 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
     setMarketSort,
     marketBrowseProvider,
     setMarketBrowseProvider,
+    registeredProviders,
     filterLabel,
     inSettingsShell,
   } = vm;
@@ -227,11 +228,11 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
                     role="group"
                     aria-label={sk.marketplaceBrowseSwitchAria}
                   >
-                    {(['skillhub', 'store'] as const).map((id) => {
-                      const selected = marketBrowseProvider === id;
+                    {registeredProviders.map((p) => {
+                      const selected = marketBrowseProvider === p.id;
                       return (
                         <button
-                          key={id}
+                          key={p.id}
                           type="button"
                           className={cn(
                             'rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors',
@@ -241,9 +242,9 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
                               : 'text-fg-muted hover:text-fg',
                           )}
                           aria-pressed={selected}
-                          onClick={() => setMarketBrowseProvider(id)}
+                          onClick={() => setMarketBrowseProvider(p.id)}
                         >
-                          {id === 'skillhub' ? sk.marketplaceBrowseSkillhub : sk.marketplaceBrowseStore}
+                          {p.displayName}
                         </button>
                       );
                     })}

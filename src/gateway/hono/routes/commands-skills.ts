@@ -1,12 +1,12 @@
 import type { Hono } from 'hono';
 
 import { commandRegistry } from '../../../chat-commands/index.js';
-import type { SkillsMarketplaceProvider } from '../../../agent/skills/skills-marketplace.js';
+import { isRegisteredProvider } from '../../../agent/skills/skills-marketplace.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
-function parseMarketplaceProviderQuery(raw: string | undefined): SkillsMarketplaceProvider | undefined {
+function parseMarketplaceProviderQuery(raw: string | undefined): string | undefined {
   const v = raw?.trim().toLowerCase();
-  if (v === 'store' || v === 'skillhub') return v;
+  if (v && isRegisteredProvider(v)) return v;
   return undefined;
 }
 
@@ -132,6 +132,13 @@ export function registerCommandsSkillsRoutes(authenticated: Hono, deps: Authenti
   authenticated.get('/api/skills/marketplace/provider', (c) => {
     const info = service.getSkillsMarketplaceProvider();
     return c.json({ ok: true, payload: info });
+  });
+
+  /** All registered marketplace providers (built-in + extension-contributed). */
+  authenticated.get('/api/skills/marketplace/providers', (c) => {
+    const providers = service.getSkillsMarketplaceProviders();
+    const current = service.getSkillsMarketplaceProvider();
+    return c.json({ ok: true, payload: { providers, current: current.provider } });
   });
 
   authenticated.get('/api/skills/marketplace/categories', async (c) => {

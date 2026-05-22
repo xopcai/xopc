@@ -1,0 +1,22 @@
+{
+  "name": "xopc-extension-skillhub",
+  "version": "1.0.0",
+  "description": "SkillHub (skillhub.cn) skills marketplace adapter",
+  "main": "index.ts",
+  "xopc": {
+    "extension": true,
+    "id": "skillhub",
+    "name": "SkillHub Marketplace",
+    "kind": "utility"
+  },
+  "keywords": [
+    "xopc",
+    "xopc-extension",
+    "skillhub",
+    "marketplace"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}

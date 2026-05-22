@@ -35,6 +35,8 @@ export function wireTunnelEventsToGateway(service: TunnelEventSink): void {
 }
 
 export async function configureTunnelFromGatewayConfig(config: Config): Promise<void> {
+  if (!config.tunnel?.enabled) return;
+
   const gateway = config.gateway ?? {};
   let brokerUrl = resolveTunnelBrokerUrl(config.tunnel?.brokerUrl);
 

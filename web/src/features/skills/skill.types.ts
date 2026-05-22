@@ -94,6 +94,12 @@ export interface SkillsPayload {
   managed: ManagedSkillDir[];
 }
 
+/**
+ * Marketplace provider identifier. Dynamic — extensions can register additional providers
+ * via `api.registerMarketplaceAdapter()`. Built-in values: 'store', 'skillhub', 'clawhub'.
+ */
+export type MarketplaceProviderId = string;
+
 /** GET /api/skills/marketplace/categories — provider-specific taxonomy. */
 export interface MarketplaceCategoryItem {
   id: string;
@@ -120,7 +126,7 @@ export interface SkillsMarketplacePayload {
   items: MarketplacePackageItem[];
   meta: { page: number; pageSize: number; total: number; totalPages: number };
   /** Current marketplace provider */
-  provider?: 'store' | 'skillhub';
+  provider?: string;
 }
 
 /** GET /api/skills/marketplace/packages/:name — store package detail for preview. */
@@ -139,5 +145,11 @@ export interface MarketplacePackageDetailPayload {
     changelog: string | null;
     publishedAt: string;
   };
-  provider?: 'store' | 'skillhub';
+  provider?: string;
+}
+
+/** Info about a single marketplace provider from the dynamic registry. */
+export interface MarketplaceProviderInfo {
+  id: string;
+  displayName: string;
 }

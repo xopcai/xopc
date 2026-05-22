@@ -1,0 +1,22 @@
+{
+  "name": "xopc-extension-clawhub",
+  "version": "1.0.0",
+  "description": "ClawHub (clawhub.ai) skills marketplace adapter",
+  "main": "index.ts",
+  "xopc": {
+    "extension": true,
+    "id": "clawhub",
+    "name": "ClawHub Marketplace",
+    "kind": "utility"
+  },
+  "keywords": [
+    "xopc",
+    "xopc-extension",
+    "clawhub",
+    "marketplace"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}

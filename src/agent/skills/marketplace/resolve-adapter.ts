@@ -1,41 +1,45 @@
 import type { Config } from '../../../config/schema.js';
-import type { SkillsMarketplaceProvider } from './adapters/store/store-api-client.js';
 
 import type { SkillsMarketplaceAdapter } from './adapter.types.js';
-import { skillhubMarketplaceAdapter } from './adapters/skillhub/adapter.js';
-import { storeMarketplaceAdapter } from './adapters/store/adapter.js';
+import {
+  getRegisteredAdapter,
+  getProviderDisplayName,
+  isRegisteredProvider,
+  listRegisteredProviders,
+  getRegisteredAdapterIds,
+} from './registry.js';
 
-export function resolveSkillsMarketplaceProvider(config: Config): SkillsMarketplaceProvider {
+// Side-effect imports: each built-in adapter self-registers into the registry.
+// SkillHub and ClawHub are provided by extensions (extensions/skillhub/, extensions/clawhub/).
+import './adapters/store/adapter.js';
+
+/** Resolve the default marketplace provider from env / config. */
+export function resolveSkillsMarketplaceProvider(config: Config): string {
   const env = process.env.XOPC_SKILLS_MARKETPLACE_PROVIDER?.trim().toLowerCase();
-  if (env === 'skillhub' || env === 'store') {
+  if (env && isRegisteredProvider(env)) {
     return env;
   }
-  const fromConfig = config.gateway?.skillsMarketplaceProvider;
-  if (fromConfig === 'skillhub' || fromConfig === 'store') {
+  const fromConfig = config.gateway?.skillsMarketplaceProvider?.trim().toLowerCase();
+  if (fromConfig && isRegisteredProvider(fromConfig)) {
     return fromConfig;
   }
   return 'skillhub';
 }
 
-export function getMarketplaceProviderDisplayName(provider: SkillsMarketplaceProvider): string {
-  switch (provider) {
-    case 'skillhub':
-      return 'SkillHub (skillhub.cn)';
-    case 'store':
-    default:
-      return 'xopc Store (store.xopc.ai)';
-  }
+export function getMarketplaceProviderDisplayName(provider: string): string {
+  return getProviderDisplayName(provider);
 }
 
-export function getMarketplaceAdapterForProvider(id: SkillsMarketplaceProvider): SkillsMarketplaceAdapter {
-  switch (id) {
-    case 'skillhub':
-      return skillhubMarketplaceAdapter;
-    case 'store':
-      return storeMarketplaceAdapter;
+export function getMarketplaceAdapterForProvider(id: string): SkillsMarketplaceAdapter {
+  const adapter = getRegisteredAdapter(id);
+  if (!adapter) {
+    throw new Error(`Unknown marketplace provider: "${id}". Registered: ${getRegisteredAdapterIds().join(', ')}`);
   }
+  return adapter;
 }
 
 export function getMarketplaceAdapter(config: Config): SkillsMarketplaceAdapter {
   return getMarketplaceAdapterForProvider(resolveSkillsMarketplaceProvider(config));
 }
+
+export { listRegisteredProviders, isRegisteredProvider } from './registry.js';

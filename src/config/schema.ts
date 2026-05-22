@@ -583,8 +583,8 @@ export const GatewayConfigSchema = z.object({
   channelConnectDeferIds: z.array(z.string().min(1)).max(24).optional(),
   /** Removed from the defer set (applied after `auto` or `explicit` resolution). */
   channelConnectDeferSkipIds: z.array(z.string().min(1)).max(24).optional(),
-  /** Skills marketplace provider: `store` (store.xopc.ai) or `skillhub` (skillhub.cn). */
-  skillsMarketplaceProvider: z.enum(['store', 'skillhub']).optional(),
+  /** Default skills marketplace provider id. Built-in: 'store', 'skillhub', 'clawhub'. Extensions may register more. */
+  skillsMarketplaceProvider: z.string().optional(),
   /** Base URL for the xopc skills marketplace (public REST API). */
   skillsStoreBaseUrl: z.string().url().optional(),
   /** File sharing configuration (temporary public download links for workspace files). */
@@ -984,7 +984,7 @@ export const ConfigSchema = z.object({
     },
     maxSseConnections: 100,
     corsOrigins: [],
-    skillsMarketplaceProvider: 'skillhub' as const,
+    skillsMarketplaceProvider: 'skillhub',
     skillsStoreBaseUrl: 'https://store.xopc.ai',
   },
   tools: {

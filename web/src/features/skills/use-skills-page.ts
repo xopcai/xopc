@@ -15,6 +15,7 @@ import {
   getMarketplaceCategories,
   getMarketplacePackageDetail,
   getMarketplaceProvider,
+  getMarketplaceProviders,
   getMarketplaceSkills,
   getSkillMarkdown,
   getSkills,
@@ -26,6 +27,7 @@ import {
 import type {
   MarketplaceCategoryItem,
   MarketplacePackageItem,
+  MarketplaceProviderInfo,
   SkillCatalogEntry,
   SkillMarkdownPreviewPayload,
 } from '@/features/skills/skill.types';
@@ -53,8 +55,8 @@ export function useSkillsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const mprovRaw = searchParams.get(MARKETPLACE_PROVIDER_PARAM);
-  const urlMarketProvider =
-    mprovRaw === 'store' || mprovRaw === 'skillhub' ? mprovRaw : null;
+  // Accept any non-empty provider id from URL — validity checked by the backend registry.
+  const urlMarketProvider = mprovRaw?.trim() || null;
 
   const [catalog, setCatalog] = useState<SkillCatalogEntry[]>([]);
   const [loading, setLoading] = useState(false);
@@ -107,7 +109,7 @@ export function useSkillsPage() {
   const [mpPayload, setMpPayload] = useState<{
     items: MarketplacePackageItem[];
     meta: { page: number; pageSize: number; total: number; totalPages: number };
-    provider?: 'store' | 'skillhub';
+    provider?: string;
   } | null>(null);
   const [installingMarketName, setInstallingMarketName] = useState<string | null>(null);
   const [usingSkillInChatName, setUsingSkillInChatName] = useState<string | null>(null);
@@ -115,9 +117,11 @@ export function useSkillsPage() {
   const [mpCategories, setMpCategories] = useState<MarketplaceCategoryItem[]>([]);
   const [mpCategoriesError, setMpCategoriesError] = useState<string | null>(null);
   const [mpCategoriesLoading, setMpCategoriesLoading] = useState(false);
-  const [marketBrowseProvider, setMarketBrowseProvider] = useState<'store' | 'skillhub' | null>(null);
-  const marketplaceDetailProviderRef = useRef<'store' | 'skillhub' | null>(null);
-  const prevMarketBrowseProviderRef = useRef<'store' | 'skillhub' | null>(null);
+  const [marketBrowseProvider, setMarketBrowseProvider] = useState<string | null>(null);
+  const marketplaceDetailProviderRef = useRef<string | null>(null);
+  const prevMarketBrowseProviderRef = useRef<string | null>(null);
+  /** Dynamic provider list from the registry API. */
+  const [registeredProviders, setRegisteredProviders] = useState<MarketplaceProviderInfo[]>([]);
 
   const load = useCallback(
     async (opts?: { silent?: boolean }): Promise<{ ok: true } | { ok: false; message: string }> => {
@@ -160,18 +164,30 @@ export function useSkillsPage() {
   }, [hasToken, urlMarketProvider]);
 
   useEffect(() => {
-    if (!hasToken || urlMarketProvider != null) return;
+    if (!hasToken) return;
     let cancelled = false;
-    void getMarketplaceProvider()
-      .then((info) => {
-        if (!cancelled) {
-          setMarketBrowseProvider((prev) => (prev != null ? prev : info.provider));
+    void getMarketplaceProviders()
+      .then(({ providers, current }) => {
+        if (cancelled) return;
+        setRegisteredProviders(providers.map((p) => ({ id: p.id, displayName: p.displayName })));
+        if (urlMarketProvider == null) {
+          setMarketBrowseProvider((prev) => (prev != null ? prev : current));
         }
       })
       .catch(() => {
-        if (!cancelled) {
-          setMarketBrowseProvider((prev) => (prev != null ? prev : 'skillhub'));
-        }
+        if (cancelled) return;
+        // Fallback: try old single-provider endpoint
+        void getMarketplaceProvider()
+          .then((info) => {
+            if (!cancelled && urlMarketProvider == null) {
+              setMarketBrowseProvider((prev) => (prev != null ? prev : info.provider));
+            }
+          })
+          .catch(() => {
+            if (!cancelled && urlMarketProvider == null) {
+              setMarketBrowseProvider((prev) => (prev != null ? prev : 'skillhub'));
+            }
+          });
       });
     return () => {
       cancelled = true;
@@ -772,6 +788,7 @@ export function useSkillsPage() {
     mpCategoriesLoading,
     marketBrowseProvider,
     setMarketBrowseProvider,
+    registeredProviders,
     builtinTabStats,
     userTabStats,
     detailEnabled,

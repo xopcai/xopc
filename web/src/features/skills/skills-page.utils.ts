@@ -1,6 +1,7 @@
 import type { SkillCatalogEntry, SkillInstallSpecApi } from '@/features/skills/skill.types';
 
 const SKILLHUB_PUBLIC_ORIGIN = 'https://skillhub.cn';
+const CLAWHUB_PUBLIC_ORIGIN = 'https://clawhub.ai';
 
 /**
  * Public SkillHub web URL for a marketplace row `id` (canonical slug, e.g. `self-improving-agent` or `team--skill`).
@@ -10,6 +11,27 @@ export function skillHubPublicSkillPageUrl(canonicalSlug: string): string | null
   const id = canonicalSlug.trim();
   if (!id) return null;
   return `${SKILLHUB_PUBLIC_ORIGIN}/skills/${encodeURIComponent(id)}`;
+}
+
+/**
+ * Public ClawHub web URL for a marketplace skill slug.
+ * Site shape: `https://clawhub.ai/<owner>/<slug>` — but since we don't have owner in list items,
+ * we use the direct slug route which ClawHub resolves.
+ */
+export function clawHubPublicSkillPageUrl(canonicalSlug: string): string | null {
+  const id = canonicalSlug.trim();
+  if (!id) return null;
+  return `${CLAWHUB_PUBLIC_ORIGIN}/${encodeURIComponent(id)}`;
+}
+
+/** Get the public web URL for a skill row based on the active marketplace provider. */
+export function marketplacePublicSkillUrl(
+  provider: string | null,
+  slug: string,
+): string | null {
+  if (provider === 'skillhub') return skillHubPublicSkillPageUrl(slug);
+  if (provider === 'clawhub') return clawHubPublicSkillPageUrl(slug);
+  return null;
 }
 
 export function interpolate(template: string, params: Record<string, string | number>): string {

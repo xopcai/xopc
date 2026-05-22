@@ -1,0 +1,9 @@
+{
+  "id": "skillhub",
+  "name": "SkillHub Marketplace",
+  "description": "SkillHub (skillhub.cn) skills marketplace adapter — browse, search and install skills from skillhub.cn",
+  "version": "1.0.0",
+  "kind": "utility",
+  "main": "index.ts",
+  "enabledByDefault": true
+}
