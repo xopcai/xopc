@@ -8,6 +8,7 @@ export type ShareItem = {
   fileName: string;
   workspaceRelativePath: string;
   shareUrl: string;
+  lanUrl: string | null;
   reachability: ShareReachability;
   createdAt: string;
   expiresAt: string;

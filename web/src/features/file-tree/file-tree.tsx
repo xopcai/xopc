@@ -12,7 +12,7 @@ export interface TreeEntry {
   children?: TreeEntry[];
 }
 
-export type FileTreeAction = 'preview' | 'download' | 'copyPath';
+export type FileTreeAction = 'preview' | 'download' | 'copyPath' | 'share';
 
 export function fileExtColor(name: string): string {
   const lower = name.toLowerCase();
@@ -28,7 +28,7 @@ function ActionMenu({
   onAction,
 }: {
   entry: TreeEntry;
-  labels: { preview: string; download: string; copyPath: string };
+  labels: { preview: string; download: string; copyPath: string; share: string };
   onAction: (action: FileTreeAction, entry: TreeEntry) => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -100,6 +100,17 @@ function ActionMenu({
               role="menuitem"
               className="block w-full px-3 py-1.5 text-left text-sm text-fg hover:bg-surface-hover"
               onClick={() => {
+                onAction('share', entry);
+                close();
+              }}
+            >
+              {labels.share}
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              className="block w-full px-3 py-1.5 text-left text-sm text-fg hover:bg-surface-hover"
+              onClick={() => {
                 onAction('copyPath', entry);
                 close();
               }}
@@ -128,7 +139,7 @@ function TreeRow({
   onSelect: (path: string, isDir: boolean) => void;
   onExpandDir?: (dirPath: string) => void;
   onAction?: (action: FileTreeAction, entry: TreeEntry) => void;
-  actionLabels?: { preview: string; download: string; copyPath: string };
+  actionLabels?: { preview: string; download: string; copyPath: string; share: string };
 }) {
   /** Collapsed by default; chevron must match visibility of children (incl. lazy-loaded empty → []). */
   const [open, setOpen] = useState(false);
@@ -216,7 +227,7 @@ export function FileTree({
   onSelectFile: (path: string) => void;
   onExpandDir?: (dirPath: string) => void;
   onAction?: (action: FileTreeAction, entry: TreeEntry) => void;
-  actionLabels?: { preview: string; download: string; copyPath: string };
+  actionLabels?: { preview: string; download: string; copyPath: string; share: string };
   emptyHint: string;
 }) {
   const handleSelect = (path: string, isDir: boolean) => {

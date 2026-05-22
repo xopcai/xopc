@@ -258,6 +258,7 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
         fileName: r.fileName,
         workspaceRelativePath: r.workspaceRelativePath,
         shareUrl: resolved.shareUrl,
+        lanUrl: resolved.lanUrl,
         reachability: resolved.reachability,
         createdAt: r.createdAt,
         expiresAt: r.expiresAt,

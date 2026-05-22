@@ -21,6 +21,8 @@ import {
   shouldReadWorkspaceFileAsBase64Path,
 } from '@/features/file-preview';
 import { showComposerNotification } from '@/features/chat/composer-notifications';
+import { ShareLinkDialog } from '@/features/shares/share-link-dialog';
+import { useShareLink } from '@/features/shares/use-share-link';
 import { useWorkspaceTree } from '@/features/workspace/use-workspace-tree';
 import { cn } from '@/lib/cn';
 import { messages } from '@/i18n/messages';
@@ -61,6 +63,9 @@ export const WorkspaceColumn = memo(function WorkspaceColumn() {
       : workspaceAgentId.trim()
         ? { agentId: workspaceAgentId.trim() }
         : undefined;
+
+  const { dialogOpen, loading: shareLoading, result, error: shareError, createShareLink, handleOpenChange } =
+    useShareLink();
 
   const onWorkspaceResizePointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
@@ -170,11 +175,17 @@ export const WorkspaceColumn = memo(function WorkspaceColumn() {
             /* ignore */
           }
           break;
+        case 'share':
+          await createShareLink({
+            path: entry.path,
+            ...workspaceReadOpts,
+          });
+          break;
         default:
           break;
       }
     },
-    [m.workspace.pathCopied, setPreviewPath, workspaceReadOpts],
+    [createShareLink, m.workspace.pathCopied, setPreviewPath, workspaceReadOpts],
   );
 
   return (
@@ -279,12 +290,21 @@ export const WorkspaceColumn = memo(function WorkspaceColumn() {
                 preview: m.workspace.preview,
                 download: m.workspace.download,
                 copyPath: m.workspace.copyPath,
+                share: m.workspace.shareLink,
               }}
               emptyHint={m.workspace.emptyDir}
             />
           </div>
         ) : null}
       </aside>
+
+      <ShareLinkDialog
+        open={dialogOpen}
+        onOpenChange={handleOpenChange}
+        loading={shareLoading}
+        error={shareError}
+        result={result}
+      />
     </>
   );
 });
