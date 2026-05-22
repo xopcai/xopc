@@ -9,9 +9,6 @@
 
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:net';
-import { createLogger } from '../utils/logger.js';
-
-const log = createLogger('PortInspect');
 
 // ─── Types ───
 

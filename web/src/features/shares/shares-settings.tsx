@@ -113,7 +113,7 @@ export function SharesSettingsPanel() {
         <p className="mt-1 text-sm text-fg-muted">{t.subtitle}</p>
       </div>
 
-      <CreateShareSection t={t} language={language} onCreated={() => void mutate()} />
+      <CreateShareSection t={t} onCreated={() => void mutate()} />
 
       <SettingsFormSection>
         <div className="mb-3 flex items-center justify-between">
@@ -127,7 +127,7 @@ export function SharesSettingsPanel() {
             <Button
               type="button"
               variant="ghost"
-              size="sm"
+              className="px-2 py-1"
               onClick={() => void mutate()}
               disabled={isLoading}
             >
@@ -153,7 +153,7 @@ export function SharesSettingsPanel() {
         ) : error ? (
           <div className="flex items-center gap-2 text-sm text-red-600 dark:text-red-400">
             <span>{t.error}</span>
-            <Button type="button" variant="ghost" size="sm" onClick={() => void mutate()}>
+            <Button type="button" variant="ghost" className="px-2 py-1 text-xs" onClick={() => void mutate()}>
               {t.retry}
             </Button>
           </div>
@@ -186,11 +186,9 @@ export function SharesSettingsPanel() {
 
 function CreateShareSection({
   t,
-  language,
   onCreated,
 }: {
   t: ReturnType<typeof messages>['sharesSettings'];
-  language: string;
   onCreated: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -332,7 +330,7 @@ function CreateShareSection({
               <code className="flex-1 break-all rounded bg-surface-hover px-2 py-1 text-xs text-fg">
                 {result.shareUrl}
               </code>
-              <Button type="button" variant="secondary" size="sm" onClick={() => void handleCopy()}>
+              <Button type="button" variant="secondary" className="px-2 py-1 text-xs" onClick={() => void handleCopy()}>
                 {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
                 {copied ? t.copied : t.copyUrl}
               </Button>
@@ -434,13 +432,13 @@ function ShareRow({
         <div className="flex shrink-0 items-center gap-1">
           {isActive && (
             <>
-              <Button type="button" variant="ghost" size="sm" onClick={() => void handleCopy()}>
+              <Button type="button" variant="ghost" className="px-2 py-1" onClick={() => void handleCopy()}>
                 {copied ? <Check className="size-3.5 text-emerald-500" /> : <Copy className="size-3.5" />}
               </Button>
               <Button
                 type="button"
                 variant="ghost"
-                size="sm"
+                className="px-2 py-1"
                 onClick={() => void handleExtend()}
                 disabled={extending}
                 title={t.extend}
@@ -450,10 +448,9 @@ function ShareRow({
               <Button
                 type="button"
                 variant="ghost"
-                size="sm"
+                className="px-2 py-1 text-red-600 hover:text-red-700 dark:text-red-400"
                 onClick={() => setRevokeOpen(true)}
                 disabled={revoking}
-                className="text-red-600 hover:text-red-700 dark:text-red-400"
               >
                 {revoking ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
               </Button>
@@ -507,10 +504,9 @@ function CleanExpiredButton({
         <Button
           type="button"
           variant="secondary"
-          size="sm"
           disabled={cleaning}
           onClick={() => setConfirmOpen(true)}
-          className="border-danger/40 text-danger hover:bg-danger/10"
+          className="border-danger/40 px-2 py-1 text-xs text-danger hover:bg-danger/10"
         >
           {cleaning ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
           {t.cleanExpired}
