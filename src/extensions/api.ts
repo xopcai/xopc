@@ -39,6 +39,7 @@ import { EventEmitter } from 'events';
 import { createLogger } from '../utils/logger.js';
 import { TypedEventBus } from './typed-event-bus.js';
 import { ExtensionRegistryImpl } from './loader.js';
+import { registerMarketplaceAdapter as _registerMarketplaceAdapter } from '../agent/skills/marketplace/registry.js';
 
 export class ExtensionApiImpl implements ExtensionApi {
   private _tools: Map<string, AgentTool> = new Map();
@@ -332,6 +333,17 @@ export class ExtensionApiImpl implements ExtensionApi {
    */
   registerProviderPlugin(plugin: import('./types/providers.js').ProviderPlugin): void {
     this.registerProvider(plugin);
+  }
+
+  /**
+   * Register a skills marketplace adapter so it appears in the UI provider picker.
+   */
+  registerMarketplaceAdapter(registration: {
+    adapter: import('../agent/skills/marketplace/adapter.types.js').SkillsMarketplaceAdapter;
+    displayName?: string;
+  }): void {
+    _registerMarketplaceAdapter(registration);
+    this._logger.info(`Extension registered marketplace adapter: ${registration.adapter.id}`);
   }
 
   registerFlag(_name: string, _config: FlagConfig): void {

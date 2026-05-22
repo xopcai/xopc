@@ -12,7 +12,11 @@ import type { SkillMarkdownPreviewPayload } from '../../../types.js';
 
 const DEFAULT_STORE_BASE = 'https://store.xopc.ai';
 
-export type SkillsMarketplaceProvider = 'store' | 'skillhub';
+/**
+ * Marketplace provider identifier. Dynamic — extensions can register additional providers
+ * via `api.registerMarketplaceAdapter()`. Built-in values: 'store', 'skillhub', 'clawhub'.
+ */
+export type SkillsMarketplaceProvider = string;
 
 export interface SkillsStoreListParams {
   q?: string;
@@ -335,14 +339,14 @@ export function skillIdForMarketplaceInstall(packageName: string): string | unde
 export interface UnifiedMarketplaceListResponse {
   items: MarketplacePackageListItem[];
   meta: { page: number; pageSize: number; total: number; totalPages: number };
-  provider: SkillsMarketplaceProvider;
+  provider: string;
 }
 
 /**
  * Unified marketplace package detail response.
  */
 export interface UnifiedMarketplacePackageDetail extends MarketplacePackageDetail {
-  provider: SkillsMarketplaceProvider;
+  provider: string;
   /** When set (e.g. SkillHub SKILL.md), gateway console renders structured meta + body like installed skills. */
   skillDocPreview?: SkillMarkdownPreviewPayload;
   /** SkillHub-specific fields */
