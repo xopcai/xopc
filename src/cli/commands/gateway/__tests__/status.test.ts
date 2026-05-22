@@ -46,6 +46,19 @@ vi.mock('../../../utils/gateway-client.js', () => ({
   resolveGatewayUrl: vi.fn(() => 'http://127.0.0.1:18790'),
 }));
 
+vi.mock('../../../../daemon/service.js', () => ({
+  resolveGatewayService: vi.fn().mockResolvedValue({
+    label: 'ai.xopc.gateway',
+    loadedText: 'LaunchAgent (loaded)',
+    notLoadedText: 'not installed',
+    isLoaded: vi.fn().mockResolvedValue(false),
+    readRuntime: vi.fn().mockResolvedValue({ status: 'stopped' }),
+    readCommand: vi.fn().mockResolvedValue(null),
+  }),
+  isDaemonAvailableAsync: vi.fn().mockResolvedValue(true),
+  getPlatformName: vi.fn(() => 'macOS (LaunchAgent)'),
+}));
+
 describe('Gateway Status Command', () => {
   let consoleLogSpy: ReturnType<typeof vi.spyOn>;
   let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
@@ -74,7 +87,7 @@ describe('Gateway Status Command', () => {
     it('should create command with correct name and description', () => {
       const cmd = createStatusCommand();
       expect(cmd.name()).toBe('status');
-      expect(cmd.description()).toBe('Check gateway status with connectivity probe');
+      expect(cmd.description()).toBe('Check gateway status (service + connectivity)');
     });
   });
 
@@ -106,7 +119,7 @@ describe('Gateway Status Command', () => {
         gateway: {
           port: 18790,
           auth: {
-            token: 'test-token',
+            token: 'test-token-1234567890',
           },
         },
       };
@@ -118,12 +131,12 @@ describe('Gateway Status Command', () => {
       const cmd = createStatusCommand();
       await cmd.parseAsync(['node', 'test']);
 
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('running'));
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Port: 18790'));
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Gateway Status'));
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('18790'));
       expect(processExitSpy).toHaveBeenCalledWith(0);
     });
 
-    it('should display token preview when available', async () => {
+    it('should display token configured when available', async () => {
       const mockConfig = {
         gateway: {
           port: 18790,
@@ -140,8 +153,7 @@ describe('Gateway Status Command', () => {
       const cmd = createStatusCommand();
       await cmd.parseAsync(['node', 'test']);
 
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('abcdef12'));
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('567890'));
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('configured'));
     });
 
     it('should use default port when not configured', async () => {
