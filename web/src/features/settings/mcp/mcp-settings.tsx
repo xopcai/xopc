@@ -1,43 +1,24 @@
-import { Loader2, Plus, Plug, Trash2, Zap, Cable } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Cable, Loader2, Plus, Plug } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
 import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/settings/settings-form-section';
 import {
   emptyMcpServerRow,
-  fetchMcpServerTools,
   buildMcpServerConfigFromRow,
   normalizeMcpSettingsFromConfig,
   patchMcpSettings,
   testMcpServer,
-  type McpServerRow,
   type McpSettingsState,
-  type McpTransportKind,
 } from '@/features/settings/mcp/mcp-config-api';
+import { McpServerCard, mcpServerCardKey } from '@/features/settings/mcp/mcp-server-card';
+import { McpToolsListDialog, type McpToolInfo } from '@/features/settings/mcp/mcp-tools-list-dialog';
 import { settingsInputFocusClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
 import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
-
-function Field({
-  label,
-  description,
-  children,
-}: {
-  label: string;
-  description?: string;
-  children: ReactNode;
-}) {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <div className="text-sm font-medium text-fg">{label}</div>
-      {children}
-      {description ? <p className="text-xs leading-relaxed text-fg-subtle">{description}</p> : null}
-    </div>
-  );
-}
 
 function inputClassName(): string {
   return cn(
@@ -47,7 +28,11 @@ function inputClassName(): string {
   );
 }
 
-const TRANSPORTS: McpTransportKind[] = ['stdio', 'sse', 'streamable-http'];
+type ServerToolsState =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'ok'; tools: McpToolInfo[] }
+  | { status: 'error'; message: string };
 
 export function McpSettingsPanel() {
   const language = useLocaleStore((s) => s.language);
@@ -62,7 +47,11 @@ export function McpSettingsPanel() {
   const [error, setError] = useState<string | null>(null);
   const [saveOk, setSaveOk] = useState(false);
   const [testingId, setTestingId] = useState<string | null>(null);
-  const [testResults, setTestResults] = useState<Record<string, string>>({});
+  const [serverTools, setServerTools] = useState<Record<string, ServerToolsState>>({});
+  const [toolsDialog, setToolsDialog] = useState<{ serverId: string; tools: McpToolInfo[] } | null>(
+    null,
+  );
+  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(() => new Set());
   const dirtyRef = useRef(false);
 
   const { data, error: swrError, isLoading, mutate } = useGatewayConfigSwr(hasToken);
@@ -78,12 +67,14 @@ export function McpSettingsPanel() {
       setForm(null);
       setBaseline(null);
       dirtyRef.current = false;
+      setExpandedKeys(new Set());
       return;
     }
     if (parsed === null) return;
     if (!dirtyRef.current) {
       setForm(parsed);
       setBaseline(parsed);
+      setExpandedKeys(new Set());
     }
   }, [hasToken, parsed]);
 
@@ -96,26 +87,78 @@ export function McpSettingsPanel() {
     return JSON.stringify(form) !== JSON.stringify(baseline);
   }, [form, baseline]);
 
-  const updateServer = useCallback((index: number, patch: Partial<McpServerRow>) => {
+  const toggleExpanded = useCallback((key: string) => {
+    setExpandedKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }, []);
+
+  const updateServer = useCallback((index: number, patch: Partial<McpSettingsState['servers'][number]>) => {
     dirtyRef.current = true;
     setForm((f) => {
       if (!f) return f;
       const servers = [...f.servers];
-      servers[index] = { ...servers[index]!, ...patch };
+      const prev = servers[index]!;
+      servers[index] = { ...prev, ...patch };
+      if (patch.id && patch.id !== prev.id) {
+        const prevKey = mcpServerCardKey(prev, index);
+        const nextKey = mcpServerCardKey({ ...prev, ...patch }, index);
+        setServerTools((st) => {
+          const next = { ...st };
+          if (prevKey !== nextKey && next[prevKey]) {
+            next[nextKey] = next[prevKey]!;
+            delete next[prevKey];
+          }
+          delete next[prev.id];
+          return next;
+        });
+        setExpandedKeys((keys) => {
+          if (!keys.has(prevKey)) return keys;
+          const next = new Set(keys);
+          next.delete(prevKey);
+          next.add(nextKey);
+          return next;
+        });
+      }
       return { ...f, servers };
     });
   }, []);
 
   const addServer = useCallback(() => {
     dirtyRef.current = true;
-    setForm((f) =>
-      f ? { ...f, servers: [...f.servers, emptyMcpServerRow(`server-${f.servers.length + 1}`)] } : f,
-    );
+    setForm((f) => {
+      if (!f) return f;
+      const nextIndex = f.servers.length;
+      setExpandedKeys((keys) => new Set(keys).add(`draft-${nextIndex}`));
+      return { ...f, servers: [...f.servers, emptyMcpServerRow(`server-${nextIndex + 1}`)] };
+    });
   }, []);
 
   const removeServer = useCallback((index: number) => {
     dirtyRef.current = true;
-    setForm((f) => (f ? { ...f, servers: f.servers.filter((_, i) => i !== index) } : f));
+    setForm((f) => {
+      if (!f) return f;
+      const removed = f.servers[index];
+      if (removed) {
+        const key = mcpServerCardKey(removed, index);
+        setExpandedKeys((keys) => {
+          const next = new Set(keys);
+          next.delete(key);
+          return next;
+        });
+        if (removed.id) {
+          setServerTools((st) => {
+            const next = { ...st };
+            delete next[removed.id];
+            return next;
+          });
+        }
+      }
+      return { ...f, servers: f.servers.filter((_, i) => i !== index) };
+    });
   }, []);
 
   const save = useCallback(async () => {
@@ -130,6 +173,7 @@ export function McpSettingsPanel() {
       setForm(next);
       dirtyRef.current = false;
       setSaveOk(true);
+      setExpandedKeys(new Set());
       void mutate();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -138,34 +182,31 @@ export function McpSettingsPanel() {
     }
   }, [form, mutate, saving]);
 
-  const runTest = useCallback(
-    async (serverId: string, row?: McpServerRow) => {
-      if (!serverId.trim()) return;
-      setTestingId(serverId);
-      setError(null);
-      try {
-        const serverConfig = row ? buildMcpServerConfigFromRow(row) : undefined;
-        const result = await testMcpServer(serverId.trim(), serverConfig);
-        const tools = await fetchMcpServerTools(serverId.trim()).catch(() =>
-          result.tools.map((name) => ({ name })),
-        );
-        const preview = tools.slice(0, 8).map((tool) => tool.name).join(', ');
-        const suffix = tools.length > 8 ? ` (+${tools.length - 8} more)` : '';
-        setTestResults((prev) => ({
-          ...prev,
-          [serverId]: `${result.toolCount} tools: ${preview}${suffix}`,
-        }));
-      } catch (e) {
-        setTestResults((prev) => ({
-          ...prev,
-          [serverId]: e instanceof Error ? e.message : String(e),
-        }));
-      } finally {
-        setTestingId(null);
-      }
-    },
-    [],
-  );
+  const runTest = useCallback(async (serverId: string, row?: McpSettingsState['servers'][number]) => {
+    if (!serverId.trim()) return;
+    setTestingId(serverId);
+    setError(null);
+    setServerTools((prev) => ({ ...prev, [serverId]: { status: 'loading' } }));
+    try {
+      const serverConfig = row ? buildMcpServerConfigFromRow(row) : undefined;
+      const result = await testMcpServer(serverId.trim(), serverConfig);
+      setServerTools((prev) => ({
+        ...prev,
+        [serverId]: {
+          status: 'ok',
+          tools: result.tools,
+        },
+      }));
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      setServerTools((prev) => ({
+        ...prev,
+        [serverId]: { status: 'error', message },
+      }));
+    } finally {
+      setTestingId(null);
+    }
+  }, []);
 
   if (!hasToken) {
     return (
@@ -205,7 +246,8 @@ export function McpSettingsPanel() {
 
       <SettingsFormSection>
         <SettingsFormSectionHeader icon={Cable} title={t.globalTitle} subtitle={t.globalHint} />
-        <Field label={t.idleTtlLabel} description={t.idleTtlHint}>
+        <div className="flex flex-col gap-1.5">
+          <div className="text-sm font-medium text-fg">{t.idleTtlLabel}</div>
           <input
             type="number"
             min={0}
@@ -225,115 +267,36 @@ export function McpSettingsPanel() {
               );
             }}
           />
-        </Field>
+          <p className="text-xs leading-relaxed text-fg-subtle">{t.idleTtlHint}</p>
+        </div>
       </SettingsFormSection>
 
       <SettingsFormSection>
         <SettingsFormSectionHeader icon={Plug} title={t.serversTitle} subtitle={t.serversHint} />
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-3">
           {form.servers.length === 0 ? (
             <p className="text-sm text-fg-muted">{t.serversEmpty}</p>
           ) : null}
-          {form.servers.map((row, index) => (
-            <div
-              key={`${row.id}-${index}`}
-              className="rounded-xl border border-edge bg-surface-panel p-4"
-            >
-              <div className="mb-3 flex flex-wrap items-center gap-2">
-                <Plug className="size-4 text-accent" aria-hidden />
-                <input
-                  className={cn(inputClassName(), 'max-w-xs font-medium')}
-                  value={row.id}
-                  placeholder={t.serverIdPlaceholder}
-                  onChange={(e) => updateServer(index, { id: e.target.value })}
-                />
-                <select
-                  className={inputClassName()}
-                  value={row.transport}
-                  onChange={(e) =>
-                    updateServer(index, { transport: e.target.value as McpTransportKind })
-                  }
-                >
-                  {TRANSPORTS.map((kind) => (
-                    <option key={kind} value={kind}>
-                      {t.transportLabels[kind]}
-                    </option>
-                  ))}
-                </select>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  disabled={!row.id.trim() || testingId === row.id}
-                  onClick={() => void runTest(row.id, row)}
-                >
-                  {testingId === row.id ? (
-                    <Loader2 className="size-4 animate-spin" aria-hidden />
-                  ) : (
-                    <Zap className="size-4" aria-hidden />
-                  )}
-                  {t.testConnection}
-                </Button>
-                <Button type="button" variant="ghost" onClick={() => removeServer(index)}>
-                  <Trash2 className="size-4" aria-hidden />
-                  {t.removeServer}
-                </Button>
-              </div>
+          {form.servers.map((row, index) => {
+            const cardKey = mcpServerCardKey(row, index);
+            const toolState = serverTools[row.id] ?? { status: 'idle' as const };
 
-              {row.transport === 'stdio' ? (
-                <div className="grid gap-3 md:grid-cols-2">
-                  <Field label={t.commandLabel}>
-                    <input
-                      className={inputClassName()}
-                      value={row.command}
-                      onChange={(e) => updateServer(index, { command: e.target.value })}
-                    />
-                  </Field>
-                  <Field label={t.argsLabel} description={t.argsHint}>
-                    <input
-                      className={inputClassName()}
-                      value={row.argsText}
-                      onChange={(e) => updateServer(index, { argsText: e.target.value })}
-                    />
-                  </Field>
-                  <Field label={t.cwdLabel}>
-                    <input
-                      className={inputClassName()}
-                      value={row.cwd}
-                      onChange={(e) => updateServer(index, { cwd: e.target.value })}
-                    />
-                  </Field>
-                  <Field label={t.envLabel} description={t.envHint}>
-                    <textarea
-                      className={cn(inputClassName(), 'min-h-[4rem] font-mono text-xs')}
-                      value={row.envJson}
-                      onChange={(e) => updateServer(index, { envJson: e.target.value })}
-                    />
-                  </Field>
-                </div>
-              ) : (
-                <div className="grid gap-3 md:grid-cols-2">
-                  <Field label={t.urlLabel}>
-                    <input
-                      className={inputClassName()}
-                      value={row.url}
-                      onChange={(e) => updateServer(index, { url: e.target.value })}
-                    />
-                  </Field>
-                  <Field label={t.headersLabel} description={t.headersHint}>
-                    <textarea
-                      className={cn(inputClassName(), 'min-h-[4rem] font-mono text-xs')}
-                      value={row.headersJson}
-                      onChange={(e) => updateServer(index, { headersJson: e.target.value })}
-                    />
-                  </Field>
-                </div>
-              )}
-
-              {testResults[row.id] ? (
-                <p className="mt-3 text-xs text-fg-subtle">{testResults[row.id]}</p>
-              ) : null}
-            </div>
-          ))}
+            return (
+              <McpServerCard
+                key={cardKey}
+                row={row}
+                expanded={expandedKeys.has(cardKey)}
+                onToggle={() => toggleExpanded(cardKey)}
+                t={t}
+                testing={testingId === row.id}
+                toolState={toolState}
+                onUpdate={(patch) => updateServer(index, patch)}
+                onRemove={() => removeServer(index)}
+                onTest={() => void runTest(row.id, row)}
+                onViewTools={(tools) => setToolsDialog({ serverId: row.id, tools })}
+              />
+            );
+          })}
 
           <Button type="button" variant="ghost" className="self-start" onClick={addServer}>
             <Plus className="size-4" aria-hidden />
@@ -357,6 +320,8 @@ export function McpSettingsPanel() {
             setForm(structuredClone(baseline));
             setSaveOk(false);
             setError(null);
+            setServerTools({});
+            setExpandedKeys(new Set());
           }}
         >
           {t.discard}
@@ -364,6 +329,24 @@ export function McpSettingsPanel() {
       </div>
 
       <p className="text-xs text-fg-subtle">{t.disableHint}</p>
+
+      {toolsDialog ? (
+        <McpToolsListDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setToolsDialog(null);
+          }}
+          serverId={toolsDialog.serverId}
+          title={t.toolsDialogTitle}
+          subtitle={t.toolsDialogSubtitle}
+          searchPlaceholder={t.toolsDialogSearchPlaceholder}
+          searchEmptyLabel={t.toolsDialogSearchEmpty}
+          emptyLabel={t.toolsEmpty}
+          closeLabel={t.toolsDialogClose}
+          tools={toolsDialog.tools}
+          stripPrefix={`${toolsDialog.serverId.trim()}__`}
+        />
+      ) : null}
     </div>
   );
 }

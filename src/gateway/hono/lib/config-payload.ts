@@ -7,6 +7,8 @@ import {
   listChannelPlugins,
   syncChannelPluginsFromManager,
 } from '../../../channels/plugins/registry.js';
+import { normalizeConfiguredMcpServers } from '../../../config/mcp-config-normalize.js';
+import type { Config } from '../../../config/schema.js';
 import { bundledChannelPlugins } from '../../../generated/bundled-channel-plugins.js';
 import { getAllProviders, isProviderConfigured } from '../../../providers/index.js';
 import type { GatewayService } from '../../service.js';
@@ -18,6 +20,18 @@ import {
   agentModelRefToString,
 } from './agent-model.js';
 import { buildSafeProvidersConfigForWeb } from './safe-providers-config.js';
+
+/** MCP block for GET/PATCH `/api/config` (authenticated console editing). */
+export function buildSafeMcpConfigForWeb(config: Config) {
+  const mcp = config.mcp;
+  if (!mcp) {
+    return { servers: {} as Record<string, Record<string, unknown>> };
+  }
+  return {
+    ...(mcp.sessionIdleTtlMs !== undefined ? { sessionIdleTtlMs: mcp.sessionIdleTtlMs } : {}),
+    servers: normalizeConfiguredMcpServers(mcp.servers),
+  };
+}
 
 /** Sanitized config snapshot for GET/PATCH `/api/config` (matches persisted `service.currentConfig`). */
 export async function buildSafeWebConfigPayload(service: GatewayService) {
@@ -215,5 +229,6 @@ export async function buildSafeWebConfigPayload(service: GatewayService) {
     tts: config.messages?.tts,
     tools: safeToolsWebForGet(config),
     bindings: Array.isArray(config.bindings) ? config.bindings : [],
+    mcp: buildSafeMcpConfigForWeb(config),
   };
 }
