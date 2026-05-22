@@ -427,6 +427,19 @@ function HeartbeatConfigFields({
         {h.enable}
       </label>
 
+      <label className="flex cursor-pointer items-start gap-2 text-sm text-fg">
+        <input
+          type="checkbox"
+          className="ui-checkbox mt-0.5"
+          checked={form.includeSystemPromptSection}
+          onChange={(e) => update({ includeSystemPromptSection: e.target.checked })}
+        />
+        <span>
+          {h.includeSystemPromptSection}
+          <span className="mt-1 block text-xs text-fg-subtle">{h.includeSystemPromptSectionHint}</span>
+        </span>
+      </label>
+
       <ScheduleField
         kind="interval"
         label={h.interval}

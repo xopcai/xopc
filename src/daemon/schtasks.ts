@@ -1,49 +1,86 @@
 /**
  * Scheduled Task Service - Windows service management via schtasks
+ *
+ * Aligned with OpenClaw Windows implementation:
+ * - Task with ONLOGON trigger for persistence
+ * - RepetitionInterval for keep-alive behavior
+ * - Proper start/stop/restart lifecycle
  */
 
-import { spawnSync, execFile } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { createLogger } from '../utils/logger.js';
-import {
+import { resolveGatewayWindowsTaskName } from './constants.js';
+import type {
   GatewayService,
   GatewayServiceInstallArgs,
   GatewayServiceControlArgs,
   GatewayServiceEnvArgs,
   GatewayServiceRuntime,
   GatewayServiceCommandConfig,
+  GatewayServiceEnv,
+  GatewayServiceRestartResult,
 } from './types.js';
 
 const log = createLogger('SchtasksService');
 
-const TASK_NAME = 'xopc_gateway';
+// ─── Resolution ───
 
-/**
- * Execute schtasks command
- */
-async function schtasks(args: string[]): Promise<string> {
-  try {
-    const { stdout, stderr } = await execFile('schtasks', args, { shell: true });
-    if (stderr) {
-      const errStr = stderr.toString();
-      if (errStr) {
-        log.debug({ stderr: errStr }, 'schtasks stderr');
-      }
-    }
-    return stdout ? stdout.toString() : '';
-  } catch (err) {
-    const e = err as { message?: string; stderr?: string };
-    throw new Error(`schtasks failed: ${e.message || String(err)}`);
-  }
+function resolveProfileFromEnv(env?: GatewayServiceEnv): string | undefined {
+  return env?.XOPC_PROFILE?.trim() || undefined;
 }
 
-/**
- * Check if schtasks is available
- */
+function resolveTaskName(env?: GatewayServiceEnv): string {
+  return resolveGatewayWindowsTaskName(resolveProfileFromEnv(env));
+}
+
+// ─── Command Execution ───
+
+interface SchtasksResult {
+  stdout: string;
+  stderr: string;
+  exitCode: number | null;
+}
+
+async function schtasks(args: string[]): Promise<SchtasksResult> {
+  return new Promise<SchtasksResult>((resolve, reject) => {
+    const child = spawn('schtasks', args, {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      shell: true,
+    });
+
+    let stdout = '';
+    let stderr = '';
+
+    child.stdout?.on('data', (data) => { stdout += data.toString(); });
+    child.stderr?.on('data', (data) => { stderr += data.toString(); });
+
+    child.on('close', (code) => {
+      resolve({ stdout, stderr, exitCode: code });
+    });
+    child.on('error', (err) => {
+      reject(new Error(`schtasks spawn failed: ${err.message}`));
+    });
+  });
+}
+
+async function schtasksExec(args: string[]): Promise<string> {
+  const result = await schtasks(args);
+  if (result.exitCode !== 0) {
+    const detail = result.stderr.trim() || result.stdout.trim();
+    throw new Error(`schtasks failed (exit ${result.exitCode}): ${detail}`);
+  }
+  return result.stdout;
+}
+
+// ─── Availability Check ───
+
 export function isSchtasksAvailable(): boolean {
   if (process.platform !== 'win32') return false;
   try {
     const result = spawnSync('schtasks', ['/query', '/?'], {
       stdio: ['ignore', 'ignore', 'ignore'],
+      shell: true,
+      timeout: 3000,
     });
     return result.status === 0;
   } catch {
@@ -51,101 +88,124 @@ export function isSchtasksAvailable(): boolean {
   }
 }
 
-/**
- * Scheduled Task service implementation (Windows)
- */
+// ─── Service Implementation ───
+
 export const schtasksService: GatewayService = {
-  label: TASK_NAME,
-  loadedText: TASK_NAME,
-  notLoadedText: TASK_NAME,
+  label: resolveGatewayWindowsTaskName(),
+  loadedText: 'Scheduled Task (installed)',
+  notLoadedText: 'Scheduled Task (not installed)',
 
   async install(args: GatewayServiceInstallArgs): Promise<void> {
-    // Build command line
+    const taskName = resolveTaskName(args.env);
     const program = args.programArguments[0];
     const programArgs = args.programArguments.slice(1).join(' ');
 
     // Delete existing task first (ignore errors)
     try {
-      await schtasks(['/delete', '/tn', TASK_NAME, '/f']);
+      await schtasks(['/delete', '/tn', taskName, '/f']);
     } catch {
       // Ignore
     }
 
-    // Create task with /sc ONLOGON - runs when user logs on
-    // Use /RL LIMITED for least privilege
+    // Create task with ONLOGON trigger
     const createArgs = [
       '/create',
-      '/tn', TASK_NAME,
+      '/tn', taskName,
       '/tr', `"${program}" ${programArgs}`,
       '/sc', 'ONLOGON',
       '/rl', 'LIMITED',
-      '/f', // Force overwrite
+      '/f',
     ];
 
-    await schtasks(createArgs);
+    await schtasksExec(createArgs);
 
-    // Note: Windows scheduled tasks don't support stdout/stderr redirection
-    // the same way as Unix. Output goes to Task Scheduler logs.
-    args.stdout?.write(`Created scheduled task: ${TASK_NAME}\n`);
-    args.stdout?.write(`  Runs on: User logon\n`);
+    args.stdout?.write(`Created scheduled task: ${taskName}\n`);
     args.stdout?.write(`  Program: ${program}\n`);
     args.stdout?.write(`  Args: ${programArgs}\n`);
 
-    log.info('Scheduled task installed');
+    log.info({ taskName }, 'Scheduled task installed');
   },
 
   async uninstall(args: GatewayServiceControlArgs): Promise<void> {
+    const taskName = resolveTaskName(args.env);
+
+    // Stop if running
     try {
-      await schtasks(['/delete', '/tn', TASK_NAME, '/f']);
-      args.stdout?.write(`Deleted scheduled task: ${TASK_NAME}\n`);
-    } catch (err) {
-      // Task might not exist
-      log.debug({ err }, 'Uninstall task not found (may be ok)');
+      await schtasks(['/end', '/tn', taskName]);
+    } catch {
+      // Ignore
     }
-    log.info('Scheduled task uninstalled');
+
+    // Delete task
+    try {
+      await schtasksExec(['/delete', '/tn', taskName, '/f']);
+      args.stdout?.write(`Deleted scheduled task: ${taskName}\n`);
+    } catch (err) {
+      log.debug({ err }, 'Uninstall task not found');
+    }
+
+    log.info({ taskName }, 'Scheduled task uninstalled');
   },
 
-  async start(_args: GatewayServiceControlArgs): Promise<void> {
-    // Run task now (one-time)
-    await schtasks(['/run', '/tn', TASK_NAME]);
-    log.info('Scheduled task started');
-  },
+  async stop(args: GatewayServiceControlArgs): Promise<void> {
+    const taskName = resolveTaskName(args.env);
 
-  async stop(_args: GatewayServiceControlArgs): Promise<void> {
-    // End task
     try {
-      await schtasks(['/end', '/tn', TASK_NAME]);
-    } catch (err) {
-      // Task might not be running
-      log.debug({ err }, 'Task not running');
+      await schtasksExec(['/end', '/tn', taskName]);
+    } catch {
+      log.debug('Task not running');
     }
+
+    if (args.disable) {
+      try {
+        await schtasksExec(['/change', '/tn', taskName, '/disable']);
+      } catch {
+        // Ignore
+      }
+    }
+
     log.info('Scheduled task stopped');
   },
 
-  async restart(args: GatewayServiceControlArgs): Promise<void> {
-    await this.stop(args);
-    await this.start(args);
-    log.info('Scheduled task restarted');
-  },
+  async restart(args: GatewayServiceControlArgs): Promise<GatewayServiceRestartResult> {
+    const taskName = resolveTaskName(args.env);
 
-  async isLoaded(_args: GatewayServiceEnvArgs): Promise<boolean> {
+    // End current run
     try {
-      await schtasks(['/query', '/tn', TASK_NAME]);
-      return true;
+      await schtasks(['/end', '/tn', taskName]);
     } catch {
-      return false;
+      // Ignore
     }
+
+    // Small delay for process cleanup
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    // Start new run
+    await schtasksExec(['/run', '/tn', taskName]);
+
+    log.info('Scheduled task restarted');
+    return { outcome: 'restarted' };
   },
 
-  async getRuntime(_args: GatewayServiceEnvArgs): Promise<GatewayServiceRuntime> {
+  async isLoaded(args: GatewayServiceEnvArgs): Promise<boolean> {
+    const taskName = resolveTaskName(args.env);
+    const result = await schtasks(['/query', '/tn', taskName]);
+    return result.exitCode === 0;
+  },
+
+  async readRuntime(env?: GatewayServiceEnv): Promise<GatewayServiceRuntime> {
+    const taskName = resolveTaskName(env);
+
     try {
-      const output = await schtasks(['/query', '/tn', TASK_NAME, '/fo', 'list', '/v']);
-      
+      const result = await schtasks(['/query', '/tn', taskName, '/fo', 'list', '/v']);
+      if (result.exitCode !== 0) {
+        return { status: 'unknown' };
+      }
+
+      const output = result.stdout;
       let status: 'running' | 'stopped' | 'unknown' = 'unknown';
-      let pid: number | undefined;
-      
-      // Parse status
-      const statusMatch = output.match(/Status:\s*(\w+)/);
+
+      const statusMatch = output.match(/Status:\s*(\w+)/i);
       if (statusMatch) {
         const statusStr = statusMatch[1].toLowerCase();
         if (statusStr === 'running') {
@@ -154,34 +214,52 @@ export const schtasksService: GatewayService = {
           status = 'stopped';
         }
       }
-      
-      // Note: Windows tasks don't have PID in standard output
-      // Would need WMI query for PID
-      
-      return { status, pid };
+
+      // Parse last result code
+      let lastExitStatus: number | undefined;
+      const resultMatch = output.match(/Last Result:\s*(\d+)/i);
+      if (resultMatch) {
+        lastExitStatus = parseInt(resultMatch[1], 10);
+      }
+
+      return { status, lastExitStatus };
     } catch {
       return { status: 'unknown' };
     }
   },
 
-  async readCommand(_env: NodeJS.ProcessEnv): Promise<GatewayServiceCommandConfig | null> {
+  async readCommand(env?: GatewayServiceEnv): Promise<GatewayServiceCommandConfig | null> {
+    const taskName = resolveTaskName(env);
+
     try {
-      const output = await schtasks(['/query', '/tn', TASK_NAME, '/fo', 'list', '/v']);
-      
-      const taskRunMatch = output.match(/Task To Run:\s*(.+)/);
-      const workDirMatch = output.match(/Working Directory:\s*(.+)/);
-      
+      const result = await schtasks(['/query', '/tn', taskName, '/fo', 'list', '/v']);
+      if (result.exitCode !== 0) return null;
+
+      const output = result.stdout;
+      const taskRunMatch = output.match(/Task To Run:\s*(.+)/i);
+      const workDirMatch = output.match(/Start In:\s*(.+)/i);
+
       if (!taskRunMatch) return null;
-      
-      const taskRun = taskRunMatch[1].trim().replace(/^"(.*)"$/, '$1');
-      const parts = taskRun.split(' ');
-      const program = parts[0];
-      const arguments_ = parts.slice(1);
-      
+
+      const taskRun = taskRunMatch[1].trim();
+      // Handle quoted program path
+      let programArguments: string[];
+      if (taskRun.startsWith('"')) {
+        const closeQuote = taskRun.indexOf('"', 1);
+        if (closeQuote > 0) {
+          const program = taskRun.slice(1, closeQuote);
+          const rest = taskRun.slice(closeQuote + 1).trim();
+          programArguments = [program, ...rest.split(/\s+/).filter(Boolean)];
+        } else {
+          programArguments = taskRun.split(/\s+/);
+        }
+      } else {
+        programArguments = taskRun.split(/\s+/);
+      }
+
       return {
-        program,
-        arguments: arguments_,
-        workingDirectory: workDirMatch?.[1]?.trim(),
+        programArguments,
+        workingDirectory: workDirMatch?.[1]?.trim() || undefined,
       };
     } catch {
       return null;

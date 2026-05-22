@@ -194,7 +194,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     maxSseConnections: service.currentConfig.gateway.maxSseConnections,
   };
 
-  registerAuthenticatedRoutes(authenticated, {
+  registerAuthenticatedRoutes(app, authenticated, {
     service,
     strictRateLimitMiddleware,
     sseConfig,

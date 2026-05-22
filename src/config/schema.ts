@@ -531,6 +531,40 @@ export const HeartbeatConfigSchema = z
 
 export const GatewayChannelConnectDeferModeSchema = z.enum(['auto', 'off', 'explicit']);
 
+export const TunnelConsentSchema = z.object({
+  version: z.string().min(1),
+  acceptedAt: z.string().min(1),
+});
+
+export const TunnelE2eSchema = z
+  .object({
+    enabled: z.boolean().default(true),
+    tlsPort: z.number().int().min(1024).max(65535).default(18791),
+    staging: z.boolean().default(false),
+  })
+  .default({
+    enabled: true,
+    tlsPort: 18791,
+    staging: false,
+  });
+
+export const TunnelConfigSchema = z
+  .object({
+    enabled: z.boolean().default(false),
+    brokerUrl: z.string().url().default('https://frp.xopc.ai/api'),
+    autoStart: z.boolean().default(false),
+    subdomain: z.string().optional(),
+    consent: TunnelConsentSchema.optional(),
+    e2e: TunnelE2eSchema.optional(),
+  })
+  .default({
+    enabled: false,
+    brokerUrl: 'https://frp.xopc.ai/api',
+    autoStart: false,
+  });
+
+export type TunnelConfig = z.infer<typeof TunnelConfigSchema>;
+
 export const GatewayConfigSchema = z.object({
   host: z.string().optional(),
   port: z.number().optional(),
@@ -553,6 +587,22 @@ export const GatewayConfigSchema = z.object({
   skillsMarketplaceProvider: z.enum(['store', 'skillhub']).optional(),
   /** Base URL for the xopc skills marketplace (public REST API). */
   skillsStoreBaseUrl: z.string().url().optional(),
+  /** File sharing configuration (temporary public download links for workspace files). */
+  share: z.object({
+    enabled: z.boolean().default(true),
+    /** Default TTL in ms (default 24h). */
+    defaultTtlMs: z.number().min(60_000).max(604_800_000).default(86_400_000),
+    /** Maximum TTL in ms (default 7 days). */
+    maxTtlMs: z.number().min(60_000).max(2_592_000_000).default(604_800_000),
+    /** Maximum concurrent active shares (default 100). */
+    maxActiveShares: z.number().min(1).max(10_000).default(100),
+    /** Maximum shareable file size in bytes (default 100MB). */
+    maxFileSize: z.number().min(1_048_576).max(10_737_418_240).default(104_857_600),
+    /** MIME types allowed for inline preview (?inline=1). */
+    inlinePreviewMimes: z.array(z.string()).default([
+      'image/png', 'image/jpeg', 'image/gif', 'image/webp', 'application/pdf',
+    ]),
+  }).optional(),
 }).default({
   host: '127.0.0.1',
   port: 18790,
@@ -848,6 +898,7 @@ export const ConfigSchema = z.object({
   session: SessionConfigSchema,
   channels: ChannelsConfigSchema,
   gateway: GatewayConfigSchema,
+  tunnel: TunnelConfigSchema.optional(),
   tools: ToolsConfigSchema,
   cron: CronConfigSchema,
   goals: GoalsConfigSchema.optional(),

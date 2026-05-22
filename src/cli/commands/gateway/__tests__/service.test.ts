@@ -1,29 +1,40 @@
-// Mock os.homedir for consistent paths across environments
-vi.mock("os", () => ({
-  homedir: () => "/root",
-}));
-
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-
-// Set consistent HOME for tests
-process.env.HOME = '/root';
-
 import {
   createInstallCommand,
   createUninstallCommand,
   createServiceStartCommand,
   createServiceStatusCommand,
 } from '../service.js';
-import { loadConfig } from '../../../../config/index.js';
-import { resolveGatewayService, isDaemonAvailableAsync, getPlatformName } from '../../../../daemon/index.js';
-import { buildGatewayInstallPlan } from '../../../../daemon/install-plan.js';
 
-// Mock dependencies
+// Mock lifecycle-core
+vi.mock('../lifecycle-core.js', () => ({
+  executeDaemonUninstall: vi.fn(),
+}));
+
+// Mock daemon service
+vi.mock('../../../../daemon/service.js', () => ({
+  resolveGatewayService: vi.fn(),
+  isDaemonAvailableAsync: vi.fn(),
+  getPlatformName: vi.fn(() => 'macOS (LaunchAgent)'),
+  startGatewayService: vi.fn(),
+}));
+
+// Mock daemon install-plan
+vi.mock('../../../../daemon/install-plan.js', () => ({
+  buildGatewayInstallArgs: vi.fn(() => ({
+    programArguments: ['/usr/local/bin/node', '/usr/local/bin/xopc', 'gateway', '--foreground'],
+    environment: {},
+    workingDirectory: '/root',
+  })),
+}));
+
+// Mock config
 vi.mock('../../../../config/index.js', () => ({
-  loadConfig: vi.fn(),
-  DEFAULT_PATHS: {
-    config: '/test/config.json',
-  },
+  loadConfig: vi.fn(() => ({ gateway: { port: 18790, host: '0.0.0.0' } })),
+}));
+
+vi.mock('../../../../config/paths.js', () => ({
+  resolveConfigPath: vi.fn(() => '/root/.xopc/xopc.json'),
 }));
 
 vi.mock('../../index.js', () => ({
@@ -32,30 +43,6 @@ vi.mock('../../index.js', () => ({
     workspacePath: '/root/.xopc/workspace/main',
     isVerbose: false,
   })),
-}));
-
-// Logger config reads HOME at module load. Since the action dynamic-imports
-// logger.js after process.env.HOME='/root' is set above, real init would try
-// to mkdir /root/.xopc/logs and fail. Stub the surface the action uses.
-vi.mock('../../../../utils/logger.js', () => ({
-  createLogger: () => ({
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-    debug: vi.fn(),
-    trace: vi.fn(),
-    fatal: vi.fn(),
-  }),
-}));
-
-vi.mock('../../../../daemon/index.js', () => ({
-  resolveGatewayService: vi.fn(),
-  isDaemonAvailableAsync: vi.fn(),
-  getPlatformName: vi.fn(() => 'Linux (systemd)'),
-}));
-
-vi.mock('../../../../daemon/install-plan.js', () => ({
-  buildGatewayInstallPlan: vi.fn(),
 }));
 
 describe('Gateway Service Commands', () => {
@@ -80,106 +67,54 @@ describe('Gateway Service Commands', () => {
     it('should create command with correct name and description', () => {
       const cmd = createInstallCommand();
       expect(cmd.name()).toBe('install');
-      expect(cmd.description()).toBe('Install gateway as system service');
+      expect(cmd.description()).toBe('Install gateway as OS service (LaunchAgent / systemd / Task)');
+    });
+
+    it('should have --port option', () => {
+      const cmd = createInstallCommand();
+      const portOption = cmd.options.find((opt: any) => opt.attributeName() === 'port');
+      expect(portOption).toBeDefined();
+    });
+
+    it('should have --force option', () => {
+      const cmd = createInstallCommand();
+      const forceOption = cmd.options.find((opt: any) => opt.attributeName() === 'force');
+      expect(forceOption).toBeDefined();
+    });
+
+    it('should have --json option', () => {
+      const cmd = createInstallCommand();
+      const jsonOption = cmd.options.find((opt: any) => opt.attributeName() === 'json');
+      expect(jsonOption).toBeDefined();
     });
 
     it('should show error when daemon is not available', async () => {
+      const { isDaemonAvailableAsync } = await import('../../../../daemon/service.js');
       vi.mocked(isDaemonAvailableAsync).mockResolvedValue(false);
-      vi.mocked(getPlatformName).mockReturnValue('Unknown Platform');
+
+      // Make process.exit throw to halt execution (since mock doesn't actually exit)
+      processExitSpy.mockImplementation((code?: number) => { throw new Error(`exit ${code}`); });
 
       const cmd = createInstallCommand();
-      await cmd.parseAsync(['node', 'test']);
+      await expect(cmd.parseAsync(['node', 'test'])).rejects.toThrow('exit 1');
 
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('not available'));
-      expect(processExitSpy).toHaveBeenCalledWith(1);
+      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('not available'));
     });
 
-    it('should show install instructions when daemon is available', async () => {
-      const mockConfig = {
-        gateway: {
-          port: 18790,
-          host: '0.0.0.0',
-        },
-      };
-      vi.mocked(loadConfig).mockReturnValue(mockConfig as any);
+    it('should report already installed without --force', async () => {
+      const { isDaemonAvailableAsync, resolveGatewayService } = await import('../../../../daemon/service.js');
       vi.mocked(isDaemonAvailableAsync).mockResolvedValue(true);
       vi.mocked(resolveGatewayService).mockResolvedValue({
-        label: 'xopc-gateway',
+        label: 'ai.xopc.gateway',
+        isLoaded: vi.fn().mockResolvedValue(true),
+        install: vi.fn(),
+        uninstall: vi.fn(),
       } as any);
-      vi.mocked(buildGatewayInstallPlan).mockReturnValue({
-        workingDirectory: '/test',
-        programArguments: ['node', 'xopc', 'gateway'],
-      } as any);
-
-      // Mock Linux platform
-      Object.defineProperty(process, 'platform', {
-        value: 'linux',
-        configurable: true,
-      });
 
       const cmd = createInstallCommand();
       await cmd.parseAsync(['node', 'test']);
 
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Installing gateway'));
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('systemd'));
-      expect(processExitSpy).toHaveBeenCalledWith(0);
-    });
-
-    it('should show macOS instructions on darwin', async () => {
-      const mockConfig = {
-        gateway: {
-          port: 18790,
-          host: '0.0.0.0',
-        },
-      };
-      vi.mocked(loadConfig).mockReturnValue(mockConfig as any);
-      vi.mocked(isDaemonAvailableAsync).mockResolvedValue(true);
-      vi.mocked(resolveGatewayService).mockResolvedValue({
-        label: 'xopc-gateway',
-      } as any);
-      vi.mocked(buildGatewayInstallPlan).mockReturnValue({
-        workingDirectory: '/test',
-        programArguments: ['node', 'xopc', 'gateway'],
-      } as any);
-
-      Object.defineProperty(process, 'platform', {
-        value: 'darwin',
-        configurable: true,
-      });
-
-      const cmd = createInstallCommand();
-      await cmd.parseAsync(['node', 'test']);
-
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('LaunchAgent'));
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('launchctl bootstrap'));
-    });
-
-    it('should show Windows instructions on win32', async () => {
-      const mockConfig = {
-        gateway: {
-          port: 18790,
-          host: '0.0.0.0',
-        },
-      };
-      vi.mocked(loadConfig).mockReturnValue(mockConfig as any);
-      vi.mocked(isDaemonAvailableAsync).mockResolvedValue(true);
-      vi.mocked(resolveGatewayService).mockResolvedValue({
-        label: 'xopc-gateway',
-      } as any);
-      vi.mocked(buildGatewayInstallPlan).mockReturnValue({
-        workingDirectory: '/test',
-        programArguments: ['node', 'xopc', 'gateway'],
-      } as any);
-
-      Object.defineProperty(process, 'platform', {
-        value: 'win32',
-        configurable: true,
-      });
-
-      const cmd = createInstallCommand();
-      await cmd.parseAsync(['node', 'test']);
-
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Windows'));
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('already installed'));
     });
   });
 
@@ -187,22 +122,17 @@ describe('Gateway Service Commands', () => {
     it('should create command with correct name and description', () => {
       const cmd = createUninstallCommand();
       expect(cmd.name()).toBe('uninstall');
-      expect(cmd.description()).toBe('Uninstall gateway system service');
+      expect(cmd.description()).toBe('Uninstall gateway OS service');
     });
 
-    it('should show uninstall instructions', async () => {
-      vi.mocked(resolveGatewayService).mockResolvedValue({
-        label: 'xopc-gateway',
-      } as any);
+    it('should delegate to executeDaemonUninstall', async () => {
+      const { executeDaemonUninstall } = await import('../lifecycle-core.js');
+      vi.mocked(executeDaemonUninstall).mockResolvedValue(undefined);
 
       const cmd = createUninstallCommand();
       await cmd.parseAsync(['node', 'test']);
 
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Uninstalling'));
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('systemctl stop'));
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('launchctl bootout'));
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('sc delete'));
-      expect(processExitSpy).toHaveBeenCalledWith(0);
+      expect(executeDaemonUninstall).toHaveBeenCalled();
     });
   });
 
@@ -210,24 +140,13 @@ describe('Gateway Service Commands', () => {
     it('should create command with correct name and description', () => {
       const cmd = createServiceStartCommand();
       expect(cmd.name()).toBe('start');
-      expect(cmd.description()).toBe('Start gateway system service');
+      expect(cmd.description()).toBe('Start gateway via OS service manager');
     });
 
-    it('should show start instructions', async () => {
-      const mockConfig = {
-        gateway: {
-          port: 18790,
-        },
-      };
-      vi.mocked(loadConfig).mockReturnValue(mockConfig as any);
-
+    it('should have --json option', () => {
       const cmd = createServiceStartCommand();
-      await cmd.parseAsync(['node', 'test']);
-
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Starting gateway'));
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Port: 18790'));
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('systemctl start'));
-      expect(processExitSpy).toHaveBeenCalledWith(0);
+      const jsonOption = cmd.options.find((opt: any) => opt.attributeName() === 'json');
+      expect(jsonOption).toBeDefined();
     });
   });
 
@@ -235,18 +154,13 @@ describe('Gateway Service Commands', () => {
     it('should create command with correct name and description', () => {
       const cmd = createServiceStatusCommand();
       expect(cmd.name()).toBe('service-status');
-      expect(cmd.description()).toBe('Check system service status');
+      expect(cmd.description()).toBe('Show OS service status');
     });
 
-    it('should show status check instructions', async () => {
+    it('should have --json option', () => {
       const cmd = createServiceStatusCommand();
-      await cmd.parseAsync(['node', 'test']);
-
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Gateway service status'));
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('systemctl status'));
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('launchctl list'));
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('sc query'));
-      expect(processExitSpy).toHaveBeenCalledWith(0);
+      const jsonOption = cmd.options.find((opt: any) => opt.attributeName() === 'json');
+      expect(jsonOption).toBeDefined();
     });
   });
 });

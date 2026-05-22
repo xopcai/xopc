@@ -7,12 +7,19 @@ export function apiUrl(path: string): string {
   return `${getBaseUrl()}${p}`;
 }
 
-/** Mobile apps register `xopc://` and read `baseUrl` + `token` from this deep link after scan. */
-export function buildMobileGatewayPairDeepLink(params: { baseUrl: string; gatewayToken: string }): string {
+/** Mobile apps register `xopc://` and exchange `ps` for a gateway token via POST /api/tunnel/exchange-token. */
+export function buildMobileGatewayPairDeepLink(params: {
+  baseUrl: string;
+  pairingSecret: string;
+  lanUrl?: string | null;
+}): string {
   const origin = params.baseUrl.trim().replace(/\/+$/, '');
   const u = new URL('xopc://gateway/mobile-connect');
   u.searchParams.set('baseUrl', origin);
-  u.searchParams.set('token', params.gatewayToken);
+  if (params.lanUrl?.trim()) {
+    u.searchParams.set('lanUrl', params.lanUrl.trim().replace(/\/+$/, ''));
+  }
+  u.searchParams.set('ps', params.pairingSecret);
   return u.toString();
 }
 

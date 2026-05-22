@@ -52,7 +52,7 @@ export async function checkGatewayService(ctx: DoctorContext): Promise<CheckResu
     };
   }
 
-  const runtime = await service.getRuntime({ env });
+  const runtime = await service.readRuntime(env);
   if (runtime.status === 'running' && runtime.pid) {
     return {
       id: 'gateway-service',

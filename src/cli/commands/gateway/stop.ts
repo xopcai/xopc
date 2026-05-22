@@ -1,85 +1,15 @@
 import { Command } from 'commander';
-import { resolveConfigPath } from '../../../config/paths.js';
-import { getContextWithOpts } from '../../index.js';
 
 /**
- * Create stop subcommand
+ * Create stop subcommand - delegates to daemon lifecycle core
  */
 export function createStopCommand(): Command {
   return new Command('stop')
-    .description('Stop running gateway')
-    .option('--force', 'Force kill immediately', false)
-    .option('--timeout <ms>', 'Timeout before force kill', '5000')
+    .description('Stop the gateway service')
+    .option('--disable', 'Disable KeepAlive so gateway does not respawn')
+    .option('--json', 'Output JSON')
     .action(async (options) => {
-      const ctx = getContextWithOpts();
-      const [
-        { loadConfig },
-        { acquireGatewayLock },
-        { forceFreePortAndWait, listPortListeners },
-      ] = await Promise.all([
-        import('../../../config/index.js'),
-        import('../../../gateway/lock.js'),
-        import('../../../gateway/ports.js'),
-      ]);
-      const config = loadConfig(ctx.configPath);
-      const port = config?.gateway?.port || 18790;
-
-      // Check if gateway is running by trying to acquire lock
-      try {
-        const lock = await acquireGatewayLock(ctx.configPath || resolveConfigPath(), {
-          timeoutMs: 100,
-          port,
-        });
-        await lock.release();
-        console.log('ℹ️  Gateway is not running');
-        process.exit(0);
-      } catch {
-        // Lock exists, gateway is running
-      }
-
-      console.log('🛑 Stopping gateway...');
-
-      try {
-        const listeners = listPortListeners(port);
-        if (listeners.length === 0) {
-          console.log('ℹ️  No process found listening on port');
-          process.exit(0);
-        }
-
-        const timeout = parseInt(options.timeout, 10);
-
-        if (options.force) {
-          // Force kill immediately
-          for (const proc of listeners) {
-            try {
-              process.kill(proc.pid, 'SIGKILL');
-              console.log(`   Killed pid ${proc.pid}`);
-            } catch (err) {
-              console.warn(`   Failed to kill pid ${proc.pid}: ${String(err)}`);
-            }
-          }
-        } else {
-          // Graceful shutdown
-          const result = await forceFreePortAndWait(port, {
-            timeoutMs: timeout,
-            sigtermTimeoutMs: Math.min(2000, timeout / 2),
-          });
-
-          if (result.killed.length > 0) {
-            for (const proc of result.killed) {
-              console.log(`   Stopped pid ${proc.pid}`);
-            }
-            if (result.escalatedToSigkill) {
-              console.log('   Escalated to SIGKILL');
-            }
-          }
-        }
-
-        console.log('✅ Gateway stopped');
-        process.exit(0);
-      } catch (err) {
-        console.error('❌ Failed to stop gateway:', err);
-        process.exit(1);
-      }
+      const { executeDaemonStop } = await import('./lifecycle-core.js');
+      await executeDaemonStop(options);
     });
 }

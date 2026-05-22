@@ -9,6 +9,7 @@ import {
   FolderOpen,
   Globe,
   Heart,
+  Radio,
   Image as ImageIcon,
   Layers,
   MessageSquare,
@@ -18,6 +19,7 @@ import {
   Palette,
   Plug,
   Search,
+  Share2,
   Shield,
   SlidersHorizontal,
   Users,
@@ -50,7 +52,9 @@ const TAB_ICONS: Record<Tab, LucideIcon> = {
   settingsVoice: Mic,
   settingsGateway: Globe,
   settingsHeartbeat: Heart,
+  settingsTunnel: Radio,
   settingsSearch: Search,
+  settingsShares: Share2,
   settingsDreams: Moon,
 };
 
