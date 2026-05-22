@@ -1,18 +1,66 @@
 import crypto from "node:crypto";
 import type { AgentToolResult } from '@earendil-works/pi-agent-core';
+import type { AgentTool as AnyAgentTool } from "@earendil-works/pi-agent-core";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { Config } from "../../config/schema.js";
 import { createLogger } from "../../utils/logger.js";
 const log = createLogger("BundleMcp");
 import { setPluginToolMeta } from "./mcp-tool-meta.js";
-import { normalizeLowercaseStringOrEmpty } from "../../utils/string-coerce.js";
+import {
+  normalizeLowercaseStringOrEmpty,
+  normalizeOptionalString,
+} from "../../utils/string-coerce.js";
 import {
   buildSafeToolName,
   normalizeReservedToolNames,
   TOOL_NAME_SEPARATOR,
 } from "./bundle-mcp-names.js";
 import type { BundleMcpToolRuntime, SessionMcpRuntime } from "./bundle-mcp-types.js";
-import type { AgentTool as AnyAgentTool } from "@earendil-works/pi-agent-core";
+
+export type McpGatewayToolEntry = {
+  name: string;
+  shortName: string;
+  description: string;
+};
+
+function readMaterializedToolDescription(tool: AnyAgentTool): string {
+  const raw = tool as { description?: unknown; label?: unknown };
+  return (
+    normalizeOptionalString(raw.description) ??
+    normalizeOptionalString(raw.label) ??
+    tool.name
+  );
+}
+
+export function mapBundleMcpToolsForGateway(
+  tools: AnyAgentTool[],
+  serverId: string,
+): McpGatewayToolEntry[] {
+  const prefix = `${serverId.trim()}${TOOL_NAME_SEPARATOR}`;
+  return tools
+    .filter((tool) => tool.name.startsWith(prefix))
+    .map((tool) => ({
+      name: tool.name,
+      shortName: tool.name.slice(prefix.length),
+      description: readMaterializedToolDescription(tool),
+    }));
+}
+
+export async function listBundleMcpServerToolsForGateway(params: {
+  workspaceDir: string;
+  cfg?: Config;
+  serverId: string;
+}): Promise<McpGatewayToolEntry[]> {
+  const runtime = await createBundleMcpToolRuntime({
+    workspaceDir: params.workspaceDir,
+    cfg: params.cfg,
+  });
+  try {
+    return mapBundleMcpToolsForGateway(runtime.tools, params.serverId);
+  } finally {
+    await runtime.dispose();
+  }
+}
 
 function toAgentToolResult(params: {
   serverName: string;
@@ -110,7 +158,7 @@ export async function materializeBundleMcpToolsForRun(params: {
     const agentTool = {
       name: safeToolName,
       label: tool.title ?? tool.toolName,
-      description: tool.description || tool.fallbackDescription,
+      description: tool.description || tool.title || tool.fallbackDescription,
       parameters: tool.inputSchema,
       execute: async (_toolCallId: string, input: unknown) => {
         params.runtime.markUsed();
