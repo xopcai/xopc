@@ -8,10 +8,12 @@ import {
   buildTunnelConsentRecord,
   hasValidTunnelConsent,
 } from './consent.js';
+import { isMaskedTunnelSecretPatchValue } from './env.js';
 
 const TunnelConfigPatchSchema = z.object({
   enabled: z.boolean().optional(),
   brokerUrl: z.string().url().optional(),
+  registrationSecret: z.union([z.string(), z.null()]).optional(),
   autoStart: z.boolean().optional(),
   subdomain: z.string().optional(),
   consent: TunnelConsentSchema.optional(),
@@ -26,10 +28,28 @@ export function mergeTunnelConfigPatch(
     return { ok: false, message: parsed.error.issues.map((i) => i.message).join('; ') };
   }
 
+  const patchFields = { ...parsed.data };
+  if (parsed.data.registrationSecret !== undefined) {
+    if (parsed.data.registrationSecret === null) {
+      delete patchFields.registrationSecret;
+    } else {
+      const trimmed = parsed.data.registrationSecret.trim();
+      if (!trimmed || isMaskedTunnelSecretPatchValue(trimmed)) {
+        delete patchFields.registrationSecret;
+      } else {
+        patchFields.registrationSecret = trimmed;
+      }
+    }
+  }
+
   const next = {
     ...(config.tunnel ?? TunnelConfigSchema.parse({})),
-    ...parsed.data,
+    ...patchFields,
   };
+
+  if (parsed.data.registrationSecret === null) {
+    delete next.registrationSecret;
+  }
 
   if (parsed.data.autoStart === true) {
     const probe: Config = { ...config, tunnel: { ...next, autoStart: true } };

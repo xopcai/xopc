@@ -86,4 +86,16 @@ describe('tunnel consent', () => {
     const result = mergeTunnelConfigPatch(cfg, { autoStart: true });
     expect(result.ok).toBe(false);
   });
+
+  it('mergeTunnelConfigPatch stores registrationSecret and ignores masked sentinel', () => {
+    const cfg = baseConfig();
+    expect(mergeTunnelConfigPatch(cfg, { registrationSecret: 'broker-secret' }).ok).toBe(true);
+    expect(cfg.tunnel?.registrationSecret).toBe('broker-secret');
+
+    expect(mergeTunnelConfigPatch(cfg, { registrationSecret: '••••••••••••' }).ok).toBe(true);
+    expect(cfg.tunnel?.registrationSecret).toBe('broker-secret');
+
+    expect(mergeTunnelConfigPatch(cfg, { registrationSecret: null }).ok).toBe(true);
+    expect(cfg.tunnel?.registrationSecret).toBeUndefined();
+  });
 });

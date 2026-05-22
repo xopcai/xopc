@@ -552,6 +552,8 @@ export const TunnelConfigSchema = z
   .object({
     enabled: z.boolean().default(false),
     brokerUrl: z.string().url().default('https://frp.xopc.ai/api'),
+    /** Broker register API secret (env `XOPC_TUNNEL_REGISTRATION_SECRET` overrides when set). */
+    registrationSecret: z.string().min(1).optional(),
     autoStart: z.boolean().default(false),
     subdomain: z.string().optional(),
     consent: TunnelConsentSchema.optional(),

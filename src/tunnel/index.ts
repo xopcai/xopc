@@ -27,10 +27,13 @@ export {
 } from './gateway-lifecycle.js';
 export { fetchTunnelWellKnown, clearTunnelWellKnownCache } from './well-known.js';
 export {
+  getTunnelRegistrationSecretMeta,
   isProductionTunnelBroker,
+  isMaskedTunnelSecretPatchValue,
   resolveTunnelBrokerUrl,
   resolveTunnelRegistrationSecret,
 } from './env.js';
+export type { TunnelRegistrationSecretMeta, TunnelRegistrationSecretSource } from './env.js';
 export { logTunnelAudit } from './tunnel-audit.js';
 export type { TunnelAuditEvent } from './tunnel-audit.js';
 export { consumeTunnelMutationLimit, resetTunnelMutationLimitsForTests } from './tunnel-rate-limit.js';

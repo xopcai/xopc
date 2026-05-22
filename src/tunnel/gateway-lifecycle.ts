@@ -34,8 +34,11 @@ export function wireTunnelEventsToGateway(service: TunnelEventSink): void {
   });
 }
 
-export async function configureTunnelFromGatewayConfig(config: Config): Promise<void> {
-  if (!config.tunnel?.enabled) return;
+export async function configureTunnelFromGatewayConfig(
+  config: Config,
+  opts?: { force?: boolean },
+): Promise<void> {
+  if (!opts?.force && !config.tunnel?.enabled) return;
 
   const gateway = config.gateway ?? {};
   let brokerUrl = resolveTunnelBrokerUrl(config.tunnel?.brokerUrl);
@@ -54,7 +57,11 @@ export async function configureTunnelFromGatewayConfig(config: Config): Promise<
 
   let registrationSecret: string;
   try {
-    registrationSecret = resolveTunnelRegistrationSecret(process.env, brokerUrl);
+    registrationSecret = resolveTunnelRegistrationSecret(
+      process.env,
+      brokerUrl,
+      config.tunnel?.registrationSecret,
+    );
   } catch (err) {
     const em = err instanceof Error ? err.message : String(err);
     log.warn({ phase: 'tunnel_configure', errorMessage: em }, em);

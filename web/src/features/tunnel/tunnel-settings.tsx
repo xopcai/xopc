@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
 import { revalidateGatewayConfig } from '@/features/gateway/gateway-config-swr';
+import { isMaskedKey } from '@/features/settings/providers-api';
 import { SettingsFormSection } from '@/features/settings/settings-form-section';
 import { MobilePairQrSection } from '@/features/tunnel/mobile-pair-qr-section';
 import { TunnelConsentDialog } from '@/features/tunnel/tunnel-consent-dialog';
@@ -66,6 +67,9 @@ export function TunnelSettingsPanel() {
   const [autoStartConfirmOpen, setAutoStartConfirmOpen] = useState(false);
   const [releaseConfirmOpen, setReleaseConfirmOpen] = useState(false);
   const [releasing, setReleasing] = useState(false);
+  const [brokerSecretDraft, setBrokerSecretDraft] = useState('');
+  const [savingBrokerSecret, setSavingBrokerSecret] = useState(false);
+  const [brokerSecretNotice, setBrokerSecretNotice] = useState<string | null>(null);
 
   const pairQr = useMobilePairQr(token ?? '');
 
@@ -88,6 +92,22 @@ export function TunnelSettingsPanel() {
     }
     return status?.config?.autoStart === true;
   }, [cfgData, status?.config?.autoStart]);
+
+  const brokerSecretFromConfig = useMemo(() => {
+    const c = cfgData?.payload?.config;
+    if (c && typeof c === 'object' && !Array.isArray(c)) {
+      const tunnel = (c as { tunnel?: unknown }).tunnel;
+      if (tunnel && typeof tunnel === 'object' && !Array.isArray(tunnel)) {
+        const secret = (tunnel as { registrationSecret?: unknown }).registrationSecret;
+        if (typeof secret === 'string') return secret;
+      }
+    }
+    return '';
+  }, [cfgData]);
+
+  const brokerSecretConfiguredInConfig = isMaskedKey(brokerSecretFromConfig);
+  const brokerSecretFromEnv = status?.registrationSecret?.source === 'env';
+  const brokerSecretMissing = status?.registrationSecret?.source === 'missing';
 
   useEffect(() => {
     const onTunnelStatus = () => {
@@ -183,6 +203,42 @@ export function TunnelSettingsPanel() {
     }
     setAutoStartConfirmOpen(true);
   }, [applyAutoStart, status?.canAutoStart, status?.consentRequired, t, autoStartEnabled]);
+
+  const saveBrokerSecret = useCallback(async () => {
+    const trimmed = brokerSecretDraft.trim();
+    if (!trimmed) return;
+    setSavingBrokerSecret(true);
+    setActionError(null);
+    setBrokerSecretNotice(null);
+    try {
+      await patchTunnelConfig({ registrationSecret: trimmed });
+      setBrokerSecretDraft('');
+      setBrokerSecretNotice(t.brokerSecretSaved);
+      void revalidateGatewayConfig();
+      await mutStatus();
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSavingBrokerSecret(false);
+    }
+  }, [brokerSecretDraft, mutStatus, t.brokerSecretSaved]);
+
+  const clearBrokerSecret = useCallback(async () => {
+    setSavingBrokerSecret(true);
+    setActionError(null);
+    setBrokerSecretNotice(null);
+    try {
+      await patchTunnelConfig({ registrationSecret: null });
+      setBrokerSecretDraft('');
+      setBrokerSecretNotice(t.brokerSecretCleared);
+      void revalidateGatewayConfig();
+      await mutStatus();
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSavingBrokerSecret(false);
+    }
+  }, [mutStatus, t.brokerSecretCleared]);
 
   const handleRelease = useCallback(async () => {
     setReleaseConfirmOpen(false);
@@ -326,6 +382,60 @@ export function TunnelSettingsPanel() {
       {st.subdomain || st.publicUrl ? (
         <p className="text-xs text-fg-subtle">{t.releaseHint}</p>
       ) : null}
+
+      <SettingsFormSection>
+        <h2 className="mb-1 text-sm font-semibold text-fg">{t.brokerSecretTitle}</h2>
+        <p className="mb-3 text-xs text-fg-muted">{t.brokerSecretHint}</p>
+        {brokerSecretFromEnv ? (
+          <p className="mb-3 text-xs text-fg-subtle">{t.brokerSecretEnvHint}</p>
+        ) : null}
+        {brokerSecretMissing && !brokerSecretFromEnv ? (
+          <p className="mb-3 text-xs text-amber-700 dark:text-amber-400">{t.brokerSecretMissingHint}</p>
+        ) : null}
+        {!brokerSecretFromEnv ? (
+          <>
+            <label className="sr-only" htmlFor="tunnel-broker-secret">
+              {t.brokerSecretTitle}
+            </label>
+            <input
+              id="tunnel-broker-secret"
+              type="password"
+              autoComplete="off"
+              className="w-full rounded-md border border-edge bg-surface-panel px-3 py-2 font-mono text-sm text-fg"
+              placeholder={
+                brokerSecretConfiguredInConfig ? t.brokerSecretPlaceholderKeep : t.brokerSecretPlaceholder
+              }
+              value={brokerSecretDraft}
+              disabled={savingBrokerSecret}
+              onChange={(e) => setBrokerSecretDraft(e.target.value)}
+            />
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={savingBrokerSecret || !brokerSecretDraft.trim()}
+                onClick={() => void saveBrokerSecret()}
+              >
+                {savingBrokerSecret ? <Loader2 className="size-4 animate-spin" /> : null}
+                {t.brokerSecretSave}
+              </Button>
+              {brokerSecretConfiguredInConfig ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  disabled={savingBrokerSecret}
+                  onClick={() => void clearBrokerSecret()}
+                >
+                  {t.brokerSecretClear}
+                </Button>
+              ) : null}
+            </div>
+          </>
+        ) : null}
+        {brokerSecretNotice ? (
+          <p className="mt-2 text-xs text-emerald-700 dark:text-emerald-400">{brokerSecretNotice}</p>
+        ) : null}
+      </SettingsFormSection>
 
       <SettingsFormSection>
         <h2 className="mb-3 text-sm font-semibold text-fg">{t.optionsTitle}</h2>

@@ -10,6 +10,18 @@ Remote access exposes your **local gateway** on the public internet via FRP (`fr
 - Cached binary: `{stateDir}/bin/frpc` (default `~/.xopc/bin/frpc`; honors `XOPC_STATE_DIR`).
 - While a tunnel is active, the gateway sets `XOPC_FRPC_PATH` to the resolved binary; it is cleared on stop.
 
+## Broker registration secret
+
+Connecting to the production broker (`frp.xopc.ai`) requires a **registration secret** (not the gateway Bearer token).
+
+| Source | Priority | Notes |
+|--------|----------|--------|
+| `XOPC_TUNNEL_REGISTRATION_SECRET` | 1 (wins) | Shell / Electron parent env; overrides config |
+| `tunnel.registrationSecret` in `xopc.json` | 2 | Remote access settings, or `xopc tunnel secret set` |
+| Dev default | 3 | Only for non-production brokers (localhost, etc.) |
+
+The web UI masks saved secrets (`••••••••••••`); PATCH with masked sentinels leaves the stored value unchanged. Send `null` to clear.
+
 ## Prefetch (optional)
 
 ```bash
@@ -67,6 +79,7 @@ Mutating tunnel endpoints are rate-limited per gateway token (12 calls / 5 minut
 - `xopc tunnel stop` — stop frpc, keep subdomain
 - `xopc tunnel stop --release` — deregister and clear saved URL (interactive confirm; `--yes` to skip)
 - `xopc tunnel prefetch` — download frpc only, no tunnel exposure
+- `xopc tunnel secret set [secret]` — save broker registration secret to config (`--stdin` for scripts)
 
 ## Advanced
 
