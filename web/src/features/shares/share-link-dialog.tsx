@@ -25,13 +25,12 @@ const shareUrlCodeClass =
   'block w-full min-w-0 cursor-default truncate rounded bg-surface-hover px-2 py-1.5 text-xs text-fg';
 
 const shareCopyButtonClass =
-  'inline-flex w-[9.5rem] shrink-0 items-center justify-center gap-1 px-2 py-1 text-xs';
+  'inline-flex w-[5.25rem] shrink-0 items-center justify-center gap-1 px-2 py-1 text-xs';
 
 type UrlRow = {
   key: string;
   label: string;
   url: string;
-  copyLabel: string;
 };
 
 function buildUrlRows(
@@ -46,7 +45,6 @@ function buildUrlRows(
         key: 'public',
         label: t.publicUrlLabel,
         url: shareUrl,
-        copyLabel: t.copyPublicUrl,
       },
     ];
     if (lanUrl) {
@@ -54,7 +52,6 @@ function buildUrlRows(
         key: 'lan',
         label: t.lanUrlLabel,
         url: lanUrl,
-        copyLabel: t.copyLanUrl,
       });
     }
     return rows;
@@ -65,7 +62,6 @@ function buildUrlRows(
         key: 'lan',
         label: t.lanUrlLabel,
         url: shareUrl,
-        copyLabel: t.copyLanUrl,
       },
     ];
   }
@@ -74,7 +70,6 @@ function buildUrlRows(
       key: 'local',
       label: t.localUrlLabel,
       url: shareUrl,
-      copyLabel: t.copyLocalUrl,
     },
   ];
 }
@@ -129,7 +124,7 @@ function CopyUrlRow({ row }: { row: UrlRow }) {
   return (
     <div className="flex min-w-0 flex-col gap-1">
       <span className="text-xs font-medium text-fg-muted">{row.label}</span>
-      <div className="grid grid-cols-[minmax(0,1fr)_9.5rem] items-center gap-2">
+      <div className="grid grid-cols-[minmax(0,1fr)_5.25rem] items-center gap-2">
         <div className="min-w-0 overflow-hidden">
           <TooltipRoot>
             <TooltipTrigger asChild>
@@ -149,7 +144,7 @@ function CopyUrlRow({ row }: { row: UrlRow }) {
           onClick={() => void handleCopy()}
         >
           {copied ? <Check className="size-3.5 shrink-0" /> : <Copy className="size-3.5 shrink-0" />}
-          <span className="truncate">{copied ? t.copied : row.copyLabel}</span>
+          <span className="truncate">{copied ? t.copied : t.copy}</span>
         </Button>
       </div>
     </div>
