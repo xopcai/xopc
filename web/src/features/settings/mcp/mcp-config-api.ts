@@ -1,4 +1,10 @@
 import { revalidateGatewayConfig } from '@/features/gateway/gateway-config-swr';
+import {
+  headersToRecord,
+  recordToHeaders,
+  type McpHeaderEntry,
+} from '@/features/settings/mcp/mcp-headers-editor';
+import type { McpToolInfo } from '@/features/settings/mcp/mcp-tools-list-dialog';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
@@ -12,7 +18,7 @@ export type McpServerRow = {
   envJson: string;
   cwd: string;
   url: string;
-  headersJson: string;
+  headers: McpHeaderEntry[];
   connectionTimeoutMs: number | undefined;
 };
 
@@ -56,7 +62,8 @@ function rowToServerConfig(row: McpServerRow): Record<string, unknown> {
     url: row.url.trim(),
     transport: row.transport,
   };
-  if (row.headersJson.trim()) config.headers = parseJsonObject(row.headersJson);
+  const headers = headersToRecord(row.headers);
+  if (headers) config.headers = headers;
   if (row.connectionTimeoutMs != null && Number.isFinite(row.connectionTimeoutMs)) {
     config.connectionTimeoutMs = row.connectionTimeoutMs;
   }
@@ -72,6 +79,11 @@ function serverConfigToRow(id: string, raw: Record<string, unknown>): McpServerR
       : 'streamable-http'
     : 'stdio';
 
+  const headersRaw =
+    raw.headers && typeof raw.headers === 'object' && !Array.isArray(raw.headers)
+      ? (raw.headers as Record<string, unknown>)
+      : undefined;
+
   return {
     id,
     transport,
@@ -80,8 +92,7 @@ function serverConfigToRow(id: string, raw: Record<string, unknown>): McpServerR
     envJson: raw.env && typeof raw.env === 'object' ? JSON.stringify(raw.env, null, 2) : '',
     cwd: typeof raw.cwd === 'string' ? raw.cwd : typeof raw.workingDirectory === 'string' ? raw.workingDirectory : '',
     url: typeof raw.url === 'string' ? raw.url : '',
-    headersJson:
-      raw.headers && typeof raw.headers === 'object' ? JSON.stringify(raw.headers, null, 2) : '',
+    headers: recordToHeaders(headersRaw),
     connectionTimeoutMs:
       typeof raw.connectionTimeoutMs === 'number' && Number.isFinite(raw.connectionTimeoutMs)
         ? raw.connectionTimeoutMs
@@ -98,7 +109,7 @@ export function emptyMcpServerRow(id = ''): McpServerRow {
     envJson: '',
     cwd: '',
     url: '',
-    headersJson: '',
+    headers: [{ key: 'Authorization', value: '' }],
     connectionTimeoutMs: undefined,
   };
 }
@@ -151,14 +162,44 @@ export async function patchMcpSettings(state: McpSettingsState): Promise<void> {
 export type McpServerTestResult = {
   serverId: string;
   toolCount: number;
-  tools: string[];
+  tools: McpToolInfo[];
 };
+
+/** Accept legacy `string[]` or `{ name, description? }[]` from the gateway. */
+export function normalizeMcpTools(tools: unknown): McpToolInfo[] {
+  if (!Array.isArray(tools)) return [];
+  const out: McpToolInfo[] = [];
+  for (const item of tools) {
+    if (typeof item === 'string') {
+      const name = item.trim();
+      if (name) out.push({ name });
+      continue;
+    }
+    if (!item || typeof item !== 'object') continue;
+    const raw = item as { name?: unknown; shortName?: unknown; description?: unknown };
+    if (typeof raw.name !== 'string') continue;
+    const name = raw.name.trim();
+    if (!name) continue;
+    const shortName =
+      typeof raw.shortName === 'string' && raw.shortName.trim() ? raw.shortName.trim() : undefined;
+    const description =
+      typeof raw.description === 'string' && raw.description.trim()
+        ? raw.description.trim()
+        : undefined;
+    out.push({ name, shortName, description });
+  }
+  return out;
+}
 
 export async function testMcpServer(
   serverId: string,
   server?: Record<string, unknown>,
 ): Promise<McpServerTestResult> {
-  const res = await fetchJson<{ ok?: boolean; payload?: McpServerTestResult; error?: string }>(
+  const res = await fetchJson<{
+    ok?: boolean;
+    payload?: { serverId?: string; toolCount?: number; tools?: unknown };
+    error?: string;
+  }>(
     apiUrl(`/api/mcp/servers/${encodeURIComponent(serverId)}/test`),
     {
       method: 'POST',
@@ -168,14 +209,32 @@ export async function testMcpServer(
   if (!res.payload) {
     throw new Error(res.error ?? 'MCP test failed');
   }
-  return res.payload;
+  const tools = normalizeMcpTools(res.payload.tools);
+  return {
+    serverId: res.payload.serverId ?? serverId,
+    toolCount: typeof res.payload.toolCount === 'number' ? res.payload.toolCount : tools.length,
+    tools,
+  };
 }
 
-export async function fetchMcpServerTools(serverId: string): Promise<Array<{ name: string; description?: string }>> {
+export async function fetchMcpServerTools(serverId: string): Promise<McpToolInfo[]> {
   const res = await fetchJson<{
     ok?: boolean;
-    payload?: { tools?: Array<{ name: string; description?: string }> };
+    payload?: { tools?: unknown };
     error?: string;
   }>(apiUrl(`/api/mcp/servers/${encodeURIComponent(serverId)}/tools`));
-  return res.payload?.tools ?? [];
+  return normalizeMcpTools(res.payload?.tools);
+}
+
+export function connectionTimeoutSeconds(row: McpServerRow): string {
+  if (row.connectionTimeoutMs == null || !Number.isFinite(row.connectionTimeoutMs)) return '';
+  return String(Math.round(row.connectionTimeoutMs / 1000));
+}
+
+export function parseConnectionTimeoutSeconds(raw: string): number | undefined {
+  const trimmed = raw.trim();
+  if (!trimmed) return undefined;
+  const seconds = Number.parseInt(trimmed, 10);
+  if (!Number.isFinite(seconds) || seconds < 1 || seconds > 600) return undefined;
+  return seconds * 1000;
 }

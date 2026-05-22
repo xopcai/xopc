@@ -2,7 +2,11 @@ import type { Hono } from 'hono';
 import { getWorkspacePath } from '../../../config/schema.js';
 import { normalizeConfiguredMcpServers, canonicalizeConfiguredMcpServer } from '../../../config/mcp-config-normalize.js';
 import { loadMergedBundleMcpConfig } from '../../../agent/mcp/bundle-mcp-config.js';
-import { createBundleMcpToolRuntime } from '../../../agent/mcp/bundle-mcp-materialize.js';
+import {
+  createBundleMcpToolRuntime,
+  listBundleMcpServerToolsForGateway,
+  mapBundleMcpToolsForGateway,
+} from '../../../agent/mcp/bundle-mcp-materialize.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
 export function registerMcpRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
@@ -27,14 +31,11 @@ export function registerMcpRoutes(authenticated: Hono, deps: AuthenticatedRouteD
     const cfg = deps.service.currentConfig;
     const workspaceDir = getWorkspacePath(cfg) || './workspace';
     try {
-      const runtime = await createBundleMcpToolRuntime({
+      const tools = await listBundleMcpServerToolsForGateway({
         workspaceDir,
         cfg,
+        serverId: id,
       });
-      const tools = runtime.tools
-        .filter((t) => t.name.startsWith(`${id}__`))
-        .map((t) => ({ name: t.name, description: t.description }));
-      await runtime.dispose();
       return c.json({ ok: true, payload: { tools } });
     } catch (err) {
       return c.json(
@@ -78,10 +79,7 @@ export function registerMcpRoutes(authenticated: Hono, deps: AuthenticatedRouteD
         workspaceDir,
         cfg: testCfg,
       });
-      const prefix = `${id}__`;
-      const tools = runtime.tools
-        .filter((t) => t.name.startsWith(prefix))
-        .map((t) => t.name);
+      const tools = mapBundleMcpToolsForGateway(runtime.tools, id);
       await runtime.dispose();
       return c.json({ ok: true, payload: { serverId: id, toolCount: tools.length, tools } });
     } catch (err) {
