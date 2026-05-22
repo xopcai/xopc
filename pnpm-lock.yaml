@@ -228,6 +228,12 @@ importers:
         specifier: ^3.5.33
         version: 3.5.33(typescript@6.0.3)
 
+  extensions/clawhub:
+    devDependencies:
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
   extensions/dashscope:
     dependencies:
       '@xopcai/xopc':
@@ -318,6 +324,12 @@ importers:
       '@xopcai/xopc':
         specifier: workspace:*
         version: link:../..
+    devDependencies:
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
+  extensions/skillhub:
     devDependencies:
       typescript:
         specifier: ^5.9.3
