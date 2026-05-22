@@ -3,10 +3,15 @@ import {
   headersToRecord,
   recordToHeaders,
   type McpHeaderEntry,
-} from '@/features/settings/mcp/mcp-headers-editor';
-import type { McpToolInfo } from '@/features/settings/mcp/mcp-tools-list-dialog';
+} from '@/features/settings/mcp/mcp-headers-utils';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
+
+export type McpToolInfo = {
+  name: string;
+  shortName?: string;
+  description?: string;
+};
 
 export type McpTransportKind = 'stdio' | 'sse' | 'streamable-http';
 
@@ -237,4 +242,8 @@ export function parseConnectionTimeoutSeconds(raw: string): number | undefined {
   const seconds = Number.parseInt(trimmed, 10);
   if (!Number.isFinite(seconds) || seconds < 1 || seconds > 600) return undefined;
   return seconds * 1000;
+}
+
+export function mcpServerCardKey(row: McpServerRow, index: number): string {
+  return row.id.trim() || `draft-${index}`;
 }

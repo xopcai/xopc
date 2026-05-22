@@ -3,15 +3,11 @@ import { Search, Wrench, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import type { McpToolInfo } from '@/features/settings/mcp/mcp-config-api';
+import { toolMatchesQuery } from '@/features/settings/mcp/mcp-tools-utils';
 import { cn } from '@/lib/cn';
 import { settingsInputFocusClass } from '@/lib/form-field-width';
 import { SETTINGS_SHELL_CONTENT_Z, SETTINGS_SHELL_OVERLAY_Z } from '@/lib/settings-shell-dialog-layer';
-
-export type McpToolInfo = {
-  name: string;
-  shortName?: string;
-  description?: string;
-};
 
 type Props = {
   open: boolean;
@@ -33,14 +29,6 @@ function displayToolName(fullName: string | undefined, stripPrefix?: string): st
     return fullName.slice(stripPrefix.length);
   }
   return fullName;
-}
-
-export function toolMatchesQuery(tool: McpToolInfo, query: string, stripPrefix?: string): boolean {
-  const q = query.trim().toLowerCase();
-  if (!q) return true;
-  const shortName = tool.shortName || displayToolName(tool.name, stripPrefix);
-  const haystack = [tool.name, shortName, tool.description].filter(Boolean).join('\n').toLowerCase();
-  return haystack.includes(q);
 }
 
 export function McpToolsListDialog({

@@ -637,6 +637,19 @@ See [Voice (STT/TTS)](/voice) for Telegram group voice + mention behavior, `/tts
 
 ---
 
+### mcp
+
+Outbound MCP server registry (agent consumes external MCP tools).
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `sessionIdleTtlMs` | number | `600000` | Per-session MCP runtime idle TTL (10 min); `0` disables eviction |
+| `servers` | object | `{}` | Server id → connection definition (stdio or HTTP) |
+
+See [MCP](/mcp) for configuration, Web UI, and security notes.
+
+---
+
 ### heartbeat
 
 Periodic health check configuration.

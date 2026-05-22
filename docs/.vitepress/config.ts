@@ -69,6 +69,7 @@ export default defineConfig({
               { text: 'Session', link: '/session' },
               { text: 'Skills', link: '/skills' },
               { text: 'Skills Testing', link: '/skills-testing' },
+              { text: 'MCP', link: '/mcp' },
               { text: 'Cron', link: '/cron' },
               { text: 'Heartbeat', link: '/heartbeat' }
             ]
@@ -143,6 +144,7 @@ export default defineConfig({
               { text: '会话管理', link: '/zh/session' },
               { text: '技能系统', link: '/zh/skills' },
               { text: '技能测试', link: '/zh/skills-testing' },
+              { text: 'MCP', link: '/zh/mcp' },
               { text: '定时任务', link: '/zh/cron' },
               { text: '心跳监控', link: '/zh/heartbeat' }
             ]
