@@ -1,4 +1,5 @@
 import { loadTunnelState } from '../tunnel/tunnel-state.js';
+import { resolveLanGatewayUrl } from '../tunnel/tunnel-qr.js';
 
 import type { ResolvedShareUrl, ShareReachability } from './share-types.js';
 
@@ -42,13 +43,9 @@ export function resolveShareUrl(token: string, ctx: ShareUrlContext): ResolvedSh
 }
 
 function buildLanUrl(host: string, port: number, path: string): string | null {
-  if (host === '0.0.0.0' || host === '::') {
-    return `http://127.0.0.1:${port}${path}`;
-  }
-  if (host === '127.0.0.1' || host === 'localhost' || host === '::1') {
-    return null;
-  }
-  return `http://${host}:${port}${path}`;
+  const lanBase = resolveLanGatewayUrl(host, port);
+  if (!lanBase) return null;
+  return `${lanBase.replace(/\/+$/, '')}${path}`;
 }
 
 export function resolveReachabilityForList(ctx: ShareUrlContext): ShareReachability {
