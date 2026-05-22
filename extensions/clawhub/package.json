@@ -1,7 +1,8 @@
 {
   "name": "xopc-extension-clawhub",
   "version": "1.0.0",
-  "description": "ClawHub (clawhub.ai) skills marketplace adapter",
+  "private": true,
+  "description": "Bundled ClawHub marketplace adapter (compiled with core into dist/extensions/; not published to npm).",
   "main": "index.ts",
   "xopc": {
     "extension": true,
