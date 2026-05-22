@@ -10,6 +10,12 @@ export type TunnelStatusResponse = {
   frpcPid: number | null;
   lastHeartbeatAt: string | null;
   lastError: string | null;
+  frpcDownload?: {
+    phase: 'downloading' | 'extracting';
+    bytesReceived?: number;
+    totalBytes?: number | null;
+    percent?: number | null;
+  } | null;
   consentRequired?: boolean;
   canAutoStart?: boolean;
   consent?: {
