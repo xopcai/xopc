@@ -42,6 +42,7 @@ export async function configureTunnelFromGatewayConfig(
   if (!opts?.force && !config.tunnel?.enabled) return;
 
   const gateway = config.gateway ?? {};
+  const gatewayPort = gateway.port ?? 18790;
   let brokerUrl = resolveTunnelBrokerUrl(config.tunnel?.brokerUrl);
 
   try {
@@ -68,9 +69,6 @@ export async function configureTunnelFromGatewayConfig(
     log.warn({ phase: 'tunnel_configure', errorMessage: em }, em);
     throw err;
   }
-
-  const gateway = config.gateway ?? {};
-  const gatewayPort = gateway.port ?? 18790;
 
   getTunnelService().configure({
     brokerUrl,
