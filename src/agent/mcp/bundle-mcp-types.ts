@@ -1,5 +1,5 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import type { TSchema } from "typebox";
+import type { JsonSchemaType } from "@modelcontextprotocol/sdk/validation/types.js";
 import type { Config } from "../../config/schema.js";
 import type { AgentTool as AnyAgentTool } from "@earendil-works/pi-agent-core";
 
@@ -20,7 +20,7 @@ export type McpCatalogTool = {
   toolName: string;
   title?: string;
   description?: string;
-  inputSchema: TSchema;
+  inputSchema: JsonSchemaType;
   fallbackDescription: string;
 };
 
