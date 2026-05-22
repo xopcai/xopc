@@ -416,14 +416,28 @@ export function resolveMemoryPath(config: Config, date: string, agentId: string)
 }
 
 /**
- * Resolve the bundled extensions directory (shipped with xopc)
+ * Resolve the bundled extensions directory (shipped with xopc).
+ *
+ * Layout-dependent candidates (first existing wins):
+ * - `dist/src/config` → `dist/extensions` (npm / gateway)
+ * - `src/config` → `extensions/` (dev, tsx)
+ * - `out/server` → `dist/extensions` (Electron esbuild bundle)
  */
 export function resolveBundledExtensionsDir(): string | null {
   try {
     const currentFile = fileURLToPath(import.meta.url);
     const srcDir = dirname(currentFile);
-    const bundledDir = join(srcDir, '..', '..', 'extensions');
-    return bundledDir;
+    const candidates = [
+      join(srcDir, '..', '..', 'extensions'),
+      join(srcDir, '..', '..', 'dist', 'extensions'),
+      join(srcDir, '..', '..', '..', 'extensions'),
+    ];
+    for (const dir of candidates) {
+      if (existsSync(dir)) {
+        return dir;
+      }
+    }
+    return null;
   } catch {
     return null;
   }

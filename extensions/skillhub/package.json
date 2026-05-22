@@ -1,7 +1,8 @@
 {
   "name": "xopc-extension-skillhub",
   "version": "1.0.0",
-  "description": "SkillHub (skillhub.cn) skills marketplace adapter",
+  "private": true,
+  "description": "Bundled SkillHub marketplace adapter (compiled with core into dist/extensions/; not published to npm).",
   "main": "index.ts",
   "xopc": {
     "extension": true,
