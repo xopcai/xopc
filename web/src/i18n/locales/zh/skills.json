@@ -2,7 +2,7 @@
   "skills": {
     "title": "技能",
     "needToken": "请先保存网关访问令牌后再管理技能。",
-    "tagline": "安装与管理技能，在对话中扩展 xopc 的能力。",
+    "tagline": "安装与管理技能，在对话中扩展 XOPC 的能力。",
     "refresh": "刷新列表",
     "reloadRuntime": "从磁盘重载",
     "reloadDiskAria": "从磁盘重载技能",
@@ -14,7 +14,7 @@
     "sectionMarketplace": "技能商店",
     "marketplaceBrowseSkillhub": "SkillHub",
     "marketplaceBrowseClawhub": "ClawHub",
-    "marketplaceBrowseStore": "xopc 商店",
+    "marketplaceBrowseStore": "XOPC 商店",
     "marketplaceBrowseSwitchAria": "技能广场来源",
     "marketplaceSortLabel": "排序",
     "marketplaceSortDownloads": "下载最多",

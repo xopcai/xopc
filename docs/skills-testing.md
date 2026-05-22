@@ -1,6 +1,6 @@
 # Skill Testing Framework Guide
 
-xopc provides a complete skill testing framework to verify skill quality, safety, and functionality.
+XOPC provides a complete skill testing framework to verify skill quality, safety, and functionality.
 
 ## Table of Contents
 
@@ -40,7 +40,7 @@ npm run dev -- skills test weather --verbose
 ### Run Unit Tests
 
 ```bash
-# From the xopc repository root (after pnpm install)
+# From the XOPC repository root (after pnpm install)
 pnpm test
 ```
 
@@ -555,7 +555,7 @@ ok 2 - weather/Dependencies
 ## References
 
 - [Skills System Guide](./skills.md)
-- Skill test framework and examples live in the xopc source tree next to the `skills test` CLI implementation.
+- Skill test framework and examples live in the XOPC source tree next to the `skills test` CLI implementation.
 
 ---
 

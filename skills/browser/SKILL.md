@@ -11,7 +11,7 @@ metadata:
 
 ## Overview
 
-`browser_use` is xopc’s unified browser tool. It supports four modes:
+`browser_use` is XOPC’s unified browser tool. It supports four modes:
 
 | Mode | Purpose |
 |------|---------|
