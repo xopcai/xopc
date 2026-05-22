@@ -27,6 +27,8 @@
     "settingsVoice": "Voice",
     "settingsGateway": "Gateway",
     "settingsHeartbeat": "Heartbeat",
+    "settingsTunnel": "Remote access",
+    "settingsShares": "File sharing",
     "settingsSearch": "Web search",
     "settingsDreams": "Dreams",
     "settingsAgentChat": "Chat",

@@ -32,6 +32,7 @@ export const REGISTRY_COMMAND_MODULES: Record<string, CommandLoader> = {
   browser: () => import('./commands/browser.js'),
   update: () => import('./commands/update.js'),
   logs: () => import('./commands/logs.js'),
+  tunnel: () => import('./commands/tunnel.js'),
 };
 
 export interface NonRegistryMatcher {

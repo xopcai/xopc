@@ -1,6 +1,7 @@
 import { serve, type ServerType } from '@hono/node-server';
 import { GatewayService } from './service.js';
 import { createHonoApp } from './hono/app.js';
+import { getTunnelService } from '../tunnel/tunnel-service.js';
 
 export interface GatewayServerConfig {
   host: string;
@@ -34,6 +35,9 @@ export class GatewayServer {
       await this.stop();
     });
 
+    const { configureTunnelFromGatewayConfig } = await import('../tunnel/gateway-lifecycle.js');
+    await configureTunnelFromGatewayConfig(this.service.currentConfig);
+
     // Create Hono app
     // Priority: CLI token > service auto-generated token
     const effectiveToken = this.config.token || this.service.getAuthToken();
@@ -41,6 +45,7 @@ export class GatewayServer {
       service: this.service,
       token: effectiveToken,
     });
+    getTunnelService().setGatewayFetch(app.fetch.bind(app));
 
     // Create Node.js HTTP server (no WebSocket upgrade needed)
     this.server = serve(

@@ -23,8 +23,12 @@ export async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Pr
 export async function fetchJson<T>(input: RequestInfo | URL, init?: RequestInit): Promise<T> {
   const res = await apiFetch(input, init);
   if (!res.ok) {
-    const errorBody = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
-    const msg = formatApiHttpError(res.status, res.statusText, errorBody.error?.message);
+    const errorBody = (await res.json().catch(() => ({}))) as {
+      error?: string | { message?: string };
+    };
+    const serverMessage =
+      typeof errorBody.error === 'string' ? errorBody.error : errorBody.error?.message;
+    const msg = formatApiHttpError(res.status, res.statusText, serverMessage);
     throw new Error(msg);
   }
   return res.json() as Promise<T>;

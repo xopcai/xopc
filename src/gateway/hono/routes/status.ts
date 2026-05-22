@@ -1,7 +1,32 @@
 import type { Context } from 'hono';
 import type { Hono } from 'hono';
 
+import type { Config } from '../../../config/schema.js';
+import { isSTTAvailable } from '../../../voice/stt/index.js';
+import { mergeSttConfigFromAppConfig } from '../../../channels/attachments/voice-stt-webchat.js';
+import { getDefaultModelSync, resolveModel } from '../../../providers/index.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
+
+function isRefineAvailable(config: Config | undefined): boolean {
+  if (!config) return false;
+  for (const candidate of [
+    process.env.XOPC_VOICE_REFINE_MODEL?.trim(),
+    'openai/gpt-4o-mini',
+    'google/gemini-2.0-flash',
+  ]) {
+    if (!candidate) continue;
+    try {
+      resolveModel(candidate);
+      return true;
+    } catch { /* next */ }
+  }
+  try {
+    resolveModel(getDefaultModelSync(config));
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 function buildStatusPayload(service: AuthenticatedRouteDeps['service']) {
   const health = service.getHealth();
@@ -11,11 +36,19 @@ function buildStatusPayload(service: AuthenticatedRouteDeps['service']) {
     const status = !row.enabled ? 'disabled' : row.connected ? 'connected' : 'disconnected';
     channels[row.name] = { status };
   }
+
+  const config = service.currentConfig as Config | undefined;
+  const sttConfig = config ? mergeSttConfigFromAppConfig(config.tools?.media?.audio) : undefined;
+
   return {
     status: health.status,
     version: health.version,
     channels,
     uptime: health.uptime,
+    voice: {
+      sttAvailable: sttConfig ? isSTTAvailable(sttConfig) : false,
+      refineAvailable: isRefineAvailable(config),
+    },
   };
 }
 
