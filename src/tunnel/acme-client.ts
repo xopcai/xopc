@@ -84,16 +84,44 @@ function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-async function waitForDnsTxt(fqdn: string, expectedValue: string, timeoutMs = 180_000): Promise<void> {
+function normalizeFqdn(fqdn: string): string {
+  return fqdn.trim().replace(/\.$/, '').toLowerCase();
+}
+
+/** LE always validates `_acme-challenge.{domain}` (RFC 8555 §8.4). */
+export function resolveAcmeChallengeFqdn(domain: string): string {
+  return `_acme-challenge.${domain}`;
+}
+
+export function formatAcmeDnsChallengeInvalidError(
+  fqdn: string,
+  data: { error?: { detail?: string; type?: string }; validationRecord?: string[] },
+): string {
+  const parts = [`ACME DNS-01 challenge invalid for ${fqdn}`];
+  if (data.error?.detail) parts.push(data.error.detail);
+  else if (data.error?.type) parts.push(data.error.type);
+  if (data.validationRecord?.length) {
+    parts.push(`validation: ${data.validationRecord.join('; ')}`);
+  }
+  return parts.join(' — ');
+}
+
+async function waitForDnsTxt(
+  fqdn: string,
+  expectedValue: string,
+  opts?: { initialDelayMs?: number; timeoutMs?: number },
+): Promise<void> {
+  const initialDelayMs = opts?.initialDelayMs ?? 45_000;
+  const timeoutMs = opts?.timeoutMs ?? 180_000;
   const deadline = Date.now() + timeoutMs;
   let lastSeen: string[] = [];
   // Dynadot authoritative DNS often needs ~60s after set_dns2 before TXT is queryable.
-  await sleep(45_000);
+  if (initialDelayMs > 0) await sleep(initialDelayMs);
   while (Date.now() < deadline) {
     try {
       lastSeen = await resolveAcmeDnsTxt(fqdn);
       if (lastSeen.some((value) => value === expectedValue)) {
-        log.info({ fqdn, resolvers: ACME_DNS_RESOLVERS }, 'DNS-01 TXT record visible');
+        log.info({ fqdn, resolvers: ACME_DNS_RESOLVERS, txtCount: lastSeen.length }, 'DNS-01 TXT record visible');
         return;
       }
     } catch {
@@ -291,16 +319,25 @@ async function pollChallengeReady(
   challengeUrl: string,
   account: AcmeAccount,
   directory: AcmeDirectory,
+  challengeFqdn: string,
 ): Promise<void> {
   for (let i = 0; i < 30; i++) {
     await sleep(i === 0 ? 5_000 : 2_000);
     const nonce = await getNonce(directory);
     // POST-as-GET (payload null) — must not POST `{}` again; that re-submits the challenge response.
-    const { data } = await acmeSignedPost<{ status?: string }>(challengeUrl, account, nonce, null);
+    const { data } = await acmeSignedPost<{
+      status?: string;
+      error?: { type?: string; detail?: string };
+      validationRecord?: string[];
+    }>(challengeUrl, account, nonce, null);
     if (data.status === 'valid') return;
-    if (data.status === 'invalid') throw new Error('ACME DNS-01 challenge invalid');
+    if (data.status === 'invalid') {
+      const message = formatAcmeDnsChallengeInvalidError(challengeFqdn, data);
+      log.error({ challengeFqdn, error: data.error, validationRecord: data.validationRecord }, message);
+      throw new Error(message);
+    }
   }
-  throw new Error('ACME DNS-01 challenge timed out');
+  throw new Error(`ACME DNS-01 challenge timed out for ${challengeFqdn}`);
 }
 
 async function pollOrderValid(
@@ -358,7 +395,8 @@ export async function requestCertificate(config: AcmeConfig): Promise<AcmeCertRe
   const keyAuth = `${challenge.token}.${thumbprint}`;
   const txtValue = base64url(createHash('sha256').update(keyAuth).digest());
 
-  log.info({ fqdn: `_acme-challenge.${domain}` }, 'Setting DNS-01 challenge via Broker');
+  const challengeFqdn = resolveAcmeChallengeFqdn(domain);
+  log.info({ fqdn: challengeFqdn, txtPreview: `${txtValue.slice(0, 8)}…` }, 'Setting DNS-01 challenge via Broker');
   config.onProgress?.('dns_challenge');
   const { recordId, fqdn } = await config.broker.setDnsChallenge({
     tunnelId: config.tunnelId,
@@ -367,15 +405,25 @@ export async function requestCertificate(config: AcmeConfig): Promise<AcmeCertRe
     txtValue,
   });
 
+  if (normalizeFqdn(fqdn) !== normalizeFqdn(challengeFqdn)) {
+    log.warn(
+      { brokerFqdn: fqdn, challengeFqdn, phase: 'acme_dns_fqdn_mismatch' },
+      'Broker returned unexpected ACME challenge FQDN — polling canonical name for Let\'s Encrypt',
+    );
+  }
+
   try {
     config.onProgress?.('dns_propagation');
-    await waitForDnsTxt(fqdn, txtValue);
+    await waitForDnsTxt(challengeFqdn, txtValue);
+    // Public resolvers can lead LE validators; re-check before submitting the challenge.
+    await sleep(15_000);
+    await waitForDnsTxt(challengeFqdn, txtValue, { initialDelayMs: 0, timeoutMs: 60_000 });
 
     nonce = await getNonce(directory);
     await acmeSignedPost(challenge.url, account, nonce, {});
 
     config.onProgress?.('ca_validation');
-    await pollChallengeReady(challenge.url, account, directory);
+    await pollChallengeReady(challenge.url, account, directory, challengeFqdn);
 
     const { csrDer, keyPem } = generateDomainCsr(domain);
     const finalizeUrl = orderResult.data.finalize;

@@ -38,7 +38,7 @@ function resolveGatewayToken(config: ReturnType<typeof loadConfig>): string {
 
 function configureTunnel(ctx: CLIContext): void {
   const config = loadConfig(ctx.configPath);
-  const { host } = resolveGatewayPortHost(config);
+  const { port, host } = resolveGatewayPortHost(config);
   const brokerUrl = resolveTunnelBrokerUrl(config.tunnel?.brokerUrl);
   getTunnelService().configure({
     brokerUrl,
@@ -49,7 +49,7 @@ function configureTunnel(ctx: CLIContext): void {
     ),
     autoStart: config.tunnel?.autoStart ?? false,
     gatewayHost: host,
-    e2e: resolveTunnelE2eConfig(config.tunnel),
+    e2e: resolveTunnelE2eConfig(config.tunnel, port),
     frpSubdomainHost: resolveFrpSubdomainHost(resolveTunnelBrokerUrl(config.tunnel?.brokerUrl)),
   });
 }

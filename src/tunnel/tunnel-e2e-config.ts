@@ -6,11 +6,27 @@ export type ResolvedTunnelE2eConfig = {
   staging: boolean;
 };
 
-export function resolveTunnelE2eConfig(tunnel?: TunnelConfig): ResolvedTunnelE2eConfig {
+/** Historical schema default — not suitable when gateway.port ≠ 18790 (e.g. Electron 28790). */
+export const LEGACY_DEFAULT_TUNNEL_TLS_PORT = 18791;
+
+export function resolveTunnelTlsPort(e2eTlsPort: number | undefined, gatewayPort: number): number {
+  if (e2eTlsPort === undefined) {
+    return gatewayPort + 1;
+  }
+  if (e2eTlsPort === LEGACY_DEFAULT_TUNNEL_TLS_PORT && gatewayPort !== 18790) {
+    return gatewayPort + 1;
+  }
+  return e2eTlsPort;
+}
+
+export function resolveTunnelE2eConfig(
+  tunnel?: TunnelConfig,
+  gatewayPort = 18790,
+): ResolvedTunnelE2eConfig {
   const e2e = tunnel?.e2e;
   return {
     enabled: e2e?.enabled ?? true,
-    tlsPort: e2e?.tlsPort ?? 18791,
+    tlsPort: resolveTunnelTlsPort(e2e?.tlsPort, gatewayPort),
     staging: e2e?.staging ?? false,
   };
 }

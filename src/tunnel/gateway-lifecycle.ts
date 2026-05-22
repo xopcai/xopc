@@ -69,12 +69,15 @@ export async function configureTunnelFromGatewayConfig(
     throw err;
   }
 
+  const gateway = config.gateway ?? {};
+  const gatewayPort = gateway.port ?? 18790;
+
   getTunnelService().configure({
     brokerUrl,
     registrationSecret,
     autoStart: config.tunnel?.autoStart ?? false,
     gatewayHost: gateway.host ?? '127.0.0.1',
-    e2e: resolveTunnelE2eConfig(config.tunnel),
+    e2e: resolveTunnelE2eConfig(config.tunnel, gatewayPort),
     frpSubdomainHost: resolveFrpSubdomainHost(brokerUrl),
   });
 }

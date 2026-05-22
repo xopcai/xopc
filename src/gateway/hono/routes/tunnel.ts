@@ -1,5 +1,6 @@
 import type { Hono, MiddlewareHandler } from 'hono';
 
+import { resolveTunnelE2eConfig } from '../../../tunnel/tunnel-e2e-config.js';
 import type { Config } from '../../../config/schema.js';
 import { extractToken } from '../../auth.js';
 import {
@@ -267,14 +268,11 @@ export function registerTunnelRoutes(authenticated: Hono, deps: AuthenticatedRou
     await configureTunnelFromService(deps);
     const config = deps.service.currentConfig as Config;
     const cert = getCertStatusSummary();
-    const e2e = config.tunnel?.e2e;
+    const gatewayPort = config.gateway?.port ?? 18790;
+    const e2e = resolveTunnelE2eConfig(config.tunnel, gatewayPort);
     return c.json({
       ...cert,
-      e2e: {
-        enabled: e2e?.enabled ?? true,
-        tlsPort: e2e?.tlsPort ?? 18791,
-        staging: e2e?.staging ?? false,
-      },
+      e2e,
     });
   });
 }
