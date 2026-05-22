@@ -1,12 +1,12 @@
 ---
 name: find-skills
-description: 帮助用户在 xopc 工作区中发现、安装和管理 Agent Skills。
+description: 帮助用户在 XOPC 工作区中发现、安装和管理 Agent Skills。
 license: MIT
 ---
 
 # Find Skills（查找技能）
 
-本技能帮助你在 xopc 生态中发现、安装和管理技能。
+本技能帮助你在 XOPC 生态中发现、安装和管理技能。
 
 ## 何时使用本技能
 
@@ -19,9 +19,9 @@ license: MIT
 - 需要管理已安装的技能（启用、禁用、配置）
 - 想要浏览可用技能
 
-## xopc Skills CLI 命令
+## XOPC Skills CLI 命令
 
-xopc 提供内置的技能管理命令：
+XOPC 提供内置的技能管理命令：
 
 ### 列出可用技能
 
@@ -50,7 +50,7 @@ mv ~/.xopc/workspace/main/skills/vercel-react-best-practices-temp/SKILL.md ~/.xo
 rm -rf ~/.xopc/workspace/main/skills/vercel-react-best-practices-temp
 ```
 
-**使用 xopc skills install（适用于含安装规范的技能）：**
+**使用 `xopc skills install`（适用于含安装规范的技能）：**
 
 ```bash
 # 安装技能依赖
@@ -144,7 +144,7 @@ xopc skills list -v
 
 ### 第 3 步：安装技能
 
-**对于 xopc 兼容的技能：**
+**对于 XOPC 兼容的技能：**
 
 1. **检查技能是否有安装规范**（在 SKILL.md 中）：
    ```bash
@@ -226,7 +226,7 @@ xopc skills list -v
 如果用户想要继续，你可以帮他们安装：
 
 ```bash
-# 对于含安装规范的 xopc 技能
+# 对于含安装规范的 XOPC 技能
 xopc skills install <skill-name> -y
 
 # 对于 GitHub 技能（自动化）
@@ -275,7 +275,7 @@ curl -L <skill-url>/SKILL.md -o ~/.xopc/workspace/main/skills/<skill-name>/SKILL
 
 ## 技能安装方法
 
-### 方法 1：xopc 内置安装（推荐）
+### 方法 1：XOPC 内置安装（推荐）
 
 适用于声明了安装依赖的技能：
 
@@ -435,6 +435,6 @@ xopc skills list -v
 ## 参考资料
 
 - **技能市场**：https://skills.sh/
-- **xopc Skills CLI**：`xopc skills --help`
+- **XOPC Skills CLI**：`xopc skills --help`
 - **技能格式**：SKILL.md frontmatter 规范
 - **GitHub 技能**：在 GitHub 上搜索 "agent-skills"

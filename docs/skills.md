@@ -1,6 +1,6 @@
 # Skills System Guide
 
-xopc's skills system is file-based: add domain-specific capabilities and knowledge to your assistant through `SKILL.md` files in the workspace.
+XOPC's skills system is file-based: add domain-specific capabilities and knowledge to your assistant through `SKILL.md` files in the workspace.
 
 ## Table of Contents
 
@@ -118,8 +118,8 @@ install:
 
 Skills can be loaded from these locations:
 
-1. **Bundled** - Skills built into xopc
-   - Bundled skills ship with the xopc install.
+1. **Bundled** - Skills built into XOPC
+   - Bundled skills ship with the XOPC install.
    
 2. **Workspace** - Workspace-specific skills
    - Location: `<workspace>/skills/`
@@ -409,7 +409,7 @@ Findings:
 
 ## Skill Testing
 
-xopc provides a complete skill testing framework to verify skill quality, safety, and functionality.
+XOPC provides a complete skill testing framework to verify skill quality, safety, and functionality.
 
 ### Test Types
 
