@@ -16,6 +16,17 @@ export type TunnelStatusResponse = {
     totalBytes?: number | null;
     percent?: number | null;
   } | null;
+  startProgress?: {
+    phase:
+      | 'preparing_frpc'
+      | 'registering'
+      | 'provisioning_tls'
+      | 'starting_frpc'
+      | 'reconnecting_frpc';
+    startedAt: string;
+    acmeStep?: 'checking' | 'dns_challenge' | 'dns_propagation' | 'ca_validation' | 'issuing' | null;
+    publicUrl?: string | null;
+  } | null;
   consentRequired?: boolean;
   canAutoStart?: boolean;
   consent?: {

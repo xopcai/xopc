@@ -19,6 +19,7 @@ import {
   type TunnelStatusResponse,
 } from '@/features/tunnel/tunnel-api';
 import { useMobilePairQr } from '@/features/tunnel/use-mobile-pair-qr';
+import { TunnelStartProgressPanel } from '@/features/tunnel/tunnel-start-progress';
 import { cn } from '@/lib/cn';
 import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
@@ -29,8 +30,13 @@ function statusLabel(
   status: TunnelStatusResponse,
 ): string {
   if (status.state === 'connected') return t.statusConnected;
-  if (status.state === 'connecting' || status.state === 'reconnecting') return t.statusConnecting;
   if (status.state === 'error') return t.statusError;
+  if (status.startProgress?.phase === 'reconnecting_frpc') return t.statusReconnecting;
+  if (status.startProgress?.phase === 'provisioning_tls') return t.statusProvisioningTls;
+  if (status.startProgress?.phase === 'starting_frpc') return t.statusStartingFrpc;
+  if (status.startProgress?.phase === 'registering') return t.statusRegistering;
+  if (status.startProgress?.phase === 'preparing_frpc' || status.frpcDownload) return t.statusPreparingFrpc;
+  if (status.state === 'connecting' || status.state === 'reconnecting') return t.statusConnecting;
   return t.statusOff;
 }
 
@@ -50,24 +56,6 @@ function formatUptime(since: string | null): string {
   const hrs = Math.floor(mins / 60);
   const rem = mins % 60;
   return `${hrs}h ${rem}m`;
-}
-
-function formatByteCount(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function frpcDownloadLabel(
-  t: ReturnType<typeof messages>['tunnelSettings'],
-  progress: NonNullable<TunnelStatusResponse['frpcDownload']>,
-): string {
-  if (progress.phase === 'extracting') return t.frpcExtracting;
-  if (progress.percent != null) return t.frpcDownloadingPercent.replace('{{percent}}', String(progress.percent));
-  if (progress.bytesReceived != null) {
-    return t.frpcDownloadingBytes.replace('{{received}}', formatByteCount(progress.bytesReceived));
-  }
-  return t.frpcDownloading;
 }
 
 export function TunnelSettingsPanel() {
@@ -351,41 +339,7 @@ export function TunnelSettingsPanel() {
           <span className={cn('size-2.5 rounded-full', statusDotClass(st))} aria-hidden />
           {statusLabel(t, st)}
         </div>
-        {st.frpcDownload ? (
-          <div className="mt-3 space-y-2">
-            <p className="flex items-center gap-2 text-xs text-fg-muted">
-              <Loader2 className="size-3.5 animate-spin shrink-0" />
-              {frpcDownloadLabel(t, st.frpcDownload)}
-            </p>
-            <div
-              className="h-1.5 w-full overflow-hidden rounded-full bg-surface-panel"
-              role="progressbar"
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-valuenow={st.frpcDownload.percent ?? undefined}
-              aria-label={frpcDownloadLabel(t, st.frpcDownload)}
-            >
-              <div
-                className={cn(
-                  'h-full rounded-full bg-accent transition-[width] duration-300',
-                  st.frpcDownload.percent == null && 'w-1/3 animate-pulse',
-                )}
-                style={
-                  st.frpcDownload.percent != null
-                    ? { width: `${st.frpcDownload.percent}%` }
-                    : undefined
-                }
-              />
-            </div>
-            {st.frpcDownload.phase === 'downloading' &&
-            st.frpcDownload.bytesReceived != null &&
-            st.frpcDownload.totalBytes ? (
-              <p className="text-xs text-fg-subtle">
-                {formatByteCount(st.frpcDownload.bytesReceived)} / {formatByteCount(st.frpcDownload.totalBytes)}
-              </p>
-            ) : null}
-          </div>
-        ) : null}
+        <TunnelStartProgressPanel status={st} t={t} />
         {st.publicUrl ? (
           <p className="font-mono text-xs text-fg-subtle break-all">{st.publicUrl}</p>
         ) : null}
