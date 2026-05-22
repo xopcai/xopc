@@ -1,5 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync } from 'node:fs';
 import type { Config } from './schema.js';
 import { loadConfig, saveConfig } from './loader.js';
 import { resolveConfigPath } from './paths.js';

@@ -7,13 +7,15 @@ import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/setti
 import {
   emptyMcpServerRow,
   buildMcpServerConfigFromRow,
+  mcpServerCardKey,
   normalizeMcpSettingsFromConfig,
   patchMcpSettings,
   testMcpServer,
   type McpSettingsState,
+  type McpToolInfo,
 } from '@/features/settings/mcp/mcp-config-api';
-import { McpServerCard, mcpServerCardKey } from '@/features/settings/mcp/mcp-server-card';
-import { McpToolsListDialog, type McpToolInfo } from '@/features/settings/mcp/mcp-tools-list-dialog';
+import { McpServerCard } from '@/features/settings/mcp/mcp-server-card';
+import { McpToolsListDialog } from '@/features/settings/mcp/mcp-tools-list-dialog';
 import { settingsInputFocusClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
 import { messages } from '@/i18n/messages';
@@ -101,7 +103,8 @@ export function McpSettingsPanel() {
     setForm((f) => {
       if (!f) return f;
       const servers = [...f.servers];
-      const prev = servers[index]!;
+      const prev = servers[index];
+      if (!prev) return f;
       servers[index] = { ...prev, ...patch };
       if (patch.id && patch.id !== prev.id) {
         const prevKey = mcpServerCardKey(prev, index);

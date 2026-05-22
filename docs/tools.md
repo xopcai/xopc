@@ -21,8 +21,11 @@ This page lists tools the xopc agent can call: read and edit files, run commands
 | Browser (optional) | `browser_*` when browser automation is enabled |
 | Delegation & code (optional) | `delegate_task`, `execute_code` |
 | Scheduling (optional) | `cronjob` — when the runtime exposes cron (typical gateway setup) |
+| MCP (optional) | `serverId__toolName` — from configured MCP servers; disable all with `bundle-mcp` in `tools.disable` |
 
 Extensions may add further tools.
+
+**MCP tools:** Registered at runtime from `mcp.servers` (and extension `.mcp.json` manifests). Names use `serverId__toolName`. See [MCP](mcp.md).
 
 **Conditionally enabled:** Some capabilities need explicit settings: e.g. `session_search` needs session persistence; `web_extract` uses `agents.defaults.webExtract.model` or `XOPC_WEB_EXTRACT_MODEL`; skills write policy is `skills.agentWritePolicy`; skill discovery can be gated with `skills.toolGating` and metadata. For skills CLI (`xopc skills hub …`), see [Skills](skills.md).
 
