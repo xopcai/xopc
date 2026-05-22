@@ -1,13 +1,26 @@
 /**
  * LaunchAgent Service - macOS user service management
+ *
+ * Aligned with OpenClaw launchd implementation:
+ * - KeepAlive with SuccessfulExit=false
+ * - ThrottleInterval for restart throttling
+ * - ExitTimeOut for graceful shutdown
+ * - launchctl bootstrap/bootout for modern service management
+ * - launchctl kickstart -k for restart
  */
 
-import { writeFile, mkdir, readFile, rm, access, constants } from 'node:fs/promises';
+import { writeFile, mkdir, readFile, rm } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { spawn, spawnSync } from 'node:child_process';
 import path from 'node:path';
 import os from 'node:os';
 import { createLogger } from '../utils/logger.js';
+import {
+  resolveGatewayLaunchAgentLabel,
+  resolveLaunchAgentPlistPath as resolvePlistPathFromConstants,
+  LAUNCH_AGENT_THROTTLE_INTERVAL_SECONDS,
+  LAUNCH_AGENT_EXIT_TIMEOUT_SECONDS,
+} from './constants.js';
 import type {
   GatewayService,
   GatewayServiceInstallArgs,
@@ -16,40 +29,49 @@ import type {
   GatewayServiceRuntime,
   GatewayServiceCommandConfig,
   GatewayServiceEnv,
+  GatewayServiceRestartResult,
 } from './types.js';
 
 const log = createLogger('LaunchdService');
 
-/**
- * Get GUI domain (for user launchd)
- */
+// ─── Domain / Path Resolution ───
+
 function resolveGuiDomain(): string {
-  // For user agents, use "gui/" domain
-  return `gui/${os.userInfo().uid}`;
+  const uid = typeof process.getuid === 'function' ? process.getuid() : 501;
+  return `gui/${uid}`;
 }
 
-/**
- * Resolve plist path
- */
-function resolveLaunchAgentPlistPath(env: GatewayServiceEnv): string {
-  const home = os.homedir();
-  const libraryPath = path.join(home, 'Library', 'LaunchAgents');
-  const label = env.XOPC_PROFILE
-    ? `ai.xopc.xopc.gateway.${env.XOPC_PROFILE}`
-    : 'ai.xopc.xopc.gateway';
-  return path.join(libraryPath, `${label}.plist`);
+function resolveProfileFromEnv(env?: GatewayServiceEnv): string | undefined {
+  return env?.XOPC_PROFILE?.trim() || undefined;
 }
 
-/**
- * Resolve log directory
- */
+export function resolveLaunchAgentPlistPath(env?: GatewayServiceEnv): string {
+  return resolvePlistPathFromConstants(resolveProfileFromEnv(env));
+}
+
+function resolveLabelFromEnv(env?: GatewayServiceEnv): string {
+  return resolveGatewayLaunchAgentLabel(resolveProfileFromEnv(env));
+}
+
+function resolveServiceTarget(env?: GatewayServiceEnv): string {
+  return `${resolveGuiDomain()}/${resolveLabelFromEnv(env)}`;
+}
+
 function resolveLogDir(): string {
   return path.join(os.homedir(), '.xopc', 'logs');
 }
 
-/**
- * Build plist content
- */
+// ─── Plist Generation ───
+
+function escapeXml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
 function buildLaunchAgentPlist(params: {
   label: string;
   programArguments: string[];
@@ -111,6 +133,10 @@ ${envDict}
         <key>SuccessfulExit</key>
         <false/>
     </dict>
+    <key>ThrottleInterval</key>
+    <integer>${LAUNCH_AGENT_THROTTLE_INTERVAL_SECONDS}</integer>
+    <key>ExitTimeOut</key>
+    <integer>${LAUNCH_AGENT_EXIT_TIMEOUT_SECONDS}</integer>
     <key>ProcessType</key>
     <string>Interactive</string>
 </dict>
@@ -119,63 +145,51 @@ ${envDict}
   return plist;
 }
 
-/**
- * Escape XML special characters
- */
-function escapeXml(str: string): string {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
+// ─── launchctl Execution ───
+
+interface LaunchctlResult {
+  stdout: string;
+  stderr: string;
+  exitCode: number | null;
 }
 
-/**
- * Execute launchctl command
- */
-async function launchctl(args: string[], _options?: { stdin?: string }): Promise<string> {
-  try {
+async function launchctl(args: string[]): Promise<LaunchctlResult> {
+  return new Promise<LaunchctlResult>((resolve, reject) => {
     const child = spawn('launchctl', args, {
       stdio: ['ignore', 'pipe', 'pipe'],
     });
-    
-    let out = '';
-    let err = '';
-    
-    if (child.stdout) {
-      child.stdout.on('data', (data) => { out += data.toString(); });
-    }
-    if (child.stderr) {
-      child.stderr.on('data', (data) => { err += data.toString(); });
-    }
-    
-    return await new Promise<string>((resolve, reject) => {
-      child.on('close', () => {
-        if (err) {
-          const errStr = err.trim();
-          if (errStr) {
-            log.debug({ stderr: errStr }, 'launchctl stderr');
-          }
-        }
-        resolve(out);
-      });
-      child.on('error', reject);
+
+    let stdout = '';
+    let stderr = '';
+
+    child.stdout?.on('data', (data) => { stdout += data.toString(); });
+    child.stderr?.on('data', (data) => { stderr += data.toString(); });
+
+    child.on('close', (code) => {
+      resolve({ stdout, stderr, exitCode: code });
     });
-  } catch (err) {
-    const e = err as { message?: string };
-    throw new Error(`launchctl failed: ${e.message || String(err)}`);
-  }
+    child.on('error', (err) => {
+      reject(new Error(`launchctl spawn failed: ${err.message}`));
+    });
+  });
 }
 
-/**
- * Check if launchd is available
- */
+async function launchctlExec(args: string[]): Promise<string> {
+  const result = await launchctl(args);
+  if (result.stderr.trim()) {
+    log.debug({ stderr: result.stderr.trim(), args }, 'launchctl stderr');
+  }
+  return result.stdout;
+}
+
+// ─── Availability Check ───
+
 export function isLaunchdAvailable(): boolean {
   if (process.platform !== 'darwin') return false;
   try {
-    const result = spawnSync('launchctl', ['print', 'gui/'], {
-      stdio: ['ignore', 'ignore', 'ignore'],
+    const result = spawnSync('launchctl', ['version'], {
+      stdio: ['ignore', 'pipe', 'ignore'],
+      timeout: 3000,
     });
     return result.status === 0;
   } catch {
@@ -183,36 +197,73 @@ export function isLaunchdAvailable(): boolean {
   }
 }
 
-/**
- * LaunchAgent service implementation
- */
+// ─── Plist Parsing ───
+
+function parsePlistProgramArguments(content: string): string[] {
+  const argsMatch = content.match(
+    /<key>ProgramArguments<\/key>\s*<array>([\s\S]*?)<\/array>/,
+  );
+  if (!argsMatch) return [];
+
+  const programArgs: string[] = [];
+  const stringMatches = argsMatch[1].matchAll(/<string>([\s\S]*?)<\/string>/g);
+  for (const m of stringMatches) {
+    programArgs.push(unescapeXml(m[1]));
+  }
+  return programArgs;
+}
+
+function parsePlistEnvironment(content: string): Record<string, string> {
+  const envMatch = content.match(
+    /<key>EnvironmentVariables<\/key>\s*<dict>([\s\S]*?)<\/dict>/,
+  );
+  if (!envMatch) return {};
+
+  const environment: Record<string, string> = {};
+  const pairs = envMatch[1].matchAll(
+    /<key>([\s\S]*?)<\/key>\s*<string>([\s\S]*?)<\/string>/g,
+  );
+  for (const pair of pairs) {
+    environment[unescapeXml(pair[1])] = unescapeXml(pair[2]);
+  }
+  return environment;
+}
+
+function parsePlistStringValue(content: string, key: string): string | undefined {
+  const regex = new RegExp(`<key>${key}</key>\\s*<string>([\\s\\S]*?)</string>`);
+  const match = content.match(regex);
+  return match ? unescapeXml(match[1]) : undefined;
+}
+
+function unescapeXml(str: string): string {
+  return str
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'");
+}
+
+// ─── Service Implementation ───
+
 export const launchdService: GatewayService = {
-  label: 'ai.xopc.xopc.gateway',
-  loadedText: 'ai.xopc.xopc.gateway',
-  notLoadedText: 'ai.xopc.xopc.gateway',
+  label: resolveGatewayLaunchAgentLabel(),
+  loadedText: 'LaunchAgent (loaded)',
+  notLoadedText: 'LaunchAgent (not loaded)',
 
   async install(args: GatewayServiceInstallArgs): Promise<void> {
+    const label = resolveLabelFromEnv(args.env);
     const plistPath = resolveLaunchAgentPlistPath(args.env);
     const logDir = resolveLogDir();
-    const label = args.env.XOPC_PROFILE
-      ? `ai.xopc.xopc.gateway.${args.env.XOPC_PROFILE}`
-      : 'ai.xopc.xopc.gateway';
 
     // Ensure directories exist
     await mkdir(path.dirname(plistPath), { recursive: true });
     await mkdir(logDir, { recursive: true });
 
     // Build environment
-    const environment: Record<string, string> = {
-      ...args.environment,
-      XOPC_CONFIG: args.env.XOPC_CONFIG || '',
-      XOPC_WORKSPACE: args.env.XOPC_WORKSPACE || '',
-      XOPC_LOG_LEVEL: args.env.XOPC_LOG_LEVEL || 'info',
-      XOPC_LOG_FILE: 'true',
-    };
-
-    if (args.env.XOPC_GATEWAY_TOKEN) {
-      environment.XOPC_GATEWAY_TOKEN = args.env.XOPC_GATEWAY_TOKEN;
+    const environment: Record<string, string> = {};
+    if (args.environment) {
+      Object.assign(environment, args.environment);
     }
 
     // Build plist
@@ -225,123 +276,161 @@ export const launchdService: GatewayService = {
       stderrPath: path.join(logDir, 'gateway.err.log'),
     });
 
-    // Write plist
+    // Write plist file
     await writeFile(plistPath, plist, 'utf8');
     args.stdout?.write(`Written: ${plistPath}\n`);
 
-    // Load the LaunchAgent via launchctl
+    // Bootstrap the service
     const domain = resolveGuiDomain();
-    await launchctl(['bootstrap', domain, plistPath]);
+    const result = await launchctl(['bootstrap', domain, plistPath]);
+    if (result.exitCode !== 0 && result.exitCode !== 37) {
+      // exit 37 = already loaded, acceptable
+      const detail = result.stderr.trim() || result.stdout.trim();
+      if (detail) {
+        log.warn({ detail, exitCode: result.exitCode }, 'launchctl bootstrap warning');
+      }
+    }
 
-    log.info('LaunchAgent installed');
+    log.info({ label, plistPath }, 'LaunchAgent installed and bootstrapped');
   },
 
   async uninstall(args: GatewayServiceControlArgs): Promise<void> {
+    const serviceTarget = resolveServiceTarget(args.env);
     const plistPath = resolveLaunchAgentPlistPath(args.env);
 
-    // Bootout (stop and unload)
-    const domain = resolveGuiDomain();
+    // Bootout the service (stops + unloads)
     try {
-      await launchctl(['bootout', domain, plistPath]);
+      await launchctlExec(['bootout', serviceTarget]);
     } catch {
       // Ignore if not loaded
     }
 
-    // Remove plist
+    // Remove plist file
     if (existsSync(plistPath)) {
       await rm(plistPath);
       args.stdout?.write(`Removed: ${plistPath}\n`);
     }
 
-    log.info('LaunchAgent uninstalled');
-  },
-
-  async start(args: GatewayServiceControlArgs): Promise<void> {
-    const plistPath = resolveLaunchAgentPlistPath(args.env);
-    const domain = resolveGuiDomain();
-    await launchctl(['bootstrap', domain, plistPath]);
-    log.info('LaunchAgent started');
+    log.info({ plistPath }, 'LaunchAgent uninstalled');
   },
 
   async stop(args: GatewayServiceControlArgs): Promise<void> {
-    const plistPath = resolveLaunchAgentPlistPath(args.env);
-    const domain = resolveGuiDomain();
-    try {
-      await launchctl(['bootout', domain, plistPath]);
-    } catch {
-      // Ignore if not running
+    const serviceTarget = resolveServiceTarget(args.env);
+
+    if (args.disable) {
+      // Disable + bootout: service won't respawn
+      const plistPath = resolveLaunchAgentPlistPath(args.env);
+      try {
+        await launchctlExec(['bootout', serviceTarget]);
+      } catch {
+        // Ignore
+      }
+      if (existsSync(plistPath)) {
+        await rm(plistPath);
+      }
+      log.info('LaunchAgent stopped and disabled (plist removed)');
+    } else {
+      // Send SIGTERM via launchctl kill
+      try {
+        await launchctlExec(['kill', 'SIGTERM', serviceTarget]);
+      } catch {
+        // Service might not be running
+        log.debug('LaunchAgent kill SIGTERM failed (may not be running)');
+      }
+      log.info('LaunchAgent stop signal sent');
     }
-    log.info('LaunchAgent stopped');
   },
 
-  async restart(args: GatewayServiceControlArgs): Promise<void> {
-    await this.stop(args);
-    await this.start(args);
-    log.info('LaunchAgent restarted');
+  async restart(args: GatewayServiceControlArgs): Promise<GatewayServiceRestartResult> {
+    const serviceTarget = resolveServiceTarget(args.env);
+
+    // Use kickstart -k for reliable restart (kills current + starts new)
+    const result = await launchctl(['kickstart', '-k', serviceTarget]);
+
+    if (result.exitCode === 0) {
+      log.info('LaunchAgent restarted via kickstart');
+      return { outcome: 'restarted' };
+    }
+
+    // Fallback: bootout + bootstrap
+    const plistPath = resolveLaunchAgentPlistPath(args.env);
+    const domain = resolveGuiDomain();
+
+    try {
+      await launchctlExec(['bootout', serviceTarget]);
+    } catch {
+      // Ignore
+    }
+
+    const bootstrapResult = await launchctl(['bootstrap', domain, plistPath]);
+    if (bootstrapResult.exitCode === 0 || bootstrapResult.exitCode === 37) {
+      log.info('LaunchAgent restarted via bootout+bootstrap');
+      return { outcome: 'restarted' };
+    }
+
+    throw new Error(
+      `Failed to restart LaunchAgent: ${bootstrapResult.stderr.trim() || 'unknown error'}`,
+    );
   },
 
   async isLoaded(args: GatewayServiceEnvArgs): Promise<boolean> {
-    const plistPath = resolveLaunchAgentPlistPath(args.env);
-    try {
-      await access(plistPath, constants.F_OK);
-      return true;
-    } catch {
-      return false;
-    }
+    const serviceTarget = resolveServiceTarget(args.env);
+    const result = await launchctl(['print', serviceTarget]);
+    return result.exitCode === 0;
   },
 
-  async getRuntime(args: GatewayServiceEnvArgs): Promise<GatewayServiceRuntime> {
-    const plistPath = resolveLaunchAgentPlistPath(args.env);
-    const domain = resolveGuiDomain();
+  async readRuntime(env?: GatewayServiceEnv): Promise<GatewayServiceRuntime> {
+    const serviceTarget = resolveServiceTarget(env);
 
     try {
-      const output = await launchctl(['print', `${domain}/${path.basename(plistPath, '.plist')}`]);
-      
-      // Parse output for PID and state
-      const pidMatch = output.match(/pid\s*=\s*(\d+)/);
-      const stateMatch = output.match(/"initial"\s*=\s*"([^"]+)"/);
-      
-      let status: 'running' | 'stopped' | 'unknown' = 'unknown';
+      const result = await launchctl(['print', serviceTarget]);
+      if (result.exitCode !== 0) {
+        return { status: 'stopped' };
+      }
+
+      const output = result.stdout;
+
+      // Parse PID
       let pid: number | undefined;
-      
-      if (stateMatch) {
-        status = stateMatch[1] === 'running' ? 'running' : 'stopped';
-      }
+      const pidMatch = output.match(/pid\s*=\s*(\d+)/);
       if (pidMatch) {
-        pid = parseInt(pidMatch[1], 10);
+        const parsed = parseInt(pidMatch[1], 10);
+        if (parsed > 0) pid = parsed;
       }
-      
-      return { status, pid };
+
+      // Parse last exit status
+      let lastExitStatus: number | undefined;
+      const exitMatch = output.match(/last exit code\s*=\s*(\d+)/i);
+      if (exitMatch) {
+        lastExitStatus = parseInt(exitMatch[1], 10);
+      }
+
+      // Determine status from PID presence
+      const status = pid ? 'running' : 'stopped';
+
+      return { status, pid, lastExitStatus };
     } catch {
       return { status: 'unknown' };
     }
   },
 
-  async readCommand(env: GatewayServiceEnv): Promise<GatewayServiceCommandConfig | null> {
+  async readCommand(env?: GatewayServiceEnv): Promise<GatewayServiceCommandConfig | null> {
     const plistPath = resolveLaunchAgentPlistPath(env);
     if (!existsSync(plistPath)) return null;
 
     const content = await readFile(plistPath, 'utf8');
-    
-    // Parse plist (simple regex approach)
-    const argsMatch = content.match(/<array>[\s\S]*?<\/array>/);
-    const programArgs: string[] = [];
-    
-    if (argsMatch) {
-      const stringMatches = argsMatch[0].match(/<string>([^<]+)<\/string>/g);
-      if (stringMatches) {
-        for (const m of stringMatches) {
-          programArgs.push(m.replace(/<\/?string>/g, ''));
-        }
-      }
-    }
 
-    const workDirMatch = content.match(/<key>WorkingDirectory<\/key>\s*<string>([^<]+)<\/string>/);
+    const programArguments = parsePlistProgramArguments(content);
+    if (programArguments.length === 0) return null;
+
+    const environment = parsePlistEnvironment(content);
+    const workingDirectory = parsePlistStringValue(content, 'WorkingDirectory');
 
     return {
-      program: programArgs[0] || '',
-      arguments: programArgs.slice(1),
-      workingDirectory: workDirMatch?.[1],
+      programArguments,
+      workingDirectory,
+      environment,
+      sourcePath: plistPath,
     };
   },
 };

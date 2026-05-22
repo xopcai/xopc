@@ -1,29 +1,41 @@
 /**
  * Daemon Service Abstraction - Cross-platform service management
+ *
+ * Provides:
+ * - Platform-specific service resolution (launchd / systemd / schtasks)
+ * - Availability detection
+ * - Unified start logic with repair detection
  */
 
+import { existsSync } from 'node:fs';
 import { createLogger } from '../utils/logger.js';
-import type { GatewayService } from './types.js';
+import { PACKAGE_VERSION } from '../package-version.js';
+import { SERVICE_VERSION_ENV_KEY } from './constants.js';
+import type {
+  GatewayService,
+  GatewayServiceEnv,
+  GatewayServiceState,
+  GatewayServiceStartResult,
+  GatewayServiceStartRepairIssue,
+} from './types.js';
 
 const log = createLogger('DaemonService');
 
-// Cache for platform check
 let _isDaemonAvailable: boolean | null = null;
 
-/**
- * Resolve the appropriate service implementation for current platform
- */
+// ─── Service Resolution ───
+
 export async function resolveGatewayService(): Promise<GatewayService> {
   const platform = process.platform;
-
-  if (platform === 'linux') {
-    const { systemdService } = await import('./systemd.js');
-    return systemdService;
-  }
 
   if (platform === 'darwin') {
     const { launchdService } = await import('./launchd.js');
     return launchdService;
+  }
+
+  if (platform === 'linux') {
+    const { systemdService } = await import('./systemd.js');
+    return systemdService;
   }
 
   if (platform === 'win32') {
@@ -31,36 +43,11 @@ export async function resolveGatewayService(): Promise<GatewayService> {
     return schtasksService;
   }
 
-  throw new Error(`Unsupported platform: ${platform}`);
+  throw new Error(`Unsupported platform for daemon services: ${platform}`);
 }
 
-/**
- * Synchronous version (throws if service not available)
- */
-export function getGatewayServiceSync(): GatewayService {
-  const platform = process.platform;
+// ─── Availability ───
 
-  if (platform === 'linux') {
-     
-    return require('./systemd.js').systemdService;
-  }
-
-  if (platform === 'darwin') {
-     
-    return require('./launchd.js').launchdService;
-  }
-
-  if (platform === 'win32') {
-     
-    return require('./schtasks.js').schtasksService;
-  }
-
-  throw new Error(`Unsupported platform: ${platform}`);
-}
-
-/**
- * Check if daemon service is available on current platform
- */
 export async function isDaemonAvailableAsync(): Promise<boolean> {
   if (_isDaemonAvailable !== null) {
     return _isDaemonAvailable;
@@ -69,50 +56,129 @@ export async function isDaemonAvailableAsync(): Promise<boolean> {
   const platform = process.platform;
 
   try {
-    if (platform === 'linux') {
-      const { isSystemdAvailable } = await import('./systemd.js');
-      _isDaemonAvailable = isSystemdAvailable();
-    } else if (platform === 'darwin') {
+    if (platform === 'darwin') {
       const { isLaunchdAvailable } = await import('./launchd.js');
       _isDaemonAvailable = isLaunchdAvailable();
+    } else if (platform === 'linux') {
+      const { isSystemdAvailable } = await import('./systemd.js');
+      _isDaemonAvailable = isSystemdAvailable();
     } else if (platform === 'win32') {
       const { isSchtasksAvailable } = await import('./schtasks.js');
       _isDaemonAvailable = isSchtasksAvailable();
     } else {
       _isDaemonAvailable = false;
     }
-  } catch (e) {
-    log.error({ err: e }, 'Failed to check daemon availability');
+  } catch (err) {
+    log.error({ err }, 'Failed to check daemon availability');
     _isDaemonAvailable = false;
   }
 
   return _isDaemonAvailable!;
 }
 
-/**
- * Synchronous platform check only; prefer {@link isDaemonAvailableAsync} for accuracy.
- */
 export function isDaemonAvailable(): boolean {
-  // For synchronous check, we can only verify platform
-  // The actual availability check should use isDaemonAvailableAsync
   const platform = process.platform;
-  
-  if (platform === 'linux' || platform === 'darwin' || platform === 'win32') {
-    return true; // Assume available, actual check done async
-  }
-  
-  return false;
+  return platform === 'linux' || platform === 'darwin' || platform === 'win32';
 }
 
-/**
- * Get platform display name
- */
+// ─── Start with Repair Detection ───
+
+export async function startGatewayService(params: {
+  service: GatewayService;
+  env?: GatewayServiceEnv;
+}): Promise<GatewayServiceStartResult> {
+  const { service, env } = params;
+  const serviceEnv = env || process.env;
+
+  // Check if service is installed
+  const loaded = await service.isLoaded({ env: serviceEnv });
+  if (!loaded) {
+    const state = await gatherServiceState(service, serviceEnv);
+    return { outcome: 'missing-install', state };
+  }
+
+  // Read command to check for repair issues
+  const command = await service.readCommand(serviceEnv);
+  const issues = detectStartRepairIssues(command);
+
+  if (issues.length > 0) {
+    const state = await gatherServiceState(service, serviceEnv);
+    return { outcome: 'repair-required', state, issues };
+  }
+
+  // Start via restart (which handles both cold-start and running scenarios)
+  const restartResult = await service.restart({ env: serviceEnv });
+  const state = await gatherServiceState(service, serviceEnv);
+
+  return {
+    outcome: restartResult.outcome === 'restarted' ? 'started' : 'scheduled',
+    state,
+  };
+}
+
+function detectStartRepairIssues(
+  command: { programArguments: string[]; environment?: Record<string, string> } | null,
+): GatewayServiceStartRepairIssue[] {
+  const issues: GatewayServiceStartRepairIssue[] = [];
+
+  if (!command || command.programArguments.length === 0) {
+    issues.push({ code: 'missing-program', message: 'Service command configuration is missing' });
+    return issues;
+  }
+
+  const program = command.programArguments[0];
+
+  // Check if program exists on disk
+  if (!existsSync(program)) {
+    issues.push({
+      code: 'missing-program',
+      message: `Service program not found: ${program}`,
+    });
+    return issues;
+  }
+
+  // Check version mismatch
+  const serviceVersion = command.environment?.[SERVICE_VERSION_ENV_KEY];
+  if (serviceVersion && serviceVersion !== PACKAGE_VERSION) {
+    issues.push({
+      code: 'version-mismatch',
+      message: `Service version ${serviceVersion} does not match current ${PACKAGE_VERSION}`,
+    });
+  }
+
+  return issues;
+}
+
+// ─── State Gathering ───
+
+async function gatherServiceState(
+  service: GatewayService,
+  env: GatewayServiceEnv,
+): Promise<GatewayServiceState> {
+  const [loaded, runtime, command] = await Promise.all([
+    service.isLoaded({ env }),
+    service.readRuntime(env),
+    service.readCommand(env),
+  ]);
+
+  return {
+    installed: loaded || command !== null,
+    loaded,
+    running: runtime.status === 'running',
+    env,
+    command,
+    runtime,
+  };
+}
+
+// ─── Display Helpers ───
+
 export function getPlatformName(): string {
   switch (process.platform) {
-    case 'linux':
-      return 'Linux (systemd)';
     case 'darwin':
       return 'macOS (launchd)';
+    case 'linux':
+      return 'Linux (systemd)';
     case 'win32':
       return 'Windows (Task Scheduler)';
     default:
@@ -120,9 +186,20 @@ export function getPlatformName(): string {
   }
 }
 
-/**
- * Get service label for display
- */
 export function getServiceLabel(): string {
   return 'xopc-gateway';
+}
+
+/** Describe what a restart operation will do on the current platform */
+export function describeGatewayServiceRestart(): string {
+  switch (process.platform) {
+    case 'darwin':
+      return 'launchctl kickstart -k (LaunchAgent restart)';
+    case 'linux':
+      return 'systemctl --user restart (systemd restart)';
+    case 'win32':
+      return 'schtasks /end + /run (Scheduled Task restart)';
+    default:
+      return 'platform restart';
+  }
 }

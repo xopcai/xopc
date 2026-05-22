@@ -68,27 +68,37 @@ xopc gateway status
 ### Stop Gateway
 
 ```bash
-# Graceful stop (SIGTERM with 5 second timeout)
+# Graceful stop (sends SIGTERM via OS service manager)
 xopc gateway stop
 
-# Force stop (SIGKILL immediately)
-xopc gateway stop --force
+# Stop and disable KeepAlive (gateway will not respawn)
+xopc gateway stop --disable
 
-# Custom timeout (milliseconds)
-xopc gateway stop --timeout 3000
+# JSON output
+xopc gateway stop --json
 ```
 
 ### Restart Gateway
 
 ```bash
-# Send SIGUSR1 signal to trigger graceful restart
+# Graceful restart via OS service manager
 xopc gateway restart
 
-# Force restart (kill and start new)
+# Force restart (kill immediately, KeepAlive respawns)
 xopc gateway restart --force
+
+# Wait for health check after restart (with timeout)
+xopc gateway restart --wait 30s
+
+# JSON output
+xopc gateway restart --json
 ```
 
-> **Note:** SIGUSR1 restart requires `XOPC_ALLOW_SIGUSR1_RESTART=1` environment variable.
+The restart flow:
+1. Writes a **restart intent** file to disk
+2. Signals the OS service manager to restart the process
+3. If `--wait` is specified, polls service runtime + port + HTTP health until confirmed healthy
+4. Cleans up the intent file
 
 ### View Logs
 
@@ -107,20 +117,20 @@ xopc gateway logs --follow
 
 ## System Service Management
 
-xopc supports running the gateway as a system service for automatic startup.
+xopc supports running the gateway as an OS-level service with **KeepAlive** (auto-restart on crash), graceful restart coordination, and version/token auditing.
 
 ### Supported Platforms
 
-| Platform | Service Type |
-|----------|--------------|
-| Linux | systemd user service |
-| macOS | LaunchAgent |
-| Windows | Task Scheduler |
+| Platform | Service Type | KeepAlive Mechanism |
+|----------|--------------|---------------------|
+| macOS | LaunchAgent | `SuccessfulExit=false` + ThrottleInterval 10s |
+| Linux | systemd user service | `Restart=always` + RestartSec 5s |
+| Windows | Task Scheduler | RepetitionInterval polling |
 
 ### Install as System Service
 
 ```bash
-xopc gateway install
+xopc gateway service install
 ```
 
 **Options:**
@@ -128,29 +138,71 @@ xopc gateway install
 | Option | Description |
 |--------|-------------|
 | `--port <number>` | Gateway port (default: 18790) |
-| `--host <address>` | Host to bind to (default: 0.0.0.0) |
 | `--token <token>` | Authentication token |
-| `--runtime <runtime>` | Runtime: node or binary |
+| `--force` | Force reinstall if already installed |
+| `--json` | Output JSON |
 
 **Example:**
 ```bash
-xopc gateway install --port 8080 --token my-secret-token
+xopc gateway service install --port 8080 --token my-secret-token
+xopc gateway service install --force   # reinstall with updated config
 ```
 
-After installation, the gateway will start automatically when you log in.
+After installation, the gateway starts automatically on login and respawns on crash.
 
 ### Service Commands
 
 ```bash
-# Start via system service
-xopc gateway service-start
+# Install / reinstall
+xopc gateway service install [--force] [--port N] [--token T]
 
-# Check service status
-xopc gateway service-status
+# Start via OS service manager
+xopc gateway service start
 
-# Uninstall system service
-xopc gateway uninstall
+# Show OS service status (loaded, runtime PID, version)
+xopc gateway service-status [--json]
+
+# Uninstall service
+xopc gateway service uninstall [--json]
 ```
+
+### KeepAlive & Graceful Stop
+
+By default, the OS service manager will **respawn** the gateway if it exits unexpectedly. To stop the gateway **without** it coming back:
+
+```bash
+xopc gateway stop --disable
+```
+
+This unloads the service (macOS `bootout` / Linux `disable`) so it won't respawn until you explicitly start or reinstall.
+
+### Service Audit
+
+The `status` command includes basic service health checks:
+- **Version mismatch**: installed service version vs current CLI version
+- **Token drift**: service-embedded token vs config file token
+- **Missing program**: installed binary path no longer exists
+
+When issues are detected, you'll see recommendations to reinstall:
+```
+⚠️  Token drift detected: service token differs from config.
+💡 Run `xopc gateway service install --force` to sync.
+```
+
+### Restart Health Probe
+
+When using `--wait`, the restart command performs a health verification loop:
+
+1. Polls service runtime status (PID)
+2. Inspects port usage (confirms new process is listening)
+3. HTTP probes `/api/health` endpoint
+4. Verifies version matches (optional)
+
+```bash
+xopc gateway restart --wait 30s
+```
+
+If the health check fails within the timeout, an error with diagnostics is reported.
 
 ---
 
@@ -192,20 +244,30 @@ Bundled messaging channels (**Telegram**, **Weixin**, **Feishu**) declare deferr
 
 Structured metrics are logged at **`info`** with `phase: "gateway.channel_startup"` and `stage: "phase1"` or `"phase2"` (millisecond fields, defer mode/source, and deferred channel ids).
 
-### Process Respawn
+### Process Lifecycle (Daemon-managed)
 
-On restart:
-1. Detect environment (supervised vs normal)
-2. If supervised: exit and let supervisor restart
-3. If normal: spawn detached child, then exit
+When installed as a system service, the gateway lifecycle is managed by the OS:
 
-### Port Management
+| Event | macOS (LaunchAgent) | Linux (systemd) | Windows (Task) |
+|-------|---------------------|-----------------|----------------|
+| Crash | Respawn after 10s throttle | Respawn after 5s | Polled restart |
+| Graceful stop | `launchctl kill SIGTERM` | `systemctl --user stop` | `schtasks /End` |
+| Permanent stop | `bootout` (unloads service) | `disable` + `stop` | `schtasks /End` |
+| Force restart | `kickstart -k` | `systemctl restart` | Stop + Run |
+| Intentional exit (code 78) | No respawn | `RestartPreventExitStatus=78` | — |
+
+### Port Inspection
+
+The daemon uses cross-platform port inspection to verify health:
 
 ```bash
-# Check if port is available
-lsof -i :18790
+# Check gateway status (includes port check)
+xopc gateway status
 
-# Force free port (SIGTERM -> SIGKILL)
+# Underlying inspection (macOS/Linux)
+lsof -nP -iTCP:18790 -sTCP:LISTEN
+
+# Force free port
 xopc gateway --force
 ```
 

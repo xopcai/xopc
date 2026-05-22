@@ -53,6 +53,7 @@
     "test:startup:bench": "node --import tsx scripts/bench-cli-startup.ts",
     "test:startup:bench:check": "node --import tsx scripts/bench-cli-startup.ts --runs 3 --warmup 1",
     "test:startup:imports": "node scripts/check-cli-bootstrap-imports.mjs",
+    "tunnel:phase5:verify": "node scripts/tunnel-phase5-staging-verify.mjs",
     "release:patch": "bash scripts/release-patch.sh",
     "prepublishOnly": "npm test && npm run test:skills:all && npm run build",
     "docs:dev": "vitepress dev docs",
@@ -65,6 +66,8 @@
     "electron:vite:build": "cross-env ELECTRON_ENTRY=out/main/index.js electron-vite build",
     "electron:package": "node scripts/electron-builder.mjs",
     "electron:server:build": "node scripts/build-electron-server.mjs",
+    "electron:frpc:download": "node scripts/download-frpc-binaries.mjs",
+    "electron:frpc:download:all": "node scripts/download-frpc-binaries.mjs --all",
     "electron:build": "pnpm run electron:vite:build && pnpm run electron:server:build && pnpm run electron:package",
     "electron:preview": "cross-env ELECTRON_ENTRY=out/main/index.js electron-vite preview"
   },

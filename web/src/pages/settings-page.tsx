@@ -12,6 +12,8 @@ import { AppearanceSettingsPanel } from '@/features/settings/appearance-settings
 import { DreamingSettingsPanel } from '@/features/settings/dreaming-settings';
 import { GatewaySettingsPanel } from '@/features/settings/gateway-settings';
 import { HeartbeatSettingsPanel } from '@/features/settings/heartbeat-settings';
+import { TunnelSettingsPanel } from '@/features/tunnel/tunnel-settings';
+import { SharesSettingsPanel } from '@/features/shares/shares-settings';
 import { ImageModelsSettingsPanel } from '@/features/settings/image-models-settings';
 import { ModelsSettingsPanel } from '@/features/settings/models-settings';
 import { ProvidersSettingsPanel } from '@/features/settings/providers-settings';
@@ -37,6 +39,8 @@ const SECTIONS: SettingsSectionId[] = [
   'voice',
   'gateway',
   'heartbeat',
+  'tunnel',
+  'shares',
   'search',
   'dreams',
 ];
@@ -111,6 +115,14 @@ export function SettingsPage() {
 
   if (id === 'heartbeat') {
     return <HeartbeatSettingsPanel />;
+  }
+
+  if (id === 'tunnel') {
+    return <TunnelSettingsPanel />;
+  }
+
+  if (id === 'shares') {
+    return <SharesSettingsPanel />;
   }
 
   if (id === 'search') {

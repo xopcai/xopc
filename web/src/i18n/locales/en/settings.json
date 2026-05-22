@@ -16,6 +16,8 @@
     "voice": "Voice",
     "gateway": "Gateway",
     "heartbeat": "Heartbeat",
+    "tunnel": "Remote access",
+    "shares": "File sharing",
     "search": "Web search",
     "dreams": "Dreams",
     "agents": "Agents",

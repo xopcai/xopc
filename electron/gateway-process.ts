@@ -129,7 +129,9 @@ export function spawnGatewayProcess(opts: GatewayProcessOptions): ChildProcess {
         XOPC_CONFIG_PATH: opts.configPath,
         XOPC_WORKSPACE: opts.workspacePath,
         ...(isPackaged
-          ? { XOPC_UI_STATIC_ROOT: join(app.getAppPath(), 'dist/gateway/static/root') }
+          ? {
+              XOPC_UI_STATIC_ROOT: join(app.getAppPath(), 'dist/gateway/static/root'),
+            }
           : {}),
       },
       // app.getAppPath() is the app.asar archive — not a real directory; using it as cwd causes spawn ENOTDIR.

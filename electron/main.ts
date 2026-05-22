@@ -35,6 +35,13 @@ import { registerUpdaterIpc } from './ipc/updater-ipc.js';
 import { getLoadingPageDataUrl } from './loading-page.js';
 import { hasPendingInstall, initAutoUpdater, stopAutoUpdater } from './auto-updater.js';
 import { buildAppMenu } from './menu.js';
+import {
+  maybeAutoStartTunnel,
+  registerTunnelPowerMonitor,
+  setEmbeddedGatewayCredentials,
+  startTunnelStatusPolling,
+  stopTunnelStatusPolling,
+} from './tunnel-main.js';
 import { createTray, destroyTray } from './tray.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -246,6 +253,9 @@ async function resolveWindowLoad(): Promise<
       };
       const child = spawnGatewayProcess(spawnOpts);
       await waitForGatewayReady(port, token, child);
+      setEmbeddedGatewayCredentials(port, token);
+      void maybeAutoStartTunnel();
+      startTunnelStatusPolling();
     } catch (e) {
       stopGatewayProcess();
       throw e;
@@ -417,6 +427,7 @@ app.whenReady().then(async () => {
   registerSystemSettingsIpc(ipcMain);
   registerCronDisplayWakeIpc(ipcMain);
   registerUpdaterIpc(ipcMain);
+  registerTunnelPowerMonitor();
 
   const hotkey = process.platform === 'darwin' ? 'Command+Shift+Space' : 'Control+Shift+Space';
   const registered = globalShortcut.register(hotkey, () => {
@@ -448,6 +459,7 @@ app.on('before-quit', () => {
   globalShortcut.unregisterAll();
   stopAllPowerSaveBlockers();
   stopCronDisplayWakeBlocker();
+  stopTunnelStatusPolling();
   stopGatewayProcess();
   stopAutoUpdater();
 });
