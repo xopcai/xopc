@@ -5,7 +5,6 @@ import {
   getRegisteredAdapter,
   getProviderDisplayName,
   isRegisteredProvider,
-  listRegisteredProviders,
   getRegisteredAdapterIds,
 } from './registry.js';
 
