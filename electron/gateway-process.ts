@@ -97,6 +97,8 @@ export interface GatewayProcessOptions {
   configPath: string;
   workspacePath: string;
   port: number;
+  /** Bind address passed to `xopc gateway --host` (defaults to 127.0.0.1). */
+  host?: string;
   /** Called when gateway process exits unexpectedly (non-zero or by signal). */
   onUnexpectedExit?: (code: number | null, signal: string | null) => void;
 }
@@ -104,6 +106,7 @@ export interface GatewayProcessOptions {
 export function spawnGatewayProcess(opts: GatewayProcessOptions): ChildProcess {
   const cli = resolveCliEntry();
   const isPackaged = app.isPackaged;
+  const host = opts.host?.trim() || '127.0.0.1';
   clearGatewayLogBuffer();
   const child = spawn(
     process.execPath,
@@ -116,7 +119,7 @@ export function spawnGatewayProcess(opts: GatewayProcessOptions): ChildProcess {
       'gateway',
       '--foreground',
       '--host',
-      '127.0.0.1',
+      host,
       '--port',
       String(opts.port),
       '--no-hot-reload',

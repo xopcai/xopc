@@ -230,12 +230,13 @@ async function resolveWindowLoad(): Promise<
 
   if (shouldEmbedGateway()) {
     const paths = getElectronUserPaths();
-    const { port, token } = await ensureGatewayConfigForElectron(paths);
+    const { port, token, host } = await ensureGatewayConfigForElectron(paths);
     try {
       const spawnOpts: GatewayProcessOptions = {
         configPath: paths.configPath,
         workspacePath: paths.workspacePath,
         port,
+        host,
         onUnexpectedExit: (code, signal) => {
           gatewayExitedUnexpectedly = true;
           console.error(`[main] Gateway exited unexpectedly: code=${code}, signal=${signal}`);
