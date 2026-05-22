@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildSafeToolName, sanitizeServerName, TOOL_NAME_SEPARATOR } from '../../agent/mcp/bundle-mcp-names.js';
+import { buildSafeToolName, sanitizeServerName, TOOL_NAME_SEPARATOR } from '../bundle-mcp-names.js';
 
 describe('bundle-mcp-names', () => {
   it('builds server__tool names capped at 64 chars', () => {

@@ -7,9 +7,9 @@ import {
   connectionTimeoutSeconds,
   parseConnectionTimeoutSeconds,
   type McpServerRow,
+  type McpToolInfo,
   type McpTransportKind,
 } from '@/features/settings/mcp/mcp-config-api';
-import type { McpToolInfo } from '@/features/settings/mcp/mcp-tools-list-dialog';
 import type { McpSettingsMessages } from '@/i18n/messages';
 import { settingsInputFocusClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
@@ -51,10 +51,6 @@ function inputClassName(): string {
     'placeholder:text-fg-subtle',
     settingsInputFocusClass,
   );
-}
-
-export function mcpServerCardKey(row: McpServerRow, index: number): string {
-  return row.id.trim() || `draft-${index}`;
 }
 
 function serverEndpointSummary(row: McpServerRow): string {

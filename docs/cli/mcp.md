@@ -1,10 +1,14 @@
-# MCP (Model Context Protocol)
+# MCP CLI & API
 
-xopc supports **outbound bundle-MCP** (agent consumes external MCP tools) and an **inbound channel bridge** (`xopc mcp serve`) that exposes gateway sessions to external MCP clients over stdio.
+XOPC supports **outbound bundle-MCP** (the agent calls external MCP tools) and an **inbound channel bridge** (`xopc mcp serve`) for stdio MCP clients.
 
-## Configuration
+For configuration, Web UI, tool naming, and lifecycle, see the main guide: [MCP](./../mcp.md).
 
-Add MCP servers under `mcp.servers` in `~/.xopc/xopc.json` (or your `XOPC_CONFIG` path):
+---
+
+## Configuration quick reference
+
+Servers live under `mcp.servers` in `~/.xopc/xopc.json`:
 
 ```json
 {
@@ -20,7 +24,8 @@ Add MCP servers under `mcp.servers` in `~/.xopc/xopc.json` (or your `XOPC_CONFIG
         "transport": "streamable-http",
         "headers": {
           "Authorization": "Bearer ${MCP_TOKEN}"
-        }
+        },
+        "connectionTimeoutMs": 30000
       }
     }
   }
@@ -29,60 +34,98 @@ Add MCP servers under `mcp.servers` in `~/.xopc/xopc.json` (or your `XOPC_CONFIG
 
 | Field | Description |
 |-------|-------------|
-| `command` + `args` | stdio MCP server launch |
-| `url` + `transport` | Remote MCP via `sse` or `streamable-http` |
-| `env` / `headers` | Passed to the MCP client (stdio env is filtered for host safety) |
-| `sessionIdleTtlMs` | Idle eviction for per-session MCP runtimes (default 10 min; `0` = disable) |
+| `command` + `args` | stdio MCP subprocess |
+| `url` + `transport` | Remote MCP: `sse` or `streamable-http` |
+| `headers` / `env` | HTTP headers or stdio env (`${ENV}` supported; stdio env is host-filtered) |
+| `connectionTimeoutMs` | Connect / list / call timeout (default **30 s**) |
+| `sessionIdleTtlMs` | Per-session runtime idle TTL (default **10 min**; `0` = no idle eviction) |
 
-Extension manifests may ship `.mcp.json` files; they merge with user config (user entries win on name collision).
+Extension `.mcp.json` manifests merge with user config (user wins on id collision).
+
+---
 
 ## Disable MCP tools
 
-Add `bundle-mcp` to `agents.defaults.tools.disable` or a per-agent `tools.disable` list to block all MCP tools for that profile.
+Add `bundle-mcp` to `agents.defaults.tools.disable` or a per-agent `tools.disable` list. Individual tools use names `serverId__toolName`.
 
-Individual MCP tools use names `serverId__toolName` and can be disabled by full name.
+---
 
 ## CLI
+
+### Manage servers
 
 ```bash
 xopc mcp list
 xopc mcp show [name]
 xopc mcp set fetch '{"command":"npx","args":["-y","@modelcontextprotocol/server-fetch"]}'
 xopc mcp unset fetch
-
-# Inbound channel bridge (stdio MCP server → gateway REST + SSE)
-xopc mcp serve --url http://127.0.0.1:18790 --token-file ~/.xopc/gateway.token
 ```
 
-### `xopc mcp serve` options
+`xopc mcp set` accepts a JSON object for the server entry. The server id is the map key you pass to `set` / `unset`.
+
+### Inbound channel bridge
+
+Expose gateway sessions to external MCP clients (stdio):
+
+```bash
+xopc mcp serve --url http://127.0.0.1:18790 --token-file ~/.xopc/gateway.token
+```
 
 | Flag | Purpose |
 |------|---------|
 | `--url` | Gateway base URL |
 | `--token` / `--token-file` | Bearer auth |
 | `--password` / `--password-file` | Password auth (when configured) |
-| `--claude-channel-mode` | `auto` \| `on` \| `off` |
+| `--claude-channel-mode` | `auto` \| `on` \| `off` — Claude Desktop channel compatibility |
 | `-v` | Verbose logging |
 
-## Gateway API
+---
 
-| Endpoint | Purpose |
-|----------|---------|
-| `GET /api/mcp/servers` | List configured + merged servers |
-| `GET /api/mcp/servers/:id/tools` | Tool catalog preview |
-| `POST /api/mcp/servers/:id/test` | Connect + list tools |
-| `POST /api/mcp/approvals/respond` | Channel bridge approval stub |
+## Gateway REST API
+
+Requires gateway auth (Bearer token or configured password).
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/mcp/servers` | GET | List configured + extension-merged servers |
+| `/api/mcp/servers/:id/tools` | GET | Tool catalog for a server (uses saved config) |
+| `/api/mcp/servers/:id/test` | POST | Connect with optional body override + list tools |
+| `/api/mcp/approvals/respond` | POST | Channel bridge approval stub |
+
+### Test / tools response shape
+
+Tool entries include:
+
+```json
+{
+  "name": "fetch__browse",
+  "shortName": "browse",
+  "description": "Fetch a URL and return readable content"
+}
+```
+
+The Web UI uses these fields in the connection test and **View all** tools dialog.
+
+Config CRUD for MCP uses the general config API: `GET /api/config` and `PATCH /api/config` (see [Gateway](./../gateway.md)).
+
+---
 
 ## Web UI
 
-Gateway Console → **Settings → Agent defaults → MCP** (`#/settings/agent-mcp`): CRUD for `mcp.servers`, idle TTL, connection test.
+Gateway Console → **Settings → MCP** (`#/settings/agent-mcp`):
 
-## Lifecycle
+- Session idle TTL
+- Collapsible server cards (stdio / SSE / streamable HTTP)
+- Headers key-value editor with paste support
+- Connection timeout
+- **Test** and searchable **View all** tools dialog
 
-MCP runtimes are per session key. They are disposed on gateway shutdown, `mcp.*` config hot reload, session delete, agent evict, and isolated cron job completion.
+See [MCP guide](./../mcp.md#gateway-console-web-ui) for the full UI walkthrough.
+
+---
 
 ## Security notes
 
-- Stdio MCP inherits a filtered host environment (`host-env-security-policy.json`).
+- Stdio MCP uses a filtered host environment (`host-env-security-policy.json`).
 - Delegate sub-agents cannot use MCP tools (`bundle-mcp` blocklist).
-- `before_tool_call` hooks receive `isMcpTool` / `mcpServerId` context for policy extensions.
+- `before_tool_call` hooks receive `isMcpTool` / `mcpServerId` for policy extensions.

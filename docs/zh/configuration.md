@@ -635,6 +635,19 @@ Voice 设置 UI 暴露常用字段（`command`、`cwd`、`outputFormat`、`timeo
 
 ---
 
+### mcp
+
+出站 MCP 服务器配置与入站 stdio 桥接。
+
+| 字段 | 类型 | 默认值 | 说明 |
+|-------|------|---------|------|
+| `sessionIdleTtlMs` | number | `600000` | 会话级 MCP 运行时空闲回收（10 分钟）；`0` 关闭 |
+| `servers` | object | `{}` | 服务器 id → 连接定义（stdio 或 HTTP） |
+
+完整说明、控制台操作与安全注意点见 [MCP 文档](/zh/mcp)。
+
+---
+
 ### heartbeat
 
 定期健康检查配置。

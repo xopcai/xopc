@@ -44,6 +44,7 @@ pnpm run dev -- <command>
 | `cron` | 管理定时任务 |
 | `extension` | 管理扩展 |
 | `skills` | 管理技能（安装、启用、配置、测试） |
+| `mcp` | 管理 MCP 服务器（`list`、`show`、`set`、`unset`、`serve`）— 见 [MCP](./mcp.md) |
 | `config` | 查看和编辑配置（非交互式） |
 | `image` | 图像理解 / 文生图默认项（`status`、`set-understanding`、`set-generation`、备用链、`providers` 等） |
 | `session` | 管理会话 |
@@ -649,6 +650,24 @@ xopc skills test security --deep
 | 安全扫描 | 扫描危险代码模式 |
 | 元数据完整性 | 检查 emoji、homepage 等可选字段 |
 | 示例验证 | 验证代码块语法 |
+
+---
+
+## mcp
+
+管理出站 MCP 服务器，或启动入站 stdio 桥接。
+
+```bash
+xopc mcp list
+xopc mcp show fetch
+xopc mcp set fetch '{"command":"npx","args":["-y","@modelcontextprotocol/server-fetch"]}'
+xopc mcp unset fetch
+
+# 入站 stdio 桥接 → 网关
+xopc mcp serve --url http://127.0.0.1:18790 --token-file ~/.xopc/gateway.token
+```
+
+配置与控制台操作见 [MCP](./mcp.md)，CLI 参数与 REST 接口见 [MCP CLI 与 API](./cli/mcp.md)。
 
 ---
 

@@ -21,8 +21,11 @@
 | 浏览器（可选） | `browser_*` — 启用浏览器自动化时 |
 | 委托与代码（可选） | `delegate_task`, `execute_code` |
 | 定时任务（可选） | `cronjob` — 运行时提供 Cron（常见为网关） |
+| MCP（可选） | `服务器ID__工具名` — 来自已配置的 MCP 服务；在 `tools.disable` 中加 `bundle-mcp` 可关闭全部 |
 
 扩展也可追加工具。
+
+**MCP 工具：** 运行时根据 `mcp.servers`（及扩展 `.mcp.json`）注册，命名格式为 `服务器ID__工具名`。详见 [MCP](mcp.md)。
 
 **条件注册举例：** `session_search` 依赖会话持久化；`web_extract` 使用 `agents.defaults.webExtract.model` 或 `XOPC_WEB_EXTRACT_MODEL`；技能写入受 `skills.agentWritePolicy` 约束；技能发现可通过 `skills.toolGating` 与元数据门控。Skills Hub CLI：`xopc skills hub pull|update|lock`，见 [Skills 指南](./skills.md)。
 

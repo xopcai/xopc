@@ -39,6 +39,7 @@ pnpm run dev -- <command>
 | `cron` | Manage scheduled tasks |
 | `extension` | Manage extensions |
 | `skills` | Manage skills |
+| `mcp` | Manage MCP servers (`list`, `show`, `set`, `unset`, `serve`) — see [MCP](./mcp.md) |
 | `config` | View/edit configuration |
 | `image` | Image understanding / generation defaults (`status`, `set-understanding`, `set-generation`, fallbacks, `providers`) |
 | `session` | Manage sessions |
@@ -503,6 +504,24 @@ xopc skills test --format json
 xopc skills test --skip-security
 xopc skills test --skip-examples
 ```
+
+---
+
+## mcp
+
+Manage outbound MCP servers and run the inbound channel bridge.
+
+```bash
+xopc mcp list
+xopc mcp show fetch
+xopc mcp set fetch '{"command":"npx","args":["-y","@modelcontextprotocol/server-fetch"]}'
+xopc mcp unset fetch
+
+# Inbound stdio bridge → gateway
+xopc mcp serve --url http://127.0.0.1:18790 --token-file ~/.xopc/gateway.token
+```
+
+See [MCP](./mcp.md) for configuration and Web UI, and [MCP CLI & API](./cli/mcp.md) for flags and REST endpoints.
 
 ---
 
