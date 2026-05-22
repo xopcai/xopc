@@ -33,6 +33,7 @@ export interface ReloadCallbacks {
   onCronReload?: ReloadCallback;
   onHeartbeatReload?: ReloadCallback;
   onToolsReload?: ReloadCallback;
+  onMcpReload?: ReloadCallback;
   onWebSearchReload?: ReloadCallback;
   /** All `extensions.*` hot paths in one batch (deduplicated in applyReload). */
   onExtensionsReload?: (
@@ -273,6 +274,13 @@ export class ConfigHotReloader {
     if (path.startsWith('tools.')) {
       if (this.callbacks.onToolsReload) {
         await Promise.resolve(this.callbacks.onToolsReload(newConfig));
+      }
+      return;
+    }
+
+    if (path.startsWith('mcp.') || path === 'mcp') {
+      if (this.callbacks.onMcpReload) {
+        await Promise.resolve(this.callbacks.onMcpReload(newConfig));
       }
       return;
     }

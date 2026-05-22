@@ -323,6 +323,7 @@
       "memory": "Memory & sessions",
       "media": "Vision & generation",
       "extensions": "Extensions",
+      "mcp": "MCP (bundle)",
       "misc": "Other built-ins"
     },
     "toolDescriptions": {
@@ -343,7 +344,8 @@
       "session_search": "Search across saved conversation transcripts and per-session summaries.",
       "image": "Analyze or describe images (vision) from the workspace or the current turn.",
       "image_generate": "Generate images using the configured image / image-generation model.",
-      "extensions": "Expose tools registered by enabled extensions — disable to block all extension tools."
+      "extensions": "Expose tools registered by enabled extensions — disable to block all extension tools.",
+      "bundle-mcp": "Load tools from configured MCP servers (global mcp.servers and extension .mcp.json)."
     },
     "skillsTitle": "Skill allowlist",
     "skillsHint": "Optional allowlist for <available_skills>. Inherit uses agents.defaults only; customize sets this agent’s skills array.",

@@ -33,6 +33,11 @@ import type { EmbeddedContextFile } from './bootstrap/types.js';
 import { SkillManager } from './skills/index.js';
 import { SystemPromptBuilder } from './prompt/service-prompt-builder.js';
 import { AgentToolsFactory } from './tools/factory.js';
+import { parseMcpToolName } from './mcp/bundle-mcp-policy.js';
+import {
+  disposeAllSessionMcpRuntimes,
+  retireSessionMcpRuntimeForSessionKey,
+} from './mcp/bundle-mcp-tools.js';
 import type { GatewayClarifyRequestFn } from './tools/clarify-tool.js';
 import type { ExtensionRegistryImpl as ExtensionRegistry } from '../extensions/index.js';
 import type { MessageBus } from '../infra/bus/index.js';
@@ -740,6 +745,7 @@ export class AgentManager {
     if (instance) {
       instance.backgroundNudge?.unsubscribe?.();
       void this.toolsFactory.closeBrowserPageForSession(sessionKey);
+      void retireSessionMcpRuntimeForSessionKey({ sessionKey, reason: 'agent-evict' });
       instance.agent.abort();
       this.agents.delete(sessionKey);
       this.memoryPrefetchUserTurn.delete(sessionKey);
@@ -780,6 +786,7 @@ export class AgentManager {
    */
   dispose(): void {
     void this.toolsFactory.shutdownBrowser();
+    void disposeAllSessionMcpRuntimes().catch(() => {});
     for (const instance of this.agents.values()) {
       instance.backgroundNudge?.unsubscribe?.();
       instance.agent.abort();
@@ -874,6 +881,26 @@ export class AgentManager {
       },
       streamFn: createExtensionAwareStreamFn(),
       getApiKey: (provider: string) => this.resolveApiKeyWithCache(provider),
+      beforeToolCall: async ({ toolCall, args }) => {
+        if (!this.config.hookRunner) {
+          return undefined;
+        }
+        const toolName = toolCall.name;
+        const parsed = parseMcpToolName(toolName);
+        const hookResult = await this.config.hookRunner.runBeforeToolCall(
+          toolName,
+          (args ?? {}) as Record<string, unknown>,
+          {
+            sessionKey,
+            isMcpTool: parsed !== null,
+            mcpServerId: parsed?.serverId,
+          },
+        );
+        if (!hookResult.allowed) {
+          return { block: true, reason: hookResult.reason ?? 'Tool call blocked by policy hook.' };
+        }
+        return undefined;
+      },
     });
     return { agent, registeredToolNames };
   }

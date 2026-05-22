@@ -323,6 +323,7 @@
       "memory": "记忆与会话",
       "media": "视觉与生成",
       "extensions": "扩展",
+      "mcp": "MCP（bundle）",
       "misc": "其他内置"
     },
     "toolDescriptions": {
@@ -343,7 +344,8 @@
       "session_search": "在已保存的会话记录与按会话摘要中搜索。",
       "image": "分析或描述图片（视觉），可来自工作区或当前对话。",
       "image_generate": "使用已配置的图像 / 文生图模型生成图片。",
-      "extensions": "启用扩展注册的工具；关闭则屏蔽所有扩展工具。"
+      "extensions": "启用扩展注册的工具；关闭则屏蔽所有扩展工具。",
+      "bundle-mcp": "从已配置的 MCP 服务器加载工具（全局 mcp.servers 与扩展 .mcp.json）。"
     },
     "skillsTitle": "技能白名单",
     "skillsHint": "可选的 <available_skills> 白名单。「继承默认」仅使用 agents.defaults；「自定义」写入本智能体的 skills 数组。",

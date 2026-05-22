@@ -1,6 +1,7 @@
 import type { LucideIcon } from 'lucide-react';
 import {
   Brain,
+  Cable,
   Clock,
   Cloud,
   Cpu,
@@ -51,6 +52,7 @@ const TAB_ICONS: Record<Tab, LucideIcon> = {
   settingsChannels: Plug,
   settingsVoice: Mic,
   settingsGateway: Globe,
+  settingsMcp: Cable,
   settingsHeartbeat: Heart,
   settingsTunnel: Radio,
   settingsSearch: Search,

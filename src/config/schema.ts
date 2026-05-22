@@ -889,6 +889,57 @@ export const UpdateConfigSchema = z
 export type UpdateConfig = z.infer<typeof UpdateConfigSchema>;
 
 // ============================================
+// MCP (Model Context Protocol)
+// ============================================
+
+const McpHttpUrlSchema = z
+  .string()
+  .url()
+  .refine((value) => {
+    try {
+      const protocol = new URL(value).protocol;
+      return protocol === 'http:' || protocol === 'https:';
+    } catch {
+      return false;
+    }
+  }, 'MCP server URL must use http or https');
+
+export const McpServerSchema = z
+  .object({
+    command: z.string().optional(),
+    args: z.array(z.string()).optional(),
+    env: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(),
+    cwd: z.string().optional(),
+    workingDirectory: z.string().optional(),
+    url: McpHttpUrlSchema.optional(),
+    transport: z.enum(['sse', 'streamable-http']).optional(),
+    headers: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(),
+    connectionTimeoutMs: z.number().finite().positive().optional(),
+  })
+  .catchall(z.unknown())
+  .superRefine((value, ctx) => {
+    const hasCommand = typeof value.command === 'string' && value.command.trim().length > 0;
+    const hasUrl = typeof value.url === 'string' && value.url.trim().length > 0;
+    if (hasCommand && hasUrl) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'MCP server cannot define both command and url',
+      });
+    }
+  });
+
+export const McpConfigSchema = z
+  .object({
+    servers: z.record(z.string(), McpServerSchema).optional(),
+    sessionIdleTtlMs: z.number().finite().min(0).optional(),
+  })
+  .strict()
+  .optional();
+
+export type McpServerConfig = z.infer<typeof McpServerSchema>;
+export type McpConfig = z.infer<typeof McpConfigSchema>;
+
+// ============================================
 // Root Config
 // ============================================
 
@@ -900,6 +951,7 @@ export const ConfigSchema = z.object({
   gateway: GatewayConfigSchema,
   tunnel: TunnelConfigSchema.optional(),
   tools: ToolsConfigSchema,
+  mcp: McpConfigSchema,
   cron: CronConfigSchema,
   goals: GoalsConfigSchema.optional(),
   extensions: ExtensionsConfigSchema.default({}),
