@@ -26,7 +26,6 @@
     "settingsChannels": "Channels",
     "settingsVoice": "Voice",
     "settingsGateway": "Gateway",
-    "settingsMcp": "MCP",
     "settingsHeartbeat": "Heartbeat",
     "settingsTunnel": "Remote access",
     "settingsShares": "File sharing",
@@ -37,6 +36,7 @@
     "settingsAgentBrowser": "Browser",
     "settingsAgentRuntime": "Runtime",
     "settingsAgentTools": "Tools & skills",
+    "settingsAgentMcp": "MCP",
     "settingsAgentSystemPrompt": "System prompt",
     "settingsAgents": "Agents",
     "settingsSystem": "System"
