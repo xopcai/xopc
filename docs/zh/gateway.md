@@ -64,27 +64,37 @@ xopc gateway status
 ### 停止网关
 
 ```bash
-# 优雅停止（SIGTERM，5秒超时）
+# 优雅停止（通过 OS 服务管理器发送 SIGTERM）
 xopc gateway stop
 
-# 强制停止（立即 SIGKILL）
-xopc gateway stop --force
+# 停止并禁用 KeepAlive（网关不会自动重启）
+xopc gateway stop --disable
 
-# 自定义超时（毫秒）
-xopc gateway stop --timeout 3000
+# JSON 输出
+xopc gateway stop --json
 ```
 
 ### 重启网关
 
 ```bash
-# 发送 SIGUSR1 信号触发优雅重启
+# 通过 OS 服务管理器优雅重启
 xopc gateway restart
 
-# 强制重启（终止并重新启动）
+# 强制重启（立即终止，KeepAlive 会自动重启新进程）
 xopc gateway restart --force
+
+# 重启后等待健康检查（指定超时）
+xopc gateway restart --wait 30s
+
+# JSON 输出
+xopc gateway restart --json
 ```
 
-**注意**：SIGUSR1 重启需要设置环境变量 `XOPC_ALLOW_SIGUSR1_RESTART=1`。
+重启流程：
+1. 写入 **restart intent** 文件到磁盘
+2. 通知 OS 服务管理器重启进程
+3. 如指定 `--wait`，轮询服务运行状态 + 端口 + HTTP 健康检查直到确认健康
+4. 清理 intent 文件
 
 ### 查看日志
 
@@ -101,83 +111,93 @@ xopc gateway logs --follow
 
 ## 系统服务管理
 
-xopc 支持将网关作为系统服务运行，实现开机自动启动。
+xopc 支持将网关作为 OS 级服务运行，具备 **KeepAlive**（崩溃自动重启）、优雅重启协调、版本/令牌审计等能力。
 
 ### 支持的平台
 
-| 平台 | 服务类型 |
-|------|----------|
-| Linux | systemd 用户服务 |
-| macOS | LaunchAgent |
-| Windows | 任务计划程序 |
+| 平台 | 服务类型 | KeepAlive 机制 |
+|------|----------|----------------|
+| macOS | LaunchAgent | `SuccessfulExit=false` + ThrottleInterval 10s |
+| Linux | systemd 用户服务 | `Restart=always` + RestartSec 5s |
+| Windows | 任务计划程序 | RepetitionInterval 轮询 |
 
 ### 安装为系统服务
 
 ```bash
-xopc gateway install
+xopc gateway service install
 ```
 
 **选项**：
 
 | 选项 | 描述 |
 |------|------|
-| `--port <number>` | 网关端口 (默认: 18790) |
-| `--host <address>` | 绑定地址 (默认: 0.0.0.0) |
+| `--port <number>` | 网关端口（默认: 18790） |
 | `--token <token>` | 认证令牌 |
-| `--runtime <runtime>` | 运行时: node 或 binary (默认: node) |
+| `--force` | 强制重装（已安装时） |
+| `--json` | JSON 输出 |
 
 **示例**：
 
 ```bash
-xopc gateway install --port 8080 --token my-secret-token
+xopc gateway service install --port 8080 --token my-secret-token
+xopc gateway service install --force   # 以最新配置重装
 ```
 
-安装后，网关将在登录时自动启动。
+安装后，网关会在登录时自动启动，崩溃后自动重启。
 
 ### 服务命令
 
 ```bash
-# 通过系统服务启动
-xopc gateway service-start
+# 安装 / 重装
+xopc gateway service install [--force] [--port N] [--token T]
 
-# 查看服务状态
-xopc gateway service-status
+# 通过 OS 服务管理器启动
+xopc gateway service start
 
-# 卸载系统服务
-xopc gateway uninstall
+# 查看 OS 服务状态（是否加载、运行 PID、版本）
+xopc gateway service-status [--json]
+
+# 卸载服务
+xopc gateway service uninstall [--json]
 ```
 
-### 服务状态输出
+### KeepAlive 与优雅停止
+
+默认情况下，OS 服务管理器会在网关异常退出后 **自动重启**。如果想停止且不再重启：
 
 ```bash
-xopc gateway service-status
+xopc gateway stop --disable
 ```
 
-示例输出：
+这会卸载服务（macOS `bootout` / Linux `disable`），直到你显式启动或重装。
+
+### 服务审计
+
+`status` 命令会进行基本的服务健康检查：
+- **版本不匹配**：已安装的服务版本 vs 当前 CLI 版本
+- **令牌漂移**：服务内嵌令牌 vs 配置文件令牌
+- **程序缺失**：安装时的二进制路径已不存在
+
+检测到问题时会给出建议：
 ```
-📋 Service Status
-────────────────
-Installed: Yes
-Status: running
-PID: 12345
-
-📝 Configuration
-────────────────
-Program: node
-Args: /path/to/xopc gateway --port 18790
-Working Dir: /home/user
-
-🌐 Access
-─────────
-URL: http://localhost:18790
-
-📝 Commands
-───────────
-  xopc gateway service-start   # 启动服务
-  xopc gateway stop            # 停止（进程）
-  xopc gateway restart         # 重启（进程）
-  xopc gateway uninstall      # 移除服务
+⚠️  令牌漂移：服务令牌与配置不一致。
+💡 执行 `xopc gateway service install --force` 同步。
 ```
+
+### 重启健康探测
+
+使用 `--wait` 时，restart 命令会执行健康验证循环：
+
+1. 轮询服务运行状态（PID）
+2. 检查端口占用（确认新进程正在监听）
+3. HTTP 探测 `/api/health` 端点
+4. 验证版本匹配（可选）
+
+```bash
+xopc gateway restart --wait 30s
+```
+
+超时内健康检查失败会报告错误和诊断信息。
 
 ## 进程架构
 
@@ -206,20 +226,30 @@ URL: http://localhost:18790
 └─────────────────────────────────────────┘
 ```
 
-### 进程重生
+### 进程生命周期（Daemon 托管）
 
-重启时：
-1. 检测环境（受监督 vs 普通）
-2. 如受监督：退出让监督器重启
-3. 如普通：生成分离的子进程，然后退出
+安装为系统服务后，网关的生命周期由 OS 管理：
 
-### 端口管理
+| 事件 | macOS (LaunchAgent) | Linux (systemd) | Windows (Task) |
+|------|---------------------|-----------------|----------------|
+| 崩溃 | 10s 节流后重启 | 5s 后重启 | 轮询重启 |
+| 优雅停止 | `launchctl kill SIGTERM` | `systemctl --user stop` | `schtasks /End` |
+| 永久停止 | `bootout`（卸载服务） | `disable` + `stop` | `schtasks /End` |
+| 强制重启 | `kickstart -k` | `systemctl restart` | Stop + Run |
+| 主动退出（code 78） | 不重启 | `RestartPreventExitStatus=78` | — |
+
+### 端口检查
+
+daemon 使用跨平台端口检查来验证健康状态：
 
 ```bash
-# 检查端口是否可用
-lsof -i :18790
+# 查看网关状态（含端口检查）
+xopc gateway status
 
-# 强制释放端口（SIGTERM -> SIGKILL）
+# 底层检查（macOS/Linux）
+lsof -nP -iTCP:18790 -sTCP:LISTEN
+
+# 强制释放端口
 xopc gateway --force
 ```
 

@@ -17,8 +17,10 @@ import { registerLogsRoutes } from './logs.js';
 import { registerModelsRoutes } from './models.js';
 import { registerSessionsRoutes } from './sessions.js';
 import { registerStatusRoutes } from './status.js';
+import { registerSharePublicRoutes, registerShareRoutes } from './shares.js';
 import { registerTunnelPublicRoutes, registerTunnelRoutes } from './tunnel.js';
 import { registerUpdateRoutes } from './update.js';
+import { registerVoiceRoutes } from './voice.js';
 import { registerWorkspaceRoutes } from './workspace.js';
 
 export function registerAuthenticatedRoutes(app: Hono, authenticated: Hono, deps: AuthenticatedRouteDeps): void {
@@ -38,10 +40,13 @@ export function registerAuthenticatedRoutes(app: Hono, authenticated: Hono, deps
   registerSessionsRoutes(authenticated, deps);
   registerGoalsRoutes(authenticated, deps);
   registerLogsRoutes(authenticated, deps);
+  registerSharePublicRoutes(app, deps.service);
+  registerShareRoutes(authenticated, deps);
   registerTunnelPublicRoutes(app, deps.service);
   registerTunnelRoutes(authenticated, deps);
   registerExtensionGatewayRoutes(authenticated, deps);
   registerUpdateRoutes(authenticated, deps);
+  registerVoiceRoutes(authenticated, deps);
 }
 
 export type { AuthenticatedRouteDeps } from './deps.js';

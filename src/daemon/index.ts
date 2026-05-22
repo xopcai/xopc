@@ -2,13 +2,13 @@
  * Daemon - Cross-platform service management for xopc gateway
  *
  * Provides unified interface for:
+ * - macOS: LaunchAgent (launchd)
  * - Linux: systemd user service
- * - macOS: LaunchAgent
- * - Windows: Scheduled Task
+ * - Windows: Scheduled Task (schtasks)
  *
  * @example
  * ```typescript
- * import { resolveGatewayService, isDaemonAvailable } from './daemon/index.js';
+ * import { resolveGatewayService, isDaemonAvailableAsync, startGatewayService } from './daemon/index.js';
  *
  * const service = await resolveGatewayService();
  * const loaded = await service.isLoaded({ env: process.env });
@@ -17,12 +17,12 @@
  *   await service.install({ ... });
  * }
  *
- * await service.start({ env: process.env });
+ * const result = await startGatewayService({ service });
  * ```
  */
 
 export * from './types.js';
+export * from './constants.js';
 export * from './service.js';
 export * from './install-plan.js';
-
-export { isDaemonAvailableAsync } from './service.js';
+export * from './launchd-restart-handoff.js';
