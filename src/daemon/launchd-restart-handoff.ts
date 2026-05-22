@@ -9,8 +9,6 @@
  */
 
 import { spawn } from 'node:child_process';
-import os from 'node:os';
-import path from 'node:path';
 import { createLogger } from '../utils/logger.js';
 import { resolveGatewayLaunchAgentLabel, resolveLaunchAgentPlistPath } from './constants.js';
 

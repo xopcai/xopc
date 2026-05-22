@@ -20,15 +20,9 @@ const log = createLogger('DaemonLifecycle');
 // ─── Stop ───
 
 export async function executeDaemonStop(options: DaemonLifecycleOptions): Promise<void> {
-  const [
-    { resolveGatewayService, isDaemonAvailableAsync },
-    { resolveConfigPath },
-    { loadConfig },
-  ] = await Promise.all([
-    import('../../../daemon/service.js'),
-    import('../../../config/paths.js'),
-    import('../../../config/index.js'),
-  ]);
+  const { resolveGatewayService, isDaemonAvailableAsync } = await import(
+    '../../../daemon/service.js'
+  );
 
   const available = await isDaemonAvailableAsync();
   if (!available) {
@@ -68,15 +62,9 @@ export async function executeDaemonStop(options: DaemonLifecycleOptions): Promis
 // ─── Restart ───
 
 export async function executeDaemonRestart(options: DaemonLifecycleOptions): Promise<void> {
-  const [
-    { resolveGatewayService, isDaemonAvailableAsync },
-    { resolveConfigPath },
-    { loadConfig },
-  ] = await Promise.all([
-    import('../../../daemon/service.js'),
-    import('../../../config/paths.js'),
-    import('../../../config/index.js'),
-  ]);
+  const { resolveGatewayService, isDaemonAvailableAsync } = await import(
+    '../../../daemon/service.js'
+  );
 
   const available = await isDaemonAvailableAsync();
   if (!available) {
@@ -208,7 +196,7 @@ async function waitForHealthAfterRestart(
       service: service as any,
       port,
       timeoutMs,
-      onProgress: (snap) => {
+      onProgress: (_snap) => {
         if (!options.json) {
           process.stdout.write('.');
         }

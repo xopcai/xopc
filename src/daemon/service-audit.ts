@@ -11,12 +11,9 @@
 
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
-import { createLogger } from '../utils/logger.js';
 import { PACKAGE_VERSION } from '../package-version.js';
 import { SERVICE_VERSION_ENV_KEY } from './constants.js';
 import type { GatewayService, GatewayServiceCommandConfig, GatewayServiceEnv } from './types.js';
-
-const log = createLogger('ServiceAudit');
 
 // ─── Types ───
 

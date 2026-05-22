@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createRestartCommand } from '../restart.js';
 
 // Mock lifecycle-core to avoid real daemon operations

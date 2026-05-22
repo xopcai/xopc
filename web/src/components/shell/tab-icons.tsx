@@ -19,6 +19,7 @@ import {
   Palette,
   Plug,
   Search,
+  Share2,
   Shield,
   SlidersHorizontal,
   Users,
@@ -53,6 +54,7 @@ const TAB_ICONS: Record<Tab, LucideIcon> = {
   settingsHeartbeat: Heart,
   settingsTunnel: Radio,
   settingsSearch: Search,
+  settingsShares: Share2,
   settingsDreams: Moon,
 };
 

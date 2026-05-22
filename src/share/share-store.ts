@@ -1,4 +1,4 @@
-import { randomBytes, randomUUID, createHash } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { stat, lstat, realpath } from 'node:fs/promises';
@@ -21,10 +21,6 @@ const VIEW_COUNT_DEBOUNCE_MS = 2_000;
 
 function resolveSharesPath(): string {
   return join(resolveStateDir(), SHARES_FILE);
-}
-
-function hashToken(token: string): string {
-  return createHash('sha256').update(token, 'utf8').digest('hex').slice(0, 12);
 }
 
 export class ShareStore {
