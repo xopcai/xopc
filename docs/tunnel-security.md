@@ -85,3 +85,4 @@ Mutating tunnel endpoints are rate-limited per gateway token (12 calls / 5 minut
 
 - Override frpc binary: `XOPC_FRPC_PATH`
 - Offline / mirror: host frpc tarballs internally and point downloads at your mirror (see `src/tunnel/frpc-binary.ts`)
+- Extraction tries system `tar`, then a built-in Node parser (macOS BSD tar quirks, Windows without `tar`, minimal Linux images)

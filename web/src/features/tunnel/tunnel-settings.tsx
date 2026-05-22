@@ -52,6 +52,24 @@ function formatUptime(since: string | null): string {
   return `${hrs}h ${rem}m`;
 }
 
+function formatByteCount(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function frpcDownloadLabel(
+  t: ReturnType<typeof messages>['tunnelSettings'],
+  progress: NonNullable<TunnelStatusResponse['frpcDownload']>,
+): string {
+  if (progress.phase === 'extracting') return t.frpcExtracting;
+  if (progress.percent != null) return t.frpcDownloadingPercent.replace('{{percent}}', String(progress.percent));
+  if (progress.bytesReceived != null) {
+    return t.frpcDownloadingBytes.replace('{{received}}', formatByteCount(progress.bytesReceived));
+  }
+  return t.frpcDownloading;
+}
+
 export function TunnelSettingsPanel() {
   const language = useLocaleStore((s) => s.language);
   const t = messages(language).tunnelSettings;
@@ -80,7 +98,15 @@ export function TunnelSettingsPanel() {
     error: statusErr,
     isLoading,
     mutate: mutStatus,
-  } = useSWR(hasToken ? 'tunnel-status' : null, fetchTunnelStatus, { refreshInterval: 60_000 });
+  } = useSWR(hasToken ? 'tunnel-status' : null, fetchTunnelStatus, {
+    refreshInterval: (latest) => {
+      if (starting) return 1000;
+      if (latest?.frpcDownload || latest?.state === 'connecting' || latest?.state === 'reconnecting') {
+        return 2000;
+      }
+      return 60_000;
+    },
+  });
 
   const autoStartEnabled = useMemo(() => {
     const c = cfgData?.payload?.config;
@@ -325,6 +351,41 @@ export function TunnelSettingsPanel() {
           <span className={cn('size-2.5 rounded-full', statusDotClass(st))} aria-hidden />
           {statusLabel(t, st)}
         </div>
+        {st.frpcDownload ? (
+          <div className="mt-3 space-y-2">
+            <p className="flex items-center gap-2 text-xs text-fg-muted">
+              <Loader2 className="size-3.5 animate-spin shrink-0" />
+              {frpcDownloadLabel(t, st.frpcDownload)}
+            </p>
+            <div
+              className="h-1.5 w-full overflow-hidden rounded-full bg-surface-panel"
+              role="progressbar"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={st.frpcDownload.percent ?? undefined}
+              aria-label={frpcDownloadLabel(t, st.frpcDownload)}
+            >
+              <div
+                className={cn(
+                  'h-full rounded-full bg-accent transition-[width] duration-300',
+                  st.frpcDownload.percent == null && 'w-1/3 animate-pulse',
+                )}
+                style={
+                  st.frpcDownload.percent != null
+                    ? { width: `${st.frpcDownload.percent}%` }
+                    : undefined
+                }
+              />
+            </div>
+            {st.frpcDownload.phase === 'downloading' &&
+            st.frpcDownload.bytesReceived != null &&
+            st.frpcDownload.totalBytes ? (
+              <p className="text-xs text-fg-subtle">
+                {formatByteCount(st.frpcDownload.bytesReceived)} / {formatByteCount(st.frpcDownload.totalBytes)}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
         {st.publicUrl ? (
           <p className="font-mono text-xs text-fg-subtle break-all">{st.publicUrl}</p>
         ) : null}
