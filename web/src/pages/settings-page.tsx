@@ -20,6 +20,7 @@ import { ProvidersSettingsPanel } from '@/features/settings/providers-settings';
 import { SystemSettingsPanel } from '@/features/settings/system-settings-panel';
 import { VoiceSettingsPanel } from '@/features/settings/voice-settings';
 import { WebSearchSettingsPanel } from '@/features/settings/web-search-settings';
+import { McpSettingsPanel } from '@/features/settings/mcp/mcp-settings';
 import { messages } from '@/i18n/messages';
 import type { SettingsSectionId } from '@/navigation';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -42,6 +43,7 @@ const SECTIONS: SettingsSectionId[] = [
   'tunnel',
   'shares',
   'search',
+  'mcp',
   'dreams',
 ];
 
@@ -127,6 +129,10 @@ export function SettingsPage() {
 
   if (id === 'search') {
     return <WebSearchSettingsPanel />;
+  }
+
+  if (id === 'mcp') {
+    return <McpSettingsPanel />;
   }
 
   if (id === 'dreams') {

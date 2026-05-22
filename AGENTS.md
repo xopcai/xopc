@@ -70,6 +70,8 @@ Examples: `pnpm run dev -- agent -i` · `pnpm run dev -- agent -m "Hello"`
 | Path | Role |
 |------|------|
 | `agent/` | `AgentService`, tools, memory, orchestration (core entry files at root; helpers grouped under `context/`, `lifecycle/`, `prompt/`, `transcript/` — transcript hygiene, thinking-level types, etc.) |
+| `agent/mcp/` | Outbound bundle-MCP: session runtimes, transports, tool materialize (`server__tool` names) |
+| `mcp/` | Inbound channel bridge (`xopc mcp serve`) — stdio MCP server + gateway REST/SSE client |
 | `channels/` | `ChannelPlugin`, manager, inbound/outbound, `attachments/`, `plugins/bundled.ts` |
 | `gateway/` | HTTP + SSE server, API for UI; `heartbeat/` keep-alive service |
 | `cli/` | Commands (self-registration via `registry`) |
@@ -199,6 +201,7 @@ import { DraftStreamManager } from '@xopcai/xopc/channels/telegram/draft-stream.
 | New provider | Prefer upstream **`pi-ai`**; else OpenRouter / Vercel AI Gateway for custom bases. See [pi-ai](https://github.com/earendil-works/pi-mono). |
 | New channel plugin | `ChannelPlugin` + optional `defineChannelPluginEntry` → `bundled.ts` if shipping in core |
 | New gateway console screen | `web/src/pages/<name>.tsx` or `web/src/features/<area>/`; register route in `web/src/app.tsx`; follow [Web UI](#web-ui). |
+| MCP servers / channel bridge | Config: `mcp.servers` in `xopc.json`; outbound runtime `src/agent/mcp/`; inbound `src/mcp/` + `xopc mcp serve`; UI `#/settings/mcp`. See [docs/cli/mcp.md](./docs/cli/mcp.md). |
 | Dependencies | **`pnpm` only** — never commit `package-lock.json` (use `pnpm-lock.yaml`). |
 | GitHub issues / PRs | Templates under `.github/ISSUE_TEMPLATE/`; process in **[CONTRIBUTING.md](./CONTRIBUTING.md)**; sync labels with `./scripts/sync-github-labels.sh` |
 | Electron desktop | Packaged app: `pnpm run build && pnpm run electron:build`. The **main process** runs minimal shell code; first-time `userData` config init uses **Zod (`ConfigSchema`) only** via `initWorkspace({ skipChannelPluginValidation: true })` so it does not load bundled channel plugins. **Channel plugin `configSchema.validate`** still runs when the **gateway subprocess** (`out/server/index.js`) starts. |
@@ -215,6 +218,7 @@ import { DraftStreamManager } from '@xopcai/xopc/channels/telegram/draft-stream.
 | `agents.defaults` | Default model, limits, temperature |
 | `channels` | Telegram and other channel configs |
 | `gateway` | HTTP + SSE |
+| `mcp` | Outbound MCP server registry (`mcp.servers`) + session idle TTL |
 | `cron` | Scheduled jobs |
 | `extensions` | Enable/disable extensions |
 
@@ -301,7 +305,7 @@ cd web && pnpm run build                  # → ../dist/gateway/static/root (gat
 | i18n | `web/src/i18n/messages.ts` (`en` / `zh`) |
 | Global styles + tokens | `web/src/styles/globals.css` (`@theme { … }` for semantic colors) |
 
-**Routing (hash):** `/` → `/chat`; chat `/chat`, `/chat/new`, `/chat/:sessionKey`. Full-screen **settings** shell: `/settings/gateway`, `/settings/appearance`, `/settings/providers`, `/settings/models`, `/settings/agents`, `/settings/search`, `/settings/heartbeat`, **`/settings/cron`**, **`/settings/skills`**, `/settings/sessions`, `/settings/logs`, **`/settings/channels`**, `/settings/voice`. Top-level **`/cron`**, **`/skills`**, **`/channels`**, `/sessions`, `/logs` redirect into the matching `/settings/...` route (bookmark-safe).
+**Routing (hash):** `/` → `/chat`; chat `/chat`, `/chat/new`, `/chat/:sessionKey`. Full-screen **settings** shell: `/settings/gateway`, `/settings/mcp`, `/settings/appearance`, `/settings/providers`, `/settings/models`, `/settings/agents`, `/settings/search`, `/settings/heartbeat`, **`/settings/cron`**, **`/settings/skills`**, `/settings/sessions`, `/settings/logs`, **`/settings/channels`**, `/settings/voice`. Top-level **`/cron`**, **`/skills`**, **`/channels`**, **`/mcp`**, `/sessions`, `/logs` redirect into the matching `/settings/...` route (bookmark-safe).
 
 **Gateway integration:**
 

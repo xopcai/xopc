@@ -16,6 +16,7 @@ export const BUILTIN_TOOL_UI_GROUPS = [
   },
   { key: 'media', toolIds: ['image', 'image_generate'] as const },
   { key: 'extensions', toolIds: ['extensions'] as const },
+  { key: 'mcp', toolIds: ['bundle-mcp'] as const },
 ] as const;
 
 export type BuiltinToolUiGroupKey = (typeof BUILTIN_TOOL_UI_GROUPS)[number]['key'] | 'misc' | 'unknown';

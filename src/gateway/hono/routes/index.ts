@@ -21,6 +21,7 @@ import { registerSharePublicRoutes, registerShareRoutes } from './shares.js';
 import { registerTunnelPublicRoutes, registerTunnelRoutes } from './tunnel.js';
 import { registerUpdateRoutes } from './update.js';
 import { registerVoiceRoutes } from './voice.js';
+import { registerMcpRoutes } from './mcp.js';
 import { registerWorkspaceRoutes } from './workspace.js';
 
 export function registerAuthenticatedRoutes(app: Hono, authenticated: Hono, deps: AuthenticatedRouteDeps): void {
@@ -47,6 +48,7 @@ export function registerAuthenticatedRoutes(app: Hono, authenticated: Hono, deps
   registerExtensionGatewayRoutes(authenticated, deps);
   registerUpdateRoutes(authenticated, deps);
   registerVoiceRoutes(authenticated, deps);
+  registerMcpRoutes(authenticated, deps);
 }
 
 export type { AuthenticatedRouteDeps } from './deps.js';

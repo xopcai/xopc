@@ -68,8 +68,12 @@ import { removeSkillsLockEntry } from '../agent/skills/hub-lock.js';
 import type { SkillCatalogEntry } from '../agent/agent-manager.js';
 import type { SkillMarkdownPreviewPayload } from '../agent/skills/types.js';
 import type { ManagedSkillListItem } from '../agent/skills/managed-store.js';
-
 import { PACKAGE_VERSION } from '../package-version.js';
+
+import {
+  disposeAllSessionMcpRuntimes,
+  retireSessionMcpRuntimeForSessionKey,
+} from '../agent/mcp/bundle-mcp-tools.js';
 import { buildSessionKey, parseSessionKey } from '../routing/session-key.js';
 import { getDefaultAgentId } from '../routing/resolve-route.js';
 import { scheduleGatewayUpdateCheck } from '../infra/update-startup.js';
@@ -575,6 +579,9 @@ export class GatewayService {
 
     registerClarifyBridge(null);
     this.clarifyBridge.dispose();
+    await disposeAllSessionMcpRuntimes().catch((err) => {
+      log.warn({ err }, 'MCP runtime shutdown failed');
+    });
     this.agentService.stop();
 
     // Unblock `consumeOutbound()` / `consumeInbound()` waiters before stopping channels (CLI agent does the same).
@@ -698,6 +705,7 @@ export class GatewayService {
         onCronReload: (newConfig) => this.handleCronReload(newConfig),
         onHeartbeatReload: (newConfig) => this.handleHeartbeatReload(newConfig),
         onToolsReload: (newConfig) => this.handleToolsReload(newConfig),
+        onMcpReload: (newConfig) => this.handleMcpReload(newConfig),
         onExtensionsReload: async (newConfig, changedPaths) => {
           await this.handleExtensionsReload(newConfig, changedPaths);
         },
@@ -817,6 +825,16 @@ export class GatewayService {
     this.config = newConfig;
     this.emit('config.reload', { section: 'tools' });
     log.debug('Tools config reloaded');
+  }
+
+  private handleMcpReload(newConfig: Config): void {
+    log.debug('Reloading MCP config...');
+    this.config = newConfig;
+    void disposeAllSessionMcpRuntimes().catch((err) => {
+      log.warn({ err }, 'MCP runtime dispose on config reload failed');
+    });
+    this.emit('config.reload', { section: 'mcp' });
+    log.debug('MCP config reloaded');
   }
 
   /**
@@ -1777,6 +1795,10 @@ export class GatewayService {
    */
   async deleteSession(key: string): Promise<{ deleted: boolean }> {
     const result = await this.sessionIndex.deleteSession(key);
+    if (result) {
+      this.agentService.evictSessionAgent(key);
+      await retireSessionMcpRuntimeForSessionKey({ sessionKey: key, reason: 'session-delete' });
+    }
     return { deleted: result };
   }
 

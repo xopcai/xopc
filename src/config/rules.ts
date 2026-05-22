@@ -104,6 +104,9 @@ export const BASE_RELOAD_RULES: ReloadRule[] = [
   
   // Tools - hot reload (for tool-specific settings)
   { prefix: 'tools', kind: 'hot', description: 'Tools configuration' },
+
+  // MCP servers - hot reload (dispose and reconnect runtimes)
+  { prefix: 'mcp', kind: 'hot', description: 'MCP server definitions and idle TTL' },
 ];
 
 function pluginsForReloadRules(): ChannelPlugin[] {

@@ -452,7 +452,15 @@ export class DefaultJobExecutor implements JobExecutor {
     })();
 
     // Race against timeout
-    return await Promise.race([executePromise, timeoutPromise]);
+    try {
+      return await Promise.race([executePromise, timeoutPromise]);
+    } finally {
+      const { retireSessionMcpRuntimeForSessionKey } = await import('../agent/mcp/bundle-mcp-tools.js');
+      await retireSessionMcpRuntimeForSessionKey({
+        sessionKey,
+        reason: 'cron-isolated-end',
+      }).catch(() => {});
+    }
   }
 
   /**

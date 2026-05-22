@@ -1,0 +1,80 @@
+import { fetch as undiciFetch } from 'undici';
+import type { Config } from '../config/schema.js';
+import { loadConfig } from '../config/loader.js';
+
+function resolveGatewayTokenFromConfig(cfg: Config): string | undefined {
+  const fromConfig = cfg.gateway?.auth?.token?.trim();
+  if (fromConfig) {
+    return fromConfig;
+  }
+  return process.env.XOPC_GATEWAY_TOKEN?.trim() || undefined;
+}
+
+export type GatewayHttpClientOptions = {
+  baseUrl: string;
+  token?: string;
+};
+
+export class GatewayHttpClient {
+  constructor(private readonly opts: GatewayHttpClientOptions) {}
+
+  private headers(extra?: Record<string, string>): Record<string, string> {
+    const h: Record<string, string> = { Accept: 'application/json', ...extra };
+    if (this.opts.token) {
+      h.Authorization = `Bearer ${this.opts.token}`;
+    }
+    return h;
+  }
+
+  async getJson<T>(path: string): Promise<T> {
+    const res = await undiciFetch(`${this.opts.baseUrl}${path}`, {
+      headers: this.headers(),
+    });
+    if (!res.ok) {
+      throw new Error(`Gateway GET ${path} failed: ${res.status}`);
+    }
+    const body = (await res.json()) as { ok?: boolean; payload?: T } | T;
+    if (body && typeof body === 'object' && 'payload' in body) {
+      return (body as { payload: T }).payload;
+    }
+    return body as T;
+  }
+
+  async postJson<T>(path: string, data: unknown): Promise<T> {
+    const res = await undiciFetch(`${this.opts.baseUrl}${path}`, {
+      method: 'POST',
+      headers: this.headers({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      throw new Error(`Gateway POST ${path} failed: ${res.status}`);
+    }
+    const body = (await res.json()) as { ok?: boolean; payload?: T } | T;
+    if (body && typeof body === 'object' && 'payload' in body) {
+      return (body as { payload: T }).payload;
+    }
+    return body as T;
+  }
+}
+
+export function resolveGatewayHttpBaseUrl(config: Config, override?: string): string {
+  if (override?.trim()) {
+    return override.replace(/\/$/, '');
+  }
+  const host = config.gateway?.host ?? '127.0.0.1';
+  const port = config.gateway?.port ?? 18790;
+  return `http://${host}:${port}`;
+}
+
+export function createGatewayHttpClientFromConfig(params: {
+  config?: Config;
+  gatewayUrl?: string;
+  gatewayToken?: string;
+}): GatewayHttpClient {
+  const cfg = params.config ?? loadConfig();
+  const token = params.gatewayToken ?? resolveGatewayTokenFromConfig(cfg) ?? undefined;
+  return new GatewayHttpClient({
+    baseUrl: resolveGatewayHttpBaseUrl(cfg, params.gatewayUrl),
+    token,
+  });
+}

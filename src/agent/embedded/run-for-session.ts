@@ -9,6 +9,10 @@ import { resolveAgentTurnTimeoutMs } from '../orchestration/run-agent-turn-with-
 import { runXopcEmbeddedTurn } from './run-turn.js';
 import type { EmbeddedStreamEvent, RunXopcEmbeddedTurnParams, RunXopcEmbeddedTurnResult } from './types.js';
 import { applyStartupContextToUserMessage } from '../reply/apply-turn-user-enrichment.js';
+import {
+  mergeTurnTools,
+  resolveEmbeddedMcpToolsForTurn,
+} from '../mcp/resolve-embedded-mcp-tools.js';
 
 export type RunEmbeddedForSessionParams = {
   sessionKey: string;
@@ -26,6 +30,8 @@ export type RunEmbeddedForSessionParams = {
   startupAction?: 'new' | 'reset';
   forceStartupContext?: boolean;
   applyStartupContext?: boolean;
+  /** When true, dispose session MCP runtime after this turn completes. */
+  cleanupBundleMcpOnRunEnd?: boolean;
 };
 
 export async function runEmbeddedTurnForSession(
@@ -67,21 +73,35 @@ export async function runEmbeddedTurnForSession(
     });
   }
 
-  const result = await runXopcEmbeddedTurn({
-    sessionKey,
-    runId,
-    userMessage: userMessageForTurn,
-    model,
-    modelRef,
-    tools,
-    systemPrompt,
-    thinkingLevel,
-    workspaceDir,
-    sessionStore,
-    timeoutMs: resolveAgentTurnTimeoutMs(config),
-    abortSignal: params.abortSignal,
-    onEvent: params.onEvent,
-  });
+  const result = await (async () => {
+    const mcpResolved = await resolveEmbeddedMcpToolsForTurn({
+      sessionKey,
+      workspaceDir,
+      cfg: config,
+      baseTools: tools,
+      cleanupOnTurnEnd: params.cleanupBundleMcpOnRunEnd === true,
+    });
+    const turnTools = mergeTurnTools(tools, mcpResolved.tools);
+    try {
+      return await runXopcEmbeddedTurn({
+        sessionKey,
+        runId,
+        userMessage: userMessageForTurn,
+        model,
+        modelRef,
+        tools: turnTools,
+        systemPrompt,
+        thinkingLevel,
+        workspaceDir,
+        sessionStore,
+        timeoutMs: resolveAgentTurnTimeoutMs(config),
+        abortSignal: params.abortSignal,
+        onEvent: params.onEvent,
+      });
+    } finally {
+      await mcpResolved.dispose().catch(() => {});
+    }
+  })();
 
   return result;
 }

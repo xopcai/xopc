@@ -21,6 +21,7 @@ export const GATEWAY_BUILTIN_TOOL_IDS = [
   'image',
   'image_generate',
   'extensions',
+  'bundle-mcp',
 ] as const;
 
 export type GatewayBuiltinToolId = (typeof GATEWAY_BUILTIN_TOOL_IDS)[number];
