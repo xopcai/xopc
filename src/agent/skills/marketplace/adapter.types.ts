@@ -10,7 +10,8 @@ import type {
  * Pluggable skills marketplace (catalog + install). Implementations: xopc Store, SkillHub.
  */
 export interface SkillsMarketplaceAdapter {
-  readonly id: 'store' | 'skillhub';
+  /** Unique adapter identifier. Built-in: 'store' | 'skillhub' | 'clawhub'. Extensions may add arbitrary ids. */
+  readonly id: string;
 
   /** Filter chips for the current provider (may be empty). */
   listCategories(config: Config): Promise<MarketplaceCategoryOption[]>;

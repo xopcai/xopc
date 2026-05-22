@@ -241,6 +241,13 @@ class MockExtensionApiImpl implements MockExtensionApi {
     /* noop */
   }
 
+  registerMarketplaceAdapter(_registration: {
+    adapter: unknown;
+    displayName?: string;
+  }): void {
+    /* noop */
+  }
+
   registerFlag(_name: string, _config: FlagConfig): void {
     /* noop */
   }

@@ -8,6 +8,7 @@ import {
 } from './store-api-client.js';
 
 import type { SkillsMarketplaceAdapter } from '../../adapter.types.js';
+import { registerMarketplaceAdapter } from '../../registry.js';
 
 export const storeMarketplaceAdapter: SkillsMarketplaceAdapter = {
   id: 'store',
@@ -47,3 +48,9 @@ export const storeMarketplaceAdapter: SkillsMarketplaceAdapter = {
     };
   },
 };
+
+// Self-register into the dynamic marketplace adapter registry.
+registerMarketplaceAdapter({
+  adapter: storeMarketplaceAdapter,
+  displayName: 'xopc Store',
+});

@@ -49,9 +49,9 @@ import {
   getMarketplaceProviderDisplayName,
   listMarketplaceCategories,
   listMarketplacePackages,
+  listRegisteredProviders,
   resolveSkillsMarketplaceProvider,
   type MarketplaceCategoryOption,
-  type SkillsMarketplaceProvider,
   type SkillsStoreListParams,
   type UnifiedMarketplaceListResponse,
   type UnifiedMarketplacePackageDetail,
@@ -1416,20 +1416,20 @@ export class GatewayService {
 
   async fetchSkillsMarketplaceCatalog(
     params: SkillsStoreListParams,
-    provider?: SkillsMarketplaceProvider,
+    provider?: string,
   ): Promise<UnifiedMarketplaceListResponse> {
     return listMarketplacePackages(this.config, params, provider);
   }
 
   async fetchSkillsMarketplaceCategories(
-    provider?: SkillsMarketplaceProvider,
+    provider?: string,
   ): Promise<{ items: MarketplaceCategoryOption[] }> {
     return listMarketplaceCategories(this.config, provider);
   }
 
   async fetchSkillsMarketplacePackageDetail(
     packageName: string,
-    provider?: SkillsMarketplaceProvider,
+    provider?: string,
   ): Promise<UnifiedMarketplacePackageDetail> {
     return getMarketplacePackageDetail(this.config, packageName, provider);
   }
@@ -1438,7 +1438,7 @@ export class GatewayService {
     name: string;
     version?: string;
     overwrite?: boolean;
-    provider?: SkillsMarketplaceProvider;
+    provider?: string;
   }): Promise<{ skillId: string; path: string }> {
     const { buffer, skillId } = await downloadFromMarketplace(
       this.config,
@@ -1627,6 +1627,11 @@ export class GatewayService {
       provider,
       displayName: getMarketplaceProviderDisplayName(provider),
     };
+  }
+
+  /** All registered marketplace providers (built-in + extension-contributed). */
+  getSkillsMarketplaceProviders(): Array<{ id: string; displayName: string }> {
+    return listRegisteredProviders();
   }
 
   reloadSkillsFromDisk(): void {

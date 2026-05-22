@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { SkillCardIcon } from '@/features/skills/skill-card-icon';
 import { MarketplaceSkillCardSkeleton } from '@/features/skills/skills-page-primitives';
 import { SKILL_LIST_SKELETON_KEYS } from '@/features/skills/skills-page.constants';
-import { interpolate, skillHubPublicSkillPageUrl } from '@/features/skills/skills-page.utils';
+import { interpolate, marketplacePublicSkillUrl } from '@/features/skills/skills-page.utils';
 import type { SkillsPageVm } from '@/features/skills/use-skills-page';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
@@ -161,8 +161,7 @@ export function SkillsPageMarketplaceContent(p: Props) {
               {mpPayload.items.map((row) => {
                 const installed = isSkillInstalledByName(row.id);
                 const busy = installingMarketName === row.id;
-                const skillhubPageUrl =
-                  marketBrowseProvider === 'skillhub' ? skillHubPublicSkillPageUrl(row.id) : null;
+                const externalPageUrl = marketplacePublicSkillUrl(marketBrowseProvider, row.id);
                 return (
                   <article
                     key={row.id}
@@ -205,9 +204,9 @@ export function SkillsPageMarketplaceContent(p: Props) {
                               {row.name}
                             </h3>
                             <div className="flex shrink-0 items-center gap-1">
-                              {skillhubPageUrl ? (
+                              {externalPageUrl ? (
                                 <a
-                                  href={skillhubPageUrl}
+                                  href={externalPageUrl}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className={cn(
@@ -215,8 +214,8 @@ export function SkillsPageMarketplaceContent(p: Props) {
                                     'hover:bg-surface-hover hover:text-fg dark:border-edge',
                                     interaction.focusRingPanel,
                                   )}
-                                  aria-label={sk.marketplaceOpenOnSkillhubAria}
-                                  title={sk.marketplaceOpenOnSkillhub}
+                                  aria-label={sk.marketplaceOpenExternalAria}
+                                  title={sk.marketplaceOpenExternal}
                                 >
                                   <ExternalLink className="size-3.5" strokeWidth={2} aria-hidden />
                                 </a>

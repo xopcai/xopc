@@ -105,14 +105,14 @@ export async function patchSkillEnabled(skillName: string, enabled: boolean): Pr
   }
 }
 
-function appendMarketplaceProvider(sp: URLSearchParams, provider?: 'store' | 'skillhub') {
-  if (provider === 'store' || provider === 'skillhub') {
-    sp.set('provider', provider);
+function appendMarketplaceProvider(sp: URLSearchParams, provider?: string) {
+  if (provider?.trim()) {
+    sp.set('provider', provider.trim());
   }
 }
 
 export async function getMarketplaceCategories(opts?: {
-  provider?: 'store' | 'skillhub';
+  provider?: string;
 }): Promise<{ items: MarketplaceCategoryItem[] }> {
   const sp = new URLSearchParams();
   appendMarketplaceProvider(sp, opts?.provider);
@@ -136,7 +136,7 @@ export async function getMarketplaceSkills(params: {
   pageSize?: number;
   sort?: 'downloads' | 'newest';
   category?: string;
-  provider?: 'store' | 'skillhub';
+  provider?: string;
 }): Promise<SkillsMarketplacePayload & { provider?: string }> {
   const sp = new URLSearchParams();
   if (params.q?.trim()) sp.set('q', params.q.trim());
@@ -161,7 +161,7 @@ export async function getMarketplaceSkills(params: {
 
 export async function getMarketplacePackageDetail(
   packageName: string,
-  opts?: { provider?: 'store' | 'skillhub' },
+  opts?: { provider?: string },
 ): Promise<MarketplacePackageDetailPayload> {
   const enc = encodeURIComponent(packageName);
   const sp = new URLSearchParams();
@@ -184,7 +184,7 @@ export async function installMarketplaceSkill(opts: {
   name: string;
   version?: string;
   overwrite?: boolean;
-  provider?: 'store' | 'skillhub';
+  provider?: string;
 }): Promise<{ skillId: string; path: string }> {
   const res = await apiFetch(apiUrl('/api/skills/marketplace/install'), {
     method: 'POST',
@@ -232,7 +232,7 @@ export async function getSkillMarkdown(skillName: string, lang?: string): Promis
 }
 
 export interface MarketplaceProviderInfo {
-  provider: 'store' | 'skillhub';
+  provider: string;
   displayName: string;
 }
 
@@ -245,6 +245,27 @@ export async function getMarketplaceProvider(): Promise<MarketplaceProviderInfo>
   }
   const data = (await res.json()) as { ok?: boolean; payload?: MarketplaceProviderInfo };
   if (!data.payload?.provider) {
+    throw new Error('Invalid response');
+  }
+  return data.payload;
+}
+
+/** All registered marketplace providers (built-in + extension-contributed). */
+export async function getMarketplaceProviders(): Promise<{
+  providers: Array<{ id: string; displayName: string }>;
+  current: string;
+}> {
+  const res = await apiFetch(apiUrl('/api/skills/marketplace/providers'), {
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    throw new Error(await readErrorMessage(res));
+  }
+  const data = (await res.json()) as {
+    ok?: boolean;
+    payload?: { providers: Array<{ id: string; displayName: string }>; current: string };
+  };
+  if (!data.payload?.providers) {
     throw new Error('Invalid response');
   }
   return data.payload;

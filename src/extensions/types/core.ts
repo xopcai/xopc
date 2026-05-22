@@ -167,7 +167,17 @@ export interface ExtensionApi {
   //  Provider Registration
   registerProvider(plugin: ProviderPlugin): void;
   registerProviderPlugin(plugin: ProviderPlugin): void;
-  
+
+  //  Marketplace Adapter Registration
+  /**
+   * Register a skills marketplace adapter (e.g. a third-party skill catalog).
+   * The adapter will appear in the UI provider picker and can be selected by users.
+   */
+  registerMarketplaceAdapter(registration: {
+    adapter: import('../../agent/skills/marketplace/adapter.types.js').SkillsMarketplaceAdapter;
+    displayName?: string;
+  }): void;
+
   //  Advanced Features
   registerFlag(name: string, config: FlagConfig, extensionId?: string): void;
   getFlag(name: string): FlagValue;
