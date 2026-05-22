@@ -7,6 +7,7 @@ import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/setti
 import {
   emptyMcpServerRow,
   fetchMcpServerTools,
+  buildMcpServerConfigFromRow,
   normalizeMcpSettingsFromConfig,
   patchMcpSettings,
   testMcpServer,
@@ -138,12 +139,13 @@ export function McpSettingsPanel() {
   }, [form, mutate, saving]);
 
   const runTest = useCallback(
-    async (serverId: string) => {
+    async (serverId: string, row?: McpServerRow) => {
       if (!serverId.trim()) return;
       setTestingId(serverId);
       setError(null);
       try {
-        const result = await testMcpServer(serverId.trim());
+        const serverConfig = row ? buildMcpServerConfigFromRow(row) : undefined;
+        const result = await testMcpServer(serverId.trim(), serverConfig);
         const tools = await fetchMcpServerTools(serverId.trim()).catch(() =>
           result.tools.map((name) => ({ name })),
         );
@@ -262,7 +264,7 @@ export function McpSettingsPanel() {
                   type="button"
                   variant="ghost"
                   disabled={!row.id.trim() || testingId === row.id}
-                  onClick={() => void runTest(row.id)}
+                  onClick={() => void runTest(row.id, row)}
                 >
                   {testingId === row.id ? (
                     <Loader2 className="size-4 animate-spin" aria-hidden />
