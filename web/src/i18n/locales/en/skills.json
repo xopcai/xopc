@@ -2,7 +2,7 @@
   "skills": {
     "title": "Skills",
     "needToken": "Save a gateway token to manage skills.",
-    "tagline": "Install and manage skills to extend xopc in conversation.",
+    "tagline": "Install and manage skills to extend XOPC in conversation.",
     "refresh": "Refresh list",
     "reloadRuntime": "Reload from disk",
     "reloadDiskAria": "Reload skills from disk",
@@ -14,7 +14,7 @@
     "sectionMarketplace": "Skill store",
     "marketplaceBrowseSkillhub": "SkillHub",
     "marketplaceBrowseClawhub": "ClawHub",
-    "marketplaceBrowseStore": "xopc Store",
+    "marketplaceBrowseStore": "XOPC Store",
     "marketplaceBrowseSwitchAria": "Skills marketplace source",
     "marketplaceSortLabel": "Sort",
     "marketplaceSortDownloads": "Most downloads",

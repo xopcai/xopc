@@ -7,7 +7,7 @@ import type {
 } from './adapters/store/store-api-client.js';
 
 /**
- * Pluggable skills marketplace (catalog + install). Implementations: xopc Store, SkillHub.
+ * Pluggable skills marketplace (catalog + install). Implementations: XOPC Store, SkillHub.
  */
 export interface SkillsMarketplaceAdapter {
   /** Unique adapter identifier. Built-in: 'store' | 'skillhub' | 'clawhub'. Extensions may add arbitrary ids. */

@@ -2,7 +2,7 @@
  * SkillHub Extension — skillhub.cn skills marketplace adapter.
  *
  * Registers a marketplace adapter so users can browse, search and install
- * skills from skillhub.cn directly in the xopc gateway console.
+ * skills from skillhub.cn directly in the XOPC gateway console.
  */
 
 import type { ExtensionApi } from 'xopc/extension-sdk';

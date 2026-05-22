@@ -78,7 +78,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
-echo -e "${BLUE}          xopc Skills Regression Test Suite            ${NC}"
+echo -e "${BLUE}          XOPC Skills Regression Test Suite            ${NC}"
 echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
 echo ""
 

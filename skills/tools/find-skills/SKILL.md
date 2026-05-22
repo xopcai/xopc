@@ -1,12 +1,12 @@
 ---
 name: find-skills
-description: Helps users discover, install, and manage agent skills in xopc workspace
+description: Helps users discover, install, and manage agent skills in XOPC workspace
 license: MIT
 ---
 
 # Find Skills
 
-This skill helps you discover, install, and manage skills in the xopc ecosystem.
+This skill helps you discover, install, and manage skills in the XOPC ecosystem.
 
 ## When to Use This Skill
 
@@ -19,9 +19,9 @@ Use this skill when the user:
 - Needs to manage installed skills (enable, disable, configure)
 - Wants to browse available skills
 
-## xopc Skills CLI Commands
+## XOPC Skills CLI Commands
 
-xopc provides built-in commands for skill management:
+XOPC provides built-in commands for skill management:
 
 ### List Available Skills
 
@@ -50,7 +50,7 @@ mv ~/.xopc/workspace/main/skills/vercel-react-best-practices-temp/SKILL.md ~/.xo
 rm -rf ~/.xopc/workspace/main/skills/vercel-react-best-practices-temp
 ```
 
-**Using xopc skills install (for skills with install specs):**
+**Using `xopc skills install` (for skills with install specs):**
 
 ```bash
 # Install skill dependencies
@@ -144,7 +144,7 @@ Use your browsing capabilities to search:
 
 ### Step 3: Install the Skill
 
-**For xopc-compatible skills:**
+**For XOPC-compatible skills:**
 
 1. **Check if skill has install specs** in SKILL.md:
    ```bash
@@ -226,7 +226,7 @@ Learn more: https://skills.sh/vercel-labs/agent-skills/vercel-react-best-practic
 If the user wants to proceed, you can help them install:
 
 ```bash
-# For xopc skills with install specs
+# For XOPC skills with install specs
 xopc skills install <skill-name> -y
 
 # For GitHub skills (automated)
@@ -275,7 +275,7 @@ Skills must be installed in the correct directory structure:
 
 ## Skill Installation Methods
 
-### Method 1: xopc Built-in Install (Recommended)
+### Method 1: XOPC Built-in Install (Recommended)
 
 For skills that declare install dependencies:
 
@@ -435,6 +435,6 @@ Then present the list with descriptions.
 ## References
 
 - **Skills Marketplace**: https://skills.sh/
-- **xopc Skills CLI**: `xopc skills --help`
+- **XOPC Skills CLI**: `xopc skills --help`
 - **Skill Format**: SKILL.md frontmatter specification
 - **GitHub Skills**: Search "agent-skills" on GitHub

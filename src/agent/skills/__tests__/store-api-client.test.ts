@@ -8,7 +8,7 @@ import {
   skillIdForMarketplaceInstall,
 } from '../marketplace/adapters/store/store-api-client.js';
 
-describe('store-api-client (xopc Store HTTP)', () => {
+describe('store-api-client (XOPC Store HTTP)', () => {
   const storeBase = 'https://store.xopc.ai';
 
   describe('assertDownloadUrlAllowed', () => {

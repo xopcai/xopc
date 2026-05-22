@@ -52,5 +52,5 @@ export const storeMarketplaceAdapter: SkillsMarketplaceAdapter = {
 // Self-register into the dynamic marketplace adapter registry.
 registerMarketplaceAdapter({
   adapter: storeMarketplaceAdapter,
-  displayName: 'xopc Store',
+  displayName: 'XOPC Store',
 });
