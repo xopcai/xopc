@@ -17,7 +17,12 @@ import {
 import { clearTunnelState, loadTunnelState, saveTunnelState, updateTunnelState } from './tunnel-state.js';
 import { logTunnelAudit } from './tunnel-audit.js';
 import type { PersistedTunnelState, TunnelQrPayload, TunnelRegistration, TunnelStatus } from './tunnel-types.js';
-import type { FrpcDownloadProgress } from './tunnel-types.js';
+import type {
+  FrpcDownloadProgress,
+  TunnelAcmeProgressStep,
+  TunnelStartPhase,
+  TunnelStartProgress,
+} from './tunnel-types.js';
 import type { ResolvedTunnelE2eConfig } from './tunnel-e2e-config.js';
 import { getCertStatusSummary } from './acme-cert-store.js';
 import type { AcmeConfig } from './acme-client.js';
@@ -63,6 +68,7 @@ export class TunnelService extends EventEmitter {
   private stopping = false;
   private startContext: { gatewayPort: number; gatewayToken: string } | null = null;
   private frpcDownload: FrpcDownloadProgress | null = null;
+  private startProgress: TunnelStartProgress | null = null;
 
   configure(cfg: TunnelServiceConfig): void {
     this.serviceConfig = {
@@ -91,6 +97,7 @@ export class TunnelService extends EventEmitter {
       lastHeartbeatAt: this.lastHeartbeatAt,
       lastError: this.lastError,
       frpcDownload: this.frpcDownload,
+      startProgress: this.startProgress,
       config: {
         autoStart: cfg?.autoStart ?? false,
         brokerUrl: cfg?.brokerUrl ?? 'https://frp.xopc.ai/api',
@@ -102,6 +109,37 @@ export class TunnelService extends EventEmitter {
       },
       cert: getCertStatusSummary(),
     };
+  }
+
+  private setStartPhase(
+    phase: TunnelStartPhase,
+    patch?: Partial<Pick<TunnelStartProgress, 'acmeStep' | 'publicUrl'>>,
+  ): void {
+    const prev = this.startProgress;
+    const samePhase = prev?.phase === phase;
+    this.startProgress = {
+      phase,
+      startedAt: samePhase && prev ? prev.startedAt : new Date().toISOString(),
+      acmeStep:
+        patch?.acmeStep !== undefined
+          ? patch.acmeStep
+          : samePhase
+            ? (prev?.acmeStep ?? null)
+            : null,
+      publicUrl:
+        patch?.publicUrl !== undefined
+          ? patch.publicUrl
+          : samePhase
+            ? (prev?.publicUrl ?? null)
+            : (prev?.publicUrl ?? null),
+    };
+    this.emit('tunnel:progress');
+  }
+
+  private clearStartProgress(): void {
+    if (!this.startProgress) return;
+    this.startProgress = null;
+    this.emit('tunnel:progress');
   }
 
   buildQr(gatewayPort: number, gatewayHost: string): TunnelQrPayload {
@@ -128,6 +166,8 @@ export class TunnelService extends EventEmitter {
     this.state = 'connecting';
     this.lastError = null;
     this.frpcDownload = null;
+    this.startProgress = null;
+    this.setStartPhase('preparing_frpc');
     this.emit('tunnel:connecting');
 
     let frpcBin: string;
@@ -135,13 +175,14 @@ export class TunnelService extends EventEmitter {
       frpcBin = await ensureFrpcBinary({
         onProgress: (progress) => {
           this.frpcDownload = progress;
-          this.emit('tunnel:progress');
+          this.setStartPhase('preparing_frpc');
         },
       });
       this.frpcDownload = null;
       this.emit('tunnel:progress');
     } catch (err) {
       this.frpcDownload = null;
+      this.clearStartProgress();
       this.state = 'error';
       this.lastError = err instanceof Error ? err.message : String(err);
       this.emit('tunnel:error', this.lastError);
@@ -153,8 +194,10 @@ export class TunnelService extends EventEmitter {
 
     let registration: TunnelRegistration;
     try {
+      this.setStartPhase('registering');
       registration = await this.resolveRegistration(broker, cfg, gatewayToken, persisted);
     } catch (err) {
+      this.clearStartProgress();
       this.state = 'error';
       this.lastError = err instanceof Error ? err.message : String(err);
       this.emit('tunnel:error', this.lastError);
@@ -163,16 +206,27 @@ export class TunnelService extends EventEmitter {
 
     const state = persistedFromRegistration(registration);
     saveTunnelState(state);
+    this.setStartPhase('registering', { publicUrl: registration.publicUrl });
 
-    const { frpcLocalPort, frpcMode } = await this.prepareFrpcTarget(
-      broker,
-      registration,
-      cfg,
-      gatewayPort,
-    );
-    const configPath = writeFrpcConfig(registration, frpcLocalPort, '127.0.0.1', frpcMode);
-    await this.spawnAndWait(frpcBin, configPath, broker, state, registration.heartbeatIntervalMs);
+    try {
+      const { frpcLocalPort, frpcMode } = await this.prepareFrpcTarget(
+        broker,
+        registration,
+        cfg,
+        gatewayPort,
+      );
+      const configPath = writeFrpcConfig(registration, frpcLocalPort, '127.0.0.1', frpcMode);
+      this.setStartPhase('starting_frpc', { publicUrl: registration.publicUrl });
+      await this.spawnAndWait(frpcBin, configPath, broker, state, registration.heartbeatIntervalMs);
+    } catch (err) {
+      this.clearStartProgress();
+      this.state = 'error';
+      this.lastError = err instanceof Error ? err.message : String(err);
+      this.emit('tunnel:error', this.lastError);
+      throw err;
+    }
 
+    this.clearStartProgress();
     this.state = 'connected';
     this.connectedSince = new Date().toISOString();
     this.reconnectAttempt = 0;
@@ -233,6 +287,7 @@ export class TunnelService extends EventEmitter {
     this.state = 'disconnected';
     this.connectedSince = null;
     this.startContext = null;
+    this.clearStartProgress();
     this.emit('tunnel:disconnected');
     return { released };
   }
@@ -321,6 +376,7 @@ export class TunnelService extends EventEmitter {
     }
 
     this.state = 'reconnecting';
+    this.setStartPhase('reconnecting_frpc', { publicUrl: state.publicUrl ?? null });
     const delayMs = Math.min(16_000, 1000 * 2 ** (this.reconnectAttempt - 1));
     log.info({ attempt: this.reconnectAttempt, delayMs }, 'Scheduling frpc reconnect');
     await new Promise((r) => setTimeout(r, delayMs));
@@ -328,6 +384,7 @@ export class TunnelService extends EventEmitter {
 
     try {
       await this.spawnAndWait(frpcBin, configPath, broker, state, heartbeatIntervalMs);
+      this.clearStartProgress();
       this.state = 'connected';
       this.reconnectAttempt = 0;
       this.emit('tunnel:connected');
@@ -402,6 +459,8 @@ export class TunnelService extends EventEmitter {
       return { frpcLocalPort: gatewayPort, frpcMode: 'http' };
     }
 
+    this.setStartPhase('provisioning_tls', { publicUrl: registration.publicUrl });
+
     const acmeConfig: AcmeConfig = {
       broker,
       tunnelId: registration.tunnelId,
@@ -409,6 +468,12 @@ export class TunnelService extends EventEmitter {
       subdomain: registration.subdomain,
       frpSubdomainHost: cfg.frpSubdomainHost,
       staging: cfg.e2e.staging,
+      onProgress: (step: TunnelAcmeProgressStep) => {
+        this.setStartPhase('provisioning_tls', {
+          publicUrl: registration.publicUrl,
+          acmeStep: step,
+        });
+      },
     };
 
     await startTunnelTlsServer({

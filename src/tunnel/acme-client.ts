@@ -7,6 +7,7 @@ import { Agent, fetch as undiciFetch, type RequestInit } from 'undici';
 import { resolveStateDir } from '../config/paths.js';
 import { createLogger } from '../utils/logger.js';
 import type { TunnelBrokerClient } from './broker-client.js';
+import type { TunnelAcmeProgressStep } from './tunnel-types.js';
 import {
   base64url,
   ensureEcAccountKeyPem,
@@ -56,6 +57,7 @@ export type AcmeConfig = {
   subdomain: string;
   frpSubdomainHost: string;
   staging?: boolean;
+  onProgress?: (step: TunnelAcmeProgressStep) => void;
 };
 
 export type AcmeCertResult = {
@@ -326,6 +328,7 @@ export async function requestCertificate(config: AcmeConfig): Promise<AcmeCertRe
   const domain = resolveCertDomain(config.subdomain, config.frpSubdomainHost);
 
   log.info({ domain, staging }, 'Starting ACME certificate request');
+  config.onProgress?.('checking');
 
   const directory = await getDirectory(staging);
   const accountKeyPem = loadAccountKeyPem();
@@ -356,6 +359,7 @@ export async function requestCertificate(config: AcmeConfig): Promise<AcmeCertRe
   const txtValue = base64url(createHash('sha256').update(keyAuth).digest());
 
   log.info({ fqdn: `_acme-challenge.${domain}` }, 'Setting DNS-01 challenge via Broker');
+  config.onProgress?.('dns_challenge');
   const { recordId, fqdn } = await config.broker.setDnsChallenge({
     tunnelId: config.tunnelId,
     tunnelToken: config.tunnelToken,
@@ -364,17 +368,20 @@ export async function requestCertificate(config: AcmeConfig): Promise<AcmeCertRe
   });
 
   try {
+    config.onProgress?.('dns_propagation');
     await waitForDnsTxt(fqdn, txtValue);
 
     nonce = await getNonce(directory);
     await acmeSignedPost(challenge.url, account, nonce, {});
 
+    config.onProgress?.('ca_validation');
     await pollChallengeReady(challenge.url, account, directory);
 
     const { csrDer, keyPem } = generateDomainCsr(domain);
     const finalizeUrl = orderResult.data.finalize;
     if (!finalizeUrl) throw new Error('ACME order missing finalize URL');
 
+    config.onProgress?.('issuing');
     nonce = await getNonce(directory);
     await acmeSignedPost(finalizeUrl, account, nonce, { csr: base64url(csrDer) });
 
