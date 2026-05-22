@@ -126,7 +126,7 @@ const router = createHashRouter([
       },
       {
         path: 'mcp',
-        element: <Navigate to="/settings/mcp" replace />,
+        element: <Navigate to="/settings/agent-mcp" replace />,
       },
       {
         path: 'agents',
@@ -188,6 +188,10 @@ const router = createHashRouter([
           {
             path: 'channels',
             element: <Navigate to="/channels" replace />,
+          },
+          {
+            path: 'mcp',
+            element: <Navigate to="/settings/agent-mcp" replace />,
           },
           {
             path: 'sessions',

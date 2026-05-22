@@ -26,7 +26,6 @@
     "settingsChannels": "消息通道",
     "settingsVoice": "语音",
     "settingsGateway": "网关",
-    "settingsMcp": "MCP",
     "settingsHeartbeat": "心跳",
     "settingsTunnel": "远程访问",
     "settingsShares": "文件分享",
@@ -37,6 +36,7 @@
     "settingsAgentBrowser": "浏览器",
     "settingsAgentRuntime": "运行时",
     "settingsAgentTools": "工具与技能",
+    "settingsAgentMcp": "MCP",
     "settingsAgentSystemPrompt": "系统提示词",
     "settingsAgents": "智能体",
     "settingsSystem": "系统设置"

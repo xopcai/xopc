@@ -18,6 +18,7 @@ const SETTINGS_SECTION_TO_TAB: Record<SettingsSectionId, Tab> = {
   'agent-browser': 'settingsAgentBrowser',
   'agent-runtime': 'settingsAgentRuntime',
   'agent-tools': 'settingsAgentTools',
+  'agent-mcp': 'settingsAgentMcp',
   'agent-system-prompt': 'settingsAgentSystemPrompt',
   agents: 'settingsAgents',
   providers: 'settingsProviders',
@@ -30,7 +31,6 @@ const SETTINGS_SECTION_TO_TAB: Record<SettingsSectionId, Tab> = {
   tunnel: 'settingsTunnel',
   shares: 'settingsShares',
   search: 'settingsSearch',
-  mcp: 'settingsMcp',
   dreams: 'settingsDreams',
   cron: 'cron',
   skills: 'skills',
@@ -44,6 +44,7 @@ const TAB_TO_SETTINGS_SECTION: Record<
   | 'settingsAgentBrowser'
   | 'settingsAgentRuntime'
   | 'settingsAgentTools'
+  | 'settingsAgentMcp'
   | 'settingsAgentSystemPrompt'
   | 'settingsAgents'
   | 'settingsProviders'
@@ -56,7 +57,6 @@ const TAB_TO_SETTINGS_SECTION: Record<
   | 'settingsTunnel'
   | 'settingsShares'
   | 'settingsSearch'
-  | 'settingsMcp'
   | 'settingsDreams'
   | 'cron'
   | 'skills'
@@ -70,6 +70,7 @@ const TAB_TO_SETTINGS_SECTION: Record<
   settingsAgentBrowser: 'agent-browser',
   settingsAgentRuntime: 'agent-runtime',
   settingsAgentTools: 'agent-tools',
+  settingsAgentMcp: 'agent-mcp',
   settingsAgentSystemPrompt: 'agent-system-prompt',
   settingsAgents: 'agents',
   settingsProviders: 'providers',
@@ -82,7 +83,6 @@ const TAB_TO_SETTINGS_SECTION: Record<
   settingsTunnel: 'tunnel',
   settingsShares: 'shares',
   settingsSearch: 'search',
-  settingsMcp: 'mcp',
   settingsDreams: 'dreams',
   cron: 'cron',
   skills: 'skills',
@@ -136,10 +136,11 @@ export const SETTINGS_SHELL_NAV_GROUPS: readonly SettingsShellNavGroup[] = [
       'settingsAgentBrowser',
       'settingsAgentRuntime',
       'settingsAgentTools',
+      'settingsAgentMcp',
       'settingsAgentSystemPrompt',
     ],
   },
-  { id: 'gateway', tabs: ['settingsGateway', 'settingsMcp', 'settingsHeartbeat', 'settingsTunnel', 'settingsShares'] },
+  { id: 'gateway', tabs: ['settingsGateway', 'settingsHeartbeat', 'settingsTunnel', 'settingsShares'] },
   { id: 'automation', tabs: ['settingsDreams'] },
   { id: 'data', tabs: ['sessions', 'logs'] },
 ] as const;
