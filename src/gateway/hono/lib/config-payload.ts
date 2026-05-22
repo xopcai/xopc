@@ -210,6 +210,7 @@ export async function buildSafeWebConfigPayload(service: GatewayService) {
       enabled: config.tunnel?.enabled === true,
       autoStart: config.tunnel?.autoStart === true,
       brokerUrl: config.tunnel?.brokerUrl ?? 'https://frp.xopc.ai/api',
+      registrationSecret: config.tunnel?.registrationSecret ? '••••••••••••' : '',
       consent: config.tunnel?.consent
         ? {
             version: config.tunnel.consent.version,

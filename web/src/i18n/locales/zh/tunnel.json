@@ -55,6 +55,16 @@
     "consentReconfirm": "接受并继续",
     "consentCancel": "取消",
     "deeplinkTitle": "深链内容",
-    "brokerNote": "流量经 frp.xopc.ai 转发，请妥善保管 gateway 令牌。详见 docs/tunnel-security.md。"
+    "brokerNote": "流量经 frp.xopc.ai 转发，请妥善保管 gateway 令牌。详见 docs/tunnel-security.md。",
+    "brokerSecretTitle": "Broker 注册密钥",
+    "brokerSecretHint": "连接 frp.xopc.ai 时必填。保存在本机 xopc.json 中。",
+    "brokerSecretEnvHint": "已设置环境变量 XOPC_TUNNEL_REGISTRATION_SECRET，其优先级高于下方配置。",
+    "brokerSecretPlaceholder": "粘贴 registration secret",
+    "brokerSecretPlaceholderKeep": "留空表示保留已保存的密钥",
+    "brokerSecretMissingHint": "请在此填写，或在启动前 export XOPC_TUNNEL_REGISTRATION_SECRET。",
+    "brokerSecretSave": "保存密钥",
+    "brokerSecretClear": "清除已保存密钥",
+    "brokerSecretSaved": "注册密钥已保存",
+    "brokerSecretCleared": "已清除保存的注册密钥"
   }
 }

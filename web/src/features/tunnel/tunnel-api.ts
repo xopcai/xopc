@@ -18,6 +18,10 @@ export type TunnelStatusResponse = {
     acceptedAt: string | null;
     valid: boolean;
   };
+  registrationSecret?: {
+    configured: boolean;
+    source: 'env' | 'config' | 'dev_default' | 'missing';
+  };
   config: {
     autoStart: boolean;
     brokerUrl: string;
@@ -96,6 +100,7 @@ export async function patchTunnelConfig(patch: {
   enabled?: boolean;
   autoStart?: boolean;
   brokerUrl?: string;
+  registrationSecret?: string | null;
 }): Promise<void> {
   await fetchJson(apiUrl('/api/config'), {
     method: 'PATCH',

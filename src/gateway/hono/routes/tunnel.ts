@@ -10,6 +10,7 @@ import {
 } from '../../../tunnel/consent.js';
 import { hashGatewayToken } from '../../../tunnel/tunnel-service.js';
 import { configureTunnelFromGatewayConfig } from '../../../tunnel/gateway-lifecycle.js';
+import { getTunnelRegistrationSecretMeta, resolveTunnelBrokerUrl } from '../../../tunnel/env.js';
 import { getTunnelService } from '../../../tunnel/index.js';
 import { getCertStatusSummary } from '../../../tunnel/acme-cert-store.js';
 import { createPairingSecret, consumePairingSecret } from '../../../tunnel/pairing.js';
@@ -25,12 +26,17 @@ import type { AuthenticatedRouteDeps } from './deps.js';
 import type { GatewayService } from '../../service.js';
 import { getClientIpFromHeaders } from '../../auth-rate-limit.js';
 
-async function configureTunnelFromService(deps: AuthenticatedRouteDeps): Promise<void> {
-  await configureTunnelFromGatewayConfig(deps.service.currentConfig);
+async function configureTunnelFromService(
+  deps: AuthenticatedRouteDeps,
+  opts?: { force?: boolean },
+): Promise<void> {
+  await configureTunnelFromGatewayConfig(deps.service.currentConfig, opts);
 }
 
 function enrichTunnelStatus(config: Config, status: ReturnType<ReturnType<typeof getTunnelService>['getStatus']>) {
   const consent = getTunnelConsentState(config);
+  const brokerUrl = resolveTunnelBrokerUrl(config.tunnel?.brokerUrl);
+  const registrationSecret = getTunnelRegistrationSecretMeta(config, process.env, brokerUrl);
   return {
     ...status,
     consentRequired: consent.consentRequired,
@@ -41,6 +47,7 @@ function enrichTunnelStatus(config: Config, status: ReturnType<ReturnType<typeof
       valid: consent.valid,
     },
     canAutoStart: consent.canAutoStart,
+    registrationSecret,
   };
 }
 
@@ -191,7 +198,7 @@ export function registerTunnelRoutes(authenticated: Hono, deps: AuthenticatedRou
   });
 
   authenticated.post('/api/tunnel/start', tunnelMutationLimit, async (c) => {
-    await configureTunnelFromService(deps);
+    await configureTunnelFromService(deps, { force: true });
     const config = deps.service.currentConfig as Config;
     const token = requireGatewayToken(c);
     if (!token) return c.json({ error: 'Gateway token required' }, 401);

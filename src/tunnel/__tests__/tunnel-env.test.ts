@@ -1,15 +1,27 @@
 import { describe, expect, it } from 'vitest';
 
-import { isProductionTunnelBroker, resolveTunnelRegistrationSecret } from '../env.js';
+import type { Config } from '../../config/schema.js';
+import {
+  getTunnelRegistrationSecretMeta,
+  isProductionTunnelBroker,
+  resolveTunnelRegistrationSecret,
+} from '../env.js';
 
 describe('resolveTunnelRegistrationSecret', () => {
-  it('prefers env over dev default', () => {
+  it('prefers env over config and dev default', () => {
     expect(
       resolveTunnelRegistrationSecret(
         { XOPC_TUNNEL_REGISTRATION_SECRET: 'prod-secret' },
         'https://frp.xopc.ai/api',
+        'config-secret',
       ),
     ).toBe('prod-secret');
+  });
+
+  it('uses config secret when env is unset', () => {
+    expect(
+      resolveTunnelRegistrationSecret({}, 'https://frp.xopc.ai/api', 'from-config'),
+    ).toBe('from-config');
   });
 
   it('allows dev default for localhost broker', () => {
@@ -18,10 +30,37 @@ describe('resolveTunnelRegistrationSecret', () => {
     ).toBe('dev-registration-secret');
   });
 
-  it('requires env for production broker host', () => {
+  it('requires env or config for production broker host', () => {
     expect(() =>
       resolveTunnelRegistrationSecret({}, 'https://frp.xopc.ai/api'),
-    ).toThrow(/XOPC_TUNNEL_REGISTRATION_SECRET/);
+    ).toThrow(/registration secret/i);
+  });
+});
+
+describe('getTunnelRegistrationSecretMeta', () => {
+  it('reports env source when env is set', () => {
+    expect(
+      getTunnelRegistrationSecretMeta(
+        { tunnel: { registrationSecret: 'cfg' } } as Config,
+        { XOPC_TUNNEL_REGISTRATION_SECRET: 'env' },
+      ),
+    ).toEqual({ configured: true, source: 'env' });
+  });
+
+  it('reports config source when only config is set', () => {
+    expect(
+      getTunnelRegistrationSecretMeta(
+        { tunnel: { registrationSecret: 'cfg' } } as Config,
+        {},
+        'https://frp.xopc.ai/api',
+      ),
+    ).toEqual({ configured: true, source: 'config' });
+  });
+
+  it('reports missing for production broker without secret', () => {
+    expect(
+      getTunnelRegistrationSecretMeta(undefined, {}, 'https://frp.xopc.ai/api'),
+    ).toEqual({ configured: false, source: 'missing' });
   });
 });
 

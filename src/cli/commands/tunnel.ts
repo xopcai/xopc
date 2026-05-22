@@ -11,7 +11,7 @@ import {
 import { resolveTunnelBrokerUrl, resolveTunnelRegistrationSecret } from '../../tunnel/env.js';
 import { ensureFrpcBinary, getTunnelService } from '../../tunnel/index.js';
 import { resolveFrpSubdomainHost, resolveTunnelE2eConfig } from '../../tunnel/tunnel-e2e-config.js';
-import { applyTunnelConsentToConfig, setTunnelEnabledInConfig } from '../../tunnel/tunnel-config.js';
+import { applyTunnelConsentToConfig, mergeTunnelConfigPatch, setTunnelEnabledInConfig } from '../../tunnel/tunnel-config.js';
 import { loadTunnelState } from '../../tunnel/tunnel-state.js';
 import { formatExamples, register, type CLIContext } from '../registry.js';
 
@@ -39,9 +39,14 @@ function resolveGatewayToken(config: ReturnType<typeof loadConfig>): string {
 function configureTunnel(ctx: CLIContext): void {
   const config = loadConfig(ctx.configPath);
   const { host } = resolveGatewayPortHost(config);
+  const brokerUrl = resolveTunnelBrokerUrl(config.tunnel?.brokerUrl);
   getTunnelService().configure({
-    brokerUrl: resolveTunnelBrokerUrl(config.tunnel?.brokerUrl),
-    registrationSecret: resolveTunnelRegistrationSecret(),
+    brokerUrl,
+    registrationSecret: resolveTunnelRegistrationSecret(
+      process.env,
+      brokerUrl,
+      config.tunnel?.registrationSecret,
+    ),
     autoStart: config.tunnel?.autoStart ?? false,
     gatewayHost: host,
     e2e: resolveTunnelE2eConfig(config.tunnel),
@@ -92,6 +97,51 @@ async function ensureCliTunnelConsent(
   await saveConfig(config, ctx.configPath);
 }
 
+async function readTunnelRegistrationSecretFromCli(opts: {
+  secretArg?: string;
+  stdin?: boolean;
+}): Promise<string> {
+  const fromArg = opts.secretArg?.trim();
+  if (fromArg) return fromArg;
+
+  if (opts.stdin) {
+    const chunks: Buffer[] = [];
+    for await (const chunk of process.stdin) {
+      chunks.push(chunk as Buffer);
+    }
+    const value = Buffer.concat(chunks).toString('utf8').trim();
+    if (!value) {
+      throw new Error('Empty registration secret from stdin.');
+    }
+    return value;
+  }
+
+  if (isInteractive()) {
+    const { password } = await import('@inquirer/prompts');
+    const value = await password({
+      message: 'Tunnel broker registration secret',
+      mask: '*',
+    });
+    if (!value?.trim()) {
+      throw new Error('Registration secret is required.');
+    }
+    return value.trim();
+  }
+
+  throw new Error(
+    'Provide the secret as an argument, pass --stdin, or run in an interactive terminal.',
+  );
+}
+
+async function saveTunnelRegistrationSecret(ctx: CLIContext, secret: string): Promise<void> {
+  const config = loadConfig(ctx.configPath);
+  const result = mergeTunnelConfigPatch(config, { registrationSecret: secret });
+  if (result.ok === false) {
+    throw new Error(result.message);
+  }
+  await saveConfig(config, ctx.configPath);
+}
+
 function createTunnelCommand(ctx: CLIContext): Command {
   const cmd = new Command('tunnel')
     .description('Manage FRP remote access tunnel')
@@ -105,6 +155,8 @@ function createTunnelCommand(ctx: CLIContext): Command {
         'xopc tunnel qr',
         'xopc tunnel consent',
         'xopc tunnel prefetch',
+        'xopc tunnel secret set',
+        'xopc tunnel secret set --stdin',
       ]),
     );
 
@@ -129,6 +181,34 @@ function createTunnelCommand(ctx: CLIContext): Command {
     .action(async (opts: { acceptRisk?: boolean }) => {
       await ensureCliTunnelConsent(ctx, { acceptRisk: opts.acceptRisk, yes: false });
       console.log('Tunnel security consent recorded.');
+    });
+
+  const secretCmd = cmd.command('secret').description('Manage tunnel broker registration secret in config');
+
+  secretCmd
+    .command('set')
+    .description('Save tunnel.registrationSecret to xopc.json (env XOPC_TUNNEL_REGISTRATION_SECRET overrides at runtime)')
+    .argument('[secret]', 'Registration secret (prompts securely when omitted in a TTY)')
+    .option('--stdin', 'Read secret from stdin (single line, trimmed)')
+    .action(async (secretArg: string | undefined, opts: { stdin?: boolean }) => {
+      try {
+        const secret = await readTunnelRegistrationSecretFromCli({
+          secretArg,
+          stdin: opts.stdin,
+        });
+        await saveTunnelRegistrationSecret(ctx, secret);
+        if (process.env.XOPC_TUNNEL_REGISTRATION_SECRET?.trim()) {
+          console.log(
+            'Note: XOPC_TUNNEL_REGISTRATION_SECRET is set in the environment and overrides the saved config at runtime.',
+          );
+        }
+        console.log(`Saved tunnel registration secret to ${ctx.configPath}.`);
+      } catch (err) {
+        const em = err instanceof Error ? err.message : String(err);
+        log.error({ err, phase: 'tunnel_secret_set' }, `Tunnel secret set failed: ${em}`);
+        console.error(em);
+        process.exit(1);
+      }
     });
 
   cmd
@@ -252,6 +332,6 @@ register({
   factory: createTunnelCommand,
   metadata: {
     category: 'runtime',
-    examples: ['xopc tunnel start', 'xopc tunnel status'],
+    examples: ['xopc tunnel start', 'xopc tunnel status', 'xopc tunnel secret set'],
   },
 });
