@@ -2,18 +2,13 @@ import {
   Check,
   Clock,
   Copy,
-  ExternalLink,
   FileText,
-  Globe,
   Loader2,
   Plus,
   RefreshCw,
   Trash2,
-  Wifi,
-  WifiOff,
 } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
@@ -27,8 +22,13 @@ import {
   revokeShare,
   type CreateShareParams,
   type ShareItem,
-  type ShareReachability,
 } from '@/features/shares/shares-api';
+import {
+  ReachabilityHint,
+  ShareLinkDialog,
+  ShareUrlCopyRows,
+  type ShareLinkResult,
+} from '@/features/shares/share-link-dialog';
 import { cn } from '@/lib/cn';
 import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
@@ -197,9 +197,9 @@ function CreateShareSection({
   const [maxViews, setMaxViews] = useState<number | null>(null);
   const [description, setDescription] = useState('');
   const [creating, setCreating] = useState(false);
-  const [result, setResult] = useState<{ shareUrl: string; reachability: ShareReachability } | null>(null);
+  const [result, setResult] = useState<ShareLinkResult | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [resultDialogOpen, setResultDialogOpen] = useState(false);
 
   const handleCreate = useCallback(async () => {
     if (!path.trim()) return;
@@ -214,7 +214,8 @@ function CreateShareSection({
         description: description.trim() || undefined,
       };
       const res = await createShare(params);
-      setResult({ shareUrl: res.payload.shareUrl, reachability: res.payload.reachability });
+      setResult(res.payload);
+      setResultDialogOpen(true);
       onCreated();
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : String(err));
@@ -222,13 +223,6 @@ function CreateShareSection({
       setCreating(false);
     }
   }, [path, ttlMs, maxViews, description, onCreated]);
-
-  const handleCopy = useCallback(async () => {
-    if (!result?.shareUrl) return;
-    await navigator.clipboard.writeText(result.shareUrl).catch(() => {});
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }, [result?.shareUrl]);
 
   const resetForm = useCallback(() => {
     setPath('');
@@ -322,23 +316,16 @@ function CreateShareSection({
         </div>
 
         {errorMsg && <p className="text-sm text-red-600 dark:text-red-400">{errorMsg}</p>}
-
-        {result && (
-          <div className="flex flex-col gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/5 px-3 py-3">
-            <p className="text-sm font-medium text-fg">{t.shareCreated}</p>
-            <div className="flex items-center gap-2">
-              <code className="flex-1 break-all rounded bg-surface-hover px-2 py-1 text-xs text-fg">
-                {result.shareUrl}
-              </code>
-              <Button type="button" variant="secondary" className="px-2 py-1 text-xs" onClick={() => void handleCopy()}>
-                {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-                {copied ? t.copied : t.copyUrl}
-              </Button>
-            </div>
-            <ReachabilityBadge reachability={result.reachability} t={t} />
-          </div>
-        )}
       </div>
+
+      <ShareLinkDialog
+        open={resultDialogOpen}
+        onOpenChange={(open) => {
+          setResultDialogOpen(open);
+          if (!open) setResult(null);
+        }}
+        result={result}
+      />
     </SettingsFormSection>
   );
 }
@@ -360,7 +347,7 @@ function ShareRow({
 }) {
   const [revokeOpen, setRevokeOpen] = useState(false);
   const [revoking, setRevoking] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [linksOpen, setLinksOpen] = useState(false);
   const [extending, setExtending] = useState(false);
 
   const isActive = !share.expired && !share.revoked;
@@ -385,10 +372,8 @@ function ShareRow({
   }, [share.id, onRevoked]);
 
   const handleCopy = useCallback(async () => {
-    await navigator.clipboard.writeText(share.shareUrl).catch(() => {});
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }, [share.shareUrl]);
+    setLinksOpen((v) => !v);
+  }, []);
 
   const handleExtend = useCallback(async () => {
     setExtending(true);
@@ -404,59 +389,80 @@ function ShareRow({
 
   return (
     <>
-      <div className="flex items-start gap-3 rounded-lg border border-edge-subtle bg-surface-panel px-3 py-2.5">
-        <FileText className="mt-0.5 size-4 shrink-0 text-fg-muted" />
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className="truncate text-sm font-medium text-fg">{share.fileName}</span>
-            <span className={cn('text-xs font-medium', statusColor)}>{statusLabel}</span>
+      <div className="rounded-lg border border-edge-subtle bg-surface-panel px-3 py-2.5">
+        <div className="flex items-start gap-3">
+          <FileText className="mt-0.5 size-4 shrink-0 text-fg-muted" />
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <span className="truncate text-sm font-medium text-fg">{share.fileName}</span>
+              <span className={cn('text-xs font-medium', statusColor)}>{statusLabel}</span>
+            </div>
+            <p className="truncate text-xs text-fg-subtle">{share.workspaceRelativePath}</p>
+            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-fg-muted">
+              <span>{formatFileSize(share.fileSize)}</span>
+              <span className="flex items-center gap-1">
+                <Clock className="size-3" />
+                {share.expired
+                  ? (language === 'zh' ? '已过期' : 'expired')
+                  : formatRelativeTime(share.expiresAt, language)}
+              </span>
+              <span>
+                {t.views}: {share.viewCount}
+                {share.maxViews !== null && ` ${t.viewsOf} ${share.maxViews}`}
+              </span>
+              {share.description && (
+                <span className="italic text-fg-subtle">{share.description}</span>
+              )}
+            </div>
           </div>
-          <p className="truncate text-xs text-fg-subtle">{share.workspaceRelativePath}</p>
-          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-fg-muted">
-            <span>{formatFileSize(share.fileSize)}</span>
-            <span className="flex items-center gap-1">
-              <Clock className="size-3" />
-              {share.expired
-                ? (language === 'zh' ? '已过期' : 'expired')
-                : formatRelativeTime(share.expiresAt, language)}
-            </span>
-            <span>
-              {t.views}: {share.viewCount}
-              {share.maxViews !== null && ` ${t.viewsOf} ${share.maxViews}`}
-            </span>
-            {share.description && (
-              <span className="italic text-fg-subtle">{share.description}</span>
+          <div className="flex shrink-0 items-center gap-1">
+            {isActive && (
+              <>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="px-2 py-1"
+                  title={t.copyUrl}
+                  onClick={() => void handleCopy()}
+                >
+                  {linksOpen ? <Check className="size-3.5 text-emerald-500" /> : <Copy className="size-3.5" />}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="px-2 py-1"
+                  onClick={() => void handleExtend()}
+                  disabled={extending}
+                  title={t.extend}
+                >
+                  {extending ? <Loader2 className="size-3.5 animate-spin" /> : <Clock className="size-3.5" />}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="px-2 py-1 text-red-600 hover:text-red-700 dark:text-red-400"
+                  onClick={() => setRevokeOpen(true)}
+                  disabled={revoking}
+                >
+                  {revoking ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
+                </Button>
+              </>
             )}
           </div>
         </div>
-        <div className="flex shrink-0 items-center gap-1">
-          {isActive && (
-            <>
-              <Button type="button" variant="ghost" className="px-2 py-1" onClick={() => void handleCopy()}>
-                {copied ? <Check className="size-3.5 text-emerald-500" /> : <Copy className="size-3.5" />}
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                className="px-2 py-1"
-                onClick={() => void handleExtend()}
-                disabled={extending}
-                title={t.extend}
-              >
-                {extending ? <Loader2 className="size-3.5 animate-spin" /> : <Clock className="size-3.5" />}
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                className="px-2 py-1 text-red-600 hover:text-red-700 dark:text-red-400"
-                onClick={() => setRevokeOpen(true)}
-                disabled={revoking}
-              >
-                {revoking ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
-              </Button>
-            </>
-          )}
-        </div>
+        {isActive && linksOpen ? (
+          <div className="mt-3 border-t border-edge-subtle pt-3 pl-7">
+            <ShareUrlCopyRows
+              shareUrl={share.shareUrl}
+              lanUrl={share.lanUrl}
+              reachability={share.reachability}
+              compact
+            />
+            <div className="mt-2">
+              <ReachabilityHint reachability={share.reachability} />
+            </div>
+          </div>
+        ) : null}
       </div>
 
       <ConfirmDialog
@@ -524,47 +530,5 @@ function CleanExpiredButton({
         onCancel={() => setConfirmOpen(false)}
       />
     </>
-  );
-}
-
-// ── Reachability Badge ────────────────────────────────────────────────────────
-
-function ReachabilityBadge({
-  reachability,
-  t,
-}: {
-  reachability: ShareReachability;
-  t: ReturnType<typeof messages>['sharesSettings'];
-}) {
-  if (reachability === 'public') {
-    return (
-      <span className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
-        <Globe className="size-3" />
-        {t.reachPublic}
-      </span>
-    );
-  }
-  if (reachability === 'lan') {
-    return (
-      <span className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
-        <Wifi className="size-3" />
-        {t.reachLan}
-      </span>
-    );
-  }
-  return (
-    <div className="flex flex-col gap-1">
-      <span className="flex items-center gap-1 text-xs text-fg-subtle">
-        <WifiOff className="size-3" />
-        {t.reachLocal}
-      </span>
-      <span className="flex items-center gap-1 text-xs text-fg-muted">
-        {t.reachLocalHint}{' '}
-        <Link to="/settings/tunnel" className="inline-flex items-center gap-0.5 text-accent hover:underline">
-          {t.openTunnel}
-          <ExternalLink className="size-3" />
-        </Link>
-      </span>
-    </div>
   );
 }

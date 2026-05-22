@@ -1,4 +1,4 @@
-import { Copy, Download, Eye, FolderOpen, Maximize2, Minimize2, Pencil, X } from 'lucide-react';
+import { Copy, Download, Eye, FolderOpen, Link2, Loader2, Maximize2, Minimize2, Pencil, X } from 'lucide-react';
 import { useCallback, useEffect } from 'react';
 
 import {
@@ -8,6 +8,8 @@ import {
   useFilePreviewFullscreen,
   useWorkspaceFilePreviewState,
 } from '@/features/file-preview';
+import { ShareLinkDialog } from '@/features/shares/share-link-dialog';
+import { useShareLink } from '@/features/shares/use-share-link';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 import { messages } from '@/i18n/messages';
@@ -42,6 +44,7 @@ export function WorkspaceFilePreviewPanel({
 
   const state = useWorkspaceFilePreviewState({ filePath, sessionKey, agentId });
   const { rootRef, active, enter, exit } = useFilePreviewFullscreen();
+  const { dialogOpen, loading, result, error, createShareLink, handleOpenChange } = useShareLink();
 
   const ext = filePath ? getFileExtension(filePath) : '';
   const name = filePath ? getFileName(filePath) : '';
@@ -52,6 +55,17 @@ export function WorkspaceFilePreviewPanel({
     if (!filePath || !navigator.clipboard?.writeText) return;
     void navigator.clipboard.writeText(filePath);
   }, [filePath]);
+
+  const handleShare = useCallback(() => {
+    if (!filePath) return;
+    const scope =
+      sessionKey != null
+        ? { sessionKey }
+        : agentId?.trim()
+          ? { agentId: agentId.trim() }
+          : {};
+    void createShareLink({ path: filePath, ...scope });
+  }, [agentId, createShareLink, filePath, sessionKey]);
 
   const canPreviewFullscreen = Boolean(filePath && !state.loading && !state.loadError);
 
@@ -64,6 +78,7 @@ export function WorkspaceFilePreviewPanel({
   }
 
   return (
+    <>
     <div ref={rootRef} className="flex h-full min-h-0 flex-col bg-surface-panel">
       <div className="flex shrink-0 items-start gap-2 border-b border-edge px-4 py-2 dark:border-edge">
         <div className="min-w-0 flex-1">
@@ -153,6 +168,16 @@ export function WorkspaceFilePreviewPanel({
           <button
             type="button"
             className="inline-flex size-9 shrink-0 items-center justify-center rounded-md text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg disabled:opacity-50"
+            title={m.workspace.shareLink}
+            aria-label={m.workspace.shareLink}
+            onClick={handleShare}
+            disabled={loading}
+          >
+            {loading ? <Loader2 className="size-4 animate-spin" /> : <Link2 className="size-4" />}
+          </button>
+          <button
+            type="button"
+            className="inline-flex size-9 shrink-0 items-center justify-center rounded-md text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg disabled:opacity-50"
             title={m.workspace.download}
             aria-label={m.workspace.download}
             onClick={() => void state.onDownload()}
@@ -200,5 +225,13 @@ export function WorkspaceFilePreviewPanel({
         }}
       />
     </div>
+    <ShareLinkDialog
+      open={dialogOpen}
+      onOpenChange={handleOpenChange}
+      loading={loading}
+      error={error}
+      result={result}
+    />
+    </>
   );
 }

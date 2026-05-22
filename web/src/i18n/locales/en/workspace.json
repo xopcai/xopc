@@ -19,6 +19,9 @@
     "openElsewhereHint": "Preview may be limited or unavailable. Download the file or open it with another app.",
     "cannotPreviewType": "This file type can't be previewed here.",
     "openSystemApp": "Open with default app",
-    "revealInFolder": "Show in folder"
+    "revealInFolder": "Show in folder",
+    "shareLink": "Share link",
+    "sharing": "Creating share…",
+    "shareFailed": "Failed to create share link"
   }
 }
