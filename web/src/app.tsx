@@ -125,6 +125,10 @@ const router = createHashRouter([
         ),
       },
       {
+        path: 'mcp',
+        element: <Navigate to="/settings/mcp" replace />,
+      },
+      {
         path: 'agents',
         element: (
           <Suspense fallback={<SecondaryRouteFallback />}>

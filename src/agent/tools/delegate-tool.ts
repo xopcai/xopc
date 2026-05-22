@@ -32,6 +32,7 @@ export const DELEGATE_BLOCKED_TOOLS = new Set([
   'skills_list',
   'skill_view',
   'skill_manage',
+  'bundle-mcp',
 ]);
 
 const DelegateTaskSchema = Type.Object({

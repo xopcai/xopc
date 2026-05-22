@@ -26,6 +26,7 @@
     "settingsChannels": "Channels",
     "settingsVoice": "Voice",
     "settingsGateway": "Gateway",
+    "settingsMcp": "MCP",
     "settingsHeartbeat": "Heartbeat",
     "settingsTunnel": "Remote access",
     "settingsShares": "File sharing",

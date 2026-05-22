@@ -21,6 +21,7 @@ export type Tab =
   | 'settingsTunnel'
   | 'settingsShares'
   | 'settingsSearch'
+  | 'settingsMcp'
   | 'settingsDreams'
   | 'settingsAgentChat'
   | 'settingsAgentWorkspace'
@@ -50,6 +51,7 @@ export type SettingsSectionId =
   | 'tunnel'
   | 'shares'
   | 'search'
+  | 'mcp'
   | 'dreams'
   | 'agents'
   | 'system'
@@ -68,6 +70,7 @@ export type GatewaySettingsMessages = MessageBundle['gatewaySettings'];
 export type HeartbeatSettingsMessages = MessageBundle['heartbeatSettings'];
 export type TunnelSettingsMessages = MessageBundle['tunnelSettings'];
 export type WebSearchSettingsMessages = MessageBundle['webSearchSettings'];
+export type McpSettingsMessages = MessageBundle['mcpSettings'];
 export type AgentsSettingsMessages = MessageBundle['agentsSettings'];
 export type ChatMessages = MessageBundle['chat'];
 export type LogsMessages = MessageBundle['logs'];

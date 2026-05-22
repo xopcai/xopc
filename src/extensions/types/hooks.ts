@@ -131,6 +131,8 @@ export interface HookAgentContext {
   extensionId?: string;
   sessionKey?: string;
   agentId?: string;
+  isMcpTool?: boolean;
+  mcpServerId?: string;
 }
 
 // LLM Observation Hook Types
@@ -485,6 +487,8 @@ export interface HookContext {
   extensionId?: string;
   sessionKey?: string;
   agentId?: string;
+  isMcpTool?: boolean;
+  mcpServerId?: string;
 }
 
 export interface BeforeAgentStartContext extends HookContext {
