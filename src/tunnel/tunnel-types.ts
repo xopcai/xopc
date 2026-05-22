@@ -5,6 +5,27 @@ export type FrpcDownloadProgress = {
   percent?: number | null;
 };
 
+export type TunnelStartPhase =
+  | 'preparing_frpc'
+  | 'registering'
+  | 'provisioning_tls'
+  | 'starting_frpc'
+  | 'reconnecting_frpc';
+
+export type TunnelAcmeProgressStep =
+  | 'checking'
+  | 'dns_challenge'
+  | 'dns_propagation'
+  | 'ca_validation'
+  | 'issuing';
+
+export type TunnelStartProgress = {
+  phase: TunnelStartPhase;
+  startedAt: string;
+  acmeStep?: TunnelAcmeProgressStep | null;
+  publicUrl?: string | null;
+};
+
 export type TunnelRegistration = {
   tunnelId: string;
   tunnelToken: string;
@@ -45,6 +66,7 @@ export type TunnelStatus = {
   lastHeartbeatAt: string | null;
   lastError: string | null;
   frpcDownload?: FrpcDownloadProgress | null;
+  startProgress?: TunnelStartProgress | null;
   config: {
     autoStart: boolean;
     brokerUrl: string;
