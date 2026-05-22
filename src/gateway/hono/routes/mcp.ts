@@ -1,6 +1,6 @@
 import type { Hono } from 'hono';
 import { getWorkspacePath } from '../../../config/schema.js';
-import { normalizeConfiguredMcpServers } from '../../../config/mcp-config-normalize.js';
+import { normalizeConfiguredMcpServers, canonicalizeConfiguredMcpServer } from '../../../config/mcp-config-normalize.js';
 import { loadMergedBundleMcpConfig } from '../../../agent/mcp/bundle-mcp-config.js';
 import { createBundleMcpToolRuntime } from '../../../agent/mcp/bundle-mcp-materialize.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
@@ -48,16 +48,40 @@ export function registerMcpRoutes(authenticated: Hono, deps: AuthenticatedRouteD
     const id = c.req.param('id');
     const cfg = deps.service.currentConfig;
     const workspaceDir = getWorkspacePath(cfg) || './workspace';
+    const body = await c.req.json().catch(() => ({}));
+    const inlineServer =
+      body && typeof body === 'object' && !Array.isArray(body) && body.server && typeof body.server === 'object'
+        ? (body.server as Record<string, unknown>)
+        : undefined;
     const servers = normalizeConfiguredMcpServers(cfg.mcp?.servers);
-    if (!servers[id] && !loadMergedBundleMcpConfig({ workspaceDir, cfg }).config.mcpServers[id]) {
+    const mergedServers = loadMergedBundleMcpConfig({ workspaceDir, cfg }).config.mcpServers;
+    const knownServer =
+      inlineServer ??
+      (servers[id] as Record<string, unknown> | undefined) ??
+      (mergedServers[id] as Record<string, unknown> | undefined);
+    if (!knownServer) {
       return c.json({ ok: false, error: `Unknown MCP server: ${id}` }, 404);
     }
     try {
+      const testCfg: typeof cfg = inlineServer
+        ? {
+            ...cfg,
+            mcp: {
+              ...cfg.mcp,
+              servers: {
+                [id]: canonicalizeConfiguredMcpServer(inlineServer),
+              },
+            },
+          }
+        : cfg;
       const runtime = await createBundleMcpToolRuntime({
         workspaceDir,
-        cfg,
+        cfg: testCfg,
       });
-      const tools = runtime.tools.map((t) => t.name);
+      const prefix = `${id}__`;
+      const tools = runtime.tools
+        .filter((t) => t.name.startsWith(prefix))
+        .map((t) => t.name);
       await runtime.dispose();
       return c.json({ ok: true, payload: { serverId: id, toolCount: tools.length, tools } });
     } catch (err) {

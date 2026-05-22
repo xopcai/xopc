@@ -123,6 +123,10 @@ export function normalizeMcpSettingsFromConfig(cfg: unknown): McpSettingsState {
   return { sessionIdleTtlMinutes, servers };
 }
 
+export function buildMcpServerConfigFromRow(row: McpServerRow): Record<string, unknown> {
+  return rowToServerConfig(row);
+}
+
 export async function patchMcpSettings(state: McpSettingsState): Promise<void> {
   const servers: Record<string, unknown> = {};
   for (const row of state.servers) {
@@ -150,10 +154,16 @@ export type McpServerTestResult = {
   tools: string[];
 };
 
-export async function testMcpServer(serverId: string): Promise<McpServerTestResult> {
+export async function testMcpServer(
+  serverId: string,
+  server?: Record<string, unknown>,
+): Promise<McpServerTestResult> {
   const res = await fetchJson<{ ok?: boolean; payload?: McpServerTestResult; error?: string }>(
     apiUrl(`/api/mcp/servers/${encodeURIComponent(serverId)}/test`),
-    { method: 'POST' },
+    {
+      method: 'POST',
+      body: server ? JSON.stringify({ server }) : undefined,
+    },
   );
   if (!res.payload) {
     throw new Error(res.error ?? 'MCP test failed');
