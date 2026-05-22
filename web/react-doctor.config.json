@@ -1,0 +1,7 @@
+{
+  "surfaces": {
+    "ciFailure": {
+      "excludeRules": ["react-doctor/only-export-components"]
+    }
+  }
+}
