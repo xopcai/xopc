@@ -9,6 +9,7 @@ import {
 } from '../../../channels/plugins/registry.js';
 import { normalizeConfiguredMcpServers } from '../../../config/mcp-config-normalize.js';
 import type { Config } from '../../../config/schema.js';
+import { resolveTunnelE2eConfig } from '../../../tunnel/tunnel-e2e-config.js';
 import { bundledChannelPlugins } from '../../../generated/bundled-channel-plugins.js';
 import { getAllProviders, isProviderConfigured } from '../../../providers/index.js';
 import type { GatewayService } from '../../service.js';
@@ -217,11 +218,7 @@ export async function buildSafeWebConfigPayload(service: GatewayService) {
             acceptedAt: config.tunnel.consent.acceptedAt,
           }
         : undefined,
-      e2e: {
-        enabled: config.tunnel?.e2e?.enabled ?? true,
-        tlsPort: config.tunnel?.e2e?.tlsPort ?? 18791,
-        staging: config.tunnel?.e2e?.staging ?? false,
-      },
+      e2e: resolveTunnelE2eConfig(config.tunnel, config.gateway?.port ?? 18790),
     },
     update: {
       channel: config.update?.channel ?? 'stable',

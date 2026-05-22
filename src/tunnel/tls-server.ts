@@ -111,6 +111,17 @@ export async function startTunnelTlsServer(config: TunnelTlsServerConfig): Promi
   await new Promise<void>((resolve, reject) => {
     httpsNodeServer!.once('error', reject);
     httpsNodeServer!.listen(config.tlsPort, '127.0.0.1', () => resolve());
+  }).catch((err: unknown) => {
+    httpsNodeServer?.close();
+    httpsNodeServer = null;
+    const em = err instanceof Error ? err.message : String(err);
+    if (em.includes('EADDRINUSE')) {
+      throw new Error(
+        `Tunnel TLS port ${config.tlsPort} is already in use. ` +
+          `Stop other xopc tunnel instances or set tunnel.e2e.tlsPort (try ${config.gatewayPort + 1} for gateway port ${config.gatewayPort}).`,
+      );
+    }
+    throw err;
   });
 
   log.info(
