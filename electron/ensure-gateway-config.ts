@@ -30,6 +30,7 @@ export function getElectronUserPaths(): ElectronUserPaths {
 export async function ensureGatewayConfigForElectron(paths: ElectronUserPaths): Promise<{
   port: number;
   token: string;
+  host: string;
 }> {
   mkdirSync(paths.userData, { recursive: true });
 
@@ -42,9 +43,10 @@ export async function ensureGatewayConfigForElectron(paths: ElectronUserPaths): 
     skipChannelPluginValidation: true,
   });
 
-  const host = '127.0.0.1';
+  const host = initResult.config.gateway?.host?.trim() || '127.0.0.1';
+  const bindHost = host === '::' ? '::' : host;
   const preferredPort = initResult.config.gateway?.port ?? getDefaultGatewayPort();
-  const resolvedPort = await pickAvailablePort(host, preferredPort, 40);
+  const resolvedPort = await pickAvailablePort(bindHost, preferredPort, 40);
 
   let finalConfig: Config = initResult.config;
   if (resolvedPort !== initResult.config.gateway?.port) {
@@ -64,5 +66,5 @@ export async function ensureGatewayConfigForElectron(paths: ElectronUserPaths): 
       ? finalConfig.gateway.auth.token
       : initResult.token;
 
-  return { port: resolvedPort, token };
+  return { port: resolvedPort, token, host };
 }
