@@ -74,13 +74,15 @@ jobs:
 
       # PR: scan only changed files vs base branch — fast feedback, blocks regressions.
       # Push to main: full scan — surface drift in the dashboard.
+      # Run from web/ so react-doctor.config.json is loaded (repo-root --project skips it).
       - name: Run react-doctor (PR diff)
         if: github.event_name == 'pull_request'
-        run: npx react-doctor@latest --project @xopc/web --yes --offline --fail-on=error --annotations --diff origin/${{ github.base_ref }}
+        working-directory: web
+        run: npx react-doctor@latest --yes --offline --fail-on=error --annotations --diff origin/${{ github.base_ref }}
 
       - name: Run react-doctor (full scan)
         if: github.event_name != 'pull_request'
-        run: npx react-doctor@latest --project @xopc/web --yes --offline --fail-on=error --annotations
+        run: pnpm -C web run react-doctor:ci
 
   test:
     name: Test
