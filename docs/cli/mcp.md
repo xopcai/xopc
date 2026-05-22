@@ -75,7 +75,7 @@ xopc mcp serve --url http://127.0.0.1:18790 --token-file ~/.xopc/gateway.token
 
 ## Web UI
 
-Gateway Console → **Settings → MCP** (`#/settings/mcp`): CRUD for `mcp.servers`, idle TTL, connection test.
+Gateway Console → **Settings → Agent defaults → MCP** (`#/settings/agent-mcp`): CRUD for `mcp.servers`, idle TTL, connection test.
 
 ## Lifecycle
 

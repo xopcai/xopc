@@ -33,6 +33,7 @@ const SECTIONS: SettingsSectionId[] = [
   'agent-browser',
   'agent-runtime',
   'agent-tools',
+  'agent-mcp',
   'agent-system-prompt',
   'providers',
   'models',
@@ -43,7 +44,6 @@ const SECTIONS: SettingsSectionId[] = [
   'tunnel',
   'shares',
   'search',
-  'mcp',
   'dreams',
 ];
 
@@ -131,7 +131,7 @@ export function SettingsPage() {
     return <WebSearchSettingsPanel />;
   }
 
-  if (id === 'mcp') {
+  if (id === 'agent-mcp') {
     return <McpSettingsPanel />;
   }
 
