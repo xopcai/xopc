@@ -4,17 +4,18 @@
  * Optional — tunnel start downloads on demand if missing.
  *
  * Usage:
- *   node scripts/download-frpc-binaries.mjs
- *   node scripts/download-frpc-binaries.mjs --all
- *   node scripts/download-frpc-binaries.mjs --platform darwin --arch arm64
+ *   node --import tsx/esm scripts/download-frpc-binaries.mjs
+ *   node --import tsx/esm scripts/download-frpc-binaries.mjs --all
+ *   node --import tsx/esm scripts/download-frpc-binaries.mjs --platform darwin --arch arm64
  *
  * Env: XOPC_STATE_DIR overrides ~/.xopc
  */
-import { chmodSync, copyFileSync, createWriteStream, existsSync, mkdirSync, rmSync } from 'node:fs';
+import { chmodSync, createWriteStream, existsSync, mkdirSync, rmSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { spawn } from 'node:child_process';
 import { pipeline } from 'node:stream/promises';
+
+import { extractFrpcFromTarGzArchive } from '../src/tunnel/frpc-extract.ts';
 
 const FRP_VERSION = '0.62.1';
 
@@ -45,38 +46,16 @@ function parseArgs() {
   return { targets: all ? ALL_TARGETS : [[platform, arch]] };
 }
 
-function extractTarGz(archivePath, destDir, folder, destBin) {
-  const ext = destBin.endsWith('.exe') ? '.exe' : '';
-  const innerName = `frpc${ext}`;
-  const innerPath = `${folder}/${innerName}`;
-  return new Promise((resolve, reject) => {
-    const tmp = join(destDir, '_extract');
-    mkdirSync(tmp, { recursive: true });
-    const child = spawn('tar', ['xzf', archivePath, '-C', tmp, innerPath], {
-      stdio: 'ignore',
-    });
-    child.on('error', reject);
-    child.on('exit', (code) => {
-      if (code !== 0) {
-        reject(new Error(`tar exited ${code}`));
-        return;
-      }
-      const extracted = join(tmp, innerPath);
-      if (!existsSync(extracted)) {
-        reject(new Error(`missing ${innerPath} in archive`));
-        return;
-      }
-      copyFileSync(extracted, destBin);
-      rmSync(tmp, { recursive: true, force: true });
-      resolve();
-    });
-  });
-}
-
 async function downloadToFile(url, destPath) {
   const res = await fetch(url);
   if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
   await pipeline(res.body, createWriteStream(destPath));
+}
+
+function nodePlatformForTarget(platform) {
+  if (platform === 'windows') return 'win32';
+  if (platform === 'darwin') return 'darwin';
+  return 'linux';
 }
 
 async function downloadOne(platform, arch) {
@@ -107,7 +86,12 @@ async function downloadOne(platform, arch) {
     }
   }
   if (lastErr) throw lastErr;
-  await extractTarGz(archivePath, destDir, folder, destBin);
+  await extractFrpcFromTarGzArchive(
+    archivePath,
+    destBin,
+    folder,
+    nodePlatformForTarget(platform),
+  );
   if (platform !== 'windows') chmodSync(destBin, 0o755);
   rmSync(archivePath, { force: true });
   console.log(`ok ${destBin}`);

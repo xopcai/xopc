@@ -17,6 +17,7 @@ import {
 import { clearTunnelState, loadTunnelState, saveTunnelState, updateTunnelState } from './tunnel-state.js';
 import { logTunnelAudit } from './tunnel-audit.js';
 import type { PersistedTunnelState, TunnelQrPayload, TunnelRegistration, TunnelStatus } from './tunnel-types.js';
+import type { FrpcDownloadProgress } from './tunnel-types.js';
 import type { ResolvedTunnelE2eConfig } from './tunnel-e2e-config.js';
 import { getCertStatusSummary } from './acme-cert-store.js';
 import type { AcmeConfig } from './acme-client.js';
@@ -61,6 +62,7 @@ export class TunnelService extends EventEmitter {
   private reconnectAttempt = 0;
   private stopping = false;
   private startContext: { gatewayPort: number; gatewayToken: string } | null = null;
+  private frpcDownload: FrpcDownloadProgress | null = null;
 
   configure(cfg: TunnelServiceConfig): void {
     this.serviceConfig = {
@@ -88,6 +90,7 @@ export class TunnelService extends EventEmitter {
       frpcPid: this.frpcHandle?.pid ?? null,
       lastHeartbeatAt: this.lastHeartbeatAt,
       lastError: this.lastError,
+      frpcDownload: this.frpcDownload,
       config: {
         autoStart: cfg?.autoStart ?? false,
         brokerUrl: cfg?.brokerUrl ?? 'https://frp.xopc.ai/api',
@@ -124,9 +127,26 @@ export class TunnelService extends EventEmitter {
     this.startContext = { gatewayPort, gatewayToken };
     this.state = 'connecting';
     this.lastError = null;
+    this.frpcDownload = null;
     this.emit('tunnel:connecting');
 
-    const frpcBin = await ensureFrpcBinary();
+    let frpcBin: string;
+    try {
+      frpcBin = await ensureFrpcBinary({
+        onProgress: (progress) => {
+          this.frpcDownload = progress;
+          this.emit('tunnel:progress');
+        },
+      });
+      this.frpcDownload = null;
+      this.emit('tunnel:progress');
+    } catch (err) {
+      this.frpcDownload = null;
+      this.state = 'error';
+      this.lastError = err instanceof Error ? err.message : String(err);
+      this.emit('tunnel:error', this.lastError);
+      throw err;
+    }
     publishFrpcPathForProcess(frpcBin);
     const persisted = loadTunnelState();
     const broker = new TunnelBrokerClient(resolveBrokerApiBase(cfg.brokerUrl));

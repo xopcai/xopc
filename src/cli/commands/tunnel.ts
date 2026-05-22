@@ -165,7 +165,21 @@ function createTunnelCommand(ctx: CLIContext): Command {
     .description('Download frpc to the state bin directory without starting the tunnel')
     .action(async () => {
       try {
-        const path = await ensureFrpcBinary();
+        const path = await ensureFrpcBinary({
+          onProgress: (progress) => {
+            if (!process.stderr.isTTY) return;
+            if (progress.phase === 'extracting') {
+              process.stderr.write('\rExtracting frpc…   \n');
+              return;
+            }
+            if (progress.percent != null) {
+              process.stderr.write(`\rDownloading frpc… ${progress.percent}%`);
+            } else if (progress.bytesReceived != null) {
+              process.stderr.write(`\rDownloading frpc… ${progress.bytesReceived} bytes`);
+            }
+          },
+        });
+        if (process.stderr.isTTY) process.stderr.write('\n');
         console.log(`frpc ready at ${path}`);
       } catch (err) {
         const em = err instanceof Error ? err.message : String(err);

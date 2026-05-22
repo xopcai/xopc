@@ -1,3 +1,10 @@
+export type FrpcDownloadProgress = {
+  phase: 'downloading' | 'extracting';
+  bytesReceived?: number;
+  totalBytes?: number | null;
+  percent?: number | null;
+};
+
 export type TunnelRegistration = {
   tunnelId: string;
   tunnelToken: string;
@@ -37,6 +44,7 @@ export type TunnelStatus = {
   frpcPid: number | null;
   lastHeartbeatAt: string | null;
   lastError: string | null;
+  frpcDownload?: FrpcDownloadProgress | null;
   config: {
     autoStart: boolean;
     brokerUrl: string;

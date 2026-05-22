@@ -27,6 +27,7 @@ export function wireTunnelEventsToGateway(service: TunnelEventSink): void {
   tunnel.on('tunnel:connected', publish);
   tunnel.on('tunnel:disconnected', publish);
   tunnel.on('tunnel:error', publish);
+  tunnel.on('tunnel:progress', publish);
 
   subscribeCertStatus((cert) => {
     service.emit('tunnel.cert.status', cert);

@@ -20,6 +20,7 @@ export {
   FRPC_VERSION,
   publishFrpcPathForProcess,
 } from './frpc-binary.js';
+export type { EnsureFrpcBinaryOptions, FrpcDownloadProgress } from './frpc-binary.js';
 export {
   configureTunnelFromGatewayConfig,
   maybeAutoStartTunnelFromConfig,
