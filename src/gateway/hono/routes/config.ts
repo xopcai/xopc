@@ -1,6 +1,7 @@
 import type { Hono } from 'hono';
 
-import { type Config, BindingsConfigSchema } from '../../../config/schema.js';
+import { type Config, BindingsConfigSchema, McpConfigSchema } from '../../../config/schema.js';
+import { canonicalizeConfiguredMcpServer } from '../../../config/mcp-config-normalize.js';
 import { CredentialResolver } from '../../../auth/credentials.js';
 import { applyToolsWebPatch } from '../../config-tools-web.js';
 import { mergeTunnelConfigPatch } from '../../../tunnel/tunnel-config.js';
@@ -1272,6 +1273,39 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
         );
       }
       config.bindings = parsed.data;
+    }
+
+    if (body.mcp !== undefined) {
+      if (body.mcp === null) {
+        delete config.mcp;
+      } else if (typeof body.mcp !== 'object' || Array.isArray(body.mcp)) {
+        return c.json({ ok: false, error: { message: 'mcp must be an object' } }, 400);
+      } else {
+        const parsed = McpConfigSchema.safeParse(body.mcp);
+        if (!parsed.success) {
+          return c.json(
+            {
+              ok: false,
+              error: { message: parsed.error.issues.map((i) => i.message).join('; ') },
+            },
+            400,
+          );
+        }
+        if (parsed.data === undefined) {
+          delete config.mcp;
+        } else {
+          const next = { ...parsed.data };
+          if (next.servers) {
+            next.servers = Object.fromEntries(
+              Object.entries(next.servers).map(([name, server]) => [
+                name,
+                canonicalizeConfiguredMcpServer(server as Record<string, unknown>),
+              ]),
+            );
+          }
+          config.mcp = next;
+        }
+      }
     }
 
     // Save config
