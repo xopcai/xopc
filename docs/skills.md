@@ -485,6 +485,23 @@ jobs:
 
 ## Example Skills
 
+### X/Twitter Growth Ops Skill
+
+`skills/business/x-twitter-growth-ops` is a bundled business skill for founders who want to turn X/Twitter conversations into a weekly operating loop. It covers read-only audience research, tweet and reply search, reply drafting, launch monitors, follower export, media workflows, and giveaway draw planning.
+
+The skill can run as a planning workflow by itself. When an OpenClaw runtime is available, it points the user to TweetClaw for concrete X/Twitter operations:
+
+```bash
+openclaw plugins install @xquik/tweetclaw
+openclaw config set tools.alsoAllow '["explore", "tweetclaw"]'
+openclaw plugins inspect tweetclaw --runtime
+```
+
+It also ships reusable templates:
+
+- `templates/weekly-x-twitter-ops.md`
+- `templates/openclaw-tweetclaw-setup.md`
+
 ### Weather Skill
 
 ```markdown
