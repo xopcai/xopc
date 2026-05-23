@@ -2,11 +2,14 @@ import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { gzipSync } from 'node:zlib';
+import AdmZip from 'adm-zip';
 import { describe, expect, it } from 'vitest';
 
 import {
   buildFrpcArchiveMemberPath,
+  extractFrpcFromReleaseArchive,
   extractFrpcFromTarGzArchive,
+  extractFrpcFromZipArchive,
   extractTarGzMemberNode,
   resolveExtractedMemberPath,
 } from '../frpc-extract.js';
@@ -81,6 +84,40 @@ describe('frpc-extract', () => {
     await extractFrpcFromTarGzArchive(archivePath, destPath, folder, 'linux');
     expect(readFileSync(destPath).equals(payload)).toBe(true);
     if (process.platform !== 'win32') chmodSync(destPath, 0o755);
+
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('extractFrpcFromZipArchive extracts nested frpc.exe', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'xopc-frpc-extract-zip-'));
+    const folder = 'frp_0.62.1_windows_amd64';
+    const member = buildFrpcArchiveMemberPath(folder, 'win32');
+    const payload = Buffer.from('windows-frpc');
+    const archivePath = join(dir, 'frpc.zip');
+    const destPath = join(dir, 'frpc.exe');
+    const zip = new AdmZip();
+    zip.addFile(member, payload);
+    zip.writeZip(archivePath);
+
+    extractFrpcFromZipArchive(archivePath, destPath, folder, 'win32');
+    expect(readFileSync(destPath).equals(payload)).toBe(true);
+
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('extractFrpcFromReleaseArchive routes zip archives', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'xopc-frpc-extract-release-'));
+    const folder = 'frp_0.62.1_windows_amd64';
+    const member = buildFrpcArchiveMemberPath(folder, 'win32');
+    const payload = Buffer.from('release-frpc');
+    const archivePath = join(dir, 'frpc.zip');
+    const destPath = join(dir, 'frpc.exe');
+    const zip = new AdmZip();
+    zip.addFile(member, payload);
+    zip.writeZip(archivePath);
+
+    await extractFrpcFromReleaseArchive(archivePath, destPath, folder, 'win32');
+    expect(readFileSync(destPath).equals(payload)).toBe(true);
 
     rmSync(dir, { recursive: true, force: true });
   });

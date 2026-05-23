@@ -13,7 +13,12 @@ import { randomBytes } from 'node:crypto';
 
 import { resolveBinDir } from '../config/paths.js';
 import { createLogger } from '../utils/logger.js';
-import { extractFrpcFromTarGzArchive } from './frpc-extract.js';
+import {
+  extractFrpcFromReleaseArchive,
+  frpcReleaseArchiveExtension,
+  nodePlatformForFrpTarget,
+  type FrpcReleasePlatform,
+} from './frpc-extract.js';
 import type { FrpcDownloadProgress } from './tunnel-types.js';
 
 const log = createLogger('TunnelFrpc');
@@ -26,7 +31,7 @@ export type EnsureFrpcBinaryOptions = {
   onProgress?: (progress: FrpcDownloadProgress) => void;
 };
 
-const PLATFORM_MAP: Record<string, string> = {
+const PLATFORM_MAP: Record<string, FrpcReleasePlatform> = {
   darwin: 'darwin',
   linux: 'linux',
   win32: 'windows',
@@ -38,19 +43,37 @@ const ARCH_MAP: Record<string, string> = {
   ia32: '386',
 };
 
-function frpcPlatformArch(): { platform: string; arch: string; folder: string } {
-  const platform = PLATFORM_MAP[process.platform] ?? process.platform;
+export function buildFrpcReleaseBasename(
+  frpPlatform: FrpcReleasePlatform,
+  arch: string,
+  version = FRPC_VERSION,
+): string {
+  return `frp_${version}_${frpPlatform}_${arch}`;
+}
+
+export function frpcDownloadUrlsForTarget(
+  frpPlatform: FrpcReleasePlatform,
+  arch: string,
+  version = FRPC_VERSION,
+): string[] {
+  const folder = buildFrpcReleaseBasename(frpPlatform, arch, version);
+  const ext = frpcReleaseArchiveExtension(frpPlatform);
+  return [
+    `https://github.com/fatedier/frp/releases/download/v${version}/${folder}${ext}`,
+    `https://ghfast.top/https://github.com/fatedier/frp/releases/download/v${version}/${folder}${ext}`,
+    `https://frp.xopc.ai/bin/${folder}${ext}`,
+  ];
+}
+
+function frpcPlatformArch(): { platform: FrpcReleasePlatform; arch: string; folder: string } {
+  const platform = PLATFORM_MAP[process.platform] ?? (process.platform as FrpcReleasePlatform);
   const arch = ARCH_MAP[process.arch] ?? process.arch;
-  return { platform, arch, folder: `frp_${FRPC_VERSION}_${platform}_${arch}` };
+  return { platform, arch, folder: buildFrpcReleaseBasename(platform, arch) };
 }
 
 function frpcDownloadUrls(): string[] {
-  const { folder } = frpcPlatformArch();
-  return [
-    `https://github.com/fatedier/frp/releases/download/v${FRPC_VERSION}/${folder}.tar.gz`,
-    `https://ghfast.top/https://github.com/fatedier/frp/releases/download/v${FRPC_VERSION}/${folder}.tar.gz`,
-    `https://frp.xopc.ai/bin/${folder}.tar.gz`,
-  ];
+  const { platform, arch } = frpcPlatformArch();
+  return frpcDownloadUrlsForTarget(platform, arch);
 }
 
 async function downloadToFile(
@@ -119,7 +142,9 @@ export async function ensureFrpcBinary(opts?: EnsureFrpcBinaryOptions): Promise<
 
   const tmpBase = join(tmpdir(), `xopc-frpc-${randomBytes(6).toString('hex')}`);
   mkdirSync(tmpBase, { recursive: true });
-  const archivePath = join(tmpBase, 'frpc.tar.gz');
+  const { platform, arch, folder } = frpcPlatformArch();
+  const archiveExt = frpcReleaseArchiveExtension(platform);
+  const archivePath = join(tmpBase, `frpc${archiveExt}`);
 
   const urls = frpcDownloadUrls();
   let lastErr: unknown;
@@ -129,8 +154,12 @@ export async function ensureFrpcBinary(opts?: EnsureFrpcBinaryOptions): Promise<
         log.info({ url }, 'Downloading frpc');
         await downloadToFile(url, archivePath, onProgress);
         onProgress?.({ phase: 'extracting', bytesReceived: 0, totalBytes: null, percent: null });
-        const { folder } = frpcPlatformArch();
-        await extractFrpcFromTarGzArchive(archivePath, cachePath, folder);
+        await extractFrpcFromReleaseArchive(
+          archivePath,
+          cachePath,
+          folder,
+          nodePlatformForFrpTarget(platform),
+        );
         if (process.platform !== 'win32') chmodSync(cachePath, 0o755);
         return cachePath;
       } catch (err) {
@@ -142,7 +171,6 @@ export async function ensureFrpcBinary(opts?: EnsureFrpcBinaryOptions): Promise<
     rmSync(tmpBase, { recursive: true, force: true });
   }
 
-  const { platform, arch } = frpcPlatformArch();
   throw new Error(
     `Failed to download frpc v${FRPC_VERSION} for ${platform}/${arch}: ${lastErr instanceof Error ? lastErr.message : String(lastErr)}`,
   );
