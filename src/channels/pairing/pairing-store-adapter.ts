@@ -1,4 +1,3 @@
-import type { Config } from '../../config/index.js';
 import type { ChannelPairingAdapter } from '../plugins/types.adapters.js';
 
 import type { PairingCliChannel } from './pairing-channel.js';
