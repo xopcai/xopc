@@ -3,11 +3,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { appendAllowFromIdSync } from './allow-from-file.js';
+import { PAIRING_PENDING_MAX } from './pairing-constants.js';
 
 const PAIRING_CODE_LENGTH = 8;
 const PAIRING_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-const PAIRING_PENDING_TTL_MS = 60 * 60 * 1000;
-const PAIRING_PENDING_MAX = 3;
+export const PAIRING_PENDING_TTL_MS = 60 * 60 * 1000;
 
 export type PairingRequest = {
   id: string;
@@ -147,6 +147,17 @@ export function upsertPairingRequestSync(params: {
 /**
  * Approve a pairing code: remove pending request and append sender id to allowFrom file.
  */
+/** Non-expired pending requests; prunes expired entries from disk. */
+export function listPendingPairingRequestsSync(pairingFilePath: string): PairingRequest[] {
+  const nowMs = Date.now();
+  let store = readStore(pairingFilePath);
+  const reqs = pruneExpired(store.requests, nowMs);
+  if (reqs.length !== store.requests.length) {
+    writeStore(pairingFilePath, { version: 1, requests: reqs });
+  }
+  return reqs;
+}
+
 export function approvePairingCodeSync(params: {
   pairingFilePath: string;
   allowFromFilePath: string;
@@ -162,6 +173,34 @@ export function approvePairingCodeSync(params: {
   let reqs = pruneExpired(store.requests, Date.now());
   const idx = reqs.findIndex(
     (r) => r.code.toUpperCase() === want && requestAccountId(r) === normalizedAccount,
+  );
+  if (idx < 0) {
+    writeStore(params.pairingFilePath, { version: 1, requests: reqs });
+    return null;
+  }
+  const entry = reqs[idx]!;
+  reqs.splice(idx, 1);
+  writeStore(params.pairingFilePath, { version: 1, requests: reqs });
+
+  appendAllowFromIdSync(params.allowFromFilePath, entry.id);
+  return { senderId: entry.id };
+}
+
+/** Approve a pending request by sender id (gateway-authenticated quick approve). */
+export function approvePairingBySenderIdSync(params: {
+  pairingFilePath: string;
+  allowFromFilePath: string;
+  senderId: string;
+  accountId?: string;
+}): { senderId: string } | null {
+  const normalizedAccount = normalizeAccountId(params.accountId);
+  const wantId = String(params.senderId ?? '').trim();
+  if (!wantId) return null;
+
+  let store = readStore(params.pairingFilePath);
+  let reqs = pruneExpired(store.requests, Date.now());
+  const idx = reqs.findIndex(
+    (r) => r.id === wantId && requestAccountId(r) === normalizedAccount,
   );
   if (idx < 0) {
     writeStore(params.pairingFilePath, { version: 1, requests: reqs });

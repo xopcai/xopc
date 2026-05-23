@@ -1,4 +1,5 @@
 import { buildPairingInstructionText } from './pairing-messages.js';
+import { broadcastPairingEvent } from './pairing-events.js';
 import { upsertPairingRequestSync } from './pairing-store.js';
 
 import type { PairingCliChannel } from './pairing-channel.js';
@@ -36,6 +37,11 @@ export async function issuePairingChallenge(params: IssuePairingChallengeParams)
     return { created: false };
   }
   params.onCreated?.({ code });
+  broadcastPairingEvent('channels.pairing.requested', {
+    channel: params.channel,
+    accountId: params.accountId.trim().toLowerCase() || 'default',
+    senderId: params.senderId,
+  });
   const replyText =
     params.buildReplyText?.({ code, senderIdLine: params.senderIdLine }) ??
     buildPairingInstructionText({

@@ -5,6 +5,7 @@ import { checkConfigHealth } from './checks/config-health.js';
 import { checkStateIntegrity } from './checks/state-integrity.js';
 import { checkProviderAuth } from './checks/provider-auth.js';
 import { checkChannelConfig } from './checks/channel-config.js';
+import { checkChannelPairingPending } from './checks/channel-pairing-pending.js';
 import { checkGatewayHealth } from './checks/gateway-health.js';
 import { checkSessionIntegrity } from './checks/session-integrity.js';
 import { checkGatewayService } from './checks/gateway-service.js';
@@ -21,6 +22,7 @@ const DOCTOR_CHECKS: DoctorCheck[] = [
   checkStateIntegrity,
   checkProviderAuth,
   checkChannelConfig,
+  checkChannelPairingPending,
   checkSecurityAudit,
   checkWorkspaceStatus,
   checkGatewayService,

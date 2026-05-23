@@ -18,6 +18,7 @@ import type {
   ChatType,
 } from '@xopcai/xopc/channels/plugin-types.js';
 import { evaluateAccess, resolveDmPolicy } from '@xopcai/xopc/channels/security.js';
+import { createStandardPairingAdapter } from '@xopcai/xopc/channels/pairing/pairing-store-adapter.js';
 import { createLogger } from '@xopcai/xopc/utils/logger.js';
 
 import { restoreContextTokens } from './messaging/inbound.js';
@@ -95,6 +96,8 @@ export class WeixinChannelPlugin implements ChannelPlugin<ResolvedWeixinAccount>
   };
 
   readonly configSurface = weixinConfigSurface;
+
+  readonly pairing = createStandardPairingAdapter('weixin');
 
   readonly defaults: ChannelPluginDefaults = {
     queue: { debounceMs: 0 },

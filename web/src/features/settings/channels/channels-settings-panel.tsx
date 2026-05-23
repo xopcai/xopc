@@ -8,6 +8,7 @@ import { ChannelsRemoveChannelDialog } from './channels-remove-channel-dialog';
 import { FeishuMoreSettingsSection } from './feishu-more-settings-section';
 import { FeishuQrSetupDialog } from './feishu-qr-setup-dialog';
 import { TelegramChannelSettingsDialog } from './telegram-channel-settings-dialog';
+import { useChannelPairingSummary } from './use-channel-pairing-summary';
 import { useChannelsSettingsPanel } from './use-channels-settings-panel';
 import { WeixinQrLoginDialog } from './weixin-qr-login-dialog';
 import { WeixinMoreSettingsSection } from './weixin-more-settings-section';
@@ -82,6 +83,15 @@ export function ChannelsSettingsPanel() {
     streamOpts,
   } = ctx;
 
+  const { summary: pairingSummary } = useChannelPairingSummary(hasToken);
+
+  const stalePairingTotal =
+    pairingSummary.telegram.stale + pairingSummary.feishu.stale + pairingSummary.weixin.stale;
+  const atCapacityPairing =
+    pairingSummary.telegram.atCapacity ||
+    pairingSummary.feishu.atCapacity ||
+    pairingSummary.weixin.atCapacity;
+
   if (!hasToken) {
     return (
       <div className="mx-auto flex w-full max-w-app-main flex-col gap-3 px-4 py-8">
@@ -145,6 +155,8 @@ export function ChannelsSettingsPanel() {
       dirty={dirty}
       save={save}
       discard={discard}
+      language={language}
+      dialogOpen={feishuModalOpen}
     />
   );
 
@@ -166,6 +178,8 @@ export function ChannelsSettingsPanel() {
       dirty={dirty}
       save={save}
       discard={discard}
+      language={language}
+      dialogOpen={weixinModalOpen}
     />
   );
 
@@ -194,6 +208,16 @@ export function ChannelsSettingsPanel() {
           {feishuSetupSuccessBanner}
         </div>
       ) : null}
+      {stalePairingTotal > 0 ? (
+        <div className="rounded-xl border border-amber-300/40 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-800/50 dark:bg-amber-950/30 dark:text-amber-100">
+          {ch.pairingStaleBanner.replace('{{count}}', String(stalePairingTotal))}
+        </div>
+      ) : null}
+      {atCapacityPairing ? (
+        <div className="rounded-xl border border-amber-300/40 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-800/50 dark:bg-amber-950/30 dark:text-amber-100">
+          {ch.pairingAtCapacityBanner}
+        </div>
+      ) : null}
 
       <div className="flex flex-col gap-3">
         <ChannelImHubCard
@@ -207,6 +231,7 @@ export function ChannelsSettingsPanel() {
           onConfigure={() => setWeixinModalOpen(true)}
           onEdit={() => setWeixinModalOpen(true)}
           onRemove={() => setRemoveTarget('weixin')}
+          pendingPairingCount={weixinConfigured && wx.dmPolicy === 'pairing' ? pairingSummary.weixin.pending : 0}
           ch={ch}
         />
         <ChannelImHubCard
@@ -220,6 +245,7 @@ export function ChannelsSettingsPanel() {
           onConfigure={() => setTelegramModalOpen(true)}
           onEdit={() => setTelegramModalOpen(true)}
           onRemove={() => setRemoveTarget('telegram')}
+          pendingPairingCount={telegramConfigured && tg.dmPolicy === 'pairing' ? pairingSummary.telegram.pending : 0}
           ch={ch}
         />
         <ChannelImHubCard
@@ -233,6 +259,7 @@ export function ChannelsSettingsPanel() {
           onConfigure={() => setFeishuModalOpen(true)}
           onEdit={() => setFeishuModalOpen(true)}
           onRemove={() => setRemoveTarget('feishu')}
+          pendingPairingCount={feishuConfigured && fs.dmPolicy === 'pairing' ? pairingSummary.feishu.pending : 0}
           ch={ch}
         />
       </div>
@@ -276,6 +303,7 @@ export function ChannelsSettingsPanel() {
         dirty={dirty}
         save={save}
         discard={discard}
+        language={language}
       />
 
       <FeishuQrSetupDialog

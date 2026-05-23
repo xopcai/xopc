@@ -5,11 +5,27 @@
 import type { Config } from '../../config/index.js';
 import type { BindingRule } from '../../routing/bindings.js';
 import type { SessionStore } from '../../session/store.js';
+import type { PairingPendingView } from '../pairing/pairing-service.js';
 
 export interface ChannelPairingAdapter {
-  generatePairingCode(params: { cfg: Config; accountId?: string }): string;
-  validatePairingCode(params: { cfg: Config; code: string; senderId: string }): boolean;
-  completePairing(params: { cfg: Config; senderId: string; code: string }): Promise<void>;
+  /** Credential-store channel key (`telegram` | `feishu` | `weixin`). */
+  pairingChannel: 'telegram' | 'feishu' | 'weixin';
+  listPending(params: { cfg: Config; accountId?: string }): PairingPendingView[];
+  approveByCode(params: {
+    cfg: Config;
+    accountId?: string;
+    code: string;
+  }): { ok: true; senderId: string } | { ok: false; error: string };
+  approveBySenderId(params: {
+    cfg: Config;
+    accountId?: string;
+    senderId: string;
+  }): { ok: true; senderId: string } | { ok: false; error: string };
+  revokePaired(params: {
+    cfg: Config;
+    accountId?: string;
+    senderId: string;
+  }): { ok: true; changed: boolean } | { ok: false; error: string };
 }
 
 export interface ChannelAllowlistAdapter {

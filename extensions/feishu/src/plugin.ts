@@ -27,6 +27,7 @@ import type {
 import type { ChannelCliLoginAdapter } from '@xopcai/xopc/channels/plugins/types.adapters.js';
 import { createLogger } from '@xopcai/xopc/utils/logger.js';
 import { evaluateAccess, resolveDmPolicy, resolveGroupPolicy } from '@xopcai/xopc/channels/security.js';
+import { createStandardPairingAdapter } from '@xopcai/xopc/channels/pairing/pairing-store-adapter.js';
 
 import { FeishuConfigSchema, type FeishuConfig } from './schema/config-schema.js';
 import { listFeishuAccountIds, resolveFeishuAccount, type ResolvedFeishuAccount } from './state/accounts.js';
@@ -106,6 +107,8 @@ export class FeishuChannelPlugin implements ChannelPlugin<ResolvedFeishuAccount>
   };
 
   readonly configSurface = feishuConfigSurface;
+
+  readonly pairing = createStandardPairingAdapter('feishu');
 
   onboard = feishuOnboardAdapter;
 
