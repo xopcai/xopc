@@ -36,6 +36,24 @@ const MAX_FLAT_PALETTE_ITEMS = 20;
 /** When grouped (empty query), rows per section before "Show N more". */
 const GROUPED_INITIAL_PER_SECTION = 3;
 
+/** Slash token body after the leading `/` looks like a filesystem path, not a skill name. */
+function looksLikePathQuery(query: string): boolean {
+  if (query.includes('/')) return true;
+  if (/^[A-Za-z]:/u.test(query)) return true;
+  return /^(Users|home|var|tmp|etc|opt|private|Volumes|System|Applications|Library|usr|dev|bin|sbin|proc|sys)(\/|$)/iu.test(
+    query,
+  );
+}
+
+/** `/` that continues a URL or path segment (`.com/foo`, `https://`), not a fresh `/command` token. */
+function isEmbeddedPathOrUrlSlash(text: string, slashIndex: number): boolean {
+  if (slashIndex === 0) return false;
+  const prev = text[slashIndex - 1]!;
+  if (prev === '.' || prev === ':' || prev === '/') return true;
+  const head = text.slice(0, slashIndex);
+  return /[a-zA-Z0-9-]+\.[a-zA-Z0-9.-]+$/u.test(head);
+}
+
 export function detectSlashRange(text: string, cursor: number): SlashRange | null {
   const len = text.length;
   let c = Math.min(Math.max(cursor, 0), len);
@@ -51,7 +69,15 @@ export function detectSlashRange(text: string, cursor: number): SlashRange | nul
   if (atFileTokenSpanContainingIndex(text, match.index)) {
     return null;
   }
+  const slashStart = match.index;
+  if (isEmbeddedPathOrUrlSlash(text, slashStart)) {
+    return null;
+  }
   const token = match[0];
+  const query = token.slice(1);
+  if (looksLikePathQuery(query)) {
+    return null;
+  }
   // Wire `/skill:name` is rendered as a pill, not an active slash palette - otherwise the list stays open with no matches and blocks typing.
   if (token.startsWith('/skill:')) {
     return null;
@@ -59,7 +85,7 @@ export function detectSlashRange(text: string, cursor: number): SlashRange | nul
   return {
     start: match.index,
     end: c,
-    query: token.slice(1),
+    query,
   };
 }
 
@@ -177,7 +203,7 @@ export function useCommandPalette(
 
   const query = slashRange?.query ?? '';
 
-  /** Slash commands only run when the token is at the start of the composer (`/new`); mid-string `/` is for skills only. */
+  /** Slash commands only run when the token is at the start of the composer (`/new`). */
   const commandsAllowed = slashRange !== null && slashRange.start === 0;
 
   const qTrim = query.trim();
