@@ -30,14 +30,14 @@ export function listPairingAccountIds(
   config: TelegramConfig | WeixinConfig | FeishuConfig,
 ): string[] {
   if (channel === 'telegram') {
-    const ids = telegramRoutingAccountIds(config as TelegramConfig);
+    const ids = telegramRoutingAccountIds(config);
     return ids.length > 0 ? ids : ['default'];
   }
   if (channel === 'weixin') {
-    const ids = weixinRoutingAccountIds(config as WeixinConfig);
+    const ids = weixinRoutingAccountIds(config);
     return ids.length > 0 ? ids : ['default'];
   }
-  const ids = feishuRoutingAccountIds(config as FeishuConfig);
+  const ids = feishuRoutingAccountIds(config);
   return ids.length > 0 ? ids : ['default'];
 }
 
