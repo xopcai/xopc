@@ -17,7 +17,7 @@ export function buildPairingInstructionText(params: {
     'Pairing code:',
     code,
     '',
-    'Ask the owner to approve with:',
+    'Ask the owner to approve in Settings → Channels → Pairing, or run:',
     approve,
   ].join('\n');
 }

@@ -384,3 +384,103 @@ export async function fetchFeishuSetupStatus(sessionKey: string): Promise<Feishu
   }>(apiUrl(`/api/channels/feishu/setup/${encodeURIComponent(sessionKey)}`));
   return res.payload.status;
 }
+
+// ---------------------------------------------------------------------------
+// Channel DM pairing (telegram / feishu / weixin)
+// ---------------------------------------------------------------------------
+
+export type PairingChannelId = 'telegram' | 'feishu' | 'weixin';
+
+export type PairingPendingItem = {
+  senderId: string;
+  codeLast4: string;
+  createdAt: string;
+  lastSeenAt: string;
+  expiresAt: string;
+  isStale: boolean;
+  meta?: Record<string, string>;
+};
+
+export type ChannelPairingStatePayload = {
+  channel: PairingChannelId;
+  accountId: string;
+  dmPolicy: DmPolicy;
+  pending: PairingPendingItem[];
+  paired: {
+    fromConfig: string[];
+    fromCredentials: string[];
+  };
+};
+
+export async function fetchChannelPairingState(
+  channel: PairingChannelId,
+  accountId = 'default',
+): Promise<ChannelPairingStatePayload> {
+  const q = new URLSearchParams({ channel, account: accountId });
+  const res = await fetchJson<{ ok: boolean; payload: ChannelPairingStatePayload }>(
+    apiUrl(`/api/channels/pairing?${q.toString()}`),
+  );
+  return res.payload;
+}
+
+export async function approveChannelPairingRequest(body: {
+  channel: PairingChannelId;
+  accountId?: string;
+  code: string;
+}): Promise<{ senderId: string; alreadyPaired: boolean }> {
+  const res = await fetchJson<{
+    ok: boolean;
+    payload: { senderId: string; alreadyPaired: boolean };
+    error?: { code?: string; message?: string };
+  }>(apiUrl('/api/channels/pairing/approve'), {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+  return res.payload;
+}
+
+export type ChannelPairingSummaryEntry = {
+  pending: number;
+  stale: number;
+  atCapacity: boolean;
+};
+
+export type ChannelPairingSummaryPayload = Record<PairingChannelId, ChannelPairingSummaryEntry>;
+
+export async function fetchChannelPairingSummary(): Promise<ChannelPairingSummaryPayload> {
+  const res = await fetchJson<{
+    ok: boolean;
+    payload: { summary: ChannelPairingSummaryPayload };
+  }>(apiUrl('/api/channels/pairing/summary'));
+  return res.payload.summary;
+}
+
+export async function approveChannelPairingBySender(body: {
+  channel: PairingChannelId;
+  accountId?: string;
+  senderId: string;
+}): Promise<{ senderId: string; alreadyPaired: boolean }> {
+  const res = await fetchJson<{
+    ok: boolean;
+    payload: { senderId: string; alreadyPaired: boolean };
+  }>(apiUrl('/api/channels/pairing/approve-sender'), {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+  return res.payload;
+}
+
+export async function revokeChannelPairingPaired(body: {
+  channel: PairingChannelId;
+  accountId?: string;
+  senderId: string;
+}): Promise<{ changed: boolean }> {
+  const res = await fetchJson<{
+    ok: boolean;
+    payload: { changed: boolean };
+  }>(apiUrl('/api/channels/pairing/paired'), {
+    method: 'DELETE',
+    body: JSON.stringify(body),
+  });
+  return res.payload;
+}

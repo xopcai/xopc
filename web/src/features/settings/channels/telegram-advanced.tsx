@@ -1,6 +1,5 @@
 import type {
   ChannelsSettingsState,
-  DmPolicy,
   GroupPolicy,
   ReplyToMode,
   StreamMode,
@@ -15,7 +14,6 @@ export function TelegramAdvanced({
   tg,
   updateTelegram,
   ch,
-  dmOpts,
   groupOpts,
   replyOpts,
   streamOpts,
@@ -27,7 +25,6 @@ export function TelegramAdvanced({
   tg: ChannelsSettingsState['telegram'];
   updateTelegram: (p: Partial<ChannelsSettingsState['telegram']>) => void;
   ch: ChannelsSettingsMessages;
-  dmOpts: { value: DmPolicy; label: string }[];
   groupOpts: { value: GroupPolicy; label: string }[];
   replyOpts: { value: ReplyToMode; label: string }[];
   streamOpts: { value: StreamMode; label: string }[];
@@ -57,7 +54,6 @@ export function TelegramAdvanced({
           placeholder="http://proxy.example.com:8080"
         />
       </div>
-      <SelectField label={ch.dmPolicy} value={tg.dmPolicy} onChange={(v) => updateTelegram({ dmPolicy: v })} options={dmOpts} />
       <SelectField
         label={ch.groupPolicy}
         value={tg.groupPolicy}

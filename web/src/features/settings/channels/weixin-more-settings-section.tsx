@@ -3,8 +3,11 @@ import { ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { ChatAgentsPayload } from '@/features/chat/chat-agents-api';
 import type { ChannelsSettingsState, DmPolicy, StreamMode } from '@/features/settings/channels-config-api';
+import { weixinRoutingAccountIds } from '@/features/settings/channel-bindings-merge';
 import type { ChannelsSettingsMessages } from '@/i18n/messages';
 
+import { ChannelPairingSection } from './channel-pairing-section';
+import { SelectField } from './field-primitives';
 import { WeixinAdvanced } from './weixin-advanced';
 
 export function WeixinMoreSettingsSection({
@@ -24,6 +27,8 @@ export function WeixinMoreSettingsSection({
   dirty,
   save,
   discard,
+  language,
+  dialogOpen,
 }: {
   ch: ChannelsSettingsMessages;
   wx: ChannelsSettingsState['weixin'];
@@ -41,7 +46,12 @@ export function WeixinMoreSettingsSection({
   dirty: boolean;
   save: () => Promise<boolean>;
   discard: () => void;
+  language: string;
+  dialogOpen: boolean;
 }) {
+  const wxAccountIds = weixinRoutingAccountIds(wx);
+  const resolvedWxAccounts = wxAccountIds.length > 0 ? wxAccountIds : ['default'];
+
   return (
     <details className="group rounded-xl border border-edge-subtle bg-surface-base open:pb-3 dark:border-edge">
       <summary className="cursor-pointer list-none rounded-xl px-3 py-2.5 text-sm font-medium text-fg transition-colors hover:bg-surface-hover group-open:rounded-b-none [&::-webkit-details-marker]:hidden">
@@ -61,12 +71,20 @@ export function WeixinMoreSettingsSection({
           />
           <span>{ch.enableWeixinAria}</span>
         </label>
+        <SelectField label={ch.dmPolicy} value={wx.dmPolicy} onChange={(v) => updateWeixin({ dmPolicy: v })} options={dmOpts} />
+        <ChannelPairingSection
+          channel="weixin"
+          accountIds={resolvedWxAccounts}
+          dmPolicy={wx.dmPolicy}
+          active={dialogOpen}
+          ch={ch}
+          language={language}
+        />
         <div className="[&>div]:border-0 [&>div]:pt-0">
           <WeixinAdvanced
             wx={wx}
             updateWeixin={updateWeixin}
             ch={ch}
-            dmOpts={dmOpts}
             streamOpts={streamOpts}
             wxAccountsDraft={wxAccountsDraft}
             setWxAccountsDraft={setWxAccountsDraft}

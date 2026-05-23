@@ -8,7 +8,8 @@ import type { ChannelsSettingsMessages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 
 import { ChannelAgentRoutingBlock } from './channel-agent-routing-block';
-import { FieldHint, FieldLabel } from './field-primitives';
+import { ChannelPairingSection } from './channel-pairing-section';
+import { FieldHint, FieldLabel, SelectField } from './field-primitives';
 import { channelsInputClassName, joinAllowFrom, parseIdList } from './utils';
 
 export function FeishuMoreSettingsSection({
@@ -36,6 +37,8 @@ export function FeishuMoreSettingsSection({
   dirty,
   save,
   discard,
+  language,
+  dialogOpen,
 }: {
   ch: ChannelsSettingsMessages;
   form: ChannelsSettingsState;
@@ -65,9 +68,13 @@ export function FeishuMoreSettingsSection({
   dirty: boolean;
   save: () => Promise<boolean>;
   discard: () => void;
+  language: string;
+  dialogOpen: boolean;
 }) {
   const inputClassName = channelsInputClassName;
   const fs = form.feishu;
+  const feishuAccountIds = feishuRoutingAccountIds(fs);
+  const resolvedFeishuAccounts = feishuAccountIds.length > 0 ? feishuAccountIds : ['default'];
   const feishuBaselineSecret = baseline?.feishu?.appSecret ?? '';
   const feishuSecretDisplayLocked =
     !showFeishuSecret &&
@@ -93,6 +100,21 @@ export function FeishuMoreSettingsSection({
           />
           <span>{ch.enableFeishuAria}</span>
         </label>
+
+        <SelectField
+          label={ch.dmPolicy}
+          value={fs.dmPolicy}
+          onChange={(v) => updateFeishu({ dmPolicy: v })}
+          options={dmOpts}
+        />
+        <ChannelPairingSection
+          channel="feishu"
+          accountIds={resolvedFeishuAccounts}
+          dmPolicy={fs.dmPolicy}
+          active={dialogOpen}
+          ch={ch}
+          language={language}
+        />
 
         <div className="space-y-4">
           <div className="flex flex-col gap-1.5">
@@ -316,39 +338,21 @@ export function FeishuMoreSettingsSection({
             {ch.enableStreaming}
           </label>
 
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="flex flex-col gap-1.5">
-              <FieldLabel>{ch.dmPolicy}</FieldLabel>
-              <select
-                className={inputClassName()}
-                value={fs.dmPolicy}
-                onChange={(e) =>
-                  updateFeishu({ dmPolicy: e.target.value as ChannelsSettingsState['feishu']['dmPolicy'] })
-                }
-              >
-                {dmOpts.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <FieldLabel>{ch.groupPolicy}</FieldLabel>
-              <select
-                className={inputClassName()}
-                value={fs.groupPolicy}
-                onChange={(e) =>
-                  updateFeishu({ groupPolicy: e.target.value as ChannelsSettingsState['feishu']['groupPolicy'] })
-                }
-              >
-                {groupOpts.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-            </div>
+          <div className="flex flex-col gap-1.5">
+            <FieldLabel>{ch.groupPolicy}</FieldLabel>
+            <select
+              className={inputClassName()}
+              value={fs.groupPolicy}
+              onChange={(e) =>
+                updateFeishu({ groupPolicy: e.target.value as ChannelsSettingsState['feishu']['groupPolicy'] })
+              }
+            >
+              {groupOpts.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
           </div>
 
           <label className="flex cursor-pointer items-center gap-2 text-sm text-fg">

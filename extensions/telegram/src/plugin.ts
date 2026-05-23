@@ -29,6 +29,7 @@ import { submitClarifyChoiceFromChannel } from '@xopcai/xopc/gateway/clarify-run
 
 import { createLogger } from '@xopcai/xopc/utils/logger.js';
 import { issuePairingChallenge, resolveStandardPairingPath } from '@xopcai/xopc/channels/pairing/index.js';
+import { createStandardPairingAdapter } from '@xopcai/xopc/channels/pairing/pairing-store-adapter.js';
 import { createTimeoutAbortSignal } from './timeout-abort.js';
 import { createInboundDebouncer } from '@xopcai/xopc/infra/debounce.js';
 import { getChatChannelMeta } from '@xopcai/xopc/channels/registry.js';
@@ -123,6 +124,8 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
   readonly configSurface = telegramConfigSurface;
 
   readonly onboard = telegramOnboardAdapter;
+
+  readonly pairing = createStandardPairingAdapter('telegram');
 
   private bus!: NonNullable<ChannelPluginInitOptions['bus']>;
   private cfg!: NonNullable<ChannelPluginInitOptions['config']>;

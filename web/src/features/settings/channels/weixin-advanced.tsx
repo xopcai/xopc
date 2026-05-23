@@ -1,4 +1,4 @@
-import type { ChannelsSettingsState, DmPolicy, StreamMode } from '@/features/settings/channels-config-api';
+import type { ChannelsSettingsState, StreamMode } from '@/features/settings/channels-config-api';
 import { weixinRoutingAccountIds } from '@/features/settings/channel-bindings-merge';
 import { cn } from '@/lib/cn';
 import type { ChannelsSettingsMessages } from '@/i18n/messages';
@@ -11,7 +11,6 @@ export function WeixinAdvanced({
   wx,
   updateWeixin,
   ch,
-  dmOpts,
   streamOpts,
   wxAccountsDraft,
   setWxAccountsDraft,
@@ -26,7 +25,6 @@ export function WeixinAdvanced({
   wx: ChannelsSettingsState['weixin'];
   updateWeixin: (p: Partial<ChannelsSettingsState['weixin']>) => void;
   ch: ChannelsSettingsMessages;
-  dmOpts: { value: DmPolicy; label: string }[];
   streamOpts: { value: StreamMode; label: string }[];
   wxAccountsDraft: string;
   setWxAccountsDraft: (s: string) => void;
@@ -59,7 +57,6 @@ export function WeixinAdvanced({
         />
         <FieldHint>{ch.weixinAllowFromDesc}</FieldHint>
       </div>
-      <SelectField label={ch.dmPolicy} value={wx.dmPolicy} onChange={(v) => updateWeixin({ dmPolicy: v })} options={dmOpts} />
       <SelectField
         label={ch.streamMode}
         value={wx.streamMode}
