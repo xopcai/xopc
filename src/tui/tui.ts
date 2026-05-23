@@ -491,26 +491,33 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     }
   };
 
+  let ctrlCHandling = false;
   const handleCtrlC = () => {
-    const now = Date.now();
-    const decision = resolveCtrlCAction({
-      hasInput: editor.getText().trim().length > 0,
-      now,
-      lastCtrlCAt: state.lastCtrlCAt,
-    });
-    state.lastCtrlCAt = decision.nextLastCtrlCAt;
-    if (decision.action === 'clear') {
-      editor.setText('');
-      setActivityStatus('cleared input; press ctrl+c again to exit');
+    if (ctrlCHandling) return;
+    ctrlCHandling = true;
+    try {
+      const now = Date.now();
+      const decision = resolveCtrlCAction({
+        hasInput: editor.getText().trim().length > 0,
+        now,
+        lastCtrlCAt: state.lastCtrlCAt,
+      });
+      state.lastCtrlCAt = decision.nextLastCtrlCAt;
+      if (decision.action === 'clear') {
+        editor.setText('');
+        setActivityStatus('cleared input; press ctrl+c again to exit');
+        tui.requestRender();
+        return;
+      }
+      if (decision.action === 'exit') {
+        requestExit();
+        return;
+      }
+      setActivityStatus('press ctrl+c again to exit');
       tui.requestRender();
-      return;
+    } finally {
+      ctrlCHandling = false;
     }
-    if (decision.action === 'exit') {
-      requestExit();
-      return;
-    }
-    setActivityStatus('press ctrl+c again to exit');
-    tui.requestRender();
   };
 
   const setModelChoices = (models: TuiModelChoice[]) => {

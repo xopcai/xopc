@@ -23,8 +23,10 @@ export function getContextWithOpts(argv: string[] = process.argv): CLIContext {
   return createDefaultContext(argv, parsedOpts);
 }
 
-// Long-running commands that should not auto-exit.
-const LONG_RUNNING_COMMANDS = new Set(['gateway', 'agent', 'tui']);
+// Commands whose action never resolves until an external shutdown signal.
+// `tui` is intentionally omitted: `await runTui()` completes when the user exits
+// the TUI and the process must call `process.exit` (interactive stdin stays open).
+const LONG_RUNNING_COMMANDS = new Set(['gateway', 'agent']);
 
 function isExtensionsDevCommand(command: Command): boolean {
   return command.name() === 'dev' && command.parent?.name() === 'extensions';
