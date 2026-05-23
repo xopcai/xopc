@@ -115,11 +115,6 @@ export function useChatSessionStreaming(deps: {
         const prior = latestMessagesRef.current ?? [];
         const merged = mergeConsecutiveAssistantMessages([...prior, appended]);
         setMessages(merged);
-        fq.refreshFollowUpSuggestions({
-          appended,
-          messages: merged,
-          clarifyActive: Boolean(fq.clarifyPromptRef.current),
-        });
       }
       setStreaming(false);
       setProgress(null);
@@ -162,7 +157,6 @@ export function useChatSessionStreaming(deps: {
       activeResumeRunIdRef,
       sessionKeyRef,
       fq.dismissClarify,
-      fq.refreshFollowUpSuggestions,
       fq.pendingFollowUpsRef,
       pollSessionNameAfterTurn,
       loadSessionById,
@@ -359,7 +353,6 @@ export function useChatSessionStreaming(deps: {
       const sender = senderRef.current;
       const chatId = sessionKey;
       userAbortedRef.current = false;
-      fq.clearFollowUpSuggestions();
       activeStreamSessionKeyRef.current = chatId;
       sendingRef.current = true;
       setSending(true);
@@ -434,7 +427,6 @@ export function useChatSessionStreaming(deps: {
       sendingRef,
       streamingRef,
       userAbortedRef,
-      fq.clearFollowUpSuggestions,
       fq.dismissClarify,
       setSending,
       setError,
