@@ -48,8 +48,8 @@ function looksLikePathQuery(query: string): boolean {
 /** `/` that continues a URL or path segment (`.com/foo`, `https://`), not a fresh `/command` token. */
 function isEmbeddedPathOrUrlSlash(text: string, slashIndex: number): boolean {
   if (slashIndex === 0) return false;
-  const prev = text[slashIndex - 1]!;
-  if (prev === '.' || prev === ':' || prev === '/') return true;
+  const prev = text[slashIndex - 1];
+  if (prev === undefined || prev === '.' || prev === ':' || prev === '/') return true;
   const head = text.slice(0, slashIndex);
   return /[a-zA-Z0-9-]+\.[a-zA-Z0-9.-]+$/u.test(head);
 }
