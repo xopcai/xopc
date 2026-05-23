@@ -9,13 +9,27 @@ import {
 import { dirname, join } from 'node:path';
 import { gunzipSync } from 'node:zlib';
 
+import AdmZip from 'adm-zip';
+
 import { createLogger } from '../utils/logger.js';
 
 const log = createLogger('TunnelFrpcExtract');
 
+export type FrpcReleasePlatform = 'darwin' | 'linux' | 'windows';
+
 export function buildFrpcArchiveMemberPath(folder: string, platform: NodeJS.Platform): string {
   const ext = platform === 'win32' ? '.exe' : '';
   return `${folder}/frpc${ext}`.replace(/\\/g, '/');
+}
+
+export function frpcReleaseArchiveExtension(frpPlatform: FrpcReleasePlatform): '.zip' | '.tar.gz' {
+  return frpPlatform === 'windows' ? '.zip' : '.tar.gz';
+}
+
+export function nodePlatformForFrpTarget(frpPlatform: FrpcReleasePlatform): NodeJS.Platform {
+  if (frpPlatform === 'windows') return 'win32';
+  if (frpPlatform === 'darwin') return 'darwin';
+  return 'linux';
 }
 
 /** Resolve on-disk path after system tar extracts a POSIX member path. */
@@ -110,6 +124,39 @@ async function extractTarGzMemberSystemTar(
 
   mkdirSync(dirname(destPath), { recursive: true });
   writeFileSync(destPath, readFileSync(extracted));
+}
+
+/** Extract frpc from a Windows release zip (upstream publishes `.zip`, not `.tar.gz`). */
+export function extractFrpcFromZipArchive(
+  archivePath: string,
+  destBin: string,
+  folder: string,
+  platform: NodeJS.Platform = process.platform,
+): void {
+  const memberPath = buildFrpcArchiveMemberPath(folder, platform);
+  const zip = new AdmZip(archivePath);
+  const entry = zip.getEntry(memberPath);
+  if (!entry || entry.isDirectory) {
+    throw new Error(`Archive missing expected path: ${memberPath}`);
+  }
+
+  mkdirSync(dirname(destBin), { recursive: true });
+  writeFileSync(destBin, entry.getData());
+  log.debug({ memberPath, method: 'adm-zip' }, 'Extracted frpc from archive');
+}
+
+/** Route to zip or tar.gz extraction based on archive extension. */
+export async function extractFrpcFromReleaseArchive(
+  archivePath: string,
+  destBin: string,
+  folder: string,
+  platform: NodeJS.Platform = process.platform,
+): Promise<void> {
+  if (archivePath.endsWith('.zip')) {
+    extractFrpcFromZipArchive(archivePath, destBin, folder, platform);
+    return;
+  }
+  await extractFrpcFromTarGzArchive(archivePath, destBin, folder, platform);
 }
 
 /**

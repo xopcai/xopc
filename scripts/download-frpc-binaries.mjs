@@ -15,12 +15,16 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 
-import { extractFrpcFromTarGzArchive } from '../src/tunnel/frpc-extract.ts';
-
-const FRP_VERSION = '0.62.1';
-
-const PLATFORM_MAP = { darwin: 'darwin', linux: 'linux', win32: 'windows' };
-const ARCH_MAP = { x64: 'amd64', arm64: 'arm64' };
+import {
+  buildFrpcReleaseBasename,
+  FRPC_VERSION,
+  frpcDownloadUrlsForTarget,
+} from '../src/tunnel/frpc-binary.ts';
+import {
+  extractFrpcFromReleaseArchive,
+  frpcReleaseArchiveExtension,
+  nodePlatformForFrpTarget,
+} from '../src/tunnel/frpc-extract.ts';
 
 const ALL_TARGETS = [
   ['darwin', 'amd64'],
@@ -37,8 +41,8 @@ function resolveStateBinDir() {
 
 function parseArgs() {
   const all = process.argv.includes('--all');
-  let platform = PLATFORM_MAP[process.platform] ?? process.platform;
-  let arch = ARCH_MAP[process.arch] ?? process.arch;
+  let platform = process.platform === 'win32' ? 'windows' : process.platform;
+  let arch = process.arch === 'x64' ? 'amd64' : process.arch;
   for (let i = 2; i < process.argv.length; i++) {
     if (process.argv[i] === '--platform' && process.argv[i + 1]) platform = process.argv[++i];
     if (process.argv[i] === '--arch' && process.argv[i + 1]) arch = process.argv[++i];
@@ -52,19 +56,9 @@ async function downloadToFile(url, destPath) {
   await pipeline(res.body, createWriteStream(destPath));
 }
 
-function nodePlatformForTarget(platform) {
-  if (platform === 'windows') return 'win32';
-  if (platform === 'darwin') return 'darwin';
-  return 'linux';
-}
-
 async function downloadOne(platform, arch) {
-  const folder = `frp_${FRP_VERSION}_${platform}_${arch}`;
-  const urls = [
-    `https://github.com/fatedier/frp/releases/download/v${FRP_VERSION}/${folder}.tar.gz`,
-    `https://ghfast.top/https://github.com/fatedier/frp/releases/download/v${FRP_VERSION}/${folder}.tar.gz`,
-    `https://frp.xopc.ai/bin/${folder}.tar.gz`,
-  ];
+  const folder = buildFrpcReleaseBasename(platform, arch);
+  const urls = frpcDownloadUrlsForTarget(platform, arch, FRPC_VERSION);
   const destDir = resolveStateBinDir();
   const ext = platform === 'windows' ? '.exe' : '';
   const destBin = join(destDir, `frpc${ext}`);
@@ -73,7 +67,8 @@ async function downloadOne(platform, arch) {
     return;
   }
   mkdirSync(destDir, { recursive: true });
-  const archivePath = join(destDir, `_frpc-${platform}-${arch}.tgz`);
+  const archiveExt = frpcReleaseArchiveExtension(platform);
+  const archivePath = join(destDir, `_frpc-${platform}-${arch}${archiveExt}`);
   let lastErr;
   for (const url of urls) {
     try {
@@ -86,11 +81,11 @@ async function downloadOne(platform, arch) {
     }
   }
   if (lastErr) throw lastErr;
-  await extractFrpcFromTarGzArchive(
+  await extractFrpcFromReleaseArchive(
     archivePath,
     destBin,
     folder,
-    nodePlatformForTarget(platform),
+    nodePlatformForFrpTarget(platform),
   );
   if (platform !== 'windows') chmodSync(destBin, 0o755);
   rmSync(archivePath, { force: true });
