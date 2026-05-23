@@ -110,7 +110,7 @@ export function FeishuMoreSettingsSection({
         <ChannelPairingSection
           channel="feishu"
           accountIds={resolvedFeishuAccounts}
-          dmPolicy={fs.dmPolicy}
+          channelConfig={fs}
           active={dialogOpen}
           ch={ch}
           language={language}

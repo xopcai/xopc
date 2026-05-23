@@ -484,3 +484,19 @@ export async function revokeChannelPairingPaired(body: {
   });
   return res.payload;
 }
+
+export async function dismissChannelPairingPending(body: {
+  channel: PairingChannelId;
+  accountId?: string;
+  senderId: string;
+}): Promise<{ senderId: string }> {
+  const res = await fetchJson<{
+    ok: boolean;
+    payload: { senderId: string };
+    error?: { code?: string; message?: string };
+  }>(apiUrl('/api/channels/pairing/pending'), {
+    method: 'DELETE',
+    body: JSON.stringify(body),
+  });
+  return res.payload;
+}

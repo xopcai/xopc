@@ -213,3 +213,28 @@ export function approvePairingBySenderIdSync(params: {
   appendAllowFromIdSync(params.allowFromFilePath, entry.id);
   return { senderId: entry.id };
 }
+
+/** Remove a pending request without approving (admin dismiss). */
+export function dismissPairingBySenderIdSync(params: {
+  pairingFilePath: string;
+  senderId: string;
+  accountId?: string;
+}): { senderId: string } | null {
+  const normalizedAccount = normalizeAccountId(params.accountId);
+  const wantId = String(params.senderId ?? '').trim();
+  if (!wantId) return null;
+
+  let store = readStore(params.pairingFilePath);
+  let reqs = pruneExpired(store.requests, Date.now());
+  const idx = reqs.findIndex(
+    (r) => r.id === wantId && requestAccountId(r) === normalizedAccount,
+  );
+  if (idx < 0) {
+    writeStore(params.pairingFilePath, { version: 1, requests: reqs });
+    return null;
+  }
+  const entry = reqs[idx]!;
+  reqs.splice(idx, 1);
+  writeStore(params.pairingFilePath, { version: 1, requests: reqs });
+  return { senderId: entry.id };
+}

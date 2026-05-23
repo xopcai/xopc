@@ -18,30 +18,36 @@ export type IssuePairingChallengeParams = {
 };
 
 /**
- * OpenClaw-style pairing: mint or refresh a pending code and send instructions once per new code.
+ * OpenClaw-style pairing: mint or refresh a pending code; notify the user only on new codes.
+ * Repeat DMs refresh lastSeenAt and broadcast SSE without re-sending the bot message.
  */
 export async function issuePairingChallenge(params: IssuePairingChallengeParams): Promise<{
   created: boolean;
   code?: string;
 }> {
+  const normalizedAccountId = params.accountId.trim().toLowerCase() || 'default';
   const { code, created } = upsertPairingRequestSync({
     pairingFilePath: params.pairingFilePath,
     id: params.senderId,
     accountId: params.accountId,
     meta: params.meta,
   });
+  const broadcastPayload = {
+    channel: params.channel,
+    accountId: normalizedAccountId,
+    senderId: params.senderId,
+  };
   if (!created) {
-    return { created: false };
+    if (code) {
+      broadcastPairingEvent('channels.pairing.refreshed', broadcastPayload);
+    }
+    return { created: false, code: code || undefined };
   }
   if (!code) {
     return { created: false };
   }
   params.onCreated?.({ code });
-  broadcastPairingEvent('channels.pairing.requested', {
-    channel: params.channel,
-    accountId: params.accountId.trim().toLowerCase() || 'default',
-    senderId: params.senderId,
-  });
+  broadcastPairingEvent('channels.pairing.requested', broadcastPayload);
   const replyText =
     params.buildReplyText?.({ code, senderIdLine: params.senderIdLine }) ??
     buildPairingInstructionText({

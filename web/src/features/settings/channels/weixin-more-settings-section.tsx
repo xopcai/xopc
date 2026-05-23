@@ -75,7 +75,7 @@ export function WeixinMoreSettingsSection({
         <ChannelPairingSection
           channel="weixin"
           accountIds={resolvedWxAccounts}
-          dmPolicy={wx.dmPolicy}
+          channelConfig={wx}
           active={dialogOpen}
           ch={ch}
           language={language}
