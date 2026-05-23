@@ -48,3 +48,24 @@ export function appendAllowFromIdSync(filePath: string, userId: string): { chang
   }
   return { changed: true };
 }
+
+export function removeAllowFromIdSync(filePath: string, userId: string): { changed: boolean } {
+  const trimmed = userId.trim();
+  if (!trimmed) return { changed: false };
+
+  const content = readAllowFromFile(filePath);
+  const next = content.allowFrom.filter((id) => id !== trimmed);
+  if (next.length === content.allowFrom.length) {
+    return { changed: false };
+  }
+
+  const dir = path.dirname(filePath);
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(filePath, JSON.stringify({ version: 1, allowFrom: next }, null, 2), 'utf-8');
+  try {
+    fs.chmodSync(filePath, 0o600);
+  } catch {
+    /* ignore */
+  }
+  return { changed: true };
+}

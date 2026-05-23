@@ -3,6 +3,15 @@ import { readFileSync } from 'node:fs';
 import type { Hono } from 'hono';
 
 import { mergeDistinctSenderIds } from '../../../channels/pairing/index.js';
+import type { PairingCliChannel } from '../../../channels/pairing/pairing-channel.js';
+import {
+  approveChannelPairing,
+  approveChannelPairingBySender,
+  listChannelPairingState,
+  listChannelPairingSummary,
+  revokeChannelPairingPaired,
+} from '../../../channels/pairing/pairing-service.js';
+import type { Config } from '../../../config/index.js';
 import { writeTextAtomic } from '../../../infra/write-file-atomic.js';
 import type { GatewayService } from '../../service.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
@@ -95,6 +104,13 @@ async function startFeishuSetupPolling(sessionKey: string, service: GatewayServi
   }
 
   setTimeout(() => feishuSetupSessions.delete(sessionKey), 30_000);
+}
+
+const PAIRING_CHANNELS = new Set<PairingCliChannel>(['telegram', 'feishu', 'weixin']);
+
+function parsePairingChannel(raw: string | undefined): PairingCliChannel | null {
+  const ch = (raw ?? '').trim().toLowerCase() as PairingCliChannel;
+  return PAIRING_CHANNELS.has(ch) ? ch : null;
 }
 
 export function registerChannelRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
@@ -244,5 +260,130 @@ export function registerChannelRoutes(authenticated: Hono, deps: AuthenticatedRo
         status: { phase: 'polling' as const },
       },
     });
+  });
+
+  authenticated.get('/api/channels/pairing', (c) => {
+    const channel = parsePairingChannel(c.req.query('channel'));
+    if (!channel) {
+      return c.json(
+        { ok: false, error: { code: 'BAD_REQUEST', message: 'Query param channel is required (telegram|feishu|weixin).' } },
+        400,
+      );
+    }
+    const accountRaw = c.req.query('account')?.trim();
+    const accountId = accountRaw || 'default';
+    const config = service.currentConfig as Config | undefined;
+    const state = listChannelPairingState({ channel, accountId, config });
+    return c.json({ ok: true, payload: state });
+  });
+
+  authenticated.post('/api/channels/pairing/approve', strictRateLimitMiddleware, async (c) => {
+    const body = await c.req.json().catch(() => ({}));
+    const channel =
+      body && typeof body === 'object' && typeof (body as { channel?: unknown }).channel === 'string'
+        ? parsePairingChannel((body as { channel: string }).channel)
+        : null;
+    if (!channel) {
+      return c.json(
+        { ok: false, error: { code: 'BAD_REQUEST', message: 'Body field channel is required (telegram|feishu|weixin).' } },
+        400,
+      );
+    }
+    const accountRaw =
+      body && typeof body === 'object' && typeof (body as { accountId?: unknown }).accountId === 'string'
+        ? (body as { accountId: string }).accountId.trim()
+        : 'default';
+    const code =
+      body && typeof body === 'object' && typeof (body as { code?: unknown }).code === 'string'
+        ? (body as { code: string }).code.trim()
+        : '';
+    const result = approveChannelPairing({ channel, accountId: accountRaw || 'default', code });
+    if (result.ok === false) {
+      return c.json(
+        { ok: false, error: { code: 'PAIRING_INVALID', message: result.error } },
+        400,
+      );
+    }
+    return c.json({
+      ok: true,
+      payload: { senderId: result.senderId, alreadyPaired: result.alreadyPaired },
+    });
+  });
+
+  authenticated.get('/api/channels/pairing/summary', (c) => {
+    const config = service.currentConfig as Config | undefined;
+    const summary = listChannelPairingSummary(config);
+    return c.json({ ok: true, payload: { summary } });
+  });
+
+  authenticated.post('/api/channels/pairing/approve-sender', strictRateLimitMiddleware, async (c) => {
+    const body = await c.req.json().catch(() => ({}));
+    const channel =
+      body && typeof body === 'object' && typeof (body as { channel?: unknown }).channel === 'string'
+        ? parsePairingChannel((body as { channel: string }).channel)
+        : null;
+    if (!channel) {
+      return c.json(
+        { ok: false, error: { code: 'BAD_REQUEST', message: 'Body field channel is required (telegram|feishu|weixin).' } },
+        400,
+      );
+    }
+    const accountRaw =
+      body && typeof body === 'object' && typeof (body as { accountId?: unknown }).accountId === 'string'
+        ? (body as { accountId: string }).accountId.trim()
+        : 'default';
+    const senderId =
+      body && typeof body === 'object' && typeof (body as { senderId?: unknown }).senderId === 'string'
+        ? (body as { senderId: string }).senderId.trim()
+        : '';
+    const result = approveChannelPairingBySender({
+      channel,
+      accountId: accountRaw || 'default',
+      senderId,
+    });
+    if (result.ok === false) {
+      return c.json(
+        { ok: false, error: { code: 'PAIRING_INVALID', message: result.error } },
+        400,
+      );
+    }
+    return c.json({
+      ok: true,
+      payload: { senderId: result.senderId, alreadyPaired: result.alreadyPaired },
+    });
+  });
+
+  authenticated.delete('/api/channels/pairing/paired', strictRateLimitMiddleware, async (c) => {
+    const body = await c.req.json().catch(() => ({}));
+    const channel =
+      body && typeof body === 'object' && typeof (body as { channel?: unknown }).channel === 'string'
+        ? parsePairingChannel((body as { channel: string }).channel)
+        : null;
+    if (!channel) {
+      return c.json(
+        { ok: false, error: { code: 'BAD_REQUEST', message: 'Body field channel is required (telegram|feishu|weixin).' } },
+        400,
+      );
+    }
+    const accountRaw =
+      body && typeof body === 'object' && typeof (body as { accountId?: unknown }).accountId === 'string'
+        ? (body as { accountId: string }).accountId.trim()
+        : 'default';
+    const senderId =
+      body && typeof body === 'object' && typeof (body as { senderId?: unknown }).senderId === 'string'
+        ? (body as { senderId: string }).senderId.trim()
+        : '';
+    const result = revokeChannelPairingPaired({
+      channel,
+      accountId: accountRaw || 'default',
+      senderId,
+    });
+    if (result.ok === false) {
+      return c.json(
+        { ok: false, error: { code: 'BAD_REQUEST', message: result.error } },
+        400,
+      );
+    }
+    return c.json({ ok: true, payload: { changed: result.changed } });
   });
 }

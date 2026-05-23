@@ -13,6 +13,7 @@ export type ChannelImHubCardProps = {
   subtitle: string;
   configured: boolean;
   enabled: boolean;
+  pendingPairingCount?: number;
   onToggle: (next: boolean) => void | Promise<void>;
   toggleDisabled: boolean;
   onConfigure: () => void;
@@ -27,6 +28,7 @@ export function ChannelImHubCard({
   subtitle,
   configured,
   enabled,
+  pendingPairingCount = 0,
   onToggle,
   toggleDisabled,
   onConfigure,
@@ -46,6 +48,11 @@ export function ChannelImHubCard({
             {configured ? (
               <span className="inline-flex items-center rounded-full bg-success-soft px-2 py-0.5 text-xs font-medium text-success">
                 {ch.hubConnectedBadge}
+              </span>
+            ) : null}
+            {pendingPairingCount > 0 ? (
+              <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900 dark:bg-amber-950/60 dark:text-amber-200">
+                {ch.hubPairingPendingBadge.replace('{{count}}', String(pendingPairingCount))}
               </span>
             ) : null}
           </div>

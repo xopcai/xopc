@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { Check, ChevronDown, Copy, Eye, EyeOff, X } from 'lucide-react';
 
@@ -17,7 +18,9 @@ import { cn } from '@/lib/cn';
 import { SETTINGS_SHELL_CONTENT_Z, SETTINGS_SHELL_OVERLAY_Z } from '@/lib/settings-shell-dialog-layer';
 
 import { ChannelAgentRoutingBlock } from './channel-agent-routing-block';
-import { FieldHint, FieldLabel } from './field-primitives';
+import { ChannelPairingSection } from './channel-pairing-section';
+import { ChannelPairingSetupSteps } from './channel-pairing-setup-steps';
+import { FieldHint, FieldLabel, SelectField } from './field-primitives';
 import { TelegramAdvanced } from './telegram-advanced';
 import { channelsInputClassName, joinAllowFrom, parseIdList, telegramDefaultBotToken } from './utils';
 
@@ -48,6 +51,7 @@ export function TelegramChannelSettingsDialog({
   dirty,
   save,
   discard,
+  language,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -75,6 +79,7 @@ export function TelegramChannelSettingsDialog({
   dirty: boolean;
   save: () => Promise<boolean>;
   discard: () => void;
+  language: string;
 }) {
   const inputClassName = channelsInputClassName;
   const tg = form.telegram;
@@ -82,6 +87,9 @@ export function TelegramChannelSettingsDialog({
   const tgToken = telegramDefaultBotToken(tg);
   const telegramTokenDisplayLocked =
     !showToken && Boolean(String(tgBaselineToken).trim()) && tgToken === tgBaselineToken;
+  const [pairedCredentialCount, setPairedCredentialCount] = useState(0);
+  const tokenReady = Boolean(tgToken.trim()) && tg.enabled;
+  const tgAccountIds = telegramRoutingAccountIds(tg);
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -174,6 +182,30 @@ export function TelegramChannelSettingsDialog({
               <FieldHint>{ch.telegramTokenDesc}</FieldHint>
             </div>
 
+            <ChannelPairingSetupSteps
+              ch={ch}
+              dmPolicy={tg.dmPolicy}
+              tokenReady={tokenReady}
+              pairingComplete={pairedCredentialCount > 0}
+            />
+
+            <SelectField
+              label={ch.dmPolicy}
+              value={tg.dmPolicy}
+              onChange={(v) => updateTelegram({ dmPolicy: v })}
+              options={dmOpts}
+            />
+
+            <ChannelPairingSection
+              channel="telegram"
+              accountIds={tgAccountIds}
+              dmPolicy={tg.dmPolicy}
+              active={open}
+              ch={ch}
+              language={language}
+              onPairedChange={setPairedCredentialCount}
+            />
+
             <div className="flex flex-col gap-1.5">
               <FieldLabel>{ch.allowFromDm}</FieldLabel>
               <textarea
@@ -211,7 +243,6 @@ export function TelegramChannelSettingsDialog({
                 tg={tg}
                 updateTelegram={updateTelegram}
                 ch={ch}
-                dmOpts={dmOpts}
                 groupOpts={groupOpts}
                 replyOpts={replyOpts}
                 streamOpts={streamOpts}

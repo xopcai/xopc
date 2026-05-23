@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { AgentService } from '../agent/service.js';
 import { ChannelManager } from '../channels/manager.js';
 import { CHAT_CHANNEL_ORDER } from '../channels/registry.js';
+import { setPairingBroadcastSink } from '../channels/pairing/pairing-events.js';
 import { MessageBus, MessageBusShutdownError } from '../infra/bus/index.js';
 import type { Config as SurfaceConfig } from '../config/config-surface.js';
 import { loadConfig, saveConfig as writeConfigToDisk } from '../config/index.js';
@@ -347,6 +348,10 @@ export class GatewayService {
   async start(): Promise<void> {
     if (this.running) return;
 
+    setPairingBroadcastSink((type, payload) => {
+      this.emit(type, payload);
+    });
+
     log.debug('Starting gateway service...');
     this.startTime = Date.now();
     this.running = true;
@@ -547,6 +552,8 @@ export class GatewayService {
 
   async stop(): Promise<void> {
     if (!this.running) return;
+
+    setPairingBroadcastSink(null);
 
     log.debug('Stopping gateway service...');
 
