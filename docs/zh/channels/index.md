@@ -43,6 +43,29 @@ xopc channels pairing approve --channel <telegram|feishu|weixin> [--account <id>
 
 命令说明见 **[CLI — channels](../cli.md#channels)**。请在 **存有凭证文件的主机**（一般为网关所在机）上执行 `approve`。
 
+### 网关控制台（Web UI）
+
+无需 CLI，可在网关控制台审批、撤销并查看待配对请求：
+
+1. 打开 **设置 → IM 频道**（hash 路由 `#/settings/channels`）。
+2. 完成频道配置（Telegram Token、微信扫码登录或飞书应用凭证），并将 **`dmPolicy`** 设为 **`pairing`**。
+3. 用户向 bot 发私聊后，待审批项会出现在 Telegram 设置对话框，或微信 / 飞书的 **Advanced** 区域。
+4. 输入 **8 位配对码** 批准，或在确认 user id 对应真实发消息用户后使用 **快速批准**。
+5. Hub 卡片显示待审批角标；新配对或重复 DM 会通过 SSE 自动刷新列表。
+
+REST 接口（需 gateway bearer token）：
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| `GET` | `/api/channels/pairing?channel=&account=` | 待审批列表 + 已配对 allowFrom（配置 + 凭证） |
+| `GET` | `/api/channels/pairing/summary` | 各频道 pending / stale / 达上限统计 |
+| `POST` | `/api/channels/pairing/approve` | 按配对码批准 |
+| `POST` | `/api/channels/pairing/approve-sender` | 按 sender id 快速批准 |
+| `DELETE` | `/api/channels/pairing/paired` | 撤销凭证 allowFrom 条目 |
+| `DELETE` | `/api/channels/pairing/pending` | 忽略待审批请求（不批准） |
+
+Summary 与 `xopc doctor` 配对检查仅统计 **已启用** 且 effective **`dmPolicy` 为 `pairing`** 的频道（含账号级覆盖）。
+
 **凭证文件目录**：未设置 **`XOPC_CREDENTIALS_DIR`** 时，Telegram / 飞书 使用 **`~/.xopc/credentials/`**（若设置了该环境变量则为其值）。
 
 | 通道 | 允许名单文件 | 待审批配对 |

@@ -1,19 +1,18 @@
-import type { DmPolicy } from '@/features/settings/channels-settings.types';
 import type { ChannelsSettingsMessages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 
 export function ChannelPairingSetupSteps({
   ch,
-  dmPolicy,
+  usesPairing,
   tokenReady,
   pairingComplete,
 }: {
   ch: ChannelsSettingsMessages;
-  dmPolicy: DmPolicy;
+  usesPairing: boolean;
   tokenReady: boolean;
   pairingComplete: boolean;
 }) {
-  if (dmPolicy !== 'pairing') return null;
+  if (!usesPairing) return null;
 
   const step1Done = tokenReady;
   const step2Done = pairingComplete;

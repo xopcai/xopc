@@ -9,6 +9,7 @@ import { PAIRING_PENDING_MAX, PAIRING_STALE_PENDING_MS } from './pairing-constan
 import {
   approvePairingBySenderIdSync,
   approvePairingCodeSync,
+  dismissPairingBySenderIdSync,
   listPendingPairingRequestsSync,
   PAIRING_PENDING_TTL_MS,
   type PairingRequest,
@@ -138,6 +139,31 @@ function resolveChannelAllowFromConfig(
   return [...new Set(top)];
 }
 
+function resolveChannelEnabled(config: Config | undefined, channel: PairingCliChannel): boolean {
+  const ch = config?.channels?.[channel as keyof NonNullable<Config['channels']>];
+  if (!ch || typeof ch !== 'object' || Array.isArray(ch)) return false;
+  return (ch as { enabled?: boolean }).enabled === true;
+}
+
+function resolveAccountEnabled(
+  config: Config | undefined,
+  channel: PairingCliChannel,
+  accountId: string,
+): boolean {
+  if (!resolveChannelEnabled(config, channel)) return false;
+  const ch = config?.channels?.[channel as keyof NonNullable<Config['channels']>];
+  if (!ch || typeof ch !== 'object' || Array.isArray(ch)) return true;
+  const block = ch as Record<string, unknown>;
+  const accounts = block.accounts;
+  if (accounts && typeof accounts === 'object' && !Array.isArray(accounts)) {
+    const acc = (accounts as Record<string, unknown>)[accountId];
+    if (acc && typeof acc === 'object' && !Array.isArray(acc)) {
+      return (acc as { enabled?: boolean }).enabled !== false;
+    }
+  }
+  return true;
+}
+
 function resolveChannelDmPolicy(
   config: Config | undefined,
   channel: PairingCliChannel,
@@ -204,8 +230,10 @@ export function listChannelPairingSummary(config?: Config): ChannelPairingSummar
     weixin: { pending: 0, stale: 0, atCapacity: false },
   };
   for (const channel of channels) {
+    if (!resolveChannelEnabled(config, channel)) continue;
     const accountIds = resolvePairingAccountIds(config, channel);
     for (const accountId of accountIds) {
+      if (!resolveAccountEnabled(config, channel, accountId)) continue;
       if (resolveChannelDmPolicy(config, channel, accountId) !== 'pairing') continue;
       const { pairingPath } = resolvePairingPaths(channel, accountId);
       const pendingRaw = listPendingPairingRequestsSync(pairingPath).filter(
@@ -223,8 +251,10 @@ export function listChannelPairingSummary(config?: Config): ChannelPairingSummar
 export function collectPairingPendingIssues(config?: Config): PairingPendingIssue[] {
   const issues: PairingPendingIssue[] = [];
   for (const channel of ['telegram', 'feishu', 'weixin'] as const) {
+    if (!resolveChannelEnabled(config, channel)) continue;
     const accountIds = resolvePairingAccountIds(config, channel);
     for (const accountId of accountIds) {
+      if (!resolveAccountEnabled(config, channel, accountId)) continue;
       if (resolveChannelDmPolicy(config, channel, accountId) !== 'pairing') continue;
       const { pairingPath } = resolvePairingPaths(channel, accountId);
       const pendingRaw = listPendingPairingRequestsSync(pairingPath).filter(
@@ -346,4 +376,30 @@ export function revokeChannelPairingPaired(params: {
     });
   }
   return { ok: true, changed };
+}
+
+export function dismissChannelPairingPending(params: {
+  channel: PairingCliChannel;
+  accountId?: string;
+  senderId: string;
+}): { ok: true; senderId: string } | { ok: false; error: string } {
+  const accountId = normalizeAccountId(params.accountId);
+  const senderId = params.senderId.trim();
+  if (!senderId) return { ok: false, error: 'Missing sender id.' };
+
+  const { pairingPath } = resolvePairingPaths(params.channel, accountId);
+  const result = dismissPairingBySenderIdSync({
+    pairingFilePath: pairingPath,
+    senderId,
+    accountId,
+  });
+  if (!result) {
+    return { ok: false, error: 'No pending pairing request for this sender (or wrong account).' };
+  }
+  broadcastPairingEvent('channels.pairing.dismissed', {
+    channel: params.channel,
+    accountId,
+    senderId: result.senderId,
+  });
+  return { ok: true, senderId: result.senderId };
 }

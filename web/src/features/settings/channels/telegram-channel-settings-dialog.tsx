@@ -20,6 +20,7 @@ import { SETTINGS_SHELL_CONTENT_Z, SETTINGS_SHELL_OVERLAY_Z } from '@/lib/settin
 import { ChannelAgentRoutingBlock } from './channel-agent-routing-block';
 import { ChannelPairingSection } from './channel-pairing-section';
 import { ChannelPairingSetupSteps } from './channel-pairing-setup-steps';
+import { channelUsesPairingPolicy } from './pairing-policy';
 import { FieldHint, FieldLabel, SelectField } from './field-primitives';
 import { TelegramAdvanced } from './telegram-advanced';
 import { channelsInputClassName, joinAllowFrom, parseIdList, telegramDefaultBotToken } from './utils';
@@ -184,7 +185,7 @@ export function TelegramChannelSettingsDialog({
 
             <ChannelPairingSetupSteps
               ch={ch}
-              dmPolicy={tg.dmPolicy}
+              usesPairing={channelUsesPairingPolicy('telegram', tg)}
               tokenReady={tokenReady}
               pairingComplete={pairedCredentialCount > 0}
             />
@@ -199,7 +200,7 @@ export function TelegramChannelSettingsDialog({
             <ChannelPairingSection
               channel="telegram"
               accountIds={tgAccountIds}
-              dmPolicy={tg.dmPolicy}
+              channelConfig={tg}
               active={open}
               ch={ch}
               language={language}

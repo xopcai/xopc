@@ -11,6 +11,7 @@ export {
   upsertPairingRequestSync,
   approvePairingCodeSync,
   approvePairingBySenderIdSync,
+  dismissPairingBySenderIdSync,
   listPendingPairingRequestsSync,
   PAIRING_PENDING_TTL_MS,
 } from './pairing-store.js';
@@ -28,6 +29,7 @@ export {
   listChannelPairingSummary,
   collectPairingPendingIssues,
   revokeChannelPairingPaired,
+  dismissChannelPairingPending,
 } from './pairing-service.js';
 export type {
   ChannelPairingState,

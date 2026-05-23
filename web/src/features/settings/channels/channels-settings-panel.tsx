@@ -7,6 +7,7 @@ import { ChannelImHubCard } from './channel-im-hub-card';
 import { ChannelsRemoveChannelDialog } from './channels-remove-channel-dialog';
 import { FeishuMoreSettingsSection } from './feishu-more-settings-section';
 import { FeishuQrSetupDialog } from './feishu-qr-setup-dialog';
+import { channelUsesPairingPolicy, hubPairingPendingCount } from './pairing-policy';
 import { TelegramChannelSettingsDialog } from './telegram-channel-settings-dialog';
 import { useChannelPairingSummary } from './use-channel-pairing-summary';
 import { useChannelsSettingsPanel } from './use-channels-settings-panel';
@@ -231,7 +232,12 @@ export function ChannelsSettingsPanel() {
           onConfigure={() => setWeixinModalOpen(true)}
           onEdit={() => setWeixinModalOpen(true)}
           onRemove={() => setRemoveTarget('weixin')}
-          pendingPairingCount={weixinConfigured && wx.dmPolicy === 'pairing' ? pairingSummary.weixin.pending : 0}
+          pendingPairingCount={hubPairingPendingCount({
+            configured: weixinConfigured,
+            channelEnabled: wx.enabled,
+            usesPairing: channelUsesPairingPolicy('weixin', wx),
+            summaryPending: pairingSummary.weixin.pending,
+          })}
           ch={ch}
         />
         <ChannelImHubCard
@@ -245,7 +251,12 @@ export function ChannelsSettingsPanel() {
           onConfigure={() => setTelegramModalOpen(true)}
           onEdit={() => setTelegramModalOpen(true)}
           onRemove={() => setRemoveTarget('telegram')}
-          pendingPairingCount={telegramConfigured && tg.dmPolicy === 'pairing' ? pairingSummary.telegram.pending : 0}
+          pendingPairingCount={hubPairingPendingCount({
+            configured: telegramConfigured,
+            channelEnabled: tg.enabled,
+            usesPairing: channelUsesPairingPolicy('telegram', tg),
+            summaryPending: pairingSummary.telegram.pending,
+          })}
           ch={ch}
         />
         <ChannelImHubCard
@@ -259,7 +270,12 @@ export function ChannelsSettingsPanel() {
           onConfigure={() => setFeishuModalOpen(true)}
           onEdit={() => setFeishuModalOpen(true)}
           onRemove={() => setRemoveTarget('feishu')}
-          pendingPairingCount={feishuConfigured && fs.dmPolicy === 'pairing' ? pairingSummary.feishu.pending : 0}
+          pendingPairingCount={hubPairingPendingCount({
+            configured: feishuConfigured,
+            channelEnabled: fs.enabled,
+            usesPairing: channelUsesPairingPolicy('feishu', fs),
+            summaryPending: pairingSummary.feishu.pending,
+          })}
           ch={ch}
         />
       </div>
