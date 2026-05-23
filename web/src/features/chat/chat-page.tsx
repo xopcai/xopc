@@ -4,7 +4,6 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { fetchCommandsCached } from '@/features/chat/command-palette-api';
 import { ChatComposer } from '@/features/chat/chat-composer';
 import { ChatGoalBanner } from '@/features/chat/chat-goal-banner';
-import { ChatFollowUpChips } from '@/features/chat/chat-follow-up-chips';
 import { ChatPageHeaderRegistration } from '@/features/chat/chat-page-header-registration';
 import { ChatSseStatus } from '@/features/chat/chat-sse-status';
 import { MessageList } from '@/features/chat/message-list';
@@ -268,17 +267,6 @@ export function ChatPage() {
                 onSubmit={clarify.submitClarifyAnswer}
                 onCancel={clarify.cancelClarifyAnswer}
               />
-              <div className="mx-auto w-full max-w-[var(--max-width-chat)] px-3 sm:px-5 xl:px-6">
-                <ChatFollowUpChips
-                  suggestions={followUp.followUpSuggestions}
-                  disabled={
-                    session.showSessionLoading ||
-                    session.sessionRoutePending ||
-                    Boolean(clarify.clarifyPrompt)
-                  }
-                  onPick={followUp.pickFollowUpSuggestion}
-                />
-              </div>
               <ChatComposer
                 disabled={
                   session.showSessionLoading ||

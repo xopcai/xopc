@@ -533,8 +533,6 @@ export function useChatSession() {
       reorderPendingFollowUp: fq.reorderPendingFollowUp,
       steerPendingFollowUp: fq.steerPendingFollowUp,
       steeringFollowUpId: fq.steeringFollowUpId,
-      followUpSuggestions: fq.followUpSuggestions,
-      pickFollowUpSuggestion: fq.pickFollowUpSuggestion,
     },
     clarify: {
       clarifyPrompt: fq.clarifyPrompt,

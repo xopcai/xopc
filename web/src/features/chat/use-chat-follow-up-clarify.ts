@@ -14,14 +14,7 @@ import {
   readFollowUpQueueSnapshot,
   writeFollowUpQueueSnapshot,
 } from '@/features/chat/follow-up-queue-storage';
-import {
-  buildFollowUpContextPack,
-  followUpPromptForSuggestionId,
-  suggestFollowUps,
-  type FollowUpSuggestionId,
-} from '@/features/chat/follow-up-suggestions';
-import { useLocaleStore } from '@/stores/locale-store';
-import type { Message, ProgressState } from '@/features/chat/messages.types';
+import type { ProgressState } from '@/features/chat/messages.types';
 import {
   FOLLOW_UP_AUTO_SEND_IDLE_MS,
   MAX_PENDING_FOLLOW_UPS,
@@ -37,7 +30,6 @@ export type ChatFollowUpClarifyApi = {
   clarifyPromptRef: MutableRefObject<ClarifyPromptState | null>;
   pendingFollowUps: PendingFollowUp[];
   pendingFollowUpsRef: MutableRefObject<PendingFollowUp[]>;
-  followUpSuggestions: FollowUpSuggestionId[];
   steeringFollowUpId: string | null;
   /** Row open in the composer for in-place edit (line stays in queue until commit). */
   editingFollowUpId: string | null;
@@ -57,18 +49,11 @@ export type ChatFollowUpClarifyApi = {
   movePendingFollowUp: (id: string, dir: 'up' | 'down') => void;
   reorderPendingFollowUp: (fromIndex: number, toIndex: number) => void;
   steerPendingFollowUp: (id: string) => Promise<void>;
-  pickFollowUpSuggestion: (id: FollowUpSuggestionId) => void;
   submitClarifyAnswer: (answer: string) => Promise<void>;
   cancelClarifyAnswer: () => Promise<void>;
   dismissClarify: () => void;
   clearPendingFollowUps: () => void;
   dismissClarifyAndClearPending: () => void;
-  refreshFollowUpSuggestions: (input: {
-    appended: Message;
-    messages: Message[];
-    clarifyActive?: boolean;
-  }) => void;
-  clearFollowUpSuggestions: () => void;
   onClarifyToolEnd: () => void;
   makeOnClarifyRequest: (chatId: string) => (payload: ClarifyPromptState) => void;
   /**
@@ -122,8 +107,6 @@ export function useChatFollowUpClarify(options: {
   const [steeringFollowUpId, setSteeringFollowUpId] = useState<string | null>(null);
   const [editingFollowUpId, setEditingFollowUpId] = useState<string | null>(null);
   const editingFollowUpIdRef = useRef<string | null>(null);
-  const [followUpSuggestions, setFollowUpSuggestions] = useState<FollowUpSuggestionId[]>([]);
-  const followUpSuggestionsRef = useRef<FollowUpSuggestionId[]>([]);
   /** Last `#/chat/:id` segment (decoded); drives flush-save on sidebar navigation before `sessionKey` catches up. */
   const followUpPrevDecodedKeyRef = useRef<string | undefined>(undefined);
   /** Last `sessionKey` from loaded session; flush-save when it changes so debounce cancellation cannot drop data. */
@@ -139,7 +122,6 @@ export function useChatFollowUpClarify(options: {
     if (prevRoute != null && prevRoute !== decodedKey) {
       writeFollowUpQueueSnapshot(prevRoute, {
         pending: structuredClone(pendingFollowUpsRef.current),
-        suggestions: [...followUpSuggestionsRef.current],
         editingId: editingFollowUpIdRef.current,
       });
     }
@@ -157,7 +139,6 @@ export function useChatFollowUpClarify(options: {
     if (prevLoaded != null && prevLoaded !== sessionKey) {
       writeFollowUpQueueSnapshot(prevLoaded, {
         pending: structuredClone(pendingFollowUpsRef.current),
-        suggestions: [...followUpSuggestionsRef.current],
         editingId: editingFollowUpIdRef.current,
       });
     }
@@ -166,8 +147,6 @@ export function useChatFollowUpClarify(options: {
     if (!sessionKey && !decodedKey) {
       pendingFollowUpsRef.current = [];
       setPendingFollowUps([]);
-      followUpSuggestionsRef.current = [];
-      setFollowUpSuggestions([]);
       setEditingFollowUpId(null);
       return;
     }
@@ -178,17 +157,12 @@ export function useChatFollowUpClarify(options: {
     const snap = readFollowUpQueueSnapshot(sessionKey);
     if (snap) {
       const pending = structuredClone(snap.pending);
-      const suggestions = [...snap.suggestions];
       pendingFollowUpsRef.current = pending;
       setPendingFollowUps(pending);
-      followUpSuggestionsRef.current = suggestions;
-      setFollowUpSuggestions(suggestions);
       setEditingFollowUpId(snap.editingId);
     } else {
       pendingFollowUpsRef.current = [];
       setPendingFollowUps([]);
-      followUpSuggestionsRef.current = [];
-      setFollowUpSuggestions([]);
       setEditingFollowUpId(null);
     }
   }, [sessionKey, decodedKey]);
@@ -207,12 +181,11 @@ export function useChatFollowUpClarify(options: {
       if (sessionKeyRef.current !== diskKey) return;
       writeFollowUpQueueSnapshot(diskKey, {
         pending: structuredClone(pendingFollowUpsRef.current),
-        suggestions: [...followUpSuggestionsRef.current],
         editingId: editingFollowUpIdRef.current,
       });
     }, 280);
     return () => window.clearTimeout(t);
-  }, [sessionKey, decodedKey, pendingFollowUps, followUpSuggestions, editingFollowUpId, sessionKeyRef]);
+  }, [sessionKey, decodedKey, pendingFollowUps, editingFollowUpId, sessionKeyRef]);
 
   useEffect(() => {
     if (!decodedKey) return;
@@ -245,27 +218,6 @@ export function useChatFollowUpClarify(options: {
     setClarifyPrompt(null);
     setEditingFollowUpId(null);
   }, [sessionKeyRef]);
-
-  const clearFollowUpSuggestions = useCallback(() => {
-    followUpSuggestionsRef.current = [];
-    setFollowUpSuggestions([]);
-  }, []);
-
-  const refreshFollowUpSuggestions = useCallback(
-    (input: { appended: Message; messages: Message[]; clarifyActive?: boolean }) => {
-      const locale = useLocaleStore.getState().language;
-      const ctx = buildFollowUpContextPack({
-        messages: input.messages,
-        appendedAssistant: input.appended,
-        locale,
-        clarifyActive: input.clarifyActive ?? Boolean(clarifyPromptRef.current),
-      });
-      const next = ctx ? suggestFollowUps(ctx) : [];
-      followUpSuggestionsRef.current = next;
-      setFollowUpSuggestions(next);
-    },
-    [],
-  );
 
   const onClarifyToolEnd = useCallback(() => {
     setClarifySubmitError(null);
@@ -495,28 +447,6 @@ export function useChatFollowUpClarify(options: {
     }
   }, [sessionKeyRef]);
 
-  const pickFollowUpSuggestion = useCallback(
-    (id: FollowUpSuggestionId) => {
-      const locale = useLocaleStore.getState().language;
-      const t = followUpPromptForSuggestionId(id, locale).trim();
-      if (!t) return;
-      followUpSuggestionsRef.current = [];
-      setFollowUpSuggestions([]);
-      if (sendingRef.current || streamingRef.current) {
-        if (pendingFollowUpsRef.current.length >= MAX_PENDING_FOLLOW_UPS) {
-          console.warn(
-            `Follow-up queue is full (max ${MAX_PENDING_FOLLOW_UPS}). Remove one or wait for the run to finish.`,
-          );
-          return;
-        }
-        addPendingFollowUp(t, undefined);
-        return;
-      }
-      void sendMessageRef.current(t, undefined, undefined);
-    },
-    [addPendingFollowUp, sendMessageRef, sendingRef, streamingRef],
-  );
-
   const submitClarifyAnswer = useCallback(async (answer: string) => {
     const p = clarifyPromptRef.current;
     if (!p) return;
@@ -564,7 +494,6 @@ export function useChatFollowUpClarify(options: {
   }, []);
 
   pendingFollowUpsRef.current = pendingFollowUps;
-  followUpSuggestionsRef.current = followUpSuggestions;
   editingFollowUpIdRef.current = editingFollowUpId;
 
   return {
@@ -574,7 +503,6 @@ export function useChatFollowUpClarify(options: {
     clarifyPromptRef,
     pendingFollowUps,
     pendingFollowUpsRef,
-    followUpSuggestions,
     steeringFollowUpId,
     editingFollowUpId,
     addPendingFollowUp,
@@ -585,14 +513,11 @@ export function useChatFollowUpClarify(options: {
     movePendingFollowUp,
     reorderPendingFollowUp,
     steerPendingFollowUp,
-    pickFollowUpSuggestion,
     submitClarifyAnswer,
     cancelClarifyAnswer,
     dismissClarify,
     clearPendingFollowUps,
     dismissClarifyAndClearPending,
-    refreshFollowUpSuggestions,
-    clearFollowUpSuggestions,
     onClarifyToolEnd,
     makeOnClarifyRequest,
     flushSteeringQueue,
