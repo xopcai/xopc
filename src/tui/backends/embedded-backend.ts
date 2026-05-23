@@ -72,6 +72,8 @@ export class EmbeddedBackend implements TuiBackend {
 
   stop(): void {
     this.running = false;
+    this.chatAbort?.abort();
+    this.chatAbort = null;
     this.bus.shutdown();
     void this.agent?.stop();
     this.agent = null;
