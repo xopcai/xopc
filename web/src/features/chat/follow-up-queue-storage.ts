@@ -1,24 +1,9 @@
-import { FOLLOW_UP_SUGGESTION_IDS, type FollowUpSuggestionId } from '@/features/chat/follow-up-suggestions';
 import type { PendingFollowUp, PendingFollowUpAttachment } from '@/features/chat/pending-follow-up.types';
 
-const STORAGE_PREFIX = 'xopc.chat.followUpQueue:v1:';
-
-const KNOWN_SUGGESTION_IDS = new Set<string>(FOLLOW_UP_SUGGESTION_IDS);
-
-function coerceStoredSuggestionIds(raw: unknown): FollowUpSuggestionId[] {
-  if (!Array.isArray(raw)) return [];
-  const out: FollowUpSuggestionId[] = [];
-  for (const x of raw) {
-    if (typeof x === 'string' && KNOWN_SUGGESTION_IDS.has(x)) {
-      out.push(x as FollowUpSuggestionId);
-    }
-  }
-  return out;
-}
+const STORAGE_PREFIX = 'xopc.chat.followUpQueue:v2:';
 
 export type FollowUpQueueSnapshot = {
   pending: PendingFollowUp[];
-  suggestions: FollowUpSuggestionId[];
   editingId: string | null;
 };
 
@@ -75,7 +60,6 @@ function parsePendingFollowUps(raw: unknown): PendingFollowUp[] {
 export function sanitizeFollowUpQueueSnapshot(snap: FollowUpQueueSnapshot): FollowUpQueueSnapshot {
   return {
     editingId: snap.editingId,
-    suggestions: [...snap.suggestions],
     pending: snap.pending.map((row) => ({
       ...row,
       attachments: row.attachments?.map((a) => {
@@ -95,15 +79,14 @@ export function readFollowUpQueueSnapshot(sessionKey: string): FollowUpQueueSnap
     const parsed = JSON.parse(raw) as unknown;
     if (!isRecord(parsed)) return null;
     const pending = parsePendingFollowUps(parsed.pending);
-    const suggestions = coerceStoredSuggestionIds(parsed.suggestions);
     const editingId =
       parsed.editingId === null
         ? null
         : typeof parsed.editingId === 'string' && parsed.editingId.trim()
           ? parsed.editingId.trim()
           : null;
-    if (pending.length === 0 && suggestions.length === 0 && editingId == null) return null;
-    return { pending, suggestions, editingId };
+    if (pending.length === 0 && editingId == null) return null;
+    return { pending, editingId };
   } catch {
     return null;
   }
@@ -113,16 +96,12 @@ export function writeFollowUpQueueSnapshot(sessionKey: string, snap: FollowUpQue
   const sk = sessionKey?.trim();
   if (!sk || typeof localStorage === 'undefined') return;
   const sanitized = sanitizeFollowUpQueueSnapshot(snap);
-  if (
-    sanitized.pending.length === 0 &&
-    sanitized.suggestions.length === 0 &&
-    sanitized.editingId == null
-  ) {
+  if (sanitized.pending.length === 0 && sanitized.editingId == null) {
     clearFollowUpQueueSnapshot(sk);
     return;
   }
   try {
-    localStorage.setItem(storageKey(sk), JSON.stringify({ v: 1, ...sanitized }));
+    localStorage.setItem(storageKey(sk), JSON.stringify({ v: 2, ...sanitized }));
   } catch {
     /* ignore quota (e.g. very long plain-text follow-ups) */
   }
