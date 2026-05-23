@@ -23,10 +23,25 @@ describe('detectSlashRange', () => {
     expect(detectSlashRange('/', 0)).toEqual({ start: 0, end: 1, query: '' });
   });
 
-  it('detects mid-string slash for palette (commands gated separately by start === 0)', () => {
+  it('detects slash anywhere the user is typing / (mid-sentence)', () => {
     const t = 'hello /n';
-    const r = detectSlashRange(t, t.length);
-    expect(r).toEqual({ start: 6, end: t.length, query: 'n' });
+    expect(detectSlashRange(t, t.length)).toEqual({ start: 6, end: t.length, query: 'n' });
+    const zh = '你好，/';
+    expect(detectSlashRange(zh, zh.length)).toEqual({ start: 3, end: zh.length, query: '' });
+    const glued = '你好，/doc';
+    expect(detectSlashRange(glued, glued.length)).toEqual({ start: 3, end: glued.length, query: 'doc' });
+  });
+
+  it('ignores slash tokens that look like file paths', () => {
+    const path = '我想要给 xopc /Users/micjoyce/develop/github/xopc只做一个宣传片';
+    expect(detectSlashRange(path, path.length)).toBeNull();
+    expect(detectSlashRange('see /Users/micjoyce', 'see /Users/micjoyce'.length)).toBeNull();
+    expect(detectSlashRange('open /var/log/syslog', 'open /var/log/syslog'.length)).toBeNull();
+  });
+
+  it('ignores slash inside URLs', () => {
+    expect(detectSlashRange('see https://example.com/foo', 'see https://example.com/foo'.length)).toBeNull();
+    expect(detectSlashRange('file foo.com/bar', 'file foo.com/bar'.length)).toBeNull();
   });
 
   it('returns null for wire /skill:name tokens (pill), not slash palette', () => {
