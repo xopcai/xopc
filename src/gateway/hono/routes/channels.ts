@@ -7,6 +7,7 @@ import type { PairingCliChannel } from '../../../channels/pairing/pairing-channe
 import {
   approveChannelPairing,
   approveChannelPairingBySender,
+  dismissChannelPairingPending,
   listChannelPairingState,
   listChannelPairingSummary,
   revokeChannelPairingPaired,
@@ -385,5 +386,39 @@ export function registerChannelRoutes(authenticated: Hono, deps: AuthenticatedRo
       );
     }
     return c.json({ ok: true, payload: { changed: result.changed } });
+  });
+
+  authenticated.delete('/api/channels/pairing/pending', strictRateLimitMiddleware, async (c) => {
+    const body = await c.req.json().catch(() => ({}));
+    const channel =
+      body && typeof body === 'object' && typeof (body as { channel?: unknown }).channel === 'string'
+        ? parsePairingChannel((body as { channel: string }).channel)
+        : null;
+    if (!channel) {
+      return c.json(
+        { ok: false, error: { code: 'BAD_REQUEST', message: 'Body field channel is required (telegram|feishu|weixin).' } },
+        400,
+      );
+    }
+    const accountRaw =
+      body && typeof body === 'object' && typeof (body as { accountId?: unknown }).accountId === 'string'
+        ? (body as { accountId: string }).accountId.trim()
+        : 'default';
+    const senderId =
+      body && typeof body === 'object' && typeof (body as { senderId?: unknown }).senderId === 'string'
+        ? (body as { senderId: string }).senderId.trim()
+        : '';
+    const result = dismissChannelPairingPending({
+      channel,
+      accountId: accountRaw || 'default',
+      senderId,
+    });
+    if (result.ok === false) {
+      return c.json(
+        { ok: false, error: { code: 'PAIRING_INVALID', message: result.error } },
+        400,
+      );
+    }
+    return c.json({ ok: true, payload: { senderId: result.senderId } });
   });
 }

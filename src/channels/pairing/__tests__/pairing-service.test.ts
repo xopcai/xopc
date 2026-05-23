@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { ENV_VARS } from '../../../config/paths-state.js';
-import { approveChannelPairing, approveChannelPairingBySender, listChannelPairingState, listChannelPairingSummary, revokeChannelPairingPaired, collectPairingPendingIssues } from '../pairing-service.js';
+import { approveChannelPairing, approveChannelPairingBySender, dismissChannelPairingPending, listChannelPairingState, listChannelPairingSummary, revokeChannelPairingPaired, collectPairingPendingIssues } from '../pairing-service.js';
 import { upsertPairingRequestSync } from '../pairing-store.js';
 
 describe('pairing-service', () => {
@@ -165,5 +165,91 @@ describe('pairing-service', () => {
       },
     } as any);
     expect(issues.some((i) => i.channel === 'telegram' && i.pending === 1)).toBe(true);
+  });
+
+  it('ignores pending when channel is disabled', () => {
+    const pairingPath = path.join(dir, 'xopc-telegram-default-pairing.json');
+    upsertPairingRequestSync({
+      pairingFilePath: pairingPath,
+      id: '444',
+      accountId: 'default',
+    });
+
+    const summary = listChannelPairingSummary({
+      channels: {
+        telegram: { enabled: false, dmPolicy: 'pairing', accounts: { default: {} } },
+      },
+    } as any);
+    expect(summary.telegram.pending).toBe(0);
+
+    const issues = collectPairingPendingIssues({
+      channels: {
+        telegram: { enabled: false, dmPolicy: 'pairing', accounts: { default: {} } },
+      },
+    } as any);
+    expect(issues).toHaveLength(0);
+  });
+
+  it('counts pending when account-level dmPolicy is pairing', () => {
+    const pairingPath = path.join(dir, 'xopc-telegram-default-pairing.json');
+    upsertPairingRequestSync({
+      pairingFilePath: pairingPath,
+      id: '555',
+      accountId: 'default',
+    });
+
+    const summary = listChannelPairingSummary({
+      channels: {
+        telegram: {
+          enabled: true,
+          dmPolicy: 'allowlist',
+          accounts: { default: { dmPolicy: 'pairing' } },
+        },
+      },
+    } as any);
+    expect(summary.telegram.pending).toBe(1);
+  });
+
+  it('ignores pending for disabled account', () => {
+    const pairingPath = path.join(dir, 'xopc-telegram-default-pairing.json');
+    upsertPairingRequestSync({
+      pairingFilePath: pairingPath,
+      id: '666',
+      accountId: 'default',
+    });
+
+    const summary = listChannelPairingSummary({
+      channels: {
+        telegram: {
+          enabled: true,
+          dmPolicy: 'pairing',
+          accounts: { default: { enabled: false } },
+        },
+      },
+    } as any);
+    expect(summary.telegram.pending).toBe(0);
+  });
+
+  it('dismisses pending request without adding to allowFrom', () => {
+    const pairingPath = path.join(dir, 'xopc-telegram-default-pairing.json');
+    const allowPath = path.join(dir, 'xopc-telegram-default-allowFrom.json');
+    upsertPairingRequestSync({
+      pairingFilePath: pairingPath,
+      id: '777',
+      accountId: 'default',
+    });
+
+    const dismissed = dismissChannelPairingPending({
+      channel: 'telegram',
+      accountId: 'default',
+      senderId: '777',
+    });
+    expect(dismissed.ok).toBe(true);
+    if (dismissed.ok === false) return;
+    expect(dismissed.senderId).toBe('777');
+
+    const state = listChannelPairingState({ channel: 'telegram', accountId: 'default' });
+    expect(state.pending).toHaveLength(0);
+    expect(fs.existsSync(allowPath)).toBe(false);
   });
 });

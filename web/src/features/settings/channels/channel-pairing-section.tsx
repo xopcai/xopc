@@ -4,17 +4,22 @@ import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
 import {
-  approveChannelPairingBySender,
-  approveChannelPairingRequest,
+  dismissChannelPairingPending,
   fetchChannelPairingState,
   revokeChannelPairingPaired,
   type PairingChannelId,
 } from '@/features/settings/channels-config-api';
-import type { DmPolicy } from '@/features/settings/channels-settings.types';
+import type {
+  FeishuConfig,
+  TelegramConfig,
+  WeixinConfig,
+} from '@/features/settings/channels-settings.types';
 import type { ChannelsSettingsMessages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 
 import { FieldHint, FieldLabel } from './field-primitives';
+import { channelUsesPairingPolicy, resolveAccountDmPolicyForConfig } from './pairing-policy';
+import { useChannelPairingApprove } from './use-channel-pairing-approve';
 import { useChannelPairingSseRefresh } from './use-channel-pairing-sse';
 import { channelsInputClassName } from './utils';
 
@@ -39,7 +44,7 @@ function pairingSwrKey(channel: PairingChannelId, accountId: string): string {
 export function ChannelPairingSection({
   channel,
   accountIds,
-  dmPolicy,
+  channelConfig,
   active,
   ch,
   language,
@@ -47,7 +52,7 @@ export function ChannelPairingSection({
 }: {
   channel: PairingChannelId;
   accountIds?: string[];
-  dmPolicy: DmPolicy;
+  channelConfig: TelegramConfig | WeixinConfig | FeishuConfig;
   active: boolean;
   ch: ChannelsSettingsMessages;
   language: string;
@@ -58,9 +63,18 @@ export function ChannelPairingSection({
     const ids = (accountIds ?? ['default']).filter(Boolean);
     return ids.length > 0 ? ids : ['default'];
   }, [accountIds]);
+  const sectionUsesPairing = useMemo(
+    () => channelUsesPairingPolicy(channel, channelConfig),
+    [channel, channelConfig],
+  );
+  const resolveAccountDmPolicy = useCallback(
+    (accountId: string) => resolveAccountDmPolicyForConfig(channel, channelConfig, accountId),
+    [channel, channelConfig],
+  );
   const [accountId, setAccountId] = useState(resolvedAccountIds[0] ?? 'default');
   const [codeBySender, setCodeBySender] = useState<Record<string, string>>({});
   const [busySender, setBusySender] = useState<string | null>(null);
+  const [dismissingId, setDismissingId] = useState<string | null>(null);
   const [revokingId, setRevokingId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
 
@@ -70,7 +84,10 @@ export function ChannelPairingSection({
     }
   }, [accountId, resolvedAccountIds]);
 
-  const swrKey = active && dmPolicy === 'pairing' ? pairingSwrKey(channel, accountId) : null;
+  const accountDmPolicy = resolveAccountDmPolicy(accountId);
+  const accountPairingActive = accountDmPolicy === 'pairing';
+
+  const swrKey = active && sectionUsesPairing && accountPairingActive ? pairingSwrKey(channel, accountId) : null;
   const { data, error, isLoading, mutate } = useSWR(
     swrKey,
     () => fetchChannelPairingState(channel, accountId),
@@ -81,55 +98,29 @@ export function ChannelPairingSection({
     void mutate();
   }, [mutate]);
 
-  useChannelPairingSseRefresh(refresh, active && dmPolicy === 'pairing');
+  useChannelPairingSseRefresh(refresh, active && sectionUsesPairing && accountPairingActive);
 
   const pairedCred = data?.paired.fromCredentials ?? [];
   useEffect(() => {
     onPairedChange?.(pairedCred.length);
   }, [onPairedChange, pairedCred.length]);
 
-  const approve = useCallback(
-    async (senderId: string, code: string) => {
-      const trimmed = code.trim().toUpperCase();
-      if (!trimmed) return;
-      setBusySender(senderId);
-      setFeedback(null);
-      try {
-        const result = await approveChannelPairingRequest({
-          channel,
-          accountId,
-          code: trimmed,
-        });
-        setCodeBySender((prev) => {
-          const next = { ...prev };
-          delete next[senderId];
-          return next;
-        });
-        setFeedback({
-          kind: 'ok',
-          text: ch.pairingApproved.replace('{{id}}', result.senderId),
-        });
-        await mutate();
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : ch.pairingInvalid;
-        setFeedback({ kind: 'err', text: msg.includes('PAIRING') ? ch.pairingInvalid : msg });
-      } finally {
-        setBusySender(null);
-      }
-    },
-    [accountId, channel, ch.pairingApproved, ch.pairingInvalid, mutate],
-  );
+  const { approveByCode, quickApprove } = useChannelPairingApprove({
+    channel,
+    accountId,
+    messages: { pairingApproved: ch.pairingApproved, pairingInvalid: ch.pairingInvalid },
+    mutate,
+    setCodeBySender,
+    setBusySender,
+    setFeedback,
+  });
 
-  const quickApprove = useCallback(
+  const dismiss = useCallback(
     async (senderId: string) => {
-      setBusySender(senderId);
+      setDismissingId(senderId);
       setFeedback(null);
       try {
-        const result = await approveChannelPairingBySender({
-          channel,
-          accountId,
-          senderId,
-        });
+        await dismissChannelPairingPending({ channel, accountId, senderId });
         setCodeBySender((prev) => {
           const next = { ...prev };
           delete next[senderId];
@@ -137,17 +128,17 @@ export function ChannelPairingSection({
         });
         setFeedback({
           kind: 'ok',
-          text: ch.pairingApproved.replace('{{id}}', result.senderId),
+          text: ch.pairingDismissed.replace('{{id}}', senderId),
         });
         await mutate();
       } catch (e) {
-        const msg = e instanceof Error ? e.message : ch.pairingInvalid;
-        setFeedback({ kind: 'err', text: msg.includes('PAIRING') ? ch.pairingInvalid : msg });
+        const msg = e instanceof Error ? e.message : ch.pairingDismissError;
+        setFeedback({ kind: 'err', text: msg });
       } finally {
-        setBusySender(null);
+        setDismissingId(null);
       }
     },
-    [accountId, channel, ch.pairingApproved, ch.pairingInvalid, mutate],
+    [accountId, channel, ch.pairingDismissed, ch.pairingDismissError, mutate],
   );
 
   const revoke = useCallback(
@@ -171,7 +162,32 @@ export function ChannelPairingSection({
     [accountId, channel, ch.pairingRevoked, ch.pairingRevokeError, mutate],
   );
 
-  if (dmPolicy !== 'pairing') return null;
+  if (!sectionUsesPairing) return null;
+
+  if (!accountPairingActive) {
+    return (
+      <div className="space-y-2 rounded-xl border border-edge-subtle bg-surface-base/50 p-4 dark:border-edge">
+        <h3 className="text-sm font-medium text-fg">{ch.pairingTitle}</h3>
+        <p className="text-xs text-fg-muted">{ch.pairingAccountNotPairing.replace('{{account}}', accountId)}</p>
+        {resolvedAccountIds.length > 1 ? (
+          <div className="flex flex-col gap-1.5">
+            <FieldLabel>{ch.pairingAccountLabel}</FieldLabel>
+            <select
+              className={inputClassName()}
+              value={accountId}
+              onChange={(e) => setAccountId(e.target.value)}
+            >
+              {resolvedAccountIds.map((id) => (
+                <option key={id} value={id}>
+                  {id}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
+      </div>
+    );
+  }
 
   const pending = data?.pending ?? [];
   const pairedConfig = data?.paired.fromConfig ?? [];
@@ -228,6 +244,7 @@ export function ChannelPairingSection({
 
       <div className="space-y-2">
         <FieldLabel>{ch.pairingPendingTitle}</FieldLabel>
+        {pending.length > 0 ? <FieldHint>{ch.pairingQuickApproveHint}</FieldHint> : null}
         {pending.length === 0 ? (
           <p className="text-xs text-fg-muted">{ch.pairingPendingEmpty}</p>
         ) : (
@@ -235,6 +252,7 @@ export function ChannelPairingSection({
             {pending.map((item) => {
               const code = codeBySender[item.senderId] ?? '';
               const busy = busySender === item.senderId;
+              const dismissing = dismissingId === item.senderId;
               return (
                 <li
                   key={item.senderId}
@@ -268,7 +286,7 @@ export function ChannelPairingSection({
                       type="button"
                       variant="secondary"
                       className="shrink-0 text-xs"
-                      disabled={busy}
+                      disabled={busy || dismissing}
                       onClick={() => void quickApprove(item.senderId)}
                     >
                       {busy ? ch.pairingApproving : ch.pairingQuickApprove}
@@ -287,17 +305,26 @@ export function ChannelPairingSection({
                         }))
                       }
                       onKeyDown={(e) => {
-                        if (e.key === 'Enter') void approve(item.senderId, code);
+                        if (e.key === 'Enter') approveByCode(item.senderId, code);
                       }}
                     />
                     <Button
                       type="button"
                       variant="primary"
                       className="shrink-0 text-xs"
-                      disabled={busy || !code.trim()}
-                      onClick={() => void approve(item.senderId, code)}
+                      disabled={busy || dismissing || !code.trim()}
+                      onClick={() => approveByCode(item.senderId, code)}
                     >
                       {busy ? ch.pairingApproving : ch.pairingApprove}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="shrink-0 text-xs text-fg-muted hover:text-danger"
+                      disabled={busy || dismissing}
+                      onClick={() => void dismiss(item.senderId)}
+                    >
+                      {dismissing ? ch.pairingDismissing : ch.pairingDismiss}
                     </Button>
                   </div>
                 </li>
@@ -350,12 +377,15 @@ export function useChannelPairingPairedCount(
   channel: PairingChannelId,
   accountId: string,
   active: boolean,
-  dmPolicy: DmPolicy,
+  channelConfig: TelegramConfig | WeixinConfig | FeishuConfig,
 ): number {
-  const swrKey = active && dmPolicy === 'pairing' ? pairingSwrKey(channel, accountId) : null;
+  const usesPairing = channelUsesPairingPolicy(channel, channelConfig);
+  const accountPairingActive = resolveAccountDmPolicyForConfig(channel, channelConfig, accountId) === 'pairing';
+  const swrKey =
+    active && usesPairing && accountPairingActive ? pairingSwrKey(channel, accountId) : null;
   const { data, mutate } = useSWR(swrKey, () => fetchChannelPairingState(channel, accountId), {
     revalidateOnFocus: true,
   });
-  useChannelPairingSseRefresh(() => void mutate(), active && dmPolicy === 'pairing');
+  useChannelPairingSseRefresh(() => void mutate(), active && usesPairing && accountPairingActive);
   return data?.paired.fromCredentials.length ?? 0;
 }
