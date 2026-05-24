@@ -8,7 +8,7 @@ import { resolveChannelConnectDeferSet } from '../resolve-channel-connect-defer.
 function baseCfg(over: Partial<Config['gateway']> = {}): Config {
   return {
     gateway: {
-      host: '127.0.0.1',
+      bind: 'loopback',
       port: 18790,
       ...over,
     },

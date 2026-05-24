@@ -2,9 +2,7 @@ import type { Hono } from 'hono';
 
 import { type Config, BindingsConfigSchema, McpConfigSchema, type GatewayBindMode } from '../../../config/schema.js';
 import {
-  inferBindModeFromHost,
   isValidIPv4,
-  syncLegacyGatewayHostFromBind,
 } from '../../../config/gateway-bind.js';
 import { assertGatewayRuntimeConfig } from '../../runtime-config.js';
 import { resolveGatewayAuth, assertGatewayAuthConfigured } from '../../auth.js';
@@ -912,7 +910,7 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
     if (body.gateway?.heartbeat !== undefined && typeof body.gateway.heartbeat === 'object') {
       if (!config.gateway) {
         config.gateway = {
-          host: '0.0.0.0',
+          bind: 'loopback',
           port: 18790,
           heartbeat: { enabled: true, intervalMs: 1_800_000, includeSystemPromptSection: false },
           maxSseConnections: 100,
@@ -987,7 +985,6 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
       if (!config.gateway) {
         config.gateway = {
           bind: bind as GatewayBindMode,
-          host: '127.0.0.1',
           port: 18790,
           heartbeat: { enabled: true, intervalMs: 1_800_000, includeSystemPromptSection: false },
           maxSseConnections: 100,
@@ -999,10 +996,6 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
       if (bind !== 'custom') {
         delete config.gateway.customBindHost;
       }
-      config.gateway.host = syncLegacyGatewayHostFromBind({
-        bind: bind as GatewayBindMode,
-        customBindHost: config.gateway.customBindHost,
-      });
     }
     if (body.gateway?.customBindHost !== undefined) {
       if (body.gateway.customBindHost === null || body.gateway.customBindHost === '') {
@@ -1017,29 +1010,6 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
       } else if (config.gateway) {
         config.gateway.customBindHost = body.gateway.customBindHost.trim();
         config.gateway.bind = 'custom';
-        config.gateway.host = config.gateway.customBindHost;
-      }
-    }
-    if (body.gateway?.host !== undefined) {
-      if (typeof body.gateway.host !== 'string' || !body.gateway.host.trim()) {
-        return c.json({ ok: false, error: { message: 'gateway.host must be a non-empty string' } }, 400);
-      }
-      if (!config.gateway) {
-        config.gateway = {
-          host: body.gateway.host.trim(),
-          port: 18790,
-          heartbeat: { enabled: true, intervalMs: 1_800_000, includeSystemPromptSection: false },
-          maxSseConnections: 100,
-          corsOrigins: [],
-        };
-      } else {
-        config.gateway.host = body.gateway.host.trim();
-        config.gateway.bind = inferBindModeFromHost(body.gateway.host.trim());
-        if (config.gateway.bind === 'custom') {
-          config.gateway.customBindHost = body.gateway.host.trim();
-        } else {
-          delete config.gateway.customBindHost;
-        }
       }
     }
     if (body.gateway?.port !== undefined) {
@@ -1053,7 +1023,7 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
       }
       if (!config.gateway) {
         config.gateway = {
-          host: '127.0.0.1',
+          bind: 'loopback',
           port: Math.floor(body.gateway.port),
           heartbeat: { enabled: true, intervalMs: 1_800_000, includeSystemPromptSection: false },
           maxSseConnections: 100,
@@ -1068,7 +1038,6 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
       if (!config.gateway) {
         config.gateway = {
           bind: 'loopback',
-          host: '127.0.0.1',
           port: 18790,
           auth: { mode: 'token' },
           heartbeat: { enabled: true, intervalMs: 1_800_000, includeSystemPromptSection: false },
@@ -1095,7 +1064,7 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
     if (body.gateway?.auth !== undefined) {
       if (!config.gateway) {
         config.gateway = {
-          host: '0.0.0.0',
+          bind: 'loopback',
           port: 18790,
           heartbeat: { enabled: true, intervalMs: 1_800_000, includeSystemPromptSection: false },
           maxSseConnections: 100,
@@ -1225,7 +1194,6 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
       if (!config.gateway) {
         config.gateway = {
           bind: 'loopback',
-          host: '127.0.0.1',
           port: 18790,
           heartbeat: { enabled: true, intervalMs: 1_800_000, includeSystemPromptSection: false },
           maxSseConnections: 100,
@@ -1240,7 +1208,6 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
       if (!config.gateway) {
         config.gateway = {
           bind: 'loopback',
-          host: '127.0.0.1',
           port: 18790,
           heartbeat: { enabled: true, intervalMs: 1_800_000, includeSystemPromptSection: false },
           maxSseConnections: 100,
@@ -1253,7 +1220,6 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
       if (!config.gateway) {
         config.gateway = {
           bind: 'loopback',
-          host: '127.0.0.1',
           port: 18790,
           heartbeat: { enabled: true, intervalMs: 1_800_000, includeSystemPromptSection: false },
           maxSseConnections: 100,
@@ -1271,7 +1237,6 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
       if (!config.gateway) {
         config.gateway = {
           bind: 'loopback',
-          host: '127.0.0.1',
           port: 18790,
           heartbeat: { enabled: true, intervalMs: 1_800_000, includeSystemPromptSection: false },
           maxSseConnections: 100,
@@ -1301,7 +1266,7 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
       }
       if (!config.gateway) {
         config.gateway = {
-          host: '0.0.0.0',
+          bind: 'loopback',
           port: 18790,
           heartbeat: { enabled: true, intervalMs: 1_800_000, includeSystemPromptSection: false },
           maxSseConnections: 100,
@@ -1325,7 +1290,7 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
       }
       if (!config.gateway) {
         config.gateway = {
-          host: '127.0.0.1',
+          bind: 'loopback',
           port: 18790,
           heartbeat: { enabled: true, intervalMs: 1_800_000, includeSystemPromptSection: false },
           maxSseConnections: Math.floor(body.gateway.maxSseConnections),
@@ -1348,7 +1313,7 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
       }
       if (!config.gateway) {
         config.gateway = {
-          host: '127.0.0.1',
+          bind: 'loopback',
           port: 18790,
           heartbeat: { enabled: true, intervalMs: 1_800_000, includeSystemPromptSection: false },
           maxSseConnections: 100,
@@ -1375,7 +1340,7 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
       }
       if (!config.gateway) {
         config.gateway = {
-          host: '127.0.0.1',
+          bind: 'loopback',
           port: 18790,
           heartbeat: { enabled: true, intervalMs: 1_800_000, includeSystemPromptSection: false },
           maxSseConnections: 100,
@@ -1397,7 +1362,7 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
       }
       if (!config.gateway) {
         config.gateway = {
-          host: '127.0.0.1',
+          bind: 'loopback',
           port: 18790,
           heartbeat: { enabled: true, intervalMs: 1_800_000, includeSystemPromptSection: false },
           maxSseConnections: 100,

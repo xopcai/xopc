@@ -13,8 +13,6 @@ export interface GatewayServerConfig {
   bindHost: string;
   bind?: GatewayBindMode;
   customBindHost?: string;
-  /** @deprecated Prefer `bind` modes; kept for CLI `--host` compatibility. */
-  host?: string;
   token?: string;
   verbose?: boolean;
   configPath?: string;
@@ -34,7 +32,6 @@ export class GatewayServer {
       enableHotReload: config.enableHotReload,
       deferChannelConnectUntilAfterHttp: true,
       listenBind: config.bind,
-      hostOverride: config.host,
       listenCustomBindHost: config.customBindHost,
     });
   }
@@ -44,7 +41,6 @@ export class GatewayServer {
     const plan = resolveGatewayListenPlan({
       cfg,
       bindOverride: this.config.bind,
-      hostOverride: this.config.host,
     });
 
     let bindHost: string;

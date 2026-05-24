@@ -12,6 +12,7 @@ import { setupChannels as runChannelOnboard, getChannelConfigurators } from './o
 import { seedMainAgentProfileMarkdown } from '../../agent/context/workspace-seed.js';
 import { resolveDefaultAgentId, resolveAgentProfileDir } from '../../agent/agent-scope.js';
 import { WORKSPACE_FILES } from '../../config/paths.js';
+import { resolveGatewayLocalClientHost } from '../../config/gateway-bind.js';
 import { initWorkspace } from '../utils/init-workspace.js';
 import { ConfigSchema } from '../../config/schema.js';
 import { isWeixinOnboardConfigured } from '../../../extensions/weixin/src/adapters/onboard-cli.js';
@@ -131,9 +132,9 @@ async function runOnboard(
     gatewayAuth?.mode === 'token' &&
     typeof gatewayAuth?.token === 'string' &&
     gatewayAuth.token.length > 0;
-  const host = (config as any)?.gateway?.host || '127.0.0.1';
-  const port = (config as any)?.gateway?.port ?? 18790;
-  const displayHost = host === '0.0.0.0' ? 'localhost' : host;
+  const bind = (config as Config)?.gateway?.bind ?? 'loopback';
+  const port = (config as Config)?.gateway?.port ?? 18790;
+  const displayHost = resolveGatewayLocalClientHost(config as Config);
   const gwToken = gatewayConfigured ? (gatewayAuth.token as string) : undefined;
 
   const showGatewaySummary = Boolean(gatewayConfigured && gwToken && (doGateway || runFullWizard));
@@ -190,9 +191,9 @@ async function runOnboard(
 }
 
 async function startGatewayInBackground(config: Config, ctx: CLIContext): Promise<void> {
-  const host = (config as { gateway?: { host?: string } }).gateway?.host ?? '127.0.0.1';
+  const bind = (config as { gateway?: { bind?: string } }).gateway?.bind ?? 'loopback';
   const port = (config as { gateway?: { port?: number } }).gateway?.port ?? 18790;
-  const displayHost = host === '0.0.0.0' ? 'localhost' : host;
+  const displayHost = bind === 'lan' ? 'localhost' : '127.0.0.1';
 
   let isRunning = false;
   try {
@@ -220,8 +221,8 @@ async function startGatewayInBackground(config: Config, ctx: CLIContext): Promis
       ...process.argv.slice(1).filter((arg) => !arg.includes('onboard') && arg !== '--quick'),
       'gateway',
       '--background',
-      '--host',
-      host,
+      '--bind',
+      bind,
       '--port',
       String(port),
     ];
@@ -332,7 +333,7 @@ async function setupGateway(config: Config): Promise<Config> {
     ...config,
     gateway: {
       ...gw,
-      host: gw.host ?? '127.0.0.1',
+      bind: gw.bind ?? 'loopback',
       port: gw.port ?? 18790,
       auth:
         authMode === 'none'

@@ -36,12 +36,10 @@ export {
   resolveGatewayListenPlan,
 } from './listen.js';
 export {
-  inferBindModeFromHost,
   resolveGatewayBindMode,
   resolveGatewayBindHost,
   resolveGatewayBindHostSync,
   resolveGatewayEffectiveHost,
-  syncLegacyGatewayHostFromBind,
   defaultGatewayBindMode,
   isContainerEnvironment,
 } from '../config/gateway-bind.js';

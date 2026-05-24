@@ -10,7 +10,6 @@ function baseConfig(overrides: Partial<Config['gateway']> = {}): Config {
   return {
     gateway: {
       bind: 'loopback',
-      host: '127.0.0.1',
       port: 18790,
       auth: { mode: 'token', token: 'a'.repeat(32) },
       corsOrigins: [],
@@ -31,7 +30,7 @@ describe('gateway listen helpers', () => {
   });
 
   it('resolves listen host with bind override', () => {
-    const cfg = baseConfig({ bind: 'loopback', host: '127.0.0.1' });
+    const cfg = baseConfig({ bind: 'loopback' });
     expect(resolveGatewayListenHost({ cfg, bindOverride: 'lan' })).toBe('0.0.0.0');
   });
 
@@ -57,7 +56,7 @@ describe('assertGatewayRuntimeConfig', () => {
   });
 
   it('refuses lan bind without corsOrigins', () => {
-    const cfg = baseConfig({ bind: 'lan', host: '0.0.0.0', corsOrigins: [] });
+    const cfg = baseConfig({ bind: 'lan', corsOrigins: [] });
     expect(() =>
       assertGatewayRuntimeConfig({
         cfg,
@@ -70,7 +69,6 @@ describe('assertGatewayRuntimeConfig', () => {
   it('allows lan bind with corsOrigins configured', () => {
     const cfg = baseConfig({
       bind: 'lan',
-      host: '0.0.0.0',
       corsOrigins: ['http://192.168.1.10:18790'],
     });
     const result = assertGatewayRuntimeConfig({
@@ -95,7 +93,7 @@ describe('assertGatewayRuntimeConfig', () => {
   });
 
   it('requires customBindHost for bind=custom', () => {
-    const cfg = baseConfig({ bind: 'custom', host: '127.0.0.1' });
+    const cfg = baseConfig({ bind: 'custom' });
     expect(() =>
       assertGatewayRuntimeConfig({
         cfg,
@@ -107,7 +105,6 @@ describe('assertGatewayRuntimeConfig', () => {
     const ok = baseConfig({
       bind: 'custom',
       customBindHost: '192.168.1.5',
-      host: '192.168.1.5',
       corsOrigins: ['http://192.168.1.5:18790'],
     });
     const plan = resolveGatewayListenPlan({ cfg: ok });
@@ -124,7 +121,6 @@ describe('assertGatewayRuntimeConfig', () => {
   it('strict security requires explicit rateLimit on network bind', () => {
     const cfg = baseConfig({
       bind: 'lan',
-      host: '0.0.0.0',
       corsOrigins: ['http://192.168.1.10:18790'],
       security: { strict: true },
     });
@@ -140,7 +136,6 @@ describe('assertGatewayRuntimeConfig', () => {
   it('allows lan bind for trusted-proxy when trustedProxies is configured', () => {
     const cfg = baseConfig({
       bind: 'lan',
-      host: '0.0.0.0',
       corsOrigins: ['https://gateway.example.com'],
       trustedProxies: ['10.0.0.1'],
       auth: {
@@ -160,7 +155,6 @@ describe('assertGatewayRuntimeConfig', () => {
   it('requires trustedProxies for trusted-proxy on network bind', () => {
     const cfg = baseConfig({
       bind: 'lan',
-      host: '0.0.0.0',
       corsOrigins: ['https://gateway.example.com'],
       auth: {
         mode: 'trusted-proxy',
@@ -179,7 +173,6 @@ describe('assertGatewayRuntimeConfig', () => {
   it('refuses tailscale serve when bind is not loopback', () => {
     const cfg = baseConfig({
       bind: 'lan',
-      host: '0.0.0.0',
       corsOrigins: ['http://localhost:18790'],
       tailscale: { mode: 'serve' },
     });
