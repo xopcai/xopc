@@ -9,6 +9,7 @@ import {
   AgentToolsDefaultsPage,
   AgentWorkspaceDefaultsPage,
 } from '@/features/settings/agents';
+import { SetupStatusPanel } from '@/features/settings/setup-checklist/setup-status-panel';
 import { AppearanceSettingsPanel } from '@/features/settings/appearance-settings';
 import { DreamingSettingsPanel } from '@/features/settings/dreaming-settings';
 import { GatewaySettingsPanel } from '@/features/settings/gateway-settings';
@@ -27,6 +28,7 @@ import type { SettingsSectionId } from '@/navigation';
 import { useLocaleStore } from '@/stores/locale-store';
 
 const SECTIONS: SettingsSectionId[] = [
+  'overview',
   'appearance',
   'system',
   'agent-chat',
@@ -59,10 +61,15 @@ export function SettingsPage() {
   }
 
   if (!section || !SECTIONS.includes(section as SettingsSectionId)) {
-    return <Navigate to="/settings/appearance" replace />;
+    return <Navigate to="/settings/overview" replace />;
   }
 
   const id = section as SettingsSectionId;
+
+  if (id === 'overview') {
+    return <SetupStatusPanel />;
+  }
+
   const title = m.settingsSections[id];
 
   if (id === 'appearance') {
@@ -148,9 +155,7 @@ export function SettingsPage() {
   return (
     <div className="mx-auto flex w-full max-w-app-main flex-col gap-3 px-4 py-8">
       <h1 className="text-lg font-semibold text-fg">{title}</h1>
-      <p className="text-sm text-fg-muted">
-        {language === 'zh' ? `设置 · ${title}（即将推出）。` : `Settings · ${title} (coming soon).`}
-      </p>
+      <p className="text-sm text-fg-muted">{m.settingsPage.comingSoon.replace('{{title}}', title)}</p>
     </div>
   );
 }

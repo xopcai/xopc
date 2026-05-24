@@ -176,7 +176,7 @@ const router = createHashRouter([
           </SettingsSheet>
         ),
         children: [
-          { index: true, element: <Navigate to="appearance" replace /> },
+          { index: true, element: <Navigate to="overview" replace /> },
           {
             path: 'skills',
             element: <Navigate to="/skills" replace />,

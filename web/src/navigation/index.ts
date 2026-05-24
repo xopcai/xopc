@@ -10,6 +10,7 @@ export type ChatRoute =
   | { type: 'new' };
 
 const SETTINGS_SECTION_TO_TAB: Record<SettingsSectionId, Tab> = {
+  overview: 'settingsOverview',
   appearance: 'settingsAppearance',
   system: 'settingsSystem',
   agent: 'settingsAgents',
@@ -38,6 +39,7 @@ const SETTINGS_SECTION_TO_TAB: Record<SettingsSectionId, Tab> = {
 };
 
 const TAB_TO_SETTINGS_SECTION: Record<
+  | 'settingsOverview'
   | 'settingsAppearance'
   | 'settingsSystem'
   | 'settingsAgentChat'
@@ -65,6 +67,7 @@ const TAB_TO_SETTINGS_SECTION: Record<
   | 'channels',
   SettingsSectionId
 > = {
+  settingsOverview: 'overview',
   settingsAppearance: 'appearance',
   settingsSystem: 'system',
   settingsAgentChat: 'agent-chat',
@@ -120,7 +123,7 @@ export type SettingsShellNavGroup = {
  * Extensions append via `ExtensionSettingsNav`.
  */
 export const SETTINGS_SHELL_NAV_GROUPS: readonly SettingsShellNavGroup[] = [
-  { id: 'general', tabs: ['settingsAppearance', 'settingsSystem'] },
+  { id: 'general', tabs: ['settingsOverview', 'settingsAppearance', 'settingsSystem'] },
   {
     id: 'models',
     tabs: [
@@ -182,13 +185,13 @@ export function parseSettingsHash(hash: string): SettingsSectionId | null {
   let h = hash.startsWith('#') ? hash.slice(1) : hash;
   if (h.startsWith('/')) h = h.slice(1);
   if (h === 'settings' || h === 'settings/') {
-    return 'appearance';
+    return 'overview';
   }
   if (!h.startsWith('settings/')) return null;
   const rest = h.slice('settings/'.length);
   const parts = rest.split('/').filter(Boolean);
   const section = parts[0];
-  if (!section) return 'appearance';
+  if (!section) return 'overview';
   if (section === 'agents' && parts.length > 1) {
     return 'agents';
   }
