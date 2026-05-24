@@ -1,4 +1,3 @@
-import { MessageSquare, Send, type LucideIcon } from 'lucide-react';
 import { useMemo } from 'react';
 import useSWR from 'swr';
 
@@ -9,17 +8,11 @@ import { channelsMetaSwrKey, fetchChannelsMeta, type ChannelHubMetaRow } from '.
 
 export type ChannelCatalogEntry = {
   id: string;
-  icon: LucideIcon;
   title: string;
   subtitle: string;
   manageable: boolean;
   order: number;
 };
-
-function iconForChannelId(id: string): LucideIcon {
-  if (id === 'telegram') return Send;
-  return MessageSquare;
-}
 
 function resolveBuiltinCopy(
   entry: BuiltinChannelCatalogEntry,
@@ -44,7 +37,6 @@ export function mergeChannelCatalog(
       : { title: row.label, subtitle: row.description || ch.hubExtensionSubtitle };
     byId.set(row.id, {
       id: row.id,
-      icon: iconForChannelId(row.id),
       title: copy.title,
       subtitle: copy.subtitle,
       manageable: row.manageable,
@@ -57,7 +49,6 @@ export function mergeChannelCatalog(
       const copy = resolveBuiltinCopy(entry, ch);
       return {
         id: entry.id,
-        icon: entry.icon,
         title: copy.title,
         subtitle: copy.subtitle,
         manageable: true,
@@ -71,7 +62,6 @@ export function mergeChannelCatalog(
     const copy = resolveBuiltinCopy(entry, ch);
     byId.set(entry.id, {
       id: entry.id,
-      icon: entry.icon,
       title: copy.title,
       subtitle: copy.subtitle,
       manageable: true,

@@ -1,10 +1,7 @@
-import { MessageSquare, Send, type LucideIcon } from 'lucide-react';
-
 import type { ManageableChannelId } from './channels-routes';
 
 export type BuiltinChannelCatalogEntry = {
   id: ManageableChannelId;
-  icon: LucideIcon;
   titleKey: 'telegramTitle' | 'weixinTitle' | 'feishuTitle';
   subtitleKey: 'telegramSubtitle' | 'weixinSubtitle' | 'feishuSubtitle';
 };
@@ -13,19 +10,16 @@ export type BuiltinChannelCatalogEntry = {
 export const BUILTIN_CHANNEL_CATALOG: readonly BuiltinChannelCatalogEntry[] = [
   {
     id: 'telegram',
-    icon: Send,
     titleKey: 'telegramTitle',
     subtitleKey: 'telegramSubtitle',
   },
   {
     id: 'weixin',
-    icon: MessageSquare,
     titleKey: 'weixinTitle',
     subtitleKey: 'weixinSubtitle',
   },
   {
     id: 'feishu',
-    icon: MessageSquare,
     titleKey: 'feishuTitle',
     subtitleKey: 'feishuSubtitle',
   },
