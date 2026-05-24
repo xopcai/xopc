@@ -273,7 +273,7 @@ xopc gateway --port 18790
 | 参数 | 描述 |
 |------|------|
 | `-p, --port` | 端口号 (默认：18790) |
-| `-h, --host` | 绑定地址 (默认：0.0.0.0) |
+| `--bind <mode>` | 绑定模式：`loopback`、`lan`、`auto`、`custom`、`tailnet`（默认取自配置） |
 | `--token` | 认证令牌 |
 | `--no-hot-reload` | 禁用配置热重载 |
 | `--force` | 强制终止端口上的现有进程 |

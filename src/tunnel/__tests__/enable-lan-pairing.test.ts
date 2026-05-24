@@ -7,7 +7,6 @@ function baseConfig(overrides: Partial<Config['gateway']> = {}): Config {
   return {
     gateway: {
       bind: 'loopback',
-      host: '127.0.0.1',
       port: 28790,
       auth: { mode: 'token', token: 'a'.repeat(32) },
       corsOrigins: [],
@@ -22,12 +21,11 @@ describe('applyLanPairingGatewayPatch', () => {
     const result = applyLanPairingGatewayPatch(config);
     expect(result).toEqual({ ok: true, changed: true });
     expect(config.gateway?.bind).toBe('lan');
-    expect(config.gateway?.host).toBe('0.0.0.0');
     expect(config.gateway?.corsOrigins?.length).toBeGreaterThan(0);
   });
 
   it('is idempotent when already on lan bind', () => {
-    const config = baseConfig({ bind: 'lan', host: '0.0.0.0', corsOrigins: ['http://127.0.0.1:28790'] });
+    const config = baseConfig({ bind: 'lan', corsOrigins: ['http://127.0.0.1:28790'] });
     const result = applyLanPairingGatewayPatch(config);
     expect(result).toEqual({ ok: true, changed: false });
   });

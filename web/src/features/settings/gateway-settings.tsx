@@ -98,24 +98,13 @@ export function GatewaySettingsPanel() {
 
   const updateBind = useCallback((bind: GatewaySettingsState['bind']) => {
     dirtyRef.current = true;
-    setForm((f) => {
-      if (!f) return null;
-      const host =
-        bind === 'lan'
-          ? '0.0.0.0'
-          : bind === 'loopback'
-            ? '127.0.0.1'
-            : bind === 'custom'
-              ? f.customBindHost || f.host
-              : f.host;
-      return { ...f, bind, host };
-    });
+    setForm((f) => (f ? { ...f, bind } : null));
   }, []);
 
   const updateCustomBindHost = useCallback((customBindHost: string) => {
     dirtyRef.current = true;
     setForm((f) =>
-      f ? { ...f, customBindHost, host: customBindHost, bind: 'custom' } : null,
+      f ? { ...f, customBindHost, bind: 'custom' } : null,
     );
   }, []);
 

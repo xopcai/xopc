@@ -1,5 +1,6 @@
 import { Command } from 'commander';
 import { existsSync } from 'fs';
+import { resolveGatewayLocalClientHost } from '../../config/gateway-bind.js';
 import { writeTextAtomic } from '../../infra/write-file-atomic.js';
 import { register, formatExamples, type CLIContext } from '../registry.js';
 
@@ -188,12 +189,13 @@ function createConfigCommand(ctx: CLIContext): Command {
       // Default: show masked token info
       const token = config?.gateway?.auth?.token;
       const mode = config?.gateway?.auth?.mode;
-      const host = config?.gateway?.host || '0.0.0.0';
+      const bind = config?.gateway?.bind ?? 'loopback';
       const port = config?.gateway?.port || 18790;
+      const clientHost = config ? resolveGatewayLocalClientHost(config) : '127.0.0.1';
 
       console.log('Gateway Configuration:');
-      console.log(`  Host: ${host}`);
-      console.log(`  Port: ${port}`);
+      console.log(`  Bind: ${bind}`);
+      console.log(`  Local URL: http://${clientHost}:${port}`);
       console.log(`  Auth Mode: ${mode || 'not set'}`);
       if (token) {
         console.log(`  Token: ${token.slice(0, 8)}...${token.slice(-8)}`);

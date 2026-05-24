@@ -80,7 +80,7 @@ function resolveAuditInputs(cfg: Config, env: NodeJS.ProcessEnv = process.env): 
  */
 export function collectGatewayConfigFindings(params: {
   auth: ResolvedGatewayAuth;
-  host?: string;
+  bindHost?: string;
   corsOrigins?: string[];
   rateLimitEnabled?: boolean;
   tlsEnabled?: boolean;
@@ -91,7 +91,7 @@ export function collectGatewayConfigFindings(params: {
   rateLimitConfigured?: boolean;
 }): SecurityAuditFinding[] {
   const findings: SecurityAuditFinding[] = [];
-  const loopback = isLoopbackHost(params.host);
+  const loopback = isLoopbackHost(params.bindHost);
 
   if (params.auth.mode === 'none') {
     if (!loopback) {
@@ -99,7 +99,7 @@ export function collectGatewayConfigFindings(params: {
         checkId: 'gateway.auth.none_on_network',
         severity: 'critical',
         title: 'Gateway has no authentication on a network-accessible address',
-        detail: `Auth mode is "none" but gateway binds to ${params.host}. ` +
+        detail: `Auth mode is "none" but gateway binds to ${params.bindHost}. ` +
           'Any host on the network can access the gateway without credentials.',
         remediation: 'Set gateway.auth.mode to "token" and configure a strong token ' +
           '(e.g. `openssl rand -hex 32`).',
@@ -265,7 +265,7 @@ export function collectGatewayConfigFindings(params: {
     });
   }
 
-  if (params.host === '0.0.0.0' || params.host === '::') {
+  if (params.bindHost === '0.0.0.0' || params.bindHost === '::') {
     findings.push({
       checkId: 'gateway.bind.all_interfaces',
       severity: 'warn',
@@ -478,7 +478,7 @@ export function collectGatewaySecurityFindings(
   const inputs = resolveAuditInputs(cfg, env);
   const configFindings = collectGatewayConfigFindings({
     auth: inputs.auth,
-    host: inputs.bindHost,
+    bindHost: inputs.bindHost,
     corsOrigins: inputs.corsOrigins,
     rateLimitEnabled: inputs.rateLimitEnabled,
     tlsEnabled: inputs.tlsEnabled,
@@ -519,7 +519,7 @@ function emitFindings(findings: SecurityAuditFinding[]): void {
  */
 export function auditGatewayConfig(params: {
   auth: ResolvedGatewayAuth;
-  host?: string;
+  bindHost?: string;
   corsOrigins?: string[];
   rateLimitEnabled?: boolean;
   tlsEnabled?: boolean;

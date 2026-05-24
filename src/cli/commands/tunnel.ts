@@ -21,10 +21,12 @@ function isInteractive(): boolean {
   return Boolean(process.stdin.isTTY && process.stdout.isTTY);
 }
 
+import { resolveGatewayEffectiveHost } from '../../config/gateway-bind.js';
+
 function resolveGatewayPortHost(config: ReturnType<typeof loadConfig>): { port: number; host: string } {
   return {
     port: config.gateway.port ?? 18790,
-    host: config.gateway.host ?? '127.0.0.1',
+    host: resolveGatewayEffectiveHost(config),
   };
 }
 

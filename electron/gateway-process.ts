@@ -6,6 +6,8 @@ import { fileURLToPath } from 'node:url';
 
 import { app } from 'electron';
 
+import type { GatewayBindMode } from '../src/config/schema.js';
+
 /** Default listen port for the gateway subprocess when started by Electron (not CLI). Kept separate from CLI default (18790) so desktop + `xopc gateway` can run side by side. */
 const DEFAULT_PORT = 28790;
 
@@ -108,8 +110,7 @@ export interface GatewayProcessOptions {
   configPath: string;
   workspacePath: string;
   port: number;
-  /** Bind address passed to `xopc gateway --host` (defaults to 127.0.0.1). */
-  host?: string;
+  bind: GatewayBindMode;
   /** Called when gateway process exits unexpectedly (non-zero or by signal). */
   onUnexpectedExit?: (code: number | null, signal: string | null) => void;
 }
@@ -117,7 +118,6 @@ export interface GatewayProcessOptions {
 export function spawnGatewayProcess(opts: GatewayProcessOptions): ChildProcess {
   const cli = resolveCliEntry();
   const isPackaged = app.isPackaged;
-  const host = opts.host?.trim() || '127.0.0.1';
   clearGatewayLogBuffer();
   const child = spawn(
     process.execPath,
@@ -129,8 +129,8 @@ export function spawnGatewayProcess(opts: GatewayProcessOptions): ChildProcess {
       opts.workspacePath,
       'gateway',
       '--foreground',
-      '--host',
-      host,
+      '--bind',
+      opts.bind,
       '--port',
       String(opts.port),
       '--no-hot-reload',
@@ -253,18 +253,18 @@ export async function waitForGatewayReady(
 export async function restartEmbeddedGatewayFromSavedConfig(params: {
   configPath: string;
   workspacePath: string;
-  resolveCredentials: () => Promise<{ port: number; token: string; host: string }>;
+  resolveCredentials: () => Promise<{ port: number; token: string; bind: GatewayBindMode }>;
 }): Promise<{ port: number; token: string }> {
   if (!embeddedGatewayRuntime) {
     throw new Error('Embedded gateway is not registered');
   }
   stopGatewayProcess();
-  const { port, token, host } = await params.resolveCredentials();
+  const { port, token, bind } = await params.resolveCredentials();
   const opts: GatewayProcessOptions = {
     configPath: params.configPath,
     workspacePath: params.workspacePath,
     port,
-    host,
+    bind,
     onUnexpectedExit: embeddedGatewayRuntime.onUnexpectedExit,
   };
   const child = spawnGatewayProcess(opts);

@@ -87,14 +87,10 @@ function normalizeStringIdList(raw: unknown, max = MAX_CHANNEL_DEFER_LIST_SIZE):
     .slice(0, max);
 }
 
-function normalizeBindMode(raw: unknown, legacyHost?: string): GatewayBindMode {
+function normalizeBindMode(raw: unknown): GatewayBindMode {
   if (raw === 'auto' || raw === 'loopback' || raw === 'lan' || raw === 'tailnet' || raw === 'custom') {
     return raw;
   }
-  const host = legacyHost?.trim().toLowerCase() ?? '';
-  if (host === '0.0.0.0' || host === '::') return 'lan';
-  if (host === '127.0.0.1' || host === 'localhost' || host === '::1') return 'loopback';
-  if (host) return 'custom';
   return 'loopback';
 }
 
@@ -180,21 +176,14 @@ export function normalizeGatewayFromConfig(config: unknown): GatewaySettingsStat
   const corsOrigins = Array.isArray(gw.corsOrigins)
     ? gw.corsOrigins.filter((x): x is string => typeof x === 'string' && x.trim().length > 0)
     : [];
-  const legacyHost = typeof gw.host === 'string' ? gw.host : '';
-  const bind = normalizeBindMode(gw.bind, legacyHost);
+  const bind = normalizeBindMode(gw.bind);
   const customBindHost =
     typeof gw.customBindHost === 'string' && gw.customBindHost.trim()
       ? gw.customBindHost.trim()
-      : bind === 'custom'
-        ? legacyHost.trim()
-        : '';
-  const host =
-    legacyHost.trim() ||
-    (bind === 'lan' ? '0.0.0.0' : bind === 'custom' ? customBindHost : '127.0.0.1');
+      : '';
   return {
     bind,
     customBindHost,
-    host,
     port:
       typeof gw.port === 'number' && Number.isFinite(gw.port) ? Math.floor(gw.port) : DEFAULT_GATEWAY_PORT,
     auth: {
@@ -284,22 +273,12 @@ export async function patchGatewaySettings(state: GatewaySettingsState): Promise
     throw new Error(validationError);
   }
 
-  const legacyHost =
-    state.bind === 'lan'
-      ? '0.0.0.0'
-      : state.bind === 'custom'
-        ? state.customBindHost.trim()
-        : state.bind === 'loopback'
-          ? '127.0.0.1'
-          : state.host.trim() || '127.0.0.1';
-
   await fetchJson(apiUrl('/api/config'), {
     method: 'PATCH',
     body: JSON.stringify({
       gateway: {
         bind: state.bind,
         ...(state.bind === 'custom' ? { customBindHost: state.customBindHost.trim() } : {}),
-        host: legacyHost,
         port: state.port,
         auth: buildAuthPatch(state),
         corsOrigins: state.corsOrigins,

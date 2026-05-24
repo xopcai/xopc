@@ -7,7 +7,6 @@ function baseConfig(overrides: Partial<Config['gateway']> = {}): Config {
   return {
     gateway: {
       bind: 'loopback',
-      host: '127.0.0.1',
       port: 28790,
       auth: { mode: 'token' },
       ...overrides,
@@ -31,7 +30,7 @@ describe('buildMobilePairContext', () => {
 
   it('is pairing ready when gateway listens on LAN', () => {
     const ctx = buildMobilePairContext({
-      config: baseConfig({ bind: 'lan', host: '0.0.0.0' }),
+      config: baseConfig({ bind: 'lan' }),
       tunnelConnected: false,
     });
     expect(ctx.pairingReady).toBe(true);
@@ -61,7 +60,7 @@ describe('buildMobilePairContext', () => {
 
   it('orders LAN before tunnel in connectUrls when both are reachable', () => {
     const ctx = buildMobilePairContext({
-      config: baseConfig({ bind: 'lan', host: '0.0.0.0' }),
+      config: baseConfig({ bind: 'lan' }),
       tunnelConnected: true,
       tunnelPublicUrl: 'https://abc123.frp.xopc.ai',
     });

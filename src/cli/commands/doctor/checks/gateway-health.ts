@@ -1,11 +1,12 @@
 import { existsSync } from 'node:fs';
 
 import { loadConfig } from '../../../../config/loader.js';
+import { resolveGatewayLocalClientHost } from '../../../../config/gateway-bind.js';
 import type { Config } from '../../../../config/schema.js';
 import type { CheckResult, DoctorContext } from '../types.js';
 
 function resolveGatewayBaseUrl(cfg: Config): string {
-  const host = cfg.gateway?.host?.trim() || '127.0.0.1';
+  const host = resolveGatewayLocalClientHost(cfg);
   const port = cfg.gateway?.port ?? 18790;
   return `http://${host}:${port}`;
 }

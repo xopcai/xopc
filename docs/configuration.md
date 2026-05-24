@@ -386,7 +386,7 @@ HTTP API gateway configuration.
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `bind` | string | `loopback` | `auto`, `loopback`, `lan`, `tailnet`, `custom` |
-| `host` | string | `127.0.0.1` | **Deprecated** — use `bind` |
+| `customBindHost` | string | - | IPv4 address when `bind` is `custom` |
 | `port` | number | `18790` | Port number |
 | `mode` | string | `local` | `local` or `remote` (CLI target) |
 | `remote` | object | - | Persistent remote URL/token for CLI when `mode=remote` |

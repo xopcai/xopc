@@ -35,13 +35,11 @@ function isRecord(x: unknown): x is Record<string, unknown> {
 async function ensureGatewayReady(
   configPath: string,
   workspacePath: string,
-  gatewayHost: string,
   gatewayPort: number,
 ): Promise<void> {
   const result = await initWorkspace({
     configPath,
     workspacePath,
-    gatewayHost,
     gatewayPort,
   });
 
@@ -132,13 +130,13 @@ export function createExtensionDevCommand(): Command {
     .description('Symlink an extension into the workspace for live development (optional file watch + gateway)')
     .argument('[dir]', 'Extension directory (default: current working directory)', '.')
     .option('--port <number>', 'Gateway port', '18790')
-    .option('--host <address>', 'Gateway host', '127.0.0.1')
+    .option('--bind <mode>', 'Gateway bind mode', 'loopback')
     .option('--no-gateway', 'Do not start the gateway (symlink only)')
     .option('--no-watch', 'Do not watch files for changes')
     .action(
       async (
         dir: string,
-        options: { port: string; host: string; gateway: boolean; watch: boolean },
+        options: { port: string; bind: string; gateway: boolean; watch: boolean },
       ) => {
         const extensionDir = resolve(dir || '.');
         const manifest = loadAndValidateManifest(extensionDir);
@@ -231,11 +229,18 @@ export function createExtensionDevCommand(): Command {
         }
 
         const port = parseInt(options.port, 10);
-        const host = options.host;
-        await ensureGatewayReady(ctx.configPath, ctx.workspacePath, host, port);
+        const bindModes = new Set(['auto', 'loopback', 'lan', 'tailnet', 'custom']);
+        const bindRaw = options.bind.trim().toLowerCase();
+        if (!bindModes.has(bindRaw)) {
+          console.error(colors.red('error:'), 'Invalid --bind mode');
+          cleanup();
+          process.exit(1);
+        }
+        const bind = bindRaw as import('../../config/schema.js').GatewayBindMode;
+        await ensureGatewayReady(ctx.configPath, ctx.workspacePath, port);
         const cfg = loadConfig(ctx.configPath);
         const { resolveGatewayListenPlan } = await import('../../gateway/listen.js');
-        const listenPlan = resolveGatewayListenPlan({ cfg, hostOverride: host });
+        const listenPlan = resolveGatewayListenPlan({ cfg, bindOverride: bind });
 
         if (Number.isNaN(port)) {
           console.error(colors.red('error:'), 'Invalid --port');
@@ -243,9 +248,8 @@ export function createExtensionDevCommand(): Command {
           process.exit(1);
         }
 
-        console.log('');
         console.log('🚀 Starting gateway (extension dev)…');
-        console.log(`   Host: ${host}`);
+        console.log(`   Bind: ${bind} (${listenPlan.bindHost})`);
         console.log(`   Port: ${port}`);
         console.log('');
 
@@ -258,7 +262,6 @@ export function createExtensionDevCommand(): Command {
                 bindHost: listenPlan.bindHost,
                 bind: listenPlan.bindMode,
                 customBindHost: listenPlan.customBindHost,
-                host,
                 port,
                 token: cfg?.gateway?.auth?.token,
                 verbose: ctx.isVerbose,
@@ -266,7 +269,7 @@ export function createExtensionDevCommand(): Command {
                 enableHotReload: true,
               });
               await server.start();
-              const displayHost = host === '0.0.0.0' ? 'localhost' : host;
+              const displayHost = listenPlan.bindHost === '0.0.0.0' ? 'localhost' : listenPlan.bindHost;
               const token = cfg?.gateway?.auth?.token;
               console.log('✅ Gateway started');
               console.log(`   URL: http://${displayHost}:${port}`);

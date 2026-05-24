@@ -1,4 +1,5 @@
 import { fetch as undiciFetch } from 'undici';
+import { resolveGatewayLocalClientHost } from '../config/gateway-bind.js';
 import type { Config } from '../config/schema.js';
 import { loadConfig } from '../config/loader.js';
 
@@ -61,7 +62,7 @@ export function resolveGatewayHttpBaseUrl(config: Config, override?: string): st
   if (override?.trim()) {
     return override.replace(/\/$/, '');
   }
-  const host = config.gateway?.host ?? '127.0.0.1';
+  const host = resolveGatewayLocalClientHost(config);
   const port = config.gateway?.port ?? 18790;
   return `http://${host}:${port}`;
 }

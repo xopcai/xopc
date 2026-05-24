@@ -25,7 +25,7 @@ export function createInstallCommand(): Command {
 
       const config = loadConfig(configPath);
       const port = options.port ? parseInt(options.port, 10) : (config?.gateway?.port || 18790);
-      const host = config?.gateway?.host || '0.0.0.0';
+      const bind = config?.gateway?.bind ?? 'loopback';
       const token = options.token || config?.gateway?.auth?.token;
 
       const available = await isDaemonAvailableAsync();
@@ -61,7 +61,7 @@ export function createInstallCommand(): Command {
       }
 
       // Build install args and install
-      const installArgs = buildGatewayInstallArgs({ port, host, token });
+      const installArgs = buildGatewayInstallArgs({ port, bind, token });
       installArgs.stdout = process.stdout;
 
       try {

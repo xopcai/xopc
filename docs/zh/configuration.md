@@ -387,7 +387,8 @@ HTTP API 网关配置。
 
 | 字段 | 类型 | 默认值 | 说明 |
 |-------|------|---------|------|
-| `host` | string | `0.0.0.0` | 绑定地址 |
+| `bind` | string | `loopback` | `auto`、`loopback`、`lan`、`tailnet`、`custom` |
+| `customBindHost` | string | - | 当 `bind` 为 `custom` 时的 IPv4 地址 |
 | `port` | number | `18790` | 端口号 |
 | `auth` | object | - | 认证配置 |
 | `cors` | object | - | CORS 设置 |

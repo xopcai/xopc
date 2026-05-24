@@ -3,7 +3,6 @@ import {
   isNetworkAccessibleBindHost,
   resolveGatewayBindMode,
   resolveGatewayEffectiveHost,
-  syncLegacyGatewayHostFromBind,
 } from '../config/gateway-bind.js';
 import { resolveGatewayAuth, assertGatewayAuthConfigured } from '../gateway/auth.js';
 import { buildDefaultCorsOrigins } from '../gateway/host.js';
@@ -39,7 +38,6 @@ export function applyLanPairingGatewayPatch(
 
   config.gateway.bind = 'lan';
   delete config.gateway.customBindHost;
-  config.gateway.host = syncLegacyGatewayHostFromBind({ bind: 'lan' });
 
   const port = config.gateway.port ?? 18790;
   const bindHost = resolveGatewayEffectiveHost(config);

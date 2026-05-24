@@ -37,8 +37,6 @@ export interface GatewayServiceConfig {
   configPath?: string;
   /** CLI `--bind` override for startup security guards. */
   listenBind?: GatewayBindMode;
-  /** CLI `--host` override (legacy) for startup security guards. */
-  hostOverride?: string;
   listenCustomBindHost?: string;
   enableHotReload?: boolean;
   /**

@@ -11,7 +11,6 @@ function baseConfig(overrides: Partial<Config['gateway']> = {}): Config {
   return {
     gateway: {
       bind: 'loopback',
-      host: '127.0.0.1',
       port: 18790,
       auth: { mode: 'token', token: 'a'.repeat(32) },
       corsOrigins: [],
@@ -29,7 +28,6 @@ describe('collectGatewaySecurityFindings', () => {
   it('reports startup guard failure for lan bind without cors', () => {
     const cfg = baseConfig({
       bind: 'lan',
-      host: '0.0.0.0',
       corsOrigins: [],
     });
     const findings = collectGatewaySecurityFindings(cfg);
@@ -40,7 +38,6 @@ describe('collectGatewaySecurityFindings', () => {
   it('reports trusted-proxy missing proxies on network bind', () => {
     const cfg = baseConfig({
       bind: 'lan',
-      host: '0.0.0.0',
       corsOrigins: ['https://gw.example.com'],
       auth: {
         mode: 'trusted-proxy',
@@ -55,7 +52,7 @@ describe('collectGatewaySecurityFindings', () => {
   it('warns about missing TLS on network bind without tunnel', () => {
     const findings = collectGatewayConfigFindings({
       auth: { mode: 'token', token: 'b'.repeat(32) },
-      host: '0.0.0.0',
+      bindHost: '0.0.0.0',
       corsOrigins: ['http://192.168.1.10:18790'],
       tlsEnabled: false,
     });
@@ -71,7 +68,6 @@ describe('collectGatewayStartupGuardFindings', () => {
   it('returns blocked finding when strict security lacks rate limit config', () => {
     const cfg = baseConfig({
       bind: 'lan',
-      host: '0.0.0.0',
       corsOrigins: ['http://192.168.1.10:18790'],
       security: { strict: true },
     });

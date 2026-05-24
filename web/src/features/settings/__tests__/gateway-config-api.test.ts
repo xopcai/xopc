@@ -18,7 +18,6 @@ describe('normalizeGatewayFromConfig', () => {
     const state = normalizeGatewayFromConfig({
       gateway: {
         bind: 'lan',
-        host: '0.0.0.0',
         port: 18800,
         corsOrigins: ['http://localhost:5173'],
         trustedProxies: ['10.0.0.0/8'],
@@ -44,7 +43,6 @@ describe('normalizeGatewayFromConfig', () => {
       update: { channel: 'beta' },
     });
     expect(state.bind).toBe('lan');
-    expect(state.host).toBe('0.0.0.0');
     expect(state.port).toBe(18800);
     expect(state.corsOrigins).toEqual(['http://localhost:5173']);
     expect(state.trustedProxies).toEqual(['10.0.0.0/8']);
@@ -83,7 +81,6 @@ describe('normalizeGatewayFromConfig', () => {
     const state = normalizeGatewayFromConfig({
       gateway: {
         bind: 'lan',
-        host: '0.0.0.0',
         port: 18800,
         corsOrigins: ['http://localhost:5173'],
         auth: {

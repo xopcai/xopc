@@ -179,14 +179,13 @@ export class GatewayService {
       cfg: this.config,
       auth: this.auth,
       bindOverride: serviceConfig.listenBind,
-      hostOverride: serviceConfig.hostOverride,
       port: gatewayPort,
     });
 
     // Security audit: non-blocking warnings for remaining risk signals
     auditGatewayConfig({
       auth: this.auth,
-      host: runtimeConfig.bindHost,
+      bindHost: runtimeConfig.bindHost,
       corsOrigins: runtimeConfig.corsOrigins,
       rateLimitEnabled: runtimeConfig.rateLimitEnabled,
       tlsEnabled: runtimeConfig.tlsEnabled,

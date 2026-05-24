@@ -9,7 +9,6 @@ import {
 } from '../../../channels/plugins/registry.js';
 import { normalizeConfiguredMcpServers } from '../../../config/mcp-config-normalize.js';
 import type { Config } from '../../../config/schema.js';
-import { inferBindModeFromHost } from '../../../config/gateway-bind.js';
 import { resolveTunnelE2eConfig } from '../../../tunnel/tunnel-e2e-config.js';
 import { resolveShareConfig } from '../../../share/share-config.js';
 import {
@@ -168,9 +167,8 @@ export async function buildSafeWebConfigPayload(service: GatewayService) {
     /** Masked `cfg.providers` for capability keys (image / STT / etc.). */
     providersConfig: buildSafeProvidersConfigForWeb(config.providers),
     gateway: {
-      bind: config.gateway?.bind ?? inferBindModeFromHost(config.gateway?.host ?? '127.0.0.1'),
+      bind: config.gateway?.bind ?? 'loopback',
       customBindHost: config.gateway?.customBindHost,
-      host: config.gateway?.host,
       port: config.gateway?.port,
       corsOrigins: Array.isArray(config.gateway?.corsOrigins) ? config.gateway.corsOrigins : [],
       trustedProxies: Array.isArray(config.gateway?.trustedProxies)

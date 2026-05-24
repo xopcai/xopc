@@ -30,7 +30,7 @@ vi.mock('../../../../daemon/install-plan.js', () => ({
 
 // Mock config
 vi.mock('../../../../config/index.js', () => ({
-  loadConfig: vi.fn(() => ({ gateway: { port: 18790, host: '0.0.0.0' } })),
+  loadConfig: vi.fn(() => ({ gateway: { port: 18790, bind: 'lan' } })),
 }));
 
 vi.mock('../../../../config/paths.js', () => ({
