@@ -9,8 +9,6 @@ import { loadConfig, saveConfig } from '../../config/loader.js';
 export interface InitWorkspaceOptions {
   configPath: string;
   workspacePath: string;
-  /** Gateway host to persist. Defaults to '127.0.0.1'. */
-  gatewayHost?: string;
   /** When set with a new config file, overrides schema default port (e.g. Electron). */
   gatewayPort?: number;
   /**
@@ -68,7 +66,6 @@ async function tryReadDiskConfig(
  * Skips saveConfig (and backup rotation) when the persisted JSON would be unchanged.
  */
 export async function initWorkspace(options: InitWorkspaceOptions): Promise<InitWorkspaceResult> {
-  const gatewayHost = options.gatewayHost ?? '127.0.0.1';
   const gatewayPortDefaulted = options.gatewayPort ?? 18790;
   const persistWorkspacePath = options.persistWorkspacePath ?? false;
   const skipChannelPluginValidation = options.skipChannelPluginValidation ?? false;
@@ -107,8 +104,6 @@ export async function initWorkspace(options: InitWorkspaceOptions): Promise<Init
       ? gatewayPortDefaulted
       : (config.gateway?.port ?? 18790);
 
-  const host = config.gateway?.host ?? gatewayHost;
-
   const agentsDefaults = {
     ...config.agents.defaults,
     ...(persistedDefaultsWorkspace !== undefined ? { workspace: persistedDefaultsWorkspace } : {}),
@@ -122,7 +117,6 @@ export async function initWorkspace(options: InitWorkspaceOptions): Promise<Init
     },
     gateway: {
       ...config.gateway,
-      host,
       port,
       auth: {
         ...config.gateway?.auth,

@@ -10,7 +10,6 @@ function mockService(overrides: { gateway?: Record<string, unknown>; tunnelState
       gateway: {
         port: 28790,
         bind: 'lan',
-        host: '0.0.0.0',
         auth: { mode: 'token' as const, token: 'a'.repeat(32) },
         ...overrides.gateway,
       },

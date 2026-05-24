@@ -10,7 +10,6 @@ function mockService() {
       gateway: {
         port: 28790,
         bind: 'loopback',
-        host: '127.0.0.1',
         auth: { mode: 'token' as const, token: 'a'.repeat(32) },
       },
       tunnel: { enabled: false, brokerUrl: 'https://frp.xopc.ai/api', autoStart: false },
@@ -74,6 +73,5 @@ describe('POST /api/tunnel/pair/enable-lan', () => {
     expect(body.context?.pairingReady).toBe(false);
     expect(body.context?.blockReason).toBe('GATEWAY_LOOPBACK_ONLY');
     expect(service.currentConfig.gateway?.bind).toBe('lan');
-    expect(service.currentConfig.gateway?.host).toBe('0.0.0.0');
   });
 });

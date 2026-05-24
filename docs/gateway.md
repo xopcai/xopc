@@ -614,7 +614,8 @@ Repeated failed authentication attempts from a client IP are governed by `gatewa
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `host` | `127.0.0.1` | Bind address |
+| `bind` | `loopback` | Bind mode (`loopback`, `lan`, `auto`, `tailnet`, `custom`) |
+| `customBindHost` | - | IPv4 listen address when `bind` is `custom` |
 | `port` | `18790` | Port number |
 | `auth.mode` | `token` | Auth mode (`none` / `token` / `password`) |
 | `auth.token` | auto-generated in token mode | Token credential |

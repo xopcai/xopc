@@ -4,9 +4,14 @@ import { join } from 'node:path';
 import { app } from 'electron';
 
 import { initWorkspace } from '../src/cli/utils/init-workspace.js';
+import {
+  resolveGatewayBindMode,
+  resolveGatewayEffectiveHost,
+} from '../src/config/gateway-bind.js';
 import { saveConfig } from '../src/config/loader.js';
-import type { Config } from '../src/config/schema.js';
+import type { GatewayBindMode } from '../src/config/schema.js';
 import { ConfigSchema } from '../src/config/schema.js';
+import { ensureGatewayCorsOriginsForNetworkBind } from '../src/gateway/ensure-network-cors.js';
 
 import { getDefaultGatewayPort, pickAvailablePort } from './gateway-process.js';
 
@@ -30,35 +35,37 @@ export function getElectronUserPaths(): ElectronUserPaths {
 export async function ensureGatewayConfigForElectron(paths: ElectronUserPaths): Promise<{
   port: number;
   token: string;
-  host: string;
+  bind: GatewayBindMode;
 }> {
   mkdirSync(paths.userData, { recursive: true });
 
   const initResult = await initWorkspace({
     configPath: paths.configPath,
     workspacePath: paths.workspacePath,
-    gatewayHost: '127.0.0.1',
     gatewayPort: getDefaultGatewayPort(),
     persistWorkspacePath: true,
     skipChannelPluginValidation: true,
   });
 
-  const host = initResult.config.gateway?.host?.trim() || '127.0.0.1';
-  const bindHost = host === '::' ? '::' : host;
   const preferredPort = initResult.config.gateway?.port ?? getDefaultGatewayPort();
+  const listenHost = resolveGatewayEffectiveHost(initResult.config);
+  const bindHost = listenHost === '::' ? '::' : listenHost;
   const resolvedPort = await pickAvailablePort(bindHost, preferredPort, 40);
 
-  let finalConfig: Config = initResult.config;
-  if (resolvedPort !== initResult.config.gateway?.port) {
-    finalConfig = ConfigSchema.parse({
-      ...initResult.config,
-      gateway: {
-        ...initResult.config.gateway,
-        port: resolvedPort,
-      },
-    });
+  let finalConfig = ConfigSchema.parse({
+    ...initResult.config,
+    gateway: {
+      ...initResult.config.gateway,
+      port: resolvedPort,
+    },
+  });
+  finalConfig = ensureGatewayCorsOriginsForNetworkBind(finalConfig, resolvedPort);
+
+  if (JSON.stringify(finalConfig) !== JSON.stringify(initResult.config)) {
     await saveConfig(finalConfig, paths.configPath);
   }
+
+  const bind = resolveGatewayBindMode(finalConfig);
 
   const token =
     finalConfig.gateway?.auth?.mode === 'token' &&
@@ -66,5 +73,5 @@ export async function ensureGatewayConfigForElectron(paths: ElectronUserPaths): 
       ? finalConfig.gateway.auth.token
       : initResult.token;
 
-  return { port: resolvedPort, token, host };
+  return { port: resolvedPort, token, bind };
 }

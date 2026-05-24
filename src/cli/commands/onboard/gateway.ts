@@ -57,7 +57,6 @@ export async function setupGateway(config: Config): Promise<Config> {
   // Configure gateway with defaults
   config.gateway = config.gateway || {};
   config.gateway.bind = config.gateway.bind || 'loopback';
-  config.gateway.host = config.gateway.host || '127.0.0.1';
   config.gateway.port = config.gateway.port || 18790;
   config.gateway.auth = {
     mode: 'token',
@@ -66,7 +65,6 @@ export async function setupGateway(config: Config): Promise<Config> {
 
   console.log('\n✅ Gateway configured:');
   console.log(`   Bind: ${config.gateway.bind}`);
-  console.log(`   Host: ${config.gateway.host}`);
   console.log(`   Port: ${config.gateway.port}`);
   console.log(`   Auth: Token-based (auto-generated)`);
   console.log(`   Token: ${token.slice(0, 8)}...${token.slice(-8)}`);
@@ -80,9 +78,9 @@ export async function setupGateway(config: Config): Promise<Config> {
  * In non-interactive mode, provides guidance on how to start manually.
  */
 export async function startGatewayNow(config: Config, ctx: CLIContext): Promise<void> {
-  const host = config?.gateway?.host || '127.0.0.1';
+  const bind = config?.gateway?.bind ?? 'loopback';
   const port = config?.gateway?.port || 18790;
-  const displayHost = host === '0.0.0.0' ? 'localhost' : host;
+  const displayHost = bind === 'lan' ? 'localhost' : '127.0.0.1';
 
   // Check if gateway is already running by trying to acquire lock
   let isRunning = false;
@@ -120,7 +118,7 @@ export async function startGatewayNow(config: Config, ctx: CLIContext): Promise<
           ...process.argv.slice(1).filter(arg => !arg.includes('onboard') && arg !== '--quick'),
           'gateway',
           '--background',
-          '--host', host,
+          '--bind', bind,
           '--port', String(port),
         ];
 
@@ -162,7 +160,7 @@ export async function startGatewayNow(config: Config, ctx: CLIContext): Promise<
       console.log(`   xopc gateway --background`);
       console.log('');
       console.log('📝 To start in foreground (development mode):');
-      console.log(`   pnpm run dev -- gateway --host ${host} --port ${port}`);
+      console.log(`   pnpm run dev -- gateway --bind ${bind} --port ${port}`);
     }
   }
 

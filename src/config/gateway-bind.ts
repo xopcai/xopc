@@ -8,23 +8,6 @@ import { isLoopbackHost } from '../gateway/host.js';
 
 export type { GatewayBindMode };
 
-/** Infer bind mode from a legacy `gateway.host` string. */
-export function inferBindModeFromHost(host: string): GatewayBindMode {
-  const normalized = host.trim().toLowerCase();
-  if (
-    normalized === '127.0.0.1' ||
-    normalized === 'localhost' ||
-    normalized === '::1' ||
-    normalized === '0:0:0:0:0:0:0:1'
-  ) {
-    return 'loopback';
-  }
-  if (normalized === '0.0.0.0' || normalized === '::' || normalized === '*') {
-    return 'lan';
-  }
-  return 'custom';
-}
-
 export function resolveGatewayBindMode(
   cfg: Config,
   bindOverride?: GatewayBindMode,
@@ -32,48 +15,7 @@ export function resolveGatewayBindMode(
   if (bindOverride) {
     return bindOverride;
   }
-  const configured = cfg.gateway?.bind;
-  if (configured) {
-    return configured;
-  }
-  const legacyHost = cfg.gateway?.host?.trim();
-  if (legacyHost) {
-    return inferBindModeFromHost(legacyHost);
-  }
-  return defaultGatewayBindMode();
-}
-
-export function bindModeFromHostOverride(host: string): {
-  bind: GatewayBindMode;
-  customBindHost?: string;
-} {
-  const trimmed = host.trim();
-  const bind = inferBindModeFromHost(trimmed);
-  if (bind === 'custom') {
-    return { bind, customBindHost: trimmed };
-  }
-  return { bind };
-}
-
-/** Legacy `gateway.host` value derived from bind mode (for readers that still use host). */
-export function syncLegacyGatewayHostFromBind(params: {
-  bind: GatewayBindMode;
-  customBindHost?: string;
-}): string {
-  switch (params.bind) {
-    case 'loopback':
-      return '127.0.0.1';
-    case 'lan':
-      return '0.0.0.0';
-    case 'custom':
-      return params.customBindHost?.trim() || '127.0.0.1';
-    case 'auto':
-      return isContainerEnvironment() ? '0.0.0.0' : '127.0.0.1';
-    case 'tailnet':
-      return pickPrimaryTailnetIPv4() ?? '127.0.0.1';
-    default:
-      return '127.0.0.1';
-  }
+  return cfg.gateway?.bind ?? defaultGatewayBindMode();
 }
 
 export function resolveGatewayCustomBindHost(cfg: Config, override?: string): string | undefined {
@@ -81,15 +23,7 @@ export function resolveGatewayCustomBindHost(cfg: Config, override?: string): st
   if (fromOverride) {
     return fromOverride;
   }
-  const fromConfig = cfg.gateway?.customBindHost?.trim();
-  if (fromConfig) {
-    return fromConfig;
-  }
-  const legacyHost = cfg.gateway?.host?.trim();
-  if (legacyHost && inferBindModeFromHost(legacyHost) === 'custom') {
-    return legacyHost;
-  }
-  return undefined;
+  return cfg.gateway?.customBindHost?.trim() || undefined;
 }
 
 let containerEnvironmentCache: boolean | undefined;
@@ -256,16 +190,15 @@ export function isNetworkAccessibleBindHost(bindHost: string): boolean {
 
 export function resolveGatewayEffectiveHost(
   cfg: Config,
-  overrides?: { bind?: GatewayBindMode; host?: string },
+  overrides?: { bind?: GatewayBindMode },
 ): string {
-  if (overrides?.host?.trim()) {
-    const mapped = bindModeFromHostOverride(overrides.host);
-    return resolveGatewayBindHostSync({
-      bindMode: mapped.bind,
-      customBindHost: mapped.customBindHost,
-    });
-  }
   const bindMode = resolveGatewayBindMode(cfg, overrides?.bind);
   const customBindHost = resolveGatewayCustomBindHost(cfg);
   return resolveGatewayBindHostSync({ bindMode, customBindHost });
+}
+
+/** Loopback URL hostname when connecting to the gateway from the same machine. */
+export function resolveGatewayLocalClientHost(cfg: Config): string {
+  const bindHost = resolveGatewayEffectiveHost(cfg);
+  return bindHost === '0.0.0.0' || bindHost === '::' ? '127.0.0.1' : bindHost;
 }

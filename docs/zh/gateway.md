@@ -631,7 +631,8 @@ Content-Type: application/json
 
 | 参数 | 默认值 | 描述 |
 |------|--------|------|
-| `host` | `127.0.0.1` | 绑定地址 |
+| `bind` | `loopback` | 绑定模式（`loopback`、`lan`、`auto`、`tailnet`、`custom`） |
+| `customBindHost` | - | 当 `bind` 为 `custom` 时的 IPv4 监听地址 |
 | `port` | `18790` | 端口号 |
 | `auth.mode` | `token` | 认证模式（`none` / `token` / `password`） |
 | `auth.token` | token 模式下自动生成 | token 凭证 |

@@ -62,7 +62,7 @@ function resolveEntryPoint(): string {
 
 export function buildGatewayInstallPlan(params: {
   port: number;
-  host?: string;
+  bind?: import('../config/schema.js').GatewayBindMode;
   token?: string;
   env?: GatewayServiceEnv;
   runtime?: 'node' | 'binary';
@@ -95,8 +95,8 @@ export function buildGatewayInstallPlan(params: {
     ];
   }
 
-  if (params.host && params.host !== '0.0.0.0') {
-    programArguments.push('--host', params.host);
+  if (params.bind && params.bind !== 'loopback') {
+    programArguments.push('--bind', params.bind);
   }
 
   // Build environment
@@ -161,7 +161,7 @@ export function buildGatewayInstallPlan(params: {
 
 export function buildGatewayInstallArgs(params: {
   port: number;
-  host?: string;
+  bind?: import('../config/schema.js').GatewayBindMode;
   token?: string;
   env?: GatewayServiceEnv;
   runtime?: 'node' | 'binary';

@@ -257,7 +257,7 @@ The gateway runs in foreground mode by default. Press `Ctrl+C` to stop.
 | Parameter | Description |
 |-----------|-------------|
 | `-p, --port` | Port number (default: 18790) |
-| `-h, --host` | Bind address (default: 0.0.0.0) |
+| `--bind <mode>` | Bind mode: `loopback`, `lan`, `auto`, `custom`, `tailnet` (default from config) |
 | `--token` | Auth token |
 | `--no-hot-reload` | Disable config hot reload |
 | `--force` | Force kill existing process on port |
