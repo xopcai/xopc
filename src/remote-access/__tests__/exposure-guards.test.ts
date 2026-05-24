@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import type { Config } from '../config/schema.js';
-import { collectExposureConflicts, isRemoteGatewayInsecure } from './exposure-guards.js';
+import type { Config } from '../../config/schema.js';
+import { collectExposureConflicts, isRemoteGatewayInsecure } from '../exposure-guards.js';
 
 describe('exposure-guards', () => {
   it('flags tailscale serve with lan bind', () => {
