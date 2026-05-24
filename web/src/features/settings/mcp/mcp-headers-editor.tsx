@@ -2,6 +2,7 @@ import { ClipboardPaste, Trash2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { parseHeadersPaste, type McpHeaderEntry } from '@/features/settings/mcp/mcp-headers-utils';
+import { readTextFromClipboard } from '@/lib/copy-to-clipboard';
 import { settingsInputFocusClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
@@ -54,7 +55,11 @@ export function McpHeadersEditor({
 
   const pasteFromClipboard = async () => {
     try {
-      const text = await navigator.clipboard.readText();
+      const text = await readTextFromClipboard();
+      if (!text) {
+        window.alert(pasteFailed);
+        return;
+      }
       const parsed = parseHeadersPaste(text);
       if (!parsed?.length) {
         window.alert(pasteFailed);
