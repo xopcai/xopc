@@ -1,4 +1,7 @@
-import { messages } from '@/i18n/messages';
+import type { StoredLanguage } from '@/lib/storage';
+import { messages, tabLabel, type Tab } from '@/i18n/messages';
+import { pathForTab, SETTINGS_SHELL_NAV_GROUPS } from '@/navigation';
+import { channelDetailPath } from '@/features/settings/channels/channels-routes';
 
 export type RouteHitSeed = {
   id: string;
@@ -8,99 +11,187 @@ export type RouteHitSeed = {
   keywords?: string[];
 };
 
-export function buildRouteSeeds(language: 'en' | 'zh'): RouteHitSeed[] {
+const AGENT_DEFAULTS_ROUTE_KEYWORDS: Partial<Record<Tab, string[]>> = {
+  settingsAgentChat: ['model', 'temperature', 'sampling', 'chat'],
+  settingsAgentWorkspace: ['workspace', 'directory', 'folder', 'attachments'],
+  settingsAgentBrowser: ['browser', 'playwright', 'automation'],
+  settingsAgentRuntime: ['limits', 'turn', 'timeout', 'tool', 'iterations'],
+  settingsAgentContext: ['context', 'compaction', 'pruning', 'tokens'],
+  settingsAgentMemory: ['memory', 'review', 'session', 'search'],
+  settingsAgentTools: ['tools', 'web', 'extract', 'code'],
+  settingsAgentSkills: ['skills', 'allowlist', 'marketplace'],
+  settingsAgentSystemPrompt: ['system', 'prompt', 'instructions'],
+  settingsAgentMcp: ['mcp', 'external', 'tools'],
+};
+
+function buildAgentDefaultsRouteSeeds(language: StoredLanguage): RouteHitSeed[] {
   const m = messages(language);
+  const subtitle = m.commandPalette.routes.agentDefaultsSubtitle;
+  const agentGroup = SETTINGS_SHELL_NAV_GROUPS.find((g) => g.id === 'agent');
+  if (!agentGroup) {
+    return [];
+  }
+  return agentGroup.tabs.map((tab) => ({
+    id: `route:settings:agent:${tab}`,
+    title: tabLabel(language, tab),
+    subtitle,
+    path: pathForTab(tab),
+    keywords: ['agent', 'defaults', 'config', ...(AGENT_DEFAULTS_ROUTE_KEYWORDS[tab] ?? [])],
+  }));
+}
+
+export function buildRouteSeeds(language: StoredLanguage): RouteHitSeed[] {
+  const m = messages(language);
+  const r = m.commandPalette.routes;
+  const ch = m.channelsSettings;
   return [
     {
       id: 'route:chat',
       title: m.nav.chat,
-      subtitle: language === 'zh' ? '打开聊天' : 'Open chat',
+      subtitle: r.chatSubtitle,
       path: '/chat',
       keywords: ['chat', 'new', 'compose', 'assistant'],
     },
     {
       id: 'route:agents',
       title: m.nav.agents,
-      subtitle: language === 'zh' ? '管理智能体' : 'Manage agents',
+      subtitle: r.agentsSubtitle,
       path: '/agents',
       keywords: ['agent', 'persona', 'switch'],
     },
     {
       id: 'route:apps',
       title: m.nav.apps,
-      subtitle: language === 'zh' ? '扩展应用' : 'Extension apps',
+      subtitle: r.appsSubtitle,
       path: '/apps',
       keywords: ['extension', 'plugin', 'addon'],
     },
     {
       id: 'route:sessions',
       title: m.nav.sessions,
-      subtitle: language === 'zh' ? '管理与搜索会话' : 'Manage and search sessions',
+      subtitle: r.sessionsSubtitle,
       path: '/settings/sessions',
       keywords: ['history', 'archive', 'pin'],
     },
     {
       id: 'route:logs',
       title: m.nav.logs,
-      subtitle: language === 'zh' ? '查看日志' : 'View logs',
+      subtitle: r.logsSubtitle,
       path: '/settings/logs',
       keywords: ['debug', 'errors'],
     },
     {
       id: 'route:skills',
       title: m.nav.skills,
-      subtitle: language === 'zh' ? '管理技能' : 'Manage skills',
+      subtitle: r.skillsSubtitle,
       path: '/skills',
       keywords: ['tools', 'catalog'],
     },
     {
       id: 'route:channels',
       title: m.nav.channels,
-      subtitle: language === 'zh' ? '消息通道设置' : 'Channel settings',
+      subtitle: r.channelsSubtitle,
       path: '/channels',
-      keywords: ['telegram', 'weixin'],
+      keywords: ['telegram', 'weixin', 'feishu', 'channel'],
+    },
+    {
+      id: 'route:channels:telegram',
+      title: ch.telegramTitle,
+      subtitle: r.channelsSubtitle,
+      path: channelDetailPath('telegram'),
+      keywords: ['telegram', 'bot', 'channel', 'pairing'],
+    },
+    {
+      id: 'route:channels:weixin',
+      title: ch.weixinTitle,
+      subtitle: r.channelsSubtitle,
+      path: channelDetailPath('weixin'),
+      keywords: ['weixin', 'wechat', 'channel', 'qr'],
+    },
+    {
+      id: 'route:channels:feishu',
+      title: ch.feishuTitle,
+      subtitle: r.channelsSubtitle,
+      path: channelDetailPath('feishu'),
+      keywords: ['feishu', 'lark', 'channel'],
+    },
+    {
+      id: 'route:channels:telegram:pairing',
+      title: `${ch.telegramTitle} — ${ch.hubPairingButton}`,
+      subtitle: r.channelsSubtitle,
+      path: channelDetailPath('telegram', { pairing: true }),
+      keywords: ['telegram', 'pairing', 'approve', 'dm'],
     },
     {
       id: 'route:cron',
       title: m.nav.cron,
-      subtitle: language === 'zh' ? '定时任务与调度' : 'Cron jobs and schedules',
+      subtitle: r.cronSubtitle,
       path: '/cron',
-      keywords: ['schedule', 'jobs'],
+      keywords: ['schedule', 'jobs', 'tasks', 'history'],
+    },
+    {
+      id: 'route:settings:cron',
+      title: m.nav.settingsCron,
+      subtitle: r.cronSettingsSubtitle,
+      path: '/settings/cron',
+      keywords: ['schedule', 'scheduler', 'timezone', 'concurrency', 'cron', 'automation'],
+    },
+    {
+      id: 'route:settings:goals',
+      title: m.nav.settingsGoals,
+      subtitle: r.goalsSettingsSubtitle,
+      path: '/settings/goals',
+      keywords: ['goal', 'checklist', 'judge', '/goal', 'automation'],
+    },
+    {
+      id: 'route:settings:dreams',
+      title: m.nav.settingsDreams,
+      subtitle: r.dreamsSettingsSubtitle,
+      path: '/settings/dreams',
+      keywords: ['dream', 'memory', 'consolidation', 'automation'],
     },
     {
       id: 'route:settings',
       title: m.nav.settings,
-      subtitle: language === 'zh' ? '打开设置' : 'Open settings',
-      path: '/settings/appearance',
-      keywords: ['config', 'appearance', 'providers', 'models', 'agents', 'search', 'preferences'],
+      subtitle: r.settingsSubtitle,
+      path: '/settings/overview',
+      keywords: ['config', 'status', 'providers', 'models', 'agents', 'search', 'preferences'],
+    },
+    {
+      id: 'route:settings:credentials',
+      title: m.nav.settingsCredentials,
+      subtitle: r.credentialsSubtitle,
+      path: '/settings/credentials',
+      keywords: ['api', 'key', 'credentials', 'oauth', 'token'],
     },
     {
       id: 'route:settings:providers',
       title: m.nav.settingsProviders,
-      subtitle: language === 'zh' ? 'AI 服务商配置' : 'AI provider configuration',
+      subtitle: r.providersSubtitle,
       path: '/settings/providers',
       keywords: ['api', 'key', 'openai', 'anthropic', 'google'],
     },
     {
       id: 'route:settings:models',
       title: m.nav.settingsModels,
-      subtitle: language === 'zh' ? '模型配置' : 'Model configuration',
+      subtitle: r.modelsSubtitle,
       path: '/settings/models',
       keywords: ['gpt', 'claude', 'gemini', 'llm'],
     },
     {
       id: 'route:settings:voice',
       title: m.nav.settingsVoice,
-      subtitle: language === 'zh' ? '语音设置' : 'Voice settings',
+      subtitle: r.voiceSubtitle,
       path: '/settings/voice',
       keywords: ['tts', 'stt', 'speech', 'microphone'],
     },
     {
       id: 'route:settings:gateway',
       title: m.nav.settingsGateway,
-      subtitle: language === 'zh' ? '网关设置' : 'Gateway settings',
+      subtitle: r.gatewaySubtitle,
       path: '/settings/gateway',
       keywords: ['server', 'port', 'auth', 'token'],
     },
+    ...buildAgentDefaultsRouteSeeds(language),
   ];
 }

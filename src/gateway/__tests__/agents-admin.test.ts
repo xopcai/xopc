@@ -147,6 +147,48 @@ describe('agents-admin', () => {
     }
   });
 
+  it('prepareCreateAgent sets toolsDisable on new entry', () => {
+    const cfg = minimalConfig();
+    const r = prepareCreateAgent(cfg, {
+      name: 'Coder',
+      id: 'coder',
+      workspace: '/tmp/c',
+      toolsDisable: ['shell', 'image_generate'],
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const e = r.data.nextConfig.agents?.list?.find((x) => x.id === 'coder');
+    expect(e?.tools?.disable).toEqual(['shell', 'image_generate']);
+  });
+
+  it('prepareCreateAgent rejects unsupported profileFiles name', () => {
+    const cfg = minimalConfig();
+    const r = prepareCreateAgent(cfg, {
+      name: 'Coder',
+      id: 'coder',
+      workspace: '/tmp/c',
+      profileFiles: { '../../../etc/passwd': 'x' },
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.status).toBe(400);
+    }
+  });
+
+  it('prepareCreateAgent rejects non-string profileFiles content', () => {
+    const cfg = minimalConfig();
+    const r = prepareCreateAgent(cfg, {
+      name: 'Coder',
+      id: 'coder',
+      workspace: '/tmp/c',
+      profileFiles: { 'SOUL.md': 42 as unknown as string },
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.status).toBe(400);
+    }
+  });
+
   it('prepareDeleteAgent refuses main', () => {
     const cfg = minimalConfig({
       agents: {

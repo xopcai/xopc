@@ -22,6 +22,7 @@ import { channelUsesPairingPolicy, resolveAccountDmPolicyForConfig } from './pai
 import { useChannelPairingApprove } from './use-channel-pairing-approve';
 import { useChannelPairingSseRefresh } from './use-channel-pairing-sse';
 import { channelsInputClassName } from './utils';
+import { channelPairingSectionDomId } from './pairing-scroll';
 
 function formatRelativeExpiry(iso: string, locale: string): string {
   const ms = Date.parse(iso) - Date.now();
@@ -166,7 +167,10 @@ export function ChannelPairingSection({
 
   if (!accountPairingActive) {
     return (
-      <div className="space-y-2 rounded-xl border border-edge-subtle bg-surface-base/50 p-4 dark:border-edge">
+      <div
+        id={channelPairingSectionDomId(channel)}
+        className="space-y-2 rounded-xl border border-edge-subtle bg-surface-base/50 p-4 dark:border-edge"
+      >
         <h3 className="text-sm font-medium text-fg">{ch.pairingTitle}</h3>
         <p className="text-xs text-fg-muted">{ch.pairingAccountNotPairing.replace('{{account}}', accountId)}</p>
         {resolvedAccountIds.length > 1 ? (
@@ -193,7 +197,10 @@ export function ChannelPairingSection({
   const pairedConfig = data?.paired.fromConfig ?? [];
 
   return (
-    <div className="space-y-3 rounded-xl border border-edge-subtle bg-surface-base/50 p-4 dark:border-edge">
+    <div
+      id={channelPairingSectionDomId(channel)}
+      className="space-y-3 rounded-xl border border-edge-subtle bg-surface-base/50 p-4 dark:border-edge"
+    >
       <div className="flex items-start justify-between gap-2">
         <div>
           <h3 className="text-sm font-medium text-fg">{ch.pairingTitle}</h3>

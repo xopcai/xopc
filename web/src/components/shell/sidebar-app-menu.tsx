@@ -216,7 +216,7 @@ export function SidebarAppMenu({
       </a>
 
       <Link
-        to="/settings/appearance"
+        to="/settings/overview"
         className={cn(
           rowClass,
           'text-accent-fg hover:bg-accent-soft hover:text-accent-fg',

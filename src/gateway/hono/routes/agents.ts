@@ -53,6 +53,26 @@ export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRou
     const agentDir = typeof body.agentDir === 'string' ? body.agentDir : undefined;
     const description = typeof body.description === 'string' ? body.description : undefined;
     const id = typeof body.id === 'string' ? body.id : undefined;
+    const toolsDisable = Array.isArray(body.toolsDisable)
+      ? body.toolsDisable.map((x: unknown) => String(x).trim()).filter(Boolean)
+      : undefined;
+    let profileFiles: Record<string, string> | undefined;
+    if (Object.hasOwn(body, 'profileFiles')) {
+      const raw = body.profileFiles;
+      if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
+        return c.json({ ok: false, error: { message: 'profileFiles must be an object' } }, 400);
+      }
+      profileFiles = {};
+      for (const [name, content] of Object.entries(raw as Record<string, unknown>)) {
+        if (typeof content !== 'string') {
+          return c.json(
+            { ok: false, error: { message: `profileFiles["${name}"] must be a string` } },
+            400,
+          );
+        }
+        profileFiles[name] = content;
+      }
+    }
     const prep = prepareCreateAgent(service.currentConfig as Config, {
       name,
       workspace,
@@ -60,6 +80,8 @@ export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRou
       agentDir,
       ...(id !== undefined ? { id } : {}),
       ...(description !== undefined ? { description } : {}),
+      ...(toolsDisable !== undefined ? { toolsDisable } : {}),
+      ...(profileFiles !== undefined ? { profileFiles } : {}),
     });
     if (prep.ok === false) {
       return c.json({ ok: false, error: { message: prep.error } }, prep.status ?? 400);
@@ -69,7 +91,12 @@ export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRou
     if (!save.saved) {
       return c.json({ ok: false, error: { message: save.error ?? 'save failed' } }, 500);
     }
-    await finalizeCreateAgentDirs(service.currentConfig as Config, agentId);
+    const finalized = await finalizeCreateAgentDirs(service.currentConfig as Config, agentId, {
+      ...(profileFiles !== undefined ? { profileFiles } : {}),
+    });
+    if (finalized.ok === false) {
+      return c.json({ ok: false, error: { message: finalized.error } }, finalized.status ?? 400);
+    }
     const agentsPayload = await listGatewayAgents(service.currentConfig as Config);
     return c.json({
       ok: true,

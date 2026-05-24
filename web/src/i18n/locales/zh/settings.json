@@ -1,17 +1,21 @@
 {
   "settingsSections": {
+    "overview": "系统状态",
     "appearance": "偏好设置",
     "agent": "智能体",
     "agent-defaults": "智能体默认",
-    "agent-chat": "对话",
+    "agent-chat": "默认模型与对话",
     "agent-workspace": "工作区",
     "agent-browser": "浏览器",
-    "agent-runtime": "运行时",
+    "agent-runtime": "单轮限制",
+    "agent-context": "上下文",
+    "agent-memory": "记忆",
     "agent-tools": "工具",
-    "agent-skills": "技能",
-    "agent-mcp": "MCP",
+    "agent-skills": "默认技能白名单",
+    "agent-mcp": "外部工具 (MCP)",
     "agent-system-prompt": "系统提示词",
-    "providers": "服务商",
+    "providers": "LLM 服务商",
+    "credentials": "凭证中心",
     "models": "模型",
     "image-models": "图像",
     "channels": "消息通道",
@@ -22,10 +26,149 @@
     "shares": "文件分享",
     "search": "网络搜索",
     "dreams": "梦境",
+    "goals": "目标评判",
     "agents": "智能体",
     "system": "系统设置",
     "cron": "定时任务",
     "skills": "技能"
+  },
+  "settingsPage": {
+    "comingSoon": "设置 · {{title}}（即将推出）。"
+  },
+  "setupStatus": {
+    "title": "系统状态",
+    "subtitle": "查看当前配置进度，完成必要步骤后即可开始对话。",
+    "refresh": "刷新",
+    "loading": "正在加载状态…",
+    "loadError": "无法加载系统状态，请检查网关连接后重试。",
+    "summaryTitle": "概览",
+    "summarySubtitle": "对话所需的核心服务。",
+    "summaryGateway": "网关",
+    "summaryProviders": "服务商",
+    "summaryModel": "默认模型",
+    "statusOnline": "在线",
+    "statusOffline": "离线",
+    "requiredCompleteMessage": "必要配置已完成，可以开始对话。",
+    "requiredIncompleteMessage": "请完成下方必要步骤后再开始对话。",
+    "checklistTitle": "设置清单",
+    "checklistSubtitle": "点击步骤进入对应设置。带「可选」标记的步骤可稍后再做。",
+    "optionalBadge": "可选",
+    "labels": {
+      "gatewayOnline": "已连接网关",
+      "gatewayOffline": "未连接 — 请检查令牌与网关",
+      "providersConfigured": "已配置 {{count}} 个服务商",
+      "providersMetaReady": "{{configured}} / {{total}} 个服务商已就绪",
+      "providersMissing": "尚未配置服务商",
+      "modelConfigured": "{{model}}",
+      "modelMissing": "尚未选择默认模型",
+      "channelConfigured": "已连接至少一个消息通道",
+      "channelMissing": "尚未配置消息通道",
+      "skillsConfigured": "已有 {{count}} 个可用技能",
+      "skillsMissing": "尚未安装技能",
+      "presetsConfigured": "已配置 {{count}} 个智能体",
+      "presetsMissing": "仅有默认智能体 — 可添加预设角色"
+    },
+    "items": {
+      "gateway": {
+        "title": "连接网关",
+        "description": "确认网页控制台可以访问 xopc 网关。"
+      },
+      "provider": {
+        "title": "配置 LLM 服务商",
+        "description": "至少添加一家 AI 服务商的 API 密钥或 OAuth 令牌。"
+      },
+      "defaultModel": {
+        "title": "选择默认模型",
+        "description": "设置新对话使用的默认模型。"
+      },
+      "channel": {
+        "title": "连接消息通道",
+        "description": "关联 Telegram、微信或飞书，从即时通讯应用对话。"
+      },
+      "skill": {
+        "title": "安装技能",
+        "description": "从市场或目录安装技能，扩展智能体能力。"
+      },
+      "presets": {
+        "title": "添加预设智能体",
+        "description": "创建专用智能体（如编程、写作等）以应对不同任务。"
+      }
+    },
+    "scenarios": {
+      "title": "快速场景向导",
+      "subtitle": "按使用方式选择路径 — 每一步会打开对应设置页。",
+      "dismiss": "隐藏",
+      "steps": {
+        "stepProviders": "配置 LLM 服务商密钥",
+        "stepDefaultModel": "选择默认对话模型",
+        "stepChannel": "连接消息通道",
+        "stepPresets": "添加专用智能体",
+        "stepCron": "设置定时任务",
+        "stepSkills": "从目录安装技能"
+      },
+      "presets": {
+        "lightChat": {
+          "title": "轻量对话",
+          "description": "在网页控制台对话 — 配置一家服务商并选择默认模型即可。"
+        },
+        "multiChannel": {
+          "title": "多频道助手",
+          "description": "从 Telegram 等通道回复，并为不同场景配置专用智能体。"
+        },
+        "automation": {
+          "title": "自动化工作流",
+          "description": "结合技能与定时任务，完成周期性后台工作。"
+        }
+      }
+    }
+  },
+  "credentialsHub": {
+    "title": "凭证中心",
+    "subtitle": "集中查看对话、搜索、图像与语音相关的 API 密钥和 OAuth 状态。",
+    "refresh": "刷新",
+    "loading": "正在加载凭证状态…",
+    "loadError": "无法加载凭证状态，请检查网关连接后重试。",
+    "domainsTitle": "凭证域",
+    "domainsSubtitle": "在各自详情页管理密钥 — 值保存在网关配置中。",
+    "footerHint": "LLM 密钥在「LLM 服务商」页管理。图像、语音与网页搜索密钥也可能来自环境变量 — 此处仅显示写入配置的项。",
+    "status": {
+      "ready": "就绪",
+      "partial": "部分",
+      "missing": "缺失",
+      "notNeeded": "可选"
+    },
+    "labels": {
+      "llmMetaReady": "{{configured}} / {{total}} 个 LLM 服务商已就绪",
+      "llmConfigured": "已配置 {{count}} 个 LLM 服务商",
+      "llmMissing": "尚未配置 LLM 服务商",
+      "webSearchDisabled": "网页搜索已关闭",
+      "webSearchReady": "已设置 {{configured}} / {{total}} 个搜索 API 密钥",
+      "webSearchNoProviders": "尚未配置搜索服务商",
+      "imageReady": "已配置 {{configured}} / {{total}} 个图像服务商",
+      "imageNoProviders": "尚未注册图像服务商",
+      "voiceDisabled": "语音输入/输出已关闭",
+      "voiceReadyNoKeys": "语音已启用 — 无需 API 密钥",
+      "voiceKeysReady": "已设置 {{configured}} / {{total}} 个语音 API 密钥",
+      "voiceMissing": "语音尚未配置"
+    },
+    "domains": {
+      "llm": {
+        "title": "LLM 服务商",
+        "description": "对话模型的 API 密钥与 OAuth。"
+      },
+      "webSearch": {
+        "title": "网页搜索",
+        "description": "Brave、Tavily 等搜索 API 密钥。"
+      },
+      "image": {
+        "title": "图像生成",
+        "description": "视觉理解与图像生成服务商密钥。"
+      },
+      "voice": {
+        "title": "语音（STT / TTS）",
+        "description": "语音识别与文字转语音凭证。"
+      }
+    }
   },
   "dreamingSettings": {
     "title": "梦境",
@@ -189,12 +332,21 @@
   },
   "settingsNavGroups": {
     "general": "通用",
-    "models": "模型与多媒体",
+    "credentials": "凭证与模型",
     "agent": "智能体默认配置",
-    "gateway": "网关",
+    "connection": "连接",
     "automation": "自动化",
-    "data": "会话与日志",
+    "diagnostics": "诊断",
     "extensions": "扩展"
+  },
+  "cronSettingsPage": {
+    "title": "定时任务",
+    "subtitle": "调度引擎开关、并发、时区与运行历史保留等全局参数。",
+    "tasksLink": "管理任务与运行历史 →"
+  },
+  "goalsSettingsPage": {
+    "title": "目标评判",
+    "subtitle": "持久目标 /goal 的评判模型、轮数上限与清单模式默认值。"
   },
   "imageModelsSettings": {
     "title": "图像",
@@ -285,7 +437,7 @@
     "aboutApp": "关于"
   },
   "mcpSettings": {
-    "title": "MCP",
+    "title": "外部工具 (MCP)",
     "subtitle": "配置出站 MCP 服务（stdio 或 HTTP），供嵌入式 Agent 运行时使用。可在 Agent 的 tools.disable 中加入 \"bundle-mcp\" 关闭全部 MCP 工具。",
     "loading": "正在加载 MCP 配置…",
     "saved": "MCP 配置已保存。",

@@ -1,20 +1,24 @@
 import type { GlobalHit } from '@/features/search/global-command-palette/types';
+import { messages } from '@/i18n/messages';
+import type { StoredLanguage } from '@/lib/storage';
 import type { NavigateFunction } from 'react-router-dom';
 
 export function buildAutomationActionHits(
-  language: 'en' | 'zh',
+  language: StoredLanguage,
   navigate: NavigateFunction,
   closePalette: () => void,
 ): Array<Omit<GlobalHit, 'rank'>> {
-  const isZh = language === 'zh';
+  const m = messages(language);
+  const a = m.commandPalette.actions;
+  const groupLabel = m.commandPalette.groups.actions;
 
   return [
     {
       kind: 'action',
       id: 'action:cron:create',
-      title: isZh ? '创建定时任务' : 'Create scheduled task',
-      subtitle: isZh ? '新建 Cron 任务' : 'Open scheduled tasks (create)',
-      groupLabel: 'Actions',
+      title: a.createCron,
+      subtitle: a.createCronSubtitle,
+      groupLabel,
       keywords: ['cron', 'schedule', 'job', 'timer'],
       run: () => {
         closePalette();
@@ -24,9 +28,9 @@ export function buildAutomationActionHits(
     {
       kind: 'action',
       id: 'action:cron:manage',
-      title: isZh ? '管理定时任务' : 'Manage scheduled tasks',
-      subtitle: isZh ? '查看和编辑 Cron' : 'View and edit cron jobs',
-      groupLabel: 'Actions',
+      title: a.manageCron,
+      subtitle: a.manageCronSubtitle,
+      groupLabel,
       keywords: ['cron', 'schedule', 'tasks'],
       run: () => {
         closePalette();
@@ -36,9 +40,9 @@ export function buildAutomationActionHits(
     {
       kind: 'action',
       id: 'action:skills:manage',
-      title: isZh ? '管理技能' : 'Manage skills',
-      subtitle: isZh ? '启用或禁用技能' : 'View, enable, or disable skills',
-      groupLabel: 'Actions',
+      title: a.manageSkills,
+      subtitle: a.manageSkillsSubtitle,
+      groupLabel,
       keywords: ['skills', 'skill', 'catalog'],
       run: () => {
         closePalette();
@@ -48,9 +52,9 @@ export function buildAutomationActionHits(
     {
       kind: 'action',
       id: 'action:skills:reload',
-      title: isZh ? '重新加载技能' : 'Reload skills',
-      subtitle: isZh ? '从磁盘重新加载' : 'Reload all skills from disk',
-      groupLabel: 'Actions',
+      title: a.reloadSkills,
+      subtitle: a.reloadSkillsSubtitle,
+      groupLabel,
       keywords: ['skills', 'reload', 'refresh'],
       run: () => {
         closePalette();

@@ -1,10 +1,14 @@
+export interface ElectronOpenDirectoryOptions {
+  defaultPath?: string;
+}
+
 export interface ElectronFileAPI {
   readFile(filePath: string): Promise<string>;
   writeFile(filePath: string, content: string): Promise<{ success: boolean }>;
   listDirectory(dirPath: string): Promise<
     Array<{ name: string; path: string; isDirectory: boolean }>
   >;
-  openDirectory(): Promise<string | null>;
+  openDirectory(options?: ElectronOpenDirectoryOptions): Promise<string | null>;
   watchFile(filePath: string, callback: (content: string) => void): void;
 }
 

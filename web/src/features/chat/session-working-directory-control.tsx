@@ -11,48 +11,17 @@ import { memo, useCallback, useEffect, useState, type ReactNode } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { SessionManager } from '@/features/chat/session-manager';
-import { WorkingDirectoryPickerModal } from '@/features/chat/working-directory-picker-modal';
+import { folderDisplayName } from '@/features/fs/directory-path-utils';
+import { DirectoryPickerTrigger } from '@/features/fs/directory-picker-trigger';
+import { useDirectoryPicker } from '@/features/fs/use-directory-picker';
+import { WorkingDirectoryPickerModal } from '@/features/fs/working-directory-picker-modal';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useWorkspacePanelStore } from '@/stores/workspace-panel-store';
 
-const RECENT_DIRS_KEY = 'xopc.recentWorkspaceDirs.v1';
-const MAX_RECENT = 10;
-
-function readRecentDirs(): string[] {
-  try {
-    const raw = localStorage.getItem(RECENT_DIRS_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as unknown;
-    return Array.isArray(parsed)
-      ? parsed.filter((x): x is string => typeof x === 'string' && x.trim().length > 0)
-      : [];
-  } catch {
-    return [];
-  }
-}
-
-function pushRecentDir(path: string): void {
-  const t = path.trim();
-  if (!t) return;
-  try {
-    const prev = readRecentDirs();
-    const next = [t, ...prev.filter((p) => p !== t)].slice(0, MAX_RECENT);
-    localStorage.setItem(RECENT_DIRS_KEY, JSON.stringify(next));
-  } catch {
-    /* ignore */
-  }
-}
-
-/** Last path segment for display (folder name only). */
-export function folderDisplayName(absPath: string): string {
-  const t = absPath.trim().replace(/[/\\]+$/, '');
-  if (!t) return absPath;
-  const parts = t.split(/[/\\]/);
-  return parts[parts.length - 1] || t;
-}
+export { folderDisplayName } from '@/features/fs/directory-path-utils';
 
 type Props = {
   sessionKey: string | null;
@@ -75,7 +44,6 @@ export const SessionWorkingDirectoryControl = memo(function SessionWorkingDirect
 
   const [effectivePath, setEffectivePath] = useState('');
   const [loading, setLoading] = useState(false);
-  const [pathModalOpen, setPathModalOpen] = useState(false);
   const [errorModalOpen, setErrorModalOpen] = useState(false);
   const [errorModalMessage, setErrorModalMessage] = useState<string | null>(null);
 
@@ -104,7 +72,6 @@ export const SessionWorkingDirectoryControl = memo(function SessionWorkingDirect
       if (!sessionKey?.trim() || !path.trim()) return;
       try {
         await sessionMgr.patchSessionAgentConfig(sessionKey, { workingDirectory: path.trim() });
-        pushRecentDir(path.trim());
         await refresh();
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
@@ -116,26 +83,7 @@ export const SessionWorkingDirectoryControl = memo(function SessionWorkingDirect
     [sessionKey, sessionMgr, refresh],
   );
 
-  /** Native folder dialog — only available in Electron desktop build. */
-  const openNativeFolderPicker = useCallback(async (): Promise<string | null> => {
-    const api = typeof window !== 'undefined' ? window.electronAPI?.file?.openDirectory : undefined;
-    if (api) return api();
-    return null;
-  }, []);
-
-  const hasElectronFolderPicker =
-    typeof window !== 'undefined' && Boolean(window.electronAPI?.file?.openDirectory);
-
-  const onSelectWorkingDirectoryClick = useCallback(() => {
-    if (hasElectronFolderPicker) {
-      void (async () => {
-        const picked = await openNativeFolderPicker();
-        if (picked) await applyPath(picked);
-      })();
-    } else {
-      setPathModalOpen(true);
-    }
-  }, [applyPath, hasElectronFolderPicker, openNativeFolderPicker]);
+  const directoryPicker = useDirectoryPicker({ initialPath: effectivePath, onPicked: applyPath });
 
   const showWorkspaceLockedReminder = useCallback(() => {
     window.dispatchEvent(
@@ -281,67 +229,60 @@ export const SessionWorkingDirectoryControl = memo(function SessionWorkingDirect
           {wrapChipTooltip(
             workspaceDirectoryTooltipBody({ hasPath, fullPath, canSelect: true }),
             (
-              <button
-                type="button"
-                disabled={disabled || loading}
-                className={cn(
-                  chipClass,
-                  'cursor-pointer hover:bg-surface-hover/70 dark:hover:bg-surface-hover/50',
-                  (disabled || loading) && 'cursor-not-allowed opacity-60',
-                )}
+              <DirectoryPickerTrigger
+                value={fullPath}
+                onPick={directoryPicker.pick}
+                disabled={disabled || loading || directoryPicker.picking}
+                placeholder={wd.notSet}
                 aria-label={ariaSelectable}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (!disabled && !loading) onSelectWorkingDirectoryClick();
-                }}
-              >
-                <FolderInput className="size-3.5 shrink-0 text-fg-muted" aria-hidden />
-                <span className="min-w-0 truncate text-left font-medium text-fg">{label}</span>
-              </button>
+                className={cn(
+                  (disabled || loading || directoryPicker.picking) && 'cursor-not-allowed opacity-60',
+                )}
+              />
             ),
           )}
         </div>
 
-        {!hasElectronFolderPicker ? (
+        {!directoryPicker.hasNativePicker ? (
           <WorkingDirectoryPickerModal
-            open={pathModalOpen}
-            onOpenChange={setPathModalOpen}
+            open={directoryPicker.modalOpen}
+            onOpenChange={directoryPicker.setModalOpen}
             initialAbsolutePath={fullPath || undefined}
-            onConfirm={applyPath}
+            onConfirm={directoryPicker.confirmPick}
             wd={wd}
           />
         ) : null}
 
-      <Dialog.Root
-        open={errorModalOpen}
-        onOpenChange={(open) => {
-          setErrorModalOpen(open);
-          if (!open) setErrorModalMessage(null);
-        }}
-      >
-        <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-[80] bg-scrim backdrop-blur-[2px]" />
-          <Dialog.Content
-            className={cn(
-              'fixed left-1/2 top-1/2 z-[81] w-[min(100%-2rem,26rem)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-edge bg-surface-panel p-4 shadow-popover',
-              'dark:border-edge',
-            )}
-            onOpenAutoFocus={(e) => e.preventDefault()}
-          >
-            <Dialog.Title className="text-base font-semibold text-fg">{wd.applyErrorTitle}</Dialog.Title>
-            {errorModalMessage ? (
-              <Dialog.Description className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-fg-muted">
-                {errorModalMessage}
-              </Dialog.Description>
-            ) : null}
-            <div className="mt-4 flex items-center justify-end border-t border-edge-subtle/60 pt-3">
-              <Button type="button" onClick={() => setErrorModalOpen(false)}>
-                {wd.applyErrorClose}
-              </Button>
-            </div>
-          </Dialog.Content>
-        </Dialog.Portal>
-      </Dialog.Root>
+        <Dialog.Root
+          open={errorModalOpen}
+          onOpenChange={(open) => {
+            setErrorModalOpen(open);
+            if (!open) setErrorModalMessage(null);
+          }}
+        >
+          <Dialog.Portal>
+            <Dialog.Overlay className="fixed inset-0 z-[80] bg-scrim backdrop-blur-[2px]" />
+            <Dialog.Content
+              className={cn(
+                'fixed left-1/2 top-1/2 z-[81] w-[min(100%-2rem,26rem)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-edge bg-surface-panel p-4 shadow-popover',
+                'dark:border-edge',
+              )}
+              onOpenAutoFocus={(e) => e.preventDefault()}
+            >
+              <Dialog.Title className="text-base font-semibold text-fg">{wd.applyErrorTitle}</Dialog.Title>
+              {errorModalMessage ? (
+                <Dialog.Description className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-fg-muted">
+                  {errorModalMessage}
+                </Dialog.Description>
+              ) : null}
+              <div className="mt-4 flex items-center justify-end border-t border-edge-subtle/60 pt-3">
+                <Button type="button" onClick={() => setErrorModalOpen(false)}>
+                  {wd.applyErrorClose}
+                </Button>
+              </div>
+            </Dialog.Content>
+          </Dialog.Portal>
+        </Dialog.Root>
       </>
     </TooltipProvider>
   );

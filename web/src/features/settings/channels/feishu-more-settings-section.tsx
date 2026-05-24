@@ -1,4 +1,5 @@
 import { Check, ChevronDown, Copy, Eye, EyeOff } from 'lucide-react';
+import { useEffect, useRef } from 'react';
 
 import { Button } from '@/components/ui/button';
 import type { ChatAgentsPayload } from '@/features/chat/chat-agents-api';
@@ -10,6 +11,7 @@ import { cn } from '@/lib/cn';
 import { ChannelAgentRoutingBlock } from './channel-agent-routing-block';
 import { ChannelPairingSection } from './channel-pairing-section';
 import { FieldHint, FieldLabel, SelectField } from './field-primitives';
+import { scrollToChannelPairingSection } from './pairing-scroll';
 import { channelsInputClassName, joinAllowFrom, parseIdList } from './utils';
 
 export function FeishuMoreSettingsSection({
@@ -34,11 +36,9 @@ export function FeishuMoreSettingsSection({
   groupOpts,
   chatAgents,
   saving,
-  dirty,
-  save,
-  discard,
   language,
   dialogOpen,
+  pairingFocus = false,
 }: {
   ch: ChannelsSettingsMessages;
   form: ChannelsSettingsState;
@@ -65,11 +65,9 @@ export function FeishuMoreSettingsSection({
   groupOpts: { value: GroupPolicy; label: string }[];
   chatAgents: ChatAgentsPayload | undefined;
   saving: boolean;
-  dirty: boolean;
-  save: () => Promise<boolean>;
-  discard: () => void;
   language: string;
   dialogOpen: boolean;
+  pairingFocus?: boolean;
 }) {
   const inputClassName = channelsInputClassName;
   const fs = form.feishu;
@@ -81,8 +79,21 @@ export function FeishuMoreSettingsSection({
     Boolean(String(feishuBaselineSecret).trim()) &&
     fs.appSecret === feishuBaselineSecret;
 
+  const detailsRef = useRef<HTMLDetailsElement>(null);
+
+  useEffect(() => {
+    if (!pairingFocus) return;
+    const details = detailsRef.current;
+    if (details) details.open = true;
+    const timer = window.setTimeout(() => scrollToChannelPairingSection('feishu'), 80);
+    return () => window.clearTimeout(timer);
+  }, [pairingFocus]);
+
   return (
-    <details className="group rounded-xl border border-edge-subtle bg-surface-base open:pb-3 dark:border-edge">
+    <details
+      ref={detailsRef}
+      className="group rounded-xl border border-edge-subtle bg-surface-base open:pb-3 dark:border-edge"
+    >
       <summary className="cursor-pointer list-none rounded-xl px-3 py-2.5 text-sm font-medium text-fg transition-colors hover:bg-surface-hover group-open:rounded-b-none [&::-webkit-details-marker]:hidden">
         <span className="inline-flex items-center gap-2">
           <ChevronDown className="size-4 shrink-0 text-fg-muted transition-transform group-open:rotate-180" />
@@ -488,23 +499,6 @@ export function FeishuMoreSettingsSection({
               <FieldHint>{ch.multiAccountJsonDesc}</FieldHint>
             )}
           </div>
-        </div>
-
-        <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-          <Button type="button" variant="secondary" className="w-full sm:w-auto" disabled={!dirty || saving} onClick={discard}>
-            {ch.discard}
-          </Button>
-          <Button
-            type="button"
-            variant="primary"
-            className="w-full sm:w-auto"
-            disabled={!dirty || saving}
-            onClick={async () => {
-              await save();
-            }}
-          >
-            {saving ? ch.saving : ch.save}
-          </Button>
         </div>
       </div>
     </details>

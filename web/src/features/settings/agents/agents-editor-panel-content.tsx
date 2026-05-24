@@ -37,6 +37,8 @@ export type AgentsEditorPanelContentProps = {
   setEditWorkspace: (v: string) => void;
   editModel: string;
   setEditModel: (v: string) => void;
+  defaultModel: string;
+  defaultWorkspace: string;
   onSetDefault: () => void;
   onSaveAgentEdits: () => void;
   onDelete: (purge: boolean) => void;
@@ -103,6 +105,8 @@ export function AgentsEditorPanelContent({
   setEditWorkspace,
   editModel,
   setEditModel,
+  defaultModel,
+  defaultWorkspace,
   onSetDefault,
   onSaveAgentEdits,
   onDelete,
@@ -177,6 +181,8 @@ export function AgentsEditorPanelContent({
         hideInlineSave
         saveProfileMarkdownRef={overviewSaveProfileMarkdownRef}
         onProfileMarkdownDirtyChange={setOverviewProfileMarkdownDirty}
+        defaultModel={defaultModel}
+        defaultWorkspace={defaultWorkspace}
       />
     );
   }

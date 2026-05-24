@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { MarkdownEditor } from '@/components/markdown/markdown-editor';
 import { MarkdownView } from '@/components/markdown/markdown-view';
 import { ModelSelector } from '@/features/chat/model-selector';
+import { DirectoryPickerPathField } from '@/features/fs/directory-picker-path-field';
 import type { GatewayAgentRow } from '@/features/settings/agents-admin-api';
 import {
   fetchAgentProfileFileContent,
@@ -22,6 +23,7 @@ import {
 import { useLocaleStore } from '@/stores/locale-store';
 import { useThemeStore } from '@/stores/theme-store';
 
+import { AgentConfigInheritanceSummary } from '../agent-config-inheritance-summary';
 import { AgentAvatarDisplay } from '../agent-avatar-display';
 import { AgentAvatarPicker } from '../agent-avatar-picker';
 import { agentsSettingsInputClass } from '../utils';
@@ -56,6 +58,8 @@ export function AgentOverviewTab(props: {
   saveProfileMarkdownRef?: MutableRefObject<(() => Promise<void>) | null>;
   /** Called when IDENTITY/SOUL editor dirty state changes. */
   onProfileMarkdownDirtyChange?: (dirty: boolean) => void;
+  defaultModel?: string;
+  defaultWorkspace?: string;
 }) {
   const {
     a,
@@ -76,6 +80,8 @@ export function AgentOverviewTab(props: {
     hideInlineSave,
     saveProfileMarkdownRef,
     onProfileMarkdownDirtyChange,
+    defaultModel = '',
+    defaultWorkspace = '',
   } = props;
 
   const language = useLocaleStore((s) => s.language);
@@ -215,6 +221,14 @@ export function AgentOverviewTab(props: {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-8 overflow-y-auto">
+      <AgentConfigInheritanceSummary
+        a={a}
+        defaultModel={defaultModel}
+        defaultWorkspace={defaultWorkspace}
+        agentModel={editModel}
+        agentWorkspace={editWorkspace}
+      />
+
       {/* ===== Section 1: Basic Identity ===== */}
       <SettingsFormSection>
         <SettingsFormSectionHeader
@@ -384,14 +398,17 @@ export function AgentOverviewTab(props: {
               ) : null}
             </div>
           </div>
-          <label className="flex flex-col gap-1.5 text-sm sm:col-span-2">
+          <div className="flex flex-col gap-1.5 text-sm sm:col-span-2">
             <span className="font-medium text-fg">{a.workspacePath}</span>
-            <input
-              className={cn(inputClass, 'font-mono text-xs')}
+            <DirectoryPickerPathField
               value={editWorkspace}
-              onChange={(e) => setEditWorkspace(e.target.value)}
+              onChange={setEditWorkspace}
+              disabled={busy}
+              wd={chat.workingDirectory}
+              placeholder={chat.workingDirectory.notSet}
+              inputClassName={cn(inputClass, 'font-mono text-xs')}
             />
-          </label>
+          </div>
         </div>
         {!hideInlineSave ? (
           <div className="mt-4">

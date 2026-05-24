@@ -15,7 +15,6 @@ import {
   type CronPayload,
 } from '@/features/cron/cron-api';
 import { CronConfirmActionDialog } from '@/features/cron/cron-confirm-action-dialog';
-import { CronGlobalsSection } from '@/features/cron/cron-globals-section';
 import { CronJobDetailDrawer } from '@/features/cron/cron-job-detail-drawer';
 import { CronJobFormDialog } from '@/features/cron/cron-job-form-dialog';
 import { CronMainToolbar } from '@/features/cron/cron-main-toolbar';
@@ -99,15 +98,6 @@ export function CronPage() {
         absorbCardClickJobIdRef.current = null;
       }
     }, 400);
-  }, []);
-
-  const hasElectronFolderPicker =
-    typeof window !== 'undefined' && Boolean(window.electronAPI?.file?.openDirectory);
-
-  const openNativeFolderPickerCron = useCallback(async (): Promise<string | null> => {
-    const api = typeof window !== 'undefined' ? window.electronAPI?.file?.openDirectory : undefined;
-    if (api) return api();
-    return null;
   }, []);
 
   const onSelectTemplate = useCallback(
@@ -348,8 +338,6 @@ export function CronPage() {
           </div>
         </header>
 
-        <CronGlobalsSection hasToken={hasToken} />
-
         {inSettingsShell ? (
           <div className="flex flex-wrap items-center justify-end gap-2 border-b border-edge-subtle pb-3 dark:border-edge-subtle">
             {cronHeaderEnd}
@@ -456,11 +444,6 @@ export function CronPage() {
         channels={data.channels}
         sessionChatIds={form.sessionChatIds}
         cronAgentSelectOptions={form.cronAgentSelectOptions}
-        hasElectronFolderPicker={hasElectronFolderPicker}
-        openNativeFolderPicker={openNativeFolderPickerCron}
-        applyWorkingDirectory={form.applyWorkingDirectory}
-        wdModalOpen={form.formWdModalOpen}
-        onWdModalOpenChange={form.setFormWdModalOpen}
         defaultModelResolver={defaultModelForForm}
         formMode={form.formMode}
         formJobId={form.formJobId}

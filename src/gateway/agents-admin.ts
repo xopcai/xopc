@@ -151,6 +151,10 @@ export type CreateAgentBody = {
   model?: string;
   agentDir?: string;
   description?: string;
+  /** Initial `agents.list[].tools.disable` for the new entry. */
+  toolsDisable?: string[];
+  /** Profile markdown files to write after seeding (e.g. `IDENTITY.md`, `SOUL.md`). */
+  profileFiles?: Record<string, string>;
 };
 
 export type AgentAdminHttpStatus = 400 | 404 | 409;
@@ -186,6 +190,21 @@ export function prepareCreateAgent(
   if (findAgentEntryIndex(listAgentEntries(cfg), agentId) >= 0) {
     return { ok: false, error: `agent "${agentId}" already exists`, status: 409 };
   }
+  if (body.profileFiles !== undefined) {
+    if (typeof body.profileFiles !== 'object' || body.profileFiles === null || Array.isArray(body.profileFiles)) {
+      return { ok: false, error: 'profileFiles must be an object', status: 400 };
+    }
+    for (const [name, content] of Object.entries(body.profileFiles)) {
+      const bad = assertAllowedFile(name);
+      if (bad) {
+        return bad;
+      }
+      if (typeof content !== 'string') {
+        return { ok: false, error: `profileFiles["${name}"] must be a string`, status: 400 };
+      }
+    }
+  }
+
   const wsAbs = resolveUserPath(workspace);
   let next = applyAgentConfig(cfg, {
     agentId,
@@ -195,10 +214,34 @@ export function prepareCreateAgent(
     ...(body.agentDir?.trim() ? { agentDir: body.agentDir.trim() } : {}),
     ...(body.description?.trim() ? { description: body.description.trim() } : {}),
   });
+
+  if (body.toolsDisable !== undefined) {
+    const list = [...listAgentEntries(next)];
+    const idx = findAgentEntryIndex(list, agentId);
+    if (idx >= 0) {
+      type Entry = (typeof list)[number];
+      const entry: Entry = { ...list[idx] };
+      const disable = body.toolsDisable.map((s) => String(s).trim()).filter(Boolean);
+      entry.tools = { ...entry.tools, disable };
+      list[idx] = entry;
+      next = {
+        ...next,
+        agents: {
+          ...next.agents,
+          list,
+        },
+      };
+    }
+  }
+
   return { ok: true, data: { nextConfig: next, agentId, workspace: wsAbs } };
 }
 
-export async function finalizeCreateAgentDirs(cfg: Config, agentId: string): Promise<void> {
+export async function finalizeCreateAgentDirs(
+  cfg: Config,
+  agentId: string,
+  opts?: { profileFiles?: Record<string, string> },
+): Promise<AgentAdminResult<void>> {
   const wsPath = resolveAgentWorkspaceDir(cfg, agentId);
   const profilePath = resolveAgentProfileDir(cfg, agentId);
   const adPath = resolveAgentDir(cfg, agentId);
@@ -209,6 +252,18 @@ export async function finalizeCreateAgentDirs(cfg: Config, agentId: string): Pro
   const entry = listAgentEntries(cfg).find((e) => normalizeAgentId(e.id) === id);
   const displayName = entry?.name?.trim() || id;
   seedAgentProfileMarkdownFiles(profilePath, wsPath, { displayName });
+
+  const profileFiles = opts?.profileFiles;
+  if (profileFiles && Object.keys(profileFiles).length > 0) {
+    for (const [name, content] of Object.entries(profileFiles)) {
+      const written = await writeAgentProfileFile(cfg, agentId, name, content);
+      if (written.ok === false) {
+        return written;
+      }
+    }
+  }
+
+  return { ok: true, data: undefined };
 }
 
 export type UpdateAgentBody = {

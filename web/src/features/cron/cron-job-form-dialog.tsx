@@ -1,13 +1,12 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { Eye, FolderInput, RefreshCw, SquarePen, X } from 'lucide-react';
+import { Eye, RefreshCw, SquarePen, X } from 'lucide-react';
 
 import { MarkdownEditor } from '@/components/markdown/markdown-editor';
 import { MarkdownView } from '@/components/markdown/markdown-view';
 import { Button } from '@/components/ui/button';
 import type { ChatAgentOption } from '@/features/chat/chat-agents-api';
 import { ModelSelector } from '@/features/chat/model-selector';
-import { folderDisplayName } from '@/features/chat/session-working-directory-control';
-import { WorkingDirectoryPickerModal } from '@/features/chat/working-directory-picker-modal';
+import { DirectoryPickerField } from '@/features/fs/directory-picker-field';
 import type { ChannelStatus, SessionChatId } from '@/features/cron/cron-api';
 import { CronSchedulePicker } from '@/features/cron/cron-schedule-form';
 import { formatRecipientOptionLabel } from '@/features/cron/cron-utils';
@@ -19,7 +18,6 @@ import {
 import { agentListDisplayName } from '@/features/settings/agents/agent-display-names';
 import type { MessageBundle } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
-import { interaction } from '@/lib/interaction';
 
 type CronCopy = MessageBundle['cron'];
 
@@ -33,11 +31,6 @@ export type CronJobFormDialogProps = {
   channels: ChannelStatus[];
   sessionChatIds: SessionChatId[];
   cronAgentSelectOptions: ChatAgentOption[];
-  hasElectronFolderPicker: boolean;
-  openNativeFolderPicker: () => Promise<string | null>;
-  applyWorkingDirectory: (path: string) => Promise<void>;
-  wdModalOpen: boolean;
-  onWdModalOpenChange: (open: boolean) => void;
   defaultModelResolver: () => string;
   formMode: 'add' | 'edit';
   formJobId: string | null;
@@ -87,11 +80,6 @@ export function CronJobFormDialog(props: CronJobFormDialogProps) {
     channels,
     sessionChatIds,
     cronAgentSelectOptions,
-    hasElectronFolderPicker,
-    openNativeFolderPicker,
-    applyWorkingDirectory,
-    wdModalOpen,
-    onWdModalOpenChange,
     defaultModelResolver,
     formMode,
     formJobId,
@@ -214,54 +202,16 @@ export function CronJobFormDialog(props: CronJobFormDialogProps) {
                       </label>
                       <div className="flex flex-col gap-1">
                         <span className="text-xs font-medium text-fg-muted">{c.workingDirectoryLabel}</span>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <button
-                            type="button"
-                            disabled={formSubmitting}
-                            className={cn(
-                              'inline-flex min-h-8 max-w-[min(16rem,48vw)] min-w-0 shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-xs',
-                              'border border-edge-subtle/80 bg-surface-hover/40 dark:border-edge-subtle',
-                              interaction.transition,
-                              interaction.focusRingPanel,
-                              'cursor-pointer hover:bg-surface-hover/70 dark:hover:bg-surface-hover/50',
-                              formSubmitting && 'cursor-not-allowed opacity-60',
-                            )}
-                            title={
-                              formWorkingDirectory.trim()
-                                ? `${formWorkingDirectory.trim()}\n${chatM.workingDirectory.chooseFolder}`
-                                : `${c.workingDirectoryHint}\n${chatM.workingDirectory.selectWorkingDirectory}`
-                            }
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (formSubmitting) return;
-                              if (hasElectronFolderPicker) {
-                                void (async () => {
-                                  const picked = await openNativeFolderPicker();
-                                  if (picked) void applyWorkingDirectory(picked);
-                                })();
-                              } else {
-                                onWdModalOpenChange(true);
-                              }
-                            }}
-                          >
-                            <FolderInput className="size-3.5 shrink-0 text-fg-muted" aria-hidden />
-                            <span className="min-w-0 truncate text-left font-medium text-fg">
-                              {formWorkingDirectory.trim()
-                                ? folderDisplayName(formWorkingDirectory.trim())
-                                : chatM.workingDirectory.notSet}
-                            </span>
-                          </button>
-                          {formWorkingDirectory.trim() ? (
-                            <button
-                              type="button"
-                              disabled={formSubmitting}
-                              className="text-xs font-medium text-accent hover:underline disabled:opacity-50"
-                              onClick={() => onFormWorkingDirectoryChange('')}
-                            >
-                              {c.workingDirectoryReset}
-                            </button>
-                          ) : null}
-                        </div>
+                        <DirectoryPickerField
+                          value={formWorkingDirectory}
+                          onChange={onFormWorkingDirectoryChange}
+                          disabled={formSubmitting}
+                          wd={chatM.workingDirectory}
+                          placeholder={chatM.workingDirectory.notSet}
+                          maxWidthClass="max-w-[min(16rem,48vw)]"
+                          clearLabel={c.workingDirectoryReset}
+                          onClear={() => onFormWorkingDirectoryChange('')}
+                        />
                         <p className="text-xs text-fg-muted">{c.workingDirectoryHint}</p>
                       </div>
                       <label className="flex cursor-pointer items-start gap-2 rounded-md bg-surface-hover/45 px-3 py-2 dark:bg-surface-hover/30">
@@ -423,19 +373,6 @@ export function CronJobFormDialog(props: CronJobFormDialogProps) {
           </div>
         </Dialog.Portal>
       </Dialog.Root>
-
-      {!hasElectronFolderPicker ? (
-        <WorkingDirectoryPickerModal
-          open={wdModalOpen}
-          onOpenChange={onWdModalOpenChange}
-          initialAbsolutePath={formWorkingDirectory.trim() || undefined}
-          onConfirm={async (p) => {
-            await applyWorkingDirectory(p);
-            onWdModalOpenChange(false);
-          }}
-          wd={chatM.workingDirectory}
-        />
-      ) : null}
     </>
   );
 }

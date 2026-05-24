@@ -1,6 +1,5 @@
-import { useState } from 'react';
-import * as Dialog from '@radix-ui/react-dialog';
-import { Check, ChevronDown, Copy, Eye, EyeOff, X } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Check, ChevronDown, Copy, Eye, EyeOff } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import type { ChatAgentsPayload } from '@/features/chat/chat-agents-api';
@@ -15,7 +14,6 @@ import {
 } from '@/features/settings/channels-config-api';
 import type { ChannelsSettingsMessages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
-import { SETTINGS_SHELL_CONTENT_Z, SETTINGS_SHELL_OVERLAY_Z } from '@/lib/settings-shell-dialog-layer';
 
 import { ChannelAgentRoutingBlock } from './channel-agent-routing-block';
 import { ChannelPairingSection } from './channel-pairing-section';
@@ -23,11 +21,15 @@ import { ChannelPairingSetupSteps } from './channel-pairing-setup-steps';
 import { channelUsesPairingPolicy } from './pairing-policy';
 import { FieldHint, FieldLabel, SelectField } from './field-primitives';
 import { TelegramAdvanced } from './telegram-advanced';
+import { ChannelsSettingsDialogFooter } from './channels-settings-dialog-footer';
+import { ChannelSettingsShell, type ChannelSettingsPresentation } from './channel-settings-shell';
+import { scrollToChannelPairingSection } from './pairing-scroll';
 import { channelsInputClassName, joinAllowFrom, parseIdList, telegramDefaultBotToken } from './utils';
 
 export function TelegramChannelSettingsDialog({
   open,
   onOpenChange,
+  presentation = 'modal',
   ch,
   form,
   baseline,
@@ -53,9 +55,12 @@ export function TelegramChannelSettingsDialog({
   save,
   discard,
   language,
+  scrollToPairingOnOpen = false,
+  closeOnSave = true,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  presentation?: ChannelSettingsPresentation;
   ch: ChannelsSettingsMessages;
   form: ChannelsSettingsState;
   baseline: ChannelsSettingsState | null;
@@ -81,6 +86,8 @@ export function TelegramChannelSettingsDialog({
   save: () => Promise<boolean>;
   discard: () => void;
   language: string;
+  scrollToPairingOnOpen?: boolean;
+  closeOnSave?: boolean;
 }) {
   const inputClassName = channelsInputClassName;
   const tg = form.telegram;
@@ -92,40 +99,46 @@ export function TelegramChannelSettingsDialog({
   const tokenReady = Boolean(tgToken.trim()) && tg.enabled;
   const tgAccountIds = telegramRoutingAccountIds(tg);
 
-  return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange}>
-      <Dialog.Portal>
-        <Dialog.Overlay
-          className={cn(
-            'xopc-dialog-overlay fixed inset-0 bg-scrim backdrop-blur-[1px]',
-            SETTINGS_SHELL_OVERLAY_Z,
-          )}
-        />
-        <Dialog.Content
-          className={cn(
-            'fixed left-1/2 top-1/2 max-h-[min(90vh,48rem)] w-[min(100%-2rem,36rem)] -translate-x-1/2 -translate-y-1/2',
-            SETTINGS_SHELL_CONTENT_Z,
-            'overflow-y-auto rounded-2xl border border-edge bg-surface-panel p-6 shadow-popover outline-none dark:border-edge',
-          )}
-          onOpenAutoFocus={(e) => e.preventDefault()}
-        >
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <Dialog.Title className="text-lg font-semibold tracking-tight text-fg">{ch.telegramTitle}</Dialog.Title>
-              <Dialog.Description className="mt-1 text-sm text-fg-muted">{ch.telegramSubtitle}</Dialog.Description>
-            </div>
-            <Dialog.Close asChild>
-              <button
-                type="button"
-                className="rounded-lg p-1.5 text-fg-muted hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
-                aria-label={ch.modalCancel}
-              >
-                <X className="size-4" />
-              </button>
-            </Dialog.Close>
-          </div>
+  useEffect(() => {
+    if (!open || !scrollToPairingOnOpen) return;
+    const timer = window.setTimeout(() => scrollToChannelPairingSection('telegram'), 80);
+    return () => window.clearTimeout(timer);
+  }, [open, scrollToPairingOnOpen]);
 
-          <label className="mt-6 flex cursor-pointer items-center gap-2 text-sm text-fg">
+  return (
+    <ChannelSettingsShell
+      presentation={presentation}
+      open={open}
+      onOpenChange={onOpenChange}
+      title={ch.telegramTitle}
+      description={ch.telegramSubtitle}
+      srTitle={ch.telegramTitle}
+      srDescription={ch.telegramSubtitle}
+      closeAriaLabel={ch.modalCancel}
+      wide
+      headerExtra={
+        presentation === 'modal' ? (
+          <div className="border-b border-edge-subtle px-6 pb-4 pt-6 dark:border-edge-subtle">
+            <h2 className="text-lg font-semibold tracking-tight text-fg">{ch.telegramTitle}</h2>
+            <p className="mt-1 text-sm text-fg-muted">{ch.telegramSubtitle}</p>
+          </div>
+        ) : undefined
+      }
+      footer={
+        <ChannelsSettingsDialogFooter
+          ch={ch}
+          dirty={dirty}
+          saving={saving}
+          onCancel={() => onOpenChange(false)}
+          onDiscard={discard}
+          onSave={async () => {
+            const ok = await save();
+            if (ok && closeOnSave) onOpenChange(false);
+          }}
+        />
+      }
+    >
+      <label className="flex cursor-pointer items-center gap-2 text-sm text-fg">
             <input
               type="checkbox"
               className="ui-checkbox"
@@ -254,28 +267,6 @@ export function TelegramChannelSettingsDialog({
               />
             ) : null}
           </div>
-
-          <div className="mt-8 flex flex-wrap justify-end gap-2 border-t border-edge-subtle pt-4 dark:border-edge-subtle">
-            <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>
-              {ch.modalCancel}
-            </Button>
-            <Button type="button" variant="secondary" disabled={!dirty || saving} onClick={discard}>
-              {ch.discard}
-            </Button>
-            <Button
-              type="button"
-              variant="primary"
-              disabled={!dirty || saving}
-              onClick={async () => {
-                const ok = await save();
-                if (ok) onOpenChange(false);
-              }}
-            >
-              {saving ? ch.saving : ch.save}
-            </Button>
-          </div>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+    </ChannelSettingsShell>
   );
 }

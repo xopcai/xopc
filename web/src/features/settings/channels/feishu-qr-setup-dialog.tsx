@@ -1,5 +1,4 @@
-import * as Dialog from '@radix-ui/react-dialog';
-import { ExternalLink, X } from 'lucide-react';
+import { ExternalLink } from 'lucide-react';
 import QRCode from 'qrcode';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 
@@ -10,7 +9,9 @@ import {
 } from '@/features/settings/channels-config-api';
 import type { ChannelsSettingsMessages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
-import { SETTINGS_SHELL_CONTENT_Z, SETTINGS_SHELL_OVERLAY_Z } from '@/lib/settings-shell-dialog-layer';
+
+import { ChannelsSettingsDialogFooter } from './channels-settings-dialog-footer';
+import { ChannelSettingsShell, type ChannelSettingsPresentation } from './channel-settings-shell';
 
 type FeishuDomain = 'feishu' | 'lark';
 
@@ -20,12 +21,24 @@ export function FeishuQrSetupDialog({
   ch,
   onSetupSuccess,
   moreSettings,
+  settingsDirty = false,
+  settingsSaving = false,
+  onSettingsDiscard,
+  onSettingsSave,
+  presentation = 'modal',
+  closeOnSetupSuccess = true,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  presentation?: ChannelSettingsPresentation;
+  closeOnSetupSuccess?: boolean;
   ch: ChannelsSettingsMessages;
   onSetupSuccess: (result: { appId: string; domain: string; openId?: string }) => void;
   moreSettings?: ReactNode;
+  settingsDirty?: boolean;
+  settingsSaving?: boolean;
+  onSettingsDiscard?: () => void;
+  onSettingsSave?: () => Promise<boolean>;
 }) {
   const [busy, setBusy] = useState(false);
   const [domain, setDomain] = useState<FeishuDomain>('feishu');
@@ -86,7 +99,7 @@ export function FeishuQrSetupDialog({
           setSessionKey(null);
           if (status.ok) {
             setQrUrl(null);
-            onOpenChange(false);
+            if (closeOnSetupSuccess) onOpenChange(false);
             onSetupSuccess({
               appId: status.appId,
               domain: status.domain,
@@ -164,41 +177,36 @@ export function FeishuQrSetupDialog({
   const qrFrameLoading = open && !error && !showQr;
 
   return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange}>
-      <Dialog.Portal>
-        <Dialog.Overlay
-          className={cn(
-            'xopc-dialog-overlay fixed inset-0 bg-scrim backdrop-blur-[1px]',
-            SETTINGS_SHELL_OVERLAY_Z,
-          )}
-        />
-        <Dialog.Content
-          className={cn(
-            'fixed left-1/2 top-1/2 max-h-[min(90vh,52rem)] w-[min(100%-2rem,32rem)] -translate-x-1/2 -translate-y-1/2',
-            SETTINGS_SHELL_CONTENT_Z,
-            'overflow-y-auto rounded-2xl border border-edge bg-surface-panel p-6 shadow-popover outline-none dark:border-edge',
-          )}
-          onOpenAutoFocus={(e) => e.preventDefault()}
-        >
-          <Dialog.Close asChild>
-            <button
-              type="button"
-              className="absolute right-3 top-3 z-20 rounded-lg p-1.5 text-fg-muted hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
-              aria-label={ch.feishuQrCloseAria}
-            >
-              <X className="size-4" />
-            </button>
-          </Dialog.Close>
+    <ChannelSettingsShell
+      presentation={presentation}
+      open={open}
+      onOpenChange={onOpenChange}
+      title={ch.feishuTitle}
+      description={ch.feishuSubtitle}
+      srTitle={ch.feishuQrModalTitle}
+      srDescription={ch.feishuQrModalSubtitle}
+      closeAriaLabel={ch.feishuQrCloseAria}
+      wide
+      footer={
+        moreSettings && onSettingsDiscard && onSettingsSave ? (
+          <ChannelsSettingsDialogFooter
+            ch={ch}
+            dirty={settingsDirty}
+            saving={settingsSaving}
+            showCancel={false}
+            onCancel={() => onOpenChange(false)}
+            onDiscard={onSettingsDiscard}
+            onSave={onSettingsSave}
+          />
+        ) : undefined
+      }
+    >
+      <div className="text-center">
+        <p className="text-base font-semibold tracking-tight text-fg">{ch.feishuQrModalTitle}</p>
+        <p className="mt-1.5 text-sm text-fg-muted">{ch.feishuQrModalSubtitle}</p>
+      </div>
 
-          <Dialog.Title className="sr-only">{ch.feishuQrModalTitle}</Dialog.Title>
-          <Dialog.Description className="sr-only">{ch.feishuQrModalSubtitle}</Dialog.Description>
-
-          <div className="text-center">
-            <p className="text-lg font-semibold tracking-tight text-fg">{ch.feishuQrModalTitle}</p>
-            <p className="mt-1.5 text-sm text-fg-muted">{ch.feishuQrModalSubtitle}</p>
-          </div>
-
-          <div className="mt-6 flex min-h-[17.5rem] flex-col items-center justify-center gap-3">
+      <div className="mt-6 flex min-h-[17.5rem] flex-col items-center justify-center gap-3">
             {error ? (
               <p className="text-center text-sm text-red-600 dark:text-red-400">{error}</p>
             ) : null}
@@ -294,11 +302,9 @@ export function FeishuQrSetupDialog({
             </Button>
           </div>
 
-          {moreSettings ? (
-            <div className="mt-6 border-t border-edge-subtle pt-4 dark:border-edge-subtle">{moreSettings}</div>
-          ) : null}
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+      {moreSettings ? (
+        <div className="mt-6 border-t border-edge-subtle pt-4 dark:border-edge-subtle">{moreSettings}</div>
+      ) : null}
+    </ChannelSettingsShell>
   );
 }

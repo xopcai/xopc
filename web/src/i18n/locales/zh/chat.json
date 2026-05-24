@@ -131,6 +131,7 @@
     "composerStageExecuting": "执行中…",
     "composerStageAnalyzing": "分析中…",
     "attachFile": "添加附件",
+    "moreActions": "更多操作",
     "fileReference": {
       "externalBadge": "外部文件",
       "externalDescription": "这个文件不在当前工作区内，因此不能直接在工作区编辑器中编辑。",

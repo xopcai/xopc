@@ -13,8 +13,10 @@ export function AgentDefaultsRouteLayout(props: {
   intro: string;
   vm: UseAgentDefaultsFormResult;
   children: ReactNode;
+  /** Merged tabbed page: single page title, per-tab intro below tabs. */
+  tabbed?: boolean;
 }) {
-  const { sectionId, intro, vm, children } = props;
+  const { sectionId, intro, vm, children, tabbed = false } = props;
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const a = m.agentSettings;
@@ -61,8 +63,14 @@ export function AgentDefaultsRouteLayout(props: {
       <header className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-lg font-semibold tracking-tight text-fg">{pageTitle}</h1>
-          <p className="mt-1 text-sm leading-relaxed text-fg-muted">{intro}</p>
-          <p className="mt-1 text-xs text-fg-subtle">{a.sectionDesc}</p>
+          {!tabbed ? (
+            <>
+              <p className="mt-1 text-sm leading-relaxed text-fg-muted">{intro}</p>
+              <p className="mt-1 text-xs text-fg-subtle">{a.sectionDesc}</p>
+            </>
+          ) : (
+            <p className="mt-1 text-xs text-fg-subtle">{a.sectionDesc}</p>
+          )}
         </div>
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
           {vm.saveOk ? <span className="text-sm text-fg-muted">{a.saved}</span> : null}

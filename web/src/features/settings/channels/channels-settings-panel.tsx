@@ -1,21 +1,35 @@
-import { ExternalLink, MessageSquare, Send } from 'lucide-react';
+import { ExternalLink } from 'lucide-react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import { docsGuidePageUrl } from '@/navigation';
+import { usePageHeaderStore } from '@/stores/page-header-store';
 
-import { ChannelImHubCard } from './channel-im-hub-card';
-import { ChannelsRemoveChannelDialog } from './channels-remove-channel-dialog';
+import { ChannelsHubGrid, type OpenChannelOptions } from './channels-hub-grid';
+import { ChannelsHubGridSkeleton } from './channels-hub-card-skeleton';
+import {
+  CHANNELS_HUB_PATH,
+  channelDetailPath,
+  isManageableChannelId,
+  normalizeChannelRouteId,
+} from './channels-routes';
+import { ExtensionChannelDetailPanel } from './extension-channel-detail-panel';
+import { ChannelsPageHeaderActions } from './channels-page-header-actions';
 import { FeishuMoreSettingsSection } from './feishu-more-settings-section';
 import { FeishuQrSetupDialog } from './feishu-qr-setup-dialog';
-import { channelUsesPairingPolicy, hubPairingPendingCount } from './pairing-policy';
 import { TelegramChannelSettingsDialog } from './telegram-channel-settings-dialog';
-import { useChannelPairingSummary } from './use-channel-pairing-summary';
+import { useChannelCatalog } from './use-channel-catalog';
+import { useChannelsHubData } from './use-channels-hub-data';
 import { useChannelsSettingsPanel } from './use-channels-settings-panel';
 import { WeixinQrLoginDialog } from './weixin-qr-login-dialog';
 import { WeixinMoreSettingsSection } from './weixin-more-settings-section';
-import { isFeishuConfigured, isTelegramConfigured, isWeixinConfigured } from './utils';
 
 export function ChannelsSettingsPanel() {
+  const navigate = useNavigate();
+  const { channelId: routeChannelId } = useParams<{ channelId?: string }>();
+  const [searchParams] = useSearchParams();
+
   const ctx = useChannelsSettingsPanel();
   const {
     language,
@@ -31,14 +45,6 @@ export function ChannelsSettingsPanel() {
     saving,
     error,
     saveOk,
-    weixinModalOpen,
-    setWeixinModalOpen,
-    telegramModalOpen,
-    setTelegramModalOpen,
-    feishuModalOpen,
-    setFeishuModalOpen,
-    removeTarget,
-    setRemoveTarget,
     weixinSuccessBanner,
     setWeixinSuccessBanner,
     feishuSetupSuccessBanner,
@@ -70,7 +76,6 @@ export function ChannelsSettingsPanel() {
     save,
     discard,
     toggleChannelEnabled,
-    removeChannel,
     copyToken,
     handleFeishuQrSetupSuccess,
     copyFeishuSecret,
@@ -84,14 +89,79 @@ export function ChannelsSettingsPanel() {
     streamOpts,
   } = ctx;
 
-  const { summary: pairingSummary } = useChannelPairingSummary(hasToken);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const stalePairingTotal =
-    pairingSummary.telegram.stale + pairingSummary.feishu.stale + pairingSummary.weixin.stale;
-  const atCapacityPairing =
-    pairingSummary.telegram.atCapacity ||
-    pairingSummary.feishu.atCapacity ||
-    pairingSummary.weixin.atCapacity;
+  const { entries: catalogEntries } = useChannelCatalog(hasToken, ch);
+  const catalogById = useMemo(() => new Map(catalogEntries.map((e) => [e.id, e])), [catalogEntries]);
+
+  const activeChannelId = normalizeChannelRouteId(routeChannelId);
+  const scrollToPairing = searchParams.get('pairing') === '1';
+  const detailOpen = Boolean(activeChannelId && catalogById.has(activeChannelId));
+
+  const { cards, refreshAll } = useChannelsHubData({
+    hasToken,
+    form,
+    ch,
+  });
+
+  const activeEntry = activeChannelId ? catalogById.get(activeChannelId) : undefined;
+  const activeCard = activeChannelId ? cards.find((c) => c.id === activeChannelId) : undefined;
+
+  useEffect(() => {
+    if (!activeChannelId || catalogEntries.length === 0) return;
+    if (!catalogById.has(activeChannelId)) {
+      navigate(CHANNELS_HUB_PATH, { replace: true });
+    }
+  }, [activeChannelId, catalogById, catalogEntries.length, navigate]);
+
+  const openChannel = useCallback(
+    (id: string, opts?: OpenChannelOptions) => {
+      navigate(channelDetailPath(id, { pairing: opts?.scrollToPairing }));
+    },
+    [navigate],
+  );
+
+  const closeChannel = useCallback(() => {
+    navigate(CHANNELS_HUB_PATH);
+  }, [navigate]);
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      refreshAll();
+      await mutate();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [mutate, refreshAll]);
+
+  const setPageHeader = usePageHeaderStore((s) => s.setPageHeader);
+  const clearPageHeader = usePageHeaderStore((s) => s.clearPageHeader);
+
+  const channelsHeaderEnd = useMemo(
+    () => (
+      <ChannelsPageHeaderActions
+        ch={ch}
+        refreshing={refreshing}
+        saveOk={saveOk}
+        onRefresh={handleRefresh}
+      />
+    ),
+    [ch, handleRefresh, refreshing, saveOk],
+  );
+
+  useLayoutEffect(() => {
+    if (!hasToken) {
+      clearPageHeader();
+      return () => clearPageHeader();
+    }
+    setPageHeader({
+      startExtra: null,
+      main: null,
+      end: channelsHeaderEnd,
+    });
+    return () => clearPageHeader();
+  }, [channelsHeaderEnd, clearPageHeader, hasToken, setPageHeader]);
 
   if (!hasToken) {
     return (
@@ -104,10 +174,13 @@ export function ChannelsSettingsPanel() {
 
   if (loading) {
     return (
-      <div className="mx-auto w-full max-w-app-main px-4 py-8">
-        <div className="h-8 w-48 animate-pulse rounded bg-surface-hover" />
-        <div className="mt-6 h-32 animate-pulse rounded-xl bg-surface-hover" />
-        <p className="mt-4 text-sm text-fg-muted">{ch.loading}</p>
+      <div className="mx-auto flex w-full max-w-app-main flex-col gap-6 px-4 py-6">
+        <div className="space-y-2">
+          <div className="h-7 w-40 animate-pulse rounded-md bg-surface-hover motion-reduce:animate-none dark:bg-surface-active/50" />
+          <div className="h-4 w-full max-w-md animate-pulse rounded-md bg-surface-hover motion-reduce:animate-none dark:bg-surface-active/50" />
+        </div>
+        <ChannelsHubGridSkeleton />
+        <p className="text-sm text-fg-muted">{ch.loading}</p>
       </div>
     );
   }
@@ -124,11 +197,29 @@ export function ChannelsSettingsPanel() {
   }
 
   const wx = form.weixin;
-  const tg = form.telegram;
-  const fs = form.feishu;
-  const weixinConfigured = isWeixinConfigured(wx);
-  const telegramConfigured = isTelegramConfigured(tg);
-  const feishuConfigured = isFeishuConfigured(fs);
+  const pairingFocusWeixin = scrollToPairing && activeChannelId === 'weixin';
+  const pairingFocusFeishu = scrollToPairing && activeChannelId === 'feishu';
+
+  const weixinMoreSettings = (
+    <WeixinMoreSettingsSection
+      ch={ch}
+      wx={wx}
+      updateWeixin={updateWeixin}
+      dmOpts={dmOpts}
+      streamOpts={streamOpts}
+      wxAccountsDraft={wxAccountsDraft}
+      setWxAccountsDraft={setWxAccountsDraft}
+      wxAccountsError={wxAccountsError}
+      onWxAccountsBlur={onWxAccountsBlur}
+      form={form}
+      chatAgents={chatAgents}
+      onAgentRouteChange={(acc, aid) => updateChannelAgentRoute('weixin', acc, aid)}
+      saving={saving}
+      language={language}
+      dialogOpen={detailOpen && activeChannelId === 'weixin'}
+      pairingFocus={pairingFocusWeixin}
+    />
+  );
 
   const feishuMoreSettings = (
     <FeishuMoreSettingsSection
@@ -153,34 +244,9 @@ export function ChannelsSettingsPanel() {
       groupOpts={groupOpts}
       chatAgents={chatAgents}
       saving={saving}
-      dirty={dirty}
-      save={save}
-      discard={discard}
       language={language}
-      dialogOpen={feishuModalOpen}
-    />
-  );
-
-  const weixinMoreSettings = (
-    <WeixinMoreSettingsSection
-      ch={ch}
-      wx={wx}
-      updateWeixin={updateWeixin}
-      dmOpts={dmOpts}
-      streamOpts={streamOpts}
-      wxAccountsDraft={wxAccountsDraft}
-      setWxAccountsDraft={setWxAccountsDraft}
-      wxAccountsError={wxAccountsError}
-      onWxAccountsBlur={onWxAccountsBlur}
-      form={form}
-      chatAgents={chatAgents}
-      onAgentRouteChange={(acc, aid) => updateChannelAgentRoute('weixin', acc, aid)}
-      saving={saving}
-      dirty={dirty}
-      save={save}
-      discard={discard}
-      language={language}
-      dialogOpen={weixinModalOpen}
+      dialogOpen={detailOpen && activeChannelId === 'feishu'}
+      pairingFocus={pairingFocusFeishu}
     />
   );
 
@@ -188,20 +254,18 @@ export function ChannelsSettingsPanel() {
     <div className="mx-auto flex w-full max-w-app-main flex-col gap-6 px-4 py-6">
       <header className="flex flex-col gap-1">
         <h1 className="text-lg font-semibold tracking-tight text-fg">{m.settingsSections.channels}</h1>
-        <p className="mt-1 text-sm text-fg-muted">{ch.subtitle}</p>
+        <p className="text-sm text-fg-muted">{ch.subtitle}</p>
         <a
           href={docsGuidePageUrl(language, 'channels')}
           target="_blank"
           rel="noreferrer"
-          className="mt-1 inline-flex items-center gap-1 text-sm text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+          className="inline-flex items-center gap-1 text-sm text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
         >
           {ch.docsLink}
           <ExternalLink className="size-3.5" />
         </a>
       </header>
 
-      {dirty ? <p className="text-xs text-amber-800 dark:text-amber-200">{ch.unsavedHint}</p> : null}
-      {saveOk ? <p className="text-xs text-fg-muted">{ch.saved}</p> : null}
       {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
       {weixinSuccessBanner ? <p className="text-xs text-accent">{weixinSuccessBanner}</p> : null}
       {feishuSetupSuccessBanner ? (
@@ -209,138 +273,106 @@ export function ChannelsSettingsPanel() {
           {feishuSetupSuccessBanner}
         </div>
       ) : null}
-      {stalePairingTotal > 0 ? (
-        <div className="rounded-xl border border-amber-300/40 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-800/50 dark:bg-amber-950/30 dark:text-amber-100">
-          {ch.pairingStaleBanner.replace('{{count}}', String(stalePairingTotal))}
-        </div>
+
+      {refreshing ? (
+        <ChannelsHubGridSkeleton count={Math.max(catalogEntries.length, 3)} />
+      ) : (
+        <ChannelsHubGrid
+          catalog={catalogEntries}
+          cards={cards}
+          ch={ch}
+          saving={saving}
+          onOpenChannel={openChannel}
+          onToggleChannel={(id, enabled) => {
+            if (isManageableChannelId(id)) void toggleChannelEnabled(id, enabled);
+          }}
+        />
+      )}
+
+      {activeChannelId === 'weixin' ? (
+        <WeixinQrLoginDialog
+          open={detailOpen}
+          onOpenChange={(open) => {
+            if (!open) closeChannel();
+          }}
+          ch={ch}
+          onLoginSuccess={async () => {
+            await mutate();
+            setWeixinSuccessBanner(ch.weixinQrLoginSuccess);
+            window.setTimeout(() => setWeixinSuccessBanner(null), 4000);
+          }}
+          moreSettings={weixinMoreSettings}
+          settingsDirty={dirty}
+          settingsSaving={saving}
+          onSettingsDiscard={discard}
+          onSettingsSave={save}
+        />
       ) : null}
-      {atCapacityPairing ? (
-        <div className="rounded-xl border border-amber-300/40 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-800/50 dark:bg-amber-950/30 dark:text-amber-100">
-          {ch.pairingAtCapacityBanner}
-        </div>
+
+      {activeChannelId === 'telegram' ? (
+        <TelegramChannelSettingsDialog
+          open={detailOpen}
+          onOpenChange={(open) => {
+            if (!open) closeChannel();
+          }}
+          ch={ch}
+          form={form}
+          baseline={baseline}
+          tgAdvanced={tgAdvanced}
+          setTgAdvanced={setTgAdvanced}
+          showToken={showToken}
+          setShowToken={setShowToken}
+          copied={copied}
+          copyToken={copyToken}
+          updateTelegram={updateTelegram}
+          updateChannelAgentRoute={updateChannelAgentRoute}
+          tgAccountsDraft={tgAccountsDraft}
+          setTgAccountsDraft={setTgAccountsDraft}
+          tgAccountsError={tgAccountsError}
+          onTgAccountsBlur={onTgAccountsBlur}
+          dmOpts={dmOpts}
+          groupOpts={groupOpts}
+          replyOpts={replyOpts}
+          streamOpts={streamOpts}
+          chatAgents={chatAgents}
+          saving={saving}
+          dirty={dirty}
+          save={save}
+          discard={discard}
+          language={language}
+          scrollToPairingOnOpen={scrollToPairing}
+          closeOnSave={false}
+        />
       ) : null}
 
-      <div className="flex flex-col gap-3">
-        <ChannelImHubCard
-          icon={<MessageSquare className="size-6 text-accent" strokeWidth={1.75} />}
-          title={ch.weixinTitle}
-          subtitle={ch.weixinSubtitle}
-          configured={weixinConfigured}
-          enabled={wx.enabled}
-          toggleDisabled={saving}
-          onToggle={(next) => void toggleChannelEnabled('weixin', next)}
-          onConfigure={() => setWeixinModalOpen(true)}
-          onEdit={() => setWeixinModalOpen(true)}
-          onRemove={() => setRemoveTarget('weixin')}
-          pendingPairingCount={hubPairingPendingCount({
-            configured: weixinConfigured,
-            channelEnabled: wx.enabled,
-            usesPairing: channelUsesPairingPolicy('weixin', wx),
-            summaryPending: pairingSummary.weixin.pending,
-          })}
+      {activeChannelId === 'feishu' ? (
+        <FeishuQrSetupDialog
+          open={detailOpen}
+          onOpenChange={(open) => {
+            if (!open) closeChannel();
+          }}
           ch={ch}
+          onSetupSuccess={handleFeishuQrSetupSuccess}
+          moreSettings={feishuMoreSettings}
+          settingsDirty={dirty}
+          settingsSaving={saving}
+          onSettingsDiscard={discard}
+          onSettingsSave={save}
         />
-        <ChannelImHubCard
-          icon={<Send className="size-6 text-accent" strokeWidth={1.75} />}
-          title={ch.telegramTitle}
-          subtitle={ch.telegramSubtitle}
-          configured={telegramConfigured}
-          enabled={tg.enabled}
-          toggleDisabled={saving}
-          onToggle={(next) => void toggleChannelEnabled('telegram', next)}
-          onConfigure={() => setTelegramModalOpen(true)}
-          onEdit={() => setTelegramModalOpen(true)}
-          onRemove={() => setRemoveTarget('telegram')}
-          pendingPairingCount={hubPairingPendingCount({
-            configured: telegramConfigured,
-            channelEnabled: tg.enabled,
-            usesPairing: channelUsesPairingPolicy('telegram', tg),
-            summaryPending: pairingSummary.telegram.pending,
-          })}
+      ) : null}
+
+      {activeEntry && activeCard && !activeEntry.manageable ? (
+        <ExtensionChannelDetailPanel
+          open={detailOpen}
+          onOpenChange={(open) => {
+            if (!open) closeChannel();
+          }}
+          entry={activeEntry}
+          vm={activeCard}
           ch={ch}
+          language={language}
         />
-        <ChannelImHubCard
-          icon={<MessageSquare className="size-6 text-accent" strokeWidth={1.75} />}
-          title={ch.feishuTitle}
-          subtitle={ch.feishuSubtitle}
-          configured={feishuConfigured}
-          enabled={fs.enabled}
-          toggleDisabled={saving}
-          onToggle={(next) => void toggleChannelEnabled('feishu', next)}
-          onConfigure={() => setFeishuModalOpen(true)}
-          onEdit={() => setFeishuModalOpen(true)}
-          onRemove={() => setRemoveTarget('feishu')}
-          pendingPairingCount={hubPairingPendingCount({
-            configured: feishuConfigured,
-            channelEnabled: fs.enabled,
-            usesPairing: channelUsesPairingPolicy('feishu', fs),
-            summaryPending: pairingSummary.feishu.pending,
-          })}
-          ch={ch}
-        />
-      </div>
-
-      <WeixinQrLoginDialog
-        open={weixinModalOpen}
-        onOpenChange={setWeixinModalOpen}
-        ch={ch}
-        onLoginSuccess={async () => {
-          await mutate();
-          setWeixinSuccessBanner(ch.weixinQrLoginSuccess);
-          window.setTimeout(() => setWeixinSuccessBanner(null), 4000);
-        }}
-        moreSettings={weixinMoreSettings}
-      />
-
-      <TelegramChannelSettingsDialog
-        open={telegramModalOpen}
-        onOpenChange={setTelegramModalOpen}
-        ch={ch}
-        form={form}
-        baseline={baseline}
-        tgAdvanced={tgAdvanced}
-        setTgAdvanced={setTgAdvanced}
-        showToken={showToken}
-        setShowToken={setShowToken}
-        copied={copied}
-        copyToken={copyToken}
-        updateTelegram={updateTelegram}
-        updateChannelAgentRoute={updateChannelAgentRoute}
-        tgAccountsDraft={tgAccountsDraft}
-        setTgAccountsDraft={setTgAccountsDraft}
-        tgAccountsError={tgAccountsError}
-        onTgAccountsBlur={onTgAccountsBlur}
-        dmOpts={dmOpts}
-        groupOpts={groupOpts}
-        replyOpts={replyOpts}
-        streamOpts={streamOpts}
-        chatAgents={chatAgents}
-        saving={saving}
-        dirty={dirty}
-        save={save}
-        discard={discard}
-        language={language}
-      />
-
-      <FeishuQrSetupDialog
-        open={feishuModalOpen}
-        onOpenChange={setFeishuModalOpen}
-        ch={ch}
-        onSetupSuccess={handleFeishuQrSetupSuccess}
-        moreSettings={feishuMoreSettings}
-      />
-
-      <ChannelsRemoveChannelDialog
-        open={removeTarget !== null}
-        onOpenChange={(o) => {
-          if (!o) setRemoveTarget(null);
-        }}
-        ch={ch}
-        removeTarget={removeTarget}
-        onCancel={() => setRemoveTarget(null)}
-        saving={saving}
-        onConfirmRemove={() => void removeChannel()}
-      />
+      ) : null}
     </div>
   );
 }

@@ -15,6 +15,7 @@
     "startChatting": "开始对话",
     "skipSetup": "跳过 — 稍后再设置",
     "setupComplete": "设置完成！在下方开始对话吧。",
-    "stepOf": "第 {{current}} 步，共 {{total}} 步"
+    "stepOf": "第 {{current}} 步，共 {{total}} 步",
+    "providerRecommended": "推荐"
   }
 }

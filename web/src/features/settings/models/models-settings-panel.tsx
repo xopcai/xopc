@@ -58,7 +58,7 @@ export function ModelsSettingsPanel() {
   const [saveOk, setSaveOk] = useState(false);
   const [validation, setValidation] = useState<ValidationResult | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
-  const [showRawJson, setShowRawJson] = useState(false);
+  const [editorMode, setEditorMode] = useState<'guided' | 'expert'>('guided');
   const [rawText, setRawText] = useState('');
   const [rawError, setRawError] = useState<string | null>(null);
   const [showPw, setShowPw] = useState<Set<string>>(() => new Set());
@@ -158,8 +158,8 @@ export function ModelsSettingsPanel() {
   }, [config]);
 
   useEffect(() => {
-    if (showRawJson) syncRawFromConfig();
-  }, [showRawJson, syncRawFromConfig]);
+    if (editorMode === 'expert') syncRawFromConfig();
+  }, [editorMode, syncRawFromConfig]);
 
   const applyRawJson = () => {
     try {
@@ -221,12 +221,12 @@ export function ModelsSettingsPanel() {
     setValidation(null);
     setSaveOk(false);
     setError(null);
-    if (showRawJson) {
+    if (editorMode === 'expert') {
       setRawText(JSON.stringify(baseline, null, 2));
       setRawError(null);
     }
     agentVm.discard();
-  }, [baseline, showRawJson, agentVm.discard]);
+  }, [baseline, editorMode, agentVm]);
 
   const runReload = async () => {
     setReloading(true);
@@ -343,6 +343,39 @@ export function ModelsSettingsPanel() {
         </p>
       ) : null}
 
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div
+          className="inline-flex rounded-lg border border-edge-subtle bg-surface-panel p-0.5"
+          role="tablist"
+          aria-label={ms.modeGuided}
+        >
+          {(['guided', 'expert'] as const).map((mode) => (
+            <button
+              key={mode}
+              type="button"
+              role="tab"
+              aria-selected={editorMode === mode}
+              className={cn(
+                'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+                editorMode === mode
+                  ? 'bg-accent-soft text-accent-fg'
+                  : 'text-fg-muted hover:bg-surface-hover hover:text-fg',
+              )}
+              onClick={() => {
+                setEditorMode(mode);
+                setRawError(null);
+              }}
+            >
+              {mode === 'guided' ? ms.modeGuided : ms.modeExpert}
+            </button>
+          ))}
+        </div>
+        <p className="text-xs text-fg-muted">
+          {editorMode === 'guided' ? ms.modeGuidedHint : ms.modeExpertHint}
+        </p>
+      </div>
+
       <div className="flex flex-wrap items-center gap-2">
         <Button
           type="button"
@@ -413,17 +446,6 @@ export function ModelsSettingsPanel() {
             </>
           )}
         </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          className="text-fg-muted"
-          onClick={() => {
-            setShowRawJson((v) => !v);
-            setRawError(null);
-          }}
-        >
-          {showRawJson ? ms.hideJson : ms.showJson}
-        </Button>
         <div className="ml-auto flex items-center gap-2 rounded-lg border border-edge-subtle bg-surface-panel px-3 py-1.5 text-sm dark:border-edge">
           <span className="text-fg-muted">
             {ms.statsProviders.replace('{{count}}', String(stats.providers))}
@@ -477,7 +499,7 @@ export function ModelsSettingsPanel() {
           <Loader2 className="size-4 animate-spin" />
           {ms.loading}
         </div>
-      ) : showRawJson ? (
+      ) : editorMode === 'expert' ? (
         <div className="flex flex-col gap-2">
           <textarea
             className={cn(

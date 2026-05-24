@@ -1,5 +1,6 @@
-import { Ban, File as FileIcon, Mic, Send, Sparkles, Square } from 'lucide-react';
-import { memo } from 'react';
+import * as Popover from '@radix-ui/react-popover';
+import { Ban, File as FileIcon, Mic, Plus, Send, Sparkles, Square } from 'lucide-react';
+import { memo, useState } from 'react';
 
 import type { Message } from '@/features/chat/messages.types';
 import { ModelContextRing } from '@/features/chat/model-context-ring';
@@ -84,7 +85,12 @@ export const ComposerToolbar = memo(function ComposerToolbar({
   contextUsageMessages,
   composerDraftChars,
 }: ComposerToolbarProps) {
+  const [moreOpen, setMoreOpen] = useState(false);
   const ThinkingIcon = thinkingIcon(thinkingLevel as ThinkingLevel);
+  const attachmentsFull = attachmentCount >= maxAttachments;
+  const attachTitle = attachmentsFull
+    ? interpolate(m.maxAttachmentsReached, { max: maxAttachments })
+    : `${m.attachFile} (${attachmentCount}/${maxAttachments})`;
 
   return (
     <div
@@ -98,46 +104,112 @@ export const ComposerToolbar = memo(function ComposerToolbar({
         canSelectWorkingDirectory={canSelectWorkingDirectory}
         disabled={disabled || runBusy}
       />
-      <button
-        type="button"
-        className={cn(
-          'inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-surface-hover/70 text-fg-subtle hover:bg-surface-hover hover:text-fg dark:bg-surface-hover/50',
-          interaction.transition,
-          interaction.press,
-          interaction.focusRingPanel,
-          'disabled:opacity-50 disabled:cursor-not-allowed',
-        )}
-        disabled={attachmentCount >= maxAttachments || disabled || runBusy}
-        title={
-          attachmentCount >= maxAttachments
-            ? interpolate(m.maxAttachmentsReached, { max: maxAttachments })
-            : `${m.attachFile} (${attachmentCount}/${maxAttachments})`
-        }
-        onClick={onPickFiles}
-      >
-        <FileIcon className="size-4" />
-      </button>
 
-      {showThinkingSelector ? (
-        <div
-          className="inline-flex min-h-8 items-center gap-1 rounded-full bg-surface-hover px-2.5 py-1 text-xs dark:bg-surface-hover/80"
-          title={`${m.thinkingLevelLabel}: ${m.thinkingLevels[thinkingLevel as ThinkingLevel] ?? thinkingLevel}`}
-        >
-          <ThinkingIcon className="size-3.5 shrink-0 text-accent-fg" aria-hidden />
-          <select
-            className="max-w-[min(6.5rem,30vw)] cursor-pointer appearance-none bg-transparent pl-0 pr-0 text-[0.8125rem] font-medium text-fg focus:outline-none"
-            value={thinkingLevel}
-            disabled={disabled || (sending && !streaming)}
-            onChange={(e) => onThinkingChange(e.target.value)}
+      <Popover.Root open={moreOpen} onOpenChange={setMoreOpen}>
+        <Popover.Trigger asChild>
+          <button
+            type="button"
+            className={cn(
+              'inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-surface-hover/70 text-fg-subtle hover:bg-surface-hover hover:text-fg dark:bg-surface-hover/50',
+              interaction.transition,
+              interaction.press,
+              interaction.focusRingPanel,
+              voiceRecording && 'bg-red-500/20 text-red-600 dark:bg-red-500/25 dark:text-red-400',
+            )}
+            title={m.moreActions}
+            aria-label={m.moreActions}
+            aria-expanded={moreOpen}
           >
-            {(Object.keys(m.thinkingLevels) as ThinkingLevel[]).map((lvl) => (
-              <option key={lvl} value={lvl}>
-                {m.thinkingLevels[lvl]}
-              </option>
-            ))}
-          </select>
-        </div>
-      ) : null}
+            <Plus className={cn('size-4', voiceRecording && 'animate-pulse')} />
+          </button>
+        </Popover.Trigger>
+        <Popover.Portal>
+          <Popover.Content
+            className={cn(
+              'z-50 min-w-[12rem] rounded-xl border border-edge bg-surface-panel p-1.5 shadow-popover dark:border-edge',
+            )}
+            side="top"
+            align="start"
+            sideOffset={8}
+            collisionPadding={12}
+            onOpenAutoFocus={(e) => e.preventDefault()}
+          >
+            <div className="flex flex-col gap-0.5">
+              <button
+                type="button"
+                className={cn(
+                  'flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm text-fg',
+                  'hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+                  'disabled:cursor-not-allowed disabled:opacity-50',
+                )}
+                disabled={attachmentsFull || disabled || runBusy}
+                title={attachTitle}
+                onClick={() => {
+                  onPickFiles();
+                  setMoreOpen(false);
+                }}
+              >
+                <FileIcon className="size-4 shrink-0 text-fg-subtle" aria-hidden />
+                <span className="min-w-0 flex-1 truncate">{m.attachFile}</span>
+                <span className="shrink-0 text-xs text-fg-subtle">
+                  {attachmentCount}/{maxAttachments}
+                </span>
+              </button>
+
+              {showThinkingSelector ? (
+                <label
+                  className={cn(
+                    'flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-fg',
+                    'hover:bg-surface-hover',
+                  )}
+                  title={`${m.thinkingLevelLabel}: ${m.thinkingLevels[thinkingLevel as ThinkingLevel] ?? thinkingLevel}`}
+                >
+                  <ThinkingIcon className="size-4 shrink-0 text-accent-fg" aria-hidden />
+                  <span className="shrink-0 text-fg-muted">{m.thinkingLevelLabel}</span>
+                  <select
+                    className="min-w-0 flex-1 cursor-pointer appearance-none rounded-md bg-surface-hover/80 px-2 py-0.5 text-sm font-medium text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                    value={thinkingLevel}
+                    disabled={disabled || (sending && !streaming)}
+                    onChange={(e) => onThinkingChange(e.target.value)}
+                  >
+                    {(Object.keys(m.thinkingLevels) as ThinkingLevel[]).map((lvl) => (
+                      <option key={lvl} value={lvl}>
+                        {m.thinkingLevels[lvl]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
+
+              <button
+                type="button"
+                className={cn(
+                  'flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm',
+                  'hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+                  'disabled:cursor-not-allowed disabled:opacity-50',
+                  voiceRecording
+                    ? 'text-red-600 dark:text-red-400'
+                    : 'text-fg',
+                )}
+                disabled={disabled || runBusy || attachmentsFull}
+                title={voiceRecording ? m.voiceRecordingStop : m.voiceRecording}
+                onClick={() => {
+                  void onToggleVoice();
+                  if (!voiceRecording) {
+                    setMoreOpen(false);
+                  }
+                }}
+              >
+                <Mic
+                  className={cn('size-4 shrink-0', voiceRecording && 'animate-pulse')}
+                  aria-hidden
+                />
+                <span>{voiceRecording ? m.voiceRecordingStop : m.voiceRecording}</span>
+              </button>
+            </div>
+          </Popover.Content>
+        </Popover.Portal>
+      </Popover.Root>
 
       <div className="ml-auto flex min-w-0 items-center gap-2">
         {showModelSelector ? (
@@ -167,26 +239,6 @@ export const ComposerToolbar = memo(function ComposerToolbar({
           </div>
         ) : null}
         <div className="flex shrink-0 items-center gap-1">
-          <button
-            type="button"
-            className={cn(
-              'inline-flex size-8 shrink-0 items-center justify-center rounded-lg border border-transparent',
-              interaction.transition,
-              interaction.press,
-              interaction.focusRingPanel,
-              voiceRecording
-                ? 'bg-red-500/20 text-red-600 dark:bg-red-500/25 dark:text-red-400'
-                : 'text-fg-subtle hover:bg-surface-hover hover:text-fg',
-              'disabled:opacity-50 disabled:cursor-not-allowed',
-            )}
-            disabled={disabled || runBusy || attachmentCount >= maxAttachments}
-            title={voiceRecording ? m.voiceRecordingStop : m.voiceRecording}
-            aria-label={voiceRecording ? m.voiceRecordingStop : m.voiceRecording}
-            onClick={() => void onToggleVoice()}
-          >
-            <Mic className={cn('size-4 stroke-[1.75]', voiceRecording && 'animate-pulse')} />
-          </button>
-
           {runBusy ? (
             <>
               {showSteeringInterrupt && onInterrupt ? (

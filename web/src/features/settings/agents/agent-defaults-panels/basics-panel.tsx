@@ -52,17 +52,6 @@ export function AgentDefaultsBasicsPanel(props: AgentDefaultsPanelProps) {
               onChange={(e) => update({ temperature: Number.parseFloat(e.target.value) || 0 })}
             />
           </AgentDefaultsField>
-          <div className="sm:col-span-2">
-            <AgentDefaultsField label={a.label.maxToolIterations} description={a.desc.maxToolIterations}>
-              <input
-                type="number"
-                className={inputClassName()}
-                value={form.maxToolIterations}
-                min={1}
-                onChange={(e) => update({ maxToolIterations: Number.parseInt(e.target.value, 10) || 0 })}
-              />
-            </AgentDefaultsField>
-          </div>
         </div>
       </SettingsFormSection>
 

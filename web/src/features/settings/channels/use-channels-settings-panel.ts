@@ -4,7 +4,6 @@ import useSWR from 'swr';
 import { fetchChatAgents } from '@/features/chat/chat-agents-api';
 import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
 import {
-  defaultChannelsState,
   normalizeChannelsFromConfig,
   patchChannelsSettings,
   type ChannelsSettingsState,
@@ -32,10 +31,6 @@ export function useChannelsSettingsPanel() {
   const [error, setError] = useState<string | null>(null);
   const [saveOk, setSaveOk] = useState(false);
 
-  const [weixinModalOpen, setWeixinModalOpen] = useState(false);
-  const [telegramModalOpen, setTelegramModalOpen] = useState(false);
-  const [feishuModalOpen, setFeishuModalOpen] = useState(false);
-  const [removeTarget, setRemoveTarget] = useState<'weixin' | 'telegram' | 'feishu' | null>(null);
   const [weixinSuccessBanner, setWeixinSuccessBanner] = useState<string | null>(null);
   const [feishuSetupSuccessBanner, setFeishuSetupSuccessBanner] = useState<string | null>(null);
   const [tgAdvanced, setTgAdvanced] = useState(false);
@@ -197,38 +192,6 @@ export function useChannelsSettingsPanel() {
     [form, saving, ch.saveError],
   );
 
-  const removeChannel = useCallback(async () => {
-    if (!form || !removeTarget || saving) return;
-    const defaults = defaultChannelsState();
-    const next: ChannelsSettingsState =
-      removeTarget === 'weixin'
-        ? { ...form, weixin: defaults.weixin }
-        : removeTarget === 'telegram'
-          ? { ...form, telegram: defaults.telegram }
-          : { ...form, feishu: defaults.feishu };
-    setSaving(true);
-    setError(null);
-    try {
-      const synced = await patchChannelsSettings(next);
-      setForm(synced);
-      const baselineClone = structuredClone(synced);
-      setBaseline(baselineClone);
-      setTgAccountsDraft(JSON.stringify(baselineClone.telegram.accounts ?? {}, null, 2));
-      setWxAccountsDraft(JSON.stringify(baselineClone.weixin.accounts ?? {}, null, 2));
-      setTgAccountsError('');
-      setWxAccountsError('');
-      setFeishuAccountsDraft(JSON.stringify(baselineClone.feishu?.accounts ?? {}, null, 2));
-      setFeishuAccountsError('');
-      setRemoveTarget(null);
-      setSaveOk(true);
-      window.setTimeout(() => setSaveOk(false), 2500);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : ch.saveError);
-    } finally {
-      setSaving(false);
-    }
-  }, [form, removeTarget, saving, ch.saveError]);
-
   const copyToken = useCallback(async () => {
     const t = form ? telegramDefaultBotToken(form.telegram) : '';
     if (!t) return;
@@ -385,14 +348,6 @@ export function useChannelsSettingsPanel() {
     saving,
     error,
     saveOk,
-    weixinModalOpen,
-    setWeixinModalOpen,
-    telegramModalOpen,
-    setTelegramModalOpen,
-    feishuModalOpen,
-    setFeishuModalOpen,
-    removeTarget,
-    setRemoveTarget,
     weixinSuccessBanner,
     setWeixinSuccessBanner,
     feishuSetupSuccessBanner,
@@ -424,7 +379,6 @@ export function useChannelsSettingsPanel() {
     save,
     discard,
     toggleChannelEnabled,
-    removeChannel,
     copyToken,
     handleFeishuQrSetupSuccess,
     copyFeishuSecret,
