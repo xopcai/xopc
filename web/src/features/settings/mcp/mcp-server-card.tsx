@@ -13,6 +13,7 @@ import {
 import type { McpSettingsMessages } from '@/i18n/messages';
 import { settingsInputFocusClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
+import { interaction } from '@/lib/interaction';
 
 const TRANSPORTS: McpTransportKind[] = ['stdio', 'sse', 'streamable-http'];
 
@@ -97,7 +98,10 @@ export function McpServerCard({
       <div className="flex items-start gap-2 p-4">
         <button
           type="button"
-          className="flex min-w-0 flex-1 items-start gap-2 rounded-lg text-left hover:opacity-90"
+          className={cn(
+            'flex min-w-0 flex-1 items-start gap-2 rounded-lg text-left hover:opacity-90',
+            interaction.press,
+          )}
           aria-expanded={expanded}
           aria-label={expanded ? t.cardCollapseAria : t.cardExpandAria}
           onClick={onToggle}

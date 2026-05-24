@@ -2,6 +2,7 @@ import * as Popover from '@radix-ui/react-popover';
 import { ExternalLink, Info, X } from 'lucide-react';
 
 import { cn } from '@/lib/cn';
+import { ghostIconButton } from '@/lib/interaction';
 import { SETTINGS_SHELL_POPOVER_Z } from '@/lib/settings-shell-dialog-layer';
 import type { StoredLanguage } from '@/lib/storage';
 
@@ -25,7 +26,7 @@ export function ProviderInfoPopover({ providerId, language }: ProviderInfoPopove
       <Popover.Trigger asChild>
         <button
           type="button"
-          className="rounded p-0.5 text-fg-subtle hover:bg-surface-hover hover:text-fg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          className={cn(ghostIconButton, 'rounded p-0.5')}
           aria-label={isZh ? `${providerId} 详情` : `${providerId} info`}
         >
           <Info className="size-3.5" aria-hidden />
@@ -50,7 +51,7 @@ export function ProviderInfoPopover({ providerId, language }: ProviderInfoPopove
             <Popover.Close asChild>
               <button
                 type="button"
-                className="shrink-0 rounded p-0.5 text-fg-subtle hover:bg-surface-hover hover:text-fg"
+                className={cn(ghostIconButton, 'shrink-0 rounded p-0.5')}
                 aria-label={isZh ? '关闭' : 'Close'}
               >
                 <X className="size-3.5" aria-hidden />

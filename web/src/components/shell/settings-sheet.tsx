@@ -5,6 +5,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { resolveSettingsBackTarget } from '@/features/settings/settings-nav-state';
 import { cn } from '@/lib/cn';
 import { SETTINGS_SHEET_PORTAL_Z } from '@/lib/settings-shell-dialog-layer';
+import { SettingsShellLayerProvider } from '@/lib/settings-shell-layer-context';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 
@@ -77,7 +78,7 @@ export const SettingsSheet = memo(function SettingsSheet({ children }: SettingsS
       aria-modal="true"
       aria-label={m.nav.settings}
     >
-      {children}
+      <SettingsShellLayerProvider layer="page">{children}</SettingsShellLayerProvider>
     </div>
   );
 

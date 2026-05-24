@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/cn';
+import { ghostIconButton } from '@/lib/interaction';
 import { SETTINGS_SHELL_CONTENT_Z, SETTINGS_SHELL_OVERLAY_Z } from '@/lib/settings-shell-dialog-layer';
 
 export type ChannelSettingsPresentation = 'modal' | 'drawer';
@@ -89,7 +90,10 @@ export function ChannelSettingsShell({
               <Dialog.Close asChild>
                 <button
                   type="button"
-                  className="absolute right-3 top-3 z-20 rounded-lg p-1.5 text-fg-muted hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                  className={cn(
+                    ghostIconButton,
+                    'absolute right-3 top-3 z-20 p-1.5 hover:bg-surface-hover',
+                  )}
                   aria-label={closeAriaLabel}
                 >
                   <X className="size-4" />

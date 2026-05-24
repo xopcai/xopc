@@ -12,6 +12,7 @@ import type { StoredLanguage } from '@/lib/storage';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 import { cn } from '@/lib/cn';
+import { interaction } from '@/lib/interaction';
 import type { PrivacyPaneKind, PermissionRequestResult, ShellPermissionSnapshot, SystemSettingsBehavior, TccTriState } from '@/types/electron';
 
 async function probeRendererMicrophone(): Promise<boolean> {
@@ -479,7 +480,10 @@ export function SystemSettingsPanel() {
               type="button"
               disabled={refreshing || permBusy}
               aria-busy={refreshing}
-              className="mt-2 inline-flex max-w-full items-center justify-center gap-1.5 rounded-lg border border-edge bg-surface-panel px-3 py-1.5 text-sm font-medium text-fg transition-colors hover:bg-surface-hover disabled:opacity-50 sm:mt-0"
+              className={cn(
+                'mt-2 inline-flex max-w-full items-center justify-center gap-1.5 rounded-lg border border-edge bg-surface-panel px-3 py-1.5 text-sm font-medium text-fg transition-colors hover:bg-surface-hover disabled:opacity-50 sm:mt-0',
+                interaction.press,
+              )}
               onClick={() => void handleRefresh()}
             >
               <RefreshCw
@@ -517,7 +521,10 @@ export function SystemSettingsPanel() {
                       <button
                         type="button"
                         disabled={permBusy}
-                        className="inline-flex items-center gap-1 rounded-lg border border-edge bg-surface-base px-2.5 py-1.5 text-xs font-medium text-fg hover:bg-surface-hover disabled:opacity-50"
+                        className={cn(
+                          'inline-flex items-center gap-1 rounded-lg border border-edge bg-surface-base px-2.5 py-1.5 text-xs font-medium text-fg hover:bg-surface-hover disabled:opacity-50',
+                          interaction.press,
+                        )}
                         onClick={() => void requestNotifications()}
                       >
                         {t.requestAccess}
@@ -527,7 +534,10 @@ export function SystemSettingsPanel() {
                       <button
                         type="button"
                         disabled={permBusy}
-                        className="inline-flex items-center gap-1 rounded-lg border border-edge bg-surface-base px-2.5 py-1.5 text-xs font-medium text-fg hover:bg-surface-hover disabled:opacity-50"
+                        className={cn(
+                          'inline-flex items-center gap-1 rounded-lg border border-edge bg-surface-base px-2.5 py-1.5 text-xs font-medium text-fg hover:bg-surface-hover disabled:opacity-50',
+                          interaction.press,
+                        )}
                         onClick={() => void requestMicrophone()}
                       >
                         {t.requestAccess}
@@ -538,7 +548,10 @@ export function SystemSettingsPanel() {
                       <button
                         type="button"
                         disabled={permBusy}
-                        className="inline-flex items-center gap-1 rounded-lg border border-edge bg-surface-base px-2.5 py-1.5 text-xs font-medium text-fg hover:bg-surface-hover disabled:opacity-50"
+                        className={cn(
+                          'inline-flex items-center gap-1 rounded-lg border border-edge bg-surface-base px-2.5 py-1.5 text-xs font-medium text-fg hover:bg-surface-hover disabled:opacity-50',
+                          interaction.press,
+                        )}
                         onClick={() => void requestAccessibility()}
                       >
                         {t.requestAccess}
@@ -546,7 +559,10 @@ export function SystemSettingsPanel() {
                     ) : null}
                     <button
                       type="button"
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-edge bg-surface-base px-2.5 py-1.5 text-xs font-medium text-fg hover:bg-surface-hover"
+                      className={cn(
+                        'inline-flex items-center gap-1.5 rounded-lg border border-edge bg-surface-base px-2.5 py-1.5 text-xs font-medium text-fg hover:bg-surface-hover',
+                        interaction.press,
+                      )}
                       onClick={() => void openPrivacy(pane)}
                     >
                       {t.openSettings}

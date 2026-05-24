@@ -9,6 +9,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/cn';
+import { interaction } from '@/lib/interaction';
 import { messages } from '@/i18n/messages';
 import { docsGuidePageUrl } from '@/navigation';
 import { useGatewayStore } from '@/stores/gateway-store';
@@ -358,6 +359,7 @@ export function ModelsSettingsPanel() {
               className={cn(
                 'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+                interaction.press,
                 editorMode === mode
                   ? 'bg-accent-soft text-accent-fg'
                   : 'text-fg-muted hover:bg-surface-hover hover:text-fg',

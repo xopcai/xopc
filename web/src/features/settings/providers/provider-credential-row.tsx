@@ -71,7 +71,10 @@ function EnvVarCopyRow({
       <button
         type="button"
         onClick={() => void handleCopy()}
-        className="rounded p-0.5 text-fg-subtle hover:bg-surface-hover hover:text-fg"
+        className={cn(
+          'rounded p-0.5 text-fg-subtle hover:bg-surface-hover hover:text-fg',
+          interaction.press,
+        )}
         title={copied ? labels.copied : labels.copy}
         aria-label={copied ? labels.copied : labels.copy}
       >

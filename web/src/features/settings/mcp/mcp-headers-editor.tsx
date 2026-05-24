@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { parseHeadersPaste, type McpHeaderEntry } from '@/features/settings/mcp/mcp-headers-utils';
 import { settingsInputFocusClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
+import { interaction } from '@/lib/interaction';
 
 type Props = {
   label: string;
@@ -109,7 +110,7 @@ export function McpHeadersEditor({
 
       <button
         type="button"
-        className="self-start text-sm text-accent hover:underline"
+        className={cn('self-start text-sm text-accent hover:underline', interaction.press)}
         onClick={addRow}
       >
         + {addLabel}

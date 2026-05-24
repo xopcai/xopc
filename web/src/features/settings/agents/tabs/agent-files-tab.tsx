@@ -3,6 +3,7 @@ import { Eye, SquarePen } from 'lucide-react';
 import { MarkdownEditor } from '@/components/markdown/markdown-editor';
 import { MarkdownView } from '@/components/markdown/markdown-view';
 import { cn } from '@/lib/cn';
+import { interaction } from '@/lib/interaction';
 import type { AgentsSettingsMessages } from '@/i18n/messages';
 import { useThemeStore } from '@/stores/theme-store';
 
@@ -57,6 +58,7 @@ export function AgentFilesTab(props: {
                 type="button"
                 className={cn(
                   '-mb-px shrink-0 border-b-2 border-transparent px-3 py-2 text-left font-mono text-xs whitespace-nowrap transition-colors',
+                  interaction.press,
                   activeFile === f.name
                     ? 'border-accent text-fg'
                     : 'text-fg-muted hover:border-edge-subtle hover:text-fg',
@@ -82,6 +84,7 @@ export function AgentFilesTab(props: {
                       type="button"
                       className={cn(
                         'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium',
+                        interaction.press,
                         filesViewMode === 'edit'
                           ? 'bg-accent-soft text-accent-fg'
                           : 'text-fg-muted hover:bg-surface-hover',
@@ -95,6 +98,7 @@ export function AgentFilesTab(props: {
                       type="button"
                       className={cn(
                         'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium',
+                        interaction.press,
                         filesViewMode === 'preview'
                           ? 'bg-accent-soft text-accent-fg'
                           : 'text-fg-muted hover:bg-surface-hover',
