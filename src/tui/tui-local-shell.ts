@@ -1,13 +1,21 @@
 import { spawn } from 'node:child_process';
 
-import type { Component } from '@earendil-works/pi-tui';
+import type { Component, TUI } from '@earendil-works/pi-tui';
 import { SelectList } from '@earendil-works/pi-tui';
 
+import type { BashExecutionComponent } from './components/bash-execution.js';
 import { selectListTheme } from './theme.js';
 
 type LocalShellDeps = {
-  chatLog: { addSystem: (line: string) => void };
-  tui: { requestRender: () => void; setFocus: (c: Component) => void };
+  chatLog: {
+    addSystem: (line: string) => void;
+    addBashExecution: (
+      command: string,
+      ui: TUI,
+      excludeFromContext: boolean,
+    ) => BashExecutionComponent;
+  };
+  tui: TUI & { requestRender: () => void; setFocus: (c: Component) => void };
   editor: Component;
   openOverlay: (component: Component) => void;
   closeOverlay: () => void;
@@ -105,14 +113,6 @@ export function createLocalShellRunner(deps: LocalShellDeps) {
       return;
     }
 
-    deps.chatLog.addSystem(`[local] $ ${cmd}${inheritStdio ? ' (inherited stdio)' : ''}`);
-    deps.tui.requestRender();
-
-    const appendWithCap = (text: string, chunk: string) => {
-      const combined = text + chunk;
-      return combined.length > maxChars ? combined.slice(-maxChars) : combined;
-    };
-
     if (
       inheritStdio &&
       deps.runWithInheritedStdio &&
@@ -131,7 +131,7 @@ export function createLocalShellRunner(deps: LocalShellDeps) {
             });
             child.on('close', (code, signal) => {
               deps.chatLog.addSystem(
-                `[local] exit ${code ?? '?'}${signal ? ` (signal ${signal})` : ''}`,
+                `[local] !! $ ${cmd} — exit ${code ?? '?'}${signal ? ` (signal ${signal})` : ''} (excluded from agent context)`,
               );
               resolve();
             });
@@ -157,6 +157,9 @@ export function createLocalShellRunner(deps: LocalShellDeps) {
       return;
     }
 
+    const bashBlock = deps.chatLog.addBashExecution(cmd, deps.tui, false);
+    deps.tui.requestRender();
+
     await new Promise<void>((resolve) => {
       const child = spawnCommand(cmd, {
         shell: true,
@@ -164,34 +167,26 @@ export function createLocalShellRunner(deps: LocalShellDeps) {
         env: { ...env, XOPC_SHELL: 'tui-local' },
       });
 
-      let stdout = '';
-      let stderr = '';
-      child.stdout?.on('data', (buf) => {
-        stdout = appendWithCap(stdout, buf.toString('utf8'));
-      });
-      child.stderr?.on('data', (buf) => {
-        stderr = appendWithCap(stderr, buf.toString('utf8'));
-      });
+      let totalChars = 0;
+      const appendCapped = (chunk: string) => {
+        if (totalChars >= maxChars) return;
+        const slice = chunk.slice(0, maxChars - totalChars);
+        totalChars += slice.length;
+        bashBlock.appendOutput(slice);
+        deps.tui.requestRender();
+      };
+
+      child.stdout?.on('data', (buf) => appendCapped(buf.toString('utf8')));
+      child.stderr?.on('data', (buf) => appendCapped(buf.toString('utf8')));
 
       child.on('close', (code, signal) => {
-        const combined = (stdout + (stderr ? (stdout ? '\n' : '') + stderr : ''))
-          .slice(0, maxChars)
-          .trimEnd();
-
-        if (combined) {
-          for (const lineChunk of combined.split('\n')) {
-            deps.chatLog.addSystem(`[local] ${lineChunk}`);
-          }
-        }
-        deps.chatLog.addSystem(
-          `[local] exit ${code ?? '?'}${signal ? ` (signal ${signal})` : ''}`,
-        );
+        bashBlock.setComplete(code, signal);
         deps.tui.requestRender();
         resolve();
       });
 
       child.on('error', (err) => {
-        deps.chatLog.addSystem(`[local] error: ${String(err)}`);
+        bashBlock.setError(String(err));
         deps.tui.requestRender();
         resolve();
       });

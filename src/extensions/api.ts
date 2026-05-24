@@ -24,6 +24,7 @@ import type {
   HookHandlerMap,
   ExtensionHookEvent,
   HookExecutionMode,
+  TuiExtensionRegistrar,
 } from './types/index.js';
 import type { CommandContribution } from './types/manifest.js';
 import type { CommandDefinition } from '../chat-commands/types.js';
@@ -356,6 +357,11 @@ export class ExtensionApiImpl implements ExtensionApi {
 
   registerShortcut(_key: string, _config: ShortcutConfig): void {
     // this._registry.registerShortcut(key, config, { extensionId: this.id });
+  }
+
+  registerTui(register: TuiExtensionRegistrar): void {
+    this._registry.addTuiRegistration(this.id, register);
+    this._logger.info('Registered TUI contributions (deferred until xopc tui starts)');
   }
 
   // Internal methods for extension manager

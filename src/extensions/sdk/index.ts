@@ -153,6 +153,17 @@ export type {
   ShortcutHandler,
 } from '../types/index.js';
 
+export type {
+  TuiExtensionHostContract,
+  TuiExtensionRegistrar,
+  TuiAutocompleteProvider,
+  TuiAutocompleteSuggestion,
+  TuiToolRenderer,
+  TuiToolRenderContext,
+  TuiSlashCommandHandler,
+  TuiNotifyLevel,
+} from '../types/index.js';
+
 // ============================================================================
 //  Security Types
 // ============================================================================

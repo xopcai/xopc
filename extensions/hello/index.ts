@@ -15,6 +15,7 @@
  */
 
 import type { ExtensionApi } from 'xopc/extension-sdk';
+import { registerHelloTui } from './tui.js';
 
 // Extension definition
 const extension = {
@@ -111,6 +112,7 @@ const extension = {
     });
 
     api.logger.info('Hello World extension fully initialized');
+    registerHelloTui(api);
   },
 
   // Activate is called when the extension is enabled
