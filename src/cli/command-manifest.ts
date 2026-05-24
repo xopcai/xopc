@@ -37,6 +37,7 @@ export const ROOT_HELP_COMMANDS: RootHelpCommand[] = [
   { name: 'image', description: 'Configure image generation and understanding models' },
   { name: 'models [options]', description: 'List and manage available models' },
   { name: 'skills', description: 'Manage skills' },
+  { name: 'tailscale', description: 'Tailscale status for gateway remote access' },
   { name: 'browser', description: 'Browser automation commands (uses Playwright)' },
   { name: 'agents', description: 'Manage agents (config + workspace)' },
   { name: 'extensions', description: 'Manage extensions' },

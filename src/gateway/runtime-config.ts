@@ -9,6 +9,7 @@ import {
   isLoopbackHost,
 } from './host.js';
 import { resolveGatewayListenPlan } from './listen.js';
+import { assertTailscaleExposureCompatible } from './tailscale-lifecycle.js';
 
 export type GatewayRuntimeConfig = {
   bindMode: GatewayBindMode;
@@ -130,11 +131,17 @@ export function assertGatewayRuntimeConfig(params: {
     );
   }
 
+  assertTailscaleExposureCompatible(params.cfg);
+
   const rateLimitConfigured = params.cfg.gateway?.auth?.rateLimit !== undefined;
   const rateLimitEnabled =
     params.cfg.gateway?.auth?.rateLimit?.enabled !== false &&
     !isAuthRateLimitGloballyDisabled();
-  const tlsEnabled = params.cfg.tunnel?.enabled === true;
+  const tailscaleMode = params.cfg.gateway?.tailscale?.mode ?? 'off';
+  const tlsEnabled =
+    params.cfg.tunnel?.enabled === true ||
+    tailscaleMode !== 'off' ||
+    params.cfg.gateway?.tls?.enabled === true;
 
   if (
     !loopback &&
