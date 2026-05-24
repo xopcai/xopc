@@ -1,5 +1,5 @@
 import { Globe, Loader2 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
@@ -12,6 +12,7 @@ import { SettingsFormSection } from '@/features/settings/settings-form-section';
 import { MobilePairQrSection } from '@/features/tunnel/mobile-pair-qr-section';
 import { TunnelConsentDialog } from '@/features/tunnel/tunnel-consent-dialog';
 import { TunnelControlCard } from '@/features/tunnel/tunnel-control-card';
+import { BrokerSecretSetupSection } from '@/features/tunnel/tunnel-broker-secret-section';
 import { RemoteAccessDocsLink } from '@/features/remote-access/remote-access-docs-link';
 import {
   fetchTunnelStatus,
@@ -45,6 +46,7 @@ export function TunnelSettingsPanel({ embedded = false }: { embedded?: boolean }
   const [brokerSecretDraft, setBrokerSecretDraft] = useState('');
   const [savingBrokerSecret, setSavingBrokerSecret] = useState(false);
   const [brokerSecretNotice, setBrokerSecretNotice] = useState<string | null>(null);
+  const brokerSecretSectionRef = useRef<HTMLDivElement>(null);
 
   const pairQr = useMobilePairQr(token ?? '');
 
@@ -91,6 +93,7 @@ export function TunnelSettingsPanel({ embedded = false }: { embedded?: boolean }
   const brokerSecretConfiguredInConfig = isMaskedKey(brokerSecretFromConfig);
   const brokerSecretFromEnv = status?.registrationSecret?.source === 'env';
   const brokerSecretMissing = status?.registrationSecret?.source === 'missing';
+  const brokerReady = status?.registrationSecret?.configured === true;
 
   const gatewayPort = useMemo(() => {
     const c = cfgData?.payload?.config;
@@ -133,12 +136,17 @@ export function TunnelSettingsPanel({ embedded = false }: { embedded?: boolean }
   }, [mutStatus, pairQr.refreshQr]);
 
   const handleStartClick = useCallback(() => {
+    if (!brokerReady) {
+      setActionError(t.brokerSecretRequiredBeforeStart);
+      brokerSecretSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
     if (status?.consentRequired) {
       setConsentOpen(true);
       return;
     }
     void runStart();
-  }, [status?.consentRequired, runStart]);
+  }, [brokerReady, status?.consentRequired, runStart, t.brokerSecretRequiredBeforeStart]);
 
   const handleConsentConfirm = useCallback(async () => {
     setConsentOpen(false);
@@ -211,6 +219,7 @@ export function TunnelSettingsPanel({ embedded = false }: { embedded?: boolean }
       setBrokerSecretNotice(t.brokerSecretSaved);
       void revalidateGatewayConfig();
       await mutStatus();
+      setActionError(null);
     } catch (e) {
       setActionError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -282,62 +291,21 @@ export function TunnelSettingsPanel({ embedded = false }: { embedded?: boolean }
   const showConsentExpired =
     status?.consentRequired && (st.enabled || autoStartEnabled || status?.consent?.acceptedAt);
 
-  const brokerSecretFields = (
-    <div className="space-y-3">
-      <div>
-        <h3 className="text-sm font-semibold text-fg">{t.brokerSecretTitle}</h3>
-        <p className="mt-0.5 text-xs text-fg-muted">{t.brokerSecretHint}</p>
-      </div>
-      {brokerSecretFromEnv ? (
-        <p className="text-xs text-fg-subtle">{t.brokerSecretEnvHint}</p>
-      ) : null}
-      {brokerSecretMissing && !brokerSecretFromEnv ? (
-        <p className="text-xs text-amber-700 dark:text-amber-400">{t.brokerSecretMissingHint}</p>
-      ) : null}
-      {!brokerSecretFromEnv ? (
-        <>
-          <label className="sr-only" htmlFor="tunnel-broker-secret">
-            {t.brokerSecretTitle}
-          </label>
-          <input
-            id="tunnel-broker-secret"
-            type="password"
-            autoComplete="off"
-            className="w-full rounded-md border border-edge bg-surface-panel px-3 py-2 font-mono text-sm text-fg"
-            placeholder={
-              brokerSecretConfiguredInConfig ? t.brokerSecretPlaceholderKeep : t.brokerSecretPlaceholder
-            }
-            value={brokerSecretDraft}
-            disabled={savingBrokerSecret}
-            onChange={(e) => setBrokerSecretDraft(e.target.value)}
-          />
-          <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              variant="secondary"
-              disabled={savingBrokerSecret || !brokerSecretDraft.trim()}
-              onClick={() => void saveBrokerSecret()}
-            >
-              {savingBrokerSecret ? <Loader2 className="size-4 animate-spin" /> : null}
-              {t.brokerSecretSave}
-            </Button>
-            {brokerSecretConfiguredInConfig ? (
-              <Button
-                type="button"
-                variant="ghost"
-                disabled={savingBrokerSecret}
-                onClick={() => void clearBrokerSecret()}
-              >
-                {t.brokerSecretClear}
-              </Button>
-            ) : null}
-          </div>
-        </>
-      ) : null}
-      {brokerSecretNotice ? (
-        <p className="text-xs text-emerald-700 dark:text-emerald-400">{brokerSecretNotice}</p>
-      ) : null}
-    </div>
+  const brokerSecretBlock = (
+    <BrokerSecretSetupSection
+      t={t}
+      variant={embedded && brokerReady && !st.enabled ? 'compact' : 'setup'}
+      brokerSecretFromEnv={brokerSecretFromEnv}
+      brokerSecretMissing={brokerSecretMissing}
+      brokerSecretConfiguredInConfig={brokerSecretConfiguredInConfig}
+      brokerSecretDraft={brokerSecretDraft}
+      savingBrokerSecret={savingBrokerSecret}
+      brokerSecretNotice={brokerSecretNotice}
+      onDraftChange={setBrokerSecretDraft}
+      onSave={() => void saveBrokerSecret()}
+      onClear={() => void clearBrokerSecret()}
+      sectionRef={brokerSecretSectionRef}
+    />
   );
 
   const dialogs = (
@@ -386,6 +354,8 @@ export function TunnelSettingsPanel({ embedded = false }: { embedded?: boolean }
       <div className="flex w-full flex-col gap-4">
         {actionError ? <p className="text-sm text-red-600 dark:text-red-400">{actionError}</p> : null}
 
+        {brokerSecretBlock}
+
         <TunnelControlCard
           t={t}
           status={st}
@@ -395,6 +365,9 @@ export function TunnelSettingsPanel({ embedded = false }: { embedded?: boolean }
           stopping={stopping}
           linkCopied={linkCopied}
           showConsentExpired={Boolean(showConsentExpired)}
+          startDisabled={!brokerReady}
+          startDisabledReason={!brokerReady ? t.brokerSecretRequiredBeforeStart : undefined}
+          stepLabel={t.flowStepStart}
           onStart={handleStartClick}
           onStop={() => void handleStop()}
           onCopyUrl={() => void copyLink()}
@@ -444,12 +417,7 @@ export function TunnelSettingsPanel({ embedded = false }: { embedded?: boolean }
           ) : null}
         </SettingsCollapsibleSection>
 
-        <SettingsCollapsibleSection
-          showLabel={t.showAdvanced}
-          hideLabel={t.hideAdvanced}
-          defaultOpen={brokerSecretMissing && !brokerSecretFromEnv}
-        >
-          {brokerSecretFields}
+        <SettingsCollapsibleSection showLabel={t.showAdvanced} hideLabel={t.hideAdvanced}>
           <div className="border-t border-edge-subtle pt-4">
             <TunnelE2eSection
               hasToken={hasToken}
@@ -492,6 +460,10 @@ export function TunnelSettingsPanel({ embedded = false }: { embedded?: boolean }
         </div>
       ) : null}
 
+      {actionError ? <p className="text-sm text-red-600 dark:text-red-400">{actionError}</p> : null}
+
+      {brokerSecretBlock}
+
       <TunnelControlCard
         t={t}
         status={st}
@@ -501,6 +473,8 @@ export function TunnelSettingsPanel({ embedded = false }: { embedded?: boolean }
         stopping={stopping}
         linkCopied={linkCopied}
         showConsentExpired={Boolean(showConsentExpired)}
+        startDisabled={!brokerReady}
+        startDisabledReason={!brokerReady ? t.brokerSecretRequiredBeforeStart : undefined}
         onStart={handleStartClick}
         onStop={() => void handleStop()}
         onCopyUrl={() => void copyLink()}
@@ -549,15 +523,11 @@ export function TunnelSettingsPanel({ embedded = false }: { embedded?: boolean }
         ) : null}
       </SettingsFormSection>
 
-      <SettingsFormSection>{brokerSecretFields}</SettingsFormSection>
-
       <TunnelE2eSection
         hasToken={hasToken}
         gatewayPort={gatewayPort}
         tunnelConnected={st.enabled && st.state === 'connected'}
       />
-
-      {actionError ? <p className="text-sm text-red-600 dark:text-red-400">{actionError}</p> : null}
 
       <div className="flex flex-col gap-2 rounded-lg border border-edge-subtle bg-surface-panel px-3 py-2 text-xs text-fg-subtle">
         <p className="flex items-start gap-2">

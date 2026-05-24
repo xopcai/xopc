@@ -66,6 +66,9 @@ type Props = {
   stopping: boolean;
   linkCopied: boolean;
   showConsentExpired: boolean;
+  startDisabled?: boolean;
+  startDisabledReason?: string;
+  stepLabel?: string;
   onStart: () => void;
   onStop: () => void;
   onCopyUrl: () => void;
@@ -80,6 +83,9 @@ export function TunnelControlCard({
   stopping,
   linkCopied,
   showConsentExpired,
+  startDisabled = false,
+  startDisabledReason,
+  stepLabel,
   onStart,
   onStop,
   onCopyUrl,
@@ -138,6 +144,7 @@ export function TunnelControlCard({
 
       {!active ? (
         <div className="space-y-4">
+          {stepLabel ? <p className="text-xs font-medium uppercase tracking-wide text-fg-subtle">{stepLabel}</p> : null}
           <div>
             <h2 className="text-base font-semibold text-fg">{t.emptyStateTitle}</h2>
             <p className="mt-1 text-sm leading-relaxed text-fg-muted">{t.emptyStateBody}</p>
@@ -146,7 +153,15 @@ export function TunnelControlCard({
             <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
             <p>{t.riskBannerBody}</p>
           </div>
-          <Button type="button" disabled={starting} onClick={onStart} className="w-full sm:w-auto">
+          {startDisabled && startDisabledReason ? (
+            <p className="text-sm text-amber-800 dark:text-amber-200">{startDisabledReason}</p>
+          ) : null}
+          <Button
+            type="button"
+            disabled={starting || startDisabled}
+            onClick={onStart}
+            className="w-full sm:w-auto"
+          >
             {starting ? <Loader2 className="size-4 animate-spin" /> : <Power className="size-4" />}
             {t.start}
           </Button>
