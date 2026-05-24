@@ -1,6 +1,6 @@
 import { ExternalLink } from 'lucide-react';
 import QRCode from 'qrcode';
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -48,7 +48,14 @@ export function FeishuQrSetupDialog({
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [qrGenFailed, setQrGenFailed] = useState(false);
 
+  const startGenerationRef = useRef(0);
+  const onSetupSuccessRef = useRef(onSetupSuccess);
+  const onOpenChangeRef = useRef(onOpenChange);
+  onSetupSuccessRef.current = onSetupSuccess;
+  onOpenChangeRef.current = onOpenChange;
+
   const startScan = useCallback(async (d: FeishuDomain) => {
+    const generation = ++startGenerationRef.current;
     setDomain(d);
     setError(null);
     setSessionKey(null);
@@ -56,17 +63,22 @@ export function FeishuQrSetupDialog({
     setBusy(true);
     try {
       const result = await fetchFeishuSetupStart({ domain: d });
+      if (generation !== startGenerationRef.current) return;
       setQrUrl(result.qrUrl);
       setSessionKey(result.sessionKey);
     } catch (e) {
+      if (generation !== startGenerationRef.current) return;
       setError(e instanceof Error ? e.message : 'Start failed');
     } finally {
-      setBusy(false);
+      if (generation === startGenerationRef.current) {
+        setBusy(false);
+      }
     }
   }, []);
 
   useEffect(() => {
     if (!open) {
+      startGenerationRef.current += 1;
       setSessionKey(null);
       setQrUrl(null);
       setError(null);
@@ -99,8 +111,8 @@ export function FeishuQrSetupDialog({
           setSessionKey(null);
           if (status.ok) {
             setQrUrl(null);
-            if (closeOnSetupSuccess) onOpenChange(false);
-            onSetupSuccess({
+            if (closeOnSetupSuccess) onOpenChangeRef.current(false);
+            onSetupSuccessRef.current({
               appId: status.appId,
               domain: status.domain,
               openId: status.openId,
@@ -140,7 +152,7 @@ export function FeishuQrSetupDialog({
         window.clearInterval(intervalId);
       }
     };
-  }, [sessionKey, onOpenChange, onSetupSuccess]);
+  }, [sessionKey, closeOnSetupSuccess]);
 
   useEffect(() => {
     if (!qrUrl) {

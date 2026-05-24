@@ -125,6 +125,19 @@ export function ChannelsSettingsPanel() {
     navigate(CHANNELS_HUB_PATH);
   }, [navigate]);
 
+  const handleWeixinOpenChange = useCallback(
+    (nextOpen: boolean) => {
+      if (!nextOpen) closeChannel();
+    },
+    [closeChannel],
+  );
+
+  const handleWeixinLoginSuccess = useCallback(async () => {
+    await mutate();
+    setWeixinSuccessBanner(ch.weixinQrLoginSuccess);
+    window.setTimeout(() => setWeixinSuccessBanner(null), 4000);
+  }, [ch.weixinQrLoginSuccess, mutate, setWeixinSuccessBanner]);
+
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
@@ -292,15 +305,9 @@ export function ChannelsSettingsPanel() {
       {activeChannelId === 'weixin' ? (
         <WeixinQrLoginDialog
           open={detailOpen}
-          onOpenChange={(open) => {
-            if (!open) closeChannel();
-          }}
+          onOpenChange={handleWeixinOpenChange}
           ch={ch}
-          onLoginSuccess={async () => {
-            await mutate();
-            setWeixinSuccessBanner(ch.weixinQrLoginSuccess);
-            window.setTimeout(() => setWeixinSuccessBanner(null), 4000);
-          }}
+          onLoginSuccess={handleWeixinLoginSuccess}
           moreSettings={weixinMoreSettings}
           settingsDirty={dirty}
           settingsSaving={saving}
