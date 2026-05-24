@@ -1,5 +1,5 @@
-import { AlertTriangle, Check, Copy, Globe, Loader2, Power, RefreshCw } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Globe, Loader2 } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
@@ -7,59 +7,28 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
 import { revalidateGatewayConfig } from '@/features/gateway/gateway-config-swr';
 import { isMaskedKey } from '@/features/settings/providers-api';
+import { SettingsCollapsibleSection } from '@/features/settings/settings-collapsible-section';
 import { SettingsFormSection } from '@/features/settings/settings-form-section';
 import { MobilePairQrSection } from '@/features/tunnel/mobile-pair-qr-section';
 import { TunnelConsentDialog } from '@/features/tunnel/tunnel-consent-dialog';
+import { TunnelControlCard } from '@/features/tunnel/tunnel-control-card';
+import { BrokerSecretSetupSection } from '@/features/tunnel/tunnel-broker-secret-section';
+import { RemoteAccessDocsLink } from '@/features/remote-access/remote-access-docs-link';
 import {
   fetchTunnelStatus,
   patchTunnelConfig,
   recordTunnelConsent,
   startTunnel,
   stopTunnel,
-  type TunnelStatusResponse,
 } from '@/features/tunnel/tunnel-api';
 import { useMobilePairQr } from '@/features/tunnel/use-mobile-pair-qr';
 import { TunnelE2eSection } from '@/features/tunnel/tunnel-e2e-section';
-import { TunnelStartProgressPanel } from '@/features/tunnel/tunnel-start-progress';
 import { cn } from '@/lib/cn';
 import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
-function statusLabel(
-  t: ReturnType<typeof messages>['tunnelSettings'],
-  status: TunnelStatusResponse,
-): string {
-  if (status.state === 'connected') return t.statusConnected;
-  if (status.state === 'error') return t.statusError;
-  if (status.startProgress?.phase === 'reconnecting_frpc') return t.statusReconnecting;
-  if (status.startProgress?.phase === 'provisioning_tls') return t.statusProvisioningTls;
-  if (status.startProgress?.phase === 'starting_frpc') return t.statusStartingFrpc;
-  if (status.startProgress?.phase === 'registering') return t.statusRegistering;
-  if (status.startProgress?.phase === 'preparing_frpc' || status.frpcDownload) return t.statusPreparingFrpc;
-  if (status.state === 'connecting' || status.state === 'reconnecting') return t.statusConnecting;
-  return t.statusOff;
-}
-
-function statusDotClass(status: TunnelStatusResponse): string {
-  if (status.state === 'connected') return 'bg-emerald-500';
-  if (status.state === 'connecting' || status.state === 'reconnecting') return 'bg-amber-500 animate-pulse';
-  if (status.state === 'error') return 'bg-red-500';
-  return 'bg-fg-subtle';
-}
-
-function formatUptime(since: string | null): string {
-  if (!since) return '—';
-  const ms = Date.now() - new Date(since).getTime();
-  if (ms < 0) return '—';
-  const mins = Math.floor(ms / 60_000);
-  if (mins < 60) return `${mins}m`;
-  const hrs = Math.floor(mins / 60);
-  const rem = mins % 60;
-  return `${hrs}h ${rem}m`;
-}
-
-export function TunnelSettingsPanel() {
+export function TunnelSettingsPanel({ embedded = false }: { embedded?: boolean }) {
   const language = useLocaleStore((s) => s.language);
   const t = messages(language).tunnelSettings;
   const token = useGatewayStore((st) => st.token);
@@ -77,6 +46,7 @@ export function TunnelSettingsPanel() {
   const [brokerSecretDraft, setBrokerSecretDraft] = useState('');
   const [savingBrokerSecret, setSavingBrokerSecret] = useState(false);
   const [brokerSecretNotice, setBrokerSecretNotice] = useState<string | null>(null);
+  const brokerSecretSectionRef = useRef<HTMLDivElement>(null);
 
   const pairQr = useMobilePairQr(token ?? '');
 
@@ -123,6 +93,7 @@ export function TunnelSettingsPanel() {
   const brokerSecretConfiguredInConfig = isMaskedKey(brokerSecretFromConfig);
   const brokerSecretFromEnv = status?.registrationSecret?.source === 'env';
   const brokerSecretMissing = status?.registrationSecret?.source === 'missing';
+  const brokerReady = status?.registrationSecret?.configured === true;
 
   const gatewayPort = useMemo(() => {
     const c = cfgData?.payload?.config;
@@ -165,12 +136,17 @@ export function TunnelSettingsPanel() {
   }, [mutStatus, pairQr.refreshQr]);
 
   const handleStartClick = useCallback(() => {
+    if (!brokerReady) {
+      setActionError(t.brokerSecretRequiredBeforeStart);
+      brokerSecretSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
     if (status?.consentRequired) {
       setConsentOpen(true);
       return;
     }
     void runStart();
-  }, [status?.consentRequired, runStart]);
+  }, [brokerReady, status?.consentRequired, runStart, t.brokerSecretRequiredBeforeStart]);
 
   const handleConsentConfirm = useCallback(async () => {
     setConsentOpen(false);
@@ -243,6 +219,7 @@ export function TunnelSettingsPanel() {
       setBrokerSecretNotice(t.brokerSecretSaved);
       void revalidateGatewayConfig();
       await mutStatus();
+      setActionError(null);
     } catch (e) {
       setActionError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -292,7 +269,7 @@ export function TunnelSettingsPanel() {
 
   if (!hasToken) {
     return (
-      <div className="mx-auto w-full max-w-app-main px-4 py-8">
+      <div className={embedded ? undefined : 'mx-auto w-full max-w-app-main px-4 py-8'}>
         <p className="text-sm text-fg-muted">{t.needToken}</p>
       </div>
     );
@@ -314,192 +291,25 @@ export function TunnelSettingsPanel() {
   const showConsentExpired =
     status?.consentRequired && (st.enabled || autoStartEnabled || status?.consent?.acceptedAt);
 
-  return (
-    <div className="mx-auto flex w-full max-w-app-main flex-col gap-6 px-4 py-8">
-      <div>
-        <h1 className="text-lg font-semibold text-fg">{t.title}</h1>
-        <p className="mt-1 text-sm text-fg-muted">{t.subtitle}</p>
-      </div>
+  const brokerSecretBlock = (
+    <BrokerSecretSetupSection
+      t={t}
+      variant={embedded && brokerReady && !st.enabled ? 'compact' : 'setup'}
+      brokerSecretFromEnv={brokerSecretFromEnv}
+      brokerSecretMissing={brokerSecretMissing}
+      brokerSecretConfiguredInConfig={brokerSecretConfiguredInConfig}
+      brokerSecretDraft={brokerSecretDraft}
+      savingBrokerSecret={savingBrokerSecret}
+      brokerSecretNotice={brokerSecretNotice}
+      onDraftChange={setBrokerSecretDraft}
+      onSave={() => void saveBrokerSecret()}
+      onClear={() => void clearBrokerSecret()}
+      sectionRef={brokerSecretSectionRef}
+    />
+  );
 
-      <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-fg-muted">
-        <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
-        <div>
-          <p className="font-medium text-fg">{t.riskBannerTitle}</p>
-          <p className="mt-1">{t.riskBannerBody}</p>
-        </div>
-      </div>
-
-      {showConsentExpired ? (
-        <div className="rounded-lg border border-edge bg-surface-panel px-3 py-2 text-xs text-fg-muted">
-          {t.consentExpiredBanner}
-        </div>
-      ) : null}
-
-      <SettingsFormSection>
-        <h2 className="mb-3 text-sm font-semibold text-fg">{t.statusTitle}</h2>
-        {isLoading && !status ? (
-          <p className="flex items-center gap-2 text-sm text-fg-muted">
-            <Loader2 className="size-4 animate-spin" />
-            {t.loading}
-          </p>
-        ) : null}
-        {statusErr ? (
-          <p className="text-sm text-red-600 dark:text-red-400">
-            {statusErr instanceof Error ? statusErr.message : String(statusErr)}
-          </p>
-        ) : null}
-        <div className="flex items-center gap-2 text-sm font-medium text-fg">
-          <span className={cn('size-2.5 rounded-full', statusDotClass(st))} aria-hidden />
-          {statusLabel(t, st)}
-        </div>
-        <TunnelStartProgressPanel status={st} t={t} />
-        {st.publicUrl ? (
-          <p className="font-mono text-xs text-fg-subtle break-all">{st.publicUrl}</p>
-        ) : null}
-        {st.connectedSince ? (
-          <p className="text-xs text-fg-subtle">
-            {t.uptime}: {formatUptime(st.connectedSince)}
-          </p>
-        ) : null}
-        {st.lastError && st.state === 'error' ? (
-          <p className="text-xs text-red-600 dark:text-red-400">{st.lastError}</p>
-        ) : null}
-        <p className="text-xs text-fg-subtle">{t.lanHint}</p>
-      </SettingsFormSection>
-
-      <MobilePairQrSection pairQr={pairQr} gatewayToken={token ?? ''} />
-
-      <div className="flex flex-wrap gap-2">
-        {!st.enabled ? (
-          <Button type="button" disabled={starting} onClick={handleStartClick}>
-            {starting ? <Loader2 className="size-4 animate-spin" /> : <Power className="size-4" />}
-            {t.start}
-          </Button>
-        ) : (
-          <Button type="button" variant="secondary" disabled={stopping} onClick={() => void handleStop()}>
-            {stopping ? <Loader2 className="size-4 animate-spin" /> : null}
-            {t.stop}
-          </Button>
-        )}
-        {st.publicUrl ? (
-          <Button type="button" variant="secondary" onClick={() => void copyLink()}>
-            {linkCopied ? <Check className="size-4" /> : <Copy className="size-4" />}
-            {linkCopied ? t.copied : t.copyUrl}
-          </Button>
-        ) : null}
-        {st.enabled ? (
-          <Button type="button" variant="ghost" onClick={() => void pairQr.refreshQr()}>
-            <RefreshCw className="size-4" />
-            {t.refreshQr}
-          </Button>
-        ) : null}
-        {st.subdomain || st.publicUrl ? (
-          <Button
-            type="button"
-            variant="secondary"
-            disabled={releasing || stopping}
-            className="border-danger/40 text-danger hover:bg-danger/10"
-            onClick={() => setReleaseConfirmOpen(true)}
-          >
-            {releasing ? <Loader2 className="size-4 animate-spin" /> : null}
-            {t.release}
-          </Button>
-        ) : null}
-      </div>
-
-      {st.subdomain || st.publicUrl ? (
-        <p className="text-xs text-fg-subtle">{t.releaseHint}</p>
-      ) : null}
-
-      <SettingsFormSection>
-        <h2 className="mb-1 text-sm font-semibold text-fg">{t.brokerSecretTitle}</h2>
-        <p className="mb-3 text-xs text-fg-muted">{t.brokerSecretHint}</p>
-        {brokerSecretFromEnv ? (
-          <p className="mb-3 text-xs text-fg-subtle">{t.brokerSecretEnvHint}</p>
-        ) : null}
-        {brokerSecretMissing && !brokerSecretFromEnv ? (
-          <p className="mb-3 text-xs text-amber-700 dark:text-amber-400">{t.brokerSecretMissingHint}</p>
-        ) : null}
-        {!brokerSecretFromEnv ? (
-          <>
-            <label className="sr-only" htmlFor="tunnel-broker-secret">
-              {t.brokerSecretTitle}
-            </label>
-            <input
-              id="tunnel-broker-secret"
-              type="password"
-              autoComplete="off"
-              className="w-full rounded-md border border-edge bg-surface-panel px-3 py-2 font-mono text-sm text-fg"
-              placeholder={
-                brokerSecretConfiguredInConfig ? t.brokerSecretPlaceholderKeep : t.brokerSecretPlaceholder
-              }
-              value={brokerSecretDraft}
-              disabled={savingBrokerSecret}
-              onChange={(e) => setBrokerSecretDraft(e.target.value)}
-            />
-            <div className="mt-3 flex flex-wrap gap-2">
-              <Button
-                type="button"
-                variant="secondary"
-                disabled={savingBrokerSecret || !brokerSecretDraft.trim()}
-                onClick={() => void saveBrokerSecret()}
-              >
-                {savingBrokerSecret ? <Loader2 className="size-4 animate-spin" /> : null}
-                {t.brokerSecretSave}
-              </Button>
-              {brokerSecretConfiguredInConfig ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  disabled={savingBrokerSecret}
-                  onClick={() => void clearBrokerSecret()}
-                >
-                  {t.brokerSecretClear}
-                </Button>
-              ) : null}
-            </div>
-          </>
-        ) : null}
-        {brokerSecretNotice ? (
-          <p className="mt-2 text-xs text-emerald-700 dark:text-emerald-400">{brokerSecretNotice}</p>
-        ) : null}
-      </SettingsFormSection>
-
-      <SettingsFormSection>
-        <h2 className="mb-3 text-sm font-semibold text-fg">{t.optionsTitle}</h2>
-        <label
-          className={cn(
-            'flex items-center gap-3 text-sm text-fg',
-            !autoStartEnabled && !status?.canAutoStart ? 'cursor-not-allowed opacity-60' : 'cursor-pointer',
-          )}
-        >
-          <input
-            type="checkbox"
-            className="size-4 rounded border-edge accent-accent"
-            checked={autoStartEnabled}
-            disabled={savingAutoStart || (!autoStartEnabled && !status?.canAutoStart)}
-            onChange={toggleAutoStart}
-          />
-          {t.autoStart}
-        </label>
-        {!status?.canAutoStart && !autoStartEnabled ? (
-          <p className="mt-2 text-xs text-fg-subtle">{t.autoStartHint}</p>
-        ) : null}
-      </SettingsFormSection>
-
-      <TunnelE2eSection
-        hasToken={hasToken}
-        gatewayPort={gatewayPort}
-        tunnelConnected={st.enabled && st.state === 'connected'}
-      />
-
-      {actionError ? <p className="text-sm text-red-600 dark:text-red-400">{actionError}</p> : null}
-
-      <div className="flex items-start gap-2 rounded-lg border border-edge-subtle bg-surface-panel px-3 py-2 text-xs text-fg-subtle">
-        <Globe className="mt-0.5 size-4 shrink-0 text-accent" />
-        <span>{t.brokerNote}</span>
-      </div>
-
+  const dialogs = (
+    <>
       <TunnelConsentDialog
         key={consentOpen ? 'consent-open' : 'consent-closed'}
         open={consentOpen}
@@ -536,6 +346,203 @@ export function TunnelSettingsPanel() {
         onConfirm={() => void handleRelease()}
         onCancel={() => setReleaseConfirmOpen(false)}
       />
+    </>
+  );
+
+  if (embedded) {
+    return (
+      <div className="flex w-full flex-col gap-4">
+        {actionError ? <p className="text-sm text-red-600 dark:text-red-400">{actionError}</p> : null}
+
+        {brokerSecretBlock}
+
+        <TunnelControlCard
+          t={t}
+          status={st}
+          isLoading={isLoading}
+          statusErr={statusErr}
+          starting={starting}
+          stopping={stopping}
+          linkCopied={linkCopied}
+          showConsentExpired={Boolean(showConsentExpired)}
+          startDisabled={!brokerReady}
+          startDisabledReason={!brokerReady ? t.brokerSecretRequiredBeforeStart : undefined}
+          stepLabel={t.flowStepStart}
+          onStart={handleStartClick}
+          onStop={() => void handleStop()}
+          onCopyUrl={() => void copyLink()}
+        />
+
+        <MobilePairQrSection
+          pairQr={pairQr}
+          gatewayToken={token ?? ''}
+          streamlined
+          onRefreshQr={() => void pairQr.refreshQr()}
+        />
+
+        <SettingsCollapsibleSection showLabel={t.showOptions} hideLabel={t.hideOptions}>
+          <label
+            className={cn(
+              'flex items-center gap-3 text-sm text-fg',
+              !autoStartEnabled && !status?.canAutoStart ? 'cursor-not-allowed opacity-60' : 'cursor-pointer',
+            )}
+          >
+            <input
+              type="checkbox"
+              className="size-4 rounded border-edge accent-accent"
+              checked={autoStartEnabled}
+              disabled={savingAutoStart || (!autoStartEnabled && !status?.canAutoStart)}
+              onChange={toggleAutoStart}
+            />
+            {t.autoStart}
+          </label>
+          {!status?.canAutoStart && !autoStartEnabled ? (
+            <p className="text-xs text-fg-subtle">{t.autoStartHint}</p>
+          ) : null}
+
+          {st.subdomain || st.publicUrl ? (
+            <div className="space-y-2 border-t border-edge-subtle pt-4">
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={releasing || stopping}
+                className="border-danger/40 text-danger hover:bg-danger/10"
+                onClick={() => setReleaseConfirmOpen(true)}
+              >
+                {releasing ? <Loader2 className="size-4 animate-spin" /> : null}
+                {t.release}
+              </Button>
+              <p className="text-xs text-fg-subtle">{t.releaseHint}</p>
+            </div>
+          ) : null}
+        </SettingsCollapsibleSection>
+
+        <SettingsCollapsibleSection showLabel={t.showAdvanced} hideLabel={t.hideAdvanced}>
+          <div className="border-t border-edge-subtle pt-4">
+            <TunnelE2eSection
+              hasToken={hasToken}
+              gatewayPort={gatewayPort}
+              tunnelConnected={st.enabled && st.state === 'connected'}
+              nested
+            />
+          </div>
+          <div className="flex flex-col gap-2 border-t border-edge-subtle pt-4 text-xs text-fg-subtle">
+            <p className="flex items-start gap-2">
+              <Globe className="mt-0.5 size-4 shrink-0 text-accent" />
+              <span>{t.brokerNote}</span>
+            </p>
+            <RemoteAccessDocsLink
+              language={language}
+              label={t.brokerDocsLink}
+              section="public-tunnel"
+              className="text-xs"
+            />
+          </div>
+        </SettingsCollapsibleSection>
+
+        {dialogs}
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className={
+        embedded
+          ? 'flex w-full flex-col gap-6'
+          : 'mx-auto flex w-full max-w-app-main flex-col gap-6 px-4 py-8'
+      }
+    >
+      {!embedded ? (
+        <div>
+          <h1 className="text-lg font-semibold text-fg">{t.title}</h1>
+          <p className="mt-1 text-sm text-fg-muted">{t.subtitle}</p>
+        </div>
+      ) : null}
+
+      {actionError ? <p className="text-sm text-red-600 dark:text-red-400">{actionError}</p> : null}
+
+      {brokerSecretBlock}
+
+      <TunnelControlCard
+        t={t}
+        status={st}
+        isLoading={isLoading}
+        statusErr={statusErr}
+        starting={starting}
+        stopping={stopping}
+        linkCopied={linkCopied}
+        showConsentExpired={Boolean(showConsentExpired)}
+        startDisabled={!brokerReady}
+        startDisabledReason={!brokerReady ? t.brokerSecretRequiredBeforeStart : undefined}
+        onStart={handleStartClick}
+        onStop={() => void handleStop()}
+        onCopyUrl={() => void copyLink()}
+      />
+
+      <MobilePairQrSection pairQr={pairQr} gatewayToken={token ?? ''} />
+
+      {st.subdomain || st.publicUrl ? (
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={releasing || stopping}
+            className="border-danger/40 text-danger hover:bg-danger/10"
+            onClick={() => setReleaseConfirmOpen(true)}
+          >
+            {releasing ? <Loader2 className="size-4 animate-spin" /> : null}
+            {t.release}
+          </Button>
+        </div>
+      ) : null}
+
+      {st.subdomain || st.publicUrl ? (
+        <p className="text-xs text-fg-subtle">{t.releaseHint}</p>
+      ) : null}
+
+      <SettingsFormSection>
+        <h2 className="mb-3 text-sm font-semibold text-fg">{t.optionsTitle}</h2>
+        <label
+          className={cn(
+            'flex items-center gap-3 text-sm text-fg',
+            !autoStartEnabled && !status?.canAutoStart ? 'cursor-not-allowed opacity-60' : 'cursor-pointer',
+          )}
+        >
+          <input
+            type="checkbox"
+            className="size-4 rounded border-edge accent-accent"
+            checked={autoStartEnabled}
+            disabled={savingAutoStart || (!autoStartEnabled && !status?.canAutoStart)}
+            onChange={toggleAutoStart}
+          />
+          {t.autoStart}
+        </label>
+        {!status?.canAutoStart && !autoStartEnabled ? (
+          <p className="mt-2 text-xs text-fg-subtle">{t.autoStartHint}</p>
+        ) : null}
+      </SettingsFormSection>
+
+      <TunnelE2eSection
+        hasToken={hasToken}
+        gatewayPort={gatewayPort}
+        tunnelConnected={st.enabled && st.state === 'connected'}
+      />
+
+      <div className="flex flex-col gap-2 rounded-lg border border-edge-subtle bg-surface-panel px-3 py-2 text-xs text-fg-subtle">
+        <p className="flex items-start gap-2">
+          <Globe className="mt-0.5 size-4 shrink-0 text-accent" />
+          <span>{t.brokerNote}</span>
+        </p>
+        <RemoteAccessDocsLink
+          language={language}
+          label={t.brokerDocsLink}
+          section="public-tunnel"
+          className="text-xs"
+        />
+      </div>
+
+      {dialogs}
     </div>
   );
 }

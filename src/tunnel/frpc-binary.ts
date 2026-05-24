@@ -59,9 +59,9 @@ export function frpcDownloadUrlsForTarget(
   const folder = buildFrpcReleaseBasename(frpPlatform, arch, version);
   const ext = frpcReleaseArchiveExtension(frpPlatform);
   return [
+    `https://frp.xopc.ai/bin/${folder}${ext}`,
     `https://github.com/fatedier/frp/releases/download/v${version}/${folder}${ext}`,
     `https://ghfast.top/https://github.com/fatedier/frp/releases/download/v${version}/${folder}${ext}`,
-    `https://frp.xopc.ai/bin/${folder}${ext}`,
   ];
 }
 
@@ -94,6 +94,7 @@ async function downloadToFile(
   const report = () => {
     onProgress?.({
       phase: 'downloading',
+      url,
       bytesReceived,
       totalBytes,
       percent:
@@ -153,7 +154,7 @@ export async function ensureFrpcBinary(opts?: EnsureFrpcBinaryOptions): Promise<
       try {
         log.info({ url }, 'Downloading frpc');
         await downloadToFile(url, archivePath, onProgress);
-        onProgress?.({ phase: 'extracting', bytesReceived: 0, totalBytes: null, percent: null });
+        onProgress?.({ phase: 'extracting', url, bytesReceived: 0, totalBytes: null, percent: null });
         await extractFrpcFromReleaseArchive(
           archivePath,
           cachePath,

@@ -1063,6 +1063,35 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
         config.gateway.port = Math.floor(body.gateway.port);
       }
     }
+    if (body.gateway?.tailscale !== undefined && typeof body.gateway.tailscale === 'object') {
+      const ts = body.gateway.tailscale as Record<string, unknown>;
+      if (!config.gateway) {
+        config.gateway = {
+          bind: 'loopback',
+          host: '127.0.0.1',
+          port: 18790,
+          auth: { mode: 'token' },
+          heartbeat: { enabled: true, intervalMs: 1_800_000, includeSystemPromptSection: false },
+          maxSseConnections: 100,
+          corsOrigins: [],
+        };
+      }
+      config.gateway.tailscale = {
+        ...(config.gateway.tailscale ?? { mode: 'off', resetOnExit: true }),
+      };
+      if (ts.mode !== undefined) {
+        if (ts.mode !== 'off' && ts.mode !== 'serve' && ts.mode !== 'funnel') {
+          return c.json(
+            { ok: false, error: { message: 'gateway.tailscale.mode must be off, serve, or funnel' } },
+            400,
+          );
+        }
+        config.gateway.tailscale.mode = ts.mode as 'off' | 'serve' | 'funnel';
+      }
+      if (ts.resetOnExit !== undefined) {
+        config.gateway.tailscale.resetOnExit = ts.resetOnExit === true;
+      }
+    }
     if (body.gateway?.auth !== undefined) {
       if (!config.gateway) {
         config.gateway = {

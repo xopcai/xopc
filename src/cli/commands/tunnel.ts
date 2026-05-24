@@ -336,6 +336,34 @@ function createTunnelCommand(ctx: CLIContext): Command {
       console.log(qr.qrPayload);
     });
 
+  cmd
+    .command('broker')
+    .description('Self-hosted FRP broker helpers')
+    .addCommand(
+      new Command('init')
+        .description('Print a starter frps + broker configuration template')
+        .option('--domain <domain>', 'Public domain for frps', 'tunnel.example.com')
+        .action((opts) => {
+          const domain = String(opts.domain ?? 'tunnel.example.com');
+          console.log(`# Self-hosted FRP broker sketch for ${domain}`);
+          console.log('# 1. Run frps with vhost HTTP/HTTPS and a registration token');
+          console.log(`# 2. Point tunnel.brokerUrl to https://${domain}/api`);
+          console.log(`# 3. Set XOPC_TUNNEL_REGISTRATION_SECRET in the gateway environment`);
+          console.log('');
+          console.log(JSON.stringify({
+            frps: {
+              bindPort: 7000,
+              vhostHTTPPort: 8080,
+              subdomainHost: domain,
+            },
+            broker: {
+              apiUrl: `https://${domain}/api`,
+              registrationSecretEnv: 'XOPC_TUNNEL_REGISTRATION_SECRET',
+            },
+          }, null, 2));
+        }),
+    );
+
   return cmd;
 }
 

@@ -42,6 +42,15 @@ export async function fetchTunnelWellKnown(brokerUrl: string): Promise<TunnelWel
   return body;
 }
 
+export async function pingTunnelBroker(brokerUrl: string): Promise<boolean> {
+  try {
+    await fetchTunnelWellKnown(brokerUrl);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function clearTunnelWellKnownCache(): void {
   cached = null;
 }
