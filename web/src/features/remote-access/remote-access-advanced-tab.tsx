@@ -6,8 +6,8 @@ import {
   SettingsFormSectionHeader,
 } from '@/features/settings/settings-form-section';
 import { SshCliSection } from '@/features/remote-access/ssh-cli-section';
+import { RemoteAccessDocsLink } from '@/features/remote-access/remote-access-docs-link';
 import { messages } from '@/i18n/messages';
-import { docsGuidePageUrl } from '@/navigation';
 import { useLocaleStore } from '@/stores/locale-store';
 
 export function RemoteAccessAdvancedTab() {
@@ -35,15 +35,7 @@ export function RemoteAccessAdvancedTab() {
       <SettingsFormSection>
         <h2 className="text-sm font-semibold text-fg">{adv.proxyTitle}</h2>
         <p className="mt-1 text-sm text-fg-muted">{adv.proxyBody}</p>
-        <a
-          href={docsGuidePageUrl(language, 'gateway/remote')}
-          target="_blank"
-          rel="noreferrer"
-          className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-accent hover:underline"
-        >
-          {adv.proxyDocs}
-          <ExternalLink className="size-3.5" aria-hidden />
-        </a>
+        <RemoteAccessDocsLink language={language} label={adv.proxyDocs} section="advanced" className="mt-3" />
       </SettingsFormSection>
     </div>
   );

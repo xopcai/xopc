@@ -1,6 +1,7 @@
 import { ChevronRight, Globe, Network, Server, Terminal } from 'lucide-react';
 import useSWR from 'swr';
 
+import { RemoteAccessDocsLink } from '@/features/remote-access/remote-access-docs-link';
 import { fetchExposureStatus } from '@/features/remote-access/remote-access-api';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
@@ -133,6 +134,8 @@ export function RemoteAccessGuideTab({ onOpenTab }: { onOpenTab: (tab: RemoteAcc
       </div>
 
       <p className="text-xs leading-relaxed text-fg-subtle">{g.oneAtATimeHint}</p>
+
+      <RemoteAccessDocsLink language={language} label={g.docsLink} />
     </div>
   );
 }

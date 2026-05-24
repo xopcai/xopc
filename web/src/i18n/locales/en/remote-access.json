@@ -2,6 +2,7 @@
   "remoteAccess": {
     "pageTitle": "Remote access",
     "pageSubtitle": "Connect to this gateway from other devices. Pick one method — only one exposure mode should be active at a time.",
+    "docsLink": "Read the remote access guide",
     "tabsAria": "Remote access methods",
     "tabs": {
       "guide": "Overview",
@@ -35,7 +36,8 @@
       "conflictsTitle": "Configuration conflict",
       "conflictsHint": "Only one exposure method should be active. Disable the other before switching.",
       "oneAtATimeHint": "Tailscale Serve and the public tunnel cannot run together. Use Overview to check status before switching.",
-      "needToken": "Sign in to the gateway (valid token) to manage remote access."
+      "needToken": "Sign in to the gateway (valid token) to manage remote access.",
+      "docsLink": "Full guide in the docs"
     },
     "advanced": {
       "lanTitle": "Same network (LAN)",
@@ -60,7 +62,8 @@
       "disableServe": "Disable Serve",
       "copyUrl": "Copy HTTPS URL",
       "copied": "Copied",
-      "hint": "Requires Tailscale installed and logged in on this machine. API routes still require your gateway token."
+      "hint": "Requires Tailscale installed and logged in on this machine. API routes still require your gateway token.",
+      "docsLink": "Tailscale Serve docs"
     },
     "ssh": {
       "title": "SSH tunnel (CLI)",

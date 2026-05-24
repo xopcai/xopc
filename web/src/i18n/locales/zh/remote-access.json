@@ -2,6 +2,7 @@
   "remoteAccess": {
     "pageTitle": "远程访问",
     "pageSubtitle": "从其他设备连接此 Gateway。选择一种方式即可 — 同一时间只应启用一种对外暴露模式。",
+    "docsLink": "阅读远程访问指南",
     "tabsAria": "远程访问方式",
     "tabs": {
       "guide": "概览",
@@ -35,7 +36,8 @@
       "conflictsTitle": "配置冲突",
       "conflictsHint": "同一时间只应启用一种暴露方式。切换前请先关闭另一种。",
       "oneAtATimeHint": "Tailscale Serve 与公网隧道不能同时运行。切换前请在概览页查看状态。",
-      "needToken": "请先使用有效的 Gateway token 登录后再管理远程访问。"
+      "needToken": "请先使用有效的 Gateway token 登录后再管理远程访问。",
+      "docsLink": "查看完整文档"
     },
     "advanced": {
       "lanTitle": "同一网络（局域网）",
@@ -60,7 +62,8 @@
       "disableServe": "停用 Serve",
       "copyUrl": "复制 HTTPS 地址",
       "copied": "已复制",
-      "hint": "需要本机已安装并登录 Tailscale。API 仍需要 gateway token。"
+      "hint": "需要本机已安装并登录 Tailscale。API 仍需要 gateway token。",
+      "docsLink": "Tailscale Serve 文档"
     },
     "ssh": {
       "title": "SSH 隧道（CLI）",
