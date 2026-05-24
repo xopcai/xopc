@@ -56,10 +56,24 @@ export const BASE_RELOAD_RULES: ReloadRule[] = [
   { prefix: 'agents.defaults.workspace', kind: 'none', description: 'Workspace path - no runtime effect' },
   
   // Gateway - restart required
-  { prefix: 'gateway.host', kind: 'restart', description: 'Host address' },
+  { prefix: 'gateway.bind', kind: 'restart', description: 'Gateway bind mode' },
+  { prefix: 'gateway.customBindHost', kind: 'restart', description: 'Gateway custom bind host' },
+  { prefix: 'gateway.host', kind: 'restart', description: 'Host address (legacy)' },
   { prefix: 'gateway.port', kind: 'restart', description: 'Port number' },
   { prefix: 'gateway.auth', kind: 'restart', description: 'Authentication settings' },
+  { prefix: 'gateway.security', kind: 'restart', description: 'Gateway security policy' },
   { prefix: 'gateway.corsOrigins', kind: 'restart', description: 'CORS settings' },
+  { prefix: 'gateway.trustedProxies', kind: 'restart', description: 'Trusted reverse proxy CIDRs' },
+  {
+    prefix: 'gateway.allowRealIpFallback',
+    kind: 'restart',
+    description: 'Trusted-proxy X-Real-IP fallback',
+  },
+  {
+    prefix: 'gateway.dangerouslyAllowHostHeaderOriginFallback',
+    kind: 'restart',
+    description: 'Host-header origin fallback',
+  },
   { prefix: 'gateway.maxSseConnections', kind: 'restart', description: 'SSE connection limit' },
   { prefix: 'gateway.channelConnectDeferMode', kind: 'restart', description: 'Channel connect defer mode' },
   { prefix: 'gateway.channelConnectDeferIds', kind: 'restart', description: 'Explicit channel connect defer list' },

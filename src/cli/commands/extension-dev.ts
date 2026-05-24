@@ -234,6 +234,8 @@ export function createExtensionDevCommand(): Command {
         const host = options.host;
         await ensureGatewayReady(ctx.configPath, ctx.workspacePath, host, port);
         const cfg = loadConfig(ctx.configPath);
+        const { resolveGatewayListenPlan } = await import('../../gateway/listen.js');
+        const listenPlan = resolveGatewayListenPlan({ cfg, hostOverride: host });
 
         if (Number.isNaN(port)) {
           console.error(colors.red('error:'), 'Invalid --port');
@@ -253,6 +255,9 @@ export function createExtensionDevCommand(): Command {
             port,
             start: async () => {
               const server = new GatewayServer({
+                bindHost: listenPlan.bindHost,
+                bind: listenPlan.bindMode,
+                customBindHost: listenPlan.customBindHost,
                 host,
                 port,
                 token: cfg?.gateway?.auth?.token,

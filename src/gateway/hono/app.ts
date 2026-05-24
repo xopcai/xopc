@@ -86,6 +86,8 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   // Non-browser requests (no Origin header) pass through — they are
   // authenticated by the token middleware instead.
   const allowedOrigins = Array.isArray(corsOrigin) ? corsOrigin : [corsOrigin];
+  const allowHostHeaderOriginFallback =
+    service.currentConfig.gateway?.dangerouslyAllowHostHeaderOriginFallback === true;
   app.use('/api/*', createMiddleware(async (c, next) => {
     // Sandboxed extension iframes (no allow-same-origin) send `Origin: null`.
     // `checkBrowserOrigin` rejects that; these routes rely on CSP instead
@@ -104,7 +106,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
       requestHost: c.req.header('host'),
       origin,
       allowedOrigins,
-      allowHostHeaderOriginFallback: true,
+      allowHostHeaderOriginFallback,
       isLocalClient: false,
     });
 
@@ -151,6 +153,16 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     auth({
       token,
       getGatewayAuth: () => service.currentConfig.gateway?.auth,
+      getResolvedAuth: () => {
+        if (typeof service.getResolvedAuth === 'function') {
+          return service.getResolvedAuth();
+        }
+        return token ? { mode: 'token', token } : { mode: 'none' };
+      },
+      getTrustedProxyContext: () => ({
+        trustedProxies: service.currentConfig.gateway?.trustedProxies,
+        allowRealIpFallback: service.currentConfig.gateway?.allowRealIpFallback === true,
+      }),
     }),
   );
   authenticated.use(operatorScopes());

@@ -1,11 +1,20 @@
 import { serve, type ServerType } from '@hono/node-server';
+
+import type { GatewayBindMode } from '../config/schema.js';
+import { resolveGatewayBindHost, resolveGatewayListenHosts } from '../config/gateway-bind.js';
+import { resolveGatewayListenPlan } from './listen.js';
 import { GatewayService } from './service.js';
 import { createHonoApp } from './hono/app.js';
 import { getTunnelService } from '../tunnel/tunnel-service.js';
 
 export interface GatewayServerConfig {
-  host: string;
   port: number;
+  /** Resolved listen address (sync plan); re-validated async at start when possible. */
+  bindHost: string;
+  bind?: GatewayBindMode;
+  customBindHost?: string;
+  /** @deprecated Prefer `bind` modes; kept for CLI `--host` compatibility. */
+  host?: string;
   token?: string;
   verbose?: boolean;
   configPath?: string;
@@ -14,6 +23,7 @@ export interface GatewayServerConfig {
 
 export class GatewayServer {
   private server?: ServerType;
+  private extraServers: ServerType[] = [];
   private config: GatewayServerConfig;
   private service: GatewayService;
 
@@ -23,13 +33,45 @@ export class GatewayServer {
       configPath: config.configPath,
       enableHotReload: config.enableHotReload,
       deferChannelConnectUntilAfterHttp: true,
+      listenBind: config.bind,
+      hostOverride: config.host,
+      listenCustomBindHost: config.customBindHost,
     });
   }
 
   async start(): Promise<void> {
-    console.log(`[GatewayServer] Starting gateway server on ${this.config.host}:${this.config.port}...`);
+    const cfg = this.service.currentConfig;
+    const plan = resolveGatewayListenPlan({
+      cfg,
+      bindOverride: this.config.bind,
+      hostOverride: this.config.host,
+    });
 
-    // Start the underlying service first
+    let bindHost: string;
+    try {
+      bindHost = await resolveGatewayBindHost({
+        bindMode: plan.bindMode,
+        customBindHost: plan.customBindHost ?? this.config.customBindHost,
+      });
+    } catch (err) {
+      bindHost = plan.bindHost;
+      if (plan.bindMode === 'custom') {
+        throw err;
+      }
+    }
+
+    if (plan.bindMode === 'custom') {
+      const expected = plan.customBindHost?.trim();
+      if (!expected || bindHost !== expected) {
+        throw new Error(
+          `gateway bind=custom requested ${expected ?? '(missing)'} but resolved ${bindHost}`,
+        );
+      }
+    }
+
+    const listenHosts = await resolveGatewayListenHosts(bindHost);
+    console.log(`[GatewayServer] Starting gateway server on ${bindHost}:${this.config.port}...`);
+
     await this.service.start();
     this.service.registerGatewayShutdownForRestart(async () => {
       await this.stop();
@@ -38,8 +80,6 @@ export class GatewayServer {
     const { configureTunnelFromGatewayConfig } = await import('../tunnel/gateway-lifecycle.js');
     await configureTunnelFromGatewayConfig(this.service.currentConfig);
 
-    // Create Hono app
-    // Priority: CLI token > service auto-generated token
     const effectiveToken = this.config.token || this.service.getAuthToken();
     const app = createHonoApp({
       service: this.service,
@@ -47,20 +87,29 @@ export class GatewayServer {
     });
     getTunnelService().setGatewayFetch(app.fetch.bind(app));
 
-    // Create Node.js HTTP server (no WebSocket upgrade needed)
+    const primaryHost = listenHosts[0] ?? bindHost;
     this.server = serve(
       {
         fetch: app.fetch,
         port: this.config.port,
-        hostname: this.config.host,
+        hostname: primaryHost,
       },
       () => {
-        console.log(`[GatewayServer] Gateway server running at http://${this.config.host}:${this.config.port}`);
+        console.log(`[GatewayServer] Gateway server running at http://${primaryHost}:${this.config.port}`);
         void this.service.onHttpListening().catch((err) => {
           console.error('[GatewayServer] Deferred channel startup failed:', err);
         });
       },
     );
+
+    for (const aliasHost of listenHosts.slice(1)) {
+      const extra = serve({
+        fetch: app.fetch,
+        port: this.config.port,
+        hostname: aliasHost,
+      });
+      this.extraServers.push(extra);
+    }
   }
 
   async close(opts?: { reason?: string; restartExpectedMs?: number | null }): Promise<void> {
@@ -72,25 +121,29 @@ export class GatewayServer {
   async stop(): Promise<void> {
     console.log('[GatewayServer] Stopping gateway server...');
 
-    // Stop the HTTP server
-    if (this.server) {
-      // Force server close after a short delay to allow connections to drain
+    const closeServer = async (server: ServerType | undefined) => {
+      if (!server) {
+        return;
+      }
       const forceClose = setTimeout(() => {
-        if (this.server) {
-          (this.server as any).closeAllConnections?.();
-        }
+        (server as { closeAllConnections?: () => void }).closeAllConnections?.();
       }, 2000);
-      
       await new Promise<void>((resolve) => {
-        this.server!.close(() => {
+        server.close(() => {
           clearTimeout(forceClose);
           resolve();
         });
       });
-      this.server = undefined;
-    }
+    };
 
-    // Stop the underlying service
+    await closeServer(this.server);
+    this.server = undefined;
+
+    for (const extra of this.extraServers) {
+      await closeServer(extra);
+    }
+    this.extraServers = [];
+
     await this.service.stop();
 
     console.log('[GatewayServer] Gateway server stopped');

@@ -1,6 +1,13 @@
 import type { Hono } from 'hono';
 
-import { type Config, BindingsConfigSchema, McpConfigSchema } from '../../../config/schema.js';
+import { type Config, BindingsConfigSchema, McpConfigSchema, type GatewayBindMode } from '../../../config/schema.js';
+import {
+  inferBindModeFromHost,
+  isValidIPv4,
+  syncLegacyGatewayHostFromBind,
+} from '../../../config/gateway-bind.js';
+import { assertGatewayRuntimeConfig } from '../../runtime-config.js';
+import { resolveGatewayAuth, assertGatewayAuthConfigured } from '../../auth.js';
 import { canonicalizeConfiguredMcpServer } from '../../../config/mcp-config-normalize.js';
 import { CredentialResolver } from '../../../auth/credentials.js';
 import { applyToolsWebPatch } from '../../config-tools-web.js';
@@ -960,6 +967,51 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
         }
       }
     }
+    if (body.gateway?.bind !== undefined) {
+      const bindModes = new Set(['auto', 'loopback', 'lan', 'tailnet', 'custom']);
+      const bind = body.gateway.bind;
+      if (typeof bind !== 'string' || !bindModes.has(bind)) {
+        return c.json(
+          { ok: false, error: { message: 'gateway.bind must be one of: auto, loopback, lan, tailnet, custom' } },
+          400,
+        );
+      }
+      if (!config.gateway) {
+        config.gateway = {
+          bind: bind as GatewayBindMode,
+          host: '127.0.0.1',
+          port: 18790,
+          heartbeat: { enabled: true, intervalMs: 1_800_000, includeSystemPromptSection: false },
+          maxSseConnections: 100,
+          corsOrigins: [],
+        };
+      } else {
+        config.gateway.bind = bind as GatewayBindMode;
+      }
+      if (bind !== 'custom') {
+        delete config.gateway.customBindHost;
+      }
+      config.gateway.host = syncLegacyGatewayHostFromBind({
+        bind: bind as GatewayBindMode,
+        customBindHost: config.gateway.customBindHost,
+      });
+    }
+    if (body.gateway?.customBindHost !== undefined) {
+      if (body.gateway.customBindHost === null || body.gateway.customBindHost === '') {
+        if (config.gateway) {
+          delete config.gateway.customBindHost;
+        }
+      } else if (typeof body.gateway.customBindHost !== 'string' || !isValidIPv4(body.gateway.customBindHost.trim())) {
+        return c.json(
+          { ok: false, error: { message: 'gateway.customBindHost must be a valid IPv4 address' } },
+          400,
+        );
+      } else if (config.gateway) {
+        config.gateway.customBindHost = body.gateway.customBindHost.trim();
+        config.gateway.bind = 'custom';
+        config.gateway.host = config.gateway.customBindHost;
+      }
+    }
     if (body.gateway?.host !== undefined) {
       if (typeof body.gateway.host !== 'string' || !body.gateway.host.trim()) {
         return c.json({ ok: false, error: { message: 'gateway.host must be a non-empty string' } }, 400);
@@ -974,6 +1026,12 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
         };
       } else {
         config.gateway.host = body.gateway.host.trim();
+        config.gateway.bind = inferBindModeFromHost(body.gateway.host.trim());
+        if (config.gateway.bind === 'custom') {
+          config.gateway.customBindHost = body.gateway.host.trim();
+        } else {
+          delete config.gateway.customBindHost;
+        }
       }
     }
     if (body.gateway?.port !== undefined) {
@@ -1041,6 +1099,7 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
             maxAttempts: 5,
             windowMs: 900_000,
             blockDurationMs: 300_000,
+            exemptLoopback: true,
           };
         }
         const rl = config.gateway.auth.rateLimit!;
@@ -1058,6 +1117,38 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
         ) {
           rl.blockDurationMs = Math.floor(rlIn.blockDurationMs);
         }
+        if (
+          typeof rlIn.lockoutMs === 'number' &&
+          Number.isFinite(rlIn.lockoutMs) &&
+          rlIn.lockoutMs > 0
+        ) {
+          rl.blockDurationMs = Math.floor(rlIn.lockoutMs);
+        }
+        if (rlIn.exemptLoopback !== undefined) {
+          rl.exemptLoopback = Boolean(rlIn.exemptLoopback);
+        }
+      }
+    }
+    if (body.gateway?.security !== undefined) {
+      if (typeof body.gateway.security !== 'object' || body.gateway.security === null) {
+        return c.json({ ok: false, error: { message: 'gateway.security must be an object' } }, 400);
+      }
+      if (!config.gateway) {
+        config.gateway = {
+          bind: 'loopback',
+          host: '127.0.0.1',
+          port: 18790,
+          heartbeat: { enabled: true, intervalMs: 1_800_000, includeSystemPromptSection: false },
+          maxSseConnections: 100,
+          corsOrigins: [],
+        };
+      }
+      const secIn = body.gateway.security as Record<string, unknown>;
+      if (!config.gateway.security) {
+        config.gateway.security = {};
+      }
+      if (secIn.strict !== undefined) {
+        config.gateway.security.strict = Boolean(secIn.strict);
       }
     }
     if (body.gateway?.corsOrigins !== undefined) {
@@ -1305,6 +1396,21 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
           }
           config.mcp = next;
         }
+      }
+    }
+
+    if (body.gateway !== undefined) {
+      try {
+        const auth = resolveGatewayAuth({ authConfig: config.gateway?.auth });
+        assertGatewayAuthConfigured(auth);
+        assertGatewayRuntimeConfig({
+          cfg: config,
+          auth,
+          port: config.gateway?.port ?? 18790,
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return c.json({ ok: false, error: { message } }, 400);
       }
     }
 

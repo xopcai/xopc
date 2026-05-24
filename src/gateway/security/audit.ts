@@ -1,4 +1,9 @@
+import type { Config } from '../../config/schema.js';
 import type { ResolvedGatewayAuth } from '../auth.js';
+import { resolveGatewayAuth, assertGatewayAuthConfigured } from '../auth.js';
+import { isAuthRateLimitGloballyDisabled, isGatewayStrictSecurityEnabled } from '../auth-rate-limit.js';
+import { assertGatewayRuntimeConfig } from '../runtime-config.js';
+import { resolveGatewayListenPlan } from '../listen.js';
 import { createLogger } from '../../utils/logger.js';
 
 const log = createLogger('SecurityAudit');
@@ -22,26 +27,64 @@ function isLoopbackHost(host: string | undefined): boolean {
     host === '::1';
 }
 
+function normalizeCorsOrigins(cfg: Config): string[] {
+  return (cfg.gateway?.corsOrigins ?? [])
+    .map((value) => value.trim())
+    .filter(Boolean);
+}
+
+function resolveAuditInputs(cfg: Config, env: NodeJS.ProcessEnv = process.env): {
+  auth: ResolvedGatewayAuth;
+  bindHost: string;
+  corsOrigins: string[];
+  rateLimitEnabled: boolean;
+  tlsEnabled: boolean;
+  trustedProxies?: string[];
+  allowRealIpFallback: boolean;
+  dangerouslyAllowHostHeaderOriginFallback: boolean;
+  loopback: boolean;
+} {
+  const auth = resolveGatewayAuth({ authConfig: cfg.gateway?.auth, env });
+  const plan = resolveGatewayListenPlan({ cfg });
+  const corsOrigins = normalizeCorsOrigins(cfg);
+  const rateLimitEnabled =
+    cfg.gateway?.auth?.rateLimit?.enabled !== false &&
+    !isAuthRateLimitGloballyDisabled();
+  const tlsEnabled = cfg.tunnel?.enabled === true;
+  const loopback = isLoopbackHost(plan.bindHost);
+
+  return {
+    auth,
+    bindHost: plan.bindHost,
+    corsOrigins,
+    rateLimitEnabled,
+    tlsEnabled,
+    trustedProxies: cfg.gateway?.trustedProxies,
+    allowRealIpFallback: cfg.gateway?.allowRealIpFallback === true,
+    dangerouslyAllowHostHeaderOriginFallback:
+      cfg.gateway?.dangerouslyAllowHostHeaderOriginFallback === true,
+    loopback,
+  };
+}
+
 /**
- * Audit the gateway configuration at startup and log security findings.
- *
- * This provides an early-warning system similar to OpenClaw's `security audit`
- * command, adapted for xopc's configuration surface. Aligned with OpenClaw's
- * `collectGatewayConfigFindings` coverage.
+ * Pure gateway config audit (no logging). Shared by startup audit and `xopc doctor`.
  */
-export function auditGatewayConfig(params: {
+export function collectGatewayConfigFindings(params: {
   auth: ResolvedGatewayAuth;
   host?: string;
   corsOrigins?: string[];
-  /** Rate limit configuration for auth failures. */
   rateLimitEnabled?: boolean;
-  /** Whether HTTPS / TLS termination is in use. */
   tlsEnabled?: boolean;
+  trustedProxies?: string[];
+  allowRealIpFallback?: boolean;
+  dangerouslyAllowHostHeaderOriginFallback?: boolean;
+  strictSecurityEnabled?: boolean;
+  rateLimitConfigured?: boolean;
 }): SecurityAuditFinding[] {
   const findings: SecurityAuditFinding[] = [];
   const loopback = isLoopbackHost(params.host);
 
-  // ── Auth mode checks ────────────────────────────────────────────────
   if (params.auth.mode === 'none') {
     if (!loopback) {
       findings.push({
@@ -65,11 +108,37 @@ export function auditGatewayConfig(params: {
     }
   }
 
-  // ── Token strength checks ───────────────────────────────────────────
+  if (
+    !loopback &&
+    params.auth.mode === 'token' &&
+    !params.auth.token?.trim()
+  ) {
+    findings.push({
+      checkId: 'gateway.auth.missing_token_on_network',
+      severity: 'critical',
+      title: 'Network-accessible gateway has no auth token configured',
+      detail: 'gateway.auth.mode is "token" but no token is configured for a non-loopback bind.',
+      remediation: 'Set gateway.auth.token or XOPC_GATEWAY_TOKEN before binding to the network.',
+    });
+  }
+
+  if (
+    !loopback &&
+    params.auth.mode === 'password' &&
+    !params.auth.password?.trim()
+  ) {
+    findings.push({
+      checkId: 'gateway.auth.missing_password_on_network',
+      severity: 'critical',
+      title: 'Network-accessible gateway has no auth password configured',
+      detail: 'gateway.auth.mode is "password" but no password is configured for a non-loopback bind.',
+      remediation: 'Set gateway.auth.password or XOPC_GATEWAY_PASSWORD before binding to the network.',
+    });
+  }
+
   if (params.auth.mode === 'token' && params.auth.token) {
     const token = params.auth.token;
 
-    // Short token warning (beyond known-weak-secrets startup assertion)
     if (token.length < MIN_AUDIT_TOKEN_LENGTH) {
       findings.push({
         checkId: 'gateway.auth.short_token',
@@ -82,7 +151,6 @@ export function auditGatewayConfig(params: {
       });
     }
 
-    // Low entropy: all same character
     if (/^(.)\1+$/.test(token)) {
       findings.push({
         checkId: 'gateway.auth.low_entropy_token',
@@ -93,7 +161,6 @@ export function auditGatewayConfig(params: {
       });
     }
 
-    // Auto-generated (no env var set)
     const envToken = process.env.XOPC_GATEWAY_TOKEN;
     if (!envToken) {
       findings.push({
@@ -107,7 +174,6 @@ export function auditGatewayConfig(params: {
     }
   }
 
-  // ── CORS checks ─────────────────────────────────────────────────────
   if (params.corsOrigins?.includes('*')) {
     findings.push({
       checkId: 'gateway.cors.wildcard',
@@ -129,20 +195,29 @@ export function auditGatewayConfig(params: {
     });
   }
 
-  // Non-loopback without explicit CORS origins — any browser with the token can call the API
-  if (!loopback && (!params.corsOrigins || params.corsOrigins.length === 0)) {
+  if (
+    !loopback &&
+    (!params.corsOrigins || params.corsOrigins.length === 0) &&
+    params.dangerouslyAllowHostHeaderOriginFallback !== true
+  ) {
     findings.push({
       checkId: 'gateway.cors.no_explicit_origins',
-      severity: 'warn',
+      severity: 'critical',
       title: 'No explicit CORS origins on network-accessible gateway',
       detail: 'Gateway is bound to a non-loopback address but no corsOrigins are configured. ' +
-        'The default localhost origins may not match the actual access URL.',
-      remediation: 'Set gateway.corsOrigins to the URLs that should be allowed to access the gateway.',
+        'Startup guards will refuse to bind until origins are set.',
+      remediation:
+        'Set gateway.corsOrigins to the browser URLs that should access the gateway, ' +
+        'or enable gateway.dangerouslyAllowHostHeaderOriginFallback only if you understand the CSRF risk.',
     });
   }
 
-  // ── Rate limit check ────────────────────────────────────────────────
-  if (!loopback && params.auth.mode !== 'none' && params.rateLimitEnabled === false) {
+  if (
+    !loopback &&
+    params.auth.mode !== 'none' &&
+    params.auth.mode !== 'trusted-proxy' &&
+    params.rateLimitEnabled === false
+  ) {
     findings.push({
       checkId: 'gateway.auth.no_rate_limit',
       severity: 'warn',
@@ -154,31 +229,194 @@ export function auditGatewayConfig(params: {
     });
   }
 
-  // ── TLS / transport security ────────────────────────────────────────
+  if (
+    !loopback &&
+    params.strictSecurityEnabled === true &&
+    params.rateLimitConfigured !== true
+  ) {
+    findings.push({
+      checkId: 'gateway.security.strict_no_rate_limit',
+      severity: 'critical',
+      title: 'Strict security requires explicit auth rate limit configuration',
+      detail: 'gateway.security.strict is enabled on a network-accessible bind but gateway.auth.rateLimit is missing.',
+      remediation:
+        'Set gateway.auth.rateLimit (e.g. { maxAttempts: 10, windowMs: 60000, blockDurationMs: 300000 }).',
+    });
+  }
+
   if (!loopback && !params.tlsEnabled) {
     findings.push({
       checkId: 'gateway.transport.no_tls',
       severity: 'warn',
       title: 'No TLS on network-accessible gateway',
-      detail: 'Gateway is bound to a non-loopback address without TLS. ' +
-        'Tokens and data are transmitted in plaintext.',
-      remediation: 'Use a reverse proxy with TLS (e.g. Caddy, nginx) or enable the tunnel feature.',
+      detail: 'Gateway is bound to a non-loopback address without TLS termination. ' +
+        'Tokens and data are transmitted in plaintext unless a reverse proxy or tunnel handles HTTPS.',
+      remediation:
+        'Enable the tunnel feature (`tunnel.enabled`), terminate TLS at a reverse proxy (Caddy/nginx), ' +
+        'or bind to loopback and access via SSH/VPN.',
     });
   }
 
-  // ── Dangerous config: 0.0.0.0 bind ─────────────────────────────────
-  if (params.host === '0.0.0.0') {
+  if (params.host === '0.0.0.0' || params.host === '::') {
     findings.push({
       checkId: 'gateway.bind.all_interfaces',
       severity: 'warn',
       title: 'Gateway binds to all network interfaces',
-      detail: 'Binding to 0.0.0.0 exposes the gateway on all network interfaces ' +
-        'including public networks. Prefer 127.0.0.1 for local-only access.',
-      remediation: 'Set gateway.host to "127.0.0.1" unless remote access is required.',
+      detail: 'Binding to all interfaces exposes the gateway on every network interface. ' +
+        'Prefer loopback unless remote access is required.',
+      remediation: 'Set gateway.bind to "loopback" unless remote access is required.',
     });
   }
 
-  // ── Emit findings as log entries ────────────────────────────────────
+  if (params.auth.mode === 'trusted-proxy') {
+    const trustedProxies = params.trustedProxies ?? [];
+    const trustedProxyConfig = params.auth.trustedProxy;
+
+    findings.push({
+      checkId: 'gateway.trusted_proxy_auth',
+      severity: 'critical',
+      title: 'Trusted-proxy auth mode enabled',
+      detail:
+        'gateway.auth.mode="trusted-proxy" delegates authentication to a reverse proxy. ' +
+        'Ensure your proxy terminates TLS and authenticates users; gateway.trustedProxies ' +
+        'must only list your proxy server IPs.',
+      remediation:
+        'Verify: (1) Proxy terminates TLS and authenticates users. ' +
+        '(2) gateway.trustedProxies is restricted to proxy IPs only. ' +
+        '(3) Direct access to the gateway port is blocked by firewall.',
+    });
+
+    if (trustedProxies.length === 0) {
+      findings.push({
+        checkId: 'gateway.trusted_proxy_no_proxies',
+        severity: 'critical',
+        title: 'Trusted-proxy auth enabled but no trusted proxies configured',
+        detail:
+          'gateway.auth.mode="trusted-proxy" but gateway.trustedProxies is empty. ' +
+          'All requests will be rejected and startup guards will fail.',
+        remediation: 'Set gateway.trustedProxies to the IP(s) of your reverse proxy.',
+      });
+    }
+
+    if (!trustedProxyConfig?.userHeader) {
+      findings.push({
+        checkId: 'gateway.trusted_proxy_no_user_header',
+        severity: 'critical',
+        title: 'Trusted-proxy auth missing userHeader config',
+        detail:
+          'gateway.auth.mode="trusted-proxy" but gateway.auth.trustedProxy.userHeader is not configured.',
+        remediation:
+          'Set gateway.auth.trustedProxy.userHeader to the header your proxy uses ' +
+          '(e.g. "x-forwarded-user", "x-pomerium-claim-email").',
+      });
+    }
+
+    if (trustedProxyConfig?.allowLoopback === true) {
+      findings.push({
+        checkId: 'gateway.trusted_proxy_allow_loopback',
+        severity: 'warn',
+        title: 'Trusted-proxy auth allows loopback proxy sources',
+        detail:
+          'gateway.auth.trustedProxy.allowLoopback=true allows loopback-source requests ' +
+          'from configured gateway.trustedProxies entries to satisfy trusted-proxy auth.',
+        remediation:
+          'Enable only when a same-host reverse proxy is the intended trust boundary.',
+      });
+    }
+
+    const allowUsers = trustedProxyConfig?.allowUsers ?? [];
+    if (allowUsers.length === 0) {
+      findings.push({
+        checkId: 'gateway.trusted_proxy_no_allowlist',
+        severity: 'warn',
+        title: 'Trusted-proxy auth allows all authenticated users',
+        detail:
+          'gateway.auth.trustedProxy.allowUsers is empty, so any user authenticated by your proxy can access the gateway.',
+        remediation:
+          'Consider setting gateway.auth.trustedProxy.allowUsers to restrict access to specific users.',
+      });
+    }
+
+    if (params.allowRealIpFallback === true) {
+      findings.push({
+        checkId: 'gateway.trusted_proxy_real_ip_fallback',
+        severity: 'warn',
+        title: 'X-Real-IP fallback is enabled for trusted-proxy client IP resolution',
+        detail:
+          'gateway.allowRealIpFallback=true uses X-Real-IP when X-Forwarded-For chain parsing fails.',
+        remediation:
+          'Keep gateway.allowRealIpFallback=false unless your trusted proxy only sets X-Real-IP.',
+      });
+    }
+  }
+
+  return findings;
+}
+
+/** Findings from fail-closed startup guards (`assertGatewayRuntimeConfig`). */
+export function collectGatewayStartupGuardFindings(
+  cfg: Config,
+  env: NodeJS.ProcessEnv = process.env,
+): SecurityAuditFinding[] {
+  try {
+    const auth = resolveGatewayAuth({ authConfig: cfg.gateway?.auth, env });
+    assertGatewayAuthConfigured(auth);
+    assertGatewayRuntimeConfig({
+      cfg,
+      auth,
+      port: cfg.gateway?.port ?? 18790,
+    });
+    return [];
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return [{
+      checkId: 'gateway.runtime_config.blocked',
+      severity: 'critical',
+      title: 'Gateway startup guards would reject this configuration',
+      detail: message,
+      remediation: 'Fix the configuration issue above, then run `xopc gateway` again.',
+    }];
+  }
+}
+
+function mergeFindings(findings: SecurityAuditFinding[]): SecurityAuditFinding[] {
+  const byId = new Map<string, SecurityAuditFinding>();
+  const severityRank = { critical: 3, warn: 2, info: 1 } as const;
+
+  for (const finding of findings) {
+    const existing = byId.get(finding.checkId);
+    if (!existing || severityRank[finding.severity] > severityRank[existing.severity]) {
+      byId.set(finding.checkId, finding);
+    }
+  }
+  return [...byId.values()];
+}
+
+/**
+ * Full gateway security findings for doctor / CLI audit (config + startup guards).
+ */
+export function collectGatewaySecurityFindings(
+  cfg: Config,
+  env: NodeJS.ProcessEnv = process.env,
+): SecurityAuditFinding[] {
+  const inputs = resolveAuditInputs(cfg, env);
+  const configFindings = collectGatewayConfigFindings({
+    auth: inputs.auth,
+    host: inputs.bindHost,
+    corsOrigins: inputs.corsOrigins,
+    rateLimitEnabled: inputs.rateLimitEnabled,
+    tlsEnabled: inputs.tlsEnabled,
+    trustedProxies: inputs.trustedProxies,
+    allowRealIpFallback: inputs.allowRealIpFallback,
+    dangerouslyAllowHostHeaderOriginFallback: inputs.dangerouslyAllowHostHeaderOriginFallback,
+    strictSecurityEnabled: isGatewayStrictSecurityEnabled(cfg),
+    rateLimitConfigured: cfg.gateway?.auth?.rateLimit !== undefined,
+  });
+  const startupFindings = collectGatewayStartupGuardFindings(cfg, env);
+  return mergeFindings([...configFindings, ...startupFindings]);
+}
+
+function emitFindings(findings: SecurityAuditFinding[]): void {
   for (const finding of findings) {
     const logData = {
       checkId: finding.checkId,
@@ -197,6 +435,24 @@ export function auditGatewayConfig(params: {
         break;
     }
   }
+}
 
+/**
+ * Audit the gateway configuration at startup and log security findings.
+ */
+export function auditGatewayConfig(params: {
+  auth: ResolvedGatewayAuth;
+  host?: string;
+  corsOrigins?: string[];
+  rateLimitEnabled?: boolean;
+  tlsEnabled?: boolean;
+  trustedProxies?: string[];
+  allowRealIpFallback?: boolean;
+  dangerouslyAllowHostHeaderOriginFallback?: boolean;
+  strictSecurityEnabled?: boolean;
+  rateLimitConfigured?: boolean;
+}): SecurityAuditFinding[] {
+  const findings = collectGatewayConfigFindings(params);
+  emitFindings(findings);
   return findings;
 }

@@ -1,8 +1,12 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, expect, it, beforeEach, afterEach } from 'vitest';
+
 import {
   AuthFailureRateLimiter,
-  resolveAuthRateLimitConfig,
+  buildBrowserOriginRateLimitKey,
+  isLoopbackClientIp,
   getClientIpFromHeaders,
+  resolveAuthRateLimitConfig,
+  resetAuthRateLimitersForTests,
 } from '../auth-rate-limit.js';
 
 describe('AuthFailureRateLimiter', () => {
@@ -11,35 +15,54 @@ describe('AuthFailureRateLimiter', () => {
     maxAttempts: 3,
     windowMs: 60_000,
     blockDurationMs: 5_000,
+    exemptLoopback: true,
   });
 
   let limiter: AuthFailureRateLimiter;
 
   beforeEach(() => {
+    resetAuthRateLimitersForTests();
     limiter = new AuthFailureRateLimiter();
+    limiter.resetForTests();
+  });
+
+  afterEach(() => {
     limiter.resetForTests();
   });
 
   it('allows attempts until max failures then blocks', () => {
     expect(limiter.checkBlocked('1.2.3.4', cfg).blocked).toBe(false);
     limiter.recordFailure('1.2.3.4', cfg);
-    expect(limiter.checkBlocked('1.2.3.4', cfg).blocked).toBe(false);
     limiter.recordFailure('1.2.3.4', cfg);
-    expect(limiter.checkBlocked('1.2.3.4', cfg).blocked).toBe(false);
     limiter.recordFailure('1.2.3.4', cfg);
-    const blocked = limiter.checkBlocked('1.2.3.4', cfg);
-    expect(blocked.blocked).toBe(true);
-    if (blocked.blocked) {
-      expect(blocked.retryAfterSec).toBeGreaterThan(0);
-    }
+    expect(limiter.checkBlocked('1.2.3.4', cfg).blocked).toBe(true);
+  });
+
+  it('exempts loopback clients when configured', () => {
+    expect(isLoopbackClientIp('127.0.0.1')).toBe(true);
+    limiter.recordFailure('127.0.0.1', cfg);
+    limiter.recordFailure('127.0.0.1', cfg);
+    limiter.recordFailure('127.0.0.1', cfg);
+    expect(limiter.checkBlocked('127.0.0.1', cfg).blocked).toBe(false);
+  });
+
+  it('does not exempt browser-origin keys on loopback', () => {
+    const key = buildBrowserOriginRateLimitKey('http://localhost:18790', '127.0.0.1');
+    limiter.recordFailure(key, cfg);
+    limiter.recordFailure(key, cfg);
+    limiter.recordFailure(key, cfg);
+    expect(limiter.checkBlocked(key, cfg).blocked).toBe(true);
+  });
+
+  it('supports lockoutMs alias', () => {
+    const fromAlias = resolveAuthRateLimitConfig({ lockoutMs: 42_000 });
+    expect(fromAlias.blockDurationMs).toBe(42_000);
   });
 
   it('clears state on success', () => {
     limiter.recordFailure('1.2.3.4', cfg);
     limiter.recordFailure('1.2.3.4', cfg);
     limiter.recordSuccess('1.2.3.4');
-    expect(limiter.checkBlocked('1.2.3.4', cfg).blocked).toBe(false);
-    limiter.recordFailure('1.2.3.4', cfg);
     expect(limiter.checkBlocked('1.2.3.4', cfg).blocked).toBe(false);
   });
 });

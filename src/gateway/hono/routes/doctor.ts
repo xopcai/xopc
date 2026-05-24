@@ -14,7 +14,7 @@ export function registerDoctorRoutes(authenticated: Hono, _deps: AuthenticatedRo
     const results = await collectDoctorResults({
       configPath,
       stateDir,
-      options: { fix: false, json: true, deep },
+      options: { fix: false, json: true, deep, security: false },
     });
 
     return c.json({
@@ -26,6 +26,7 @@ export function registerDoctorRoutes(authenticated: Hono, _deps: AuthenticatedRo
         message: r.message,
         hints: r.hints,
         fixed: r.fixed ?? false,
+        ...(r.findings ? { findings: r.findings } : {}),
       })),
     });
   });

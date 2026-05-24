@@ -9,6 +9,7 @@ import {
   MAX_CHANNEL_DEFER_LIST_SIZE,
   type GatewayAuthMode,
   type GatewayAuthRateLimitState,
+  type GatewayBindMode,
   type GatewayChannelConnectDeferMode,
   type GatewaySettingsState,
   type UpdatePackageChannel,
@@ -31,7 +32,7 @@ export function isMaskedGatewaySecret(value: string): boolean {
 }
 
 function normalizeAuthMode(raw: unknown): GatewayAuthMode {
-  if (raw === 'none' || raw === 'token' || raw === 'password') return raw;
+  if (raw === 'none' || raw === 'token' || raw === 'password' || raw === 'trusted-proxy') return raw;
   return 'token';
 }
 
@@ -52,7 +53,12 @@ function normalizeRateLimit(raw: unknown): GatewayAuthRateLimitState {
       Number.isFinite(rl.blockDurationMs) &&
       rl.blockDurationMs > 0
         ? Math.floor(rl.blockDurationMs)
-        : DEFAULT_AUTH_RATE_LIMIT.blockDurationMs,
+        : typeof rl.lockoutMs === 'number' &&
+            Number.isFinite(rl.lockoutMs) &&
+            rl.lockoutMs > 0
+          ? Math.floor(rl.lockoutMs)
+          : DEFAULT_AUTH_RATE_LIMIT.blockDurationMs,
+    exemptLoopback: rl.exemptLoopback !== false,
   };
 }
 
@@ -69,6 +75,17 @@ function normalizeStringIdList(raw: unknown, max = MAX_CHANNEL_DEFER_LIST_SIZE):
     .slice(0, max);
 }
 
+function normalizeBindMode(raw: unknown, legacyHost?: string): GatewayBindMode {
+  if (raw === 'auto' || raw === 'loopback' || raw === 'lan' || raw === 'tailnet' || raw === 'custom') {
+    return raw;
+  }
+  const host = legacyHost?.trim().toLowerCase() ?? '';
+  if (host === '0.0.0.0' || host === '::') return 'lan';
+  if (host === '127.0.0.1' || host === 'localhost' || host === '::1') return 'loopback';
+  if (host) return 'custom';
+  return 'loopback';
+}
+
 export function normalizeGatewayFromConfig(config: unknown): GatewaySettingsState {
   const c = isRecord(config) ? config : {};
   const gw = isRecord(c.gateway) ? c.gateway : {};
@@ -80,8 +97,21 @@ export function normalizeGatewayFromConfig(config: unknown): GatewaySettingsStat
   const corsOrigins = Array.isArray(gw.corsOrigins)
     ? gw.corsOrigins.filter((x): x is string => typeof x === 'string' && x.trim().length > 0)
     : [];
+  const legacyHost = typeof gw.host === 'string' ? gw.host : '';
+  const bind = normalizeBindMode(gw.bind, legacyHost);
+  const customBindHost =
+    typeof gw.customBindHost === 'string' && gw.customBindHost.trim()
+      ? gw.customBindHost.trim()
+      : bind === 'custom'
+        ? legacyHost.trim()
+        : '';
+  const host =
+    legacyHost.trim() ||
+    (bind === 'lan' ? '0.0.0.0' : bind === 'custom' ? customBindHost : '127.0.0.1');
   return {
-    host: typeof gw.host === 'string' ? gw.host : '',
+    bind,
+    customBindHost,
+    host,
     port:
       typeof gw.port === 'number' && Number.isFinite(gw.port) ? Math.floor(gw.port) : DEFAULT_GATEWAY_PORT,
     auth: {
@@ -120,6 +150,9 @@ function buildAuthPatch(state: GatewaySettingsState): Record<string, unknown> {
       auth.password = state.auth.password;
     }
     auth.token = null;
+  } else if (state.auth.mode === 'trusted-proxy') {
+    auth.token = null;
+    auth.password = null;
   }
 
   return auth;
@@ -131,11 +164,22 @@ export async function fetchGatewaySettings(): Promise<GatewaySettingsState> {
 }
 
 export async function patchGatewaySettings(state: GatewaySettingsState): Promise<void> {
+  const legacyHost =
+    state.bind === 'lan'
+      ? '0.0.0.0'
+      : state.bind === 'custom'
+        ? state.customBindHost.trim()
+        : state.bind === 'loopback'
+          ? '127.0.0.1'
+          : state.host.trim() || '127.0.0.1';
+
   await fetchJson(apiUrl('/api/config'), {
     method: 'PATCH',
     body: JSON.stringify({
       gateway: {
-        host: state.host.trim() || '127.0.0.1',
+        bind: state.bind,
+        ...(state.bind === 'custom' ? { customBindHost: state.customBindHost.trim() } : {}),
+        host: legacyHost,
         port: state.port,
         auth: buildAuthPatch(state),
         corsOrigins: state.corsOrigins,

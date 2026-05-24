@@ -23,4 +23,9 @@ describe('matchReloadRule', () => {
     expect(r?.prefix).toBe('gateway.heartbeat');
     expect(r?.kind).toBe('hot');
   });
+
+  it('requires restart for trusted proxy settings', () => {
+    expect(matchReloadRule('gateway.trustedProxies')?.kind).toBe('restart');
+    expect(matchReloadRule('gateway.allowRealIpFallback')?.kind).toBe('restart');
+  });
 });

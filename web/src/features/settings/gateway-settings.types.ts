@@ -1,4 +1,6 @@
-export type GatewayAuthMode = 'none' | 'token' | 'password';
+export type GatewayBindMode = 'auto' | 'loopback' | 'lan' | 'tailnet' | 'custom';
+
+export type GatewayAuthMode = 'none' | 'token' | 'password' | 'trusted-proxy';
 
 export type UpdatePackageChannel = 'stable' | 'beta' | 'dev';
 
@@ -7,11 +9,15 @@ export interface GatewayAuthRateLimitState {
   maxAttempts: number;
   windowMs: number;
   blockDurationMs: number;
+  exemptLoopback: boolean;
 }
 
 export type GatewayChannelConnectDeferMode = 'auto' | 'off' | 'explicit';
 
 export interface GatewaySettingsState {
+  bind: GatewayBindMode;
+  customBindHost: string;
+  /** Legacy mirror of bind; kept in sync on save. */
   host: string;
   port: number;
   auth: {
@@ -39,4 +45,5 @@ export const DEFAULT_AUTH_RATE_LIMIT: GatewayAuthRateLimitState = {
   maxAttempts: 5,
   windowMs: 900_000,
   blockDurationMs: 300_000,
+  exemptLoopback: true,
 };

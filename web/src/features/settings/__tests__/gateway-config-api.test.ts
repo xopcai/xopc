@@ -10,6 +10,7 @@ describe('normalizeGatewayFromConfig', () => {
   it('maps gateway auth, listen, cors, and rate limit fields', () => {
     const state = normalizeGatewayFromConfig({
       gateway: {
+        bind: 'lan',
         host: '0.0.0.0',
         port: 18800,
         corsOrigins: ['http://localhost:5173'],
@@ -26,6 +27,7 @@ describe('normalizeGatewayFromConfig', () => {
       },
       update: { channel: 'beta' },
     });
+    expect(state.bind).toBe('lan');
     expect(state.host).toBe('0.0.0.0');
     expect(state.port).toBe(18800);
     expect(state.corsOrigins).toEqual(['http://localhost:5173']);
@@ -39,6 +41,7 @@ describe('normalizeGatewayFromConfig', () => {
   it('uses defaults when gateway fields are missing', () => {
     const state = normalizeGatewayFromConfig({});
     expect(state.port).toBe(DEFAULT_GATEWAY_PORT);
+    expect(state.bind).toBe('loopback');
     expect(state.corsOrigins).toEqual([]);
     expect(state.maxSseConnections).toBe(DEFAULT_MAX_SSE_CONNECTIONS);
     expect(state.channelConnectDeferMode).toBe('auto');

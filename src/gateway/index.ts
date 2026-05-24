@@ -22,3 +22,38 @@ export {
 export * from './protocol.js';
 export * from './hono/index.js';
 export * from './auth.js';
+export {
+  assertGatewayRuntimeConfig,
+  type GatewayRuntimeConfig,
+} from './runtime-config.js';
+export {
+  isLoopbackHost,
+  isAllInterfacesHost,
+  buildDefaultCorsOrigins,
+} from './host.js';
+export {
+  resolveGatewayListenHost,
+  resolveGatewayListenPlan,
+} from './listen.js';
+export {
+  inferBindModeFromHost,
+  resolveGatewayBindMode,
+  resolveGatewayBindHost,
+  resolveGatewayBindHostSync,
+  resolveGatewayEffectiveHost,
+  syncLegacyGatewayHostFromBind,
+  defaultGatewayBindMode,
+  isContainerEnvironment,
+} from '../config/gateway-bind.js';
+export {
+  isSecureWebSocketUrl,
+  assertSecureWebSocketUrl,
+  assertSecureGatewayHttpUrl,
+  isInsecurePrivateWsAllowed,
+} from './ws-security.js';
+export {
+  isGatewayStrictSecurityEnabled,
+  buildBrowserOriginRateLimitKey,
+  resolveAuthRateLimitTracking,
+  resetAuthRateLimitersForTests,
+} from './auth-rate-limit.js';

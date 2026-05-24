@@ -34,6 +34,9 @@ export {
 } from './flood-guard.js';
 export {
   auditGatewayConfig,
+  collectGatewayConfigFindings,
+  collectGatewaySecurityFindings,
+  collectGatewayStartupGuardFindings,
   type SecurityAuditFinding,
 } from './audit.js';
 export {
