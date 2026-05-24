@@ -6,7 +6,6 @@ import type {
   TuiExtensionRegistrar,
   TuiNotifyLevel,
   TuiSlashCommandHandler,
-  TuiToolRenderer,
 } from '../../extensions/types/tui.js';
 import { TuiExtensionSurface } from './surface.js';
 import { registerTuiToolRenderer } from './tool-renderers.js';

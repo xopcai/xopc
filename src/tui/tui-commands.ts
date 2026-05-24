@@ -110,7 +110,6 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: strin
     updateFooter,
     keybindings,
     uiOverlays,
-    runCompaction,
     extensionSlashCommands = [],
   } = deps;
 
