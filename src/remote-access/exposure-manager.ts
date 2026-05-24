@@ -9,16 +9,15 @@ import {
 } from '../gateway/tailscale-lifecycle.js';
 import { maybeAutoStartTunnelFromConfig } from '../tunnel/gateway-lifecycle.js';
 import type { GatewayTailscaleMode } from '../gateway/server-tailscale.js';
+import { isTailscaleInstalled } from '../infra/tailscale.js';
 import { collectExposureConflicts } from './exposure-guards.js';
+import { createLogger } from '../utils/logger.js';
+
+const log = createLogger('ExposureManager');
 
 export type ExposureStatus = {
   bindMode: string;
-  tailscale: {
-    mode: GatewayTailscaleMode;
-    active: boolean;
-    hostname: string | null;
-    resetOnExit: boolean;
-  };
+  tailscale: ReturnType<typeof getTailscaleExposureState> & { cliAvailable: boolean };
   tunnel: ReturnType<ReturnType<typeof getTunnelService>['getStatus']> & {
     consentRequired: boolean;
     canAutoStart: boolean;
@@ -31,9 +30,10 @@ export class ExposureManager {
     const tunnelStatus = getTunnelService().getStatus();
     const consent = getTunnelConsentState(config);
     const ts = getTailscaleExposureState();
+    const cliAvailable = await isTailscaleInstalled();
     return {
       bindMode: resolveGatewayBindMode(config),
-      tailscale: ts,
+      tailscale: { ...ts, cliAvailable },
       tunnel: {
         ...tunnelStatus,
         consentRequired: consent.consentRequired,
@@ -44,7 +44,12 @@ export class ExposureManager {
   }
 
   async autoStart(config: Config, port: number, gatewayToken: string): Promise<void> {
-    await maybeStartTailscaleFromConfig(config, port);
+    try {
+      await maybeStartTailscaleFromConfig(config, port);
+    } catch (err) {
+      const em = err instanceof Error ? err.message : String(err);
+      log.warn({ err, errorMessage: em, phase: 'tailscale_autostart' }, `Tailscale auto-start skipped: ${em}`);
+    }
     await maybeAutoStartTunnelFromConfig(config, gatewayToken);
   }
 

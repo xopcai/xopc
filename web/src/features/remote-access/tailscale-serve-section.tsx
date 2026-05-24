@@ -17,6 +17,21 @@ import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
+const TAILSCALE_DOWNLOAD_URL = 'https://tailscale.com/download';
+
+function TailscaleDownloadLink({ label }: { label: string }) {
+  return (
+    <a
+      href={TAILSCALE_DOWNLOAD_URL}
+      target="_blank"
+      rel="noreferrer"
+      className="font-medium text-accent hover:underline"
+    >
+      {label}
+    </a>
+  );
+}
+
 export function TailscaleServeSection({ embedded = false }: { embedded?: boolean }) {
   const language = useLocaleStore((s) => s.language);
   const t = messages(language).remoteAccess.tailscale;
@@ -33,6 +48,7 @@ export function TailscaleServeSection({ embedded = false }: { embedded?: boolean
 
   const hostname = data?.tailscale.hostname;
   const active = data?.tailscale.active === true;
+  const cliAvailable = data?.tailscale.cliAvailable !== false;
   const publicUrl = hostname ? `https://${hostname}/` : null;
 
   const onStart = useCallback(async () => {
@@ -80,7 +96,11 @@ export function TailscaleServeSection({ embedded = false }: { embedded?: boolean
             <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-surface-hover text-xs font-semibold text-fg">
               1
             </span>
-            <span>{t.stepInstall}</span>
+            <span>
+              {t.stepInstallBefore}
+              <TailscaleDownloadLink label={t.stepInstallLink} />
+              {t.stepInstallAfter}
+            </span>
           </li>
           <li className="flex gap-2">
             <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-surface-hover text-xs font-semibold text-fg">
@@ -95,6 +115,14 @@ export function TailscaleServeSection({ embedded = false }: { embedded?: boolean
             <span>{t.stepCopy}</span>
           </li>
         </ol>
+      ) : null}
+
+      {embedded && data?.tailscale.cliAvailable === false ? (
+        <p className="rounded-lg border border-amber-500/25 bg-amber-500/5 px-3 py-2 text-sm text-fg-muted">
+          {t.cliMissingIntro}{' '}
+          <TailscaleDownloadLink label={t.cliMissingDownloadLink} />
+          {t.cliMissingSuffix}
+        </p>
       ) : null}
 
       {isLoading && !data ? (
@@ -112,7 +140,7 @@ export function TailscaleServeSection({ embedded = false }: { embedded?: boolean
             {error ? <p className="mt-2 text-sm text-red-600 dark:text-red-400">{error}</p> : null}
             <div className="mt-3 flex flex-wrap gap-2">
               {!active ? (
-                <Button type="button" disabled={busy} onClick={() => void onStart()}>
+                <Button type="button" disabled={busy || !cliAvailable} onClick={() => void onStart()}>
                   {busy ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Power className="mr-1 h-4 w-4" />}
                   {t.enableServe}
                 </Button>

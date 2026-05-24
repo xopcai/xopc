@@ -39,6 +39,22 @@ function parseTailnetIpv4Lines(stdout: string): string | undefined {
   return undefined;
 }
 
+const WELL_KNOWN_TAILSCALE_PATHS = [
+  '/opt/homebrew/bin/tailscale',
+  '/usr/local/bin/tailscale',
+  '/Applications/Tailscale.app/Contents/MacOS/Tailscale',
+] as const;
+
+export class TailscaleCliNotFoundError extends Error {
+  constructor() {
+    super(
+      'Tailscale CLI not found. Install Tailscale (https://tailscale.com/download) and sign in, ' +
+        'or ensure the tailscale command is on PATH (macOS app: /Applications/Tailscale.app).',
+    );
+    this.name = 'TailscaleCliNotFoundError';
+  }
+}
+
 async function checkBinary(path: string): Promise<boolean> {
   if (!path || !existsSync(path)) {
     return false;
@@ -55,6 +71,12 @@ async function checkBinary(path: string): Promise<boolean> {
 }
 
 export async function findTailscaleBinary(): Promise<string | null> {
+  for (const path of WELL_KNOWN_TAILSCALE_PATHS) {
+    if (await checkBinary(path)) {
+      return path;
+    }
+  }
+
   try {
     const { stdout } = await runExec('which', ['tailscale'], { timeoutMs: 3000 });
     const fromPath = stdout.trim();
@@ -63,11 +85,6 @@ export async function findTailscaleBinary(): Promise<string | null> {
     }
   } catch {
     // continue
-  }
-
-  const macAppPath = '/Applications/Tailscale.app/Contents/MacOS/Tailscale';
-  if (await checkBinary(macAppPath)) {
-    return macAppPath;
   }
 
   try {
@@ -108,7 +125,7 @@ export function getTestTailscaleBinaryOverride(env: NodeJS.ProcessEnv = process.
   return null;
 }
 
-export async function getTailscaleBinary(): Promise<string> {
+export async function requireTailscaleBinary(): Promise<string> {
   const forcedBinary = getTestTailscaleBinaryOverride();
   if (forcedBinary) {
     cachedTailscaleBinary = forcedBinary;
@@ -117,15 +134,30 @@ export async function getTailscaleBinary(): Promise<string> {
   if (cachedTailscaleBinary) {
     return cachedTailscaleBinary;
   }
-  cachedTailscaleBinary = await findTailscaleBinary();
-  return cachedTailscaleBinary ?? 'tailscale';
+  const resolved = await findTailscaleBinary();
+  if (!resolved) {
+    throw new TailscaleCliNotFoundError();
+  }
+  cachedTailscaleBinary = resolved;
+  return resolved;
+}
+
+export async function getTailscaleBinary(): Promise<string> {
+  try {
+    return await requireTailscaleBinary();
+  } catch (err) {
+    if (err instanceof TailscaleCliNotFoundError) {
+      return 'tailscale';
+    }
+    throw err;
+  }
 }
 
 export function resetTailscaleBinaryCacheForTest(): void {
   cachedTailscaleBinary = null;
 }
 
-function findTailscaleBinarySync(): string {
+function findTailscaleBinarySync(): string | null {
   const forced = getTestTailscaleBinaryOverride();
   if (forced) {
     return forced;
@@ -133,16 +165,20 @@ function findTailscaleBinarySync(): string {
   if (cachedTailscaleBinary) {
     return cachedTailscaleBinary;
   }
-  const macAppPath = '/Applications/Tailscale.app/Contents/MacOS/Tailscale';
-  if (existsSync(macAppPath)) {
-    return macAppPath;
+  for (const path of WELL_KNOWN_TAILSCALE_PATHS) {
+    if (existsSync(path)) {
+      return path;
+    }
   }
-  return 'tailscale';
+  return null;
 }
 
 export function getTailnetIPv4Sync(): string | undefined {
   try {
     const bin = findTailscaleBinarySync();
+    if (!bin) {
+      return undefined;
+    }
     const stdout = execFileSync(bin, ['ip', '-4'], {
       encoding: 'utf8',
       timeout: 3000,
@@ -239,36 +275,60 @@ async function execWithSudoFallback(
   }
 }
 
+function wrapTailscaleExecError(err: unknown): Error {
+  const { code, message } = extractExecErrorText(err);
+  if (code === 'ENOENT' || message.includes('ENOENT')) {
+    return new TailscaleCliNotFoundError();
+  }
+  return err instanceof Error ? err : new Error(String(err));
+}
+
 export async function enableTailscaleServe(port: number, exec: typeof runExec = runExec): Promise<void> {
-  const tailscaleBin = await getTailscaleBinary();
-  await execWithSudoFallback(exec, tailscaleBin, ['serve', '--bg', '--yes', `${port}`], {
-    maxBuffer: 200_000,
-    timeoutMs: 15_000,
-  });
+  const tailscaleBin = await requireTailscaleBinary();
+  try {
+    await execWithSudoFallback(exec, tailscaleBin, ['serve', '--bg', '--yes', `${port}`], {
+      maxBuffer: 200_000,
+      timeoutMs: 15_000,
+    });
+  } catch (err) {
+    throw wrapTailscaleExecError(err);
+  }
 }
 
 export async function disableTailscaleServe(exec: typeof runExec = runExec): Promise<void> {
-  const tailscaleBin = await getTailscaleBinary();
-  await execWithSudoFallback(exec, tailscaleBin, ['serve', 'reset'], {
-    maxBuffer: 200_000,
-    timeoutMs: 15_000,
-  });
+  const tailscaleBin = await requireTailscaleBinary();
+  try {
+    await execWithSudoFallback(exec, tailscaleBin, ['serve', 'reset'], {
+      maxBuffer: 200_000,
+      timeoutMs: 15_000,
+    });
+  } catch (err) {
+    throw wrapTailscaleExecError(err);
+  }
 }
 
 export async function enableTailscaleFunnel(port: number, exec: typeof runExec = runExec): Promise<void> {
-  const tailscaleBin = await getTailscaleBinary();
-  await execWithSudoFallback(exec, tailscaleBin, ['funnel', '--bg', '--yes', `${port}`], {
-    maxBuffer: 200_000,
-    timeoutMs: 15_000,
-  });
+  const tailscaleBin = await requireTailscaleBinary();
+  try {
+    await execWithSudoFallback(exec, tailscaleBin, ['funnel', '--bg', '--yes', `${port}`], {
+      maxBuffer: 200_000,
+      timeoutMs: 15_000,
+    });
+  } catch (err) {
+    throw wrapTailscaleExecError(err);
+  }
 }
 
 export async function disableTailscaleFunnel(exec: typeof runExec = runExec): Promise<void> {
-  const tailscaleBin = await getTailscaleBinary();
-  await execWithSudoFallback(exec, tailscaleBin, ['funnel', 'reset'], {
-    maxBuffer: 200_000,
-    timeoutMs: 15_000,
-  });
+  const tailscaleBin = await requireTailscaleBinary();
+  try {
+    await execWithSudoFallback(exec, tailscaleBin, ['funnel', 'reset'], {
+      maxBuffer: 200_000,
+      timeoutMs: 15_000,
+    });
+  } catch (err) {
+    throw wrapTailscaleExecError(err);
+  }
 }
 
 export type TailscaleWhoisIdentity = {

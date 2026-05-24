@@ -52,7 +52,9 @@
       "title": "Tailscale Serve (recommended)",
       "subtitle": "Expose the gateway on your tailnet over HTTPS while keeping the process bound to loopback.",
       "statusLabel": "Serve status",
-      "stepInstall": "Install Tailscale on this machine and sign in to your tailnet.",
+      "stepInstallBefore": "Install ",
+      "stepInstallLink": "Tailscale",
+      "stepInstallAfter": " on this machine and sign in to your tailnet.",
       "stepEnable": "Enable Serve below to publish HTTPS on your tailnet hostname.",
       "stepCopy": "Open or copy the HTTPS URL on any device on the same tailnet.",
       "loading": "Loading Tailscale status…",
@@ -63,7 +65,10 @@
       "copyUrl": "Copy HTTPS URL",
       "copied": "Copied",
       "hint": "Requires Tailscale installed and logged in on this machine. API routes still require your gateway token.",
-      "docsLink": "Tailscale Serve docs"
+      "docsLink": "Tailscale Serve docs",
+      "cliMissingIntro": "Tailscale CLI not found on this machine.",
+      "cliMissingDownloadLink": "Download from tailscale.com/download",
+      "cliMissingSuffix": " — install, sign in, then retry."
     },
     "ssh": {
       "title": "SSH tunnel (CLI)",

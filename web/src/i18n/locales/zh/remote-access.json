@@ -52,7 +52,9 @@
       "title": "Tailscale Serve（推荐）",
       "subtitle": "在 tailnet 上通过 HTTPS 暴露 Gateway，进程仍绑定 loopback。",
       "statusLabel": "Serve 状态",
-      "stepInstall": "在本机安装 Tailscale 并登录 tailnet。",
+      "stepInstallBefore": "在本机安装 ",
+      "stepInstallLink": "Tailscale",
+      "stepInstallAfter": " 并登录 tailnet。",
       "stepEnable": "在下方启用 Serve，通过 tailnet 主机名发布 HTTPS。",
       "stepCopy": "在 tailnet 内任意设备打开或复制 HTTPS 地址。",
       "loading": "正在加载 Tailscale 状态…",
@@ -63,7 +65,10 @@
       "copyUrl": "复制 HTTPS 地址",
       "copied": "已复制",
       "hint": "需要本机已安装并登录 Tailscale。API 仍需要 gateway token。",
-      "docsLink": "Tailscale Serve 文档"
+      "docsLink": "Tailscale Serve 文档",
+      "cliMissingIntro": "本机未找到 Tailscale CLI。",
+      "cliMissingDownloadLink": "前往 tailscale.com/download 下载",
+      "cliMissingSuffix": "，安装并登录后重试。"
     },
     "ssh": {
       "title": "SSH 隧道（CLI）",
