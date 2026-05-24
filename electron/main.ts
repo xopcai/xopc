@@ -453,6 +453,8 @@ app.whenReady().then(async () => {
     return true;
   });
 
+  ipcMain.handle('clipboard:read-text', () => clipboard.readText());
+
   ipcMain.handle('gateway:restart', async () => {
     if (!shouldEmbedGateway()) {
       return { ok: false, message: 'Embedded gateway is not active in this session.' };
