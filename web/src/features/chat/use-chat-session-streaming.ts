@@ -12,6 +12,11 @@ import { createAgentStreamMessagingCallbacks } from '@/features/chat/agent-strea
 import type { WireAttachment } from '@/features/chat/composer.types';
 import type { Message, ProgressState } from '@/features/chat/messages.types';
 import { extractUserMessagePlainText, messageAttachmentsToWire } from '@/features/chat/user-message-plain-text';
+import {
+  isUiUserMessage,
+  uiDeleteCountForUserRound,
+  userRoundIndexFromUiMessageIndex,
+} from '@/features/chat/user-round-index';
 import { pendingAgentRunStorageKey, MessageSender } from '@/features/chat/message-sender';
 import {
   FOLLOW_UP_AUTO_SEND_IDLE_MS,
@@ -484,20 +489,16 @@ export function useChatSessionStreaming(deps: {
 
       setMessages((prev) => {
         const msg = prev[messageIndex];
-        if (!msg) return prev;
-        const isUserMsg = msg.role === 'user' || msg.role === 'user-with-attachments';
-        if (!isUserMsg) return prev;
+        if (!msg || !isUiUserMessage(msg.role)) return prev;
 
-        let deleteCount = 1;
-        const next = prev[messageIndex + 1];
-        if (next && next.role === 'assistant') {
-          deleteCount = 2;
-        }
+        const userRoundIndex = userRoundIndexFromUiMessageIndex(prev, messageIndex);
+        if (userRoundIndex === null) return prev;
 
+        const deleteCount = uiDeleteCountForUserRound(prev, messageIndex);
         const updated = [...prev];
         updated.splice(messageIndex, deleteCount);
 
-        void sessionMgrRef.current.deleteMessages(key, messageIndex, deleteCount).catch(() => {
+        void sessionMgrRef.current.deleteMessages(key, { userRoundIndex }).catch(() => {
           void loadSessionById(key, 0);
         });
 
@@ -515,33 +516,30 @@ export function useChatSessionStreaming(deps: {
 
       setMessages((prev) => {
         const msg = prev[messageIndex];
-        if (!msg) return prev;
-        if (msg.role !== 'user' && msg.role !== 'user-with-attachments') return prev;
+        if (!msg || !isUiUserMessage(msg.role)) return prev;
         for (let j = messageIndex + 1; j < prev.length; j++) {
-          const r = prev[j].role;
-          if (r === 'user' || r === 'user-with-attachments') return prev;
+          if (isUiUserMessage(prev[j]!.role)) return prev;
         }
 
         const text = extractUserMessagePlainText(msg.content);
         const wireAtt = messageAttachmentsToWire(msg.attachments);
         if (!text.trim() && !wireAtt?.length) return prev;
 
-        let deleteCount = 1;
-        const next = prev[messageIndex + 1];
-        if (next && next.role === 'assistant') {
-          deleteCount = 2;
-        }
+        const userRoundIndex = userRoundIndexFromUiMessageIndex(prev, messageIndex);
+        if (userRoundIndex === null) return prev;
 
+        const deleteCount = uiDeleteCountForUserRound(prev, messageIndex);
         const updated = [...prev];
         updated.splice(messageIndex, deleteCount);
 
-        void sessionMgrRef.current.deleteMessages(key, messageIndex, deleteCount).catch(() => {
-          void loadSessionById(key, 0);
-        });
-
-        queueMicrotask(() => {
-          void sendMessageRef.current(text, wireAtt);
-        });
+        void (async () => {
+          try {
+            await sessionMgrRef.current.deleteMessages(key, { userRoundIndex });
+            await sendMessageRef.current(text, wireAtt);
+          } catch {
+            void loadSessionById(key, 0);
+          }
+        })();
 
         return updated;
       });

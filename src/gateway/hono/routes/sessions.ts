@@ -4,6 +4,7 @@ import { buildSessionKey, parseSessionKey } from '../../../routing/session-key.j
 import { agentExists, getDefaultAgentId } from '../../../routing/resolve-route.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 import { messagesToClientHistory } from '../../../session/client-history.js';
+import { computeUserRoundDeleteRange } from '../../../session/user-round-delete.js';
 
 export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const { service } = deps;
@@ -273,18 +274,36 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
     return c.json(result);
   });
 
-  // DELETE /api/sessions/:key/messages — delete a range by **LLM message indices** (same order as
-  // `loadMessages` / session `messages`), not raw on-disk row indices when `kind: 'context'` rows exist.
+  // DELETE /api/sessions/:key/messages — delete LLM rows by range or by user turn.
+  // `userRoundIndex` (0-based among user messages) removes the user row and every following
+  // assistant / tool / toolResult row until the next user. Prefer this from the web console so
+  // tool loops are not left orphaned after retry/delete.
   authenticated.delete('/api/sessions/:key/messages', async (c) => {
     const key = c.req.param('key');
     const body = await c.req.json().catch(() => ({}));
-    const startIndex = typeof body.startIndex === 'number' ? body.startIndex : -1;
-    const count = typeof body.count === 'number' ? body.count : 0;
+    const loaded = await service.sessionManagerInstance.loadMessages(key);
+    if (!loaded) {
+      return c.json({ error: 'Session not found' }, 404);
+    }
+
+    let startIndex = typeof body.startIndex === 'number' ? body.startIndex : -1;
+    let count = typeof body.count === 'number' ? body.count : 0;
+    const userRoundIndex =
+      typeof body.userRoundIndex === 'number' ? body.userRoundIndex : undefined;
+
+    if (userRoundIndex !== undefined) {
+      const range = computeUserRoundDeleteRange(loaded, userRoundIndex);
+      if (!range) {
+        return c.json({ error: 'User round index out of range' }, 400);
+      }
+      startIndex = range.startIndex;
+      count = range.count;
+    }
+
     if (startIndex < 0 || count <= 0) {
       return c.json({ error: 'Invalid startIndex or count' }, 400);
     }
-    const loaded = await service.sessionManagerInstance.loadMessages(key);
-    if (!loaded || startIndex >= loaded.length) {
+    if (startIndex >= loaded.length) {
       return c.json({ error: 'Index out of range' }, 400);
     }
     const deleteCount = Math.min(count, loaded.length - startIndex);
