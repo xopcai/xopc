@@ -6,8 +6,6 @@ import { messages } from '@/i18n/messages';
 import {
   buildExtensionChannelHubCardVm,
   buildManageableChannelHubCardVm,
-  buildChannelHubCards,
-  buildChannelsHubSummaryVm,
   resolveChannelConnected,
 } from '@/features/settings/channels/channel-hub-view-model';
 
@@ -113,37 +111,6 @@ describe('channel-hub-view-model', () => {
 
     expect(vm.status).toBe('offline');
     expect(vm.primaryAction).toBe('fix');
-  });
-
-  it('buildChannelsHubSummaryVm aggregates hub metrics', () => {
-    const form = defaultChannelsState();
-    form.telegram.enabled = true;
-    form.telegram.accounts.default.botToken = '123:abc';
-
-    const cards = buildChannelHubCards(
-      form,
-      [{ name: 'telegram', enabled: true, connected: false }],
-      {
-        telegram: { pending: 1, stale: 2, atCapacity: true },
-        feishu: { pending: 0, stale: 0, atCapacity: false },
-        weixin: { pending: 0, stale: 0, atCapacity: false },
-      },
-      ch,
-    );
-
-    const summary = buildChannelsHubSummaryVm({
-      cards,
-      pairingSummary: {
-        telegram: { pending: 1, stale: 2, atCapacity: true },
-        feishu: { pending: 0, stale: 0, atCapacity: false },
-        weixin: { pending: 0, stale: 0, atCapacity: false },
-      },
-    });
-
-    expect(summary.pendingPairingTotal).toBe(1);
-    expect(summary.stalePairingTotal).toBe(2);
-    expect(summary.atCapacity).toBe(true);
-    expect(summary.offlineChannelIds).toEqual(['telegram']);
   });
 
   it('buildExtensionChannelHubCardVm marks extension channels as read-only hub cards', () => {

@@ -8,9 +8,7 @@ import type { ChannelsSettingsMessages } from '@/i18n/messages';
 
 import {
   buildChannelHubCardsForCatalog,
-  buildChannelsHubSummaryVm,
   type ChannelHubCardVm,
-  type ChannelsHubSummaryVm,
 } from './channel-hub-view-model';
 import { parseChannelStatusSseDetail, useChannelStatusSse } from './use-channel-status-sse';
 import { useChannelPairingSummary } from './use-channel-pairing-summary';
@@ -24,7 +22,6 @@ export function useChannelsHubData(params: {
   ch: ChannelsSettingsMessages;
 }): {
   cards: ChannelHubCardVm[];
-  hubSummary: ChannelsHubSummaryVm | null;
   refreshAll: () => void;
 } {
   const { hasToken, form, ch } = params;
@@ -69,11 +66,6 @@ export function useChannelsHubData(params: {
     });
   }, [form, catalogIds, configRoot, statuses, pairingSummary, ch]);
 
-  const hubSummary = useMemo(() => {
-    if (cards.length === 0) return null;
-    return buildChannelsHubSummaryVm({ cards, pairingSummary });
-  }, [cards, pairingSummary]);
-
   const refreshAll = useCallback(() => {
     void mutateStatus();
     void mutateCatalog();
@@ -81,5 +73,5 @@ export function useChannelsHubData(params: {
     refreshPairing();
   }, [mutateCatalog, mutateConfig, mutateStatus, refreshPairing]);
 
-  return { cards, hubSummary, refreshAll };
+  return { cards, refreshAll };
 }

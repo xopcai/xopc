@@ -14,10 +14,8 @@ export function ChannelsHubGrid(props: {
   saving: boolean;
   onOpenChannel: (id: string, opts?: OpenChannelOptions) => void;
   onToggleChannel: (id: string, enabled: boolean) => void | Promise<void>;
-  onRemoveChannel: (id: string) => void;
-  onViewDocs: () => void;
 }) {
-  const { catalog, cards, ch, saving, onOpenChannel, onToggleChannel, onRemoveChannel, onViewDocs } = props;
+  const { catalog, cards, ch, saving, onOpenChannel, onToggleChannel } = props;
 
   const cardById = new Map(cards.map((c) => [c.id, c]));
 
@@ -29,12 +27,11 @@ export function ChannelsHubGrid(props: {
       {catalog.map((entry) => {
         const vm = cardById.get(entry.id);
         if (!vm) return null;
-        const Icon = entry.icon;
         const openPairing = () => onOpenChannel(entry.id, { scrollToPairing: true });
         return (
           <li key={entry.id} className="h-full min-h-0">
             <ChannelHubCard
-              icon={Icon}
+              channelId={entry.id}
               title={entry.title}
               subtitle={entry.subtitle}
               vm={vm}
@@ -42,8 +39,6 @@ export function ChannelsHubGrid(props: {
               onOpen={() => onOpenChannel(entry.id)}
               onReviewPairing={openPairing}
               onToggle={(next) => onToggleChannel(entry.id, next)}
-              onRemove={() => onRemoveChannel(entry.id)}
-              onViewDocs={onViewDocs}
               ch={ch}
             />
           </li>

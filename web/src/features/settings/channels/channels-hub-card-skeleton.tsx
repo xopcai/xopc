@@ -21,9 +21,8 @@ export function ChannelHubCardSkeleton() {
         <div className={cn('h-3 w-[88%]', skelBar)} />
         <div className={cn('h-3 w-3/5', skelBar)} />
       </div>
-      <div className="mt-auto flex gap-2">
-        <div className={cn('h-10 min-w-0 flex-1 rounded-lg', skelBar)} />
-        <div className={cn('size-9 shrink-0 rounded-lg', skelBar)} />
+      <div className="mt-auto">
+        <div className={cn('h-10 w-full rounded-lg', skelBar)} />
       </div>
     </div>
   );

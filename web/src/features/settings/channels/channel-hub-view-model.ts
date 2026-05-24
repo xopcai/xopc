@@ -29,13 +29,6 @@ export type ChannelHubCardVm = {
   primaryAction: ChannelHubPrimaryAction;
 };
 
-export type ChannelsHubSummaryVm = {
-  pendingPairingTotal: number;
-  stalePairingTotal: number;
-  atCapacity: boolean;
-  offlineChannelIds: string[];
-};
-
 export const CHANNEL_HUB_IDS: readonly ChannelHubId[] = ['telegram', 'weixin', 'feishu'];
 
 export function resolveChannelConnected(statuses: ChannelStatus[], id: string): boolean {
@@ -221,28 +214,6 @@ export function buildChannelHubCardForCatalogId(params: {
     statuses: params.statuses,
     ch: params.ch,
   });
-}
-
-export function buildChannelsHubSummaryVm(params: {
-  cards: ChannelHubCardVm[];
-  pairingSummary: ChannelPairingSummaryPayload;
-}): ChannelsHubSummaryVm {
-  const { cards, pairingSummary } = params;
-  const pendingPairingTotal = cards.reduce((n, c) => n + c.pendingPairing, 0);
-  const stalePairingTotal =
-    pairingSummary.telegram.stale + pairingSummary.feishu.stale + pairingSummary.weixin.stale;
-  const atCapacity =
-    pairingSummary.telegram.atCapacity ||
-    pairingSummary.feishu.atCapacity ||
-    pairingSummary.weixin.atCapacity;
-  const offlineChannelIds = cards.filter((c) => c.status === 'offline').map((c) => c.id);
-
-  return {
-    pendingPairingTotal,
-    stalePairingTotal,
-    atCapacity,
-    offlineChannelIds,
-  };
 }
 
 export function buildChannelHubCardsForCatalog(params: {

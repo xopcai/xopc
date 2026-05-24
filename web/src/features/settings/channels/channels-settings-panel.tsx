@@ -1,9 +1,10 @@
 import { ExternalLink } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import { docsGuidePageUrl } from '@/navigation';
+import { usePageHeaderStore } from '@/stores/page-header-store';
 
 import { ChannelsHubGrid, type OpenChannelOptions } from './channels-hub-grid';
 import { ChannelsHubGridSkeleton } from './channels-hub-card-skeleton';
@@ -13,9 +14,8 @@ import {
   isManageableChannelId,
   normalizeChannelRouteId,
 } from './channels-routes';
-import { ChannelsRemoveChannelDialog } from './channels-remove-channel-dialog';
-import { ChannelsSummaryStrip } from './channels-summary-strip';
 import { ExtensionChannelDetailPanel } from './extension-channel-detail-panel';
+import { ChannelsPageHeaderActions } from './channels-page-header-actions';
 import { FeishuMoreSettingsSection } from './feishu-more-settings-section';
 import { FeishuQrSetupDialog } from './feishu-qr-setup-dialog';
 import { TelegramChannelSettingsDialog } from './telegram-channel-settings-dialog';
@@ -45,8 +45,6 @@ export function ChannelsSettingsPanel() {
     saving,
     error,
     saveOk,
-    removeTarget,
-    setRemoveTarget,
     weixinSuccessBanner,
     setWeixinSuccessBanner,
     feishuSetupSuccessBanner,
@@ -78,7 +76,6 @@ export function ChannelsSettingsPanel() {
     save,
     discard,
     toggleChannelEnabled,
-    removeChannel,
     copyToken,
     handleFeishuQrSetupSuccess,
     copyFeishuSecret,
@@ -101,7 +98,7 @@ export function ChannelsSettingsPanel() {
   const scrollToPairing = searchParams.get('pairing') === '1';
   const detailOpen = Boolean(activeChannelId && catalogById.has(activeChannelId));
 
-  const { cards, hubSummary, refreshAll } = useChannelsHubData({
+  const { cards, refreshAll } = useChannelsHubData({
     hasToken,
     form,
     ch,
@@ -116,11 +113,6 @@ export function ChannelsSettingsPanel() {
       navigate(CHANNELS_HUB_PATH, { replace: true });
     }
   }, [activeChannelId, catalogById, catalogEntries.length, navigate]);
-
-  const resolveChannelTitle = useCallback(
-    (id: string) => catalogById.get(id)?.title ?? id,
-    [catalogById],
-  );
 
   const openChannel = useCallback(
     (id: string, opts?: OpenChannelOptions) => {
@@ -143,6 +135,34 @@ export function ChannelsSettingsPanel() {
     }
   }, [mutate, refreshAll]);
 
+  const setPageHeader = usePageHeaderStore((s) => s.setPageHeader);
+  const clearPageHeader = usePageHeaderStore((s) => s.clearPageHeader);
+
+  const channelsHeaderEnd = useMemo(
+    () => (
+      <ChannelsPageHeaderActions
+        ch={ch}
+        refreshing={refreshing}
+        saveOk={saveOk}
+        onRefresh={handleRefresh}
+      />
+    ),
+    [ch, handleRefresh, refreshing, saveOk],
+  );
+
+  useLayoutEffect(() => {
+    if (!hasToken) {
+      clearPageHeader();
+      return () => clearPageHeader();
+    }
+    setPageHeader({
+      startExtra: null,
+      main: null,
+      end: channelsHeaderEnd,
+    });
+    return () => clearPageHeader();
+  }, [channelsHeaderEnd, clearPageHeader, hasToken, setPageHeader]);
+
   if (!hasToken) {
     return (
       <div className="mx-auto flex w-full max-w-app-main flex-col gap-3 px-4 py-8">
@@ -159,7 +179,6 @@ export function ChannelsSettingsPanel() {
           <div className="h-7 w-40 animate-pulse rounded-md bg-surface-hover motion-reduce:animate-none dark:bg-surface-active/50" />
           <div className="h-4 w-full max-w-md animate-pulse rounded-md bg-surface-hover motion-reduce:animate-none dark:bg-surface-active/50" />
         </div>
-        <div className="h-16 animate-pulse rounded-xl bg-surface-hover motion-reduce:animate-none dark:bg-surface-active/50" />
         <ChannelsHubGridSkeleton />
         <p className="text-sm text-fg-muted">{ch.loading}</p>
       </div>
@@ -235,28 +254,17 @@ export function ChannelsSettingsPanel() {
     <div className="mx-auto flex w-full max-w-app-main flex-col gap-6 px-4 py-6">
       <header className="flex flex-col gap-1">
         <h1 className="text-lg font-semibold tracking-tight text-fg">{m.settingsSections.channels}</h1>
-        <p className="mt-1 text-sm text-fg-muted">{ch.subtitle}</p>
+        <p className="text-sm text-fg-muted">{ch.subtitle}</p>
         <a
           href={docsGuidePageUrl(language, 'channels')}
           target="_blank"
           rel="noreferrer"
-          className="mt-1 inline-flex items-center gap-1 text-sm text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+          className="inline-flex items-center gap-1 text-sm text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
         >
           {ch.docsLink}
           <ExternalLink className="size-3.5" />
         </a>
       </header>
-
-      {hubSummary ? (
-        <ChannelsSummaryStrip
-          summary={hubSummary}
-          ch={ch}
-          saveOk={saveOk}
-          refreshing={refreshing}
-          resolveChannelTitle={resolveChannelTitle}
-          onRefresh={() => void handleRefresh()}
-        />
-      ) : null}
 
       {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
       {weixinSuccessBanner ? <p className="text-xs text-accent">{weixinSuccessBanner}</p> : null}
@@ -278,10 +286,6 @@ export function ChannelsSettingsPanel() {
           onToggleChannel={(id, enabled) => {
             if (isManageableChannelId(id)) void toggleChannelEnabled(id, enabled);
           }}
-          onRemoveChannel={(id) => {
-            if (isManageableChannelId(id)) setRemoveTarget(id);
-          }}
-          onViewDocs={() => window.open(docsGuidePageUrl(language, 'channels'), '_blank', 'noopener,noreferrer')}
         />
       )}
 
@@ -369,18 +373,6 @@ export function ChannelsSettingsPanel() {
           language={language}
         />
       ) : null}
-
-      <ChannelsRemoveChannelDialog
-        open={removeTarget !== null}
-        onOpenChange={(o) => {
-          if (!o) setRemoveTarget(null);
-        }}
-        ch={ch}
-        removeTarget={removeTarget}
-        onCancel={() => setRemoveTarget(null)}
-        saving={saving}
-        onConfirmRemove={() => void removeChannel()}
-      />
     </div>
   );
 }

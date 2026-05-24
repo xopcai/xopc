@@ -1,11 +1,7 @@
-import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { BookOpen, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
-
+import { SessionChannelIcon } from '@/components/shell/session-channel-icon';
 import { Button } from '@/components/ui/button';
 import type { ChannelsSettingsMessages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
-import { SETTINGS_SHELL_POPOVER_Z } from '@/lib/settings-shell-dialog-layer';
 
 import type { ChannelHubCardVm, ChannelHubPrimaryAction, ChannelHubStatus } from './channel-hub-view-model';
 
@@ -49,7 +45,7 @@ function primaryActionLabel(ch: ChannelsSettingsMessages, action: ChannelHubPrim
 }
 
 export type ChannelHubCardProps = {
-  icon: LucideIcon;
+  channelId: string;
   title: string;
   subtitle: string;
   vm: ChannelHubCardVm;
@@ -57,13 +53,11 @@ export type ChannelHubCardProps = {
   onOpen: () => void;
   onReviewPairing: () => void;
   onToggle: (next: boolean) => void | Promise<void>;
-  onRemove: () => void;
-  onViewDocs: () => void;
   ch: ChannelsSettingsMessages;
 };
 
 export function ChannelHubCard({
-  icon: Icon,
+  channelId,
   title,
   subtitle,
   vm,
@@ -71,8 +65,6 @@ export function ChannelHubCard({
   onOpen,
   onReviewPairing,
   onToggle,
-  onRemove,
-  onViewDocs,
   ch,
 }: ChannelHubCardProps) {
   const showToggle = vm.configured && vm.manageable;
@@ -92,7 +84,7 @@ export function ChannelHubCard({
           )}
           aria-hidden
         >
-          <Icon className="size-5 text-accent" strokeWidth={1.75} />
+          <SessionChannelIcon sourceChannel={channelId} className="size-5" />
         </div>
         {showToggle ? (
           <button
@@ -152,11 +144,11 @@ export function ChannelHubCard({
         ) : null}
       </div>
 
-      <div className="mt-auto flex items-center gap-2">
+      <div className="mt-auto">
         <Button
           type="button"
           variant="primary"
-          className="min-w-0 flex-1"
+          className="w-full"
           onClick={() => {
             if (vm.manageable && (vm.primaryAction === 'pairing' || vm.pendingPairing > 0)) {
               onReviewPairing();
@@ -167,60 +159,6 @@ export function ChannelHubCard({
         >
           {primaryActionLabel(ch, vm.primaryAction)}
         </Button>
-        <DropdownMenu.Root>
-          <DropdownMenu.Trigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              className="size-9 shrink-0 p-0"
-              aria-label={ch.menuMoreAria}
-            >
-              <MoreHorizontal className="size-5 text-fg-muted" strokeWidth={1.75} />
-            </Button>
-          </DropdownMenu.Trigger>
-          <DropdownMenu.Portal>
-            <DropdownMenu.Content
-              className={cn(
-                'min-w-[11rem] rounded-xl border border-edge bg-surface-panel p-1 shadow-popover dark:border-edge',
-                SETTINGS_SHELL_POPOVER_Z,
-              )}
-              sideOffset={6}
-              align="end"
-            >
-              {vm.configured ? (
-                <DropdownMenu.Item
-                  className="cursor-pointer rounded-lg px-3 py-2 text-sm text-fg outline-none hover:bg-surface-hover data-[highlighted]:bg-surface-hover"
-                  onSelect={() => onOpen()}
-                >
-                  <span className="flex items-center gap-2">
-                    <Pencil className="size-4 shrink-0 text-fg-muted" strokeWidth={1.75} />
-                    {ch.menuEditConfig}
-                  </span>
-                </DropdownMenu.Item>
-              ) : null}
-              <DropdownMenu.Item
-                className="cursor-pointer rounded-lg px-3 py-2 text-sm text-fg outline-none hover:bg-surface-hover data-[highlighted]:bg-surface-hover"
-                onSelect={() => onViewDocs()}
-              >
-                <span className="flex items-center gap-2">
-                  <BookOpen className="size-4 shrink-0 text-fg-muted" strokeWidth={1.75} />
-                  {ch.hubViewDocs}
-                </span>
-              </DropdownMenu.Item>
-              {vm.configured && vm.manageable ? (
-                <DropdownMenu.Item
-                  className="cursor-pointer rounded-lg px-3 py-2 text-sm text-fg outline-none hover:bg-surface-hover data-[highlighted]:bg-surface-hover"
-                  onSelect={() => onRemove()}
-                >
-                  <span className="flex items-center gap-2">
-                    <Trash2 className="size-4 shrink-0" strokeWidth={1.75} />
-                    {ch.menuRemoveConfig}
-                  </span>
-                </DropdownMenu.Item>
-              ) : null}
-            </DropdownMenu.Content>
-          </DropdownMenu.Portal>
-        </DropdownMenu.Root>
       </div>
     </article>
   );
