@@ -10,7 +10,6 @@
   "appBarPreferences": "语言与主题",
   "nav": {
     "chat": "对话",
-    "management": "管理",
     "settings": "设置",
     "sessions": "会话管理",
     "cron": "定时任务",

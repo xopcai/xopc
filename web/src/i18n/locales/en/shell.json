@@ -10,7 +10,6 @@
   "appBarPreferences": "Language and theme",
   "nav": {
     "chat": "Chat",
-    "management": "Management",
     "settings": "Settings",
     "sessions": "Session management",
     "cron": "Scheduled Tasks",
