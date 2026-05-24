@@ -20,6 +20,7 @@ import {
   type GatewayAgentRow,
   type GatewayAgentsPayload,
 } from '@/features/settings/agents-admin-api';
+import { parseAgentDefaultsFromConfig } from '@/features/settings/config-api';
 import { AGENTS_APP_LIST_PATH, agentsAppDetailPath } from '@/features/settings/agents/agents-app-path';
 import { SETTINGS_BACK_PATH_STATE_KEY } from '@/features/settings/settings-nav-state';
 import { suggestWorkspaceFromAgentName } from '@/features/settings/suggest-agent-workspace';
@@ -72,6 +73,11 @@ export function useAgentsSettingsPanel() {
 
   const bindingsFromConfig = useMemo(
     () => parseGatewayBindingsFromConfig(gatewayCfgData?.payload?.config ?? {}),
+    [gatewayCfgData],
+  );
+
+  const globalAgentDefaults = useMemo(
+    () => parseAgentDefaultsFromConfig(gatewayCfgData?.payload?.config ?? {}),
     [gatewayCfgData],
   );
 
@@ -162,7 +168,7 @@ export function useAgentsSettingsPanel() {
     if (searchParams.get('panel') !== 'defaults') {
       return;
     }
-    navigate('/settings/agent-chat', {
+    navigate('/settings/agent-defaults?tab=chat', {
       replace: true,
       state: { [SETTINGS_BACK_PATH_STATE_KEY]: AGENTS_APP_LIST_PATH },
     });
@@ -592,6 +598,8 @@ export function useAgentsSettingsPanel() {
     setEditWorkspace,
     editModel,
     setEditModel,
+    defaultModel: globalAgentDefaults.model,
+    defaultWorkspace: globalAgentDefaults.workspace,
     onSetDefault: () => {
       if (!selected) return;
       void onSetDefault(selected);

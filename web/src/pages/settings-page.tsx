@@ -1,13 +1,7 @@
 import { Navigate, useParams } from 'react-router-dom';
 
 import {
-  AgentBrowserDefaultsPage,
-  AgentChatDefaultsPage,
-  AgentRuntimeDefaultsPage,
-  AgentSkillsDefaultsPage,
-  AgentSystemPromptDefaultsPage,
-  AgentToolsDefaultsPage,
-  AgentWorkspaceDefaultsPage,
+  AgentDefaultsTabbedPage,
 } from '@/features/settings/agents';
 import { SetupStatusPanel } from '@/features/settings/setup-checklist/setup-status-panel';
 import { AppearanceSettingsPanel } from '@/features/settings/appearance-settings';
@@ -31,14 +25,8 @@ const SECTIONS: SettingsSectionId[] = [
   'overview',
   'appearance',
   'system',
-  'agent-chat',
-  'agent-workspace',
-  'agent-browser',
-  'agent-runtime',
-  'agent-tools',
-  'agent-skills',
+  'agent-defaults',
   'agent-mcp',
-  'agent-system-prompt',
   'providers',
   'models',
   'image-models',
@@ -72,40 +60,20 @@ export function SettingsPage() {
 
   const title = m.settingsSections[id];
 
+  if (id === 'agent-defaults') {
+    return <AgentDefaultsTabbedPage />;
+  }
+
+  if (id === 'agent-mcp') {
+    return <McpSettingsPanel />;
+  }
+
   if (id === 'appearance') {
     return <AppearanceSettingsPanel />;
   }
 
   if (id === 'system') {
     return <SystemSettingsPanel />;
-  }
-
-  if (id === 'agent-chat') {
-    return <AgentChatDefaultsPage />;
-  }
-
-  if (id === 'agent-workspace') {
-    return <AgentWorkspaceDefaultsPage />;
-  }
-
-  if (id === 'agent-browser') {
-    return <AgentBrowserDefaultsPage />;
-  }
-
-  if (id === 'agent-runtime') {
-    return <AgentRuntimeDefaultsPage />;
-  }
-
-  if (id === 'agent-tools') {
-    return <AgentToolsDefaultsPage />;
-  }
-
-  if (id === 'agent-skills') {
-    return <AgentSkillsDefaultsPage />;
-  }
-
-  if (id === 'agent-system-prompt') {
-    return <AgentSystemPromptDefaultsPage />;
   }
 
   if (id === 'providers') {
@@ -142,10 +110,6 @@ export function SettingsPage() {
 
   if (id === 'search') {
     return <WebSearchSettingsPanel />;
-  }
-
-  if (id === 'agent-mcp') {
-    return <McpSettingsPanel />;
   }
 
   if (id === 'dreams') {

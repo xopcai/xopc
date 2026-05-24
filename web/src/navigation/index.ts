@@ -14,14 +14,15 @@ const SETTINGS_SECTION_TO_TAB: Record<SettingsSectionId, Tab> = {
   appearance: 'settingsAppearance',
   system: 'settingsSystem',
   agent: 'settingsAgents',
-  'agent-chat': 'settingsAgentChat',
-  'agent-workspace': 'settingsAgentWorkspace',
-  'agent-browser': 'settingsAgentBrowser',
-  'agent-runtime': 'settingsAgentRuntime',
-  'agent-tools': 'settingsAgentTools',
-  'agent-skills': 'settingsAgentSkills',
+  'agent-defaults': 'settingsAgentDefaults',
+  'agent-chat': 'settingsAgentDefaults',
+  'agent-workspace': 'settingsAgentDefaults',
+  'agent-browser': 'settingsAgentDefaults',
+  'agent-runtime': 'settingsAgentDefaults',
+  'agent-tools': 'settingsAgentDefaults',
+  'agent-skills': 'settingsAgentDefaults',
   'agent-mcp': 'settingsAgentMcp',
-  'agent-system-prompt': 'settingsAgentSystemPrompt',
+  'agent-system-prompt': 'settingsAgentDefaults',
   agents: 'settingsAgents',
   providers: 'settingsProviders',
   models: 'settingsModels',
@@ -42,14 +43,8 @@ const TAB_TO_SETTINGS_SECTION: Record<
   | 'settingsOverview'
   | 'settingsAppearance'
   | 'settingsSystem'
-  | 'settingsAgentChat'
-  | 'settingsAgentWorkspace'
-  | 'settingsAgentBrowser'
-  | 'settingsAgentRuntime'
-  | 'settingsAgentTools'
-  | 'settingsAgentSkills'
+  | 'settingsAgentDefaults'
   | 'settingsAgentMcp'
-  | 'settingsAgentSystemPrompt'
   | 'settingsAgents'
   | 'settingsProviders'
   | 'settingsModels'
@@ -70,14 +65,8 @@ const TAB_TO_SETTINGS_SECTION: Record<
   settingsOverview: 'overview',
   settingsAppearance: 'appearance',
   settingsSystem: 'system',
-  settingsAgentChat: 'agent-chat',
-  settingsAgentWorkspace: 'agent-workspace',
-  settingsAgentBrowser: 'agent-browser',
-  settingsAgentRuntime: 'agent-runtime',
-  settingsAgentTools: 'agent-tools',
-  settingsAgentSkills: 'agent-skills',
+  settingsAgentDefaults: 'agent-defaults',
   settingsAgentMcp: 'agent-mcp',
-  settingsAgentSystemPrompt: 'agent-system-prompt',
   settingsAgents: 'agents',
   settingsProviders: 'providers',
   settingsModels: 'models',
@@ -127,7 +116,6 @@ export const SETTINGS_SHELL_NAV_GROUPS: readonly SettingsShellNavGroup[] = [
   {
     id: 'models',
     tabs: [
-      'settingsAgentChat',
       'settingsImageModels',
       'settingsVoice',
       'settingsSearch',
@@ -137,15 +125,7 @@ export const SETTINGS_SHELL_NAV_GROUPS: readonly SettingsShellNavGroup[] = [
   },
   {
     id: 'agent',
-    tabs: [
-      'settingsAgentWorkspace',
-      'settingsAgentBrowser',
-      'settingsAgentRuntime',
-      'settingsAgentTools',
-      'settingsAgentSkills',
-      'settingsAgentMcp',
-      'settingsAgentSystemPrompt',
-    ],
+    tabs: ['settingsAgentDefaults', 'settingsAgentMcp'],
   },
   { id: 'gateway', tabs: ['settingsGateway', 'settingsHeartbeat', 'settingsTunnel', 'settingsShares'] },
   { id: 'automation', tabs: ['settingsDreams'] },
@@ -241,6 +221,14 @@ export function pathForTab(tab: Tab): string {
   if (tab === 'cron') return '/cron';
   if (tab === 'skills') return '/skills';
   if (tab === 'channels' || tab === 'settingsChannels') return '/channels';
+  if (tab === 'settingsAgentDefaults') return '/settings/agent-defaults';
+  if (tab === 'settingsAgentChat') return '/settings/agent-defaults';
+  if (tab === 'settingsAgentWorkspace') return '/settings/agent-defaults?tab=workspace';
+  if (tab === 'settingsAgentBrowser') return '/settings/agent-defaults?tab=browser';
+  if (tab === 'settingsAgentRuntime') return '/settings/agent-defaults?tab=runtime';
+  if (tab === 'settingsAgentTools') return '/settings/agent-defaults?tab=tools';
+  if (tab === 'settingsAgentSkills') return '/settings/agent-defaults?tab=skills';
+  if (tab === 'settingsAgentSystemPrompt') return '/settings/agent-defaults?tab=system-prompt';
   const section = tabToSettingsSection(tab);
   if (section) return `/settings/${section}`;
   if (tab === 'sessions' || tab === 'logs') {

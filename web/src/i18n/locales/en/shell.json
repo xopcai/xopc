@@ -32,7 +32,7 @@
     "settingsShares": "File sharing",
     "settingsSearch": "Web search",
     "settingsDreams": "Dreams",
-    "settingsAgentChat": "Default model & chat",
+    "settingsAgentDefaults": "Agent defaults",
     "settingsAgentWorkspace": "Workspace",
     "settingsAgentBrowser": "Browser",
     "settingsAgentRuntime": "Runtime",

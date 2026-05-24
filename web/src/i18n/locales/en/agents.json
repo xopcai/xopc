@@ -18,6 +18,16 @@
       "skills": "Skills marketplace source (use the section Save button) and default skill allowlist for all agents (use the page header Save). Install skills in the Skills library. Per-tool toggles are under Tools.",
       "systemPrompt": "Optional full replacement for the default system prompt; merges with per-agent entries (entry wins). Saves to agents.defaults."
     },
+    "defaultsTabs": {
+      "chat": "Model & chat",
+      "workspace": "Workspace",
+      "browser": "Browser",
+      "runtime": "Runtime",
+      "tools": "Tools",
+      "skills": "Skills",
+      "system-prompt": "System prompt"
+    },
+    "defaultsTabsAria": "Agent default configuration sections",
     "cardModelsTitle": "Models",
     "cardModelsSubtitle": "Chat, vision, and image generation defaults",
     "cardWorkspaceTitle": "Workspace & attachments",
@@ -273,6 +283,17 @@
     "setDefault": "Set as default",
     "editAgent": "Edit entry",
     "editAgentHint": "Updates agents.list on the gateway. Paths are expanded (~ → home).",
+    "inheritance": {
+      "title": "Defaults vs this agent",
+      "subtitle": "Empty model uses the global default. Workspace matches the default path when unchanged.",
+      "editDefaultsLink": "Edit defaults",
+      "modelLabel": "Primary model",
+      "workspaceLabel": "Workspace",
+      "badgeInherit": "Inherits default",
+      "badgeOverride": "Custom",
+      "inheritsValue": "Default: {{value}}",
+      "unset": "Not set"
+    },
     "displayName": "Display name",
     "agentDescription": "Description",
     "agentDescriptionPlaceholder": "Short summary shown on agent cards and in pickers (optional).",
