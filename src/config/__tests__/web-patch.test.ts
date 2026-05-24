@@ -41,6 +41,13 @@ describe('web-patch merges', () => {
     expect(config.goals?.judgeTimeoutMs).toBe(45_000);
   });
 
+  it('clears goals judgeModelRef when patch sends null', () => {
+    const config = { goals: { judgeModelRef: 'openai/gpt-4o-mini' } } as Config;
+    const result = mergeGoalsConfigPatch(config, { judgeModelRef: null });
+    expect(result).toEqual({ ok: true });
+    expect(config.goals?.judgeModelRef).toBeUndefined();
+  });
+
   it('merges session storage patch', () => {
     const config = { session: { dmScope: 'main' } } as Config;
     const result = mergeSessionConfigPatch(config, {
@@ -51,6 +58,20 @@ describe('web-patch merges', () => {
     expect(config.session?.dmScope).toBe('per-peer');
     expect(config.session?.storage?.pruneAfterMs).toBe(86_400_000);
     expect(config.session?.storage?.maxEntries).toBe(500);
+  });
+
+  it('clears session storage fields when patch sends null', () => {
+    const config = {
+      session: {
+        dmScope: 'main',
+        storage: { pruneAfterMs: 86_400_000, maxEntries: 500 },
+      },
+    } as Config;
+    const result = mergeSessionConfigPatch(config, {
+      storage: { pruneAfterMs: null, maxEntries: null },
+    });
+    expect(result).toEqual({ ok: true });
+    expect(config.session?.storage).toBeUndefined();
   });
 
   it('merges update auto nested fields', () => {

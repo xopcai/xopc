@@ -56,7 +56,7 @@ export async function patchGoalsConfig(state: GoalsConfigState): Promise<void> {
     body: JSON.stringify({
       goals: {
         maxTurns: state.maxTurns,
-        ...(state.judgeModelRef.trim() ? { judgeModelRef: state.judgeModelRef.trim() } : {}),
+        ...(state.judgeModelRef.trim() ? { judgeModelRef: state.judgeModelRef.trim() } : { judgeModelRef: null }),
         checklistMode: state.checklistMode,
         maxConsecutiveParseFailures: state.maxConsecutiveParseFailures,
         judgeTimeoutMs: state.judgeTimeoutSec * 1000,

@@ -28,6 +28,11 @@ export type {
 
 export type { DmPolicy, GroupPolicy, ReplyToMode, StreamMode };
 
+function clearableString(value: string): string | null {
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+}
+
 export function emptyTelegramAccount(accountId: string): TelegramAccount {
   return {
     accountId,
@@ -291,17 +296,17 @@ export async function patchChannelsSettings(state: ChannelsSettingsState): Promi
       channels: {
         telegram: {
           enabled: tg.enabled,
-          apiRoot: tg.apiRoot || undefined,
+          apiRoot: tg.apiRoot.trim() ? tg.apiRoot.trim() : null,
           debug: tg.debug,
           allowFrom: tg.allowFrom,
-          groupAllowFrom: tg.groupAllowFrom.length ? tg.groupAllowFrom : undefined,
+          groupAllowFrom: tg.groupAllowFrom.length ? tg.groupAllowFrom : null,
           dmPolicy: tg.dmPolicy,
           groupPolicy: tg.groupPolicy,
           replyToMode: tg.replyToMode,
           streamMode: tg.streamMode,
           historyLimit: tg.historyLimit,
           textChunkLimit: tg.textChunkLimit,
-          proxy: tg.proxy || undefined,
+          proxy: tg.proxy.trim() ? tg.proxy.trim() : null,
           // Always send `accounts` (including `{}`) so PATCH clears stale entries instead of omitting the field.
           accounts: tg.accounts,
         },
@@ -318,20 +323,20 @@ export async function patchChannelsSettings(state: ChannelsSettingsState): Promi
         },
         feishu: {
           enabled: fs.enabled,
-          defaultAccount: fs.defaultAccount || undefined,
+          defaultAccount: clearableString(fs.defaultAccount),
           appId: fs.appId,
-          appSecret: fs.appSecret || undefined,
+          appSecret: clearableString(fs.appSecret),
           domain: fs.domain || undefined,
           connectionMode: fs.connectionMode,
-          verificationToken: (fs as any).verificationToken?.trim() ? (fs as any).verificationToken : undefined,
-          encryptKey: (fs as any).encryptKey?.trim() ? (fs as any).encryptKey : undefined,
-          webhookHost: (fs as any).webhookHost?.trim() ? (fs as any).webhookHost : undefined,
+          verificationToken: clearableString((fs as any).verificationToken ?? ''),
+          encryptKey: clearableString((fs as any).encryptKey ?? ''),
+          webhookHost: clearableString((fs as any).webhookHost ?? ''),
           webhookPort: typeof (fs as any).webhookPort === 'number' ? (fs as any).webhookPort : undefined,
-          webhookPath: (fs as any).webhookPath?.trim() ? (fs as any).webhookPath : undefined,
+          webhookPath: clearableString((fs as any).webhookPath ?? ''),
           dmPolicy: fs.dmPolicy,
           groupPolicy: fs.groupPolicy,
           allowFrom: fs.allowFrom,
-          groupAllowFrom: fs.groupAllowFrom.length ? fs.groupAllowFrom : undefined,
+          groupAllowFrom: fs.groupAllowFrom.length ? fs.groupAllowFrom : null,
           requireMention: fs.requireMention,
           historyLimit: fs.historyLimit,
           textChunkLimit: fs.textChunkLimit,

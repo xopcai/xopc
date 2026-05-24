@@ -20,7 +20,7 @@ const CronConfigPatchSchema = z.object({
 
 const GoalsConfigPatchSchema = z.object({
   maxTurns: z.number().int().min(1).max(500).optional(),
-  judgeModelRef: z.string().optional(),
+  judgeModelRef: z.union([z.string(), z.null()]).optional(),
   checklistMode: z.boolean().optional(),
   maxConsecutiveParseFailures: z.number().int().min(1).max(20).optional(),
   judgeTimeoutMs: z.number().int().min(5_000).max(120_000).optional(),
@@ -28,8 +28,8 @@ const GoalsConfigPatchSchema = z.object({
 });
 
 const SessionStoragePatchSchema = z.object({
-  pruneAfterMs: z.number().int().min(0).optional(),
-  maxEntries: z.number().int().min(1).optional(),
+  pruneAfterMs: z.union([z.number().int().min(0), z.null()]).optional(),
+  maxEntries: z.union([z.number().int().min(1), z.null()]).optional(),
 });
 
 const SessionConfigPatchSchema = z.object({
@@ -82,6 +82,12 @@ export function mergeGoalsConfigPatch(
     ...(config.goals ?? GoalsConfigSchema.parse({})),
     ...parsed.data,
   };
+  if ('judgeModelRef' in patch) {
+    const ref = patch.judgeModelRef;
+    if (ref === null || (typeof ref === 'string' && !ref.trim())) {
+      delete config.goals?.judgeModelRef;
+    }
+  }
   return { ok: true };
 }
 
@@ -95,8 +101,19 @@ export function mergeSessionConfigPatch(
   }
   const current = config.session ?? SessionConfigSchema.parse({});
   const next = { ...current, ...parsed.data };
-  if (parsed.data.storage) {
-    next.storage = { ...(current.storage ?? {}), ...parsed.data.storage };
+  if (parsed.data.storage !== undefined) {
+    const storagePatch = parsed.data.storage;
+    const nextStorage = { ...(current.storage ?? {}) };
+    if ('pruneAfterMs' in storagePatch) {
+      if (storagePatch.pruneAfterMs === null) delete nextStorage.pruneAfterMs;
+      else if (storagePatch.pruneAfterMs !== undefined) nextStorage.pruneAfterMs = storagePatch.pruneAfterMs;
+    }
+    if ('maxEntries' in storagePatch) {
+      if (storagePatch.maxEntries === null) delete nextStorage.maxEntries;
+      else if (storagePatch.maxEntries !== undefined) nextStorage.maxEntries = storagePatch.maxEntries;
+    }
+    if (Object.keys(nextStorage).length === 0) delete next.storage;
+    else next.storage = nextStorage;
   }
   config.session = next;
   return { ok: true };
