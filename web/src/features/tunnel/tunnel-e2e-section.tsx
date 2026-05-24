@@ -27,9 +27,10 @@ type Props = {
   hasToken: boolean;
   gatewayPort: number;
   tunnelConnected: boolean;
+  nested?: boolean;
 };
 
-export function TunnelE2eSection({ hasToken, gatewayPort, tunnelConnected }: Props) {
+export function TunnelE2eSection({ hasToken, gatewayPort, tunnelConnected, nested = false }: Props) {
   const language = useLocaleStore((s) => s.language);
   const t = messages(language).tunnelSettings;
   const { data, isLoading } = useGatewayConfigSwr(hasToken);
@@ -114,6 +115,45 @@ export function TunnelE2eSection({ hasToken, gatewayPort, tunnelConnected }: Pro
     return null;
   }
 
+  const body = (
+    <>
+      {tunnelConnected ? (
+        <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+          {t.e2eConnectedWarning}
+        </p>
+      ) : null}
+
+      {dirty ? <p className="mb-3 text-xs text-amber-800 dark:text-amber-200">{t.e2eUnsaved}</p> : null}
+      {error ? <p className="mb-3 text-sm text-red-600 dark:text-red-400">{error}</p> : null}
+      <p className="mb-4 text-xs text-fg-subtle">{t.e2eRestartHint}</p>
+
+      <TunnelE2eFields t={t} form={form} gatewayPort={gatewayPort} onChange={update} />
+    </>
+  );
+
+  if (nested) {
+    return (
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <h3 className="text-sm font-semibold text-fg">{t.e2eTitle}</h3>
+            <p className="mt-0.5 text-xs text-fg-muted">{t.e2eSubtitle}</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {saveOk ? <span className="text-xs text-fg-muted">{t.e2eSaved}</span> : null}
+            <Button type="button" variant="secondary" disabled={!dirty || saving} onClick={discard}>
+              {t.e2eDiscard}
+            </Button>
+            <Button type="button" variant="primary" disabled={!dirty || saving} onClick={() => void save()}>
+              {saving ? t.e2eSaving : t.e2eSave}
+            </Button>
+          </div>
+        </div>
+        {body}
+      </div>
+    );
+  }
+
   return (
     <SettingsFormSection>
       <SettingsFormSectionHeader
@@ -132,18 +172,7 @@ export function TunnelE2eSection({ hasToken, gatewayPort, tunnelConnected }: Pro
           </div>
         }
       />
-
-      {tunnelConnected ? (
-        <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
-          {t.e2eConnectedWarning}
-        </p>
-      ) : null}
-
-      {dirty ? <p className="mb-3 text-xs text-amber-800 dark:text-amber-200">{t.e2eUnsaved}</p> : null}
-      {error ? <p className="mb-3 text-sm text-red-600 dark:text-red-400">{error}</p> : null}
-      <p className="mb-4 text-xs text-fg-subtle">{t.e2eRestartHint}</p>
-
-      <TunnelE2eFields t={t} form={form} gatewayPort={gatewayPort} onChange={update} />
+      {body}
     </SettingsFormSection>
   );
 }
