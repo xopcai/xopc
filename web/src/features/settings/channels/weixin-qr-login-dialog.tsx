@@ -1,6 +1,6 @@
 import { ExternalLink } from 'lucide-react';
 import QRCode from 'qrcode';
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -46,30 +46,43 @@ export function WeixinQrLoginDialog({
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [qrGenFailed, setQrGenFailed] = useState(false);
 
+  const startGenerationRef = useRef(0);
+  const onLoginSuccessRef = useRef(onLoginSuccess);
+  const onOpenChangeRef = useRef(onOpenChange);
+  onLoginSuccessRef.current = onLoginSuccess;
+  onOpenChangeRef.current = onOpenChange;
+
   const start = useCallback(async () => {
+    const generation = ++startGenerationRef.current;
     setError(null);
     setHint(null);
     setSessionKey(null);
     setBusy(true);
     try {
       const r = await fetchWeixinGatewayQrLoginStart();
+      if (generation !== startGenerationRef.current) return;
       setQrcodeUrl(r.qrcodeUrl);
       setSessionKey(r.sessionKey);
     } catch (e) {
+      if (generation !== startGenerationRef.current) return;
       setError(e instanceof Error ? e.message : 'Start failed');
     } finally {
-      setBusy(false);
+      if (generation === startGenerationRef.current) {
+        setBusy(false);
+      }
     }
   }, []);
 
   useEffect(() => {
     if (!open) {
+      startGenerationRef.current += 1;
       setSessionKey(null);
       setQrcodeUrl(null);
       setError(null);
       setQrDataUrl(null);
       setQrGenFailed(false);
       setHint(null);
+      setBusy(false);
       return;
     }
     void start();
@@ -101,8 +114,8 @@ export function WeixinQrLoginDialog({
           setSessionKey(null);
           if (st.ok) {
             setQrcodeUrl(null);
-            if (closeOnLoginSuccess) onOpenChange(false);
-            await onLoginSuccess();
+            if (closeOnLoginSuccess) onOpenChangeRef.current(false);
+            await onLoginSuccessRef.current();
           } else {
             setError(st.message);
             setQrcodeUrl(null);
@@ -132,7 +145,7 @@ export function WeixinQrLoginDialog({
         window.clearInterval(intervalId);
       }
     };
-  }, [sessionKey, ch.weixinQrLoginScanned, ch.weixinQrLoginSuccess, closeOnLoginSuccess, onLoginSuccess, onOpenChange]);
+  }, [sessionKey, ch.weixinQrLoginScanned, closeOnLoginSuccess]);
 
   useEffect(() => {
     if (!qrcodeUrl) {
