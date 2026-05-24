@@ -1,4 +1,5 @@
 import type { Config } from '../config/schema.js';
+import { resolveGatewayEffectiveHost } from '../config/gateway-bind.js';
 import { createLogger } from '../utils/logger.js';
 import { hasValidTunnelConsent } from './consent.js';
 import { subscribeCertStatus } from './acme-cert-store.js';
@@ -74,7 +75,7 @@ export async function configureTunnelFromGatewayConfig(
     brokerUrl,
     registrationSecret,
     autoStart: config.tunnel?.autoStart ?? false,
-    gatewayHost: gateway.host ?? '127.0.0.1',
+    gatewayHost: resolveGatewayEffectiveHost(config),
     e2e: resolveTunnelE2eConfig(config.tunnel, gatewayPort),
     frpSubdomainHost: resolveFrpSubdomainHost(brokerUrl),
   });
@@ -107,7 +108,7 @@ export async function maybeAutoStartTunnelFromConfig(
 
   const gateway = config.gateway ?? {};
   const port = gateway.port ?? 18790;
-  const host = gateway.host ?? '127.0.0.1';
+  const host = resolveGatewayEffectiveHost(config);
 
   await configureTunnelFromGatewayConfig(config);
 

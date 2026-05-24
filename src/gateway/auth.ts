@@ -5,15 +5,17 @@ import { safeEqualSecret } from './security/secret-equal.js';
 /**
  * Resolved gateway authentication configuration.
  *
- * Supports three modes:
+ * Supports four modes:
  * - `none`: no authentication (local dev only)
  * - `token`: Bearer token authentication (default)
  * - `password`: password-based authentication (for simpler setups)
+ * - `trusted-proxy`: reverse proxy terminates auth and forwards user identity headers
  */
 export interface ResolvedGatewayAuth {
-  mode: 'none' | 'token' | 'password';
+  mode: 'none' | 'token' | 'password' | 'trusted-proxy';
   token?: string;
   password?: string;
+  trustedProxy?: GatewayAuthConfig['trustedProxy'];
 }
 
 /**
@@ -27,20 +29,26 @@ export function resolveGatewayAuth(params: {
   const env = params.env ?? process.env;
   const config: GatewayAuthConfig = params.authConfig ?? { mode: 'token' };
 
-  // Environment variables take precedence
   const envMode = env.XOPC_GATEWAY_AUTH_MODE;
   const envToken = env.XOPC_GATEWAY_TOKEN;
   const envPassword = env.XOPC_GATEWAY_PASSWORD;
 
-  // Resolve mode
   let mode: ResolvedGatewayAuth['mode'] = 'token';
-  if (envMode === 'none' || envMode === 'token' || envMode === 'password') {
+  if (
+    envMode === 'none' ||
+    envMode === 'token' ||
+    envMode === 'password' ||
+    envMode === 'trusted-proxy'
+  ) {
     mode = envMode;
-  } else if (config.mode === 'none' || config.mode === 'password') {
+  } else if (
+    config.mode === 'none' ||
+    config.mode === 'password' ||
+    config.mode === 'trusted-proxy'
+  ) {
     mode = config.mode;
   }
 
-  // Ambiguity detection: reject conflicting credential types
   const hasToken = Boolean(envToken || config.token);
   const hasPassword = Boolean(envPassword || config.password);
   if (hasToken && hasPassword) {
@@ -50,7 +58,20 @@ export function resolveGatewayAuth(params: {
     );
   }
 
-  // Resolve token
+  if (mode === 'trusted-proxy' && hasToken) {
+    throw new Error(
+      'Invalid config: gateway.auth.mode is trusted-proxy but a shared token is also configured. ' +
+      'Remove gateway.auth.token / XOPC_GATEWAY_TOKEN because trusted-proxy and token auth are mutually exclusive.',
+    );
+  }
+
+  if (mode === 'trusted-proxy') {
+    return {
+      mode: 'trusted-proxy',
+      trustedProxy: config.trustedProxy,
+    };
+  }
+
   let token: string | undefined;
   if (mode === 'token') {
     if (envToken) {
@@ -58,12 +79,10 @@ export function resolveGatewayAuth(params: {
     } else if (config.token) {
       token = config.token;
     } else {
-      // Auto-generate token if not provided
       token = crypto.randomBytes(24).toString('hex');
     }
   }
 
-  // Resolve password
   let password: string | undefined;
   if (mode === 'password') {
     if (envPassword) {
@@ -92,6 +111,20 @@ export function assertGatewayAuthConfigured(auth: ResolvedGatewayAuth): void {
       'Set gateway.auth.password in config or XOPC_GATEWAY_PASSWORD environment variable.',
     );
   }
+  if (auth.mode === 'trusted-proxy') {
+    if (!auth.trustedProxy) {
+      throw new Error(
+        'Gateway auth mode is trusted-proxy, but no trustedProxy config was provided ' +
+        '(set gateway.auth.trustedProxy).',
+      );
+    }
+    if (!auth.trustedProxy.userHeader || auth.trustedProxy.userHeader.trim() === '') {
+      throw new Error(
+        'Gateway auth mode is trusted-proxy, but trustedProxy.userHeader is empty ' +
+        '(set gateway.auth.trustedProxy.userHeader).',
+      );
+    }
+  }
 }
 
 /**
@@ -101,7 +134,7 @@ export function assertGatewayAuthConfigured(auth: ResolvedGatewayAuth): void {
  * from the appropriate transport (header, query param, etc.).
  */
 export function validateToken(auth: ResolvedGatewayAuth, providedCredential?: string | null): boolean {
-  if (auth.mode === 'none') {
+  if (auth.mode === 'none' || auth.mode === 'trusted-proxy') {
     return true;
   }
 
@@ -114,7 +147,6 @@ export function validateToken(auth: ResolvedGatewayAuth, providedCredential?: st
     return safeEqualSecret(auth.password, providedCredential);
   }
 
-  // Default: token mode
   if (!auth.token) return false;
   return safeEqualSecret(auth.token, providedCredential);
 }
@@ -126,7 +158,6 @@ export function validateToken(auth: ResolvedGatewayAuth, providedCredential?: st
 export function extractToken(headers?: Record<string, string | string[] | undefined>): string | undefined {
   if (!headers) return undefined;
 
-  // Authorization: Bearer <token>
   const authHeader = headers.authorization;
   if (authHeader) {
     const value = Array.isArray(authHeader) ? authHeader[0] : authHeader;
@@ -135,7 +166,6 @@ export function extractToken(headers?: Record<string, string | string[] | undefi
     }
   }
 
-  // X-Api-Key: <token>
   const apiKey = headers['x-api-key'];
   if (apiKey) {
     return Array.isArray(apiKey) ? apiKey[0] : apiKey;

@@ -59,7 +59,8 @@ function createGatewayCommand(_ctx: CLIContext): Command {
       formatExamples([
         'xopc gateway                   # Start gateway (foreground, default)',
         'xopc gateway --background      # Start gateway in background',
-        'xopc gateway --host 0.0.0.0    # Listen on all interfaces (LAN / mobile)',
+        'xopc gateway --bind lan          # Listen on all interfaces (LAN)',
+        'xopc gateway --host 0.0.0.0      # Deprecated: same as --bind lan',
         'xopc gateway --port 8080       # Custom port',
         'xopc gateway --force           # Force kill existing process',
         'xopc gateway stop             # Stop gateway',
@@ -74,8 +75,12 @@ function createGatewayCommand(_ctx: CLIContext): Command {
       ])
     )
     .option(
+      '--bind <mode>',
+      'Bind mode: loopback | lan | auto | custom | tailnet (preferred over --host)',
+    )
+    .option(
       '--host <address>',
-      'Host to bind to (defaults to gateway.host in config, else 127.0.0.1). Use 0.0.0.0 for LAN access.',
+      'Deprecated: use --bind. Maps legacy host strings to bind modes.',
     )
     .option('--port <number>', 'Port to listen on (defaults to gateway.port in config, else 18790)')
     .option('--token <token>', 'Authentication token')
@@ -106,21 +111,70 @@ function createGatewayCommand(_ctx: CLIContext): Command {
       const { checkPortAvailable, forceFreePortAndWait } = gatewayPorts;
       const config = loadConfig(ctx.configPath);
 
+      const bindFromFlagRaw =
+        typeof options.bind === 'string' && options.bind.trim().length > 0
+          ? options.bind.trim().toLowerCase()
+          : undefined;
+      const bindModes = new Set(['auto', 'loopback', 'lan', 'tailnet', 'custom']);
+      const bindFromFlag = bindFromFlagRaw && bindModes.has(bindFromFlagRaw)
+        ? (bindFromFlagRaw as import('../../config/schema.js').GatewayBindMode)
+        : undefined;
+      if (bindFromFlagRaw && !bindFromFlag) {
+        console.error(`Invalid --bind mode "${bindFromFlagRaw}". Use: loopback, lan, auto, custom, tailnet.`);
+        process.exit(1);
+      }
+
       const hostFromFlag =
         typeof options.host === 'string' && options.host.trim().length > 0 ? options.host.trim() : undefined;
+      if (hostFromFlag && !bindFromFlag) {
+        console.warn('Warning: `--host` is deprecated; prefer `--bind` (e.g. `--bind lan`).');
+      }
+
       const portRaw = options.port as string | number | undefined;
       const portFromFlag =
         portRaw !== undefined && portRaw !== null && String(portRaw).trim().length > 0
           ? parseInt(String(portRaw), 10)
           : undefined;
 
-      const host = hostFromFlag ?? config.gateway.host ?? '127.0.0.1';
+      const { resolveGatewayListenPlan } = await import('../../gateway/listen.js');
+      const listenPlan = resolveGatewayListenPlan({
+        cfg: config,
+        bindOverride: bindFromFlag,
+        hostOverride: hostFromFlag,
+      });
+      const host = listenPlan.bindHost;
       const port =
         portFromFlag !== undefined && Number.isFinite(portFromFlag)
           ? portFromFlag
           : (typeof config.gateway.port === 'number' ? config.gateway.port : 18790);
 
       await ensureGatewayReady(ctx.configPath, ctx.workspacePath, host, port);
+
+      const effectiveConfig = loadConfig(ctx.configPath);
+      const {
+        resolveGatewayAuth,
+        assertGatewayAuthConfigured,
+      } = await import('../../gateway/auth.js');
+      const { assertGatewayRuntimeConfig } = await import('../../gateway/runtime-config.js');
+
+      let auth = resolveGatewayAuth({ authConfig: effectiveConfig.gateway?.auth });
+      if (typeof options.token === 'string' && options.token.trim().length > 0) {
+        auth = { mode: 'token', token: options.token.trim() };
+      }
+      try {
+        assertGatewayAuthConfigured(auth);
+        assertGatewayRuntimeConfig({
+          cfg: effectiveConfig,
+          auth,
+          bindOverride: bindFromFlag,
+          hostOverride: hostFromFlag,
+          port,
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error(`Gateway refused to start: ${message}`);
+        process.exit(1);
+      }
 
       // --force: Force free port
       if (options.force) {
@@ -211,7 +265,10 @@ function createGatewayCommand(_ctx: CLIContext): Command {
         start: async () => {
           const { GatewayServer } = await import('../../gateway/index.js');
           const server = new GatewayServer({
-            host,
+            bindHost: listenPlan.bindHost,
+            bind: listenPlan.bindMode,
+            customBindHost: listenPlan.customBindHost,
+            host: hostFromFlag,
             port,
             token: options.token || config?.gateway?.auth?.token,
             verbose: ctx.isVerbose,

@@ -1,3 +1,5 @@
+import type { GatewayBindMode } from '../../config/schema.js';
+
 export interface ServiceEvent {
   id: string;
   type: string;
@@ -33,6 +35,11 @@ export interface GatewayChannelStartupPhase2Metrics {
 
 export interface GatewayServiceConfig {
   configPath?: string;
+  /** CLI `--bind` override for startup security guards. */
+  listenBind?: GatewayBindMode;
+  /** CLI `--host` override (legacy) for startup security guards. */
+  hostOverride?: string;
+  listenCustomBindHost?: string;
   enableHotReload?: boolean;
   /**
    * When true (GatewayServer), outbound channel connects that declare

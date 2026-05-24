@@ -1,12 +1,17 @@
 import { createMiddleware } from 'hono/factory';
+import type { Context } from 'hono';
+import { getConnInfo } from '@hono/node-server/conninfo';
 import type { GatewayAuthConfig } from '../../../config/schema.js';
 import {
-  getAuthFailureRateLimiter,
   getClientIpFromHeaders,
   isAuthRateLimitGloballyDisabled,
   resolveAuthRateLimitConfig,
+  resolveAuthRateLimitTracking,
 } from '../../auth-rate-limit.js';
+import type { ResolvedGatewayAuth } from '../../auth.js';
+import { resolveClientIpFromRequest } from '../../client-ip.js';
 import { safeEqualSecret } from '../../security/secret-equal.js';
+import { authorizeTrustedProxy } from '../../trusted-proxy.js';
 import { createLogger } from '../../../utils/logger.js';
 
 const log = createLogger('Hono:Auth');
@@ -15,6 +20,11 @@ export interface AuthConfig {
   token?: string;
   /** Current gateway auth from config (for rate-limit settings); optional. */
   getGatewayAuth?: () => GatewayAuthConfig | undefined;
+  getResolvedAuth?: () => ResolvedGatewayAuth;
+  getTrustedProxyContext?: () => {
+    trustedProxies?: string[];
+    allowRealIpFallback?: boolean;
+  };
 }
 
 /**
@@ -59,29 +69,128 @@ function isQueryTokenAllowedPath(path: string): boolean {
   return QUERY_TOKEN_ALLOWED_PATHS.has(path) || path.startsWith('/api/events');
 }
 
+function resolveRemoteAddress(c: Context): string | undefined {
+  try {
+    return getConnInfo(c).remote.address;
+  } catch {
+    return undefined;
+  }
+}
+
+function resolveMiddlewareClientIp(
+  c: Context,
+  trustedProxies?: string[],
+  allowRealIpFallback?: boolean,
+): string {
+  if (trustedProxies?.length) {
+    return resolveClientIpFromRequest({
+      remoteAddress: resolveRemoteAddress(c),
+      getHeader: (name) => c.req.header(name),
+      trustedProxies,
+      allowRealIpFallback,
+    });
+  }
+  return getClientIpFromHeaders({
+    get: (name: string) => c.req.header(name) ?? undefined,
+  });
+}
+
 /**
  * Create auth middleware for HTTP routes
  */
 export function auth(config?: AuthConfig) {
-  const { token, getGatewayAuth } = config || {};
-  const limiter = getAuthFailureRateLimiter();
+  const { token, getGatewayAuth, getResolvedAuth, getTrustedProxyContext } = config || {};
 
   return createMiddleware(async (c, next) => {
-    // If no token configured, allow all
-    if (!token) {
+    const resolvedAuth = getResolvedAuth?.();
+    const authMode = resolvedAuth?.mode ?? (token ? 'token' : 'none');
+
+    if (authMode === 'trusted-proxy') {
+      const proxyContext = getTrustedProxyContext?.();
+      const trustedProxies = proxyContext?.trustedProxies;
+      const trustedProxyConfig = resolvedAuth?.trustedProxy;
+
+      const rlInput = getGatewayAuth?.()?.rateLimit;
+      const rlCfg = resolveAuthRateLimitConfig(rlInput);
+      const rateLimitActive = rlCfg.enabled && !isAuthRateLimitGloballyDisabled();
+      const clientIp = resolveMiddlewareClientIp(
+        c,
+        trustedProxies,
+        proxyContext?.allowRealIpFallback,
+      );
+      const origin = c.req.header('origin');
+      const tracking = resolveAuthRateLimitTracking({ clientIp, origin, cfg: rlCfg });
+      const { limiter, key: rateLimitKey, cfg: activeRlCfg } = tracking;
+
+      if (!trustedProxyConfig) {
+        if (rateLimitActive) {
+          limiter.recordFailure(rateLimitKey, activeRlCfg);
+        }
+        log.warn(
+          { path: c.req.path, method: c.req.method, clientIp, reason: 'trusted_proxy_config_missing' },
+          'HTTP auth rejected: trusted-proxy config missing',
+        );
+        return c.json({ error: 'Unauthorized', message: 'Trusted-proxy auth is not configured' }, 401);
+      }
+
+      const result = authorizeTrustedProxy({
+        remoteAddress: resolveRemoteAddress(c),
+        getHeader: (name) => c.req.header(name),
+        trustedProxies,
+        trustedProxyConfig,
+      });
+
+      if (result.ok) {
+        if (rateLimitActive) {
+          limiter.recordSuccess(rateLimitKey);
+        }
+        await next();
+        return;
+      }
+
+      if (result.ok === false) {
+        if (rateLimitActive) {
+          const blocked = limiter.checkBlocked(rateLimitKey, activeRlCfg);
+          if (blocked.blocked) {
+            c.header('Retry-After', String(blocked.retryAfterSec));
+            return c.json(
+              {
+                error: 'Too Many Requests',
+                message: 'Too many authentication attempts',
+                retryAfter: blocked.retryAfterSec,
+              },
+              429,
+            );
+          }
+          limiter.recordFailure(rateLimitKey, activeRlCfg);
+        }
+
+        log.warn(
+          { path: c.req.path, method: c.req.method, clientIp, reason: result.reason },
+          'HTTP auth rejected: trusted-proxy validation failed',
+        );
+        return c.json({ error: 'Unauthorized', message: 'Trusted-proxy authentication failed' }, 401);
+      }
+    }
+
+    if (authMode === 'none' || !token) {
       return next();
     }
 
     const rlInput = getGatewayAuth?.()?.rateLimit;
     const rlCfg = resolveAuthRateLimitConfig(rlInput);
-    const rateLimitActive =
-      rlCfg.enabled && !isAuthRateLimitGloballyDisabled();
+    const rateLimitActive = rlCfg.enabled && !isAuthRateLimitGloballyDisabled();
 
-    const clientIp = getClientIpFromHeaders({
-      get: (name: string) => c.req.header(name) ?? undefined,
-    });
+    const proxyContext = getTrustedProxyContext?.();
+    const clientIp = resolveMiddlewareClientIp(
+      c,
+      proxyContext?.trustedProxies,
+      proxyContext?.allowRealIpFallback,
+    );
+    const origin = c.req.header('origin');
+    const tracking = resolveAuthRateLimitTracking({ clientIp, origin, cfg: rlCfg });
+    const { limiter, key: rateLimitKey, cfg: activeRlCfg } = tracking;
 
-    // Try header first, then query param (only for SSE/WS paths)
     const authHeader = extractTokenFromHeader(c.req.header('authorization'));
     const requestPath = new URL(c.req.url).pathname;
     const queryToken = isQueryTokenAllowedPath(requestPath)
@@ -97,18 +206,16 @@ export function auth(config?: AuthConfig) {
 
     const providedToken = authHeader || queryToken;
 
-    // Allow valid credentials to pass immediately and clear historical failures for this client.
-    // This avoids lockout after a user fixes token configuration.
     if (providedToken && validateToken(providedToken, token)) {
       if (rateLimitActive) {
-        limiter.recordSuccess(clientIp);
+        limiter.recordSuccess(rateLimitKey);
       }
       await next();
       return;
     }
 
     if (rateLimitActive) {
-      const blocked = limiter.checkBlocked(clientIp, rlCfg);
+      const blocked = limiter.checkBlocked(rateLimitKey, activeRlCfg);
       if (blocked.blocked) {
         c.header('Retry-After', String(blocked.retryAfterSec));
         return c.json(
@@ -124,7 +231,7 @@ export function auth(config?: AuthConfig) {
 
     if (!providedToken) {
       if (rateLimitActive) {
-        limiter.recordFailure(clientIp, rlCfg);
+        limiter.recordFailure(rateLimitKey, activeRlCfg);
       }
       log.warn(
         { path: c.req.path, method: c.req.method, clientIp, reason: 'missing_token' },
@@ -135,7 +242,7 @@ export function auth(config?: AuthConfig) {
 
     if (!validateToken(providedToken, token)) {
       if (rateLimitActive) {
-        limiter.recordFailure(clientIp, rlCfg);
+        limiter.recordFailure(rateLimitKey, activeRlCfg);
       }
       log.warn(
         { path: c.req.path, method: c.req.method, clientIp, reason: 'invalid_token' },
@@ -159,12 +266,10 @@ export function validateWebSocketAuth(
   authHeader: string | null,
   expectedToken?: string
 ): WebSocketAuthResult {
-  // If no token configured, allow all
   if (!expectedToken) {
     return { valid: true };
   }
 
-  // Extract token from query param or header
   const queryToken = url.searchParams.get('token');
   const headerToken = extractTokenFromHeader(authHeader);
 

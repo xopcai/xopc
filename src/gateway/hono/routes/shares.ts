@@ -13,6 +13,7 @@ import { logShareAudit } from '../../../share/share-audit.js';
 import { renderShareLandingPage, renderShareExpiredPage } from '../../../share/share-landing.js';
 import type { ShareExpiredReason } from '../../../share/share-landing.js';
 import type { ShareConfig } from '../../../share/share-types.js';
+import { resolveGatewayEffectiveHost } from '../../../config/gateway-bind.js';
 import { SHARE_CONFIG_DEFAULTS } from '../../../share/share-types.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 import type { GatewayService } from '../../service.js';
@@ -20,7 +21,7 @@ import type { GatewayService } from '../../service.js';
 function getShareUrlContext(service: GatewayService) {
   const gateway = service.currentConfig.gateway;
   return {
-    gatewayHost: gateway.host ?? '127.0.0.1',
+    gatewayHost: resolveGatewayEffectiveHost(service.currentConfig),
     gatewayPort: gateway.port ?? 18790,
   };
 }

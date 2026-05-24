@@ -131,7 +131,7 @@ async function runOnboard(
     gatewayAuth?.mode === 'token' &&
     typeof gatewayAuth?.token === 'string' &&
     gatewayAuth.token.length > 0;
-  const host = (config as any)?.gateway?.host || '0.0.0.0';
+  const host = (config as any)?.gateway?.host || '127.0.0.1';
   const port = (config as any)?.gateway?.port ?? 18790;
   const displayHost = host === '0.0.0.0' ? 'localhost' : host;
   const gwToken = gatewayConfigured ? (gatewayAuth.token as string) : undefined;

@@ -45,14 +45,29 @@ export function printSummary(results: CheckResult[]): void {
   );
 }
 
-export function printResults(results: CheckResult[]): void {
+export function printResults(results: CheckResult[], opts?: { security?: boolean }): void {
   console.log('');
-  console.log(colors.bold('xopc doctor'));
+  console.log(colors.bold(opts?.security ? 'xopc doctor --security' : 'xopc doctor'));
   console.log('');
   for (const r of results) {
     console.log(formatCheckLine(r));
-    for (const line of formatHints(r.hints)) {
-      console.log(line);
+    if (opts?.security && r.findings?.length) {
+      for (const finding of r.findings) {
+        const icon = finding.severity === 'critical' ? '✗' : finding.severity === 'warn' ? '⚠' : '·';
+        const colored = statusColor(
+          finding.severity === 'critical' ? 'fail' : finding.severity === 'warn' ? 'warn' : 'pass',
+          icon,
+        );
+        console.log(`    ${colored} ${colors.bold(finding.checkId)} ${finding.title}`);
+        console.log(`      ${colors.gray(finding.detail)}`);
+        if (finding.remediation) {
+          console.log(`      ${colors.gray('→')} ${finding.remediation}`);
+        }
+      }
+    } else {
+      for (const line of formatHints(r.hints)) {
+        console.log(line);
+      }
     }
   }
   printSummary(results);
@@ -70,6 +85,7 @@ export function printJsonResults(results: CheckResult[]): void {
       message: r.message,
       hints: r.hints,
       fixed: r.fixed ?? false,
+      ...(r.findings ? { findings: r.findings } : {}),
     })),
   };
   console.log(JSON.stringify(payload, null, 2));

@@ -2,15 +2,26 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createHonoApp, isExtensionGatewayUiAssetPath } from '../hono/app.js';
 import type { GatewayService } from '../service.js';
 import { GatewayConfigSchema } from '../../config/schema.js';
-import { getAuthFailureRateLimiter } from '../auth-rate-limit.js';
+import { getAuthFailureRateLimiter, resetAuthRateLimitersForTests } from '../auth-rate-limit.js';
 
 // Mock GatewayService for testing
 function createMockService(config: any = {}): GatewayService {
+  const gatewayAuth = config.gateway?.auth ?? { mode: 'token', token: 'test-token' };
+  const resolvedAuth =
+    gatewayAuth.mode === 'trusted-proxy'
+      ? { mode: 'trusted-proxy' as const, trustedProxy: gatewayAuth.trustedProxy }
+      : gatewayAuth.mode === 'none'
+        ? { mode: 'none' as const }
+        : gatewayAuth.mode === 'password'
+          ? { mode: 'password' as const, password: gatewayAuth.password ?? 'test-password' }
+          : { mode: 'token' as const, token: gatewayAuth.token ?? 'test-token' };
+
   return {
     currentConfig: {
       gateway: {
         port: 18790,
         corsOrigins: [],
+        auth: gatewayAuth,
         ...config.gateway,
       },
       agents: { defaults: {} },
@@ -19,8 +30,9 @@ function createMockService(config: any = {}): GatewayService {
     },
     getHealth: () => ({ status: 'healthy', version: 'test', channels: [], uptime: 0 }),
     getChannelsStatus: () => [],
-    getAuthToken: () => 'test-token',
-    getAuthMode: () => 'token',
+    getAuthToken: () => (resolvedAuth.mode === 'token' ? resolvedAuth.token : undefined),
+    getAuthMode: () => resolvedAuth.mode,
+    getResolvedAuth: () => resolvedAuth,
     sessionManagerInstance: {} as any,
     cronServiceInstance: {} as any,
     emit: () => {},
@@ -147,6 +159,45 @@ describe('Gateway Security Fixes', () => {
       });
       expect(res.headers.get('Access-Control-Allow-Origin')).toBe('https://myapp.com');
     });
+
+    it('does not allow host-header origin fallback by default', async () => {
+      const service = createMockService({
+        gateway: {
+          port: 18790,
+          corsOrigins: ['http://localhost:18790'],
+        },
+      });
+      const app = createHonoApp({ service, token: 'test' });
+
+      const res = await app.request('/api/config', {
+        headers: {
+          Origin: 'http://evil.example:18790',
+          Host: 'evil.example:18790',
+          Authorization: 'Bearer test',
+        },
+      });
+      expect(res.status).toBe(403);
+    });
+
+    it('allows host-header origin fallback when explicitly enabled', async () => {
+      const service = createMockService({
+        gateway: {
+          port: 18790,
+          corsOrigins: ['http://localhost:18790'],
+          dangerouslyAllowHostHeaderOriginFallback: true,
+        },
+      });
+      const app = createHonoApp({ service, token: 'test' });
+
+      const res = await app.request('/api/config', {
+        headers: {
+          Origin: 'http://192.168.1.5:18790',
+          Host: '192.168.1.5:18790',
+          Authorization: 'Bearer test',
+        },
+      });
+      expect(res.status).not.toBe(403);
+    });
   });
 
   describe('FIX-3: Body Size Limit', () => {
@@ -199,10 +250,10 @@ describe('Gateway Security Fixes', () => {
 
   describe('Auth failure rate limiting', () => {
     beforeEach(() => {
-      getAuthFailureRateLimiter().resetForTests();
+      resetAuthRateLimitersForTests();
     });
     afterEach(() => {
-      getAuthFailureRateLimiter().resetForTests();
+      resetAuthRateLimitersForTests();
     });
 
     it('returns 429 after repeated invalid gateway tokens', async () => {
@@ -236,6 +287,33 @@ describe('Gateway Security Fixes', () => {
         headers: { Authorization: 'Bearer wrong' },
       });
       expect(r3.status).toBe(429);
+    });
+
+    it('rate limits browser-origin auth failures on loopback', async () => {
+      const service = createMockService({
+        gateway: {
+          auth: {
+            mode: 'token',
+            token: 'real',
+            rateLimit: {
+              enabled: true,
+              maxAttempts: 2,
+              windowMs: 60_000,
+              blockDurationMs: 60_000,
+              exemptLoopback: true,
+            },
+          },
+        },
+      });
+      const app = createHonoApp({ service, token: 'real' });
+      const headers = {
+        Origin: 'http://localhost:18790',
+        Authorization: 'Bearer wrong',
+      };
+
+      expect((await app.request('/api/config', { headers })).status).toBe(401);
+      expect((await app.request('/api/config', { headers })).status).toBe(401);
+      expect((await app.request('/api/config', { headers })).status).toBe(429);
     });
 
     it('allows immediate recovery with a valid token after block', async () => {
@@ -316,8 +394,9 @@ describe('Gateway Security Fixes', () => {
   });
 
   describe('FIX-4: Default Host Binding', () => {
-    it('should default to loopback address in config', () => {
+    it('should default to loopback bind in config', () => {
       const defaults = GatewayConfigSchema.parse(undefined);
+      expect(defaults.bind).toBe('loopback');
       expect(defaults.host).toBe('127.0.0.1');
     });
 

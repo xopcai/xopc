@@ -490,15 +490,40 @@ export const GatewayAuthRateLimitSchema = z
     maxAttempts: z.number().int().min(1).default(5),
     windowMs: z.number().default(900_000),
     blockDurationMs: z.number().default(300_000),
+    /** OpenClaw alias for blockDurationMs. */
+    lockoutMs: z.number().optional(),
+    /** Skip rate limiting for loopback client IPs (default true). Browser Origin requests never exempt. */
+    exemptLoopback: z.boolean().default(true),
   })
   .optional();
 
+export const GatewaySecuritySchema = z
+  .object({
+    /** When true, non-loopback binds require explicit gateway.auth.rateLimit configuration. */
+    strict: z.boolean().optional(),
+  })
+  .optional();
+
+export const GatewayTrustedProxySchema = z
+  .object({
+    /** Header set by the reverse proxy with the authenticated user identity. */
+    userHeader: z.string().min(1),
+    /** Additional headers that must be present (e.g. proxy auth markers). */
+    requiredHeaders: z.array(z.string()).optional(),
+    /** When non-empty, only these user identities are allowed. */
+    allowUsers: z.array(z.string()).optional(),
+    /** Allow trusted-proxy auth when the TCP source is loopback (same-host reverse proxy). */
+    allowLoopback: z.boolean().optional(),
+  })
+  .strict();
+
 export const GatewayAuthSchema = z
   .object({
-    mode: z.enum(['none', 'token', 'password']).default('token'),
+    mode: z.enum(['none', 'token', 'password', 'trusted-proxy']).default('token'),
     token: z.string().optional(),
     password: z.string().optional(),
     rateLimit: GatewayAuthRateLimitSchema,
+    trustedProxy: GatewayTrustedProxySchema.optional(),
   })
   .default({
     mode: 'token',
@@ -567,13 +592,27 @@ export const TunnelConfigSchema = z
 
 export type TunnelConfig = z.infer<typeof TunnelConfigSchema>;
 
+export const GatewayBindModeSchema = z.enum(['auto', 'loopback', 'lan', 'tailnet', 'custom']);
+
 export const GatewayConfigSchema = z.object({
+  /** Semantic bind mode (preferred over raw `host`). */
+  bind: GatewayBindModeSchema.optional(),
+  /** IPv4 listen address when `bind` is `custom`. */
+  customBindHost: z.string().optional(),
+  /** @deprecated Use `bind` + `customBindHost`. Kept for backward compatibility. */
   host: z.string().optional(),
   port: z.number().optional(),
   auth: GatewayAuthSchema.optional(),
   heartbeat: HeartbeatConfigSchema.optional(),
   maxSseConnections: z.number().optional(),
   corsOrigins: z.array(z.string()).optional(),
+  /** Dangerous: allow browser Origin to match the HTTP Host header when not in corsOrigins. */
+  dangerouslyAllowHostHeaderOriginFallback: z.boolean().optional(),
+  /** CIDRs or exact IPs of reverse proxies allowed to terminate auth (trusted-proxy mode). */
+  trustedProxies: z.array(z.string()).optional(),
+  /** When true, fall back to X-Real-IP if X-Forwarded-For chain parsing fails. Default false (fail closed). */
+  allowRealIpFallback: z.boolean().optional(),
+  security: GatewaySecuritySchema,
   /**
    * How channel `start()` is split around HTTP listen when using `GatewayServer`.
    * - `auto` (default): defer ids come from channel plugin `meta.deferConnectUntilAfterListen` + enabled config.
@@ -606,6 +645,7 @@ export const GatewayConfigSchema = z.object({
     ]),
   }).optional(),
 }).default({
+  bind: 'loopback',
   host: '127.0.0.1',
   port: 18790,
   auth: {
@@ -1085,7 +1125,9 @@ export const ConfigSchema = z.object({
 export type Config = z.infer<typeof ConfigSchema>;
 export type AgentDefaults = z.infer<typeof AgentDefaultsSchema>;
 export type GatewayAuthConfig = z.infer<typeof GatewayAuthSchema>;
+export type GatewayTrustedProxyConfig = z.infer<typeof GatewayTrustedProxySchema>;
 export type GatewayAuthRateLimitConfig = z.infer<typeof GatewayAuthRateLimitSchema>;
+export type GatewayBindMode = z.infer<typeof GatewayBindModeSchema>;
 export type STTConfig = z.infer<typeof STTConfigSchema>;
 export type TTSConfig = z.infer<typeof TTSConfigSchema>;
 
