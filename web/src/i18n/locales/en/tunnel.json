@@ -28,6 +28,7 @@
     "frpcDownloading": "Downloading frpc…",
     "frpcDownloadingPercent": "Downloading frpc… {{percent}}%",
     "frpcDownloadingBytes": "Downloading frpc… {{received}}",
+    "frpcDownloadingUrlLabel": "Download URL",
     "frpcExtracting": "Extracting frpc…",
     "startProgressTitle": "Startup progress",
     "startProgressHint": "First start can take 1–3 minutes (HTTPS certificate). The public URL appears before the tunnel is fully ready.",

@@ -12,6 +12,7 @@ export type TunnelStatusResponse = {
   lastError: string | null;
   frpcDownload?: {
     phase: 'downloading' | 'extracting';
+    url?: string;
     bytesReceived?: number;
     totalBytes?: number | null;
     percent?: number | null;
