@@ -48,6 +48,7 @@ export interface ElectronShellAPI {
 
 export interface ElectronClipboardAPI {
   writeText(text: string): Promise<boolean>;
+  readText(): Promise<string>;
 }
 
 export type TccTriState = 'granted' | 'denied' | 'unknown';

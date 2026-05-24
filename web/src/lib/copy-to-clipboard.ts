@@ -46,3 +46,25 @@ export async function copyTextToClipboard(text: string): Promise<boolean> {
   }
   return false;
 }
+
+/** Reads plain text from the system clipboard (Electron main process when available). */
+export async function readTextFromClipboard(): Promise<string | null> {
+  try {
+    const electronRead =
+      typeof window !== 'undefined' ? window.electronAPI?.clipboard?.readText : undefined;
+    if (electronRead) {
+      return await electronRead();
+    }
+  } catch {
+    /* fall through */
+  }
+
+  try {
+    if (typeof navigator !== 'undefined' && navigator.clipboard?.readText) {
+      return await navigator.clipboard.readText();
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
