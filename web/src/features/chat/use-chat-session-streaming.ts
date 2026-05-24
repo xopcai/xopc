@@ -518,7 +518,8 @@ export function useChatSessionStreaming(deps: {
         const msg = prev[messageIndex];
         if (!msg || !isUiUserMessage(msg.role)) return prev;
         for (let j = messageIndex + 1; j < prev.length; j++) {
-          if (isUiUserMessage(prev[j]!.role)) return prev;
+          const nextMsg = prev[j];
+          if (nextMsg && isUiUserMessage(nextMsg.role)) return prev;
         }
 
         const text = extractUserMessagePlainText(msg.content);

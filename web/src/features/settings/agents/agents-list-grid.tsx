@@ -7,6 +7,7 @@ import {
   agentListDisplayName,
 } from '@/features/settings/agents/agent-display-names';
 import { cn } from '@/lib/cn';
+import { interaction } from '@/lib/interaction';
 import type { AgentsSettingsMessages } from '@/i18n/messages';
 
 function filterAgents(agents: GatewayAgentRow[], query: string, a: AgentsSettingsMessages): GatewayAgentRow[] {
@@ -40,6 +41,7 @@ function NewAgentCard(props: {
         'hover:border-accent/50 hover:bg-surface-hover hover:text-fg',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
         'disabled:pointer-events-none disabled:opacity-50',
+        interaction.pressCard,
       )}
     >
       <Plus className="size-8 shrink-0 opacity-80" strokeWidth={1.75} aria-hidden />
@@ -102,6 +104,7 @@ export function AgentsListGrid(props: {
                     'flex shrink-0 w-full flex-col gap-2 text-left transition-colors',
                     'rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
                     'disabled:pointer-events-none disabled:opacity-50',
+                    interaction.pressCard,
                   )}
                 >
                   <div className="flex items-start gap-3">
@@ -145,6 +148,7 @@ export function AgentsListGrid(props: {
                     'hover:bg-accent/15',
                     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
                     'disabled:pointer-events-none disabled:opacity-50',
+                    interaction.press,
                   )}
                 >
                   <MessageSquarePlus className="size-4 shrink-0" strokeWidth={2} aria-hidden />

@@ -26,6 +26,7 @@ import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 import { settingsInputFocusClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
+import { interaction } from '@/lib/interaction';
 import { messages } from '@/i18n/messages';
 import { docsGuidePageUrl } from '@/navigation';
 import { useGatewayStore } from '@/stores/gateway-store';
@@ -393,7 +394,10 @@ export function ProvidersSettingsPanel() {
                   id={`${panelId}-trigger`}
                   aria-expanded={expanded}
                   aria-controls={panelId}
-                  className="flex w-full items-center justify-between gap-2 border-b border-edge-subtle px-4 py-3 text-left transition-colors hover:bg-surface-hover/60 dark:border-edge-subtle"
+                  className={cn(
+                    'flex w-full items-center justify-between gap-2 border-b border-edge-subtle px-4 py-3 text-left transition-colors hover:bg-surface-hover/60 dark:border-edge-subtle',
+                    interaction.pressCard,
+                  )}
                   onClick={() => toggleCat(cat)}
                 >
                   <span className="flex min-w-0 items-center gap-2 text-sm font-semibold text-fg">

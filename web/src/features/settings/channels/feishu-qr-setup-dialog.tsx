@@ -9,6 +9,7 @@ import {
 } from '@/features/settings/channels-config-api';
 import type { ChannelsSettingsMessages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
+import { interaction } from '@/lib/interaction';
 
 import { ChannelsSettingsDialogFooter } from './channels-settings-dialog-footer';
 import { ChannelSettingsShell, type ChannelSettingsPresentation } from './channel-settings-shell';
@@ -277,6 +278,7 @@ export function FeishuQrSetupDialog({
                   disabled={busy}
                   className={cn(
                     'min-w-0 flex-1 rounded-full px-3 py-2 text-center text-sm font-medium transition-colors',
+                    interaction.press,
                     domain === 'feishu'
                       ? 'bg-surface-panel text-fg shadow-sm dark:bg-surface-panel'
                       : 'text-fg-muted hover:text-fg',
@@ -290,6 +292,7 @@ export function FeishuQrSetupDialog({
                   disabled={busy}
                   className={cn(
                     'min-w-0 flex-1 rounded-full px-3 py-2 text-center text-sm font-medium transition-colors',
+                    interaction.press,
                     domain === 'lark'
                       ? 'bg-surface-panel text-fg shadow-sm dark:bg-surface-panel'
                       : 'text-fg-muted hover:text-fg',

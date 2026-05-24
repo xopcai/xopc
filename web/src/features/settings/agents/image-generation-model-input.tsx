@@ -141,6 +141,7 @@ export function ImageGenerationModelInput({
               comboboxTriggerLayoutClass,
               'items-center gap-2 rounded-lg border border-edge-subtle bg-surface-panel px-3 py-2 text-left text-sm font-normal text-fg',
               interaction.transition,
+              interaction.press,
               'hover:border-edge hover:bg-surface-hover/45',
               selectComboboxTriggerFocusClass,
               'disabled:cursor-not-allowed disabled:opacity-50',
@@ -198,6 +199,7 @@ export function ImageGenerationModelInput({
                 aria-selected={id === value}
                 className={cn(
                   'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-fg hover:bg-surface-hover',
+                  interaction.press,
                   id === value && 'bg-surface-hover/90 font-medium dark:bg-surface-hover/70',
                 )}
                 onClick={() => {

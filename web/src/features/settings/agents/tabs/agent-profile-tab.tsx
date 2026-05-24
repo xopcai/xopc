@@ -10,6 +10,7 @@ import {
   saveAgentProfileFileContent,
 } from '@/features/settings/agents-admin-api';
 import { cn } from '@/lib/cn';
+import { interaction } from '@/lib/interaction';
 import type { AgentsSettingsMessages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 
@@ -290,7 +291,10 @@ export function AgentProfileTab({ a, agentId, saveRef, onDirtyChange }: ProfileT
               </select>
               <button
                 type="button"
-                className="shrink-0 rounded-lg border border-edge bg-surface-panel px-3 py-2 text-xs font-medium text-fg-muted hover:bg-surface-hover hover:text-fg"
+                className={cn(
+                  'shrink-0 rounded-lg border border-edge bg-surface-panel px-3 py-2 text-xs font-medium text-fg-muted hover:bg-surface-hover hover:text-fg',
+                  interaction.press,
+                )}
                 onClick={handleDetectTimezone}
               >
                 {a.personaTimezoneDetect}

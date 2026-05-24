@@ -12,6 +12,10 @@ import {
 } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
+import {
+  settingsShellPopoverZClass,
+  useSettingsShellPopoverLayer,
+} from '@/lib/settings-shell-layer-context';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 
@@ -98,7 +102,7 @@ export function ModelSelector({
   contentAlign?: 'start' | 'center' | 'end';
   /** Merged onto the trigger button (e.g. full width in wide forms). */
   className?: string;
-  /** Merged onto `Popover.Content` — use `SETTINGS_SHELL_MODAL_POPOVER_Z` inside settings-shell modals. */
+  /** Optional override merged onto `Popover.Content` (e.g. cron dialog `z-[70]`). Settings shell tiers apply automatically. */
   popoverContentClassName?: string;
   showProviderSettingsFooter?: boolean;
   onChange: (modelId: string) => void;
@@ -109,6 +113,8 @@ export function ModelSelector({
 
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const settingsShellLayer = useSettingsShellPopoverLayer();
+  const settingsShellPopoverZ = settingsShellPopoverZClass(settingsShellLayer);
 
   const { data: models = [], isLoading, error } = useSWR(CONFIGURED_MODELS_SWR_KEY, fetchConfiguredModelsCached, {
     revalidateOnFocus: false,
@@ -159,7 +165,8 @@ export function ModelSelector({
       <Popover.Portal>
         <Popover.Content
           className={cn(
-            'z-50 w-[min(22rem,calc(100vw-2rem))] rounded-xl border border-edge-subtle bg-surface-panel p-1 shadow-elevated dark:border-edge-subtle',
+            settingsShellPopoverZ,
+            'w-[min(22rem,calc(100vw-2rem))] rounded-xl border border-edge-subtle bg-surface-panel p-1 shadow-elevated dark:border-edge-subtle',
             popoverContentClassName,
           )}
           side={contentSide}
