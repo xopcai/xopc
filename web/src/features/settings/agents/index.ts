@@ -3,6 +3,7 @@ export {
   AgentBrowserDefaultsPage,
   AgentChatDefaultsPage,
   AgentRuntimeDefaultsPage,
+  AgentSkillsDefaultsPage,
   AgentSystemPromptDefaultsPage,
   AgentToolsDefaultsPage,
   AgentWorkspaceDefaultsPage,

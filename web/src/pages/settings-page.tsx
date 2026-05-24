@@ -4,6 +4,7 @@ import {
   AgentBrowserDefaultsPage,
   AgentChatDefaultsPage,
   AgentRuntimeDefaultsPage,
+  AgentSkillsDefaultsPage,
   AgentSystemPromptDefaultsPage,
   AgentToolsDefaultsPage,
   AgentWorkspaceDefaultsPage,
@@ -33,6 +34,7 @@ const SECTIONS: SettingsSectionId[] = [
   'agent-browser',
   'agent-runtime',
   'agent-tools',
+  'agent-skills',
   'agent-mcp',
   'agent-system-prompt',
   'providers',
@@ -89,6 +91,10 @@ export function SettingsPage() {
 
   if (id === 'agent-tools') {
     return <AgentToolsDefaultsPage />;
+  }
+
+  if (id === 'agent-skills') {
+    return <AgentSkillsDefaultsPage />;
   }
 
   if (id === 'agent-system-prompt') {
