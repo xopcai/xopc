@@ -57,11 +57,6 @@ export function SidebarNav({
               <span className="truncate">{m.sidebar.newTask}</span>
             </Link>
           ) : null}
-          {!collapsed ? (
-            <p className="px-3 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wider text-fg-muted">
-              {m.nav.management}
-            </p>
-          ) : null}
           <NavLink
             to={pathForTab('agents')}
             className={(props) => secondaryNavClass(props, collapsed)}
