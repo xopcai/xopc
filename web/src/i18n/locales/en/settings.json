@@ -1,17 +1,21 @@
 {
   "settingsSections": {
+    "overview": "System status",
     "appearance": "Preferences",
     "agent": "Agent",
     "agent-defaults": "Agent defaults",
-    "agent-chat": "Chat",
+    "agent-chat": "Default model & chat",
     "agent-workspace": "Workspace",
     "agent-browser": "Browser",
-    "agent-runtime": "Runtime",
+    "agent-runtime": "Turn limits",
+    "agent-context": "Context",
+    "agent-memory": "Memory",
     "agent-tools": "Tools",
-    "agent-skills": "Skills",
-    "agent-mcp": "MCP",
+    "agent-skills": "Default skill allowlist",
+    "agent-mcp": "External tools (MCP)",
     "agent-system-prompt": "System prompt",
-    "providers": "Providers",
+    "providers": "LLM providers",
+    "credentials": "Credentials hub",
     "models": "Models",
     "image-models": "Images",
     "channels": "Channels",
@@ -22,10 +26,149 @@
     "shares": "File sharing",
     "search": "Web search",
     "dreams": "Dreams",
+    "goals": "Goal judge",
     "agents": "Agents",
     "system": "System",
-    "cron": "Scheduled Tasks",
+    "cron": "Scheduled tasks",
     "skills": "Skills"
+  },
+  "settingsPage": {
+    "comingSoon": "Settings · {{title}} (coming soon)."
+  },
+  "setupStatus": {
+    "title": "System status",
+    "subtitle": "See what's configured and finish setup to start chatting.",
+    "refresh": "Refresh",
+    "loading": "Loading status…",
+    "loadError": "Could not load system status. Check your gateway connection and try again.",
+    "summaryTitle": "At a glance",
+    "summarySubtitle": "Core services needed for chat.",
+    "summaryGateway": "Gateway",
+    "summaryProviders": "Providers",
+    "summaryModel": "Default model",
+    "statusOnline": "Online",
+    "statusOffline": "Offline",
+    "requiredCompleteMessage": "Required setup is complete — you're ready to chat.",
+    "requiredIncompleteMessage": "Complete the required steps below to start chatting.",
+    "checklistTitle": "Setup checklist",
+    "checklistSubtitle": "Tap a step to open its settings. Optional steps enhance channels and skills.",
+    "optionalBadge": "Optional",
+    "labels": {
+      "gatewayOnline": "Connected to gateway",
+      "gatewayOffline": "Not connected — check token and gateway",
+      "providersConfigured": "{{count}} provider(s) configured",
+      "providersMetaReady": "{{configured}} / {{total}} providers ready",
+      "providersMissing": "No provider configured",
+      "modelConfigured": "{{model}}",
+      "modelMissing": "No default model selected",
+      "channelConfigured": "At least one channel connected",
+      "channelMissing": "No channel configured yet",
+      "skillsConfigured": "{{count}} skill(s) available",
+      "skillsMissing": "No skills installed yet",
+      "presetsConfigured": "{{count}} agent(s) configured",
+      "presetsMissing": "Only the default agent — add preset personas"
+    },
+    "items": {
+      "gateway": {
+        "title": "Connect gateway",
+        "description": "Verify the Web console can reach your xopc gateway."
+      },
+      "provider": {
+        "title": "Configure LLM provider",
+        "description": "Add at least one AI provider API key or OAuth token."
+      },
+      "defaultModel": {
+        "title": "Choose default model",
+        "description": "Set the model used for new conversations."
+      },
+      "channel": {
+        "title": "Connect a channel",
+        "description": "Link Telegram, Weixin, or Feishu to chat from messaging apps."
+      },
+      "skill": {
+        "title": "Install a skill",
+        "description": "Browse the marketplace or catalog to extend agent capabilities."
+      },
+      "presets": {
+        "title": "Add preset agents",
+        "description": "Create specialized agents (Coder, Writer, etc.) for different tasks."
+      }
+    },
+    "scenarios": {
+      "title": "Quick setup scenarios",
+      "subtitle": "Pick a path that matches how you plan to use xopc — each step opens the right settings.",
+      "dismiss": "Hide",
+      "steps": {
+        "stepProviders": "Configure LLM provider keys",
+        "stepDefaultModel": "Choose default chat model",
+        "stepChannel": "Connect a messaging channel",
+        "stepPresets": "Add specialized agents",
+        "stepCron": "Set up scheduled tasks",
+        "stepSkills": "Install skills from the catalog"
+      },
+      "presets": {
+        "lightChat": {
+          "title": "Light chat",
+          "description": "Talk to your assistant in the web console with one provider and a default model."
+        },
+        "multiChannel": {
+          "title": "Multi-channel assistant",
+          "description": "Reply from Telegram or other channels with dedicated agents for different contexts."
+        },
+        "automation": {
+          "title": "Automation workflow",
+          "description": "Combine skills and cron jobs for recurring background work."
+        }
+      }
+    }
+  },
+  "credentialsHub": {
+    "title": "Credentials hub",
+    "subtitle": "One place to see API keys and OAuth status across chat, search, images, and voice.",
+    "refresh": "Refresh",
+    "loading": "Loading credentials…",
+    "loadError": "Could not load credential status. Check your gateway connection and try again.",
+    "domainsTitle": "Credential domains",
+    "domainsSubtitle": "Manage keys on each detail page — values stay in your gateway config.",
+    "footerHint": "LLM keys live under Providers. Image, voice, and web-search keys may also appear in environment variables — the gateway shows only what is stored in config.",
+    "status": {
+      "ready": "Ready",
+      "partial": "Partial",
+      "missing": "Missing",
+      "notNeeded": "Optional"
+    },
+    "labels": {
+      "llmMetaReady": "{{configured}} / {{total}} LLM providers ready",
+      "llmConfigured": "{{count}} LLM provider(s) configured",
+      "llmMissing": "No LLM provider configured",
+      "webSearchDisabled": "Web search disabled",
+      "webSearchReady": "{{configured}} / {{total}} search provider keys set",
+      "webSearchNoProviders": "No search providers configured",
+      "imageReady": "{{configured}} / {{total}} image providers configured",
+      "imageNoProviders": "No image providers registered",
+      "voiceDisabled": "Speech input/output disabled",
+      "voiceReadyNoKeys": "Speech enabled — no API keys required",
+      "voiceKeysReady": "{{configured}} / {{total}} speech API keys set",
+      "voiceMissing": "Speech not configured"
+    },
+    "domains": {
+      "llm": {
+        "title": "LLM providers",
+        "description": "API keys and OAuth for chat models."
+      },
+      "webSearch": {
+        "title": "Web search",
+        "description": "Brave, Tavily, and other search API keys."
+      },
+      "image": {
+        "title": "Image generation",
+        "description": "Keys for vision and image-generation providers."
+      },
+      "voice": {
+        "title": "Voice (STT / TTS)",
+        "description": "Speech recognition and text-to-speech credentials."
+      }
+    }
   },
   "dreamingSettings": {
     "title": "Dreams",
@@ -189,12 +332,21 @@
   },
   "settingsNavGroups": {
     "general": "General",
-    "models": "Models & media",
+    "credentials": "Credentials & models",
     "agent": "Agent defaults",
-    "gateway": "Gateway",
+    "connection": "Connection",
     "automation": "Automation",
-    "data": "Sessions & logs",
+    "diagnostics": "Diagnostics",
     "extensions": "Extensions"
+  },
+  "cronSettingsPage": {
+    "title": "Scheduled tasks",
+    "subtitle": "Global scheduler limits and defaults for all cron jobs.",
+    "tasksLink": "Manage tasks and run history →"
+  },
+  "goalsSettingsPage": {
+    "title": "Goal judge",
+    "subtitle": "Default settings for persistent /goal tasks and checklist judging."
   },
   "imageModelsSettings": {
     "title": "Images",
@@ -285,7 +437,7 @@
     "aboutApp": "About"
   },
   "mcpSettings": {
-    "title": "MCP",
+    "title": "External tools (MCP)",
     "subtitle": "Configure outbound MCP servers (stdio or HTTP) for embedded agent runs. Disable all MCP tools with tools.disable: [\"bundle-mcp\"] on an agent.",
     "loading": "Loading MCP configuration…",
     "saved": "MCP configuration saved.",

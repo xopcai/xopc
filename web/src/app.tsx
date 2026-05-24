@@ -58,6 +58,12 @@ function SecondaryRouteFallback() {
   );
 }
 
+
+function LegacyAgentDefaultsRedirect({ tab }: { tab?: string }) {
+  const to = tab ? `/settings/agent-defaults?tab=${encodeURIComponent(tab)}` : '/settings/agent-defaults';
+  return <Navigate to={to} replace />;
+}
+
 function RedirectLegacySettingsAgentsDetail() {
   const { agentId } = useParams();
   const raw = typeof agentId === 'string' ? agentId.trim() : '';
@@ -118,11 +124,24 @@ const router = createHashRouter([
       },
       {
         path: 'channels',
-        element: (
-          <Suspense fallback={<SecondaryRouteFallback />}>
-            <ChannelsPage />
-          </Suspense>
-        ),
+        children: [
+          {
+            index: true,
+            element: (
+              <Suspense fallback={<SecondaryRouteFallback />}>
+                <ChannelsPage />
+              </Suspense>
+            ),
+          },
+          {
+            path: ':channelId',
+            element: (
+              <Suspense fallback={<SecondaryRouteFallback />}>
+                <ChannelsPage />
+              </Suspense>
+            ),
+          },
+        ],
       },
       {
         path: 'mcp',
@@ -176,14 +195,10 @@ const router = createHashRouter([
           </SettingsSheet>
         ),
         children: [
-          { index: true, element: <Navigate to="appearance" replace /> },
+          { index: true, element: <Navigate to="overview" replace /> },
           {
             path: 'skills',
             element: <Navigate to="/skills" replace />,
-          },
-          {
-            path: 'cron',
-            element: <Navigate to="/cron" replace />,
           },
           {
             path: 'channels',
@@ -226,8 +241,40 @@ const router = createHashRouter([
             element: <RedirectLegacySettingsAgentsDetail />,
           },
           {
-            path: 'agent-defaults',
-            element: <Navigate to="/settings/agent-chat" replace />,
+            path: 'agent-chat',
+            element: <LegacyAgentDefaultsRedirect />,
+          },
+          {
+            path: 'agent-workspace',
+            element: <LegacyAgentDefaultsRedirect tab="workspace" />,
+          },
+          {
+            path: 'agent-browser',
+            element: <LegacyAgentDefaultsRedirect tab="browser" />,
+          },
+          {
+            path: 'agent-runtime',
+            element: <LegacyAgentDefaultsRedirect tab="runtime" />,
+          },
+          {
+            path: 'agent-context',
+            element: <LegacyAgentDefaultsRedirect tab="context" />,
+          },
+          {
+            path: 'agent-memory',
+            element: <LegacyAgentDefaultsRedirect tab="memory" />,
+          },
+          {
+            path: 'agent-tools',
+            element: <LegacyAgentDefaultsRedirect tab="tools" />,
+          },
+          {
+            path: 'agent-skills',
+            element: <LegacyAgentDefaultsRedirect tab="skills" />,
+          },
+          {
+            path: 'agent-system-prompt',
+            element: <LegacyAgentDefaultsRedirect tab="system-prompt" />,
           },
           {
             path: 'agent-models',

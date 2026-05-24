@@ -1,13 +1,18 @@
 import { Folder } from 'lucide-react';
 
+import { Button } from '@/components/ui/button';
+import { DirectoryPickerPathField } from '@/features/fs/directory-picker-path-field';
 import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/settings/settings-form-section';
+import { DEFAULT_AGENT_WORKSPACE } from '@/features/settings/suggest-agent-workspace';
 
 import { AgentDefaultsField } from '../agent-defaults-field';
 import type { AgentDefaultsPanelProps } from '../agent-defaults-panel-props';
-import { inputClassName } from '../defaults-field-styles';
+import { agentDefaultsQuickActionButtonClass, inputClassName } from '../defaults-field-styles';
 
 export function AgentDefaultsWorkspacePanel(props: AgentDefaultsPanelProps) {
-  const { a, form, update } = props;
+  const { a, chat, form, update } = props;
+  const workspaceTrimmed = form.workspace.trim();
+  const isDefaultWorkspace = workspaceTrimmed === DEFAULT_AGENT_WORKSPACE;
 
   return (
     <div className="flex flex-col gap-5">
@@ -15,12 +20,24 @@ export function AgentDefaultsWorkspacePanel(props: AgentDefaultsPanelProps) {
         <SettingsFormSectionHeader icon={Folder} title={a.cardWorkspaceTitle} subtitle={a.cardWorkspaceSubtitle} />
         <div className="flex flex-col gap-5">
           <AgentDefaultsField label={a.label.workspace} description={a.desc.workspace}>
-            <input
-              type="text"
-              className={inputClassName()}
+            <DirectoryPickerPathField
               value={form.workspace}
-              onChange={(e) => update({ workspace: e.target.value })}
-              autoComplete="off"
+              onChange={(path) => update({ workspace: path })}
+              wd={chat.workingDirectory}
+              placeholder={chat.workingDirectory.notSet}
+              inputClassName={inputClassName()}
+              trailing={
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className={agentDefaultsQuickActionButtonClass}
+                  disabled={isDefaultWorkspace}
+                  title={DEFAULT_AGENT_WORKSPACE}
+                  onClick={() => update({ workspace: DEFAULT_AGENT_WORKSPACE })}
+                >
+                  {a.setDefaultWorkspace}
+                </Button>
+              }
             />
           </AgentDefaultsField>
           <AgentDefaultsField label={a.label.mediaMaxMb} description={a.desc.mediaMaxMb}>

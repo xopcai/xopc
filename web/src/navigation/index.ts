@@ -10,19 +10,24 @@ export type ChatRoute =
   | { type: 'new' };
 
 const SETTINGS_SECTION_TO_TAB: Record<SettingsSectionId, Tab> = {
+  overview: 'settingsOverview',
   appearance: 'settingsAppearance',
   system: 'settingsSystem',
   agent: 'settingsAgents',
+  'agent-defaults': 'settingsAgentChat',
   'agent-chat': 'settingsAgentChat',
   'agent-workspace': 'settingsAgentWorkspace',
   'agent-browser': 'settingsAgentBrowser',
   'agent-runtime': 'settingsAgentRuntime',
+  'agent-context': 'settingsAgentContext',
+  'agent-memory': 'settingsAgentMemory',
   'agent-tools': 'settingsAgentTools',
   'agent-skills': 'settingsAgentSkills',
   'agent-mcp': 'settingsAgentMcp',
   'agent-system-prompt': 'settingsAgentSystemPrompt',
   agents: 'settingsAgents',
   providers: 'settingsProviders',
+  credentials: 'settingsCredentials',
   models: 'settingsModels',
   'image-models': 'settingsImageModels',
   channels: 'channels',
@@ -33,22 +38,19 @@ const SETTINGS_SECTION_TO_TAB: Record<SettingsSectionId, Tab> = {
   shares: 'settingsShares',
   search: 'settingsSearch',
   dreams: 'settingsDreams',
-  cron: 'cron',
+  cron: 'settingsCron',
+  goals: 'settingsGoals',
   skills: 'skills',
 };
 
 const TAB_TO_SETTINGS_SECTION: Record<
+  | 'settingsOverview'
   | 'settingsAppearance'
   | 'settingsSystem'
-  | 'settingsAgentChat'
-  | 'settingsAgentWorkspace'
-  | 'settingsAgentBrowser'
-  | 'settingsAgentRuntime'
-  | 'settingsAgentTools'
-  | 'settingsAgentSkills'
+  | 'settingsAgentDefaults'
   | 'settingsAgentMcp'
-  | 'settingsAgentSystemPrompt'
   | 'settingsAgents'
+  | 'settingsCredentials'
   | 'settingsProviders'
   | 'settingsModels'
   | 'settingsImageModels'
@@ -60,22 +62,19 @@ const TAB_TO_SETTINGS_SECTION: Record<
   | 'settingsShares'
   | 'settingsSearch'
   | 'settingsDreams'
-  | 'cron'
+  | 'settingsCron'
+  | 'settingsGoals'
   | 'skills'
   | 'channels',
   SettingsSectionId
 > = {
+  settingsOverview: 'overview',
   settingsAppearance: 'appearance',
   settingsSystem: 'system',
-  settingsAgentChat: 'agent-chat',
-  settingsAgentWorkspace: 'agent-workspace',
-  settingsAgentBrowser: 'agent-browser',
-  settingsAgentRuntime: 'agent-runtime',
-  settingsAgentTools: 'agent-tools',
-  settingsAgentSkills: 'agent-skills',
+  settingsAgentDefaults: 'agent-defaults',
   settingsAgentMcp: 'agent-mcp',
-  settingsAgentSystemPrompt: 'agent-system-prompt',
   settingsAgents: 'agents',
+  settingsCredentials: 'credentials',
   settingsProviders: 'providers',
   settingsModels: 'models',
   settingsImageModels: 'image-models',
@@ -87,7 +86,8 @@ const TAB_TO_SETTINGS_SECTION: Record<
   settingsShares: 'shares',
   settingsSearch: 'search',
   settingsDreams: 'dreams',
-  cron: 'cron',
+  settingsCron: 'cron',
+  settingsGoals: 'goals',
   skills: 'skills',
   channels: 'channels',
 };
@@ -103,11 +103,11 @@ export function tabToSettingsSection(tab: Tab): SettingsSectionId | null {
 /** Group keys for `messages(lang).settingsNavGroups` — left rail sections + sort order. */
 export type SettingsNavGroupId =
   | 'general'
-  | 'models'
+  | 'credentials'
   | 'agent'
-  | 'gateway'
+  | 'connection'
   | 'automation'
-  | 'data';
+  | 'diagnostics';
 
 export type SettingsShellNavGroup = {
   id: SettingsNavGroupId;
@@ -120,38 +120,47 @@ export type SettingsShellNavGroup = {
  * Extensions append via `ExtensionSettingsNav`.
  */
 export const SETTINGS_SHELL_NAV_GROUPS: readonly SettingsShellNavGroup[] = [
-  { id: 'general', tabs: ['settingsAppearance', 'settingsSystem'] },
+  { id: 'general', tabs: ['settingsOverview', 'settingsAppearance', 'settingsSystem'] },
   {
-    id: 'models',
+    id: 'credentials',
     tabs: [
-      'settingsAgentChat',
+      'settingsCredentials',
+      'settingsProviders',
+      'settingsModels',
       'settingsImageModels',
       'settingsVoice',
       'settingsSearch',
-      'settingsProviders',
-      'settingsModels',
     ],
   },
   {
     id: 'agent',
     tabs: [
+      'settingsAgentChat',
       'settingsAgentWorkspace',
       'settingsAgentBrowser',
       'settingsAgentRuntime',
+      'settingsAgentContext',
+      'settingsAgentMemory',
       'settingsAgentTools',
       'settingsAgentSkills',
-      'settingsAgentMcp',
       'settingsAgentSystemPrompt',
+      'settingsAgentMcp',
     ],
   },
-  { id: 'gateway', tabs: ['settingsGateway', 'settingsHeartbeat', 'settingsTunnel', 'settingsShares'] },
-  { id: 'automation', tabs: ['settingsDreams'] },
-  { id: 'data', tabs: ['sessions', 'logs'] },
+  {
+    id: 'connection',
+    tabs: ['settingsGateway', 'settingsHeartbeat', 'settingsTunnel', 'settingsShares'],
+  },
+  {
+    id: 'automation',
+    tabs: ['settingsCron', 'settingsGoals', 'settingsDreams'],
+  },
+  { id: 'diagnostics', tabs: ['sessions', 'logs'] },
 ] as const;
 
 /** Flat order: settings routes only (excludes sessions/logs). */
 export const SETTINGS_NAV_TABS: readonly Tab[] = SETTINGS_SHELL_NAV_GROUPS.filter(
-  (g) => g.id !== 'data',
+  (g) => g.id !== 'diagnostics',
 ).flatMap((g) => [...g.tabs]);
 
 /** Settings shell: full left rail including sessions + logs. */
@@ -182,13 +191,13 @@ export function parseSettingsHash(hash: string): SettingsSectionId | null {
   let h = hash.startsWith('#') ? hash.slice(1) : hash;
   if (h.startsWith('/')) h = h.slice(1);
   if (h === 'settings' || h === 'settings/') {
-    return 'appearance';
+    return 'overview';
   }
   if (!h.startsWith('settings/')) return null;
   const rest = h.slice('settings/'.length);
   const parts = rest.split('/').filter(Boolean);
   const section = parts[0];
-  if (!section) return 'appearance';
+  if (!section) return 'overview';
   if (section === 'agents' && parts.length > 1) {
     return 'agents';
   }
@@ -236,8 +245,20 @@ export function pathForTab(tab: Tab): string {
   if (tab === 'chat') return '/chat';
   if (tab === 'agents' || tab === 'settingsAgents') return '/agents';
   if (tab === 'cron') return '/cron';
+  if (tab === 'settingsCron') return '/settings/cron';
+  if (tab === 'settingsGoals') return '/settings/goals';
   if (tab === 'skills') return '/skills';
   if (tab === 'channels' || tab === 'settingsChannels') return '/channels';
+  if (tab === 'settingsAgentDefaults') return '/settings/agent-defaults';
+  if (tab === 'settingsAgentChat') return '/settings/agent-defaults';
+  if (tab === 'settingsAgentWorkspace') return '/settings/agent-defaults?tab=workspace';
+  if (tab === 'settingsAgentBrowser') return '/settings/agent-defaults?tab=browser';
+  if (tab === 'settingsAgentRuntime') return '/settings/agent-defaults?tab=runtime';
+  if (tab === 'settingsAgentContext') return '/settings/agent-defaults?tab=context';
+  if (tab === 'settingsAgentMemory') return '/settings/agent-defaults?tab=memory';
+  if (tab === 'settingsAgentTools') return '/settings/agent-defaults?tab=tools';
+  if (tab === 'settingsAgentSkills') return '/settings/agent-defaults?tab=skills';
+  if (tab === 'settingsAgentSystemPrompt') return '/settings/agent-defaults?tab=system-prompt';
   const section = tabToSettingsSection(tab);
   if (section) return `/settings/${section}`;
   if (tab === 'sessions' || tab === 'logs') {

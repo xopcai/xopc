@@ -44,8 +44,15 @@ export function registerFileIpc(ipcMain: IpcMain): void {
     });
   });
 
-  ipcMain.handle('file:open-dir-dialog', async () => {
-    const res = await dialog.showOpenDialog({ properties: ['openDirectory'] });
+  ipcMain.handle('file:open-dir-dialog', async (_, options?: { defaultPath?: string }) => {
+    const defaultPath =
+      typeof options?.defaultPath === 'string' && options.defaultPath.trim()
+        ? options.defaultPath.trim()
+        : undefined;
+    const res = await dialog.showOpenDialog({
+      properties: ['openDirectory'],
+      ...(defaultPath ? { defaultPath } : {}),
+    });
     return res.canceled ? null : res.filePaths[0] ?? null;
   });
 
