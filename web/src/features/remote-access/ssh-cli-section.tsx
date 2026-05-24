@@ -9,7 +9,7 @@ import {
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 
-export function SshCliSection() {
+export function SshCliSection({ embedded = false }: { embedded?: boolean }) {
   const language = useLocaleStore((s) => s.language);
   const t = messages(language).remoteAccess.ssh;
   const [copied, setCopied] = useState(false);
@@ -25,10 +25,9 @@ export function SshCliSection() {
     setTimeout(() => setCopied(false), 2000);
   }, [command]);
 
-  return (
-    <SettingsFormSection>
-      <SettingsFormSectionHeader icon={Terminal} title={t.title} subtitle={t.subtitle} />
-      <pre className="mt-4 overflow-x-auto rounded-lg border border-edge bg-surface px-3 py-2 text-xs text-fg-muted">
+  const commandBlock = (
+    <>
+      <pre className="overflow-x-auto rounded-lg border border-edge bg-surface px-3 py-2 text-xs text-fg-muted">
         {command}
       </pre>
       <div className="mt-2">
@@ -37,6 +36,23 @@ export function SshCliSection() {
           {copied ? t.copied : t.copy}
         </Button>
       </div>
+      {embedded ? <p className="mt-2 text-xs text-fg-subtle">{t.hint}</p> : null}
+    </>
+  );
+
+  if (embedded) {
+    return (
+      <SettingsFormSection>
+        <SettingsFormSectionHeader icon={Terminal} title={t.title} subtitle={t.subtitle} />
+        <div className="mt-4 space-y-2">{commandBlock}</div>
+      </SettingsFormSection>
+    );
+  }
+
+  return (
+    <SettingsFormSection>
+      <SettingsFormSectionHeader icon={Terminal} title={t.title} subtitle={t.subtitle} />
+      <div className="mt-4">{commandBlock}</div>
     </SettingsFormSection>
   );
 }

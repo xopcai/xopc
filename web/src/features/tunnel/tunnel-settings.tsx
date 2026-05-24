@@ -59,7 +59,7 @@ function formatUptime(since: string | null): string {
   return `${hrs}h ${rem}m`;
 }
 
-export function TunnelSettingsPanel() {
+export function TunnelSettingsPanel({ embedded = false }: { embedded?: boolean }) {
   const language = useLocaleStore((s) => s.language);
   const t = messages(language).tunnelSettings;
   const token = useGatewayStore((st) => st.token);
@@ -292,7 +292,7 @@ export function TunnelSettingsPanel() {
 
   if (!hasToken) {
     return (
-      <div className="mx-auto w-full max-w-app-main px-4 py-8">
+      <div className={embedded ? undefined : 'mx-auto w-full max-w-app-main px-4 py-8'}>
         <p className="text-sm text-fg-muted">{t.needToken}</p>
       </div>
     );
@@ -315,11 +315,19 @@ export function TunnelSettingsPanel() {
     status?.consentRequired && (st.enabled || autoStartEnabled || status?.consent?.acceptedAt);
 
   return (
-    <div className="mx-auto flex w-full max-w-app-main flex-col gap-6 px-4 py-8">
-      <div>
-        <h1 className="text-lg font-semibold text-fg">{t.title}</h1>
-        <p className="mt-1 text-sm text-fg-muted">{t.subtitle}</p>
-      </div>
+    <div
+      className={
+        embedded
+          ? 'flex w-full flex-col gap-6'
+          : 'mx-auto flex w-full max-w-app-main flex-col gap-6 px-4 py-8'
+      }
+    >
+      {!embedded ? (
+        <div>
+          <h1 className="text-lg font-semibold text-fg">{t.title}</h1>
+          <p className="mt-1 text-sm text-fg-muted">{t.subtitle}</p>
+        </div>
+      ) : null}
 
       <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-fg-muted">
         <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />

@@ -16,7 +16,7 @@ import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
-export function TailscaleServeSection() {
+export function TailscaleServeSection({ embedded = false }: { embedded?: boolean }) {
   const language = useLocaleStore((s) => s.language);
   const t = messages(language).remoteAccess.tailscale;
   const hasToken = Boolean(useGatewayStore((s) => s.token));
@@ -71,22 +71,45 @@ export function TailscaleServeSection() {
     return null;
   }
 
-  return (
-    <SettingsFormSection>
-      <SettingsFormSectionHeader icon={Globe} title={t.title} subtitle={t.subtitle} />
-      <div className="mt-4 space-y-3">
-        {isLoading && !data ? (
-          <p className="text-sm text-fg-muted">{t.loading}</p>
-        ) : (
-          <>
-            <p className="text-sm text-fg-muted">
+  const body = (
+    <div className={embedded ? 'space-y-4' : 'mt-4 space-y-3'}>
+      {embedded ? (
+        <ol className="space-y-3 text-sm text-fg-muted">
+          <li className="flex gap-2">
+            <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-surface-hover text-xs font-semibold text-fg">
+              1
+            </span>
+            <span>{t.stepInstall}</span>
+          </li>
+          <li className="flex gap-2">
+            <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-surface-hover text-xs font-semibold text-fg">
+              2
+            </span>
+            <span>{t.stepEnable}</span>
+          </li>
+          <li className="flex gap-2">
+            <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-surface-hover text-xs font-semibold text-fg">
+              3
+            </span>
+            <span>{t.stepCopy}</span>
+          </li>
+        </ol>
+      ) : null}
+
+      {isLoading && !data ? (
+        <p className="text-sm text-fg-muted">{t.loading}</p>
+      ) : (
+        <>
+          <SettingsFormSection>
+            <p className="text-sm font-medium text-fg">{t.statusLabel}</p>
+            <p className="mt-1 text-sm text-fg-muted">
               {active ? t.statusActive : t.statusOff}
               {publicUrl ? (
-                <span className="ml-2 font-mono text-fg">{publicUrl}</span>
+                <span className="mt-1 block font-mono text-xs text-fg break-all">{publicUrl}</span>
               ) : null}
             </p>
-            {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
-            <div className="flex flex-wrap gap-2">
+            {error ? <p className="mt-2 text-sm text-red-600 dark:text-red-400">{error}</p> : null}
+            <div className="mt-3 flex flex-wrap gap-2">
               {!active ? (
                 <Button type="button" disabled={busy} onClick={() => void onStart()}>
                   {busy ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Power className="mr-1 h-4 w-4" />}
@@ -105,10 +128,21 @@ export function TailscaleServeSection() {
                 </Button>
               ) : null}
             </div>
-            <p className="text-xs text-fg-subtle">{t.hint}</p>
-          </>
-        )}
-      </div>
+          </SettingsFormSection>
+          <p className="text-xs text-fg-subtle">{t.hint}</p>
+        </>
+      )}
+    </div>
+  );
+
+  if (embedded) {
+    return body;
+  }
+
+  return (
+    <SettingsFormSection>
+      <SettingsFormSectionHeader icon={Globe} title={t.title} subtitle={t.subtitle} />
+      {body}
     </SettingsFormSection>
   );
 }
