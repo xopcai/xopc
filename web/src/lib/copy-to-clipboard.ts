@@ -1,11 +1,22 @@
 /**
  * Writes text to the system clipboard.
- * Tries synchronous `execCommand('copy')` first so copies from button clicks stay
+ * In Electron, uses main-process `clipboard.writeText` (reliable on embedded `file://` and gateway URLs).
+ * Otherwise tries synchronous `execCommand('copy')` first so copies from button clicks stay
  * within the user-activation window (Safari / some WebViews reject async Clipboard API).
  * Falls back to `navigator.clipboard.writeText` when the legacy path fails.
  */
 export async function copyTextToClipboard(text: string): Promise<boolean> {
   if (!text) return false;
+
+  try {
+    const electronWrite =
+      typeof window !== 'undefined' ? window.electronAPI?.clipboard?.writeText : undefined;
+    if (electronWrite) {
+      return await electronWrite(text);
+    }
+  } catch {
+    /* fall through to renderer strategies */
+  }
 
   try {
     const ta = document.createElement('textarea');

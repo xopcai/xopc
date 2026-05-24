@@ -46,6 +46,10 @@ export interface ElectronShellAPI {
   showItemInFolder(filePath: string): Promise<{ success: boolean }>;
 }
 
+export interface ElectronClipboardAPI {
+  writeText(text: string): Promise<boolean>;
+}
+
 export type TccTriState = 'granted' | 'denied' | 'unknown';
 
 export type ShellPermissionSnapshot = {
@@ -156,6 +160,7 @@ export interface ElectronSystemSettingsAPI {
 }
 
 export interface ElectronAPI {
+  clipboard?: ElectronClipboardAPI;
   shell?: ElectronShellAPI;
   file: ElectronFileAPI;
   search: ElectronSearchAPI;

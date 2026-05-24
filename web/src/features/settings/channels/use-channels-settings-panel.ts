@@ -13,6 +13,7 @@ import {
   type StreamMode,
 } from '@/features/settings/channels-config-api';
 import { messages } from '@/i18n/messages';
+import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
@@ -195,7 +196,8 @@ export function useChannelsSettingsPanel() {
   const copyToken = useCallback(async () => {
     const t = form ? telegramDefaultBotToken(form.telegram) : '';
     if (!t) return;
-    await navigator.clipboard.writeText(t).catch(() => {});
+    const ok = await copyTextToClipboard(t);
+    if (!ok) return;
     setCopied(true);
     window.setTimeout(() => setCopied(false), 2000);
   }, [form]);
@@ -217,7 +219,8 @@ export function useChannelsSettingsPanel() {
   const copyFeishuSecret = useCallback(async () => {
     const t = form?.feishu?.appSecret;
     if (!t) return;
-    await navigator.clipboard.writeText(t).catch(() => {});
+    const ok = await copyTextToClipboard(t);
+    if (!ok) return;
     setFeishuCopied(true);
     window.setTimeout(() => setFeishuCopied(false), 2000);
   }, [form]);
@@ -233,7 +236,8 @@ export function useChannelsSettingsPanel() {
       webhookPort: fs.webhookPort || 0,
       webhookPath: fs.webhookPath || '',
     };
-    await navigator.clipboard.writeText(JSON.stringify(payload, null, 2)).catch(() => {});
+    const ok = await copyTextToClipboard(JSON.stringify(payload, null, 2));
+    if (!ok) return;
     setFeishuWebhookCopied(true);
     window.setTimeout(() => setFeishuWebhookCopied(false), 2000);
   }, [form]);

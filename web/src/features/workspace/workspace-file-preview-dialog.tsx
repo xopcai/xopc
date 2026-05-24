@@ -11,6 +11,7 @@ import {
 import { ShareLinkDialog } from '@/features/shares/share-link-dialog';
 import { useShareLink } from '@/features/shares/use-share-link';
 import { cn } from '@/lib/cn';
+import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
 import { interaction } from '@/lib/interaction';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -52,8 +53,8 @@ export function WorkspaceFilePreviewPanel({
   const isHtml = ext === '.html' || ext === '.htm';
 
   const handleCopyPath = useCallback(() => {
-    if (!filePath || !navigator.clipboard?.writeText) return;
-    void navigator.clipboard.writeText(filePath);
+    if (!filePath) return;
+    void copyTextToClipboard(filePath);
   }, [filePath]);
 
   const handleShare = useCallback(() => {
