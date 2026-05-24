@@ -1,6 +1,8 @@
 import { cn } from '@/lib/cn';
 
 import { ProviderLogo } from '@/features/onboarding/provider-icons';
+import { messages } from '@/i18n/messages';
+import { useLocaleStore } from '@/stores/locale-store';
 
 export const ONBOARDING_FEATURED_PROVIDERS = [
   { id: 'deepseek', name: 'DeepSeek', recommended: true },
@@ -16,6 +18,9 @@ export function OnboardingProviderGrid({
 }: {
   onSelect: (providerId: string) => void;
 }) {
+  const language = useLocaleStore((s) => s.language);
+  const recommendedLabel = messages(language).onboarding.providerRecommended;
+
   return (
     <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
       {ONBOARDING_FEATURED_PROVIDERS.map((p) => (
@@ -32,7 +37,7 @@ export function OnboardingProviderGrid({
         >
           {p.recommended && (
             <span className="absolute -top-2 right-2 rounded-full bg-accent px-2 py-0.5 text-[10px] font-semibold text-white">
-              推荐
+              {recommendedLabel}
             </span>
           )}
           <ProviderLogo providerId={p.id} className="size-8" />

@@ -20,6 +20,7 @@
     "apps": "Apps",
     "logs": "Logs",
     "settingsAppearance": "Preferences",
+    "settingsOverview": "System status",
     "settingsProviders": "Providers",
     "settingsModels": "Models",
     "settingsImageModels": "Images",
@@ -31,13 +32,13 @@
     "settingsShares": "File sharing",
     "settingsSearch": "Web search",
     "settingsDreams": "Dreams",
-    "settingsAgentChat": "Chat",
+    "settingsAgentChat": "Default model & chat",
     "settingsAgentWorkspace": "Workspace",
     "settingsAgentBrowser": "Browser",
     "settingsAgentRuntime": "Runtime",
     "settingsAgentTools": "Tools",
-    "settingsAgentSkills": "Skills",
-    "settingsAgentMcp": "MCP",
+    "settingsAgentSkills": "Default skill allowlist",
+    "settingsAgentMcp": "External tools (MCP)",
     "settingsAgentSystemPrompt": "System prompt",
     "settingsAgents": "Agents",
     "settingsSystem": "System"
@@ -152,5 +153,55 @@
     "updateErrorFailed": "Update failed",
     "restartRequired": "v{{version}} installed. Restart the gateway to use the new version.",
     "restartGateway": "Restart gateway"
+  },
+  "commandPalette": {
+    "groups": {
+      "navigate": "Navigate",
+      "quickSettings": "Quick Settings",
+      "extensions": "Extensions",
+      "sessions": "Sessions",
+      "files": "Files",
+      "commands": "Commands",
+      "skills": "Skills",
+      "actions": "Actions"
+    },
+    "routes": {
+      "chatSubtitle": "Open chat",
+      "agentsSubtitle": "Manage agents",
+      "appsSubtitle": "Extension apps",
+      "sessionsSubtitle": "Manage and search sessions",
+      "logsSubtitle": "View logs",
+      "skillsSubtitle": "Manage skills",
+      "channelsSubtitle": "Channel settings",
+      "cronSubtitle": "Cron jobs and schedules",
+      "settingsSubtitle": "Open settings",
+      "providersSubtitle": "AI provider configuration",
+      "modelsSubtitle": "Model configuration",
+      "voiceSubtitle": "Voice settings",
+      "gatewaySubtitle": "Gateway settings"
+    },
+    "quickSettings": {
+      "switchModel": "Switch model",
+      "switchModelSubtitle": "Change the default AI model",
+      "switchAgent": "Switch agent",
+      "switchAgentSubtitle": "Change the agent for new chats",
+      "themeLight": "Switch to light theme",
+      "themeDark": "Switch to dark theme",
+      "themeSystem": "Use system theme",
+      "appearanceSubtitle": "Appearance",
+      "languageSubtitle": "Language",
+      "languageEn": "Switch to English",
+      "languageZh": "Switch to 中文"
+    },
+    "actions": {
+      "createCron": "Create scheduled task",
+      "createCronSubtitle": "Open scheduled tasks (create)",
+      "manageCron": "Manage scheduled tasks",
+      "manageCronSubtitle": "View and edit cron jobs",
+      "manageSkills": "Manage skills",
+      "manageSkillsSubtitle": "View, enable, or disable skills",
+      "reloadSkills": "Reload skills",
+      "reloadSkillsSubtitle": "Reload all skills from disk"
+    }
   }
 }

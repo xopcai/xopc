@@ -20,6 +20,7 @@
     "apps": "应用",
     "logs": "日志",
     "settingsAppearance": "偏好设置",
+    "settingsOverview": "系统状态",
     "settingsProviders": "服务商",
     "settingsModels": "模型",
     "settingsImageModels": "图像",
@@ -31,13 +32,13 @@
     "settingsShares": "文件分享",
     "settingsSearch": "网络搜索",
     "settingsDreams": "梦境",
-    "settingsAgentChat": "对话",
+    "settingsAgentChat": "默认模型与对话",
     "settingsAgentWorkspace": "工作区",
     "settingsAgentBrowser": "浏览器",
     "settingsAgentRuntime": "运行时",
     "settingsAgentTools": "工具",
-    "settingsAgentSkills": "技能",
-    "settingsAgentMcp": "MCP",
+    "settingsAgentSkills": "默认技能白名单",
+    "settingsAgentMcp": "外部工具 (MCP)",
     "settingsAgentSystemPrompt": "系统提示词",
     "settingsAgents": "智能体",
     "settingsSystem": "系统设置"
@@ -152,5 +153,55 @@
     "updateErrorFailed": "更新失败",
     "restartRequired": "已安装 v{{version}}。请重启网关以使用新版本。",
     "restartGateway": "重启网关"
+  },
+  "commandPalette": {
+    "groups": {
+      "navigate": "导航",
+      "quickSettings": "快捷设置",
+      "extensions": "扩展",
+      "sessions": "会话",
+      "files": "文件",
+      "commands": "命令",
+      "skills": "技能",
+      "actions": "操作"
+    },
+    "routes": {
+      "chatSubtitle": "打开聊天",
+      "agentsSubtitle": "管理智能体",
+      "appsSubtitle": "扩展应用",
+      "sessionsSubtitle": "管理与搜索会话",
+      "logsSubtitle": "查看日志",
+      "skillsSubtitle": "管理技能",
+      "channelsSubtitle": "消息通道设置",
+      "cronSubtitle": "定时任务与调度",
+      "settingsSubtitle": "打开设置",
+      "providersSubtitle": "AI 服务商配置",
+      "modelsSubtitle": "模型配置",
+      "voiceSubtitle": "语音设置",
+      "gatewaySubtitle": "网关设置"
+    },
+    "quickSettings": {
+      "switchModel": "切换模型",
+      "switchModelSubtitle": "更改默认 AI 模型",
+      "switchAgent": "切换智能体",
+      "switchAgentSubtitle": "更改新对话使用的智能体",
+      "themeLight": "切换到浅色主题",
+      "themeDark": "切换到深色主题",
+      "themeSystem": "使用系统主题",
+      "appearanceSubtitle": "外观",
+      "languageSubtitle": "语言",
+      "languageEn": "切换到 English",
+      "languageZh": "切换到中文"
+    },
+    "actions": {
+      "createCron": "创建定时任务",
+      "createCronSubtitle": "新建 Cron 任务",
+      "manageCron": "管理定时任务",
+      "manageCronSubtitle": "查看和编辑 Cron",
+      "manageSkills": "管理技能",
+      "manageSkillsSubtitle": "启用或禁用技能",
+      "reloadSkills": "重新加载技能",
+      "reloadSkillsSubtitle": "从磁盘重新加载"
+    }
   }
 }

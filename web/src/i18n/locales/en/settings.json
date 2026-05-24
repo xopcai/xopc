@@ -1,15 +1,16 @@
 {
   "settingsSections": {
+    "overview": "System status",
     "appearance": "Preferences",
     "agent": "Agent",
     "agent-defaults": "Agent defaults",
-    "agent-chat": "Chat",
+    "agent-chat": "Default model & chat",
     "agent-workspace": "Workspace",
     "agent-browser": "Browser",
     "agent-runtime": "Runtime",
     "agent-tools": "Tools",
-    "agent-skills": "Skills",
-    "agent-mcp": "MCP",
+    "agent-skills": "Default skill allowlist",
+    "agent-mcp": "External tools (MCP)",
     "agent-system-prompt": "System prompt",
     "providers": "Providers",
     "models": "Models",
@@ -26,6 +27,62 @@
     "system": "System",
     "cron": "Scheduled Tasks",
     "skills": "Skills"
+  },
+  "settingsPage": {
+    "comingSoon": "Settings · {{title}} (coming soon)."
+  },
+  "setupStatus": {
+    "title": "System status",
+    "subtitle": "See what's configured and finish setup to start chatting.",
+    "refresh": "Refresh",
+    "loading": "Loading status…",
+    "loadError": "Could not load system status. Check your gateway connection and try again.",
+    "summaryTitle": "At a glance",
+    "summarySubtitle": "Core services needed for chat.",
+    "summaryGateway": "Gateway",
+    "summaryProviders": "Providers",
+    "summaryModel": "Default model",
+    "statusOnline": "Online",
+    "statusOffline": "Offline",
+    "requiredCompleteMessage": "Required setup is complete — you're ready to chat.",
+    "requiredIncompleteMessage": "Complete the required steps below to start chatting.",
+    "checklistTitle": "Setup checklist",
+    "checklistSubtitle": "Tap a step to open its settings. Optional steps enhance channels and skills.",
+    "optionalBadge": "Optional",
+    "labels": {
+      "gatewayOnline": "Connected to gateway",
+      "gatewayOffline": "Not connected — check token and gateway",
+      "providersConfigured": "{{count}} provider(s) configured",
+      "providersMissing": "No provider configured",
+      "modelConfigured": "{{model}}",
+      "modelMissing": "No default model selected",
+      "channelConfigured": "At least one channel connected",
+      "channelMissing": "No channel configured yet",
+      "skillsConfigured": "{{count}} skill(s) available",
+      "skillsMissing": "No skills installed yet"
+    },
+    "items": {
+      "gateway": {
+        "title": "Connect gateway",
+        "description": "Verify the Web console can reach your xopc gateway."
+      },
+      "provider": {
+        "title": "Configure LLM provider",
+        "description": "Add at least one AI provider API key or OAuth token."
+      },
+      "defaultModel": {
+        "title": "Choose default model",
+        "description": "Set the model used for new conversations."
+      },
+      "channel": {
+        "title": "Connect a channel",
+        "description": "Link Telegram, Weixin, or Feishu to chat from messaging apps."
+      },
+      "skill": {
+        "title": "Install a skill",
+        "description": "Browse the marketplace or catalog to extend agent capabilities."
+      }
+    }
   },
   "dreamingSettings": {
     "title": "Dreams",
@@ -285,7 +342,7 @@
     "aboutApp": "About"
   },
   "mcpSettings": {
-    "title": "MCP",
+    "title": "External tools (MCP)",
     "subtitle": "Configure outbound MCP servers (stdio or HTTP) for embedded agent runs. Disable all MCP tools with tools.disable: [\"bundle-mcp\"] on an agent.",
     "loading": "Loading MCP configuration…",
     "saved": "MCP configuration saved.",

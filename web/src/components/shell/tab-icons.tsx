@@ -1,5 +1,6 @@
 import type { LucideIcon } from 'lucide-react';
 import {
+  Activity,
   Brain,
   BookOpen,
   Cable,
@@ -38,6 +39,7 @@ const TAB_ICONS: Record<Tab, LucideIcon> = {
   channels: Plug,
   agents: Users,
   logs: FileText,
+  settingsOverview: Activity,
   settingsAppearance: Palette,
   settingsSystem: Shield,
   settingsAgentChat: SlidersHorizontal,

@@ -10,6 +10,7 @@ export type Tab =
   | 'channels'
   | 'agents'
   | 'logs'
+  | 'settingsOverview'
   | 'settingsAppearance'
   | 'settingsProviders'
   | 'settingsModels'
@@ -34,6 +35,7 @@ export type Tab =
   | 'settingsSystem';
 
 export type SettingsSectionId =
+  | 'overview'
   | 'appearance'
   | 'agent'
   | 'agent-chat'

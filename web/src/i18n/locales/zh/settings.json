@@ -1,15 +1,16 @@
 {
   "settingsSections": {
+    "overview": "系统状态",
     "appearance": "偏好设置",
     "agent": "智能体",
     "agent-defaults": "智能体默认",
-    "agent-chat": "对话",
+    "agent-chat": "默认模型与对话",
     "agent-workspace": "工作区",
     "agent-browser": "浏览器",
     "agent-runtime": "运行时",
     "agent-tools": "工具",
-    "agent-skills": "技能",
-    "agent-mcp": "MCP",
+    "agent-skills": "默认技能白名单",
+    "agent-mcp": "外部工具 (MCP)",
     "agent-system-prompt": "系统提示词",
     "providers": "服务商",
     "models": "模型",
@@ -26,6 +27,62 @@
     "system": "系统设置",
     "cron": "定时任务",
     "skills": "技能"
+  },
+  "settingsPage": {
+    "comingSoon": "设置 · {{title}}（即将推出）。"
+  },
+  "setupStatus": {
+    "title": "系统状态",
+    "subtitle": "查看当前配置进度，完成必要步骤后即可开始对话。",
+    "refresh": "刷新",
+    "loading": "正在加载状态…",
+    "loadError": "无法加载系统状态，请检查网关连接后重试。",
+    "summaryTitle": "概览",
+    "summarySubtitle": "对话所需的核心服务。",
+    "summaryGateway": "网关",
+    "summaryProviders": "服务商",
+    "summaryModel": "默认模型",
+    "statusOnline": "在线",
+    "statusOffline": "离线",
+    "requiredCompleteMessage": "必要配置已完成，可以开始对话。",
+    "requiredIncompleteMessage": "请完成下方必要步骤后再开始对话。",
+    "checklistTitle": "设置清单",
+    "checklistSubtitle": "点击步骤进入对应设置。带「可选」标记的步骤可稍后再做。",
+    "optionalBadge": "可选",
+    "labels": {
+      "gatewayOnline": "已连接网关",
+      "gatewayOffline": "未连接 — 请检查令牌与网关",
+      "providersConfigured": "已配置 {{count}} 个服务商",
+      "providersMissing": "尚未配置服务商",
+      "modelConfigured": "{{model}}",
+      "modelMissing": "尚未选择默认模型",
+      "channelConfigured": "已连接至少一个消息通道",
+      "channelMissing": "尚未配置消息通道",
+      "skillsConfigured": "已有 {{count}} 个可用技能",
+      "skillsMissing": "尚未安装技能"
+    },
+    "items": {
+      "gateway": {
+        "title": "连接网关",
+        "description": "确认网页控制台可以访问 xopc 网关。"
+      },
+      "provider": {
+        "title": "配置 LLM 服务商",
+        "description": "至少添加一家 AI 服务商的 API 密钥或 OAuth 令牌。"
+      },
+      "defaultModel": {
+        "title": "选择默认模型",
+        "description": "设置新对话使用的默认模型。"
+      },
+      "channel": {
+        "title": "连接消息通道",
+        "description": "关联 Telegram、微信或飞书，从即时通讯应用对话。"
+      },
+      "skill": {
+        "title": "安装技能",
+        "description": "从市场或目录安装技能，扩展智能体能力。"
+      }
+    }
   },
   "dreamingSettings": {
     "title": "梦境",
@@ -285,7 +342,7 @@
     "aboutApp": "关于"
   },
   "mcpSettings": {
-    "title": "MCP",
+    "title": "外部工具 (MCP)",
     "subtitle": "配置出站 MCP 服务（stdio 或 HTTP），供嵌入式 Agent 运行时使用。可在 Agent 的 tools.disable 中加入 \"bundle-mcp\" 关闭全部 MCP 工具。",
     "loading": "正在加载 MCP 配置…",
     "saved": "MCP 配置已保存。",
