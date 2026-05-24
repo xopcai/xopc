@@ -54,13 +54,16 @@
       "gatewayOnline": "已连接网关",
       "gatewayOffline": "未连接 — 请检查令牌与网关",
       "providersConfigured": "已配置 {{count}} 个服务商",
+      "providersMetaReady": "{{configured}} / {{total}} 个服务商已就绪",
       "providersMissing": "尚未配置服务商",
       "modelConfigured": "{{model}}",
       "modelMissing": "尚未选择默认模型",
       "channelConfigured": "已连接至少一个消息通道",
       "channelMissing": "尚未配置消息通道",
       "skillsConfigured": "已有 {{count}} 个可用技能",
-      "skillsMissing": "尚未安装技能"
+      "skillsMissing": "尚未安装技能",
+      "presetsConfigured": "已配置 {{count}} 个智能体",
+      "presetsMissing": "仅有默认智能体 — 可添加预设角色"
     },
     "items": {
       "gateway": {
@@ -82,6 +85,10 @@
       "skill": {
         "title": "安装技能",
         "description": "从市场或目录安装技能，扩展智能体能力。"
+      },
+      "presets": {
+        "title": "添加预设智能体",
+        "description": "创建专用智能体（如编程、写作等）以应对不同任务。"
       }
     }
   },

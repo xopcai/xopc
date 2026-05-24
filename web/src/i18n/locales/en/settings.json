@@ -53,13 +53,16 @@
       "gatewayOnline": "Connected to gateway",
       "gatewayOffline": "Not connected — check token and gateway",
       "providersConfigured": "{{count}} provider(s) configured",
+      "providersMetaReady": "{{configured}} / {{total}} providers ready",
       "providersMissing": "No provider configured",
       "modelConfigured": "{{model}}",
       "modelMissing": "No default model selected",
       "channelConfigured": "At least one channel connected",
       "channelMissing": "No channel configured yet",
       "skillsConfigured": "{{count}} skill(s) available",
-      "skillsMissing": "No skills installed yet"
+      "skillsMissing": "No skills installed yet",
+      "presetsConfigured": "{{count}} agent(s) configured",
+      "presetsMissing": "Only the default agent — add preset personas"
     },
     "items": {
       "gateway": {
@@ -81,6 +84,10 @@
       "skill": {
         "title": "Install a skill",
         "description": "Browse the marketplace or catalog to extend agent capabilities."
+      },
+      "presets": {
+        "title": "Add preset agents",
+        "description": "Create specialized agents (Coder, Writer, etc.) for different tasks."
       }
     }
   },
