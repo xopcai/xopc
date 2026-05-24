@@ -3,6 +3,22 @@ import type { Config } from '../config/schema.js';
 /** Bump when risk copy or terms change; users must re-accept. */
 export const CURRENT_TUNNEL_CONSENT_VERSION = '2026-05';
 
+/** Bump when Tailscale Serve risk copy changes. */
+export const CURRENT_TAILSCALE_CONSENT_VERSION = '2026-05-serve';
+
+export function hasValidTailscaleConsent(config: Config): boolean {
+  const consent = config.gateway?.tailscale?.consent;
+  if (!consent?.acceptedAt?.trim()) return false;
+  return consent.version === CURRENT_TAILSCALE_CONSENT_VERSION;
+}
+
+export function buildTailscaleConsentRecord() {
+  return {
+    version: CURRENT_TAILSCALE_CONSENT_VERSION,
+    acceptedAt: new Date().toISOString(),
+  };
+}
+
 export const TUNNEL_CONSENT_REQUIRED_CODE = 'TUNNEL_CONSENT_REQUIRED';
 
 export class TunnelConsentError extends Error {

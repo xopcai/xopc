@@ -64,6 +64,7 @@ export type SettingsSectionId =
   | 'gateway'
   | 'heartbeat'
   | 'tunnel'
+  | 'remote-access'
   | 'shares'
   | 'search'
   | 'dreams'

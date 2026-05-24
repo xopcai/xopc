@@ -175,4 +175,20 @@ describe('assertGatewayRuntimeConfig', () => {
       /trustedProxies/,
     );
   });
+
+  it('refuses tailscale serve when bind is not loopback', () => {
+    const cfg = baseConfig({
+      bind: 'lan',
+      host: '0.0.0.0',
+      corsOrigins: ['http://localhost:18790'],
+      tailscale: { mode: 'serve' },
+    });
+    expect(() =>
+      assertGatewayRuntimeConfig({
+        cfg,
+        auth: tokenAuth,
+        port: 18790,
+      }),
+    ).toThrow(/requires gateway\.bind=loopback/);
+  });
 });

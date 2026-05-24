@@ -385,10 +385,15 @@ HTTP API gateway configuration.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `host` | string | `0.0.0.0` | Bind address |
+| `bind` | string | `loopback` | `auto`, `loopback`, `lan`, `tailnet`, `custom` |
+| `host` | string | `127.0.0.1` | **Deprecated** — use `bind` |
 | `port` | number | `18790` | Port number |
+| `mode` | string | `local` | `local` or `remote` (CLI target) |
+| `remote` | object | - | Persistent remote URL/token for CLI when `mode=remote` |
+| `tailscale` | object | `{ mode: off }` | `serve` / `funnel` / `off` — see [network.md](./network.md) |
+| `tls` | object | - | Native HTTPS (optional) |
 | `auth` | object | - | Authentication config |
-| `cors` | object | - | CORS settings |
+| `corsOrigins` | string[] | `[]` | Browser origin allowlist |
 
 #### gateway.auth
 

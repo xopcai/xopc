@@ -11,7 +11,7 @@ import { CronSettingsPanel } from '@/features/settings/cron-settings';
 import { GoalsSettingsPanel } from '@/features/settings/goals-settings';
 import { GatewaySettingsPanel } from '@/features/settings/gateway-settings';
 import { HeartbeatSettingsPanel } from '@/features/settings/heartbeat-settings';
-import { TunnelSettingsPanel } from '@/features/tunnel/tunnel-settings';
+import { RemoteAccessHub } from '@/features/remote-access/remote-access-hub';
 import { SharesSettingsPanel } from '@/features/shares/shares-settings';
 import { ImageModelsSettingsPanel } from '@/features/settings/image-models-settings';
 import { ModelsSettingsPanel } from '@/features/settings/models-settings';
@@ -38,6 +38,7 @@ const SECTIONS: SettingsSectionId[] = [
   'gateway',
   'heartbeat',
   'tunnel',
+  'remote-access',
   'shares',
   'search',
   'cron',
@@ -56,6 +57,10 @@ export function SettingsPage() {
 
   if (!section || !SECTIONS.includes(section as SettingsSectionId)) {
     return <Navigate to="/settings/overview" replace />;
+  }
+
+  if (section === 'tunnel') {
+    return <Navigate to="/settings/remote-access" replace />;
   }
 
   const id = section as SettingsSectionId;
@@ -110,8 +115,8 @@ export function SettingsPage() {
     return <HeartbeatSettingsPanel />;
   }
 
-  if (id === 'tunnel') {
-    return <TunnelSettingsPanel />;
+  if (id === 'tunnel' || id === 'remote-access') {
+    return <RemoteAccessHub />;
   }
 
   if (id === 'shares') {

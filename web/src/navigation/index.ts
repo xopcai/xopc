@@ -35,6 +35,7 @@ const SETTINGS_SECTION_TO_TAB: Record<SettingsSectionId, Tab> = {
   gateway: 'settingsGateway',
   heartbeat: 'settingsHeartbeat',
   tunnel: 'settingsTunnel',
+  'remote-access': 'settingsTunnel',
   shares: 'settingsShares',
   search: 'settingsSearch',
   dreams: 'settingsDreams',
