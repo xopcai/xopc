@@ -6,6 +6,7 @@ import { PrimaryAppHeader } from '@/components/shell/primary-app-header';
 import { SidebarColumn } from '@/components/shell/sidebar-column';
 import { WorkspaceColumn } from '@/components/shell/workspace-column';
 import { TokenDialog } from '@/components/shell/token-dialog';
+import { DesktopNotificationBridge } from '@/features/electron/desktop-notification-bridge';
 import { ElectronGatewayExitBanner } from '@/features/electron/electron-gateway-exit-banner';
 import { ElectronMenuListener } from '@/features/electron/electron-menu-listener';
 import { UpdateReminderBar } from '@/features/updater/update-reminder-bar';
@@ -133,6 +134,7 @@ export function AppShell() {
       </a>
       <GatewaySseBridge />
       <DreamingOverlay />
+      <DesktopNotificationBridge />
       <ElectronMenuListener />
       <NavigateToChatListener />
       <ExtensionNavigateListener />

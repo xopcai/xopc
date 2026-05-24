@@ -11,13 +11,25 @@ import { join } from 'node:path';
 
 import { type IpcMain, type IpcMainInvokeEvent, app, powerSaveBlocker, shell, systemPreferences } from 'electron';
 
-import type { PrivacyPaneKind, ShellPermissionSnapshot, SystemSettingsBehavior, TccTriState } from './system-settings-types.js';
+import type { PrivacyPaneKind, ShellPermissionSnapshot, SystemSettingsBehavior, TccTriState, PermissionRequestResult } from './system-settings-types.js';
+import { openMacosPrivacyPane, openWinPrivacyPane } from './privacy-deep-links.js';
 
 const execFileAsync = promisify(execFile);
 
 const PREFS_NAME = 'electron-shell-prefs.json';
 
 const LINUX_HELP_URL = 'https://xopcai.github.io/xopc/';
+
+function rawMediaAccessStatus(type: 'microphone' | 'screen' | 'camera'): string {
+  if (process.platform !== 'win32' && process.platform !== 'darwin') {
+    return 'unknown';
+  }
+  try {
+    return systemPreferences.getMediaAccessStatus(type);
+  } catch {
+    return 'unknown';
+  }
+}
 
 type ElectronShellPreferences = {
   keepAwakePreferred: boolean;
@@ -103,15 +115,7 @@ function tccToTriState(s: string): TccTriState {
 }
 
 function mapMediaStatusWhenAvailable(type: 'microphone' | 'screen' | 'camera'): TccTriState {
-  if (process.platform !== 'win32' && process.platform !== 'darwin') {
-    return 'unknown';
-  }
-  try {
-    const s = systemPreferences.getMediaAccessStatus(type);
-    return tccToTriState(s);
-  } catch {
-    return 'unknown';
-  }
+  return tccToTriState(rawMediaAccessStatus(type));
 }
 
 async function probeFullDiskAccess(): Promise<TccTriState> {
@@ -208,30 +212,6 @@ async function getPermissionSnapshot(): Promise<ShellPermissionSnapshot> {
   return buildSnapshotLinux();
 }
 
-const MACOS_PRIVACY_URLS: Record<PrivacyPaneKind, string> = {
-  fullDisk: 'x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles',
-  screen: 'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture',
-  microphone: 'x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone',
-  accessibility: 'x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility',
-  automation: 'x-apple.systempreferences:com.apple.preference.security?Privacy_Automation',
-  notifications: 'x-apple.systempreferences:com.apple.Notifications-Settings.extension',
-  location: 'x-apple.systempreferences:com.apple.preference.security?Privacy_LocationServices',
-  camera: 'x-apple.systempreferences:com.apple.preference.security?Privacy_Camera',
-};
-
-/** @see https://learn.microsoft.com/en-us/windows/uwp/launch-resume/launch-app-for-settings */
-const WIN_SETTINGS_URLS: Record<PrivacyPaneKind, string> = {
-  fullDisk: 'ms-settings:storage',
-  screen: 'ms-settings:display',
-  microphone: 'ms-settings:privacy-microphone',
-  accessibility: 'ms-settings:accessibility',
-  automation: 'ms-settings:defaultapps',
-  notifications: 'ms-settings:notifications',
-  location: 'ms-settings:privacy-location',
-  camera: 'ms-settings:privacy-webcam',
-};
-
-/** `gnome-control-center` (first arg = panel) — best effort across distros. */
 const LINUX_GNOME_ARGS: Record<PrivacyPaneKind, [string, ...string[]] | [string]> = {
   fullDisk: ['privacy'],
   screen: ['display'],
@@ -257,24 +237,74 @@ async function openLinuxPrivacyPanel(kind: PrivacyPaneKind): Promise<void> {
   }
 }
 
-function openPrivacyForPlatform(kind: PrivacyPaneKind): void {
+async function openPrivacyForPlatform(kind: PrivacyPaneKind): Promise<boolean> {
   if (process.platform === 'darwin') {
-    const u = MACOS_PRIVACY_URLS[kind];
-    if (u) {
-      void shell.openExternal(u);
-    }
-    return;
+    return openMacosPrivacyPane(kind);
   }
   if (process.platform === 'win32') {
-    const u = WIN_SETTINGS_URLS[kind];
-    if (u) {
-      void shell.openExternal(u);
-    }
-    return;
+    return openWinPrivacyPane(kind);
   }
   if (process.platform === 'linux') {
-    void openLinuxPrivacyPanel(kind);
+    await openLinuxPrivacyPanel(kind);
+    return true;
   }
+  return false;
+}
+
+async function requestMicrophoneAccess(): Promise<PermissionRequestResult> {
+  if (process.platform === 'darwin') {
+    const raw = rawMediaAccessStatus('microphone');
+    if (raw === 'granted') {
+      return { status: 'granted', outcome: 'already-granted' };
+    }
+    if (raw === 'denied' || raw === 'restricted') {
+      await openMacosPrivacyPane('microphone');
+      return { status: 'denied', outcome: 'opened-settings' };
+    }
+    try {
+      const granted = await systemPreferences.askForMediaAccess('microphone');
+      return {
+        status: granted ? 'granted' : mapMediaStatusWhenAvailable('microphone'),
+        outcome: granted ? 'granted' : 'denied',
+      };
+    } catch {
+      return {
+        status: mapMediaStatusWhenAvailable('microphone'),
+        outcome: 'denied',
+      };
+    }
+  }
+  if (process.platform === 'win32') {
+    const raw = rawMediaAccessStatus('microphone');
+    if (raw === 'denied' || raw === 'restricted') {
+      await openWinPrivacyPane('microphone');
+      return { status: 'denied', outcome: 'opened-settings' };
+    }
+    return { status: mapMediaStatusWhenAvailable('microphone'), outcome: 'prompted' };
+  }
+  return { status: mapMediaStatusWhenAvailable('microphone'), outcome: 'prompted' };
+}
+
+async function requestAccessibilityAccess(): Promise<PermissionRequestResult> {
+  if (process.platform === 'darwin') {
+    if (accessibilityState() === 'granted') {
+      return { status: 'granted', outcome: 'already-granted' };
+    }
+    try {
+      if (systemPreferences.isTrustedAccessibilityClient(true)) {
+        return { status: 'granted', outcome: 'granted' };
+      }
+    } catch {
+      /* fall through to System Settings */
+    }
+    await openMacosPrivacyPane('accessibility');
+    return { status: accessibilityState(), outcome: 'opened-settings' };
+  }
+  if (process.platform === 'win32') {
+    await openWinPrivacyPane('accessibility');
+    return { status: 'unknown', outcome: 'opened-settings' };
+  }
+  return { status: 'unknown', outcome: 'opened-settings' };
 }
 
 function getBehaviorState(): SystemSettingsBehavior {
@@ -344,25 +374,36 @@ export function registerSystemSettingsIpc(ipcMain: IpcMain): void {
 
   ipcMain.handle('system-settings:get-permissions', permissionsHandler);
 
-  const openHandler = (_e: IpcMainInvokeEvent, kind: PrivacyPaneKind) => {
-    openPrivacyForPlatform(kind);
-    return { ok: true as const };
+  const openHandler = async (_e: IpcMainInvokeEvent, kind: PrivacyPaneKind) => {
+    const ok = await openPrivacyForPlatform(kind);
+    return ok ? ({ ok: true as const }) : ({ ok: false as const, error: 'OPEN_SETTINGS_FAILED' });
   };
 
   ipcMain.handle('system-settings:open-privacy', openHandler);
 
-  ipcMain.handle('system-settings:request-microphone', async (): Promise<{ status: TccTriState }> => {
-    if (process.platform === 'darwin') {
-      try {
-        const granted = await systemPreferences.askForMediaAccess('microphone');
-        return { status: granted ? 'granted' : 'denied' };
-      } catch {
-        return { status: mapMediaStatusWhenAvailable('microphone') };
-      }
-    }
-    if (process.platform === 'win32' || process.platform === 'linux') {
-      return { status: mapMediaStatusWhenAvailable('microphone') };
-    }
-    return { status: 'unknown' };
+  ipcMain.handle('system-settings:request-microphone', async (): Promise<PermissionRequestResult> => {
+    return requestMicrophoneAccess();
   });
+
+  ipcMain.handle('system-settings:request-accessibility', async (): Promise<PermissionRequestResult> => {
+    return requestAccessibilityAccess();
+  });
+
+  ipcMain.handle('system-settings:get-uninstall-info', async () => {
+    const { getUninstallInfo } = await import('../uninstall/get-uninstall-info.js');
+    return getUninstallInfo();
+  });
+
+  ipcMain.handle('system-settings:clear-user-data', async () => {
+    const { clearUserData } = await import('../uninstall/clear-user-data.js');
+    return clearUserData();
+  });
+
+  ipcMain.handle(
+    'system-settings:uninstall-app',
+    async (_e: IpcMainInvokeEvent, options?: { removeUserData?: boolean }) => {
+      const { uninstallApp } = await import('../uninstall/index.js');
+      return uninstallApp({ removeUserData: options?.removeUserData === true });
+    },
+  );
 }
