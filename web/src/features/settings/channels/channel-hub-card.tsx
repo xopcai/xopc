@@ -76,7 +76,7 @@ export function ChannelHubCard({
         'hover:border-edge',
       )}
     >
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex items-start gap-3">
         <div
           className={cn(
             'flex size-11 shrink-0 items-center justify-center rounded-xl ring-1 ring-edge-subtle/40',
@@ -85,6 +85,31 @@ export function ChannelHubCard({
           aria-hidden
         >
           <SessionChannelIcon sourceChannel={channelId} className="size-5" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <h2 className="text-sm font-semibold text-fg">{title}</h2>
+          <div className="mt-1 flex flex-wrap items-center gap-1.5">
+            <span
+              className={cn(
+                'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium',
+                statusPillClass(vm.status),
+              )}
+            >
+              {statusLabel(ch, vm.status)}
+            </span>
+            {vm.pendingPairing > 0 ? (
+              <button
+                type="button"
+                className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900 dark:bg-amber-950/60 dark:text-amber-200"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onReviewPairing();
+                }}
+              >
+                {ch.hubPairingPendingBadge.replace('{{count}}', String(vm.pendingPairing))}
+              </button>
+            ) : null}
+          </div>
         </div>
         {showToggle ? (
           <button
@@ -109,32 +134,9 @@ export function ChannelHubCard({
       </div>
 
       <div className="min-w-0 flex-1">
-        <h2 className="text-sm font-semibold text-fg">{title}</h2>
-        <div className="mt-1.5 flex flex-wrap items-center gap-2">
-          <span
-            className={cn(
-              'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium',
-              statusPillClass(vm.status),
-            )}
-          >
-            {statusLabel(ch, vm.status)}
-          </span>
-          {vm.pendingPairing > 0 ? (
-            <button
-              type="button"
-              className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900 dark:bg-amber-950/60 dark:text-amber-200"
-              onClick={(e) => {
-                e.stopPropagation();
-                onReviewPairing();
-              }}
-            >
-              {ch.hubPairingPendingBadge.replace('{{count}}', String(vm.pendingPairing))}
-            </button>
-          ) : null}
-        </div>
-        <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-fg-muted">{subtitle}</p>
+        <p className="line-clamp-2 text-xs leading-relaxed text-fg-muted">{subtitle}</p>
         {vm.summaryLines.length > 0 ? (
-          <ul className="mt-2 space-y-0.5">
+          <ul className="mt-1.5 space-y-0.5">
             {vm.summaryLines.map((line) => (
               <li key={line} className="text-xs text-fg-muted">
                 {line}
