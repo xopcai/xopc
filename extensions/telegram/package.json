@@ -20,12 +20,12 @@
   "dependencies": {
     "abort-controller": "^3.0.0",
     "@grammyjs/runner": "^2.0.3",
-    "@grammyjs/types": "^3.26.0",
     "@inquirer/prompts": "^8.4.2",
     "grammy": "^1.42.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@grammyjs/types": "^3.26.0",
     "typescript": "^5.9.3"
   },
   "peerDependencies": {
