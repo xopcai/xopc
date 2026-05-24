@@ -101,15 +101,6 @@ export function CronPage() {
     }, 400);
   }, []);
 
-  const hasElectronFolderPicker =
-    typeof window !== 'undefined' && Boolean(window.electronAPI?.file?.openDirectory);
-
-  const openNativeFolderPickerCron = useCallback(async (): Promise<string | null> => {
-    const api = typeof window !== 'undefined' ? window.electronAPI?.file?.openDirectory : undefined;
-    if (api) return api();
-    return null;
-  }, []);
-
   const onSelectTemplate = useCallback(
     (templateId: string) => {
       const ok = form.applyCronTemplate(templateId);
@@ -456,11 +447,6 @@ export function CronPage() {
         channels={data.channels}
         sessionChatIds={form.sessionChatIds}
         cronAgentSelectOptions={form.cronAgentSelectOptions}
-        hasElectronFolderPicker={hasElectronFolderPicker}
-        openNativeFolderPicker={openNativeFolderPickerCron}
-        applyWorkingDirectory={form.applyWorkingDirectory}
-        wdModalOpen={form.formWdModalOpen}
-        onWdModalOpenChange={form.setFormWdModalOpen}
         defaultModelResolver={defaultModelForForm}
         formMode={form.formMode}
         formJobId={form.formJobId}

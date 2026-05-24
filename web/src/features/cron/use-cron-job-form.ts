@@ -8,7 +8,7 @@ import {
   type CronJob,
   type SessionChatId,
 } from '@/features/cron/cron-api';
-import { DEFAULT_SCHEDULE, pushRecentWorkspaceDirForCron } from '@/features/cron/cron-page-lib';
+import { DEFAULT_SCHEDULE } from '@/features/cron/cron-page-lib';
 import { getCronTemplateCopy } from '@/features/cron/cron-template-i18n';
 import { cronTemplateById } from '@/features/cron/cron-templates';
 import type { messages as makeMessages } from '@/i18n/messages';
@@ -39,7 +39,6 @@ export function useCronJobForm(opts: {
   const [formAgentId, setFormAgentId] = useState('');
   const [formAgentLocalOnly, setFormAgentLocalOnly] = useState(false);
   const [formWorkingDirectory, setFormWorkingDirectory] = useState('');
-  const [formWdModalOpen, setFormWdModalOpen] = useState(false);
   const [formModel, setFormModel] = useState('');
   const [formSubmitting, setFormSubmitting] = useState(false);
   const [sessionChatIds, setSessionChatIds] = useState<SessionChatId[]>([]);
@@ -209,7 +208,6 @@ export function useCronJobForm(opts: {
     setFormSessionTarget('main');
     setFormAgentId('');
     setFormWorkingDirectory('');
-    setFormWdModalOpen(false);
     setFormAgentLocalOnly(false);
     setFormModel('');
     setFormMessageMdMode('edit');
@@ -243,13 +241,6 @@ export function useCronJobForm(opts: {
     void getSessionChatIds(formChannel).then(setSessionChatIds);
   }, [formChannel]);
 
-  const applyWorkingDirectory = useCallback(async (path: string) => {
-    const t = path.trim();
-    if (!t) return;
-    pushRecentWorkspaceDirForCron(t);
-    setFormWorkingDirectory(t);
-  }, []);
-
   return {
     // state
     formOpen,
@@ -266,7 +257,6 @@ export function useCronJobForm(opts: {
     formAgentId,
     formAgentLocalOnly,
     formWorkingDirectory,
-    formWdModalOpen,
     formModel,
     formSubmitting,
     sessionChatIds,
@@ -278,7 +268,6 @@ export function useCronJobForm(opts: {
     setFormAgentId,
     setFormAgentLocalOnly,
     setFormWorkingDirectory,
-    setFormWdModalOpen,
     setFormSubmitting,
     // derived
     canSubmit,
@@ -294,6 +283,5 @@ export function useCronJobForm(opts: {
     handleFormChannelChange,
     handleFormModelUserChange,
     refreshRecipientsList,
-    applyWorkingDirectory,
   };
 }
