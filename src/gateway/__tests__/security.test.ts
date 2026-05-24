@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createHonoApp, isExtensionGatewayUiAssetPath } from '../hono/app.js';
 import type { GatewayService } from '../service.js';
 import { GatewayConfigSchema } from '../../config/schema.js';
-import { getAuthFailureRateLimiter, resetAuthRateLimitersForTests } from '../auth-rate-limit.js';
+import { resetAuthRateLimitersForTests } from '../auth-rate-limit.js';
 
 // Mock GatewayService for testing
 function createMockService(config: any = {}): GatewayService {

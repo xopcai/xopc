@@ -3,7 +3,7 @@ import net from 'node:net';
 
 import type { Config } from '../config/schema.js';
 import type { GatewayBindMode } from '../config/schema.js';
-import { isAllInterfacesHost, isLoopbackHost } from '../gateway/host.js';
+import { isLoopbackHost } from '../gateway/host.js';
 
 export type { GatewayBindMode };
 

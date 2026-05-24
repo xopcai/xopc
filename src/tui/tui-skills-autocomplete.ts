@@ -1,7 +1,7 @@
-import { resolveBundledSkillsDir, resolveStateDir } from '../../config/paths.js';
-import { getWorkspacePath, loadConfig } from '../../config/index.js';
-import { loadSkills } from '../../agent/skills/index.js';
-import type { TuiAutocompleteProvider } from '../../extensions/types/tui.js';
+import { resolveBundledSkillsDir, resolveStateDir } from '../config/paths.js';
+import { getWorkspacePath, loadConfig } from '../config/index.js';
+import { loadSkills } from '../agent/skills/index.js';
+import type { TuiAutocompleteProvider } from '../extensions/types/tui.js';
 
 /** `@skill` autocomplete from workspace + global + bundled skill directories. */
 export function createSkillsAutocompleteProvider(): TuiAutocompleteProvider {
