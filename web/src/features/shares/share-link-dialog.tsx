@@ -186,7 +186,7 @@ export function ReachabilityHint({
       </span>
       <span className="flex items-center gap-1 text-xs text-fg-muted">
         {reachabilityHint ?? t.reachLocalHint}{' '}
-        <Link to="/settings/tunnel" className="inline-flex items-center gap-0.5 text-accent hover:underline">
+        <Link to="/settings/remote-access" className="inline-flex items-center gap-0.5 text-accent hover:underline">
           {t.openTunnel}
           <ExternalLink className="size-3" />
         </Link>

@@ -18,6 +18,7 @@ import {
   createServiceStartCommand,
   createServiceStatusCommand,
 } from './gateway/index.js';
+import { registerGatewaySshTunnelCommand } from './gateway-ssh-tunnel.js';
 
 async function ensureGatewayReady(
   configPath: string,
@@ -84,6 +85,8 @@ function createGatewayCommand(_ctx: CLIContext): Command {
     )
     .option('--port <number>', 'Port to listen on (defaults to gateway.port in config, else 18790)')
     .option('--token <token>', 'Authentication token')
+    .option('--tailscale <mode>', 'Tailscale exposure: off | serve | funnel (overrides config for this run)')
+    .option('--tailscale-reset-on-exit', 'Reset Tailscale serve/funnel on gateway shutdown', false)
     .option('--force', 'Force kill existing process on port', false)
     .option('--no-hot-reload', 'Disable config hot reload')
     .option('--foreground', 'Start gateway in foreground mode (blocks terminal)', true)
@@ -99,8 +102,30 @@ function createGatewayCommand(_ctx: CLIContext): Command {
     .addCommand(createInstallCommand())
     .addCommand(createUninstallCommand())
     .addCommand(createServiceStartCommand())
-    .addCommand(createServiceStatusCommand())
-    .action(async (options) => {
+    .addCommand(createServiceStatusCommand());
+
+  registerGatewaySshTunnelCommand(cmd, _ctx);
+
+  cmd.action(async (options) => {
+      const tailscaleModes = new Set(['off', 'serve', 'funnel']);
+      const tailscaleRaw =
+        typeof options.tailscale === 'string' ? options.tailscale.trim().toLowerCase() : undefined;
+      const tailscaleOverride =
+        tailscaleRaw && tailscaleModes.has(tailscaleRaw)
+          ? (tailscaleRaw as 'off' | 'serve' | 'funnel')
+          : undefined;
+      if (tailscaleRaw && !tailscaleOverride) {
+        console.error(`Invalid --tailscale mode "${tailscaleRaw}". Use: off, serve, funnel.`);
+        process.exit(1);
+      }
+
+      if (tailscaleOverride && tailscaleOverride !== 'off') {
+        process.env.XOPC_GATEWAY_TAILSCALE_MODE = tailscaleOverride;
+      }
+      if (options.tailscaleResetOnExit === true) {
+        process.env.XOPC_GATEWAY_TAILSCALE_RESET_ON_EXIT = '1';
+      }
+
       const ctx = getContextWithOpts();
       const [{ loadConfig }, { resolveConfigPath }, { runGatewayLoop }, gatewayPorts] = await Promise.all([
         import('../../config/index.js'),

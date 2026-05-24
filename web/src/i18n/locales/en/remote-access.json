@@ -1,0 +1,22 @@
+{
+  "remoteAccess": {
+    "tailscale": {
+      "title": "Tailscale Serve (recommended)",
+      "subtitle": "Expose the gateway on your tailnet over HTTPS while keeping the process bound to loopback.",
+      "loading": "Loading Tailscale status…",
+      "statusActive": "Tailscale Serve is active.",
+      "statusOff": "Tailscale Serve is off.",
+      "enableServe": "Enable Serve",
+      "disableServe": "Disable Serve",
+      "copyUrl": "Copy HTTPS URL",
+      "copied": "Copied",
+      "hint": "Requires Tailscale installed and logged in on this machine. API routes still require your gateway token."
+    },
+    "ssh": {
+      "title": "SSH tunnel (CLI)",
+      "subtitle": "Forward the remote gateway loopback port to your laptop when Tailscale is unavailable.",
+      "copy": "Copy command",
+      "copied": "Copied"
+    }
+  }
+}

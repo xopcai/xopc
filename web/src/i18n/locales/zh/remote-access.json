@@ -1,0 +1,22 @@
+{
+  "remoteAccess": {
+    "tailscale": {
+      "title": "Tailscale Serve（推荐）",
+      "subtitle": "在 tailnet 上通过 HTTPS 暴露 Gateway，进程仍绑定 loopback。",
+      "loading": "正在加载 Tailscale 状态…",
+      "statusActive": "Tailscale Serve 已启用。",
+      "statusOff": "Tailscale Serve 未启用。",
+      "enableServe": "启用 Serve",
+      "disableServe": "停用 Serve",
+      "copyUrl": "复制 HTTPS 地址",
+      "copied": "已复制",
+      "hint": "需要本机已安装并登录 Tailscale。API 仍需要 gateway token。"
+    },
+    "ssh": {
+      "title": "SSH 隧道（CLI）",
+      "subtitle": "无 Tailscale 时，将远程 Gateway 的 loopback 端口转发到本机。",
+      "copy": "复制命令",
+      "copied": "已复制"
+    }
+  }
+}
