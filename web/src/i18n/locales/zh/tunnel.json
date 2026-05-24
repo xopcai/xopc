@@ -28,6 +28,7 @@
     "frpcDownloading": "正在下载 frpc…",
     "frpcDownloadingPercent": "正在下载 frpc… {{percent}}%",
     "frpcDownloadingBytes": "正在下载 frpc… {{received}}",
+    "frpcDownloadingUrlLabel": "下载地址",
     "frpcExtracting": "正在解压 frpc…",
     "startProgressTitle": "启动进度",
     "startProgressHint": "首次开启可能需要 1–3 分钟（HTTPS 证书）。公网地址会先显示，但隧道尚未完全就绪。",

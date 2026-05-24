@@ -24,6 +24,9 @@ describe('frpc-binary release URLs', () => {
     const windows = frpcDownloadUrlsForTarget('windows', 'amd64');
     expect(windows.every((url) => url.endsWith('.zip'))).toBe(true);
     expect(windows[0]).toBe(
+      `https://frp.xopc.ai/bin/frp_${FRPC_VERSION}_windows_amd64.zip`,
+    );
+    expect(windows[1]).toBe(
       `https://github.com/fatedier/frp/releases/download/v${FRPC_VERSION}/frp_${FRPC_VERSION}_windows_amd64.zip`,
     );
 
