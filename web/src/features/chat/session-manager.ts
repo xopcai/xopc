@@ -191,12 +191,15 @@ export class SessionManager {
     return key && key !== 'new' ? key : null;
   }
 
-  /** Delete a range of messages from a session by index. */
-  async deleteMessages(sessionKey: string, startIndex: number, count: number): Promise<void> {
+  /** Delete one user turn (user + assistant/tool rows) or a raw LLM index range. */
+  async deleteMessages(
+    sessionKey: string,
+    opts: { userRoundIndex: number } | { startIndex: number; count: number },
+  ): Promise<void> {
     const res = await apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(sessionKey)}/messages`), {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ startIndex, count }),
+      body: JSON.stringify(opts),
     });
     if (!res.ok) {
       const json = (await res.json().catch(() => ({}))) as { error?: string };
