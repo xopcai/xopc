@@ -24,8 +24,6 @@ export type GatewayChannelConnectDeferMode = 'auto' | 'off' | 'explicit';
 export interface GatewaySettingsState {
   bind: GatewayBindMode;
   customBindHost: string;
-  /** Legacy mirror of bind; kept in sync on save. */
-  host: string;
   port: number;
   auth: {
     mode: GatewayAuthMode;

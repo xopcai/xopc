@@ -642,12 +642,10 @@ export type TunnelConfig = z.infer<typeof TunnelConfigSchema>;
 export const GatewayBindModeSchema = z.enum(['auto', 'loopback', 'lan', 'tailnet', 'custom']);
 
 export const GatewayConfigSchema = z.object({
-  /** Semantic bind mode (preferred over raw `host`). */
+  /** Semantic bind mode. */
   bind: GatewayBindModeSchema.optional(),
   /** IPv4 listen address when `bind` is `custom`. */
   customBindHost: z.string().optional(),
-  /** @deprecated Use `bind` + `customBindHost`. Kept for backward compatibility. */
-  host: z.string().optional(),
   port: z.number().optional(),
   /** local: this process runs the gateway; remote: CLI clients target gateway.remote. */
   mode: GatewayModeSchema.optional(),
@@ -699,7 +697,6 @@ export const GatewayConfigSchema = z.object({
   }).optional(),
 }).default({
   bind: 'loopback',
-  host: '127.0.0.1',
   port: 18790,
   auth: {
     mode: 'token',
@@ -1119,7 +1116,7 @@ export const ConfigSchema = z.object({
     },
   },
   gateway: {
-    host: '127.0.0.1',
+    bind: 'loopback',
     port: 18790,
     auth: {
       mode: 'token',

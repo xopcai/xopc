@@ -38,7 +38,6 @@ export function mergeShareConfigPatch(
   if (!config.gateway) {
     config.gateway = {
       bind: 'loopback',
-      host: '127.0.0.1',
       port: 18790,
       auth: { mode: 'token' },
       heartbeat: { enabled: true, intervalMs: 1_800_000, includeSystemPromptSection: false },

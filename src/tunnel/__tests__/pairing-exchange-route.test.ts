@@ -7,7 +7,7 @@ import { resetPairingExchangeLimitsForTests } from '../pairing-rate-limit.js';
 function mockService() {
   return {
     currentConfig: {
-      gateway: { port: 18790, host: '127.0.0.1', auth: { mode: 'token' as const } },
+      gateway: { port: 18790, bind: 'loopback', auth: { mode: 'token' as const } },
       tunnel: { enabled: false, brokerUrl: 'https://frp.xopc.ai/api', autoStart: false },
     },
     getAuthToken: () => 'gateway-secret-token',

@@ -1,6 +1,5 @@
 import type { Config } from '../config/schema.js';
 import type { GatewayBindMode } from '../config/schema.js';
-import { inferBindModeFromHost } from '../config/gateway-bind.js';
 import type { ResolvedGatewayAuth } from './auth.js';
 import { isAuthRateLimitGloballyDisabled, isGatewayStrictSecurityEnabled } from './auth-rate-limit.js';
 import {
@@ -50,13 +49,11 @@ export function assertGatewayRuntimeConfig(params: {
   cfg: Config;
   auth: ResolvedGatewayAuth;
   bindOverride?: GatewayBindMode;
-  hostOverride?: string;
   port: number;
 }): GatewayRuntimeConfig {
   const plan = resolveGatewayListenPlan({
     cfg: params.cfg,
     bindOverride: params.bindOverride,
-    hostOverride: params.hostOverride,
   });
   const { bindMode, bindHost, customBindHost } = plan;
   const loopback = isLoopbackHost(bindHost);
@@ -71,8 +68,7 @@ export function assertGatewayRuntimeConfig(params: {
   }
 
   if (bindMode === 'custom') {
-    const configuredCustom = params.cfg.gateway?.customBindHost?.trim()
-      ?? (params.cfg.gateway?.host?.trim() && inferLegacyCustomHost(params.cfg));
+    const configuredCustom = params.cfg.gateway?.customBindHost?.trim();
     if (!configuredCustom) {
       throw new Error('gateway.bind=custom requires gateway.customBindHost');
     }
@@ -165,12 +161,4 @@ export function assertGatewayRuntimeConfig(params: {
     rateLimitEnabled,
     tlsEnabled,
   };
-}
-
-function inferLegacyCustomHost(cfg: Config): string | undefined {
-  const host = cfg.gateway?.host?.trim();
-  if (!host) {
-    return undefined;
-  }
-  return inferBindModeFromHost(host) === 'custom' ? host : undefined;
 }

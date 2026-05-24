@@ -58,7 +58,6 @@ export const BASE_RELOAD_RULES: ReloadRule[] = [
   // Gateway - restart required
   { prefix: 'gateway.bind', kind: 'restart', description: 'Gateway bind mode' },
   { prefix: 'gateway.customBindHost', kind: 'restart', description: 'Gateway custom bind host' },
-  { prefix: 'gateway.host', kind: 'restart', description: 'Host address (legacy)' },
   { prefix: 'gateway.port', kind: 'restart', description: 'Port number' },
   { prefix: 'gateway.mode', kind: 'restart', description: 'Gateway local/remote CLI mode' },
   { prefix: 'gateway.remote', kind: 'restart', description: 'Remote gateway CLI target' },

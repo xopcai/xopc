@@ -35,7 +35,7 @@ function minimalConfig(overrides: Partial<Config> = {}): Config {
     session: { dmScope: 'main' },
     channels: {},
     gateway: {
-      host: '127.0.0.1',
+      bind: 'loopback',
       port: 18790,
       auth: { mode: 'token' },
       heartbeat: { enabled: true, intervalMs: 60_000 },

@@ -23,8 +23,7 @@ import { registerGatewaySshTunnelCommand } from './gateway-ssh-tunnel.js';
 async function ensureGatewayReady(
   configPath: string,
   workspacePath: string,
-  gatewayHost: string,
-  gatewayPort: number,
+  port: number,
 ): Promise<void> {
   const [{ initWorkspace }, { seedMainAgentProfileMarkdown }] = await Promise.all([
     import('../utils/init-workspace.js'),
@@ -33,8 +32,7 @@ async function ensureGatewayReady(
   const result = await initWorkspace({
     configPath,
     workspacePath,
-    gatewayHost,
-    gatewayPort,
+    gatewayPort: port,
   });
 
   if (result.configCreated || result.workspaceCreated) {
@@ -61,7 +59,6 @@ function createGatewayCommand(_ctx: CLIContext): Command {
         'xopc gateway                   # Start gateway (foreground, default)',
         'xopc gateway --background      # Start gateway in background',
         'xopc gateway --bind lan          # Listen on all interfaces (LAN)',
-        'xopc gateway --host 0.0.0.0      # Deprecated: same as --bind lan',
         'xopc gateway --port 8080       # Custom port',
         'xopc gateway --force           # Force kill existing process',
         'xopc gateway stop             # Stop gateway',
@@ -77,11 +74,7 @@ function createGatewayCommand(_ctx: CLIContext): Command {
     )
     .option(
       '--bind <mode>',
-      'Bind mode: loopback | lan | auto | custom | tailnet (preferred over --host)',
-    )
-    .option(
-      '--host <address>',
-      'Deprecated: use --bind. Maps legacy host strings to bind modes.',
+      'Bind mode: loopback | lan | auto | custom | tailnet',
     )
     .option('--port <number>', 'Port to listen on (defaults to gateway.port in config, else 18790)')
     .option('--token <token>', 'Authentication token')
@@ -149,12 +142,6 @@ function createGatewayCommand(_ctx: CLIContext): Command {
         process.exit(1);
       }
 
-      const hostFromFlag =
-        typeof options.host === 'string' && options.host.trim().length > 0 ? options.host.trim() : undefined;
-      if (hostFromFlag && !bindFromFlag) {
-        console.warn('Warning: `--host` is deprecated; prefer `--bind` (e.g. `--bind lan`).');
-      }
-
       const portRaw = options.port as string | number | undefined;
       const portFromFlag =
         portRaw !== undefined && portRaw !== null && String(portRaw).trim().length > 0
@@ -165,15 +152,14 @@ function createGatewayCommand(_ctx: CLIContext): Command {
       const listenPlan = resolveGatewayListenPlan({
         cfg: config,
         bindOverride: bindFromFlag,
-        hostOverride: hostFromFlag,
       });
-      const host = listenPlan.bindHost;
+      const bindHost = listenPlan.bindHost;
       const port =
         portFromFlag !== undefined && Number.isFinite(portFromFlag)
           ? portFromFlag
           : (typeof config.gateway.port === 'number' ? config.gateway.port : 18790);
 
-      await ensureGatewayReady(ctx.configPath, ctx.workspacePath, host, port);
+      await ensureGatewayReady(ctx.configPath, ctx.workspacePath, port);
 
       const effectiveConfig = loadConfig(ctx.configPath);
       const {
@@ -192,7 +178,6 @@ function createGatewayCommand(_ctx: CLIContext): Command {
           cfg: effectiveConfig,
           auth,
           bindOverride: bindFromFlag,
-          hostOverride: hostFromFlag,
           port,
         });
       } catch (err) {
@@ -221,7 +206,7 @@ function createGatewayCommand(_ctx: CLIContext): Command {
       }
 
       // Check if port is available
-      const portAvailable = await checkPortAvailable(port, host);
+      const portAvailable = await checkPortAvailable(port, bindHost);
       if (!portAvailable) {
         console.error(`Port ${port} is already in use. Use --force to kill existing process.`);
         process.exit(1);
@@ -233,7 +218,7 @@ function createGatewayCommand(_ctx: CLIContext): Command {
       // Background mode: spawn detached process
       if (isBackground) {
         console.log('🚀 Starting xopc gateway in background...');
-        console.log(`   Host: ${host}`);
+        console.log(`   Bind: ${listenPlan.bindMode} (${bindHost})`);
         console.log(`   Port: ${port}`);
         console.log('');
 
@@ -255,7 +240,7 @@ function createGatewayCommand(_ctx: CLIContext): Command {
         await new Promise(resolve => setTimeout(resolve, 500));
 
         if (child.pid && !child.killed) {
-          const displayHost = host === '0.0.0.0' ? 'localhost' : host;
+          const displayHost = bindHost === '0.0.0.0' ? 'localhost' : bindHost;
           console.log('✅ Gateway started in background');
           console.log(`   PID: ${child.pid}`);
           console.log(`   URL: http://${displayHost}:${port}`);
@@ -278,7 +263,7 @@ function createGatewayCommand(_ctx: CLIContext): Command {
 
       // Foreground mode: Start gateway with run loop
       console.log('🚀 Starting xopc gateway...');
-      console.log(`   Host: ${host}`);
+      console.log(`   Bind: ${listenPlan.bindMode} (${bindHost})`);
       console.log(`   Port: ${port}`);
       console.log('');
       console.log('Press Ctrl+C to stop');
@@ -293,7 +278,6 @@ function createGatewayCommand(_ctx: CLIContext): Command {
             bindHost: listenPlan.bindHost,
             bind: listenPlan.bindMode,
             customBindHost: listenPlan.customBindHost,
-            host: hostFromFlag,
             port,
             token: options.token || config?.gateway?.auth?.token,
             verbose: ctx.isVerbose,
@@ -302,7 +286,7 @@ function createGatewayCommand(_ctx: CLIContext): Command {
           });
           await server.start();
 
-          const displayHost = host === '0.0.0.0' ? 'localhost' : host;
+          const displayHost = bindHost === '0.0.0.0' ? 'localhost' : bindHost;
           const token = options.token || config?.gateway?.auth?.token;
           console.log('✅ Gateway started');
           console.log(`   URL: http://${displayHost}:${port}`);
