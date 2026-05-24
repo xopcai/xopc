@@ -15,6 +15,7 @@
     "startChatting": "Start chatting",
     "skipSetup": "Skip — I'll set this up later",
     "setupComplete": "You're all set! Start chatting below.",
-    "stepOf": "Step {{current}} of {{total}}"
+    "stepOf": "Step {{current}} of {{total}}",
+    "providerRecommended": "Recommended"
   }
 }

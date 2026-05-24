@@ -1,16 +1,14 @@
 import { Navigate, useParams } from 'react-router-dom';
 
 import {
-  AgentBrowserDefaultsPage,
-  AgentChatDefaultsPage,
-  AgentRuntimeDefaultsPage,
-  AgentSkillsDefaultsPage,
-  AgentSystemPromptDefaultsPage,
-  AgentToolsDefaultsPage,
-  AgentWorkspaceDefaultsPage,
+  AgentDefaultsTabbedPage,
 } from '@/features/settings/agents';
+import { SetupStatusPanel } from '@/features/settings/setup-checklist/setup-status-panel';
+import { CredentialsHubPanel } from '@/features/settings/credentials/credentials-hub-panel';
 import { AppearanceSettingsPanel } from '@/features/settings/appearance-settings';
 import { DreamingSettingsPanel } from '@/features/settings/dreaming-settings';
+import { CronSettingsPanel } from '@/features/settings/cron-settings';
+import { GoalsSettingsPanel } from '@/features/settings/goals-settings';
 import { GatewaySettingsPanel } from '@/features/settings/gateway-settings';
 import { HeartbeatSettingsPanel } from '@/features/settings/heartbeat-settings';
 import { TunnelSettingsPanel } from '@/features/tunnel/tunnel-settings';
@@ -27,16 +25,12 @@ import type { SettingsSectionId } from '@/navigation';
 import { useLocaleStore } from '@/stores/locale-store';
 
 const SECTIONS: SettingsSectionId[] = [
+  'overview',
   'appearance',
   'system',
-  'agent-chat',
-  'agent-workspace',
-  'agent-browser',
-  'agent-runtime',
-  'agent-tools',
-  'agent-skills',
+  'agent-defaults',
   'agent-mcp',
-  'agent-system-prompt',
+  'credentials',
   'providers',
   'models',
   'image-models',
@@ -46,6 +40,8 @@ const SECTIONS: SettingsSectionId[] = [
   'tunnel',
   'shares',
   'search',
+  'cron',
+  'goals',
   'dreams',
 ];
 
@@ -59,11 +55,24 @@ export function SettingsPage() {
   }
 
   if (!section || !SECTIONS.includes(section as SettingsSectionId)) {
-    return <Navigate to="/settings/appearance" replace />;
+    return <Navigate to="/settings/overview" replace />;
   }
 
   const id = section as SettingsSectionId;
+
+  if (id === 'overview') {
+    return <SetupStatusPanel />;
+  }
+
   const title = m.settingsSections[id];
+
+  if (id === 'agent-defaults') {
+    return <AgentDefaultsTabbedPage />;
+  }
+
+  if (id === 'agent-mcp') {
+    return <McpSettingsPanel />;
+  }
 
   if (id === 'appearance') {
     return <AppearanceSettingsPanel />;
@@ -73,32 +82,8 @@ export function SettingsPage() {
     return <SystemSettingsPanel />;
   }
 
-  if (id === 'agent-chat') {
-    return <AgentChatDefaultsPage />;
-  }
-
-  if (id === 'agent-workspace') {
-    return <AgentWorkspaceDefaultsPage />;
-  }
-
-  if (id === 'agent-browser') {
-    return <AgentBrowserDefaultsPage />;
-  }
-
-  if (id === 'agent-runtime') {
-    return <AgentRuntimeDefaultsPage />;
-  }
-
-  if (id === 'agent-tools') {
-    return <AgentToolsDefaultsPage />;
-  }
-
-  if (id === 'agent-skills') {
-    return <AgentSkillsDefaultsPage />;
-  }
-
-  if (id === 'agent-system-prompt') {
-    return <AgentSystemPromptDefaultsPage />;
+  if (id === 'credentials') {
+    return <CredentialsHubPanel />;
   }
 
   if (id === 'providers') {
@@ -137,20 +122,22 @@ export function SettingsPage() {
     return <WebSearchSettingsPanel />;
   }
 
-  if (id === 'agent-mcp') {
-    return <McpSettingsPanel />;
-  }
-
   if (id === 'dreams') {
     return <DreamingSettingsPanel />;
+  }
+
+  if (id === 'cron') {
+    return <CronSettingsPanel />;
+  }
+
+  if (id === 'goals') {
+    return <GoalsSettingsPanel />;
   }
 
   return (
     <div className="mx-auto flex w-full max-w-app-main flex-col gap-3 px-4 py-8">
       <h1 className="text-lg font-semibold text-fg">{title}</h1>
-      <p className="text-sm text-fg-muted">
-        {language === 'zh' ? `设置 · ${title}（即将推出）。` : `Settings · ${title} (coming soon).`}
-      </p>
+      <p className="text-sm text-fg-muted">{m.settingsPage.comingSoon.replace('{{title}}', title)}</p>
     </div>
   );
 }

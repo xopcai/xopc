@@ -4,6 +4,7 @@ import { ModelSelector } from '@/features/chat/model-selector';
 import type { AgentDefaultsState } from '@/features/settings/config-api';
 import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/settings/settings-form-section';
 
+import { AgentDefaultsAdvancedDetails } from '../agent-defaults-advanced-details';
 import { AgentDefaultsField } from '../agent-defaults-field';
 import type { AgentDefaultsPanelProps } from '../agent-defaults-panel-props';
 import { inputClassName, selectClassName } from '../defaults-field-styles';
@@ -73,97 +74,101 @@ export function AgentDefaultsMemoryPanel(props: AgentDefaultsPanelProps) {
                 <option value="stub">stub</option>
               </select>
             </AgentDefaultsField>
-            <AgentDefaultsField label={x.injectionFrequency} description={x.injectionFrequencyDesc}>
-              <select
-                className={selectClassName()}
-                value={form.memory.injectionFrequency}
-                onChange={(e) =>
-                  update({
-                    memory: {
-                      ...form.memory,
-                      injectionFrequency: e.target.value as AgentDefaultsState['memory']['injectionFrequency'],
-                    },
-                  })
-                }
-              >
-                <option value="">{x.injectionFrequencyUnset}</option>
-                <option value="every-turn">{x.injectionEveryTurn}</option>
-                <option value="first-turn">{x.injectionFirstTurn}</option>
-              </select>
-            </AgentDefaultsField>
-            <AgentDefaultsField label={x.memoryCharLimit} description={x.memoryCharLimitDesc}>
-              <input
-                type="number"
-                className={inputClassName()}
-                min={1}
-                value={form.memory.memoryCharLimit ?? ''}
-                placeholder="—"
-                onChange={(e) => {
-                  const v = e.target.value;
-                  update({
-                    memory: {
-                      ...form.memory,
-                      memoryCharLimit: v === '' ? undefined : Number.parseInt(v, 10),
-                    },
-                  });
-                }}
-              />
-            </AgentDefaultsField>
-            <AgentDefaultsField label={x.userCharLimit} description={x.userCharLimitDesc}>
-              <input
-                type="number"
-                className={inputClassName()}
-                min={1}
-                value={form.memory.userCharLimit ?? ''}
-                placeholder="—"
-                onChange={(e) => {
-                  const v = e.target.value;
-                  update({
-                    memory: {
-                      ...form.memory,
-                      userCharLimit: v === '' ? undefined : Number.parseInt(v, 10),
-                    },
-                  });
-                }}
-              />
-            </AgentDefaultsField>
-            <AgentDefaultsField label={x.contextCadence} description={x.contextCadenceDesc}>
-              <input
-                type="number"
-                className={inputClassName()}
-                min={1}
-                value={form.memory.contextCadence ?? ''}
-                placeholder="—"
-                onChange={(e) => {
-                  const v = e.target.value;
-                  update({
-                    memory: {
-                      ...form.memory,
-                      contextCadence: v === '' ? undefined : Number.parseInt(v, 10),
-                    },
-                  });
-                }}
-              />
-            </AgentDefaultsField>
-            <AgentDefaultsField label={x.dialecticCadence} description={x.dialecticCadenceDesc}>
-              <input
-                type="number"
-                className={inputClassName()}
-                min={1}
-                value={form.memory.dialecticCadence ?? ''}
-                placeholder="—"
-                onChange={(e) => {
-                  const v = e.target.value;
-                  update({
-                    memory: {
-                      ...form.memory,
-                      dialecticCadence: v === '' ? undefined : Number.parseInt(v, 10),
-                    },
-                  });
-                }}
-              />
-            </AgentDefaultsField>
           </div>
+          <AgentDefaultsAdvancedDetails showLabel={x.advancedOptionsShow} hideLabel={x.advancedOptionsHide}>
+            <div className="grid gap-5 sm:grid-cols-2">
+              <AgentDefaultsField label={x.injectionFrequency} description={x.injectionFrequencyDesc}>
+                <select
+                  className={selectClassName()}
+                  value={form.memory.injectionFrequency}
+                  onChange={(e) =>
+                    update({
+                      memory: {
+                        ...form.memory,
+                        injectionFrequency: e.target.value as AgentDefaultsState['memory']['injectionFrequency'],
+                      },
+                    })
+                  }
+                >
+                  <option value="">{x.injectionFrequencyUnset}</option>
+                  <option value="every-turn">{x.injectionEveryTurn}</option>
+                  <option value="first-turn">{x.injectionFirstTurn}</option>
+                </select>
+              </AgentDefaultsField>
+              <AgentDefaultsField label={x.memoryCharLimit} description={x.memoryCharLimitDesc}>
+                <input
+                  type="number"
+                  className={inputClassName()}
+                  min={1}
+                  value={form.memory.memoryCharLimit ?? ''}
+                  placeholder="—"
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    update({
+                      memory: {
+                        ...form.memory,
+                        memoryCharLimit: v === '' ? undefined : Number.parseInt(v, 10),
+                      },
+                    });
+                  }}
+                />
+              </AgentDefaultsField>
+              <AgentDefaultsField label={x.userCharLimit} description={x.userCharLimitDesc}>
+                <input
+                  type="number"
+                  className={inputClassName()}
+                  min={1}
+                  value={form.memory.userCharLimit ?? ''}
+                  placeholder="—"
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    update({
+                      memory: {
+                        ...form.memory,
+                        userCharLimit: v === '' ? undefined : Number.parseInt(v, 10),
+                      },
+                    });
+                  }}
+                />
+              </AgentDefaultsField>
+              <AgentDefaultsField label={x.contextCadence} description={x.contextCadenceDesc}>
+                <input
+                  type="number"
+                  className={inputClassName()}
+                  min={1}
+                  value={form.memory.contextCadence ?? ''}
+                  placeholder="—"
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    update({
+                      memory: {
+                        ...form.memory,
+                        contextCadence: v === '' ? undefined : Number.parseInt(v, 10),
+                      },
+                    });
+                  }}
+                />
+              </AgentDefaultsField>
+              <AgentDefaultsField label={x.dialecticCadence} description={x.dialecticCadenceDesc}>
+                <input
+                  type="number"
+                  className={inputClassName()}
+                  min={1}
+                  value={form.memory.dialecticCadence ?? ''}
+                  placeholder="—"
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    update({
+                      memory: {
+                        ...form.memory,
+                        dialecticCadence: v === '' ? undefined : Number.parseInt(v, 10),
+                      },
+                    });
+                  }}
+                />
+              </AgentDefaultsField>
+            </div>
+          </AgentDefaultsAdvancedDetails>
         </div>
       </SettingsFormSection>
 
@@ -198,92 +203,94 @@ export function AgentDefaultsMemoryPanel(props: AgentDefaultsPanelProps) {
               <span>{x.reviewEnabledOn}</span>
             </label>
           </AgentDefaultsField>
-          <div className="grid gap-5 sm:grid-cols-2">
-            <AgentDefaultsField label={x.memoryNudgeInterval} description={x.memoryNudgeIntervalDesc}>
-              <input
-                type="number"
-                className={inputClassName()}
-                min={0}
-                value={form.backgroundReview.memoryNudgeInterval}
-                onChange={(e) =>
-                  update({
-                    backgroundReview: {
-                      ...form.backgroundReview,
-                      memoryNudgeInterval: Number.parseInt(e.target.value, 10) || 0,
-                    },
-                  })
-                }
-              />
-            </AgentDefaultsField>
-            <AgentDefaultsField label={x.skillNudgeInterval} description={x.skillNudgeIntervalDesc}>
-              <input
-                type="number"
-                className={inputClassName()}
-                min={0}
-                value={form.backgroundReview.skillNudgeInterval}
-                onChange={(e) =>
-                  update({
-                    backgroundReview: {
-                      ...form.backgroundReview,
-                      skillNudgeInterval: Number.parseInt(e.target.value, 10) || 0,
-                    },
-                  })
-                }
-              />
-            </AgentDefaultsField>
-            <AgentDefaultsField label={x.reviewMaxToolRounds} description={x.reviewMaxToolRoundsDesc}>
-              <input
-                type="number"
-                className={inputClassName()}
-                min={1}
-                max={32}
-                value={form.backgroundReview.maxToolRounds}
-                onChange={(e) =>
-                  update({
-                    backgroundReview: {
-                      ...form.backgroundReview,
-                      maxToolRounds: Number.parseInt(e.target.value, 10) || 8,
-                    },
-                  })
-                }
-              />
-            </AgentDefaultsField>
-            <AgentDefaultsField label={x.reviewMaxHistoryMessages} description={x.reviewMaxHistoryMessagesDesc}>
-              <input
-                type="number"
-                className={inputClassName()}
-                min={10}
-                max={200}
-                value={form.backgroundReview.maxHistoryMessages}
-                onChange={(e) =>
-                  update({
-                    backgroundReview: {
-                      ...form.backgroundReview,
-                      maxHistoryMessages: Number.parseInt(e.target.value, 10) || 80,
-                    },
-                  })
-                }
-              />
-            </AgentDefaultsField>
-            <AgentDefaultsField label={x.reviewMaxDurationMs} description={x.reviewMaxDurationMsDesc}>
-              <input
-                type="number"
-                className={inputClassName()}
-                min={30}
-                max={600}
-                step={1}
-                value={Math.round((form.backgroundReview.maxDurationMs ?? 120_000) / 1000)}
-                onChange={(e) =>
-                  update({
-                    backgroundReview: {
-                      ...form.backgroundReview,
-                      maxDurationMs: (Number.parseInt(e.target.value, 10) || 120) * 1000,
-                    },
-                  })
-                }
-              />
-            </AgentDefaultsField>
-          </div>
+          <AgentDefaultsAdvancedDetails showLabel={x.advancedOptionsShow} hideLabel={x.advancedOptionsHide}>
+            <div className="grid gap-5 sm:grid-cols-2">
+              <AgentDefaultsField label={x.memoryNudgeInterval} description={x.memoryNudgeIntervalDesc}>
+                <input
+                  type="number"
+                  className={inputClassName()}
+                  min={0}
+                  value={form.backgroundReview.memoryNudgeInterval}
+                  onChange={(e) =>
+                    update({
+                      backgroundReview: {
+                        ...form.backgroundReview,
+                        memoryNudgeInterval: Number.parseInt(e.target.value, 10) || 0,
+                      },
+                    })
+                  }
+                />
+              </AgentDefaultsField>
+              <AgentDefaultsField label={x.skillNudgeInterval} description={x.skillNudgeIntervalDesc}>
+                <input
+                  type="number"
+                  className={inputClassName()}
+                  min={0}
+                  value={form.backgroundReview.skillNudgeInterval}
+                  onChange={(e) =>
+                    update({
+                      backgroundReview: {
+                        ...form.backgroundReview,
+                        skillNudgeInterval: Number.parseInt(e.target.value, 10) || 0,
+                      },
+                    })
+                  }
+                />
+              </AgentDefaultsField>
+              <AgentDefaultsField label={x.reviewMaxToolRounds} description={x.reviewMaxToolRoundsDesc}>
+                <input
+                  type="number"
+                  className={inputClassName()}
+                  min={1}
+                  max={32}
+                  value={form.backgroundReview.maxToolRounds}
+                  onChange={(e) =>
+                    update({
+                      backgroundReview: {
+                        ...form.backgroundReview,
+                        maxToolRounds: Number.parseInt(e.target.value, 10) || 8,
+                      },
+                    })
+                  }
+                />
+              </AgentDefaultsField>
+              <AgentDefaultsField label={x.reviewMaxHistoryMessages} description={x.reviewMaxHistoryMessagesDesc}>
+                <input
+                  type="number"
+                  className={inputClassName()}
+                  min={10}
+                  max={200}
+                  value={form.backgroundReview.maxHistoryMessages}
+                  onChange={(e) =>
+                    update({
+                      backgroundReview: {
+                        ...form.backgroundReview,
+                        maxHistoryMessages: Number.parseInt(e.target.value, 10) || 80,
+                      },
+                    })
+                  }
+                />
+              </AgentDefaultsField>
+              <AgentDefaultsField label={x.reviewMaxDurationMs} description={x.reviewMaxDurationMsDesc}>
+                <input
+                  type="number"
+                  className={inputClassName()}
+                  min={30}
+                  max={600}
+                  step={1}
+                  value={Math.round((form.backgroundReview.maxDurationMs ?? 120_000) / 1000)}
+                  onChange={(e) =>
+                    update({
+                      backgroundReview: {
+                        ...form.backgroundReview,
+                        maxDurationMs: (Number.parseInt(e.target.value, 10) || 120) * 1000,
+                      },
+                    })
+                  }
+                />
+              </AgentDefaultsField>
+            </div>
+          </AgentDefaultsAdvancedDetails>
         </div>
       </SettingsFormSection>
     </div>

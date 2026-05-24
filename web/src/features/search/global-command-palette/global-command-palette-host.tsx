@@ -3,6 +3,10 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 
 import { buildAutomationActionHits } from '@/features/search/global-command-palette/actions-provider';
+import {
+  commandPaletteGroupCaps,
+  commandPaletteGroupSortKey,
+} from '@/features/search/global-command-palette/command-palette-groups';
 import type { GlobalHit } from '@/features/search/global-command-palette/types';
 import { hitRank, sortHits } from '@/features/search/global-command-palette/rank';
 import { buildRouteSeeds } from '@/features/search/global-command-palette/routes-provider';
@@ -41,29 +45,6 @@ type PaletteState =
   | { phase: 'error'; hits: GlobalHit[]; message: string };
 
 type PaletteLayer = 'main' | 'models' | 'agents';
-
-function groupOrder(label: string): number {
-  switch (label) {
-    case 'Navigate':
-      return 0;
-    case 'Quick Settings':
-      return 1;
-    case 'Extensions':
-      return 2;
-    case 'Sessions':
-      return 3;
-    case 'Files':
-      return 4;
-    case 'Commands':
-      return 5;
-    case 'Skills':
-      return 6;
-    case 'Actions':
-      return 7;
-    default:
-      return 10;
-  }
-}
 
 function iconFor(hit: GlobalHit) {
   switch (hit.kind) {
@@ -112,6 +93,7 @@ function buildExtensionHits(args: {
   navigate: ReturnType<typeof useNavigate>;
   close: () => void;
   uiExtensions: ReturnType<typeof useUiExtensions>;
+  extensionsGroupLabel: string;
 }): Array<Omit<GlobalHit, 'rank'>> {
   const hits: Array<Omit<GlobalHit, 'rank'>> = [];
   for (const extension of args.uiExtensions) {
@@ -124,7 +106,7 @@ function buildExtensionHits(args: {
         id: `ext:${extension.id}:${command.id}`,
         title: command.title,
         subtitle: extension.name,
-        groupLabel: 'Extensions',
+        groupLabel: args.extensionsGroupLabel,
         keywords: [extension.id, extension.name, command.id],
         run: () => {
           args.close();
@@ -360,13 +342,14 @@ export function GlobalCommandPaletteHost() {
           setState((prev) => ({ phase: 'loading', hits: prev.hits }));
 
           const close = () => setOpen(false);
+          const groups = messages(language).commandPalette.groups;
 
           const routeHits: Array<Omit<GlobalHit, 'rank'>> = routeSeeds.map((r) => ({
             kind: 'route',
             id: r.id,
             title: r.title,
             subtitle: r.subtitle,
-            groupLabel: 'Navigate',
+            groupLabel: groups.navigate,
             keywords: [...(r.keywords ?? []), r.path],
             run: () => {
               close();
@@ -382,7 +365,7 @@ export function GlobalCommandPaletteHost() {
 
           const actionHits = buildAutomationActionHits(language, navigate, close);
 
-          const extensionHits = buildExtensionHits({ query: q, close, navigate, uiExtensions });
+          const extensionHits = buildExtensionHits({ query: q, close, navigate, uiExtensions, extensionsGroupLabel: groups.extensions });
 
           const [commands, skillsPayload, sessions, files] = await Promise.all([
             fetchCommandsCached(),
@@ -406,7 +389,7 @@ export function GlobalCommandPaletteHost() {
             id: `cmd:${c.id}`,
             title: `/${c.name}`,
             subtitle: c.description,
-            groupLabel: 'Commands',
+            groupLabel: groups.commands,
             keywords: [c.id, ...(c.aliases ?? []), c.category ?? ''],
             run: () => {
               fillChatComposerWithNavigate(wireTextForSlashCommandEntry(c), pathname, navigate, close);
@@ -420,7 +403,7 @@ export function GlobalCommandPaletteHost() {
               id: `skill:${s.name}`,
               title: `/skill:${s.name}`,
               subtitle: s.description,
-              groupLabel: 'Skills',
+              groupLabel: groups.skills,
               keywords: [s.source ?? '', 'skill'],
               run: () => {
                 const text = `/skill:${s.name} `;
@@ -433,7 +416,7 @@ export function GlobalCommandPaletteHost() {
             id: `session:${s.key}`,
             title: s.name?.trim() || s.key,
             subtitle: s.key,
-            groupLabel: 'Sessions',
+            groupLabel: groups.sessions,
             keywords: [s.key, ...(s.tags ?? []), s.sourceChannel ?? ''],
             run: () => {
               close();
@@ -448,7 +431,7 @@ export function GlobalCommandPaletteHost() {
               id: `file:${f.relativePath}`,
               title: f.name,
               subtitle: f.relativePath,
-              groupLabel: 'Files',
+              groupLabel: groups.files,
               keywords: [f.relativePath],
               run: () => {
                 close();
@@ -481,16 +464,7 @@ export function GlobalCommandPaletteHost() {
             ranked.push({ ...s, rank: r });
           }
 
-          const caps: Record<string, number> = {
-            Navigate: 12,
-            'Quick Settings': 12,
-            Actions: 8,
-            Extensions: 8,
-            Sessions: 8,
-            Files: 10,
-            Commands: 6,
-            Skills: 6,
-          };
+          const caps = commandPaletteGroupCaps(language);
           const sorted = sortHits(ranked);
           const grouped: GlobalHit[] = [];
           const seen: Record<string, number> = {};
@@ -503,7 +477,8 @@ export function GlobalCommandPaletteHost() {
           }
           grouped.sort(
             (a, b) =>
-              groupOrder(a.groupLabel) - groupOrder(b.groupLabel) ||
+              commandPaletteGroupSortKey(language, a.groupLabel) -
+                commandPaletteGroupSortKey(language, b.groupLabel) ||
               a.rank - b.rank ||
               a.title.localeCompare(b.title),
           );

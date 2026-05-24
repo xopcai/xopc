@@ -15,7 +15,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('file:list-dir', dirPath) as Promise<
         Array<{ name: string; path: string; isDirectory: boolean }>
       >,
-    openDirectory: () => ipcRenderer.invoke('file:open-dir-dialog') as Promise<string | null>,
+    openDirectory: (options?: { defaultPath?: string }) =>
+      ipcRenderer.invoke('file:open-dir-dialog', options) as Promise<string | null>,
     watchFile: (filePath: string, callback: (content: string) => void) => {
       const handler = (_: unknown, payload: { path: string; content: string }) => {
         if (payload.path === filePath) callback(payload.content);

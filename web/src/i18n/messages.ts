@@ -10,7 +10,9 @@ export type Tab =
   | 'channels'
   | 'agents'
   | 'logs'
+  | 'settingsOverview'
   | 'settingsAppearance'
+  | 'settingsCredentials'
   | 'settingsProviders'
   | 'settingsModels'
   | 'settingsImageModels'
@@ -22,10 +24,15 @@ export type Tab =
   | 'settingsShares'
   | 'settingsSearch'
   | 'settingsDreams'
+  | 'settingsCron'
+  | 'settingsGoals'
+  | 'settingsAgentDefaults'
   | 'settingsAgentChat'
   | 'settingsAgentWorkspace'
   | 'settingsAgentBrowser'
   | 'settingsAgentRuntime'
+  | 'settingsAgentContext'
+  | 'settingsAgentMemory'
   | 'settingsAgentTools'
   | 'settingsAgentSkills'
   | 'settingsAgentMcp'
@@ -34,17 +41,22 @@ export type Tab =
   | 'settingsSystem';
 
 export type SettingsSectionId =
+  | 'overview'
   | 'appearance'
   | 'agent'
+  | 'agent-defaults'
   | 'agent-chat'
   | 'agent-workspace'
   | 'agent-browser'
   | 'agent-runtime'
+  | 'agent-context'
+  | 'agent-memory'
   | 'agent-tools'
   | 'agent-skills'
   | 'agent-mcp'
   | 'agent-system-prompt'
   | 'providers'
+  | 'credentials'
   | 'models'
   | 'image-models'
   | 'channels'
@@ -55,6 +67,7 @@ export type SettingsSectionId =
   | 'shares'
   | 'search'
   | 'dreams'
+  | 'goals'
   | 'agents'
   | 'system'
   | 'cron'
@@ -86,6 +99,9 @@ export function tabLabel(lang: StoredLanguage, tab: Tab): string {
   const m = messages(lang);
   if (tab === 'settingsAgents') {
     return m.nav.agents;
+  }
+  if (tab === 'settingsAgentDefaults') {
+    return m.nav.settingsAgentChat;
   }
   return m.nav[tab];
 }

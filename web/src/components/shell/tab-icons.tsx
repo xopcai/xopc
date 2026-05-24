@@ -1,5 +1,6 @@
 import type { LucideIcon } from 'lucide-react';
 import {
+  Activity,
   Brain,
   BookOpen,
   Cable,
@@ -13,7 +14,9 @@ import {
   Heart,
   Radio,
   Image as ImageIcon,
+  KeyRound,
   Layers,
+  Layers2,
   MessageSquare,
   Mic,
   ScrollText,
@@ -24,6 +27,8 @@ import {
   Share2,
   Shield,
   SlidersHorizontal,
+  Target,
+  Timer,
   Users,
   Wrench,
 } from 'lucide-react';
@@ -38,12 +43,17 @@ const TAB_ICONS: Record<Tab, LucideIcon> = {
   channels: Plug,
   agents: Users,
   logs: FileText,
+  settingsOverview: Activity,
+  settingsCredentials: KeyRound,
+  settingsAgentDefaults: SlidersHorizontal,
   settingsAppearance: Palette,
   settingsSystem: Shield,
-  settingsAgentChat: SlidersHorizontal,
+  settingsAgentChat: Cpu,
   settingsAgentWorkspace: Folder,
   settingsAgentBrowser: Globe,
-  settingsAgentRuntime: Brain,
+  settingsAgentRuntime: Timer,
+  settingsAgentContext: Layers2,
+  settingsAgentMemory: Brain,
   settingsAgentTools: Wrench,
   settingsAgentSkills: BookOpen,
   settingsAgentMcp: Cable,
@@ -60,6 +70,8 @@ const TAB_ICONS: Record<Tab, LucideIcon> = {
   settingsSearch: Search,
   settingsShares: Share2,
   settingsDreams: Moon,
+  settingsCron: Clock,
+  settingsGoals: Target,
 };
 
 export function TabIcon({ tab, className }: { tab: Tab; className?: string }) {

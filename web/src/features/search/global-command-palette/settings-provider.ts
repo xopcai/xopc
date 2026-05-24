@@ -1,5 +1,6 @@
 import type { GlobalHit } from '@/features/search/global-command-palette/types';
 import type { StoredLanguage } from '@/lib/storage';
+import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useThemeStore, type ThemePreference } from '@/stores/theme-store';
 
@@ -12,40 +13,42 @@ function setLanguage(next: StoredLanguage) {
 }
 
 export function buildQuickSettingHits(
-  language: 'en' | 'zh',
+  language: StoredLanguage,
   opts: {
     closePalette: () => void;
     openModelPalette: () => void;
     openAgentPalette: () => void;
   },
 ): Array<Omit<GlobalHit, 'rank'>> {
-  const isZh = language === 'zh';
+  const m = messages(language);
+  const q = m.commandPalette.quickSettings;
+  const groupLabel = m.commandPalette.groups.quickSettings;
 
   return [
     {
       kind: 'setting',
       id: 'setting:model',
-      title: isZh ? '切换模型' : 'Switch model',
-      subtitle: isZh ? '更改默认 AI 模型' : 'Change the default AI model',
-      groupLabel: 'Quick Settings',
+      title: q.switchModel,
+      subtitle: q.switchModelSubtitle,
+      groupLabel,
       keywords: ['model', 'gpt', 'claude', 'gemini', 'llm'],
       run: () => opts.openModelPalette(),
     },
     {
       kind: 'setting',
       id: 'setting:agent',
-      title: isZh ? '切换智能体' : 'Switch agent',
-      subtitle: isZh ? '更改新对话使用的智能体' : 'Change the agent for new chats',
-      groupLabel: 'Quick Settings',
+      title: q.switchAgent,
+      subtitle: q.switchAgentSubtitle,
+      groupLabel,
       keywords: ['agent', 'persona', 'bot'],
       run: () => opts.openAgentPalette(),
     },
     {
       kind: 'setting',
       id: 'setting:theme:light',
-      title: isZh ? '切换到浅色主题' : 'Switch to light theme',
-      subtitle: isZh ? '外观' : 'Appearance',
-      groupLabel: 'Quick Settings',
+      title: q.themeLight,
+      subtitle: q.appearanceSubtitle,
+      groupLabel,
       keywords: ['theme', 'light', 'appearance'],
       run: () => {
         setTheme('light');
@@ -55,9 +58,9 @@ export function buildQuickSettingHits(
     {
       kind: 'setting',
       id: 'setting:theme:dark',
-      title: isZh ? '切换到深色主题' : 'Switch to dark theme',
-      subtitle: isZh ? '外观' : 'Appearance',
-      groupLabel: 'Quick Settings',
+      title: q.themeDark,
+      subtitle: q.appearanceSubtitle,
+      groupLabel,
       keywords: ['theme', 'dark', 'night'],
       run: () => {
         setTheme('dark');
@@ -67,9 +70,9 @@ export function buildQuickSettingHits(
     {
       kind: 'setting',
       id: 'setting:theme:system',
-      title: isZh ? '使用系统主题' : 'Use system theme',
-      subtitle: isZh ? '外观' : 'Appearance',
-      groupLabel: 'Quick Settings',
+      title: q.themeSystem,
+      subtitle: q.appearanceSubtitle,
+      groupLabel,
       keywords: ['theme', 'system', 'auto'],
       run: () => {
         setTheme('system');
@@ -79,9 +82,9 @@ export function buildQuickSettingHits(
     {
       kind: 'setting',
       id: 'setting:lang:en',
-      title: 'Switch to English',
-      subtitle: isZh ? '语言' : 'Language',
-      groupLabel: 'Quick Settings',
+      title: q.languageEn,
+      subtitle: q.languageSubtitle,
+      groupLabel,
       keywords: ['english', 'language', 'locale'],
       run: () => {
         setLanguage('en');
@@ -91,9 +94,9 @@ export function buildQuickSettingHits(
     {
       kind: 'setting',
       id: 'setting:lang:zh',
-      title: '切换到中文',
-      subtitle: isZh ? '语言' : 'Language',
-      groupLabel: 'Quick Settings',
+      title: q.languageZh,
+      subtitle: q.languageSubtitle,
+      groupLabel,
       keywords: ['chinese', '中文', 'language'],
       run: () => {
         setLanguage('zh');
