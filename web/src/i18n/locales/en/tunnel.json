@@ -91,6 +91,23 @@
     "brokerSecretSave": "Save secret",
     "brokerSecretClear": "Clear saved secret",
     "brokerSecretSaved": "Registration secret saved",
-    "brokerSecretCleared": "Saved registration secret cleared"
+    "brokerSecretCleared": "Saved registration secret cleared",
+    "e2eTitle": "HTTPS / E2E",
+    "e2eSubtitle": "Local TLS terminator used before frp forwards traffic (tunnel.e2e).",
+    "e2eEnabled": "Enable E2E TLS",
+    "e2eEnabledHint": "When off, tunnel HTTPS provisioning is skipped.",
+    "e2eTlsPort": "Local TLS port",
+    "e2eTlsPortHint": "Port for the on-machine HTTPS listener. Suggested default: {{port}} (gateway port + 1).",
+    "e2eStaging": "Use Let's Encrypt staging",
+    "e2eStagingHint": "For testing certificate issuance without production rate limits.",
+    "e2eSave": "Save E2E settings",
+    "e2eDiscard": "Discard",
+    "e2eSaving": "Saving…",
+    "e2eSaved": "E2E settings saved",
+    "e2eSaveError": "Failed to save E2E settings",
+    "e2eUnsaved": "You have unsaved E2E changes.",
+    "e2eRestartHint": "E2E TLS port changes require stopping remote access and restarting the gateway.",
+    "e2eConnectedWarning": "Remote access is active. Stop the tunnel before changing TLS port or E2E options.",
+    "e2eLoading": "Loading E2E settings…"
   }
 }

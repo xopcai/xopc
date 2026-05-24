@@ -461,5 +461,21 @@
     "presetCreatingProgress": "Creating agent {{current}} of {{total}}…",
     "presetSetupComplete": "Agents created successfully!",
     "presetCreateFailed": "Failed to create {{name}}: {{message}}"
+  },
+  "goalsSettings": {
+    "title": "Goal judge (/goal)",
+    "hint": "Defaults for persistent goal missions and the judge model that scores progress.",
+    "save": "Save",
+    "discard": "Discard",
+    "saving": "Saving…",
+    "saveError": "Failed to save goal settings",
+    "maxTurns": "Max turns per run",
+    "judgeModelRef": "Judge model",
+    "judgeModelRefPlaceholder": "provider/model-id (optional — uses agent default)",
+    "checklistMode": "Checklist mode",
+    "parseFailures": "Max consecutive parse failures",
+    "judgeTimeoutSec": "Judge timeout (seconds)",
+    "checklistHistoryChars": "Checklist history chars",
+    "checklistHistoryCharsHint": "Max characters of transcript history sent to the judge in checklist mode."
   }
 }

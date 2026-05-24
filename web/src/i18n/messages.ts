@@ -69,6 +69,7 @@ export type VoiceSettingsMessages = MessageBundle['voiceSettings'];
 export type GatewaySettingsMessages = MessageBundle['gatewaySettings'];
 export type HeartbeatSettingsMessages = MessageBundle['heartbeatSettings'];
 export type TunnelSettingsMessages = MessageBundle['tunnelSettings'];
+export type SharesSettingsMessages = MessageBundle['sharesSettings'];
 export type WebSearchSettingsMessages = MessageBundle['webSearchSettings'];
 export type McpSettingsMessages = MessageBundle['mcpSettings'];
 export type AgentsSettingsMessages = MessageBundle['agentsSettings'];

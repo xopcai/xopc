@@ -36,6 +36,23 @@
     "detailLoading": "Loading session…",
     "detailMessages": "Messages",
     "detailExport": "Export",
-    "close": "Close"
+    "close": "Close",
+    "config": {
+      "title": "Session storage",
+      "hint": "How direct-message sessions are keyed and when old session metadata is pruned.",
+      "save": "Save",
+      "discard": "Discard",
+      "saving": "Saving…",
+      "saveError": "Failed to save session settings",
+      "dmScope": "DM session scope",
+      "dmScopeHint": "Controls how session keys are derived for direct messages across channels and accounts.",
+      "dmScopeMain": "Main (single DM session)",
+      "dmScopePerPeer": "Per peer",
+      "dmScopePerChannelPeer": "Per channel + peer",
+      "dmScopePerAccountChannelPeer": "Per account + channel + peer",
+      "pruneAfterDays": "Prune after (days)",
+      "maxEntries": "Max session entries",
+      "unsetPlaceholder": "Leave empty for default"
+    }
   }
 }

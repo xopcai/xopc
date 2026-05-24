@@ -19,6 +19,7 @@ import {
   type TunnelStatusResponse,
 } from '@/features/tunnel/tunnel-api';
 import { useMobilePairQr } from '@/features/tunnel/use-mobile-pair-qr';
+import { TunnelE2eSection } from '@/features/tunnel/tunnel-e2e-section';
 import { TunnelStartProgressPanel } from '@/features/tunnel/tunnel-start-progress';
 import { cn } from '@/lib/cn';
 import { messages } from '@/i18n/messages';
@@ -122,6 +123,18 @@ export function TunnelSettingsPanel() {
   const brokerSecretConfiguredInConfig = isMaskedKey(brokerSecretFromConfig);
   const brokerSecretFromEnv = status?.registrationSecret?.source === 'env';
   const brokerSecretMissing = status?.registrationSecret?.source === 'missing';
+
+  const gatewayPort = useMemo(() => {
+    const c = cfgData?.payload?.config;
+    if (c && typeof c === 'object' && !Array.isArray(c)) {
+      const gw = (c as { gateway?: unknown }).gateway;
+      if (gw && typeof gw === 'object' && !Array.isArray(gw)) {
+        const port = (gw as { port?: unknown }).port;
+        if (typeof port === 'number' && Number.isFinite(port)) return Math.floor(port);
+      }
+    }
+    return 18790;
+  }, [cfgData]);
 
   useEffect(() => {
     const onTunnelStatus = () => {
@@ -473,6 +486,12 @@ export function TunnelSettingsPanel() {
           <p className="mt-2 text-xs text-fg-subtle">{t.autoStartHint}</p>
         ) : null}
       </SettingsFormSection>
+
+      <TunnelE2eSection
+        hasToken={hasToken}
+        gatewayPort={gatewayPort}
+        tunnelConnected={st.enabled && st.state === 'connected'}
+      />
 
       {actionError ? <p className="text-sm text-red-600 dark:text-red-400">{actionError}</p> : null}
 

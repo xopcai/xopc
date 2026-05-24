@@ -11,6 +11,13 @@ import { normalizeConfiguredMcpServers } from '../../../config/mcp-config-normal
 import type { Config } from '../../../config/schema.js';
 import { inferBindModeFromHost } from '../../../config/gateway-bind.js';
 import { resolveTunnelE2eConfig } from '../../../tunnel/tunnel-e2e-config.js';
+import { resolveShareConfig } from '../../../share/share-config.js';
+import {
+  resolveCronConfigForWeb,
+  resolveGoalsConfigForWeb,
+  resolveSessionConfigForWeb,
+  resolveUpdateConfigForWeb,
+} from '../../../config/web-patch.js';
 import { bundledChannelPlugins } from '../../../generated/bundled-channel-plugins.js';
 import { getAllProviders, isProviderConfigured } from '../../../providers/index.js';
 import type { GatewayService } from '../../service.js';
@@ -170,6 +177,11 @@ export async function buildSafeWebConfigPayload(service: GatewayService) {
         ? config.gateway.trustedProxies
         : [],
       allowRealIpFallback: config.gateway?.allowRealIpFallback === true,
+      dangerouslyAllowHostHeaderOriginFallback:
+        config.gateway?.dangerouslyAllowHostHeaderOriginFallback === true,
+      security: {
+        strict: config.gateway?.security?.strict === true,
+      },
       auth: {
         mode: config.gateway?.auth?.mode || 'token',
         token: config.gateway?.auth?.token || '',
@@ -223,8 +235,13 @@ export async function buildSafeWebConfigPayload(service: GatewayService) {
       channelConnectDeferSkipIds: Array.isArray(config.gateway?.channelConnectDeferSkipIds)
         ? config.gateway.channelConnectDeferSkipIds
         : [],
+      share: resolveShareConfig(config.gateway?.share),
+      skillsMarketplaceProvider: config.gateway?.skillsMarketplaceProvider ?? 'skillhub',
+      skillsStoreBaseUrl: config.gateway?.skillsStoreBaseUrl ?? 'https://store.xopc.ai',
     },
-    cron: { enabled: config.cron?.enabled },
+    cron: resolveCronConfigForWeb(config),
+    goals: resolveGoalsConfigForWeb(config),
+    session: resolveSessionConfigForWeb(config),
     tunnel: {
       enabled: config.tunnel?.enabled === true,
       autoStart: config.tunnel?.autoStart === true,
@@ -239,7 +256,7 @@ export async function buildSafeWebConfigPayload(service: GatewayService) {
       e2e: resolveTunnelE2eConfig(config.tunnel, config.gateway?.port ?? 18790),
     },
     update: {
-      channel: config.update?.channel ?? 'stable',
+      ...resolveUpdateConfigForWeb(config),
     },
     stt: config.tools?.media?.audio,
     tts: config.messages?.tts,
