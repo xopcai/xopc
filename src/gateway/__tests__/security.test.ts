@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createHonoApp, isExtensionGatewayUiAssetPath } from '../hono/app.js';
 import type { GatewayService } from '../service.js';
-import { GatewayConfigSchema } from '../../config/schema.js';
+import { resolveGatewayEffectiveHost } from '../../config/gateway-bind.js';
+import { GatewayConfigSchema, type Config } from '../../config/schema.js';
 import { resetAuthRateLimitersForTests } from '../auth-rate-limit.js';
 
 // Mock GatewayService for testing
@@ -397,7 +398,7 @@ describe('Gateway Security Fixes', () => {
     it('should default to loopback bind in config', () => {
       const defaults = GatewayConfigSchema.parse(undefined);
       expect(defaults.bind).toBe('loopback');
-      expect(defaults.host).toBe('127.0.0.1');
+      expect(resolveGatewayEffectiveHost({ gateway: defaults } as Config)).toBe('127.0.0.1');
     });
 
     it('should default to empty corsOrigins array', () => {

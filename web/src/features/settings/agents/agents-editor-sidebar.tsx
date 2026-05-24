@@ -1,6 +1,7 @@
 import { Clock, FileText, Plug, Puzzle, User, UserCircle, Wrench } from 'lucide-react';
 
 import { cn } from '@/lib/cn';
+import { interaction } from '@/lib/interaction';
 import type { AgentsSettingsMessages } from '@/i18n/messages';
 
 import type { AgentPanel } from './utils';
@@ -32,6 +33,7 @@ export function AgentsEditorSidebar(props: {
       onClick={() => onPanelChange(id)}
       className={cn(
         'flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors',
+        interaction.press,
         panel === id
           ? 'bg-accent-soft text-accent-fg'
           : 'text-fg-muted hover:bg-surface-hover hover:text-fg',

@@ -132,7 +132,6 @@ async function runOnboard(
     gatewayAuth?.mode === 'token' &&
     typeof gatewayAuth?.token === 'string' &&
     gatewayAuth.token.length > 0;
-  const bind = (config as Config)?.gateway?.bind ?? 'loopback';
   const port = (config as Config)?.gateway?.port ?? 18790;
   const displayHost = resolveGatewayLocalClientHost(config as Config);
   const gwToken = gatewayConfigured ? (gatewayAuth.token as string) : undefined;

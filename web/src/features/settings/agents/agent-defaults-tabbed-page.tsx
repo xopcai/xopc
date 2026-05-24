@@ -4,6 +4,7 @@ import { useSearchParams } from 'react-router-dom';
 import { SkillsMarketplaceConfigSection } from '@/features/skills/skills-marketplace-config-section';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
+import { interaction } from '@/lib/interaction';
 import { useLocaleStore } from '@/stores/locale-store';
 
 import type { AgentDefaultsPanelProps } from './agent-defaults-panel-props';
@@ -154,6 +155,7 @@ export function AgentDefaultsTabbedPage() {
                 className={cn(
                   'shrink-0 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
                   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+                  interaction.press,
                   selected
                     ? 'bg-accent-soft text-accent-fg'
                     : 'text-fg-muted hover:bg-surface-hover hover:text-fg',

@@ -6,11 +6,12 @@ import { Button } from '@/components/ui/button';
 import { ModelSelector } from '@/features/chat/model-selector';
 import type { AgentsSettingsMessages, ChatMessages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
+import { ghostIconButton } from '@/lib/interaction';
 import {
   SETTINGS_SHELL_CONTENT_Z,
-  SETTINGS_SHELL_MODAL_POPOVER_Z,
   SETTINGS_SHELL_OVERLAY_Z,
 } from '@/lib/settings-shell-dialog-layer';
+import { SettingsShellLayerProvider } from '@/lib/settings-shell-layer-context';
 
 import { agentsSettingsInputClass } from './utils';
 
@@ -69,6 +70,7 @@ export function CreateAgentDialog(props: {
           )}
           onOpenAutoFocus={(e) => e.preventDefault()}
         >
+          <SettingsShellLayerProvider layer="modal">
           <div className="mb-3 flex items-start justify-between gap-2">
             <div className="min-w-0 pr-2">
               <Dialog.Title className="text-base font-semibold text-fg">{a.addAgent}</Dialog.Title>
@@ -77,7 +79,7 @@ export function CreateAgentDialog(props: {
             <Dialog.Close asChild>
               <button
                 type="button"
-                className="shrink-0 rounded-lg p-1.5 text-fg-muted hover:bg-surface-base hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                className={cn(ghostIconButton, 'shrink-0 p-1.5 hover:bg-surface-base')}
                 aria-label={a.closeDialogAria}
               >
                 <X className="size-4" aria-hidden />
@@ -148,7 +150,6 @@ export function CreateAgentDialog(props: {
               <div className="flex flex-wrap items-stretch gap-2">
                 <ModelSelector
                   className="min-w-0 flex-1"
-                  popoverContentClassName={SETTINGS_SHELL_MODAL_POPOVER_Z}
                   value={createModel}
                   disabled={busy}
                   placeholder={chat.modelPlaceholder}
@@ -181,6 +182,7 @@ export function CreateAgentDialog(props: {
               </Button>
             </div>
           </form>
+          </SettingsShellLayerProvider>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

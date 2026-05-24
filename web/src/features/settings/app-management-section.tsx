@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { SettingsFormSection } from '@/features/settings/settings-form-section';
 import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
 import { cn } from '@/lib/cn';
+import { interaction } from '@/lib/interaction';
 import { SETTINGS_SHELL_CONTENT_Z, SETTINGS_SHELL_OVERLAY_Z } from '@/lib/settings-shell-dialog-layer';
 import type { UninstallErrorCode, UninstallInfo } from '@/types/electron';
 
@@ -241,7 +242,10 @@ export function AppManagementSection({ api, messages: m }: AppManagementSectionP
             <p className="text-xs text-amber-800 dark:text-amber-200">{m.cliDataWarning}</p>
             <button
               type="button"
-              className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-edge bg-surface-base px-2.5 py-1.5 text-xs font-medium text-fg hover:bg-surface-hover"
+              className={cn(
+                'mt-2 inline-flex items-center gap-1.5 rounded-lg border border-edge bg-surface-base px-2.5 py-1.5 text-xs font-medium text-fg hover:bg-surface-hover',
+                interaction.press,
+              )}
               onClick={() => void openCliData(info.cliDataPath!)}
             >
               <FolderOpen className="size-3.5" strokeWidth={1.75} aria-hidden />
@@ -257,7 +261,10 @@ export function AppManagementSection({ api, messages: m }: AppManagementSectionP
               <code className="break-all text-xs text-fg">{info.appPath}</code>
               <button
                 type="button"
-                className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-edge px-2 py-1 text-xs text-fg hover:bg-surface-hover"
+                className={cn(
+                  'inline-flex shrink-0 items-center gap-1 rounded-lg border border-edge px-2 py-1 text-xs text-fg hover:bg-surface-hover',
+                  interaction.press,
+                )}
                 onClick={() => void copyPath(info.appPath, 'app')}
               >
                 <Copy className="size-3" aria-hidden />
@@ -271,7 +278,10 @@ export function AppManagementSection({ api, messages: m }: AppManagementSectionP
               <code className="break-all text-xs text-fg">{info.userDataPath}</code>
               <button
                 type="button"
-                className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-edge px-2 py-1 text-xs text-fg hover:bg-surface-hover"
+                className={cn(
+                  'inline-flex shrink-0 items-center gap-1 rounded-lg border border-edge px-2 py-1 text-xs text-fg hover:bg-surface-hover',
+                  interaction.press,
+                )}
                 onClick={() => void copyPath(info.userDataPath, 'data')}
               >
                 <Copy className="size-3" aria-hidden />
@@ -293,7 +303,10 @@ export function AppManagementSection({ api, messages: m }: AppManagementSectionP
             <button
               type="button"
               disabled={actionsDisabled}
-              className="inline-flex shrink-0 items-center justify-center rounded-lg border border-danger/40 bg-danger px-3 py-1.5 text-sm font-medium text-white hover:bg-danger/90 disabled:opacity-50"
+              className={cn(
+                'inline-flex shrink-0 items-center justify-center rounded-lg border border-danger/40 bg-danger px-3 py-1.5 text-sm font-medium text-white hover:bg-danger/90 disabled:opacity-50',
+                interaction.press,
+              )}
               onClick={openClearDialog}
             >
               {m.clearData}
@@ -309,7 +322,10 @@ export function AppManagementSection({ api, messages: m }: AppManagementSectionP
               <button
                 type="button"
                 disabled={actionsDisabled}
-                className="inline-flex shrink-0 items-center justify-center rounded-lg border border-edge bg-surface-base px-3 py-1.5 text-sm font-medium text-fg hover:bg-surface-hover disabled:opacity-50"
+                className={cn(
+                  'inline-flex shrink-0 items-center justify-center rounded-lg border border-edge bg-surface-base px-3 py-1.5 text-sm font-medium text-fg hover:bg-surface-hover disabled:opacity-50',
+                  interaction.press,
+                )}
                 onClick={() => {
                   setRemoveUserDataOnUninstall(false);
                   setUninstallDialogOpen(true);

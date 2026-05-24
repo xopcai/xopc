@@ -12,12 +12,14 @@ export function userRoundIndexFromUiMessageIndex(
   if (uiMessageIndex < 0 || uiMessageIndex >= messages.length) {
     return null;
   }
-  if (!isUiUserMessage(messages[uiMessageIndex]!.role)) {
+  const target = messages[uiMessageIndex];
+  if (!target || !isUiUserMessage(target.role)) {
     return null;
   }
   let count = 0;
   for (let i = 0; i <= uiMessageIndex; i++) {
-    if (isUiUserMessage(messages[i]!.role)) {
+    const msg = messages[i];
+    if (msg && isUiUserMessage(msg.role)) {
       count += 1;
     }
   }
@@ -31,7 +33,8 @@ export function uiDeleteCountForUserRound(
 ): number {
   let deleteCount = 1;
   for (let j = uiMessageIndex + 1; j < messages.length; j++) {
-    if (isUiUserMessage(messages[j]!.role)) {
+    const msg = messages[j];
+    if (msg && isUiUserMessage(msg.role)) {
       break;
     }
     deleteCount += 1;

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/cn';
+import { ghostIconButton } from '@/lib/interaction';
 import { SETTINGS_SHELL_CONTENT_Z, SETTINGS_SHELL_OVERLAY_Z } from '@/lib/settings-shell-dialog-layer';
 import { type ModelsSettingsMessages } from '@/i18n/messages';
 
@@ -120,7 +121,7 @@ export function ModelEditDialogContent({
             <Dialog.Close asChild>
               <button
                 type="button"
-                className="rounded-lg p-1.5 text-fg-muted hover:bg-surface-base hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                className={cn(ghostIconButton, 'p-1.5 hover:bg-surface-base')}
                 aria-label={m.close}
               >
                 <X className="size-4" />

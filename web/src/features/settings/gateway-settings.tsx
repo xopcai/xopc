@@ -13,6 +13,7 @@ import { GatewaySecurityAuditCard } from '@/features/settings/gateway-security-a
 import { MAX_CHANNEL_DEFER_LIST_SIZE } from '@/features/settings/gateway-settings.types';
 import { settingsInputFocusClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
+import { interaction } from '@/lib/interaction';
 import { messages, type GatewaySettingsMessages } from '@/i18n/messages';
 import { docsGuidePageUrl } from '@/navigation';
 import { useGatewayStore } from '@/stores/gateway-store';
@@ -856,7 +857,7 @@ function GatewayStringListField({
               {value}
               <button
                 type="button"
-                className="text-fg-muted hover:text-fg"
+                className={cn('text-fg-muted hover:text-fg', interaction.press)}
                 aria-label={`Remove ${value}`}
                 onClick={() => onChange(values.filter((x) => x !== value))}
               >

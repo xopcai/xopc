@@ -2,6 +2,7 @@ import { SessionChannelIcon } from '@/components/shell/session-channel-icon';
 import { Button } from '@/components/ui/button';
 import type { ChannelsSettingsMessages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
+import { interaction } from '@/lib/interaction';
 
 import type { ChannelHubCardVm, ChannelHubPrimaryAction, ChannelHubStatus } from './channel-hub-view-model';
 
@@ -100,7 +101,10 @@ export function ChannelHubCard({
             {vm.pendingPairing > 0 ? (
               <button
                 type="button"
-                className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900 dark:bg-amber-950/60 dark:text-amber-200"
+                className={cn(
+                  'inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900 dark:bg-amber-950/60 dark:text-amber-200',
+                  interaction.press,
+                )}
                 onClick={(e) => {
                   e.stopPropagation();
                   onReviewPairing();
@@ -120,6 +124,7 @@ export function ChannelHubCard({
             disabled={toggleDisabled}
             className={cn(
               'inline-flex h-6 w-10 shrink-0 items-center rounded-full border border-edge p-0.5 transition-colors',
+              interaction.press,
               vm.enabled ? 'justify-end bg-accent' : 'justify-start bg-surface-hover',
               toggleDisabled && 'cursor-not-allowed opacity-50',
             )}

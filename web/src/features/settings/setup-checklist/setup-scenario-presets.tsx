@@ -8,6 +8,7 @@ import {
 } from '@/features/settings/settings-form-section';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
+import { interaction } from '@/lib/interaction';
 import { useLocaleStore } from '@/stores/locale-store';
 
 import {
@@ -41,6 +42,7 @@ export function SetupScenarioPresets() {
           className={cn(
             'inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-medium text-fg-muted',
             'hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+            interaction.press,
           )}
           onClick={() => {
             dismissScenarioPresets();

@@ -78,7 +78,7 @@ export function ModelsProvidersList({
               <div className="flex items-center justify-between gap-2 border-b border-edge-subtle bg-surface-hover/35 px-3 py-2 dark:border-edge-subtle">
                 <button
                   type="button"
-                  className="flex min-w-0 flex-1 items-center gap-2 text-left text-sm font-semibold text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                  className="flex min-w-0 flex-1 items-center gap-2 text-left text-sm font-semibold text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 transition-transform duration-150 ease-out active:scale-[0.99] motion-reduce:transition-none motion-reduce:active:scale-100"
                   onClick={() => toggleExpand(id)}
                 >
                   {isEx ? (
@@ -107,7 +107,10 @@ export function ModelsProvidersList({
                 </button>
                 <button
                   type="button"
-                  className="rounded-lg p-1.5 text-fg-muted hover:bg-surface-base hover:text-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 dark:hover:text-red-400"
+                  className={cn(
+                    'rounded-lg p-1.5 text-fg-muted hover:bg-surface-base hover:text-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 dark:hover:text-red-400',
+                    interaction.press,
+                  )}
                   onClick={() => removeProv(id)}
                   aria-label={ms.removeProvider}
                 >
@@ -252,7 +255,10 @@ export function ModelsProvidersList({
                             <div className="flex shrink-0 gap-1">
                               <button
                                 type="button"
-                                className="rounded-lg p-1.5 text-fg-muted hover:bg-surface-panel hover:text-fg"
+                                className={cn(
+                                  'rounded-lg p-1.5 text-fg-muted hover:bg-surface-panel hover:text-fg',
+                                  interaction.press,
+                                )}
                                 onClick={() => openModelDialog(id, mod, false)}
                                 aria-label={ms.editModel}
                               >
@@ -260,7 +266,10 @@ export function ModelsProvidersList({
                               </button>
                               <button
                                 type="button"
-                                className="rounded-lg p-1.5 text-fg-muted hover:bg-surface-panel hover:text-red-600 dark:hover:text-red-400"
+                                className={cn(
+                                  'rounded-lg p-1.5 text-fg-muted hover:bg-surface-panel hover:text-red-600 dark:hover:text-red-400',
+                                  interaction.press,
+                                )}
                                 onClick={() => {
                                   if (!window.confirm(ms.removeModelConfirm.replace('{{id}}', mod.id))) return;
                                   setConfig((c) => {
@@ -318,6 +327,7 @@ export function ModelsSettingsEmptyState({ ms, openAddProvider }: ModelsSettings
             'inline-flex items-center gap-1.5 rounded-full border border-edge bg-surface-base px-3 py-1.5 text-xs text-fg hover:border-accent hover:text-accent dark:border-edge',
             interaction.transition,
             interaction.focusRingBase,
+            interaction.press,
           )}
           onClick={() => openAddProvider('ollama')}
         >
@@ -330,6 +340,7 @@ export function ModelsSettingsEmptyState({ ms, openAddProvider }: ModelsSettings
             'inline-flex items-center gap-1.5 rounded-full border border-edge bg-surface-base px-3 py-1.5 text-xs text-fg hover:border-accent hover:text-accent dark:border-edge',
             interaction.transition,
             interaction.focusRingBase,
+            interaction.press,
           )}
           onClick={() => openAddProvider('openrouter')}
         >
@@ -342,6 +353,7 @@ export function ModelsSettingsEmptyState({ ms, openAddProvider }: ModelsSettings
             'inline-flex items-center gap-1.5 rounded-full border border-edge bg-surface-base px-3 py-1.5 text-xs text-fg hover:border-accent hover:text-accent dark:border-edge',
             interaction.transition,
             interaction.focusRingBase,
+            interaction.press,
           )}
           onClick={() => openAddProvider('lmstudio')}
         >
@@ -354,6 +366,7 @@ export function ModelsSettingsEmptyState({ ms, openAddProvider }: ModelsSettings
             'inline-flex items-center gap-1.5 rounded-full border border-edge bg-surface-base px-3 py-1.5 text-xs text-fg hover:border-accent hover:text-accent dark:border-edge',
             interaction.transition,
             interaction.focusRingBase,
+            interaction.press,
           )}
           onClick={() => openAddProvider('zhipuCn')}
         >
@@ -366,6 +379,7 @@ export function ModelsSettingsEmptyState({ ms, openAddProvider }: ModelsSettings
             'inline-flex items-center gap-1.5 rounded-full border border-edge bg-surface-base px-3 py-1.5 text-xs text-fg hover:border-accent hover:text-accent dark:border-edge',
             interaction.transition,
             interaction.focusRingBase,
+            interaction.press,
           )}
           onClick={() => openAddProvider('zaiGeneral')}
         >

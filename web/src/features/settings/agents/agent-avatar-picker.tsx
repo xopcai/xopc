@@ -4,6 +4,7 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/cn';
+import { interaction } from '@/lib/interaction';
 import type { AgentsSettingsMessages } from '@/i18n/messages';
 
 import {
@@ -144,6 +145,7 @@ export function AgentAvatarPicker(props: {
             onClick={() => void pickDicebear(id, DICEBEAR_ROW_SEEDS[0] ?? agentId)}
             className={cn(
               'rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
+              interaction.press,
               activeStyle === id
                 ? 'border-fg bg-fg text-surface-base'
                 : 'border-edge-subtle bg-surface-panel text-fg hover:border-edge',
@@ -164,6 +166,7 @@ export function AgentAvatarPicker(props: {
               onClick={() => void pickDicebear(activeStyle, seed)}
               className={cn(
                 'flex size-12 shrink-0 items-center justify-center rounded-full border-2 transition-colors',
+                interaction.press,
                 isRowSeedActive(activeStyle, seed)
                   ? 'border-accent ring-2 ring-accent/30'
                   : 'border-transparent hover:border-edge',
@@ -184,7 +187,10 @@ export function AgentAvatarPicker(props: {
             <Popover.Trigger asChild>
               <button
                 type="button"
-                className="flex size-12 shrink-0 items-center justify-center rounded-xl border border-edge-subtle bg-surface-base text-xs font-medium text-fg-muted hover:border-edge hover:text-fg"
+                className={cn(
+                  'flex size-12 shrink-0 items-center justify-center rounded-xl border border-edge-subtle bg-surface-base text-xs font-medium text-fg-muted hover:border-edge hover:text-fg',
+                  interaction.press,
+                )}
               >
                 {a.avatarMore}
               </button>
@@ -205,6 +211,7 @@ export function AgentAvatarPicker(props: {
                       onClick={() => void pickDicebear(activeStyle, seed)}
                       className={cn(
                         'flex size-11 shrink-0 items-center justify-center rounded-full border-2 transition-colors',
+                        interaction.press,
                         isRowSeedActive(activeStyle, seed)
                           ? 'border-accent ring-2 ring-accent/30'
                           : 'border-transparent hover:border-edge',
