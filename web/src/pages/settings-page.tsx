@@ -4,6 +4,7 @@ import {
   AgentDefaultsTabbedPage,
 } from '@/features/settings/agents';
 import { SetupStatusPanel } from '@/features/settings/setup-checklist/setup-status-panel';
+import { CredentialsHubPanel } from '@/features/settings/credentials/credentials-hub-panel';
 import { AppearanceSettingsPanel } from '@/features/settings/appearance-settings';
 import { DreamingSettingsPanel } from '@/features/settings/dreaming-settings';
 import { GatewaySettingsPanel } from '@/features/settings/gateway-settings';
@@ -27,6 +28,7 @@ const SECTIONS: SettingsSectionId[] = [
   'system',
   'agent-defaults',
   'agent-mcp',
+  'credentials',
   'providers',
   'models',
   'image-models',
@@ -74,6 +76,10 @@ export function SettingsPage() {
 
   if (id === 'system') {
     return <SystemSettingsPanel />;
+  }
+
+  if (id === 'credentials') {
+    return <CredentialsHubPanel />;
   }
 
   if (id === 'providers') {

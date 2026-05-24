@@ -13,7 +13,8 @@
     "agent-skills": "默认技能白名单",
     "agent-mcp": "外部工具 (MCP)",
     "agent-system-prompt": "系统提示词",
-    "providers": "服务商",
+    "providers": "LLM 服务商",
+    "credentials": "凭证中心",
     "models": "模型",
     "image-models": "图像",
     "channels": "消息通道",
@@ -89,6 +90,81 @@
       "presets": {
         "title": "添加预设智能体",
         "description": "创建专用智能体（如编程、写作等）以应对不同任务。"
+      }
+    },
+    "scenarios": {
+      "title": "快速场景向导",
+      "subtitle": "按使用方式选择路径 — 每一步会打开对应设置页。",
+      "dismiss": "隐藏",
+      "steps": {
+        "stepProviders": "配置 LLM 服务商密钥",
+        "stepDefaultModel": "选择默认对话模型",
+        "stepChannel": "连接消息通道",
+        "stepPresets": "添加专用智能体",
+        "stepCron": "设置定时任务",
+        "stepSkills": "从目录安装技能"
+      },
+      "presets": {
+        "lightChat": {
+          "title": "轻量对话",
+          "description": "在网页控制台对话 — 配置一家服务商并选择默认模型即可。"
+        },
+        "multiChannel": {
+          "title": "多频道助手",
+          "description": "从 Telegram 等通道回复，并为不同场景配置专用智能体。"
+        },
+        "automation": {
+          "title": "自动化工作流",
+          "description": "结合技能与定时任务，完成周期性后台工作。"
+        }
+      }
+    }
+  },
+  "credentialsHub": {
+    "title": "凭证中心",
+    "subtitle": "集中查看对话、搜索、图像与语音相关的 API 密钥和 OAuth 状态。",
+    "refresh": "刷新",
+    "loading": "正在加载凭证状态…",
+    "loadError": "无法加载凭证状态，请检查网关连接后重试。",
+    "domainsTitle": "凭证域",
+    "domainsSubtitle": "在各自详情页管理密钥 — 值保存在网关配置中。",
+    "footerHint": "LLM 密钥在「LLM 服务商」页管理。图像、语音与网页搜索密钥也可能来自环境变量 — 此处仅显示写入配置的项。",
+    "status": {
+      "ready": "就绪",
+      "partial": "部分",
+      "missing": "缺失",
+      "notNeeded": "可选"
+    },
+    "labels": {
+      "llmMetaReady": "{{configured}} / {{total}} 个 LLM 服务商已就绪",
+      "llmConfigured": "已配置 {{count}} 个 LLM 服务商",
+      "llmMissing": "尚未配置 LLM 服务商",
+      "webSearchDisabled": "网页搜索已关闭",
+      "webSearchReady": "已设置 {{configured}} / {{total}} 个搜索 API 密钥",
+      "webSearchNoProviders": "尚未配置搜索服务商",
+      "imageReady": "已配置 {{configured}} / {{total}} 个图像服务商",
+      "imageNoProviders": "尚未注册图像服务商",
+      "voiceDisabled": "语音输入/输出已关闭",
+      "voiceReadyNoKeys": "语音已启用 — 无需 API 密钥",
+      "voiceKeysReady": "已设置 {{configured}} / {{total}} 个语音 API 密钥",
+      "voiceMissing": "语音尚未配置"
+    },
+    "domains": {
+      "llm": {
+        "title": "LLM 服务商",
+        "description": "对话模型的 API 密钥与 OAuth。"
+      },
+      "webSearch": {
+        "title": "网页搜索",
+        "description": "Brave、Tavily 等搜索 API 密钥。"
+      },
+      "image": {
+        "title": "图像生成",
+        "description": "视觉理解与图像生成服务商密钥。"
+      },
+      "voice": {
+        "title": "语音（STT / TTS）",
+        "description": "语音识别与文字转语音凭证。"
       }
     }
   },
@@ -254,11 +330,11 @@
   },
   "settingsNavGroups": {
     "general": "通用",
-    "models": "模型与多媒体",
+    "credentials": "凭证与模型",
     "agent": "智能体默认配置",
-    "gateway": "网关",
-    "automation": "自动化",
-    "data": "会话与日志",
+    "connection": "连接",
+    "advanced": "高级",
+    "diagnostics": "诊断",
     "extensions": "扩展"
   },
   "imageModelsSettings": {

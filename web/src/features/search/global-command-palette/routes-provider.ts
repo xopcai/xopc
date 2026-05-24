@@ -77,6 +77,13 @@ export function buildRouteSeeds(language: StoredLanguage): RouteHitSeed[] {
       keywords: ['config', 'status', 'providers', 'models', 'agents', 'search', 'preferences'],
     },
     {
+      id: 'route:settings:credentials',
+      title: m.nav.settingsCredentials,
+      subtitle: r.credentialsSubtitle,
+      path: '/settings/credentials',
+      keywords: ['api', 'key', 'credentials', 'oauth', 'token'],
+    },
+    {
       id: 'route:settings:providers',
       title: m.nav.settingsProviders,
       subtitle: r.providersSubtitle,

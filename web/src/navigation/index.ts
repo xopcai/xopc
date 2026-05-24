@@ -25,6 +25,7 @@ const SETTINGS_SECTION_TO_TAB: Record<SettingsSectionId, Tab> = {
   'agent-system-prompt': 'settingsAgentDefaults',
   agents: 'settingsAgents',
   providers: 'settingsProviders',
+  credentials: 'settingsCredentials',
   models: 'settingsModels',
   'image-models': 'settingsImageModels',
   channels: 'channels',
@@ -46,6 +47,7 @@ const TAB_TO_SETTINGS_SECTION: Record<
   | 'settingsAgentDefaults'
   | 'settingsAgentMcp'
   | 'settingsAgents'
+  | 'settingsCredentials'
   | 'settingsProviders'
   | 'settingsModels'
   | 'settingsImageModels'
@@ -68,6 +70,7 @@ const TAB_TO_SETTINGS_SECTION: Record<
   settingsAgentDefaults: 'agent-defaults',
   settingsAgentMcp: 'agent-mcp',
   settingsAgents: 'agents',
+  settingsCredentials: 'credentials',
   settingsProviders: 'providers',
   settingsModels: 'models',
   settingsImageModels: 'image-models',
@@ -95,11 +98,11 @@ export function tabToSettingsSection(tab: Tab): SettingsSectionId | null {
 /** Group keys for `messages(lang).settingsNavGroups` — left rail sections + sort order. */
 export type SettingsNavGroupId =
   | 'general'
-  | 'models'
+  | 'credentials'
   | 'agent'
-  | 'gateway'
-  | 'automation'
-  | 'data';
+  | 'connection'
+  | 'advanced'
+  | 'diagnostics';
 
 export type SettingsShellNavGroup = {
   id: SettingsNavGroupId;
@@ -114,27 +117,31 @@ export type SettingsShellNavGroup = {
 export const SETTINGS_SHELL_NAV_GROUPS: readonly SettingsShellNavGroup[] = [
   { id: 'general', tabs: ['settingsOverview', 'settingsAppearance', 'settingsSystem'] },
   {
-    id: 'models',
+    id: 'credentials',
     tabs: [
+      'settingsCredentials',
+      'settingsProviders',
+      'settingsModels',
       'settingsImageModels',
       'settingsVoice',
       'settingsSearch',
-      'settingsProviders',
-      'settingsModels',
     ],
   },
   {
     id: 'agent',
     tabs: ['settingsAgentDefaults', 'settingsAgentMcp'],
   },
-  { id: 'gateway', tabs: ['settingsGateway', 'settingsHeartbeat', 'settingsTunnel', 'settingsShares'] },
-  { id: 'automation', tabs: ['settingsDreams'] },
-  { id: 'data', tabs: ['sessions', 'logs'] },
+  {
+    id: 'connection',
+    tabs: ['settingsGateway', 'settingsHeartbeat', 'settingsTunnel', 'settingsShares'],
+  },
+  { id: 'advanced', tabs: ['settingsDreams'] },
+  { id: 'diagnostics', tabs: ['sessions', 'logs'] },
 ] as const;
 
 /** Flat order: settings routes only (excludes sessions/logs). */
 export const SETTINGS_NAV_TABS: readonly Tab[] = SETTINGS_SHELL_NAV_GROUPS.filter(
-  (g) => g.id !== 'data',
+  (g) => g.id !== 'diagnostics',
 ).flatMap((g) => [...g.tabs]);
 
 /** Settings shell: full left rail including sessions + logs. */
