@@ -257,7 +257,7 @@ export async function finalizeCreateAgentDirs(
   if (profileFiles && Object.keys(profileFiles).length > 0) {
     for (const [name, content] of Object.entries(profileFiles)) {
       const written = await writeAgentProfileFile(cfg, agentId, name, content);
-      if (!written.ok) {
+      if (written.ok === false) {
         return written;
       }
     }
