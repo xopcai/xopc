@@ -41,6 +41,7 @@ import {
 import { ProviderInfoPopover } from '@/features/settings/provider-info-popover';
 import { activeSourceLabel, interpolate } from './providers-settings-lib';
 import { settingsInputFocusClass } from '@/lib/form-field-width';
+import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 import type { StoredLanguage } from '@/lib/storage';
@@ -56,13 +57,10 @@ function EnvVarCopyRow({
   const [copied, setCopied] = useState(false);
 
   const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(envVar);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
-    } catch {
-      /* ignore clipboard errors */
-    }
+    const ok = await copyTextToClipboard(envVar);
+    if (!ok) return;
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 2000);
   };
 
   return (
@@ -248,13 +246,10 @@ export function ProviderCredentialRow({
 
   const copyKey = async () => {
     if (!value || masked) return;
-    try {
-      await navigator.clipboard.writeText(value);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
-    } catch {
-      /* ignore */
-    }
+    const ok = await copyTextToClipboard(value);
+    if (!ok) return;
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 2000);
   };
 
   const runTest = async () => {

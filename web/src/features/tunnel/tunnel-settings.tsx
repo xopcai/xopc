@@ -24,6 +24,7 @@ import {
 import { useMobilePairQr } from '@/features/tunnel/use-mobile-pair-qr';
 import { TunnelE2eSection } from '@/features/tunnel/tunnel-e2e-section';
 import { cn } from '@/lib/cn';
+import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
 import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -262,7 +263,8 @@ export function TunnelSettingsPanel({ embedded = false }: { embedded?: boolean }
 
   const copyLink = useCallback(async () => {
     if (!status?.publicUrl) return;
-    await navigator.clipboard.writeText(status.publicUrl).catch(() => {});
+    const ok = await copyTextToClipboard(status.publicUrl);
+    if (!ok) return;
     setLinkCopied(true);
     window.setTimeout(() => setLinkCopied(false), 2000);
   }, [status?.publicUrl]);

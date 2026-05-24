@@ -13,6 +13,7 @@ import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import type { CreateShareResponse, ShareReachability } from '@/features/shares/shares-api';
 import { cn } from '@/lib/cn';
+import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 
@@ -116,7 +117,8 @@ function CopyUrlRow({ row }: { row: UrlRow }) {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = useCallback(async () => {
-    await navigator.clipboard.writeText(row.url).catch(() => {});
+    const ok = await copyTextToClipboard(row.url);
+    if (!ok) return;
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }, [row.url]);

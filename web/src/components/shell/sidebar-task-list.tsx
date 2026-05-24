@@ -35,6 +35,7 @@ import type { SessionMetadata } from '@/features/sessions/session.types';
 import { messages } from '@/i18n/messages';
 import { formControlBorderFocusClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
+import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
@@ -121,11 +122,7 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
   };
 
   const copyChatId = async () => {
-    try {
-      await navigator.clipboard.writeText(session.key);
-    } catch {
-      /* ignore */
-    }
+    await copyTextToClipboard(session.key);
     setMenuOpen(false);
   };
 

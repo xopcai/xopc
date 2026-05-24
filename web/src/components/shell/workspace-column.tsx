@@ -25,6 +25,7 @@ import { ShareLinkDialog } from '@/features/shares/share-link-dialog';
 import { useShareLink } from '@/features/shares/use-share-link';
 import { useWorkspaceTree } from '@/features/workspace/use-workspace-tree';
 import { cn } from '@/lib/cn';
+import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useWorkspaceEditorAgentStore } from '@/stores/workspace-editor-agent-store';
@@ -169,8 +170,10 @@ export const WorkspaceColumn = memo(function WorkspaceColumn() {
           break;
         case 'copyPath':
           try {
-            await navigator.clipboard.writeText(entry.absolutePath ?? entry.path);
-            showComposerNotification('success', m.workspace.pathCopied, undefined, { duration: 2500 });
+            const ok = await copyTextToClipboard(entry.absolutePath ?? entry.path);
+            if (ok) {
+              showComposerNotification('success', m.workspace.pathCopied, undefined, { duration: 2500 });
+            }
           } catch {
             /* ignore */
           }

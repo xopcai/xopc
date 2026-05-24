@@ -7,6 +7,7 @@ import {
   SettingsFormSectionHeader,
 } from '@/features/settings/settings-form-section';
 import { messages } from '@/i18n/messages';
+import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
 import { useLocaleStore } from '@/stores/locale-store';
 
 export function SshCliSection({ embedded = false }: { embedded?: boolean }) {
@@ -20,7 +21,8 @@ export function SshCliSection({ embedded = false }: { embedded?: boolean }) {
   );
 
   const onCopy = useCallback(async () => {
-    await navigator.clipboard.writeText(command);
+    const ok = await copyTextToClipboard(command);
+    if (!ok) return;
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }, [command]);

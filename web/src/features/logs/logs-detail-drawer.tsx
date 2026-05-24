@@ -6,6 +6,7 @@ import { LogDetailBody } from '@/features/logs/log-detail-body';
 import type { LogEntry } from '@/features/logs/log.types';
 import type { LogsMessages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
+import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
 import { SETTINGS_SHELL_CONTENT_Z, SETTINGS_SHELL_OVERLAY_Z } from '@/lib/settings-shell-dialog-layer';
 
 type Props = {
@@ -43,7 +44,9 @@ export function LogsDetailDrawer({ L, log, onClose, copiedDetail, onCopiedMessag
                     className="h-9 shrink-0 gap-1 px-2 text-xs"
                     onClick={() => {
                       const text = typeof log.message === 'string' ? log.message : '';
-                      void navigator.clipboard.writeText(text).then(onCopiedMessage);
+                      void copyTextToClipboard(text).then((ok) => {
+                        if (ok) onCopiedMessage();
+                      });
                     }}
                   >
                     <ClipboardCopy className="size-3.5 shrink-0" strokeWidth={1.75} />
@@ -54,7 +57,9 @@ export function LogsDetailDrawer({ L, log, onClose, copiedDetail, onCopiedMessag
                     variant="ghost"
                     className="h-9 shrink-0 gap-1 px-2 text-xs"
                     onClick={() => {
-                      void navigator.clipboard.writeText(JSON.stringify(log, null, 2)).then(onCopiedJson);
+                      void copyTextToClipboard(JSON.stringify(log, null, 2)).then((ok) => {
+                        if (ok) onCopiedJson();
+                      });
                     }}
                   >
                     <ClipboardCopy className="size-3.5 shrink-0" strokeWidth={1.75} />

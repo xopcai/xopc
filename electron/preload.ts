@@ -1,6 +1,9 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
 contextBridge.exposeInMainWorld('electronAPI', {
+  clipboard: {
+    writeText: (text: string) => ipcRenderer.invoke('clipboard:write-text', text) as Promise<boolean>,
+  },
   shell: {
     openPath: (filePath: string) =>
       ipcRenderer.invoke('shell:open-path', filePath) as Promise<{ error?: string }>,
