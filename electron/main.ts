@@ -103,6 +103,10 @@ function ensureWin32TitleBarOverlayThemeSync(): void {
   });
 }
 
+if (process.platform === 'win32') {
+  app.setAppUserModelId('ai.xopc.xopc');
+}
+
 const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
   app.quit();
@@ -418,10 +422,20 @@ function createWindow(): void {
 app.whenReady().then(async () => {
   if (!gotTheLock) return;
 
-  // getUserMedia / MediaRecorder need Chromium "media" permission; without a handler some Electron
+  // getUserMedia / MediaRecorder need Chromium "media" permission; without handlers some Electron
   // builds deny it for packaged apps (browser tabs are unaffected).
+  const allowShellPermission = (permission: string) =>
+    permission === 'media' ||
+    permission === 'audioCapture' ||
+    permission === 'videoCapture' ||
+    permission === 'notifications';
+
+  session.defaultSession.setPermissionCheckHandler((_webContents, permission) => {
+    return allowShellPermission(permission);
+  });
+
   session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
-    callback(permission === 'media');
+    callback(allowShellPermission(permission));
   });
 
   await initElectronShellPreferences();
