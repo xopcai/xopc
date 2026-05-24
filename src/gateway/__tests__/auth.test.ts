@@ -48,6 +48,30 @@ describe('Gateway Auth', () => {
       });
       expect(result.mode).toBe('none');
     });
+
+    it('should resolve trusted-proxy mode without auto-generating token', () => {
+      const result = resolveGatewayAuth({
+        authConfig: {
+          mode: 'trusted-proxy',
+          trustedProxy: { userHeader: 'x-forwarded-user' },
+        },
+      });
+      expect(result.mode).toBe('trusted-proxy');
+      expect(result.token).toBeUndefined();
+      expect(result.trustedProxy?.userHeader).toBe('x-forwarded-user');
+    });
+
+    it('should reject trusted-proxy mode with configured token', () => {
+      expect(() =>
+        resolveGatewayAuth({
+          authConfig: {
+            mode: 'trusted-proxy',
+            token: 'secret',
+            trustedProxy: { userHeader: 'x-forwarded-user' },
+          },
+        }),
+      ).toThrow(/mutually exclusive/);
+    });
   });
 
   describe('safeEqualSecret', () => {
@@ -151,6 +175,21 @@ describe('Gateway Auth', () => {
       expect(() => {
         assertGatewayAuthConfigured({ mode: 'token' });
       }).toThrow(/no token was configured/);
+    });
+
+    it('should throw for trusted-proxy mode without trustedProxy config', () => {
+      expect(() => {
+        assertGatewayAuthConfigured({ mode: 'trusted-proxy' });
+      }).toThrow(/trustedProxy config was provided/);
+    });
+
+    it('should not throw for trusted-proxy mode with userHeader', () => {
+      expect(() => {
+        assertGatewayAuthConfigured({
+          mode: 'trusted-proxy',
+          trustedProxy: { userHeader: 'x-forwarded-user' },
+        });
+      }).not.toThrow();
     });
   });
 });

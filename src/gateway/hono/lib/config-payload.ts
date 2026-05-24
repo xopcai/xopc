@@ -9,6 +9,7 @@ import {
 } from '../../../channels/plugins/registry.js';
 import { normalizeConfiguredMcpServers } from '../../../config/mcp-config-normalize.js';
 import type { Config } from '../../../config/schema.js';
+import { inferBindModeFromHost } from '../../../config/gateway-bind.js';
 import { resolveTunnelE2eConfig } from '../../../tunnel/tunnel-e2e-config.js';
 import { bundledChannelPlugins } from '../../../generated/bundled-channel-plugins.js';
 import { getAllProviders, isProviderConfigured } from '../../../providers/index.js';
@@ -160,13 +161,27 @@ export async function buildSafeWebConfigPayload(service: GatewayService) {
     /** Masked `cfg.providers` for capability keys (image / STT / etc.). */
     providersConfig: buildSafeProvidersConfigForWeb(config.providers),
     gateway: {
+      bind: config.gateway?.bind ?? inferBindModeFromHost(config.gateway?.host ?? '127.0.0.1'),
+      customBindHost: config.gateway?.customBindHost,
       host: config.gateway?.host,
       port: config.gateway?.port,
       corsOrigins: Array.isArray(config.gateway?.corsOrigins) ? config.gateway.corsOrigins : [],
+      trustedProxies: Array.isArray(config.gateway?.trustedProxies)
+        ? config.gateway.trustedProxies
+        : [],
+      allowRealIpFallback: config.gateway?.allowRealIpFallback === true,
       auth: {
         mode: config.gateway?.auth?.mode || 'token',
         token: config.gateway?.auth?.token || '',
         password: config.gateway?.auth?.password ? '••••••••••••' : '',
+        trustedProxy: config.gateway?.auth?.trustedProxy
+          ? {
+              userHeader: config.gateway.auth.trustedProxy.userHeader,
+              requiredHeaders: config.gateway.auth.trustedProxy.requiredHeaders ?? [],
+              allowUsers: config.gateway.auth.trustedProxy.allowUsers ?? [],
+              allowLoopback: config.gateway.auth.trustedProxy.allowLoopback === true,
+            }
+          : undefined,
         rateLimit: {
           enabled: config.gateway?.auth?.rateLimit?.enabled !== false,
           maxAttempts:
@@ -180,7 +195,10 @@ export async function buildSafeWebConfigPayload(service: GatewayService) {
           blockDurationMs:
             typeof config.gateway?.auth?.rateLimit?.blockDurationMs === 'number'
               ? config.gateway.auth.rateLimit.blockDurationMs
-              : 300_000,
+              : typeof config.gateway?.auth?.rateLimit?.lockoutMs === 'number'
+                ? config.gateway.auth.rateLimit.lockoutMs
+                : 300_000,
+          exemptLoopback: config.gateway?.auth?.rateLimit?.exemptLoopback !== false,
         },
       },
       heartbeat: {

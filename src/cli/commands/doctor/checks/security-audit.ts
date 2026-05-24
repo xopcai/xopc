@@ -2,21 +2,74 @@ import { existsSync, statSync } from 'node:fs';
 
 import { loadConfig } from '../../../../config/loader.js';
 import type { Config } from '../../../../config/schema.js';
+import { collectGatewaySecurityFindings, type SecurityAuditFinding } from '../../../../gateway/security/audit.js';
 import type { CheckResult, DoctorContext } from '../types.js';
 
-function isLoopbackHost(host: string): boolean {
-  const normalized = host.trim().toLowerCase();
-  return (
-    normalized === '127.0.0.1' ||
-    normalized === 'localhost' ||
-    normalized === '::1' ||
-    normalized === '0:0:0:0:0:0:0:1'
-  );
+function collectConfigFileHints(configPath: string): string[] {
+  const hints: string[] = [];
+  if (process.platform === 'win32') {
+    return hints;
+  }
+  try {
+    const st = statSync(configPath);
+    const perms = st.mode & 0o777;
+    if (perms & 0o077) {
+      hints.push('Config file is group/world-readable; consider chmod 600 (contains secrets).');
+    }
+  } catch {
+    /* ignore */
+  }
+  return hints;
 }
 
-function isAllInterfaces(host: string): boolean {
-  const n = host.trim();
-  return n === '0.0.0.0' || n === '::' || n === '*';
+function formatFindingHint(finding: SecurityAuditFinding): string {
+  const remediation = finding.remediation ?? finding.detail;
+  return `[${finding.checkId}] ${remediation}`;
+}
+
+function summarizeFindings(findings: SecurityAuditFinding[]): Pick<CheckResult, 'status' | 'message' | 'hints'> {
+  const critical = findings.filter((f) => f.severity === 'critical');
+  const warns = findings.filter((f) => f.severity === 'warn');
+  const infos = findings.filter((f) => f.severity === 'info');
+
+  const hints = [
+    ...critical.map(formatFindingHint),
+    ...warns.map(formatFindingHint),
+    ...infos.map(formatFindingHint),
+  ];
+
+  if (critical.length > 0) {
+    const startupBlocked = critical.some((f) => f.checkId === 'gateway.runtime_config.blocked');
+    return {
+      status: 'fail',
+      message: startupBlocked
+        ? 'Gateway startup would be blocked by security guards (critical).'
+        : `${critical.length} critical gateway security issue(s) detected.`,
+      hints,
+    };
+  }
+
+  if (warns.length > 0) {
+    return {
+      status: 'warn',
+      message: `${warns.length} gateway security recommendation(s).`,
+      hints,
+    };
+  }
+
+  if (infos.length > 0) {
+    return {
+      status: 'pass',
+      message: `${infos.length} informational note(s); no critical gateway security issues.`,
+      hints,
+    };
+  }
+
+  return {
+    status: 'pass',
+    message: 'No critical gateway security issues detected.',
+    hints,
+  };
 }
 
 export async function checkSecurityAudit(ctx: DoctorContext): Promise<CheckResult> {
@@ -43,83 +96,19 @@ export async function checkSecurityAudit(ctx: DoctorContext): Promise<CheckResul
     };
   }
 
-  const hints: string[] = [];
-  const host = cfg.gateway?.host?.trim() || '127.0.0.1';
-  const auth = cfg.gateway?.auth;
-  const mode = auth?.mode ?? 'token';
-  const token = auth?.token?.trim() ?? '';
-
-  if (isAllInterfaces(host) && (mode === 'none' || !token)) {
-    return {
-      id: 'security-audit',
-      label: 'Security',
-      status: 'fail',
-      message: 'Gateway is bound to all interfaces without token authentication (critical).',
-      hints: [
-        'Set gateway.host to 127.0.0.1 or enable gateway.auth (token).',
-        'Do not expose an unauthenticated gateway on the network.',
-      ],
-    };
-  }
-
-  if (isAllInterfaces(host) && mode !== 'none' && token) {
-    hints.push('Listening on all network interfaces; prefer 127.0.0.1 or firewall rules if the token could leak.');
-  }
-
-  if (!isLoopbackHost(host) && !isAllInterfaces(host)) {
-    if (mode === 'none' || !token) {
-      return {
-        id: 'security-audit',
-        label: 'Security',
-        status: 'fail',
-        message: 'Gateway is reachable on a non-loopback address without authentication.',
-        hints: ['Use gateway.auth.mode "token" and set gateway.auth.token, or bind to loopback only.'],
-      };
-    }
-    hints.push('Non-loopback bind is safer with a strong token and firewall rules.');
-  }
-
-  if (isLoopbackHost(host) && (mode === 'none' || !token)) {
-    return {
-      id: 'security-audit',
-      label: 'Security',
-      status: 'warn',
-      message: 'Gateway has no token auth (loopback only).',
-      hints: ['Consider gateway.auth.token for defense in depth.'],
-    };
-  }
-
-  if (token.length > 0 && token.length < 16) {
-    hints.push('Auth token is shorter than 16 characters; use a longer random token.');
-  }
-
-  if (process.platform !== 'win32') {
-    try {
-      const st = statSync(ctx.configPath);
-      const perms = st.mode & 0o777;
-      if (perms & 0o077) {
-        hints.push('Config file is group/world-readable; consider chmod 600 (contains secrets).');
-      }
-    } catch {
-      /* ignore */
-    }
-  }
-
-  if (hints.length > 0) {
-    return {
-      id: 'security-audit',
-      label: 'Security',
-      status: 'warn',
-      message: 'Non-critical security recommendations.',
-      hints,
-    };
-  }
+  const findings = collectGatewaySecurityFindings(cfg);
+  const summary = summarizeFindings(findings);
+  const fileHints = collectConfigFileHints(ctx.configPath);
 
   return {
     id: 'security-audit',
     label: 'Security',
-    status: 'pass',
-    message: 'No critical gateway exposure issues detected.',
-    hints: [],
+    status: fileHints.length > 0 && summary.status === 'pass' ? 'warn' : summary.status,
+    message:
+      fileHints.length > 0 && summary.status === 'pass'
+        ? 'No critical gateway issues; config file permissions could be tighter.'
+        : summary.message,
+    hints: [...summary.hints, ...fileHints],
+    findings,
   };
 }

@@ -27,6 +27,8 @@ import { sanitizeTunnelConfig } from '../tunnel/tunnel-config.js';
 import { resolveGatewayAuth, assertGatewayAuthConfigured, validateToken, extractToken, type ResolvedGatewayAuth } from './auth.js';
 import { assertGatewayAuthNotKnownWeak } from './security/known-weak-secrets.js';
 import { auditGatewayConfig } from './security/audit.js';
+import { assertGatewayRuntimeConfig } from './runtime-config.js';
+import { isGatewayStrictSecurityEnabled } from './auth-rate-limit.js';
 import { getModelRegistry } from '../providers/index.js';
 import { createLogger, getLogDir, getLogStats } from '../utils/logger.js';
 import {
@@ -169,19 +171,44 @@ export class GatewayService {
     // Reject known weak / placeholder credentials at startup
     assertGatewayAuthNotKnownWeak(this.auth);
 
-    // Security audit: detect dangerous configuration combinations early
+    const gatewayPort = this.config.gateway?.port ?? 18790;
+    const runtimeConfig = assertGatewayRuntimeConfig({
+      cfg: this.config,
+      auth: this.auth,
+      bindOverride: serviceConfig.listenBind,
+      hostOverride: serviceConfig.hostOverride,
+      port: gatewayPort,
+    });
+
+    // Security audit: non-blocking warnings for remaining risk signals
     auditGatewayConfig({
       auth: this.auth,
-      host: this.config.gateway?.host,
-      corsOrigins: this.config.gateway?.corsOrigins,
+      host: runtimeConfig.bindHost,
+      corsOrigins: runtimeConfig.corsOrigins,
+      rateLimitEnabled: runtimeConfig.rateLimitEnabled,
+      tlsEnabled: runtimeConfig.tlsEnabled,
+      trustedProxies: this.config.gateway?.trustedProxies,
+      allowRealIpFallback: this.config.gateway?.allowRealIpFallback === true,
+      dangerouslyAllowHostHeaderOriginFallback: runtimeConfig.dangerouslyAllowHostHeaderOriginFallback,
+      strictSecurityEnabled: isGatewayStrictSecurityEnabled(this.config),
+      rateLimitConfigured: this.config.gateway?.auth?.rateLimit !== undefined,
     });
 
     // Log token info (not the token itself)
     if (this.auth.mode === 'token') {
       const tokenPreview = this.auth.token ? `${this.auth.token.slice(0, 4)}***` : 'none';
       log.info({ mode: this.auth.mode, token: tokenPreview }, 'Authentication configured');
+    } else if (this.auth.mode === 'trusted-proxy') {
+      log.info(
+        {
+          mode: this.auth.mode,
+          userHeader: this.auth.trustedProxy?.userHeader,
+          trustedProxyCount: this.config.gateway?.trustedProxies?.length ?? 0,
+        },
+        'Trusted-proxy authentication configured',
+      );
     } else {
-      log.info({ mode: this.auth.mode }, 'Authentication disabled');
+      log.info({ mode: this.auth.mode }, 'Authentication configured');
     }
 
     // Initialize channel manager
@@ -1932,13 +1959,18 @@ export class GatewayService {
   /**
    * Get current auth mode.
    */
-  getAuthMode(): 'none' | 'token' | 'password' {
+  getAuthMode(): 'none' | 'token' | 'password' | 'trusted-proxy' {
     return this.auth.mode;
+  }
+
+  /** Resolved gateway auth (mode, credentials, trusted-proxy config). */
+  getResolvedAuth(): ResolvedGatewayAuth {
+    return this.auth;
   }
 
   /**
    * Get current auth token (for CLI server integration).
-   * Returns undefined if mode is 'none'.
+   * Returns undefined if mode is not token.
    */
   getAuthToken(): string | undefined {
     return this.auth.mode === 'token' ? this.auth.token : undefined;

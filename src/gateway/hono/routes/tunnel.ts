@@ -2,6 +2,8 @@ import type { Hono, MiddlewareHandler } from 'hono';
 
 import { resolveTunnelE2eConfig } from '../../../tunnel/tunnel-e2e-config.js';
 import type { Config } from '../../../config/schema.js';
+import { isAllInterfacesHost } from '../../host.js';
+import { resolveGatewayEffectiveHost } from '../../../config/gateway-bind.js';
 import { extractToken } from '../../auth.js';
 import {
   assertTunnelMayStart,
@@ -121,9 +123,9 @@ export function registerTunnelPublicRoutes(app: Hono, service: GatewayService): 
 
     const persisted = loadTunnelState();
     const gateway = service.currentConfig.gateway;
-    const host = gateway.host ?? '127.0.0.1';
+    const host = resolveGatewayEffectiveHost(service.currentConfig);
     const port = gateway.port ?? 18790;
-    const lanHost = host === '0.0.0.0' || host === '::' ? '127.0.0.1' : host;
+    const lanHost = isAllInterfacesHost(host) ? '127.0.0.1' : host;
     const lanUrl =
       lanHost === '127.0.0.1' || lanHost === 'localhost' ? null : `http://${lanHost}:${port}`.replace(/\/+$/, '');
 
@@ -257,7 +259,7 @@ export function registerTunnelRoutes(authenticated: Hono, deps: AuthenticatedRou
     await configureTunnelFromService(deps);
     const gateway = deps.service.currentConfig.gateway;
     const port = gateway.port ?? 18790;
-    const host = gateway.host ?? '127.0.0.1';
+    const host = resolveGatewayEffectiveHost(deps.service.currentConfig);
     const token = requireGatewayToken(c);
     if (!token) return c.json({ error: 'Gateway token required' }, 401);
     const qr = tunnel.buildQr(port, host);

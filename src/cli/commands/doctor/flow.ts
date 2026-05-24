@@ -35,6 +35,10 @@ const DOCTOR_CHECKS: DoctorCheck[] = [
  * Headless data collection — used by both CLI and gateway API.
  */
 export async function collectDoctorResults(ctx: DoctorContext): Promise<CheckResult[]> {
+  if (ctx.options.security) {
+    return [await checkSecurityAudit(ctx)];
+  }
+
   const results: CheckResult[] = [];
 
   for (const check of DOCTOR_CHECKS) {
@@ -55,7 +59,7 @@ export async function runDoctor(ctx: DoctorContext): Promise<CheckResult[]> {
   if (ctx.options.json) {
     printJsonResults(results);
   } else {
-    printResults(results);
+    printResults(results, { security: ctx.options.security });
   }
 
   return results;

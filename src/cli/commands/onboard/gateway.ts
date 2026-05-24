@@ -56,7 +56,8 @@ export async function setupGateway(config: Config): Promise<Config> {
 
   // Configure gateway with defaults
   config.gateway = config.gateway || {};
-  config.gateway.host = config.gateway.host || '0.0.0.0';
+  config.gateway.bind = config.gateway.bind || 'loopback';
+  config.gateway.host = config.gateway.host || '127.0.0.1';
   config.gateway.port = config.gateway.port || 18790;
   config.gateway.auth = {
     mode: 'token',
@@ -64,6 +65,7 @@ export async function setupGateway(config: Config): Promise<Config> {
   };
 
   console.log('\n✅ Gateway configured:');
+  console.log(`   Bind: ${config.gateway.bind}`);
   console.log(`   Host: ${config.gateway.host}`);
   console.log(`   Port: ${config.gateway.port}`);
   console.log(`   Auth: Token-based (auto-generated)`);
@@ -78,7 +80,7 @@ export async function setupGateway(config: Config): Promise<Config> {
  * In non-interactive mode, provides guidance on how to start manually.
  */
 export async function startGatewayNow(config: Config, ctx: CLIContext): Promise<void> {
-  const host = config?.gateway?.host || '0.0.0.0';
+  const host = config?.gateway?.host || '127.0.0.1';
   const port = config?.gateway?.port || 18790;
   const displayHost = host === '0.0.0.0' ? 'localhost' : host;
 

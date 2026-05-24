@@ -93,9 +93,27 @@ export function GatewaySettingsPanel() {
     setForm((f) => (f ? { ...f, corsOrigins } : null));
   }, []);
 
-  const updateHost = useCallback((host: string) => {
+  const updateBind = useCallback((bind: GatewaySettingsState['bind']) => {
     dirtyRef.current = true;
-    setForm((f) => (f ? { ...f, host } : null));
+    setForm((f) => {
+      if (!f) return null;
+      const host =
+        bind === 'lan'
+          ? '0.0.0.0'
+          : bind === 'loopback'
+            ? '127.0.0.1'
+            : bind === 'custom'
+              ? f.customBindHost || f.host
+              : f.host;
+      return { ...f, bind, host };
+    });
+  }, []);
+
+  const updateCustomBindHost = useCallback((customBindHost: string) => {
+    dirtyRef.current = true;
+    setForm((f) =>
+      f ? { ...f, customBindHost, host: customBindHost, bind: 'custom' } : null,
+    );
   }, []);
 
   const updatePort = useCallback((port: number) => {
@@ -262,18 +280,37 @@ export function GatewaySettingsPanel() {
         <div className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
-              <label className="mb-1 block text-sm font-medium text-fg" htmlFor="gateway-listen-host">
-                {g.listenHost}
+              <label className="mb-1 block text-sm font-medium text-fg" htmlFor="gateway-bind-mode">
+                {g.bindMode}
               </label>
-              <input
-                id="gateway-listen-host"
-                className={cn(inputClassName(), 'font-mono text-xs')}
-                value={form.host}
-                onChange={(e) => updateHost(e.target.value)}
-                placeholder={g.listenHostPlaceholder}
-                autoComplete="off"
-              />
+              <select
+                id="gateway-bind-mode"
+                className={inputClassName()}
+                value={form.bind}
+                onChange={(e) => updateBind(e.target.value as GatewaySettingsState['bind'])}
+              >
+                <option value="loopback">{g.bindLoopback}</option>
+                <option value="lan">{g.bindLan}</option>
+                <option value="auto">{g.bindAuto}</option>
+                <option value="custom">{g.bindCustom}</option>
+                <option value="tailnet">{g.bindTailnet}</option>
+              </select>
             </div>
+            {form.bind === 'custom' ? (
+              <div>
+                <label className="mb-1 block text-sm font-medium text-fg" htmlFor="gateway-custom-bind-host">
+                  {g.customBindHost}
+                </label>
+                <input
+                  id="gateway-custom-bind-host"
+                  className={cn(inputClassName(), 'font-mono text-xs')}
+                  value={form.customBindHost}
+                  onChange={(e) => updateCustomBindHost(e.target.value)}
+                  placeholder={g.customBindHostPlaceholder}
+                  autoComplete="off"
+                />
+              </div>
+            ) : null}
             <div>
               <label className="mb-1 block text-sm font-medium text-fg" htmlFor="gateway-listen-port">
                 {g.listenPort}
@@ -306,9 +343,14 @@ export function GatewaySettingsPanel() {
             >
               <option value="token">{g.authModeToken}</option>
               <option value="password">{g.authModePassword}</option>
+              <option value="trusted-proxy">{g.authModeTrustedProxy}</option>
               <option value="none">{g.authModeNoneLabel}</option>
             </select>
           </div>
+
+          {form.auth.mode === 'trusted-proxy' ? (
+            <p className="text-xs text-fg-subtle">{g.authModeTrustedProxyHint}</p>
+          ) : null}
 
           {form.auth.mode === 'token' ? (
             <>
@@ -598,6 +640,16 @@ function AuthRateLimitFields({
           onChange={(e) => onChange({ enabled: e.target.checked })}
         />
         {g.rateLimitEnabled}
+      </label>
+      <label className="flex cursor-pointer items-center gap-2 text-sm text-fg">
+        <input
+          type="checkbox"
+          className="ui-checkbox"
+          checked={rateLimit.exemptLoopback}
+          disabled={!rateLimit.enabled}
+          onChange={(e) => onChange({ exemptLoopback: e.target.checked })}
+        />
+        {g.rateLimitExemptLoopback}
       </label>
       <div className="grid gap-3 sm:grid-cols-3">
         <div>

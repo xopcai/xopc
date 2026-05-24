@@ -4,6 +4,8 @@
 
 import { loadConfig } from '../../config/index.js';
 import { resolveConfigPath } from '../../config/paths.js';
+import { resolveGatewayEffectiveHost } from '../../config/gateway-bind.js';
+import { assertSecureGatewayHttpUrl } from '../../gateway/ws-security.js';
 import { createLogger } from '../../utils/logger.js';
 import type { GatewayClientOptions } from './gateway-client-options.js';
 
@@ -25,16 +27,20 @@ export interface GatewayCallResult<T = unknown> {
 
 export function resolveGatewayUrl(opts?: { url?: string; configPath?: string }): string {
   if (opts?.url) {
-    return opts.url.replace(/\/+$/, '');
+    const normalized = opts.url.replace(/\/+$/, '');
+    assertSecureGatewayHttpUrl(normalized);
+    return normalized;
   }
 
   try {
     const configPath = opts?.configPath ?? resolveConfigPath();
     const config = loadConfig(configPath);
-    const host = config?.gateway?.host || '127.0.0.1';
+    const host = resolveGatewayEffectiveHost(config);
     const port = config?.gateway?.port ?? 18790;
     const displayHost = host === '0.0.0.0' ? '127.0.0.1' : host;
-    return `http://${displayHost}:${port}`;
+    const url = `http://${displayHost}:${port}`;
+    assertSecureGatewayHttpUrl(url);
+    return url;
   } catch {
     return 'http://127.0.0.1:18790';
   }
