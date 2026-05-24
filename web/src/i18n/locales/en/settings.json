@@ -12,7 +12,8 @@
     "agent-skills": "Default skill allowlist",
     "agent-mcp": "External tools (MCP)",
     "agent-system-prompt": "System prompt",
-    "providers": "Providers",
+    "providers": "LLM providers",
+    "credentials": "Credentials hub",
     "models": "Models",
     "image-models": "Images",
     "channels": "Channels",
@@ -88,6 +89,81 @@
       "presets": {
         "title": "Add preset agents",
         "description": "Create specialized agents (Coder, Writer, etc.) for different tasks."
+      }
+    },
+    "scenarios": {
+      "title": "Quick setup scenarios",
+      "subtitle": "Pick a path that matches how you plan to use xopc — each step opens the right settings.",
+      "dismiss": "Hide",
+      "steps": {
+        "stepProviders": "Configure LLM provider keys",
+        "stepDefaultModel": "Choose default chat model",
+        "stepChannel": "Connect a messaging channel",
+        "stepPresets": "Add specialized agents",
+        "stepCron": "Set up scheduled tasks",
+        "stepSkills": "Install skills from the catalog"
+      },
+      "presets": {
+        "lightChat": {
+          "title": "Light chat",
+          "description": "Talk to your assistant in the web console with one provider and a default model."
+        },
+        "multiChannel": {
+          "title": "Multi-channel assistant",
+          "description": "Reply from Telegram or other channels with dedicated agents for different contexts."
+        },
+        "automation": {
+          "title": "Automation workflow",
+          "description": "Combine skills and cron jobs for recurring background work."
+        }
+      }
+    }
+  },
+  "credentialsHub": {
+    "title": "Credentials hub",
+    "subtitle": "One place to see API keys and OAuth status across chat, search, images, and voice.",
+    "refresh": "Refresh",
+    "loading": "Loading credentials…",
+    "loadError": "Could not load credential status. Check your gateway connection and try again.",
+    "domainsTitle": "Credential domains",
+    "domainsSubtitle": "Manage keys on each detail page — values stay in your gateway config.",
+    "footerHint": "LLM keys live under Providers. Image, voice, and web-search keys may also appear in environment variables — the gateway shows only what is stored in config.",
+    "status": {
+      "ready": "Ready",
+      "partial": "Partial",
+      "missing": "Missing",
+      "notNeeded": "Optional"
+    },
+    "labels": {
+      "llmMetaReady": "{{configured}} / {{total}} LLM providers ready",
+      "llmConfigured": "{{count}} LLM provider(s) configured",
+      "llmMissing": "No LLM provider configured",
+      "webSearchDisabled": "Web search disabled",
+      "webSearchReady": "{{configured}} / {{total}} search provider keys set",
+      "webSearchNoProviders": "No search providers configured",
+      "imageReady": "{{configured}} / {{total}} image providers configured",
+      "imageNoProviders": "No image providers registered",
+      "voiceDisabled": "Speech input/output disabled",
+      "voiceReadyNoKeys": "Speech enabled — no API keys required",
+      "voiceKeysReady": "{{configured}} / {{total}} speech API keys set",
+      "voiceMissing": "Speech not configured"
+    },
+    "domains": {
+      "llm": {
+        "title": "LLM providers",
+        "description": "API keys and OAuth for chat models."
+      },
+      "webSearch": {
+        "title": "Web search",
+        "description": "Brave, Tavily, and other search API keys."
+      },
+      "image": {
+        "title": "Image generation",
+        "description": "Keys for vision and image-generation providers."
+      },
+      "voice": {
+        "title": "Voice (STT / TTS)",
+        "description": "Speech recognition and text-to-speech credentials."
       }
     }
   },
@@ -253,11 +329,11 @@
   },
   "settingsNavGroups": {
     "general": "General",
-    "models": "Models & media",
+    "credentials": "Credentials & models",
     "agent": "Agent defaults",
-    "gateway": "Gateway",
-    "automation": "Automation",
-    "data": "Sessions & logs",
+    "connection": "Connection",
+    "advanced": "Advanced",
+    "diagnostics": "Diagnostics",
     "extensions": "Extensions"
   },
   "imageModelsSettings": {

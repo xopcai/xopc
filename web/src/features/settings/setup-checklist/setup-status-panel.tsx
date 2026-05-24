@@ -10,11 +10,12 @@ import { cn } from '@/lib/cn';
 import { useLocaleStore } from '@/stores/locale-store';
 
 import type { SetupChecklistItemId } from './setup-checklist-state';
+import { SetupScenarioPresets } from './setup-scenario-presets';
 import { useSetupChecklist } from './use-setup-checklist';
 
 const CHECKLIST_PATHS: Record<SetupChecklistItemId, string> = {
   gateway: '/settings/gateway',
-  provider: '/settings/providers',
+  provider: '/settings/credentials',
   defaultModel: '/settings/agent-defaults?tab=chat',
   channel: '/channels',
   skill: '/skills',
@@ -113,6 +114,8 @@ export function SetupStatusPanel() {
               <p className="mt-4 text-sm text-fg-muted">{s.requiredIncompleteMessage}</p>
             )}
           </SettingsFormSection>
+
+          <SetupScenarioPresets />
 
           <SettingsFormSection>
             <SettingsFormSectionHeader
