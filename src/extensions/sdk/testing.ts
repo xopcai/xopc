@@ -35,6 +35,7 @@ import type {
   HookOptions,
 } from '../types/hooks.js';
 import type { CommandContribution } from '../types/manifest.js';
+import type { TuiExtensionRegistrar } from '../types/tui.js';
 import { TypedEventBus } from '../typed-event-bus.js';
 
 export interface MockExtensionApiOptions {
@@ -257,6 +258,10 @@ class MockExtensionApiImpl implements MockExtensionApi {
   }
 
   registerShortcut(_key: string, _config: ShortcutConfig): void {
+    /* noop */
+  }
+
+  registerTui(_register: TuiExtensionRegistrar): void {
     /* noop */
   }
 }

@@ -80,6 +80,47 @@ export type TunnelPairResponse = {
   expiresAt: string;
 };
 
+export type MobilePairCandidateKind = 'lan' | 'tunnel';
+
+export type MobilePairBlockReason = 'GATEWAY_LOOPBACK_ONLY' | 'NO_REACHABLE_URL';
+
+export type MobilePairContextResponse = {
+  port: number;
+  bindMode: string;
+  listenHost: string;
+  pairingReady: boolean;
+  blockReason?: MobilePairBlockReason;
+  candidates: Array<{
+    kind: MobilePairCandidateKind;
+    url: string;
+    label?: string;
+    reachable: boolean;
+    note?: string;
+  }>;
+  recommended: {
+    mode: MobilePairCandidateKind | null;
+    url: string | null;
+  };
+  connectUrls: string[];
+};
+
+export async function fetchTunnelPairContext(): Promise<MobilePairContextResponse> {
+  return fetchJson<MobilePairContextResponse>(apiUrl('/api/tunnel/pair/context'));
+}
+
+export type EnableLanPairingResponse = {
+  ok: boolean;
+  requiresRestart: boolean;
+  context: MobilePairContextResponse;
+};
+
+export async function enableLanMobilePairing(): Promise<EnableLanPairingResponse> {
+  return fetchJson<EnableLanPairingResponse>(apiUrl('/api/tunnel/pair/enable-lan'), {
+    method: 'POST',
+    body: JSON.stringify({}),
+  });
+}
+
 export async function fetchTunnelStatus(): Promise<TunnelStatusResponse> {
   return fetchJson<TunnelStatusResponse>(apiUrl('/api/tunnel/status'));
 }
@@ -111,6 +152,44 @@ export async function createTunnelPair(): Promise<TunnelPairResponse> {
     method: 'POST',
     body: JSON.stringify({}),
   });
+}
+
+export type MobilePairPingResponse = {
+  ok: boolean;
+  mobilePairing: boolean;
+  port: number;
+  bindMode: string;
+  pairingReady: boolean;
+  blockReason: string | null;
+  tunnelConnected: boolean;
+  connectUrls: string[];
+};
+
+export type MobilePairValidateUrlResponse =
+  | { ok: true; url: string; loopback: false; probePath: string }
+  | { ok: false; code: string; message: string };
+
+/** Public probe for mobile apps (no auth). */
+export async function fetchMobilePairPing(baseUrl: string): Promise<MobilePairPingResponse> {
+  const root = baseUrl.trim().replace(/\/+$/, '');
+  const res = await fetch(`${root}/api/tunnel/pair/ping`);
+  if (!res.ok) {
+    throw new Error(`Pairing probe failed (${res.status})`);
+  }
+  return res.json() as Promise<MobilePairPingResponse>;
+}
+
+/** Public URL validation for mobile manual config (no auth). */
+export async function validateMobilePairBaseUrlPublic(
+  baseUrl: string,
+): Promise<MobilePairValidateUrlResponse> {
+  const root = baseUrl.trim().replace(/\/+$/, '');
+  const res = await fetch(`${root}/api/tunnel/pair/validate-url`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ baseUrl: root }),
+  });
+  return res.json() as Promise<MobilePairValidateUrlResponse>;
 }
 
 export async function patchTunnelConfig(patch: {

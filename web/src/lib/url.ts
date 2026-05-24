@@ -30,7 +30,13 @@ export function isLoopbackHttpOrigin(origin: string): boolean {
       return false;
     }
     const h = u.hostname.toLowerCase();
-    return h === 'localhost' || h === '127.0.0.1' || h === '[::1]' || h === '::1';
+    if (h === 'localhost' || h === '127.0.0.1' || h === '[::1]' || h === '::1') {
+      return true;
+    }
+    if (/^127\.\d+\.\d+\.\d+$/.test(h)) {
+      return true;
+    }
+    return false;
   } catch {
     return false;
   }

@@ -34,6 +34,7 @@ export interface ElectronStartupAPI {
 
 export interface ElectronGatewayShellAPI {
   onExited(callback: (detail: { code: number | null; signal: string | null }) => void): () => void;
+  restart(): Promise<{ ok: boolean; message?: string }>;
 }
 
 export interface ElectronShellAPI {

@@ -6,6 +6,34 @@ function trimBase(raw: string): string {
   return raw.trim().replace(/\/+$/, '');
 }
 
+export type LanGatewayCandidate = {
+  url: string;
+  address: string;
+  interfaceName: string;
+};
+
+/** Non-internal IPv4 addresses on this machine (independent of gateway bind mode). */
+export function enumerateLanGatewayCandidates(port: number): LanGatewayCandidate[] {
+  const nets = networkInterfaces();
+  const seen = new Set<string>();
+  const out: LanGatewayCandidate[] = [];
+
+  for (const [interfaceName, addrs] of Object.entries(nets)) {
+    for (const addr of addrs ?? []) {
+      if (addr.family !== 'IPv4' || addr.internal) continue;
+      if (seen.has(addr.address)) continue;
+      seen.add(addr.address);
+      out.push({
+        address: addr.address,
+        interfaceName,
+        url: trimBase(`http://${addr.address}:${port}`),
+      });
+    }
+  }
+
+  return out;
+}
+
 /** First non-internal IPv4 suitable for LAN QR (when gateway listens on 0.0.0.0). */
 export function resolveLanGatewayUrl(gatewayHost: string, gatewayPort: number): string | null {
   const host = gatewayHost.trim().toLowerCase();
@@ -15,16 +43,7 @@ export function resolveLanGatewayUrl(gatewayHost: string, gatewayPort: number): 
 
   let ip: string | undefined;
   if (host === '0.0.0.0' || host === '::' || host === '') {
-    const nets = networkInterfaces();
-    for (const name of Object.keys(nets)) {
-      for (const addr of nets[name] ?? []) {
-        if (addr.family === 'IPv4' && !addr.internal) {
-          ip = addr.address;
-          break;
-        }
-      }
-      if (ip) break;
-    }
+    ip = enumerateLanGatewayCandidates(gatewayPort)[0]?.address;
   } else if (!host.includes(':')) {
     ip = host;
   }

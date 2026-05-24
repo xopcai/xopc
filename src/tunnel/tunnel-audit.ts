@@ -9,7 +9,8 @@ export type TunnelAuditEvent =
   | 'tunnel.release'
   | 'tunnel.start_denied'
   | 'tunnel.pair'
-  | 'tunnel.exchange_token';
+  | 'tunnel.exchange_token'
+  | 'tunnel.enable_lan_pairing';
 
 export function logTunnelAudit(
   event: TunnelAuditEvent,

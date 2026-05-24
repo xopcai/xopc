@@ -23,6 +23,8 @@ import {
   isCliBundlePresent,
   spawnGatewayProcess,
   stopGatewayProcess,
+  registerEmbeddedGatewayRuntime,
+  restartEmbeddedGatewayFromSavedConfig,
   waitForGatewayReady,
   type GatewayProcessOptions,
 } from './gateway-process.js';
@@ -254,6 +256,7 @@ async function resolveWindowLoad(): Promise<
       };
       const child = spawnGatewayProcess(spawnOpts);
       await waitForGatewayReady(port, token, child);
+      registerEmbeddedGatewayRuntime({ ...spawnOpts, authToken: token });
       setEmbeddedGatewayCredentials(port, token);
       void maybeAutoStartTunnel();
       startTunnelStatusPolling();
@@ -428,6 +431,26 @@ app.whenReady().then(async () => {
   registerSystemSettingsIpc(ipcMain);
   registerCronDisplayWakeIpc(ipcMain);
   registerUpdaterIpc(ipcMain);
+
+  ipcMain.handle('gateway:restart', async () => {
+    if (!shouldEmbedGateway()) {
+      return { ok: false, message: 'Embedded gateway is not active in this session.' };
+    }
+    try {
+      const paths = getElectronUserPaths();
+      const { port, token } = await restartEmbeddedGatewayFromSavedConfig({
+        configPath: paths.configPath,
+        workspacePath: paths.workspacePath,
+        resolveCredentials: () => ensureGatewayConfigForElectron(paths),
+      });
+      setEmbeddedGatewayCredentials(port, token);
+      return { ok: true };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return { ok: false, message };
+    }
+  });
+
   registerTunnelPowerMonitor();
 
   const hotkey = process.platform === 'darwin' ? 'Command+Shift+Space' : 'Control+Shift+Space';

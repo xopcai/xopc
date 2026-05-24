@@ -367,7 +367,7 @@ export function TunnelSettingsPanel() {
         <p className="text-xs text-fg-subtle">{t.lanHint}</p>
       </SettingsFormSection>
 
-      <MobilePairQrSection pairQr={pairQr} />
+      <MobilePairQrSection pairQr={pairQr} gatewayToken={token ?? ''} />
 
       <div className="flex flex-wrap gap-2">
         {!st.enabled ? (

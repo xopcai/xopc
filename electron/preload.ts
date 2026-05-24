@@ -56,6 +56,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.on('gateway:exited', handler);
       return () => ipcRenderer.removeListener('gateway:exited', handler);
     },
+    restart: () =>
+      ipcRenderer.invoke('gateway:restart') as Promise<{ ok: boolean; message?: string }>,
   },
   updater: {
     getStatus: () =>

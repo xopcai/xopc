@@ -12,6 +12,17 @@ const DEFAULT_PORT = 28790;
 let gatewayChild: ChildProcess | null = null;
 let gatewayExitHandler: ((code: number | null, signal: string | null) => void) | null = null;
 
+type EmbeddedGatewayRuntime = GatewayProcessOptions & { authToken: string };
+let embeddedGatewayRuntime: EmbeddedGatewayRuntime | null = null;
+
+export function registerEmbeddedGatewayRuntime(runtime: EmbeddedGatewayRuntime): void {
+  embeddedGatewayRuntime = runtime;
+}
+
+export function isEmbeddedGatewayRegistered(): boolean {
+  return embeddedGatewayRuntime !== null;
+}
+
 /** Recent stdout/stderr from the packaged gateway child (dev uses inherited stdio — usually empty). */
 let gatewayLogBuffer = '';
 const GATEWAY_LOG_BUFFER_MAX = 12_000;
@@ -237,6 +248,29 @@ export async function waitForGatewayReady(
     `Gateway did not become ready with expected auth at ${url} within ${timeoutMs}ms` +
       (logHint ? `\n\nRecent gateway output:\n${logHint}` : ''),
   );
+}
+
+export async function restartEmbeddedGatewayFromSavedConfig(params: {
+  configPath: string;
+  workspacePath: string;
+  resolveCredentials: () => Promise<{ port: number; token: string; host: string }>;
+}): Promise<{ port: number; token: string }> {
+  if (!embeddedGatewayRuntime) {
+    throw new Error('Embedded gateway is not registered');
+  }
+  stopGatewayProcess();
+  const { port, token, host } = await params.resolveCredentials();
+  const opts: GatewayProcessOptions = {
+    configPath: params.configPath,
+    workspacePath: params.workspacePath,
+    port,
+    host,
+    onUnexpectedExit: embeddedGatewayRuntime.onUnexpectedExit,
+  };
+  const child = spawnGatewayProcess(opts);
+  await waitForGatewayReady(port, token, child);
+  embeddedGatewayRuntime = { ...opts, authToken: token };
+  return { port, token };
 }
 
 export function stopGatewayProcess(): void {

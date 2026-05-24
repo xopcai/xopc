@@ -1262,7 +1262,7 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
         return c.json({ ok: false, error: { message: 'gateway.share must be an object' } }, 400);
       }
       const shareResult = mergeShareConfigPatch(config, body.gateway.share as Record<string, unknown>);
-      if (!shareResult.ok) {
+      if (shareResult.ok === false) {
         return c.json({ ok: false, error: { message: shareResult.message } }, 400);
       }
     }
@@ -1380,7 +1380,7 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
 
     if (body.update !== undefined && typeof body.update === 'object' && body.update !== null) {
       const updateResult = mergeUpdateConfigPatch(config, body.update as Record<string, unknown>);
-      if (!updateResult.ok) {
+      if (updateResult.ok === false) {
         return c.json({ ok: false, error: { message: updateResult.message } }, 400);
       }
     }
@@ -1390,7 +1390,7 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
         return c.json({ ok: false, error: { message: 'cron must be an object' } }, 400);
       }
       const cronResult = mergeCronConfigPatch(config, body.cron as Record<string, unknown>);
-      if (!cronResult.ok) {
+      if (cronResult.ok === false) {
         return c.json({ ok: false, error: { message: cronResult.message } }, 400);
       }
     }
@@ -1400,7 +1400,7 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
         return c.json({ ok: false, error: { message: 'goals must be an object' } }, 400);
       }
       const goalsResult = mergeGoalsConfigPatch(config, body.goals as Record<string, unknown>);
-      if (!goalsResult.ok) {
+      if (goalsResult.ok === false) {
         return c.json({ ok: false, error: { message: goalsResult.message } }, 400);
       }
     }
@@ -1410,7 +1410,7 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
         return c.json({ ok: false, error: { message: 'session must be an object' } }, 400);
       }
       const sessionResult = mergeSessionConfigPatch(config, body.session as Record<string, unknown>);
-      if (!sessionResult.ok) {
+      if (sessionResult.ok === false) {
         return c.json({ ok: false, error: { message: sessionResult.message } }, 400);
       }
     }
@@ -1431,7 +1431,7 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
             ? { skillsStoreBaseUrl: gwPatch.skillsStoreBaseUrl }
             : {}),
         });
-        if (!skillsResult.ok) {
+        if (skillsResult.ok === false) {
           return c.json({ ok: false, error: { message: skillsResult.message } }, 400);
         }
       }

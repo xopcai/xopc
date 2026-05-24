@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 
-import type { Config } from '../../config/schema.js';
+import type { Config } from '../schema.js';
 import {
   bindModeFromHostOverride,
   defaultGatewayBindMode,
@@ -11,7 +11,7 @@ import {
   resolveGatewayBindMode,
   resolveGatewayEffectiveHost,
   syncLegacyGatewayHostFromBind,
-} from '../config/gateway-bind.js';
+} from '../gateway-bind.js';
 
 describe('gateway-bind', () => {
   beforeEach(() => {

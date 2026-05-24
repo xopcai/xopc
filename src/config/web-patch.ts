@@ -6,6 +6,8 @@ import {
   GoalsConfigSchema,
   SessionConfigSchema,
   SessionDmScopeSchema,
+  UpdateAutoConfigSchema,
+  UpdateConfigSchema,
 } from './schema.js';
 
 const CronConfigPatchSchema = z.object({
@@ -109,11 +111,14 @@ export function mergeUpdateConfigPatch(
     return { ok: false, message: parsed.error.issues.map((i) => i.message).join('; ') };
   }
   const current = config.update ?? { checkOnStart: true, channel: 'stable' as const };
-  const next = { ...current, ...parsed.data };
-  if (parsed.data.auto) {
-    next.auto = { ...(current.auto ?? {}), ...parsed.data.auto };
-  }
-  config.update = next;
+  const merged = {
+    ...current,
+    ...parsed.data,
+    ...(parsed.data.auto !== undefined
+      ? { auto: { ...(current.auto ?? {}), ...parsed.data.auto } }
+      : {}),
+  };
+  config.update = UpdateConfigSchema.parse(merged);
   return { ok: true };
 }
 
@@ -165,15 +170,15 @@ export function resolveSessionConfigForWeb(config: Config) {
 
 export function resolveUpdateConfigForWeb(config: Config) {
   const update = config.update ?? { checkOnStart: true, channel: 'stable' as const };
-  const auto = update.auto ?? {};
+  const auto = UpdateAutoConfigSchema.parse(update.auto ?? {});
   return {
     checkOnStart: update.checkOnStart !== false,
     channel: update.channel ?? 'stable',
     auto: {
-      enabled: auto.enabled === true,
-      stableDelayHours: auto.stableDelayHours ?? 6,
-      stableJitterHours: auto.stableJitterHours ?? 12,
-      betaCheckIntervalHours: auto.betaCheckIntervalHours ?? 1,
+      enabled: auto?.enabled === true,
+      stableDelayHours: auto?.stableDelayHours ?? 6,
+      stableJitterHours: auto?.stableJitterHours ?? 12,
+      betaCheckIntervalHours: auto?.betaCheckIntervalHours ?? 1,
     },
   };
 }
