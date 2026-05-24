@@ -1,5 +1,7 @@
 # Remote access
 
+> **Full guide:** [Remote access](./../remote-access.md) (matches **Settings → Remote access** in the gateway console).
+
 Use these patterns when the gateway runs on another machine (VPS, home server, sleeping laptop host).
 
 ## SSH tunnel (universal fallback)

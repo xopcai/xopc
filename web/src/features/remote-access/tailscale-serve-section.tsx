@@ -7,6 +7,7 @@ import {
   SettingsFormSection,
   SettingsFormSectionHeader,
 } from '@/features/settings/settings-form-section';
+import { RemoteAccessDocsLink } from '@/features/remote-access/remote-access-docs-link';
 import {
   fetchExposureStatus,
   startTailscaleExposure,
@@ -130,6 +131,7 @@ export function TailscaleServeSection({ embedded = false }: { embedded?: boolean
             </div>
           </SettingsFormSection>
           <p className="text-xs text-fg-subtle">{t.hint}</p>
+          <RemoteAccessDocsLink language={language} label={t.docsLink} section="tailscale-serve" className="mt-2" />
         </>
       )}
     </div>

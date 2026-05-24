@@ -187,6 +187,17 @@ export function docsGuidePageUrl(language: StoredLanguage, page: string): string
   return `${HELP_DOCS_BASE_URL}/${slug}`;
 }
 
+export type RemoteAccessDocsSection = 'tailscale-serve' | 'public-tunnel' | 'advanced';
+
+/** Remote access guide (`docs/remote-access.md`), optionally anchored to a section. */
+export function remoteAccessDocsUrl(
+  language: StoredLanguage,
+  section?: RemoteAccessDocsSection,
+): string {
+  const href = docsGuidePageUrl(language, 'remote-access');
+  return section ? `${href}#${section}` : href;
+}
+
 /** Parse `#/settings/<section>` etc. Returns null if not a settings route. */
 export function parseSettingsHash(hash: string): SettingsSectionId | null {
   let h = hash.startsWith('#') ? hash.slice(1) : hash;

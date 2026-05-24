@@ -293,7 +293,7 @@ Gateway defaults to loopback. External access layers:
 |-------|----------------|------|
 | Tailscale Serve | `gateway.tailscale.mode=serve`, `xopc gateway --tailscale serve` | [docs/gateway/tailscale.md](./docs/gateway/tailscale.md) |
 | SSH tunnel | `xopc gateway ssh-tunnel --target user@host` | [docs/gateway/remote.md](./docs/gateway/remote.md) |
-| FRP public tunnel | `tunnel.*`, `#/settings/remote-access` | [docs/tunnel-security.md](./docs/tunnel-security.md) |
+| FRP public tunnel | `tunnel.*`, `#/settings/remote-access` | [docs/remote-access.md](./docs/remote-access.md) · [tunnel-security](./docs/tunnel-security.md) |
 | CLI remote mode | `gateway.mode=remote`, `gateway.remote.*` | [docs/network.md](./docs/network.md) |
 
 Key paths: `src/infra/tailscale.ts`, `src/gateway/tailscale-lifecycle.ts`, `src/remote-access/`, `src/tunnel/`.

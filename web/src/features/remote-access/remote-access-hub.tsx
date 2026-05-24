@@ -5,11 +5,13 @@ import { TunnelSettingsPanel } from '@/features/tunnel/tunnel-settings';
 import { TailscaleServeSection } from '@/features/remote-access/tailscale-serve-section';
 import { RemoteAccessAdvancedTab } from '@/features/remote-access/remote-access-advanced-tab';
 import { RemoteAccessGuideTab } from '@/features/remote-access/remote-access-guide-tab';
+import { RemoteAccessDocsLink } from '@/features/remote-access/remote-access-docs-link';
 import {
   REMOTE_ACCESS_TABS,
   parseRemoteAccessTab,
   type RemoteAccessTabId,
 } from '@/features/remote-access/remote-access-tabs';
+import type { RemoteAccessDocsSection } from '@/navigation';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { useGatewayStore } from '@/stores/gateway-store';
@@ -21,6 +23,19 @@ function tabLabel(ra: ReturnType<typeof messages>['remoteAccess'], tab: RemoteAc
 
 function tabIntro(ra: ReturnType<typeof messages>['remoteAccess'], tab: RemoteAccessTabId): string {
   return ra.tabIntro[tab];
+}
+
+function tabDocsSection(tab: RemoteAccessTabId): RemoteAccessDocsSection | undefined {
+  switch (tab) {
+    case 'tailscale':
+      return 'tailscale-serve';
+    case 'public':
+      return 'public-tunnel';
+    case 'advanced':
+      return 'advanced';
+    default:
+      return undefined;
+  }
 }
 
 function RemoteAccessTabPanel({
@@ -72,6 +87,12 @@ export function RemoteAccessHub() {
       <div>
         <h1 className="text-lg font-semibold text-fg">{ra.pageTitle}</h1>
         <p className="mt-1 text-sm text-fg-muted">{ra.pageSubtitle}</p>
+        <RemoteAccessDocsLink
+          language={language}
+          label={ra.docsLink}
+          section={tabDocsSection(activeTab)}
+          className="mt-1"
+        />
       </div>
 
       {!hasToken ? (

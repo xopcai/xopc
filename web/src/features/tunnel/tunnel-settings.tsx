@@ -12,6 +12,7 @@ import { SettingsFormSection } from '@/features/settings/settings-form-section';
 import { MobilePairQrSection } from '@/features/tunnel/mobile-pair-qr-section';
 import { TunnelConsentDialog } from '@/features/tunnel/tunnel-consent-dialog';
 import { TunnelControlCard } from '@/features/tunnel/tunnel-control-card';
+import { RemoteAccessDocsLink } from '@/features/remote-access/remote-access-docs-link';
 import {
   fetchTunnelStatus,
   patchTunnelConfig,
@@ -457,10 +458,18 @@ export function TunnelSettingsPanel({ embedded = false }: { embedded?: boolean }
               nested
             />
           </div>
-          <p className="flex items-start gap-2 border-t border-edge-subtle pt-4 text-xs text-fg-subtle">
-            <Globe className="mt-0.5 size-4 shrink-0 text-accent" />
-            <span>{t.brokerNote}</span>
-          </p>
+          <div className="flex flex-col gap-2 border-t border-edge-subtle pt-4 text-xs text-fg-subtle">
+            <p className="flex items-start gap-2">
+              <Globe className="mt-0.5 size-4 shrink-0 text-accent" />
+              <span>{t.brokerNote}</span>
+            </p>
+            <RemoteAccessDocsLink
+              language={language}
+              label={t.brokerDocsLink}
+              section="public-tunnel"
+              className="text-xs"
+            />
+          </div>
         </SettingsCollapsibleSection>
 
         {dialogs}
@@ -550,9 +559,17 @@ export function TunnelSettingsPanel({ embedded = false }: { embedded?: boolean }
 
       {actionError ? <p className="text-sm text-red-600 dark:text-red-400">{actionError}</p> : null}
 
-      <div className="flex items-start gap-2 rounded-lg border border-edge-subtle bg-surface-panel px-3 py-2 text-xs text-fg-subtle">
-        <Globe className="mt-0.5 size-4 shrink-0 text-accent" />
-        <span>{t.brokerNote}</span>
+      <div className="flex flex-col gap-2 rounded-lg border border-edge-subtle bg-surface-panel px-3 py-2 text-xs text-fg-subtle">
+        <p className="flex items-start gap-2">
+          <Globe className="mt-0.5 size-4 shrink-0 text-accent" />
+          <span>{t.brokerNote}</span>
+        </p>
+        <RemoteAccessDocsLink
+          language={language}
+          label={t.brokerDocsLink}
+          section="public-tunnel"
+          className="text-xs"
+        />
       </div>
 
       {dialogs}
