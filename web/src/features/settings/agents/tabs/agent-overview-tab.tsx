@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { MarkdownEditor } from '@/components/markdown/markdown-editor';
 import { MarkdownView } from '@/components/markdown/markdown-view';
 import { ModelSelector } from '@/features/chat/model-selector';
-import { DirectoryPickerField } from '@/features/fs/directory-picker-field';
+import { DirectoryPickerPathField } from '@/features/fs/directory-picker-path-field';
 import type { GatewayAgentRow } from '@/features/settings/agents-admin-api';
 import {
   fetchAgentProfileFileContent,
@@ -400,21 +400,13 @@ export function AgentOverviewTab(props: {
           </div>
           <div className="flex flex-col gap-1.5 text-sm sm:col-span-2">
             <span className="font-medium text-fg">{a.workspacePath}</span>
-            <DirectoryPickerField
+            <DirectoryPickerPathField
               value={editWorkspace}
               onChange={setEditWorkspace}
               disabled={busy}
               wd={chat.workingDirectory}
               placeholder={chat.workingDirectory.notSet}
-              maxWidthClass="max-w-full sm:max-w-[min(20rem,100%)]"
-            />
-            <input
-              className={cn(inputClass, 'font-mono text-xs')}
-              value={editWorkspace}
-              onChange={(e) => setEditWorkspace(e.target.value)}
-              placeholder={chat.workingDirectory.pathInputPlaceholder}
-              spellCheck={false}
-              autoComplete="off"
+              inputClassName={cn(inputClass, 'font-mono text-xs')}
             />
           </div>
         </div>

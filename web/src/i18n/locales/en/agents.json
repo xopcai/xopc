@@ -115,7 +115,7 @@
     },
     "addModelFallback": "Add fallback model",
     "removeModelFallback": "Remove fallback model",
-    "setDefaultWorkspace": "Use ~/.xopc/workspace",
+    "setDefaultWorkspace": "Set default",
     "visionRegistryEmpty": "No models flagged as image-capable for your configured providers. Add `input` including \"image\" in models.json, or pick a provider model that exposes image input.",
     "visionOutOfFilterNote": "Registry does not mark this model as image-capable; choose a vision model when possible.",
     "imageGenRegistryEmpty": "No image generation providers are configured with API credentials. Add keys for a provider (e.g. OpenAI) in config or environment, then refresh.",

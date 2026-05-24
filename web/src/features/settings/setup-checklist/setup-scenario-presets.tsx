@@ -60,7 +60,7 @@ export function SetupScenarioPresets() {
               className="flex flex-col rounded-xl border border-edge-subtle bg-surface-panel p-4"
             >
               <h3 className="text-sm font-semibold text-fg">{copy.title}</h3>
-              <p className="mt-1 flex-1 text-xs leading-relaxed text-fg-muted">{copy.description}</p>
+              <p className="mt-1 text-xs leading-relaxed text-fg-muted">{copy.description}</p>
               <ol className="mt-3 flex flex-col gap-1">
                 {preset.steps.map((step, index) => (
                   <li key={`${preset.id}-${step.labelKey}`}>
