@@ -8,6 +8,7 @@ import { messages, tabLabel } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { ExtensionSettingsNav } from '@/features/extensions/extension-settings-nav';
 import { pathForTab, SETTINGS_SHELL_NAV_GROUPS } from '@/navigation';
+import { isAgentDefaultsNavActive, isAgentDefaultsNavTab } from '@/navigation/agent-defaults-nav';
 import { isElectron } from '@/lib/electron-env';
 import { electronDarwinTitlebarLeftPad, isElectronDarwin } from '@/lib/electron-window-chrome';
 import { AGENTS_APP_LIST_PATH } from '@/features/settings/agents/agents-app-path';
@@ -147,7 +148,17 @@ export const SettingsPageLayout = memo(function SettingsPageLayout() {
                   </p>
                   <div className="flex flex-col gap-0.5">
                     {tabs.map((tab) => (
-                      <NavLink key={tab} to={pathForTab(tab)} className={settingsNavLinkClass}>
+                      <NavLink
+                        key={tab}
+                        to={pathForTab(tab)}
+                        className={({ isActive: routerActive }) =>
+                          settingsNavLinkClass({
+                            isActive: isAgentDefaultsNavTab(tab)
+                              ? isAgentDefaultsNavActive(tab, location)
+                              : routerActive,
+                          })
+                        }
+                      >
                         <TabIcon tab={tab} className="size-5 shrink-0 opacity-90" />
                         <span className="min-w-0 flex-1 truncate">{tabLabel(language, tab)}</span>
                       </NavLink>

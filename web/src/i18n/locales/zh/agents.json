@@ -13,7 +13,9 @@
       "chat": "主模型、采样参数与界面展示方式。保存到网关配置中的 agents.defaults。",
       "workspace": "智能体工作目录与图像工具加载入站图片的体积上限。",
       "browser": "Playwright 的 browser_* 工具：开关、无头模式、超时与本地或云端后端。",
-      "runtime": "单轮耗时与请求上限、上下文压缩、工具输出裁剪、记忆、会话检索摘要模型与后台回顾。",
+      "runtime": "单轮耗时、工具调用轮数、请求重试与连续工具失败上限。保存到 agents.defaults。",
+      "context": "上下文压缩与工具结果裁剪，控制送入模型的历史体积。",
+      "memory": "记忆快照、session_search 摘要模型与可选的后台审阅。",
       "tools": "可选工具（网页抽取、子任务委托、沙箱执行代码）、全局禁用内置工具，以及扩展用 Params（JSON）。技能白名单见「技能」页。",
       "skills": "技能市场来源（在该区块内单独保存）与全部智能体的默认技能白名单（使用页头保存）。在「技能库」安装技能；按工具开关见「工具」页。",
       "systemPrompt": "可选覆盖默认系统提示；与条目级合并（条目优先）。保存到 agents.defaults。"
@@ -22,7 +24,9 @@
       "chat": "模型与对话",
       "workspace": "工作区",
       "browser": "浏览器",
-      "runtime": "运行时",
+      "runtime": "单轮限制",
+      "context": "上下文",
+      "memory": "记忆",
       "tools": "工具",
       "skills": "技能",
       "system-prompt": "系统提示词"
@@ -127,6 +131,8 @@
       "full": "完整"
     },
     "advanced": {
+      "advancedOptionsShow": "高级选项",
+      "advancedOptionsHide": "收起高级选项",
       "cardLimitsTitle": "单轮限制与可靠性",
       "cardLimitsSubtitle": "单轮最大耗时、重试与工具连续失败次数。",
       "maxTaskDurationMs": "单轮最长时间（分钟）",
@@ -136,6 +142,8 @@
       "maxRequestsPerTurnDesc": "单条用户消息内大模型重试/请求尝试上限（默认 50）。",
       "maxToolFailuresPerTurn": "每轮最大工具失败次数",
       "maxToolFailuresPerTurnDesc": "连续工具错误达到该值后放弃（默认 3）。",
+      "goalsCheckLink": "目标检查 (/goal) → 定时任务设置",
+      "goalsCheckLinkHint": "定时任务的目标清单评判在「定时任务」页单独配置与保存。",
       "cardCompactionTitle": "上下文压缩",
       "cardCompactionSubtitle": "在上下文中按策略压缩较早内容以适配窗口。",
       "compactionEnabled": "启用压缩",

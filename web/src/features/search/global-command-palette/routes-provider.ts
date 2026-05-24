@@ -1,5 +1,6 @@
 import type { StoredLanguage } from '@/lib/storage';
-import { messages } from '@/i18n/messages';
+import { messages, tabLabel, type Tab } from '@/i18n/messages';
+import { pathForTab, SETTINGS_SHELL_NAV_GROUPS } from '@/navigation';
 
 export type RouteHitSeed = {
   id: string;
@@ -8,6 +9,35 @@ export type RouteHitSeed = {
   path: string;
   keywords?: string[];
 };
+
+const AGENT_DEFAULTS_ROUTE_KEYWORDS: Partial<Record<Tab, string[]>> = {
+  settingsAgentChat: ['model', 'temperature', 'sampling', 'chat'],
+  settingsAgentWorkspace: ['workspace', 'directory', 'folder', 'attachments'],
+  settingsAgentBrowser: ['browser', 'playwright', 'automation'],
+  settingsAgentRuntime: ['limits', 'turn', 'timeout', 'tool', 'iterations'],
+  settingsAgentContext: ['context', 'compaction', 'pruning', 'tokens'],
+  settingsAgentMemory: ['memory', 'review', 'session', 'search'],
+  settingsAgentTools: ['tools', 'web', 'extract', 'code'],
+  settingsAgentSkills: ['skills', 'allowlist', 'marketplace'],
+  settingsAgentSystemPrompt: ['system', 'prompt', 'instructions'],
+  settingsAgentMcp: ['mcp', 'external', 'tools'],
+};
+
+function buildAgentDefaultsRouteSeeds(language: StoredLanguage): RouteHitSeed[] {
+  const m = messages(language);
+  const subtitle = m.commandPalette.routes.agentDefaultsSubtitle;
+  const agentGroup = SETTINGS_SHELL_NAV_GROUPS.find((g) => g.id === 'agent');
+  if (!agentGroup) {
+    return [];
+  }
+  return agentGroup.tabs.map((tab) => ({
+    id: `route:settings:agent:${tab}`,
+    title: tabLabel(language, tab),
+    subtitle,
+    path: pathForTab(tab),
+    keywords: ['agent', 'defaults', 'config', ...(AGENT_DEFAULTS_ROUTE_KEYWORDS[tab] ?? [])],
+  }));
+}
 
 export function buildRouteSeeds(language: StoredLanguage): RouteHitSeed[] {
   const m = messages(language);
@@ -67,7 +97,7 @@ export function buildRouteSeeds(language: StoredLanguage): RouteHitSeed[] {
       title: m.nav.cron,
       subtitle: r.cronSubtitle,
       path: '/cron',
-      keywords: ['schedule', 'jobs'],
+      keywords: ['schedule', 'jobs', 'goal', 'checklist', 'judge'],
     },
     {
       id: 'route:settings',
@@ -111,5 +141,6 @@ export function buildRouteSeeds(language: StoredLanguage): RouteHitSeed[] {
       path: '/settings/gateway',
       keywords: ['server', 'port', 'auth', 'token'],
     },
+    ...buildAgentDefaultsRouteSeeds(language),
   ];
 }

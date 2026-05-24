@@ -248,6 +248,14 @@ const router = createHashRouter([
             element: <LegacyAgentDefaultsRedirect tab="runtime" />,
           },
           {
+            path: 'agent-context',
+            element: <LegacyAgentDefaultsRedirect tab="context" />,
+          },
+          {
+            path: 'agent-memory',
+            element: <LegacyAgentDefaultsRedirect tab="memory" />,
+          },
+          {
             path: 'agent-tools',
             element: <LegacyAgentDefaultsRedirect tab="tools" />,
           },

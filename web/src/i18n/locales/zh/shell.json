@@ -34,9 +34,12 @@
     "settingsSearch": "网络搜索",
     "settingsDreams": "梦境",
     "settingsAgentDefaults": "智能体默认配置",
+    "settingsAgentChat": "默认模型与对话",
     "settingsAgentWorkspace": "工作区",
     "settingsAgentBrowser": "浏览器",
-    "settingsAgentRuntime": "运行时",
+    "settingsAgentRuntime": "单轮限制",
+    "settingsAgentContext": "上下文",
+    "settingsAgentMemory": "记忆",
     "settingsAgentTools": "工具",
     "settingsAgentSkills": "默认技能白名单",
     "settingsAgentMcp": "外部工具 (MCP)",
@@ -180,7 +183,8 @@
       "providersSubtitle": "LLM 服务商密钥与 OAuth",
       "modelsSubtitle": "模型配置",
       "voiceSubtitle": "语音设置",
-      "gatewaySubtitle": "网关设置"
+      "gatewaySubtitle": "网关设置",
+      "agentDefaultsSubtitle": "智能体默认配置"
     },
     "quickSettings": {
       "switchModel": "切换模型",
