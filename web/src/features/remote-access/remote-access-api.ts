@@ -7,6 +7,7 @@ export type ExposureStatusResponse = {
     active: boolean;
     hostname: string | null;
     resetOnExit: boolean;
+    cliAvailable?: boolean;
   };
   tunnel: Record<string, unknown>;
   conflicts: Array<{ code: string; message: string }>;

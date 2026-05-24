@@ -74,7 +74,12 @@ export async function maybeStartTailscaleFromConfig(
 
 export async function stopTailscaleExposure(): Promise<void> {
   if (tailscaleCleanup) {
-    await tailscaleCleanup();
+    try {
+      await tailscaleCleanup();
+    } catch (err) {
+      const em = err instanceof Error ? err.message : String(err);
+      log.warn({ err, errorMessage: em, phase: 'tailscale_stop' }, `Tailscale cleanup failed: ${em}`);
+    }
     tailscaleCleanup = null;
   }
   tailscaleState = {

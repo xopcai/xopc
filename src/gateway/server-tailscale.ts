@@ -20,28 +20,19 @@ export async function startGatewayTailscaleExposure(params: {
     return null;
   }
 
-  try {
-    if (params.tailscaleMode === 'serve') {
-      await enableTailscaleServe(params.port);
-    } else {
-      await enableTailscaleFunnel(params.port);
-    }
-    const host = await getTailnetHostname().catch(() => null);
-    if (host) {
-      log.info(
-        { tailscaleMode: params.tailscaleMode, host, port: params.port },
-        `${params.tailscaleMode} enabled: https://${host}/`,
-      );
-    } else {
-      log.info({ tailscaleMode: params.tailscaleMode, port: params.port }, `${params.tailscaleMode} enabled`);
-    }
-  } catch (err) {
-    const em = err instanceof Error ? err.message : String(err);
-    log.warn(
-      { err, tailscaleMode: params.tailscaleMode, port: params.port, errorMessage: em },
-      `Tailscale ${params.tailscaleMode} failed: ${em}`,
+  if (params.tailscaleMode === 'serve') {
+    await enableTailscaleServe(params.port);
+  } else {
+    await enableTailscaleFunnel(params.port);
+  }
+  const host = await getTailnetHostname().catch(() => null);
+  if (host) {
+    log.info(
+      { tailscaleMode: params.tailscaleMode, host, port: params.port },
+      `${params.tailscaleMode} enabled: https://${host}/`,
     );
-    return null;
+  } else {
+    log.info({ tailscaleMode: params.tailscaleMode, port: params.port }, `${params.tailscaleMode} enabled`);
   }
 
   if (!params.resetOnExit) {
