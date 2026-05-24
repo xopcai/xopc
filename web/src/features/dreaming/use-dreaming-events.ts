@@ -5,8 +5,7 @@
  * converts them to hyphens before dispatching on `window` — so we listen for
  * `dreaming-phase-start` / `dreaming-phase-end`.
  *
- * Also supports a manual trigger via `window.dispatchEvent(new CustomEvent('dreaming-phase-start', ...))`,
- * which the Dreaming Settings panel uses when the user clicks "Run Now".
+ * Phase runs triggered from Settings → Dreams arrive via SSE when the gateway executes the job.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 

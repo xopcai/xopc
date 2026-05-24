@@ -24,7 +24,6 @@ import { parseAgentDefaultsFromConfig } from '@/features/settings/config-api';
 import { AGENTS_APP_LIST_PATH, agentsAppDetailPath } from '@/features/settings/agents/agents-app-path';
 import { SETTINGS_BACK_PATH_STATE_KEY } from '@/features/settings/settings-nav-state';
 import { suggestWorkspaceFromAgentName } from '@/features/settings/suggest-agent-workspace';
-import { postDreamingRunNow, type DreamingPhaseId } from '@/features/settings/dreaming-api';
 import { validateAgentIdForNewAgent } from '@/lib/agent-id';
 import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
@@ -101,7 +100,6 @@ export function useAgentsSettingsPanel() {
   const [addAgentModalOpen, setAddAgentModalOpen] = useState(false);
   const createWorkspaceSuggestedRef = useRef('');
   const [busy, setBusy] = useState(false);
-  const [sleeping, setSleeping] = useState(false);
   const [listSearchQuery, setListSearchQuery] = useState('');
 
   const [editWorkspace, setEditWorkspace] = useState('');
@@ -274,59 +272,17 @@ export function useAgentsSettingsPanel() {
     setAddAgentModalOpen(true);
   }, []);
 
-  const sleep = useCallback((ms: number) => new Promise<void>((resolve) => window.setTimeout(resolve, ms)), []);
-
-  const triggerSleepSequence = useCallback(async () => {
-    if (sleeping || busy) return;
-    setSleeping(true);
-    setError(null);
-
-    const phases: DreamingPhaseId[] = ['light', 'deep', 'rem'];
-    try {
-      void (async () => {
-        for (const phase of phases) {
-          try {
-            await postDreamingRunNow(phase);
-          } catch {
-            // Animation-first: errors are intentionally not surfaced here.
-          }
-        }
-      })();
-
-      for (let idx = 0; idx < phases.length; idx++) {
-        const phase = phases[idx];
-        window.dispatchEvent(new CustomEvent('dreaming-phase-start', { detail: { phase, source: 'ui' } }));
-
-        const displayMs = phase === 'light' ? 7000 : phase === 'deep' ? 9000 : 8000;
-        await sleep(displayMs);
-
-        if (idx === phases.length - 1) {
-          (window as unknown as { __xopcDreamingIgnoreSseUntil?: number }).__xopcDreamingIgnoreSseUntil =
-            Date.now() + 60_000;
-          window.dispatchEvent(new CustomEvent('dreaming-phase-end', { detail: { phase, source: 'ui' } }));
-        }
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : a.saveError);
-    } finally {
-      setSleeping(false);
-    }
-  }, [a.saveError, busy, sleeping, sleep]);
-
   const agentsHeaderEnd = useMemo(
     () => (
       <AgentsSettingsToolbar
-        language={language}
         a={a}
         busy={busy}
-        sleeping={sleeping}
         listSearchQuery={listSearchQuery}
         onListSearchQueryChange={setListSearchQuery}
-        onSleep={() => void triggerSleepSequence()}
         onAddAgent={() => openAddAgentModal()}
       />
     ),
-    [a, busy, language, listSearchQuery, openAddAgentModal, sleeping, triggerSleepSequence],
+    [a, busy, listSearchQuery, openAddAgentModal],
   );
 
   useLayoutEffect(() => {
