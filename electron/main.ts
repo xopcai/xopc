@@ -6,6 +6,7 @@ import {
   BrowserWindow,
   Menu,
   app,
+  clipboard,
   dialog,
   globalShortcut,
   ipcMain,
@@ -445,6 +446,12 @@ app.whenReady().then(async () => {
   registerSystemSettingsIpc(ipcMain);
   registerCronDisplayWakeIpc(ipcMain);
   registerUpdaterIpc(ipcMain);
+
+  ipcMain.handle('clipboard:write-text', (_event, text: unknown) => {
+    if (typeof text !== 'string' || !text) return false;
+    clipboard.writeText(text);
+    return true;
+  });
 
   ipcMain.handle('gateway:restart', async () => {
     if (!shouldEmbedGateway()) {

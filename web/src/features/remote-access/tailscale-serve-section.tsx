@@ -14,6 +14,7 @@ import {
   stopTailscaleExposure,
 } from '@/features/remote-access/remote-access-api';
 import { messages } from '@/i18n/messages';
+import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
@@ -79,7 +80,8 @@ export function TailscaleServeSection({ embedded = false }: { embedded?: boolean
 
   const copyUrl = useCallback(async () => {
     if (!publicUrl) return;
-    await navigator.clipboard.writeText(publicUrl);
+    const ok = await copyTextToClipboard(publicUrl);
+    if (!ok) return;
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }, [publicUrl]);
