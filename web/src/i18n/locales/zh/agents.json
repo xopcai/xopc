@@ -16,8 +16,18 @@
       "runtime": "单轮耗时与请求上限、上下文压缩、工具输出裁剪、记忆、会话检索摘要模型与后台回顾。",
       "tools": "可选工具（网页抽取、子任务委托、沙箱执行代码）、全局禁用内置工具，以及扩展用 Params（JSON）。技能白名单见「技能」页。",
       "skills": "技能市场来源（在该区块内单独保存）与全部智能体的默认技能白名单（使用页头保存）。在「技能库」安装技能；按工具开关见「工具」页。",
-      "systemPrompt": "可选覆盖默认系统提示；与智能体级合并（条目优先）。保存到 agents.defaults。"
+      "systemPrompt": "可选覆盖默认系统提示；与条目级合并（条目优先）。保存到 agents.defaults。"
     },
+    "defaultsTabs": {
+      "chat": "模型与对话",
+      "workspace": "工作区",
+      "browser": "浏览器",
+      "runtime": "运行时",
+      "tools": "工具",
+      "skills": "技能",
+      "system-prompt": "系统提示词"
+    },
+    "defaultsTabsAria": "智能体默认配置分区",
     "cardModelsTitle": "模型",
     "cardModelsSubtitle": "对话、视觉与图像生成默认模型",
     "cardWorkspaceTitle": "工作区与附件",
@@ -273,6 +283,17 @@
     "setDefault": "设为默认",
     "editAgent": "运行配置",
     "editAgentHint": "修改模型、工作区等配置，保存后将更新网关的 agents.list。",
+    "inheritance": {
+      "title": "默认配置与本智能体",
+      "subtitle": "模型留空时使用全局默认；工作区路径与默认一致时视为继承。",
+      "editDefaultsLink": "编辑默认配置",
+      "modelLabel": "主模型",
+      "workspaceLabel": "工作区",
+      "badgeInherit": "继承默认",
+      "badgeOverride": "已覆盖",
+      "inheritsValue": "默认：{{value}}",
+      "unset": "未设置"
+    },
     "displayName": "名称",
     "agentDescription": "描述",
     "agentDescriptionPlaceholder": "简短说明，会显示在智能体卡片和选择器中（可选）。",

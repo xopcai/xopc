@@ -23,6 +23,7 @@ export type Tab =
   | 'settingsShares'
   | 'settingsSearch'
   | 'settingsDreams'
+  | 'settingsAgentDefaults'
   | 'settingsAgentChat'
   | 'settingsAgentWorkspace'
   | 'settingsAgentBrowser'
@@ -38,6 +39,7 @@ export type SettingsSectionId =
   | 'overview'
   | 'appearance'
   | 'agent'
+  | 'agent-defaults'
   | 'agent-chat'
   | 'agent-workspace'
   | 'agent-browser'
@@ -88,6 +90,18 @@ export function tabLabel(lang: StoredLanguage, tab: Tab): string {
   const m = messages(lang);
   if (tab === 'settingsAgents') {
     return m.nav.agents;
+  }
+  if (
+    tab === 'settingsAgentDefaults' ||
+    tab === 'settingsAgentChat' ||
+    tab === 'settingsAgentWorkspace' ||
+    tab === 'settingsAgentBrowser' ||
+    tab === 'settingsAgentRuntime' ||
+    tab === 'settingsAgentTools' ||
+    tab === 'settingsAgentSkills' ||
+    tab === 'settingsAgentSystemPrompt'
+  ) {
+    return m.nav.settingsAgentDefaults;
   }
   return m.nav[tab];
 }

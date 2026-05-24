@@ -32,7 +32,7 @@
     "settingsShares": "文件分享",
     "settingsSearch": "网络搜索",
     "settingsDreams": "梦境",
-    "settingsAgentChat": "默认模型与对话",
+    "settingsAgentDefaults": "智能体默认配置",
     "settingsAgentWorkspace": "工作区",
     "settingsAgentBrowser": "浏览器",
     "settingsAgentRuntime": "运行时",

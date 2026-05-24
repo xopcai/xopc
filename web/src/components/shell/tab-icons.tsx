@@ -40,6 +40,7 @@ const TAB_ICONS: Record<Tab, LucideIcon> = {
   agents: Users,
   logs: FileText,
   settingsOverview: Activity,
+  settingsAgentDefaults: SlidersHorizontal,
   settingsAppearance: Palette,
   settingsSystem: Shield,
   settingsAgentChat: SlidersHorizontal,
