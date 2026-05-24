@@ -9,6 +9,7 @@ import type { ProvidersSettingsMessages } from '@/i18n/messages';
 import { settingsInputFocusClass } from '@/lib/form-field-width';
 import { interaction } from '@/lib/interaction';
 import { cn } from '@/lib/cn';
+import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
 
 export type ImageProviderApiKeyFieldLabels = {
   apiKeyLabel: string;
@@ -74,13 +75,10 @@ export function ImageProviderApiKeyField({
           ? revealed
           : '';
     if (!text) return;
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
-    } catch {
-      /* ignore */
-    }
+    const ok = await copyTextToClipboard(text);
+    if (!ok) return;
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 2000);
   }, [masked, revealed, value]);
 
   const toggleEye = useCallback(async () => {

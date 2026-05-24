@@ -13,6 +13,7 @@ import { GatewaySecurityAuditCard } from '@/features/settings/gateway-security-a
 import { MAX_CHANNEL_DEFER_LIST_SIZE } from '@/features/settings/gateway-settings.types';
 import { settingsInputFocusClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
+import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
 import { interaction } from '@/lib/interaction';
 import { messages, type GatewaySettingsMessages } from '@/i18n/messages';
 import { docsGuidePageUrl } from '@/navigation';
@@ -208,7 +209,8 @@ export function GatewaySettingsPanel() {
   const copyAccessToken = useCallback(async () => {
     const t = form?.auth.token;
     if (!t) return;
-    await navigator.clipboard.writeText(t).catch(() => {});
+    const ok = await copyTextToClipboard(t);
+    if (!ok) return;
     setCopied(true);
     window.setTimeout(() => setCopied(false), 2000);
   }, [form?.auth.token]);

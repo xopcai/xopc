@@ -12,6 +12,7 @@ import {
 } from '@/features/tunnel/tunnel-api';
 import { encodeMobilePairQr } from '@/features/tunnel/mobile-pair-qr';
 import { buildMobileGatewayPairDeepLink, isLoopbackHttpOrigin } from '@/lib/url';
+import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
 
 export type MobilePairQrState = {
   tunnelActive: boolean;
@@ -213,7 +214,8 @@ export function useMobilePairQr(gatewayToken: string): MobilePairQrState {
 
   const copyDeepLink = useCallback(async () => {
     if (!deepLink) return;
-    await navigator.clipboard.writeText(deepLink).catch(() => {});
+    const ok = await copyTextToClipboard(deepLink);
+    if (!ok) return;
     setLinkCopied(true);
     window.setTimeout(() => setLinkCopied(false), 2000);
   }, [deepLink]);
