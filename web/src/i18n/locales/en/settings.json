@@ -26,9 +26,10 @@
     "shares": "File sharing",
     "search": "Web search",
     "dreams": "Dreams",
+    "goals": "Goal judge",
     "agents": "Agents",
     "system": "System",
-    "cron": "Scheduled Tasks",
+    "cron": "Scheduled tasks",
     "skills": "Skills"
   },
   "settingsPage": {
@@ -334,9 +335,18 @@
     "credentials": "Credentials & models",
     "agent": "Agent defaults",
     "connection": "Connection",
-    "advanced": "Advanced",
+    "automation": "Automation",
     "diagnostics": "Diagnostics",
     "extensions": "Extensions"
+  },
+  "cronSettingsPage": {
+    "title": "Scheduled tasks",
+    "subtitle": "Global scheduler limits and defaults for all cron jobs.",
+    "tasksLink": "Manage tasks and run history →"
+  },
+  "goalsSettingsPage": {
+    "title": "Goal judge",
+    "subtitle": "Default settings for persistent /goal tasks and checklist judging."
   },
   "imageModelsSettings": {
     "title": "Images",

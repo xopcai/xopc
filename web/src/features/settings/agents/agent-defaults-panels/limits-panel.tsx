@@ -74,7 +74,7 @@ export function AgentDefaultsLimitsPanel(props: AgentDefaultsPanelProps) {
         </div>
       </SettingsFormSection>
       <p className="text-xs text-fg-muted">
-        <Link to={pathForTab('cron')} className="font-medium text-accent-fg hover:underline">
+        <Link to={pathForTab('settingsGoals')} className="font-medium text-accent-fg hover:underline">
           {x.goalsCheckLink}
         </Link>
         <span className="mt-1 block">{x.goalsCheckLinkHint}</span>

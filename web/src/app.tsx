@@ -188,10 +188,6 @@ const router = createHashRouter([
             element: <Navigate to="/skills" replace />,
           },
           {
-            path: 'cron',
-            element: <Navigate to="/cron" replace />,
-          },
-          {
             path: 'channels',
             element: <Navigate to="/channels" replace />,
           },
