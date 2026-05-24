@@ -20,8 +20,8 @@ export function channelSettingsShellContentClass(
     );
   }
   return cn(
-    'fixed left-1/2 top-1/2 flex max-h-[min(90vh,52rem)] w-[min(calc(100%-2rem),36rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden',
-    wide && 'max-h-[min(90vh,48rem)] w-[min(calc(100%-2rem),40rem)]',
+    'fixed left-1/2 top-1/2 flex max-h-[min(90vh,52rem)] w-[min(calc(100%-2rem),32rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden',
+    wide && 'max-h-[min(90vh,48rem)] w-[min(calc(100%-2rem),36rem)]',
     SETTINGS_SHELL_CONTENT_Z,
     'rounded-2xl border border-edge bg-surface-panel shadow-popover outline-none dark:border-edge',
   );
