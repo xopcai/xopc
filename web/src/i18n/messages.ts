@@ -29,6 +29,8 @@ export type Tab =
   | 'settingsAgentWorkspace'
   | 'settingsAgentBrowser'
   | 'settingsAgentRuntime'
+  | 'settingsAgentContext'
+  | 'settingsAgentMemory'
   | 'settingsAgentTools'
   | 'settingsAgentSkills'
   | 'settingsAgentMcp'
@@ -45,6 +47,8 @@ export type SettingsSectionId =
   | 'agent-workspace'
   | 'agent-browser'
   | 'agent-runtime'
+  | 'agent-context'
+  | 'agent-memory'
   | 'agent-tools'
   | 'agent-skills'
   | 'agent-mcp'
@@ -93,17 +97,8 @@ export function tabLabel(lang: StoredLanguage, tab: Tab): string {
   if (tab === 'settingsAgents') {
     return m.nav.agents;
   }
-  if (
-    tab === 'settingsAgentDefaults' ||
-    tab === 'settingsAgentChat' ||
-    tab === 'settingsAgentWorkspace' ||
-    tab === 'settingsAgentBrowser' ||
-    tab === 'settingsAgentRuntime' ||
-    tab === 'settingsAgentTools' ||
-    tab === 'settingsAgentSkills' ||
-    tab === 'settingsAgentSystemPrompt'
-  ) {
-    return m.nav.settingsAgentDefaults;
+  if (tab === 'settingsAgentDefaults') {
+    return m.nav.settingsAgentChat;
   }
   return m.nav[tab];
 }

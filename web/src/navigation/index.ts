@@ -14,15 +14,17 @@ const SETTINGS_SECTION_TO_TAB: Record<SettingsSectionId, Tab> = {
   appearance: 'settingsAppearance',
   system: 'settingsSystem',
   agent: 'settingsAgents',
-  'agent-defaults': 'settingsAgentDefaults',
-  'agent-chat': 'settingsAgentDefaults',
-  'agent-workspace': 'settingsAgentDefaults',
-  'agent-browser': 'settingsAgentDefaults',
-  'agent-runtime': 'settingsAgentDefaults',
-  'agent-tools': 'settingsAgentDefaults',
-  'agent-skills': 'settingsAgentDefaults',
+  'agent-defaults': 'settingsAgentChat',
+  'agent-chat': 'settingsAgentChat',
+  'agent-workspace': 'settingsAgentWorkspace',
+  'agent-browser': 'settingsAgentBrowser',
+  'agent-runtime': 'settingsAgentRuntime',
+  'agent-context': 'settingsAgentContext',
+  'agent-memory': 'settingsAgentMemory',
+  'agent-tools': 'settingsAgentTools',
+  'agent-skills': 'settingsAgentSkills',
   'agent-mcp': 'settingsAgentMcp',
-  'agent-system-prompt': 'settingsAgentDefaults',
+  'agent-system-prompt': 'settingsAgentSystemPrompt',
   agents: 'settingsAgents',
   providers: 'settingsProviders',
   credentials: 'settingsCredentials',
@@ -129,7 +131,18 @@ export const SETTINGS_SHELL_NAV_GROUPS: readonly SettingsShellNavGroup[] = [
   },
   {
     id: 'agent',
-    tabs: ['settingsAgentDefaults', 'settingsAgentMcp'],
+    tabs: [
+      'settingsAgentChat',
+      'settingsAgentWorkspace',
+      'settingsAgentBrowser',
+      'settingsAgentRuntime',
+      'settingsAgentContext',
+      'settingsAgentMemory',
+      'settingsAgentTools',
+      'settingsAgentSkills',
+      'settingsAgentSystemPrompt',
+      'settingsAgentMcp',
+    ],
   },
   {
     id: 'connection',
@@ -233,6 +246,8 @@ export function pathForTab(tab: Tab): string {
   if (tab === 'settingsAgentWorkspace') return '/settings/agent-defaults?tab=workspace';
   if (tab === 'settingsAgentBrowser') return '/settings/agent-defaults?tab=browser';
   if (tab === 'settingsAgentRuntime') return '/settings/agent-defaults?tab=runtime';
+  if (tab === 'settingsAgentContext') return '/settings/agent-defaults?tab=context';
+  if (tab === 'settingsAgentMemory') return '/settings/agent-defaults?tab=memory';
   if (tab === 'settingsAgentTools') return '/settings/agent-defaults?tab=tools';
   if (tab === 'settingsAgentSkills') return '/settings/agent-defaults?tab=skills';
   if (tab === 'settingsAgentSystemPrompt') return '/settings/agent-defaults?tab=system-prompt';

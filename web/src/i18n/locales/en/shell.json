@@ -34,9 +34,12 @@
     "settingsSearch": "Web search",
     "settingsDreams": "Dreams",
     "settingsAgentDefaults": "Agent defaults",
+    "settingsAgentChat": "Default model & chat",
     "settingsAgentWorkspace": "Workspace",
     "settingsAgentBrowser": "Browser",
-    "settingsAgentRuntime": "Runtime",
+    "settingsAgentRuntime": "Turn limits",
+    "settingsAgentContext": "Context",
+    "settingsAgentMemory": "Memory",
     "settingsAgentTools": "Tools",
     "settingsAgentSkills": "Default skill allowlist",
     "settingsAgentMcp": "External tools (MCP)",
@@ -180,7 +183,8 @@
       "providersSubtitle": "LLM provider keys and OAuth",
       "modelsSubtitle": "Model configuration",
       "voiceSubtitle": "Voice settings",
-      "gatewaySubtitle": "Gateway settings"
+      "gatewaySubtitle": "Gateway settings",
+      "agentDefaultsSubtitle": "Default agent configuration"
     },
     "quickSettings": {
       "switchModel": "Switch model",

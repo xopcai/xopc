@@ -4,6 +4,8 @@ export type AgentDefaultsTabId =
   | 'workspace'
   | 'browser'
   | 'runtime'
+  | 'context'
+  | 'memory'
   | 'tools'
   | 'skills'
   | 'system-prompt';
@@ -13,6 +15,8 @@ export const AGENT_DEFAULTS_TABS: readonly AgentDefaultsTabId[] = [
   'workspace',
   'browser',
   'runtime',
+  'context',
+  'memory',
   'tools',
   'skills',
   'system-prompt',
@@ -24,6 +28,8 @@ export const LEGACY_AGENT_DEFAULTS_SECTION_TO_TAB: Record<string, AgentDefaultsT
   'agent-workspace': 'workspace',
   'agent-browser': 'browser',
   'agent-runtime': 'runtime',
+  'agent-context': 'context',
+  'agent-memory': 'memory',
   'agent-tools': 'tools',
   'agent-skills': 'skills',
   'agent-system-prompt': 'system-prompt',

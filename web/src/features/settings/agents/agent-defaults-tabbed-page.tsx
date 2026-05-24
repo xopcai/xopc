@@ -1,7 +1,6 @@
 import { useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
-import { GoalsConfigSection } from '@/features/settings/goals-config-section';
 import { SkillsMarketplaceConfigSection } from '@/features/skills/skills-marketplace-config-section';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
@@ -13,6 +12,7 @@ import { AgentDefaultsBrowserPanel } from './agent-defaults-panels/browser-panel
 import { AgentDefaultsCapabilitiesPanel } from './agent-defaults-panels/capabilities-panel';
 import { AgentDefaultsContextPanel } from './agent-defaults-panels/context-panel';
 import { AgentDefaultsExpertPanel } from './agent-defaults-panels/expert-panel';
+import { AgentDefaultsLimitsPanel } from './agent-defaults-panels/limits-panel';
 import { AgentDefaultsMemoryPanel } from './agent-defaults-panels/memory-panel';
 import { AgentDefaultsSkillsAllowlistPanel } from './agent-defaults-panels/skills-allowlist-panel';
 import { AgentDefaultsSystemPromptPanel } from './agent-defaults-panels/system-prompt-panel';
@@ -39,6 +39,10 @@ function tabIntro(a: ReturnType<typeof messages>['agentSettings'], tab: AgentDef
       return a.routeIntro.browser;
     case 'runtime':
       return a.routeIntro.runtime;
+    case 'context':
+      return a.routeIntro.context;
+    case 'memory':
+      return a.routeIntro.memory;
     case 'tools':
       return a.routeIntro.tools;
     case 'skills':
@@ -65,13 +69,11 @@ function AgentDefaultsTabPanel({
     case 'browser':
       return <AgentDefaultsBrowserPanel {...pp} />;
     case 'runtime':
-      return (
-        <div className="flex flex-col gap-8">
-          <GoalsConfigSection hasToken={hasToken} />
-          <AgentDefaultsContextPanel {...pp} />
-          <AgentDefaultsMemoryPanel {...pp} />
-        </div>
-      );
+      return <AgentDefaultsLimitsPanel {...pp} />;
+    case 'context':
+      return <AgentDefaultsContextPanel {...pp} />;
+    case 'memory':
+      return <AgentDefaultsMemoryPanel {...pp} />;
     case 'tools':
       return (
         <div className="flex flex-col gap-8">
