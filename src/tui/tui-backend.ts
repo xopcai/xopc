@@ -22,6 +22,7 @@ export interface TuiSessionItem {
   model?: string | null;
   totalTokens?: number | null;
   displayName?: string;
+  messageCount?: number;
 }
 
 /** Model choice for the selector overlay. */
@@ -29,6 +30,7 @@ export interface TuiModelChoice {
   id: string;
   name: string;
   provider: string;
+  contextWindow?: number;
 }
 
 /**
@@ -60,6 +62,9 @@ export interface TuiBackend {
   /** Abort an active run. */
   abortChat(opts: { sessionKey: string; runId: string }): Promise<{ ok: boolean }>;
 
+  /** Inject steering text into an active run (tool-boundary delivery). */
+  steerChat(opts: { sessionKey: string; message: string }): Promise<{ ok: boolean }>;
+
   /** Load chat history for a session. */
   loadHistory(opts: {
     sessionKey: string;
@@ -78,11 +83,23 @@ export interface TuiBackend {
   /** Reset / create new session. */
   resetSession(sessionKey: string): Promise<void>;
 
+  /** Rename session display name. */
+  renameSession(sessionKey: string, name: string): Promise<{ ok: boolean }>;
+
+  /** Delete session and transcript. */
+  deleteSession(sessionKey: string): Promise<{ ok: boolean }>;
+
   /** Patch session settings (e.g. model). */
   patchSession(
     sessionKey: string,
     patch: Record<string, unknown>,
   ): Promise<void>;
+
+  /** Compact session transcript (returns whether compaction ran). */
+  compactSession(
+    sessionKey: string,
+    options?: { force?: boolean },
+  ): Promise<{ compacted: boolean; summary?: string }>;
 }
 
 /** A single message in chat history (aligned with `ClientHistoryMessage`). */

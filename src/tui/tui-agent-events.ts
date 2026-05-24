@@ -132,7 +132,11 @@ export function dispatchAgentSSE(
       break;
     }
     case 'progress': {
-      setActivityStatus('running');
+      const stage = typeof data.stage === 'string' ? data.stage : '';
+      const message = typeof data.message === 'string' ? data.message : stage;
+      state.progressMessage = message || null;
+      setActivityStatus(message ? `progress: ${message}` : 'running');
+      tui.requestRender();
       break;
     }
     default:

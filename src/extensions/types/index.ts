@@ -15,3 +15,4 @@ export * from './loader.js';
 export type { ProviderConfig, ProviderApiType, ModelConfig, OAuthConfig, OAuthCallbacks, OAuthCredentials, FlagConfig, FlagValue, ShortcutConfig, ShortcutHandler } from './phase4.js';
 //  Provider types
 export * from './providers.js';
+export * from './tui.js';

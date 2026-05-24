@@ -162,6 +162,20 @@ export class GatewaySseBackend implements TuiBackend {
     }
   }
 
+  async steerChat(opts: { sessionKey: string; message: string }): Promise<{ ok: boolean }> {
+    try {
+      const res = await gatewayFetch(this.baseUrl, '/api/agent/steer', this.token, {
+        method: 'POST',
+        body: JSON.stringify({ chatId: opts.sessionKey, message: opts.message }),
+      });
+      if (!res.ok) return { ok: false };
+      const json = (await res.json()) as { ok?: boolean };
+      return { ok: json.ok === true };
+    } catch {
+      return { ok: false };
+    }
+  }
+
   // ── REST helpers ──
 
   async loadHistory(opts: {
@@ -197,6 +211,7 @@ export class GatewaySseBackend implements TuiBackend {
           name?: string;
           updatedAt?: string;
           estimatedTokens?: number;
+          messageCount?: number;
           customData?: Record<string, unknown>;
         }>;
       };
@@ -205,6 +220,7 @@ export class GatewaySseBackend implements TuiBackend {
         displayName: s.name,
         updatedAt: s.updatedAt ? Date.parse(s.updatedAt) : undefined,
         totalTokens: s.estimatedTokens ?? null,
+        messageCount: typeof s.messageCount === 'number' ? s.messageCount : undefined,
         model:
           typeof s.customData?.model === 'string'
             ? s.customData.model
@@ -284,6 +300,21 @@ export class GatewaySseBackend implements TuiBackend {
         }
       }
 
+      if (out.totalTokens != null) {
+        const models = await this.listModels();
+        const match = models.find(
+          (m) =>
+            m.id === out.model &&
+            (!out.modelProvider || m.provider === out.modelProvider),
+        );
+        const contextWindow = match?.contextWindow ?? 128_000;
+        out.contextWindow = contextWindow;
+        out.contextUsagePercent =
+          contextWindow > 0
+            ? Math.min(100, Math.round((out.totalTokens / contextWindow) * 100))
+            : null;
+      }
+
       return out;
     } catch {
       return {};
@@ -313,6 +344,41 @@ export class GatewaySseBackend implements TuiBackend {
     ).catch(() => {});
   }
 
+  async compactSession(
+    sessionKey: string,
+    options?: { force?: boolean },
+  ): Promise<{ compacted: boolean; summary?: string }> {
+    try {
+      const res = await gatewayFetch(
+        this.baseUrl,
+        `/api/sessions/${encodeURIComponent(sessionKey)}/compaction/run`,
+        this.token,
+        {
+          method: 'POST',
+          body: JSON.stringify({ force: options?.force ?? true }),
+        },
+      );
+      if (!res.ok) {
+        return { compacted: false, summary: `Compaction failed (${res.status})` };
+      }
+      const json = (await res.json()) as {
+        ok?: boolean;
+        payload?: { result?: { compacted?: boolean; tokensBefore?: number; tokensAfter?: number } };
+      };
+      const result = json.payload?.result;
+      if (!result?.compacted) {
+        return { compacted: false, summary: 'Nothing to compact' };
+      }
+      return {
+        compacted: true,
+        summary: `Compacted (${result.tokensBefore ?? '?'} → ${result.tokensAfter ?? '?'} tokens)`,
+      };
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      return { compacted: false, summary: errorMessage };
+    }
+  }
+
   async patchSession(sessionKey: string, patch: Record<string, unknown>): Promise<void> {
     await gatewayFetch(
       this.baseUrl,
@@ -320,6 +386,36 @@ export class GatewaySseBackend implements TuiBackend {
       this.token,
       { method: 'PATCH', body: JSON.stringify(patch) },
     ).catch(() => {});
+  }
+
+  async renameSession(sessionKey: string, name: string): Promise<{ ok: boolean }> {
+    try {
+      const res = await gatewayFetch(
+        this.baseUrl,
+        `/api/sessions/${encodeURIComponent(sessionKey)}/rename`,
+        this.token,
+        { method: 'POST', body: JSON.stringify({ name }) },
+      );
+      return { ok: res.ok };
+    } catch {
+      return { ok: false };
+    }
+  }
+
+  async deleteSession(sessionKey: string): Promise<{ ok: boolean }> {
+    try {
+      const res = await gatewayFetch(
+        this.baseUrl,
+        `/api/sessions/${encodeURIComponent(sessionKey)}`,
+        this.token,
+        { method: 'DELETE' },
+      );
+      if (!res.ok) return { ok: false };
+      const json = (await res.json()) as { deleted?: boolean };
+      return { ok: json.deleted !== false };
+    } catch {
+      return { ok: false };
+    }
   }
 
   // ── Broadcast SSE (GET /api/events) ──

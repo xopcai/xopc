@@ -1,8 +1,12 @@
 import type { Component, SelectItem, TUI } from '@earendil-works/pi-tui';
 
-import type { TuiBackend, TuiModelChoice } from './tui-backend.js';
+import { ScopedModelsSelector } from './components/scoped-models-selector.js';
+import { SettingsSelector } from './components/settings-selector.js';
 import { SearchableSelectList } from './components/searchable-select-list.js';
+import { SessionSelector } from './components/session-selector.js';
+import type { TuiBackend, TuiModelChoice } from './tui-backend.js';
 import { searchableSelectListTheme, theme } from './theme.js';
+import type { TuiSettings } from './tui-settings.js';
 
 export type PickerServices = {
   tui: TUI;
@@ -17,20 +21,28 @@ export type PickerServices = {
   state: { currentSessionKey: string };
   setSessionKey: (key: string) => void;
   clearChatForSessionSwitch: () => void;
-  /** Load transcript after switching session or on connect. */
   loadSessionHistory: () => Promise<void>;
-  /** Keeps Ctrl+P model cycle list in sync with the picker catalog. */
   setModelChoices: (models: TuiModelChoice[]) => void;
+  getScopedModelRefs: () => string[] | null;
+  setScopedModelRefs: (refs: string[] | null) => void;
+  refreshCycleModels: () => void;
+  getTuiSettings: () => TuiSettings;
+  applyTuiSettings: (settings: TuiSettings) => void;
+  previewTheme: (themeId: string) => void;
+  reloadKeybindings: () => void;
 };
 
-function openSearchableOverlay(svc: PickerServices, list: SearchableSelectList, title: string) {
-  list.onCancel = () => {
-    svc.closeOverlay();
-    svc.tui.setFocus(svc.editor);
-    svc.tui.requestRender();
-  };
-  svc.openOverlay(list);
-  svc.chatLog.addSystem(theme.dim(`${title} (↑/↓ · type to filter · Esc)`));
+function resumeSession(svc: PickerServices, sessionKey: string): void {
+  svc.setSessionKey(sessionKey);
+  svc.clearChatForSessionSwitch();
+  svc.chatLog.addSystem(`Session: ${sessionKey}`);
+  void svc
+    .refreshSessionInfo()
+    .then(() => svc.loadSessionHistory())
+    .then(() => {
+      svc.updateHeader();
+      svc.tui.requestRender();
+    });
   svc.tui.requestRender();
 }
 
@@ -56,10 +68,17 @@ export async function openModelPickerOverlay(svc: PickerServices): Promise<void>
     svc.sendMessage(`/switch ${item.value}`);
     svc.tui.requestRender();
   };
-  openSearchableOverlay(svc, list, 'Select model');
+  list.onCancel = () => {
+    svc.closeOverlay();
+    svc.tui.setFocus(svc.editor);
+    svc.tui.requestRender();
+  };
+  svc.openOverlay(list);
+  svc.chatLog.addSystem(theme.dim('Select model (↑/↓ · type to filter · Esc)'));
+  svc.tui.requestRender();
 }
 
-/** Ctrl+P — switch session key and reload transcript when available. */
+/** Ctrl+Shift+P — session picker with rename/delete. */
 export async function openSessionPickerOverlay(svc: PickerServices): Promise<void> {
   const sessions = await svc.client.listSessions();
   if (sessions.length === 0) {
@@ -67,28 +86,92 @@ export async function openSessionPickerOverlay(svc: PickerServices): Promise<voi
     svc.tui.requestRender();
     return;
   }
-  const sorted = [...sessions].sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
-  const items: SelectItem[] = sorted.slice(0, 80).map((s) => ({
-    value: s.key,
-    label: s.displayName || s.key,
-    description: s.model ? String(s.model) : undefined,
-    searchText: `${s.key} ${s.displayName ?? ''} ${s.model ?? ''}`,
-  }));
-  const list = new SearchableSelectList(items, Math.min(10, items.length), searchableSelectListTheme);
-  list.onSelect = (item) => {
-    svc.closeOverlay();
-    svc.tui.setFocus(svc.editor);
-    svc.setSessionKey(item.value);
-    svc.clearChatForSessionSwitch();
-    svc.chatLog.addSystem(`Session: ${item.value}`);
-    void svc
-      .refreshSessionInfo()
-      .then(() => svc.loadSessionHistory())
-      .then(() => {
-        svc.updateHeader();
-        svc.tui.requestRender();
-      });
+
+  const selector = new SessionSelector(sessions, {
+    onResume: (sessionKey) => {
+      svc.closeOverlay();
+      svc.tui.setFocus(svc.editor);
+      resumeSession(svc, sessionKey);
+    },
+    onRename: async (sessionKey, name) => {
+      const result = await svc.client.renameSession(sessionKey, name);
+      return result.ok ? { ok: true } : { ok: false, error: 'Rename failed' };
+    },
+    onDelete: async (sessionKey) => {
+      if (sessionKey === svc.state.currentSessionKey) {
+        return { ok: false, error: 'Switch away before deleting the active session' };
+      }
+      const result = await svc.client.deleteSession(sessionKey);
+      return result.ok ? { ok: true } : { ok: false, error: 'Delete failed' };
+    },
+    onCancel: () => {
+      svc.closeOverlay();
+      svc.tui.setFocus(svc.editor);
+      svc.tui.requestRender();
+    },
+    requestRender: () => svc.tui.requestRender(),
+  });
+
+  svc.openOverlay(selector);
+  svc.chatLog.addSystem(theme.dim('Session picker'));
+  svc.tui.requestRender();
+}
+
+/** `/scoped-models` — limit Ctrl+P model cycle set. */
+export async function openScopedModelsOverlay(svc: PickerServices): Promise<void> {
+  const catalog = await svc.client.listModels();
+  svc.setModelChoices(catalog);
+  if (catalog.length === 0) {
+    svc.chatLog.addSystem('No models available.');
     svc.tui.requestRender();
-  };
-  openSearchableOverlay(svc, list, 'Select session');
+    return;
+  }
+
+  const selector = new ScopedModelsSelector(catalog, svc.getScopedModelRefs(), {
+    onSave: (refs) => {
+      svc.setScopedModelRefs(refs);
+      svc.refreshCycleModels();
+      svc.closeOverlay();
+      svc.tui.setFocus(svc.editor);
+      const count =
+        refs === null ? catalog.length : refs.length;
+      svc.chatLog.addSystem(
+        theme.dim(
+          refs === null
+            ? `Ctrl+P cycles all ${catalog.length} models`
+            : `Ctrl+P cycles ${count} scoped model${count === 1 ? '' : 's'}`,
+        ),
+      );
+      svc.tui.requestRender();
+    },
+    onCancel: () => {
+      svc.closeOverlay();
+      svc.tui.setFocus(svc.editor);
+      svc.tui.requestRender();
+    },
+    requestRender: () => svc.tui.requestRender(),
+  });
+
+  svc.openOverlay(selector);
+  svc.chatLog.addSystem(theme.dim('Scoped models for Ctrl+P'));
+  svc.tui.requestRender();
+}
+
+/** `/settings` — TUI preferences overlay. */
+export function openSettingsOverlay(svc: PickerServices): void {
+  const selector = new SettingsSelector(svc.getTuiSettings(), {
+    onChange: (settings) => svc.applyTuiSettings(settings),
+    onThemePreview: (themeId) => svc.previewTheme(themeId),
+    onReloadKeybindings: () => svc.reloadKeybindings(),
+    onCancel: () => {
+      svc.previewTheme(svc.getTuiSettings().theme);
+      svc.closeOverlay();
+      svc.tui.setFocus(svc.editor);
+      svc.tui.requestRender();
+    },
+  });
+
+  svc.openOverlay(selector);
+  svc.chatLog.addSystem(theme.dim('Settings (↑/↓ · Enter toggle · Esc close)'));
+  svc.tui.requestRender();
 }

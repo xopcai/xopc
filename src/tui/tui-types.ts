@@ -12,6 +12,8 @@ export interface TuiOptions {
   message?: string;
   /** Run in embedded (local) mode — no gateway required. */
   local?: boolean;
+  /** Theme id: `auto`, `dark`, `light`, or custom name under `~/.xopc/themes/`. */
+  theme?: string;
 }
 
 export type TuiExitReason = 'exit' | 'signal';
@@ -70,7 +72,8 @@ export type ActivityStatus =
   | 'sending'
   | 'waiting'
   | 'streaming'
-  | 'running';
+  | 'running'
+  | 'compacting';
 
 /** Session metadata shown in the TUI footer. */
 export interface SessionInfo {
@@ -79,6 +82,8 @@ export interface SessionInfo {
   thinkingLevel?: string;
   contextTokens?: number | null;
   totalTokens?: number | null;
+  contextWindow?: number | null;
+  contextUsagePercent?: number | null;
   displayName?: string;
 }
 
@@ -99,6 +104,16 @@ export interface TuiState {
   exitRequested: boolean;
   /** Queued via Alt+Enter while a run is active; flushed FIFO when the run ends. */
   messageFollowUpQueue: string[];
+  /** Ctrl+P cycle filter; `null` = all models from catalog. */
+  scopedModelRefs: string[] | null;
+  /** Last Escape timestamp for double-press actions. */
+  lastEscapeAt: number;
+  /** Human-readable progress from SSE `progress` events. */
+  progressMessage: string | null;
+  /** Session compaction in flight (local /compact handler). */
+  isCompacting: boolean;
+  /** Messages queued while compacting. */
+  compactionQueue: string[];
 }
 
 export function createInitialState(sessionKey: string): TuiState {
@@ -116,5 +131,10 @@ export function createInitialState(sessionKey: string): TuiState {
     lastCtrlCAt: 0,
     exitRequested: false,
     messageFollowUpQueue: [],
+    scopedModelRefs: null,
+    lastEscapeAt: 0,
+    progressMessage: null,
+    isCompacting: false,
+    compactionQueue: [],
   };
 }
