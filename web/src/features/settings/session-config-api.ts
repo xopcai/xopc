@@ -54,20 +54,16 @@ export function normalizeSessionConfigFromConfig(config: unknown): SessionConfig
 }
 
 export async function patchSessionConfig(state: SessionConfigState): Promise<void> {
-  const storage: Record<string, number> = {};
-  if (state.pruneAfterDays !== null) {
-    storage.pruneAfterMs = state.pruneAfterDays * 86_400_000;
-  }
-  if (state.maxEntries !== null) {
-    storage.maxEntries = state.maxEntries;
-  }
-
   await fetchJson(apiUrl('/api/config'), {
     method: 'PATCH',
     body: JSON.stringify({
       session: {
         dmScope: state.dmScope,
-        ...(Object.keys(storage).length > 0 ? { storage } : {}),
+        storage: {
+          pruneAfterMs:
+            state.pruneAfterDays !== null ? state.pruneAfterDays * 86_400_000 : null,
+          maxEntries: state.maxEntries,
+        },
       },
     }),
   });
