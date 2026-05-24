@@ -78,6 +78,54 @@ export type SystemSettingsBehavior = {
   notifySoundEnabled: boolean;
 };
 
+export type UninstallMode = 'manual' | 'native-uninstaller' | 'unsupported';
+
+export type LinuxPackageKind = 'appimage' | 'deb' | 'unknown';
+
+export type UninstallErrorCode =
+  | 'PENDING_UPDATE'
+  | 'NOT_PACKAGED'
+  | 'UNINSTALLER_NOT_FOUND'
+  | 'PLATFORM_UNSUPPORTED';
+
+export type UninstallInfo = {
+  packaged: boolean;
+  platform: 'darwin' | 'win32' | 'linux';
+  uninstallMode: UninstallMode;
+  appPath: string;
+  userDataPath: string;
+  userDataSizeBytes: number | null;
+  hasSeparateCliData: boolean;
+  cliDataPath: string | null;
+  uninstallerPath: string | null;
+  pendingUpdate: boolean;
+  linuxPackageKind?: LinuxPackageKind;
+  linuxDebPackageName?: string;
+};
+
+export type UninstallAppResult =
+  | {
+      ok: true;
+      mode: 'manual' | 'native-uninstaller';
+      linuxPackageKind?: LinuxPackageKind;
+      debPackageName?: string;
+    }
+  | { ok: false; error: UninstallErrorCode };
+
+export type ClearUserDataResult = { ok: true } | { ok: false; error: UninstallErrorCode };
+
+export type PermissionRequestOutcome =
+  | 'granted'
+  | 'denied'
+  | 'prompted'
+  | 'opened-settings'
+  | 'already-granted';
+
+export type PermissionRequestResult = {
+  status: TccTriState;
+  outcome: PermissionRequestOutcome;
+};
+
 export interface ElectronMenuAPI {
   onNavigate(callback: (path: string) => void): () => void;
   onTogglePalette(callback: () => void): () => void;
@@ -100,7 +148,11 @@ export interface ElectronSystemSettingsAPI {
   openPrivacy(
     kind: PrivacyPaneKind,
   ): Promise<{ ok: true } | { ok: false; error: string }>;
-  requestMicrophone(): Promise<{ status: TccTriState }>;
+  requestMicrophone(): Promise<PermissionRequestResult>;
+  requestAccessibility(): Promise<PermissionRequestResult>;
+  getUninstallInfo(): Promise<UninstallInfo>;
+  clearUserData(): Promise<ClearUserDataResult>;
+  uninstallApp(options?: { removeUserData?: boolean }): Promise<UninstallAppResult>;
 }
 
 export interface ElectronAPI {

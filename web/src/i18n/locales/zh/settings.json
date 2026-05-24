@@ -284,9 +284,9 @@
       "keepAwake": "保持系统唤醒",
       "keepAwakeDesc": "开启后请求系统保持唤醒，减少因空闲睡眠中断长时间任务。",
       "notifyDesktop": "桌面通知",
-      "notifyDesktopDesc": "在后续版本接入系统通知时生效（当前仅保存偏好）。",
+      "notifyDesktopDesc": "应用在后台时显示系统通知（更新提醒、应用内提示、智能体错误等）。",
       "notifySound": "声音通知",
-      "notifySoundDesc": "在实现通知时是否播放提示音（需同时启用桌面通知相关实现）。"
+      "notifySoundDesc": "每条桌面通知播放短提示音。"
     },
     "permissionsTitle": "系统权限",
     "permissionsHint": "状态为尽量检测，修改系统设置后请刷新或重新进入本页。",
@@ -300,6 +300,39 @@
     },
     "openSettings": "去设置",
     "refresh": "刷新状态",
+    "refreshing": "刷新中…",
+    "refreshDone": "权限状态已更新。",
+    "openSettingsDone": "已打开系统设置。",
+    "openSettingsFailed": "无法打开系统设置，请从系统偏好设置中手动查找对应项。",
+    "requestAccess": "请求访问",
+    "permFeedback": {
+      "granted": "麦克风已授权。",
+      "alreadyGranted": "麦克风此前已授权。",
+      "openedSettings": "已在系统设置中打开麦克风页面，请启用 xopc 后点击「刷新状态」。",
+      "denied": "麦克风未授权，请在系统设置中启用 xopc。",
+      "rendererDenied": "浏览器层无法访问麦克风，请检查系统隐私设置。",
+      "prompted": "若出现系统提示，请选择允许麦克风访问。"
+    },
+    "accessibilityFeedback": {
+      "granted": "辅助功能已授权。",
+      "alreadyGranted": "辅助功能此前已授权。",
+      "openedSettings": "已在系统设置中打开辅助功能页面，请启用 xopc 后点击「刷新状态」。",
+      "denied": "辅助功能未授权，请在系统设置中启用 xopc。"
+    },
+    "notificationsFeedback": {
+      "granted": "通知权限已授权。",
+      "denied": "通知权限被拒绝，请在系统设置中启用 xopc。",
+      "default": "未选择通知权限，请重试或在系统设置中手动启用。",
+      "unsupported": "当前环境不支持系统通知。"
+    },
+    "desktopNotify": {
+      "testTitle": "桌面通知已开启",
+      "testBody": "当 xopc 在后台运行时会在此显示提醒。",
+      "testShown": "已发送测试通知。若未看到，请在系统设置中允许 xopc 的通知。",
+      "denied": "通知权限被拒绝。请先在系统中允许 xopc 的通知，再重试。",
+      "agentErrorTitle": "智能体运行失败",
+      "agentErrorBody": "打开 xopc 查看详情。"
+    },
     "perm": {
       "fullDisk": {
         "title": "文件与磁盘访问",
@@ -328,6 +361,80 @@
       "location": {
         "title": "位置",
         "desc": "在提供地理位置相关任务时获取位置信息。"
+      }
+    },
+    "permUnknown": {
+      "fullDisk": {
+        "darwin": "macOS 在真正访问前无法准确报告。若读取工作区失败，请在「完全磁盘访问权限」中启用 xopc。",
+        "win32": "Windows 无法在此准确报告。若文件访问失败，请打开「存储」相关设置。",
+        "linux": "若文件访问失败，请在发行版、Flatpak 或 desktop portal 中授予文件权限。"
+      },
+      "screen": {
+        "darwin": "若录屏/截屏失败，请在「屏幕录制」中为 xopc 授权。",
+        "win32": "若屏幕采集失败，请在「设置」中允许桌面应用的屏幕捕获。",
+        "linux": "若屏幕采集失败，请在 desktop portal 或合成器设置中授权。"
+      },
+      "microphone": {
+        "darwin": "若语音输入失败，请点「请求访问」或打开「麦克风」隐私设置。",
+        "win32": "若语音输入失败，请点「请求访问」或打开「麦克风」隐私设置。",
+        "linux": "若语音输入失败，请在桌面环境或 Flatpak 中授予麦克风权限。"
+      },
+      "accessibility": {
+        "darwin": "全局快捷键需要辅助功能权限。请「请求访问」后在「辅助功能」中启用 xopc。",
+        "win32": "若全局快捷键或集成失败，请打开「辅助功能」设置。",
+        "linux": "若快捷键失败，请在桌面环境的辅助功能/权限设置中授权。"
+      },
+      "automation": {
+        "darwin": "若控制其他应用失败，请在「自动化」/ Apple 事件中为 xopc 授权。",
+        "win32": "若与其他应用集成失败，请在 Windows「设置」中配置默认应用与自动化。",
+        "linux": "若自动化失败，请在 desktop portal 或会话设置中授权应用集成。"
+      },
+      "notifications": {
+        "darwin": "请「请求访问」，然后在系统「通知」中为 xopc 开启通知。",
+        "win32": "请「请求访问」，然后在「设置」中为 xopc 开启通知。",
+        "linux": "请在桌面环境或 Flatpak 权限中允许通知。"
+      },
+      "location": {
+        "darwin": "若位置功能失败，请在「定位服务」中为 xopc 授权。",
+        "win32": "若位置功能失败，请在「设置」中允许桌面应用访问位置。",
+        "linux": "若位置功能失败，请在 desktop portal 中授予位置权限。"
+      }
+    },
+    "appManagement": {
+      "title": "应用管理",
+      "appPath": "安装位置",
+      "dataPath": "本地数据",
+      "dataSize": "数据大小",
+      "dataSizeUnknown": "—",
+      "copyPath": "复制",
+      "copied": "已复制",
+      "copyFailed": "无法复制到剪贴板，请手动选择路径复制。",
+      "cliDataWarning": "检测到独立的 CLI 数据目录 ~/.xopc。在此清除本地数据不会删除该目录。",
+      "openCliData": "打开 CLI 数据目录",
+      "pendingUpdateBlocked": "有待安装的更新时无法清除数据或卸载，请先完成或取消更新。",
+      "clearData": "清除本地数据",
+      "clearDataDesc": "删除配置、会话、工作区与缓存。应用将重启并恢复默认设置。",
+      "clearDataConfirmTitle": "清除本地数据？",
+      "clearDataConfirmDesc": "将永久删除桌面应用保存的 API 密钥、会话、对话记录与工作区文件，且无法恢复。",
+      "clearDataConfirmCheckbox": "我了解此操作不可恢复",
+      "clearDataConfirmPhrase": "确认删除",
+      "clearDataConfirmLabel": "请输入「确认删除」以继续",
+      "clearDataConfirmHint": "必须输入「确认删除」后才会启用清除按钮。",
+      "uninstall": "卸载应用",
+      "uninstallDescDarwin": "将在 Finder 中选中 xopc 并退出应用。请将 xopc.app 拖入废纸篓以完成卸载。",
+      "uninstallDescWin": "将打开 Windows 卸载向导并退出 xopc。",
+      "uninstallDescLinuxAppImage": "将打开 AppImage 所在文件夹并退出 xopc。删除该 AppImage 文件即可完成卸载。",
+      "uninstallDescLinuxDeb": "将退出 xopc 并打开安装目录。在终端执行：sudo dpkg -r {{package}}（或使用发行版软件中心卸载）。",
+      "uninstallDescLinuxUnknown": "将打开安装位置并退出 xopc。请使用发行版工具删除应用文件或软件包。",
+      "uninstallConfirmTitle": "卸载 xopc？",
+      "removeUserDataCheckbox": "卸载前同时清除本地数据",
+      "confirmClear": "清除数据",
+      "confirmUninstall": "卸载",
+      "cancel": "取消",
+      "errors": {
+        "pendingUpdate": "已有下载完成的更新等待安装。请先重启完成更新，再卸载。",
+        "uninstallerNotFound": "未找到卸载程序。请在「设置 → 应用 → 已安装的应用」中移除 xopc。",
+        "generic": "操作失败。请重试或通过系统设置卸载。"
       }
     }
   },
