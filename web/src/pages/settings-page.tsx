@@ -7,6 +7,8 @@ import { SetupStatusPanel } from '@/features/settings/setup-checklist/setup-stat
 import { CredentialsHubPanel } from '@/features/settings/credentials/credentials-hub-panel';
 import { AppearanceSettingsPanel } from '@/features/settings/appearance-settings';
 import { DreamingSettingsPanel } from '@/features/settings/dreaming-settings';
+import { CronSettingsPanel } from '@/features/settings/cron-settings';
+import { GoalsSettingsPanel } from '@/features/settings/goals-settings';
 import { GatewaySettingsPanel } from '@/features/settings/gateway-settings';
 import { HeartbeatSettingsPanel } from '@/features/settings/heartbeat-settings';
 import { TunnelSettingsPanel } from '@/features/tunnel/tunnel-settings';
@@ -38,6 +40,8 @@ const SECTIONS: SettingsSectionId[] = [
   'tunnel',
   'shares',
   'search',
+  'cron',
+  'goals',
   'dreams',
 ];
 
@@ -120,6 +124,14 @@ export function SettingsPage() {
 
   if (id === 'dreams') {
     return <DreamingSettingsPanel />;
+  }
+
+  if (id === 'cron') {
+    return <CronSettingsPanel />;
+  }
+
+  if (id === 'goals') {
+    return <GoalsSettingsPanel />;
   }
 
   return (

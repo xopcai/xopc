@@ -38,7 +38,8 @@ const SETTINGS_SECTION_TO_TAB: Record<SettingsSectionId, Tab> = {
   shares: 'settingsShares',
   search: 'settingsSearch',
   dreams: 'settingsDreams',
-  cron: 'cron',
+  cron: 'settingsCron',
+  goals: 'settingsGoals',
   skills: 'skills',
 };
 
@@ -61,7 +62,8 @@ const TAB_TO_SETTINGS_SECTION: Record<
   | 'settingsShares'
   | 'settingsSearch'
   | 'settingsDreams'
-  | 'cron'
+  | 'settingsCron'
+  | 'settingsGoals'
   | 'skills'
   | 'channels',
   SettingsSectionId
@@ -84,7 +86,8 @@ const TAB_TO_SETTINGS_SECTION: Record<
   settingsShares: 'shares',
   settingsSearch: 'search',
   settingsDreams: 'dreams',
-  cron: 'cron',
+  settingsCron: 'cron',
+  settingsGoals: 'goals',
   skills: 'skills',
   channels: 'channels',
 };
@@ -103,7 +106,7 @@ export type SettingsNavGroupId =
   | 'credentials'
   | 'agent'
   | 'connection'
-  | 'advanced'
+  | 'automation'
   | 'diagnostics';
 
 export type SettingsShellNavGroup = {
@@ -148,7 +151,10 @@ export const SETTINGS_SHELL_NAV_GROUPS: readonly SettingsShellNavGroup[] = [
     id: 'connection',
     tabs: ['settingsGateway', 'settingsHeartbeat', 'settingsTunnel', 'settingsShares'],
   },
-  { id: 'advanced', tabs: ['settingsDreams'] },
+  {
+    id: 'automation',
+    tabs: ['settingsCron', 'settingsGoals', 'settingsDreams'],
+  },
   { id: 'diagnostics', tabs: ['sessions', 'logs'] },
 ] as const;
 
@@ -239,6 +245,8 @@ export function pathForTab(tab: Tab): string {
   if (tab === 'chat') return '/chat';
   if (tab === 'agents' || tab === 'settingsAgents') return '/agents';
   if (tab === 'cron') return '/cron';
+  if (tab === 'settingsCron') return '/settings/cron';
+  if (tab === 'settingsGoals') return '/settings/goals';
   if (tab === 'skills') return '/skills';
   if (tab === 'channels' || tab === 'settingsChannels') return '/channels';
   if (tab === 'settingsAgentDefaults') return '/settings/agent-defaults';

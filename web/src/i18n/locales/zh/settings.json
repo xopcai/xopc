@@ -26,6 +26,7 @@
     "shares": "文件分享",
     "search": "网络搜索",
     "dreams": "梦境",
+    "goals": "目标评判",
     "agents": "智能体",
     "system": "系统设置",
     "cron": "定时任务",
@@ -334,9 +335,18 @@
     "credentials": "凭证与模型",
     "agent": "智能体默认配置",
     "connection": "连接",
-    "advanced": "高级",
+    "automation": "自动化",
     "diagnostics": "诊断",
     "extensions": "扩展"
+  },
+  "cronSettingsPage": {
+    "title": "定时任务",
+    "subtitle": "调度引擎开关、并发、时区与运行历史保留等全局参数。",
+    "tasksLink": "管理任务与运行历史 →"
+  },
+  "goalsSettingsPage": {
+    "title": "目标评判",
+    "subtitle": "持久目标 /goal 的评判模型、轮数上限与清单模式默认值。"
   },
   "imageModelsSettings": {
     "title": "图像",

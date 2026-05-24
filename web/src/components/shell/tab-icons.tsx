@@ -27,6 +27,7 @@ import {
   Share2,
   Shield,
   SlidersHorizontal,
+  Target,
   Timer,
   Users,
   Wrench,
@@ -69,6 +70,8 @@ const TAB_ICONS: Record<Tab, LucideIcon> = {
   settingsSearch: Search,
   settingsShares: Share2,
   settingsDreams: Moon,
+  settingsCron: Clock,
+  settingsGoals: Target,
 };
 
 export function TabIcon({ tab, className }: { tab: Tab; className?: string }) {
