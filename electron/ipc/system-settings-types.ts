@@ -35,3 +35,15 @@ export type SystemSettingsBehavior = {
   notifyEnabled: boolean;
   notifySoundEnabled: boolean;
 };
+
+export type PermissionRequestOutcome =
+  | 'granted'
+  | 'denied'
+  | 'prompted'
+  | 'opened-settings'
+  | 'already-granted';
+
+export type PermissionRequestResult = {
+  status: TccTriState;
+  outcome: PermissionRequestOutcome;
+};

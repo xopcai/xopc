@@ -284,9 +284,9 @@
       "keepAwake": "Keep system awake",
       "keepAwakeDesc": "While enabled, the app requests that the system stay awake (agent work may not be interrupted by idle sleep).",
       "notifyDesktop": "Desktop notifications",
-      "notifyDesktopDesc": "Allow the app to show system notifications when you wire them in a future update (preference is saved now).",
+      "notifyDesktopDesc": "Show native notifications when the app is in the background (updates, toasts, and agent errors).",
       "notifySound": "Sound notifications",
-      "notifySoundDesc": "Play a sound when a notification is shown (when notification sound is implemented)."
+      "notifySoundDesc": "Play a short sound with each desktop notification."
     },
     "permissionsTitle": "System permissions",
     "permissionsHint": "Status is best-effort. After changing system settings, refresh or revisit this page.",
@@ -300,6 +300,39 @@
     },
     "openSettings": "Open settings",
     "refresh": "Refresh status",
+    "refreshing": "Refreshing…",
+    "refreshDone": "Permission status updated.",
+    "openSettingsDone": "Opened system settings.",
+    "openSettingsFailed": "Could not open system settings. Find the matching page manually.",
+    "requestAccess": "Request access",
+    "permFeedback": {
+      "granted": "Microphone access is granted.",
+      "alreadyGranted": "Microphone was already granted.",
+      "openedSettings": "Opened Microphone in System Settings — enable xopc, then tap Refresh status.",
+      "denied": "Microphone access is denied. Enable xopc in System Settings.",
+      "rendererDenied": "The app could not access the microphone. Check OS privacy settings.",
+      "prompted": "If a system prompt appears, allow microphone access."
+    },
+    "accessibilityFeedback": {
+      "granted": "Accessibility access is granted.",
+      "alreadyGranted": "Accessibility was already granted.",
+      "openedSettings": "Opened Accessibility in System Settings — enable xopc, then tap Refresh status.",
+      "denied": "Accessibility is not granted. Enable xopc in System Settings."
+    },
+    "notificationsFeedback": {
+      "granted": "Notification permission is granted.",
+      "denied": "Notification permission was denied. Enable xopc in System Settings.",
+      "default": "Notification permission was not granted. Try again or enable it in System Settings.",
+      "unsupported": "System notifications are not supported in this environment."
+    },
+    "desktopNotify": {
+      "testTitle": "Desktop notifications enabled",
+      "testBody": "You will see alerts here when xopc is in the background.",
+      "testShown": "Test notification sent. Allow notifications in System Settings if you did not see it.",
+      "denied": "Notification permission was denied. Enable notifications for xopc, then try again.",
+      "agentErrorTitle": "Agent run failed",
+      "agentErrorBody": "Open xopc to see details."
+    },
     "perm": {
       "fullDisk": {
         "title": "Files & storage",
@@ -328,6 +361,80 @@
       "location": {
         "title": "Location",
         "desc": "Location-based tasks when the product uses location."
+      }
+    },
+    "permUnknown": {
+      "fullDisk": {
+        "darwin": "macOS does not report this until access is attempted. Grant Full Disk Access if workspace reads fail.",
+        "win32": "Windows does not report this here. Open Storage settings if file access fails.",
+        "linux": "Grant file access in your distro, Flatpak, or desktop portal if reads fail."
+      },
+      "screen": {
+        "darwin": "Grant Screen Recording for xopc if screen capture tools fail.",
+        "win32": "Enable screen capture for desktop apps in Settings if capture fails.",
+        "linux": "Use your desktop portal or compositor settings if screen capture fails."
+      },
+      "microphone": {
+        "darwin": "Use Request access or open Microphone settings if voice input fails.",
+        "win32": "Use Request access or open Microphone privacy settings if voice input fails.",
+        "linux": "Grant microphone access in your desktop or Flatpak settings if voice input fails."
+      },
+      "accessibility": {
+        "darwin": "Required for global shortcuts. Use Request access, then enable xopc under Accessibility.",
+        "win32": "Open Accessibility settings if global shortcuts or integrations fail.",
+        "linux": "Grant accessibility permissions in your desktop environment if shortcuts fail."
+      },
+      "automation": {
+        "darwin": "Grant Automation (Apple Events) if controlling other apps fails.",
+        "win32": "Configure default apps and automation in Windows Settings if integrations fail.",
+        "linux": "Use desktop portal or session settings for app integration if automation fails."
+      },
+      "notifications": {
+        "darwin": "Use Request access, then allow notifications for xopc in System Settings.",
+        "win32": "Use Request access, then allow notifications for xopc in Settings.",
+        "linux": "Allow notifications in your desktop environment or Flatpak permissions."
+      },
+      "location": {
+        "darwin": "Grant Location Services for xopc if location features fail.",
+        "win32": "Enable location for desktop apps in Settings if location features fail.",
+        "linux": "Grant location in your desktop portal if location features fail."
+      }
+    },
+    "appManagement": {
+      "title": "App management",
+      "appPath": "Install location",
+      "dataPath": "Local data",
+      "dataSize": "Data size",
+      "dataSizeUnknown": "—",
+      "copyPath": "Copy",
+      "copied": "Copied",
+      "copyFailed": "Could not copy to the clipboard. Select the path and copy manually.",
+      "cliDataWarning": "Separate CLI data was found at ~/.xopc. Clearing local data here does not remove it.",
+      "openCliData": "Open CLI data folder",
+      "pendingUpdateBlocked": "Finish or cancel the pending update before clearing data or uninstalling.",
+      "clearData": "Clear local data",
+      "clearDataDesc": "Remove config, sessions, workspace, and caches. The app will restart with default settings.",
+      "clearDataConfirmTitle": "Clear local data?",
+      "clearDataConfirmDesc": "This permanently deletes API keys, sessions, transcripts, and workspace files stored by the desktop app. This cannot be undone.",
+      "clearDataConfirmCheckbox": "I understand this cannot be undone",
+      "clearDataConfirmPhrase": "confirm delete",
+      "clearDataConfirmLabel": "Type \"confirm delete\" to continue",
+      "clearDataConfirmHint": "The clear button stays disabled until the phrase matches exactly.",
+      "uninstall": "Uninstall app",
+      "uninstallDescDarwin": "Opens Finder with xopc selected, then quits the app. Drag xopc.app to the Trash to finish uninstalling.",
+      "uninstallDescWin": "Opens the Windows uninstall wizard and quits xopc.",
+      "uninstallDescLinuxAppImage": "Opens the folder containing the AppImage, then quits xopc. Delete the AppImage file to uninstall.",
+      "uninstallDescLinuxDeb": "Quits xopc and opens the install folder. Remove the package with: sudo dpkg -r {{package}} (or use your distro software center).",
+      "uninstallDescLinuxUnknown": "Opens the install location, then quits xopc. Remove the app binary or package using your distro tools.",
+      "uninstallConfirmTitle": "Uninstall xopc?",
+      "removeUserDataCheckbox": "Also clear local data before uninstalling",
+      "confirmClear": "Clear data",
+      "confirmUninstall": "Uninstall",
+      "cancel": "Cancel",
+      "errors": {
+        "pendingUpdate": "A downloaded update is waiting to install. Restart to update or wait before uninstalling.",
+        "uninstallerNotFound": "Could not find the uninstaller. Remove xopc from Settings → Apps → Installed apps.",
+        "generic": "Operation failed. Try again or use your system settings to uninstall."
       }
     }
   },

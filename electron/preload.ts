@@ -130,5 +130,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
         | 'camera',
     ) => ipcRenderer.invoke('system-settings:open-privacy', kind),
     requestMicrophone: () => ipcRenderer.invoke('system-settings:request-microphone'),
+    requestAccessibility: () => ipcRenderer.invoke('system-settings:request-accessibility'),
+    getUninstallInfo: () => ipcRenderer.invoke('system-settings:get-uninstall-info'),
+    clearUserData: () => ipcRenderer.invoke('system-settings:clear-user-data'),
+    uninstallApp: (options?: { removeUserData?: boolean }) =>
+      ipcRenderer.invoke('system-settings:uninstall-app', options),
   },
 });
