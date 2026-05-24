@@ -102,7 +102,7 @@ export class ScopedModelsSelector implements Component {
       return;
     }
 
-    if (matchesKey(keyData, ' ')) {
+    if (keyData === ' ') {
       const item = this.list.getSelectedItem();
       if (!item) return;
       if (this.enabledRefs === null) {

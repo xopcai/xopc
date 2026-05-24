@@ -1,8 +1,11 @@
-import { Check, Copy, Smartphone } from 'lucide-react';
+import { Check, Copy, Loader2, Smartphone } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { SettingsFormSection } from '@/features/settings/settings-form-section';
 import type { MobilePairQrState } from '@/features/tunnel/use-mobile-pair-qr';
+import { useEnableLanPairing } from '@/features/tunnel/use-enable-lan-pairing';
 import { settingsInputFocusClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
 import { messages } from '@/i18n/messages';
@@ -17,17 +20,28 @@ function inputClassName(): string {
   );
 }
 
-export function MobilePairQrSection({ pairQr }: { pairQr: MobilePairQrState }) {
+export function MobilePairQrSection({
+  pairQr,
+  gatewayToken,
+}: {
+  pairQr: MobilePairQrState;
+  gatewayToken: string;
+}) {
   const language = useLocaleStore((s) => s.language);
   const t = messages(language).tunnelSettings;
   const {
     tunnelActive,
     tunnelStatus,
     tunnelQr,
+    pairContext,
     pairBaseUrl,
     setPairBaseUrl,
+    applySuggestedPairUrl,
+    applyCandidateUrl,
+    resetPairBaseFromContext,
     baseOk,
     localhostWarn,
+    pairingBlocked,
     deepLink,
     qrPayload,
     qrDataUrl,
@@ -36,6 +50,57 @@ export function MobilePairQrSection({ pairQr }: { pairQr: MobilePairQrState }) {
     linkCopied,
     copyDeepLink,
   } = pairQr;
+
+  const enableLan = useEnableLanPairing(gatewayToken, (context) => {
+    resetPairBaseFromContext(context.recommended.url);
+  });
+
+  const lanCandidates = pairContext?.candidates.filter((c) => c.kind === 'lan') ?? [];
+  const suggestedUrl = pairContext?.recommended.url?.trim() ?? '';
+  const showLanCandidatePicker = !tunnelActive && lanCandidates.length > 1;
+
+  function renderLanCandidateList(tone: 'amber' | 'neutral') {
+    if (lanCandidates.length === 0) return null;
+    const itemClass =
+      tone === 'amber'
+        ? 'text-amber-950 dark:text-amber-100'
+        : 'text-fg';
+    const labelClass =
+      tone === 'amber'
+        ? 'text-amber-950/80 dark:text-amber-200/90'
+        : 'text-fg-muted';
+    return (
+      <div>
+        <div className={cn('text-xs font-medium', labelClass)}>
+          {showLanCandidatePicker ? t.pairSelectCandidateTitle : t.pairCandidatesTitle}
+        </div>
+        <ul className="mt-1 space-y-1">
+          {lanCandidates.map((candidate) => (
+            <li key={candidate.url}>
+              <button
+                type="button"
+                className={cn(
+                  'w-full rounded-md border px-2 py-1.5 text-left font-mono text-[11px] transition-colors',
+                  tone === 'amber'
+                    ? 'border-amber-300/70 hover:bg-amber-100/80 dark:border-amber-800 dark:hover:bg-amber-950/50'
+                    : 'border-edge hover:bg-surface-panel',
+                  pairBaseUrl.trim() === candidate.url && 'border-accent bg-accent/5',
+                  itemClass,
+                )}
+                onClick={() => applyCandidateUrl(candidate.url)}
+              >
+                {candidate.label ? `${candidate.label}: ` : ''}
+                {candidate.url}
+              </button>
+            </li>
+          ))}
+        </ul>
+        {showLanCandidatePicker ? (
+          <p className={cn('mt-1 text-[11px] leading-relaxed', labelClass)}>{t.pairSelectCandidateHint}</p>
+        ) : null}
+      </div>
+    );
+  }
 
   return (
     <SettingsFormSection>
@@ -46,6 +111,48 @@ export function MobilePairQrSection({ pairQr }: { pairQr: MobilePairQrState }) {
       <p className="mb-3 text-xs text-fg-subtle">
         {tunnelActive ? t.pairTunnelActive : t.pairSubtitle}
       </p>
+
+      {pairingBlocked ? (
+        <div className="mb-3 space-y-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 dark:border-amber-900/50 dark:bg-amber-950/30">
+          <div>
+            <div className="text-sm font-medium text-amber-950 dark:text-amber-100">{t.pairBlockedTitle}</div>
+            <p className="mt-1 text-xs leading-relaxed text-amber-900 dark:text-amber-200">{t.pairBlockedLoopbackBody}</p>
+          </div>
+          {suggestedUrl ? (
+            <div className="space-y-2">
+              <div>
+                <div className="text-xs font-medium text-amber-950/80 dark:text-amber-200/90">{t.pairSuggestedLanLabel}</div>
+                <div className="mt-0.5 break-all font-mono text-xs text-amber-950 dark:text-amber-100">{suggestedUrl}</div>
+              </div>
+              <Button type="button" variant="secondary" className="w-full sm:w-auto" onClick={applySuggestedPairUrl}>
+                {t.pairUseSuggestedUrl}
+              </Button>
+            </div>
+          ) : null}
+          {lanCandidates.length > 0 ? renderLanCandidateList('amber') : null}
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+            <Button
+              type="button"
+              className="w-full sm:w-auto"
+              disabled={enableLan.busy || !gatewayToken}
+              onClick={() => enableLan.setConfirmOpen(true)}
+            >
+              {enableLan.busy ? <Loader2 className="size-3.5 animate-spin" /> : null}
+              {enableLan.busy ? t.pairEnableLanEnabling : t.pairEnableLanButton}
+            </Button>
+          </div>
+          {enableLan.error ? (
+            <p className="text-xs text-red-800 dark:text-red-200">{enableLan.error}</p>
+          ) : null}
+          <p className="text-xs leading-relaxed text-amber-900 dark:text-amber-200">{t.pairBlockedNextSteps}</p>
+          <Link
+            to="/settings/gateway"
+            className="inline-block text-xs font-medium text-accent hover:underline"
+          >
+            {t.pairEnableLanSecurityAuditLink}
+          </Link>
+        </div>
+      ) : null}
 
       {tunnelActive ? (
         <div className="mb-3 space-y-2 rounded-lg border border-edge bg-surface-panel px-3 py-3">
@@ -71,11 +178,12 @@ export function MobilePairQrSection({ pairQr }: { pairQr: MobilePairQrState }) {
             type="text"
             autoComplete="off"
             spellCheck={false}
+            placeholder={suggestedUrl || t.pairBaseUrlPlaceholder}
             value={pairBaseUrl}
             onChange={(e) => setPairBaseUrl(e.target.value)}
           />
           <p className="text-xs text-fg-subtle">{t.pairBaseUrlHint}</p>
-          {!baseOk ? (
+          {!baseOk && pairBaseUrl.trim() ? (
             <p className="text-xs text-amber-800 dark:text-amber-200">{t.pairInvalidBaseUrl}</p>
           ) : null}
           {localhostWarn ? (
@@ -83,6 +191,7 @@ export function MobilePairQrSection({ pairQr }: { pairQr: MobilePairQrState }) {
               {t.pairLocalhostWarning}
             </p>
           ) : null}
+          {showLanCandidatePicker ? renderLanCandidateList('neutral') : null}
         </div>
       )}
 
@@ -112,6 +221,8 @@ export function MobilePairQrSection({ pairQr }: { pairQr: MobilePairQrState }) {
             {linkCopied ? t.pairCopied : t.pairCopyLink}
           </Button>
         </div>
+      ) : pairingBlocked ? (
+        <p className="text-sm text-fg-muted">{t.pairQrDisabled}</p>
       ) : null}
 
       {qrPayload ? (
@@ -122,6 +233,19 @@ export function MobilePairQrSection({ pairQr }: { pairQr: MobilePairQrState }) {
       ) : null}
 
       <p className="mt-3 break-all font-mono text-[10px] leading-relaxed text-fg-subtle">{t.pairSchemeHint}</p>
+      <p className="mt-1 text-[10px] leading-relaxed text-fg-subtle">{t.pairMobileProbeHint}</p>
+
+      <ConfirmDialog
+        open={enableLan.confirmOpen}
+        title={t.pairEnableLanConfirmTitle}
+        description={t.pairEnableLanConfirmBody}
+        confirmLabel={t.pairEnableLanButton}
+        cancelLabel={t.consentCancel}
+        onConfirm={() => void enableLan.runEnableLanPairing()}
+        onCancel={() => {
+          if (!enableLan.busy) enableLan.setConfirmOpen(false);
+        }}
+      />
     </SettingsFormSection>
   );
 }

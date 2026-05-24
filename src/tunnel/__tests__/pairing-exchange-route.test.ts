@@ -32,8 +32,9 @@ describe('POST /api/tunnel/exchange-token', () => {
     });
 
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { token?: string };
+    const body = (await res.json()) as { token?: string; connectUrls?: string[] };
     expect(body.token).toBe('gateway-secret-token');
+    expect(Array.isArray(body.connectUrls)).toBe(true);
     expect(consumePairingSecret(secret)).toBe(false);
   });
 

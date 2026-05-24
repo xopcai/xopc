@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import type { Config } from '../config/schema.js';
-import { TunnelConfigSchema, TunnelConsentSchema } from '../config/schema.js';
+import { TunnelConfigSchema, TunnelConsentSchema, TunnelE2eSchema } from '../config/schema.js';
 
 import {
   assertTunnelAutoStartAllowed,
@@ -59,7 +59,8 @@ export function mergeTunnelConfigPatch(
   }
 
   if (parsed.data.autoStart === true) {
-    const probe: Config = { ...config, tunnel: { ...next, autoStart: true } };
+    const probeTunnel = TunnelConfigSchema.parse({ ...next, autoStart: true });
+    const probe: Config = { ...config, tunnel: probeTunnel };
     try {
       assertTunnelAutoStartAllowed(probe);
     } catch (err) {
@@ -68,7 +69,10 @@ export function mergeTunnelConfigPatch(
     }
   }
 
-  if (parsed.data.enabled === true && !hasValidTunnelConsent({ ...config, tunnel: next })) {
+  if (
+    parsed.data.enabled === true &&
+    !hasValidTunnelConsent({ ...config, tunnel: TunnelConfigSchema.parse(next) })
+  ) {
     return {
       ok: false,
       message:
@@ -77,13 +81,13 @@ export function mergeTunnelConfigPatch(
   }
 
   if (parsed.data.e2e !== undefined) {
-    next.e2e = {
+    next.e2e = TunnelE2eSchema.parse({
       ...(next.e2e ?? { enabled: true, tlsPort: 18791, staging: false }),
       ...parsed.data.e2e,
-    };
+    });
   }
 
-  config.tunnel = next;
+  config.tunnel = TunnelConfigSchema.parse(next);
   return { ok: true };
 }
 

@@ -2,7 +2,6 @@ import type { Hono, MiddlewareHandler } from 'hono';
 
 import { resolveTunnelE2eConfig } from '../../../tunnel/tunnel-e2e-config.js';
 import type { Config } from '../../../config/schema.js';
-import { isAllInterfacesHost } from '../../host.js';
 import { resolveGatewayEffectiveHost } from '../../../config/gateway-bind.js';
 import { extractToken } from '../../auth.js';
 import {
@@ -17,6 +16,13 @@ import { getTunnelRegistrationSecretMeta, resolveTunnelBrokerUrl } from '../../.
 import { getTunnelService } from '../../../tunnel/index.js';
 import { getCertStatusSummary } from '../../../tunnel/acme-cert-store.js';
 import { createPairingSecret, consumePairingSecret } from '../../../tunnel/pairing.js';
+import { buildMobilePairContext } from '../../../tunnel/pair-context.js';
+import { applyLanPairingGatewayPatch } from '../../../tunnel/enable-lan-pairing.js';
+import {
+  buildMobileConnectUrlOrder,
+  resolveMobilePairLanUrl,
+  validateMobilePairBaseUrl,
+} from '../../../tunnel/pair-url.js';
 import { consumePairingExchangeFailLimit } from '../../../tunnel/pairing-rate-limit.js';
 import { loadTunnelState } from '../../../tunnel/tunnel-state.js';
 import { logTunnelAudit } from '../../../tunnel/tunnel-audit.js';
@@ -85,6 +91,53 @@ function createTunnelMutationRateLimitMiddleware(): MiddlewareHandler {
 }
 
 export function registerTunnelPublicRoutes(app: Hono, service: GatewayService): void {
+  app.get('/api/tunnel/pair/ping', (c) => {
+    const config = service.currentConfig as Config;
+    const tunnel = getTunnelService();
+    const status = tunnel.getStatus();
+    const context = buildMobilePairContext({
+      config,
+      tunnelPublicUrl: status.publicUrl,
+      tunnelConnected: status.state === 'connected',
+    });
+    return c.json({
+      ok: true,
+      service: 'xopc-gateway',
+      mobilePairing: true,
+      port: context.port,
+      bindMode: context.bindMode,
+      listenHost: context.listenHost,
+      pairingReady: context.pairingReady,
+      blockReason: context.blockReason ?? null,
+      tunnelConnected: status.state === 'connected',
+      connectUrls: context.connectUrls,
+    });
+  });
+
+  app.post('/api/tunnel/pair/validate-url', async (c) => {
+    let body: { baseUrl?: unknown };
+    try {
+      body = (await c.req.json()) as { baseUrl?: unknown };
+    } catch {
+      return c.json({ error: 'Invalid JSON body' }, 400);
+    }
+    const baseUrl = typeof body.baseUrl === 'string' ? body.baseUrl : '';
+    const result = validateMobilePairBaseUrl(baseUrl);
+    if (result.ok === false) {
+      return c.json({
+        ok: false,
+        code: result.code,
+        message: result.message,
+      });
+    }
+    return c.json({
+      ok: true,
+      url: result.url,
+      loopback: false,
+      probePath: '/api/tunnel/pair/ping',
+    });
+  });
+
   app.post('/api/tunnel/exchange-token', async (c) => {
     const clientIp =
       getClientIpFromHeaders({
@@ -122,12 +175,10 @@ export function registerTunnelPublicRoutes(app: Hono, service: GatewayService): 
     }
 
     const persisted = loadTunnelState();
-    const gateway = service.currentConfig.gateway;
-    const host = resolveGatewayEffectiveHost(service.currentConfig);
-    const port = gateway.port ?? 18790;
-    const lanHost = isAllInterfacesHost(host) ? '127.0.0.1' : host;
-    const lanUrl =
-      lanHost === '127.0.0.1' || lanHost === 'localhost' ? null : `http://${lanHost}:${port}`.replace(/\/+$/, '');
+    const config = service.currentConfig as Config;
+    const publicUrl = persisted?.publicUrl?.trim() || null;
+    const lanUrl = resolveMobilePairLanUrl(config);
+    const connectUrls = buildMobileConnectUrlOrder({ baseUrl: publicUrl, lanUrl });
 
     logTunnelAudit(
       'tunnel.exchange_token',
@@ -137,8 +188,9 @@ export function registerTunnelPublicRoutes(app: Hono, service: GatewayService): 
 
     return c.json({
       token,
-      baseUrl: persisted?.publicUrl ?? null,
+      baseUrl: publicUrl,
       lanUrl,
+      connectUrls,
     });
   });
 }
@@ -146,6 +198,65 @@ export function registerTunnelPublicRoutes(app: Hono, service: GatewayService): 
 export function registerTunnelRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const tunnel = getTunnelService();
   const tunnelMutationLimit = createTunnelMutationRateLimitMiddleware();
+
+  authenticated.get('/api/tunnel/pair/context', async (c) => {
+    await configureTunnelFromService(deps);
+    const config = deps.service.currentConfig as Config;
+    const status = tunnel.getStatus();
+    const context = buildMobilePairContext({
+      config,
+      tunnelPublicUrl: status.publicUrl,
+      tunnelConnected: status.state === 'connected',
+    });
+    return c.json(context);
+  });
+
+  authenticated.post('/api/tunnel/pair/enable-lan', tunnelMutationLimit, async (c) => {
+    const token = requireGatewayToken(c);
+    if (!token) return c.json({ error: 'Gateway token required' }, 401);
+
+    const config = deps.service.currentConfig as Config;
+    const patchResult = applyLanPairingGatewayPatch(config);
+    if (patchResult.ok === false) {
+      return c.json({ ok: false, error: { message: patchResult.message, code: 'LAN_PAIRING_CONFIG' } }, 400);
+    }
+
+    if (patchResult.changed) {
+      const saveResult = await deps.service.saveConfig(config);
+      if (!saveResult.saved) {
+        return c.json(
+          { ok: false, error: { message: saveResult.error ?? 'Failed to save config', code: 'SAVE_FAILED' } },
+          500,
+        );
+      }
+      logTunnelAudit(
+        'tunnel.enable_lan_pairing',
+        { gatewayTokenHash: hashGatewayToken(token).slice(0, 12) },
+        'Gateway bind switched to LAN for mobile pairing',
+      );
+    }
+
+    const status = tunnel.getStatus();
+    let context = buildMobilePairContext({
+      config: deps.service.currentConfig as Config,
+      tunnelPublicUrl: status.publicUrl,
+      tunnelConnected: status.state === 'connected',
+    });
+
+    if (patchResult.changed) {
+      context = {
+        ...context,
+        pairingReady: false,
+        blockReason: 'GATEWAY_LOOPBACK_ONLY',
+      };
+    }
+
+    return c.json({
+      ok: true,
+      requiresRestart: patchResult.changed,
+      context,
+    });
+  });
 
   authenticated.post('/api/tunnel/pair', tunnelMutationLimit, async (c) => {
     await configureTunnelFromService(deps);

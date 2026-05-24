@@ -6,7 +6,7 @@ export interface Config {
   agents?: {
     defaults?: {
       workspace?: string;
-      model?: string;
+      model?: string | { primary?: string; fallbacks?: string[] };
       maxTokens?: number;
       temperature?: number;
       max_tool_iterations?: number;
