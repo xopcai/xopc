@@ -1,11 +1,19 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildMobileConnectQrPayload, resolveLanGatewayUrl } from '../tunnel-qr.js';
+import { buildMobileConnectQrPayload, enumerateLanGatewayCandidates, resolveLanGatewayUrl } from '../tunnel-qr.js';
 
 describe('tunnel-qr', () => {
   it('returns null lanUrl for loopback gateway host', () => {
     expect(resolveLanGatewayUrl('127.0.0.1', 18790)).toBeNull();
     expect(resolveLanGatewayUrl('localhost', 18790)).toBeNull();
+  });
+
+  it('enumerateLanGatewayCandidates lists non-internal IPv4 urls', () => {
+    const entries = enumerateLanGatewayCandidates(28790);
+    for (const entry of entries) {
+      expect(entry.url).toMatch(/^http:\/\/\d+\.\d+\.\d+\.\d+:28790$/);
+      expect(entry.interfaceName.length).toBeGreaterThan(0);
+    }
   });
 
   it('builds mobile-connect payload with tunnel, lan, and pairing secret', () => {
