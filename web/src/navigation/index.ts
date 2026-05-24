@@ -18,6 +18,7 @@ const SETTINGS_SECTION_TO_TAB: Record<SettingsSectionId, Tab> = {
   'agent-browser': 'settingsAgentBrowser',
   'agent-runtime': 'settingsAgentRuntime',
   'agent-tools': 'settingsAgentTools',
+  'agent-skills': 'settingsAgentSkills',
   'agent-mcp': 'settingsAgentMcp',
   'agent-system-prompt': 'settingsAgentSystemPrompt',
   agents: 'settingsAgents',
@@ -44,6 +45,7 @@ const TAB_TO_SETTINGS_SECTION: Record<
   | 'settingsAgentBrowser'
   | 'settingsAgentRuntime'
   | 'settingsAgentTools'
+  | 'settingsAgentSkills'
   | 'settingsAgentMcp'
   | 'settingsAgentSystemPrompt'
   | 'settingsAgents'
@@ -70,6 +72,7 @@ const TAB_TO_SETTINGS_SECTION: Record<
   settingsAgentBrowser: 'agent-browser',
   settingsAgentRuntime: 'agent-runtime',
   settingsAgentTools: 'agent-tools',
+  settingsAgentSkills: 'agent-skills',
   settingsAgentMcp: 'agent-mcp',
   settingsAgentSystemPrompt: 'agent-system-prompt',
   settingsAgents: 'agents',
@@ -136,6 +139,7 @@ export const SETTINGS_SHELL_NAV_GROUPS: readonly SettingsShellNavGroup[] = [
       'settingsAgentBrowser',
       'settingsAgentRuntime',
       'settingsAgentTools',
+      'settingsAgentSkills',
       'settingsAgentMcp',
       'settingsAgentSystemPrompt',
     ],

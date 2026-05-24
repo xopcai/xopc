@@ -14,6 +14,7 @@ import { AgentDefaultsSkillsAllowlistPanel } from './agent-defaults-panels/skill
 import { AgentDefaultsSystemPromptPanel } from './agent-defaults-panels/system-prompt-panel';
 import { AgentDefaultsWorkspacePanel } from './agent-defaults-panels/workspace-panel';
 import { GoalsConfigSection } from '@/features/settings/goals-config-section';
+import { SkillsMarketplaceConfigSection } from '@/features/skills/skills-marketplace-config-section';
 
 import { AgentDefaultsRouteLayout } from './agent-defaults-route-layout';
 import { useAgentDefaultsForm } from './use-agent-defaults-form';
@@ -89,8 +90,22 @@ export function AgentToolsDefaultsPage() {
       {pp ? (
         <div className="flex flex-col gap-8">
           <AgentDefaultsCapabilitiesPanel {...pp} />
-          <AgentDefaultsSkillsAllowlistPanel {...pp} />
           <AgentDefaultsExpertPanel {...pp} />
+        </div>
+      ) : null}
+    </AgentDefaultsRouteLayout>
+  );
+}
+
+export function AgentSkillsDefaultsPage() {
+  const { vm, pp, a } = useAgentDefaultsPageModel();
+
+  return (
+    <AgentDefaultsRouteLayout sectionId="agent-skills" intro={a.routeIntro.skills} vm={vm}>
+      {pp ? (
+        <div className="flex flex-col gap-8">
+          <SkillsMarketplaceConfigSection hasToken={vm.hasToken} />
+          <AgentDefaultsSkillsAllowlistPanel {...pp} />
         </div>
       ) : null}
     </AgentDefaultsRouteLayout>
