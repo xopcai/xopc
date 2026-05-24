@@ -41,6 +41,8 @@ import type {
   ExtensionRecord,
   ResolvedExtensionConfig,
   DiscoveredExtension,
+  TuiExtensionRegistration,
+  TuiExtensionRegistrar,
 } from './types/index.js';
 import type { ActivationContext } from './activation-planner.js';
 import { ActivationPlanner } from './activation-planner.js';
@@ -105,6 +107,7 @@ export class ExtensionRegistryImpl implements ExtensionRegistry {
   channelPlugins: ChannelPlugin[] = [];
   private cliRegistrations: ExtensionCliRegistration[] = [];
   private reloadRegistrations: ExtensionReloadRegistration[] = [];
+  private tuiRegistrations: TuiExtensionRegistration[] = [];
 
   addExtension(record: ExtensionRecord): void {
     this.extensions.set(record.id, record);
@@ -213,6 +216,14 @@ export class ExtensionRegistryImpl implements ExtensionRegistry {
 
   getCliRegistrations(): readonly ExtensionCliRegistration[] {
     return this.cliRegistrations;
+  }
+
+  addTuiRegistration(extensionId: string, register: TuiExtensionRegistrar): void {
+    this.tuiRegistrations.push({ extensionId, register });
+  }
+
+  getTuiRegistrations(): readonly TuiExtensionRegistration[] {
+    return this.tuiRegistrations;
   }
 
   addReloadRegistration(reg: ExtensionReloadRegistration): void {

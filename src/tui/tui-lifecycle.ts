@@ -70,7 +70,7 @@ export function resolveCtrlCAction(params: {
   lastCtrlCAt: number;
   exitWindowMs?: number;
 }): { action: CtrlCAction; nextLastCtrlCAt: number } {
-  const exitWindowMs = Math.max(1, Math.floor(params.exitWindowMs ?? 1000));
+  const exitWindowMs = Math.max(1, Math.floor(params.exitWindowMs ?? 500));
   if (params.hasInput) {
     return { action: 'clear', nextLastCtrlCAt: params.now };
   }

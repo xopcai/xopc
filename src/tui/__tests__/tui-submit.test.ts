@@ -1,6 +1,40 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createSubmitBurstCoalescer, shouldEnableWindowsGitBashPasteFallback } from '../tui-submit.js';
+import { createEditorSubmitHandler, createSubmitBurstCoalescer, shouldEnableWindowsGitBashPasteFallback } from '../tui-submit.js';
+
+describe('createEditorSubmitHandler', () => {
+  it('steers instead of sending when the agent is busy', () => {
+    const steerWhileBusy = vi.fn();
+    const sendMessage = vi.fn();
+    const submit = createEditorSubmitHandler({
+      editor: { setText: vi.fn(), addToHistory: vi.fn() },
+      handleCommand: vi.fn(),
+      sendMessage,
+      handleBangLine: vi.fn(),
+      isAgentBusy: () => true,
+      steerWhileBusy,
+    });
+
+    submit('change direction please');
+    expect(steerWhileBusy).toHaveBeenCalledWith('change direction please');
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('still sends slash commands while busy', () => {
+    const handleCommand = vi.fn();
+    const submit = createEditorSubmitHandler({
+      editor: { setText: vi.fn(), addToHistory: vi.fn() },
+      handleCommand,
+      sendMessage: vi.fn(),
+      handleBangLine: vi.fn(),
+      isAgentBusy: () => true,
+      steerWhileBusy: vi.fn(),
+    });
+
+    submit('/abort');
+    expect(handleCommand).toHaveBeenCalledWith('/abort');
+  });
+});
 
 describe('createSubmitBurstCoalescer', () => {
   it('merges rapid single-line submits before flushing', () => {

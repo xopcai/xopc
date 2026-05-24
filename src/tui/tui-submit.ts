@@ -15,6 +15,8 @@ export function createEditorSubmitHandler(params: {
   handleCommand: (value: string) => void | Promise<void>;
   sendMessage: (value: string) => void | Promise<void>;
   handleBangLine: (value: string) => void | Promise<void>;
+  isAgentBusy?: () => boolean;
+  steerWhileBusy?: (value: string) => void | Promise<void>;
 }) {
   return (text: string) => {
     const raw = text;
@@ -35,6 +37,11 @@ export function createEditorSubmitHandler(params: {
 
     if (value.startsWith('/')) {
       void params.handleCommand(value);
+      return;
+    }
+
+    if (params.isAgentBusy?.() && params.steerWhileBusy) {
+      void params.steerWhileBusy(value);
       return;
     }
 

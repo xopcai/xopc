@@ -1,6 +1,7 @@
 import type { Component } from '@earendil-works/pi-tui';
 import { Container, Spacer, Text } from '@earendil-works/pi-tui';
 
+import { BashExecutionComponent } from './bash-execution.js';
 import { theme } from '../theme.js';
 import { AssistantMessageComponent } from './assistant-message.js';
 import { ToolExecutionComponent } from './tool-execution.js';
@@ -10,6 +11,7 @@ const MAX_COMPONENTS = 180;
 
 export class ChatLog extends Container {
   private toolById = new Map<string, ToolExecutionComponent>();
+  private bashBlocks: BashExecutionComponent[] = [];
   private streamingRuns = new Map<string, AssistantMessageComponent>();
   /** After finalizeAssistant, late tool_start can still arrive; keep the bubble to insert tools above. */
   private assistantAnchorByRunId = new Map<string, AssistantMessageComponent>();
@@ -44,6 +46,7 @@ export class ChatLog extends Container {
   clearAll(): void {
     this.clear();
     this.toolById.clear();
+    this.bashBlocks = [];
     this.streamingRuns.clear();
     this.assistantAnchorByRunId.clear();
   }
@@ -58,6 +61,20 @@ export class ChatLog extends Container {
   addUser(text: string): void {
     this.assistantAnchorByRunId.clear();
     this.append(new UserMessageComponent(text));
+  }
+
+  /** Stream local `!command` output in a bordered block. */
+  addBashExecution(
+    command: string,
+    ui: import('@earendil-works/pi-tui').TUI,
+    excludeFromContext: boolean,
+  ): BashExecutionComponent {
+    this.assistantAnchorByRunId.clear();
+    const component = new BashExecutionComponent(command, ui, excludeFromContext);
+    component.setExpanded(this.toolsExpanded);
+    this.bashBlocks.push(component);
+    this.append(component);
+    return component;
   }
 
   startAssistant(text: string, runId: string): void {
@@ -136,6 +153,9 @@ export class ChatLog extends Container {
     this.toolsExpanded = expanded;
     for (const tool of this.toolById.values()) {
       tool.setExpanded(expanded);
+    }
+    for (const bash of this.bashBlocks) {
+      bash.setExpanded(expanded);
     }
   }
 }

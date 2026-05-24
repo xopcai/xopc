@@ -1,8 +1,9 @@
 import {
-  KeybindingsManager,
   TUI_KEYBINDINGS,
   type KeybindingDefinitions,
 } from '@earendil-works/pi-tui';
+
+export { createXopcTuiKeybindingsManager, XopcKeybindingsManager } from './tui-keybindings-file.js';
 
 /** App-level bindings wired by xopc TUI (subset of pi coding-agent). */
 export type XopcTuiAppKeybinding =
@@ -45,7 +46,7 @@ declare module '@earendil-works/pi-tui' {
 export const XOPC_TUI_KEYBINDINGS = {
   ...TUI_KEYBINDINGS,
   'app.interrupt': { defaultKeys: 'escape', description: 'Abort run (or cancel overlay)' },
-  'app.clear': { defaultKeys: 'ctrl+c', description: 'Clear input; repeat to exit' },
+  'app.clear': { defaultKeys: 'ctrl+c', description: 'Clear input; repeat within 0.5s to exit' },
   'app.exit': { defaultKeys: 'ctrl+d', description: 'Exit when input empty' },
   'app.suspend': {
     defaultKeys: process.platform === 'win32' ? [] : 'ctrl+z',
@@ -109,7 +110,3 @@ export const XOPC_TUI_HOTKEY_ORDER: XopcTuiAppKeybinding[] = [
   'app.message.followUp',
   'app.message.dequeue',
 ];
-
-export function createXopcTuiKeybindingsManager(): KeybindingsManager {
-  return new KeybindingsManager(XOPC_TUI_KEYBINDINGS);
-}

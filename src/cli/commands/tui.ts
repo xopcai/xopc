@@ -20,6 +20,7 @@ function createTuiCommand(_ctx: CLIContext): Command {
     .option('-s, --session <key>', 'Session key to resume')
     .option('-m, --message <text>', 'Send a message on launch')
     .option('--local', 'Run in embedded mode (no gateway required)')
+    .option('--theme <name>', 'Theme: auto, dark, light, or custom name from ~/.xopc/themes/')
     .option('--thinking <level>', 'Thinking level override')
     .action(async (options: Record<string, string | boolean | undefined>) => {
       const { runTui } = await import('../../tui/tui.js');
@@ -30,6 +31,7 @@ function createTuiCommand(_ctx: CLIContext): Command {
         message: typeof options.message === 'string' ? options.message : undefined,
         local: options.local === true,
         thinking: typeof options.thinking === 'string' ? options.thinking : undefined,
+        theme: typeof options.theme === 'string' ? options.theme : undefined,
       });
     });
 

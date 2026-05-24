@@ -62,6 +62,7 @@ For switching sessions and models from the TUI, prefer **gateway mode**.
 | `-s, --session <key>` | Session key (default when omitted: `cli:tui`). |
 | `-m, --message <text>` | After connect, send this message once and keep the UI open. |
 | `--local` | Embedded mode (no gateway). |
+| `--theme <name>` | Theme: `auto`, `dark`, `light`, or a custom name from `~/.xopc/themes/`. |
 | `--thinking <level>` | Thinking level override passed through to the agent (same semantics as gateway/agent). |
 
 Examples:
@@ -84,6 +85,23 @@ xopc tui --url http://192.168.1.10:18790 --token "$TOKEN"
 | **Ctrl+C** | If the input buffer is non-empty: clear it. If empty: first press warns; second press within ~1s exits. |
 | **Ctrl+O** | Toggle tool blocks expanded / collapsed. |
 | **Ctrl+T** | Toggle thinking content in the stream display. |
+| **Ctrl+Shift+P** | Session picker (search, rename, delete). |
+| **Ctrl+L** | Model picker. |
+| **Ctrl+P / Shift+Ctrl+P** | Cycle models (respects `/scoped-models` filter). |
+
+Settings and customization:
+
+| Input | Action |
+|-------|--------|
+| **`/settings`** | Overlay: theme, thinking display, tool expansion, double-escape action, terminal progress. |
+| **`/scoped-models`** | Limit which models **Ctrl+P** cycles through. |
+| **`/hotkeys`** | Show resolved shortcuts (reads `~/.xopc/keybindings.json` overrides). |
+| **`/reload-keybindings`** | Reload keybindings without restarting. |
+| **`XOPC_THEME`** | Env override for theme id (`auto`, `dark`, `light`, or custom). |
+| **`~/.xopc/tui-settings.json`** | Persisted TUI preferences from `/settings`. |
+| **`~/.xopc/keybindings.json`** | Custom `app.*` keybindings (pi-compatible names). |
+| **`/compact`** | Compact session transcript (gateway API or embedded). Queues messages while running. |
+| **`@path` / quoted paths** | File autocomplete when `fd` is on PATH (pi-tui). |
 
 Lines starting with **`/`** are treated as **slash commands** (not sent to the model). The editor offers autocomplete for command names.
 
@@ -102,8 +120,57 @@ Lines starting with **`/`** are treated as **slash commands** (not sent to the m
 | `/abort` | Abort the current run. |
 | `/thinking` | Toggle thinking display (same effect as **Ctrl+T**). |
 | `/tools` | Toggle tools expanded (same as **Ctrl+O**). |
+| `/settings` | Open TUI settings overlay (theme, thinking, tools, terminal progress). |
+| `/scoped-models` | Choose models for **Ctrl+P** cycling. |
+| `/resume` | Open session picker (**Ctrl+Shift+P**). |
+| `/hotkeys` | Show resolved keyboard shortcuts. |
+| `/reload-keybindings` | Reload `~/.xopc/keybindings.json`. |
 | `/status` | Show connection and activity text (**gateway mode only**). |
 | `/exit`, `/quit` | Leave the TUI. |
+
+---
+
+## TUI extensions (Phase 4)
+
+Extensions can contribute terminal UI when **`xopc tui --local`** starts. Register deferred callbacks from `register()`:
+
+```typescript
+import type { ExtensionApi } from 'xopc/extension-sdk';
+
+export function register(api: ExtensionApi) {
+  api.registerTui((host) => {
+    host.setFooterWidget('status', ['My extension · ready']);
+    host.registerSlashCommand('my-tui', 'Local TUI command', async (args) => {
+      host.notify(`Args: ${args || '(none)'}`);
+    });
+    host.addAutocompleteProvider(async (query) => [
+      { name: `tag-${query || 'all'}`, description: 'Example @ mention' },
+    ]);
+    host.registerToolRenderer('my_tool', (ctx) => [
+      `Rendered by extension: ${ctx.toolName}`,
+      ctx.resultText,
+    ]);
+  });
+}
+```
+
+| Host API | Purpose |
+|----------|---------|
+| `setHeaderWidget` / `setFooterWidget` | Extra lines under the header or footer |
+| `setStatus` | Short status chips in the footer stats row |
+| `addAutocompleteProvider` | `@`-prefix suggestions in the editor |
+| `registerToolRenderer` | Custom expanded tool output |
+| `registerSlashCommand` | TUI-local `/commands` (not forwarded to the agent) |
+| `notify` | System message in the chat log |
+| `showOverlay` / `hideOverlay` | Full-screen pi-tui overlay |
+
+**Notes:**
+
+- **`--local` only** for full extension load (tools + hooks + TUI host share one registry with `AgentService`).
+- **Gateway mode** still gets built-in **`@skill`** autocomplete; extension `registerTui` callbacks run only when extensions are loaded in-process.
+- Types: `TuiExtensionHostContract` and related types are exported from `xopc/extension-sdk`.
+
+Type **`@`** in the editor to autocomplete skill names from workspace / `~/.xopc/skills` / bundled skills.
 
 ---
 

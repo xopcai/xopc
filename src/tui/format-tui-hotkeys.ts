@@ -1,6 +1,7 @@
 import type { KeybindingsManager } from '@earendil-works/pi-tui';
 
 import { XOPC_TUI_HOTKEY_ORDER, type XopcTuiAppKeybinding } from './xopc-tui-keybindings.js';
+import { getTuiKeybindingsPath } from './tui-keybindings-file.js';
 
 function formatKeyIds(manager: KeybindingsManager, id: XopcTuiAppKeybinding): string {
   const keys = manager.getKeys(id);
@@ -16,5 +17,6 @@ export function formatXopcTuiHotkeys(manager: KeybindingsManager): string {
     const desc = def.description ?? id;
     lines.push(`  ${formatKeyIds(manager, id)} — ${desc}`);
   }
+  lines.push('', `Customize in ${getTuiKeybindingsPath()} (/reload-keybindings to apply).`);
   return lines.join('\n');
 }

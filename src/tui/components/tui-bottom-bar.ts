@@ -2,6 +2,7 @@ import type { Component } from '@earendil-works/pi-tui';
 import { truncateToWidth, visibleWidth } from '@earendil-works/pi-tui';
 
 import { theme } from '../theme.js';
+import { formatContextUsageLabel } from '../tui-context-usage.js';
 import { getGitBranchCached } from '../tui-git-branch.js';
 import type { TuiState } from '../tui-types.js';
 
@@ -29,10 +30,21 @@ function shortenPath(cwd: string): string {
  * cwd · session, then a single padded row: status/tokens on the left, model on the right.
  */
 export class TuiBottomBar implements Component {
+  private extensionLines: string[] = [];
+  private extensionStatusParts: string[] = [];
+
   constructor(
     private readonly getState: () => TuiState,
     private readonly getThinkingDefault: () => string | undefined,
   ) {}
+
+  setExtensionLines(lines: string[]): void {
+    this.extensionLines = lines;
+  }
+
+  setExtensionStatusParts(parts: string[]): void {
+    this.extensionStatusParts = parts;
+  }
 
   invalidate(): void {}
 
@@ -57,8 +69,20 @@ export class TuiBottomBar implements Component {
     if (state.sessionInfo.totalTokens != null) {
       leftParts.push(formatTokens(state.sessionInfo.totalTokens));
     }
+    const ctxLabel = formatContextUsageLabel(state.sessionInfo.contextUsagePercent ?? null);
+    if (ctxLabel) {
+      leftParts.push(ctxLabel);
+    }
+    if (state.isCompacting) {
+      leftParts.push('compact…');
+    } else if (state.compactionQueue.length > 0) {
+      leftParts.push(`C${state.compactionQueue.length}`);
+    }
     if (state.messageFollowUpQueue.length > 0) {
       leftParts.push(`Q${state.messageFollowUpQueue.length}`);
+    }
+    for (const part of this.extensionStatusParts) {
+      leftParts.push(part);
     }
     let statsLeft = leftParts.join(' · ');
 
@@ -97,6 +121,10 @@ export class TuiBottomBar implements Component {
     }
 
     const statsDimmed = theme.dim(statsLine);
-    return [pwdLine, statsDimmed];
+    const lines = [pwdLine, statsDimmed];
+    for (const extLine of this.extensionLines) {
+      lines.push(truncateToWidth(theme.dim(extLine), width, theme.dim('…')));
+    }
+    return lines;
   }
 }

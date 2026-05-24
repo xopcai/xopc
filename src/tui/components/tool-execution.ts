@@ -1,6 +1,8 @@
 import { Container, Spacer, Text } from '@earendil-works/pi-tui';
 
 import { theme } from '../theme.js';
+import { isDiffFriendlyTool, looksLikeUnifiedDiff, renderUnifiedDiff } from '../tui-tool-diff.js';
+import { renderToolWithExtensions } from '../extension-host/tool-renderers.js';
 
 const MAX_ARG_VALUE_LENGTH = 120;
 
@@ -75,6 +77,17 @@ export class ToolExecutionComponent extends Container {
   }
 
   private formatToolExecution(): string {
+    const custom = renderToolWithExtensions({
+      toolName: this.toolName,
+      args: this.args,
+      resultText: this.resultText,
+      isError: this.isError,
+      expanded: this.expanded,
+    });
+    if (custom && custom.length > 0) {
+      return custom.join('\n');
+    }
+
     // Title line: 🔧 tool_name (args_summary)
     const argsStr = formatArgsSummary(this.args);
     const titleParts = [theme.toolTitle(theme.bold(this.toolName))];
@@ -86,7 +99,13 @@ export class ToolExecutionComponent extends Container {
     // Output / result — collapsed: single-line summary; expanded: full output
     const output = this.resultText;
     if (output) {
-      if (this.expanded) {
+      const useDiff =
+        this.expanded &&
+        isDiffFriendlyTool(this.toolName) &&
+        looksLikeUnifiedDiff(output);
+      if (useDiff) {
+        text += `\n${renderUnifiedDiff(output)}`;
+      } else if (this.expanded) {
         text += `\n${theme.toolOutput(output)}`;
       } else {
         // Compact single-line preview: flatten to one line and truncate

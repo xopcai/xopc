@@ -54,16 +54,16 @@ describe('resolveCtrlCAction', () => {
   });
 
   it('exits on second ctrl+c within the exit window', () => {
-    expect(resolveCtrlCAction({ hasInput: false, now: 2800, lastCtrlCAt: 2000 })).toEqual({
+    expect(resolveCtrlCAction({ hasInput: false, now: 2300, lastCtrlCAt: 2000 })).toEqual({
       action: 'exit',
       nextLastCtrlCAt: 2000,
     });
   });
 
   it('shows warning when exit window has elapsed', () => {
-    expect(resolveCtrlCAction({ hasInput: false, now: 3501, lastCtrlCAt: 2000 })).toEqual({
+    expect(resolveCtrlCAction({ hasInput: false, now: 2600, lastCtrlCAt: 2000 })).toEqual({
       action: 'warn',
-      nextLastCtrlCAt: 3501,
+      nextLastCtrlCAt: 2600,
     });
   });
 });

@@ -15,6 +15,7 @@ import type { ChannelPlugin } from '../../channels/plugin-types.js';
 import type { SessionMetadata } from '../../session/types.js';
 import type { FlagConfig, FlagValue, ShortcutConfig } from './phase4.js';
 import type { ProviderPlugin } from './providers.js';
+import type { TuiExtensionRegistrar } from './tui.js';
 
 // ============================================================================
 // Extension Definition
@@ -182,6 +183,12 @@ export interface ExtensionApi {
   registerFlag(name: string, config: FlagConfig, extensionId?: string): void;
   getFlag(name: string): FlagValue;
   registerShortcut(key: string, config: ShortcutConfig): void;
+
+  /**
+   * Register TUI contributions (footer/header widgets, autocomplete, tool renderers).
+   * Callback runs when `xopc tui` starts — not during gateway-only extension load.
+   */
+  registerTui(register: TuiExtensionRegistrar): void;
 }
 
 // ============================================================================

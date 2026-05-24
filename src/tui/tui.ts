@@ -1,10 +1,8 @@
 import {
-  CombinedAutocompleteProvider,
   Container,
   Loader,
   ProcessTerminal,
   setKeybindings,
-  Text,
   TUI,
 } from '@earendil-works/pi-tui';
 import { mkdtempSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
@@ -24,6 +22,7 @@ import {
 import { ChatLog } from './components/chat-log.js';
 import { CustomEditor } from './components/custom-editor.js';
 import { TuiBottomBar } from './components/tui-bottom-bar.js';
+import { TuiHeader } from './components/tui-header.js';
 import { StreamAssembler } from './stream-assembler.js';
 import { createTuiCommandHandler, getSlashCommands } from './tui-commands.js';
 import { createLocalShellRunner } from './tui-local-shell.js';
@@ -32,7 +31,12 @@ import {
   drainAndStopTuiSafely,
   resolveCtrlCAction,
 } from './tui-lifecycle.js';
-import { openModelPickerOverlay, openSessionPickerOverlay } from './tui-picker-overlay.js';
+import {
+  openModelPickerOverlay,
+  openScopedModelsOverlay,
+  openSessionPickerOverlay,
+  openSettingsOverlay,
+} from './tui-picker-overlay.js';
 import { createOverlayHandlers } from './tui-overlays.js';
 import {
   createEditorSubmitHandler,
@@ -42,9 +46,28 @@ import {
 import { appendHistoryToChatLog } from './chat-history.js';
 import { installTuiStdioFilter } from './tui-stdio-filter.js';
 import { withTuiSuspended } from './tui-suspend.js';
+import { saveClipboardImageToTempFile } from './clipboard-image.js';
+import {
+  applyThemeById,
+  getBashExcludeBorderColor,
+  getBashModeBorderColor,
+  getThinkingBorderColor,
+  initTuiTheme,
+} from './theme-manager.js';
 import { editorTheme, theme } from './theme.js';
+import { loadTuiSettings, saveTuiSettings, type TuiSettings } from './tui-settings.js';
+import { resolveFdPath } from './tui-fd-path.js';
+import packageJson from '../../package.json' with { type: 'json' };
 import { createInitialState, type TuiOptions, type TuiResult, type TuiState } from './tui-types.js';
 import { createXopcTuiKeybindingsManager } from './xopc-tui-keybindings.js';
+import {
+  filterModelsForCycle,
+  loadScopedModelRefs,
+  saveScopedModelRefs,
+} from './tui-scoped-models.js';
+import { loadExtensionsForTuiLocalMode } from './extension-host/load-extensions.js';
+import { createTuiExtensionRuntime } from './extension-host/runtime.js';
+import type { ExtensionRegistryImpl } from '../extensions/loader.js';
 
 export type { TuiOptions, TuiResult };
 
@@ -77,23 +100,42 @@ function nextThinkLevel(current: string | undefined): ThinkLevel {
   return THINK_LEVEL_CYCLE[(base + 1) % THINK_LEVEL_CYCLE.length]!;
 }
 
+const DOUBLE_ESCAPE_WINDOW_MS = 500;
+
 export async function runTui(opts: TuiOptions): Promise<TuiResult> {
   const stdioFilter = installTuiStdioFilter();
   const restoreStdio = () => stdioFilter.restore();
 
   const isLocalMode = opts.local === true;
   const sessionKey = opts.session ?? 'cli:tui';
+  let tuiSettings = loadTuiSettings();
+  initTuiTheme({ themeId: opts.theme ?? tuiSettings.theme });
   const state = createInitialState(sessionKey);
+  state.scopedModelRefs = loadScopedModelRefs();
+  state.showThinking = tuiSettings.showThinking;
+  state.toolsExpanded = tuiSettings.toolsExpanded;
   const assembler = new StreamAssembler();
 
+  let extensionRegistry: ExtensionRegistryImpl | undefined;
+  if (isLocalMode) {
+    extensionRegistry = await loadExtensionsForTuiLocalMode();
+  }
+
   const client: TuiBackend = isLocalMode
-    ? new EmbeddedBackend()
+    ? new EmbeddedBackend({ extensionRegistry })
     : new GatewaySseBackend({ url: opts.url ?? 'http://localhost:3120', token: opts.token });
 
   const keybindings = createXopcTuiKeybindingsManager();
   setKeybindings(keybindings);
 
   let modelChoices: TuiModelChoice[] = [];
+  const cycleModelChoices = (): TuiModelChoice[] =>
+    filterModelsForCycle(modelChoices, state.scopedModelRefs);
+
+  const refreshCycleModels = () => {
+    bottomBar.invalidate();
+    tui.requestRender();
+  };
 
   const tui = new TUI(new ProcessTerminal());
   const dedupeBackspace = createBackspaceDeduper();
@@ -105,10 +147,16 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     return { data: next };
   });
 
-  const header = new Text('', 1, 0);
+  const header = new TuiHeader(() => ({
+    version: packageJson.version ?? 'dev',
+    connectionLabel: client.connectionLabel,
+    sessionKey: state.currentSessionKey,
+    showHints: tuiSettings.showStartupHints,
+  }));
   const statusContainer = new Container();
   const bottomBar = new TuiBottomBar(() => state, () => opts.thinking);
   const chatLog = new ChatLog();
+  chatLog.setToolsExpanded(state.toolsExpanded);
   const editor = new CustomEditor(tui, editorTheme, keybindings);
   const root = new Container();
   root.addChild(header);
@@ -119,21 +167,70 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
   tui.addChild(root);
   tui.setFocus(editor);
 
+  let isBashMode = false;
+  let isBashExcludeContext = false;
+
+  const updateEditorBorderColor = () => {
+    if (isBashMode) {
+      editor.borderColor = isBashExcludeContext
+        ? getBashExcludeBorderColor()
+        : getBashModeBorderColor();
+    } else {
+      const level = state.sessionInfo.thinkingLevel ?? opts.thinking ?? 'off';
+      editor.borderColor = getThinkingBorderColor(level);
+    }
+    tui.requestRender();
+  };
+
+  editor.onChange = (text: string) => {
+    const trimmed = text.trimStart();
+    const nextExclude = trimmed.startsWith('!!');
+    const nextBash = trimmed.startsWith('!');
+    if (nextBash !== isBashMode || nextExclude !== isBashExcludeContext) {
+      isBashMode = nextBash;
+      isBashExcludeContext = nextExclude;
+      updateEditorBorderColor();
+    }
+  };
+
   const { openOverlay, closeOverlay } = createOverlayHandlers(tui, editor);
 
   const slashCommands = getSlashCommands(isLocalMode);
-  editor.setAutocompleteProvider(
-    new CombinedAutocompleteProvider(
-      slashCommands.map((c) => ({ name: c.name, description: c.description })),
-      process.cwd(),
-    ),
-  );
+
+  const extensionRuntime = createTuiExtensionRuntime({
+    registry: extensionRegistry,
+    tui,
+    chatLog,
+    header,
+    bottomBar,
+    getState: () => state,
+    baseSlashCommands: slashCommands,
+    cwd: process.cwd(),
+    fdPath: resolveFdPath(),
+    openOverlay,
+    closeOverlay,
+    onInvalidate: () => {
+      updateHeader();
+      updateFooter();
+      tui.requestRender();
+    },
+  });
+
+  editor.setAutocompleteProvider(extensionRuntime.autocompleteProvider);
 
   let statusLoader: Loader | null = null;
   let statusStartedAt: number | null = null;
   let lastActivityStatus = '';
   let elapsedTimerId: ReturnType<typeof setInterval> | null = null;
-  const busyStates = new Set(['sending', 'waiting', 'streaming', 'running']);
+  const busyStates = new Set(['sending', 'waiting', 'streaming', 'running', 'compacting']);
+
+  const syncTerminalProgress = () => {
+    if (!tuiSettings.showTerminalProgress) {
+      tui.terminal.setProgress(false);
+      return;
+    }
+    tui.terminal.setProgress(busyStates.has(state.activityStatus));
+  };
 
   let lastStreamActivityAt = Date.now();
   let streamWatchdogId: ReturnType<typeof setInterval> | null = null;
@@ -167,16 +264,21 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
         statusContainer.addChild(statusLoader);
       }
       const elapsed = formatElapsed(statusStartedAt);
-      statusLoader.setMessage(`${state.activityStatus} • ${elapsed} | ${state.connectionStatus}`);
+      statusLoader.setMessage(
+        `${state.progressMessage ?? state.activityStatus} • ${elapsed} | ${state.connectionStatus}`,
+      );
       if (!elapsedTimerId) {
         elapsedTimerId = setInterval(() => {
           if (statusStartedAt && statusLoader) {
             const el = formatElapsed(statusStartedAt);
-            statusLoader.setMessage(`${state.activityStatus} • ${el} | ${state.connectionStatus}`);
+            statusLoader.setMessage(
+              `${state.progressMessage ?? state.activityStatus} • ${el} | ${state.connectionStatus}`,
+            );
           }
         }, 1000);
       }
     } else {
+      state.progressMessage = null;
       statusStartedAt = null;
       if (elapsedTimerId) {
         clearInterval(elapsedTimerId);
@@ -188,6 +290,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     }
     lastActivityStatus = state.activityStatus;
     bottomBar.invalidate();
+    syncTerminalProgress();
     tui.requestRender();
   };
 
@@ -202,10 +305,16 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
   };
 
   const updateHeader = () => {
-    const title = 'xopc tui';
-    header.setText(
-      theme.header(`${title} — ${client.connectionLabel} — session ${state.currentSessionKey}`),
-    );
+    header.invalidate();
+    syncTerminalTitle();
+  };
+
+  const syncTerminalTitle = () => {
+    const shortKey =
+      state.currentSessionKey.length > 48
+        ? `${state.currentSessionKey.slice(0, 45)}…`
+        : state.currentSessionKey;
+    tui.terminal.setTitle(`xopc · ${shortKey}`);
   };
 
   const updateFooter = () => {
@@ -225,6 +334,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
   const refreshSessionInfo = async () => {
     try {
       state.sessionInfo = await client.getSessionInfo(state.currentSessionKey);
+      updateEditorBorderColor();
       updateFooter();
       tui.requestRender();
     } catch {
@@ -247,9 +357,11 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
       streamWatchdogId = null;
     }
     client.stop();
+    tui.terminal.setProgress(false);
     void drainAndStopTuiSafely(tui).then(() => {
       restoreStdio();
       finishTui?.();
+      process.exit(0);
     });
   };
 
@@ -265,25 +377,27 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
   };
 
   const resolveModelChoiceIndex = (): number => {
-    if (modelChoices.length === 0) return -1;
+    const choices = cycleModelChoices();
+    if (choices.length === 0) return -1;
     const p = state.sessionInfo.modelProvider;
     const m = state.sessionInfo.model;
     if (p && m) {
-      const byParts = modelChoices.findIndex((x) => x.provider === p && x.id === m);
+      const byParts = choices.findIndex((x) => x.provider === p && x.id === m);
       if (byParts >= 0) return byParts;
     }
     if (m?.includes('/')) {
       const [a, b] = m.split('/', 2);
-      const bySlash = modelChoices.findIndex((x) => x.provider === a && x.id === b);
+      const bySlash = choices.findIndex((x) => x.provider === a && x.id === b);
       if (bySlash >= 0) return bySlash;
     }
     return 0;
   };
 
   const cycleModel = (dir: 'forward' | 'backward') => {
-    if (modelChoices.length === 0) {
+    const choices = cycleModelChoices();
+    if (choices.length === 0) {
       void refreshModelChoices().then(() => {
-        if (modelChoices.length === 0) {
+        if (cycleModelChoices().length === 0) {
           chatLog.addSystem('No models available to cycle.');
           tui.requestRender();
           return;
@@ -295,7 +409,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     const idx = resolveModelChoiceIndex();
     const base = idx >= 0 ? idx : 0;
     const delta = dir === 'forward' ? 1 : -1;
-    const next = modelChoices[(base + delta + modelChoices.length) % modelChoices.length]!;
+    const next = choices[(base + delta + choices.length) % choices.length]!;
     sendMessage(`/switch ${next.provider}/${next.id}`);
   };
 
@@ -349,9 +463,51 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     })();
   };
 
+  const isAgentBusy = () =>
+    state.activeRunId != null || state.isCompacting || busyStates.has(state.activityStatus);
+
+  const steerMessage = (text: string) => {
+    chatLog.addUser(text);
+    touchStreamingActivity();
+    tui.requestRender();
+    void client
+      .steerChat({ sessionKey: state.currentSessionKey, message: text })
+      .then(({ ok }) => {
+        if (!ok) {
+          chatLog.addSystem(
+            theme.dim(
+              'Could not steer — no active run or steer failed. Press Escape to abort, or Alt+Enter to queue a follow-up.',
+            ),
+          );
+        } else {
+          chatLog.addSystem(
+            theme.dim('Steered — message injects at the next tool boundary (pi-style).'),
+          );
+        }
+        tui.requestRender();
+      })
+      .catch((error: unknown) => {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        chatLog.addSystem(theme.dim(`Steer failed: ${errorMessage}`));
+        tui.requestRender();
+      });
+  };
+
   const sendMessage = (text: string) => {
+    if (state.isCompacting) {
+      state.compactionQueue.push(text);
+      chatLog.addSystem(
+        theme.dim(`Queued during compaction (${state.compactionQueue.length}). Sends when compact finishes.`),
+      );
+      bottomBar.invalidate();
+      tui.requestRender();
+      return;
+    }
+
     if (state.activeRunId) {
-      chatLog.addSystem('A response is still in progress. Use /abort or press Escape to cancel.');
+      chatLog.addSystem(
+        'A response is still in progress. Press Enter to steer, Alt+Enter to queue, or Escape to abort.',
+      );
       tui.requestRender();
       return;
     }
@@ -375,6 +531,70 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
       });
   };
 
+  const runCompaction = async () => {
+    if (state.isCompacting) return;
+    state.isCompacting = true;
+    setActivityStatus('compacting');
+    chatLog.addSystem(theme.dim('Compacting session…'));
+    tui.requestRender();
+    try {
+      const result = await client.compactSession(state.currentSessionKey, { force: true });
+      chatLog.addSystem(result.summary ?? (result.compacted ? 'Session compacted' : 'Nothing to compact'));
+      if (result.compacted) {
+        assembler.clear();
+        clearPendingToolCallIds();
+        state.historyLoaded = false;
+        await loadSessionHistory();
+      }
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      chatLog.addSystem(`❌ Compaction failed: ${errorMessage}`);
+    } finally {
+      state.isCompacting = false;
+      setActivityStatus('idle');
+      await refreshSessionInfo();
+      const queued = state.compactionQueue.shift();
+      if (queued && !state.activeRunId) {
+        sendMessage(queued);
+      }
+      updateFooter();
+      tui.requestRender();
+    }
+  };
+
+  const applyTuiSettings = (settings: TuiSettings) => {
+    tuiSettings = { ...settings };
+    saveTuiSettings(tuiSettings);
+    state.showThinking = tuiSettings.showThinking;
+    state.toolsExpanded = tuiSettings.toolsExpanded;
+    chatLog.setToolsExpanded(tuiSettings.toolsExpanded);
+    applyThemeById(tuiSettings.theme);
+    header.invalidate();
+    updateEditorBorderColor();
+    syncTerminalProgress();
+    bottomBar.invalidate();
+    tui.requestRender();
+  };
+
+  const previewTheme = (themeId: string) => {
+    applyThemeById(themeId);
+    updateEditorBorderColor();
+    tui.requestRender();
+  };
+
+  const reloadKeybindings = () => {
+    keybindings.reload();
+    setKeybindings(keybindings);
+    tui.requestRender();
+  };
+
+  const uiOverlays = {
+    openSessionPicker: () => {},
+    openScopedModels: () => {},
+    openSettings: () => {},
+    reloadKeybindings: () => reloadKeybindings(),
+  };
+
   const handleCommand = createTuiCommandHandler({
     state,
     chatLog,
@@ -386,6 +606,9 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     requestExit,
     updateFooter,
     keybindings,
+    uiOverlays,
+    runCompaction,
+    extensionSlashCommands: extensionRuntime.slashCommands,
   });
 
   const { runLocalShellLine } = createLocalShellRunner({
@@ -406,6 +629,8 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     handleCommand,
     sendMessage,
     handleBangLine: runLocalShellLine,
+    isAgentBusy,
+    steerWhileBusy: steerMessage,
   });
 
   const submitBurst = createSubmitBurstCoalescer({
@@ -421,9 +646,6 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     if (next === undefined) return;
     sendMessage(next);
   };
-
-  const isAgentBusy = () =>
-    state.activeRunId != null || busyStates.has(state.activityStatus);
 
   const handleFollowUp = () => {
     const text = editor.getText().trim();
@@ -539,9 +761,50 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     clearChatForSessionSwitch,
     loadSessionHistory,
     setModelChoices,
+    getScopedModelRefs: () => state.scopedModelRefs,
+    setScopedModelRefs: (refs: string[] | null) => {
+      state.scopedModelRefs = refs;
+      saveScopedModelRefs(refs);
+    },
+    refreshCycleModels,
+    getTuiSettings: () => ({ ...tuiSettings }),
+    applyTuiSettings,
+    previewTheme,
+    reloadKeybindings,
   };
 
-  editor.onEscape = () => void abortActive();
+  uiOverlays.openSessionPicker = () => void openSessionPickerOverlay(pickerSvc);
+  uiOverlays.openScopedModels = () => void openScopedModelsOverlay(pickerSvc);
+  uiOverlays.openSettings = () => openSettingsOverlay(pickerSvc);
+
+  const handleDoubleEscape = () => {
+    switch (tuiSettings.doubleEscapeAction) {
+      case 'tree':
+        chatLog.addSystem(theme.dim('Session tree is not available in xopc TUI yet.'));
+        break;
+      case 'fork':
+        chatLog.addSystem(theme.dim('Session fork is not available in xopc TUI yet.'));
+        break;
+      default:
+        break;
+    }
+    tui.requestRender();
+  };
+
+  editor.onEscape = () => {
+    if (state.activeRunId) {
+      void abortActive();
+      return;
+    }
+    if (editor.getText().trim().length > 0) return;
+    const now = Date.now();
+    if (now - state.lastEscapeAt <= DOUBLE_ESCAPE_WINDOW_MS) {
+      state.lastEscapeAt = 0;
+      handleDoubleEscape();
+      return;
+    }
+    state.lastEscapeAt = now;
+  };
   editor.onCtrlD = () => requestExit();
 
   editor.onAction('app.clear', handleCtrlC);
@@ -550,6 +813,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
   editor.onAction('app.thinking.cycle', () => {
     const cur = state.sessionInfo.thinkingLevel ?? opts.thinking ?? 'medium';
     sendMessage(`/think ${nextThinkLevel(cur)}`);
+    updateEditorBorderColor();
   });
   editor.onAction('app.model.cycleForward', () => cycleModel('forward'));
   editor.onAction('app.model.cycleBackward', () => cycleModel('backward'));
@@ -557,23 +821,28 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
   editor.onAction('app.session.resume', () => void openSessionPickerOverlay(pickerSvc));
   editor.onAction('app.tools.expand', () => {
     state.toolsExpanded = !state.toolsExpanded;
+    tuiSettings = { ...tuiSettings, toolsExpanded: state.toolsExpanded };
+    saveTuiSettings(tuiSettings);
     chatLog.setToolsExpanded(state.toolsExpanded);
     setActivityStatus(state.toolsExpanded ? 'tools expanded' : 'tools collapsed');
     tui.requestRender();
   });
   editor.onAction('app.thinking.toggle', () => {
     state.showThinking = !state.showThinking;
+    tuiSettings = { ...tuiSettings, showThinking: state.showThinking };
+    saveTuiSettings(tuiSettings);
     updateFooter();
     tui.requestRender();
   });
   editor.onAction('app.editor.external', openExternalEditor);
   editor.onPasteImage = () => {
-    chatLog.addSystem(
-      theme.dim(
-        'Clipboard image paste is not implemented in xopc TUI yet. Paste a file path or use the gateway UI.',
-      ),
-    );
-    tui.requestRender();
+    void (async () => {
+      const filePath = await saveClipboardImageToTempFile();
+      if (!filePath) return;
+      editor.insertTextAtCursor(filePath);
+      chatLog.addSystem(theme.dim(`Pasted image path: ${filePath}`));
+      tui.requestRender();
+    })();
   };
   editor.onAction('app.message.followUp', handleFollowUp);
   editor.onAction('app.message.dequeue', handleDequeue);
@@ -602,6 +871,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
   }, 5000);
 
   const onAgentRunEnded = () => {
+    state.progressMessage = null;
     void refreshSessionInfo().finally(() => {
       updateFooter();
       tui.requestRender();
@@ -679,8 +949,10 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
   process.on('SIGTERM', sigtermHandler);
 
   updateHeader();
+  updateEditorBorderColor();
   setConnectionStatus(isLocalMode ? 'starting local runtime' : 'connecting');
   updateFooter();
+  await extensionRuntime.activate();
   tui.start();
   client.start();
 

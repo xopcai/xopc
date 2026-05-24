@@ -18,7 +18,7 @@ import {
   type CompactionConfig,
   type WindowConfig,
 } from '../session/index.js';
-import type { SessionDetail } from '../session/types.js';
+import type { SessionDetail, SessionMetadata } from '../session/types.js';
 import {
   normalizeThinkLevel,
   normalizeReasoningLevel,
@@ -891,6 +891,29 @@ export class AgentService {
     return this.sessionStore.get(sessionKey);
   }
 
+  /** Session list for TUI picker (embedded / local). */
+  async listSessionsForUi(limit = 200): Promise<SessionMetadata[]> {
+    const result = await this.sessionStore.list({
+      limit,
+      sortBy: 'updatedAt',
+      sortOrder: 'desc',
+    });
+    return result.items;
+  }
+
+  async deleteSessionKey(key: string): Promise<boolean> {
+    return this.sessionStore.deleteSession(key);
+  }
+
+  async renameSessionKey(key: string, name: string): Promise<void> {
+    await this.sessionStore.updateMetadata(key, { name: name.trim() });
+  }
+
+  async clearSessionMessages(key: string): Promise<void> {
+    await this.sessionStore.saveMessages(key, []);
+    this.agentManager.removeAgent(key);
+  }
+
   async compactSession(
     sessionKey: string,
     options?: { instructions?: string; force?: boolean },
@@ -983,6 +1006,20 @@ export class AgentService {
       compactionStats: this.sessionStore.getCompactionStats(sessionKey),
       tokenEstimate: this.sessionStore.estimateTokenUsage(sessionKey, messages),
     };
+  }
+
+  /** Rough context usage for TUI footer (estimated tokens vs nominal budget). */
+  async getSessionContextUsage(sessionKey: string): Promise<{
+    estimatedTokens: number;
+    contextWindow: number;
+    usagePercent: number | null;
+  }> {
+    const messages = await this.sessionStore.load(sessionKey);
+    const contextWindow = this.getContextWindow();
+    const estimatedTokens = await this.sessionStore.estimateTokenUsage(sessionKey, messages);
+    const usagePercent =
+      contextWindow > 0 ? Math.min(100, Math.round((estimatedTokens / contextWindow) * 100)) : null;
+    return { estimatedTokens, contextWindow, usagePercent };
   }
 
   private async applyResolvedThinkingLevel(sessionKey: string, requestOverride?: string | null): Promise<void> {
