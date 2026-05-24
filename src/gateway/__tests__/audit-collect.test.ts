@@ -53,11 +53,6 @@ describe('collectGatewaySecurityFindings', () => {
   });
 
   it('warns about missing TLS on network bind without tunnel', () => {
-    const cfg = baseConfig({
-      bind: 'lan',
-      host: '0.0.0.0',
-      corsOrigins: ['http://192.168.1.10:18790'],
-    });
     const findings = collectGatewayConfigFindings({
       auth: { mode: 'token', token: 'b'.repeat(32) },
       host: '0.0.0.0',
