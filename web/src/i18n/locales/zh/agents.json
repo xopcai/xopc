@@ -111,6 +111,7 @@
     },
     "addModelFallback": "添加备用模型",
     "removeModelFallback": "移除备用模型",
+    "setDefaultWorkspace": "设为默认 ~/.xopc/workspace",
     "visionRegistryEmpty": "当前已配置的服务商下，没有标记为支持图像输入的模型。可在 models.json 中为模型设置包含 \"image\" 的 `input`，或选择上游目录中声明支持图像的模型。",
     "visionOutOfFilterNote": "网关模型目录未将该模型标为支持图像；建议尽量选择带图像能力的模型。",
     "imageGenRegistryEmpty": "当前没有已配置 API 凭证的图像生成服务商。请在配置或环境变量中填写对应密钥（如 OpenAI）后刷新。",

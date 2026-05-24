@@ -3,6 +3,11 @@ import {
   nativeSelectMaxWidthClass,
   selectControlBaseClass,
 } from '@/lib/form-field-width';
+import {
+  MAX_RECENT_DIRS,
+  pushRecentDir,
+  RECENT_DIRS_KEY,
+} from '@/features/fs/directory-path-utils';
 import { cn } from '@/lib/cn';
 
 export const RUN_HISTORY_FETCH_LIMIT = 400;
@@ -10,8 +15,12 @@ export const RUN_HISTORY_FETCH_LIMIT = 400;
 export const DEFAULT_SCHEDULE = '*/5 * * * *';
 
 /** Same storage key as chat composer so recent folders stay in sync. */
-export const RECENT_WD_STORAGE_KEY = 'xopc.recentWorkspaceDirs.v1';
-export const RECENT_WD_MAX = 10;
+export const RECENT_WD_STORAGE_KEY = RECENT_DIRS_KEY;
+export const RECENT_WD_MAX = MAX_RECENT_DIRS;
+
+export function pushRecentWorkspaceDirForCron(path: string): void {
+  pushRecentDir(path);
+}
 
 export function startOfLocalDay(d: Date): Date {
   const x = new Date(d);
@@ -38,22 +47,6 @@ export function navigateToSessionChat(sessionKey: string | undefined | null): vo
   window.dispatchEvent(
     new CustomEvent('navigate-to-chat', { detail: { sessionKey: sk }, bubbles: true }),
   );
-}
-
-export function pushRecentWorkspaceDirForCron(path: string): void {
-  const t = path.trim();
-  if (!t) return;
-  try {
-    const raw = localStorage.getItem(RECENT_WD_STORAGE_KEY);
-    const parsed = raw ? (JSON.parse(raw) as unknown) : [];
-    const prev = Array.isArray(parsed)
-      ? parsed.filter((x): x is string => typeof x === 'string' && x.trim().length > 0)
-      : [];
-    const next = [t, ...prev.filter((p) => p !== t)].slice(0, RECENT_WD_MAX);
-    localStorage.setItem(RECENT_WD_STORAGE_KEY, JSON.stringify(next));
-  } catch {
-    /* ignore */
-  }
 }
 
 export function inputClassName(disabled?: boolean): string {

@@ -4,6 +4,9 @@
 
 import { normalizeAgentId } from '@/lib/agent-id';
 
+/** Gateway default when `agents.defaults.workspace` is unset. */
+export const DEFAULT_AGENT_WORKSPACE = '~/.xopc/workspace';
+
 /** Empty string if `name` is blank; else `~/.xopc/workspace/<agentId>`. */
 export function suggestWorkspaceFromAgentName(name: string): string {
   const t = name.trim();
@@ -11,5 +14,5 @@ export function suggestWorkspaceFromAgentName(name: string): string {
     return '';
   }
   const id = normalizeAgentId(t);
-  return `~/.xopc/workspace/${id}`;
+  return `${DEFAULT_AGENT_WORKSPACE}/${id}`;
 }
