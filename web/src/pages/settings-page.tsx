@@ -60,7 +60,7 @@ export function SettingsPage() {
   }
 
   if (section === 'tunnel') {
-    return <Navigate to="/settings/remote-access" replace />;
+    return <Navigate to="/settings/remote-access?tab=public" replace />;
   }
 
   const id = section as SettingsSectionId;

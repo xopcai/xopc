@@ -1,8 +1,58 @@
 {
   "remoteAccess": {
+    "pageTitle": "Remote access",
+    "pageSubtitle": "Connect to this gateway from other devices. Pick one method — only one exposure mode should be active at a time.",
+    "tabsAria": "Remote access methods",
+    "tabs": {
+      "guide": "Overview",
+      "tailscale": "Tailscale",
+      "public": "Public internet",
+      "advanced": "Advanced"
+    },
+    "tabIntro": {
+      "guide": "Compare options and see what's active on this gateway.",
+      "tailscale": "Best for personal devices on your tailnet. Gateway stays on loopback; Tailscale Serve publishes HTTPS.",
+      "public": "Expose a public HTTPS URL for mobile apps and share links. Requires explicit consent.",
+      "advanced": "SSH port forwarding, LAN binding, and reverse-proxy settings."
+    },
+    "guide": {
+      "pickMethod": "Choose a connection method",
+      "recommended": "Recommended",
+      "configure": "Configure",
+      "statusActive": "Active",
+      "statusOff": "Off",
+      "statusConnecting": "Connecting",
+      "tailscaleCardTitle": "Tailscale Serve",
+      "tailscaleCardDesc": "HTTPS on your tailnet only. No public internet exposure.",
+      "publicCardTitle": "Public tunnel",
+      "publicCardDesc": "Share a public URL for mobile pairing and remote clients.",
+      "sshCardTitle": "SSH tunnel",
+      "sshCardDesc": "CLI forwarding when VPN or public tunnel are unavailable.",
+      "sshCardStatus": "CLI",
+      "lanCardTitle": "Same Wi‑Fi / LAN",
+      "lanCardDesc": "Use the gateway bind address on your local network.",
+      "lanCardStatus": "Local",
+      "conflictsTitle": "Configuration conflict",
+      "conflictsHint": "Only one exposure method should be active. Disable the other before switching.",
+      "oneAtATimeHint": "Tailscale Serve and the public tunnel cannot run together. Use Overview to check status before switching.",
+      "needToken": "Sign in to the gateway (valid token) to manage remote access."
+    },
+    "advanced": {
+      "lanTitle": "Same network (LAN)",
+      "lanSubtitle": "Reach the gateway from phones or laptops on the same Wi‑Fi without exposing it to the internet.",
+      "lanBody": "Set the gateway bind address to your LAN IP (or 0.0.0.0) and connect using http://<host>:<port>. Keep firewall rules in mind.",
+      "lanLink": "Open Gateway settings",
+      "proxyTitle": "Reverse proxy & remote URL",
+      "proxyBody": "When the gateway sits behind nginx, Caddy, or another proxy, configure trusted headers and optional gateway.remote for CLI clients.",
+      "proxyDocs": "Read remote access docs"
+    },
     "tailscale": {
       "title": "Tailscale Serve (recommended)",
       "subtitle": "Expose the gateway on your tailnet over HTTPS while keeping the process bound to loopback.",
+      "statusLabel": "Serve status",
+      "stepInstall": "Install Tailscale on this machine and sign in to your tailnet.",
+      "stepEnable": "Enable Serve below to publish HTTPS on your tailnet hostname.",
+      "stepCopy": "Open or copy the HTTPS URL on any device on the same tailnet.",
       "loading": "Loading Tailscale status…",
       "statusActive": "Tailscale Serve is active.",
       "statusOff": "Tailscale Serve is off.",
@@ -15,6 +65,7 @@
     "ssh": {
       "title": "SSH tunnel (CLI)",
       "subtitle": "Forward the remote gateway loopback port to your laptop when Tailscale is unavailable.",
+      "hint": "Replace user@your-host with your SSH login. Run on the machine where you want to use the gateway console.",
       "copy": "Copy command",
       "copied": "Copied"
     }
