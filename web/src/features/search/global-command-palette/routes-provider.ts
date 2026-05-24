@@ -1,6 +1,7 @@
 import type { StoredLanguage } from '@/lib/storage';
 import { messages, tabLabel, type Tab } from '@/i18n/messages';
 import { pathForTab, SETTINGS_SHELL_NAV_GROUPS } from '@/navigation';
+import { channelDetailPath } from '@/features/settings/channels/channels-routes';
 
 export type RouteHitSeed = {
   id: string;
@@ -42,6 +43,7 @@ function buildAgentDefaultsRouteSeeds(language: StoredLanguage): RouteHitSeed[] 
 export function buildRouteSeeds(language: StoredLanguage): RouteHitSeed[] {
   const m = messages(language);
   const r = m.commandPalette.routes;
+  const ch = m.channelsSettings;
   return [
     {
       id: 'route:chat',
@@ -90,7 +92,35 @@ export function buildRouteSeeds(language: StoredLanguage): RouteHitSeed[] {
       title: m.nav.channels,
       subtitle: r.channelsSubtitle,
       path: '/channels',
-      keywords: ['telegram', 'weixin'],
+      keywords: ['telegram', 'weixin', 'feishu', 'channel'],
+    },
+    {
+      id: 'route:channels:telegram',
+      title: ch.telegramTitle,
+      subtitle: r.channelsSubtitle,
+      path: channelDetailPath('telegram'),
+      keywords: ['telegram', 'bot', 'channel', 'pairing'],
+    },
+    {
+      id: 'route:channels:weixin',
+      title: ch.weixinTitle,
+      subtitle: r.channelsSubtitle,
+      path: channelDetailPath('weixin'),
+      keywords: ['weixin', 'wechat', 'channel', 'qr'],
+    },
+    {
+      id: 'route:channels:feishu',
+      title: ch.feishuTitle,
+      subtitle: r.channelsSubtitle,
+      path: channelDetailPath('feishu'),
+      keywords: ['feishu', 'lark', 'channel'],
+    },
+    {
+      id: 'route:channels:telegram:pairing',
+      title: `${ch.telegramTitle} — ${ch.hubPairingButton}`,
+      subtitle: r.channelsSubtitle,
+      path: channelDetailPath('telegram', { pairing: true }),
+      keywords: ['telegram', 'pairing', 'approve', 'dm'],
     },
     {
       id: 'route:cron',
