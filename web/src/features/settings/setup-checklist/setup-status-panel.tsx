@@ -18,6 +18,7 @@ const CHECKLIST_PATHS: Record<SetupChecklistItemId, string> = {
   defaultModel: '/settings/agent-defaults?tab=chat',
   channel: '/channels',
   skill: '/skills',
+  presets: '/agents',
 };
 
 function StatusPill({ ok, label }: { ok: boolean; label: string }) {
@@ -89,7 +90,11 @@ export function SetupStatusPanel() {
                 <p className="text-xs font-medium uppercase tracking-wide text-fg-subtle">{s.summaryProviders}</p>
                 <p className="mt-2 truncate text-sm font-medium text-fg">
                   {snapshot.providerConfigured
-                    ? s.labels.providersConfigured.replace('{{count}}', String(snapshot.providerCount))
+                    ? snapshot.providerMetaTotal > 0
+                      ? s.labels.providersMetaReady
+                          .replace('{{configured}}', String(snapshot.providerMetaConfigured))
+                          .replace('{{total}}', String(snapshot.providerMetaTotal))
+                      : s.labels.providersConfigured.replace('{{count}}', String(snapshot.providerCount))
                     : s.labels.providersMissing}
                 </p>
               </div>

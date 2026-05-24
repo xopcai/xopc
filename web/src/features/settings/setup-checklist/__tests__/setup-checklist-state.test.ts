@@ -6,6 +6,7 @@ const labels = {
   gatewayOnline: 'online',
   gatewayOffline: 'offline',
   providersConfigured: (count: number) => `${count} providers`,
+  providersMetaReady: (configured: number, total: number) => `${configured}/${total} ready`,
   providersMissing: 'no providers',
   modelConfigured: (model: string) => model,
   modelMissing: 'no model',
@@ -13,6 +14,8 @@ const labels = {
   channelMissing: 'no channel',
   skillsConfigured: (count: number) => `${count} skills`,
   skillsMissing: 'no skills',
+  presetsConfigured: 'presets ok',
+  presetsMissing: 'presets missing',
 };
 
 describe('buildSetupStatusSnapshot', () => {
@@ -22,6 +25,8 @@ describe('buildSetupStatusSnapshot', () => {
       sseConnected: true,
       config: { agents: { defaults: { model: '' } }, providers: {} },
       skillCount: 0,
+      presetsDone: false,
+      agentCount: 1,
       labels,
     });
 
@@ -39,11 +44,34 @@ describe('buildSetupStatusSnapshot', () => {
         providers: { openai: '***' },
       },
       skillCount: 0,
+      presetsDone: false,
+      agentCount: 1,
       labels,
     });
 
     expect(snapshot.requiredComplete).toBe(true);
     expect(snapshot.defaultModel).toBe('openai/gpt-4o');
     expect(snapshot.providerCount).toBe(1);
+  });
+
+  it('uses provider meta ratio in detail when available', () => {
+    const snapshot = buildSetupStatusSnapshot({
+      hasToken: true,
+      sseConnected: true,
+      config: {
+        agents: { defaults: { model: 'openai/gpt-4o' } },
+        providers: { openai: '***' },
+      },
+      skillCount: 0,
+      providerMeta: { configured: 3, total: 23 },
+      presetsDone: true,
+      agentCount: 2,
+      labels,
+    });
+
+    expect(snapshot.providerMetaConfigured).toBe(3);
+    expect(snapshot.providerMetaTotal).toBe(23);
+    expect(snapshot.checklist.find((i) => i.id === 'provider')?.detail).toBe('3/23 ready');
+    expect(snapshot.checklist.find((i) => i.id === 'presets')?.done).toBe(true);
   });
 });

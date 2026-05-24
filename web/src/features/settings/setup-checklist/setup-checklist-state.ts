@@ -5,7 +5,13 @@ import {
   isWeixinConfigured,
 } from '@/features/settings/channels/utils';
 
-export type SetupChecklistItemId = 'gateway' | 'provider' | 'defaultModel' | 'channel' | 'skill';
+export type SetupChecklistItemId =
+  | 'gateway'
+  | 'provider'
+  | 'defaultModel'
+  | 'channel'
+  | 'skill'
+  | 'presets';
 
 export type SetupChecklistItemState = {
   id: SetupChecklistItemId;
@@ -19,11 +25,15 @@ export type SetupStatusSnapshot = {
   gatewayConnected: boolean;
   providerConfigured: boolean;
   providerCount: number;
+  providerMetaConfigured: number;
+  providerMetaTotal: number;
   defaultModel: string;
   defaultModelConfigured: boolean;
   channelConfigured: boolean;
   skillInstalled: boolean;
   skillCount: number;
+  presetsDone: boolean;
+  agentCount: number;
   checklist: SetupChecklistItemState[];
   requiredComplete: boolean;
   allComplete: boolean;
@@ -63,10 +73,14 @@ export function buildSetupStatusSnapshot(input: {
   sseConnected: boolean;
   config: unknown;
   skillCount: number;
+  providerMeta?: { configured: number; total: number } | null;
+  presetsDone: boolean;
+  agentCount: number;
   labels: {
     gatewayOnline: string;
     gatewayOffline: string;
     providersConfigured: (count: number) => string;
+    providersMetaReady: (configured: number, total: number) => string;
     providersMissing: string;
     modelConfigured: (model: string) => string;
     modelMissing: string;
@@ -74,10 +88,15 @@ export function buildSetupStatusSnapshot(input: {
     channelMissing: string;
     skillsConfigured: (count: number) => string;
     skillsMissing: string;
+    presetsConfigured: string;
+    presetsMissing: string;
   };
 }): SetupStatusSnapshot {
   const providerCount = countConfiguredProviders(input.config);
-  const providerConfigured = providerCount > 0;
+  const providerMetaConfigured = input.providerMeta?.configured ?? providerCount;
+  const providerMetaTotal = input.providerMeta?.total ?? 0;
+  const providerConfigured =
+    providerMetaConfigured > 0 || providerCount > 0;
   const defaultModel = readDefaultModel(input.config);
   const defaultModelConfigured = defaultModel.length > 0;
   const gatewayConnected = input.hasToken && input.sseConnected;
@@ -94,7 +113,9 @@ export function buildSetupStatusSnapshot(input: {
       id: 'provider',
       done: providerConfigured,
       detail: providerConfigured
-        ? input.labels.providersConfigured(providerCount)
+        ? input.providerMeta && input.providerMeta.total > 0
+          ? input.labels.providersMetaReady(providerMetaConfigured, providerMetaTotal)
+          : input.labels.providersConfigured(providerCount)
         : input.labels.providersMissing,
     },
     {
@@ -118,6 +139,12 @@ export function buildSetupStatusSnapshot(input: {
         ? input.labels.skillsConfigured(input.skillCount)
         : input.labels.skillsMissing,
     },
+    {
+      id: 'presets',
+      done: input.presetsDone,
+      optional: true,
+      detail: input.presetsDone ? input.labels.presetsConfigured : input.labels.presetsMissing,
+    },
   ];
 
   const requiredComplete = checklist.filter((item) => !item.optional).every((item) => item.done);
@@ -127,11 +154,15 @@ export function buildSetupStatusSnapshot(input: {
     gatewayConnected,
     providerConfigured,
     providerCount,
+    providerMetaConfigured,
+    providerMetaTotal,
     defaultModel,
     defaultModelConfigured,
     channelConfigured,
     skillInstalled,
     skillCount: input.skillCount,
+    presetsDone: input.presetsDone,
+    agentCount: input.agentCount,
     checklist,
     requiredComplete,
     allComplete,
