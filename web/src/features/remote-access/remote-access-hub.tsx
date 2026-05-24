@@ -117,7 +117,9 @@ export function RemoteAccessHub() {
             })}
           </div>
 
-          <p className="text-sm leading-relaxed text-fg-muted">{intro}</p>
+          {activeTab !== 'public' ? (
+            <p className="text-sm leading-relaxed text-fg-muted">{intro}</p>
+          ) : null}
 
           <div
             role="tabpanel"

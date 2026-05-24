@@ -12,7 +12,7 @@
     "tabIntro": {
       "guide": "对比各方式并查看当前 Gateway 上的激活状态。",
       "tailscale": "适合 tailnet 内的个人设备。Gateway 仍绑定 loopback，由 Tailscale Serve 发布 HTTPS。",
-      "public": "暴露公网 HTTPS 地址，供移动 App 配对与远程客户端使用。需明确确认风险。",
+      "public": "开启隧道获取公网地址，再扫码配对移动 App。",
       "advanced": "SSH 端口转发、局域网绑定与反向代理相关设置。"
     },
     "guide": {

@@ -12,7 +12,7 @@
     "tabIntro": {
       "guide": "Compare options and see what's active on this gateway.",
       "tailscale": "Best for personal devices on your tailnet. Gateway stays on loopback; Tailscale Serve publishes HTTPS.",
-      "public": "Expose a public HTTPS URL for mobile apps and share links. Requires explicit consent.",
+      "public": "Start the tunnel to get a public URL, then pair your mobile app.",
       "advanced": "SSH port forwarding, LAN binding, and reverse-proxy settings."
     },
     "guide": {
