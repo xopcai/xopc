@@ -13,6 +13,8 @@ import { AgentDefaultsMemoryPanel } from './agent-defaults-panels/memory-panel';
 import { AgentDefaultsSkillsAllowlistPanel } from './agent-defaults-panels/skills-allowlist-panel';
 import { AgentDefaultsSystemPromptPanel } from './agent-defaults-panels/system-prompt-panel';
 import { AgentDefaultsWorkspacePanel } from './agent-defaults-panels/workspace-panel';
+import { GoalsConfigSection } from '@/features/settings/goals-config-section';
+
 import { AgentDefaultsRouteLayout } from './agent-defaults-route-layout';
 import { useAgentDefaultsForm } from './use-agent-defaults-form';
 
@@ -70,6 +72,7 @@ export function AgentRuntimeDefaultsPage() {
     <AgentDefaultsRouteLayout sectionId="agent-runtime" intro={a.routeIntro.runtime} vm={vm}>
       {pp ? (
         <div className="flex flex-col gap-8">
+          <GoalsConfigSection hasToken={vm.hasToken} />
           <AgentDefaultsContextPanel {...pp} />
           <AgentDefaultsMemoryPanel {...pp} />
         </div>

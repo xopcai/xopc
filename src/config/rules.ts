@@ -78,6 +78,7 @@ export const BASE_RELOAD_RULES: ReloadRule[] = [
   { prefix: 'gateway.channelConnectDeferMode', kind: 'restart', description: 'Channel connect defer mode' },
   { prefix: 'gateway.channelConnectDeferIds', kind: 'restart', description: 'Explicit channel connect defer list' },
   { prefix: 'gateway.channelConnectDeferSkipIds', kind: 'restart', description: 'Channel connect defer skip list' },
+  { prefix: 'gateway.share', kind: 'restart', description: 'File share policy' },
   {
     prefix: 'gateway.skillsStoreBaseUrl',
     kind: 'restart',
@@ -121,6 +122,10 @@ export const BASE_RELOAD_RULES: ReloadRule[] = [
 
   // MCP servers - hot reload (dispose and reconnect runtimes)
   { prefix: 'mcp', kind: 'hot', description: 'MCP server definitions and idle TTL' },
+
+  // Tunnel E2E TLS — restart (local HTTPS terminator port)
+  { prefix: 'tunnel.e2e', kind: 'restart', description: 'Tunnel E2E TLS settings' },
+  { prefix: 'tunnel', kind: 'hot', description: 'Tunnel broker and auto-start settings' },
 ];
 
 function pluginsForReloadRules(): ChannelPlugin[] {

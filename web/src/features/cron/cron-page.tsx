@@ -15,6 +15,7 @@ import {
   type CronPayload,
 } from '@/features/cron/cron-api';
 import { CronConfirmActionDialog } from '@/features/cron/cron-confirm-action-dialog';
+import { CronGlobalsSection } from '@/features/cron/cron-globals-section';
 import { CronJobDetailDrawer } from '@/features/cron/cron-job-detail-drawer';
 import { CronJobFormDialog } from '@/features/cron/cron-job-form-dialog';
 import { CronMainToolbar } from '@/features/cron/cron-main-toolbar';
@@ -346,6 +347,8 @@ export function CronPage() {
             <p className="mt-1 max-w-2xl text-sm text-fg-muted">{c.subtitle}</p>
           </div>
         </header>
+
+        <CronGlobalsSection hasToken={hasToken} />
 
         {inSettingsShell ? (
           <div className="flex flex-wrap items-center justify-end gap-2 border-b border-edge-subtle pb-3 dark:border-edge-subtle">

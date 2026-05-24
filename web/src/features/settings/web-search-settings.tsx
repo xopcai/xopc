@@ -1,4 +1,4 @@
-import { ExternalLink, Loader2, Plus, Search, Trash2 } from 'lucide-react';
+import { Ban, ExternalLink, Loader2, Plus, Search, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -212,6 +212,39 @@ export function WebSearchSettingsPanel() {
               <option value="cn">{w.regionCn}</option>
               <option value="global">{w.regionGlobal}</option>
             </select>
+          </Field>
+        </div>
+      </SettingsFormSection>
+
+      <SettingsFormSection>
+        <SettingsFormSectionHeader icon={Ban} title={w.sectionBlocklist} subtitle={w.sectionBlocklistHint} />
+        <div className="flex max-w-xl flex-col gap-4">
+          <label className="flex cursor-pointer items-start gap-2 text-sm text-fg">
+            <input
+              type="checkbox"
+              className="ui-checkbox mt-0.5"
+              checked={form.blocklistEnabled}
+              onChange={(e) => update({ blocklistEnabled: e.target.checked })}
+            />
+            <span>
+              <span className="font-medium">{w.blocklistEnabled}</span>
+              <span className="mt-0.5 block text-xs text-fg-subtle">{w.blocklistEnabledDesc}</span>
+            </span>
+          </label>
+          <Field label={w.blocklistDomains} description={w.blocklistDomainsDesc}>
+            <textarea
+              className={cn(inputClassName(), 'min-h-[6rem] font-mono text-xs')}
+              value={form.blocklistDomains.join('\n')}
+              placeholder={w.blocklistDomainsPlaceholder}
+              disabled={!form.blocklistEnabled}
+              onChange={(e) => {
+                const domains = e.target.value
+                  .split(/\r?\n/)
+                  .map((line) => line.trim().toLowerCase())
+                  .filter(Boolean);
+                update({ blocklistDomains: domains });
+              }}
+            />
           </Field>
         </div>
       </SettingsFormSection>

@@ -461,5 +461,21 @@
     "presetCreatingProgress": "正在创建第 {{current}} 个 / 共 {{total}} 个…",
     "presetSetupComplete": "Agent 创建成功！",
     "presetCreateFailed": "创建 {{name}} 失败：{{message}}"
+  },
+  "goalsSettings": {
+    "title": "目标评判（/goal）",
+    "hint": "持久化目标任务与评判模型评分的默认设置。",
+    "save": "保存",
+    "discard": "放弃",
+    "saving": "保存中…",
+    "saveError": "保存目标设置失败",
+    "maxTurns": "单次运行最大轮数",
+    "judgeModelRef": "评判模型",
+    "judgeModelRefPlaceholder": "provider/model-id（可选，默认使用 Agent 模型）",
+    "checklistMode": "清单模式",
+    "parseFailures": "最大连续解析失败次数",
+    "judgeTimeoutSec": "评判超时（秒）",
+    "checklistHistoryChars": "清单历史字符数",
+    "checklistHistoryCharsHint": "清单模式下发送给评判模型的 transcript 历史最大字符数。"
   }
 }

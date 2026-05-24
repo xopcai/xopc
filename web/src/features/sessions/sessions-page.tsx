@@ -16,6 +16,7 @@ import useSWR from 'swr';
 import { fetchChatAgents } from '@/features/chat/chat-agents-api';
 import { SessionCard, type SessionCardAction } from '@/features/sessions/session-card';
 import { agentAvatarFromOptions, resolveSessionAgentId } from '@/features/sessions/session-agent-resolve';
+import { SessionConfigSection } from '@/features/settings/session-config-section';
 import { SessionDetailDrawer } from '@/features/sessions/session-detail-drawer';
 import {
   archiveSession,
@@ -374,6 +375,8 @@ export function SessionsPage() {
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden bg-surface-panel">
       <div className="mx-auto flex w-full min-w-0 max-w-2xl flex-col gap-4 px-4 py-6 sm:px-6 lg:max-w-app-main lg:px-8">
+        <SessionConfigSection hasToken={hasToken} />
+
         <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <h1 className="text-xl font-semibold tracking-tight text-fg">{s.title}</h1>
           <div className="flex w-full min-w-0 items-center gap-2 rounded-xl bg-surface-base px-3 py-2 transition-colors sm:max-w-md dark:bg-surface-hover/40">

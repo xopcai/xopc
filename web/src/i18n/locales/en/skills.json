@@ -124,5 +124,17 @@
     "hubRemote": "Remote",
     "hubKindGit": "git",
     "hubKindArchive": "archive"
+  },
+  "skillsMarketplaceSettings": {
+    "title": "Marketplace source",
+    "hint": "Default provider and store API base URL for the Skills marketplace tab.",
+    "save": "Save",
+    "discard": "Discard",
+    "saving": "Saving…",
+    "saveError": "Failed to save marketplace settings",
+    "provider": "Provider",
+    "providerHint": "Which catalog to browse by default (store, skillhub, clawhub).",
+    "storeBaseUrl": "Store base URL",
+    "storeBaseUrlHint": "REST base for package listings. Override with XOPC_SKILLS_STORE_URL env if needed."
   }
 }

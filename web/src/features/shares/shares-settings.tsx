@@ -29,6 +29,7 @@ import {
   ShareUrlCopyRows,
   type ShareLinkResult,
 } from '@/features/shares/share-link-dialog';
+import { SharePolicySection } from '@/features/shares/share-policy-section';
 import { cn } from '@/lib/cn';
 import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
@@ -112,6 +113,8 @@ export function SharesSettingsPanel() {
         <h1 className="text-lg font-semibold text-fg">{t.title}</h1>
         <p className="mt-1 text-sm text-fg-muted">{t.subtitle}</p>
       </div>
+
+      <SharePolicySection hasToken={hasToken} />
 
       <CreateShareSection t={t} onCreated={() => void mutate()} />
 

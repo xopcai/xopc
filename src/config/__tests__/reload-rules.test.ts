@@ -28,4 +28,11 @@ describe('matchReloadRule', () => {
     expect(matchReloadRule('gateway.trustedProxies')?.kind).toBe('restart');
     expect(matchReloadRule('gateway.allowRealIpFallback')?.kind).toBe('restart');
   });
+
+  it('requires restart for share policy and tunnel e2e', () => {
+    expect(matchReloadRule('gateway.share')?.kind).toBe('restart');
+    expect(matchReloadRule('gateway.share.maxTtlMs')?.kind).toBe('restart');
+    expect(matchReloadRule('tunnel.e2e.tlsPort')?.kind).toBe('restart');
+    expect(matchReloadRule('tunnel.autoStart')?.kind).toBe('hot');
+  });
 });

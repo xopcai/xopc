@@ -1,4 +1,4 @@
-import { AlertCircle, Check, Copy, ExternalLink, Eye, EyeOff, Loader2, Server, SlidersHorizontal } from 'lucide-react';
+import { AlertCircle, Check, Copy, ExternalLink, Eye, EyeOff, Loader2, Server, Shield, SlidersHorizontal } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -6,8 +6,10 @@ import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
 import {
   normalizeGatewayFromConfig,
   patchGatewaySettings,
+  validateGatewaySettings,
   type GatewaySettingsState,
 } from '@/features/settings/gateway-config-api';
+import { GatewaySecurityAuditCard } from '@/features/settings/gateway-security-audit-card';
 import { MAX_CHANNEL_DEFER_LIST_SIZE } from '@/features/settings/gateway-settings.types';
 import { settingsInputFocusClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
@@ -42,6 +44,7 @@ export function GatewaySettingsPanel() {
   const [showAccessToken, setShowAccessToken] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [auditRefreshToken, setAuditRefreshToken] = useState(0);
   const dirtyRef = useRef(false);
 
   const { data, error: swrError, isLoading, mutate } = useGatewayConfigSwr(hasToken);
@@ -149,8 +152,43 @@ export function GatewaySettingsPanel() {
     setForm((f) => (f ? { ...f, channelConnectDeferSkipIds } : null));
   }, []);
 
+  const updateTrustedProxies = useCallback((trustedProxies: string[]) => {
+    dirtyRef.current = true;
+    setForm((f) => (f ? { ...f, trustedProxies } : null));
+  }, []);
+
+  const updateTrustedProxy = useCallback((patch: Partial<GatewaySettingsState['auth']['trustedProxy']>) => {
+    dirtyRef.current = true;
+    setForm((f) =>
+      f ? { ...f, auth: { ...f.auth, trustedProxy: { ...f.auth.trustedProxy, ...patch } } } : null,
+    );
+  }, []);
+
+  const updateSecurityStrict = useCallback((securityStrict: boolean) => {
+    dirtyRef.current = true;
+    setForm((f) => (f ? { ...f, securityStrict } : null));
+  }, []);
+
+  const updateAllowRealIpFallback = useCallback((allowRealIpFallback: boolean) => {
+    dirtyRef.current = true;
+    setForm((f) => (f ? { ...f, allowRealIpFallback } : null));
+  }, []);
+
+  const updateDangerouslyAllowHostHeaderOriginFallback = useCallback(
+    (dangerouslyAllowHostHeaderOriginFallback: boolean) => {
+      dirtyRef.current = true;
+      setForm((f) => (f ? { ...f, dangerouslyAllowHostHeaderOriginFallback } : null));
+    },
+    [],
+  );
+
   const save = useCallback(async () => {
     if (!form || saving) return;
+    const validationError = validateGatewaySettings(form);
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
     setSaving(true);
     setError(null);
     setSaveOk(false);
@@ -160,6 +198,7 @@ export function GatewaySettingsPanel() {
       const next = structuredClone(form);
       setBaseline(next);
       setSaveOk(true);
+      setAuditRefreshToken((n) => n + 1);
       window.setTimeout(() => setSaveOk(false), 2500);
     } catch (e) {
       setError(e instanceof Error ? e.message : g.saveError);
@@ -266,6 +305,8 @@ export function GatewaySettingsPanel() {
         {g.restartHint}
       </p>
 
+      <GatewaySecurityAuditCard enabled={hasToken} refreshToken={auditRefreshToken} />
+
       {form.auth.mode === 'none' ? (
         <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
           {g.authModeNone}
@@ -349,7 +390,13 @@ export function GatewaySettingsPanel() {
           </div>
 
           {form.auth.mode === 'trusted-proxy' ? (
-            <p className="text-xs text-fg-subtle">{g.authModeTrustedProxyHint}</p>
+            <TrustedProxyAuthFields
+              g={g}
+              form={form}
+              onTrustedProxyChange={updateTrustedProxy}
+              onTrustedProxiesChange={updateTrustedProxies}
+              onAllowRealIpFallbackChange={updateAllowRealIpFallback}
+            />
           ) : null}
 
           {form.auth.mode === 'token' ? (
@@ -408,12 +455,129 @@ export function GatewaySettingsPanel() {
             <p className="text-xs text-fg-subtle">{g.updateChannelHint}</p>
           </div>
 
+          <div className="space-y-4 border-t border-edge pt-4">
+            <div className="text-sm font-medium text-fg">{g.updateAutoSection}</div>
+            <p className="text-xs text-fg-subtle">{g.updateAutoSectionHint}</p>
+            <label className="flex cursor-pointer items-start gap-2 text-sm text-fg">
+              <input
+                type="checkbox"
+                className="ui-checkbox mt-0.5"
+                checked={form.updateCheckOnStart}
+                onChange={(e) => {
+                  dirtyRef.current = true;
+                  setForm((f) => (f ? { ...f, updateCheckOnStart: e.target.checked } : null));
+                }}
+              />
+              <span>
+                <span className="font-medium">{g.updateCheckOnStart}</span>
+                <span className="mt-0.5 block text-xs text-fg-subtle">{g.updateCheckOnStartHint}</span>
+              </span>
+            </label>
+            <label className="flex cursor-pointer items-start gap-2 text-sm text-fg">
+              <input
+                type="checkbox"
+                className="ui-checkbox mt-0.5"
+                checked={form.updateAutoEnabled}
+                onChange={(e) => {
+                  dirtyRef.current = true;
+                  setForm((f) => (f ? { ...f, updateAutoEnabled: e.target.checked } : null));
+                }}
+              />
+              <span>
+                <span className="font-medium">{g.updateAutoEnabled}</span>
+                <span className="mt-0.5 block text-xs text-fg-subtle">{g.updateAutoEnabledHint}</span>
+              </span>
+            </label>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-fg" htmlFor="update-auto-stable-delay">
+                  {g.updateAutoStableDelayHours}
+                </label>
+                <input
+                  id="update-auto-stable-delay"
+                  type="number"
+                  min={0}
+                  disabled={!form.updateAutoEnabled}
+                  className={inputClassName()}
+                  value={form.updateAutoStableDelayHours}
+                  onChange={(e) => {
+                    dirtyRef.current = true;
+                    setForm((f) =>
+                      f ? { ...f, updateAutoStableDelayHours: Math.max(0, Math.floor(Number(e.target.value) || 0)) } : null,
+                    );
+                  }}
+                />
+                <p className="mt-1 text-xs text-fg-subtle">{g.updateAutoStableDelayHoursHint}</p>
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-fg" htmlFor="update-auto-stable-jitter">
+                  {g.updateAutoStableJitterHours}
+                </label>
+                <input
+                  id="update-auto-stable-jitter"
+                  type="number"
+                  min={0}
+                  disabled={!form.updateAutoEnabled}
+                  className={inputClassName()}
+                  value={form.updateAutoStableJitterHours}
+                  onChange={(e) => {
+                    dirtyRef.current = true;
+                    setForm((f) =>
+                      f ? { ...f, updateAutoStableJitterHours: Math.max(0, Math.floor(Number(e.target.value) || 0)) } : null,
+                    );
+                  }}
+                />
+                <p className="mt-1 text-xs text-fg-subtle">{g.updateAutoStableJitterHoursHint}</p>
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-fg" htmlFor="update-auto-beta-interval">
+                  {g.updateAutoBetaCheckIntervalHours}
+                </label>
+                <input
+                  id="update-auto-beta-interval"
+                  type="number"
+                  min={0.25}
+                  step={0.25}
+                  disabled={!form.updateAutoEnabled}
+                  className={inputClassName()}
+                  value={form.updateAutoBetaCheckIntervalHours}
+                  onChange={(e) => {
+                    dirtyRef.current = true;
+                    setForm((f) =>
+                      f
+                        ? {
+                            ...f,
+                            updateAutoBetaCheckIntervalHours: Math.max(0.25, Number(e.target.value) || 1),
+                          }
+                        : null,
+                    );
+                  }}
+                />
+                <p className="mt-1 text-xs text-fg-subtle">{g.updateAutoBetaCheckIntervalHoursHint}</p>
+              </div>
+            </div>
+          </div>
+
           <CorsOriginsField
             g={g}
             origins={form.corsOrigins}
             onChange={updateCorsOrigins}
           />
         </div>
+      </section>
+
+      <section className="rounded-2xl bg-surface-base px-4 py-5 sm:px-5">
+        <div className="mb-5 flex items-center gap-2 text-sm font-semibold text-fg">
+          <Shield className="size-4 text-accent" strokeWidth={1.75} />
+          {g.securitySection}
+        </div>
+        <p className="mb-4 text-xs text-fg-subtle">{g.securitySectionHint}</p>
+        <GatewaySecurityFields
+          g={g}
+          form={form}
+          onSecurityStrictChange={updateSecurityStrict}
+          onDangerouslyAllowHostHeaderOriginFallbackChange={updateDangerouslyAllowHostHeaderOriginFallback}
+        />
       </section>
 
       <section className="rounded-2xl bg-surface-base px-4 py-5 sm:px-5">
@@ -431,6 +595,149 @@ export function GatewaySettingsPanel() {
           onSkipIdsChange={updateChannelConnectDeferSkipIds}
         />
       </section>
+    </div>
+  );
+}
+
+function GatewaySecurityFields({
+  g,
+  form,
+  onSecurityStrictChange,
+  onDangerouslyAllowHostHeaderOriginFallbackChange,
+}: {
+  g: GatewaySettingsMessages;
+  form: GatewaySettingsState;
+  onSecurityStrictChange: (value: boolean) => void;
+  onDangerouslyAllowHostHeaderOriginFallbackChange: (value: boolean) => void;
+}) {
+  return (
+    <div className="space-y-4">
+      <label className="flex cursor-pointer items-start gap-2 text-sm text-fg">
+        <input
+          type="checkbox"
+          className="ui-checkbox mt-0.5"
+          checked={form.securityStrict}
+          onChange={(e) => onSecurityStrictChange(e.target.checked)}
+        />
+        <span>
+          <span className="font-medium">{g.securityStrict}</span>
+          <span className="mt-0.5 block text-xs text-fg-subtle">{g.securityStrictHint}</span>
+        </span>
+      </label>
+
+      <label className="flex cursor-pointer items-start gap-2 text-sm text-fg">
+        <input
+          type="checkbox"
+          className="ui-checkbox mt-0.5"
+          checked={form.dangerouslyAllowHostHeaderOriginFallback}
+          onChange={(e) => onDangerouslyAllowHostHeaderOriginFallbackChange(e.target.checked)}
+        />
+        <span>
+          <span className="font-medium">{g.dangerouslyAllowHostHeaderOriginFallback}</span>
+          <span className="mt-0.5 block text-xs text-fg-subtle">
+            {g.dangerouslyAllowHostHeaderOriginFallbackHint}
+          </span>
+        </span>
+      </label>
+
+      {form.dangerouslyAllowHostHeaderOriginFallback ? (
+        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+          {g.dangerouslyAllowHostHeaderOriginFallbackWarning}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function TrustedProxyAuthFields({
+  g,
+  form,
+  onTrustedProxyChange,
+  onTrustedProxiesChange,
+  onAllowRealIpFallbackChange,
+}: {
+  g: GatewaySettingsMessages;
+  form: GatewaySettingsState;
+  onTrustedProxyChange: (patch: Partial<GatewaySettingsState['auth']['trustedProxy']>) => void;
+  onTrustedProxiesChange: (values: string[]) => void;
+  onAllowRealIpFallbackChange: (value: boolean) => void;
+}) {
+  const tp = form.auth.trustedProxy;
+
+  return (
+    <div className="space-y-4 border-t border-edge pt-4">
+      <p className="text-xs text-fg-subtle">{g.authModeTrustedProxyHint}</p>
+
+      <div>
+        <label className="mb-1 block text-sm font-medium text-fg" htmlFor="gateway-trusted-proxy-user-header">
+          {g.trustedProxyUserHeader}
+        </label>
+        <input
+          id="gateway-trusted-proxy-user-header"
+          className={cn(inputClassName(), 'font-mono text-xs')}
+          value={tp.userHeader}
+          onChange={(e) => onTrustedProxyChange({ userHeader: e.target.value })}
+          placeholder={g.trustedProxyUserHeaderPlaceholder}
+          autoComplete="off"
+        />
+        <p className="mt-1 text-xs text-fg-subtle">{g.trustedProxyUserHeaderHint}</p>
+      </div>
+
+      <GatewayStringListField
+        title={g.trustedProxyRequiredHeaders}
+        hint={g.trustedProxyRequiredHeadersHint}
+        emptyText={g.channelIdListEmpty}
+        placeholder={g.trustedProxyUserHeaderPlaceholder}
+        values={tp.requiredHeaders}
+        maxItems={32}
+        onChange={(requiredHeaders) => onTrustedProxyChange({ requiredHeaders })}
+      />
+
+      <GatewayStringListField
+        title={g.trustedProxyAllowUsers}
+        hint={g.trustedProxyAllowUsersHint}
+        emptyText={g.channelIdListEmpty}
+        placeholder={g.trustedProxyUserHeaderPlaceholder}
+        values={tp.allowUsers}
+        maxItems={128}
+        onChange={(allowUsers) => onTrustedProxyChange({ allowUsers })}
+      />
+
+      <label className="flex cursor-pointer items-start gap-2 text-sm text-fg">
+        <input
+          type="checkbox"
+          className="ui-checkbox mt-0.5"
+          checked={tp.allowLoopback}
+          onChange={(e) => onTrustedProxyChange({ allowLoopback: e.target.checked })}
+        />
+        <span>
+          <span className="font-medium">{g.trustedProxyAllowLoopback}</span>
+          <span className="mt-0.5 block text-xs text-fg-subtle">{g.trustedProxyAllowLoopbackHint}</span>
+        </span>
+      </label>
+
+      <GatewayStringListField
+        title={g.trustedProxies}
+        hint={g.trustedProxiesHint}
+        emptyText={g.trustedProxiesEmpty}
+        placeholder={g.trustedProxiesPlaceholder}
+        values={form.trustedProxies}
+        maxItems={64}
+        onChange={onTrustedProxiesChange}
+      />
+
+      <label className="flex cursor-pointer items-start gap-2 text-sm text-fg">
+        <input
+          type="checkbox"
+          className="ui-checkbox mt-0.5"
+          checked={form.allowRealIpFallback}
+          onChange={(e) => onAllowRealIpFallbackChange(e.target.checked)}
+        />
+        <span>
+          <span className="font-medium">{g.allowRealIpFallback}</span>
+          <span className="mt-0.5 block text-xs text-fg-subtle">{g.allowRealIpFallbackHint}</span>
+        </span>
+      </label>
     </div>
   );
 }

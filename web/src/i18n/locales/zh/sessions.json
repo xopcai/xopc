@@ -36,6 +36,23 @@
     "detailLoading": "加载会话…",
     "detailMessages": "消息",
     "detailExport": "导出",
-    "close": "关闭"
+    "close": "关闭",
+    "config": {
+      "title": "会话存储",
+      "hint": "私信会话的键名规则以及旧会话元数据的清理策略。",
+      "save": "保存",
+      "discard": "放弃",
+      "saving": "保存中…",
+      "saveError": "保存会话设置失败",
+      "dmScope": "私信会话范围",
+      "dmScopeHint": "控制跨通道与账号的私信如何映射到 session key。",
+      "dmScopeMain": "主会话（单一私信）",
+      "dmScopePerPeer": "按对端",
+      "dmScopePerChannelPeer": "按通道 + 对端",
+      "dmScopePerAccountChannelPeer": "按账号 + 通道 + 对端",
+      "pruneAfterDays": "清理阈值（天）",
+      "maxEntries": "最大会话条目数",
+      "unsetPlaceholder": "留空使用默认值"
+    }
   }
 }

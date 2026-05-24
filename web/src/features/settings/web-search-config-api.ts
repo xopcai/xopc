@@ -13,6 +13,8 @@ export type WebSearchSettingsState = {
   regionMode: 'auto' | 'cn' | 'global';
   maxResults: number;
   providers: SearchProviderRow[];
+  blocklistEnabled: boolean;
+  blocklistDomains: string[];
 };
 
 export function normalizeWebSearchSettingsFromConfig(cfg: unknown): WebSearchSettingsState {
@@ -31,6 +33,13 @@ export function normalizeWebSearchSettingsFromConfig(cfg: unknown): WebSearchSet
 
   const maxResults =
     typeof s.maxResults === 'number' && Number.isFinite(s.maxResults) ? Math.floor(s.maxResults) : 5;
+
+  const blocklist =
+    web && typeof web === 'object' && 'blocklist' in web ? (web as { blocklist?: unknown }).blocklist : undefined;
+  const bl = blocklist && typeof blocklist === 'object' ? (blocklist as Record<string, unknown>) : {};
+  const blocklistDomains = Array.isArray(bl.domains)
+    ? bl.domains.filter((d): d is string => typeof d === 'string' && d.trim().length > 0)
+    : [];
 
   const rawProviders = s.providers;
   const rows: SearchProviderRow[] = Array.isArray(rawProviders)
@@ -52,6 +61,8 @@ export function normalizeWebSearchSettingsFromConfig(cfg: unknown): WebSearchSet
     regionMode,
     maxResults,
     providers: rows,
+    blocklistEnabled: bl.enabled === true,
+    blocklistDomains,
   };
 }
 
@@ -86,6 +97,10 @@ export async function patchWebSearchSettings(state: WebSearchSettingsState): Pro
         web: {
           region,
           search,
+          blocklist: {
+            enabled: state.blocklistEnabled,
+            domains: state.blocklistDomains,
+          },
         },
       },
     }),

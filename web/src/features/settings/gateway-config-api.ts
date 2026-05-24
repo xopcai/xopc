@@ -12,6 +12,7 @@ import {
   type GatewayBindMode,
   type GatewayChannelConnectDeferMode,
   type GatewaySettingsState,
+  type GatewayTrustedProxyState,
   type UpdatePackageChannel,
 } from './gateway-settings.types';
 
@@ -20,6 +21,7 @@ export type {
   GatewayAuthRateLimitState,
   GatewayChannelConnectDeferMode,
   GatewaySettingsState,
+  GatewayTrustedProxyState,
   UpdatePackageChannel,
 } from './gateway-settings.types';
 
@@ -62,6 +64,16 @@ function normalizeRateLimit(raw: unknown): GatewayAuthRateLimitState {
   };
 }
 
+function normalizeTrustedProxy(raw: unknown): GatewayTrustedProxyState {
+  const tp = isRecord(raw) ? raw : {};
+  return {
+    userHeader: typeof tp.userHeader === 'string' ? tp.userHeader : '',
+    requiredHeaders: normalizeStringIdList(tp.requiredHeaders, 32),
+    allowUsers: normalizeStringIdList(tp.allowUsers, 128),
+    allowLoopback: tp.allowLoopback === true,
+  };
+}
+
 function normalizeDeferMode(raw: unknown): GatewayChannelConnectDeferMode {
   if (raw === 'auto' || raw === 'off' || raw === 'explicit') return raw;
   return 'auto';
@@ -86,11 +98,82 @@ function normalizeBindMode(raw: unknown, legacyHost?: string): GatewayBindMode {
   return 'loopback';
 }
 
+/** True when the bind mode likely exposes the gateway beyond loopback. */
+export function isNonLoopbackGatewayBind(state: GatewaySettingsState): boolean {
+  if (state.bind === 'loopback') return false;
+  if (state.bind === 'lan') return true;
+  if (state.bind === 'custom') {
+    const host = state.customBindHost.trim().toLowerCase();
+    if (!host) return true;
+    return host !== '127.0.0.1' && host !== 'localhost' && host !== '::1';
+  }
+  return true;
+}
+
+function buildDefaultCorsOrigins(port: number, bindHost?: string): string[] {
+  const origins = new Set<string>([`http://localhost:${port}`, `http://127.0.0.1:${port}`]);
+  const host = bindHost?.trim();
+  if (
+    host &&
+    host !== '127.0.0.1' &&
+    host !== 'localhost' &&
+    host !== '::1' &&
+    host !== '0.0.0.0' &&
+    host !== '::'
+  ) {
+    origins.add(`http://${host}:${port}`);
+  }
+  return [...origins];
+}
+
+export function validateGatewaySettings(state: GatewaySettingsState): string | null {
+  const nonLoopback = isNonLoopbackGatewayBind(state);
+
+  if (nonLoopback && state.auth.mode === 'none') {
+    return 'Network-accessible gateway requires authentication (token, password, or trusted-proxy).';
+  }
+
+  if (nonLoopback && state.auth.mode === 'trusted-proxy' && state.trustedProxies.length === 0) {
+    return 'Trusted-proxy auth on a network bind requires at least one gateway.trustedProxies entry.';
+  }
+
+  if (state.auth.mode === 'trusted-proxy' && !state.auth.trustedProxy.userHeader.trim()) {
+    return 'Trusted-proxy auth requires gateway.auth.trustedProxy.userHeader.';
+  }
+
+  if (
+    nonLoopback &&
+    state.corsOrigins.length === 0 &&
+    !state.dangerouslyAllowHostHeaderOriginFallback
+  ) {
+    const bindHost =
+      state.bind === 'custom'
+        ? state.customBindHost.trim()
+        : state.bind === 'lan'
+          ? '0.0.0.0'
+          : undefined;
+    const suggested = buildDefaultCorsOrigins(state.port, bindHost).join(', ');
+    return `Network-accessible gateway requires CORS origins (e.g. ${suggested}) or enable Host-header origin fallback.`;
+  }
+
+  if (nonLoopback && state.corsOrigins.includes('*')) {
+    return 'CORS wildcard "*" is not allowed on network-accessible binds.';
+  }
+
+  if (state.bind === 'custom' && !state.customBindHost.trim()) {
+    return 'Custom bind mode requires a bind address.';
+  }
+
+  return null;
+}
+
 export function normalizeGatewayFromConfig(config: unknown): GatewaySettingsState {
   const c = isRecord(config) ? config : {};
   const gw = isRecord(c.gateway) ? c.gateway : {};
   const auth = isRecord(gw.auth) ? gw.auth : {};
+  const security = isRecord(gw.security) ? gw.security : {};
   const upd = isRecord(c.update) ? c.update : {};
+  const auto = isRecord(upd.auto) ? upd.auto : {};
   const ch = upd.channel;
   const updateChannel: UpdatePackageChannel =
     ch === 'beta' || ch === 'dev' || ch === 'stable' ? ch : 'stable';
@@ -119,8 +202,13 @@ export function normalizeGatewayFromConfig(config: unknown): GatewaySettingsStat
       token: typeof auth.token === 'string' ? auth.token : '',
       password: typeof auth.password === 'string' ? auth.password : '',
       rateLimit: normalizeRateLimit(auth.rateLimit),
+      trustedProxy: normalizeTrustedProxy(auth.trustedProxy),
     },
     corsOrigins,
+    trustedProxies: normalizeStringIdList(gw.trustedProxies, 64),
+    allowRealIpFallback: gw.allowRealIpFallback === true,
+    dangerouslyAllowHostHeaderOriginFallback: gw.dangerouslyAllowHostHeaderOriginFallback === true,
+    securityStrict: security.strict === true,
     maxSseConnections:
       typeof gw.maxSseConnections === 'number' && Number.isFinite(gw.maxSseConnections)
         ? Math.max(1, Math.floor(gw.maxSseConnections))
@@ -129,6 +217,20 @@ export function normalizeGatewayFromConfig(config: unknown): GatewaySettingsStat
     channelConnectDeferIds: normalizeStringIdList(gw.channelConnectDeferIds),
     channelConnectDeferSkipIds: normalizeStringIdList(gw.channelConnectDeferSkipIds),
     updateChannel,
+    updateCheckOnStart: upd.checkOnStart !== false,
+    updateAutoEnabled: auto.enabled === true,
+    updateAutoStableDelayHours:
+      typeof auto.stableDelayHours === 'number' && Number.isFinite(auto.stableDelayHours)
+        ? Math.max(0, Math.floor(auto.stableDelayHours))
+        : 6,
+    updateAutoStableJitterHours:
+      typeof auto.stableJitterHours === 'number' && Number.isFinite(auto.stableJitterHours)
+        ? Math.max(0, Math.floor(auto.stableJitterHours))
+        : 12,
+    updateAutoBetaCheckIntervalHours:
+      typeof auto.betaCheckIntervalHours === 'number' && Number.isFinite(auto.betaCheckIntervalHours)
+        ? Math.max(0.25, auto.betaCheckIntervalHours)
+        : 1,
   };
 }
 
@@ -144,15 +246,28 @@ function buildAuthPatch(state: GatewaySettingsState): Record<string, unknown> {
       auth.token = state.auth.token;
     }
     auth.password = null;
+    auth.trustedProxy = null;
   } else if (state.auth.mode === 'password') {
     const password = state.auth.password.trim();
     if (password.length > 0 && !isMaskedGatewaySecret(password)) {
       auth.password = state.auth.password;
     }
     auth.token = null;
+    auth.trustedProxy = null;
   } else if (state.auth.mode === 'trusted-proxy') {
     auth.token = null;
     auth.password = null;
+    const tp = state.auth.trustedProxy;
+    auth.trustedProxy = {
+      userHeader: tp.userHeader.trim(),
+      ...(tp.requiredHeaders.length > 0 ? { requiredHeaders: tp.requiredHeaders } : {}),
+      ...(tp.allowUsers.length > 0 ? { allowUsers: tp.allowUsers } : {}),
+      ...(tp.allowLoopback ? { allowLoopback: true } : {}),
+    };
+  } else {
+    auth.token = null;
+    auth.password = null;
+    auth.trustedProxy = null;
   }
 
   return auth;
@@ -164,6 +279,11 @@ export async function fetchGatewaySettings(): Promise<GatewaySettingsState> {
 }
 
 export async function patchGatewaySettings(state: GatewaySettingsState): Promise<void> {
+  const validationError = validateGatewaySettings(state);
+  if (validationError) {
+    throw new Error(validationError);
+  }
+
   const legacyHost =
     state.bind === 'lan'
       ? '0.0.0.0'
@@ -183,6 +303,10 @@ export async function patchGatewaySettings(state: GatewaySettingsState): Promise
         port: state.port,
         auth: buildAuthPatch(state),
         corsOrigins: state.corsOrigins,
+        trustedProxies: state.trustedProxies,
+        allowRealIpFallback: state.allowRealIpFallback,
+        dangerouslyAllowHostHeaderOriginFallback: state.dangerouslyAllowHostHeaderOriginFallback,
+        security: { strict: state.securityStrict },
         maxSseConnections: state.maxSseConnections,
         channelConnectDeferMode: state.channelConnectDeferMode,
         channelConnectDeferIds: state.channelConnectDeferIds,
@@ -190,6 +314,13 @@ export async function patchGatewaySettings(state: GatewaySettingsState): Promise
       },
       update: {
         channel: state.updateChannel,
+        checkOnStart: state.updateCheckOnStart,
+        auto: {
+          enabled: state.updateAutoEnabled,
+          stableDelayHours: state.updateAutoStableDelayHours,
+          stableJitterHours: state.updateAutoStableJitterHours,
+          betaCheckIntervalHours: state.updateAutoBetaCheckIntervalHours,
+        },
       },
     }),
   });

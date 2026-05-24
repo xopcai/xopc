@@ -8,13 +8,14 @@ import type { AuthenticatedRouteDeps } from './deps.js';
 export function registerDoctorRoutes(authenticated: Hono, _deps: AuthenticatedRouteDeps): void {
   authenticated.get('/api/doctor', async (c) => {
     const deep = c.req.query('deep') === 'true';
+    const security = c.req.query('security') === 'true';
     const configPath = process.env.XOPC_CONFIG_PATH || resolveConfigPath();
     const stateDir = resolveStateDir();
 
     const results = await collectDoctorResults({
       configPath,
       stateDir,
-      options: { fix: false, json: true, deep, security: false },
+      options: { fix: false, json: true, deep, security },
     });
 
     return c.json({

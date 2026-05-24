@@ -10,6 +10,12 @@ import {
 } from './consent.js';
 import { isMaskedTunnelSecretPatchValue } from './env.js';
 
+const TunnelE2ePatchSchema = z.object({
+  enabled: z.boolean().optional(),
+  tlsPort: z.number().int().min(1024).max(65535).optional(),
+  staging: z.boolean().optional(),
+});
+
 const TunnelConfigPatchSchema = z.object({
   enabled: z.boolean().optional(),
   brokerUrl: z.string().url().optional(),
@@ -17,6 +23,7 @@ const TunnelConfigPatchSchema = z.object({
   autoStart: z.boolean().optional(),
   subdomain: z.string().optional(),
   consent: TunnelConsentSchema.optional(),
+  e2e: TunnelE2ePatchSchema.optional(),
 });
 
 export function mergeTunnelConfigPatch(
@@ -66,6 +73,13 @@ export function mergeTunnelConfigPatch(
       ok: false,
       message:
         'Cannot enable tunnel without accepting the security notice. Start remote access from settings or record consent first.',
+    };
+  }
+
+  if (parsed.data.e2e !== undefined) {
+    next.e2e = {
+      ...(next.e2e ?? { enabled: true, tlsPort: 18791, staging: false }),
+      ...parsed.data.e2e,
     };
   }
 
