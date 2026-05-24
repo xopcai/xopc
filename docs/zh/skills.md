@@ -476,6 +476,23 @@ jobs:
 
 ## 示例技能
 
+### X/Twitter 增长运营 Skill
+
+`skills/business/x-twitter-growth-ops` 是一个内置业务 Skill,适合创始人把 X/Twitter 对话变成每周运营循环。它覆盖只读受众研究、推文和回复搜索、回复草稿、上线监控、粉丝导出、媒体流程和抽奖计划。
+
+这个 Skill 可以单独用于规划。当用户有 OpenClaw 运行时,它会把具体 X/Twitter 操作交给 TweetClaw:
+
+```bash
+openclaw plugins install @xquik/tweetclaw
+openclaw config set tools.alsoAllow '["explore", "tweetclaw"]'
+openclaw plugins inspect tweetclaw --runtime
+```
+
+它还包含可复用模板:
+
+- `templates/weekly-x-twitter-ops.md`
+- `templates/openclaw-tweetclaw-setup.md`
+
 ### 天气技能
 
 ```markdown
