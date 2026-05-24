@@ -124,5 +124,17 @@
     "hubRemote": "远程",
     "hubKindGit": "git",
     "hubKindArchive": "归档"
+  },
+  "skillsMarketplaceSettings": {
+    "title": "市场来源",
+    "hint": "技能市场标签页的默认提供商与商店 API 基础 URL。",
+    "save": "保存",
+    "discard": "放弃",
+    "saving": "保存中…",
+    "saveError": "保存市场设置失败",
+    "provider": "提供商",
+    "providerHint": "默认浏览的目录（store、skillhub、clawhub）。",
+    "storeBaseUrl": "商店基础 URL",
+    "storeBaseUrlHint": "包列表 REST 基础地址。可用环境变量 XOPC_SKILLS_STORE_URL 覆盖。"
   }
 }

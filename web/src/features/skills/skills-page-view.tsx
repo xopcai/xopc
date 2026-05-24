@@ -2,6 +2,7 @@ import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { ChevronDown, Funnel } from 'lucide-react';
 import { useLayoutEffect, useMemo } from 'react';
 
+import { SkillsMarketplaceConfigSection } from '@/features/skills/skills-marketplace-config-section';
 import { SkillsPageHeaderEnd } from '@/features/skills/skills-page-header-end';
 import { SkillsPageCatalogContent } from '@/features/skills/skills-page-catalog-content';
 import { SkillsPageConfirmDialog } from '@/features/skills/skills-page-confirm-dialog';
@@ -110,6 +111,8 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
             <p className="mt-1 max-w-2xl text-sm text-fg-muted">{sk.tagline}</p>
           </div>
         </header>
+
+        <SkillsMarketplaceConfigSection hasToken={hasToken} />
 
         {inSettingsShell ? (
           <div className="flex flex-col gap-3 border-b border-edge-subtle pb-4 dark:border-edge-subtle sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">

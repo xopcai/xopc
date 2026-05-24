@@ -11,6 +11,10 @@ export function safeToolsWebForGet(config: Config): {
       maxResults: number;
       providers: Array<{ type: string; apiKey: string; url: string; disabled: boolean }>;
     };
+    blocklist: {
+      enabled: boolean;
+      domains: string[];
+    };
   };
 } {
   const web = config.tools?.web;
@@ -22,12 +26,19 @@ export function safeToolsWebForGet(config: Config): {
     url: typeof p.url === 'string' ? p.url : '',
     disabled: Boolean(p.disabled),
   }));
+  const blocklist = web?.blocklist;
   return {
     web: {
       region: web?.region ?? null,
       search: {
         maxResults: search?.maxResults ?? 5,
         providers: providersOut,
+      },
+      blocklist: {
+        enabled: blocklist?.enabled === true,
+        domains: Array.isArray(blocklist?.domains)
+          ? blocklist.domains.filter((d): d is string => typeof d === 'string' && d.trim().length > 0)
+          : [],
       },
     },
   };
@@ -64,6 +75,31 @@ export function applyToolsWebPatch(config: Config, body: Record<string, unknown>
       config.tools.web.region = incoming.region;
     } else {
       return 'Invalid tools.web.region';
+    }
+  }
+
+  if (incoming.blocklist !== undefined) {
+    if (incoming.blocklist === null) {
+      delete config.tools.web.blocklist;
+    } else if (typeof incoming.blocklist !== 'object') {
+      return 'Invalid tools.web.blocklist';
+    } else {
+      const bl = incoming.blocklist as Record<string, unknown>;
+      const next = {
+        ...(config.tools.web.blocklist ?? { enabled: false, domains: [] }),
+      };
+      if (bl.enabled !== undefined) {
+        next.enabled = Boolean(bl.enabled);
+      }
+      if (bl.domains !== undefined) {
+        if (!Array.isArray(bl.domains)) {
+          return 'tools.web.blocklist.domains must be an array';
+        }
+        next.domains = bl.domains
+          .filter((d): d is string => typeof d === 'string' && d.trim().length > 0)
+          .map((d) => d.trim());
+      }
+      config.tools.web.blocklist = next;
     }
   }
 

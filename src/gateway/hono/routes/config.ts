@@ -12,6 +12,14 @@ import { canonicalizeConfiguredMcpServer } from '../../../config/mcp-config-norm
 import { CredentialResolver } from '../../../auth/credentials.js';
 import { applyToolsWebPatch } from '../../config-tools-web.js';
 import { mergeTunnelConfigPatch } from '../../../tunnel/tunnel-config.js';
+import { mergeShareConfigPatch } from '../../../share/share-config.js';
+import {
+  mergeCronConfigPatch,
+  mergeGatewaySkillsMarketplacePatch,
+  mergeGoalsConfigPatch,
+  mergeSessionConfigPatch,
+  mergeUpdateConfigPatch,
+} from '../../../config/web-patch.js';
 import { buildSafeWebConfigPayload } from '../lib/config-payload.js';
 import {
   normalizePatchAgentImageGenerationModel,
@@ -1068,8 +1076,16 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
       if (!config.gateway.auth) config.gateway.auth = { mode: 'token' };
       const a = body.gateway.auth;
       if (a.mode !== undefined) {
-        if (a.mode !== 'none' && a.mode !== 'token' && a.mode !== 'password') {
-          return c.json({ ok: false, error: { message: 'gateway.auth.mode must be none, token, or password' } }, 400);
+        if (
+          a.mode !== 'none' &&
+          a.mode !== 'token' &&
+          a.mode !== 'password' &&
+          a.mode !== 'trusted-proxy'
+        ) {
+          return c.json(
+            { ok: false, error: { message: 'gateway.auth.mode must be none, token, password, or trusted-proxy' } },
+            400,
+          );
         }
         config.gateway.auth.mode = a.mode;
       }
@@ -1128,6 +1144,96 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
           rl.exemptLoopback = Boolean(rlIn.exemptLoopback);
         }
       }
+      if (a.trustedProxy !== undefined) {
+        if (a.trustedProxy === null) {
+          delete config.gateway.auth.trustedProxy;
+        } else if (typeof a.trustedProxy === 'object' && a.trustedProxy !== null) {
+          const tpIn = a.trustedProxy as Record<string, unknown>;
+          const userHeader =
+            typeof tpIn.userHeader === 'string' ? tpIn.userHeader.trim() : '';
+          if (!userHeader) {
+            return c.json(
+              { ok: false, error: { message: 'gateway.auth.trustedProxy.userHeader is required' } },
+              400,
+            );
+          }
+          const trustedProxy: NonNullable<(typeof config.gateway.auth)['trustedProxy']> = {
+            userHeader,
+          };
+          if (tpIn.requiredHeaders !== undefined) {
+            if (!Array.isArray(tpIn.requiredHeaders)) {
+              return c.json(
+                { ok: false, error: { message: 'gateway.auth.trustedProxy.requiredHeaders must be an array' } },
+                400,
+              );
+            }
+            trustedProxy.requiredHeaders = tpIn.requiredHeaders
+              .filter((x): x is string => typeof x === 'string' && x.trim().length > 0)
+              .map((x) => x.trim());
+          }
+          if (tpIn.allowUsers !== undefined) {
+            if (!Array.isArray(tpIn.allowUsers)) {
+              return c.json(
+                { ok: false, error: { message: 'gateway.auth.trustedProxy.allowUsers must be an array' } },
+                400,
+              );
+            }
+            trustedProxy.allowUsers = tpIn.allowUsers
+              .filter((x): x is string => typeof x === 'string' && x.trim().length > 0)
+              .map((x) => x.trim());
+          }
+          if (tpIn.allowLoopback !== undefined) {
+            trustedProxy.allowLoopback = Boolean(tpIn.allowLoopback);
+          }
+          config.gateway.auth.trustedProxy = trustedProxy;
+        }
+      }
+    }
+    if (body.gateway?.trustedProxies !== undefined) {
+      if (!Array.isArray(body.gateway.trustedProxies)) {
+        return c.json({ ok: false, error: { message: 'gateway.trustedProxies must be an array' } }, 400);
+      }
+      if (!config.gateway) {
+        config.gateway = {
+          bind: 'loopback',
+          host: '127.0.0.1',
+          port: 18790,
+          heartbeat: { enabled: true, intervalMs: 1_800_000, includeSystemPromptSection: false },
+          maxSseConnections: 100,
+          corsOrigins: [],
+        };
+      }
+      config.gateway.trustedProxies = body.gateway.trustedProxies
+        .filter((x): x is string => typeof x === 'string' && x.trim().length > 0)
+        .map((x) => x.trim());
+    }
+    if (body.gateway?.allowRealIpFallback !== undefined) {
+      if (!config.gateway) {
+        config.gateway = {
+          bind: 'loopback',
+          host: '127.0.0.1',
+          port: 18790,
+          heartbeat: { enabled: true, intervalMs: 1_800_000, includeSystemPromptSection: false },
+          maxSseConnections: 100,
+          corsOrigins: [],
+        };
+      }
+      config.gateway.allowRealIpFallback = Boolean(body.gateway.allowRealIpFallback);
+    }
+    if (body.gateway?.dangerouslyAllowHostHeaderOriginFallback !== undefined) {
+      if (!config.gateway) {
+        config.gateway = {
+          bind: 'loopback',
+          host: '127.0.0.1',
+          port: 18790,
+          heartbeat: { enabled: true, intervalMs: 1_800_000, includeSystemPromptSection: false },
+          maxSseConnections: 100,
+          corsOrigins: [],
+        };
+      }
+      config.gateway.dangerouslyAllowHostHeaderOriginFallback = Boolean(
+        body.gateway.dangerouslyAllowHostHeaderOriginFallback,
+      );
     }
     if (body.gateway?.security !== undefined) {
       if (typeof body.gateway.security !== 'object' || body.gateway.security === null) {
@@ -1149,6 +1255,15 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
       }
       if (secIn.strict !== undefined) {
         config.gateway.security.strict = Boolean(secIn.strict);
+      }
+    }
+    if (body.gateway?.share !== undefined) {
+      if (typeof body.gateway.share !== 'object' || body.gateway.share === null || Array.isArray(body.gateway.share)) {
+        return c.json({ ok: false, error: { message: 'gateway.share must be an object' } }, 400);
+      }
+      const shareResult = mergeShareConfigPatch(config, body.gateway.share as Record<string, unknown>);
+      if (!shareResult.ok) {
+        return c.json({ ok: false, error: { message: shareResult.message } }, 400);
       }
     }
     if (body.gateway?.corsOrigins !== undefined) {
@@ -1264,12 +1379,60 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
     }
 
     if (body.update !== undefined && typeof body.update === 'object' && body.update !== null) {
-      const p = body.update as Record<string, unknown>;
-      if (p.channel === 'stable' || p.channel === 'beta' || p.channel === 'dev') {
-        if (!config.update) {
-          config.update = { checkOnStart: true, channel: p.channel };
-        } else {
-          config.update.channel = p.channel;
+      const updateResult = mergeUpdateConfigPatch(config, body.update as Record<string, unknown>);
+      if (!updateResult.ok) {
+        return c.json({ ok: false, error: { message: updateResult.message } }, 400);
+      }
+    }
+
+    if (body.cron !== undefined) {
+      if (typeof body.cron !== 'object' || body.cron === null || Array.isArray(body.cron)) {
+        return c.json({ ok: false, error: { message: 'cron must be an object' } }, 400);
+      }
+      const cronResult = mergeCronConfigPatch(config, body.cron as Record<string, unknown>);
+      if (!cronResult.ok) {
+        return c.json({ ok: false, error: { message: cronResult.message } }, 400);
+      }
+    }
+
+    if (body.goals !== undefined) {
+      if (typeof body.goals !== 'object' || body.goals === null || Array.isArray(body.goals)) {
+        return c.json({ ok: false, error: { message: 'goals must be an object' } }, 400);
+      }
+      const goalsResult = mergeGoalsConfigPatch(config, body.goals as Record<string, unknown>);
+      if (!goalsResult.ok) {
+        return c.json({ ok: false, error: { message: goalsResult.message } }, 400);
+      }
+    }
+
+    if (body.session !== undefined) {
+      if (typeof body.session !== 'object' || body.session === null || Array.isArray(body.session)) {
+        return c.json({ ok: false, error: { message: 'session must be an object' } }, 400);
+      }
+      const sessionResult = mergeSessionConfigPatch(config, body.session as Record<string, unknown>);
+      if (!sessionResult.ok) {
+        return c.json({ ok: false, error: { message: sessionResult.message } }, 400);
+      }
+    }
+
+    if (
+      body.gateway !== undefined &&
+      typeof body.gateway === 'object' &&
+      body.gateway !== null &&
+      !Array.isArray(body.gateway)
+    ) {
+      const gwPatch = body.gateway as Record<string, unknown>;
+      if (gwPatch.skillsMarketplaceProvider !== undefined || gwPatch.skillsStoreBaseUrl !== undefined) {
+        const skillsResult = mergeGatewaySkillsMarketplacePatch(config, {
+          ...(gwPatch.skillsMarketplaceProvider !== undefined
+            ? { skillsMarketplaceProvider: gwPatch.skillsMarketplaceProvider }
+            : {}),
+          ...(gwPatch.skillsStoreBaseUrl !== undefined
+            ? { skillsStoreBaseUrl: gwPatch.skillsStoreBaseUrl }
+            : {}),
+        });
+        if (!skillsResult.ok) {
+          return c.json({ ok: false, error: { message: skillsResult.message } }, 400);
         }
       }
     }
