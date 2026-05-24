@@ -14,7 +14,8 @@
       "workspace": "Working directory for agent files and limits for inbound images in the image tool.",
       "browser": "Playwright browser_* tools: enablement, headless mode, timeouts, and local or cloud backends.",
       "runtime": "Per-turn limits, context compaction, tool-result pruning, memory, session_search summaries, and background review.",
-      "tools": "Optional tools (web_extract, delegate_task, execute_code), global tool disables, skill allowlist, and extension params JSON.",
+      "tools": "Optional tools (web_extract, delegate_task, execute_code), global built-in tool disables, and extension params JSON. Skill allowlist is under Skills.",
+      "skills": "Skills marketplace source (use the section Save button) and default skill allowlist for all agents (use the page header Save). Install skills in the Skills library. Per-tool toggles are under Tools.",
       "systemPrompt": "Optional full replacement for the default system prompt; merges with per-agent entries (entry wins). Saves to agents.defaults."
     },
     "cardModelsTitle": "Models",

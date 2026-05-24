@@ -1,6 +1,7 @@
 import type { LucideIcon } from 'lucide-react';
 import {
   Brain,
+  BookOpen,
   Cable,
   Clock,
   Cloud,
@@ -44,6 +45,7 @@ const TAB_ICONS: Record<Tab, LucideIcon> = {
   settingsAgentBrowser: Globe,
   settingsAgentRuntime: Brain,
   settingsAgentTools: Wrench,
+  settingsAgentSkills: BookOpen,
   settingsAgentMcp: Cable,
   settingsAgentSystemPrompt: ScrollText,
   settingsAgents: Users,
