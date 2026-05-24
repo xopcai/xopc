@@ -124,11 +124,24 @@ const router = createHashRouter([
       },
       {
         path: 'channels',
-        element: (
-          <Suspense fallback={<SecondaryRouteFallback />}>
-            <ChannelsPage />
-          </Suspense>
-        ),
+        children: [
+          {
+            index: true,
+            element: (
+              <Suspense fallback={<SecondaryRouteFallback />}>
+                <ChannelsPage />
+              </Suspense>
+            ),
+          },
+          {
+            path: ':channelId',
+            element: (
+              <Suspense fallback={<SecondaryRouteFallback />}>
+                <ChannelsPage />
+              </Suspense>
+            ),
+          },
+        ],
       },
       {
         path: 'mcp',

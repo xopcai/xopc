@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { AgentService } from '../agent/service.js';
 import { ChannelManager } from '../channels/manager.js';
-import { CHAT_CHANNEL_ORDER } from '../channels/registry.js';
+import { CHAT_CHANNEL_ORDER, getChatChannelMeta } from '../channels/registry.js';
 import { setPairingBroadcastSink } from '../channels/pairing/pairing-events.js';
 import { MessageBus, MessageBusShutdownError } from '../infra/bus/index.js';
 import type { Config as SurfaceConfig } from '../config/config-surface.js';
@@ -1304,6 +1304,50 @@ export class GatewayService {
     }
 
     return rows;
+  }
+
+  /**
+   * Hub metadata for gateway console (built-in registry + registered channel plugins).
+   */
+  getChannelsHubMeta(): Array<{
+    id: string;
+    label: string;
+    description: string;
+    manageable: boolean;
+    order: number;
+  }> {
+    const manageableIds = new Set<string>(['telegram', 'weixin', 'feishu']);
+    const byId = new Map<
+      string,
+      { id: string; label: string; description: string; manageable: boolean; order: number }
+    >();
+
+    for (const plugin of this.channelManager.getAllPlugins()) {
+      byId.set(plugin.id, {
+        id: plugin.id,
+        label: plugin.meta.label,
+        description: plugin.meta.blurb,
+        manageable: manageableIds.has(plugin.id),
+        order: plugin.meta.order ?? 999,
+      });
+    }
+
+    CHAT_CHANNEL_ORDER.forEach((id, index) => {
+      if (byId.has(id)) return;
+      const meta = getChatChannelMeta(id);
+      byId.set(id, {
+        id,
+        label: meta.label,
+        description: meta.description,
+        manageable: true,
+        order: index,
+      });
+    });
+
+    return Array.from(byId.values()).toSorted((a, b) => {
+      if (a.order !== b.order) return a.order - b.order;
+      return a.id.localeCompare(b.id);
+    });
   }
 
   /**

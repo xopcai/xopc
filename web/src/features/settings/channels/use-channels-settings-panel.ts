@@ -32,9 +32,6 @@ export function useChannelsSettingsPanel() {
   const [error, setError] = useState<string | null>(null);
   const [saveOk, setSaveOk] = useState(false);
 
-  const [weixinModalOpen, setWeixinModalOpen] = useState(false);
-  const [telegramModalOpen, setTelegramModalOpen] = useState(false);
-  const [feishuModalOpen, setFeishuModalOpen] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<'weixin' | 'telegram' | 'feishu' | null>(null);
   const [weixinSuccessBanner, setWeixinSuccessBanner] = useState<string | null>(null);
   const [feishuSetupSuccessBanner, setFeishuSetupSuccessBanner] = useState<string | null>(null);
@@ -385,12 +382,6 @@ export function useChannelsSettingsPanel() {
     saving,
     error,
     saveOk,
-    weixinModalOpen,
-    setWeixinModalOpen,
-    telegramModalOpen,
-    setTelegramModalOpen,
-    feishuModalOpen,
-    setFeishuModalOpen,
     removeTarget,
     setRemoveTarget,
     weixinSuccessBanner,

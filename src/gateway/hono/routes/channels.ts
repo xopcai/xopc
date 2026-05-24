@@ -122,6 +122,11 @@ export function registerChannelRoutes(authenticated: Hono, deps: AuthenticatedRo
     return c.json({ ok: true, payload: { channels } });
   });
 
+  authenticated.get('/api/channels/meta', (c) => {
+    const channels = service.getChannelsHubMeta();
+    return c.json({ ok: true, payload: { channels } });
+  });
+
   authenticated.post('/api/channels/weixin/login/start', strictRateLimitMiddleware, async (c) => {
     const body = await c.req.json().catch(() => ({}));
     const account =
