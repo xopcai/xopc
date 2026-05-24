@@ -753,8 +753,13 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
           if (bodyTg.allowFrom !== undefined) {
             tg.allowFrom = bodyTg.allowFrom;
           }
-          if (bodyTg.apiRoot !== undefined) {
-            tg.apiRoot = bodyTg.apiRoot;
+          if ('apiRoot' in bodyTg) {
+            const ar = bodyTg.apiRoot;
+            if (ar === null || ar === undefined || (typeof ar === 'string' && !ar.trim())) {
+              delete tg.apiRoot;
+            } else {
+              tg.apiRoot = String(ar).trim();
+            }
           }
           if (bodyTg.debug !== undefined) {
             tg.debug = bodyTg.debug;
@@ -762,8 +767,13 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
           if (bodyTg.streamMode !== undefined) {
             tg.streamMode = bodyTg.streamMode;
           }
-          if (bodyTg.groupAllowFrom !== undefined) {
-            tg.groupAllowFrom = bodyTg.groupAllowFrom;
+          if ('groupAllowFrom' in bodyTg) {
+            const ga = bodyTg.groupAllowFrom;
+            if (ga === null || (Array.isArray(ga) && ga.length === 0)) {
+              delete tg.groupAllowFrom;
+            } else {
+              tg.groupAllowFrom = ga;
+            }
           }
           if (bodyTg.dmPolicy !== undefined) {
             tg.dmPolicy = bodyTg.dmPolicy;
@@ -780,8 +790,13 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
           if (bodyTg.textChunkLimit !== undefined) {
             tg.textChunkLimit = bodyTg.textChunkLimit;
           }
-          if (bodyTg.proxy !== undefined) {
-            tg.proxy = bodyTg.proxy;
+          if ('proxy' in bodyTg) {
+            const pr = bodyTg.proxy;
+            if (pr === null || pr === undefined || (typeof pr === 'string' && !pr.trim())) {
+              delete tg.proxy;
+            } else {
+              tg.proxy = String(pr).trim();
+            }
           }
           if (bodyTg.accounts !== undefined) {
             tg.accounts = bodyTg.accounts;
@@ -859,7 +874,14 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
             else fsTarget.defaultAccount = String(da);
           }
           if (fs.appId !== undefined) fsTarget.appId = fs.appId;
-          if (fs.appSecret !== undefined) fsTarget.appSecret = fs.appSecret;
+          if ('appSecret' in fs) {
+            const v = fs.appSecret;
+            if (v === null || (typeof v === 'string' && !String(v).trim())) {
+              delete fsTarget.appSecret;
+            } else {
+              fsTarget.appSecret = v;
+            }
+          }
           if (fs.domain !== undefined) fsTarget.domain = fs.domain;
           if (fs.connectionMode !== undefined) fsTarget.connectionMode = fs.connectionMode;
           if (fs.verificationToken !== undefined) {
