@@ -23,6 +23,7 @@
     "gateway": "网关",
     "heartbeat": "心跳",
     "tunnel": "远程访问",
+    "remote-access": "远程访问",
     "shares": "文件分享",
     "search": "网络搜索",
     "dreams": "梦境",

@@ -21,8 +21,11 @@ import type { Config } from '../config/schema.js';
 import type { SessionListQuery, ExportFormat } from '../session/types.js';
 import type { SessionPatchBody } from '../session/patch-metadata.js';
 import type { CompactionResult } from '../agent/memory/compaction.js';
-import { maybeAutoStartTunnelFromConfig } from '../tunnel/gateway-lifecycle.js';
 import { wireTunnelEventsToGateway } from '../tunnel/gateway-lifecycle.js';
+import {
+  stopTailscaleExposure,
+} from './tailscale-lifecycle.js';
+import { getExposureManager } from '../remote-access/exposure-manager.js';
 import { sanitizeTunnelConfig } from '../tunnel/tunnel-config.js';
 import { resolveGatewayAuth, assertGatewayAuthConfigured, validateToken, extractToken, type ResolvedGatewayAuth } from './auth.js';
 import { assertGatewayAuthNotKnownWeak } from './security/known-weak-secrets.js';
@@ -518,9 +521,10 @@ export class GatewayService {
     log.debug('Gateway service started');
   }
 
-  /** After HTTP is listening: honor `tunnel.autoStart` (CLI / GatewayServer). */
-  private async runTunnelAutoStartIfConfigured(): Promise<void> {
-    await maybeAutoStartTunnelFromConfig(this.config, this.getAuthToken());
+  /** After HTTP is listening: exposure auto-start (Tailscale, then FRP tunnel). */
+  private async runExposureAutoStartIfConfigured(): Promise<void> {
+    const port = this.config.gateway?.port ?? 18790;
+    await getExposureManager().autoStart(this.config, port, this.getAuthToken());
   }
 
   /**
@@ -528,7 +532,7 @@ export class GatewayService {
    * opted into `meta.deferConnectUntilAfterListen`, then replays outbound queue.
    */
   async onHttpListening(): Promise<void> {
-    await this.runTunnelAutoStartIfConfigured();
+    await this.runExposureAutoStartIfConfigured();
 
     if (this.serviceConfig.deferChannelConnectUntilAfterHttp !== true) {
       return;
@@ -583,6 +587,10 @@ export class GatewayService {
     setPairingBroadcastSink(null);
 
     log.debug('Stopping gateway service...');
+
+    await stopTailscaleExposure().catch((err) => {
+      log.warn({ err }, 'Tailscale exposure shutdown failed');
+    });
 
     if (this.stopGatewayUpdateCheck) {
       this.stopGatewayUpdateCheck();

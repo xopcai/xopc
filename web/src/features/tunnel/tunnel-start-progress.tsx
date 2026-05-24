@@ -52,7 +52,6 @@ function stepDetail(
     }
     return t.frpcDownloading;
   }
-
   if (stepId === 'registering' && progress?.publicUrl) {
     return t.stepRegisterDetail;
   }
@@ -187,6 +186,19 @@ export function TunnelStartProgressPanel({
                       </p>
                     ) : null}
                   </div>
+                ) : null}
+                {stepId === 'preparing_frpc' && state === 'active' && status.frpcDownload?.url ? (
+                  <p className="mt-2 text-fg-subtle">
+                    <span className="font-sans">{t.frpcDownloadingUrlLabel}: </span>
+                    <a
+                      href={status.frpcDownload.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="break-all font-mono text-[11px] text-accent hover:underline"
+                    >
+                      {status.frpcDownload.url}
+                    </a>
+                  </p>
                 ) : null}
               </div>
             </li>

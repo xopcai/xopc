@@ -32,9 +32,21 @@ export function resolveGatewayUrl(opts?: { url?: string; configPath?: string }):
     return normalized;
   }
 
+  const envUrl = process.env.XOPC_GATEWAY_URL?.trim();
+  if (envUrl) {
+    const normalized = envUrl.replace(/\/+$/, '');
+    assertSecureGatewayHttpUrl(normalized);
+    return normalized;
+  }
+
   try {
     const configPath = opts?.configPath ?? resolveConfigPath();
     const config = loadConfig(configPath);
+    if (config.gateway?.mode === 'remote' && config.gateway.remote?.url?.trim()) {
+      const normalized = config.gateway.remote.url.trim().replace(/\/+$/, '');
+      assertSecureGatewayHttpUrl(normalized);
+      return normalized;
+    }
     const host = resolveGatewayEffectiveHost(config);
     const port = config?.gateway?.port ?? 18790;
     const displayHost = host === '0.0.0.0' ? '127.0.0.1' : host;
@@ -55,6 +67,10 @@ export function resolveGatewayToken(opts?: { token?: string; configPath?: string
   try {
     const configPath = opts?.configPath ?? resolveConfigPath();
     const config = loadConfig(configPath);
+    if (config.gateway?.mode === 'remote') {
+      const remoteToken = config.gateway.remote?.token?.trim();
+      if (remoteToken) return remoteToken;
+    }
     return config?.gateway?.auth?.token;
   } catch {
     return undefined;

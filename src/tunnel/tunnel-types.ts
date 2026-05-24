@@ -1,5 +1,6 @@
 export type FrpcDownloadProgress = {
   phase: 'downloading' | 'extracting';
+  url?: string;
   bytesReceived?: number;
   totalBytes?: number | null;
   percent?: number | null;

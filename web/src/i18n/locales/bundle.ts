@@ -6,6 +6,7 @@ import enCron from './en/cron.json' with { type: 'json' };
 import enLogs from './en/logs.json' with { type: 'json' };
 import enOnboarding from './en/onboarding.json' with { type: 'json' };
 import enProviders from './en/providers.json' with { type: 'json' };
+import enRemoteAccess from './en/remote-access.json' with { type: 'json' };
 import enSessions from './en/sessions.json' with { type: 'json' };
 import enSettings from './en/settings.json' with { type: 'json' };
 import enShell from './en/shell.json' with { type: 'json' };
@@ -22,6 +23,7 @@ import zhCron from './zh/cron.json' with { type: 'json' };
 import zhLogs from './zh/logs.json' with { type: 'json' };
 import zhOnboarding from './zh/onboarding.json' with { type: 'json' };
 import zhProviders from './zh/providers.json' with { type: 'json' };
+import zhRemoteAccess from './zh/remote-access.json' with { type: 'json' };
 import zhSessions from './zh/sessions.json' with { type: 'json' };
 import zhSettings from './zh/settings.json' with { type: 'json' };
 import zhShell from './zh/shell.json' with { type: 'json' };
@@ -40,6 +42,7 @@ export const en = {
   ...enLogs,
   ...enOnboarding,
   ...enProviders,
+  ...enRemoteAccess,
   ...enSessions,
   ...enSettings,
   ...enShell,
@@ -59,6 +62,7 @@ export const zh = {
   ...zhLogs,
   ...zhOnboarding,
   ...zhProviders,
+  ...zhRemoteAccess,
   ...zhSessions,
   ...zhSettings,
   ...zhShell,

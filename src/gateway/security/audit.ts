@@ -4,6 +4,11 @@ import { resolveGatewayAuth, assertGatewayAuthConfigured } from '../auth.js';
 import { isAuthRateLimitGloballyDisabled, isGatewayStrictSecurityEnabled } from '../auth-rate-limit.js';
 import { assertGatewayRuntimeConfig } from '../runtime-config.js';
 import { resolveGatewayListenPlan } from '../listen.js';
+import {
+  collectExposureConflicts,
+  isRemoteGatewayInsecure,
+  isTailnetBindUnavailable,
+} from '../../remote-access/exposure-guards.js';
 import { createLogger } from '../../utils/logger.js';
 
 const log = createLogger('SecurityAudit');
@@ -50,7 +55,10 @@ function resolveAuditInputs(cfg: Config, env: NodeJS.ProcessEnv = process.env): 
   const rateLimitEnabled =
     cfg.gateway?.auth?.rateLimit?.enabled !== false &&
     !isAuthRateLimitGloballyDisabled();
-  const tlsEnabled = cfg.tunnel?.enabled === true;
+  const tlsEnabled =
+    cfg.tunnel?.enabled === true ||
+    (cfg.gateway?.tailscale?.mode ?? 'off') !== 'off' ||
+    cfg.gateway?.tls?.enabled === true;
   const loopback = isLoopbackHost(plan.bindHost);
 
   return {
@@ -353,6 +361,74 @@ export function collectGatewayConfigFindings(params: {
   return findings;
 }
 
+export function collectExposureAuditFindings(cfg: Config): SecurityAuditFinding[] {
+  const findings: SecurityAuditFinding[] = [];
+  const tailscaleMode = cfg.gateway?.tailscale?.mode ?? 'off';
+  const bindMode = cfg.gateway?.bind ?? 'loopback';
+
+  for (const conflict of collectExposureConflicts(cfg)) {
+    findings.push({
+      checkId: `gateway.exposure.${conflict.code}`,
+      severity: 'critical',
+      title: 'Remote exposure configuration conflict',
+      detail: conflict.message,
+      remediation: 'Adjust gateway.tailscale and tunnel settings so only one auto-exposure path is active.',
+    });
+  }
+
+  if (tailscaleMode === 'funnel' && cfg.gateway?.auth?.mode !== 'password') {
+    findings.push({
+      checkId: 'gateway.tailscale.funnel_without_password',
+      severity: 'critical',
+      title: 'Tailscale Funnel requires password auth',
+      detail: 'gateway.tailscale.mode=funnel exposes the gateway on the public internet and requires gateway.auth.mode=password.',
+      remediation: 'Set gateway.auth.mode to password and configure gateway.auth.password.',
+    });
+  }
+
+  if (tailscaleMode !== 'off' && bindMode !== 'loopback') {
+    findings.push({
+      checkId: 'gateway.tailscale.serve_with_non_loopback_bind',
+      severity: 'critical',
+      title: 'Tailscale exposure requires loopback bind',
+      detail: `Tailscale ${tailscaleMode} is enabled but gateway.bind=${bindMode}.`,
+      remediation: 'Set gateway.bind to loopback when using Tailscale Serve or Funnel.',
+    });
+  }
+
+  if (isTailnetBindUnavailable(cfg)) {
+    findings.push({
+      checkId: 'gateway.bind.tailnet_ip_unavailable',
+      severity: 'warn',
+      title: 'Tailnet bind requested but Tailscale IP unavailable',
+      detail: 'gateway.bind=tailnet but no Tailscale IPv4 (100.x) was detected; gateway falls back to loopback.',
+      remediation: 'Install and connect Tailscale, or use gateway.tailscale.mode=serve instead.',
+    });
+  }
+
+  if (isRemoteGatewayInsecure(cfg)) {
+    findings.push({
+      checkId: 'gateway.remote.insecure_url',
+      severity: 'warn',
+      title: 'Remote gateway URL uses plaintext HTTP',
+      detail: 'gateway.mode=remote points to a non-loopback http:// URL without TLS.',
+      remediation: 'Use https://, SSH tunnel to loopback, or Tailscale Serve.',
+    });
+  }
+
+  if (tailscaleMode === 'funnel') {
+    findings.push({
+      checkId: 'gateway.tailscale.funnel_public',
+      severity: 'critical',
+      title: 'Tailscale Funnel exposes gateway to the public internet',
+      detail: 'Funnel publishes HTTPS endpoints reachable from the public internet.',
+      remediation: 'Prefer Tailscale Serve for tailnet-only access, or use FRP with consent for controlled public exposure.',
+    });
+  }
+
+  return findings;
+}
+
 /** Findings from fail-closed startup guards (`assertGatewayRuntimeConfig`). */
 export function collectGatewayStartupGuardFindings(
   cfg: Config,
@@ -413,7 +489,8 @@ export function collectGatewaySecurityFindings(
     rateLimitConfigured: cfg.gateway?.auth?.rateLimit !== undefined,
   });
   const startupFindings = collectGatewayStartupGuardFindings(cfg, env);
-  return mergeFindings([...configFindings, ...startupFindings]);
+  const exposureFindings = collectExposureAuditFindings(cfg);
+  return mergeFindings([...configFindings, ...startupFindings, ...exposureFindings]);
 }
 
 function emitFindings(findings: SecurityAuditFinding[]): void {

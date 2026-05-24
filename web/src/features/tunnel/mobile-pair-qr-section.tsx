@@ -1,4 +1,4 @@
-import { Check, Copy, Loader2, Smartphone } from 'lucide-react';
+import { Check, Copy, Loader2, RefreshCw, Smartphone } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
@@ -23,9 +23,13 @@ function inputClassName(): string {
 export function MobilePairQrSection({
   pairQr,
   gatewayToken,
+  streamlined = false,
+  onRefreshQr,
 }: {
   pairQr: MobilePairQrState;
   gatewayToken: string;
+  streamlined?: boolean;
+  onRefreshQr?: () => void;
 }) {
   const language = useLocaleStore((s) => s.language);
   const t = messages(language).tunnelSettings;
@@ -102,15 +106,41 @@ export function MobilePairQrSection({
     );
   }
 
-  return (
-    <SettingsFormSection>
-      <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-fg">
-        <Smartphone className="size-4 text-accent" strokeWidth={1.75} />
-        {t.pairTitle}
+  if (streamlined && !tunnelActive) {
+    return (
+      <SettingsFormSection>
+        <div className="flex items-center gap-2 text-sm font-semibold text-fg">
+          <Smartphone className="size-4 text-accent" strokeWidth={1.75} />
+          {t.pairTitle}
+        </div>
+        <p className="mt-2 text-sm text-fg-muted">{t.pairWaitingForTunnel}</p>
+      </SettingsFormSection>
+    );
+  }
+
+  const sectionBody = (
+    <>
+      <div className={cn('flex flex-wrap items-start justify-between gap-2', streamlined ? 'mb-2' : 'mb-3')}>
+        <div>
+          <div className="flex items-center gap-2 text-sm font-semibold text-fg">
+            <Smartphone className="size-4 text-accent" strokeWidth={1.75} />
+            {t.pairTitle}
+          </div>
+          {!streamlined ? (
+            <p className="mt-1 text-xs text-fg-subtle">
+              {tunnelActive ? t.pairTunnelActive : t.pairSubtitle}
+            </p>
+          ) : (
+            <p className="mt-1 text-xs text-fg-subtle">{t.pairSubtitle}</p>
+          )}
+        </div>
+        {streamlined && tunnelActive && onRefreshQr ? (
+          <Button type="button" variant="ghost" className="shrink-0" onClick={() => void onRefreshQr()}>
+            <RefreshCw className="size-4" />
+            {t.refreshQr}
+          </Button>
+        ) : null}
       </div>
-      <p className="mb-3 text-xs text-fg-subtle">
-        {tunnelActive ? t.pairTunnelActive : t.pairSubtitle}
-      </p>
 
       {pairingBlocked ? (
         <div className="mb-3 space-y-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 dark:border-amber-900/50 dark:bg-amber-950/30">
@@ -155,18 +185,20 @@ export function MobilePairQrSection({
       ) : null}
 
       {tunnelActive ? (
-        <div className="mb-3 space-y-2 rounded-lg border border-edge bg-surface-panel px-3 py-3">
-          <div>
-            <div className="text-xs font-medium text-fg-muted">{t.pairTunnelPublicUrl}</div>
-            <div className="mt-0.5 break-all font-mono text-xs text-fg">{tunnelStatus?.publicUrl}</div>
-          </div>
-          {tunnelQr?.lanUrl ? (
+        !streamlined ? (
+          <div className="mb-3 space-y-2 rounded-lg border border-edge bg-surface-panel px-3 py-3">
             <div>
-              <div className="text-xs font-medium text-fg-muted">{t.pairTunnelLanUrl}</div>
-              <div className="mt-0.5 break-all font-mono text-xs text-fg">{tunnelQr.lanUrl}</div>
+              <div className="text-xs font-medium text-fg-muted">{t.pairTunnelPublicUrl}</div>
+              <div className="mt-0.5 break-all font-mono text-xs text-fg">{tunnelStatus?.publicUrl}</div>
             </div>
-          ) : null}
-        </div>
+            {tunnelQr?.lanUrl ? (
+              <div>
+                <div className="text-xs font-medium text-fg-muted">{t.pairTunnelLanUrl}</div>
+                <div className="mt-0.5 break-all font-mono text-xs text-fg">{tunnelQr.lanUrl}</div>
+              </div>
+            ) : null}
+          </div>
+        ) : null
       ) : (
         <div className="mb-3 space-y-1.5">
           <label className="text-sm font-medium text-fg" htmlFor="tunnel-mobile-pair-base">
@@ -225,15 +257,19 @@ export function MobilePairQrSection({
         <p className="text-sm text-fg-muted">{t.pairQrDisabled}</p>
       ) : null}
 
-      {qrPayload ? (
+      {qrPayload && !streamlined ? (
         <details className="mt-3 rounded-lg border border-edge bg-surface-panel px-3 py-2">
           <summary className="cursor-pointer text-xs font-medium text-fg-muted">{t.deeplinkTitle}</summary>
           <p className="mt-2 break-all font-mono text-[10px] leading-relaxed text-fg-subtle">{qrPayload}</p>
         </details>
       ) : null}
 
-      <p className="mt-3 break-all font-mono text-[10px] leading-relaxed text-fg-subtle">{t.pairSchemeHint}</p>
-      <p className="mt-1 text-[10px] leading-relaxed text-fg-subtle">{t.pairMobileProbeHint}</p>
+      {!streamlined ? (
+        <>
+          <p className="mt-3 break-all font-mono text-[10px] leading-relaxed text-fg-subtle">{t.pairSchemeHint}</p>
+          <p className="mt-1 text-[10px] leading-relaxed text-fg-subtle">{t.pairMobileProbeHint}</p>
+        </>
+      ) : null}
 
       <ConfirmDialog
         open={enableLan.confirmOpen}
@@ -246,6 +282,8 @@ export function MobilePairQrSection({
           if (!enableLan.busy) enableLan.setConfirmOpen(false);
         }}
       />
-    </SettingsFormSection>
+    </>
   );
+
+  return <SettingsFormSection>{sectionBody}</SettingsFormSection>;
 }

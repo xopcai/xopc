@@ -35,6 +35,7 @@ const SETTINGS_SECTION_TO_TAB: Record<SettingsSectionId, Tab> = {
   gateway: 'settingsGateway',
   heartbeat: 'settingsHeartbeat',
   tunnel: 'settingsTunnel',
+  'remote-access': 'settingsTunnel',
   shares: 'settingsShares',
   search: 'settingsSearch',
   dreams: 'settingsDreams',
@@ -184,6 +185,17 @@ export function docsGuidePageUrl(language: StoredLanguage, page: string): string
     return `${HELP_DOCS_BASE_URL}/zh/${slug}`;
   }
   return `${HELP_DOCS_BASE_URL}/${slug}`;
+}
+
+export type RemoteAccessDocsSection = 'tailscale-serve' | 'public-tunnel' | 'advanced';
+
+/** Remote access guide (`docs/remote-access.md`), optionally anchored to a section. */
+export function remoteAccessDocsUrl(
+  language: StoredLanguage,
+  section?: RemoteAccessDocsSection,
+): string {
+  const href = docsGuidePageUrl(language, 'remote-access');
+  return section ? `${href}#${section}` : href;
 }
 
 /** Parse `#/settings/<section>` etc. Returns null if not a settings route. */

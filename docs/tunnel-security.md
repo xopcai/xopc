@@ -1,5 +1,7 @@
 # Remote access (tunnel) security
 
+> **Settings walkthrough:** [Remote access guide](./remote-access.md#public-tunnel) (Public internet tab).
+
 Remote access exposes your **local gateway** on the public internet via FRP (`frp.xopc.ai`). Treat it as high risk.
 
 ## Defaults

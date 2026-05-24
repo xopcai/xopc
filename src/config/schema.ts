@@ -522,12 +522,54 @@ export const GatewayAuthSchema = z
     mode: z.enum(['none', 'token', 'password', 'trusted-proxy']).default('token'),
     token: z.string().optional(),
     password: z.string().optional(),
+    /** When true (default for Serve), browser UI may auth via Tailscale identity headers. API routes still require token. */
+    allowTailscale: z.boolean().optional(),
     rateLimit: GatewayAuthRateLimitSchema,
     trustedProxy: GatewayTrustedProxySchema.optional(),
   })
   .default({
     mode: 'token',
   });
+
+export const GatewayTailscaleConsentSchema = z.object({
+  version: z.string().min(1),
+  acceptedAt: z.string().min(1),
+});
+
+export const GatewayTailscaleSchema = z
+  .object({
+    mode: z.enum(['off', 'serve', 'funnel']).default('off'),
+    resetOnExit: z.boolean().default(true),
+    consent: GatewayTailscaleConsentSchema.optional(),
+  })
+  .default({
+    mode: 'off',
+    resetOnExit: true,
+  });
+
+export const GatewayRemoteSchema = z.object({
+  url: z.string().url(),
+  token: z.string().optional(),
+  password: z.string().optional(),
+  transport: z.enum(['direct', 'ssh']).default('direct'),
+  sshTarget: z.string().optional(),
+  sshIdentity: z.string().optional(),
+  tlsFingerprint: z.string().optional(),
+});
+
+export const GatewayTlsSchema = z
+  .object({
+    enabled: z.boolean().default(false),
+    autoGenerate: z.boolean().default(false),
+    certPath: z.string().optional(),
+    keyPath: z.string().optional(),
+  })
+  .default({
+    enabled: false,
+    autoGenerate: false,
+  });
+
+export const GatewayModeSchema = z.enum(['local', 'remote']).default('local');
 
 export const HeartbeatConfigSchema = z
   .object({
@@ -573,6 +615,8 @@ export const TunnelE2eSchema = z
     staging: false,
   });
 
+export const TunnelExposureModeSchema = z.enum(['public', 'pairing-only']);
+
 export const TunnelConfigSchema = z
   .object({
     enabled: z.boolean().default(false),
@@ -581,6 +625,8 @@ export const TunnelConfigSchema = z
     registrationSecret: z.string().min(1).optional(),
     autoStart: z.boolean().default(false),
     subdomain: z.string().optional(),
+    /** public: full gateway; pairing-only: broker routes only mobile pair endpoints. */
+    exposure: TunnelExposureModeSchema.default('public'),
     consent: TunnelConsentSchema.optional(),
     e2e: TunnelE2eSchema.optional(),
   })
@@ -588,6 +634,7 @@ export const TunnelConfigSchema = z
     enabled: false,
     brokerUrl: 'https://frp.xopc.ai/api',
     autoStart: false,
+    exposure: 'public',
   });
 
 export type TunnelConfig = z.infer<typeof TunnelConfigSchema>;
@@ -602,6 +649,12 @@ export const GatewayConfigSchema = z.object({
   /** @deprecated Use `bind` + `customBindHost`. Kept for backward compatibility. */
   host: z.string().optional(),
   port: z.number().optional(),
+  /** local: this process runs the gateway; remote: CLI clients target gateway.remote. */
+  mode: GatewayModeSchema.optional(),
+  /** Persistent remote gateway target for CLI/TUI/MCP when mode=remote. */
+  remote: GatewayRemoteSchema.optional(),
+  tailscale: GatewayTailscaleSchema.optional(),
+  tls: GatewayTlsSchema.optional(),
   auth: GatewayAuthSchema.optional(),
   heartbeat: HeartbeatConfigSchema.optional(),
   maxSseConnections: z.number().optional(),

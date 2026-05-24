@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import net from 'node:net';
 
+import { getTailnetIPv4Sync } from '../infra/tailscale.js';
 import type { Config } from '../config/schema.js';
 import type { GatewayBindMode } from '../config/schema.js';
 import { isLoopbackHost } from '../gateway/host.js';
@@ -122,9 +123,9 @@ export function defaultGatewayBindMode(): GatewayBindMode {
   return isContainerEnvironment() ? 'auto' : 'loopback';
 }
 
-/** Placeholder for Tailscale tailnet bind; returns undefined when tailnet IP is unavailable. */
+/** Resolve primary Tailscale tailnet IPv4 (100.x) when available. */
 export function pickPrimaryTailnetIPv4(): string | undefined {
-  return undefined;
+  return getTailnetIPv4Sync();
 }
 
 export function isValidIPv4(host: string): boolean {
