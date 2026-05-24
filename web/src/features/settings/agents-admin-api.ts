@@ -54,6 +54,8 @@ export async function createGatewayAgent(body: {
   model?: string;
   agentDir?: string;
   description?: string;
+  toolsDisable?: string[];
+  profileFiles?: Record<string, string>;
 }): Promise<CreateGatewayAgentResult> {
   const res = await fetchJson<{
     ok?: boolean;

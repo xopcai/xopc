@@ -4,8 +4,6 @@ import { SkipForward, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   createGatewayAgent,
-  saveAgentProfileFileContent,
-  updateGatewayAgent,
 } from '@/features/settings/agents-admin-api';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
@@ -66,15 +64,14 @@ export function PresetAgentsSetup({ existingAgentIds, onComplete, onSkip }: Pres
           id: preset.id,
           workspace: `~/.xopc/workspace/${preset.id}`,
           description: language === 'zh' ? preset.descriptionZh : preset.descriptionEn,
+          profileFiles: {
+            'IDENTITY.md': preset.identityMd,
+            'SOUL.md': preset.soulMd,
+          },
+          ...(preset.toolsDisable && preset.toolsDisable.length > 0
+            ? { toolsDisable: preset.toolsDisable }
+            : {}),
         });
-
-        await saveAgentProfileFileContent(preset.id, 'IDENTITY.md', preset.identityMd);
-        await saveAgentProfileFileContent(preset.id, 'SOUL.md', preset.soulMd);
-
-        const disables = preset.toolsDisable;
-        if (disables && disables.length > 0) {
-          await updateGatewayAgent(preset.id, { toolsDisable: disables });
-        }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         if (message.toLowerCase().includes('already exists')) {
