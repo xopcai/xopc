@@ -1,6 +1,7 @@
 import { PreferenceSelectFields } from '@/components/shell/preference-select-fields';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
+import { interaction } from '@/lib/interaction';
 import { useLocaleStore } from '@/stores/locale-store';
 import { type ColorScheme, useThemeStore } from '@/stores/theme-store';
 
@@ -160,7 +161,8 @@ function ColorSchemeSelector() {
               aria-pressed={isSelected}
               onClick={() => setColorScheme(value)}
               className={cn(
-                'flex flex-col gap-2 rounded-xl border-2 p-2.5 text-left transition-[border-color,box-shadow] duration-150',
+                'flex flex-col gap-2 rounded-xl border-2 p-2.5 text-left transition-[border-color,box-shadow,transform] duration-150',
+                interaction.pressCard,
                 isSelected
                   ? 'border-accent shadow-[0_0_0_1px_var(--color-accent)]'
                   : 'border-edge-subtle hover:border-edge',

@@ -15,9 +15,9 @@ import {
 import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/settings/settings-form-section';
 import type { AgentsSettingsMessages, ChatMessages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
+import { ghostIconButton, interaction } from '@/lib/interaction';
 import {
   SETTINGS_SHELL_CONTENT_Z,
-  SETTINGS_SHELL_MODAL_POPOVER_Z,
   SETTINGS_SHELL_OVERLAY_Z,
 } from '@/lib/settings-shell-dialog-layer';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -280,7 +280,7 @@ export function AgentOverviewTab(props: {
                 <Dialog.Close asChild>
                   <button
                     type="button"
-                    className="shrink-0 rounded-lg p-1.5 text-fg-muted hover:bg-surface-base hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                    className={cn(ghostIconButton, 'shrink-0 p-1.5 hover:bg-surface-base')}
                     aria-label={a.closeDialogAria}
                   >
                     <X className="size-4" aria-hidden />
@@ -383,7 +383,6 @@ export function AgentOverviewTab(props: {
             <div className="flex flex-wrap items-stretch gap-2">
               <ModelSelector
                 className="min-w-0 flex-1"
-                popoverContentClassName={SETTINGS_SHELL_MODAL_POPOVER_Z}
                 value={editModel}
                 disabled={busy}
                 placeholder={chat.modelPlaceholder}
@@ -435,6 +434,7 @@ export function AgentOverviewTab(props: {
                   type="button"
                   className={cn(
                     'flex flex-col items-center gap-1.5 rounded-xl border-2 p-3 text-center transition-all',
+                    interaction.pressCard,
                     soulTemplate === template.id
                       ? 'border-accent bg-accent-soft/40 shadow-sm'
                       : 'border-edge hover:border-accent/40 hover:bg-surface-hover',
@@ -453,7 +453,10 @@ export function AgentOverviewTab(props: {
                 <span className="text-sm font-medium text-fg">{a.personaSoulCustomEdit}</span>
                 <button
                   type="button"
-                  className="inline-flex size-9 shrink-0 items-center justify-center rounded-md text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg"
+                  className={cn(
+                    ghostIconButton,
+                    'inline-flex size-9 shrink-0 items-center justify-center rounded-md p-0 hover:bg-surface-hover',
+                  )}
                   title={soulPreviewMode ? a.personaSoulEdit : a.personaSoulPreview}
                   aria-label={soulPreviewMode ? a.personaSoulEdit : a.personaSoulPreview}
                   onClick={() => setSoulPreviewMode((v) => !v)}

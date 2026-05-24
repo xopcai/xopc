@@ -7,6 +7,7 @@ import {
 } from '@/features/settings/settings-form-section';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
+import { interaction } from '@/lib/interaction';
 import { useLocaleStore } from '@/stores/locale-store';
 
 import type { SetupChecklistItemId } from './setup-checklist-state';
@@ -53,6 +54,7 @@ export function SetupStatusPanel() {
           className={cn(
             'inline-flex shrink-0 items-center gap-2 rounded-lg border border-edge px-3 py-2 text-sm font-medium text-fg',
             'hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+            interaction.press,
           )}
           onClick={() => void refresh()}
           disabled={!ready}

@@ -137,7 +137,7 @@ export function AgentDefaultsSkillsAllowlistPanel(props: AgentDefaultsPanelProps
               <div
                 className={cn(
                   'max-h-[min(50vh,22rem)] overflow-y-auto overscroll-contain pr-0.5',
-                  !restrictMode && 'pointer-events-none opacity-50',
+                  !restrictMode && 'opacity-50',
                 )}
               >
                 <ul className="flex flex-col gap-2.5 text-sm">

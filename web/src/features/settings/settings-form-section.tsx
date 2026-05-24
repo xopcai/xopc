@@ -3,6 +3,7 @@ import { Pencil } from 'lucide-react';
 import type { ReactNode } from 'react';
 
 import { cn } from '@/lib/cn';
+import { interaction } from '@/lib/interaction';
 
 /**
  * Settings content sits on `bg-surface-panel`; grouped blocks use a recessed `bg-surface-base`
@@ -52,11 +53,13 @@ export function SettingsFormSectionHeader({
     ? cn(
         'flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-surface-panel p-0 ring-1 ring-inset ring-edge-subtle transition-[box-shadow] hover:ring-accent/40 dark:ring-edge-subtle',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
+        interaction.press,
       )
     : cn(
         settingsSectionHeaderIconShellClass,
         'hover:text-fg',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
+        interaction.press,
       );
 
   const showAvatarEditPencil = Boolean(iconInteractive && iconLeading);
