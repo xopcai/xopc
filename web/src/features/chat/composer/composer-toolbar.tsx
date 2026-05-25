@@ -40,8 +40,8 @@ export interface ComposerToolbarProps {
   showThinkingSelector: boolean;
   onThinkingChange: (level: string) => void;
 
-  voiceRecording: boolean;
-  onToggleVoice: () => void;
+  voiceActive: boolean;
+  onStartVoiceInput: () => void;
 
   onSend: () => void;
   onAbort: () => void;
@@ -73,8 +73,8 @@ export const ComposerToolbar = memo(function ComposerToolbar({
   thinkingLevel,
   showThinkingSelector,
   onThinkingChange,
-  voiceRecording,
-  onToggleVoice,
+  voiceActive,
+  onStartVoiceInput,
   onSend,
   onAbort,
   onInterrupt,
@@ -114,13 +114,12 @@ export const ComposerToolbar = memo(function ComposerToolbar({
               interaction.transition,
               interaction.press,
               interaction.focusRingPanel,
-              voiceRecording && 'bg-red-500/20 text-red-600 dark:bg-red-500/25 dark:text-red-400',
             )}
             title={m.moreActions}
             aria-label={m.moreActions}
             aria-expanded={moreOpen}
           >
-            <Plus className={cn('size-4', voiceRecording && 'animate-pulse')} />
+            <Plus className="size-4" />
           </button>
         </Popover.Trigger>
         <Popover.Portal>
@@ -180,32 +179,6 @@ export const ComposerToolbar = memo(function ComposerToolbar({
                   </select>
                 </label>
               ) : null}
-
-              <button
-                type="button"
-                className={cn(
-                  'flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm',
-                  'hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-                  'disabled:cursor-not-allowed disabled:opacity-50',
-                  voiceRecording
-                    ? 'text-red-600 dark:text-red-400'
-                    : 'text-fg',
-                )}
-                disabled={disabled || runBusy || attachmentsFull}
-                title={voiceRecording ? m.voiceRecordingStop : m.voiceRecording}
-                onClick={() => {
-                  void onToggleVoice();
-                  if (!voiceRecording) {
-                    setMoreOpen(false);
-                  }
-                }}
-              >
-                <Mic
-                  className={cn('size-4 shrink-0', voiceRecording && 'animate-pulse')}
-                  aria-hidden
-                />
-                <span>{voiceRecording ? m.voiceRecordingStop : m.voiceRecording}</span>
-              </button>
             </div>
           </Popover.Content>
         </Popover.Portal>
@@ -239,6 +212,24 @@ export const ComposerToolbar = memo(function ComposerToolbar({
           </div>
         ) : null}
         <div className="flex shrink-0 items-center gap-1">
+          {!voiceActive ? (
+            <button
+              type="button"
+              className={cn(
+                'inline-flex size-8 shrink-0 items-center justify-center rounded-lg border border-transparent text-fg-subtle hover:bg-surface-hover hover:text-fg',
+                interaction.transition,
+                interaction.press,
+                interaction.focusRingPanel,
+                'disabled:cursor-not-allowed disabled:opacity-50',
+              )}
+              disabled={disabled}
+              title={m.voiceInput}
+              aria-label={m.voiceInput}
+              onClick={() => void onStartVoiceInput()}
+            >
+              <Mic className="size-4 stroke-[1.75]" />
+            </button>
+          ) : null}
           {runBusy ? (
             <>
               {showSteeringInterrupt && onInterrupt ? (
@@ -283,7 +274,7 @@ export const ComposerToolbar = memo(function ComposerToolbar({
                   ? 'border-transparent text-accent-fg hover:bg-accent-soft dark:text-accent-fg dark:hover:bg-accent-soft'
                   : 'border-transparent text-fg-disabled',
               )}
-              disabled={disabled || !hasDraft}
+              disabled={disabled || voiceActive || !hasDraft}
               title={m.sendMessage}
               aria-label={m.sendMessage}
               onClick={onSend}
