@@ -121,6 +121,28 @@ export async function enableDesktopNotificationsWithTest(
   if (typeof Notification === 'undefined') {
     return 'unsupported';
   }
+
+  if (isElectron() && window.electronAPI?.system?.requestNotifications) {
+    const result = await window.electronAPI.system.requestNotifications();
+    if (result.status !== 'granted') {
+      if (result.outcome === 'opened-settings' || result.status === 'denied') {
+        return 'denied';
+      }
+      return 'default';
+    }
+    if (Notification.permission === 'default') {
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') {
+        return permission === 'denied' ? 'denied' : 'default';
+      }
+    } else if (Notification.permission === 'denied') {
+      return 'denied';
+    }
+    cachedPrefs = { ...cachedPrefs, notifyEnabled: true };
+    showDesktopNotification({ title: testTitle, body: testBody, tag: 'xopc-notify-test', force: true });
+    return 'enabled';
+  }
+
   let permission = Notification.permission;
   if (permission === 'default') {
     permission = await Notification.requestPermission();

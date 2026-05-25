@@ -291,6 +291,7 @@
     "permissionsTitle": "系统权限",
     "permissionsHint": "状态为尽量检测，修改系统设置后请刷新或重新进入本页。",
     "permissionsHintDarwin": "macOS 的隐私/媒体状态为尽量检测。修改系统设置后请用「刷新状态」或再次进入本页。",
+    "permissionsHintDevDarwin": "开发模式（electron:dev）在系统设置中显示为 Electron，而非 xopc。请用打包后的 .app 验证权限名称是否正确。",
     "permissionsHintWin": "在 Windows 上，麦克风和（如系统可报告）录屏等能力受系统级开关影响；每个按钮会打开系统「设置」中的相关页面。",
     "permissionsHintLinux": "Linux 上此处不显示各权限的准确状态。会尝试打开桌面环境设置，失败时打开说明文档。请在发行版/Flatpak/ portal 中授予「文件、麦克风、通知」等。",
     "status": {
@@ -313,6 +314,13 @@
       "rendererDenied": "浏览器层无法访问麦克风，请检查系统隐私设置。",
       "prompted": "若出现系统提示，请选择允许麦克风访问。"
     },
+    "screenFeedback": {
+      "granted": "录屏权限已授权。",
+      "alreadyGranted": "录屏此前已授权。",
+      "openedSettings": "已在系统设置中打开录屏页面，请启用 xopc 后点击「刷新状态」。",
+      "denied": "录屏未授权，请在系统设置中启用 xopc。",
+      "prompted": "若出现系统提示，请允许 xopc 进行屏幕录制。"
+    },
     "accessibilityFeedback": {
       "granted": "辅助功能已授权。",
       "alreadyGranted": "辅助功能此前已授权。",
@@ -321,7 +329,10 @@
     },
     "notificationsFeedback": {
       "granted": "通知权限已授权。",
+      "alreadyGranted": "通知此前已授权。",
+      "openedSettings": "已在系统设置中打开通知页面，请启用 xopc 后点击「刷新状态」。",
       "denied": "通知权限被拒绝，请在系统设置中启用 xopc。",
+      "prompted": "若出现系统提示，请允许 xopc 发送通知。",
       "default": "未选择通知权限，请重试或在系统设置中手动启用。",
       "unsupported": "当前环境不支持系统通知。"
     },

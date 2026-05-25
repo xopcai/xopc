@@ -32,7 +32,8 @@ import {
 import { registerAgentIpc } from './ipc/agent-ipc.js';
 import { registerFileIpc } from './ipc/file-ipc.js';
 import { registerSearchIpc } from './ipc/search-ipc.js';
-import { initElectronShellPreferences, registerSystemSettingsIpc, stopAllPowerSaveBlockers } from './ipc/system-settings-ipc.js';
+import { initElectronShellPreferences, isShellNotificationGranted, registerSystemSettingsIpc, stopAllPowerSaveBlockers } from './ipc/system-settings-ipc.js';
+import { isShellChromiumPermissionGranted } from './ipc/shell-permission-gates.js';
 import { registerCronDisplayWakeIpc, stopCronDisplayWakeBlocker } from './ipc/cron-display-wake-ipc.js';
 import { registerUpdaterIpc } from './ipc/updater-ipc.js';
 import { getLoadingPageDataUrl } from './loading-page.js';
@@ -423,20 +424,20 @@ function createWindow(): void {
 app.whenReady().then(async () => {
   if (!gotTheLock) return;
 
-  // getUserMedia / MediaRecorder need Chromium "media" permission; without handlers some Electron
-  // builds deny it for packaged apps (browser tabs are unaffected).
-  const allowShellPermission = (permission: string) =>
-    permission === 'media' ||
-    permission === 'audioCapture' ||
-    permission === 'videoCapture' ||
-    permission === 'notifications';
-
+  // Align Chromium media / screen capture with OS privacy before granting renderer access.
   session.defaultSession.setPermissionCheckHandler((_webContents, permission) => {
-    return allowShellPermission(permission);
+    if (permission === 'notifications') {
+      return isShellNotificationGranted();
+    }
+    return isShellChromiumPermissionGranted(permission);
   });
 
   session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
-    callback(allowShellPermission(permission));
+    if (permission === 'notifications') {
+      callback(isShellNotificationGranted());
+      return;
+    }
+    callback(isShellChromiumPermissionGranted(permission));
   });
 
   await initElectronShellPreferences();

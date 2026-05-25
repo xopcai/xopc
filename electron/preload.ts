@@ -121,7 +121,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       notifyEnabled?: boolean;
       notifySoundEnabled?: boolean;
     }) => ipcRenderer.invoke('system-settings:set-behavior', patch),
-    getPermissions: () => ipcRenderer.invoke('system-settings:get-permissions'),
+    getPermissions: (options?: { probe?: boolean }) =>
+      ipcRenderer.invoke('system-settings:get-permissions', options),
     openPrivacy: (
       kind:
         | 'fullDisk'
@@ -135,6 +136,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ) => ipcRenderer.invoke('system-settings:open-privacy', kind),
     requestMicrophone: () => ipcRenderer.invoke('system-settings:request-microphone'),
     requestAccessibility: () => ipcRenderer.invoke('system-settings:request-accessibility'),
+    requestNotifications: () => ipcRenderer.invoke('system-settings:request-notifications'),
+    requestScreen: () => ipcRenderer.invoke('system-settings:request-screen'),
     getUninstallInfo: () => ipcRenderer.invoke('system-settings:get-uninstall-info'),
     clearUserData: () => ipcRenderer.invoke('system-settings:clear-user-data'),
     uninstallApp: (options?: { removeUserData?: boolean }) =>

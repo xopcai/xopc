@@ -291,6 +291,7 @@
     "permissionsTitle": "System permissions",
     "permissionsHint": "Status is best-effort. After changing system settings, refresh or revisit this page.",
     "permissionsHintDarwin": "macOS privacy (TCC) and media status are best-effort. Use Refresh after you change System Settings.",
+    "permissionsHintDevDarwin": "Development builds (electron:dev) appear as Electron in System Settings, not xopc. Test permissions with a packaged .app for accurate naming.",
     "permissionsHintWin": "On Windows, microphone and (where reported) screen access follow system-wide toggles. Each link opens a relevant page in the Settings app.",
     "permissionsHintLinux": "Linux does not report these states here. We try to open your desktop’s Settings; otherwise a documentation page opens. Grant access in your distro, Flatpak, or portal as needed.",
     "status": {
@@ -313,6 +314,13 @@
       "rendererDenied": "The app could not access the microphone. Check OS privacy settings.",
       "prompted": "If a system prompt appears, allow microphone access."
     },
+    "screenFeedback": {
+      "granted": "Screen recording access is granted.",
+      "alreadyGranted": "Screen recording was already granted.",
+      "openedSettings": "Opened Screen Recording in System Settings — enable xopc, then tap Refresh status.",
+      "denied": "Screen recording is denied. Enable xopc in System Settings.",
+      "prompted": "If a system prompt appears, allow screen recording for xopc."
+    },
     "accessibilityFeedback": {
       "granted": "Accessibility access is granted.",
       "alreadyGranted": "Accessibility was already granted.",
@@ -321,7 +329,10 @@
     },
     "notificationsFeedback": {
       "granted": "Notification permission is granted.",
+      "alreadyGranted": "Notifications were already allowed.",
+      "openedSettings": "Opened Notifications in System Settings — enable xopc, then tap Refresh status.",
       "denied": "Notification permission was denied. Enable xopc in System Settings.",
+      "prompted": "If a system prompt appears, allow notifications for xopc.",
       "default": "Notification permission was not granted. Try again or enable it in System Settings.",
       "unsupported": "System notifications are not supported in this environment."
     },

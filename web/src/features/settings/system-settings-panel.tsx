@@ -75,6 +75,94 @@ function accessibilityFeedback(
   return fb.denied;
 }
 
+function notificationFeedback(
+  result: PermissionRequestResult,
+  fb: {
+    granted: string;
+    alreadyGranted: string;
+    openedSettings: string;
+    denied: string;
+    prompted: string;
+  },
+): string {
+  if (result.outcome === 'opened-settings') {
+    return fb.openedSettings;
+  }
+  if (result.status === 'granted') {
+    return result.outcome === 'already-granted' ? fb.alreadyGranted : fb.granted;
+  }
+  if (result.status === 'denied') {
+    return fb.denied;
+  }
+  return fb.prompted;
+}
+
+function screenFeedback(
+  result: PermissionRequestResult,
+  fb: {
+    granted: string;
+    alreadyGranted: string;
+    openedSettings: string;
+    denied: string;
+    prompted: string;
+  },
+): string {
+  if (result.outcome === 'opened-settings') {
+    return fb.openedSettings;
+  }
+  if (result.status === 'granted') {
+    return result.outcome === 'already-granted' ? fb.alreadyGranted : fb.granted;
+  }
+  if (result.status === 'denied') {
+    return fb.denied;
+  }
+  return fb.prompted;
+}
+
+const REQUESTABLE_PERM_KEYS = new Set<keyof ShellPermissionSnapshot>([
+  'microphone',
+  'accessibility',
+  'notifications',
+  'screen',
+]);
+
+function canRequestAccess(
+  key: keyof ShellPermissionSnapshot,
+  status: TccTriState,
+  platform: SystemSettingsBehavior['platform'],
+): boolean {
+  if (status === 'granted') {
+    return false;
+  }
+  if (key === 'accessibility' && (platform === 'darwin' || platform === 'win32' || platform === 'linux')) {
+    return status === 'unknown';
+  }
+  if (key === 'screen' && (platform === 'darwin' || platform === 'win32')) {
+    return status === 'unknown';
+  }
+  if (REQUESTABLE_PERM_KEYS.has(key)) {
+    return status === 'unknown';
+  }
+  return false;
+}
+
+function canOpenSettings(
+  key: keyof ShellPermissionSnapshot,
+  status: TccTriState,
+  platform: SystemSettingsBehavior['platform'],
+): boolean {
+  if (key === 'accessibility') {
+    return false;
+  }
+  if (key === 'screen' && platform === 'linux') {
+    return true;
+  }
+  if (REQUESTABLE_PERM_KEYS.has(key)) {
+    return status === 'denied';
+  }
+  return true;
+}
+
 const PERM_ROWS: { key: keyof ShellPermissionSnapshot; pane: PrivacyPaneKind; platforms?: Array<'darwin' | 'win32'> }[] = [
   { key: 'fullDisk', pane: 'fullDisk', platforms: ['darwin'] },
   { key: 'screen', pane: 'screen' },
@@ -84,20 +172,6 @@ const PERM_ROWS: { key: keyof ShellPermissionSnapshot; pane: PrivacyPaneKind; pl
   { key: 'notifications', pane: 'notifications' },
   { key: 'location', pane: 'location' },
 ];
-
-function overlayRendererPermissions(perms: ShellPermissionSnapshot): ShellPermissionSnapshot {
-  if (typeof Notification === 'undefined') {
-    return perms;
-  }
-  const p = Notification.permission;
-  if (p === 'default') {
-    return perms;
-  }
-  return {
-    ...perms,
-    notifications: p === 'granted' ? 'granted' : 'denied',
-  };
-}
 
 function visiblePermRows(platform: SystemSettingsBehavior['platform']) {
   if (platform === 'linux') {
@@ -164,7 +238,7 @@ export function SystemSettingsPanel() {
       try {
         const b = await api.getBehavior();
         setBehavior(b);
-        setPerms(overlayRendererPermissions(await api.getPermissions()));
+        setPerms(await api.getPermissions({ probe: options?.showRefreshFeedback }));
         if (options?.showRefreshFeedback) {
           setPermFeedback(t.refreshDone);
         }
@@ -266,7 +340,7 @@ export function SystemSettingsPanel() {
         return;
       }
       await patchBehavior({ notifyEnabled: true });
-      setPerms(overlayRendererPermissions(await api.getPermissions()));
+      setPerms(await api.getPermissions());
       setPermFeedback(t.desktopNotify.testShown);
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : String(e));
@@ -297,7 +371,7 @@ export function SystemSettingsPanel() {
     try {
       const result = await api.requestMicrophone();
       const rendererOk = await probeRendererMicrophone();
-      setPerms(overlayRendererPermissions(await api.getPermissions()));
+      setPerms(await api.getPermissions());
       setPermFeedback(microphoneFeedback(result, rendererOk, t.permFeedback));
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : String(e));
@@ -315,7 +389,7 @@ export function SystemSettingsPanel() {
     setLoadError(null);
     try {
       const result = await api.requestAccessibility();
-      setPerms(overlayRendererPermissions(await api.getPermissions()));
+      setPerms(await api.getPermissions());
       setPermFeedback(accessibilityFeedback(result, t.accessibilityFeedback));
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : String(e));
@@ -325,23 +399,34 @@ export function SystemSettingsPanel() {
   };
 
   const requestNotifications = async () => {
+    if (!api.requestNotifications) {
+      return;
+    }
     setPermBusy(true);
     setPermFeedback(null);
     setLoadError(null);
     try {
-      if (typeof Notification === 'undefined') {
-        setPermFeedback(t.notificationsFeedback.unsupported);
-        return;
-      }
-      const result = await Notification.requestPermission();
-      setPerms(overlayRendererPermissions(await api.getPermissions()));
-      if (result === 'granted') {
-        setPermFeedback(t.notificationsFeedback.granted);
-      } else if (result === 'denied') {
-        setPermFeedback(t.notificationsFeedback.denied);
-      } else {
-        setPermFeedback(t.notificationsFeedback.default);
-      }
+      const result = await api.requestNotifications();
+      setPerms(await api.getPermissions());
+      setPermFeedback(notificationFeedback(result, t.notificationsFeedback));
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setPermBusy(false);
+    }
+  };
+
+  const requestScreen = async () => {
+    if (!api.requestScreen) {
+      return;
+    }
+    setPermBusy(true);
+    setPermFeedback(null);
+    setLoadError(null);
+    try {
+      const result = await api.requestScreen();
+      setPerms(await api.getPermissions());
+      setPermFeedback(screenFeedback(result, t.screenFeedback));
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -389,6 +474,9 @@ export function SystemSettingsPanel() {
                   permFeedback === t.accessibilityFeedback.granted ||
                   permFeedback === t.accessibilityFeedback.alreadyGranted ||
                   permFeedback === t.notificationsFeedback.granted ||
+                  permFeedback === t.notificationsFeedback.alreadyGranted ||
+                  permFeedback === t.screenFeedback.granted ||
+                  permFeedback === t.screenFeedback.alreadyGranted ||
                   permFeedback === t.desktopNotify.testShown
                 ? 'text-emerald-600 dark:text-emerald-400'
                 : 'text-fg-muted',
@@ -475,6 +563,9 @@ export function SystemSettingsPanel() {
             <div>
               <h2 className="text-sm font-semibold text-fg">{t.permissionsTitle}</h2>
               <p className="mt-0.5 text-xs text-fg-muted">{permissionsHint}</p>
+              {behavior.platform === 'darwin' && !behavior.packaged ? (
+                <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">{t.permissionsHintDevDarwin}</p>
+              ) : null}
             </div>
             <button
               type="button"
@@ -517,7 +608,7 @@ export function SystemSettingsPanel() {
                     ) : null}
                   </div>
                   <div className="flex shrink-0 flex-wrap items-center gap-2">
-                    {key === 'notifications' && typeof Notification !== 'undefined' ? (
+                    {key === 'notifications' && canRequestAccess(key, perms[key], behavior.platform) ? (
                       <button
                         type="button"
                         disabled={permBusy}
@@ -530,7 +621,7 @@ export function SystemSettingsPanel() {
                         {t.requestAccess}
                       </button>
                     ) : null}
-                    {key === 'microphone' ? (
+                    {key === 'microphone' && canRequestAccess(key, perms[key], behavior.platform) ? (
                       <button
                         type="button"
                         disabled={permBusy}
@@ -544,7 +635,7 @@ export function SystemSettingsPanel() {
                       </button>
                     ) : null}
                     {key === 'accessibility' &&
-                    (behavior?.platform === 'darwin' || behavior?.platform === 'win32') ? (
+                    canRequestAccess(key, perms[key], behavior.platform) ? (
                       <button
                         type="button"
                         disabled={permBusy}
@@ -557,17 +648,32 @@ export function SystemSettingsPanel() {
                         {t.requestAccess}
                       </button>
                     ) : null}
-                    <button
-                      type="button"
-                      className={cn(
-                        'inline-flex items-center gap-1.5 rounded-lg border border-edge bg-surface-base px-2.5 py-1.5 text-xs font-medium text-fg hover:bg-surface-hover',
-                        interaction.press,
-                      )}
-                      onClick={() => void openPrivacy(pane)}
-                    >
-                      {t.openSettings}
-                      <ExternalLink className="size-3.5" strokeWidth={1.75} aria-hidden />
-                    </button>
+                    {key === 'screen' && canRequestAccess(key, perms[key], behavior.platform) ? (
+                      <button
+                        type="button"
+                        disabled={permBusy}
+                        className={cn(
+                          'inline-flex items-center gap-1 rounded-lg border border-edge bg-surface-base px-2.5 py-1.5 text-xs font-medium text-fg hover:bg-surface-hover disabled:opacity-50',
+                          interaction.press,
+                        )}
+                        onClick={() => void requestScreen()}
+                      >
+                        {t.requestAccess}
+                      </button>
+                    ) : null}
+                    {canOpenSettings(key, perms[key], behavior.platform) ? (
+                      <button
+                        type="button"
+                        className={cn(
+                          'inline-flex items-center gap-1.5 rounded-lg border border-edge bg-surface-base px-2.5 py-1.5 text-xs font-medium text-fg hover:bg-surface-hover',
+                          interaction.press,
+                        )}
+                        onClick={() => void openPrivacy(pane)}
+                      >
+                        {t.openSettings}
+                        <ExternalLink className="size-3.5" strokeWidth={1.75} aria-hidden />
+                      </button>
+                    ) : null}
                   </div>
                 </li>
               );
