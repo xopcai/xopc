@@ -6,8 +6,9 @@
 <h1 align="center">xopc</h1>
 
 <p align="center">
-  <strong>与你共同成长的 OPC 工作站。</strong><br />
-  面向<strong>一人公司</strong>的轻量<strong>个人 AI 助手</strong> —— <strong>本地部署</strong>、<strong>密钥自备（BYOK）</strong>，靠插件扩展能力，不必改核心代码。
+  <strong>与你一起成长的 OPC 工作站。</strong><br />
+  为一人公司打造的本地优先 AI 助手。CLI、桌面、浏览器、手机、即时通讯——全平台覆盖。<br />
+  自带钥匙，无需 fork 即可扩展。
 </p>
 
 <p align="center">
@@ -25,6 +26,7 @@
 </p>
 
 <p align="center">
+  <a href="https://xopc.ai">官网</a> ·
   <a href="https://github.com/xopcai/xopc">GitHub</a> ·
   <a href="https://xopcai.github.io/xopc/zh/">中文文档</a> ·
   <a href="https://xopcai.github.io/xopc/zh/models">模型</a> ·
@@ -36,42 +38,32 @@
 
 ---
 
-## 主要特性
+## 为什么选 xopc
 
 | | |
 | --- | --- |
-| **数据留在身边** | 服务跑在你自己电脑上；不接入会主动访问外网的机器人或联网插件时，数据默认不出本机。也**不必**绑死某一家公有云。 |
-| **BYOK** | API Key、OAuth 等写在配置文件（`~/.xopc/xopc.json`）和环境变量里 —— 可用 DeepSeek(推荐)、 OpenAI、Anthropic、Google、**Ollama / LM Studio / vLLM**、Bedrock、Azure、OpenRouter、各类网关等。 |
-| **多种用法** | **`xopc tui`**（全屏终端）、**`xopc agent`**（命令行里多轮聊）、**浏览器开网关网页**、**Electron 桌面版**（同一套界面）。 |
-| **聊天机器人** | 内置 **Telegram**、**微信**、**飞书/Lark**，以及网关自带的**网页对话**；私聊、群聊可做访问控制（配对、白名单等）。 |
-| **图片与语音** | **图片**：识图、按需生图。**语音**：语音转文字、文字转语音（如 Telegram、网关等），详见文档。 |
-| **可扩展** | **服务端**：`ChannelPlugin`、工具、定时任务（cron）、自定义模型接入。**界面**：用 **`@xopcai/xopc/extension-ui-sdk`** 扩展网关网页。 |
+| **你的机器，你的规则。** | xopc 运行在你自己的硬件上。对话留在本地，密钥存在你的配置里。没有强制云端，没有意外账单，没有数据在你不知情时外流。**`~/.xopc/`**——一切尽在你拥有的目录里。 |
+| **自带钥匙，任选模型。** | DeepSeek（推荐）、OpenAI、Anthropic、Google、Ollama、LM Studio、vLLM、Bedrock、Azure——内置 20+ 供应商。纯离线本地推理也行，云端本地混搭也行。一行配置切换模型，零厂商绑定。 |
+| **一个大脑，每块屏幕都能用** | 同一个助手——终端、浏览器、桌面应用、手机、即时通讯。无需同步，因为本来就是同一个系统。 |
+| **跟你一起长大，永远不会过时。** | 一行命令安装技能，Extensions 增加工具/通道/UI 面板，多 Agent 路由不同场景。**`xopc skills install`** · **`xopc extensions install`**——装好就能用。 |
+| **Cron 定时** | 摘要、提醒与报告按时间表推送。不只是被动回复，还能在你专注别处时主动运行。 |
+| **多 Agent 路由** | 不同场景路由到不同 Agent——各自模型、工作区、工具与系统提示词，上下文完全隔离。工作、创作、编码各用一套。 |
 
 ---
 
-<a id="install"></a>
+## 30 秒，立即开始
 
-## 安装
-
-**环境：** Node.js **≥ 22**（跑 CLI、起网关都需要）。在本仓库里开发时建议用 **pnpm**。
+安装 CLI、运行 onboard、在终端开聊——三步，半分钟上手：
 
 ```bash
 npm install -g @xopcai/xopc
-# 或: pnpm add -g @xopcai/xopc
+xopc onboard          # 想更快可先执行：xopc onboard --quick
+xopc tui --local
 ```
 
-**中国大陆用户**可在 `npm install` 时加上 `--registry=https://registry.npmmirror.com`，例如：
+**环境：** Node.js **≥ 22**。在本仓库里开发时建议用 **pnpm**。
 
-```bash
-npm install -g @xopcai/xopc --registry=https://registry.npmmirror.com
-```
-
-**装好后，**建议先跑一遍配置向导，把模型、密钥、机器人等一次配齐。
-
-```bash
-xopc onboard
-# 只想快速选模型: xopc onboard --quick
-```
+**中国大陆用户**可在 `npm install` 时加上 `--registry=https://registry.npmmirror.com`，或执行 `npm config set registry https://registry.npmmirror.com` 设为默认。
 
 ---
 
@@ -122,7 +114,7 @@ pnpm run build                              # 构建发布：Node + 网页 → d
 2. 在最新版本里选本机系统对应的安装包（常见：**macOS** 用 `.dmg` / `.zip`，**Windows** 用 `.exe`，**Linux** 用 `.AppImage` / `.deb`）。
 3. 像平时装软件一样安装或运行。macOS 若用语音相关功能，首次可能会要**麦克风**权限。
 
-暂时没有适合你系统的安装包时，可先按上文 **[安装](#安装)** 装命令行版，再用 **`xopc gateway`**；需要桌面安装包可自行 **[从源码打包](#electron-desktop)**。
+暂时没有适合你系统的安装包时，可先装命令行版，再用 **`xopc gateway`**；需要桌面安装包可自行 **[从源码打包](#electron-desktop)**。
 
 ### 从源码打包
 
@@ -137,10 +129,12 @@ pnpm run electron:build   # 输出在 dist/release/
 
 | 方式 | 怎么用 | 适合谁 |
 | --- | --- | --- |
-| **TUI** | `xopc tui`、`xopc tui --local` 或 `xopc tui --url …` | 喜欢全屏终端，或要连远程网关 |
+| **TUI** | `xopc tui`、`xopc tui --local` 或 `xopc tui --url …` | 全键盘操作，流式输出，零延迟感 |
 | **CLI** | `xopc agent -i` / `xopc agent -m "…"` | 写脚本、只要一个普通终端 |
-| **网页** | 先 `xopc gateway`（前台）或 `xopc gateway --background`（后台），浏览器打开控制台地址 | 多人共用一台网关、习惯浏览器、要改各项设置 |
-| **Electron** | **[Releases 下载安装包](#electron-desktop)** 或本地打包 | 要系统原生窗口（macOS / Windows / Linux） |
+| **网页** | 先 `xopc gateway`（前台）或 `xopc gateway --background`（后台），浏览器打开控制台地址 | 打开浏览器就是完整控制台 |
+| **桌面** | **[Releases 下载安装包](#electron-desktop)** 或本地打包 | 原生桌面体验，三平台通吃 |
+| **手机** | 扫码配对网关 | 通勤路上也能用 |
+| **即时通讯** | Telegram、微信、飞书/Lark——配好 `channels.*` 并启动网关 | 在你最常用的 IM 里直接对话 |
 
 ---
 
@@ -213,10 +207,10 @@ pnpm run electron:build   # 输出在 dist/release/
 ## 扩展与技能
 
 ```bash
-xopc extensions install xopc-extension-weather
+xopc skills install <名称>     # 用 SKILL.md 教会助手新领域，不写代码
+xopc extensions install <包名>  # 工具、通道、UI 面板
 xopc extensions dev ./my-extension
 xopc skills list
-xopc skills install <名称>
 ```
 
 扩展里可以带**工具**、**新聊天频道**、**自定义模型**；要改网关网页界面用 **`@xopcai/xopc/extension-ui-sdk`**（代码在 `packages/extension-ui-sdk/`）。详见 **[扩展](https://xopcai.github.io/xopc/zh/extensions)**、**[技能](https://xopcai.github.io/xopc/zh/skills)**。
