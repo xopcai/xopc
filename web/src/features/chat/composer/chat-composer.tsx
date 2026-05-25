@@ -29,7 +29,9 @@ import { useCommandPalette } from '@/features/chat/palette/use-command-palette';
 import { useComposerActions } from '@/features/chat/composer/use-composer-actions';
 import { useComposerAttachments } from '@/features/chat/composer/use-composer-attachments';
 import { useComposerEditor } from '@/features/chat/composer/use-composer-editor';
-import { useComposerVoice } from '@/features/chat/composer/use-composer-voice';
+import { appendTranscriptToDraft } from '@/features/chat/composer/append-transcript-to-draft';
+import { ComposerVoiceInputBar } from '@/features/chat/composer/composer-voice-input-bar';
+import { useComposerVoiceInput } from '@/features/chat/composer/use-composer-voice-input';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -162,23 +164,14 @@ export const ChatComposer = memo(function ChatComposer({
   const runBusy = sending || streaming;
   busyRef.current = runBusy;
 
-  const voice = useComposerVoice({
+  const voice = useComposerVoiceInput({
     disabled,
-    runBusy,
     chat: m.chat,
-    getAttachmentCount: () => att.attachmentsRef.current.length,
-    onAutoSend: (text, w, level) => {
-      onSendRef.current(text, w, level);
-      onUserTextCommitted(text);
+    onTranscript: (text) => {
+      const prev = editor.valueRef.current;
+      const next = appendTranscriptToDraft(prev, text);
+      editor.resetEditor({ nextText: next, caretOffset: next.length, focus: true });
     },
-    wireAttachmentsPayload: att.wireAttachmentsPayload,
-    getTextValue: () => editor.valueRef.current,
-    getThinkingLevel: () => thinkingLevelRef.current,
-    resetEditor: () => {
-      editor.resetEditor();
-    },
-    clearAttachments: att.clearAttachments,
-    isRunBusy: () => busyRef.current,
   });
 
   const clearEditFollowUpRef = useCallback(() => {
@@ -188,8 +181,8 @@ export const ChatComposer = memo(function ChatComposer({
   const actions = useComposerActions({
     chat: m.chat,
     runBusy,
-    voiceRecording: voice.voiceRecording,
-    stopVoiceRecording: voice.stopVoiceRecording,
+    voiceActive: voice.voiceActive,
+    cancelVoiceInput: voice.cancelVoiceInput,
     editingFollowUpId,
     getTextValue: () => editor.valueRef.current,
     getAttachmentCount: () => att.attachmentsRef.current.length,
@@ -496,23 +489,34 @@ export const ChatComposer = memo(function ChatComposer({
             onExpandCommands={palette.expandGroupedCommands}
             onSelectItem={applyPaletteItem}
           />
-          <ChatComposerInput
-            editorRef={editor.editorRef}
-            disabled={disabled}
-            placeholder={
-              runBusyState
-                ? editingFollowUpId
-                  ? m.chat.inputPlaceholderSteeringEdit
-                  : m.chat.inputPlaceholderSteering
-                : m.chat.inputPlaceholder
-            }
-            onWireInput={onWireInputClearWalk}
-            adjustHeight={editor.adjustHeight}
-            processFiles={att.processFiles}
-            setIsComposing={editor.setIsComposing}
-            kbdRef={kbdRef}
-            chatMessages={m.chat}
-          />
+          {voice.voiceActive ? (
+            <ComposerVoiceInputBar
+              phase={voice.phase}
+              elapsedLabel={voice.elapsedLabel}
+              disabled={disabled}
+              chat={m.chat}
+              onCancel={voice.cancelVoiceInput}
+              onConfirm={voice.confirmVoiceInput}
+            />
+          ) : (
+            <ChatComposerInput
+              editorRef={editor.editorRef}
+              disabled={disabled}
+              placeholder={
+                runBusyState
+                  ? editingFollowUpId
+                    ? m.chat.inputPlaceholderSteeringEdit
+                    : m.chat.inputPlaceholderSteering
+                  : m.chat.inputPlaceholder
+              }
+              onWireInput={onWireInputClearWalk}
+              adjustHeight={editor.adjustHeight}
+              processFiles={att.processFiles}
+              setIsComposing={editor.setIsComposing}
+              kbdRef={kbdRef}
+              chatMessages={m.chat}
+            />
+          )}
         </div>
 
         <ComposerToolbar
@@ -532,8 +536,8 @@ export const ChatComposer = memo(function ChatComposer({
           thinkingLevel={thinkingLevel}
           showThinkingSelector={showThinkingSelector}
           onThinkingChange={onThinkingChange}
-          voiceRecording={voice.voiceRecording}
-          onToggleVoice={voice.toggleVoiceRecording}
+          voiceActive={voice.voiceActive}
+          onStartVoiceInput={voice.startVoiceInput}
           onSend={actions.send}
           onAbort={onAbort}
           onInterrupt={actions.interruptDraft}
