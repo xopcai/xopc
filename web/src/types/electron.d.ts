@@ -75,6 +75,8 @@ export type PrivacyPaneKind =
 
 export type SystemSettingsBehavior = {
   platform: 'darwin' | 'win32' | 'linux';
+  /** False when running unpackaged (e.g. electron:dev); macOS privacy lists may show "Electron". */
+  packaged: boolean;
   openAtLogin: boolean;
   openAsHidden: boolean;
   keepAwakeEnabled: boolean;
@@ -149,12 +151,14 @@ export interface ElectronSystemSettingsAPI {
     notifyEnabled?: boolean;
     notifySoundEnabled?: boolean;
   }): Promise<{ ok: true; behavior: SystemSettingsBehavior }>;
-  getPermissions(): Promise<ShellPermissionSnapshot>;
+  getPermissions(options?: { probe?: boolean }): Promise<ShellPermissionSnapshot>;
   openPrivacy(
     kind: PrivacyPaneKind,
   ): Promise<{ ok: true } | { ok: false; error: string }>;
   requestMicrophone(): Promise<PermissionRequestResult>;
   requestAccessibility(): Promise<PermissionRequestResult>;
+  requestNotifications(): Promise<PermissionRequestResult>;
+  requestScreen(): Promise<PermissionRequestResult>;
   getUninstallInfo(): Promise<UninstallInfo>;
   clearUserData(): Promise<ClearUserDataResult>;
   uninstallApp(options?: { removeUserData?: boolean }): Promise<UninstallAppResult>;

@@ -60,6 +60,7 @@ mac:
   # Required for microphone (TCC). Without this, macOS may block or effectively mute capture in the packaged app.
   extendInfo:
     NSMicrophoneUsageDescription: 'xopc needs microphone access to record voice messages in chat.'
+    NSScreenCaptureUsageDescription: 'xopc needs screen recording access for screen capture and vision features.'
   # After Apple Developer ID cert + repo secrets are set (see .github/workflows/electron-build.yml),
   # set to true so CI/local release builds submit to Apple Notary Service.
   notarize: true
