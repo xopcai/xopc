@@ -1,7 +1,7 @@
 import { Cpu, Plus, Trash2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { ModelSelector } from '@/features/chat/model-selector';
+import { ModelSelector } from '@/features/chat/model/model-selector';
 import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/settings/settings-form-section';
 
 import type { AgentDefaultsPanelProps } from '../agent-defaults-panel-props';

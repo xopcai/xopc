@@ -1,6 +1,6 @@
 import { useMemo, type ReactNode } from 'react';
 
-import { parsePptxExtractedForDisplay } from '@/features/chat/pptx-preview-parse';
+import { parsePptxExtractedForDisplay } from '@/features/chat/attachments/pptx-preview-parse';
 
 export interface PptxPreviewViewProps {
   text: string;

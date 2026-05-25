@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 
-import { EXCEL_PREVIEW_MAX_COLS, EXCEL_PREVIEW_MAX_ROWS } from '@/features/chat/attachment-utils-core';
+import { EXCEL_PREVIEW_MAX_COLS, EXCEL_PREVIEW_MAX_ROWS } from '@/features/chat/attachments/attachment-utils-core';
 import { messages } from '@/i18n/messages';
 import type { StoredLanguage } from '@/lib/storage';
 
@@ -37,7 +37,7 @@ export function useBinaryPreviewInContainer({
 
     void (async () => {
       try {
-        const mod = await import('@/features/chat/attachment-preview-renderer');
+        const mod = await import('@/features/chat/attachments/attachment-preview-renderer');
         if (cancelled) return;
         const L = messages(language).chat;
         if (kind === 'pdf') {

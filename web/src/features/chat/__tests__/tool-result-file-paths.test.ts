@@ -5,8 +5,8 @@ import {
   extractWorkspaceRelativeMentionsFromAssistantMarkdown,
   isBareProfileMarkdownFileName,
   looksLikeAbsoluteFilePath,
-} from '@/features/chat/tool-result-file-paths';
-import { extractWebSearchLinksFromToolResult } from '@/features/chat/web-search-tool-result-links';
+} from '@/features/chat/tool-results/tool-result-file-paths';
+import { extractWebSearchLinksFromToolResult } from '@/features/chat/tool-results/web-search-tool-result-links';
 
 describe('looksLikeAbsoluteFilePath', () => {
   it('rejects URL path segments that are not host filesystem roots', () => {

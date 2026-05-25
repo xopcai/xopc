@@ -5,7 +5,7 @@ import {
   base64ToArrayBuffer,
   inferMimeTypeFromFileName,
   PPTX_PREVIEW_MAX_CHARS,
-} from '@/features/chat/attachment-utils-core';
+} from '@/features/chat/attachments/attachment-utils-core';
 import { downloadBinaryFile, downloadTextFile, readWorkspaceFile, readWorkspaceFileBase64, writeWorkspaceFile } from '@/features/workspace/workspace-api';
 import { isElectron } from '@/lib/electron-env';
 import { getFileExtension, getFileName, isBinaryOnlyPreviewExt, isImagePreviewExt } from '@/features/file-preview/utils';
@@ -190,7 +190,7 @@ export function useWorkspaceFilePreviewState({
 
     void (async () => {
       try {
-        const mod = await import('@/features/chat/attachment-process-heavy');
+        const mod = await import('@/features/chat/attachments/attachment-process-heavy');
         const { extractedText } = await mod.processPptx(binaryBuffer, pptxName);
         if (cancelled) return;
         const cap = PPTX_PREVIEW_MAX_CHARS;

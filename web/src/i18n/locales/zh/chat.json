@@ -151,7 +151,30 @@
       "invalidDescription": "无法识别这个文件路径。",
       "openExternal": "默认应用打开",
       "revealInFolder": "打开所在目录",
-      "copyPath": "复制路径"
+      "copyPath": "复制路径",
+      "importToWorkspace": "导入到工作区",
+      "importInProgress": "导入中…",
+      "importDialogTitle": "把这个文件复制到当前工作区？",
+      "importDialogSourceLabel": "源文件",
+      "importDialogDestinationLabel": "目标（工作区内相对路径）",
+      "importDialogConfirm": "导入",
+      "importDialogCancel": "取消",
+      "importSuccessToast": "已导入到 {{path}}",
+      "importErrors": {
+        "IMPORT_NOT_ALLOWED": "该文件不支持导入到工作区。",
+        "SOURCE_NOT_FOUND": "源文件已不可用。",
+        "SOURCE_NOT_FILE": "只能导入普通文件。",
+        "SOURCE_TOO_LARGE": "文件超过导入大小上限。",
+        "INVALID_DESTINATION": "无效的目标路径。",
+        "DESTINATION_BLOCKED": "目标路径受保护，请改个名字。",
+        "DESTINATION_EXISTS": "目标位置已存在同名文件。",
+        "SAME_LOCATION": "源和目标是同一个文件。",
+        "FILE_REF_EXPIRED": "文件引用已过期，请重试。",
+        "FILE_REF_FORBIDDEN": "该文件引用不属于当前会话。",
+        "OVERWRITE_DISABLED": "覆盖已被配置禁用。",
+        "IMPORT_FAILED": "导入失败，请重试。",
+        "UNKNOWN": "导入失败。"
+      }
     },
     "workingDirectory": {
       "selectWorkingDirectory": "选择工作目录",

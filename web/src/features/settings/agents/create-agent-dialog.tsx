@@ -3,7 +3,7 @@ import { UserPlus, X } from 'lucide-react';
 import type { FormEvent } from 'react';
 
 import { Button } from '@/components/ui/button';
-import { ModelSelector } from '@/features/chat/model-selector';
+import { ModelSelector } from '@/features/chat/model/model-selector';
 import type { AgentsSettingsMessages, ChatMessages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { ghostIconButton } from '@/lib/interaction';

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { collectClipboardFiles, isComposerAcceptableFile } from '@/features/chat/chat-composer';
+import { collectClipboardFiles, isComposerAcceptableFile } from '@/features/chat/composer/chat-composer';
 
 function fileListFrom(files: File[]): FileList {
   return {

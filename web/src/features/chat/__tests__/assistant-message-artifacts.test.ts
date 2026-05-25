@@ -3,8 +3,8 @@ import { describe, expect, it } from 'vitest';
 import {
   collectAssistantWorkspaceOutputPaths,
   filterAssistantAttachmentsDedupedAgainstWorkspacePaths,
-} from '@/features/chat/assistant-message-artifacts';
-import type { MessageContent } from '@/features/chat/messages.types';
+} from '@/features/chat/messages/assistant-message-artifacts';
+import type { MessageContent } from '@/features/chat/messages/messages.types';
 
 describe('collectAssistantWorkspaceOutputPaths', () => {
   it('merges absolute paths from write_file tool text', () => {
@@ -60,7 +60,11 @@ describe('collectAssistantWorkspaceOutputPaths', () => {
     expect(collectAssistantWorkspaceOutputPaths(content)).toEqual([]);
   });
 
-  it('dedupes write_file absolute path against the same file in assistant markdown', () => {
+  it('keeps absolute writer path even when a bare assistant-markdown mention names the same file', () => {
+    // Bare-name mention (`hangzhou-trip.html`) no longer cross-links via basename
+    // (option A — prevents same-name false positives across writer outputs). The
+    // file still surfaces because the writer's tool-result entry already carries
+    // the absolute path.
     const content: MessageContent[] = [
       {
         type: 'tool_use',
@@ -77,7 +81,32 @@ describe('collectAssistantWorkspaceOutputPaths', () => {
     ];
     const paths = collectAssistantWorkspaceOutputPaths(content);
     expect(paths).toHaveLength(1);
-    expect(paths[0]?.workspaceRelativePath).toBe('hangzhou-trip.html');
+    expect(paths[0]?.absolutePath).toBe('/Users/x/ws/hangzhou-trip.html');
+    expect(paths[0]?.workspaceRelativePath).toBeUndefined();
+  });
+
+  it('cross-links a path-shaped assistant mention to a tool-result absolute path (option A)', () => {
+    // Same artifact, mention has at least one "/" so the basename cross-link kicks in.
+    // The combining merge preserves the real absolute path AND attaches the rel for
+    // remote-friendly resolve, so the chip can fall back to the abs if rel misses.
+    const content: MessageContent[] = [
+      {
+        type: 'tool_use',
+        id: 'w1',
+        name: 'write_file',
+        input: { path: 'acp-demo/index.html' },
+        status: 'done',
+        result: 'File written: /Users/x/develop/acp-demo/index.html',
+      },
+      {
+        type: 'text',
+        text: '直接用浏览器打开 **`acp-demo/index.html`** 即可预览。',
+      },
+    ];
+    const paths = collectAssistantWorkspaceOutputPaths(content);
+    expect(paths).toHaveLength(1);
+    expect(paths[0]?.absolutePath).toBe('/Users/x/develop/acp-demo/index.html');
+    expect(paths[0]?.workspaceRelativePath).toBe('acp-demo/index.html');
   });
 
   it('filterAssistantAttachmentsDedupedAgainstWorkspacePaths removes duplicate document chips', () => {

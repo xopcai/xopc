@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import type { PaletteItem } from '@/features/chat/command-palette.types';
-import { detectSlashRange, paletteItemMatchRank } from '@/features/chat/use-command-palette';
+import type { PaletteItem } from '@/features/chat/palette/command-palette.types';
+import { detectSlashRange, paletteItemMatchRank } from '@/features/chat/palette/use-command-palette';
 
 describe('detectSlashRange', () => {
   it('detects active slash token before cursor', () => {

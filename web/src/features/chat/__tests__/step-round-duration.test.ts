@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatStepRoundDuration } from '@/features/chat/step-round-duration';
+import { formatStepRoundDuration } from '@/features/chat/time/step-round-duration';
 
 describe('formatStepRoundDuration', () => {
   it('formats zh minutes and seconds', () => {

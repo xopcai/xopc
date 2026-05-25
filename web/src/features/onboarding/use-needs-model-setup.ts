@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import useSWR from 'swr';
 
-import { CONFIGURED_MODELS_SWR_KEY, fetchConfiguredModelsCached } from '@/features/chat/registry-api';
+import { CONFIGURED_MODELS_SWR_KEY, fetchConfiguredModelsCached } from '@/features/chat/api/registry-api';
 import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
 import { needsModelOrProviders } from '@/features/gateway/model-setup-state';
 

@@ -1,6 +1,6 @@
 import { apiFetch } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
-import { fetchConfiguredModelsCached } from '@/features/chat/registry-api';
+import { fetchConfiguredModelsCached } from '@/features/chat/api/registry-api';
 
 export interface CronDelivery {
   mode: 'none' | 'announce' | 'direct';

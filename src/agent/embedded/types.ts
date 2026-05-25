@@ -23,7 +23,14 @@ export type EmbeddedStreamEvent =
     }
   | { type: 'message_end' }
   | { type: 'progress'; stage: string; message: string }
-  | { type: 'error'; content: string };
+  | { type: 'error'; content: string }
+  | {
+      type: 'compaction';
+      status: 'started' | 'completed' | 'skipped';
+      tokensBefore?: number;
+      tokensAfter?: number;
+      summary?: string;
+    };
 
 export type RunXopcEmbeddedTurnParams = {
   sessionKey: string;

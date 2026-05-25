@@ -1,7 +1,7 @@
 import { ChevronDown } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 
-import type { ChatAgentsPayload } from '@/features/chat/chat-agents-api';
+import type { ChatAgentsPayload } from '@/features/chat/agent-selection/chat-agents-api';
 import type { ChannelsSettingsState, DmPolicy, StreamMode } from '@/features/settings/channels-config-api';
 import { weixinRoutingAccountIds } from '@/features/settings/channel-bindings-merge';
 import type { ChannelsSettingsMessages } from '@/i18n/messages';

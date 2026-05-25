@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { computeGoalWallElapsedMs } from '../format-execution-elapsed';
+import { computeGoalWallElapsedMs } from '../time/format-execution-elapsed';
 
 describe('computeGoalWallElapsedMs', () => {
   it('uses now for active goals', () => {

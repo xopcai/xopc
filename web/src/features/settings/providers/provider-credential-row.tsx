@@ -18,7 +18,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import type { ConfiguredModel } from '@/features/chat/registry-api';
+import type { ConfiguredModel } from '@/features/chat/api/registry-api';
 import {
   cancelOAuth,
   cleanupOAuthSession,

@@ -639,6 +639,26 @@ export const TunnelConfigSchema = z
 
 export type TunnelConfig = z.infer<typeof TunnelConfigSchema>;
 
+/**
+ * Workspace-scoped concerns (file import, etc.). Distinct from
+ * `agents.defaults.workspace`, which is the workspace *path*; this block carries
+ * feature configuration for workspace-related routes.
+ */
+export const WorkspaceImportConfigSchema = z.object({
+  /** Workspace-relative subdir for imported files. Default `imports`. */
+  targetDir: z.string().default('imports'),
+  /** Per-file byte cap. Default 100 MiB. */
+  maxBytes: z.number().int().min(1024).max(10_737_418_240).default(104_857_600),
+  /** When false, the route rejects `onConflict: 'overwrite'`. Default true. */
+  allowOverwrite: z.boolean().default(true),
+});
+export type WorkspaceImportConfig = z.infer<typeof WorkspaceImportConfigSchema>;
+
+export const WorkspaceConfigSchema = z.object({
+  import: WorkspaceImportConfigSchema.optional(),
+}).optional();
+export type WorkspaceConfig = z.infer<typeof WorkspaceConfigSchema>;
+
 export const GatewayBindModeSchema = z.enum(['auto', 'loopback', 'lan', 'tailnet', 'custom']);
 
 export const GatewayConfigSchema = z.object({
@@ -1042,6 +1062,7 @@ export const ConfigSchema = z.object({
   channels: ChannelsConfigSchema,
   gateway: GatewayConfigSchema,
   tunnel: TunnelConfigSchema.optional(),
+  workspace: WorkspaceConfigSchema,
   tools: ToolsConfigSchema,
   mcp: McpConfigSchema,
   cron: CronConfigSchema,

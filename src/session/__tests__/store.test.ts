@@ -85,6 +85,98 @@ describe('SessionStore', () => {
       expect(loaded[1].role).toBe('assistant');
     });
 
+    it('should hide compaction summary messages from display history', async () => {
+      const key = 'main:webchat:default:direct:compaction-summary';
+      const messages: any[] = [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              text: '[Previous conversation summary]: Previous conversation covered: old turns...',
+            },
+          ],
+          timestamp: Date.now(),
+        },
+        { role: 'user', content: 'Visible user message', timestamp: Date.now() + 1 },
+        { role: 'assistant', content: 'Visible assistant message', timestamp: Date.now() + 2 },
+      ];
+
+      await store.saveMessages(key, messages);
+
+      const llmMessages = await store.loadMessages(key);
+      const detail = await store.get(key);
+      const page = await store.getMessagePage(key, { offset: 0, limit: 50 });
+
+      expect(llmMessages).toHaveLength(3);
+      expect(detail?.messages.map((message) => message.content)).toEqual([
+        'Visible user message',
+        'Visible assistant message',
+      ]);
+      expect(page?.session.messages.map((message) => message.content)).toEqual([
+        'Visible user message',
+        'Visible assistant message',
+      ]);
+      expect(page?.pagination.total).toBe(2);
+    });
+
+    it('should page messages from the newest tail while preserving chronological order', async () => {
+      const key = 'main:webchat:default:direct:history-page';
+      const messages: any[] = Array.from({ length: 5 }, (_, index) => ({
+        role: index % 2 === 0 ? 'user' : 'assistant',
+        content: `message-${index}`,
+        timestamp: Date.now() + index,
+      }));
+
+      await store.saveMessages(key, messages);
+      const firstPage = await store.getMessagePage(key, { offset: 0, limit: 2 });
+      const secondPage = await store.getMessagePage(key, { offset: 2, limit: 2 });
+      const finalPage = await store.getMessagePage(key, { offset: 4, limit: 2 });
+
+      expect(firstPage?.session.messages.map((message) => message.content)).toEqual([
+        'message-3',
+        'message-4',
+      ]);
+      expect(firstPage?.pagination).toEqual({
+        total: 5,
+        limit: 2,
+        offset: 0,
+        hasMore: true,
+        nextBeforeCursor: '3',
+      });
+      expect(secondPage?.session.messages.map((message) => message.content)).toEqual([
+        'message-1',
+        'message-2',
+      ]);
+      expect(secondPage?.pagination).toEqual({
+        total: 5,
+        limit: 2,
+        offset: 2,
+        hasMore: true,
+        nextBeforeCursor: '1',
+      });
+      expect(finalPage?.session.messages.map((message) => message.content)).toEqual(['message-0']);
+      expect(finalPage?.pagination).toEqual({ total: 5, limit: 2, offset: 4, hasMore: false });
+
+      const cursorPage = await store.getMessagePage(key, {
+        before: firstPage?.pagination.nextBeforeCursor,
+        limit: 2,
+      });
+
+      expect(cursorPage?.session.messages.map((message) => message.content)).toEqual([
+        'message-1',
+        'message-2',
+      ]);
+      expect(cursorPage?.pagination).toEqual({
+        total: 5,
+        limit: 2,
+        offset: 0,
+        hasMore: true,
+        before: '3',
+        nextBeforeCursor: '1',
+      });
+    });
+
     it('should list sessions with channel filter', async () => {
       await store.saveMessages('main:telegram:default:dm:1', [{ role: 'user', content: '1' }]);
       await store.saveMessages('main:discord:default:dm:2', [{ role: 'user', content: '2' }]);
@@ -199,7 +291,16 @@ describe('SessionStore', () => {
       expect(detail?.messageCount).toBe(msgs.length);
 
       const afterCompact = await store.loadMessages(key);
+      const displayAfterCompact = await store.get(key);
+      const displayPageAfterCompact = await store.getMessagePage(key, { offset: 0, limit: 50 });
       expect(afterCompact.length).toBeLessThan(msgs.length);
+      expect(displayAfterCompact?.messages.map((message) => message.content)).toEqual(
+        msgs.map((message) => message.content),
+      );
+      expect(displayPageAfterCompact?.session.messages.map((message) => message.content)).toEqual(
+        msgs.map((message) => message.content),
+      );
+      expect(displayPageAfterCompact?.pagination.total).toBe(msgs.length);
 
       await store.restoreCompactionCheckpoint(key, cpId);
       const restored = await store.loadMessages(key);

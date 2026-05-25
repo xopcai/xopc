@@ -151,7 +151,30 @@
       "invalidDescription": "This file path could not be resolved.",
       "openExternal": "Open",
       "revealInFolder": "Show in folder",
-      "copyPath": "Copy path"
+      "copyPath": "Copy path",
+      "importToWorkspace": "Import to workspace",
+      "importInProgress": "Importing…",
+      "importDialogTitle": "Copy this file into the workspace?",
+      "importDialogSourceLabel": "Source",
+      "importDialogDestinationLabel": "Destination (workspace-relative)",
+      "importDialogConfirm": "Import",
+      "importDialogCancel": "Cancel",
+      "importSuccessToast": "Imported to {{path}}",
+      "importErrors": {
+        "IMPORT_NOT_ALLOWED": "This file cannot be imported into the workspace.",
+        "SOURCE_NOT_FOUND": "The source file is no longer available.",
+        "SOURCE_NOT_FILE": "Only regular files can be imported.",
+        "SOURCE_TOO_LARGE": "File exceeds the import size limit.",
+        "INVALID_DESTINATION": "Invalid destination path.",
+        "DESTINATION_BLOCKED": "The destination path is protected. Try a different name.",
+        "DESTINATION_EXISTS": "A file already exists at the destination.",
+        "SAME_LOCATION": "Source and destination are the same.",
+        "FILE_REF_EXPIRED": "This file reference has expired. Try again.",
+        "FILE_REF_FORBIDDEN": "This file reference does not belong to the current session.",
+        "OVERWRITE_DISABLED": "Overwrite is disabled by configuration.",
+        "IMPORT_FAILED": "Import failed. Please try again.",
+        "UNKNOWN": "Import failed."
+      }
     },
     "workingDirectory": {
       "selectWorkingDirectory": "Select working directory",

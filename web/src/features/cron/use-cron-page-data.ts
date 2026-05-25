@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import { fetchChatAgents, type ChatAgentOption } from '@/features/chat/chat-agents-api';
+import { fetchChatAgents, type ChatAgentOption } from '@/features/chat/agent-selection/chat-agents-api';
 import {
   getAllRunsHistory,
   getChannels,

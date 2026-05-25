@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import type { Message } from '@/features/chat/messages.types';
+import type { Message } from '@/features/chat/messages/messages.types';
 import {
   uiDeleteCountForUserRound,
   userRoundIndexFromUiMessageIndex,
-} from '@/features/chat/user-round-index';
+} from '@/features/chat/messages/user-round-index';
 
 describe('userRoundIndexFromUiMessageIndex', () => {
   it('maps UI user row to 0-based user round', () => {

@@ -1,9 +1,12 @@
 import type { Hono } from 'hono';
-import { readdir, readFile, stat, writeFile } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { randomUUID } from 'node:crypto';
+import { constants as fsConstants } from 'node:fs';
+import { copyFile, link, mkdir, readdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises';
+import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
 
 import { extractProfileAgentId } from '../../../config/agent-profile.js';
 import { type Config, getWorkspacePath } from '../../../config/schema.js';
+import { validateWritePath } from '../../../agent/sandbox/path-policy.js';
 import { resolveSafeInboundFilePath } from '../../../channels/attachments/inbound-persist.js';
 import { resolveSafeTtsFilePath } from '../../../channels/attachments/outbound-tts-persist.js';
 import {
@@ -27,12 +30,12 @@ import {
   classifyFileLocation,
   displayNameForPath,
   fileRefSessionKeysMatch,
-  looksLikeHostAbsolutePath,
   resolveFileReferenceCandidate,
 } from '../../file-path-classifier.js';
 import {
   fileReferenceRegistry,
   type FileReferenceCapability,
+  type FileReferenceLocationKind,
   type FileReferenceScope,
 } from '../../file-reference-registry.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
@@ -156,14 +159,77 @@ async function resolveEditorWorkspaceRootAsync(
   return resolveEditorWorkspaceRoot(cfg, agentIdRaw);
 }
 
-function fileReferenceCapabilities(scope: FileReferenceScope, isDirectory: boolean): FileReferenceCapability[] {
+interface ResolvedWorkspaceImportConfig {
+  targetDir: string;
+  maxBytes: number;
+  allowOverwrite: boolean;
+}
+
+function resolveWorkspaceImportConfig(cfg: Config): ResolvedWorkspaceImportConfig {
+  const raw = cfg.workspace?.import;
+  return {
+    targetDir: raw?.targetDir?.trim() || 'imports',
+    maxBytes: raw?.maxBytes ?? 104_857_600,
+    allowOverwrite: raw?.allowOverwrite ?? true,
+  };
+}
+
+/** Strip path separators, NULs and control chars from a basename so it stays in the destination dir. */
+function sanitizeImportBasename(name: string): string {
+  return name
+    .replace(/[\\/]/g, '')
+    .replace(/[\x00-\x1f\x7f]/g, '')
+    .trim();
+}
+
+/**
+ * Race-safe target picker for the `rename`-on-conflict strategy. Uses `link(tmp, target)`
+ * which atomically fails with EEXIST when the candidate is taken; on success the tmp
+ * file is left in place for the caller to unlink. Returns the linked target path.
+ */
+async function pickAvailableTargetWithLink(
+  tmpAbs: string,
+  initialDestAbs: string,
+  maxAttempts = 1000,
+): Promise<{ ok: true; path: string; attempts: number } | { ok: false; attempts: number }> {
+  const dir = dirname(initialDestAbs);
+  const original = basename(initialDestAbs);
+  const dotIdx = original.lastIndexOf('.');
+  const stem = dotIdx > 0 ? original.slice(0, dotIdx) : original;
+  const ext = dotIdx > 0 ? original.slice(dotIdx) : '';
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const candidate = attempt === 1 ? initialDestAbs : join(dir, `${stem}-${attempt}${ext}`);
+    try {
+      await link(tmpAbs, candidate);
+      return { ok: true, path: candidate, attempts: attempt };
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException)?.code;
+      if (code !== 'EEXIST') {
+        throw err;
+      }
+    }
+  }
+  return { ok: false, attempts: maxAttempts };
+}
+
+function fileReferenceCapabilities(
+  scope: FileReferenceScope,
+  isDirectory: boolean,
+  locationKind?: FileReferenceLocationKind,
+): FileReferenceCapability[] {
   if (scope === 'workspace') {
     return isDirectory
       ? ['openExternal', 'revealInFolder', 'copyPath']
       : ['preview', 'edit', 'openExternal', 'revealInFolder', 'copyPath'];
   }
   if (scope === 'external' || scope === 'agent-profile' || scope === 'session-artifact') {
-    return ['openExternal', 'revealInFolder', 'copyPath'];
+    const base: FileReferenceCapability[] = ['openExternal', 'revealInFolder', 'copyPath'];
+    // v1: importToWorkspace for files only; exclude xopc-config to prevent copying
+    // app config into the workspace (semantically wrong).
+    if (!isDirectory && locationKind !== 'xopc-config') {
+      base.push('importToWorkspace');
+    }
+    return base;
   }
   if (scope === 'missing') return ['copyPath'];
   return [];
@@ -508,7 +574,9 @@ export function registerWorkspaceRoutes(authenticated: Hono, deps: Authenticated
     }
 
     if (!st) {
-      const isAbs = looksLikeHostAbsolutePath(rawPath);
+      // Always include the resolved candidate so the UI's "Copy path" yields
+      // something actionable ("I looked here, no file"). Without this, bare
+      // workspace-relative mentions fall back to the `rel:<path>` UI sentinel.
       return c.json({
         ok: true,
         payload: {
@@ -516,7 +584,7 @@ export function registerWorkspaceRoutes(authenticated: Hono, deps: Authenticated
           displayName,
           scope: 'missing' satisfies FileReferenceScope,
           exists: false,
-          absolutePath: isAbs ? candidate : undefined,
+          absolutePath: candidate,
           capabilities: fileReferenceCapabilities('missing', false),
           errorCode: 'FILE_NOT_FOUND',
         },
@@ -527,7 +595,7 @@ export function registerWorkspaceRoutes(authenticated: Hono, deps: Authenticated
     const { scope, locationKind, manageRoute } = classified;
     const inWorkspace = scope === 'workspace';
     const isDirectory = st.isDirectory();
-    const capabilities = fileReferenceCapabilities(scope, isDirectory);
+    const capabilities = fileReferenceCapabilities(scope, isDirectory, locationKind);
     const ref = fileReferenceRegistry.register({
       absolutePath: candidate,
       sessionKey: sessionKey || undefined,
@@ -592,6 +660,229 @@ export function registerWorkspaceRoutes(authenticated: Hono, deps: Authenticated
       payload: {
         absolutePath: ref.absolutePath,
         isDirectory: st.isDirectory(),
+      },
+    });
+  });
+
+  authenticated.post('/api/workspace/import-file-ref/:id', async (c) => {
+    const id = c.req.param('id')?.trim() ?? '';
+    if (!id) {
+      return c.json({ ok: false, error: { code: 'INVALID_FILE_REF', message: 'Missing file reference' } }, 400);
+    }
+
+    const ref = fileReferenceRegistry.resolve(id);
+    if (!ref) {
+      return c.json({ ok: false, error: { code: 'FILE_REF_EXPIRED', message: 'File reference expired' } }, 404);
+    }
+
+    const sessionKey = typeof c.req.query('sessionKey') === 'string' ? c.req.query('sessionKey')!.trim() : '';
+    if (!fileRefSessionKeysMatch(ref.sessionKey, sessionKey)) {
+      return c.json({ ok: false, error: { code: 'FILE_REF_FORBIDDEN', message: 'File reference forbidden' } }, 403);
+    }
+
+    if (!ref.capabilities.includes('importToWorkspace')) {
+      return c.json({ ok: false, error: { code: 'IMPORT_NOT_ALLOWED', message: 'Import not allowed for this file' } }, 403);
+    }
+
+    let sourceStat: Awaited<ReturnType<typeof stat>>;
+    try {
+      sourceStat = await stat(ref.absolutePath);
+    } catch {
+      fileReferenceRegistry.expireById(id);
+      return c.json({ ok: false, error: { code: 'SOURCE_NOT_FOUND', message: 'Source file no longer exists' } }, 404);
+    }
+    if (!sourceStat.isFile()) {
+      return c.json({ ok: false, error: { code: 'SOURCE_NOT_FILE', message: 'Source is not a regular file' } }, 400);
+    }
+
+    const importCfg = resolveWorkspaceImportConfig(service.currentConfig);
+    if (sourceStat.size > importCfg.maxBytes) {
+      return c.json(
+        {
+          ok: false,
+          error: {
+            code: 'SOURCE_TOO_LARGE',
+            message: `Source exceeds maximum import size (${importCfg.maxBytes} bytes)`,
+          },
+        },
+        413,
+      );
+    }
+
+    const ws = await resolveEditorWorkspaceRootAsync(service, service.currentConfig, sessionKey, undefined);
+    if (ws.ok === false) {
+      return c.json({ ok: false, error: { code: 'WORKSPACE_RESOLUTION_FAILED', message: ws.message } }, 400);
+    }
+    const workspaceRoot = ws.root;
+
+    let body: { destination?: unknown; onConflict?: unknown };
+    try {
+      body = (await c.req.json().catch(() => ({}))) as typeof body;
+    } catch {
+      body = {};
+    }
+    const requestedDestRaw = typeof body.destination === 'string' ? body.destination.trim() : '';
+    const onConflictRaw = typeof body.onConflict === 'string' ? body.onConflict : 'rename';
+    if (onConflictRaw !== 'rename' && onConflictRaw !== 'overwrite' && onConflictRaw !== 'error') {
+      return c.json({ ok: false, error: { code: 'INVALID_CONFLICT_MODE', message: 'Invalid onConflict value' } }, 400);
+    }
+    const onConflict = onConflictRaw as 'rename' | 'overwrite' | 'error';
+    if (onConflict === 'overwrite' && !importCfg.allowOverwrite) {
+      return c.json({ ok: false, error: { code: 'OVERWRITE_DISABLED', message: 'Overwrite is disabled by config' } }, 403);
+    }
+
+    const sourceBasename = sanitizeImportBasename(basename(ref.absolutePath)) || 'imported-file';
+    let requestedRel: string;
+    if (!requestedDestRaw) {
+      requestedRel = `${importCfg.targetDir}/${sourceBasename}`;
+    } else {
+      const trimmedDest = requestedDestRaw.replace(/\\/g, '/');
+      // Path ending with `/` is treated as a directory; append source basename.
+      requestedRel = trimmedDest.endsWith('/') ? `${trimmedDest}${sourceBasename}` : trimmedDest;
+    }
+
+    let initialDestAbs = resolveWorkspaceSafePath(workspaceRoot, requestedRel);
+    if (!initialDestAbs) {
+      return c.json({ ok: false, error: { code: 'INVALID_DESTINATION', message: 'Invalid destination path' } }, 400);
+    }
+
+    // Sandbox: blocks `.xopc/xopc.json`, `.env*`, etc.; canonical symlink resolution included.
+    const writePolicy = validateWritePath(initialDestAbs, workspaceRoot);
+    if (!writePolicy.allowed) {
+      return c.json({ ok: false, error: { code: 'DESTINATION_BLOCKED', message: writePolicy.reason ?? 'Destination blocked' } }, 403);
+    }
+
+    if (resolve(ref.absolutePath) === resolve(initialDestAbs)) {
+      return c.json({ ok: false, error: { code: 'SAME_LOCATION', message: 'Destination is the same as source' } }, 400);
+    }
+
+    const destDir = dirname(initialDestAbs);
+    try {
+      await mkdir(destDir, { recursive: true });
+    } catch (err) {
+      log.warn({ err, destDir }, 'Failed to create import destination directory');
+      return c.json({ ok: false, error: { code: 'IMPORT_FAILED', message: 'Failed to prepare destination' } }, 500);
+    }
+
+    // Stage source into a hidden tmp file inside the destination directory so we
+    // can atomically `link` (rename strategy) or `rename` (overwrite) to land it.
+    const tmpName = `.${basename(initialDestAbs)}.import-${randomUUID()}.tmp`;
+    const tmpAbs = join(destDir, tmpName);
+
+    const started = Date.now();
+    let renamed = false;
+    let overwrote = false;
+    let finalDestAbs = initialDestAbs;
+
+    try {
+      try {
+        await copyFile(ref.absolutePath, tmpAbs, fsConstants.COPYFILE_FICLONE);
+      } catch (err) {
+        await unlink(tmpAbs).catch(() => {});
+        log.warn({ err, source: ref.absolutePath, tmpAbs }, 'Failed to copy source into staging tmp');
+        return c.json({ ok: false, error: { code: 'IMPORT_FAILED', message: 'Failed to copy source file' } }, 500);
+      }
+
+      if (onConflict === 'overwrite') {
+        // Snapshot pre-rename existence for telemetry; the actual overwrite is unconditional.
+        overwrote = await stat(initialDestAbs).then(() => true).catch(() => false);
+        try {
+          await rename(tmpAbs, initialDestAbs);
+        } catch (err) {
+          await unlink(tmpAbs).catch(() => {});
+          log.warn({ err, target: initialDestAbs }, 'Atomic rename failed');
+          return c.json({ ok: false, error: { code: 'IMPORT_FAILED', message: 'Failed to finalize import' } }, 500);
+        }
+      } else if (onConflict === 'error') {
+        const exists = await stat(initialDestAbs).then(() => true).catch(() => false);
+        if (exists) {
+          await unlink(tmpAbs).catch(() => {});
+          return c.json({ ok: false, error: { code: 'DESTINATION_EXISTS', message: 'Destination already exists' } }, 409);
+        }
+        try {
+          await link(tmpAbs, initialDestAbs);
+          await unlink(tmpAbs).catch(() => {});
+        } catch (err) {
+          await unlink(tmpAbs).catch(() => {});
+          log.warn({ err, target: initialDestAbs }, 'Hard link to destination failed');
+          return c.json({ ok: false, error: { code: 'IMPORT_FAILED', message: 'Failed to finalize import' } }, 500);
+        }
+      } else {
+        // rename: race-safe loop using O_EXCL semantics of `link`.
+        const picked = await pickAvailableTargetWithLink(tmpAbs, initialDestAbs);
+        if (!picked.ok) {
+          await unlink(tmpAbs).catch(() => {});
+          log.warn({ target: initialDestAbs, attempts: picked.attempts }, 'Failed to find free import target name');
+          return c.json({ ok: false, error: { code: 'IMPORT_FAILED', message: 'No free destination name available' } }, 500);
+        }
+        await unlink(tmpAbs).catch(() => {});
+        finalDestAbs = picked.path;
+        renamed = picked.path !== initialDestAbs;
+      }
+    } catch (err) {
+      await unlink(tmpAbs).catch(() => {});
+      log.error({ err }, 'Import file unexpected failure');
+      return c.json({ ok: false, error: { code: 'IMPORT_FAILED', message: 'Import failed' } }, 500);
+    }
+
+    let finalMtime: number;
+    try {
+      finalMtime = (await stat(finalDestAbs)).mtimeMs;
+    } catch {
+      finalMtime = Date.now();
+    }
+
+    const workspaceRel = toWorkspaceRelativePosix(workspaceRoot, finalDestAbs);
+
+    fileReferenceRegistry.expireById(id);
+    const newRef = fileReferenceRegistry.register({
+      absolutePath: finalDestAbs,
+      sessionKey: sessionKey || undefined,
+      scope: 'workspace',
+      capabilities: fileReferenceCapabilities('workspace', false),
+    });
+
+    const sourceScope = ref.scope;
+    const sourceLocationKind = ref.locationKind;
+
+    service.emit('workspace.file-imported', {
+      sessionKey: sessionKey || undefined,
+      workspaceRelativePath: workspaceRel,
+      absolutePath: finalDestAbs,
+      bytes: sourceStat.size,
+      sourceScope,
+      sourceLocationKind,
+    });
+
+    log.info(
+      {
+        sessionKey,
+        fileRefId: id,
+        sourceAbsolutePath: ref.absolutePath,
+        sourceScope,
+        sourceLocationKind,
+        destWorkspaceRelativePath: workspaceRel,
+        bytes: sourceStat.size,
+        renamed,
+        overwrote,
+        durationMs: Date.now() - started,
+      },
+      'Workspace file import succeeded',
+    );
+
+    return c.json({
+      ok: true,
+      payload: {
+        workspaceRelativePath: workspaceRel,
+        absolutePath: finalDestAbs,
+        bytesCopied: sourceStat.size,
+        sourceAbsolutePath: ref.absolutePath,
+        sourceScope,
+        sourceLocationKind,
+        renamed,
+        overwrote,
+        mtimeMs: finalMtime,
+        newFileRefId: newRef.id,
       },
     });
   });

@@ -9,7 +9,7 @@ import {
   type FileTreeAction,
   type TreeEntry,
 } from '@/features/file-tree/file-tree';
-import { base64ToArrayBuffer, inferMimeTypeFromFileName } from '@/features/chat/attachment-utils-core';
+import { base64ToArrayBuffer, inferMimeTypeFromFileName } from '@/features/chat/attachments/attachment-utils-core';
 import {
   downloadBinaryFile,
   downloadTextFile,
@@ -20,7 +20,7 @@ import {
   getFileName,
   shouldReadWorkspaceFileAsBase64Path,
 } from '@/features/file-preview';
-import { showComposerNotification } from '@/features/chat/composer-notifications';
+import { showComposerNotification } from '@/features/chat/composer/composer-notifications';
 import { ShareLinkDialog } from '@/features/shares/share-link-dialog';
 import { useShareLink } from '@/features/shares/use-share-link';
 import { useWorkspaceTree } from '@/features/workspace/use-workspace-tree';

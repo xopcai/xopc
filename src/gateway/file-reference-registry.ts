@@ -76,6 +76,15 @@ export class FileReferenceRegistry {
     return ref;
   }
 
+  /**
+   * Remove a specific reference (used after a one-shot action like
+   * import-to-workspace completes so the source card can't be re-triggered).
+   * Returns true if the reference existed and was removed.
+   */
+  expireById(id: string): boolean {
+    return this.refs.delete(id);
+  }
+
   expire(now = Date.now()): void {
     for (const [id, ref] of this.refs) {
       if (ref.expiresAt <= now) {

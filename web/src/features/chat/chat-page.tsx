@@ -1,24 +1,24 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 
-import { fetchCommandsCached } from '@/features/chat/command-palette-api';
-import { ChatComposer } from '@/features/chat/chat-composer';
-import { ChatGoalBanner } from '@/features/chat/chat-goal-banner';
+import { fetchCommandsCached } from '@/features/chat/palette/command-palette-api';
+import { ChatComposer } from '@/features/chat/composer/chat-composer';
+import { ChatGoalBanner } from '@/features/chat/goals/chat-goal-banner';
 import { ChatPageHeaderRegistration } from '@/features/chat/chat-page-header-registration';
-import { ChatSseStatus } from '@/features/chat/chat-sse-status';
-import { MessageList } from '@/features/chat/message-list';
-import { ScrollToBottomButton } from '@/features/chat/scroll-to-bottom-button';
-import { useChatScrollViewport } from '@/features/chat/use-chat-scroll-viewport';
-import { useChatSession } from '@/features/chat/use-chat-session';
-import { ClarifyPrompt } from '@/features/chat/clarify-prompt';
+import { ChatSseStatus } from '@/features/chat/agent-selection/chat-sse-status';
+import { MessageList } from '@/features/chat/messages/message-list';
+import { ScrollToBottomButton } from '@/features/chat/scroll/scroll-to-bottom-button';
+import { useChatScrollViewport } from '@/features/chat/scroll/use-chat-scroll-viewport';
+import { useChatSession } from '@/features/chat/session/use-chat-session';
+import { ClarifyPrompt } from '@/features/chat/composer/clarify-prompt';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { useChatAgentRunIndicatorStore } from '@/stores/chat-agent-run-indicator-store';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
-import { isWebUiSessionKey } from '@/features/chat/session-manager';
-import { isValidSkillWireId } from '@/features/chat/skill-wire-pattern';
-import { wireTextForSlashCommandEntry } from '@/features/chat/slash-command-wire-text';
+import { isWebUiSessionKey } from '@/features/chat/session/session-manager';
+import { isValidSkillWireId } from '@/features/chat/palette/skill-wire-pattern';
+import { wireTextForSlashCommandEntry } from '@/features/chat/palette/slash-command-wire-text';
 import { useWorkspaceEditorAgentStore } from '@/stores/workspace-editor-agent-store';
 
 export function ChatPage() {

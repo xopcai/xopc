@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { normalizeAgentMessages } from '@/features/chat/agent-messages';
+import { normalizeAgentMessages } from '@/features/chat/messages/agent-messages';
 
 describe('normalizeAgentMessages image wire shape', () => {
   it('maps pi-style { type, data, mimeType } to ImageContent with data URL src', () => {

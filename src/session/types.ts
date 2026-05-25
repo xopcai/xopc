@@ -20,6 +20,12 @@ export interface Message {
   toolName?: string;
   isError?: boolean;
   name?: string;
+  /** Token usage from the LLM response (assistant messages only). */
+  usage?: {
+    inputTokens?: number;
+    outputTokens?: number;
+    totalTokens?: number;
+  };
   /** Webchat early-save / UI: inbound file metadata (no base64). Omitted when absent. */
   attachments?: Array<{
     type?: string;

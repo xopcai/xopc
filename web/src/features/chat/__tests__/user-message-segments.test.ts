@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import type { CommandEntry } from '@/features/chat/command-palette.types';
-import { refreshSlashCommandWireIndex } from '@/features/chat/slash-command-wire';
-import { parseMessageSegments, parseSkillWireSegments } from '@/features/chat/user-message-segments';
+import type { CommandEntry } from '@/features/chat/palette/command-palette.types';
+import { refreshSlashCommandWireIndex } from '@/features/chat/palette/slash-command-wire';
+import { parseMessageSegments, parseSkillWireSegments } from '@/features/chat/messages/user-message-segments';
 
 const cmdFixtures: CommandEntry[] = [
   {

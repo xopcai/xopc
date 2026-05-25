@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import useSWR from 'swr';
 
-import { fetchChatAgents } from '@/features/chat/chat-agents-api';
+import { fetchChatAgents } from '@/features/chat/agent-selection/chat-agents-api';
 import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
 import {
   normalizeChannelsFromConfig,

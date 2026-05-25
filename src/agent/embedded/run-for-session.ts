@@ -13,6 +13,9 @@ import {
   mergeTurnTools,
   resolveEmbeddedMcpToolsForTurn,
 } from '../mcp/resolve-embedded-mcp-tools.js';
+import { createLogger } from '../../utils/logger.js';
+
+const log = createLogger('EmbeddedTurnForSession');
 
 export type RunEmbeddedForSessionParams = {
   sessionKey: string;
@@ -60,6 +63,16 @@ export async function runEmbeddedTurnForSession(
   const workspaceDir = agentManager.getResolvedWorkspaceForSession(sessionKey);
   const config = params.getConfig?.();
 
+  // --- Pre-turn automatic compaction ---
+  await maybeAutoCompactBeforeTurn({
+    sessionKey,
+    sessionStore,
+    agentManager,
+    model,
+    config,
+    onEvent: params.onEvent,
+  });
+
   let userMessageForTurn = userMessage;
   if (params.applyStartupContext !== false) {
     userMessageForTurn = await applyStartupContextToUserMessage({
@@ -104,4 +117,75 @@ export async function runEmbeddedTurnForSession(
   })();
 
   return result;
+}
+
+// ---------------------------------------------------------------------------
+// Pre-turn automatic compaction
+// ---------------------------------------------------------------------------
+
+async function maybeAutoCompactBeforeTurn(opts: {
+  sessionKey: string;
+  sessionStore: SessionStore;
+  agentManager: AgentManager;
+  model: RunXopcEmbeddedTurnParams['model'];
+  config: Config | undefined;
+  onEvent?: (event: EmbeddedStreamEvent) => void;
+}): Promise<void> {
+  const { sessionKey, sessionStore, agentManager, model, config, onEvent } = opts;
+
+  // Respect the compaction.enabled flag
+  const compactionConfig = config?.agents?.defaults?.compaction;
+  if (compactionConfig?.enabled === false) {
+    return;
+  }
+
+  const contextWindow = (model as { contextWindow?: number }).contextWindow ?? 128_000;
+  const messages = await sessionStore.load(sessionKey);
+  const prep = sessionStore.prepareCompaction(sessionKey, messages, contextWindow);
+
+  if (!prep.needsCompaction) {
+    return;
+  }
+
+  log.info(
+    { sessionKey, reason: prep.stats?.reason, usagePercent: prep.stats?.usagePercent, contextWindow },
+    'Pre-turn auto-compaction triggered',
+  );
+
+  onEvent?.({
+    type: 'compaction',
+    status: 'started',
+    tokensBefore: prep.stats?.usagePercent != null
+      ? Math.round((prep.stats.usagePercent as number) * contextWindow)
+      : undefined,
+  });
+
+  try {
+    const result = await sessionStore.compact(sessionKey, messages, contextWindow);
+
+    if (result.compacted) {
+      // Evict the cached agent so the next turn reloads from the compacted transcript
+      agentManager.removeAgent(sessionKey);
+
+      log.info(
+        { sessionKey, tokensBefore: result.tokensBefore, tokensAfter: result.tokensAfter },
+        'Pre-turn auto-compaction completed',
+      );
+
+      onEvent?.({
+        type: 'compaction',
+        status: 'completed',
+        tokensBefore: result.tokensBefore,
+        tokensAfter: result.tokensAfter,
+        summary: result.summary.length > 200 ? `${result.summary.slice(0, 200)}…` : result.summary,
+      });
+    } else {
+      onEvent?.({ type: 'compaction', status: 'skipped' });
+    }
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    log.warn({ err, sessionKey }, `Pre-turn auto-compaction failed: ${errorMessage}`);
+    // Non-fatal: let the turn proceed even if compaction fails
+    onEvent?.({ type: 'compaction', status: 'skipped' });
+  }
 }

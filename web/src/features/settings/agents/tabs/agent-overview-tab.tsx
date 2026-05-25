@@ -5,7 +5,7 @@ import { AlertTriangle, Cog, Eye, Pencil, Sparkles, Trash2, User, X } from 'luci
 import { Button } from '@/components/ui/button';
 import { MarkdownEditor } from '@/components/markdown/markdown-editor';
 import { MarkdownView } from '@/components/markdown/markdown-view';
-import { ModelSelector } from '@/features/chat/model-selector';
+import { ModelSelector } from '@/features/chat/model/model-selector';
 import { DirectoryPickerPathField } from '@/features/fs/directory-picker-path-field';
 import type { GatewayAgentRow } from '@/features/settings/agents-admin-api';
 import {

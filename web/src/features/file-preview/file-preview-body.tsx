@@ -3,7 +3,7 @@ import { useMemo, useRef, type ReactNode } from 'react';
 import { HtmlWorkspaceEditor } from '@/components/html/html-workspace-editor';
 import { MarkdownSplit } from '@/components/markdown/markdown-split';
 import { MarkdownView } from '@/components/markdown/markdown-view';
-import { arrayBufferToBase64, inferMimeTypeFromFileName, PPTX_PREVIEW_MAX_CHARS } from '@/features/chat/attachment-utils-core';
+import { arrayBufferToBase64, inferMimeTypeFromFileName, PPTX_PREVIEW_MAX_CHARS } from '@/features/chat/attachments/attachment-utils-core';
 import { PreviewOpenAlternativesBar } from '@/features/preview/preview-open-alternatives';
 import { PptxPreviewView } from '@/features/preview/pptx-preview-view';
 import { useBinaryPreviewInContainer } from '@/features/file-preview/use-binary-preview-in-container';

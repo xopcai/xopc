@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildStepsRoundCompleteSummary } from '@/features/chat/assistant-steps-block';
-import type { ThinkingContent, ToolUseContent } from '@/features/chat/messages.types';
+import { buildStepsRoundCompleteSummary } from '@/features/chat/messages/assistant-steps-summary';
+import type { ThinkingContent, ToolUseContent } from '@/features/chat/messages/messages.types';
 
 const labels = {
   searchedWeb: '搜索网页',

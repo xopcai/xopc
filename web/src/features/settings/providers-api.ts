@@ -1,4 +1,4 @@
-import { fetchConfiguredModelsCached, type ConfiguredModel } from '@/features/chat/registry-api';
+import { fetchConfiguredModelsCached, type ConfiguredModel } from '@/features/chat/api/registry-api';
 import { revalidateGatewayConfig } from '@/features/gateway/gateway-config-swr';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';

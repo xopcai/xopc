@@ -2,7 +2,7 @@ import { Check, ChevronDown, Copy, Eye, EyeOff } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 
 import { Button } from '@/components/ui/button';
-import type { ChatAgentsPayload } from '@/features/chat/chat-agents-api';
+import type { ChatAgentsPayload } from '@/features/chat/agent-selection/chat-agents-api';
 import { feishuRoutingAccountIds } from '@/features/settings/channel-bindings-merge';
 import type { ChannelsSettingsState, DmPolicy, GroupPolicy } from '@/features/settings/channels-config-api';
 import type { ChannelsSettingsMessages } from '@/i18n/messages';

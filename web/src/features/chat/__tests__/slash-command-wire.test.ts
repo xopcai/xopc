@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import type { CommandEntry } from '@/features/chat/command-palette.types';
+import type { CommandEntry } from '@/features/chat/palette/command-palette.types';
 import {
   collectSlashCommandWireRanges,
   refreshSlashCommandWireIndex,
   trySlashCommandTokenAt,
-} from '@/features/chat/slash-command-wire';
+} from '@/features/chat/palette/slash-command-wire';
 
 const sampleCommands: CommandEntry[] = [
   {

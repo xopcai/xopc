@@ -1,6 +1,6 @@
 import { Brain, Search, Sparkles } from 'lucide-react';
 
-import { ModelSelector } from '@/features/chat/model-selector';
+import { ModelSelector } from '@/features/chat/model/model-selector';
 import type { AgentDefaultsState } from '@/features/settings/config-api';
 import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/settings/settings-form-section';
 
