@@ -11,14 +11,14 @@ import type { ChatMessages } from '@/i18n/messages';
  * Returns null if voice is recording (stops it) or if the draft is empty.
  */
 function harvestDraft(opts: {
-  voiceRecording: boolean;
-  stopVoiceRecording: () => void;
+  voiceActive: boolean;
+  cancelVoiceInput: () => void;
   getTextValue: () => string;
   getAttachmentCount: () => number;
   wireAttachmentsPayload: () => WireAttachment[];
 }): ComposerDraft | null {
-  if (opts.voiceRecording) {
-    opts.stopVoiceRecording();
+  if (opts.voiceActive) {
+    opts.cancelVoiceInput();
     return null;
   }
 
@@ -35,8 +35,8 @@ function harvestDraft(opts: {
 export interface UseComposerActionsOptions {
   chat: ChatMessages;
   runBusy: boolean;
-  voiceRecording: boolean;
-  stopVoiceRecording: () => void;
+  voiceActive: boolean;
+  cancelVoiceInput: () => void;
   editingFollowUpId: string | null;
 
   getTextValue: () => string;
@@ -73,8 +73,8 @@ export function useComposerActions(options: UseComposerActionsOptions): UseCompo
   const {
     chat: m,
     runBusy,
-    voiceRecording,
-    stopVoiceRecording,
+    voiceActive,
+    cancelVoiceInput,
     editingFollowUpId,
     getTextValue,
     getAttachmentCount,
@@ -101,8 +101,8 @@ export function useComposerActions(options: UseComposerActionsOptions): UseCompo
   const send = useCallback(() => {
     if (runBusy) return;
     const draft = harvestDraft({
-      voiceRecording,
-      stopVoiceRecording,
+      voiceActive,
+      cancelVoiceInput,
       ...readers,
     });
     if (!draft) return;
@@ -117,8 +117,8 @@ export function useComposerActions(options: UseComposerActionsOptions): UseCompo
     clearAttachments();
   }, [
     runBusy,
-    voiceRecording,
-    stopVoiceRecording,
+    voiceActive,
+    cancelVoiceInput,
     onSend,
     getThinkingLevel,
     onUserTextCommitted,
@@ -132,8 +132,8 @@ export function useComposerActions(options: UseComposerActionsOptions): UseCompo
   const flushSteeringDraft = useCallback(async () => {
     if (!runBusy && pendingFollowUpsCount === 0) return;
     const draft = harvestDraft({
-      voiceRecording,
-      stopVoiceRecording,
+      voiceActive,
+      cancelVoiceInput,
       ...readers,
     });
     if (!draft) return;
@@ -167,8 +167,8 @@ export function useComposerActions(options: UseComposerActionsOptions): UseCompo
     clearAttachments();
   }, [
     runBusy,
-    voiceRecording,
-    stopVoiceRecording,
+    voiceActive,
+    cancelVoiceInput,
     editingFollowUpId,
     pendingFollowUpsCount,
     onAddPendingFollowUp,
@@ -187,8 +187,8 @@ export function useComposerActions(options: UseComposerActionsOptions): UseCompo
   const interruptDraft = useCallback(() => {
     if (!runBusy || !onSteeringInterrupt) return;
     const draft = harvestDraft({
-      voiceRecording,
-      stopVoiceRecording,
+      voiceActive,
+      cancelVoiceInput,
       ...readers,
     });
     if (!draft) return;
@@ -208,8 +208,8 @@ export function useComposerActions(options: UseComposerActionsOptions): UseCompo
     clearAttachments();
   }, [
     runBusy,
-    voiceRecording,
-    stopVoiceRecording,
+    voiceActive,
+    cancelVoiceInput,
     editingFollowUpId,
     onPendingFollowUpRemove,
     onSteeringInterrupt,
