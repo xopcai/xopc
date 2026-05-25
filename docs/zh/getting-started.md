@@ -2,6 +2,20 @@
 
 装好 **xopc**、配上至少一家大模型厂商的密钥后，就可以用 **命令行**、**全屏终端（TUI）**、**网关网页控制台** 或 **Electron 桌面版**。本页从「第一次安装」讲起。
 
+## 30 秒，立即开始
+
+安装 CLI、运行 onboard、在终端开聊——三步，半分钟上手：
+
+```bash
+npm install -g @xopcai/xopc
+xopc onboard          # 想更快可先执行：xopc onboard --quick
+xopc tui --local
+```
+
+**国内镜像：** `npm install -g @xopcai/xopc --registry=https://registry.npmmirror.com`
+
+下文会展开网关、频道、桌面版与故障排除等细节。
+
 ## 终端演示
 
 [![asciinema](https://asciinema.org/a/PlH1sYqOiV3malzu.svg)](https://asciinema.org/a/PlH1sYqOiV3malzu)
