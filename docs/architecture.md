@@ -2,6 +2,8 @@
 
 This page describes how xopc is structured and how the main pieces fit together.
 
+**Skills**, **Extensions**, and community contributions install in seconds — often without a restart. Skills teach via **SKILL.md**; Extensions add full capabilities as npm packages; **UI Extensions** embed custom panels in the Web console.
+
 ## System Architecture
 
 ```
