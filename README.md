@@ -7,7 +7,8 @@
 
 <p align="center">
   <strong>The OPC workstation that grows with you.</strong><br />
-  A lightweight <strong>personal AI assistant</strong> for <strong>one-person companies</strong> — run it locally, bring your own keys, and extend it without forking core.
+  A local-first personal AI for one-person companies — CLI, desktop, browser, mobile, and your favorite messengers.<br />
+  Bring your own keys. Extend without forking.
 </p>
 
 <p align="center">
@@ -25,6 +26,7 @@
 </p>
 
 <p align="center">
+  <a href="https://xopc.ai">Website</a> ·
   <a href="https://github.com/xopcai/xopc">GitHub</a> ·
   <a href="https://xopcai.github.io/xopc/">Documentation</a> ·
   <a href="https://xopcai.github.io/xopc/models">Models</a> ·
@@ -40,45 +42,28 @@
 
 | | |
 | --- | --- |
-| **Local-first** | You run the process; data stays on your machine unless you configure outbound channels or tools. No mandatory vendor cloud for the runtime. |
-| **BYOK** | API keys and OAuth profiles live in your config (`~/.xopc/xopc.json`) and environment — **DeepSeek** (recommended), OpenAI, Anthropic, Google, **Ollama / LM Studio / vLLM**, Bedrock, Azure, OpenRouter, gateways, and more. |
-| **Surfaces** | **`xopc tui`** (rich terminal UI), **`xopc agent`** (TTY chat), **gateway + browser UI**, **Electron** app with the same console. |
-| **Channels** | **Telegram**, **WeChat (Weixin)**, **Feishu/Lark** (bundled) + **web** chat in the gateway; DM/group **policies** (pairing, allowlist, …). |
-| **Media** | **Images** (vision + generation where configured) and **voice** (STT/TTS) — e.g. Telegram and gateway paths; see docs. |
-| **Extensible** | **Backend**: `ChannelPlugin`, tools, providers, cron. **UI**: customize the gateway console with **`@xopcai/xopc/extension-ui-sdk`**. |
+| **Your machine. Your rules.** | xopc runs on your hardware. Conversations stay local. API keys stay in your config. No mandatory cloud, no surprise bills, no data leaving without your say — everything under **`~/.xopc/`**. |
+| **Bring your own keys. Any model.** | DeepSeek (recommended), OpenAI, Anthropic, Google, Ollama, LM Studio, vLLM, Bedrock, Azure — 20+ providers built in. Run fully offline with local inference, or mix cloud and local. Switch models in one config line. |
+| **One brain, every screen** | The same assistant — in your terminal, browser, desktop app, phone, and messengers. No sync needed. It's all one system. |
+| **Grows with you. Never outgrow it.** | Install Skills with one command. Add Extensions for new tools, channels, and UI panels. Multi-agent routing for different contexts. **`xopc skills install`** · **`xopc extensions install`** — and it just works. |
+| **Cron scheduling** | Summaries, reminders, and reports pushed on a timetable. Your agent doesn't only reply; it runs while you focus elsewhere. |
+| **Multi-agent routing** | Route different contexts to different agents — each with its own model, workspace, tools, and system prompt. Fully isolated contexts for work, creativity, and code. |
 
 ---
 
-## Install
+## Up and running in 30 seconds
 
-**Requirements:** Node.js **≥ 22** (for the CLI and gateway). **pnpm** is recommended when working from a git clone.
+Install the CLI, run onboarding, and start chatting in the terminal — three steps:
 
 ```bash
 npm install -g @xopcai/xopc
-# or: pnpm add -g @xopcai/xopc
+xopc onboard          # faster path: xopc onboard --quick
+xopc tui --local
 ```
 
-**China / slow access to `registry.npmjs.org`:** many projects (for example [cnpm](https://github.com/cnpm/cnpm#install)) suggest installing from the [China mirror](https://registry.npmmirror.com) ([npmmirror.com](https://npmmirror.com/)). One-off install:
+**Requirements:** Node.js **≥ 22**. **pnpm** is recommended when working from a git clone.
 
-```bash
-npm install <package> --registry=https://registry.npmmirror.com
-```
-
-For this CLI or a git clone of this repo:
-
-```bash
-npm install -g @xopcai/xopc --registry=https://registry.npmmirror.com
-pnpm install --registry=https://registry.npmmirror.com
-```
-
-To make the mirror the default: `npm config set registry https://registry.npmmirror.com` (reset: `npm config delete registry`).
-
-**First run:** interactive onboarding (models, keys, channels).
-
-```bash
-xopc onboard
-# faster path: xopc onboard --quick
-```
+**China / slow access to `registry.npmjs.org`:** add `--registry=https://registry.npmmirror.com` to `npm install`, or set `npm config set registry https://registry.npmmirror.com`.
 
 ---
 
@@ -144,10 +129,12 @@ pnpm run electron:build   # artifacts under dist/release/
 
 | Surface | Command / how | Best for |
 | --- | --- | --- |
-| **TUI** | `xopc tui`, `xopc tui --local`, or `xopc tui --url …` | Full-screen terminal UX, optional remote gateway |
+| **TUI** | `xopc tui`, `xopc tui --local`, or `xopc tui --url …` | Full keyboard control, streaming output, zero perceived latency |
 | **CLI** | `xopc agent -i` / `xopc agent -m "…"` | Scripting and minimal TTY |
-| **Web** | `xopc gateway` (foreground) or `xopc gateway --background`, then open the console URL | Sharing one gateway, browser chat, settings |
-| **Electron** | **[Install from Releases](#electron-desktop)** or build from source | Desktop app (macOS / Windows / Linux) |
+| **Web** | `xopc gateway` (foreground) or `xopc gateway --background`, then open the console URL | Full console in the browser — chat, settings, logs |
+| **Desktop** | **[Install from Releases](#electron-desktop)** or build from source | Native desktop experience across macOS, Windows, and Linux |
+| **Mobile** | Scan to pair with your gateway | Your assistant on the go |
+| **Messengers** | Telegram, WeChat, Feishu/Lark — configure `channels.*`, run gateway | Chat directly in your favorite IM |
 
 ---
 
@@ -220,10 +207,10 @@ Treat inbound chat messages as **untrusted input**. Prefer **pairing** or **allo
 ## Extensions & skills
 
 ```bash
-xopc extensions install xopc-extension-weather
+xopc skills install <name>     # teach your assistant new domains via SKILL.md
+xopc extensions install <pkg>  # tools, channels, and UI panels
 xopc extensions dev ./my-extension
 xopc skills list
-xopc skills install <name>
 ```
 
 Backend extensions can ship **tools**, **channels**, and **model bridges**. Gateway **UI** extensions use **`@xopcai/xopc/extension-ui-sdk`** (see `packages/extension-ui-sdk/`). Guides: **[Extensions](https://xopcai.github.io/xopc/extensions)**, **[Skills](https://xopcai.github.io/xopc/skills)**.

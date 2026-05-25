@@ -2,6 +2,8 @@
 
 本文页说明 xopc 的整体结构与主要模块之间的关系。
 
+**Skills**、**Extensions** 与社区贡献——秒级安装，通常无需重启。Skills 用 **SKILL.md** 教知识；Extensions 以 npm 包扩展全功能；**UI Extensions** 在 Web 控制台嵌入自定义面板。
+
 ## 系统架构
 
 ```

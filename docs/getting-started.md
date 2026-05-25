@@ -2,6 +2,20 @@
 
 Install **xopc**, add at least one LLM provider key, then use the **CLI**, **TUI**, **gateway** (browser console), or the **Electron** app. This page walks through a first install from scratch.
 
+## Up and running in 30 seconds
+
+Install the CLI, run onboarding, and start chatting in the terminal — three steps:
+
+```bash
+npm install -g @xopcai/xopc
+xopc onboard          # faster path: xopc onboard --quick
+xopc tui --local
+```
+
+**China mirror:** `npm install -g @xopcai/xopc --registry=https://registry.npmmirror.com`
+
+The sections below cover gateway, channels, desktop, and troubleshooting in more detail.
+
 ## Terminal demo
 
 [![asciinema](https://asciinema.org/a/PlH1sYqOiV3malzu.svg)](https://asciinema.org/a/PlH1sYqOiV3malzu)

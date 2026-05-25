@@ -4,7 +4,7 @@ layout: home
 hero:
   name: xopc
   text: OPC 工作站
-  tagline: 与你共同成长的一人公司 AI 工作站。
+  tagline: 与你一起成长的 OPC 工作站——为一人公司打造的本地优先 AI 助手。CLI、桌面、浏览器、手机、即时通讯——全平台覆盖。自带钥匙，无需 fork 即可扩展。
   image:
     src: /logo.svg
     alt: xopc
@@ -17,37 +17,31 @@ hero:
       link: https://github.com/xopcai/xopc
 
 features:
-  - title: 🚀 OPC 原生
-    details: "专为一人公司设计：智能体、网关、频道、cron、技能——一切尽在掌控。"
-    link: /zh/getting-started
-  - title: 📈 与你共同成长
-    details: 从 CLI 起步；随需求演进添加频道、扩展、cron——无供应商锁定
-    link: /zh/getting-started
-  - title: 🔌 扩展系统
-    details: 后端钩子与扩展能力；可选 manifest ui，在网关网页控制台沙箱 iframe 中运行（@xopcai/extension-ui-sdk）
-    link: /zh/extensions
-  - title: 🌐 多频道
-    details: 内置 Telegram、微信、飞书/Lark 与网关网页对话/控制台；可加载扩展的 manifest ui 面板；更多频道可通过扩展接入。
-    link: /zh/channels
-  - title: 💻 本地优先
-    details: 本地运行、完全掌控——专为自管技术栈的一人公司打造
+  - title: 🏠 你的机器，你的规则。
+    details: "xopc 运行在你自己的硬件上。对话留在本地，密钥存在你的配置里。没有强制云端——一切尽在 ~/.xopc/。"
     link: /zh/configuration
-  - title: 🔧 内置工具
-    details: 文件操作、网页搜索、Shell 执行等
-    link: /zh/tools
-  - title: 🎯 技能系统
-    details: 通过 SKILL.md 文件为智能体扩展新技能
-    link: /zh/skills
-  - title: 🔐 OAuth 支持
-    details: 支持 Kimi、Anthropic 等安全认证
-    link: /zh/configuration
-  - title: 📊 进度反馈
-    details: 长任务实时进度更新
-    link: /zh/progress
-  - title: 🎤 语音消息
-    details: 支持通过 Telegram 收发语音消息（STT/TTS）
-    link: /zh/voice
-  - title: 🤖 多模型厂商
-    details: 20+ 家：DeepSeek（推荐）、OpenAI、Anthropic、Google、Groq、Ollama、OpenRouter 等
+  - title: 🔑 自带钥匙，任选模型。
+    details: "DeepSeek、OpenAI、Anthropic、Google、Ollama、LM Studio、vLLM、Bedrock、Azure——内置 20+ 供应商。纯离线或云端本地混搭，一行配置切换模型。"
     link: /zh/models
+  - title: 📡 一个大脑，每块屏幕都能用
+    details: "同一个助手——终端、浏览器、桌面应用、手机、即时通讯。无需同步，因为本来就是同一个系统。"
+    link: /zh/channels
+  - title: 🧩 跟你一起长大，永远不会过时。
+    details: "xopc skills install · xopc extensions install——用 SKILL.md 教知识，增加工具、通道与 UI 面板，不必改核心代码。"
+    link: /zh/extensions
+  - title: ⏰ Cron 定时
+    details: 摘要、提醒与报告按时间表推送。在你专注别处时，Agent 也能主动运行。
+    link: /zh/cron
+  - title: 🤖 多 Agent 路由
+    details: 不同场景路由到不同 Agent——各自模型、工作区、工具与系统提示词，上下文完全隔离。
+    link: /zh/routing-system
+  - title: 🌐 HTTP/SSE 网关
+    details: REST JSON API 与 SSE 流式更新；浏览器与 Electron 内为同一套 React 控制台。
+    link: /zh/gateway
+  - title: 🛠️ 类型安全工具
+    details: TypeBox 定义内置与自定义工具——网页搜索、浏览器（Playwright，按需开启）、文件操作等。
+    link: /zh/tools
+  - title: 🎙️ 语音与图像
+    details: 在已配置路径上提供 STT/TTS（Telegram、网关等）；图像支持识图与按需生图。
+    link: /zh/voice
 ---
