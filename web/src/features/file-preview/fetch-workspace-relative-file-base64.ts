@@ -1,4 +1,4 @@
-import { arrayBufferToBase64, workspaceRelativePathToApiPath } from '@/features/chat/attachment-utils-core';
+import { arrayBufferToBase64, workspaceRelativePathToApiPath } from '@/features/chat/attachments/attachment-utils-core';
 import { apiFetch } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 

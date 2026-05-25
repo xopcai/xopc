@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import useSWR from 'swr';
 
-import { CONFIGURED_MODELS_SWR_KEY, fetchConfiguredModelsCached } from '@/features/chat/registry-api';
+import { CONFIGURED_MODELS_SWR_KEY, fetchConfiguredModelsCached } from '@/features/chat/api/registry-api';
 import { fetchGatewayAgents } from '@/features/settings/agents-admin-api';
 import { PRESET_AGENTS_SKIPPED_KEY } from '@/features/settings/agents/preset-agents';
 import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';

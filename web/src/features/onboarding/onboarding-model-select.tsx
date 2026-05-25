@@ -1,4 +1,4 @@
-import type { ConfiguredModel } from '@/features/chat/registry-api';
+import type { ConfiguredModel } from '@/features/chat/api/registry-api';
 import { cn } from '@/lib/cn';
 
 export function OnboardingModelSelect({

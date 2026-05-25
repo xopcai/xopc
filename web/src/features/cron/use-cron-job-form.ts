@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { type ChatAgentOption } from '@/features/chat/chat-agents-api';
+import { type ChatAgentOption } from '@/features/chat/agent-selection/chat-agents-api';
 import {
   cronJobBodyText,
   getSessionChatIds,

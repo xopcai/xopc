@@ -3,8 +3,8 @@ import { memo, useEffect, useLayoutEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
-import { ChatAgentSelector } from '@/features/chat/chat-agent-selector';
-import type { ChatAgentOption } from '@/features/chat/chat-agents-api';
+import { ChatAgentSelector } from '@/features/chat/agent-selection/chat-agent-selector';
+import type { ChatAgentOption } from '@/features/chat/agent-selection/chat-agents-api';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { useAppShellStore } from '@/stores/app-shell-store';

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { collapseExpandedSkillBlockForDisplay } from '@/features/chat/agent-messages';
+import { collapseExpandedSkillBlockForDisplay } from '@/features/chat/messages/wire-text-scrub';
 
 describe('collapseExpandedSkillBlockForDisplay', () => {
   it('returns wire text unchanged when not an expanded skill block', () => {

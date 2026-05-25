@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-import { detectAtRange } from '@/features/chat/use-at-mention-picker';
+import { detectAtRange } from '@/features/chat/palette/use-at-mention-picker';
 
 describe('detectAtRange', () => {
   it('returns range and query after @', () => {

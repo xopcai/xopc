@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Check, ChevronDown, Copy, Eye, EyeOff } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import type { ChatAgentsPayload } from '@/features/chat/chat-agents-api';
+import type { ChatAgentsPayload } from '@/features/chat/agent-selection/chat-agents-api';
 import { telegramRoutingAccountIds } from '@/features/settings/channel-bindings-merge';
 import {
   emptyTelegramAccount,

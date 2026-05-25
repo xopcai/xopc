@@ -13,7 +13,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
 
-import { fetchChatAgents } from '@/features/chat/chat-agents-api';
+import { fetchChatAgents } from '@/features/chat/agent-selection/chat-agents-api';
 import { SessionCard, type SessionCardAction } from '@/features/sessions/session-card';
 import { agentAvatarFromOptions, resolveSessionAgentId } from '@/features/sessions/session-agent-resolve';
 import { SessionConfigSection } from '@/features/settings/session-config-section';

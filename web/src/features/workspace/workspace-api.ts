@@ -241,6 +241,91 @@ export async function fetchWorkspaceFileBlob(
   return res.blob();
 }
 
+export type ImportFileReferenceResult = {
+  workspaceRelativePath: string;
+  absolutePath: string;
+  bytesCopied: number;
+  sourceAbsolutePath: string;
+  sourceScope: FileReferenceScope;
+  sourceLocationKind?: FileReferenceLocationKind;
+  renamed: boolean;
+  overwrote: boolean;
+  mtimeMs?: number;
+  newFileRefId: string;
+};
+
+export type ImportFileReferenceError = {
+  code:
+    | 'INVALID_FILE_REF'
+    | 'FILE_REF_EXPIRED'
+    | 'FILE_REF_FORBIDDEN'
+    | 'IMPORT_NOT_ALLOWED'
+    | 'SOURCE_NOT_FOUND'
+    | 'SOURCE_NOT_FILE'
+    | 'SOURCE_TOO_LARGE'
+    | 'WORKSPACE_RESOLUTION_FAILED'
+    | 'INVALID_CONFLICT_MODE'
+    | 'OVERWRITE_DISABLED'
+    | 'INVALID_DESTINATION'
+    | 'DESTINATION_BLOCKED'
+    | 'SAME_LOCATION'
+    | 'DESTINATION_EXISTS'
+    | 'IMPORT_FAILED'
+    | 'UNKNOWN';
+  message: string;
+};
+
+/**
+ * Copy an external file (identified by a registered fileRef) into the current
+ * session's workspace. The source ref is consumed; on success the response
+ * carries a fresh workspace-scoped fileRef ready to render in-place.
+ */
+export async function importFileReferenceToWorkspace(
+  fileRefId: string,
+  options?: WorkspaceEditorRequestOptions & {
+    destination?: string;
+    onConflict?: 'rename' | 'overwrite' | 'error';
+  },
+): Promise<{ ok: true; payload: ImportFileReferenceResult } | { ok: false; error: ImportFileReferenceError }> {
+  const params = new URLSearchParams();
+  const sk = options?.sessionKey?.trim();
+  if (sk) {
+    params.set('sessionKey', sk);
+  } else {
+    const aid = options?.agentId?.trim();
+    if (aid) params.set('agentId', aid);
+  }
+  const qs = params.toString();
+  const res = await apiFetch(
+    apiUrl(`/api/workspace/import-file-ref/${encodeURIComponent(fileRefId)}${qs ? `?${qs}` : ''}`),
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        destination: options?.destination,
+        onConflict: options?.onConflict ?? 'rename',
+      }),
+    },
+  );
+
+  let data: unknown;
+  try {
+    data = await res.json();
+  } catch {
+    return { ok: false, error: { code: 'UNKNOWN', message: `HTTP ${res.status}` } };
+  }
+  const body = data as { ok?: boolean; payload?: ImportFileReferenceResult; error?: { code?: string; message?: string } };
+  if (body.ok && body.payload) {
+    return { ok: true, payload: body.payload };
+  }
+  return {
+    ok: false,
+    error: {
+      code: (body.error?.code as ImportFileReferenceError['code']) ?? 'UNKNOWN',
+      message: body.error?.message ?? `HTTP ${res.status}`,
+    },
+  };
+}
+
 export async function writeWorkspaceFile(
   path: string,
   content: string,

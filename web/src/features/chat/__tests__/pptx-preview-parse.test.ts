@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { parsePptxExtractedForDisplay } from '@/features/chat/pptx-preview-parse';
+import { parsePptxExtractedForDisplay } from '@/features/chat/attachments/pptx-preview-parse';
 
 describe('parsePptxExtractedForDisplay', () => {
   it('parses processPptx-style XML into slides', () => {

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, it, expect } from 'vitest';
-import type { CommandEntry } from '@/features/chat/command-palette.types';
-import { formatFilePathForWire } from '@/features/chat/file-wire-pattern';
+import type { CommandEntry } from '@/features/chat/palette/command-palette.types';
+import { formatFilePathForWire } from '@/features/chat/palette/file-wire-pattern';
 import {
   applyWireToEditor,
   listSkillNamesInWire,
@@ -9,8 +9,8 @@ import {
   removeSkillTokenAtOrBeforeCaret,
   removeTrailingSkillTokenBeforeCaret,
   serializeEditorToWire,
-} from '@/features/chat/composer-editor-wire';
-import { refreshSlashCommandWireIndex } from '@/features/chat/slash-command-wire';
+} from '@/features/chat/composer/composer-editor-wire';
+import { refreshSlashCommandWireIndex } from '@/features/chat/palette/slash-command-wire';
 
 describe('removeSkillTokenAtOrBeforeCaret', () => {
   it('removes token when caret is at end of token', () => {
