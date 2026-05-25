@@ -439,6 +439,55 @@ function curatedSkillsToPackageItems(skills: CuratedIndexSkill[]): PackageListIt
   }));
 }
 
+async function findCuratedIndexSkill(slug: string): Promise<CuratedIndexSkill | null> {
+  const want = slug.trim();
+  if (!want) return null;
+  const ecoUrls = resolveSkillHubEcosystemUrls();
+  try {
+    const idx = await cachedFetchSkillHubCuratedIndex(ecoUrls);
+    return idx.skills.find((s) => s.slug?.trim() === want) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function curatedSkillFallbackReadmeMarkdown(skill: CuratedIndexSkill): string {
+  const title = (skill.name ?? skill.slug).trim() || skill.slug;
+  const desc = (skill.description ?? '').trim() || '_No description._';
+  const version = (skill.version ?? '').trim() || '1.0.0';
+  return `## ${title}\n\n**${skill.slug}** · v${version}\n\n${desc}`;
+}
+
+function packageDetailFromCuratedSkill(skill: CuratedIndexSkill) {
+  const slug = skill.slug.trim();
+  const version = (skill.version ?? '').trim() || '1.0.0';
+  const categories = (skill.categories ?? []).map((c) => String(c).trim()).filter(Boolean);
+  const sourceLabel = sourceLabelFromHomepage(skill.homepage);
+  return {
+    id: slug,
+    name: (skill.name ?? slug).trim() || slug,
+    type: 'skill',
+    description: (skill.description ?? '').trim(),
+    readme: curatedSkillFallbackReadmeMarkdown(skill),
+    downloads: typeof skill.downloads === 'number' ? skill.downloads : 0,
+    author: {
+      username: sourceLabel?.toLowerCase() ?? 'skillhub',
+      avatarUrl: null,
+    },
+    latestVersion: {
+      version,
+      changelog: null,
+      publishedAt: String(skill.rank ?? skill.score ?? 0),
+    },
+    provider: 'skillhub',
+    skillHubInfo: {
+      category: categories[0] ?? '',
+      installs: 0,
+      stars: typeof skill.stars === 'number' ? skill.stars : 0,
+    },
+  };
+}
+
 function lightmakeHitToPackageItem(hit: LightmakeSearchHit): PackageListItem {
   const slug = String(hit.slug || '').trim();
   const desc = (hit.summary ?? hit.description_zh ?? hit.description ?? '').trim() || '';
@@ -771,8 +820,15 @@ const extension = {
         },
 
         async getPackageDetail(_config, packageName) {
-          const detail = await getSkillHubSkill(packageName);
-          const slug = detail.skill.slug;
+          const slug = packageName.trim();
+          let detail: SkillHubSkillDetail;
+          try {
+            detail = await getSkillHubSkill(slug);
+          } catch (registryErr) {
+            const curated = await findCuratedIndexSkill(slug);
+            if (curated) return packageDetailFromCuratedSkill(curated);
+            throw registryErr;
+          }
           const version = detail.latestVersion.version;
           const changelog = detail.latestVersion.changelog;
 
