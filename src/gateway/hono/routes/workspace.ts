@@ -2,7 +2,7 @@ import type { Hono } from 'hono';
 import { randomUUID } from 'node:crypto';
 import { constants as fsConstants } from 'node:fs';
 import { copyFile, link, mkdir, readdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises';
-import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 
 import { extractProfileAgentId } from '../../../config/agent-profile.js';
 import { type Config, getWorkspacePath } from '../../../config/schema.js';
