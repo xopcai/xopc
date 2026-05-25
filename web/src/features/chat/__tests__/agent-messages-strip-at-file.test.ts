@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { normalizeAgentMessages, stripExpandedAtFileBlocks } from '@/features/chat/agent-messages';
+import { normalizeAgentMessages } from '@/features/chat/messages/agent-messages';
+import { stripExpandedAtFileBlocks } from '@/features/chat/messages/wire-text-scrub';
 
 describe('stripExpandedAtFileBlocks', () => {
   it('removes single file block and preserves @file: token', () => {

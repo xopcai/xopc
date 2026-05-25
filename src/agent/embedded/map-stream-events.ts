@@ -31,6 +31,14 @@ export function mapEmbeddedEventToGatewaySse(event: EmbeddedStreamEvent): Gatewa
       return { type: 'message_end' };
     case 'progress':
       return { type: 'progress', stage: event.stage, message: event.message };
+    case 'compaction':
+      return {
+        type: 'compaction',
+        status: event.status,
+        tokensBefore: event.tokensBefore,
+        tokensAfter: event.tokensAfter,
+        summary: event.summary,
+      };
     case 'error':
       return { type: 'error', content: event.content };
     default:

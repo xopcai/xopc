@@ -1831,6 +1831,19 @@ export class GatewayService {
     return this.sessionIndex.getSession(key, options);
   }
 
+  async getSessionMessagePage(
+    key: string,
+    options?: {
+      offset?: number;
+      limit?: number;
+      before?: string;
+      includeTranscriptSummary?: boolean;
+      includeTranscriptRows?: boolean;
+    },
+  ) {
+    return this.sessionIndex.getSessionMessagePage(key, options);
+  }
+
   /**
    * Partial session metadata update (OpenClaw-style sessions.patch subset).
    */

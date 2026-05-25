@@ -9,7 +9,7 @@ import { Link } from 'react-router-dom';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
-import { CONFIGURED_MODELS_SWR_KEY, fetchConfiguredModelsCached } from '@/features/chat/registry-api';
+import { CONFIGURED_MODELS_SWR_KEY, fetchConfiguredModelsCached } from '@/features/chat/api/registry-api';
 import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
 import {
   isMaskedKey,

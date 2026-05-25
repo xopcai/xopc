@@ -5,7 +5,7 @@ import {
   COMPOSER_INPUT_HISTORY_MAX,
   getComposerInputHistory,
   recordComposerInputHistory,
-} from '@/features/chat/composer-input-history';
+} from '@/features/chat/composer/composer-input-history';
 
 const SK = 'test-session-key';
 

@@ -6,7 +6,7 @@ import {
   readFollowUpQueueSnapshot,
   sanitizeFollowUpQueueSnapshot,
   writeFollowUpQueueSnapshot,
-} from '@/features/chat/follow-up-queue-storage';
+} from '@/features/chat/follow-up/follow-up-queue-storage';
 
 describe('follow-up-queue-storage', () => {
   beforeEach(() => {

@@ -447,7 +447,68 @@ export class SessionStore {
     if (!metadata) {
       return null;
     }
-    const messages = await this.loadMessages(key);
+    const messages = await this.loadDisplayMessages(key);
+    const detail = await this.buildSessionDetail(key, metadata, messages, options);
+    return detail;
+  }
+
+  async getMessagePage(
+    key: string,
+    options: {
+      offset?: number;
+      limit?: number;
+      before?: string;
+      includeTranscriptSummary?: boolean;
+      includeTranscriptRows?: boolean;
+    } = {},
+  ): Promise<{
+    session: SessionDetail;
+    pagination: {
+      total: number;
+      limit: number;
+      offset: number;
+      hasMore: boolean;
+      before?: string;
+      nextBeforeCursor?: string;
+    };
+  } | null> {
+    const metadata = await this.getMetadata(key);
+    if (!metadata) {
+      return null;
+    }
+    const messages = await this.loadDisplayMessages(key);
+    const total = messages.length;
+    const limit = Math.min(200, Math.max(1, Math.trunc(options.limit ?? 50)));
+    const offset = Math.max(0, Math.trunc(options.offset ?? 0));
+    const parsedBefore = options.before ? Number.parseInt(options.before, 10) : undefined;
+    const hasBeforeCursor = parsedBefore !== undefined && Number.isFinite(parsedBefore);
+    const endExclusive = hasBeforeCursor
+      ? Math.min(total, Math.max(0, Math.trunc(parsedBefore)))
+      : Math.max(0, total - offset);
+    const startInclusive = Math.max(0, endExclusive - limit);
+    const pageMessages = messages.slice(startInclusive, endExclusive);
+    const session = await this.buildSessionDetail(key, metadata, pageMessages, options);
+    const nextBeforeCursor = startInclusive > 0 ? String(startInclusive) : undefined;
+
+    return {
+      session,
+      pagination: {
+        total,
+        limit,
+        offset,
+        hasMore: startInclusive > 0,
+        ...(hasBeforeCursor ? { before: String(endExclusive) } : {}),
+        ...(nextBeforeCursor ? { nextBeforeCursor } : {}),
+      },
+    };
+  }
+
+  private async buildSessionDetail(
+    key: string,
+    metadata: SessionMetadata,
+    messages: AgentMessage[],
+    options?: { includeTranscriptSummary?: boolean; includeTranscriptRows?: boolean },
+  ): Promise<SessionDetail> {
     let transcriptSummary: SessionTranscriptSummary | undefined;
     if (options?.includeTranscriptSummary) {
       const env = await this.loadTranscriptDocument(key);
@@ -647,6 +708,42 @@ export class SessionStore {
       return rowsToLlmMessages(rows);
     }
     return [];
+  }
+
+  private async loadDisplayMessages(key: string): Promise<AgentMessage[]> {
+    const entry = await this.getDiskEntry(key);
+    if (!entry) {
+      return [];
+    }
+    const keySessionsDir = this.resolveSessionsDirForKey(key);
+    const primary = this.transcriptPathForEntry(entry, keySessionsDir);
+    const transcriptPaths: string[] = [];
+    const checkpoints = await this.listCompactionCheckpoints(key);
+    for (const checkpoint of [...checkpoints].reverse()) {
+      transcriptPaths.push(join(keySessionsDir, `${this.checkpointBasename(entry.sessionId)}${checkpoint.id}.jsonl`));
+    }
+    transcriptPaths.push(primary);
+
+    const messages: AgentMessage[] = [];
+    const seenMessages = new Set<string>();
+    for (const transcriptPath of transcriptPaths) {
+      if (!existsSync(transcriptPath)) {
+        continue;
+      }
+      const rows = await readTranscriptRowsFromFile(transcriptPath);
+      for (const message of rowsToLlmMessages(rows)) {
+        if (this.isCompactionSummaryMessage(message)) {
+          continue;
+        }
+        const key = this.displayMessageIdentity(message);
+        if (seenMessages.has(key)) {
+          continue;
+        }
+        seenMessages.add(key);
+        messages.push(message);
+      }
+    }
+    return messages;
   }
 
   async loadTranscriptDocument(key: string): Promise<XopcSessionTranscriptV1 | null> {
@@ -1073,7 +1170,7 @@ export class SessionStore {
   }
 
   async searchInSession(key: string, keyword: string): Promise<Message[]> {
-    const messages = await this.loadMessages(key);
+    const messages = await this.loadDisplayMessages(key);
     const keywordLower = keyword.toLowerCase();
     return this.convertMessages(
       messages.filter((m) => {
@@ -1175,6 +1272,25 @@ export class SessionStore {
     return (msg as { content?: unknown }).content;
   }
 
+  private isCompactionSummaryMessage(msg: AgentMessage): boolean {
+    if (msg.role !== 'user') {
+      return false;
+    }
+    const text = this.extractTextContent(this.messageContent(msg)).trim();
+    return /^\[Previous conversation summary\]/i.test(text);
+  }
+
+  private displayMessageIdentity(message: AgentMessage): string {
+    const record = message as unknown as Record<string, unknown>;
+    return JSON.stringify({
+      role: message.role,
+      timestamp: record.timestamp,
+      toolCallId: record.toolCallId ?? record.tool_call_id,
+      toolName: record.toolName,
+      content: this.messageContent(message),
+    });
+  }
+
   private extractTextContent(content: unknown): string {
     if (typeof content === 'string') {
       return content;
@@ -1244,6 +1360,19 @@ export class SessionStore {
       };
       if (Array.isArray(m.attachments) && m.attachments.length > 0) {
         row.attachments = m.attachments as Message['attachments'];
+      }
+      const rawUsage = m.usage as { input?: number; output?: number; totalTokens?: number; total?: number } | undefined;
+      if (rawUsage && typeof rawUsage === 'object') {
+        const inputTokens = typeof rawUsage.input === 'number' ? rawUsage.input : undefined;
+        const outputTokens = typeof rawUsage.output === 'number' ? rawUsage.output : undefined;
+        const totalTokens = typeof rawUsage.totalTokens === 'number'
+          ? rawUsage.totalTokens
+          : typeof rawUsage.total === 'number'
+            ? rawUsage.total
+            : undefined;
+        if (inputTokens != null || outputTokens != null || totalTokens != null) {
+          row.usage = { inputTokens, outputTokens, totalTokens };
+        }
       }
       return row;
     });

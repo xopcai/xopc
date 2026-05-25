@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 
-import type { MessageAttachment } from '@/features/chat/messages.types';
+import type { MessageAttachment } from '@/features/chat/messages/messages.types';
 import {
   base64ToArrayBuffer,
   extractTextForPreview,
@@ -8,7 +8,7 @@ import {
   inferAttachmentFileType,
   PPTX_PREVIEW_MAX_CHARS,
   type AttachmentPreviewFileType,
-} from '@/features/chat/attachment-utils-core';
+} from '@/features/chat/attachments/attachment-utils-core';
 import { fetchWorkspaceRelativeFileAsBase64 } from '@/features/file-preview/fetch-workspace-relative-file-base64';
 import { messages } from '@/i18n/messages';
 import type { StoredLanguage } from '@/lib/storage';

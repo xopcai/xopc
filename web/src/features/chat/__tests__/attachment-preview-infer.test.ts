@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { normalizeAgentMessages } from '@/features/chat/agent-messages';
-import { inferAttachmentFileType, inferMimeTypeFromFileName } from '@/features/chat/attachment-utils-core';
+import { normalizeAgentMessages } from '@/features/chat/messages/agent-messages';
+import { inferAttachmentFileType, inferMimeTypeFromFileName } from '@/features/chat/attachments/attachment-utils-core';
 
 describe('inferAttachmentFileType', () => {
   it('detects PDF from extension when mime is application/octet-stream', () => {

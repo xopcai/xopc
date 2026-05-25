@@ -2,8 +2,8 @@ import { ExternalLink } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 
-import type { ConfiguredModel } from '@/features/chat/registry-api';
-import { fetchConfiguredModelsCached, invalidateConfiguredModelsCache } from '@/features/chat/registry-api';
+import type { ConfiguredModel } from '@/features/chat/api/registry-api';
+import { fetchConfiguredModelsCached, invalidateConfiguredModelsCache } from '@/features/chat/api/registry-api';
 import { revalidateGatewayConfig } from '@/features/gateway/gateway-config-swr';
 import { OnboardingModelSelect } from '@/features/onboarding/onboarding-model-select';
 import { OnboardingProviderGrid } from '@/features/onboarding/onboarding-provider-grid';

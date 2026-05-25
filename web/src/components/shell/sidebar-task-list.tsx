@@ -19,9 +19,9 @@ import useSWRInfinite from 'swr/infinite';
 import { SessionChannelIcon } from '@/components/shell/session-channel-icon';
 import { Button } from '@/components/ui/button';
 import { SlidingSegmented } from '@/components/ui/sliding-segmented';
-import { fetchChatAgents } from '@/features/chat/chat-agents-api';
-import { isWebUiSessionKey, WEB_UI_SESSION_SOURCE_CHANNELS } from '@/features/chat/session-manager';
-import { useSidebarSessionAgentRun } from '@/features/chat/use-sidebar-session-agent-run';
+import { fetchChatAgents } from '@/features/chat/agent-selection/chat-agents-api';
+import { isWebUiSessionKey, WEB_UI_SESSION_SOURCE_CHANNELS } from '@/features/chat/session/session-manager';
+import { useSidebarSessionAgentRun } from '@/features/chat/session/use-sidebar-session-agent-run';
 import { AgentAvatarDisplay } from '@/features/settings/agents/agent-avatar-display';
 import { agentAvatarFromOptions, resolveSessionAgentId } from '@/features/sessions/session-agent-resolve';
 import {

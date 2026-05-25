@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import type { PaletteItem } from '@/features/chat/command-palette.types';
-import { paletteDefaultTiebreak } from '@/features/chat/palette-default-order';
+import type { PaletteItem } from '@/features/chat/palette/command-palette.types';
+import { paletteDefaultTiebreak } from '@/features/chat/palette/palette-default-order';
 
 function cmd(
   name: string,

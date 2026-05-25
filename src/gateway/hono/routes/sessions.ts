@@ -139,6 +139,29 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
     return c.json({ ok: true, payload: { messages } });
   });
 
+  // GET /api/sessions/:key/history — UI chat history page from the newest tail.
+  authenticated.get('/api/sessions/:key/history', async (c) => {
+    const key = c.req.param('key');
+    const offsetRaw = c.req.query('offset');
+    const limitRaw = c.req.query('limit');
+    const before = c.req.query('before')?.trim();
+    const parsedOffset = offsetRaw ? Number.parseInt(offsetRaw, 10) : 0;
+    const parsedLimit = limitRaw ? Number.parseInt(limitRaw, 10) : 50;
+    const offset = Number.isFinite(parsedOffset) ? Math.max(0, parsedOffset) : 0;
+    const limit = Number.isFinite(parsedLimit) ? Math.min(200, Math.max(1, parsedLimit)) : 50;
+    const result = await service.getSessionMessagePage(key, {
+      offset,
+      limit,
+      ...(before ? { before } : {}),
+    });
+
+    if (!result) {
+      return c.json({ error: 'Session not found' }, 404);
+    }
+
+    return c.json(result);
+  });
+
   // POST /api/sessions/:key/transcript/context — append persisted-only `kind: 'context'` row (not in LLM context)
   authenticated.post('/api/sessions/:key/transcript/context', async (c) => {
     const key = c.req.param('key');
@@ -226,6 +249,27 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
     );
     const includeTranscript = includeSet.has('transcript');
     const includeTranscriptRows = includeSet.has('transcriptRows');
+    const offsetRaw = c.req.query('offset');
+    const limitRaw = c.req.query('limit');
+    const hasPagingQuery = offsetRaw !== undefined || limitRaw !== undefined;
+
+    if (hasPagingQuery) {
+      const parsedOffset = offsetRaw ? Number.parseInt(offsetRaw, 10) : 0;
+      const parsedLimit = limitRaw ? Number.parseInt(limitRaw, 10) : 50;
+      const offset = Number.isFinite(parsedOffset) ? Math.max(0, parsedOffset) : 0;
+      const limit = Number.isFinite(parsedLimit) ? Math.min(200, Math.max(1, parsedLimit)) : 50;
+      const result = await service.getSessionMessagePage(key, {
+        offset,
+        limit,
+        includeTranscriptSummary: includeTranscript,
+        includeTranscriptRows,
+      });
+      if (!result) {
+        return c.json({ error: 'Session not found' }, 404);
+      }
+      return c.json(result);
+    }
+
     const session = await service.getSession(key, {
       includeTranscriptSummary: includeTranscript,
       includeTranscriptRows,

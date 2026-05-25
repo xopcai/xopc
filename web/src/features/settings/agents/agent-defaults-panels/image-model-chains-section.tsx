@@ -1,7 +1,7 @@
 import { Image as ImageIcon, Plus, Trash2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { ModelSelector } from '@/features/chat/model-selector';
+import { ModelSelector } from '@/features/chat/model/model-selector';
 import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/settings/settings-form-section';
 
 import { AgentDefaultsField } from '../agent-defaults-field';

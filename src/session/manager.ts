@@ -97,6 +97,33 @@ export class SessionIndex extends EventEmitter {
     return session;
   }
 
+  async getSessionMessagePage(
+    key: string,
+    options?: {
+      offset?: number;
+      limit?: number;
+      before?: string;
+      includeTranscriptSummary?: boolean;
+      includeTranscriptRows?: boolean;
+    },
+  ): Promise<{
+    session: SessionDetail;
+    pagination: {
+      total: number;
+      limit: number;
+      offset: number;
+      hasMore: boolean;
+      before?: string;
+      nextBeforeCursor?: string;
+    };
+  } | null> {
+    const result = await this.store.getMessagePage(key, options);
+    if (result) {
+      this.emit('sessionAccessed', { key });
+    }
+    return result;
+  }
+
   /**
    * OpenClaw-style `sessions.patch`: partial metadata (name, tags, customData shallow merge).
    */

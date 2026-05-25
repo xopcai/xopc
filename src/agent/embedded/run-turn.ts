@@ -26,6 +26,7 @@ import {
 } from '../orchestration/llm-turn-retry.js';
 import { runAgentTurnWithTimeout, resolveAgentTurnTimeoutMs } from '../orchestration/run-agent-turn-with-timeout.js';
 import { applySystemPromptOverrideToSession } from './system-prompt-override.js';
+import { detectToolLoops, type RecentToolCall } from '../orchestration/loop-guard.js';
 
 const log = createLogger('EmbeddedRun');
 const LOG_PREVIEW_MAX_CHARS = 300;
@@ -47,6 +48,24 @@ function extractTextFromContent(content: unknown): string {
     })
     .map((block) => block.text)
     .join('');
+}
+
+/**
+ * Extract recent tool calls from message history for loop detection.
+ * Scans assistant messages for ToolCall content blocks.
+ */
+function extractRecentToolCalls(messages: readonly { role?: string; content?: unknown }[]): RecentToolCall[] {
+  const calls: RecentToolCall[] = [];
+  for (const message of messages) {
+    if (message.role !== 'assistant' || !Array.isArray(message.content)) continue;
+    for (const block of message.content) {
+      if (block && typeof block === 'object' && (block as { type?: string }).type === 'toolCall') {
+        const toolCall = block as { name: string; arguments: unknown };
+        calls.push({ name: toolCall.name, params: toolCall.arguments });
+      }
+    }
+  }
+  return calls;
 }
 
 function getLastUserMessagePreview(messages: readonly { role?: string; content?: unknown }[]): string | undefined {
@@ -160,19 +179,38 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
 
     const streamFnWithXopcExtensions = wrapStreamFnForXopcExtensions(session.agent.streamFn);
     const loggingStreamFn: typeof session.agent.streamFn = (streamModel, context, options) => {
+      // ── Loop guard: inject warning and/or hide tools ──────────────
+      const recentToolCalls = extractRecentToolCalls(context.messages);
+      const loopGuard = detectToolLoops(recentToolCalls);
+
+      let effectiveContext = context;
+      if (loopGuard.injection || loopGuard.hiddenTools.size > 0) {
+        const messages = loopGuard.injection
+          ? [...context.messages, { role: 'user' as const, content: loopGuard.injection, timestamp: Date.now() }]
+          : context.messages;
+
+        const tools = loopGuard.hiddenTools.size > 0 && context.tools
+          ? context.tools.filter((t) => !loopGuard.hiddenTools.has(t.name))
+          : context.tools;
+
+        effectiveContext = { ...context, messages, tools };
+      }
+
       log.debug(
         {
           sessionKey,
           runId,
           modelRef: `${streamModel.provider}/${streamModel.id}`,
-          systemPromptLength: context.systemPrompt?.length ?? 0,
-          messageCount: context.messages.length,
-          toolCount: context.tools?.length ?? 0,
-          lastUserMessagePreview: getLastUserMessagePreview(context.messages),
+          systemPromptLength: effectiveContext.systemPrompt?.length ?? 0,
+          messageCount: effectiveContext.messages.length,
+          toolCount: effectiveContext.tools?.length ?? 0,
+          lastUserMessagePreview: getLastUserMessagePreview(effectiveContext.messages),
+          loopWarningInjected: !!loopGuard.injection,
+          hiddenToolCount: loopGuard.hiddenTools.size,
         },
         'Sending messages to AI',
       );
-      return streamFnWithXopcExtensions(streamModel, context, options);
+      return streamFnWithXopcExtensions(streamModel, effectiveContext, options);
     };
     session.agent.streamFn = loggingStreamFn;
 
