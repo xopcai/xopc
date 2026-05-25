@@ -323,7 +323,7 @@ export async function patchChannelsSettings(state: ChannelsSettingsState): Promi
         },
         feishu: {
           enabled: fs.enabled,
-          defaultAccount: clearableString(fs.defaultAccount),
+          defaultAccount: clearableString(fs.defaultAccount ?? ''),
           appId: fs.appId,
           appSecret: clearableString(fs.appSecret),
           domain: fs.domain || undefined,
