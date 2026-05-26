@@ -755,8 +755,17 @@ function GatewaySettingsTabs({
   return (
     <nav
       aria-label={g.tabsAriaLabel}
-      className="flex gap-2 overflow-x-auto border-b border-edge pb-0.5"
+      className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1"
       role="tablist"
+      onKeyDown={(event) => {
+        if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+        event.preventDefault();
+        const currentIndex = GATEWAY_SETTINGS_TABS.indexOf(activeTab);
+        const delta = event.key === 'ArrowRight' ? 1 : -1;
+        const nextIndex =
+          (currentIndex + delta + GATEWAY_SETTINGS_TABS.length) % GATEWAY_SETTINGS_TABS.length;
+        onChange(GATEWAY_SETTINGS_TABS[nextIndex]);
+      }}
     >
       {GATEWAY_SETTINGS_TABS.map((tab) => {
         const Icon = GATEWAY_SETTINGS_TAB_ICONS[tab];
@@ -770,14 +779,15 @@ function GatewaySettingsTabs({
             aria-controls={`gateway-settings-panel-${tab}`}
             id={`gateway-settings-tab-${tab}`}
             className={cn(
-              'inline-flex shrink-0 items-center gap-2 rounded-t-lg border-b-2 px-3 py-2 text-sm font-medium transition-colors',
-              selected ? 'border-accent text-accent' : 'border-transparent text-fg-muted hover:text-fg',
+              'inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
               interaction.press,
+              selected ? 'bg-accent-soft text-accent-fg' : 'text-fg-muted hover:bg-surface-hover hover:text-fg',
             )}
             onClick={() => onChange(tab)}
           >
-            <Icon className="size-4" strokeWidth={1.75} />
-            {gatewaySettingsTabLabel(g, tab)}
+            <Icon className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
+            <span>{gatewaySettingsTabLabel(g, tab)}</span>
           </button>
         );
       })}
