@@ -38,7 +38,8 @@ export type Tab =
   | 'settingsAgentMcp'
   | 'settingsAgentSystemPrompt'
   | 'settingsAgents'
-  | 'settingsSystem';
+  | 'settingsSystem'
+  | 'settingsAppManagement';
 
 export type SettingsSectionId =
   | 'overview'
@@ -71,6 +72,7 @@ export type SettingsSectionId =
   | 'goals'
   | 'agents'
   | 'system'
+  | 'app-management'
   | 'cron'
   | 'skills';
 

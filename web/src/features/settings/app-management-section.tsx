@@ -33,6 +33,9 @@ function mapUninstallError(
   if (code === 'UNINSTALLER_NOT_FOUND') {
     return errors.uninstallerNotFound ?? errors.generic;
   }
+  if (code === 'NOT_PACKAGED') {
+    return errors.notPackaged ?? errors.generic;
+  }
   return errors.generic;
 }
 
@@ -61,6 +64,9 @@ function resolveUninstallDescription(
 
 type AppManagementMessages = {
   title: string;
+  loading: string;
+  devOnlyTitle: string;
+  devOnlyBody: string;
   appPath: string;
   dataPath: string;
   dataSize: string;
@@ -93,6 +99,7 @@ type AppManagementMessages = {
   errors: {
     pendingUpdate: string;
     uninstallerNotFound: string;
+    notPackaged: string;
     generic: string;
   };
 };
@@ -100,9 +107,15 @@ type AppManagementMessages = {
 type AppManagementSectionProps = {
   api: NonNullable<Window['electronAPI']>['system'];
   messages: AppManagementMessages;
+  /** When false, page title is rendered by the parent panel. */
+  embedded?: boolean;
 };
 
-export function AppManagementSection({ api, messages: m }: AppManagementSectionProps) {
+export function AppManagementSection({
+  api,
+  messages: m,
+  embedded = true,
+}: AppManagementSectionProps) {
   const [info, setInfo] = useState<UninstallInfo | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -201,12 +214,13 @@ export function AppManagementSection({ api, messages: m }: AppManagementSectionP
     );
   }
 
-  if (!info?.packaged) {
-    return null;
+  if (!info) {
+    return <p className="text-sm text-fg-muted">{m.loading}</p>;
   }
 
-  const actionsDisabled = busy || info.pendingUpdate;
-  const showUninstall = info.uninstallMode !== 'unsupported';
+  const isDevBuild = !info.packaged;
+  const actionsDisabled = busy || info.pendingUpdate || isDevBuild;
+  const showUninstall = !isDevBuild && info.uninstallMode !== 'unsupported';
   const uninstallDescription = resolveUninstallDescription(info, m);
   const clearConfirmReady =
     clearConfirmChecked && clearConfirmText.trim() === m.clearDataConfirmPhrase;
@@ -220,15 +234,24 @@ export function AppManagementSection({ api, messages: m }: AppManagementSectionP
   return (
     <>
       <SettingsFormSection>
-        <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-fg">
-          <Package className="size-4 text-accent" strokeWidth={1.75} />
-          {m.title}
-        </div>
+        {embedded ? (
+          <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-fg">
+            <Package className="size-4 text-accent" strokeWidth={1.75} />
+            {m.title}
+          </div>
+        ) : null}
 
         {actionError ? (
           <p className="mb-3 text-sm text-amber-600 dark:text-amber-400" role="alert">
             {actionError}
           </p>
+        ) : null}
+
+        {isDevBuild ? (
+          <div className="mb-4 rounded-xl border border-edge-subtle bg-surface-panel/60 px-3 py-2.5">
+            <p className="text-sm font-medium text-fg">{m.devOnlyTitle}</p>
+            <p className="mt-1 text-xs text-fg-muted">{m.devOnlyBody}</p>
+          </div>
         ) : null}
 
         {info.pendingUpdate ? (

@@ -16,6 +16,7 @@ import { SharesSettingsPanel } from '@/features/shares/shares-settings';
 import { ImageModelsSettingsPanel } from '@/features/settings/image-models-settings';
 import { ModelsSettingsPanel } from '@/features/settings/models-settings';
 import { ProvidersSettingsPanel } from '@/features/settings/providers-settings';
+import { AppManagementSettingsPanel } from '@/features/settings/app-management-settings-panel';
 import { SystemSettingsPanel } from '@/features/settings/system-settings-panel';
 import { VoiceSettingsPanel } from '@/features/settings/voice-settings';
 import { WebSearchSettingsPanel } from '@/features/settings/web-search-settings';
@@ -28,6 +29,7 @@ const SECTIONS: SettingsSectionId[] = [
   'overview',
   'appearance',
   'system',
+  'app-management',
   'agent-defaults',
   'agent-mcp',
   'credentials',
@@ -85,6 +87,10 @@ export function SettingsPage() {
 
   if (id === 'system') {
     return <SystemSettingsPanel />;
+  }
+
+  if (id === 'app-management') {
+    return <AppManagementSettingsPanel />;
   }
 
   if (id === 'credentials') {

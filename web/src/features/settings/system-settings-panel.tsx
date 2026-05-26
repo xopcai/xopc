@@ -1,7 +1,6 @@
 import { ExternalLink, RefreshCw, Shield } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 
-import { AppManagementSection } from '@/features/settings/app-management-section';
 import { SettingsFormSection, settingsFormSectionClassName } from '@/features/settings/settings-form-section';
 import {
   dispatchShellPrefsChanged,
@@ -681,8 +680,6 @@ export function SystemSettingsPanel() {
           </ul>
         </section>
       ) : null}
-
-      {api ? <AppManagementSection api={api} messages={t.appManagement} /> : null}
     </div>
   );
 }

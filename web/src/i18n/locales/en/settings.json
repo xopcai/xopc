@@ -29,7 +29,8 @@
     "dreams": "Dreams",
     "goals": "Goal judge",
     "agents": "Agents",
-    "system": "System",
+    "system": "System permissions",
+    "app-management": "App management",
     "cron": "Scheduled tasks",
     "skills": "Skills"
   },
@@ -274,7 +275,7 @@
     "confirmClearLock": "Clear the promotion lock file? Only do this if a sweep got stuck."
   },
   "systemSettings": {
-    "title": "System",
+    "title": "System permissions",
     "behaviorGroup": "App behavior",
     "desktopOnlyTitle": "Desktop app only",
     "desktopOnlyBody": "System integration is available in the xopc Electron app. In the browser, use your OS settings instead.",
@@ -413,6 +414,9 @@
     },
     "appManagement": {
       "title": "App management",
+      "loading": "Loading…",
+      "devOnlyTitle": "Development build",
+      "devOnlyBody": "Clear data and uninstall are only available in the packaged desktop app. Paths below are for reference.",
       "appPath": "Install location",
       "dataPath": "Local data",
       "dataSize": "Data size",
@@ -445,12 +449,14 @@
       "errors": {
         "pendingUpdate": "A downloaded update is waiting to install. Restart to update or wait before uninstalling.",
         "uninstallerNotFound": "Could not find the uninstaller. Remove xopc from Settings → Apps → Installed apps.",
+        "notPackaged": "This action is not available in development mode. Use the packaged desktop app.",
         "generic": "Operation failed. Try again or use your system settings to uninstall."
       }
     }
   },
   "settingsNavGroups": {
     "general": "General",
+    "system": "System settings",
     "credentials": "Credentials & models",
     "agent": "Agent defaults",
     "connection": "Connection",

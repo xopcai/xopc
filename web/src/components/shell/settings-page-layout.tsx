@@ -7,10 +7,17 @@ import { TabIcon } from '@/components/shell/tab-icons';
 import { messages, tabLabel } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { ExtensionSettingsNav } from '@/features/extensions/extension-settings-nav';
-import { pathForTab, SETTINGS_SHELL_NAV_GROUPS } from '@/navigation';
+import {
+  ELECTRON_ONLY_SETTINGS_TABS,
+  ELECTRON_SYSTEM_NAV_GROUP,
+  pathForTab,
+  SETTINGS_SHELL_NAV_GROUPS,
+} from '@/navigation';
+import type { SettingsShellNavGroup } from '@/navigation';
 import { isAgentDefaultsNavActive, isAgentDefaultsNavTab } from '@/navigation/agent-defaults-nav';
 import { isElectron } from '@/lib/electron-env';
 import { electronDarwinTitlebarLeftPad, isElectronDarwin } from '@/lib/electron-window-chrome';
+import type { StoredLanguage } from '@/lib/storage';
 import { AGENTS_APP_LIST_PATH } from '@/features/settings/agents/agents-app-path';
 import { resolveSettingsBackTarget } from '@/features/settings/settings-nav-state';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -34,6 +41,58 @@ const backLinkClass = cn(
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
   'sm:px-4',
 );
+
+function visibleSettingsNavTabs(group: SettingsShellNavGroup) {
+  return group.tabs.filter((tab) => !ELECTRON_ONLY_SETTINGS_TABS.has(tab) || isElectron());
+}
+
+function SettingsNavGroupBlock({
+  group,
+  groupIndex,
+  language,
+  location,
+}: {
+  group: SettingsShellNavGroup;
+  groupIndex: number;
+  language: StoredLanguage;
+  location: ReturnType<typeof useLocation>;
+}) {
+  const m = messages(language);
+  const tabs = visibleSettingsNavTabs(group);
+  if (tabs.length === 0) {
+    return null;
+  }
+  return (
+    <div>
+      <p
+        className={cn(
+          'px-4 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wider text-fg-muted',
+          groupIndex === 0 && 'pt-0',
+        )}
+      >
+        {m.settingsNavGroups[group.id]}
+      </p>
+      <div className="flex flex-col gap-0.5">
+        {tabs.map((tab) => (
+          <NavLink
+            key={tab}
+            to={pathForTab(tab)}
+            className={({ isActive: routerActive }) =>
+              settingsNavLinkClass({
+                isActive: isAgentDefaultsNavTab(tab)
+                  ? isAgentDefaultsNavActive(tab, location)
+                  : routerActive,
+              })
+            }
+          >
+            <TabIcon tab={tab} className="size-5 shrink-0 opacity-90" />
+            <span className="min-w-0 flex-1 truncate">{tabLabel(language, tab)}</span>
+          </NavLink>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 /** Full-screen settings: left rail (back + nav) vs right panel — color only, no divider borders. */
 export const SettingsPageLayout = memo(function SettingsPageLayout() {
@@ -94,6 +153,11 @@ export const SettingsPageLayout = memo(function SettingsPageLayout() {
     </Link>
   );
 
+  const railNavGroups: SettingsShellNavGroup[] = [
+    ...SETTINGS_SHELL_NAV_GROUPS,
+    ...(isElectron() ? [ELECTRON_SYSTEM_NAV_GROUP] : []),
+  ];
+
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden md:flex-row">
       {/* Left: surface-base — no border vs right; §2.1 */}
@@ -131,42 +195,15 @@ export const SettingsPageLayout = memo(function SettingsPageLayout() {
             aria-label={m.nav.settings}
           >
             <div className="flex flex-col gap-1">
-              {SETTINGS_SHELL_NAV_GROUPS.map((group, groupIndex) => {
-                const tabs = group.tabs.filter((tab) => tab !== 'settingsSystem' || isElectron());
-                if (tabs.length === 0) {
-                  return null;
-                }
-                return (
-                <div key={group.id}>
-                  <p
-                    className={cn(
-                      'px-4 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wider text-fg-muted',
-                      groupIndex === 0 && 'pt-0',
-                    )}
-                  >
-                    {m.settingsNavGroups[group.id]}
-                  </p>
-                  <div className="flex flex-col gap-0.5">
-                    {tabs.map((tab) => (
-                      <NavLink
-                        key={tab}
-                        to={pathForTab(tab)}
-                        className={({ isActive: routerActive }) =>
-                          settingsNavLinkClass({
-                            isActive: isAgentDefaultsNavTab(tab)
-                              ? isAgentDefaultsNavActive(tab, location)
-                              : routerActive,
-                          })
-                        }
-                      >
-                        <TabIcon tab={tab} className="size-5 shrink-0 opacity-90" />
-                        <span className="min-w-0 flex-1 truncate">{tabLabel(language, tab)}</span>
-                      </NavLink>
-                    ))}
-                  </div>
-                </div>
-                );
-              })}
+              {railNavGroups.map((group, groupIndex) => (
+                <SettingsNavGroupBlock
+                  key={group.id}
+                  group={group}
+                  groupIndex={groupIndex}
+                  language={language}
+                  location={location}
+                />
+              ))}
               <ExtensionSettingsNav navLinkClassName={settingsNavLinkClass} />
             </div>
           </nav>
