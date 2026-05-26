@@ -35,7 +35,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import { createLogger } from '../../src/utils/logger.js';
-import { registerSpeechProvider } from '../../src/voice/tts/speech-registry.js';
+import type { ExtensionDefinition } from '../../src/extensions/types/core.js';
 import type {
   SpeechDirectiveTokenParseContext,
   SpeechDirectiveTokenParseResult,
@@ -101,7 +101,13 @@ function normalizeOutputFormat(value: unknown): OutputFormat {
 }
 
 function normalizeConfig(rawConfig: Record<string, unknown>): CliConfig {
-  const raw = asObject(rawConfig['tts-local-cli']) ?? asObject(rawConfig.cli) ?? rawConfig;
+  const providers = asObject(rawConfig.providers);
+  const raw =
+    asObject(providers?.['tts-local-cli']) ??
+    asObject(providers?.cli) ??
+    asObject(rawConfig['tts-local-cli']) ??
+    asObject(rawConfig.cli) ??
+    rawConfig;
   return {
     command: trimToUndefined(raw.command) ?? '',
     ...(asStringArray(raw.args) ? { args: asStringArray(raw.args) } : {}),
@@ -332,8 +338,14 @@ export const localCliSpeechProvider: SpeechProviderPlugin = {
   // orchestrator falls back to wrapBufferAsStream automatically.
 };
 
-registerSpeechProvider(localCliSpeechProvider);
+const extension: ExtensionDefinition = {
+  id: 'tts-local-cli',
+  name: 'Local CLI TTS',
+  description: 'Pipe text to any local TTS binary (mlx-audio, sherpa-onnx-tts, piper, ...).',
+  kind: 'speech-provider',
+  register(api) {
+    api.registerSpeechProvider(localCliSpeechProvider);
+  },
+};
 
-// Default export for convenient `import localCli from 'extensions/tts-local-cli'`
-// (currently nothing imports it this way; kept for symmetry with other extensions).
-export default localCliSpeechProvider;
+export default extension;

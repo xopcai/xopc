@@ -49,6 +49,8 @@ export type ExtensionKind =
   | 'tool'
   | 'utility'
   | 'tts'
+  | 'speech-provider'
+  | 'media-provider'
   | 'image-generation'
   | 'web-search';
 
@@ -168,6 +170,16 @@ export interface ExtensionApi {
   //  Provider Registration
   registerProvider(plugin: ProviderPlugin): void;
   registerProviderPlugin(plugin: ProviderPlugin): void;
+
+  /** Register a speech (TTS) provider plugin. */
+  registerSpeechProvider(
+    plugin: import('../../voice/tts/speech-provider-types.js').SpeechProviderPlugin,
+  ): void;
+
+  /** Register a media understanding (STT / image / video) provider plugin. */
+  registerMediaUnderstandingProvider(
+    plugin: import('../../media-understanding/types.js').MediaUnderstandingProvider,
+  ): void;
 
   //  Marketplace Adapter Registration
   /**

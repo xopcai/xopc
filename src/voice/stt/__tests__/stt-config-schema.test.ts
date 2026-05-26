@@ -1,0 +1,48 @@
+import { describe, expect, it } from 'vitest';
+
+import { STTConfigSchema } from '../../../config/schema.js';
+
+describe('STTConfigSchema', () => {
+  it('accepts open provider ids and providers map', () => {
+    const parsed = STTConfigSchema.parse({
+      enabled: true,
+      provider: 'openai',
+      providers: {
+        openai: { apiKey: 'sk-test', model: 'whisper-1' },
+      },
+    });
+
+    expect(parsed.provider).toBe('openai');
+    expect(parsed.providers?.openai?.model).toBe('whisper-1');
+  });
+
+  it('accepts models[] entries', () => {
+    const parsed = STTConfigSchema.parse({
+      enabled: true,
+      models: [{ provider: 'openai', model: 'whisper-1', capabilities: ['audio'] }],
+    });
+
+    expect(parsed.models?.[0]?.provider).toBe('openai');
+  });
+
+  it('preserves legacy flat provider keys via passthrough', () => {
+    const parsed = STTConfigSchema.parse({
+      enabled: true,
+      provider: 'alibaba',
+      alibaba: { model: 'paraformer-v2' },
+    });
+
+    expect(parsed.alibaba?.model).toBe('paraformer-v2');
+  });
+
+  it('accepts open fallback order entries', () => {
+    const parsed = STTConfigSchema.parse({
+      fallback: {
+        enabled: true,
+        order: ['openai', 'alibaba', 'custom-stt'],
+      },
+    });
+
+    expect(parsed.fallback?.order).toEqual(['openai', 'alibaba', 'custom-stt']);
+  });
+});

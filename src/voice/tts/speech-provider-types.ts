@@ -151,6 +151,12 @@ export interface SpeechProviderPlugin {
   aliases?: readonly string[];
 
   /**
+   * Lower number = higher priority when auto-selecting providers (fallback disabled
+   * or empty order). Matches OpenClaw `autoSelectOrder`.
+   */
+  autoSelectOrder?: number;
+
+  /**
    * Normalize raw config → SpeechProviderConfig. Throws on validation error.
    * The returned object is opaque to the orchestrator and re-passed back into
    * `synthesize`, `synthesizeStream`, etc. via `request.providerConfig`.

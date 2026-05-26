@@ -264,6 +264,7 @@ export function createOpenAiCompatibleSpeechProvider(
   return {
     id: options.id,
     aliases: options.aliases,
+    autoSelectOrder: options.autoSelectOrder,
 
     resolveConfig: (ctx: SpeechProviderResolveConfigContext) => normalizeConfig(ctx.rawConfig),
 

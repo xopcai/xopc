@@ -48,6 +48,11 @@ export {
 } from '../../voice/tts/speech-registry.js';
 
 export {
+  createOpenAiCompatibleSpeechProvider,
+  type OpenAiCompatibleSpeechProviderOptions,
+} from '../../voice/tts/openai-compatible-speech.js';
+
+export {
   // Key rotation
   collectProviderApiKeysForExecution,
   executeWithApiKeyRotation,

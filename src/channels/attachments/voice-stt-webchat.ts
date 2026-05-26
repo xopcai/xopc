@@ -16,7 +16,10 @@ import {
 
 const STT_MAX_BYTES = 25 * 1024 * 1024;
 
-export function mergeSttConfigFromAppConfig(stt: Partial<STTConfig> | undefined): STTConfig {
+export function mergeSttConfigFromAppConfig(
+  stt: Partial<STTConfig> | undefined,
+  toolsMedia?: { models?: STTConfig['sharedModels'] },
+): STTConfig {
   const p = stt ?? {};
   return {
     ...DEFAULT_STT_CONFIG,
@@ -24,6 +27,7 @@ export function mergeSttConfigFromAppConfig(stt: Partial<STTConfig> | undefined)
     alibaba: { ...DEFAULT_STT_CONFIG.alibaba, ...p.alibaba },
     openai: { ...DEFAULT_STT_CONFIG.openai, ...p.openai },
     fallback: { ...DEFAULT_STT_CONFIG.fallback!, ...p.fallback },
+    ...(toolsMedia?.models?.length ? { sharedModels: toolsMedia.models } : {}),
   };
 }
 

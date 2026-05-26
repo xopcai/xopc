@@ -54,6 +54,12 @@ function rewriteExtensionAssetHtml(html: string, extensionId: string, assetPath:
     });
 }
 
+function hasNonEmptyConfigSchema(schema: unknown): boolean {
+  if (!schema || typeof schema !== 'object') return false;
+  const properties = (schema as { properties?: unknown }).properties;
+  return Boolean(properties && typeof properties === 'object' && Object.keys(properties).length > 0);
+}
+
 /**
  * Register extension UI asset routes on the public (unauthenticated) app.
  *
@@ -252,7 +258,7 @@ export function registerAuthRegistryExtensionsRoutes(authenticated: Hono, deps: 
       active: activeIds.has(ext.id),
       activationEligible: activationEligibleIds.has(ext.id),
       hasUi: Boolean(ext.manifest.ui),
-      hasConfigSchema: Boolean(ext.manifest.configSchema),
+      hasConfigSchema: hasNonEmptyConfigSchema(ext.manifest.configSchema),
       ui: ext.manifest.ui
         ? {
             icon: ext.manifest.ui.icon,

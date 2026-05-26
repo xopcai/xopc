@@ -220,6 +220,13 @@
     "saveError": "Failed to save",
     "retry": "Retry",
     "unsavedHint": "You have unsaved changes.",
+    "apiKeyMaskedHelp": "Saved keys are hidden. Click the eye to load the key from your config file (not from environment variables).",
+    "apiKeyCopy": "Copy",
+    "apiKeyCopied": "Copied",
+    "apiKeyShow": "Show",
+    "apiKeyHide": "Hide",
+    "apiKeyNotInConfigFile": "No key stored in the config file for this provider (check environment variables).",
+    "apiKeyRevealFailed": "Could not load key from config.",
     "stt": {
       "title": "Speech-to-text (STT)",
       "description": "Transcribe inbound voice using Alibaba DashScope or OpenAI Whisper.",

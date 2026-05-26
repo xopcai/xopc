@@ -1,0 +1,22 @@
+{
+  "name": "xopc-extension-groq-stt",
+  "version": "1.0.0",
+  "description": "Groq Whisper STT provider (OpenAI-compatible transcriptions API)",
+  "main": "index.ts",
+  "private": true,
+  "type": "module",
+  "xopc": {
+    "extension": true,
+    "id": "groq-stt",
+    "name": "Groq STT",
+    "kind": "media-provider"
+  },
+  "keywords": [
+    "xopc",
+    "xopc-extension",
+    "stt",
+    "groq",
+    "whisper"
+  ],
+  "license": "MIT"
+}

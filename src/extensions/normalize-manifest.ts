@@ -99,6 +99,12 @@ export function normalizeExtensionManifest(raw: Record<string, unknown>): Extens
     providers: Array.isArray(raw.providers)
       ? raw.providers.filter((x): x is string => typeof x === 'string')
       : undefined,
+    speechProviders: Array.isArray(raw.speechProviders)
+      ? raw.speechProviders.filter((x): x is string => typeof x === 'string')
+      : undefined,
+    mediaUnderstandingProviders: Array.isArray(raw.mediaUnderstandingProviders)
+      ? raw.mediaUnderstandingProviders.filter((x): x is string => typeof x === 'string')
+      : undefined,
     providerAuthEnvVars: normalizeStringArrayMap(raw.providerAuthEnvVars),
     providerAuthChoices: normalizeProviderAuthChoices(raw.providerAuthChoices),
     modelSupport: normalizeModelSupport(raw.modelSupport),

@@ -9,7 +9,7 @@ import { useTranslation } from 'react-i18next';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 
-import { useUiExtensions } from './extension-provider';
+import { extensionHasProviderCredentialsSettings, useUiExtensions } from './extension-provider';
 import type { ExtensionUiInfo, SettingsPanelContribution } from './types';
 
 interface ExtensionSettingsNavProps {
@@ -85,7 +85,7 @@ function collectSettingsPanels(
 function configOnlyExtensions(extensions: ExtensionUiInfo[]): ExtensionUiInfo[] {
   return extensions.filter(
     (e) =>
-      Boolean(e.hasConfigSchema) &&
+      (Boolean(e.hasConfigSchema) || extensionHasProviderCredentialsSettings(e)) &&
       !(
         Array.isArray(e.ui?.contributions?.settingsPanels) &&
         e.ui.contributions.settingsPanels.length > 0

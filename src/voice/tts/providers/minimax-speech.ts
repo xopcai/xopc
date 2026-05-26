@@ -324,6 +324,7 @@ function parseDirectiveTokenInternal(
 
 export const minimaxSpeechProvider: SpeechProviderPlugin = {
   id: 'minimax',
+  autoSelectOrder: 40,
 
   resolveConfig: (ctx: SpeechProviderResolveConfigContext) => normalizeConfig(ctx.rawConfig),
 

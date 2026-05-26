@@ -27,6 +27,20 @@ describe('mergeTtsConfigFromAppConfig', () => {
     expect(merged.minimax?.model).toBe('speech-2.8-hd');
     expect(merged.minimax?.voice).toBe('female-shaonv');
   });
+
+  it('merges providers map entries for extension providers', () => {
+    const merged = mergeTtsConfigFromAppConfig({
+      provider: 'tts-local-cli',
+      providers: {
+        'tts-local-cli': { command: 'piper --text {{Text}}', outputFormat: 'wav' },
+      },
+    });
+    expect(merged.provider).toBe('tts-local-cli');
+    expect(merged.providers?.['tts-local-cli']).toEqual({
+      command: 'piper --text {{Text}}',
+      outputFormat: 'wav',
+    });
+  });
 });
 
 describe('appendTtsReadinessNote', () => {

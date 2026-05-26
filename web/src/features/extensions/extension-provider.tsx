@@ -151,10 +151,16 @@ export function extensionShellUiReachable(e: ExtensionApiRow): boolean {
   return extensionExposesGatewayShellUi(e) || extensionBundledUiBrowsable(e);
 }
 
+/** Credential-only settings pages (no manifest configSchema). */
+export function extensionHasProviderCredentialsSettings(e: ExtensionApiRow): boolean {
+  return e.kind === 'image-generation' || e.kind === 'media-provider';
+}
+
 /** Used by sidebar nav, command palette, and {@link useUiExtensions} (active or pending activation only). */
 export function extensionExposesGatewayShellUi(e: ExtensionApiRow): boolean {
   if (!extensionUiUnlocked(e)) return false;
   if (e.hasConfigSchema) return true;
+  if (extensionHasProviderCredentialsSettings(e)) return true;
   if (!e.hasUi) return false;
   return manifestDeclaresGatewayContributions(e);
 }

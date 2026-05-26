@@ -3,6 +3,12 @@
  */
 
 import type { Config } from '../config/config-surface.js';
+import { mergeSttConfigFromAppConfig } from '../channels/attachments/voice-stt-webchat.js';
+import { collectSttProviderConfigEntries } from '../voice/stt/config-slice.js';
+import { isSttProviderConfigured } from '../voice/stt/list-providers.js';
+import { collectTtsProviderConfigEntries } from '../voice/tts/config-slice.js';
+import { isProviderConfigured } from '../voice/tts/factory.js';
+import { mergeTtsConfigFromAppConfig } from '../voice/tts/merge-config.js';
 import type { ActivationContext } from './activation-planner.js';
 
 function isRecord(x: unknown): x is Record<string, unknown> {
@@ -63,23 +69,81 @@ export function collectConfiguredChannelIds(config: unknown): string[] | undefin
   return ids.length ? ids : undefined;
 }
 
+function collectConfiguredLlmProviderIds(config: unknown): string[] {
+  const root = config as Record<string, unknown> | undefined;
+  const ids: string[] = [];
+  const providers = root?.providers;
+  if (isRecord(providers)) {
+    for (const key of Object.keys(providers)) {
+      const v = providers[key];
+      if (!isRecord(v)) continue;
+      if (
+        (typeof v.apiKey === 'string' && v.apiKey.length > 0) ||
+        (typeof v.api_key === 'string' && v.api_key.length > 0) ||
+        v.enabled === true
+      ) {
+        ids.push(key);
+      }
+    }
+  }
+  return ids;
+}
+
+function collectConfiguredSpeechProviderIds(config: unknown): string[] {
+  const root = config as Record<string, unknown> | undefined;
+  const messages = root?.messages;
+  if (!isRecord(messages) || !isRecord(messages.tts)) {
+    return [];
+  }
+
+  const ttsConfig = mergeTtsConfigFromAppConfig(messages.tts);
+  const ids = new Set<string>();
+  const primary = ttsConfig.provider?.trim();
+  if (primary && isProviderConfigured(primary, ttsConfig)) {
+    ids.add(primary);
+  }
+  for (const providerId of Object.keys(collectTtsProviderConfigEntries(ttsConfig))) {
+    if (isProviderConfigured(providerId, ttsConfig)) {
+      ids.add(providerId);
+    }
+  }
+  return [...ids];
+}
+
+function collectConfiguredMediaUnderstandingProviderIds(config: unknown): string[] {
+  const root = config as Record<string, unknown> | undefined;
+  const tools = root?.tools;
+  if (!isRecord(tools) || !isRecord(tools.media)) {
+    return [];
+  }
+
+  const sttConfig = mergeSttConfigFromAppConfig(
+    tools.media.audio as Parameters<typeof mergeSttConfigFromAppConfig>[0],
+    tools.media as Parameters<typeof mergeSttConfigFromAppConfig>[1],
+  );
+  const ids = new Set<string>();
+  const primary = sttConfig.provider?.trim();
+  if (primary && isSttProviderConfigured(primary, sttConfig)) {
+    ids.add(primary);
+  }
+  for (const providerId of Object.keys(collectSttProviderConfigEntries(sttConfig))) {
+    if (isSttProviderConfigured(providerId, sttConfig)) {
+      ids.add(providerId);
+    }
+  }
+  return [...ids];
+}
+
 /**
- * Derive configured LLM provider ids when present on config (e.g. custom keys block).
+ * Derive configured provider ids for extension activation (LLM + speech + STT).
  */
 export function collectConfiguredProviderIds(config: unknown): string[] | undefined {
-  const root = config as Record<string, unknown> | undefined;
-  const providers = root?.providers;
-  if (!isRecord(providers)) return undefined;
-  const ids = Object.keys(providers).filter((k) => {
-    const v = providers[k];
-    if (!isRecord(v)) return false;
-    return (
-      (typeof v.apiKey === 'string' && v.apiKey.length > 0) ||
-      (typeof v.api_key === 'string' && v.api_key.length > 0) ||
-      v.enabled === true
-    );
-  });
-  return ids.length ? ids : undefined;
+  const ids = new Set<string>([
+    ...collectConfiguredLlmProviderIds(config),
+    ...collectConfiguredSpeechProviderIds(config),
+    ...collectConfiguredMediaUnderstandingProviderIds(config),
+  ]);
+  return ids.size > 0 ? [...ids] : undefined;
 }
 
 function defaultModelId(config: unknown): string | undefined {
