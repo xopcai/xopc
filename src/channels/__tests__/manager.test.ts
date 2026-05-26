@@ -7,22 +7,19 @@
 import { describe, it, expect } from 'vitest';
 
 import type { ChannelPlugin } from '../plugin-types.js';
+import { ChannelManager } from '../manager.js';
 
 describe('ChannelManager module', () => {
-  it('should export ChannelManager class', async () => {
-    const { ChannelManager } = await import('../manager.js');
+  it('should export ChannelManager class', () => {
     expect(ChannelManager).toBeDefined();
     expect(typeof ChannelManager).toBe('function');
   });
 
-  it('should export EXTENSIONS constant', async () => {
-    const module = await import('../manager.js');
-    expect(module.ChannelManager).toBeDefined();
+  it('should export EXTENSIONS constant', () => {
+    expect(ChannelManager).toBeDefined();
   });
 
-  it('should create ChannelManager instance with valid config', async () => {
-    const { ChannelManager } = await import('../manager.js');
-    
+  it('should create ChannelManager instance with valid config', () => {
     const mockConfig = {
       channels: {}
     } as any;
@@ -37,8 +34,6 @@ describe('ChannelManager module', () => {
   });
 
   it('initializes disabled channels so stop still runs after start (hot-reload / runtime stop)', async () => {
-    const { ChannelManager } = await import('../manager.js');
-
     let stopCalls = 0;
     const plugin = {
       id: 'mockchan',

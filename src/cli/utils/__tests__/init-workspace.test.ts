@@ -2,11 +2,15 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 
 import { initWorkspace } from '../init-workspace.js';
 
 describe('initWorkspace', () => {
+  beforeAll(async () => {
+    await import('../../../config/validate-channel-configs.js');
+  }, 30_000);
+
   it('creates config and workspace with skipChannelPluginValidation (Electron path; no bundled channel graph)', async () => {
     const root = mkdtempSync(join(tmpdir(), 'xopc-init-skip-'));
     try {
