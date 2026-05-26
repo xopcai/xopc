@@ -220,6 +220,13 @@
     "saveError": "保存失败",
     "retry": "重试",
     "unsavedHint": "有未保存的更改。",
+    "apiKeyMaskedHelp": "已保存的密钥默认隐藏。点击眼睛图标可从配置文件读取（不含环境变量里的密钥）。",
+    "apiKeyCopy": "复制",
+    "apiKeyCopied": "已复制",
+    "apiKeyShow": "显示",
+    "apiKeyHide": "隐藏",
+    "apiKeyNotInConfigFile": "配置文件中没有该服务商的密钥（请检查环境变量）。",
+    "apiKeyRevealFailed": "无法从配置文件读取密钥。",
     "stt": {
       "title": "语音转文字（STT）",
       "description": "使用阿里云 DashScope 或 OpenAI Whisper 将收到的语音转为文字。",

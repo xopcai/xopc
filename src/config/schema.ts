@@ -756,38 +756,92 @@ export const ModelsDevConfigSchema = z.object({
 // STT (Speech-to-Text) Config
 // ============================================
 
-export const STTProviderConfigSchema = z.object({
-  apiKey: z.string().optional(),
-  model: z.string().optional(),
-});
+const SttProviderConfigCatchallSchema = z.union([
+  z.string(),
+  z.number(),
+  z.boolean(),
+  z.null(),
+  z.array(z.unknown()),
+  z.record(z.string(), z.unknown()),
+]);
+
+export const STTProviderConfigSchema = z
+  .object({
+    apiKey: z.string().optional(),
+    model: z.string().optional(),
+    baseUrl: z.string().optional(),
+    headers: z.record(z.string(), z.string()).optional(),
+    language: z.string().optional(),
+    prompt: z.string().optional(),
+  })
+  .catchall(SttProviderConfigCatchallSchema);
 
 export const STTFallbackConfigSchema = z.object({
   enabled: z.boolean().default(true),
-  order: z.array(z.enum(['alibaba', 'openai'])).default(['alibaba', 'openai']),
+  order: z.array(z.string().min(1)).default(['alibaba', 'openai']),
 });
 
-export const STTConfigSchema = z.object({
-  enabled: z.boolean().default(false),
-  provider: z.enum(['alibaba', 'openai']).default('alibaba'),
-  alibaba: STTProviderConfigSchema.optional(),
-  openai: STTProviderConfigSchema.optional(),
-  fallback: STTFallbackConfigSchema.optional(),
-});
+export const MediaUnderstandingCapabilitiesSchema = z
+  .array(z.enum(['image', 'audio', 'video']))
+  .optional();
+
+export const MediaUnderstandingModelSchema = z
+  .object({
+    provider: z.string().optional(),
+    model: z.string().optional(),
+    capabilities: MediaUnderstandingCapabilitiesSchema,
+    type: z.union([z.literal('provider'), z.literal('cli')]).optional(),
+    command: z.string().optional(),
+    baseUrl: z.string().optional(),
+    headers: z.record(z.string(), z.string()).optional(),
+    apiKey: z.string().optional(),
+    language: z.string().optional(),
+    prompt: z.string().optional(),
+  })
+  .catchall(SttProviderConfigCatchallSchema);
+
+export const STTConfigSchema = z
+  .object({
+    enabled: z.boolean().default(false),
+    /** Primary provider id — any registered MediaUnderstandingProvider id. */
+    provider: z.string().min(1).default('alibaba'),
+    fallback: STTFallbackConfigSchema.optional(),
+    timeoutMs: z.number().int().min(1000).max(180000).optional(),
+    /** Ordered model entries for this capability (OpenClaw `tools.media.audio.models`). */
+    models: z.array(MediaUnderstandingModelSchema).optional(),
+    /** OpenClaw-aligned provider settings map (`tools.media.audio.providers.<id>`). */
+    providers: z.record(z.string(), STTProviderConfigSchema).optional(),
+    /** Legacy flat provider keys — kept for backward compatibility. */
+    alibaba: STTProviderConfigSchema.optional(),
+    openai: STTProviderConfigSchema.optional(),
+  })
+  .passthrough();
 
 // ============================================
 // TTS (Text-to-Speech) Config
 // ============================================
 
-export const TTSProviderConfigSchema = z.object({
-  apiKey: z.string().optional(),
-  model: z.string().optional(),
-  voice: z.string().optional(),
-});
+const TtsProviderConfigCatchallSchema = z.union([
+  z.string(),
+  z.number(),
+  z.boolean(),
+  z.null(),
+  z.array(z.unknown()),
+  z.record(z.string(), z.unknown()),
+]);
+
+export const TTSProviderConfigSchema = z
+  .object({
+    apiKey: z.string().optional(),
+    model: z.string().optional(),
+    voice: z.string().optional(),
+  })
+  .catchall(TtsProviderConfigCatchallSchema);
 
 export const TTSFallbackConfigSchema = z.object({
   enabled: z.boolean().default(true),
   order: z
-    .array(z.enum(['openai', 'alibaba', 'edge', 'minimax']))
+    .array(z.string().min(1))
     .default(['openai', 'alibaba', 'minimax', 'edge']),
 });
 
@@ -821,20 +875,26 @@ export const TTSSummarizationConfigSchema = z.object({
   model: z.string().optional(),
 });
 
-export const TTSConfigSchema = z.object({
-  enabled: z.boolean().default(false),
-  provider: z.enum(['openai', 'alibaba', 'edge', 'minimax']).default('openai'),
-  trigger: z.enum(['off', 'always', 'inbound', 'tagged']).default('always'),
-  fallback: TTSFallbackConfigSchema.optional(),
-  maxTextLength: z.number().int().min(1).default(512), // Conservative default to accommodate all providers (Alibaba limit is 512)
-  timeoutMs: z.number().int().min(1000).max(180000).default(60000),
-  summarization: TTSSummarizationConfigSchema.optional(),
-  modelOverrides: TTSModelOverridesConfigSchema.optional(),
-  alibaba: TTSProviderConfigSchema.optional(),
-  openai: TTSProviderConfigSchema.optional(),
-  edge: TTSEdgeConfigSchema.optional(),
-  minimax: TTSProviderConfigSchema.optional(),
-});
+export const TTSConfigSchema = z
+  .object({
+    enabled: z.boolean().default(false),
+    /** Primary provider id — any registered SpeechProviderPlugin id. */
+    provider: z.string().min(1).default('openai'),
+    trigger: z.enum(['off', 'always', 'inbound', 'tagged']).default('always'),
+    fallback: TTSFallbackConfigSchema.optional(),
+    maxTextLength: z.number().int().min(1).default(512), // Conservative default to accommodate all providers (Alibaba limit is 512)
+    timeoutMs: z.number().int().min(1000).max(180000).default(60000),
+    summarization: TTSSummarizationConfigSchema.optional(),
+    modelOverrides: TTSModelOverridesConfigSchema.optional(),
+    /** OpenClaw-aligned provider settings map (`messages.tts.providers.<id>`). */
+    providers: z.record(z.string(), TTSProviderConfigSchema).optional(),
+    /** Legacy flat provider keys — kept for backward compatibility. */
+    alibaba: TTSProviderConfigSchema.optional(),
+    openai: TTSProviderConfigSchema.optional(),
+    edge: TTSEdgeConfigSchema.optional(),
+    minimax: TTSProviderConfigSchema.optional(),
+  })
+  .passthrough();
 
 // ============================================
 // messages.* — delivery / presentation concerns
@@ -847,10 +907,14 @@ export const MessagesConfigSchema = z.object({
 
 export const ToolsMediaAudioConfigSchema = STTConfigSchema;
 
-export const ToolsMediaConfigSchema = z.object({
-  /** Audio (speech-to-text) capability provider config. */
-  audio: ToolsMediaAudioConfigSchema.optional(),
-}).optional();
+export const ToolsMediaConfigSchema = z
+  .object({
+    /** Shared model entries applied across media capabilities when entry lacks capabilities. */
+    models: z.array(MediaUnderstandingModelSchema).optional(),
+    /** Audio (speech-to-text) capability provider config. */
+    audio: ToolsMediaAudioConfigSchema.optional(),
+  })
+  .optional();
 
 // ============================================
 // Provider Configs (capability providers: image / audio / video)

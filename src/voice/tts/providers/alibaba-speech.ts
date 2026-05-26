@@ -146,6 +146,7 @@ function parseDirectiveTokenInternal(
 export const alibabaSpeechProvider: SpeechProviderPlugin = {
   id: 'alibaba',
   aliases: ['dashscope', 'qwen-tts'],
+  autoSelectOrder: 25,
 
   resolveConfig: (ctx: SpeechProviderResolveConfigContext) => normalizeConfig(ctx.rawConfig),
 

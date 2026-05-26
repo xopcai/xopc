@@ -19,6 +19,7 @@ import {
   mergeUpdateConfigPatch,
 } from '../../../config/web-patch.js';
 import { buildSafeWebConfigPayload } from '../lib/config-payload.js';
+import { mergeSttConfigPatch, mergeTtsConfigPatch } from '../lib/safe-voice-config.js';
 import {
   normalizePatchAgentImageGenerationModel,
   normalizePatchAgentModel,
@@ -1509,11 +1510,17 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
     if (body.stt !== undefined) {
       config.tools = config.tools ?? {};
       config.tools.media = config.tools.media ?? {};
-      (config.tools.media as Record<string, unknown>).audio = body.stt;
+      (config.tools.media as Record<string, unknown>).audio = mergeSttConfigPatch(
+        config.tools.media.audio,
+        body.stt,
+      );
     }
     if (body.tts !== undefined) {
       config.messages = config.messages ?? {};
-      (config.messages as Record<string, unknown>).tts = body.tts;
+      (config.messages as Record<string, unknown>).tts = mergeTtsConfigPatch(
+        config.messages.tts,
+        body.tts,
+      );
     }
 
     const toolsPatchErr = applyToolsWebPatch(config, body as Record<string, unknown>);

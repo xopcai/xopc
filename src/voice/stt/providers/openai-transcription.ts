@@ -85,6 +85,7 @@ async function transcribeAudio(req: AudioTranscriptionRequest): Promise<AudioTra
 export const openAiTranscriptionProvider: MediaUnderstandingProvider = {
   id: 'openai',
   capabilities: ['audio'],
+  envKey: 'OPENAI_API_KEY',
   defaultModels: { audio: DEFAULT_MODEL },
   autoPriority: { audio: 20 }, // alibaba is preferred when both configured (Chinese-first)
   transcribeAudio,

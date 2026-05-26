@@ -8,11 +8,19 @@ import { useSaveBarRegistration } from '@/features/settings/save-bar/use-save-ba
 import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
 import {
   fetchVoiceModels,
+  fetchVoiceProviders,
+  fetchVoiceSttProviders,
   normalizeVoiceSettings,
   patchVoiceSettings,
+  type SttProviderListEntry,
+  type TtsProviderListEntry,
   type VoiceModelsPayload,
   type VoiceSettingsState,
 } from '@/features/settings/voice-config-api';
+import {
+  VoiceApiKeyField,
+  type VoiceApiKeyFieldLabels,
+} from '@/features/settings/voice-api-key-field';
 import { apiUrl } from '@/lib/url';
 import { nativeSelectMaxWidthClass, selectControlBaseClass, settingsInputFocusClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
@@ -20,6 +28,34 @@ import { messages, type VoiceSettingsMessages } from '@/i18n/messages';
 import { docsGuidePageUrl } from '@/navigation';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
+
+const credentialFieldWidthClass = nativeSelectMaxWidthClass;
+
+function sttEnvHint(provider: string): string {
+  switch (provider) {
+    case 'alibaba':
+      return '(DASHSCOPE_API_KEY)';
+    case 'openai':
+      return '(OPENAI_API_KEY)';
+    case 'groq':
+      return '(GROQ_API_KEY)';
+    default:
+      return '';
+  }
+}
+
+function ttsEnvHint(provider: string): string {
+  switch (provider) {
+    case 'alibaba':
+      return '(DASHSCOPE_API_KEY)';
+    case 'openai':
+      return '(OPENAI_API_KEY)';
+    case 'minimax':
+      return '(MINIMAX_API_KEY)';
+    default:
+      return '';
+  }
+}
 
 function inputClassName(): string {
   return cn(
@@ -39,6 +75,10 @@ const STT_ALIBABA_FALLBACK = [
   { id: 'paraformer-v1', name: 'Paraformer v1' },
 ];
 const STT_OPENAI_FALLBACK = [{ id: 'whisper-1', name: 'Whisper-1' }];
+const STT_GROQ_MODELS_FALLBACK = [
+  { id: 'whisper-large-v3-turbo', name: 'Whisper Large v3 Turbo' },
+  { id: 'whisper-large-v3', name: 'Whisper Large v3' },
+];
 const TTS_OPENAI_MODELS_FALLBACK = [
   { id: 'tts-1', name: 'TTS-1' },
   { id: 'tts-1-hd', name: 'TTS-1 HD' },
@@ -68,6 +108,61 @@ const TTS_MINIMAX_VOICES_FALLBACK = [
   { id: 'female-shaonv', name: 'Female Shaonv (少女音)' },
 ];
 
+const FALLBACK_TTS_PROVIDERS: TtsProviderListEntry[] = [
+  { id: 'openai', aliases: [], configured: false },
+  { id: 'alibaba', aliases: [], configured: false },
+  { id: 'minimax', aliases: [], configured: false },
+  { id: 'edge', aliases: [], configured: false },
+  { id: 'tts-local-cli', aliases: ['cli', 'local-cli'], configured: false },
+];
+
+const FALLBACK_STT_PROVIDERS: SttProviderListEntry[] = [
+  { id: 'alibaba', aliases: ['dashscope', 'paraformer'], configured: false },
+  { id: 'openai', aliases: [], configured: false },
+];
+
+function sttProviderLabel(id: string, v: VoiceSettingsMessages): string {
+  switch (id) {
+    case 'openai':
+      return v.stt.openai;
+    case 'alibaba':
+      return v.stt.alibaba;
+    case 'groq':
+      return 'Groq';
+    default:
+      return id;
+  }
+}
+
+function ttsProviderLabel(id: string, v: VoiceSettingsMessages): string {
+  switch (id) {
+    case 'openai':
+      return v.tts.providerOpenai;
+    case 'alibaba':
+      return v.stt.alibaba;
+    case 'edge':
+      return v.tts.providerEdge;
+    case 'tts-local-cli':
+      return v.tts.providerLocalCli;
+    case 'minimax':
+      return 'MiniMax';
+    default:
+      return id;
+  }
+}
+
+function voiceApiKeyLabels(v: VoiceSettingsMessages): VoiceApiKeyFieldLabels {
+  return {
+    maskedHelp: v.apiKeyMaskedHelp,
+    copy: v.apiKeyCopy,
+    copied: v.apiKeyCopied,
+    show: v.apiKeyShow,
+    hide: v.apiKeyHide,
+    notInConfigFile: v.apiKeyNotInConfigFile,
+    loadFailed: v.apiKeyRevealFailed,
+  };
+}
+
 /** See `WebSearchSettingsPanel` for the embedded-mode contract. */
 export function VoiceSettingsPanel({ embedded = false }: { embedded?: boolean } = {}) {
   const language = useLocaleStore((s) => s.language);
@@ -95,6 +190,30 @@ export function VoiceSettingsPanel({ embedded = false }: { embedded?: boolean } 
     isLoading: vmLoading,
     mutate: mutVm,
   } = useSWR(hasToken ? apiUrl('/api/voice/models') : null, fetchVoiceModels, { revalidateOnFocus: false });
+  const {
+    data: voiceProviders,
+    error: vpErr,
+    isLoading: vpLoading,
+  } = useSWR(hasToken ? apiUrl('/api/voice/providers') : null, fetchVoiceProviders, {
+    revalidateOnFocus: false,
+  });
+  const {
+    data: voiceSttProviders,
+    error: vspErr,
+    isLoading: vspLoading,
+  } = useSWR(hasToken ? apiUrl('/api/voice/stt-providers') : null, fetchVoiceSttProviders, {
+    revalidateOnFocus: false,
+  });
+
+  const ttsProviders = useMemo(
+    () => voiceProviders?.providers ?? FALLBACK_TTS_PROVIDERS,
+    [voiceProviders],
+  );
+
+  const sttProviders = useMemo(
+    () => voiceSttProviders?.providers ?? FALLBACK_STT_PROVIDERS,
+    [voiceSttProviders],
+  );
 
   const voiceParsed = useMemo(
     () =>
@@ -127,8 +246,11 @@ export function VoiceSettingsPanel({ embedded = false }: { embedded?: boolean } 
 
   const loading = Boolean(
     hasToken &&
-      (voiceParsed === null || voiceModels === undefined) &&
-      (cfgLoading || vmLoading),
+      (voiceParsed === null ||
+        voiceModels === undefined ||
+        voiceProviders === undefined ||
+        voiceSttProviders === undefined) &&
+      (cfgLoading || vmLoading || vpLoading || vspLoading),
   );
   const fetchError =
     cfgErr instanceof Error
@@ -139,7 +261,15 @@ export function VoiceSettingsPanel({ embedded = false }: { embedded?: boolean } 
           ? vmErr.message
           : vmErr
             ? String(vmErr)
-            : null;
+            : vpErr instanceof Error
+              ? vpErr.message
+              : vpErr
+                ? String(vpErr)
+                : vspErr instanceof Error
+                  ? vspErr.message
+                  : vspErr
+                    ? String(vspErr)
+                    : null;
 
   const updateStt = useCallback((patch: Partial<VoiceSettingsState['stt']>) => {
     setForm((f) => (f ? { ...f, stt: { ...f.stt, ...patch } } : null));
@@ -319,6 +449,7 @@ export function VoiceSettingsPanel({ embedded = false }: { embedded?: boolean } 
 
   const stt = form.stt;
   const tts = form.tts;
+  const apiKeyLabels = voiceApiKeyLabels(v);
 
   return (
     <div className={outerClass}>
@@ -361,8 +492,10 @@ export function VoiceSettingsPanel({ embedded = false }: { embedded?: boolean } 
       <div className="flex flex-col gap-4">
         <SttSection
           v={v}
+          apiKeyLabels={apiKeyLabels}
           stt={stt}
           models={models}
+          sttProviders={sttProviders}
           updateStt={updateStt}
           updateSttAlibaba={updateSttAlibaba}
           updateSttOpenai={updateSttOpenai}
@@ -371,8 +504,10 @@ export function VoiceSettingsPanel({ embedded = false }: { embedded?: boolean } 
 
         <TtsSection
           v={v}
+          apiKeyLabels={apiKeyLabels}
           tts={tts}
           models={models}
+          ttsProviders={ttsProviders}
           updateTts={updateTts}
           updateTtsAlibaba={updateTtsAlibaba}
           updateTtsOpenai={updateTtsOpenai}
@@ -394,16 +529,20 @@ export function VoiceSettingsPanel({ embedded = false }: { embedded?: boolean } 
 
 function SttSection({
   v,
+  apiKeyLabels,
   stt,
   models,
+  sttProviders,
   updateStt,
   updateSttAlibaba,
   updateSttOpenai,
   updateSttFallback,
 }: {
   v: VoiceSettingsMessages;
+  apiKeyLabels: VoiceApiKeyFieldLabels;
   stt: VoiceSettingsState['stt'];
   models: VoiceModelsPayload | null;
+  sttProviders: SttProviderListEntry[];
   updateStt: (p: Partial<VoiceSettingsState['stt']>) => void;
   updateSttAlibaba: (p: Partial<NonNullable<VoiceSettingsState['stt']['alibaba']>>) => void;
   updateSttOpenai: (p: Partial<NonNullable<VoiceSettingsState['stt']['openai']>>) => void;
@@ -411,6 +550,41 @@ function SttSection({
 }) {
   const alibabaModels = models?.stt?.alibaba?.length ? models.stt.alibaba : STT_ALIBABA_FALLBACK;
   const openaiModels = models?.stt?.openai?.length ? models.stt.openai : STT_OPENAI_FALLBACK;
+
+  const providerOptions = useMemo(() => {
+    const seen = new Set<string>();
+    const options: SttProviderListEntry[] = [];
+    for (const entry of sttProviders) {
+      if (seen.has(entry.id)) continue;
+      seen.add(entry.id);
+      options.push(entry);
+    }
+    if (stt.provider && !seen.has(stt.provider)) {
+      options.push({ id: stt.provider, aliases: [], configured: false });
+    }
+    return options;
+  }, [sttProviders, stt.provider]);
+
+  const extensionProviderSlice = stt.providers?.[stt.provider];
+  const extensionApiKey =
+    typeof extensionProviderSlice?.apiKey === 'string' ? extensionProviderSlice.apiKey : '';
+  const extensionModel =
+    typeof extensionProviderSlice?.model === 'string' ? extensionProviderSlice.model : '';
+
+  const updateExtensionProvider = useCallback(
+    (patch: Record<string, unknown>) => {
+      updateStt({
+        providers: {
+          ...(stt.providers ?? {}),
+          [stt.provider]: {
+            ...(stt.providers?.[stt.provider] ?? {}),
+            ...patch,
+          },
+        },
+      });
+    },
+    [stt.provider, stt.providers, updateStt],
+  );
 
   return (
     <section className="rounded-2xl bg-surface-base px-4 py-5 sm:px-5">
@@ -438,37 +612,25 @@ function SttSection({
         {stt.enabled ? (
           <>
             <div className="grid gap-3 sm:grid-cols-2">
-              <div className="flex flex-col gap-1.5">
+              <div className={cn('flex flex-col gap-1.5', credentialFieldWidthClass)}>
                 <FieldLabel>{v.stt.provider}</FieldLabel>
                 <select
                   className={selectClassName()}
                   value={stt.provider}
-                  onChange={(e) => updateStt({ provider: e.target.value as 'alibaba' | 'openai' })}
+                  onChange={(e) => updateStt({ provider: e.target.value })}
                 >
-                  <option value="alibaba">{v.stt.alibaba}</option>
-                  <option value="openai">{v.stt.openai}</option>
+                  {providerOptions.map((entry) => (
+                    <option key={entry.id} value={entry.id}>
+                      {sttProviderLabel(entry.id, v)}
+                      {entry.configured ? '' : ' *'}
+                    </option>
+                  ))}
                 </select>
               </div>
-            </div>
 
-            {stt.provider === 'alibaba' ? (
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="flex flex-col gap-1.5">
-                  <FieldLabel>{v.stt.apiKey}</FieldLabel>
-                  <input
-                    className={cn(inputClassName(), 'font-mono text-xs')}
-                    type="password"
-                    autoComplete="off"
-                    value={stt.alibaba?.apiKey ?? ''}
-                    onChange={(e) => updateSttAlibaba({ apiKey: e.target.value })}
-                    placeholder="sk-..."
-                  />
-                  <p className="text-xs text-fg-subtle">
-                    {v.stt.apiKeyDesc} (DASHSCOPE_API_KEY)
-                  </p>
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <FieldLabel>{v.stt.model}</FieldLabel>
+              <div className={cn('flex flex-col gap-1.5', credentialFieldWidthClass)}>
+                <FieldLabel>{v.stt.model}</FieldLabel>
+                {stt.provider === 'alibaba' ? (
                   <select
                     className={selectClassName()}
                     value={stt.alibaba?.model ?? ''}
@@ -480,26 +642,7 @@ function SttSection({
                       </option>
                     ))}
                   </select>
-                </div>
-              </div>
-            ) : (
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="flex flex-col gap-1.5">
-                  <FieldLabel>{v.stt.apiKey}</FieldLabel>
-                  <input
-                    className={cn(inputClassName(), 'font-mono text-xs')}
-                    type="password"
-                    autoComplete="off"
-                    value={stt.openai?.apiKey ?? ''}
-                    onChange={(e) => updateSttOpenai({ apiKey: e.target.value })}
-                    placeholder="sk-..."
-                  />
-                  <p className="text-xs text-fg-subtle">
-                    {v.stt.apiKeyDesc} (OPENAI_API_KEY)
-                  </p>
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <FieldLabel>{v.stt.model}</FieldLabel>
+                ) : stt.provider === 'openai' ? (
                   <select
                     className={selectClassName()}
                     value={stt.openai?.model ?? ''}
@@ -511,9 +654,55 @@ function SttSection({
                       </option>
                     ))}
                   </select>
-                </div>
+                ) : stt.provider === 'groq' ? (
+                  <select
+                    className={selectClassName()}
+                    value={extensionModel || STT_GROQ_MODELS_FALLBACK[0]!.id}
+                    onChange={(e) => updateExtensionProvider({ model: e.target.value })}
+                  >
+                    {STT_GROQ_MODELS_FALLBACK.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    className={inputClassName()}
+                    value={extensionModel}
+                    onChange={(e) => updateExtensionProvider({ model: e.target.value })}
+                    placeholder={stt.provider}
+                  />
+                )}
               </div>
-            )}
+
+              <div className={cn('flex flex-col gap-1.5', credentialFieldWidthClass)}>
+                <FieldLabel>{v.stt.apiKey}</FieldLabel>
+                <VoiceApiKeyField
+                  kind="stt"
+                  providerId={stt.provider}
+                  fieldId={`voice-stt-${stt.provider}-api-key`}
+                  value={
+                    stt.provider === 'alibaba'
+                      ? (stt.alibaba?.apiKey ?? '')
+                      : stt.provider === 'openai'
+                        ? (stt.openai?.apiKey ?? '')
+                        : extensionApiKey
+                  }
+                  onChange={(next) => {
+                    if (stt.provider === 'alibaba') updateSttAlibaba({ apiKey: next });
+                    else if (stt.provider === 'openai') updateSttOpenai({ apiKey: next });
+                    else updateExtensionProvider({ apiKey: next });
+                  }}
+                  labels={apiKeyLabels}
+                  placeholder={stt.provider === 'groq' ? 'gsk_...' : 'sk-...'}
+                />
+                <p className="text-xs text-fg-subtle">
+                  {v.stt.apiKeyDesc}
+                  {sttEnvHint(stt.provider) ? ` ${sttEnvHint(stt.provider)}` : ''}
+                </p>
+              </div>
+            </div>
 
             <div className="flex items-center justify-between gap-2 rounded-xl bg-surface-hover/50 px-3 py-2.5 dark:bg-surface-hover/35">
               <div>
@@ -536,8 +725,10 @@ function SttSection({
 
 function TtsSection({
   v,
+  apiKeyLabels,
   tts,
   models,
+  ttsProviders,
   updateTts,
   updateTtsAlibaba,
   updateTtsOpenai,
@@ -546,8 +737,10 @@ function TtsSection({
   updateTtsLocalCli,
 }: {
   v: VoiceSettingsMessages;
+  apiKeyLabels: VoiceApiKeyFieldLabels;
   tts: VoiceSettingsState['tts'];
   models: VoiceModelsPayload | null;
+  ttsProviders: TtsProviderListEntry[];
   updateTts: (p: Partial<VoiceSettingsState['tts']>) => void;
   updateTtsAlibaba: (p: Partial<NonNullable<VoiceSettingsState['tts']['alibaba']>>) => void;
   updateTtsOpenai: (p: Partial<NonNullable<VoiceSettingsState['tts']['openai']>>) => void;
@@ -572,6 +765,20 @@ function TtsSection({
   const ttsVoicesMinimax = models?.ttsVoices?.minimax?.length
     ? models.ttsVoices.minimax
     : TTS_MINIMAX_VOICES_FALLBACK;
+
+  const providerOptions = useMemo(() => {
+    const seen = new Set<string>();
+    const options: TtsProviderListEntry[] = [];
+    for (const entry of ttsProviders) {
+      if (seen.has(entry.id)) continue;
+      seen.add(entry.id);
+      options.push(entry);
+    }
+    if (tts.provider && !seen.has(tts.provider)) {
+      options.push({ id: tts.provider, aliases: [], configured: false });
+    }
+    return options;
+  }, [ttsProviders, tts.provider]);
 
   return (
     <section className="rounded-2xl bg-surface-base px-4 py-5 sm:px-5">
@@ -599,7 +806,7 @@ function TtsSection({
         {tts.enabled ? (
           <>
             <div className="grid gap-3 sm:grid-cols-2">
-              <div className="flex flex-col gap-1.5">
+              <div className={cn('flex flex-col gap-1.5', credentialFieldWidthClass)}>
                 <FieldLabel>{v.tts.trigger}</FieldLabel>
                 <select
                   className={selectClassName()}
@@ -615,152 +822,106 @@ function TtsSection({
                 </select>
                 <p className="text-xs text-fg-subtle">{triggerDesc(tts.trigger)}</p>
               </div>
-              <div className="flex flex-col gap-1.5">
+              <div className={cn('flex flex-col gap-1.5', credentialFieldWidthClass)}>
                 <FieldLabel>{v.tts.provider}</FieldLabel>
                 <select
                   className={selectClassName()}
                   value={tts.provider}
                   onChange={(e) => updateTts({ provider: e.target.value })}
                 >
-                  <option value="openai">{v.tts.providerOpenai}</option>
-                  <option value="alibaba">{v.stt.alibaba}</option>
-                  <option value="minimax">MiniMax</option>
-                  <option value="edge">{v.tts.providerEdge}</option>
-                  <option value="tts-local-cli">{v.tts.providerLocalCli}</option>
+                  {providerOptions.map((entry) => (
+                    <option key={entry.id} value={entry.id}>
+                      {ttsProviderLabel(entry.id, v)}
+                    </option>
+                  ))}
                 </select>
               </div>
             </div>
 
-            {tts.provider === 'openai' ? (
+            {tts.provider === 'openai' ||
+            tts.provider === 'alibaba' ||
+            tts.provider === 'minimax' ? (
               <div className="grid gap-3 sm:grid-cols-2">
-                <div className="flex flex-col gap-1.5 sm:col-span-2">
+                <div className={cn('flex flex-col gap-1.5', credentialFieldWidthClass)}>
                   <FieldLabel>{v.stt.apiKey}</FieldLabel>
-                  <input
-                    className={cn(inputClassName(), 'font-mono text-xs')}
-                    type="password"
-                    autoComplete="off"
-                    value={tts.openai?.apiKey ?? ''}
-                    onChange={(e) => updateTtsOpenai({ apiKey: e.target.value })}
-                    placeholder="sk-..."
+                  <VoiceApiKeyField
+                    kind="tts"
+                    providerId={tts.provider}
+                    fieldId={`voice-tts-${tts.provider}-api-key`}
+                    value={
+                      tts.provider === 'openai'
+                        ? (tts.openai?.apiKey ?? '')
+                        : tts.provider === 'alibaba'
+                          ? (tts.alibaba?.apiKey ?? '')
+                          : (tts.minimax?.apiKey ?? '')
+                    }
+                    onChange={(next) => {
+                      if (tts.provider === 'openai') updateTtsOpenai({ apiKey: next });
+                      else if (tts.provider === 'alibaba') updateTtsAlibaba({ apiKey: next });
+                      else updateTtsMinimax({ apiKey: next });
+                    }}
+                    labels={apiKeyLabels}
+                    placeholder={tts.provider === 'minimax' ? 'eyJ...' : 'sk-...'}
                   />
                   <p className="text-xs text-fg-subtle">
-                    {v.stt.apiKeyDesc} (OPENAI_API_KEY)
+                    {v.stt.apiKeyDesc}
+                    {ttsEnvHint(tts.provider) ? ` ${ttsEnvHint(tts.provider)}` : ''}
                   </p>
                 </div>
-                <div className="flex flex-col gap-1.5">
-                  <FieldLabel>{v.stt.model}</FieldLabel>
-                  <select
-                    className={selectClassName()}
-                    value={tts.openai?.model ?? ''}
-                    onChange={(e) => updateTtsOpenai({ model: e.target.value })}
-                  >
-                    {ttsOpenai.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <FieldLabel>{v.tts.voice}</FieldLabel>
-                  <select
-                    className={selectClassName()}
-                    value={tts.openai?.voice ?? ''}
-                    onChange={(e) => updateTtsOpenai({ voice: e.target.value })}
-                  >
-                    {ttsVoicesOpenai.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            ) : null}
 
-            {tts.provider === 'alibaba' ? (
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="flex flex-col gap-1.5 sm:col-span-2">
-                  <FieldLabel>{v.stt.apiKey}</FieldLabel>
-                  <input
-                    className={cn(inputClassName(), 'font-mono text-xs')}
-                    type="password"
-                    autoComplete="off"
-                    value={tts.alibaba?.apiKey ?? ''}
-                    onChange={(e) => updateTtsAlibaba({ apiKey: e.target.value })}
-                    placeholder="sk-..."
-                  />
-                  <p className="text-xs text-fg-subtle">
-                    {v.stt.apiKeyDesc} (DASHSCOPE_API_KEY)
-                  </p>
-                </div>
-                <div className="flex flex-col gap-1.5">
+                <div className={cn('flex flex-col gap-1.5', credentialFieldWidthClass)}>
                   <FieldLabel>{v.stt.model}</FieldLabel>
                   <select
                     className={selectClassName()}
-                    value={tts.alibaba?.model ?? ''}
-                    onChange={(e) => updateTtsAlibaba({ model: e.target.value })}
+                    value={
+                      tts.provider === 'openai'
+                        ? (tts.openai?.model ?? '')
+                        : tts.provider === 'alibaba'
+                          ? (tts.alibaba?.model ?? '')
+                          : (tts.minimax?.model ?? '')
+                    }
+                    onChange={(e) => {
+                      if (tts.provider === 'openai') updateTtsOpenai({ model: e.target.value });
+                      else if (tts.provider === 'alibaba') updateTtsAlibaba({ model: e.target.value });
+                      else updateTtsMinimax({ model: e.target.value });
+                    }}
                   >
-                    {ttsAlibaba.map((m) => (
+                    {(tts.provider === 'openai'
+                      ? ttsOpenai
+                      : tts.provider === 'alibaba'
+                        ? ttsAlibaba
+                        : ttsMinimax
+                    ).map((m) => (
                       <option key={m.id} value={m.id}>
                         {m.name}
                       </option>
                     ))}
                   </select>
                 </div>
-                <div className="flex flex-col gap-1.5">
-                  <FieldLabel>{v.tts.voice}</FieldLabel>
-                  <select
-                    className={selectClassName()}
-                    value={tts.alibaba?.voice ?? ''}
-                    onChange={(e) => updateTtsAlibaba({ voice: e.target.value })}
-                  >
-                    {ttsVoicesAlibaba.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            ) : null}
 
-            {tts.provider === 'minimax' ? (
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="flex flex-col gap-1.5 sm:col-span-2">
-                  <FieldLabel>{v.stt.apiKey}</FieldLabel>
-                  <input
-                    className={cn(inputClassName(), 'font-mono text-xs')}
-                    type="password"
-                    autoComplete="off"
-                    value={tts.minimax?.apiKey ?? ''}
-                    onChange={(e) => updateTtsMinimax({ apiKey: e.target.value })}
-                    placeholder="eyJ..."
-                  />
-                  <p className="text-xs text-fg-subtle">{v.stt.apiKeyDesc} (MINIMAX_API_KEY)</p>
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <FieldLabel>{v.stt.model}</FieldLabel>
-                  <select
-                    className={selectClassName()}
-                    value={tts.minimax?.model ?? ''}
-                    onChange={(e) => updateTtsMinimax({ model: e.target.value })}
-                  >
-                    {ttsMinimax.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="flex flex-col gap-1.5">
+                <div className={cn('flex flex-col gap-1.5', credentialFieldWidthClass)}>
                   <FieldLabel>{v.tts.voice}</FieldLabel>
                   <select
                     className={selectClassName()}
-                    value={tts.minimax?.voice ?? ''}
-                    onChange={(e) => updateTtsMinimax({ voice: e.target.value })}
+                    value={
+                      tts.provider === 'openai'
+                        ? (tts.openai?.voice ?? '')
+                        : tts.provider === 'alibaba'
+                          ? (tts.alibaba?.voice ?? '')
+                          : (tts.minimax?.voice ?? '')
+                    }
+                    onChange={(e) => {
+                      if (tts.provider === 'openai') updateTtsOpenai({ voice: e.target.value });
+                      else if (tts.provider === 'alibaba') updateTtsAlibaba({ voice: e.target.value });
+                      else updateTtsMinimax({ voice: e.target.value });
+                    }}
                   >
-                    {ttsVoicesMinimax.map((m) => (
+                    {(tts.provider === 'openai'
+                      ? ttsVoicesOpenai
+                      : tts.provider === 'alibaba'
+                        ? ttsVoicesAlibaba
+                        : ttsVoicesMinimax
+                    ).map((m) => (
                       <option key={m.id} value={m.id}>
                         {m.name}
                       </option>
@@ -771,7 +932,7 @@ function TtsSection({
             ) : null}
 
             {tts.provider === 'edge' ? (
-              <div className="flex flex-col gap-1.5">
+              <div className={cn('flex flex-col gap-1.5', credentialFieldWidthClass)}>
                 <FieldLabel>{v.tts.voice}</FieldLabel>
                 <select
                   className={selectClassName()}

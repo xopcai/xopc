@@ -242,6 +242,16 @@ class MockExtensionApiImpl implements MockExtensionApi {
     /* noop */
   }
 
+  registerSpeechProvider(_plugin: import('../../voice/tts/speech-provider-types.js').SpeechProviderPlugin): void {
+    /* noop */
+  }
+
+  registerMediaUnderstandingProvider(
+    _plugin: import('../../media-understanding/types.js').MediaUnderstandingProvider,
+  ): void {
+    /* noop */
+  }
+
   registerMarketplaceAdapter(_registration: {
     adapter: unknown;
     displayName?: string;

@@ -574,6 +574,14 @@
     "banner": "API keys and endpoints are stored globally as providers.<id> (same as Settings → Images). Use either page — they stay in sync.",
     "openImageModels": "Open Images settings (all providers)"
   },
+  "extensionSttMedia": {
+    "banner": "STT credentials are stored in tools.media.audio.providers.<id> (same as Settings → Voice). Use either page — they stay in sync.",
+    "openVoice": "Open Voice settings (all STT providers)",
+    "credentialsTitle": "STT credentials",
+    "credentialsHint": "Edits tools.media.audio.providers.{providerId} and enables STT when you save.",
+    "configured": "Configured",
+    "notConfigured": "Not configured"
+  },
   "appearanceSettings": {
     "pageTitle": "Preferences",
     "subtitle": "Language, appearance, and text size for daily use. Stored in this browser only.",

@@ -120,7 +120,8 @@ function buildAudioRequest(params: {
     );
     return undefined;
   }
-  if (!config.apiKey) {
+  const requiresApiKey = provider.requiresApiKey !== false;
+  if (requiresApiKey && !config.apiKey) {
     log.debug(
       { providerId: provider.id, attachmentIndex: attachment.attachmentIndex },
       `Provider "${provider.id}" has no apiKey; skipping`,
@@ -131,7 +132,7 @@ function buildAudioRequest(params: {
     buffer: attachment.buffer,
     fileName: attachment.fileName,
     ...(attachment.mime ? { mime: attachment.mime } : {}),
-    apiKey: config.apiKey,
+    ...(config.apiKey ? { apiKey: config.apiKey } : {}),
     ...(config.baseUrl ? { baseUrl: config.baseUrl } : {}),
     ...(config.headers ? { headers: config.headers } : {}),
     ...(config.model ?? provider.defaultModels?.audio

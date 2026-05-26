@@ -2,7 +2,11 @@
  * TTS (Text-to-Speech) Types
  */
 
-export type TTSProvider = 'openai' | 'alibaba' | 'edge' | 'minimax';
+/** Built-in provider ids shipped in core. Extensions add more at runtime. */
+export type BuiltinTTSProvider = 'openai' | 'alibaba' | 'edge' | 'minimax' | 'tts-local-cli';
+
+/** Any registered SpeechProviderPlugin id (built-in or extension). */
+export type TTSProvider = string;
 
 export type TTSAutoMode = 'off' | 'always' | 'inbound' | 'tagged';
 
@@ -76,6 +80,8 @@ export interface TTSConfig {
   summarization?: TTSSummarizationConfig;
   /** Allow model to override TTS parameters */
   modelOverrides?: TTSModelOverrideConfig;
+  /** OpenClaw-aligned provider settings map (`messages.tts.providers.<id>`). */
+  providers?: Record<string, Record<string, unknown>>;
   alibaba?: {
     apiKey?: string;
     model?: string;
@@ -102,6 +108,8 @@ export interface TTSConfig {
     model?: string;
     voice?: string;
   };
+  /** Extension / legacy flat provider config (e.g. `tts-local-cli`). */
+  [providerId: string]: unknown;
 }
 
 export interface TTSSummarizationConfig {

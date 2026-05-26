@@ -54,6 +54,8 @@ import { PACKAGE_VERSION } from '../package-version.js';
 import type { ChannelPlugin } from '../channels/plugin-types.js';
 import { bundledChannelPlugins } from '../channels/plugins/bundled.js';
 import { ExtensionApiImpl, createExtensionLogger, createPathResolver } from './api.js';
+import { validateSpeechProviderContracts } from './speech-provider-contracts.js';
+import { validateMediaUnderstandingProviderContracts } from './media-provider-contracts.js';
 import { createLogger, createServiceLogger } from '../utils/logger.js';
 
 //  Security imports
@@ -334,6 +336,8 @@ export class ExtensionLoader {
       alias['xopc/extension-sdk/hooks'] = join(sdkDir, 'hooks.ts');
       alias['xopc/extension-sdk/tools'] = join(sdkDir, 'tools.ts');
       alias['xopc/extension-sdk/testing'] = join(sdkDir, 'testing.ts');
+      alias['xopc/extension-sdk/speech'] = join(sdkDir, 'speech.ts');
+      alias['xopc/extension-sdk/media'] = join(sdkDir, 'media.ts');
     }
 
     // Initialize jiti with TypeScript support and SDK alias
@@ -763,6 +767,20 @@ export class ExtensionLoader {
       // Initialize extension
       await this.initializeExtension(module, api, manifest);
 
+      validateSpeechProviderContracts({
+        extensionId: config.id,
+        manifest,
+        registeredProviderIds: (api as ExtensionApiImpl).getRegisteredSpeechProviderIds(),
+        logger: api.logger,
+      });
+
+      validateMediaUnderstandingProviderContracts({
+        extensionId: config.id,
+        manifest,
+        registeredProviderIds: (api as ExtensionApiImpl).getRegisteredMediaUnderstandingProviderIds(),
+        logger: api.logger,
+      });
+
       // Register to registry
       this.registry.addExtension({
         id: config.id,
@@ -810,6 +828,7 @@ export class ExtensionLoader {
     const slotMap: Record<string, SlotKey> = {
       'memory': 'memory',
       'tts': 'tts',
+      'speech-provider': 'tts',
       'image-generation': 'imageGeneration',
       'imageGeneration': 'imageGeneration',
       'web-search': 'webSearch',

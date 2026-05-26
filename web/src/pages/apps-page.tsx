@@ -7,6 +7,7 @@ import { useSWRConfig } from 'swr';
 import { Button } from '@/components/ui/button';
 import { parseAppsMainTab, type AppsMainTab } from '@/features/apps/apps-page.constants';
 import {
+  extensionHasProviderCredentialsSettings,
   extensionShellUiReachable,
   useExtensions,
   useExtensionsLoading,
@@ -387,7 +388,7 @@ function ExtensionDetailDialog({
   const openPath = primaryPage ? extensionPagePath(ext.id, primaryPage) : null;
   const settingsPath = primarySettingsPanel
     ? `/settings/ext/${ext.id}/${primarySettingsPanel.id}`
-    : ext.hasConfigSchema
+    : ext.hasConfigSchema || extensionHasProviderCredentialsSettings(ext)
       ? `/settings/ext/${ext.id}`
       : null;
 

@@ -28,6 +28,7 @@ import {
   agentModelRefToString,
 } from './agent-model.js';
 import { buildSafeProvidersConfigForWeb } from './safe-providers-config.js';
+import { maskSttConfigForWeb, maskTtsConfigForWeb } from './safe-voice-config.js';
 
 /** MCP block for GET/PATCH `/api/config` (authenticated console editing). */
 export function buildSafeMcpConfigForWeb(config: Config) {
@@ -256,8 +257,8 @@ export async function buildSafeWebConfigPayload(service: GatewayService) {
     update: {
       ...resolveUpdateConfigForWeb(config),
     },
-    stt: config.tools?.media?.audio,
-    tts: config.messages?.tts,
+    stt: maskSttConfigForWeb(config.tools?.media?.audio),
+    tts: maskTtsConfigForWeb(config.messages?.tts),
     tools: safeToolsWebForGet(config),
     bindings: Array.isArray(config.bindings) ? config.bindings : [],
     mcp: buildSafeMcpConfigForWeb(config),

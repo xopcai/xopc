@@ -228,6 +228,7 @@ export const alibabaTranscriptionProvider: MediaUnderstandingProvider = {
   id: 'alibaba',
   aliases: ['dashscope', 'paraformer'],
   capabilities: ['audio'],
+  envKey: 'DASHSCOPE_API_KEY',
   defaultModels: { audio: DEFAULT_MODEL },
   // Higher priority than openai for audio because Paraformer-v2 has better
   // Chinese accuracy and is the project's typical primary STT.

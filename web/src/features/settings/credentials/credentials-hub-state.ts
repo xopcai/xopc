@@ -107,12 +107,19 @@ function voiceNeedsKey(provider: string): boolean {
   return provider === 'openai' || provider === 'alibaba' || provider === 'minimax';
 }
 
+function sttNeedsKey(provider: string): boolean {
+  return provider === 'openai' || provider === 'alibaba' || provider === 'groq';
+}
+
 function voiceProviderKey(voice: VoiceSettingsState, kind: 'stt' | 'tts'): string | undefined {
   if (kind === 'stt') {
     if (!voice.stt.enabled) return undefined;
-    return voice.stt.provider === 'alibaba'
-      ? voice.stt.alibaba?.apiKey
-      : voice.stt.openai?.apiKey;
+    const p = voice.stt.provider;
+    if (p === 'alibaba') return voice.stt.alibaba?.apiKey ?? voice.stt.providers?.alibaba?.apiKey as string | undefined;
+    if (p === 'openai') return voice.stt.openai?.apiKey ?? voice.stt.providers?.openai?.apiKey as string | undefined;
+    if (p === 'groq') return voice.stt.providers?.groq?.apiKey as string | undefined;
+    const slice = voice.stt.providers?.[p];
+    return typeof slice?.apiKey === 'string' ? slice.apiKey : undefined;
   }
   if (!voice.tts.enabled) return undefined;
   const p = voice.tts.provider;
@@ -139,9 +146,11 @@ function voiceDomain(
   let haveKeys = 0;
 
   if (voice.stt.enabled) {
-    needKeys++;
-    const key = voiceProviderKey(voice, 'stt');
-    if (keyConfigured(key)) haveKeys++;
+    if (sttNeedsKey(voice.stt.provider)) {
+      needKeys++;
+      const key = voiceProviderKey(voice, 'stt');
+      if (keyConfigured(key)) haveKeys++;
+    }
   }
 
   if (voice.tts.enabled) {

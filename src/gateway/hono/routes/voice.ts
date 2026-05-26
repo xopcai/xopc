@@ -16,11 +16,30 @@ import { complete, type UserMessage } from '@earendil-works/pi-ai';
 import type { Config } from '../../../config/schema.js';
 import { getDefaultModelSync, resolveModel } from '../../../providers/index.js';
 import { isSTTAvailable, transcribe } from '../../../voice/stt/index.js';
+import { listTtsProvidersForApi } from '../../../voice/tts/list-providers.js';
+import { listSttProvidersForApi } from '../../../voice/stt/list-providers.js';
 import { mergeSttConfigFromAppConfig } from '../../../channels/attachments/voice-stt-webchat.js';
+import { resolveSttProviderConfigSlice } from '../../../voice/stt/config-slice.js';
+import { resolveTtsProviderConfigSlice } from '../../../voice/tts/config-slice.js';
 import { createLogger } from '../../../utils/logger.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
 const log = createLogger('Gateway:Voice');
+
+function readVoiceApiKeyFromConfigFileOnly(
+  cfg: Config,
+  kind: 'stt' | 'tts',
+  providerId: string,
+): string | undefined {
+  const id = providerId.trim();
+  if (!id) return undefined;
+  const slice =
+    kind === 'stt'
+      ? resolveSttProviderConfigSlice(id, cfg.tools?.media?.audio)
+      : resolveTtsProviderConfigSlice(id, cfg.messages?.tts);
+  const key = slice.apiKey;
+  return typeof key === 'string' && key.trim() ? key.trim() : undefined;
+}
 
 const REFINE_TIMEOUT_MS = 15_000;
 const MAX_AUDIO_BYTES = 25 * 1024 * 1024; // 25 MB
@@ -113,7 +132,64 @@ async function refineTranscript(
 }
 
 export function registerVoiceRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
-  const { service } = deps;
+  const { service, strictRateLimitMiddleware } = deps;
+
+  /**
+   * GET /api/voice/providers
+   *
+   * Lists registered SpeechProviderPlugin ids with configured state for the
+   * current gateway config (OpenClaw `tts.providers` equivalent).
+   */
+  authenticated.get('/api/voice/providers', (c) => {
+    const config = service.currentConfig as Config;
+    const payload = listTtsProvidersForApi(config);
+    return c.json({ ok: true, payload });
+  });
+
+  /**
+   * GET /api/voice/stt-providers
+   *
+   * Lists registered MediaUnderstandingProvider ids with configured state for
+   * the current gateway config (OpenClaw `tools.media.audio.providers` equivalent).
+   */
+  authenticated.get('/api/voice/stt-providers', (c) => {
+    const config = service.currentConfig as Config;
+    const payload = listSttProvidersForApi(config);
+    return c.json({ ok: true, payload });
+  });
+
+  /**
+   * POST /api/voice/reveal-api-key — return plaintext voice provider apiKey from config file only.
+   * Body: `{ kind: 'stt' | 'tts', provider: string }`
+   */
+  authenticated.post('/api/voice/reveal-api-key', strictRateLimitMiddleware, async (c) => {
+    let body: { kind?: unknown; provider?: unknown } = {};
+    try {
+      body = (await c.req.json()) as typeof body;
+    } catch {
+      return c.json({ ok: false, error: { message: 'Invalid JSON body' } }, 400);
+    }
+    const kind = body.kind === 'stt' || body.kind === 'tts' ? body.kind : null;
+    const provider = typeof body.provider === 'string' ? body.provider.trim() : '';
+    if (!kind) {
+      return c.json({ ok: false, error: { message: 'kind must be "stt" or "tts"' } }, 400);
+    }
+    if (!provider) {
+      return c.json({ ok: false, error: { message: 'provider is required' } }, 400);
+    }
+
+    const cfg = service.currentConfig as Config;
+    const apiKey = readVoiceApiKeyFromConfigFileOnly(cfg, kind, provider);
+    return c.json({
+      ok: true,
+      payload: {
+        kind,
+        provider,
+        apiKey: apiKey ?? null,
+        source: apiKey ? ('config' as const) : ('none' as const),
+      },
+    });
+  });
 
   /**
    * POST /api/voice/transcribe
@@ -155,7 +231,7 @@ export function registerVoiceRoutes(authenticated: Hono, deps: AuthenticatedRout
     // Resolve STT config from app config
     const config = service.currentConfig as Config;
     const sttConfigRaw = config.tools?.media?.audio;
-    const sttConfig = mergeSttConfigFromAppConfig(sttConfigRaw);
+    const sttConfig = mergeSttConfigFromAppConfig(sttConfigRaw, config.tools?.media);
 
     if (!isSTTAvailable(sttConfig)) {
       return c.json({

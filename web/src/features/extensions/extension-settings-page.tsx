@@ -7,6 +7,7 @@
 import { Link, useParams } from 'react-router-dom';
 
 import { ExtensionImageProviderSettings } from '@/features/settings/extension-image-provider-settings';
+import { ExtensionSttProviderSettings } from '@/features/settings/extension-stt-provider-settings';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 
@@ -18,6 +19,7 @@ export function ExtensionSettingsPage() {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const xm = m.extensionImageGen;
+  const xs = m.extensionSttMedia;
   const { extensionId, panelId } = useParams<{ extensionId: string; panelId?: string }>();
   const extensions = useExtensions();
 
@@ -42,8 +44,10 @@ export function ExtensionSettingsPage() {
   const hasIframe = Boolean(panel && extension.ui);
   const hasAutoForm = Boolean(extension.hasConfigSchema);
   const isImageGeneration = extension.kind === 'image-generation';
+  const isMediaProvider = extension.kind === 'media-provider';
+  const hasProviderCredentialsUi = isImageGeneration || isMediaProvider;
 
-  if (!hasAutoForm && !hasIframe && !isImageGeneration) {
+  if (!hasAutoForm && !hasIframe && !hasProviderCredentialsUi) {
     return (
       <SettingsPanelNotFound
         message={`Extension "${extensionId}" has no settings panels or config schema.`}
@@ -69,6 +73,15 @@ export function ExtensionSettingsPage() {
         </div>
       ) : null}
       {isImageGeneration ? <ExtensionImageProviderSettings extensionId={extensionId} /> : null}
+      {isMediaProvider ? (
+        <div className="flex flex-col gap-2 rounded-lg border border-edge-subtle bg-surface-base px-4 py-3 text-sm">
+          <p className="leading-relaxed text-fg-muted">{xs.banner}</p>
+          <Link to="/settings/voice" className="w-fit font-medium text-accent hover:underline">
+            {xs.openVoice}
+          </Link>
+        </div>
+      ) : null}
+      {isMediaProvider ? <ExtensionSttProviderSettings extensionId={extensionId} /> : null}
       {hasAutoForm ? <ExtensionAutoSettings extensionId={extensionId} /> : null}
       {hasIframe && panel && extension.ui ? (
         <div className="overflow-hidden rounded-xl border border-edge bg-surface-base">

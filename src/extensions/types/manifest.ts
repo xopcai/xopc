@@ -25,6 +25,10 @@ export interface ExtensionManifest {
   legacyExtensionIds?: string[];
 
   providers?: string[];
+  /** Speech/TTS provider ids implemented by this extension. */
+  speechProviders?: string[];
+  /** Media understanding (STT/image/video) provider ids implemented by this extension. */
+  mediaUnderstandingProviders?: string[];
   providerAuthEnvVars?: Record<string, string[]>;
   providerAuthChoices?: ProviderAuthChoice[];
   modelSupport?: ModelSupportDeclaration;
