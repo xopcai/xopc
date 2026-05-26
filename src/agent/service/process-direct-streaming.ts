@@ -6,6 +6,7 @@ import type { InternalAttachmentRoots } from '../../channels/attachments/inbound
 import { commandRegistry } from '../../chat-commands/index.js';
 import { parseSlashCommand } from '../../chat-commands/command-parse.js';
 import {
+  isVoiceLikeAttachment,
   mergeVoiceTranscriptsIntoUserText,
   mergeSttConfigFromAppConfig,
 } from '../../channels/attachments/voice-stt-webchat.js';
@@ -172,12 +173,30 @@ export async function* runProcessDirectStreaming(
     const prepared = await prepareInboundAttachments(sessionKey, input.attachments);
 
     const sttCfg = mergeSttConfigFromAppConfig(getConfig()?.tools?.media?.audio);
-    const { text: mergedUserText, inboundVoice } = await mergeVoiceTranscriptsIntoUserText(
-      attachmentRootsForSession(sessionKey),
-      prepared,
-      input.content,
-      sttCfg,
-    );
+    const { text: mergedUserText, inboundVoice, voiceTranscripts } =
+      await mergeVoiceTranscriptsIntoUserText(
+        attachmentRootsForSession(sessionKey),
+        prepared,
+        input.content,
+        sttCfg,
+      );
+
+    if (inboundVoice) {
+      const transcriptParts = [
+        voiceTranscripts.filter(Boolean).join('\n'),
+        input.content.trim(),
+      ].filter(Boolean);
+      const voiceAttachments = (prepared ?? []).filter(isVoiceLikeAttachment).map((att) => ({
+        workspaceRelativePath: att.workspaceRelativePath,
+        mimeType: att.mimeType,
+        name: att.name,
+      }));
+      pushEvent({
+        type: 'user_transcript',
+        text: transcriptParts.join('\n\n'),
+        attachments: voiceAttachments,
+      });
+    }
 
     const armAbort = () => {
       if (abortHandled) {

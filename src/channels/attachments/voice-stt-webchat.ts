@@ -39,22 +39,22 @@ export async function mergeVoiceTranscriptsIntoUserText(
   userText: string,
   sttConfig: STTConfig,
   opts?: { skipVoiceTranscription?: boolean },
-): Promise<{ text: string; inboundVoice: boolean }> {
+): Promise<{ text: string; inboundVoice: boolean; voiceTranscripts: string[] }> {
   if (!prepared?.length) {
-    return { text: userText, inboundVoice: false };
+    return { text: userText, inboundVoice: false, voiceTranscripts: [] };
   }
 
   const hasVoice = prepared.some(isVoiceLikeAttachment);
   if (!hasVoice) {
-    return { text: userText, inboundVoice: false };
+    return { text: userText, inboundVoice: false, voiceTranscripts: [] };
   }
 
   if (opts?.skipVoiceTranscription === true) {
-    return { text: userText, inboundVoice: true };
+    return { text: userText, inboundVoice: true, voiceTranscripts: [] };
   }
 
   if (!isSTTAvailable(sttConfig)) {
-    return { text: userText, inboundVoice: true };
+    return { text: userText, inboundVoice: true, voiceTranscripts: [] };
   }
 
   const transcripts: string[] = [];
@@ -100,5 +100,5 @@ export async function mergeVoiceTranscriptsIntoUserText(
   }
 
   const merged = [transcripts.filter(Boolean).join('\n'), userText.trim()].filter(Boolean).join('\n\n');
-  return { text: merged || userText, inboundVoice: true };
+  return { text: merged || userText, inboundVoice: true, voiceTranscripts: transcripts };
 }
