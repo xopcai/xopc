@@ -1,7 +1,24 @@
-import { AlertCircle, Check, Copy, ExternalLink, Eye, EyeOff, Loader2, Server, Shield, SlidersHorizontal } from 'lucide-react';
+import {
+  AlertCircle,
+  Check,
+  Copy,
+  ExternalLink,
+  Eye,
+  EyeOff,
+  KeyRound,
+  Loader2,
+  Network,
+  RefreshCw,
+  RotateCw,
+  Shield,
+  SlidersHorizontal,
+  type LucideIcon,
+} from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useSearchParams } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
 import {
   normalizeGatewayFromConfig,
@@ -11,6 +28,7 @@ import {
 } from '@/features/settings/gateway-config-api';
 import { GatewaySecurityAuditCard } from '@/features/settings/gateway-security-audit-card';
 import { MAX_CHANNEL_DEFER_LIST_SIZE } from '@/features/settings/gateway-settings.types';
+import { restartGatewayAfterConfigChange } from '@/features/tunnel/gateway-restart';
 import { settingsInputFocusClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
 import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
@@ -29,10 +47,68 @@ function inputClassName(): string {
   );
 }
 
+type GatewaySettingsTabId = 'network' | 'access' | 'updates' | 'security' | 'advanced';
+
+const GATEWAY_SETTINGS_TABS: readonly GatewaySettingsTabId[] = [
+  'network',
+  'access',
+  'updates',
+  'security',
+  'advanced',
+];
+
+const GATEWAY_SETTINGS_TAB_ICONS: Record<GatewaySettingsTabId, LucideIcon> = {
+  network: Network,
+  access: KeyRound,
+  updates: RefreshCw,
+  security: Shield,
+  advanced: SlidersHorizontal,
+};
+
+function parseGatewaySettingsTab(raw: string | null): GatewaySettingsTabId {
+  if (raw && GATEWAY_SETTINGS_TABS.includes(raw as GatewaySettingsTabId)) {
+    return raw as GatewaySettingsTabId;
+  }
+  return 'network';
+}
+
+function gatewaySettingsTabLabel(g: GatewaySettingsMessages, tab: GatewaySettingsTabId): string {
+  if (tab === 'network') return g.tabNetwork;
+  if (tab === 'access') return g.tabAccess;
+  if (tab === 'updates') return g.tabUpdates;
+  if (tab === 'security') return g.tabSecurity;
+  return g.tabAdvanced;
+}
+
+function gatewaySettingsTabHint(g: GatewaySettingsMessages, tab: GatewaySettingsTabId): string {
+  if (tab === 'network') return g.networkTabHint;
+  if (tab === 'access') return g.accessTabHint;
+  if (tab === 'updates') return g.updatesTabHint;
+  if (tab === 'security') return g.securitySectionHint;
+  return g.advancedSectionHint;
+}
+
 export function GatewaySettingsPanel() {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const g = m.gatewaySettings;
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = parseGatewaySettingsTab(searchParams.get('tab'));
+
+  const setActiveTab = useCallback(
+    (tab: GatewaySettingsTabId) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          if (tab === 'network') next.delete('tab');
+          else next.set('tab', tab);
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
   const token = useGatewayStore((st) => st.token);
   const tokenExpired = useGatewayStore((st) => st.tokenExpired);
   const openTokenDialog = useGatewayStore((st) => st.openTokenDialog);
@@ -47,6 +123,8 @@ export function GatewaySettingsPanel() {
   const [showPassword, setShowPassword] = useState(false);
   const [copied, setCopied] = useState(false);
   const [auditRefreshToken, setAuditRefreshToken] = useState(0);
+  const [restarting, setRestarting] = useState(false);
+  const [restartConfirmOpen, setRestartConfirmOpen] = useState(false);
   const dirtyRef = useRef(false);
 
   const { data, error: swrError, isLoading, mutate } = useGatewayConfigSwr(hasToken);
@@ -215,6 +293,36 @@ export function GatewaySettingsPanel() {
     window.setTimeout(() => setCopied(false), 2000);
   }, [form?.auth.token]);
 
+  const executeRestart = useCallback(async () => {
+    if (restarting) return;
+    setRestarting(true);
+    setRestartConfirmOpen(false);
+    try {
+      const res = await restartGatewayAfterConfigChange();
+      if (res.ok) {
+        window.dispatchEvent(new Event('gateway-restart-initiated'));
+      } else {
+        window.dispatchEvent(
+          new CustomEvent('extension-notification', {
+            detail: { type: 'error', title: g.restartGatewayFailed, message: res.message ?? '' },
+          }),
+        );
+      }
+    } catch (e) {
+      window.dispatchEvent(
+        new CustomEvent('extension-notification', {
+          detail: {
+            type: 'error',
+            title: g.restartGatewayFailed,
+            message: e instanceof Error ? e.message : String(e),
+          },
+        }),
+      );
+    } finally {
+      setRestarting(false);
+    }
+  }, [restarting, g.restartGatewayFailed]);
+
   if (!hasToken) {
     return (
       <div className="mx-auto flex w-full max-w-app-main flex-col gap-3 px-4 py-8">
@@ -293,291 +401,319 @@ export function GatewaySettingsPanel() {
       {dirty ? <p className="text-xs text-amber-800 dark:text-amber-200">{g.unsavedHint}</p> : null}
       {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
 
-      <p className="rounded-lg border border-edge bg-surface-panel/60 px-3 py-2 text-xs text-fg-subtle">
-        {g.restartHint}
-      </p>
+      <div className="flex items-center justify-between gap-3 rounded-lg border border-edge bg-surface-panel/60 px-3 py-2">
+        <p className="text-xs text-fg-subtle">{g.restartHint}</p>
+        <Button
+          type="button"
+          variant="secondary"
+          className="shrink-0 gap-1.5 border-red-300 bg-red-50 text-xs text-red-700 hover:bg-red-100 dark:border-red-800 dark:bg-red-950/50 dark:text-red-300 dark:hover:bg-red-900/60"
+          disabled={restarting}
+          onClick={() => setRestartConfirmOpen(true)}
+        >
+          {restarting ? (
+            <Loader2 className="size-3.5 animate-spin" />
+          ) : (
+            <RotateCw className="size-3.5" />
+          )}
+          {g.restartGatewayButton}
+        </Button>
+      </div>
 
-      <GatewaySecurityAuditCard enabled={hasToken} refreshToken={auditRefreshToken} />
+      <ConfirmDialog
+        open={restartConfirmOpen}
+        title={g.restartGatewayButton}
+        description={g.restartGatewayConfirm}
+        confirmLabel={g.restartGatewayButton}
+        cancelLabel={g.discard}
+        destructive
+        onConfirm={() => void executeRestart()}
+        onCancel={() => setRestartConfirmOpen(false)}
+      />
 
-      {form.auth.mode === 'none' ? (
-        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
-          {g.authModeNone}
-        </p>
-      ) : null}
+      <GatewaySettingsTabs g={g} activeTab={activeTab} onChange={setActiveTab} />
 
-      <section className="rounded-2xl bg-surface-base px-4 py-5 sm:px-5">
-        <div className="mb-5 flex items-center gap-2 text-sm font-semibold text-fg">
-          <Server className="size-4 text-accent" strokeWidth={1.75} />
-          {m.settingsSections.gateway}
-        </div>
-        <div className="space-y-4">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-fg" htmlFor="gateway-bind-mode">
-                {g.bindMode}
-              </label>
-              <select
-                id="gateway-bind-mode"
-                className={inputClassName()}
-                value={form.bind}
-                onChange={(e) => updateBind(e.target.value as GatewaySettingsState['bind'])}
-              >
-                <option value="loopback">{g.bindLoopback}</option>
-                <option value="lan">{g.bindLan}</option>
-                <option value="auto">{g.bindAuto}</option>
-                <option value="custom">{g.bindCustom}</option>
-                <option value="tailnet">{g.bindTailnet}</option>
-              </select>
-            </div>
-            {form.bind === 'custom' ? (
-              <div>
-                <label className="mb-1 block text-sm font-medium text-fg" htmlFor="gateway-custom-bind-host">
-                  {g.customBindHost}
-                </label>
-                <input
-                  id="gateway-custom-bind-host"
-                  className={cn(inputClassName(), 'font-mono text-xs')}
-                  value={form.customBindHost}
-                  onChange={(e) => updateCustomBindHost(e.target.value)}
-                  placeholder={g.customBindHostPlaceholder}
-                  autoComplete="off"
-                />
-              </div>
-            ) : null}
-            <div>
-              <label className="mb-1 block text-sm font-medium text-fg" htmlFor="gateway-listen-port">
-                {g.listenPort}
-              </label>
-              <input
-                id="gateway-listen-port"
-                type="number"
-                min={1}
-                max={65535}
-                className={cn(inputClassName(), 'font-mono text-xs')}
-                value={form.port}
-                onChange={(e) => {
-                  const n = Number(e.target.value);
-                  updatePort(Number.isFinite(n) ? Math.max(1, Math.min(65535, Math.floor(n))) : form.port);
-                }}
-              />
-            </div>
-            <p className="sm:col-span-2 text-xs text-fg-subtle">{g.listenHint}</p>
-          </div>
-
-          <div className="space-y-2 border-t border-edge pt-4">
-            <label className="text-sm font-medium text-fg" htmlFor="gateway-auth-mode">
-              {g.authMode}
+      <GatewayTabPanel g={g} id="network" activeTab={activeTab}>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-fg" htmlFor="gateway-bind-mode">
+              {g.bindMode}
             </label>
             <select
-              id="gateway-auth-mode"
-              value={form.auth.mode}
-              onChange={(e) => updateAuth({ mode: e.target.value as GatewaySettingsState['auth']['mode'] })}
+              id="gateway-bind-mode"
               className={inputClassName()}
+              value={form.bind}
+              onChange={(event) => updateBind(event.target.value as GatewaySettingsState['bind'])}
             >
-              <option value="token">{g.authModeToken}</option>
-              <option value="password">{g.authModePassword}</option>
-              <option value="trusted-proxy">{g.authModeTrustedProxy}</option>
-              <option value="none">{g.authModeNoneLabel}</option>
+              <option value="loopback">{g.bindLoopback}</option>
+              <option value="lan">{g.bindLan}</option>
+              <option value="auto">{g.bindAuto}</option>
+              <option value="custom">{g.bindCustom}</option>
+              <option value="tailnet">{g.bindTailnet}</option>
             </select>
           </div>
-
-          {form.auth.mode === 'trusted-proxy' ? (
-            <TrustedProxyAuthFields
-              g={g}
-              form={form}
-              onTrustedProxyChange={updateTrustedProxy}
-              onTrustedProxiesChange={updateTrustedProxies}
-              onAllowRealIpFallbackChange={updateAllowRealIpFallback}
-            />
-          ) : null}
-
-          {form.auth.mode === 'token' ? (
-            <>
-              <SecretCredentialField
-                g={g}
-                id="gateway-access-token"
-                label={g.accessToken}
-                help={g.tokenHelp}
-                placeholder={g.tokenPlaceholder}
-                value={form.auth.token}
-                show={showAccessToken}
-                copied={copied}
-                onToggleShow={() => setShowAccessToken((s) => !s)}
-                onCopy={() => void copyAccessToken()}
-                onChange={(token) => updateAuth({ token })}
+          {form.bind === 'custom' ? (
+            <div>
+              <label className="mb-1 block text-sm font-medium text-fg" htmlFor="gateway-custom-bind-host">
+                {g.customBindHost}
+              </label>
+              <input
+                id="gateway-custom-bind-host"
+                className={cn(inputClassName(), 'font-mono text-xs')}
+                value={form.customBindHost}
+                onChange={(event) => updateCustomBindHost(event.target.value)}
+                placeholder={g.customBindHostPlaceholder}
+                autoComplete="off"
               />
-              <Button type="button" variant="secondary" className="w-full sm:w-auto" onClick={() => openTokenDialog()}>
-                {g.changeToken}
-              </Button>
-            </>
+            </div>
           ) : null}
+          <div>
+            <label className="mb-1 block text-sm font-medium text-fg" htmlFor="gateway-listen-port">
+              {g.listenPort}
+            </label>
+            <input
+              id="gateway-listen-port"
+              type="number"
+              min={1}
+              max={65535}
+              className={cn(inputClassName(), 'font-mono text-xs')}
+              value={form.port}
+              onChange={(event) => {
+                const nextPort = Number(event.target.value);
+                updatePort(
+                  Number.isFinite(nextPort)
+                    ? Math.max(1, Math.min(65535, Math.floor(nextPort)))
+                    : form.port,
+                );
+              }}
+            />
+          </div>
+          <p className="text-xs text-fg-subtle sm:col-span-2">{g.listenHint}</p>
+        </div>
 
-          {form.auth.mode === 'password' ? (
+        <CorsOriginsField g={g} origins={form.corsOrigins} onChange={updateCorsOrigins} />
+      </GatewayTabPanel>
+
+      <GatewayTabPanel g={g} id="access" activeTab={activeTab}>
+        {form.auth.mode === 'none' ? (
+          <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+            {g.authModeNone}
+          </p>
+        ) : null}
+
+        <div className="space-y-2">
+          <label className="text-sm font-medium text-fg" htmlFor="gateway-auth-mode">
+            {g.authMode}
+          </label>
+          <select
+            id="gateway-auth-mode"
+            value={form.auth.mode}
+            onChange={(event) => updateAuth({ mode: event.target.value as GatewaySettingsState['auth']['mode'] })}
+            className={inputClassName()}
+          >
+            <option value="token">{g.authModeToken}</option>
+            <option value="password">{g.authModePassword}</option>
+            <option value="trusted-proxy">{g.authModeTrustedProxy}</option>
+            <option value="none">{g.authModeNoneLabel}</option>
+          </select>
+        </div>
+
+        {form.auth.mode === 'trusted-proxy' ? (
+          <TrustedProxyAuthFields
+            g={g}
+            form={form}
+            onTrustedProxyChange={updateTrustedProxy}
+            onTrustedProxiesChange={updateTrustedProxies}
+            onAllowRealIpFallbackChange={updateAllowRealIpFallback}
+          />
+        ) : null}
+
+        {form.auth.mode === 'token' ? (
+          <>
             <SecretCredentialField
               g={g}
-              id="gateway-auth-password"
-              label={g.authPassword}
-              help={g.authPasswordHelp}
-              placeholder={g.authPasswordPlaceholder}
-              value={form.auth.password}
-              show={showPassword}
-              onToggleShow={() => setShowPassword((s) => !s)}
-              onChange={(password) => updateAuth({ password })}
+              id="gateway-access-token"
+              label={g.accessToken}
+              help={g.tokenHelp}
+              placeholder={g.tokenPlaceholder}
+              value={form.auth.token}
+              show={showAccessToken}
+              copied={copied}
+              onToggleShow={() => setShowAccessToken((isShown) => !isShown)}
+              onCopy={() => void copyAccessToken()}
+              onChange={(tokenValue) => updateAuth({ token: tokenValue })}
             />
-          ) : null}
+            <Button type="button" variant="secondary" className="w-full sm:w-auto" onClick={() => openTokenDialog()}>
+              {g.changeToken}
+            </Button>
+          </>
+        ) : null}
 
-          {form.auth.mode !== 'none' ? (
-            <AuthRateLimitFields g={g} rateLimit={form.auth.rateLimit} onChange={updateRateLimit} />
-          ) : null}
+        {form.auth.mode === 'password' ? (
+          <SecretCredentialField
+            g={g}
+            id="gateway-auth-password"
+            label={g.authPassword}
+            help={g.authPasswordHelp}
+            placeholder={g.authPasswordPlaceholder}
+            value={form.auth.password}
+            show={showPassword}
+            onToggleShow={() => setShowPassword((isShown) => !isShown)}
+            onChange={(passwordValue) => updateAuth({ password: passwordValue })}
+          />
+        ) : null}
 
-          <div className="space-y-2 border-t border-edge pt-4">
-            <label className="text-sm font-medium text-fg" htmlFor="gateway-update-channel">
-              {g.updateChannel}
-            </label>
-            <select
-              id="gateway-update-channel"
-              value={form.updateChannel}
-              onChange={(e) => updateChannel(e.target.value as GatewaySettingsState['updateChannel'])}
-              className={inputClassName()}
-            >
-              <option value="stable">{g.channelStable}</option>
-              <option value="beta">{g.channelBeta}</option>
-              <option value="dev">{g.channelDev}</option>
-            </select>
-            <p className="text-xs text-fg-subtle">{g.updateChannelHint}</p>
-          </div>
+        {form.auth.mode !== 'none' ? (
+          <AuthRateLimitFields g={g} rateLimit={form.auth.rateLimit} onChange={updateRateLimit} />
+        ) : null}
+      </GatewayTabPanel>
 
-          <div className="space-y-4 border-t border-edge pt-4">
-            <div className="text-sm font-medium text-fg">{g.updateAutoSection}</div>
-            <p className="text-xs text-fg-subtle">{g.updateAutoSectionHint}</p>
-            <label className="flex cursor-pointer items-start gap-2 text-sm text-fg">
+      <GatewayTabPanel g={g} id="updates" activeTab={activeTab}>
+        <div className="space-y-2">
+          <label className="text-sm font-medium text-fg" htmlFor="gateway-update-channel">
+            {g.updateChannel}
+          </label>
+          <select
+            id="gateway-update-channel"
+            value={form.updateChannel}
+            onChange={(event) => updateChannel(event.target.value as GatewaySettingsState['updateChannel'])}
+            className={inputClassName()}
+          >
+            <option value="stable">{g.channelStable}</option>
+            <option value="beta">{g.channelBeta}</option>
+            <option value="dev">{g.channelDev}</option>
+          </select>
+          <p className="text-xs text-fg-subtle">{g.updateChannelHint}</p>
+        </div>
+
+        <div className="space-y-4 border-t border-edge pt-4">
+          <div className="text-sm font-medium text-fg">{g.updateAutoSection}</div>
+          <p className="text-xs text-fg-subtle">{g.updateAutoSectionHint}</p>
+          <label className="flex cursor-pointer items-start gap-2 text-sm text-fg">
+            <input
+              type="checkbox"
+              className="ui-checkbox mt-0.5"
+              checked={form.updateCheckOnStart}
+              onChange={(event) => {
+                dirtyRef.current = true;
+                setForm((currentForm) =>
+                  currentForm ? { ...currentForm, updateCheckOnStart: event.target.checked } : null,
+                );
+              }}
+            />
+            <span>
+              <span className="font-medium">{g.updateCheckOnStart}</span>
+              <span className="mt-0.5 block text-xs text-fg-subtle">{g.updateCheckOnStartHint}</span>
+            </span>
+          </label>
+          <label className="flex cursor-pointer items-start gap-2 text-sm text-fg">
+            <input
+              type="checkbox"
+              className="ui-checkbox mt-0.5"
+              checked={form.updateAutoEnabled}
+              onChange={(event) => {
+                dirtyRef.current = true;
+                setForm((currentForm) =>
+                  currentForm ? { ...currentForm, updateAutoEnabled: event.target.checked } : null,
+                );
+              }}
+            />
+            <span>
+              <span className="font-medium">{g.updateAutoEnabled}</span>
+              <span className="mt-0.5 block text-xs text-fg-subtle">{g.updateAutoEnabledHint}</span>
+            </span>
+          </label>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-fg" htmlFor="update-auto-stable-delay">
+                {g.updateAutoStableDelayHours}
+              </label>
               <input
-                type="checkbox"
-                className="ui-checkbox mt-0.5"
-                checked={form.updateCheckOnStart}
-                onChange={(e) => {
+                id="update-auto-stable-delay"
+                type="number"
+                min={0}
+                disabled={!form.updateAutoEnabled}
+                className={inputClassName()}
+                value={form.updateAutoStableDelayHours}
+                onChange={(event) => {
                   dirtyRef.current = true;
-                  setForm((f) => (f ? { ...f, updateCheckOnStart: e.target.checked } : null));
+                  setForm((currentForm) =>
+                    currentForm
+                      ? {
+                          ...currentForm,
+                          updateAutoStableDelayHours: Math.max(0, Math.floor(Number(event.target.value) || 0)),
+                        }
+                      : null,
+                  );
                 }}
               />
-              <span>
-                <span className="font-medium">{g.updateCheckOnStart}</span>
-                <span className="mt-0.5 block text-xs text-fg-subtle">{g.updateCheckOnStartHint}</span>
-              </span>
-            </label>
-            <label className="flex cursor-pointer items-start gap-2 text-sm text-fg">
+              <p className="mt-1 text-xs text-fg-subtle">{g.updateAutoStableDelayHoursHint}</p>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-fg" htmlFor="update-auto-stable-jitter">
+                {g.updateAutoStableJitterHours}
+              </label>
               <input
-                type="checkbox"
-                className="ui-checkbox mt-0.5"
-                checked={form.updateAutoEnabled}
-                onChange={(e) => {
+                id="update-auto-stable-jitter"
+                type="number"
+                min={0}
+                disabled={!form.updateAutoEnabled}
+                className={inputClassName()}
+                value={form.updateAutoStableJitterHours}
+                onChange={(event) => {
                   dirtyRef.current = true;
-                  setForm((f) => (f ? { ...f, updateAutoEnabled: e.target.checked } : null));
+                  setForm((currentForm) =>
+                    currentForm
+                      ? {
+                          ...currentForm,
+                          updateAutoStableJitterHours: Math.max(0, Math.floor(Number(event.target.value) || 0)),
+                        }
+                      : null,
+                  );
                 }}
               />
-              <span>
-                <span className="font-medium">{g.updateAutoEnabled}</span>
-                <span className="mt-0.5 block text-xs text-fg-subtle">{g.updateAutoEnabledHint}</span>
-              </span>
-            </label>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <label className="mb-1 block text-sm font-medium text-fg" htmlFor="update-auto-stable-delay">
-                  {g.updateAutoStableDelayHours}
-                </label>
-                <input
-                  id="update-auto-stable-delay"
-                  type="number"
-                  min={0}
-                  disabled={!form.updateAutoEnabled}
-                  className={inputClassName()}
-                  value={form.updateAutoStableDelayHours}
-                  onChange={(e) => {
-                    dirtyRef.current = true;
-                    setForm((f) =>
-                      f ? { ...f, updateAutoStableDelayHours: Math.max(0, Math.floor(Number(e.target.value) || 0)) } : null,
-                    );
-                  }}
-                />
-                <p className="mt-1 text-xs text-fg-subtle">{g.updateAutoStableDelayHoursHint}</p>
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-fg" htmlFor="update-auto-stable-jitter">
-                  {g.updateAutoStableJitterHours}
-                </label>
-                <input
-                  id="update-auto-stable-jitter"
-                  type="number"
-                  min={0}
-                  disabled={!form.updateAutoEnabled}
-                  className={inputClassName()}
-                  value={form.updateAutoStableJitterHours}
-                  onChange={(e) => {
-                    dirtyRef.current = true;
-                    setForm((f) =>
-                      f ? { ...f, updateAutoStableJitterHours: Math.max(0, Math.floor(Number(e.target.value) || 0)) } : null,
-                    );
-                  }}
-                />
-                <p className="mt-1 text-xs text-fg-subtle">{g.updateAutoStableJitterHoursHint}</p>
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-fg" htmlFor="update-auto-beta-interval">
-                  {g.updateAutoBetaCheckIntervalHours}
-                </label>
-                <input
-                  id="update-auto-beta-interval"
-                  type="number"
-                  min={0.25}
-                  step={0.25}
-                  disabled={!form.updateAutoEnabled}
-                  className={inputClassName()}
-                  value={form.updateAutoBetaCheckIntervalHours}
-                  onChange={(e) => {
-                    dirtyRef.current = true;
-                    setForm((f) =>
-                      f
-                        ? {
-                            ...f,
-                            updateAutoBetaCheckIntervalHours: Math.max(0.25, Number(e.target.value) || 1),
-                          }
-                        : null,
-                    );
-                  }}
-                />
-                <p className="mt-1 text-xs text-fg-subtle">{g.updateAutoBetaCheckIntervalHoursHint}</p>
-              </div>
+              <p className="mt-1 text-xs text-fg-subtle">{g.updateAutoStableJitterHoursHint}</p>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-fg" htmlFor="update-auto-beta-interval">
+                {g.updateAutoBetaCheckIntervalHours}
+              </label>
+              <input
+                id="update-auto-beta-interval"
+                type="number"
+                min={0.25}
+                step={0.25}
+                disabled={!form.updateAutoEnabled}
+                className={inputClassName()}
+                value={form.updateAutoBetaCheckIntervalHours}
+                onChange={(event) => {
+                  dirtyRef.current = true;
+                  setForm((currentForm) =>
+                    currentForm
+                      ? {
+                          ...currentForm,
+                          updateAutoBetaCheckIntervalHours: Math.max(0.25, Number(event.target.value) || 1),
+                        }
+                      : null,
+                  );
+                }}
+              />
+              <p className="mt-1 text-xs text-fg-subtle">{g.updateAutoBetaCheckIntervalHoursHint}</p>
             </div>
           </div>
-
-          <CorsOriginsField
-            g={g}
-            origins={form.corsOrigins}
-            onChange={updateCorsOrigins}
-          />
         </div>
-      </section>
+      </GatewayTabPanel>
 
-      <section className="rounded-2xl bg-surface-base px-4 py-5 sm:px-5">
-        <div className="mb-5 flex items-center gap-2 text-sm font-semibold text-fg">
-          <Shield className="size-4 text-accent" strokeWidth={1.75} />
-          {g.securitySection}
-        </div>
-        <p className="mb-4 text-xs text-fg-subtle">{g.securitySectionHint}</p>
+      <GatewayTabPanel g={g} id="security" activeTab={activeTab}>
+        <GatewaySecurityAuditCard enabled={hasToken} refreshToken={auditRefreshToken} />
         <GatewaySecurityFields
           g={g}
           form={form}
           onSecurityStrictChange={updateSecurityStrict}
           onDangerouslyAllowHostHeaderOriginFallbackChange={updateDangerouslyAllowHostHeaderOriginFallback}
         />
-      </section>
+      </GatewayTabPanel>
 
-      <section className="rounded-2xl bg-surface-base px-4 py-5 sm:px-5">
-        <div className="mb-5 flex items-center gap-2 text-sm font-semibold text-fg">
-          <SlidersHorizontal className="size-4 text-accent" strokeWidth={1.75} />
-          {g.advancedSection}
-        </div>
-        <p className="mb-4 text-xs text-fg-subtle">{g.advancedSectionHint}</p>
+      <GatewayTabPanel g={g} id="advanced" activeTab={activeTab}>
         <GatewayAdvancedFields
           g={g}
           form={form}
@@ -586,10 +722,82 @@ export function GatewaySettingsPanel() {
           onDeferIdsChange={updateChannelConnectDeferIds}
           onSkipIdsChange={updateChannelConnectDeferSkipIds}
         />
-      </section>
+      </GatewayTabPanel>
     </div>
   );
 }
+
+function GatewaySettingsTabs({
+  g,
+  activeTab,
+  onChange,
+}: {
+  g: GatewaySettingsMessages;
+  activeTab: GatewaySettingsTabId;
+  onChange: (tab: GatewaySettingsTabId) => void;
+}) {
+  return (
+    <nav
+      aria-label={g.tabsAriaLabel}
+      className="flex gap-2 overflow-x-auto border-b border-edge pb-0.5"
+      role="tablist"
+    >
+      {GATEWAY_SETTINGS_TABS.map((tab) => {
+        const Icon = GATEWAY_SETTINGS_TAB_ICONS[tab];
+        const selected = tab === activeTab;
+        return (
+          <button
+            key={tab}
+            type="button"
+            role="tab"
+            aria-selected={selected}
+            aria-controls={`gateway-settings-panel-${tab}`}
+            id={`gateway-settings-tab-${tab}`}
+            className={cn(
+              'inline-flex shrink-0 items-center gap-2 rounded-t-lg border-b-2 px-3 py-2 text-sm font-medium transition-colors',
+              selected ? 'border-accent text-accent' : 'border-transparent text-fg-muted hover:text-fg',
+              interaction.press,
+            )}
+            onClick={() => onChange(tab)}
+          >
+            <Icon className="size-4" strokeWidth={1.75} />
+            {gatewaySettingsTabLabel(g, tab)}
+          </button>
+        );
+      })}
+    </nav>
+  );
+}
+
+function GatewayTabPanel({
+  g,
+  id,
+  activeTab,
+  children,
+}: {
+  g: GatewaySettingsMessages;
+  id: GatewaySettingsTabId;
+  activeTab: GatewaySettingsTabId;
+  children: ReactNode;
+}) {
+  if (activeTab !== id) return null;
+
+  return (
+    <section
+      id={`gateway-settings-panel-${id}`}
+      role="tabpanel"
+      aria-labelledby={`gateway-settings-tab-${id}`}
+      className="rounded-2xl border border-edge bg-surface-base px-4 py-5 sm:px-5"
+    >
+      <div className="mb-5">
+        <div className="text-sm font-semibold text-fg">{gatewaySettingsTabLabel(g, id)}</div>
+        <p className="mt-1 text-xs text-fg-subtle">{gatewaySettingsTabHint(g, id)}</p>
+      </div>
+      <div className="space-y-4">{children}</div>
+    </section>
+  );
+}
+
 
 function GatewaySecurityFields({
   g,

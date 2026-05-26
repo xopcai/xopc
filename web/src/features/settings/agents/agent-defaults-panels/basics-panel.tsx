@@ -6,6 +6,7 @@ import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/setti
 import { AgentDefaultsField } from '../agent-defaults-field';
 import type { AgentDefaultsPanelProps } from '../agent-defaults-panel-props';
 import { inputClassName, selectClassName } from '../defaults-field-styles';
+import { AgentDefaultsChatModelFallbacksSection } from './chat-model-fallbacks-section';
 
 const THINKING_KEYS = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'adaptive'] as const;
 
@@ -28,6 +29,8 @@ export function AgentDefaultsBasicsPanel(props: AgentDefaultsPanelProps) {
           </AgentDefaultsField>
         </div>
       </SettingsFormSection>
+
+      <AgentDefaultsChatModelFallbacksSection {...props} />
 
       <SettingsFormSection>
         <SettingsFormSectionHeader icon={SlidersHorizontal} title={a.cardGenerationTitle} subtitle={a.cardGenerationSubtitle} />

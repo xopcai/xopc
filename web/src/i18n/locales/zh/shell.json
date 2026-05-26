@@ -20,7 +20,7 @@
     "logs": "诊断日志",
     "settingsAppearance": "偏好设置",
     "settingsOverview": "系统状态",
-    "settingsCredentials": "凭证中心",
+    "settingsCredentials": "密钥与授权",
     "settingsProviders": "LLM 服务商",
     "settingsModels": "模型",
     "settingsImageModels": "图像",
@@ -34,7 +34,7 @@
     "settingsDreams": "梦境",
     "settingsCron": "定时任务",
     "settingsGoals": "目标评判",
-    "settingsAgentDefaults": "智能体默认配置",
+    "settingsAgentDefaults": "默认智能体配置",
     "settingsAgentChat": "默认模型与对话",
     "settingsAgentWorkspace": "工作区",
     "settingsAgentBrowser": "浏览器",
@@ -42,7 +42,7 @@
     "settingsAgentContext": "上下文",
     "settingsAgentMemory": "记忆",
     "settingsAgentTools": "工具",
-    "settingsAgentSkills": "默认技能白名单",
+    "settingsAgentSkills": "默认可用技能",
     "settingsAgentMcp": "外部工具 (MCP)",
     "settingsAgentSystemPrompt": "系统提示词",
     "settingsAgents": "智能体",
@@ -158,7 +158,10 @@
     "updateErrorBusy": "已有更新任务在进行中",
     "updateErrorFailed": "更新失败",
     "restartRequired": "已安装 v{{version}}。请重启网关以使用新版本。",
-    "restartGateway": "重启网关"
+    "restartGateway": "重启网关",
+    "restartPolling": "网关正在重启，等待恢复中…",
+    "restartPollTimeout": "网关在预期时间内未响应，可能仍在启动中。",
+    "restartPollRetry": "重试"
   },
   "commandPalette": {
     "groups": {

@@ -14,7 +14,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -86,6 +86,46 @@ function EnvVarCopyRow({
   );
 }
 
+/**
+ * Accessible collapsible section replacing the native `<details>` element.
+ * Uses controlled state + CSS transitions so keyboard focus, screen readers,
+ * and animation all work consistently within the Radix-oriented component set.
+ */
+function MoreOptionsSection({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const toggle = useCallback(() => setOpen((v) => !v), []);
+
+  return (
+    <div className="rounded-md">
+      <button
+        type="button"
+        onClick={toggle}
+        aria-expanded={open}
+        className="cursor-pointer select-none text-xs text-fg-subtle hover:text-fg-muted"
+      >
+        <span className="inline-flex items-center gap-1">
+          <ChevronDown
+            className={cn('size-3 transition-transform', open && 'rotate-180')}
+            aria-hidden
+          />
+          {label}
+        </span>
+      </button>
+      {open ? (
+        <div className="mt-2 flex flex-col gap-2 pl-4">
+          {children}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function ProviderCredentialRow({
   row,
   value,
@@ -96,6 +136,8 @@ export function ProviderCredentialRow({
   onReload,
   justSaved,
   availableModels,
+  autoExpand = false,
+  autoFocusInput = false,
 }: {
   row: ProviderRowModel;
   value: string;
@@ -106,8 +148,26 @@ export function ProviderCredentialRow({
   onReload: () => void;
   justSaved: boolean;
   availableModels: ConfiguredModel[];
+  /** When true, the row opens automatically on mount. */
+  autoExpand?: boolean;
+  /** When true, the key input receives focus after expanding. */
+  autoFocusInput?: boolean;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(autoExpand);
+  const keyInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (autoExpand && !expanded) setExpanded(true);
+    // Only react to autoExpand toggling on; `expanded` is intentionally excluded
+    // to avoid collapsing the row when the user manually closes it.
+     
+  }, [autoExpand]);
+
+  useEffect(() => {
+    if (autoFocusInput && expanded) {
+      requestAnimationFrame(() => keyInputRef.current?.focus());
+    }
+  }, [autoFocusInput, expanded]);
   const [showKey, setShowKey] = useState(false);
   const [copied, setCopied] = useState(false);
   const [revokeError, setRevokeError] = useState<string | null>(null);
@@ -307,9 +367,6 @@ export function ProviderCredentialRow({
             <span className="rounded bg-surface-hover px-1.5 py-0.5 font-mono text-[10px] font-medium uppercase tracking-wide text-fg-subtle">
               {row.id}
             </span>
-            <span className="rounded bg-surface-hover px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-fg-subtle">
-              {row.category}
-            </span>
           </div>
           <p className="mt-0.5 text-xs text-fg-muted">{secondaryLine}</p>
         </div>
@@ -337,6 +394,7 @@ export function ProviderCredentialRow({
               <div className="relative flex flex-col gap-2 sm:flex-row sm:gap-2">
                 <div className="relative min-w-0 flex-1">
                   <input
+                    ref={keyInputRef}
                     type={showKey || !masked ? 'text' : 'password'}
                     className={cn(
                       'w-full rounded-lg border border-edge bg-surface-panel py-2 pl-3 pr-20 font-mono text-sm text-fg',
@@ -422,30 +480,7 @@ export function ProviderCredentialRow({
                       </Button>
                     )
                   ) : null}
-                  {canRemoveKey ? (
-                    <>
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        className="gap-1 text-red-600 dark:text-red-400"
-                        disabled={removeLoading}
-                        onClick={() => setRemoveConfirmOpen(true)}
-                      >
-                        {removeLoading ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Trash2 className="size-4" aria-hidden />}
-                        {labels.removeKey}
-                      </Button>
-                      <ConfirmDialog
-                        open={removeConfirmOpen}
-                        title={labels.removeKey}
-                        description={interpolate(labels.removeKeyConfirm, { name: row.name })}
-                        confirmLabel={labels.removeKey}
-                        cancelLabel={labels.cancelOAuth}
-                        destructive
-                        onConfirm={() => void doRemoveKey()}
-                        onCancel={() => setRemoveConfirmOpen(false)}
-                      />
-                    </>
-                  ) : null}
+                  {/* Remove key moves into the "More" details block below — it's destructive and rarely-used. */}
                 </div>
               </div>
               {testMessage ? (
@@ -458,22 +493,6 @@ export function ProviderCredentialRow({
                 >
                   {testMessage}
                 </p>
-              ) : null}
-              {apiKeyLinks.length > 0 ? (
-                <div className="flex flex-col gap-1">
-                  {apiKeyLinks.map((link) => (
-                    <a
-                      key={`${link.kind}-${link.href}`}
-                      href={link.href}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex w-fit items-center gap-1 text-xs font-medium text-accent-fg hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                    >
-                      {providerApiKeyLinkLabel(link.kind, labels)}
-                      <ExternalLink className="size-3" aria-hidden />
-                    </a>
-                  ))}
-                </div>
               ) : null}
             </div>
           ) : null}
@@ -581,9 +600,7 @@ export function ProviderCredentialRow({
             </div>
           ) : null}
 
-          {row.supportsOAuth && !masked && !isOAuthConfigured ? (
-            <p className="text-xs text-fg-subtle">{labels.oauthHint}</p>
-          ) : null}
+          {/* `oauthHint` removed — the OAuth button right above conveys the same affordance. */}
 
           {justSaved ? (
             <div className="flex items-start gap-2 rounded-md bg-surface-hover/60 px-3 py-2 text-xs text-fg-muted dark:bg-surface-hover/40">
@@ -603,18 +620,72 @@ export function ProviderCredentialRow({
             </div>
           ) : null}
 
-          {(PROVIDER_ENRICHMENT[row.id]?.envVars ?? []).length > 0 ? (
-            <details>
-              <summary className="cursor-pointer select-none list-none text-xs text-fg-subtle hover:text-fg-muted">
-                {labels.envVarAlt}
-              </summary>
-              <div className="mt-1.5 flex flex-col gap-1">
-                {(PROVIDER_ENRICHMENT[row.id]?.envVars ?? []).map((envVar) => (
-                  <EnvVarCopyRow key={envVar} envVar={envVar} labels={labels} />
-                ))}
-              </div>
-            </details>
-          ) : null}
+          {(() => {
+            // "More" section consolidates the rarely-used or destructive
+            // controls so the primary key + Test + OAuth flow stays clean:
+            //   • API key console links — most users open these once to grab
+            //     a key and never again
+            //   • Environment variable alternatives — for users who'd rather
+            //     export `OPENAI_API_KEY` than paste it here
+            //   • Remove key — destructive, lives behind a confirm dialog
+            const envVars = PROVIDER_ENRICHMENT[row.id]?.envVars ?? [];
+            const hasMore = apiKeyLinks.length > 0 || envVars.length > 0 || canRemoveKey;
+            if (!hasMore) return null;
+            return (
+              <MoreOptionsSection label={labels.moreOptions ?? labels.envVarAlt}>
+                {apiKeyLinks.length > 0 ? (
+                  <div className="flex flex-col gap-1">
+                    {apiKeyLinks.map((link) => (
+                      <a
+                        key={`${link.kind}-${link.href}`}
+                        href={link.href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex w-fit items-center gap-1 text-xs font-medium text-accent-fg hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                      >
+                        {providerApiKeyLinkLabel(link.kind, labels)}
+                        <ExternalLink className="size-3" aria-hidden />
+                      </a>
+                    ))}
+                  </div>
+                ) : null}
+                {envVars.length > 0 ? (
+                  <div className="flex flex-col gap-1">
+                    <p className="text-[10px] font-medium uppercase tracking-wide text-fg-subtle">
+                      {labels.envVarAlt}
+                    </p>
+                    {envVars.map((envVar) => (
+                      <EnvVarCopyRow key={envVar} envVar={envVar} labels={labels} />
+                    ))}
+                  </div>
+                ) : null}
+                {canRemoveKey ? (
+                  <>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="gap-1 self-start text-red-600 dark:text-red-400"
+                      disabled={removeLoading}
+                      onClick={() => setRemoveConfirmOpen(true)}
+                    >
+                      {removeLoading ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Trash2 className="size-4" aria-hidden />}
+                      {labels.removeKey}
+                    </Button>
+                    <ConfirmDialog
+                      open={removeConfirmOpen}
+                      title={labels.removeKey}
+                      description={interpolate(labels.removeKeyConfirm, { name: row.name })}
+                      confirmLabel={labels.removeKey}
+                      cancelLabel={labels.cancelOAuth}
+                      destructive
+                      onConfirm={() => void doRemoveKey()}
+                      onCancel={() => setRemoveConfirmOpen(false)}
+                    />
+                  </>
+                ) : null}
+              </MoreOptionsSection>
+            );
+          })()}
         </div>
       ) : null}
     </div>

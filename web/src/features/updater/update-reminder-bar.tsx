@@ -31,11 +31,7 @@ export function UpdateReminderBar({
       const res = await apiFetch(apiUrl('/api/gateway/restart'), { method: 'POST' });
       const j = (await res.json().catch(() => ({}))) as { ok?: boolean; message?: string };
       if (res.ok && j.ok !== false) {
-        window.dispatchEvent(
-          new CustomEvent('extension-notification', {
-            detail: { type: 'success', title: tp.restartGateway, message: '' },
-          }),
-        );
+        window.dispatchEvent(new Event('gateway-restart-initiated'));
         return;
       }
       window.dispatchEvent(

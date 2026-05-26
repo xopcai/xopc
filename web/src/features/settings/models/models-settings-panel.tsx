@@ -8,6 +8,7 @@ import {
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { useSaveBarRegistration } from '@/features/settings/save-bar/use-save-bar-registration';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 import { messages } from '@/i18n/messages';
@@ -27,7 +28,6 @@ import {
   type ProviderConfig,
   type ValidationResult,
 } from '../models-json-api';
-import { AgentDefaultsChatModelFallbacksSection } from '../agents/agent-defaults-panels/chat-model-fallbacks-section';
 import { useAgentDefaultsForm } from '../agents/use-agent-defaults-form';
 
 import { ModelEditDialogContent } from './models-model-edit-dialog';
@@ -39,7 +39,8 @@ import {
 } from './models-providers-list';
 import { addProviderEntry, inputClassName, removeProvider, updateProvider } from './models-settings-lib';
 
-export function ModelsSettingsPanel() {
+/** See `WebSearchSettingsPanel` for the embedded-mode contract. */
+export function ModelsSettingsPanel({ embedded = false }: { embedded?: boolean } = {}) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const ms = m.modelsSettings;
@@ -114,16 +115,13 @@ export function ModelsSettingsPanel() {
     [config, baseline],
   );
 
-  const agentPanelProps = useMemo(() => {
-    if (!agentVm.form) return null;
-    return {
-      form: agentVm.form,
-      update: agentVm.update,
-      a: m.agentSettings,
-      chat: m.chat,
-    };
-  }, [agentVm.form, agentVm.update, m.agentSettings, m.chat]);
-
+  // M3.4 follow-up: the chat-model fallback chain moved to
+  // /settings/agent-defaults?tab=chat, so this panel no longer renders or
+  // saves agent defaults. We still load `useAgentDefaultsForm` above
+  // because the agent-defaults page may not be mounted yet — invoking the
+  // hook here keeps the form's SWR cache warm for fast cross-tab load —
+  // but the dirty/save coordination below is intentionally left in place
+  // and degrades to no-op (`agentVm.dirty` stays false).
   const combinedDirty = dirty || agentVm.dirty;
 
   const stats = useMemo(() => {
@@ -229,6 +227,14 @@ export function ModelsSettingsPanel() {
     agentVm.discard();
   }, [baseline, editorMode, agentVm]);
 
+  useSaveBarRegistration({
+    id: 'models',
+    dirty: combinedDirty,
+    saving: saving || agentVm.saving,
+    save: runSave,
+    discard: runDiscard,
+  });
+
   const runReload = async () => {
     setReloading(true);
     setError(null);
@@ -303,30 +309,39 @@ export function ModelsSettingsPanel() {
     });
   };
 
+  const outerClass = embedded
+    ? 'flex flex-col gap-4'
+    : 'mx-auto flex w-full max-w-app-main flex-col gap-4 px-4 py-8';
+  const compactClass = embedded
+    ? 'flex flex-col gap-3'
+    : 'mx-auto flex w-full max-w-app-main flex-col gap-3 px-4 py-8';
+
   if (!hasToken) {
     return (
-      <div className="mx-auto flex w-full max-w-app-main flex-col gap-3 px-4 py-8">
-        <h1 className="text-lg font-semibold text-fg">{m.settingsSections.models}</h1>
+      <div className={compactClass}>
+        {embedded ? null : <h1 className="text-lg font-semibold text-fg">{m.settingsSections.models}</h1>}
         <p className="text-sm text-fg-muted">{ms.needToken}</p>
       </div>
     );
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-app-main flex-col gap-4 px-4 py-8">
-      <div className="flex flex-col gap-1">
-        <h1 className="text-lg font-semibold text-fg">{m.settingsSections.models}</h1>
-        <p className="text-sm text-fg-muted">{ms.subtitle}</p>
-        <a
-          href={docsGuidePageUrl(language, 'models')}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex items-center gap-1 text-sm text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
-        >
-          {ms.docsLink}
-          <ExternalLink className="size-3.5" />
-        </a>
-      </div>
+    <div className={outerClass}>
+      {embedded ? null : (
+        <div className="flex flex-col gap-1">
+          <h1 className="text-lg font-semibold text-fg">{m.settingsSections.models}</h1>
+          <p className="text-sm text-fg-muted">{ms.subtitle}</p>
+          <a
+            href={docsGuidePageUrl(language, 'models')}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 text-sm text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+          >
+            {ms.docsLink}
+            <ExternalLink className="size-3.5" />
+          </a>
+        </div>
+      )}
 
       {loadMetaError ? (
         <div
@@ -404,31 +419,36 @@ export function ModelsSettingsPanel() {
             ms.validate
           )}
         </Button>
-        <Button
-          type="button"
-          variant="secondary"
-          className="inline-flex min-h-9 min-w-[7.5rem] justify-center"
-          onClick={runDiscard}
-          disabled={loading || saving || agentVm.saving || !combinedDirty}
-        >
-          {ms.discard}
-        </Button>
-        <Button
-          type="button"
-          variant="secondary"
-          className="inline-flex min-h-9 min-w-[7.5rem] justify-center"
-          onClick={() => void runSave()}
-          disabled={loading || saving || agentVm.saving || !combinedDirty}
-        >
-          {saving || agentVm.saving ? (
-            <>
-              <Loader2 className="mr-1 size-4 animate-spin" />
-              {ms.saving}
-            </>
-          ) : (
-            ms.save
-          )}
-        </Button>
+        {/* Hide Discard / Save in embedded mode — global Save bar handles them. */}
+        {embedded ? null : (
+          <>
+            <Button
+              type="button"
+              variant="secondary"
+              className="inline-flex min-h-9 min-w-[7.5rem] justify-center"
+              onClick={runDiscard}
+              disabled={loading || saving || agentVm.saving || !combinedDirty}
+            >
+              {ms.discard}
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              className="inline-flex min-h-9 min-w-[7.5rem] justify-center"
+              onClick={() => void runSave()}
+              disabled={loading || saving || agentVm.saving || !combinedDirty}
+            >
+              {saving || agentVm.saving ? (
+                <>
+                  <Loader2 className="mr-1 size-4 animate-spin" />
+                  {ms.saving}
+                </>
+              ) : (
+                ms.save
+              )}
+            </Button>
+          </>
+        )}
         <Button
           type="button"
           variant="secondary"
@@ -459,7 +479,7 @@ export function ModelsSettingsPanel() {
         </div>
       </div>
 
-      {combinedDirty ? <p className="text-xs text-amber-800 dark:text-amber-200">{ms.unsavedHint}</p> : null}
+      {combinedDirty && !embedded ? <p className="text-xs text-amber-800 dark:text-amber-200">{ms.unsavedHint}</p> : null}
       {saveOk || agentVm.saveOk ? (
         <p className="text-xs text-emerald-700 dark:text-emerald-400" role="status">
           {ms.saved}
@@ -540,12 +560,6 @@ export function ModelsSettingsPanel() {
           setTestResults={setTestResults}
         />
       )}
-
-      {agentPanelProps ? (
-        <div className="mt-10 border-t border-edge-subtle pt-8 dark:border-edge">
-          <AgentDefaultsChatModelFallbacksSection {...agentPanelProps} />
-        </div>
-      ) : null}
 
       <ProviderAddDialog
         open={providerDialogOpen}

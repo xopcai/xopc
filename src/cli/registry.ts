@@ -39,9 +39,19 @@ export interface CommandDefinition {
 export class CommandRegistry {
   private commands: CommandDefinition[] = [];
   private initialized = false;
+  private suppressLateRegistrationWarnings = false;
+
+  /**
+   * Temporarily silence the "registered after initialization" warning. Used by
+   * commands that need to bulk-load other command modules to harvest their
+   * side effects (e.g. `xopc setup manifest`).
+   */
+  setSuppressLateRegistrationWarnings(value: boolean): void {
+    this.suppressLateRegistrationWarnings = value;
+  }
 
   register(def: CommandDefinition): void {
-    if (this.initialized) {
+    if (this.initialized && !this.suppressLateRegistrationWarnings) {
       console.warn(`Warning: Command "${def.id}" registered after initialization`);
     }
 

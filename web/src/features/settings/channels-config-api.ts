@@ -2,6 +2,7 @@ import { revalidateGatewayConfig } from '@/features/gateway/gateway-config-swr';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
+import { callSetup } from './setup-api.js';
 import {
   extractChannelAgentRoutes,
   mergeChannelAgentBindings,
@@ -289,70 +290,73 @@ export async function patchChannelsSettings(state: ChannelsSettingsState): Promi
     return /^\d+$/.test(raw) ? Number(raw) : raw;
   })();
 
-  const res = await fetchJson<{ ok?: boolean; payload?: { config?: unknown } }>(apiUrl('/api/config'), {
-    method: 'PATCH',
-    body: JSON.stringify({
-      bindings: mergedBindings,
-      channels: {
-        telegram: {
-          enabled: tg.enabled,
-          apiRoot: tg.apiRoot.trim() ? tg.apiRoot.trim() : null,
-          debug: tg.debug,
-          allowFrom: tg.allowFrom,
-          groupAllowFrom: tg.groupAllowFrom.length ? tg.groupAllowFrom : null,
-          dmPolicy: tg.dmPolicy,
-          groupPolicy: tg.groupPolicy,
-          replyToMode: tg.replyToMode,
-          streamMode: tg.streamMode,
-          historyLimit: tg.historyLimit,
-          textChunkLimit: tg.textChunkLimit,
-          proxy: tg.proxy.trim() ? tg.proxy.trim() : null,
-          // Always send `accounts` (including `{}`) so PATCH clears stale entries instead of omitting the field.
-          accounts: tg.accounts,
-        },
-        weixin: {
-          enabled: wx.enabled,
-          dmPolicy: wx.dmPolicy,
-          allowFrom: wx.allowFrom,
-          debug: wx.debug,
-          streamMode: wx.streamMode,
-          historyLimit: wx.historyLimit,
-          textChunkLimit: wx.textChunkLimit,
-          routeTag: weixinRouteTag,
-          accounts: wx.accounts,
-        },
-        feishu: {
-          enabled: fs.enabled,
-          defaultAccount: clearableString(fs.defaultAccount ?? ''),
-          appId: fs.appId,
-          appSecret: clearableString(fs.appSecret),
-          domain: fs.domain || undefined,
-          connectionMode: fs.connectionMode,
-          verificationToken: clearableString((fs as any).verificationToken ?? ''),
-          encryptKey: clearableString((fs as any).encryptKey ?? ''),
-          webhookHost: clearableString((fs as any).webhookHost ?? ''),
-          webhookPort: typeof (fs as any).webhookPort === 'number' ? (fs as any).webhookPort : undefined,
-          webhookPath: clearableString((fs as any).webhookPath ?? ''),
-          dmPolicy: fs.dmPolicy,
-          groupPolicy: fs.groupPolicy,
-          allowFrom: fs.allowFrom,
-          groupAllowFrom: fs.groupAllowFrom.length ? fs.groupAllowFrom : null,
-          requireMention: fs.requireMention,
-          historyLimit: fs.historyLimit,
-          textChunkLimit: fs.textChunkLimit,
-          renderMode: fs.renderMode,
-          streaming: fs.streaming,
-          reactionNotifications: fs.reactionNotifications,
-          tools: (fs as any).tools,
-          actions: (fs as any).actions,
-          accounts: fs.accounts,
-        },
-      },
-    }),
+  const channelsPayload = {
+    telegram: {
+      enabled: tg.enabled,
+      apiRoot: tg.apiRoot.trim() ? tg.apiRoot.trim() : null,
+      debug: tg.debug,
+      allowFrom: tg.allowFrom,
+      groupAllowFrom: tg.groupAllowFrom.length ? tg.groupAllowFrom : null,
+      dmPolicy: tg.dmPolicy,
+      groupPolicy: tg.groupPolicy,
+      replyToMode: tg.replyToMode,
+      streamMode: tg.streamMode,
+      historyLimit: tg.historyLimit,
+      textChunkLimit: tg.textChunkLimit,
+      proxy: tg.proxy.trim() ? tg.proxy.trim() : null,
+      accounts: tg.accounts,
+    },
+    weixin: {
+      enabled: wx.enabled,
+      dmPolicy: wx.dmPolicy,
+      allowFrom: wx.allowFrom,
+      debug: wx.debug,
+      streamMode: wx.streamMode,
+      historyLimit: wx.historyLimit,
+      textChunkLimit: wx.textChunkLimit,
+      routeTag: weixinRouteTag,
+      accounts: wx.accounts,
+    },
+    feishu: {
+      enabled: fs.enabled,
+      defaultAccount: clearableString(fs.defaultAccount ?? ''),
+      appId: fs.appId,
+      appSecret: clearableString(fs.appSecret),
+      domain: fs.domain || undefined,
+      connectionMode: fs.connectionMode,
+      verificationToken: clearableString((fs as any).verificationToken ?? ''),
+      encryptKey: clearableString((fs as any).encryptKey ?? ''),
+      webhookHost: clearableString((fs as any).webhookHost ?? ''),
+      webhookPort: typeof (fs as any).webhookPort === 'number' ? (fs as any).webhookPort : undefined,
+      webhookPath: clearableString((fs as any).webhookPath ?? ''),
+      dmPolicy: fs.dmPolicy,
+      groupPolicy: fs.groupPolicy,
+      allowFrom: fs.allowFrom,
+      groupAllowFrom: fs.groupAllowFrom.length ? fs.groupAllowFrom : null,
+      requireMention: fs.requireMention,
+      historyLimit: fs.historyLimit,
+      textChunkLimit: fs.textChunkLimit,
+      renderMode: fs.renderMode,
+      streaming: fs.streaming,
+      reactionNotifications: fs.reactionNotifications,
+      tools: (fs as any).tools,
+      actions: (fs as any).actions,
+      accounts: fs.accounts,
+    },
+  };
+
+  const outcome = await callSetup({
+    domain: 'channels',
+    action: 'configure',
+    fields: { channels: channelsPayload, bindings: mergedBindings },
   });
-  const c = res.payload?.config;
   void revalidateGatewayConfig();
-  if (c) return normalizeChannelsFromConfig(c);
+  const outcomeValue = outcome.value as Record<string, unknown> | undefined;
+  if (outcomeValue && 'channels' in outcomeValue) {
+    // The handler returns the written config state; reconstruct from it.
+    const wrappedConfig = { channels: outcomeValue.channels, bindings: mergedBindings };
+    return normalizeChannelsFromConfig(wrappedConfig);
+  }
   return {
     ...state,
     bindingsFull: mergedBindings,

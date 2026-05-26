@@ -2,6 +2,8 @@ import { revalidateGatewayConfig } from '@/features/gateway/gateway-config-swr';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
+import { callSetup, SetupApiError } from './setup-api.js';
+
 export type SearchProviderRow = {
   type: 'brave' | 'tavily' | 'bing' | 'searxng';
   apiKey: string;
@@ -71,32 +73,87 @@ export async function fetchWebSearchSettings(): Promise<WebSearchSettingsState> 
   return normalizeWebSearchSettingsFromConfig(res.payload?.config);
 }
 
-export async function patchWebSearchSettings(state: WebSearchSettingsState): Promise<void> {
+function rowToFields(row: SearchProviderRow): Record<string, unknown> {
+  const fields: Record<string, unknown> = { type: row.type };
+  if (row.type === 'searxng') {
+    fields.url = row.url.trim().replace(/\/+$/, '');
+  } else {
+    fields.key = row.apiKey;
+  }
+  return fields;
+}
+
+function rowsEqual(a: SearchProviderRow, b: SearchProviderRow): boolean {
+  return (
+    a.type === b.type &&
+    a.apiKey === b.apiKey &&
+    a.url.trim().replace(/\/+$/, '') === b.url.trim().replace(/\/+$/, '') &&
+    a.disabled === b.disabled
+  );
+}
+
+/**
+ * Persist web-search settings.
+ *
+ * M3.5 phase B routes provider add/remove through `POST /api/setup/search/*`
+ * (the same path the CLI and M2 skills use), so all three surfaces share one
+ * write path with consistent zod validation. Region / blocklist / maxResults
+ * stay on `PATCH /api/config` because no setup CLI handler covers them yet
+ * (those follow in a later milestone).
+ *
+ * Throws on the first provider error (with a {@link SetupApiError} carrying
+ * structured `errors[]`); the form catches it and renders the message.
+ */
+export async function patchWebSearchSettings(
+  state: WebSearchSettingsState,
+  baseline?: WebSearchSettingsState | null,
+): Promise<void> {
+  const before = baseline?.providers ?? [];
+  const after = state.providers;
+
+  // Remove providers that vanished from the form.
+  for (const prev of before) {
+    if (!after.some((p) => p.type === prev.type)) {
+      try {
+        await callSetup({
+          domain: 'search',
+          action: 'remove',
+          fields: { type: prev.type },
+        });
+      } catch (err) {
+        // Tolerate "already gone" — defensive against concurrent edits.
+        if (!(err instanceof SetupApiError)) throw err;
+        if (!/no.*configured/i.test(err.message)) throw err;
+      }
+    }
+  }
+
+  // Upsert added or changed providers (idempotent on the server).
+  for (const row of after) {
+    const prev = before.find((p) => p.type === row.type);
+    if (prev && rowsEqual(prev, row)) continue;
+    if (row.type !== 'searxng' && !row.apiKey.trim()) {
+      // Skip rows whose key was cleared but type wasn't removed —
+      // prevents the "key required" error from blowing up the save.
+      continue;
+    }
+    if (row.type === 'searxng' && !row.url.trim()) {
+      continue;
+    }
+    await callSetup({ domain: 'search', action: 'add', fields: rowToFields(row) });
+  }
+
+  // Region, blocklist and maxResults aren't covered by setup CLI handlers
+  // yet — patch them through the legacy /api/config endpoint.
   const region =
     state.regionMode === 'auto' ? 'auto' : state.regionMode === 'cn' ? 'cn' : 'global';
-
-  const search: Record<string, unknown> = {
-    maxResults: state.maxResults,
-    providers: state.providers.map((p) => {
-      const row: Record<string, unknown> = {
-        type: p.type,
-        apiKey: p.apiKey,
-      };
-      if (p.type === 'searxng' && p.url.trim()) {
-        row.url = p.url.trim().replace(/\/+$/, '');
-      }
-      if (p.disabled) row.disabled = true;
-      return row;
-    }),
-  };
-
   await fetchJson(apiUrl('/api/config'), {
     method: 'PATCH',
     body: JSON.stringify({
       tools: {
         web: {
           region,
-          search,
+          search: { maxResults: state.maxResults },
           blocklist: {
             enabled: state.blocklistEnabled,
             domains: state.blocklistDomains,

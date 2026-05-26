@@ -39,12 +39,20 @@ export function diffConfigPaths(prev: unknown, next: unknown, prefix = ''): stri
     return paths;
   }
 
-  // Both are arrays - simple comparison
+  // Both are arrays — compare element by element. We recurse so that two
+  // equal-by-value arrays whose elements are differently-allocated objects
+  // (e.g. from two separate `ConfigSchema.parse` passes) don't report a
+  // false-positive diff. Bail out at the parent path on length mismatch.
   if (Array.isArray(prev) && Array.isArray(next)) {
-    if (prev.length === next.length && prev.every((val, idx) => val === next[idx])) {
-      return [];
+    if (prev.length !== next.length) {
+      return [prefix || '<root>'];
     }
-    return [prefix || '<root>'];
+    for (let i = 0; i < prev.length; i++) {
+      if (diffConfigPaths(prev[i], next[i], prefix).length > 0) {
+        return [prefix || '<root>'];
+      }
+    }
+    return [];
   }
 
   // Primitive or other types changed

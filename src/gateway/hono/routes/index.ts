@@ -16,6 +16,7 @@ import { registerHostFsRoutes } from './host-fs.js';
 import { registerLogsRoutes } from './logs.js';
 import { registerModelsRoutes } from './models.js';
 import { registerSessionsRoutes } from './sessions.js';
+import { registerSetupRoutes } from './setup.js';
 import { registerStatusRoutes } from './status.js';
 import { registerSharePublicRoutes, registerShareRoutes } from './shares.js';
 import { registerTunnelPublicRoutes, registerTunnelRoutes } from './tunnel.js';
@@ -40,6 +41,7 @@ export function registerAuthenticatedRoutes(app: Hono, authenticated: Hono, deps
   registerCommandsSkillsRoutes(authenticated, deps);
   registerCronRoutes(authenticated, deps);
   registerSessionsRoutes(authenticated, deps);
+  registerSetupRoutes(authenticated, deps);
   registerGoalsRoutes(authenticated, deps);
   registerLogsRoutes(authenticated, deps);
   registerSharePublicRoutes(app, deps.service);

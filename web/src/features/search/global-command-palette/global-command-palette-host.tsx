@@ -11,6 +11,7 @@ import type { GlobalHit } from '@/features/search/global-command-palette/types';
 import { hitRank, sortHits } from '@/features/search/global-command-palette/rank';
 import { buildRouteSeeds } from '@/features/search/global-command-palette/routes-provider';
 import { buildQuickSettingHits } from '@/features/search/global-command-palette/settings-provider';
+import { buildSettingsFieldHits } from '@/features/search/global-command-palette/settings-fields-provider';
 import { fetchCommandsCached, getSkillsCached } from '@/features/chat/palette/command-palette-api';
 import { dispatchFillChatComposer } from '@/features/chat/composer/fill-composer-dispatch';
 import { wireTextForSlashCommandEntry } from '@/features/chat/palette/slash-command-wire-text';
@@ -446,11 +447,14 @@ export function GlobalCommandPaletteHost() {
               },
             }));
 
+          const settingsFieldHits = buildSettingsFieldHits(language, navigate, close, groups.navigate);
+
           const seeds: Array<Omit<GlobalHit, 'rank'>> = [
             ...routeHits,
             ...quickHits,
             ...actionHits,
             ...extensionHits,
+            ...settingsFieldHits,
             ...sessionHits,
             ...fileHits,
             ...commandHits,

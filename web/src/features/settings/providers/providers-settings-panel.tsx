@@ -5,11 +5,12 @@ import {
   Search,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
 import { CONFIGURED_MODELS_SWR_KEY, fetchConfiguredModelsCached } from '@/features/chat/api/registry-api';
+import { ConfigureWithAILink } from '@/features/settings/configure-with-ai-link';
+import { useSaveBarRegistration } from '@/features/settings/save-bar/use-save-bar-registration';
 import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
 import {
   isMaskedKey,
@@ -28,11 +29,11 @@ import { settingsInputFocusClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 import { messages } from '@/i18n/messages';
-import { docsGuidePageUrl } from '@/navigation';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
-export function ProvidersSettingsPanel() {
+/** See `WebSearchSettingsPanel` for the embedded-mode contract. */
+export function ProvidersSettingsPanel({ embedded = false }: { embedded?: boolean } = {}) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const p = m.providersSettings;
@@ -48,6 +49,7 @@ export function ProvidersSettingsPanel() {
   const [searchQuery, setSearchQuery] = useState('');
   const [unconfiguredOnly, setUnconfiguredOnly] = useState(false);
   const [savedProviderIds, setSavedProviderIds] = useState<Set<string>>(() => new Set());
+  const [quickStartProviderId, setQuickStartProviderId] = useState<string | null>(null);
   const prevSearchRef = useRef('');
 
   const metaUrl = apiUrl('/api/providers/meta');
@@ -208,6 +210,8 @@ export function ProvidersSettingsPanel() {
     setSavedProviderIds(new Set());
   }, [baseline]);
 
+  useSaveBarRegistration({ id: 'providers', dirty, saving, save, discard });
+
   const toggleCat = (cat: string) => {
     setExpandedCats((prev) => {
       const next = new Set(prev);
@@ -224,14 +228,26 @@ export function ProvidersSettingsPanel() {
 
   const filtersActive = Boolean(searchQuery.trim() || unconfiguredOnly);
 
+  const outerClass = embedded
+    ? 'flex flex-col gap-4'
+    : 'mx-auto flex w-full max-w-app-main flex-col gap-6 px-4 py-6';
+  const compactClass = embedded
+    ? 'flex flex-col gap-3'
+    : 'mx-auto flex w-full max-w-app-main flex-col gap-3 px-4 py-10';
+  const skeletonClass = embedded
+    ? 'w-full'
+    : 'mx-auto w-full max-w-app-main px-4 py-8';
+
   if (!hasToken) {
     return (
-      <div className="mx-auto flex w-full max-w-app-main flex-col gap-3 px-4 py-10">
+      <div className={compactClass}>
         <div className="flex items-start gap-3 rounded-2xl bg-surface-base p-6">
           <KeyRound className="mt-0.5 size-5 shrink-0 text-fg-subtle" strokeWidth={1.75} />
           <div>
-            <h1 className="text-base font-semibold text-fg">{m.settingsSections.providers}</h1>
-            <p className="mt-1 text-sm text-fg-muted">{p.needToken}</p>
+            {embedded ? null : (
+              <h1 className="text-base font-semibold text-fg">{m.settingsSections.providers}</h1>
+            )}
+            <p className={cn('text-sm text-fg-muted', !embedded && 'mt-1')}>{p.needToken}</p>
           </div>
         </div>
       </div>
@@ -240,7 +256,7 @@ export function ProvidersSettingsPanel() {
 
   if (loading) {
     return (
-      <div className="mx-auto w-full max-w-app-main px-4 py-8">
+      <div className={skeletonClass}>
         <div className="h-8 w-48 animate-pulse rounded bg-surface-hover" />
         <div className="mt-6 h-32 animate-pulse rounded-xl bg-surface-hover" />
         <p className="mt-4 text-sm text-fg-muted">{m.logs.loading}</p>
@@ -250,7 +266,7 @@ export function ProvidersSettingsPanel() {
 
   if (metaRows.length === 0) {
     return (
-      <div className="mx-auto flex w-full max-w-app-main flex-col gap-3 px-4 py-10">
+      <div className={compactClass}>
         <div className="rounded-xl border border-edge-subtle bg-surface-base px-4 py-3">
           <p className="text-sm font-medium text-fg">{p.loadError}</p>
           <p className="mt-1 text-sm text-fg-muted">{error ?? fetchError ?? p.empty}</p>
@@ -270,14 +286,21 @@ export function ProvidersSettingsPanel() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-app-main flex-col gap-6 px-4 py-6">
+    <div className={outerClass}>
       <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <h1 className="text-lg font-semibold tracking-tight text-fg">{m.settingsSections.providers}</h1>
-          <p className="mt-1 text-sm text-fg-muted">{p.subtitle}</p>
-          <p className="mt-2 text-xs text-fg-subtle">{p.rotateHint}</p>
-        </div>
+        {embedded ? (
+          <div className="min-w-0" aria-hidden />
+        ) : (
+          <div className="min-w-0">
+            <h1 className="text-lg font-semibold tracking-tight text-fg">{m.settingsSections.providers}</h1>
+            <p className="mt-1 text-sm text-fg-muted">{p.subtitle}</p>
+            <p className="mt-2 text-xs text-fg-subtle">{p.rotateHint}</p>
+          </div>
+        )}
+        {/* See WebSearchSettingsPanel — global Save bar replaces these in embedded mode. */}
+        {embedded ? null : (
         <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <ConfigureWithAILink skill="setup-provider" />
           {saveNotice === 'saved' ? <span className="text-sm text-fg-muted">{p.saved}</span> : null}
           {saveNotice === 'noChanges' ? <span className="text-sm text-fg-muted">{p.noChangesSaved}</span> : null}
           <Button type="button" variant="secondary" disabled={!dirty || saving} onClick={discard}>
@@ -287,28 +310,35 @@ export function ProvidersSettingsPanel() {
             {saving ? p.saving : p.save}
           </Button>
         </div>
+        )}
       </header>
 
-      {dirty ? <p className="text-xs text-amber-800 dark:text-amber-200">{p.unsavedHint}</p> : null}
+      {dirty && !embedded ? <p className="text-xs text-amber-800 dark:text-amber-200">{p.unsavedHint}</p> : null}
 
-      <p className="text-sm leading-relaxed text-fg-muted">
-        {p.intro}{' '}
-        <a
-          href={docsGuidePageUrl(language, 'models')}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="font-medium text-accent-fg hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-        >
-          {p.docsLink}
-        </a>
-        {' · '}
-        <Link
-          to="/settings/models"
-          className="font-medium text-accent-fg hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-        >
-          {p.modelsLink}
-        </Link>
-      </p>
+      {/*
+       * Empty-state shortcut: when nothing is configured, surface 4 popular
+       * providers as big quick-start buttons so users don't have to scan
+       * 30 rows to find OpenAI / DeepSeek / Anthropic / Google. Clicking a
+       * button just filters the list to that provider; the existing row
+       * machinery (key input + Save) takes over from there.
+       */}
+      {metaRows.length > 0 && metaRows.every((r) => !r.configured) ? (
+        <ProviderQuickStart
+          intro={p.quickStartIntro ?? p.intro}
+          recommended={['deepseek', 'openai', 'anthropic', 'google']}
+          metaRows={metaRows}
+          onPick={(id) => {
+            setSearchQuery(id);
+            setQuickStartProviderId(id);
+            // Expand the category containing this provider
+            const row = metaRows.find((r) => r.id === id);
+            if (row) {
+              const cat = row.category || 'specialty';
+              setExpandedCats((prev) => new Set([...prev, cat]));
+            }
+          }}
+        />
+      ) : null}
 
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
         <div className="relative min-w-0 flex-1 sm:max-w-md">
@@ -421,21 +451,26 @@ export function ProvidersSettingsPanel() {
                 </button>
                 {expanded ? (
                   <div id={panelId} role="region" aria-labelledby={`${panelId}-trigger`} className="divide-y divide-edge-subtle">
-                    {list.map((row) => (
-                      <div id={`provider-row-${row.id}`} key={row.id}>
-                        <ProviderCredentialRow
-                          row={row}
-                          value={draft[row.id] ?? ''}
-                          rowDirty={(draft[row.id] ?? '') !== (baseline[row.id] ?? '')}
-                          labels={p}
-                          language={language}
-                          onChange={(id, v) => setDraft((d) => ({ ...d, [id]: v }))}
-                          onReload={refreshProviders}
-                          justSaved={savedProviderIds.has(row.id)}
-                          availableModels={models ?? []}
-                        />
-                      </div>
-                    ))}
+                    {list.map((row) => {
+                      const isQuickTarget = quickStartProviderId === row.id;
+                      return (
+                        <div id={`provider-row-${row.id}`} key={row.id}>
+                          <ProviderCredentialRow
+                            row={row}
+                            value={draft[row.id] ?? ''}
+                            rowDirty={(draft[row.id] ?? '') !== (baseline[row.id] ?? '')}
+                            labels={p}
+                            language={language}
+                            onChange={(id, v) => setDraft((d) => ({ ...d, [id]: v }))}
+                            onReload={refreshProviders}
+                            justSaved={savedProviderIds.has(row.id)}
+                            availableModels={models ?? []}
+                            autoExpand={isQuickTarget}
+                            autoFocusInput={isQuickTarget}
+                          />
+                        </div>
+                      );
+                    })}
                   </div>
                 ) : null}
               </section>
@@ -443,6 +478,49 @@ export function ProvidersSettingsPanel() {
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Empty-state shortcut for the Providers panel — 4 prominent buttons that
+ * filter the list down to the picked provider so users don't have to scan
+ * 30 categorised rows to find the one they want.
+ */
+function ProviderQuickStart({
+  intro,
+  recommended,
+  metaRows,
+  onPick,
+}: {
+  intro: string;
+  recommended: readonly string[];
+  metaRows: ProviderRowModel[];
+  onPick: (providerId: string) => void;
+}) {
+  const available = recommended.filter((id) => metaRows.some((r) => r.id === id));
+  if (available.length === 0) return null;
+  const lookup = new Map(metaRows.map((r) => [r.id, r]));
+  return (
+    <div className="rounded-2xl border border-edge-subtle bg-surface-panel/40 p-4">
+      <p className="mb-3 text-sm text-fg-muted">{intro}</p>
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        {available.map((id) => {
+          const meta = lookup.get(id);
+          const label = meta?.name ?? id;
+          return (
+            <Button
+              key={id}
+              type="button"
+              variant="secondary"
+              className="justify-start"
+              onClick={() => onPick(id)}
+            >
+              <span className="truncate">{label}</span>
+            </Button>
+          );
+        })}
+      </div>
     </div>
   );
 }

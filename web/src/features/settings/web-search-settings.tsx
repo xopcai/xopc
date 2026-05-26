@@ -9,6 +9,8 @@ import {
   type SearchProviderRow,
   type WebSearchSettingsState,
 } from '@/features/settings/web-search-config-api';
+import { ConfigureWithAILink } from '@/features/settings/configure-with-ai-link';
+import { useSaveBarRegistration } from '@/features/settings/save-bar/use-save-bar-registration';
 import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/settings/settings-form-section';
 import { isMaskedKey } from '@/features/settings/providers-api';
 import { nativeSelectMaxWidthClass, selectControlBaseClass, settingsInputFocusClass } from '@/lib/form-field-width';
@@ -55,7 +57,13 @@ function emptyProviderRow(): SearchProviderRow {
   return { type: 'brave', apiKey: '', url: '', disabled: false };
 }
 
-export function WebSearchSettingsPanel() {
+/**
+ * `embedded` strips the outer `mx-auto max-w-app-main` page wrapper, the
+ * page title/subtitle/docs block, and the duplicate vertical padding so the
+ * panel slots cleanly into the M3.4 hub. Save / Discard / Configure-with-AI
+ * stay because each section saves independently.
+ */
+export function WebSearchSettingsPanel({ embedded = false }: { embedded?: boolean } = {}) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const w = m.webSearchSettings;
@@ -114,7 +122,7 @@ export function WebSearchSettingsPanel() {
     setError(null);
     setSaveOk(false);
     try {
-      await patchWebSearchSettings(form);
+      await patchWebSearchSettings(form, baseline);
       const next = structuredClone(form);
       setBaseline(next);
       setForm(next);
@@ -136,10 +144,21 @@ export function WebSearchSettingsPanel() {
     setSaveOk(false);
   }, [baseline]);
 
+  // Coordinate with the hub-level Save bar (no-op when this panel is opened
+  // standalone since no provider wraps it).
+  useSaveBarRegistration({ id: 'search', dirty, saving, save, discard });
+
+  const outerClass = embedded
+    ? 'flex flex-col gap-4'
+    : 'mx-auto flex w-full max-w-app-main flex-col gap-6 px-4 py-6';
+  const compactClass = embedded
+    ? 'flex flex-col gap-3'
+    : 'mx-auto flex w-full max-w-app-main flex-col gap-3 px-4 py-8';
+
   if (!hasToken) {
     return (
-      <div className="mx-auto flex w-full max-w-app-main flex-col gap-4 px-4 py-6">
-        <h1 className="text-lg font-semibold text-fg">{w.title}</h1>
+      <div className={compactClass}>
+        {embedded ? null : <h1 className="text-lg font-semibold text-fg">{w.title}</h1>}
         <p className="text-sm text-fg-muted">{w.needToken}</p>
       </div>
     );
@@ -147,7 +166,7 @@ export function WebSearchSettingsPanel() {
 
   if (loading) {
     return (
-      <div className="mx-auto flex w-full max-w-app-main flex-col items-center gap-3 px-4 py-8">
+      <div className={cn(compactClass, 'items-center')}>
         <Loader2 className="size-8 animate-spin text-fg-muted" aria-hidden />
         <p className="text-sm text-fg-muted">{w.loading}</p>
       </div>
@@ -156,7 +175,7 @@ export function WebSearchSettingsPanel() {
 
   if (!form) {
     return (
-      <div className="mx-auto flex w-full max-w-app-main flex-col gap-3 px-4 py-8">
+      <div className={compactClass}>
         <p className="text-sm text-fg-muted">{error ?? fetchError ?? w.loadError}</p>
         <Button type="button" variant="secondary" onClick={() => void mutate()}>
           {logs.refresh}
@@ -166,33 +185,46 @@ export function WebSearchSettingsPanel() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-app-main flex-col gap-6 px-4 py-6">
+    <div className={outerClass}>
       <header className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="text-lg font-semibold tracking-tight text-fg">{w.title}</h1>
-          <p className="mt-1 text-sm text-fg-muted">{w.subtitle}</p>
-          <a
-            href={docsGuidePageUrl(language, 'gateway')}
-            target="_blank"
-            rel="noreferrer"
-            className="mt-1 inline-flex items-center gap-1 text-sm text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
-          >
-            {w.docsLink}
-            <ExternalLink className="size-3.5" />
-          </a>
-        </div>
-        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-          {saveOk ? <span className="text-sm text-fg-muted">{w.saved}</span> : null}
-          <Button type="button" variant="secondary" disabled={!dirty || saving} onClick={discard}>
-            {w.discard}
-          </Button>
-          <Button type="button" variant="primary" disabled={!dirty || saving} onClick={() => void save()}>
-            {saving ? w.saving : w.save}
-          </Button>
-        </div>
+        {embedded ? (
+          <div className="min-w-0" aria-hidden />
+        ) : (
+          <div>
+            <h1 className="text-lg font-semibold tracking-tight text-fg">{w.title}</h1>
+            <p className="mt-1 text-sm text-fg-muted">{w.subtitle}</p>
+            <a
+              href={docsGuidePageUrl(language, 'gateway')}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-1 inline-flex items-center gap-1 text-sm text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+            >
+              {w.docsLink}
+              <ExternalLink className="size-3.5" />
+            </a>
+          </div>
+        )}
+        {/*
+         * In `embedded` mode the hub's `<SaveBarControls />` aggregates
+         * save/discard across every section, so rendering them here too
+         * would give users two competing buttons. Keep the in-panel
+         * controls only when this panel is opened standalone.
+         */}
+        {embedded ? null : (
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+            <ConfigureWithAILink skill="setup-search" />
+            {saveOk ? <span className="text-sm text-fg-muted">{w.saved}</span> : null}
+            <Button type="button" variant="secondary" disabled={!dirty || saving} onClick={discard}>
+              {w.discard}
+            </Button>
+            <Button type="button" variant="primary" disabled={!dirty || saving} onClick={() => void save()}>
+              {saving ? w.saving : w.save}
+            </Button>
+          </div>
+        )}
       </header>
 
-      {dirty ? <p className="text-xs text-amber-800 dark:text-amber-200">{w.unsavedHint}</p> : null}
+      {dirty && !embedded ? <p className="text-xs text-amber-800 dark:text-amber-200">{w.unsavedHint}</p> : null}
       {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
 
       <SettingsFormSection>

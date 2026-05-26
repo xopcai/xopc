@@ -4,7 +4,7 @@ import {
   AgentDefaultsTabbedPage,
 } from '@/features/settings/agents';
 import { SetupStatusPanel } from '@/features/settings/setup-checklist/setup-status-panel';
-import { CredentialsHubPanel } from '@/features/settings/credentials/credentials-hub-panel';
+import { ModelsHubPanel } from '@/features/settings/models-hub/models-hub-panel';
 import { AppearanceSettingsPanel } from '@/features/settings/appearance-settings';
 import { DreamingSettingsPanel } from '@/features/settings/dreaming-settings';
 import { CronSettingsPanel } from '@/features/settings/cron-settings';
@@ -13,13 +13,8 @@ import { GatewaySettingsPanel } from '@/features/settings/gateway-settings';
 import { HeartbeatSettingsPanel } from '@/features/settings/heartbeat-settings';
 import { RemoteAccessHub } from '@/features/remote-access/remote-access-hub';
 import { SharesSettingsPanel } from '@/features/shares/shares-settings';
-import { ImageModelsSettingsPanel } from '@/features/settings/image-models-settings';
-import { ModelsSettingsPanel } from '@/features/settings/models-settings';
-import { ProvidersSettingsPanel } from '@/features/settings/providers-settings';
 import { AppManagementSettingsPanel } from '@/features/settings/app-management-settings-panel';
 import { SystemSettingsPanel } from '@/features/settings/system-settings-panel';
-import { VoiceSettingsPanel } from '@/features/settings/voice-settings';
-import { WebSearchSettingsPanel } from '@/features/settings/web-search-settings';
 import { McpSettingsPanel } from '@/features/settings/mcp/mcp-settings';
 import { messages } from '@/i18n/messages';
 import type { SettingsSectionId } from '@/navigation';
@@ -65,6 +60,21 @@ export function SettingsPage() {
     return <Navigate to="/settings/remote-access?tab=public" replace />;
   }
 
+  // M3.4: providers / models / image-models / voice / search legacy routes
+  // redirect to the unified hub at /settings/credentials, landing on the
+  // matching tab via `?tab=<id>`. The hub's `parseModelsHubTab` defaults to
+  // `providers` so the omitted tab is implied (clean URL on default).
+  if (
+    section === 'providers' ||
+    section === 'models' ||
+    section === 'image-models' ||
+    section === 'voice' ||
+    section === 'search'
+  ) {
+    const tab = section === 'providers' ? '' : `?tab=${section}`;
+    return <Navigate to={`/settings/credentials${tab}`} replace />;
+  }
+
   const id = section as SettingsSectionId;
 
   if (id === 'overview') {
@@ -94,23 +104,7 @@ export function SettingsPage() {
   }
 
   if (id === 'credentials') {
-    return <CredentialsHubPanel />;
-  }
-
-  if (id === 'providers') {
-    return <ProvidersSettingsPanel />;
-  }
-
-  if (id === 'models') {
-    return <ModelsSettingsPanel />;
-  }
-
-  if (id === 'image-models') {
-    return <ImageModelsSettingsPanel />;
-  }
-
-  if (id === 'voice') {
-    return <VoiceSettingsPanel />;
+    return <ModelsHubPanel />;
   }
 
   if (id === 'gateway') {
@@ -127,10 +121,6 @@ export function SettingsPage() {
 
   if (id === 'shares') {
     return <SharesSettingsPanel />;
-  }
-
-  if (id === 'search') {
-    return <WebSearchSettingsPanel />;
   }
 
   if (id === 'dreams') {

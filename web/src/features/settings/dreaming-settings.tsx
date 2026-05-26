@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Activity, ScanLine, Settings2, Wrench, type LucideIcon } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
 
 import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
@@ -24,9 +26,44 @@ import { DreamingHeader } from '@/features/settings/dreaming-settings-header';
 import { DreamingMaintenanceSection } from '@/features/settings/dreaming-settings-maintenance-section';
 import { DreamingPreviewSection } from '@/features/settings/dreaming-settings-preview-section';
 import { DreamingRuntimeSection } from '@/features/settings/dreaming-settings-runtime-section';
-import { messages } from '@/i18n/messages';
+import { cn } from '@/lib/cn';
+import { interaction } from '@/lib/interaction';
+import { messages, type MessageBundle } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
+
+type DreamingSettingsI18n = MessageBundle['dreamingSettings'];
+type DreamingSettingsTabId = 'config' | 'runtime' | 'insights' | 'maintenance';
+
+const DREAMING_SETTINGS_TABS: readonly DreamingSettingsTabId[] = ['config', 'runtime', 'insights', 'maintenance'];
+
+const DREAMING_SETTINGS_TAB_ICONS: Record<DreamingSettingsTabId, LucideIcon> = {
+  config: Settings2,
+  runtime: Activity,
+  insights: ScanLine,
+  maintenance: Wrench,
+};
+
+function parseDreamingSettingsTab(raw: string | null): DreamingSettingsTabId {
+  if (raw && DREAMING_SETTINGS_TABS.includes(raw as DreamingSettingsTabId)) {
+    return raw as DreamingSettingsTabId;
+  }
+  return 'config';
+}
+
+function dreamingSettingsTabLabel(t: DreamingSettingsI18n, tab: DreamingSettingsTabId): string {
+  if (tab === 'config') return t.tabConfig;
+  if (tab === 'runtime') return t.tabRuntime;
+  if (tab === 'insights') return t.tabInsights;
+  return t.tabMaintenance;
+}
+
+function dreamingSettingsTabHint(t: DreamingSettingsI18n, tab: DreamingSettingsTabId): string {
+  if (tab === 'config') return t.configTabHint;
+  if (tab === 'runtime') return t.runtimeTabHint;
+  if (tab === 'insights') return t.insightsTabHint;
+  return t.maintenanceTabHint;
+}
 
 export function DreamingSettingsPanel() {
   const language = useLocaleStore((s) => s.language);
@@ -38,6 +75,22 @@ export function DreamingSettingsPanel() {
 
   const token = useGatewayStore((st) => st.token);
   const hasToken = Boolean(token);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = parseDreamingSettingsTab(searchParams.get('tab'));
+  const setActiveTab = useCallback(
+    (tab: DreamingSettingsTabId) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          if (tab === 'config') next.delete('tab');
+          else next.set('tab', tab);
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
 
   const { data: cfgData } = useGatewayConfigSwr(hasToken);
 
@@ -269,7 +322,9 @@ export function DreamingSettingsPanel() {
         </div>
       ) : null}
 
-      <div className="flex flex-col gap-4">
+      <DreamingSettingsTabs t={t} activeTab={activeTab} onChange={setActiveTab} />
+
+      <DreamingTabPanel t={t} id="config" activeTab={activeTab}>
         <DreamingConfigSection
           t={t}
           schedulePickerLabels={schedulePickerLabels}
@@ -283,7 +338,9 @@ export function DreamingSettingsPanel() {
           setCfgError={setCfgError}
           saveConfig={saveConfig}
         />
+      </DreamingTabPanel>
 
+      <DreamingTabPanel t={t} id="runtime" activeTab={activeTab}>
         <DreamingRuntimeSection
           t={t}
           data={data}
@@ -291,26 +348,110 @@ export function DreamingSettingsPanel() {
           localeTag={localeTag}
           scheduleBadgeLabels={scheduleBadgeLabels}
         />
-      </div>
+      </DreamingTabPanel>
 
-      <div className="grid gap-4 xl:grid-cols-2">
-        <DreamingPreviewSection
-          t={t}
-          hasToken={hasToken}
-          previewLoading={previewLoading}
-          previewItems={previewItems}
-          loadPreview={loadPreview}
-        />
-        <DreamingEventsSection
-          t={t}
-          hasToken={hasToken}
-          eventsLoading={eventsLoading}
-          events={events}
-          loadEvents={loadEvents}
-        />
-      </div>
+      <DreamingTabPanel t={t} id="insights" activeTab={activeTab}>
+        <div className="grid gap-4 xl:grid-cols-2">
+          <DreamingPreviewSection
+            t={t}
+            hasToken={hasToken}
+            previewLoading={previewLoading}
+            previewItems={previewItems}
+            loadPreview={loadPreview}
+          />
+          <DreamingEventsSection
+            t={t}
+            hasToken={hasToken}
+            eventsLoading={eventsLoading}
+            events={events}
+            loadEvents={loadEvents}
+          />
+        </div>
+      </DreamingTabPanel>
 
-      <DreamingMaintenanceSection t={t} disabled={disabled} actionBusy={actionBusy} doAction={doAction} />
+      <DreamingTabPanel t={t} id="maintenance" activeTab={activeTab}>
+        <DreamingMaintenanceSection t={t} disabled={disabled} actionBusy={actionBusy} doAction={doAction} />
+      </DreamingTabPanel>
     </div>
+  );
+}
+
+function DreamingSettingsTabs({
+  t,
+  activeTab,
+  onChange,
+}: {
+  t: DreamingSettingsI18n;
+  activeTab: DreamingSettingsTabId;
+  onChange: (tab: DreamingSettingsTabId) => void;
+}) {
+  return (
+    <nav
+      aria-label={t.tabsAriaLabel}
+      className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1"
+      role="tablist"
+      onKeyDown={(event) => {
+        if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+        event.preventDefault();
+        const currentIndex = DREAMING_SETTINGS_TABS.indexOf(activeTab);
+        const delta = event.key === 'ArrowRight' ? 1 : -1;
+        const nextIndex = (currentIndex + delta + DREAMING_SETTINGS_TABS.length) % DREAMING_SETTINGS_TABS.length;
+        onChange(DREAMING_SETTINGS_TABS[nextIndex]);
+      }}
+    >
+      {DREAMING_SETTINGS_TABS.map((tab) => {
+        const Icon = DREAMING_SETTINGS_TAB_ICONS[tab];
+        const selected = tab === activeTab;
+        return (
+          <button
+            key={tab}
+            type="button"
+            role="tab"
+            aria-selected={selected}
+            id={`dreaming-settings-tab-${tab}`}
+            aria-controls={`dreaming-settings-panel-${tab}`}
+            className={cn(
+              'inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+              interaction.press,
+              selected ? 'bg-accent-soft text-accent-fg' : 'text-fg-muted hover:bg-surface-hover hover:text-fg',
+            )}
+            onClick={() => onChange(tab)}
+          >
+            <Icon className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
+            <span>{dreamingSettingsTabLabel(t, tab)}</span>
+          </button>
+        );
+      })}
+    </nav>
+  );
+}
+
+function DreamingTabPanel({
+  t,
+  id,
+  activeTab,
+  children,
+}: {
+  t: DreamingSettingsI18n;
+  id: DreamingSettingsTabId;
+  activeTab: DreamingSettingsTabId;
+  children: ReactNode;
+}) {
+  if (activeTab !== id) return null;
+
+  return (
+    <section
+      id={`dreaming-settings-panel-${id}`}
+      role="tabpanel"
+      aria-labelledby={`dreaming-settings-tab-${id}`}
+      className="rounded-2xl border border-edge bg-surface-base px-4 py-5 sm:px-5"
+    >
+      <div className="mb-5">
+        <div className="text-sm font-semibold text-fg">{dreamingSettingsTabLabel(t, id)}</div>
+        <p className="mt-1 text-xs text-fg-subtle">{dreamingSettingsTabHint(t, id)}</p>
+      </div>
+      {children}
+    </section>
   );
 }
