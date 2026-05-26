@@ -657,7 +657,7 @@ function SttSection({
                 ) : stt.provider === 'groq' ? (
                   <select
                     className={selectClassName()}
-                    value={extensionModel || STT_GROQ_MODELS_FALLBACK[0]!.id}
+                    value={extensionModel || STT_GROQ_MODELS_FALLBACK[0].id}
                     onChange={(e) => updateExtensionProvider({ model: e.target.value })}
                   >
                     {STT_GROQ_MODELS_FALLBACK.map((m) => (
