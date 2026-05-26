@@ -33,6 +33,47 @@ export function isMaskedGatewaySecret(value: string): boolean {
   return value === '***' || value === '••••••••••••';
 }
 
+function normalizeSecretForRestartCompare(value: string): string {
+  return isMaskedGatewaySecret(value) ? '' : value.trim();
+}
+
+function sortedStringList(values: string[]): string[] {
+  return [...values].map((value) => value.trim()).sort();
+}
+
+/** Snapshot of gateway settings that require a process restart (listen, auth, CORS). */
+function snapshotGatewayRestartSettings(state: GatewaySettingsState): string {
+  return JSON.stringify({
+    bind: state.bind,
+    customBindHost: state.customBindHost.trim(),
+    port: state.port,
+    auth: {
+      mode: state.auth.mode,
+      token: normalizeSecretForRestartCompare(state.auth.token),
+      password: normalizeSecretForRestartCompare(state.auth.password),
+      rateLimit: state.auth.rateLimit,
+      trustedProxy: {
+        userHeader: state.auth.trustedProxy.userHeader.trim(),
+        requiredHeaders: sortedStringList(state.auth.trustedProxy.requiredHeaders),
+        allowUsers: sortedStringList(state.auth.trustedProxy.allowUsers),
+        allowLoopback: state.auth.trustedProxy.allowLoopback,
+      },
+    },
+    corsOrigins: sortedStringList(state.corsOrigins),
+    trustedProxies: sortedStringList(state.trustedProxies),
+    allowRealIpFallback: state.allowRealIpFallback,
+    dangerouslyAllowHostHeaderOriginFallback: state.dangerouslyAllowHostHeaderOriginFallback,
+  });
+}
+
+/** True when listen address, authentication, or CORS settings differ between two states. */
+export function gatewaySettingsRequireRestart(
+  from: GatewaySettingsState,
+  to: GatewaySettingsState,
+): boolean {
+  return snapshotGatewayRestartSettings(from) !== snapshotGatewayRestartSettings(to);
+}
+
 function normalizeAuthMode(raw: unknown): GatewayAuthMode {
   if (raw === 'none' || raw === 'token' || raw === 'password' || raw === 'trusted-proxy') return raw;
   return 'token';

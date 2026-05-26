@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  gatewaySettingsRequireRestart,
   isMaskedGatewaySecret,
   isNonLoopbackGatewayBind,
   normalizeGatewayFromConfig,
@@ -172,5 +173,49 @@ describe('isMaskedGatewaySecret', () => {
     expect(isMaskedGatewaySecret('***')).toBe(true);
     expect(isMaskedGatewaySecret('••••••••••••')).toBe(true);
     expect(isMaskedGatewaySecret('sk-live')).toBe(false);
+  });
+});
+
+describe('gatewaySettingsRequireRestart', () => {
+  it('returns false for identical settings', () => {
+    const state = normalizeGatewayFromConfig({
+      gateway: {
+        bind: 'loopback',
+        port: 18790,
+        corsOrigins: ['http://localhost:5173'],
+        auth: { mode: 'token', token: 'secret' },
+      },
+    });
+    expect(gatewaySettingsRequireRestart(state, structuredClone(state))).toBe(false);
+  });
+
+  it('detects listen address changes', () => {
+    const from = normalizeGatewayFromConfig({ gateway: { bind: 'loopback', port: 18790 } });
+    const to = normalizeGatewayFromConfig({ gateway: { bind: 'lan', port: 18790 } });
+    expect(gatewaySettingsRequireRestart(from, to)).toBe(true);
+  });
+
+  it('detects auth mode changes', () => {
+    const from = normalizeGatewayFromConfig({ gateway: { auth: { mode: 'token', token: 'a' } } });
+    const to = normalizeGatewayFromConfig({ gateway: { auth: { mode: 'password', password: 'b' } } });
+    expect(gatewaySettingsRequireRestart(from, to)).toBe(true);
+  });
+
+  it('detects cors origin changes', () => {
+    const from = normalizeGatewayFromConfig({ gateway: { corsOrigins: ['http://localhost:5173'] } });
+    const to = normalizeGatewayFromConfig({ gateway: { corsOrigins: ['http://127.0.0.1:5173'] } });
+    expect(gatewaySettingsRequireRestart(from, to)).toBe(true);
+  });
+
+  it('ignores masked secrets when auth mode is unchanged', () => {
+    const from = normalizeGatewayFromConfig({ gateway: { auth: { mode: 'token', token: '***' } } });
+    const to = normalizeGatewayFromConfig({ gateway: { auth: { mode: 'token', token: '••••••••••••' } } });
+    expect(gatewaySettingsRequireRestart(from, to)).toBe(false);
+  });
+
+  it('ignores update channel changes', () => {
+    const from = normalizeGatewayFromConfig({ update: { channel: 'stable' } });
+    const to = normalizeGatewayFromConfig({ update: { channel: 'beta' } });
+    expect(gatewaySettingsRequireRestart(from, to)).toBe(false);
   });
 });
