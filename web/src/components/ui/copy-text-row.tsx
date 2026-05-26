@@ -57,41 +57,43 @@ export function CopyTextRow({
   };
 
   return (
-    <div className={cn('flex min-w-0 flex-col gap-1', compact && 'gap-0.5')}>
-      {label ? <span className="text-xs font-medium text-fg-muted">{label}</span> : null}
-      <div className="grid grid-cols-[minmax(0,1fr)_5.25rem] items-center gap-2">
-        <div className="min-w-0 overflow-hidden">
-          <TooltipRoot>
-            <TooltipTrigger asChild>
-              <input
-                ref={inputRef}
-                readOnly
-                type="text"
-                value={text}
-                aria-label={label ?? labels.copy}
-                className={cn(copyInputClass, !monospace && 'font-sans')}
-                onFocus={(e) => e.currentTarget.select()}
-              />
-            </TooltipTrigger>
-            <TooltipPortal>
-              <TooltipContent side="top" sideOffset={6} collisionPadding={12} className={copyTooltipClass}>
-                <span className="break-all">{text}</span>
-              </TooltipContent>
-            </TooltipPortal>
-          </TooltipRoot>
+    <TooltipProvider delayDuration={300}>
+      <div className={cn('flex min-w-0 flex-col gap-1', compact && 'gap-0.5')}>
+        {label ? <span className="text-xs font-medium text-fg-muted">{label}</span> : null}
+        <div className="grid grid-cols-[minmax(0,1fr)_5.25rem] items-center gap-2">
+          <div className="min-w-0 overflow-hidden">
+            <TooltipRoot>
+              <TooltipTrigger asChild>
+                <input
+                  ref={inputRef}
+                  readOnly
+                  type="text"
+                  value={text}
+                  aria-label={label ?? labels.copy}
+                  className={cn(copyInputClass, !monospace && 'font-sans')}
+                  onFocus={(e) => e.currentTarget.select()}
+                />
+              </TooltipTrigger>
+              <TooltipPortal>
+                <TooltipContent side="top" sideOffset={6} collisionPadding={12} className={copyTooltipClass}>
+                  <span className="break-all">{text}</span>
+                </TooltipContent>
+              </TooltipPortal>
+            </TooltipRoot>
+          </div>
+          <Button
+            type="button"
+            variant="secondary"
+            className={copyButtonClass}
+            onClick={() => void handleCopy()}
+          >
+            {copied ? <Check className="size-3.5 shrink-0" /> : <Copy className="size-3.5 shrink-0" />}
+            <span className="truncate">{copied ? labels.copied : labels.copy}</span>
+          </Button>
         </div>
-        <Button
-          type="button"
-          variant="secondary"
-          className={copyButtonClass}
-          onClick={() => void handleCopy()}
-        >
-          {copied ? <Check className="size-3.5 shrink-0" /> : <Copy className="size-3.5 shrink-0" />}
-          <span className="truncate">{copied ? labels.copied : labels.copy}</span>
-        </Button>
+        {copyFailed ? <p className="text-xs text-red-600 dark:text-red-400">{labels.copyFailed}</p> : null}
       </div>
-      {copyFailed ? <p className="text-xs text-red-600 dark:text-red-400">{labels.copyFailed}</p> : null}
-    </div>
+    </TooltipProvider>
   );
 }
 
@@ -105,12 +107,10 @@ export function CopyTextRowList({
   labels: CopyTextRowLabels;
 }) {
   return (
-    <TooltipProvider delayDuration={300}>
-      <div className={cn('flex min-w-0 flex-col gap-2', compact && 'gap-1.5')}>
-        {rows.map((row) => (
-          <CopyTextRow key={row.key} label={row.label} text={row.text} compact={compact} labels={labels} />
-        ))}
-      </div>
-    </TooltipProvider>
+    <div className={cn('flex min-w-0 flex-col gap-2', compact && 'gap-1.5')}>
+      {rows.map((row) => (
+        <CopyTextRow key={row.key} label={row.label} text={row.text} compact={compact} labels={labels} />
+      ))}
+    </div>
   );
 }
