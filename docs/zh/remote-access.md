@@ -14,9 +14,9 @@
 |------|------|----------|
 | Tailscale tailnet 内的个人设备 | **Tailscale Serve**（推荐） | Tailscale |
 | 移动 App / 从公网访问 HTTPS | **公网隧道**（FRP） | 公网访问 |
-| 本机 CLI/TUI，可 SSH 到主机 | **SSH 隧道** | 高级 |
-| 同一 Wi‑Fi 下的手机 | **局域网绑定** | 高级 → Gateway 设置 |
-| 企业 SSO 前置网关 | **反向代理** | 高级 |
+| 本机 CLI/TUI，可 SSH 到主机 | **SSH 隧道** | SSH 隧道 |
+| 同一 Wi‑Fi 下的手机 | **局域网绑定** | 局域网 → Gateway 设置 |
+| 企业 SSO 前置网关 | **反向代理** | 概览（见下文） |
 
 整体架构见 [网络说明](../network.md)。
 
@@ -28,7 +28,9 @@
 
 - **Tailscale Serve** — tailnet HTTPS 状态
 - **公网隧道** — FRP 连接状态
-- **SSH / 局域网** — 跳转到高级选项
+- **SSH 隧道** — CLI 端口转发命令
+- **局域网** — 跳转至 Gateway 绑定设置
+- **反向代理** — Gateway 位于 nginx、Caddy 等前置代理时的说明
 
 点击方式卡片进入对应 Tab。切换方式前，请先解决 Tailscale 与公网隧道同时启用的问题。
 
@@ -124,21 +126,9 @@ xopc tunnel secret set
 
 ---
 
-## 高级 {#advanced}
+## SSH 隧道（CLI）{#ssh-tunnel}
 
-### 同一网络（局域网）
-
-**同一 Wi‑Fi** 内访问、不暴露公网：
-
-1. 打开 **设置 → Gateway**。
-2. 将 **绑定地址** 设为局域网 IP 或 `0.0.0.0`（配合 token 认证与防火墙）。
-3. 使用 `http://<局域网-ip>:<端口>` 连接。
-
-Gateway 仍绑定 loopback 时，公网访问 Tab 可为移动配对推荐局域网地址。
-
-### SSH 隧道（CLI）
-
-可 SSH 到主机、但不需要公网 URL：
+可 SSH 到主机、但不需要公网 URL 时，打开 **远程访问 → SSH 隧道** 复制命令，或直接运行：
 
 ```bash
 xopc gateway ssh-tunnel --target user@your-host --local-port 18790 --remote-port 18790
@@ -168,7 +158,21 @@ ssh -N -L 18790:127.0.0.1:18790 user@your-host
 
 更多：[远程访问（SSH + CLI）](../gateway/remote.md)（英文）。
 
-### 反向代理与企业入口
+---
+
+## 同一网络（局域网）{#lan}
+
+**同一 Wi‑Fi** 内访问、不暴露公网时，打开 **远程访问 → 局域网**，然后：
+
+1. 打开 **设置 → Gateway**。
+2. 将 **绑定地址** 设为局域网 IP 或 `0.0.0.0`（配合 token 认证与防火墙）。
+3. 使用 `http://<局域网-ip>:<端口>` 连接。
+
+Gateway 仍绑定 loopback 时，公网访问 Tab 可为移动配对推荐局域网地址。
+
+---
+
+## 反向代理与企业入口 {#advanced}
 
 在 nginx、Caddy 或 Pomerium 终止 TLS 并做用户认证时：
 

@@ -86,7 +86,7 @@ const TAB_TO_SETTINGS_SECTION: Record<
   settingsVoice: 'voice',
   settingsGateway: 'gateway',
   settingsHeartbeat: 'heartbeat',
-  settingsTunnel: 'tunnel',
+  settingsTunnel: 'remote-access',
   settingsShares: 'shares',
   settingsSearch: 'search',
   settingsDreams: 'dreams',
@@ -196,7 +196,7 @@ export function docsGuidePageUrl(language: StoredLanguage, page: string): string
   return `${HELP_DOCS_BASE_URL}/${slug}`;
 }
 
-export type RemoteAccessDocsSection = 'tailscale-serve' | 'public-tunnel' | 'advanced';
+export type RemoteAccessDocsSection = 'tailscale-serve' | 'public-tunnel' | 'ssh-tunnel' | 'lan' | 'advanced';
 
 /** Remote access guide (`docs/remote-access.md`), optionally anchored to a section. */
 export function remoteAccessDocsUrl(

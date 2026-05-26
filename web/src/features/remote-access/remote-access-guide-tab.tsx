@@ -121,19 +121,25 @@ export function RemoteAccessGuideTab({ onOpenTab }: { onOpenTab: (tab: RemoteAcc
             title={g.sshCardTitle}
             description={g.sshCardDesc}
             openLabel={g.configure}
-            onOpen={() => onOpenTab('advanced')}
+            onOpen={() => onOpenTab('ssh')}
           />
           <MethodCard
             icon={Server}
             title={g.lanCardTitle}
             description={g.lanCardDesc}
             openLabel={g.configure}
-            onOpen={() => onOpenTab('advanced')}
+            onOpen={() => onOpenTab('lan')}
           />
         </div>
       </div>
 
       <p className="text-xs leading-relaxed text-fg-subtle">{g.oneAtATimeHint}</p>
+
+      <div className="rounded-xl border border-edge-subtle bg-surface-base px-4 py-3">
+        <h3 className="text-sm font-semibold text-fg">{ra.advanced.proxyTitle}</h3>
+        <p className="mt-1 text-sm text-fg-muted">{ra.advanced.proxyBody}</p>
+        <RemoteAccessDocsLink language={language} label={ra.advanced.proxyDocs} section="advanced" className="mt-2" />
+      </div>
 
       <RemoteAccessDocsLink language={language} label={g.docsLink} />
     </div>
