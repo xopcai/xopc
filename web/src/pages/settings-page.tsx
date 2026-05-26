@@ -57,7 +57,7 @@ export function SettingsPage() {
   }
 
   if (section === 'tunnel') {
-    return <Navigate to="/settings/remote-access?tab=public" replace />;
+    return <Navigate to="/settings/remote-access" replace />;
   }
 
   // M3.4: providers / models / image-models / voice / search legacy routes

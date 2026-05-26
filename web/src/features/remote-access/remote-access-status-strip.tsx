@@ -77,14 +77,14 @@ export function RemoteAccessStatusStrip({ onOpenTab }: { onOpenTab: (tab: Remote
       statusLabel: tunnelActive ? g.statusActive : tunnelConnecting ? g.statusConnecting : g.statusOff,
     },
     {
-      tab: 'advanced',
+      tab: 'ssh',
       icon: Terminal,
       title: g.sshCardTitle,
       kind: 'off',
       statusLabel: g.sshCardStatus,
     },
     {
-      tab: 'advanced',
+      tab: 'lan',
       icon: Server,
       title: g.lanCardTitle,
       kind: 'off',

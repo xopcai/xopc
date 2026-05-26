@@ -3,7 +3,8 @@ import { useSearchParams } from 'react-router-dom';
 
 import { TunnelSettingsPanel } from '@/features/tunnel/tunnel-settings';
 import { TailscaleServeSection } from '@/features/remote-access/tailscale-serve-section';
-import { RemoteAccessAdvancedTab } from '@/features/remote-access/remote-access-advanced-tab';
+import { RemoteAccessLanTab } from '@/features/remote-access/remote-access-lan-tab';
+import { RemoteAccessSshTab } from '@/features/remote-access/remote-access-ssh-tab';
 import { RemoteAccessGuideTab } from '@/features/remote-access/remote-access-guide-tab';
 import { RemoteAccessDocsLink } from '@/features/remote-access/remote-access-docs-link';
 import {
@@ -31,8 +32,10 @@ function tabDocsSection(tab: RemoteAccessTabId): RemoteAccessDocsSection | undef
       return 'tailscale-serve';
     case 'public':
       return 'public-tunnel';
-    case 'advanced':
-      return 'advanced';
+    case 'ssh':
+      return 'ssh-tunnel';
+    case 'lan':
+      return 'lan';
     default:
       return undefined;
   }
@@ -52,8 +55,10 @@ function RemoteAccessTabPanel({
       return <TailscaleServeSection embedded />;
     case 'public':
       return <TunnelSettingsPanel embedded />;
-    case 'advanced':
-      return <RemoteAccessAdvancedTab />;
+    case 'ssh':
+      return <RemoteAccessSshTab />;
+    case 'lan':
+      return <RemoteAccessLanTab />;
   }
 }
 

@@ -14,9 +14,9 @@ Only **one public exposure mode** should be active at a time (Tailscale Serve **
 |----------|--------|--------------|
 | Personal devices on your Tailscale tailnet | **Tailscale Serve** (recommended) | Tailscale |
 | Mobile app / public HTTPS URL from anywhere | **Public tunnel** (FRP) | Public internet |
-| CLI/TUI on a laptop, SSH to the host | **SSH tunnel** | Advanced |
-| Phone on the same Wi‑Fi | **LAN bind** | Advanced → Gateway settings |
-| Enterprise SSO in front of the gateway | **Reverse proxy** | Advanced |
+| CLI/TUI on a laptop, SSH to the host | **SSH tunnel** | SSH tunnel |
+| Phone on the same Wi‑Fi | **LAN bind** | Local network → Gateway settings |
+| Enterprise SSO in front of the gateway | **Reverse proxy** | Overview (see below) |
 
 See also the [network hub](./network.md) for how these layers fit together.
 
@@ -28,7 +28,9 @@ The Overview tab summarizes what is active on **this** gateway:
 
 - **Tailscale Serve** — tailnet HTTPS status
 - **Public tunnel** — FRP connection state
-- **SSH / LAN** — shortcuts to Advanced options
+- **SSH tunnel** — CLI port-forwarding command
+- **Local network** — LAN bind shortcut to Gateway settings
+- **Reverse proxy** — notes when the gateway sits behind nginx, Caddy, or similar
 
 Pick a method card to jump to the matching tab. If Tailscale and the public tunnel are both enabled, fix the conflict before switching.
 
@@ -124,21 +126,9 @@ Full security model, API, and CLI: [FRP tunnel security](./tunnel-security.md).
 
 ---
 
-## Advanced {#advanced}
+## SSH tunnel (CLI) {#ssh-tunnel}
 
-### Same network (LAN)
-
-For phones or laptops on the **same Wi‑Fi** without public exposure:
-
-1. Open **Settings → Gateway**.
-2. Set **Bind** to your LAN IP or `0.0.0.0` (with token auth and sensible firewall rules).
-3. Connect with `http://<lan-ip>:<port>`.
-
-The Public internet tab can suggest LAN addresses for mobile pairing when the gateway is still on loopback.
-
-### SSH tunnel (CLI)
-
-When you can SSH to the host but do not want a public URL:
+When you can SSH to the host but do not want a public URL, open **Remote access → SSH tunnel** for the copy-ready command, or run:
 
 ```bash
 xopc gateway ssh-tunnel --target user@your-host --local-port 18790 --remote-port 18790
@@ -168,7 +158,21 @@ CLI/TUI/MCP use `gateway.remote` when `gateway.mode=remote`. Override with `XOPC
 
 More: [Remote access (SSH + CLI)](./gateway/remote.md).
 
-### Reverse proxy & enterprise front door
+---
+
+## Same network (LAN) {#lan}
+
+For phones or laptops on the **same Wi‑Fi** without public exposure, open **Remote access → Local network**, then:
+
+1. Open **Settings → Gateway**.
+2. Set **Bind** to your LAN IP or `0.0.0.0` (with token auth and sensible firewall rules).
+3. Connect with `http://<lan-ip>:<port>`.
+
+The Public internet tab can suggest LAN addresses for mobile pairing when the gateway is still on loopback.
+
+---
+
+## Reverse proxy & enterprise front door {#advanced}
 
 When nginx, Caddy, or Pomerium terminates TLS and authenticates users:
 
