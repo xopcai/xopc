@@ -1,6 +1,6 @@
 import type { StoredLanguage } from '@/lib/storage';
 import { messages, tabLabel, type Tab } from '@/i18n/messages';
-import { pathForTab, SETTINGS_SHELL_NAV_GROUPS } from '@/navigation';
+import { pathForTab } from '@/navigation';
 import { channelDetailPath } from '@/features/settings/channels/channels-routes';
 
 export type RouteHitSeed = {
@@ -10,6 +10,27 @@ export type RouteHitSeed = {
   path: string;
   keywords?: string[];
 };
+
+/**
+ * Tabs for which the command palette offers a deep-link shortcut.
+ *
+ * M3.1 collapsed these from individual rail entries into a single "Agent
+ * defaults" rail item, but the palette still seeds every sub-tab so users
+ * can cmd-K → "browser" / "memory" / "skills" → jump directly. Keep this
+ * list in sync with `AGENT_DEFAULTS_TABS` (`features/settings/agents/`).
+ */
+const AGENT_DEFAULTS_PALETTE_TABS: readonly Tab[] = [
+  'settingsAgentChat',
+  'settingsAgentWorkspace',
+  'settingsAgentBrowser',
+  'settingsAgentRuntime',
+  'settingsAgentContext',
+  'settingsAgentMemory',
+  'settingsAgentTools',
+  'settingsAgentSkills',
+  'settingsAgentSystemPrompt',
+  'settingsAgentMcp',
+];
 
 const AGENT_DEFAULTS_ROUTE_KEYWORDS: Partial<Record<Tab, string[]>> = {
   settingsAgentChat: ['model', 'temperature', 'sampling', 'chat'],
@@ -27,11 +48,7 @@ const AGENT_DEFAULTS_ROUTE_KEYWORDS: Partial<Record<Tab, string[]>> = {
 function buildAgentDefaultsRouteSeeds(language: StoredLanguage): RouteHitSeed[] {
   const m = messages(language);
   const subtitle = m.commandPalette.routes.agentDefaultsSubtitle;
-  const agentGroup = SETTINGS_SHELL_NAV_GROUPS.find((g) => g.id === 'agent');
-  if (!agentGroup) {
-    return [];
-  }
-  return agentGroup.tabs.map((tab) => ({
+  return AGENT_DEFAULTS_PALETTE_TABS.map((tab) => ({
     id: `route:settings:agent:${tab}`,
     title: tabLabel(language, tab),
     subtitle,
@@ -157,32 +174,36 @@ export function buildRouteSeeds(language: StoredLanguage): RouteHitSeed[] {
       path: '/settings/overview',
       keywords: ['config', 'status', 'providers', 'models', 'agents', 'search', 'preferences'],
     },
+    // M3.4: providers / models / voice all funnel to the unified hub at
+    // /settings/credentials. The palette keeps individual entries so users
+    // searching "OpenAI" or "TTS" still find the right page; each routes
+    // directly to the hub (no Navigate hop).
     {
       id: 'route:settings:credentials',
       title: m.nav.settingsCredentials,
       subtitle: r.credentialsSubtitle,
       path: '/settings/credentials',
-      keywords: ['api', 'key', 'credentials', 'oauth', 'token'],
+      keywords: ['api', 'key', 'credentials', 'oauth', 'token', 'models', 'providers'],
     },
     {
       id: 'route:settings:providers',
       title: m.nav.settingsProviders,
       subtitle: r.providersSubtitle,
-      path: '/settings/providers',
+      path: '/settings/credentials',
       keywords: ['api', 'key', 'openai', 'anthropic', 'google'],
     },
     {
       id: 'route:settings:models',
       title: m.nav.settingsModels,
       subtitle: r.modelsSubtitle,
-      path: '/settings/models',
+      path: '/settings/credentials',
       keywords: ['gpt', 'claude', 'gemini', 'llm'],
     },
     {
       id: 'route:settings:voice',
       title: m.nav.settingsVoice,
       subtitle: r.voiceSubtitle,
-      path: '/settings/voice',
+      path: '/settings/credentials',
       keywords: ['tts', 'stt', 'speech', 'microphone'],
     },
     {

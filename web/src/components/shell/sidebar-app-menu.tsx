@@ -36,6 +36,7 @@ function OptionRow({
   return (
     <button
       type="button"
+      aria-pressed={selected}
       className={cn(
         'flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium leading-5 text-fg',
         'transition-colors duration-150 ease-out hover:bg-surface-hover',
@@ -44,11 +45,6 @@ function OptionRow({
       onClick={onSelect}
     >
       <span className="min-w-0 truncate">{label}</span>
-      {selected ? (
-        <span className="size-1.5 shrink-0 rounded-full bg-success" aria-hidden />
-      ) : (
-        <span className="size-1.5 shrink-0" aria-hidden />
-      )}
     </button>
   );
 }

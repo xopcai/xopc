@@ -158,7 +158,10 @@
     "updateErrorBusy": "An update is already in progress",
     "updateErrorFailed": "Update failed",
     "restartRequired": "v{{version}} installed. Restart the gateway to use the new version.",
-    "restartGateway": "Restart gateway"
+    "restartGateway": "Restart gateway",
+    "restartPolling": "Gateway is restarting, waiting for it to come back…",
+    "restartPollTimeout": "Gateway did not respond in time. It may still be starting.",
+    "restartPollRetry": "Retry"
   },
   "commandPalette": {
     "groups": {
