@@ -2,6 +2,7 @@
   "providersSettings": {
     "subtitle": "Provider API keys and OAuth. Keys you save here go to the gateway credential store.",
     "intro": "Search or open a group, expand a provider, paste a new key, then Save. OAuth opens in your browser when you choose it.",
+    "quickStartIntro": "Pick a provider to get started — paste your API key in the row that opens.",
     "docsLink": "Model & provider docs",
     "modelsLink": "Custom providers (models.json)",
     "rotateHint": "Rotating a key: expand the provider, paste the new secret, Save — no restart needed.",
@@ -20,6 +21,7 @@
     "savedModelsAvailable": "models available",
     "savedNoModels": "Configured — no models listed yet",
     "envVarAlt": "Or set via environment variable",
+    "moreOptions": "More options",
     "unconfiguredOnly": "Unconfigured only",
     "noMatches": "No providers match your filters.",
     "clearFilters": "Clear filters",

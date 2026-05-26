@@ -42,8 +42,13 @@ function panelMessagesFromBundle(t: MessageBundle['imageModelsSettings']): Image
     imageModelsLinkTitle: t.imageModelsLinkTitle,
     configured: t.configured,
     missingKey: t.missingKey,
+    unsavedChanges: t.unsavedChanges,
+    expandProvider: t.expandProvider,
+    collapseProvider: t.collapseProvider,
     defaultModel: t.defaultModel,
     modelsLabel: t.modelsLabel,
+    modelCountOne: t.modelCountOne,
+    modelCountMany: t.modelCountMany,
     imageBaseUrlPresetHint: t.imageBaseUrlPresetHint,
     dashscopeRegion_beijing: t.dashscopeRegion_beijing,
     dashscopeRegion_singapore: t.dashscopeRegion_singapore,
@@ -117,6 +122,7 @@ export function ExtensionImageProviderSettings({ extensionId }: { extensionId: s
     <ImageProviderCredentialsPanel
       summaries={summaries}
       credDraft={cred.credDraft}
+      credBaseline={cred.credBaseline}
       credDirty={cred.credDirty}
       credSaving={cred.credSaving}
       credError={cred.credError}

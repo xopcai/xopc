@@ -1,6 +1,7 @@
 import { ChevronRight, KeyRound, Loader2, RefreshCw } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
+import { ConfigureWithAILink } from '@/features/settings/configure-with-ai-link';
 import {
   SettingsFormSection,
   SettingsFormSectionHeader,
@@ -39,19 +40,22 @@ export function CredentialsHubPanel() {
           <h1 className="text-lg font-semibold tracking-tight text-fg">{c.title}</h1>
           <p className="text-sm text-fg-muted">{c.subtitle}</p>
         </div>
-        <button
-          type="button"
-          className={cn(
-            'inline-flex shrink-0 items-center gap-2 rounded-lg border border-edge px-3 py-2 text-sm font-medium text-fg',
-            'hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-            interaction.press,
-          )}
-          onClick={() => void refresh()}
-          disabled={!ready}
-        >
-          <RefreshCw className={cn('size-4', !ready && 'animate-spin')} aria-hidden />
-          {c.refresh}
-        </button>
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <ConfigureWithAILink skill="configure-xopc" size="md" />
+          <button
+            type="button"
+            className={cn(
+              'inline-flex shrink-0 items-center gap-2 rounded-lg border border-edge px-3 py-2 text-sm font-medium text-fg',
+              'hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+              interaction.press,
+            )}
+            onClick={() => void refresh()}
+            disabled={!ready}
+          >
+            <RefreshCw className={cn('size-4', !ready && 'animate-spin')} aria-hidden />
+            {c.refresh}
+          </button>
+        </div>
       </header>
 
       {error ? (

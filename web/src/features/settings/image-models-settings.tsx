@@ -1,27 +1,28 @@
-import { Image as ImageIcon, Loader2, RefreshCw, Save, Server } from 'lucide-react';
+import { Loader2, Save, Server } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
 import { useExtensions } from '@/features/extensions/extension-provider';
 import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
+import { useSaveBarRegistration } from '@/features/settings/save-bar/use-save-bar-registration';
+import { SettingsCollapsibleSection } from '@/features/settings/settings-collapsible-section';
 import { fetchImageProvidersList } from '@/features/settings/fetch-image-providers';
 import {
   ImageProviderCredentialsPanel,
   type ImageProviderCredentialsPanelMessages,
 } from '@/features/settings/image-provider-credentials-panel';
 import { IMAGE_PROVIDERS_SWR_KEY } from '@/features/settings/image-providers-swr-key';
-import { AgentDefaultsImageModelChainsSection } from '@/features/settings/agents/agent-defaults-panels/image-model-chains-section';
+import {
+  ImageModelPrimarySelectors,
+  ImageModelFallbackChains,
+} from '@/features/settings/agents/agent-defaults-panels/image-model-chains-section';
 import {
   fetchAgentDefaults,
   parseParamsJsonForSave,
   patchAgentDefaults,
   type AgentDefaultsState,
 } from '@/features/settings/config-api';
-import {
-  SettingsFormSection,
-  SettingsFormSectionHeader,
-} from '@/features/settings/settings-form-section';
 import { useImageProviderCredentials } from '@/features/settings/use-image-provider-credentials';
 import { settingsInputFocusClass } from '@/lib/form-field-width';
 import { apiUrl } from '@/lib/url';
@@ -77,8 +78,13 @@ function panelMessagesFromBundle(t: MessageBundle['imageModelsSettings']): Image
     imageModelsLinkTitle: t.imageModelsLinkTitle,
     configured: t.configured,
     missingKey: t.missingKey,
+    unsavedChanges: t.unsavedChanges,
+    expandProvider: t.expandProvider,
+    collapseProvider: t.collapseProvider,
     defaultModel: t.defaultModel,
     modelsLabel: t.modelsLabel,
+    modelCountOne: t.modelCountOne,
+    modelCountMany: t.modelCountMany,
     imageBaseUrlPresetHint: t.imageBaseUrlPresetHint,
     dashscopeRegion_beijing: t.dashscopeRegion_beijing,
     dashscopeRegion_singapore: t.dashscopeRegion_singapore,
@@ -97,7 +103,8 @@ function panelMessagesFromBundle(t: MessageBundle['imageModelsSettings']): Image
   };
 }
 
-export function ImageModelsSettingsPanel() {
+/** See `WebSearchSettingsPanel` for the embedded-mode contract. */
+export function ImageModelsSettingsPanel({ embedded = false }: { embedded?: boolean } = {}) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const t = m.imageModelsSettings;
@@ -138,11 +145,16 @@ export function ImageModelsSettingsPanel() {
     setState((s) => (s ? { ...s, ...patch } : null));
   }, []);
 
-  const { data: providers = [], mutate: refreshProviders } = useSWR(
+  const { data: providers = [] } = useSWR(
     hasToken ? imageProvidersSwrKey() : null,
     fetchImageProvidersList,
     { revalidateOnFocus: false },
   );
+
+  // Drives the default-open state of the credentials collapsible below —
+  // expand if the user already has at least one image provider with a key,
+  // otherwise stay collapsed to keep the page short for new users.
+  const hasConfiguredProvider = providers.some((p) => p.configured);
 
   const gwSwr = useGatewayConfigSwr(hasToken);
 
@@ -184,24 +196,44 @@ export function ImageModelsSettingsPanel() {
         );
         return;
       }
-      await patchAgentDefaults(state);
-      setBaseline(structuredClone(state));
+      // Save agent defaults + credentials in parallel
+      const savePromises: Promise<void>[] = [];
+      if (dirty) {
+        savePromises.push(
+          patchAgentDefaults(state).then(() => {
+            setBaseline(structuredClone(state));
+            void gwSwr.mutate?.();
+          }),
+        );
+      }
+      if (cred.credDirty) {
+        savePromises.push(cred.saveCredentials(t.credentialsSaveError));
+      }
+      await Promise.all(savePromises);
       setSavedFlash(true);
       window.setTimeout(() => setSavedFlash(false), 1500);
-      void gwSwr.mutate?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setSaving(false);
     }
-  }, [state, gwSwr, m.agentSettings]);
+  }, [state, dirty, gwSwr, m.agentSettings, cred, t.credentialsSaveError]);
 
   const onDiscard = useCallback(() => {
     if (!baseline) return;
     setState(structuredClone(baseline));
+    if (cred.credDirty) cred.onDiscardCredentials();
     setError(undefined);
     setSavedFlash(false);
-  }, [baseline]);
+  }, [baseline, cred]);
+
+  useSaveBarRegistration({
+    id: 'image-models',
+    dirty: anyDirty,
+    saving,
+    save: onSave,
+    discard: onDiscard,
+  });
 
   const panelMsg = useMemo(() => panelMessagesFromBundle(t), [t]);
   const apiKeyLinkLabels = useMemo(
@@ -213,9 +245,19 @@ export function ImageModelsSettingsPanel() {
     [m.providersSettings],
   );
 
+  const outerClass = embedded
+    ? 'flex flex-col gap-4'
+    : 'mx-auto flex w-full max-w-app-main flex-col gap-6 px-4 py-8';
+  const stubClass = embedded
+    ? 'w-full text-sm text-fg-muted'
+    : 'mx-auto w-full max-w-app-main px-4 py-8 text-sm text-fg-muted';
+  const stubFlexClass = embedded
+    ? 'flex w-full items-center gap-2 text-sm text-fg-muted'
+    : 'mx-auto flex w-full max-w-app-main items-center gap-2 px-4 py-8 text-sm text-fg-muted';
+
   if (!hasToken) {
     return (
-      <div className="mx-auto w-full max-w-app-main px-4 py-8 text-sm text-fg-muted">
+      <div className={stubClass}>
         {language === 'zh' ? '请先登录网关。' : 'Connect to a gateway to continue.'}
       </div>
     );
@@ -223,42 +265,32 @@ export function ImageModelsSettingsPanel() {
 
   if (loading || !state) {
     return (
-      <div className="mx-auto flex w-full max-w-app-main items-center gap-2 px-4 py-8 text-sm text-fg-muted">
+      <div className={stubFlexClass}>
         <Loader2 className="size-4 animate-spin" /> Loading…
       </div>
     );
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-app-main flex-col gap-6 px-4 py-8">
-      <header className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="text-lg font-semibold tracking-tight text-fg">{t.title}</h1>
-          <p className="mt-1 text-sm text-fg-muted">{t.subtitle}</p>
-        </div>
-        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={() => {
-              void reload();
-              void refreshProviders();
-              void gwSwr.mutate?.();
-            }}
-          >
-            <RefreshCw className="size-3.5" />
-            <span className="ml-1.5">{t.refresh}</span>
-          </Button>
-          {savedFlash ? <span className="text-sm text-fg-muted">{t.saved}</span> : null}
-          <Button type="button" variant="secondary" onClick={onDiscard} disabled={!dirty || saving}>
-            {t.discard}
-          </Button>
-          <Button type="button" variant="primary" onClick={() => void onSave()} disabled={!dirty || saving}>
-            {saving ? <Loader2 className="size-3.5 animate-spin" /> : <Save className="size-3.5" />}
-            <span className="ml-1.5">{saving ? t.saving : t.save}</span>
-          </Button>
-        </div>
-      </header>
+    <div className={outerClass}>
+      {embedded ? null : (
+        <header className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-lg font-semibold tracking-tight text-fg">{t.title}</h1>
+            <p className="mt-1 text-sm text-fg-muted">{t.subtitle}</p>
+          </div>
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+            {savedFlash ? <span className="text-sm text-fg-muted">{t.saved}</span> : null}
+            <Button type="button" variant="secondary" onClick={onDiscard} disabled={!anyDirty || saving}>
+              {t.discard}
+            </Button>
+            <Button type="button" variant="primary" onClick={() => void onSave()} disabled={!anyDirty || saving}>
+              {saving ? <Loader2 className="size-3.5 animate-spin" /> : <Save className="size-3.5" />}
+              <span className="ml-1.5">{saving ? t.saving : t.save}</span>
+            </Button>
+          </div>
+        </header>
+      )}
 
       {error ? (
         <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:text-red-300">
@@ -266,26 +298,40 @@ export function ImageModelsSettingsPanel() {
         </div>
       ) : null}
 
-      <AgentDefaultsImageModelChainsSection
+      {/* Primary model selectors — always visible */}
+      <ImageModelPrimarySelectors
         form={state}
         update={patchAgentDefaultsLocal}
         a={m.agentSettings}
         chat={m.chat}
       />
 
-      <SettingsFormSection>
-        <SettingsFormSectionHeader icon={ImageIcon} title={t.title} subtitle={t.subtitle} />
+      {/* Fallback chains — collapsed by default */}
+      <SettingsCollapsibleSection
+        showLabel={t.fallbackChainsTitle}
+        hideLabel={t.fallbackChainsTitle}
+      >
+        <ImageModelFallbackChains
+          form={state}
+          update={patchAgentDefaultsLocal}
+          a={m.agentSettings}
+          chat={m.chat}
+        />
+      </SettingsCollapsibleSection>
+
+      {/* Runtime tuning — collapsed by default */}
+      <SettingsCollapsibleSection
+        showLabel={t.runtimeTuningTitle}
+        hideLabel={t.runtimeTuningTitle}
+      >
         <div className="flex flex-col gap-4">
-          <div className="rounded-lg border border-edge-subtle bg-surface-base px-3 py-2.5 text-xs leading-relaxed text-fg-muted">
-            {t.crossLinkHint}
-          </div>
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium text-fg">{t.timeoutLabel}</label>
             <input
               type="number"
               min={0}
               step={1000}
-              className={cn(inputClass(), 'max-w-[12rem]')}
+              className={cn(inputClass(), 'max-w-48')}
               value={state.imageGenerationModelTimeoutMs ?? ''}
               placeholder="120000"
               onChange={(e) => {
@@ -323,16 +369,22 @@ export function ImageModelsSettingsPanel() {
             </span>
           </label>
         </div>
-      </SettingsFormSection>
+      </SettingsCollapsibleSection>
 
-      <SettingsFormSection>
-        <SettingsFormSectionHeader icon={Server} title={t.providersTitle} subtitle="" />
+      {/* Provider credentials — collapsed; expands if user already has configured providers */}
+      <SettingsCollapsibleSection
+        icon={Server}
+        showLabel={t.providersTitle}
+        hideLabel={t.providersTitle}
+        defaultOpen={hasConfiguredProvider}
+      >
         {providers.length === 0 ? (
           <p className="text-sm text-fg-muted">{t.providersEmpty}</p>
         ) : (
           <ImageProviderCredentialsPanel
             summaries={providers}
             credDraft={cred.credDraft}
+            credBaseline={cred.credBaseline}
             credDirty={cred.credDirty}
             credSaving={cred.credSaving}
             credError={cred.credError}
@@ -344,12 +396,13 @@ export function ImageModelsSettingsPanel() {
             extensionIds={extensionIds}
             showExtensionLinks
             showImageModelsLink={false}
+            hideActions
             language={language}
             apiKeyLinkLabels={apiKeyLinkLabels}
             messages={panelMsg}
           />
         )}
-      </SettingsFormSection>
+      </SettingsCollapsibleSection>
     </div>
   );
 }

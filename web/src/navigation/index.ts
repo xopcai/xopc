@@ -129,44 +129,37 @@ export const ELECTRON_SYSTEM_NAV_GROUP: SettingsShellNavGroup = {
 };
 
 /**
- * Settings rail: general → credentials → agent → connection → automation → diagnostics.
+ * Settings rail. M3.1 collapsed two groups that previously exposed many
+ * sibling rail items leading to the same underlying page or hub:
+ *
+ *   - `credentials` group: 6 → 1. The credentials hub
+ *     (`/settings/credentials`) already lists LLM / search / image / voice as
+ *     cards with manage links, so flat exposure of every sub-page in the rail
+ *     was redundant.
+ *   - `agent` group: 9 → 2. The agent-defaults page (`/settings/agent-defaults`)
+ *     has internal tabs for chat / workspace / browser / runtime / context /
+ *     memory / tools / skills / system-prompt; nine sibling rail items all
+ *     deep-linking to `?tab=` was confusing.
+ *
+ * Old direct URLs (`/settings/providers`, `/settings/agent-tools`, …) keep
+ * working — see `settings-page.tsx` and the legacy redirects.
+ *
  * Electron system group and extensions append in `SettingsPageLayout`.
  */
 export const SETTINGS_SHELL_NAV_GROUPS: readonly SettingsShellNavGroup[] = [
   { id: 'general', tabs: ['settingsOverview', 'settingsAppearance'] },
-  {
-    id: 'credentials',
-    tabs: [
-      'settingsCredentials',
-      'settingsProviders',
-      'settingsModels',
-      'settingsImageModels',
-      'settingsVoice',
-      'settingsSearch',
-    ],
-  },
+  { id: 'credentials', tabs: ['settingsCredentials'] },
   {
     id: 'agent',
-    tabs: [
-      'settingsAgentChat',
-      'settingsAgentWorkspace',
-      'settingsAgentBrowser',
-      'settingsAgentRuntime',
-      'settingsAgentContext',
-      'settingsAgentMemory',
-      'settingsAgentTools',
-      'settingsAgentSkills',
-      'settingsAgentSystemPrompt',
-      'settingsAgentMcp',
-    ],
+    tabs: ['settingsAgentDefaults', 'settingsAgentMcp'],
   },
   {
     id: 'connection',
-    tabs: ['settingsGateway', 'settingsHeartbeat', 'settingsTunnel', 'settingsShares'],
+    tabs: ['settingsGateway', 'settingsTunnel', 'settingsShares'],
   },
   {
     id: 'automation',
-    tabs: ['settingsCron', 'settingsGoals', 'settingsDreams'],
+    tabs: ['settingsCron', 'settingsHeartbeat', 'settingsGoals', 'settingsDreams'],
   },
   { id: 'diagnostics', tabs: ['sessions', 'logs'] },
 ] as const;

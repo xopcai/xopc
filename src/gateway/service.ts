@@ -1486,6 +1486,15 @@ export class GatewayService {
     return this.config;
   }
 
+  /**
+   * Filesystem path of the live xopc.json. Exposed for setup-style routes
+   * (`POST /api/setup/*`, M3.5) that delegate to `runSetupHeadless`, which
+   * needs the path to load + atomically save the config file.
+   */
+  get currentConfigPath(): string {
+    return this.configPath;
+  }
+
   get cronServiceInstance(): CronService {
     return this.cronService;
   }

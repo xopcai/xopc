@@ -3,6 +3,8 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
+import { ConfigureWithAILink } from '@/features/settings/configure-with-ai-link';
+import { useSaveBarRegistration } from '@/features/settings/save-bar/use-save-bar-registration';
 import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
 import {
   fetchVoiceModels,
@@ -66,7 +68,8 @@ const TTS_MINIMAX_VOICES_FALLBACK = [
   { id: 'female-shaonv', name: 'Female Shaonv (少女音)' },
 ];
 
-export function VoiceSettingsPanel() {
+/** See `WebSearchSettingsPanel` for the embedded-mode contract. */
+export function VoiceSettingsPanel({ embedded = false }: { embedded?: boolean } = {}) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const v = m.voiceSettings;
@@ -267,10 +270,19 @@ export function VoiceSettingsPanel() {
     setSaveOk(false);
   }, [baseline]);
 
+  useSaveBarRegistration({ id: 'voice', dirty, saving, save, discard });
+
+  const outerClass = embedded
+    ? 'flex flex-col gap-4'
+    : 'mx-auto flex w-full max-w-app-main flex-col gap-6 px-4 py-6';
+  const compactClass = embedded
+    ? 'flex flex-col gap-3'
+    : 'mx-auto flex w-full max-w-app-main flex-col gap-3 px-4 py-8';
+
   if (!hasToken) {
     return (
-      <div className="mx-auto flex w-full max-w-app-main flex-col gap-3 px-4 py-8">
-        <h1 className="text-lg font-semibold text-fg">{m.settingsSections.voice}</h1>
+      <div className={compactClass}>
+        {embedded ? null : <h1 className="text-lg font-semibold text-fg">{m.settingsSections.voice}</h1>}
         <p className="text-sm text-fg-muted">{v.needToken}</p>
       </div>
     );
@@ -278,7 +290,7 @@ export function VoiceSettingsPanel() {
 
   if (loading) {
     return (
-      <div className="mx-auto flex w-full max-w-app-main flex-col gap-3 px-4 py-8">
+      <div className={compactClass}>
         <div className="flex items-center gap-2 text-sm text-fg-muted">
           <Loader2 className="size-4 animate-spin" />
           {v.loading}
@@ -289,7 +301,7 @@ export function VoiceSettingsPanel() {
 
   if (!form || models === null) {
     return (
-      <div className="mx-auto flex w-full max-w-app-main flex-col gap-3 px-4 py-8">
+      <div className={compactClass}>
         <p className="text-sm text-fg-muted">{error ?? fetchError ?? v.loadError}</p>
         <Button
           type="button"
@@ -309,33 +321,41 @@ export function VoiceSettingsPanel() {
   const tts = form.tts;
 
   return (
-    <div className="mx-auto flex w-full max-w-app-main flex-col gap-6 px-4 py-6">
+    <div className={outerClass}>
       <header className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="text-lg font-semibold tracking-tight text-fg">{m.settingsSections.voice}</h1>
-          <p className="mt-1 text-sm text-fg-muted">{v.subtitle}</p>
-          <a
-            href={docsGuidePageUrl(language, 'voice')}
-            target="_blank"
-            rel="noreferrer"
-            className="mt-1 inline-flex items-center gap-1 text-sm text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
-          >
-            {v.docsLink}
-            <ExternalLink className="size-3.5" />
-          </a>
-        </div>
-        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-          {saveOk ? <span className="text-sm text-fg-muted">{v.saved}</span> : null}
-          <Button type="button" variant="secondary" disabled={!dirty || saving} onClick={discard}>
-            {v.discard}
-          </Button>
-          <Button type="button" variant="primary" disabled={!dirty || saving} onClick={() => void save()}>
-            {saving ? v.saving : v.save}
-          </Button>
-        </div>
+        {embedded ? (
+          <div className="min-w-0" aria-hidden />
+        ) : (
+          <div>
+            <h1 className="text-lg font-semibold tracking-tight text-fg">{m.settingsSections.voice}</h1>
+            <p className="mt-1 text-sm text-fg-muted">{v.subtitle}</p>
+            <a
+              href={docsGuidePageUrl(language, 'voice')}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-1 inline-flex items-center gap-1 text-sm text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+            >
+              {v.docsLink}
+              <ExternalLink className="size-3.5" />
+            </a>
+          </div>
+        )}
+        {/* See WebSearchSettingsPanel — global Save bar replaces these in embedded mode. */}
+        {embedded ? null : (
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+            <ConfigureWithAILink skill="setup-voice" />
+            {saveOk ? <span className="text-sm text-fg-muted">{v.saved}</span> : null}
+            <Button type="button" variant="secondary" disabled={!dirty || saving} onClick={discard}>
+              {v.discard}
+            </Button>
+            <Button type="button" variant="primary" disabled={!dirty || saving} onClick={() => void save()}>
+              {saving ? v.saving : v.save}
+            </Button>
+          </div>
+        )}
       </header>
 
-      {dirty ? <p className="text-xs text-amber-800 dark:text-amber-200">{v.unsavedHint}</p> : null}
+      {dirty && !embedded ? <p className="text-xs text-amber-800 dark:text-amber-200">{v.unsavedHint}</p> : null}
       {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
 
       <div className="flex flex-col gap-4">

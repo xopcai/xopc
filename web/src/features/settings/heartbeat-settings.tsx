@@ -1,5 +1,6 @@
-import { ExternalLink, Heart, Loader2, Play, RefreshCw } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Clock, ExternalLink, FileText, Heart, Loader2, MessageSquare, Play, RefreshCw, type LucideIcon } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
@@ -15,9 +16,11 @@ import {
 } from '@/features/settings/heartbeat-config-api';
 import { fetchHeartbeatMdSwr, heartbeatMdSwrKey } from '@/features/settings/heartbeat-md-swr';
 import type { HeartbeatSettingsState } from '@/features/settings/heartbeat-settings.types';
-import { SettingsFormSection } from '@/features/settings/settings-form-section';
+import { SaveBarControls } from '@/features/settings/save-bar/save-bar-controls';
+import { useSaveBarRegistration } from '@/features/settings/save-bar/use-save-bar-registration';
 import { nativeSelectMaxWidthClass, selectControlBaseClass, settingsInputFocusClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
+import { interaction } from '@/lib/interaction';
 import { messages, type HeartbeatSettingsMessages } from '@/i18n/messages';
 import { ScheduleField } from '@/features/scheduling/schedule-field';
 import { docsGuidePageUrl } from '@/navigation';
@@ -38,6 +41,42 @@ function selectClassName(): string {
 }
 
 type CronMessages = ReturnType<typeof messages>['cron'];
+type HeartbeatSettingsTabId = 'schedule' | 'delivery' | 'prompt' | 'document';
+
+const HEARTBEAT_SETTINGS_TABS: readonly HeartbeatSettingsTabId[] = [
+  'schedule',
+  'delivery',
+  'prompt',
+  'document',
+];
+
+const HEARTBEAT_SETTINGS_TAB_ICONS: Record<HeartbeatSettingsTabId, LucideIcon> = {
+  schedule: Clock,
+  delivery: MessageSquare,
+  prompt: Heart,
+  document: FileText,
+};
+
+function parseHeartbeatSettingsTab(raw: string | null): HeartbeatSettingsTabId {
+  if (raw && HEARTBEAT_SETTINGS_TABS.includes(raw as HeartbeatSettingsTabId)) {
+    return raw as HeartbeatSettingsTabId;
+  }
+  return 'schedule';
+}
+
+function heartbeatSettingsTabLabel(h: HeartbeatSettingsMessages, tab: HeartbeatSettingsTabId): string {
+  if (tab === 'schedule') return h.tabSchedule;
+  if (tab === 'delivery') return h.tabDelivery;
+  if (tab === 'prompt') return h.tabPrompt;
+  return h.tabDocument;
+}
+
+function heartbeatSettingsTabHint(h: HeartbeatSettingsMessages, tab: HeartbeatSettingsTabId): string {
+  if (tab === 'schedule') return h.scheduleTabHint;
+  if (tab === 'delivery') return h.deliveryTabHint;
+  if (tab === 'prompt') return h.promptTabHint;
+  return h.documentTabHint;
+}
 
 function workspacePathFromConfig(cfg: unknown): string {
   if (!cfg || typeof cfg !== 'object' || Array.isArray(cfg)) return '';
@@ -55,16 +94,29 @@ export function HeartbeatSettingsPanel() {
   const h = m.heartbeatSettings;
   const token = useGatewayStore((st) => st.token);
   const hasToken = Boolean(token);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = parseHeartbeatSettingsTab(searchParams.get('tab'));
+  const setActiveTab = useCallback(
+    (tab: HeartbeatSettingsTabId) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          if (tab === 'schedule') next.delete('tab');
+          else next.set('tab', tab);
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
 
   const [form, setForm] = useState<HeartbeatSettingsState | null>(null);
   const [baseline, setBaseline] = useState<HeartbeatSettingsState | null>(null);
   const [doc, setDoc] = useState<string>('');
   const [docBaseline, setDocBaseline] = useState<string>('');
-  const [savingConfig, setSavingConfig] = useState(false);
-  const [savingDoc, setSavingDoc] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [saveConfigOk, setSaveConfigOk] = useState(false);
-  const [saveDocOk, setSaveDocOk] = useState(false);
   const [triggerLoading, setTriggerLoading] = useState(false);
   const [triggerOk, setTriggerOk] = useState(false);
   const [triggerError, setTriggerError] = useState<string | null>(null);
@@ -114,7 +166,6 @@ export function HeartbeatSettingsPanel() {
       const next = structuredClone(heartbeatParsed);
       setForm(next);
       setBaseline(next);
-      setSaveConfigOk(false);
     }
   }, [hasToken, cfgData, heartbeatParsed, dirtyConfig]);
 
@@ -123,7 +174,6 @@ export function HeartbeatSettingsPanel() {
     if (!dirtyDoc) {
       setDoc(mdContent);
       setDocBaseline(mdContent);
-      setSaveDocOk(false);
     }
   }, [hasToken, mdContent, dirtyDoc]);
 
@@ -189,53 +239,38 @@ export function HeartbeatSettingsPanel() {
     setForm((f) => (f ? { ...f, ...patch } : null));
   }, []);
 
-  const discardConfiguration = useCallback(() => {
-    if (!baseline) return;
-    setForm(structuredClone(baseline));
-    setSaveConfigOk(false);
-    setError(null);
-  }, [baseline]);
+  const dirty = dirtyConfig || dirtyDoc;
 
-  const discardDocument = useCallback(() => {
+  const discard = useCallback(() => {
+    if (baseline) setForm(structuredClone(baseline));
     setDoc(docBaseline);
-    setSaveDocOk(false);
     setError(null);
-  }, [docBaseline]);
+  }, [baseline, docBaseline]);
 
-  const saveConfiguration = useCallback(async () => {
-    if (!form || savingConfig) return;
-    setSavingConfig(true);
+  const save = useCallback(async () => {
+    if (!form || saving) return;
+    setSaving(true);
     setError(null);
-    setSaveConfigOk(false);
     try {
-      await patchHeartbeatSettings(form);
-      const next = structuredClone(form);
-      setBaseline(next);
-      setSaveConfigOk(true);
-      window.setTimeout(() => setSaveConfigOk(false), 2500);
+      if (dirtyConfig) {
+        await patchHeartbeatSettings(form);
+        setBaseline(structuredClone(form));
+      }
+      if (dirtyDoc) {
+        await putHeartbeatMd(doc);
+        setDocBaseline(doc);
+      }
     } catch (e) {
-      setError(e instanceof Error ? e.message : h.saveConfigError);
+      const fallback = dirtyConfig ? h.saveConfigError : h.saveDocError;
+      const message = e instanceof Error ? e.message : fallback;
+      setError(message);
+      throw new Error(message);
     } finally {
-      setSavingConfig(false);
+      setSaving(false);
     }
-  }, [form, savingConfig, h.saveConfigError]);
+  }, [dirtyConfig, dirtyDoc, doc, form, h.saveConfigError, h.saveDocError, saving]);
 
-  const saveDocument = useCallback(async () => {
-    if (savingDoc) return;
-    setSavingDoc(true);
-    setError(null);
-    setSaveDocOk(false);
-    try {
-      await putHeartbeatMd(doc);
-      setDocBaseline(doc);
-      setSaveDocOk(true);
-      window.setTimeout(() => setSaveDocOk(false), 2500);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : h.saveDocError);
-    } finally {
-      setSavingDoc(false);
-    }
-  }, [doc, savingDoc, h.saveDocError]);
+  useSaveBarRegistration({ id: 'heartbeat', dirty, saving, save, discard });
 
   if (!hasToken) {
     return (
@@ -276,9 +311,9 @@ export function HeartbeatSettingsPanel() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-app-main flex-col gap-6 px-4 py-6">
-      <header className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <div>
+    <div className="mx-auto flex w-full max-w-app-main flex-col gap-4 px-4 py-6">
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
           <h1 className="text-lg font-semibold tracking-tight text-fg">{m.settingsSections.heartbeat}</h1>
           <p className="mt-1 text-sm text-fg-muted">{h.subtitle}</p>
           <a
@@ -291,7 +326,26 @@ export function HeartbeatSettingsPanel() {
             <ExternalLink className="size-3.5" />
           </a>
         </div>
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant="secondary"
+            className="inline-flex items-center gap-2"
+            disabled={triggerLoading}
+            onClick={() => void runHeartbeatNow()}
+          >
+            {triggerLoading ? (
+              <Loader2 className="size-4 animate-spin" aria-hidden />
+            ) : (
+              <Play className="size-4" strokeWidth={1.75} aria-hidden />
+            )}
+            {triggerLoading ? h.triggering : h.triggerNow}
+          </Button>
+          {triggerOk ? <span className="text-sm text-fg-muted">{h.triggered}</span> : null}
+        </div>
       </header>
+
+      <SaveBarControls />
 
       {workspacePath ? (
         <p className="text-xs text-fg-subtle">
@@ -300,34 +354,16 @@ export function HeartbeatSettingsPanel() {
       ) : null}
 
       {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
+      {triggerError ? <p className="text-sm text-red-600 dark:text-red-400">{triggerError}</p> : null}
 
-      <SettingsFormSection>
-        <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-          <div className="flex items-center gap-2 text-sm font-semibold text-fg">
-            <Heart className="size-4 text-accent" strokeWidth={1.75} />
-            {h.configSection}
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              type="button"
-              variant="secondary"
-              className="inline-flex items-center gap-2"
-              disabled={triggerLoading}
-              onClick={() => void runHeartbeatNow()}
-            >
-              {triggerLoading ? (
-                <Loader2 className="size-4 animate-spin" aria-hidden />
-              ) : (
-                <Play className="size-4" strokeWidth={1.75} aria-hidden />
-              )}
-              {triggerLoading ? h.triggering : h.triggerNow}
-            </Button>
-            {triggerOk ? <span className="text-sm text-fg-muted">{h.triggered}</span> : null}
-          </div>
-        </div>
-        <p className="mb-4 text-xs text-fg-subtle">{h.triggerHint}</p>
-        {triggerError ? <p className="mb-3 text-sm text-red-600 dark:text-red-400">{triggerError}</p> : null}
-        <HeartbeatConfigFields
+      <HeartbeatSettingsTabs h={h} activeTab={activeTab} onChange={setActiveTab} />
+
+      <HeartbeatTabPanel h={h} id="schedule" activeTab={activeTab}>
+        <HeartbeatScheduleFields h={h} form={form} update={update} />
+      </HeartbeatTabPanel>
+
+      <HeartbeatTabPanel h={h} id="delivery" activeTab={activeTab}>
+        <HeartbeatDeliveryFields
           h={h}
           cron={m.cron}
           form={form}
@@ -338,59 +374,155 @@ export function HeartbeatSettingsPanel() {
           inputClassName={inputClassName}
           selectClassName={selectClassName}
         />
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          {saveConfigOk ? <span className="text-sm text-fg-muted">{h.savedConfig}</span> : null}
-          <Button
-            type="button"
-            variant="secondary"
-            disabled={!dirtyConfig || savingConfig}
-            onClick={discardConfiguration}
-          >
-            {h.discard}
-          </Button>
-          <Button
-            type="button"
-            variant="primary"
-            disabled={!dirtyConfig || savingConfig}
-            onClick={() => void saveConfiguration()}
-          >
-            {savingConfig ? h.savingConfig : h.saveConfig}
-          </Button>
-          {dirtyConfig ? <span className="text-xs text-amber-800 dark:text-amber-200">{h.unsavedConfig}</span> : null}
-        </div>
-      </SettingsFormSection>
+      </HeartbeatTabPanel>
 
-      <SettingsFormSection>
-        <div className="mb-2 text-sm font-semibold text-fg">{h.docSection}</div>
+      <HeartbeatTabPanel h={h} id="prompt" activeTab={activeTab}>
+        <HeartbeatPromptFields h={h} form={form} update={update} inputClassName={inputClassName} />
+      </HeartbeatTabPanel>
+
+      <HeartbeatTabPanel h={h} id="document" activeTab={activeTab}>
         <p className="mb-3 text-xs text-fg-subtle">{h.docHint}</p>
         <textarea
-          className={cn(inputClassName(), 'min-h-[12rem] resize-y font-mono text-xs leading-relaxed')}
+          className={cn(inputClassName(), 'min-h-72 resize-y font-mono text-xs leading-relaxed')}
           value={doc}
           onChange={(e) => setDoc(e.target.value)}
           spellCheck={false}
           aria-label={h.docSection}
         />
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          {saveDocOk ? <span className="text-sm text-fg-muted">{h.savedDoc}</span> : null}
-          <Button type="button" variant="secondary" disabled={!dirtyDoc || savingDoc} onClick={discardDocument}>
-            {h.discard}
-          </Button>
-          <Button
-            type="button"
-            variant="primary"
-            disabled={!dirtyDoc || savingDoc}
-            onClick={() => void saveDocument()}
-          >
-            {savingDoc ? h.savingDoc : h.saveDoc}
-          </Button>
-          {dirtyDoc ? <span className="text-xs text-amber-800 dark:text-amber-200">{h.unsavedDoc}</span> : null}
-        </div>
-      </SettingsFormSection>
+      </HeartbeatTabPanel>
     </div>
   );
 }
 
-function HeartbeatConfigFields({
+function HeartbeatSettingsTabs({
+  h,
+  activeTab,
+  onChange,
+}: {
+  h: HeartbeatSettingsMessages;
+  activeTab: HeartbeatSettingsTabId;
+  onChange: (tab: HeartbeatSettingsTabId) => void;
+}) {
+  return (
+    <nav
+      aria-label={h.tabsAriaLabel}
+      className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1"
+      role="tablist"
+      onKeyDown={(event) => {
+        if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+        event.preventDefault();
+        const currentIndex = HEARTBEAT_SETTINGS_TABS.indexOf(activeTab);
+        const delta = event.key === 'ArrowRight' ? 1 : -1;
+        const nextIndex = (currentIndex + delta + HEARTBEAT_SETTINGS_TABS.length) % HEARTBEAT_SETTINGS_TABS.length;
+        onChange(HEARTBEAT_SETTINGS_TABS[nextIndex]);
+      }}
+    >
+      {HEARTBEAT_SETTINGS_TABS.map((tab) => {
+        const Icon = HEARTBEAT_SETTINGS_TAB_ICONS[tab];
+        const selected = tab === activeTab;
+        return (
+          <button
+            key={tab}
+            type="button"
+            role="tab"
+            aria-selected={selected}
+            id={`heartbeat-settings-tab-${tab}`}
+            aria-controls={`heartbeat-settings-panel-${tab}`}
+            className={cn(
+              'inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+              interaction.press,
+              selected ? 'bg-accent-soft text-accent-fg' : 'text-fg-muted hover:bg-surface-hover hover:text-fg',
+            )}
+            onClick={() => onChange(tab)}
+          >
+            <Icon className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
+            <span>{heartbeatSettingsTabLabel(h, tab)}</span>
+          </button>
+        );
+      })}
+    </nav>
+  );
+}
+
+function HeartbeatTabPanel({
+  h,
+  id,
+  activeTab,
+  children,
+}: {
+  h: HeartbeatSettingsMessages;
+  id: HeartbeatSettingsTabId;
+  activeTab: HeartbeatSettingsTabId;
+  children: ReactNode;
+}) {
+  if (activeTab !== id) return null;
+
+  return (
+    <section
+      id={`heartbeat-settings-panel-${id}`}
+      role="tabpanel"
+      aria-labelledby={`heartbeat-settings-tab-${id}`}
+      className="rounded-2xl border border-edge bg-surface-base px-4 py-5 sm:px-5"
+    >
+      <div className="mb-5">
+        <div className="text-sm font-semibold text-fg">{heartbeatSettingsTabLabel(h, id)}</div>
+        <p className="mt-1 text-xs text-fg-subtle">{heartbeatSettingsTabHint(h, id)}</p>
+      </div>
+      <div className="space-y-4">{children}</div>
+    </section>
+  );
+}
+
+function HeartbeatScheduleFields({
+  h,
+  form,
+  update,
+}: {
+  h: HeartbeatSettingsMessages;
+  form: HeartbeatSettingsState;
+  update: (patch: Partial<HeartbeatSettingsState>) => void;
+}) {
+  return (
+    <>
+      <label className="flex cursor-pointer items-center gap-2 text-sm text-fg">
+        <input
+          type="checkbox"
+          className="ui-checkbox"
+          checked={form.enabled}
+          onChange={(event) => update({ enabled: event.target.checked })}
+        />
+        {h.enable}
+      </label>
+
+      <ScheduleField
+        kind="interval"
+        label={h.interval}
+        valueMs={form.intervalMs}
+        onChangeMs={(intervalMs) => update({ intervalMs })}
+        labels={{ secondsLabel: h.intervalSecondsLabel, presets: h.intervalPresets }}
+        hint={`${h.intervalHintPreset} ${h.intervalHint}`}
+      />
+
+      <ScheduleField
+        kind="active-hours"
+        label={h.activeHoursTitle}
+        value={form.activeHours}
+        onChange={(activeHours) => update({ activeHours })}
+        labels={{
+          start: h.activeStart,
+          end: h.activeEnd,
+          timezone: h.activeTimezone,
+          add: h.addActiveHours,
+          clear: h.clearActiveHours,
+        }}
+        hint={h.activeHoursHint}
+      />
+    </>
+  );
+}
+
+function HeartbeatDeliveryFields({
   h,
   cron: c,
   form,
@@ -411,28 +543,112 @@ function HeartbeatConfigFields({
   inputClassName: typeof inputClassName;
   selectClassName: typeof selectClassName;
 }) {
-  const channelNames = useMemo(() => new Set(channels.map((x) => x.name)), [channels]);
+  const channelNames = useMemo(() => new Set(channels.map((channel) => channel.name)), [channels]);
   const targetTrim = form.target.trim();
   const showCustomChannel = Boolean(targetTrim && !channelNames.has(targetTrim));
 
   return (
-    <div className="space-y-4">
-      <label className="flex cursor-pointer items-center gap-2 text-sm text-fg">
-        <input
-          type="checkbox"
-          className="ui-checkbox"
-          checked={form.enabled}
-          onChange={(e) => update({ enabled: e.target.checked })}
-        />
-        {h.enable}
+    <>
+      <p className="text-xs text-fg-subtle">{h.deliveryHint}</p>
+
+      <label className="flex flex-col gap-1">
+        <span className="text-xs font-medium text-fg-muted">{c.channel}</span>
+        <select
+          className={selectCn()}
+          value={targetTrim}
+          onChange={(event) => {
+            const value = event.target.value.trim();
+            update({ target: value, targetChatId: '' });
+          }}
+        >
+          <option value="">{h.channelNone}</option>
+          {showCustomChannel ? (
+            <option value={targetTrim}>
+              {targetTrim} ({h.customChannelSuffix})
+            </option>
+          ) : null}
+          {channels.map((channel) => (
+            <option key={channel.name} value={channel.name} disabled={!channel.enabled}>
+              {channel.name} {!channel.enabled ? '(disabled)' : ''}
+            </option>
+          ))}
+        </select>
       </label>
 
+      {targetTrim ? (
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs font-medium text-fg-muted">{c.recipient}</span>
+            <Button
+              type="button"
+              variant="ghost"
+              className="h-7 gap-1 px-2 text-xs"
+              title={c.refreshRecipientHint}
+              onClick={onRefreshChatIds}
+            >
+              <RefreshCw className="size-3.5" strokeWidth={1.75} aria-hidden />
+              {c.refreshList}
+            </Button>
+          </div>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              className={cn(inputCn(), 'min-w-0 flex-1')}
+              value={form.targetChatId}
+              onChange={(event) => update({ targetChatId: event.target.value })}
+              placeholder={c.recipientPlaceholder}
+              autoComplete="off"
+            />
+            <select
+              className={cn(selectCn(), 'max-w-40 shrink-0 text-xs')}
+              value={form.targetChatId}
+              onChange={(event) => {
+                const value = event.target.value;
+                if (value) update({ targetChatId: value });
+              }}
+            >
+              <option value="">{c.selectRecipient}</option>
+              {sessionChatIds.length > 0 ? (
+                sessionChatIds.map((item) => (
+                  <option key={`${item.channel}-${item.chatId}`} value={item.chatId}>
+                    {formatRecipientOptionLabel(item, c.lastActiveLabels)}
+                  </option>
+                ))
+              ) : (
+                <option value="" disabled>
+                  {c.noRecentChatsOption}
+                </option>
+              )}
+            </select>
+          </div>
+          <p className="text-xs text-fg-muted">
+            {sessionChatIds.length > 0 ? c.enterManuallyOrSelect : c.noRecentChats}
+          </p>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+function HeartbeatPromptFields({
+  h,
+  form,
+  update,
+  inputClassName: inputCn,
+}: {
+  h: HeartbeatSettingsMessages;
+  form: HeartbeatSettingsState;
+  update: (patch: Partial<HeartbeatSettingsState>) => void;
+  inputClassName: typeof inputClassName;
+}) {
+  return (
+    <>
       <label className="flex cursor-pointer items-start gap-2 text-sm text-fg">
         <input
           type="checkbox"
           className="ui-checkbox mt-0.5"
           checked={form.includeSystemPromptSection}
-          onChange={(e) => update({ includeSystemPromptSection: e.target.checked })}
+          onChange={(event) => update({ includeSystemPromptSection: event.target.checked })}
         />
         <span>
           {h.includeSystemPromptSection}
@@ -440,103 +656,12 @@ function HeartbeatConfigFields({
         </span>
       </label>
 
-      <ScheduleField
-        kind="interval"
-        label={h.interval}
-        valueMs={form.intervalMs}
-        onChangeMs={(intervalMs) => update({ intervalMs })}
-        labels={{ secondsLabel: h.intervalSecondsLabel, presets: h.intervalPresets }}
-        hint={`${h.intervalHintPreset} ${h.intervalHint}`}
-      />
-
-      <div className="border-t border-edge-subtle pt-4">
-        <div className="mb-2 text-sm font-medium text-fg">{h.deliveryTitle}</div>
-
-        <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-fg-muted">{c.channel}</span>
-          <select
-            className={selectCn()}
-            value={targetTrim}
-            onChange={(e) => {
-              const v = e.target.value.trim();
-              update({ target: v, targetChatId: '' });
-            }}
-          >
-            <option value="">{h.channelNone}</option>
-            {showCustomChannel ? (
-              <option value={targetTrim}>
-                {targetTrim} ({h.customChannelSuffix})
-              </option>
-            ) : null}
-            {channels.map((ch) => (
-              <option key={ch.name} value={ch.name} disabled={!ch.enabled}>
-                {ch.name} {!ch.enabled ? '(disabled)' : ''}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        {targetTrim ? (
-          <div className="mt-3 flex flex-col gap-1">
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-xs font-medium text-fg-muted">{c.recipient}</span>
-              <Button
-                type="button"
-                variant="ghost"
-                className="h-7 gap-1 px-2 text-xs"
-                title={c.refreshRecipientHint}
-                onClick={onRefreshChatIds}
-              >
-                <RefreshCw className="size-3.5" strokeWidth={1.75} aria-hidden />
-                {c.refreshList}
-              </Button>
-            </div>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                className={cn(inputCn(), 'min-w-0 flex-1')}
-                value={form.targetChatId}
-                onChange={(e) => update({ targetChatId: e.target.value })}
-                placeholder={c.recipientPlaceholder}
-                autoComplete="off"
-              />
-              <select
-                className={cn(selectCn(), 'max-w-[10rem] shrink-0 text-xs')}
-                value={form.targetChatId}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  if (v) update({ targetChatId: v });
-                }}
-              >
-                <option value="">{c.selectRecipient}</option>
-                {sessionChatIds.length > 0 ? (
-                  sessionChatIds.map((item) => (
-                    <option key={`${item.channel}-${item.chatId}`} value={item.chatId}>
-                      {formatRecipientOptionLabel(item, c.lastActiveLabels)}
-                    </option>
-                  ))
-                ) : (
-                  <option value="" disabled>
-                    {c.noRecentChatsOption}
-                  </option>
-                )}
-              </select>
-            </div>
-            <p className="text-xs text-fg-muted">
-              {sessionChatIds.length > 0 ? c.enterManuallyOrSelect : c.noRecentChats}
-            </p>
-          </div>
-        ) : null}
-
-        <p className="mt-2 text-xs text-fg-subtle">{h.deliveryHint}</p>
-      </div>
-
       <div>
         <div className="mb-1 text-sm font-medium text-fg">{h.prompt}</div>
         <textarea
-          className={cn(inputCn(), 'min-h-[4.5rem] resize-y font-mono text-xs')}
+          className={cn(inputCn(), 'min-h-36 resize-y font-mono text-xs')}
           value={form.prompt}
-          onChange={(e) => update({ prompt: e.target.value })}
+          onChange={(event) => update({ prompt: event.target.value })}
           placeholder={h.promptPlaceholder}
         />
         <p className="mt-1 text-xs text-fg-subtle">{h.promptHint}</p>
@@ -549,13 +674,14 @@ function HeartbeatConfigFields({
           min={1}
           className={inputCn()}
           value={form.ackMaxChars === '' ? '' : form.ackMaxChars}
-          onChange={(e) => {
-            const v = e.target.value;
-            if (v === '') update({ ackMaxChars: '' });
-            else {
-              const n = parseInt(v, 10);
-              update({ ackMaxChars: Number.isFinite(n) ? n : '' });
+          onChange={(event) => {
+            const value = event.target.value;
+            if (value === '') {
+              update({ ackMaxChars: '' });
+              return;
             }
+            const parsedValue = parseInt(value, 10);
+            update({ ackMaxChars: Number.isFinite(parsedValue) ? parsedValue : '' });
           }}
           placeholder={h.ackDefaultPlaceholder}
         />
@@ -567,30 +693,13 @@ function HeartbeatConfigFields({
           type="checkbox"
           className="ui-checkbox mt-0.5"
           checked={form.isolatedSession}
-          onChange={(e) => update({ isolatedSession: e.target.checked })}
+          onChange={(event) => update({ isolatedSession: event.target.checked })}
         />
         <span>
           {h.isolatedSession}
           <span className="mt-1 block text-xs text-fg-subtle">{h.isolatedSessionHint}</span>
         </span>
       </label>
-
-      <div className="border-t border-edge-subtle pt-4">
-        <ScheduleField
-          kind="active-hours"
-          label={h.activeHoursTitle}
-          value={form.activeHours}
-          onChange={(activeHours) => update({ activeHours })}
-          labels={{
-            start: h.activeStart,
-            end: h.activeEnd,
-            timezone: h.activeTimezone,
-            add: h.addActiveHours,
-            clear: h.clearActiveHours,
-          }}
-          hint={h.activeHoursHint}
-        />
-      </div>
-    </div>
+    </>
   );
 }

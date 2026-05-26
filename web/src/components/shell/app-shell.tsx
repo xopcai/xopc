@@ -9,6 +9,7 @@ import { TokenDialog } from '@/components/shell/token-dialog';
 import { DesktopNotificationBridge } from '@/features/electron/desktop-notification-bridge';
 import { ElectronGatewayExitBanner } from '@/features/electron/electron-gateway-exit-banner';
 import { ElectronMenuListener } from '@/features/electron/electron-menu-listener';
+import { GatewayRestartBanner } from '@/features/gateway/gateway-restart-banner';
 import { UpdateReminderBar } from '@/features/updater/update-reminder-bar';
 import { useUpdateReminder } from '@/features/updater/use-update-reminder';
 import { GlobalCommandPaletteHost } from '@/features/search/global-command-palette/global-command-palette-host';
@@ -145,6 +146,7 @@ export function AppShell() {
       <ElectronGatewayExitBanner />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <UpdateReminderBar reminder={updateReminder} />
+        <GatewayRestartBanner />
         <div className="flex min-h-0 min-w-0 flex-1 flex-row overflow-hidden">
           <SidebarColumn />
 

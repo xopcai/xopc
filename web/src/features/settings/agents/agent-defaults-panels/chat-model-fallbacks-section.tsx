@@ -6,7 +6,12 @@ import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/setti
 
 import type { AgentDefaultsPanelProps } from '../agent-defaults-panel-props';
 
-/** Chat-only fallback chain (`agents.defaults.modelFallbacks`) — lives on the Models settings page. */
+/**
+ * Chat-only fallback chain (`agents.defaults.modelFallbacks`).
+ * Rendered on the Agent defaults / Chat tab right under the primary model
+ * selector — when the primary model fails after instant retries, xopc
+ * walks this list in order.
+ */
 export function AgentDefaultsChatModelFallbacksSection(props: AgentDefaultsPanelProps) {
   const { a, chat, form, update } = props;
 
