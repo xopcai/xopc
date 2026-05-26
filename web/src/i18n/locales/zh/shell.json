@@ -46,7 +46,8 @@
     "settingsAgentMcp": "外部工具 (MCP)",
     "settingsAgentSystemPrompt": "系统提示词",
     "settingsAgents": "智能体",
-    "settingsSystem": "系统设置"
+    "settingsSystem": "系统授权",
+    "settingsAppManagement": "应用管理"
   },
   "token": {
     "title": "需要身份验证",
