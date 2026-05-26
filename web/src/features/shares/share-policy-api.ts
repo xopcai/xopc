@@ -17,7 +17,18 @@ export const DEFAULT_SHARE_POLICY: SharePolicyState = {
   maxTtlDays: 7,
   maxActiveShares: 100,
   maxFileSizeMb: 100,
-  inlinePreviewMimes: ['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'application/pdf'],
+  inlinePreviewMimes: [
+    'image/png',
+    'image/jpeg',
+    'image/gif',
+    'image/webp',
+    'image/svg+xml',
+    'application/pdf',
+    'text/html',
+    'text/markdown',
+    'text/plain',
+    'application/json',
+  ],
 };
 
 const MS_PER_HOUR = 3_600_000;

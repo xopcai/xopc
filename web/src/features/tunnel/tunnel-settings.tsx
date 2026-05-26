@@ -24,7 +24,6 @@ import {
 import { useMobilePairQr } from '@/features/tunnel/use-mobile-pair-qr';
 import { TunnelE2eSection } from '@/features/tunnel/tunnel-e2e-section';
 import { cn } from '@/lib/cn';
-import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
 import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -39,7 +38,6 @@ export function TunnelSettingsPanel({ embedded = false }: { embedded?: boolean }
   const [starting, setStarting] = useState(false);
   const [stopping, setStopping] = useState(false);
   const [savingAutoStart, setSavingAutoStart] = useState(false);
-  const [linkCopied, setLinkCopied] = useState(false);
   const [consentOpen, setConsentOpen] = useState(false);
   const [autoStartConfirmOpen, setAutoStartConfirmOpen] = useState(false);
   const [releaseConfirmOpen, setReleaseConfirmOpen] = useState(false);
@@ -261,13 +259,14 @@ export function TunnelSettingsPanel({ embedded = false }: { embedded?: boolean }
     }
   }, [mutStatus, pairQr.refreshQr]);
 
-  const copyLink = useCallback(async () => {
-    if (!status?.publicUrl) return;
-    const ok = await copyTextToClipboard(status.publicUrl);
-    if (!ok) return;
-    setLinkCopied(true);
-    window.setTimeout(() => setLinkCopied(false), 2000);
-  }, [status?.publicUrl]);
+  const copyLabels = useMemo(
+    () => ({
+      copy: t.copyUrl,
+      copied: t.copied,
+      copyFailed: messages(language).clipboard.copyFailed,
+    }),
+    [language, t.copyUrl, t.copied],
+  );
 
   if (!hasToken) {
     return (
@@ -365,14 +364,13 @@ export function TunnelSettingsPanel({ embedded = false }: { embedded?: boolean }
           statusErr={statusErr}
           starting={starting}
           stopping={stopping}
-          linkCopied={linkCopied}
           showConsentExpired={Boolean(showConsentExpired)}
+          copyLabels={copyLabels}
           startDisabled={!brokerReady}
           startDisabledReason={!brokerReady ? t.brokerSecretRequiredBeforeStart : undefined}
           stepLabel={t.flowStepStart}
           onStart={handleStartClick}
           onStop={() => void handleStop()}
-          onCopyUrl={() => void copyLink()}
         />
 
         <MobilePairQrSection
@@ -473,13 +471,12 @@ export function TunnelSettingsPanel({ embedded = false }: { embedded?: boolean }
         statusErr={statusErr}
         starting={starting}
         stopping={stopping}
-        linkCopied={linkCopied}
         showConsentExpired={Boolean(showConsentExpired)}
+        copyLabels={copyLabels}
         startDisabled={!brokerReady}
         startDisabledReason={!brokerReady ? t.brokerSecretRequiredBeforeStart : undefined}
         onStart={handleStartClick}
         onStop={() => void handleStop()}
-        onCopyUrl={() => void copyLink()}
       />
 
       <MobilePairQrSection pairQr={pairQr} gatewayToken={token ?? ''} />

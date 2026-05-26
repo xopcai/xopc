@@ -31,6 +31,7 @@ import {
 } from '@/features/shares/share-link-dialog';
 import { SharePolicySection } from '@/features/shares/share-policy-section';
 import { cn } from '@/lib/cn';
+import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
 import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -351,6 +352,8 @@ function ShareRow({
   const [revokeOpen, setRevokeOpen] = useState(false);
   const [revoking, setRevoking] = useState(false);
   const [linksOpen, setLinksOpen] = useState(false);
+  const [urlCopied, setUrlCopied] = useState(false);
+  const [copyFailed, setCopyFailed] = useState(false);
   const [extending, setExtending] = useState(false);
 
   const isActive = !share.expired && !share.revoked;
@@ -375,8 +378,17 @@ function ShareRow({
   }, [share.id, onRevoked]);
 
   const handleCopy = useCallback(async () => {
-    setLinksOpen((v) => !v);
-  }, []);
+    setLinksOpen(true);
+    setCopyFailed(false);
+    const ok = await copyTextToClipboard(share.shareUrl);
+    if (!ok) {
+      setCopyFailed(true);
+      window.setTimeout(() => setCopyFailed(false), 2500);
+      return;
+    }
+    setUrlCopied(true);
+    window.setTimeout(() => setUrlCopied(false), 2000);
+  }, [share.shareUrl]);
 
   const handleExtend = useCallback(async () => {
     setExtending(true);
@@ -428,7 +440,7 @@ function ShareRow({
                   title={t.copyUrl}
                   onClick={() => void handleCopy()}
                 >
-                  {linksOpen ? <Check className="size-3.5 text-emerald-500" /> : <Copy className="size-3.5" />}
+                  {urlCopied ? <Check className="size-3.5 text-emerald-500" /> : <Copy className="size-3.5" />}
                 </Button>
                 <Button
                   type="button"
@@ -461,6 +473,9 @@ function ShareRow({
               reachability={share.reachability}
               compact
             />
+            {copyFailed ? (
+              <p className="mt-2 text-xs text-red-600 dark:text-red-400">{t.copyFailed}</p>
+            ) : null}
             <div className="mt-2">
               <ReachabilityHint reachability={share.reachability} />
             </div>

@@ -12,7 +12,6 @@ import {
 } from '@/features/tunnel/tunnel-api';
 import { encodeMobilePairQr } from '@/features/tunnel/mobile-pair-qr';
 import { buildMobileGatewayPairDeepLink, isLoopbackHttpOrigin } from '@/lib/url';
-import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
 
 export type MobilePairQrState = {
   tunnelActive: boolean;
@@ -31,8 +30,6 @@ export type MobilePairQrState = {
   qrDataUrl: string | null;
   qrGenFailed: boolean;
   encoding: boolean;
-  linkCopied: boolean;
-  copyDeepLink: () => Promise<void>;
   refreshQr: (payload?: string) => Promise<void>;
   resetPairBaseFromContext: (url?: string | null) => void;
 };
@@ -81,7 +78,6 @@ export function useMobilePairQr(gatewayToken: string): MobilePairQrState {
   const [pairBaseUrl, setPairBaseUrlState] = useState('');
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [qrGenFailed, setQrGenFailed] = useState(false);
-  const [linkCopied, setLinkCopied] = useState(false);
   const [manualPayload, setManualPayload] = useState('');
 
   const setPairBaseUrl = useCallback((value: string) => {
@@ -212,14 +208,6 @@ export function useMobilePairQr(gatewayToken: string): MobilePairQrState {
 
   const encoding = Boolean(deepLink && !qrDataUrl && !qrGenFailed);
 
-  const copyDeepLink = useCallback(async () => {
-    if (!deepLink) return;
-    const ok = await copyTextToClipboard(deepLink);
-    if (!ok) return;
-    setLinkCopied(true);
-    window.setTimeout(() => setLinkCopied(false), 2000);
-  }, [deepLink]);
-
   return {
     tunnelActive,
     tunnelStatus,
@@ -237,8 +225,6 @@ export function useMobilePairQr(gatewayToken: string): MobilePairQrState {
     qrDataUrl,
     qrGenFailed,
     encoding,
-    linkCopied,
-    copyDeepLink,
     refreshQr,
     resetPairBaseFromContext,
   };

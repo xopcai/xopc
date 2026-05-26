@@ -36,6 +36,7 @@ import { messages } from '@/i18n/messages';
 import { formControlBorderFocusClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
 import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
+import { showComposerNotification } from '@/features/chat/composer/composer-notifications';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
@@ -84,6 +85,7 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
   onRequestDelete,
   sb,
   sess,
+  clipboard,
   defaultUnnamedTitle,
   sessionAgentId,
   sessionAgentAvatar,
@@ -98,6 +100,7 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
   onRequestDelete: (key: string) => void;
   sb: ReturnType<typeof messages>['sidebar'];
   sess: ReturnType<typeof messages>['sessions'];
+  clipboard: ReturnType<typeof messages>['clipboard'];
   defaultUnnamedTitle: string;
   sessionAgentId: string;
   sessionAgentAvatar?: string;
@@ -122,8 +125,13 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
   };
 
   const copyChatId = async () => {
-    await copyTextToClipboard(session.key);
+    const ok = await copyTextToClipboard(session.key);
     setMenuOpen(false);
+    if (ok) {
+      showComposerNotification('success', sb.taskChatIdCopied, undefined, { duration: 2000 });
+      return;
+    }
+    showComposerNotification('warning', clipboard.copyFailed, undefined, { duration: 4000 });
   };
 
   return (
@@ -492,6 +500,7 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
                   onRequestDelete={setDeleteKey}
                   sb={sb}
                   sess={sess}
+                  clipboard={m.clipboard}
                   defaultUnnamedTitle={m.chat.newSession}
                   sessionAgentId={sessionAgentId}
                   sessionAgentAvatar={agentAvatarFromOptions(sessionAgentId, agentItems)}

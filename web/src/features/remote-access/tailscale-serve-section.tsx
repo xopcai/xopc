@@ -1,8 +1,9 @@
-import { Copy, Globe, Loader2, Power } from 'lucide-react';
-import { useCallback, useState } from 'react';
+import { Globe, Loader2, Power } from 'lucide-react';
+import { useCallback, useMemo, useState } from 'react';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
+import { CopyTextRow } from '@/components/ui/copy-text-row';
 import {
   SettingsFormSection,
   SettingsFormSectionHeader,
@@ -14,7 +15,6 @@ import {
   stopTailscaleExposure,
 } from '@/features/remote-access/remote-access-api';
 import { messages } from '@/i18n/messages';
-import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
@@ -36,10 +36,17 @@ function TailscaleDownloadLink({ label }: { label: string }) {
 export function TailscaleServeSection({ embedded = false }: { embedded?: boolean }) {
   const language = useLocaleStore((s) => s.language);
   const t = messages(language).remoteAccess.tailscale;
+  const copyLabels = useMemo(
+    () => ({
+      copy: t.copyUrl,
+      copied: t.copied,
+      copyFailed: messages(language).clipboard.copyFailed,
+    }),
+    [language, t.copyUrl, t.copied],
+  );
   const hasToken = Boolean(useGatewayStore((s) => s.token));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
 
   const { data, mutate, isLoading } = useSWR(
     hasToken ? 'exposure-status' : null,
@@ -77,14 +84,6 @@ export function TailscaleServeSection({ embedded = false }: { embedded?: boolean
       setBusy(false);
     }
   }, [mutate]);
-
-  const copyUrl = useCallback(async () => {
-    if (!publicUrl) return;
-    const ok = await copyTextToClipboard(publicUrl);
-    if (!ok) return;
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }, [publicUrl]);
 
   if (!hasToken) {
     return null;
@@ -133,12 +132,12 @@ export function TailscaleServeSection({ embedded = false }: { embedded?: boolean
         <>
           <SettingsFormSection>
             <p className="text-sm font-medium text-fg">{t.statusLabel}</p>
-            <p className="mt-1 text-sm text-fg-muted">
-              {active ? t.statusActive : t.statusOff}
-              {publicUrl ? (
-                <span className="mt-1 block font-mono text-xs text-fg break-all">{publicUrl}</span>
-              ) : null}
-            </p>
+            <p className="mt-1 text-sm text-fg-muted">{active ? t.statusActive : t.statusOff}</p>
+            {publicUrl ? (
+              <div className="mt-3">
+                <CopyTextRow text={publicUrl} labels={copyLabels} />
+              </div>
+            ) : null}
             {error ? <p className="mt-2 text-sm text-red-600 dark:text-red-400">{error}</p> : null}
             <div className="mt-3 flex flex-wrap gap-2">
               {!active ? (
@@ -152,12 +151,6 @@ export function TailscaleServeSection({ embedded = false }: { embedded?: boolean
                   {t.disableServe}
                 </Button>
               )}
-              {publicUrl ? (
-                <Button type="button" variant="ghost" onClick={() => void copyUrl()}>
-                  <Copy className="mr-1 h-4 w-4" />
-                  {copied ? t.copied : t.copyUrl}
-                </Button>
-              ) : null}
             </div>
           </SettingsFormSection>
           <p className="text-xs text-fg-subtle">{t.hint}</p>

@@ -1,32 +1,15 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import {
-  Content as TooltipContent,
-  Portal as TooltipPortal,
-  Provider as TooltipProvider,
-  Root as TooltipRoot,
-  Trigger as TooltipTrigger,
-} from '@radix-ui/react-tooltip';
-import { Check, Copy, ExternalLink, Globe, Loader2, Wifi, WifiOff, X } from 'lucide-react';
-import { useCallback, useMemo, useState } from 'react';
+import { ExternalLink, Globe, Loader2, Wifi, WifiOff, X } from 'lucide-react';
+import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 
-import { Button } from '@/components/ui/button';
+import { CopyTextRowList } from '@/components/ui/copy-text-row';
 import type { CreateShareResponse, ShareReachability } from '@/features/shares/shares-api';
 import { cn } from '@/lib/cn';
-import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 
 export type ShareLinkResult = CreateShareResponse['payload'];
-
-const shareUrlTooltipClass =
-  '!z-[10000] max-w-[min(28rem,90vw)] rounded-md border border-edge bg-surface-panel px-2.5 py-2 text-left text-xs leading-snug text-fg shadow-lg';
-
-const shareUrlCodeClass =
-  'block w-full min-w-0 cursor-default truncate rounded bg-surface-hover px-2 py-1.5 text-xs text-fg';
-
-const shareCopyButtonClass =
-  'inline-flex w-[5.25rem] shrink-0 items-center justify-center gap-1 px-2 py-1 text-xs';
 
 type UrlRow = {
   key: string;
@@ -92,15 +75,17 @@ export function ShareUrlCopyRows({
     () => buildUrlRows(shareUrl, lanUrl ?? null, reachability, t),
     [shareUrl, lanUrl, reachability, t],
   );
+  const copyLabels = useMemo(
+    () => ({ copy: t.copy, copied: t.copied, copyFailed: t.copyFailed }),
+    [t],
+  );
 
   return (
-    <TooltipProvider delayDuration={300}>
-      <div className={cn('flex min-w-0 flex-col gap-2', compact && 'gap-1.5')}>
-        {rows.map((row) => (
-          <CopyUrlRow key={row.key} row={row} />
-        ))}
-      </div>
-    </TooltipProvider>
+    <CopyTextRowList
+      rows={rows.map((row) => ({ key: row.key, label: row.label, text: row.url }))}
+      compact={compact}
+      labels={copyLabels}
+    />
   );
 }
 
@@ -109,48 +94,6 @@ function formatExpiresAt(isoDate: string, language: 'en' | 'zh'): string {
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(new Date(isoDate));
-}
-
-function CopyUrlRow({ row }: { row: UrlRow }) {
-  const language = useLocaleStore((s) => s.language);
-  const t = messages(language).sharesSettings;
-  const [copied, setCopied] = useState(false);
-
-  const handleCopy = useCallback(async () => {
-    const ok = await copyTextToClipboard(row.url);
-    if (!ok) return;
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }, [row.url]);
-
-  return (
-    <div className="flex min-w-0 flex-col gap-1">
-      <span className="text-xs font-medium text-fg-muted">{row.label}</span>
-      <div className="grid grid-cols-[minmax(0,1fr)_5.25rem] items-center gap-2">
-        <div className="min-w-0 overflow-hidden">
-          <TooltipRoot>
-            <TooltipTrigger asChild>
-              <code className={shareUrlCodeClass}>{row.url}</code>
-            </TooltipTrigger>
-            <TooltipPortal>
-              <TooltipContent side="top" sideOffset={6} collisionPadding={12} className={shareUrlTooltipClass}>
-                <span className="break-all">{row.url}</span>
-              </TooltipContent>
-            </TooltipPortal>
-          </TooltipRoot>
-        </div>
-        <Button
-          type="button"
-          variant="secondary"
-          className={shareCopyButtonClass}
-          onClick={() => void handleCopy()}
-        >
-          {copied ? <Check className="size-3.5 shrink-0" /> : <Copy className="size-3.5 shrink-0" />}
-          <span className="truncate">{copied ? t.copied : t.copy}</span>
-        </Button>
-      </div>
-    </div>
-  );
 }
 
 export function ReachabilityHint({
@@ -200,10 +143,6 @@ export function ReachabilityHint({
 export function ShareLinkResultContent({ result }: { result: ShareLinkResult }) {
   const language = useLocaleStore((s) => s.language);
   const t = messages(language).sharesSettings;
-  const rows = useMemo(
-    () => buildUrlRows(result.shareUrl, result.lanUrl, result.reachability, t),
-    [result, t],
-  );
 
   return (
     <div className="flex min-w-0 flex-col gap-3">
@@ -213,13 +152,11 @@ export function ShareLinkResultContent({ result }: { result: ShareLinkResult }) 
           {t.expiresLabel}: {formatExpiresAt(result.expiresAt, language)}
         </p>
       </div>
-      <TooltipProvider delayDuration={300}>
-        <div className="flex min-w-0 flex-col gap-3">
-          {rows.map((row) => (
-            <CopyUrlRow key={row.key} row={row} />
-          ))}
-        </div>
-      </TooltipProvider>
+      <ShareUrlCopyRows
+        shareUrl={result.shareUrl}
+        lanUrl={result.lanUrl}
+        reachability={result.reachability}
+      />
       <ReachabilityHint
         reachability={result.reachability}
         reachabilityHint={result.reachabilityHint}

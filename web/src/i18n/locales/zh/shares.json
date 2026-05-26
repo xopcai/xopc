@@ -30,6 +30,7 @@
     "localUrlLabel": "本机",
     "expiresLabel": "过期时间",
     "copied": "已复制！",
+    "copyFailed": "无法复制到剪贴板，请手动选择链接复制。",
     "listTitle": "活跃的分享",
     "allSharesTitle": "全部分享",
     "showExpired": "显示已过期/已撤销",

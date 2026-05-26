@@ -1,7 +1,8 @@
-import { Check, Copy, Loader2, RefreshCw, Smartphone } from 'lucide-react';
+import { Loader2, RefreshCw, Smartphone } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
+import { CopyTextRow } from '@/components/ui/copy-text-row';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { SettingsFormSection } from '@/features/settings/settings-form-section';
 import type { MobilePairQrState } from '@/features/tunnel/use-mobile-pair-qr';
@@ -32,7 +33,13 @@ export function MobilePairQrSection({
   onRefreshQr?: () => void;
 }) {
   const language = useLocaleStore((s) => s.language);
-  const t = messages(language).tunnelSettings;
+  const m = messages(language);
+  const t = m.tunnelSettings;
+  const copyLabels = {
+    copy: t.pairCopyLink,
+    copied: t.pairCopied,
+    copyFailed: m.clipboard.copyFailed,
+  };
   const {
     tunnelActive,
     tunnelStatus,
@@ -51,8 +58,6 @@ export function MobilePairQrSection({
     qrDataUrl,
     qrGenFailed,
     encoding,
-    linkCopied,
-    copyDeepLink,
   } = pairQr;
 
   const enableLan = useEnableLanPairing(gatewayToken, (context) => {
@@ -242,16 +247,7 @@ export function MobilePairQrSection({
           {qrGenFailed ? (
             <p className="text-center text-sm text-fg-muted sm:text-left">{t.pairImageError}</p>
           ) : null}
-          <Button
-            type="button"
-            variant="secondary"
-            className="w-full sm:w-auto"
-            disabled={!deepLink}
-            onClick={() => void copyDeepLink()}
-          >
-            {linkCopied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-            {linkCopied ? t.pairCopied : t.pairCopyLink}
-          </Button>
+          <CopyTextRow text={deepLink} labels={copyLabels} />
         </div>
       ) : pairingBlocked ? (
         <p className="text-sm text-fg-muted">{t.pairQrDisabled}</p>

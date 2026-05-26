@@ -108,6 +108,7 @@
     "taskSessionAgentRunning": "Assistant is still responding",
     "taskRename": "Rename",
     "taskCopyChatId": "Copy chat ID",
+    "taskChatIdCopied": "Chat ID copied",
     "taskDeleteTask": "Delete task",
     "taskRenameTitle": "Rename task",
     "taskRenamePlaceholder": "Session name",
@@ -217,5 +218,10 @@
       "reloadSkills": "Reload skills",
       "reloadSkillsSubtitle": "Reload all skills from disk"
     }
+  },
+  "clipboard": {
+    "copy": "Copy",
+    "copied": "Copied!",
+    "copyFailed": "Could not copy to the clipboard. The text is selected — press Ctrl/Cmd+C to copy manually."
   }
 }

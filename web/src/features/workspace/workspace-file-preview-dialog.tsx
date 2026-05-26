@@ -1,6 +1,7 @@
-import { Copy, Download, Eye, FolderOpen, Link2, Loader2, Maximize2, Minimize2, Pencil, X } from 'lucide-react';
-import { useCallback, useEffect } from 'react';
+import { Check, Copy, Download, Eye, FolderOpen, Link2, Loader2, Maximize2, Minimize2, Pencil, X } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
 
+import { showComposerNotification } from '@/features/chat/composer/composer-notifications';
 import {
   FilePreviewBody,
   getFileExtension,
@@ -46,16 +47,24 @@ export function WorkspaceFilePreviewPanel({
   const state = useWorkspaceFilePreviewState({ filePath, sessionKey, agentId });
   const { rootRef, active, enter, exit } = useFilePreviewFullscreen();
   const { dialogOpen, loading, result, error, createShareLink, handleOpenChange } = useShareLink();
+  const [pathCopied, setPathCopied] = useState(false);
 
   const ext = filePath ? getFileExtension(filePath) : '';
   const name = filePath ? getFileName(filePath) : '';
   const isMd = ext === '.md';
   const isHtml = ext === '.html' || ext === '.htm';
 
-  const handleCopyPath = useCallback(() => {
+  const handleCopyPath = useCallback(async () => {
     if (!filePath) return;
-    void copyTextToClipboard(filePath);
-  }, [filePath]);
+    const ok = await copyTextToClipboard(filePath);
+    if (ok) {
+      setPathCopied(true);
+      window.setTimeout(() => setPathCopied(false), 2000);
+      showComposerNotification('success', m.workspace.pathCopied, undefined, { duration: 2000 });
+      return;
+    }
+    showComposerNotification('warning', m.clipboard.copyFailed, undefined, { duration: 4000 });
+  }, [filePath, m.clipboard.copyFailed, m.workspace.pathCopied]);
 
   const handleShare = useCallback(() => {
     if (!filePath) return;
@@ -148,9 +157,9 @@ export function WorkspaceFilePreviewPanel({
             )}
             title={m.workspace.copyPath}
             aria-label={m.workspace.copyPath}
-            onClick={handleCopyPath}
+            onClick={() => void handleCopyPath()}
           >
-            <Copy className="size-4" />
+            {pathCopied ? <Check className="size-4" /> : <Copy className="size-4" />}
           </button>
           {state.canRevealInFolder ? (
             <button

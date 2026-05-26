@@ -80,5 +80,16 @@ export const SHARE_CONFIG_DEFAULTS: ShareConfig = {
   maxTtlMs: 604_800_000,
   maxActiveShares: 100,
   maxFileSize: 104_857_600,
-  inlinePreviewMimes: ['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'application/pdf'],
+  inlinePreviewMimes: [
+    'image/png',
+    'image/jpeg',
+    'image/gif',
+    'image/webp',
+    'image/svg+xml',
+    'application/pdf',
+    'text/html',
+    'text/markdown',
+    'text/plain',
+    'application/json',
+  ],
 };
