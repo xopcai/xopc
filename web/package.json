@@ -11,8 +11,9 @@
     "lint": "eslint",
     "lint:fix": "eslint --fix",
     "type-check": "tsc -b --noEmit",
-    "react-doctor": "npx --yes react-doctor@latest --yes --offline --fail-on=error",
-    "react-doctor:ci": "npx --yes react-doctor@latest --yes --offline --fail-on=error --annotations"
+    "react-doctor": "npx --yes react-doctor@0.2.6 --yes --offline --fail-on=error",
+    "react-doctor:ci": "npx --yes react-doctor@0.2.6 --yes --offline --fail-on=error --annotations",
+    "react-doctor:pr": "npx --yes react-doctor@0.2.6 --yes --offline --fail-on=error --annotations --diff"
   },
   "dependencies": {
     "@codemirror/commands": "^6.10.3",
