@@ -8,13 +8,15 @@
       "guide": "Overview",
       "tailscale": "Tailscale",
       "public": "Public internet",
-      "advanced": "Advanced"
+      "ssh": "SSH tunnel",
+      "lan": "Local network"
     },
     "tabIntro": {
       "guide": "Compare options and see what's active on this gateway.",
       "tailscale": "Best for personal devices on your tailnet. Gateway stays on loopback; Tailscale Serve publishes HTTPS.",
       "public": "Start the tunnel to get a public URL, then pair your mobile app.",
-      "advanced": "SSH port forwarding, LAN binding, and reverse-proxy settings."
+      "ssh": "CLI SSH port forwarding when VPN or a public tunnel are unavailable.",
+      "lan": "Reach the gateway on the same Wi‑Fi or LAN via its bind address."
     },
     "guide": {
       "pickMethod": "Choose a connection method",
@@ -40,13 +42,15 @@
       "docsLink": "Full guide in the docs"
     },
     "advanced": {
-      "lanTitle": "Same network (LAN)",
-      "lanSubtitle": "Reach the gateway from phones or laptops on the same Wi‑Fi without exposing it to the internet.",
-      "lanBody": "Set the gateway bind address to your LAN IP (or 0.0.0.0) and connect using http://<host>:<port>. Keep firewall rules in mind.",
-      "lanLink": "Open Gateway settings",
       "proxyTitle": "Reverse proxy & remote URL",
       "proxyBody": "When the gateway sits behind nginx, Caddy, or another proxy, configure trusted headers and optional gateway.remote for CLI clients.",
       "proxyDocs": "Read remote access docs"
+    },
+    "lan": {
+      "title": "Same network (LAN)",
+      "subtitle": "Reach the gateway from phones or laptops on the same Wi‑Fi without exposing it to the internet.",
+      "body": "Set the gateway bind address to your LAN IP (or 0.0.0.0) and connect using http://<host>:<port>. Keep firewall rules in mind.",
+      "link": "Open Gateway settings"
     },
     "tailscale": {
       "title": "Tailscale Serve (recommended)",

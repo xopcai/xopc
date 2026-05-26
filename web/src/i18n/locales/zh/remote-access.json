@@ -8,13 +8,15 @@
       "guide": "概览",
       "tailscale": "Tailscale",
       "public": "公网访问",
-      "advanced": "高级"
+      "ssh": "SSH 隧道",
+      "lan": "局域网"
     },
     "tabIntro": {
       "guide": "对比各方式并查看当前 Gateway 上的激活状态。",
       "tailscale": "适合 tailnet 内的个人设备。Gateway 仍绑定 loopback，由 Tailscale Serve 发布 HTTPS。",
       "public": "开启隧道获取公网地址，再扫码配对移动 App。",
-      "advanced": "SSH 端口转发、局域网绑定与反向代理相关设置。"
+      "ssh": "无 VPN 或公网隧道时，通过 CLI 做 SSH 端口转发。",
+      "lan": "在同一 Wi‑Fi 或局域网内，通过 Gateway 绑定地址访问。"
     },
     "guide": {
       "pickMethod": "选择连接方式",
@@ -40,13 +42,15 @@
       "docsLink": "查看完整文档"
     },
     "advanced": {
-      "lanTitle": "同一网络（局域网）",
-      "lanSubtitle": "在同一 Wi‑Fi 下的手机或笔记本访问 Gateway，无需暴露到公网。",
-      "lanBody": "将 Gateway 绑定地址设为局域网 IP（或 0.0.0.0），通过 http://<主机>:<端口> 连接。请注意防火墙规则。",
-      "lanLink": "打开 Gateway 设置",
       "proxyTitle": "反向代理与 remote URL",
       "proxyBody": "Gateway 位于 nginx、Caddy 等反向代理之后时，需配置可信头与可选的 gateway.remote，供 CLI 客户端使用。",
       "proxyDocs": "阅读远程访问文档"
+    },
+    "lan": {
+      "title": "同一网络（局域网）",
+      "subtitle": "在同一 Wi‑Fi 下的手机或笔记本访问 Gateway，无需暴露到公网。",
+      "body": "将 Gateway 绑定地址设为局域网 IP（或 0.0.0.0），通过 http://<主机>:<端口> 连接。请注意防火墙规则。",
+      "link": "打开 Gateway 设置"
     },
     "tailscale": {
       "title": "Tailscale Serve（推荐）",
