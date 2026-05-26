@@ -1,5 +1,5 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { AlertCircle, ArrowDownToLine, Copy, ExternalLink, Eye, File, FolderOpen, Loader2, Settings2 } from 'lucide-react';
+import { AlertCircle, ArrowDownToLine, Check, Copy, ExternalLink, Eye, File, FolderOpen, Loader2, Settings2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -86,12 +86,17 @@ function InlineWorkspaceImageThumb({
 function FileReferenceActionButton({
   icon,
   label,
+  copiedLabel,
   onClick,
+  copied,
 }: {
   icon: ReactNode;
   label: string;
+  copiedLabel?: string;
   onClick: () => void;
+  copied?: boolean;
 }) {
+  const doneLabel = copiedLabel ?? label;
   return (
     <button
       type="button"
@@ -102,8 +107,8 @@ function FileReferenceActionButton({
         interaction.press,
       )}
     >
-      {icon}
-      <span>{label}</span>
+      {copied ? <Check className="size-3" strokeWidth={1.75} aria-hidden /> : icon}
+      <span>{copied ? doneLabel : label}</span>
     </button>
   );
 }
@@ -135,9 +140,11 @@ function OffWorkspaceFileCard({
 }) {
   const navigate = useNavigate();
   const language = useLocaleStore((s) => s.language);
-  const m = messages(language).chat.fileReference;
+  const chat = messages(language).chat;
+  const m = chat.fileReference;
   const canUseSystemShell = isElectron() && Boolean(window.electronAPI?.shell);
   const displayPath = refInfo.absolutePath ?? path.absolutePath;
+  const [pathCopied, setPathCopied] = useState(false);
 
   const openViaGatewayRef = useCallback(
     async (action: 'openExternal' | 'revealInFolder') => {
@@ -156,7 +163,11 @@ function OffWorkspaceFileCard({
   );
 
   const copyPath = useCallback(() => {
-    void copyTextToClipboard(displayPath);
+    void copyTextToClipboard(displayPath).then((ok) => {
+      if (!ok) return;
+      setPathCopied(true);
+      window.setTimeout(() => setPathCopied(false), 2000);
+    });
   }, [displayPath]);
 
   const [importDialogOpen, setImportDialogOpen] = useState(false);
@@ -233,6 +244,8 @@ function OffWorkspaceFileCard({
           <FileReferenceActionButton
             icon={<Copy className="size-3" strokeWidth={1.75} aria-hidden />}
             label={m.copyPath}
+            copiedLabel={chat.messageCopied}
+            copied={pathCopied}
             onClick={copyPath}
           />
         ) : null}

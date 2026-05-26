@@ -712,7 +712,16 @@ export const GatewayConfigSchema = z.object({
     maxFileSize: z.number().min(1_048_576).max(10_737_418_240).default(104_857_600),
     /** MIME types allowed for inline preview (?inline=1). */
     inlinePreviewMimes: z.array(z.string()).default([
-      'image/png', 'image/jpeg', 'image/gif', 'image/webp', 'application/pdf',
+      'image/png',
+      'image/jpeg',
+      'image/gif',
+      'image/webp',
+      'image/svg+xml',
+      'application/pdf',
+      'text/html',
+      'text/markdown',
+      'text/plain',
+      'application/json',
     ]),
   }).optional(),
 }).default({
