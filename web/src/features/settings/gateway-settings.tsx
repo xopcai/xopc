@@ -21,6 +21,7 @@ import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
 import {
+  gatewaySettingsRequireRestart,
   normalizeGatewayFromConfig,
   patchGatewaySettings,
   validateGatewaySettings,
@@ -116,6 +117,7 @@ export function GatewaySettingsPanel() {
 
   const [form, setForm] = useState<GatewaySettingsState | null>(null);
   const [baseline, setBaseline] = useState<GatewaySettingsState | null>(null);
+  const [appliedBaseline, setAppliedBaseline] = useState<GatewaySettingsState | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saveOk, setSaveOk] = useState(false);
@@ -126,6 +128,7 @@ export function GatewaySettingsPanel() {
   const [restarting, setRestarting] = useState(false);
   const [restartConfirmOpen, setRestartConfirmOpen] = useState(false);
   const dirtyRef = useRef(false);
+  const appliedBaselineInitializedRef = useRef(false);
 
   const { data, error: swrError, isLoading, mutate } = useGatewayConfigSwr(hasToken);
 
@@ -141,10 +144,16 @@ export function GatewaySettingsPanel() {
     if (!hasToken) {
       setForm(null);
       setBaseline(null);
+      setAppliedBaseline(null);
       dirtyRef.current = false;
+      appliedBaselineInitializedRef.current = false;
       return;
     }
     if (parsed === null) return;
+    if (!appliedBaselineInitializedRef.current) {
+      setAppliedBaseline(structuredClone(parsed));
+      appliedBaselineInitializedRef.current = true;
+    }
     if (!dirtyRef.current) {
       setForm(parsed);
       setBaseline(structuredClone(parsed));
@@ -160,6 +169,11 @@ export function GatewaySettingsPanel() {
     if (!form || !baseline) return false;
     return JSON.stringify(form) !== JSON.stringify(baseline);
   }, [form, baseline]);
+
+  const showRestartPrompt = useMemo(() => {
+    if (!baseline || !appliedBaseline) return false;
+    return gatewaySettingsRequireRestart(appliedBaseline, baseline);
+  }, [appliedBaseline, baseline]);
 
   const updateAuth = useCallback((patch: Partial<GatewaySettingsState['auth']>) => {
     dirtyRef.current = true;
@@ -401,23 +415,25 @@ export function GatewaySettingsPanel() {
       {dirty ? <p className="text-xs text-amber-800 dark:text-amber-200">{g.unsavedHint}</p> : null}
       {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
 
-      <div className="flex items-center justify-between gap-3 rounded-lg border border-edge bg-surface-panel/60 px-3 py-2">
-        <p className="text-xs text-fg-subtle">{g.restartHint}</p>
-        <Button
-          type="button"
-          variant="secondary"
-          className="shrink-0 gap-1.5 border-red-300 bg-red-50 text-xs text-red-700 hover:bg-red-100 dark:border-red-800 dark:bg-red-950/50 dark:text-red-300 dark:hover:bg-red-900/60"
-          disabled={restarting}
-          onClick={() => setRestartConfirmOpen(true)}
-        >
-          {restarting ? (
-            <Loader2 className="size-3.5 animate-spin" />
-          ) : (
-            <RotateCw className="size-3.5" />
-          )}
-          {g.restartGatewayButton}
-        </Button>
-      </div>
+      {showRestartPrompt ? (
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 dark:border-amber-800 dark:bg-amber-950/40">
+          <p className="text-xs text-amber-950 dark:text-amber-100">{g.restartHint}</p>
+          <Button
+            type="button"
+            variant="secondary"
+            className="shrink-0 gap-1.5 border-red-300 bg-red-50 text-xs text-red-700 hover:bg-red-100 dark:border-red-800 dark:bg-red-950/50 dark:text-red-300 dark:hover:bg-red-900/60"
+            disabled={restarting}
+            onClick={() => setRestartConfirmOpen(true)}
+          >
+            {restarting ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <RotateCw className="size-3.5" />
+            )}
+            {g.restartGatewayButton}
+          </Button>
+        </div>
+      ) : null}
 
       <ConfirmDialog
         open={restartConfirmOpen}
