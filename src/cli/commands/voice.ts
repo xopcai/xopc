@@ -11,6 +11,7 @@ import { Command } from 'commander';
 import { loadConfig } from '../../config/loader.js';
 import { resolveConfigPath } from '../../config/paths.js';
 import type { Config } from '../../config/schema.js';
+import { mergeSttConfigPatch, mergeTtsConfigPatch } from '../../gateway/hono/lib/safe-voice-config.js';
 import { register, formatExamples, type CLIContext } from '../registry.js';
 import { colors } from '../utils/colors.js';
 
@@ -322,14 +323,27 @@ registerSetupHandler({
         domain: 'voice',
         action: 'set',
         mutate(cfg) {
-          const patched = { ...cfg } as Record<string, unknown>;
-          if (stt) patched.stt = stt;
-          if (tts) patched.tts = tts;
-          return patched as Config;
+          const next = { ...cfg };
+          if (stt) {
+            next.tools = next.tools ?? {};
+            next.tools.media = next.tools.media ?? {};
+            next.tools.media.audio = mergeSttConfigPatch(
+              next.tools.media.audio,
+              stt,
+            ) as typeof next.tools.media.audio;
+          }
+          if (tts) {
+            next.messages = next.messages ?? {};
+            next.messages.tts = mergeTtsConfigPatch(
+              next.messages.tts,
+              tts,
+            ) as typeof next.messages.tts;
+          }
+          return next;
         },
         resultValue: (cfg) => ({
-          stt: (cfg as Record<string, unknown>).stt,
-          tts: (cfg as Record<string, unknown>).tts,
+          stt: cfg.tools?.media?.audio,
+          tts: cfg.messages?.tts,
         }),
       },
     });

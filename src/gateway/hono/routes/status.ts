@@ -38,7 +38,9 @@ function buildStatusPayload(service: AuthenticatedRouteDeps['service']) {
   }
 
   const config = service.currentConfig as Config | undefined;
-  const sttConfig = config ? mergeSttConfigFromAppConfig(config.tools?.media?.audio) : undefined;
+  const sttConfig = config
+    ? mergeSttConfigFromAppConfig(config.tools?.media?.audio, config.tools?.media)
+    : undefined;
 
   return {
     status: health.status,

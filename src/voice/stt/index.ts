@@ -20,7 +20,7 @@ export { isSTTAvailable } from './availability.js';
  */
 export async function transcribeWithProvider(
   audioBuffer: Buffer,
-  providerName: 'alibaba' | 'openai',
+  providerName: string,
   config: STTConfig,
   options?: STTOptions,
 ): Promise<STTResult> {

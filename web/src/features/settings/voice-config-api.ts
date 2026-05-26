@@ -3,9 +3,9 @@ import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
 import { callSetup } from './setup-api.js';
-import type { SttSettings, TtsSettings, VoiceModelsPayload, VoiceSettingsState } from './voice-settings.types';
+import type { SttSettings, SttProvidersPayload, TtsSettings, VoiceModelsPayload, VoiceSettingsState, VoiceProvidersPayload } from './voice-settings.types';
 
-export type { SttSettings, TtsSettings, VoiceModelsPayload, VoiceSettingsState } from './voice-settings.types';
+export type { SttSettings, TtsSettings, VoiceModelsPayload, VoiceSettingsState, VoiceProvidersPayload, SttProvidersPayload, TtsProviderListEntry, SttProviderListEntry } from './voice-settings.types';
 
 function defaultStt(): SttSettings {
   return {
@@ -42,28 +42,43 @@ function isRecord(v: unknown): v is Record<string, unknown> {
   return v !== null && typeof v === 'object' && !Array.isArray(v);
 }
 
+function normalizeSttProvider(v: unknown): string {
+  return typeof v === 'string' && v.trim().length > 0 ? v.trim() : 'alibaba';
+}
+
 function mergeStt(raw: unknown): SttSettings {
   const d = defaultStt();
   if (!isRecord(raw)) return d;
-  const provider = raw.provider === 'openai' ? 'openai' : 'alibaba';
+  const provider = normalizeSttProvider(raw.provider);
   const alibaba = isRecord(raw.alibaba) ? { ...d.alibaba, ...raw.alibaba } : d.alibaba;
   const openai = isRecord(raw.openai) ? { ...d.openai, ...raw.openai } : d.openai;
-  const baseFallback = d.fallback ?? { enabled: true, order: ['alibaba', 'openai'] as const };
+  const baseFallback = d.fallback ?? { enabled: true, order: ['alibaba', 'openai'] };
   let fallback = baseFallback;
   if (isRecord(raw.fallback)) {
     const order = Array.isArray(raw.fallback.order)
-      ? (raw.fallback.order.filter((x) => x === 'alibaba' || x === 'openai') as ('alibaba' | 'openai')[])
+      ? raw.fallback.order.filter((x): x is string => typeof x === 'string' && x.trim().length > 0)
       : fallback.order;
     fallback = {
       enabled: typeof raw.fallback.enabled === 'boolean' ? raw.fallback.enabled : fallback.enabled,
       order: order.length ? order : fallback.order,
     };
   }
+
+  const providers = isRecord(raw.providers)
+    ? Object.fromEntries(
+        Object.entries(raw.providers).map(([key, value]) => [
+          key,
+          isRecord(value) ? { ...value } : {},
+        ]),
+      )
+    : undefined;
+
   return {
     enabled: Boolean(raw.enabled),
     provider,
     alibaba,
     openai,
+    ...(providers ? { providers } : {}),
     fallback,
   };
 }
@@ -138,4 +153,49 @@ export async function fetchVoiceModels(): Promise<VoiceModelsPayload> {
     throw new Error('Missing voice models payload');
   }
   return res.payload.models;
+}
+
+export async function fetchVoiceProviders(): Promise<VoiceProvidersPayload> {
+  const res = await fetchJson<{ ok?: boolean; payload?: VoiceProvidersPayload }>(
+    apiUrl('/api/voice/providers'),
+  );
+  if (!res.payload?.providers) {
+    throw new Error('Missing voice providers payload');
+  }
+  return res.payload;
+}
+
+export async function fetchVoiceSttProviders(): Promise<SttProvidersPayload> {
+  const res = await fetchJson<{ ok?: boolean; payload?: SttProvidersPayload }>(
+    apiUrl('/api/voice/stt-providers'),
+  );
+  if (!res.payload?.providers) {
+    throw new Error('Missing STT providers payload');
+  }
+  return res.payload;
+}
+
+export type RevealVoiceApiKeyPayload = {
+  kind: 'stt' | 'tts';
+  provider: string;
+  apiKey: string | null;
+  source: 'config' | 'none';
+};
+
+/** POST /api/voice/reveal-api-key — plaintext only when stored in config file. */
+export async function revealVoiceConfigApiKey(args: {
+  kind: 'stt' | 'tts';
+  provider: string;
+}): Promise<RevealVoiceApiKeyPayload> {
+  const res = await fetchJson<{ ok?: boolean; payload?: RevealVoiceApiKeyPayload }>(
+    apiUrl('/api/voice/reveal-api-key'),
+    {
+      method: 'POST',
+      body: JSON.stringify(args),
+    },
+  );
+  if (!res.payload) {
+    throw new Error('Missing reveal payload');
+  }
+  return res.payload;
 }

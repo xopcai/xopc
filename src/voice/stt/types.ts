@@ -24,24 +24,42 @@ export interface STTOptions {
   model?: string;
 }
 
+export type { MediaUnderstandingModelEntry } from '../../media-understanding/types.js';
+import type { MediaUnderstandingModelEntry } from '../../media-understanding/types.js';
+
 /** STTConfig consumed by the schema and downstream wiring. */
 export interface STTConfig {
   enabled: boolean;
-  provider: 'alibaba' | 'openai';
+  provider: string;
   alibaba?: {
     apiKey?: string;
     model?: string;
+    baseUrl?: string;
+    headers?: Record<string, string>;
+    language?: string;
+    prompt?: string;
   };
   openai?: {
     apiKey?: string;
     model?: string;
+    baseUrl?: string;
+    headers?: Record<string, string>;
+    language?: string;
+    prompt?: string;
   };
+  /** Capability-local model chain (`tools.media.audio.models`). */
+  models?: MediaUnderstandingModelEntry[];
+  /** Shared model entries merged from `tools.media.models` at runtime. */
+  sharedModels?: MediaUnderstandingModelEntry[];
+  /** OpenClaw-aligned provider settings map (`tools.media.audio.providers.<id>`). */
+  providers?: Record<string, Record<string, unknown>>;
   fallback?: {
     enabled: boolean;
-    order: ('alibaba' | 'openai')[];
+    order: string[];
   };
   /** Hard timeout per provider call (ms). Default 60s. */
   timeoutMs?: number;
+  [key: string]: unknown;
 }
 
 export type STTProviderAttemptOutcome = 'success' | 'skipped' | 'failed';

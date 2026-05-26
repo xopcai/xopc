@@ -1,0 +1,18 @@
+{
+  "id": "groq-stt",
+  "name": "Groq STT",
+  "description": "Groq Whisper speech-to-text via OpenAI-compatible /audio/transcriptions.",
+  "version": "1.0.0",
+  "kind": "media-provider",
+  "main": "index.ts",
+  "mediaUnderstandingProviders": ["groq"],
+  "providerAuthEnvVars": {
+    "groq": ["GROQ_API_KEY"]
+  },
+  "activation": {
+    "onProviders": ["groq"]
+  },
+  "contracts": {
+    "mediaUnderstandingProviders": ["groq"]
+  }
+}

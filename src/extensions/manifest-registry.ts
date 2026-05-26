@@ -16,6 +16,8 @@ export class ManifestRegistry {
   private entries = new Map<string, ManifestRegistryEntry>();
 
   private providerIndex = new Map<string, string>();
+  private speechProviderIndex = new Map<string, string>();
+  private mediaUnderstandingProviderIndex = new Map<string, string>();
   private channelIndex = new Map<string, string>();
   private modelPrefixIndex = new Map<string, string>();
   private envVarIndex = new Map<string, string>();
@@ -45,6 +47,20 @@ export class ManifestRegistry {
       for (const providerId of manifest.providers) {
         this.providerIndex.set(providerId, entry.id);
       }
+    }
+
+    for (const providerId of manifest.speechProviders ?? []) {
+      this.speechProviderIndex.set(providerId, entry.id);
+    }
+    for (const providerId of manifest.contracts?.speechProviders ?? []) {
+      this.speechProviderIndex.set(providerId, entry.id);
+    }
+
+    for (const providerId of manifest.mediaUnderstandingProviders ?? []) {
+      this.mediaUnderstandingProviderIndex.set(providerId, entry.id);
+    }
+    for (const providerId of manifest.contracts?.mediaUnderstandingProviders ?? []) {
+      this.mediaUnderstandingProviderIndex.set(providerId, entry.id);
     }
 
     if (manifest.channels) {
@@ -85,6 +101,16 @@ export class ManifestRegistry {
 
   findByProvider(providerId: string): ManifestRegistryEntry | undefined {
     const extensionId = this.providerIndex.get(providerId);
+    return extensionId ? this.entries.get(extensionId) : undefined;
+  }
+
+  findBySpeechProvider(providerId: string): ManifestRegistryEntry | undefined {
+    const extensionId = this.speechProviderIndex.get(providerId);
+    return extensionId ? this.entries.get(extensionId) : undefined;
+  }
+
+  findByMediaUnderstandingProvider(providerId: string): ManifestRegistryEntry | undefined {
+    const extensionId = this.mediaUnderstandingProviderIndex.get(providerId);
     return extensionId ? this.entries.get(extensionId) : undefined;
   }
 

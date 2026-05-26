@@ -21,6 +21,21 @@ import type { Config } from '../config/schema.js';
 
 export type MediaCapability = 'image' | 'audio' | 'video';
 
+/** One model entry in `tools.media.models` or `tools.media.audio.models`. */
+export interface MediaUnderstandingModelEntry {
+  provider?: string;
+  model?: string;
+  capabilities?: MediaCapability[];
+  type?: 'provider' | 'cli';
+  command?: string;
+  baseUrl?: string;
+  headers?: Record<string, string>;
+  apiKey?: string;
+  language?: string;
+  prompt?: string;
+  [key: string]: unknown;
+}
+
 export type MediaUnderstandingDecisionOutcome =
   | 'success'
   | 'failed'
@@ -99,7 +114,8 @@ export interface AudioTranscriptionRequest {
   buffer: Buffer;
   fileName: string;
   mime?: string;
-  apiKey: string;
+  /** Optional for local/cli providers that do not use bearer auth. */
+  apiKey?: string;
   baseUrl?: string;
   headers?: Record<string, string>;
   model?: string;
@@ -169,6 +185,15 @@ export interface MediaUnderstandingProvider {
 
   /** Default model id per capability. */
   defaultModels?: Partial<Record<MediaCapability, string>>;
+
+  /** Env var fallback when config slice has no apiKey (e.g. OPENAI_API_KEY). */
+  envKey?: string;
+
+  /**
+   * When false, factory/runner do not require apiKey before invoking transcribeAudio.
+   * Defaults to true.
+   */
+  requiresApiKey?: boolean;
 
   /** Lower number = higher priority in auto-selection. */
   autoPriority?: Partial<Record<MediaCapability, number>>;

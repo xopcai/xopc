@@ -13,6 +13,7 @@
 import { createLogger } from '../../utils/logger.js';
 
 import './providers/index.js'; // side-effect: register built-in providers
+import { buildTtsResolveRawConfig } from './config-slice.js';
 import { getSpeechProvider, listSpeechProviders } from './speech-registry.js';
 import type { SpeechProviderConfig, SpeechProviderPlugin } from './speech-provider-types.js';
 import type { TTSConfig, TTSProvider } from './types.js';
@@ -30,26 +31,6 @@ export interface ResolvedSpeechProvider {
   timeoutMs: number;
 }
 
-/**
- * Build the SpeechProviderConfig consumed by plugin.resolveConfig from the
- * TTSConfig shape. The plugin's own `resolveConfig` further normalizes
- * per-provider keys; we just hand it the raw nested object.
- */
-function buildRawConfig(providerId: TTSProvider, config: TTSConfig): Record<string, unknown> {
-  switch (providerId) {
-    case 'openai':
-      return { openai: config.openai ?? {} };
-    case 'alibaba':
-      return { alibaba: config.alibaba ?? {} };
-    case 'edge':
-      return { edge: config.edge ?? {} };
-    case 'minimax':
-      return { minimax: config.minimax ?? {} };
-    default:
-      return {};
-  }
-}
-
 /** Resolve a single provider id → plugin + per-call config, or null if unavailable. */
 export function resolveSpeechProvider(
   providerId: TTSProvider,
@@ -60,7 +41,7 @@ export function resolveSpeechProvider(
     log.warn({ providerId }, `Unknown TTS provider "${providerId}" (not registered)`);
     return null;
   }
-  const rawConfig = buildRawConfig(providerId, config);
+  const rawConfig = buildTtsResolveRawConfig(providerId, config);
   const timeoutMs = config.timeoutMs ?? 30_000;
   // SpeechProviderResolveConfigContext requires `cfg: Config` but this entry
   // point only holds a TTSConfig slice. Cast through unknown — built-in
@@ -82,18 +63,42 @@ export function resolveSpeechProvider(
   };
 }
 
-/** Order = primary first, then fallback chain (deduped, primary excluded from fallback list). */
+/** Order providers: explicit fallback when enabled, otherwise auto-select by registry order. */
 export function resolveProviderOrder(
   primary: TTSProvider,
-  fallback?: { enabled: boolean; order: TTSProvider[] },
+  fallback: TTSConfig['fallback'] | undefined,
+  config: TTSConfig,
 ): TTSProvider[] {
-  if (!fallback?.enabled) {
-    return [primary];
+  if (fallback?.enabled && fallback.order.length > 0) {
+    const order: TTSProvider[] = [primary];
+    for (const provider of fallback.order) {
+      if (provider !== primary && !order.includes(provider)) {
+        order.push(provider);
+      }
+    }
+    return order;
   }
+
+  const configured = listSpeechProviders()
+    .map((plugin) => {
+      const resolved = resolveSpeechProvider(plugin.id, config);
+      return resolved ? plugin : null;
+    })
+    .filter((plugin): plugin is SpeechProviderPlugin => plugin !== null)
+    .sort((left, right) => {
+      const leftOrder = left.autoSelectOrder ?? Number.MAX_SAFE_INTEGER;
+      const rightOrder = right.autoSelectOrder ?? Number.MAX_SAFE_INTEGER;
+      if (leftOrder !== rightOrder) {
+        return leftOrder - rightOrder;
+      }
+      return left.id.localeCompare(right.id);
+    })
+    .map((plugin) => plugin.id);
+
   const order: TTSProvider[] = [primary];
-  for (const provider of fallback.order) {
-    if (provider !== primary && !order.includes(provider)) {
-      order.push(provider);
+  for (const providerId of configured) {
+    if (providerId !== primary && !order.includes(providerId)) {
+      order.push(providerId);
     }
   }
   return order;
@@ -104,7 +109,7 @@ export function resolveSpeechProviderChain(config: TTSConfig): ResolvedSpeechPro
   if (!config.enabled) {
     throw new Error('TTS is not enabled');
   }
-  const order = resolveProviderOrder(config.provider, config.fallback);
+  const order = resolveProviderOrder(config.provider, config.fallback, config);
   const chain: ResolvedSpeechProvider[] = [];
   for (const providerId of order) {
     const resolved = resolveSpeechProvider(providerId, config);
@@ -140,8 +145,9 @@ export function isProviderConfigured(provider: TTSProvider, config: TTSConfig): 
 }
 
 export function getAvailableProviders(config: TTSConfig): TTSProvider[] {
-  const allProviders: TTSProvider[] = ['openai', 'alibaba', 'minimax', 'edge'];
-  return allProviders.filter((provider) => isProviderConfigured(provider, config));
+  return listSpeechProviders()
+    .map((plugin) => plugin.id)
+    .filter((provider) => isProviderConfigured(provider, config));
 }
 
 /** List all registered SpeechProviderPlugin ids — primarily for the gateway console. */

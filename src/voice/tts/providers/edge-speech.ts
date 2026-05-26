@@ -162,6 +162,7 @@ async function synthesizeToBuffer(
 
 export const edgeSpeechProvider: SpeechProviderPlugin = {
   id: 'edge',
+  autoSelectOrder: 100,
 
   resolveConfig: (ctx: SpeechProviderResolveConfigContext) => normalizeConfig(ctx.rawConfig),
 

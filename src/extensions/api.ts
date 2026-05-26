@@ -41,6 +41,10 @@ import { createLogger } from '../utils/logger.js';
 import { TypedEventBus } from './typed-event-bus.js';
 import { ExtensionRegistryImpl } from './loader.js';
 import { registerMarketplaceAdapter as _registerMarketplaceAdapter } from '../agent/skills/marketplace/registry.js';
+import { registerSpeechProvider as registerSpeechProviderInRegistry } from '../voice/tts/speech-registry.js';
+import type { SpeechProviderPlugin } from '../voice/tts/speech-provider-types.js';
+import { registerMediaUnderstandingProvider as registerMediaUnderstandingProviderInRegistry } from '../media-understanding/registry.js';
+import type { MediaUnderstandingProvider } from '../media-understanding/types.js';
 
 export class ExtensionApiImpl implements ExtensionApi {
   private _tools: Map<string, AgentTool> = new Map();
@@ -57,6 +61,8 @@ export class ExtensionApiImpl implements ExtensionApi {
 
   private _reloadConfigPrefixes: string[] = [];
   private _registeredCommandIds: string[] = [];
+  private _registeredSpeechProviderIds: string[] = [];
+  private _registeredMediaUnderstandingProviderIds: string[] = [];
   private readonly _manifestCommands = new Map<string, CommandContribution>();
 
   constructor(
@@ -334,6 +340,32 @@ export class ExtensionApiImpl implements ExtensionApi {
    */
   registerProviderPlugin(plugin: import('./types/providers.js').ProviderPlugin): void {
     this.registerProvider(plugin);
+  }
+
+  registerSpeechProvider(plugin: SpeechProviderPlugin): void {
+    registerSpeechProviderInRegistry(plugin);
+    if (!this._registeredSpeechProviderIds.includes(plugin.id)) {
+      this._registeredSpeechProviderIds.push(plugin.id);
+    }
+    this._logger.info(`Registered speech provider: ${plugin.id}`);
+  }
+
+  /** Speech provider ids registered through this extension API instance. */
+  getRegisteredSpeechProviderIds(): readonly string[] {
+    return [...this._registeredSpeechProviderIds];
+  }
+
+  registerMediaUnderstandingProvider(plugin: MediaUnderstandingProvider): void {
+    registerMediaUnderstandingProviderInRegistry(plugin);
+    if (!this._registeredMediaUnderstandingProviderIds.includes(plugin.id)) {
+      this._registeredMediaUnderstandingProviderIds.push(plugin.id);
+    }
+    this._logger.info(`Registered media understanding provider: ${plugin.id}`);
+  }
+
+  /** Media understanding provider ids registered through this extension API instance. */
+  getRegisteredMediaUnderstandingProviderIds(): readonly string[] {
+    return [...this._registeredMediaUnderstandingProviderIds];
   }
 
   /**

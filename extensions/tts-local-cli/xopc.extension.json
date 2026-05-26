@@ -5,6 +5,9 @@
   "version": "1.0.0",
   "kind": "speech-provider",
   "main": "index.ts",
+  "contracts": {
+    "speechProviders": ["tts-local-cli", "cli"]
+  },
   "configSchema": {
     "type": "object",
     "required": ["command"],

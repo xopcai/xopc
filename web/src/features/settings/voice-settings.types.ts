@@ -37,10 +37,12 @@ export interface VoiceModelsPayload {
 
 export interface SttSettings {
   enabled: boolean;
-  provider: 'alibaba' | 'openai';
+  /** Built-in id or any extension-registered MediaUnderstandingProvider id. */
+  provider: string;
   alibaba?: { apiKey?: string; model?: string };
   openai?: { apiKey?: string; model?: string };
-  fallback?: { enabled: boolean; order: ('alibaba' | 'openai')[] };
+  providers?: Record<string, Record<string, unknown>>;
+  fallback?: { enabled: boolean; order: string[] };
 }
 
 /** Built-in TTS provider ids; extensions add more via the SpeechProviderRegistry. */
@@ -79,4 +81,26 @@ export interface TtsSettings {
 export interface VoiceSettingsState {
   stt: SttSettings;
   tts: TtsSettings;
+}
+
+export interface TtsProviderListEntry {
+  id: string;
+  aliases: string[];
+  configured: boolean;
+}
+
+export interface VoiceProvidersPayload {
+  providers: TtsProviderListEntry[];
+  active: string;
+}
+
+export interface SttProviderListEntry {
+  id: string;
+  aliases: string[];
+  configured: boolean;
+}
+
+export interface SttProvidersPayload {
+  providers: SttProviderListEntry[];
+  active: string;
 }

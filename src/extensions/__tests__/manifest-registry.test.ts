@@ -28,6 +28,42 @@ describe('ManifestRegistry', () => {
     expect(reg.detectAvailableByEnv({ OPENAI_API_KEY: 'x' }).map((e) => e.id)).toEqual(['ext-a']);
   });
 
+  it('indexes speechProviders from manifest and contracts', () => {
+    const reg = ManifestRegistry.fromDiscovered([
+      {
+        id: 'tts-local-cli',
+        path: '/p/tts-local-cli',
+        source: 'bundled',
+        manifest: {
+          id: 'tts-local-cli',
+          name: 'Local CLI TTS',
+          speechProviders: ['tts-local-cli'],
+          contracts: { speechProviders: ['cli'] },
+        },
+      },
+    ]);
+    expect(reg.findBySpeechProvider('tts-local-cli')?.id).toBe('tts-local-cli');
+    expect(reg.findBySpeechProvider('cli')?.id).toBe('tts-local-cli');
+  });
+
+  it('indexes mediaUnderstandingProviders from manifest and contracts', () => {
+    const reg = ManifestRegistry.fromDiscovered([
+      {
+        id: 'groq-stt',
+        path: '/p/groq-stt',
+        source: 'bundled',
+        manifest: {
+          id: 'groq-stt',
+          name: 'Groq STT',
+          mediaUnderstandingProviders: ['groq'],
+          contracts: { mediaUnderstandingProviders: ['groq-whisper'] },
+        },
+      },
+    ]);
+    expect(reg.findByMediaUnderstandingProvider('groq')?.id).toBe('groq-stt');
+    expect(reg.findByMediaUnderstandingProvider('groq-whisper')?.id).toBe('groq-stt');
+  });
+
   it('matches modelPatterns', () => {
     const reg = ManifestRegistry.fromDiscovered([
       {

@@ -172,7 +172,7 @@ export async function* runProcessDirectStreaming(
 
     const prepared = await prepareInboundAttachments(sessionKey, input.attachments);
 
-    const sttCfg = mergeSttConfigFromAppConfig(getConfig()?.tools?.media?.audio);
+    const sttCfg = mergeSttConfigFromAppConfig(getConfig()?.tools?.media?.audio, getConfig()?.tools?.media);
     const { text: mergedUserText, inboundVoice, voiceTranscripts } =
       await mergeVoiceTranscriptsIntoUserText(
         attachmentRootsForSession(sessionKey),
