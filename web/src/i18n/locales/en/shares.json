@@ -30,6 +30,7 @@
     "localUrlLabel": "Local only",
     "expiresLabel": "Expires",
     "copied": "Copied!",
+    "copyFailed": "Could not copy to the clipboard. Select the link and copy manually.",
     "listTitle": "Active shares",
     "allSharesTitle": "All shares",
     "showExpired": "Show expired / revoked",

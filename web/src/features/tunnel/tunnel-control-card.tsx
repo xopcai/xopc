@@ -1,5 +1,6 @@
-import { AlertTriangle, Check, Copy, Globe, Loader2, Power } from 'lucide-react';
+import { AlertTriangle, Globe, Loader2, Power } from 'lucide-react';
 
+import { CopyTextRow } from '@/components/ui/copy-text-row';
 import { Button } from '@/components/ui/button';
 import { settingsFormSectionClassName } from '@/features/settings/settings-form-section';
 import type { TunnelStatusResponse } from '@/features/tunnel/tunnel-api';
@@ -64,14 +65,13 @@ type Props = {
   statusErr: unknown;
   starting: boolean;
   stopping: boolean;
-  linkCopied: boolean;
   showConsentExpired: boolean;
+  copyLabels: { copy: string; copied: string; copyFailed: string };
   startDisabled?: boolean;
   startDisabledReason?: string;
   stepLabel?: string;
   onStart: () => void;
   onStop: () => void;
-  onCopyUrl: () => void;
 };
 
 export function TunnelControlCard({
@@ -81,14 +81,13 @@ export function TunnelControlCard({
   statusErr,
   starting,
   stopping,
-  linkCopied,
   showConsentExpired,
+  copyLabels,
   startDisabled = false,
   startDisabledReason,
   stepLabel,
   onStart,
   onStop,
-  onCopyUrl,
 }: Props) {
   const tone = statusTone(st);
   const active = st.enabled || starting;
@@ -170,14 +169,7 @@ export function TunnelControlCard({
         <div className="space-y-4">
           {st.publicUrl ? (
             <div className="rounded-xl border border-edge-subtle bg-surface-panel px-3 py-3">
-              <p className="text-xs font-medium text-fg-muted">{t.publicUrlLabel}</p>
-              <div className="mt-1 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <p className="min-w-0 break-all font-mono text-sm text-fg">{st.publicUrl}</p>
-                <Button type="button" variant="secondary" className="shrink-0" onClick={onCopyUrl}>
-                  {linkCopied ? <Check className="size-4" /> : <Copy className="size-4" />}
-                  {linkCopied ? t.copied : t.copyUrl}
-                </Button>
-              </div>
+              <CopyTextRow label={t.publicUrlLabel} text={st.publicUrl} labels={copyLabels} />
             </div>
           ) : null}
 

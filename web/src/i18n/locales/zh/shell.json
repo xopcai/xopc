@@ -108,6 +108,7 @@
     "taskSessionAgentRunning": "助手仍在回复中",
     "taskRename": "重命名",
     "taskCopyChatId": "复制会话 ID",
+    "taskChatIdCopied": "会话 ID 已复制",
     "taskDeleteTask": "删除对话",
     "taskRenameTitle": "重命名对话",
     "taskRenamePlaceholder": "会话名称",
@@ -217,5 +218,10 @@
       "reloadSkills": "重新加载技能",
       "reloadSkillsSubtitle": "从磁盘重新加载"
     }
+  },
+  "clipboard": {
+    "copy": "复制",
+    "copied": "已复制！",
+    "copyFailed": "无法复制到剪贴板，文本已选中，请按 Ctrl/Cmd+C 手动复制。"
   }
 }
