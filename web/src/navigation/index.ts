@@ -13,6 +13,7 @@ const SETTINGS_SECTION_TO_TAB: Record<SettingsSectionId, Tab> = {
   overview: 'settingsOverview',
   appearance: 'settingsAppearance',
   system: 'settingsSystem',
+  'app-management': 'settingsAppManagement',
   agent: 'settingsAgents',
   'agent-defaults': 'settingsAgentChat',
   'agent-chat': 'settingsAgentChat',
@@ -48,6 +49,7 @@ const TAB_TO_SETTINGS_SECTION: Record<
   | 'settingsOverview'
   | 'settingsAppearance'
   | 'settingsSystem'
+  | 'settingsAppManagement'
   | 'settingsAgentDefaults'
   | 'settingsAgentMcp'
   | 'settingsAgents'
@@ -72,6 +74,7 @@ const TAB_TO_SETTINGS_SECTION: Record<
   settingsOverview: 'overview',
   settingsAppearance: 'appearance',
   settingsSystem: 'system',
+  settingsAppManagement: 'app-management',
   settingsAgentDefaults: 'agent-defaults',
   settingsAgentMcp: 'agent-mcp',
   settingsAgents: 'agents',
@@ -104,6 +107,7 @@ export function tabToSettingsSection(tab: Tab): SettingsSectionId | null {
 /** Group keys for `messages(lang).settingsNavGroups` — left rail sections + sort order. */
 export type SettingsNavGroupId =
   | 'general'
+  | 'system'
   | 'credentials'
   | 'agent'
   | 'connection'
@@ -115,13 +119,21 @@ export type SettingsShellNavGroup = {
   tabs: readonly Tab[];
 };
 
+/** Settings tabs shown only in the Electron desktop shell. */
+export const ELECTRON_ONLY_SETTINGS_TABS = new Set<Tab>(['settingsSystem', 'settingsAppManagement']);
+
+/** Electron-only group — rendered above Extensions in the settings rail. */
+export const ELECTRON_SYSTEM_NAV_GROUP: SettingsShellNavGroup = {
+  id: 'system',
+  tabs: ['settingsSystem', 'settingsAppManagement'],
+};
+
 /**
- * Settings rail: general → models & media (chat, image, voice, search, providers, registry) →
- * remaining default-agent slices → gateway (HTTP + heartbeat) → automation → data.
- * Extensions append via `ExtensionSettingsNav`.
+ * Settings rail: general → credentials → agent → connection → automation → diagnostics.
+ * Electron system group and extensions append in `SettingsPageLayout`.
  */
 export const SETTINGS_SHELL_NAV_GROUPS: readonly SettingsShellNavGroup[] = [
-  { id: 'general', tabs: ['settingsOverview', 'settingsAppearance', 'settingsSystem'] },
+  { id: 'general', tabs: ['settingsOverview', 'settingsAppearance'] },
   {
     id: 'credentials',
     tabs: [
@@ -160,12 +172,16 @@ export const SETTINGS_SHELL_NAV_GROUPS: readonly SettingsShellNavGroup[] = [
 ] as const;
 
 /** Flat order: settings routes only (excludes sessions/logs). */
-export const SETTINGS_NAV_TABS: readonly Tab[] = SETTINGS_SHELL_NAV_GROUPS.filter(
-  (g) => g.id !== 'diagnostics',
-).flatMap((g) => [...g.tabs]);
+export const SETTINGS_NAV_TABS: readonly Tab[] = [
+  ...SETTINGS_SHELL_NAV_GROUPS.filter((g) => g.id !== 'diagnostics').flatMap((g) => [...g.tabs]),
+  ...ELECTRON_SYSTEM_NAV_GROUP.tabs,
+];
 
-/** Settings shell: full left rail including sessions + logs. */
-export const SETTINGS_SHELL_NAV_TABS: readonly Tab[] = SETTINGS_SHELL_NAV_GROUPS.flatMap((g) => [...g.tabs]);
+/** Settings shell: full left rail including sessions + logs and Electron group tabs. */
+export const SETTINGS_SHELL_NAV_TABS: readonly Tab[] = [
+  ...SETTINGS_SHELL_NAV_GROUPS.flatMap((g) => [...g.tabs]),
+  ...ELECTRON_SYSTEM_NAV_GROUP.tabs,
+];
 
 /** Official docs site (VitePress `base: /xopc/`). */
 export const HELP_DOCS_BASE_URL = 'https://xopcai.github.io/xopc';

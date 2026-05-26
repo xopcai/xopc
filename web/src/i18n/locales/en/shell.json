@@ -46,7 +46,8 @@
     "settingsAgentMcp": "External tools (MCP)",
     "settingsAgentSystemPrompt": "System prompt",
     "settingsAgents": "Agents",
-    "settingsSystem": "System"
+    "settingsSystem": "System permissions",
+    "settingsAppManagement": "App management"
   },
   "token": {
     "title": "Authentication required",

@@ -123,6 +123,12 @@ export function TunnelE2eSection({ hasToken, gatewayPort, tunnelConnected, neste
         </p>
       ) : null}
 
+      {!form.enabled ? (
+        <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+          {t.e2eDisabledWarning}
+        </p>
+      ) : null}
+
       {dirty ? <p className="mb-3 text-xs text-amber-800 dark:text-amber-200">{t.e2eUnsaved}</p> : null}
       {error ? <p className="mb-3 text-sm text-red-600 dark:text-red-400">{error}</p> : null}
       <p className="mb-4 text-xs text-fg-subtle">{t.e2eRestartHint}</p>

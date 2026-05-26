@@ -29,7 +29,8 @@
     "dreams": "梦境",
     "goals": "目标评判",
     "agents": "智能体",
-    "system": "系统设置",
+    "system": "系统授权",
+    "app-management": "应用管理",
     "cron": "定时任务",
     "skills": "技能"
   },
@@ -274,7 +275,7 @@
     "confirmClearLock": "确认删除晋升锁文件？仅在 sweep 卡住时使用。"
   },
   "systemSettings": {
-    "title": "系统设置",
+    "title": "系统授权",
     "behaviorGroup": "应用行为",
     "desktopOnlyTitle": "仅桌面端",
     "desktopOnlyBody": "系统集成功能仅在 xopc Electron 桌面版中可用。在浏览器中请通过操作系统设置管理。",
@@ -413,6 +414,9 @@
     },
     "appManagement": {
       "title": "应用管理",
+      "loading": "加载中…",
+      "devOnlyTitle": "开发模式",
+      "devOnlyBody": "清除数据与卸载仅在打包后的桌面应用中可用。下方路径仅供参考。",
       "appPath": "安装位置",
       "dataPath": "本地数据",
       "dataSize": "数据大小",
@@ -445,12 +449,14 @@
       "errors": {
         "pendingUpdate": "已有下载完成的更新等待安装。请先重启完成更新，再卸载。",
         "uninstallerNotFound": "未找到卸载程序。请在「设置 → 应用 → 已安装的应用」中移除 xopc。",
+        "notPackaged": "开发模式下无法执行此操作，请使用打包后的桌面应用。",
         "generic": "操作失败。请重试或通过系统设置卸载。"
       }
     }
   },
   "settingsNavGroups": {
     "general": "通用",
+    "system": "系统设置",
     "credentials": "凭证与模型",
     "agent": "智能体默认配置",
     "connection": "连接",

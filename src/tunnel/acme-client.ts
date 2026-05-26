@@ -33,21 +33,71 @@ const acmeDispatcher = new Agent({
 });
 
 /** Public resolvers — LE validators use global DNS, not the host's stale cache. */
-const ACME_DNS_RESOLVERS = ['8.8.8.8', '1.1.1.1', '9.9.9.9'];
+export const ACME_DNS_RESOLVERS = ['8.8.8.8', '1.1.1.1', '9.9.9.9'] as const;
 
-let acmeDnsResolver: Resolver | null = null;
+/** Consecutive consensus rounds required before trusting DNS propagation. */
+const ACME_DNS_CONSENSUS_ROUNDS = 2;
 
-function getAcmeDnsResolver(): Resolver {
-  if (!acmeDnsResolver) {
-    acmeDnsResolver = new Resolver();
-    acmeDnsResolver.setServers(ACME_DNS_RESOLVERS);
-  }
-  return acmeDnsResolver;
+/** Minimum time after publishing TXT before accepting consensus (Dynadot ~60s). */
+const ACME_DNS_MIN_PROPAGATION_MS = 30_000;
+
+/** Hold consensus this long before submitting (LE secondary validation). */
+const ACME_DNS_STABLE_MS = 30_000;
+
+/** Poll interval while waiting for DNS. */
+const ACME_DNS_POLL_INTERVAL_MS = 5_000;
+
+/** Max time to wait for DNS consensus (first + stable phases). */
+const ACME_DNS_TIMEOUT_MS = 240_000;
+
+/** Retry whole DNS-01 attempt when LE reports secondary validation failures. */
+const ACME_DNS_ATTEMPTS = 2;
+
+/** Pause between ACME DNS-01 retries. */
+const ACME_DNS_RETRY_DELAY_MS = 45_000;
+
+export type AcmeDnsTxtProbe = {
+  resolver: string;
+  values: string[];
+  error?: string;
+};
+
+async function resolveAcmeDnsTxtFromResolver(fqdn: string, resolver: string): Promise<string[]> {
+  const dns = new Resolver();
+  dns.setServers([resolver]);
+  const records = await dns.resolveTxt(fqdn);
+  return records.map((parts) => parts.join(''));
 }
 
-async function resolveAcmeDnsTxt(fqdn: string): Promise<string[]> {
-  const records = await getAcmeDnsResolver().resolveTxt(fqdn);
-  return records.map((parts) => parts.join(''));
+/** Query each public resolver independently (Node tries setServers in order — not sufficient for LE). */
+export async function probeAcmeDnsTxtAllResolvers(fqdn: string): Promise<AcmeDnsTxtProbe[]> {
+  return Promise.all(
+    ACME_DNS_RESOLVERS.map(async (resolver) => {
+      try {
+        const values = await resolveAcmeDnsTxtFromResolver(fqdn, resolver);
+        return { resolver, values };
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        return { resolver, values: [] as string[], error: errorMessage };
+      }
+    }),
+  );
+}
+
+export function allAcmeDnsResolversHaveTxt(probes: AcmeDnsTxtProbe[], expectedValue: string): boolean {
+  return (
+    probes.length > 0 &&
+    probes.every((probe) => probe.values.some((value) => value === expectedValue))
+  );
+}
+
+function summarizeAcmeDnsProbes(probes: AcmeDnsTxtProbe[]): string {
+  return probes
+    .map((probe) => {
+      const seen = probe.values.join(', ') || probe.error || 'none';
+      return `${probe.resolver}=${seen}`;
+    })
+    .join('; ');
 }
 
 export type AcmeConfig = {
@@ -93,44 +143,129 @@ export function resolveAcmeChallengeFqdn(domain: string): string {
   return `_acme-challenge.${domain}`;
 }
 
+function formatValidationRecordEntry(entry: unknown): string {
+  if (typeof entry === 'string') return entry;
+  if (entry && typeof entry === 'object') {
+    const obj = entry as Record<string, unknown>;
+    if (typeof obj.detail === 'string') return obj.detail;
+    const hostname = typeof obj.hostname === 'string' ? obj.hostname : '';
+    const error = typeof obj.error === 'string' ? obj.error : '';
+    if (hostname && error) return `${hostname}: ${error}`;
+    if (error) return error;
+    try {
+      return JSON.stringify(entry);
+    } catch {
+      return String(entry);
+    }
+  }
+  return String(entry);
+}
+
 export function formatAcmeDnsChallengeInvalidError(
   fqdn: string,
-  data: { error?: { detail?: string; type?: string }; validationRecord?: string[] },
+  data: { error?: { detail?: string; type?: string }; validationRecord?: unknown[] },
 ): string {
   const parts = [`ACME DNS-01 challenge invalid for ${fqdn}`];
   if (data.error?.detail) parts.push(data.error.detail);
   else if (data.error?.type) parts.push(data.error.type);
   if (data.validationRecord?.length) {
-    parts.push(`validation: ${data.validationRecord.join('; ')}`);
+    parts.push(
+      `validation: ${data.validationRecord.map(formatValidationRecordEntry).join('; ')}`,
+    );
   }
   return parts.join(' — ');
 }
 
-async function waitForDnsTxt(
+export function isRetryableAcmeDnsError(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err);
+  return (
+    /secondary validation/i.test(message) ||
+    /DNS TXT not visible on all resolvers/i.test(message) ||
+    /ACME DNS-01 challenge timed out/i.test(message)
+  );
+}
+
+export type WaitForDnsTxtOptions = {
+  minPropagationMs?: number;
+  stableMs?: number;
+  timeoutMs?: number;
+  consensusRounds?: number;
+  pollIntervalMs?: number;
+  probe?: (fqdn: string) => Promise<AcmeDnsTxtProbe[]>;
+  sleep?: (ms: number) => Promise<void>;
+};
+
+/** Poll public resolvers until TXT is stable — no blind initial sleep. */
+export async function waitForDnsTxtConsensus(
   fqdn: string,
   expectedValue: string,
-  opts?: { initialDelayMs?: number; timeoutMs?: number },
+  opts?: WaitForDnsTxtOptions,
 ): Promise<void> {
-  const initialDelayMs = opts?.initialDelayMs ?? 45_000;
-  const timeoutMs = opts?.timeoutMs ?? 180_000;
-  const deadline = Date.now() + timeoutMs;
-  let lastSeen: string[] = [];
-  // Dynadot authoritative DNS often needs ~60s after set_dns2 before TXT is queryable.
-  if (initialDelayMs > 0) await sleep(initialDelayMs);
+  const minPropagationMs = opts?.minPropagationMs ?? ACME_DNS_MIN_PROPAGATION_MS;
+  const stableMs = opts?.stableMs ?? ACME_DNS_STABLE_MS;
+  const timeoutMs = opts?.timeoutMs ?? ACME_DNS_TIMEOUT_MS;
+  const consensusRounds = opts?.consensusRounds ?? ACME_DNS_CONSENSUS_ROUNDS;
+  const pollIntervalMs = opts?.pollIntervalMs ?? ACME_DNS_POLL_INTERVAL_MS;
+  const probe = opts?.probe ?? probeAcmeDnsTxtAllResolvers;
+  const delay = opts?.sleep ?? sleep;
+
+  const startedAt = Date.now();
+  const deadline = startedAt + timeoutMs;
+  let lastProbes: AcmeDnsTxtProbe[] = [];
+  let consensusStreak = 0;
+  let stableSince: number | null = null;
+
   while (Date.now() < deadline) {
-    try {
-      lastSeen = await resolveAcmeDnsTxt(fqdn);
-      if (lastSeen.some((value) => value === expectedValue)) {
-        log.info({ fqdn, resolvers: ACME_DNS_RESOLVERS, txtCount: lastSeen.length }, 'DNS-01 TXT record visible');
-        return;
+    lastProbes = await probe(fqdn);
+    const elapsedMs = Date.now() - startedAt;
+    const hasConsensus =
+      elapsedMs >= minPropagationMs &&
+      allAcmeDnsResolversHaveTxt(lastProbes, expectedValue);
+
+    if (hasConsensus) {
+      consensusStreak += 1;
+      if (consensusStreak >= consensusRounds) {
+        if (stableMs <= 0) {
+          log.info(
+            {
+              fqdn,
+              resolvers: ACME_DNS_RESOLVERS,
+              elapsedMs,
+              probes: summarizeAcmeDnsProbes(lastProbes),
+            },
+            'DNS-01 TXT visible on all public resolvers',
+          );
+          return;
+        }
+        if (stableSince === null) stableSince = Date.now();
+        if (Date.now() - stableSince >= stableMs) {
+          const finalProbes = await probe(fqdn);
+          if (allAcmeDnsResolversHaveTxt(finalProbes, expectedValue)) {
+            log.info(
+              {
+                fqdn,
+                resolvers: ACME_DNS_RESOLVERS,
+                elapsedMs: Date.now() - startedAt,
+                stableMs,
+                probes: summarizeAcmeDnsProbes(finalProbes),
+              },
+              'DNS-01 TXT stable on all public resolvers',
+            );
+            return;
+          }
+          stableSince = null;
+          consensusStreak = 0;
+        }
       }
-    } catch {
-      /* NXDOMAIN / timeout — keep polling until deadline */
+    } else {
+      consensusStreak = 0;
+      stableSince = null;
     }
-    await sleep(5_000);
+    await delay(pollIntervalMs);
   }
+
   throw new Error(
-    `DNS TXT not visible for ${fqdn} (expected ${expectedValue}; last seen: ${lastSeen.join(', ') || 'none'})`,
+    `DNS TXT not visible on all resolvers for ${fqdn} (expected ${expectedValue}; last probe: ${summarizeAcmeDnsProbes(lastProbes)})`,
   );
 }
 
@@ -328,7 +463,7 @@ async function pollChallengeReady(
     const { data } = await acmeSignedPost<{
       status?: string;
       error?: { type?: string; detail?: string };
-      validationRecord?: string[];
+      validationRecord?: unknown[];
     }>(challengeUrl, account, nonce, null);
     if (data.status === 'valid') return;
     if (data.status === 'invalid') {
@@ -360,16 +495,27 @@ async function pollOrderValid(
   throw new Error('ACME order finalize timed out');
 }
 
-export async function requestCertificate(config: AcmeConfig): Promise<AcmeCertResult> {
-  const staging = config.staging ?? false;
-  const domain = resolveCertDomain(config.subdomain, config.frpSubdomainHost);
+async function cleanupDnsChallengeRecord(
+  broker: TunnelBrokerClient,
+  tunnelId: string,
+  tunnelToken: string,
+  recordId: string,
+): Promise<void> {
+  await broker
+    .cleanupDnsChallenge({ tunnelId, tunnelToken, recordId })
+    .catch((err) => {
+      log.warn({ err, recordId }, 'DNS cleanup failed (non-critical)');
+    });
+}
 
-  log.info({ domain, staging }, 'Starting ACME certificate request');
-  config.onProgress?.('checking');
-
-  const directory = await getDirectory(staging);
-  const accountKeyPem = loadAccountKeyPem();
-  const account = await ensureAccount(directory, accountKeyPem, staging);
+async function runDns01Attempt(params: {
+  config: AcmeConfig;
+  directory: AcmeDirectory;
+  account: AcmeAccount;
+  domain: string;
+  challengeFqdn: string;
+}): Promise<{ result: AcmeCertResult; recordId: string }> {
+  const { config, directory, account, domain, challengeFqdn } = params;
 
   let nonce = await getNonce(directory);
   const orderResult = await acmeSignedPost<{ authorizations?: string[]; finalize?: string }>(
@@ -395,7 +541,6 @@ export async function requestCertificate(config: AcmeConfig): Promise<AcmeCertRe
   const keyAuth = `${challenge.token}.${thumbprint}`;
   const txtValue = base64url(createHash('sha256').update(keyAuth).digest());
 
-  const challengeFqdn = resolveAcmeChallengeFqdn(domain);
   log.info({ fqdn: challengeFqdn, txtPreview: `${txtValue.slice(0, 8)}…` }, 'Setting DNS-01 challenge via Broker');
   config.onProgress?.('dns_challenge');
   const { recordId, fqdn } = await config.broker.setDnsChallenge({
@@ -414,10 +559,7 @@ export async function requestCertificate(config: AcmeConfig): Promise<AcmeCertRe
 
   try {
     config.onProgress?.('dns_propagation');
-    await waitForDnsTxt(challengeFqdn, txtValue);
-    // Public resolvers can lead LE validators; re-check before submitting the challenge.
-    await sleep(15_000);
-    await waitForDnsTxt(challengeFqdn, txtValue, { initialDelayMs: 0, timeoutMs: 60_000 });
+    await waitForDnsTxtConsensus(challengeFqdn, txtValue);
 
     nonce = await getNonce(directory);
     await acmeSignedPost(challenge.url, account, nonce, {});
@@ -442,16 +584,61 @@ export async function requestCertificate(config: AcmeConfig): Promise<AcmeCertRe
     const expiresAt = getCertExpiryFromPem(firstCert);
     log.info({ domain, expiresAt: expiresAt.toISOString() }, 'Certificate issued');
 
-    return { certPem: certPem.trim(), keyPem, domain, expiresAt, issuedAt: new Date() };
-  } finally {
-    await config.broker
-      .cleanupDnsChallenge({
-        tunnelId: config.tunnelId,
-        tunnelToken: config.tunnelToken,
-        recordId,
-      })
-      .catch((err) => {
-        log.warn({ err, recordId }, 'DNS cleanup failed (non-critical)');
-      });
+    await cleanupDnsChallengeRecord(config.broker, config.tunnelId, config.tunnelToken, recordId);
+
+    return {
+      recordId,
+      result: {
+        certPem: certPem.trim(),
+        keyPem,
+        domain,
+        expiresAt,
+        issuedAt: new Date(),
+      },
+    };
+  } catch (err) {
+    await cleanupDnsChallengeRecord(config.broker, config.tunnelId, config.tunnelToken, recordId);
+    throw err;
   }
+}
+
+export async function requestCertificate(config: AcmeConfig): Promise<AcmeCertResult> {
+  const staging = config.staging ?? false;
+  const domain = resolveCertDomain(config.subdomain, config.frpSubdomainHost);
+  const challengeFqdn = resolveAcmeChallengeFqdn(domain);
+
+  log.info({ domain, staging }, 'Starting ACME certificate request');
+  config.onProgress?.('checking');
+
+  const directory = await getDirectory(staging);
+  const accountKeyPem = loadAccountKeyPem();
+  const account = await ensureAccount(directory, accountKeyPem, staging);
+
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= ACME_DNS_ATTEMPTS; attempt++) {
+    try {
+      if (attempt > 1) {
+        log.warn({ domain, attempt, phase: 'acme_dns_retry' }, 'Retrying ACME DNS-01 after propagation delay');
+        await sleep(ACME_DNS_RETRY_DELAY_MS);
+      }
+      const { result } = await runDns01Attempt({
+        config,
+        directory,
+        account,
+        domain,
+        challengeFqdn,
+      });
+      return result;
+    } catch (err) {
+      lastErr = err;
+      if (attempt < ACME_DNS_ATTEMPTS && isRetryableAcmeDnsError(err)) {
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        log.warn({ domain, attempt, errorMessage, phase: 'acme_dns_retryable' }, `ACME DNS-01 failed, will retry: ${errorMessage}`);
+        continue;
+      }
+      throw err;
+    }
+  }
+
+  throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
 }
