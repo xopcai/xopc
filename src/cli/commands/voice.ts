@@ -11,16 +11,12 @@ import { Command } from 'commander';
 import { loadConfig } from '../../config/loader.js';
 import { resolveConfigPath } from '../../config/paths.js';
 import type { Config } from '../../config/schema.js';
-import { mergeSttConfigPatch, mergeTtsConfigPatch } from '../../gateway/hono/lib/safe-voice-config.js';
 import { register, formatExamples, type CLIContext } from '../registry.js';
 import { colors } from '../utils/colors.js';
 
 import {
   emitOutcome,
-  registerSetupDomain,
-  registerSetupHandler,
   runSetup,
-  runSetupHeadless,
 } from './setup-shared/index.js';
 
 const TTS_PROVIDERS = ['openai', 'alibaba', 'edge', 'minimax'] as const;
@@ -241,161 +237,5 @@ register({
       'xopc voice disable',
       'xopc voice schema --json',
     ],
-  },
-});
-
-// HTTP / programmatic handlers for `POST /api/setup/voice/<action>`.
-// `fields` shape mirrors the CLI flags (provider / trigger).
-
-function asTtsProvider(value: unknown): TTSProvider | undefined {
-  return typeof value === 'string' && (TTS_PROVIDERS as readonly string[]).includes(value)
-    ? (value as TTSProvider)
-    : undefined;
-}
-
-function asTtsTrigger(value: unknown): TTSTrigger | undefined {
-  return typeof value === 'string' && (TTS_TRIGGERS as readonly string[]).includes(value)
-    ? (value as TTSTrigger)
-    : undefined;
-}
-
-registerSetupHandler({
-  domain: 'voice',
-  action: 'enable',
-  handler: async ({ configPath, fields, options }) => {
-    const provider = asTtsProvider(fields.provider);
-    const trigger = asTtsTrigger(fields.trigger);
-    return runSetupHeadless({
-      configPath,
-      options,
-      mutator: {
-        domain: 'voice',
-        action: 'set',
-        mutate: (cfg) => applyTTSEnable(cfg, { enabled: true, provider, trigger }),
-        resultValue: (cfg) => readTTSStatus(cfg),
-      },
-    });
-  },
-});
-
-registerSetupHandler({
-  domain: 'voice',
-  action: 'disable',
-  handler: async ({ configPath, options }) =>
-    runSetupHeadless({
-      configPath,
-      options,
-      mutator: {
-        domain: 'voice',
-        action: 'set',
-        mutate: (cfg) => applyTTSEnable(cfg, { enabled: false }),
-        resultValue: (cfg) => readTTSStatus(cfg),
-      },
-    }),
-});
-
-/**
- * Full STT+TTS configuration write — used by the web Voice settings panel.
- * Accepts the entire `{ stt, tts }` state blob and merges it into config,
- * providing the same zod validation + diff semantics as the CLI `enable/disable`
- * handlers but covering all sub-fields (provider-specific models, voices, etc.).
- */
-registerSetupHandler({
-  domain: 'voice',
-  action: 'configure',
-  handler: async ({ configPath, fields, options }) => {
-    const stt = fields.stt && typeof fields.stt === 'object' ? fields.stt : undefined;
-    const tts = fields.tts && typeof fields.tts === 'object' ? fields.tts : undefined;
-    if (!stt && !tts) {
-      return {
-        ok: false,
-        action: 'set',
-        domain: 'voice',
-        changedPaths: [],
-        dryRun: options.dryRun,
-        errors: [{ message: 'At least one of `stt` or `tts` fields is required.' }],
-      };
-    }
-    return runSetupHeadless({
-      configPath,
-      options,
-      mutator: {
-        domain: 'voice',
-        action: 'set',
-        mutate(cfg) {
-          const next = { ...cfg };
-          if (stt) {
-            next.tools = next.tools ?? {};
-            next.tools.media = next.tools.media ?? {};
-            next.tools.media.audio = mergeSttConfigPatch(
-              next.tools.media.audio,
-              stt,
-            ) as typeof next.tools.media.audio;
-          }
-          if (tts) {
-            next.messages = next.messages ?? {};
-            next.messages.tts = mergeTtsConfigPatch(
-              next.messages.tts,
-              tts,
-            ) as typeof next.messages.tts;
-          }
-          return next;
-        },
-        resultValue: (cfg) => ({
-          stt: cfg.tools?.media?.audio,
-          tts: cfg.messages?.tts,
-        }),
-      },
-    });
-  },
-});
-
-registerSetupDomain({
-  domain: 'voice',
-  description: 'Text-to-speech (TTS) for outbound messages.',
-  docs: 'https://xopcai.github.io/xopc/voice',
-  storage: 'cfg.messages.tts in ~/.xopc/xopc.json',
-  actions: [
-    {
-      name: 'status',
-      cli: 'xopc voice status [--json]',
-      description: 'Show current TTS configuration.',
-    },
-    {
-      name: 'enable',
-      cli: 'xopc voice enable [--provider <id>] [--trigger <mode>] [--dry-run] [--json]',
-      description: 'Enable TTS, optionally setting provider/trigger.',
-      fields: ['provider', 'trigger'],
-    },
-    {
-      name: 'disable',
-      cli: 'xopc voice disable [--dry-run] [--json]',
-      description: 'Disable TTS.',
-    },
-    {
-      name: 'configure',
-      cli: 'POST /api/setup/voice/configure',
-      description: 'Full STT+TTS configuration write (used by web panel). Fields: { stt, tts }.',
-      fields: ['stt', 'tts'],
-    },
-    {
-      name: 'schema',
-      cli: 'xopc voice schema [--json]',
-      description: 'Print TTS setup schema.',
-    },
-  ],
-  fields: {
-    provider: {
-      type: 'enum',
-      description: 'TTS provider engine.',
-      enum: [...TTS_PROVIDERS],
-      default: 'openai',
-    },
-    trigger: {
-      type: 'enum',
-      description: 'When to speak: off (never), always, inbound (only on incoming), tagged (only when message is tagged).',
-      enum: [...TTS_TRIGGERS],
-      default: 'always',
-    },
   },
 });

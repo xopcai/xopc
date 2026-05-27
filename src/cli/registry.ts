@@ -44,7 +44,7 @@ export class CommandRegistry {
   /**
    * Temporarily silence the "registered after initialization" warning. Used by
    * commands that need to bulk-load other command modules to harvest their
-   * side effects (e.g. `xopc setup manifest`).
+   * side effects during initialization.
    */
   setSuppressLateRegistrationWarnings(value: boolean): void {
     this.suppressLateRegistrationWarnings = value;

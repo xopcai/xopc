@@ -3,9 +3,6 @@ import { register, formatExamples, type CLIContext } from '../registry.js';
 import { seedMainAgentProfileMarkdown } from '../../agent/context/workspace-seed.js';
 import { getWorkspaceStatus } from '../utils/workspace.js';
 import { initWorkspace } from '../utils/init-workspace.js';
-import { REGISTRY_COMMAND_MODULES } from '../command-loaders.js';
-import { registry } from '../registry.js';
-import { serializeSetupManifest } from './setup-shared/index.js';
 import { colors } from '../utils/colors.js';
 
 function createSetupCommand(ctx: CLIContext): Command {
@@ -16,7 +13,6 @@ function createSetupCommand(ctx: CLIContext): Command {
       formatExamples([
         'xopc setup                    # Create config + workspace',
         'xopc setup --workspace /path  # Custom workspace path',
-        'xopc setup manifest --json    # Discovery JSON for agents / UIs',
       ])
     )
     .option('--workspace <path>', 'Workspace directory path', ctx.workspacePath)
@@ -61,35 +57,6 @@ function createSetupCommand(ctx: CLIContext): Command {
       console.log('   xopc onboard              # Run full setup wizard');
       console.log('   xopc onboard --model      # Configure model only');
       console.log('   xopc onboard --channels  # Configure channels only');
-    });
-
-  cmd
-    .command('manifest')
-    .description(
-      'Print a discovery JSON describing every configurable domain (for agents / UIs)',
-    )
-    .option('--json', 'Single-line JSON output suitable for piping (default: pretty)', false)
-    .action(async (opts: { json?: boolean }) => {
-      // Force-load every command module so each domain's
-      // `registerSetupDomain(...)` side effect runs before we serialize. The
-      // registry is already initialized at this point, so silence the
-      // "registered after initialization" warning during the bulk load.
-      registry.setSuppressLateRegistrationWarnings(true);
-      try {
-        await Promise.all(Object.values(REGISTRY_COMMAND_MODULES).map((load) => load()));
-      } finally {
-        registry.setSuppressLateRegistrationWarnings(false);
-      }
-      const manifest = serializeSetupManifest();
-      if (opts.json) {
-        process.stdout.write(JSON.stringify(manifest) + '\n');
-        return;
-      }
-      if (manifest.domains.length === 0) {
-        console.log(colors.gray('No setup domains registered.'));
-        return;
-      }
-      console.log(JSON.stringify(manifest, null, 2));
     });
 
   return cmd;

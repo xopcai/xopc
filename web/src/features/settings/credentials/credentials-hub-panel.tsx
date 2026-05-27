@@ -1,7 +1,6 @@
 import { ChevronRight, KeyRound, Loader2, RefreshCw } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
-import { ConfigureWithAILink } from '@/features/settings/configure-with-ai-link';
 import {
   SettingsFormSection,
   SettingsFormSectionHeader,
@@ -41,7 +40,6 @@ export function CredentialsHubPanel() {
           <p className="text-sm text-fg-muted">{c.subtitle}</p>
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2">
-          <ConfigureWithAILink skill="configure-xopc" size="md" />
           <button
             type="button"
             className={cn(
