@@ -100,7 +100,7 @@ pnpm run build                              # Node + web console → dist/
 
 ## Demo
 
-[![asciinema](https://asciinema.org/a/PlH1sYqOiV3malzu.svg)](https://asciinema.org/a/PlH1sYqOiV3malzu)
+![tui](docs/public/xopc-tui.gif)
 
 ---
 
