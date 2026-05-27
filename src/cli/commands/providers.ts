@@ -37,7 +37,6 @@ import {
   emitOutcome,
   isPromptCancelled,
   promptSecret,
-  registerSetupDomain,
   type SetupOutcome,
 } from './setup-shared/index.js';
 
@@ -140,6 +139,12 @@ interface MutationOptions {
   json: boolean;
 }
 
+function finalizeProviderOutcome(outcome: SetupOutcome, options: MutationOptions): SetupOutcome {
+  emitOutcome(outcome, options.json);
+  process.exitCode = outcome.ok ? SETUP_EXIT.OK : SETUP_EXIT.ERROR;
+  return outcome;
+}
+
 function planSetKey(args: {
   provider: string;
   profileId: string;
@@ -180,9 +185,7 @@ async function runSetKey(args: {
         },
       ],
     };
-    emitOutcome(outcome, args.options.json);
-    process.exitCode = SETUP_EXIT.ERROR;
-    return outcome;
+    return finalizeProviderOutcome(outcome, args.options);
   }
 
   const { existing, willChange } = planSetKey(args);
@@ -200,9 +203,7 @@ async function runSetKey(args: {
       value: { profileId: args.profileId, key: maskKey(args.key) },
       notes: ['Key is unchanged.'],
     };
-    emitOutcome(outcome, args.options.json);
-    process.exitCode = SETUP_EXIT.OK;
-    return outcome;
+    return finalizeProviderOutcome(outcome, args.options);
   }
 
   if (!args.options.dryRun) {
@@ -221,9 +222,7 @@ async function runSetKey(args: {
         dryRun: false,
         errors: [{ message: (error as Error).message }],
       };
-      emitOutcome(outcome, args.options.json);
-      process.exitCode = SETUP_EXIT.ERROR;
-      return outcome;
+      return finalizeProviderOutcome(outcome, args.options);
     }
   }
 
@@ -236,9 +235,7 @@ async function runSetKey(args: {
     dryRun: args.options.dryRun,
     value: { profileId: args.profileId, key: maskKey(args.key) },
   };
-  emitOutcome(outcome, args.options.json);
-  process.exitCode = SETUP_EXIT.OK;
-  return outcome;
+  return finalizeProviderOutcome(outcome, args.options);
 }
 
 async function runUnsetKey(args: {
@@ -257,9 +254,7 @@ async function runUnsetKey(args: {
       dryRun: args.options.dryRun,
       notes: [`No profile "${args.profileId}" to remove.`],
     };
-    emitOutcome(outcome, args.options.json);
-    process.exitCode = SETUP_EXIT.OK;
-    return outcome;
+    return finalizeProviderOutcome(outcome, args.options);
   }
 
   const changedPaths = [`profiles.${args.profileId}`];
@@ -276,9 +271,7 @@ async function runUnsetKey(args: {
     dryRun: args.options.dryRun,
     value: { profileId: args.profileId, removed: true },
   };
-  emitOutcome(outcome, args.options.json);
-  process.exitCode = SETUP_EXIT.OK;
-  return outcome;
+  return finalizeProviderOutcome(outcome, args.options);
 }
 
 function emitSchema(opts: { providerId?: string; json: boolean }): void {
@@ -449,66 +442,4 @@ register({
       'xopc providers schema --json',
     ],
   },
-});
-
-registerSetupDomain({
-  domain: 'providers',
-  description: 'Manage LLM provider credentials (API keys, OAuth profiles).',
-  docs: 'https://xopcai.github.io/xopc/models',
-  storage: '~/.xopc/auth-profiles.json (auth profile store)',
-  actions: [
-    {
-      name: 'list',
-      cli: 'xopc providers list [--json]',
-      description: 'List known providers with credential status (configured / env-only / oauth / not-set).',
-    },
-    {
-      name: 'set-key',
-      cli: 'xopc providers set-key <provider> [--key <value>] [--profile <id>] [--dry-run] [--json]',
-      description: 'Set or update the API key for a provider. Prompts securely if --key is omitted.',
-      fields: ['provider', 'key', 'profile'],
-    },
-    {
-      name: 'unset-key',
-      cli: 'xopc providers unset-key <provider> [--profile <id>] [--dry-run] [--json]',
-      description: 'Remove a provider auth profile.',
-      fields: ['provider', 'profile'],
-    },
-    {
-      name: 'schema',
-      cli: 'xopc providers schema [provider] [--json]',
-      description: 'Print a structured description of provider setup fields.',
-    },
-  ],
-  fields: {
-    provider: {
-      type: 'enum',
-      description: 'Provider id. See `xopc providers list` for the full set.',
-      required: true,
-      enum: getAllProviders(),
-    },
-    key: {
-      type: 'string',
-      description: 'API key value. Prefer interactive prompt over CLI arg to avoid shell-history leaks.',
-      secret: true,
-      source: 'Provider dashboard (e.g. https://platform.openai.com/api-keys for OpenAI).',
-    },
-    profile: {
-      type: 'string',
-      description: 'Optional profile id when managing multiple keys per provider.',
-      default: '<provider>:default',
-    },
-  },
-  targets: () =>
-    listProviders().map((entry) => ({
-      id: entry.id,
-      name: entry.name,
-      meta: {
-        category: entry.category,
-        supportsApiKey: entry.supportsApiKey,
-        supportsOAuth: entry.supportsOAuth,
-        status: entry.status,
-        envVar: entry.envVar,
-      },
-    })),
 });

@@ -2,10 +2,9 @@ import { AlertCircle, Download, Loader2, RefreshCw, X } from 'lucide-react';
 import { useCallback, useState } from 'react';
 
 import type { UpdateReminderController } from '@/features/updater/use-update-reminder';
-import { apiFetch } from '@/lib/fetch';
+import { restartGatewayAfterConfigChange } from '@/features/tunnel/gateway-restart';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
-import { apiUrl } from '@/lib/url';
 import { useLocaleStore } from '@/stores/locale-store';
 
 /**
@@ -28,9 +27,8 @@ export function UpdateReminderBar({
     const tp = messages(language).updatePanel;
     setRestartBusy(true);
     try {
-      const res = await apiFetch(apiUrl('/api/gateway/restart'), { method: 'POST' });
-      const j = (await res.json().catch(() => ({}))) as { ok?: boolean; message?: string };
-      if (res.ok && j.ok !== false) {
+      const j = await restartGatewayAfterConfigChange();
+      if (j.ok) {
         window.dispatchEvent(new Event('gateway-restart-initiated'));
         return;
       }
@@ -39,7 +37,7 @@ export function UpdateReminderBar({
           detail: {
             type: 'error',
             title: tp.updateErrorFailed,
-            message: typeof j.message === 'string' ? j.message : `HTTP ${res.status}`,
+            message: j.message ?? 'Gateway restart failed',
           },
         }),
       );

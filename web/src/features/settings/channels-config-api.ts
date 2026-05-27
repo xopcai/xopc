@@ -1,8 +1,6 @@
 import { revalidateGatewayConfig } from '@/features/gateway/gateway-config-swr';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
-
-import { callSetup } from './setup-api.js';
 import {
   extractChannelAgentRoutes,
   mergeChannelAgentBindings,
@@ -345,17 +343,17 @@ export async function patchChannelsSettings(state: ChannelsSettingsState): Promi
     },
   };
 
-  const outcome = await callSetup({
-    domain: 'channels',
-    action: 'configure',
-    fields: { channels: channelsPayload, bindings: mergedBindings },
+  const res = await fetchJson<{ ok?: boolean; payload?: { config?: unknown } }>(apiUrl('/api/config'), {
+    method: 'PATCH',
+    body: JSON.stringify({
+      bindings: mergedBindings,
+      channels: channelsPayload,
+    }),
   });
   void revalidateGatewayConfig();
-  const outcomeValue = outcome.value as Record<string, unknown> | undefined;
-  if (outcomeValue && 'channels' in outcomeValue) {
-    // The handler returns the written config state; reconstruct from it.
-    const wrappedConfig = { channels: outcomeValue.channels, bindings: mergedBindings };
-    return normalizeChannelsFromConfig(wrappedConfig);
+  const cfg = res.payload?.config;
+  if (cfg) {
+    return normalizeChannelsFromConfig(cfg);
   }
   return {
     ...state,

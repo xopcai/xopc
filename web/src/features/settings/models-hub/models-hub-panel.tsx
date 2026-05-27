@@ -23,7 +23,6 @@ import { Bot, ExternalLink, ImageIcon, KeyRound, Mic, Search, type LucideIcon } 
 import { useCallback, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
-import { ConfigureWithAILink } from '@/features/settings/configure-with-ai-link';
 import { ImageModelsSettingsPanel } from '@/features/settings/image-models-settings';
 import { ModelsSettingsPanel } from '@/features/settings/models-settings';
 import { ProvidersSettingsPanel } from '@/features/settings/providers-settings';
@@ -98,9 +97,6 @@ export function ModelsHubPanel() {
             {c.docsLink}
             <ExternalLink className="size-3.5" />
           </a>
-        </div>
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
-          <ConfigureWithAILink skill="configure-xopc" size="md" />
         </div>
       </header>
 

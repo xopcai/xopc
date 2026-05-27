@@ -37,11 +37,6 @@
   "settingsPage": {
     "comingSoon": "设置 · {{title}}（即将推出）。"
   },
-  "configureWithAi": {
-    "label": "用 AI 配置",
-    "title": "打开聊天，自动加载该项的引导技能",
-    "tooltip": "通过对话完成配置 —— 助手会问清需要的字段，并替你执行正确的命令。"
-  },
   "modelsHub": {
     "subtitle": "服务商密钥、模型、图像生成、语音、网络搜索。",
     "docsLink": "查看文档",
