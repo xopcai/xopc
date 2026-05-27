@@ -100,7 +100,7 @@ pnpm run build                              # 构建发布：Node + 网页 → d
 
 ## 演示
 
-[![asciinema](https://asciinema.org/a/PlH1sYqOiV3malzu.svg)](https://asciinema.org/a/PlH1sYqOiV3malzu)
+![tui](docs/public/xopc-tui.gif)
 
 ---
 
