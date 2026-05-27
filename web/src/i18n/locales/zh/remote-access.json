@@ -16,7 +16,7 @@
       "tailscale": "适合 tailnet 内的个人设备。Gateway 仍绑定 loopback，由 Tailscale Serve 发布 HTTPS。",
       "public": "开启隧道获取公网地址，再扫码配对移动 App。",
       "ssh": "无 VPN 或公网隧道时，通过 CLI 做 SSH 端口转发。",
-      "lan": "在同一 Wi‑Fi 或局域网内，通过 Gateway 绑定地址访问。"
+      "lan": "在同一 Wi‑Fi 或局域网内，通过 Gateway 绑定地址访问，并扫码配对移动 App。"
     },
     "guide": {
       "pickMethod": "选择连接方式",
@@ -50,7 +50,11 @@
       "title": "同一网络（局域网）",
       "subtitle": "在同一 Wi‑Fi 下的手机或笔记本访问 Gateway，无需暴露到公网。",
       "body": "将 Gateway 绑定地址设为局域网 IP（或 0.0.0.0），通过 http://<主机>:<端口> 连接。请注意防火墙规则。",
-      "link": "打开 Gateway 设置"
+      "link": "打开 Gateway 设置",
+      "pairTitle": "移动 App 配对",
+      "pairSubtitle": "在同一 Wi‑Fi 下扫码连接手机。App 会用一次性配对密钥换取 Gateway token。",
+      "pairBlockedNextSteps": "或使用「公网访问」标签通过隧道配对。",
+      "pairPublicTabLink": "打开公网访问"
     },
     "tailscale": {
       "title": "Tailscale Serve（推荐）",
