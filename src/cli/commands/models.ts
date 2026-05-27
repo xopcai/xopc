@@ -135,5 +135,3 @@ register({
     ],
   },
 });
-
-import './agents-setup-handlers.js';

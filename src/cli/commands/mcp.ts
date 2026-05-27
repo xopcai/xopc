@@ -1,27 +1,13 @@
 import { Command } from 'commander';
 import { readFileSync } from 'node:fs';
 import { parseConfigValue } from '../../chat-commands/config-value.js';
-import { loadConfig } from '../../config/loader.js';
 import {
   listConfiguredMcpServers,
   setConfiguredMcpServer,
   unsetConfiguredMcpServer,
 } from '../../config/mcp-config.js';
-import { normalizeConfiguredMcpServers } from '../../config/mcp-config-normalize.js';
-import type { Config } from '../../config/schema.js';
-import {
-  applyMcpServersPatch,
-  validateMcpServersPatch,
-} from '../../config/setup-writes/index.js';
 import { serveXopcChannelMcpImpl } from '../../mcp/channel-server.js';
-import { isRecord } from '../../utils/is-record.js';
 import { register, formatExamples, type CLIContext } from '../registry.js';
-
-import {
-  registerSetupDomain,
-  registerSetupHandler,
-  runSetupHeadless,
-} from './setup-shared/index.js';
 
 function readOptionalFile(path: string | undefined): string | undefined {
   if (!path?.trim()) {
@@ -158,167 +144,6 @@ register({
       'xopc mcp list',
       'xopc mcp serve',
     ],
-  },
-});
-
-function summarizeMcpServers(cfg: Config): Array<{ id: string; transport: string }> {
-  const servers = normalizeConfiguredMcpServers(cfg.mcp?.servers);
-  return Object.entries(servers)
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([id, server]) => {
-      const hasUrl = typeof server.url === 'string' && server.url.trim().length > 0;
-      const transportRaw =
-        typeof server.transport === 'string' ? server.transport.trim().toLowerCase() : '';
-      const transport = hasUrl
-        ? transportRaw === 'sse'
-          ? 'sse'
-          : 'streamable-http'
-        : 'stdio';
-      return { id, transport };
-    });
-}
-
-function parseMcpConfigureFields(fields: Record<string, unknown>): {
-  patch: Parameters<typeof applyMcpServersPatch>[1] | null;
-  errors: Array<{ path?: string; message: string }>;
-} {
-  if (!isRecord(fields.servers)) {
-    return {
-      patch: null,
-      errors: [{ path: 'servers', message: 'servers must be a JSON object (id → config)' }],
-    };
-  }
-  const patch: Parameters<typeof applyMcpServersPatch>[1] = {
-    servers: fields.servers as Record<string, unknown>,
-  };
-  if (fields.sessionIdleTtlMinutes !== undefined) {
-    const n =
-      typeof fields.sessionIdleTtlMinutes === 'number'
-        ? fields.sessionIdleTtlMinutes
-        : Number.parseInt(String(fields.sessionIdleTtlMinutes), 10);
-    if (!Number.isFinite(n) || n < 0) {
-      return {
-        patch: null,
-        errors: [{ path: 'sessionIdleTtlMinutes', message: 'sessionIdleTtlMinutes must be >= 0' }],
-      };
-    }
-    patch.sessionIdleTtlMinutes = Math.floor(n);
-  } else if (fields.sessionIdleTtlMs !== undefined) {
-    const n =
-      typeof fields.sessionIdleTtlMs === 'number'
-        ? fields.sessionIdleTtlMs
-        : Number.parseInt(String(fields.sessionIdleTtlMs), 10);
-    if (!Number.isFinite(n) || n < 0) {
-      return {
-        patch: null,
-        errors: [{ path: 'sessionIdleTtlMs', message: 'sessionIdleTtlMs must be >= 0' }],
-      };
-    }
-    patch.sessionIdleTtlMs = Math.floor(n);
-  }
-
-  const errors = validateMcpServersPatch(patch);
-  return { patch, errors };
-}
-
-registerSetupHandler({
-  domain: 'mcp',
-  action: 'list',
-  handler: async ({ configPath }) => {
-    let cfg: Config;
-    try {
-      cfg = loadConfig(configPath);
-    } catch (error) {
-      return {
-        ok: false,
-        action: 'noop',
-        domain: 'mcp',
-        changedPaths: [],
-        dryRun: false,
-        errors: [{ message: `Failed to load config: ${(error as Error).message}` }],
-      };
-    }
-    const ttlMs =
-      typeof cfg.mcp?.sessionIdleTtlMs === 'number' ? cfg.mcp.sessionIdleTtlMs : undefined;
-    return {
-      ok: true,
-      action: 'noop',
-      domain: 'mcp',
-      changedPaths: [],
-      dryRun: false,
-      value: {
-        servers: summarizeMcpServers(cfg),
-        sessionIdleTtlMinutes:
-          ttlMs == null ? undefined : ttlMs === 0 ? 0 : Math.round(ttlMs / 60_000),
-      },
-    };
-  },
-});
-
-registerSetupHandler({
-  domain: 'mcp',
-  action: 'configure',
-  handler: async ({ configPath, fields, options }) => {
-    const { patch, errors } = parseMcpConfigureFields(fields);
-    if (!patch || errors.length > 0) {
-      return {
-        ok: false,
-        action: 'set',
-        domain: 'mcp',
-        changedPaths: [],
-        dryRun: options.dryRun,
-        errors,
-      };
-    }
-    return runSetupHeadless({
-      configPath,
-      options,
-      mutator: {
-        domain: 'mcp',
-        action: 'set',
-        mutate: (cfg) => applyMcpServersPatch(cfg, patch),
-        resultValue: (cfg) => ({
-          servers: summarizeMcpServers(cfg),
-          sessionIdleTtlMinutes:
-            typeof cfg.mcp?.sessionIdleTtlMs === 'number'
-              ? cfg.mcp.sessionIdleTtlMs === 0
-                ? 0
-                : Math.round(cfg.mcp.sessionIdleTtlMs / 60_000)
-              : undefined,
-        }),
-      },
-    });
-  },
-});
-
-registerSetupDomain({
-  domain: 'mcp',
-  description: 'Outbound MCP server registry for agent tool bundles.',
-  docs: 'https://xopcai.github.io/xopc/cli/mcp',
-  storage: 'cfg.mcp.servers in ~/.xopc/xopc.json',
-  actions: [
-    {
-      name: 'list',
-      cli: 'xopc mcp list [--json] | POST /api/setup/mcp/list',
-      description: 'List configured MCP server ids and transports (no secrets).',
-    },
-    {
-      name: 'configure',
-      cli: 'POST /api/setup/mcp/configure',
-      description: 'Replace the MCP server map and optional session idle TTL.',
-      fields: ['servers', 'sessionIdleTtlMinutes', 'sessionIdleTtlMs'],
-    },
-  ],
-  fields: {
-    servers: {
-      type: 'string',
-      description: 'JSON object: server id → { command, args?, url?, transport?, headers?, env? }.',
-      required: true,
-    },
-    sessionIdleTtlMinutes: {
-      type: 'number',
-      description: 'Session idle TTL in minutes (0 = no idle eviction).',
-    },
   },
 });
 

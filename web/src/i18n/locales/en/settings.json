@@ -37,11 +37,6 @@
   "settingsPage": {
     "comingSoon": "Settings · {{title}} (coming soon)."
   },
-  "configureWithAi": {
-    "label": "Configure with AI",
-    "title": "Open chat with a guided setup skill loaded",
-    "tooltip": "Get walked through this setup in chat — the assistant will ask for what it needs and run the right command for you."
-  },
   "modelsHub": {
     "subtitle": "Provider keys, models, image generation, voice, and web search.",
     "docsLink": "Read the docs",

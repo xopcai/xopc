@@ -14,7 +14,6 @@ import {
   putHeartbeatMd,
   triggerHeartbeat,
 } from '@/features/settings/heartbeat-config-api';
-import { ConfigureWithAILink } from '@/features/settings/configure-with-ai-link';
 import { fetchHeartbeatMdSwr, heartbeatMdSwrKey } from '@/features/settings/heartbeat-md-swr';
 import type { HeartbeatSettingsState } from '@/features/settings/heartbeat-settings.types';
 import { SaveBarControls } from '@/features/settings/save-bar/save-bar-controls';
@@ -328,7 +327,6 @@ export function HeartbeatSettingsPanel() {
           </a>
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2">
-          <ConfigureWithAILink skill="configure-xopc" domain="heartbeat" />
           <Button
             type="button"
             variant="secondary"

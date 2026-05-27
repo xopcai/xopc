@@ -225,8 +225,6 @@ export class AgentService {
       verboseLevel: config.verboseLevel,
       gatewayClarify: config.gatewayClarify,
       getCronService: config.getCronService,
-      getConfigPath: config.getConfigPath,
-      onSetupApplied: config.onSetupApplied,
     });
 
     this.agentEventHandler = new AgentEventHandler({

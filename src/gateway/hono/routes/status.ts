@@ -7,12 +7,6 @@ import { mergeSttConfigFromAppConfig } from '../../../channels/attachments/voice
 import { getDefaultModelSync, resolveModel } from '../../../providers/index.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
-export type GatewayRuntimeKind = 'electron' | 'cli';
-
-export function detectGatewayRuntime(): GatewayRuntimeKind {
-  return process.env.ELECTRON_RUN_AS_NODE === '1' ? 'electron' : 'cli';
-}
-
 function isRefineAvailable(config: Config | undefined): boolean {
   if (!config) return false;
   for (const candidate of [
@@ -53,10 +47,6 @@ function buildStatusPayload(service: AuthenticatedRouteDeps['service']) {
     version: health.version,
     channels,
     uptime: health.uptime,
-    configPath: health.configPath,
-    runtime: detectGatewayRuntime(),
-    hotReloadEnabled: service.isHotReloadEnabled,
-    gatewayPort: service.gatewayPort,
     voice: {
       sttAvailable: sttConfig ? isSTTAvailable(sttConfig) : false,
       refineAvailable: isRefineAvailable(config),

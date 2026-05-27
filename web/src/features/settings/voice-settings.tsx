@@ -3,7 +3,6 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
-import { ConfigureWithAILink } from '@/features/settings/configure-with-ai-link';
 import { useSaveBarRegistration } from '@/features/settings/save-bar/use-save-bar-registration';
 import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
 import {
@@ -474,7 +473,6 @@ export function VoiceSettingsPanel({ embedded = false }: { embedded?: boolean } 
         {/* See WebSearchSettingsPanel — global Save bar replaces these in embedded mode. */}
         {embedded ? null : (
           <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-            <ConfigureWithAILink skill="configure-xopc" domain="voice" />
             {saveOk ? <span className="text-sm text-fg-muted">{v.saved}</span> : null}
             <Button type="button" variant="secondary" disabled={!dirty || saving} onClick={discard}>
               {v.discard}

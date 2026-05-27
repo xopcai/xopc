@@ -5,7 +5,6 @@ import type { SessionStore } from '../session/store.js';
 import type { CronService } from '../cron/index.js';
 import type { ExtensionRegistryImpl as ExtensionRegistry } from '../extensions/index.js';
 import type { GatewayClarifyRequestFn } from './tools/clarify-tool.js';
-import type { SetupOutcome } from '../cli/commands/setup-shared/index.js';
 import type { ProgressStage } from './lifecycle/progress.js';
 
 export interface AgentServiceConfig {
@@ -39,10 +38,6 @@ export interface AgentServiceConfig {
   onSessionMetadataUpdated?: (sessionKey: string) => void;
   /** Gateway: transcript JSONL append (goal verdict, slash receipt, background turns). */
   onSessionTranscriptUpdated?: (sessionKey: string) => void;
-  /** Path to xopc.json for the `setup` tool (gateway + CLI). */
-  getConfigPath?: () => string;
-  /** Called after successful setup writes (e.g. gateway reloadConfig). */
-  onSetupApplied?: (outcome: SetupOutcome) => Promise<void>;
 }
 
 export interface AgentContext {

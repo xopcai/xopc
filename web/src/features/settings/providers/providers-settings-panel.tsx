@@ -9,7 +9,6 @@ import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
 import { CONFIGURED_MODELS_SWR_KEY, fetchConfiguredModelsCached } from '@/features/chat/api/registry-api';
-import { ConfigureWithAILink } from '@/features/settings/configure-with-ai-link';
 import { useSaveBarRegistration } from '@/features/settings/save-bar/use-save-bar-registration';
 import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
 import {
@@ -300,7 +299,6 @@ export function ProvidersSettingsPanel({ embedded = false }: { embedded?: boolea
         {/* See WebSearchSettingsPanel — global Save bar replaces these in embedded mode. */}
         {embedded ? null : (
         <div className="flex shrink-0 flex-wrap items-center gap-2">
-          <ConfigureWithAILink skill="configure-xopc" domain="providers" />
           {saveNotice === 'saved' ? <span className="text-sm text-fg-muted">{p.saved}</span> : null}
           {saveNotice === 'noChanges' ? <span className="text-sm text-fg-muted">{p.noChangesSaved}</span> : null}
           <Button type="button" variant="secondary" disabled={!dirty || saving} onClick={discard}>

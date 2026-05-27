@@ -2,7 +2,6 @@ import { RefreshCw } from 'lucide-react';
 import { memo } from 'react';
 
 import { Button } from '@/components/ui/button';
-import { ConfigureWithAILink } from '@/features/settings/configure-with-ai-link';
 import type { ChannelsSettingsMessages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 
@@ -19,7 +18,6 @@ export const ChannelsPageHeaderActions = memo(function ChannelsPageHeaderActions
 }) {
   return (
     <div className="flex min-w-0 shrink-0 items-center justify-end gap-2">
-      <ConfigureWithAILink skill="configure-xopc" domain="channels" />
       {saveOk ? <span className="text-sm text-fg-muted">{ch.saved}</span> : null}
       <Button
         type="button"
@@ -28,10 +26,9 @@ export const ChannelsPageHeaderActions = memo(function ChannelsPageHeaderActions
         disabled={refreshing}
         title={ch.refresh}
         aria-label={ch.refresh}
-        aria-busy={refreshing}
-        onClick={() => void onRefresh()}
+        onClick={onRefresh}
       >
-        <RefreshCw className={cn('size-4', refreshing && 'animate-spin')} strokeWidth={1.75} />
+        <RefreshCw className={cn('size-4', refreshing && 'animate-spin')} aria-hidden />
       </Button>
     </div>
   );

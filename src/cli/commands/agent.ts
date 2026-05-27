@@ -103,7 +103,6 @@ function createAgentCommand(_ctx: CLIContext): Command {
         gatewayClarify: {
           requestClarification: createCliReadlineClarifyRequestFn(),
         },
-        getConfigPath: () => resolveConfigPath(),
       });
 
       // Start agent service in background

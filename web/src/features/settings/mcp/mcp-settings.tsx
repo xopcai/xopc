@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
 import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/settings/settings-form-section';
-import { ConfigureWithAILink } from '@/features/settings/configure-with-ai-link';
 import {
   emptyMcpServerRow,
   buildMcpServerConfigFromRow,
@@ -232,12 +231,9 @@ export function McpSettingsPanel() {
 
   return (
     <div className="mx-auto flex w-full max-w-app-main flex-col gap-6 px-4 py-8">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="text-lg font-semibold tracking-tight text-fg">{t.title}</h1>
-          <p className="mt-1 text-sm text-fg-muted">{t.subtitle}</p>
-        </div>
-        <ConfigureWithAILink skill="configure-xopc" domain="mcp" />
+      <div>
+        <h1 className="text-lg font-semibold tracking-tight text-fg">{t.title}</h1>
+        <p className="mt-1 text-sm text-fg-muted">{t.subtitle}</p>
       </div>
 
       {(fetchError || error) && (

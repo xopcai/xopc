@@ -18,7 +18,6 @@ import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 import { isWebUiSessionKey } from '@/features/chat/session/session-manager';
 import { isValidSkillWireId } from '@/features/chat/palette/skill-wire-pattern';
-import { composeSkillWireSeed } from '@/features/settings/setup-composer-hint';
 import { wireTextForSlashCommandEntry } from '@/features/chat/palette/slash-command-wire-text';
 import { useWorkspaceEditorAgentStore } from '@/stores/workspace-editor-agent-store';
 
@@ -39,7 +38,6 @@ export function ChatPage() {
 
   const skillQuery = searchParams.get('skill')?.trim() ?? '';
   const slashQuery = searchParams.get('slash')?.trim() ?? '';
-  const domainQuery = searchParams.get('domain')?.trim() ?? '';
 
   useEffect(() => {
     routeComposerSeedMarkerRef.current = null;
@@ -55,7 +53,6 @@ export function ChatPage() {
       const next = new URLSearchParams(searchParams);
       next.delete('skill');
       next.delete('slash');
-      next.delete('domain');
       const qs = next.toString();
       navigate({ pathname, search: qs ? `?${qs}` : '' }, { replace: true });
     };
@@ -76,8 +73,8 @@ export function ChatPage() {
         stripRouteComposerParams();
         return;
       }
-      const marker = `${session.sessionKey}:skill:${skillQuery}:${domainQuery}`;
-      applyWireSeed(composeSkillWireSeed(skillQuery, domainQuery), marker);
+      const marker = `${session.sessionKey}:skill:${skillQuery}`;
+      applyWireSeed(`/skill:${skillQuery} `, marker);
       return;
     }
 
@@ -113,7 +110,6 @@ export function ChatPage() {
     auth.hasToken,
     skillQuery,
     slashQuery,
-    domainQuery,
     searchParams,
     session.showSessionLoading,
     session.sessionRoutePending,

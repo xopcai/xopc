@@ -51,7 +51,6 @@ export {
   type GatewayClarifyRequestFn,
 } from './clarify-tool.js';
 
-export { createSetupTool, type SetupToolDeps } from './setup-tool.js';
 
 export { createBrowserTools, type CreateBrowserToolsDeps } from './browser-legacy-tools.js';
 export { BrowserManager, assertBrowserUrlAllowed } from '../../browser/index.js';

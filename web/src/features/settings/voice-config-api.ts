@@ -2,7 +2,6 @@ import { revalidateGatewayConfig } from '@/features/gateway/gateway-config-swr';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
-import { callSetup } from './setup-api.js';
 import type { SttSettings, SttProvidersPayload, TtsSettings, VoiceModelsPayload, VoiceSettingsState, VoiceProvidersPayload } from './voice-settings.types';
 
 export type { SttSettings, TtsSettings, VoiceModelsPayload, VoiceSettingsState, VoiceProvidersPayload, SttProvidersPayload, TtsProviderListEntry, SttProviderListEntry } from './voice-settings.types';
@@ -137,10 +136,9 @@ export async function fetchVoiceSettings(): Promise<VoiceSettingsState> {
 }
 
 export async function patchVoiceSettings(state: VoiceSettingsState): Promise<void> {
-  await callSetup({
-    domain: 'voice',
-    action: 'configure',
-    fields: { stt: state.stt, tts: state.tts },
+  await fetchJson(apiUrl('/api/config'), {
+    method: 'PATCH',
+    body: JSON.stringify({ stt: state.stt, tts: state.tts }),
   });
   void revalidateGatewayConfig();
 }

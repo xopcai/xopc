@@ -318,6 +318,4 @@ register({
   },
 });
 
-import './heartbeat-setup.js';
-
-import './heartbeat-setup.js';
+export { createGatewayCommand };

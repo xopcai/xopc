@@ -37,8 +37,6 @@ import {
   emitOutcome,
   isPromptCancelled,
   promptSecret,
-  registerSetupHandler,
-  registerSetupDomain,
   type SetupOutcome,
 } from './setup-shared/index.js';
 
@@ -139,15 +137,11 @@ function printListJson(entries: ProviderListEntry[]): void {
 interface MutationOptions {
   dryRun: boolean;
   json: boolean;
-  /** When true, skip stdout emit and process.exitCode (HTTP / agent setup tool). */
-  programmatic?: boolean;
 }
 
 function finalizeProviderOutcome(outcome: SetupOutcome, options: MutationOptions): SetupOutcome {
-  if (!options.programmatic) {
-    emitOutcome(outcome, options.json);
-    process.exitCode = outcome.ok ? SETUP_EXIT.OK : SETUP_EXIT.ERROR;
-  }
+  emitOutcome(outcome, options.json);
+  process.exitCode = outcome.ok ? SETUP_EXIT.OK : SETUP_EXIT.ERROR;
   return outcome;
 }
 
@@ -447,156 +441,5 @@ register({
       'xopc providers unset-key openai',
       'xopc providers schema --json',
     ],
-  },
-});
-
-registerSetupDomain({
-  domain: 'providers',
-  description: 'Manage LLM provider credentials (API keys, OAuth profiles).',
-  docs: 'https://xopcai.github.io/xopc/models',
-  storage: '~/.xopc/auth-profiles.json (auth profile store)',
-  actions: [
-    {
-      name: 'list',
-      cli: 'xopc providers list [--json]',
-      description: 'List known providers with credential status (configured / env-only / oauth / not-set).',
-    },
-    {
-      name: 'set-key',
-      cli: 'xopc providers set-key <provider> [--key <value>] [--profile <id>] [--dry-run] [--json]',
-      description: 'Set or update the API key for a provider. Prompts securely if --key is omitted.',
-      fields: ['provider', 'key', 'profile'],
-    },
-    {
-      name: 'unset-key',
-      cli: 'xopc providers unset-key <provider> [--profile <id>] [--dry-run] [--json]',
-      description: 'Remove a provider auth profile.',
-      fields: ['provider', 'profile'],
-    },
-    {
-      name: 'schema',
-      cli: 'xopc providers schema [provider] [--json]',
-      description: 'Print a structured description of provider setup fields.',
-    },
-  ],
-  fields: {
-    provider: {
-      type: 'enum',
-      description: 'Provider id. See `xopc providers list` for the full set.',
-      required: true,
-      enum: getAllProviders(),
-    },
-    key: {
-      type: 'string',
-      description: 'API key value. Prefer interactive prompt over CLI arg to avoid shell-history leaks.',
-      secret: true,
-      source: 'Provider dashboard (e.g. https://platform.openai.com/api-keys for OpenAI).',
-    },
-    profile: {
-      type: 'string',
-      description: 'Optional profile id when managing multiple keys per provider.',
-      default: '<provider>:default',
-    },
-  },
-  targets: () =>
-    listProviders().map((entry) => ({
-      id: entry.id,
-      name: entry.name,
-      meta: {
-        category: entry.category,
-        supportsApiKey: entry.supportsApiKey,
-        supportsOAuth: entry.supportsOAuth,
-        status: entry.status,
-        envVar: entry.envVar,
-      },
-    })),
-});
-
-registerSetupHandler({
-  domain: 'providers',
-  action: 'list',
-  handler: async () => {
-    const providers = listProviders();
-    return {
-      ok: true,
-      action: 'noop',
-      domain: 'providers',
-      changedPaths: [],
-      dryRun: false,
-      value: { providers },
-    };
-  },
-});
-
-registerSetupHandler({
-  domain: 'providers',
-  action: 'set-key',
-  handler: async ({ fields, options }) => {
-    const provider =
-      (typeof fields.provider === 'string' && fields.provider.trim()) ||
-      (typeof fields.target === 'string' && fields.target.trim()) ||
-      '';
-    if (!provider) {
-      return {
-        ok: false,
-        action: 'set',
-        domain: 'providers',
-        changedPaths: [],
-        dryRun: options.dryRun,
-        errors: [{ path: 'provider', message: 'provider is required (provider id, e.g. openai)' }],
-      };
-    }
-    const key = typeof fields.key === 'string' ? fields.key.trim() : '';
-    if (!key) {
-      return {
-        ok: false,
-        action: 'set',
-        domain: 'providers',
-        target: provider,
-        changedPaths: [],
-        dryRun: options.dryRun,
-        errors: [{ path: 'key', message: 'fields.key required for non-interactive setup' }],
-      };
-    }
-    const profileId =
-      typeof fields.profile === 'string' && fields.profile.trim()
-        ? fields.profile.trim()
-        : defaultProfileId(provider);
-    return runSetKey({
-      provider,
-      profileId,
-      key,
-      options: { ...options, programmatic: true },
-    });
-  },
-});
-
-registerSetupHandler({
-  domain: 'providers',
-  action: 'unset-key',
-  handler: async ({ fields, options }) => {
-    const provider =
-      (typeof fields.provider === 'string' && fields.provider.trim()) ||
-      (typeof fields.target === 'string' && fields.target.trim()) ||
-      '';
-    if (!provider) {
-      return {
-        ok: false,
-        action: 'remove',
-        domain: 'providers',
-        changedPaths: [],
-        dryRun: options.dryRun,
-        errors: [{ path: 'provider', message: 'provider is required (provider id, e.g. openai)' }],
-      };
-    }
-    const profileId =
-      typeof fields.profile === 'string' && fields.profile.trim()
-        ? fields.profile.trim()
-        : defaultProfileId(provider);
-    return runUnsetKey({
-      provider,
-      profileId,
-      options: { ...options, programmatic: true },
-    });
   },
 });
