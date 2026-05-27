@@ -20,21 +20,25 @@ import { useLocaleStore } from '@/stores/locale-store';
 
 export interface ConfigureWithAILinkProps {
   /**
-   * Skill id to load into the composer (e.g. `setup-provider`,
-   * `setup-telegram`, `setup-voice`, `setup-search`, `configure-xopc`).
+   * Skill id to load into the composer (typically `configure-xopc` for
+   * all setup domains — providers, channels, voice, search, etc.).
    * Must match an installed skill — otherwise the chat-page strips the
    * query param without effect.
    */
   skill: string;
+  /** Optional setup domain hint appended to the composer seed (e.g. `providers`). */
+  domain?: 'providers' | 'channels' | 'voice' | 'search' | 'mcp' | 'heartbeat' | 'agents';
   /** Visual size hint. `sm` matches in-header buttons; `md` is a stand-alone CTA. */
   size?: 'sm' | 'md';
   className?: string;
 }
 
-export function ConfigureWithAILink({ skill, size = 'sm', className }: ConfigureWithAILinkProps) {
+export function ConfigureWithAILink({ skill, domain, size = 'sm', className }: ConfigureWithAILinkProps) {
   const language = useLocaleStore((s) => s.language);
   const c = messages(language).configureWithAi;
-  const href = `/chat/new?skill=${encodeURIComponent(skill)}`;
+  const params = new URLSearchParams({ skill });
+  if (domain) params.set('domain', domain);
+  const href = `/chat/new?${params.toString()}`;
 
   const padX = size === 'md' ? 'px-3' : 'px-2.5';
   const padY = size === 'md' ? 'py-2' : 'py-1.5';

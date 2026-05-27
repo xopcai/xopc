@@ -16,39 +16,15 @@
 import type { Hono } from 'hono';
 
 import {
+  ensureSetupHandlersLoaded,
   getSetupHandler,
   serializeSetupManifest,
 } from '../../../cli/commands/setup-shared/index.js';
-import { REGISTRY_COMMAND_MODULES } from '../../../cli/command-loaders.js';
-import { registry as cliRegistry } from '../../../cli/registry.js';
 import { createLogger } from '../../../utils/logger.js';
 
 import type { AuthenticatedRouteDeps } from './deps.js';
 
 const log = createLogger('Gateway:Setup');
-
-let handlersLoadedPromise: Promise<void> | null = null;
-
-/**
- * Force-import every CLI command module so each domain's
- * `registerSetupHandler(...)` and `registerSetupDomain(...)` side effect runs.
- * Cached after the first call. The CLI registry is already populated with
- * Commander commands at this point — silence the "registered after init"
- * warning during the bulk load.
- */
-async function ensureHandlersLoaded(): Promise<void> {
-  if (!handlersLoadedPromise) {
-    handlersLoadedPromise = (async () => {
-      cliRegistry.setSuppressLateRegistrationWarnings(true);
-      try {
-        await Promise.all(Object.values(REGISTRY_COMMAND_MODULES).map((load) => load()));
-      } finally {
-        cliRegistry.setSuppressLateRegistrationWarnings(false);
-      }
-    })();
-  }
-  return handlersLoadedPromise;
-}
 
 interface SetupRequestBody {
   fields?: Record<string, unknown>;
@@ -59,13 +35,13 @@ export function registerSetupRoutes(app: Hono, deps: AuthenticatedRouteDeps): vo
   const { service } = deps;
 
   app.get('/api/setup/manifest', async (c) => {
-    await ensureHandlersLoaded();
+    await ensureSetupHandlersLoaded();
     const manifest = serializeSetupManifest();
     return c.json({ ok: true, ...manifest });
   });
 
   app.post('/api/setup/:domain/:action', async (c) => {
-    await ensureHandlersLoaded();
+    await ensureSetupHandlersLoaded();
 
     const domain = c.req.param('domain');
     const action = c.req.param('action');

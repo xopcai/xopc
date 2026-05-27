@@ -294,6 +294,34 @@ registerSetupHandler({
     }),
 });
 
+registerSetupHandler({
+  domain: 'voice',
+  action: 'status',
+  handler: async ({ configPath }) => {
+    let cfg: Config;
+    try {
+      cfg = loadConfig(configPath);
+    } catch (error) {
+      return {
+        ok: false,
+        action: 'noop',
+        domain: 'voice',
+        changedPaths: [],
+        dryRun: false,
+        errors: [{ message: `Failed to load config: ${(error as Error).message}` }],
+      };
+    }
+    return {
+      ok: true,
+      action: 'noop',
+      domain: 'voice',
+      changedPaths: [],
+      dryRun: false,
+      value: readTTSStatus(cfg),
+    };
+  },
+});
+
 /**
  * Full STT+TTS configuration write — used by the web Voice settings panel.
  * Accepts the entire `{ stt, tts }` state blob and merges it into config,

@@ -40,6 +40,8 @@ import { shouldRegisterCuratedMemoryTool } from '../memory/memory-config.js';
 import type { SessionStore } from '../../session/store.js';
 import { parseSessionKey as parseRoutingSessionKey } from '../../routing/session-key.js';
 import type { GatewayClarifyRequestFn } from './clarify-tool.js';
+import { createSetupTool } from './setup-tool.js';
+import type { SetupOutcome } from '../../cli/commands/setup-shared/index.js';
 import { createImageTool } from './image-tool.js';
 import { createImageGenerateTool } from './image-generate-tool.js';
 import {
@@ -95,6 +97,9 @@ export interface ToolFactoryDeps {
   gatewayClarify?: { requestClarification: GatewayClarifyRequestFn };
   /** Gateway: enables the `cronjob` tool. */
   getCronService?: () => CronService | undefined;
+  /** Path to xopc.json — enables the `setup` tool when set. */
+  getConfigPath?: () => string;
+  onSetupApplied?: (outcome: SetupOutcome) => Promise<void>;
   /** Current session skill indexing (tool gating + allowlist); used by skills_list / skill_view. */
   getSkillIndexingContext?: () =>
     | { registeredToolNames: string[]; skillAllowlist?: string[] }
@@ -303,6 +308,14 @@ export class AgentToolsFactory {
               getSessionStore: this.deps.getSessionStore,
               getConfig: this.deps.getConfig,
               getCurrentSessionKey: () => this.deps.getCurrentContext()?.sessionKey,
+            }),
+          ]
+        : []),
+      ...(this.deps.getConfigPath
+        ? [
+            createSetupTool({
+              getConfigPath: this.deps.getConfigPath,
+              onSetupApplied: this.deps.onSetupApplied,
             }),
           ]
         : []),

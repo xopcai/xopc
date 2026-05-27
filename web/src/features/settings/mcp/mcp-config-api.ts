@@ -7,6 +7,8 @@ import {
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
+import { callSetup } from '../setup-api.js';
+
 export type McpToolInfo = {
   name: string;
   shortName?: string;
@@ -151,15 +153,13 @@ export async function patchMcpSettings(state: McpSettingsState): Promise<void> {
     servers[id] = rowToServerConfig(row);
   }
 
-  const mcp: Record<string, unknown> = { servers };
-  if (state.sessionIdleTtlMinutes != null && Number.isFinite(state.sessionIdleTtlMinutes)) {
-    mcp.sessionIdleTtlMs =
-      state.sessionIdleTtlMinutes === 0 ? 0 : Math.round(state.sessionIdleTtlMinutes * 60_000);
-  }
-
-  await fetchJson(apiUrl('/api/config'), {
-    method: 'PATCH',
-    body: JSON.stringify({ mcp }),
+  await callSetup({
+    domain: 'mcp',
+    action: 'configure',
+    fields: {
+      servers,
+      sessionIdleTtlMinutes: state.sessionIdleTtlMinutes,
+    },
   });
   void revalidateGatewayConfig();
 }

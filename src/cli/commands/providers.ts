@@ -37,6 +37,7 @@ import {
   emitOutcome,
   isPromptCancelled,
   promptSecret,
+  registerSetupHandler,
   registerSetupDomain,
   type SetupOutcome,
 } from './setup-shared/index.js';
@@ -138,6 +139,16 @@ function printListJson(entries: ProviderListEntry[]): void {
 interface MutationOptions {
   dryRun: boolean;
   json: boolean;
+  /** When true, skip stdout emit and process.exitCode (HTTP / agent setup tool). */
+  programmatic?: boolean;
+}
+
+function finalizeProviderOutcome(outcome: SetupOutcome, options: MutationOptions): SetupOutcome {
+  if (!options.programmatic) {
+    emitOutcome(outcome, options.json);
+    process.exitCode = outcome.ok ? SETUP_EXIT.OK : SETUP_EXIT.ERROR;
+  }
+  return outcome;
 }
 
 function planSetKey(args: {
@@ -180,9 +191,7 @@ async function runSetKey(args: {
         },
       ],
     };
-    emitOutcome(outcome, args.options.json);
-    process.exitCode = SETUP_EXIT.ERROR;
-    return outcome;
+    return finalizeProviderOutcome(outcome, args.options);
   }
 
   const { existing, willChange } = planSetKey(args);
@@ -200,9 +209,7 @@ async function runSetKey(args: {
       value: { profileId: args.profileId, key: maskKey(args.key) },
       notes: ['Key is unchanged.'],
     };
-    emitOutcome(outcome, args.options.json);
-    process.exitCode = SETUP_EXIT.OK;
-    return outcome;
+    return finalizeProviderOutcome(outcome, args.options);
   }
 
   if (!args.options.dryRun) {
@@ -221,9 +228,7 @@ async function runSetKey(args: {
         dryRun: false,
         errors: [{ message: (error as Error).message }],
       };
-      emitOutcome(outcome, args.options.json);
-      process.exitCode = SETUP_EXIT.ERROR;
-      return outcome;
+      return finalizeProviderOutcome(outcome, args.options);
     }
   }
 
@@ -236,9 +241,7 @@ async function runSetKey(args: {
     dryRun: args.options.dryRun,
     value: { profileId: args.profileId, key: maskKey(args.key) },
   };
-  emitOutcome(outcome, args.options.json);
-  process.exitCode = SETUP_EXIT.OK;
-  return outcome;
+  return finalizeProviderOutcome(outcome, args.options);
 }
 
 async function runUnsetKey(args: {
@@ -257,9 +260,7 @@ async function runUnsetKey(args: {
       dryRun: args.options.dryRun,
       notes: [`No profile "${args.profileId}" to remove.`],
     };
-    emitOutcome(outcome, args.options.json);
-    process.exitCode = SETUP_EXIT.OK;
-    return outcome;
+    return finalizeProviderOutcome(outcome, args.options);
   }
 
   const changedPaths = [`profiles.${args.profileId}`];
@@ -276,9 +277,7 @@ async function runUnsetKey(args: {
     dryRun: args.options.dryRun,
     value: { profileId: args.profileId, removed: true },
   };
-  emitOutcome(outcome, args.options.json);
-  process.exitCode = SETUP_EXIT.OK;
-  return outcome;
+  return finalizeProviderOutcome(outcome, args.options);
 }
 
 function emitSchema(opts: { providerId?: string; json: boolean }): void {
@@ -511,4 +510,93 @@ registerSetupDomain({
         envVar: entry.envVar,
       },
     })),
+});
+
+registerSetupHandler({
+  domain: 'providers',
+  action: 'list',
+  handler: async () => {
+    const providers = listProviders();
+    return {
+      ok: true,
+      action: 'noop',
+      domain: 'providers',
+      changedPaths: [],
+      dryRun: false,
+      value: { providers },
+    };
+  },
+});
+
+registerSetupHandler({
+  domain: 'providers',
+  action: 'set-key',
+  handler: async ({ fields, options }) => {
+    const provider =
+      (typeof fields.provider === 'string' && fields.provider.trim()) ||
+      (typeof fields.target === 'string' && fields.target.trim()) ||
+      '';
+    if (!provider) {
+      return {
+        ok: false,
+        action: 'set',
+        domain: 'providers',
+        changedPaths: [],
+        dryRun: options.dryRun,
+        errors: [{ path: 'provider', message: 'provider is required (provider id, e.g. openai)' }],
+      };
+    }
+    const key = typeof fields.key === 'string' ? fields.key.trim() : '';
+    if (!key) {
+      return {
+        ok: false,
+        action: 'set',
+        domain: 'providers',
+        target: provider,
+        changedPaths: [],
+        dryRun: options.dryRun,
+        errors: [{ path: 'key', message: 'fields.key required for non-interactive setup' }],
+      };
+    }
+    const profileId =
+      typeof fields.profile === 'string' && fields.profile.trim()
+        ? fields.profile.trim()
+        : defaultProfileId(provider);
+    return runSetKey({
+      provider,
+      profileId,
+      key,
+      options: { ...options, programmatic: true },
+    });
+  },
+});
+
+registerSetupHandler({
+  domain: 'providers',
+  action: 'unset-key',
+  handler: async ({ fields, options }) => {
+    const provider =
+      (typeof fields.provider === 'string' && fields.provider.trim()) ||
+      (typeof fields.target === 'string' && fields.target.trim()) ||
+      '';
+    if (!provider) {
+      return {
+        ok: false,
+        action: 'remove',
+        domain: 'providers',
+        changedPaths: [],
+        dryRun: options.dryRun,
+        errors: [{ path: 'provider', message: 'provider is required (provider id, e.g. openai)' }],
+      };
+    }
+    const profileId =
+      typeof fields.profile === 'string' && fields.profile.trim()
+        ? fields.profile.trim()
+        : defaultProfileId(provider);
+    return runUnsetKey({
+      provider,
+      profileId,
+      options: { ...options, programmatic: true },
+    });
+  },
 });

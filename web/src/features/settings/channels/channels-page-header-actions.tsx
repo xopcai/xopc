@@ -19,7 +19,7 @@ export const ChannelsPageHeaderActions = memo(function ChannelsPageHeaderActions
 }) {
   return (
     <div className="flex min-w-0 shrink-0 items-center justify-end gap-2">
-      <ConfigureWithAILink skill="setup-telegram" />
+      <ConfigureWithAILink skill="configure-xopc" domain="channels" />
       {saveOk ? <span className="text-sm text-fg-muted">{ch.saved}</span> : null}
       <Button
         type="button"

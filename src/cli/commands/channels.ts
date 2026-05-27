@@ -634,3 +634,28 @@ registerSetupDomain({
     },
   },
 });
+
+registerSetupDomain({
+  domain: 'channels',
+  description: 'Bulk channels configuration (accounts, bindings) for the web Channels panel.',
+  docs: 'https://xopcai.github.io/xopc/channels',
+  storage: 'channels.* and bindings in xopc.json',
+  actions: [
+    {
+      name: 'configure',
+      cli: 'POST /api/setup/channels/configure',
+      description: 'Merge a full channels + bindings blob into config with validation and diff.',
+      fields: ['channels', 'bindings'],
+    },
+  ],
+  fields: {
+    channels: {
+      type: 'string',
+      description: 'JSON-encoded partial or full `channels` object to merge.',
+    },
+    bindings: {
+      type: 'string',
+      description: 'JSON-encoded routing bindings array.',
+    },
+  },
+});

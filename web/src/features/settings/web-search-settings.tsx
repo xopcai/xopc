@@ -212,7 +212,7 @@ export function WebSearchSettingsPanel({ embedded = false }: { embedded?: boolea
          */}
         {embedded ? null : (
           <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-            <ConfigureWithAILink skill="setup-search" />
+            <ConfigureWithAILink skill="configure-xopc" domain="search" />
             {saveOk ? <span className="text-sm text-fg-muted">{w.saved}</span> : null}
             <Button type="button" variant="secondary" disabled={!dirty || saving} onClick={discard}>
               {w.discard}

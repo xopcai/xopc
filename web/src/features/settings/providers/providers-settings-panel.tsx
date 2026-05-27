@@ -300,7 +300,7 @@ export function ProvidersSettingsPanel({ embedded = false }: { embedded?: boolea
         {/* See WebSearchSettingsPanel — global Save bar replaces these in embedded mode. */}
         {embedded ? null : (
         <div className="flex shrink-0 flex-wrap items-center gap-2">
-          <ConfigureWithAILink skill="setup-provider" />
+          <ConfigureWithAILink skill="configure-xopc" domain="providers" />
           {saveNotice === 'saved' ? <span className="text-sm text-fg-muted">{p.saved}</span> : null}
           {saveNotice === 'noChanges' ? <span className="text-sm text-fg-muted">{p.noChangesSaved}</span> : null}
           <Button type="button" variant="secondary" disabled={!dirty || saving} onClick={discard}>

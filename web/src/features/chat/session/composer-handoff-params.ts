@@ -10,8 +10,10 @@ export function searchParamsForComposerHandoff(search: string): string {
   const next = new URLSearchParams();
   const skill = sp.get('skill');
   const slash = sp.get('slash');
+  const domain = sp.get('domain');
   if (skill) next.set('skill', skill);
   if (slash) next.set('slash', slash);
+  if (domain) next.set('domain', domain);
   const out = next.toString();
   return out ? `?${out}` : '';
 }

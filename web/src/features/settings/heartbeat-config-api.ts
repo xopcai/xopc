@@ -4,6 +4,7 @@ import { apiUrl } from '@/lib/url';
 import { heartbeatMdSwrKey } from '@/features/settings/heartbeat-md-swr';
 import { mutate } from 'swr';
 
+import { callSetup } from './setup-api.js';
 import type { HeartbeatSettingsState } from './heartbeat-settings.types';
 
 export type { HeartbeatSettingsState } from './heartbeat-settings.types';
@@ -40,47 +41,21 @@ export function normalizeHeartbeatFromConfig(config: unknown): HeartbeatSettings
   };
 }
 
-function buildHeartbeatPayload(state: HeartbeatSettingsState): Record<string, unknown> {
-  const p: Record<string, unknown> = {
-    enabled: state.enabled,
-    intervalMs: state.intervalMs,
-    includeSystemPromptSection: state.includeSystemPromptSection,
-  };
-  if (state.target.trim()) p.target = state.target.trim();
-  else p.target = null;
-  if (state.targetChatId.trim()) p.targetChatId = state.targetChatId.trim();
-  else p.targetChatId = null;
-  if (state.prompt.trim()) p.prompt = state.prompt.trim();
-  else p.prompt = null;
-  if (state.ackMaxChars === '' || state.ackMaxChars === undefined) {
-    p.ackMaxChars = null;
-  } else {
-    p.ackMaxChars = state.ackMaxChars;
-  }
-  if (state.isolatedSession) p.isolatedSession = true;
-  else p.isolatedSession = null;
-  if (state.activeHours?.start?.trim() && state.activeHours?.end?.trim()) {
-    p.activeHours = {
-      start: state.activeHours.start.trim(),
-      end: state.activeHours.end.trim(),
-      ...(state.activeHours.timezone.trim()
-        ? { timezone: state.activeHours.timezone.trim() }
-        : {}),
-    };
-  } else {
-    p.activeHours = null;
-  }
-  return p;
-}
-
 export async function patchHeartbeatSettings(state: HeartbeatSettingsState): Promise<void> {
-  await fetchJson(apiUrl('/api/config'), {
-    method: 'PATCH',
-    body: JSON.stringify({
-      gateway: {
-        heartbeat: buildHeartbeatPayload(state),
-      },
-    }),
+  await callSetup({
+    domain: 'heartbeat',
+    action: 'configure',
+    fields: {
+      enabled: state.enabled,
+      intervalMs: state.intervalMs,
+      includeSystemPromptSection: state.includeSystemPromptSection,
+      target: state.target,
+      targetChatId: state.targetChatId,
+      prompt: state.prompt,
+      ackMaxChars: state.ackMaxChars === '' ? null : state.ackMaxChars,
+      isolatedSession: state.isolatedSession,
+      activeHours: state.activeHours,
+    },
   });
   void revalidateGatewayConfig();
 }

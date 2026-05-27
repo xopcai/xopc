@@ -38,3 +38,8 @@ export {
   type SetupManifest,
   type SetupTargetDescriptor,
 } from './manifest.js';
+
+export {
+  ensureSetupHandlersLoaded,
+  resetSetupHandlersLoadedForTests,
+} from './load-handlers.js';

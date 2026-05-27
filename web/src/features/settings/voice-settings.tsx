@@ -474,7 +474,7 @@ export function VoiceSettingsPanel({ embedded = false }: { embedded?: boolean } 
         {/* See WebSearchSettingsPanel — global Save bar replaces these in embedded mode. */}
         {embedded ? null : (
           <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-            <ConfigureWithAILink skill="setup-voice" />
+            <ConfigureWithAILink skill="configure-xopc" domain="voice" />
             {saveOk ? <span className="text-sm text-fg-muted">{v.saved}</span> : null}
             <Button type="button" variant="secondary" disabled={!dirty || saving} onClick={discard}>
               {v.discard}

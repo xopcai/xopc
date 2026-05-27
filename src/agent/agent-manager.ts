@@ -39,6 +39,7 @@ import {
   retireSessionMcpRuntimeForSessionKey,
 } from './mcp/bundle-mcp-tools.js';
 import type { GatewayClarifyRequestFn } from './tools/clarify-tool.js';
+import type { SetupOutcome } from '../cli/commands/setup-shared/index.js';
 import type { ExtensionRegistryImpl as ExtensionRegistry } from '../extensions/index.js';
 import type { MessageBus } from '../infra/bus/index.js';
 import type { CronService } from '../cron/index.js';
@@ -114,6 +115,9 @@ export interface AgentManagerConfig {
   gatewayClarify?: { requestClarification: GatewayClarifyRequestFn };
   /** Gateway: exposes CronService for the `cronjob` tool. */
   getCronService?: () => CronService | undefined;
+  /** Path to xopc.json for the `setup` tool. */
+  getConfigPath?: () => string;
+  onSetupApplied?: (outcome: SetupOutcome) => Promise<void>;
 }
 
 export interface AgentInstance {
@@ -175,6 +179,8 @@ export class AgentManager {
       getSessionStore: config.getSessionStore,
       gatewayClarify: config.gatewayClarify,
       getCronService: config.getCronService,
+      getConfigPath: config.getConfigPath,
+      onSetupApplied: config.onSetupApplied,
       getSkillIndexingContext: () => {
         const ctx = this.config.getCurrentContext?.();
         if (!ctx?.sessionKey) return undefined;
@@ -332,6 +338,8 @@ export class AgentManager {
       getSessionStore: this.config.getSessionStore,
       gatewayClarify: this.config.gatewayClarify,
       getCronService: this.config.getCronService,
+      getConfigPath: this.config.getConfigPath,
+      onSetupApplied: this.config.onSetupApplied,
       getSkillIndexingContext: () => {
         const ctx = this.config.getCurrentContext?.();
         if (!ctx?.sessionKey) return undefined;

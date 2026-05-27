@@ -10,6 +10,10 @@ import { Command } from 'commander';
 import { loadConfig } from '../../config/loader.js';
 import { resolveConfigPath } from '../../config/paths.js';
 import type { Config, SearchProviderEntry } from '../../config/schema.js';
+import {
+  applySearchTuningPatch,
+  type SearchRegionMode,
+} from '../../config/setup-writes/index.js';
 import { register, formatExamples, type CLIContext } from '../registry.js';
 import { colors } from '../utils/colors.js';
 
@@ -421,6 +425,150 @@ registerSetupHandler({
   },
 });
 
+const SEARCH_REGION_MODES = ['auto', 'cn', 'global'] as const;
+
+function readSearchListValue(cfg: Config): Record<string, unknown> {
+  const web = (cfg.tools?.web ?? {}) as Record<string, unknown>;
+  const regionRaw = web.region;
+  const region: SearchRegionMode =
+    regionRaw === 'cn' || regionRaw === 'global' ? regionRaw : 'auto';
+  const search = (web.search ?? {}) as Record<string, unknown>;
+  const maxResults =
+    typeof search.maxResults === 'number' && Number.isFinite(search.maxResults)
+      ? Math.floor(search.maxResults)
+      : 5;
+  const blocklist = (web.blocklist ?? {}) as Record<string, unknown>;
+  const blocklistDomains = Array.isArray(blocklist.domains)
+    ? blocklist.domains.filter((d): d is string => typeof d === 'string' && d.trim().length > 0)
+    : [];
+  return {
+    providers: readProviders(cfg).map(summarizeEntry),
+    region,
+    maxResults,
+    blocklist: {
+      enabled: blocklist.enabled === true,
+      domains: blocklistDomains,
+    },
+  };
+}
+
+function parseSearchConfigureFields(fields: Record<string, unknown>): {
+  patch: Parameters<typeof applySearchTuningPatch>[1];
+  errors: Array<{ path?: string; message: string }>;
+} {
+  const patch: Parameters<typeof applySearchTuningPatch>[1] = {};
+  const errors: Array<{ path?: string; message: string }> = [];
+
+  if (fields.region !== undefined) {
+    const region = typeof fields.region === 'string' ? fields.region.trim().toLowerCase() : '';
+    if (!(SEARCH_REGION_MODES as readonly string[]).includes(region)) {
+      errors.push({
+        path: 'region',
+        message: `region must be one of: ${SEARCH_REGION_MODES.join(', ')}`,
+      });
+    } else {
+      patch.region = region as SearchRegionMode;
+    }
+  }
+
+  if (fields.maxResults !== undefined) {
+    const n =
+      typeof fields.maxResults === 'number'
+        ? fields.maxResults
+        : Number.parseInt(String(fields.maxResults), 10);
+    if (!Number.isFinite(n) || n < 1 || n > 50) {
+      errors.push({ path: 'maxResults', message: 'maxResults must be an integer from 1 to 50' });
+    } else {
+      patch.maxResults = Math.floor(n);
+    }
+  }
+
+  if (fields.blocklistEnabled !== undefined) {
+    patch.blocklistEnabled = fields.blocklistEnabled === true;
+  }
+
+  if (fields.blocklistDomains !== undefined) {
+    if (!Array.isArray(fields.blocklistDomains)) {
+      errors.push({ path: 'blocklistDomains', message: 'blocklistDomains must be an array of strings' });
+    } else {
+      patch.blocklistDomains = fields.blocklistDomains
+        .filter((d): d is string => typeof d === 'string')
+        .map((d) => d.trim())
+        .filter(Boolean);
+    }
+  }
+
+  if (
+    patch.region === undefined &&
+    patch.maxResults === undefined &&
+    patch.blocklistEnabled === undefined &&
+    patch.blocklistDomains === undefined
+  ) {
+    errors.push({
+      message:
+        'At least one of region, maxResults, blocklistEnabled, or blocklistDomains is required',
+    });
+  }
+
+  return { patch, errors };
+}
+
+registerSetupHandler({
+  domain: 'search',
+  action: 'list',
+  handler: async ({ configPath }) => {
+    let cfg: Config;
+    try {
+      cfg = loadConfig(configPath);
+    } catch (error) {
+      return {
+        ok: false,
+        action: 'noop',
+        domain: 'search',
+        changedPaths: [],
+        dryRun: false,
+        errors: [{ message: `Failed to load config: ${(error as Error).message}` }],
+      };
+    }
+    return {
+      ok: true,
+      action: 'noop',
+      domain: 'search',
+      changedPaths: [],
+      dryRun: false,
+      value: readSearchListValue(cfg),
+    };
+  },
+});
+
+registerSetupHandler({
+  domain: 'search',
+  action: 'configure',
+  handler: async ({ configPath, fields, options }) => {
+    const { patch, errors } = parseSearchConfigureFields(fields);
+    if (errors.length > 0) {
+      return {
+        ok: false,
+        action: 'set',
+        domain: 'search',
+        changedPaths: [],
+        dryRun: options.dryRun,
+        errors,
+      };
+    }
+    return runSetupHeadless({
+      configPath,
+      options,
+      mutator: {
+        domain: 'search',
+        action: 'set',
+        mutate: (cfg) => applySearchTuningPatch(cfg, patch),
+        resultValue: (cfg) => readSearchListValue(cfg),
+      },
+    });
+  },
+});
+
 registerSetupHandler({
   domain: 'search',
   action: 'remove',
@@ -474,6 +622,12 @@ registerSetupDomain({
       fields: ['type'],
     },
     {
+      name: 'configure',
+      cli: 'POST /api/setup/search/configure',
+      description: 'Tune region, maxResults, and domain blocklist (not provider keys).',
+      fields: ['region', 'maxResults', 'blocklistEnabled', 'blocklistDomains'],
+    },
+    {
       name: 'schema',
       cli: 'xopc search schema [--json]',
       description: 'Print search-provider setup schema.',
@@ -496,6 +650,23 @@ registerSetupDomain({
     url: {
       type: 'url',
       description: 'SearXNG instance base URL (only for type=searxng).',
+    },
+    region: {
+      type: 'enum',
+      description: 'Web region mode for search/fetch.',
+      enum: [...SEARCH_REGION_MODES],
+    },
+    maxResults: {
+      type: 'number',
+      description: 'Max web_search results per query (1–50).',
+    },
+    blocklistEnabled: {
+      type: 'boolean',
+      description: 'Enable domain blocklist for web fetch/search.',
+    },
+    blocklistDomains: {
+      type: 'string',
+      description: 'Blocked domain strings (array in setup invoke fields).',
     },
   },
   targets: () => SEARCH_TYPES.map((t) => ({ id: t, name: t })),

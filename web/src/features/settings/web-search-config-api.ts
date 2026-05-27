@@ -98,8 +98,7 @@ function rowsEqual(a: SearchProviderRow, b: SearchProviderRow): boolean {
  * M3.5 phase B routes provider add/remove through `POST /api/setup/search/*`
  * (the same path the CLI and M2 skills use), so all three surfaces share one
  * write path with consistent zod validation. Region / blocklist / maxResults
- * stay on `PATCH /api/config` because no setup CLI handler covers them yet
- * (those follow in a later milestone).
+ * use `search/configure` (Phase 2 setup handler).
  *
  * Throws on the first provider error (with a {@link SetupApiError} carrying
  * structured `errors[]`); the form catches it and renders the message.
@@ -143,24 +142,18 @@ export async function patchWebSearchSettings(
     await callSetup({ domain: 'search', action: 'add', fields: rowToFields(row) });
   }
 
-  // Region, blocklist and maxResults aren't covered by setup CLI handlers
-  // yet — patch them through the legacy /api/config endpoint.
+  // Region, blocklist and maxResults — shared setup handler (same path as CLI/agent).
   const region =
     state.regionMode === 'auto' ? 'auto' : state.regionMode === 'cn' ? 'cn' : 'global';
-  await fetchJson(apiUrl('/api/config'), {
-    method: 'PATCH',
-    body: JSON.stringify({
-      tools: {
-        web: {
-          region,
-          search: { maxResults: state.maxResults },
-          blocklist: {
-            enabled: state.blocklistEnabled,
-            domains: state.blocklistDomains,
-          },
-        },
-      },
-    }),
+  await callSetup({
+    domain: 'search',
+    action: 'configure',
+    fields: {
+      region,
+      maxResults: state.maxResults,
+      blocklistEnabled: state.blocklistEnabled,
+      blocklistDomains: state.blocklistDomains,
+    },
   });
   void revalidateGatewayConfig();
 }

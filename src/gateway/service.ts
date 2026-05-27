@@ -278,6 +278,12 @@ export class GatewayService {
           });
         },
       },
+      getConfigPath: () => this.configPath,
+      onSetupApplied: async (outcome) => {
+        if (outcome.ok && !outcome.dryRun && outcome.changedPaths.length > 0) {
+          await this.reloadConfig();
+        }
+      },
     });
 
 
@@ -1443,6 +1449,16 @@ export class GatewayService {
 
   get isRunning(): boolean {
     return this.running;
+  }
+
+  /** Whether config file hot-reload watcher is active (false for Electron embedded gateway). */
+  get isHotReloadEnabled(): boolean {
+    return this.serviceConfig.enableHotReload !== false;
+  }
+
+  /** Resolved gateway listen port from current config. */
+  get gatewayPort(): number {
+    return this.config.gateway?.port ?? 18790;
   }
 
   /**

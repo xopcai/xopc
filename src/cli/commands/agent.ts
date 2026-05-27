@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { AgentService } from '../../agent/index.js';
 import { loadConfig, getWorkspacePath } from '../../config/index.js';
+import { resolveConfigPath } from '../../config/paths.js';
 import { MessageBus, MessageBusShutdownError } from '../../infra/bus/index.js';
 import { createLogger } from '../../utils/logger.js';
 import { register, formatExamples, type CLIContext } from '../registry.js';
@@ -102,6 +103,7 @@ function createAgentCommand(_ctx: CLIContext): Command {
         gatewayClarify: {
           requestClarification: createCliReadlineClarifyRequestFn(),
         },
+        getConfigPath: () => resolveConfigPath(),
       });
 
       // Start agent service in background
