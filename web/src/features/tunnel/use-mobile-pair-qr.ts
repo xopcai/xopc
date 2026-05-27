@@ -13,6 +13,30 @@ import {
 import { encodeMobilePairQr } from '@/features/tunnel/mobile-pair-qr';
 import { buildMobileGatewayPairDeepLink, isLoopbackHttpOrigin } from '@/lib/url';
 
+function pickLanCandidateUrl(context?: MobilePairContextResponse): string {
+  const candidates = context?.candidates ?? [];
+  const reachable = candidates.find((c) => c.kind === 'lan' && c.reachable);
+  const anyLan = candidates.find((c) => c.kind === 'lan');
+  return (reachable ?? anyLan)?.url?.trim() ?? '';
+}
+
+function isTunnelCandidateUrl(context: MobilePairContextResponse | undefined, url: string): boolean {
+  const trimmed = url.trim();
+  if (!trimmed || !context) return false;
+  return context.candidates.some((c) => c.kind === 'tunnel' && c.url.trim() === trimmed);
+}
+
+function resolveSuggestedPairBaseUrl(
+  context: MobilePairContextResponse | undefined,
+  preferLan: boolean,
+): string {
+  if (!context) return '';
+  if (preferLan) {
+    return pickLanCandidateUrl(context) || context.recommended.url?.trim() || '';
+  }
+  return context.recommended.url?.trim() || '';
+}
+
 export type MobilePairQrState = {
   tunnelActive: boolean;
   tunnelStatus: TunnelStatusResponse | undefined;
@@ -97,20 +121,20 @@ export function useMobilePairQr(
 
   useEffect(() => {
     if (userEditedBaseRef.current || !pairContext) return;
-    const suggested = pairContext.recommended.url?.trim();
+    const suggested = resolveSuggestedPairBaseUrl(pairContext, preferLan);
     if (suggested) {
       setPairBaseUrlState(suggested);
       return;
     }
     setPairBaseUrlState('');
-  }, [pairContext]);
+  }, [pairContext, preferLan]);
 
   const applySuggestedPairUrl = useCallback(() => {
-    const suggested = pairContext?.recommended.url?.trim();
+    const suggested = resolveSuggestedPairBaseUrl(pairContext, preferLan);
     if (!suggested) return;
     userEditedBaseRef.current = true;
     setPairBaseUrlState(suggested);
-  }, [pairContext?.recommended.url]);
+  }, [pairContext, preferLan]);
 
   const applyCandidateUrl = useCallback((url: string) => {
     const trimmed = url.trim();
@@ -119,11 +143,15 @@ export function useMobilePairQr(
     setPairBaseUrlState(trimmed);
   }, []);
 
-  const resetPairBaseFromContext = useCallback((url?: string | null) => {
-    userEditedBaseRef.current = false;
-    const suggested = url?.trim() || pairContext?.recommended.url?.trim();
-    setPairBaseUrlState(suggested ?? '');
-  }, [pairContext?.recommended.url]);
+  const resetPairBaseFromContext = useCallback(
+    (url?: string | null) => {
+      userEditedBaseRef.current = false;
+      const suggested =
+        url?.trim() || resolveSuggestedPairBaseUrl(pairContext, preferLan);
+      setPairBaseUrlState(suggested);
+    },
+    [pairContext, preferLan],
+  );
 
   const trimmedBase = pairBaseUrl.trim();
   const baseOk = useMemo(() => {
@@ -147,6 +175,16 @@ export function useMobilePairQr(
     Boolean(lanPair?.pairingSecret) &&
     (pairContext?.pairingReady === true || !pairingBlocked);
 
+  const lanBaseUrl = useMemo(() => {
+    const fromCandidates = pickLanCandidateUrl(pairContext);
+    if (preferLan) {
+      if (fromCandidates) return fromCandidates;
+      if (trimmedBase && !isTunnelCandidateUrl(pairContext, trimmedBase)) return trimmedBase;
+      return '';
+    }
+    return trimmedBase;
+  }, [pairContext, preferLan, trimmedBase]);
+
   const deepLink = useMemo(() => {
     if (!gatewayToken) return '';
     if (manualPayload.trim()) return manualPayload.trim();
@@ -156,13 +194,18 @@ export function useMobilePairQr(
     if (!lanPairReady || !lanPair?.pairingSecret) return '';
     const tunnelCandidate = pairContext?.candidates.find((c) => c.kind === 'tunnel' && c.reachable);
     const lanCandidate = pairContext?.candidates.find((c) => c.kind === 'lan' && c.reachable);
+    const baseUrl = preferLan
+      ? lanBaseUrl
+      : (tunnelCandidate?.url ?? trimmedBase);
+    if (!baseUrl) return '';
     return buildMobileGatewayPairDeepLink({
-      baseUrl: preferLan ? trimmedBase : (tunnelCandidate?.url ?? trimmedBase),
+      baseUrl,
       pairingSecret: lanPair.pairingSecret,
       lanUrl: preferLan ? null : (tunnelCandidate && lanCandidate ? lanCandidate.url : null),
     });
   }, [
     gatewayToken,
+    lanBaseUrl,
     lanPair?.pairingSecret,
     lanPairReady,
     manualPayload,

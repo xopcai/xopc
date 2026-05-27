@@ -69,8 +69,10 @@ export function MobilePairQrSection({
   });
 
   const lanCandidates = pairContext?.candidates.filter((c) => c.kind === 'lan') ?? [];
-  const suggestedUrl = pairContext?.recommended.url?.trim() ?? '';
-  const showLanCandidatePicker = !tunnelActive && lanCandidates.length > 1;
+  const suggestedUrl = lanOnly
+    ? (lanCandidates.find((c) => c.reachable)?.url ?? lanCandidates[0]?.url ?? '').trim()
+    : (pairContext?.recommended.url?.trim() ?? '');
+  const showLanCandidatePicker = (lanOnly || !tunnelActive) && lanCandidates.length > 1;
 
   function renderLanCandidateList(tone: 'amber' | 'neutral') {
     if (lanCandidates.length === 0) return null;
