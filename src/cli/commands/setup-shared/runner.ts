@@ -63,9 +63,8 @@ function zodErrorToSetupErrors(err: ZodError): SetupError[] {
  * (write | dry-run) → outcome. Returns the {@link SetupOutcome} without any
  * I/O side effects (no stdout, no `process.exitCode`).
  *
- * Used by the gateway HTTP route (`/api/setup/*`, M3.5) and by the CLI
- * wrapper {@link runSetup}. Keep this side-effect-free so it stays safe to
- * call from web/server contexts and from tests.
+ * Used by CLI setup commands via {@link runSetup}. Keep this side-effect-free
+ * so it stays safe to call from tests and other programmatic callers.
  *
  * Custom errors thrown by the mutator surface as `errors[]` on the outcome:
  *   - `SetupValidationError` — explicit `{path?, message}[]` entries

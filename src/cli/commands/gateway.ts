@@ -317,3 +317,5 @@ register({
     ],
   },
 });
+
+export { createGatewayCommand };
