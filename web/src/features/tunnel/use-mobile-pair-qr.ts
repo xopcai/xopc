@@ -34,7 +34,16 @@ export type MobilePairQrState = {
   resetPairBaseFromContext: (url?: string | null) => void;
 };
 
-export function useMobilePairQr(gatewayToken: string): MobilePairQrState {
+export type UseMobilePairQrOptions = {
+  /** Prefer LAN pairing QR even when a public tunnel is connected. */
+  preferLan?: boolean;
+};
+
+export function useMobilePairQr(
+  gatewayToken: string,
+  options?: UseMobilePairQrOptions,
+): MobilePairQrState {
+  const preferLan = options?.preferLan === true;
   const hasToken = Boolean(gatewayToken);
   const { mutate: globalMutate } = useSWRConfig();
   const userEditedBaseRef = useRef(false);
@@ -62,15 +71,16 @@ export function useMobilePairQr(gatewayToken: string): MobilePairQrState {
 
   const tunnelActive =
     tunnelStatus?.state === 'connected' && Boolean(tunnelStatus.publicUrl?.trim());
+  const useTunnelQr = tunnelActive && !preferLan;
 
   const { data: tunnelQr, mutate: mutTunnelQr } = useSWR(
-    tunnelActive && hasToken ? 'tunnel-qr' : null,
+    useTunnelQr && hasToken ? 'tunnel-qr' : null,
     fetchTunnelQr,
     { refreshInterval: 4 * 60_000 },
   );
 
   const { data: lanPair, mutate: mutLanPair } = useSWR(
-    !tunnelActive && hasToken && pairContext?.pairingReady ? 'tunnel-pair' : null,
+    !useTunnelQr && hasToken && pairContext?.pairingReady ? 'tunnel-pair' : null,
     createTunnelPair,
     { refreshInterval: 4 * 60_000 },
   );
@@ -127,11 +137,11 @@ export function useMobilePairQr(gatewayToken: string): MobilePairQrState {
 
   const localhostWarn = baseOk && isLoopbackHttpOrigin(trimmedBase);
   const pairingBlocked =
-    !tunnelActive &&
+    !useTunnelQr &&
     Boolean(pairContext && !pairContext.pairingReady && pairContext.blockReason === 'GATEWAY_LOOPBACK_ONLY');
 
   const lanPairReady =
-    !tunnelActive &&
+    !useTunnelQr &&
     baseOk &&
     !localhostWarn &&
     Boolean(lanPair?.pairingSecret) &&
@@ -140,24 +150,25 @@ export function useMobilePairQr(gatewayToken: string): MobilePairQrState {
   const deepLink = useMemo(() => {
     if (!gatewayToken) return '';
     if (manualPayload.trim()) return manualPayload.trim();
-    if (tunnelActive && tunnelQr?.qrPayload?.trim()) {
+    if (useTunnelQr && tunnelQr?.qrPayload?.trim()) {
       return tunnelQr.qrPayload.trim();
     }
     if (!lanPairReady || !lanPair?.pairingSecret) return '';
     const tunnelCandidate = pairContext?.candidates.find((c) => c.kind === 'tunnel' && c.reachable);
     const lanCandidate = pairContext?.candidates.find((c) => c.kind === 'lan' && c.reachable);
     return buildMobileGatewayPairDeepLink({
-      baseUrl: tunnelCandidate?.url ?? trimmedBase,
+      baseUrl: preferLan ? trimmedBase : (tunnelCandidate?.url ?? trimmedBase),
       pairingSecret: lanPair.pairingSecret,
-      lanUrl: tunnelCandidate && lanCandidate ? lanCandidate.url : null,
+      lanUrl: preferLan ? null : (tunnelCandidate && lanCandidate ? lanCandidate.url : null),
     });
   }, [
     gatewayToken,
     lanPair?.pairingSecret,
     lanPairReady,
     manualPayload,
+    preferLan,
     trimmedBase,
-    tunnelActive,
+    useTunnelQr,
     tunnelQr?.qrPayload,
     pairContext?.candidates,
   ]);
@@ -197,13 +208,13 @@ export function useMobilePairQr(gatewayToken: string): MobilePairQrState {
       }
       setManualPayload('');
       await mutPairContext();
-      if (tunnelActive) {
+      if (useTunnelQr) {
         await mutTunnelQr();
       } else if (pairContext?.pairingReady) {
         await mutLanPair();
       }
     },
-    [mutLanPair, mutPairContext, mutTunnelQr, pairContext?.pairingReady, tunnelActive, tunnelQr?.lanUrl, tunnelStatus?.publicUrl],
+    [mutLanPair, mutPairContext, mutTunnelQr, pairContext?.pairingReady, tunnelQr?.lanUrl, tunnelStatus?.publicUrl, useTunnelQr],
   );
 
   const encoding = Boolean(deepLink && !qrDataUrl && !qrGenFailed);

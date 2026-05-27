@@ -25,16 +25,20 @@ export function MobilePairQrSection({
   pairQr,
   gatewayToken,
   streamlined = false,
+  lanOnly = false,
   onRefreshQr,
 }: {
   pairQr: MobilePairQrState;
   gatewayToken: string;
   streamlined?: boolean;
+  /** LAN remote-access tab: always show LAN pairing UI, never wait for public tunnel. */
+  lanOnly?: boolean;
   onRefreshQr?: () => void;
 }) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const t = m.tunnelSettings;
+  const lanCopy = lanOnly ? m.remoteAccess.lan : null;
   const copyLabels = {
     copy: t.pairCopyLink,
     copied: t.pairCopied,
@@ -111,7 +115,9 @@ export function MobilePairQrSection({
     );
   }
 
-  if (streamlined && !tunnelActive) {
+  const effectiveStreamlined = streamlined && !lanOnly;
+
+  if (effectiveStreamlined && !tunnelActive) {
     return (
       <SettingsFormSection>
         <div className="flex items-center gap-2 text-sm font-semibold text-fg">
@@ -123,24 +129,30 @@ export function MobilePairQrSection({
     );
   }
 
+  const pairTitle = lanCopy?.pairTitle ?? t.pairTitle;
+  const pairSubtitle = lanOnly
+    ? (lanCopy?.pairSubtitle ?? t.pairSubtitle)
+    : tunnelActive
+      ? t.pairTunnelActive
+      : t.pairSubtitle;
+  const showRefreshButton = Boolean(onRefreshQr && (lanOnly || (streamlined && tunnelActive)));
+
   const sectionBody = (
     <>
-      <div className={cn('flex flex-wrap items-start justify-between gap-2', streamlined ? 'mb-2' : 'mb-3')}>
+      <div className={cn('flex flex-wrap items-start justify-between gap-2', effectiveStreamlined ? 'mb-2' : 'mb-3')}>
         <div>
           <div className="flex items-center gap-2 text-sm font-semibold text-fg">
             <Smartphone className="size-4 text-accent" strokeWidth={1.75} />
-            {t.pairTitle}
+            {pairTitle}
           </div>
-          {!streamlined ? (
-            <p className="mt-1 text-xs text-fg-subtle">
-              {tunnelActive ? t.pairTunnelActive : t.pairSubtitle}
-            </p>
+          {!effectiveStreamlined ? (
+            <p className="mt-1 text-xs text-fg-subtle">{pairSubtitle}</p>
           ) : (
             <p className="mt-1 text-xs text-fg-subtle">{t.pairSubtitle}</p>
           )}
         </div>
-        {streamlined && tunnelActive && onRefreshQr ? (
-          <Button type="button" variant="ghost" className="shrink-0" onClick={() => void onRefreshQr()}>
+        {showRefreshButton ? (
+          <Button type="button" variant="ghost" className="shrink-0" onClick={() => void onRefreshQr!()}>
             <RefreshCw className="size-4" />
             {t.refreshQr}
           </Button>
@@ -179,18 +191,30 @@ export function MobilePairQrSection({
           {enableLan.error ? (
             <p className="text-xs text-red-800 dark:text-red-200">{enableLan.error}</p>
           ) : null}
-          <p className="text-xs leading-relaxed text-amber-900 dark:text-amber-200">{t.pairBlockedNextSteps}</p>
-          <Link
-            to="/settings/gateway"
-            className="inline-block text-xs font-medium text-accent hover:underline"
-          >
-            {t.pairEnableLanSecurityAuditLink}
-          </Link>
+          <p className="text-xs leading-relaxed text-amber-900 dark:text-amber-200">
+            {lanOnly ? (lanCopy?.pairBlockedNextSteps ?? t.pairBlockedNextSteps) : t.pairBlockedNextSteps}
+          </p>
+          <div className="flex flex-col gap-1">
+            <Link
+              to="/settings/gateway"
+              className="inline-block text-xs font-medium text-accent hover:underline"
+            >
+              {t.pairEnableLanSecurityAuditLink}
+            </Link>
+            {lanOnly && lanCopy?.pairPublicTabLink ? (
+              <Link
+                to="/settings/remote-access?tab=public"
+                className="inline-block text-xs font-medium text-accent hover:underline"
+              >
+                {lanCopy.pairPublicTabLink}
+              </Link>
+            ) : null}
+          </div>
         </div>
       ) : null}
 
-      {tunnelActive ? (
-        !streamlined ? (
+      {tunnelActive && !lanOnly ? (
+        !effectiveStreamlined ? (
           <div className="mb-3 space-y-2 rounded-lg border border-edge bg-surface-panel px-3 py-3">
             <div>
               <div className="text-xs font-medium text-fg-muted">{t.pairTunnelPublicUrl}</div>
@@ -253,14 +277,14 @@ export function MobilePairQrSection({
         <p className="text-sm text-fg-muted">{t.pairQrDisabled}</p>
       ) : null}
 
-      {qrPayload && !streamlined ? (
+      {qrPayload && !effectiveStreamlined ? (
         <details className="mt-3 rounded-lg border border-edge bg-surface-panel px-3 py-2">
           <summary className="cursor-pointer text-xs font-medium text-fg-muted">{t.deeplinkTitle}</summary>
           <p className="mt-2 break-all font-mono text-[10px] leading-relaxed text-fg-subtle">{qrPayload}</p>
         </details>
       ) : null}
 
-      {!streamlined ? (
+      {!effectiveStreamlined ? (
         <>
           <p className="mt-3 break-all font-mono text-[10px] leading-relaxed text-fg-subtle">{t.pairSchemeHint}</p>
           <p className="mt-1 text-[10px] leading-relaxed text-fg-subtle">{t.pairMobileProbeHint}</p>
