@@ -1,7 +1,6 @@
 import {
   useCallback,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -45,6 +44,7 @@ import {
   normalizeCatalogEntry,
 } from '@/features/skills/skills-page.utils';
 import { messages } from '@/i18n/messages';
+import { useAsyncResource } from '@/lib/use-async-resource';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
@@ -61,8 +61,7 @@ export function useSkillsPage() {
   // Accept any non-empty provider id from URL — validity checked by the backend registry.
   const urlMarketProvider = mprovRaw?.trim() || null;
 
-  const [catalog, setCatalog] = useState<SkillCatalogEntry[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [manualLoading, setManualLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const initialSearch = searchParams.get('q') ?? '';
@@ -107,97 +106,58 @@ export function useSkillsPage() {
 
   const [marketSort, setMarketSort] = useState<'downloads' | 'newest'>('downloads');
   const [marketPage, setMarketPage] = useState(1);
-  const [mpLoading, setMpLoading] = useState(false);
-  const [mpError, setMpError] = useState<string | null>(null);
-  const [mpPayload, setMpPayload] = useState<{
-    items: MarketplacePackageItem[];
-    meta: { page: number; pageSize: number; total: number; totalPages: number };
-    provider?: string;
-  } | null>(null);
   const [installingMarketName, setInstallingMarketName] = useState<string | null>(null);
   const [usingSkillInChatName, setUsingSkillInChatName] = useState<string | null>(null);
   const [marketCategoryId, setMarketCategoryId] = useState('');
-  const [mpCategories, setMpCategories] = useState<MarketplaceCategoryItem[]>([]);
-  const [mpCategoriesError, setMpCategoriesError] = useState<string | null>(null);
-  const [mpCategoriesLoading, setMpCategoriesLoading] = useState(false);
   const [marketBrowseProvider, setMarketBrowseProvider] = useState<string | null>(null);
   const marketplaceDetailProviderRef = useRef<string | null>(null);
-  const prevMarketBrowseProviderRef = useRef<string | null>(null);
-  /** Dynamic provider list from the registry API. */
-  const [registeredProviders, setRegisteredProviders] = useState<MarketplaceProviderInfo[]>([]);
+  const trackedUrlProviderRef = useRef<string | null>(urlMarketProvider);
+  const trackedProvidersCurrentRef = useRef<string | null>(null);
+  const trackedMarketFilterKeyRef = useRef('');
+  const trackedMarketProviderRef = useRef<string | null>(null);
 
-  const load = useCallback(
-    async (opts?: { silent?: boolean }): Promise<{ ok: true } | { ok: false; message: string }> => {
-      const silent = opts?.silent === true;
-      if (!silent) {
-        setLoading(true);
-      }
-      setError(null);
+  const catalogResource = useAsyncResource(
+    () =>
+      getSkills(language !== 'en' ? language : undefined).then((data) =>
+        data.catalog.map(normalizeCatalogEntry),
+      ),
+    [hasToken, language],
+    { enabled: hasToken, initial: [] as SkillCatalogEntry[], errorData: [] },
+  );
+  const { data: catalog, loading: catalogLoading, setData: setCatalogData } = catalogResource;
+
+  const providersResource = useAsyncResource(
+    async () => {
       try {
-        const data = await getSkills(language !== 'en' ? language : undefined);
-        setCatalog(data.catalog.map(normalizeCatalogEntry));
-        return { ok: true };
-      } catch (e) {
-        const message = e instanceof Error ? e.message : sk.loadFailed;
-        setError(message);
-        return { ok: false, message };
-      } finally {
-        if (!silent) {
-          setLoading(false);
+        const { providers, current } = await getMarketplaceProviders();
+        return {
+          providers: providers.map((p) => ({ id: p.id, displayName: p.displayName })),
+          current,
+        };
+      } catch {
+        try {
+          const info = await getMarketplaceProvider();
+          return { providers: [] as MarketplaceProviderInfo[], current: info.provider };
+        } catch {
+          return { providers: [] as MarketplaceProviderInfo[], current: 'skillhub' };
         }
       }
     },
-    [language, sk.loadFailed],
+    [hasToken],
+    {
+      enabled: hasToken,
+      initial: { providers: [] as MarketplaceProviderInfo[], current: null as string | null },
+    },
   );
 
-  useEffect(() => {
-    if (!hasToken) return;
-    void load();
-  }, [hasToken, load]);
+  const loading = manualLoading || catalogLoading;
+  const registeredProviders = providersResource.data.providers;
 
-  useEffect(() => {
-    if (!hasToken) {
-      setMarketBrowseProvider(null);
-      marketplaceDetailProviderRef.current = null;
-      return;
-    }
-    if (urlMarketProvider) {
-      setMarketBrowseProvider(urlMarketProvider);
-    }
-  }, [hasToken, urlMarketProvider]);
-
-  useEffect(() => {
-    if (!hasToken) return;
-    let cancelled = false;
-    void getMarketplaceProviders()
-      .then(({ providers, current }) => {
-        if (cancelled) return;
-        setRegisteredProviders(providers.map((p) => ({ id: p.id, displayName: p.displayName })));
-        if (urlMarketProvider == null) {
-          setMarketBrowseProvider((prev) => (prev != null ? prev : current));
-        }
-      })
-      .catch(() => {
-        if (cancelled) return;
-        // Fallback: try old single-provider endpoint
-        void getMarketplaceProvider()
-          .then((info) => {
-            if (!cancelled && urlMarketProvider == null) {
-              setMarketBrowseProvider((prev) => (prev != null ? prev : info.provider));
-            }
-          })
-          .catch(() => {
-            if (!cancelled && urlMarketProvider == null) {
-              setMarketBrowseProvider((prev) => (prev != null ? prev : 'skillhub'));
-            }
-          });
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [hasToken, urlMarketProvider]);
-
-  useEffect(() => {
+  // Sync URL → local state during render so the URL→state→URL effect chain doesn't add a render.
+  const searchParamsKey = searchParams.toString();
+  const trackedSearchParamsKeyRef = useRef(searchParamsKey);
+  if (trackedSearchParamsKeyRef.current !== searchParamsKey) {
+    trackedSearchParamsKeyRef.current = searchParamsKey;
     const nextQ = searchParams.get('q') ?? '';
     const nextTabRaw = searchParams.get('tab');
     const nextSourceRaw = searchParams.get('source');
@@ -216,110 +176,133 @@ export function useSkillsPage() {
     } else {
       setMarketCategoryId('');
     }
-  }, [searchParams]);
+  }
 
-  useEffect(() => {
-    if (mainTab !== 'marketplace') return;
+  const trackedHasTokenRef = useRef(hasToken);
+  if (!hasToken && trackedHasTokenRef.current) {
+    setMarketBrowseProvider(null);
+    marketplaceDetailProviderRef.current = null;
+  }
+  trackedHasTokenRef.current = hasToken;
+
+  if (hasToken && urlMarketProvider && trackedUrlProviderRef.current !== urlMarketProvider) {
+    trackedUrlProviderRef.current = urlMarketProvider;
+    setMarketBrowseProvider(urlMarketProvider);
+  }
+  if (
+    hasToken &&
+    urlMarketProvider == null &&
+    providersResource.data.current &&
+    providersResource.data.current !== trackedProvidersCurrentRef.current
+  ) {
+    trackedProvidersCurrentRef.current = providersResource.data.current;
+    setMarketBrowseProvider((prev) => prev ?? providersResource.data.current);
+  }
+
+  const marketFilterKey = `${searchQuery}|${marketSort}|${mainTab}|${marketCategoryId}|${marketBrowseProvider ?? ''}`;
+  if (trackedMarketFilterKeyRef.current !== marketFilterKey) {
+    trackedMarketFilterKeyRef.current = marketFilterKey;
     setMarketPage(1);
-  }, [searchQuery, marketSort, mainTab, marketCategoryId, marketBrowseProvider]);
+  }
 
-  useEffect(() => {
-    if (mainTab !== 'marketplace' || !marketBrowseProvider) {
-      prevMarketBrowseProviderRef.current = marketBrowseProvider;
-      return;
-    }
-    const prev = prevMarketBrowseProviderRef.current;
-    prevMarketBrowseProviderRef.current = marketBrowseProvider;
-    if (prev != null && prev !== marketBrowseProvider) {
-      setMarketCategoryId('');
-    }
-  }, [mainTab, marketBrowseProvider]);
+  if (
+    mainTab === 'marketplace' &&
+    marketBrowseProvider &&
+    trackedMarketProviderRef.current != null &&
+    trackedMarketProviderRef.current !== marketBrowseProvider
+  ) {
+    setMarketCategoryId('');
+  }
+  trackedMarketProviderRef.current = marketBrowseProvider;
 
-  /** Before paint: avoid one frame of empty/stale list then skeleton (useEffect runs too late). */
-  useLayoutEffect(() => {
-    if (!hasToken || mainTab !== 'marketplace') return;
-    setMpLoading(true);
-  }, [hasToken, mainTab, marketCategoryId, marketPage, marketSort, searchQuery, marketBrowseProvider]);
+  const mpSkillsResource = useAsyncResource(
+    () =>
+      getMarketplaceSkills({
+        q: searchQuery.trim() || undefined,
+        page: marketPage,
+        pageSize: 20,
+        sort: marketSort,
+        category: marketCategoryId.trim() || undefined,
+        provider: marketBrowseProvider!,
+      }),
+    [hasToken, mainTab, marketCategoryId, marketPage, marketSort, searchQuery, marketBrowseProvider],
+    {
+      enabled: hasToken && mainTab === 'marketplace' && Boolean(marketBrowseProvider),
+      initial: null as {
+        items: MarketplacePackageItem[];
+        meta: { page: number; pageSize: number; total: number; totalPages: number };
+        provider?: string;
+      } | null,
+      errorData: null,
+    },
+  );
 
-  useLayoutEffect(() => {
-    if (!hasToken || mainTab !== 'marketplace') return;
-    setMpCategoriesLoading(true);
-  }, [hasToken, mainTab, marketBrowseProvider]);
+  const mpCategoriesResource = useAsyncResource(
+    () => getMarketplaceCategories({ provider: marketBrowseProvider! }).then((r) => r.items),
+    [hasToken, mainTab, marketBrowseProvider],
+    {
+      enabled: hasToken && mainTab === 'marketplace' && Boolean(marketBrowseProvider),
+      initial: [] as MarketplaceCategoryItem[],
+      errorData: [],
+    },
+  );
 
-  useEffect(() => {
-    if (mainTab === 'marketplace') return;
-    setMpCategories([]);
-    setMpCategoriesError(null);
-    setMpCategoriesLoading(false);
-  }, [mainTab]);
+  const mpPayload = mainTab === 'marketplace' ? mpSkillsResource.data : null;
+  const mpLoading = mainTab === 'marketplace' ? mpSkillsResource.loading : false;
+  const mpError =
+    mpSkillsResource.error instanceof Error
+      ? mpSkillsResource.error.message
+      : mpSkillsResource.error
+        ? sk.marketplaceLoadFailed
+        : null;
+  const mpCategories = mainTab === 'marketplace' ? mpCategoriesResource.data : [];
+  const mpCategoriesLoading = mainTab === 'marketplace' ? mpCategoriesResource.loading : false;
+  const mpCategoriesError =
+    mpCategoriesResource.error instanceof Error
+      ? mpCategoriesResource.error.message
+      : mpCategoriesResource.error
+        ? sk.marketplaceCategoriesFailed
+        : null;
 
-  useEffect(() => {
-    if (!hasToken || mainTab !== 'marketplace' || !marketBrowseProvider) return;
-    let cancelled = false;
-    setMpError(null);
-    void getMarketplaceSkills({
-      q: searchQuery.trim() || undefined,
-      page: marketPage,
-      pageSize: 20,
-      sort: marketSort,
-      category: marketCategoryId.trim() || undefined,
-      provider: marketBrowseProvider,
-    })
-      .then((payload) => {
-        if (!cancelled) setMpPayload(payload);
-      })
-      .catch((e) => {
-        if (!cancelled) {
-          setMpError(e instanceof Error ? e.message : sk.marketplaceLoadFailed);
-          setMpPayload(null);
+  if (
+    marketCategoryId.trim() &&
+    mpCategories.length > 0 &&
+    !mpCategories.some((c) => c.id === marketCategoryId)
+  ) {
+    setMarketCategoryId('');
+  }
+
+  const load = useCallback(
+    async (opts?: { silent?: boolean }): Promise<{ ok: true } | { ok: false; message: string }> => {
+      const silent = opts?.silent === true;
+      if (!silent) {
+        setManualLoading(true);
+      }
+      setError(null);
+      try {
+        const data = await getSkills(language !== 'en' ? language : undefined);
+        setCatalogData(data.catalog.map(normalizeCatalogEntry));
+        return { ok: true };
+      } catch (e) {
+        const message = e instanceof Error ? e.message : sk.loadFailed;
+        setError(message);
+        return { ok: false, message };
+      } finally {
+        if (!silent) {
+          setManualLoading(false);
         }
-      })
-      .finally(() => {
-        if (!cancelled) setMpLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    hasToken,
-    mainTab,
-    marketCategoryId,
-    marketPage,
-    marketSort,
-    searchQuery,
-    sk.marketplaceLoadFailed,
-    marketBrowseProvider,
-  ]);
+      }
+    },
+    [language, setCatalogData, sk.loadFailed],
+  );
 
-  useEffect(() => {
-    if (!hasToken || mainTab !== 'marketplace' || !marketBrowseProvider) return;
-    let cancelled = false;
-    setMpCategoriesError(null);
-    void getMarketplaceCategories({ provider: marketBrowseProvider })
-      .then((r) => {
-        if (!cancelled) setMpCategories(r.items);
-      })
-      .catch((e) => {
-        if (!cancelled) {
-          setMpCategories([]);
-          setMpCategoriesError(e instanceof Error ? e.message : sk.marketplaceCategoriesFailed);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setMpCategoriesLoading(false);
-      });
-    return () => {
-      cancelled = true;
-      setMpCategoriesLoading(false);
-    };
-  }, [hasToken, mainTab, sk.marketplaceCategoriesFailed, marketBrowseProvider]);
-
-  useEffect(() => {
-    if (!marketCategoryId.trim() || mpCategories.length === 0) return;
-    if (!mpCategories.some((c) => c.id === marketCategoryId)) {
-      setMarketCategoryId('');
-    }
-  }, [mpCategories, marketCategoryId]);
+  const catalogFetchError =
+    !manualLoading && catalogResource.error
+      ? catalogResource.error instanceof Error
+        ? catalogResource.error.message
+        : sk.loadFailed
+      : null;
+  const displayError = error ?? catalogFetchError;
 
   useEffect(() => {
     setSearchParams(
@@ -450,14 +433,14 @@ export function useSkillsPage() {
 
   const onReloadClick = useCallback(async () => {
     setActionFeedback(null);
-    setLoading(true);
+    setManualLoading(true);
     setError(null);
     try {
       await reloadSkills();
     } catch (e) {
       const msg = e instanceof Error ? e.message : sk.reloadFailed;
       setError(msg);
-      setLoading(false);
+      setManualLoading(false);
       return;
     }
     await load();
@@ -747,7 +730,7 @@ export function useSkillsPage() {
     hasToken,
     catalog,
     loading,
-    error,
+    error: displayError,
     uploading,
     searchQuery,
     setSearchQuery,

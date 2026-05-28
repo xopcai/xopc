@@ -1,5 +1,5 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { memo, useEffect, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
 
 import { getFileName } from '@/features/file-preview';
@@ -8,6 +8,7 @@ import { cn } from '@/lib/cn';
 import { useSidebarStore } from '@/stores/sidebar-store';
 import { useWorkspaceEditorAgentStore } from '@/stores/workspace-editor-agent-store';
 import { useWorkspacePanelStore } from '@/stores/workspace-panel-store';
+import { useMediaQuery } from '@/lib/use-media-query';
 import { useWorkspacePreviewStore } from '@/stores/workspace-preview-store';
 
 const MD_MIN = '(min-width: 768px)';
@@ -18,27 +19,8 @@ function usePreviewDialogInset() {
   const expandedWidthPx = useSidebarStore((s) => s.expandedWidthPx);
   const workspaceOpen = useWorkspacePanelStore((s) => s.open);
   const workspaceWidthPx = useWorkspacePanelStore((s) => s.widthPx);
-  const [isMd, setIsMd] = useState(() =>
-    typeof globalThis.matchMedia === 'function' ? globalThis.matchMedia(MD_MIN).matches : true,
-  );
-  const [isLg, setIsLg] = useState(() =>
-    typeof globalThis.matchMedia === 'function' ? globalThis.matchMedia(LG_MIN).matches : true,
-  );
-
-  useEffect(() => {
-    const mqMd = globalThis.matchMedia(MD_MIN);
-    const mqLg = globalThis.matchMedia(LG_MIN);
-    const onMd = () => setIsMd(mqMd.matches);
-    const onLg = () => setIsLg(mqLg.matches);
-    onMd();
-    onLg();
-    mqMd.addEventListener('change', onMd);
-    mqLg.addEventListener('change', onLg);
-    return () => {
-      mqMd.removeEventListener('change', onMd);
-      mqLg.removeEventListener('change', onLg);
-    };
-  }, []);
+  const isMd = useMediaQuery(MD_MIN, true);
+  const isLg = useMediaQuery(LG_MIN, true);
 
   return useMemo(() => {
     if (!isMd) {

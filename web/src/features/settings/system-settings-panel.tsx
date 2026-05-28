@@ -1,5 +1,7 @@
 import { ExternalLink, RefreshCw, Shield } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useReducer } from 'react';
+
+import { uiPatchReducer, type UiPatchAction } from '@/lib/settings-form-draft';
 
 import { SettingsFormSection, settingsFormSectionClassName } from '@/features/settings/settings-form-section';
 import {
@@ -214,17 +216,33 @@ function permUnknownHint(
   return null;
 }
 
+type SystemPanelUi = {
+  behavior: SystemSettingsBehavior | null;
+  perms: ShellPermissionSnapshot | null;
+  loadError: string | null;
+  permFeedback: string | null;
+  permBusy: boolean;
+  refreshing: boolean;
+};
+
+type SystemPanelUiAction = UiPatchAction<SystemPanelUi>;
+
+const initialSystemPanelUi: SystemPanelUi = {
+  behavior: null,
+  perms: null,
+  loadError: null,
+  permFeedback: null,
+  permBusy: false,
+  refreshing: false,
+};
+
 export function SystemSettingsPanel() {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const t = m.systemSettings;
 
-  const [behavior, setBehavior] = useState<SystemSettingsBehavior | null>(null);
-  const [perms, setPerms] = useState<ShellPermissionSnapshot | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [permFeedback, setPermFeedback] = useState<string | null>(null);
-  const [permBusy, setPermBusy] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
+  const [ui, dispatch] = useReducer(uiPatchReducer<SystemPanelUi>, initialSystemPanelUi);
+  const { behavior, perms, loadError, permFeedback, permBusy, refreshing } = ui;
 
   const api = typeof window !== 'undefined' ? window.electronAPI?.system : undefined;
 

@@ -1,5 +1,5 @@
 import { Check, Copy, Download, Eye, FolderOpen, Link2, Loader2, Maximize2, Minimize2, Pencil, X } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 
 import { showComposerNotification } from '@/features/chat/composer/composer-notifications';
 import {
@@ -87,9 +87,10 @@ export function WorkspaceFilePreviewPanel({
 
   const canPreviewFullscreen = Boolean(filePath && !state.loading && !state.loadError);
 
-  useEffect(() => {
-    if (!filePath) void exit();
-  }, [filePath, exit]);
+  const handleClose = useCallback(() => {
+    void exit();
+    onClose();
+  }, [exit, onClose]);
 
   if (!filePath) {
     return null;
@@ -208,7 +209,7 @@ export function WorkspaceFilePreviewPanel({
             className="inline-flex size-9 shrink-0 items-center justify-center rounded-md text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg"
             title={m.workspace.close}
             aria-label={m.workspace.close}
-            onClick={onClose}
+            onClick={handleClose}
           >
             <X className="size-4" strokeWidth={1.75} />
           </button>

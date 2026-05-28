@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import type { Dispatch, FormEvent, SetStateAction } from 'react';
 
 import {
@@ -38,8 +38,22 @@ export function useAgentsChannelBindings(options: {
     setError,
   } = options;
 
-  const [allBindings, setAllBindings] = useState<GatewayConfigBinding[]>([]);
-  const [newBindChannel, setNewBindChannel] = useState('');
+  const bindingsDirtyRef = useRef(false);
+  const [localBindings, setLocalBindings] = useState<GatewayConfigBinding[] | null>(null);
+
+  const trackedBindingsRef = useRef(bindingsFromConfig);
+  if (
+    panel === 'channels' &&
+    hasToken &&
+    !bindingsDirtyRef.current &&
+    trackedBindingsRef.current !== bindingsFromConfig
+  ) {
+    trackedBindingsRef.current = bindingsFromConfig;
+    setLocalBindings(bindingsFromConfig);
+  }
+
+  const allBindings = localBindings ?? bindingsFromConfig;
+
   const channelsEnabled = panel === 'channels' && hasToken;
   const channelsResource = useAsyncResource(
     () => getChannels(),
@@ -48,6 +62,25 @@ export function useAgentsChannelBindings(options: {
   );
   const bindChannelStatuses = channelsResource.data;
   const bindChannelsLoading = channelsResource.loading;
+
+  const defaultBindChannel = useMemo(() => {
+    if (bindChannelsLoading || bindChannelStatuses.length === 0) return '';
+    return bindChannelStatuses[0]?.name ?? '';
+  }, [bindChannelStatuses, bindChannelsLoading]);
+
+  const [newBindChannel, setNewBindChannel] = useState('');
+  const trackedDefaultChannelRef = useRef(defaultBindChannel);
+  if (
+    panel === 'channels' &&
+    !bindChannelsLoading &&
+    defaultBindChannel &&
+    trackedDefaultChannelRef.current !== defaultBindChannel &&
+    (!newBindChannel || !bindChannelStatuses.some((c) => c.name === newBindChannel))
+  ) {
+    trackedDefaultChannelRef.current = defaultBindChannel;
+    setNewBindChannel(defaultBindChannel);
+  }
+  trackedDefaultChannelRef.current = defaultBindChannel;
 
   const trimmedBindChannel = newBindChannel.trim();
   const sessionsEnabled = channelsEnabled && trimmedBindChannel.length > 0;
@@ -63,7 +96,6 @@ export function useAgentsChannelBindings(options: {
   const [newBindSessionIdx, setNewBindSessionIdx] = useState<number | null>(null);
   const [newBindCustomPeer, setNewBindCustomPeer] = useState('');
 
-  // Reset session selection when the channel changes (separate from the fetch effect).
   const trackedBindChannelRef = useRef(trimmedBindChannel);
   if (trackedBindChannelRef.current !== trimmedBindChannel) {
     trackedBindChannelRef.current = trimmedBindChannel;
@@ -76,26 +108,6 @@ export function useAgentsChannelBindings(options: {
     }
     return allBindings.filter((b) => b.agentId.toLowerCase() === selected.id.toLowerCase());
   }, [allBindings, selected?.id]);
-
-  useEffect(() => {
-    if (panel !== 'channels' || !hasToken) {
-      return;
-    }
-    setAllBindings(bindingsFromConfig);
-  }, [panel, hasToken, bindingsFromConfig]);
-
-  useEffect(() => {
-    if (bindChannelsLoading || panel !== 'channels' || bindChannelStatuses.length === 0) {
-      return;
-    }
-    setNewBindChannel((prev) => {
-      const valid = Boolean(prev) && bindChannelStatuses.some((c) => c.name === prev);
-      if (valid) {
-        return prev;
-      }
-      return bindChannelStatuses[0].name;
-    });
-  }, [bindChannelsLoading, panel, bindChannelStatuses]);
 
   const refreshBindSessions = useCallback(() => {
     const ch = newBindChannel.trim();
@@ -123,7 +135,8 @@ export function useAgentsChannelBindings(options: {
       try {
         const nextList = allBindings.filter((b) => b !== rule);
         await patchGatewayBindings(nextList);
-        setAllBindings(nextList);
+        bindingsDirtyRef.current = true;
+        setLocalBindings(nextList);
       } catch (err) {
         setError(err instanceof Error ? err.message : saveErrorMessage);
       } finally {
@@ -158,7 +171,8 @@ export function useAgentsChannelBindings(options: {
       setError(null);
       try {
         await patchGatewayBindings(nextList);
-        setAllBindings(nextList);
+        bindingsDirtyRef.current = true;
+        setLocalBindings(nextList);
         setNewBindSessionIdx(null);
         setNewBindCustomPeer('');
       } catch (err) {

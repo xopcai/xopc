@@ -156,9 +156,16 @@ export function ModelsSettingsPanel({ embedded = false }: { embedded?: boolean }
     setRawError(null);
   }, [config]);
 
-  useEffect(() => {
-    if (editorMode === 'expert') syncRawFromConfig();
-  }, [editorMode, syncRawFromConfig]);
+  const selectEditorMode = useCallback(
+    (mode: 'guided' | 'expert') => {
+      setEditorMode(mode);
+      if (mode === 'expert') {
+        setRawText(JSON.stringify(config, null, 2));
+        setRawError(null);
+      }
+    },
+    [config],
+  );
 
   const applyRawJson = () => {
     try {
@@ -380,7 +387,7 @@ export function ModelsSettingsPanel({ embedded = false }: { embedded?: boolean }
                   : 'text-fg-muted hover:bg-surface-hover hover:text-fg',
               )}
               onClick={() => {
-                setEditorMode(mode);
+                selectEditorMode(mode);
                 setRawError(null);
               }}
             >

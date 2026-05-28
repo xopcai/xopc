@@ -1,6 +1,5 @@
 import {
   useCallback,
-  useEffect,
   useLayoutEffect,
   useRef,
   useState,
@@ -65,6 +64,7 @@ export function useChatScrollViewport({
   const atBottomRef = useRef(true);
   /** Tracks loading→idle so we scroll to bottom once after refresh / session load. */
   const prevLoadingRef = useRef(true);
+  const prevSendingRef = useRef(false);
 
   /** After prepending older messages, preserve viewport (virtual + non-virtual lists). */
   const listScrollMetricsRef = useRef<{
@@ -79,9 +79,17 @@ export function useChatScrollViewport({
   const lastFollowLayoutScrollTopRef = useRef(0);
   const lastFollowLayoutScrollHeightRef = useRef(0);
 
-  useEffect(() => {
-    atBottomRef.current = atBottom;
-  }, [atBottom]);
+  atBottomRef.current = atBottom;
+
+  const shouldPinForSend =
+    hasToken && sending && !prevSendingRef.current && !showSessionLoading;
+  if (shouldPinForSend) {
+    atBottomRef.current = true;
+    if (!atBottom) {
+      setAtBottom(true);
+    }
+  }
+  prevSendingRef.current = sending;
 
   const scrollToBottom = useCallback((smooth = true, force = false) => {
     const el = scrollRef.current;
@@ -175,12 +183,10 @@ export function useChatScrollViewport({
     });
   }, [sessionKey, hasToken, showSessionLoading, scrollToBottom]);
 
-  useEffect(() => {
-    if (!sending) return;
-    if (showSessionLoading) return;
-    setAtBottom(true);
+  useLayoutEffect(() => {
+    if (!shouldPinForSend) return;
     scrollToBottom(true, true);
-  }, [sending, showSessionLoading, scrollToBottom]);
+  }, [shouldPinForSend, scrollToBottom]);
 
   /** Wheel / touch intent to view older messages: unpin before React commits so list auto-scroll cannot fight the gesture. */
   useLayoutEffect(() => {

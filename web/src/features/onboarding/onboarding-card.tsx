@@ -1,5 +1,5 @@
 import { ExternalLink } from 'lucide-react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useReducer } from 'react';
 import { Link } from 'react-router-dom';
 
 import type { ConfiguredModel } from '@/features/chat/api/registry-api';
@@ -20,19 +20,47 @@ interface OnboardingCardProps {
   onDismiss: () => void;
 }
 
+type OnboardingState = {
+  step: 'provider' | 'apiKey' | 'model';
+  selectedProvider: string | null;
+  apiKey: string;
+  busy: boolean;
+  error: string | null;
+  models: ConfiguredModel[];
+  selectedModelId: string | null;
+  modelsLoading: boolean;
+};
+
+type OnboardingAction =
+  | { type: 'patch'; patch: Partial<OnboardingState> }
+  | { type: 'reset-models' };
+
+const initialOnboarding: OnboardingState = {
+  step: 'provider',
+  selectedProvider: null,
+  apiKey: '',
+  busy: false,
+  error: null,
+  models: [],
+  selectedModelId: null,
+  modelsLoading: false,
+};
+
+function onboardingReducer(state: OnboardingState, action: OnboardingAction): OnboardingState {
+  switch (action.type) {
+    case 'patch':
+      return { ...state, ...action.patch };
+    case 'reset-models':
+      return { ...state, models: [], selectedModelId: null };
+  }
+}
+
 export function OnboardingCard({ onComplete, onDismiss }: OnboardingCardProps) {
   const language = useLocaleStore((s) => s.language);
   const o = messages(language).onboarding;
 
-  const [step, setStep] = useState<'provider' | 'apiKey' | 'model'>('provider');
-  const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
-  const [apiKey, setApiKey] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const [models, setModels] = useState<ConfiguredModel[]>([]);
-  const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
-  const [modelsLoading, setModelsLoading] = useState(false);
+  const [state, dispatch] = useReducer(onboardingReducer, initialOnboarding);
+  const { step, selectedProvider, apiKey, busy, error, models, selectedModelId, modelsLoading } = state;
 
   const stepLabel = useMemo(
     () => o.stepOf.replace('{{current}}', String(step === 'provider' ? 1 : step === 'apiKey' ? 2 : 3)).replace('{{total}}', '3'),
@@ -40,42 +68,46 @@ export function OnboardingCard({ onComplete, onDismiss }: OnboardingCardProps) {
   );
 
   const loadModels = useCallback(async (providerId: string) => {
-    setModelsLoading(true);
-    setError(null);
+    dispatch({ type: 'patch', patch: { modelsLoading: true, error: null } });
     try {
       const list = await fetchConfiguredModelsCached(true);
       const filtered = list.filter((m) => m.provider === providerId);
-      setModels(filtered);
-      setSelectedModelId(filtered[0]?.id ?? null);
+      dispatch({
+        type: 'patch',
+        patch: { models: filtered, selectedModelId: filtered[0]?.id ?? null },
+      });
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-      setModels([]);
-      setSelectedModelId(null);
+      dispatch({
+        type: 'patch',
+        patch: {
+          error: e instanceof Error ? e.message : String(e),
+          models: [],
+          selectedModelId: null,
+        },
+      });
     } finally {
-      setModelsLoading(false);
+      dispatch({ type: 'patch', patch: { modelsLoading: false } });
     }
   }, []);
 
   const onContinueApiKey = async () => {
     if (!selectedProvider || !apiKey.trim()) return;
-    setBusy(true);
-    setError(null);
+    dispatch({ type: 'patch', patch: { busy: true, error: null } });
     try {
       await patchProviderApiKeys({ [selectedProvider]: apiKey.trim() });
       await loadModels(selectedProvider);
-      setStep('model');
+      dispatch({ type: 'patch', patch: { step: 'model' } });
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      dispatch({ type: 'patch', patch: { error: e instanceof Error ? e.message : String(e) } });
     } finally {
-      setBusy(false);
+      dispatch({ type: 'patch', patch: { busy: false } });
     }
   };
 
   const onStartChatting = async () => {
     if (!selectedProvider || !selectedModelId) return;
     const modelRef = models.find((m) => m.id === selectedModelId)?.id ?? selectedModelId;
-    setBusy(true);
-    setError(null);
+    dispatch({ type: 'patch', patch: { busy: true, error: null } });
     try {
       await fetchJson(apiUrl('/api/config'), {
         method: 'PATCH',
@@ -92,9 +124,9 @@ export function OnboardingCard({ onComplete, onDismiss }: OnboardingCardProps) {
       window.dispatchEvent(new CustomEvent('config-reload'));
       onComplete();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      dispatch({ type: 'patch', patch: { error: e instanceof Error ? e.message : String(e) } });
     } finally {
-      setBusy(false);
+      dispatch({ type: 'patch', patch: { busy: false } });
     }
   };
 
@@ -118,10 +150,10 @@ export function OnboardingCard({ onComplete, onDismiss }: OnboardingCardProps) {
             </div>
             <OnboardingProviderGrid
               onSelect={(id) => {
-                setSelectedProvider(id);
-                setStep('apiKey');
-                setApiKey('');
-                setError(null);
+                dispatch({
+                  type: 'patch',
+                  patch: { selectedProvider: id, step: 'apiKey', apiKey: '', error: null },
+                });
               }}
             />
             <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
@@ -192,7 +224,7 @@ export function OnboardingCard({ onComplete, onDismiss }: OnboardingCardProps) {
                 type="password"
                 autoComplete="off"
                 value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
+                onChange={(e) => dispatch({ type: 'patch', patch: { apiKey: e.target.value } })}
                 placeholder={o.step2Placeholder}
                 className="mt-1 w-full rounded-xl border border-edge bg-surface-panel px-3 py-2.5 text-sm text-fg outline-none ring-accent placeholder:text-fg-muted focus:border-accent focus:ring-2 focus:ring-accent/30"
               />
@@ -200,7 +232,7 @@ export function OnboardingCard({ onComplete, onDismiss }: OnboardingCardProps) {
             <p className="text-xs text-fg-muted">{o.step2SecurityNote}</p>
             {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
             <div className="flex flex-wrap justify-between gap-2">
-              <Button type="button" variant="secondary" disabled={busy} onClick={() => setStep('provider')}>
+              <Button type="button" variant="secondary" disabled={busy} onClick={() => dispatch({ type: 'patch', patch: { step: 'provider' } })}>
                 {o.back}
               </Button>
               <Button
@@ -238,12 +270,12 @@ export function OnboardingCard({ onComplete, onDismiss }: OnboardingCardProps) {
               <OnboardingModelSelect
                 models={models}
                 selectedId={selectedModelId}
-                onSelectedChange={setSelectedModelId}
+                onSelectedChange={(id) => dispatch({ type: 'patch', patch: { selectedModelId: id } })}
               />
             )}
             {error && models.length > 0 ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
             <div className="flex flex-wrap justify-between gap-2">
-              <Button type="button" variant="secondary" disabled={busy} onClick={() => setStep('apiKey')}>
+              <Button type="button" variant="secondary" disabled={busy} onClick={() => dispatch({ type: 'patch', patch: { step: 'apiKey' } })}>
                 {o.back}
               </Button>
               <Button

@@ -1,7 +1,19 @@
-import { useEffect, useState } from 'react';
+import { useRef, useState } from 'react';
 import type { GatewayAgentRow } from '@/features/settings/agents-admin-api';
 
 import type { AgentPanel } from '../utils';
+
+function toolDisableFromSelected(selected: GatewayAgentRow): Set<string> {
+  return new Set(selected.tools.entryDisable);
+}
+
+function skillsStateFromSelected(selected: GatewayAgentRow): { inherit: boolean; pick: Set<string> } {
+  const inherit = selected.skills.entry === undefined;
+  if (inherit) {
+    return { inherit: true, pick: new Set(selected.skills.effectiveAllowlist ?? []) };
+  }
+  return { inherit: false, pick: new Set(selected.skills.entry ?? []) };
+}
 
 export function useAgentsToolsSkillsLocalState(options: {
   panel: AgentPanel;
@@ -9,30 +21,23 @@ export function useAgentsToolsSkillsLocalState(options: {
 }) {
   const { panel, selected } = options;
 
+  const syncKey = `${panel}:${selected?.id ?? ''}`;
+  const trackedSyncRef = useRef(syncKey);
   const [toolEntryDisable, setToolEntryDisable] = useState<Set<string>>(() => new Set());
   const [skillsPick, setSkillsPick] = useState<Set<string>>(() => new Set());
   const [skillsInherit, setSkillsInherit] = useState(true);
 
-  useEffect(() => {
-    if (!selected || panel !== 'tools') {
-      return;
+  if (trackedSyncRef.current !== syncKey) {
+    trackedSyncRef.current = syncKey;
+    if (selected && panel === 'tools') {
+      setToolEntryDisable(toolDisableFromSelected(selected));
     }
-    setToolEntryDisable(new Set(selected.tools.entryDisable));
-  }, [panel, selected]);
-
-  useEffect(() => {
-    if (!selected || panel !== 'skills') {
-      return;
+    if (selected && panel === 'skills') {
+      const next = skillsStateFromSelected(selected);
+      setSkillsInherit(next.inherit);
+      setSkillsPick(next.pick);
     }
-    const inherit = selected.skills.entry === undefined;
-    setSkillsInherit(inherit);
-    if (inherit) {
-      const eff = selected.skills.effectiveAllowlist;
-      setSkillsPick(new Set(eff ?? []));
-    } else {
-      setSkillsPick(new Set(selected.skills.entry ?? []));
-    }
-  }, [panel, selected]);
+  }
 
   return {
     toolEntryDisable,

@@ -1,6 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { AlertCircle, CheckCircle, Download, Loader2, RefreshCw, X } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 
 import { BrandLogo } from '@/components/shell/brand-logo';
 import { XOPC_ELECTRON_UPDATE_RECHECK_EVENT } from '@/features/updater/use-update-reminder';
@@ -11,6 +11,7 @@ import { webBuildInfo } from '@/lib/build-info';
 import { cn } from '@/lib/cn';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
+import { useAsyncResource } from '@/lib/use-async-resource';
 import { useLocaleStore } from '@/stores/locale-store';
 
 const REPO_URL = 'https://github.com/xopcai/xopc';
@@ -62,18 +63,30 @@ export function AboutDialog({
   const tp = m.updatePanel;
   const { isElectron, electron, electronCheck, checkNow, npm, runNpmUpdate, npmUpdateRunning } = useUpdateStatus();
 
-  const [gatewayVersion, setGatewayVersion] = useState<string | null>(null);
   const [manualCheckTriggered, setManualCheckTriggered] = useState(false);
   const [npmCheckBusy, setNpmCheckBusy] = useState(false);
   const [npmCheckFailed, setNpmCheckFailed] = useState(false);
 
-  useEffect(() => {
-    if (!open) {
-      setManualCheckTriggered(false);
-      setNpmCheckBusy(false);
-      setNpmCheckFailed(false);
-    }
-  }, [open]);
+  const { data: gatewayVersion } = useAsyncResource(
+    async () => {
+      const data = await fetchJson<GatewayHealth>(apiUrl('/health'));
+      return typeof data.version === 'string' ? data.version : null;
+    },
+    [open],
+    { enabled: open, initial: null as string | null, errorData: null },
+  );
+
+  const handleOpenChange = useCallback(
+    (nextOpen: boolean) => {
+      if (!nextOpen) {
+        setManualCheckTriggered(false);
+        setNpmCheckBusy(false);
+        setNpmCheckFailed(false);
+      }
+      onOpenChange(nextOpen);
+    },
+    [onOpenChange],
+  );
 
   const handleNpmUpgrade = useCallback(async () => {
     const panel = messages(language).updatePanel;
@@ -103,25 +116,6 @@ export function AboutDialog({
     );
   }, [runNpmUpdate, language]);
 
-  useEffect(() => {
-    if (!open) return;
-    let cancelled = false;
-    setGatewayVersion(null);
-    void (async () => {
-      try {
-        const data = await fetchJson<GatewayHealth>(apiUrl('/health'));
-        if (!cancelled) {
-          setGatewayVersion(typeof data.version === 'string' ? data.version : null);
-        }
-      } catch {
-        if (!cancelled) setGatewayVersion(null);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [open]);
-
   const commit = webBuildInfo.commit;
   const localeTag = language === 'zh' ? 'zh-CN' : 'en-US';
   const buildDate = formatBuildDate(webBuildInfo.buildTimeIso, localeTag);
@@ -129,7 +123,7 @@ export function AboutDialog({
   const copyright = d.copyright.replace('{year}', String(year));
 
   return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+    <Dialog.Root open={open} onOpenChange={handleOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[200] bg-scrim" />
         <Dialog.Content

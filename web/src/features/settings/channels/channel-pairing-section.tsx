@@ -1,5 +1,5 @@
 import { RefreshCw, X } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useReducer, useRef, useState, type SetStateAction } from 'react';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
@@ -42,6 +42,50 @@ function pairingSwrKey(channel: PairingChannelId, accountId: string): string {
   return `channel-pairing-${channel}-${accountId}`;
 }
 
+type PairingUiState = {
+  codeBySender: Record<string, string>;
+  busySender: string | null;
+  dismissingId: string | null;
+  revokingId: string | null;
+  feedback: { kind: 'ok' | 'err'; text: string } | null;
+};
+
+const emptyPairingUiState: PairingUiState = {
+  codeBySender: {},
+  busySender: null,
+  dismissingId: null,
+  revokingId: null,
+  feedback: null,
+};
+
+type PairingUiAction =
+  | { type: 'setCodeBySender'; updater: (prev: Record<string, string>) => Record<string, string> }
+  | { type: 'setBusySender'; value: string | null }
+  | { type: 'setDismissingId'; value: string | null }
+  | { type: 'setRevokingId'; value: string | null }
+  | { type: 'setFeedback'; value: PairingUiState['feedback'] }
+  | { type: 'clearSenderCode'; senderId: string };
+
+function pairingUiReducer(state: PairingUiState, action: PairingUiAction): PairingUiState {
+  switch (action.type) {
+    case 'setCodeBySender':
+      return { ...state, codeBySender: action.updater(state.codeBySender) };
+    case 'setBusySender':
+      return { ...state, busySender: action.value };
+    case 'setDismissingId':
+      return { ...state, dismissingId: action.value };
+    case 'setRevokingId':
+      return { ...state, revokingId: action.value };
+    case 'setFeedback':
+      return { ...state, feedback: action.value };
+    case 'clearSenderCode': {
+      const next = { ...state.codeBySender };
+      delete next[action.senderId];
+      return { ...state, codeBySender: next };
+    }
+  }
+}
+
 export function ChannelPairingSection({
   channel,
   accountIds,
@@ -72,27 +116,35 @@ export function ChannelPairingSection({
     (accountId: string) => resolveAccountDmPolicyForConfig(channel, channelConfig, accountId),
     [channel, channelConfig],
   );
-  const [accountId, setAccountId] = useState(resolvedAccountIds[0] ?? 'default');
-  const [codeBySender, setCodeBySender] = useState<Record<string, string>>({});
-  const [busySender, setBusySender] = useState<string | null>(null);
-  const [dismissingId, setDismissingId] = useState<string | null>(null);
-  const [revokingId, setRevokingId] = useState<string | null>(null);
-  const [feedback, setFeedback] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
 
-  useEffect(() => {
+  const [accountId, setAccountId] = useState(resolvedAccountIds[0] ?? 'default');
+  const [prevResolvedAccountIds, setPrevResolvedAccountIds] = useState(resolvedAccountIds);
+  if (resolvedAccountIds !== prevResolvedAccountIds) {
+    setPrevResolvedAccountIds(resolvedAccountIds);
     if (!resolvedAccountIds.includes(accountId)) {
       setAccountId(resolvedAccountIds[0] ?? 'default');
     }
-  }, [accountId, resolvedAccountIds]);
+  }
+
+  const [ui, dispatchUi] = useReducer(pairingUiReducer, emptyPairingUiState);
+  const { codeBySender, busySender, dismissingId, revokingId, feedback } = ui;
 
   const accountDmPolicy = resolveAccountDmPolicy(accountId);
   const accountPairingActive = accountDmPolicy === 'pairing';
+
+  const onPairedChangeRef = useRef(onPairedChange);
+  onPairedChangeRef.current = onPairedChange;
 
   const swrKey = active && sectionUsesPairing && accountPairingActive ? pairingSwrKey(channel, accountId) : null;
   const { data, error, isLoading, mutate } = useSWR(
     swrKey,
     () => fetchChannelPairingState(channel, accountId),
-    { revalidateOnFocus: true },
+    {
+      revalidateOnFocus: true,
+      onSuccess: (result) => {
+        onPairedChangeRef.current?.(result.paired.fromCredentials.length);
+      },
+    },
   );
 
   const refresh = useCallback(() => {
@@ -102,9 +154,30 @@ export function ChannelPairingSection({
   useChannelPairingSseRefresh(refresh, active && sectionUsesPairing && accountPairingActive);
 
   const pairedCred = data?.paired.fromCredentials ?? [];
-  useEffect(() => {
-    onPairedChange?.(pairedCred.length);
-  }, [onPairedChange, pairedCred.length]);
+
+  const setCodeBySender = useCallback(
+    (updater: SetStateAction<Record<string, string>>) => {
+      dispatchUi({
+        type: 'setCodeBySender',
+        updater: typeof updater === 'function' ? updater : () => updater,
+      });
+    },
+    [],
+  );
+
+  const setBusySender = useCallback((value: SetStateAction<string | null>) => {
+    dispatchUi({
+      type: 'setBusySender',
+      value: typeof value === 'function' ? value(ui.busySender) : value,
+    });
+  }, [ui.busySender]);
+
+  const setFeedback = useCallback((value: SetStateAction<PairingUiState['feedback']>) => {
+    dispatchUi({
+      type: 'setFeedback',
+      value: typeof value === 'function' ? value(ui.feedback) : value,
+    });
+  }, [ui.feedback]);
 
   const { approveByCode, quickApprove } = useChannelPairingApprove({
     channel,
@@ -118,25 +191,24 @@ export function ChannelPairingSection({
 
   const dismiss = useCallback(
     async (senderId: string) => {
-      setDismissingId(senderId);
-      setFeedback(null);
+      dispatchUi({ type: 'setDismissingId', value: senderId });
+      dispatchUi({ type: 'setFeedback', value: null });
       try {
         await dismissChannelPairingPending({ channel, accountId, senderId });
-        setCodeBySender((prev) => {
-          const next = { ...prev };
-          delete next[senderId];
-          return next;
-        });
-        setFeedback({
-          kind: 'ok',
-          text: ch.pairingDismissed.replace('{{id}}', senderId),
+        dispatchUi({ type: 'clearSenderCode', senderId });
+        dispatchUi({
+          type: 'setFeedback',
+          value: {
+            kind: 'ok',
+            text: ch.pairingDismissed.replace('{{id}}', senderId),
+          },
         });
         await mutate();
       } catch (e) {
         const msg = e instanceof Error ? e.message : ch.pairingDismissError;
-        setFeedback({ kind: 'err', text: msg });
+        dispatchUi({ type: 'setFeedback', value: { kind: 'err', text: msg } });
       } finally {
-        setDismissingId(null);
+        dispatchUi({ type: 'setDismissingId', value: null });
       }
     },
     [accountId, channel, ch.pairingDismissed, ch.pairingDismissError, mutate],
@@ -144,20 +216,23 @@ export function ChannelPairingSection({
 
   const revoke = useCallback(
     async (senderId: string) => {
-      setRevokingId(senderId);
-      setFeedback(null);
+      dispatchUi({ type: 'setRevokingId', value: senderId });
+      dispatchUi({ type: 'setFeedback', value: null });
       try {
         await revokeChannelPairingPaired({ channel, accountId, senderId });
-        setFeedback({
-          kind: 'ok',
-          text: ch.pairingRevoked.replace('{{id}}', senderId),
+        dispatchUi({
+          type: 'setFeedback',
+          value: {
+            kind: 'ok',
+            text: ch.pairingRevoked.replace('{{id}}', senderId),
+          },
         });
         await mutate();
       } catch (e) {
         const msg = e instanceof Error ? e.message : ch.pairingRevokeError;
-        setFeedback({ kind: 'err', text: msg });
+        dispatchUi({ type: 'setFeedback', value: { kind: 'err', text: msg } });
       } finally {
-        setRevokingId(null);
+        dispatchUi({ type: 'setRevokingId', value: null });
       }
     },
     [accountId, channel, ch.pairingRevoked, ch.pairingRevokeError, mutate],

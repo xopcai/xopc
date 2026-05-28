@@ -1,5 +1,5 @@
 import { ExternalLink, Loader2, Mic, Volume2 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
@@ -162,6 +162,39 @@ function voiceApiKeyLabels(v: VoiceSettingsMessages): VoiceApiKeyFieldLabels {
   };
 }
 
+type VoiceFormDraft = {
+  form: VoiceSettingsState | null;
+  baseline: VoiceSettingsState | null;
+};
+
+type VoiceFormAction =
+  | { type: 'reset' }
+  | { type: 'sync'; value: VoiceSettingsState }
+  | { type: 'update'; updater: (prev: VoiceSettingsState | null) => VoiceSettingsState | null }
+  | { type: 'discard' }
+  | { type: 'saved'; value: VoiceSettingsState };
+
+function voiceFormReducer(state: VoiceFormDraft, action: VoiceFormAction): VoiceFormDraft {
+  switch (action.type) {
+    case 'reset':
+      return { form: null, baseline: null };
+    case 'sync': {
+      const snapshot = structuredClone(action.value);
+      return { form: snapshot, baseline: structuredClone(snapshot) };
+    }
+    case 'update':
+      return { ...state, form: action.updater(state.form) };
+    case 'discard':
+      return state.baseline
+        ? { form: structuredClone(state.baseline), baseline: state.baseline }
+        : state;
+    case 'saved': {
+      const snapshot = structuredClone(action.value);
+      return { form: snapshot, baseline: structuredClone(snapshot) };
+    }
+  }
+}
+
 /** See `WebSearchSettingsPanel` for the embedded-mode contract. */
 export function VoiceSettingsPanel({ embedded = false }: { embedded?: boolean } = {}) {
   const language = useLocaleStore((s) => s.language);
@@ -170,12 +203,18 @@ export function VoiceSettingsPanel({ embedded = false }: { embedded?: boolean } 
   const token = useGatewayStore((st) => st.token);
   const hasToken = Boolean(token);
 
-  const [form, setForm] = useState<VoiceSettingsState | null>(null);
-  const [baseline, setBaseline] = useState<VoiceSettingsState | null>(null);
+  const [formDraft, dispatchForm] = useReducer(voiceFormReducer, { form: null, baseline: null });
+  const form = formDraft.form;
+  const baseline = formDraft.baseline;
   const [models, setModels] = useState<VoiceModelsPayload | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saveOk, setSaveOk] = useState(false);
+  const dirtyRef = useRef(false);
+  const trackedVoiceSyncRef = useRef<{
+    parsed: VoiceSettingsState | null;
+    models: VoiceModelsPayload | null | undefined;
+  }>({ parsed: null, models: undefined });
 
   const {
     data: cfgData,
@@ -227,21 +266,24 @@ export function VoiceSettingsPanel({ embedded = false }: { embedded?: boolean } 
     return JSON.stringify(form) !== JSON.stringify(baseline);
   }, [form, baseline]);
 
-  useEffect(() => {
-    if (!hasToken) {
-      setForm(null);
-      setBaseline(null);
+  if (!hasToken) {
+    if (trackedVoiceSyncRef.current.parsed !== null || trackedVoiceSyncRef.current.models !== undefined) {
+      trackedVoiceSyncRef.current = { parsed: null, models: undefined };
+      dispatchForm({ type: 'reset' });
       setModels(null);
-      return;
+      dirtyRef.current = false;
     }
-    if (voiceParsed === null || voiceModels === undefined) return;
-    if (!dirty) {
-      setForm(structuredClone(voiceParsed));
-      setBaseline(structuredClone(voiceParsed));
+  } else if (voiceParsed !== null && voiceModels !== undefined && !dirtyRef.current) {
+    if (
+      trackedVoiceSyncRef.current.parsed !== voiceParsed ||
+      trackedVoiceSyncRef.current.models !== voiceModels
+    ) {
+      trackedVoiceSyncRef.current = { parsed: voiceParsed, models: voiceModels };
+      dispatchForm({ type: 'sync', value: voiceParsed });
       setModels(voiceModels);
       setSaveOk(false);
     }
-  }, [hasToken, voiceParsed, voiceModels, dirty]);
+  }
 
   const loading = Boolean(
     hasToken &&
@@ -271,104 +313,136 @@ export function VoiceSettingsPanel({ embedded = false }: { embedded?: boolean } 
                     : null;
 
   const updateStt = useCallback((patch: Partial<VoiceSettingsState['stt']>) => {
-    setForm((f) => (f ? { ...f, stt: { ...f.stt, ...patch } } : null));
+    dirtyRef.current = true;
+    dispatchForm({
+      type: 'update',
+      updater: (f) => (f ? { ...f, stt: { ...f.stt, ...patch } } : null),
+    });
   }, []);
 
   const updateSttAlibaba = useCallback((patch: Partial<NonNullable<VoiceSettingsState['stt']['alibaba']>>) => {
-    setForm((f) =>
-      f
-        ? {
-            ...f,
-            stt: { ...f.stt, alibaba: { ...f.stt.alibaba, ...patch } },
-          }
-        : null,
-    );
+    dirtyRef.current = true;
+    dispatchForm({
+      type: 'update',
+      updater: (f) =>
+        f
+          ? {
+              ...f,
+              stt: { ...f.stt, alibaba: { ...f.stt.alibaba, ...patch } },
+            }
+          : null,
+    });
   }, []);
 
   const updateSttOpenai = useCallback((patch: Partial<NonNullable<VoiceSettingsState['stt']['openai']>>) => {
-    setForm((f) =>
-      f
-        ? {
-            ...f,
-            stt: { ...f.stt, openai: { ...f.stt.openai, ...patch } },
-          }
-        : null,
-    );
+    dirtyRef.current = true;
+    dispatchForm({
+      type: 'update',
+      updater: (f) =>
+        f
+          ? {
+              ...f,
+              stt: { ...f.stt, openai: { ...f.stt.openai, ...patch } },
+            }
+          : null,
+    });
   }, []);
 
   const updateSttFallback = useCallback((patch: Partial<NonNullable<VoiceSettingsState['stt']['fallback']>>) => {
-    setForm((f) => {
-      if (!f) return null;
-      const cur = f.stt.fallback ?? { enabled: true, order: ['alibaba', 'openai'] };
-      return {
-        ...f,
-        stt: {
-          ...f.stt,
-          fallback: { ...cur, ...patch },
-        },
-      };
+    dirtyRef.current = true;
+    dispatchForm({
+      type: 'update',
+      updater: (f) => {
+        if (!f) return null;
+        const cur = f.stt.fallback ?? { enabled: true, order: ['alibaba', 'openai'] };
+        return {
+          ...f,
+          stt: {
+            ...f.stt,
+            fallback: { ...cur, ...patch },
+          },
+        };
+      },
     });
   }, []);
 
   const updateTts = useCallback((patch: Partial<VoiceSettingsState['tts']>) => {
-    setForm((f) => (f ? { ...f, tts: { ...f.tts, ...patch } } : null));
+    dirtyRef.current = true;
+    dispatchForm({
+      type: 'update',
+      updater: (f) => (f ? { ...f, tts: { ...f.tts, ...patch } } : null),
+    });
   }, []);
 
   const updateTtsAlibaba = useCallback((patch: Partial<NonNullable<VoiceSettingsState['tts']['alibaba']>>) => {
-    setForm((f) =>
-      f
-        ? {
-            ...f,
-            tts: { ...f.tts, alibaba: { ...f.tts.alibaba, ...patch } },
-          }
-        : null,
-    );
+    dirtyRef.current = true;
+    dispatchForm({
+      type: 'update',
+      updater: (f) =>
+        f
+          ? {
+              ...f,
+              tts: { ...f.tts, alibaba: { ...f.tts.alibaba, ...patch } },
+            }
+          : null,
+    });
   }, []);
 
   const updateTtsOpenai = useCallback((patch: Partial<NonNullable<VoiceSettingsState['tts']['openai']>>) => {
-    setForm((f) =>
-      f
-        ? {
-            ...f,
-            tts: { ...f.tts, openai: { ...f.tts.openai, ...patch } },
-          }
-        : null,
-    );
+    dirtyRef.current = true;
+    dispatchForm({
+      type: 'update',
+      updater: (f) =>
+        f
+          ? {
+              ...f,
+              tts: { ...f.tts, openai: { ...f.tts.openai, ...patch } },
+            }
+          : null,
+    });
   }, []);
 
   const updateTtsEdge = useCallback((patch: Partial<NonNullable<VoiceSettingsState['tts']['edge']>>) => {
-    setForm((f) =>
-      f
-        ? {
-            ...f,
-            tts: { ...f.tts, edge: { ...f.tts.edge, ...patch } },
-          }
-        : null,
-    );
+    dirtyRef.current = true;
+    dispatchForm({
+      type: 'update',
+      updater: (f) =>
+        f
+          ? {
+              ...f,
+              tts: { ...f.tts, edge: { ...f.tts.edge, ...patch } },
+            }
+          : null,
+    });
   }, []);
 
   const updateTtsMinimax = useCallback(
     (patch: Partial<NonNullable<VoiceSettingsState['tts']['minimax']>>) => {
-      setForm((f) =>
-        f ? { ...f, tts: { ...f.tts, minimax: { ...f.tts.minimax, ...patch } } } : null,
-      );
+      dirtyRef.current = true;
+      dispatchForm({
+        type: 'update',
+        updater: (f) => (f ? { ...f, tts: { ...f.tts, minimax: { ...f.tts.minimax, ...patch } } } : null),
+      });
     },
     [],
   );
 
   const updateTtsLocalCli = useCallback(
     (patch: Partial<NonNullable<VoiceSettingsState['tts']['tts-local-cli']>>) => {
-      setForm((f) =>
-        f
-          ? {
-              ...f,
-              tts: {
-                ...f.tts,
-                'tts-local-cli': { ...f.tts['tts-local-cli'], ...patch },
-              },
-            }
-          : null,
-      );
+      dirtyRef.current = true;
+      dispatchForm({
+        type: 'update',
+        updater: (f) =>
+          f
+            ? {
+                ...f,
+                tts: {
+                  ...f.tts,
+                  'tts-local-cli': { ...f.tts['tts-local-cli'], ...patch },
+                },
+              }
+            : null,
+      });
     },
     [],
   );
@@ -380,9 +454,8 @@ export function VoiceSettingsPanel({ embedded = false }: { embedded?: boolean } 
     setSaveOk(false);
     try {
       await patchVoiceSettings(form);
-      const next = structuredClone(form);
-      setBaseline(next);
-      setForm(next);
+      dispatchForm({ type: 'saved', value: form });
+      dirtyRef.current = false;
       setSaveOk(true);
       window.setTimeout(() => setSaveOk(false), 2500);
     } catch (e) {
@@ -394,7 +467,8 @@ export function VoiceSettingsPanel({ embedded = false }: { embedded?: boolean } 
 
   const discard = useCallback(() => {
     if (!baseline) return;
-    setForm(structuredClone(baseline));
+    dirtyRef.current = false;
+    dispatchForm({ type: 'discard' });
     setError(null);
     setSaveOk(false);
   }, [baseline]);

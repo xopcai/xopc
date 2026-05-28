@@ -10,6 +10,7 @@ import {
   type Message,
   type ProgressState,
   type ReasoningLevel,
+  coerceReasoningLevel,
 } from '@/features/chat/messages/messages.types';
 import { hasPendingAgentRunForChat, MessageSender, setPendingAgentRun } from '@/features/chat/messages/message-sender';
 import type { PendingFollowUp } from '@/features/chat/follow-up/pending-follow-up.types';
@@ -230,13 +231,10 @@ export function useChatSession() {
       latestMessagesRef,
     });
 
-  useEffect(() => {
-    if (!decodedKey) return;
+  const trackedDecodedKeyRef = useRef(decodedKey);
+  if (decodedKey && trackedDecodedKeyRef.current !== decodedKey) {
+    trackedDecodedKeyRef.current = decodedKey;
     const active = activeStreamSessionKeyRef.current;
-    // Hash session changed (or no stream for this chat): clear stream UI and the
-    // guard refs used by `loadSessionById` so returning to a chat always refetches
-    // from the gateway. Leaving refs set while `MessageSender` still drains another
-    // session caused the load to be skipped and stale messages until full reload.
     if (!active || decodedKey !== active) {
       activeStreamSessionKeyRef.current = null;
       sendingRef.current = false;
@@ -246,12 +244,36 @@ export function useChatSession() {
       setStreaming(false);
       setSending(false);
     }
-  }, [decodedKey]);
+  } else if (!decodedKey) {
+    trackedDecodedKeyRef.current = undefined;
+  }
 
   const displayMessages = useMemo(() => {
     if (!streamingMsg) return messages;
     return [...messages, streamingMsg];
   }, [messages, streamingMsg]);
+
+  const adoptEmptySession = useCallback((key: string, name: string | null) => {
+    setSessionKey(key);
+    setSessionName(name);
+    setMessages([]);
+    setHasMore(false);
+  }, []);
+
+  const applyAgentConfig = useCallback(
+    (cfg: { model: string; thinkingLevel?: string | null; reasoningLevel?: string | null }) => {
+      setSessionModel(cfg.model);
+      setThinkingLevel(cfg.thinkingLevel || DEFAULT_THINKING);
+      setReasoningLevel(coerceReasoningLevel(cfg.reasoningLevel ?? undefined));
+      void refreshModelThinkingSupport(cfg.model);
+    },
+    [refreshModelThinkingSupport],
+  );
+
+  const patchInitUi = useCallback((patch: { loading?: boolean; error?: string | null }) => {
+    if (patch.loading !== undefined) setLoading(patch.loading);
+    if (patch.error !== undefined) setError(patch.error);
+  }, []);
 
   useChatSessionWindowEvents({
     sessionKey,
@@ -260,11 +282,8 @@ export function useChatSession() {
     streamingRef,
     sessionMgrRef,
     loadSessionById,
-    refreshModelThinkingSupport,
+    applyAgentConfig,
     setSessionName,
-    setSessionModel,
-    setThinkingLevel,
-    setReasoningLevel,
   });
 
   useChatSessionInit({
@@ -275,29 +294,24 @@ export function useChatSession() {
     sessionMgrRef,
     resolveAgentIdForPost,
     navigateToSession,
-    refreshModelThinkingSupport,
     loadSessionById,
     tryResumeAgentRun,
     restoreLiveCacheIfNeeded,
-    setSessionKey,
-    setSessionName,
-    setMessages,
-    setHasMore,
-    setSessionModel,
-    setThinkingLevel,
-    setReasoningLevel,
-    setError,
-    setLoading,
+    adoptEmptySession,
+    applyAgentConfig,
+    patchInitUi,
   });
 
-  useEffect(() => {
+  const streamBusy = streaming || sending;
+  const trackedAgentIndicatorRef = useRef({ sessionKey, streamBusy });
+  if (
+    trackedAgentIndicatorRef.current.sessionKey !== sessionKey ||
+    trackedAgentIndicatorRef.current.streamBusy !== streamBusy
+  ) {
+    trackedAgentIndicatorRef.current = { sessionKey, streamBusy };
     const set = useChatAgentRunIndicatorStore.getState().setFocusedAgentRun;
-    if (!sessionKey) {
-      set(null, false);
-      return;
-    }
-    set(sessionKey, streaming || sending);
-  }, [sessionKey, streaming, sending]);
+    set(sessionKey ?? null, sessionKey ? streamBusy : false);
+  }
 
   /**
    * `/goal` (and similar) schedule a follow-up webchat run without a browser POST. Those runs still

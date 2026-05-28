@@ -1,5 +1,5 @@
 import { ChevronDown, ExternalLink, Loader2, Save } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
@@ -180,21 +180,45 @@ export function ImageProviderCredentialsPanel({
 }) {
   const anyRegionUi = summaries.some((s) => (s.ui?.regions?.length ?? 0) > 0);
   const anyBaseUrlPresets = summaries.some((s) => (s.ui?.baseUrlPresets?.length ?? 0) > 0);
-  const [expandedProviderIds, setExpandedProviderIds] = useState<Set<string>>(() => new Set());
+  const [manualExpandedIds, setManualExpandedIds] = useState<Set<string>>(() => new Set());
+  const [manualCollapsedIds, setManualCollapsedIds] = useState<Set<string>>(() => new Set());
 
-  useEffect(() => {
-    setExpandedProviderIds((current) => {
-      const nextExpandedProviderIds = new Set(current);
-      for (const summary of summaries) {
-        const draftRow = credDraft[summary.id] ?? emptyImageProviderCredRow();
-        const baselineRow = credBaseline[summary.id] ?? emptyImageProviderCredRow();
-        if (isProviderRowDirty(draftRow, baselineRow)) {
-          nextExpandedProviderIds.add(summary.id);
-        }
+  const dirtyProviderIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const summary of summaries) {
+      const draftRow = credDraft[summary.id] ?? emptyImageProviderCredRow();
+      const baselineRow = credBaseline[summary.id] ?? emptyImageProviderCredRow();
+      if (isProviderRowDirty(draftRow, baselineRow)) {
+        ids.add(summary.id);
       }
-      return nextExpandedProviderIds;
-    });
+    }
+    return ids;
   }, [summaries, credDraft, credBaseline]);
+
+  const isProviderExpanded = (id: string) => {
+    if (manualCollapsedIds.has(id)) return false;
+    if (manualExpandedIds.has(id)) return true;
+    return dirtyProviderIds.has(id);
+  };
+
+  const toggleProviderExpanded = (id: string) => {
+    const expanded = isProviderExpanded(id);
+    if (expanded) {
+      setManualCollapsedIds((current) => new Set(current).add(id));
+      setManualExpandedIds((current) => {
+        const next = new Set(current);
+        next.delete(id);
+        return next;
+      });
+      return;
+    }
+    setManualCollapsedIds((current) => {
+      const next = new Set(current);
+      next.delete(id);
+      return next;
+    });
+    setManualExpandedIds((current) => new Set(current).add(id));
+  };
 
   if (summaries.length === 0) {
     return null;
@@ -259,7 +283,7 @@ export function ImageProviderCredentialsPanel({
               : null;
           const baselineRow = credBaseline[p.id] ?? emptyImageProviderCredRow();
           const isDirty = isProviderRowDirty(row, baselineRow);
-          const isExpanded = expandedProviderIds.has(p.id);
+          const isExpanded = isProviderExpanded(p.id);
           const providerName = p.label ?? p.id;
           const modelCountLabel = formatModelCount(t, p.models.length);
           return (
@@ -275,17 +299,7 @@ export function ImageProviderCredentialsPanel({
                 className="flex w-full items-start justify-between gap-3 px-4 py-3 text-left hover:bg-surface-hover/70"
                 aria-expanded={isExpanded}
                 aria-controls={`img-provider-credentials-${p.id}`}
-                onClick={() => {
-                  setExpandedProviderIds((current) => {
-                    const nextExpandedProviderIds = new Set(current);
-                    if (nextExpandedProviderIds.has(p.id)) {
-                      nextExpandedProviderIds.delete(p.id);
-                    } else {
-                      nextExpandedProviderIds.add(p.id);
-                    }
-                    return nextExpandedProviderIds;
-                  });
-                }}
+                onClick={() => toggleProviderExpanded(p.id)}
               >
                 <div className="flex min-w-0 flex-1 flex-col gap-2">
                   <div className="flex min-w-0 flex-wrap items-center gap-2">

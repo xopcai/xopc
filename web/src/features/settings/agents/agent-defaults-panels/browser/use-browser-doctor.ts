@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useReducer, useRef } from 'react';
 
 import { apiFetch } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
@@ -46,6 +46,55 @@ async function postJson<T>(url: string, body: unknown): Promise<T> {
   return json.payload;
 }
 
+type BrowserDoctorState = {
+  playwright: DoctorState<PlaywrightDoctor>;
+  cloak: DoctorState<CloakDoctor>;
+  extension: DoctorState<ExtensionProbe>;
+  extensionArtifacts: DoctorState<ExtensionArtifacts>;
+};
+
+type BrowserDoctorAction =
+  | { type: 'playwright'; state: DoctorState<PlaywrightDoctor> }
+  | { type: 'cloak'; state: DoctorState<CloakDoctor> }
+  | { type: 'extension'; state: DoctorState<ExtensionProbe> }
+  | { type: 'extension-artifacts'; state: DoctorState<ExtensionArtifacts> }
+  | { type: 'extension-idle' }
+  | { type: 'extension-start-probe' }
+  | { type: 'extension-artifacts-start-probe' };
+
+const initialBrowserDoctorState: BrowserDoctorState = {
+  playwright: { kind: 'idle' },
+  cloak: { kind: 'idle' },
+  extension: { kind: 'idle' },
+  extensionArtifacts: { kind: 'idle' },
+};
+
+function browserDoctorReducer(state: BrowserDoctorState, action: BrowserDoctorAction): BrowserDoctorState {
+  switch (action.type) {
+    case 'playwright':
+      return { ...state, playwright: action.state };
+    case 'cloak':
+      return { ...state, cloak: action.state };
+    case 'extension':
+      return { ...state, extension: action.state };
+    case 'extension-artifacts':
+      return { ...state, extensionArtifacts: action.state };
+    case 'extension-idle':
+      return { ...state, extension: { kind: 'idle' }, extensionArtifacts: { kind: 'idle' } };
+    case 'extension-start-probe':
+      return {
+        ...state,
+        extension: state.extension.kind === 'ok' ? state.extension : { kind: 'loading' },
+      };
+    case 'extension-artifacts-start-probe':
+      return {
+        ...state,
+        extensionArtifacts:
+          state.extensionArtifacts.kind === 'ok' ? state.extensionArtifacts : { kind: 'loading' },
+      };
+  }
+}
+
 export interface BrowserDoctor {
   playwright: DoctorState<PlaywrightDoctor>;
   cloak: DoctorState<CloakDoctor>;
@@ -78,26 +127,25 @@ export function useBrowserDoctor(opts: {
   extensionHost?: string;
   extensionPort?: number;
 }): BrowserDoctor {
-  const [playwright, setPlaywright] = useState<DoctorState<PlaywrightDoctor>>({ kind: 'idle' });
-  const [cloak, setCloak] = useState<DoctorState<CloakDoctor>>({ kind: 'idle' });
-  const [extension, setExtension] = useState<DoctorState<ExtensionProbe>>({ kind: 'idle' });
-  const [extensionArtifacts, setExtensionArtifacts] = useState<DoctorState<ExtensionArtifacts>>({
-    kind: 'idle',
-  });
+  const [doctors, dispatch] = useReducer(browserDoctorReducer, initialBrowserDoctorState);
+  const { playwright, cloak, extension, extensionArtifacts } = doctors;
 
   const refetchPlaywright = useCallback(async () => {
-    setPlaywright({ kind: 'loading' });
+    dispatch({ type: 'playwright', state: { kind: 'loading' } });
     try {
       const data = await getJson<PlaywrightDoctor>(apiUrl('/api/browser/playwright/doctor'));
-      setPlaywright({ kind: 'ok', data });
+      dispatch({ type: 'playwright', state: { kind: 'ok', data } });
     } catch (e) {
-      setPlaywright({ kind: 'error', message: e instanceof Error ? e.message : String(e) });
+      dispatch({
+        type: 'playwright',
+        state: { kind: 'error', message: e instanceof Error ? e.message : String(e) },
+      });
     }
   }, []);
 
   const refetchCloak = useCallback(
     async (overrides?: { cacheDir?: string; binaryPath?: string }) => {
-      setCloak({ kind: 'loading' });
+      dispatch({ type: 'cloak', state: { kind: 'loading' } });
       const cd = (overrides?.cacheDir ?? opts.cacheDir ?? '').trim();
       const bp = (overrides?.binaryPath ?? opts.binaryPath ?? '').trim();
       const qs = new URLSearchParams();
@@ -107,10 +155,13 @@ export function useBrowserDoctor(opts: {
         const data = await getJson<CloakDoctor>(
           apiUrl(`/api/browser/cloakbrowser/doctor${qs.size ? `?${qs}` : ''}`),
         );
-        setCloak({ kind: 'ok', data });
+        dispatch({ type: 'cloak', state: { kind: 'ok', data } });
         return data;
       } catch (e) {
-        setCloak({ kind: 'error', message: e instanceof Error ? e.message : String(e) });
+        dispatch({
+          type: 'cloak',
+          state: { kind: 'error', message: e instanceof Error ? e.message : String(e) },
+        });
         return null;
       }
     },
@@ -118,11 +169,11 @@ export function useBrowserDoctor(opts: {
   );
 
   const applyPlaywrightDoctor = useCallback((data: PlaywrightDoctor) => {
-    setPlaywright({ kind: 'ok', data });
+    dispatch({ type: 'playwright', state: { kind: 'ok', data } });
   }, []);
 
   const applyCloakDoctor = useCallback((data: CloakDoctor) => {
-    setCloak({ kind: 'ok', data });
+    dispatch({ type: 'cloak', state: { kind: 'ok', data } });
   }, []);
 
   // One-shot probes on mount.
@@ -139,7 +190,7 @@ export function useBrowserDoctor(opts: {
     const qs = new URLSearchParams({ probe: '1' });
     if (extensionHost) qs.set('host', extensionHost);
     if (extensionPort !== undefined) qs.set('port', String(extensionPort));
-    setExtension((prev) => (prev.kind === 'ok' ? prev : { kind: 'loading' }));
+    dispatch({ type: 'extension-start-probe' });
     try {
       const res = await apiFetch(apiUrl(`/api/browser/extension-status?${qs}`), {
         signal: AbortSignal.timeout(3000),
@@ -151,31 +202,40 @@ export function useBrowserDoctor(opts: {
         artifacts?: ExtensionArtifacts;
       };
       if (!res.ok) {
-        setExtension({ kind: 'error', message: `HTTP ${res.status}` });
+        dispatch({ type: 'extension', state: { kind: 'error', message: `HTTP ${res.status}` } });
         return;
       }
-      setExtension({
-        kind: 'ok',
-        data: {
-          running: data.running === true,
-          connected: data.connected === true,
-          backend: data.backend,
-          artifacts: data.artifacts,
+      dispatch({
+        type: 'extension',
+        state: {
+          kind: 'ok',
+          data: {
+            running: data.running === true,
+            connected: data.connected === true,
+            backend: data.backend,
+            artifacts: data.artifacts,
+          },
         },
       });
     } catch (e) {
-      setExtension({ kind: 'error', message: e instanceof Error ? e.message : String(e) });
+      dispatch({
+        type: 'extension',
+        state: { kind: 'error', message: e instanceof Error ? e.message : String(e) },
+      });
     }
   }, [extensionHost, extensionPort]);
 
   const refetchExtensionArtifacts = useCallback(async () => {
-    setExtensionArtifacts((prev) => (prev.kind === 'ok' ? prev : { kind: 'loading' }));
+    dispatch({ type: 'extension-artifacts-start-probe' });
     try {
       const data = await getJson<ExtensionArtifacts>(apiUrl('/api/browser/extension/doctor'));
-      setExtensionArtifacts({ kind: 'ok', data });
+      dispatch({ type: 'extension-artifacts', state: { kind: 'ok', data } });
       return data;
     } catch (e) {
-      setExtensionArtifacts({ kind: 'error', message: e instanceof Error ? e.message : String(e) });
+      dispatch({
+        type: 'extension-artifacts',
+        state: { kind: 'error', message: e instanceof Error ? e.message : String(e) },
+      });
       return null;
     }
   }, []);
@@ -187,7 +247,7 @@ export function useBrowserDoctor(opts: {
         { force: params?.force ?? false },
       );
       const doctor = payload.doctor;
-      setExtensionArtifacts({ kind: 'ok', data: doctor });
+      dispatch({ type: 'extension-artifacts', state: { kind: 'ok', data: doctor } });
       await refetchExtension();
       return doctor;
     },
@@ -206,12 +266,16 @@ export function useBrowserDoctor(opts: {
     });
   }, []);
 
-  useEffect(() => {
+  const trackedExtensionEnabledRef = useRef(extensionEnabled);
+  if (trackedExtensionEnabledRef.current !== extensionEnabled) {
+    trackedExtensionEnabledRef.current = extensionEnabled;
     if (!extensionEnabled) {
-      setExtension({ kind: 'idle' });
-      setExtensionArtifacts({ kind: 'idle' });
-      return undefined;
+      dispatch({ type: 'extension-idle' });
     }
+  }
+
+  useEffect(() => {
+    if (!extensionEnabled) return undefined;
     void refetchExtension();
     void refetchExtensionArtifacts();
     const id = setInterval(() => void refetchExtension(), 5000);

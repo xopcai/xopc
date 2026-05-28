@@ -1,5 +1,5 @@
 import { Clock, ExternalLink, FileText, Heart, Loader2, MessageSquare, Play, RefreshCw, type LucideIcon } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
 
@@ -26,6 +26,7 @@ import { ScheduleField } from '@/features/scheduling/schedule-field';
 import { docsGuidePageUrl } from '@/navigation';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
+import { useAsyncResource } from '@/lib/use-async-resource';
 
 function inputClassName(): string {
   return cn(
@@ -78,6 +79,63 @@ function heartbeatSettingsTabHint(h: HeartbeatSettingsMessages, tab: HeartbeatSe
   return h.documentTabHint;
 }
 
+type HeartbeatFormDraft = {
+  form: HeartbeatSettingsState | null;
+  baseline: HeartbeatSettingsState | null;
+};
+
+type HeartbeatFormAction =
+  | { type: 'reset' }
+  | { type: 'sync'; value: HeartbeatSettingsState }
+  | { type: 'patch'; patch: Partial<HeartbeatSettingsState> }
+  | { type: 'discard' }
+  | { type: 'saved'; value: HeartbeatSettingsState };
+
+function heartbeatFormReducer(state: HeartbeatFormDraft, action: HeartbeatFormAction): HeartbeatFormDraft {
+  switch (action.type) {
+    case 'reset':
+      return { form: null, baseline: null };
+    case 'sync': {
+      const snapshot = structuredClone(action.value);
+      return { form: snapshot, baseline: structuredClone(snapshot) };
+    }
+    case 'patch':
+      return { ...state, form: state.form ? { ...state.form, ...action.patch } : null };
+    case 'discard':
+      return state.baseline
+        ? { form: structuredClone(state.baseline), baseline: state.baseline }
+        : state;
+    case 'saved': {
+      const snapshot = structuredClone(action.value);
+      return { form: snapshot, baseline: structuredClone(snapshot) };
+    }
+  }
+}
+
+type HeartbeatDocDraft = { doc: string; baseline: string };
+
+type HeartbeatDocAction =
+  | { type: 'reset' }
+  | { type: 'sync'; value: string }
+  | { type: 'set'; value: string }
+  | { type: 'discard' }
+  | { type: 'saved'; value: string };
+
+function heartbeatDocReducer(state: HeartbeatDocDraft, action: HeartbeatDocAction): HeartbeatDocDraft {
+  switch (action.type) {
+    case 'reset':
+      return { doc: '', baseline: '' };
+    case 'sync':
+      return { doc: action.value, baseline: action.value };
+    case 'set':
+      return { ...state, doc: action.value };
+    case 'discard':
+      return { ...state, doc: state.baseline };
+    case 'saved':
+      return { doc: action.value, baseline: action.value };
+  }
+}
+
 function workspacePathFromConfig(cfg: unknown): string {
   if (!cfg || typeof cfg !== 'object' || Array.isArray(cfg)) return '';
   const agents = (cfg as { agents?: unknown }).agents;
@@ -111,16 +169,19 @@ export function HeartbeatSettingsPanel() {
     [setSearchParams],
   );
 
-  const [form, setForm] = useState<HeartbeatSettingsState | null>(null);
-  const [baseline, setBaseline] = useState<HeartbeatSettingsState | null>(null);
-  const [doc, setDoc] = useState<string>('');
-  const [docBaseline, setDocBaseline] = useState('');
+  const [formDraft, dispatchForm] = useReducer(heartbeatFormReducer, { form: null, baseline: null });
+  const form = formDraft.form;
+  const baseline = formDraft.baseline;
+  const [docDraft, dispatchDoc] = useReducer(heartbeatDocReducer, { doc: '', baseline: '' });
+  const doc = docDraft.doc;
+  const docBaseline = docDraft.baseline;
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [triggerLoading, setTriggerLoading] = useState(false);
   const [triggerOk, setTriggerOk] = useState(false);
   const [triggerError, setTriggerError] = useState<string | null>(null);
-  const [sessionChatIds, setSessionChatIds] = useState<SessionChatId[]>([]);
+  const configDirtyRef = useRef(false);
+  const docDirtyRef = useRef(false);
 
   const {
     data: cfgData,
@@ -157,25 +218,27 @@ export function HeartbeatSettingsPanel() {
 
   useEffect(() => {
     if (!hasToken) {
-      setForm(null);
-      setBaseline(null);
+      dispatchForm({ type: 'reset' });
+      configDirtyRef.current = false;
       return;
     }
     if (cfgData === undefined) return;
-    if (!dirtyConfig) {
-      const next = structuredClone(heartbeatParsed);
-      setForm(next);
-      setBaseline(next);
+    if (!configDirtyRef.current) {
+      dispatchForm({ type: 'sync', value: heartbeatParsed });
     }
-  }, [hasToken, cfgData, heartbeatParsed, dirtyConfig]);
+  }, [hasToken, cfgData, heartbeatParsed]);
 
   useEffect(() => {
-    if (!hasToken || mdContent === undefined) return;
-    if (!dirtyDoc) {
-      setDoc(mdContent);
-      setDocBaseline(mdContent);
+    if (!hasToken) {
+      dispatchDoc({ type: 'reset' });
+      docDirtyRef.current = false;
+      return;
     }
-  }, [hasToken, mdContent, dirtyDoc]);
+    if (mdContent === undefined) return;
+    if (!docDirtyRef.current) {
+      dispatchDoc({ type: 'sync', value: mdContent });
+    }
+  }, [hasToken, mdContent]);
 
   const fetchError =
     cfgErr instanceof Error
@@ -195,30 +258,17 @@ export function HeartbeatSettingsPanel() {
       (cfgLoading || mdLoading),
   );
 
-  useEffect(() => {
-    if (!hasToken || !form) {
-      setSessionChatIds([]);
-      return;
-    }
-    const t = form.target.trim();
-    if (!t) {
-      setSessionChatIds([]);
-      return;
-    }
-    let cancelled = false;
-    void getSessionChatIds(t).then((ids) => {
-      if (!cancelled) setSessionChatIds(ids);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [hasToken, form?.target]);
+  const deliveryTarget = form?.target.trim() ?? '';
+  const { data: sessionChatIds, setData: setSessionChatIds } = useAsyncResource(
+    () => getSessionChatIds(deliveryTarget),
+    [hasToken, deliveryTarget],
+    { enabled: hasToken && deliveryTarget.length > 0, initial: [] as SessionChatId[], errorData: [] },
+  );
 
   const refreshSessionChatIds = useCallback(() => {
-    const t = form?.target?.trim();
-    if (!t) return;
-    void getSessionChatIds(t).then(setSessionChatIds);
-  }, [form?.target]);
+    if (!deliveryTarget) return;
+    void getSessionChatIds(deliveryTarget).then(setSessionChatIds);
+  }, [deliveryTarget, setSessionChatIds]);
 
   const runHeartbeatNow = useCallback(async () => {
     setTriggerLoading(true);
@@ -236,14 +286,17 @@ export function HeartbeatSettingsPanel() {
   }, [h.triggerError]);
 
   const update = useCallback((patch: Partial<HeartbeatSettingsState>) => {
-    setForm((f) => (f ? { ...f, ...patch } : null));
+    configDirtyRef.current = true;
+    dispatchForm({ type: 'patch', patch });
   }, []);
 
   const dirty = dirtyConfig || dirtyDoc;
 
   const discard = useCallback(() => {
-    if (baseline) setForm(structuredClone(baseline));
-    setDoc(docBaseline);
+    dispatchForm({ type: 'discard' });
+    dispatchDoc({ type: 'discard' });
+    configDirtyRef.current = false;
+    docDirtyRef.current = false;
     setError(null);
   }, []);
 
@@ -254,11 +307,13 @@ export function HeartbeatSettingsPanel() {
     try {
       if (dirtyConfig) {
         await patchHeartbeatSettings(form);
-        setBaseline(structuredClone(form));
+        dispatchForm({ type: 'saved', value: form });
+        configDirtyRef.current = false;
       }
       if (dirtyDoc) {
         await putHeartbeatMd(doc);
-        setDocBaseline(doc);
+        dispatchDoc({ type: 'saved', value: doc });
+        docDirtyRef.current = false;
       }
     } catch (e) {
       const fallback = dirtyConfig ? h.saveConfigError : h.saveDocError;
@@ -389,7 +444,10 @@ export function HeartbeatSettingsPanel() {
         <textarea
           className={cn(inputClassName(), 'min-h-72 resize-y font-mono text-xs leading-relaxed')}
           value={doc}
-          onChange={(e) => setDoc(e.target.value)}
+          onChange={(e) => {
+            docDirtyRef.current = true;
+            dispatchDoc({ type: 'set', value: e.target.value });
+          }}
           spellCheck={false}
           aria-label={h.docSection}
           data-doc-in-sync={doc === docBaseline ? 'true' : 'false'}

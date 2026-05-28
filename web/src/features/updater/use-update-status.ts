@@ -87,6 +87,26 @@ if (import.meta.env.DEV && typeof window !== 'undefined') {
   }
 }
 
+function clearNpmPendingRestartIfMatched(currentVersion: string): void {
+  if (!currentVersion || typeof window === 'undefined') return;
+  try {
+    const raw = sessionStorage.getItem(NPM_PENDING_RESTART_KEY);
+    if (!raw) return;
+    const p = JSON.parse(raw) as { installedVersion?: string };
+    const v = typeof p.installedVersion === 'string' ? p.installedVersion.trim() : '';
+    if (v && v === currentVersion) {
+      sessionStorage.removeItem(NPM_PENDING_RESTART_KEY);
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+function applyNpmStatus(next: NpmUpdateStatus): NpmUpdateStatus {
+  clearNpmPendingRestartIfMatched(next.currentVersion);
+  return next;
+}
+
 export function useUpdateStatus(): UpdateStatus & {
   /** Resolves true when the server returned a fresh npm status payload. */
   checkNow: () => Promise<boolean>;
@@ -106,43 +126,29 @@ export function useUpdateStatus(): UpdateStatus & {
 
   useEffect(() => {
     if (isEffectiveElectron) return;
-    void fetchNpmStatus().then(setNpm).catch(() => {});
+    void fetchNpmStatus().then((payload) => setNpm(applyNpmStatus(payload))).catch(() => {});
 
     const handler = (e: Event) => {
       const detail = (e as CustomEvent<unknown>).detail;
       if (detail === null) {
         setNpm((prev) =>
-          prev ? { ...prev, updateAvailable: false, latestVersion: null, channel: null } : prev,
+          prev ? applyNpmStatus({ ...prev, updateAvailable: false, latestVersion: null, channel: null }) : prev,
         );
       } else if (detail && typeof detail === 'object') {
         const d = detail as { currentVersion?: string; latestVersion?: string; channel?: string };
-        setNpm({
-          currentVersion: d.currentVersion ?? '',
-          updateAvailable: true,
-          latestVersion: d.latestVersion ?? null,
-          channel: d.channel ?? null,
-        });
+        setNpm(
+          applyNpmStatus({
+            currentVersion: d.currentVersion ?? '',
+            updateAvailable: true,
+            latestVersion: d.latestVersion ?? null,
+            channel: d.channel ?? null,
+          }),
+        );
       }
     };
     window.addEventListener('update-available', handler);
     return () => window.removeEventListener('update-available', handler);
   }, [isEffectiveElectron]);
-
-  /** When the running gateway version catches up, clear pending npm restart UX. */
-  useEffect(() => {
-    if (isEffectiveElectron || !npm?.currentVersion) return;
-    try {
-      const raw = sessionStorage.getItem(NPM_PENDING_RESTART_KEY);
-      if (!raw) return;
-      const p = JSON.parse(raw) as { installedVersion?: string };
-      const v = typeof p.installedVersion === 'string' ? p.installedVersion.trim() : '';
-      if (v && v === npm.currentVersion) {
-        sessionStorage.removeItem(NPM_PENDING_RESTART_KEY);
-      }
-    } catch {
-      /* ignore */
-    }
-  }, [isEffectiveElectron, npm?.currentVersion]);
 
   useEffect(() => {
     if (!isElectronEnv) return;
@@ -156,11 +162,6 @@ export function useUpdateStatus(): UpdateStatus & {
     const cleanup = api.onStatusChanged((s) => setElectron(s));
     return cleanup;
   }, []);
-
-  useEffect(() => {
-    if (!import.meta.env.DEV || isElectronEnv) return;
-    setElectron(devMockElectron);
-  }, [devMockElectron]);
 
   useEffect(() => {
     if (!import.meta.env.DEV) return;
@@ -189,7 +190,7 @@ export function useUpdateStatus(): UpdateStatus & {
       if (!res.ok) return false;
       const json = (await res.json()) as { payload?: NpmUpdateStatus };
       if (json.payload) {
-        setNpm(json.payload);
+        setNpm(applyNpmStatus(json.payload));
         return true;
       }
       return false;
@@ -293,9 +294,11 @@ export function useUpdateStatus(): UpdateStatus & {
     }
   }, []);
 
+  const resolvedElectron = isElectronEnv ? electron : (devMockElectron ?? electron);
+
   return {
     npm,
-    electron,
+    electron: resolvedElectron,
     isElectron: isEffectiveElectron,
     checkNow,
     runNpmUpdate,
