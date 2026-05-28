@@ -110,6 +110,7 @@ export function useSkillsPage() {
   const [usingSkillInChatName, setUsingSkillInChatName] = useState<string | null>(null);
   const [marketCategoryId, setMarketCategoryId] = useState('');
   const [marketBrowseProvider, setMarketBrowseProvider] = useState<string | null>(null);
+  const [providersRefreshKey, setProvidersRefreshKey] = useState(0);
   const marketplaceDetailProviderRef = useRef<string | null>(null);
   const trackedUrlProviderRef = useRef<string | null>(urlMarketProvider);
   const trackedProvidersCurrentRef = useRef<string | null>(null);
@@ -143,7 +144,7 @@ export function useSkillsPage() {
         }
       }
     },
-    [hasToken],
+    [hasToken, providersRefreshKey],
     {
       enabled: hasToken,
       initial: { providers: [] as MarketplaceProviderInfo[], current: null as string | null },
@@ -152,6 +153,12 @@ export function useSkillsPage() {
 
   const loading = manualLoading || catalogLoading;
   const registeredProviders = providersResource.data.providers;
+
+  useEffect(() => {
+    const onConfigReload = () => setProvidersRefreshKey((k) => k + 1);
+    window.addEventListener('config-reload', onConfigReload);
+    return () => window.removeEventListener('config-reload', onConfigReload);
+  }, []);
 
   // Sync URL → local state during render so the URL→state→URL effect chain doesn't add a render.
   const searchParamsKey = searchParams.toString();

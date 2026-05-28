@@ -40,7 +40,7 @@ import { EventEmitter } from 'events';
 import { createLogger } from '../utils/logger.js';
 import { TypedEventBus } from './typed-event-bus.js';
 import { ExtensionRegistryImpl } from './loader.js';
-import { registerMarketplaceAdapter as _registerMarketplaceAdapter } from '../agent/skills/marketplace/registry.js';
+import { registerMarketplaceAdapter as _registerMarketplaceAdapter, unregisterMarketplaceAdapter as _unregisterMarketplaceAdapter } from '../agent/skills/marketplace/registry.js';
 import { registerSpeechProvider as registerSpeechProviderInRegistry } from '../voice/tts/speech-registry.js';
 import type { SpeechProviderPlugin } from '../voice/tts/speech-provider-types.js';
 import { registerMediaUnderstandingProvider as registerMediaUnderstandingProviderInRegistry } from '../media-understanding/registry.js';
@@ -63,6 +63,7 @@ export class ExtensionApiImpl implements ExtensionApi {
   private _registeredCommandIds: string[] = [];
   private _registeredSpeechProviderIds: string[] = [];
   private _registeredMediaUnderstandingProviderIds: string[] = [];
+  private _registeredMarketplaceAdapterIds: string[] = [];
   private readonly _manifestCommands = new Map<string, CommandContribution>();
 
   constructor(
@@ -376,7 +377,11 @@ export class ExtensionApiImpl implements ExtensionApi {
     displayName?: string;
   }): void {
     _registerMarketplaceAdapter(registration);
-    this._logger.info(`Extension registered marketplace adapter: ${registration.adapter.id}`);
+    const adapterId = registration.adapter.id;
+    if (!this._registeredMarketplaceAdapterIds.includes(adapterId)) {
+      this._registeredMarketplaceAdapterIds.push(adapterId);
+    }
+    this._logger.info(`Extension registered marketplace adapter: ${adapterId}`);
   }
 
   registerFlag(_name: string, _config: FlagConfig): void {
@@ -417,6 +422,11 @@ export class ExtensionApiImpl implements ExtensionApi {
     this._manifestCommands.clear();
 
     this._registry.removeReloadRegistration(this.id);
+
+    for (const adapterId of this._registeredMarketplaceAdapterIds) {
+      _unregisterMarketplaceAdapter(adapterId);
+    }
+    this._registeredMarketplaceAdapterIds = [];
 
     this._typedEventBus.cleanupAll();
     this._eventBus.removeAllListeners();
