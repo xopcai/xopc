@@ -251,19 +251,26 @@ export function SystemSettingsPanel() {
       if (!api) {
         return;
       }
-      setLoadError(null);
+      dispatch({ type: 'patch', patch: { loadError: null } });
       try {
         const b = await api.getBehavior();
-        setBehavior(b);
-        setPerms(await api.getPermissions({ probe: options?.showRefreshFeedback }));
-        if (options?.showRefreshFeedback) {
-          setPermFeedback(t.refreshDone);
-        }
+        const nextPerms = await api.getPermissions({ probe: options?.showRefreshFeedback });
+        dispatch({
+          type: 'patch',
+          patch: {
+            behavior: b,
+            perms: nextPerms,
+            ...(options?.showRefreshFeedback ? { permFeedback: t.refreshDone } : {}),
+          },
+        });
       } catch (e) {
-        setLoadError(e instanceof Error ? e.message : String(e));
-        if (options?.showRefreshFeedback) {
-          setPermFeedback(null);
-        }
+        dispatch({
+          type: 'patch',
+          patch: {
+            loadError: e instanceof Error ? e.message : String(e),
+            ...(options?.showRefreshFeedback ? { permFeedback: null } : {}),
+          },
+        });
       }
     },
     [api, t.refreshDone],
@@ -273,11 +280,11 @@ export function SystemSettingsPanel() {
     if (refreshing || permBusy) {
       return;
     }
-    setRefreshing(true);
+    dispatch({ type: 'patch', patch: { refreshing: true } });
     try {
       await load({ showRefreshFeedback: true });
     } finally {
-      setRefreshing(false);
+      dispatch({ type: 'patch', patch: { refreshing: false } });
     }
   }, [load, permBusy, refreshing]);
 
@@ -292,7 +299,7 @@ export function SystemSettingsPanel() {
       return;
     }
     const timer = window.setTimeout(() => {
-      setPermFeedback((current) => (current === permFeedback ? null : current));
+      dispatch({ type: 'patch', patch: { permFeedback: null } });
     }, 3000);
     return () => window.clearTimeout(timer);
   }, [permFeedback, t.openSettingsDone, t.openSettingsFailed, t.refreshDone, t.desktopNotify.testShown]);
@@ -323,12 +330,12 @@ export function SystemSettingsPanel() {
   }) => {
     try {
       const { behavior: next } = await api.setBehavior(patch);
-      setBehavior(next);
+      dispatch({ type: 'patch', patch: { behavior: next } });
       if (patch.notifyEnabled !== undefined || patch.notifySoundEnabled !== undefined) {
         dispatchShellPrefsChanged();
       }
     } catch (e) {
-      setLoadError(e instanceof Error ? e.message : String(e));
+      dispatch({ type: 'patch', patch: { loadError: e instanceof Error ? e.message : String(e) } });
     }
   };
 
@@ -337,63 +344,61 @@ export function SystemSettingsPanel() {
       await patchBehavior({ notifyEnabled: false });
       return;
     }
-    setPermBusy(true);
-    setPermFeedback(null);
+    dispatch({ type: 'patch', patch: { permBusy: true, permFeedback: null } });
     try {
       const result = await enableDesktopNotificationsWithTest(
         t.desktopNotify.testTitle,
         t.desktopNotify.testBody,
       );
       if (result === 'unsupported') {
-        setPermFeedback(t.notificationsFeedback.unsupported);
+        dispatch({ type: 'patch', patch: { permFeedback: t.notificationsFeedback.unsupported } });
         return;
       }
       if (result === 'denied') {
-        setPermFeedback(t.desktopNotify.denied);
+        dispatch({ type: 'patch', patch: { permFeedback: t.desktopNotify.denied } });
         return;
       }
       if (result === 'default') {
-        setPermFeedback(t.notificationsFeedback.default);
+        dispatch({ type: 'patch', patch: { permFeedback: t.notificationsFeedback.default } });
         return;
       }
       await patchBehavior({ notifyEnabled: true });
-      setPerms(await api.getPermissions());
-      setPermFeedback(t.desktopNotify.testShown);
+      dispatch({ type: 'patch', patch: { perms: await api.getPermissions() } });
+      dispatch({ type: 'patch', patch: { permFeedback: t.desktopNotify.testShown } });
     } catch (e) {
-      setLoadError(e instanceof Error ? e.message : String(e));
+      dispatch({ type: 'patch', patch: { loadError: e instanceof Error ? e.message : String(e) } });
     } finally {
-      setPermBusy(false);
+      dispatch({ type: 'patch', patch: { permBusy: false } });
     }
   };
 
   const openPrivacy = async (kind: PrivacyPaneKind) => {
-    setPermFeedback(null);
-    setLoadError(null);
+    dispatch({ type: 'patch', patch: { permFeedback: null } });
+    dispatch({ type: 'patch', patch: { loadError: null } });
     try {
       const r = await api.openPrivacy(kind);
       if (!r.ok) {
-        setPermFeedback(t.openSettingsFailed);
+        dispatch({ type: 'patch', patch: { permFeedback: t.openSettingsFailed } });
       } else {
-        setPermFeedback(t.openSettingsDone);
+        dispatch({ type: 'patch', patch: { permFeedback: t.openSettingsDone } });
       }
     } catch (e) {
-      setLoadError(e instanceof Error ? e.message : String(e));
+      dispatch({ type: 'patch', patch: { loadError: e instanceof Error ? e.message : String(e) } });
     }
   };
 
   const requestMicrophone = async () => {
-    setPermBusy(true);
-    setPermFeedback(null);
-    setLoadError(null);
+    dispatch({ type: 'patch', patch: { permBusy: true, permFeedback: null } });
+    dispatch({ type: 'patch', patch: { loadError: null } });
     try {
       const result = await api.requestMicrophone();
       const rendererOk = await probeRendererMicrophone();
-      setPerms(await api.getPermissions());
-      setPermFeedback(microphoneFeedback(result, rendererOk, t.permFeedback));
+      dispatch({ type: 'patch', patch: { perms: await api.getPermissions() } });
+      dispatch({ type: 'patch', patch: { permFeedback: microphoneFeedback(result, rendererOk, t.permFeedback) } });
     } catch (e) {
-      setLoadError(e instanceof Error ? e.message : String(e));
+      dispatch({ type: 'patch', patch: { loadError: e instanceof Error ? e.message : String(e) } });
     } finally {
-      setPermBusy(false);
+      dispatch({ type: 'patch', patch: { permBusy: false } });
     }
   };
 
@@ -401,17 +406,16 @@ export function SystemSettingsPanel() {
     if (!api.requestAccessibility) {
       return;
     }
-    setPermBusy(true);
-    setPermFeedback(null);
-    setLoadError(null);
+    dispatch({ type: 'patch', patch: { permBusy: true, permFeedback: null } });
+    dispatch({ type: 'patch', patch: { loadError: null } });
     try {
       const result = await api.requestAccessibility();
-      setPerms(await api.getPermissions());
-      setPermFeedback(accessibilityFeedback(result, t.accessibilityFeedback));
+      dispatch({ type: 'patch', patch: { perms: await api.getPermissions() } });
+      dispatch({ type: 'patch', patch: { permFeedback: accessibilityFeedback(result, t.accessibilityFeedback) } });
     } catch (e) {
-      setLoadError(e instanceof Error ? e.message : String(e));
+      dispatch({ type: 'patch', patch: { loadError: e instanceof Error ? e.message : String(e) } });
     } finally {
-      setPermBusy(false);
+      dispatch({ type: 'patch', patch: { permBusy: false } });
     }
   };
 
@@ -419,17 +423,16 @@ export function SystemSettingsPanel() {
     if (!api.requestNotifications) {
       return;
     }
-    setPermBusy(true);
-    setPermFeedback(null);
-    setLoadError(null);
+    dispatch({ type: 'patch', patch: { permBusy: true, permFeedback: null } });
+    dispatch({ type: 'patch', patch: { loadError: null } });
     try {
       const result = await api.requestNotifications();
-      setPerms(await api.getPermissions());
-      setPermFeedback(notificationFeedback(result, t.notificationsFeedback));
+      dispatch({ type: 'patch', patch: { perms: await api.getPermissions() } });
+      dispatch({ type: 'patch', patch: { permFeedback: notificationFeedback(result, t.notificationsFeedback) } });
     } catch (e) {
-      setLoadError(e instanceof Error ? e.message : String(e));
+      dispatch({ type: 'patch', patch: { loadError: e instanceof Error ? e.message : String(e) } });
     } finally {
-      setPermBusy(false);
+      dispatch({ type: 'patch', patch: { permBusy: false } });
     }
   };
 
@@ -437,17 +440,16 @@ export function SystemSettingsPanel() {
     if (!api.requestScreen) {
       return;
     }
-    setPermBusy(true);
-    setPermFeedback(null);
-    setLoadError(null);
+    dispatch({ type: 'patch', patch: { permBusy: true, permFeedback: null } });
+    dispatch({ type: 'patch', patch: { loadError: null } });
     try {
       const result = await api.requestScreen();
-      setPerms(await api.getPermissions());
-      setPermFeedback(screenFeedback(result, t.screenFeedback));
+      dispatch({ type: 'patch', patch: { perms: await api.getPermissions() } });
+      dispatch({ type: 'patch', patch: { permFeedback: screenFeedback(result, t.screenFeedback) } });
     } catch (e) {
-      setLoadError(e instanceof Error ? e.message : String(e));
+      dispatch({ type: 'patch', patch: { loadError: e instanceof Error ? e.message : String(e) } });
     } finally {
-      setPermBusy(false);
+      dispatch({ type: 'patch', patch: { permBusy: false } });
     }
   };
 
