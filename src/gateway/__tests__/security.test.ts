@@ -180,6 +180,28 @@ describe('Gateway Security Fixes', () => {
       expect(res.status).toBe(403);
     });
 
+    it('allows Vite dev origin when custom corsOrigins omit port 3000', async () => {
+      const service = createMockService({
+        gateway: {
+          port: 18790,
+          bind: 'lan',
+          corsOrigins: ['http://localhost:18790', 'http://192.168.1.5:18790'],
+        },
+      });
+      const app = createHonoApp({ service, token: 'test' });
+
+      const res = await app.request('/api/tunnel/pair', {
+        method: 'POST',
+        headers: {
+          Origin: 'http://localhost:3000',
+          Authorization: 'Bearer test',
+          'Content-Type': 'application/json',
+        },
+        body: '{}',
+      });
+      expect(res.status).not.toBe(403);
+    });
+
     it('allows host-header origin fallback when explicitly enabled', async () => {
       const service = createMockService({
         gateway: {

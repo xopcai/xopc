@@ -3,9 +3,11 @@ import { cors } from 'hono/cors';
 import { createMiddleware } from 'hono/factory';
 import { bodyLimit } from 'hono/body-limit';
 
+import { resolveGatewayEffectiveHost } from '../../config/gateway-bind.js';
 import { createFixedWindowRateLimiter } from '../../infra/rate-limit.js';
 import { createLogger } from '../../utils/logger.js';
 import type { GatewayService } from '../service.js';
+import { resolveGatewayCorsOrigins } from '../host.js';
 import { maxWebchatAgentRequestBodyBytes } from '../chat-limits.js';
 import { buildGatewayConsoleCspHeader } from '../security/csp.js';
 import { checkBrowserOrigin } from '../security/origin-check.js';
@@ -38,19 +40,11 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   const app = new Hono();
 
   const gatewayPort = service.currentConfig.gateway.port ?? 18790;
-  const configuredOrigins = service.currentConfig.gateway.corsOrigins;
-
-  let corsOrigin: string | string[];
-  if (configuredOrigins && configuredOrigins.length > 0) {
-    corsOrigin = configuredOrigins;
-  } else {
-    corsOrigin = [
-      `http://localhost:${gatewayPort}`,
-      `http://127.0.0.1:${gatewayPort}`,
-      'http://localhost:3000',
-      'http://127.0.0.1:3000',
-    ];
-  }
+  const corsOrigin = resolveGatewayCorsOrigins({
+    configuredOrigins: service.currentConfig.gateway.corsOrigins,
+    port: gatewayPort,
+    bindHost: resolveGatewayEffectiveHost(service.currentConfig),
+  });
 
   const CORS_OPTIONS = {
     origin: corsOrigin,
