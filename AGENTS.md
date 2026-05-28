@@ -352,7 +352,7 @@ cd web && pnpm run build                  # → ../dist/gateway/static/root (gat
 | Symptom | Check |
 |---------|--------|
 | `ERR_MODULE_NOT_FOUND` | `pnpm install` |
-| `@vscode/ripgrep` missing at runtime | Allow install scripts: `pnpm approve-builds` (ships the `rg` binary) |
+| `@vscode/ripgrep` missing at runtime | `allowBuilds` in `pnpm-workspace.yaml` must include `@vscode/ripgrep` (ships the `rg` binary); re-run `pnpm install` |
 | `@xopc/...` not found | `pnpm run build` |
 | Tests timeout | API keys / network for live calls |
 | Bad config | JSON syntax of `~/.xopc/xopc.json` |
