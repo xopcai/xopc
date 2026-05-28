@@ -492,7 +492,7 @@ export const GatewayAuthRateLimitSchema = z
     blockDurationMs: z.number().default(300_000),
     /** OpenClaw alias for blockDurationMs. */
     lockoutMs: z.number().optional(),
-    /** Skip rate limiting for loopback client IPs (default true). Browser Origin requests never exempt. */
+    /** Skip rate limiting for loopback client IPs (default true). Remote browser Origin requests never exempt. */
     exemptLoopback: z.boolean().default(true),
   })
   .optional();

@@ -46,8 +46,16 @@ describe('AuthFailureRateLimiter', () => {
     expect(limiter.checkBlocked('127.0.0.1', cfg).blocked).toBe(false);
   });
 
-  it('does not exempt browser-origin keys on loopback', () => {
+  it('exempts loopback browser-origin keys when configured', () => {
     const key = buildBrowserOriginRateLimitKey('http://localhost:18790', '127.0.0.1');
+    limiter.recordFailure(key, cfg);
+    limiter.recordFailure(key, cfg);
+    limiter.recordFailure(key, cfg);
+    expect(limiter.checkBlocked(key, cfg).blocked).toBe(false);
+  });
+
+  it('still rate limits non-loopback browser-origin keys', () => {
+    const key = buildBrowserOriginRateLimitKey('http://evil.example.com', '127.0.0.1');
     limiter.recordFailure(key, cfg);
     limiter.recordFailure(key, cfg);
     limiter.recordFailure(key, cfg);

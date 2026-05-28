@@ -71,6 +71,41 @@ export function isLoopbackClientIp(clientIp: string | undefined): boolean {
   return isLoopbackHost(trimmed.split(':')[0]);
 }
 
+/** True when a browser Origin header targets the local gateway console (Electron / loopback SPA). */
+export function isLoopbackBrowserOrigin(origin: string | undefined): boolean {
+  const trimmed = origin?.trim();
+  if (!trimmed || trimmed === 'null') {
+    return false;
+  }
+  try {
+    return isLoopbackHost(new URL(trimmed).hostname);
+  } catch {
+    return false;
+  }
+}
+
+function parseBrowserOriginRateLimitKey(clientKey: string): { origin: string; clientIp: string } | null {
+  if (!clientKey.startsWith('browser-origin:')) {
+    return null;
+  }
+  const pipeIdx = clientKey.indexOf('|');
+  if (pipeIdx === -1) {
+    return null;
+  }
+  return {
+    origin: clientKey.slice('browser-origin:'.length, pipeIdx),
+    clientIp: clientKey.slice(pipeIdx + 1),
+  };
+}
+
+function isLocalBrowserAuthClient(clientKey: string): boolean {
+  const parsed = parseBrowserOriginRateLimitKey(clientKey);
+  if (!parsed) {
+    return false;
+  }
+  return isLoopbackBrowserOrigin(parsed.origin) && isLoopbackClientIp(parsed.clientIp);
+}
+
 /** Browser-origin auth failures are tracked independently from CLI/server clients. */
 export function buildBrowserOriginRateLimitKey(origin: string, clientIp: string): string {
   const normalizedOrigin = origin.trim().toLowerCase();
@@ -82,7 +117,7 @@ function shouldSkipRateLimit(clientKey: string, cfg: AuthRateLimitConfig): boole
     return false;
   }
   if (clientKey.startsWith('browser-origin:')) {
-    return false;
+    return isLocalBrowserAuthClient(clientKey);
   }
   return isLoopbackClientIp(clientKey);
 }
@@ -235,10 +270,15 @@ export function resolveAuthRateLimitTracking(params: {
 }): { limiter: AuthFailureRateLimiter; key: string; cfg: AuthRateLimitConfig } {
   const origin = params.origin?.trim();
   if (origin) {
+    const localBrowserClient =
+      isLoopbackBrowserOrigin(origin) && isLoopbackClientIp(params.clientIp);
     return {
       limiter: getBrowserOriginAuthFailureRateLimiter(),
       key: buildBrowserOriginRateLimitKey(origin, params.clientIp),
-      cfg: { ...params.cfg, exemptLoopback: false },
+      cfg: {
+        ...params.cfg,
+        exemptLoopback: localBrowserClient ? params.cfg.exemptLoopback : false,
+      },
     };
   }
   return {
