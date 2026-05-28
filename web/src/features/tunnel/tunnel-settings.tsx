@@ -295,13 +295,14 @@ export function TunnelSettingsPanel({ embedded = false }: { embedded?: boolean }
   const brokerSecretBlock = (
     <BrokerSecretSetupSection
       t={t}
-      variant={embedded && brokerReady && !st.enabled ? 'compact' : 'setup'}
       brokerSecretFromEnv={brokerSecretFromEnv}
       brokerSecretMissing={brokerSecretMissing}
       brokerSecretConfiguredInConfig={brokerSecretConfiguredInConfig}
+      brokerSecretMaskedValue={brokerSecretConfiguredInConfig ? brokerSecretFromConfig : ''}
       brokerSecretDraft={brokerSecretDraft}
       savingBrokerSecret={savingBrokerSecret}
       brokerSecretNotice={brokerSecretNotice}
+      copyFailedLabel={messages(language).clipboard.copyFailed}
       onDraftChange={setBrokerSecretDraft}
       onSave={() => void saveBrokerSecret()}
       onClear={() => void clearBrokerSecret()}

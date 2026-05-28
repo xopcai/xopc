@@ -29,8 +29,15 @@ export function isProductionTunnelBroker(brokerUrl: string): boolean {
   return host === 'frp.xopc.ai';
 }
 
+export function maskTunnelSecretForWeb(secret: string): string {
+  const trimmed = secret.trim();
+  if (!trimmed) return '';
+  return '•'.repeat(trimmed.length);
+}
+
 export function isMaskedTunnelSecretPatchValue(value: string): boolean {
-  return (TUNNEL_MASKED_SECRET_SENTINELS as readonly string[]).includes(value);
+  if ((TUNNEL_MASKED_SECRET_SENTINELS as readonly string[]).includes(value)) return true;
+  return /^•+$/.test(value);
 }
 
 function effectiveBrokerUrl(
@@ -43,6 +50,14 @@ function effectiveBrokerUrl(
 /**
  * Describe where the tunnel registration secret will be resolved from (no secret value returned).
  */
+/** Plaintext registration secret from config file only (never env). */
+export function readTunnelRegistrationSecretFromConfigOnly(
+  config: Config | undefined,
+): string | null {
+  const secret = config?.tunnel?.registrationSecret?.trim();
+  return secret || null;
+}
+
 export function getTunnelRegistrationSecretMeta(
   config: Config | undefined,
   env: NodeJS.ProcessEnv = process.env,
@@ -84,7 +99,7 @@ export function resolveTunnelRegistrationSecret(
   if (isProductionTunnelBroker(effectiveUrl)) {
     throw new Error(
       'Tunnel registration secret is required for the production broker (frp.xopc.ai). ' +
-        'Set XOPC_TUNNEL_REGISTRATION_SECRET or tunnel.registrationSecret in xopc.json (Remote access settings).',
+        'Create a Tunnel Registration Key at https://console.xopc.ai/keys/tunnel and save it under Remote access → Public internet.',
     );
   }
 
