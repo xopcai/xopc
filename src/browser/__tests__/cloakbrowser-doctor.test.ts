@@ -11,18 +11,13 @@ vi.mock('../../config/paths.js', () => ({
   resolveBinDir: () => binDirState.path,
 }));
 
-vi.mock('../providers/cloakbrowser.js', async (importOriginal) => {
-  const mod = await importOriginal();
+// Mock node:os so detectPlatform() returns darwin-arm64 on any CI runner OS
+vi.mock('node:os', async (importOriginal) => {
+  const actual = await importOriginal();
   return {
-    ...mod,
-    detectPlatform: () => ({
-      tag: 'darwin-arm64',
-      chromiumVersion: '145.0.7632.109.2',
-      archiveExt: '.tar.gz',
-      executableRelativePath: 'Chromium.app/Contents/MacOS/Chromium',
-      fingerprintPlatform: 'macos',
-      expectedSha256: '',
-    }),
+    ...actual,
+    platform: vi.fn().mockReturnValue('darwin'),
+    arch: vi.fn().mockReturnValue('arm64'),
   };
 });
 
