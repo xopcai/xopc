@@ -2,7 +2,7 @@ export const CHANNELS_HUB_PATH = '/channels';
 
 export type ManageableChannelId = 'telegram' | 'weixin' | 'feishu';
 
-export const MANAGEABLE_CHANNEL_IDS: readonly ManageableChannelId[] = ['telegram', 'weixin', 'feishu'];
+const MANAGEABLE_CHANNEL_IDS: readonly ManageableChannelId[] = ['telegram', 'weixin', 'feishu'];
 
 export function isManageableChannelId(id: string): id is ManageableChannelId {
   return (MANAGEABLE_CHANNEL_IDS as readonly string[]).includes(id);

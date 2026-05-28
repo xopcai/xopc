@@ -11,7 +11,7 @@ export type GoalsConfigState = {
   checklistHistoryChars: number;
 };
 
-export const DEFAULT_GOALS_CONFIG: GoalsConfigState = {
+const DEFAULT_GOALS_CONFIG: GoalsConfigState = {
   maxTurns: 20,
   judgeModelRef: '',
   checklistMode: true,

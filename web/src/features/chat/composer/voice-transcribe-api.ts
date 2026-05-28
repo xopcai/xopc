@@ -8,7 +8,7 @@ export interface VoiceTranscribeResult {
   language?: string;
 }
 
-export async function blobToBase64(blob: Blob): Promise<string> {
+async function blobToBase64(blob: Blob): Promise<string> {
   return arrayBufferToBase64(await blob.arrayBuffer());
 }
 
@@ -41,8 +41,4 @@ export async function fetchVoiceSttAvailable(): Promise<boolean> {
     sttAvailableCache = false;
   }
   return sttAvailableCache;
-}
-
-export function clearVoiceSttAvailableCache(): void {
-  sttAvailableCache = null;
 }

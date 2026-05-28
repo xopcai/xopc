@@ -2,11 +2,11 @@
  * Design system §7.1 — six-state controls: default, hover (via component styles),
  * active (press), focus-visible, disabled, loading (spinner/skeleton at call site).
  */
-export const pressFeedback =
+const pressFeedback =
   'transition-transform duration-150 ease-out active:scale-95 motion-reduce:transition-none motion-reduce:active:scale-100';
 
 /** Large selectable cards / tiles — subtler press than icon buttons. */
-export const pressCardFeedback =
+const pressCardFeedback =
   'transition-transform duration-150 ease-out active:scale-[0.98] motion-reduce:transition-none motion-reduce:active:scale-100';
 
 export const interaction = {

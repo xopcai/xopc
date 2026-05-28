@@ -24,7 +24,7 @@ function IconShell({ className, children, ...rest }: IconProps & { children: Rea
 }
 
 /** DeepSeek — official logo from Simple Icons. */
-export function DeepSeekIcon({ className, ...rest }: IconProps) {
+function DeepSeekIcon({ className, ...rest }: IconProps) {
   return (
     <IconShell className={className} {...rest}>
       <path
@@ -36,7 +36,7 @@ export function DeepSeekIcon({ className, ...rest }: IconProps) {
 }
 
 /** MiniMax — official logo from Simple Icons. */
-export function MiniMaxIcon({ className, ...rest }: IconProps) {
+function MiniMaxIcon({ className, ...rest }: IconProps) {
   return (
     <IconShell className={className} {...rest}>
       <path
@@ -48,7 +48,7 @@ export function MiniMaxIcon({ className, ...rest }: IconProps) {
 }
 
 /** Moonshot AI / Kimi — official logo from Simple Icons. */
-export function KimiCodingIcon({ className, ...rest }: IconProps) {
+function KimiCodingIcon({ className, ...rest }: IconProps) {
   return (
     <IconShell className={className} {...rest}>
       <path
@@ -60,7 +60,7 @@ export function KimiCodingIcon({ className, ...rest }: IconProps) {
 }
 
 /** OpenAI — official logo (CC0, widely used canonical path). */
-export function OpenAIIcon({ className, ...rest }: IconProps) {
+function OpenAIIcon({ className, ...rest }: IconProps) {
   return (
     <IconShell className={className} {...rest}>
       <path
@@ -72,7 +72,7 @@ export function OpenAIIcon({ className, ...rest }: IconProps) {
 }
 
 /** Anthropic — official logo from Simple Icons. */
-export function AnthropicIcon({ className, ...rest }: IconProps) {
+function AnthropicIcon({ className, ...rest }: IconProps) {
   return (
     <IconShell className={className} {...rest}>
       <path
@@ -84,7 +84,7 @@ export function AnthropicIcon({ className, ...rest }: IconProps) {
 }
 
 /** Google Gemini — official logo from Simple Icons (star/sparkle shape). */
-export function GoogleAIIcon({ className, ...rest }: IconProps) {
+function GoogleAIIcon({ className, ...rest }: IconProps) {
   return (
     <IconShell className={className} {...rest}>
       <defs>

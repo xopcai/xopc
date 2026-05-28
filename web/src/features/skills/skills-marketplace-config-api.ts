@@ -7,7 +7,7 @@ export type SkillsMarketplaceConfigState = {
   storeBaseUrl: string;
 };
 
-export const DEFAULT_SKILLS_MARKETPLACE: SkillsMarketplaceConfigState = {
+const DEFAULT_SKILLS_MARKETPLACE: SkillsMarketplaceConfigState = {
   provider: 'skillhub',
   storeBaseUrl: 'https://store.xopc.ai',
 };

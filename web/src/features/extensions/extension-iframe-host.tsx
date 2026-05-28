@@ -1,6 +1,6 @@
 import { type CSSProperties, useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef } from 'react';
 
-import { uiPatchReducer, type UiPatchAction } from '@/lib/settings-form-draft';
+import { uiPatchReducer } from '@/lib/settings-form-draft';
 import { useTranslation } from 'react-i18next';
 
 import { useLocaleStore } from '@/stores/locale-store';
@@ -26,8 +26,6 @@ type IframeHostUi = {
   loadError: boolean;
   dynamicHeight: number;
 };
-
-type IframeHostUiAction = UiPatchAction<IframeHostUi>;
 
 export type ExtensionIframeHostProps = {
   extensionId: string;

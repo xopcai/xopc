@@ -3,24 +3,11 @@ import {
   nativeSelectMaxWidthClass,
   selectControlBaseClass,
 } from '@/lib/form-field-width';
-import {
-  MAX_RECENT_DIRS,
-  pushRecentDir,
-  RECENT_DIRS_KEY,
-} from '@/features/fs/directory-path-utils';
 import { cn } from '@/lib/cn';
 
 export const RUN_HISTORY_FETCH_LIMIT = 400;
 
 export const DEFAULT_SCHEDULE = '*/5 * * * *';
-
-/** Same storage key as chat composer so recent folders stay in sync. */
-export const RECENT_WD_STORAGE_KEY = RECENT_DIRS_KEY;
-export const RECENT_WD_MAX = MAX_RECENT_DIRS;
-
-export function pushRecentWorkspaceDirForCron(path: string): void {
-  pushRecentDir(path);
-}
 
 export function startOfLocalDay(d: Date): Date {
   const x = new Date(d);

@@ -13,7 +13,7 @@ export function sortLogsByTimeDesc(entries: readonly LogEntry[]): LogEntry[] {
 export const PAGE_LIMIT = 50;
 export const REFRESH_MS = 5000;
 
-export const LOG_LEVEL_SET = new Set<LogLevel>(LOG_LEVELS);
+const LOG_LEVEL_SET = new Set<LogLevel>(LOG_LEVELS);
 
 export type LevelPreset = 'all' | 'errors' | 'warnPlus' | 'infoPlus' | 'verbose' | 'custom';
 export type LevelSegmentValue = Exclude<LevelPreset, 'custom'> | 'other';
@@ -45,7 +45,7 @@ function setMatchesLevels(s: Set<LogLevel>, levels: readonly LogLevel[]): boolea
   return levels.every((l) => s.has(l));
 }
 
-export function derivePreset(levels: Set<LogLevel>): LevelPreset {
+function derivePreset(levels: Set<LogLevel>): LevelPreset {
   if (levels.size === 0) return 'all';
   if (setMatchesLevels(levels, PRESET_ERRORS)) return 'errors';
   if (setMatchesLevels(levels, PRESET_WARN_PLUS)) return 'warnPlus';

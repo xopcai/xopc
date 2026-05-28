@@ -17,7 +17,7 @@ import { stripEnvelopeTimestampPrefix } from '@/features/chat/messages/user-mess
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 
-export function renderTextOrImageBlock(
+function renderTextOrImageBlock(
   block: MessageContent,
   key: string,
   isUser: boolean,

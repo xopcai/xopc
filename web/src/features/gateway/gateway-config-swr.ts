@@ -9,7 +9,7 @@ export type GatewayConfigApiResponse = {
   payload?: { config?: unknown };
 };
 
-export function gatewayConfigSwrKey(): string {
+function gatewayConfigSwrKey(): string {
   return apiUrl('/api/config');
 }
 

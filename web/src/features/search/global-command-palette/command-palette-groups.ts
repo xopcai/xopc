@@ -1,11 +1,11 @@
 import { messages } from '@/i18n/messages';
 import type { StoredLanguage } from '@/lib/storage';
 
-export function commandPaletteGroups(language: StoredLanguage) {
+function commandPaletteGroups(language: StoredLanguage) {
   return messages(language).commandPalette.groups;
 }
 
-export function commandPaletteGroupOrder(language: StoredLanguage): Record<string, number> {
+function commandPaletteGroupOrder(language: StoredLanguage): Record<string, number> {
   const g = commandPaletteGroups(language);
   return {
     [g.navigate]: 0,

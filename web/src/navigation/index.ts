@@ -98,11 +98,7 @@ const TAB_TO_SETTINGS_SECTION: Record<
   channels: 'channels',
 };
 
-export function settingsSectionToTab(section: SettingsSectionId): Tab {
-  return SETTINGS_SECTION_TO_TAB[section];
-}
-
-export function tabToSettingsSection(tab: Tab): SettingsSectionId | null {
+function tabToSettingsSection(tab: Tab): SettingsSectionId | null {
   return TAB_TO_SETTINGS_SECTION[tab as keyof typeof TAB_TO_SETTINGS_SECTION] ?? null;
 }
 
@@ -166,20 +162,8 @@ export const SETTINGS_SHELL_NAV_GROUPS: readonly SettingsShellNavGroup[] = [
   { id: 'diagnostics', tabs: ['sessions', 'logs'] },
 ] as const;
 
-/** Flat order: settings routes only (excludes sessions/logs). */
-export const SETTINGS_NAV_TABS: readonly Tab[] = [
-  ...SETTINGS_SHELL_NAV_GROUPS.flatMap((g) => (g.id === 'diagnostics' ? [] : [...g.tabs])),
-  ...ELECTRON_SYSTEM_NAV_GROUP.tabs,
-];
-
-/** Settings shell: full left rail including sessions + logs and Electron group tabs. */
-export const SETTINGS_SHELL_NAV_TABS: readonly Tab[] = [
-  ...SETTINGS_SHELL_NAV_GROUPS.flatMap((g) => [...g.tabs]),
-  ...ELECTRON_SYSTEM_NAV_GROUP.tabs,
-];
-
 /** Official docs site (VitePress `base: /xopc/`). */
-export const HELP_DOCS_BASE_URL = 'https://xopcai.github.io/xopc';
+const HELP_DOCS_BASE_URL = 'https://xopcai.github.io/xopc';
 
 /** Sidebar “Documentation” — English root vs `zh/` locale home. */
 export function helpDocsHomeUrl(language: StoredLanguage): string {
@@ -210,7 +194,7 @@ export function remoteAccessDocsUrl(
 }
 
 /** Parse `#/settings/<section>` etc. Returns null if not a settings route. */
-export function parseSettingsHash(hash: string): SettingsSectionId | null {
+function parseSettingsHash(hash: string): SettingsSectionId | null {
   let h = hash.startsWith('#') ? hash.slice(1) : hash;
   if (h.startsWith('/')) h = h.slice(1);
   if (h === 'settings' || h === 'settings/') {
@@ -227,11 +211,11 @@ export function parseSettingsHash(hash: string): SettingsSectionId | null {
   return section in SETTINGS_SECTION_TO_TAB ? (section as SettingsSectionId) : null;
 }
 
-export function getSettingsHash(section: SettingsSectionId): string {
+function getSettingsHash(section: SettingsSectionId): string {
   return `#/settings/${section}`;
 }
 
-export function parseChatHash(hash: string): ChatRoute | null {
+function parseChatHash(hash: string): ChatRoute | null {
   const withoutHash = hash.startsWith('#') ? hash.slice(1) : hash;
   const cleanHash = withoutHash.replace(/^\/?chat\/?/, '');
 
@@ -252,7 +236,7 @@ export function parseChatHash(hash: string): ChatRoute | null {
   return { type: 'recent' };
 }
 
-export function getChatHash(route: ChatRoute): string {
+function getChatHash(route: ChatRoute): string {
   switch (route.type) {
     case 'recent':
       return '#/chat';

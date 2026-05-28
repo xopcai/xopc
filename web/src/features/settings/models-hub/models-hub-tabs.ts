@@ -30,23 +30,3 @@ export function parseModelsHubTab(raw: string | null | undefined): ModelsHubTabI
   }
   return 'providers';
 }
-
-/**
- * Map credential snapshot domain ids to hub tabs. The credentials hub state
- * was originally driven by `/settings/<domain>` routes; under the M3.4 Shape
- * C consolidation the snapshot pills jump within the hub instead.
- */
-export function modelsHubTabForCredentialDomain(
-  domain: 'llm' | 'webSearch' | 'image' | 'voice',
-): ModelsHubTabId {
-  switch (domain) {
-    case 'llm':
-      return 'providers';
-    case 'webSearch':
-      return 'search';
-    case 'image':
-      return 'image-models';
-    case 'voice':
-      return 'voice';
-  }
-}

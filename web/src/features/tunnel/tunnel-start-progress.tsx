@@ -93,7 +93,7 @@ function stepLabel(t: TunnelSettingsMessages, stepId: StepId): string {
   }
 }
 
-export function formatPhaseElapsed(startedAt: string | undefined): string | null {
+function formatPhaseElapsed(startedAt: string | undefined): string | null {
   if (!startedAt) return null;
   const sec = Math.max(0, Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000));
   if (sec < 60) return `${sec}s`;

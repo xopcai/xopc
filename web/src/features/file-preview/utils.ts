@@ -46,7 +46,7 @@ const RASTER_IMAGE_EXTS = new Set([
   '.jxl',
 ]);
 
-export function isRasterImageExt(ext: string): boolean {
+function isRasterImageExt(ext: string): boolean {
   return RASTER_IMAGE_EXTS.has(ext.toLowerCase());
 }
 

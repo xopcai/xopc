@@ -10,12 +10,6 @@ export type SessionConfigState = {
   maxEntries: number | null;
 };
 
-export const DEFAULT_SESSION_CONFIG: SessionConfigState = {
-  dmScope: 'main',
-  pruneAfterDays: null,
-  maxEntries: null,
-};
-
 function isRecord(v: unknown): v is Record<string, unknown> {
   return v !== null && typeof v === 'object' && !Array.isArray(v);
 }

@@ -141,34 +141,6 @@ export async function readWorkspaceFileBase64(
   return res.payload;
 }
 
-/** Write (overwrite) a workspace file. */
-/** Map a host absolute path to workspace-relative path (auth; 403 if not under session workspace). */
-export async function resolveWorkspaceAbsoluteToRelative(
-  absolutePath: string,
-  options?: WorkspaceEditorRequestOptions,
-): Promise<string | null> {
-  const params = new URLSearchParams({ absolutePath });
-  const sk = options?.sessionKey?.trim();
-  if (sk) {
-    params.set('sessionKey', sk);
-  } else {
-    const aid = options?.agentId?.trim();
-    if (aid) params.set('agentId', aid);
-  }
-  const res = await apiFetch(apiUrl(`/api/workspace/editor/resolve-path?${params.toString()}`));
-  if (res.status === 403 || res.status === 400) {
-    return null;
-  }
-  if (!res.ok) {
-    return null;
-  }
-  const data = (await res.json()) as { ok?: boolean; payload?: { workspaceRelativePath?: string } };
-  if (!data.ok || typeof data.payload?.workspaceRelativePath !== 'string') {
-    return null;
-  }
-  return data.payload.workspaceRelativePath;
-}
-
 export async function resolveWorkspaceFileReference(
   path: string,
   options?: WorkspaceEditorRequestOptions,

@@ -1,7 +1,7 @@
 import { Check, CheckCircle2, Copy, ExternalLink, Eye, EyeOff, KeyRound, Loader2 } from 'lucide-react';
 import { useCallback, useId, useReducer, useRef, type RefObject } from 'react';
 
-import { uiPatchReducer, type UiPatchAction } from '@/lib/settings-form-draft';
+import { uiPatchReducer } from '@/lib/settings-form-draft';
 
 import { Button } from '@/components/ui/button';
 import { SettingsFormSection } from '@/features/settings/settings-form-section';
@@ -12,7 +12,7 @@ import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
 import { interaction } from '@/lib/interaction';
 import type { TunnelSettingsMessages } from '@/i18n/messages';
 
-export const TUNNEL_CONSOLE_REGISTRATION_KEY_URL = 'https://console.xopc.ai/keys/tunnel';
+const TUNNEL_CONSOLE_REGISTRATION_KEY_URL = 'https://console.xopc.ai/keys/tunnel';
 
 export type BrokerSecretSetupProps = {
   t: TunnelSettingsMessages;
@@ -38,8 +38,6 @@ type BrokerSecretUi = {
   revealErr: string | null;
   copied: boolean;
 };
-
-type BrokerSecretUiAction = UiPatchAction<BrokerSecretUi>;
 
 const initialBrokerSecretUi: BrokerSecretUi = {
   reconfiguring: false,

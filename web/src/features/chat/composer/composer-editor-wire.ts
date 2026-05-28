@@ -106,7 +106,7 @@ export function serializeEditorToWire(root: HTMLElement): string {
   return joinComposerWireParts(parts).replaceAll(CARET_PROBE, '');
 }
 
-export function placeCaretAtStartOfComposer(root: HTMLElement): void {
+function placeCaretAtStartOfComposer(root: HTMLElement): void {
   const sel = window.getSelection();
   if (!sel) return;
   const range = document.createRange();

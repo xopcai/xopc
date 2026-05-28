@@ -138,13 +138,6 @@ export function parseGatewayBindingsFromConfig(config: unknown): GatewayConfigBi
   return raw as GatewayConfigBinding[];
 }
 
-export async function fetchGatewayConfigBindings(): Promise<GatewayConfigBinding[]> {
-  const res = await fetchJson<{ ok?: boolean; payload?: { config?: { bindings?: unknown } } }>(
-    apiUrl('/api/config'),
-  );
-  return parseGatewayBindingsFromConfig(res.payload?.config ?? {});
-}
-
 export async function patchGatewayBindings(bindings: GatewayConfigBinding[]): Promise<void> {
   await fetchJson(apiUrl('/api/config'), {
     method: 'PATCH',

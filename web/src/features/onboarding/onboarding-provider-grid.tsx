@@ -4,7 +4,7 @@ import { ProviderLogo } from '@/features/onboarding/provider-icons';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 
-export const ONBOARDING_FEATURED_PROVIDERS = [
+const ONBOARDING_FEATURED_PROVIDERS = [
   { id: 'deepseek', name: 'DeepSeek', recommended: true },
   { id: 'minimax', name: 'MiniMax', recommended: false },
   { id: 'kimi-coding', name: 'Kimi Coding', recommended: false },

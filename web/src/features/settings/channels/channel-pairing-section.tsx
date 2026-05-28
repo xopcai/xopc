@@ -454,20 +454,3 @@ export function ChannelPairingSection({
     </div>
   );
 }
-
-export function useChannelPairingPairedCount(
-  channel: PairingChannelId,
-  accountId: string,
-  active: boolean,
-  channelConfig: TelegramConfig | WeixinConfig | FeishuConfig,
-): number {
-  const usesPairing = channelUsesPairingPolicy(channel, channelConfig);
-  const accountPairingActive = resolveAccountDmPolicyForConfig(channel, channelConfig, accountId) === 'pairing';
-  const swrKey =
-    active && usesPairing && accountPairingActive ? pairingSwrKey(channel, accountId) : null;
-  const { data, mutate } = useSWR(swrKey, () => fetchChannelPairingState(channel, accountId), {
-    revalidateOnFocus: true,
-  });
-  useChannelPairingSseRefresh(() => void mutate(), active && usesPairing && accountPairingActive);
-  return data?.paired.fromCredentials.length ?? 0;
-}

@@ -1,5 +1,7 @@
 import { Loader2, Save, Server } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useReducer } from 'react';
+
+import { createFormDraftReducer, uiPatchReducer } from '@/lib/settings-form-draft';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
@@ -103,6 +105,22 @@ function panelMessagesFromBundle(t: MessageBundle['imageModelsSettings']): Image
   };
 }
 
+const agentDefaultsFormReducer = createFormDraftReducer<AgentDefaultsState>();
+
+type ImageModelsUi = {
+  loading: boolean;
+  saving: boolean;
+  savedFlash: boolean;
+  error: string | undefined;
+};
+
+const initialImageModelsUi: ImageModelsUi = {
+  loading: true,
+  saving: false,
+  savedFlash: false,
+  error: undefined,
+};
+
 /** See `WebSearchSettingsPanel` for the embedded-mode contract. */
 export function ImageModelsSettingsPanel({ embedded = false }: { embedded?: boolean } = {}) {
   const language = useLocaleStore((s) => s.language);
@@ -111,29 +129,29 @@ export function ImageModelsSettingsPanel({ embedded = false }: { embedded?: bool
   const token = useGatewayStore((st) => st.token);
   const hasToken = Boolean(token);
 
-  const [state, setState] = useState<AgentDefaultsState | null>(null);
-  const [baseline, setBaseline] = useState<AgentDefaultsState | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [savedFlash, setSavedFlash] = useState(false);
-  const [error, setError] = useState<string | undefined>(undefined);
+  const [formDraft, dispatchForm] = useReducer(agentDefaultsFormReducer, { form: null, baseline: null });
+  const state = formDraft.form;
+  const baseline = formDraft.baseline;
+  const [ui, dispatchUi] = useReducer(uiPatchReducer<ImageModelsUi>, initialImageModelsUi);
+  const { loading, saving, savedFlash, error } = ui;
 
   const extensions = useExtensions();
   const extensionIds = useMemo(() => new Set(extensions.map((e) => e.id)), [extensions]);
 
   const reload = useCallback(async () => {
     if (!hasToken) return;
-    setLoading(true);
-    setError(undefined);
+    dispatchUi({ type: 'patch', patch: { loading: true, error: undefined } });
     try {
       const fresh = await fetchAgentDefaults();
       const snapshot = structuredClone(fresh);
-      setState(snapshot);
-      setBaseline(structuredClone(snapshot));
+      dispatchForm({ type: 'sync', value: snapshot });
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      dispatchUi({
+        type: 'patch',
+        patch: { error: err instanceof Error ? err.message : String(err) },
+      });
     } finally {
-      setLoading(false);
+      dispatchUi({ type: 'patch', patch: { loading: false } });
     }
   }, [hasToken]);
 
@@ -142,7 +160,7 @@ export function ImageModelsSettingsPanel({ embedded = false }: { embedded?: bool
   }, [reload]);
 
   const patchAgentDefaultsLocal = useCallback((patch: Partial<AgentDefaultsState>) => {
-    setState((s) => (s ? { ...s, ...patch } : null));
+    dispatchForm({ type: 'patch', patch });
   }, []);
 
   const { data: providers = [] } = useSWR(
@@ -181,19 +199,22 @@ export function ImageModelsSettingsPanel({ embedded = false }: { embedded?: bool
 
   const onSave = useCallback(async () => {
     if (!state) return;
-    setSaving(true);
-    setError(undefined);
+    dispatchUi({ type: 'patch', patch: { saving: true, error: undefined } });
     try {
       try {
         void parseParamsJsonForSave(state.paramsJson);
       } catch (e) {
-        setError(
-          e instanceof SyntaxError
-            ? m.agentSettings.advanced.paramsInvalidJson
-            : e instanceof Error
-              ? e.message
-              : m.agentSettings.advanced.paramsInvalidJson,
-        );
+        dispatchUi({
+          type: 'patch',
+          patch: {
+            error:
+              e instanceof SyntaxError
+                ? m.agentSettings.advanced.paramsInvalidJson
+                : e instanceof Error
+                  ? e.message
+                  : m.agentSettings.advanced.paramsInvalidJson,
+          },
+        });
         return;
       }
       // Save agent defaults + credentials in parallel
@@ -201,7 +222,7 @@ export function ImageModelsSettingsPanel({ embedded = false }: { embedded?: bool
       if (dirty) {
         savePromises.push(
           patchAgentDefaults(state).then(() => {
-            setBaseline(structuredClone(state));
+            dispatchForm({ type: 'saved', value: structuredClone(state) });
             void gwSwr.mutate?.();
           }),
         );
@@ -210,21 +231,23 @@ export function ImageModelsSettingsPanel({ embedded = false }: { embedded?: bool
         savePromises.push(cred.saveCredentials(t.credentialsSaveError));
       }
       await Promise.all(savePromises);
-      setSavedFlash(true);
-      window.setTimeout(() => setSavedFlash(false), 1500);
+      dispatchUi({ type: 'patch', patch: { savedFlash: true } });
+      window.setTimeout(() => dispatchUi({ type: 'patch', patch: { savedFlash: false } }), 1500);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      dispatchUi({
+        type: 'patch',
+        patch: { error: err instanceof Error ? err.message : String(err) },
+      });
     } finally {
-      setSaving(false);
+      dispatchUi({ type: 'patch', patch: { saving: false } });
     }
   }, [state, dirty, gwSwr, m.agentSettings, cred, t.credentialsSaveError]);
 
   const onDiscard = useCallback(() => {
     if (!baseline) return;
-    setState(structuredClone(baseline));
+    dispatchForm({ type: 'discard' });
     if (cred.credDirty) cred.onDiscardCredentials();
-    setError(undefined);
-    setSavedFlash(false);
+    dispatchUi({ type: 'patch', patch: { error: undefined, savedFlash: false } });
   }, [baseline, cred]);
 
   useSaveBarRegistration({
@@ -337,14 +360,9 @@ export function ImageModelsSettingsPanel({ embedded = false }: { embedded?: bool
               onChange={(e) => {
                 const raw = e.target.value.trim();
                 const next = raw === '' ? null : Math.max(0, Math.floor(Number(raw)));
-                setState((prev) =>
-                  prev
-                    ? {
-                        ...prev,
-                        imageGenerationModelTimeoutMs: next && next > 0 ? next : null,
-                      }
-                    : null,
-                );
+                patchAgentDefaultsLocal({
+                  imageGenerationModelTimeoutMs: next && next > 0 ? next : null,
+                });
               }}
             />
             <p className="text-xs text-fg-subtle">{t.timeoutHint}</p>
@@ -355,11 +373,9 @@ export function ImageModelsSettingsPanel({ embedded = false }: { embedded?: bool
               className="mt-0.5"
               checked={state.imageGenerationModelAutoProviderFallback}
               onChange={(e) =>
-                setState((prev) =>
-                  prev
-                    ? { ...prev, imageGenerationModelAutoProviderFallback: e.target.checked }
-                    : null,
-                )
+                patchAgentDefaultsLocal({
+                  imageGenerationModelAutoProviderFallback: e.target.checked,
+                })
               }
               aria-label={t.autoFallbackLabel}
             />

@@ -1,5 +1,7 @@
 import { Globe, Loader2 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react';
+
+import { uiPatchReducer } from '@/lib/settings-form-draft';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
@@ -28,23 +30,54 @@ import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
+type TunnelUi = {
+  actionError: string | null;
+  starting: boolean;
+  stopping: boolean;
+  savingAutoStart: boolean;
+  consentOpen: boolean;
+  autoStartConfirmOpen: boolean;
+  releaseConfirmOpen: boolean;
+  releasing: boolean;
+  brokerSecretDraft: string;
+  savingBrokerSecret: boolean;
+  brokerSecretNotice: string | null;
+};
+
+const initialTunnelUi: TunnelUi = {
+  actionError: null,
+  starting: false,
+  stopping: false,
+  savingAutoStart: false,
+  consentOpen: false,
+  autoStartConfirmOpen: false,
+  releaseConfirmOpen: false,
+  releasing: false,
+  brokerSecretDraft: '',
+  savingBrokerSecret: false,
+  brokerSecretNotice: null,
+};
+
 export function TunnelSettingsPanel({ embedded = false }: { embedded?: boolean }) {
   const language = useLocaleStore((s) => s.language);
   const t = messages(language).tunnelSettings;
   const token = useGatewayStore((st) => st.token);
   const hasToken = Boolean(token);
 
-  const [actionError, setActionError] = useState<string | null>(null);
-  const [starting, setStarting] = useState(false);
-  const [stopping, setStopping] = useState(false);
-  const [savingAutoStart, setSavingAutoStart] = useState(false);
-  const [consentOpen, setConsentOpen] = useState(false);
-  const [autoStartConfirmOpen, setAutoStartConfirmOpen] = useState(false);
-  const [releaseConfirmOpen, setReleaseConfirmOpen] = useState(false);
-  const [releasing, setReleasing] = useState(false);
-  const [brokerSecretDraft, setBrokerSecretDraft] = useState('');
-  const [savingBrokerSecret, setSavingBrokerSecret] = useState(false);
-  const [brokerSecretNotice, setBrokerSecretNotice] = useState<string | null>(null);
+  const [ui, dispatchUi] = useReducer(uiPatchReducer<TunnelUi>, initialTunnelUi);
+  const {
+    actionError,
+    starting,
+    stopping,
+    savingAutoStart,
+    consentOpen,
+    autoStartConfirmOpen,
+    releaseConfirmOpen,
+    releasing,
+    brokerSecretDraft,
+    savingBrokerSecret,
+    brokerSecretNotice,
+  } = ui;
   const brokerSecretSectionRef = useRef<HTMLDivElement>(null);
 
   const pairQr = useMobilePairQr(token ?? '');
@@ -120,69 +153,81 @@ export function TunnelSettingsPanel({ embedded = false }: { embedded?: boolean }
   );
 
   const runStart = useCallback(async () => {
-    setActionError(null);
-    setStarting(true);
+    dispatchUi({ type: 'patch', patch: { actionError: null } });
+    dispatchUi({ type: 'patch', patch: { starting: true } });
     try {
       const res = await startTunnel();
       await mutStatus();
       void revalidateGatewayConfig();
       await pairQr.refreshQr(res.qrPayload);
     } catch (e) {
-      setActionError(e instanceof Error ? e.message : String(e));
+      dispatchUi({
+        type: 'patch',
+        patch: { actionError: e instanceof Error ? e.message : String(e) },
+      });
     } finally {
-      setStarting(false);
+      dispatchUi({ type: 'patch', patch: { starting: false } });
     }
   }, [mutStatus, pairQr.refreshQr]);
 
   const handleStartClick = useCallback(() => {
     if (!brokerReady) {
-      setActionError(t.brokerSecretRequiredBeforeStart);
+      dispatchUi({ type: 'patch', patch: { actionError: t.brokerSecretRequiredBeforeStart } });
       brokerSecretSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       return;
     }
     if (status?.consentRequired) {
-      setConsentOpen(true);
+      dispatchUi({ type: 'patch', patch: { consentOpen: true } });
       return;
     }
     void runStart();
   }, [brokerReady, status?.consentRequired, runStart, t.brokerSecretRequiredBeforeStart]);
 
   const handleConsentConfirm = useCallback(async () => {
-    setConsentOpen(false);
-    setActionError(null);
+    dispatchUi({ type: 'patch', patch: { consentOpen: false } });
+    dispatchUi({ type: 'patch', patch: { actionError: null } });
     try {
       await recordTunnelConsent();
       await Promise.all([mutStatus(), runStart()]);
     } catch (e) {
-      setActionError(e instanceof Error ? e.message : String(e));
+      dispatchUi({
+        type: 'patch',
+        patch: { actionError: e instanceof Error ? e.message : String(e) },
+      });
     }
   }, [mutStatus, runStart]);
 
   const handleStop = useCallback(async () => {
-    setActionError(null);
-    setStopping(true);
+    dispatchUi({ type: 'patch', patch: { actionError: null } });
+    dispatchUi({ type: 'patch', patch: { stopping: true } });
     try {
       await stopTunnel();
       await Promise.all([pairQr.refreshQr(), mutStatus()]);
       void revalidateGatewayConfig();
     } catch (e) {
-      setActionError(e instanceof Error ? e.message : String(e));
+      dispatchUi({
+        type: 'patch',
+        patch: { actionError: e instanceof Error ? e.message : String(e) },
+      });
     } finally {
-      setStopping(false);
+      dispatchUi({ type: 'patch', patch: { stopping: false } });
     }
   }, [mutStatus, pairQr.refreshQr]);
 
   const applyAutoStart = useCallback(
     async (next: boolean) => {
-      setSavingAutoStart(true);
-      setActionError(null);
+      dispatchUi({ type: 'patch', patch: { savingAutoStart: true } });
+      dispatchUi({ type: 'patch', patch: { actionError: null } });
       try {
         await patchTunnelConfig({ autoStart: next });
         void revalidateGatewayConfig();
       } catch (e) {
-        setActionError(e instanceof Error ? e.message : String(e));
+        dispatchUi({
+        type: 'patch',
+        patch: { actionError: e instanceof Error ? e.message : String(e) },
+      });
       } finally {
-        setSavingAutoStart(false);
+        dispatchUi({ type: 'patch', patch: { savingAutoStart: false } });
       }
     },
     [],
@@ -194,65 +239,78 @@ export function TunnelSettingsPanel({ embedded = false }: { embedded?: boolean }
       return;
     }
     if (status?.consentRequired) {
-      setActionError(t.consentExpiredBanner);
+      dispatchUi({ type: 'patch', patch: { actionError: t.consentExpiredBanner } });
       return;
     }
     if (!status?.canAutoStart) {
-      setActionError(t.autoStartHint);
+      dispatchUi({ type: 'patch', patch: { actionError: t.autoStartHint } });
       return;
     }
-    setAutoStartConfirmOpen(true);
+    dispatchUi({ type: 'patch', patch: { autoStartConfirmOpen: true } });
   }, [applyAutoStart, status?.canAutoStart, status?.consentRequired, t, autoStartEnabled]);
 
   const saveBrokerSecret = useCallback(async () => {
     const trimmed = brokerSecretDraft.trim();
     if (!trimmed) return;
-    setSavingBrokerSecret(true);
-    setActionError(null);
-    setBrokerSecretNotice(null);
+    dispatchUi({
+      type: 'patch',
+      patch: { savingBrokerSecret: true, actionError: null, brokerSecretNotice: null },
+    });
     try {
       await patchTunnelConfig({ registrationSecret: trimmed });
-      setBrokerSecretDraft('');
-      setBrokerSecretNotice(t.brokerSecretSaved);
+      dispatchUi({
+        type: 'patch',
+        patch: { brokerSecretDraft: '', brokerSecretNotice: t.brokerSecretSaved },
+      });
       void revalidateGatewayConfig();
       await mutStatus();
-      setActionError(null);
+      dispatchUi({ type: 'patch', patch: { actionError: null } });
     } catch (e) {
-      setActionError(e instanceof Error ? e.message : String(e));
+      dispatchUi({
+        type: 'patch',
+        patch: { actionError: e instanceof Error ? e.message : String(e) },
+      });
     } finally {
-      setSavingBrokerSecret(false);
+      dispatchUi({ type: 'patch', patch: { savingBrokerSecret: false } });
     }
   }, [brokerSecretDraft, mutStatus, t.brokerSecretSaved]);
 
   const clearBrokerSecret = useCallback(async () => {
-    setSavingBrokerSecret(true);
-    setActionError(null);
-    setBrokerSecretNotice(null);
+    dispatchUi({
+      type: 'patch',
+      patch: { savingBrokerSecret: true, actionError: null, brokerSecretNotice: null },
+    });
     try {
       await patchTunnelConfig({ registrationSecret: null });
-      setBrokerSecretDraft('');
-      setBrokerSecretNotice(t.brokerSecretCleared);
+      dispatchUi({
+        type: 'patch',
+        patch: { brokerSecretDraft: '', brokerSecretNotice: t.brokerSecretCleared },
+      });
       void revalidateGatewayConfig();
       await mutStatus();
     } catch (e) {
-      setActionError(e instanceof Error ? e.message : String(e));
+      dispatchUi({
+        type: 'patch',
+        patch: { actionError: e instanceof Error ? e.message : String(e) },
+      });
     } finally {
-      setSavingBrokerSecret(false);
+      dispatchUi({ type: 'patch', patch: { savingBrokerSecret: false } });
     }
   }, [mutStatus, t.brokerSecretCleared]);
 
   const handleRelease = useCallback(async () => {
-    setReleaseConfirmOpen(false);
-    setActionError(null);
-    setReleasing(true);
+    dispatchUi({ type: 'patch', patch: { releaseConfirmOpen: false, actionError: null, releasing: true } });
     try {
       await stopTunnel({ release: true });
       await Promise.all([pairQr.refreshQr(), mutStatus()]);
       void revalidateGatewayConfig();
     } catch (e) {
-      setActionError(e instanceof Error ? e.message : String(e));
+      dispatchUi({
+        type: 'patch',
+        patch: { actionError: e instanceof Error ? e.message : String(e) },
+      });
     } finally {
-      setReleasing(false);
+      dispatchUi({ type: 'patch', patch: { releasing: false } });
     }
   }, [mutStatus, pairQr.refreshQr]);
 
@@ -300,7 +358,7 @@ export function TunnelSettingsPanel({ embedded = false }: { embedded?: boolean }
       savingBrokerSecret={savingBrokerSecret}
       brokerSecretNotice={brokerSecretNotice}
       copyFailedLabel={messages(language).clipboard.copyFailed}
-      onDraftChange={setBrokerSecretDraft}
+      onDraftChange={(value) => dispatchUi({ type: 'patch', patch: { brokerSecretDraft: value } })}
       onSave={() => void saveBrokerSecret()}
       onClear={() => void clearBrokerSecret()}
       sectionRef={brokerSecretSectionRef}
@@ -319,7 +377,7 @@ export function TunnelSettingsPanel({ embedded = false }: { embedded?: boolean }
         confirmLabel={showConsentExpired ? t.consentReconfirm : t.consentConfirm}
         cancelLabel={t.consentCancel}
         onConfirm={() => void handleConsentConfirm()}
-        onCancel={() => setConsentOpen(false)}
+        onCancel={() => dispatchUi({ type: 'patch', patch: { consentOpen: false } })}
       />
 
       <ConfirmDialog
@@ -329,10 +387,10 @@ export function TunnelSettingsPanel({ embedded = false }: { embedded?: boolean }
         confirmLabel={t.autoStartConfirmLabel}
         cancelLabel={t.consentCancel}
         onConfirm={() => {
-          setAutoStartConfirmOpen(false);
+          dispatchUi({ type: 'patch', patch: { autoStartConfirmOpen: false } });
           void applyAutoStart(true);
         }}
-        onCancel={() => setAutoStartConfirmOpen(false)}
+        onCancel={() => dispatchUi({ type: 'patch', patch: { autoStartConfirmOpen: false } })}
       />
 
       <ConfirmDialog
@@ -343,7 +401,7 @@ export function TunnelSettingsPanel({ embedded = false }: { embedded?: boolean }
         cancelLabel={t.consentCancel}
         destructive
         onConfirm={() => void handleRelease()}
-        onCancel={() => setReleaseConfirmOpen(false)}
+        onCancel={() => dispatchUi({ type: 'patch', patch: { releaseConfirmOpen: false } })}
       />
     </>
   );
@@ -405,7 +463,7 @@ export function TunnelSettingsPanel({ embedded = false }: { embedded?: boolean }
                 variant="secondary"
                 disabled={releasing || stopping}
                 className="border-danger/40 text-danger hover:bg-danger/10"
-                onClick={() => setReleaseConfirmOpen(true)}
+                onClick={() => dispatchUi({ type: 'patch', patch: { releaseConfirmOpen: true } })}
               >
                 {releasing ? <Loader2 className="size-4 animate-spin" /> : null}
                 {t.release}
@@ -486,7 +544,7 @@ export function TunnelSettingsPanel({ embedded = false }: { embedded?: boolean }
             variant="secondary"
             disabled={releasing || stopping}
             className="border-danger/40 text-danger hover:bg-danger/10"
-            onClick={() => setReleaseConfirmOpen(true)}
+            onClick={() => dispatchUi({ type: 'patch', patch: { releaseConfirmOpen: true } })}
           >
             {releasing ? <Loader2 className="size-4 animate-spin" /> : null}
             {t.release}

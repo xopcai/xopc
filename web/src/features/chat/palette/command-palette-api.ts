@@ -16,7 +16,7 @@ async function readErrorMessage(res: Response): Promise<string> {
   return `HTTP ${res.status}`;
 }
 
-export async function fetchCommands(): Promise<CommandEntry[]> {
+async function fetchCommands(): Promise<CommandEntry[]> {
   const res = await apiFetch(apiUrl('/api/commands'));
   if (!res.ok) {
     throw new Error(await readErrorMessage(res));

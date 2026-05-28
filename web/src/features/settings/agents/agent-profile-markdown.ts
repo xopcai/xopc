@@ -307,7 +307,7 @@ Sharp, direct, slightly nerdy. The kind of engineer you'd want on your team — 
 /**
  * Strip YAML front matter (--- ... ---) from the beginning of Markdown content.
  */
-export function stripFrontMatterForParsing(content: string): string {
+function stripFrontMatterForParsing(content: string): string {
   const trimmed = content.trimStart();
   if (!trimmed.startsWith('---')) {
     return content;
@@ -409,7 +409,7 @@ export function detectBrowserTimezone(): string {
 // Vibe presets
 // ---------------------------------------------------------------------------
 
-export const VIBE_PRESETS = [
+const VIBE_PRESETS = [
   { value: 'warm', labelEn: 'Warm', labelZh: '温暖' },
   { value: 'sharp', labelEn: 'Sharp', labelZh: '犀利' },
   { value: 'calm', labelEn: 'Calm', labelZh: '沉稳' },

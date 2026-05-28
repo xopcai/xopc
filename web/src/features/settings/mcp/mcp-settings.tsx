@@ -1,5 +1,5 @@
 import { Cable, Loader2, Plus, Plug } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
@@ -16,6 +16,7 @@ import {
 } from '@/features/settings/mcp/mcp-config-api';
 import { McpServerCard } from '@/features/settings/mcp/mcp-server-card';
 import { McpToolsListDialog } from '@/features/settings/mcp/mcp-tools-list-dialog';
+import { uiPatchReducer } from '@/lib/settings-form-draft';
 import { settingsInputFocusClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
 import { messages } from '@/i18n/messages';
@@ -71,6 +72,24 @@ function mcpFormReducer(state: McpFormDraft, action: McpFormAction): McpFormDraf
   }
 }
 
+type McpUi = {
+  saving: boolean;
+  error: string | null;
+  saveOk: boolean;
+  testingId: string | null;
+  serverTools: Record<string, ServerToolsState>;
+  toolsDialog: { serverId: string; tools: McpToolInfo[] } | null;
+};
+
+const initialMcpUi: McpUi = {
+  saving: false,
+  error: null,
+  saveOk: false,
+  testingId: null,
+  serverTools: {},
+  toolsDialog: null,
+};
+
 export function McpSettingsPanel() {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
@@ -86,14 +105,8 @@ export function McpSettingsPanel() {
   const form = formDraft.form;
   const baseline = formDraft.baseline;
   const expandedKeys = formDraft.expandedKeys;
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [saveOk, setSaveOk] = useState(false);
-  const [testingId, setTestingId] = useState<string | null>(null);
-  const [serverTools, setServerTools] = useState<Record<string, ServerToolsState>>({});
-  const [toolsDialog, setToolsDialog] = useState<{ serverId: string; tools: McpToolInfo[] } | null>(
-    null,
-  );
+  const [ui, dispatchUi] = useReducer(uiPatchReducer<McpUi>, initialMcpUi);
+  const { saving, error, saveOk, testingId, serverTools, toolsDialog } = ui;
   const dirtyRef = useRef(false);
 
   const { data, error: swrError, isLoading, mutate } = useGatewayConfigSwr(hasToken);
@@ -137,10 +150,15 @@ export function McpSettingsPanel() {
         if (!prev) return f;
         servers[index] = { ...prev, ...patch };
         if (patch.id && patch.id !== prev.id && prev.id) {
-          setServerTools((st) => {
-            const next = { ...st };
-            delete next[prev.id];
-            return next;
+          dispatchUi({
+            type: 'patch',
+            patch: {
+              serverTools: (() => {
+                const next = { ...serverTools };
+                delete next[prev.id];
+                return next;
+              })(),
+            },
           });
         }
         return { ...f, servers };
@@ -174,10 +192,15 @@ export function McpSettingsPanel() {
           nextExpanded.delete(key);
           dispatchForm({ type: 'set-expanded', keys: nextExpanded });
           if (removed.id) {
-            setServerTools((st) => {
-              const next = { ...st };
-              delete next[removed.id];
-              return next;
+            dispatchUi({
+              type: 'patch',
+              patch: {
+                serverTools: (() => {
+                  const next = { ...serverTools };
+                  delete next[removed.id];
+                  return next;
+                })(),
+              },
             });
           }
         }
@@ -188,46 +211,53 @@ export function McpSettingsPanel() {
 
   const save = useCallback(async () => {
     if (!form || saving) return;
-    setSaving(true);
-    setError(null);
-    setSaveOk(false);
+    dispatchUi({ type: 'patch', patch: { saving: true, error: null, saveOk: false } });
     try {
       await patchMcpSettings(form);
       const next = structuredClone(form);
       dirtyRef.current = false;
       dispatchForm({ type: 'saved', value: next });
-      setSaveOk(true);
+      dispatchUi({ type: 'patch', patch: { saveOk: true } });
       void mutate();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      dispatchUi({ type: 'patch', patch: { error: e instanceof Error ? e.message : String(e) } });
     } finally {
-      setSaving(false);
+      dispatchUi({ type: 'patch', patch: { saving: false } });
     }
   }, [form, mutate, saving]);
 
   const runTest = useCallback(async (serverId: string, row?: McpSettingsState['servers'][number]) => {
     if (!serverId.trim()) return;
-    setTestingId(serverId);
-    setError(null);
-    setServerTools((prev) => ({ ...prev, [serverId]: { status: 'loading' } }));
+    dispatchUi({
+      type: 'patch',
+      patch: {
+        testingId: serverId,
+        error: null,
+        serverTools: { ...serverTools, [serverId]: { status: 'loading' } },
+      },
+    });
     try {
       const serverConfig = row ? buildMcpServerConfigFromRow(row) : undefined;
       const result = await testMcpServer(serverId.trim(), serverConfig);
-      setServerTools((prev) => ({
-        ...prev,
-        [serverId]: {
-          status: 'ok',
-          tools: result.tools,
+      dispatchUi({
+        type: 'patch',
+        patch: {
+          serverTools: {
+            ...serverTools,
+            [serverId]: { status: 'ok', tools: result.tools },
+          },
         },
-      }));
+      });
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
-      setServerTools((prev) => ({
-        ...prev,
-        [serverId]: { status: 'error', message },
-      }));
+      dispatchUi({
+        type: 'patch',
+        patch: {
+          serverTools: { ...serverTools, [serverId]: { status: 'error', message } },
+        },
+      });
     } finally {
-      setTestingId(null);
+      dispatchUi({ type: 'patch', patch: { testingId: null } });
     }
   }, []);
 
@@ -315,7 +345,9 @@ export function McpSettingsPanel() {
                 onUpdate={(patch) => updateServer(index, patch)}
                 onRemove={() => removeServer(index)}
                 onTest={() => void runTest(row.id, row)}
-                onViewTools={(tools) => setToolsDialog({ serverId: row.id, tools })}
+                onViewTools={(tools) =>
+                  dispatchUi({ type: 'patch', patch: { toolsDialog: { serverId: row.id, tools } } })
+                }
               />
             );
           })}
@@ -340,9 +372,7 @@ export function McpSettingsPanel() {
             if (!baseline) return;
             dirtyRef.current = false;
             dispatchForm({ type: 'sync', value: structuredClone(baseline) });
-            setSaveOk(false);
-            setError(null);
-            setServerTools({});
+            dispatchUi({ type: 'patch', patch: { saveOk: false, error: null, serverTools: {} } });
           }}
         >
           {t.discard}
@@ -355,7 +385,7 @@ export function McpSettingsPanel() {
         <McpToolsListDialog
           open
           onOpenChange={(open) => {
-            if (!open) setToolsDialog(null);
+            if (!open) dispatchUi({ type: 'patch', patch: { toolsDialog: null } });
           }}
           serverId={toolsDialog.serverId}
           title={t.toolsDialogTitle}

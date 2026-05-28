@@ -7,7 +7,7 @@
 export const SKILL_ID_IN_WIRE = '[a-zA-Z0-9](?:[a-zA-Z0-9._-]{0,62})';
 
 /** `/skill:` + valid id; group 1 = id */
-export const SKILL_WIRE_TOKEN_RE = new RegExp(`\\/skill:(${SKILL_ID_IN_WIRE})`, 'g');
+const SKILL_WIRE_TOKEN_RE = new RegExp(`\\/skill:(${SKILL_ID_IN_WIRE})`, 'g');
 
 /** Fresh RegExp (global regexes retain `lastIndex` across calls). */
 export function skillWireTokenRe(): RegExp {

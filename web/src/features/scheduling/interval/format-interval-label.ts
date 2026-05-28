@@ -1,7 +1,4 @@
-import {
-  HEARTBEAT_INTERVAL_PRESET_MS,
-  HEARTBEAT_INTERVAL_PRESET_MS_ORDER,
-} from '@/features/scheduling/interval/interval-presets';
+import { HEARTBEAT_INTERVAL_PRESET_MS } from '@/features/scheduling/interval/interval-presets';
 
 export type IntervalPresetLabels = {
   custom: string;
@@ -78,8 +75,4 @@ export function formatIntervalMsLabel(
   }
   const hr = Math.round(min / 60);
   return intervalUnitFormat(locale, 'hour').format(hr);
-}
-
-export function defaultIntervalPresetsOrder(): readonly number[] {
-  return HEARTBEAT_INTERVAL_PRESET_MS_ORDER;
 }

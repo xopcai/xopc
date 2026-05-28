@@ -31,7 +31,7 @@ function resolveBuiltinCopy(
   };
 }
 
-export function mergeChannelCatalog(
+function mergeChannelCatalog(
   metaRows: ChannelHubMetaRow[] | undefined,
   ch: ChannelsSettingsMessages,
 ): ChannelCatalogEntry[] {

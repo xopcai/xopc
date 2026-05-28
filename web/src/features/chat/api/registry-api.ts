@@ -11,7 +11,7 @@ export type ConfiguredModel = {
   vision?: boolean;
 };
 
-export async function fetchConfiguredModels(): Promise<ConfiguredModel[]> {
+async function fetchConfiguredModels(): Promise<ConfiguredModel[]> {
   const res = await apiFetch(apiUrl('/api/models'));
   if (!res.ok) throw new Error(`Models: HTTP ${res.status}`);
   const data = (await res.json()) as { payload?: { models?: ConfiguredModel[] } };

@@ -139,18 +139,3 @@ export const useSaveBarStore = create<State>((set, get) => ({
     }
   },
 }));
-
-/** @deprecated Use `state.anyDirty` directly as a zustand selector. */
-export function selectAnyDirty(state: State): boolean {
-  return state.anyDirty;
-}
-
-/** @deprecated Use `state.dirtyCount` directly as a zustand selector. */
-export function selectDirtyCount(state: State): number {
-  return state.dirtyCount;
-}
-
-/** @deprecated Use `state.anySaving` directly as a zustand selector. */
-export function selectAnySaving(state: State): boolean {
-  return state.anySaving;
-}

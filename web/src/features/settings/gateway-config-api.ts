@@ -303,11 +303,6 @@ function buildAuthPatch(state: GatewaySettingsState): Record<string, unknown> {
   return auth;
 }
 
-export async function fetchGatewaySettings(): Promise<GatewaySettingsState> {
-  const res = await fetchJson<{ ok?: boolean; payload?: { config?: unknown } }>(apiUrl('/api/config'));
-  return normalizeGatewayFromConfig(res.payload?.config ?? {});
-}
-
 export async function patchGatewaySettings(state: GatewaySettingsState): Promise<void> {
   const validationError = validateGatewaySettings(state);
   if (validationError) {
