@@ -20,8 +20,7 @@ if (!existsSync(entry)) {
 }
 
 // Exclude Electron-only or optional native / heavy deps the gateway subprocess does not need bundled.
-// Marketplace adapters (clawhub, skillhub) load from dist/extensions/ at runtime — pack them via
-// electron-builder.yml; channel plugins are inlined by this bundle from dist/src imports.
+// Marketplace adapters (store, skillhub, clawhub) are built-in under src/agent/skills/marketplace/.
 const external = [
   'electron',
   '@vscode/ripgrep',

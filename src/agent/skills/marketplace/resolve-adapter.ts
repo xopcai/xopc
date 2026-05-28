@@ -9,8 +9,9 @@ import {
 } from './registry.js';
 
 // Side-effect imports: each built-in adapter self-registers into the registry.
-// SkillHub and ClawHub are provided by extensions (extensions/skillhub/, extensions/clawhub/).
 import './adapters/store/adapter.js';
+import './adapters/skillhub/adapter.js';
+import './adapters/clawhub/adapter.js';
 
 /** Resolve the default marketplace provider from env / config. */
 export function resolveSkillsMarketplaceProvider(config: Config): string {

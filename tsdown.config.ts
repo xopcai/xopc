@@ -26,8 +26,6 @@ export default defineConfig({
     '!./extensions/google/src/**/__tests__/**/*.ts',
     './extensions/fal/src/**/*.ts',
     '!./extensions/fal/src/**/__tests__/**/*.ts',
-    './extensions/clawhub/index.ts',
-    './extensions/skillhub/index.ts',
   ],
   outDir: 'dist',
   root: '.',
