@@ -12,7 +12,11 @@ import {
 } from '../../../tunnel/consent.js';
 import { hashGatewayToken } from '../../../tunnel/tunnel-service.js';
 import { configureTunnelFromGatewayConfig } from '../../../tunnel/gateway-lifecycle.js';
-import { getTunnelRegistrationSecretMeta, resolveTunnelBrokerUrl } from '../../../tunnel/env.js';
+import {
+  getTunnelRegistrationSecretMeta,
+  readTunnelRegistrationSecretFromConfigOnly,
+  resolveTunnelBrokerUrl,
+} from '../../../tunnel/env.js';
 import { getTunnelService } from '../../../tunnel/index.js';
 import { getCertStatusSummary } from '../../../tunnel/acme-cert-store.js';
 import { createPairingSecret, consumePairingSecret } from '../../../tunnel/pairing.js';
@@ -196,6 +200,7 @@ export function registerTunnelPublicRoutes(app: Hono, service: GatewayService): 
 }
 
 export function registerTunnelRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
+  const { strictRateLimitMiddleware } = deps;
   const tunnel = getTunnelService();
   const tunnelMutationLimit = createTunnelMutationRateLimitMiddleware();
 
@@ -386,6 +391,21 @@ export function registerTunnelRoutes(authenticated: Hono, deps: AuthenticatedRou
     return c.json({
       ...cert,
       e2e,
+    });
+  });
+
+  /**
+   * POST /api/tunnel/reveal-registration-secret — plaintext only when stored in config file.
+   */
+  authenticated.post('/api/tunnel/reveal-registration-secret', strictRateLimitMiddleware, async (c) => {
+    const config = deps.service.currentConfig as Config;
+    const registrationSecret = readTunnelRegistrationSecretFromConfigOnly(config);
+    return c.json({
+      ok: true,
+      payload: {
+        registrationSecret,
+        source: registrationSecret ? ('config' as const) : ('none' as const),
+      },
     });
   });
 }

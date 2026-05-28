@@ -14,7 +14,7 @@
     "tabIntro": {
       "guide": "Compare options and see what's active on this gateway.",
       "tailscale": "Best for personal devices on your tailnet. Gateway stays on loopback; Tailscale Serve publishes HTTPS.",
-      "public": "Start the tunnel to get a public URL, then pair your mobile app.",
+      "public": "Create a Tunnel Registration Key in the Console and save it here, then start the tunnel for a public URL and pair your mobile app.",
       "ssh": "CLI SSH port forwarding when VPN or a public tunnel are unavailable.",
       "lan": "Reach the gateway on the same Wi‑Fi or LAN via its bind address, then scan to pair your mobile app."
     },

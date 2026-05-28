@@ -6,7 +6,7 @@ import { mutate } from 'swr';
 
 /** True for gateway masked key sentinels (`***` or bullet placeholder). */
 export function isMaskedKey(value: string): boolean {
-  return value === '***' || value === '••••••••••••';
+  return value === '***' || value === '••••••••••••' || /^•+$/.test(value);
 }
 
 export type ProviderCategory = 'common' | 'specialty' | 'enterprise' | 'oauth' | 'extension';

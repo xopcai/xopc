@@ -9,6 +9,7 @@ import {
 } from '../../../channels/plugins/registry.js';
 import { normalizeConfiguredMcpServers } from '../../../config/mcp-config-normalize.js';
 import type { Config } from '../../../config/schema.js';
+import { maskTunnelSecretForWeb } from '../../../tunnel/env.js';
 import { resolveTunnelE2eConfig } from '../../../tunnel/tunnel-e2e-config.js';
 import { resolveShareConfig } from '../../../share/share-config.js';
 import {
@@ -283,7 +284,9 @@ export async function buildSafeWebConfigPayload(service: GatewayService) {
       enabled: config.tunnel?.enabled === true,
       autoStart: config.tunnel?.autoStart === true,
       brokerUrl: config.tunnel?.brokerUrl ?? 'https://frp.xopc.ai/api',
-      registrationSecret: config.tunnel?.registrationSecret ? '••••••••••••' : '',
+      registrationSecret: config.tunnel?.registrationSecret
+        ? maskTunnelSecretForWeb(config.tunnel.registrationSecret)
+        : '',
       consent: config.tunnel?.consent
         ? {
             version: config.tunnel.consent.version,

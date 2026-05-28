@@ -193,6 +193,27 @@ export async function validateMobilePairBaseUrlPublic(
   return res.json() as Promise<MobilePairValidateUrlResponse>;
 }
 
+export async function revealTunnelRegistrationSecret(): Promise<{
+  registrationSecret: string | null;
+  source: 'config' | 'none';
+}> {
+  const data = await fetchJson<{
+    ok?: boolean;
+    payload?: { registrationSecret?: string | null; source?: 'config' | 'none' };
+  }>(apiUrl('/api/tunnel/reveal-registration-secret'), {
+    method: 'POST',
+    body: JSON.stringify({}),
+  });
+  const payload = data.payload;
+  if (!payload) {
+    throw new Error('Missing reveal payload');
+  }
+  return {
+    registrationSecret: payload.registrationSecret ?? null,
+    source: payload.source === 'config' ? 'config' : 'none',
+  };
+}
+
 export async function patchTunnelConfig(patch: {
   enabled?: boolean;
   autoStart?: boolean;
