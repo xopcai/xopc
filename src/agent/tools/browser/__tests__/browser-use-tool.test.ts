@@ -114,6 +114,26 @@ describe('browser_use tool', () => {
       expect(result.content[0].text).toContain('validated');
     });
 
+    it('loads pipeline YAML from a remote path URL', async () => {
+      const { tool } = createTool();
+      const yaml = 'name: remote\npipeline:\n  - wait:\n      ms: 100';
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(yaml, { status: 200 })));
+
+      try {
+        const result = await tool.execute(
+          'call-remote',
+          { mode: 'pipeline', pipeline: { path: 'https://example.com/pipeline.yaml', dryRun: true } },
+          undefined as any,
+          undefined as any,
+        );
+
+        expect(result.details.ok).toBe(true);
+        expect(result.content[0].text).toContain('validated');
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
+
     it('returns validation error for invalid YAML', async () => {
       const { tool } = createTool();
       const yaml = 'name: bad\npipeline: not-array';

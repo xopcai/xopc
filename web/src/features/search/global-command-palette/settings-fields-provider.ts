@@ -85,7 +85,7 @@ function buildFieldSeeds(language: StoredLanguage): FieldSeed[] {
       id: 'field:agent:browser',
       title: isZh ? '浏览器自动化' : 'Browser Automation',
       subtitle: isZh ? '启用/禁用 Playwright 浏览器工具' : 'Enable/disable Playwright browser tools',
-      path: '/settings/agent-defaults?tab=browser',
+      path: '/settings/agent-browser',
       keywords: ['browser', 'playwright', 'chromium', 'automation', 'headless', '浏览器'],
     },
 

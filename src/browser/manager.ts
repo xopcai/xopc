@@ -28,6 +28,8 @@ export class BrowserManager {
   private cloudProvider: CloudBrowserProvider | null = null;
   private extensionProvider: ExtensionBrowserProvider | null = null;
   private extensionRelease: (() => Promise<void>) | null = null;
+  private cloakChildProcess: import('node:child_process').ChildProcess | null = null;
+  private cloakTempProfileDir: string | null = null;
   private pages = new Map<string, { page: Page; lastUsed: number }>();
   private readonly options: BrowserManagerOptions;
   private activeBackendMode: BrowserBackend['mode'] | null = null;
@@ -70,6 +72,9 @@ export class BrowserManager {
         break;
       case 'extension':
         await this._connectViaExtension(backend.config);
+        break;
+      case 'cloakbrowser':
+        await this._connectViaCloakBrowser(backend.config);
         break;
       case 'local':
       default:
@@ -149,6 +154,16 @@ export class BrowserManager {
     log.info({ mode: 'extension' }, 'Browser connected (Chrome Extension)');
   }
 
+  private async _connectViaCloakBrowser(config?: import('./providers/types.js').CloakBrowserConfig): Promise<void> {
+    const { launchCloakBrowser } = await import('./providers/cloakbrowser.js');
+    const result = await launchCloakBrowser(config);
+    this.browser = result.browser;
+    this.context = result.context;
+    this.cloakChildProcess = result.childProcess;
+    this.cloakTempProfileDir = result.temporaryProfileDir;
+    log.info({ mode: 'cloakbrowser' }, 'Browser connected (CloakBrowser)');
+  }
+
   async getPage(taskId: string): Promise<Page> {
     if (this.extensionProvider) {
       throw new Error('BrowserManager.getPage is not used in Chrome Extension backend mode');
@@ -212,6 +227,14 @@ export class BrowserManager {
       this.extensionRelease = null;
     }
     this.extensionProvider = null;
+
+    // CloakBrowser cleanup — kill child process and remove temp profile
+    if (this.cloakChildProcess || this.cloakTempProfileDir) {
+      const { cleanupCloakBrowser } = await import('./providers/cloakbrowser.js');
+      await cleanupCloakBrowser(this.cloakChildProcess, this.cloakTempProfileDir).catch(() => {});
+      this.cloakChildProcess = null;
+      this.cloakTempProfileDir = null;
+    }
 
     await this.context?.close().catch(() => {});
     await this.browser?.close().catch(() => {});

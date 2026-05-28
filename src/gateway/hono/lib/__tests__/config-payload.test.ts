@@ -1,6 +1,37 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildSafeMcpConfigForWeb } from '../config-payload.js';
+import { buildSafeBrowserConfigForWeb, buildSafeMcpConfigForWeb } from '../config-payload.js';
+
+describe('buildSafeBrowserConfigForWeb', () => {
+  it('keeps cloakbrowser backend and related settings for config reloads', () => {
+    const safe = buildSafeBrowserConfigForWeb({
+      enabled: true,
+      headless: false,
+      backend: 'cloakbrowser',
+      cloakbrowser: {
+        keepOpen: true,
+        temporaryProfile: false,
+        cacheDir: '/Users/test/.xopc/bin',
+        binaryPath: '/Users/test/.xopc/bin/CloakBrowser.app/Contents/MacOS/CloakBrowser',
+      },
+      humanize: true,
+      humanPreset: 'careful',
+    });
+
+    expect(safe).toMatchObject({
+      enabled: true,
+      backend: 'cloakbrowser',
+      cloakbrowser: {
+        keepOpen: true,
+        temporaryProfile: false,
+        cacheDir: '/Users/test/.xopc/bin',
+        binaryPath: '/Users/test/.xopc/bin/CloakBrowser.app/Contents/MacOS/CloakBrowser',
+      },
+      humanize: true,
+      humanPreset: 'careful',
+    });
+  });
+});
 
 describe('buildSafeMcpConfigForWeb', () => {
   it('returns empty servers when mcp is unset', () => {

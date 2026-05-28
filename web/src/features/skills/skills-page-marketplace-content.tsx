@@ -1,10 +1,10 @@
-import { ChevronLeft, ChevronRight, ExternalLink, Loader2, Star } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Loader2, Star } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { SkillCardIcon } from '@/features/skills/skill-card-icon';
 import { MarketplaceSkillCardSkeleton } from '@/features/skills/skills-page-primitives';
 import { SKILL_LIST_SKELETON_KEYS } from '@/features/skills/skills-page.constants';
-import { interpolate, marketplacePublicSkillUrl } from '@/features/skills/skills-page.utils';
+import { interpolate } from '@/features/skills/skills-page.utils';
 import type { SkillsPageVm } from '@/features/skills/use-skills-page';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
@@ -20,13 +20,12 @@ type Props = Pick<
   | 'mpError'
   | 'marketCategoryId'
   | 'setMarketCategoryId'
-  | 'marketBrowseProvider'
   | 'marketPage'
   | 'setMarketPage'
-  | 'installingMarketName'
   | 'isSkillInstalledByName'
-  | 'onMarketInstall'
   | 'openMarketplaceDetail'
+  | 'onUseSkillInChat'
+  | 'usingSkillInChatName'
 >;
 
 export function SkillsPageMarketplaceContent(p: Props) {
@@ -40,13 +39,12 @@ export function SkillsPageMarketplaceContent(p: Props) {
     mpError,
     marketCategoryId,
     setMarketCategoryId,
-    marketBrowseProvider,
     marketPage,
     setMarketPage,
-    installingMarketName,
     isSkillInstalledByName,
-    onMarketInstall,
     openMarketplaceDetail,
+    onUseSkillInChat,
+    usingSkillInChatName,
   } = p;
 
   return (
@@ -160,8 +158,6 @@ export function SkillsPageMarketplaceContent(p: Props) {
             >
               {mpPayload.items.map((row) => {
                 const installed = isSkillInstalledByName(row.id);
-                const busy = installingMarketName === row.id;
-                const externalPageUrl = marketplacePublicSkillUrl(marketBrowseProvider, row.id);
                 return (
                   <article
                     key={row.id}
@@ -181,12 +177,12 @@ export function SkillsPageMarketplaceContent(p: Props) {
                       aria-labelledby={`mp-skill-title-${row.id}`}
                       onClick={(e) => {
                         const el = e.target as HTMLElement;
-                        if (el.closest('a[href]') || el.closest('button')) return;
+                        if (el.closest('button')) return;
                         void openMarketplaceDetail(row.id, row.name);
                       }}
                       onKeyDown={(e) => {
                         const el = e.target as HTMLElement;
-                        if (el.closest('a[href]') || el.closest('button')) return;
+                        if (el.closest('button')) return;
                         if (e.key === 'Enter' || e.key === ' ') {
                           e.preventDefault();
                           void openMarketplaceDetail(row.id, row.name);
@@ -203,43 +199,25 @@ export function SkillsPageMarketplaceContent(p: Props) {
                             >
                               {row.name}
                             </h3>
-                            <div className="flex shrink-0 items-center gap-1">
-                              {externalPageUrl ? (
-                                <a
-                                  href={externalPageUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className={cn(
-                                    'inline-flex size-8 shrink-0 items-center justify-center rounded-lg border border-edge bg-surface-panel text-fg-muted',
-                                    'hover:bg-surface-hover hover:text-fg dark:border-edge',
-                                    interaction.focusRingPanel,
-                                  )}
-                                  aria-label={sk.marketplaceOpenExternalAria}
-                                  title={sk.marketplaceOpenExternal}
-                                >
-                                  <ExternalLink className="size-3.5" strokeWidth={2} aria-hidden />
-                                </a>
-                              ) : null}
-                              <div
-                                role="group"
-                                className="inline-flex shrink-0"
-                                onClick={(e) => e.stopPropagation()}
-                                onKeyDown={(e) => e.stopPropagation()}
+                            <div
+                              role="group"
+                              className="flex shrink-0 items-center gap-1"
+                              onClick={(e) => e.stopPropagation()}
+                              onKeyDown={(e) => e.stopPropagation()}
+                            >
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                className="h-8 shrink-0 whitespace-nowrap px-2.5 text-xs font-medium"
+                                disabled={mpLoading || usingSkillInChatName === row.id}
+                                onClick={() =>
+                                  void onUseSkillInChat({ name: row.id, source: 'store' })
+                                }
                               >
-                                <Button
-                                  type="button"
-                                  variant="secondary"
-                                  className="h-8 shrink-0 whitespace-nowrap px-2.5 text-xs font-medium"
-                                  disabled={busy || mpLoading}
-                                  onClick={() => void onMarketInstall(row.id)}
-                                >
-                                  {busy
-                                    ? sk.uploading
-                                    : installed
-                                      ? sk.marketplaceReinstall
-                                      : sk.marketplaceInstall}
-                                </Button>
-                              </div>
+                                {usingSkillInChatName === row.id
+                                  ? sk.previewUseInChatBusy
+                                  : sk.previewUseInChat}
+                              </Button>
                             </div>
                           </div>
                           <p

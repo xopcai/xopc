@@ -2,12 +2,11 @@
  * CLI helpers for `xopc browser` — shared runtime setup for CLI browser commands.
  */
 
-import { readFile } from 'node:fs/promises';
-
 import type { Page } from 'playwright-core';
 
 import { BrowserManager, resolveBrowserBackendFromConfig, createBrowserActionRegistry } from '../../browser/index.js';
 import { validateBrowserPipeline, runBrowserPipeline } from '../../browser/pipeline/runner.js';
+import { loadBrowserPipelineSource } from '../../browser/pipeline/source.js';
 import type { BrowserActionContext } from '../../browser/actions/types.js';
 import { loadConfig } from '../../config/loader.js';
 
@@ -69,9 +68,10 @@ export async function executeBrowserCliAction(action: string, args: Record<strin
 export async function validatePipelineCli(file: string): Promise<void> {
   let yamlSource: string;
   try {
-    yamlSource = await readFile(file, 'utf-8');
-  } catch {
-    console.error(`Failed to read file: ${file}`);
+    yamlSource = (await loadBrowserPipelineSource(file)).source;
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error(`Failed to read pipeline source: ${msg}`);
     process.exitCode = 1;
     return;
   }
@@ -93,9 +93,10 @@ export async function validatePipelineCli(file: string): Promise<void> {
 export async function runPipelineCli(file: string, args: Record<string, unknown>): Promise<void> {
   let yamlSource: string;
   try {
-    yamlSource = await readFile(file, 'utf-8');
-  } catch {
-    console.error(`Failed to read file: ${file}`);
+    yamlSource = (await loadBrowserPipelineSource(file)).source;
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error(`Failed to read pipeline source: ${msg}`);
     process.exitCode = 1;
     return;
   }

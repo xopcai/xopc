@@ -42,6 +42,87 @@ export function buildSafeMcpConfigForWeb(config: Config) {
   };
 }
 
+function maskBrowserCloudConfigForWeb(cloud: unknown): Record<string, unknown> | null {
+  if (!cloud || typeof cloud !== 'object' || Array.isArray(cloud)) {
+    return null;
+  }
+  const raw = cloud as Record<string, unknown>;
+  const safe: Record<string, unknown> = {};
+  if (typeof raw.apiKey === 'string' && raw.apiKey.trim()) {
+    safe.apiKey = '***';
+  }
+  if (typeof raw.projectId === 'string' && raw.projectId.trim()) {
+    safe.projectId = raw.projectId.trim();
+  }
+  if (typeof raw.region === 'string' && raw.region.trim()) {
+    safe.region = raw.region.trim();
+  }
+  return Object.keys(safe).length > 0 ? safe : null;
+}
+
+export function buildSafeBrowserConfigForWeb(browser: Config['agents']['defaults']['browser'] | undefined) {
+  if (!browser || typeof browser !== 'object') {
+    return {
+      enabled: false,
+      headless: false,
+      allowPrivateUrls: false,
+      commandTimeout: null,
+      backend: null,
+      cloudProvider: null,
+      cloud: null,
+      cdpUrl: null,
+      extension: null,
+      cloakbrowser: null,
+      humanize: null,
+      humanPreset: null,
+      dialogPolicy: null,
+      dialogTimeoutSeconds: null,
+    };
+  }
+
+  return {
+    enabled: browser.enabled === true,
+    headless: browser.headless === true,
+    allowPrivateUrls: browser.allowPrivateUrls === true,
+    commandTimeout:
+      typeof browser.commandTimeout === 'number' && Number.isFinite(browser.commandTimeout)
+        ? Math.floor(browser.commandTimeout)
+        : null,
+    backend:
+      browser.backend === 'cdp' ||
+      browser.backend === 'cloud' ||
+      browser.backend === 'extension' ||
+      browser.backend === 'cloakbrowser'
+        ? browser.backend
+        : null,
+    cloudProvider:
+      browser.cloudProvider === 'browserbase' || browser.cloudProvider === 'browser-use'
+        ? browser.cloudProvider
+        : null,
+    cloud: maskBrowserCloudConfigForWeb(browser.cloud),
+    cdpUrl: typeof browser.cdpUrl === 'string' && browser.cdpUrl.trim() ? browser.cdpUrl.trim() : null,
+    extension: browser.extension && typeof browser.extension === 'object' && !Array.isArray(browser.extension)
+      ? browser.extension
+      : null,
+    cloakbrowser:
+      browser.cloakbrowser && typeof browser.cloakbrowser === 'object' && !Array.isArray(browser.cloakbrowser)
+        ? browser.cloakbrowser
+        : null,
+    humanize: typeof browser.humanize === 'boolean' ? browser.humanize : null,
+    humanPreset: browser.humanPreset === 'default' || browser.humanPreset === 'careful' ? browser.humanPreset : null,
+    dialogPolicy:
+      browser.dialogPolicy === 'must_respond' ||
+      browser.dialogPolicy === 'auto_accept' ||
+      browser.dialogPolicy === 'auto_dismiss'
+        ? browser.dialogPolicy
+        : null,
+    dialogTimeoutSeconds:
+      typeof browser.dialogTimeoutSeconds === 'number' && Number.isFinite(browser.dialogTimeoutSeconds)
+        ? Math.floor(browser.dialogTimeoutSeconds)
+        : null,
+  };
+}
+
 /** Sanitized config snapshot for GET/PATCH `/api/config` (matches persisted `service.currentConfig`). */
 export async function buildSafeWebConfigPayload(service: GatewayService) {
   const config = service.currentConfig;
@@ -95,50 +176,7 @@ export async function buildSafeWebConfigPayload(service: GatewayService) {
         thinkingDefault: config.agents?.defaults?.thinkingDefault,
         reasoningDefault: config.agents?.defaults?.reasoningDefault,
         verboseDefault: config.agents?.defaults?.verboseDefault,
-        browser: (() => {
-          const br = config.agents?.defaults?.browser;
-          if (!br || typeof br !== 'object') {
-            return {
-              enabled: false,
-              headless: false,
-              allowPrivateUrls: false,
-              commandTimeout: null,
-              cloudProvider: null,
-              cdpUrl: null,
-              dialogPolicy: null,
-              dialogTimeoutSeconds: null,
-            };
-          }
-          return {
-            enabled: br.enabled === true,
-            headless: br.headless === true,
-            allowPrivateUrls: br.allowPrivateUrls === true,
-            commandTimeout:
-              typeof br.commandTimeout === 'number' && Number.isFinite(br.commandTimeout)
-                ? Math.floor(br.commandTimeout)
-                : null,
-            backend:
-              br.backend === 'cdp' || br.backend === 'cloud' || br.backend === 'extension'
-                ? br.backend
-                : null,
-            cloudProvider:
-              br.cloudProvider === 'browserbase' || br.cloudProvider === 'browser-use' ? br.cloudProvider : null,
-            cdpUrl: typeof br.cdpUrl === 'string' && br.cdpUrl.trim() ? br.cdpUrl.trim() : null,
-            extension: br.extension && typeof br.extension === 'object' && !Array.isArray(br.extension)
-              ? br.extension
-              : null,
-            dialogPolicy:
-              br.dialogPolicy === 'must_respond' ||
-              br.dialogPolicy === 'auto_accept' ||
-              br.dialogPolicy === 'auto_dismiss'
-                ? br.dialogPolicy
-                : null,
-            dialogTimeoutSeconds:
-              typeof br.dialogTimeoutSeconds === 'number' && Number.isFinite(br.dialogTimeoutSeconds)
-                ? Math.floor(br.dialogTimeoutSeconds)
-                : null,
-          };
-        })(),
+        browser: buildSafeBrowserConfigForWeb(config.agents?.defaults?.browser),
         maxTaskDurationMs: config.agents?.defaults?.maxTaskDurationMs,
         maxRequestsPerTurn: config.agents?.defaults?.maxRequestsPerTurn,
         maxToolFailuresPerTurn: config.agents?.defaults?.maxToolFailuresPerTurn,

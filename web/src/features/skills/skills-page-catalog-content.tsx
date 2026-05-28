@@ -1,8 +1,6 @@
-import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { MoreVertical, Trash2 } from 'lucide-react';
-
+import { Button } from '@/components/ui/button';
 import { SkillCardIcon } from '@/features/skills/skill-card-icon';
-import { SkillCatalogCardSkeleton, SkillEnableSwitch } from '@/features/skills/skills-page-primitives';
+import { SkillCatalogCardSkeleton } from '@/features/skills/skills-page-primitives';
 import { SKILL_LIST_SKELETON_KEYS } from '@/features/skills/skills-page.constants';
 import type { SkillsPageVm } from '@/features/skills/use-skills-page';
 import { cn } from '@/lib/cn';
@@ -20,12 +18,10 @@ type Props = Pick<
   | 'setBuiltinCategoryFilter'
   | 'categoryFilteredCatalog'
   | 'categoryLabel'
-  | 'enabledOverride'
-  | 'onSkillToggle'
   | 'sourceLabel'
   | 'openSkillDetail'
-  | 'setConfirmOpen'
-  | 'setConfirmId'
+  | 'onUseSkillInChat'
+  | 'usingSkillInChatName'
 >;
 
 export function SkillsPageCatalogContent(p: Props) {
@@ -40,12 +36,10 @@ export function SkillsPageCatalogContent(p: Props) {
     setBuiltinCategoryFilter,
     categoryFilteredCatalog,
     categoryLabel,
-    enabledOverride,
-    onSkillToggle,
     sourceLabel,
     openSkillDetail,
-    setConfirmOpen,
-    setConfirmId,
+    onUseSkillInChat,
+    usingSkillInChatName,
   } = p;
 
   if (loading) {
@@ -176,50 +170,19 @@ export function SkillsPageCatalogContent(p: Props) {
                         onClick={(e) => e.stopPropagation()}
                         onKeyDown={(e) => e.stopPropagation()}
                       >
-                        <div className="inline-flex shrink-0">
-                          <SkillEnableSwitch
-                            checked={enabledOverride[row.name] ?? row.enabled}
-                            onChange={(next) => void onSkillToggle(row.name, next)}
-                          />
-                        </div>
-                        {row.managed ? (
-                          <DropdownMenu.Root>
-                            <DropdownMenu.Trigger asChild>
-                              <button
-                                type="button"
-                                className={cn(
-                                  'inline-flex size-8 shrink-0 items-center justify-center rounded-lg border border-edge bg-surface-panel text-fg-muted',
-                                  'hover:bg-surface-hover hover:text-fg dark:border-edge',
-                                  interaction.focusRingPanel,
-                                )}
-                                aria-label={sk.col.actions}
-                              >
-                                <MoreVertical className="size-3.5" strokeWidth={2} aria-hidden />
-                              </button>
-                            </DropdownMenu.Trigger>
-                            <DropdownMenu.Portal>
-                              <DropdownMenu.Content
-                                className="z-50 min-w-[8rem] rounded-xl border border-edge bg-surface-panel p-1 shadow-popover dark:border-edge"
-                                sideOffset={4}
-                                align="end"
-                              >
-                                <DropdownMenu.Item
-                                  className={cn(
-                                    'flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-red-600 outline-none',
-                                    'hover:bg-red-50 data-[highlighted]:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40',
-                                  )}
-                                  onSelect={() => {
-                                    setConfirmId(row.directoryId);
-                                    setConfirmOpen(true);
-                                  }}
-                                >
-                                  <Trash2 className="size-4" strokeWidth={1.75} aria-hidden />
-                                  {sk.delete}
-                                </DropdownMenu.Item>
-                              </DropdownMenu.Content>
-                            </DropdownMenu.Portal>
-                          </DropdownMenu.Root>
-                        ) : null}
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          className="h-8 shrink-0 whitespace-nowrap px-2.5 text-xs font-medium"
+                          disabled={usingSkillInChatName === row.name}
+                          onClick={() =>
+                            void onUseSkillInChat({ name: row.name, source: 'catalog' })
+                          }
+                        >
+                          {usingSkillInChatName === row.name
+                            ? sk.previewUseInChatBusy
+                            : sk.previewUseInChat}
+                        </Button>
                       </div>
                     </div>
                     <p

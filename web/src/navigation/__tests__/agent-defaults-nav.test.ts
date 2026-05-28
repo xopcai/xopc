@@ -11,12 +11,14 @@ describe('agent-defaults-nav', () => {
   it('recognizes agent defaults rail tabs', () => {
     expect(isAgentDefaultsNavTab('settingsAgentContext')).toBe(true);
     expect(isAgentDefaultsNavTab('settingsAgentMemory')).toBe(true);
+    expect(isAgentDefaultsNavTab('settingsAgentBrowser')).toBe(false);
     expect(isAgentDefaultsNavTab('settingsGateway')).toBe(false);
   });
 
   it('highlights the matching ?tab= slice on agent defaults', () => {
     const base = loc('/settings/agent-defaults');
     expect(isAgentDefaultsNavActive('settingsAgentChat', base)).toBe(true);
+    expect(isAgentDefaultsNavActive('settingsAgentBrowser', loc('/settings/agent-browser'))).toBe(false);
     expect(isAgentDefaultsNavActive('settingsAgentContext', loc('/settings/agent-defaults', '?tab=context'))).toBe(
       true,
     );

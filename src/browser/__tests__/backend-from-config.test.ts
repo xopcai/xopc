@@ -86,6 +86,70 @@ describe('resolveBrowserBackendFromConfig', () => {
     expect(b.mode).toBe('local');
     if (b.mode === 'local') expect(b.headless).toBe(true);
   });
+
+  it('uses cloakbrowser when backend is cloakbrowser', () => {
+    const cfg = {
+      agents: {
+        defaults: {
+          browser: {
+            backend: 'cloakbrowser' as const,
+            humanize: true,
+            humanPreset: 'careful' as const,
+            cloakbrowser: {
+              keepOpen: true,
+              temporaryProfile: false,
+              timezone: 'America/New_York',
+              locale: 'en-US',
+              webrtcIp: '1.2.3.4',
+            },
+          },
+        },
+      },
+    } as unknown as Config;
+    const b = resolveBrowserBackendFromConfig(cfg);
+    expect(b.mode).toBe('cloakbrowser');
+    if (b.mode === 'cloakbrowser') {
+      expect(b.config?.keepOpen).toBe(true);
+      expect(b.config?.temporaryProfile).toBe(false);
+      expect(b.config?.timezone).toBe('America/New_York');
+      expect(b.config?.locale).toBe('en-US');
+      expect(b.config?.webrtcIp).toBe('1.2.3.4');
+      expect(b.config?.humanize).toBe(true);
+      expect(b.config?.humanPreset).toBe('careful');
+    }
+  });
+
+  it('cloakbrowser defaults humanize to true when not specified', () => {
+    const cfg = {
+      agents: {
+        defaults: {
+          browser: {
+            backend: 'cloakbrowser' as const,
+          },
+        },
+      },
+    } as unknown as Config;
+    const b = resolveBrowserBackendFromConfig(cfg);
+    expect(b.mode).toBe('cloakbrowser');
+    if (b.mode === 'cloakbrowser') {
+      expect(b.config?.humanize).toBe(true);
+      expect(b.config?.humanPreset).toBe('careful');
+    }
+  });
+
+  it('prefers cloakbrowser backend over cdpUrl when both set', () => {
+    const cfg = {
+      agents: {
+        defaults: {
+          browser: {
+            backend: 'cloakbrowser' as const,
+            cdpUrl: 'ws://127.0.0.1:9222/devtools/browser/x',
+          },
+        },
+      },
+    } as unknown as Config;
+    expect(resolveBrowserBackendFromConfig(cfg).mode).toBe('cloakbrowser');
+  });
 });
 
 describe('resolveBrowserCommandTimeoutMs', () => {

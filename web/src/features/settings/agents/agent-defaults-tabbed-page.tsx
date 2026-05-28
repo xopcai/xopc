@@ -9,7 +9,6 @@ import { useLocaleStore } from '@/stores/locale-store';
 
 import type { AgentDefaultsPanelProps } from './agent-defaults-panel-props';
 import { AgentDefaultsBasicsPanel } from './agent-defaults-panels/basics-panel';
-import { AgentDefaultsBrowserPanel } from './agent-defaults-panels/browser-panel';
 import { AgentDefaultsCapabilitiesPanel } from './agent-defaults-panels/capabilities-panel';
 import { AgentDefaultsContextPanel } from './agent-defaults-panels/context-panel';
 import { AgentDefaultsExpertPanel } from './agent-defaults-panels/expert-panel';
@@ -36,8 +35,6 @@ function tabIntro(a: ReturnType<typeof messages>['agentSettings'], tab: AgentDef
       return a.routeIntro.chat;
     case 'workspace':
       return a.routeIntro.workspace;
-    case 'browser':
-      return a.routeIntro.browser;
     case 'runtime':
       return a.routeIntro.runtime;
     case 'context':
@@ -67,8 +64,6 @@ function AgentDefaultsTabPanel({
       return <AgentDefaultsBasicsPanel {...pp} />;
     case 'workspace':
       return <AgentDefaultsWorkspacePanel {...pp} />;
-    case 'browser':
-      return <AgentDefaultsBrowserPanel {...pp} />;
     case 'runtime':
       return <AgentDefaultsLimitsPanel {...pp} />;
     case 'context':
