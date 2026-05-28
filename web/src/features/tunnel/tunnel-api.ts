@@ -155,44 +155,6 @@ export async function createTunnelPair(): Promise<TunnelPairResponse> {
   });
 }
 
-export type MobilePairPingResponse = {
-  ok: boolean;
-  mobilePairing: boolean;
-  port: number;
-  bindMode: string;
-  pairingReady: boolean;
-  blockReason: string | null;
-  tunnelConnected: boolean;
-  connectUrls: string[];
-};
-
-export type MobilePairValidateUrlResponse =
-  | { ok: true; url: string; loopback: false; probePath: string }
-  | { ok: false; code: string; message: string };
-
-/** Public probe for mobile apps (no auth). */
-export async function fetchMobilePairPing(baseUrl: string): Promise<MobilePairPingResponse> {
-  const root = baseUrl.trim().replace(/\/+$/, '');
-  const res = await fetch(`${root}/api/tunnel/pair/ping`);
-  if (!res.ok) {
-    throw new Error(`Pairing probe failed (${res.status})`);
-  }
-  return res.json() as Promise<MobilePairPingResponse>;
-}
-
-/** Public URL validation for mobile manual config (no auth). */
-export async function validateMobilePairBaseUrlPublic(
-  baseUrl: string,
-): Promise<MobilePairValidateUrlResponse> {
-  const root = baseUrl.trim().replace(/\/+$/, '');
-  const res = await fetch(`${root}/api/tunnel/pair/validate-url`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ baseUrl: root }),
-  });
-  return res.json() as Promise<MobilePairValidateUrlResponse>;
-}
-
 export async function revealTunnelRegistrationSecret(): Promise<{
   registrationSecret: string | null;
   source: 'config' | 'none';

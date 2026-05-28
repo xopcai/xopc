@@ -2,7 +2,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { ArrowLeft, CheckCircle, Loader2, Package, Search, Trash2, X } from 'lucide-react';
 import { useCallback, useEffect, useReducer, useState } from 'react';
 
-import { uiPatchReducer, type UiPatchAction } from '@/lib/settings-form-draft';
+import { uiPatchReducer } from '@/lib/settings-form-draft';
 import { Link } from 'react-router-dom';
 import useSWR, { useSWRConfig } from 'swr';
 
@@ -55,8 +55,6 @@ type MarketplaceUi = {
   actionError: string | null;
   restartHint: string | null;
 };
-
-type MarketplaceUiAction = UiPatchAction<MarketplaceUi>;
 
 const initialMarketplaceUi: MarketplaceUi = {
   q: '',

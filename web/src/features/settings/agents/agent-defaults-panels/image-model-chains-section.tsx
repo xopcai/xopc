@@ -161,16 +161,3 @@ export function ImageModelFallbackChains(props: AgentDefaultsPanelProps) {
     </div>
   );
 }
-
-/**
- * Combined section (legacy export) — renders primary selectors + fallbacks together.
- * @deprecated Prefer `ImageModelPrimarySelectors` + `ImageModelFallbackChains` separately.
- */
-export function AgentDefaultsImageModelChainsSection(props: AgentDefaultsPanelProps) {
-  return (
-    <>
-      <ImageModelPrimarySelectors {...props} />
-      <ImageModelFallbackChains {...props} />
-    </>
-  );
-}

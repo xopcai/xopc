@@ -12,7 +12,7 @@ let cachedPrefs: DesktopNotificationPrefs = {
   notifySoundEnabled: true,
 };
 
-export function getDesktopNotificationPrefs(): DesktopNotificationPrefs {
+function getDesktopNotificationPrefs(): DesktopNotificationPrefs {
   return cachedPrefs;
 }
 

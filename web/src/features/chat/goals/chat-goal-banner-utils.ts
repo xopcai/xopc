@@ -84,18 +84,6 @@ export function statusAfterLabel(s: WebchatGoalRunWire['statusAfter'], t: GoalMe
   return s;
 }
 
-export function groupChecklistItems(g: WebchatPersistentGoalWire): {
-  pending: WebchatChecklistItemWire[];
-  completed: WebchatChecklistItemWire[];
-  impossible: WebchatChecklistItemWire[];
-} {
-  const groups = { pending: [] as WebchatChecklistItemWire[], completed: [] as WebchatChecklistItemWire[], impossible: [] as WebchatChecklistItemWire[] };
-  for (const item of g.checklist ?? []) {
-    groups[item.status].push(item);
-  }
-  return groups;
-}
-
 export function collapsedStorageKey(sk: string): string {
   return `xopc:goalBannerCollapsed:${sk}`;
 }

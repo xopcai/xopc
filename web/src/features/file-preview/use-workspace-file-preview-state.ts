@@ -13,7 +13,7 @@ import type { FilePreviewKind } from '@/features/file-preview/types';
 
 export type WorkspacePreviewReadOpts = { sessionKey: string } | { agentId: string } | undefined;
 
-export function useWorkspacePreviewReadOpts({
+function useWorkspacePreviewReadOpts({
   sessionKey,
   agentId,
 }: {

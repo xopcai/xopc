@@ -24,6 +24,3 @@ export const BUILTIN_CHANNEL_CATALOG: readonly BuiltinChannelCatalogEntry[] = [
     subtitleKey: 'feishuSubtitle',
   },
 ] as const;
-
-/** @deprecated Use `useChannelCatalog` / `BUILTIN_CHANNEL_CATALOG` */
-export const CHANNEL_CATALOG = BUILTIN_CHANNEL_CATALOG;

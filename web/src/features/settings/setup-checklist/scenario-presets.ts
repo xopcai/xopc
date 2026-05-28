@@ -37,7 +37,7 @@ export const SCENARIO_PRESETS: readonly ScenarioPreset[] = [
   },
 ];
 
-export const SCENARIO_PRESETS_DISMISSED_KEY = 'xopc-scenario-presets-dismissed';
+const SCENARIO_PRESETS_DISMISSED_KEY = 'xopc-scenario-presets-dismissed';
 
 export function readScenarioPresetsDismissed(): boolean {
   try {

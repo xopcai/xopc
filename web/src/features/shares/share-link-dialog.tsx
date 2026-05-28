@@ -146,7 +146,7 @@ export function ReachabilityHint({
   );
 }
 
-export function ShareLinkResultContent({ result }: { result: ShareLinkResult }) {
+function ShareLinkResultContent({ result }: { result: ShareLinkResult }) {
   const language = useLocaleStore((s) => s.language);
   const t = messages(language).sharesSettings;
 

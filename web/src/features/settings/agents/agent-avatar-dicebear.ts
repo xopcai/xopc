@@ -9,7 +9,7 @@ import {
 } from '@dicebear/collection';
 
 export const XOPC_CUSTOM_AVATAR = 'xopc:custom';
-export const XOPC_DICEBEAR_PREFIX = 'xopc:dicebear:';
+const XOPC_DICEBEAR_PREFIX = 'xopc:dicebear:';
 
 /** Styles offered in the avatar picker. */
 export type DicebearStyleId = 'adventurer' | 'bottts' | 'lorelei' | 'thumbs' | 'fun-emoji';

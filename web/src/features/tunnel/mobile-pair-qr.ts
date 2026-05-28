@@ -1,6 +1,6 @@
 import QRCode from 'qrcode';
 
-export const MOBILE_PAIR_QR_OPTIONS = {
+const MOBILE_PAIR_QR_OPTIONS = {
   width: 216,
   margin: 2,
   errorCorrectionLevel: 'M' as const,

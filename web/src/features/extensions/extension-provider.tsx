@@ -148,7 +148,7 @@ function manifestDeclaresGatewayContributions(e: ExtensionApiRow): boolean {
  * require the Node runtime to be activated. Used for Apps detail + `/apps/...` routes only —
  * not for sidebar/command palette ({@link useUiExtensions} stays gated on activation).
  */
-export function extensionBundledUiBrowsable(e: ExtensionApiRow): boolean {
+function extensionBundledUiBrowsable(e: ExtensionApiRow): boolean {
   return e.source === 'bundled' && e.hasUi === true && manifestDeclaresGatewayContributions(e);
 }
 
@@ -163,7 +163,7 @@ export function extensionHasProviderCredentialsSettings(e: ExtensionApiRow): boo
 }
 
 /** Used by sidebar nav, command palette, and {@link useUiExtensions} (active or pending activation only). */
-export function extensionExposesGatewayShellUi(e: ExtensionApiRow): boolean {
+function extensionExposesGatewayShellUi(e: ExtensionApiRow): boolean {
   if (!extensionUiUnlocked(e)) return false;
   if (e.hasConfigSchema) return true;
   if (extensionHasProviderCredentialsSettings(e)) return true;

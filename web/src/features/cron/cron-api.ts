@@ -113,19 +113,6 @@ export interface CronRunHistoryRow extends CronJobExecution {
   jobName?: string;
 }
 
-export interface CronMetrics {
-  totalJobs: number;
-  runningJobs: number;
-  enabledJobs: number;
-  failedLastHour: number;
-  avgExecutionTime: number;
-  nextScheduledJob?: {
-    id: string;
-    name?: string;
-    runAt: Date | string;
-  };
-}
-
 export interface CronJobUpdate {
   name?: string;
   schedule?: string;
@@ -212,10 +199,6 @@ export async function getAllRunsHistory(limit = 40): Promise<CronRunHistoryRow[]
     apiUrl(`/api/cron/runs/history?limit=${limit}`),
   );
   return result.runs || [];
-}
-
-export async function getMetrics(): Promise<CronMetrics> {
-  return fetchJsonCron<CronMetrics>(apiUrl('/api/cron/metrics'));
 }
 
 export async function getChannels(): Promise<ChannelStatus[]> {

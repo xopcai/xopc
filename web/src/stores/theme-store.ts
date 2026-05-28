@@ -6,13 +6,6 @@ export type ThemePreference = 'light' | 'dark' | 'system';
 /** Visual color scheme — orthogonal to light/dark mode. */
 export type ColorScheme = 'default' | 'emerald' | 'mono' | 'clay';
 
-export const COLOR_SCHEMES: { value: ColorScheme; labelEn: string; labelZh: string }[] = [
-  { value: 'default', labelEn: 'Default', labelZh: '默认' },
-  { value: 'emerald', labelEn: 'Light green', labelZh: '浅绿' },
-  { value: 'mono', labelEn: 'Mono', labelZh: 'mono/单色' },
-  { value: 'clay', labelEn: 'Clay', labelZh: '奶油 Clay' },
-];
-
 const DEFAULT_COLOR_SCHEME: ColorScheme = 'default';
 
 const THEME_META_COLOR: Record<'light' | 'dark', Record<ColorScheme, string>> = {

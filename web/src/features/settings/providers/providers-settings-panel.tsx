@@ -4,7 +4,9 @@ import {
   KeyRound,
   Search,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react';
+
+import { uiPatchReducer } from '@/lib/settings-form-draft';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
@@ -67,6 +69,28 @@ function providersDraftReducer(state: ProvidersDraft, action: ProvidersDraftActi
   }
 }
 
+type ProvidersUi = {
+  saving: boolean;
+  error: string | null;
+  saveNotice: null | 'saved' | 'noChanges';
+  expandedCats: Set<string>;
+  searchQuery: string;
+  unconfiguredOnly: boolean;
+  savedProviderIds: Set<string>;
+  quickStartProviderId: string | null;
+};
+
+const initialProvidersUi: ProvidersUi = {
+  saving: false,
+  error: null,
+  saveNotice: null,
+  expandedCats: new Set(['common']),
+  searchQuery: '',
+  unconfiguredOnly: false,
+  savedProviderIds: new Set(),
+  quickStartProviderId: null,
+};
+
 /** See `WebSearchSettingsPanel` for the embedded-mode contract. */
 export function ProvidersSettingsPanel({ embedded = false }: { embedded?: boolean } = {}) {
   const language = useLocaleStore((s) => s.language);
@@ -78,14 +102,17 @@ export function ProvidersSettingsPanel({ embedded = false }: { embedded?: boolea
   const [draftState, dispatchDraft] = useReducer(providersDraftReducer, { draft: {}, baseline: {} });
   const draft = draftState.draft;
   const baseline = draftState.baseline;
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [saveNotice, setSaveNotice] = useState<null | 'saved' | 'noChanges'>(null);
-  const [expandedCats, setExpandedCats] = useState<Set<string>>(() => new Set(['common']));
-  const [searchQuery, setSearchQuery] = useState('');
-  const [unconfiguredOnly, setUnconfiguredOnly] = useState(false);
-  const [savedProviderIds, setSavedProviderIds] = useState<Set<string>>(() => new Set());
-  const [quickStartProviderId, setQuickStartProviderId] = useState<string | null>(null);
+  const [ui, dispatchUi] = useReducer(uiPatchReducer<ProvidersUi>, initialProvidersUi);
+  const {
+    saving,
+    error,
+    saveNotice,
+    expandedCats,
+    searchQuery,
+    unconfiguredOnly,
+    savedProviderIds,
+    quickStartProviderId,
+  } = ui;
   const dirtyRef = useRef(false);
 
   const metaUrl = apiUrl('/api/providers/meta');
@@ -202,16 +229,14 @@ export function ProvidersSettingsPanel({ embedded = false }: { embedded?: boolea
     if (Object.keys(toPatch).length === 0) {
       dispatchDraft({ type: 'commitDraft' });
       dirtyRef.current = false;
-      setSaveNotice('noChanges');
-      window.setTimeout(() => setSaveNotice(null), 2500);
+      dispatchUi({ type: 'patch', patch: { saveNotice: 'noChanges' } });
+      window.setTimeout(() => dispatchUi({ type: 'patch', patch: { saveNotice: null } }), 2500);
       return;
     }
-    setSaving(true);
-    setError(null);
-    setSaveNotice(null);
+    dispatchUi({ type: 'patch', patch: { saving: true, error: null, saveNotice: null } });
     try {
       await patchProviderApiKeys(toPatch);
-      setSavedProviderIds(new Set(Object.keys(toPatch)));
+      dispatchUi({ type: 'patch', patch: { savedProviderIds: new Set(Object.keys(toPatch)) } });
       const freshModels = (await mutModels(fetchConfiguredModelsCached(true))) ?? models ?? [];
       const [nextCfg, nextMeta] = await Promise.all([mutCfg(), mutMeta()]);
       const list = Array.isArray(nextMeta) ? nextMeta : metaList ?? [];
@@ -222,32 +247,28 @@ export function ProvidersSettingsPanel({ embedded = false }: { embedded?: boolea
         dispatchDraft({ type: 'saved', rows });
         dirtyRef.current = false;
       }
-      setSaveNotice('saved');
-      window.setTimeout(() => setSaveNotice(null), 2500);
+      dispatchUi({ type: 'patch', patch: { saveNotice: 'saved' } });
+      window.setTimeout(() => dispatchUi({ type: 'patch', patch: { saveNotice: null } }), 2500);
     } catch (e) {
-      setError(e instanceof Error ? e.message : p.saveError);
+      dispatchUi({ type: 'patch', patch: { error: e instanceof Error ? e.message : p.saveError } });
     } finally {
-      setSaving(false);
+      dispatchUi({ type: 'patch', patch: { saving: false } });
     }
   }, [cfgData, draft, metaList, models, mutCfg, mutMeta, mutModels, p.saveError, saving]);
 
   const discard = useCallback(() => {
     dirtyRef.current = false;
     dispatchDraft({ type: 'discard' });
-    setError(null);
-    setSaveNotice(null);
-    setSavedProviderIds(new Set());
+    dispatchUi({ type: 'patch', patch: { error: null, saveNotice: null, savedProviderIds: new Set() } });
   }, [baseline]);
 
   useSaveBarRegistration({ id: 'providers', dirty, saving, save, discard });
 
   const toggleCat = (cat: string) => {
-    setExpandedCats((prev) => {
-      const next = new Set(prev);
-      if (next.has(cat)) next.delete(cat);
-      else next.add(cat);
-      return next;
-    });
+    const next = new Set(expandedCats);
+    if (next.has(cat)) next.delete(cat);
+    else next.add(cat);
+    dispatchUi({ type: 'patch', patch: { expandedCats: next } });
   };
 
   const refreshProviders = useCallback(() => {
@@ -356,13 +377,12 @@ export function ProvidersSettingsPanel({ embedded = false }: { embedded?: boolea
           recommended={['deepseek', 'openai', 'anthropic', 'google']}
           metaRows={metaRows}
           onPick={(id) => {
-            setSearchQuery(id);
-            setQuickStartProviderId(id);
+            dispatchUi({ type: 'patch', patch: { searchQuery: id, quickStartProviderId: id } });
             // Expand the category containing this provider
             const row = metaRows.find((r) => r.id === id);
             if (row) {
               const cat = row.category || 'specialty';
-              setExpandedCats((prev) => new Set([...prev, cat]));
+              dispatchUi({ type: 'patch', patch: { expandedCats: new Set([...expandedCats, cat]) } });
             }
           }}
         />
@@ -378,7 +398,7 @@ export function ProvidersSettingsPanel({ embedded = false }: { embedded?: boolea
           <input
             type="search"
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => dispatchUi({ type: 'patch', patch: { searchQuery: e.target.value } })}
             placeholder={p.searchPlaceholder}
             autoComplete="off"
             className={cn(
@@ -393,7 +413,7 @@ export function ProvidersSettingsPanel({ embedded = false }: { embedded?: boolea
           <input
             type="checkbox"
             checked={unconfiguredOnly}
-            onChange={(e) => setUnconfiguredOnly(e.target.checked)}
+            onChange={(e) => dispatchUi({ type: 'patch', patch: { unconfiguredOnly: e.target.checked } })}
             className="size-4 rounded border-edge text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           />
           {p.unconfiguredOnly}
@@ -404,8 +424,7 @@ export function ProvidersSettingsPanel({ embedded = false }: { embedded?: boolea
             variant="ghost"
             className="h-9 w-fit self-start text-fg-muted"
             onClick={() => {
-              setSearchQuery('');
-              setUnconfiguredOnly(false);
+              dispatchUi({ type: 'patch', patch: { searchQuery: '', unconfiguredOnly: false } });
             }}
           >
             {p.clearFilters}
@@ -430,8 +449,7 @@ export function ProvidersSettingsPanel({ embedded = false }: { embedded?: boolea
             variant="secondary"
             className="mt-4"
             onClick={() => {
-              setSearchQuery('');
-              setUnconfiguredOnly(false);
+              dispatchUi({ type: 'patch', patch: { searchQuery: '', unconfiguredOnly: false } });
             }}
           >
             {p.clearFilters}

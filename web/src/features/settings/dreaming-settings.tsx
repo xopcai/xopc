@@ -1,5 +1,7 @@
 import { Activity, ScanLine, Settings2, Wrench, type LucideIcon } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, type ReactNode } from 'react';
+
+import { uiPatchReducer } from '@/lib/settings-form-draft';
 import { useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
 
@@ -89,6 +91,46 @@ function dreamingFormReducer(state: DreamingFormDraft, action: DreamingFormActio
   }
 }
 
+type DreamingUi = {
+  actionBusy: null | 'reset_store' | 'clear_lock';
+  actionError: string | null;
+  actionOk: boolean;
+  runBusy: boolean;
+  runOk: boolean;
+  runError: string | null;
+  runPhase: DreamingPhaseId;
+  cfgSaving: boolean;
+  enableSaving: boolean;
+  cfgOk: boolean;
+  cfgError: string | null;
+  previewLoading: boolean;
+  previewError: string | null;
+  previewItems: DreamingPreviewItem[] | null;
+  eventsLoading: boolean;
+  eventsError: string | null;
+  events: DreamingEvent[] | null;
+};
+
+const initialDreamingUi: DreamingUi = {
+  actionBusy: null,
+  actionError: null,
+  actionOk: false,
+  runBusy: false,
+  runOk: false,
+  runError: null,
+  runPhase: 'deep',
+  cfgSaving: false,
+  enableSaving: false,
+  cfgOk: false,
+  cfgError: null,
+  previewLoading: false,
+  previewError: null,
+  previewItems: null,
+  eventsLoading: false,
+  eventsError: null,
+  events: null,
+};
+
 export function DreamingSettingsPanel() {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
@@ -118,26 +160,29 @@ export function DreamingSettingsPanel() {
 
   const { data: cfgData } = useGatewayConfigSwr(hasToken);
 
-  const [actionBusy, setActionBusy] = useState<null | 'reset_store' | 'clear_lock'>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
-  const [actionOk, setActionOk] = useState(false);
-  const [runBusy, setRunBusy] = useState(false);
-  const [runOk, setRunOk] = useState(false);
-  const [runError, setRunError] = useState<string | null>(null);
-  const [runPhase, setRunPhase] = useState<DreamingPhaseId>('deep');
+  const [ui, dispatchUi] = useReducer(uiPatchReducer<DreamingUi>, initialDreamingUi);
+  const {
+    actionBusy,
+    actionError,
+    actionOk,
+    runBusy,
+    runOk,
+    runError,
+    runPhase,
+    cfgSaving,
+    enableSaving,
+    cfgOk,
+    cfgError,
+    previewLoading,
+    previewError,
+    previewItems,
+    eventsLoading,
+    eventsError,
+    events,
+  } = ui;
   const [cfgDraft, dispatchCfg] = useReducer(dreamingFormReducer, { form: null, baseline: null });
   const cfgForm = cfgDraft.form;
   const cfgBaseline = cfgDraft.baseline;
-  const [cfgSaving, setCfgSaving] = useState(false);
-  const [enableSaving, setEnableSaving] = useState(false);
-  const [cfgOk, setCfgOk] = useState(false);
-  const [cfgError, setCfgError] = useState<string | null>(null);
-  const [previewLoading, setPreviewLoading] = useState(false);
-  const [previewError, setPreviewError] = useState<string | null>(null);
-  const [previewItems, setPreviewItems] = useState<DreamingPreviewItem[] | null>(null);
-  const [eventsLoading, setEventsLoading] = useState(false);
-  const [eventsError, setEventsError] = useState<string | null>(null);
-  const [events, setEvents] = useState<DreamingEvent[] | null>(null);
   const cfgDirtyRef = useRef(false);
 
   const { data, error, isLoading, mutate } = useSWR(hasToken ? dreamingSwrKey() : null, fetchDreamingStatus, {
@@ -164,55 +209,65 @@ export function DreamingSettingsPanel() {
   }, [cfgOk, runOk, actionOk, t]);
 
   const doRefresh = useCallback(async () => {
-    setActionOk(false);
-    setActionError(null);
-    setRunOk(false);
-    setRunError(null);
-    setCfgOk(false);
-    setCfgError(null);
-    setPreviewError(null);
+    dispatchUi({
+      type: 'patch',
+      patch: {
+        actionOk: false,
+        actionError: null,
+        runOk: false,
+        runError: null,
+        cfgOk: false,
+        cfgError: null,
+        previewError: null,
+      },
+    });
     await mutate();
   }, [mutate]);
 
   const loadPreview = useCallback(async () => {
-    setPreviewLoading(true);
-    setPreviewError(null);
+    dispatchUi({ type: 'patch', patch: { previewLoading: true, previewError: null } });
     try {
       const res = await fetchDreamingPreview(20);
-      setPreviewItems(res.items ?? []);
+      dispatchUi({ type: 'patch', patch: { previewItems: res.items ?? [] } });
     } catch (e) {
-      setPreviewError(e instanceof Error ? e.message : String(e));
+      dispatchUi({
+        type: 'patch',
+        patch: { previewError: e instanceof Error ? e.message : String(e) },
+      });
     } finally {
-      setPreviewLoading(false);
+      dispatchUi({ type: 'patch', patch: { previewLoading: false } });
     }
   }, []);
 
   const loadEvents = useCallback(async () => {
-    setEventsLoading(true);
-    setEventsError(null);
+    dispatchUi({ type: 'patch', patch: { eventsLoading: true, eventsError: null } });
     try {
       const result = await fetchDreamingEvents(50);
-      setEvents(result);
+      dispatchUi({ type: 'patch', patch: { events: result } });
     } catch (e) {
-      setEventsError(e instanceof Error ? e.message : String(e));
+      dispatchUi({
+        type: 'patch',
+        patch: { eventsError: e instanceof Error ? e.message : String(e) },
+      });
     } finally {
-      setEventsLoading(false);
+      dispatchUi({ type: 'patch', patch: { eventsLoading: false } });
     }
   }, []);
 
   const doRunNow = useCallback(
     async (phase: DreamingPhaseId = 'deep') => {
-      setRunBusy(true);
-      setRunOk(false);
-      setRunError(null);
+      dispatchUi({ type: 'patch', patch: { runBusy: true, runOk: false, runError: null } });
       try {
         await postDreamingRunNow(phase);
-        setRunOk(true);
+        dispatchUi({ type: 'patch', patch: { runOk: true } });
         await mutate();
       } catch (e) {
-        setRunError(e instanceof Error ? e.message : String(e));
+        dispatchUi({
+          type: 'patch',
+          patch: { runError: e instanceof Error ? e.message : String(e) },
+        });
       } finally {
-        setRunBusy(false);
+        dispatchUi({ type: 'patch', patch: { runBusy: false } });
       }
     },
     [mutate],
@@ -220,17 +275,18 @@ export function DreamingSettingsPanel() {
 
   const doAction = useCallback(
     async (action: 'reset_store' | 'clear_lock') => {
-      setActionBusy(action);
-      setActionError(null);
-      setActionOk(false);
+      dispatchUi({ type: 'patch', patch: { actionBusy: action, actionError: null, actionOk: false } });
       try {
         await postDreamingAction(action);
-        setActionOk(true);
+        dispatchUi({ type: 'patch', patch: { actionOk: true } });
         await mutate();
       } catch (e) {
-        setActionError(e instanceof Error ? e.message : String(e));
+        dispatchUi({
+          type: 'patch',
+          patch: { actionError: e instanceof Error ? e.message : String(e) },
+        });
       } finally {
-        setActionBusy(null);
+        dispatchUi({ type: 'patch', patch: { actionBusy: null } });
       }
     },
     [mutate],
@@ -261,19 +317,20 @@ export function DreamingSettingsPanel() {
 
   const saveConfig = useCallback(async () => {
     if (!cfgForm) return;
-    setCfgSaving(true);
-    setCfgOk(false);
-    setCfgError(null);
+    dispatchUi({ type: 'patch', patch: { cfgSaving: true, cfgOk: false, cfgError: null } });
     try {
       await patchDreamingConfig(cfgForm);
       dispatchCfg({ type: 'saved', value: cfgForm });
       cfgDirtyRef.current = false;
-      setCfgOk(true);
+      dispatchUi({ type: 'patch', patch: { cfgOk: true } });
       await mutate();
     } catch (e) {
-      setCfgError(e instanceof Error ? e.message : String(e));
+      dispatchUi({
+        type: 'patch',
+        patch: { cfgError: e instanceof Error ? e.message : String(e) },
+      });
     } finally {
-      setCfgSaving(false);
+      dispatchUi({ type: 'patch', patch: { cfgSaving: false } });
     }
   }, [cfgForm, mutate]);
 
@@ -284,20 +341,21 @@ export function DreamingSettingsPanel() {
       const prev = cfgForm;
       cfgDirtyRef.current = true;
       dispatchCfg({ type: 'set', value: next });
-      setEnableSaving(true);
-      setCfgOk(false);
-      setCfgError(null);
+      dispatchUi({ type: 'patch', patch: { enableSaving: true, cfgOk: false, cfgError: null } });
       try {
         await patchDreamingConfig(next);
         dispatchCfg({ type: 'saved', value: next });
         cfgDirtyRef.current = false;
-        setCfgOk(true);
+        dispatchUi({ type: 'patch', patch: { cfgOk: true } });
         await mutate();
       } catch (e) {
         dispatchCfg({ type: 'set', value: prev });
-        setCfgError(e instanceof Error ? e.message : String(e));
+        dispatchUi({
+          type: 'patch',
+          patch: { cfgError: e instanceof Error ? e.message : String(e) },
+        });
       } finally {
-        setEnableSaving(false);
+        dispatchUi({ type: 'patch', patch: { enableSaving: false } });
       }
     },
     [cfgForm, hasToken, mutate],
@@ -315,7 +373,7 @@ export function DreamingSettingsPanel() {
         cfgSaving={cfgSaving}
         enableSaving={enableSaving}
         runPhase={runPhase}
-        setRunPhase={setRunPhase}
+        setRunPhase={(phase) => dispatchUi({ type: 'patch', patch: { runPhase: phase } })}
         runBusy={runBusy}
         doRunNow={doRunNow}
         doRefresh={doRefresh}
@@ -366,8 +424,8 @@ export function DreamingSettingsPanel() {
               dispatchCfg({ type: 'set', value: resolved });
             }
           }}
-          setCfgOk={setCfgOk}
-          setCfgError={setCfgError}
+          setCfgOk={(ok) => dispatchUi({ type: 'patch', patch: { cfgOk: ok } })}
+          setCfgError={(err) => dispatchUi({ type: 'patch', patch: { cfgError: err } })}
           saveConfig={saveConfig}
         />
       </DreamingTabPanel>

@@ -10,7 +10,7 @@ export type CronGlobalsState = {
   enableMetrics: boolean;
 };
 
-export const DEFAULT_CRON_GLOBALS: CronGlobalsState = {
+const DEFAULT_CRON_GLOBALS: CronGlobalsState = {
   enabled: true,
   maxConcurrentJobs: 5,
   defaultTimezone: 'UTC',

@@ -67,27 +67,6 @@ export async function getSessionDetail(
   return data.session;
 }
 
-export type SessionPatchPayload = {
-  name?: string;
-  tags?: string[];
-  replaceTags?: boolean;
-  customData?: Record<string, unknown>;
-};
-
-export async function patchSession(
-  key: string,
-  patch: SessionPatchPayload,
-): Promise<SessionDetail> {
-  const data = await fetchJson<{ ok: boolean; session?: SessionDetail; error?: string }>(
-    apiUrl(`/api/sessions/${encodeURIComponent(key)}`),
-    { method: 'PATCH', body: JSON.stringify(patch) },
-  );
-  if (!data.ok || !data.session) {
-    throw new Error(data.error || 'PATCH session failed');
-  }
-  return data.session;
-}
-
 export async function deleteSession(key: string): Promise<void> {
   await fetchJson(apiUrl(`/api/sessions/${encodeURIComponent(key)}`), { method: 'DELETE' });
 }

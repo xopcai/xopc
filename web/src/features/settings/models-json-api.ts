@@ -5,7 +5,6 @@ import type {
   ApiType,
   CustomModel,
   ModelsJsonConfig,
-  ProviderConfig,
   ValidationResult,
 } from './models-json.types';
 
@@ -145,19 +144,6 @@ export async function testApiKey(value: string): Promise<ApiKeyTestResult> {
   return data.payload;
 }
 
-export function createCustomProvider(
-  baseUrl: string,
-  apiKey: string,
-  api: ApiType = 'openai-completions',
-): ProviderConfig {
-  return {
-    baseUrl,
-    apiKey,
-    api,
-    models: [],
-  };
-}
-
 export function createCustomModel(id: string, name?: string, overrides?: Partial<CustomModel>): CustomModel {
   return {
     id,
@@ -175,11 +161,11 @@ export function createCustomModel(id: string, name?: string, overrides?: Partial
   };
 }
 
-export function isShellCommand(value: string): boolean {
+function isShellCommand(value: string): boolean {
   return value.startsWith('!');
 }
 
-export function isEnvVar(value: string): boolean {
+function isEnvVar(value: string): boolean {
   return /^[A-Z][A-Z0-9_]*$/.test(value);
 }
 

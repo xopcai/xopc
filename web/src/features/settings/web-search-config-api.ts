@@ -66,11 +66,6 @@ export function normalizeWebSearchSettingsFromConfig(cfg: unknown): WebSearchSet
   };
 }
 
-export async function fetchWebSearchSettings(): Promise<WebSearchSettingsState> {
-  const res = await fetchJson<{ ok?: boolean; payload?: { config?: unknown } }>(apiUrl('/api/config'));
-  return normalizeWebSearchSettingsFromConfig(res.payload?.config);
-}
-
 export async function patchWebSearchSettings(state: WebSearchSettingsState): Promise<void> {
   const region =
     state.regionMode === 'auto' ? 'auto' : state.regionMode === 'cn' ? 'cn' : 'global';

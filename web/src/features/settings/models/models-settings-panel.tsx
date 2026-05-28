@@ -5,7 +5,9 @@ import {
   Plus,
   RefreshCw,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, type Dispatch, type SetStateAction } from 'react';
+
+import { createFormDraftReducer, uiPatchReducer } from '@/lib/settings-form-draft';
 
 import { Button } from '@/components/ui/button';
 import { useSaveBarRegistration } from '@/features/settings/save-bar/use-save-bar-registration';
@@ -39,6 +41,52 @@ import {
 } from './models-providers-list';
 import { addProviderEntry, inputClassName, removeProvider, updateProvider } from './models-settings-lib';
 
+const modelsFormReducer = createFormDraftReducer<ModelsJsonConfig>();
+
+type ModelsUi = {
+  path: string;
+  loadMetaError: string | undefined;
+  loading: boolean;
+  saving: boolean;
+  validating: boolean;
+  reloading: boolean;
+  error: string | null;
+  saveOk: boolean;
+  validation: ValidationResult | null;
+  expanded: Set<string>;
+  editorMode: 'guided' | 'expert';
+  rawText: string;
+  rawError: string | null;
+  showPw: Set<string>;
+  testResults: Map<string, ModelsTestResult>;
+  providerDialogOpen: boolean;
+  providerPreset: string | null;
+  modelDialogOpen: boolean;
+  modelDialogCtx: { providerId: string; model: CustomModel | null; isNew: boolean } | null;
+};
+
+const initialModelsUi: ModelsUi = {
+  path: '',
+  loadMetaError: undefined,
+  loading: true,
+  saving: false,
+  validating: false,
+  reloading: false,
+  error: null,
+  saveOk: false,
+  validation: null,
+  expanded: new Set(),
+  editorMode: 'guided',
+  rawText: '',
+  rawError: null,
+  showPw: new Set(),
+  testResults: new Map(),
+  providerDialogOpen: false,
+  providerPreset: null,
+  modelDialogOpen: false,
+  modelDialogCtx: null,
+};
+
 /** See `WebSearchSettingsPanel` for the embedded-mode contract. */
 export function ModelsSettingsPanel({ embedded = false }: { embedded?: boolean } = {}) {
   const language = useLocaleStore((s) => s.language);
@@ -48,63 +96,77 @@ export function ModelsSettingsPanel({ embedded = false }: { embedded?: boolean }
   const token = useGatewayStore((st) => st.token);
   const hasToken = Boolean(token);
 
-  const [config, setConfig] = useState<ModelsJsonConfig>({ providers: {} });
-  const [baseline, setBaseline] = useState<ModelsJsonConfig>({ providers: {} });
-  const [path, setPath] = useState('');
-  const [loadMetaError, setLoadMetaError] = useState<string | undefined>();
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [validating, setValidating] = useState(false);
-  const [reloading, setReloading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [saveOk, setSaveOk] = useState(false);
-  const [validation, setValidation] = useState<ValidationResult | null>(null);
-  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
-  const [editorMode, setEditorMode] = useState<'guided' | 'expert'>('guided');
-  const [rawText, setRawText] = useState('');
-  const [rawError, setRawError] = useState<string | null>(null);
-  const [showPw, setShowPw] = useState<Set<string>>(() => new Set());
-  const [testResults, setTestResults] = useState<Map<string, ModelsTestResult>>(() => new Map());
+  const [formDraft, dispatchForm] = useReducer(modelsFormReducer, {
+    form: { providers: {} } as ModelsJsonConfig,
+    baseline: { providers: {} } as ModelsJsonConfig,
+  });
+  const config = formDraft.form ?? { providers: {} };
+  const baseline = formDraft.baseline ?? { providers: {} };
+  const [ui, dispatchUi] = useReducer(uiPatchReducer<ModelsUi>, initialModelsUi);
+  const {
+    path,
+    loadMetaError,
+    loading,
+    saving,
+    validating,
+    reloading,
+    error,
+    saveOk,
+    validation,
+    expanded,
+    editorMode,
+    rawText,
+    rawError,
+    showPw,
+    testResults,
+    providerDialogOpen,
+    providerPreset,
+    modelDialogOpen,
+    modelDialogCtx,
+  } = ui;
 
-  const [providerDialogOpen, setProviderDialogOpen] = useState(false);
-  const [providerPreset, setProviderPreset] = useState<string | null>(null);
-
-  const [modelDialogOpen, setModelDialogOpen] = useState(false);
-  const [modelDialogCtx, setModelDialogCtx] = useState<{
-    providerId: string;
-    model: CustomModel | null;
-    isNew: boolean;
-  } | null>(null);
+  const setConfig = useCallback(
+    (updater: ModelsJsonConfig | ((prev: ModelsJsonConfig) => ModelsJsonConfig)) => {
+      dispatchForm({
+        type: 'set-form',
+        updater: (prev) => (typeof updater === 'function' ? updater(prev) : updater),
+      });
+    },
+    [],
+  );
 
   const load = useCallback(async (opts?: { skipFullPageLoading?: boolean }) => {
     const showFullPageLoading = !opts?.skipFullPageLoading;
     if (showFullPageLoading) {
-      setLoading(true);
+      dispatchUi({ type: 'patch', patch: { loading: true } });
     }
-    setError(null);
+    dispatchUi({ type: 'patch', patch: { error: null } });
     try {
       const st = await fetchModelsJson();
       const norm = normalizeModelsJsonConfig(st.config);
-      setConfig(norm);
-      setBaseline(structuredClone(norm));
-      setPath(st.path);
-      setLoadMetaError(st.loadError);
-      setValidation(null);
-      setSaveOk(false);
+      dispatchForm({ type: 'sync', value: norm });
+      dispatchUi({
+        type: 'patch',
+        patch: {
+          path: st.path,
+          loadMetaError: st.loadError,
+          validation: null,
+          saveOk: false,
+        },
+      });
     } catch (e) {
-      setError(e instanceof Error ? e.message : ms.loadError);
-      setConfig({ providers: {} });
-      setBaseline({ providers: {} });
+      dispatchUi({ type: 'patch', patch: { error: e instanceof Error ? e.message : ms.loadError } });
+      dispatchForm({ type: 'sync', value: { providers: {} } });
     } finally {
       if (showFullPageLoading) {
-        setLoading(false);
+        dispatchUi({ type: 'patch', patch: { loading: false } });
       }
     }
   }, [ms.loadError]);
 
   useEffect(() => {
     if (!hasToken) {
-      setLoading(false);
+      dispatchUi({ type: 'patch', patch: { loading: false } });
       return;
     }
     void load();
@@ -134,35 +196,35 @@ export function ModelsSettingsPanel({ embedded = false }: { embedded?: boolean }
   }, [config.providers]);
 
   const toggleExpand = (id: string) => {
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+    const next = new Set(expanded);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    dispatchUi({ type: 'patch', patch: { expanded: next } });
   };
 
   const toggleShowPw = (id: string) => {
-    setShowPw((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+    const next = new Set(showPw);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    dispatchUi({ type: 'patch', patch: { showPw: next } });
   };
 
   const syncRawFromConfig = useCallback(() => {
-    setRawText(JSON.stringify(config, null, 2));
-    setRawError(null);
+    dispatchUi({
+      type: 'patch',
+      patch: { rawText: JSON.stringify(config, null, 2), rawError: null },
+    });
   }, [config]);
 
   const selectEditorMode = useCallback(
     (mode: 'guided' | 'expert') => {
-      setEditorMode(mode);
-      if (mode === 'expert') {
-        setRawText(JSON.stringify(config, null, 2));
-        setRawError(null);
-      }
+      dispatchUi({
+        type: 'patch',
+        patch:
+          mode === 'expert'
+            ? { editorMode: mode, rawText: JSON.stringify(config, null, 2), rawError: null }
+            : { editorMode: mode },
+      });
     },
     [config],
   );
@@ -172,22 +234,24 @@ export function ModelsSettingsPanel({ embedded = false }: { embedded?: boolean }
       const parsed = JSON.parse(rawText) as unknown;
       const norm = normalizeModelsJsonConfig(parsed);
       setConfig(norm);
-      setRawError(null);
+      dispatchUi({ type: 'patch', patch: { rawError: null } });
     } catch {
-      setRawError(ms.jsonParseError);
+      dispatchUi({ type: 'patch', patch: { rawError: ms.jsonParseError } });
     }
   };
 
   const runValidate = async () => {
-    setValidating(true);
-    setError(null);
+    dispatchUi({ type: 'patch', patch: { validating: true, error: null } });
     try {
       const r = await validateModelsJson(config);
-      setValidation(r);
+      dispatchUi({ type: 'patch', patch: { validation: r } });
     } catch (e) {
-      setError(e instanceof Error ? e.message : ms.validateError);
+      dispatchUi({
+        type: 'patch',
+        patch: { error: e instanceof Error ? e.message : ms.validateError },
+      });
     } finally {
-      setValidating(false);
+      dispatchUi({ type: 'patch', patch: { validating: false } });
     }
   };
 
@@ -197,17 +261,16 @@ export function ModelsSettingsPanel({ embedded = false }: { embedded?: boolean }
     const hadAgentDirty = agentVm.dirty;
     if (!hadJsonDirty && !hadAgentDirty) return;
 
-    setError(null);
-    setSaveOk(false);
+    dispatchUi({ type: 'patch', patch: { error: null, saveOk: false } });
     try {
       if (hadJsonDirty) {
-        setSaving(true);
+        dispatchUi({ type: 'patch', patch: { saving: true } });
         try {
           await saveModelsJson(config);
-          setBaseline(structuredClone(config));
-          setValidation(null);
+          dispatchForm({ type: 'saved', value: structuredClone(config) });
+          dispatchUi({ type: 'patch', patch: { validation: null } });
         } finally {
-          setSaving(false);
+          dispatchUi({ type: 'patch', patch: { saving: false } });
         }
       }
       if (hadAgentDirty && agentVm.form) {
@@ -216,21 +279,25 @@ export function ModelsSettingsPanel({ embedded = false }: { embedded?: boolean }
           throw new Error(m.agentSettings.saveError);
         }
       }
-      setSaveOk(true);
+      dispatchUi({ type: 'patch', patch: { saveOk: true } });
     } catch (e) {
-      setError(e instanceof Error ? e.message : ms.saveError);
+      dispatchUi({ type: 'patch', patch: { error: e instanceof Error ? e.message : ms.saveError } });
     }
   };
 
   const runDiscard = useCallback(() => {
-    setConfig(structuredClone(baseline));
-    setValidation(null);
-    setSaveOk(false);
-    setError(null);
-    if (editorMode === 'expert') {
-      setRawText(JSON.stringify(baseline, null, 2));
-      setRawError(null);
-    }
+    dispatchForm({ type: 'discard' });
+    dispatchUi({
+      type: 'patch',
+      patch: {
+        validation: null,
+        saveOk: false,
+        error: null,
+        ...(editorMode === 'expert'
+          ? { rawText: JSON.stringify(baseline, null, 2), rawError: null }
+          : {}),
+      },
+    });
     agentVm.discard();
   }, [baseline, editorMode, agentVm]);
 
@@ -243,62 +310,67 @@ export function ModelsSettingsPanel({ embedded = false }: { embedded?: boolean }
   });
 
   const runReload = async () => {
-    setReloading(true);
-    setError(null);
+    dispatchUi({ type: 'patch', patch: { reloading: true, error: null } });
     try {
       await reloadModelsJson();
       await load({ skipFullPageLoading: true });
     } catch (e) {
-      setError(e instanceof Error ? e.message : ms.reloadError);
+      dispatchUi({
+        type: 'patch',
+        patch: { error: e instanceof Error ? e.message : ms.reloadError },
+      });
     } finally {
-      setReloading(false);
+      dispatchUi({ type: 'patch', patch: { reloading: false } });
     }
   };
 
   const runTestKey = async (providerId: string, value: string) => {
     try {
       const r = await testApiKey(value);
-      setTestResults((prev) => {
-        const next = new Map(prev);
-        next.set(providerId, r);
-        return next;
-      });
+      const next = new Map(testResults);
+      next.set(providerId, r);
+      dispatchUi({ type: 'patch', patch: { testResults: next } });
     } catch (e) {
-      setTestResults((prev) => {
-        const next = new Map(prev);
-        next.set(providerId, {
-          type: 'error',
-          error: e instanceof Error ? e.message : 'Error',
-        });
-        return next;
+      const next = new Map(testResults);
+      next.set(providerId, {
+        type: 'error',
+        error: e instanceof Error ? e.message : 'Error',
       });
+      dispatchUi({ type: 'patch', patch: { testResults: next } });
     }
   };
 
   const openAddProvider = (preset: string | null = null) => {
-    setProviderPreset(preset);
-    setProviderDialogOpen(true);
+    dispatchUi({ type: 'patch', patch: { providerPreset: preset, providerDialogOpen: true } });
   };
 
   const onProviderAdded = (providerId: string, prov: ProviderConfig) => {
     setConfig((c) => addProviderEntry(c, providerId, prov));
-    setExpanded((prev) => new Set(prev).add(providerId));
+    dispatchUi({ type: 'patch', patch: { expanded: new Set(expanded).add(providerId) } });
   };
 
   const removeProv = (providerId: string) => {
     if (!window.confirm(ms.removeProviderConfirm.replace('{{id}}', providerId))) return;
     setConfig((c) => removeProvider(c, providerId));
-    setTestResults((prev) => {
-      const next = new Map(prev);
-      next.delete(providerId);
-      return next;
-    });
+    const next = new Map(testResults);
+    next.delete(providerId);
+    dispatchUi({ type: 'patch', patch: { testResults: next } });
   };
 
   const openModelDialog = (providerId: string, model: CustomModel | null, isNew: boolean) => {
-    setModelDialogCtx({ providerId, model, isNew });
-    setModelDialogOpen(true);
+    dispatchUi({
+      type: 'patch',
+      patch: { modelDialogCtx: { providerId, model, isNew }, modelDialogOpen: true },
+    });
   };
+
+  const patchTestResults = useCallback<Dispatch<SetStateAction<Map<string, ModelsTestResult>>>>(
+    (value) => {
+      const next = typeof value === 'function' ? value(testResults) : value;
+      dispatchUi({ type: 'patch', patch: { testResults: next } });
+    },
+    [testResults],
+  );
 
   const onModelSaved = (updated: CustomModel) => {
     if (!modelDialogCtx) return;
@@ -388,7 +460,7 @@ export function ModelsSettingsPanel({ embedded = false }: { embedded?: boolean }
               )}
               onClick={() => {
                 selectEditorMode(mode);
-                setRawError(null);
+                dispatchUi({ type: 'patch', patch: { rawError: null } });
               }}
             >
               {mode === 'guided' ? ms.modeGuided : ms.modeExpert}
@@ -536,7 +608,7 @@ export function ModelsSettingsPanel({ embedded = false }: { embedded?: boolean }
               'min-h-[320px] resize-y font-mono text-xs leading-relaxed',
             )}
             value={rawText}
-            onChange={(e) => setRawText(e.target.value)}
+            onChange={(e) => dispatchUi({ type: 'patch', patch: { rawText: e.target.value } })}
             spellCheck={false}
           />
           {rawError ? <p className="text-xs text-red-600 dark:text-red-400">{rawError}</p> : null}
@@ -564,13 +636,13 @@ export function ModelsSettingsPanel({ embedded = false }: { embedded?: boolean }
           ms={ms}
           removeProv={removeProv}
           openModelDialog={openModelDialog}
-          setTestResults={setTestResults}
+          setTestResults={patchTestResults}
         />
       )}
 
       <ProviderAddDialog
         open={providerDialogOpen}
-        onOpenChange={setProviderDialogOpen}
+        onOpenChange={(open) => dispatchUi({ type: 'patch', patch: { providerDialogOpen: open } })}
         presetKey={providerPreset}
         onConfirm={onProviderAdded}
         m={ms}
@@ -579,8 +651,10 @@ export function ModelsSettingsPanel({ embedded = false }: { embedded?: boolean }
       <ModelEditDialogContent
         open={modelDialogOpen}
         onOpenChange={(o) => {
-          setModelDialogOpen(o);
-          if (!o) setModelDialogCtx(null);
+          dispatchUi({
+            type: 'patch',
+            patch: { modelDialogOpen: o, ...(o ? {} : { modelDialogCtx: null }) },
+          });
         }}
         providerId={modelDialogCtx?.providerId ?? null}
         model={modelDialogCtx?.model ?? null}

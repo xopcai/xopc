@@ -11,7 +11,7 @@ export type SharePolicyState = {
   inlinePreviewMimes: string[];
 };
 
-export const DEFAULT_SHARE_POLICY: SharePolicyState = {
+const DEFAULT_SHARE_POLICY: SharePolicyState = {
   enabled: true,
   defaultTtlHours: 24,
   maxTtlDays: 7,

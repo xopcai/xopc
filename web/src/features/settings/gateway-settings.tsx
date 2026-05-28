@@ -14,7 +14,9 @@ import {
   SlidersHorizontal,
   type LucideIcon,
 } from 'lucide-react';
-import { useCallback, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useMemo, useReducer, useRef, type ReactNode } from 'react';
+
+import { uiPatchReducer } from '@/lib/settings-form-draft';
 import { useSearchParams } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
@@ -124,6 +126,30 @@ function gatewayFormReducer(state: GatewayFormDraft, action: GatewayFormAction):
   }
 }
 
+type GatewayUi = {
+  saving: boolean;
+  error: string | null;
+  saveOk: boolean;
+  showAccessToken: boolean;
+  showPassword: boolean;
+  copied: boolean;
+  auditRefreshToken: number;
+  restarting: boolean;
+  restartConfirmOpen: boolean;
+};
+
+const initialGatewayUi: GatewayUi = {
+  saving: false,
+  error: null,
+  saveOk: false,
+  showAccessToken: false,
+  showPassword: false,
+  copied: false,
+  auditRefreshToken: 0,
+  restarting: false,
+  restartConfirmOpen: false,
+};
+
 export function GatewaySettingsPanel() {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
@@ -158,15 +184,18 @@ export function GatewaySettingsPanel() {
   const form = formDraft.form;
   const baseline = formDraft.baseline;
   const appliedBaseline = formDraft.appliedBaseline;
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [saveOk, setSaveOk] = useState(false);
-  const [showAccessToken, setShowAccessToken] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const [auditRefreshToken, setAuditRefreshToken] = useState(0);
-  const [restarting, setRestarting] = useState(false);
-  const [restartConfirmOpen, setRestartConfirmOpen] = useState(false);
+  const [ui, dispatchUi] = useReducer(uiPatchReducer<GatewayUi>, initialGatewayUi);
+  const {
+    saving,
+    error,
+    saveOk,
+    showAccessToken,
+    showPassword,
+    copied,
+    auditRefreshToken,
+    restarting,
+    restartConfirmOpen,
+  } = ui;
   const dirtyRef = useRef(false);
   const trackedParsedRef = useRef<GatewaySettingsState | null>(null);
   const appliedBaselineInitializedRef = useRef(false);
@@ -196,7 +225,7 @@ export function GatewaySettingsPanel() {
     if (!dirtyRef.current && trackedParsedRef.current !== parsed) {
       trackedParsedRef.current = parsed;
       dispatchForm({ type: 'sync', value: parsed });
-      setSaveOk(false);
+      dispatchUi({ type: 'patch', patch: { saveOk: false } });
     }
   }
 
@@ -313,23 +342,23 @@ export function GatewaySettingsPanel() {
     if (!form || saving) return;
     const validationError = validateGatewaySettings(form);
     if (validationError) {
-      setError(validationError);
+      dispatchUi({ type: 'patch', patch: { error: validationError } });
       return;
     }
-    setSaving(true);
-    setError(null);
-    setSaveOk(false);
+    dispatchUi({ type: 'patch', patch: { saving: true, error: null, saveOk: false } });
     try {
       await patchGatewaySettings(form);
       dirtyRef.current = false;
       dispatchForm({ type: 'saved', value: form });
-      setSaveOk(true);
-      setAuditRefreshToken((n) => n + 1);
-      window.setTimeout(() => setSaveOk(false), 2500);
+      dispatchUi({
+        type: 'patch',
+        patch: { saveOk: true, auditRefreshToken: auditRefreshToken + 1 },
+      });
+      window.setTimeout(() => dispatchUi({ type: 'patch', patch: { saveOk: false } }), 2500);
     } catch (e) {
-      setError(e instanceof Error ? e.message : g.saveError);
+      dispatchUi({ type: 'patch', patch: { error: e instanceof Error ? e.message : g.saveError } });
     } finally {
-      setSaving(false);
+      dispatchUi({ type: 'patch', patch: { saving: false } });
     }
   }, [form, saving, g.saveError]);
 
@@ -337,8 +366,7 @@ export function GatewaySettingsPanel() {
     if (!baseline) return;
     dirtyRef.current = false;
     dispatchForm({ type: 'discard' });
-    setError(null);
-    setSaveOk(false);
+    dispatchUi({ type: 'patch', patch: { error: null, saveOk: false } });
   }, [baseline]);
 
   const copyAccessToken = useCallback(async () => {
@@ -346,14 +374,13 @@ export function GatewaySettingsPanel() {
     if (!t) return;
     const ok = await copyTextToClipboard(t);
     if (!ok) return;
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 2000);
+    dispatchUi({ type: 'patch', patch: { copied: true } });
+    window.setTimeout(() => dispatchUi({ type: 'patch', patch: { copied: false } }), 2000);
   }, [form?.auth.token]);
 
   const executeRestart = useCallback(async () => {
     if (restarting) return;
-    setRestarting(true);
-    setRestartConfirmOpen(false);
+    dispatchUi({ type: 'patch', patch: { restarting: true, restartConfirmOpen: false } });
     try {
       const res = await restartGatewayAfterConfigChange();
       if (res.ok) {
@@ -376,7 +403,7 @@ export function GatewaySettingsPanel() {
         }),
       );
     } finally {
-      setRestarting(false);
+      dispatchUi({ type: 'patch', patch: { restarting: false } });
     }
   }, [restarting, g.restartGatewayFailed]);
 
@@ -466,7 +493,7 @@ export function GatewaySettingsPanel() {
             variant="secondary"
             className="shrink-0 gap-1.5 border-red-300 bg-red-50 text-xs text-red-700 hover:bg-red-100 dark:border-red-800 dark:bg-red-950/50 dark:text-red-300 dark:hover:bg-red-900/60"
             disabled={restarting}
-            onClick={() => setRestartConfirmOpen(true)}
+            onClick={() => dispatchUi({ type: 'patch', patch: { restartConfirmOpen: true } })}
           >
             {restarting ? (
               <Loader2 className="size-3.5 animate-spin" />
@@ -486,7 +513,7 @@ export function GatewaySettingsPanel() {
         cancelLabel={g.discard}
         destructive
         onConfirm={() => void executeRestart()}
-        onCancel={() => setRestartConfirmOpen(false)}
+        onCancel={() => dispatchUi({ type: 'patch', patch: { restartConfirmOpen: false } })}
       />
 
       <GatewaySettingsTabs g={g} activeTab={activeTab} onChange={setActiveTab} />
@@ -597,7 +624,9 @@ export function GatewaySettingsPanel() {
               value={form.auth.token}
               show={showAccessToken}
               copied={copied}
-              onToggleShow={() => setShowAccessToken((isShown) => !isShown)}
+              onToggleShow={() =>
+                dispatchUi({ type: 'patch', patch: { showAccessToken: !showAccessToken } })
+              }
               onCopy={() => void copyAccessToken()}
               onChange={(tokenValue) => updateAuth({ token: tokenValue })}
             />
@@ -616,7 +645,7 @@ export function GatewaySettingsPanel() {
             placeholder={g.authPasswordPlaceholder}
             value={form.auth.password}
             show={showPassword}
-            onToggleShow={() => setShowPassword((isShown) => !isShown)}
+            onToggleShow={() => dispatchUi({ type: 'patch', patch: { showPassword: !showPassword } })}
             onChange={(passwordValue) => updateAuth({ password: passwordValue })}
           />
         ) : null}

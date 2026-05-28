@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef } from 'react';
 
-import { uiPatchReducer, type UiPatchAction } from '@/lib/settings-form-draft';
+import { uiPatchReducer } from '@/lib/settings-form-draft';
 import { useLocation } from 'react-router-dom';
 
 import {
@@ -55,8 +55,6 @@ type CronPageUi = {
   templatePickerOpen: boolean;
   templateCategoryFilter: CronTemplateFilter;
 };
-
-type CronPageUiAction = UiPatchAction<CronPageUi>;
 
 const initialCronPageUi: CronPageUi = {
   mainTab: 'myTasks',

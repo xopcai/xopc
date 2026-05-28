@@ -1,7 +1,7 @@
 import { ExternalLink, RefreshCw, Shield } from 'lucide-react';
 import { useCallback, useEffect, useReducer } from 'react';
 
-import { uiPatchReducer, type UiPatchAction } from '@/lib/settings-form-draft';
+import { uiPatchReducer } from '@/lib/settings-form-draft';
 
 import { SettingsFormSection, settingsFormSectionClassName } from '@/features/settings/settings-form-section';
 import {
@@ -224,8 +224,6 @@ type SystemPanelUi = {
   permBusy: boolean;
   refreshing: boolean;
 };
-
-type SystemPanelUiAction = UiPatchAction<SystemPanelUi>;
 
 const initialSystemPanelUi: SystemPanelUi = {
   behavior: null,

@@ -238,12 +238,6 @@ export function normalizeChannelsFromConfig(config: unknown): ChannelsSettingsSt
   };
 }
 
-export async function fetchChannelsSettings(): Promise<ChannelsSettingsState> {
-  const res = await fetchJson<{ ok?: boolean; payload?: { config?: unknown } }>(apiUrl('/api/config'));
-  const c = res.payload?.config;
-  return normalizeChannelsFromConfig(c ?? {});
-}
-
 export type WeixinGatewayQrLoginStatusPayload =
   | { phase: 'polling'; qrcodeUrl: string; qrStatus?: string }
   | { phase: 'done'; ok: true; accountId: string }

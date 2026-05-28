@@ -1,7 +1,7 @@
 import { LoaderCircle, Play, Plug, Square, Webhook } from 'lucide-react';
 import { useCallback, useEffect, useReducer } from 'react';
 
-import { uiPatchReducer, type UiPatchAction } from '@/lib/settings-form-draft';
+import { uiPatchReducer } from '@/lib/settings-form-draft';
 import { AgentDefaultsField } from '../../agent-defaults-field';
 import { inputClassName } from '../../defaults-field-styles';
 
@@ -18,8 +18,6 @@ type CdpCardUi = {
   testMessage: string | null;
   executablePath: string;
 };
-
-type CdpCardUiAction = UiPatchAction<CdpCardUi>;
 
 const initialCdpCardUi: CdpCardUi = {
   instances: [],

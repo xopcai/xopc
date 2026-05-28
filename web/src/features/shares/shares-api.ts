@@ -73,13 +73,6 @@ export async function revokeShare(id: string): Promise<RevokeResponse> {
   return fetchJson<RevokeResponse>(apiUrl(`/api/shares/${id}`), { method: 'DELETE' });
 }
 
-export async function revokeSharesBatch(ids: string[]): Promise<BatchRevokeResponse> {
-  return fetchJson<BatchRevokeResponse>(apiUrl('/api/shares'), {
-    method: 'DELETE',
-    body: JSON.stringify({ ids }),
-  });
-}
-
 export async function cleanExpiredShares(): Promise<BatchRevokeResponse> {
   return fetchJson<BatchRevokeResponse>(apiUrl('/api/shares'), {
     method: 'DELETE',

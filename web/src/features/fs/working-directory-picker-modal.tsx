@@ -2,7 +2,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { ChevronUp, FolderInput, Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useId, useReducer } from 'react';
 
-import { uiPatchReducer, type UiPatchAction } from '@/lib/settings-form-draft';
+import { uiPatchReducer } from '@/lib/settings-form-draft';
 
 import { Button } from '@/components/ui/button';
 import { getHostFsMeta, listHostFs, type HostFsEntry, type HostFsListPayload } from '@/features/fs/host-fs-api';
@@ -49,8 +49,6 @@ type PickerUi = {
   listError: string | null;
   manualPath: string;
 };
-
-type PickerUiAction = UiPatchAction<PickerUi>;
 
 const initialPickerUi: PickerUi = {
   metaHostname: null,
