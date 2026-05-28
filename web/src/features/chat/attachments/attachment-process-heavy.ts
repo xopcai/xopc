@@ -255,7 +255,7 @@ export async function processPptx(
         return;
       }
 
-      const { i, slideXml } = slideXmls[pos]!;
+      const { i, slideXml } = slideXmls[pos];
       if (slideXml) {
         const slideTexts = extractTextNodesFromSlideXml(slideXml);
 

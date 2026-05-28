@@ -446,8 +446,8 @@ export function ToolResultFileLinks({
     [pathsKey, trimmedSessionKey],
     {
       enabled: paths.length > 0,
-      initial: null as Record<string, WorkspaceFileReference | null> | null,
-      errorData: {} as Record<string, WorkspaceFileReference | null>,
+      initial: null,
+      errorData: {},
     },
   );
 

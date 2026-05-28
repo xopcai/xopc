@@ -4,47 +4,6 @@ import type { SettingsSectionId, Tab } from '@/i18n/messages';
 
 export type { SettingsSectionId, Tab } from '@/i18n/messages';
 
-export type ChatRoute =
-  | { type: 'recent' }
-  | { type: 'session'; sessionKey: string }
-  | { type: 'new' };
-
-const SETTINGS_SECTION_TO_TAB: Record<SettingsSectionId, Tab> = {
-  overview: 'settingsOverview',
-  appearance: 'settingsAppearance',
-  system: 'settingsSystem',
-  'app-management': 'settingsAppManagement',
-  agent: 'settingsAgents',
-  'agent-defaults': 'settingsAgentChat',
-  'agent-chat': 'settingsAgentChat',
-  'agent-workspace': 'settingsAgentWorkspace',
-  'agent-browser': 'settingsAgentBrowser',
-  'agent-runtime': 'settingsAgentRuntime',
-  'agent-context': 'settingsAgentContext',
-  'agent-memory': 'settingsAgentMemory',
-  'agent-tools': 'settingsAgentTools',
-  'agent-skills': 'settingsAgentSkills',
-  'agent-mcp': 'settingsAgentMcp',
-  'agent-system-prompt': 'settingsAgentSystemPrompt',
-  agents: 'settingsAgents',
-  providers: 'settingsProviders',
-  credentials: 'settingsCredentials',
-  models: 'settingsModels',
-  'image-models': 'settingsImageModels',
-  channels: 'channels',
-  voice: 'settingsVoice',
-  gateway: 'settingsGateway',
-  heartbeat: 'settingsHeartbeat',
-  tunnel: 'settingsTunnel',
-  'remote-access': 'settingsTunnel',
-  shares: 'settingsShares',
-  search: 'settingsSearch',
-  dreams: 'settingsDreams',
-  cron: 'settingsCron',
-  goals: 'settingsGoals',
-  skills: 'skills',
-};
-
 const TAB_TO_SETTINGS_SECTION: Record<
   | 'settingsOverview'
   | 'settingsAppearance'
@@ -191,60 +150,6 @@ export function remoteAccessDocsUrl(
 ): string {
   const href = docsGuidePageUrl(language, 'remote-access');
   return section ? `${href}#${section}` : href;
-}
-
-/** Parse `#/settings/<section>` etc. Returns null if not a settings route. */
-function parseSettingsHash(hash: string): SettingsSectionId | null {
-  let h = hash.startsWith('#') ? hash.slice(1) : hash;
-  if (h.startsWith('/')) h = h.slice(1);
-  if (h === 'settings' || h === 'settings/') {
-    return 'overview';
-  }
-  if (!h.startsWith('settings/')) return null;
-  const rest = h.slice('settings/'.length);
-  const parts = rest.split('/').filter(Boolean);
-  const section = parts[0];
-  if (!section) return 'overview';
-  if (section === 'agents' && parts.length > 1) {
-    return 'agents';
-  }
-  return section in SETTINGS_SECTION_TO_TAB ? (section as SettingsSectionId) : null;
-}
-
-function getSettingsHash(section: SettingsSectionId): string {
-  return `#/settings/${section}`;
-}
-
-function parseChatHash(hash: string): ChatRoute | null {
-  const withoutHash = hash.startsWith('#') ? hash.slice(1) : hash;
-  const cleanHash = withoutHash.replace(/^\/?chat\/?/, '');
-
-  if (!cleanHash || cleanHash === '/') {
-    return { type: 'recent' };
-  }
-
-  const path = cleanHash.replace(/^\/?/, '');
-
-  if (path === 'new') {
-    return { type: 'new' };
-  }
-
-  if (path && path.length > 0) {
-    return { type: 'session', sessionKey: decodeURIComponent(path) };
-  }
-
-  return { type: 'recent' };
-}
-
-function getChatHash(route: ChatRoute): string {
-  switch (route.type) {
-    case 'recent':
-      return '#/chat';
-    case 'new':
-      return '#/chat/new';
-    case 'session':
-      return `#/chat/${encodeURIComponent(route.sessionKey)}`;
-  }
 }
 
 /** Path for React Router `to` prop (hash router, no `#`). */

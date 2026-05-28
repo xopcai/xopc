@@ -97,8 +97,8 @@ export function ModelsSettingsPanel({ embedded = false }: { embedded?: boolean }
   const hasToken = Boolean(token);
 
   const [formDraft, dispatchForm] = useReducer(modelsFormReducer, {
-    form: { providers: {} } as ModelsJsonConfig,
-    baseline: { providers: {} } as ModelsJsonConfig,
+    form: { providers: {} },
+    baseline: { providers: {} },
   });
   const config = formDraft.form ?? { providers: {} };
   const baseline = formDraft.baseline ?? { providers: {} };

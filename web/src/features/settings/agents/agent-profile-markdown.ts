@@ -409,21 +409,6 @@ export function detectBrowserTimezone(): string {
 // Vibe presets
 // ---------------------------------------------------------------------------
 
-const VIBE_PRESETS = [
-  { value: 'warm', labelEn: 'Warm', labelZh: '温暖' },
-  { value: 'sharp', labelEn: 'Sharp', labelZh: '犀利' },
-  { value: 'calm', labelEn: 'Calm', labelZh: '沉稳' },
-  { value: 'playful', labelEn: 'Playful', labelZh: '活泼' },
-  { value: 'professional', labelEn: 'Professional', labelZh: '专业' },
-  { value: 'casual', labelEn: 'Casual', labelZh: '随意' },
-  { value: 'witty', labelEn: 'Witty', labelZh: '机智' },
-  { value: 'concise', labelEn: 'Concise', labelZh: '简洁' },
-] as const;
-
-// ---------------------------------------------------------------------------
-// Creature presets
-// ---------------------------------------------------------------------------
-
 export const PRONOUNS_PRESETS = [
   { value: '先生', labelEn: 'Mr.', labelZh: '先生' },
   { value: '女士', labelEn: 'Ms.', labelZh: '女士' },
