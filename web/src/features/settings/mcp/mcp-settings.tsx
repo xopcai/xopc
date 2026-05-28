@@ -106,23 +106,10 @@ export function McpSettingsPanel() {
       const prev = servers[index];
       if (!prev) return f;
       servers[index] = { ...prev, ...patch };
-      if (patch.id && patch.id !== prev.id) {
-        const prevKey = mcpServerCardKey(prev, index);
-        const nextKey = mcpServerCardKey({ ...prev, ...patch }, index);
+      if (patch.id && patch.id !== prev.id && prev.id) {
         setServerTools((st) => {
           const next = { ...st };
-          if (prevKey !== nextKey && next[prevKey]) {
-            next[nextKey] = next[prevKey]!;
-            delete next[prevKey];
-          }
           delete next[prev.id];
-          return next;
-        });
-        setExpandedKeys((keys) => {
-          if (!keys.has(prevKey)) return keys;
-          const next = new Set(keys);
-          next.delete(prevKey);
-          next.add(nextKey);
           return next;
         });
       }
@@ -135,8 +122,9 @@ export function McpSettingsPanel() {
     setForm((f) => {
       if (!f) return f;
       const nextIndex = f.servers.length;
-      setExpandedKeys((keys) => new Set(keys).add(`draft-${nextIndex}`));
-      return { ...f, servers: [...f.servers, emptyMcpServerRow(`server-${nextIndex + 1}`)] };
+      const newRow = emptyMcpServerRow(`server-${nextIndex + 1}`);
+      setExpandedKeys((keys) => new Set(keys).add(mcpServerCardKey(newRow, nextIndex)));
+      return { ...f, servers: [...f.servers, newRow] };
     });
   }, []);
 

@@ -16,6 +16,8 @@ export type McpToolInfo = {
 export type McpTransportKind = 'stdio' | 'sse' | 'streamable-http';
 
 export type McpServerRow = {
+  /** Stable React list key; not persisted to config. */
+  clientKey: string;
   id: string;
   transport: McpTransportKind;
   command: string;
@@ -90,6 +92,7 @@ function serverConfigToRow(id: string, raw: Record<string, unknown>): McpServerR
       : undefined;
 
   return {
+    clientKey: id,
     id,
     transport,
     command: typeof raw.command === 'string' ? raw.command : '',
@@ -107,6 +110,7 @@ function serverConfigToRow(id: string, raw: Record<string, unknown>): McpServerR
 
 export function emptyMcpServerRow(id = ''): McpServerRow {
   return {
+    clientKey: crypto.randomUUID(),
     id,
     transport: 'stdio',
     command: '',
@@ -244,6 +248,6 @@ export function parseConnectionTimeoutSeconds(raw: string): number | undefined {
   return seconds * 1000;
 }
 
-export function mcpServerCardKey(row: McpServerRow, index: number): string {
-  return row.id.trim() || `draft-${index}`;
+export function mcpServerCardKey(row: McpServerRow, _index: number): string {
+  return row.clientKey;
 }

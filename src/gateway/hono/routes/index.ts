@@ -20,6 +20,7 @@ import { registerStatusRoutes } from './status.js';
 import { registerSharePublicRoutes, registerShareRoutes } from './shares.js';
 import { registerTunnelPublicRoutes, registerTunnelRoutes } from './tunnel.js';
 import { registerExposureRoutes } from './exposure.js';
+import { registerBrowserInstallRoutes } from './browser-install.js';
 import { registerUpdateRoutes } from './update.js';
 import { registerVoiceRoutes } from './voice.js';
 import { registerMcpRoutes } from './mcp.js';
@@ -49,6 +50,7 @@ export function registerAuthenticatedRoutes(app: Hono, authenticated: Hono, deps
   registerExposureRoutes(authenticated, deps);
   registerExtensionGatewayRoutes(authenticated, deps);
   registerUpdateRoutes(authenticated, deps);
+  registerBrowserInstallRoutes(authenticated, deps);
   registerVoiceRoutes(authenticated, deps);
   registerMcpRoutes(authenticated, deps);
 }

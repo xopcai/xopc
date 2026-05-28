@@ -523,17 +523,8 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
       : undefined;
 
     try {
-      const { launchCloakBrowser, cleanupCloakBrowser, cloakBrowserDoctor } = await import('../../../browser/providers/cloakbrowser.js');
-      const result = await launchCloakBrowser({
-        headless: true,
-        temporaryProfile: true,
-        keepOpen: false,
-        cacheDir,
-        binaryPath,
-      });
-      await result.browser.close().catch(() => {});
-      await cleanupCloakBrowser(result.childProcess, result.temporaryProfileDir);
-      const status = await cloakBrowserDoctor({ cacheDir, binaryPath });
+      const { installCloakBrowser } = await import('../../../browser/providers/cloakbrowser.js');
+      const status = await installCloakBrowser({ cacheDir, binaryPath });
       return c.json({ ok: true, payload: status });
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);

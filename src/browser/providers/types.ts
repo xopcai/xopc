@@ -56,9 +56,11 @@ export interface ExtensionConnectionConfig {
   commandTimeout?: number;
 }
 
+import type { BrowserInstallProgress } from '../install-progress.js';
+
 /** Configuration for CloakBrowser — anti-fingerprint Chromium with stealth capabilities. */
 export interface CloakBrowserConfig {
-  /** Directory for cached CloakBrowser binaries. Default: ~/.xopc/bin. */
+  /** Directory for cached CloakBrowser binaries. Default: ~/.xopc/bin/cloakbrowser. */
   cacheDir?: string;
   /** Override the CloakBrowser binary path (skip auto-download). */
   binaryPath?: string;
@@ -88,6 +90,8 @@ export interface CloakBrowserConfig {
   humanize?: boolean;
   /** Humanize behavior preset. Default: 'careful'. */
   humanPreset?: 'default' | 'careful';
+  /** Optional install/download progress callback (gateway SSE, CLI). */
+  onProgress?: (progress: BrowserInstallProgress) => void | Promise<void>;
 }
 
 /** Union of all backend connection modes. */

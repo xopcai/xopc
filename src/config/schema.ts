@@ -268,7 +268,7 @@ export const AgentDefaultsSchema = z.object({
         keepOpen: z.boolean().optional(),
         /** Create a temporary profile directory, cleaned up on close. Default: false. */
         temporaryProfile: z.boolean().optional(),
-        /** Directory for cached CloakBrowser binaries. Must live under the user's home directory. Default: ~/.xopc/bin. */
+        /** Directory for cached CloakBrowser binaries. Must live under the user's home directory. Default: ~/.xopc/bin/cloakbrowser. */
         cacheDir: z
           .string()
           .optional()
