@@ -468,7 +468,7 @@ app.whenReady().then(async () => {
         resolveCredentials: () => ensureGatewayConfigForElectron(paths),
       });
       setEmbeddedGatewayCredentials(port, token);
-      return { ok: true };
+      return { ok: true, token, port };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return { ok: false, message };

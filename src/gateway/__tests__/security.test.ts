@@ -290,7 +290,7 @@ describe('Gateway Security Fixes', () => {
       expect(r3.status).toBe(429);
     });
 
-    it('rate limits browser-origin auth failures on loopback', async () => {
+    it('exempts loopback browser-origin auth failures when exemptLoopback is true', async () => {
       const service = createMockService({
         gateway: {
           auth: {
@@ -309,6 +309,33 @@ describe('Gateway Security Fixes', () => {
       const app = createHonoApp({ service, token: 'real' });
       const headers = {
         Origin: 'http://localhost:18790',
+        Authorization: 'Bearer wrong',
+      };
+
+      expect((await app.request('/api/config', { headers })).status).toBe(401);
+      expect((await app.request('/api/config', { headers })).status).toBe(401);
+      expect((await app.request('/api/config', { headers })).status).toBe(401);
+    });
+
+    it('rate limits remote browser-origin auth failures on loopback', async () => {
+      const service = createMockService({
+        gateway: {
+          auth: {
+            mode: 'token',
+            token: 'real',
+            rateLimit: {
+              enabled: true,
+              maxAttempts: 2,
+              windowMs: 60_000,
+              blockDurationMs: 60_000,
+              exemptLoopback: true,
+            },
+          },
+        },
+      });
+      const app = createHonoApp({ service, token: 'real' });
+      const headers = {
+        Origin: 'http://evil.example.com',
         Authorization: 'Bearer wrong',
       };
 

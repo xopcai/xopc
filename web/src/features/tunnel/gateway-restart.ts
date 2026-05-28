@@ -2,10 +2,15 @@ import { fetchJson } from '@/lib/fetch';
 import { isElectron } from '@/lib/electron-env';
 import { apiUrl } from '@/lib/url';
 import { fetchTunnelPairContext, type MobilePairContextResponse } from '@/features/tunnel/tunnel-api';
+import { useGatewayStore } from '@/stores/gateway-store';
 
 export async function restartGatewayAfterConfigChange(): Promise<{ ok: boolean; message?: string }> {
   if (isElectron() && window.electronAPI?.gateway?.restart) {
-    return window.electronAPI.gateway.restart();
+    const res = await window.electronAPI.gateway.restart();
+    if (res.ok && res.token) {
+      useGatewayStore.getState().setGatewayToken(res.token);
+    }
+    return res;
   }
 
   const res = await fetchJson<{ ok?: boolean; message?: string; error?: string }>(
