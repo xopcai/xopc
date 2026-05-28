@@ -93,6 +93,13 @@ const BOT_DETECTION_PATTERNS = [
   /blocked.*bot/i,
   /automated.*browser/i,
   /unusual.*traffic/i,
+  // Additional detection signals (aligned with CloakBrowser fingerprint checks)
+  /just a moment/i,
+  /checking your browser/i,
+  /security check/i,
+  /verify.*not.*robot/i,
+  /turnstile/i,
+  /browser.*verification/i,
 ];
 
 export interface BotDetectionResult {

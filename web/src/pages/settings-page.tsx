@@ -1,6 +1,7 @@
 import { Navigate, useParams } from 'react-router-dom';
 
 import {
+  AgentBrowserSettingsPage,
   AgentDefaultsTabbedPage,
 } from '@/features/settings/agents';
 import { SetupStatusPanel } from '@/features/settings/setup-checklist/setup-status-panel';
@@ -26,6 +27,7 @@ const SECTIONS: SettingsSectionId[] = [
   'system',
   'app-management',
   'agent-defaults',
+  'agent-browser',
   'agent-mcp',
   'credentials',
   'providers',
@@ -85,6 +87,10 @@ export function SettingsPage() {
 
   if (id === 'agent-defaults') {
     return <AgentDefaultsTabbedPage />;
+  }
+
+  if (id === 'agent-browser') {
+    return <AgentBrowserSettingsPage />;
   }
 
   if (id === 'agent-mcp') {

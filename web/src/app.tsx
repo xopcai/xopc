@@ -249,10 +249,6 @@ const router = createHashRouter([
             element: <LegacyAgentDefaultsRedirect tab="workspace" />,
           },
           {
-            path: 'agent-browser',
-            element: <LegacyAgentDefaultsRedirect tab="browser" />,
-          },
-          {
             path: 'agent-runtime',
             element: <LegacyAgentDefaultsRedirect tab="runtime" />,
           },

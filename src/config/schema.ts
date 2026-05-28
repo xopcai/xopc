@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { getDefaultWorkspacePath } from '../agent/agent-scope.js';
+import { checkCacheDir } from '../browser/cache-dir-policy.js';
 
 // ============================================
 // Agent Configs
@@ -218,7 +219,7 @@ export const AgentDefaultsSchema = z.object({
     .optional(),
   /**
    * Browser capability via unified `browser_use` tool. Enabled by default (set `enabled: false` to disable).
-   * Install browsers once: `npx playwright install chromium`.
+   * The local Playwright backend requires Chromium on the gateway host: `npx playwright install chromium`.
    */
   browser: z
     .object({
@@ -229,10 +230,19 @@ export const AgentDefaultsSchema = z.object({
       allowPrivateUrls: z.boolean().optional(),
       /** Browser command timeout in seconds (default: 30). */
       commandTimeout: z.number().min(5).optional(),
-      /** Browser backend mode: 'local' (Playwright), 'cdp', 'cloud', or 'extension' (Chrome Extension bridge). */
-      backend: z.enum(['local', 'cdp', 'cloud', 'extension']).optional(),
+      /** Browser backend mode: 'local' (Playwright), 'cdp', 'cloud', 'extension' (Chrome Extension bridge), or 'cloakbrowser' (anti-fingerprint Chromium). */
+      backend: z.enum(['local', 'cdp', 'cloud', 'extension', 'cloakbrowser']).optional(),
       /** Cloud browser backend: 'local' (default Playwright), 'browserbase', or 'browser-use'. */
       cloudProvider: z.enum(['local', 'browserbase', 'browser-use']).optional(),
+      /** Cloud browser credentials and optional session hints. */
+      cloud: z.object({
+        /** API key for the selected cloud provider. Environment variables are still supported as fallback. */
+        apiKey: z.string().optional(),
+        /** Browserbase project id. Falls back to BROWSERBASE_PROJECT_ID. */
+        projectId: z.string().optional(),
+        /** Optional cloud provider region. */
+        region: z.string().optional(),
+      }).optional(),
       /** Direct CDP WebSocket endpoint URL (bypasses cloud provider). */
       cdpUrl: z.string().optional(),
       /** Chrome Extension bridge settings (only used when backend = 'extension'). */
@@ -248,6 +258,37 @@ export const AgentDefaultsSchema = z.object({
       dialogPolicy: z.enum(['must_respond', 'auto_dismiss', 'auto_accept']).optional(),
       /** Dialog auto-dismiss/accept timeout in seconds (default: 300). */
       dialogTimeoutSeconds: z.number().min(1).optional(),
+      /** Enable humanized input simulation (Bezier mouse, per-char typing, wheel scroll). Default: false. */
+      humanize: z.boolean().optional(),
+      /** Humanize behavior preset: 'default' (fast) or 'careful' (slower, more realistic). Default: 'careful'. */
+      humanPreset: z.enum(['default', 'careful']).optional(),
+      /** CloakBrowser settings (only used when backend = 'cloakbrowser'). */
+      cloakbrowser: z.object({
+        /** Keep browser process alive between tasks. Default: true. */
+        keepOpen: z.boolean().optional(),
+        /** Create a temporary profile directory, cleaned up on close. Default: false. */
+        temporaryProfile: z.boolean().optional(),
+        /** Directory for cached CloakBrowser binaries. Must live under the user's home directory. Default: ~/.xopc/bin. */
+        cacheDir: z
+          .string()
+          .optional()
+          .superRefine((v, ctx) => {
+            const r = checkCacheDir(v);
+            if (r.ok === false) ctx.addIssue({ code: 'custom', message: r.message });
+          }),
+        /** Override the CloakBrowser binary path (skip auto-download). */
+        binaryPath: z.string().optional(),
+        /** Timezone to emulate (e.g. "America/New_York"). */
+        timezone: z.string().optional(),
+        /** Locale to emulate (e.g. "en-US"). */
+        locale: z.string().optional(),
+        /** Public IP for WebRTC leak prevention. */
+        webrtcIp: z.string().optional(),
+        /** Platform to emulate in fingerprint (e.g. "windows", "macos"). */
+        fingerprintPlatform: z.string().optional(),
+        /** Extra Chromium launch args (override defaults with same --key= prefix). */
+        extraArgs: z.array(z.string()).optional(),
+      }).optional(),
     })
     .optional(),
   /** Sub-agent delegation (`delegate_task`). Opt-in. */

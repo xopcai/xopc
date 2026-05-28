@@ -10,7 +10,6 @@ const AGENT_DEFAULTS_NAV_TAB_TO_TAB_ID: Partial<Record<Tab, AgentDefaultsTabId>>
   settingsAgentDefaults: 'chat',
   settingsAgentChat: 'chat',
   settingsAgentWorkspace: 'workspace',
-  settingsAgentBrowser: 'browser',
   settingsAgentRuntime: 'runtime',
   settingsAgentContext: 'context',
   settingsAgentMemory: 'memory',

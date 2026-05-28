@@ -51,6 +51,7 @@ const TAB_TO_SETTINGS_SECTION: Record<
   | 'settingsSystem'
   | 'settingsAppManagement'
   | 'settingsAgentDefaults'
+  | 'settingsAgentBrowser'
   | 'settingsAgentMcp'
   | 'settingsAgents'
   | 'settingsCredentials'
@@ -76,6 +77,7 @@ const TAB_TO_SETTINGS_SECTION: Record<
   settingsSystem: 'system',
   settingsAppManagement: 'app-management',
   settingsAgentDefaults: 'agent-defaults',
+  settingsAgentBrowser: 'agent-browser',
   settingsAgentMcp: 'agent-mcp',
   settingsAgents: 'agents',
   settingsCredentials: 'credentials',
@@ -136,10 +138,10 @@ export const ELECTRON_SYSTEM_NAV_GROUP: SettingsShellNavGroup = {
  *     (`/settings/credentials`) already lists LLM / search / image / voice as
  *     cards with manage links, so flat exposure of every sub-page in the rail
  *     was redundant.
- *   - `agent` group: 9 → 2. The agent-defaults page (`/settings/agent-defaults`)
- *     has internal tabs for chat / workspace / browser / runtime / context /
- *     memory / tools / skills / system-prompt; nine sibling rail items all
- *     deep-linking to `?tab=` was confusing.
+ *   - `agent` group: 9 → 3. The agent-defaults page (`/settings/agent-defaults`)
+ *     has internal tabs for chat / workspace / runtime / context / memory /
+ *     tools / skills / system-prompt. Browser remains a first-level rail item
+ *     because it is a core default next to model and chat settings.
  *
  * Old direct URLs (`/settings/providers`, `/settings/agent-tools`, …) keep
  * working — see `settings-page.tsx` and the legacy redirects.
@@ -151,7 +153,7 @@ export const SETTINGS_SHELL_NAV_GROUPS: readonly SettingsShellNavGroup[] = [
   { id: 'credentials', tabs: ['settingsCredentials'] },
   {
     id: 'agent',
-    tabs: ['settingsAgentDefaults', 'settingsAgentMcp'],
+    tabs: ['settingsAgentDefaults', 'settingsAgentBrowser', 'settingsAgentMcp'],
   },
   {
     id: 'connection',
@@ -273,7 +275,7 @@ export function pathForTab(tab: Tab): string {
   if (tab === 'settingsAgentDefaults') return '/settings/agent-defaults';
   if (tab === 'settingsAgentChat') return '/settings/agent-defaults';
   if (tab === 'settingsAgentWorkspace') return '/settings/agent-defaults?tab=workspace';
-  if (tab === 'settingsAgentBrowser') return '/settings/agent-defaults?tab=browser';
+  if (tab === 'settingsAgentBrowser') return '/settings/agent-browser';
   if (tab === 'settingsAgentRuntime') return '/settings/agent-defaults?tab=runtime';
   if (tab === 'settingsAgentContext') return '/settings/agent-defaults?tab=context';
   if (tab === 'settingsAgentMemory') return '/settings/agent-defaults?tab=memory';

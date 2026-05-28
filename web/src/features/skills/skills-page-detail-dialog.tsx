@@ -1,5 +1,5 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { Info, X } from 'lucide-react';
+import { ExternalLink, Info, Trash2, X } from 'lucide-react';
 
 import { MarkdownView } from '@/components/markdown/markdown-view';
 import { Button } from '@/components/ui/button';
@@ -41,6 +41,9 @@ type Props = Pick<
   | 'detailError'
   | 'setDetailError'
   | 'detailEnabled'
+  | 'detailDirectoryId'
+  | 'detailManaged'
+  | 'detailExternalUrl'
   | 'usingSkillInChatName'
   | 'installingMarketName'
   | 'togglingSkillName'
@@ -48,6 +51,8 @@ type Props = Pick<
   | 'onUseSkillInChat'
   | 'onMarketInstall'
   | 'onSkillToggle'
+  | 'setConfirmId'
+  | 'setConfirmOpen'
 >;
 
 export function SkillsPageDetailDialog(p: Props) {
@@ -69,6 +74,9 @@ export function SkillsPageDetailDialog(p: Props) {
     detailError,
     setDetailError,
     detailEnabled,
+    detailDirectoryId,
+    detailManaged,
+    detailExternalUrl,
     usingSkillInChatName,
     installingMarketName,
     togglingSkillName,
@@ -76,6 +84,8 @@ export function SkillsPageDetailDialog(p: Props) {
     onUseSkillInChat,
     onMarketInstall,
     onSkillToggle,
+    setConfirmId,
+    setConfirmOpen,
   } = p;
 
   return (
@@ -154,70 +164,105 @@ export function SkillsPageDetailDialog(p: Props) {
               </div>
             )}
           </div>
-          <div className="flex shrink-0 justify-end gap-2 border-t border-edge px-4 py-3">
-            {detailSource === 'store' ? (
-              <>
-                <Button type="button" variant="ghost" onClick={() => setDetailOpen(false)}>
-                  {sk.cancel}
-                </Button>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  disabled={
-                    !detailTitle ||
-                    detailLoading ||
-                    usingSkillInChatName === detailTitle ||
-                    installingMarketName === detailTitle
-                  }
-                  onClick={() => void onUseSkillInChat()}
+          <div className="flex shrink-0 items-center justify-between gap-2 border-t border-edge px-4 py-3">
+            <div className="flex items-center gap-2">
+              {detailSource === 'store' && detailExternalUrl ? (
+                <a
+                  href={detailExternalUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={cn(
+                    'inline-flex h-9 items-center gap-1.5 rounded-lg border border-edge bg-surface-panel px-3 text-sm font-medium text-fg-muted',
+                    'hover:bg-surface-hover hover:text-fg dark:border-edge',
+                    interaction.focusRingPanel,
+                  )}
+                  aria-label={sk.marketplaceOpenExternalAria}
+                  title={sk.marketplaceOpenExternal}
                 >
-                  {usingSkillInChatName === detailTitle ? sk.previewUseInChatBusy : sk.previewUseInChat}
-                </Button>
+                  <ExternalLink className="size-4" strokeWidth={1.75} aria-hidden />
+                  <span>{sk.marketplaceOpenExternal}</span>
+                </a>
+              ) : null}
+              {detailSource === 'catalog' && detailManaged && detailDirectoryId ? (
                 <Button
                   type="button"
-                  variant={isSkillInstalledByName(detailTitle) ? 'secondary' : 'primary'}
-                  disabled={!detailTitle || installingMarketName === detailTitle}
+                  variant="ghost"
+                  className="gap-1.5 text-red-600 hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-950/40 dark:hover:text-red-300"
                   onClick={() => {
-                    if (!detailTitle) return;
-                    void onMarketInstall(detailTitle, { useDetailProvider: true });
+                    setConfirmId(detailDirectoryId);
+                    setConfirmOpen(true);
                   }}
                 >
-                  {installingMarketName === detailTitle
-                    ? sk.uploading
-                    : isSkillInstalledByName(detailTitle)
-                      ? sk.marketplaceReinstall
-                      : sk.marketplaceInstall}
+                  <Trash2 className="size-4" strokeWidth={1.75} aria-hidden />
+                  {sk.delete}
                 </Button>
-              </>
-            ) : (
-              <>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  disabled={
-                    !detailTitle ||
-                    detailLoading ||
-                    usingSkillInChatName === detailTitle ||
-                    togglingSkillName === detailTitle
-                  }
-                  onClick={() => void onUseSkillInChat()}
-                >
-                  {usingSkillInChatName === detailTitle ? sk.previewUseInChatBusy : sk.previewUseInChat}
-                </Button>
-                <Button
-                  type="button"
-                  variant="primary"
-                  disabled={!detailTitle || togglingSkillName === detailTitle}
-                  onClick={async () => {
-                    if (!detailTitle) return;
-                    const ok = await onSkillToggle(detailTitle, !detailEnabled);
-                    if (ok) setDetailOpen(false);
-                  }}
-                >
-                  {detailEnabled ? sk.detailModalDisable : sk.detailModalEnable}
-                </Button>
-              </>
-            )}
+              ) : null}
+            </div>
+            <div className="flex items-center gap-2">
+              {detailSource === 'store' ? (
+                <>
+                  <Button type="button" variant="ghost" onClick={() => setDetailOpen(false)}>
+                    {sk.cancel}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    disabled={
+                      !detailTitle ||
+                      detailLoading ||
+                      usingSkillInChatName === detailTitle ||
+                      installingMarketName === detailTitle
+                    }
+                    onClick={() => void onUseSkillInChat()}
+                  >
+                    {usingSkillInChatName === detailTitle ? sk.previewUseInChatBusy : sk.previewUseInChat}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={isSkillInstalledByName(detailTitle) ? 'secondary' : 'primary'}
+                    disabled={!detailTitle || installingMarketName === detailTitle}
+                    onClick={() => {
+                      if (!detailTitle) return;
+                      void onMarketInstall(detailTitle, { useDetailProvider: true });
+                    }}
+                  >
+                    {installingMarketName === detailTitle
+                      ? sk.uploading
+                      : isSkillInstalledByName(detailTitle)
+                        ? sk.marketplaceReinstall
+                        : sk.marketplaceInstall}
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    disabled={
+                      !detailTitle ||
+                      detailLoading ||
+                      usingSkillInChatName === detailTitle ||
+                      togglingSkillName === detailTitle
+                    }
+                    onClick={() => void onUseSkillInChat()}
+                  >
+                    {usingSkillInChatName === detailTitle ? sk.previewUseInChatBusy : sk.previewUseInChat}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="primary"
+                    disabled={!detailTitle || togglingSkillName === detailTitle}
+                    onClick={async () => {
+                      if (!detailTitle) return;
+                      const ok = await onSkillToggle(detailTitle, !detailEnabled);
+                      if (ok) setDetailOpen(false);
+                    }}
+                  >
+                    {detailEnabled ? sk.detailModalDisable : sk.detailModalEnable}
+                  </Button>
+                </>
+              )}
+            </div>
           </div>
         </Dialog.Content>
       </Dialog.Portal>

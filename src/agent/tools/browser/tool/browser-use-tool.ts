@@ -16,6 +16,7 @@ import type { Page } from 'playwright-core';
 import { BrowserUseSchema } from './schemas.js';
 import { createBrowserActionRegistry } from '../../../../browser/actions/registry.js';
 import type { BrowserActionContext, BrowserActionResult } from '../../../../browser/actions/types.js';
+import { loadBrowserPipelineSource } from '../../../../browser/pipeline/source.js';
 
 const log = createLogger('browser_use');
 
@@ -162,15 +163,12 @@ export function createBrowserUseTool(deps: CreateBrowserUseToolDeps): AgentTool<
         let yamlSource = pipelineParams.yaml ?? pipelineParams.script ?? '';
 
         if (!yamlSource && pipelineParams.path) {
-          // Read from file
           try {
-            const fs = await import('node:fs/promises');
-            const resolved = pipelineParams.path;
-            yamlSource = await fs.readFile(resolved, 'utf-8');
+            yamlSource = (await loadBrowserPipelineSource(pipelineParams.path)).source;
           } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
             return {
-              content: [{ type: 'text', text: `Failed to read pipeline file: ${msg}` }],
+              content: [{ type: 'text', text: `Failed to read pipeline source: ${msg}` }],
               details: { ok: false, mode: 'pipeline', error: msg },
             };
           }

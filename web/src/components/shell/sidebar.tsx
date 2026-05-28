@@ -1,28 +1,13 @@
-import { Clock, Layers, Plug, Plus, Users } from 'lucide-react';
-import { Link, NavLink } from 'react-router-dom';
+import { Plus } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 import { messages } from '@/i18n/messages';
-import { pathForTab } from '@/navigation';
 import { useLocaleStore } from '@/stores/locale-store';
 import { cn } from '@/lib/cn';
 
-import { ExtensionNavItems } from '@/features/extensions/extension-nav-items';
-
 import { SidebarFooter } from '@/components/shell/sidebar-footer';
+import { SidebarNavItems } from '@/components/shell/sidebar-nav-items';
 import { SidebarTaskList } from '@/components/shell/sidebar-task-list';
-
-function secondaryNavClass({ isActive }: { isActive: boolean }, collapsed: boolean) {
-  return cn(
-    'flex w-full items-center text-sm font-medium leading-6 transition-colors duration-200 ease-out',
-    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
-    collapsed
-      ? 'justify-center rounded-xl p-2.5'
-      : 'gap-2 rounded-lg px-3 py-2 text-left',
-    isActive
-      ? 'bg-accent-soft text-accent-fg'
-      : 'text-fg-muted hover:bg-surface-hover hover:text-fg',
-  );
-}
 
 export function SidebarNav({
   onNavigate,
@@ -57,47 +42,7 @@ export function SidebarNav({
               <span className="truncate">{m.sidebar.newTask}</span>
             </Link>
           ) : null}
-          <NavLink
-            to={pathForTab('agents')}
-            className={(props) => secondaryNavClass(props, collapsed)}
-            title={m.nav.agents}
-            onClick={() => onNavigate?.()}
-          >
-            <Users className="size-4 shrink-0 opacity-90" strokeWidth={1.75} aria-hidden />
-            {!collapsed ? <span className="truncate">{m.nav.agents}</span> : null}
-          </NavLink>
-          <NavLink
-            to={pathForTab('skills')}
-            className={(props) => secondaryNavClass(props, collapsed)}
-            title={m.nav.skills}
-            onClick={() => onNavigate?.()}
-          >
-            <Layers className="size-4 shrink-0 opacity-90" strokeWidth={1.75} aria-hidden />
-            {!collapsed ? <span className="truncate">{m.nav.skills}</span> : null}
-          </NavLink>
-          <NavLink
-            to={pathForTab('cron')}
-            className={(props) => secondaryNavClass(props, collapsed)}
-            title={m.nav.cron}
-            onClick={() => onNavigate?.()}
-          >
-            <Clock className="size-4 shrink-0 opacity-90" strokeWidth={1.75} aria-hidden />
-            {!collapsed ? <span className="truncate">{m.nav.cron}</span> : null}
-          </NavLink>
-          <NavLink
-            to={pathForTab('channels')}
-            className={(props) => secondaryNavClass(props, collapsed)}
-            title={m.nav.channels}
-            onClick={() => onNavigate?.()}
-          >
-            <Plug className="size-4 shrink-0 opacity-90" strokeWidth={1.75} aria-hidden />
-            {!collapsed ? <span className="truncate">{m.nav.channels}</span> : null}
-          </NavLink>
-          <ExtensionNavItems
-            collapsed={collapsed}
-            onNavigate={onNavigate}
-            navLinkClassName={secondaryNavClass}
-          />
+          <SidebarNavItems collapsed={collapsed} onNavigate={onNavigate} />
         </div>
       </nav>
 

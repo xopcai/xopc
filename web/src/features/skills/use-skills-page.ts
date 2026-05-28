@@ -40,7 +40,10 @@ import {
   type MainTab,
   type SourceFilter,
 } from '@/features/skills/skills-page.constants';
-import { normalizeCatalogEntry } from '@/features/skills/skills-page.utils';
+import {
+  marketplacePublicSkillUrl,
+  normalizeCatalogEntry,
+} from '@/features/skills/skills-page.utils';
 import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -484,6 +487,13 @@ export function useSkillsPage() {
     detailFromCatalog == null
       ? true
       : (enabledOverride[detailTitle] ?? detailFromCatalog.enabled);
+  const detailDirectoryId = detailFromCatalog?.directoryId ?? null;
+  const detailManaged = detailFromCatalog?.managed ?? false;
+  const detailExternalUrl = useMemo(() => {
+    if (detailSource !== 'store' || !detailTitle) return null;
+    const provider = marketplaceDetailProviderRef.current ?? marketBrowseProvider;
+    return marketplacePublicSkillUrl(provider, detailTitle);
+  }, [detailSource, detailTitle, marketBrowseProvider]);
 
   const filteredCatalog = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -643,39 +653,43 @@ export function useSkillsPage() {
     [catalog],
   );
 
-  const onUseSkillInChat = useCallback(async () => {
-    const name = detailTitle.trim();
-    if (!name) return;
-    setActionFeedback(null);
-    const needsMarketInstall = detailSource === 'store' && !isSkillInstalledByName(name);
-    if (needsMarketInstall) setUsingSkillInChatName(name);
-    try {
-      if (needsMarketInstall) {
-        const mp = marketplaceDetailProviderRef.current ?? marketBrowseProvider;
-        await installMarketplaceSkill({
-          name,
-          overwrite: false,
-          ...(mp ? { provider: mp } : {}),
-        });
-        await load({ silent: true });
+  const onUseSkillInChat = useCallback(
+    async (opts?: { name?: string; source?: 'catalog' | 'store' }) => {
+      const name = (opts?.name ?? detailTitle).trim();
+      if (!name) return;
+      const source = opts?.source ?? detailSource;
+      setActionFeedback(null);
+      const needsMarketInstall = source === 'store' && !isSkillInstalledByName(name);
+      setUsingSkillInChatName(name);
+      try {
+        if (needsMarketInstall) {
+          const mp = marketplaceDetailProviderRef.current ?? marketBrowseProvider;
+          await installMarketplaceSkill({
+            name,
+            overwrite: false,
+            ...(mp ? { provider: mp } : {}),
+          });
+          await load({ silent: true });
+        }
+        setDetailOpen(false);
+        navigate(`/chat/new?skill=${encodeURIComponent(name)}`);
+      } catch (e) {
+        showFeedback('error', e instanceof Error ? e.message : sk.uploadFailed);
+      } finally {
+        setUsingSkillInChatName(null);
       }
-      setDetailOpen(false);
-      navigate(`/chat/new?skill=${encodeURIComponent(name)}`);
-    } catch (e) {
-      showFeedback('error', e instanceof Error ? e.message : sk.uploadFailed);
-    } finally {
-      setUsingSkillInChatName(null);
-    }
-  }, [
-    detailTitle,
-    detailSource,
-    isSkillInstalledByName,
-    load,
-    navigate,
-    showFeedback,
-    sk.uploadFailed,
-    marketBrowseProvider,
-  ]);
+    },
+    [
+      detailTitle,
+      detailSource,
+      isSkillInstalledByName,
+      load,
+      navigate,
+      showFeedback,
+      sk.uploadFailed,
+      marketBrowseProvider,
+    ],
+  );
 
   const onMarketInstall = useCallback(
     async (name: string, opts?: { useDetailProvider?: boolean }) => {
@@ -792,6 +806,9 @@ export function useSkillsPage() {
     builtinTabStats,
     userTabStats,
     detailEnabled,
+    detailDirectoryId,
+    detailManaged,
+    detailExternalUrl,
     filteredCatalog,
     builtinCategories,
     categoryFilteredCatalog,

@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 
+import { loadBrowserPipelineSource } from '../pipeline/source.js';
 import { parseBrowserPipeline } from '../pipeline/schema.js';
 import { resolveTemplate, resolveTemplateDeep } from '../pipeline/template.js';
 import { validateBrowserPipeline } from '../pipeline/runner.js';
@@ -123,6 +124,28 @@ describe('Pipeline template expressions', () => {
     const input = { url: '${{ args.url }}', options: { timeout: '${{ args.timeout }}' } };
     const result = resolveTemplateDeep(input, { args: { url: 'https://x.com', timeout: '3000' }, data: undefined });
     expect(result).toEqual({ url: 'https://x.com', options: { timeout: '3000' } });
+  });
+});
+
+describe('Pipeline source loading', () => {
+  it('loads pipeline YAML from a remote URL', async () => {
+    const yaml = 'name: remote\npipeline:\n  - wait:\n      ms: 100';
+    const fetchMock = vi.fn().mockResolvedValue(new Response(yaml, { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    try {
+      const result = await loadBrowserPipelineSource('https://example.com/pipeline.yaml');
+
+      expect(result.origin).toBe('url');
+      expect(result.location).toBe('https://example.com/pipeline.yaml');
+      expect(result.source).toBe(yaml);
+      expect(fetchMock).toHaveBeenCalledWith(
+        'https://example.com/pipeline.yaml',
+        expect.objectContaining({ headers: expect.any(Object) }),
+      );
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
 

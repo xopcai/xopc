@@ -8,6 +8,7 @@ import { assertGatewayRuntimeConfig } from '../../runtime-config.js';
 import { resolveGatewayAuth, assertGatewayAuthConfigured } from '../../auth.js';
 import { canonicalizeConfiguredMcpServer } from '../../../config/mcp-config-normalize.js';
 import { CredentialResolver } from '../../../auth/credentials.js';
+import { runExec } from '../../../infra/exec.js';
 import { applyToolsWebPatch } from '../../config-tools-web.js';
 import { mergeTunnelConfigPatch } from '../../../tunnel/tunnel-config.js';
 import { mergeShareConfigPatch } from '../../../share/share-config.js';
@@ -28,6 +29,31 @@ import type { AuthenticatedRouteDeps } from './deps.js';
 
 const DEFAULT_EXTENSION_PORT = 19820;
 const DEFAULT_EXTENSION_HOST = '127.0.0.1';
+
+/**
+ * Optional manual hold on the extension WS server kept alive from the UI so
+ * users can pair the extension before saving config / running a browser tool.
+ * Module-scoped so repeat Start calls are idempotent and the bridge survives
+ * config patches.
+ */
+type ManualHandle = { release: () => Promise<void>; host: string; port: number };
+let manualExtensionHandle: ManualHandle | null = null;
+
+function loopbackHostnameFromUrl(input: string): string | null {
+  let parsed: URL;
+  try {
+    parsed = new URL(input);
+  } catch {
+    return null;
+  }
+  const proto = parsed.protocol;
+  if (proto !== 'ws:' && proto !== 'wss:' && proto !== 'http:' && proto !== 'https:') {
+    return null;
+  }
+  const host = parsed.hostname.toLowerCase();
+  if (host === '127.0.0.1' || host === 'localhost' || host === '::1') return host;
+  return null;
+}
 
 function isLoopbackHost(host: string): boolean {
   const h = host.trim().toLowerCase();
@@ -95,6 +121,334 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
       });
     } catch {
       return c.json({ running: false, connected: false, backend: target.backend });
+    }
+  });
+
+  // Start the extension WS bridge eagerly so the user can pair the extension
+  // before saving config / running any tool. Idempotent (returns current state
+  // if already running).
+  authenticated.post('/api/browser/extension/start', strictRateLimitMiddleware, async (c) => {
+    let body: unknown;
+    try {
+      body = await c.req.json();
+    } catch {
+      body = {};
+    }
+    const input = body && typeof body === 'object' && !Array.isArray(body)
+      ? (body as Record<string, unknown>)
+      : {};
+    const port =
+      typeof input.port === 'number' && input.port >= 1024 && input.port <= 65535
+        ? Math.floor(input.port)
+        : DEFAULT_EXTENSION_PORT;
+    const hostRaw = typeof input.host === 'string' && input.host.trim() ? input.host.trim() : DEFAULT_EXTENSION_HOST;
+    if (!isLoopbackHost(hostRaw)) {
+      return c.json({ ok: false, error: 'extension bridge host must be loopback' }, 400);
+    }
+
+    try {
+      if (manualExtensionHandle && (manualExtensionHandle.host !== hostRaw || manualExtensionHandle.port !== port)) {
+        await manualExtensionHandle.release();
+        manualExtensionHandle = null;
+      }
+      if (!manualExtensionHandle) {
+        const { acquireExtensionBrowserServer } = await import(
+          '../../../browser/providers/extension-ws-acquire.js'
+        );
+        const { release } = await acquireExtensionBrowserServer({ host: hostRaw, port });
+        manualExtensionHandle = { release, host: hostRaw, port };
+      }
+      return c.json({ ok: true, payload: { running: true, host: hostRaw, port } });
+    } catch (e) {
+      return c.json({ ok: false, error: e instanceof Error ? e.message : String(e) }, 500);
+    }
+  });
+
+  authenticated.post('/api/browser/extension/stop', strictRateLimitMiddleware, async (c) => {
+    if (!manualExtensionHandle) {
+      return c.json({ ok: true, payload: { running: false, alreadyStopped: true } });
+    }
+    try {
+      await manualExtensionHandle.release();
+    } catch {
+      // ignore — refcount underflow should not surface
+    }
+    manualExtensionHandle = null;
+    return c.json({ ok: true, payload: { running: false } });
+  });
+
+  // Doctor: does Playwright have a runnable Chromium on disk?
+  authenticated.get('/api/browser/playwright/doctor', async (c) => {
+    try {
+      const pw = await import('playwright-core');
+      const chromium = pw.chromium
+        ?? (pw as { default?: { chromium?: (typeof pw)['chromium'] } }).default?.chromium;
+      if (!chromium?.executablePath) {
+        return c.json({ ok: true, payload: { installed: false, reason: 'playwright-core missing' } });
+      }
+      let executablePath: string | null = null;
+      try {
+        executablePath = chromium.executablePath();
+      } catch (err) {
+        return c.json({
+          ok: true,
+          payload: {
+            installed: false,
+            reason: err instanceof Error ? err.message : String(err),
+          },
+        });
+      }
+      const { stat } = await import('node:fs/promises');
+      let installed = false;
+      try {
+        const st = await stat(executablePath);
+        installed = st.isFile();
+      } catch {
+        installed = false;
+      }
+      return c.json({ ok: true, payload: { installed, executablePath } });
+    } catch (e) {
+      return c.json(
+        { ok: false, error: e instanceof Error ? e.message : String(e) },
+        500,
+      );
+    }
+  });
+
+  // Doctor: CloakBrowser installed?
+  authenticated.get('/api/browser/cloakbrowser/doctor', async (c) => {
+    const cacheDirRaw = c.req.query('cacheDir');
+    const binaryPathRaw = c.req.query('binaryPath');
+    try {
+      const { cloakBrowserDoctor } = await import('../../../browser/providers/cloakbrowser.js');
+      const status = await cloakBrowserDoctor({
+        cacheDir: cacheDirRaw && cacheDirRaw.trim() ? cacheDirRaw.trim() : undefined,
+        binaryPath: binaryPathRaw && binaryPathRaw.trim() ? binaryPathRaw.trim() : undefined,
+      });
+      return c.json({ ok: true, payload: status });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      return c.json({ ok: false, error: message }, 400);
+    }
+  });
+
+  // Ping a user-supplied CDP endpoint — loopback only (SSRF guard).
+  authenticated.post('/api/browser/cdp/ping', strictRateLimitMiddleware, async (c) => {
+    let body: unknown;
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ ok: false, error: 'invalid JSON body' }, 400);
+    }
+    const input = body && typeof body === 'object' && !Array.isArray(body)
+      ? (body as Record<string, unknown>)
+      : {};
+    const cdpUrl = typeof input.cdpUrl === 'string' ? input.cdpUrl.trim() : '';
+    if (!cdpUrl) return c.json({ ok: false, error: 'cdpUrl is required' }, 400);
+
+    const loopback = loopbackHostnameFromUrl(cdpUrl);
+    if (!loopback) {
+      return c.json(
+        { ok: false, error: 'CDP ping only allowed for loopback hosts (127.0.0.1 / localhost / ::1)' },
+        403,
+      );
+    }
+    let httpBase: URL;
+    try {
+      httpBase = new URL(cdpUrl);
+      httpBase.protocol = httpBase.protocol === 'wss:' ? 'https:' : 'http:';
+      httpBase.pathname = '/json/version';
+      httpBase.search = '';
+      httpBase.hash = '';
+    } catch (e) {
+      return c.json({ ok: false, error: e instanceof Error ? e.message : 'invalid cdpUrl' }, 400);
+    }
+    try {
+      const res = await fetch(httpBase.toString(), { signal: AbortSignal.timeout(2000) });
+      if (!res.ok) {
+        return c.json({ ok: true, payload: { reachable: false, status: res.status } });
+      }
+      const data = (await res.json()) as { Browser?: string; 'Protocol-Version'?: string; webSocketDebuggerUrl?: string };
+      return c.json({
+        ok: true,
+        payload: {
+          reachable: true,
+          browser: data.Browser ?? null,
+          protocolVersion: data['Protocol-Version'] ?? null,
+          webSocketDebuggerUrl: data.webSocketDebuggerUrl ?? null,
+        },
+      });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      return c.json({ ok: true, payload: { reachable: false, error: message } });
+    }
+  });
+
+  // Spawn a local debuggable Chrome and return its WS endpoint.
+  authenticated.post('/api/browser/cdp/launch', strictRateLimitMiddleware, async (c) => {
+    let body: unknown;
+    try {
+      body = await c.req.json();
+    } catch {
+      body = {};
+    }
+    const input = body && typeof body === 'object' && !Array.isArray(body)
+      ? (body as Record<string, unknown>)
+      : {};
+    const executablePath =
+      typeof input.executablePath === 'string' && input.executablePath.trim()
+        ? input.executablePath.trim()
+        : undefined;
+    try {
+      const { launchLocalCdpChrome } = await import('../../../browser/cdp-local-launcher.js');
+      const result = await launchLocalCdpChrome({ executablePath });
+      return c.json({ ok: true, payload: result });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      return c.json({ ok: false, error: message }, 500);
+    }
+  });
+
+  authenticated.post('/api/browser/cdp/stop', strictRateLimitMiddleware, async (c) => {
+    let body: unknown;
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ ok: false, error: 'invalid JSON body' }, 400);
+    }
+    const input = body && typeof body === 'object' && !Array.isArray(body)
+      ? (body as Record<string, unknown>)
+      : {};
+    const port = typeof input.port === 'number' && Number.isInteger(input.port) ? input.port : NaN;
+    if (!Number.isFinite(port) || port < 1024 || port > 65535) {
+      return c.json({ ok: false, error: 'port must be an integer in [1024, 65535]' }, 400);
+    }
+    const { stopLocalCdpChrome } = await import('../../../browser/cdp-local-launcher.js');
+    const stopped = await stopLocalCdpChrome(port);
+    return c.json({ ok: true, payload: { stopped } });
+  });
+
+  authenticated.get('/api/browser/cdp/instances', async (c) => {
+    const { listLocalCdpInstances } = await import('../../../browser/cdp-local-launcher.js');
+    return c.json({ ok: true, payload: { instances: listLocalCdpInstances() } });
+  });
+
+  // Cloud provider connection test.
+  authenticated.post('/api/browser/cloud/test-connection', strictRateLimitMiddleware, async (c) => {
+    let body: unknown;
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ ok: false, error: 'invalid JSON body' }, 400);
+    }
+    const input = body && typeof body === 'object' && !Array.isArray(body)
+      ? (body as Record<string, unknown>)
+      : {};
+    const provider = input.provider;
+    const apiKeyRaw = typeof input.apiKey === 'string' ? input.apiKey.trim() : '';
+
+    // The masked sentinel means "use the stored config key".
+    let apiKey = apiKeyRaw;
+    if (apiKey === '***' || apiKey === '••••••••••••') {
+      const stored =
+        (service.currentConfig as Config)?.agents?.defaults?.browser?.cloud?.apiKey;
+      apiKey = typeof stored === 'string' ? stored.trim() : '';
+    }
+    if (!apiKey) {
+      if (provider === 'browserbase') apiKey = process.env.BROWSERBASE_API_KEY ?? '';
+      else if (provider === 'browser-use') apiKey = process.env.BROWSER_USE_API_KEY ?? '';
+    }
+    if (!apiKey) {
+      return c.json({ ok: true, payload: { reachable: false, error: 'No API key configured' } });
+    }
+
+    try {
+      if (provider === 'browserbase') {
+        const res = await fetch('https://api.browserbase.com/v1/projects', {
+          headers: { 'x-bb-api-key': apiKey },
+          signal: AbortSignal.timeout(5000),
+        });
+        if (!res.ok) {
+          return c.json({
+            ok: true,
+            payload: { reachable: false, status: res.status, error: await res.text().catch(() => '') },
+          });
+        }
+        const data = (await res.json().catch(() => null)) as unknown;
+        const projects = Array.isArray(data) ? data : Array.isArray((data as { data?: unknown[] })?.data) ? (data as { data: unknown[] }).data : [];
+        return c.json({ ok: true, payload: { reachable: true, projectCount: projects.length } });
+      }
+      if (provider === 'browser-use') {
+        const res = await fetch('https://api.browser-use.com/api/v1/users/me', {
+          headers: { Authorization: `Bearer ${apiKey}` },
+          signal: AbortSignal.timeout(5000),
+        });
+        if (!res.ok) {
+          return c.json({
+            ok: true,
+            payload: { reachable: false, status: res.status, error: await res.text().catch(() => '') },
+          });
+        }
+        return c.json({ ok: true, payload: { reachable: true } });
+      }
+      return c.json({ ok: false, error: 'provider must be browserbase or browser-use' }, 400);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      return c.json({ ok: true, payload: { reachable: false, error: message } });
+    }
+  });
+
+  authenticated.post('/api/browser/playwright/install', strictRateLimitMiddleware, async (c) => {
+    try {
+      const npxCommand = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+      const result = await runExec(npxCommand, ['playwright', 'install', 'chromium'], {
+        timeoutMs: 10 * 60 * 1000,
+        maxBuffer: 4 * 1024 * 1024,
+      });
+      return c.json({ ok: true, payload: result });
+    } catch (e) {
+      const error = e as NodeJS.ErrnoException & { stdout?: string; stderr?: string };
+      const message = [error.message, error.stderr, error.stdout]
+        .filter((part): part is string => Boolean(part && part.trim()))
+        .join('\n')
+        .slice(0, 4000);
+      return c.json({ ok: false, error: message || 'Failed to install Playwright Chromium' }, 500);
+    }
+  });
+
+  authenticated.post('/api/browser/cloakbrowser/install', strictRateLimitMiddleware, async (c) => {
+    let body: unknown;
+    try {
+      body = await c.req.json();
+    } catch {
+      body = {};
+    }
+    const input = body && typeof body === 'object' && !Array.isArray(body)
+      ? (body as Record<string, unknown>)
+      : {};
+    const cacheDir = typeof input.cacheDir === 'string' && input.cacheDir.trim()
+      ? input.cacheDir.trim()
+      : undefined;
+    const binaryPath = typeof input.binaryPath === 'string' && input.binaryPath.trim()
+      ? input.binaryPath.trim()
+      : undefined;
+
+    try {
+      const { launchCloakBrowser, cleanupCloakBrowser, cloakBrowserDoctor } = await import('../../../browser/providers/cloakbrowser.js');
+      const result = await launchCloakBrowser({
+        headless: true,
+        temporaryProfile: true,
+        keepOpen: false,
+        cacheDir,
+        binaryPath,
+      });
+      await result.browser.close().catch(() => {});
+      await cleanupCloakBrowser(result.childProcess, result.temporaryProfileDir);
+      const status = await cloakBrowserDoctor({ cacheDir, binaryPath });
+      return c.json({ ok: true, payload: status });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      return c.json({ ok: false, error: message }, 500);
     }
   });
 
@@ -226,7 +580,12 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
           if (br.backend !== undefined) {
             if (br.backend === null || br.backend === '' || br.backend === 'local') {
               delete target.backend;
-            } else if (br.backend === 'cdp' || br.backend === 'cloud' || br.backend === 'extension') {
+            } else if (
+              br.backend === 'cdp' ||
+              br.backend === 'cloud' ||
+              br.backend === 'extension' ||
+              br.backend === 'cloakbrowser'
+            ) {
               target.backend = br.backend;
             }
           }
@@ -235,6 +594,40 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
               delete target.cloudProvider;
             } else if (br.cloudProvider === 'browserbase' || br.cloudProvider === 'browser-use') {
               target.cloudProvider = br.cloudProvider;
+            }
+          }
+          if (br.cloud !== undefined) {
+            if (br.cloud === null) {
+              delete target.cloud;
+            } else if (typeof br.cloud === 'object' && !Array.isArray(br.cloud)) {
+              const cloudPatch = br.cloud as Record<string, unknown>;
+              const existingCloud =
+                target.cloud && typeof target.cloud === 'object' && !Array.isArray(target.cloud)
+                  ? (target.cloud as Record<string, unknown>)
+                  : {};
+              const cloudTarget: Record<string, unknown> = { ...existingCloud };
+              if (cloudPatch.apiKey !== undefined) {
+                if (cloudPatch.apiKey === null || cloudPatch.apiKey === '') {
+                  delete cloudTarget.apiKey;
+                } else if (cloudPatch.apiKey === '***') {
+                  // Keep the existing stored key when the web UI sends the masked sentinel.
+                } else if (typeof cloudPatch.apiKey === 'string') {
+                  cloudTarget.apiKey = cloudPatch.apiKey.trim();
+                }
+              }
+              for (const key of ['projectId', 'region']) {
+                const value = cloudPatch[key];
+                if (value === null || value === '') {
+                  delete cloudTarget[key];
+                } else if (typeof value === 'string' && value.trim()) {
+                  cloudTarget[key] = value.trim();
+                }
+              }
+              if (Object.keys(cloudTarget).length > 0) {
+                target.cloud = cloudTarget;
+              } else {
+                delete target.cloud;
+              }
             }
           }
           if (br.cdpUrl !== undefined) {
@@ -250,17 +643,78 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
             } else if (typeof br.extension === 'object' && !Array.isArray(br.extension)) {
               const ext = br.extension as Record<string, unknown>;
               const extTarget: Record<string, unknown> = {};
-              if (typeof ext.port === 'number' && ext.port >= 1024 && ext.port <= 65535) {
+              if (ext.port === null || ext.port === '') {
+                // explicit clear: leave unset (consumers fall back to default)
+              } else if (typeof ext.port === 'number' && ext.port >= 1024 && ext.port <= 65535) {
                 extTarget.port = Math.floor(ext.port);
               }
-              if (typeof ext.host === 'string' && ext.host && ext.host !== '127.0.0.1') {
-                extTarget.host = ext.host;
+              if (ext.host === null || ext.host === '') {
+                // explicit clear
+              } else if (typeof ext.host === 'string' && ext.host.trim()) {
+                extTarget.host = ext.host.trim();
+              }
+              if (
+                ext.connectionTimeout === null ||
+                ext.connectionTimeout === ''
+              ) {
+                // explicit clear
+              } else if (
+                typeof ext.connectionTimeout === 'number' &&
+                Number.isFinite(ext.connectionTimeout) &&
+                ext.connectionTimeout >= 1000
+              ) {
+                extTarget.connectionTimeout = Math.floor(ext.connectionTimeout);
               }
               if (Object.keys(extTarget).length > 0) {
                 target.extension = extTarget;
               } else {
                 delete target.extension;
               }
+            }
+          }
+          if (br.cloakbrowser !== undefined) {
+            if (br.cloakbrowser === null) {
+              delete target.cloakbrowser;
+            } else if (typeof br.cloakbrowser === 'object' && !Array.isArray(br.cloakbrowser)) {
+              const cloakbrowserPatch = br.cloakbrowser as Record<string, unknown>;
+              const cloakbrowserTarget: Record<string, unknown> = {};
+              if (typeof cloakbrowserPatch.keepOpen === 'boolean') {
+                cloakbrowserTarget.keepOpen = cloakbrowserPatch.keepOpen;
+              }
+              if (typeof cloakbrowserPatch.temporaryProfile === 'boolean') {
+                cloakbrowserTarget.temporaryProfile = cloakbrowserPatch.temporaryProfile;
+              }
+              for (const key of ['cacheDir', 'binaryPath', 'timezone', 'locale', 'webrtcIp', 'fingerprintPlatform']) {
+                const value = cloakbrowserPatch[key];
+                if (typeof value === 'string' && value.trim()) {
+                  cloakbrowserTarget[key] = value.trim();
+                }
+              }
+              if (
+                Array.isArray(cloakbrowserPatch.extraArgs) &&
+                cloakbrowserPatch.extraArgs.every((value) => typeof value === 'string')
+              ) {
+                cloakbrowserTarget.extraArgs = cloakbrowserPatch.extraArgs;
+              }
+              if (Object.keys(cloakbrowserTarget).length > 0) {
+                target.cloakbrowser = cloakbrowserTarget;
+              } else {
+                delete target.cloakbrowser;
+              }
+            }
+          }
+          if (br.humanize !== undefined) {
+            if (br.humanize === null) {
+              delete target.humanize;
+            } else {
+              target.humanize = Boolean(br.humanize);
+            }
+          }
+          if (br.humanPreset !== undefined) {
+            if (br.humanPreset === null) {
+              delete target.humanPreset;
+            } else if (br.humanPreset === 'default' || br.humanPreset === 'careful') {
+              target.humanPreset = br.humanPreset;
             }
           }
           if (br.dialogPolicy !== undefined) {

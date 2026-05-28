@@ -30,8 +30,8 @@ export interface CloudBrowserProvider {
 export interface CloudBrowserProviderConfig {
   /** Provider type identifier. */
   type: 'browserbase' | 'browser-use';
-  /** API key for the cloud provider. */
-  apiKey: string;
+  /** API key for the cloud provider. Falls back to provider-specific environment variables. */
+  apiKey?: string;
   /** Optional project/session identifier. */
   projectId?: string;
   /** Optional region preference. */
@@ -56,9 +56,44 @@ export interface ExtensionConnectionConfig {
   commandTimeout?: number;
 }
 
+/** Configuration for CloakBrowser — anti-fingerprint Chromium with stealth capabilities. */
+export interface CloakBrowserConfig {
+  /** Directory for cached CloakBrowser binaries. Default: ~/.xopc/bin. */
+  cacheDir?: string;
+  /** Override the CloakBrowser binary path (skip auto-download). */
+  binaryPath?: string;
+  /** Run headless. Default: false. */
+  headless?: boolean;
+  /** Fixed CDP debugging port. Default: auto-pick free port, or 9222 if keepOpen. */
+  cdpPort?: number;
+  /** Keep browser process alive between tasks. Default: true. */
+  keepOpen?: boolean;
+  /** Reuse an already-running CloakBrowser instance on the same port. Default: false. */
+  reuseExisting?: boolean;
+  /** Create a temporary profile directory, cleaned up on close. Default: false. */
+  temporaryProfile?: boolean;
+  /** Persistent user data directory (overrides temporaryProfile). */
+  userDataDir?: string;
+  /** Extra Chromium launch args (override defaults with same --key= prefix). */
+  extraArgs?: string[];
+  /** Timezone to emulate (e.g. "America/New_York"). */
+  timezone?: string;
+  /** Locale to emulate (e.g. "en-US"). */
+  locale?: string;
+  /** Public IP for WebRTC leak prevention. */
+  webrtcIp?: string;
+  /** Platform to emulate in fingerprint (e.g. "windows", "macos"). */
+  fingerprintPlatform?: string;
+  /** Enable humanized input (mouse/keyboard/scroll). Default: true. */
+  humanize?: boolean;
+  /** Humanize behavior preset. Default: 'careful'. */
+  humanPreset?: 'default' | 'careful';
+}
+
 /** Union of all backend connection modes. */
 export type BrowserBackend =
   | { mode: 'local'; headless: boolean }
   | { mode: 'cdp'; config: CdpConnectionConfig }
   | { mode: 'cloud'; config: CloudBrowserProviderConfig }
-  | { mode: 'extension'; config?: ExtensionConnectionConfig };
+  | { mode: 'extension'; config?: ExtensionConnectionConfig }
+  | { mode: 'cloakbrowser'; config?: CloakBrowserConfig };

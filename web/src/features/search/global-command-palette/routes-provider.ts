@@ -14,10 +14,9 @@ export type RouteHitSeed = {
 /**
  * Tabs for which the command palette offers a deep-link shortcut.
  *
- * M3.1 collapsed these from individual rail entries into a single "Agent
- * defaults" rail item, but the palette still seeds every sub-tab so users
- * can cmd-K → "browser" / "memory" / "skills" → jump directly. Keep this
- * list in sync with `AGENT_DEFAULTS_TABS` (`features/settings/agents/`).
+ * M3.1 collapsed most agent-defaults slices into one rail item. The palette
+ * still seeds each important settings destination so users can cmd-K →
+ * "browser" / "memory" / "skills" → jump directly.
  */
 const AGENT_DEFAULTS_PALETTE_TABS: readonly Tab[] = [
   'settingsAgentChat',

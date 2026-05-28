@@ -34,6 +34,29 @@ export {
   BrowserVisionSchema,
 } from './schemas.js';
 
+export {
+  humanizedClick,
+  humanizedFill,
+  humanizedPress,
+  humanizedScroll,
+  resolveHumanConfig,
+  generateMousePath,
+  generateTypingPlan,
+  generateScrollPlan,
+  type HumanConfig,
+  type HumanPreset,
+} from './humanize.js';
+
+export {
+  buildStealthArgs,
+  buildLocalStealthArgs,
+  generateFingerprintSeed,
+  removeQuarantineAttr,
+  makeExecutable,
+  WEBDRIVER_OVERRIDE_SCRIPT,
+  type StealthOptions,
+} from './stealth.js';
+
 export { createBrowserActionRegistry } from './actions/registry.js';
 export type {
   BrowserActionName,
@@ -47,4 +70,5 @@ export type {
 
 export { parseBrowserPipeline, type PipelineDocument, type PipelineStep } from './pipeline/schema.js';
 export { runBrowserPipeline, validateBrowserPipeline } from './pipeline/runner.js';
+export { loadBrowserPipelineSource } from './pipeline/source.js';
 export { resolveTemplate, resolveTemplateDeep } from './pipeline/template.js';
