@@ -76,7 +76,7 @@ export interface AgentDefaultsState {
   maxRequestsPerTurn: number;
   maxToolFailuresPerTurn: number;
   workspace: string;
-  /** Playwright `browser_*` tools (`agents.defaults.browser.enabled`). */
+  /** `browser_use` tool (`agents.defaults.browser.enabled`). */
   browserEnabled: boolean;
   /** Headless Chromium when browser tools are on (`agents.defaults.browser.headless`; default false = visible window). */
   browserHeadless: boolean;
@@ -252,7 +252,7 @@ function parseBrowserFromDefaults(d: Record<string, unknown>): BrowserFieldsPick
       browserHeadless: false,
       browserAllowPrivateUrls: false,
       browserCommandTimeout: undefined,
-      browserBackend: 'local',
+      browserBackend: 'extension',
       browserCloudProvider: 'local',
       browserCloudApiKey: '',
       browserCloudProjectId: '',
@@ -285,12 +285,13 @@ function parseBrowserFromDefaults(d: Record<string, unknown>): BrowserFieldsPick
 
   const backendRaw = b.backend;
   const backend: AgentDefaultsState['browserBackend'] =
+    backendRaw === 'local' ||
     backendRaw === 'cdp' ||
     backendRaw === 'cloud' ||
     backendRaw === 'extension' ||
     backendRaw === 'cloakbrowser'
       ? backendRaw
-      : 'local';
+      : 'extension';
 
   const cpRaw = b.cloudProvider;
   const cloudProvider: AgentDefaultsState['browserCloudProvider'] =
@@ -766,7 +767,7 @@ export async function patchAgentDefaults(state: AgentDefaultsState): Promise<voi
       headless: state.browserHeadless,
       allowPrivateUrls: state.browserAllowPrivateUrls,
       commandTimeout: state.browserCommandTimeout ?? null,
-      backend: state.browserBackend === 'local' ? null : state.browserBackend,
+      backend: state.browserBackend === 'extension' ? null : state.browserBackend,
       cloudProvider: state.browserCloudProvider === 'local' ? null : state.browserCloudProvider,
       cloud: state.browserBackend === 'cloud'
         ? {

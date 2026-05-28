@@ -35,6 +35,14 @@ export function AgentDefaultsBrowserPanel(props: AgentDefaultsPanelProps) {
   const modeOptions = useMemo<BackendModeOption[]>(
     () => [
       {
+        value: 'extension',
+        icon: Puzzle,
+        name: a.browserBackendExtension,
+        tagline: a.browserModeExtTagline,
+        status: extensionStatus,
+        statusLabel: extensionStatusLabel,
+      },
+      {
         value: 'local',
         icon: MonitorPlay,
         name: a.browserBackendLocal,
@@ -61,14 +69,6 @@ export function AgentDefaultsBrowserPanel(props: AgentDefaultsPanelProps) {
         icon: Cloud,
         name: a.browserBackendCloud,
         tagline: a.browserModeCloudTagline,
-      },
-      {
-        value: 'extension',
-        icon: Puzzle,
-        name: a.browserBackendExtension,
-        tagline: a.browserModeExtTagline,
-        status: extensionStatus,
-        statusLabel: extensionStatusLabel,
       },
     ],
     [a, cloakStatus, extensionStatus, extensionStatusLabel, localStatus],
@@ -219,6 +219,7 @@ export function AgentDefaultsBrowserPanel(props: AgentDefaultsPanelProps) {
             <ExtensionCard
               m={a}
               probe={doctor.extension}
+              artifacts={doctor.extensionArtifacts}
               form={{ port: form.browserExtensionPort, host: form.browserExtensionHost }}
               onChange={(patch) =>
                 update({
@@ -228,6 +229,10 @@ export function AgentDefaultsBrowserPanel(props: AgentDefaultsPanelProps) {
               }
               startBridge={doctor.startExtensionBridge}
               stopBridge={doctor.stopExtensionBridge}
+              installArtifacts={doctor.installExtensionArtifacts}
+              refetchArtifacts={doctor.refetchExtensionArtifacts}
+              openExtensionChrome={doctor.openExtensionChrome}
+              revealExtensionFolder={doctor.revealExtensionFolder}
             />
           ) : null}
 

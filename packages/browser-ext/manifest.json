@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "xopc Browser Bridge",
-  "version": "0.0.1",
+  "version": "0.0.73",
   "description": "Browser automation bridge for xopc — executes commands in Chrome via the local xopc daemon.",
   "permissions": [
     "debugger",
@@ -23,8 +23,12 @@
   },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
-      "js": ["dist/content.js"],
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "dist/content.js"
+      ],
       "run_at": "document_idle",
       "all_frames": false
     }

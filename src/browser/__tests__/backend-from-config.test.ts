@@ -70,21 +70,29 @@ describe('resolveBrowserBackendFromConfig', () => {
     expect(resolveBrowserBackendFromConfig(cfg).mode).toBe('extension');
   });
 
-  it('defaults to local', () => {
-    expect(resolveBrowserBackendFromConfig(undefined).mode).toBe('local');
+  it('defaults to extension', () => {
+    expect(resolveBrowserBackendFromConfig(undefined).mode).toBe('extension');
   });
 
-  it('defaults local backend to headed (headless false)', () => {
-    const b = resolveBrowserBackendFromConfig(undefined);
+  it('uses local only when backend is explicitly local', () => {
+    const cfg = { agents: { defaults: { browser: { backend: 'local' as const } } } } as unknown as Config;
+    const b = resolveBrowserBackendFromConfig(cfg);
     expect(b.mode).toBe('local');
     if (b.mode === 'local') expect(b.headless).toBe(false);
   });
 
-  it('local headless only when explicitly true', () => {
-    const cfg = { agents: { defaults: { browser: { headless: true } } } } as unknown as Config;
+  it('local headless only when explicitly local and headless true', () => {
+    const cfg = {
+      agents: { defaults: { browser: { backend: 'local' as const, headless: true } } },
+    } as unknown as Config;
     const b = resolveBrowserBackendFromConfig(cfg);
     expect(b.mode).toBe('local');
     if (b.mode === 'local') expect(b.headless).toBe(true);
+  });
+
+  it('headless without backend still defaults to extension', () => {
+    const cfg = { agents: { defaults: { browser: { headless: true } } } } as unknown as Config;
+    expect(resolveBrowserBackendFromConfig(cfg).mode).toBe('extension');
   });
 
   it('uses cloakbrowser when backend is cloakbrowser', () => {

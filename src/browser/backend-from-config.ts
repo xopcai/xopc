@@ -4,7 +4,7 @@ import type { BrowserBackend } from './providers/types.js';
 
 /**
  * Resolve browser backend from agent defaults.
- * Precedence: `backend: 'extension'` → `cdpUrl` (CDP) → `cloudProvider` (remote) → local Playwright Chromium.
+ * Precedence: `backend: 'extension'` → `cloakbrowser` → `cdpUrl` (CDP) → `cloudProvider` (remote) → `local` (explicit) → extension (default).
  */
 export function resolveBrowserBackendFromConfig(cfg: Config | undefined): BrowserBackend {
   const b = cfg?.agents?.defaults?.browser;
@@ -68,5 +68,23 @@ export function resolveBrowserBackendFromConfig(cfg: Config | undefined): Browse
       },
     };
   }
-  return { mode: 'local', headless };
+
+  if (b?.backend === 'local') {
+    return { mode: 'local', headless };
+  }
+
+  const ex = b?.extension;
+  const cmdSec = b?.commandTimeout;
+  return {
+    mode: 'extension',
+    config: {
+      port: ex?.port,
+      host: ex?.host,
+      connectionTimeout: ex?.connectionTimeout,
+      commandTimeout:
+        typeof cmdSec === 'number' && Number.isFinite(cmdSec) && cmdSec > 0
+          ? Math.floor(cmdSec * 1000)
+          : undefined,
+    },
+  };
 }

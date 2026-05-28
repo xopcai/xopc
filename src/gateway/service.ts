@@ -488,6 +488,10 @@ export class GatewayService {
 
     this.heartbeatService.start(heartbeatRunnerConfigFromConfig(this.config));
 
+    void import('../browser/providers/browser-ext-install.js')
+      .then(({ ensureBrowserExtensionOnStartup }) => ensureBrowserExtensionOnStartup(this.config))
+      .catch((err) => log.warn({ err }, 'Browser extension artifact ensure failed'));
+
     // Start browser extension WS server if configured
     await this.startBrowserExtensionServerIfNeeded();
 
