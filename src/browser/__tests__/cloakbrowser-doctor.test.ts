@@ -10,6 +10,21 @@ const binDirState = vi.hoisted(() => ({ path: '' }));
 vi.mock('../../config/paths.js', () => ({
   resolveBinDir: () => binDirState.path,
 }));
+vi.mock('../providers/cloakbrowser.js', async () => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const mod: any = await import('../providers/cloakbrowser.js');
+  return {
+    ...mod,
+    detectPlatform: () => ({
+      tag: 'darwin-arm64',
+      chromiumVersion: '145.0.7632.109.2',
+      archiveExt: '.tar.gz',
+      executableRelativePath: 'Chromium.app/Contents/MacOS/Chromium',
+      fingerprintPlatform: 'macos',
+      expectedSha256: '',
+    }),
+  };
+});
 
 describe('cloakBrowserDoctor', () => {
   it('detects binary under default cloakbrowser layout', async () => {
