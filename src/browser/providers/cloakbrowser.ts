@@ -10,8 +10,8 @@
 
 import { createHash } from 'node:crypto';
 import { createReadStream, createWriteStream } from 'node:fs';
-import { mkdir, mkdtemp, rm, stat } from 'node:fs/promises';
-import { homedir, platform as osPlatform, arch as osArch, tmpdir } from 'node:os';
+import { mkdir, mkdtemp, readdir, rename, rm, stat } from 'node:fs/promises';
+import { platform as osPlatform, arch as osArch, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { Readable } from 'node:stream';
@@ -20,7 +20,9 @@ import { ChildProcess, spawn } from 'node:child_process';
 import AdmZip from 'adm-zip';
 import type { Browser, BrowserContext } from 'playwright-core';
 
+import type { BrowserInstallProgress } from '../install-progress.js';
 import { createLogger } from '../../utils/logger.js';
+import { resolveBinDir } from '../../config/paths.js';
 import { assertCacheDir } from '../cache-dir-policy.js';
 import { pickFreePort } from '../free-port.js';
 import {
@@ -132,8 +134,62 @@ async function sha256OfFile(path: string): Promise<string> {
 
 // ── Binary management ───────────────────────────────────────────────────────
 
-function defaultCacheDir(): string {
-  return join(homedir(), '.xopc', 'bin');
+const CLOAKBROWSER_DIR_NAME = 'cloakbrowser';
+
+/** Default CloakBrowser home: ~/.xopc/bin/cloakbrowser (chromium-v*, profiles/, …). */
+export function defaultCloakBrowserCacheDir(): string {
+  return join(resolveBinDir(), CLOAKBROWSER_DIR_NAME);
+}
+
+/** Resolve configured or default CloakBrowser cache root. */
+export function resolveCloakBrowserCacheDir(configured?: string): string {
+  if (configured?.trim()) {
+    return assertCacheDir(configured.trim());
+  }
+  return defaultCloakBrowserCacheDir();
+}
+
+/**
+ * Move legacy layout (~/.xopc/bin/chromium-v* and profiles/) into ~/.xopc/bin/cloakbrowser/.
+ * No-op when using a custom cacheDir or when the new layout already exists.
+ */
+export async function migrateLegacyCloakBrowserLayout(cacheDir: string): Promise<void> {
+  if (cacheDir !== defaultCloakBrowserCacheDir()) return;
+
+  const binDir = resolveBinDir();
+  await mkdir(cacheDir, { recursive: true });
+
+  let entries: string[];
+  try {
+    entries = await readdir(binDir);
+  } catch {
+    return;
+  }
+
+  for (const name of entries) {
+    if (!name.startsWith('chromium-v')) continue;
+    const from = join(binDir, name);
+    const to = join(cacheDir, name);
+    if (await fileExists(to)) continue;
+    if (!(await fileExists(from))) continue;
+    try {
+      await rename(from, to);
+      log.info({ from, to }, 'Migrated legacy CloakBrowser binary directory');
+    } catch (err) {
+      log.warn({ err, from, to }, 'Failed to migrate legacy CloakBrowser binary directory');
+    }
+  }
+
+  const legacyProfiles = join(binDir, 'profiles');
+  const newProfiles = join(cacheDir, 'profiles');
+  if (await fileExists(newProfiles) || !(await fileExists(legacyProfiles))) return;
+
+  try {
+    await rename(legacyProfiles, newProfiles);
+    log.info({ from: legacyProfiles, to: newProfiles }, 'Migrated legacy CloakBrowser profiles directory');
+  } catch (err) {
+    log.warn({ err, from: legacyProfiles, to: newProfiles }, 'Failed to migrate legacy CloakBrowser profiles');
+  }
 }
 
 function binaryDir(cacheDir: string, platformInfo: PlatformInfo): string {
@@ -195,19 +251,62 @@ async function extractArchive(archivePath: string, targetDir: string, platformIn
  * present. Set `XOPC_CLOAKBROWSER_SKIP_HASH=1` to bypass (development only;
  * the gateway logs a warning when the env var is honoured).
  */
+async function downloadArchiveToFile(
+  url: string,
+  archivePath: string,
+  onProgress?: (progress: BrowserInstallProgress) => void | Promise<void>,
+): Promise<void> {
+  const response = await fetch(url, { redirect: 'follow' });
+  if (!response.ok || !response.body) {
+    throw new Error(`download returned HTTP ${response.status}`);
+  }
+
+  const contentLength = response.headers.get('content-length');
+  const totalBytes =
+    contentLength && Number.isFinite(Number(contentLength)) ? Number(contentLength) : null;
+  let bytesReceived = 0;
+
+  const report = () => {
+    void onProgress?.({
+      phase: 'downloading',
+      message: 'Downloading CloakBrowser archive',
+      bytesReceived,
+      totalBytes,
+      percent:
+        totalBytes && totalBytes > 0
+          ? Math.min(100, Math.round((bytesReceived / totalBytes) * 100))
+          : null,
+    });
+  };
+
+  report();
+
+  const nodeStream = Readable.fromWeb(response.body as Parameters<typeof Readable.fromWeb>[0]);
+  nodeStream.on('data', (chunk: Buffer | string) => {
+    bytesReceived += typeof chunk === 'string' ? Buffer.byteLength(chunk) : chunk.length;
+    report();
+  });
+
+  await pipeline(nodeStream, createWriteStream(archivePath));
+  report();
+}
+
 async function downloadBinary(
   cacheDir: string,
   platformInfo: PlatformInfo,
+  onProgress?: (progress: BrowserInstallProgress) => void | Promise<void>,
 ): Promise<string> {
   const targetDir = binaryDir(cacheDir, platformInfo);
   const execPath = binaryPath(cacheDir, platformInfo);
 
   if (await fileExists(execPath)) {
     log.info({ path: execPath }, 'CloakBrowser binary already cached');
+    await onProgress?.({ phase: 'ready', message: 'CloakBrowser binary already cached', percent: 100 });
     return execPath;
   }
 
   await mkdir(cacheDir, { recursive: true });
+  await onProgress?.({ phase: 'starting', message: 'Preparing CloakBrowser download' });
 
   const archiveName = `cloakbrowser-${platformInfo.tag}${platformInfo.archiveExt}`;
   const urls = archiveDownloadUrls(platformInfo);
@@ -221,15 +320,10 @@ async function downloadBinary(
     const stagingDir = await mkdtemp(join(cacheDir, '.download-'));
     const archivePath = join(stagingDir, archiveName);
     try {
-      const response = await fetch(url, { redirect: 'follow' });
-      if (!response.ok || !response.body) {
-        throw new Error(`download returned HTTP ${response.status}`);
-      }
-
-      const fileStream = createWriteStream(archivePath);
-      await pipeline(Readable.fromWeb(response.body as ReadableStream), fileStream);
+      await downloadArchiveToFile(url, archivePath, onProgress);
 
       if (expectedSha256) {
+        await onProgress?.({ phase: 'verifying', message: 'Verifying SHA-256 checksum' });
         const actual = await sha256OfFile(archivePath);
         if (actual !== expectedSha256) {
           throw new Error(
@@ -249,6 +343,7 @@ async function downloadBinary(
         );
       }
 
+      await onProgress?.({ phase: 'extracting', message: 'Extracting CloakBrowser archive' });
       log.info({ archivePath }, 'Extracting CloakBrowser archive...');
       await rm(targetDir, { recursive: true, force: true }).catch(() => {});
       await mkdir(targetDir, { recursive: true });
@@ -262,6 +357,7 @@ async function downloadBinary(
       await removeQuarantineAttr(execPath);
       await rm(stagingDir, { recursive: true, force: true }).catch(() => {});
 
+      await onProgress?.({ phase: 'ready', message: 'CloakBrowser binary ready', percent: 100 });
       log.info({ path: execPath }, 'CloakBrowser binary ready');
       return execPath;
     } catch (e) {
@@ -339,14 +435,13 @@ export async function launchCloakBrowser(
   config: CloakBrowserConfig = {},
 ): Promise<CloakBrowserLaunchResult> {
   const platformInfo = detectPlatform();
-  const cacheDir = config.cacheDir
-    ? assertCacheDir(config.cacheDir)
-    : defaultCacheDir();
+  const cacheDir = resolveCloakBrowserCacheDir(config.cacheDir);
+  await migrateLegacyCloakBrowserLayout(cacheDir);
   const keepOpen = config.keepOpen ?? true;
   const reuseExisting = config.reuseExisting ?? keepOpen;
 
   // Resolve binary
-  const execPath = config.binaryPath ?? await downloadBinary(cacheDir, platformInfo);
+  const execPath = config.binaryPath ?? await downloadBinary(cacheDir, platformInfo, config.onProgress);
   if (config.binaryPath) {
     await makeExecutable(execPath);
     await removeQuarantineAttr(execPath);
@@ -419,6 +514,8 @@ export async function launchCloakBrowser(
   if (osPlatform() === 'darwin') {
     launchArgs.push('--use-mock-keychain');
   }
+
+  await config.onProgress?.({ phase: 'running', message: 'Launching CloakBrowser for verification' });
 
   log.info(
     { execPath, port: cdpPort, headless: !!config.headless, keepOpen },
@@ -541,14 +638,33 @@ export interface CloakBrowserDoctorResult {
   customBinaryPath: boolean;
 }
 
+/**
+ * Download (if needed), launch headlessly to verify, then return doctor status.
+ * Used by gateway install endpoints and CLI.
+ */
+export async function installCloakBrowser(
+  config: CloakBrowserConfig = {},
+): Promise<CloakBrowserDoctorResult> {
+  const result = await launchCloakBrowser({
+    headless: true,
+    temporaryProfile: true,
+    keepOpen: false,
+    cacheDir: config.cacheDir,
+    binaryPath: config.binaryPath,
+    onProgress: config.onProgress,
+  });
+  await result.browser.close().catch(() => {});
+  await cleanupCloakBrowser(result.childProcess, result.temporaryProfileDir);
+  return cloakBrowserDoctor({ cacheDir: config.cacheDir, binaryPath: config.binaryPath });
+}
+
 /** Check CloakBrowser installation status. */
 export async function cloakBrowserDoctor(
   config: CloakBrowserConfig = {},
 ): Promise<CloakBrowserDoctorResult> {
   const platformInfo = detectPlatform();
-  const cacheDir = config.cacheDir
-    ? assertCacheDir(config.cacheDir)
-    : defaultCacheDir();
+  const cacheDir = resolveCloakBrowserCacheDir(config.cacheDir);
+  await migrateLegacyCloakBrowserLayout(cacheDir);
   const customBinaryPath = typeof config.binaryPath === 'string' && config.binaryPath.length > 0;
   const execPath = config.binaryPath ?? binaryPath(cacheDir, platformInfo);
   const installed = await fileExists(execPath);
