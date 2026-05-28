@@ -15,9 +15,13 @@ import { CloudCard } from './browser/cloud-card';
 import { ExtensionCard } from './browser/extension-card';
 import { LocalCard } from './browser/local-card';
 import { useBrowserDoctor } from './browser/use-browser-doctor';
+import { useBrowserInstallStream } from './browser/use-browser-install-stream';
 
 export function AgentDefaultsBrowserPanel(props: AgentDefaultsPanelProps) {
   const { a, form, update } = props;
+
+  const playwrightInstall = useBrowserInstallStream('playwright');
+  const cloakInstall = useBrowserInstallStream('cloakbrowser');
 
   const doctor = useBrowserDoctor({
     cacheDir: form.browserCloakCacheDir,
@@ -155,13 +159,21 @@ export function AgentDefaultsBrowserPanel(props: AgentDefaultsPanelProps) {
 
           {/* Selected mode card */}
           {form.browserBackend === 'local' ? (
-            <LocalCard m={a} doctor={doctor.playwright} refetch={doctor.refetchPlaywright} />
+            <LocalCard
+              m={a}
+              doctor={doctor.playwright}
+              refetch={doctor.refetchPlaywright}
+              applyDoctor={doctor.applyPlaywrightDoctor}
+              installStream={playwrightInstall}
+            />
           ) : null}
           {form.browserBackend === 'cloakbrowser' ? (
             <CloakCard
               m={a}
               doctor={doctor.cloak}
               refetch={doctor.refetchCloak}
+              applyDoctor={doctor.applyCloakDoctor}
+              installStream={cloakInstall}
               form={{
                 cacheDir: form.browserCloakCacheDir,
                 binaryPath: form.browserCloakBinaryPath,

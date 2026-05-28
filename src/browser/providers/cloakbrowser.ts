@@ -12,7 +12,7 @@ import { createHash } from 'node:crypto';
 import { createReadStream, createWriteStream } from 'node:fs';
 import { mkdir, mkdtemp, readdir, rename, rm, stat } from 'node:fs/promises';
 import { platform as osPlatform, arch as osArch, tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { Readable } from 'node:stream';
 import { ChildProcess, spawn } from 'node:child_process';
@@ -23,7 +23,7 @@ import type { Browser, BrowserContext } from 'playwright-core';
 import type { BrowserInstallProgress } from '../install-progress.js';
 import { createLogger } from '../../utils/logger.js';
 import { resolveBinDir } from '../../config/paths.js';
-import { assertCacheDir } from '../cache-dir-policy.js';
+import { assertCacheDir, expandHome } from '../cache-dir-policy.js';
 import { pickFreePort } from '../free-port.js';
 import {
   buildStealthArgs,
@@ -144,9 +144,41 @@ export function defaultCloakBrowserCacheDir(): string {
 /** Resolve configured or default CloakBrowser cache root. */
 export function resolveCloakBrowserCacheDir(configured?: string): string {
   if (configured?.trim()) {
-    return assertCacheDir(configured.trim());
+    const resolved = assertCacheDir(configured.trim());
+    // Legacy configs used ~/.xopc/bin — normalize to ~/.xopc/bin/cloakbrowser.
+    if (resolve(resolved) === resolve(resolveBinDir())) {
+      return defaultCloakBrowserCacheDir();
+    }
+    return resolved;
   }
   return defaultCloakBrowserCacheDir();
+}
+
+async function resolveCloakExecutablePath(
+  cacheDir: string,
+  platformInfo: PlatformInfo,
+  configuredBinaryPath?: string,
+): Promise<{ execPath: string; installed: boolean; customBinaryPath: boolean }> {
+  const trimmed = configuredBinaryPath?.trim();
+  const autoPath = binaryPath(cacheDir, platformInfo);
+  if (!trimmed) {
+    return {
+      execPath: autoPath,
+      installed: await fileExists(autoPath),
+      customBinaryPath: false,
+    };
+  }
+
+  const customPath = resolve(expandHome(trimmed));
+  if (await fileExists(customPath)) {
+    return { execPath: customPath, installed: true, customBinaryPath: true };
+  }
+
+  if (await fileExists(autoPath)) {
+    return { execPath: autoPath, installed: true, customBinaryPath: true };
+  }
+
+  return { execPath: customPath, installed: false, customBinaryPath: true };
 }
 
 /**
@@ -255,8 +287,11 @@ async function downloadArchiveToFile(
   url: string,
   archivePath: string,
   onProgress?: (progress: BrowserInstallProgress) => void | Promise<void>,
+  signal?: AbortSignal,
 ): Promise<void> {
-  const response = await fetch(url, { redirect: 'follow' });
+  if (signal?.aborted) throw new Error('Install cancelled');
+
+  const response = await fetch(url, { redirect: 'follow', signal });
   if (!response.ok || !response.body) {
     throw new Error(`download returned HTTP ${response.status}`);
   }
@@ -295,6 +330,7 @@ async function downloadBinary(
   cacheDir: string,
   platformInfo: PlatformInfo,
   onProgress?: (progress: BrowserInstallProgress) => void | Promise<void>,
+  signal?: AbortSignal,
 ): Promise<string> {
   const targetDir = binaryDir(cacheDir, platformInfo);
   const execPath = binaryPath(cacheDir, platformInfo);
@@ -317,12 +353,14 @@ async function downloadBinary(
 
   let downloadError: Error | undefined;
   for (const url of urls) {
+    if (signal?.aborted) throw new Error('Install cancelled');
     const stagingDir = await mkdtemp(join(cacheDir, '.download-'));
     const archivePath = join(stagingDir, archiveName);
     try {
-      await downloadArchiveToFile(url, archivePath, onProgress);
+      await downloadArchiveToFile(url, archivePath, onProgress, signal);
 
       if (expectedSha256) {
+        if (signal?.aborted) throw new Error('Install cancelled');
         await onProgress?.({ phase: 'verifying', message: 'Verifying SHA-256 checksum' });
         const actual = await sha256OfFile(archivePath);
         if (actual !== expectedSha256) {
@@ -441,8 +479,11 @@ export async function launchCloakBrowser(
   const reuseExisting = config.reuseExisting ?? keepOpen;
 
   // Resolve binary
-  const execPath = config.binaryPath ?? await downloadBinary(cacheDir, platformInfo, config.onProgress);
-  if (config.binaryPath) {
+  const configuredBinary = config.binaryPath?.trim() || undefined;
+  const execPath = configuredBinary
+    ? (await resolveCloakExecutablePath(cacheDir, platformInfo, configuredBinary)).execPath
+    : await downloadBinary(cacheDir, platformInfo, config.onProgress, config.signal);
+  if (configuredBinary) {
     await makeExecutable(execPath);
     await removeQuarantineAttr(execPath);
   }
@@ -516,6 +557,7 @@ export async function launchCloakBrowser(
   }
 
   await config.onProgress?.({ phase: 'running', message: 'Launching CloakBrowser for verification' });
+  if (config.signal?.aborted) throw new Error('Install cancelled');
 
   log.info(
     { execPath, port: cdpPort, headless: !!config.headless, keepOpen },
@@ -652,6 +694,7 @@ export async function installCloakBrowser(
     cacheDir: config.cacheDir,
     binaryPath: config.binaryPath,
     onProgress: config.onProgress,
+    signal: config.signal,
   });
   await result.browser.close().catch(() => {});
   await cleanupCloakBrowser(result.childProcess, result.temporaryProfileDir);
@@ -665,9 +708,11 @@ export async function cloakBrowserDoctor(
   const platformInfo = detectPlatform();
   const cacheDir = resolveCloakBrowserCacheDir(config.cacheDir);
   await migrateLegacyCloakBrowserLayout(cacheDir);
-  const customBinaryPath = typeof config.binaryPath === 'string' && config.binaryPath.length > 0;
-  const execPath = config.binaryPath ?? binaryPath(cacheDir, platformInfo);
-  const installed = await fileExists(execPath);
+  const { execPath, installed, customBinaryPath } = await resolveCloakExecutablePath(
+    cacheDir,
+    platformInfo,
+    config.binaryPath,
+  );
   const [primary, ...fallbacks] = archiveDownloadUrls(platformInfo);
 
   return {

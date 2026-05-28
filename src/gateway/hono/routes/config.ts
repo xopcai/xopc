@@ -8,7 +8,6 @@ import { assertGatewayRuntimeConfig } from '../../runtime-config.js';
 import { resolveGatewayAuth, assertGatewayAuthConfigured } from '../../auth.js';
 import { canonicalizeConfiguredMcpServer } from '../../../config/mcp-config-normalize.js';
 import { CredentialResolver } from '../../../auth/credentials.js';
-import { runExec } from '../../../infra/exec.js';
 import { applyToolsWebPatch } from '../../config-tools-web.js';
 import { mergeTunnelConfigPatch } from '../../../tunnel/tunnel-config.js';
 import { mergeShareConfigPatch } from '../../../share/share-config.js';
@@ -269,33 +268,9 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
   // Doctor: does Playwright have a runnable Chromium on disk?
   authenticated.get('/api/browser/playwright/doctor', async (c) => {
     try {
-      const pw = await import('playwright-core');
-      const chromium = pw.chromium
-        ?? (pw as { default?: { chromium?: (typeof pw)['chromium'] } }).default?.chromium;
-      if (!chromium?.executablePath) {
-        return c.json({ ok: true, payload: { installed: false, reason: 'playwright-core missing' } });
-      }
-      let executablePath: string | null = null;
-      try {
-        executablePath = chromium.executablePath();
-      } catch (err) {
-        return c.json({
-          ok: true,
-          payload: {
-            installed: false,
-            reason: err instanceof Error ? err.message : String(err),
-          },
-        });
-      }
-      const { stat } = await import('node:fs/promises');
-      let installed = false;
-      try {
-        const st = await stat(executablePath);
-        installed = st.isFile();
-      } catch {
-        installed = false;
-      }
-      return c.json({ ok: true, payload: { installed, executablePath } });
+      const { playwrightChromiumDoctor } = await import('../../../browser/providers/playwright-doctor.js');
+      const payload = await playwrightChromiumDoctor();
+      return c.json({ ok: true, payload });
     } catch (e) {
       return c.json(
         { ok: false, error: e instanceof Error ? e.message : String(e) },
@@ -489,18 +464,11 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
 
   authenticated.post('/api/browser/playwright/install', strictRateLimitMiddleware, async (c) => {
     try {
-      const npxCommand = process.platform === 'win32' ? 'npx.cmd' : 'npx';
-      const result = await runExec(npxCommand, ['playwright', 'install', 'chromium'], {
-        timeoutMs: 10 * 60 * 1000,
-        maxBuffer: 4 * 1024 * 1024,
-      });
-      return c.json({ ok: true, payload: result });
+      const { installPlaywrightChromium } = await import('../../../browser/providers/playwright-install.js');
+      const payload = await installPlaywrightChromium();
+      return c.json({ ok: true, payload });
     } catch (e) {
-      const error = e as NodeJS.ErrnoException & { stdout?: string; stderr?: string };
-      const message = [error.message, error.stderr, error.stdout]
-        .filter((part): part is string => Boolean(part && part.trim()))
-        .join('\n')
-        .slice(0, 4000);
+      const message = e instanceof Error ? e.message : String(e);
       return c.json({ ok: false, error: message || 'Failed to install Playwright Chromium' }, 500);
     }
   });
