@@ -49,7 +49,9 @@ export function ConfirmDialog({
           onOpenAutoFocus={(e) => e.preventDefault()}
         >
           <Dialog.Title className="text-base font-semibold text-fg">{title}</Dialog.Title>
-          <Dialog.Description className="mt-2 text-sm text-fg-muted">{description}</Dialog.Description>
+          <Dialog.Description className="mt-2 max-h-[min(50vh,16rem)] overflow-y-auto text-sm text-fg-muted whitespace-pre-wrap break-all">
+            {description}
+          </Dialog.Description>
           <div className="mt-6 flex justify-end gap-2">
             <Button type="button" variant="secondary" onClick={onCancel}>
               {cancelLabel}
