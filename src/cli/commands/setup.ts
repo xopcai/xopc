@@ -3,7 +3,6 @@ import { register, formatExamples, type CLIContext } from '../registry.js';
 import { seedMainAgentProfileMarkdown } from '../../agent/context/workspace-seed.js';
 import { getWorkspaceStatus } from '../utils/workspace.js';
 import { initWorkspace } from '../utils/init-workspace.js';
-import { colors } from '../utils/colors.js';
 
 function createSetupCommand(ctx: CLIContext): Command {
   const cmd = new Command('setup')

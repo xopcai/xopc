@@ -19,10 +19,10 @@ overrides:
   axios: ^1.15.1
 
 allowBuilds:
-  '@google/genai': true
+  '@google/genai': set this to true or false
   '@swc/core': true
-  '@vscode/ripgrep': true
+  '@vscode/ripgrep': set this to true or false
   electron: true
-  electron-winstaller: true
-  esbuild: true
-  protobufjs: true
+  electron-winstaller: set this to true or false
+  esbuild: set this to true or false
+  protobufjs: set this to true or false
