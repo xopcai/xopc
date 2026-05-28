@@ -276,32 +276,36 @@ export class MessageSender {
     let evtType = '';
     let evtData = '';
 
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buf += value;
+    const readChunk = async (): Promise<void> => {
+      const { done, value } = await reader.read();
+      if (done) {
+        if (evtData) this._dispatchSSE(evtType || 'message', evtData, callbacks);
+        return;
+      }
+      buf += value;
 
-        while (buf.includes('\n')) {
-          const idx = buf.indexOf('\n');
-          let line = buf.slice(0, idx);
-          buf = buf.slice(idx + 1);
-          line = line.replace(/\r$/, '');
+      const lines = buf.split('\n');
+      buf = lines.pop() ?? '';
+      for (const rawLine of lines) {
+        let line = rawLine.replace(/\r$/, '');
 
-          if (line.startsWith('event:')) {
-            evtData = '';
-            evtType = line.slice(6).trim();
-          } else if (line.startsWith('data:')) {
-            const payload = line.startsWith('data: ') ? line.slice(6) : line.slice(5);
-            evtData += (evtData ? '\n' : '') + payload;
-          } else if (line === '' && evtData) {
-            this._dispatchSSE(evtType || 'message', evtData, callbacks);
-            evtType = '';
-            evtData = '';
-          }
+        if (line.startsWith('event:')) {
+          evtData = '';
+          evtType = line.slice(6).trim();
+        } else if (line.startsWith('data:')) {
+          const payload = line.startsWith('data: ') ? line.slice(6) : line.slice(5);
+          evtData += (evtData ? '\n' : '') + payload;
+        } else if (line === '' && evtData) {
+          this._dispatchSSE(evtType || 'message', evtData, callbacks);
+          evtType = '';
+          evtData = '';
         }
       }
-      if (evtData) this._dispatchSSE(evtType || 'message', evtData, callbacks);
+      await readChunk();
+    };
+
+    try {
+      await readChunk();
     } finally {
       reader.releaseLock();
     }

@@ -20,6 +20,15 @@ type Props = {
   onChange: (headers: McpHeaderEntry[]) => void;
 };
 
+function headerRowKey(row: McpHeaderEntry, index: number, all: McpHeaderEntry[]): string {
+  const key = row.key.trim();
+  if (key) return `key:${key}`;
+  const value = row.value.trim();
+  if (value) return `value:${value}`;
+  const emptySlot = all.slice(0, index).filter((r) => !r.key.trim() && !r.value.trim()).length;
+  return `empty:${emptySlot}`;
+}
+
 function inputClassName(): string {
   return cn(
     'w-full rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg',
@@ -86,7 +95,7 @@ export function McpHeadersEditor({
 
       <div className="flex flex-col gap-2">
         {headers.map((row, index) => (
-          <div key={`header-${index}`} className="flex items-center gap-2">
+          <div key={headerRowKey(row, index, headers)} className="flex items-center gap-2">
             <input
               className={cn(inputClassName(), 'min-w-0 flex-1 font-mono text-xs')}
               value={row.key}

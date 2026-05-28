@@ -84,104 +84,120 @@ export function useChatSessionInit(opts: {
     let cancelled = false;
     const isLive = () => !cancelled && gen === initGenRef.current;
 
-    const applyResolvedSessionConfig = async (key: string) => {
-      try {
-        const cfg = await sessionMgrRef.current.loadSessionAgentConfig(key);
+    const applyResolvedSessionConfig = (key: string) => {
+      if (!isLive()) return;
+      void sessionMgrRef.current
+        .loadSessionAgentConfig(key)
+        .then((cfg) => {
+          if (!isLive()) return;
+          setSessionModel(cfg.model);
+          setThinkingLevel(cfg.thinkingLevel || DEFAULT_THINKING);
+          setReasoningLevel(coerceReasoningLevel(cfg.reasoningLevel));
+          void refreshModelThinkingSupport(cfg.model);
+        })
+        .catch(() => {
+          /* ignore */
+        });
+    };
+
+    const adoptOrCreateNewRouteSession = (): Promise<void> => {
+      if (!isLive()) return Promise.resolve();
+      return sessionMgrRef.current.loadSessions().then((sessions) => {
         if (!isLive()) return;
-        setSessionModel(cfg.model);
-        setThinkingLevel(cfg.thinkingLevel || DEFAULT_THINKING);
-        setReasoningLevel(coerceReasoningLevel(cfg.reasoningLevel));
-        void refreshModelThinkingSupport(cfg.model);
-      } catch {
-        /* ignore */
-      }
-    };
-
-    const adoptOrCreateNewRouteSession = async () => {
-      const sessions = await sessionMgrRef.current.loadSessions();
-      if (!isLive()) return;
-      const aid = resolveAgentIdForPost();
-      const empty = pickEmptyWebSessionForAgent(sessions, aid ?? undefined);
-      if (empty) {
-        setSessionKey(empty.key);
-        setSessionName(empty.name ?? null);
-        setMessages([]);
-        setHasMore(false);
-        navigateToSession(empty.key, true, searchParamsForComposerHandoff(locationSearch));
-        await applyResolvedSessionConfig(empty.key);
-        return;
-      }
-      const session = await sessionMgrRef.current.createSession(
-        aid ? { agentId: aid } : undefined,
-      );
-      if (!isLive()) return;
-      setSessionKey(session.key);
-      setSessionName(session.name ?? null);
-      setMessages([]);
-      setHasMore(false);
-      navigateToSession(session.key, true, searchParamsForComposerHandoff(locationSearch));
-      await applyResolvedSessionConfig(session.key);
-    };
-
-    const initDecodedKey = async (key: string) => {
-      const loaded = await loadSessionById(key, 0);
-      if (!isLive()) return;
-      restoreLiveCacheIfNeeded(key);
-      const seed = getLiveSessionCache(key)?.messages ?? loaded ?? [];
-      await tryResumeAgentRun(key, seed);
-    };
-
-    const initFallback = async () => {
-      const sessions = await sessionMgrRef.current.loadSessions();
-      if (!isLive()) return;
-      const withMsgs = sessions.filter((s) => (s.messageCount ?? 0) > 0);
-      const target = withMsgs[0] ?? sessions[0];
-      if (target) {
-        const loaded = await loadSessionById(target.key, 0);
+        const aid = resolveAgentIdForPost();
+        const empty = pickEmptyWebSessionForAgent(sessions, aid ?? undefined);
+        if (empty) {
+          setSessionKey(empty.key);
+          setSessionName(empty.name ?? null);
+          setMessages([]);
+          setHasMore(false);
+          navigateToSession(empty.key, true, searchParamsForComposerHandoff(locationSearch));
+          if (!isLive()) return;
+          applyResolvedSessionConfig(empty.key);
+          return;
+        }
         if (!isLive()) return;
-        restoreLiveCacheIfNeeded(target.key);
-        const seed = getLiveSessionCache(target.key)?.messages ?? loaded ?? [];
-        const keyFromUrl = sessionMgrRef.current.parseSessionFromHash();
-        if (!keyFromUrl) navigateToSession(target.key, true);
-        await tryResumeAgentRun(target.key, seed);
-        return;
-      }
-      const aid = resolveAgentIdForPost();
-      const session = await sessionMgrRef.current.createSession(
-        aid ? { agentId: aid } : undefined,
-      );
-      if (!isLive()) return;
-      setSessionKey(session.key);
-      setSessionName(session.name ?? null);
-      setMessages([]);
-      setHasMore(false);
-      navigateToSession(session.key);
-      await applyResolvedSessionConfig(session.key);
+        return sessionMgrRef.current
+          .createSession(aid ? { agentId: aid } : undefined)
+          .then((session) => {
+            if (!isLive()) return;
+            setSessionKey(session.key);
+            setSessionName(session.name ?? null);
+            setMessages([]);
+            setHasMore(false);
+            navigateToSession(session.key, true, searchParamsForComposerHandoff(locationSearch));
+            applyResolvedSessionConfig(session.key);
+          });
+      });
     };
 
-    const run = async () => {
+    const initDecodedKey = (key: string): Promise<void> => {
+      if (!isLive()) return Promise.resolve();
+      return loadSessionById(key, 0).then((loaded) => {
+        if (!isLive()) return;
+        restoreLiveCacheIfNeeded(key);
+        const seed = getLiveSessionCache(key)?.messages ?? loaded ?? [];
+        return tryResumeAgentRun(key, seed);
+      });
+    };
+
+    const initFallback = (): Promise<void> => {
+      if (!isLive()) return Promise.resolve();
+      return sessionMgrRef.current.loadSessions().then((sessions) => {
+        if (!isLive()) return;
+        const withMsgs = sessions.filter((s) => (s.messageCount ?? 0) > 0);
+        const target = withMsgs[0] ?? sessions[0];
+        if (target) {
+          if (!isLive()) return;
+          return loadSessionById(target.key, 0).then((loaded) => {
+            if (!isLive()) return;
+            restoreLiveCacheIfNeeded(target.key);
+            const seed = getLiveSessionCache(target.key)?.messages ?? loaded ?? [];
+            const keyFromUrl = sessionMgrRef.current.parseSessionFromHash();
+            if (!keyFromUrl) navigateToSession(target.key, true);
+            return tryResumeAgentRun(target.key, seed);
+          });
+        }
+        if (!isLive()) return;
+        const aid = resolveAgentIdForPost();
+        return sessionMgrRef.current
+          .createSession(aid ? { agentId: aid } : undefined)
+          .then((session) => {
+            if (!isLive()) return;
+            setSessionKey(session.key);
+            setSessionName(session.name ?? null);
+            setMessages([]);
+            setHasMore(false);
+            navigateToSession(session.key);
+            applyResolvedSessionConfig(session.key);
+          });
+      });
+    };
+
+    const run = () => {
       const needsFullBlockingLoad = isNewRoute || decodedKey === undefined;
       if (needsFullBlockingLoad) {
         setLoading(true);
       }
       setError(null);
 
-      try {
-        if (isNewRoute) {
-          await adoptOrCreateNewRouteSession();
-        } else if (decodedKey) {
-          await initDecodedKey(decodedKey);
-        } else {
-          await initFallback();
-        }
-      } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : 'Chat init failed');
-      } finally {
-        if (isLive()) setLoading(false);
-      }
+      const branch = isNewRoute
+        ? adoptOrCreateNewRouteSession()
+        : decodedKey
+          ? initDecodedKey(decodedKey)
+          : initFallback();
+
+      void branch
+        .then(() => {
+          if (isLive()) setLoading(false);
+        })
+        .catch((err) => {
+          if (!cancelled) setError(err instanceof Error ? err.message : 'Chat init failed');
+          if (isLive()) setLoading(false);
+        });
     };
 
-    void run();
+    run();
     return () => {
       cancelled = true;
     };

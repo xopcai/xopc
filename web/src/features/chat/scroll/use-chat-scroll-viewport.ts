@@ -4,9 +4,9 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  startTransition,
   type RefObject,
 } from 'react';
-import { flushSync } from 'react-dom';
 
 import {
   CHAT_SCROLL_REPIN_WITHIN_PX,
@@ -191,7 +191,7 @@ export function useChatScrollViewport({
     const unpinFromUserIntent = () => {
       if (!atBottomRef.current) return;
       atBottomRef.current = false;
-      flushSync(() => setAtBottom(false));
+      startTransition(() => setAtBottom(false));
     };
 
     const onWheel = (e: WheelEvent) => {

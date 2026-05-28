@@ -152,8 +152,7 @@ export function TunnelSettingsPanel({ embedded = false }: { embedded?: boolean }
     setActionError(null);
     try {
       await recordTunnelConsent();
-      await mutStatus();
-      await runStart();
+      await Promise.all([mutStatus(), runStart()]);
     } catch (e) {
       setActionError(e instanceof Error ? e.message : String(e));
     }
@@ -164,8 +163,7 @@ export function TunnelSettingsPanel({ embedded = false }: { embedded?: boolean }
     setStopping(true);
     try {
       await stopTunnel();
-      await pairQr.refreshQr();
-      await mutStatus();
+      await Promise.all([pairQr.refreshQr(), mutStatus()]);
       void revalidateGatewayConfig();
     } catch (e) {
       setActionError(e instanceof Error ? e.message : String(e));
@@ -249,8 +247,7 @@ export function TunnelSettingsPanel({ embedded = false }: { embedded?: boolean }
     setReleasing(true);
     try {
       await stopTunnel({ release: true });
-      await pairQr.refreshQr();
-      await mutStatus();
+      await Promise.all([pairQr.refreshQr(), mutStatus()]);
       void revalidateGatewayConfig();
     } catch (e) {
       setActionError(e instanceof Error ? e.message : String(e));

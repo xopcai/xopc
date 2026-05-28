@@ -10,6 +10,24 @@ import { useAsyncResource } from '@/lib/use-async-resource';
 
 import { runVerdictLabel, statusAfterLabel, type GoalMessages } from './chat-goal-banner-utils';
 
+const GOAL_RUN_AT_ZH = new Intl.DateTimeFormat('zh-CN', {
+  month: 'short',
+  day: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+});
+const GOAL_RUN_AT_EN = new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  day: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+});
+
+function formatGoalRunAt(at: number | string, language: StoredLanguage): string {
+  const value = typeof at === 'string' ? new Date(at) : at;
+  return (language === 'zh' ? GOAL_RUN_AT_ZH : GOAL_RUN_AT_EN).format(value);
+}
+
 type Props = {
   sessionKey: string;
   goal: WebchatPersistentGoalWire;
@@ -65,12 +83,7 @@ export function GoalRunsHistory({ sessionKey, goal, language, t }: Props) {
                 >
                   <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5 text-[10px] text-fg-muted">
                     <time suppressHydrationWarning dateTime={new Date(r.at).toISOString()}>
-                      {new Intl.DateTimeFormat(language === 'zh' ? 'zh-CN' : 'en-US', {
-                        month: 'short',
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      }).format(r.at)}
+                      {formatGoalRunAt(r.at, language)}
                     </time>
                     <span>
                       {t.runHistoryTurns

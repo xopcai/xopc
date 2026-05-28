@@ -107,17 +107,25 @@ export const useSaveBarStore = create<State>((set, get) => ({
     const failures: SaveAllFailure[] = [];
     let saved = 0;
     try {
-      for (const section of sections) {
-        try {
-          const result = await section.save();
-          if (result.ok) saved += 1;
-          else failures.push({ id: section.id, error: result.error ?? 'Save failed' });
-        } catch (err) {
-          failures.push({
-            id: section.id,
-            error: err instanceof Error ? err.message : String(err),
-          });
-        }
+      const outcomes = await Promise.all(
+        sections.map(async (section) => {
+          try {
+            const result = await section.save();
+            return { id: section.id, result };
+          } catch (err) {
+            return {
+              id: section.id,
+              result: {
+                ok: false as const,
+                error: err instanceof Error ? err.message : String(err),
+              },
+            };
+          }
+        }),
+      );
+      for (const { id, result } of outcomes) {
+        if (result.ok) saved += 1;
+        else failures.push({ id, error: result.error ?? 'Save failed' });
       }
     } finally {
       set((state) => ({ saveAllInFlight: false, ...computeAggregates(state.sections, false) }));

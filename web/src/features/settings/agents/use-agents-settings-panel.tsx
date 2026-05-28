@@ -417,7 +417,7 @@ export function useAgentsSettingsPanel() {
     setBusy(true);
     setError(null);
     try {
-      const toolsDisable = [...toolsSkills.toolEntryDisable].sort((x, y) => x.localeCompare(y));
+      const toolsDisable = Array.from(toolsSkills.toolEntryDisable).toSorted((x, y) => x.localeCompare(y));
       const next = await updateGatewayAgent(selected.id, { toolsDisable });
       void mutateAgents(next, { revalidate: false });
     } catch (err) {
@@ -454,7 +454,7 @@ export function useAgentsSettingsPanel() {
       const next = await updateGatewayAgent(selected.id, {
         skills: toolsSkills.skillsInherit
           ? null
-          : [...toolsSkills.skillsPick].sort((x, y) => x.localeCompare(y)),
+          : [...toolsSkills.skillsPick].toSorted((x, y) => x.localeCompare(y)),
       });
       void mutateAgents(next, { revalidate: false });
     } catch (err) {

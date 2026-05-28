@@ -268,10 +268,10 @@ export function WebSearchSettingsPanel({ embedded = false }: { embedded?: boolea
               placeholder={w.blocklistDomainsPlaceholder}
               disabled={!form.blocklistEnabled}
               onChange={(e) => {
-                const domains = e.target.value
-                  .split(/\r?\n/)
-                  .map((line) => line.trim().toLowerCase())
-                  .filter(Boolean);
+                const domains = e.target.value.split(/\r?\n/).flatMap((line) => {
+                  const v = line.trim().toLowerCase();
+                  return v ? [v] : [];
+                });
                 update({ blocklistDomains: domains });
               }}
             />
@@ -297,7 +297,7 @@ export function WebSearchSettingsPanel({ embedded = false }: { embedded?: boolea
             <div className="text-sm font-medium text-fg">{w.providersTitle}</div>
             {form.providers.map((row, index) => (
               <ProviderRowEditor
-                key={index}
+                key={`${row.type}:${row.url}:${row.apiKey}:${row.disabled}`}
                 row={row}
                 labels={w}
                 onChange={(next) => {

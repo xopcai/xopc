@@ -131,8 +131,10 @@ export function normalizeMcpSettingsFromConfig(cfg: unknown): McpSettingsState {
   const servers: McpServerRow[] =
     serversRaw && typeof serversRaw === 'object' && !Array.isArray(serversRaw)
       ? Object.entries(serversRaw as Record<string, unknown>)
-          .filter(([, v]) => v && typeof v === 'object')
-          .map(([id, v]) => serverConfigToRow(id, v as Record<string, unknown>))
+          .flatMap(([id, v]) => {
+            if (!v || typeof v !== 'object') return [];
+            return [serverConfigToRow(id, v as Record<string, unknown>)];
+          })
           .sort((a, b) => a.id.localeCompare(b.id))
       : [];
 

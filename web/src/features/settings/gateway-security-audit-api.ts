@@ -47,7 +47,7 @@ export function gatewaySecurityAuditSwrKey(): string {
 export function sortSecurityAuditFindings(
   findings: GatewaySecurityAuditFinding[],
 ): GatewaySecurityAuditFinding[] {
-  return [...findings].sort(
+  return findings.toSorted(
     (a, b) => SEVERITY_RANK[b.severity] - SEVERITY_RANK[a.severity] || a.checkId.localeCompare(b.checkId),
   );
 }

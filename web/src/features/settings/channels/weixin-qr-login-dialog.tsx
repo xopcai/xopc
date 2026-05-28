@@ -52,25 +52,27 @@ export function WeixinQrLoginDialog({
   onLoginSuccessRef.current = onLoginSuccess;
   onOpenChangeRef.current = onOpenChange;
 
-  const start = useCallback(async () => {
+  const start = useCallback(() => {
     const generation = ++startGenerationRef.current;
     setError(null);
     setHint(null);
     setSessionKey(null);
     setBusy(true);
-    try {
-      const r = await fetchWeixinGatewayQrLoginStart();
-      if (generation !== startGenerationRef.current) return;
-      setQrcodeUrl(r.qrcodeUrl);
-      setSessionKey(r.sessionKey);
-    } catch (e) {
-      if (generation !== startGenerationRef.current) return;
-      setError(e instanceof Error ? e.message : 'Start failed');
-    } finally {
-      if (generation === startGenerationRef.current) {
-        setBusy(false);
-      }
-    }
+    void fetchWeixinGatewayQrLoginStart()
+      .then((r) => {
+        if (generation !== startGenerationRef.current) return;
+        setQrcodeUrl(r.qrcodeUrl);
+        setSessionKey(r.sessionKey);
+      })
+      .catch((e) => {
+        if (generation !== startGenerationRef.current) return;
+        setError(e instanceof Error ? e.message : 'Start failed');
+      })
+      .finally(() => {
+        if (generation === startGenerationRef.current) {
+          setBusy(false);
+        }
+      });
   }, []);
 
   useEffect(() => {

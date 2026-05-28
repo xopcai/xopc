@@ -3,6 +3,8 @@ export type McpHeaderEntry = {
   value: string;
 };
 
+const MCP_HEADER_LINE = /^([^:=]+)[:=](.*)$/;
+
 export function parseHeadersPaste(text: string): McpHeaderEntry[] | null {
   const trimmed = text.trim();
   if (!trimmed) return null;
@@ -23,21 +25,12 @@ export function parseHeadersPaste(text: string): McpHeaderEntry[] | null {
   for (const line of trimmed.split(/\r?\n/)) {
     const row = line.trim();
     if (!row) continue;
-    const colon = row.indexOf(':');
-    if (colon > 0) {
-      rows.push({
-        key: row.slice(0, colon).trim(),
-        value: row.slice(colon + 1).trim(),
-      });
-      continue;
-    }
-    const eq = row.indexOf('=');
-    if (eq > 0) {
-      rows.push({
-        key: row.slice(0, eq).trim(),
-        value: row.slice(eq + 1).trim(),
-      });
-    }
+    const match = MCP_HEADER_LINE.exec(row);
+    if (!match) continue;
+    rows.push({
+      key: match[1].trim(),
+      value: match[2].trim(),
+    });
   }
   return rows.length > 0 ? rows : null;
 }

@@ -1,7 +1,13 @@
 const STORAGE_KEY = 'xopc.extensionUiGrants.v1';
 
 function permissionFingerprint(permissions: string[]): string {
-  return [...permissions].map((p) => p.trim()).filter(Boolean).sort().join('\0');
+  return permissions
+    .flatMap((p) => {
+      const v = p.trim();
+      return v ? [v] : [];
+    })
+    .toSorted()
+    .join('\0');
 }
 
 export function hasUiGrant(extensionId: string, permissions: string[]): boolean {

@@ -114,7 +114,7 @@ export function HeartbeatSettingsPanel() {
   const [form, setForm] = useState<HeartbeatSettingsState | null>(null);
   const [baseline, setBaseline] = useState<HeartbeatSettingsState | null>(null);
   const [doc, setDoc] = useState<string>('');
-  const [docBaseline, setDocBaseline] = useState<string>('');
+  const [docBaseline, setDocBaseline] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [triggerLoading, setTriggerLoading] = useState(false);
@@ -153,7 +153,7 @@ export function HeartbeatSettingsPanel() {
     return JSON.stringify(form) !== JSON.stringify(baseline);
   }, [form, baseline]);
 
-  const dirtyDoc = useMemo(() => doc !== docBaseline, [doc, docBaseline]);
+  const dirtyDoc = doc !== docBaseline;
 
   useEffect(() => {
     if (!hasToken) {
@@ -245,7 +245,7 @@ export function HeartbeatSettingsPanel() {
     if (baseline) setForm(structuredClone(baseline));
     setDoc(docBaseline);
     setError(null);
-  }, [baseline, docBaseline]);
+  }, []);
 
   const save = useCallback(async () => {
     if (!form || saving) return;
@@ -311,7 +311,11 @@ export function HeartbeatSettingsPanel() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-app-main flex-col gap-4 px-4 py-6">
+    <div
+      className="mx-auto flex w-full max-w-app-main flex-col gap-4 px-4 py-6"
+      aria-busy={saving}
+      data-has-baseline={baseline ? '1' : '0'}
+    >
       <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <h1 className="text-lg font-semibold tracking-tight text-fg">{m.settingsSections.heartbeat}</h1>
@@ -388,6 +392,7 @@ export function HeartbeatSettingsPanel() {
           onChange={(e) => setDoc(e.target.value)}
           spellCheck={false}
           aria-label={h.docSection}
+          data-doc-in-sync={doc === docBaseline ? 'true' : 'false'}
         />
       </HeartbeatTabPanel>
     </div>

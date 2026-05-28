@@ -41,11 +41,14 @@ export function GatewayRestartBanner() {
     }, 2000);
 
     async function pollHealth() {
-      while (!cancelled && Date.now() < deadline) {
+      const pollOnce = async (): Promise<void> => {
+        if (cancelled || Date.now() >= deadline) {
+          if (!cancelled) setTimedOut(true);
+          return;
+        }
         try {
           const res = await fetch(apiUrl('/api/health'), { signal: AbortSignal.timeout(3000) });
           if (res.ok) {
-            // Gateway is back — reload page.
             window.location.reload();
             return;
           }
@@ -53,10 +56,9 @@ export function GatewayRestartBanner() {
           // Expected while gateway is down.
         }
         await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
-      }
-      if (!cancelled) {
-        setTimedOut(true);
-      }
+        await pollOnce();
+      };
+      await pollOnce();
     }
 
     return () => {

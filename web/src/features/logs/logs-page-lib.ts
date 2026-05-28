@@ -7,7 +7,7 @@ function logEntryTimeMs(entry: LogEntry): number {
 
 /** Newest first (descending by timestamp). */
 export function sortLogsByTimeDesc(entries: readonly LogEntry[]): LogEntry[] {
-  return [...entries].sort((a, b) => logEntryTimeMs(b) - logEntryTimeMs(a));
+  return entries.toSorted((a, b) => logEntryTimeMs(b) - logEntryTimeMs(a));
 }
 
 export const PAGE_LIMIT = 50;

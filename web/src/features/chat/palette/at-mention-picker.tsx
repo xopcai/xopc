@@ -115,18 +115,19 @@ export const AtMentionPicker = memo(function AtMentionPicker({
         setHoverPreview(null);
         return;
       }
-      previewTimerRef.current = setTimeout(async () => {
+      previewTimerRef.current = setTimeout(() => {
         previewTimerRef.current = null;
         if (rid !== previewAbortRef.current) return;
-        try {
-          const { content } = await readWorkspaceFile(item.relativePath, { sessionKey });
-          const snippet = content.length > PREVIEW_MAX_CHARS ? `${content.slice(0, PREVIEW_MAX_CHARS)}…` : content;
-          if (rid !== previewAbortRef.current) return;
-          setHoverPreview({ text: snippet, x: clientX, y: clientY });
-        } catch {
-          if (rid !== previewAbortRef.current) return;
-          setHoverPreview(null);
-        }
+        void readWorkspaceFile(item.relativePath!, { sessionKey })
+          .then(({ content }) => {
+            const snippet = content.length > PREVIEW_MAX_CHARS ? `${content.slice(0, PREVIEW_MAX_CHARS)}…` : content;
+            if (rid !== previewAbortRef.current) return;
+            setHoverPreview({ text: snippet, x: clientX, y: clientY });
+          })
+          .catch(() => {
+            if (rid !== previewAbortRef.current) return;
+            setHoverPreview(null);
+          });
       }, 420);
     },
     [sessionKey],

@@ -6,6 +6,13 @@ import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/setti
 
 import type { AgentDefaultsPanelProps } from '../agent-defaults-panel-props';
 
+function modelFallbackRowKey(modelId: string, index: number, all: string[]): string {
+  const trimmed = modelId.trim();
+  if (trimmed) return `model:${trimmed}`;
+  const emptySlot = all.slice(0, index).filter((id) => !id.trim()).length;
+  return `empty:${emptySlot}`;
+}
+
 /**
  * Chat-only fallback chain (`agents.defaults.modelFallbacks`).
  * Rendered on the Agent defaults / Chat tab right under the primary model
@@ -20,7 +27,7 @@ export function AgentDefaultsChatModelFallbacksSection(props: AgentDefaultsPanel
       <SettingsFormSectionHeader icon={Cpu} title={a.label.modelFallbacks} subtitle={a.desc.modelFallbacks} />
       <div className="mt-4 flex flex-col gap-2">
         {form.modelFallbacks.map((fb, idx) => (
-          <div key={idx} className="flex items-start gap-2">
+          <div key={modelFallbackRowKey(fb, idx, form.modelFallbacks)} className="flex items-start gap-2">
             <div className="min-w-0 flex-1">
               <ModelSelector
                 value={fb}

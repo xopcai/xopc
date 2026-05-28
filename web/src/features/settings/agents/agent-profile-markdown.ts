@@ -340,27 +340,30 @@ export function detectSoulTemplate(content: string): SoulTemplateId {
       return template.id;
     }
     // Fuzzy: check for unique key phrases in each template
-    const keyPhrases = getTemplateKeyPhrases(template.id);
-    const matchCount = keyPhrases.filter((phrase) => stripped.includes(phrase)).length;
-    if (matchCount >= 2) {
-      return template.id;
-    }
+    const matchCount = countDistinctTemplatePhraseHits(stripped, template.id);
+    if (matchCount >= 2) return template.id;
   }
 
   return 'custom';
 }
 
-function getTemplateKeyPhrases(id: SoulTemplateId): string[] {
-  switch (id) {
-    case 'professional':
-      return ['precise and efficient', "Value the user's time", 'actionable answers'];
-    case 'casual':
-      return ['good friend', 'corporate drone', 'a little playful'];
-    case 'geeky':
-      return ['Precision over politeness', 'Go deep', 'slightly nerdy'];
-    default:
-      return [];
+const SOUL_TEMPLATE_PHRASE_PATTERNS: Partial<Record<SoulTemplateId, RegExp>> = {
+  professional: /precise and efficient|Value the user's time|actionable answers/g,
+  casual: /good friend|corporate drone|a little playful/g,
+  geeky: /Precision over politeness|Go deep|slightly nerdy/g,
+};
+
+function countDistinctTemplatePhraseHits(text: string, templateId: SoulTemplateId): number {
+  const pattern = SOUL_TEMPLATE_PHRASE_PATTERNS[templateId];
+  if (!pattern) return 0;
+  const re = new RegExp(pattern.source, 'g');
+  const hits = new Set<string>();
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(text)) !== null) {
+    hits.add(match[0]);
+    if (hits.size >= 2) return hits.size;
   }
+  return hits.size;
 }
 
 // ---------------------------------------------------------------------------

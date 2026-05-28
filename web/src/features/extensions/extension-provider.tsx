@@ -71,12 +71,18 @@ export function ExtensionProvider({ children }: { children: React.ReactNode }) {
     [router],
   );
 
+  const handleAgentStreamEventRef = useRef(handleAgentStreamEvent);
+  handleAgentStreamEventRef.current = handleAgentStreamEvent;
+
   useEffect(() => {
-    window.addEventListener('agent-stream-event', handleAgentStreamEvent);
-    return () => {
-      window.removeEventListener('agent-stream-event', handleAgentStreamEvent);
+    const onAgentStreamEvent = (event: Event) => {
+      handleAgentStreamEventRef.current(event);
     };
-  }, [handleAgentStreamEvent]);
+    window.addEventListener('agent-stream-event', onAgentStreamEvent);
+    return () => {
+      window.removeEventListener('agent-stream-event', onAgentStreamEvent);
+    };
+  }, []);
 
   useEffect(() => {
     const theme = buildThemeInfo(resolved);

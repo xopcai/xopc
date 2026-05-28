@@ -301,7 +301,7 @@ function scanTextForPaths(text: string, out: ExtractedFilePath[]): void {
     while ((m = re.exec(text)) !== null) {
       const cap = m[1];
       if (cap) {
-        const start = m.index + (m[0].indexOf(cap) >= 0 ? m[0].indexOf(cap) : 0);
+        const start = m.indices?.[1]?.[0] ?? m.index ?? 0;
         pushPath(cap, out, text, start, start + cap.length);
       }
     }
@@ -342,14 +342,13 @@ export function extractWorkspaceRelativeMentionsFromAssistantMarkdown(fullText: 
     }
   }
   const seen = new Set<string>();
-  return out
-    .filter((p) => {
-      const k = p.workspaceRelativePath ?? p.absolutePath;
-      if (seen.has(k)) return false;
-      seen.add(k);
-      return true;
-    })
-    .map((p) => ({ ...p, origin: 'assistant-markdown' as const }));
+  return out.reduce<ExtractedFilePath[]>((acc, p) => {
+    const k = p.workspaceRelativePath ?? p.absolutePath;
+    if (seen.has(k)) return acc;
+    seen.add(k);
+    acc.push({ ...p, origin: 'assistant-markdown' as const });
+    return acc;
+  }, []);
 }
 
 /** True if `abs` is the on-disk file for workspace-relative `rel` (dedupe "Saved: /.../a.png" vs "media/.../a.png"). */
@@ -398,12 +397,11 @@ export function extractFilePathsFromToolResult(resultText: string): ExtractedFil
   const dedupedRel = dropAbsolutePathDupesCoveredByRel(paths);
 
   const seen = new Set<string>();
-  return dedupedRel
-    .filter((p) => {
-      const key = p.absolutePath;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    })
-    .map((p) => ({ ...p, origin: 'tool-result' as const }));
+  return dedupedRel.reduce<ExtractedFilePath[]>((acc, p) => {
+    const key = p.absolutePath;
+    if (seen.has(key)) return acc;
+    seen.add(key);
+    acc.push({ ...p, origin: 'tool-result' as const });
+    return acc;
+  }, []);
 }

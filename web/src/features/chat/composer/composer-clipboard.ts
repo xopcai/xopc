@@ -1,9 +1,10 @@
 const ACCEPT =
   'image/*,application/pdf,.docx,.pptx,.xlsx,.xls,.txt,.md,.json,.xml,.html,.css,.js,.ts,.jsx,.tsx,.yml,.yaml,.zip';
 
-const ACCEPT_TOKENS = ACCEPT.split(',')
-  .map((t) => t.trim())
-  .filter(Boolean);
+const ACCEPT_TOKENS = ACCEPT.split(',').flatMap((t) => {
+  const v = t.trim();
+  return v ? [v] : [];
+});
 
 export { ACCEPT };
 

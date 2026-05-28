@@ -6,6 +6,13 @@ import type { ChannelsSettingsMessages } from '@/i18n/messages';
 import { BUILTIN_CHANNEL_CATALOG, type BuiltinChannelCatalogEntry } from './channel-catalog';
 import { channelsMetaSwrKey, fetchChannelsMeta, type ChannelHubMetaRow } from './channels-meta-api';
 
+const BUILTIN_CHANNEL_BY_ID = new Map(
+  BUILTIN_CHANNEL_CATALOG.map((entry) => [entry.id, entry] as const),
+);
+const BUILTIN_CHANNEL_ORDER_BY_ID = new Map(
+  BUILTIN_CHANNEL_CATALOG.map((entry, index) => [entry.id, index] as const),
+);
+
 export type ChannelCatalogEntry = {
   id: string;
   title: string;
@@ -31,7 +38,7 @@ export function mergeChannelCatalog(
   const byId = new Map<string, ChannelCatalogEntry>();
 
   for (const row of metaRows ?? []) {
-    const builtin = BUILTIN_CHANNEL_CATALOG.find((b) => b.id === row.id);
+    const builtin = BUILTIN_CHANNEL_BY_ID.get(row.id as BuiltinChannelCatalogEntry['id']);
     const copy = builtin
       ? resolveBuiltinCopy(builtin, ch)
       : { title: row.label, subtitle: row.description || ch.hubExtensionSubtitle };
@@ -65,7 +72,7 @@ export function mergeChannelCatalog(
       title: copy.title,
       subtitle: copy.subtitle,
       manageable: true,
-      order: BUILTIN_CHANNEL_CATALOG.findIndex((b) => b.id === entry.id),
+      order: BUILTIN_CHANNEL_ORDER_BY_ID.get(entry.id) ?? 0,
     });
   }
 

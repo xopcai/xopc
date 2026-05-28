@@ -58,7 +58,7 @@ export function hitRank(hit: Omit<GlobalHit, 'rank'>, query: string): number | n
 }
 
 export function sortHits(hits: GlobalHit[]): GlobalHit[] {
-  return [...hits].sort((a, b) => {
+  return hits.toSorted((a, b) => {
     if (a.rank !== b.rank) return a.rank - b.rank;
     if (a.groupLabel !== b.groupLabel) return a.groupLabel.localeCompare(b.groupLabel);
     return a.title.localeCompare(b.title);

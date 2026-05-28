@@ -55,26 +55,28 @@ export function FeishuQrSetupDialog({
   onSetupSuccessRef.current = onSetupSuccess;
   onOpenChangeRef.current = onOpenChange;
 
-  const startScan = useCallback(async (d: FeishuDomain) => {
+  const startScan = useCallback((d: FeishuDomain) => {
     const generation = ++startGenerationRef.current;
     setDomain(d);
     setError(null);
     setSessionKey(null);
     setQrUrl(null);
     setBusy(true);
-    try {
-      const result = await fetchFeishuSetupStart({ domain: d });
-      if (generation !== startGenerationRef.current) return;
-      setQrUrl(result.qrUrl);
-      setSessionKey(result.sessionKey);
-    } catch (e) {
-      if (generation !== startGenerationRef.current) return;
-      setError(e instanceof Error ? e.message : 'Start failed');
-    } finally {
-      if (generation === startGenerationRef.current) {
-        setBusy(false);
-      }
-    }
+    void fetchFeishuSetupStart({ domain: d })
+      .then((result) => {
+        if (generation !== startGenerationRef.current) return;
+        setQrUrl(result.qrUrl);
+        setSessionKey(result.sessionKey);
+      })
+      .catch((e) => {
+        if (generation !== startGenerationRef.current) return;
+        setError(e instanceof Error ? e.message : 'Start failed');
+      })
+      .finally(() => {
+        if (generation === startGenerationRef.current) {
+          setBusy(false);
+        }
+      });
   }, []);
 
   useEffect(() => {

@@ -55,32 +55,45 @@ export function PresetAgentsSetup({ existingAgentIds, onComplete, onSkip }: Pres
     setError(null);
     setProgress({ current: 0, total: toCreate.length });
 
-    for (let i = 0; i < toCreate.length; i++) {
-      const preset = toCreate[i];
-      setProgress({ current: i + 1, total: toCreate.length });
-      try {
-        await createGatewayAgent({
-          name: preset.name,
-          id: preset.id,
-          workspace: `~/.xopc/workspace/${preset.id}`,
-          description: language === 'zh' ? preset.descriptionZh : preset.descriptionEn,
-          profileFiles: {
-            'IDENTITY.md': preset.identityMd,
-            'SOUL.md': preset.soulMd,
-          },
-          ...(preset.toolsDisable && preset.toolsDisable.length > 0
-            ? { toolsDisable: preset.toolsDisable }
-            : {}),
-        });
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        if (message.toLowerCase().includes('already exists')) {
-          continue;
+    let completed = 0;
+    const failures: { preset: PresetAgent; message: string }[] = [];
+    await Promise.all(
+      toCreate.map(async (preset) => {
+        try {
+          await createGatewayAgent({
+            name: preset.name,
+            id: preset.id,
+            workspace: `~/.xopc/workspace/${preset.id}`,
+            description: language === 'zh' ? preset.descriptionZh : preset.descriptionEn,
+            profileFiles: {
+              'IDENTITY.md': preset.identityMd,
+              'SOUL.md': preset.soulMd,
+            },
+            ...(preset.toolsDisable && preset.toolsDisable.length > 0
+              ? { toolsDisable: preset.toolsDisable }
+              : {}),
+          });
+          completed += 1;
+          setProgress({ current: completed, total: toCreate.length });
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          if (message.toLowerCase().includes('already exists')) {
+            return;
+          }
+          failures.push({ preset, message });
         }
-        setError(a.presetCreateFailed.replace('{{name}}', preset.name).replace('{{message}}', message));
-        setCreating(false);
-        return;
-      }
+      }),
+    );
+
+    const firstFailure = failures[0];
+    if (firstFailure) {
+      setError(
+        a.presetCreateFailed
+          .replace('{{name}}', firstFailure.preset.name)
+          .replace('{{message}}', firstFailure.message),
+      );
+      setCreating(false);
+      return;
     }
 
     setCreating(false);

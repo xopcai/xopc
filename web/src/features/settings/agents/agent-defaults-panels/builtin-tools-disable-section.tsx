@@ -23,19 +23,25 @@ export function AgentDefaultsBuiltinToolsDisableSection(props: AgentDefaultsPane
   const { builtinToolIds, loading } = useBuiltinToolIdsLoad(true, hasToken);
 
   const disableSet = useMemo(
-    () => new Set(form.toolsDisable.map((s) => s.trim()).filter(Boolean)),
+    () =>
+      new Set(
+        form.toolsDisable.flatMap((s) => {
+          const v = s.trim();
+          return v ? [v] : [];
+        }),
+      ),
     [form.toolsDisable],
   );
 
-  const unknownDisabled = useMemo(
-    () =>
-      form.toolsDisable
-        .map((s) => s.trim())
-        .filter(Boolean)
-        .filter((id) => !builtinToolIds.includes(id))
-        .sort((x, y) => x.localeCompare(y)),
-    [form.toolsDisable, builtinToolIds],
-  );
+  const unknownDisabled = useMemo(() => {
+    const builtinSet = new Set(builtinToolIds);
+    return form.toolsDisable
+      .flatMap((s) => {
+        const v = s.trim();
+        return v && !builtinSet.has(v) ? [v] : [];
+      })
+      .toSorted((x, y) => x.localeCompare(y));
+  }, [form.toolsDisable, builtinToolIds]);
 
   const onDisableSetChange = useCallback(
     (next: Set<string>) => {

@@ -73,21 +73,24 @@ export function useComposerAttachments(options: UseComposerAttachmentsOptions): 
         });
       }
       const { loadAttachment } = await import('@/features/chat/attachments/attachment-load');
-      const next: Attachment[] = [];
-      for (const file of slice) {
-        if (file.size > MAX_WEBCHAT_ATTACHMENT_FILE_BYTES) {
-          showComposerNotification('warning', m.attachmentFileTooLarge, {
-            name: file.name,
-            maxSize: formatFileSize(MAX_WEBCHAT_ATTACHMENT_FILE_BYTES),
-          });
-          continue;
-        }
-        try {
-          next.push(await loadAttachment(file, file.name));
-        } catch {
-          showComposerNotification('error', m.attachmentLoadFailed, { name: file.name });
-        }
-      }
+      const loaded = await Promise.all(
+        slice.map(async (file) => {
+          if (file.size > MAX_WEBCHAT_ATTACHMENT_FILE_BYTES) {
+            showComposerNotification('warning', m.attachmentFileTooLarge, {
+              name: file.name,
+              maxSize: formatFileSize(MAX_WEBCHAT_ATTACHMENT_FILE_BYTES),
+            });
+            return null;
+          }
+          try {
+            return await loadAttachment(file, file.name);
+          } catch {
+            showComposerNotification('error', m.attachmentLoadFailed, { name: file.name });
+            return null;
+          }
+        }),
+      );
+      const next = loaded.filter((a): a is Attachment => a !== null);
       setAttachments((a) => [...a, ...next]);
     },
     [m.attachmentFileTooLarge, m.attachmentLoadFailed, m.maxAttachmentsReached, m.maxAttachmentsTruncated],

@@ -109,6 +109,9 @@ export function SlidingSegmented<T extends string>({
     setReady(true);
   }, [options, value]);
 
+  const measureRef = useRef(measure);
+  measureRef.current = measure;
+
   useLayoutEffect(() => {
     const id = requestAnimationFrame(() => measure());
     return () => cancelAnimationFrame(id);
@@ -124,16 +127,17 @@ export function SlidingSegmented<T extends string>({
   useEffect(() => {
     const track = trackRef.current;
     if (!track) return;
-    const ro = new ResizeObserver(() => {
-      requestAnimationFrame(() => measure());
-    });
+    const onResize = () => {
+      requestAnimationFrame(() => measureRef.current());
+    };
+    const ro = new ResizeObserver(onResize);
     ro.observe(track);
-    window.addEventListener('resize', measure);
+    window.addEventListener('resize', onResize);
     return () => {
       ro.disconnect();
-      window.removeEventListener('resize', measure);
+      window.removeEventListener('resize', onResize);
     };
-  }, [measure]);
+  }, []);
 
   return (
     <div

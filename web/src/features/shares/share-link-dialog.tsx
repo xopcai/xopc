@@ -9,6 +9,15 @@ import { cn } from '@/lib/cn';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 
+const SHARE_EXPIRES_AT_ZH = new Intl.DateTimeFormat('zh-CN', {
+  dateStyle: 'medium',
+  timeStyle: 'short',
+});
+const SHARE_EXPIRES_AT_EN = new Intl.DateTimeFormat('en', {
+  dateStyle: 'medium',
+  timeStyle: 'short',
+});
+
 export type ShareLinkResult = CreateShareResponse['payload'];
 
 type UrlRow = {
@@ -90,10 +99,7 @@ export function ShareUrlCopyRows({
 }
 
 function formatExpiresAt(isoDate: string, language: 'en' | 'zh'): string {
-  return new Intl.DateTimeFormat(language === 'zh' ? 'zh-CN' : 'en', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(new Date(isoDate));
+  return (language === 'zh' ? SHARE_EXPIRES_AT_ZH : SHARE_EXPIRES_AT_EN).format(new Date(isoDate));
 }
 
 export function ReachabilityHint({

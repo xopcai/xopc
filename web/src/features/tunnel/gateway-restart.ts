@@ -30,7 +30,9 @@ export async function waitForGatewayApiReady(
   const timeoutMs = params.timeoutMs ?? 90_000;
   const intervalMs = params.intervalMs ?? 500;
   const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
+
+  const pollOnce = async (): Promise<boolean> => {
+    if (Date.now() >= deadline) return false;
     try {
       const res = await fetch(apiUrl('/api/tunnel/pair/context'), {
         headers: { Authorization: `Bearer ${token}` },
@@ -40,8 +42,10 @@ export async function waitForGatewayApiReady(
       /* retry */
     }
     await new Promise((r) => setTimeout(r, intervalMs));
-  }
-  return false;
+    return pollOnce();
+  };
+
+  return pollOnce();
 }
 
 export async function waitForPairingReadyAfterRestart(
@@ -50,7 +54,9 @@ export async function waitForPairingReadyAfterRestart(
   const timeoutMs = params.timeoutMs ?? 90_000;
   const intervalMs = params.intervalMs ?? 500;
   const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
+
+  const pollOnce = async (): Promise<MobilePairContextResponse | null> => {
+    if (Date.now() >= deadline) return null;
     try {
       const context = await fetchTunnelPairContext();
       if (context.pairingReady) return context;
@@ -58,6 +64,8 @@ export async function waitForPairingReadyAfterRestart(
       /* retry until gateway is back */
     }
     await new Promise((r) => setTimeout(r, intervalMs));
-  }
-  return null;
+    return pollOnce();
+  };
+
+  return pollOnce();
 }

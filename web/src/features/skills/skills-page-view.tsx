@@ -18,16 +18,10 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
     sk,
     hasToken,
     error,
-    searchQuery,
-    setSearchQuery,
     actionFeedback,
     mainTab,
     setMainTab,
     setSourceFilter,
-    loading,
-    onReloadClick,
-    setPendingFile,
-    setInstallOpen,
     builtinTabStats,
     userTabStats,
     marketSort,
@@ -39,48 +33,21 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
     inSettingsShell,
   } = vm;
 
-  const setPageHeader = usePageHeaderStore((s) => s.setPageHeader);
-  const clearPageHeader = usePageHeaderStore((s) => s.clearPageHeader);
-
-  const skillsHeaderEnd = useMemo(
-    () => (
-      <SkillsPageHeaderEnd
-        loading={loading}
-        onReloadClick={onReloadClick}
-        searchQuery={searchQuery}
-        setSearchQuery={setSearchQuery}
-        mainTab={mainTab}
-        sk={sk}
-        setPendingFile={setPendingFile}
-        setInstallOpen={setInstallOpen}
-      />
-    ),
-    [loading, onReloadClick, searchQuery, setSearchQuery, mainTab, sk, setPendingFile, setInstallOpen],
-  );
-
-  useLayoutEffect(() => {
-    if (!hasToken || inSettingsShell) {
-      clearPageHeader();
-      return () => clearPageHeader();
-    }
-    setPageHeader({
-      startExtra: null,
-      main: null,
-      end: skillsHeaderEnd,
-    });
-    return () => clearPageHeader();
-  }, [clearPageHeader, hasToken, inSettingsShell, setPageHeader, skillsHeaderEnd]);
-
   if (!hasToken) {
     return (
-      <div className="mx-auto w-full max-w-app-main px-4 py-16 text-center text-sm text-fg-muted sm:px-8">
-        {sk.needToken}
-      </div>
+      <>
+        <SkillsPageHeaderRegistration vm={vm} />
+        <div className="mx-auto w-full max-w-app-main px-4 py-16 text-center text-sm text-fg-muted sm:px-8">
+          {sk.needToken}
+        </div>
+      </>
     );
   }
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-surface-panel">
+    <>
+      <SkillsPageHeaderRegistration vm={vm} />
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-surface-panel">
       <div className="mx-auto flex w-full max-w-app-main flex-col gap-6 px-4 py-6 sm:px-8">
         {actionFeedback ? (
           <div
@@ -113,7 +80,16 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
 
         {inSettingsShell ? (
           <div className="flex flex-col gap-3 border-b border-edge-subtle pb-4 dark:border-edge-subtle sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
-            {skillsHeaderEnd}
+            <SkillsPageHeaderEnd
+              loading={vm.loading}
+              onReloadClick={vm.onReloadClick}
+              searchQuery={vm.searchQuery}
+              setSearchQuery={vm.setSearchQuery}
+              mainTab={vm.mainTab}
+              sk={vm.sk}
+              setPendingFile={vm.setPendingFile}
+              setInstallOpen={vm.setInstallOpen}
+            />
           </div>
         ) : null}
 
@@ -311,5 +287,55 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
       <SkillsPageInstallDialog {...vm} />
       <SkillsPageConfirmDialog {...vm} />
     </div>
+    </>
   );
+}
+
+function SkillsPageHeaderRegistration({ vm }: { vm: SkillsPageVm }) {
+  const {
+    sk,
+    hasToken,
+    loading,
+    onReloadClick,
+    searchQuery,
+    setSearchQuery,
+    mainTab,
+    setPendingFile,
+    setInstallOpen,
+    inSettingsShell,
+  } = vm;
+
+  const setPageHeader = usePageHeaderStore((s) => s.setPageHeader);
+  const clearPageHeader = usePageHeaderStore((s) => s.clearPageHeader);
+
+  const skillsHeaderEnd = useMemo(
+    () => (
+      <SkillsPageHeaderEnd
+        loading={loading}
+        onReloadClick={onReloadClick}
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
+        mainTab={mainTab}
+        sk={sk}
+        setPendingFile={setPendingFile}
+        setInstallOpen={setInstallOpen}
+      />
+    ),
+    [loading, onReloadClick, searchQuery, setSearchQuery, mainTab, sk, setPendingFile, setInstallOpen],
+  );
+
+  useLayoutEffect(() => {
+    if (!hasToken || inSettingsShell) {
+      clearPageHeader();
+      return () => clearPageHeader();
+    }
+    setPageHeader({
+      startExtra: null,
+      main: null,
+      end: skillsHeaderEnd,
+    });
+    return () => clearPageHeader();
+  }, [clearPageHeader, hasToken, inSettingsShell, setPageHeader, skillsHeaderEnd]);
+
+  return null;
 }

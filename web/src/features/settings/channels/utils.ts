@@ -16,11 +16,11 @@ export function channelsSelectClassName(): string {
 }
 
 export function parseIdList(raw: string): (string | number)[] {
-  return raw
-    .split(/[,\n]/)
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .map((s) => (/^-?\d+$/.test(s) ? Number(s) : s));
+  return raw.split(/[,\n]/).flatMap((s) => {
+    const v = s.trim();
+    if (!v) return [];
+    return [/^-?\d+$/.test(v) ? Number(v) : v];
+  });
 }
 
 export function joinAllowFrom(ids: (string | number)[]): string {
