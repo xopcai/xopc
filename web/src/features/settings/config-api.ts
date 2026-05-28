@@ -84,16 +84,34 @@ export interface AgentDefaultsState {
   browserAllowPrivateUrls: boolean;
   /** Per-command timeout in seconds (default 30). */
   browserCommandTimeout: number | undefined;
-  /** Browser backend mode: local, cdp, cloud, or extension. */
-  browserBackend: 'local' | 'cdp' | 'cloud' | 'extension';
+  /** Browser backend mode: local, cdp, cloud, extension, or CloakBrowser. */
+  browserBackend: 'local' | 'cdp' | 'cloud' | 'extension' | 'cloakbrowser';
   /** Cloud browser backend: local, browserbase, or browser-use. */
   browserCloudProvider: 'local' | 'browserbase' | 'browser-use';
+  /** Cloud provider API key. Masked as *** when already stored. */
+  browserCloudApiKey: string;
+  /** Optional Browserbase project id. */
+  browserCloudProjectId: string;
+  /** Optional cloud provider region. */
+  browserCloudRegion: string;
   /** Direct CDP WebSocket endpoint URL. */
   browserCdpUrl: string;
   /** Chrome Extension bridge port (default 19820). */
   browserExtensionPort: number | undefined;
   /** Chrome Extension bridge host (default 127.0.0.1). */
   browserExtensionHost: string;
+  /** Keep CloakBrowser alive between tasks. */
+  browserCloakKeepOpen: boolean;
+  /** Use a temporary CloakBrowser profile. */
+  browserCloakTemporaryProfile: boolean;
+  /** Optional CloakBrowser binary cache directory. */
+  browserCloakCacheDir: string;
+  /** Optional CloakBrowser executable path. */
+  browserCloakBinaryPath: string;
+  /** Humanized browser input simulation. */
+  browserHumanize: boolean;
+  /** Humanized input behavior preset. */
+  browserHumanPreset: 'default' | 'careful';
   /** JS dialog handling policy. */
   browserDialogPolicy: 'must_respond' | 'auto_dismiss' | 'auto_accept';
   /** Dialog auto-timeout in seconds (default 300). */
@@ -210,9 +228,18 @@ type BrowserFieldsPick = Pick<
   | 'browserCommandTimeout'
   | 'browserBackend'
   | 'browserCloudProvider'
+  | 'browserCloudApiKey'
+  | 'browserCloudProjectId'
+  | 'browserCloudRegion'
   | 'browserCdpUrl'
   | 'browserExtensionPort'
   | 'browserExtensionHost'
+  | 'browserCloakKeepOpen'
+  | 'browserCloakTemporaryProfile'
+  | 'browserCloakCacheDir'
+  | 'browserCloakBinaryPath'
+  | 'browserHumanize'
+  | 'browserHumanPreset'
   | 'browserDialogPolicy'
   | 'browserDialogTimeout'
 >;
@@ -227,9 +254,18 @@ function parseBrowserFromDefaults(d: Record<string, unknown>): BrowserFieldsPick
       browserCommandTimeout: undefined,
       browserBackend: 'local',
       browserCloudProvider: 'local',
+      browserCloudApiKey: '',
+      browserCloudProjectId: '',
+      browserCloudRegion: '',
       browserCdpUrl: '',
       browserExtensionPort: undefined,
       browserExtensionHost: '127.0.0.1',
+      browserCloakKeepOpen: true,
+      browserCloakTemporaryProfile: false,
+      browserCloakCacheDir: '',
+      browserCloakBinaryPath: '',
+      browserHumanize: true,
+      browserHumanPreset: 'careful',
       browserDialogPolicy: 'auto_dismiss',
       browserDialogTimeout: undefined,
     };
@@ -249,11 +285,24 @@ function parseBrowserFromDefaults(d: Record<string, unknown>): BrowserFieldsPick
 
   const backendRaw = b.backend;
   const backend: AgentDefaultsState['browserBackend'] =
-    backendRaw === 'cdp' || backendRaw === 'cloud' || backendRaw === 'extension' ? backendRaw : 'local';
+    backendRaw === 'cdp' ||
+    backendRaw === 'cloud' ||
+    backendRaw === 'extension' ||
+    backendRaw === 'cloakbrowser'
+      ? backendRaw
+      : 'local';
 
   const cpRaw = b.cloudProvider;
   const cloudProvider: AgentDefaultsState['browserCloudProvider'] =
     cpRaw === 'browserbase' || cpRaw === 'browser-use' ? cpRaw : 'local';
+
+  const cloud =
+    typeof b.cloud === 'object' && b.cloud && !Array.isArray(b.cloud)
+      ? (b.cloud as Record<string, unknown>)
+      : {};
+  const cloudApiKey = typeof cloud.apiKey === 'string' ? cloud.apiKey : '';
+  const cloudProjectId = typeof cloud.projectId === 'string' ? cloud.projectId : '';
+  const cloudRegion = typeof cloud.region === 'string' ? cloud.region : '';
 
   const cdpUrl = typeof b.cdpUrl === 'string' ? b.cdpUrl : '';
 
@@ -266,6 +315,13 @@ function parseBrowserFromDefaults(d: Record<string, unknown>): BrowserFieldsPick
       ? Math.floor(ext.port)
       : undefined;
   const extensionHost = typeof ext.host === 'string' && ext.host ? ext.host : '127.0.0.1';
+
+  const cloakbrowser =
+    typeof b.cloakbrowser === 'object' && b.cloakbrowser && !Array.isArray(b.cloakbrowser)
+      ? (b.cloakbrowser as Record<string, unknown>)
+      : {};
+  const humanPreset: AgentDefaultsState['browserHumanPreset'] =
+    b.humanPreset === 'default' ? 'default' : 'careful';
 
   const dpRaw = b.dialogPolicy;
   const dialogPolicy: AgentDefaultsState['browserDialogPolicy'] =
@@ -285,9 +341,18 @@ function parseBrowserFromDefaults(d: Record<string, unknown>): BrowserFieldsPick
     browserCommandTimeout: commandTimeout,
     browserBackend: backend,
     browserCloudProvider: cloudProvider,
+    browserCloudApiKey: cloudApiKey,
+    browserCloudProjectId: cloudProjectId,
+    browserCloudRegion: cloudRegion,
     browserCdpUrl: cdpUrl,
     browserExtensionPort: extensionPort,
     browserExtensionHost: extensionHost,
+    browserCloakKeepOpen: cloakbrowser.keepOpen !== false,
+    browserCloakTemporaryProfile: cloakbrowser.temporaryProfile === true,
+    browserCloakCacheDir: typeof cloakbrowser.cacheDir === 'string' ? cloakbrowser.cacheDir : '',
+    browserCloakBinaryPath: typeof cloakbrowser.binaryPath === 'string' ? cloakbrowser.binaryPath : '',
+    browserHumanize: b.humanize !== false,
+    browserHumanPreset: humanPreset,
     browserDialogPolicy: dialogPolicy,
     browserDialogTimeout: dialogTimeout,
   };
@@ -703,13 +768,30 @@ export async function patchAgentDefaults(state: AgentDefaultsState): Promise<voi
       commandTimeout: state.browserCommandTimeout ?? null,
       backend: state.browserBackend === 'local' ? null : state.browserBackend,
       cloudProvider: state.browserCloudProvider === 'local' ? null : state.browserCloudProvider,
+      cloud: state.browserBackend === 'cloud'
+        ? {
+            apiKey: state.browserCloudApiKey.trim() || null,
+            projectId: state.browserCloudProjectId.trim() || null,
+            region: state.browserCloudRegion.trim() || null,
+          }
+        : null,
       cdpUrl: state.browserCdpUrl.trim() || null,
       extension: state.browserBackend === 'extension'
         ? {
             port: state.browserExtensionPort ?? null,
-            host: state.browserExtensionHost === '127.0.0.1' ? null : state.browserExtensionHost,
+            host: state.browserExtensionHost.trim() || null,
           }
         : null,
+      cloakbrowser: state.browserBackend === 'cloakbrowser'
+        ? {
+            keepOpen: state.browserCloakKeepOpen,
+            temporaryProfile: state.browserCloakTemporaryProfile,
+            cacheDir: state.browserCloakCacheDir.trim() || null,
+            binaryPath: state.browserCloakBinaryPath.trim() || null,
+          }
+        : null,
+      humanize: state.browserBackend === 'cloakbrowser' ? state.browserHumanize : null,
+      humanPreset: state.browserBackend === 'cloakbrowser' ? state.browserHumanPreset : null,
       dialogPolicy: state.browserDialogPolicy === 'auto_dismiss' ? null : state.browserDialogPolicy,
       dialogTimeoutSeconds: state.browserDialogTimeout ?? null,
     },

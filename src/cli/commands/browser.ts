@@ -64,7 +64,7 @@ function createBrowserCommand(_ctx: CLIContext): Command {
 
     cmd
       .command('validate <file>')
-      .description('Validate a browser pipeline YAML without executing')
+      .description('Validate a browser pipeline YAML file or URL without executing')
       .action(async (file: string) => {
         const { validatePipelineCli } = await import('./browser-cli-helpers.js');
         await validatePipelineCli(file);
@@ -72,7 +72,7 @@ function createBrowserCommand(_ctx: CLIContext): Command {
 
     cmd
       .command('run <file>')
-      .description('Run a browser pipeline YAML')
+      .description('Run a browser pipeline YAML file or URL')
       .option('--arg <args...>', 'Pipeline args (key=value)')
       .action(async (file: string, opts: { arg?: string[] }) => {
         const { runPipelineCli } = await import('./browser-cli-helpers.js');
@@ -102,6 +102,54 @@ function createBrowserCommand(_ctx: CLIContext): Command {
         await executeBrowserCliAction('close', {});
       });
 
+    // ── CloakBrowser sub-commands ───────────────────────────────────────────
+    const cloakCmd = cmd
+      .command('cloakbrowser')
+      .description('CloakBrowser anti-fingerprint browser management');
+
+    cloakCmd
+      .command('doctor')
+      .description('Check CloakBrowser installation status and version')
+      .action(async () => {
+        const { cloakBrowserDoctor } = await import('../../browser/providers/cloakbrowser.js');
+        const result = await cloakBrowserDoctor();
+        console.log('\n  CloakBrowser Status\n');
+        console.log(`  Installed:   ${result.installed ? '✓ yes' : '✗ no'}`);
+        console.log(`  Platform:    ${result.platform}`);
+        console.log(`  Version:     ${result.version ?? '(not installed)'}`);
+        console.log(`  Binary:      ${result.binaryPath ?? '(not found)'}`);
+        console.log(`  Cache dir:   ${result.cacheDir}`);
+        console.log('');
+        if (!result.installed) {
+          console.log('  Run "xopc browser cloakbrowser install" to download CloakBrowser.\n');
+        }
+      });
+
+    cloakCmd
+      .command('install')
+      .description('Download and install CloakBrowser binary')
+      .option('--cache-dir <dir>', 'Custom cache directory for the binary')
+      .action(async (opts: { cacheDir?: string }) => {
+        console.log('\n  Downloading CloakBrowser...\n');
+        try {
+          const { launchCloakBrowser, cleanupCloakBrowser } = await import('../../browser/providers/cloakbrowser.js');
+          // Launch with headless + temporary profile just to trigger download, then immediately cleanup
+          const result = await launchCloakBrowser({
+            headless: true,
+            temporaryProfile: true,
+            keepOpen: false,
+            cacheDir: opts.cacheDir,
+          });
+          await result.browser.close().catch(() => {});
+          await cleanupCloakBrowser(result.childProcess, result.temporaryProfileDir);
+          console.log('  ✓ CloakBrowser installed successfully.\n');
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          console.error(`  ✗ Installation failed: ${msg}\n`);
+          process.exitCode = 1;
+        }
+      });
+
   return cmd;
 }
 
@@ -117,6 +165,8 @@ register({
       'xopc browser validate ./flow.yaml',
       'xopc browser run ./flow.yaml',
       'xopc browser doctor',
+      'xopc browser cloakbrowser doctor',
+      'xopc browser cloakbrowser install',
     ],
   },
 });

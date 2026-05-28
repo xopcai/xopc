@@ -1,0 +1,126 @@
+import { Cloud, LoaderCircle, Plug } from 'lucide-react';
+import { useCallback, useState } from 'react';
+
+import { AgentDefaultsField } from '../../agent-defaults-field';
+import { inputClassName, selectClassName } from '../../defaults-field-styles';
+
+import { ActionResultBox, BackendModeCard } from './backend-mode-card';
+import type { BrowserMessages } from './types';
+
+type ActionStatus = 'idle' | 'pending' | 'ok' | 'error';
+
+export interface CloudCardForm {
+  provider: 'local' | 'browserbase' | 'browser-use';
+  apiKey: string;
+  projectId: string;
+  region: string;
+}
+
+export function CloudCard({
+  m,
+  form,
+  onChange,
+  testCloud,
+}: {
+  m: BrowserMessages;
+  form: CloudCardForm;
+  onChange: (patch: Partial<CloudCardForm>) => void;
+  testCloud: (provider: 'browserbase' | 'browser-use', apiKey: string) => Promise<{ reachable: boolean; error?: string }>;
+}) {
+  const [status, setStatus] = useState<ActionStatus>('idle');
+  const [message, setMessage] = useState<string | null>(null);
+
+  const provider = form.provider === 'local' ? 'browserbase' : form.provider;
+
+  const onTest = useCallback(async () => {
+    setStatus('pending');
+    setMessage(null);
+    try {
+      const result = await testCloud(provider, form.apiKey);
+      if (result.reachable) {
+        setStatus('ok');
+        setMessage(m.browserCloudTestOk);
+      } else {
+        setStatus('error');
+        setMessage(m.browserCloudTestFailed.replace('{{error}}', result.error ?? '—'));
+      }
+    } catch (e) {
+      setStatus('error');
+      setMessage(m.browserCloudTestFailed.replace('{{error}}', e instanceof Error ? e.message : String(e)));
+    }
+  }, [form.apiKey, m.browserCloudTestFailed, m.browserCloudTestOk, provider, testCloud]);
+
+  return (
+    <BackendModeCard
+      icon={Cloud}
+      title={m.label.browserCloudProvider}
+      description={m.desc.browserCloudProvider}
+      m={m}
+      primaryAction={
+        <button
+          type="button"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-edge bg-surface-panel px-2.5 py-1.5 text-xs font-medium text-fg hover:bg-surface-raised disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={status === 'pending'}
+          onClick={() => void onTest()}
+        >
+          {status === 'pending' ? <LoaderCircle className="size-3.5 animate-spin" /> : <Plug className="size-3.5" />}
+          {m.browserCloudTestConnection}
+        </button>
+      }
+    >
+      <div className="grid gap-5 sm:grid-cols-2">
+        <AgentDefaultsField label={m.label.browserCloudProvider} description={m.desc.browserCloudProvider}>
+          <select
+            className={selectClassName()}
+            value={provider}
+            onChange={(e) => onChange({ provider: e.target.value as CloudCardForm['provider'] })}
+          >
+            <option value="browserbase">{m.browserCloudProviderBrowserbase}</option>
+            <option value="browser-use">{m.browserCloudProviderBrowserUse}</option>
+          </select>
+        </AgentDefaultsField>
+        <AgentDefaultsField label={m.label.browserCloudApiKey} description={m.desc.browserCloudApiKey}>
+          <input
+            type="password"
+            className={inputClassName()}
+            value={form.apiKey === '***' ? '' : form.apiKey}
+            placeholder={
+              form.apiKey === '***'
+                ? '••••••••'
+                : provider === 'browserbase'
+                  ? 'BROWSERBASE_API_KEY'
+                  : 'BROWSER_USE_API_KEY'
+            }
+            onChange={(e) => onChange({ apiKey: e.target.value })}
+            autoComplete="off"
+          />
+        </AgentDefaultsField>
+        {provider === 'browserbase' ? (
+          <AgentDefaultsField label={m.label.browserCloudProjectId} description={m.desc.browserCloudProjectId}>
+            <input
+              type="text"
+              className={inputClassName()}
+              value={form.projectId}
+              placeholder="BROWSERBASE_PROJECT_ID"
+              onChange={(e) => onChange({ projectId: e.target.value })}
+              autoComplete="off"
+            />
+          </AgentDefaultsField>
+        ) : null}
+        <AgentDefaultsField label={m.label.browserCloudRegion} description={m.desc.browserCloudRegion}>
+          <input
+            type="text"
+            className={inputClassName()}
+            value={form.region}
+            placeholder="us-west-2"
+            onChange={(e) => onChange({ region: e.target.value })}
+            autoComplete="off"
+          />
+        </AgentDefaultsField>
+      </div>
+      {message ? (
+        <ActionResultBox kind={status === 'error' ? 'error' : 'success'} message={message} />
+      ) : null}
+    </BackendModeCard>
+  );
+}

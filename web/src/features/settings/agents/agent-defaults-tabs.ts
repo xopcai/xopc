@@ -2,7 +2,6 @@
 export type AgentDefaultsTabId =
   | 'chat'
   | 'workspace'
-  | 'browser'
   | 'runtime'
   | 'context'
   | 'memory'
@@ -13,7 +12,6 @@ export type AgentDefaultsTabId =
 export const AGENT_DEFAULTS_TABS: readonly AgentDefaultsTabId[] = [
   'chat',
   'workspace',
-  'browser',
   'runtime',
   'context',
   'memory',
@@ -26,7 +24,6 @@ export const AGENT_DEFAULTS_TABS: readonly AgentDefaultsTabId[] = [
 export const LEGACY_AGENT_DEFAULTS_SECTION_TO_TAB: Record<string, AgentDefaultsTabId> = {
   'agent-chat': 'chat',
   'agent-workspace': 'workspace',
-  'agent-browser': 'browser',
   'agent-runtime': 'runtime',
   'agent-context': 'context',
   'agent-memory': 'memory',

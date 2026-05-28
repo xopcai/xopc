@@ -9,6 +9,7 @@ import { assertBrowserUrlAllowed, checkPostRedirectUrl, containsApiKeyPattern } 
 import { checkWebsiteBlocklist } from '../../agent/tools/url-safety.js';
 import { resolveBrowserCommandTimeoutMs } from '../browser-command-timeout.js';
 import { truncateSnapshotAtBoundary } from '../snapshot-helpers.js';
+import { humanizedClick, humanizedFill, humanizedScroll, type HumanPreset } from '../humanize.js';
 
 import type {
   BrowserActionContext,
@@ -26,6 +27,20 @@ const AUTO_SNAPSHOT_MAX = 8_000;
 
 function toMs(ctx: BrowserActionContext): number {
   return resolveBrowserCommandTimeoutMs(ctx.config);
+}
+
+/** Whether humanize mode is active for this context (local/cdp/cloakbrowser only). */
+function isHumanizeEnabled(ctx: BrowserActionContext): boolean {
+  const browser = ctx.config?.agents?.defaults?.browser;
+  if (!browser?.humanize) return false;
+  // Extension backend has its own event dispatch — humanize is not applicable
+  const backend = browser.backend;
+  if (backend === 'extension') return false;
+  return true;
+}
+
+function humanPreset(ctx: BrowserActionContext): HumanPreset {
+  return (ctx.config?.agents?.defaults?.browser?.humanPreset as HumanPreset) ?? 'default';
 }
 
 async function ariaSnapshot(page: Page, selector: string | undefined, maxLength: number, timeoutMs: number): Promise<string> {
@@ -123,6 +138,10 @@ const stateAction: BrowserActionHandler = async (ctx, args) => {
 const clickAction: BrowserActionHandler = async (ctx, args) => {
   const timeout = toMs(ctx);
   try {
+    if (isHumanizeEnabled(ctx) && args.selector) {
+      await humanizedClick(ctx.page, String(args.selector), humanPreset(ctx));
+      return ok('click', 'Click succeeded (humanized).');
+    }
     const loc = resolveClickLocator(ctx.page, args);
     await loc.click({ timeout });
     return ok('click', 'Click succeeded.');
@@ -134,6 +153,11 @@ const clickAction: BrowserActionHandler = async (ctx, args) => {
 const typeAction: BrowserActionHandler = async (ctx, args) => {
   const timeout = toMs(ctx);
   try {
+    if (isHumanizeEnabled(ctx) && args.selector) {
+      await humanizedFill(ctx.page, String(args.selector), String(args.text ?? ''), humanPreset(ctx));
+      if (args.pressEnter) await ctx.page.keyboard.press('Enter');
+      return ok('type', 'Typed into field (humanized).');
+    }
     const loc = resolveTypeLocator(ctx.page, args);
     await loc.clear({ timeout: Math.min(5000, timeout) }).catch(() => {});
     await loc.fill(String(args.text ?? ''), { timeout });
@@ -148,10 +172,18 @@ const scrollAction: BrowserActionHandler = async (ctx, args) => {
   const direction = (args.direction as string) ?? 'down';
   const amount = typeof args.amount === 'number' ? args.amount : 500;
   const dy = direction === 'down' ? amount : -amount;
-  await ctx.page.evaluate(({ deltaY }) => {
-    (globalThis as any).scrollBy(0, deltaY);
-  }, { deltaY: dy });
-  return ok('scroll', `Scrolled ${direction} by ${amount}px.`);
+  try {
+    if (isHumanizeEnabled(ctx)) {
+      await humanizedScroll(ctx.page, dy, humanPreset(ctx));
+      return ok('scroll', `Scrolled ${direction} by ${amount}px (humanized).`);
+    }
+    await ctx.page.evaluate(({ deltaY }) => {
+      (globalThis as any).scrollBy(0, deltaY);
+    }, { deltaY: dy });
+    return ok('scroll', `Scrolled ${direction} by ${amount}px.`);
+  } catch (e) {
+    return fail('scroll', 'SCROLL_FAILED', e instanceof Error ? e.message : String(e));
+  }
 };
 
 const screenshotAction: BrowserActionHandler = async (ctx, args) => {

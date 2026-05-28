@@ -357,7 +357,11 @@ function ExtensionDetailDialog({
   const [bundledToggleErr, setBundledToggleErr] = useState<string | null>(null);
   const [bundledRestartHint, setBundledRestartHint] = useState(false);
 
-  const bundledConfiguredOn = ext.active === true || ext.activationEligible === true;
+  // Reflect *user intent* — the persisted enabled/disabled config — rather than
+  // whether the gateway has actually loaded the process yet. Without this,
+  // disabling a still-running extension leaves the button labelled "停用",
+  // making the toggle look like it did nothing on subsequent clicks.
+  const bundledConfiguredOn = ext.activationEligible === true;
 
   const onBundledActivationToggle = useCallback(async () => {
     if (ext.source !== 'bundled') return;
