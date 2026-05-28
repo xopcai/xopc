@@ -237,6 +237,16 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
+  extensions/demo-skill-hub:
+    dependencies:
+      '@xopcai/xopc':
+        specifier: workspace:*
+        version: link:../..
+    devDependencies:
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
   extensions/echo:
     devDependencies:
       typescript:

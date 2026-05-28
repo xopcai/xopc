@@ -1,0 +1,19 @@
+{
+  "id": "demo-skill-hub",
+  "name": "Demo Skill Hub",
+  "description": "Example skills marketplace extension — shows how to register a catalog with api.registerMarketplaceAdapter(). Uses clawhub.ai as the demo remote API.",
+  "version": "1.0.0",
+  "kind": "utility",
+  "main": "index.ts",
+  "enabledByDefault": false,
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "registryBaseUrl": {
+        "type": "string",
+        "default": "https://clawhub.ai",
+        "description": "Remote marketplace registry base URL (demo defaults to clawhub.ai)"
+      }
+    }
+  }
+}

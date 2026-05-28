@@ -1,0 +1,28 @@
+{
+  "name": "@xopcai/xopc-extension-demo-skill-hub",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Bundled example: skills marketplace extension (ClawHub API, separate provider id).",
+  "main": "index.ts",
+  "xopc": {
+    "extension": true,
+    "id": "demo-skill-hub",
+    "name": "Demo Skill Hub",
+    "kind": "utility"
+  },
+  "peerDependencies": {
+    "@xopcai/xopc": "workspace:*"
+  },
+  "keywords": [
+    "xopc",
+    "xopc-extension",
+    "demo-skill-hub",
+    "marketplace",
+    "skills"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}

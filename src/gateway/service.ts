@@ -1028,7 +1028,7 @@ export class GatewayService {
 
   /**
    * App store (phase 1): persist `extensions.enabled` / `extensions.disabled` for a bundled extension.
-   * Extension modules are loaded at gateway startup; restart the gateway process to fully apply load/unload.
+   * Marketplace-only extensions hot-load on enable; disable still needs a gateway restart to unload.
    */
   async setBundledExtensionActivationTarget(
     extensionId: string,
@@ -1052,7 +1052,25 @@ export class GatewayService {
       return { ok: false, error: saved.error ?? 'Failed to save config', requiresGatewayRestart: false };
     }
     loader.setConfig(this.config as unknown as SurfaceConfig);
-    return { ok: true, requiresGatewayRestart: true };
+
+    let requiresGatewayRestart = true;
+    if (wanted) {
+      try {
+        loader.invalidateManifestCache();
+        await loader.loadByActivationPlan();
+        requiresGatewayRestart = false;
+      } catch (err) {
+        const em = err instanceof Error ? err.message : String(err);
+        log.warn(
+          { err, extensionId: id, errorMessage: em },
+          `Extension hot-load after bundled activation failed: ${em}`,
+        );
+        requiresGatewayRestart = true;
+      }
+    }
+
+    this.emit('config.reload', { section: 'extensions', source: 'bundled-activation' });
+    return { ok: true, requiresGatewayRestart };
   }
 
   /**

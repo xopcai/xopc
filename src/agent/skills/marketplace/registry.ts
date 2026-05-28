@@ -45,6 +45,16 @@ export function registerMarketplaceAdapter(registration: MarketplaceAdapterRegis
   }
 }
 
+/** Remove a marketplace adapter (e.g. when an extension is unloaded). */
+export function unregisterMarketplaceAdapter(id: string): boolean {
+  const removed = adapters.delete(id);
+  if (removed) {
+    displayNames.delete(id);
+    log.info({ adapterId: id }, `Unregistered marketplace adapter: ${id}`);
+  }
+  return removed;
+}
+
 /** Get an adapter by id. Returns `undefined` when not registered. */
 export function getRegisteredAdapter(id: string): SkillsMarketplaceAdapter | undefined {
   return adapters.get(id);
