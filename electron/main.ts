@@ -240,6 +240,16 @@ async function resolveWindowLoad(): Promise<
     const paths = getElectronUserPaths();
     const { port, token, bind } = await ensureGatewayConfigForElectron(paths);
     try {
+      const { ensureBrowserExtensionArtifacts } = await import(
+        '../src/browser/providers/browser-ext-install.js'
+      );
+      await ensureBrowserExtensionArtifacts().catch((err) => {
+        console.warn('[main] Browser extension artifact ensure failed:', err);
+      });
+    } catch (err) {
+      console.warn('[main] Browser extension install module unavailable:', err);
+    }
+    try {
       const spawnOpts: GatewayProcessOptions = {
         configPath: paths.configPath,
         workspacePath: paths.workspacePath,

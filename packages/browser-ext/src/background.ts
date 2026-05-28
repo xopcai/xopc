@@ -76,7 +76,15 @@ async function dispatchCommand(cmd: ExtensionCommand): Promise<ExtensionResult> 
 
       // Ping
       case 'ping':
-        result = { id: cmd.id, ok: true, data: { pong: true, timestamp: Date.now() } };
+        result = {
+          id: cmd.id,
+          ok: true,
+          data: {
+            pong: true,
+            extensionVersion: chrome.runtime.getManifest().version,
+            timestamp: Date.now(),
+          },
+        };
         break;
 
       default:

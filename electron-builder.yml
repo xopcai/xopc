@@ -29,6 +29,8 @@ files:
   - dist/gateway/static/root/**/*
   # Built-in skills: bundled SKILL.md files for the agent
   - skills/**/*
+  # Chrome extension bridge (sideload copy source)
+  - dist/browser-ext/**/*
   # Marketplace adapters (dynamic extension load; not inlined in out/server esbuild bundle)
   - dist/extensions/clawhub/**/*
   - dist/extensions/skillhub/**/*

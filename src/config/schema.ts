@@ -230,7 +230,7 @@ export const AgentDefaultsSchema = z.object({
       allowPrivateUrls: z.boolean().optional(),
       /** Browser command timeout in seconds (default: 30). */
       commandTimeout: z.number().min(5).optional(),
-      /** Browser backend mode: 'local' (Playwright), 'cdp', 'cloud', 'extension' (Chrome Extension bridge), or 'cloakbrowser' (anti-fingerprint Chromium). */
+      /** Browser backend mode (default: 'extension'). Also: 'local' (Playwright), 'cdp', 'cloud', or 'cloakbrowser'. */
       backend: z.enum(['local', 'cdp', 'cloud', 'extension', 'cloakbrowser']).optional(),
       /** Cloud browser backend: 'local' (default Playwright), 'browserbase', or 'browser-use'. */
       cloudProvider: z.enum(['local', 'browserbase', 'browser-use']).optional(),
@@ -378,6 +378,9 @@ export const AgentsConfigSchema = z.object({
       maxToolResultChars: 10000,
       headKeepRatio: 0.3,
       tailKeepRatio: 0.3,
+    },
+    browser: {
+      backend: 'extension',
     },
   },
 } as any);
@@ -1216,6 +1219,9 @@ export const ConfigSchema = z.object({
         maxToolResultChars: 10000,
         headKeepRatio: 0.3,
         tailKeepRatio: 0.3,
+      },
+      browser: {
+        backend: 'extension',
       },
     },
   },

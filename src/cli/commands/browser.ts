@@ -150,6 +150,86 @@ function createBrowserCommand(_ctx: CLIContext): Command {
         }
       });
 
+    // ── Chrome extension sub-commands ───────────────────────────────────────
+    const extensionCmd = cmd
+      .command('extension')
+      .description('xopc Chrome extension (browser bridge) management');
+
+    extensionCmd
+      .command('doctor')
+      .description('Check bundled extension install status')
+      .option('--cache-dir <dir>', 'Custom bin cache directory')
+      .action(async (opts: { cacheDir?: string }) => {
+        const { browserExtDoctor } = await import('../../browser/providers/browser-ext-install.js');
+        const result = await browserExtDoctor({ cacheDir: opts.cacheDir });
+        console.log('\n  Chrome Extension Artifacts\n');
+        console.log(`  Bundled:     ${result.bundledAvailable ? '✓ yes' : '✗ no'}`);
+        console.log(`  Installed:   ${result.installed ? '✓ yes' : '✗ no'}`);
+        console.log(`  xopc ver:    ${result.xopcVersion}`);
+        console.log(`  Installed:   ${result.installedVersion ?? '(none)'}`);
+        console.log(`  Manifest:    ${result.manifestVersion ?? '(none)'}`);
+        console.log(`  Directory:   ${result.extensionDir ?? '(not installed)'}`);
+        console.log(`  Cache dir:   ${result.cacheDir}`);
+        console.log(`  Refresh:     ${result.needsRefresh ? 'needed' : 'up to date'}`);
+        if (result.needsChromeReload) {
+          console.log('  ⚠ Chrome reload required (extension runtime version mismatch)');
+        }
+        console.log('');
+        if (!result.installed) {
+          console.log('  Run "xopc browser extension install" to copy bundled artifacts.\n');
+        }
+      });
+
+    extensionCmd
+      .command('install')
+      .description('Copy bundled Chrome extension to the local bin directory')
+      .option('--cache-dir <dir>', 'Custom bin cache directory')
+      .option('--force', 'Force reinstall even when up to date')
+      .action(async (opts: { cacheDir?: string; force?: boolean }) => {
+        console.log('\n  Installing Chrome extension artifacts...\n');
+        try {
+          const { ensureBrowserExtensionArtifacts } = await import(
+            '../../browser/providers/browser-ext-install.js'
+          );
+          const result = await ensureBrowserExtensionArtifacts({
+            cacheDir: opts.cacheDir,
+            force: opts.force,
+          });
+          console.log(`  ✓ ${result.copied ? 'Installed' : 'Already up to date'}`);
+          console.log(`  Directory: ${result.extensionDir}\n`);
+          console.log('  Next steps:');
+          console.log('  1. Open chrome://extensions');
+          console.log('  2. Enable Developer mode');
+          console.log('  3. Load unpacked → select the directory above');
+          console.log('  4. Run "xopc browser extension open" to open Chrome and reveal the folder\n');
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          console.error(`  ✗ Installation failed: ${msg}\n`);
+          process.exitCode = 1;
+        }
+      });
+
+    extensionCmd
+      .command('open')
+      .description('Open chrome://extensions and reveal the extension folder')
+      .option('--cache-dir <dir>', 'Custom bin cache directory')
+      .action(async (opts: { cacheDir?: string }) => {
+        try {
+          const { openBrowserExtensionInstallUi } = await import(
+            '../../browser/providers/browser-ext-install.js'
+          );
+          const { extensionDir } = await openBrowserExtensionInstallUi({
+            action: 'both',
+            cacheDir: opts.cacheDir,
+          });
+          console.log(`Opened Chrome extensions page and folder:\n  ${extensionDir}`);
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          console.error(`  ✗ ${msg}\n`);
+          process.exitCode = 1;
+        }
+      });
+
   return cmd;
 }
 
@@ -167,6 +247,9 @@ register({
       'xopc browser doctor',
       'xopc browser cloakbrowser doctor',
       'xopc browser cloakbrowser install',
+      'xopc browser extension doctor',
+      'xopc browser extension install',
+      'xopc browser extension open',
     ],
   },
 });

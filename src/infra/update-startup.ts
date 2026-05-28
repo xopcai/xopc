@@ -317,7 +317,7 @@ async function handleAutoUpdate(params: {
     if (result.ok) {
       nextState.autoLastSuccessVersion = version;
       nextState.autoLastSuccessAt = new Date(now).toISOString();
-      log.info({ channel, version, tag }, 'Auto-update applied successfully');
+      log.info({ channel, version, tag }, 'Auto-update applied successfully; restart gateway to refresh browser extension artifacts');
     } else {
       log.warn(
         { channel, version, tag, exitCode: result.exitCode, reason: result.reason },

@@ -32,6 +32,56 @@ if (existsSync(srcTpl)) {
   cpSync(srcTpl, distTpl, { recursive: true });
 }
 
+// Bundled Chrome extension bridge (packages/browser-ext → dist/browser-ext/)
+const browserExtPkg = join(root, 'packages/browser-ext');
+const browserExtDist = join(root, 'dist/browser-ext');
+const browserExtRequired = [
+  'manifest.json',
+  'popup.html',
+  'dist/background.js',
+  'dist/content.js',
+  'dist/popup.js',
+];
+
+function validateBrowserExtLayout(dir) {
+  return browserExtRequired.every((rel) => existsSync(join(dir, rel)));
+}
+
+const syncVersion = spawnSync('node', [join(__dirname, 'sync-browser-ext-version.mjs')], {
+  encoding: 'utf8',
+  stdio: 'inherit',
+  shell: process.platform === 'win32',
+});
+if ((syncVersion.status ?? 1) !== 0) {
+  process.exit(syncVersion.status ?? 1);
+}
+
+const buildBrowserExt = spawnSync('pnpm', ['-C', 'packages/browser-ext', 'run', 'build'], {
+  encoding: 'utf8',
+  stdio: 'inherit',
+  shell: process.platform === 'win32',
+});
+if ((buildBrowserExt.status ?? 1) !== 0) {
+  process.exit(buildBrowserExt.status ?? 1);
+}
+
+if (!validateBrowserExtLayout(browserExtPkg)) {
+  console.error('packages/browser-ext build incomplete. Missing required files.');
+  process.exit(1);
+}
+
+mkdirSync(browserExtDist, { recursive: true });
+for (const name of ['manifest.json', 'popup.html']) {
+  cpSync(join(browserExtPkg, name), join(browserExtDist, name));
+}
+cpSync(join(browserExtPkg, 'dist'), join(browserExtDist, 'dist'), { recursive: true });
+cpSync(join(browserExtPkg, 'icons'), join(browserExtDist, 'icons'), { recursive: true });
+
+if (!validateBrowserExtLayout(browserExtDist)) {
+  console.error('dist/browser-ext copy incomplete.');
+  process.exit(1);
+}
+
 // Bundled extension manifests: `extensions/*/xopc.extension.json` → `dist/extensions/<id>/xopc.extension.json`
 // (tsdown emits `dist/extensions/<id>/src/**` but does not copy JSON assets). Copy for every built
 // extension dir so Apps / discoverExtensions parity matches dev (not only the four channel plugins).

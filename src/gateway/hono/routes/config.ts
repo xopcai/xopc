@@ -71,7 +71,7 @@ function resolveExtensionStatusTarget(
   browser: Record<string, unknown> | undefined,
   query: { probe?: string; host?: string; port?: string },
 ): { host: string; port: number; backend: string } | null {
-  const backend = typeof browser?.backend === 'string' ? browser.backend : 'local';
+  const backend = typeof browser?.backend === 'string' ? browser.backend : 'extension';
   const probe = query.probe === '1' || query.probe === 'true';
   if (!probe && backend !== 'extension') {
     return null;
@@ -107,9 +107,26 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
       host: c.req.query('host'),
       port: c.req.query('port'),
     });
+
+    let artifacts: Record<string, unknown> | undefined;
+    try {
+      const { browserExtDoctor } = await import('../../../browser/providers/browser-ext-install.js');
+      const doctor = await browserExtDoctor();
+      artifacts = {
+        installed: doctor.installed,
+        extensionDir: doctor.extensionDir,
+        xopcVersion: doctor.xopcVersion,
+        installedVersion: doctor.installedVersion,
+        needsRefresh: doctor.needsRefresh,
+        needsChromeReload: doctor.needsChromeReload,
+      };
+    } catch {
+      /* optional */
+    }
+
     if (!target) {
-      const backend = typeof browser?.backend === 'string' ? browser.backend : 'local';
-      return c.json({ running: false, connected: false, backend });
+      const backend = typeof browser?.backend === 'string' ? browser.backend : 'extension';
+      return c.json({ running: false, connected: false, backend, artifacts });
     }
     try {
       const res = await fetch(`http://${target.host}:${target.port}/`, { signal: AbortSignal.timeout(2000) });
@@ -118,9 +135,81 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
         running: Boolean(data.ok),
         connected: Boolean(data.connected),
         backend: target.backend,
+        artifacts,
       });
     } catch {
-      return c.json({ running: false, connected: false, backend: target.backend });
+      return c.json({ running: false, connected: false, backend: target.backend, artifacts });
+    }
+  });
+
+  authenticated.get('/api/browser/extension/doctor', async (c) => {
+    const cacheDirRaw = c.req.query('cacheDir');
+    try {
+      const { browserExtDoctor } = await import('../../../browser/providers/browser-ext-install.js');
+      const status = await browserExtDoctor({
+        cacheDir: cacheDirRaw && cacheDirRaw.trim() ? cacheDirRaw.trim() : undefined,
+      });
+      return c.json({ ok: true, payload: status });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      return c.json({ ok: false, error: message }, 400);
+    }
+  });
+
+  authenticated.post('/api/browser/extension/install', strictRateLimitMiddleware, async (c) => {
+    let body: unknown;
+    try {
+      body = await c.req.json();
+    } catch {
+      body = {};
+    }
+    const input = body && typeof body === 'object' && !Array.isArray(body)
+      ? (body as Record<string, unknown>)
+      : {};
+    const cacheDir = typeof input.cacheDir === 'string' && input.cacheDir.trim()
+      ? input.cacheDir.trim()
+      : undefined;
+    const force = input.force === true;
+
+    try {
+      const { ensureBrowserExtensionArtifacts, browserExtDoctor } = await import(
+        '../../../browser/providers/browser-ext-install.js'
+      );
+      const result = await ensureBrowserExtensionArtifacts({ cacheDir, force });
+      const doctor = await browserExtDoctor({ cacheDir });
+      return c.json({ ok: true, payload: { ...result, doctor } });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      return c.json({ ok: false, error: message }, 500);
+    }
+  });
+
+  authenticated.post('/api/browser/extension/open', strictRateLimitMiddleware, async (c) => {
+    let body: unknown;
+    try {
+      body = await c.req.json();
+    } catch {
+      body = {};
+    }
+    const input = body && typeof body === 'object' && !Array.isArray(body)
+      ? (body as Record<string, unknown>)
+      : {};
+    const cacheDir = typeof input.cacheDir === 'string' && input.cacheDir.trim()
+      ? input.cacheDir.trim()
+      : undefined;
+    const actionRaw = typeof input.action === 'string' ? input.action.trim() : 'both';
+    const action =
+      actionRaw === 'chrome' || actionRaw === 'folder' || actionRaw === 'both' ? actionRaw : 'both';
+
+    try {
+      const { openBrowserExtensionInstallUi } = await import(
+        '../../../browser/providers/browser-ext-install.js'
+      );
+      const result = await openBrowserExtensionInstallUi({ action, cacheDir });
+      return c.json({ ok: true, payload: result });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      return c.json({ ok: false, error: message }, 500);
     }
   });
 
@@ -578,12 +667,12 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
             }
           }
           if (br.backend !== undefined) {
-            if (br.backend === null || br.backend === '' || br.backend === 'local') {
+            if (br.backend === null || br.backend === '' || br.backend === 'extension') {
               delete target.backend;
             } else if (
+              br.backend === 'local' ||
               br.backend === 'cdp' ||
               br.backend === 'cloud' ||
-              br.backend === 'extension' ||
               br.backend === 'cloakbrowser'
             ) {
               target.backend = br.backend;

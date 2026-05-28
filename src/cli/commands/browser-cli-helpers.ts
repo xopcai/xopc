@@ -151,7 +151,7 @@ export async function doctorCli(): Promise<void> {
     console.log(`\nConfig:`);
     console.log(`  enabled: ${browser?.enabled !== false}`);
     console.log(`  headless: ${browser?.headless === true}`);
-    console.log(`  backend: ${browser?.backend ?? 'local'}`);
+    console.log(`  backend: ${browser?.backend ?? 'extension'}`);
     console.log(`  provider: ${browser?.cloudProvider ?? 'local'}`);
     if (browser?.cdpUrl) console.log(`  cdp: ${browser.cdpUrl}`);
     if (browser?.backend === 'extension' || browser?.extension) {
@@ -160,6 +160,15 @@ export async function doctorCli(): Promise<void> {
       const host = ext?.host ?? '127.0.0.1';
       console.log(`\nExtension Bridge:`);
       console.log(`  endpoint: ws://${host}:${port}/browser-ext`);
+      try {
+        const { browserExtDoctor } = await import('../../browser/providers/browser-ext-install.js');
+        const artifacts = await browserExtDoctor();
+        console.log(`  artifacts: ${artifacts.installed ? '✓ installed' : '✗ not installed'}`);
+        if (artifacts.extensionDir) console.log(`  path: ${artifacts.extensionDir}`);
+        if (artifacts.needsRefresh) console.log(`  refresh: ⚠ bundled update available`);
+      } catch {
+        console.log(`  artifacts: ⚠ could not check`);
+      }
       // Try to ping the extension WS server
       try {
         const res = await fetch(`http://${host}:${port}/`);
