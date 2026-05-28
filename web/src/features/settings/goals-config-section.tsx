@@ -2,6 +2,7 @@ import { Target, Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { ModelSelector } from '@/features/chat/model/model-selector';
 import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
 import {
   normalizeGoalsConfigFromConfig,
@@ -23,7 +24,9 @@ function inputClassName(): string {
 }
 
 export function GoalsConfigSection({ hasToken }: { hasToken: boolean }) {
-  const t = messages(useLocaleStore((s) => s.language)).goalsSettings;
+  const language = useLocaleStore((s) => s.language);
+  const t = messages(language).goalsSettings;
+  const chatM = messages(language).chat;
   const { data, isLoading } = useGatewayConfigSwr(hasToken);
   const parsed = useMemo(
     () => (data?.payload?.config !== undefined ? normalizeGoalsConfigFromConfig(data.payload.config) : null),
@@ -94,7 +97,25 @@ export function GoalsConfigSection({ hasToken }: { hasToken: boolean }) {
         </div>
         <div>
           <label className="mb-1 block text-sm font-medium text-fg">{t.judgeModelRef}</label>
-          <input className={cn(inputClassName(), 'font-mono text-xs')} value={form.judgeModelRef} placeholder={t.judgeModelRefPlaceholder} onChange={(e) => update({ judgeModelRef: e.target.value })} />
+          <ModelSelector
+            value={form.judgeModelRef}
+            placeholder={t.judgeModelRefPlaceholder}
+            searchPlaceholder={chatM.modelSearchPlaceholder}
+            noMatches={chatM.modelNoMatches}
+            className="w-full max-w-none min-w-0"
+            onChange={(modelId) => update({ judgeModelRef: modelId })}
+          />
+          {form.judgeModelRef.trim() ? (
+            <button
+              type="button"
+              className="mt-1 text-xs text-accent hover:underline"
+              onClick={() => update({ judgeModelRef: '' })}
+            >
+              {t.judgeModelRefUseDefault}
+            </button>
+          ) : (
+            <p className="mt-1 text-xs text-fg-subtle">{t.judgeModelRefHint}</p>
+          )}
         </div>
         <label className="flex items-center gap-2 text-sm text-fg sm:col-span-2">
           <input type="checkbox" className="ui-checkbox" checked={form.checklistMode} onChange={(e) => update({ checklistMode: e.target.checked })} />
