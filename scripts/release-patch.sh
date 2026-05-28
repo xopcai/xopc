@@ -69,6 +69,7 @@ fi
 run_release_step "pnpm run build" pnpm run build
 run_release_step "pnpm test" pnpm test
 run_release_step "pnpm run lint" pnpm run lint
+run_release_step "pnpm -C web run react-doctor" pnpm -C web run react-doctor
 
 NEXT_VER="$(node "$ROOT/scripts/bump-patch-version.mjs")"
 TAG="v${NEXT_VER}"
