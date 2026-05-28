@@ -1,5 +1,5 @@
 import { Loader2 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
@@ -59,7 +59,41 @@ function inputClassName(): string {
   );
 }
 
-export function ExtensionSttProviderSettings({ extensionId }: { extensionId: string }) {
+type SttCredSlice = { apiKey: string; model: string };
+
+function savedSliceFromVoiceSettings(
+  voiceSettings: VoiceSettingsState | undefined,
+  providerId: string | undefined,
+): SttCredSlice {
+  if (!voiceSettings || !providerId) return { apiKey: '', model: GROQ_MODELS[0].id };
+  if (providerId === 'alibaba') {
+    return {
+      apiKey: voiceSettings.stt.alibaba?.apiKey ?? '',
+      model: voiceSettings.stt.alibaba?.model ?? 'paraformer-v2',
+    };
+  }
+  if (providerId === 'openai') {
+    return {
+      apiKey: voiceSettings.stt.openai?.apiKey ?? '',
+      model: voiceSettings.stt.openai?.model ?? 'whisper-1',
+    };
+  }
+  const slice = voiceSettings.stt.providers?.[providerId];
+  return {
+    apiKey: typeof slice?.apiKey === 'string' ? slice.apiKey : '',
+    model: typeof slice?.model === 'string' ? slice.model : GROQ_MODELS[0].id,
+  };
+}
+
+function ExtensionSttProviderSettingsBody({
+  providerId,
+  voiceSettings,
+  mutateVoice,
+}: {
+  providerId: string;
+  voiceSettings: VoiceSettingsState;
+  mutateVoice: ReturnType<typeof useSWR<VoiceSettingsState>>['mutate'];
+}) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const v = m.voiceSettings;
@@ -73,25 +107,9 @@ export function ExtensionSttProviderSettings({ extensionId }: { extensionId: str
     notInConfigFile: v.apiKeyNotInConfigFile,
     loadFailed: v.apiKeyRevealFailed,
   };
-  const hasToken = useGatewayStore((s) => Boolean(s.token));
-
-  const { data: detail, isLoading: detailLoading } = useSWR(
-    hasToken && extensionId ? `ext-stt-detail-${extensionId}` : null,
-    () => fetchJson<ExtensionDetailResponse>(apiUrl(`/api/extensions/${encodeURIComponent(extensionId)}`)),
-  );
-
-  const providerId = resolveMediaProviderId(detail);
-
-  const {
-    data: voiceSettings,
-    mutate: mutateVoice,
-    isLoading: voiceLoading,
-  } = useSWR(hasToken ? 'voice-settings-ext-stt' : null, fetchVoiceSettings, {
-    revalidateOnFocus: false,
-  });
 
   const { data: sttProviders } = useSWR(
-    hasToken ? apiUrl('/api/voice/stt-providers') : null,
+    apiUrl('/api/voice/stt-providers'),
     fetchVoiceSttProviders,
     { revalidateOnFocus: false },
   );
@@ -101,42 +119,24 @@ export function ExtensionSttProviderSettings({ extensionId }: { extensionId: str
     [providerId, sttProviders],
   );
 
-  const savedSlice = useMemo(() => {
-    if (!voiceSettings || !providerId) return { apiKey: '', model: GROQ_MODELS[0].id };
-    if (providerId === 'alibaba') {
-      return {
-        apiKey: voiceSettings.stt.alibaba?.apiKey ?? '',
-        model: voiceSettings.stt.alibaba?.model ?? 'paraformer-v2',
-      };
-    }
-    if (providerId === 'openai') {
-      return {
-        apiKey: voiceSettings.stt.openai?.apiKey ?? '',
-        model: voiceSettings.stt.openai?.model ?? 'whisper-1',
-      };
-    }
-    const slice = voiceSettings.stt.providers?.[providerId];
-    return {
-      apiKey: typeof slice?.apiKey === 'string' ? slice.apiKey : '',
-      model: typeof slice?.model === 'string' ? slice.model : GROQ_MODELS[0].id,
-    };
-  }, [providerId, voiceSettings]);
+  const savedSlice = useMemo(
+    () => savedSliceFromVoiceSettings(voiceSettings, providerId),
+    [providerId, voiceSettings],
+  );
 
-  const [apiKey, setApiKey] = useState('');
-  const [model, setModel] = useState<string>(GROQ_MODELS[0].id);
-  const [dirty, setDirty] = useState(false);
+  const dirtyRef = useRef(false);
+  const [localDraft, setLocalDraft] = useState<SttCredSlice | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedFlash, setSavedFlash] = useState(false);
 
-  useEffect(() => {
-    if (dirty) return;
-    setApiKey(savedSlice.apiKey);
-    setModel(savedSlice.model);
-  }, [dirty, savedSlice]);
+  const credDraft = localDraft ?? savedSlice;
+  const credBaseline = savedSlice;
+
+  const dirty =
+    credDraft.apiKey !== credBaseline.apiKey || credDraft.model !== credBaseline.model;
 
   const handleSave = useCallback(async () => {
-    if (!voiceSettings || !providerId) return;
     setSaving(true);
     setError(null);
     try {
@@ -144,17 +144,17 @@ export function ExtensionSttProviderSettings({ extensionId }: { extensionId: str
       next.stt.enabled = true;
       if (providerId === 'alibaba') {
         next.stt.provider = 'alibaba';
-        next.stt.alibaba = { ...next.stt.alibaba, apiKey, model };
+        next.stt.alibaba = { ...next.stt.alibaba, apiKey: credDraft.apiKey, model: credDraft.model };
       } else if (providerId === 'openai') {
         next.stt.provider = 'openai';
-        next.stt.openai = { ...next.stt.openai, apiKey, model };
+        next.stt.openai = { ...next.stt.openai, apiKey: credDraft.apiKey, model: credDraft.model };
       } else {
         next.stt.providers = {
           ...(next.stt.providers ?? {}),
           [providerId]: {
             ...(next.stt.providers?.[providerId] ?? {}),
-            apiKey,
-            model,
+            apiKey: credDraft.apiKey,
+            model: credDraft.model,
           },
         };
         if (!next.stt.provider || next.stt.provider === 'alibaba' || next.stt.provider === 'openai') {
@@ -163,7 +163,8 @@ export function ExtensionSttProviderSettings({ extensionId }: { extensionId: str
       }
       await patchVoiceSettings(next);
       await mutateVoice(next, false);
-      setDirty(false);
+      dirtyRef.current = false;
+      setLocalDraft(null);
       setSavedFlash(true);
       window.setTimeout(() => setSavedFlash(false), 2500);
     } catch (e) {
@@ -171,32 +172,9 @@ export function ExtensionSttProviderSettings({ extensionId }: { extensionId: str
     } finally {
       setSaving(false);
     }
-  }, [apiKey, model, mutateVoice, providerId, voiceSettings]);
+  }, [credDraft.apiKey, credDraft.model, mutateVoice, providerId, voiceSettings]);
 
-  if (!hasToken) {
-    return null;
-  }
-
-  if (detailLoading || voiceLoading) {
-    return (
-      <div className="flex items-center gap-2 py-6 text-sm text-fg-muted">
-        <Loader2 className="size-4 animate-spin" />
-        …
-      </div>
-    );
-  }
-
-  if (!providerId) {
-    return (
-      <p className="text-sm text-fg-muted">
-        {language === 'zh'
-          ? '该扩展未声明 mediaUnderstandingProviders。'
-          : 'This extension does not declare mediaUnderstandingProviders.'}
-      </p>
-    );
-  }
-
-  const modelOptions = providerId === 'groq' ? GROQ_MODELS : [{ id: model, name: model }];
+  const modelOptions = providerId === 'groq' ? GROQ_MODELS : [{ id: credDraft.model, name: credDraft.model }];
 
   return (
     <div className="flex flex-col gap-4 rounded-xl border border-edge bg-surface-base p-4">
@@ -226,10 +204,13 @@ export function ExtensionSttProviderSettings({ extensionId }: { extensionId: str
             kind="stt"
             providerId={providerId}
             fieldId={`ext-stt-${providerId}-api-key`}
-            value={apiKey}
+            value={credDraft.apiKey}
             onChange={(next) => {
-              setApiKey(next);
-              setDirty(true);
+              dirtyRef.current = true;
+              setLocalDraft((prev) => {
+                const base = prev ?? savedSlice;
+                return { ...base, apiKey: next };
+              });
               setError(null);
             }}
             labels={apiKeyLabels}
@@ -245,10 +226,13 @@ export function ExtensionSttProviderSettings({ extensionId }: { extensionId: str
           {providerId === 'groq' ? (
             <select
               className={selectClassName()}
-              value={model}
+              value={credDraft.model}
               onChange={(e) => {
-                setModel(e.target.value);
-                setDirty(true);
+                dirtyRef.current = true;
+                setLocalDraft((prev) => {
+                  const base = prev ?? savedSlice;
+                  return { ...base, model: e.target.value };
+                });
                 setError(null);
               }}
             >
@@ -261,10 +245,13 @@ export function ExtensionSttProviderSettings({ extensionId }: { extensionId: str
           ) : (
             <input
               className={inputClassName()}
-              value={model}
+              value={credDraft.model}
               onChange={(e) => {
-                setModel(e.target.value);
-                setDirty(true);
+                dirtyRef.current = true;
+                setLocalDraft((prev) => {
+                  const base = prev ?? savedSlice;
+                  return { ...base, model: e.target.value };
+                });
                 setError(null);
               }}
             />
@@ -283,9 +270,8 @@ export function ExtensionSttProviderSettings({ extensionId }: { extensionId: str
           className="h-8 text-xs"
           disabled={!dirty || saving}
           onClick={() => {
-            setApiKey(savedSlice.apiKey);
-            setModel(savedSlice.model);
-            setDirty(false);
+            dirtyRef.current = false;
+            setLocalDraft(null);
             setError(null);
           }}
         >
@@ -302,5 +288,61 @@ export function ExtensionSttProviderSettings({ extensionId }: { extensionId: str
         </Button>
       </div>
     </div>
+  );
+}
+
+export function ExtensionSttProviderSettings({ extensionId }: { extensionId: string }) {
+  const language = useLocaleStore((s) => s.language);
+  const hasToken = useGatewayStore((s) => Boolean(s.token));
+
+  const { data: detail, isLoading: detailLoading } = useSWR(
+    hasToken && extensionId ? `ext-stt-detail-${extensionId}` : null,
+    () => fetchJson<ExtensionDetailResponse>(apiUrl(`/api/extensions/${encodeURIComponent(extensionId)}`)),
+  );
+
+  const providerId = resolveMediaProviderId(detail);
+
+  const {
+    data: voiceSettings,
+    mutate: mutateVoice,
+    isLoading: voiceLoading,
+  } = useSWR(hasToken ? 'voice-settings-ext-stt' : null, fetchVoiceSettings, {
+    revalidateOnFocus: false,
+  });
+
+  if (!hasToken) {
+    return null;
+  }
+
+  if (detailLoading || voiceLoading) {
+    return (
+      <div className="flex items-center gap-2 py-6 text-sm text-fg-muted">
+        <Loader2 className="size-4 animate-spin" />
+        …
+      </div>
+    );
+  }
+
+  if (!providerId) {
+    return (
+      <p className="text-sm text-fg-muted">
+        {language === 'zh'
+          ? '该扩展未声明 mediaUnderstandingProviders。'
+          : 'This extension does not declare mediaUnderstandingProviders.'}
+      </p>
+    );
+  }
+
+  if (!voiceSettings) {
+    return null;
+  }
+
+  return (
+    <ExtensionSttProviderSettingsBody
+      key={`${extensionId}:${providerId}`}
+      providerId={providerId}
+      voiceSettings={voiceSettings}
+      mutateVoice={mutateVoice}
+    />
   );
 }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 
 import { listSkillNamesInWire } from '@/features/chat/composer/composer-editor-wire';
 import { fetchCommandsCached, getSkillsCached } from '@/features/chat/palette/command-palette-api';
@@ -137,6 +137,11 @@ export function paletteItemMatchRank(item: PaletteItem, q: string): number | nul
   return null;
 }
 
+function clampPaletteIndex(index: number, length: number): number {
+  if (length === 0) return 0;
+  return Math.min(index, length - 1);
+}
+
 export function useCommandPalette(
   value: string,
   cursor: number,
@@ -154,18 +159,10 @@ export function useCommandPalette(
   );
   const paletteActive = Boolean(slashRange && !options?.suppress);
 
-  useEffect(() => {
-    if (!slashRange) {
-      setSelectedIndex(0);
-    }
-  }, [slashRange]);
-
-  useEffect(() => {
-    if (!paletteActive) {
-      setGroupedSkillsExpanded(false);
-      setGroupedCommandsExpanded(false);
-    }
-  }, [paletteActive]);
+  if (!paletteActive && (groupedSkillsExpanded || groupedCommandsExpanded)) {
+    setGroupedSkillsExpanded(false);
+    setGroupedCommandsExpanded(false);
+  }
 
   const itemsResource = useAsyncResource(
     async () => {
@@ -194,7 +191,7 @@ export function useCommandPalette(
       });
       return [...skillItems, ...commandItems];
     },
-    [paletteActive, language],
+    [language],
     { enabled: paletteActive, initial: [] as PaletteItem[], errorData: [] },
   );
   const allItems = itemsResource.data;
@@ -212,12 +209,8 @@ export function useCommandPalette(
   const qTrim = query.trim();
   const grouped = qTrim === '';
 
-  useEffect(() => {
-    if (!grouped) {
-      setGroupedSkillsExpanded(false);
-      setGroupedCommandsExpanded(false);
-    }
-  }, [grouped]);
+  const effectiveGroupedSkillsExpanded = paletteActive && grouped && groupedSkillsExpanded;
+  const effectiveGroupedCommandsExpanded = paletteActive && grouped && groupedCommandsExpanded;
 
   const expandGroupedSkills = useCallback(() => {
     setGroupedSkillsExpanded(true);
@@ -270,16 +263,16 @@ export function useCommandPalette(
         .map((s) => s.item);
       const hasSkills = skills.length > 0;
       const hasCommands = commands.length > 0;
-      const visSkills = groupedSkillsExpanded
+      const visSkills = effectiveGroupedSkillsExpanded
         ? skills
         : skills.slice(0, GROUPED_INITIAL_PER_SECTION);
-      const visCommands = groupedCommandsExpanded
+      const visCommands = effectiveGroupedCommandsExpanded
         ? commands
         : commands.slice(0, GROUPED_INITIAL_PER_SECTION);
-      const moreSkills = !groupedSkillsExpanded
+      const moreSkills = !effectiveGroupedSkillsExpanded
         ? Math.max(0, skills.length - GROUPED_INITIAL_PER_SECTION)
         : 0;
-      const moreCommands = !groupedCommandsExpanded
+      const moreCommands = !effectiveGroupedCommandsExpanded
         ? Math.max(0, commands.length - GROUPED_INITIAL_PER_SECTION)
         : 0;
       return {
@@ -311,17 +304,25 @@ export function useCommandPalette(
       groupedSkillsMoreCount: 0,
       groupedCommandsMoreCount: 0,
     };
-  }, [allItems, commandsAllowed, grouped, groupedCommandsExpanded, groupedSkillsExpanded, query, value]);
+  }, [
+    allItems,
+    commandsAllowed,
+    grouped,
+    effectiveGroupedCommandsExpanded,
+    effectiveGroupedSkillsExpanded,
+    query,
+    value,
+  ]);
 
-  const trackedQueryForIndexRef = useRef(query);
-  if (trackedQueryForIndexRef.current !== query) {
-    trackedQueryForIndexRef.current = query;
-    setSelectedIndex(0);
-  } else if (selectedIndex >= items.length && items.length > 0) {
-    setSelectedIndex(items.length - 1);
-  } else if (selectedIndex !== 0 && items.length === 0) {
-    setSelectedIndex(0);
+  const selectionKey = slashRange ? query : '';
+  const trackedSelectionKeyRef = useRef(selectionKey);
+  if (trackedSelectionKeyRef.current !== selectionKey) {
+    trackedSelectionKeyRef.current = selectionKey;
+    if (selectedIndex !== 0) {
+      setSelectedIndex(0);
+    }
   }
+  const resolvedSelectedIndex = clampPaletteIndex(selectedIndex, items.length);
 
   const onNavigate = useCallback(
     (dir: 'up' | 'down') => {
@@ -351,7 +352,7 @@ export function useCommandPalette(
     /** Hidden command rows in that section when the section is collapsed. */
     groupedCommandsMoreCount,
     items,
-    selectedIndex,
+    selectedIndex: resolvedSelectedIndex,
     query,
     loadError,
     onNavigate,

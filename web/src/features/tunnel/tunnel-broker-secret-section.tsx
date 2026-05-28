@@ -1,5 +1,7 @@
 import { Check, CheckCircle2, Copy, ExternalLink, Eye, EyeOff, KeyRound, Loader2 } from 'lucide-react';
-import { useCallback, useEffect, useId, useState, type RefObject } from 'react';
+import { useCallback, useId, useReducer, useRef, type RefObject } from 'react';
+
+import { uiPatchReducer, type UiPatchAction } from '@/lib/settings-form-draft';
 
 import { Button } from '@/components/ui/button';
 import { SettingsFormSection } from '@/features/settings/settings-form-section';
@@ -28,6 +30,26 @@ export type BrokerSecretSetupProps = {
   sectionRef?: RefObject<HTMLDivElement | null>;
 };
 
+type BrokerSecretUi = {
+  reconfiguring: boolean;
+  showKey: boolean;
+  revealed: string | null | undefined;
+  revealLoading: boolean;
+  revealErr: string | null;
+  copied: boolean;
+};
+
+type BrokerSecretUiAction = UiPatchAction<BrokerSecretUi>;
+
+const initialBrokerSecretUi: BrokerSecretUi = {
+  reconfiguring: false,
+  showKey: false,
+  revealed: undefined,
+  revealLoading: false,
+  revealErr: null,
+  copied: false,
+};
+
 export function BrokerSecretSetupSection({
   t,
   brokerSecretFromEnv,
@@ -47,67 +69,66 @@ export function BrokerSecretSetupSection({
   const needsSetup = brokerSecretMissing && !brokerSecretFromEnv;
   const ready = !needsSetup;
 
-  const [reconfiguring, setReconfiguring] = useState(false);
-  const [showKey, setShowKey] = useState(false);
-  const [revealed, setRevealed] = useState<string | null | undefined>(undefined);
-  const [revealLoading, setRevealLoading] = useState(false);
-  const [revealErr, setRevealErr] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [ui, dispatch] = useReducer(uiPatchReducer<BrokerSecretUi>, initialBrokerSecretUi);
+  const { reconfiguring, showKey, revealed, revealLoading, revealErr, copied } = ui;
 
   const showStoredKeyRow =
     brokerSecretConfiguredInConfig && !brokerSecretFromEnv && !reconfiguring && !brokerSecretDraft.trim();
 
-  useEffect(() => {
-    if (!brokerSecretConfiguredInConfig) {
-      setReconfiguring(false);
-      setRevealed(undefined);
-      setRevealErr(null);
-      setShowKey(false);
-    }
-  }, [brokerSecretConfiguredInConfig]);
+  const trackedConfiguredRef = useRef(brokerSecretConfiguredInConfig);
+  if (!brokerSecretConfiguredInConfig && trackedConfiguredRef.current) {
+    dispatch({
+      type: 'patch',
+      patch: { reconfiguring: false, revealed: undefined, revealErr: null, showKey: false },
+    });
+  }
+  trackedConfiguredRef.current = brokerSecretConfiguredInConfig;
 
-  useEffect(() => {
-    if (brokerSecretNotice) {
-      setReconfiguring(false);
-    }
-  }, [brokerSecretNotice]);
+  const trackedNoticeRef = useRef(brokerSecretNotice);
+  if (brokerSecretNotice && brokerSecretNotice !== trackedNoticeRef.current) {
+    dispatch({ type: 'patch', patch: { reconfiguring: false } });
+  }
+  trackedNoticeRef.current = brokerSecretNotice;
 
   const copyKey = useCallback(async () => {
     const text = typeof revealed === 'string' ? revealed : '';
     if (!text) return;
     const ok = await copyTextToClipboard(text);
     if (!ok) {
-      setRevealErr(copyFailedLabel);
+      dispatch({ type: 'patch', patch: { revealErr: copyFailedLabel } });
       return;
     }
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 2000);
+    dispatch({ type: 'patch', patch: { copied: true } });
+    window.setTimeout(() => dispatch({ type: 'patch', patch: { copied: false } }), 2000);
   }, [copyFailedLabel, revealed]);
 
   const toggleEye = useCallback(async () => {
-    setRevealErr(null);
+    dispatch({ type: 'patch', patch: { revealErr: null } });
     if (revealed !== undefined) {
-      setShowKey((s) => !s);
+      dispatch({ type: 'patch', patch: { showKey: !showKey } });
       return;
     }
-    setRevealLoading(true);
+    dispatch({ type: 'patch', patch: { revealLoading: true } });
     try {
       const payload = await revealTunnelRegistrationSecret();
-      setRevealed(payload.registrationSecret ?? null);
-      setShowKey(true);
+      dispatch({ type: 'patch', patch: { revealed: payload.registrationSecret ?? null, showKey: true } });
     } catch (e) {
-      setRevealErr(e instanceof Error ? e.message : t.brokerSecretRevealFailed);
-      setRevealed(null);
+      dispatch({
+        type: 'patch',
+        patch: {
+          revealErr: e instanceof Error ? e.message : t.brokerSecretRevealFailed,
+          revealed: null,
+        },
+      });
     } finally {
-      setRevealLoading(false);
+      dispatch({ type: 'patch', patch: { revealLoading: false } });
     }
   }, [revealed, t.brokerSecretRevealFailed]);
 
   const canSave = brokerSecretDraft.trim().length > 0 && !isMaskedKey(brokerSecretDraft.trim());
 
   const cancelReconfigure = () => {
-    setReconfiguring(false);
-    setRevealErr(null);
+    dispatch({ type: 'patch', patch: { reconfiguring: false, revealErr: null } });
     onDraftChange('');
   };
 
@@ -228,8 +249,7 @@ export function BrokerSecretSetupSection({
                     variant="secondary"
                     disabled={savingBrokerSecret}
                     onClick={() => {
-                      setRevealErr(null);
-                      setReconfiguring(true);
+                      dispatch({ type: 'patch', patch: { revealErr: null, reconfiguring: true } });
                     }}
                   >
                     {t.brokerSecretReconfigure}

@@ -1,5 +1,5 @@
 import { Ban, ExternalLink, Loader2, Plus, Search, Trash2 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
@@ -16,6 +16,7 @@ import { nativeSelectMaxWidthClass, selectControlBaseClass, settingsInputFocusCl
 import { cn } from '@/lib/cn';
 import { messages, type WebSearchSettingsMessages } from '@/i18n/messages';
 import { docsGuidePageUrl } from '@/navigation';
+import { createFormDraftReducer, syncFormDraftFromParsed } from '@/lib/settings-form-draft';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
@@ -56,6 +57,8 @@ function emptyProviderRow(): SearchProviderRow {
   return { type: 'brave', apiKey: '', url: '', disabled: false };
 }
 
+const webSearchFormReducer = createFormDraftReducer<WebSearchSettingsState>();
+
 /**
  * `embedded` strips the outer `mx-auto max-w-app-main` page wrapper, the
  * page title/subtitle/docs block, and the duplicate vertical padding so the
@@ -70,12 +73,14 @@ export function WebSearchSettingsPanel({ embedded = false }: { embedded?: boolea
   const token = useGatewayStore((st) => st.token);
   const hasToken = Boolean(token);
 
-  const [form, setForm] = useState<WebSearchSettingsState | null>(null);
-  const [baseline, setBaseline] = useState<WebSearchSettingsState | null>(null);
+  const [formDraft, dispatchForm] = useReducer(webSearchFormReducer, { form: null, baseline: null });
+  const form = formDraft.form;
+  const baseline = formDraft.baseline;
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saveOk, setSaveOk] = useState(false);
   const dirtyRef = useRef(false);
+  const trackedParsedRef = useRef<WebSearchSettingsState | null>(null);
 
   const { data, error: swrError, isLoading, mutate } = useGatewayConfigSwr(hasToken);
 
@@ -87,19 +92,16 @@ export function WebSearchSettingsPanel({ embedded = false }: { embedded?: boolea
     [data],
   );
 
-  useEffect(() => {
-    if (!hasToken) {
-      setForm(null);
-      setBaseline(null);
+  syncFormDraftFromParsed({
+    enabled: hasToken,
+    parsed,
+    dirty: dirtyRef.current,
+    trackedParsedRef,
+    dispatch: dispatchForm,
+    onResetDirty: () => {
       dirtyRef.current = false;
-      return;
-    }
-    if (parsed === null) return;
-    if (!dirtyRef.current) {
-      setForm(parsed);
-      setBaseline(parsed);
-    }
-  }, [hasToken, parsed]);
+    },
+  });
 
   const loading = Boolean(hasToken && isLoading && data === undefined && !swrError);
   const fetchError =
@@ -112,7 +114,7 @@ export function WebSearchSettingsPanel({ embedded = false }: { embedded?: boolea
 
   const update = useCallback((patch: Partial<WebSearchSettingsState>) => {
     dirtyRef.current = true;
-    setForm((f) => (f ? { ...f, ...patch } : null));
+    dispatchForm({ type: 'patch', patch });
   }, []);
 
   const save = useCallback(async () => {
@@ -122,10 +124,8 @@ export function WebSearchSettingsPanel({ embedded = false }: { embedded?: boolea
     setSaveOk(false);
     try {
       await patchWebSearchSettings(form);
-      const next = structuredClone(form);
-      setBaseline(next);
-      setForm(next);
       dirtyRef.current = false;
+      dispatchForm({ type: 'saved', value: form });
       setSaveOk(true);
       window.setTimeout(() => setSaveOk(false), 2500);
     } catch (e) {
@@ -138,7 +138,7 @@ export function WebSearchSettingsPanel({ embedded = false }: { embedded?: boolea
   const discard = useCallback(() => {
     if (!baseline) return;
     dirtyRef.current = false;
-    setForm(structuredClone(baseline));
+    dispatchForm({ type: 'discard' });
     setError(null);
     setSaveOk(false);
   }, [baseline]);

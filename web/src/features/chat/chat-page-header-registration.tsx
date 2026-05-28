@@ -1,5 +1,5 @@
 import { FolderOpen, Plus } from 'lucide-react';
-import { memo, useEffect, useLayoutEffect, useState } from 'react';
+import { memo, useLayoutEffect } from 'react';
 import { Link } from 'react-router-dom';
 
 import { APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
@@ -13,6 +13,7 @@ import { useLocaleStore } from '@/stores/locale-store';
 import { useSidebarStore } from '@/stores/sidebar-store';
 import { useWorkspacePanelStore } from '@/stores/workspace-panel-store';
 import { isElectronDarwin } from '@/lib/electron-window-chrome';
+import { useMediaQuery } from '@/lib/use-media-query';
 
 const MAX_MD = '(max-width: 767px)';
 
@@ -45,16 +46,7 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
   const setPageHeader = usePageHeaderStore((s) => s.setPageHeader);
   const clearPageHeader = usePageHeaderStore((s) => s.clearPageHeader);
 
-  const [isMobileLayout, setIsMobileLayout] = useState(() =>
-    typeof globalThis.matchMedia === 'function' ? globalThis.matchMedia(MAX_MD).matches : false,
-  );
-  useEffect(() => {
-    const mq = globalThis.matchMedia(MAX_MD);
-    const onChange = () => setIsMobileLayout(mq.matches);
-    onChange();
-    mq.addEventListener('change', onChange);
-    return () => mq.removeEventListener('change', onChange);
-  }, []);
+  const isMobileLayout = useMediaQuery(MAX_MD);
 
   const showNewChatLink = isMobileLayout
     ? !mobileNavOpen

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react';
 import { useDebouncedCallback } from 'use-debounce';
 
 import {
@@ -61,6 +61,130 @@ export type WorkspaceFilePreviewState = {
   onRevealInFolder: () => Promise<void>;
 };
 
+type PreviewLoadState = {
+  textContent: string | null;
+  binaryBuffer: ArrayBuffer | null;
+  previewKind: FilePreviewKind | null;
+  hostAbsolutePath: string | null;
+  loadError: string | null;
+  loading: boolean;
+  mtimeMs: number | null;
+};
+
+const emptyPreviewLoad: PreviewLoadState = {
+  textContent: null,
+  binaryBuffer: null,
+  previewKind: null,
+  hostAbsolutePath: null,
+  loadError: null,
+  loading: false,
+  mtimeMs: null,
+};
+
+type PreviewLoadAction =
+  | { type: 'clear' }
+  | { type: 'loadStart' }
+  | {
+      type: 'loadSuccess';
+      payload: {
+        previewKind: FilePreviewKind;
+        textContent?: string | null;
+        binaryBuffer?: ArrayBuffer | null;
+        hostAbsolutePath: string | null;
+        mtimeMs: number | null;
+      };
+    }
+  | { type: 'loadError'; error: string }
+  | { type: 'patchMtime'; mtimeMs: number }
+  | { type: 'patchText'; text: string };
+
+function previewLoadReducer(state: PreviewLoadState, action: PreviewLoadAction): PreviewLoadState {
+  switch (action.type) {
+    case 'clear':
+      return emptyPreviewLoad;
+    case 'loadStart':
+      return { ...emptyPreviewLoad, loading: true };
+    case 'loadSuccess':
+      return {
+        textContent: action.payload.textContent ?? null,
+        binaryBuffer: action.payload.binaryBuffer ?? null,
+        previewKind: action.payload.previewKind,
+        hostAbsolutePath: action.payload.hostAbsolutePath,
+        loadError: null,
+        loading: false,
+        mtimeMs: action.payload.mtimeMs,
+      };
+    case 'loadError':
+      return { ...emptyPreviewLoad, loading: false, loadError: action.error };
+    case 'patchMtime':
+      return { ...state, mtimeMs: action.mtimeMs };
+    case 'patchText':
+      return { ...state, textContent: action.text };
+  }
+}
+
+type PptxPreviewState = {
+  text: string | null;
+  truncated: boolean;
+  error: string | null;
+};
+
+const emptyPptxPreview: PptxPreviewState = { text: null, truncated: false, error: null };
+
+type PptxPreviewAction =
+  | { type: 'clear' }
+  | { type: 'success'; text: string; truncated: boolean }
+  | { type: 'error'; error: string };
+
+function pptxPreviewReducer(_state: PptxPreviewState, action: PptxPreviewAction): PptxPreviewState {
+  switch (action.type) {
+    case 'clear':
+      return emptyPptxPreview;
+    case 'success':
+      return { text: action.text, truncated: action.truncated, error: null };
+    case 'error':
+      return { ...emptyPptxPreview, error: action.error };
+  }
+}
+
+type EditorUiState = {
+  markdownEditMode: boolean;
+  htmlCodeMode: boolean;
+  saveStatus: 'idle' | 'saving' | 'saved';
+};
+
+const emptyEditorUi: EditorUiState = {
+  markdownEditMode: false,
+  htmlCodeMode: false,
+  saveStatus: 'idle',
+};
+
+type EditorUiAction =
+  | { type: 'resetModes' }
+  | { type: 'setMarkdownEditMode'; value: boolean | ((prev: boolean) => boolean) }
+  | { type: 'setHtmlCodeMode'; value: boolean | ((prev: boolean) => boolean) }
+  | { type: 'setSaveStatus'; value: EditorUiState['saveStatus'] };
+
+function editorUiReducer(state: EditorUiState, action: EditorUiAction): EditorUiState {
+  switch (action.type) {
+    case 'resetModes':
+      return { ...state, markdownEditMode: false, htmlCodeMode: false };
+    case 'setMarkdownEditMode':
+      return {
+        ...state,
+        markdownEditMode:
+          typeof action.value === 'function' ? action.value(state.markdownEditMode) : action.value,
+      };
+    case 'setHtmlCodeMode':
+      return {
+        ...state,
+        htmlCodeMode: typeof action.value === 'function' ? action.value(state.htmlCodeMode) : action.value,
+      };
+    case 'setSaveStatus':
+      return { ...state, saveStatus: action.value };
+  }
+}
+
 export function useWorkspaceFilePreviewState({
   filePath,
   sessionKey,
@@ -72,73 +196,50 @@ export function useWorkspaceFilePreviewState({
 }): WorkspaceFilePreviewState {
   const readOpts = useWorkspacePreviewReadOpts({ sessionKey, agentId });
 
-  const [textContent, setTextContent] = useState<string | null>(null);
-  const [binaryBuffer, setBinaryBuffer] = useState<ArrayBuffer | null>(null);
-  const [previewKind, setPreviewKind] = useState<FilePreviewKind | null>(null);
-  const [hostAbsolutePath, setHostAbsolutePath] = useState<string | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [mtimeMs, setMtimeMs] = useState<number | null>(null);
-
-  const [markdownEditMode, setMarkdownEditMode] = useState(false);
-  const [htmlCodeMode, setHtmlCodeMode] = useState(false);
-  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [preview, dispatchPreview] = useReducer(previewLoadReducer, emptyPreviewLoad);
+  const [pptxPreview, dispatchPptx] = useReducer(pptxPreviewReducer, emptyPptxPreview);
+  const [editorUi, dispatchEditorUi] = useReducer(editorUiReducer, emptyEditorUi);
   const saveStatusClearRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
-  const [pptxText, setPptxText] = useState<string | null>(null);
-  const [pptxTruncated, setPptxTruncated] = useState(false);
-  const [pptxError, setPptxError] = useState<string | null>(null);
-
-  const trackedFilePathForModeRef = useRef(filePath);
-  if (trackedFilePathForModeRef.current !== filePath) {
-    trackedFilePathForModeRef.current = filePath;
-    setMarkdownEditMode(false);
-    setHtmlCodeMode(false);
+  const trackedFilePathRef = useRef(filePath);
+  if (trackedFilePathRef.current !== filePath) {
+    trackedFilePathRef.current = filePath;
+    dispatchEditorUi({ type: 'resetModes' });
+    dispatchPptx({ type: 'clear' });
   }
 
   useEffect(() => {
-    setPptxText(null);
-    setPptxTruncated(false);
-    setPptxError(null);
+    dispatchPptx({ type: 'clear' });
 
     if (!filePath) {
-      setTextContent(null);
-      setBinaryBuffer(null);
-      setPreviewKind(null);
-      setHostAbsolutePath(null);
-      setMtimeMs(null);
-      setLoadError(null);
-      setLoading(false);
+      dispatchPreview({ type: 'clear' });
       return;
     }
 
     const ext = getFileExtension(filePath);
     let cancelled = false;
-    setLoading(true);
-    setLoadError(null);
-    setTextContent(null);
-    setBinaryBuffer(null);
-    setPreviewKind(null);
-    setHostAbsolutePath(null);
-    setMtimeMs(null);
+    dispatchPreview({ type: 'loadStart' });
+
+    const finishSuccess = (payload: Extract<PreviewLoadAction, { type: 'loadSuccess' }>['payload']) => {
+      if (!cancelled) dispatchPreview({ type: 'loadSuccess', payload });
+    };
+    const finishError = (err: unknown) => {
+      if (!cancelled) {
+        dispatchPreview({ type: 'loadError', error: err instanceof Error ? err.message : String(err) });
+      }
+    };
 
     const loadBinary = (kind: FilePreviewKind) => {
       void readWorkspaceFileBase64(filePath, readOpts)
         .then(({ contentBase64, mtimeMs: mt, absolutePath }) => {
-          if (cancelled) return;
-          setBinaryBuffer(base64ToArrayBuffer(contentBase64));
-          setPreviewKind(kind);
-          setHostAbsolutePath(typeof absolutePath === 'string' && absolutePath.length > 0 ? absolutePath : null);
-          setMtimeMs(typeof mt === 'number' && Number.isFinite(mt) ? mt : null);
+          finishSuccess({
+            previewKind: kind,
+            binaryBuffer: base64ToArrayBuffer(contentBase64),
+            hostAbsolutePath: typeof absolutePath === 'string' && absolutePath.length > 0 ? absolutePath : null,
+            mtimeMs: typeof mt === 'number' && Number.isFinite(mt) ? mt : null,
+          });
         })
-        .catch((err) => {
-          if (!cancelled) {
-            setLoadError(err instanceof Error ? err.message : String(err));
-          }
-        })
-        .finally(() => {
-          if (!cancelled) setLoading(false);
-        });
+        .catch(finishError);
     };
 
     if (ext === '.pdf') {
@@ -156,20 +257,14 @@ export function useWorkspaceFilePreviewState({
     } else {
       void readWorkspaceFile(filePath, readOpts)
         .then(({ content: text, mtimeMs: mt, absolutePath }) => {
-          if (cancelled) return;
-          setTextContent(text);
-          setPreviewKind('text');
-          setHostAbsolutePath(typeof absolutePath === 'string' && absolutePath.length > 0 ? absolutePath : null);
-          setMtimeMs(typeof mt === 'number' && Number.isFinite(mt) ? mt : null);
+          finishSuccess({
+            previewKind: 'text',
+            textContent: text,
+            hostAbsolutePath: typeof absolutePath === 'string' && absolutePath.length > 0 ? absolutePath : null,
+            mtimeMs: typeof mt === 'number' && Number.isFinite(mt) ? mt : null,
+          });
         })
-        .catch((err) => {
-          if (!cancelled) {
-            setLoadError(err instanceof Error ? err.message : String(err));
-          }
-        })
-        .finally(() => {
-          if (!cancelled) setLoading(false);
-        });
+        .catch(finishError);
     }
 
     return () => {
@@ -178,28 +273,29 @@ export function useWorkspaceFilePreviewState({
   }, [filePath, readOpts]);
 
   useEffect(() => {
-    if (!binaryBuffer || previewKind !== 'pptx' || !filePath) {
+    if (!preview.binaryBuffer || preview.previewKind !== 'pptx' || !filePath) {
       return;
     }
     let cancelled = false;
-    setPptxText(null);
-    setPptxTruncated(false);
-    setPptxError(null);
+    dispatchPptx({ type: 'clear' });
 
     const pptxName = getFileName(filePath);
 
     void (async () => {
       try {
         const mod = await import('@/features/chat/attachments/attachment-process-heavy');
-        const { extractedText } = await mod.processPptx(binaryBuffer, pptxName);
+        const { extractedText } = await mod.processPptx(preview.binaryBuffer!, pptxName);
         if (cancelled) return;
         const cap = PPTX_PREVIEW_MAX_CHARS;
         const truncated = extractedText.length > cap;
-        setPptxText(truncated ? extractedText.slice(0, cap) : extractedText);
-        setPptxTruncated(truncated);
+        dispatchPptx({
+          type: 'success',
+          text: truncated ? extractedText.slice(0, cap) : extractedText,
+          truncated,
+        });
       } catch (e) {
         if (!cancelled) {
-          setPptxError(e instanceof Error ? e.message : String(e));
+          dispatchPptx({ type: 'error', error: e instanceof Error ? e.message : String(e) });
         }
       }
     })();
@@ -207,7 +303,7 @@ export function useWorkspaceFilePreviewState({
     return () => {
       cancelled = true;
     };
-  }, [binaryBuffer, previewKind, filePath]);
+  }, [preview.binaryBuffer, preview.previewKind, filePath]);
 
   const onSaveMarkdown = useCallback(
     async (next: string) => {
@@ -216,7 +312,7 @@ export function useWorkspaceFilePreviewState({
         clearTimeout(saveStatusClearRef.current);
         saveStatusClearRef.current = undefined;
       }
-      setSaveStatus('saving');
+      dispatchEditorUi({ type: 'setSaveStatus', value: 'saving' });
       try {
         const { mtimeMs: writtenMtime } = await writeWorkspaceFile(
           filePath,
@@ -224,15 +320,15 @@ export function useWorkspaceFilePreviewState({
           agentId?.trim() ? { agentId: agentId.trim() } : undefined,
         );
         if (typeof writtenMtime === 'number' && Number.isFinite(writtenMtime)) {
-          setMtimeMs(writtenMtime);
+          dispatchPreview({ type: 'patchMtime', mtimeMs: writtenMtime });
         }
-        setSaveStatus('saved');
+        dispatchEditorUi({ type: 'setSaveStatus', value: 'saved' });
         saveStatusClearRef.current = setTimeout(() => {
-          setSaveStatus('idle');
+          dispatchEditorUi({ type: 'setSaveStatus', value: 'idle' });
           saveStatusClearRef.current = undefined;
         }, 2000);
       } catch {
-        setSaveStatus('idle');
+        dispatchEditorUi({ type: 'setSaveStatus', value: 'idle' });
       }
     },
     [filePath, agentId],
@@ -244,7 +340,7 @@ export function useWorkspaceFilePreviewState({
 
   const onHtmlChange = useCallback(
     (next: string) => {
-      setTextContent(next);
+      dispatchPreview({ type: 'patchText', text: next });
       debouncedHtmlSave(next);
     },
     [debouncedHtmlSave],
@@ -253,13 +349,13 @@ export function useWorkspaceFilePreviewState({
   const onDownload = useCallback(async () => {
     if (!filePath) return;
     const name = getFileName(filePath);
-    if (binaryBuffer) {
+    if (preview.binaryBuffer) {
       const mime = inferMimeTypeFromFileName(name) ?? 'application/octet-stream';
-      downloadBinaryFile(name, binaryBuffer, mime);
+      downloadBinaryFile(name, preview.binaryBuffer, mime);
       return;
     }
-    if (textContent != null) {
-      downloadTextFile(name, textContent);
+    if (preview.textContent != null) {
+      downloadTextFile(name, preview.textContent);
       return;
     }
     try {
@@ -270,46 +366,61 @@ export function useWorkspaceFilePreviewState({
     } catch {
       /* ignore */
     }
-  }, [binaryBuffer, filePath, readOpts, textContent]);
+  }, [preview.binaryBuffer, preview.textContent, filePath, readOpts]);
 
-  const canDownload = !loading && (binaryBuffer != null || textContent != null || loadError != null);
+  const canDownload =
+    !preview.loading && (preview.binaryBuffer != null || preview.textContent != null || preview.loadError != null);
 
   const canOpenWithSystemApp =
-    isElectron() && Boolean(hostAbsolutePath) && Boolean(window.electronAPI?.shell?.openPath);
+    isElectron() && Boolean(preview.hostAbsolutePath) && Boolean(window.electronAPI?.shell?.openPath);
 
   const onOpenWithSystemApp = useCallback(async () => {
-    const p = hostAbsolutePath;
+    const p = preview.hostAbsolutePath;
     if (!p || !window.electronAPI?.shell?.openPath) return;
     await window.electronAPI.shell.openPath(p);
-  }, [hostAbsolutePath]);
+  }, [preview.hostAbsolutePath]);
 
   const canRevealInFolder =
-    isElectron() && Boolean(hostAbsolutePath) && Boolean(window.electronAPI?.shell?.showItemInFolder);
+    isElectron() && Boolean(preview.hostAbsolutePath) && Boolean(window.electronAPI?.shell?.showItemInFolder);
 
   const onRevealInFolder = useCallback(async () => {
-    const p = hostAbsolutePath;
+    const p = preview.hostAbsolutePath;
     if (!p || !window.electronAPI?.shell?.showItemInFolder) return;
     await window.electronAPI.shell.showItemInFolder(p);
-  }, [hostAbsolutePath]);
+  }, [preview.hostAbsolutePath]);
+
+  const setMarkdownEditMode = useCallback(
+    (value: boolean | ((prev: boolean) => boolean)) => {
+      dispatchEditorUi({ type: 'setMarkdownEditMode', value });
+    },
+    [],
+  );
+
+  const setHtmlCodeMode = useCallback(
+    (value: boolean | ((prev: boolean) => boolean)) => {
+      dispatchEditorUi({ type: 'setHtmlCodeMode', value });
+    },
+    [],
+  );
 
   return {
-    previewKind,
-    loading,
-    loadError,
-    textContent,
-    binaryBuffer,
-    hostAbsolutePath,
-    mtimeMs,
+    previewKind: preview.previewKind,
+    loading: preview.loading,
+    loadError: preview.loadError,
+    textContent: preview.textContent,
+    binaryBuffer: preview.binaryBuffer,
+    hostAbsolutePath: preview.hostAbsolutePath,
+    mtimeMs: preview.mtimeMs,
 
-    pptxText,
-    pptxTruncated,
-    pptxError,
+    pptxText: pptxPreview.text,
+    pptxTruncated: pptxPreview.truncated,
+    pptxError: pptxPreview.error,
 
-    markdownEditMode,
+    markdownEditMode: editorUi.markdownEditMode,
     setMarkdownEditMode,
-    htmlCodeMode,
+    htmlCodeMode: editorUi.htmlCodeMode,
     setHtmlCodeMode,
-    saveStatus,
+    saveStatus: editorUi.saveStatus,
 
     onSaveMarkdown,
     onHtmlChange,
@@ -324,4 +435,3 @@ export function useWorkspaceFilePreviewState({
     onRevealInFolder,
   };
 }
-

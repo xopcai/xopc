@@ -1,5 +1,5 @@
 import { Database, Loader2 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useReducer, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
@@ -11,6 +11,7 @@ import {
 } from '@/features/settings/session-config-api';
 import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/settings/settings-form-section';
 import { settingsInputFocusClass } from '@/lib/form-field-width';
+import { createFormDraftReducer, syncFormDraftFromParsed } from '@/lib/settings-form-draft';
 import { cn } from '@/lib/cn';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -23,6 +24,8 @@ function inputClassName(): string {
   );
 }
 
+const sessionFormReducer = createFormDraftReducer<SessionConfigState>();
+
 export function SessionConfigSection({ hasToken }: { hasToken: boolean }) {
   const t = messages(useLocaleStore((s) => s.language)).sessions.config;
   const { data, isLoading } = useGatewayConfigSwr(hasToken);
@@ -30,22 +33,29 @@ export function SessionConfigSection({ hasToken }: { hasToken: boolean }) {
     () => (data?.payload?.config !== undefined ? normalizeSessionConfigFromConfig(data.payload.config) : null),
     [data],
   );
-  const [form, setForm] = useState<SessionConfigState | null>(null);
-  const [baseline, setBaseline] = useState<SessionConfigState | null>(null);
+  const [formDraft, dispatchForm] = useReducer(sessionFormReducer, { form: null, baseline: null });
+  const form = formDraft.form;
+  const baseline = formDraft.baseline;
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const dirtyRef = useRef(false);
+  const trackedParsedRef = useRef<SessionConfigState | null>(null);
 
-  useEffect(() => {
-    if (!hasToken || parsed === null || dirtyRef.current) return;
-    setForm(structuredClone(parsed));
-    setBaseline(structuredClone(parsed));
-  }, [hasToken, parsed]);
+  syncFormDraftFromParsed({
+    enabled: hasToken,
+    parsed,
+    dirty: dirtyRef.current,
+    trackedParsedRef,
+    dispatch: dispatchForm,
+    onResetDirty: () => {
+      dirtyRef.current = false;
+    },
+  });
 
   const dirty = form && baseline && JSON.stringify(form) !== JSON.stringify(baseline);
   const update = useCallback((patch: Partial<SessionConfigState>) => {
     dirtyRef.current = true;
-    setForm((f) => (f ? { ...f, ...patch } : null));
+    dispatchForm({ type: 'patch', patch });
   }, []);
 
   if (!hasToken || !form) {
@@ -60,7 +70,7 @@ export function SessionConfigSection({ hasToken }: { hasToken: boolean }) {
     <SettingsFormSection>
       <SettingsFormSectionHeader icon={Database} title={t.title} subtitle={t.hint} />
       <div className="mb-4 flex justify-end gap-2">
-        <Button type="button" variant="secondary" disabled={!dirty || saving} onClick={() => baseline && setForm(structuredClone(baseline))}>
+        <Button type="button" variant="secondary" disabled={!dirty || saving} onClick={() => dispatchForm({ type: 'discard' })}>
           {t.discard}
         </Button>
         <Button
@@ -74,7 +84,7 @@ export function SessionConfigSection({ hasToken }: { hasToken: boolean }) {
               try {
                 await patchSessionConfig(form);
                 dirtyRef.current = false;
-                setBaseline(structuredClone(form));
+                dispatchForm({ type: 'saved', value: form });
               } catch (e) {
                 setError(e instanceof Error ? e.message : t.saveError);
               } finally {

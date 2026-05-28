@@ -1,5 +1,5 @@
 import { Cable, Loader2, Plus, Plug } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
@@ -36,6 +36,41 @@ type ServerToolsState =
   | { status: 'ok'; tools: McpToolInfo[] }
   | { status: 'error'; message: string };
 
+type McpFormDraft = {
+  form: McpSettingsState | null;
+  baseline: McpSettingsState | null;
+  expandedKeys: Set<string>;
+};
+
+type McpFormAction =
+  | { type: 'reset' }
+  | { type: 'sync'; value: McpSettingsState }
+  | { type: 'set-form'; updater: (prev: McpSettingsState) => McpSettingsState }
+  | { type: 'saved'; value: McpSettingsState }
+  | { type: 'toggle-expanded'; key: string }
+  | { type: 'set-expanded'; keys: Set<string> };
+
+function mcpFormReducer(state: McpFormDraft, action: McpFormAction): McpFormDraft {
+  switch (action.type) {
+    case 'reset':
+      return { form: null, baseline: null, expandedKeys: new Set() };
+    case 'sync':
+      return { form: action.value, baseline: action.value, expandedKeys: new Set() };
+    case 'set-form':
+      return state.form ? { ...state, form: action.updater(state.form) } : state;
+    case 'saved':
+      return { form: action.value, baseline: action.value, expandedKeys: new Set() };
+    case 'toggle-expanded': {
+      const next = new Set(state.expandedKeys);
+      if (next.has(action.key)) next.delete(action.key);
+      else next.add(action.key);
+      return { ...state, expandedKeys: next };
+    }
+    case 'set-expanded':
+      return { ...state, expandedKeys: action.keys };
+  }
+}
+
 export function McpSettingsPanel() {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
@@ -43,8 +78,14 @@ export function McpSettingsPanel() {
   const token = useGatewayStore((st) => st.token);
   const hasToken = Boolean(token);
 
-  const [form, setForm] = useState<McpSettingsState | null>(null);
-  const [baseline, setBaseline] = useState<McpSettingsState | null>(null);
+  const [formDraft, dispatchForm] = useReducer(mcpFormReducer, {
+    form: null,
+    baseline: null,
+    expandedKeys: new Set<string>(),
+  });
+  const form = formDraft.form;
+  const baseline = formDraft.baseline;
+  const expandedKeys = formDraft.expandedKeys;
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saveOk, setSaveOk] = useState(false);
@@ -53,7 +94,6 @@ export function McpSettingsPanel() {
   const [toolsDialog, setToolsDialog] = useState<{ serverId: string; tools: McpToolInfo[] } | null>(
     null,
   );
-  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(() => new Set());
   const dirtyRef = useRef(false);
 
   const { data, error: swrError, isLoading, mutate } = useGatewayConfigSwr(hasToken);
@@ -66,18 +106,12 @@ export function McpSettingsPanel() {
 
   useEffect(() => {
     if (!hasToken) {
-      setForm(null);
-      setBaseline(null);
+      dispatchForm({ type: 'reset' });
       dirtyRef.current = false;
-      setExpandedKeys(new Set());
       return;
     }
-    if (parsed === null) return;
-    if (!dirtyRef.current) {
-      setForm(parsed);
-      setBaseline(parsed);
-      setExpandedKeys(new Set());
-    }
+    if (parsed === null || dirtyRef.current) return;
+    dispatchForm({ type: 'sync', value: parsed });
   }, [hasToken, parsed]);
 
   const loading = Boolean(hasToken && isLoading && data === undefined && !swrError);
@@ -90,67 +124,67 @@ export function McpSettingsPanel() {
   }, [form, baseline]);
 
   const toggleExpanded = useCallback((key: string) => {
-    setExpandedKeys((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
+    dispatchForm({ type: 'toggle-expanded', key });
   }, []);
 
   const updateServer = useCallback((index: number, patch: Partial<McpSettingsState['servers'][number]>) => {
     dirtyRef.current = true;
-    setForm((f) => {
-      if (!f) return f;
-      const servers = [...f.servers];
-      const prev = servers[index];
-      if (!prev) return f;
-      servers[index] = { ...prev, ...patch };
-      if (patch.id && patch.id !== prev.id && prev.id) {
-        setServerTools((st) => {
-          const next = { ...st };
-          delete next[prev.id];
-          return next;
-        });
-      }
-      return { ...f, servers };
+    dispatchForm({
+      type: 'set-form',
+      updater: (f) => {
+        const servers = [...f.servers];
+        const prev = servers[index];
+        if (!prev) return f;
+        servers[index] = { ...prev, ...patch };
+        if (patch.id && patch.id !== prev.id && prev.id) {
+          setServerTools((st) => {
+            const next = { ...st };
+            delete next[prev.id];
+            return next;
+          });
+        }
+        return { ...f, servers };
+      },
     });
   }, []);
 
   const addServer = useCallback(() => {
     dirtyRef.current = true;
-    setForm((f) => {
-      if (!f) return f;
-      const nextIndex = f.servers.length;
-      const newRow = emptyMcpServerRow(`server-${nextIndex + 1}`);
-      setExpandedKeys((keys) => new Set(keys).add(mcpServerCardKey(newRow, nextIndex)));
-      return { ...f, servers: [...f.servers, newRow] };
+    dispatchForm({
+      type: 'set-form',
+      updater: (f) => {
+        const nextIndex = f.servers.length;
+        const newRow = emptyMcpServerRow(`server-${nextIndex + 1}`);
+        const key = mcpServerCardKey(newRow, nextIndex);
+        dispatchForm({ type: 'set-expanded', keys: new Set(expandedKeys).add(key) });
+        return { ...f, servers: [...f.servers, newRow] };
+      },
     });
-  }, []);
+  }, [expandedKeys]);
 
   const removeServer = useCallback((index: number) => {
     dirtyRef.current = true;
-    setForm((f) => {
-      if (!f) return f;
-      const removed = f.servers[index];
-      if (removed) {
-        const key = mcpServerCardKey(removed, index);
-        setExpandedKeys((keys) => {
-          const next = new Set(keys);
-          next.delete(key);
-          return next;
-        });
-        if (removed.id) {
-          setServerTools((st) => {
-            const next = { ...st };
-            delete next[removed.id];
-            return next;
-          });
+    dispatchForm({
+      type: 'set-form',
+      updater: (f) => {
+        const removed = f.servers[index];
+        if (removed) {
+          const key = mcpServerCardKey(removed, index);
+          const nextExpanded = new Set(expandedKeys);
+          nextExpanded.delete(key);
+          dispatchForm({ type: 'set-expanded', keys: nextExpanded });
+          if (removed.id) {
+            setServerTools((st) => {
+              const next = { ...st };
+              delete next[removed.id];
+              return next;
+            });
+          }
         }
-      }
-      return { ...f, servers: f.servers.filter((_, i) => i !== index) };
+        return { ...f, servers: f.servers.filter((_, i) => i !== index) };
+      },
     });
-  }, []);
+  }, [expandedKeys]);
 
   const save = useCallback(async () => {
     if (!form || saving) return;
@@ -160,11 +194,9 @@ export function McpSettingsPanel() {
     try {
       await patchMcpSettings(form);
       const next = structuredClone(form);
-      setBaseline(next);
-      setForm(next);
       dirtyRef.current = false;
+      dispatchForm({ type: 'saved', value: next });
       setSaveOk(true);
-      setExpandedKeys(new Set());
       void mutate();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -248,14 +280,13 @@ export function McpSettingsPanel() {
             onChange={(e) => {
               dirtyRef.current = true;
               const raw = e.target.value.trim();
-              setForm((f) =>
-                f
-                  ? {
-                      ...f,
-                      sessionIdleTtlMinutes: raw === '' ? undefined : Number.parseInt(raw, 10),
-                    }
-                  : f,
-              );
+              dispatchForm({
+                type: 'set-form',
+                updater: (f) => ({
+                  ...f,
+                  sessionIdleTtlMinutes: raw === '' ? undefined : Number.parseInt(raw, 10),
+                }),
+              });
             }}
           />
           <p className="text-xs leading-relaxed text-fg-subtle">{t.idleTtlHint}</p>
@@ -308,11 +339,10 @@ export function McpSettingsPanel() {
           onClick={() => {
             if (!baseline) return;
             dirtyRef.current = false;
-            setForm(structuredClone(baseline));
+            dispatchForm({ type: 'sync', value: structuredClone(baseline) });
             setSaveOk(false);
             setError(null);
             setServerTools({});
-            setExpandedKeys(new Set());
           }}
         >
           {t.discard}

@@ -1,15 +1,14 @@
 import { CheckCircle2, Copy, ExternalLink, Eye, EyeOff, Loader2 } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback } from 'react';
 
 import { revealImageProviderConfigApiKey } from '@/features/settings/image-providers-config-api';
 import type { ApiKeyLinkKind } from '@/features/settings/provider-enrichment';
 import { providerApiKeyLinkLabel } from '@/features/settings/provider-enrichment';
-import { isMaskedKey } from '@/features/settings/providers-api';
 import type { ProvidersSettingsMessages } from '@/i18n/messages';
 import { settingsInputFocusClass } from '@/lib/form-field-width';
 import { interaction } from '@/lib/interaction';
 import { cn } from '@/lib/cn';
-import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
+import { useMaskedApiKeyField } from '@/lib/use-masked-api-key-field';
 
 export type ImageProviderApiKeyFieldLabels = {
   apiKeyLabel: string;
@@ -38,71 +37,25 @@ export function ImageProviderApiKeyField({
   apiKeyLinks: { href: string; kind: ApiKeyLinkKind }[];
   apiKeyLinkLabels: Pick<ProvidersSettingsMessages, 'getApiKey' | 'getApiKeyIntl' | 'getApiKeyCn'>;
 }) {
-  const [showKey, setShowKey] = useState(false);
-  /** `undefined` = not fetched; `null` = fetched, not in config file; string = plaintext from config */
-  const [revealed, setRevealed] = useState<string | null | undefined>(undefined);
-  const [revealLoading, setRevealLoading] = useState(false);
-  const [revealErr, setRevealErr] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const reveal = useCallback(
+    () => revealImageProviderConfigApiKey(providerId).then((payload) => payload.apiKey ?? null),
+    [providerId],
+  );
 
-  const masked = isMaskedKey(value);
-
-  useEffect(() => {
-    if (!masked) {
-      setRevealed(undefined);
-      setRevealErr(null);
-    }
-  }, [masked, value]);
-
-  const inputValue = (() => {
-    if (!masked) return value;
-    if (showKey && typeof revealed === 'string') return revealed;
-    return value;
-  })();
-
-  const inputType =
-    !masked || (masked && showKey && typeof revealed === 'string') ? ('text' as const) : ('password' as const);
-
-  const copyEnabled =
-    (!masked && value.trim().length > 0 && !isMaskedKey(value)) ||
-    (Boolean(showKey) && typeof revealed === 'string' && revealed.length > 0);
-
-  const copyKey = useCallback(async () => {
-    const text =
-      !masked && value.trim() && !isMaskedKey(value)
-        ? value.trim()
-        : typeof revealed === 'string' && revealed.length > 0
-          ? revealed
-          : '';
-    if (!text) return;
-    const ok = await copyTextToClipboard(text);
-    if (!ok) return;
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 2000);
-  }, [masked, revealed, value]);
-
-  const toggleEye = useCallback(async () => {
-    setRevealErr(null);
-    if (!masked) {
-      setShowKey((s) => !s);
-      return;
-    }
-    if (revealed !== undefined) {
-      setShowKey((s) => !s);
-      return;
-    }
-    setRevealLoading(true);
-    try {
-      const payload = await revealImageProviderConfigApiKey(providerId);
-      setRevealed(payload.apiKey ?? null);
-      setShowKey(true);
-    } catch (e) {
-      setRevealErr(e instanceof Error ? e.message : labels.loadFailed);
-      setRevealed(null);
-    } finally {
-      setRevealLoading(false);
-    }
-  }, [masked, providerId, revealed, labels.loadFailed]);
+  const {
+    masked,
+    showKey,
+    revealed,
+    revealLoading,
+    revealErr,
+    copied,
+    inputValue,
+    inputType,
+    copyEnabled,
+    copyKey,
+    toggleEye,
+    onInputChange,
+  } = useMaskedApiKeyField({ value, reveal, loadFailedLabel: labels.loadFailed });
 
   return (
     <div className="flex min-w-0 flex-col gap-1 sm:col-span-2">
@@ -139,14 +92,7 @@ export function ImageProviderApiKeyField({
           )}
           value={inputValue}
           placeholder={masked ? '••••••••' : labels.optionalPlaceholder}
-          onChange={(e) => {
-            const next = e.target.value;
-            if (masked && typeof revealed === 'string' && showKey && next !== revealed) {
-              setRevealed(undefined);
-              setShowKey(false);
-            }
-            onChange(next);
-          }}
+          onChange={(e) => onInputChange(e.target.value, onChange)}
         />
         <div className="absolute right-1 top-1/2 flex -translate-y-1/2 gap-0.5">
           {copyEnabled ? (

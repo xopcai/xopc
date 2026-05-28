@@ -66,9 +66,15 @@ export function VoiceMessageBar({
     }
   }, []);
 
-  useEffect(() => {
+  const attPlaybackKey = `${att.workspaceRelativePath ?? ''}:${att.content?.length ?? 0}:${att.mimeType ?? ''}:${sessionKey ?? ''}`;
+  const trackedAttPlaybackRef = useRef(attPlaybackKey);
+  if (trackedAttPlaybackRef.current !== attPlaybackKey) {
+    trackedAttPlaybackRef.current = attPlaybackKey;
     setCurrent(0);
     setPlaying(false);
+  }
+
+  useEffect(() => {
     let revoke: string | undefined;
     let cancelled = false;
     const run = async () => {

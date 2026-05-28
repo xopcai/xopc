@@ -14,7 +14,7 @@ import {
   SlidersHorizontal,
   type LucideIcon,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
@@ -89,6 +89,41 @@ function gatewaySettingsTabHint(g: GatewaySettingsMessages, tab: GatewaySettings
   return g.advancedSectionHint;
 }
 
+type GatewayFormDraft = {
+  form: GatewaySettingsState | null;
+  baseline: GatewaySettingsState | null;
+  appliedBaseline: GatewaySettingsState | null;
+};
+
+type GatewayFormAction =
+  | { type: 'reset' }
+  | { type: 'init-applied'; value: GatewaySettingsState }
+  | { type: 'sync'; value: GatewaySettingsState }
+  | { type: 'set-form'; updater: (prev: GatewaySettingsState) => GatewaySettingsState }
+  | { type: 'discard' }
+  | { type: 'saved'; value: GatewaySettingsState };
+
+function gatewayFormReducer(state: GatewayFormDraft, action: GatewayFormAction): GatewayFormDraft {
+  switch (action.type) {
+    case 'reset':
+      return { form: null, baseline: null, appliedBaseline: null };
+    case 'init-applied':
+      return { ...state, appliedBaseline: structuredClone(action.value) };
+    case 'sync': {
+      const snapshot = structuredClone(action.value);
+      return { form: snapshot, baseline: structuredClone(snapshot), appliedBaseline: state.appliedBaseline };
+    }
+    case 'set-form':
+      return state.form ? { ...state, form: action.updater(state.form) } : state;
+    case 'discard':
+      return state.baseline ? { ...state, form: structuredClone(state.baseline) } : state;
+    case 'saved': {
+      const snapshot = structuredClone(action.value);
+      return { form: snapshot, baseline: structuredClone(snapshot), appliedBaseline: state.appliedBaseline };
+    }
+  }
+}
+
 export function GatewaySettingsPanel() {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
@@ -115,9 +150,14 @@ export function GatewaySettingsPanel() {
   const openTokenDialog = useGatewayStore((st) => st.openTokenDialog);
   const hasToken = Boolean(token);
 
-  const [form, setForm] = useState<GatewaySettingsState | null>(null);
-  const [baseline, setBaseline] = useState<GatewaySettingsState | null>(null);
-  const [appliedBaseline, setAppliedBaseline] = useState<GatewaySettingsState | null>(null);
+  const [formDraft, dispatchForm] = useReducer(gatewayFormReducer, {
+    form: null,
+    baseline: null,
+    appliedBaseline: null,
+  });
+  const form = formDraft.form;
+  const baseline = formDraft.baseline;
+  const appliedBaseline = formDraft.appliedBaseline;
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saveOk, setSaveOk] = useState(false);
@@ -128,6 +168,7 @@ export function GatewaySettingsPanel() {
   const [restarting, setRestarting] = useState(false);
   const [restartConfirmOpen, setRestartConfirmOpen] = useState(false);
   const dirtyRef = useRef(false);
+  const trackedParsedRef = useRef<GatewaySettingsState | null>(null);
   const appliedBaselineInitializedRef = useRef(false);
 
   const { data, error: swrError, isLoading, mutate } = useGatewayConfigSwr(hasToken);
@@ -140,26 +181,24 @@ export function GatewaySettingsPanel() {
     [data],
   );
 
-  useEffect(() => {
-    if (!hasToken) {
-      setForm(null);
-      setBaseline(null);
-      setAppliedBaseline(null);
-      dirtyRef.current = false;
+  if (!hasToken) {
+    if (trackedParsedRef.current !== null || appliedBaselineInitializedRef.current) {
+      trackedParsedRef.current = null;
       appliedBaselineInitializedRef.current = false;
-      return;
+      dispatchForm({ type: 'reset' });
+      dirtyRef.current = false;
     }
-    if (parsed === null) return;
+  } else if (parsed !== null) {
     if (!appliedBaselineInitializedRef.current) {
-      setAppliedBaseline(structuredClone(parsed));
       appliedBaselineInitializedRef.current = true;
+      dispatchForm({ type: 'init-applied', value: parsed });
     }
-    if (!dirtyRef.current) {
-      setForm(parsed);
-      setBaseline(structuredClone(parsed));
+    if (!dirtyRef.current && trackedParsedRef.current !== parsed) {
+      trackedParsedRef.current = parsed;
+      dispatchForm({ type: 'sync', value: parsed });
       setSaveOk(false);
     }
-  }, [hasToken, parsed]);
+  }
 
   const loading = Boolean(hasToken && isLoading && data === undefined && !swrError);
   const fetchError =
@@ -177,90 +216,95 @@ export function GatewaySettingsPanel() {
 
   const updateAuth = useCallback((patch: Partial<GatewaySettingsState['auth']>) => {
     dirtyRef.current = true;
-    setForm((f) => (f ? { ...f, auth: { ...f.auth, ...patch } } : null));
+    dispatchForm({ type: 'set-form', updater: (f) => ({ ...f, auth: { ...f.auth, ...patch } }) });
   }, []);
 
   const updateChannel = useCallback((channel: GatewaySettingsState['updateChannel']) => {
     dirtyRef.current = true;
-    setForm((f) => (f ? { ...f, updateChannel: channel } : null));
+    dispatchForm({ type: 'set-form', updater: (f) => ({ ...f, updateChannel: channel }) });
   }, []);
 
   const updateCorsOrigins = useCallback((corsOrigins: string[]) => {
     dirtyRef.current = true;
-    setForm((f) => (f ? { ...f, corsOrigins } : null));
+    dispatchForm({ type: 'set-form', updater: (f) => ({ ...f, corsOrigins }) });
   }, []);
 
   const updateBind = useCallback((bind: GatewaySettingsState['bind']) => {
     dirtyRef.current = true;
-    setForm((f) => (f ? { ...f, bind } : null));
+    dispatchForm({ type: 'set-form', updater: (f) => ({ ...f, bind }) });
   }, []);
 
   const updateCustomBindHost = useCallback((customBindHost: string) => {
     dirtyRef.current = true;
-    setForm((f) =>
-      f ? { ...f, customBindHost, bind: 'custom' } : null,
-    );
+    dispatchForm({
+      type: 'set-form',
+      updater: (f) => ({ ...f, customBindHost, bind: 'custom' }),
+    });
   }, []);
 
   const updatePort = useCallback((port: number) => {
     dirtyRef.current = true;
-    setForm((f) => (f ? { ...f, port } : null));
+    dispatchForm({ type: 'set-form', updater: (f) => ({ ...f, port }) });
   }, []);
 
   const updateRateLimit = useCallback((patch: Partial<GatewaySettingsState['auth']['rateLimit']>) => {
     dirtyRef.current = true;
-    setForm((f) => (f ? { ...f, auth: { ...f.auth, rateLimit: { ...f.auth.rateLimit, ...patch } } } : null));
+    dispatchForm({
+      type: 'set-form',
+      updater: (f) => ({ ...f, auth: { ...f.auth, rateLimit: { ...f.auth.rateLimit, ...patch } } }),
+    });
   }, []);
 
   const updateMaxSseConnections = useCallback((maxSseConnections: number) => {
     dirtyRef.current = true;
-    setForm((f) => (f ? { ...f, maxSseConnections } : null));
+    dispatchForm({ type: 'set-form', updater: (f) => ({ ...f, maxSseConnections }) });
   }, []);
 
   const updateChannelConnectDeferMode = useCallback(
     (channelConnectDeferMode: GatewaySettingsState['channelConnectDeferMode']) => {
       dirtyRef.current = true;
-      setForm((f) => (f ? { ...f, channelConnectDeferMode } : null));
+      dispatchForm({ type: 'set-form', updater: (f) => ({ ...f, channelConnectDeferMode }) });
     },
     [],
   );
 
   const updateChannelConnectDeferIds = useCallback((channelConnectDeferIds: string[]) => {
     dirtyRef.current = true;
-    setForm((f) => (f ? { ...f, channelConnectDeferIds } : null));
+    dispatchForm({ type: 'set-form', updater: (f) => ({ ...f, channelConnectDeferIds }) });
   }, []);
 
   const updateChannelConnectDeferSkipIds = useCallback((channelConnectDeferSkipIds: string[]) => {
     dirtyRef.current = true;
-    setForm((f) => (f ? { ...f, channelConnectDeferSkipIds } : null));
+    dispatchForm({ type: 'set-form', updater: (f) => ({ ...f, channelConnectDeferSkipIds }) });
   }, []);
 
   const updateTrustedProxies = useCallback((trustedProxies: string[]) => {
     dirtyRef.current = true;
-    setForm((f) => (f ? { ...f, trustedProxies } : null));
+    dispatchForm({ type: 'set-form', updater: (f) => ({ ...f, trustedProxies }) });
   }, []);
 
   const updateTrustedProxy = useCallback((patch: Partial<GatewaySettingsState['auth']['trustedProxy']>) => {
     dirtyRef.current = true;
-    setForm((f) =>
-      f ? { ...f, auth: { ...f.auth, trustedProxy: { ...f.auth.trustedProxy, ...patch } } } : null,
-    );
+    dispatchForm({
+      type: 'set-form',
+      updater: (f) => ({ ...f, auth: { ...f.auth, trustedProxy: { ...f.auth.trustedProxy, ...patch } } }),
+    });
   }, []);
 
   const updateSecurityStrict = useCallback((securityStrict: boolean) => {
     dirtyRef.current = true;
-    setForm((f) => (f ? { ...f, securityStrict } : null));
+    dispatchForm({ type: 'set-form', updater: (f) => ({ ...f, securityStrict }) });
   }, []);
 
   const updateAllowRealIpFallback = useCallback((allowRealIpFallback: boolean) => {
     dirtyRef.current = true;
-    setForm((f) => (f ? { ...f, allowRealIpFallback } : null));
+    dispatchForm({ type: 'set-form', updater: (f) => ({ ...f, allowRealIpFallback }) });
   }, []);
 
   const updateDangerouslyAllowHostHeaderOriginFallback = useCallback(
     (dangerouslyAllowHostHeaderOriginFallback: boolean) => {
       dirtyRef.current = true;
-      setForm((f) => (f ? { ...f, dangerouslyAllowHostHeaderOriginFallback } : null));
+      dispatchForm({ type: 'set-form', updater: (f) => ({ ...f, dangerouslyAllowHostHeaderOriginFallback }) });
     },
     [],
   );
@@ -278,8 +322,7 @@ export function GatewaySettingsPanel() {
     try {
       await patchGatewaySettings(form);
       dirtyRef.current = false;
-      const next = structuredClone(form);
-      setBaseline(next);
+      dispatchForm({ type: 'saved', value: form });
       setSaveOk(true);
       setAuditRefreshToken((n) => n + 1);
       window.setTimeout(() => setSaveOk(false), 2500);
@@ -293,7 +336,7 @@ export function GatewaySettingsPanel() {
   const discard = useCallback(() => {
     if (!baseline) return;
     dirtyRef.current = false;
-    setForm(structuredClone(baseline));
+    dispatchForm({ type: 'discard' });
     setError(null);
     setSaveOk(false);
   }, [baseline]);
@@ -611,9 +654,10 @@ export function GatewaySettingsPanel() {
               checked={form.updateCheckOnStart}
               onChange={(event) => {
                 dirtyRef.current = true;
-                setForm((currentForm) =>
-                  currentForm ? { ...currentForm, updateCheckOnStart: event.target.checked } : null,
-                );
+                dispatchForm({
+                  type: 'set-form',
+                  updater: (currentForm) => ({ ...currentForm, updateCheckOnStart: event.target.checked }),
+                });
               }}
             />
             <span>
@@ -628,9 +672,10 @@ export function GatewaySettingsPanel() {
               checked={form.updateAutoEnabled}
               onChange={(event) => {
                 dirtyRef.current = true;
-                setForm((currentForm) =>
-                  currentForm ? { ...currentForm, updateAutoEnabled: event.target.checked } : null,
-                );
+                dispatchForm({
+                  type: 'set-form',
+                  updater: (currentForm) => ({ ...currentForm, updateAutoEnabled: event.target.checked }),
+                });
               }}
             />
             <span>
@@ -652,14 +697,10 @@ export function GatewaySettingsPanel() {
                 value={form.updateAutoStableDelayHours}
                 onChange={(event) => {
                   dirtyRef.current = true;
-                  setForm((currentForm) =>
-                    currentForm
-                      ? {
+                  dispatchForm({ type: 'set-form', updater: (currentForm) => ({
                           ...currentForm,
                           updateAutoStableDelayHours: Math.max(0, Math.floor(Number(event.target.value) || 0)),
-                        }
-                      : null,
-                  );
+                        }) });
                 }}
               />
               <p className="mt-1 text-xs text-fg-subtle">{g.updateAutoStableDelayHoursHint}</p>
@@ -677,14 +718,10 @@ export function GatewaySettingsPanel() {
                 value={form.updateAutoStableJitterHours}
                 onChange={(event) => {
                   dirtyRef.current = true;
-                  setForm((currentForm) =>
-                    currentForm
-                      ? {
+                  dispatchForm({ type: 'set-form', updater: (currentForm) => ({
                           ...currentForm,
                           updateAutoStableJitterHours: Math.max(0, Math.floor(Number(event.target.value) || 0)),
-                        }
-                      : null,
-                  );
+                        }) });
                 }}
               />
               <p className="mt-1 text-xs text-fg-subtle">{g.updateAutoStableJitterHoursHint}</p>
@@ -703,14 +740,10 @@ export function GatewaySettingsPanel() {
                 value={form.updateAutoBetaCheckIntervalHours}
                 onChange={(event) => {
                   dirtyRef.current = true;
-                  setForm((currentForm) =>
-                    currentForm
-                      ? {
+                  dispatchForm({ type: 'set-form', updater: (currentForm) => ({
                           ...currentForm,
                           updateAutoBetaCheckIntervalHours: Math.max(0.25, Number(event.target.value) || 1),
-                        }
-                      : null,
-                  );
+                        }) });
                 }}
               />
               <p className="mt-1 text-xs text-fg-subtle">{g.updateAutoBetaCheckIntervalHoursHint}</p>

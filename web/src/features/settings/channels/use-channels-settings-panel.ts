@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useReducer, useRef, useState } from 'react';
 import useSWR from 'swr';
 
 import { fetchChatAgents } from '@/features/chat/agent-selection/chat-agents-api';
@@ -19,6 +19,188 @@ import { useLocaleStore } from '@/stores/locale-store';
 
 import { telegramDefaultBotToken } from './utils';
 
+type ChannelsPanelFormState = {
+  form: ChannelsSettingsState | null;
+  baseline: ChannelsSettingsState | null;
+  tgAccountsDraft: string;
+  tgAccountsError: string;
+  wxAccountsDraft: string;
+  wxAccountsError: string;
+  feishuAccountsDraft: string;
+  feishuAccountsError: string;
+};
+
+const emptyPanelFormState: ChannelsPanelFormState = {
+  form: null,
+  baseline: null,
+  tgAccountsDraft: '',
+  tgAccountsError: '',
+  wxAccountsDraft: '',
+  wxAccountsError: '',
+  feishuAccountsDraft: '',
+  feishuAccountsError: '',
+};
+
+function accountsDraftsFrom(state: ChannelsSettingsState): Pick<
+  ChannelsPanelFormState,
+  | 'tgAccountsDraft'
+  | 'tgAccountsError'
+  | 'wxAccountsDraft'
+  | 'wxAccountsError'
+  | 'feishuAccountsDraft'
+  | 'feishuAccountsError'
+> {
+  return {
+    tgAccountsDraft: JSON.stringify(state.telegram.accounts ?? {}, null, 2),
+    tgAccountsError: '',
+    wxAccountsDraft: JSON.stringify(state.weixin.accounts ?? {}, null, 2),
+    wxAccountsError: '',
+    feishuAccountsDraft: JSON.stringify(state.feishu?.accounts ?? {}, null, 2),
+    feishuAccountsError: '',
+  };
+}
+
+type PanelFormAction =
+  | { type: 'reset' }
+  | { type: 'load'; payload: ChannelsSettingsState }
+  | { type: 'commitSaved'; payload: ChannelsSettingsState }
+  | { type: 'discard' }
+  | { type: 'updateTelegram'; patch: Partial<ChannelsSettingsState['telegram']> }
+  | { type: 'updateWeixin'; patch: Partial<ChannelsSettingsState['weixin']> }
+  | { type: 'updateFeishu'; patch: Partial<ChannelsSettingsState['feishu']> }
+  | {
+      type: 'updateChannelAgentRoute';
+      channel: 'telegram' | 'weixin' | 'feishu';
+      accountId: string;
+      agentId: string;
+    }
+  | { type: 'setTgAccountsDraft'; value: string }
+  | { type: 'setWxAccountsDraft'; value: string }
+  | { type: 'setFeishuAccountsDraft'; value: string }
+  | { type: 'setTgAccountsError'; value: string }
+  | { type: 'setWxAccountsError'; value: string }
+  | { type: 'setFeishuAccountsError'; value: string }
+  | { type: 'applyTgAccounts'; accounts: ChannelsSettingsState['telegram']['accounts'] }
+  | { type: 'applyWxAccounts'; accounts: ChannelsSettingsState['weixin']['accounts'] }
+  | { type: 'applyFeishuAccounts'; accounts: ChannelsSettingsState['feishu']['accounts'] }
+  | { type: 'restoreForm'; payload: ChannelsSettingsState };
+
+function panelFormReducer(
+  state: ChannelsPanelFormState,
+  action: PanelFormAction,
+): ChannelsPanelFormState {
+  switch (action.type) {
+    case 'reset':
+      return emptyPanelFormState;
+    case 'load': {
+      const snapshot = structuredClone(action.payload);
+      return {
+        form: snapshot,
+        baseline: structuredClone(snapshot),
+        ...accountsDraftsFrom(snapshot),
+      };
+    }
+    case 'commitSaved': {
+      const snapshot = structuredClone(action.payload);
+      return {
+        form: snapshot,
+        baseline: structuredClone(snapshot),
+        ...accountsDraftsFrom(snapshot),
+      };
+    }
+    case 'discard': {
+      if (!state.baseline) return state;
+      const restored = structuredClone(state.baseline);
+      return {
+        form: restored,
+        baseline: state.baseline,
+        ...accountsDraftsFrom(restored),
+      };
+    }
+    case 'updateTelegram':
+      return state.form
+        ? {
+            ...state,
+            form: { ...state.form, telegram: { ...state.form.telegram, ...action.patch } },
+          }
+        : state;
+    case 'updateWeixin':
+      return state.form
+        ? {
+            ...state,
+            form: { ...state.form, weixin: { ...state.form.weixin, ...action.patch } },
+          }
+        : state;
+    case 'updateFeishu':
+      return state.form
+        ? {
+            ...state,
+            form: { ...state.form, feishu: { ...state.form.feishu, ...action.patch } },
+          }
+        : state;
+    case 'updateChannelAgentRoute': {
+      if (!state.form) return state;
+      const k =
+        action.channel === 'telegram'
+          ? 'telegram'
+          : action.channel === 'weixin'
+            ? 'weixin'
+            : 'feishu';
+      return {
+        ...state,
+        form: {
+          ...state.form,
+          channelAgentRoutes: {
+            ...state.form.channelAgentRoutes,
+            [k]: {
+              ...state.form.channelAgentRoutes[k],
+              [action.accountId]: action.agentId.trim().toLowerCase(),
+            },
+          },
+        },
+      };
+    }
+    case 'setTgAccountsDraft':
+      return { ...state, tgAccountsDraft: action.value };
+    case 'setWxAccountsDraft':
+      return { ...state, wxAccountsDraft: action.value };
+    case 'setFeishuAccountsDraft':
+      return { ...state, feishuAccountsDraft: action.value };
+    case 'setTgAccountsError':
+      return { ...state, tgAccountsError: action.value };
+    case 'setWxAccountsError':
+      return { ...state, wxAccountsError: action.value };
+    case 'setFeishuAccountsError':
+      return { ...state, feishuAccountsError: action.value };
+    case 'applyTgAccounts':
+      return state.form
+        ? {
+            ...state,
+            form: { ...state.form, telegram: { ...state.form.telegram, accounts: action.accounts } },
+            tgAccountsError: '',
+          }
+        : state;
+    case 'applyWxAccounts':
+      return state.form
+        ? {
+            ...state,
+            form: { ...state.form, weixin: { ...state.form.weixin, accounts: action.accounts } },
+            wxAccountsError: '',
+          }
+        : state;
+    case 'applyFeishuAccounts':
+      return state.form
+        ? {
+            ...state,
+            form: { ...state.form, feishu: { ...state.form.feishu, accounts: action.accounts } },
+            feishuAccountsError: '',
+          }
+        : state;
+    case 'restoreForm':
+      return { ...state, form: structuredClone(action.payload) };
+  }
+}
+
 export function useChannelsSettingsPanel() {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
@@ -26,8 +208,13 @@ export function useChannelsSettingsPanel() {
   const token = useGatewayStore((st) => st.token);
   const hasToken = Boolean(token);
 
-  const [form, setForm] = useState<ChannelsSettingsState | null>(null);
-  const [baseline, setBaseline] = useState<ChannelsSettingsState | null>(null);
+  const dirtyRef = useRef(false);
+  const [panelForm, dispatchPanelForm] = useReducer(panelFormReducer, emptyPanelFormState);
+  const [syncSource, setSyncSource] = useState({
+    hasToken,
+    parsed: null as ChannelsSettingsState | null,
+  });
+
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saveOk, setSaveOk] = useState(false);
@@ -41,13 +228,6 @@ export function useChannelsSettingsPanel() {
   const [copied, setCopied] = useState(false);
   const [feishuCopied, setFeishuCopied] = useState(false);
   const [feishuWebhookCopied, setFeishuWebhookCopied] = useState(false);
-
-  const [tgAccountsDraft, setTgAccountsDraft] = useState('');
-  const [tgAccountsError, setTgAccountsError] = useState('');
-  const [wxAccountsDraft, setWxAccountsDraft] = useState('');
-  const [wxAccountsError, setWxAccountsError] = useState('');
-  const [feishuAccountsDraft, setFeishuAccountsDraft] = useState('');
-  const [feishuAccountsError, setFeishuAccountsError] = useState('');
 
   const { data: chatAgents } = useSWR(hasToken ? 'gateway-chat-agents-ch' : null, fetchChatAgents, {
     revalidateOnFocus: false,
@@ -63,30 +243,33 @@ export function useChannelsSettingsPanel() {
     [cfgData],
   );
 
+  if (hasToken !== syncSource.hasToken || parsed !== syncSource.parsed) {
+    setSyncSource({ hasToken, parsed });
+    if (!hasToken) {
+      dirtyRef.current = false;
+      dispatchPanelForm({ type: 'reset' });
+      setSaveOk(false);
+    } else if (parsed !== null && !dirtyRef.current) {
+      dispatchPanelForm({ type: 'load', payload: parsed });
+      setSaveOk(false);
+    }
+  }
+
+  const {
+    form,
+    baseline,
+    tgAccountsDraft,
+    tgAccountsError,
+    wxAccountsDraft,
+    wxAccountsError,
+    feishuAccountsDraft,
+    feishuAccountsError,
+  } = panelForm;
+
   const dirty = useMemo(() => {
     if (!form || !baseline) return false;
     return JSON.stringify(form) !== JSON.stringify(baseline);
   }, [form, baseline]);
-
-  useEffect(() => {
-    if (!hasToken) {
-      setForm(null);
-      setBaseline(null);
-      return;
-    }
-    if (parsed === null) return;
-    if (!dirty) {
-      setForm(parsed);
-      setBaseline(structuredClone(parsed));
-      setTgAccountsDraft(JSON.stringify(parsed.telegram.accounts ?? {}, null, 2));
-      setTgAccountsError('');
-      setWxAccountsDraft(JSON.stringify(parsed.weixin.accounts ?? {}, null, 2));
-      setWxAccountsError('');
-      setFeishuAccountsDraft(JSON.stringify(parsed.feishu?.accounts ?? {}, null, 2));
-      setFeishuAccountsError('');
-      setSaveOk(false);
-    }
-  }, [hasToken, parsed, dirty]);
 
   const loading = Boolean(hasToken && isLoading && cfgData === undefined && !swrError);
   const fetchError =
@@ -94,31 +277,25 @@ export function useChannelsSettingsPanel() {
 
   const updateChannelAgentRoute = useCallback(
     (channel: 'telegram' | 'weixin' | 'feishu', accountId: string, agentId: string) => {
-      setForm((f) => {
-        if (!f) return null;
-        const k = channel === 'telegram' ? 'telegram' : channel === 'weixin' ? 'weixin' : 'feishu';
-        return {
-          ...f,
-          channelAgentRoutes: {
-            ...f.channelAgentRoutes,
-            [k]: { ...f.channelAgentRoutes[k], [accountId]: agentId.trim().toLowerCase() },
-          },
-        };
-      });
+      dirtyRef.current = true;
+      dispatchPanelForm({ type: 'updateChannelAgentRoute', channel, accountId, agentId });
     },
     [],
   );
 
   const updateTelegram = useCallback((patch: Partial<ChannelsSettingsState['telegram']>) => {
-    setForm((f) => (f ? { ...f, telegram: { ...f.telegram, ...patch } } : null));
+    dirtyRef.current = true;
+    dispatchPanelForm({ type: 'updateTelegram', patch });
   }, []);
 
   const updateWeixin = useCallback((patch: Partial<ChannelsSettingsState['weixin']>) => {
-    setForm((f) => (f ? { ...f, weixin: { ...f.weixin, ...patch } } : null));
+    dirtyRef.current = true;
+    dispatchPanelForm({ type: 'updateWeixin', patch });
   }, []);
 
   const updateFeishu = useCallback((patch: Partial<ChannelsSettingsState['feishu']>) => {
-    setForm((f) => (f ? { ...f, feishu: { ...f.feishu, ...patch } } : null));
+    dirtyRef.current = true;
+    dispatchPanelForm({ type: 'updateFeishu', patch });
   }, []);
 
   const save = useCallback(async (): Promise<boolean> => {
@@ -128,15 +305,8 @@ export function useChannelsSettingsPanel() {
     setSaveOk(false);
     try {
       const next = await patchChannelsSettings(form);
-      setForm(next);
-      const baselineClone = structuredClone(next);
-      setBaseline(baselineClone);
-      setTgAccountsDraft(JSON.stringify(baselineClone.telegram.accounts ?? {}, null, 2));
-      setTgAccountsError('');
-      setWxAccountsDraft(JSON.stringify(baselineClone.weixin.accounts ?? {}, null, 2));
-      setWxAccountsError('');
-      setFeishuAccountsDraft(JSON.stringify(baselineClone.feishu?.accounts ?? {}, null, 2));
-      setFeishuAccountsError('');
+      dirtyRef.current = false;
+      dispatchPanelForm({ type: 'commitSaved', payload: next });
       setSaveOk(true);
       window.setTimeout(() => setSaveOk(false), 2500);
       return true;
@@ -150,14 +320,8 @@ export function useChannelsSettingsPanel() {
 
   const discard = useCallback(() => {
     if (!baseline) return;
-    const b = structuredClone(baseline);
-    setForm(b);
-    setTgAccountsDraft(JSON.stringify(b.telegram.accounts ?? {}, null, 2));
-    setTgAccountsError('');
-    setWxAccountsDraft(JSON.stringify(b.weixin.accounts ?? {}, null, 2));
-    setWxAccountsError('');
-    setFeishuAccountsDraft(JSON.stringify(b.feishu?.accounts ?? {}, null, 2));
-    setFeishuAccountsError('');
+    dirtyRef.current = false;
+    dispatchPanelForm({ type: 'discard' });
     setError(null);
     setSaveOk(false);
   }, [baseline]);
@@ -172,20 +336,24 @@ export function useChannelsSettingsPanel() {
           : which === 'telegram'
             ? { ...form, telegram: { ...form.telegram, enabled } }
             : { ...form, feishu: { ...form.feishu, enabled } };
-      setForm(next);
+      dirtyRef.current = true;
+      if (which === 'weixin') {
+        dispatchPanelForm({ type: 'updateWeixin', patch: { enabled } });
+      } else if (which === 'telegram') {
+        dispatchPanelForm({ type: 'updateTelegram', patch: { enabled } });
+      } else {
+        dispatchPanelForm({ type: 'updateFeishu', patch: { enabled } });
+      }
       setSaving(true);
       setError(null);
       try {
         const synced = await patchChannelsSettings(next);
-        setForm(synced);
-        const baselineClone = structuredClone(synced);
-        setBaseline(baselineClone);
-        setTgAccountsDraft(JSON.stringify(baselineClone.telegram.accounts ?? {}, null, 2));
-        setWxAccountsDraft(JSON.stringify(baselineClone.weixin.accounts ?? {}, null, 2));
-        setFeishuAccountsDraft(JSON.stringify(baselineClone.feishu?.accounts ?? {}, null, 2));
+        dirtyRef.current = false;
+        dispatchPanelForm({ type: 'commitSaved', payload: synced });
       } catch (e) {
         setError(e instanceof Error ? e.message : ch.saveError);
-        setForm(prev);
+        dirtyRef.current = true;
+        dispatchPanelForm({ type: 'restoreForm', payload: prev });
       } finally {
         setSaving(false);
       }
@@ -242,12 +410,24 @@ export function useChannelsSettingsPanel() {
     window.setTimeout(() => setFeishuWebhookCopied(false), 2000);
   }, [form]);
 
+  const setTgAccountsDraft = useCallback((value: string) => {
+    dispatchPanelForm({ type: 'setTgAccountsDraft', value });
+  }, []);
+
+  const setWxAccountsDraft = useCallback((value: string) => {
+    dispatchPanelForm({ type: 'setWxAccountsDraft', value });
+  }, []);
+
+  const setFeishuAccountsDraft = useCallback((value: string) => {
+    dispatchPanelForm({ type: 'setFeishuAccountsDraft', value });
+  }, []);
+
   const onTgAccountsBlur = useCallback(() => {
     if (!form) return;
     const raw = tgAccountsDraft.trim();
     if (!raw) {
-      updateTelegram({ accounts: {} });
-      setTgAccountsError('');
+      dirtyRef.current = true;
+      dispatchPanelForm({ type: 'applyTgAccounts', accounts: {} });
       return;
     }
     try {
@@ -255,19 +435,25 @@ export function useChannelsSettingsPanel() {
       if (typeof parsedJson !== 'object' || parsedJson === null || Array.isArray(parsedJson)) {
         throw new Error(ch.jsonObjectAccounts);
       }
-      updateTelegram({ accounts: parsedJson as ChannelsSettingsState['telegram']['accounts'] });
-      setTgAccountsError('');
+      dirtyRef.current = true;
+      dispatchPanelForm({
+        type: 'applyTgAccounts',
+        accounts: parsedJson as ChannelsSettingsState['telegram']['accounts'],
+      });
     } catch (err) {
-      setTgAccountsError(err instanceof Error ? err.message : ch.jsonInvalid);
+      dispatchPanelForm({
+        type: 'setTgAccountsError',
+        value: err instanceof Error ? err.message : ch.jsonInvalid,
+      });
     }
-  }, [form, tgAccountsDraft, updateTelegram, ch.jsonObjectAccounts, ch.jsonInvalid]);
+  }, [form, tgAccountsDraft, ch.jsonObjectAccounts, ch.jsonInvalid]);
 
   const onWxAccountsBlur = useCallback(() => {
     if (!form) return;
     const raw = wxAccountsDraft.trim();
     if (!raw) {
-      updateWeixin({ accounts: {} });
-      setWxAccountsError('');
+      dirtyRef.current = true;
+      dispatchPanelForm({ type: 'applyWxAccounts', accounts: {} });
       return;
     }
     try {
@@ -275,19 +461,25 @@ export function useChannelsSettingsPanel() {
       if (typeof parsedJson !== 'object' || parsedJson === null || Array.isArray(parsedJson)) {
         throw new Error(ch.jsonObjectAccounts);
       }
-      updateWeixin({ accounts: parsedJson as ChannelsSettingsState['weixin']['accounts'] });
-      setWxAccountsError('');
+      dirtyRef.current = true;
+      dispatchPanelForm({
+        type: 'applyWxAccounts',
+        accounts: parsedJson as ChannelsSettingsState['weixin']['accounts'],
+      });
     } catch (err) {
-      setWxAccountsError(err instanceof Error ? err.message : ch.jsonInvalid);
+      dispatchPanelForm({
+        type: 'setWxAccountsError',
+        value: err instanceof Error ? err.message : ch.jsonInvalid,
+      });
     }
-  }, [form, wxAccountsDraft, updateWeixin, ch.jsonObjectAccounts, ch.jsonInvalid]);
+  }, [form, wxAccountsDraft, ch.jsonObjectAccounts, ch.jsonInvalid]);
 
   const onFeishuAccountsBlur = useCallback(() => {
     if (!form) return;
     const raw = feishuAccountsDraft.trim();
     if (!raw) {
-      updateFeishu({ accounts: {} });
-      setFeishuAccountsError('');
+      dirtyRef.current = true;
+      dispatchPanelForm({ type: 'applyFeishuAccounts', accounts: {} });
       return;
     }
     try {
@@ -295,12 +487,18 @@ export function useChannelsSettingsPanel() {
       if (typeof parsedJson !== 'object' || parsedJson === null || Array.isArray(parsedJson)) {
         throw new Error(ch.jsonObjectAccounts);
       }
-      updateFeishu({ accounts: parsedJson as ChannelsSettingsState['feishu']['accounts'] });
-      setFeishuAccountsError('');
+      dirtyRef.current = true;
+      dispatchPanelForm({
+        type: 'applyFeishuAccounts',
+        accounts: parsedJson as ChannelsSettingsState['feishu']['accounts'],
+      });
     } catch (err) {
-      setFeishuAccountsError(err instanceof Error ? err.message : ch.jsonInvalid);
+      dispatchPanelForm({
+        type: 'setFeishuAccountsError',
+        value: err instanceof Error ? err.message : ch.jsonInvalid,
+      });
     }
-  }, [form, feishuAccountsDraft, updateFeishu, ch.jsonObjectAccounts, ch.jsonInvalid]);
+  }, [form, feishuAccountsDraft, ch.jsonObjectAccounts, ch.jsonInvalid]);
 
   const dmOpts = useMemo(
     () =>

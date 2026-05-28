@@ -1,12 +1,11 @@
 import { Check, Copy, Eye, EyeOff, Loader2 } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { revealVoiceConfigApiKey } from '@/features/settings/voice-config-api';
-import { isMaskedKey } from '@/features/settings/providers-api';
 import { settingsInputFocusClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
-import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
+import { useMaskedApiKeyField } from '@/lib/use-masked-api-key-field';
 
 export type VoiceApiKeyFieldLabels = {
   maskedHelp: string;
@@ -37,69 +36,26 @@ export function VoiceApiKeyField({
   placeholder?: string;
   className?: string;
 }) {
-  const [showKey, setShowKey] = useState(false);
-  const [revealed, setRevealed] = useState<string | null | undefined>(undefined);
-  const [revealLoading, setRevealLoading] = useState(false);
-  const [revealErr, setRevealErr] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const reveal = useCallback(
+    () =>
+      revealVoiceConfigApiKey({ kind, provider: providerId }).then((payload) => payload.apiKey ?? null),
+    [kind, providerId],
+  );
 
-  const masked = isMaskedKey(value);
-
-  useEffect(() => {
-    if (!masked) {
-      setRevealed(undefined);
-      setRevealErr(null);
-    }
-  }, [masked, value]);
-
-  const inputValue = (() => {
-    if (!masked) return value;
-    if (showKey && typeof revealed === 'string') return revealed;
-    return value;
-  })();
-
-  const inputType = showKey ? ('text' as const) : ('password' as const);
-
-  const copyEnabled =
-    (!masked && value.trim().length > 0) ||
-    (typeof revealed === 'string' && revealed.length > 0);
-
-  const copyKey = useCallback(async () => {
-    const text =
-      !masked && value.trim() && !isMaskedKey(value)
-        ? value.trim()
-        : typeof revealed === 'string' && revealed.length > 0
-          ? revealed
-          : '';
-    if (!text) return;
-    const ok = await copyTextToClipboard(text);
-    if (!ok) return;
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 2000);
-  }, [masked, revealed, value]);
-
-  const toggleEye = useCallback(async () => {
-    setRevealErr(null);
-    if (!masked) {
-      setShowKey((s) => !s);
-      return;
-    }
-    if (revealed !== undefined) {
-      setShowKey((s) => !s);
-      return;
-    }
-    setRevealLoading(true);
-    try {
-      const payload = await revealVoiceConfigApiKey({ kind, provider: providerId });
-      setRevealed(payload.apiKey ?? null);
-      setShowKey(true);
-    } catch (e) {
-      setRevealErr(e instanceof Error ? e.message : labels.loadFailed);
-      setRevealed(null);
-    } finally {
-      setRevealLoading(false);
-    }
-  }, [kind, labels.loadFailed, masked, providerId, revealed]);
+  const {
+    masked,
+    showKey,
+    revealed,
+    revealLoading,
+    revealErr,
+    copied,
+    inputValue,
+    inputType,
+    copyEnabled,
+    copyKey,
+    toggleEye,
+    onInputChange,
+  } = useMaskedApiKeyField({ value, reveal, loadFailedLabel: labels.loadFailed });
 
   return (
     <div className={cn('flex min-w-0 flex-col gap-1.5', className)}>
@@ -119,14 +75,7 @@ export function VoiceApiKeyField({
           )}
           value={inputValue}
           placeholder={masked ? '••••••••' : placeholder}
-          onChange={(e) => {
-            const next = e.target.value;
-            if (masked && typeof revealed === 'string' && showKey && next !== revealed) {
-              setRevealed(undefined);
-              setShowKey(false);
-            }
-            onChange(next);
-          }}
+          onChange={(e) => onInputChange(e.target.value, onChange)}
         />
         {copyEnabled ? (
           <Button type="button" variant="secondary" className="px-2 py-1 text-xs" onClick={() => void copyKey()}>

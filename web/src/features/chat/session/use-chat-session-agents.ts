@@ -101,17 +101,22 @@ export function useChatSessionAgents(opts: {
     return () => window.removeEventListener('xopc-set-chat-agent', handler);
   }, [onChatAgentChange]);
 
-  useEffect(() => {
-    if (!sessionKey) return;
-    const a = getAgentIdFromWebSessionKey(sessionKey);
-    if (!a) return;
-    setPreferredAgentId((p) => (a !== p ? a : p));
-    try {
-      globalThis.localStorage?.setItem(WEBCHAT_AGENT_STORAGE_KEY, a);
-    } catch {
-      /* noop */
+  const trackedSessionAgentRef = useRef<string | null>(null);
+  if (sessionKey) {
+    const agentFromSession = getAgentIdFromWebSessionKey(sessionKey);
+    if (agentFromSession && trackedSessionAgentRef.current !== `${sessionKey}:${agentFromSession}`) {
+      trackedSessionAgentRef.current = `${sessionKey}:${agentFromSession}`;
+      if (preferredAgentIdRef.current !== agentFromSession) {
+        preferredAgentIdRef.current = agentFromSession;
+        setPreferredAgentId(agentFromSession);
+        try {
+          globalThis.localStorage?.setItem(WEBCHAT_AGENT_STORAGE_KEY, agentFromSession);
+        } catch {
+          /* noop */
+        }
+      }
     }
-  }, [sessionKey]);
+  }
 
   useLayoutEffect(() => {
     if (!isNewRoute) return;

@@ -8,11 +8,6 @@
 
 import { useEffect, type MutableRefObject } from 'react';
 
-import {
-  coerceReasoningLevel,
-  type ReasoningLevel,
-} from '@/features/chat/messages/messages.types';
-import { DEFAULT_THINKING } from '@/features/chat/session/chat-session-defaults';
 import type { SessionManager } from '@/features/chat/session/session-manager';
 
 export function useChatSessionWindowEvents(opts: {
@@ -22,11 +17,12 @@ export function useChatSessionWindowEvents(opts: {
   streamingRef: MutableRefObject<boolean>;
   sessionMgrRef: MutableRefObject<SessionManager>;
   loadSessionById: (key: string, offset: number) => Promise<unknown>;
-  refreshModelThinkingSupport: (model: string) => void | Promise<void>;
+  applyAgentConfig: (cfg: {
+    model: string;
+    thinkingLevel?: string | null;
+    reasoningLevel?: string | null;
+  }) => void;
   setSessionName: (name: string | null) => void;
-  setSessionModel: (model: string) => void;
-  setThinkingLevel: (level: string) => void;
-  setReasoningLevel: (level: ReasoningLevel) => void;
 }): void {
   const {
     sessionKey,
@@ -35,11 +31,8 @@ export function useChatSessionWindowEvents(opts: {
     streamingRef,
     sessionMgrRef,
     loadSessionById,
-    refreshModelThinkingSupport,
+    applyAgentConfig,
     setSessionName,
-    setSessionModel,
-    setThinkingLevel,
-    setReasoningLevel,
   } = opts;
 
   useEffect(() => {
@@ -70,21 +63,11 @@ export function useChatSessionWindowEvents(opts: {
       void sessionMgrRef.current
         .loadSessionAgentConfig(key)
         .then((cfg) => {
-          setSessionModel(cfg.model);
-          setThinkingLevel(cfg.thinkingLevel || DEFAULT_THINKING);
-          setReasoningLevel(coerceReasoningLevel(cfg.reasoningLevel));
-          void refreshModelThinkingSupport(cfg.model);
+          applyAgentConfig(cfg);
         })
         .catch(() => {});
     };
     window.addEventListener('config-reload', onConfigReload);
     return () => window.removeEventListener('config-reload', onConfigReload);
-  }, [
-    sessionKeyRef,
-    sessionMgrRef,
-    refreshModelThinkingSupport,
-    setSessionModel,
-    setThinkingLevel,
-    setReasoningLevel,
-  ]);
+  }, [sessionKeyRef, sessionMgrRef, applyAgentConfig]);
 }

@@ -1,5 +1,5 @@
 import { Loader2 } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { cn } from '@/lib/cn';
 import { apiUrl } from '@/lib/url';
@@ -19,33 +19,17 @@ export function GatewayRestartBanner() {
   const t = messages(language).updatePanel;
   const [restarting, setRestarting] = useState(false);
   const [timedOut, setTimedOut] = useState(false);
+  const pollGenRef = useRef(0);
 
-  useEffect(() => {
-    const handler = () => {
-      setRestarting(true);
-      setTimedOut(false);
-    };
-    window.addEventListener('gateway-restart-initiated', handler);
-    return () => window.removeEventListener('gateway-restart-initiated', handler);
-  }, []);
+  const startHealthPoll = useCallback(() => {
+    const gen = ++pollGenRef.current;
+    setRestarting(true);
+    setTimedOut(false);
 
-  useEffect(() => {
-    if (!restarting) return;
-
-    let cancelled = false;
-    const deadline = Date.now() + POLL_TIMEOUT_MS;
-
-    // Wait a short moment before starting to poll (gateway needs time to shut down).
-    const initialDelay = setTimeout(() => {
-      pollHealth();
-    }, 2000);
-
-    async function pollHealth() {
-      const pollOnce = async (): Promise<void> => {
-        if (cancelled || Date.now() >= deadline) {
-          if (!cancelled) setTimedOut(true);
-          return;
-        }
+    void (async () => {
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      const deadline = Date.now() + POLL_TIMEOUT_MS;
+      while (gen === pollGenRef.current && Date.now() < deadline) {
         try {
           const res = await fetch(apiUrl('/api/health'), { signal: AbortSignal.timeout(3000) });
           if (res.ok) {
@@ -55,24 +39,26 @@ export function GatewayRestartBanner() {
         } catch {
           // Expected while gateway is down.
         }
-        await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
-        await pollOnce();
-      };
-      await pollOnce();
-    }
+        await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+      }
+      if (gen === pollGenRef.current) {
+        setTimedOut(true);
+      }
+    })();
+  }, []);
 
+  useEffect(() => {
+    const handler = () => startHealthPoll();
+    window.addEventListener('gateway-restart-initiated', handler);
     return () => {
-      cancelled = true;
-      clearTimeout(initialDelay);
+      pollGenRef.current += 1;
+      window.removeEventListener('gateway-restart-initiated', handler);
     };
-  }, [restarting]);
+  }, [startHealthPoll]);
 
   const handleRetry = useCallback(() => {
-    setTimedOut(false);
-    // Re-trigger polling by toggling state.
-    setRestarting(false);
-    requestAnimationFrame(() => setRestarting(true));
-  }, []);
+    startHealthPoll();
+  }, [startHealthPoll]);
 
   if (!restarting) return null;
 

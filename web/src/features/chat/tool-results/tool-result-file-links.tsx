@@ -1,6 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { AlertCircle, ArrowDownToLine, Check, Copy, ExternalLink, Eye, File, FolderOpen, Loader2, Settings2 } from 'lucide-react';
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
@@ -22,6 +22,7 @@ import { isElectron } from '@/lib/electron-env';
 import { interaction } from '@/lib/interaction';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useWorkspacePreviewStore } from '@/stores/workspace-preview-store';
+import { useAsyncResource } from '@/lib/use-async-resource';
 
 import type { ExtractedFilePath } from './tool-result-file-paths';
 import { isImageMimeType, looksLikeAbsoluteFilePath } from './tool-result-file-paths';
@@ -257,9 +258,10 @@ function OffWorkspaceFileCard({
           />
         ) : null}
       </div>
-      {canImport ? (
+      {canImport && importDialogOpen ? (
         <ImportToWorkspaceDialog
-          open={importDialogOpen}
+          key={`${refInfo.fileRefId}:${defaultDestination}`}
+          open
           onOpenChange={setImportDialogOpen}
           fileRefId={refInfo.fileRefId!}
           sessionKey={sessionKey}
@@ -298,15 +300,6 @@ function ImportToWorkspaceDialog({
   const [destination, setDestination] = useState(defaultDestination);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // Reset state whenever the dialog re-opens (also reseeds destination if path changed).
-  useEffect(() => {
-    if (open) {
-      setDestination(defaultDestination);
-      setError(null);
-      setBusy(false);
-    }
-  }, [open, defaultDestination]);
 
   const submit = useCallback(async () => {
     setBusy(true);
@@ -365,6 +358,7 @@ function ImportToWorkspaceDialog({
                 value={destination}
                 onChange={(e) => setDestination(e.target.value)}
                 disabled={busy}
+                aria-label={m.importDialogDestinationLabel}
                 className={cn(
                   'mt-1 w-full rounded-md border border-edge bg-surface px-2 py-1.5 font-mono text-xs text-fg outline-none',
                   'focus:border-accent focus:ring-1 focus:ring-accent disabled:opacity-60',
@@ -413,19 +407,18 @@ export function ToolResultFileLinks({
   sessionKey?: string | null;
 }) {
   const setPreview = useWorkspacePreviewStore((s) => s.setPath);
-  const [refByAbs, setRefByAbs] = useState<Record<string, WorkspaceFileReference | null> | null>(null);
+  const [refOverrides, setRefOverrides] = useState<Record<string, WorkspaceFileReference | null>>({});
+  const pathsKey = useMemo(
+    () => paths.map((p) => `${p.absolutePath}\0${p.workspaceRelativePath ?? ''}`).join('\n'),
+    [paths],
+  );
+  const trimmedSessionKey = sessionKey?.trim() || undefined;
 
-  useEffect(() => {
-    if (paths.length === 0) {
-      setRefByAbs({});
-      return;
-    }
-    let cancelled = false;
-    void (async () => {
+  const refsResource = useAsyncResource(
+    async () => {
       const next: Record<string, WorkspaceFileReference | null> = {};
       await Promise.all(
         paths.map(async (p) => {
-          const sk = sessionKey?.trim() || undefined;
           const hasRealAbs = looksLikeAbsoluteFilePath(p.absolutePath);
           // Prefer rel first when available: it stays valid across remote/local host
           // splits (the original justification for `workspaceRelativePath`). Fall back
@@ -434,37 +427,38 @@ export function ToolResultFileLinks({
           // tool-result `/Users/.../acp-demo/index.html` that lives outside the workspace).
           let ref: WorkspaceFileReference | null = null;
           if (p.workspaceRelativePath) {
-            ref = await resolveWorkspaceFileReference(p.workspaceRelativePath, { sessionKey: sk });
+            ref = await resolveWorkspaceFileReference(p.workspaceRelativePath, { sessionKey: trimmedSessionKey });
             const exhausted = ref && (ref.scope === 'missing' || ref.scope === 'invalid');
             if (exhausted && hasRealAbs) {
-              const absRef = await resolveWorkspaceFileReference(p.absolutePath, { sessionKey: sk });
+              const absRef = await resolveWorkspaceFileReference(p.absolutePath, { sessionKey: trimmedSessionKey });
               if (absRef && absRef.scope !== 'missing' && absRef.scope !== 'invalid') {
                 ref = absRef;
               }
             }
           } else {
-            ref = await resolveWorkspaceFileReference(p.absolutePath, { sessionKey: sk });
+            ref = await resolveWorkspaceFileReference(p.absolutePath, { sessionKey: trimmedSessionKey });
           }
-          if (!cancelled) {
-            next[p.absolutePath] = ref;
-          }
+          next[p.absolutePath] = ref;
         }),
       );
-      if (!cancelled) {
-        setRefByAbs(next);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [paths, sessionKey]);
+      return next;
+    },
+    [pathsKey, trimmedSessionKey],
+    {
+      enabled: paths.length > 0,
+      initial: null as Record<string, WorkspaceFileReference | null> | null,
+      errorData: {} as Record<string, WorkspaceFileReference | null>,
+    },
+  );
 
   if (paths.length === 0) {
     return null;
   }
-  if (refByAbs === null) {
+  if (refsResource.data === null) {
     return null;
   }
+
+  const refByAbs = { ...refsResource.data, ...refOverrides };
 
   const visible = paths.flatMap((p) => {
     const refInfo = refByAbs[p.absolutePath] ?? null;
@@ -537,11 +531,10 @@ export function ToolResultFileLinks({
               refInfo={p.refInfo}
               sessionKey={sessionKey}
               onImported={(result) => {
-                setRefByAbs((prev) => {
-                  if (!prev) return prev;
-                  const next = { ...prev };
-                  next[p.absolutePath] = {
-                    ...prev[p.absolutePath],
+                setRefOverrides((prev) => ({
+                  ...prev,
+                  [p.absolutePath]: {
+                    ...refByAbs[p.absolutePath],
                     fileRefId: result.newFileRefId,
                     scope: 'workspace',
                     locationKind: undefined,
@@ -553,9 +546,8 @@ export function ToolResultFileLinks({
                     capabilities: ['preview', 'edit', 'openExternal', 'revealInFolder', 'copyPath'],
                     mtimeMs: result.mtimeMs,
                     errorCode: undefined,
-                  } as WorkspaceFileReference;
-                  return next;
-                });
+                  } as WorkspaceFileReference,
+                }));
                 setPreview(result.workspaceRelativePath);
               }}
             />

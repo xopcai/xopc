@@ -1,6 +1,7 @@
 import { LoaderCircle, Play, Plug, Square, Webhook } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useReducer } from 'react';
 
+import { uiPatchReducer, type UiPatchAction } from '@/lib/settings-form-draft';
 import { AgentDefaultsField } from '../../agent-defaults-field';
 import { inputClassName } from '../../defaults-field-styles';
 
@@ -8,6 +9,26 @@ import { ActionResultBox, BackendModeCard } from './backend-mode-card';
 import type { BrowserMessages, LaunchedCdpInstance } from './types';
 
 type ActionStatus = 'idle' | 'pending' | 'ok' | 'error';
+
+type CdpCardUi = {
+  instances: LaunchedCdpInstance[];
+  launchStatus: ActionStatus;
+  launchMessage: string | null;
+  testStatus: ActionStatus;
+  testMessage: string | null;
+  executablePath: string;
+};
+
+type CdpCardUiAction = UiPatchAction<CdpCardUi>;
+
+const initialCdpCardUi: CdpCardUi = {
+  instances: [],
+  launchStatus: 'idle',
+  launchMessage: null,
+  testStatus: 'idle',
+  testMessage: null,
+  executablePath: '',
+};
 
 export function CdpCard({
   m,
@@ -26,17 +47,13 @@ export function CdpCard({
   listInstances: () => Promise<LaunchedCdpInstance[]>;
   ping: (url: string) => Promise<{ reachable: boolean; browser?: string | null; error?: string }>;
 }) {
-  const [instances, setInstances] = useState<LaunchedCdpInstance[]>([]);
-  const [launchStatus, setLaunchStatus] = useState<ActionStatus>('idle');
-  const [launchMessage, setLaunchMessage] = useState<string | null>(null);
-  const [testStatus, setTestStatus] = useState<ActionStatus>('idle');
-  const [testMessage, setTestMessage] = useState<string | null>(null);
-  const [executablePath, setExecutablePath] = useState('');
+  const [ui, dispatch] = useReducer(uiPatchReducer<CdpCardUi>, initialCdpCardUi);
+  const { instances, launchStatus, launchMessage, testStatus, testMessage, executablePath } = ui;
 
   const refreshInstances = useCallback(async () => {
     try {
       const list = await listInstances();
-      setInstances(list);
+      dispatch({ type: 'patch', patch: { instances: list } });
     } catch {
       // silent — not blocking
     }
@@ -50,17 +67,26 @@ export function CdpCard({
 
   const onLaunch = useCallback(async () => {
     if (launchStatus === 'pending') return;
-    setLaunchStatus('pending');
-    setLaunchMessage(null);
+    dispatch({ type: 'patch', patch: { launchStatus: 'pending', launchMessage: null } });
     try {
       const result = await launch(executablePath.trim() || undefined);
-      setLaunchStatus('ok');
-      setLaunchMessage(m.browserCdpLaunchedAtPort.replace('{{port}}', String(result.port)));
+      dispatch({
+        type: 'patch',
+        patch: {
+          launchStatus: 'ok',
+          launchMessage: m.browserCdpLaunchedAtPort.replace('{{port}}', String(result.port)),
+        },
+      });
       onCdpUrlChange(result.wsEndpoint);
       await refreshInstances();
     } catch (e) {
-      setLaunchStatus('error');
-      setLaunchMessage(e instanceof Error ? e.message : String(e));
+      dispatch({
+        type: 'patch',
+        patch: {
+          launchStatus: 'error',
+          launchMessage: e instanceof Error ? e.message : String(e),
+        },
+      });
     }
   }, [executablePath, launch, launchStatus, m.browserCdpLaunchedAtPort, onCdpUrlChange, refreshInstances]);
 
@@ -74,20 +100,37 @@ export function CdpCard({
 
   const onTest = useCallback(async () => {
     if (!cdpUrl.trim()) return;
-    setTestStatus('pending');
-    setTestMessage(null);
+    dispatch({ type: 'patch', patch: { testStatus: 'pending', testMessage: null } });
     try {
       const result = await ping(cdpUrl.trim());
       if (result.reachable) {
-        setTestStatus('ok');
-        setTestMessage(m.browserCdpReachable.replace('{{browser}}', result.browser ?? '—'));
+        dispatch({
+          type: 'patch',
+          patch: {
+            testStatus: 'ok',
+            testMessage: m.browserCdpReachable.replace('{{browser}}', result.browser ?? '—'),
+          },
+        });
       } else {
-        setTestStatus('error');
-        setTestMessage(m.browserCdpUnreachable.replace('{{error}}', result.error ?? '—'));
+        dispatch({
+          type: 'patch',
+          patch: {
+            testStatus: 'error',
+            testMessage: m.browserCdpUnreachable.replace('{{error}}', result.error ?? '—'),
+          },
+        });
       }
     } catch (e) {
-      setTestStatus('error');
-      setTestMessage(m.browserCdpUnreachable.replace('{{error}}', e instanceof Error ? e.message : String(e)));
+      dispatch({
+        type: 'patch',
+        patch: {
+          testStatus: 'error',
+          testMessage: m.browserCdpUnreachable.replace(
+            '{{error}}',
+            e instanceof Error ? e.message : String(e),
+          ),
+        },
+      });
     }
   }, [cdpUrl, m.browserCdpReachable, m.browserCdpUnreachable, ping]);
 
@@ -120,7 +163,7 @@ export function CdpCard({
               className={inputClassName()}
               value={executablePath}
               placeholder="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-              onChange={(e) => setExecutablePath(e.target.value)}
+              onChange={(e) => dispatch({ type: 'patch', patch: { executablePath: e.target.value } })}
               autoComplete="off"
             />
           </AgentDefaultsField>

@@ -1,5 +1,5 @@
 import { Target, Loader2 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useReducer, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { ModelSelector } from '@/features/chat/model/model-selector';
@@ -23,6 +23,39 @@ function inputClassName(): string {
   );
 }
 
+type GoalsFormDraft = {
+  form: GoalsConfigState | null;
+  baseline: GoalsConfigState | null;
+};
+
+type GoalsFormAction =
+  | { type: 'reset' }
+  | { type: 'sync'; value: GoalsConfigState }
+  | { type: 'patch'; patch: Partial<GoalsConfigState> }
+  | { type: 'discard' }
+  | { type: 'saved'; value: GoalsConfigState };
+
+function goalsFormReducer(state: GoalsFormDraft, action: GoalsFormAction): GoalsFormDraft {
+  switch (action.type) {
+    case 'reset':
+      return { form: null, baseline: null };
+    case 'sync': {
+      const snapshot = structuredClone(action.value);
+      return { form: snapshot, baseline: structuredClone(snapshot) };
+    }
+    case 'patch':
+      return { ...state, form: state.form ? { ...state.form, ...action.patch } : null };
+    case 'discard':
+      return state.baseline
+        ? { form: structuredClone(state.baseline), baseline: state.baseline }
+        : state;
+    case 'saved': {
+      const snapshot = structuredClone(action.value);
+      return { form: snapshot, baseline: structuredClone(snapshot) };
+    }
+  }
+}
+
 export function GoalsConfigSection({ hasToken }: { hasToken: boolean }) {
   const language = useLocaleStore((s) => s.language);
   const t = messages(language).goalsSettings;
@@ -32,23 +65,30 @@ export function GoalsConfigSection({ hasToken }: { hasToken: boolean }) {
     () => (data?.payload?.config !== undefined ? normalizeGoalsConfigFromConfig(data.payload.config) : null),
     [data],
   );
-  const [form, setForm] = useState<GoalsConfigState | null>(null);
-  const [baseline, setBaseline] = useState<GoalsConfigState | null>(null);
+  const [formDraft, dispatchForm] = useReducer(goalsFormReducer, { form: null, baseline: null });
+  const form = formDraft.form;
+  const baseline = formDraft.baseline;
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const dirtyRef = useRef(false);
+  const trackedParsedRef = useRef<GoalsConfigState | null>(null);
 
-  useEffect(() => {
-    if (!hasToken || parsed === null || dirtyRef.current) return;
-    setForm(structuredClone(parsed));
-    setBaseline(structuredClone(parsed));
-  }, [hasToken, parsed]);
+  if (!hasToken) {
+    if (trackedParsedRef.current !== null) {
+      trackedParsedRef.current = null;
+      dispatchForm({ type: 'reset' });
+      dirtyRef.current = false;
+    }
+  } else if (parsed !== null && !dirtyRef.current && trackedParsedRef.current !== parsed) {
+    trackedParsedRef.current = parsed;
+    dispatchForm({ type: 'sync', value: parsed });
+  }
 
   const dirty = form && baseline && JSON.stringify(form) !== JSON.stringify(baseline);
 
   const update = useCallback((patch: Partial<GoalsConfigState>) => {
     dirtyRef.current = true;
-    setForm((f) => (f ? { ...f, ...patch } : null));
+    dispatchForm({ type: 'patch', patch });
   }, []);
 
   if (!hasToken || !form) {
@@ -63,7 +103,12 @@ export function GoalsConfigSection({ hasToken }: { hasToken: boolean }) {
     <SettingsFormSection>
       <SettingsFormSectionHeader icon={Target} title={t.title} subtitle={t.hint} />
       <div className="mb-4 flex justify-end gap-2">
-        <Button type="button" variant="secondary" disabled={!dirty || saving} onClick={() => baseline && setForm(structuredClone(baseline))}>
+        <Button
+          type="button"
+          variant="secondary"
+          disabled={!dirty || saving}
+          onClick={() => dispatchForm({ type: 'discard' })}
+        >
           {t.discard}
         </Button>
         <Button
@@ -77,7 +122,7 @@ export function GoalsConfigSection({ hasToken }: { hasToken: boolean }) {
               try {
                 await patchGoalsConfig(form);
                 dirtyRef.current = false;
-                setBaseline(structuredClone(form));
+                dispatchForm({ type: 'saved', value: form });
               } catch (e) {
                 setError(e instanceof Error ? e.message : t.saveError);
               } finally {

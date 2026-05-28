@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
+import { useDebounce } from 'use-debounce';
 
 import { fetchWorkspaceBrowseEntries, searchWorkspaceFiles, type AtMentionItem } from '@/features/chat/palette/at-mention-api';
 import { getRecentAtPaths } from '@/features/chat/palette/at-mention-recent';
+import { useAsyncResource } from '@/lib/use-async-resource';
 
 const DEBOUNCE_MS = 150;
 const MAX_ITEMS = 15;
@@ -40,7 +42,7 @@ export function detectAtRange(text: string, cursor: number): AtRange | null {
   };
 }
 
-export function isBrowseModeQuery(query: string): boolean {
+function isBrowseModeQuery(query: string): boolean {
   const q = query.trim();
   return q.length > 0 && q.endsWith('/') && !/^https?:\/\//i.test(q);
 }
@@ -56,6 +58,11 @@ export function browseParentDir(dir: string): string {
   return i <= 0 ? '' : d.slice(0, i);
 }
 
+function clampPaletteIndex(index: number, length: number): number {
+  if (length === 0) return 0;
+  return Math.min(index, length - 1);
+}
+
 export function useAtMentionPicker(
   value: string,
   cursor: number,
@@ -68,11 +75,6 @@ export function useAtMentionPicker(
   },
 ) {
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const [items, setItems] = useState<AtMentionItem[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const requestIdRef = useRef(0);
 
   const atRange = useMemo(() => {
     if (options.precomputedAtRange !== undefined) {
@@ -86,125 +88,83 @@ export function useAtMentionPicker(
   }, [value, cursor, options.slashPaletteOpen, options.isComposing, options.precomputedAtRange]);
 
   const pickerActive = atRange !== null;
-  const [debouncedQuery, setDebouncedQuery] = useState('');
+  const rawQuery = pickerActive ? (atRange?.query ?? '') : '';
+  const [debouncedQueryRaw] = useDebounce(rawQuery, DEBOUNCE_MS);
+  const debouncedQuery = pickerActive ? debouncedQueryRaw : '';
 
-  useEffect(() => {
-    if (!pickerActive) {
-      if (debounceRef.current) {
-        clearTimeout(debounceRef.current);
-        debounceRef.current = null;
+  const sessionKey = options.sessionKey?.trim() ?? '';
+  const itemsResource = useAsyncResource(
+    async () => {
+      if (!sessionKey) {
+        return [] as AtMentionItem[];
       }
-      setDebouncedQuery('');
-      return;
-    }
-    const q = atRange.query;
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      debounceRef.current = null;
-      setDebouncedQuery(q);
-    }, DEBOUNCE_MS);
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
-  }, [pickerActive, atRange?.query]);
 
-  useEffect(() => {
-    if (!pickerActive) {
-      setItems([]);
-      setLoading(false);
-      setError(null);
-      setSelectedIndex(0);
-      return;
-    }
-
-    const sk = options.sessionKey?.trim();
-    if (!sk) {
-      setItems([]);
-      setError(null);
-      setLoading(false);
-      return;
-    }
-
-    const rid = ++requestIdRef.current;
-    let cancelled = false;
-
-    (async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        let next: AtMentionItem[] = [];
-
-        if (isBrowseModeQuery(debouncedQuery)) {
-          const dir = browseDirFromQuery(debouncedQuery);
-          const entries = await fetchWorkspaceBrowseEntries(dir, { sessionKey: sk });
-          let mapped = entries.map((e) => ({
-            name: e.name,
-            relativePath: e.path,
-            isDirectory: e.isDirectory,
-          }));
-          const browseUp: AtMentionItem = {
-            name: '..',
-            relativePath: '',
-            isDirectory: true,
-            isBrowseUp: true,
-          };
-          next = dir ? [browseUp, ...mapped] : mapped;
-        } else {
-          const raw = await searchWorkspaceFiles(debouncedQuery, {
-            sessionKey: sk,
-            limit: MAX_ITEMS,
-          });
-          const recentPaths = getRecentAtPaths(sk);
-          const recentItems: AtMentionItem[] = [];
-          const seen = new Set(raw.map((r) => r.relativePath));
-          for (const p of recentPaths) {
-            if (seen.has(p)) continue;
-            seen.add(p);
-            const base = p.replace(/\/$/, '').split('/').pop() ?? p;
-            recentItems.push({
-              name: base,
-              relativePath: p,
-              isDirectory: p.endsWith('/'),
-              isRecent: true,
-            });
-            if (recentItems.length >= 5) break;
-          }
-          next = [...recentItems, ...raw];
-        }
-
-        if (cancelled || rid !== requestIdRef.current) return;
-        setItems(next);
-      } catch (e) {
-        if (cancelled || rid !== requestIdRef.current) return;
-        setItems([]);
-        setError(e instanceof Error ? e.message : String(e));
-      } finally {
-        if (!cancelled && rid === requestIdRef.current) {
-          setLoading(false);
-        }
+      if (isBrowseModeQuery(debouncedQuery)) {
+        const dir = browseDirFromQuery(debouncedQuery);
+        const entries = await fetchWorkspaceBrowseEntries(dir, { sessionKey });
+        const mapped = entries.map((e) => ({
+          name: e.name,
+          relativePath: e.path,
+          isDirectory: e.isDirectory,
+        }));
+        const browseUp: AtMentionItem = {
+          name: '..',
+          relativePath: '',
+          isDirectory: true,
+          isBrowseUp: true,
+        };
+        return dir ? [browseUp, ...mapped] : mapped;
       }
-    })();
 
-    return () => {
-      cancelled = true;
-    };
-  }, [pickerActive, debouncedQuery, options.sessionKey]);
+      const raw = await searchWorkspaceFiles(debouncedQuery, {
+        sessionKey,
+        limit: MAX_ITEMS,
+      });
+      const recentPaths = getRecentAtPaths(sessionKey);
+      const recentItems: AtMentionItem[] = [];
+      const seen = new Set(raw.map((r) => r.relativePath));
+      for (const p of recentPaths) {
+        if (seen.has(p)) continue;
+        seen.add(p);
+        const base = p.replace(/\/$/, '').split('/').pop() ?? p;
+        recentItems.push({
+          name: base,
+          relativePath: p,
+          isDirectory: p.endsWith('/'),
+          isRecent: true,
+        });
+        if (recentItems.length >= 5) break;
+      }
+      return [...recentItems, ...raw];
+    },
+    [debouncedQuery, sessionKey],
+    {
+      enabled: pickerActive && Boolean(sessionKey),
+      initial: [] as AtMentionItem[],
+      errorData: [] as AtMentionItem[],
+    },
+  );
+
+  const items = pickerActive ? itemsResource.data : [];
+  const loading = pickerActive ? itemsResource.loading : false;
+  const error =
+    pickerActive && itemsResource.error != null
+      ? itemsResource.error instanceof Error
+        ? itemsResource.error.message
+        : String(itemsResource.error)
+      : null;
 
   const rangeStart = atRange?.start;
   const rangeEnd = atRange?.end;
-  const trackedIndexKeyRef = useRef({ s: rangeStart, e: rangeEnd, q: debouncedQuery });
-  if (
-    trackedIndexKeyRef.current.s !== rangeStart ||
-    trackedIndexKeyRef.current.e !== rangeEnd ||
-    trackedIndexKeyRef.current.q !== debouncedQuery
-  ) {
-    trackedIndexKeyRef.current = { s: rangeStart, e: rangeEnd, q: debouncedQuery };
-    setSelectedIndex(0);
-  } else if (selectedIndex >= items.length && items.length > 0) {
-    setSelectedIndex(items.length - 1);
-  } else if (selectedIndex !== 0 && items.length === 0) {
-    setSelectedIndex(0);
+  const selectionKey = `${rangeStart ?? ''}:${rangeEnd ?? ''}:${debouncedQuery}`;
+  const trackedSelectionKeyRef = useRef(selectionKey);
+  if (trackedSelectionKeyRef.current !== selectionKey) {
+    trackedSelectionKeyRef.current = selectionKey;
+    if (selectedIndex !== 0) {
+      setSelectedIndex(0);
+    }
   }
+  const resolvedSelectedIndex = clampPaletteIndex(selectedIndex, items.length);
 
   const onNavigate = useCallback(
     (dir: 'up' | 'down') => {
@@ -221,7 +181,7 @@ export function useAtMentionPicker(
     open: pickerActive,
     atRange,
     items,
-    selectedIndex,
+    selectedIndex: resolvedSelectedIndex,
     query: atRange?.query ?? '',
     loading,
     error,

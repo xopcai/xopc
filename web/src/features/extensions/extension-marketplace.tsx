@@ -1,6 +1,8 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { ArrowLeft, CheckCircle, Loader2, Package, Search, Trash2, X } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useReducer, useState } from 'react';
+
+import { uiPatchReducer, type UiPatchAction } from '@/lib/settings-form-draft';
 import { Link } from 'react-router-dom';
 import useSWR, { useSWRConfig } from 'swr';
 
@@ -45,6 +47,26 @@ function extensionInstallKind(
   return 'user';
 }
 
+type MarketplaceUi = {
+  q: string;
+  debounced: string;
+  detailPkg: string | null;
+  rowBusy: string | null;
+  actionError: string | null;
+  restartHint: string | null;
+};
+
+type MarketplaceUiAction = UiPatchAction<MarketplaceUi>;
+
+const initialMarketplaceUi: MarketplaceUi = {
+  q: '',
+  debounced: '',
+  detailPkg: null,
+  rowBusy: null,
+  actionError: null,
+  restartHint: null,
+};
+
 export function ExtensionMarketplacePanel({ className }: { className?: string }) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
@@ -52,16 +74,12 @@ export function ExtensionMarketplacePanel({ className }: { className?: string })
   const hasToken = useGatewayStore((s) => Boolean(s.token));
   const extensions = useExtensions();
   const { mutate } = useSWRConfig();
-  const [q, setQ] = useState('');
-  const [debounced, setDebounced] = useState('');
+  const [ui, dispatch] = useReducer(uiPatchReducer<MarketplaceUi>, initialMarketplaceUi);
+  const { q, debounced, detailPkg, rowBusy, actionError, restartHint } = ui;
   const listKey = hasToken ? `marketplace-${debounced}` : null;
-  const [detailPkg, setDetailPkg] = useState<string | null>(null);
-  const [rowBusy, setRowBusy] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
-  const [restartHint, setRestartHint] = useState<string | null>(null);
 
   useEffect(() => {
-    const t = window.setTimeout(() => setDebounced(q.trim()), 300);
+    const t = window.setTimeout(() => dispatch({ type: 'patch', patch: { debounced: q.trim() } }), 300);
     return () => window.clearTimeout(t);
   }, [q]);
 
@@ -84,20 +102,21 @@ export function ExtensionMarketplacePanel({ className }: { className?: string })
 
   const runInstall = useCallback(
     async (packageName: string, overwrite: boolean) => {
-      setActionError(null);
-      setRestartHint(null);
-      setRowBusy(packageName);
+      dispatch({ type: 'patch', patch: { actionError: null, restartHint: null, rowBusy: packageName } });
       try {
         const payload = await installExtensionFromMarketplace({ name: packageName, overwrite });
         refetchExtensions();
         if (payload.requiresGatewayRestart) {
-          setRestartHint(copy.marketplaceRestartHint);
+          dispatch({ type: 'patch', patch: { restartHint: copy.marketplaceRestartHint } });
         }
       } catch (e) {
-        setActionError(e instanceof Error ? e.message : copy.marketplaceInstallFailed);
+        dispatch({
+          type: 'patch',
+          patch: { actionError: e instanceof Error ? e.message : copy.marketplaceInstallFailed },
+        });
         throw e;
       } finally {
-        setRowBusy(null);
+        dispatch({ type: 'patch', patch: { rowBusy: null } });
       }
     },
     [copy.marketplaceInstallFailed, copy.marketplaceRestartHint, refetchExtensions],
@@ -105,20 +124,21 @@ export function ExtensionMarketplacePanel({ className }: { className?: string })
 
   const runUninstall = useCallback(
     async (extensionId: string) => {
-      setActionError(null);
-      setRestartHint(null);
-      setRowBusy(extensionId);
+      dispatch({ type: 'patch', patch: { actionError: null, restartHint: null, rowBusy: extensionId } });
       try {
         const payload = await uninstallExtensionFromDisk(extensionId);
         refetchExtensions();
         if (payload.requiresGatewayRestart) {
-          setRestartHint(copy.marketplaceRestartHint);
+          dispatch({ type: 'patch', patch: { restartHint: copy.marketplaceRestartHint } });
         }
       } catch (e) {
-        setActionError(e instanceof Error ? e.message : copy.marketplaceUninstallFailed);
+        dispatch({
+          type: 'patch',
+          patch: { actionError: e instanceof Error ? e.message : copy.marketplaceUninstallFailed },
+        });
         throw e;
       } finally {
-        setRowBusy(null);
+        dispatch({ type: 'patch', patch: { rowBusy: null } });
       }
     },
     [copy.marketplaceRestartHint, copy.marketplaceUninstallFailed, refetchExtensions],
@@ -137,7 +157,7 @@ export function ExtensionMarketplacePanel({ className }: { className?: string })
         <input
           type="search"
           value={q}
-          onChange={(e) => setQ(e.target.value)}
+          onChange={(e) => dispatch({ type: 'patch', patch: { q: e.target.value } })}
           placeholder={copy.marketplaceSearchPlaceholder}
           className="ui-input h-10 w-full rounded-lg border border-edge bg-surface-base pl-9 pr-3 text-sm text-fg placeholder:text-fg-muted"
         />
@@ -167,11 +187,11 @@ export function ExtensionMarketplacePanel({ className }: { className?: string })
                     role="button"
                     tabIndex={0}
                     aria-label={`${e.name}, ${copy.marketplaceDetailTitle}`}
-                    onClick={() => setDetailPkg(e.id)}
+                    onClick={() => dispatch({ type: 'patch', patch: { detailPkg: e.id } })}
                     onKeyDown={(ev) => {
                       if (ev.key === 'Enter' || ev.key === ' ') {
                         ev.preventDefault();
-                        setDetailPkg(e.id);
+                        dispatch({ type: 'patch', patch: { detailPkg: e.id } });
                       }
                     }}
                     className={cn(
@@ -290,7 +310,7 @@ export function ExtensionMarketplacePanel({ className }: { className?: string })
           packageName={detailPkg}
           copy={copy}
           extensions={extensions}
-          onClose={() => setDetailPkg(null)}
+          onClose={() => dispatch({ type: 'patch', patch: { detailPkg: null } })}
           onInstall={runInstall}
           onUninstall={runUninstall}
         />

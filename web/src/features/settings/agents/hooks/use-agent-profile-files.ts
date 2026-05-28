@@ -1,5 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
-import type { Dispatch, SetStateAction } from 'react';
+import { useCallback, useEffect, useRef, useReducer, useState, type Dispatch, type SetStateAction } from 'react';
 import { useDebouncedCallback } from 'use-debounce';
 
 import {
@@ -12,6 +11,41 @@ import { useAsyncResource } from '@/lib/use-async-resource';
 import type { AgentPanel } from '../utils';
 
 type ProfileFiles = Awaited<ReturnType<typeof fetchAgentProfileFiles>>;
+
+type FileEditorState = {
+  draft: string;
+  editorNonce: number;
+  loadedKey: string;
+};
+
+type FileEditorAction =
+  | { type: 'load'; key: string; content: string }
+  | { type: 'setDraft'; value: string }
+  | { type: 'clear' }
+  | { type: 'resetViewMode' };
+
+const initialFileEditor: FileEditorState = {
+  draft: '',
+  editorNonce: 0,
+  loadedKey: '',
+};
+
+function fileEditorReducer(state: FileEditorState, action: FileEditorAction): FileEditorState {
+  switch (action.type) {
+    case 'load':
+      return {
+        draft: action.content,
+        editorNonce: state.editorNonce + 1,
+        loadedKey: action.key,
+      };
+    case 'setDraft':
+      return { ...state, draft: action.value };
+    case 'clear':
+      return { draft: '', editorNonce: state.editorNonce, loadedKey: '' };
+    case 'resetViewMode':
+      return state;
+  }
+}
 
 export function useAgentProfileFiles(options: {
   panel: AgentPanel;
@@ -32,12 +66,13 @@ export function useAgentProfileFiles(options: {
   const files = filesResource.data;
   const setFiles = filesResource.setData;
   const filesLoading = filesResource.loading;
-  const [activeFile, setActiveFile] = useState<string | null>(null);
-  const [fileDraft, setFileDraft] = useState('');
+  const [activeFile, setActiveFileState] = useState<string | null>(null);
+  const [fileEditor, dispatchFileEditor] = useReducer(fileEditorReducer, initialFileEditor);
   const [fileSaving, setFileSaving] = useState(false);
   const [filesViewMode, setFilesViewMode] = useState<'edit' | 'preview'>('edit');
-  const [profileFileLoading, setProfileFileLoading] = useState(false);
-  const [profileEditorNonce, setProfileEditorNonce] = useState(0);
+
+  const fileDraft = fileEditor.draft;
+  const profileEditorNonce = fileEditor.editorNonce;
 
   const fileDraftRef = useRef(fileDraft);
   fileDraftRef.current = fileDraft;
@@ -48,6 +83,19 @@ export function useAgentProfileFiles(options: {
   const overviewSaveProfileMarkdownRef = useRef<(() => Promise<void>) | null>(null);
   const profileFileKeyRef = useRef('');
   const profileSyncedRef = useRef('');
+  const trackedProfileKeyRef = useRef('');
+  const flushProfileSaveRef = useRef<() => void>(() => {});
+
+  const profileFileEnabled = Boolean(activeFile && selectedId && hasToken);
+  const profileFileResource = useAsyncResource(
+    () =>
+      activeFile && selectedId
+        ? fetchAgentProfileFileContent(selectedId, activeFile).catch(() => '')
+        : Promise.resolve(''),
+    [activeFile, selectedId, hasToken],
+    { enabled: profileFileEnabled, initial: '', errorData: '' },
+  );
+  const profileFileLoading = profileFileResource.loading;
 
   const saveProfileMarkdownDebounced = useDebouncedCallback(
     async () => {
@@ -87,7 +135,6 @@ export function useAgentProfileFiles(options: {
     800,
   );
 
-  const flushProfileSaveRef = useRef(saveProfileMarkdownDebounced.flush);
   flushProfileSaveRef.current = saveProfileMarkdownDebounced.flush;
 
   useEffect(() => {
@@ -96,58 +143,33 @@ export function useAgentProfileFiles(options: {
     };
   }, []);
 
-  useEffect(() => {
-    if (!activeFile || !selectedId || !hasToken) {
-      return;
+  const trackedPanelRef = useRef(panel);
+  if (trackedPanelRef.current !== panel) {
+    if (trackedPanelRef.current === 'files') {
+      flushProfileSaveRef.current();
     }
-    let cancelled = false;
-    saveProfileMarkdownDebounced.flush();
-    setProfileFileLoading(true);
-    void fetchAgentProfileFileContent(selectedId, activeFile)
-      .then((c) => {
-        if (cancelled) {
-          return;
-        }
-        const key = `${selectedId}:${activeFile}`;
-        profileFileKeyRef.current = key;
-        profileSyncedRef.current = c;
-        setFileDraft(c);
-        setProfileEditorNonce((n) => n + 1);
-      })
-      .catch(() => {
-        if (!cancelled) {
-          const key = `${selectedId}:${activeFile}`;
-          profileFileKeyRef.current = key;
-          profileSyncedRef.current = '';
-          setFileDraft('');
-          setProfileEditorNonce((n) => n + 1);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setProfileFileLoading(false);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [activeFile, selectedId, hasToken, saveProfileMarkdownDebounced]);
+    trackedPanelRef.current = panel;
+  }
 
-  useEffect(() => {
-    if (!activeFile || !selectedId || profileFileLoading) {
-      return;
-    }
-    saveProfileMarkdownDebounced();
-  }, [fileDraft, activeFile, selectedId, profileFileLoading, saveProfileMarkdownDebounced]);
+  const profileFileKey = activeFile && selectedId ? `${selectedId}:${activeFile}` : '';
 
-  useEffect(() => {
-    if (panel !== 'files') {
-      return;
+  if (profileFileKey !== trackedProfileKeyRef.current) {
+    flushProfileSaveRef.current();
+    trackedProfileKeyRef.current = profileFileKey;
+  }
+  if (!profileFileKey) {
+    if (fileEditor.loadedKey !== '') {
+      dispatchFileEditor({ type: 'clear' });
     }
-    return () => {
-      saveProfileMarkdownDebounced.flush();
-    };
-  }, [panel, saveProfileMarkdownDebounced]);
+  } else if (!profileFileLoading && fileEditor.loadedKey !== profileFileKey) {
+    profileFileKeyRef.current = profileFileKey;
+    profileSyncedRef.current = profileFileResource.data;
+    dispatchFileEditor({
+      type: 'load',
+      key: profileFileKey,
+      content: profileFileResource.data,
+    });
+  }
 
   const trackedViewModeKeyRef = useRef({ activeFile, selectedId });
   if (
@@ -157,6 +179,22 @@ export function useAgentProfileFiles(options: {
     trackedViewModeKeyRef.current = { activeFile, selectedId };
     setFilesViewMode('edit');
   }
+
+  const setActiveFile = useCallback((value: string | null) => {
+    flushProfileSaveRef.current();
+    setActiveFileState(value);
+  }, []);
+
+  const setFileDraft = useCallback(
+    (value: SetStateAction<string>) => {
+      dispatchFileEditor({
+        type: 'setDraft',
+        value: typeof value === 'function' ? value(fileDraftRef.current) : value,
+      });
+      saveProfileMarkdownDebounced();
+    },
+    [saveProfileMarkdownDebounced],
+  );
 
   return {
     files,

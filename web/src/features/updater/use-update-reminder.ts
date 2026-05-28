@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { NPM_PENDING_RESTART_KEY, useUpdateStatus } from '@/features/updater/use-update-status';
 
@@ -54,8 +54,7 @@ export function useUpdateReminder() {
   const { npm, electron, isElectron, electronQuitAndInstall, runNpmUpdate, npmUpdateRunning } =
     useUpdateStatus();
   const [dismissed, setDismissed] = useState<Dismissed>(readDismissed);
-  const [hideDownloading, setHideDownloading] = useState(false);
-  const [hideElectronError, setHideElectronError] = useState(false);
+  const [dismissUi, setDismissUi] = useState({ downloading: false, electronError: false });
   const [pendingNpmRestartVersion, setPendingNpmRestartVersion] = useState<string | null>(() => {
     if (typeof window === 'undefined' || isElectronEnv) return null;
     try {
@@ -69,17 +68,31 @@ export function useUpdateReminder() {
     }
   });
 
-  useEffect(() => {
-    if (electron?.state !== 'downloading') {
-      setHideDownloading(false);
+  const trackedElectronStateRef = useRef(electron?.state);
+  if (trackedElectronStateRef.current !== electron?.state) {
+    trackedElectronStateRef.current = electron?.state;
+    if (electron?.state !== 'downloading' && dismissUi.downloading) {
+      setDismissUi((ui) => ({ ...ui, downloading: false }));
     }
-  }, [electron?.state]);
+    if (electron?.state !== 'error' && dismissUi.electronError) {
+      setDismissUi((ui) => ({ ...ui, electronError: false }));
+    }
+  }
 
-  useEffect(() => {
-    if (electron?.state !== 'error') {
-      setHideElectronError(false);
+  const clearedPendingRestartRef = useRef<string | null>(null);
+  if (
+    pendingNpmRestartVersion &&
+    npm?.currentVersion === pendingNpmRestartVersion &&
+    clearedPendingRestartRef.current !== pendingNpmRestartVersion
+  ) {
+    clearedPendingRestartRef.current = pendingNpmRestartVersion;
+    try {
+      sessionStorage.removeItem(NPM_PENDING_RESTART_KEY);
+    } catch {
+      /* ignore */
     }
-  }, [electron?.state]);
+    setPendingNpmRestartVersion(null);
+  }
 
   useEffect(() => {
     if (isElectron) return;
@@ -103,20 +116,8 @@ export function useUpdateReminder() {
   }, [isElectron]);
 
   useEffect(() => {
-    if (!npm?.currentVersion || !pendingNpmRestartVersion) return;
-    if (npm.currentVersion === pendingNpmRestartVersion) {
-      try {
-        sessionStorage.removeItem(NPM_PENDING_RESTART_KEY);
-      } catch {
-        /* ignore */
-      }
-      setPendingNpmRestartVersion(null);
-    }
-  }, [npm?.currentVersion, pendingNpmRestartVersion]);
-
-  useEffect(() => {
     const onRecheck = () => {
-      setHideDownloading(false);
+      setDismissUi((ui) => ({ ...ui, downloading: false }));
       setDismissed((prev) => {
         const next: Dismissed = { ...prev };
         delete next.electronReady;
@@ -158,10 +159,10 @@ export function useUpdateReminder() {
       }
       return { kind: 'electron-ready', version: electron.version };
     }
-    if (isElectron && electron?.state === 'downloading' && !hideDownloading) {
+    if (isElectron && electron?.state === 'downloading' && !dismissUi.downloading) {
       return { kind: 'electron-downloading', percent: Math.round(electron.percent ?? 0) };
     }
-    if (isElectron && electron?.state === 'error' && electron.message && !hideElectronError) {
+    if (isElectron && electron?.state === 'error' && electron.message && !dismissUi.electronError) {
       return { kind: 'electron-error', message: truncateElectronErrorMessage(electron.message) };
     }
     if (
@@ -183,8 +184,8 @@ export function useUpdateReminder() {
     dismissed.npm,
     dismissed.electronReady,
     electron,
-    hideDownloading,
-    hideElectronError,
+    dismissUi.downloading,
+    dismissUi.electronError,
     isElectron,
     npm,
     pendingNpmRestartVersion,
@@ -192,11 +193,11 @@ export function useUpdateReminder() {
 
   const dismiss = useCallback(() => {
     if (show.kind === 'electron-downloading') {
-      setHideDownloading(true);
+      setDismissUi((ui) => ({ ...ui, downloading: true }));
       return;
     }
     if (show.kind === 'electron-error') {
-      setHideElectronError(true);
+      setDismissUi((ui) => ({ ...ui, electronError: true }));
       return;
     }
     if (show.kind === 'npm-restart-required') {

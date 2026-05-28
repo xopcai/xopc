@@ -119,25 +119,26 @@ export function AssistantStepsBlock({
   const stepsDrawerOpen = Boolean(isMessageStreaming) && !finalAnswerStarted;
 
   const roundStartRef = useRef<number | null>(null);
-  const prevStepsDrawerOpenRef = useRef(false);
+  const prevStepsDrawerOpenRef = useRef(stepsDrawerOpen);
   const [frozenDurationMs, setFrozenDurationMs] = useState<number | null>(null);
-  const [expanded, setExpanded] = useState(stepsDrawerOpen);
+  const [userExpanded, setUserExpanded] = useState<boolean | null>(null);
 
   if (anyActive && roundStartRef.current === null) {
     roundStartRef.current = Date.now();
   }
 
-  useEffect(() => {
-    if (stepsDrawerOpen) {
-      setExpanded(true);
-    } else if (prevStepsDrawerOpenRef.current) {
-      if (roundStartRef.current !== null) {
-        setFrozenDurationMs(Date.now() - roundStartRef.current);
-      }
-      setExpanded(false);
+  if (stepsDrawerOpen && !prevStepsDrawerOpenRef.current) {
+    setUserExpanded(null);
+    setFrozenDurationMs(null);
+  } else if (!stepsDrawerOpen && prevStepsDrawerOpenRef.current) {
+    if (roundStartRef.current !== null) {
+      setFrozenDurationMs(Date.now() - roundStartRef.current);
     }
-    prevStepsDrawerOpenRef.current = stepsDrawerOpen;
-  }, [stepsDrawerOpen]);
+    setUserExpanded(false);
+  }
+  prevStepsDrawerOpenRef.current = stepsDrawerOpen;
+
+  const expanded = userExpanded ?? stepsDrawerOpen;
 
   const completedHeader = useMemo(() => {
     if (anyActive) return '';
@@ -216,7 +217,7 @@ export function AssistantStepsBlock({
           'hover:bg-surface-hover/80 dark:hover:bg-surface-hover/50',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
         )}
-        onClick={() => setExpanded(!expanded)}
+        onClick={() => setUserExpanded((current) => !(current ?? stepsDrawerOpen))}
         aria-expanded={expanded}
       >
         <AssistantStepsHeaderStatusIcon active={anyActive} />

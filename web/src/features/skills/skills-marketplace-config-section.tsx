@@ -1,5 +1,5 @@
 import { Store, Loader2 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useReducer, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
@@ -11,6 +11,7 @@ import {
 } from '@/features/skills/skills-marketplace-config-api';
 import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/settings/settings-form-section';
 import { settingsInputFocusClass } from '@/lib/form-field-width';
+import { createFormDraftReducer, syncFormDraftFromParsed } from '@/lib/settings-form-draft';
 import { cn } from '@/lib/cn';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -23,6 +24,8 @@ function inputClassName(): string {
   );
 }
 
+const marketplaceFormReducer = createFormDraftReducer<SkillsMarketplaceConfigState>();
+
 export function SkillsMarketplaceConfigSection({ hasToken }: { hasToken: boolean }) {
   const t = messages(useLocaleStore((s) => s.language)).skillsMarketplaceSettings;
   const providers = listKnownMarketplaceProviders();
@@ -32,22 +35,29 @@ export function SkillsMarketplaceConfigSection({ hasToken }: { hasToken: boolean
       data?.payload?.config !== undefined ? normalizeSkillsMarketplaceFromConfig(data.payload.config) : null,
     [data],
   );
-  const [form, setForm] = useState<SkillsMarketplaceConfigState | null>(null);
-  const [baseline, setBaseline] = useState<SkillsMarketplaceConfigState | null>(null);
+  const [formDraft, dispatchForm] = useReducer(marketplaceFormReducer, { form: null, baseline: null });
+  const form = formDraft.form;
+  const baseline = formDraft.baseline;
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const dirtyRef = useRef(false);
+  const trackedParsedRef = useRef<SkillsMarketplaceConfigState | null>(null);
 
-  useEffect(() => {
-    if (!hasToken || parsed === null || dirtyRef.current) return;
-    setForm(structuredClone(parsed));
-    setBaseline(structuredClone(parsed));
-  }, [hasToken, parsed]);
+  syncFormDraftFromParsed({
+    enabled: hasToken,
+    parsed,
+    dirty: dirtyRef.current,
+    trackedParsedRef,
+    dispatch: dispatchForm,
+    onResetDirty: () => {
+      dirtyRef.current = false;
+    },
+  });
 
   const dirty = form && baseline && JSON.stringify(form) !== JSON.stringify(baseline);
   const update = useCallback((patch: Partial<SkillsMarketplaceConfigState>) => {
     dirtyRef.current = true;
-    setForm((f) => (f ? { ...f, ...patch } : null));
+    dispatchForm({ type: 'patch', patch });
   }, []);
 
   if (!hasToken || !form) {
@@ -62,7 +72,7 @@ export function SkillsMarketplaceConfigSection({ hasToken }: { hasToken: boolean
     <SettingsFormSection>
       <SettingsFormSectionHeader icon={Store} title={t.title} subtitle={t.hint} />
       <div className="mb-4 flex justify-end gap-2">
-        <Button type="button" variant="secondary" disabled={!dirty || saving} onClick={() => baseline && setForm(structuredClone(baseline))}>
+        <Button type="button" variant="secondary" disabled={!dirty || saving} onClick={() => dispatchForm({ type: 'discard' })}>
           {t.discard}
         </Button>
         <Button
@@ -76,7 +86,7 @@ export function SkillsMarketplaceConfigSection({ hasToken }: { hasToken: boolean
               try {
                 await patchSkillsMarketplaceConfig(form);
                 dirtyRef.current = false;
-                setBaseline(structuredClone(form));
+                dispatchForm({ type: 'saved', value: form });
               } catch (e) {
                 setError(e instanceof Error ? e.message : t.saveError);
               } finally {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from 'react';
+import { useCallback, useMemo, useReducer, useRef, type ChangeEvent } from 'react';
 
 import {
   buildCronFromPickerState,
@@ -62,6 +62,33 @@ const cronTextareaClass = cn(
   formControlBorderFocusClass,
 );
 
+type InternalState = PickerState & {
+  intervalMinutesDraft: string | null;
+  intervalHoursDraft: string | null;
+};
+
+function fromParsed(parsed: PickerState): InternalState {
+  return { ...parsed, intervalMinutesDraft: null, intervalHoursDraft: null };
+}
+
+function toPickerState(state: InternalState): PickerState {
+  const { intervalMinutesDraft: _minutesDraft, intervalHoursDraft: _hoursDraft, ...picker } = state;
+  return picker;
+}
+
+type PickerAction =
+  | { type: 'reset'; state: PickerState }
+  | { type: 'replace'; state: InternalState };
+
+function pickerReducer(_state: InternalState, action: PickerAction): InternalState {
+  switch (action.type) {
+    case 'reset':
+      return fromParsed(action.state);
+    case 'replace':
+      return action.state;
+  }
+}
+
 type CronSchedulePickerProps = {
   value: string;
   onChange: (cron: string) => void;
@@ -79,67 +106,44 @@ export function CronSchedulePicker({
   showHeading = true,
 }: CronSchedulePickerProps) {
   const parsed = useMemo(() => cronExpressionToPickerState(value), [value]);
+  const [state, dispatch] = useReducer(pickerReducer, parsed, fromParsed);
 
-  const [mode, setMode] = useState<SchedulePickerMode>(parsed.mode);
-  const [intervalKind, setIntervalKind] = useState<IntervalKind>(parsed.intervalKind);
-  const [onceDate, setOnceDate] = useState(parsed.onceDate);
-  const [intervalMinutes, setIntervalMinutes] = useState(parsed.intervalMinutes);
-  const [intervalHours, setIntervalHours] = useState(parsed.intervalHours);
-  const [minute, setMinute] = useState(parsed.minute);
-  const [hour, setHour] = useState(parsed.hour);
-  const [weekDays, setWeekDays] = useState<boolean[]>(parsed.weekDays);
-  const [dayOfMonth, setDayOfMonth] = useState(parsed.dayOfMonth);
-  const [rawCron, setRawCron] = useState(parsed.rawCron);
-  const [intervalMinutesDraft, setIntervalMinutesDraft] = useState<string | null>(null);
-  const [intervalHoursDraft, setIntervalHoursDraft] = useState<string | null>(null);
+  const trackedValueRef = useRef(value);
+  if (trackedValueRef.current !== value) {
+    trackedValueRef.current = value;
+    dispatch({ type: 'reset', state: parsed });
+  }
 
-  useEffect(() => {
-    const p = cronExpressionToPickerState(value);
-    setMode(p.mode);
-    setIntervalKind(p.intervalKind);
-    setOnceDate(p.onceDate);
-    setIntervalMinutes(p.intervalMinutes);
-    setIntervalHours(p.intervalHours);
-    setMinute(p.minute);
-    setHour(p.hour);
-    setWeekDays(p.weekDays);
-    setDayOfMonth(p.dayOfMonth);
-    setRawCron(p.rawCron);
-    setIntervalMinutesDraft(null);
-    setIntervalHoursDraft(null);
-  }, [value]);
-
-  const emit = useCallback(
-    (patch: Partial<PickerState>) => {
-      const next: PickerState = {
-        mode,
-        intervalKind,
-        onceDate,
-        intervalMinutes,
-        intervalHours,
-        minute,
-        hour,
-        weekDays,
-        dayOfMonth,
-        rawCron,
-        ...patch,
-      };
-      onChange(buildCronFromPickerState(next));
+  const commitPicker = useCallback(
+    (patch: Partial<InternalState>) => {
+      const nextState = { ...state, ...patch };
+      dispatch({ type: 'replace', state: nextState });
+      const nextPicker = toPickerState(nextState);
+      const prevPicker = toPickerState(state);
+      const pickerChanged = (Object.keys(nextPicker) as (keyof PickerState)[]).some(
+        (key) => nextPicker[key] !== prevPicker[key],
+      );
+      if (pickerChanged) {
+        onChange(buildCronFromPickerState(nextPicker));
+      }
     },
-    [
-      mode,
-      intervalKind,
-      onceDate,
-      intervalMinutes,
-      intervalHours,
-      minute,
-      hour,
-      weekDays,
-      dayOfMonth,
-      rawCron,
-      onChange,
-    ],
+    [onChange, state],
   );
+
+  const {
+    mode,
+    intervalKind,
+    onceDate,
+    intervalMinutes,
+    intervalHours,
+    minute,
+    hour,
+    weekDays,
+    dayOfMonth,
+    rawCron,
+    intervalMinutesDraft,
+    intervalHoursDraft,
+  } = state;
 
   const timeValue = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
 
@@ -148,7 +152,7 @@ export function CronSchedulePicker({
     if (!v) return;
     const [hh, mm] = v.split(':').map((x) => parseInt(x, 10));
     if (Number.isNaN(hh) || Number.isNaN(mm)) return;
-    emit({ minute: mm, hour: hh });
+    commitPicker({ minute: mm, hour: hh });
   };
 
   const modeRow = (
@@ -159,8 +163,7 @@ export function CronSchedulePicker({
         value={mode}
         onChange={(e) => {
           const next = e.target.value as SchedulePickerMode;
-          setMode(next);
-          emit({ mode: next });
+          commitPicker({ mode: next });
         }}
         aria-label={labels.scheduleTimeLabel}
       >
@@ -181,9 +184,7 @@ export function CronSchedulePicker({
             className={dateInputClass}
             value={onceDate}
             onChange={(e) => {
-              const v = e.target.value;
-              setOnceDate(v);
-              emit({ onceDate: v });
+              commitPicker({ onceDate: e.target.value });
             }}
             aria-label={labels.modeNoRepeat}
           />
@@ -207,10 +208,7 @@ export function CronSchedulePicker({
             value={intervalKind}
             onChange={(e) => {
               const k = e.target.value as IntervalKind;
-              setIntervalKind(k);
-              setIntervalMinutesDraft(null);
-              setIntervalHoursDraft(null);
-              emit({ intervalKind: k });
+              commitPicker({ intervalKind: k, intervalMinutesDraft: null, intervalHoursDraft: null });
             }}
             aria-label={labels.modeInterval}
           >
@@ -228,12 +226,12 @@ export function CronSchedulePicker({
                 value={intervalMinutesDraft ?? String(intervalMinutes)}
                 onChange={(e) => {
                   const next = e.target.value;
-                  setIntervalMinutesDraft(next);
                   const raw = parseInt(next, 10);
+                  const patch: Partial<InternalState> = { intervalMinutesDraft: next };
                   if (Number.isFinite(raw) && raw >= 1 && raw <= 59) {
-                    setIntervalMinutes(raw);
-                    emit({ intervalMinutes: raw });
+                    patch.intervalMinutes = raw;
                   }
+                  commitPicker(patch);
                 }}
                 onBlur={() => {
                   if (intervalMinutesDraft === null) return;
@@ -242,9 +240,7 @@ export function CronSchedulePicker({
                     !Number.isFinite(raw) || raw < 1
                       ? 5
                       : Math.min(59, Math.max(1, Math.round(raw)));
-                  setIntervalMinutes(v);
-                  emit({ intervalMinutes: v });
-                  setIntervalMinutesDraft(null);
+                  commitPicker({ intervalMinutes: v, intervalMinutesDraft: null });
                 }}
                 aria-label={labels.intervalMinutes}
               />
@@ -261,12 +257,12 @@ export function CronSchedulePicker({
                 value={intervalHoursDraft ?? String(intervalHours)}
                 onChange={(e) => {
                   const next = e.target.value;
-                  setIntervalHoursDraft(next);
                   const raw = parseInt(next, 10);
+                  const patch: Partial<InternalState> = { intervalHoursDraft: next };
                   if (Number.isFinite(raw) && raw >= 1 && raw <= 23) {
-                    setIntervalHours(raw);
-                    emit({ intervalHours: raw });
+                    patch.intervalHours = raw;
                   }
+                  commitPicker(patch);
                 }}
                 onBlur={() => {
                   if (intervalHoursDraft === null) return;
@@ -275,9 +271,7 @@ export function CronSchedulePicker({
                     !Number.isFinite(raw) || raw < 1
                       ? 2
                       : Math.min(23, Math.max(1, Math.round(raw)));
-                  setIntervalHours(v);
-                  emit({ intervalHours: v });
-                  setIntervalHoursDraft(null);
+                  commitPicker({ intervalHours: v, intervalHoursDraft: null });
                 }}
                 aria-label={labels.intervalHours}
               />
@@ -288,8 +282,7 @@ export function CronSchedulePicker({
                 value={minute}
                 onChange={(e) => {
                   const mm = parseInt(e.target.value, 10);
-                  setMinute(mm);
-                  emit({ minute: mm });
+                  commitPicker({ minute: mm });
                 }}
                 aria-label={labels.minuteAtHour}
               >
@@ -337,8 +330,7 @@ export function CronSchedulePicker({
             value={dayOfMonth}
             onChange={(e) => {
               const d = parseInt(e.target.value, 10);
-              setDayOfMonth(d);
-              emit({ dayOfMonth: d });
+              commitPicker({ dayOfMonth: d });
             }}
             aria-label={labels.dayOfMonth}
           >
@@ -368,8 +360,7 @@ export function CronSchedulePicker({
             value={minute}
             onChange={(e) => {
               const mm = parseInt(e.target.value, 10);
-              setMinute(mm);
-              emit({ minute: mm });
+              commitPicker({ minute: mm });
             }}
             aria-label={labels.minuteAtHour}
           >
@@ -405,8 +396,7 @@ export function CronSchedulePicker({
               onClick={() => {
                 const next = [...weekDays];
                 next[i] = !next[i];
-                setWeekDays(next);
-                emit({ weekDays: next });
+                commitPicker({ weekDays: next });
               }}
             >
               {label}
@@ -427,9 +417,7 @@ export function CronSchedulePicker({
           value={rawCron}
           placeholder="*/5 * * * *"
           onChange={(e) => {
-            const v = e.target.value;
-            setRawCron(v);
-            onChange(v.trim() || '*/5 * * * *');
+            commitPicker({ rawCron: e.target.value });
           }}
           aria-label={labels.modeCustom}
         />

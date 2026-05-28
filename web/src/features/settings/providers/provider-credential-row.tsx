@@ -14,7 +14,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useEffectEvent, useMemo, useReducer, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -91,6 +91,126 @@ function EnvVarCopyRow({
  * Uses controlled state + CSS transitions so keyboard focus, screen readers,
  * and animation all work consistently within the Radix-oriented component set.
  */
+type OAuthState = {
+  loading: boolean;
+  sessionId?: string;
+  status?: 'idle' | 'waiting' | 'waiting_code' | 'success' | 'error';
+  message?: string;
+  authUrl?: string;
+  instructions?: string;
+  codeInput: string;
+};
+
+type OAuthAction =
+  | { type: 'start'; message: string }
+  | { type: 'session'; sessionId: string }
+  | { type: 'poll'; message?: string; authUrl?: string; instructions?: string; status: 'waiting' | 'waiting_code' }
+  | { type: 'complete'; message?: string }
+  | { type: 'fail'; message: string }
+  | { type: 'cancel' }
+  | { type: 'setCode'; value: string }
+  | { type: 'clearCode' };
+
+const initialOAuthState: OAuthState = { loading: false, codeInput: '' };
+
+function oauthReducer(state: OAuthState, action: OAuthAction): OAuthState {
+  switch (action.type) {
+    case 'start':
+      return {
+        loading: true,
+        status: 'waiting',
+        message: action.message,
+        codeInput: '',
+        sessionId: undefined,
+        authUrl: undefined,
+        instructions: undefined,
+      };
+    case 'session':
+      return { ...state, sessionId: action.sessionId };
+    case 'poll':
+      return {
+        ...state,
+        message: action.message ?? state.message,
+        authUrl: action.authUrl,
+        instructions: action.instructions,
+        status: action.status,
+      };
+    case 'complete':
+      return {
+        ...state,
+        loading: false,
+        status: 'success',
+        message: action.message ?? state.message,
+      };
+    case 'fail':
+      return { ...state, loading: false, status: 'error', message: action.message };
+    case 'cancel':
+      return initialOAuthState;
+    case 'setCode':
+      return { ...state, codeInput: action.value };
+    case 'clearCode':
+      return { ...state, codeInput: '' };
+  }
+}
+
+type RowUiState = {
+  showKey: boolean;
+  copied: boolean;
+  revokeError: string | null;
+  removeLoading: boolean;
+  removeMessage: string | null;
+  removeConfirmOpen: boolean;
+  testLoading: boolean;
+  testMessage: string | null;
+  testOk: boolean | null;
+};
+
+type RowUiAction =
+  | { type: 'toggleShowKey' }
+  | { type: 'copied' }
+  | { type: 'clearCopied' }
+  | { type: 'revokeError'; message: string | null }
+  | { type: 'removeStart' }
+  | { type: 'removeDone'; message: string | null }
+  | { type: 'removeConfirm'; open: boolean }
+  | { type: 'testStart' }
+  | { type: 'testDone'; ok: boolean | null; message: string | null };
+
+const initialRowUi: RowUiState = {
+  showKey: false,
+  copied: false,
+  revokeError: null,
+  removeLoading: false,
+  removeMessage: null,
+  removeConfirmOpen: false,
+  testLoading: false,
+  testMessage: null,
+  testOk: null,
+};
+
+function rowUiReducer(state: RowUiState, action: RowUiAction): RowUiState {
+  switch (action.type) {
+    case 'toggleShowKey':
+      return { ...state, showKey: !state.showKey };
+    case 'copied':
+      return { ...state, copied: true };
+    case 'clearCopied':
+      return { ...state, copied: false };
+    case 'revokeError':
+      return { ...state, revokeError: action.message };
+    case 'removeStart':
+      return { ...state, removeLoading: true, removeMessage: null, removeConfirmOpen: false };
+    case 'removeDone':
+      return { ...state, removeLoading: false, removeMessage: action.message };
+    case 'removeConfirm':
+      return { ...state, removeConfirmOpen: action.open };
+    case 'testStart':
+      return { ...state, testLoading: true, testMessage: null, testOk: null };
+    case 'testDone':
+      return { ...state, testLoading: false, testOk: action.ok, testMessage: action.message };
+  }
+}
+
 function MoreOptionsSection({
   label,
   children,
@@ -153,46 +273,56 @@ export function ProviderCredentialRow({
   /** When true, the key input receives focus after expanding. */
   autoFocusInput?: boolean;
 }) {
-  const [expanded, setExpanded] = useState(autoExpand);
+  const [expanded, setExpanded] = useState(false);
   const keyInputRef = useRef<HTMLInputElement>(null);
+  const trackedAutoExpandRef = useRef(autoExpand);
+  if (autoExpand && !trackedAutoExpandRef.current && !expanded) {
+    trackedAutoExpandRef.current = autoExpand;
+    setExpanded(true);
+  } else if (autoExpand !== trackedAutoExpandRef.current) {
+    trackedAutoExpandRef.current = autoExpand;
+  }
 
-  useEffect(() => {
-    if (autoExpand && !expanded) setExpanded(true);
-    // Only react to autoExpand toggling on; `expanded` is intentionally excluded
-    // to avoid collapsing the row when the user manually closes it.
-     
-  }, [autoExpand]);
+  const bindKeyInputRef = useCallback(
+    (el: HTMLInputElement | null) => {
+      keyInputRef.current = el;
+      if (autoFocusInput && expanded && el) {
+        el.focus();
+      }
+    },
+    [autoFocusInput, expanded],
+  );
 
-  useEffect(() => {
-    if (autoFocusInput && expanded) {
-      requestAnimationFrame(() => keyInputRef.current?.focus());
-    }
-  }, [autoFocusInput, expanded]);
-  const [showKey, setShowKey] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const [revokeError, setRevokeError] = useState<string | null>(null);
-  const [removeLoading, setRemoveLoading] = useState(false);
-  const [removeMessage, setRemoveMessage] = useState<string | null>(null);
-  const [removeConfirmOpen, setRemoveConfirmOpen] = useState(false);
+  const [ui, dispatchUi] = useReducer(rowUiReducer, initialRowUi);
+  const {
+    showKey,
+    copied,
+    revokeError,
+    removeLoading,
+    removeMessage,
+    removeConfirmOpen,
+    testLoading,
+    testMessage,
+    testOk,
+  } = ui;
+
+  const [oauth, dispatchOAuth] = useReducer(oauthReducer, initialOAuthState);
+  const {
+    loading: oauthLoading,
+    sessionId: oauthSessionId,
+    status: oauthStatus,
+    message: oauthMessage,
+    authUrl,
+    instructions,
+    codeInput,
+  } = oauth;
+
+  const oauthSessionIdRef = useRef<string | undefined>(undefined);
+  oauthSessionIdRef.current = oauthSessionId;
+
   const masked = isMaskedKey(value);
   const inputValue = masked && !showKey ? '' : value;
   const isOAuthConfigured = row.configured && !masked && Boolean(value);
-
-  const [oauthLoading, setOauthLoading] = useState(false);
-  const [oauthSessionId, setOauthSessionId] = useState<string | undefined>();
-  const oauthSessionIdRef = useRef<string | undefined>(undefined);
-  oauthSessionIdRef.current = oauthSessionId;
-  const [oauthStatus, setOauthStatus] = useState<
-    'idle' | 'waiting' | 'waiting_code' | 'success' | 'error' | undefined
-  >();
-  const [oauthMessage, setOauthMessage] = useState<string | undefined>();
-  const [authUrl, setAuthUrl] = useState<string | undefined>();
-  const [instructions, setInstructions] = useState<string | undefined>();
-  const [codeInput, setCodeInput] = useState('');
-
-  const [testLoading, setTestLoading] = useState(false);
-  const [testMessage, setTestMessage] = useState<string | null>(null);
-  const [testOk, setTestOk] = useState<boolean | null>(null);
 
   const activeSrc = row.activeKeySource ?? 'none';
 
@@ -207,28 +337,34 @@ export function ProviderCredentialRow({
     };
   }, []);
 
+  const reloadProviders = useEffectEvent(() => {
+    onReload();
+  });
+
   useEffect(() => {
     if (!oauthSessionId || !oauthLoading) return;
     const id = window.setInterval(() => {
       void (async () => {
         try {
           const st = await fetchOAuthSessionStatus(oauthSessionId);
-          setOauthMessage(st.message);
-          setAuthUrl(st.authUrl);
-          setInstructions(st.instructions);
           if (st.status === 'waiting_auth' || st.status === 'waiting_code') {
-            setOauthStatus(st.status === 'waiting_code' ? 'waiting_code' : 'waiting');
+            dispatchOAuth({
+              type: 'poll',
+              message: st.message,
+              authUrl: st.authUrl,
+              instructions: st.instructions,
+              status: st.status === 'waiting_code' ? 'waiting_code' : 'waiting',
+            });
           } else if (st.status === 'completed') {
             window.clearInterval(id);
-            setOauthLoading(false);
-            setOauthStatus('success');
-            setOauthMessage(st.message);
-            window.setTimeout(() => onReload(), 800);
+            dispatchOAuth({ type: 'complete', message: st.message });
+            window.setTimeout(() => reloadProviders(), 800);
           } else if (st.status === 'failed' || st.status === 'cancelled') {
             window.clearInterval(id);
-            setOauthLoading(false);
-            setOauthStatus('error');
-            setOauthMessage(st.error || st.message || 'OAuth failed');
+            dispatchOAuth({
+              type: 'fail',
+              message: st.error || st.message || 'OAuth failed',
+            });
           }
         } catch {
           /* ignore poll errors */
@@ -236,22 +372,18 @@ export function ProviderCredentialRow({
       })();
     }, 1000);
     return () => window.clearInterval(id);
-  }, [oauthSessionId, oauthLoading, onReload]);
+  }, [oauthSessionId, oauthLoading]);
 
   const startOAuth = async () => {
-    setOauthLoading(true);
-    setOauthStatus('waiting');
-    setOauthMessage(labels.oauthStarting);
-    setOauthSessionId(undefined);
-    setAuthUrl(undefined);
-    setInstructions(undefined);
+    dispatchOAuth({ type: 'start', message: labels.oauthStarting });
     try {
       const res = await startAsyncOAuthLogin(row.id);
-      setOauthSessionId(res.sessionId);
+      dispatchOAuth({ type: 'session', sessionId: res.sessionId });
     } catch (e) {
-      setOauthStatus('error');
-      setOauthMessage(e instanceof Error ? e.message : 'OAuth failed');
-      setOauthLoading(false);
+      dispatchOAuth({
+        type: 'fail',
+        message: e instanceof Error ? e.message : 'OAuth failed',
+      });
     }
   };
 
@@ -263,10 +395,7 @@ export function ProviderCredentialRow({
     } catch {
       /* ignore */
     }
-    setOauthSessionId(undefined);
-    setOauthLoading(false);
-    setOauthStatus('idle');
-    setOauthMessage(undefined);
+    dispatchOAuth({ type: 'cancel' });
   };
 
   const submitCode = async () => {
@@ -274,35 +403,45 @@ export function ProviderCredentialRow({
     if (!sessionId || !codeInput.trim()) return;
     try {
       await submitOAuthCode(sessionId, codeInput.trim());
-      setCodeInput('');
-      setOauthMessage(labels.oauthProcessingCode);
+      dispatchOAuth({ type: 'clearCode' });
+      dispatchOAuth({
+        type: 'poll',
+        message: labels.oauthProcessingCode,
+        status: oauthStatus === 'waiting_code' ? 'waiting_code' : 'waiting',
+      });
     } catch (e) {
-      setOauthStatus('error');
-      setOauthMessage(e instanceof Error ? e.message : 'Failed');
+      dispatchOAuth({
+        type: 'fail',
+        message: e instanceof Error ? e.message : 'Failed',
+      });
     }
   };
 
   const doRevoke = () => {
     if (!window.confirm(interpolate(labels.revokeConfirm, { name: row.name }))) return;
-    setRevokeError(null);
+    dispatchUi({ type: 'revokeError', message: null });
     void revokeOAuth(row.id)
       .then(() => onReload())
-      .catch((e) => setRevokeError(e instanceof Error ? e.message : labels.revokeFailed));
+      .catch((e) =>
+        dispatchUi({
+          type: 'revokeError',
+          message: e instanceof Error ? e.message : labels.revokeFailed,
+        }),
+      );
   };
 
   const doRemoveKey = async () => {
-    setRemoveConfirmOpen(false);
-    setRemoveLoading(true);
-    setRemoveMessage(null);
+    dispatchUi({ type: 'removeStart' });
     try {
       await deleteProviderApiKey(row.id);
-      setRemoveMessage(labels.removeKeySuccess);
+      dispatchUi({ type: 'removeDone', message: labels.removeKeySuccess });
       onChange(row.id, '');
       window.setTimeout(() => onReload(), 600);
     } catch (error) {
-      setRemoveMessage(error instanceof Error ? error.message : labels.removeKeyFailed);
-    } finally {
-      setRemoveLoading(false);
+      dispatchUi({
+        type: 'removeDone',
+        message: error instanceof Error ? error.message : labels.removeKeyFailed,
+      });
     }
   };
 
@@ -313,32 +452,33 @@ export function ProviderCredentialRow({
     if (!value || masked) return;
     const ok = await copyTextToClipboard(value);
     if (!ok) return;
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 2000);
+    dispatchUi({ type: 'copied' });
+    window.setTimeout(() => dispatchUi({ type: 'clearCopied' }), 2000);
   };
 
   const runTest = async () => {
     const v = value.trim();
     if (!v || isMaskedKey(v)) return;
-    setTestLoading(true);
-    setTestMessage(null);
-    setTestOk(null);
+    dispatchUi({ type: 'testStart' });
     try {
       const res = await testProviderKeyResolution(v);
       if (res.error) {
-        setTestOk(false);
-        setTestMessage(`${labels.testFailed} ${res.error}`);
+        dispatchUi({ type: 'testDone', ok: false, message: `${labels.testFailed} ${res.error}` });
         return;
       }
-      setTestOk(true);
-      if (res.type === 'env') setTestMessage(labels.testOkEnv);
-      else if (res.type === 'command') setTestMessage(labels.testOkCommand);
-      else setTestMessage(labels.testOkLiteral);
+      const message =
+        res.type === 'env'
+          ? labels.testOkEnv
+          : res.type === 'command'
+            ? labels.testOkCommand
+            : labels.testOkLiteral;
+      dispatchUi({ type: 'testDone', ok: true, message });
     } catch (e) {
-      setTestOk(false);
-      setTestMessage(e instanceof Error ? e.message : labels.testFailed);
-    } finally {
-      setTestLoading(false);
+      dispatchUi({
+        type: 'testDone',
+        ok: false,
+        message: e instanceof Error ? e.message : labels.testFailed,
+      });
     }
   };
 
@@ -399,7 +539,7 @@ export function ProviderCredentialRow({
               <div className="relative flex flex-col gap-2 sm:flex-row sm:gap-2">
                 <div className="relative min-w-0 flex-1">
                   <input
-                    ref={keyInputRef}
+                    ref={bindKeyInputRef}
                     type={showKey || !masked ? 'text' : 'password'}
                     className={cn(
                       'w-full rounded-lg border border-edge bg-surface-panel py-2 pl-3 pr-20 font-mono text-sm text-fg',
@@ -444,7 +584,7 @@ export function ProviderCredentialRow({
                       title={showKey ? labels.hide : labels.show}
                       aria-label={showKey ? labels.hide : labels.show}
                       disabled={masked}
-                      onClick={() => setShowKey((s) => !s)}
+                      onClick={() => dispatchUi({ type: 'toggleShowKey' })}
                     >
                       {showKey ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                     </button>
@@ -590,7 +730,7 @@ export function ProviderCredentialRow({
                 )}
                 value={codeInput}
                 placeholder={labels.pasteRedirectUrl}
-                onChange={(e) => setCodeInput(e.target.value)}
+                onChange={(e) => dispatchOAuth({ type: 'setCode', value: e.target.value })}
                 onKeyDown={(e) => e.key === 'Enter' && void submitCode()}
               />
               <Button type="button" variant="primary" className="shrink-0" onClick={() => void submitCode()}>
@@ -672,7 +812,7 @@ export function ProviderCredentialRow({
                       variant="secondary"
                       className="gap-1 self-start text-red-600 dark:text-red-400"
                       disabled={removeLoading}
-                      onClick={() => setRemoveConfirmOpen(true)}
+                      onClick={() => dispatchUi({ type: 'removeConfirm', open: true })}
                     >
                       {removeLoading ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Trash2 className="size-4" aria-hidden />}
                       {labels.removeKey}
@@ -685,7 +825,7 @@ export function ProviderCredentialRow({
                       cancelLabel={labels.cancelOAuth}
                       destructive
                       onConfirm={() => void doRemoveKey()}
-                      onCancel={() => setRemoveConfirmOpen(false)}
+                      onCancel={() => dispatchUi({ type: 'removeConfirm', open: false })}
                     />
                   </>
                 ) : null}

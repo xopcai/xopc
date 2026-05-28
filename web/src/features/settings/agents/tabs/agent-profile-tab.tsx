@@ -1,5 +1,11 @@
 import { Info, UserCircle } from 'lucide-react';
-import { type MutableRefObject, useCallback, useEffect, useRef, useState } from 'react';
+import {
+  type MutableRefObject,
+  useCallback,
+  useEffect,
+  useReducer,
+  useRef,
+} from 'react';
 
 import {
   SettingsFormSection,
@@ -11,6 +17,7 @@ import {
 } from '@/features/settings/agents-admin-api';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
+import { useAsyncResource } from '@/lib/use-async-resource';
 import type { AgentsSettingsMessages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 
@@ -37,137 +44,139 @@ interface ProfileTabProps {
   onDirtyChange?: (dirty: boolean) => void;
 }
 
+type ProfileFormState = {
+  user: UserFields;
+  showCustomPronouns: boolean;
+  showCustomTimezone: boolean;
+  customTimezone: string;
+  snapshot: string;
+};
+
+type ProfileFormAction =
+  | { type: 'load'; user: UserFields }
+  | { type: 'patch'; patch: Partial<UserFields> }
+  | { type: 'setShowCustomPronouns'; value: boolean }
+  | { type: 'setShowCustomTimezone'; value: boolean }
+  | { type: 'setCustomTimezone'; value: string }
+  | { type: 'saved' };
+
+function profileFormFromUser(user: UserFields): Pick<ProfileFormState, 'showCustomPronouns' | 'showCustomTimezone' | 'customTimezone'> {
+  const isKnownPronouns = !user.pronouns || PRONOUNS_PRESETS.some((p) => p.value === user.pronouns);
+  const isKnownTimezone = TIMEZONE_OPTIONS.some((tz) => tz.value === user.timezone);
+  return {
+    showCustomPronouns: Boolean(user.pronouns && !isKnownPronouns),
+    showCustomTimezone: Boolean(user.timezone && !isKnownTimezone),
+    customTimezone: user.timezone && !isKnownTimezone ? user.timezone : '',
+  };
+}
+
+function profileFormReducer(state: ProfileFormState, action: ProfileFormAction): ProfileFormState {
+  switch (action.type) {
+    case 'load': {
+      const extras = profileFormFromUser(action.user);
+      const snapshot = JSON.stringify(action.user);
+      return { user: action.user, snapshot, ...extras };
+    }
+    case 'patch': {
+      const user = { ...state.user, ...action.patch };
+      return { ...state, user };
+    }
+    case 'setShowCustomPronouns':
+      return { ...state, showCustomPronouns: action.value };
+    case 'setShowCustomTimezone':
+      return { ...state, showCustomTimezone: action.value };
+    case 'setCustomTimezone':
+      return { ...state, customTimezone: action.value };
+    case 'saved':
+      return { ...state, snapshot: JSON.stringify(state.user) };
+  }
+}
+
+const emptyUser: UserFields = {
+  callName: '',
+  pronouns: '',
+  timezone: '',
+  notes: '',
+};
+
+const initialProfileForm: ProfileFormState = {
+  user: emptyUser,
+  showCustomPronouns: false,
+  showCustomTimezone: false,
+  customTimezone: '',
+  snapshot: JSON.stringify(emptyUser),
+};
+
 // ---------------------------------------------------------------------------
 // Component — About You (USER.md)
 // ---------------------------------------------------------------------------
 
-export function AgentProfileTab({ a, agentId, saveRef, onDirtyChange }: ProfileTabProps) {
+function AgentProfileTabBody({ a, agentId, saveRef, onDirtyChange }: ProfileTabProps) {
   const language = useLocaleStore((s) => s.language);
-
-  const [loading, setLoading] = useState(true);
-  const [, setSaving] = useState(false);
-
-  const [user, setUser] = useState<UserFields>({
-    callName: '',
-    pronouns: '',
-    timezone: '',
-    notes: '',
-  });
-
-  const [showCustomPronouns, setShowCustomPronouns] = useState(false);
-  const [showCustomTimezone, setShowCustomTimezone] = useState(false);
-  const [customTimezone, setCustomTimezone] = useState('');
-
-  const initialLoadDoneRef = useRef(false);
+  const [form, dispatchForm] = useReducer(profileFormReducer, initialProfileForm);
   const agentIdRef = useRef(agentId);
   agentIdRef.current = agentId;
+  const onDirtyChangeRef = useRef(onDirtyChange);
+  onDirtyChangeRef.current = onDirtyChange;
 
-  // Snapshot for dirty tracking (set after load, reset after save)
-  const userSnapshotRef = useRef('');
+  const userResource = useAsyncResource(
+    async () => {
+      const userMd = await fetchAgentProfileFileContent(agentId, 'USER.md').catch(() => '');
+      const parsedUser = parseUserMarkdown(userMd);
+      if (!parsedUser.timezone) {
+        const detected = detectBrowserTimezone();
+        if (detected) {
+          return { ...parsedUser, timezone: detected };
+        }
+      }
+      return parsedUser;
+    },
+    [agentId],
+    { enabled: Boolean(agentId), initial: null as UserFields | null, errorData: emptyUser },
+  );
 
-  // ---- Save helper (manual save only, triggered by footer button) ----
+  const syncedAgentRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (userResource.loading || !userResource.data) return;
+    if (syncedAgentRef.current === agentId) return;
+    syncedAgentRef.current = agentId;
+    dispatchForm({ type: 'load', user: userResource.data });
+    onDirtyChangeRef.current?.(false);
+  }, [agentId, userResource.loading, userResource.data]);
+
   const saveFile = useCallback(async (content: string) => {
-    const currentAgent = agentIdRef.current;
-    setSaving(true);
-    try {
-      await saveAgentProfileFileContent(currentAgent, 'USER.md', content);
-    } finally {
-      setSaving(false);
-    }
+    await saveAgentProfileFileContent(agentIdRef.current, 'USER.md', content);
   }, []);
 
-  // Ref to hold latest user state for the save callback
-  const userRef = useRef(user);
-  userRef.current = user;
+  const userRef = useRef(form.user);
+  userRef.current = form.user;
 
-  // Expose save function to parent for the footer save button
   useEffect(() => {
     if (!saveRef) return;
     saveRef.current = async () => {
       await saveFile(serializeUserMarkdown(userRef.current));
-      userSnapshotRef.current = JSON.stringify(userRef.current);
-      // Manually notify parent since state didn't change (only snapshot did)
-      onDirtyChange?.(false);
+      dispatchForm({ type: 'saved' });
+      onDirtyChangeRef.current?.(false);
     };
     return () => {
       saveRef.current = null;
     };
-  }, [saveRef, saveFile, onDirtyChange]);
+  }, [saveRef, saveFile]);
 
-  // Notify parent when dirty state changes.
-  // Lifting `user` state into the parent would be a much larger refactor (the dirty
-  // check needs the snapshot ref and the form is co-located here), so this effect
-  // remains the bridge for the dirty signal until that refactor lands.
-  useEffect(() => {
-    if (!onDirtyChange) return;
-    onDirtyChange(JSON.stringify(user) !== userSnapshotRef.current);
-  }, [user, onDirtyChange]);
-
-  // ---- Load USER.md on mount / agentId change ----
-  useEffect(() => {
-    let cancelled = false;
-    initialLoadDoneRef.current = false;
-    setLoading(true);
-
-    const load = async () => {
-      try {
-        const userMd = await fetchAgentProfileFileContent(agentId, 'USER.md').catch(() => '');
-        if (cancelled) return;
-
-        const parsedUser = parseUserMarkdown(userMd);
-
-        // Auto-detect timezone if not already set (saved when user clicks "Save")
-        let effectiveUser = parsedUser;
-        if (!parsedUser.timezone) {
-          const detected = detectBrowserTimezone();
-          if (detected) {
-            effectiveUser = { ...parsedUser, timezone: detected };
-          }
-        }
-
-        setUser(effectiveUser);
-        userSnapshotRef.current = JSON.stringify(effectiveUser);
-
-        // Custom pronouns handling
-        const isKnownPronouns = !effectiveUser.pronouns || PRONOUNS_PRESETS.some((p) => p.value === effectiveUser.pronouns);
-        if (effectiveUser.pronouns && !isKnownPronouns) {
-          setShowCustomPronouns(true);
-        }
-
-        // Custom timezone handling
-        const isKnownTimezone = TIMEZONE_OPTIONS.some((tz) => tz.value === effectiveUser.timezone);
-        if (effectiveUser.timezone && !isKnownTimezone) {
-          setShowCustomTimezone(true);
-          setCustomTimezone(effectiveUser.timezone);
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-          initialLoadDoneRef.current = true;
-        }
-      }
-    };
-
-    void load();
-    return () => {
-      cancelled = true;
-    };
-  }, [agentId]);
-
-  // ---- Field updater (local state only, saved via footer button) ----
   const updateUser = useCallback((patch: Partial<UserFields>) => {
-    setUser((prev) => ({ ...prev, ...patch }));
-  }, []);
+    dispatchForm({ type: 'patch', patch });
+    const next = { ...userRef.current, ...patch };
+    onDirtyChangeRef.current?.(JSON.stringify(next) !== form.snapshot);
+  }, [form.snapshot]);
 
-  // ---- Timezone handling ----
   const handleTimezoneChange = useCallback(
     (value: string) => {
       if (value === '__custom__') {
-        setShowCustomTimezone(true);
+        dispatchForm({ type: 'setShowCustomTimezone', value: true });
         return;
       }
-      setShowCustomTimezone(false);
-      setCustomTimezone('');
+      dispatchForm({ type: 'setShowCustomTimezone', value: false });
+      dispatchForm({ type: 'setCustomTimezone', value: '' });
       updateUser({ timezone: value });
     },
     [updateUser],
@@ -175,7 +184,7 @@ export function AgentProfileTab({ a, agentId, saveRef, onDirtyChange }: ProfileT
 
   const handleCustomTimezoneChange = useCallback(
     (value: string) => {
-      setCustomTimezone(value);
+      dispatchForm({ type: 'setCustomTimezone', value });
       updateUser({ timezone: value });
     },
     [updateUser],
@@ -183,24 +192,22 @@ export function AgentProfileTab({ a, agentId, saveRef, onDirtyChange }: ProfileT
 
   const handleDetectTimezone = useCallback(() => {
     const detected = detectBrowserTimezone();
-    if (detected) {
-      const isKnown = TIMEZONE_OPTIONS.some((tz) => tz.value === detected);
-      if (isKnown) {
-        setShowCustomTimezone(false);
-        setCustomTimezone('');
-      } else {
-        setShowCustomTimezone(true);
-        setCustomTimezone(detected);
-      }
-      updateUser({ timezone: detected });
+    if (!detected) return;
+    const isKnown = TIMEZONE_OPTIONS.some((tz) => tz.value === detected);
+    if (isKnown) {
+      dispatchForm({ type: 'setShowCustomTimezone', value: false });
+      dispatchForm({ type: 'setCustomTimezone', value: '' });
+    } else {
+      dispatchForm({ type: 'setShowCustomTimezone', value: true });
+      dispatchForm({ type: 'setCustomTimezone', value: detected });
     }
+    updateUser({ timezone: detected });
   }, [updateUser]);
 
-  // ---- Effective timezone for select ----
   const timezoneSelectValue = (() => {
-    if (showCustomTimezone) return '__custom__';
-    const isKnown = TIMEZONE_OPTIONS.some((tz) => tz.value === user.timezone);
-    return isKnown ? user.timezone : '__custom__';
+    if (form.showCustomTimezone) return '__custom__';
+    const isKnown = TIMEZONE_OPTIONS.some((tz) => tz.value === form.user.timezone);
+    return isKnown ? form.user.timezone : '__custom__';
   })();
 
   const locLabel = useCallback(
@@ -208,11 +215,12 @@ export function AgentProfileTab({ a, agentId, saveRef, onDirtyChange }: ProfileT
     [language],
   );
 
-  if (loading) {
+  if (userResource.loading) {
     return <p className="text-sm text-fg-muted">{a.loading}</p>;
   }
 
   const inputClass = agentsSettingsInputClass();
+  const { user, showCustomPronouns, showCustomTimezone, customTimezone } = form;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto">
@@ -245,10 +253,10 @@ export function AgentProfileTab({ a, agentId, saveRef, onDirtyChange }: ProfileT
               value={PRONOUNS_PRESETS.some((p) => p.value === user.pronouns) ? user.pronouns : '__custom__'}
               onChange={(e) => {
                 if (e.target.value === '__custom__') {
-                  setShowCustomPronouns(true);
+                  dispatchForm({ type: 'setShowCustomPronouns', value: true });
                   return;
                 }
-                setShowCustomPronouns(false);
+                dispatchForm({ type: 'setShowCustomPronouns', value: false });
                 updateUser({ pronouns: e.target.value });
               }}
             >
@@ -333,4 +341,8 @@ export function AgentProfileTab({ a, agentId, saveRef, onDirtyChange }: ProfileT
       </SettingsFormSection>
     </div>
   );
+}
+
+export function AgentProfileTab(props: ProfileTabProps) {
+  return <AgentProfileTabBody key={props.agentId} {...props} />;
 }

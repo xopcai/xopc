@@ -1,9 +1,10 @@
-import { memo, useEffect, useState } from 'react';
+import { memo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import { resolveSettingsBackTarget } from '@/features/settings/settings-nav-state';
 import { cn } from '@/lib/cn';
+import { useMediaQuery } from '@/lib/use-media-query';
 import { SETTINGS_SHEET_PORTAL_Z } from '@/lib/settings-shell-dialog-layer';
 import { SettingsShellLayerProvider } from '@/lib/settings-shell-layer-context';
 import { messages } from '@/i18n/messages';
@@ -26,18 +27,7 @@ export const SettingsSheet = memo(function SettingsSheet({ children }: SettingsS
   const m = messages(language);
   const closeTarget = resolveSettingsBackTarget(location.state);
 
-  const [portalToBody, setPortalToBody] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    return window.matchMedia(SETTINGS_PORTAL_BODY_MQ).matches;
-  });
-
-  useEffect(() => {
-    const mq = window.matchMedia(SETTINGS_PORTAL_BODY_MQ);
-    const onChange = () => setPortalToBody(mq.matches);
-    onChange();
-    mq.addEventListener('change', onChange);
-    return () => mq.removeEventListener('change', onChange);
-  }, []);
+  const portalToBody = useMediaQuery(SETTINGS_PORTAL_BODY_MQ);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

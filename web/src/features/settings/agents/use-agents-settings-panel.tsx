@@ -33,6 +33,7 @@ import { usePageHeaderStore } from '@/stores/page-header-store';
 import type { AgentsEditorPanelContentProps } from './agents-editor-panel-content';
 import { AgentsSettingsToolbar } from './agents-settings-toolbar';
 import { agentListDisplayName } from './agent-display-names';
+import { useAgentOverviewProfileMarkdown } from './hooks/use-agent-overview-profile-markdown';
 import { useAgentProfileFiles } from './hooks/use-agent-profile-files';
 import { useAgentsChannelBindings } from './hooks/use-agents-channel-bindings';
 import { useAgentsCronJobs } from './hooks/use-agents-cron-jobs';
@@ -88,7 +89,9 @@ export function useAgentsSettingsPanel() {
   const displayError = error ?? loadError;
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [showPresetSetup, setShowPresetSetup] = useState(false);
+  const [presetSetupDismissed, setPresetSetupDismissed] = useState(
+    () => localStorage.getItem(PRESET_AGENTS_SKIPPED_KEY) === 'true',
+  );
   const [panel, setPanel] = useState<AgentPanel>('overview');
 
   const [createDisplayName, setCreateDisplayName] = useState('');
@@ -108,43 +111,45 @@ export function useAgentsSettingsPanel() {
   const [editDescription, setEditDescription] = useState('');
 
   const profileSaveRef = useRef<(() => Promise<void>) | null>(null);
-  const [overviewProfileMarkdownDirty, setOverviewProfileMarkdownDirty] = useState(false);
+  const overviewSaveProfileMarkdownRef = useRef<(() => Promise<void>) | null>(null);
   const [profileDirty, setProfileDirty] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
 
-  useEffect(() => {
-    if (!data) {
-      return;
-    }
+  const trackedAgentsSyncRef = useRef<{ data: GatewayAgentsPayload | null; routeAgentId?: string }>({
+    data: null,
+    routeAgentId: undefined,
+  });
+  if (
+    data &&
+    (data !== trackedAgentsSyncRef.current.data || routeAgentId !== trackedAgentsSyncRef.current.routeAgentId)
+  ) {
+    trackedAgentsSyncRef.current = { data, routeAgentId };
     if (routeAgentId && data.agents.some((x) => x.id === routeAgentId)) {
       setSelectedId(routeAgentId);
-      return;
+    } else {
+      setSelectedId((prev) => {
+        if (prev && data.agents.some((x) => x.id === prev)) {
+          return prev;
+        }
+        return data.defaultId;
+      });
     }
-    setSelectedId((prev) => {
-      if (prev && data.agents.some((x) => x.id === prev)) {
-        return prev;
-      }
-      return data.defaultId;
-    });
-  }, [data, routeAgentId]);
+  }
 
-  useEffect(() => {
-    if (!data || loading) {
-      return;
-    }
-    const onlyMain =
-      data.agents.length <= 1 && data.agents.every((ag) => ag.id === data.defaultId);
-    const skipped = localStorage.getItem(PRESET_AGENTS_SKIPPED_KEY) === 'true';
-    setShowPresetSetup(onlyMain && !skipped);
-  }, [data, loading]);
+  const onlyMainAgent =
+    data != null &&
+    data.agents.length <= 1 &&
+    data.agents.every((ag) => ag.id === data.defaultId);
+  const showPresetSetup = Boolean(data && !loading && onlyMainAgent && !presetSetupDismissed);
 
   const onPresetSetupComplete = useCallback(() => {
-    setShowPresetSetup(false);
+    setPresetSetupDismissed(true);
     void mutateAgents();
   }, [mutateAgents]);
 
   const onPresetSetupSkip = useCallback(() => {
-    setShowPresetSetup(false);
+    localStorage.setItem(PRESET_AGENTS_SKIPPED_KEY, 'true');
+    setPresetSetupDismissed(true);
   }, []);
 
   useEffect(() => {
@@ -202,6 +207,27 @@ export function useAgentsSettingsPanel() {
     [data, selectedId],
   );
 
+  const trackedSelectedIdRef = useRef<string | null>(null);
+  if (selected && trackedSelectedIdRef.current !== selected.id) {
+    trackedSelectedIdRef.current = selected.id;
+    setEditWorkspace(selected.workspace);
+    setEditModel(selected.model?.primary ?? '');
+    setEditName(agentListDisplayName(selected, messages(language).agentsSettings));
+    setEditDescription(selected.description?.trim() ?? '');
+  } else if (!selected && trackedSelectedIdRef.current !== null) {
+    trackedSelectedIdRef.current = null;
+    setEditWorkspace('');
+    setEditModel('');
+    setEditName('');
+    setEditDescription('');
+  }
+
+  const overviewProfile = useAgentOverviewProfileMarkdown({
+    agentId: selected?.id ?? null,
+    enabled: panel === 'overview' && Boolean(selected),
+    saveRef: overviewSaveProfileMarkdownRef,
+  });
+
   const profileFiles = useAgentProfileFiles({
     panel,
     selectedId,
@@ -235,20 +261,6 @@ export function useAgentsSettingsPanel() {
   });
 
   const skillsCatalog = useAgentsSkillsCatalog({ panel, hasToken });
-
-  useEffect(() => {
-    if (!selected) {
-      setEditWorkspace('');
-      setEditModel('');
-      setEditName('');
-      setEditDescription('');
-      return;
-    }
-    setEditWorkspace(selected.workspace);
-    setEditModel(selected.model?.primary ?? '');
-    setEditName(agentListDisplayName(selected, messages(language).agentsSettings));
-    setEditDescription(selected.description?.trim() ?? '');
-  }, [selected?.id, language]);
 
   const applyCreateWorkspaceSuggestion = useCallback(() => {
     const next = suggestWorkspaceFromAgentName(createAgentId.trim() || createDisplayName);
@@ -484,7 +496,7 @@ export function useAgentsSettingsPanel() {
     if (footerSaveNotApplicable) return false;
     switch (panel) {
       case 'overview':
-        return overviewRestDirty || overviewProfileMarkdownDirty;
+        return overviewRestDirty || overviewProfile.dirty;
       case 'profile':
         return profileDirty;
       default:
@@ -504,7 +516,7 @@ export function useAgentsSettingsPanel() {
       case 'overview':
         await Promise.all([
           onSaveAgentEdits(),
-          profileFiles.overviewSaveProfileMarkdownRef.current?.() ?? Promise.resolve(),
+          overviewSaveProfileMarkdownRef.current?.() ?? Promise.resolve(),
         ]);
         showSavedFlash();
         break;
@@ -565,9 +577,9 @@ export function useAgentsSettingsPanel() {
       if (!selected) return;
       void onDelete(selected, purge);
     },
-    overviewSaveProfileMarkdownRef: profileFiles.overviewSaveProfileMarkdownRef,
+    overviewSaveProfileMarkdownRef,
     profileSaveRef,
-    setOverviewProfileMarkdownDirty,
+    overviewProfile,
     setProfileDirty,
     filesLoading: profileFiles.filesLoading,
     files: profileFiles.files,

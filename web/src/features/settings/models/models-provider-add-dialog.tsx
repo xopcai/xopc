@@ -1,6 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { AlertCircle, X } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useReducer, useRef } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/cn';
@@ -29,52 +29,102 @@ type ProviderDialogProps = {
   m: ModelsSettingsMessages;
 };
 
-export function ProviderAddDialog({ open, onOpenChange, presetKey, onConfirm, m }: ProviderDialogProps) {
-  const [providerId, setProviderId] = useState('');
-  const [preset, setPreset] = useState('custom');
-  const [baseUrl, setBaseUrl] = useState('');
-  const [api, setApi] = useState<ApiType>('openai-completions');
-  const [apiKey, setApiKey] = useState('');
-  const [error, setError] = useState<string | null>(null);
+type FormState = {
+  providerId: string;
+  preset: string;
+  baseUrl: string;
+  api: ApiType;
+  apiKey: string;
+  error: string | null;
+};
 
-  useEffect(() => {
-    if (!open) return;
-    setError(null);
-    const pk = presetKey || null;
-    if (pk && PROVIDER_PRESETS[pk]) {
-      const p = PROVIDER_PRESETS[pk];
-      setPreset(pk);
-      setBaseUrl(p.baseUrl || '');
-      setApi((p.api as ApiType) || 'openai-completions');
-      setApiKey(p.apiKey ?? '');
-      setProviderId(providerIdForPreset(pk));
-    } else {
-      setPreset('custom');
-      setProviderId('');
-      setBaseUrl('');
-      setApi('openai-completions');
-      setApiKey('');
-    }
-  }, [open, presetKey]);
-
-  const applyPreset = (key: string) => {
-    setPreset(key);
-    if (key === 'custom') return;
-    const p = PROVIDER_PRESETS[key];
-    if (!p) return;
-    setBaseUrl(p.baseUrl || '');
-    setApi((p.api as ApiType) || 'openai-completions');
-    setApiKey(p.apiKey ?? '');
-    setProviderId(providerIdForPreset(key));
+function formStateFromPreset(presetKey?: string | null): FormState {
+  const pk = presetKey || null;
+  if (pk && PROVIDER_PRESETS[pk]) {
+    const p = PROVIDER_PRESETS[pk];
+    return {
+      preset: pk,
+      baseUrl: p.baseUrl || '',
+      api: (p.api as ApiType) || 'openai-completions',
+      apiKey: p.apiKey ?? '',
+      providerId: providerIdForPreset(pk),
+      error: null,
+    };
+  }
+  return {
+    preset: 'custom',
+    providerId: '',
+    baseUrl: '',
+    api: 'openai-completions',
+    apiKey: '',
+    error: null,
   };
+}
+
+type FormAction =
+  | { type: 'reset'; presetKey?: string | null }
+  | { type: 'applyPreset'; key: string }
+  | { type: 'setProviderId'; value: string }
+  | { type: 'setBaseUrl'; value: string }
+  | { type: 'setApi'; value: ApiType }
+  | { type: 'setApiKey'; value: string }
+  | { type: 'setError'; value: string | null };
+
+function formReducer(state: FormState, action: FormAction): FormState {
+  switch (action.type) {
+    case 'reset':
+      return formStateFromPreset(action.presetKey);
+    case 'applyPreset': {
+      if (action.key === 'custom') {
+        return { ...state, preset: 'custom', error: null };
+      }
+      const p = PROVIDER_PRESETS[action.key];
+      if (!p) return state;
+      return {
+        ...state,
+        preset: action.key,
+        baseUrl: p.baseUrl || '',
+        api: (p.api as ApiType) || 'openai-completions',
+        apiKey: p.apiKey ?? '',
+        providerId: providerIdForPreset(action.key),
+        error: null,
+      };
+    }
+    case 'setProviderId':
+      return { ...state, providerId: action.value };
+    case 'setBaseUrl':
+      return { ...state, baseUrl: action.value };
+    case 'setApi':
+      return { ...state, api: action.value };
+    case 'setApiKey':
+      return { ...state, apiKey: action.value };
+    case 'setError':
+      return { ...state, error: action.value };
+  }
+}
+
+export function ProviderAddDialog({ open, onOpenChange, presetKey, onConfirm, m }: ProviderDialogProps) {
+  const [form, dispatch] = useReducer(formReducer, undefined as never, () => formStateFromPreset(presetKey));
+
+  const dialogResetKey = open ? (presetKey ?? 'custom') : '';
+  const trackedDialogResetKeyRef = useRef('');
+  if (open && trackedDialogResetKeyRef.current !== dialogResetKey) {
+    trackedDialogResetKeyRef.current = dialogResetKey;
+    dispatch({ type: 'reset', presetKey });
+  }
+  if (!open && trackedDialogResetKeyRef.current !== '') {
+    trackedDialogResetKeyRef.current = '';
+  }
+
+  const { providerId, preset, baseUrl, api, apiKey, error } = form;
 
   const handleSubmit = () => {
     const id = providerId.trim();
     if (!id) {
-      setError(m.providerIdRequired);
+      dispatch({ type: 'setError', value: m.providerIdRequired });
       return;
     }
-    setError(null);
+    dispatch({ type: 'setError', value: null });
     onConfirm(id, {
       baseUrl: baseUrl.trim() || undefined,
       api,
@@ -120,7 +170,7 @@ export function ProviderAddDialog({ open, onOpenChange, presetKey, onConfirm, m 
               <select
                 className={selectClassName()}
                 value={preset}
-                onChange={(e) => applyPreset(e.target.value)}
+                onChange={(e) => dispatch({ type: 'applyPreset', key: e.target.value })}
               >
                 <option value="custom">{m.presetCustom}</option>
                 <option value="ollama">{m.presetOllama}</option>
@@ -138,7 +188,7 @@ export function ProviderAddDialog({ open, onOpenChange, presetKey, onConfirm, m 
               <input
                 className={inputClassName()}
                 value={providerId}
-                onChange={(e) => setProviderId(e.target.value)}
+                onChange={(e) => dispatch({ type: 'setProviderId', value: e.target.value })}
                 placeholder={m.providerIdPlaceholder}
               />
             </div>
@@ -148,7 +198,7 @@ export function ProviderAddDialog({ open, onOpenChange, presetKey, onConfirm, m 
                 <input
                   className={inputClassName()}
                   value={baseUrl}
-                  onChange={(e) => setBaseUrl(e.target.value)}
+                  onChange={(e) => dispatch({ type: 'setBaseUrl', value: e.target.value })}
                   placeholder="https://…"
                 />
               </div>
@@ -157,7 +207,7 @@ export function ProviderAddDialog({ open, onOpenChange, presetKey, onConfirm, m 
                 <select
                   className={selectClassName()}
                   value={api}
-                  onChange={(e) => setApi(e.target.value as ApiType)}
+                  onChange={(e) => dispatch({ type: 'setApi', value: e.target.value as ApiType })}
                 >
                   {API_TYPE_OPTIONS.map((opt) => (
                     <option key={opt.value} value={opt.value}>
@@ -172,7 +222,7 @@ export function ProviderAddDialog({ open, onOpenChange, presetKey, onConfirm, m 
               <input
                 className={inputClassName()}
                 value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
+                onChange={(e) => dispatch({ type: 'setApiKey', value: e.target.value })}
                 placeholder={m.apiKeyPlaceholder}
               />
             </div>

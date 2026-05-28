@@ -58,31 +58,51 @@ export function ClarifyPrompt({
   onSubmit,
   onCancel,
 }: ClarifyPromptProps) {
+  if (!prompt) {
+    return null;
+  }
+
+  return (
+    <ClarifyPromptBody
+      key={prompt.requestId}
+      prompt={prompt}
+      submitting={submitting}
+      submitError={submitError}
+      labels={labels}
+      onSubmit={onSubmit}
+      onCancel={onCancel}
+    />
+  );
+}
+
+function ClarifyPromptBody({
+  prompt,
+  submitting,
+  submitError,
+  labels,
+  onSubmit,
+  onCancel,
+}: {
+  prompt: ClarifyPromptState;
+  submitting: boolean;
+  submitError: string | null;
+  labels: ClarifyPromptCopy;
+  onSubmit: (answer: string) => void | Promise<void>;
+  onCancel: () => void | Promise<void>;
+}) {
   const [customDraft, setCustomDraft] = useState('');
-  const [deadlineMs, setDeadlineMs] = useState<number | null>(null);
+  const [deadlineMs] = useState(() => Date.now() + CLARIFY_PROMPT_COUNTDOWN_MS);
   const [tick, setTick] = useState(0);
   const regionRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!prompt) {
-      setDeadlineMs(null);
-      setCustomDraft('');
-      return;
-    }
-    setDeadlineMs(Date.now() + CLARIFY_PROMPT_COUNTDOWN_MS);
-    setCustomDraft('');
-  }, [prompt?.requestId]);
-
-  useEffect(() => {
-    if (!prompt || !deadlineMs) return;
     const id = window.setInterval(() => setTick((n) => n + 1), 1000);
     return () => window.clearInterval(id);
-  }, [prompt?.requestId, deadlineMs, prompt]);
+  }, []);
 
   useEffect(() => {
-    if (!prompt) return;
     regionRef.current?.focus();
-  }, [prompt?.requestId, prompt]);
+  }, []);
 
   const pick = useCallback(
     (answer: string) => {
@@ -92,13 +112,12 @@ export function ClarifyPrompt({
   );
 
   const remainingSeconds = useMemo(() => {
-    if (!deadlineMs) return 0;
     void tick;
     return Math.max(0, Math.ceil((deadlineMs - Date.now()) / 1000));
   }, [deadlineMs, tick]);
 
-  const metaId = prompt ? `clarify-meta-${prompt.requestId}` : undefined;
-  const errId = submitError && prompt ? `clarify-err-${prompt.requestId}` : undefined;
+  const metaId = `clarify-meta-${prompt.requestId}`;
+  const errId = submitError ? `clarify-err-${prompt.requestId}` : undefined;
 
   const onKeyDownRegion = useCallback(
     (e: KeyboardEvent<HTMLDivElement>) => {
@@ -111,10 +130,6 @@ export function ClarifyPrompt({
     [onCancel, submitting],
   );
 
-  if (!prompt) {
-    return null;
-  }
-
   const hasChoices = Array.isArray(prompt.choices) && prompt.choices.length >= 2;
   const defaultLabel = prompt.default
     ? labels.clarifyDefaultChoice.replace('{{text}}', prompt.default)
@@ -124,14 +139,11 @@ export function ClarifyPrompt({
   const timeLeftLine = labels.clarifyTimeRemaining.replace('{{time}}', formatClock(remainingSeconds));
 
   return (
-    <div
+    <section
       ref={regionRef}
       tabIndex={-1}
-      role="region"
       aria-label={labels.clarifyRegionAria}
       aria-describedby={metaId}
-      aria-invalid={submitError ? true : undefined}
-      aria-errormessage={errId}
       onKeyDown={onKeyDownRegion}
       className={cn(
         'mb-4 rounded-lg border border-edge bg-surface-elevated px-4 py-3 text-sm text-fg shadow-sm outline-none',
@@ -162,7 +174,6 @@ export function ClarifyPrompt({
         <>
           <div
             className="max-h-[min(40vh,16rem)] overflow-y-auto overflow-x-hidden pr-1 [scrollbar-gutter:stable]"
-            role="group"
             aria-label={labels.clarifyChoicesGroupAria}
           >
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -215,6 +226,7 @@ export function ClarifyPrompt({
                 onChange={(e) => setCustomDraft(e.target.value)}
                 disabled={submitting}
                 placeholder={labels.clarifyPlaceholder}
+                aria-label={labels.clarifyPlaceholder}
                 className="min-w-0 flex-1 rounded-md border border-edge bg-surface-panel px-3 py-2 text-fg placeholder:text-fg-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
               />
               <Button
@@ -245,6 +257,7 @@ export function ClarifyPrompt({
             onChange={(e) => setCustomDraft(e.target.value)}
             disabled={submitting}
             placeholder={labels.clarifyPlaceholder}
+            aria-label={labels.clarifyPlaceholder}
             className="min-w-0 flex-1 rounded-md border border-edge bg-surface-panel px-3 py-2 text-fg placeholder:text-fg-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
           />
           <Button
@@ -280,6 +293,6 @@ export function ClarifyPrompt({
           {labels.clarifySkip}
         </Button>
       </div>
-    </div>
+    </section>
   );
 }

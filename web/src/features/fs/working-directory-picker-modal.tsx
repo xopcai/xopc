@@ -1,6 +1,8 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { ChevronUp, FolderInput, Loader2 } from 'lucide-react';
-import { useCallback, useEffect, useId, useState } from 'react';
+import { useCallback, useEffect, useId, useReducer } from 'react';
+
+import { uiPatchReducer, type UiPatchAction } from '@/lib/settings-form-draft';
 
 import { Button } from '@/components/ui/button';
 import { getHostFsMeta, listHostFs, type HostFsEntry, type HostFsListPayload } from '@/features/fs/host-fs-api';
@@ -40,6 +42,24 @@ type Props = {
   wd: MessageBundle['chat']['workingDirectory'];
 };
 
+type PickerUi = {
+  metaHostname: string | null;
+  listState: HostFsListPayload | null;
+  listLoading: boolean;
+  listError: string | null;
+  manualPath: string;
+};
+
+type PickerUiAction = UiPatchAction<PickerUi>;
+
+const initialPickerUi: PickerUi = {
+  metaHostname: null,
+  listState: null,
+  listLoading: false,
+  listError: null,
+  manualPath: '',
+};
+
 export function WorkingDirectoryPickerModal({
   open,
   onOpenChange,
@@ -48,24 +68,19 @@ export function WorkingDirectoryPickerModal({
   wd,
 }: Props) {
   const manualId = useId();
-  const [metaHostname, setMetaHostname] = useState<string | null>(null);
-  const [listState, setListState] = useState<HostFsListPayload | null>(null);
-  const [listLoading, setListLoading] = useState(false);
-  const [listError, setListError] = useState<string | null>(null);
-  const [manualPath, setManualPath] = useState('');
+  const [ui, dispatch] = useReducer(uiPatchReducer<PickerUi>, initialPickerUi);
+  const { metaHostname, listState, listLoading, listError, manualPath } = ui;
 
   const refreshFromPath = useCallback(async (pathArg?: string) => {
-    setListLoading(true);
-    setListError(null);
+    dispatch({ type: 'patch', patch: { listLoading: true, listError: null } });
     try {
       const payload = await listHostFs(pathArg);
-      setListState(payload);
+      dispatch({ type: 'patch', patch: { listState: payload } });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      setListError(msg);
-      setListState(null);
+      dispatch({ type: 'patch', patch: { listError: msg, listState: null } });
     } finally {
-      setListLoading(false);
+      dispatch({ type: 'patch', patch: { listLoading: false } });
     }
   }, []);
 
@@ -75,9 +90,9 @@ export function WorkingDirectoryPickerModal({
     void (async () => {
       try {
         const m = await getHostFsMeta();
-        if (!cancelled) setMetaHostname(m.hostname);
+        if (!cancelled) dispatch({ type: 'patch', patch: { metaHostname: m.hostname } });
       } catch {
-        if (!cancelled) setMetaHostname(null);
+        if (!cancelled) dispatch({ type: 'patch', patch: { metaHostname: null } });
       }
     })();
     return () => {
@@ -88,32 +103,30 @@ export function WorkingDirectoryPickerModal({
   useEffect(() => {
     if (!open) return;
     const initial = initialAbsolutePath?.trim() ?? '';
-    setManualPath(initial);
+    dispatch({ type: 'patch', patch: { manualPath: initial } });
     let cancelled = false;
     void (async () => {
-      setListLoading(true);
-      setListError(null);
+      dispatch({ type: 'patch', patch: { listLoading: true, listError: null } });
       try {
         if (initial) {
           try {
             const payload = await listHostFs(initial);
-            if (!cancelled) setListState(payload);
+            if (!cancelled) dispatch({ type: 'patch', patch: { listState: payload } });
           } catch {
             const payload = await listHostFs();
-            if (!cancelled) setListState(payload);
+            if (!cancelled) dispatch({ type: 'patch', patch: { listState: payload } });
           }
         } else {
           const payload = await listHostFs();
-          if (!cancelled) setListState(payload);
+          if (!cancelled) dispatch({ type: 'patch', patch: { listState: payload } });
         }
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         if (!cancelled) {
-          setListError(msg);
-          setListState(null);
+          dispatch({ type: 'patch', patch: { listError: msg, listState: null } });
         }
       } finally {
-        if (!cancelled) setListLoading(false);
+        if (!cancelled) dispatch({ type: 'patch', patch: { listLoading: false } });
       }
     })();
     return () => {
@@ -265,7 +278,7 @@ export function WorkingDirectoryPickerModal({
                 id={manualId}
                 type="text"
                 value={manualPath}
-                onChange={(e) => setManualPath(e.target.value)}
+                onChange={(e) => dispatch({ type: 'patch', patch: { manualPath: e.target.value } })}
                 placeholder={wd.pathInputPlaceholder}
                 className={inputClassName()}
                 autoComplete="off"

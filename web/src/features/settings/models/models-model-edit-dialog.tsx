@@ -1,6 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/cn';
@@ -28,23 +28,25 @@ type ModelDialogProps = {
   m: ModelsSettingsMessages;
 };
 
-export function ModelEditDialogContent({
-  open,
-  onOpenChange,
-  providerId,
+function ModelEditForm({
   model,
   isNew,
+  providerId,
   onSave,
+  onClose,
   m,
-}: ModelDialogProps) {
-  const [form, setForm] = useState<Partial<CustomModel>>(() => createCustomModel(''));
+}: {
+  model: CustomModel | null;
+  isNew: boolean;
+  providerId: string | null;
+  onSave: (model: CustomModel) => void;
+  onClose: () => void;
+  m: ModelsSettingsMessages;
+}) {
+  const [form, setForm] = useState<Partial<CustomModel>>(() =>
+    model ? { ...model } : createCustomModel(''),
+  );
   const [errors, setErrors] = useState<Map<string, string>>(() => new Map());
-
-  useEffect(() => {
-    if (!open) return;
-    setErrors(new Map());
-    setForm(model ? { ...model } : createCustomModel(''));
-  }, [open, model]);
 
   const update = <K extends keyof CustomModel>(field: K, value: CustomModel[K]) => {
     setForm((f) => ({ ...f, [field]: value }));
@@ -88,48 +90,36 @@ export function ModelEditDialogContent({
       },
     };
     onSave(result);
-    onOpenChange(false);
+    onClose();
   };
 
   const inputSel = parseInputSelect(form as CustomModel);
 
   return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange}>
-      <Dialog.Portal>
-        <Dialog.Overlay
-          className={cn('xopc-dialog-overlay fixed inset-0 bg-scrim', SETTINGS_SHELL_OVERLAY_Z)}
-        />
-        <Dialog.Content
-          className={cn(
-            'xopc-dialog-content fixed left-1/2 top-1/2 max-h-[min(90vh,720px)] w-[min(100%-2rem,28rem)] -translate-x-1/2 -translate-y-1/2',
-            SETTINGS_SHELL_CONTENT_Z,
-            'overflow-y-auto rounded-xl border border-edge bg-surface-panel p-4 shadow-popover dark:border-edge',
-          )}
-          onOpenAutoFocus={(e) => e.preventDefault()}
-        >
-          <div className="mb-3 flex items-start justify-between gap-2">
-            <div>
-              <Dialog.Title className="text-base font-semibold text-fg">
-                {isNew ? m.addModelTitle : m.editModelTitle}
-              </Dialog.Title>
-              {providerId ? (
-                <p className="mt-0.5 text-xs text-fg-muted">
-                  {m.modelProviderLabel}: {providerId}
-                </p>
-              ) : null}
-            </div>
-            <Dialog.Close asChild>
-              <button
-                type="button"
-                className={cn(ghostIconButton, 'p-1.5 hover:bg-surface-base')}
-                aria-label={m.close}
-              >
-                <X className="size-4" />
-              </button>
-            </Dialog.Close>
-          </div>
+    <>
+      <div className="mb-3 flex items-start justify-between gap-2">
+        <div>
+          <Dialog.Title className="text-base font-semibold text-fg">
+            {isNew ? m.addModelTitle : m.editModelTitle}
+          </Dialog.Title>
+          {providerId ? (
+            <p className="mt-0.5 text-xs text-fg-muted">
+              {m.modelProviderLabel}: {providerId}
+            </p>
+          ) : null}
+        </div>
+        <Dialog.Close asChild>
+          <button
+            type="button"
+            className={cn(ghostIconButton, 'p-1.5 hover:bg-surface-base')}
+            aria-label={m.close}
+          >
+            <X className="size-4" />
+          </button>
+        </Dialog.Close>
+      </div>
 
-          <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-3">
             <div>
               <label className="mb-1 block text-xs font-medium text-fg">
                 {m.modelId}
@@ -252,16 +242,54 @@ export function ModelEditDialogContent({
             </div>
           </div>
 
-          <div className="mt-4 flex justify-end gap-2 border-t border-edge-subtle pt-3 dark:border-edge">
-            <Dialog.Close asChild>
-              <Button type="button" variant="secondary">
-                {m.cancel}
-              </Button>
-            </Dialog.Close>
-            <Button type="button" className="bg-accent text-white hover:bg-accent/90" onClick={handleSave}>
-              {isNew ? m.addModelConfirm : m.saveModelConfirm}
-            </Button>
-          </div>
+      <div className="mt-4 flex justify-end gap-2 border-t border-edge-subtle pt-3 dark:border-edge">
+        <Dialog.Close asChild>
+          <Button type="button" variant="secondary">
+            {m.cancel}
+          </Button>
+        </Dialog.Close>
+        <Button type="button" className="bg-accent text-white hover:bg-accent/90" onClick={handleSave}>
+          {isNew ? m.addModelConfirm : m.saveModelConfirm}
+        </Button>
+      </div>
+    </>
+  );
+}
+
+export function ModelEditDialogContent({
+  open,
+  onOpenChange,
+  providerId,
+  model,
+  isNew,
+  onSave,
+  m,
+}: ModelDialogProps) {
+  return (
+    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+      <Dialog.Portal>
+        <Dialog.Overlay
+          className={cn('xopc-dialog-overlay fixed inset-0 bg-scrim', SETTINGS_SHELL_OVERLAY_Z)}
+        />
+        <Dialog.Content
+          className={cn(
+            'xopc-dialog-content fixed left-1/2 top-1/2 max-h-[min(90vh,720px)] w-[min(100%-2rem,28rem)] -translate-x-1/2 -translate-y-1/2',
+            SETTINGS_SHELL_CONTENT_Z,
+            'overflow-y-auto rounded-xl border border-edge bg-surface-panel p-4 shadow-popover dark:border-edge',
+          )}
+          onOpenAutoFocus={(e) => e.preventDefault()}
+        >
+          {open ? (
+            <ModelEditForm
+              key={`${providerId ?? 'none'}-${model?.id ?? 'new'}`}
+              model={model}
+              isNew={isNew}
+              providerId={providerId}
+              onSave={onSave}
+              onClose={() => onOpenChange(false)}
+              m={m}
+            />
+          ) : null}
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

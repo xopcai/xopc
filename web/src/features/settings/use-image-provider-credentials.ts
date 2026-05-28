@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { mutate } from 'swr';
 
 import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
@@ -46,8 +46,8 @@ export function useImageProviderCredentials(summaries: ImageGenProviderCredentia
 
   const ids = useMemo(() => summaries.map((s) => s.id), [summaries]);
 
-  const [credDraft, setCredDraft] = useState<Record<string, ImageProviderCredRow>>({});
-  const [credBaseline, setCredBaseline] = useState<Record<string, ImageProviderCredRow>>({});
+  const dirtyRef = useRef(false);
+  const [localDraft, setLocalDraft] = useState<Record<string, ImageProviderCredRow> | null>(null);
   const [credSaving, setCredSaving] = useState(false);
   const [credError, setCredError] = useState<string | null>(null);
   const [credSavedFlash, setCredSavedFlash] = useState(false);
@@ -58,31 +58,30 @@ export function useImageProviderCredentials(summaries: ImageGenProviderCredentia
     [gwCfg?.payload?.config, ids],
   );
 
+  const credDraft = localDraft ?? credRowsFromServer;
+  const credBaseline = credRowsFromServer;
+
   const credDirty = useMemo(
     () => JSON.stringify(credDraft) !== JSON.stringify(credBaseline),
     [credDraft, credBaseline],
   );
 
-  useEffect(() => {
-    if (!credDirty) {
-      setCredDraft(structuredClone(credRowsFromServer));
-      setCredBaseline(structuredClone(credRowsFromServer));
-    }
-  }, [credRowsFromServer, credDirty]);
-
   const updateCredRow = useCallback((id: string, patch: Partial<ImageProviderCredRow>) => {
-    setCredDraft((prev) => {
-      const base = prev[id] ?? emptyImageProviderCredRow();
-      return { ...prev, [id]: { ...base, ...patch } };
+    dirtyRef.current = true;
+    setLocalDraft((prev) => {
+      const base = prev ?? credRowsFromServer;
+      const row = base[id] ?? emptyImageProviderCredRow();
+      return { ...base, [id]: { ...row, ...patch } };
     });
-  }, []);
+  }, [credRowsFromServer]);
 
   const onDiscardCredentials = useCallback(() => {
-    setCredDraft(structuredClone(credBaseline));
+    dirtyRef.current = false;
+    setLocalDraft(null);
     setCredError(null);
     setCredSavedFlash(false);
     setCredNoopFlash(false);
-  }, [credBaseline]);
+  }, []);
 
   const saveCredentials = useCallback(
     async (errorFallback: string) => {
@@ -99,9 +98,9 @@ export function useImageProviderCredentials(summaries: ImageGenProviderCredentia
         await patchImageProvidersConfig(patch);
         const updated = await gwSwr.mutate?.();
         void mutate(apiUrl(IMAGE_PROVIDERS_SWR_KEY));
-        const nextRows = imageProviderCredRowsFromConfigRoot(updated?.payload?.config, ids);
-        setCredDraft(structuredClone(nextRows));
-        setCredBaseline(structuredClone(nextRows));
+        void updated;
+        dirtyRef.current = false;
+        setLocalDraft(null);
         setCredSavedFlash(true);
         window.setTimeout(() => setCredSavedFlash(false), 2000);
       } catch (e) {

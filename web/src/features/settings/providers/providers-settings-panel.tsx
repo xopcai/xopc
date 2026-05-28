@@ -4,7 +4,7 @@ import {
   KeyRound,
   Search,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
@@ -31,6 +31,42 @@ import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
+type ProvidersDraft = {
+  draft: Record<string, string>;
+  baseline: Record<string, string>;
+};
+
+type ProvidersDraftAction =
+  | { type: 'reset' }
+  | { type: 'sync'; rows: ProviderRowModel[] }
+  | { type: 'patch'; id: string; value: string }
+  | { type: 'discard' }
+  | { type: 'commitDraft' }
+  | { type: 'saved'; rows: ProviderRowModel[] };
+
+function providersDraftReducer(state: ProvidersDraft, action: ProvidersDraftAction): ProvidersDraft {
+  switch (action.type) {
+    case 'reset':
+      return { draft: {}, baseline: {} };
+    case 'sync': {
+      const d: Record<string, string> = {};
+      for (const r of action.rows) d[r.id] = r.apiKey;
+      return { draft: d, baseline: { ...d } };
+    }
+    case 'patch':
+      return { ...state, draft: { ...state.draft, [action.id]: action.value } };
+    case 'discard':
+      return { ...state, draft: { ...state.baseline } };
+    case 'commitDraft':
+      return { ...state, baseline: { ...state.draft } };
+    case 'saved': {
+      const d: Record<string, string> = {};
+      for (const r of action.rows) d[r.id] = r.apiKey;
+      return { draft: d, baseline: { ...d } };
+    }
+  }
+}
+
 /** See `WebSearchSettingsPanel` for the embedded-mode contract. */
 export function ProvidersSettingsPanel({ embedded = false }: { embedded?: boolean } = {}) {
   const language = useLocaleStore((s) => s.language);
@@ -39,8 +75,9 @@ export function ProvidersSettingsPanel({ embedded = false }: { embedded?: boolea
   const token = useGatewayStore((st) => st.token);
   const hasToken = Boolean(token);
 
-  const [draft, setDraft] = useState<Record<string, string>>({});
-  const [baseline, setBaseline] = useState<Record<string, string>>({});
+  const [draftState, dispatchDraft] = useReducer(providersDraftReducer, { draft: {}, baseline: {} });
+  const draft = draftState.draft;
+  const baseline = draftState.baseline;
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saveNotice, setSaveNotice] = useState<null | 'saved' | 'noChanges'>(null);
@@ -49,7 +86,7 @@ export function ProvidersSettingsPanel({ embedded = false }: { embedded?: boolea
   const [unconfiguredOnly, setUnconfiguredOnly] = useState(false);
   const [savedProviderIds, setSavedProviderIds] = useState<Set<string>>(() => new Set());
   const [quickStartProviderId, setQuickStartProviderId] = useState<string | null>(null);
-  const prevSearchRef = useRef('');
+  const dirtyRef = useRef(false);
 
   const metaUrl = apiUrl('/api/providers/meta');
   const fetchMetaList = useCallback(async (url: string) => {
@@ -113,13 +150,10 @@ export function ProvidersSettingsPanel({ embedded = false }: { embedded?: boolea
 
   useEffect(() => {
     if (!hasToken || mergedRows === null) return;
-    if (!dirty) {
-      const d: Record<string, string> = {};
-      for (const r of mergedRows) d[r.id] = r.apiKey;
-      setDraft(d);
-      setBaseline({ ...d });
+    if (!dirtyRef.current) {
+      dispatchDraft({ type: 'sync', rows: mergedRows });
     }
-  }, [hasToken, mergedRows, dirty]);
+  }, [hasToken, mergedRows]);
 
   const metaRows = mergedRows ?? [];
 
@@ -145,21 +179,17 @@ export function ProvidersSettingsPanel({ embedded = false }: { embedded?: boolea
 
   const groups = useMemo(() => groupByCategory(filteredRows), [filteredRows]);
 
-  useEffect(() => {
-    const prev = prevSearchRef.current;
-    prevSearchRef.current = searchQuery;
-    if (searchQuery.trim()) {
+  const searchTrim = searchQuery.trim();
+  const effectiveExpandedCats = useMemo(() => {
+    if (searchTrim) {
       const next = new Set<string>();
       for (const c of CATEGORY_ORDER) {
         if ((groups.get(c) ?? []).length > 0) next.add(c);
       }
-      setExpandedCats(next);
-      return;
+      return next;
     }
-    if (prev.trim()) {
-      setExpandedCats(new Set(['common']));
-    }
-  }, [searchQuery, groups]);
+    return expandedCats;
+  }, [searchTrim, groups, expandedCats]);
 
   const save = useCallback(async () => {
     if (saving) return;
@@ -170,7 +200,8 @@ export function ProvidersSettingsPanel({ embedded = false }: { embedded?: boolea
       toPatch[id] = v;
     }
     if (Object.keys(toPatch).length === 0) {
-      setBaseline({ ...draft });
+      dispatchDraft({ type: 'commitDraft' });
+      dirtyRef.current = false;
       setSaveNotice('noChanges');
       window.setTimeout(() => setSaveNotice(null), 2500);
       return;
@@ -188,10 +219,8 @@ export function ProvidersSettingsPanel({ embedded = false }: { embedded?: boolea
       if (cfg?.payload) {
         const keys = providersKeysFromConfigRoot(cfg.payload.config);
         const rows = mergeProviderRows(list, keys, freshModels);
-        const d: Record<string, string> = {};
-        for (const r of rows) d[r.id] = r.apiKey;
-        setDraft(d);
-        setBaseline({ ...d });
+        dispatchDraft({ type: 'saved', rows });
+        dirtyRef.current = false;
       }
       setSaveNotice('saved');
       window.setTimeout(() => setSaveNotice(null), 2500);
@@ -203,7 +232,8 @@ export function ProvidersSettingsPanel({ embedded = false }: { embedded?: boolea
   }, [cfgData, draft, metaList, models, mutCfg, mutMeta, mutModels, p.saveError, saving]);
 
   const discard = useCallback(() => {
-    setDraft({ ...baseline });
+    dirtyRef.current = false;
+    dispatchDraft({ type: 'discard' });
     setError(null);
     setSaveNotice(null);
     setSavedProviderIds(new Set());
@@ -412,7 +442,7 @@ export function ProvidersSettingsPanel({ embedded = false }: { embedded?: boolea
           {CATEGORY_ORDER.map((cat) => {
             const list = groups.get(cat) ?? [];
             if (list.length === 0) return null;
-            const expanded = expandedCats.has(cat);
+            const expanded = effectiveExpandedCats.has(cat);
             const configuredCount = list.filter((r) => r.configured).length;
             const panelId = `providers-cat-${cat}`;
             return (
@@ -459,7 +489,10 @@ export function ProvidersSettingsPanel({ embedded = false }: { embedded?: boolea
                             rowDirty={(draft[row.id] ?? '') !== (baseline[row.id] ?? '')}
                             labels={p}
                             language={language}
-                            onChange={(id, v) => setDraft((d) => ({ ...d, [id]: v }))}
+                            onChange={(id, v) => {
+                              dirtyRef.current = true;
+                              dispatchDraft({ type: 'patch', id, value: v });
+                            }}
                             onReload={refreshProviders}
                             justSaved={savedProviderIds.has(row.id)}
                             availableModels={models ?? []}
