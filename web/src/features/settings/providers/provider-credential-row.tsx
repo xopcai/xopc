@@ -179,7 +179,9 @@ export function ProviderCredentialRow({
   const isOAuthConfigured = row.configured && !masked && Boolean(value);
 
   const [oauthLoading, setOauthLoading] = useState(false);
-  const [sessionId, setSessionId] = useState<string | undefined>();
+  const [oauthSessionId, setOauthSessionId] = useState<string | undefined>();
+  const oauthSessionIdRef = useRef<string | undefined>(undefined);
+  oauthSessionIdRef.current = oauthSessionId;
   const [oauthStatus, setOauthStatus] = useState<
     'idle' | 'waiting' | 'waiting_code' | 'success' | 'error' | undefined
   >();
@@ -198,18 +200,19 @@ export function ProviderCredentialRow({
 
   useEffect(() => {
     return () => {
+      const sessionId = oauthSessionIdRef.current;
       if (sessionId) {
         void cleanupOAuthSession(sessionId).catch(() => {});
       }
     };
-  }, [sessionId]);
+  }, []);
 
   useEffect(() => {
-    if (!sessionId || !oauthLoading) return;
+    if (!oauthSessionId || !oauthLoading) return;
     const id = window.setInterval(() => {
       void (async () => {
         try {
-          const st = await fetchOAuthSessionStatus(sessionId);
+          const st = await fetchOAuthSessionStatus(oauthSessionId);
           setOauthMessage(st.message);
           setAuthUrl(st.authUrl);
           setInstructions(st.instructions);
@@ -233,18 +236,18 @@ export function ProviderCredentialRow({
       })();
     }, 1000);
     return () => window.clearInterval(id);
-  }, [sessionId, oauthLoading, onReload]);
+  }, [oauthSessionId, oauthLoading, onReload]);
 
   const startOAuth = async () => {
     setOauthLoading(true);
     setOauthStatus('waiting');
     setOauthMessage(labels.oauthStarting);
-    setSessionId(undefined);
+    setOauthSessionId(undefined);
     setAuthUrl(undefined);
     setInstructions(undefined);
     try {
       const res = await startAsyncOAuthLogin(row.id);
-      setSessionId(res.sessionId);
+      setOauthSessionId(res.sessionId);
     } catch (e) {
       setOauthStatus('error');
       setOauthMessage(e instanceof Error ? e.message : 'OAuth failed');
@@ -253,19 +256,21 @@ export function ProviderCredentialRow({
   };
 
   const cancelFlow = async () => {
+    const sessionId = oauthSessionId;
     if (!sessionId) return;
     try {
       await cancelOAuth(sessionId);
     } catch {
       /* ignore */
     }
-    setSessionId(undefined);
+    setOauthSessionId(undefined);
     setOauthLoading(false);
     setOauthStatus('idle');
     setOauthMessage(undefined);
   };
 
   const submitCode = async () => {
+    const sessionId = oauthSessionId;
     if (!sessionId || !codeInput.trim()) return;
     try {
       await submitOAuthCode(sessionId, codeInput.trim());
@@ -473,6 +478,7 @@ export function ProviderCredentialRow({
                         variant="secondary"
                         className="gap-1"
                         disabled={oauthLoading}
+                        data-oauth-session={oauthSessionId ?? ''}
                         onClick={() => void startOAuth()}
                       >
                         {oauthLoading ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <LogIn className="size-4" aria-hidden />}

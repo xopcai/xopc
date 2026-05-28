@@ -4,6 +4,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import { docsGuidePageUrl } from '@/navigation';
+import type { ChannelsSettingsMessages } from '@/i18n/messages';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 
 import { ChannelsHubGrid, type OpenChannelOptions } from './channels-hub-grid';
@@ -148,46 +149,35 @@ export function ChannelsSettingsPanel() {
     }
   }, [mutate, refreshAll]);
 
-  const setPageHeader = usePageHeaderStore((s) => s.setPageHeader);
-  const clearPageHeader = usePageHeaderStore((s) => s.clearPageHeader);
-
-  const channelsHeaderEnd = useMemo(
-    () => (
-      <ChannelsPageHeaderActions
-        ch={ch}
-        refreshing={refreshing}
-        saveOk={saveOk}
-        onRefresh={handleRefresh}
-      />
-    ),
-    [ch, handleRefresh, refreshing, saveOk],
-  );
-
-  useLayoutEffect(() => {
-    if (!hasToken) {
-      clearPageHeader();
-      return () => clearPageHeader();
-    }
-    setPageHeader({
-      startExtra: null,
-      main: null,
-      end: channelsHeaderEnd,
-    });
-    return () => clearPageHeader();
-  }, [channelsHeaderEnd, clearPageHeader, hasToken, setPageHeader]);
-
   if (!hasToken) {
     return (
-      <div className="mx-auto flex w-full max-w-app-main flex-col gap-3 px-4 py-8">
-        <h1 className="text-lg font-semibold text-fg">{m.settingsSections.channels}</h1>
-        <p className="text-sm text-fg-muted">{ch.needToken}</p>
-      </div>
+      <>
+        <ChannelsPageHeaderRegistration
+          hasToken={hasToken}
+          ch={ch}
+          refreshing={refreshing}
+          saveOk={saveOk}
+          onRefresh={handleRefresh}
+        />
+        <div className="mx-auto flex w-full max-w-app-main flex-col gap-3 px-4 py-8">
+          <h1 className="text-lg font-semibold text-fg">{m.settingsSections.channels}</h1>
+          <p className="text-sm text-fg-muted">{ch.needToken}</p>
+        </div>
+      </>
     );
   }
 
   if (loading) {
     return (
-      <div className="mx-auto flex w-full max-w-app-main flex-col gap-6 px-4 py-6">
+      <>
+        <ChannelsPageHeaderRegistration
+          hasToken={hasToken}
+          ch={ch}
+          refreshing={refreshing}
+          saveOk={saveOk}
+          onRefresh={handleRefresh}
+        />
+        <div className="mx-auto flex w-full max-w-app-main flex-col gap-6 px-4 py-6">
         <div className="space-y-2">
           <div className="h-7 w-40 animate-pulse rounded-md bg-surface-hover motion-reduce:animate-none dark:bg-surface-active/50" />
           <div className="h-4 w-full max-w-md animate-pulse rounded-md bg-surface-hover motion-reduce:animate-none dark:bg-surface-active/50" />
@@ -195,17 +185,27 @@ export function ChannelsSettingsPanel() {
         <ChannelsHubGridSkeleton />
         <p className="text-sm text-fg-muted">{ch.loading}</p>
       </div>
+      </>
     );
   }
 
   if (!form) {
     return (
-      <div className="mx-auto flex w-full max-w-app-main flex-col gap-3 px-4 py-8">
-        <p className="text-sm text-fg-muted">{error ?? fetchError ?? ch.loadError}</p>
-        <Button type="button" variant="secondary" onClick={() => void mutate()}>
-          {ch.retry}
-        </Button>
-      </div>
+      <>
+        <ChannelsPageHeaderRegistration
+          hasToken={hasToken}
+          ch={ch}
+          refreshing={refreshing}
+          saveOk={saveOk}
+          onRefresh={handleRefresh}
+        />
+        <div className="mx-auto flex w-full max-w-app-main flex-col gap-3 px-4 py-8">
+          <p className="text-sm text-fg-muted">{error ?? fetchError ?? ch.loadError}</p>
+          <Button type="button" variant="secondary" onClick={() => void mutate()}>
+            {ch.retry}
+          </Button>
+        </div>
+      </>
     );
   }
 
@@ -264,7 +264,15 @@ export function ChannelsSettingsPanel() {
   );
 
   return (
-    <div className="mx-auto flex w-full max-w-app-main flex-col gap-6 px-4 py-6">
+    <>
+      <ChannelsPageHeaderRegistration
+        hasToken={hasToken}
+        ch={ch}
+        refreshing={refreshing}
+        saveOk={saveOk}
+        onRefresh={handleRefresh}
+      />
+      <div className="mx-auto flex w-full max-w-app-main flex-col gap-6 px-4 py-6">
       <header className="flex flex-col gap-1">
         <h1 className="text-lg font-semibold tracking-tight text-fg">{m.settingsSections.channels}</h1>
         <p className="text-sm text-fg-muted">{ch.subtitle}</p>
@@ -381,5 +389,50 @@ export function ChannelsSettingsPanel() {
         />
       ) : null}
     </div>
+    </>
   );
+}
+
+function ChannelsPageHeaderRegistration({
+  hasToken,
+  ch,
+  refreshing,
+  saveOk,
+  onRefresh,
+}: {
+  hasToken: boolean;
+  ch: ChannelsSettingsMessages;
+  refreshing: boolean;
+  saveOk: boolean;
+  onRefresh: () => void | Promise<void>;
+}) {
+  const setPageHeader = usePageHeaderStore((s) => s.setPageHeader);
+  const clearPageHeader = usePageHeaderStore((s) => s.clearPageHeader);
+
+  const channelsHeaderEnd = useMemo(
+    () => (
+      <ChannelsPageHeaderActions
+        ch={ch}
+        refreshing={refreshing}
+        saveOk={saveOk}
+        onRefresh={onRefresh}
+      />
+    ),
+    [ch, onRefresh, refreshing, saveOk],
+  );
+
+  useLayoutEffect(() => {
+    if (!hasToken) {
+      clearPageHeader();
+      return () => clearPageHeader();
+    }
+    setPageHeader({
+      startExtra: null,
+      main: null,
+      end: channelsHeaderEnd,
+    });
+    return () => clearPageHeader();
+  }, [channelsHeaderEnd, clearPageHeader, hasToken, setPageHeader]);
+
+  return null;
 }

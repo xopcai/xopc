@@ -72,14 +72,50 @@ function preferExtractedPath(existing: ExtractedFilePath, incoming: ExtractedFil
   };
 }
 
+function artifactIndexKeys(p: ExtractedFilePath): string[] {
+  const keys: string[] = [];
+  const rel = normalizeWorkspaceRel(p.workspaceRelativePath);
+  if (rel) keys.push(`rel:${rel}`);
+  const abs = p.absolutePath?.replace(/\\/g, '/').trim();
+  if (looksLikeAbsoluteFilePath(abs)) keys.push(`abs:${abs}`);
+  return keys;
+}
+
+function buildArtifactIndex(accum: ExtractedFilePath[]): Map<string, number> {
+  const index = new Map<string, number>();
+  accum.forEach((p, i) => {
+    for (const k of artifactIndexKeys(p)) index.set(k, i);
+  });
+  return index;
+}
+
+function findArtifactIndex(
+  accum: ExtractedFilePath[],
+  index: Map<string, number>,
+  p: ExtractedFilePath,
+): number {
+  for (const k of artifactIndexKeys(p)) {
+    const hit = index.get(k);
+    if (hit !== undefined) return hit;
+  }
+  for (let i = 0; i < accum.length; i++) {
+    if (pathsIndicateSameWorkspaceArtifact(accum[i], p)) return i;
+  }
+  return -1;
+}
+
 function mergeExtractedPaths(accum: ExtractedFilePath[], from: readonly ExtractedFilePath[]): void {
+  const index = buildArtifactIndex(accum);
   for (const p of from) {
-    const idx = accum.findIndex((e) => pathsIndicateSameWorkspaceArtifact(e, p));
+    const idx = findArtifactIndex(accum, index, p);
     if (idx >= 0) {
       accum[idx] = preferExtractedPath(accum[idx], p);
+      for (const k of artifactIndexKeys(accum[idx])) index.set(k, idx);
       continue;
     }
+    const newIdx = accum.length;
     accum.push(p);
+    for (const k of artifactIndexKeys(p)) index.set(k, newIdx);
   }
 }
 
@@ -179,7 +215,10 @@ export function collectAssistantWorkspaceOutputPaths(
 
   // Exact workspace-relative writer keys (from tools that emit `workspaceRelativePaths`).
   const writerRels = new Set(
-    out.map((p) => normalizeWorkspaceRel(p.workspaceRelativePath)).filter(Boolean),
+    out.flatMap((p) => {
+      const v = normalizeWorkspaceRel(p.workspaceRelativePath);
+      return v ? [v] : [];
+    }),
   );
   // Basename-only keys from absolute writer paths (e.g. write_file -> "File written: /…/foo.html").
   // Cross-linking via these is intentionally fuzzy and gated by `mentionIsPathShaped`.
@@ -208,7 +247,7 @@ export function collectAssistantWorkspaceOutputPaths(
       // Basename cross-link: only allow when the mention has at least one `/` so we have
       // some namespace to disambiguate. Bare-name mentions (`README.md`) collide too often
       // across tool outputs and would false-positive (option A).
-      if (!rel.includes('/')) return false;
+      if (rel.split('/').length < 2) return false;
       const name = fileNameKey(rel);
       return name.length > 0 && writerBasenames.has(name);
     });

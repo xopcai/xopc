@@ -38,6 +38,24 @@ function presetLabel(ms: number, presets: IntervalPresetLabels): string | null {
   }
 }
 
+type IntervalUnit = 'second' | 'minute' | 'hour';
+
+const EN_UNIT_FORMATTERS: Record<IntervalUnit, Intl.NumberFormat> = {
+  second: new Intl.NumberFormat('en-US', { style: 'unit', unit: 'second', unitDisplay: 'long' }),
+  minute: new Intl.NumberFormat('en-US', { style: 'unit', unit: 'minute', unitDisplay: 'long' }),
+  hour: new Intl.NumberFormat('en-US', { style: 'unit', unit: 'hour', unitDisplay: 'long' }),
+};
+
+const ZH_UNIT_FORMATTERS: Record<IntervalUnit, Intl.NumberFormat> = {
+  second: new Intl.NumberFormat('zh-CN', { style: 'unit', unit: 'second', unitDisplay: 'long' }),
+  minute: new Intl.NumberFormat('zh-CN', { style: 'unit', unit: 'minute', unitDisplay: 'long' }),
+  hour: new Intl.NumberFormat('zh-CN', { style: 'unit', unit: 'hour', unitDisplay: 'long' }),
+};
+
+function intervalUnitFormat(locale: string, unit: IntervalUnit): Intl.NumberFormat {
+  return locale.startsWith('zh') ? ZH_UNIT_FORMATTERS[unit] : EN_UNIT_FORMATTERS[unit];
+}
+
 /** Human-readable label for a millisecond interval (preset phrase or compact duration). */
 export function formatIntervalMsLabel(
   intervalMs: number,
@@ -52,14 +70,14 @@ export function formatIntervalMsLabel(
 
   const sec = Math.max(1, Math.round(ms / 1000));
   if (sec < 120) {
-    return new Intl.NumberFormat(locale, { style: 'unit', unit: 'second', unitDisplay: 'long' }).format(sec);
+    return intervalUnitFormat(locale, 'second').format(sec);
   }
   const min = Math.round(sec / 60);
   if (min < 120) {
-    return new Intl.NumberFormat(locale, { style: 'unit', unit: 'minute', unitDisplay: 'long' }).format(min);
+    return intervalUnitFormat(locale, 'minute').format(min);
   }
   const hr = Math.round(min / 60);
-  return new Intl.NumberFormat(locale, { style: 'unit', unit: 'hour', unitDisplay: 'long' }).format(hr);
+  return intervalUnitFormat(locale, 'hour').format(hr);
 }
 
 export function defaultIntervalPresetsOrder(): readonly number[] {

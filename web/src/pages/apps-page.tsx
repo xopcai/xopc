@@ -88,7 +88,7 @@ export function AppsPage() {
           (e.description ?? '').toLowerCase().includes(q),
       );
     }
-    return [...list].sort((a, b) => {
+    return list.toSorted((a, b) => {
       if (a.hasUi !== b.hasUi) return a.hasUi ? -1 : 1;
       return (a.name || a.id).localeCompare(b.name || b.id, language);
     });

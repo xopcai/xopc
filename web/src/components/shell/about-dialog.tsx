@@ -15,6 +15,25 @@ import { useLocaleStore } from '@/stores/locale-store';
 
 const REPO_URL = 'https://github.com/xopcai/xopc';
 
+const BUILD_DATE_ZH = new Intl.DateTimeFormat('zh-CN', {
+  year: 'numeric',
+  month: 'numeric',
+  day: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hour12: false,
+});
+const BUILD_DATE_EN = new Intl.DateTimeFormat('en-US', {
+  year: 'numeric',
+  month: 'numeric',
+  day: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hour12: false,
+});
+
 type GatewayHealth = {
   version?: string;
   service?: string;
@@ -24,15 +43,7 @@ function formatBuildDate(iso: string, locale: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
   try {
-    return new Intl.DateTimeFormat(locale === 'zh' ? 'zh-CN' : 'en-US', {
-      year: 'numeric',
-      month: 'numeric',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: false,
-    }).format(d);
+    return (locale === 'zh' ? BUILD_DATE_ZH : BUILD_DATE_EN).format(d);
   } catch {
     return d.toISOString();
   }
@@ -313,7 +324,7 @@ function ElectronUpdateHint({
   if (state === 'downloading') {
     return (
       <p className="flex items-center gap-2 text-[12px] text-fg-muted">
-        <Download className="size-3.5 animate-bounce" />
+        <Download className="size-3.5 motion-safe:animate-[bounce_1s_ease-out_infinite]" />
         <span>{d.checkUpdatesDownloading.replace('{percent}', String(Math.round(percent ?? 0)))}</span>
       </p>
     );

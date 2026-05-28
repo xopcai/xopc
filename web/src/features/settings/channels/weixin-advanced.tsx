@@ -48,10 +48,10 @@ export function WeixinAdvanced({
           value={wx.allowFrom.join(', ')}
           onChange={(e) =>
             updateWeixin({
-              allowFrom: e.target.value
-                .split(/[,\n]/)
-                .map((s) => s.trim())
-                .filter(Boolean),
+              allowFrom: e.target.value.split(/[,\n]/).flatMap((s) => {
+                const v = s.trim();
+                return v ? [v] : [];
+              }),
             })
           }
         />

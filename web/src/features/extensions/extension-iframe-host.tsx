@@ -59,7 +59,7 @@ export function ExtensionIframeHost({
   const displayName = extensionName?.trim() || extensionId;
   const iframeTitle = title?.trim() || `Extension ${extensionId}`;
   const permsKey = useMemo(
-    () => JSON.stringify([...(permissions ?? [])].sort()),
+    () => JSON.stringify(Array.from(permissions ?? []).toSorted()),
     [permissions],
   );
   /** Stable list so registerIframe effect does not churn every render (permissions ?? [] is a new []). */

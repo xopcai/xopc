@@ -373,7 +373,13 @@ export function applyWireToEditor(root: HTMLElement, wire: string, caretWireOffs
   let n: Node | null;
   while ((n = walker.nextNode())) {
     const t = n.textContent ?? '';
-    const idx = t.indexOf(CARET_PROBE);
+    let idx = -1;
+    for (let ci = 0; ci < t.length; ci++) {
+      if (t[ci] === CARET_PROBE) {
+        idx = ci;
+        break;
+      }
+    }
     if (idx >= 0) {
       const tn = n as Text;
       tn.textContent = t.slice(0, idx) + t.slice(idx + CARET_PROBE.length);

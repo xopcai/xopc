@@ -18,11 +18,19 @@ import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useThemeStore } from '@/stores/theme-store';
 
+const WORKSPACE_FILE_MTIME_ZH = new Intl.DateTimeFormat('zh-CN', {
+  dateStyle: 'medium',
+  timeStyle: 'short',
+});
+const WORKSPACE_FILE_MTIME_EN = new Intl.DateTimeFormat('en', {
+  dateStyle: 'medium',
+  timeStyle: 'short',
+});
+
 function formatWorkspaceFileMtime(mtimeMs: number, language: 'en' | 'zh'): string {
-  return new Intl.DateTimeFormat(language === 'zh' ? 'zh-CN' : 'en', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(new Date(mtimeMs));
+  return (language === 'zh' ? WORKSPACE_FILE_MTIME_ZH : WORKSPACE_FILE_MTIME_EN).format(
+    new Date(mtimeMs),
+  );
 }
 
 export interface WorkspaceFilePreviewPanelProps {

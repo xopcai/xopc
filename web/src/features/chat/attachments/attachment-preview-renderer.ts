@@ -69,8 +69,8 @@ export async function renderPdfInContainer(
   const pagesHost = document.createElement('div');
   wrapper.appendChild(pagesHost);
 
-  const renderPageToHost = async (pageNum: number, numPagesTotal: number) => {
-    if (!pdf) return;
+  const renderPageElement = async (pageNum: number, numPagesTotal: number) => {
+    if (!pdf) return null;
     const page = await pdf.getPage(pageNum);
 
     const pageContainer = document.createElement('div');
@@ -107,15 +107,27 @@ export async function renderPdfInContainer(
       pageContainer.appendChild(separator);
     }
 
-    pagesHost.appendChild(pageContainer);
+    return pageContainer;
+  };
+
+  const appendRenderedPages = async (pageNums: number[], numPagesTotal: number) => {
+    const rendered = await Promise.all(
+      pageNums.map((pageNum) => renderPageElement(pageNum, numPagesTotal)),
+    );
+    for (const pageContainer of rendered) {
+      if (pageContainer) pagesHost.appendChild(pageContainer);
+    }
+    await yieldToBrowser();
   };
 
   const numPages = pdf.numPages;
   const initialEnd = Math.min(PDF_INITIAL_PAGE_COUNT, numPages);
 
-  for (let pageNum = 1; pageNum <= initialEnd; pageNum++) {
-    await renderPageToHost(pageNum, numPages);
-    await yieldToBrowser();
+  if (initialEnd > 0) {
+    await appendRenderedPages(
+      Array.from({ length: initialEnd }, (_, i) => i + 1),
+      numPages,
+    );
   }
 
   let nextPage = initialEnd + 1;
@@ -138,10 +150,11 @@ export async function renderPdfInContainer(
         loadingMore = true;
         try {
           const batchEnd = Math.min(nextPage + PDF_LAZY_PAGE_BATCH - 1, numPages);
-          for (let p = nextPage; p <= batchEnd; p++) {
-            await renderPageToHost(p, numPages);
-            await yieldToBrowser();
-          }
+          const batchPageNums = Array.from(
+            { length: batchEnd - nextPage + 1 },
+            (_, i) => nextPage + i,
+          );
+          await appendRenderedPages(batchPageNums, numPages);
           nextPage = batchEnd + 1;
           if (nextPage > numPages) {
             observer?.disconnect();

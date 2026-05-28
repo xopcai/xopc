@@ -4,6 +4,7 @@ import { SKILL_ID_IN_WIRE } from '@/features/chat/palette/skill-wire-pattern';
 const SKILL_HEAD_AT = new RegExp(`^\\/skill:(${SKILL_ID_IN_WIRE})`);
 
 let sortedEntries: Array<{ key: string }> = [];
+const slashCommandEowSuffixReByTok = new Map<string, RegExp>();
 
 /** Rebuilt when `fetchCommandsCached` resolves (and on empty / failure). */
 export function refreshSlashCommandWireIndex(commands: CommandEntry[] | null | undefined): void {
@@ -14,7 +15,8 @@ export function refreshSlashCommandWireIndex(commands: CommandEntry[] | null | u
       if (typeof a === 'string' && a.length > 0) keys.add(a);
     }
   }
-  sortedEntries = [...keys].sort((a, b) => b.length - a.length).map((key) => ({ key }));
+  sortedEntries = Array.from(keys).toSorted((a, b) => b.length - a.length).map((key) => ({ key }));
+  slashCommandEowSuffixReByTok.clear();
 }
 
 function boundaryOk(rest: string, endExclusive: number): boolean {
@@ -92,6 +94,15 @@ function escapeReLit(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+function slashCommandEowSuffixReFor(tok: string): RegExp {
+  let re = slashCommandEowSuffixReByTok.get(tok);
+  if (!re) {
+    re = new RegExp(`(${escapeReLit(tok)})([ \\t\\f\\v]*)$`);
+    slashCommandEowSuffixReByTok.set(tok, re);
+  }
+  return re;
+}
+
 /** `head` ends with `/${key}` (caret flush after token). */
 export function slashCommandPlainSuffixAtEnd(head: string): { tokenStart: number } | null {
   for (const { key } of sortedEntries) {
@@ -107,7 +118,7 @@ export function slashCommandPlainSuffixAtEnd(head: string): { tokenStart: number
 export function slashCommandEowSuffixAtEnd(head: string): { tokenStart: number } | null {
   for (const { key } of sortedEntries) {
     const tok = `/${key}`;
-    const m = head.match(new RegExp(`(${escapeReLit(tok)})([ \\t\\f\\v]*)$`));
+    const m = head.match(slashCommandEowSuffixReFor(tok));
     if (!m) continue;
     const tokenStart = head.length - m[0].length;
     if (trySlashCommandTokenAt(head, tokenStart)) return { tokenStart };

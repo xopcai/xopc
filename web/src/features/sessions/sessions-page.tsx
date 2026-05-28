@@ -70,22 +70,21 @@ export function SessionsPage() {
   const agentItems = chatAgents?.items ?? [];
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const initialSearch = searchParams.get('q') ?? '';
-  const initialStatus = searchParams.get('status');
-  const initialView = searchParams.get('view');
-  const initialChannel = searchParams.get('channel') ?? '';
-  const initialStatusFilter: StatusFilter = SESSION_STATUS_FILTER_SET.has(initialStatus as StatusFilter)
-    ? (initialStatus as StatusFilter)
-    : 'all';
-  const initialViewMode: SessionsViewMode = SESSION_VIEW_MODE_SET.has(initialView as SessionsViewMode)
-    ? (initialView as SessionsViewMode)
-    : 'grid';
-
-  const [searchInput, setSearchInput] = useState(initialSearch);
-  const [debouncedSearch, setDebouncedSearch] = useState(initialSearch.trim());
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>(initialStatusFilter);
-  const [viewMode, setViewMode] = useState<SessionsViewMode>(initialViewMode);
-  const [channelFilter, setChannelFilter] = useState(initialChannel.trim());
+  const [searchInput, setSearchInput] = useState(() => searchParams.get('q') ?? '');
+  const [debouncedSearch, setDebouncedSearch] = useState(() => (searchParams.get('q') ?? '').trim());
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>(() => {
+    const initialStatus = searchParams.get('status');
+    return SESSION_STATUS_FILTER_SET.has(initialStatus as StatusFilter)
+      ? (initialStatus as StatusFilter)
+      : 'all';
+  });
+  const [viewMode, setViewMode] = useState<SessionsViewMode>(() => {
+    const initialView = searchParams.get('view');
+    return SESSION_VIEW_MODE_SET.has(initialView as SessionsViewMode)
+      ? (initialView as SessionsViewMode)
+      : 'grid';
+  });
+  const [channelFilter, setChannelFilter] = useState(() => (searchParams.get('channel') ?? '').trim());
 
   const [sessions, setSessions] = useState<SessionMetadata[]>([]);
   const [loading, setLoading] = useState(false);
@@ -101,7 +100,10 @@ export function SessionsPage() {
   const [confirmKey, setConfirmKey] = useState<string | null>(null);
 
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(searchInput.trim()), 300);
+    const t = setTimeout(() => {
+      const next = searchInput.trim();
+      setDebouncedSearch((prev) => (prev === next ? prev : next));
+    }, 300);
     return () => clearTimeout(t);
   }, [searchInput]);
 
@@ -172,7 +174,7 @@ export function SessionsPage() {
     return () => {
       cancelled = true;
     };
-  }, [hasToken, debouncedSearch, statusFilter, s.loadError]);
+  }, [hasToken, debouncedSearch, statusFilter, channelFilter, s.loadError]);
 
   useEffect(() => {
     if (!hasToken) return;
@@ -357,9 +359,13 @@ export function SessionsPage() {
   const channelChips = (() => {
     const entries = Object.entries(stats?.byChannel ?? {}).sort((a, b) => b[1] - a[1]);
     const top = entries.slice(0, 6).map(([id]) => id);
+    const topSet = new Set(top);
     // Keep a few common channels visible even if no stats yet.
     for (const c of ['telegram', 'weixin', 'feishu']) {
-      if (!top.includes(c)) top.push(c);
+      if (!topSet.has(c)) {
+        top.push(c);
+        topSet.add(c);
+      }
     }
     return top.slice(0, 8);
   })();
@@ -386,6 +392,7 @@ export function SessionsPage() {
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               placeholder={s.searchPlaceholder}
+              data-debounced-query={debouncedSearch || undefined}
               className="min-w-0 flex-1 border-0 bg-transparent text-sm text-fg placeholder:text-fg-disabled focus:outline-none focus:ring-0"
             />
           </div>
@@ -548,6 +555,7 @@ export function SessionsPage() {
                 'grid min-w-0 gap-3',
                 viewMode === 'grid' ? 'sm:grid-cols-2 lg:grid-cols-3' : 'grid-cols-1',
               )}
+              data-debounced-query={debouncedSearch || undefined}
             >
               {sessions.map((session) => {
                 const sessionAgentId = resolveSessionAgentId(session, defaultAgentId);

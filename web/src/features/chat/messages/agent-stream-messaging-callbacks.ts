@@ -1,5 +1,4 @@
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
-import { flushSync } from 'react-dom';
 
 import {
   clearLiveSessionCache,
@@ -114,10 +113,7 @@ export function createAgentStreamMessagingCallbacks(opts: {
 
   const flushStreamingToReact = () => {
     cancelScheduledStreamingCommit();
-    const bubble = readStreamingBubble();
-    if (!bubble) return;
-    lastStreamingReactCommitAt = performance.now();
-    flushSync(() => setStreamingMsg(bubble));
+    applyStreamingToReact();
   };
 
   const scheduleStreamingToReact = () => {

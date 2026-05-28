@@ -1,5 +1,4 @@
 import { useCallback, useRef, type Dispatch, type RefObject, type SetStateAction } from 'react';
-import { flushSync } from 'react-dom';
 
 import {
   clearLiveSessionCache,
@@ -66,7 +65,7 @@ export function useChatSessionStreaming(deps: {
   ) => void;
   loadSessionById: (key: string, offset?: number) => Promise<Message[] | undefined>;
   createNewSession: () => Promise<void>;
-  pollSessionNameAfterTurn: () => Promise<void>;
+  pollSessionNameAfterTurn: () => void;
   /** Latest committed messages (synced each render) for resume cache seeding. */
   latestMessagesRef: RefObject<Message[]>;
 }) {
@@ -105,15 +104,13 @@ export function useChatSessionStreaming(deps: {
     (opts?: { skipSteeringQueueFlush?: boolean }) => {
       const cacheKey = activeStreamSessionKeyRef.current ?? sessionKeyRef.current;
       let finalMsg: Message | null = null;
-      flushSync(() => {
-        setStreamingMsg((prev) => {
-          if (!prev) return null;
-          const msg = ensureAssistantMessage(prev, Date.now());
-          finalizeStreamingThinking(msg.content);
-          finalizeRunningTools(msg.content);
-          finalMsg = cloneMessageForRender(msg);
-          return null;
-        });
+      setStreamingMsg((prev) => {
+        if (!prev) return null;
+        const msg = ensureAssistantMessage(prev, Date.now());
+        finalizeStreamingThinking(msg.content);
+        finalizeRunningTools(msg.content);
+        finalMsg = cloneMessageForRender(msg);
+        return null;
       });
       const appended = finalMsg;
       if (appended && hasRenderableAssistantContent(appended)) {
@@ -204,20 +201,18 @@ export function useChatSessionStreaming(deps: {
         hydratedResumeTail = true;
         let extractedTail: Message | null = null;
         let committedWithoutTail: Message[] = [];
-        flushSync(() => {
-          setMessages((prev) => {
-            if (prev.length === 0) return prev;
-            const last = prev[prev.length - 1];
-            if (last?.role !== 'assistant') return prev;
-            extractedTail = cloneMessageForRender(last);
-            committedWithoutTail = prev.slice(0, -1);
-            return committedWithoutTail;
-          });
-          if (extractedTail) {
-            setStreamingMsg((prev) => prev ?? extractedTail);
-            liveSessionCacheApplyHydratedTail(chatId, committedWithoutTail, extractedTail);
-          }
+        setMessages((prev) => {
+          if (prev.length === 0) return prev;
+          const last = prev[prev.length - 1];
+          if (last?.role !== 'assistant') return prev;
+          extractedTail = cloneMessageForRender(last);
+          committedWithoutTail = prev.slice(0, -1);
+          return committedWithoutTail;
         });
+        if (extractedTail) {
+          setStreamingMsg((prev) => prev ?? extractedTail);
+          liveSessionCacheApplyHydratedTail(chatId, committedWithoutTail, extractedTail);
+        }
       };
 
       try {

@@ -44,7 +44,13 @@ export function AgentDefaultsSkillsAllowlistPanel(props: AgentDefaultsPanelProps
   const restrictMode = form.skillsAllowlist.length > 0;
 
   const allowSet = useMemo(
-    () => new Set(form.skillsAllowlist.map((s) => s.trim()).filter(Boolean)),
+    () =>
+      new Set(
+        form.skillsAllowlist.flatMap((s) => {
+          const v = s.trim();
+          return v ? [v] : [];
+        }),
+      ),
     [form.skillsAllowlist],
   );
 
@@ -73,7 +79,12 @@ export function AgentDefaultsSkillsAllowlistPanel(props: AgentDefaultsPanelProps
 
   const toggleId = useCallback(
     (id: string, checked: boolean) => {
-      const selected = new Set(form.skillsAllowlist.map((s) => s.trim()).filter(Boolean));
+      const selected = new Set(
+        form.skillsAllowlist.flatMap((s) => {
+          const v = s.trim();
+          return v ? [v] : [];
+        }),
+      );
       if (checked) {
         selected.add(id);
       } else {
@@ -141,13 +152,14 @@ export function AgentDefaultsSkillsAllowlistPanel(props: AgentDefaultsPanelProps
                 )}
               >
                 <ul className="flex flex-col gap-2.5 text-sm">
-                  {rowsToRender.filter((s) => rowId(s)).map((s) => {
+                  {rowsToRender.flatMap((s) => {
                     const id = rowId(s);
+                    if (!id) return [];
                     const on = restrictMode && allowSet.has(id);
                     const desc = typeof s.description === 'string' ? s.description.trim() : '';
                     const descLine = desc || agentsTab.skillsNoDescription;
                     const unknown = !catalogIds.includes(id);
-                    return (
+                    return [
                       <li
                         key={id}
                         className="h-16 shrink-0 overflow-hidden rounded-xl border border-edge-subtle bg-surface-panel/60 px-3 dark:border-edge-subtle"
@@ -181,8 +193,8 @@ export function AgentDefaultsSkillsAllowlistPanel(props: AgentDefaultsPanelProps
                             </p>
                           </div>
                         </label>
-                      </li>
-                    );
+                      </li>,
+                    ];
                   })}
                 </ul>
               </div>

@@ -397,20 +397,23 @@ export function GlobalCommandPaletteHost() {
             },
           }));
 
-          const skillHits: Array<Omit<GlobalHit, 'rank'>> = skillsPayload.catalog
-            .filter((s) => s.enabled && !s.disableModelInvocation)
-            .map((s) => ({
-              kind: 'skill',
-              id: `skill:${s.name}`,
-              title: `/skill:${s.name}`,
-              subtitle: s.description,
-              groupLabel: groups.skills,
-              keywords: [s.source ?? '', 'skill'],
-              run: () => {
-                const text = `/skill:${s.name} `;
-                fillChatComposerWithNavigate(text, pathname, navigate, close);
+          const skillHits: Array<Omit<GlobalHit, 'rank'>> = skillsPayload.catalog.flatMap((s) => {
+            if (!s.enabled || s.disableModelInvocation) return [];
+            return [
+              {
+                kind: 'skill',
+                id: `skill:${s.name}`,
+                title: `/skill:${s.name}`,
+                subtitle: s.description,
+                groupLabel: groups.skills,
+                keywords: [s.source ?? '', 'skill'],
+                run: () => {
+                  const text = `/skill:${s.name} `;
+                  fillChatComposerWithNavigate(text, pathname, navigate, close);
+                },
               },
-            }));
+            ];
+          });
 
           const sessionHits: Array<Omit<GlobalHit, 'rank'>> = (sessions.items ?? []).map((s) => ({
             kind: 'session',
@@ -425,27 +428,30 @@ export function GlobalCommandPaletteHost() {
             },
           }));
 
-          const fileHits: Array<Omit<GlobalHit, 'rank'>> = files
-            .filter((f) => !f.isDirectory)
-            .map((f) => ({
-              kind: 'file',
-              id: `file:${f.relativePath}`,
-              title: f.name,
-              subtitle: f.relativePath,
-              groupLabel: groups.files,
-              keywords: [f.relativePath],
-              run: () => {
-                close();
-                const rel = f.relativePath.replace(/\\/g, '/').replace(/^\/+/, '');
-                const openPreview = () => setPreviewPath(rel);
-                if (pathname.startsWith('/chat')) {
-                  openPreview();
-                  return;
-                }
-                navigate('/chat');
-                window.setTimeout(() => openPreview(), 0);
+          const fileHits: Array<Omit<GlobalHit, 'rank'>> = files.flatMap((f) => {
+            if (f.isDirectory) return [];
+            return [
+              {
+                kind: 'file',
+                id: `file:${f.relativePath}`,
+                title: f.name,
+                subtitle: f.relativePath,
+                groupLabel: groups.files,
+                keywords: [f.relativePath],
+                run: () => {
+                  close();
+                  const rel = f.relativePath.replace(/\\/g, '/').replace(/^\/+/, '');
+                  const openPreview = () => setPreviewPath(rel);
+                  if (pathname.startsWith('/chat')) {
+                    openPreview();
+                    return;
+                  }
+                  navigate('/chat');
+                  window.setTimeout(() => openPreview(), 0);
+                },
               },
-            }));
+            ];
+          });
 
           const settingsFieldHits = buildSettingsFieldHits(language, navigate, close, groups.navigate);
 
