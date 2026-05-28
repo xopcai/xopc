@@ -136,14 +136,15 @@ export const AtMentionPicker = memo(function AtMentionPicker({
       clearPreviewTimer();
       previewAbortRef.current += 1;
       const rid = previewAbortRef.current;
-      if (!sessionKey?.trim() || item.isDirectory || item.isBrowseUp || !item.relativePath) {
+      const relativePath = item.relativePath;
+      if (!sessionKey?.trim() || item.isDirectory || item.isBrowseUp || !relativePath) {
         dispatchLayout({ type: 'set-hover', hoverPreview: null });
         return;
       }
       previewTimerRef.current = setTimeout(() => {
         previewTimerRef.current = null;
         if (rid !== previewAbortRef.current) return;
-        void readWorkspaceFile(item.relativePath!, { sessionKey })
+        void readWorkspaceFile(relativePath, { sessionKey })
           .then(({ content }) => {
             const snippet = content.length > PREVIEW_MAX_CHARS ? `${content.slice(0, PREVIEW_MAX_CHARS)}…` : content;
             if (rid !== previewAbortRef.current) return;

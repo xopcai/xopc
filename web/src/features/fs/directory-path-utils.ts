@@ -1,5 +1,5 @@
 export const RECENT_DIRS_KEY = 'xopc.recentWorkspaceDirs.v1';
-export const MAX_RECENT_DIRS = 10;
+const MAX_RECENT_DIRS = 10;
 
 function readRecentDirs(): string[] {
   try {
