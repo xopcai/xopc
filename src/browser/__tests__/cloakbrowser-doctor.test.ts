@@ -10,9 +10,9 @@ const binDirState = vi.hoisted(() => ({ path: '' }));
 vi.mock('../../config/paths.js', () => ({
   resolveBinDir: () => binDirState.path,
 }));
-vi.mock('../providers/cloakbrowser.js', async () => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const mod: any = await import('../providers/cloakbrowser.js');
+
+vi.mock('../providers/cloakbrowser.js', async (importOriginal) => {
+  const mod = await importOriginal();
   return {
     ...mod,
     detectPlatform: () => ({
