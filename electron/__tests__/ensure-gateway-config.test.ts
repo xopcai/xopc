@@ -17,6 +17,8 @@ describe('ensureGatewayCorsOriginsForNetworkBind', () => {
     expect(next.gateway?.corsOrigins).toEqual([
       'http://localhost:28790',
       'http://127.0.0.1:28790',
+      'http://localhost:3000',
+      'http://127.0.0.1:3000',
     ]);
   });
 
