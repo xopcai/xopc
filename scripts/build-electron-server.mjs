@@ -26,6 +26,7 @@ const external = [
   '@vscode/ripgrep',
   'silk-wasm',
   'node-cron',
+  'fsevents',
 ];
 
 await esbuild.build({
