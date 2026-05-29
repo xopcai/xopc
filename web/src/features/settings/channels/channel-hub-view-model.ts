@@ -29,8 +29,6 @@ export type ChannelHubCardVm = {
   primaryAction: ChannelHubPrimaryAction;
 };
 
-const CHANNEL_HUB_IDS: readonly ChannelHubId[] = ['telegram', 'weixin', 'feishu'];
-
 export function resolveChannelConnected(statuses: ChannelStatus[], id: string): boolean {
   return statuses.find((s) => s.name === id)?.connected ?? false;
 }
@@ -163,9 +161,6 @@ export function buildManageableChannelHubCardVm(params: {
   };
 }
 
-/** @deprecated alias */
-const buildChannelHubCardVm = buildManageableChannelHubCardVm;
-
 export function buildExtensionChannelHubCardVm(params: {
   id: string;
   config: unknown;
@@ -234,20 +229,4 @@ export function buildChannelHubCardsForCatalog(params: {
       ch: params.ch,
     }),
   );
-}
-
-function buildChannelHubCards(
-  form: ChannelsSettingsState,
-  statuses: ChannelStatus[],
-  pairingSummary: ChannelPairingSummaryPayload,
-  ch: ChannelsSettingsMessages,
-): ChannelHubCardVm[] {
-  return buildChannelHubCardsForCatalog({
-    catalogIds: [...CHANNEL_HUB_IDS],
-    form,
-    config: null,
-    statuses,
-    pairingSummary,
-    ch,
-  });
 }
