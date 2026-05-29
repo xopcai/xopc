@@ -14,7 +14,7 @@ import { mkdir, mkdtemp, readdir, rename, rm, stat } from 'node:fs/promises';
 import { platform as osPlatform, arch as osArch, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pipeline } from 'node:stream/promises';
-import { Readable } from 'node:stream';
+import { Readable, Transform } from 'node:stream';
 import { ChildProcess, spawn } from 'node:child_process';
 
 import AdmZip from 'adm-zip';
@@ -301,7 +301,11 @@ async function downloadArchiveToFile(
     contentLength && Number.isFinite(Number(contentLength)) ? Number(contentLength) : null;
   let bytesReceived = 0;
 
-  const report = () => {
+  let lastReportAt = 0;
+  const report = (force = false) => {
+    const now = Date.now();
+    if (!force && now - lastReportAt < 250) return;
+    lastReportAt = now;
     void onProgress?.({
       phase: 'downloading',
       message: 'Downloading CloakBrowser archive',
@@ -314,16 +318,19 @@ async function downloadArchiveToFile(
     });
   };
 
-  report();
+  report(true);
 
   const nodeStream = Readable.fromWeb(response.body as Parameters<typeof Readable.fromWeb>[0]);
-  nodeStream.on('data', (chunk: Buffer | string) => {
-    bytesReceived += typeof chunk === 'string' ? Buffer.byteLength(chunk) : chunk.length;
-    report();
+  const counting = new Transform({
+    transform(chunk, _encoding, callback) {
+      bytesReceived += chunk.length;
+      report();
+      callback(null, chunk);
+    },
   });
 
-  await pipeline(nodeStream, createWriteStream(archivePath));
-  report();
+  await pipeline(nodeStream, counting, createWriteStream(archivePath));
+  report(true);
 }
 
 async function downloadBinary(

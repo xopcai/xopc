@@ -74,7 +74,7 @@ export class GatewayServer {
     });
 
     const { configureTunnelFromGatewayConfig } = await import('../tunnel/gateway-lifecycle.js');
-    await configureTunnelFromGatewayConfig(this.service.currentConfig);
+    await configureTunnelFromGatewayConfig(this.service.currentConfig, { deferWellKnownFetch: true });
 
     const effectiveToken = this.config.token || this.service.getAuthToken();
     const app = createHonoApp({
