@@ -99,8 +99,16 @@ export async function prepareSessionManagerForRun(params: {
   }
 
   if (params.hadSessionFile && header && !hasAssistant) {
-    // Reset file so the first assistant flush includes header+user+assistant in order.
-    await fs.writeFile(params.sessionFile, "", "utf-8");
+    // Remove the pre-created transcript so pi SessionManager can create it with O_EXCL
+    // on the first assistant flush (pi-coding-agent 0.77+ uses open(..., "wx") there).
+    try {
+      await fs.unlink(params.sessionFile);
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code !== "ENOENT") {
+        throw err;
+      }
+    }
     sm.fileEntries = [header];
     sm.byId?.clear?.();
     sm.labelsById?.clear?.();
