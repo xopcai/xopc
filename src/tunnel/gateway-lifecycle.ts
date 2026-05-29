@@ -36,27 +36,15 @@ export function wireTunnelEventsToGateway(service: TunnelEventSink): void {
   });
 }
 
-export async function configureTunnelFromGatewayConfig(
-  config: Config,
-  opts?: { force?: boolean },
-): Promise<void> {
-  if (!opts?.force && !config.tunnel?.enabled) return;
+export type ConfigureTunnelFromGatewayConfigOptions = {
+  force?: boolean;
+  /** Apply config/env broker URL immediately; refresh from well-known in the background. */
+  deferWellKnownFetch?: boolean;
+};
 
+function applyTunnelServiceFromGatewayConfig(config: Config, brokerUrl: string): void {
   const gateway = config.gateway ?? {};
   const gatewayPort = gateway.port ?? 18790;
-  let brokerUrl = resolveTunnelBrokerUrl(config.tunnel?.brokerUrl);
-
-  try {
-    const wellKnown = await fetchTunnelWellKnown(brokerUrl);
-    if (wellKnown.brokerUrl?.trim()) {
-      brokerUrl = wellKnown.brokerUrl.trim();
-    }
-  } catch (err) {
-    log.debug(
-      { err, brokerUrl, phase: 'tunnel_well_known' },
-      'Tunnel well-known fetch skipped (using config/env broker URL)',
-    );
-  }
 
   let registrationSecret: string;
   try {
@@ -79,6 +67,66 @@ export async function configureTunnelFromGatewayConfig(
     e2e: resolveTunnelE2eConfig(config.tunnel, gatewayPort),
     frpSubdomainHost: resolveFrpSubdomainHost(brokerUrl),
   });
+}
+
+async function resolveBrokerUrlFromWellKnown(initialBrokerUrl: string): Promise<string> {
+  let brokerUrl = initialBrokerUrl;
+  try {
+    const wellKnown = await fetchTunnelWellKnown(brokerUrl);
+    if (wellKnown.brokerUrl?.trim()) {
+      brokerUrl = wellKnown.brokerUrl.trim();
+    }
+  } catch (err) {
+    log.debug(
+      { err, brokerUrl, phase: 'tunnel_well_known' },
+      'Tunnel well-known fetch skipped (using config/env broker URL)',
+    );
+  }
+  return brokerUrl;
+}
+
+let deferredWellKnownRefresh: Promise<void> | null = null;
+
+function scheduleDeferredWellKnownRefresh(config: Config, initialBrokerUrl: string): void {
+  if (deferredWellKnownRefresh) return;
+
+  deferredWellKnownRefresh = resolveBrokerUrlFromWellKnown(initialBrokerUrl)
+    .then((resolvedBrokerUrl) => {
+      if (resolvedBrokerUrl === initialBrokerUrl) return;
+      applyTunnelServiceFromGatewayConfig(config, resolvedBrokerUrl);
+    })
+    .catch((err) => {
+      const em = err instanceof Error ? err.message : String(err);
+      log.warn(
+        { err, phase: 'tunnel_well_known_deferred', errorMessage: em },
+        `Deferred tunnel well-known refresh failed: ${em}`,
+      );
+    })
+    .finally(() => {
+      deferredWellKnownRefresh = null;
+    });
+}
+
+export async function configureTunnelFromGatewayConfig(
+  config: Config,
+  opts?: ConfigureTunnelFromGatewayConfigOptions,
+): Promise<void> {
+  if (!opts?.force && !config.tunnel?.enabled) return;
+
+  const initialBrokerUrl = resolveTunnelBrokerUrl(config.tunnel?.brokerUrl);
+
+  if (opts?.deferWellKnownFetch) {
+    applyTunnelServiceFromGatewayConfig(config, initialBrokerUrl);
+    scheduleDeferredWellKnownRefresh(config, initialBrokerUrl);
+    return;
+  }
+
+  if (deferredWellKnownRefresh) {
+    await deferredWellKnownRefresh;
+  }
+
+  const brokerUrl = await resolveBrokerUrlFromWellKnown(initialBrokerUrl);
+  applyTunnelServiceFromGatewayConfig(config, brokerUrl);
 }
 
 /**

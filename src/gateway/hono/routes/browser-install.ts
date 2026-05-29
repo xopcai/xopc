@@ -45,10 +45,23 @@ async function writeInstallProgress(
   }
 }
 
+function createInstallProgressEmitter(
+  stream: { writeSSE: (payload: { event: string; data: string }) => Promise<void> },
+): (progress: BrowserInstallProgress) => Promise<void> {
+  let chain = Promise.resolve();
+  return (progress) => {
+    chain = chain.then(() => writeInstallProgress(stream, progress));
+    return chain;
+  };
+}
+
 async function runBrowserInstallStream(
   kind: BrowserInstallKind,
   stream: { writeSSE: (payload: { event: string; data: string }) => Promise<void> },
-  run: (signal: AbortSignal) => Promise<unknown>,
+  run: (
+    signal: AbortSignal,
+    emitProgress: (progress: BrowserInstallProgress) => Promise<void>,
+  ) => Promise<unknown>,
 ): Promise<void> {
   const lock = acquireBrowserInstallLock(kind);
   if (!lock) {
@@ -64,7 +77,9 @@ async function runBrowserInstallStream(
   }
 
   try {
-    const payload = await run(lock.signal);
+    const emitProgress = createInstallProgressEmitter(stream);
+    const payload = await run(lock.signal, emitProgress);
+    await emitProgress({ phase: 'ready', message: 'Install complete', percent: 100 });
     try {
       await stream.writeSSE({
         event: 'result',
@@ -136,13 +151,11 @@ export function registerBrowserInstallRoutes(authenticated: Hono, deps: Authenti
 
   authenticated.post('/api/browser/playwright/install/stream', strictRateLimitMiddleware, async (c) => {
     return streamSSE(c, async (stream) => {
-      await runBrowserInstallStream('playwright', stream, async (signal) => {
+      await runBrowserInstallStream('playwright', stream, async (signal, emitProgress) => {
         log.info('Gateway: starting streamed Playwright Chromium install');
         await runPlaywrightChromiumInstallWithProgress({
           signal,
-          onProgress: async (progress) => {
-            await writeInstallProgress(stream, progress);
-          },
+          onProgress: emitProgress,
         });
         const { playwrightChromiumDoctor } = await import('../../../browser/providers/playwright-doctor.js');
         const payload = await playwrightChromiumDoctor();
@@ -164,7 +177,7 @@ export function registerBrowserInstallRoutes(authenticated: Hono, deps: Authenti
     const { cacheDir, binaryPath } = parseCloakInstallBody(body);
 
     return streamSSE(c, async (stream) => {
-      await runBrowserInstallStream('cloakbrowser', stream, async (signal) => {
+      await runBrowserInstallStream('cloakbrowser', stream, async (signal, emitProgress) => {
         log.info(
           { cacheDir, binaryPath: binaryPath ? '(custom)' : undefined },
           'Gateway: starting streamed CloakBrowser install',
@@ -174,9 +187,7 @@ export function registerBrowserInstallRoutes(authenticated: Hono, deps: Authenti
           cacheDir,
           binaryPath,
           signal,
-          onProgress: async (progress) => {
-            await writeInstallProgress(stream, progress);
-          },
+          onProgress: emitProgress,
         });
       });
     });
