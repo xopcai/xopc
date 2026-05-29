@@ -1,5 +1,5 @@
 import { Activity, ScanLine, Settings2, Wrench, type LucideIcon } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
 
@@ -65,6 +65,30 @@ function dreamingSettingsTabHint(t: DreamingSettingsI18n, tab: DreamingSettingsT
   return t.maintenanceTabHint;
 }
 
+type DreamingFormDraft = {
+  form: DreamingConfigState | null;
+  baseline: DreamingConfigState | null;
+};
+
+type DreamingFormAction =
+  | { type: 'reset' }
+  | { type: 'sync'; value: DreamingConfigState }
+  | { type: 'set'; value: DreamingConfigState }
+  | { type: 'saved'; value: DreamingConfigState };
+
+function dreamingFormReducer(state: DreamingFormDraft, action: DreamingFormAction): DreamingFormDraft {
+  switch (action.type) {
+    case 'reset':
+      return { form: null, baseline: null };
+    case 'sync':
+      return { form: action.value, baseline: action.value };
+    case 'set':
+      return { ...state, form: action.value };
+    case 'saved':
+      return { form: action.value, baseline: action.value };
+  }
+}
+
 export function DreamingSettingsPanel() {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
@@ -101,8 +125,9 @@ export function DreamingSettingsPanel() {
   const [runOk, setRunOk] = useState(false);
   const [runError, setRunError] = useState<string | null>(null);
   const [runPhase, setRunPhase] = useState<DreamingPhaseId>('deep');
-  const [cfgForm, setCfgForm] = useState<DreamingConfigState | null>(null);
-  const [cfgBaseline, setCfgBaseline] = useState<DreamingConfigState | null>(null);
+  const [cfgDraft, dispatchCfg] = useReducer(dreamingFormReducer, { form: null, baseline: null });
+  const cfgForm = cfgDraft.form;
+  const cfgBaseline = cfgDraft.baseline;
   const [cfgSaving, setCfgSaving] = useState(false);
   const [enableSaving, setEnableSaving] = useState(false);
   const [cfgOk, setCfgOk] = useState(false);
@@ -113,6 +138,7 @@ export function DreamingSettingsPanel() {
   const [eventsLoading, setEventsLoading] = useState(false);
   const [eventsError, setEventsError] = useState<string | null>(null);
   const [events, setEvents] = useState<DreamingEvent[] | null>(null);
+  const cfgDirtyRef = useRef(false);
 
   const { data, error, isLoading, mutate } = useSWR(hasToken ? dreamingSwrKey() : null, fetchDreamingStatus, {
     revalidateOnFocus: false,
@@ -218,19 +244,15 @@ export function DreamingSettingsPanel() {
   }, [cfgData]);
 
   useEffect(() => {
-    if (!hasToken) return;
-    if (!cfgBaseline) {
-      setCfgBaseline(cfgFromGateway);
-      setCfgForm(cfgFromGateway);
+    if (!hasToken) {
+      dispatchCfg({ type: 'reset' });
+      cfgDirtyRef.current = false;
       return;
     }
-    const nextJson = JSON.stringify(cfgFromGateway);
-    const baseJson = JSON.stringify(cfgBaseline);
-    if (nextJson !== baseJson) {
-      setCfgBaseline(cfgFromGateway);
-      setCfgForm(cfgFromGateway);
+    if (!cfgDirtyRef.current) {
+      dispatchCfg({ type: 'sync', value: cfgFromGateway });
     }
-  }, [cfgBaseline, cfgFromGateway, hasToken]);
+  }, [cfgFromGateway, hasToken]);
 
   const cfgDirty = useMemo(() => {
     if (!cfgForm || !cfgBaseline) return false;
@@ -244,7 +266,8 @@ export function DreamingSettingsPanel() {
     setCfgError(null);
     try {
       await patchDreamingConfig(cfgForm);
-      setCfgBaseline(cfgForm);
+      dispatchCfg({ type: 'saved', value: cfgForm });
+      cfgDirtyRef.current = false;
       setCfgOk(true);
       await mutate();
     } catch (e) {
@@ -259,17 +282,19 @@ export function DreamingSettingsPanel() {
       if (!cfgForm || !hasToken) return;
       const next = { ...cfgForm, enabled };
       const prev = cfgForm;
-      setCfgForm(next);
+      cfgDirtyRef.current = true;
+      dispatchCfg({ type: 'set', value: next });
       setEnableSaving(true);
       setCfgOk(false);
       setCfgError(null);
       try {
         await patchDreamingConfig(next);
-        setCfgBaseline(next);
+        dispatchCfg({ type: 'saved', value: next });
+        cfgDirtyRef.current = false;
         setCfgOk(true);
         await mutate();
       } catch (e) {
-        setCfgForm(prev);
+        dispatchCfg({ type: 'set', value: prev });
         setCfgError(e instanceof Error ? e.message : String(e));
       } finally {
         setEnableSaving(false);
@@ -333,7 +358,14 @@ export function DreamingSettingsPanel() {
           cfgBaseline={cfgBaseline}
           cfgSaving={cfgSaving}
           cfgDirty={cfgDirty}
-          setCfgForm={setCfgForm}
+          setCfgForm={(next) => {
+            cfgDirtyRef.current = true;
+            const resolved =
+              typeof next === 'function' ? next(cfgForm) : next;
+            if (resolved) {
+              dispatchCfg({ type: 'set', value: resolved });
+            }
+          }}
           setCfgOk={setCfgOk}
           setCfgError={setCfgError}
           saveConfig={saveConfig}

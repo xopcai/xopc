@@ -1,5 +1,5 @@
 import { Loader2 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
@@ -40,21 +40,14 @@ export function SharePolicySection({ hasToken }: Props) {
     [data],
   );
 
-  const [form, setForm] = useState<SharePolicyState | null>(null);
-  const [baseline, setBaseline] = useState<SharePolicyState | null>(null);
+  const dirtyRef = useRef(false);
+  const [localDraft, setLocalDraft] = useState<SharePolicyState | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saveOk, setSaveOk] = useState(false);
-  const dirtyRef = useRef(false);
 
-  useEffect(() => {
-    if (!hasToken || parsed === null) return;
-    if (!dirtyRef.current) {
-      setForm(parsed);
-      setBaseline(structuredClone(parsed));
-      setSaveOk(false);
-    }
-  }, [hasToken, parsed]);
+  const form = localDraft ?? parsed;
+  const baseline = parsed;
 
   const dirty = useMemo(() => {
     if (!form || !baseline) return false;
@@ -63,8 +56,11 @@ export function SharePolicySection({ hasToken }: Props) {
 
   const update = useCallback((patch: Partial<SharePolicyState>) => {
     dirtyRef.current = true;
-    setForm((f) => (f ? { ...f, ...patch } : null));
-  }, []);
+    setLocalDraft((prev) => {
+      const base = prev ?? baseline;
+      return base ? { ...base, ...patch } : null;
+    });
+  }, [baseline]);
 
   const save = useCallback(async () => {
     if (!form || saving) return;
@@ -74,8 +70,7 @@ export function SharePolicySection({ hasToken }: Props) {
     try {
       await patchSharePolicy(form);
       dirtyRef.current = false;
-      const next = structuredClone(form);
-      setBaseline(next);
+      setLocalDraft(null);
       setSaveOk(true);
       window.setTimeout(() => setSaveOk(false), 2500);
     } catch (e) {
@@ -86,12 +81,11 @@ export function SharePolicySection({ hasToken }: Props) {
   }, [form, saving, t.policySaveError]);
 
   const discard = useCallback(() => {
-    if (!baseline) return;
     dirtyRef.current = false;
-    setForm(structuredClone(baseline));
+    setLocalDraft(null);
     setError(null);
     setSaveOk(false);
-  }, [baseline]);
+  }, []);
 
   if (!hasToken || !form) {
     if (isLoading) {

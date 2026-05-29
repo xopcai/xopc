@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef } from 'react';
+
+import { uiPatchReducer, type UiPatchAction } from '@/lib/settings-form-draft';
 import { useLocation } from 'react-router-dom';
 
 import {
@@ -39,6 +41,38 @@ import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 import { useThemeStore } from '@/stores/theme-store';
 
+type CronPageUi = {
+  mainTab: 'myTasks' | 'systemTasks' | 'history';
+  jobSort: JobSort;
+  historyRange: HistoryRange;
+  historyJobFilter: string;
+  historyStatusFilter: string;
+  detailOpen: boolean;
+  detailJob: CronJob | null;
+  detailHistory: CronJobExecution[];
+  detailLoading: boolean;
+  confirmOpen: boolean;
+  templatePickerOpen: boolean;
+  templateCategoryFilter: CronTemplateFilter;
+};
+
+type CronPageUiAction = UiPatchAction<CronPageUi>;
+
+const initialCronPageUi: CronPageUi = {
+  mainTab: 'myTasks',
+  jobSort: 'created_desc',
+  historyRange: 'day',
+  historyJobFilter: '',
+  historyStatusFilter: '',
+  detailOpen: false,
+  detailJob: null,
+  detailHistory: [],
+  detailLoading: false,
+  confirmOpen: false,
+  templatePickerOpen: false,
+  templateCategoryFilter: 'all',
+};
+
 export function CronPage() {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
@@ -50,11 +84,21 @@ export function CronPage() {
   const isDark = resolvedTheme === 'dark';
   const localeTag = language === 'zh' ? 'zh-CN' : 'en-US';
 
-  const [mainTab, setMainTab] = useState<'myTasks' | 'systemTasks' | 'history'>('myTasks');
-  const [jobSort, setJobSort] = useState<JobSort>('created_desc');
-  const [historyRange, setHistoryRange] = useState<HistoryRange>('day');
-  const [historyJobFilter, setHistoryJobFilter] = useState('');
-  const [historyStatusFilter, setHistoryStatusFilter] = useState('');
+  const [ui, dispatch] = useReducer(uiPatchReducer<CronPageUi>, initialCronPageUi);
+  const {
+    mainTab,
+    jobSort,
+    historyRange,
+    historyJobFilter,
+    historyStatusFilter,
+    detailOpen,
+    detailJob,
+    detailHistory,
+    detailLoading,
+    confirmOpen,
+    templatePickerOpen,
+    templateCategoryFilter,
+  } = ui;
 
   const data = useCronPageData({
     hasToken,
@@ -77,29 +121,20 @@ export function CronPage() {
     chatAgents: data.chatAgents,
   });
 
-  const [detailOpen, setDetailOpen] = useState(false);
-  const [detailJob, setDetailJob] = useState<CronJob | null>(null);
-  const [detailHistory, setDetailHistory] = useState<CronJobExecution[]>([]);
-  const [detailLoading, setDetailLoading] = useState(false);
-
-  const [confirmOpen, setConfirmOpen] = useState(false);
   const confirmActionRef = useRef<'delete' | 'run' | null>(null);
   const confirmJobIdRef = useRef<string | null>(null);
 
   const openConfirm = useCallback((action: 'delete' | 'run', jobId: string) => {
     confirmActionRef.current = action;
     confirmJobIdRef.current = jobId;
-    setConfirmOpen(true);
+    dispatch({ type: 'patch', patch: { confirmOpen: true } });
   }, []);
 
   const dismissConfirm = useCallback(() => {
-    setConfirmOpen(false);
+    dispatch({ type: 'patch', patch: { confirmOpen: false } });
     confirmJobIdRef.current = null;
     confirmActionRef.current = null;
   }, []);
-
-  const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
-  const [templateCategoryFilter, setTemplateCategoryFilter] = useState<CronTemplateFilter>('all');
 
   const absorbCardClickJobIdRef = useRef<string | null>(null);
 
@@ -115,7 +150,7 @@ export function CronPage() {
   const onSelectTemplate = useCallback(
     (templateId: string) => {
       const ok = form.applyCronTemplate(templateId);
-      if (ok) setTemplatePickerOpen(false);
+      if (ok) dispatch({ type: 'patch', patch: { templatePickerOpen: false } });
     },
     [form],
   );
@@ -205,22 +240,32 @@ export function CronPage() {
   };
 
   const openDetail = async (job: CronJob) => {
-    setDetailOpen(true);
-    setDetailJob(job);
-    setDetailLoading(true);
-    setDetailHistory([]);
+    dispatch({
+      type: 'patch',
+      patch: { detailOpen: true, detailJob: job, detailLoading: true, detailHistory: [] },
+    });
     try {
       const full = await getJob(job.id);
       if (full) {
-        setDetailJob(full);
-        setDetailHistory(await getHistory(job.id, 20));
+        dispatch({
+          type: 'patch',
+          patch: { detailJob: full, detailHistory: await getHistory(job.id, 20) },
+        });
       }
     } catch {
       /* keep partial */
     } finally {
-      setDetailLoading(false);
+      dispatch({ type: 'patch', patch: { detailLoading: false } });
     }
   };
+
+  const closeDetail = useCallback(() => {
+    dispatch({ type: 'patch', patch: { detailOpen: false, detailJob: null } });
+  }, []);
+
+  const openTemplatePicker = useCallback(() => {
+    dispatch({ type: 'patch', patch: { templateCategoryFilter: 'all', templatePickerOpen: true } });
+  }, []);
 
   const onToggle = async (job: CronJob, enabled: boolean) => {
     try {
@@ -242,8 +287,7 @@ export function CronPage() {
       } else {
         await removeJob(id);
         if (detailJob?.id === id) {
-          setDetailOpen(false);
-          setDetailJob(null);
+          dispatch({ type: 'patch', patch: { detailOpen: false, detailJob: null } });
         }
       }
       await Promise.all([data.loadJobs(), data.loadAux(), data.loadRunHistoryOnly()]);
@@ -257,8 +301,7 @@ export function CronPage() {
       if (e.key !== 'Escape') return;
       if (form.formOpen) form.closeForm();
       else if (detailOpen) {
-        setDetailOpen(false);
-        setDetailJob(null);
+        dispatch({ type: 'patch', patch: { detailOpen: false, detailJob: null } });
       }
     };
     document.addEventListener('keydown', onKey);
@@ -296,10 +339,7 @@ export function CronPage() {
           loading={data.loading}
           runHistoryLoading={data.runHistoryLoading}
           onRefresh={data.refreshAll}
-          onOpenTemplatePicker={() => {
-            setTemplateCategoryFilter('all');
-            setTemplatePickerOpen(true);
-          }}
+          onOpenTemplatePicker={openTemplatePicker}
           onAddJob={() => form.openForm()}
         />
         <div className="mx-auto w-full max-w-app-main px-4 py-16 text-center text-sm text-fg-muted sm:px-8">
@@ -317,10 +357,7 @@ export function CronPage() {
         loading={data.loading}
         runHistoryLoading={data.runHistoryLoading}
         onRefresh={data.refreshAll}
-        onOpenTemplatePicker={() => {
-          setTemplateCategoryFilter('all');
-          setTemplatePickerOpen(true);
-        }}
+        onOpenTemplatePicker={openTemplatePicker}
         onAddJob={() => form.openForm()}
       />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-surface-panel">
@@ -348,10 +385,7 @@ export function CronPage() {
               loading={data.loading}
               runHistoryLoading={data.runHistoryLoading}
               onRefresh={data.refreshAll}
-              onOpenTemplatePicker={() => {
-                setTemplateCategoryFilter('all');
-                setTemplatePickerOpen(true);
-              }}
+              onOpenTemplatePicker={openTemplatePicker}
               onAddJob={() => form.openForm()}
             />
           </div>
@@ -360,15 +394,19 @@ export function CronPage() {
         <CronMainToolbar
           c={c}
           mainTab={mainTab}
-          onMainTabChange={setMainTab}
+          onMainTabChange={(tab) => dispatch({ type: 'patch', patch: { mainTab: tab } })}
           jobSort={jobSort}
-          onJobSortChange={setJobSort}
+          onJobSortChange={(sort) => dispatch({ type: 'patch', patch: { jobSort: sort } })}
           historyRange={historyRange}
-          onHistoryRangeChange={setHistoryRange}
+          onHistoryRangeChange={(range) => dispatch({ type: 'patch', patch: { historyRange: range } })}
           historyJobFilter={historyJobFilter}
-          onHistoryJobFilterChange={setHistoryJobFilter}
+          onHistoryJobFilterChange={(filter) =>
+            dispatch({ type: 'patch', patch: { historyJobFilter: filter } })
+          }
           historyStatusFilter={historyStatusFilter}
-          onHistoryStatusFilterChange={setHistoryStatusFilter}
+          onHistoryStatusFilterChange={(filter) =>
+            dispatch({ type: 'patch', patch: { historyStatusFilter: filter } })
+          }
           jobs={data.jobs}
         />
 
@@ -381,7 +419,9 @@ export function CronPage() {
             jobsCount={data.userCronJobs.length}
             sortedJobs={sortedUserJobs}
             templateCategoryFilter={templateCategoryFilter}
-            onTemplateCategoryFilterChange={setTemplateCategoryFilter}
+            onTemplateCategoryFilterChange={(filter) =>
+              dispatch({ type: 'patch', patch: { templateCategoryFilter: filter } })
+            }
             onSelectTemplate={onSelectTemplate}
             keepAwake={keepAwakeHook.keepAwake}
             wakeSupported={keepAwakeHook.featureAvailable}
@@ -393,14 +433,8 @@ export function CronPage() {
             onToggle={(j, en) => void onToggle(j, en)}
             onEdit={(j) => form.openForm(j)}
             onAddJob={() => form.openForm()}
-            onRunNow={(j) => {
-              openConfirm('run', j.id);
-              setConfirmOpen(true);
-            }}
-            onDelete={(j) => {
-              openConfirm('delete', j.id);
-              setConfirmOpen(true);
-            }}
+            onRunNow={(j) => openConfirm('run', j.id)}
+            onDelete={(j) => openConfirm('delete', j.id)}
           />
         ) : mainTab === 'systemTasks' ? (
           <CronSystemTasksPanel
@@ -420,14 +454,8 @@ export function CronPage() {
             onOpenDetail={(j) => void openDetail(j)}
             onToggle={(j, en) => void onToggle(j, en)}
             onEdit={(j) => form.openForm(j)}
-            onRunNow={(j) => {
-              openConfirm('run', j.id);
-              setConfirmOpen(true);
-            }}
-            onDelete={(j) => {
-              openConfirm('delete', j.id);
-              setConfirmOpen(true);
-            }}
+            onRunNow={(j) => openConfirm('run', j.id)}
+            onDelete={(j) => openConfirm('delete', j.id)}
           />
         ) : (
           <CronRunHistorySection
@@ -490,23 +518,27 @@ export function CronPage() {
       <CronTemplatePickerDialog
         open={templatePickerOpen}
         onOpenChange={(openNext) => {
-          setTemplatePickerOpen(openNext);
-          if (openNext) setTemplateCategoryFilter('all');
+          dispatch({
+            type: 'patch',
+            patch: {
+              templatePickerOpen: openNext,
+              ...(openNext ? { templateCategoryFilter: 'all' as const } : {}),
+            },
+          });
         }}
         c={c}
         localeTag={localeTag}
         scheduleBadgeLabels={scheduleBadgeLabels}
         categoryFilter={templateCategoryFilter}
-        onCategoryFilterChange={setTemplateCategoryFilter}
+        onCategoryFilterChange={(filter) =>
+          dispatch({ type: 'patch', patch: { templateCategoryFilter: filter } })
+        }
         onSelectTemplate={onSelectTemplate}
       />
 
       <CronJobDetailDrawer
         open={detailOpen}
-        onDismiss={() => {
-          setDetailOpen(false);
-          setDetailJob(null);
-        }}
+        onDismiss={closeDetail}
         detailJob={detailJob}
         detailLoading={detailLoading}
         detailHistory={detailHistory}
@@ -517,7 +549,7 @@ export function CronPage() {
 
       <CronConfirmActionDialog
         open={confirmOpen}
-        onOpenChange={setConfirmOpen}
+        onOpenChange={(open) => dispatch({ type: 'patch', patch: { confirmOpen: open } })}
         action={confirmActionRef.current}
         c={c}
         onDismiss={dismissConfirm}

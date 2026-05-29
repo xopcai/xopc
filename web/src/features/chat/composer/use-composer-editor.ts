@@ -88,12 +88,13 @@ export function useComposerEditor(options: UseComposerEditorOptions): UseCompose
     adjustHeight();
   }, [value, adjustHeight]);
 
-  useEffect(() => {
-    if (!welcomeDraftSeed || welcomeDraftSeed.id === lastWelcomeDraftIdRef.current) return;
+  const trackedWelcomeRef = useRef(welcomeDraftSeed?.id ?? 0);
+  if (welcomeDraftSeed && welcomeDraftSeed.id !== trackedWelcomeRef.current) {
+    trackedWelcomeRef.current = welcomeDraftSeed.id;
     lastWelcomeDraftIdRef.current = welcomeDraftSeed.id;
     onExternalTextReplace?.();
     resetEditor({ nextText: welcomeDraftSeed.text, focus: true });
-  }, [welcomeDraftSeed, onExternalTextReplace, resetEditor]);
+  }
 
   useLayoutEffect(() => {
     if (disabled) {

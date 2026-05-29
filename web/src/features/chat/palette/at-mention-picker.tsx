@@ -4,8 +4,8 @@ import {
   useCallback,
   useLayoutEffect,
   useMemo,
+  useReducer,
   useRef,
-  useState,
   type ReactNode,
   type RefObject,
 } from 'react';
@@ -19,6 +19,27 @@ import { readWorkspaceFile } from '@/features/workspace/workspace-api';
 const PORTAL_Z = 100;
 const MAX_PALETTE_WIDTH_PX = 400;
 const PREVIEW_MAX_CHARS = 900;
+
+type PickerLayoutState = {
+  box: { left: number; top: number; width: number } | null;
+  hoverPreview: { text: string; x: number; y: number } | null;
+};
+
+type PickerLayoutAction =
+  | { type: 'reset' }
+  | { type: 'set-box'; box: NonNullable<PickerLayoutState['box']> }
+  | { type: 'set-hover'; hoverPreview: PickerLayoutState['hoverPreview'] };
+
+function pickerLayoutReducer(state: PickerLayoutState, action: PickerLayoutAction): PickerLayoutState {
+  switch (action.type) {
+    case 'reset':
+      return { box: null, hoverPreview: null };
+    case 'set-box':
+      return { ...state, box: action.box };
+    case 'set-hover':
+      return { ...state, hoverPreview: action.hoverPreview };
+  }
+}
 
 function matchRangesForName(name: string, query: string): [number, number][] {
   const q = query.trim().toLowerCase();
@@ -94,8 +115,12 @@ export const AtMentionPicker = memo(function AtMentionPicker({
   onSelectItem: (item: AtMentionItem, meta?: { shiftKey?: boolean }) => void;
   shiftHint?: string;
 }) {
-  const [box, setBox] = useState<{ left: number; top: number; width: number } | null>(null);
-  const [hoverPreview, setHoverPreview] = useState<{ text: string; x: number; y: number } | null>(null);
+  const [layout, dispatchLayout] = useReducer(pickerLayoutReducer, {
+    box: null,
+    hoverPreview: null,
+  });
+  const box = layout.box;
+  const hoverPreview = layout.hoverPreview;
   const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const previewAbortRef = useRef(0);
 
@@ -112,7 +137,7 @@ export const AtMentionPicker = memo(function AtMentionPicker({
       previewAbortRef.current += 1;
       const rid = previewAbortRef.current;
       if (!sessionKey?.trim() || item.isDirectory || item.isBrowseUp || !item.relativePath) {
-        setHoverPreview(null);
+        dispatchLayout({ type: 'set-hover', hoverPreview: null });
         return;
       }
       previewTimerRef.current = setTimeout(() => {
@@ -122,11 +147,11 @@ export const AtMentionPicker = memo(function AtMentionPicker({
           .then(({ content }) => {
             const snippet = content.length > PREVIEW_MAX_CHARS ? `${content.slice(0, PREVIEW_MAX_CHARS)}…` : content;
             if (rid !== previewAbortRef.current) return;
-            setHoverPreview({ text: snippet, x: clientX, y: clientY });
+            dispatchLayout({ type: 'set-hover', hoverPreview: { text: snippet, x: clientX, y: clientY } });
           })
           .catch(() => {
             if (rid !== previewAbortRef.current) return;
-            setHoverPreview(null);
+            dispatchLayout({ type: 'set-hover', hoverPreview: null });
           });
       }, 420);
     },
@@ -135,8 +160,7 @@ export const AtMentionPicker = memo(function AtMentionPicker({
 
   useLayoutEffect(() => {
     if (!open) {
-      setBox(null);
-      setHoverPreview(null);
+      dispatchLayout({ type: 'reset' });
       clearPreviewTimer();
       previewAbortRef.current += 1;
       return;
@@ -146,7 +170,7 @@ export const AtMentionPicker = memo(function AtMentionPicker({
       const el = anchorRef.current;
       if (!el) return;
       const r = el.getBoundingClientRect();
-      setBox({ left: r.left, top: r.top, width: r.width });
+      dispatchLayout({ type: 'set-box', box: { left: r.left, top: r.top, width: r.width } });
     };
 
     update();
@@ -226,7 +250,7 @@ export const AtMentionPicker = memo(function AtMentionPicker({
                 onPointerLeave={() => {
                   clearPreviewTimer();
                   previewAbortRef.current += 1;
-                  setHoverPreview(null);
+                  dispatchLayout({ type: 'set-hover', hoverPreview: null });
                 }}
               >
                 <span className="mt-0.5 shrink-0">

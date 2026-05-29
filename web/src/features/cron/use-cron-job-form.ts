@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useReducer, useRef } from 'react';
 
 import { type ChatAgentOption } from '@/features/chat/agent-selection/chat-agents-api';
 import {
@@ -12,10 +12,133 @@ import { DEFAULT_SCHEDULE } from '@/features/cron/cron-page-lib';
 import { getCronTemplateCopy } from '@/features/cron/cron-template-i18n';
 import { cronTemplateById } from '@/features/cron/cron-templates';
 import type { messages as makeMessages } from '@/i18n/messages';
+import { useAsyncResource } from '@/lib/use-async-resource';
 
 export type FormMode = 'add' | 'edit';
 export type FormSessionTarget = 'main' | 'isolated';
 export type FormMessageMdMode = 'edit' | 'preview';
+
+type FormState = {
+  formOpen: boolean;
+  formMode: FormMode;
+  formJobId: string | null;
+  formName: string;
+  formSchedule: string;
+  formChannel: string;
+  formChatId: string;
+  formMessage: string;
+  formMessageMdMode: FormMessageMdMode;
+  messageEditorNonce: number;
+  formSessionTarget: FormSessionTarget;
+  formAgentId: string;
+  formAgentLocalOnly: boolean;
+  formWorkingDirectory: string;
+  formModel: string;
+  formSubmitting: boolean;
+};
+
+type FormAction =
+  | { type: 'patch'; patch: Partial<FormState> }
+  | { type: 'replace'; state: FormState }
+  | { type: 'setMessageMdMode'; mode: FormMessageMdMode };
+
+function initialFormState(): FormState {
+  return {
+    formOpen: false,
+    formMode: 'add',
+    formJobId: null,
+    formName: '',
+    formSchedule: DEFAULT_SCHEDULE,
+    formChannel: 'local',
+    formChatId: '',
+    formMessage: '',
+    formMessageMdMode: 'edit',
+    messageEditorNonce: 0,
+    formSessionTarget: 'main',
+    formAgentId: '',
+    formAgentLocalOnly: false,
+    formWorkingDirectory: '',
+    formModel: '',
+    formSubmitting: false,
+  };
+}
+
+function formReducer(state: FormState, action: FormAction): FormState {
+  switch (action.type) {
+    case 'patch':
+      return { ...state, ...action.patch };
+    case 'replace':
+      return action.state;
+    case 'setMessageMdMode':
+      return {
+        ...state,
+        formMessageMdMode: action.mode,
+        messageEditorNonce: action.mode === 'edit' ? state.messageEditorNonce + 1 : state.messageEditorNonce,
+      };
+  }
+}
+
+function buildOpenFormState(job: CronJob | undefined, defaultModelForForm: () => string): FormState {
+  const base = initialFormState();
+  base.formOpen = true;
+  base.formMode = job ? 'edit' : 'add';
+  base.formJobId = job?.id ?? null;
+
+  if (!job) {
+    base.formModel = defaultModelForForm();
+    return base;
+  }
+
+  base.formName = job.name || '';
+  base.formSchedule = (job.schedule && String(job.schedule).trim()) || DEFAULT_SCHEDULE;
+  const bodyText = cronJobBodyText(job);
+  base.formMessage = bodyText ?? '';
+  base.formSessionTarget = job.sessionTarget || 'main';
+  base.formAgentId =
+    (job.sessionTarget || 'main') === 'isolated' && job.agentId?.trim()
+      ? job.agentId.trim().toLowerCase()
+      : '';
+  base.formWorkingDirectory =
+    (job.sessionTarget || 'main') === 'isolated' && job.workingDirectory?.trim()
+      ? job.workingDirectory.trim()
+      : '';
+  const fromPayload =
+    job.payload?.kind === 'agentTurn' && job.payload.model?.trim() ? job.payload.model.trim() : '';
+  const stored = job.model?.trim() || fromPayload;
+  base.formModel = stored || defaultModelForForm();
+  const hasLocalChannel = job.delivery?.channel === 'local';
+  const agentLocalOnly =
+    (job.sessionTarget || 'main') === 'isolated' &&
+    !hasLocalChannel &&
+    (!job.delivery?.to || job.delivery.mode === 'none');
+  base.formAgentLocalOnly = agentLocalOnly;
+
+  if (hasLocalChannel) {
+    base.formChannel = 'local';
+    base.formChatId = '';
+  } else if (job.delivery && job.delivery.mode !== 'none' && job.delivery.to) {
+    base.formChannel = job.delivery.channel || 'telegram';
+    base.formChatId = job.delivery.to || '';
+  } else if (!agentLocalOnly) {
+    const parts = bodyText.split(':');
+    const knownChannels = ['telegram', 'cli', 'gateway', 'local'];
+    if (parts.length >= 3 && knownChannels.includes(parts[0])) {
+      base.formChannel = parts[0];
+      base.formChatId = parts[1];
+      base.formMessage = parts.slice(2).join(':');
+    } else {
+      base.formChannel = 'telegram';
+      base.formChatId = '';
+    }
+  } else {
+    base.formChannel = 'telegram';
+    base.formChatId = '';
+  }
+
+  base.formMessageMdMode = 'edit';
+  base.messageEditorNonce = 1;
+  return base;
+}
 
 export function useCronJobForm(opts: {
   m: ReturnType<typeof makeMessages>;
@@ -25,149 +148,69 @@ export function useCronJobForm(opts: {
 }) {
   const { m, defaultModelForForm, channels, chatAgents } = opts;
 
-  const [formOpen, setFormOpen] = useState(false);
-  const [formMode, setFormMode] = useState<FormMode>('add');
-  const [formJobId, setFormJobId] = useState<string | null>(null);
-  const [formName, setFormName] = useState('');
-  const [formSchedule, setFormSchedule] = useState(DEFAULT_SCHEDULE);
-  const [formChannel, setFormChannel] = useState('local');
-  const [formChatId, setFormChatId] = useState('');
-  const [formMessage, setFormMessage] = useState('');
-  const [formMessageMdMode, setFormMessageMdMode] = useState<FormMessageMdMode>('edit');
-  const [messageEditorNonce, setMessageEditorNonce] = useState(0);
-  const [formSessionTarget, setFormSessionTarget] = useState<FormSessionTarget>('main');
-  const [formAgentId, setFormAgentId] = useState('');
-  const [formAgentLocalOnly, setFormAgentLocalOnly] = useState(false);
-  const [formWorkingDirectory, setFormWorkingDirectory] = useState('');
-  const [formModel, setFormModel] = useState('');
-  const [formSubmitting, setFormSubmitting] = useState(false);
-  const [sessionChatIds, setSessionChatIds] = useState<SessionChatId[]>([]);
+  const [form, dispatch] = useReducer(formReducer, undefined as never, initialFormState);
   const formModelUserTouched = useRef(false);
+
+  const validChannelSet = useMemo(
+    () => new Set(['local', ...channels.map((x) => x.name)]),
+    [channels],
+  );
+
+  if (form.formOpen && form.formMode === 'add' && !validChannelSet.has(form.formChannel)) {
+    dispatch({ type: 'patch', patch: { formChannel: 'local' } });
+  }
+
+  if (form.formOpen && form.formMode === 'add' && !formModelUserTouched.current) {
+    const next = defaultModelForForm();
+    if (next && next !== form.formModel) {
+      dispatch({ type: 'patch', patch: { formModel: next } });
+    }
+  }
+
+  const sessionChatIdsResource = useAsyncResource(
+    () => getSessionChatIds(form.formChannel),
+    [form.formChannel],
+    {
+      enabled: form.formOpen && form.formChannel !== 'local',
+      initial: [] as SessionChatId[],
+      errorData: [] as SessionChatId[],
+    },
+  );
+  const sessionChatIds = form.formChannel === 'local' ? [] : sessionChatIdsResource.data;
 
   const cronAgentSelectOptions = useMemo(() => {
     const ids = new Set(chatAgents.map((a) => a.id));
     const out: ChatAgentOption[] = [...chatAgents];
-    const extra = formAgentId.trim().toLowerCase();
+    const extra = form.formAgentId.trim().toLowerCase();
     if (extra && !ids.has(extra)) {
       out.push({ id: extra });
     }
     return out;
-  }, [chatAgents, formAgentId]);
+  }, [chatAgents, form.formAgentId]);
 
   const needsDeliveryChat =
-    formChannel !== 'local' && (formSessionTarget === 'main' || (formSessionTarget === 'isolated' && !formAgentLocalOnly));
+    form.formChannel !== 'local' &&
+    (form.formSessionTarget === 'main' || (form.formSessionTarget === 'isolated' && !form.formAgentLocalOnly));
 
   const showChannelPicker =
-    formSessionTarget === 'main' || (formSessionTarget === 'isolated' && !formAgentLocalOnly);
+    form.formSessionTarget === 'main' || (form.formSessionTarget === 'isolated' && !form.formAgentLocalOnly);
 
   const canSubmit =
-    Boolean(formName.trim()) &&
-    Boolean(formSchedule.trim()) &&
-    Boolean(formMessage.trim()) &&
-    (!needsDeliveryChat || Boolean(formChatId.trim()));
-
-  useEffect(() => {
-    if (!formOpen || formMode !== 'add' || formModelUserTouched.current) return;
-    const next = defaultModelForForm();
-    if (next) setFormModel(next);
-  }, [formOpen, formMode, defaultModelForForm]);
-
-  useEffect(() => {
-    if (!formOpen || formMode !== 'add') return;
-    const valid = new Set(['local', ...channels.map((x) => x.name)]);
-    if (!valid.has(formChannel)) setFormChannel('local');
-  }, [channels, formChannel, formMode, formOpen]);
-
-  useEffect(() => {
-    if (formChannel === 'local') {
-      setSessionChatIds([]);
-      return;
-    }
-    let cancelled = false;
-    void getSessionChatIds(formChannel).then((ids) => {
-      if (!cancelled) setSessionChatIds(ids);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [formChannel, formOpen]);
+    Boolean(form.formName.trim()) &&
+    Boolean(form.formSchedule.trim()) &&
+    Boolean(form.formMessage.trim()) &&
+    (!needsDeliveryChat || Boolean(form.formChatId.trim()));
 
   const openForm = useCallback(
     (job?: CronJob) => {
       formModelUserTouched.current = false;
-      setFormOpen(true);
-      setFormMode(job ? 'edit' : 'add');
-      setFormJobId(job?.id ?? null);
-
-      if (job) {
-        setFormName(job.name || '');
-        setFormSchedule((job.schedule && String(job.schedule).trim()) || DEFAULT_SCHEDULE);
-        const bodyText = cronJobBodyText(job);
-        setFormMessage(bodyText ?? '');
-        setFormSessionTarget(job.sessionTarget || 'main');
-        setFormAgentId(
-          (job.sessionTarget || 'main') === 'isolated' && job.agentId?.trim()
-            ? job.agentId.trim().toLowerCase()
-            : '',
-        );
-        setFormWorkingDirectory(
-          (job.sessionTarget || 'main') === 'isolated' && job.workingDirectory?.trim()
-            ? job.workingDirectory.trim()
-            : '',
-        );
-        const fromPayload =
-          job.payload?.kind === 'agentTurn' && job.payload.model?.trim() ? job.payload.model.trim() : '';
-        const stored = job.model?.trim() || fromPayload;
-        setFormModel(stored || defaultModelForForm());
-        const hasLocalChannel = job.delivery?.channel === 'local';
-        const agentLocalOnly =
-          (job.sessionTarget || 'main') === 'isolated' &&
-          !hasLocalChannel &&
-          (!job.delivery?.to || job.delivery.mode === 'none');
-        setFormAgentLocalOnly(agentLocalOnly);
-
-        if (hasLocalChannel) {
-          setFormChannel('local');
-          setFormChatId('');
-        } else if (job.delivery && job.delivery.mode !== 'none' && job.delivery.to) {
-          setFormChannel(job.delivery.channel || 'telegram');
-          setFormChatId(job.delivery.to || '');
-        } else if (!agentLocalOnly) {
-          const parts = bodyText.split(':');
-          const knownChannels = ['telegram', 'cli', 'gateway', 'local'];
-          if (parts.length >= 3 && knownChannels.includes(parts[0])) {
-            setFormChannel(parts[0]);
-            setFormChatId(parts[1]);
-            setFormMessage(parts.slice(2).join(':'));
-          } else {
-            setFormChannel('telegram');
-            setFormChatId('');
-          }
-        } else {
-          setFormChannel('telegram');
-          setFormChatId('');
-        }
-      } else {
-        setFormName('');
-        setFormSchedule(DEFAULT_SCHEDULE);
-        setFormChannel('local');
-        setFormChatId('');
-        setFormMessage('');
-        setFormSessionTarget('main');
-        setFormAgentId('');
-        setFormWorkingDirectory('');
-        setFormAgentLocalOnly(false);
-        setFormModel(defaultModelForForm());
-      }
-      setFormMessageMdMode('edit');
-      setMessageEditorNonce((n) => n + 1);
+      dispatch({ type: 'replace', state: buildOpenFormState(job, defaultModelForForm) });
     },
     [defaultModelForForm],
   );
 
   const setMessageMdMode = useCallback((mode: FormMessageMdMode) => {
-    setFormMessageMdMode(mode);
-    if (mode === 'edit') setMessageEditorNonce((n) => n + 1);
+    dispatch({ type: 'setMessageMdMode', mode });
   }, []);
 
   const applyCronTemplate = useCallback(
@@ -176,99 +219,97 @@ export function useCronJobForm(opts: {
       const copy = def ? getCronTemplateCopy(m.cron, templateId) : undefined;
       if (!def || !copy) return false;
       formModelUserTouched.current = false;
-      setFormMode('add');
-      setFormJobId(null);
-      setFormName(copy.title);
-      setFormSchedule(def.defaultSchedule);
-      setFormMessage(copy.prompt);
-      setFormSessionTarget(def.defaultSessionTarget);
-      setFormChannel('local');
-      setFormChatId('');
-      setFormAgentLocalOnly(false);
-      setFormAgentId('');
-      setFormWorkingDirectory('');
-      setFormModel(defaultModelForForm());
-      setFormMessageMdMode('edit');
-      setMessageEditorNonce((n) => n + 1);
-      setFormOpen(true);
+      dispatch({
+        type: 'replace',
+        state: {
+          ...initialFormState(),
+          formOpen: true,
+          formMode: 'add',
+          formName: copy.title,
+          formSchedule: def.defaultSchedule,
+          formMessage: copy.prompt,
+          formSessionTarget: def.defaultSessionTarget,
+          formModel: defaultModelForForm(),
+          messageEditorNonce: 1,
+        },
+      });
       return true;
     },
     [defaultModelForForm, m.cron],
   );
 
   const closeForm = useCallback(() => {
-    setFormOpen(false);
-    setFormMode('add');
-    setFormJobId(null);
-    setFormName('');
-    setFormSchedule(DEFAULT_SCHEDULE);
-    setFormChannel('local');
-    setFormChatId('');
-    setFormMessage('');
-    setFormSessionTarget('main');
-    setFormAgentId('');
-    setFormWorkingDirectory('');
-    setFormAgentLocalOnly(false);
-    setFormModel('');
-    setFormMessageMdMode('edit');
     formModelUserTouched.current = false;
+    dispatch({ type: 'replace', state: initialFormState() });
   }, []);
 
   const handleFormSessionTargetChange = useCallback(
     (target: FormSessionTarget, defaultModelFallback: () => string, currentModel: string) => {
-      setFormSessionTarget(target);
+      const patch: Partial<FormState> = { formSessionTarget: target };
       if (target === 'main') {
-        setFormAgentLocalOnly(false);
-        setFormAgentId('');
-        setFormWorkingDirectory('');
-      } else if (target === 'isolated' && !currentModel) setFormModel(defaultModelFallback());
+        patch.formAgentLocalOnly = false;
+        patch.formAgentId = '';
+        patch.formWorkingDirectory = '';
+      } else if (target === 'isolated' && !currentModel) {
+        patch.formModel = defaultModelFallback();
+      }
+      dispatch({ type: 'patch', patch });
     },
     [],
   );
 
   const handleFormChannelChange = useCallback((v: string) => {
-    setFormChannel(v);
-    if (v === 'local') setFormAgentLocalOnly(false);
-    setFormChatId('');
+    dispatch({
+      type: 'patch',
+      patch: {
+        formChannel: v,
+        formChatId: '',
+        ...(v === 'local' ? { formAgentLocalOnly: false } : {}),
+      },
+    });
   }, []);
 
   const handleFormModelUserChange = useCallback((id: string) => {
     formModelUserTouched.current = true;
-    setFormModel(id);
+    dispatch({ type: 'patch', patch: { formModel: id } });
   }, []);
 
   const refreshRecipientsList = useCallback(() => {
-    void getSessionChatIds(formChannel).then(setSessionChatIds);
-  }, [formChannel]);
+    void getSessionChatIds(form.formChannel).then(sessionChatIdsResource.setData);
+  }, [form.formChannel, sessionChatIdsResource.setData]);
+
+  const patchForm = useCallback((patch: Partial<FormState>) => {
+    dispatch({ type: 'patch', patch });
+  }, []);
 
   return {
     // state
-    formOpen,
-    formMode,
-    formJobId,
-    formName,
-    formSchedule,
-    formChannel,
-    formChatId,
-    formMessage,
-    formMessageMdMode,
-    messageEditorNonce,
-    formSessionTarget,
-    formAgentId,
-    formAgentLocalOnly,
-    formWorkingDirectory,
-    formModel,
-    formSubmitting,
+    formOpen: form.formOpen,
+    formMode: form.formMode,
+    formJobId: form.formJobId,
+    formName: form.formName,
+    formSchedule: form.formSchedule,
+    formChannel: form.formChannel,
+    formChatId: form.formChatId,
+    formMessage: form.formMessage,
+    formMessageMdMode: form.formMessageMdMode,
+    messageEditorNonce: form.messageEditorNonce,
+    formSessionTarget: form.formSessionTarget,
+    formAgentId: form.formAgentId,
+    formAgentLocalOnly: form.formAgentLocalOnly,
+    formWorkingDirectory: form.formWorkingDirectory,
+    formModel: form.formModel,
+    formSubmitting: form.formSubmitting,
     sessionChatIds,
     // setters
-    setFormName,
-    setFormSchedule,
-    setFormChatId,
-    setFormMessage,
-    setFormAgentId,
-    setFormAgentLocalOnly,
-    setFormWorkingDirectory,
-    setFormSubmitting,
+    setFormName: (formName: string) => patchForm({ formName }),
+    setFormSchedule: (formSchedule: string) => patchForm({ formSchedule }),
+    setFormChatId: (formChatId: string) => patchForm({ formChatId }),
+    setFormMessage: (formMessage: string) => patchForm({ formMessage }),
+    setFormAgentId: (formAgentId: string) => patchForm({ formAgentId }),
+    setFormAgentLocalOnly: (formAgentLocalOnly: boolean) => patchForm({ formAgentLocalOnly }),
+    setFormWorkingDirectory: (formWorkingDirectory: string) => patchForm({ formWorkingDirectory }),
+    setFormSubmitting: (formSubmitting: boolean) => patchForm({ formSubmitting }),
     // derived
     canSubmit,
     needsDeliveryChat,

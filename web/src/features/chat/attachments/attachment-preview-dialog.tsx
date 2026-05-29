@@ -1,6 +1,5 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { Download, Maximize2, Minimize2, X } from 'lucide-react';
-import { useEffect } from 'react';
 
 import type { MessageAttachment } from '@/features/chat/messages/messages.types';
 import {
@@ -52,9 +51,10 @@ export function AttachmentPreviewDialog({
 
   const canPreviewFullscreen = Boolean(preview && !resolved.loading && !resolved.loadError);
 
-  useEffect(() => {
-    if (!open) void exit();
-  }, [open, exit]);
+  const handleClose = () => {
+    void exit();
+    onClose();
+  };
 
   const handleDownload = () => {
     if (!preview) return;
@@ -85,7 +85,7 @@ export function AttachmentPreviewDialog({
   );
 
   return (
-    <Dialog.Root open={open} onOpenChange={(o) => !o && onClose()}>
+    <Dialog.Root open={open} onOpenChange={(o) => !o && handleClose()}>
       <Dialog.Portal>
         <Dialog.Content
           className={cn(
@@ -96,7 +96,7 @@ export function AttachmentPreviewDialog({
           <button
             type="button"
             className={sideStripClass}
-            onClick={onClose}
+            onClick={handleClose}
             aria-label={labels.attachmentPreviewClose}
           />
 
@@ -207,7 +207,7 @@ export function AttachmentPreviewDialog({
           <button
             type="button"
             className={sideStripClass}
-            onClick={onClose}
+            onClick={handleClose}
             aria-label={labels.attachmentPreviewClose}
           />
         </Dialog.Content>

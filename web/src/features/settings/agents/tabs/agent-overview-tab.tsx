@@ -1,5 +1,5 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { type MutableRefObject, useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback } from 'react';
 import { AlertTriangle, Cog, Eye, Pencil, Sparkles, Trash2, User, X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -8,10 +8,7 @@ import { MarkdownView } from '@/components/markdown/markdown-view';
 import { ModelSelector } from '@/features/chat/model/model-selector';
 import { DirectoryPickerPathField } from '@/features/fs/directory-picker-path-field';
 import type { GatewayAgentRow } from '@/features/settings/agents-admin-api';
-import {
-  fetchAgentProfileFileContent,
-  saveAgentProfileFileContent,
-} from '@/features/settings/agents-admin-api';
+import type { OverviewProfileDraft } from '@/features/settings/agents/hooks/use-agent-overview-profile-markdown';
 import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/settings/settings-form-section';
 import type { AgentsSettingsMessages, ChatMessages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
@@ -28,13 +25,9 @@ import { AgentAvatarDisplay } from '../agent-avatar-display';
 import { AgentAvatarPicker } from '../agent-avatar-picker';
 import { agentsSettingsInputClass } from '../utils';
 import {
-  type IdentityFields,
-  type SoulTemplateId,
-  parseIdentityMarkdown,
-  serializeIdentityMarkdown,
-  detectSoulTemplate,
-  SOUL_TEMPLATES,
   CREATURE_PRESETS,
+  SOUL_TEMPLATES,
+  type SoulTemplateId,
 } from '../agent-profile-markdown';
 
 export function AgentOverviewTab(props: {
@@ -54,10 +47,13 @@ export function AgentOverviewTab(props: {
   onSaveAgentEdits: () => void;
   onDelete: (purge: boolean) => void;
   hideInlineSave?: boolean;
-  /** Parent writes a save callback for IDENTITY/SOUL Markdown into this ref (modal footer). */
-  saveProfileMarkdownRef?: MutableRefObject<(() => Promise<void>) | null>;
-  /** Called when IDENTITY/SOUL editor dirty state changes. */
-  onProfileMarkdownDirtyChange?: (dirty: boolean) => void;
+  profileMarkdownLoading: boolean;
+  profileDraft: OverviewProfileDraft | null;
+  updateIdentity: (patch: Partial<OverviewProfileDraft['identity']>) => void;
+  handleSoulTemplateChange: (templateId: SoulTemplateId) => void;
+  handleSoulContentChange: (content: string) => void;
+  setAvatarDialogOpen: (open: boolean) => void;
+  toggleSoulPreviewMode: () => void;
   defaultModel?: string;
   defaultWorkspace?: string;
 }) {
@@ -78,8 +74,13 @@ export function AgentOverviewTab(props: {
     onSaveAgentEdits,
     onDelete,
     hideInlineSave,
-    saveProfileMarkdownRef,
-    onProfileMarkdownDirtyChange,
+    profileMarkdownLoading,
+    profileDraft,
+    updateIdentity,
+    handleSoulTemplateChange,
+    handleSoulContentChange,
+    setAvatarDialogOpen,
+    toggleSoulPreviewMode,
     defaultModel = '',
     defaultWorkspace = '',
   } = props;
@@ -87,126 +88,12 @@ export function AgentOverviewTab(props: {
   const language = useLocaleStore((s) => s.language);
   const isDark = useThemeStore((s) => s.resolved === 'dark');
 
-  // ---- Profile Markdown (IDENTITY / SOUL) ----
-  const [profileMarkdownLoading, setProfileMarkdownLoading] = useState(true);
-  const [, setProfileMarkdownSaving] = useState(false);
-
-  const [identity, setIdentity] = useState<IdentityFields>({
-    name: '',
-    creature: '',
-    emoji: '',
-    avatar: '',
-  });
-  const [soulTemplate, setSoulTemplate] = useState<SoulTemplateId>('professional');
-  const [soulCustomContent, setSoulCustomContent] = useState('');
-  const [soulEditorNonce, setSoulEditorNonce] = useState(0);
-  const [soulPreviewMode, setSoulPreviewMode] = useState(false);
-  const [avatarDialogOpen, setAvatarDialogOpen] = useState(false);
-
-  const initialLoadDoneRef = useRef(false);
-  const agentIdRef = useRef(selected?.id ?? '');
-  agentIdRef.current = selected?.id ?? '';
-
-  // Snapshots for dirty tracking (set after load, reset after save)
-  const identitySnapshotRef = useRef('');
-  const soulSnapshotRef = useRef('');
-
-  // ---- Load IDENTITY.md + SOUL.md ----
-  useEffect(() => {
-    if (!selected) return;
-    let cancelled = false;
-    initialLoadDoneRef.current = false;
-    setProfileMarkdownLoading(true);
-
-    const load = async () => {
-      try {
-        const [identityMd, soulMd] = await Promise.all([
-          fetchAgentProfileFileContent(selected.id, 'IDENTITY.md').catch(() => ''),
-          fetchAgentProfileFileContent(selected.id, 'SOUL.md').catch(() => ''),
-        ]);
-        if (cancelled) return;
-        const parsedIdentity = parseIdentityMarkdown(identityMd);
-        setIdentity(parsedIdentity);
-        identitySnapshotRef.current = JSON.stringify(parsedIdentity);
-        setSoulTemplate(detectSoulTemplate(soulMd));
-        setSoulCustomContent(soulMd);
-        soulSnapshotRef.current = soulMd;
-        setSoulEditorNonce((n) => n + 1);
-      } finally {
-        if (!cancelled) {
-          setProfileMarkdownLoading(false);
-          initialLoadDoneRef.current = true;
-        }
-      }
-    };
-    void load();
-    return () => {
-      cancelled = true;
-    };
-  }, [selected?.id]);
-
-  // ---- Save helpers (manual save only, triggered by footer button) ----
-  const saveProfileMarkdownFile = useCallback(async (fileName: string, content: string) => {
-    setProfileMarkdownSaving(true);
-    try {
-      await saveAgentProfileFileContent(agentIdRef.current, fileName, content);
-    } finally {
-      setProfileMarkdownSaving(false);
-    }
-  }, []);
-
-  // Refs to hold latest state for the save callback
-  const identityRef = useRef(identity);
-  identityRef.current = identity;
-  const soulContentRef = useRef(soulCustomContent);
-  soulContentRef.current = soulCustomContent;
-
-  // Expose save function to parent for the footer save button
-  useEffect(() => {
-    if (!saveProfileMarkdownRef) return;
-    saveProfileMarkdownRef.current = async () => {
-      await Promise.all([
-        saveProfileMarkdownFile('IDENTITY.md', serializeIdentityMarkdown(identityRef.current)),
-        saveProfileMarkdownFile('SOUL.md', soulContentRef.current),
-      ]);
-      // Reset snapshots after successful save
-      identitySnapshotRef.current = JSON.stringify(identityRef.current);
-      soulSnapshotRef.current = soulContentRef.current;
-      // Manually notify parent since state didn't change (only snapshot did)
-      onProfileMarkdownDirtyChange?.(false);
-    };
-    return () => {
-      saveProfileMarkdownRef.current = null;
-    };
-  }, [saveProfileMarkdownRef, saveProfileMarkdownFile, onProfileMarkdownDirtyChange]);
-
-  // Notify parent when profile markdown dirty state changes
-  useEffect(() => {
-    if (!onProfileMarkdownDirtyChange) return;
-    const identityDirty = JSON.stringify(identity) !== identitySnapshotRef.current;
-    const soulDirty = soulCustomContent !== soulSnapshotRef.current;
-    onProfileMarkdownDirtyChange(identityDirty || soulDirty);
-  }, [identity, soulCustomContent, onProfileMarkdownDirtyChange]);
-
-  const updateIdentity = useCallback((patch: Partial<IdentityFields>) => {
-    setIdentity((prev) => ({ ...prev, ...patch }));
-  }, []);
-
-  const handleSoulTemplateChange = useCallback((templateId: SoulTemplateId) => {
-    setSoulTemplate(templateId);
-    if (templateId !== 'custom') {
-      const tpl = SOUL_TEMPLATES.find((t) => t.id === templateId);
-      if (tpl?.content) {
-        setSoulCustomContent(tpl.content);
-        setSoulEditorNonce((n) => n + 1);
-      }
-    }
-  }, []);
-
-  const handleSoulContentChange = useCallback((content: string) => {
-    setSoulCustomContent(content);
-    setSoulTemplate('custom');
-  }, []);
+  const identity = profileDraft?.identity ?? { name: '', creature: '', emoji: '', avatar: '' };
+  const soulTemplate = profileDraft?.soulTemplate ?? 'professional';
+  const soulCustomContent = profileDraft?.soulCustomContent ?? '';
+  const soulEditorNonce = profileDraft?.soulEditorNonce ?? 0;
+  const soulPreviewMode = profileDraft?.soulPreviewMode ?? false;
+  const avatarDialogOpen = profileDraft?.avatarDialogOpen ?? false;
 
   const locLabel = useCallback(
     (en: string, zh: string) => (language === 'zh' ? zh : en),
@@ -299,7 +186,6 @@ export function AgentOverviewTab(props: {
         </Dialog.Root>
 
         <div className="grid gap-4 sm:grid-cols-2">
-          {/* Name — single unified field */}
           <label className="flex flex-col gap-1.5 text-sm">
             <span className="font-medium text-fg">{a.displayName}</span>
             <input
@@ -314,7 +200,6 @@ export function AgentOverviewTab(props: {
             />
           </label>
 
-          {/* Emoji */}
           <label className="flex flex-col gap-1.5 text-sm">
             <span className="font-medium text-fg">{a.personaEmoji}</span>
             <input
@@ -326,7 +211,6 @@ export function AgentOverviewTab(props: {
             />
           </label>
 
-          {/* Description */}
           <label className="flex flex-col gap-1.5 text-sm sm:col-span-2">
             <span className="font-medium text-fg">{a.agentDescription}</span>
             <textarea
@@ -340,7 +224,6 @@ export function AgentOverviewTab(props: {
             />
           </label>
 
-          {/* Creature type — dropdown */}
           <div className="flex flex-col gap-1.5 text-sm">
             <span className="font-medium text-fg">{a.personaCreature}</span>
             <select
@@ -424,7 +307,6 @@ export function AgentOverviewTab(props: {
       ) : (
         <SettingsFormSection>
           <SettingsFormSectionHeader icon={User} title={a.personaSectionSoul} subtitle={a.personaSectionSoulHint} />
-          {/* Soul template */}
           <div className="mb-4 flex flex-col gap-2">
             <span className="text-sm font-medium text-fg">{a.personaSoulTemplate}</span>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -459,7 +341,7 @@ export function AgentOverviewTab(props: {
                   )}
                   title={soulPreviewMode ? a.personaSoulEdit : a.personaSoulPreview}
                   aria-label={soulPreviewMode ? a.personaSoulEdit : a.personaSoulPreview}
-                  onClick={() => setSoulPreviewMode((v) => !v)}
+                  onClick={toggleSoulPreviewMode}
                 >
                   {soulPreviewMode ? <Pencil className="size-4" aria-hidden /> : <Eye className="size-4" aria-hidden />}
                 </button>

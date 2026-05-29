@@ -17,6 +17,8 @@ import { AgentOverviewTab } from './tabs/agent-overview-tab';
 import { AgentProfileTab } from './tabs/agent-profile-tab';
 import { AgentSkillsTab } from './tabs/agent-skills-tab';
 import { AgentToolsTab } from './tabs/agent-tools-tab';
+import type { OverviewProfileDraft } from './hooks/use-agent-overview-profile-markdown';
+import type { SoulTemplateId } from './agent-profile-markdown';
 import type { AgentPanel } from './utils';
 
 type CronMessages = MessageBundle['cron'];
@@ -44,7 +46,15 @@ export type AgentsEditorPanelContentProps = {
   onDelete: (purge: boolean) => void;
   overviewSaveProfileMarkdownRef: MutableRefObject<(() => Promise<void>) | null>;
   profileSaveRef: MutableRefObject<(() => Promise<void>) | null>;
-  setOverviewProfileMarkdownDirty: (v: boolean) => void;
+  overviewProfile: {
+    profileMarkdownLoading: boolean;
+    draft: OverviewProfileDraft | null;
+    updateIdentity: (patch: Partial<OverviewProfileDraft['identity']>) => void;
+    handleSoulTemplateChange: (templateId: SoulTemplateId) => void;
+    handleSoulContentChange: (content: string) => void;
+    setAvatarDialogOpen: (open: boolean) => void;
+    toggleSoulPreviewMode: () => void;
+  };
   setProfileDirty: (v: boolean) => void;
   filesLoading: boolean;
   files: Awaited<ReturnType<typeof fetchAgentProfileFiles>> | null;
@@ -110,9 +120,9 @@ export function AgentsEditorPanelContent({
   onSetDefault,
   onSaveAgentEdits,
   onDelete,
-  overviewSaveProfileMarkdownRef,
+  overviewSaveProfileMarkdownRef: _overviewSaveProfileMarkdownRef,
   profileSaveRef,
-  setOverviewProfileMarkdownDirty,
+  overviewProfile,
   setProfileDirty,
   filesLoading,
   files,
@@ -179,8 +189,13 @@ export function AgentsEditorPanelContent({
         onSaveAgentEdits={onSaveAgentEdits}
         onDelete={onDelete}
         hideInlineSave
-        saveProfileMarkdownRef={overviewSaveProfileMarkdownRef}
-        onProfileMarkdownDirtyChange={setOverviewProfileMarkdownDirty}
+        profileMarkdownLoading={overviewProfile.profileMarkdownLoading}
+        profileDraft={overviewProfile.draft}
+        updateIdentity={overviewProfile.updateIdentity}
+        handleSoulTemplateChange={overviewProfile.handleSoulTemplateChange}
+        handleSoulContentChange={overviewProfile.handleSoulContentChange}
+        setAvatarDialogOpen={overviewProfile.setAvatarDialogOpen}
+        toggleSoulPreviewMode={overviewProfile.toggleSoulPreviewMode}
         defaultModel={defaultModel}
         defaultWorkspace={defaultWorkspace}
       />

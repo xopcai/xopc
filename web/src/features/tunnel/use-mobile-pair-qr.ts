@@ -12,6 +12,7 @@ import {
 } from '@/features/tunnel/tunnel-api';
 import { encodeMobilePairQr } from '@/features/tunnel/mobile-pair-qr';
 import { buildMobileGatewayPairDeepLink, isLoopbackHttpOrigin } from '@/lib/url';
+import { useAsyncResource } from '@/lib/use-async-resource';
 
 function pickLanCandidateUrl(context?: MobilePairContextResponse): string {
   const candidates = context?.candidates ?? [];
@@ -110,24 +111,27 @@ export function useMobilePairQr(
   );
 
   const [pairBaseUrl, setPairBaseUrlState] = useState('');
-  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
-  const [qrGenFailed, setQrGenFailed] = useState(false);
   const [manualPayload, setManualPayload] = useState('');
+  const [syncSource, setSyncSource] = useState({
+    pairContext: undefined as MobilePairContextResponse | undefined,
+    preferLan,
+  });
+
+  if (
+    !userEditedBaseRef.current &&
+    (pairContext !== syncSource.pairContext || preferLan !== syncSource.preferLan)
+  ) {
+    setSyncSource({ pairContext, preferLan });
+    const suggested = resolveSuggestedPairBaseUrl(pairContext, preferLan);
+    if (pairBaseUrl !== suggested) {
+      setPairBaseUrlState(suggested);
+    }
+  }
 
   const setPairBaseUrl = useCallback((value: string) => {
     userEditedBaseRef.current = true;
     setPairBaseUrlState(value);
   }, []);
-
-  useEffect(() => {
-    if (userEditedBaseRef.current || !pairContext) return;
-    const suggested = resolveSuggestedPairBaseUrl(pairContext, preferLan);
-    if (suggested) {
-      setPairBaseUrlState(suggested);
-      return;
-    }
-    setPairBaseUrlState('');
-  }, [pairContext, preferLan]);
 
   const applySuggestedPairUrl = useCallback(() => {
     const suggested = resolveSuggestedPairBaseUrl(pairContext, preferLan);
@@ -216,28 +220,15 @@ export function useMobilePairQr(
     pairContext?.candidates,
   ]);
 
-  useEffect(() => {
-    if (!deepLink) {
-      setQrDataUrl(null);
-      setQrGenFailed(false);
-      return;
-    }
-    let cancelled = false;
-    setQrGenFailed(false);
-    void encodeMobilePairQr(deepLink)
-      .then((url) => {
-        if (!cancelled) setQrDataUrl(url);
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setQrGenFailed(true);
-          setQrDataUrl(null);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [deepLink]);
+  const qrImage = useAsyncResource(
+    () => encodeMobilePairQr(deepLink),
+    [deepLink],
+    { enabled: Boolean(deepLink), initial: null as string | null, errorData: null },
+  );
+
+  const qrDataUrl = deepLink ? qrImage.data : null;
+  const qrGenFailed = Boolean(deepLink && qrImage.error !== null && !qrImage.loading);
+  const encoding = Boolean(deepLink && !qrDataUrl && !qrGenFailed);
 
   const refreshQr = useCallback(
     async (payload?: string) => {
@@ -259,8 +250,6 @@ export function useMobilePairQr(
     },
     [mutLanPair, mutPairContext, mutTunnelQr, pairContext?.pairingReady, tunnelQr?.lanUrl, tunnelStatus?.publicUrl, useTunnelQr],
   );
-
-  const encoding = Boolean(deepLink && !qrDataUrl && !qrGenFailed);
 
   return {
     tunnelActive,

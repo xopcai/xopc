@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useEffectEvent,
   useRef,
   useState,
   type Dispatch,
@@ -107,65 +108,60 @@ export function useChatFollowUpClarify(options: {
   const [steeringFollowUpId, setSteeringFollowUpId] = useState<string | null>(null);
   const [editingFollowUpId, setEditingFollowUpId] = useState<string | null>(null);
   const editingFollowUpIdRef = useRef<string | null>(null);
+  const [hydratedQueueKey, setHydratedQueueKey] = useState<string | null>(null);
+
   /** Last `#/chat/:id` segment (decoded); drives flush-save on sidebar navigation before `sessionKey` catches up. */
   const followUpPrevDecodedKeyRef = useRef<string | undefined>(undefined);
   /** Last `sessionKey` from loaded session; flush-save when it changes so debounce cancellation cannot drop data. */
   const followUpPrevLoadedSessionRef = useRef<string | null>(null);
 
-  useEffect(() => {
-    clarifyPromptRef.current = clarifyPrompt;
-  }, [clarifyPrompt]);
+  clarifyPromptRef.current = clarifyPrompt;
+  pendingFollowUpsRef.current = pendingFollowUps;
+  editingFollowUpIdRef.current = editingFollowUpId;
 
-  /** Hash route changed: persist the queue for the session we are leaving (URL is source of truth). */
-  useEffect(() => {
-    const prevRoute = followUpPrevDecodedKeyRef.current;
-    if (prevRoute != null && prevRoute !== decodedKey) {
-      writeFollowUpQueueSnapshot(prevRoute, {
-        pending: structuredClone(pendingFollowUpsRef.current),
-        editingId: editingFollowUpIdRef.current,
-      });
+  const syncQueueKey =
+    sessionKey && decodedKey && sessionKey === decodedKey ? sessionKey : null;
+
+  const prevDecodedRoute = followUpPrevDecodedKeyRef.current;
+  if (prevDecodedRoute != null && prevDecodedRoute !== decodedKey) {
+    writeFollowUpQueueSnapshot(prevDecodedRoute, {
+      pending: structuredClone(pendingFollowUps),
+      editingId: editingFollowUpId,
+    });
+    if (steeringFollowUpId !== null) {
+      setSteeringFollowUpId(null);
     }
-    followUpPrevDecodedKeyRef.current = decodedKey;
-    setSteeringFollowUpId(null);
-  }, [decodedKey]);
+  }
+  followUpPrevDecodedKeyRef.current = decodedKey;
 
-  /**
-   * When the loaded session id changes, sync-write the previous id's queue (covers debounce cleanup
-   * when `sessionKey` catches up to the URL in the same navigation).
-   * When URL and loaded session match, hydrate from localStorage.
-   */
-  useEffect(() => {
-    const prevLoaded = followUpPrevLoadedSessionRef.current;
-    if (prevLoaded != null && prevLoaded !== sessionKey) {
-      writeFollowUpQueueSnapshot(prevLoaded, {
-        pending: structuredClone(pendingFollowUpsRef.current),
-        editingId: editingFollowUpIdRef.current,
-      });
-    }
-    followUpPrevLoadedSessionRef.current = sessionKey;
+  const prevLoadedSession = followUpPrevLoadedSessionRef.current;
+  if (prevLoadedSession != null && prevLoadedSession !== sessionKey) {
+    writeFollowUpQueueSnapshot(prevLoadedSession, {
+      pending: structuredClone(pendingFollowUps),
+      editingId: editingFollowUpId,
+    });
+  }
+  followUpPrevLoadedSessionRef.current = sessionKey;
 
-    if (!sessionKey && !decodedKey) {
+  if (!sessionKey && !decodedKey) {
+    if (pendingFollowUps.length > 0 || editingFollowUpId !== null || hydratedQueueKey !== null) {
       pendingFollowUpsRef.current = [];
       setPendingFollowUps([]);
       setEditingFollowUpId(null);
-      return;
+      setHydratedQueueKey(null);
     }
-    if (!sessionKey || !decodedKey || sessionKey !== decodedKey) {
-      return;
-    }
+  } else if (syncQueueKey != null && syncQueueKey !== hydratedQueueKey) {
+    const snap = readFollowUpQueueSnapshot(syncQueueKey);
+    const pending = snap ? structuredClone(snap.pending) : [];
+    pendingFollowUpsRef.current = pending;
+    setPendingFollowUps(pending);
+    setEditingFollowUpId(snap?.editingId ?? null);
+    setHydratedQueueKey(syncQueueKey);
+  }
 
-    const snap = readFollowUpQueueSnapshot(sessionKey);
-    if (snap) {
-      const pending = structuredClone(snap.pending);
-      pendingFollowUpsRef.current = pending;
-      setPendingFollowUps(pending);
-      setEditingFollowUpId(snap.editingId);
-    } else {
-      pendingFollowUpsRef.current = [];
-      setPendingFollowUps([]);
-      setEditingFollowUpId(null);
-    }
-  }, [sessionKey, decodedKey]);
+  if (sessionKey != null && sessionKey !== decodedKey && clarifyPrompt != null) {
+    setClarifyPrompt(null);
+  }
 
   /**
    * Debounced persist. While `sessionRoutePending`, the in-memory queue still belongs to
@@ -187,15 +183,6 @@ export function useChatFollowUpClarify(options: {
     return () => window.clearTimeout(t);
   }, [sessionKey, decodedKey, pendingFollowUps, editingFollowUpId, sessionKeyRef]);
 
-  useEffect(() => {
-    if (!decodedKey) return;
-    // While `sessionKey` is still null during route hydration, `sessionKeyRef` can
-    // lag the URL — treating that as a mismatch cleared every clarify prompt.
-    if (sessionKey != null && sessionKey !== decodedKey) {
-      setClarifyPrompt(null);
-    }
-  }, [decodedKey, sessionKey]);
-
   const dismissClarify = useCallback(() => {
     setClarifySubmitError(null);
     setClarifyPrompt(null);
@@ -207,6 +194,7 @@ export function useChatFollowUpClarify(options: {
     pendingFollowUpsRef.current = [];
     setPendingFollowUps([]);
     setEditingFollowUpId(null);
+    setHydratedQueueKey(key);
   }, [sessionKeyRef]);
 
   const dismissClarifyAndClearPending = useCallback(() => {
@@ -217,6 +205,7 @@ export function useChatFollowUpClarify(options: {
     setClarifySubmitError(null);
     setClarifyPrompt(null);
     setEditingFollowUpId(null);
+    setHydratedQueueKey(key);
   }, [sessionKeyRef]);
 
   const onClarifyToolEnd = useCallback(() => {
@@ -281,6 +270,10 @@ export function useChatFollowUpClarify(options: {
     await sendMessageRef.current(first.text, first.attachments, first.thinkingLevel);
   }, [sendMessageRef, sessionKeyRef, activeStreamSessionKeyRef, sendingRef, streamingRef]);
 
+  const flushSteeringQueueEvent = useEffectEvent((forChatId?: string | null) => {
+    void flushSteeringQueue(forChatId);
+  });
+
   /**
    * After hydration or returning to a chat, resume the auto-send chain if the queue has rows and the
    * session is idle (covers skipped `finalizeMessage` timeouts when switching chats mid-delay).
@@ -297,19 +290,10 @@ export function useChatFollowUpClarify(options: {
       if (sessionKeyRef.current !== sessionKey) return;
       if (sendingRef.current || streamingRef.current) return;
       if (clarifyPromptRef.current) return;
-      void flushSteeringQueue(sessionKey);
+      flushSteeringQueueEvent(sessionKey);
     }, FOLLOW_UP_AUTO_SEND_IDLE_MS);
     return () => window.clearTimeout(tid);
-  }, [
-    sessionKey,
-    decodedKey,
-    clarifyPrompt,
-    pendingFollowUps,
-    flushSteeringQueue,
-    sendingRef,
-    streamingRef,
-    sessionKeyRef,
-  ]);
+  }, [sessionKey, decodedKey, clarifyPrompt, pendingFollowUps, sendingRef, streamingRef, sessionKeyRef]);
 
   const addPendingFollowUp = useCallback(
     (
@@ -492,9 +476,6 @@ export function useChatFollowUpClarify(options: {
       setClarifySubmitting(false);
     }
   }, []);
-
-  pendingFollowUpsRef.current = pendingFollowUps;
-  editingFollowUpIdRef.current = editingFollowUpId;
 
   return {
     clarifyPrompt,

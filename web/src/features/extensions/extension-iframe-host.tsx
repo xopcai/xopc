@@ -1,4 +1,6 @@
-import { type CSSProperties, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { type CSSProperties, useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef } from 'react';
+
+import { uiPatchReducer, type UiPatchAction } from '@/lib/settings-form-draft';
 import { useTranslation } from 'react-i18next';
 
 import { useLocaleStore } from '@/stores/locale-store';
@@ -16,6 +18,16 @@ const DEFAULT_MAX = 2000;
 
 /** Sandboxed extension UI: no `allow-same-origin` so the document is opaque-isolated from the host origin. */
 const EXTENSION_IFRAME_SANDBOX = 'allow-scripts allow-forms allow-popups';
+
+type IframeHostUi = {
+  allowed: boolean;
+  dialogOpen: boolean;
+  reloadKey: number;
+  loadError: boolean;
+  dynamicHeight: number;
+};
+
+type IframeHostUiAction = UiPatchAction<IframeHostUi>;
 
 export type ExtensionIframeHostProps = {
   extensionId: string;
@@ -65,20 +77,26 @@ export function ExtensionIframeHost({
   /** Stable list so registerIframe effect does not churn every render (permissions ?? [] is a new []). */
   const permList = useMemo(() => JSON.parse(permsKey) as string[], [permsKey]);
 
-  const [allowed, setAllowed] = useState(() => hasUiGrant(extensionId, permList));
-  const [dialogOpen, setDialogOpen] = useState(() => !hasUiGrant(extensionId, permList));
+  const initialGranted = hasUiGrant(extensionId, permList);
+  const [ui, dispatch] = useReducer(uiPatchReducer<IframeHostUi>, {
+    allowed: initialGranted,
+    dialogOpen: !initialGranted,
+    reloadKey: 0,
+    loadError: false,
+    dynamicHeight: fixedHeight ?? Math.min(maxHeight, Math.max(minHeight, 320)),
+  });
+  const { allowed, dialogOpen, reloadKey, loadError, dynamicHeight } = ui;
+
   const trackedGrantKeyRef = useRef({ id: extensionId, k: permsKey });
   if (trackedGrantKeyRef.current.id !== extensionId || trackedGrantKeyRef.current.k !== permsKey) {
     trackedGrantKeyRef.current = { id: extensionId, k: permsKey };
     const ok = hasUiGrant(extensionId, permList);
-    setAllowed(ok);
-    setDialogOpen(!ok);
+    dispatch({ type: 'patch', patch: { allowed: ok, dialogOpen: !ok } });
   }
-  const [reloadKey, setReloadKey] = useState(0);
-  const [loadError, setLoadError] = useState(false);
 
-  const [dynamicHeight, setDynamicHeight] = useState(
-    fixedHeight ?? Math.min(maxHeight, Math.max(minHeight, 320)),
+  const setDialogOpen = useCallback(
+    (open: boolean) => dispatch({ type: 'patch', patch: { dialogOpen: open } }),
+    [],
   );
 
   const src = useMemo(() => {
@@ -97,22 +115,21 @@ export function ExtensionIframeHost({
     const el = iframeRef.current;
     if (!el) return;
     router.registerIframe(extensionId, el, permList);
-    return () => router.unregisterIframe(extensionId);
-  }, [allowed, extensionId, permList, router]);
-
-  useEffect(() => {
-    if (!allowed) return;
-    return router.subscribeExtensionEvents(extensionId, (msg) => {
+    const unsubscribe = router.subscribeExtensionEvents(extensionId, (msg) => {
       if (msg.event !== 'ui.resize') return;
       if (!msg.data || typeof msg.data !== 'object' || msg.data === null) return;
       const h = Number((msg.data as { height?: unknown }).height);
       if (!Number.isFinite(h)) return;
       const clamped = Math.min(maxHeight, Math.max(minHeight, h));
       if (fixedHeight === undefined) {
-        setDynamicHeight(clamped);
+        dispatch({ type: 'patch', patch: { dynamicHeight: clamped } });
       }
     });
-  }, [allowed, extensionId, fixedHeight, maxHeight, minHeight, router]);
+    return () => {
+      unsubscribe();
+      router.unregisterIframe(extensionId);
+    };
+  }, [allowed, extensionId, fixedHeight, maxHeight, minHeight, permList, router]);
 
   useEffect(() => {
     if (!allowed) return;
@@ -127,7 +144,7 @@ export function ExtensionIframeHost({
 
   const handleConfirmGrant = () => {
     saveUiGrant(extensionId, permList);
-    setAllowed(true);
+    dispatch({ type: 'patch', patch: { allowed: true } });
   };
 
   if (!allowed) {
@@ -153,7 +170,7 @@ export function ExtensionIframeHost({
             <button
               type="button"
               className="mt-2 text-sm font-medium text-accent underline-offset-2 hover:underline"
-              onClick={() => setDialogOpen(true)}
+              onClick={() => dispatch({ type: 'patch', patch: { dialogOpen: true } })}
             >
               {t('extensionUi.reviewPermissions')}
             </button>
@@ -173,8 +190,7 @@ export function ExtensionIframeHost({
             type="button"
             className="mt-2 font-medium text-accent underline-offset-2 hover:underline"
             onClick={() => {
-              setLoadError(false);
-              setReloadKey((k) => k + 1);
+              dispatch({ type: 'patch', patch: { loadError: false, reloadKey: reloadKey + 1 } });
             }}
           >
             {t('extensionUi.retryLoad')}
@@ -190,9 +206,9 @@ export function ExtensionIframeHost({
         style={style}
         sandbox={EXTENSION_IFRAME_SANDBOX}
         referrerPolicy="no-referrer"
-        onError={() => setLoadError(true)}
+        onError={() => dispatch({ type: 'patch', patch: { loadError: true } })}
         onLoad={() => {
-          setLoadError(false);
+          dispatch({ type: 'patch', patch: { loadError: false } });
           const locale = useLocaleStore.getState().language;
           router.sendInit(extensionId, buildThemeInfo(useThemeStore.getState().resolved), locale);
           if (initialData !== undefined) {

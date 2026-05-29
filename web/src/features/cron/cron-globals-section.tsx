@@ -1,5 +1,5 @@
 import { Clock, Loader2 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useReducer, useRef } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
@@ -22,6 +22,72 @@ function inputClassName(): string {
   );
 }
 
+type GlobalsUiState = {
+  form: CronGlobalsState | null;
+  baseline: CronGlobalsState | null;
+  saving: boolean;
+  error: string | null;
+  saveOk: boolean;
+  dirty: boolean;
+};
+
+type GlobalsAction =
+  | { type: 'sync'; parsed: CronGlobalsState }
+  | { type: 'patch'; patch: Partial<CronGlobalsState> }
+  | { type: 'discard' }
+  | { type: 'saveStart' }
+  | { type: 'saveSuccess' }
+  | { type: 'saveError'; error: string }
+  | { type: 'clearSaveOk' };
+
+function initialGlobalsUiState(): GlobalsUiState {
+  return {
+    form: null,
+    baseline: null,
+    saving: false,
+    error: null,
+    saveOk: false,
+    dirty: false,
+  };
+}
+
+function globalsReducer(state: GlobalsUiState, action: GlobalsAction): GlobalsUiState {
+  switch (action.type) {
+    case 'sync':
+      return {
+        ...state,
+        form: structuredClone(action.parsed),
+        baseline: structuredClone(action.parsed),
+        saveOk: false,
+        dirty: false,
+      };
+    case 'patch':
+      return state.form
+        ? { ...state, form: { ...state.form, ...action.patch }, dirty: true, saveOk: false }
+        : state;
+    case 'discard':
+      return state.baseline
+        ? { ...state, form: structuredClone(state.baseline), dirty: false }
+        : state;
+    case 'saveStart':
+      return { ...state, saving: true, error: null };
+    case 'saveSuccess':
+      return state.form
+        ? {
+            ...state,
+            saving: false,
+            baseline: structuredClone(state.form),
+            dirty: false,
+            saveOk: true,
+          }
+        : { ...state, saving: false };
+    case 'saveError':
+      return { ...state, saving: false, error: action.error };
+    case 'clearSaveOk':
+      return { ...state, saveOk: false };
+  }
+}
+
 export function CronGlobalsSection({ hasToken }: { hasToken: boolean }) {
   const language = useLocaleStore((s) => s.language);
   const t = messages(language).cron.globals;
@@ -34,47 +100,35 @@ export function CronGlobalsSection({ hasToken }: { hasToken: boolean }) {
     [data],
   );
 
-  const [form, setForm] = useState<CronGlobalsState | null>(null);
-  const [baseline, setBaseline] = useState<CronGlobalsState | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [saveOk, setSaveOk] = useState(false);
-  const dirtyRef = useRef(false);
+  const [ui, dispatch] = useReducer(globalsReducer, undefined as never, initialGlobalsUiState);
+  const trackedParsedRef = useRef(parsed);
+  if (hasToken && parsed !== null && !ui.dirty && trackedParsedRef.current !== parsed) {
+    trackedParsedRef.current = parsed;
+    dispatch({ type: 'sync', parsed });
+  }
 
-  useEffect(() => {
-    if (!hasToken || parsed === null) return;
-    if (!dirtyRef.current) {
-      setForm(parsed);
-      setBaseline(structuredClone(parsed));
-      setSaveOk(false);
-    }
-  }, [hasToken, parsed]);
-
-  const dirty = useMemo(() => form && baseline && JSON.stringify(form) !== JSON.stringify(baseline), [form, baseline]);
+  const dirty = useMemo(
+    () => Boolean(ui.form && ui.baseline && JSON.stringify(ui.form) !== JSON.stringify(ui.baseline)),
+    [ui.form, ui.baseline],
+  );
 
   const update = useCallback((patch: Partial<CronGlobalsState>) => {
-    dirtyRef.current = true;
-    setForm((f) => (f ? { ...f, ...patch } : null));
+    dispatch({ type: 'patch', patch });
   }, []);
 
   const save = useCallback(async () => {
-    if (!form || saving) return;
-    setSaving(true);
-    setError(null);
+    if (!ui.form || ui.saving) return;
+    dispatch({ type: 'saveStart' });
     try {
-      await patchCronGlobals(form);
-      dirtyRef.current = false;
-      setBaseline(structuredClone(form));
-      setSaveOk(true);
-      window.setTimeout(() => setSaveOk(false), 2500);
+      await patchCronGlobals(ui.form);
+      dispatch({ type: 'saveSuccess' });
+      window.setTimeout(() => dispatch({ type: 'clearSaveOk' }), 2500);
     } catch (e) {
-      setError(e instanceof Error ? e.message : t.saveError);
-    } finally {
-      setSaving(false);
+      dispatch({ type: 'saveError', error: e instanceof Error ? e.message : t.saveError });
     }
-  }, [form, saving, t.saveError]);
+  }, [t.saveError, ui.form, ui.saving]);
 
-  if (!hasToken || !form) {
+  if (!hasToken || !ui.form) {
     if (isLoading) {
       return (
         <SettingsFormSection>
@@ -92,29 +146,25 @@ export function CronGlobalsSection({ hasToken }: { hasToken: boolean }) {
     <SettingsFormSection>
       <SettingsFormSectionHeader icon={Clock} title={t.title} subtitle={t.hint} />
       <div className="mb-4 flex flex-wrap items-center justify-end gap-2">
-        {saveOk ? <span className="text-sm text-fg-muted">{t.saved}</span> : null}
-        <Button type="button" variant="secondary" disabled={!dirty || saving} onClick={() => {
-          if (!baseline) return;
-          dirtyRef.current = false;
-          setForm(structuredClone(baseline));
-        }}>
+        {ui.saveOk ? <span className="text-sm text-fg-muted">{t.saved}</span> : null}
+        <Button type="button" variant="secondary" disabled={!dirty || ui.saving} onClick={() => dispatch({ type: 'discard' })}>
           {t.discard}
         </Button>
-        <Button type="button" variant="primary" disabled={!dirty || saving} onClick={() => void save()}>
-          {saving ? t.saving : t.save}
+        <Button type="button" variant="primary" disabled={!dirty || ui.saving} onClick={() => void save()}>
+          {ui.saving ? t.saving : t.save}
         </Button>
       </div>
-      {error ? <p className="mb-3 text-sm text-red-600 dark:text-red-400">{error}</p> : null}
+      {ui.error ? <p className="mb-3 text-sm text-red-600 dark:text-red-400">{ui.error}</p> : null}
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="flex items-center gap-2 text-sm text-fg sm:col-span-2">
-          <input type="checkbox" className="ui-checkbox" checked={form.enabled} onChange={(e) => update({ enabled: e.target.checked })} />
+          <input type="checkbox" className="ui-checkbox" checked={ui.form.enabled} onChange={(e) => update({ enabled: e.target.checked })} />
           {t.enabled}
         </label>
-        <Field label={t.maxConcurrent} value={form.maxConcurrentJobs} min={1} max={100} disabled={!form.enabled} onChange={(maxConcurrentJobs) => update({ maxConcurrentJobs })} />
-        <Field label={t.timezone} text value={form.defaultTimezone} disabled={!form.enabled} onTextChange={(defaultTimezone) => update({ defaultTimezone })} />
-        <Field label={t.retentionDays} value={form.historyRetentionDays} min={1} max={365} disabled={!form.enabled} onChange={(historyRetentionDays) => update({ historyRetentionDays })} />
+        <Field label={t.maxConcurrent} value={ui.form.maxConcurrentJobs} min={1} max={100} disabled={!ui.form.enabled} onChange={(maxConcurrentJobs) => update({ maxConcurrentJobs })} />
+        <Field label={t.timezone} text value={ui.form.defaultTimezone} disabled={!ui.form.enabled} onTextChange={(defaultTimezone) => update({ defaultTimezone })} />
+        <Field label={t.retentionDays} value={ui.form.historyRetentionDays} min={1} max={365} disabled={!ui.form.enabled} onChange={(historyRetentionDays) => update({ historyRetentionDays })} />
         <label className="flex items-center gap-2 text-sm text-fg">
-          <input type="checkbox" className="ui-checkbox" checked={form.enableMetrics} disabled={!form.enabled} onChange={(e) => update({ enableMetrics: e.target.checked })} />
+          <input type="checkbox" className="ui-checkbox" checked={ui.form.enableMetrics} disabled={!ui.form.enabled} onChange={(e) => update({ enableMetrics: e.target.checked })} />
           {t.metrics}
         </label>
       </div>

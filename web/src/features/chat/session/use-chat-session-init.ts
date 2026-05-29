@@ -13,19 +13,10 @@
 import { useEffect, useRef, type MutableRefObject } from 'react';
 
 import type { Message } from '@/features/chat/messages/messages.types';
-import {
-  coerceReasoningLevel,
-  type ReasoningLevel,
-} from '@/features/chat/messages/messages.types';
 import { getLiveSessionCache } from '@/features/chat/session/active-session-live-cache';
-import {
-  DEFAULT_THINKING,
-  pickEmptyWebSessionForAgent,
-} from '@/features/chat/session/chat-session-defaults';
+import { pickEmptyWebSessionForAgent } from '@/features/chat/session/chat-session-defaults';
 import { searchParamsForComposerHandoff } from '@/features/chat/session/composer-handoff-params';
 import type { SessionManager } from '@/features/chat/session/session-manager';
-
-type Setter<T> = (value: T) => void;
 
 export function useChatSessionInit(opts: {
   token: string | undefined;
@@ -35,19 +26,16 @@ export function useChatSessionInit(opts: {
   sessionMgrRef: MutableRefObject<SessionManager>;
   resolveAgentIdForPost: () => string | null | undefined;
   navigateToSession: (key: string, replace?: boolean, search?: string) => void;
-  refreshModelThinkingSupport: (model: string) => void | Promise<void>;
   loadSessionById: (key: string, offset: number) => Promise<Message[] | undefined>;
   tryResumeAgentRun: (key: string, seed: Message[]) => Promise<void>;
   restoreLiveCacheIfNeeded: (key: string) => boolean;
-  setSessionKey: Setter<string | null>;
-  setSessionName: Setter<string | null>;
-  setMessages: Setter<Message[]>;
-  setHasMore: Setter<boolean>;
-  setSessionModel: Setter<string>;
-  setThinkingLevel: Setter<string>;
-  setReasoningLevel: Setter<ReasoningLevel>;
-  setError: Setter<string | null>;
-  setLoading: Setter<boolean>;
+  adoptEmptySession: (key: string, name: string | null) => void;
+  applyAgentConfig: (cfg: {
+    model: string;
+    thinkingLevel?: string | null;
+    reasoningLevel?: string | null;
+  }) => void;
+  patchInitUi: (patch: { loading?: boolean; error?: string | null }) => void;
 }): void {
   const {
     token,
@@ -57,26 +45,19 @@ export function useChatSessionInit(opts: {
     sessionMgrRef,
     resolveAgentIdForPost,
     navigateToSession,
-    refreshModelThinkingSupport,
     loadSessionById,
     tryResumeAgentRun,
     restoreLiveCacheIfNeeded,
-    setSessionKey,
-    setSessionName,
-    setMessages,
-    setHasMore,
-    setSessionModel,
-    setThinkingLevel,
-    setReasoningLevel,
-    setError,
-    setLoading,
+    adoptEmptySession,
+    applyAgentConfig,
+    patchInitUi,
   } = opts;
 
   const initGenRef = useRef(0);
 
   useEffect(() => {
     if (!token) {
-      setLoading(false);
+      patchInitUi({ loading: false });
       return;
     }
 
@@ -90,10 +71,7 @@ export function useChatSessionInit(opts: {
         .loadSessionAgentConfig(key)
         .then((cfg) => {
           if (!isLive()) return;
-          setSessionModel(cfg.model);
-          setThinkingLevel(cfg.thinkingLevel || DEFAULT_THINKING);
-          setReasoningLevel(coerceReasoningLevel(cfg.reasoningLevel));
-          void refreshModelThinkingSupport(cfg.model);
+          applyAgentConfig(cfg);
         })
         .catch(() => {
           /* ignore */
@@ -107,10 +85,7 @@ export function useChatSessionInit(opts: {
         const aid = resolveAgentIdForPost();
         const empty = pickEmptyWebSessionForAgent(sessions, aid ?? undefined);
         if (empty) {
-          setSessionKey(empty.key);
-          setSessionName(empty.name ?? null);
-          setMessages([]);
-          setHasMore(false);
+          adoptEmptySession(empty.key, empty.name ?? null);
           navigateToSession(empty.key, true, searchParamsForComposerHandoff(locationSearch));
           if (!isLive()) return;
           applyResolvedSessionConfig(empty.key);
@@ -121,10 +96,7 @@ export function useChatSessionInit(opts: {
           .createSession(aid ? { agentId: aid } : undefined)
           .then((session) => {
             if (!isLive()) return;
-            setSessionKey(session.key);
-            setSessionName(session.name ?? null);
-            setMessages([]);
-            setHasMore(false);
+            adoptEmptySession(session.key, session.name ?? null);
             navigateToSession(session.key, true, searchParamsForComposerHandoff(locationSearch));
             applyResolvedSessionConfig(session.key);
           });
@@ -164,10 +136,7 @@ export function useChatSessionInit(opts: {
           .createSession(aid ? { agentId: aid } : undefined)
           .then((session) => {
             if (!isLive()) return;
-            setSessionKey(session.key);
-            setSessionName(session.name ?? null);
-            setMessages([]);
-            setHasMore(false);
+            adoptEmptySession(session.key, session.name ?? null);
             navigateToSession(session.key);
             applyResolvedSessionConfig(session.key);
           });
@@ -176,10 +145,7 @@ export function useChatSessionInit(opts: {
 
     const run = () => {
       const needsFullBlockingLoad = isNewRoute || decodedKey === undefined;
-      if (needsFullBlockingLoad) {
-        setLoading(true);
-      }
-      setError(null);
+      patchInitUi({ loading: needsFullBlockingLoad, error: null });
 
       const branch = isNewRoute
         ? adoptOrCreateNewRouteSession()
@@ -189,11 +155,17 @@ export function useChatSessionInit(opts: {
 
       void branch
         .then(() => {
-          if (isLive()) setLoading(false);
+          if (isLive()) patchInitUi({ loading: false });
         })
         .catch((err) => {
-          if (!cancelled) setError(err instanceof Error ? err.message : 'Chat init failed');
-          if (isLive()) setLoading(false);
+          if (!cancelled) {
+            patchInitUi({
+              error: err instanceof Error ? err.message : 'Chat init failed',
+              loading: false,
+            });
+          } else if (isLive()) {
+            patchInitUi({ loading: false });
+          }
         });
     };
 
@@ -209,18 +181,11 @@ export function useChatSessionInit(opts: {
     sessionMgrRef,
     resolveAgentIdForPost,
     navigateToSession,
-    refreshModelThinkingSupport,
     loadSessionById,
     tryResumeAgentRun,
     restoreLiveCacheIfNeeded,
-    setSessionKey,
-    setSessionName,
-    setMessages,
-    setHasMore,
-    setSessionModel,
-    setThinkingLevel,
-    setReasoningLevel,
-    setError,
-    setLoading,
+    adoptEmptySession,
+    applyAgentConfig,
+    patchInitUi,
   ]);
 }

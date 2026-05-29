@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useReducer, useRef, useState } from 'react';
 import {
   computeGoalWallElapsedMs,
   formatExecutionElapsedMs,
@@ -12,6 +12,7 @@ import {
 } from '@/features/chat/goals/goals-api';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
+import { useAsyncResource } from '@/lib/use-async-resource';
 
 import { GoalActions } from './chat-goal-banner-actions';
 import { GoalChecklist } from './chat-goal-banner-checklist';
@@ -29,26 +30,58 @@ type ChatGoalBannerProps = {
   sending: boolean;
 };
 
-export function ChatGoalBanner({ sessionKey, streaming, sending }: ChatGoalBannerProps) {
+type MutationState = {
+  busy: boolean;
+  error: string | null;
+};
+
+type MutationAction =
+  | { type: 'start' }
+  | { type: 'error'; error: string }
+  | { type: 'done' };
+
+function mutationReducer(_state: MutationState, action: MutationAction): MutationState {
+  switch (action.type) {
+    case 'start':
+      return { busy: true, error: null };
+    case 'error':
+      return { busy: false, error: action.error };
+    case 'done':
+      return { busy: false, error: null };
+  }
+}
+
+function readCollapsedFromStorage(sessionKey: string): boolean {
+  try {
+    return sessionStorage.getItem(collapsedStorageKey(sessionKey)) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function GoalElapsedTicker({ onTick }: { onTick: () => void }) {
+  useEffect(() => {
+    const id = window.setInterval(onTick, 1000);
+    return () => clearInterval(id);
+  }, [onTick]);
+  return null;
+}
+
+function ChatGoalBannerBody({ sessionKey, streaming, sending }: ChatGoalBannerProps) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const t = m.chat.goal;
 
-  const [goal, setGoal] = useState<WebchatPersistentGoalWire | null>(null);
-  const [loaded, setLoaded] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [mutationBusy, setMutationBusy] = useState(false);
-  const [collapsed, setCollapsed] = useState(false);
-  const prevStreamingRef = useRef(false);
-  const [, bumpGoalClock] = useState(0);
-
-  useEffect(() => {
-    try {
-      setCollapsed(sessionStorage.getItem(collapsedStorageKey(sessionKey)) === '1');
-    } catch {
-      setCollapsed(false);
-    }
-  }, [sessionKey]);
+  const [collapsed, setCollapsed] = useState(() => readCollapsedFromStorage(sessionKey));
+  const [mutation, dispatchMutation] = useReducer(mutationReducer, { busy: false, error: null });
+  const [goalClockMs, setGoalClockMs] = useState(() => Date.now());
+  const prevAgentBusyRef = useRef(streaming || sending);
+  const idleRefetchPendingRef = useRef(false);
+  const isAgentBusy = streaming || sending;
+  if (prevAgentBusyRef.current && !isAgentBusy) {
+    idleRefetchPendingRef.current = true;
+  }
+  prevAgentBusyRef.current = isAgentBusy;
 
   const setCollapsedPersist = useCallback(
     (next: boolean) => {
@@ -66,73 +99,91 @@ export function ChatGoalBanner({ sessionKey, streaming, sending }: ChatGoalBanne
     [sessionKey],
   );
 
-  const refetch = useCallback(async () => {
+  const {
+    data: goal,
+    loading,
+    error: fetchError,
+    setData: setGoal,
+  } = useAsyncResource(
+    async () => {
+      const res = await fetchWebchatGoal(sessionKey, { uiLocale: language });
+      return res.persistentGoal;
+    },
+    [sessionKey, language],
+    { initial: null as WebchatPersistentGoalWire | null, errorData: null },
+  );
+
+  const refetchGoal = useCallback(async () => {
     try {
-      setError(null);
       const res = await fetchWebchatGoal(sessionKey, { uiLocale: language });
       setGoal(res.persistentGoal);
     } catch (e) {
-      setError(e instanceof Error ? e.message : t.loadFailed);
-    } finally {
-      setLoaded(true);
+      dispatchMutation({
+        type: 'error',
+        error: e instanceof Error ? e.message : t.loadFailed,
+      });
     }
-  }, [sessionKey, t.loadFailed, language]);
+  }, [sessionKey, language, setGoal, t.loadFailed]);
 
-  useEffect(() => {
-    setLoaded(false);
-    setGoal(null);
-    void refetch();
-  }, [sessionKey, refetch]);
+  const refetchFromEffect = useEffectEvent(() => {
+    void refetchGoal();
+  });
 
   useEffect(() => {
     const onSessionUpdated = (e: Event) => {
       const key = (e as CustomEvent<{ key?: string }>).detail?.key;
-      if (key === sessionKey) void refetch();
+      if (key === sessionKey) refetchFromEffect();
     };
     window.addEventListener('session-updated', onSessionUpdated);
     return () => window.removeEventListener('session-updated', onSessionUpdated);
-  }, [sessionKey, refetch]);
+  }, [sessionKey]);
 
-  useEffect(() => {
-    const was = prevStreamingRef.current;
-    prevStreamingRef.current = streaming || sending;
-    if (was && !streaming && !sending) {
-      void refetch();
-    }
-  }, [streaming, sending, refetch]);
+  useLayoutEffect(() => {
+    if (!idleRefetchPendingRef.current) return;
+    idleRefetchPendingRef.current = false;
+    refetchFromEffect();
+  });
 
-  const goalStatus = goal?.status;
-  useEffect(() => {
-    if (collapsed || !goalStatus || goalStatus === 'done' || goalStatus === 'cleared') return;
-    const id = window.setInterval(() => bumpGoalClock((n) => n + 1), 1000);
-    return () => clearInterval(id);
-  }, [goalStatus, collapsed]);
+  const bumpGoalClock = useCallback(() => {
+    setGoalClockMs(Date.now());
+  }, []);
 
   const runAction = async (action: GoalWebchatAction) => {
-    setMutationBusy(true);
-    setError(null);
+    dispatchMutation({ type: 'start' });
     try {
       await postWebchatGoalAction(sessionKey, action, { uiLocale: language });
-      await refetch();
+      await refetchGoal();
+      dispatchMutation({ type: 'done' });
     } catch (e) {
-      setError(e instanceof Error ? e.message : t.loadFailed);
-    } finally {
-      setMutationBusy(false);
+      dispatchMutation({
+        type: 'error',
+        error: e instanceof Error ? e.message : t.loadFailed,
+      });
     }
   };
 
-  const runChecklist = async (mutation: Parameters<typeof postWebchatChecklistMutation>[1]) => {
-    setMutationBusy(true);
-    setError(null);
+  const runChecklist = async (mutationArg: Parameters<typeof postWebchatChecklistMutation>[1]) => {
+    dispatchMutation({ type: 'start' });
     try {
-      await postWebchatChecklistMutation(sessionKey, mutation, { uiLocale: language });
-      await refetch();
+      await postWebchatChecklistMutation(sessionKey, mutationArg, { uiLocale: language });
+      await refetchGoal();
+      dispatchMutation({ type: 'done' });
     } catch (e) {
-      setError(e instanceof Error ? e.message : t.loadFailed);
-    } finally {
-      setMutationBusy(false);
+      dispatchMutation({
+        type: 'error',
+        error: e instanceof Error ? e.message : t.loadFailed,
+      });
     }
   };
+
+  const loaded = !loading || fetchError != null || goal != null;
+  const error =
+    mutation.error ??
+    (fetchError == null
+      ? null
+      : fetchError instanceof Error
+        ? fetchError.message
+        : t.loadFailed);
 
   if (!loaded || !shouldShowGoal(goal)) {
     return null;
@@ -145,10 +196,12 @@ export function ChatGoalBanner({ sessionKey, streaming, sending }: ChatGoalBanne
   const { total: clTotal, done: clDone } = checklistStats(g);
   const clLine =
     clTotal > 0 ? t.checklistProgress.replace('{{done}}', String(clDone)).replace('{{total}}', String(clTotal)) : '';
-  const elapsedMs = computeGoalWallElapsedMs(g, Date.now());
+  const elapsedMs = computeGoalWallElapsedMs(g, goalClockMs);
   const elapsedStr = formatExecutionElapsedMs(elapsedMs, language);
   const phase = goalUiPhase(g, agentBusy);
   const pillTitle = t.pillTitle.replace('{{status}}', statusShort).replace('{{turns}}', turnsShort);
+  const showGoalClock =
+    !collapsed && g.status !== 'done' && g.status !== 'cleared';
 
   if (collapsed) {
     return (
@@ -170,6 +223,7 @@ export function ChatGoalBanner({ sessionKey, streaming, sending }: ChatGoalBanne
 
   return (
     <div className="shrink-0 w-full px-3 pt-1.5 sm:px-5 sm:pt-2 xl:px-6">
+      {showGoalClock ? <GoalElapsedTicker onTick={bumpGoalClock} /> : null}
       <div className="mx-auto flex w-full max-w-[var(--max-width-chat)] flex-col gap-2.5 rounded-2xl bg-surface-panel px-3 py-2.5 shadow-elevated sm:px-4 sm:py-3">
         <GoalMissionHeader
           goal={g}
@@ -184,12 +238,12 @@ export function ChatGoalBanner({ sessionKey, streaming, sending }: ChatGoalBanne
 
         <GoalProgressMeter goal={g} t={t} />
 
-        <GoalChecklist goal={g} canEdit={canEditChecklist} mutationBusy={mutationBusy} t={t} onMutate={runChecklist} />
+        <GoalChecklist goal={g} canEdit={canEditChecklist} mutationBusy={mutation.busy} t={t} onMutate={runChecklist} />
 
         <GoalActions
           goal={g}
           canEditChecklist={canEditChecklist}
-          mutationBusy={mutationBusy}
+          mutationBusy={mutation.busy}
           t={t}
           onAction={runAction}
           onChecklist={runChecklist}
@@ -202,4 +256,8 @@ export function ChatGoalBanner({ sessionKey, streaming, sending }: ChatGoalBanne
       </div>
     </div>
   );
+}
+
+export function ChatGoalBanner(props: ChatGoalBannerProps) {
+  return <ChatGoalBannerBody key={props.sessionKey} {...props} />;
 }
