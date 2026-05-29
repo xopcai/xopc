@@ -73,14 +73,6 @@ pnpm install && pnpm run dev -- agent -i
 pnpm run build    # Node + web console → dist/
 ```
 
-```mermaid
-flowchart LR
-  A[install + onboard] --> B{Pick a surface}
-  B --> C["xopc tui --local"]
-  B --> D["xopc gateway → browser"]
-  B --> E["channels.* + gateway → IM"]
-```
-
 ---
 
 ## Why xopc

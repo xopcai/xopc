@@ -73,14 +73,6 @@ pnpm install && pnpm run dev -- agent -i
 pnpm run build    # Node + 网页 → dist/
 ```
 
-```mermaid
-flowchart LR
-  A[安装 + onboard] --> B{选入口}
-  B --> C["xopc tui --local"]
-  B --> D["xopc gateway → 浏览器"]
-  B --> E["channels.* + gateway → IM"]
-```
-
 ---
 
 ## 为什么选 xopc
