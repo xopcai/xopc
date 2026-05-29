@@ -1,9 +1,0 @@
-{
-  "id": "clawhub",
-  "name": "ClawHub Marketplace",
-  "description": "ClawHub (clawhub.ai) skills marketplace adapter — browse, search and install skills from clawhub.ai",
-  "version": "1.0.0",
-  "kind": "utility",
-  "main": "index.ts",
-  "enabledByDefault": true
-}

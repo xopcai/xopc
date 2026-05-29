@@ -1,12 +1,9 @@
 /**
- * ClawHub Extension — clawhub.ai skills marketplace adapter.
- *
- * Registers a marketplace adapter so users can browse, search and install
- * skills from clawhub.ai directly in the xopc gateway console.
+ * ClawHub (clawhub.ai) skills marketplace adapter.
  */
 
-import type { ExtensionApi } from 'xopc/extension-sdk';
-import { fetch } from 'undici';
+import type { SkillsMarketplaceAdapter } from '../../adapter.types.js';
+import { registerMarketplaceAdapter } from '../../registry.js';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -400,114 +397,100 @@ function fallbackReadmeMarkdown(detail: {
   return `## ${title}\n\n**${detail.skill.slug}** · v${detail.latestVersion.version}\n\n${body}`;
 }
 
-// ─── Extension definition ────────────────────────────────────────────────────
-
-const extension = {
+export const clawHubMarketplaceAdapter: SkillsMarketplaceAdapter = {
   id: 'clawhub',
-  name: 'ClawHub Marketplace',
-  description: 'ClawHub (clawhub.ai) skills marketplace adapter',
-  version: '1.0.0',
-  kind: 'utility' as const,
 
-  register(api: ExtensionApi) {
-    api.registerMarketplaceAdapter({
-      adapter: {
-        id: 'clawhub',
+  async listCategories() {
+    return [];
+  },
 
-        async listCategories() {
-          return [];
-        },
+  async listPackages(_config, params) {
+    const pageSize = params.pageSize ?? 20;
+    const page = params.page ?? 1;
 
-        async listPackages(_config, params) {
-          const pageSize = params.pageSize ?? 20;
-          const page = params.page ?? 1;
+    if (params.q?.trim()) {
+      const searchResponse = await cachedSearchClawHubSkills(params.q.trim(), LIST_BATCH_SIZE);
+      let rows = searchResponse.results.map(convertSearchResultToPackageItem);
+      if (params.sort === 'downloads') {
+        rows = [...rows].sort((a, b) => b.downloads - a.downloads);
+      }
+      const total = rows.length;
+      const start = (page - 1) * pageSize;
+      const items = rows.slice(start, start + pageSize);
+      const totalPages = Math.max(1, Math.ceil(total / pageSize));
+      return { items, meta: { page, pageSize, total, totalPages }, provider: 'clawhub' };
+    }
 
-          if (params.q?.trim()) {
-            const searchResponse = await cachedSearchClawHubSkills(params.q.trim(), LIST_BATCH_SIZE);
-            let rows = searchResponse.results.map(convertSearchResultToPackageItem);
-            if (params.sort === 'downloads') {
-              rows = [...rows].sort((a, b) => b.downloads - a.downloads);
-            }
-            const total = rows.length;
-            const start = (page - 1) * pageSize;
-            const items = rows.slice(start, start + pageSize);
-            const totalPages = Math.max(1, Math.ceil(total / pageSize));
-            return { items, meta: { page, pageSize, total, totalPages }, provider: 'clawhub' };
-          }
+    const sort = mapSortParam(params.sort);
+    const listResponse = await cachedListClawHubSkills({ limit: LIST_BATCH_SIZE, sort });
+    const rows = listResponse.items.map(convertListItemToPackageItem);
+    const total = rows.length;
+    const start = (page - 1) * pageSize;
+    const items = rows.slice(start, start + pageSize);
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    return { items, meta: { page, pageSize, total, totalPages }, provider: 'clawhub' };
+  },
 
-          const sort = mapSortParam(params.sort);
-          const listResponse = await cachedListClawHubSkills({ limit: LIST_BATCH_SIZE, sort });
-          const rows = listResponse.items.map(convertListItemToPackageItem);
-          const total = rows.length;
-          const start = (page - 1) * pageSize;
-          const items = rows.slice(start, start + pageSize);
-          const totalPages = Math.max(1, Math.ceil(total / pageSize));
-          return { items, meta: { page, pageSize, total, totalPages }, provider: 'clawhub' };
-        },
+  async getPackageDetail(_config, packageName) {
+    const detail = await cachedGetClawHubSkillDetail(packageName);
+    const slug = detail.skill.slug;
+    const version = detail.latestVersion.version;
 
-        async getPackageDetail(_config, packageName) {
-          const detail = await cachedGetClawHubSkillDetail(packageName);
-          const slug = detail.skill.slug;
-          const version = detail.latestVersion.version;
+    let readme: string | null = null;
 
-          let readme: string | null = null;
+    try {
+      const versionDetail = await getClawHubVersionDetail(slug, version);
+      const docPath = pickClawHubDocFilePath(versionDetail.version.files);
+      if (docPath) {
+        const rawText = await getClawHubSkillFileText(slug, docPath, version);
+        const trimmed = rawText.trim();
+        if (trimmed) readme = trimmed;
+      }
+    } catch {
+      // version detail or file fetch failed — use fallback
+    }
 
-          try {
-            const versionDetail = await getClawHubVersionDetail(slug, version);
-            const docPath = pickClawHubDocFilePath(versionDetail.version.files);
-            if (docPath) {
-              const rawText = await getClawHubSkillFileText(slug, docPath, version);
-              const trimmed = rawText.trim();
-              if (trimmed) readme = trimmed;
-            }
-          } catch {
-            // version detail or file fetch failed — use fallback
-          }
+    if (!readme) {
+      readme = fallbackReadmeMarkdown(detail);
+    }
 
-          if (!readme) {
-            readme = fallbackReadmeMarkdown(detail);
-          }
+    const changelog = detail.latestVersion.changelog?.trim();
+    if (changelog) {
+      readme = `${readme}\n\n---\n\n## Changelog\n\n${changelog}`;
+    }
 
-          const changelog = detail.latestVersion.changelog?.trim();
-          if (changelog) {
-            readme = `${readme}\n\n---\n\n## Changelog\n\n${changelog}`;
-          }
-
-          return {
-            id: slug,
-            name: slug,
-            type: 'skill',
-            description: detail.skill.summary || '',
-            readme,
-            downloads: detail.skill.stats.downloads,
-            author: {
-              username: detail.owner.handle,
-              avatarUrl: detail.owner.image,
-            },
-            latestVersion: {
-              version: detail.latestVersion.version,
-              changelog: detail.latestVersion.changelog,
-              publishedAt: String(detail.latestVersion.createdAt),
-            },
-            provider: 'clawhub',
-          };
-        },
-
-        async downloadPackage(_config, packageName, version) {
-          const slug = packageName.trim();
-          const result = await downloadClawHubSkillZip(slug, version);
-          return {
-            buffer: result.buffer,
-            skillId: isValidSkillId(slug) ? slug : 'unknown',
-            version: result.version,
-          };
-        },
+    return {
+      id: slug,
+      name: slug,
+      type: 'skill',
+      description: detail.skill.summary || '',
+      readme,
+      downloads: detail.skill.stats.downloads,
+      author: {
+        username: detail.owner.handle,
+        avatarUrl: detail.owner.image,
       },
-      displayName: 'ClawHub',
-    });
+      latestVersion: {
+        version: detail.latestVersion.version,
+        changelog: detail.latestVersion.changelog,
+        publishedAt: String(detail.latestVersion.createdAt),
+      },
+      provider: 'clawhub',
+    };
+  },
 
-    api.logger.info('ClawHub marketplace adapter registered');
+  async downloadPackage(_config, packageName, version) {
+    const slug = packageName.trim();
+    const result = await downloadClawHubSkillZip(slug, version);
+    return {
+      buffer: result.buffer,
+      skillId: isValidSkillId(slug) ? slug : 'unknown',
+      version: result.version,
+    };
   },
 };
 
-export default extension;
+registerMarketplaceAdapter({
+  adapter: clawHubMarketplaceAdapter,
+  displayName: 'ClawHub',
+});
