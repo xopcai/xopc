@@ -310,6 +310,7 @@ describe('Gateway Security Fixes', () => {
       const headers = {
         Origin: 'http://localhost:18790',
         Authorization: 'Bearer wrong',
+        'X-Forwarded-For': '127.0.0.1',
       };
 
       expect((await app.request('/api/config', { headers })).status).toBe(401);
@@ -320,6 +321,7 @@ describe('Gateway Security Fixes', () => {
     it('rate limits remote browser-origin auth failures on loopback', async () => {
       const service = createMockService({
         gateway: {
+          corsOrigins: ['http://evil.example.com'],
           auth: {
             mode: 'token',
             token: 'real',
@@ -337,6 +339,7 @@ describe('Gateway Security Fixes', () => {
       const headers = {
         Origin: 'http://evil.example.com',
         Authorization: 'Bearer wrong',
+        'X-Forwarded-For': '127.0.0.1',
       };
 
       expect((await app.request('/api/config', { headers })).status).toBe(401);
