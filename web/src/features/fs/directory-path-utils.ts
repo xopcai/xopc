@@ -1,7 +1,7 @@
 export const RECENT_DIRS_KEY = 'xopc.recentWorkspaceDirs.v1';
 export const MAX_RECENT_DIRS = 10;
 
-export function readRecentDirs(): string[] {
+function readRecentDirs(): string[] {
   try {
     const raw = localStorage.getItem(RECENT_DIRS_KEY);
     if (!raw) return [];

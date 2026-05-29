@@ -9,7 +9,7 @@ import { SETTINGS_SHELL_CONTENT_Z, SETTINGS_SHELL_OVERLAY_Z } from '@/lib/settin
 
 export type ChannelSettingsPresentation = 'modal' | 'drawer';
 
-export function channelSettingsShellContentClass(
+function channelSettingsShellContentClass(
   presentation: ChannelSettingsPresentation,
   wide = false,
 ): string {

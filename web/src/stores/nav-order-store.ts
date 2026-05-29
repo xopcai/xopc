@@ -31,7 +31,7 @@ export type NavOrderState = {
   setOrder: (order: string[]) => void;
 };
 
-export function applyMove(
+function applyMove(
   order: string[],
   fromId: string,
   toId: string,
@@ -48,7 +48,7 @@ export function applyMove(
   return ensureAllKnown(next, knownIds);
 }
 
-export function applyMoveToEnd(
+function applyMoveToEnd(
   order: string[],
   id: string,
   knownIds: ReadonlySet<string>,

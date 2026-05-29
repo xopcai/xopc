@@ -1,4 +1,4 @@
-export function getBaseUrl(): string {
+function getBaseUrl(): string {
   return window.location.origin;
 }
 

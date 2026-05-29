@@ -8,7 +8,9 @@ import {
   RefreshCw,
   Trash2,
 } from 'lucide-react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useReducer, useState } from 'react';
+
+import { uiPatchReducer } from '@/lib/settings-form-draft';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
@@ -188,6 +190,30 @@ export function SharesSettingsPanel() {
 
 // ── Create Section ────────────────────────────────────────────────────────────
 
+type CreateShareUi = {
+  expanded: boolean;
+  path: string;
+  ttlMs: number;
+  maxViews: number | null;
+  description: string;
+  creating: boolean;
+  result: ShareLinkResult | null;
+  errorMsg: string | null;
+  resultDialogOpen: boolean;
+};
+
+const initialCreateShareUi: CreateShareUi = {
+  expanded: false,
+  path: '',
+  ttlMs: 86_400_000,
+  maxViews: null,
+  description: '',
+  creating: false,
+  result: null,
+  errorMsg: null,
+  resultDialogOpen: false,
+};
+
 function CreateShareSection({
   t,
   onCreated,
@@ -195,21 +221,22 @@ function CreateShareSection({
   t: ReturnType<typeof messages>['sharesSettings'];
   onCreated: () => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
-  const [path, setPath] = useState('');
-  const [ttlMs, setTtlMs] = useState(86_400_000);
-  const [maxViews, setMaxViews] = useState<number | null>(null);
-  const [description, setDescription] = useState('');
-  const [creating, setCreating] = useState(false);
-  const [result, setResult] = useState<ShareLinkResult | null>(null);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [resultDialogOpen, setResultDialogOpen] = useState(false);
+  const [ui, dispatch] = useReducer(uiPatchReducer<CreateShareUi>, initialCreateShareUi);
+  const {
+    expanded,
+    path,
+    ttlMs,
+    maxViews,
+    description,
+    creating,
+    result,
+    errorMsg,
+    resultDialogOpen,
+  } = ui;
 
   const handleCreate = useCallback(async () => {
     if (!path.trim()) return;
-    setCreating(true);
-    setErrorMsg(null);
-    setResult(null);
+    dispatch({ type: 'patch', patch: { creating: true, errorMsg: null, result: null } });
     try {
       const params: CreateShareParams = {
         path: path.trim(),
@@ -218,28 +245,35 @@ function CreateShareSection({
         description: description.trim() || undefined,
       };
       const res = await createShare(params);
-      setResult(res.payload);
-      setResultDialogOpen(true);
+      dispatch({ type: 'patch', patch: { result: res.payload, resultDialogOpen: true } });
       onCreated();
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : String(err));
+      dispatch({
+        type: 'patch',
+        patch: { errorMsg: err instanceof Error ? err.message : String(err) },
+      });
     } finally {
-      setCreating(false);
+      dispatch({ type: 'patch', patch: { creating: false } });
     }
   }, [path, ttlMs, maxViews, description, onCreated]);
 
   const resetForm = useCallback(() => {
-    setPath('');
-    setDescription('');
-    setMaxViews(null);
-    setTtlMs(86_400_000);
-    setResult(null);
-    setErrorMsg(null);
+    dispatch({
+      type: 'patch',
+      patch: {
+        path: '',
+        description: '',
+        maxViews: null,
+        ttlMs: 86_400_000,
+        result: null,
+        errorMsg: null,
+      },
+    });
   }, []);
 
   if (!expanded) {
     return (
-      <Button type="button" onClick={() => setExpanded(true)} className="self-start">
+      <Button type="button" onClick={() => dispatch({ type: 'patch', patch: { expanded: true } })} className="self-start">
         <Plus className="size-4" />
         {t.createTitle}
       </Button>
@@ -259,7 +293,7 @@ function CreateShareSection({
             className="rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg placeholder:text-fg-subtle focus:outline-none focus:ring-2 focus:ring-accent"
             placeholder={t.pathPlaceholder}
             value={path}
-            onChange={(e) => setPath(e.target.value)}
+            onChange={(e) => dispatch({ type: 'patch', patch: { path: e.target.value } })}
           />
         </label>
 
@@ -269,7 +303,7 @@ function CreateShareSection({
             <select
               className="rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg focus:outline-none focus:ring-2 focus:ring-accent"
               value={ttlMs}
-              onChange={(e) => setTtlMs(Number(e.target.value))}
+              onChange={(e) => dispatch({ type: 'patch', patch: { ttlMs: Number(e.target.value) } })}
             >
               {TTL_OPTIONS.map((opt) => (
                 <option key={opt.key} value={opt.value}>
@@ -285,7 +319,12 @@ function CreateShareSection({
               className="rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg focus:outline-none focus:ring-2 focus:ring-accent"
               value={maxViews ?? 'unlimited'}
               onChange={(e) =>
-                setMaxViews(e.target.value === 'unlimited' ? null : Number(e.target.value))
+                dispatch({
+                  type: 'patch',
+                  patch: {
+                    maxViews: e.target.value === 'unlimited' ? null : Number(e.target.value),
+                  },
+                })
               }
             >
               <option value="unlimited">{t.maxViewsUnlimited}</option>
@@ -305,7 +344,7 @@ function CreateShareSection({
             className="rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg placeholder:text-fg-subtle focus:outline-none focus:ring-2 focus:ring-accent"
             placeholder={t.descriptionPlaceholder}
             value={description}
-            onChange={(e) => setDescription(e.target.value)}
+            onChange={(e) => dispatch({ type: 'patch', patch: { description: e.target.value } })}
           />
         </label>
 
@@ -314,7 +353,7 @@ function CreateShareSection({
             {creating ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
             {creating ? t.creating : t.createButton}
           </Button>
-          <Button type="button" variant="ghost" onClick={() => { resetForm(); setExpanded(false); }}>
+          <Button type="button" variant="ghost" onClick={() => { resetForm(); dispatch({ type: 'patch', patch: { expanded: false } }); }}>
             {t.cancel}
           </Button>
         </div>
@@ -325,8 +364,7 @@ function CreateShareSection({
       <ShareLinkDialog
         open={resultDialogOpen}
         onOpenChange={(open) => {
-          setResultDialogOpen(open);
-          if (!open) setResult(null);
+          dispatch({ type: 'patch', patch: { resultDialogOpen: open, ...(open ? {} : { result: null }) } });
         }}
         result={result}
       />
@@ -335,6 +373,24 @@ function CreateShareSection({
 }
 
 // ── Share Row ─────────────────────────────────────────────────────────────────
+
+type ShareRowUi = {
+  revokeOpen: boolean;
+  revoking: boolean;
+  linksOpen: boolean;
+  urlCopied: boolean;
+  copyFailed: boolean;
+  extending: boolean;
+};
+
+const initialShareRowUi: ShareRowUi = {
+  revokeOpen: false,
+  revoking: false,
+  linksOpen: false,
+  urlCopied: false,
+  copyFailed: false,
+  extending: false,
+};
 
 function ShareRow({
   share,
@@ -349,12 +405,8 @@ function ShareRow({
   onRevoked: () => void;
   onExtended: () => void;
 }) {
-  const [revokeOpen, setRevokeOpen] = useState(false);
-  const [revoking, setRevoking] = useState(false);
-  const [linksOpen, setLinksOpen] = useState(false);
-  const [urlCopied, setUrlCopied] = useState(false);
-  const [copyFailed, setCopyFailed] = useState(false);
-  const [extending, setExtending] = useState(false);
+  const [ui, dispatch] = useReducer(uiPatchReducer<ShareRowUi>, initialShareRowUi);
+  const { revokeOpen, revoking, linksOpen, urlCopied, copyFailed, extending } = ui;
 
   const isActive = !share.expired && !share.revoked;
   const statusLabel = share.revoked ? t.statusRevoked : share.expired ? t.statusExpired : t.statusActive;
@@ -365,40 +417,38 @@ function ShareRow({
       : 'text-emerald-600 dark:text-emerald-400';
 
   const handleRevoke = useCallback(async () => {
-    setRevokeOpen(false);
-    setRevoking(true);
+    dispatch({ type: 'patch', patch: { revokeOpen: false, revoking: true } });
     try {
       await revokeShare(share.id);
       onRevoked();
     } catch {
       /* silent */
     } finally {
-      setRevoking(false);
+      dispatch({ type: 'patch', patch: { revoking: false } });
     }
   }, [share.id, onRevoked]);
 
   const handleCopy = useCallback(async () => {
-    setLinksOpen(true);
-    setCopyFailed(false);
+    dispatch({ type: 'patch', patch: { linksOpen: true, copyFailed: false } });
     const ok = await copyTextToClipboard(share.shareUrl);
     if (!ok) {
-      setCopyFailed(true);
-      window.setTimeout(() => setCopyFailed(false), 2500);
+      dispatch({ type: 'patch', patch: { copyFailed: true } });
+      window.setTimeout(() => dispatch({ type: 'patch', patch: { copyFailed: false } }), 2500);
       return;
     }
-    setUrlCopied(true);
-    window.setTimeout(() => setUrlCopied(false), 2000);
+    dispatch({ type: 'patch', patch: { urlCopied: true } });
+    window.setTimeout(() => dispatch({ type: 'patch', patch: { urlCopied: false } }), 2000);
   }, [share.shareUrl]);
 
   const handleExtend = useCallback(async () => {
-    setExtending(true);
+    dispatch({ type: 'patch', patch: { extending: true } });
     try {
       await extendShare(share.id, 86_400_000);
       onExtended();
     } catch {
       /* silent */
     } finally {
-      setExtending(false);
+      dispatch({ type: 'patch', patch: { extending: false } });
     }
   }, [share.id, onExtended]);
 
@@ -456,7 +506,7 @@ function ShareRow({
                   type="button"
                   variant="ghost"
                   className="px-2 py-1 text-red-600 hover:text-red-700 dark:text-red-400"
-                  onClick={() => setRevokeOpen(true)}
+                  onClick={() => dispatch({ type: 'patch', patch: { revokeOpen: true } })}
                   disabled={revoking}
                 >
                   {revoking ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
@@ -491,7 +541,7 @@ function ShareRow({
         cancelLabel={t.cancel}
         destructive
         onConfirm={() => void handleRevoke()}
-        onCancel={() => setRevokeOpen(false)}
+        onCancel={() => dispatch({ type: 'patch', patch: { revokeOpen: false } })}
       />
     </>
   );

@@ -159,20 +159,6 @@ export function base64ToArrayBuffer(base64: string | undefined | null): ArrayBuf
 }
 
 /**
- * Get file icon based on mime type
- */
-export function getFileIcon(mimeType: string): string {
-  if (!mimeType) return '📎';
-  if (mimeType.includes('pdf')) return '📄';
-  if (mimeType.includes('word') || mimeType.includes('document')) return '📝';
-  if (mimeType.includes('sheet') || mimeType.includes('excel')) return '📊';
-  if (mimeType.includes('presentation') || mimeType.includes('powerpoint')) return '📽️';
-  if (mimeType.startsWith('image/')) return '🖼️';
-  if (mimeType.startsWith('text/') || mimeType.includes('json')) return '📃';
-  return '📎';
-}
-
-/**
  * Format file size
  */
 export function formatFileSize(bytes: number): string {
@@ -184,13 +170,6 @@ export function formatFileSize(bytes: number): string {
     unitIndex++;
   }
   return `${size.toFixed(1)} ${units[unitIndex]}`;
-}
-
-/**
- * Check if file is an image
- */
-export function isImageFile(mimeType: string): boolean {
-  return Boolean(mimeType?.startsWith('image/'));
 }
 
 /** View kind for the attachment preview dialog — mirrors `loadAttachment` detection (MIME + extension). */
@@ -291,47 +270,6 @@ export function inferMimeTypeFromFileName(fileName: string): string | undefined 
     if (lower.endsWith(ext)) return mime;
   }
   return undefined;
-}
-
-/**
- * Check if file is a document that can be previewed
- */
-export function isPreviewableDocument(mimeType: string, name?: string): boolean {
-  const previewableTypes = [
-    'application/pdf',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-    'text/plain',
-    'text/markdown',
-    'text/html',
-    'application/json',
-    'text/xml',
-  ];
-
-  if (previewableTypes.includes(mimeType)) return true;
-
-  if (name) {
-    const ext = name.toLowerCase().split('.').pop();
-    const previewableExts = [
-      'pdf',
-      'docx',
-      'xlsx',
-      'xls',
-      'pptx',
-      'txt',
-      'md',
-      'json',
-      'xml',
-      'html',
-      'css',
-      'js',
-      'ts',
-    ];
-    if (ext && previewableExts.includes(ext)) return true;
-  }
-
-  return false;
 }
 
 export function isTextLikeFileNameAndMime(name: string, mimeType: string): boolean {

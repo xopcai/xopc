@@ -54,7 +54,7 @@ type LastActiveLabels = {
   daysAgo: string;
 };
 
-export function formatLastActive(date: string, labels: LastActiveLabels): string {
+function formatLastActive(date: string, labels: LastActiveLabels): string {
   const d = new Date(date);
   const now = new Date();
   const diff = now.getTime() - d.getTime();

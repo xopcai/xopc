@@ -85,13 +85,6 @@ export async function patchHeartbeatSettings(state: HeartbeatSettingsState): Pro
   void revalidateGatewayConfig();
 }
 
-export async function fetchHeartbeatMd(): Promise<string> {
-  const res = await fetchJson<{ ok?: boolean; payload?: { content?: string } }>(
-    apiUrl('/api/workspace/heartbeat-md'),
-  );
-  return typeof res.payload?.content === 'string' ? res.payload.content : '';
-}
-
 export async function putHeartbeatMd(content: string): Promise<void> {
   await fetchJson(apiUrl('/api/workspace/heartbeat-md'), {
     method: 'PUT',

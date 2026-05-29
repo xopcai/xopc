@@ -7,7 +7,7 @@ const CLAWHUB_PUBLIC_ORIGIN = 'https://clawhub.ai';
  * Public SkillHub web URL for a marketplace row `id` (canonical slug, e.g. `self-improving-agent` or `team--skill`).
  * Site shape: `https://skillhub.cn/skills/<slug>`.
  */
-export function skillHubPublicSkillPageUrl(canonicalSlug: string): string | null {
+function skillHubPublicSkillPageUrl(canonicalSlug: string): string | null {
   const id = canonicalSlug.trim();
   if (!id) return null;
   return `${SKILLHUB_PUBLIC_ORIGIN}/skills/${encodeURIComponent(id)}`;
@@ -18,7 +18,7 @@ export function skillHubPublicSkillPageUrl(canonicalSlug: string): string | null
  * Site shape: `https://clawhub.ai/<owner>/<slug>` — but since we don't have owner in list items,
  * we use the direct slug route which ClawHub resolves.
  */
-export function clawHubPublicSkillPageUrl(canonicalSlug: string): string | null {
+function clawHubPublicSkillPageUrl(canonicalSlug: string): string | null {
   const id = canonicalSlug.trim();
   if (!id) return null;
   return `${CLAWHUB_PUBLIC_ORIGIN}/${encodeURIComponent(id)}`;

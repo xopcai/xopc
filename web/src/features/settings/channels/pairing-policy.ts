@@ -25,7 +25,7 @@ export function resolveAccountDmPolicy(
   return topDmPolicy ?? defaultChannelDmPolicy(channel);
 }
 
-export function listPairingAccountIds(
+function listPairingAccountIds(
   channel: PairingPolicyChannelId,
   config: TelegramConfig | WeixinConfig | FeishuConfig,
 ): string[] {
@@ -41,7 +41,7 @@ export function listPairingAccountIds(
   return ids.length > 0 ? ids : ['default'];
 }
 
-export function isPairingAccountEnabled(account?: { enabled?: boolean }): boolean {
+function isPairingAccountEnabled(account?: { enabled?: boolean }): boolean {
   return account?.enabled !== false;
 }
 

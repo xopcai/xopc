@@ -1,5 +1,7 @@
 import { Clock, ExternalLink, FileText, Heart, Loader2, MessageSquare, Play, RefreshCw, type LucideIcon } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, type ReactNode } from 'react';
+
+import { uiPatchReducer } from '@/lib/settings-form-draft';
 import { useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
 
@@ -146,6 +148,22 @@ function workspacePathFromConfig(cfg: unknown): string {
   return typeof w === 'string' ? w : '';
 }
 
+type HeartbeatUi = {
+  saving: boolean;
+  error: string | null;
+  triggerLoading: boolean;
+  triggerOk: boolean;
+  triggerError: string | null;
+};
+
+const initialHeartbeatUi: HeartbeatUi = {
+  saving: false,
+  error: null,
+  triggerLoading: false,
+  triggerOk: false,
+  triggerError: null,
+};
+
 export function HeartbeatSettingsPanel() {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
@@ -175,11 +193,8 @@ export function HeartbeatSettingsPanel() {
   const [docDraft, dispatchDoc] = useReducer(heartbeatDocReducer, { doc: '', baseline: '' });
   const doc = docDraft.doc;
   const docBaseline = docDraft.baseline;
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [triggerLoading, setTriggerLoading] = useState(false);
-  const [triggerOk, setTriggerOk] = useState(false);
-  const [triggerError, setTriggerError] = useState<string | null>(null);
+  const [ui, dispatchUi] = useReducer(uiPatchReducer<HeartbeatUi>, initialHeartbeatUi);
+  const { saving, error, triggerLoading, triggerOk, triggerError } = ui;
   const configDirtyRef = useRef(false);
   const docDirtyRef = useRef(false);
 
@@ -271,17 +286,18 @@ export function HeartbeatSettingsPanel() {
   }, [deliveryTarget, setSessionChatIds]);
 
   const runHeartbeatNow = useCallback(async () => {
-    setTriggerLoading(true);
-    setTriggerOk(false);
-    setTriggerError(null);
+    dispatchUi({ type: 'patch', patch: { triggerLoading: true, triggerOk: false, triggerError: null } });
     try {
       await triggerHeartbeat();
-      setTriggerOk(true);
-      window.setTimeout(() => setTriggerOk(false), 3000);
+      dispatchUi({ type: 'patch', patch: { triggerOk: true } });
+      window.setTimeout(() => dispatchUi({ type: 'patch', patch: { triggerOk: false } }), 3000);
     } catch (e) {
-      setTriggerError(e instanceof Error ? e.message : h.triggerError);
+      dispatchUi({
+        type: 'patch',
+        patch: { triggerError: e instanceof Error ? e.message : h.triggerError },
+      });
     } finally {
-      setTriggerLoading(false);
+      dispatchUi({ type: 'patch', patch: { triggerLoading: false } });
     }
   }, [h.triggerError]);
 
@@ -297,13 +313,12 @@ export function HeartbeatSettingsPanel() {
     dispatchDoc({ type: 'discard' });
     configDirtyRef.current = false;
     docDirtyRef.current = false;
-    setError(null);
+    dispatchUi({ type: 'patch', patch: { error: null } });
   }, []);
 
   const save = useCallback(async () => {
     if (!form || saving) return;
-    setSaving(true);
-    setError(null);
+    dispatchUi({ type: 'patch', patch: { saving: true, error: null } });
     try {
       if (dirtyConfig) {
         await patchHeartbeatSettings(form);
@@ -318,10 +333,10 @@ export function HeartbeatSettingsPanel() {
     } catch (e) {
       const fallback = dirtyConfig ? h.saveConfigError : h.saveDocError;
       const message = e instanceof Error ? e.message : fallback;
-      setError(message);
+      dispatchUi({ type: 'patch', patch: { error: message } });
       throw new Error(message);
     } finally {
-      setSaving(false);
+      dispatchUi({ type: 'patch', patch: { saving: false } });
     }
   }, [dirtyConfig, dirtyDoc, doc, form, h.saveConfigError, h.saveDocError, saving]);
 

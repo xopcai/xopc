@@ -1,5 +1,7 @@
 import { Copy, FolderOpen, Package } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useReducer } from 'react';
+
+import { uiPatchReducer } from '@/lib/settings-form-draft';
 import * as Dialog from '@radix-ui/react-dialog';
 
 import { Button } from '@/components/ui/button';
@@ -111,32 +113,61 @@ type AppManagementSectionProps = {
   embedded?: boolean;
 };
 
+type AppManagementUi = {
+  info: UninstallInfo | null;
+  loadError: string | null;
+  actionError: string | null;
+  copiedField: 'app' | 'data' | null;
+  clearDialogOpen: boolean;
+  clearConfirmChecked: boolean;
+  clearConfirmText: string;
+  uninstallDialogOpen: boolean;
+  removeUserDataOnUninstall: boolean;
+  busy: boolean;
+};
+
+const initialAppManagementUi: AppManagementUi = {
+  info: null,
+  loadError: null,
+  actionError: null,
+  copiedField: null,
+  clearDialogOpen: false,
+  clearConfirmChecked: false,
+  clearConfirmText: '',
+  uninstallDialogOpen: false,
+  removeUserDataOnUninstall: false,
+  busy: false,
+};
+
 export function AppManagementSection({
   api,
   messages: m,
   embedded = true,
 }: AppManagementSectionProps) {
-  const [info, setInfo] = useState<UninstallInfo | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
-  const [copiedField, setCopiedField] = useState<'app' | 'data' | null>(null);
-  const [clearDialogOpen, setClearDialogOpen] = useState(false);
-  const [clearConfirmChecked, setClearConfirmChecked] = useState(false);
-  const [clearConfirmText, setClearConfirmText] = useState('');
-  const [uninstallDialogOpen, setUninstallDialogOpen] = useState(false);
-  const [removeUserDataOnUninstall, setRemoveUserDataOnUninstall] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const [ui, dispatch] = useReducer(uiPatchReducer<AppManagementUi>, initialAppManagementUi);
+  const {
+    info,
+    loadError,
+    actionError,
+    copiedField,
+    clearDialogOpen,
+    clearConfirmChecked,
+    clearConfirmText,
+    uninstallDialogOpen,
+    removeUserDataOnUninstall,
+    busy,
+  } = ui;
 
   const load = useCallback(async () => {
     if (!api?.getUninstallInfo) {
       return;
     }
-    setLoadError(null);
+    dispatch({ type: 'patch', patch: { loadError: null } });
     try {
       const next = await api.getUninstallInfo();
-      setInfo(next);
+      dispatch({ type: 'patch', patch: { info: next } });
     } catch (e) {
-      setLoadError(e instanceof Error ? e.message : String(e));
+      dispatch({ type: 'patch', patch: { loadError: e instanceof Error ? e.message : String(e) } });
     }
   }, [api]);
 
@@ -147,12 +178,11 @@ export function AppManagementSection({
   const copyPath = async (value: string, field: 'app' | 'data') => {
     const ok = await copyTextToClipboard(value);
     if (ok) {
-      setActionError(null);
-      setCopiedField(field);
-      window.setTimeout(() => setCopiedField(null), 2000);
+      dispatch({ type: 'patch', patch: { actionError: null, copiedField: field } });
+      window.setTimeout(() => dispatch({ type: 'patch', patch: { copiedField: null } }), 2000);
       return;
     }
-    setActionError(m.copyFailed);
+    dispatch({ type: 'patch', patch: { actionError: m.copyFailed } });
   };
 
   const openCliData = async (path: string) => {
@@ -162,7 +192,7 @@ export function AppManagementSection({
     }
     const r = await shell.openPath(path);
     if (r.error) {
-      setActionError(r.error);
+      dispatch({ type: 'patch', patch: { actionError: r.error } });
     }
   };
 
@@ -170,20 +200,19 @@ export function AppManagementSection({
     if (!api?.clearUserData) {
       return;
     }
-    setBusy(true);
-    setActionError(null);
+    dispatch({ type: 'patch', patch: { busy: true, actionError: null } });
     try {
       const result = await api.clearUserData();
       if (!result.ok) {
-        setActionError(mapUninstallError(result.error, m.errors));
+        dispatch({ type: 'patch', patch: { actionError: mapUninstallError(result.error, m.errors) } });
       }
     } catch (e) {
-      setActionError(e instanceof Error ? e.message : m.errors.generic);
+      dispatch({ type: 'patch', patch: { actionError: e instanceof Error ? e.message : m.errors.generic } });
     } finally {
-      setBusy(false);
-      setClearDialogOpen(false);
-      setClearConfirmChecked(false);
-      setClearConfirmText('');
+      dispatch({
+        type: 'patch',
+        patch: { busy: false, clearDialogOpen: false, clearConfirmChecked: false, clearConfirmText: '' },
+      });
     }
   };
 
@@ -191,18 +220,16 @@ export function AppManagementSection({
     if (!api?.uninstallApp) {
       return;
     }
-    setBusy(true);
-    setActionError(null);
+    dispatch({ type: 'patch', patch: { busy: true, actionError: null } });
     try {
       const result = await api.uninstallApp({ removeUserData: removeUserDataOnUninstall });
       if (!result.ok) {
-        setActionError(mapUninstallError(result.error, m.errors));
+        dispatch({ type: 'patch', patch: { actionError: mapUninstallError(result.error, m.errors) } });
       }
     } catch (e) {
-      setActionError(e instanceof Error ? e.message : m.errors.generic);
+      dispatch({ type: 'patch', patch: { actionError: e instanceof Error ? e.message : m.errors.generic } });
     } finally {
-      setBusy(false);
-      setUninstallDialogOpen(false);
+      dispatch({ type: 'patch', patch: { busy: false, uninstallDialogOpen: false } });
     }
   };
 
@@ -226,9 +253,10 @@ export function AppManagementSection({
     clearConfirmChecked && clearConfirmText.trim() === m.clearDataConfirmPhrase;
 
   const openClearDialog = () => {
-    setClearConfirmChecked(false);
-    setClearConfirmText('');
-    setClearDialogOpen(true);
+    dispatch({
+      type: 'patch',
+      patch: { clearConfirmChecked: false, clearConfirmText: '', clearDialogOpen: true },
+    });
   };
 
   return (
@@ -350,8 +378,10 @@ export function AppManagementSection({
                   interaction.press,
                 )}
                 onClick={() => {
-                  setRemoveUserDataOnUninstall(false);
-                  setUninstallDialogOpen(true);
+                  dispatch({
+                    type: 'patch',
+                    patch: { removeUserDataOnUninstall: false, uninstallDialogOpen: true },
+                  });
                 }}
               >
                 {m.uninstall}
@@ -365,9 +395,10 @@ export function AppManagementSection({
         open={clearDialogOpen}
         onOpenChange={(open) => {
           if (!open) {
-            setClearDialogOpen(false);
-            setClearConfirmChecked(false);
-            setClearConfirmText('');
+            dispatch({
+              type: 'patch',
+              patch: { clearDialogOpen: false, clearConfirmChecked: false, clearConfirmText: '' },
+            });
           }
         }}
       >
@@ -397,7 +428,7 @@ export function AppManagementSection({
                 type="checkbox"
                 className="ui-checkbox mt-0.5"
                 checked={clearConfirmChecked}
-                onChange={(e) => setClearConfirmChecked(e.target.checked)}
+                onChange={(e) => dispatch({ type: 'patch', patch: { clearConfirmChecked: e.target.checked } })}
               />
               <span>{m.clearDataConfirmCheckbox}</span>
             </label>
@@ -418,7 +449,7 @@ export function AppManagementSection({
                 )}
                 placeholder={m.clearDataConfirmPhrase}
                 value={clearConfirmText}
-                onChange={(e) => setClearConfirmText(e.target.value)}
+                onChange={(e) => dispatch({ type: 'patch', patch: { clearConfirmText: e.target.value } })}
               />
               <p className="text-xs text-fg-muted">{m.clearDataConfirmHint}</p>
             </div>
@@ -428,9 +459,10 @@ export function AppManagementSection({
                 variant="secondary"
                 disabled={busy}
                 onClick={() => {
-                  setClearDialogOpen(false);
-                  setClearConfirmChecked(false);
-                  setClearConfirmText('');
+                  dispatch({
+                    type: 'patch',
+                    patch: { clearDialogOpen: false, clearConfirmChecked: false, clearConfirmText: '' },
+                  });
                 }}
               >
                 {m.cancel}
@@ -454,7 +486,7 @@ export function AppManagementSection({
           open={uninstallDialogOpen}
           onOpenChange={(open) => {
             if (!open) {
-              setUninstallDialogOpen(false);
+              dispatch({ type: 'patch', patch: { uninstallDialogOpen: false } });
             }
           }}
         >
@@ -484,7 +516,9 @@ export function AppManagementSection({
                   type="checkbox"
                   className="ui-checkbox mt-0.5"
                   checked={removeUserDataOnUninstall}
-                  onChange={(e) => setRemoveUserDataOnUninstall(e.target.checked)}
+                  onChange={(e) =>
+                    dispatch({ type: 'patch', patch: { removeUserDataOnUninstall: e.target.checked } })
+                  }
                 />
                 <span>{m.removeUserDataCheckbox}</span>
               </label>
@@ -496,7 +530,7 @@ export function AppManagementSection({
                   type="button"
                   variant="secondary"
                   disabled={busy}
-                  onClick={() => setUninstallDialogOpen(false)}
+                  onClick={() => dispatch({ type: 'patch', patch: { uninstallDialogOpen: false } })}
                 >
                   {m.cancel}
                 </Button>

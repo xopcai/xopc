@@ -4,7 +4,7 @@ const skelBar =
   'animate-pulse motion-reduce:animate-none rounded-md bg-surface-hover dark:bg-surface-active/50';
 
 /** Matches `ChannelHubCard` layout (icon + status + summary + CTA row). */
-export function ChannelHubCardSkeleton() {
+function ChannelHubCardSkeleton() {
   return (
     <div
       className="flex h-full min-h-[13.5rem] flex-col gap-3 rounded-xl border border-edge-subtle bg-surface-panel p-4 shadow-sm dark:border-edge-subtle"

@@ -177,7 +177,7 @@ export type McpServerTestResult = {
 };
 
 /** Accept legacy `string[]` or `{ name, description? }[]` from the gateway. */
-export function normalizeMcpTools(tools: unknown): McpToolInfo[] {
+function normalizeMcpTools(tools: unknown): McpToolInfo[] {
   if (!Array.isArray(tools)) return [];
   const out: McpToolInfo[] = [];
   for (const item of tools) {
@@ -226,15 +226,6 @@ export async function testMcpServer(
     toolCount: typeof res.payload.toolCount === 'number' ? res.payload.toolCount : tools.length,
     tools,
   };
-}
-
-export async function fetchMcpServerTools(serverId: string): Promise<McpToolInfo[]> {
-  const res = await fetchJson<{
-    ok?: boolean;
-    payload?: { tools?: unknown };
-    error?: string;
-  }>(apiUrl(`/api/mcp/servers/${encodeURIComponent(serverId)}/tools`));
-  return normalizeMcpTools(res.payload?.tools);
 }
 
 export function connectionTimeoutSeconds(row: McpServerRow): string {

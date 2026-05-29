@@ -9,7 +9,9 @@ import {
   Pin,
   Search,
 } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useReducer, useRef } from 'react';
+
+import { uiPatchReducer } from '@/lib/settings-form-draft';
 import { useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
 
@@ -55,6 +57,50 @@ type SessionsViewMode = 'grid' | 'list';
 const SESSION_STATUS_FILTER_SET = new Set<StatusFilter>(['all', 'active', 'pinned', 'archived']);
 const SESSION_VIEW_MODE_SET = new Set<SessionsViewMode>(['grid', 'list']);
 
+type SessionsUi = {
+  searchInput: string;
+  debouncedSearch: string;
+  statusFilter: StatusFilter;
+  viewMode: SessionsViewMode;
+  channelFilter: string;
+  sessions: SessionMetadata[];
+  loading: boolean;
+  error: string | null;
+  hasMore: boolean;
+  stats: SessionStats | null;
+  detailOpen: boolean;
+  detailLoading: boolean;
+  detailSession: SessionDetail | null;
+  confirmOpen: boolean;
+  confirmKey: string | null;
+};
+
+function initSessionsUi(searchParams: URLSearchParams): SessionsUi {
+  const initialStatus = searchParams.get('status');
+  const initialView = searchParams.get('view');
+  return {
+    searchInput: searchParams.get('q') ?? '',
+    debouncedSearch: (searchParams.get('q') ?? '').trim(),
+    statusFilter: SESSION_STATUS_FILTER_SET.has(initialStatus as StatusFilter)
+      ? (initialStatus as StatusFilter)
+      : 'all',
+    viewMode: SESSION_VIEW_MODE_SET.has(initialView as SessionsViewMode)
+      ? (initialView as SessionsViewMode)
+      : 'grid',
+    channelFilter: (searchParams.get('channel') ?? '').trim(),
+    sessions: [],
+    loading: false,
+    error: null,
+    hasMore: false,
+    stats: null,
+    detailOpen: false,
+    detailLoading: false,
+    detailSession: null,
+    confirmOpen: false,
+    confirmKey: null,
+  };
+}
+
 export function SessionsPage() {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
@@ -70,42 +116,34 @@ export function SessionsPage() {
   const agentItems = chatAgents?.items ?? [];
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const [searchInput, setSearchInput] = useState(() => searchParams.get('q') ?? '');
-  const [debouncedSearch, setDebouncedSearch] = useState(() => (searchParams.get('q') ?? '').trim());
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>(() => {
-    const initialStatus = searchParams.get('status');
-    return SESSION_STATUS_FILTER_SET.has(initialStatus as StatusFilter)
-      ? (initialStatus as StatusFilter)
-      : 'all';
-  });
-  const [viewMode, setViewMode] = useState<SessionsViewMode>(() => {
-    const initialView = searchParams.get('view');
-    return SESSION_VIEW_MODE_SET.has(initialView as SessionsViewMode)
-      ? (initialView as SessionsViewMode)
-      : 'grid';
-  });
-  const [channelFilter, setChannelFilter] = useState(() => (searchParams.get('channel') ?? '').trim());
-
-  const [sessions, setSessions] = useState<SessionMetadata[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [hasMore, setHasMore] = useState(false);
-  const [stats, setStats] = useState<SessionStats | null>(null);
-
-  const [detailOpen, setDetailOpen] = useState(false);
-  const [detailLoading, setDetailLoading] = useState(false);
-  const [detailSession, setDetailSession] = useState<SessionDetail | null>(null);
-
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [confirmKey, setConfirmKey] = useState<string | null>(null);
+  const [ui, dispatch] = useReducer(uiPatchReducer<SessionsUi>, searchParams, initSessionsUi);
+  const {
+    searchInput,
+    debouncedSearch,
+    statusFilter,
+    viewMode,
+    channelFilter,
+    sessions,
+    loading,
+    error,
+    hasMore,
+    stats,
+    detailOpen,
+    detailLoading,
+    detailSession,
+    confirmOpen,
+    confirmKey,
+  } = ui;
 
   useEffect(() => {
     const t = setTimeout(() => {
       const next = searchInput.trim();
-      setDebouncedSearch((prev) => (prev === next ? prev : next));
+      if (debouncedSearch !== next) {
+        dispatch({ type: 'patch', patch: { debouncedSearch: next } });
+      }
     }, 300);
     return () => clearTimeout(t);
-  }, [searchInput]);
+  }, [searchInput, debouncedSearch]);
 
   // Sync URL → local state during render so the URL→state→URL effect chain doesn't add a render.
   const searchParamsKey = searchParams.toString();
@@ -124,11 +162,16 @@ export function SessionsPage() {
       : 'grid';
     const nextDebouncedQ = nextQ.trim();
 
-    setSearchInput((prev) => (prev === nextQ ? prev : nextQ));
-    setDebouncedSearch((prev) => (prev === nextDebouncedQ ? prev : nextDebouncedQ));
-    setStatusFilter((prev) => (prev === nextStatus ? prev : nextStatus));
-    setViewMode((prev) => (prev === nextView ? prev : nextView));
-    setChannelFilter((prev) => (prev === nextChannel ? prev : nextChannel));
+    dispatch({
+      type: 'patch',
+      patch: {
+        ...(searchInput !== nextQ ? { searchInput: nextQ } : {}),
+        ...(debouncedSearch !== nextDebouncedQ ? { debouncedSearch: nextDebouncedQ } : {}),
+        ...(statusFilter !== nextStatus ? { statusFilter: nextStatus } : {}),
+        ...(viewMode !== nextView ? { viewMode: nextView } : {}),
+        ...(channelFilter !== nextChannel ? { channelFilter: nextChannel } : {}),
+      },
+    });
   }
 
   useEffect(() => {
@@ -152,8 +195,7 @@ export function SessionsPage() {
     if (!hasToken) return;
     let cancelled = false;
     (async () => {
-      setLoading(true);
-      setError(null);
+      dispatch({ type: 'patch', patch: { loading: true, error: null } });
       try {
         const result = await listSessions({
           limit: PAGE_LIMIT,
@@ -163,12 +205,19 @@ export function SessionsPage() {
           ...(channelFilter ? { channel: channelFilter } : {}),
         });
         if (cancelled) return;
-        setSessions(result.items);
-        setHasMore(result.hasMore);
+        dispatch({
+          type: 'patch',
+          patch: { sessions: result.items, hasMore: result.hasMore },
+        });
       } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : s.loadError);
+        if (!cancelled) {
+          dispatch({
+            type: 'patch',
+            patch: { error: e instanceof Error ? e.message : s.loadError },
+          });
+        }
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) dispatch({ type: 'patch', patch: { loading: false } });
       }
     })();
     return () => {
@@ -179,7 +228,7 @@ export function SessionsPage() {
   useEffect(() => {
     if (!hasToken) return;
     void getSessionStats()
-      .then(setStats)
+      .then((st) => dispatch({ type: 'patch', patch: { stats: st } }))
       .catch(() => {});
   }, [hasToken]);
 
@@ -195,23 +244,28 @@ export function SessionsPage() {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent<{ key?: string; name?: string }>).detail;
       if (!detail?.key || detail.name === undefined) return;
-      setSessions((prev) =>
-        prev.map((row) => (row.key === detail.key ? { ...row, name: detail.name } : row)),
-      );
-      setDetailSession((prev) =>
-        prev && prev.key === detail.key ? { ...prev, name: detail.name } : prev,
-      );
+      dispatch({
+        type: 'patch',
+        patch: {
+          sessions: sessions.map((row) =>
+            row.key === detail.key ? { ...row, name: detail.name } : row,
+          ),
+          detailSession:
+            detailSession && detailSession.key === detail.key
+              ? { ...detailSession, name: detail.name }
+              : detailSession,
+        },
+      });
     };
     window.addEventListener('session-updated', handler);
     return () => {
       window.removeEventListener('session-updated', handler);
     };
-  }, [hasToken]);
+  }, [hasToken, sessions, detailSession]);
 
   const loadMore = useCallback(async () => {
     if (!hasToken || loading || !hasMore) return;
-    setLoading(true);
-    setError(null);
+    dispatch({ type: 'patch', patch: { loading: true, error: null } });
     try {
       const result = await listSessions({
         limit: PAGE_LIMIT,
@@ -220,12 +274,14 @@ export function SessionsPage() {
         ...(statusFilter !== 'all' ? { status: statusFilter } : {}),
         ...(channelFilter ? { channel: channelFilter } : {}),
       });
-      setSessions((prev) => [...prev, ...result.items]);
-      setHasMore(result.hasMore);
+      dispatch({
+        type: 'patch',
+        patch: { sessions: [...sessions, ...result.items], hasMore: result.hasMore },
+      });
     } catch (e) {
-      setError(e instanceof Error ? e.message : s.loadError);
+      dispatch({ type: 'patch', patch: { error: e instanceof Error ? e.message : s.loadError } });
     } finally {
-      setLoading(false);
+      dispatch({ type: 'patch', patch: { loading: false } });
     }
   }, [
     hasToken,
@@ -238,22 +294,32 @@ export function SessionsPage() {
     s.loadError,
   ]);
 
-  const updateSessionStatus = useCallback((key: string, status: SessionMetadata['status']) => {
-    setSessions((prev) => prev.map((row) => (row.key === key ? { ...row, status } : row)));
-    setDetailSession((prev) => (prev && prev.key === key ? { ...prev, status } : prev));
-  }, []);
+  const updateSessionStatus = useCallback(
+    (key: string, status: SessionMetadata['status']) => {
+      dispatch({
+        type: 'patch',
+        patch: {
+          sessions: sessions.map((row) => (row.key === key ? { ...row, status } : row)),
+          detailSession:
+            detailSession && detailSession.key === key ? { ...detailSession, status } : detailSession,
+        },
+      });
+    },
+    [sessions, detailSession],
+  );
 
   const openDetail = useCallback(async (key: string) => {
-    setDetailOpen(true);
-    setDetailLoading(true);
-    setDetailSession(null);
+    dispatch({
+      type: 'patch',
+      patch: { detailOpen: true, detailLoading: true, detailSession: null },
+    });
     try {
       const session = await getSessionDetail(key);
-      setDetailSession(session);
+      dispatch({ type: 'patch', patch: { detailSession: session } });
     } catch {
-      setDetailOpen(false);
+      dispatch({ type: 'patch', patch: { detailOpen: false } });
     } finally {
-      setDetailLoading(false);
+      dispatch({ type: 'patch', patch: { detailLoading: false } });
     }
   }, []);
 
@@ -269,8 +335,7 @@ export function SessionsPage() {
       return;
     }
     if (action === 'delete') {
-      setConfirmKey(key);
-      setConfirmOpen(true);
+      dispatch({ type: 'patch', patch: { confirmKey: key, confirmOpen: true } });
       return;
     }
     try {
@@ -307,7 +372,9 @@ export function SessionsPage() {
         default:
           break;
       }
-      void getSessionStats().then(setStats).catch(() => {});
+      void getSessionStats()
+        .then((st) => dispatch({ type: 'patch', patch: { stats: st } }))
+        .catch(() => {});
     } catch {
       /* toast optional */
     }
@@ -316,10 +383,17 @@ export function SessionsPage() {
   const runDelete = async (key: string) => {
     try {
       await deleteSession(key);
-      setSessions((prev) => prev.filter((row) => row.key !== key));
-      setDetailSession((prev) => (prev?.key === key ? null : prev));
-      if (detailSession?.key === key) setDetailOpen(false);
-      void getSessionStats().then(setStats).catch(() => {});
+      dispatch({
+        type: 'patch',
+        patch: {
+          sessions: sessions.filter((row) => row.key !== key),
+          detailSession: detailSession?.key === key ? null : detailSession,
+          ...(detailSession?.key === key ? { detailOpen: false } : {}),
+        },
+      });
+      void getSessionStats()
+        .then((st) => dispatch({ type: 'patch', patch: { stats: st } }))
+        .catch(() => {});
     } catch {
       /* ignore */
     }
@@ -390,7 +464,7 @@ export function SessionsPage() {
             <input
               type="search"
               value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
+              onChange={(e) => dispatch({ type: 'patch', patch: { searchInput: e.target.value } })}
               placeholder={s.searchPlaceholder}
               data-debounced-query={debouncedSearch || undefined}
               className="min-w-0 flex-1 border-0 bg-transparent text-sm text-fg placeholder:text-fg-disabled focus:outline-none focus:ring-0"
@@ -404,7 +478,7 @@ export function SessionsPage() {
               key={key}
               type="button"
               aria-pressed={statusFilter === key}
-              onClick={() => setStatusFilter(key)}
+              onClick={() => dispatch({ type: 'patch', patch: { statusFilter: key } })}
               className={cn(
                 'inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium',
                 interaction.transition,
@@ -426,7 +500,7 @@ export function SessionsPage() {
           <button
             type="button"
             aria-pressed={!channelFilter}
-            onClick={() => setChannelFilter('')}
+            onClick={() => dispatch({ type: 'patch', patch: { channelFilter: '' } })}
             className={cn(
               'inline-flex items-center rounded-xl px-3 py-2 text-sm font-medium',
               interaction.transition,
@@ -443,7 +517,7 @@ export function SessionsPage() {
               key={chId}
               type="button"
               aria-pressed={channelFilter === chId}
-              onClick={() => setChannelFilter(chId)}
+              onClick={() => dispatch({ type: 'patch', patch: { channelFilter: chId } })}
               className={cn(
                 'inline-flex items-center rounded-xl px-3 py-2 text-sm font-medium',
                 interaction.transition,
@@ -496,7 +570,7 @@ export function SessionsPage() {
               variant="segmented"
               title={s.gridView}
               aria-pressed={viewMode === 'grid'}
-              onClick={() => setViewMode('grid')}
+              onClick={() => dispatch({ type: 'patch', patch: { viewMode: 'grid' } })}
               className={cn(
                 segmentedThumbBaseClassName,
                 'size-7 p-0',
@@ -511,7 +585,7 @@ export function SessionsPage() {
               variant="segmented"
               title={s.listView}
               aria-pressed={viewMode === 'list'}
-              onClick={() => setViewMode('list')}
+              onClick={() => dispatch({ type: 'patch', patch: { viewMode: 'list' } })}
               className={cn(
                 segmentedThumbBaseClassName,
                 'size-9 p-0',
@@ -601,18 +675,23 @@ export function SessionsPage() {
         }
         labels={detailLabels}
         onClose={() => {
-          setDetailOpen(false);
-          setDetailSession(null);
+          dispatch({ type: 'patch', patch: { detailOpen: false, detailSession: null } });
         }}
         onArchive={() => detailSession && void handleCardAction(detailSession.key, 'archive')}
         onUnarchive={() => detailSession && void handleCardAction(detailSession.key, 'unarchive')}
         onPin={() => detailSession && void handleCardAction(detailSession.key, 'pin')}
         onUnpin={() => detailSession && void handleCardAction(detailSession.key, 'unpin')}
         onExport={() => detailSession && void handleCardAction(detailSession.key, 'export')}
-        onDelete={() => detailSession && (setConfirmKey(detailSession.key), setConfirmOpen(true))}
+        onDelete={() =>
+          detailSession &&
+          dispatch({ type: 'patch', patch: { confirmKey: detailSession.key, confirmOpen: true } })
+        }
       />
 
-      <Dialog.Root open={confirmOpen} onOpenChange={setConfirmOpen}>
+      <Dialog.Root
+        open={confirmOpen}
+        onOpenChange={(open) => dispatch({ type: 'patch', patch: { confirmOpen: open } })}
+      >
         <Dialog.Portal>
           <Dialog.Overlay
             className={cn('xopc-dialog-overlay fixed inset-0 bg-scrim', SETTINGS_SHELL_OVERLAY_Z)}
@@ -633,7 +712,11 @@ export function SessionsPage() {
                 : ''}
             </p>
             <div className="mt-4 flex justify-end gap-2">
-              <Button type="button" variant="secondary" onClick={() => setConfirmOpen(false)}>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => dispatch({ type: 'patch', patch: { confirmOpen: false } })}
+              >
                 {s.cancel}
               </Button>
               <Button
@@ -642,8 +725,7 @@ export function SessionsPage() {
                 className="bg-red-600 hover:bg-red-700"
                 onClick={() => {
                   if (confirmKey) void runDelete(confirmKey);
-                  setConfirmOpen(false);
-                  setConfirmKey(null);
+                  dispatch({ type: 'patch', patch: { confirmOpen: false, confirmKey: null } });
                 }}
               >
                 {s.delete}

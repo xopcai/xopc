@@ -29,7 +29,7 @@ export type ChannelHubCardVm = {
   primaryAction: ChannelHubPrimaryAction;
 };
 
-export const CHANNEL_HUB_IDS: readonly ChannelHubId[] = ['telegram', 'weixin', 'feishu'];
+const CHANNEL_HUB_IDS: readonly ChannelHubId[] = ['telegram', 'weixin', 'feishu'];
 
 export function resolveChannelConnected(statuses: ChannelStatus[], id: string): boolean {
   return statuses.find((s) => s.name === id)?.connected ?? false;
@@ -39,7 +39,7 @@ function readChannelEnabled(statuses: ChannelStatus[], id: string): boolean {
   return statuses.find((s) => s.name === id)?.enabled ?? false;
 }
 
-export function isExtensionChannelConfigured(config: unknown, id: string): boolean {
+function isExtensionChannelConfigured(config: unknown, id: string): boolean {
   const channels =
     config && typeof config === 'object'
       ? (config as { channels?: unknown }).channels
@@ -164,7 +164,7 @@ export function buildManageableChannelHubCardVm(params: {
 }
 
 /** @deprecated alias */
-export const buildChannelHubCardVm = buildManageableChannelHubCardVm;
+const buildChannelHubCardVm = buildManageableChannelHubCardVm;
 
 export function buildExtensionChannelHubCardVm(params: {
   id: string;
@@ -191,7 +191,7 @@ export function buildExtensionChannelHubCardVm(params: {
   };
 }
 
-export function buildChannelHubCardForCatalogId(params: {
+function buildChannelHubCardForCatalogId(params: {
   id: string;
   form: ChannelsSettingsState;
   config: unknown;
@@ -236,7 +236,7 @@ export function buildChannelHubCardsForCatalog(params: {
   );
 }
 
-export function buildChannelHubCards(
+function buildChannelHubCards(
   form: ChannelsSettingsState,
   statuses: ChannelStatus[],
   pairingSummary: ChannelPairingSummaryPayload,

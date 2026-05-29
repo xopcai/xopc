@@ -39,7 +39,3 @@ export function parseAgentDefaultsTab(raw: string | null | undefined): AgentDefa
   }
   return 'chat';
 }
-
-export function agentDefaultsTabSearchParam(tab: AgentDefaultsTabId): string {
-  return tab === 'chat' ? '' : tab;
-}
