@@ -53,7 +53,12 @@ xopc tui --local
 
 **环境：** Node.js **≥ 22**。在本仓库开发建议用 **pnpm**。
 
-**中国大陆用户：** `npm install` 可加 `--registry=https://registry.npmmirror.com`，或 `npm config set registry https://registry.npmmirror.com`。
+**中国大陆用户：** `npm install` 可加 `--registry=https://registry.npmmirror.com`，或 `npm config set registry https://registry.npmmirror.com`。从源码 `pnpm install` 时若 Electron 下载慢，可先设置：
+
+```bash
+export ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/"
+export ELECTRON_BUILDER_BINARIES_MIRROR="https://npmmirror.com/mirrors/electron-builder-binaries/"
+```
 
 ### 更多命令
 
