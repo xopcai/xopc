@@ -51,8 +51,21 @@ export interface LaunchedCdpInstance {
   startedAt: number;
 }
 
+export interface ExtensionArtifacts {
+  installed: boolean;
+  extensionDir?: string;
+  xopcVersion?: string;
+  installedVersion?: string;
+  manifestVersion?: string;
+  needsRefresh?: boolean;
+  needsChromeReload?: boolean;
+  bundledAvailable?: boolean;
+  cacheDir?: string;
+}
+
 export interface ExtensionProbe {
   running: boolean;
   connected: boolean;
   backend?: string;
+  artifacts?: ExtensionArtifacts;
 }

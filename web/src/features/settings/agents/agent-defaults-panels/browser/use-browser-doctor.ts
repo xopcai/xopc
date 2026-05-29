@@ -8,6 +8,7 @@ import type {
   CloakDoctor,
   CloudTestResult,
   DoctorState,
+  ExtensionArtifacts,
   ExtensionProbe,
   LaunchedCdpInstance,
   PlaywrightDoctor,
@@ -50,6 +51,7 @@ export interface BrowserDoctor {
   cloak: DoctorState<CloakDoctor>;
   /** Periodic probe of the extension bridge (polled every 5 s when active). */
   extension: DoctorState<ExtensionProbe>;
+  extensionArtifacts: DoctorState<ExtensionArtifacts>;
   refetchPlaywright: () => Promise<void>;
   refetchCloak: (overrides?: { cacheDir?: string; binaryPath?: string }) => Promise<CloakDoctor | null>;
   pingCdp: (cdpUrl: string) => Promise<CdpPingResult>;
@@ -60,6 +62,10 @@ export interface BrowserDoctor {
   startExtensionBridge: (opts?: { host?: string; port?: number }) => Promise<void>;
   stopExtensionBridge: () => Promise<void>;
   refetchExtension: () => Promise<void>;
+  refetchExtensionArtifacts: () => Promise<ExtensionArtifacts | null>;
+  installExtensionArtifacts: (opts?: { force?: boolean }) => Promise<ExtensionArtifacts | null>;
+  openExtensionChrome: () => Promise<void>;
+  revealExtensionFolder: () => Promise<void>;
 }
 
 export function useBrowserDoctor(opts: {
@@ -73,6 +79,9 @@ export function useBrowserDoctor(opts: {
   const [playwright, setPlaywright] = useState<DoctorState<PlaywrightDoctor>>({ kind: 'idle' });
   const [cloak, setCloak] = useState<DoctorState<CloakDoctor>>({ kind: 'idle' });
   const [extension, setExtension] = useState<DoctorState<ExtensionProbe>>({ kind: 'idle' });
+  const [extensionArtifacts, setExtensionArtifacts] = useState<DoctorState<ExtensionArtifacts>>({
+    kind: 'idle',
+  });
 
   const refetchPlaywright = useCallback(async () => {
     setPlaywright({ kind: 'loading' });
@@ -129,6 +138,7 @@ export function useBrowserDoctor(opts: {
         running?: boolean;
         connected?: boolean;
         backend?: string;
+        artifacts?: ExtensionArtifacts;
       };
       if (!res.ok) {
         setExtension({ kind: 'error', message: `HTTP ${res.status}` });
@@ -140,6 +150,7 @@ export function useBrowserDoctor(opts: {
           running: data.running === true,
           connected: data.connected === true,
           backend: data.backend,
+          artifacts: data.artifacts,
         },
       });
     } catch (e) {
@@ -147,15 +158,55 @@ export function useBrowserDoctor(opts: {
     }
   }, [extensionHost, extensionPort]);
 
+  const refetchExtensionArtifacts = useCallback(async () => {
+    setExtensionArtifacts((prev) => (prev.kind === 'ok' ? prev : { kind: 'loading' }));
+    try {
+      const data = await getJson<ExtensionArtifacts>(apiUrl('/api/browser/extension/doctor'));
+      setExtensionArtifacts({ kind: 'ok', data });
+      return data;
+    } catch (e) {
+      setExtensionArtifacts({ kind: 'error', message: e instanceof Error ? e.message : String(e) });
+      return null;
+    }
+  }, []);
+
+  const installExtensionArtifacts = useCallback(
+    async (params?: { force?: boolean }) => {
+      const payload = await postJson<{ doctor: ExtensionArtifacts }>(
+        apiUrl('/api/browser/extension/install'),
+        { force: params?.force ?? false },
+      );
+      const doctor = payload.doctor;
+      setExtensionArtifacts({ kind: 'ok', data: doctor });
+      await refetchExtension();
+      return doctor;
+    },
+    [refetchExtension],
+  );
+
+  const openExtensionChrome = useCallback(async () => {
+    await postJson<{ extensionDir: string }>(apiUrl('/api/browser/extension/open'), {
+      action: 'chrome',
+    });
+  }, []);
+
+  const revealExtensionFolder = useCallback(async () => {
+    await postJson<{ extensionDir: string }>(apiUrl('/api/browser/extension/open'), {
+      action: 'folder',
+    });
+  }, []);
+
   useEffect(() => {
     if (!extensionEnabled) {
       setExtension({ kind: 'idle' });
+      setExtensionArtifacts({ kind: 'idle' });
       return undefined;
     }
     void refetchExtension();
+    void refetchExtensionArtifacts();
     const id = setInterval(() => void refetchExtension(), 5000);
     return () => clearInterval(id);
-  }, [extensionEnabled, refetchExtension]);
+  }, [extensionEnabled, refetchExtension, refetchExtensionArtifacts]);
 
   const startExtensionBridge = useCallback(
     async (params?: { host?: string; port?: number }) => {
@@ -208,9 +259,14 @@ export function useBrowserDoctor(opts: {
     playwright,
     cloak,
     extension,
+    extensionArtifacts,
     refetchPlaywright,
     refetchCloak,
     refetchExtension,
+    refetchExtensionArtifacts,
+    installExtensionArtifacts,
+    openExtensionChrome,
+    revealExtensionFolder,
     pingCdp,
     testCloud,
     launchCdp,
