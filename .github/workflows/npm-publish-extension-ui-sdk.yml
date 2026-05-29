@@ -80,7 +80,7 @@ jobs:
         if: steps.version.outputs.changed == 'true'
         uses: pnpm/action-setup@v5
         with:
-          version: 9
+          version: 11
 
       - name: Setup Node.js
         if: steps.version.outputs.changed == 'true'
