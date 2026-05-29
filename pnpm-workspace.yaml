@@ -4,6 +4,9 @@ packages:
   - 'packages/*'
   - 'web'
 
+overrides:
+  axios: ">=1.15.2"
+
 allowBuilds:
   '@google/genai': true
   '@swc/core': true
