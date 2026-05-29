@@ -28,7 +28,8 @@ export default defineConfig({
         // Do not mark `thread-stream` external: pnpm may not hoist it, so `require('thread-stream')`
         // from `out/main/chunks/*` fails. Bundled `thread-stream` + `thread-stream-bundle-shim.ts`
         // fixes pino transport worker path (see electron/thread-stream-bundle-shim.ts).
-        external: ['electron'],
+        // `@vscode/ripgrep` resolves a platform optionalDep at import time; packaged apps use extraResources `bin/rg`.
+        external: ['electron', '@vscode/ripgrep'],
         input: {
           index: resolve(__dirname, 'electron/main.ts'),
         },

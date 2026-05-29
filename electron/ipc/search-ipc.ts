@@ -2,7 +2,6 @@ import { spawn } from 'node:child_process';
 
 import { type IpcMain, app } from 'electron';
 import { join } from 'node:path';
-import { rgPath } from '@vscode/ripgrep';
 
 export interface SearchResult {
   filePath: string;
@@ -12,19 +11,29 @@ export interface SearchResult {
   matchEnd: number;
 }
 
-function resolveRipgrepBinary(): string {
+let cachedDevRipgrepBin: string | undefined;
+
+/** Packaged apps ship `rg` under extraResources; dev resolves from `@vscode/ripgrep` or PATH. */
+async function resolveRipgrepBinary(): Promise<string> {
   if (app.isPackaged) {
     return join(process.resourcesPath, 'bin', process.platform === 'win32' ? 'rg.exe' : 'rg');
   }
-  return rgPath;
+  if (cachedDevRipgrepBin) return cachedDevRipgrepBin;
+  try {
+    const { rgPath } = await import('@vscode/ripgrep');
+    cachedDevRipgrepBin = typeof rgPath === 'string' && rgPath.length > 0 ? rgPath : 'rg';
+  } catch {
+    cachedDevRipgrepBin = 'rg';
+  }
+  return cachedDevRipgrepBin;
 }
 
 export function registerSearchIpc(ipcMain: IpcMain): void {
   ipcMain.handle(
     'search:ripgrep',
-    (_, query: string, dirPath: string): Promise<SearchResult[]> => {
+    async (_, query: string, dirPath: string): Promise<SearchResult[]> => {
+      const rgBin = await resolveRipgrepBinary();
       return new Promise((resolve, reject) => {
-        const rgBin = resolveRipgrepBinary();
         const args = [
           '--json',
           '--smart-case',
