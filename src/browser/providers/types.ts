@@ -92,6 +92,8 @@ export interface CloakBrowserConfig {
   humanPreset?: 'default' | 'careful';
   /** Optional install/download progress callback (gateway SSE, CLI). */
   onProgress?: (progress: BrowserInstallProgress) => void | Promise<void>;
+  /** Abort long-running install/download (client disconnect). */
+  signal?: AbortSignal;
 }
 
 /** Union of all backend connection modes. */

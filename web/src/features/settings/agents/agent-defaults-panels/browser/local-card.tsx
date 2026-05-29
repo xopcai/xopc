@@ -4,7 +4,7 @@ import { useCallback, useState } from 'react';
 import { BrowserInstallProgressPanel } from './browser-install-progress';
 import { ActionResultBox, BackendModeCard, type ModeStatusKind } from './backend-mode-card';
 import type { BrowserMessages, DoctorState, PlaywrightDoctor } from './types';
-import { useBrowserInstallStream } from './use-browser-install-stream';
+import type { BrowserInstallStream } from './use-browser-install-stream';
 
 type InstallStatus = 'idle' | 'installing' | 'installed' | 'failed';
 
@@ -12,40 +12,58 @@ export function LocalCard({
   m,
   doctor,
   refetch,
+  applyDoctor,
+  installStream,
 }: {
   m: BrowserMessages;
   doctor: DoctorState<PlaywrightDoctor>;
   refetch: () => Promise<void>;
+  applyDoctor?: (data: PlaywrightDoctor) => void;
+  installStream: BrowserInstallStream;
 }) {
   const [status, setStatus] = useState<InstallStatus>('idle');
   const [message, setMessage] = useState<string | null>(null);
-  const { progress, running, run: runInstall, reset: resetInstall } = useBrowserInstallStream();
+  const { progress, running, cancelling, run: runInstall, reset: resetInstall, cancel } = installStream;
 
   const install = useCallback(async () => {
-    if (status === 'installing' || running) return;
     setStatus('installing');
     setMessage(null);
     resetInstall();
-    const result = await runInstall({
-      path: '/api/browser/playwright/install/stream',
+    const result = await runInstall<PlaywrightDoctor>({
       fallbackError: m.browserPlaywrightInstallFailed,
     });
     if (!result.ok) {
+      if (result.error === 'busy') {
+        setStatus('installing');
+        return;
+      }
+      if (result.error === 'cancelled') {
+        setStatus('idle');
+        setMessage(null);
+        resetInstall();
+        return;
+      }
       setStatus('failed');
       setMessage(result.errorMessage ?? m.browserPlaywrightInstallFailed);
       return;
     }
+    if (result.payload) {
+      applyDoctor?.(result.payload);
+    }
     setStatus('installed');
-    setMessage(m.browserPlaywrightInstalled);
+    setMessage(
+      result.payload?.executablePath
+        ? `${m.browserPlaywrightInstalled}: ${result.payload.executablePath}`
+        : m.browserPlaywrightInstalled,
+    );
     await refetch();
   }, [
+    applyDoctor,
     m.browserPlaywrightInstallFailed,
     m.browserPlaywrightInstalled,
     refetch,
     resetInstall,
     runInstall,
-    running,
-    status,
   ]);
 
   const statusKind: ModeStatusKind =
@@ -65,6 +83,7 @@ export function LocalCard({
       : undefined;
 
   const installed = doctor.kind === 'ok' && doctor.data.installed;
+  const installing = status === 'installing' || running;
 
   return (
     <BackendModeCard
@@ -78,10 +97,10 @@ export function LocalCard({
         <button
           type="button"
           className="inline-flex items-center gap-1.5 rounded-lg border border-edge bg-surface-panel px-2.5 py-1.5 text-xs font-medium text-fg hover:bg-surface-raised disabled:cursor-not-allowed disabled:opacity-60"
-          disabled={status === 'installing' || running}
+          disabled={installing}
           onClick={() => void install()}
         >
-          {status === 'installing' ? (
+          {installing ? (
             <LoaderCircle className="size-3.5 animate-spin" />
           ) : installed ? (
             <RefreshCw className="size-3.5" />
@@ -90,7 +109,7 @@ export function LocalCard({
           ) : (
             <Download className="size-3.5" />
           )}
-          {status === 'installing' || running
+          {installing
             ? m.browserPlaywrightInstalling
             : installed
               ? m.browserReinstall
@@ -99,9 +118,17 @@ export function LocalCard({
       }
     >
       <code className="w-fit rounded-md border border-edge bg-surface-base px-2 py-1 text-xs text-fg">
-        npx playwright install chromium
+        node node_modules/playwright-core/cli.js install chromium
       </code>
-      {running ? <BrowserInstallProgressPanel m={m} progress={progress} showLogs /> : null}
+      {running ? (
+        <BrowserInstallProgressPanel
+          m={m}
+          progress={progress}
+          showLogs
+          cancelling={cancelling}
+          onCancel={() => void cancel()}
+        />
+      ) : null}
       {message ? (
         <ActionResultBox kind={status === 'failed' ? 'error' : 'success'} message={message} />
       ) : null}

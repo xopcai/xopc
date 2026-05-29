@@ -23,6 +23,12 @@ describe('CloakBrowser cache directory layout', () => {
     expect(resolveCloakBrowserCacheDir()).toBe(join(root, 'cloakbrowser'));
   });
 
+  it('normalizes legacy ~/.xopc/bin cacheDir to bin/cloakbrowser', async () => {
+    const root = await mkdtemp(join(homedir(), '.xopc-cloak-legacy-'));
+    binDirState.path = root;
+    expect(resolveCloakBrowserCacheDir(root)).toBe(join(root, 'cloakbrowser'));
+  });
+
   it('honors an explicit configured cacheDir', async () => {
     const customRoot = await mkdtemp(join(homedir(), '.xopc-cloak-test-'));
     const custom = join(customRoot, 'my-cloak');

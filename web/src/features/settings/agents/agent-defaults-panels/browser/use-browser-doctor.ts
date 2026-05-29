@@ -53,7 +53,9 @@ export interface BrowserDoctor {
   extension: DoctorState<ExtensionProbe>;
   extensionArtifacts: DoctorState<ExtensionArtifacts>;
   refetchPlaywright: () => Promise<void>;
+  applyPlaywrightDoctor: (data: PlaywrightDoctor) => void;
   refetchCloak: (overrides?: { cacheDir?: string; binaryPath?: string }) => Promise<CloakDoctor | null>;
+  applyCloakDoctor: (data: CloakDoctor) => void;
   pingCdp: (cdpUrl: string) => Promise<CdpPingResult>;
   testCloud: (provider: 'browserbase' | 'browser-use', apiKey: string) => Promise<CloudTestResult>;
   launchCdp: (executablePath?: string) => Promise<LaunchedCdpInstance>;
@@ -114,6 +116,14 @@ export function useBrowserDoctor(opts: {
     },
     [opts.binaryPath, opts.cacheDir],
   );
+
+  const applyPlaywrightDoctor = useCallback((data: PlaywrightDoctor) => {
+    setPlaywright({ kind: 'ok', data });
+  }, []);
+
+  const applyCloakDoctor = useCallback((data: CloakDoctor) => {
+    setCloak({ kind: 'ok', data });
+  }, []);
 
   // One-shot probes on mount.
   useEffect(() => {
@@ -261,7 +271,9 @@ export function useBrowserDoctor(opts: {
     extension,
     extensionArtifacts,
     refetchPlaywright,
+    applyPlaywrightDoctor,
     refetchCloak,
+    applyCloakDoctor,
     refetchExtension,
     refetchExtensionArtifacts,
     installExtensionArtifacts,

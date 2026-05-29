@@ -9,7 +9,7 @@ import { inputClassName, selectClassName } from '../../defaults-field-styles';
 import { BrowserInstallProgressPanel } from './browser-install-progress';
 import { ActionResultBox, BackendModeCard, type ModeStatusKind } from './backend-mode-card';
 import type { BrowserMessages, CloakDoctor, DoctorState } from './types';
-import { useBrowserInstallStream } from './use-browser-install-stream';
+import type { BrowserInstallStream } from './use-browser-install-stream';
 
 type InstallStatus = 'idle' | 'installing' | 'installed' | 'failed';
 
@@ -26,22 +26,27 @@ export function CloakCard({
   m,
   doctor,
   refetch,
+  applyDoctor,
+  installStream,
   form,
   onChange,
 }: {
   m: BrowserMessages;
   doctor: DoctorState<CloakDoctor>;
   refetch: (overrides?: { cacheDir?: string; binaryPath?: string }) => Promise<CloakDoctor | null>;
+  applyDoctor?: (data: CloakDoctor) => void;
+  installStream: BrowserInstallStream;
   form: CloakCardForm;
   onChange: (patch: Partial<CloakCardForm>) => void;
 }) {
   const [status, setStatus] = useState<InstallStatus>('idle');
   const [message, setMessage] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const { progress, running, run: runInstall, reset: resetInstall } = useBrowserInstallStream();
+  const { progress, running, cancelling, run: runInstall, reset: resetInstall, cancel } = installStream;
 
   const data = doctor.kind === 'ok' ? doctor.data : null;
   const installed = data?.installed === true;
+  const installing = status === 'installing' || running;
 
   const installNow = useCallback(async () => {
     setConfirmOpen(false);
@@ -49,7 +54,6 @@ export function CloakCard({
     setMessage(null);
     resetInstall();
     const result = await runInstall<CloakDoctor>({
-      path: '/api/browser/cloakbrowser/install/stream',
       body: {
         cacheDir: form.cacheDir.trim() || undefined,
         binaryPath: form.binaryPath.trim() || undefined,
@@ -57,16 +61,33 @@ export function CloakCard({
       fallbackError: m.browserCloakInstallFailed,
     });
     if (!result.ok) {
+      if (result.error === 'busy') {
+        setStatus('installing');
+        return;
+      }
+      if (result.error === 'cancelled') {
+        setStatus('idle');
+        setMessage(null);
+        resetInstall();
+        return;
+      }
       setStatus('failed');
       setMessage(result.errorMessage ?? m.browserCloakInstallFailed);
       return;
+    }
+    if (result.payload) {
+      applyDoctor?.(result.payload);
     }
     setStatus('installed');
     setMessage(
       result.payload?.binaryPath ? `${m.browserCloakInstalled}: ${result.payload.binaryPath}` : m.browserCloakInstalled,
     );
-    await refetch();
+    await refetch({
+      cacheDir: form.cacheDir,
+      binaryPath: form.binaryPath,
+    });
   }, [
+    applyDoctor,
     form.binaryPath,
     form.cacheDir,
     m.browserCloakInstallFailed,
@@ -100,10 +121,10 @@ export function CloakCard({
           <button
             type="button"
             className="inline-flex items-center gap-1.5 rounded-lg border border-edge bg-surface-panel px-2.5 py-1.5 text-xs font-medium text-fg hover:bg-surface-raised disabled:cursor-not-allowed disabled:opacity-60"
-            disabled={status === 'installing' || running}
+            disabled={installing}
             onClick={() => setConfirmOpen(true)}
           >
-            {status === 'installing' ? (
+            {installing ? (
               <LoaderCircle className="size-3.5 animate-spin" />
             ) : installed ? (
               <RefreshCw className="size-3.5" />
@@ -112,7 +133,7 @@ export function CloakCard({
             ) : (
               <Download className="size-3.5" />
             )}
-            {status === 'installing' || running
+            {installing
               ? m.browserCloakInstalling
               : installed
                 ? m.browserReinstall
@@ -120,7 +141,14 @@ export function CloakCard({
           </button>
         }
       >
-        {running ? <BrowserInstallProgressPanel m={m} progress={progress} /> : null}
+        {running ? (
+          <BrowserInstallProgressPanel
+            m={m}
+            progress={progress}
+            cancelling={cancelling}
+            onCancel={() => void cancel()}
+          />
+        ) : null}
 
         {message ? (
           <ActionResultBox kind={status === 'failed' ? 'error' : 'success'} message={message} />
