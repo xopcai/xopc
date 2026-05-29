@@ -15,3 +15,10 @@ allowBuilds:
   electron-winstaller: true
   esbuild: true
   protobufjs: true
+
+# Exempt recently-published @earendil-works/pi-* from minimumReleaseAge policy
+minimumReleaseAgeExclude:
+  - '@earendil-works/pi-agent-core@0.77.0'
+  - '@earendil-works/pi-ai@0.77.0'
+  - '@earendil-works/pi-coding-agent@0.77.0'
+  - '@earendil-works/pi-tui@0.77.0'
