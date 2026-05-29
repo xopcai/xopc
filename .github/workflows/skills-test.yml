@@ -20,42 +20,42 @@ jobs:
   test-skills:
     name: Test Skills
     runs-on: ${{ matrix.os }}
-    
+
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         node-version: [22.x]
-    
+
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-      
+
       - name: Configure Git to use HTTPS instead of SSH
         run: |
           git config --global url."https://github.com/".insteadOf "git@github.com:"
-      
+
       - name: Install pnpm
         uses: pnpm/action-setup@v5
         with:
-          version: 9
-      
+          version: 11
+
       - name: Setup Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v6
         with:
           node-version: ${{ matrix.node-version }}
           cache: 'pnpm'
-      
+
       - name: Configure Git for HTTPS
         run: |
           git config --global url."https://github.com/".insteadOf "git@github.com:"
           git config --global url."https://".insteadOf "git://"
-      
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-      
+
       - name: Build
         run: pnpm run build:ci
-      
+
       - name: Run skill tests
         shell: bash
         timeout-minutes: 15
@@ -66,11 +66,11 @@ jobs:
           else
             ./scripts/test-skills.sh --verbose
           fi
-      
+
       - name: Run unit tests for test framework
         timeout-minutes: 5
         run: pnpm vitest run src/agent/skills/__tests__/test-framework.test.ts
-      
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v7
@@ -96,25 +96,25 @@ jobs:
       - name: Install pnpm
         uses: pnpm/action-setup@v5
         with:
-          version: 9
-      
+          version: 11
+
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
           node-version: 22.x
           cache: 'pnpm'
-      
+
       - name: Configure Git for HTTPS
         run: |
           git config --global url."https://github.com/".insteadOf "git@github.com:"
           git config --global url."https://".insteadOf "git://"
-      
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-      
+
       - name: Build
         run: pnpm run build:ci
-      
+
       - name: Run security audit
         timeout-minutes: 10
         run: |
@@ -126,37 +126,37 @@ jobs:
   validate-skill-format:
     name: Validate SKILL.md Format
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-      
+
       - name: Configure Git to use HTTPS instead of SSH
         run: |
           git config --global url."https://github.com/".insteadOf "git@github.com:"
-      
+
       - name: Install pnpm
         uses: pnpm/action-setup@v5
         with:
-          version: 9
-      
+          version: 11
+
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
           node-version: 22.x
           cache: 'pnpm'
-      
+
       - name: Configure Git for HTTPS
         run: |
           git config --global url."https://github.com/".insteadOf "git@github.com:"
           git config --global url."https://".insteadOf "git://"
-      
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-      
+
       - name: Build
         run: pnpm run build:ci
-      
+
       - name: Validate all SKILL.md files
         timeout-minutes: 10
         run: |
@@ -171,38 +171,38 @@ jobs:
   check-dependencies:
     name: Check Dependencies
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-      
+
       - name: Configure Git to use HTTPS instead of SSH
         run: |
           git config --global url."https://github.com/".insteadOf "git@github.com:"
-      
+
       - name: Install pnpm
         uses: pnpm/action-setup@v5
         with:
-          version: 9
-      
+          version: 11
+
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
           node-version: 22.x
           cache: 'pnpm'
-      
+
       - name: Configure Git for HTTPS
         run: |
           git config --global url."https://github.com/".insteadOf "git@github.com:"
           git config --global url."https://".insteadOf "git://"
-      
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-      
+
       - name: Build
         timeout-minutes: 10
         run: pnpm run build:ci
-      
+
       - name: Check skill dependencies
         timeout-minutes: 10
         run: |
@@ -214,7 +214,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [test-skills, security-audit, validate-skill-format, check-dependencies]
     if: always()
-    
+
     steps:
       - name: Generate report
         run: |
@@ -228,7 +228,7 @@ jobs:
           echo "  - Format Validation: ${{ needs.validate-skill-format.result }}"
           echo "  - Dependency Check: ${{ needs.check-dependencies.result }}"
           echo ""
-          
+
           # Overall status (all matrix legs and follow-up jobs must succeed)
           TS="${{ needs.test-skills.result }}"
           SA="${{ needs.security-audit.result }}"
