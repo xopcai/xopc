@@ -2,14 +2,14 @@ import { CheckCircle2, Download, LoaderCircle, RefreshCw, ShieldCheck } from 'lu
 import { useCallback, useState } from 'react';
 
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { apiFetch } from '@/lib/fetch';
-import { apiUrl } from '@/lib/url';
 
 import { AgentDefaultsField } from '../../agent-defaults-field';
 import { inputClassName, selectClassName } from '../../defaults-field-styles';
 
+import { BrowserInstallProgressPanel } from './browser-install-progress';
 import { ActionResultBox, BackendModeCard, type ModeStatusKind } from './backend-mode-card';
 import type { BrowserMessages, CloakDoctor, DoctorState } from './types';
+import { useBrowserInstallStream } from './use-browser-install-stream';
 
 type InstallStatus = 'idle' | 'installing' | 'installed' | 'failed';
 
@@ -38,6 +38,7 @@ export function CloakCard({
   const [status, setStatus] = useState<InstallStatus>('idle');
   const [message, setMessage] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const { progress, running, run: runInstall, reset: resetInstall } = useBrowserInstallStream();
 
   const data = doctor.kind === 'ok' ? doctor.data : null;
   const installed = data?.installed === true;
@@ -46,33 +47,34 @@ export function CloakCard({
     setConfirmOpen(false);
     setStatus('installing');
     setMessage(null);
-    try {
-      const res = await apiFetch(apiUrl('/api/browser/cloakbrowser/install'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          cacheDir: form.cacheDir.trim() || undefined,
-          binaryPath: form.binaryPath.trim() || undefined,
-        }),
-      });
-      const body = (await res.json().catch(() => ({}))) as {
-        ok?: boolean;
-        error?: string;
-        payload?: { binaryPath?: string | null };
-      };
-      if (!res.ok || body.ok === false) {
-        throw new Error(body.error || m.browserCloakInstallFailed);
-      }
-      setStatus('installed');
-      setMessage(
-        body.payload?.binaryPath ? `${m.browserCloakInstalled}: ${body.payload.binaryPath}` : m.browserCloakInstalled,
-      );
-      await refetch();
-    } catch (e) {
+    resetInstall();
+    const result = await runInstall<CloakDoctor>({
+      path: '/api/browser/cloakbrowser/install/stream',
+      body: {
+        cacheDir: form.cacheDir.trim() || undefined,
+        binaryPath: form.binaryPath.trim() || undefined,
+      },
+      fallbackError: m.browserCloakInstallFailed,
+    });
+    if (!result.ok) {
       setStatus('failed');
-      setMessage(e instanceof Error ? e.message : m.browserCloakInstallFailed);
+      setMessage(result.errorMessage ?? m.browserCloakInstallFailed);
+      return;
     }
-  }, [form.binaryPath, form.cacheDir, m.browserCloakInstallFailed, m.browserCloakInstalled, refetch]);
+    setStatus('installed');
+    setMessage(
+      result.payload?.binaryPath ? `${m.browserCloakInstalled}: ${result.payload.binaryPath}` : m.browserCloakInstalled,
+    );
+    await refetch();
+  }, [
+    form.binaryPath,
+    form.cacheDir,
+    m.browserCloakInstallFailed,
+    m.browserCloakInstalled,
+    refetch,
+    resetInstall,
+    runInstall,
+  ]);
 
   const statusKind: ModeStatusKind =
     doctor.kind === 'loading'
@@ -98,7 +100,7 @@ export function CloakCard({
           <button
             type="button"
             className="inline-flex items-center gap-1.5 rounded-lg border border-edge bg-surface-panel px-2.5 py-1.5 text-xs font-medium text-fg hover:bg-surface-raised disabled:cursor-not-allowed disabled:opacity-60"
-            disabled={status === 'installing'}
+            disabled={status === 'installing' || running}
             onClick={() => setConfirmOpen(true)}
           >
             {status === 'installing' ? (
@@ -110,7 +112,7 @@ export function CloakCard({
             ) : (
               <Download className="size-3.5" />
             )}
-            {status === 'installing'
+            {status === 'installing' || running
               ? m.browserCloakInstalling
               : installed
                 ? m.browserReinstall
@@ -118,6 +120,8 @@ export function CloakCard({
           </button>
         }
       >
+        {running ? <BrowserInstallProgressPanel m={m} progress={progress} /> : null}
+
         {message ? (
           <ActionResultBox kind={status === 'failed' ? 'error' : 'success'} message={message} />
         ) : null}
@@ -179,7 +183,7 @@ export function CloakCard({
             type="text"
             className={inputClassName()}
             value={form.cacheDir}
-            placeholder="~/.xopc/bin"
+            placeholder="~/.xopc/bin/cloakbrowser"
             onChange={(e) => onChange({ cacheDir: e.target.value })}
             autoComplete="off"
           />
@@ -190,7 +194,7 @@ export function CloakCard({
             type="text"
             className={inputClassName()}
             value={form.binaryPath}
-            placeholder="~/.xopc/bin/chromium-v.../Chromium.app/Contents/MacOS/Chromium"
+            placeholder="~/.xopc/bin/cloakbrowser/chromium-v.../Chromium.app/Contents/MacOS/Chromium"
             onChange={(e) => onChange({ binaryPath: e.target.value })}
             autoComplete="off"
           />
