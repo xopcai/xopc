@@ -168,7 +168,7 @@ export const SETTINGS_SHELL_NAV_GROUPS: readonly SettingsShellNavGroup[] = [
 
 /** Flat order: settings routes only (excludes sessions/logs). */
 export const SETTINGS_NAV_TABS: readonly Tab[] = [
-  ...SETTINGS_SHELL_NAV_GROUPS.filter((g) => g.id !== 'diagnostics').flatMap((g) => [...g.tabs]),
+  ...SETTINGS_SHELL_NAV_GROUPS.flatMap((g) => (g.id === 'diagnostics' ? [] : [...g.tabs])),
   ...ELECTRON_SYSTEM_NAV_GROUP.tabs,
 ];
 

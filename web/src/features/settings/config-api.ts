@@ -702,17 +702,26 @@ export async function fetchAgentDefaults(): Promise<AgentDefaultsState> {
 }
 
 export async function patchAgentDefaults(state: AgentDefaultsState): Promise<void> {
-  const fallbacks = state.modelFallbacks.map((s) => s.trim()).filter(Boolean);
+  const fallbacks = state.modelFallbacks.flatMap((s) => {
+    const v = s.trim();
+    return v ? [v] : [];
+  });
   const modelField =
     fallbacks.length > 0 ? { primary: state.model, fallbacks } : state.model;
 
-  const imageFbs = state.imageModelFallbacks.map((s) => s.trim()).filter(Boolean);
+  const imageFbs = state.imageModelFallbacks.flatMap((s) => {
+    const v = s.trim();
+    return v ? [v] : [];
+  });
   const imageModelField =
     imageFbs.length > 0 && state.imageModel.trim()
       ? { primary: state.imageModel.trim(), fallbacks: imageFbs }
       : state.imageModel || '';
 
-  const imageGenFbs = state.imageGenerationModelFallbacks.map((s) => s.trim()).filter(Boolean);
+  const imageGenFbs = state.imageGenerationModelFallbacks.flatMap((s) => {
+    const v = s.trim();
+    return v ? [v] : [];
+  });
   const imageGenPrimary = state.imageGenerationModel.trim();
   const imageGenTimeoutMs =
     typeof state.imageGenerationModelTimeoutMs === 'number' &&
@@ -743,8 +752,14 @@ export async function patchAgentDefaults(state: AgentDefaultsState): Promise<voi
           return ms;
         })();
 
-  const skillsClean = state.skillsAllowlist.map((s) => s.trim()).filter(Boolean);
-  const toolsDisableClean = state.toolsDisable.map((s) => s.trim()).filter(Boolean);
+  const skillsClean = state.skillsAllowlist.flatMap((s) => {
+    const v = s.trim();
+    return v ? [v] : [];
+  });
+  const toolsDisableClean = state.toolsDisable.flatMap((s) => {
+    const v = s.trim();
+    return v ? [v] : [];
+  });
 
   const paramsParsed = parseParamsJsonForSave(state.paramsJson);
   const params =

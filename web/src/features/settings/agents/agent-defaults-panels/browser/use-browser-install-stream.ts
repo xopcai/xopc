@@ -3,6 +3,9 @@ import { useCallback, useRef, useState } from 'react';
 import { apiFetch } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
+const SSE_BLOCK_DELIM = '\n\n';
+const CRLF_RE = /\r\n/g;
+
 export type BrowserInstallKind = 'playwright' | 'cloakbrowser';
 
 export type BrowserInstallPhase =
@@ -127,22 +130,25 @@ async function consumeBrowserInstallSse<T>(
   };
 
   try {
-    while (final === null) {
+    const readChunk = async (): Promise<BrowserInstallStreamResult<T>> => {
+      if (final !== null) return final;
       if (signal?.aborted) {
         await reader.cancel().catch(() => {});
         return { ok: false, error: 'cancelled', status: 499 };
       }
       const { done, value } = await reader.read();
-      if (done) break;
+      if (done) return final ?? { ok: false, error: 'no-result', status: 0 };
       buffer += decoder.decode(value, { stream: true });
-      buffer = buffer.replace(/\r\n/g, '\n');
-      let idx: number;
-      while ((idx = buffer.indexOf('\n\n')) !== -1) {
-        const chunk = buffer.slice(0, idx);
-        buffer = buffer.slice(idx + 2);
+      buffer = buffer.replace(CRLF_RE, '\n');
+      const parts = buffer.split(SSE_BLOCK_DELIM);
+      buffer = parts.pop() ?? '';
+      for (const chunk of parts) {
         if (chunk.length) handleSseBlock(chunk);
       }
-    }
+      return readChunk();
+    };
+    const result = await readChunk();
+    if (result) return result;
   } catch (err) {
     if (signal?.aborted || (err instanceof DOMException && err.name === 'AbortError')) {
       return { ok: false, error: 'cancelled', status: 499 };

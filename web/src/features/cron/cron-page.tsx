@@ -33,7 +33,7 @@ import {
   type HistoryRange,
   type JobSort,
 } from '@/features/cron/use-cron-page-data';
-import { messages } from '@/i18n/messages';
+import { messages, type MessageBundle } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
@@ -83,8 +83,20 @@ export function CronPage() {
   const [detailLoading, setDetailLoading] = useState(false);
 
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [confirmAction, setConfirmAction] = useState<'delete' | 'run' | null>(null);
-  const [confirmJobId, setConfirmJobId] = useState<string | null>(null);
+  const confirmActionRef = useRef<'delete' | 'run' | null>(null);
+  const confirmJobIdRef = useRef<string | null>(null);
+
+  const openConfirm = useCallback((action: 'delete' | 'run', jobId: string) => {
+    confirmActionRef.current = action;
+    confirmJobIdRef.current = jobId;
+    setConfirmOpen(true);
+  }, []);
+
+  const dismissConfirm = useCallback(() => {
+    setConfirmOpen(false);
+    confirmJobIdRef.current = null;
+    confirmActionRef.current = null;
+  }, []);
 
   const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
   const [templateCategoryFilter, setTemplateCategoryFilter] = useState<CronTemplateFilter>('all');
@@ -213,20 +225,17 @@ export function CronPage() {
   const onToggle = async (job: CronJob, enabled: boolean) => {
     try {
       await toggleJob(job.id, enabled);
-      await data.loadJobs();
-      await data.loadAux();
+      await Promise.all([data.loadJobs(), data.loadAux()]);
     } catch (e) {
       setError(e instanceof Error ? e.message : c.failedToToggleJob);
     }
   };
 
   const runConfirm = async () => {
-    if (!confirmJobId || !confirmAction) return;
-    const id = confirmJobId;
-    const action = confirmAction;
-    setConfirmOpen(false);
-    setConfirmJobId(null);
-    setConfirmAction(null);
+    const id = confirmJobIdRef.current;
+    const action = confirmActionRef.current;
+    if (!id || !action) return;
+    dismissConfirm();
     try {
       if (action === 'run') {
         await runJob(id);
@@ -237,9 +246,7 @@ export function CronPage() {
           setDetailJob(null);
         }
       }
-      await data.loadJobs();
-      await data.loadAux();
-      await data.loadRunHistoryOnly();
+      await Promise.all([data.loadJobs(), data.loadAux(), data.loadRunHistoryOnly()]);
     } catch (e) {
       setError(e instanceof Error ? e.message : c.actionFailed);
     }
@@ -277,15 +284,35 @@ export function CronPage() {
   );
 
   const scheduleBadgeLabels = c.scheduleBadge;
-
-  const setPageHeader = usePageHeaderStore((s) => s.setPageHeader);
-  const clearPageHeader = usePageHeaderStore((s) => s.clearPageHeader);
   const { pathname } = useLocation();
   const inSettingsShell = pathname.startsWith('/settings/');
 
-  const cronHeaderEnd = useMemo(
-    () => (
-      <CronPageHeaderActions
+  if (!hasToken) {
+    return (
+      <>
+        <CronPageHeaderRegistration
+          hasToken={hasToken}
+          c={c}
+          loading={data.loading}
+          runHistoryLoading={data.runHistoryLoading}
+          onRefresh={data.refreshAll}
+          onOpenTemplatePicker={() => {
+            setTemplateCategoryFilter('all');
+            setTemplatePickerOpen(true);
+          }}
+          onAddJob={() => form.openForm()}
+        />
+        <div className="mx-auto w-full max-w-app-main px-4 py-16 text-center text-sm text-fg-muted sm:px-8">
+          {c.needToken}
+        </div>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <CronPageHeaderRegistration
+        hasToken={hasToken}
         c={c}
         loading={data.loading}
         runHistoryLoading={data.runHistoryLoading}
@@ -296,31 +323,7 @@ export function CronPage() {
         }}
         onAddJob={() => form.openForm()}
       />
-    ),
-    [c, data.loading, data.runHistoryLoading, data.refreshAll, form],
-  );
-
-  useLayoutEffect(() => {
-    if (!hasToken || inSettingsShell) {
-      clearPageHeader();
-      return () => clearPageHeader();
-    }
-    setPageHeader({
-      startExtra: null,
-      main: null,
-      end: cronHeaderEnd,
-    });
-    return () => clearPageHeader();
-  }, [clearPageHeader, cronHeaderEnd, hasToken, inSettingsShell, setPageHeader]);
-
-  if (!hasToken) {
-    return (
-      <div className="mx-auto w-full max-w-app-main px-4 py-16 text-center text-sm text-fg-muted sm:px-8">{c.needToken}</div>
-    );
-  }
-
-  return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-surface-panel">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-surface-panel">
       <div className="mx-auto flex w-full max-w-app-main flex-col gap-6 px-4 py-6 sm:px-8">
         {data.error ? (
           <div
@@ -340,7 +343,17 @@ export function CronPage() {
 
         {inSettingsShell ? (
           <div className="flex flex-wrap items-center justify-end gap-2 border-b border-edge-subtle pb-3 dark:border-edge-subtle">
-            {cronHeaderEnd}
+            <CronPageHeaderActions
+              c={c}
+              loading={data.loading}
+              runHistoryLoading={data.runHistoryLoading}
+              onRefresh={data.refreshAll}
+              onOpenTemplatePicker={() => {
+                setTemplateCategoryFilter('all');
+                setTemplatePickerOpen(true);
+              }}
+              onAddJob={() => form.openForm()}
+            />
           </div>
         ) : null}
 
@@ -381,13 +394,11 @@ export function CronPage() {
             onEdit={(j) => form.openForm(j)}
             onAddJob={() => form.openForm()}
             onRunNow={(j) => {
-              setConfirmAction('run');
-              setConfirmJobId(j.id);
+              openConfirm('run', j.id);
               setConfirmOpen(true);
             }}
             onDelete={(j) => {
-              setConfirmAction('delete');
-              setConfirmJobId(j.id);
+              openConfirm('delete', j.id);
               setConfirmOpen(true);
             }}
           />
@@ -410,13 +421,11 @@ export function CronPage() {
             onToggle={(j, en) => void onToggle(j, en)}
             onEdit={(j) => form.openForm(j)}
             onRunNow={(j) => {
-              setConfirmAction('run');
-              setConfirmJobId(j.id);
+              openConfirm('run', j.id);
               setConfirmOpen(true);
             }}
             onDelete={(j) => {
-              setConfirmAction('delete');
-              setConfirmJobId(j.id);
+              openConfirm('delete', j.id);
               setConfirmOpen(true);
             }}
           />
@@ -509,15 +518,64 @@ export function CronPage() {
       <CronConfirmActionDialog
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
-        action={confirmAction}
+        action={confirmActionRef.current}
         c={c}
-        onDismiss={() => {
-          setConfirmOpen(false);
-          setConfirmJobId(null);
-          setConfirmAction(null);
-        }}
+        onDismiss={dismissConfirm}
         onConfirm={runConfirm}
       />
     </div>
+    </>
   );
+}
+
+function CronPageHeaderRegistration({
+  hasToken,
+  c,
+  loading,
+  runHistoryLoading,
+  onRefresh,
+  onOpenTemplatePicker,
+  onAddJob,
+}: {
+  hasToken: boolean;
+  c: MessageBundle['cron'];
+  loading: boolean;
+  runHistoryLoading: boolean;
+  onRefresh: () => void;
+  onOpenTemplatePicker: () => void;
+  onAddJob: () => void;
+}) {
+  const { pathname } = useLocation();
+  const inSettingsShell = pathname.startsWith('/settings/');
+  const setPageHeader = usePageHeaderStore((s) => s.setPageHeader);
+  const clearPageHeader = usePageHeaderStore((s) => s.clearPageHeader);
+
+  const cronHeaderEnd = useMemo(
+    () => (
+      <CronPageHeaderActions
+        c={c}
+        loading={loading}
+        runHistoryLoading={runHistoryLoading}
+        onRefresh={onRefresh}
+        onOpenTemplatePicker={onOpenTemplatePicker}
+        onAddJob={onAddJob}
+      />
+    ),
+    [c, loading, runHistoryLoading, onRefresh, onOpenTemplatePicker, onAddJob],
+  );
+
+  useLayoutEffect(() => {
+    if (!hasToken || inSettingsShell) {
+      clearPageHeader();
+      return () => clearPageHeader();
+    }
+    setPageHeader({
+      startExtra: null,
+      main: null,
+      end: cronHeaderEnd,
+    });
+    return () => clearPageHeader();
+  }, [clearPageHeader, cronHeaderEnd, hasToken, inSettingsShell, setPageHeader]);
+
+  return null;
 }

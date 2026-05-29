@@ -12,7 +12,10 @@ const PRESET_HIGH_RISK = ['shell', 'image_generate', 'extensions'] as const;
 const PRESET_NO_OUTBOUND = ['send_message', 'send_media'] as const;
 
 function sortedDisableList(ids: Set<string>): string[] {
-  return [...ids].map((s) => s.trim()).filter(Boolean).sort((x, y) => x.localeCompare(y));
+  return Array.from(ids).flatMap((s) => {
+    const v = s.trim();
+    return v ? [v] : [];
+  }).toSorted((x, y) => x.localeCompare(y));
 }
 
 export type BuiltinToolsDisableUiMode = 'defaults' | 'agentEntry';
@@ -107,7 +110,7 @@ export function BuiltinToolsDisableUi(props: BuiltinToolsDisableUiProps) {
     const misc = miscBuiltinToolIds(builtinToolIds);
     const sections: { key: BuiltinToolUiGroupKey; ids: string[] }[] = [];
     if (mode === 'defaults' && unknownDisabledIds.length > 0) {
-      sections.push({ key: 'unknown', ids: [...unknownDisabledIds].sort((x, y) => x.localeCompare(y)) });
+      sections.push({ key: 'unknown', ids: unknownDisabledIds.toSorted((x, y) => x.localeCompare(y)) });
     }
     for (const g of BUILTIN_TOOL_UI_GROUPS) {
       const ids = g.toolIds.filter((id) => allowedBuiltin.has(id));

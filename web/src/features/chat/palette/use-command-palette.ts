@@ -179,16 +179,19 @@ export function useCommandPalette(
         aliases: c.aliases,
         acceptsArgs: c.acceptsArgs,
       }));
-      const skillItems: PaletteItem[] = skillsPayload.catalog
-        .filter((s) => s.enabled && !s.disableModelInvocation)
-        .map((s) => ({
-          kind: 'skill' as const,
-          id: `skill:${s.name}`,
-          name: s.name,
-          description: s.description,
-          category: 'skill',
-          source: s.source,
-        }));
+      const skillItems: PaletteItem[] = skillsPayload.catalog.flatMap((s) => {
+        if (!s.enabled || s.disableModelInvocation) return [];
+        return [
+          {
+            kind: 'skill' as const,
+            id: `skill:${s.name}`,
+            name: s.name,
+            description: s.description,
+            category: 'skill',
+            source: s.source,
+          },
+        ];
+      });
       return [...skillItems, ...commandItems];
     },
     [paletteActive, language],

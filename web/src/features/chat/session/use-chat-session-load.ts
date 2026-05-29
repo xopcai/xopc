@@ -79,18 +79,20 @@ export function useChatSessionLoad(deps: {
   /** Bumps when a new title poll starts so rapid `finalizeMessage` calls (e.g. `/goal` multi-turn) do not stack 8×N `limit=1` fetches. */
   const sessionNamePollGenRef = useRef(0);
 
-  const refreshModelThinkingSupport = useCallback(async (modelId: string) => {
-    const gen = ++thinkingSupportGenRef.current;
+  const refreshModelThinkingSupport = useCallback((modelId: string): Promise<void> => {
     if (!modelId.trim()) {
+      const gen = ++thinkingSupportGenRef.current;
       if (gen === thinkingSupportGenRef.current) setModelSupportsThinking(false);
-      return;
+      return Promise.resolve();
     }
-    const supports = await modelSupportsReasoning(modelId);
-    if (gen !== thinkingSupportGenRef.current) return;
-    setModelSupportsThinking(supports);
+    const gen = ++thinkingSupportGenRef.current;
+    return modelSupportsReasoning(modelId).then((supports) => {
+      if (gen !== thinkingSupportGenRef.current) return;
+      setModelSupportsThinking(supports);
+    });
   }, [setModelSupportsThinking, thinkingSupportGenRef]);
 
-  const pollSessionNameAfterTurn = useCallback(async () => {
+  const pollSessionNameAfterTurn = useCallback(() => {
     const key = sessionKeyRef.current;
     if (!key) return;
     if (sessionNameRef.current?.trim()) return;
@@ -99,22 +101,32 @@ export function useChatSessionLoad(deps: {
     const maxAttempts = 5;
     const delaysMs = [700, 900, 900, 1000, 1000];
 
-    for (let i = 0; i < maxAttempts; i++) {
-      await new Promise<void>((r) => setTimeout(r, delaysMs[i] ?? 900));
+    const pollAttempt = (attempt: number): void => {
+      if (attempt >= maxAttempts) return;
       if (gen !== sessionNamePollGenRef.current) return;
       if (sessionKeyRef.current !== key) return;
       if (sessionNameRef.current?.trim()) return;
-      try {
-        const name = await sessionMgrRef.current.fetchSessionName(key);
+      window.setTimeout(() => {
         if (gen !== sessionNamePollGenRef.current) return;
-        if (name) {
-          setSessionName(name);
-          return;
-        }
-      } catch {
-        /* ignore */
-      }
-    }
+        if (sessionKeyRef.current !== key) return;
+        if (sessionNameRef.current?.trim()) return;
+        void sessionMgrRef.current
+          .fetchSessionName(key)
+          .then((name) => {
+            if (gen !== sessionNamePollGenRef.current) return;
+            if (name) {
+              setSessionName(name);
+              return;
+            }
+            pollAttempt(attempt + 1);
+          })
+          .catch(() => {
+            pollAttempt(attempt + 1);
+          });
+      }, delaysMs[attempt] ?? 900);
+    };
+
+    pollAttempt(0);
   }, [sessionKeyRef, sessionNameRef, sessionMgrRef, setSessionName]);
 
   const applyLoadedSessionSnapshot = useCallback(

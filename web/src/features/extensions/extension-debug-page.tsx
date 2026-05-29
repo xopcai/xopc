@@ -16,7 +16,7 @@ export function ExtensionDebugPage() {
   const [grantsRaw, setGrantsRaw] = useState(() => readGrantsSafe());
 
   const sorted = useMemo(
-    () => [...extensions].sort((a, b) => a.id.localeCompare(b.id)),
+    () => extensions.toSorted((a, b) => a.id.localeCompare(b.id)),
     [extensions],
   );
 

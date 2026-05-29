@@ -11,6 +11,22 @@ function normAcc(s: string | undefined): string {
   return (s ?? '').trim().toLowerCase();
 }
 
+function accountBindingKey(channel: string, accountId: string): string {
+  return `${normAcc(channel)}\0${normAcc(accountId)}`;
+}
+
+function buildSimpleAccountBindingLookup(bindings: BindingRuleWire[]): Map<string, BindingRuleWire> {
+  const byAccount = new Map<string, BindingRuleWire>();
+  for (const r of bindings) {
+    if (!isSimpleAccountOnlyRule(r)) continue;
+    const channel = normAcc(r.match?.channel);
+    const accountId = normAcc(r.match?.accountId);
+    if (!channel || !accountId) continue;
+    byAccount.set(accountBindingKey(channel, accountId), r);
+  }
+  return byAccount;
+}
+
 export function isSimpleAccountOnlyRule(r: BindingRuleWire): boolean {
   const m = r.match;
   if (!m?.channel || !m.accountId) return false;
@@ -30,7 +46,7 @@ export function weixinRoutingAccountIds(wx: { accounts?: Record<string, unknown>
 
 export function feishuRoutingAccountIds(fs: { appId?: string; appSecret?: string; accounts?: Record<string, unknown> }): string[] {
   const keys = Object.keys(fs.accounts ?? {});
-  if (keys.length > 0) return [...keys].sort();
+  if (keys.length > 0) return keys.toSorted();
   if (typeof fs.appId === 'string' && fs.appId.trim() && typeof fs.appSecret === 'string' && fs.appSecret.trim()) {
     return ['default'];
   }
@@ -47,33 +63,19 @@ export function extractChannelAgentRoutes(
   const telegram: Record<string, string> = {};
   const weixin: Record<string, string> = {};
   const feishu: Record<string, string> = {};
+  const byAccount = buildSimpleAccountBindingLookup(bindings);
 
   for (const id of telegramAccountIds) {
-    const rule = bindings.find(
-      (r) =>
-        normAcc(r.match?.channel) === 'telegram' &&
-        normAcc(r.match?.accountId) === normAcc(id) &&
-        isSimpleAccountOnlyRule(r),
-    );
+    const rule = byAccount.get(accountBindingKey('telegram', id));
     telegram[id] = (rule?.agentId ?? defaultAgentId).trim().toLowerCase();
   }
   for (const id of weixinAccountIds) {
-    const rule = bindings.find(
-      (r) =>
-        normAcc(r.match?.channel) === 'weixin' &&
-        normAcc(r.match?.accountId) === normAcc(id) &&
-        isSimpleAccountOnlyRule(r),
-    );
+    const rule = byAccount.get(accountBindingKey('weixin', id));
     weixin[id] = (rule?.agentId ?? defaultAgentId).trim().toLowerCase();
   }
 
   for (const id of feishuAccountIds) {
-    const rule = bindings.find(
-      (r) =>
-        normAcc(r.match?.channel) === 'feishu' &&
-        normAcc(r.match?.accountId) === normAcc(id) &&
-        isSimpleAccountOnlyRule(r),
-    );
+    const rule = byAccount.get(accountBindingKey('feishu', id));
     feishu[id] = (rule?.agentId ?? defaultAgentId).trim().toLowerCase();
   }
 

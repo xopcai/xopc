@@ -44,7 +44,10 @@ function parsePendingFollowUps(raw: unknown): PendingFollowUp[] {
       item.thinkingLevel = row.thinkingLevel.trim();
     }
     if (Array.isArray(row.attachments)) {
-      const atts = row.attachments.map(parseAttachment).filter(Boolean) as PendingFollowUpAttachment[];
+      const atts = row.attachments.flatMap((a) => {
+        const v = parseAttachment(a);
+        return v ? [v] : [];
+      });
       if (atts.length) item.attachments = atts;
     }
     out.push(item);

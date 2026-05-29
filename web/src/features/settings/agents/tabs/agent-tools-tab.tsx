@@ -37,7 +37,13 @@ export function AgentToolsTab(props: {
   const adv = messages(language).agentSettings.advanced;
 
   const defaultsDisableSet = useMemo(
-    () => new Set(selected.tools.defaultsDisable.map((s) => String(s).trim()).filter(Boolean)),
+    () =>
+      new Set(
+        selected.tools.defaultsDisable.flatMap((s) => {
+          const v = String(s).trim();
+          return v ? [v] : [];
+        }),
+      ),
     [selected.tools.defaultsDisable],
   );
 

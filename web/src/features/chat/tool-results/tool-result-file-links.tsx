@@ -1,6 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { AlertCircle, ArrowDownToLine, Check, Copy, ExternalLink, Eye, File, FolderOpen, Loader2, Settings2 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
@@ -172,7 +172,7 @@ function OffWorkspaceFileCard({
 
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const canImport = refInfo.capabilities.includes('importToWorkspace') && Boolean(refInfo.fileRefId);
-  const defaultDestination = useMemo(() => `imports/${path.fileName || refInfo.displayName}`, [path.fileName, refInfo.displayName]);
+  const defaultDestination = `imports/${path.fileName || refInfo.displayName}`;
 
   const isMissing = refInfo.scope === 'missing';
   const isInvalid = refInfo.scope === 'invalid';
@@ -466,14 +466,14 @@ export function ToolResultFileLinks({
     return null;
   }
 
-  const visible = paths
-    .map((p) => ({ ...p, refInfo: refByAbs[p.absolutePath] ?? null }))
-    .filter((p): p is ExtractedFilePath & { refInfo: WorkspaceFileReference } => Boolean(p.refInfo))
-    // Suppress missing/invalid cards that came from assistant-markdown prose mentions:
-    // a bare "README.md" in the answer prose isn't really a file reference, and a
-    // greyed-out "not found" card next to the answer is just noise. Tool-result
-    // entries are kept since they generally carry a real absolute path worth surfacing.
-    .filter((p) => !(p.origin === 'assistant-markdown' && (p.refInfo.scope === 'missing' || p.refInfo.scope === 'invalid')));
+  const visible = paths.flatMap((p) => {
+    const refInfo = refByAbs[p.absolutePath] ?? null;
+    if (!refInfo) return [];
+    if (p.origin === 'assistant-markdown' && (refInfo.scope === 'missing' || refInfo.scope === 'invalid')) {
+      return [];
+    }
+    return [{ ...p, refInfo }];
+  });
 
   if (visible.length === 0) {
     return null;

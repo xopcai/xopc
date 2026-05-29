@@ -1,5 +1,5 @@
 import { Copy, Terminal } from 'lucide-react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -15,10 +15,8 @@ export function SshCliSection({ embedded = false }: { embedded?: boolean }) {
   const t = messages(language).remoteAccess.ssh;
   const [copied, setCopied] = useState(false);
 
-  const command = useMemo(
-    () => 'xopc gateway ssh-tunnel --target user@your-host --local-port 18790 --remote-port 18790',
-    [],
-  );
+  const command =
+    'xopc gateway ssh-tunnel --target user@your-host --local-port 18790 --remote-port 18790';
 
   const onCopy = useCallback(async () => {
     const ok = await copyTextToClipboard(command);

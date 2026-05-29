@@ -8,6 +8,13 @@ import { AgentDefaultsField } from '../agent-defaults-field';
 import type { AgentDefaultsPanelProps } from '../agent-defaults-panel-props';
 import { ImageGenerationModelInput } from '../image-generation-model-input';
 
+function modelFallbackRowKey(modelId: string, index: number, all: string[]): string {
+  const trimmed = modelId.trim();
+  if (trimmed) return `model:${trimmed}`;
+  const emptySlot = all.slice(0, index).filter((id) => !id.trim()).length;
+  return `empty:${emptySlot}`;
+}
+
 /** Top-level primary model selectors — vision + image generation. */
 export function ImageModelPrimarySelectors(props: AgentDefaultsPanelProps) {
   const { a, chat, form, update } = props;
@@ -53,7 +60,7 @@ export function ImageModelFallbackChains(props: AgentDefaultsPanelProps) {
       <AgentDefaultsField label={a.label.imageModelFallbacks} description={a.desc.imageModelFallbacks}>
         <div className="flex flex-col gap-2">
           {form.imageModelFallbacks.map((fb, idx) => (
-            <div key={idx} className="flex items-start gap-2">
+            <div key={modelFallbackRowKey(fb, idx, form.imageModelFallbacks)} className="flex items-start gap-2">
               <div className="min-w-0 flex-1">
                 <ModelSelector
                   value={fb}
@@ -102,7 +109,10 @@ export function ImageModelFallbackChains(props: AgentDefaultsPanelProps) {
       >
         <div className="flex flex-col gap-2">
           {form.imageGenerationModelFallbacks.map((fb, idx) => (
-            <div key={idx} className="flex items-start gap-2">
+            <div
+              key={modelFallbackRowKey(fb, idx, form.imageGenerationModelFallbacks)}
+              className="flex items-start gap-2"
+            >
               <div className="min-w-0 flex-1">
                 <ImageGenerationModelInput
                   value={fb}

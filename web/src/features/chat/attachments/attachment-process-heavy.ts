@@ -30,14 +30,24 @@ export async function processPdf(
     pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
 
     let extractedText = `<pdf filename="${name}">`;
-    for (let i = 1; i <= pdf.numPages; i++) {
-      const page = await pdf.getPage(i);
-      const textContent = await page.getTextContent();
+    const pageTexts = await Promise.all(
+      Array.from({ length: pdf.numPages }, (_, idx) => {
+        const pageNum = idx + 1;
+        return (async () => {
+          const page = await pdf!.getPage(pageNum);
+          const textContent = await page.getTextContent();
       const pageText = textContent.items
-        .map((item) => ('str' in item ? item.str : ''))
-        .filter((str) => str.trim())
+        .flatMap((item) => {
+          const str = 'str' in item ? item.str : '';
+          return str.trim() ? [str] : [];
+        })
         .join(' ');
-      extractedText += `\n<page number="${i}">\n${pageText}\n</page>`;
+          return { pageNum, pageText };
+        })();
+      }),
+    );
+    for (const { pageNum, pageText } of pageTexts) {
+      extractedText += `\n<page number="${pageNum}">\n${pageText}\n</page>`;
     }
     extractedText += '\n</pdf>';
 
@@ -229,15 +239,24 @@ export async function processPptx(
       extractedText += `\n<!-- truncated: ${slideFiles.length} slides, processing first ${PPTX_EXTRACT_MAX_SLIDES} -->`;
     }
 
-    for (let i = 0; i < maxSlides; i++) {
+    const slideXmls = await Promise.all(
+      slideFiles.slice(0, maxSlides).map(async (slidePath, i) => {
+        const slideFile = zip.file(slidePath);
+        if (!slideFile) return { i, slideXml: null as string | null };
+        const slideXml = await slideFile.async('text');
+        return { i, slideXml };
+      }),
+    );
+
+    const processSlideAt = async (pos: number): Promise<void> => {
+      if (pos >= slideXmls.length) return;
       if (extractedText.length >= PPTX_EXTRACT_MAX_CHARS) {
         extractedText += `\n<!-- extraction stopped: size limit ${PPTX_EXTRACT_MAX_CHARS} chars -->`;
-        break;
+        return;
       }
 
-      const slideFile = zip.file(slideFiles[i]);
-      if (slideFile) {
-        const slideXml = await slideFile.async('text');
+      const { i, slideXml } = slideXmls[pos]!;
+      if (slideXml) {
         const slideTexts = extractTextNodesFromSlideXml(slideXml);
 
         if (slideTexts.length > 0) {
@@ -250,10 +269,13 @@ export async function processPptx(
         }
       }
 
-      if (i % 4 === 3) {
+      if (pos % 4 === 3 && pos + 1 < slideXmls.length) {
         await new Promise<void>((r) => setTimeout(r, 0));
       }
-    }
+      await processSlideAt(pos + 1);
+    };
+
+    await processSlideAt(0);
 
     extractedText += '\n</pptx>';
     return { extractedText };

@@ -3,6 +3,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiUrl } from '@/lib/url';
 import { apiFetch } from '@/lib/fetch';
 
+const SSE_BLOCK_DELIM = '\n\n';
+const CRLF_RE = /\r\n/g;
+
 /** Session flag: npm install finished but gateway process still on older `currentVersion`. */
 export const NPM_PENDING_RESTART_KEY = 'xopc.npmPendingRestart';
 
@@ -386,18 +389,21 @@ async function consumeNpmUpdateSse(body: ReadableStream<Uint8Array>): Promise<Np
   };
 
   try {
-    while (final === null) {
+    const readChunk = async (): Promise<NpmUpdateRunResult | null> => {
+      if (final !== null) return final;
       const { done, value } = await reader.read();
-      if (done) break;
+      if (done) return final;
       buffer += decoder.decode(value, { stream: true });
-      buffer = buffer.replace(/\r\n/g, '\n');
-      let idx: number;
-      while ((idx = buffer.indexOf('\n\n')) !== -1) {
-        const chunk = buffer.slice(0, idx);
-        buffer = buffer.slice(idx + 2);
+      buffer = buffer.replace(CRLF_RE, '\n');
+      const parts = buffer.split(SSE_BLOCK_DELIM);
+      buffer = parts.pop() ?? '';
+      for (const chunk of parts) {
         if (chunk.length) handleSseBlock(chunk);
       }
-    }
+      return readChunk();
+    };
+    const result = await readChunk();
+    if (result) return result;
   } finally {
     reader.releaseLock();
   }
