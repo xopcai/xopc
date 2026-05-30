@@ -160,7 +160,7 @@ xopc gateway --background
 
 ## 6. Electron 桌面版（可选）
 
-**macOS / Windows / Linux** 的安装包见 **[GitHub Releases](https://github.com/xopcai/xopc/releases)**（有发版时）。与浏览器里打开的是同一套网关 + 网页控制台。
+**macOS / Windows / Linux** 的安装包见 **[GitHub Releases](https://github.com/xopcai/xopc/releases)**（有发版时；Windows 为 `xopc-<版本>-x64.exe` 或 `xopc-<版本>-arm64.exe`）。与浏览器里打开的是同一套网关 + 网页控制台。
 
 <video controls playsinline width="100%" style="max-width: 960px; border-radius: 8px;">
   <source src="https://xopc.ai/xopc-demo.mp4" type="video/mp4" />

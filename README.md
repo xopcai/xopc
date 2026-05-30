@@ -169,7 +169,7 @@ Also: [Tools](https://xopcai.github.io/xopc/tools) · [Voice](https://xopcai.git
 
 ## Desktop app
 
-1. Download from **[GitHub Releases](https://github.com/xopcai/xopc/releases)** (`.dmg` / `.exe` / `.AppImage` / `.deb`).
+1. Download from **[GitHub Releases](https://github.com/xopcai/xopc/releases)** — macOS `.dmg`, Windows `xopc-<version>-x64.exe` or `xopc-<version>-arm64.exe`, Linux `.AppImage` / `.deb`.
 2. Or use **`xopc gateway`** + the npm CLI until a build exists for your OS.
 
 **Build from source:** `pnpm install && pnpm run electron:build` → `dist/release/`
