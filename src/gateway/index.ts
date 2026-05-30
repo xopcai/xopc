@@ -30,6 +30,8 @@ export {
   isLoopbackHost,
   isAllInterfacesHost,
   buildDefaultCorsOrigins,
+  resolveEffectiveGatewayPort,
+  resolveGatewayServiceListenPort,
 } from './host.js';
 export {
   resolveGatewayListenHost,

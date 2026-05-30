@@ -4,7 +4,7 @@ import type { Config } from '../../config/schema.js';
 import { assertGatewayRuntimeConfig } from '../runtime-config.js';
 import type { ResolvedGatewayAuth } from '../auth.js';
 import { resolveGatewayListenHost, resolveGatewayListenPlan } from '../listen.js';
-import { buildDefaultCorsOrigins, isLoopbackHost } from '../host.js';
+import { buildDefaultCorsOrigins, isLoopbackHost, resolveEffectiveGatewayPort } from '../host.js';
 
 function baseConfig(overrides: Partial<Config['gateway']> = {}): Config {
   return {
@@ -43,6 +43,13 @@ describe('gateway listen helpers', () => {
       'http://192.168.1.10:18790',
     ]);
   });
+
+  it('resolveEffectiveGatewayPort prefers CLI override over config', () => {
+    const cfg = baseConfig({ port: 18790 });
+    expect(resolveEffectiveGatewayPort(cfg)).toBe(18790);
+    expect(resolveEffectiveGatewayPort(cfg, 8080)).toBe(8080);
+    expect(resolveEffectiveGatewayPort({ gateway: {} }, 9999)).toBe(9999);
+  });
 });
 
 describe('assertGatewayRuntimeConfig', () => {
@@ -57,15 +64,16 @@ describe('assertGatewayRuntimeConfig', () => {
     expect(result.bindMode).toBe('loopback');
   });
 
-  it('refuses lan bind without corsOrigins', () => {
+  it('allows lan bind without corsOrigins (loopback defaults)', () => {
     const cfg = baseConfig({ bind: 'lan', corsOrigins: [] });
-    expect(() =>
-      assertGatewayRuntimeConfig({
-        cfg,
-        auth: tokenAuth,
-        port: 18790,
-      }),
-    ).toThrow(/gateway\.corsOrigins/);
+    const result = assertGatewayRuntimeConfig({
+      cfg,
+      auth: tokenAuth,
+      port: 18790,
+    });
+    expect(result.bindMode).toBe('lan');
+    expect(result.bindHost).toBe('0.0.0.0');
+    expect(result.corsOrigins).toEqual([]);
   });
 
   it('allows lan bind with corsOrigins configured', () => {
@@ -84,14 +92,14 @@ describe('assertGatewayRuntimeConfig', () => {
 
   it('uses CLI bind override for guard evaluation', () => {
     const cfg = baseConfig({ bind: 'loopback', corsOrigins: [] });
-    expect(() =>
-      assertGatewayRuntimeConfig({
-        cfg,
-        auth: tokenAuth,
-        bindOverride: 'lan',
-        port: 18790,
-      }),
-    ).toThrow(/gateway\.corsOrigins/);
+    const result = assertGatewayRuntimeConfig({
+      cfg,
+      auth: tokenAuth,
+      bindOverride: 'lan',
+      port: 18790,
+    });
+    expect(result.bindMode).toBe('lan');
+    expect(result.bindHost).toBe('0.0.0.0');
   });
 
   it('requires customBindHost for bind=custom', () => {

@@ -54,6 +54,14 @@ describe('AuthFailureRateLimiter', () => {
     expect(limiter.checkBlocked(key, cfg).blocked).toBe(false);
   });
 
+  it('exempts loopback browser-origin keys when client IP is unknown (Electron embedded UI)', () => {
+    const key = buildBrowserOriginRateLimitKey('http://127.0.0.1:28790', 'unknown');
+    limiter.recordFailure(key, cfg);
+    limiter.recordFailure(key, cfg);
+    limiter.recordFailure(key, cfg);
+    expect(limiter.checkBlocked(key, cfg).blocked).toBe(false);
+  });
+
   it('still rate limits non-loopback browser-origin keys', () => {
     const key = buildBrowserOriginRateLimitKey('http://evil.example.com', '127.0.0.1');
     limiter.recordFailure(key, cfg);

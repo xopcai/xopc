@@ -2,6 +2,11 @@ import { createLogger } from '../utils/logger.js';
 
 const log = createLogger('Tunnel');
 
+export type TunnelWellKnownTransport = {
+  tls: 'broker_terminated' | string;
+  publicScheme?: string;
+};
+
 export type TunnelWellKnownConfig = {
   brokerUrl: string;
   frp: {
@@ -11,6 +16,7 @@ export type TunnelWellKnownConfig = {
   };
   frpcVersion: string;
   heartbeatIntervalMs: number;
+  transport?: TunnelWellKnownTransport;
 };
 
 let cached: { origin: string; config: TunnelWellKnownConfig; fetchedAt: number } | null = null;
@@ -38,7 +44,7 @@ export async function fetchTunnelWellKnown(brokerUrl: string): Promise<TunnelWel
   }
   const body = (await res.json()) as TunnelWellKnownConfig;
   cached = { origin, config: body, fetchedAt: Date.now() };
-  log.debug({ url, brokerUrl: body.brokerUrl }, 'Loaded tunnel well-known config');
+  log.debug({ url, brokerUrl: body.brokerUrl, transport: body.transport?.tls }, 'Loaded tunnel well-known config');
   return body;
 }
 

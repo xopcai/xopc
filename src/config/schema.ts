@@ -647,20 +647,6 @@ export const TunnelConsentSchema = z.object({
   acceptedAt: z.string().min(1),
 });
 
-export const TunnelE2eSchema = z
-  .object({
-    enabled: z.boolean().default(true),
-    tlsPort: z.number().int().min(1024).max(65535).default(18791),
-    staging: z.boolean().default(false),
-  })
-  .default({
-    enabled: true,
-    tlsPort: 18791,
-    staging: false,
-  });
-
-export const TunnelExposureModeSchema = z.enum(['public', 'pairing-only']);
-
 export const TunnelConfigSchema = z
   .object({
     enabled: z.boolean().default(false),
@@ -669,16 +655,12 @@ export const TunnelConfigSchema = z
     registrationSecret: z.string().min(1).optional(),
     autoStart: z.boolean().default(false),
     subdomain: z.string().optional(),
-    /** public: full gateway; pairing-only: broker routes only mobile pair endpoints. */
-    exposure: TunnelExposureModeSchema.default('public'),
     consent: TunnelConsentSchema.optional(),
-    e2e: TunnelE2eSchema.optional(),
   })
   .default({
     enabled: false,
     brokerUrl: 'https://frp.xopc.ai/api',
     autoStart: false,
-    exposure: 'public',
   });
 
 export type TunnelConfig = z.infer<typeof TunnelConfigSchema>;

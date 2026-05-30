@@ -2,10 +2,9 @@ import type { Config } from '../config/schema.js';
 import { resolveGatewayEffectiveHost } from '../config/gateway-bind.js';
 import { createLogger } from '../utils/logger.js';
 import { hasValidTunnelConsent } from './consent.js';
-import { subscribeCertStatus } from './acme-cert-store.js';
 import { resolveTunnelBrokerUrl, resolveTunnelRegistrationSecret } from './env.js';
 import { getTunnelService } from './tunnel-service.js';
-import { resolveFrpSubdomainHost, resolveTunnelE2eConfig } from './tunnel-e2e-config.js';
+import { resolveFrpSubdomainHost } from './frp-subdomain-host.js';
 import { fetchTunnelWellKnown } from './well-known.js';
 
 const log = createLogger('Tunnel');
@@ -29,23 +28,14 @@ export function wireTunnelEventsToGateway(service: TunnelEventSink): void {
   tunnel.on('tunnel:disconnected', publish);
   tunnel.on('tunnel:error', publish);
   tunnel.on('tunnel:progress', publish);
-
-  subscribeCertStatus((cert) => {
-    service.emit('tunnel.cert.status', cert);
-    publish();
-  });
 }
 
 export type ConfigureTunnelFromGatewayConfigOptions = {
   force?: boolean;
-  /** Apply config/env broker URL immediately; refresh from well-known in the background. */
   deferWellKnownFetch?: boolean;
 };
 
 function applyTunnelServiceFromGatewayConfig(config: Config, brokerUrl: string): void {
-  const gateway = config.gateway ?? {};
-  const gatewayPort = gateway.port ?? 18790;
-
   let registrationSecret: string;
   try {
     registrationSecret = resolveTunnelRegistrationSecret(
@@ -64,7 +54,6 @@ function applyTunnelServiceFromGatewayConfig(config: Config, brokerUrl: string):
     registrationSecret,
     autoStart: config.tunnel?.autoStart ?? false,
     gatewayHost: resolveGatewayEffectiveHost(config),
-    e2e: resolveTunnelE2eConfig(config.tunnel, gatewayPort),
     frpSubdomainHost: resolveFrpSubdomainHost(brokerUrl),
   });
 }
@@ -75,6 +64,14 @@ async function resolveBrokerUrlFromWellKnown(initialBrokerUrl: string): Promise<
     const wellKnown = await fetchTunnelWellKnown(brokerUrl);
     if (wellKnown.brokerUrl?.trim()) {
       brokerUrl = wellKnown.brokerUrl.trim();
+    }
+    if (wellKnown.transport?.tls === 'broker_terminated') {
+      log.debug({ brokerUrl, phase: 'tunnel_well_known' }, 'Broker uses wildcard TLS termination');
+    } else if (wellKnown.transport?.tls) {
+      log.warn(
+        { tls: wellKnown.transport.tls, phase: 'tunnel_well_known' },
+        'Unexpected broker transport mode — expect broker_terminated',
+      );
     }
   } catch (err) {
     log.debug(
@@ -129,9 +126,6 @@ export async function configureTunnelFromGatewayConfig(
   applyTunnelServiceFromGatewayConfig(config, brokerUrl);
 }
 
-/**
- * Start FRP tunnel when `tunnel.autoStart` is set (CLI gateway / GatewayServer after HTTP listen).
- */
 export async function maybeAutoStartTunnelFromConfig(
   config: Config,
   gatewayToken: string | undefined,

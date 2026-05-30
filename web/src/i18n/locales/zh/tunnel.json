@@ -132,24 +132,6 @@
     "copyKey": "复制密钥",
     "showKey": "显示密钥",
     "hideKey": "隐藏密钥",
-    "flowStepStart": "步骤 2 · 启动远程访问",
-    "e2eTitle": "HTTPS / E2E",
-    "e2eSubtitle": "frp 转发前本机 TLS 终结器（tunnel.e2e）。",
-    "e2eEnabled": "启用 E2E TLS",
-    "e2eEnabledHint": "公网 HTTPS 与移动 App 远程连接需要开启。关闭后跳过 ACME 证书流程，但公网 TLS 透传将不可用。",
-    "e2eDisabledWarning": "E2E TLS 已关闭：桌面隧道可能仍能启动，但移动 App 无法通过 https://*.frp.xopc.ai 公网地址连接。",
-    "e2eTlsPort": "本机 TLS 端口",
-    "e2eTlsPortHint": "本机 HTTPS 监听端口。建议默认值：{{port}}（网关端口 + 1）。",
-    "e2eStaging": "使用 Let's Encrypt 测试环境",
-    "e2eStagingHint": "测试证书签发，不受生产环境速率限制。",
-    "e2eSave": "保存 E2E 设置",
-    "e2eDiscard": "放弃",
-    "e2eSaving": "保存中…",
-    "e2eSaved": "E2E 设置已保存",
-    "e2eSaveError": "保存 E2E 设置失败",
-    "e2eUnsaved": "有未保存的 E2E 更改。",
-    "e2eRestartHint": "更改 E2E TLS 端口前需停止远程访问并重启网关。",
-    "e2eConnectedWarning": "远程访问已连接。更改 TLS 端口或 E2E 选项前请先停止隧道。",
-    "e2eLoading": "加载 E2E 设置中…"
+    "flowStepStart": "步骤 2 · 启动远程访问"
   }
 }

@@ -5,7 +5,6 @@ import { resolveGatewayBindHost, resolveGatewayListenHosts } from '../config/gat
 import { resolveGatewayListenPlan } from './listen.js';
 import { GatewayService } from './service.js';
 import { createHonoApp } from './hono/app.js';
-import { getTunnelService } from '../tunnel/tunnel-service.js';
 
 export interface GatewayServerConfig {
   port: number;
@@ -33,6 +32,7 @@ export class GatewayServer {
       deferChannelConnectUntilAfterHttp: true,
       listenBind: config.bind,
       listenCustomBindHost: config.customBindHost,
+      listenPort: config.port,
     });
   }
 
@@ -81,7 +81,6 @@ export class GatewayServer {
       service: this.service,
       token: effectiveToken,
     });
-    getTunnelService().setGatewayFetch(app.fetch.bind(app));
 
     const primaryHost = listenHosts[0] ?? bindHost;
     this.server = serve(

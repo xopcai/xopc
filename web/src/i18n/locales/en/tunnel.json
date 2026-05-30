@@ -132,24 +132,6 @@
     "copyKey": "Copy key",
     "showKey": "Show key",
     "hideKey": "Hide key",
-    "flowStepStart": "Step 2 · Start remote access",
-    "e2eTitle": "HTTPS / E2E",
-    "e2eSubtitle": "Local TLS terminator used before frp forwards traffic (tunnel.e2e).",
-    "e2eEnabled": "Enable E2E TLS",
-    "e2eEnabledHint": "Required for public HTTPS and mobile app remote access. When off, ACME is skipped and public TLS passthrough will not work.",
-    "e2eDisabledWarning": "E2E TLS is off: the desktop tunnel may start, but the mobile app cannot connect via https://*.frp.xopc.ai.",
-    "e2eTlsPort": "Local TLS port",
-    "e2eTlsPortHint": "Port for the on-machine HTTPS listener. Suggested default: {{port}} (gateway port + 1).",
-    "e2eStaging": "Use Let's Encrypt staging",
-    "e2eStagingHint": "For testing certificate issuance without production rate limits.",
-    "e2eSave": "Save E2E settings",
-    "e2eDiscard": "Discard",
-    "e2eSaving": "Saving…",
-    "e2eSaved": "E2E settings saved",
-    "e2eSaveError": "Failed to save E2E settings",
-    "e2eUnsaved": "You have unsaved E2E changes.",
-    "e2eRestartHint": "E2E TLS port changes require stopping remote access and restarting the gateway.",
-    "e2eConnectedWarning": "Remote access is active. Stop the tunnel before changing TLS port or E2E options.",
-    "e2eLoading": "Loading E2E settings…"
+    "flowStepStart": "Step 2 · Start remote access"
   }
 }

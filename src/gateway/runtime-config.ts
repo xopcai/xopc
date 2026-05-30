@@ -3,7 +3,6 @@ import type { GatewayBindMode } from '../config/schema.js';
 import type { ResolvedGatewayAuth } from './auth.js';
 import { isAuthRateLimitGloballyDisabled, isGatewayStrictSecurityEnabled } from './auth-rate-limit.js';
 import {
-  buildDefaultCorsOrigins,
   isAllInterfacesHost,
   isLoopbackHost,
 } from './host.js';
@@ -105,14 +104,8 @@ export function assertGatewayRuntimeConfig(params: {
       }
     }
 
-    if (corsOrigins.length === 0 && !dangerouslyAllowHostHeaderOriginFallback) {
-      const suggested = buildDefaultCorsOrigins({ port: params.port, bindHost }).join(', ');
-      throw new Error(
-        'network-accessible gateway requires gateway.corsOrigins ' +
-          `(e.g. [${suggested}]), or set ` +
-          'gateway.dangerouslyAllowHostHeaderOriginFallback=true for Host-header origin fallback',
-      );
-    }
+    // Empty corsOrigins is allowed: resolveGatewayCorsOrigins applies loopback defaults
+    // (localhost + 127.0.0.1 on the gateway port). LAN browser access still needs explicit origins.
 
     if (corsOrigins.some((origin) => origin === '*')) {
       throw new Error(

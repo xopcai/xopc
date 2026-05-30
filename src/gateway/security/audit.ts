@@ -210,12 +210,14 @@ export function collectGatewayConfigFindings(params: {
   ) {
     findings.push({
       checkId: 'gateway.cors.no_explicit_origins',
-      severity: 'critical',
-      title: 'No explicit CORS origins on network-accessible gateway',
-      detail: 'Gateway is bound to a non-loopback address but no corsOrigins are configured. ' +
-        'Startup guards will refuse to bind until origins are set.',
+      severity: 'info',
+      title: 'No custom CORS origins — loopback browsers only',
+      detail:
+        'Gateway listens on a network address with empty gateway.corsOrigins. ' +
+        'localhost and 127.0.0.1 on the gateway port are allowed by default; ' +
+        'LAN or remote browser URLs must be added explicitly.',
       remediation:
-        'Set gateway.corsOrigins to the browser URLs that should access the gateway, ' +
+        'Add gateway.corsOrigins entries (e.g. http://192.168.x.x:<port>) for non-loopback browser access, ' +
         'or enable gateway.dangerouslyAllowHostHeaderOriginFallback only if you understand the CSRF risk.',
     });
   }

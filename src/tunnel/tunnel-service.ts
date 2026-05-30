@@ -17,16 +17,7 @@ import {
 import { clearTunnelState, loadTunnelState, saveTunnelState, updateTunnelState } from './tunnel-state.js';
 import { logTunnelAudit } from './tunnel-audit.js';
 import type { PersistedTunnelState, TunnelQrPayload, TunnelRegistration, TunnelStatus } from './tunnel-types.js';
-import type {
-  FrpcDownloadProgress,
-  TunnelAcmeProgressStep,
-  TunnelStartPhase,
-  TunnelStartProgress,
-} from './tunnel-types.js';
-import type { ResolvedTunnelE2eConfig } from './tunnel-e2e-config.js';
-import { getCertStatusSummary } from './acme-cert-store.js';
-import type { AcmeConfig } from './acme-client.js';
-import { startTunnelTlsServer, stopTunnelTlsServer } from './tls-server.js';
+import type { FrpcDownloadProgress, TunnelStartPhase, TunnelStartProgress } from './tunnel-types.js';
 
 const log = createLogger('Tunnel');
 
@@ -35,9 +26,7 @@ export type TunnelServiceConfig = {
   registrationSecret: string;
   autoStart: boolean;
   gatewayHost: string;
-  e2e: ResolvedTunnelE2eConfig;
   frpSubdomainHost: string;
-  gatewayFetch?: typeof fetch;
 };
 
 export function hashGatewayToken(token: string): string {
@@ -57,7 +46,6 @@ export function getTunnelService(): TunnelService {
 
 export class TunnelService extends EventEmitter {
   private serviceConfig: TunnelServiceConfig | null = null;
-  private pendingGatewayFetch: typeof fetch | undefined;
   private frpcHandle: FrpcProcessHandle | null = null;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private connectedSince: string | null = null;
@@ -71,17 +59,7 @@ export class TunnelService extends EventEmitter {
   private startProgress: TunnelStartProgress | null = null;
 
   configure(cfg: TunnelServiceConfig): void {
-    this.serviceConfig = {
-      ...cfg,
-      gatewayFetch: cfg.gatewayFetch ?? this.pendingGatewayFetch ?? this.serviceConfig?.gatewayFetch,
-    };
-  }
-
-  setGatewayFetch(fetchFn: typeof fetch): void {
-    this.pendingGatewayFetch = fetchFn;
-    if (this.serviceConfig) {
-      this.serviceConfig.gatewayFetch = fetchFn;
-    }
+    this.serviceConfig = cfg;
   }
 
   getStatus(): TunnelStatus {
@@ -101,31 +79,17 @@ export class TunnelService extends EventEmitter {
       config: {
         autoStart: cfg?.autoStart ?? false,
         brokerUrl: cfg?.brokerUrl ?? 'https://frp.xopc.ai/api',
-        e2e: {
-          enabled: cfg?.e2e.enabled ?? true,
-          tlsPort: cfg?.e2e.tlsPort ?? 18791,
-          staging: cfg?.e2e.staging ?? false,
-        },
+        transport: { tls: 'broker_terminated' },
       },
-      cert: getCertStatusSummary(),
     };
   }
 
-  private setStartPhase(
-    phase: TunnelStartPhase,
-    patch?: Partial<Pick<TunnelStartProgress, 'acmeStep' | 'publicUrl'>>,
-  ): void {
+  private setStartPhase(phase: TunnelStartPhase, patch?: Partial<Pick<TunnelStartProgress, 'publicUrl'>>): void {
     const prev = this.startProgress;
     const samePhase = prev?.phase === phase;
     this.startProgress = {
       phase,
       startedAt: samePhase && prev ? prev.startedAt : new Date().toISOString(),
-      acmeStep:
-        patch?.acmeStep !== undefined
-          ? patch.acmeStep
-          : samePhase
-            ? (prev?.acmeStep ?? null)
-            : null,
       publicUrl:
         patch?.publicUrl !== undefined
           ? patch.publicUrl
@@ -142,7 +106,7 @@ export class TunnelService extends EventEmitter {
     this.emit('tunnel:progress');
   }
 
-  buildQr(gatewayPort: number, gatewayHost: string): TunnelQrPayload {
+  async buildQr(gatewayPort: number, gatewayHost: string): Promise<TunnelQrPayload> {
     const persisted = loadTunnelState();
     const publicUrl = persisted?.publicUrl ?? null;
     if (!publicUrl) {
@@ -209,13 +173,7 @@ export class TunnelService extends EventEmitter {
     this.setStartPhase('registering', { publicUrl: registration.publicUrl });
 
     try {
-      const { frpcLocalPort, frpcMode } = await this.prepareFrpcTarget(
-        broker,
-        registration,
-        cfg,
-        gatewayPort,
-      );
-      const configPath = writeFrpcConfig(registration, frpcLocalPort, '127.0.0.1', frpcMode);
+      const configPath = writeFrpcConfig(registration, gatewayPort, '127.0.0.1', 'http');
       this.setStartPhase('starting_frpc', { publicUrl: registration.publicUrl });
       await this.spawnAndWait(frpcBin, configPath, broker, state, registration.heartbeatIntervalMs);
     } catch (err) {
@@ -232,7 +190,7 @@ export class TunnelService extends EventEmitter {
     this.reconnectAttempt = 0;
     this.emit('tunnel:connected');
 
-    const qr = this.buildQr(gatewayPort, cfg.gatewayHost);
+    const qr = await this.buildQr(gatewayPort, cfg.gatewayHost);
     logTunnelAudit(
       'tunnel.start',
       {
@@ -250,7 +208,6 @@ export class TunnelService extends EventEmitter {
     const release = opts?.release === true;
     this.stopping = true;
     this.clearHeartbeat();
-    stopTunnelTlsServer();
     if (this.frpcHandle) {
       await this.frpcHandle.kill();
       this.frpcHandle = null;
@@ -292,9 +249,6 @@ export class TunnelService extends EventEmitter {
     return { released };
   }
 
-  /**
-   * Reuse Broker registration when possible so subdomain and URLs stay stable across stop/start.
-   */
   private async resolveRegistration(
     broker: TunnelBrokerClient,
     cfg: TunnelServiceConfig,
@@ -423,13 +377,7 @@ export class TunnelService extends EventEmitter {
           const next = persistedFromRegistration(registration);
           saveTunnelState(next);
           const frpcBin = await ensureFrpcBinary();
-          const { frpcLocalPort, frpcMode } = await this.prepareFrpcTarget(
-            broker,
-            registration,
-            cfg,
-            ctx.gatewayPort,
-          );
-          const configPath = writeFrpcConfig(registration, frpcLocalPort, '127.0.0.1', frpcMode);
+          const configPath = writeFrpcConfig(registration, ctx.gatewayPort, '127.0.0.1', 'http');
           await this.spawnAndWait(frpcBin, configPath, broker, next, registration.heartbeatIntervalMs);
         } catch (reErr) {
           this.lastError = reErr instanceof Error ? reErr.message : String(reErr);
@@ -447,42 +395,5 @@ export class TunnelService extends EventEmitter {
       clearInterval(this.heartbeatTimer);
       this.heartbeatTimer = null;
     }
-  }
-
-  private async prepareFrpcTarget(
-    broker: TunnelBrokerClient,
-    registration: TunnelRegistration,
-    cfg: TunnelServiceConfig,
-    gatewayPort: number,
-  ): Promise<{ frpcLocalPort: number; frpcMode: 'http' | 'https' }> {
-    if (!cfg.e2e.enabled) {
-      return { frpcLocalPort: gatewayPort, frpcMode: 'http' };
-    }
-
-    this.setStartPhase('provisioning_tls', { publicUrl: registration.publicUrl });
-
-    const acmeConfig: AcmeConfig = {
-      broker,
-      tunnelId: registration.tunnelId,
-      tunnelToken: registration.tunnelToken,
-      subdomain: registration.subdomain,
-      frpSubdomainHost: cfg.frpSubdomainHost,
-      staging: cfg.e2e.staging,
-      onProgress: (step: TunnelAcmeProgressStep) => {
-        this.setStartPhase('provisioning_tls', {
-          publicUrl: registration.publicUrl,
-          acmeStep: step,
-        });
-      },
-    };
-
-    await startTunnelTlsServer({
-      tlsPort: cfg.e2e.tlsPort,
-      gatewayPort,
-      acmeConfig,
-      fetch: cfg.gatewayFetch,
-    });
-
-    return { frpcLocalPort: cfg.e2e.tlsPort, frpcMode: 'https' };
   }
 }

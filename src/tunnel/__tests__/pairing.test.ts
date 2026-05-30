@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { consumePairingSecret, createPairingSecret, resetPairingSessionsForTests } from '../pairing.js';
+import {
+  cachePairingExchange,
+  consumePairingSecret,
+  createPairingSecret,
+  getCachedPairingExchange,
+  resetPairingSessionsForTests,
+} from '../pairing.js';
 
 describe('tunnel pairing', () => {
   afterEach(() => {
@@ -23,5 +29,22 @@ describe('tunnel pairing', () => {
 
   it('rejects empty secret', () => {
     expect(consumePairingSecret('')).toBe(false);
+  });
+
+  it('caches exchange payload for replay after consume', () => {
+    const { secret } = createPairingSecret();
+    expect(consumePairingSecret(secret)).toBe(true);
+    expect(getCachedPairingExchange(secret)).toBeNull();
+
+    const payload = {
+      token: 'tok',
+      baseUrl: 'https://abc.frp.xopc.ai',
+      lanUrl: 'http://192.168.1.2:18789',
+      connectUrls: ['https://abc.frp.xopc.ai', 'http://192.168.1.2:18789'],
+    };
+    cachePairingExchange(secret, payload);
+    expect(getCachedPairingExchange(secret)).toEqual(payload);
+    expect(consumePairingSecret(secret)).toBe(false);
+    expect(getCachedPairingExchange(secret)).toEqual(payload);
   });
 });

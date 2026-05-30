@@ -27,6 +27,7 @@ export {
   wireTunnelEventsToGateway,
 } from './gateway-lifecycle.js';
 export { fetchTunnelWellKnown, clearTunnelWellKnownCache } from './well-known.js';
+export type { TunnelWellKnownConfig, TunnelWellKnownTransport } from './well-known.js';
 export {
   getTunnelRegistrationSecretMeta,
   isProductionTunnelBroker,
@@ -40,10 +41,7 @@ export type { TunnelAuditEvent } from './tunnel-audit.js';
 export { consumeTunnelMutationLimit, resetTunnelMutationLimitsForTests } from './tunnel-rate-limit.js';
 export { getTunnelService, hashGatewayToken, TunnelService } from './tunnel-service.js';
 export type { TunnelServiceConfig } from './tunnel-service.js';
-export { resolveFrpSubdomainHost, resolveTunnelE2eConfig } from './tunnel-e2e-config.js';
-export type { ResolvedTunnelE2eConfig } from './tunnel-e2e-config.js';
-export { getCertStatusSummary, subscribeCertStatus, recordRenewalFailure } from './acme-cert-store.js';
-export { getActiveTlsCert, stopTunnelTlsServer } from './tls-server.js';
+export { resolveFrpSubdomainHost } from './frp-subdomain-host.js';
 export { createPairingSecret, consumePairingSecret, resetPairingSessionsForTests } from './pairing.js';
 export type { PairingSecretResult } from './pairing.js';
 export { buildMobileConnectQrPayload, resolveLanGatewayUrl } from './tunnel-qr.js';

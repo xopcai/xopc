@@ -53,7 +53,7 @@
     "test:startup:bench": "node --import tsx scripts/bench-cli-startup.ts",
     "test:startup:bench:check": "node --import tsx scripts/bench-cli-startup.ts --runs 3 --warmup 1",
     "test:startup:imports": "node scripts/check-cli-bootstrap-imports.mjs",
-    "tunnel:phase5:verify": "node scripts/tunnel-phase5-staging-verify.mjs",
+    "tunnel:phase6:verify": "node scripts/tunnel-phase6-broker-tls-verify.mjs",
     "release:patch": "bash scripts/release-patch.sh",
     "prepublishOnly": "npm test && npm run test:skills:all && npm run build",
     "docs:dev": "vitepress dev docs",

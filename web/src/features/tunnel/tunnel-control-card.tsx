@@ -12,7 +12,6 @@ function statusLabel(t: TunnelSettingsMessages, status: TunnelStatusResponse): s
   if (status.state === 'connected') return t.statusConnected;
   if (status.state === 'error') return t.statusError;
   if (status.startProgress?.phase === 'reconnecting_frpc') return t.statusReconnecting;
-  if (status.startProgress?.phase === 'provisioning_tls') return t.statusProvisioningTls;
   if (status.startProgress?.phase === 'starting_frpc') return t.statusStartingFrpc;
   if (status.startProgress?.phase === 'registering') return t.statusRegistering;
   if (status.startProgress?.phase === 'preparing_frpc' || status.frpcDownload) return t.statusPreparingFrpc;

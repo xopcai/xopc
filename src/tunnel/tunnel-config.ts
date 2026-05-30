@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import type { Config } from '../config/schema.js';
-import { TunnelConfigSchema, TunnelConsentSchema, TunnelE2eSchema } from '../config/schema.js';
+import { TunnelConfigSchema, TunnelConsentSchema } from '../config/schema.js';
 
 import {
   assertTunnelAutoStartAllowed,
@@ -10,12 +10,6 @@ import {
 } from './consent.js';
 import { isMaskedTunnelSecretPatchValue } from './env.js';
 
-const TunnelE2ePatchSchema = z.object({
-  enabled: z.boolean().optional(),
-  tlsPort: z.number().int().min(1024).max(65535).optional(),
-  staging: z.boolean().optional(),
-});
-
 const TunnelConfigPatchSchema = z.object({
   enabled: z.boolean().optional(),
   brokerUrl: z.string().url().optional(),
@@ -23,7 +17,6 @@ const TunnelConfigPatchSchema = z.object({
   autoStart: z.boolean().optional(),
   subdomain: z.string().optional(),
   consent: TunnelConsentSchema.optional(),
-  e2e: TunnelE2ePatchSchema.optional(),
 });
 
 export function mergeTunnelConfigPatch(
@@ -78,13 +71,6 @@ export function mergeTunnelConfigPatch(
       message:
         'Cannot enable tunnel without accepting the security notice. Start remote access from settings or record consent first.',
     };
-  }
-
-  if (parsed.data.e2e !== undefined) {
-    next.e2e = TunnelE2eSchema.parse({
-      ...(next.e2e ?? { enabled: true, tlsPort: 18791, staging: false }),
-      ...parsed.data.e2e,
-    });
   }
 
   config.tunnel = TunnelConfigSchema.parse(next);

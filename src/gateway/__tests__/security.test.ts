@@ -1,12 +1,20 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createHonoApp, isExtensionGatewayUiAssetPath } from '../hono/app.js';
 import type { GatewayService } from '../service.js';
 import { resolveGatewayEffectiveHost } from '../../config/gateway-bind.js';
 import { GatewayConfigSchema, type Config } from '../../config/schema.js';
 import { resetAuthRateLimitersForTests } from '../auth-rate-limit.js';
+import { originFromGatewayPublicUrl, resolveAllowedBrowserOrigins, resolveEffectiveGatewayPort } from '../host.js';
+import { loadTunnelState } from '../../tunnel/tunnel-state.js';
+
+vi.mock('../../tunnel/tunnel-state.js', () => ({
+  loadTunnelState: vi.fn(() => null),
+}));
+
+const mockLoadTunnelState = vi.mocked(loadTunnelState);
 
 // Mock GatewayService for testing
-function createMockService(config: any = {}): GatewayService {
+function createMockService(config: any = {}, listenPort?: number): GatewayService {
   const gatewayAuth = config.gateway?.auth ?? { mode: 'token', token: 'test-token' };
   const resolvedAuth =
     gatewayAuth.mode === 'trusted-proxy'
@@ -29,6 +37,17 @@ function createMockService(config: any = {}): GatewayService {
       channels: {},
       ...config,
     },
+    getEffectiveListenPort: () =>
+      resolveEffectiveGatewayPort(
+        {
+          gateway: {
+            port: 18790,
+            corsOrigins: [],
+            ...config.gateway,
+          },
+        },
+        listenPort,
+      ),
     getHealth: () => ({ status: 'healthy', version: 'test', channels: [], uptime: 0 }),
     getChannelsStatus: () => [],
     getAuthToken: () => (resolvedAuth.mode === 'token' ? resolvedAuth.token : undefined),
@@ -161,6 +180,24 @@ describe('Gateway Security Fixes', () => {
       expect(res.headers.get('Access-Control-Allow-Origin')).toBe('https://myapp.com');
     });
 
+    it('uses effective listen port for default loopback CORS when CLI overrides port', async () => {
+      const service = createMockService(
+        { gateway: { bind: 'lan', port: 18790, corsOrigins: [] } },
+        8080,
+      );
+      const app = createHonoApp({ service, token: 'test' });
+
+      const allowed = await app.request('/health', {
+        headers: { Origin: 'http://localhost:8080' },
+      });
+      expect(allowed.headers.get('Access-Control-Allow-Origin')).toBe('http://localhost:8080');
+
+      const stale = await app.request('/health', {
+        headers: { Origin: 'http://localhost:18790' },
+      });
+      expect(stale.headers.get('Access-Control-Allow-Origin')).not.toBe('http://localhost:18790');
+    });
+
     it('does not allow host-header origin fallback by default', async () => {
       const service = createMockService({
         gateway: {
@@ -200,6 +237,54 @@ describe('Gateway Security Fixes', () => {
         body: '{}',
       });
       expect(res.status).not.toBe(403);
+    });
+
+    it('allows API calls with opaque Origin null when Bearer token is valid', async () => {
+      const service = createMockService();
+      const app = createHonoApp({ service, token: 'test' });
+
+      const res = await app.request('/api/sessions', {
+        method: 'POST',
+        headers: {
+          Origin: 'null',
+          Authorization: 'Bearer test',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ channel: 'webchat' }),
+      });
+
+      expect(res.status).not.toBe(403);
+    });
+
+    it('allows browser API calls from the active tunnel public URL origin', async () => {
+      mockLoadTunnelState.mockReturnValue({
+        tunnelId: 't1',
+        tunnelToken: 'tok',
+        subdomain: 'wxfy4i',
+        publicUrl: 'https://wxfy4i.frp.xopc.ai',
+        frpcAuthToken: 'frpc',
+        registeredAt: new Date().toISOString(),
+        enabled: true,
+        frpcServerAddr: '127.0.0.1',
+        frpcServerPort: 8080,
+        proxyName: 'p',
+      });
+
+      const service = createMockService();
+      const app = createHonoApp({ service, token: 'test' });
+
+      const res = await app.request('/api/sessions', {
+        method: 'POST',
+        headers: {
+          Origin: 'https://wxfy4i.frp.xopc.ai',
+          Authorization: 'Bearer test',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ channel: 'webchat' }),
+      });
+
+      expect(res.status).not.toBe(403);
+      mockLoadTunnelState.mockReturnValue(null);
     });
 
     it('allows host-header origin fallback when explicitly enabled', async () => {
@@ -333,6 +418,34 @@ describe('Gateway Security Fixes', () => {
         Origin: 'http://localhost:18790',
         Authorization: 'Bearer wrong',
         'X-Forwarded-For': '127.0.0.1',
+      };
+
+      expect((await app.request('/api/config', { headers })).status).toBe(401);
+      expect((await app.request('/api/config', { headers })).status).toBe(401);
+      expect((await app.request('/api/config', { headers })).status).toBe(401);
+    });
+
+    it('exempts loopback browser-origin auth failures when client IP is unknown (embedded desktop UI)', async () => {
+      const service = createMockService({
+        gateway: {
+          corsOrigins: ['http://127.0.0.1:28790'],
+          auth: {
+            mode: 'token',
+            token: 'real',
+            rateLimit: {
+              enabled: true,
+              maxAttempts: 2,
+              windowMs: 60_000,
+              blockDurationMs: 60_000,
+              exemptLoopback: true,
+            },
+          },
+        },
+      });
+      const app = createHonoApp({ service, token: 'real' });
+      const headers = {
+        Origin: 'http://127.0.0.1:28790',
+        Authorization: 'Bearer wrong',
       };
 
       expect((await app.request('/api/config', { headers })).status).toBe(401);

@@ -88,7 +88,15 @@ export function parseMobileConnectDeepLink(raw: string): ParsedMobileConnectDeep
       return null;
     }
     const baseUrl = u.searchParams.get('baseUrl')?.trim() ?? '';
-    const pairingSecret = u.searchParams.get('ps')?.trim() ?? '';
+    const psRaw = u.searchParams.get('ps')?.trim() ?? '';
+    let pairingSecret = psRaw;
+    if (psRaw) {
+      try {
+        pairingSecret = decodeURIComponent(psRaw);
+      } catch {
+        pairingSecret = psRaw;
+      }
+    }
     if (!baseUrl || !pairingSecret) return null;
     const lanRaw = u.searchParams.get('lanUrl')?.trim() ?? '';
     const lanUrl = lanRaw ? normalizeGatewayBaseUrl(lanRaw) : null;

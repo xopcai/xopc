@@ -32,6 +32,68 @@ export type PairingSecretResult = {
   expiresAt: Date;
 };
 
+export type PairingExchangePayload = {
+  token: string;
+  baseUrl: string | null;
+  lanUrl: string | null;
+  connectUrls: string[];
+};
+
+const EXCHANGE_REPLAY_MS = 60_000;
+const exchangeReplayCache = new Map<string, { expiresAt: number; payload: PairingExchangePayload }>();
+
+export function cachePairingExchange(secret: string, payload: PairingExchangePayload): void {
+  exchangeReplayCache.set(secret, { expiresAt: Date.now() + EXCHANGE_REPLAY_MS, payload });
+}
+
+export function getCachedPairingExchange(secret: string): PairingExchangePayload | null {
+  const entry = exchangeReplayCache.get(secret);
+  if (!entry) return null;
+  if (Date.now() > entry.expiresAt) {
+    exchangeReplayCache.delete(secret);
+    return null;
+  }
+  return entry.payload;
+}
+
+const inflightExchanges = new Map<string, Promise<PairingExchangePayload | null>>();
+
+/**
+ * Consume a pairing secret once and build the exchange payload.
+ * Concurrent requests for the same secret share one in-flight exchange (mobile cold-start deeplink).
+ */
+export async function exchangePairingSecretOnce(
+  secret: string,
+  buildPayload: () => PairingExchangePayload,
+): Promise<PairingExchangePayload | null> {
+  const key = secret.trim();
+  if (!key) return null;
+
+  const replay = getCachedPairingExchange(key);
+  if (replay) return replay;
+
+  let inflight = inflightExchanges.get(key);
+  if (!inflight) {
+    inflight = (async (): Promise<PairingExchangePayload | null> => {
+      const cached = getCachedPairingExchange(key);
+      if (cached) return cached;
+      if (!consumePairingSecret(key)) {
+        return getCachedPairingExchange(key);
+      }
+      const payload = buildPayload();
+      cachePairingExchange(key, payload);
+      return payload;
+    })();
+    inflightExchanges.set(key, inflight);
+  }
+
+  try {
+    return await inflight;
+  } finally {
+    if (inflightExchanges.get(key) === inflight) inflightExchanges.delete(key);
+  }
+}
+
 export function createPairingSecret(): PairingSecretResult {
   ensureCleanupTimer();
   const secret = randomBytes(32).toString('base64url');
@@ -59,6 +121,8 @@ export function consumePairingSecret(secret: string): boolean {
 /** @internal */
 export function resetPairingSessionsForTests(): void {
   sessions.clear();
+  exchangeReplayCache.clear();
+  inflightExchanges.clear();
   if (cleanupTimer) {
     clearInterval(cleanupTimer);
     cleanupTimer = null;

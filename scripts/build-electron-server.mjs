@@ -4,7 +4,7 @@
  * Run after `pnpm run build` so dist/src/cli/bin.js exists. Invoked by electron:server:build.
  */
 import * as esbuild from 'esbuild';
-import { existsSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -53,3 +53,24 @@ await esbuild.build({
 });
 
 console.log(`[build-electron-server] Wrote ${outfile}`);
+
+// workspace-seed.ts resolves bundled templates next to the running module (`__dirname/workspace-templates`).
+// The esbuild bundle is a single file under out/server/, so copy templates beside index.js for packaged Electron.
+const tplCandidates = [
+  join(root, 'dist/src/agent/context/workspace-templates'),
+  join(root, 'src/agent/context/workspace-templates'),
+];
+const tplSrc = tplCandidates.find((p) => existsSync(p));
+const tplDest = join(root, 'out/server/workspace-templates');
+if (tplSrc) {
+  mkdirSync(dirname(tplDest), { recursive: true });
+  cpSync(tplSrc, tplDest, { recursive: true });
+  console.log(`[build-electron-server] Copied workspace templates to ${tplDest}`);
+} else {
+  console.error(
+    `[build-electron-server] Missing workspace templates (tried:\n` +
+      tplCandidates.map((p) => `  - ${p}`).join('\n') +
+      `\n). Run \`pnpm run build\` first.\n`,
+  );
+  process.exit(1);
+}
