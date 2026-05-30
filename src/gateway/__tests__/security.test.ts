@@ -4,7 +4,7 @@ import type { GatewayService } from '../service.js';
 import { resolveGatewayEffectiveHost } from '../../config/gateway-bind.js';
 import { GatewayConfigSchema, type Config } from '../../config/schema.js';
 import { resetAuthRateLimitersForTests } from '../auth-rate-limit.js';
-import { originFromGatewayPublicUrl, resolveAllowedBrowserOrigins, resolveEffectiveGatewayPort } from '../host.js';
+import { resolveEffectiveGatewayPort } from '../host.js';
 import { loadTunnelState } from '../../tunnel/tunnel-state.js';
 
 vi.mock('../../tunnel/tunnel-state.js', () => ({
