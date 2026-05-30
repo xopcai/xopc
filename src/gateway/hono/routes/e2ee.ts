@@ -24,6 +24,7 @@ import {
 import { getTunnelService } from '../../../tunnel/index.js';
 import { createLogger } from '../../../utils/logger.js';
 import type { GatewayService } from '../../service.js';
+import { resolveGatewayServiceListenPort } from '../../host.js';
 
 const log = createLogger('E2EE:Relay');
 
@@ -60,7 +61,7 @@ function isRemoteTunnelRequest(c: { req: { header: (name: string) => string | un
 
 /** Loopback base for relay sub-requests — must not use the public tunnel Host (nginx ACL blocks most /api/*). */
 export function resolveInternalGatewayRelayBaseUrl(service: GatewayService): string {
-  const port = service.currentConfig.gateway?.port ?? 18790;
+  const port = resolveGatewayServiceListenPort(service);
   return `http://127.0.0.1:${port}`;
 }
 
