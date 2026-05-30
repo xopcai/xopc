@@ -240,6 +240,9 @@ async function resolveWindowLoad(): Promise<
     const paths = getElectronUserPaths();
     const { port, token, bind } = await ensureGatewayConfigForElectron(paths);
     try {
+      if (app.isPackaged) {
+        process.env.XOPC_BROWSER_EXT_BUNDLED_ROOT = join(process.resourcesPath, 'browser-ext');
+      }
       const { ensureBrowserExtensionArtifacts } = await import(
         '../src/browser/providers/browser-ext-install.js'
       );

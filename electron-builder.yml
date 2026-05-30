@@ -29,8 +29,6 @@ files:
   - dist/gateway/static/root/**/*
   # Built-in skills: bundled SKILL.md files for the agent
   - skills/**/*
-  # Chrome extension bridge (sideload copy source)
-  - dist/browser-ext/**/*
 
 extraMetadata:
   main: out/main/index.js
@@ -41,6 +39,11 @@ extraResources:
     filter:
       - rg
       - rg.exe
+  # Chrome extension bridge (sideload copy source; must be real files, not inside app.asar)
+  - from: dist/browser-ext
+    to: browser-ext
+    filter:
+      - '**/*'
   - from: electron/resources
     to: resources
     filter:
