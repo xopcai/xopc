@@ -293,6 +293,7 @@ export async function buildSafeWebConfigPayload(service: GatewayService) {
           }
         : undefined,
       transport: { tls: 'broker_terminated' as const },
+      appE2ee: config.tunnel?.appE2ee ?? { enabled: true, requiredOnRemote: true },
     },
     update: {
       ...resolveUpdateConfigForWeb(config),

@@ -19,6 +19,7 @@ import { registerSessionsRoutes } from './sessions.js';
 import { registerStatusRoutes } from './status.js';
 import { registerSharePublicRoutes, registerShareRoutes } from './shares.js';
 import { registerTunnelPublicRoutes, registerTunnelRoutes } from './tunnel.js';
+import { registerE2eePublicRoutes, registerE2eeRoutes } from './e2ee.js';
 import { registerExposureRoutes } from './exposure.js';
 import { registerBrowserInstallRoutes } from './browser-install.js';
 import { registerUpdateRoutes } from './update.js';
@@ -46,7 +47,9 @@ export function registerAuthenticatedRoutes(app: Hono, authenticated: Hono, deps
   registerSharePublicRoutes(app, deps.service);
   registerShareRoutes(authenticated, deps);
   registerTunnelPublicRoutes(app, deps.service);
+  registerE2eePublicRoutes(app);
   registerTunnelRoutes(authenticated, deps);
+  registerE2eeRoutes(authenticated, deps.service);
   registerExposureRoutes(authenticated, deps);
   registerExtensionGatewayRoutes(authenticated, deps);
   registerUpdateRoutes(authenticated, deps);

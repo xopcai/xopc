@@ -41,6 +41,7 @@ describe('tunnel pairing', () => {
       baseUrl: 'https://abc.frp.xopc.ai',
       lanUrl: 'http://192.168.1.2:18789',
       connectUrls: ['https://abc.frp.xopc.ai', 'http://192.168.1.2:18789'],
+      e2ee: { gatewayPub: 'pub', fingerprint: 'fp' },
     };
     cachePairingExchange(secret, payload);
     expect(getCachedPairingExchange(secret)).toEqual(payload);

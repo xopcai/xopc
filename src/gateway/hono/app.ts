@@ -19,6 +19,8 @@ import { logger } from './middleware/logger.js';
 import { registerPublicExtensionAssetRoutes } from './routes/auth-registry-extensions.js';
 import { registerAuthenticatedRoutes } from './routes/index.js';
 import { registerPublicGatewayRoutes } from './routes/public-gateway.js';
+import { createE2eeRequirementMiddleware } from './routes/e2ee.js';
+
 const log = createLogger('HonoApp');
 
 export interface HonoAppConfig {
@@ -171,6 +173,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     }),
   );
   authenticated.use(operatorScopes());
+  authenticated.use(createE2eeRequirementMiddleware(service));
 
   const strictRateLimiter = new Map<string, ReturnType<typeof createFixedWindowRateLimiter>>();
 

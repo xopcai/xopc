@@ -33,7 +33,7 @@
     "generate:bundled-channels": "node scripts/generate-bundled-channel-plugins.mjs",
     "generate:bundled-image-providers": "node scripts/generate-bundled-image-providers.mjs",
     "generate:bundled": "pnpm run generate:bundled-channels && pnpm run generate:bundled-image-providers",
-    "build:node": "node scripts/tsdown-build.mjs",
+    "build:node": "pnpm -C packages/xopc-e2ee run build && node scripts/tsdown-build.mjs",
     "build:types": "tsc -p tsconfig.dts.json",
     "build:ci": "pnpm run generate:bundled && pnpm run build:node && pnpm run build:web",
     "build": "pnpm run generate:bundled && pnpm run build:node && pnpm run build:types && pnpm run build:web",
@@ -42,7 +42,7 @@
     "dev:web": "pnpm -C web run dev",
     "dev": "tsx src/cli/bin.ts",
     "start": "node dist/src/cli/bin.js",
-    "test": "vitest run src extensions/telegram/src extensions/feishu/src extensions/openai/src extensions/dashscope/src extensions/minimax/src extensions/google/src extensions/fal/src",
+    "test": "vitest run src extensions/telegram/src extensions/feishu/src extensions/openai/src extensions/dashscope/src extensions/minimax/src extensions/google/src extensions/fal/src packages/xopc-e2ee/src",
     "test:skills": "vitest run src/agent/skills/__tests__",
     "test:skills:regression": "./scripts/test-skills.sh",
     "test:skills:all": "npm run test:skills && npm run test:skills:regression",
@@ -97,6 +97,7 @@
     "node": ">=22.0.0"
   },
   "dependencies": {
+    "@xopcai/xopc-e2ee": "workspace:*",
     "@earendil-works/pi-agent-core": "^0.77.0",
     "@earendil-works/pi-ai": "^0.77.0",
     "@earendil-works/pi-coding-agent": "0.77.0",

@@ -102,3 +102,28 @@ TUNNEL_PUBLIC_URL=https://{sub}.frp.xopc.ai pnpm run tunnel:phase6:verify
 ## Remote mobile API
 
 The mobile app uses **broker TLS + gateway Bearer token** over `https://{sub}.frp.xopc.ai/api/*` (full path proxy on the broker).
+
+## Application-layer E2EE
+
+When the tunnel is active, remote clients must use `xopc-e2ee-v1` (handshake + relay). See [Mobile E2EE](./mobile-e2ee.md).
+
+### Operations (logs)
+
+Gateway structured logs use prefix **`E2EE:Relay`**. Useful grep patterns on `~/.xopc/logs/app-*.log`:
+
+| Symptom | Grep |
+|---------|------|
+| REST relay failures | `"E2EE:Relay"` + `"phase":"relay"` |
+| Broadcast SSE over tunnel | `"relayPath":"/api/events"` |
+| Agent chat over tunnel | `"relayPath":"/api/agent"` |
+| Session / seq issues | `"E2EE_SEQ"` or `"E2EE_SESSION"` |
+| Stream lifecycle | `"phase":"relay_stream_open"` / `"relay_stream_close"` |
+
+Sessions are persisted under `{stateDir}/e2ee/sessions/` (~24h TTL) so a **gateway restart** does not force mobile re-pairing; clients may still renew on `401`.
+
+Broker nginx ACL updates:
+
+```bash
+# xopc-platform repo
+./scripts/broker/reload-wildcard-tunnel-nginx.sh --apply
+```

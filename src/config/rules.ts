@@ -127,6 +127,7 @@ export const BASE_RELOAD_RULES: ReloadRule[] = [
   { prefix: 'mcp', kind: 'hot', description: 'MCP server definitions and idle TTL' },
 
   // Tunnel E2E TLS — restart (local HTTPS terminator port)
+  { prefix: 'tunnel.appE2ee', kind: 'restart', description: 'Tunnel app-layer E2EE settings' },
   { prefix: 'tunnel', kind: 'hot', description: 'Tunnel broker and auto-start settings' },
 ];
 

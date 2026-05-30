@@ -37,6 +37,10 @@ export type PairingExchangePayload = {
   baseUrl: string | null;
   lanUrl: string | null;
   connectUrls: string[];
+  e2ee: {
+    gatewayPub: string;
+    fingerprint: string;
+  };
 };
 
 const EXCHANGE_REPLAY_MS = 60_000;

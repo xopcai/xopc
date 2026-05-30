@@ -647,6 +647,16 @@ export const TunnelConsentSchema = z.object({
   acceptedAt: z.string().min(1),
 });
 
+export const TunnelAppE2eeSchema = z
+  .object({
+    enabled: z.boolean().default(true),
+    requiredOnRemote: z.boolean().default(true),
+  })
+  .default({
+    enabled: true,
+    requiredOnRemote: true,
+  });
+
 export const TunnelConfigSchema = z
   .object({
     enabled: z.boolean().default(false),
@@ -656,6 +666,7 @@ export const TunnelConfigSchema = z
     autoStart: z.boolean().default(false),
     subdomain: z.string().optional(),
     consent: TunnelConsentSchema.optional(),
+    appE2ee: TunnelAppE2eeSchema.optional(),
   })
   .default({
     enabled: false,

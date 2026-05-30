@@ -17,6 +17,7 @@ import {
   resolveTunnelBrokerUrl,
 } from '../../../tunnel/env.js';
 import { getTunnelService } from '../../../tunnel/index.js';
+import { getGatewayE2eePublicMeta } from '../../../e2ee/identity.js';
 import { createPairingSecret, exchangePairingSecretOnce, getCachedPairingExchange } from '../../../tunnel/pairing.js';
 import { buildMobilePairContext } from '../../../tunnel/pair-context.js';
 import { applyLanPairingGatewayPatch } from '../../../tunnel/enable-lan-pairing.js';
@@ -102,6 +103,7 @@ export function registerTunnelPublicRoutes(app: Hono, service: GatewayService): 
       tunnelPublicUrl: status.publicUrl,
       tunnelConnected: status.state === 'connected',
     });
+    const e2ee = await getGatewayE2eePublicMeta();
     return c.json({
       ok: true,
       service: 'xopc-gateway',
@@ -113,6 +115,10 @@ export function registerTunnelPublicRoutes(app: Hono, service: GatewayService): 
       blockReason: context.blockReason ?? null,
       tunnelConnected: status.state === 'connected',
       connectUrls: context.connectUrls,
+      e2ee: {
+        gatewayPub: e2ee.publicKey,
+        fingerprint: e2ee.fingerprint,
+      },
     });
   });
 
@@ -178,12 +184,17 @@ export function registerTunnelPublicRoutes(app: Hono, service: GatewayService): 
     const publicUrl = persisted?.publicUrl?.trim() || null;
     const lanUrl = resolveMobilePairLanUrl(config);
     const connectUrls = buildMobileConnectUrlOrder({ baseUrl: publicUrl, lanUrl });
+    const e2ee = await getGatewayE2eePublicMeta();
 
     const payload = await exchangePairingSecretOnce(pairingSecret, () => ({
       token,
       baseUrl: publicUrl,
       lanUrl,
       connectUrls,
+      e2ee: {
+        gatewayPub: e2ee.publicKey,
+        fingerprint: e2ee.fingerprint,
+      },
     }));
 
     if (!payload) {
@@ -395,6 +406,10 @@ export function registerTunnelRoutes(authenticated: Hono, deps: AuthenticatedRou
     await configureTunnelFromService(deps);
     return c.json({
       transport: { tls: 'broker_terminated' as const },
+      appE2ee: deps.service.currentConfig.tunnel?.appE2ee ?? {
+        enabled: true,
+        requiredOnRemote: true,
+      },
     });
   });
 

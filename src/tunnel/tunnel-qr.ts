@@ -57,11 +57,13 @@ export function buildMobileConnectQrPayload(input: {
   lanUrl: string | null;
   pairingSecret: string;
   expiresAt?: string;
+  e2eeFingerprint?: string | null;
 }): TunnelQrPayload {
   const params = new URLSearchParams();
   params.set('baseUrl', input.publicUrl);
   if (input.lanUrl) params.set('lanUrl', input.lanUrl);
   if (input.pairingSecret) params.set('ps', input.pairingSecret);
+  if (input.e2eeFingerprint?.trim()) params.set('e2eeFp', input.e2eeFingerprint.trim());
   const qrPayload = `xopc://gateway/mobile-connect?${params.toString()}`;
   return {
     qrPayload,

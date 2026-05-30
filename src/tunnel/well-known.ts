@@ -5,6 +5,7 @@ const log = createLogger('Tunnel');
 export type TunnelWellKnownTransport = {
   tls: 'broker_terminated' | string;
   publicScheme?: string;
+  requiresAppE2ee?: boolean;
 };
 
 export type TunnelWellKnownConfig = {

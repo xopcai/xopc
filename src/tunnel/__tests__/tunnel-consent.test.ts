@@ -99,4 +99,15 @@ describe('tunnel consent', () => {
     expect(cfg.tunnel?.registrationSecret).toBeUndefined();
   });
 
+  it('mergeTunnelConfigPatch merges tunnel.appE2ee settings', () => {
+    const cfg = baseConfig();
+    const result = mergeTunnelConfigPatch(cfg, {
+      appE2ee: { enabled: true, requiredOnRemote: false },
+    });
+    expect(result.ok).toBe(true);
+    expect(cfg.tunnel?.appE2ee).toEqual({
+      enabled: true,
+      requiredOnRemote: false,
+    });
+  });
 });

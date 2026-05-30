@@ -8,6 +8,7 @@ import { clearFrpcPathForProcess, ensureFrpcBinary, publishFrpcPathForProcess } 
 import { writeFrpcConfig } from './frpc-config.js';
 import { type FrpcProcessHandle, spawnFrpcProcess } from './frpc-process.js';
 import { buildMobileConnectQrPayload, resolveLanGatewayUrl } from './tunnel-qr.js';
+import { getGatewayE2eePublicMeta } from '../e2ee/identity.js';
 import { createPairingSecret } from './pairing.js';
 import {
   canResumePersistedTunnel,
@@ -113,11 +114,13 @@ export class TunnelService extends EventEmitter {
       return { qrPayload: '', publicUrl: null, lanUrl: null };
     }
     const { secret, expiresAt } = createPairingSecret();
+    const e2ee = await getGatewayE2eePublicMeta();
     return buildMobileConnectQrPayload({
       publicUrl,
       lanUrl: resolveLanGatewayUrl(gatewayHost, gatewayPort),
       pairingSecret: secret,
       expiresAt: expiresAt.toISOString(),
+      e2eeFingerprint: e2ee.fingerprint,
     });
   }
 

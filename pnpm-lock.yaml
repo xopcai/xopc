@@ -47,6 +47,9 @@ importers:
       '@vscode/ripgrep':
         specifier: ^1.18.0
         version: 1.18.0
+      '@xopcai/xopc-e2ee':
+        specifier: workspace:*
+        version: link:packages/xopc-e2ee
       abort-controller:
         specifier: ^3.0.0
         version: 3.0.0
@@ -412,6 +415,8 @@ importers:
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
+
+  packages/xopc-e2ee: {}
 
   web:
     dependencies:

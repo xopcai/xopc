@@ -33,5 +33,5 @@
     "extensions/google/src/**/*",
     "extensions/fal/src/**/*"
   ],
-  "exclude": ["node_modules", "dist", "**/__tests__/**/*"]
+  "exclude": ["node_modules", "dist", "**/__tests__/**/*", "packages/xopc-e2ee/**/*"]
 }

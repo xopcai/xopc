@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import type { Config } from '../config/schema.js';
-import { TunnelConfigSchema, TunnelConsentSchema } from '../config/schema.js';
+import { TunnelConfigSchema, TunnelConsentSchema, TunnelAppE2eeSchema } from '../config/schema.js';
 
 import {
   assertTunnelAutoStartAllowed,
@@ -10,6 +10,11 @@ import {
 } from './consent.js';
 import { isMaskedTunnelSecretPatchValue } from './env.js';
 
+const TunnelAppE2eePatchSchema = z.object({
+  enabled: z.boolean().optional(),
+  requiredOnRemote: z.boolean().optional(),
+});
+
 const TunnelConfigPatchSchema = z.object({
   enabled: z.boolean().optional(),
   brokerUrl: z.string().url().optional(),
@@ -17,6 +22,7 @@ const TunnelConfigPatchSchema = z.object({
   autoStart: z.boolean().optional(),
   subdomain: z.string().optional(),
   consent: TunnelConsentSchema.optional(),
+  appE2ee: TunnelAppE2eePatchSchema.optional(),
 });
 
 export function mergeTunnelConfigPatch(
@@ -71,6 +77,13 @@ export function mergeTunnelConfigPatch(
       message:
         'Cannot enable tunnel without accepting the security notice. Start remote access from settings or record consent first.',
     };
+  }
+
+  if (parsed.data.appE2ee !== undefined) {
+    next.appE2ee = TunnelAppE2eeSchema.parse({
+      ...(next.appE2ee ?? { enabled: true, requiredOnRemote: true }),
+      ...parsed.data.appE2ee,
+    });
   }
 
   config.tunnel = TunnelConfigSchema.parse(next);
