@@ -106,6 +106,10 @@ jobs:
         shell: bash
         run: test -f dist/gateway/static/root/index.html
 
+      - name: Verify Chrome extension bridge artifacts
+        shell: bash
+        run: test -f dist/browser-ext/dist/background.js
+
       - name: Build Electron app
         shell: bash
         env:

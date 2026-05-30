@@ -2,7 +2,18 @@
  * Install bundled Chrome extension artifacts into {resolveBinDir()}/browser-ext/.
  */
 
-import { cpSync, existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, symlinkSync } from 'node:fs';
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  realpathSync,
+  renameSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { readFile, readdir, rm } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { dirname, join, relative, resolve } from 'node:path';
@@ -256,13 +267,29 @@ async function gcOldVersions(root: string, keepVersions: Set<string>): Promise<v
   }
 }
 
+/** Copy one bundled file (read/write works when src is inside Electron app.asar). */
+function copyBundledFile(src: string, dest: string): void {
+  mkdirSync(dirname(dest), { recursive: true });
+  writeFileSync(dest, readFileSync(src));
+}
+
+const BROWSER_EXT_DIST_FILES = ['background.js', 'content.js', 'popup.js'] as const;
+const BROWSER_EXT_ICON_FILES = ['icon-16.png', 'icon-32.png', 'icon-48.png', 'icon-128.png'] as const;
+
 function copyBundledTree(src: string, dest: string): void {
   mkdirSync(dest, { recursive: true });
   for (const name of ['manifest.json', 'popup.html']) {
-    cpSync(join(src, name), join(dest, name));
+    copyBundledFile(join(src, name), join(dest, name));
   }
-  cpSync(join(src, 'dist'), join(dest, 'dist'), { recursive: true });
-  cpSync(join(src, 'icons'), join(dest, 'icons'), { recursive: true });
+  for (const file of BROWSER_EXT_DIST_FILES) {
+    copyBundledFile(join(src, 'dist', file), join(dest, 'dist', file));
+  }
+  for (const icon of BROWSER_EXT_ICON_FILES) {
+    const iconSrc = join(src, 'icons', icon);
+    if (existsSync(iconSrc)) {
+      copyBundledFile(iconSrc, join(dest, 'icons', icon));
+    }
+  }
   if (!validateBrowserExtLayout(dest)) {
     throw new Error('Bundled browser extension copy failed validation');
   }
