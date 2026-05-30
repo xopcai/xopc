@@ -6,10 +6,7 @@ import { DarwinCollapsedTitlebarCluster } from '@/components/shell/darwin-collap
 import { MainRailExpandWhenCollapsed } from '@/components/shell/main-rail-expand-when-collapsed';
 import { MobileNavMenuButton } from '@/components/shell/mobile-nav-menu-button';
 import { cn } from '@/lib/cn';
-import {
-  electronDarwinCollapsedClusterMainPadMd,
-  electronWindowsCaptionRightReserveMd,
-} from '@/lib/electron-window-chrome';
+import { electronDarwinCollapsedClusterMainPadMd } from '@/lib/electron-window-chrome';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 import { useSidebarStore } from '@/stores/sidebar-store';
 
@@ -29,7 +26,6 @@ export const PrimaryAppHeader = memo(function PrimaryAppHeader() {
         APP_TOP_HEADER_BAR_NO_DRAG_CLASS,
         'px-3 sm:gap-4 sm:px-5 xl:px-6',
         electronDarwinCollapsedClusterMainPadMd(sidebarCollapsed),
-        electronWindowsCaptionRightReserveMd(),
       )}
     >
       <DarwinCollapsedTitlebarCluster />

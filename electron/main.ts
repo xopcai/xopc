@@ -10,7 +10,6 @@ import {
   dialog,
   globalShortcut,
   ipcMain,
-  nativeTheme,
   session,
   shell,
   type BrowserWindowConstructorOptions,
@@ -53,28 +52,11 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 /** Track the main window for gateway exit notifications. */
 let mainWindow: BrowserWindow | null = null;
 
-/** Matches gateway console `h-14` (56px) with Windows `titleBarOverlay`. */
-const WIN_TITLEBAR_OVERLAY_HEIGHT = 56;
-
-function win32TitleBarOverlayColors(): { color: string; symbolColor: string; height: number } {
-  const dark = nativeTheme.shouldUseDarkColors;
-  return {
-    color: dark ? '#1c1c1e' : '#f5f5f7',
-    symbolColor: dark ? '#f5f5f7' : '#1d1d1f',
-    height: WIN_TITLEBAR_OVERLAY_HEIGHT,
-  };
-}
-
 function browserWindowChromeOptions(): Pick<BrowserWindowConstructorOptions, 'titleBarStyle' | 'titleBarOverlay'> {
   if (process.platform === 'darwin') {
     return { titleBarStyle: 'hiddenInset' };
   }
-  if (process.platform === 'win32') {
-    return {
-      titleBarStyle: 'hidden',
-      titleBarOverlay: win32TitleBarOverlayColors(),
-    };
-  }
+  // Windows/Linux: native frame so File/Edit/View menu bar and caption buttons use OS defaults.
   return {};
 }
 
@@ -92,17 +74,6 @@ function applyDarwinWindowButtonPosition(win: BrowserWindow): void {
   } catch {
     /* hiddenInset / OS build may not support custom placement */
   }
-}
-
-let winTitleBarThemeListenerAttached = false;
-
-function ensureWin32TitleBarOverlayThemeSync(): void {
-  if (winTitleBarThemeListenerAttached || process.platform !== 'win32') return;
-  winTitleBarThemeListenerAttached = true;
-  nativeTheme.on('updated', () => {
-    if (!mainWindow || mainWindow.isDestroyed()) return;
-    mainWindow.setTitleBarOverlay(win32TitleBarOverlayColors());
-  });
 }
 
 if (process.platform === 'win32') {
@@ -367,8 +338,6 @@ function createWindow(): void {
       applyDarwinWindowButtonPosition(win);
     });
   }
-
-  ensureWin32TitleBarOverlayThemeSync();
 
   Menu.setApplicationMenu(buildAppMenu(win));
 
