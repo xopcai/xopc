@@ -135,11 +135,11 @@ describe('isNonLoopbackGatewayBind', () => {
 });
 
 describe('validateGatewaySettings', () => {
-  it('requires cors or host fallback on lan bind', () => {
+  it('allows lan bind without custom cors origins', () => {
     const state = normalizeGatewayFromConfig({
       gateway: { bind: 'lan', auth: { mode: 'token', token: 'secret' } },
     });
-    expect(validateGatewaySettings(state)).toMatch(/CORS/i);
+    expect(validateGatewaySettings(state)).toBeNull();
   });
 
   it('requires trusted proxies for trusted-proxy on lan bind', () => {

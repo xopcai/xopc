@@ -24,7 +24,6 @@ import {
   stopTunnel,
 } from '@/features/tunnel/tunnel-api';
 import { useMobilePairQr } from '@/features/tunnel/use-mobile-pair-qr';
-import { TunnelE2eSection } from '@/features/tunnel/tunnel-e2e-section';
 import { cn } from '@/lib/cn';
 import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
@@ -126,18 +125,6 @@ export function TunnelSettingsPanel({ embedded = false }: { embedded?: boolean }
   const brokerSecretFromEnv = status?.registrationSecret?.source === 'env';
   const brokerSecretMissing = status?.registrationSecret?.source === 'missing';
   const brokerReady = status?.registrationSecret?.configured === true;
-
-  const gatewayPort = useMemo(() => {
-    const c = cfgData?.payload?.config;
-    if (c && typeof c === 'object' && !Array.isArray(c)) {
-      const gw = (c as { gateway?: unknown }).gateway;
-      if (gw && typeof gw === 'object' && !Array.isArray(gw)) {
-        const port = (gw as { port?: unknown }).port;
-        if (typeof port === 'number' && Number.isFinite(port)) return Math.floor(port);
-      }
-    }
-    return 18790;
-  }, [cfgData]);
 
   useEffect(() => {
     const onTunnelStatus = () => {
@@ -474,14 +461,6 @@ export function TunnelSettingsPanel({ embedded = false }: { embedded?: boolean }
         </SettingsCollapsibleSection>
 
         <SettingsCollapsibleSection showLabel={t.showAdvanced} hideLabel={t.hideAdvanced}>
-          <div className="border-t border-edge-subtle pt-4">
-            <TunnelE2eSection
-              hasToken={hasToken}
-              gatewayPort={gatewayPort}
-              tunnelConnected={st.enabled && st.state === 'connected'}
-              nested
-            />
-          </div>
           <div className="flex flex-col gap-2 border-t border-edge-subtle pt-4 text-xs text-fg-subtle">
             <p className="flex items-start gap-2">
               <Globe className="mt-0.5 size-4 shrink-0 text-accent" />
@@ -577,12 +556,6 @@ export function TunnelSettingsPanel({ embedded = false }: { embedded?: boolean }
           <p className="mt-2 text-xs text-fg-subtle">{t.autoStartHint}</p>
         ) : null}
       </SettingsFormSection>
-
-      <TunnelE2eSection
-        hasToken={hasToken}
-        gatewayPort={gatewayPort}
-        tunnelConnected={st.enabled && st.state === 'connected'}
-      />
 
       <div className="flex flex-col gap-2 rounded-lg border border-edge-subtle bg-surface-panel px-3 py-2 text-xs text-fg-subtle">
         <p className="flex items-start gap-2">

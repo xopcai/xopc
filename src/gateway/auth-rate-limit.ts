@@ -84,6 +84,20 @@ export function isLoopbackBrowserOrigin(origin: string | undefined): boolean {
   }
 }
 
+/** Loopback gateway console in a same-machine browser (Electron embedded UI, local dev). */
+export function isLoopbackEmbeddedBrowserClient(
+  origin: string | undefined,
+  clientIp: string,
+): boolean {
+  if (!isLoopbackBrowserOrigin(origin)) {
+    return false;
+  }
+  if (clientIp === 'unknown') {
+    return true;
+  }
+  return isLoopbackClientIp(clientIp);
+}
+
 function parseBrowserOriginRateLimitKey(clientKey: string): { origin: string; clientIp: string } | null {
   if (!clientKey.startsWith('browser-origin:')) {
     return null;
@@ -103,7 +117,7 @@ function isLocalBrowserAuthClient(clientKey: string): boolean {
   if (!parsed) {
     return false;
   }
-  return isLoopbackBrowserOrigin(parsed.origin) && isLoopbackClientIp(parsed.clientIp);
+  return isLoopbackEmbeddedBrowserClient(parsed.origin, parsed.clientIp);
 }
 
 /** Browser-origin auth failures are tracked independently from CLI/server clients. */
@@ -270,8 +284,7 @@ export function resolveAuthRateLimitTracking(params: {
 }): { limiter: AuthFailureRateLimiter; key: string; cfg: AuthRateLimitConfig } {
   const origin = params.origin?.trim();
   if (origin) {
-    const localBrowserClient =
-      isLoopbackBrowserOrigin(origin) && isLoopbackClientIp(params.clientIp);
+    const localBrowserClient = isLoopbackEmbeddedBrowserClient(origin, params.clientIp);
     return {
       limiter: getBrowserOriginAuthFailureRateLimiter(),
       key: buildBrowserOriginRateLimitKey(origin, params.clientIp),

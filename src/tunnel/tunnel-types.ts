@@ -9,21 +9,12 @@ export type FrpcDownloadProgress = {
 export type TunnelStartPhase =
   | 'preparing_frpc'
   | 'registering'
-  | 'provisioning_tls'
   | 'starting_frpc'
   | 'reconnecting_frpc';
-
-export type TunnelAcmeProgressStep =
-  | 'checking'
-  | 'dns_challenge'
-  | 'dns_propagation'
-  | 'ca_validation'
-  | 'issuing';
 
 export type TunnelStartProgress = {
   phase: TunnelStartPhase;
   startedAt: string;
-  acmeStep?: TunnelAcmeProgressStep | null;
   publicUrl?: string | null;
 };
 
@@ -71,22 +62,9 @@ export type TunnelStatus = {
   config: {
     autoStart: boolean;
     brokerUrl: string;
-    e2e: {
-      enabled: boolean;
-      tlsPort: number;
-      staging: boolean;
+    transport: {
+      tls: 'broker_terminated';
     };
-  };
-  cert: {
-    status: 'no_cert' | 'healthy' | 'expiring_soon' | 'critical' | 'renewal_failed';
-    domain: string | null;
-    issuedAt: string | null;
-    expiresAt: string | null;
-    daysUntilExpiry: number | null;
-    autoRenewal: boolean;
-    renewalFailed: boolean;
-    lastRenewalError: string | null;
-    lastRenewalErrorAt: string | null;
   };
 };
 

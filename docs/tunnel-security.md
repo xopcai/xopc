@@ -88,3 +88,17 @@ Mutating tunnel endpoints are rate-limited per gateway token (12 calls / 5 minut
 - Override frpc binary: `XOPC_FRPC_PATH`
 - Offline / mirror: host frpc tarballs internally and point downloads at your mirror (see `src/tunnel/frpc-binary.ts`)
 - Extraction tries system `tar`, then a built-in Node parser (macOS BSD tar quirks, Windows without `tar`, minimal Linux images)
+
+## Transport TLS (broker-terminated)
+
+Subdomain HTTPS is terminated at the broker with a wildcard certificate (`*.frp.xopc.ai`). The gateway runs **frpc in HTTP mode** directly to the gateway port — no per-gateway ACME or local TLS proxy.
+
+Verify after cutover:
+
+```bash
+TUNNEL_PUBLIC_URL=https://{sub}.frp.xopc.ai pnpm run tunnel:phase6:verify
+```
+
+## Remote mobile API
+
+The mobile app uses **broker TLS + gateway Bearer token** over `https://{sub}.frp.xopc.ai/api/*` (full path proxy on the broker).

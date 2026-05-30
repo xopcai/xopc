@@ -1,6 +1,5 @@
 import type { Hono, MiddlewareHandler } from 'hono';
 
-import { resolveTunnelE2eConfig } from '../../../tunnel/tunnel-e2e-config.js';
 import type { Config } from '../../../config/schema.js';
 import { resolveGatewayEffectiveHost } from '../../../config/gateway-bind.js';
 import { extractToken } from '../../auth.js';
@@ -18,8 +17,7 @@ import {
   resolveTunnelBrokerUrl,
 } from '../../../tunnel/env.js';
 import { getTunnelService } from '../../../tunnel/index.js';
-import { getCertStatusSummary } from '../../../tunnel/acme-cert-store.js';
-import { createPairingSecret, consumePairingSecret } from '../../../tunnel/pairing.js';
+import { createPairingSecret, exchangePairingSecretOnce, getCachedPairingExchange } from '../../../tunnel/pairing.js';
 import { buildMobilePairContext } from '../../../tunnel/pair-context.js';
 import { applyLanPairingGatewayPatch } from '../../../tunnel/enable-lan-pairing.js';
 import {
@@ -95,7 +93,7 @@ function createTunnelMutationRateLimitMiddleware(): MiddlewareHandler {
 }
 
 export function registerTunnelPublicRoutes(app: Hono, service: GatewayService): void {
-  app.get('/api/tunnel/pair/ping', (c) => {
+  app.get('/api/tunnel/pair/ping', async (c) => {
     const config = service.currentConfig as Config;
     const tunnel = getTunnelService();
     const status = tunnel.getStatus();
@@ -160,17 +158,14 @@ export function registerTunnelPublicRoutes(app: Hono, service: GatewayService): 
       return c.json({ error: 'pairingSecret required' }, 400);
     }
 
-    if (!consumePairingSecret(pairingSecret)) {
-      const limited = consumePairingExchangeFailLimit(clientIp);
-      if (!limited.allowed) {
-        c.header('Retry-After', String(Math.ceil(limited.retryAfterMs / 1000)));
-      }
+    const cached = getCachedPairingExchange(pairingSecret);
+    if (cached) {
       logTunnelAudit(
         'tunnel.exchange_token',
-        { ok: false, clientIp, phase: 'pairing_exchange' },
-        'Pairing exchange denied: invalid or expired secret',
+        { ok: true, clientIp, phase: 'pairing_exchange', replay: true },
+        'Pairing secret replayed (duplicate mobile exchange)',
       );
-      return c.json({ error: 'Invalid or expired pairing secret', code: 'PAIRING_INVALID' }, 401);
+      return c.json(cached);
     }
 
     const token = service.getAuthToken();
@@ -184,18 +179,32 @@ export function registerTunnelPublicRoutes(app: Hono, service: GatewayService): 
     const lanUrl = resolveMobilePairLanUrl(config);
     const connectUrls = buildMobileConnectUrlOrder({ baseUrl: publicUrl, lanUrl });
 
+    const payload = await exchangePairingSecretOnce(pairingSecret, () => ({
+      token,
+      baseUrl: publicUrl,
+      lanUrl,
+      connectUrls,
+    }));
+
+    if (!payload) {
+      const limited = consumePairingExchangeFailLimit(clientIp);
+      if (!limited.allowed) {
+        c.header('Retry-After', String(Math.ceil(limited.retryAfterMs / 1000)));
+      }
+      logTunnelAudit(
+        'tunnel.exchange_token',
+        { ok: false, clientIp, phase: 'pairing_exchange' },
+        'Pairing exchange denied: invalid or expired secret',
+      );
+      return c.json({ error: 'Invalid or expired pairing secret', code: 'PAIRING_INVALID' }, 401);
+    }
+
     logTunnelAudit(
       'tunnel.exchange_token',
       { ok: true, clientIp, subdomain: persisted?.subdomain ?? null, phase: 'pairing_exchange' },
       'Pairing secret exchanged for gateway token',
     );
-
-    return c.json({
-      token,
-      baseUrl: publicUrl,
-      lanUrl,
-      connectUrls,
-    });
+    return c.json(payload);
   });
 }
 
@@ -378,19 +387,14 @@ export function registerTunnelRoutes(authenticated: Hono, deps: AuthenticatedRou
     const host = resolveGatewayEffectiveHost(deps.service.currentConfig);
     const token = requireGatewayToken(c);
     if (!token) return c.json({ error: 'Gateway token required' }, 401);
-    const qr = tunnel.buildQr(port, host);
+    const qr = await tunnel.buildQr(port, host);
     return c.json(qr);
   });
 
-  authenticated.get('/api/tunnel/cert-status', async (c) => {
+  authenticated.get('/api/tunnel/transport-status', async (c) => {
     await configureTunnelFromService(deps);
-    const config = deps.service.currentConfig as Config;
-    const cert = getCertStatusSummary();
-    const gatewayPort = config.gateway?.port ?? 18790;
-    const e2e = resolveTunnelE2eConfig(config.tunnel, gatewayPort);
     return c.json({
-      ...cert,
-      e2e,
+      transport: { tls: 'broker_terminated' as const },
     });
   });
 

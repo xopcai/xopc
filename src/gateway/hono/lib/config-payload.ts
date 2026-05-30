@@ -10,7 +10,6 @@ import {
 import { normalizeConfiguredMcpServers } from '../../../config/mcp-config-normalize.js';
 import type { Config } from '../../../config/schema.js';
 import { maskTunnelSecretForWeb } from '../../../tunnel/env.js';
-import { resolveTunnelE2eConfig } from '../../../tunnel/tunnel-e2e-config.js';
 import { resolveShareConfig } from '../../../share/share-config.js';
 import {
   resolveCronConfigForWeb,
@@ -293,7 +292,7 @@ export async function buildSafeWebConfigPayload(service: GatewayService) {
             acceptedAt: config.tunnel.consent.acceptedAt,
           }
         : undefined,
-      e2e: resolveTunnelE2eConfig(config.tunnel, config.gateway?.port ?? 18790),
+      transport: { tls: 'broker_terminated' as const },
     },
     update: {
       ...resolveUpdateConfigForWeb(config),

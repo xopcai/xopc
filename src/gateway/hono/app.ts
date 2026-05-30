@@ -7,7 +7,8 @@ import { resolveGatewayEffectiveHost } from '../../config/gateway-bind.js';
 import { createFixedWindowRateLimiter } from '../../infra/rate-limit.js';
 import { createLogger } from '../../utils/logger.js';
 import type { GatewayService } from '../service.js';
-import { resolveGatewayCorsOrigins } from '../host.js';
+import { resolveAllowedBrowserOrigins, resolveGatewayServiceListenPort } from '../host.js';
+import { loadTunnelState } from '../../tunnel/tunnel-state.js';
 import { maxWebchatAgentRequestBodyBytes } from '../chat-limits.js';
 import { buildGatewayConsoleCspHeader } from '../security/csp.js';
 import { checkBrowserOrigin } from '../security/origin-check.js';
@@ -18,7 +19,6 @@ import { logger } from './middleware/logger.js';
 import { registerPublicExtensionAssetRoutes } from './routes/auth-registry-extensions.js';
 import { registerAuthenticatedRoutes } from './routes/index.js';
 import { registerPublicGatewayRoutes } from './routes/public-gateway.js';
-
 const log = createLogger('HonoApp');
 
 export interface HonoAppConfig {
@@ -39,24 +39,36 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   const { service, token } = config;
   const app = new Hono();
 
-  const gatewayPort = service.currentConfig.gateway.port ?? 18790;
-  const corsOrigin = resolveGatewayCorsOrigins({
-    configuredOrigins: service.currentConfig.gateway.corsOrigins,
-    port: gatewayPort,
-    bindHost: resolveGatewayEffectiveHost(service.currentConfig),
-  });
+  const gatewayPort = resolveGatewayServiceListenPort(service);
 
-  const CORS_OPTIONS = {
-    origin: corsOrigin,
-    allowMethods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowHeaders: ['Content-Type', 'Authorization', 'Accept', 'X-Session-Id', 'Last-Event-ID'],
-    credentials: true,
-    maxAge: 86400,
-  };
+  const resolveBrowserOrigins = (): string[] =>
+    resolveAllowedBrowserOrigins({
+      configuredOrigins: service.currentConfig.gateway.corsOrigins,
+      port: gatewayPort,
+      bindHost: resolveGatewayEffectiveHost(service.currentConfig),
+      tunnelPublicUrl: loadTunnelState()?.publicUrl,
+    });
 
   app.use(logContextMiddleware());
   app.use(logger());
-  app.use(cors(CORS_OPTIONS));
+  app.use(
+    cors({
+      origin: (origin) => {
+        const allowed = resolveBrowserOrigins();
+        if (!origin) {
+          return allowed[0] ?? `http://127.0.0.1:${gatewayPort}`;
+        }
+        const normalized = origin.toLowerCase();
+        const hit = allowed.find((entry) => entry.toLowerCase() === normalized);
+        if (hit) return origin;
+        return allowed.includes('*') ? '*' : '';
+      },
+      allowMethods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+      allowHeaders: ['Content-Type', 'Authorization', 'Accept', 'X-Session-Id', 'Last-Event-ID'],
+      credentials: true,
+      maxAge: 86400,
+    }),
+  );
 
   // Build CSP header once at startup (no inline script hashes needed for SPA)
   const gatewayConsoleCsp = buildGatewayConsoleCspHeader();
@@ -79,7 +91,6 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   // Browser Origin check middleware for API routes (CSRF protection).
   // Non-browser requests (no Origin header) pass through — they are
   // authenticated by the token middleware instead.
-  const allowedOrigins = Array.isArray(corsOrigin) ? corsOrigin : [corsOrigin];
   const allowHostHeaderOriginFallback =
     service.currentConfig.gateway?.dangerouslyAllowHostHeaderOriginFallback === true;
   app.use('/api/*', createMiddleware(async (c, next) => {
@@ -91,15 +102,15 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     }
 
     const origin = c.req.header('origin');
-    if (!origin) {
-      // Non-browser request (CLI, server-to-server) — skip origin check
+    if (!origin || origin.trim().toLowerCase() === 'null') {
+      // Native apps / opaque origins — authenticated via Bearer token
       return next();
     }
 
     const result = checkBrowserOrigin({
       requestHost: c.req.header('host'),
       origin,
-      allowedOrigins,
+      allowedOrigins: resolveBrowserOrigins(),
       allowHostHeaderOriginFallback,
       isLocalClient: false,
     });

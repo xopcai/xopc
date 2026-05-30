@@ -38,6 +38,33 @@ describe('POST /api/tunnel/exchange-token', () => {
     expect(consumePairingSecret(secret)).toBe(false);
   });
 
+  it('deduplicates concurrent exchange for the same secret', async () => {
+    const { secret } = createPairingSecret();
+    const app = createHonoApp({ service: mockService(), token: 'admin-token' });
+
+    const body = JSON.stringify({ pairingSecret: secret });
+    const [a, b] = await Promise.all([
+      app.request('/api/tunnel/exchange-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+      }),
+      app.request('/api/tunnel/exchange-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+      }),
+    ]);
+
+    expect(a.status).toBe(200);
+    expect(b.status).toBe(200);
+    const ja = (await a.json()) as { token?: string };
+    const jb = (await b.json()) as { token?: string };
+    expect(ja.token).toBe('gateway-secret-token');
+    expect(jb.token).toBe('gateway-secret-token');
+    expect(consumePairingSecret(secret)).toBe(false);
+  });
+
   it('rejects invalid pairing secret', async () => {
     const app = createHonoApp({ service: mockService(), token: 'admin-token' });
 

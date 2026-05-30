@@ -25,14 +25,15 @@ describe('collectGatewaySecurityFindings', () => {
     expect(findings.some((f) => f.checkId === 'gateway.runtime_config.blocked')).toBe(false);
   });
 
-  it('reports startup guard failure for lan bind without cors', () => {
+  it('reports info when lan bind has no custom cors origins', () => {
     const cfg = baseConfig({
       bind: 'lan',
       corsOrigins: [],
     });
     const findings = collectGatewaySecurityFindings(cfg);
-    expect(findings.some((f) => f.checkId === 'gateway.runtime_config.blocked')).toBe(true);
-    expect(findings.some((f) => f.checkId === 'gateway.cors.no_explicit_origins')).toBe(true);
+    expect(findings.some((f) => f.checkId === 'gateway.runtime_config.blocked')).toBe(false);
+    const corsFinding = findings.find((f) => f.checkId === 'gateway.cors.no_explicit_origins');
+    expect(corsFinding?.severity).toBe('info');
   });
 
   it('reports trusted-proxy missing proxies on network bind', () => {

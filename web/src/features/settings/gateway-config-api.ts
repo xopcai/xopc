@@ -147,22 +147,6 @@ export function isNonLoopbackGatewayBind(state: GatewaySettingsState): boolean {
   return true;
 }
 
-function buildDefaultCorsOrigins(port: number, bindHost?: string): string[] {
-  const origins = new Set<string>([`http://localhost:${port}`, `http://127.0.0.1:${port}`]);
-  const host = bindHost?.trim();
-  if (
-    host &&
-    host !== '127.0.0.1' &&
-    host !== 'localhost' &&
-    host !== '::1' &&
-    host !== '0.0.0.0' &&
-    host !== '::'
-  ) {
-    origins.add(`http://${host}:${port}`);
-  }
-  return [...origins];
-}
-
 export function validateGatewaySettings(state: GatewaySettingsState): string | null {
   const nonLoopback = isNonLoopbackGatewayBind(state);
 
@@ -176,21 +160,6 @@ export function validateGatewaySettings(state: GatewaySettingsState): string | n
 
   if (state.auth.mode === 'trusted-proxy' && !state.auth.trustedProxy.userHeader.trim()) {
     return 'Trusted-proxy auth requires gateway.auth.trustedProxy.userHeader.';
-  }
-
-  if (
-    nonLoopback &&
-    state.corsOrigins.length === 0 &&
-    !state.dangerouslyAllowHostHeaderOriginFallback
-  ) {
-    const bindHost =
-      state.bind === 'custom'
-        ? state.customBindHost.trim()
-        : state.bind === 'lan'
-          ? '0.0.0.0'
-          : undefined;
-    const suggested = buildDefaultCorsOrigins(state.port, bindHost).join(', ');
-    return `Network-accessible gateway requires CORS origins (e.g. ${suggested}) or enable Host-header origin fallback.`;
   }
 
   if (nonLoopback && state.corsOrigins.includes('*')) {

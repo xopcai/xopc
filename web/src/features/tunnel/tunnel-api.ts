@@ -18,14 +18,8 @@ export type TunnelStatusResponse = {
     percent?: number | null;
   } | null;
   startProgress?: {
-    phase:
-      | 'preparing_frpc'
-      | 'registering'
-      | 'provisioning_tls'
-      | 'starting_frpc'
-      | 'reconnecting_frpc';
+    phase: 'preparing_frpc' | 'registering' | 'starting_frpc' | 'reconnecting_frpc';
     startedAt: string;
-    acmeStep?: 'checking' | 'dns_challenge' | 'dns_propagation' | 'ca_validation' | 'issuing' | null;
     publicUrl?: string | null;
   } | null;
   consentRequired?: boolean;
@@ -43,22 +37,7 @@ export type TunnelStatusResponse = {
   config: {
     autoStart: boolean;
     brokerUrl: string;
-    e2e?: {
-      enabled: boolean;
-      tlsPort: number;
-      staging: boolean;
-    };
-  };
-  cert?: {
-    status: 'no_cert' | 'healthy' | 'expiring_soon' | 'critical' | 'renewal_failed';
-    domain: string | null;
-    issuedAt: string | null;
-    expiresAt: string | null;
-    daysUntilExpiry: number | null;
-    autoRenewal: boolean;
-    renewalFailed?: boolean;
-    lastRenewalError?: string | null;
-    lastRenewalErrorAt?: string | null;
+    transport?: { tls: 'broker_terminated' };
   };
 };
 

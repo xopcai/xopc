@@ -1,3 +1,5 @@
+import { DEFAULT_GATEWAY_PORT } from '../daemon/constants.js';
+
 /** True when the bind address is local-only (127.x, localhost, ::1). */
 export function isLoopbackHost(host: string | undefined): boolean {
   if (!host) {
@@ -26,6 +28,28 @@ export const GATEWAY_DEV_CONSOLE_ORIGINS = [
   'http://localhost:3000',
   'http://127.0.0.1:3000',
 ] as const;
+
+/** Effective HTTP listen port: CLI `--port` override wins over config (default 18790). */
+export function resolveEffectiveGatewayPort(
+  config: { gateway?: { port?: number } },
+  listenPortOverride?: number,
+): number {
+  if (typeof listenPortOverride === 'number' && Number.isFinite(listenPortOverride)) {
+    return listenPortOverride;
+  }
+  return config.gateway?.port ?? DEFAULT_GATEWAY_PORT;
+}
+
+/** Resolve listen port from a gateway service (supports partial test mocks without `getEffectiveListenPort`). */
+export function resolveGatewayServiceListenPort(service: {
+  currentConfig: { gateway?: { port?: number } };
+  getEffectiveListenPort?: () => number;
+}): number {
+  if (typeof service.getEffectiveListenPort === 'function') {
+    return service.getEffectiveListenPort();
+  }
+  return resolveEffectiveGatewayPort(service.currentConfig);
+}
 
 export function buildDefaultCorsOrigins(params: { port: number; bindHost?: string }): string[] {
   const origins = new Set<string>([
@@ -56,4 +80,34 @@ export function resolveGatewayCorsOrigins(params: {
     return buildDefaultCorsOrigins({ port: params.port, bindHost: params.bindHost });
   }
   return [...new Set([...configured, ...GATEWAY_DEV_CONSOLE_ORIGINS])];
+}
+
+/** Browser origin (`https://host`) from a gateway public/tunnel root URL. */
+export function originFromGatewayPublicUrl(publicUrl: string | null | undefined): string | null {
+  const trimmed = publicUrl?.trim();
+  if (!trimmed) return null;
+  try {
+    return new URL(trimmed).origin.toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
+/** CORS + CSRF allowlist including active FRP tunnel origin when connected. */
+export function resolveAllowedBrowserOrigins(params: {
+  configuredOrigins?: string[];
+  port: number;
+  bindHost?: string;
+  tunnelPublicUrl?: string | null;
+}): string[] {
+  const origins = resolveGatewayCorsOrigins({
+    configuredOrigins: params.configuredOrigins,
+    port: params.port,
+    bindHost: params.bindHost,
+  });
+  const tunnelOrigin = originFromGatewayPublicUrl(params.tunnelPublicUrl);
+  if (tunnelOrigin && !origins.includes(tunnelOrigin)) {
+    origins.push(tunnelOrigin);
+  }
+  return origins;
 }

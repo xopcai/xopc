@@ -5,7 +5,7 @@ import type { TunnelStatusResponse } from '@/features/tunnel/tunnel-api';
 import type { TunnelSettingsMessages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 
-type StepId = 'preparing_frpc' | 'registering' | 'provisioning_tls' | 'starting_frpc';
+type StepId = 'preparing_frpc' | 'registering' | 'starting_frpc';
 
 function formatByteCount(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -13,7 +13,7 @@ function formatByteCount(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-const STEP_ORDER: StepId[] = ['preparing_frpc', 'registering', 'provisioning_tls', 'starting_frpc'];
+const STEP_ORDER: StepId[] = ['preparing_frpc', 'registering', 'starting_frpc'];
 
 function phaseIndex(phase: StepId | 'reconnecting_frpc' | undefined): number {
   if (!phase) return -1;
@@ -56,23 +56,6 @@ function stepDetail(
     return t.stepRegisterDetail;
   }
 
-  if (stepId === 'provisioning_tls' && progress?.acmeStep) {
-    switch (progress.acmeStep) {
-      case 'checking':
-        return t.stepTlsChecking;
-      case 'dns_challenge':
-        return t.stepTlsDnsChallenge;
-      case 'dns_propagation':
-        return t.stepTlsDnsPropagation;
-      case 'ca_validation':
-        return t.stepTlsCaValidation;
-      case 'issuing':
-        return t.stepTlsIssuing;
-      default:
-        return t.stepTlsDetail;
-    }
-  }
-
   if (stepId === 'starting_frpc') {
     return progress?.phase === 'reconnecting_frpc' ? t.stepReconnectDetail : t.stepFrpcDetail;
   }
@@ -86,8 +69,6 @@ function stepLabel(t: TunnelSettingsMessages, stepId: StepId): string {
       return t.stepPrepareFrpc;
     case 'registering':
       return t.stepRegister;
-    case 'provisioning_tls':
-      return t.stepTls;
     case 'starting_frpc':
       return t.stepFrpcLogin;
   }
@@ -121,8 +102,6 @@ export function TunnelStartProgressPanel({
 
   if (!showSteps) return null;
 
-  const e2eEnabled = status.config?.e2e?.enabled !== false;
-  const steps = STEP_ORDER.filter((id) => id !== 'provisioning_tls' || e2eEnabled);
   const elapsed = formatPhaseElapsed(status.startProgress?.startedAt);
   const showPendingUrlNotice =
     Boolean(status.publicUrl) &&
@@ -137,7 +116,7 @@ export function TunnelStartProgressPanel({
       </div>
 
       <ol className="space-y-2">
-        {steps.map((stepId) => {
+        {STEP_ORDER.map((stepId) => {
           const state = stepState(stepId, status);
           const detail = stepDetail(t, stepId, status);
           return (

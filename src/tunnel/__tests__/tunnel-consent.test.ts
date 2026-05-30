@@ -99,16 +99,4 @@ describe('tunnel consent', () => {
     expect(cfg.tunnel?.registrationSecret).toBeUndefined();
   });
 
-  it('mergeTunnelConfigPatch merges tunnel.e2e settings', () => {
-    const cfg = baseConfig();
-    const result = mergeTunnelConfigPatch(cfg, {
-      e2e: { enabled: false, tlsPort: 19999, staging: true },
-    });
-    expect(result.ok).toBe(true);
-    expect(cfg.tunnel?.e2e).toEqual({
-      enabled: false,
-      tlsPort: 19999,
-      staging: true,
-    });
-  });
 });

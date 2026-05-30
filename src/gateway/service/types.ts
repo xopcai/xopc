@@ -38,6 +38,8 @@ export interface GatewayServiceConfig {
   /** CLI `--bind` override for startup security guards. */
   listenBind?: GatewayBindMode;
   listenCustomBindHost?: string;
+  /** CLI `--port` override; used for CORS loopback defaults when it differs from config. */
+  listenPort?: number;
   enableHotReload?: boolean;
   /**
    * When true (GatewayServer), outbound channel connects that declare

@@ -31,6 +31,7 @@ import { resolveGatewayAuth, assertGatewayAuthConfigured, validateToken, extract
 import { assertGatewayAuthNotKnownWeak } from './security/known-weak-secrets.js';
 import { auditGatewayConfig } from './security/audit.js';
 import { assertGatewayRuntimeConfig } from './runtime-config.js';
+import { resolveEffectiveGatewayPort } from './host.js';
 import { isGatewayStrictSecurityEnabled } from './auth-rate-limit.js';
 import { getModelRegistry } from '../providers/index.js';
 import { createLogger, getLogDir, getLogStats } from '../utils/logger.js';
@@ -174,7 +175,7 @@ export class GatewayService {
     // Reject known weak / placeholder credentials at startup
     assertGatewayAuthNotKnownWeak(this.auth);
 
-    const gatewayPort = this.config.gateway?.port ?? 18790;
+    const gatewayPort = this.getEffectiveListenPort();
     const runtimeConfig = assertGatewayRuntimeConfig({
       cfg: this.config,
       auth: this.auth,
@@ -526,7 +527,7 @@ export class GatewayService {
 
   /** After HTTP is listening: exposure auto-start (Tailscale, then FRP tunnel). */
   private async runExposureAutoStartIfConfigured(): Promise<void> {
-    const port = this.config.gateway?.port ?? 18790;
+    const port = this.getEffectiveListenPort();
     await getExposureManager().autoStart(this.config, port, this.getAuthToken());
   }
 
@@ -1506,6 +1507,11 @@ export class GatewayService {
 
   get currentConfig(): Config {
     return this.config;
+  }
+
+  /** Effective HTTP listen port (CLI `--port` override or config default). */
+  getEffectiveListenPort(): number {
+    return resolveEffectiveGatewayPort(this.config, this.serviceConfig.listenPort);
   }
 
 
