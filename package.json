@@ -37,7 +37,7 @@
     "build:types": "tsc -p tsconfig.dts.json",
     "build:ci": "pnpm run generate:bundled && pnpm run build:node && pnpm run build:web",
     "build": "pnpm run generate:bundled && pnpm run build:node && pnpm run build:types && pnpm run build:web",
-    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "typecheck": "pnpm -C packages/xopc-e2ee run build && tsc --noEmit -p tsconfig.json",
     "build:web": "pnpm -C web run build",
     "dev:web": "pnpm -C web run dev",
     "dev": "tsx src/cli/bin.ts",
