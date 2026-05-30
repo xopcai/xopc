@@ -14,11 +14,20 @@
 
 // Main
 import { spawnSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = join(fileURLToPath(new URL('..', import.meta.url)));
+const e2eeEntry = join(root, 'packages/xopc-e2ee/dist/index.js');
+if (!existsSync(e2eeEntry)) {
+  console.error(
+    `[electron-builder] Missing ${e2eeEntry}.\n` +
+      '  Run `pnpm -C packages/xopc-e2ee run build` (or `pnpm run electron:build`, which runs it first).\n',
+  );
+  process.exit(1);
+}
 const require = createRequire(join(root, 'package.json'));
 const cli = require.resolve('electron-builder/cli.js');
 
