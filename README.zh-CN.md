@@ -169,7 +169,7 @@ xopc extensions dev ./my-extension
 
 ## 桌面版
 
-1. 从 **[GitHub Releases](https://github.com/xopcai/xopc/releases)** 下载（`.dmg` / `.exe` / `.AppImage` / `.deb`）。
+1. 从 **[GitHub Releases](https://github.com/xopcai/xopc/releases)** 下载 — macOS `.dmg`，Windows `xopc-<版本>-x64.exe` 或 `xopc-<版本>-arm64.exe`，Linux `.AppImage` / `.deb`。
 2. 暂无对应平台安装包时，先用 **`xopc gateway`** + npm 命令行版。
 
 **从源码打包：** `pnpm install && pnpm run electron:build` → `dist/release/`

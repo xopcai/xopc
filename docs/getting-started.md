@@ -167,7 +167,7 @@ After `xopc gateway`, open the URL printed in the terminal (commonly `http://loc
 
 ## 6. Electron desktop (optional)
 
-Prebuilt **macOS / Windows / Linux** installers are published on **[GitHub Releases](https://github.com/xopcai/xopc/releases)** when available. They bundle the gateway and the same React console as the browser UI.
+Prebuilt **macOS / Windows / Linux** installers are published on **[GitHub Releases](https://github.com/xopcai/xopc/releases)** when available (Windows: `xopc-<version>-x64.exe` or `xopc-<version>-arm64.exe`). They bundle the gateway and the same React console as the browser UI.
 
 <video controls playsinline width="100%" style="max-width: 960px; border-radius: 8px;">
   <source src="https://xopc.ai/xopc-demo.mp4" type="video/mp4" />

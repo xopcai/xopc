@@ -153,17 +153,16 @@ jobs:
             exit 1
           fi
           
-          # Count actual artifact files (not directories)
-          artifact_count=$(find dist/release -type f \( -name "*.exe" -o -name "*.dmg" -o -name "*.zip" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.rpm" -o -name "*.snap" -o -name "latest*.yml" \) | wc -l)
-          if [ "$artifact_count" -eq 0 ]; then
+          mapfile -t ARTIFACTS < <(bash scripts/list-electron-release-upload-files.sh dist/release)
+          if [ ${#ARTIFACTS[@]} -eq 0 ]; then
             echo "❌ No installable artifacts found in dist/release!"
             echo "Contents of dist/release:"
             find dist/release -type f
             exit 1
           fi
-          
-          echo "✅ Found $artifact_count artifact(s):"
-          find dist/release -type f \( -name "*.exe" -o -name "*.dmg" -o -name "*.zip" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.rpm" -o -name "*.snap" -o -name "latest*.yml" \)
+
+          echo "✅ Found ${#ARTIFACTS[@]} publishable artifact(s):"
+          printf '%s\n' "${ARTIFACTS[@]}"
 
       - name: Upload release artifacts
         uses: actions/upload-artifact@v7
@@ -205,18 +204,8 @@ jobs:
           set -euo pipefail
           TAG="${{ github.ref_name }}"
           REPO="${{ github.repository }}"
-          # Only include installable artifacts, exclude metadata (.yml, .blockmap, .yaml)
-          # and helper binaries (elevate.exe, rg.exe) that are bundled inside installers
-          mapfile -t FILES < <(find release-assets -type f \( \
-            -name "*.exe" -o \
-            -name "*.dmg" -o \
-            -name "*.zip" -o \
-            -name "*.AppImage" -o \
-            -name "*.deb" -o \
-            -name "*.rpm" -o \
-            -name "*.snap" -o \
-            -name "latest*.yml" \
-          \) ! -name "elevate.exe" ! -name "rg.exe" ! -name "builder-*.yml" | sort)
+          # See scripts/list-electron-release-upload-files.sh (excludes win-unpacked/xopc.exe).
+          mapfile -t FILES < <(bash scripts/list-electron-release-upload-files.sh release-assets)
           if [ ${#FILES[@]} -eq 0 ]; then
             echo "No installable artifacts found under release-assets"
             exit 1
@@ -250,3 +239,9 @@ jobs:
             done
             sleep 12
           done
+
+          # Older releases mistakenly uploaded win-unpacked/xopc.exe as release asset "xopc.exe".
+          if gh release view "$TAG" --repo "$REPO" --json assets --jq '.assets[].name' | grep -qx 'xopc.exe'; then
+            echo "Removing misleading release asset xopc.exe (win-unpacked binary, not the NSIS installer)"
+            gh release delete-asset "$TAG" xopc.exe --repo "$REPO" -y || true
+          fi
