@@ -127,16 +127,18 @@ export function AssistantStepsBlock({
     roundStartRef.current = Date.now();
   }
 
-  if (stepsDrawerOpen && !prevStepsDrawerOpenRef.current) {
-    setUserExpanded(null);
-    setFrozenDurationMs(null);
-  } else if (!stepsDrawerOpen && prevStepsDrawerOpenRef.current) {
-    if (roundStartRef.current !== null) {
-      setFrozenDurationMs(Date.now() - roundStartRef.current);
+  useEffect(() => {
+    if (stepsDrawerOpen && !prevStepsDrawerOpenRef.current) {
+      setUserExpanded(null);
+      setFrozenDurationMs(null);
+    } else if (!stepsDrawerOpen && prevStepsDrawerOpenRef.current) {
+      if (roundStartRef.current !== null) {
+        setFrozenDurationMs(Date.now() - roundStartRef.current);
+      }
+      setUserExpanded(false);
     }
-    setUserExpanded(false);
-  }
-  prevStepsDrawerOpenRef.current = stepsDrawerOpen;
+    prevStepsDrawerOpenRef.current = stepsDrawerOpen;
+  }, [stepsDrawerOpen]);
 
   const expanded = userExpanded ?? stepsDrawerOpen;
 

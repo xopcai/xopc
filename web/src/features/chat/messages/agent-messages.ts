@@ -136,6 +136,106 @@ export function mergeConsecutiveAssistantMessages(messages: Message[]): Message[
   return out;
 }
 
+function lastAssistantIndex(messages: readonly Message[]): number {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i]?.role === 'assistant') return i;
+  }
+  return -1;
+}
+
+function assistantTextFingerprint(content: readonly MessageContent[]): string {
+  return content
+    .filter((b): b is { type: 'text'; text: string } => b.type === 'text')
+    .map((b) => b.text.trim())
+    .filter(Boolean)
+    .join('\n');
+}
+
+function assistantThinkingFingerprint(content: readonly MessageContent[]): string {
+  return content
+    .filter((b): b is ThinkingContent => b.type === 'thinking')
+    .map((b) => (b.text ?? '').trim())
+    .filter(Boolean)
+    .join('\n');
+}
+
+function assistantToolsFingerprint(content: readonly MessageContent[]): string {
+  return content
+    .filter((b): b is ToolUseContent => b.type === 'tool_use')
+    .map((b) => {
+      const result =
+        typeof b.result === 'string' ? b.result.trim() : JSON.stringify(b.result ?? '');
+      return `${b.name}|${b.status}|${result}`;
+    })
+    .join('\n');
+}
+
+/** True when two assistant rows would render the same in the chat column (ignoring timestamp / usage). */
+export function assistantTurnVisuallyEquivalent(a: Message, b: Message): boolean {
+  if (a.role !== 'assistant' || b.role !== 'assistant') return false;
+  return (
+    assistantTextFingerprint(a.content) === assistantTextFingerprint(b.content) &&
+    assistantThinkingFingerprint(a.content) === assistantThinkingFingerprint(b.content) &&
+    assistantToolsFingerprint(a.content) === assistantToolsFingerprint(b.content)
+  );
+}
+
+function attachmentsEquivalent(
+  a: Message['attachments'] | undefined,
+  b: Message['attachments'] | undefined,
+): boolean {
+  const al = a?.length ?? 0;
+  const bl = b?.length ?? 0;
+  if (al !== bl) return false;
+  if (al === 0) return true;
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+function usageEquivalent(a: Message['usage'], b: Message['usage']): boolean {
+  return JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+}
+
+/**
+ * After a live SSE turn, gateway reload often returns the same assistant text with a new
+ * timestamp. Replacing the whole list remounts virtual rows and makes the last bubble flicker.
+ * Keep prior message references when the visible turn is already equivalent.
+ */
+export function reconcileSessionSnapshot(prev: Message[], loaded: Message[]): Message[] {
+  if (prev.length === 0 || loaded.length === 0) return loaded;
+
+  const prevLastIdx = lastAssistantIndex(prev);
+  const loadedLastIdx = lastAssistantIndex(loaded);
+  if (prevLastIdx < 0 || loadedLastIdx < 0) return loaded;
+
+  const prevLast = prev[prevLastIdx];
+  const loadedLast = loaded[loadedLastIdx];
+  if (!prevLast || !loadedLast) return loaded;
+
+  if (!assistantTurnVisuallyEquivalent(prevLast, loadedLast)) {
+    return loaded;
+  }
+
+  if (prev.length !== loaded.length) {
+    return loaded;
+  }
+
+  const usageChanged = !usageEquivalent(prevLast.usage, loadedLast.usage);
+  const attachmentsChanged = !attachmentsEquivalent(prevLast.attachments, loadedLast.attachments);
+  if (!usageChanged && !attachmentsChanged) {
+    return prev;
+  }
+
+  const next = [...prev];
+  next[prevLastIdx] = {
+    ...prevLast,
+    ...(usageChanged && loadedLast.usage !== undefined ? { usage: loadedLast.usage } : {}),
+    ...(attachmentsChanged && loadedLast.attachments?.length
+      ? { attachments: loadedLast.attachments }
+      : {}),
+  };
+  return next;
+}
+
 /**
  * Convert session/API wire format (including toolResult rows) into chat UI messages.
  */

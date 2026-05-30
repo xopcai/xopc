@@ -1,6 +1,9 @@
 import { useCallback, useRef, type Dispatch, type RefObject, type SetStateAction } from 'react';
 
-import { mergeConsecutiveAssistantMessages } from '@/features/chat/messages/agent-messages';
+import {
+  mergeConsecutiveAssistantMessages,
+  reconcileSessionSnapshot,
+} from '@/features/chat/messages/agent-messages';
 import {
   DEFAULT_THINKING,
   pickEmptyWebSessionForAgent,
@@ -135,7 +138,7 @@ export function useChatSessionLoad(deps: {
         return;
       }
       historyBeforeCursorRef.current = data.nextBeforeCursor ?? null;
-      setMessages(data.messages);
+      setMessages((prev) => reconcileSessionSnapshot(prev, data.messages));
       setHasMore(data.hasMore);
       if (data.name) {
         setSessionName(data.name);
@@ -175,7 +178,7 @@ export function useChatSessionLoad(deps: {
             historyBeforeCursorRef.current = nextBeforeCursor ?? null;
             setSessionKey(k);
             setSessionName(name ?? null);
-            setMessages(loaded);
+            setMessages((prev) => (prev.length > 0 ? reconcileSessionSnapshot(prev, loaded) : loaded));
             setHasMore(more);
             setError(null);
             try {
