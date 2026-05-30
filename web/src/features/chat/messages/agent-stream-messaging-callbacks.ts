@@ -267,7 +267,7 @@ export function createAgentStreamMessagingCallbacks(opts: {
         userAbortedRef.current = false;
         return;
       }
-      flushStreamingToReact();
+      cancelScheduledStreamingCommit();
       finalizeMessage();
     },
     onError: (msg) => {

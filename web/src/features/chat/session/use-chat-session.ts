@@ -68,10 +68,15 @@ export function useChatSession() {
   const [loadingMore, setLoadingMore] = useState(false);
   const messagesLenRef = useRef(0);
   const latestMessagesRef = useRef<Message[]>([]);
+  const streamingMsgRef = useRef<Message | null>(null);
 
   useEffect(() => {
     latestMessagesRef.current = messages;
   }, [messages]);
+
+  useEffect(() => {
+    streamingMsgRef.current = streamingMsg;
+  }, [streamingMsg]);
 
   useEffect(() => {
     streamingRef.current = streaming;
@@ -229,6 +234,7 @@ export function useChatSession() {
       createNewSession,
       pollSessionNameAfterTurn,
       latestMessagesRef,
+      streamingMsgRef,
     });
 
   const trackedDecodedKeyRef = useRef(decodedKey);

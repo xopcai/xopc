@@ -2,6 +2,7 @@ import { useCallback, useRef, type Dispatch, type RefObject, type SetStateAction
 
 import {
   clearLiveSessionCache,
+  getLiveSessionCache,
   initLiveSessionCache,
   liveSessionCacheApplyHydratedTail,
   seedLiveSessionCacheIfEmpty,
@@ -68,6 +69,8 @@ export function useChatSessionStreaming(deps: {
   pollSessionNameAfterTurn: () => void;
   /** Latest committed messages (synced each render) for resume cache seeding. */
   latestMessagesRef: RefObject<Message[]>;
+  /** In-progress assistant bubble (synced each render) for synchronous finalize. */
+  streamingMsgRef: RefObject<Message | null>;
 }) {
   const {
     sessionKey,
@@ -95,6 +98,7 @@ export function useChatSessionStreaming(deps: {
     createNewSession,
     pollSessionNameAfterTurn,
     latestMessagesRef,
+    streamingMsgRef,
   } = deps;
 
   const flushSteeringQueueRef = useRef(fq.flushSteeringQueue);
@@ -103,20 +107,19 @@ export function useChatSessionStreaming(deps: {
   const finalizeMessage = useCallback(
     (opts?: { skipSteeringQueueFlush?: boolean }) => {
       const cacheKey = activeStreamSessionKeyRef.current ?? sessionKeyRef.current;
+      const cachedBubble = cacheKey ? (getLiveSessionCache(cacheKey)?.streamingMsg ?? null) : null;
+      const bubbleSource = cachedBubble ?? streamingMsgRef.current;
       let finalMsg: Message | null = null;
-      setStreamingMsg((prev) => {
-        if (!prev) return null;
-        const msg = ensureAssistantMessage(prev, Date.now());
+      if (bubbleSource) {
+        const msg = ensureAssistantMessage(bubbleSource, Date.now());
         finalizeStreamingThinking(msg.content);
         finalizeRunningTools(msg.content);
         finalMsg = cloneMessageForRender(msg);
-        return null;
-      });
-      const appended = finalMsg;
-      if (appended && hasRenderableAssistantContent(appended)) {
+      }
+      setStreamingMsg(null);
+      if (finalMsg && hasRenderableAssistantContent(finalMsg)) {
         const prior = latestMessagesRef.current ?? [];
-        const merged = mergeConsecutiveAssistantMessages([...prior, appended]);
-        setMessages(merged);
+        setMessages(mergeConsecutiveAssistantMessages([...prior, finalMsg]));
       }
       setStreaming(false);
       setProgress(null);
@@ -162,6 +165,7 @@ export function useChatSessionStreaming(deps: {
       fq.pendingFollowUpsRef,
       pollSessionNameAfterTurn,
       loadSessionById,
+      streamingMsgRef,
     ],
   );
 
