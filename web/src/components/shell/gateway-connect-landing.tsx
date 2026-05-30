@@ -1,7 +1,6 @@
 import { ExternalLink } from 'lucide-react';
 
 import { BrandLogo } from '@/components/shell/brand-logo';
-import { cn } from '@/lib/cn';
 import { GatewayTokenForm } from '@/components/shell/gateway-token-form';
 import { PreferenceSelectFields } from '@/components/shell/preference-select-fields';
 import { messages } from '@/i18n/messages';
