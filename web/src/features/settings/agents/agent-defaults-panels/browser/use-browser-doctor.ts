@@ -3,9 +3,12 @@ import { useCallback, useEffect, useReducer, useRef } from 'react';
 import { apiFetch } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
+import type { BackendMode } from './backend-mode-list';
 import type {
   CdpPingResult,
   CloakDoctor,
+  CloakLaunchResult,
+  CloakRuntimeStatus,
   CloudTestResult,
   DoctorState,
   ExtensionArtifacts,
@@ -58,6 +61,8 @@ type BrowserDoctorAction =
   | { type: 'cloak'; state: DoctorState<CloakDoctor> }
   | { type: 'extension'; state: DoctorState<ExtensionProbe> }
   | { type: 'extension-artifacts'; state: DoctorState<ExtensionArtifacts> }
+  | { type: 'playwright-idle' }
+  | { type: 'cloak-idle' }
   | { type: 'extension-idle' }
   | { type: 'extension-start-probe' }
   | { type: 'extension-artifacts-start-probe' };
@@ -79,6 +84,10 @@ function browserDoctorReducer(state: BrowserDoctorState, action: BrowserDoctorAc
       return { ...state, extension: action.state };
     case 'extension-artifacts':
       return { ...state, extensionArtifacts: action.state };
+    case 'playwright-idle':
+      return { ...state, playwright: { kind: 'idle' } };
+    case 'cloak-idle':
+      return { ...state, cloak: { kind: 'idle' } };
     case 'extension-idle':
       return { ...state, extension: { kind: 'idle' }, extensionArtifacts: { kind: 'idle' } };
     case 'extension-start-probe':
@@ -105,6 +114,8 @@ export interface BrowserDoctor {
   applyPlaywrightDoctor: (data: PlaywrightDoctor) => void;
   refetchCloak: (overrides?: { cacheDir?: string; binaryPath?: string }) => Promise<CloakDoctor | null>;
   applyCloakDoctor: (data: CloakDoctor) => void;
+  fetchCloakRuntimeStatus: () => Promise<CloakRuntimeStatus>;
+  launchCloak: () => Promise<CloakLaunchResult>;
   pingCdp: (cdpUrl: string) => Promise<CdpPingResult>;
   testCloud: (provider: 'browserbase' | 'browser-use', apiKey: string) => Promise<CloudTestResult>;
   launchCdp: (executablePath?: string) => Promise<LaunchedCdpInstance>;
@@ -112,6 +123,7 @@ export interface BrowserDoctor {
   listCdpInstances: () => Promise<LaunchedCdpInstance[]>;
   startExtensionBridge: (opts?: { host?: string; port?: number }) => Promise<void>;
   stopExtensionBridge: () => Promise<void>;
+  disconnectExtension: () => Promise<void>;
   refetchExtension: () => Promise<void>;
   refetchExtensionArtifacts: () => Promise<ExtensionArtifacts | null>;
   installExtensionArtifacts: (opts?: { force?: boolean }) => Promise<ExtensionArtifacts | null>;
@@ -122,8 +134,16 @@ export interface BrowserDoctor {
 export function useBrowserDoctor(opts: {
   cacheDir?: string;
   binaryPath?: string;
-  /** When true, the extension probe polls every 5 s. */
-  extensionEnabled?: boolean;
+  /** When false, all backend probes stay idle. */
+  browserEnabled?: boolean;
+  /** Probe Chrome extension bridge status. */
+  probeExtension?: boolean;
+  /** Probe local Playwright / Chromium. */
+  probeLocal?: boolean;
+  /** Probe CloakBrowser install. */
+  probeCloak?: boolean;
+  /** Active backend — extension bridge auto-start runs only when this is `extension`. */
+  activeBackend?: BackendMode;
   extensionHost?: string;
   extensionPort?: number;
 }): BrowserDoctor {
@@ -176,15 +196,18 @@ export function useBrowserDoctor(opts: {
     dispatch({ type: 'cloak', state: { kind: 'ok', data } });
   }, []);
 
-  // One-shot probes on mount.
-  useEffect(() => {
-    void refetchPlaywright();
-  }, [refetchPlaywright]);
-  useEffect(() => {
-    void refetchCloak();
-  }, [refetchCloak]);
+  const fetchCloakRuntimeStatus = useCallback(async () => {
+    return getJson<CloakRuntimeStatus>(apiUrl('/api/browser/cloakbrowser/status'));
+  }, []);
 
-  const { extensionEnabled, extensionHost, extensionPort } = opts;
+  const launchCloak = useCallback(async () => {
+    return postJson<CloakLaunchResult>(apiUrl('/api/browser/cloakbrowser/launch'), {});
+  }, []);
+
+  const extensionProbe = opts.browserEnabled === true && opts.probeExtension === true;
+  const localProbe = opts.browserEnabled === true && opts.probeLocal === true;
+  const cloakProbe = opts.browserEnabled === true && opts.probeCloak === true;
+  const { extensionHost, extensionPort } = opts;
 
   const refetchExtension = useCallback(async () => {
     const qs = new URLSearchParams({ probe: '1' });
@@ -200,6 +223,10 @@ export function useBrowserDoctor(opts: {
         connected?: boolean;
         backend?: string;
         artifacts?: ExtensionArtifacts;
+        bridgeHeld?: boolean;
+        refCount?: number;
+        manualBridge?: boolean;
+        portConflict?: boolean;
       };
       if (!res.ok) {
         dispatch({ type: 'extension', state: { kind: 'error', message: `HTTP ${res.status}` } });
@@ -214,6 +241,10 @@ export function useBrowserDoctor(opts: {
             connected: data.connected === true,
             backend: data.backend,
             artifacts: data.artifacts,
+            bridgeHeld: data.bridgeHeld === true,
+            refCount: typeof data.refCount === 'number' ? data.refCount : undefined,
+            manualBridge: data.manualBridge === true,
+            portConflict: data.portConflict === true,
           },
         },
       });
@@ -266,21 +297,40 @@ export function useBrowserDoctor(opts: {
     });
   }, []);
 
-  const trackedExtensionEnabledRef = useRef(extensionEnabled);
-  if (trackedExtensionEnabledRef.current !== extensionEnabled) {
-    trackedExtensionEnabledRef.current = extensionEnabled;
-    if (!extensionEnabled) {
+  // Lazy probe per visible settings tab (overview probes all three for the picker).
+  useEffect(() => {
+    if (!localProbe) {
+      dispatch({ type: 'playwright-idle' });
+      return undefined;
+    }
+    void refetchPlaywright();
+    return undefined;
+  }, [localProbe, refetchPlaywright]);
+
+  useEffect(() => {
+    if (!cloakProbe) {
+      dispatch({ type: 'cloak-idle' });
+      return undefined;
+    }
+    void refetchCloak();
+    return undefined;
+  }, [cloakProbe, refetchCloak]);
+
+  const trackedExtensionProbeRef = useRef(extensionProbe);
+  if (trackedExtensionProbeRef.current !== extensionProbe) {
+    trackedExtensionProbeRef.current = extensionProbe;
+    if (!extensionProbe) {
       dispatch({ type: 'extension-idle' });
     }
   }
 
   useEffect(() => {
-    if (!extensionEnabled) return undefined;
+    if (!extensionProbe) return undefined;
     void refetchExtension();
     void refetchExtensionArtifacts();
     const id = setInterval(() => void refetchExtension(), 5000);
     return () => clearInterval(id);
-  }, [extensionEnabled, refetchExtension, refetchExtensionArtifacts]);
+  }, [extensionProbe, refetchExtension, refetchExtensionArtifacts]);
 
   const startExtensionBridge = useCallback(
     async (params?: { host?: string; port?: number }) => {
@@ -297,6 +347,32 @@ export function useBrowserDoctor(opts: {
     await postJson<{ running: boolean }>(apiUrl('/api/browser/extension/stop'), {});
     await refetchExtension();
   }, [refetchExtension]);
+
+  const disconnectExtension = useCallback(async () => {
+    await postJson<{ connected: boolean }>(apiUrl('/api/browser/extension/disconnect'), {});
+    await refetchExtension();
+  }, [refetchExtension]);
+
+  const extensionAutoStartKeyRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!extensionProbe || opts.activeBackend !== 'extension') {
+      extensionAutoStartKeyRef.current = null;
+      return undefined;
+    }
+    if (extension.kind !== 'ok') return undefined;
+    if (extension.data.running || extension.data.bridgeHeld) return undefined;
+
+    const port = extensionPort ?? 19820;
+    const key = `${extensionHost}:${port}`;
+    if (extensionAutoStartKeyRef.current === key) return undefined;
+
+    extensionAutoStartKeyRef.current = key;
+    void startExtensionBridge({ host: extensionHost, port: extensionPort }).catch(() => {
+      extensionAutoStartKeyRef.current = null;
+    });
+    return undefined;
+  }, [extensionProbe, extension, extensionHost, extensionPort, opts.activeBackend, startExtensionBridge]);
 
   const pingCdp = useCallback(async (cdpUrl: string) => {
     return postJson<CdpPingResult>(apiUrl('/api/browser/cdp/ping'), { cdpUrl });
@@ -338,6 +414,8 @@ export function useBrowserDoctor(opts: {
     applyPlaywrightDoctor,
     refetchCloak,
     applyCloakDoctor,
+    fetchCloakRuntimeStatus,
+    launchCloak,
     refetchExtension,
     refetchExtensionArtifacts,
     installExtensionArtifacts,
@@ -350,5 +428,6 @@ export function useBrowserDoctor(opts: {
     listCdpInstances,
     startExtensionBridge,
     stopExtensionBridge,
+    disconnectExtension,
   };
 }

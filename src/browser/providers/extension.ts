@@ -260,6 +260,16 @@ export class ExtensionBrowserProvider {
     return this.connected;
   }
 
+  /** Close the Chrome Extension client without stopping the WebSocket server. */
+  disconnectClient(): void {
+    if (!this.clientWs) return;
+    try {
+      (this.clientWs as { close: () => void }).close();
+    } catch {
+      /* */
+    }
+  }
+
   /** Shutdown the WebSocket server. */
   async shutdown(): Promise<void> {
     // Reject pending waiters

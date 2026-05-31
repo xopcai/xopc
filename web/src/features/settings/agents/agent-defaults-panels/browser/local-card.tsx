@@ -14,12 +14,14 @@ export function LocalCard({
   refetch,
   applyDoctor,
   installStream,
+  embedded = false,
 }: {
   m: BrowserMessages;
   doctor: DoctorState<PlaywrightDoctor>;
   refetch: () => Promise<void>;
   applyDoctor?: (data: PlaywrightDoctor) => void;
   installStream: BrowserInstallStream;
+  embedded?: boolean;
 }) {
   const [status, setStatus] = useState<InstallStatus>('idle');
   const [message, setMessage] = useState<string | null>(null);
@@ -93,6 +95,7 @@ export function LocalCard({
       status={statusKind}
       statusDetail={statusDetail}
       m={m}
+      embedded={embedded}
       primaryAction={
         <button
           type="button"
@@ -117,9 +120,12 @@ export function LocalCard({
         </button>
       }
     >
-      <code className="w-fit rounded-md border border-edge bg-surface-base px-2 py-1 text-xs text-fg">
-        node node_modules/playwright-core/cli.js install chromium
-      </code>
+      <div className="text-xs">
+        <p className="text-fg-muted">{m.browserPlaywrightManualInstall}</p>
+        <code className="mt-2 block w-fit rounded-md border border-edge bg-surface-base px-2 py-1 text-xs text-fg">
+          node node_modules/playwright-core/cli.js install chromium
+        </code>
+      </div>
       {running ? (
         <BrowserInstallProgressPanel
           m={m}

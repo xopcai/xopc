@@ -21,11 +21,13 @@ export function CloudCard({
   form,
   onChange,
   testCloud,
+  embedded = false,
 }: {
   m: BrowserMessages;
   form: CloudCardForm;
   onChange: (patch: Partial<CloudCardForm>) => void;
   testCloud: (provider: 'browserbase' | 'browser-use', apiKey: string) => Promise<{ reachable: boolean; error?: string }>;
+  embedded?: boolean;
 }) {
   const [status, setStatus] = useState<ActionStatus>('idle');
   const [message, setMessage] = useState<string | null>(null);
@@ -56,6 +58,7 @@ export function CloudCard({
       title={m.label.browserCloudProvider}
       description={m.desc.browserCloudProvider}
       m={m}
+      embedded={embedded}
       primaryAction={
         <button
           type="button"

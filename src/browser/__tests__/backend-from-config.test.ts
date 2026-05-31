@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import type { Config } from '../../config/schema.js';
-import { resolveBrowserBackendFromConfig } from '../backend-from-config.js';
+import {
+  cloakBrowserConfigFromAgentDefaults,
+  resolveBrowserBackendFromConfig,
+  shouldRunExtensionBridgeServer,
+} from '../backend-from-config.js';
 import { resolveBrowserCommandTimeoutMs } from '../browser-command-timeout.js';
 
 describe('resolveBrowserBackendFromConfig', () => {
@@ -157,6 +161,82 @@ describe('resolveBrowserBackendFromConfig', () => {
       },
     } as unknown as Config;
     expect(resolveBrowserBackendFromConfig(cfg).mode).toBe('cloakbrowser');
+  });
+});
+
+describe('cloakBrowserConfigFromAgentDefaults', () => {
+  it('builds headed launch config from saved cloakbrowser settings', () => {
+    const cfg = {
+      agents: {
+        defaults: {
+          browser: {
+            backend: 'cloakbrowser' as const,
+            headless: true,
+            cloakbrowser: {
+              keepOpen: true,
+              temporaryProfile: false,
+              cacheDir: '/Users/me/.xopc/bin/cloakbrowser',
+              timezone: 'America/New_York',
+              extraArgs: ['--disable-dev-shm-usage'],
+            },
+          },
+        },
+      },
+    } as unknown as Config;
+    expect(cloakBrowserConfigFromAgentDefaults(cfg)).toEqual({
+      headless: false,
+      keepOpen: true,
+      temporaryProfile: false,
+      cacheDir: '/Users/me/.xopc/bin/cloakbrowser',
+      binaryPath: undefined,
+      timezone: 'America/New_York',
+      locale: undefined,
+      webrtcIp: undefined,
+      fingerprintPlatform: undefined,
+      extraArgs: ['--disable-dev-shm-usage'],
+      reuseExisting: true,
+    });
+  });
+});
+
+describe('shouldRunExtensionBridgeServer', () => {
+  it('starts for default extension backend (null backend)', () => {
+    const cfg = {
+      agents: { defaults: { browser: { enabled: true } } },
+    } as unknown as Config;
+    expect(shouldRunExtensionBridgeServer(cfg)).toBe(true);
+  });
+
+  it('starts when backend is explicitly extension', () => {
+    const cfg = {
+      agents: { defaults: { browser: { backend: 'extension' as const } } },
+    } as unknown as Config;
+    expect(shouldRunExtensionBridgeServer(cfg)).toBe(true);
+  });
+
+  it('does not start when browser is disabled', () => {
+    const cfg = {
+      agents: { defaults: { browser: { enabled: false, backend: 'extension' as const } } },
+    } as unknown as Config;
+    expect(shouldRunExtensionBridgeServer(cfg)).toBe(false);
+  });
+
+  it('does not start for local backend', () => {
+    const cfg = {
+      agents: { defaults: { browser: { backend: 'local' as const } } },
+    } as unknown as Config;
+    expect(shouldRunExtensionBridgeServer(cfg)).toBe(false);
+  });
+
+  it('does not start when cdpUrl selects CDP backend', () => {
+    const cfg = {
+      agents: {
+        defaults: {
+          browser: { cdpUrl: 'ws://127.0.0.1:9222/devtools/browser/x' },
+        },
+      },
+    } as unknown as Config;
+    expect(shouldRunExtensionBridgeServer(cfg)).toBe(false);
   });
 });
 
