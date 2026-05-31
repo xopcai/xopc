@@ -7,8 +7,7 @@ export type BrowserTabId =
   | 'local'
   | 'cloakbrowser'
   | 'cdp'
-  | 'cloud'
-  | 'behavior';
+  | 'cloud';
 
 export const BROWSER_TABS: readonly BrowserTabId[] = [
   'overview',
@@ -17,7 +16,6 @@ export const BROWSER_TABS: readonly BrowserTabId[] = [
   'cloakbrowser',
   'cdp',
   'cloud',
-  'behavior',
 ] as const;
 
 export const BROWSER_BACKEND_TABS: readonly BackendMode[] = [
@@ -36,12 +34,13 @@ export const LEGACY_BROWSER_FOCUS_TO_TAB: Record<string, BrowserTabId> = {
   cloak: 'cloakbrowser',
   cdp: 'cdp',
   cloud: 'cloud',
-  runtime: 'behavior',
-  security: 'behavior',
+  runtime: 'overview',
+  security: 'overview',
 };
 
 export function parseBrowserTab(raw: string | null | undefined): BrowserTabId {
   const id = (raw ?? '').trim();
+  if (id === 'behavior') return 'overview';
   if (BROWSER_TABS.includes(id as BrowserTabId)) {
     return id as BrowserTabId;
   }
@@ -49,7 +48,7 @@ export function parseBrowserTab(raw: string | null | undefined): BrowserTabId {
 }
 
 export function browserTabToBackend(tab: BrowserTabId): BackendMode | null {
-  if (tab === 'overview' || tab === 'behavior') return null;
+  if (tab === 'overview') return null;
   return tab;
 }
 

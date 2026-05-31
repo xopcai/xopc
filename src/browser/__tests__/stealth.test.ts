@@ -3,13 +3,14 @@ import { describe, expect, it } from 'vitest';
 import {
   buildLocalStealthArgs,
   buildStealthArgs,
+  filterCloakBrowserExtraArgs,
   generateFingerprintSeed,
 } from '../stealth.js';
 
 describe('buildStealthArgs', () => {
-  it('includes default stealth args', () => {
+  it('includes default stealth args without sandbox flags', () => {
     const args = buildStealthArgs();
-    expect(args.some((a) => a === '--no-sandbox')).toBe(true);
+    expect(args.some((a) => a === '--no-sandbox')).toBe(false);
     expect(args.some((a) => a === '--disable-blink-features=AutomationControlled')).toBe(true);
     expect(args.some((a) => a.startsWith('--fingerprint='))).toBe(true);
     expect(args.some((a) => a.startsWith('--fingerprint-platform='))).toBe(true);
@@ -57,6 +58,13 @@ describe('buildStealthArgs', () => {
     const platArgs = args.filter((a) => a.startsWith('--fingerprint-platform='));
     expect(platArgs).toHaveLength(1);
     expect(platArgs[0]).toBe('--fingerprint-platform=linux');
+  });
+});
+
+describe('filterCloakBrowserExtraArgs', () => {
+  it('removes sandbox flags from user extra args', () => {
+    expect(filterCloakBrowserExtraArgs(['--no-sandbox', '--custom-flag'])).toEqual(['--custom-flag']);
+    expect(filterCloakBrowserExtraArgs(['--disable-setuid-sandbox'])).toEqual([]);
   });
 });
 

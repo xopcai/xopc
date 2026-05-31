@@ -1,12 +1,14 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { PACKAGE_VERSION } from '../../package-version.js';
 import {
   BROWSER_EXT_REQUIRED_FILES,
   computeNeedsRefresh,
   ensureBrowserExtensionArtifacts,
+  resolveInstalledExtensionPath,
   validateBrowserExtLayout,
 } from '../providers/browser-ext-install.js';
 
@@ -38,7 +40,7 @@ describe('browser-ext-install', () => {
     bundledDir = join(tempHome, 'bundled');
     binDir = join(tempHome, '.xopc', 'bin');
     mkdirSync(binDir, { recursive: true });
-    writeMinimalExtensionTree(bundledDir, '0.0.73');
+    writeMinimalExtensionTree(bundledDir, PACKAGE_VERSION);
 
     process.env.HOME = tempHome;
     process.env.USERPROFILE = tempHome;
@@ -72,8 +74,8 @@ describe('browser-ext-install', () => {
   it('computeNeedsRefresh when meta missing or force', () => {
     expect(
       computeNeedsRefresh({
-        bundledManifestVersion: '0.0.73',
-        currentRealPath: null,
+        bundledManifestVersion: PACKAGE_VERSION,
+        installedPath: null,
         meta: null,
       }),
     ).toBe(true);
@@ -81,11 +83,11 @@ describe('browser-ext-install', () => {
     expect(
       computeNeedsRefresh({
         force: true,
-        bundledManifestVersion: '0.0.73',
-        currentRealPath: bundledDir,
+        bundledManifestVersion: PACKAGE_VERSION,
+        installedPath: bundledDir,
         meta: {
-          xopcVersion: '0.0.73',
-          manifestVersion: '0.0.73',
+          xopcVersion: PACKAGE_VERSION,
+          manifestVersion: PACKAGE_VERSION,
           source: 'bundled',
           bundledFrom: 'env-override',
           installedAt: new Date().toISOString(),
@@ -99,6 +101,7 @@ describe('browser-ext-install', () => {
     const first = await ensureBrowserExtensionArtifacts({ cacheDir: binDir });
     expect(first.copied).toBe(true);
     expect(validateBrowserExtLayout(first.extensionDir)).toBe(true);
+    expect(first.extensionDir).toBe(join(binDir, 'browser-ext', PACKAGE_VERSION));
 
     const second = await ensureBrowserExtensionArtifacts({ cacheDir: binDir });
     expect(second.copied).toBe(false);
@@ -106,18 +109,21 @@ describe('browser-ext-install', () => {
   });
 
   it('ensure refreshes when bundled manifest version changes', async () => {
+    const nextVersion = '9.9.9';
     await ensureBrowserExtensionArtifacts({ cacheDir: binDir });
     writeFileSync(
       join(bundledDir, 'manifest.json'),
-      JSON.stringify({ manifest_version: 3, name: 'test', version: '0.0.74' }, null, 2),
+      JSON.stringify({ manifest_version: 3, name: 'test', version: nextVersion }, null, 2),
     );
 
     const upgraded = await ensureBrowserExtensionArtifacts({ cacheDir: binDir });
     expect(upgraded.copied).toBe(true);
+    expect(upgraded.extensionDir).toBe(join(binDir, 'browser-ext', nextVersion));
     const manifest = JSON.parse(readFileSync(join(upgraded.extensionDir, 'manifest.json'), 'utf8')) as {
       version: string;
     };
-    expect(manifest.version).toBe('0.0.74');
+    expect(manifest.version).toBe(nextVersion);
+    expect(existsSync(join(binDir, 'browser-ext', PACKAGE_VERSION))).toBe(false);
   });
 
   it('rejects cacheDir outside home', async () => {
@@ -126,14 +132,28 @@ describe('browser-ext-install', () => {
     ).rejects.toThrow(/home directory/i);
   });
 
-  it('gc removes stale version directories', async () => {
+  it('removes stale version directories and legacy current link', async () => {
     const root = join(binDir, 'browser-ext');
     mkdirSync(join(root, '0.0.99-stale'), { recursive: true });
     writeFileSync(join(root, '0.0.99-stale', 'marker.txt'), 'stale');
+    writeMinimalExtensionTree(join(root, '0.0.88'), '0.0.88');
+    symlinkSync('0.0.88', join(root, 'current'), 'dir');
 
     await ensureBrowserExtensionArtifacts({ cacheDir: binDir });
 
     expect(existsSync(join(root, '0.0.99-stale'))).toBe(false);
-    expect(existsSync(join(root, 'current'))).toBe(true);
+    expect(existsSync(join(root, '0.0.88'))).toBe(false);
+    expect(existsSync(join(root, 'current'))).toBe(false);
+    expect(existsSync(join(root, PACKAGE_VERSION))).toBe(true);
+  });
+
+  it('resolveInstalledExtensionPath reads legacy current before migration', () => {
+    const root = join(binDir, 'browser-ext');
+    const legacyDir = join(root, '0.0.55');
+    writeMinimalExtensionTree(legacyDir, '0.0.55');
+    symlinkSync('0.0.55', join(root, 'current'), 'dir');
+
+    const resolved = resolveInstalledExtensionPath(binDir, null);
+    expect(resolved).toBe(realpathSync(legacyDir));
   });
 });

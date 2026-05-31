@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import type { Config } from '../../config/schema.js';
-import { resolveBrowserBackendFromConfig, shouldRunExtensionBridgeServer } from '../backend-from-config.js';
+import {
+  cloakBrowserConfigFromAgentDefaults,
+  resolveBrowserBackendFromConfig,
+  shouldRunExtensionBridgeServer,
+} from '../backend-from-config.js';
 import { resolveBrowserCommandTimeoutMs } from '../browser-command-timeout.js';
 
 describe('resolveBrowserBackendFromConfig', () => {
@@ -157,6 +161,41 @@ describe('resolveBrowserBackendFromConfig', () => {
       },
     } as unknown as Config;
     expect(resolveBrowserBackendFromConfig(cfg).mode).toBe('cloakbrowser');
+  });
+});
+
+describe('cloakBrowserConfigFromAgentDefaults', () => {
+  it('builds headed launch config from saved cloakbrowser settings', () => {
+    const cfg = {
+      agents: {
+        defaults: {
+          browser: {
+            backend: 'cloakbrowser' as const,
+            headless: true,
+            cloakbrowser: {
+              keepOpen: true,
+              temporaryProfile: false,
+              cacheDir: '/Users/me/.xopc/bin/cloakbrowser',
+              timezone: 'America/New_York',
+              extraArgs: ['--disable-dev-shm-usage'],
+            },
+          },
+        },
+      },
+    } as unknown as Config;
+    expect(cloakBrowserConfigFromAgentDefaults(cfg)).toEqual({
+      headless: false,
+      keepOpen: true,
+      temporaryProfile: false,
+      cacheDir: '/Users/me/.xopc/bin/cloakbrowser',
+      binaryPath: undefined,
+      timezone: 'America/New_York',
+      locale: undefined,
+      webrtcIp: undefined,
+      fingerprintPlatform: undefined,
+      extraArgs: ['--disable-dev-shm-usage'],
+      reuseExisting: true,
+    });
   });
 });
 

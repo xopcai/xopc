@@ -7,6 +7,8 @@ import type { BackendMode } from './backend-mode-list';
 import type {
   CdpPingResult,
   CloakDoctor,
+  CloakLaunchResult,
+  CloakRuntimeStatus,
   CloudTestResult,
   DoctorState,
   ExtensionArtifacts,
@@ -112,6 +114,8 @@ export interface BrowserDoctor {
   applyPlaywrightDoctor: (data: PlaywrightDoctor) => void;
   refetchCloak: (overrides?: { cacheDir?: string; binaryPath?: string }) => Promise<CloakDoctor | null>;
   applyCloakDoctor: (data: CloakDoctor) => void;
+  fetchCloakRuntimeStatus: () => Promise<CloakRuntimeStatus>;
+  launchCloak: () => Promise<CloakLaunchResult>;
   pingCdp: (cdpUrl: string) => Promise<CdpPingResult>;
   testCloud: (provider: 'browserbase' | 'browser-use', apiKey: string) => Promise<CloudTestResult>;
   launchCdp: (executablePath?: string) => Promise<LaunchedCdpInstance>;
@@ -190,6 +194,14 @@ export function useBrowserDoctor(opts: {
 
   const applyCloakDoctor = useCallback((data: CloakDoctor) => {
     dispatch({ type: 'cloak', state: { kind: 'ok', data } });
+  }, []);
+
+  const fetchCloakRuntimeStatus = useCallback(async () => {
+    return getJson<CloakRuntimeStatus>(apiUrl('/api/browser/cloakbrowser/status'));
+  }, []);
+
+  const launchCloak = useCallback(async () => {
+    return postJson<CloakLaunchResult>(apiUrl('/api/browser/cloakbrowser/launch'), {});
   }, []);
 
   const extensionProbe = opts.browserEnabled === true && opts.probeExtension === true;
@@ -402,6 +414,8 @@ export function useBrowserDoctor(opts: {
     applyPlaywrightDoctor,
     refetchCloak,
     applyCloakDoctor,
+    fetchCloakRuntimeStatus,
+    launchCloak,
     refetchExtension,
     refetchExtensionArtifacts,
     installExtensionArtifacts,

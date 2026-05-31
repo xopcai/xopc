@@ -374,6 +374,47 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
     }
   });
 
+  // Runtime status for CloakBrowser (CDP port + profile dir from saved agent defaults).
+  authenticated.get('/api/browser/cloakbrowser/status', async (c) => {
+    try {
+      const { cloakBrowserConfigFromAgentDefaults } = await import('../../../browser/backend-from-config.js');
+      const { probeCloakBrowserRuntime } = await import('../../../browser/providers/cloakbrowser.js');
+      const config = cloakBrowserConfigFromAgentDefaults(service.currentConfig as Config);
+      const status = await probeCloakBrowserRuntime(config);
+      return c.json({ ok: true, payload: status });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      return c.json({ ok: false, error: message }, 500);
+    }
+  });
+
+  // Open CloakBrowser with the same profile/settings agents use (saved config, headed).
+  authenticated.post('/api/browser/cloakbrowser/launch', strictRateLimitMiddleware, async (c) => {
+    try {
+      const { cloakBrowserConfigFromAgentDefaults } = await import('../../../browser/backend-from-config.js');
+      const { launchCloakBrowser } = await import('../../../browser/providers/cloakbrowser.js');
+      const config = cloakBrowserConfigFromAgentDefaults(service.currentConfig as Config);
+      const result = await launchCloakBrowser({
+        ...config,
+        skipPlaywrightConnect: true,
+      });
+      return c.json({
+        ok: true,
+        payload: {
+          running: true,
+          reused: result.reused,
+          port: result.cdpPort,
+          pid: result.pid,
+          userDataDir: result.userDataDir,
+          temporaryProfile: config.temporaryProfile === true,
+        },
+      });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      return c.json({ ok: false, error: message }, 500);
+    }
+  });
+
   // Ping a user-supplied CDP endpoint — loopback only (SSRF guard).
   authenticated.post('/api/browser/cdp/ping', strictRateLimitMiddleware, async (c) => {
     let body: unknown;

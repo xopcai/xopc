@@ -113,14 +113,14 @@ function buildFieldSeeds(language: StoredLanguage): FieldSeed[] {
       id: 'field:agent:browser-headless',
       title: isZh ? '浏览器无头模式' : 'Browser headless mode',
       subtitle: isZh ? '隐藏浏览器窗口' : 'Run without a visible window',
-      path: '/settings/agent-browser?tab=behavior',
+      path: '/settings/agent-browser?focus=runtime',
       keywords: ['headless', 'window', 'visible', '无头'],
     },
     {
       id: 'field:agent:browser-private-urls',
       title: isZh ? '允许内网 URL' : 'Allow private URLs',
       subtitle: isZh ? '浏览器导航安全限制' : 'Browser navigation security policy',
-      path: '/settings/agent-browser?tab=behavior',
+      path: '/settings/agent-browser?focus=security',
       keywords: ['private', 'internal', 'localhost', 'security', '内网', '安全'],
     },
 
