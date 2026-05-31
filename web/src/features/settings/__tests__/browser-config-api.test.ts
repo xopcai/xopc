@@ -35,6 +35,31 @@ describe('browser config API', () => {
     expect(state.browserCloakExtraArgs).toBe('--disable-dev-shm-usage');
   });
 
+  it('round-trips local backend through parse → build → parse', () => {
+    const initial = parseAgentDefaultsFromConfig({
+      agents: {
+        defaults: {
+          browser: {
+            enabled: true,
+            backend: 'local',
+            headless: true,
+          },
+        },
+      },
+    });
+
+    expect(initial.browserBackend).toBe('local');
+
+    const built = buildBrowserConfigFromAgentDefaults(initial);
+    expect(built.backend).toBe('local');
+
+    const roundTripped = parseAgentDefaultsFromConfig({
+      agents: { defaults: { browser: built } },
+    });
+    expect(roundTripped.browserBackend).toBe('local');
+    expect(roundTripped.browserHeadless).toBe(true);
+  });
+
   it('buildBrowserConfigFromAgentDefaults serializes extension and cloak slices', () => {
     const base = parseAgentDefaultsFromConfig({});
     const state = {
