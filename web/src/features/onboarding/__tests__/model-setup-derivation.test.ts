@@ -1,16 +1,18 @@
 import { describe, expect, it } from 'vitest';
 
-import { computeNeedsModelSetup } from '@/features/onboarding/model-setup-derivation';
+import { computeNeedsModelSetup, type ModelSetupDerivationInput } from '@/features/onboarding/model-setup-derivation';
 
-const readyInput = {
+const readyInput: ModelSetupDerivationInput = {
   enabled: true,
   ready: true,
+  configError: undefined,
+  modelsError: undefined,
   config: {
     agents: { defaults: { model: 'openai/gpt-4o' } },
     providers: { openai: '***' },
   },
   modelsData: [{ id: 'openai/gpt-4o', name: 'GPT-4o', provider: 'openai' }],
-} as const;
+};
 
 describe('computeNeedsModelSetup', () => {
   it('returns false while disabled or not ready', () => {
