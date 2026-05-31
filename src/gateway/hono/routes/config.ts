@@ -1,4 +1,5 @@
 import type { Hono } from 'hono';
+import net from 'node:net';
 
 import { type Config, BindingsConfigSchema, McpConfigSchema, type GatewayBindMode } from '../../../config/schema.js';
 import {
@@ -66,6 +67,51 @@ function parseExtensionProbePort(raw: string | undefined): number | undefined {
   return n;
 }
 
+function isLoopbackPortOpen(host: string, port: number, timeoutMs = 500): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = net.connect({ host, port });
+    const finish = (open: boolean) => {
+      socket.removeAllListeners();
+      try {
+        socket.destroy();
+      } catch {
+        /* */
+      }
+      resolve(open);
+    };
+    socket.setTimeout(timeoutMs);
+    socket.once('connect', () => finish(true));
+    socket.once('timeout', () => finish(false));
+    socket.once('error', () => finish(false));
+  });
+}
+
+async function readExtensionBridgeSnapshot() {
+  const { getExtensionBrowserServerSnapshot } = await import(
+    '../../../browser/providers/extension-ws-acquire.js'
+  );
+  return getExtensionBrowserServerSnapshot();
+}
+
+async function stopExtensionBridgeFromSettings(service: AuthenticatedRouteDeps['service']): Promise<{
+  forcedShutdown: boolean;
+}> {
+  if (manualExtensionHandle) {
+    try {
+      await manualExtensionHandle.release();
+    } catch {
+      /* refcount underflow should not surface */
+    }
+    manualExtensionHandle = null;
+  }
+  await service.releaseBrowserExtensionBridge();
+  const { forceShutdownExtensionBrowserServer } = await import(
+    '../../../browser/providers/extension-ws-acquire.js'
+  );
+  const forcedShutdown = await forceShutdownExtensionBrowserServer();
+  return { forcedShutdown };
+}
+
 function resolveExtensionStatusTarget(
   browser: Record<string, unknown> | undefined,
   query: { probe?: string; host?: string; port?: string },
@@ -127,18 +173,32 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
       const backend = typeof browser?.backend === 'string' ? browser.backend : 'extension';
       return c.json({ running: false, connected: false, backend, artifacts });
     }
+    const snapshot = await readExtensionBridgeSnapshot();
+    let probeRunning = false;
+    let probeConnected = false;
     try {
       const res = await fetch(`http://${target.host}:${target.port}/`, { signal: AbortSignal.timeout(2000) });
       const data = (await res.json()) as { ok?: boolean; connected?: boolean };
-      return c.json({
-        running: Boolean(data.ok),
-        connected: Boolean(data.connected),
-        backend: target.backend,
-        artifacts,
-      });
+      probeRunning = Boolean(data.ok);
+      probeConnected = Boolean(data.connected);
     } catch {
-      return c.json({ running: false, connected: false, backend: target.backend, artifacts });
+      /* probe failed — fall through to snapshot / port check */
     }
+    const running = probeRunning || snapshot.active;
+    const portConflict =
+      !running && !snapshot.active
+        ? await isLoopbackPortOpen(target.host, target.port)
+        : false;
+    return c.json({
+      running,
+      connected: probeConnected,
+      backend: target.backend,
+      artifacts,
+      bridgeHeld: snapshot.active,
+      refCount: snapshot.refCount,
+      manualBridge: manualExtensionHandle !== null,
+      portConflict,
+    });
   });
 
   authenticated.get('/api/browser/extension/doctor', async (c) => {
@@ -253,16 +313,34 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
   });
 
   authenticated.post('/api/browser/extension/stop', strictRateLimitMiddleware, async (c) => {
-    if (!manualExtensionHandle) {
-      return c.json({ ok: true, payload: { running: false, alreadyStopped: true } });
-    }
     try {
-      await manualExtensionHandle.release();
-    } catch {
-      // ignore — refcount underflow should not surface
+      const { forcedShutdown } = await stopExtensionBridgeFromSettings(service);
+      return c.json({
+        ok: true,
+        payload: { running: false, forcedShutdown },
+      });
+    } catch (e) {
+      return c.json({ ok: false, error: e instanceof Error ? e.message : String(e) }, 500);
     }
-    manualExtensionHandle = null;
-    return c.json({ ok: true, payload: { running: false } });
+  });
+
+  authenticated.post('/api/browser/extension/disconnect', strictRateLimitMiddleware, async (c) => {
+    try {
+      const { getExtensionBrowserProvider } = await import(
+        '../../../browser/providers/extension-ws-acquire.js'
+      );
+      const provider = getExtensionBrowserProvider();
+      if (!provider?.isConnected()) {
+        return c.json({
+          ok: true,
+          payload: { connected: false, alreadyDisconnected: true },
+        });
+      }
+      provider.disconnectClient();
+      return c.json({ ok: true, payload: { connected: false } });
+    } catch (e) {
+      return c.json({ ok: false, error: e instanceof Error ? e.message : String(e) }, 500);
+    }
   });
 
   // Doctor: does Playwright have a runnable Chromium on disk?
@@ -293,6 +371,47 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       return c.json({ ok: false, error: message }, 400);
+    }
+  });
+
+  // Runtime status for CloakBrowser (CDP port + profile dir from saved agent defaults).
+  authenticated.get('/api/browser/cloakbrowser/status', async (c) => {
+    try {
+      const { cloakBrowserConfigFromAgentDefaults } = await import('../../../browser/backend-from-config.js');
+      const { probeCloakBrowserRuntime } = await import('../../../browser/providers/cloakbrowser.js');
+      const config = cloakBrowserConfigFromAgentDefaults(service.currentConfig as Config);
+      const status = await probeCloakBrowserRuntime(config);
+      return c.json({ ok: true, payload: status });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      return c.json({ ok: false, error: message }, 500);
+    }
+  });
+
+  // Open CloakBrowser with the same profile/settings agents use (saved config, headed).
+  authenticated.post('/api/browser/cloakbrowser/launch', strictRateLimitMiddleware, async (c) => {
+    try {
+      const { cloakBrowserConfigFromAgentDefaults } = await import('../../../browser/backend-from-config.js');
+      const { launchCloakBrowser } = await import('../../../browser/providers/cloakbrowser.js');
+      const config = cloakBrowserConfigFromAgentDefaults(service.currentConfig as Config);
+      const result = await launchCloakBrowser({
+        ...config,
+        skipPlaywrightConnect: true,
+      });
+      return c.json({
+        ok: true,
+        payload: {
+          running: true,
+          reused: result.reused,
+          port: result.cdpPort,
+          pid: result.pid,
+          userDataDir: result.userDataDir,
+          temporaryProfile: config.temporaryProfile === true,
+        },
+      });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      return c.json({ ok: false, error: message }, 500);
     }
   });
 

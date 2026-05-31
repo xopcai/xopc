@@ -1,9 +1,9 @@
 /**
- * Install bundled Chrome extension artifacts into {resolveBinDir()}/browser-ext/.
+ * Install bundled Chrome extension artifacts into {resolveBinDir()}/browser-ext/{version}/.
+ * Single version directory per install — direct overwrite, no `current` symlink.
  */
 
 import {
-  cpSync,
   existsSync,
   mkdirSync,
   readFileSync,
@@ -11,12 +11,11 @@ import {
   renameSync,
   rmSync,
   statSync,
-  symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { readFile, readdir, rm } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
-import { dirname, join, relative, resolve } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { PACKAGE_VERSION } from '../../package-version.js';
@@ -29,8 +28,9 @@ import { assertCacheDir } from '../cache-dir-policy.js';
 const log = createLogger('BrowserExtInstall');
 
 const META_FILENAME = '.meta.json';
-const CURRENT_LINK = 'current';
+const LEGACY_CURRENT_LINK = 'current';
 const STAGING_MAX_AGE_MS = 60 * 60 * 1000;
+const VERSION_DIR_RE = /^\d+\.\d+\.\d+/;
 
 export const BROWSER_EXT_REQUIRED_FILES = [
   'manifest.json',
@@ -49,7 +49,6 @@ export interface BrowserExtInstallMeta {
   bundledFrom: BrowserExtBundledFrom;
   installedAt: string;
   installPath: string;
-  previousVersion?: string;
 }
 
 export interface BrowserExtDoctor {
@@ -70,7 +69,6 @@ export interface EnsureBrowserExtResult {
   extensionDir: string;
   xopcVersion: string;
   copied: boolean;
-  previousVersion?: string;
 }
 
 function moduleDir(): string {
@@ -109,23 +107,40 @@ function browserExtRoot(cacheDir: string): string {
   return join(cacheDir, 'browser-ext');
 }
 
-function resolveCurrentPath(cacheDir: string): string {
-  return join(browserExtRoot(cacheDir), CURRENT_LINK);
-}
-
 function resolveMetaPath(cacheDir: string): string {
   return join(browserExtRoot(cacheDir), META_FILENAME);
 }
 
-function resolveCurrentRealPath(cacheDir: string): string | null {
-  const current = resolveCurrentPath(cacheDir);
-  if (!existsSync(current)) return null;
-  try {
-    const real = realpathSync(current);
-    return validateBrowserExtLayout(real) ? real : null;
-  } catch {
-    return null;
+function resolveVersionDir(cacheDir: string, version: string): string {
+  return join(browserExtRoot(cacheDir), version);
+}
+
+/** Resolve the installed extension directory (version folder, not a symlink). */
+export function resolveInstalledExtensionPath(
+  cacheDir: string,
+  meta: BrowserExtInstallMeta | null,
+): string | null {
+  if (meta?.installPath && validateBrowserExtLayout(meta.installPath)) {
+    return meta.installPath;
   }
+
+  const expectedDir = resolveVersionDir(cacheDir, PACKAGE_VERSION);
+  if (validateBrowserExtLayout(expectedDir)) {
+    return expectedDir;
+  }
+
+  const root = browserExtRoot(cacheDir);
+  const legacyCurrent = join(root, LEGACY_CURRENT_LINK);
+  if (existsSync(legacyCurrent)) {
+    try {
+      const real = realpathSync(legacyCurrent);
+      if (validateBrowserExtLayout(real)) return real;
+    } catch {
+      /* legacy path unreadable */
+    }
+  }
+
+  return null;
 }
 
 function walkAncestorsForGitDevBundled(start: string): string | null {
@@ -183,14 +198,14 @@ export async function resolveBundledBrowserExtDir(): Promise<{
 export function computeNeedsRefresh(params: {
   force?: boolean;
   bundledManifestVersion: string;
-  currentRealPath: string | null;
+  installedPath: string | null;
   meta: BrowserExtInstallMeta | null;
 }): boolean {
   if (params.force) return true;
-  if (!params.currentRealPath || !validateBrowserExtLayout(params.currentRealPath)) return true;
+  if (!params.installedPath || !validateBrowserExtLayout(params.installedPath)) return true;
 
-  const currentManifest = readManifestVersion(params.currentRealPath);
-  if (!currentManifest || currentManifest !== params.bundledManifestVersion) return true;
+  const installedManifest = readManifestVersion(params.installedPath);
+  if (!installedManifest || installedManifest !== params.bundledManifestVersion) return true;
 
   if (!params.meta || params.meta.xopcVersion !== PACKAGE_VERSION) return true;
 
@@ -220,33 +235,15 @@ async function cleanupStaleStaging(root: string): Promise<void> {
   }
 }
 
-function switchCurrentLink(root: string, versionDir: string): void {
-  const currentPath = join(root, CURRENT_LINK);
-  const versionName = relative(root, versionDir);
-  const tmpLink = join(root, `.current-${process.pid}`);
-
-  if (existsSync(tmpLink)) {
-    rmSync(tmpLink, { recursive: true, force: true });
-  }
-  if (existsSync(currentPath)) {
-    rmSync(currentPath, { recursive: true, force: true });
-  }
-
-  if (process.platform === 'win32') {
-    const target = resolve(versionDir);
-    cpSync(target, currentPath, { recursive: true });
-    return;
-  }
-
-  try {
-    symlinkSync(versionName, tmpLink, 'dir');
-    renameSync(tmpLink, currentPath);
-  } catch {
-    cpSync(versionDir, currentPath, { recursive: true });
-  }
+/** Remove legacy `current` link only (safe before a fresh install). */
+function removeLegacyCurrentLink(root: string): void {
+  const legacyCurrent = join(root, LEGACY_CURRENT_LINK);
+  if (!existsSync(legacyCurrent)) return;
+  rmSync(legacyCurrent, { recursive: true, force: true });
+  log.info('Removed legacy browser-ext/current');
 }
 
-async function gcOldVersions(root: string, keepVersions: Set<string>): Promise<void> {
+async function cleanupSiblingVersionDirs(root: string, keepVersion: string): Promise<void> {
   if (!existsSync(root)) return;
   let entries: string[];
   try {
@@ -255,14 +252,22 @@ async function gcOldVersions(root: string, keepVersions: Set<string>): Promise<v
     return;
   }
   for (const name of entries) {
-    if (name === CURRENT_LINK || name === META_FILENAME || name.startsWith('.')) continue;
-    if (!keepVersions.has(name)) {
+    if (name === META_FILENAME || name.startsWith('.')) continue;
+    if (name === LEGACY_CURRENT_LINK) {
       try {
         await rm(join(root, name), { recursive: true, force: true });
-        log.info({ version: name }, 'Removed old browser extension version directory');
       } catch (err) {
-        log.warn({ err, version: name }, 'Failed to remove old browser extension version');
+        log.warn({ err, name }, 'Failed to remove legacy browser extension path');
       }
+      continue;
+    }
+    if (!VERSION_DIR_RE.test(name)) continue;
+    if (name === keepVersion) continue;
+    try {
+      await rm(join(root, name), { recursive: true, force: true });
+      log.info({ version: name }, 'Removed old browser extension version directory');
+    } catch (err) {
+      log.warn({ err, version: name }, 'Failed to remove old browser extension version');
     }
   }
 }
@@ -306,20 +311,20 @@ export async function browserExtDoctor(opts?: {
 
   const bundled = await resolveBundledBrowserExtDir();
   const bundledManifestVersion = bundled ? readManifestVersion(bundled.dir) : undefined;
-  const currentRealPath = resolveCurrentRealPath(cacheDir);
   const meta = await readMeta(resolveMetaPath(cacheDir));
+  const installedPath = resolveInstalledExtensionPath(cacheDir, meta);
 
   const needsRefresh = bundled
     ? computeNeedsRefresh({
         force: false,
         bundledManifestVersion: bundledManifestVersion ?? PACKAGE_VERSION,
-        currentRealPath,
+        installedPath,
         meta,
       })
     : false;
 
-  const installed = Boolean(currentRealPath) && !needsRefresh;
-  const manifestVersion = currentRealPath ? readManifestVersion(currentRealPath) : undefined;
+  const installed = Boolean(installedPath) && !needsRefresh;
+  const manifestVersion = installedPath ? readManifestVersion(installedPath) : undefined;
 
   let needsChromeReload: boolean | undefined;
   const runtimeVer = opts?.runtimeExtensionVersion?.trim();
@@ -333,7 +338,7 @@ export async function browserExtDoctor(opts?: {
     xopcVersion: PACKAGE_VERSION,
     installedVersion: meta?.xopcVersion,
     manifestVersion,
-    extensionDir: currentRealPath ?? undefined,
+    extensionDir: installedPath ?? undefined,
     cacheDir,
     needsRefresh,
     needsChromeReload,
@@ -364,24 +369,26 @@ export async function ensureBrowserExtensionArtifacts(opts?: {
   await cleanupStaleStaging(root);
 
   const meta = await readMeta(resolveMetaPath(cacheDir));
-  const currentRealPath = resolveCurrentRealPath(cacheDir);
+  const installedPath = resolveInstalledExtensionPath(cacheDir, meta);
   const needsRefresh = computeNeedsRefresh({
     force: opts?.force,
     bundledManifestVersion,
-    currentRealPath,
+    installedPath,
     meta,
   });
 
-  if (!needsRefresh && currentRealPath) {
+  const versionKey = bundledManifestVersion;
+  removeLegacyCurrentLink(root);
+
+  if (!needsRefresh && installedPath) {
+    await cleanupSiblingVersionDirs(root, versionKey);
     return {
-      extensionDir: currentRealPath,
+      extensionDir: installedPath,
       xopcVersion: PACKAGE_VERSION,
       copied: false,
-      previousVersion: meta?.previousVersion,
     };
   }
 
-  const versionKey = PACKAGE_VERSION;
   const versionDir = join(root, versionKey);
   const stagingDir = join(root, `.staging-${versionKey}-${process.pid}`);
 
@@ -395,11 +402,7 @@ export async function ensureBrowserExtensionArtifacts(opts?: {
   }
   renameSync(stagingDir, versionDir);
 
-  switchCurrentLink(root, versionDir);
-  const extensionDir = resolveCurrentRealPath(cacheDir) ?? versionDir;
-
-  const previousVersion =
-    meta?.xopcVersion && meta.xopcVersion !== PACKAGE_VERSION ? meta.xopcVersion : meta?.previousVersion;
+  await cleanupSiblingVersionDirs(root, versionKey);
 
   const nextMeta: BrowserExtInstallMeta = {
     xopcVersion: PACKAGE_VERSION,
@@ -408,24 +411,18 @@ export async function ensureBrowserExtensionArtifacts(opts?: {
     bundledFrom: bundled.bundledFrom,
     installedAt: new Date().toISOString(),
     installPath: versionDir,
-    ...(previousVersion ? { previousVersion } : {}),
   };
   await writeTextAtomic(resolveMetaPath(cacheDir), JSON.stringify(nextMeta, null, 2));
 
-  const keep = new Set<string>([versionKey]);
-  if (previousVersion) keep.add(previousVersion);
-  await gcOldVersions(root, keep);
-
   log.info(
-    { extensionDir, xopcVersion: PACKAGE_VERSION, bundledFrom: bundled.bundledFrom },
+    { extensionDir: versionDir, xopcVersion: PACKAGE_VERSION, bundledFrom: bundled.bundledFrom },
     'Browser extension artifacts installed',
   );
 
   return {
-    extensionDir,
+    extensionDir: versionDir,
     xopcVersion: PACKAGE_VERSION,
     copied: true,
-    previousVersion,
   };
 }
 
@@ -446,7 +443,9 @@ export async function ensureBrowserExtensionOnStartup(config: {
 
 export async function readInstalledExtensionDir(cacheDir?: string): Promise<string | null> {
   const dir = cacheDir?.trim() ? assertCacheDir(cacheDir) : resolveBinDir();
-  return resolveCurrentRealPath(dir || resolveBinDir());
+  const resolved = dir || resolveBinDir();
+  const meta = await readMeta(resolveMetaPath(resolved));
+  return resolveInstalledExtensionPath(resolved, meta);
 }
 
 export type BrowserExtensionOpenAction = 'chrome' | 'folder' | 'both';

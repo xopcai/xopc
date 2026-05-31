@@ -36,6 +36,7 @@ export function CdpCard({
   stop,
   listInstances,
   ping,
+  embedded = false,
 }: {
   m: BrowserMessages;
   cdpUrl: string;
@@ -44,6 +45,7 @@ export function CdpCard({
   stop: (port: number) => Promise<void>;
   listInstances: () => Promise<LaunchedCdpInstance[]>;
   ping: (url: string) => Promise<{ reachable: boolean; browser?: string | null; error?: string }>;
+  embedded?: boolean;
 }) {
   const [ui, dispatch] = useReducer(uiPatchReducer<CdpCardUi>, initialCdpCardUi);
   const { instances, launchStatus, launchMessage, testStatus, testMessage, executablePath } = ui;
@@ -139,6 +141,8 @@ export function CdpCard({
         title={m.browserCdpLaunchLocal}
         description={m.browserCdpLaunchLocalDesc}
         m={m}
+        embedded={embedded}
+        sectionTitle={embedded ? m.browserCdpLaunchLocal : undefined}
         primaryAction={
           <button
             type="button"
@@ -154,22 +158,21 @@ export function CdpCard({
             {launchStatus === 'pending' ? m.browserCdpLaunching : m.browserCdpLaunchLocal}
           </button>
         }
-        advanced={
-          <AgentDefaultsField label={m.browserCdpChromePath} description={m.browserCdpChromePathDesc}>
-            <input
-              type="text"
-              className={inputClassName()}
-              value={executablePath}
-              placeholder="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-              onChange={(e) => dispatch({ type: 'patch', patch: { executablePath: e.target.value } })}
-              autoComplete="off"
-            />
-          </AgentDefaultsField>
-        }
       >
         {launchMessage ? (
           <ActionResultBox kind={launchStatus === 'error' ? 'error' : 'success'} message={launchMessage} />
         ) : null}
+
+        <AgentDefaultsField label={m.browserCdpChromePath} description={m.browserCdpChromePathDesc}>
+          <input
+            type="text"
+            className={inputClassName()}
+            value={executablePath}
+            placeholder="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+            onChange={(e) => dispatch({ type: 'patch', patch: { executablePath: e.target.value } })}
+            autoComplete="off"
+          />
+        </AgentDefaultsField>
 
         {instances.length > 0 ? (
           <div className="flex flex-col gap-2 rounded-lg border border-edge bg-surface-base p-3 text-xs">
@@ -198,6 +201,8 @@ export function CdpCard({
         title={m.label.browserCdpUrl}
         description={m.desc.browserCdpUrl}
         m={m}
+        embedded={embedded}
+        sectionTitle={embedded ? m.label.browserCdpUrl : undefined}
         primaryAction={
           <button
             type="button"
