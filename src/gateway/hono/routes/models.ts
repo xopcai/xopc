@@ -25,6 +25,7 @@ import { CredentialResolver } from '../../../auth/credentials.js';
 import { getProviderRegistry } from '../../../providers/plugin-registry.js';
 import type { ProviderModelDefinition } from '../../../extensions/types/providers.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
+import { respondStartupUnavailable } from '../lib/startup-unavailable.js';
 
 /** Plaintext key only when persisted under `cfg.providers.<id>.apiKey` (not env / credential store). */
 function readProviderApiKeyFromConfigFileOnly(cfg: Config, providerId: string): string | undefined {
@@ -150,6 +151,9 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
 
   // GET /api/models - Get available models (only configured providers)
   authenticated.get('/api/models', async (c) => {
+    if (!service.isGatewayReady()) {
+      return respondStartupUnavailable(c, 'models.list');
+    }
     const pluginRegistry = getProviderRegistry();
     const models = (await getAvailableModels()).map(m => ({
       id: `${m.provider}/${m.id}`,

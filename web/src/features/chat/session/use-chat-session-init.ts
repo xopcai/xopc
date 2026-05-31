@@ -1,21 +1,16 @@
-// Initial chat-session bootstrap. Three branches:
-//   1. `/chat/new` route — adopt an existing empty session for this agent if
-//      one exists, otherwise create one. The URL is then replaced with the
-//      resolved session key.
-//   2. `/chat/:key` route — load that session and try to resume any in-flight
-//      agent run for it.
-//   3. No key in URL — pick the most-recent populated session (or fall back to
-//      creating one) and redirect to it.
+// Initial chat-session bootstrap. Product contract: docs/web/chat-session-semantics.md
+//   1. `/chat/new` — always POST createSession, replace URL with new key.
+//   2. `/chat/:key` route — load that session and try to resume any in-flight agent run for it.
+//   3. No key in URL — pick the most-recent populated session (or fall back to creating one).
 //
-// Cancellation: each render bumps `initGenRef` so a stale async chain (e.g.
-// `isNewRoute` toggled mid-fetch) won't apply its results.
+// Cancellation: each render bumps `initGenRef` so a stale async chain won't apply its results.
 
 import { useEffect, useRef, type MutableRefObject } from 'react';
 
 import type { Message } from '@/features/chat/messages/messages.types';
-import { getLiveSessionCache } from '@/features/chat/session/active-session-live-cache';
-import { pickEmptyWebSessionForAgent } from '@/features/chat/session/chat-session-defaults';
+import { getChatSessionSnapshot, getSessionMessages } from '@/features/chat/session/chat-session-store';
 import { searchParamsForComposerHandoff } from '@/features/chat/session/composer-handoff-params';
+import { markSkipInitialSessionLoad, takeSkipInitialSessionLoad } from '@/features/chat/session/chat-session-init-skip-load';
 import type { SessionManager } from '@/features/chat/session/session-manager';
 
 export function useChatSessionInit(opts: {
@@ -78,38 +73,36 @@ export function useChatSessionInit(opts: {
         });
     };
 
-    const adoptOrCreateNewRouteSession = (): Promise<void> => {
+    const createNewRouteSession = (): Promise<void> => {
       if (!isLive()) return Promise.resolve();
-      return sessionMgrRef.current.loadSessions().then((sessions) => {
-        if (!isLive()) return;
-        const aid = resolveAgentIdForPost();
-        const empty = pickEmptyWebSessionForAgent(sessions, aid ?? undefined);
-        if (empty) {
-          adoptEmptySession(empty.key, empty.name ?? null);
-          navigateToSession(empty.key, true, searchParamsForComposerHandoff(locationSearch));
+      const aid = resolveAgentIdForPost();
+      return sessionMgrRef.current
+        .createSession(aid ? { agentId: aid } : undefined)
+        .then((session) => {
           if (!isLive()) return;
-          applyResolvedSessionConfig(empty.key);
-          return;
-        }
-        if (!isLive()) return;
-        return sessionMgrRef.current
-          .createSession(aid ? { agentId: aid } : undefined)
-          .then((session) => {
-            if (!isLive()) return;
-            adoptEmptySession(session.key, session.name ?? null);
-            navigateToSession(session.key, true, searchParamsForComposerHandoff(locationSearch));
-            applyResolvedSessionConfig(session.key);
-          });
-      });
+          markSkipInitialSessionLoad(session.key);
+          adoptEmptySession(session.key, session.name ?? null);
+          navigateToSession(session.key, true, searchParamsForComposerHandoff(locationSearch));
+          applyResolvedSessionConfig(session.key);
+        });
+    };
+
+    const resumeSessionRun = (key: string, seed: Message[]): Promise<void> => {
+      if (!isLive()) return Promise.resolve();
+      restoreLiveCacheIfNeeded(key);
+      const resolvedSeed =
+        getChatSessionSnapshot(key)?.messages ?? seed ?? getSessionMessages(key);
+      return tryResumeAgentRun(key, resolvedSeed);
     };
 
     const initDecodedKey = (key: string): Promise<void> => {
       if (!isLive()) return Promise.resolve();
+      if (takeSkipInitialSessionLoad(key)) {
+        return resumeSessionRun(key, getSessionMessages(key));
+      }
       return loadSessionById(key, 0).then((loaded) => {
         if (!isLive()) return;
-        restoreLiveCacheIfNeeded(key);
-        const seed = getLiveSessionCache(key)?.messages ?? loaded ?? [];
-        return tryResumeAgentRun(key, seed);
+        return resumeSessionRun(key, loaded ?? getSessionMessages(key));
       });
     };
 
@@ -124,7 +117,7 @@ export function useChatSessionInit(opts: {
           return loadSessionById(target.key, 0).then((loaded) => {
             if (!isLive()) return;
             restoreLiveCacheIfNeeded(target.key);
-            const seed = getLiveSessionCache(target.key)?.messages ?? loaded ?? [];
+            const seed = getChatSessionSnapshot(target.key)?.messages ?? loaded ?? getSessionMessages(target.key);
             const keyFromUrl = sessionMgrRef.current.parseSessionFromHash();
             if (!keyFromUrl) navigateToSession(target.key, true);
             return tryResumeAgentRun(target.key, seed);
@@ -136,6 +129,7 @@ export function useChatSessionInit(opts: {
           .createSession(aid ? { agentId: aid } : undefined)
           .then((session) => {
             if (!isLive()) return;
+            markSkipInitialSessionLoad(session.key);
             adoptEmptySession(session.key, session.name ?? null);
             navigateToSession(session.key);
             applyResolvedSessionConfig(session.key);
@@ -148,7 +142,7 @@ export function useChatSessionInit(opts: {
       patchInitUi({ loading: needsFullBlockingLoad, error: null });
 
       const branch = isNewRoute
-        ? adoptOrCreateNewRouteSession()
+        ? createNewRouteSession()
         : decodedKey
           ? initDecodedKey(decodedKey)
           : initFallback();

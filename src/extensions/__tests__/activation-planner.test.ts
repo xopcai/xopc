@@ -70,4 +70,25 @@ describe('ActivationPlanner', () => {
     );
     expect(planner.getActivatedIds({ env: {} })).toContain('x');
   });
+
+  it('normalizes activation.onStartup', () => {
+    const planner = new ActivationPlanner(
+      regFrom([
+        {
+          id: 'boot',
+          path: '/boot',
+          source: 'bundled',
+          manifest: {
+            id: 'boot',
+            name: 'Boot',
+            enabledByDefault: true,
+            activation: { onStartup: true },
+          },
+        },
+      ]),
+    );
+    const ids = planner.getActivatedIds({ env: {} });
+    expect(planner.filterActivatedIdsByLoadPhase(ids, 'startup')).toContain('boot');
+    expect(planner.filterActivatedIdsByLoadPhase(ids, 'deferred')).not.toContain('boot');
+  });
 });

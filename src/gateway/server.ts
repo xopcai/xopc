@@ -91,6 +91,7 @@ export class GatewayServer {
       },
       () => {
         console.log(`[GatewayServer] Gateway server running at http://${primaryHost}:${this.config.port}`);
+        this.service.markHttpListening();
         void this.service.onHttpListening().catch((err) => {
           console.error('[GatewayServer] Deferred channel startup failed:', err);
         });

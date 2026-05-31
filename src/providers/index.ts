@@ -388,4 +388,4 @@ export function getDefaultModelSync(config?: Config | null | undefined): string 
 }
 
 // Re-export ModelRegistry for advanced use cases
-export { ModelRegistry, getModelRegistry, resetModelRegistry } from './model-registry.js';
+export { ModelRegistry, getModelRegistry, resetModelRegistry, prewarmModelRegistry } from './model-registry.js';

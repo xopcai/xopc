@@ -1,10 +1,25 @@
 import type { ReasoningLevel } from '@/features/chat/messages/messages.types';
-import type { SessionInfo } from '@/features/chat/chat.types';
-import { isWebUiSessionKey } from '@/features/chat/session/session-manager';
-import { getAgentIdFromWebSessionKey } from '@/lib/web-session-agent';
 
 export const DEFAULT_THINKING = 'medium';
 export const DEFAULT_REASONING: ReasoningLevel = 'stream';
+
+export type DefaultSessionMeta = {
+  name: string | null;
+  model: string;
+  thinkingLevel: string;
+  reasoningLevel: ReasoningLevel;
+  modelSupportsThinking: boolean;
+};
+
+export function defaultSessionMeta(): DefaultSessionMeta {
+  return {
+    name: null,
+    model: '',
+    thinkingLevel: DEFAULT_THINKING,
+    reasoningLevel: DEFAULT_REASONING,
+    modelSupportsThinking: false,
+  };
+}
 
 export const WEBCHAT_AGENT_STORAGE_KEY = 'xopc.webchat.agentId';
 
@@ -16,17 +31,4 @@ export function readStoredWebchatAgentId(): string | null {
   } catch {
     return null;
   }
-}
-
-export function pickEmptyWebSessionForAgent(
-  sessions: SessionInfo[],
-  agentId: string | undefined,
-): SessionInfo | undefined {
-  if (!agentId) return undefined;
-  return sessions.find(
-    (s) =>
-      isWebUiSessionKey(s.key) &&
-      (s.messageCount ?? 0) === 0 &&
-      getAgentIdFromWebSessionKey(s.key) === agentId,
-  );
 }

@@ -1,0 +1,11 @@
+{
+  "entry": "dist/src/cli/bin.js",
+  "readyBudgetMs": 15000,
+  "rssBudgetMb": 512,
+  "summary": {
+    "avgReadyMs": 8000,
+    "p95ReadyMs": 12000,
+    "avgMaxRssMb": 350,
+    "passedBudget": true
+  }
+}
