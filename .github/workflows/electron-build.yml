@@ -138,6 +138,7 @@ jobs:
           fi
           # Same as local `pnpm run electron:build`: bundle gateway CLI to out/server/index.js for packaged apps.
           pnpm run electron:server:build
+          # electron-builder.mjs hides pnpm workspace markers + verifies asar node_modules size on success.
           # macOS: build architectures sequentially to avoid DMG temp file conflicts
           if [[ "${{ matrix.os }}" == "macos-latest" ]]; then
             echo "Building macOS x64..."
