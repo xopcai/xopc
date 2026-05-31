@@ -1,13 +1,27 @@
 import { existsSync } from 'node:fs';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
 import {
   playwrightChromiumDoctor,
   resolvePlaywrightCoreCliPath,
+  resolvePlaywrightCoreRoot,
 } from '../providers/playwright-doctor.js';
 
 describe('playwrightChromiumDoctor', () => {
+  const prevRoot = process.env.XOPC_PLAYWRIGHT_CORE_ROOT;
+  afterEach(() => {
+    if (prevRoot === undefined) delete process.env.XOPC_PLAYWRIGHT_CORE_ROOT;
+    else process.env.XOPC_PLAYWRIGHT_CORE_ROOT = prevRoot;
+  });
+
   it('resolves bundled playwright-core cli.js', () => {
+    const cliPath = resolvePlaywrightCoreCliPath();
+    expect(cliPath.endsWith('playwright-core/cli.js')).toBe(true);
+    expect(existsSync(cliPath)).toBe(true);
+  });
+
+  it('honors XOPC_PLAYWRIGHT_CORE_ROOT for packaged Electron layout', () => {
+    process.env.XOPC_PLAYWRIGHT_CORE_ROOT = resolvePlaywrightCoreRoot();
     const cliPath = resolvePlaywrightCoreCliPath();
     expect(cliPath.endsWith('playwright-core/cli.js')).toBe(true);
     expect(existsSync(cliPath)).toBe(true);
