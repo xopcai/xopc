@@ -1,6 +1,6 @@
 import type { LucideIcon } from 'lucide-react';
 import { AlertTriangle, CheckCircle2, CircleHelp, LoaderCircle, XCircle } from 'lucide-react';
-import { useState, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 
 import { cn } from '@/lib/cn';
 
@@ -18,6 +18,9 @@ export function BackendModeCard({
   children,
   advanced,
   m,
+  embedded = false,
+  sectionTitle,
+  advancedTitle,
 }: {
   icon: LucideIcon;
   title: string;
@@ -26,11 +29,49 @@ export function BackendModeCard({
   statusDetail?: string;
   primaryAction?: ReactNode;
   children?: ReactNode;
-  /** Collapsible "Advanced" section. */
+  /** Optional extra fields block, always visible below main content. */
   advanced?: ReactNode;
+  /** Section heading for {@link advanced} (e.g. "Paths & fingerprint"). */
+  advancedTitle?: string;
   m: BrowserMessages;
+  /** Inside {@link BrowserWorkspace}: omit outer chrome; optional sub-section title. */
+  embedded?: boolean;
+  sectionTitle?: string;
 }) {
-  const [showAdvanced, setShowAdvanced] = useState(false);
+  const advancedBlock = advanced ? (
+    <div className="flex flex-col gap-4">
+      {advancedTitle ? <h4 className="text-sm font-medium text-fg">{advancedTitle}</h4> : null}
+      {advanced}
+    </div>
+  ) : null;
+
+  if (embedded) {
+    return (
+      <div className="flex flex-col gap-4">
+        {sectionTitle ? (
+          <div className="flex flex-col gap-0.5">
+            <h4 className="text-sm font-medium text-fg">{sectionTitle}</h4>
+            {description ? <p className="text-xs leading-relaxed text-fg-muted">{description}</p> : null}
+          </div>
+        ) : null}
+        {status || primaryAction ? (
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            {status ? (
+              <div className="min-w-0 flex-1">
+                <StatusBadge kind={status} detail={statusDetail} m={m} />
+              </div>
+            ) : (
+              <span />
+            )}
+            {primaryAction ? <div className="shrink-0">{primaryAction}</div> : null}
+          </div>
+        ) : null}
+        {children ? <div className="flex flex-col gap-4">{children}</div> : null}
+        {advancedBlock}
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-4 rounded-xl border border-edge bg-surface-panel p-4">
       <div className="flex items-start gap-3">
@@ -48,23 +89,7 @@ export function BackendModeCard({
       </div>
 
       {children ? <div className="flex flex-col gap-4">{children}</div> : null}
-
-      {advanced ? (
-        <div className="flex flex-col gap-3">
-          <button
-            type="button"
-            className="self-start text-xs font-medium text-fg-muted hover:text-fg"
-            onClick={() => setShowAdvanced((v) => !v)}
-          >
-            {showAdvanced ? m.browserAdvancedHide : m.browserAdvancedShow}
-          </button>
-          {showAdvanced ? (
-            <div className="flex flex-col gap-4 rounded-lg border border-edge bg-surface-base p-3">
-              {advanced}
-            </div>
-          ) : null}
-        </div>
-      ) : null}
+      {advancedBlock}
     </div>
   );
 }
@@ -87,10 +112,14 @@ function StatusBadge({
   };
   const { icon: Icon, color, label } = config[kind];
   return (
-    <span className={cn('inline-flex items-center gap-1 text-xs font-medium', color)}>
-      <Icon className={cn('size-3.5', kind === 'checking' && 'animate-spin')} />
-      <span>{label}</span>
-      {detail ? <span className="font-normal text-fg-subtle">· {detail}</span> : null}
+    <span className="inline-flex min-w-0 flex-col items-start gap-1">
+      <span className={cn('inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-xs font-medium', color)}>
+        <Icon className={cn('size-3.5 shrink-0', kind === 'checking' && 'animate-spin')} />
+        <span>{label}</span>
+      </span>
+      {detail ? (
+        <span className="break-all font-mono text-[11px] leading-snug text-fg-subtle">{detail}</span>
+      ) : null}
     </span>
   );
 }

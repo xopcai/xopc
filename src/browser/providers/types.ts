@@ -94,6 +94,8 @@ export interface CloakBrowserConfig {
   onProgress?: (progress: BrowserInstallProgress) => void | Promise<void>;
   /** Abort long-running install/download (client disconnect). */
   signal?: AbortSignal;
+  /** When true, wait for CDP then return without connecting Playwright (settings "open browser"). */
+  skipPlaywrightConnect?: boolean;
 }
 
 /** Union of all backend connection modes. */

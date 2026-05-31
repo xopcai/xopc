@@ -46,12 +46,68 @@ export class BrowserManager {
   private evictIdlePages(): void {
     const now = Date.now();
     for (const [id, entry] of this.pages) {
-      if (now - entry.lastUsed > PAGE_IDLE_TIMEOUT_MS) {
+      if (entry.page.isClosed() || now - entry.lastUsed > PAGE_IDLE_TIMEOUT_MS) {
         void entry.page.close().catch(() => {});
         this.pages.delete(id);
-        log.debug({ taskId: id }, 'Evicted idle browser page');
+        log.debug({ taskId: id }, 'Evicted idle or closed browser page');
       }
     }
+  }
+
+  private _isPlaywrightConnectionAlive(): boolean {
+    if (!this.browser || !this.context) return false;
+    try {
+      if (typeof this.browser.isConnected === 'function' && !this.browser.isConnected()) {
+        return false;
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private _wireBrowserLifecycle(browser: Browser): void {
+    browser.on('disconnected', () => {
+      log.warn({ mode: this.activeBackendMode }, 'Browser disconnected — clearing stale session');
+      this._clearPlaywrightSessionRefs();
+    });
+  }
+
+  /** Drop Playwright handles without tearing down extension bridge. */
+  private _clearPlaywrightSessionRefs(): void {
+    this.pages.clear();
+    this.context = null;
+    this.browser = null;
+    this.cloakChildProcess = null;
+    this.cloakTempProfileDir = null;
+    if (this.cloudProvider) {
+      void this.cloudProvider.disconnect().catch(() => {});
+      this.cloudProvider = null;
+    }
+  }
+
+  private async _resetStalePlaywrightSession(): Promise<void> {
+    for (const [, entry] of this.pages) {
+      await entry.page.close().catch(() => {});
+    }
+    this.pages.clear();
+
+    if (this.cloudProvider) {
+      await this.cloudProvider.disconnect().catch(() => {});
+      this.cloudProvider = null;
+    }
+
+    if (this.cloakChildProcess || this.cloakTempProfileDir) {
+      const { cleanupCloakBrowser } = await import('./providers/cloakbrowser.js');
+      await cleanupCloakBrowser(this.cloakChildProcess, this.cloakTempProfileDir).catch(() => {});
+      this.cloakChildProcess = null;
+      this.cloakTempProfileDir = null;
+    }
+
+    await this.context?.close().catch(() => {});
+    await this.browser?.close().catch(() => {});
+    this.context = null;
+    this.browser = null;
   }
 
   /**
@@ -59,7 +115,16 @@ export class BrowserManager {
    * Extension mode does not create a Playwright {@link BrowserContext}.
    */
   async ensureConnected(): Promise<void> {
-    if (this.context || this.extensionProvider) return;
+    if (this.extensionProvider) return;
+
+    if (this.context && this._isPlaywrightConnectionAlive()) {
+      return;
+    }
+
+    if (this.context || this.browser) {
+      log.warn({ mode: this.activeBackendMode }, 'Browser session unavailable — reconnecting');
+      await this._resetStalePlaywrightSession();
+    }
 
     const backend = this.options.getBackend?.() ?? { mode: 'local' as const, headless: false };
 
@@ -83,6 +148,9 @@ export class BrowserManager {
     }
 
     this.activeBackendMode = backend.mode;
+    if (this.browser) {
+      this._wireBrowserLifecycle(this.browser);
+    }
   }
 
   /** @deprecated Use {@link ensureConnected}. */
@@ -157,6 +225,9 @@ export class BrowserManager {
   private async _connectViaCloakBrowser(config?: import('./providers/types.js').CloakBrowserConfig): Promise<void> {
     const { launchCloakBrowser } = await import('./providers/cloakbrowser.js');
     const result = await launchCloakBrowser(config);
+    if (!result.browser || !result.context) {
+      throw new Error('BrowserManager: CloakBrowser launch did not return a Playwright connection');
+    }
     this.browser = result.browser;
     this.context = result.context;
     this.cloakChildProcess = result.childProcess;
@@ -170,11 +241,15 @@ export class BrowserManager {
     }
 
     this.evictIdlePages();
+    await this.ensureConnected();
 
     const existing = this.pages.get(taskId);
-    if (existing) {
+    if (existing && !existing.page.isClosed()) {
       existing.lastUsed = Date.now();
       return existing.page;
+    }
+    if (existing) {
+      this.pages.delete(taskId);
     }
 
     if (this.pages.size >= MAX_PAGES) {
@@ -185,7 +260,6 @@ export class BrowserManager {
       }
     }
 
-    await this.ensureConnected();
     const ctx = this.context;
     if (!ctx) {
       throw new Error('BrowserManager: Playwright context missing after ensureConnected');

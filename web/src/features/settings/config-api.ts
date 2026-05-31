@@ -100,6 +100,8 @@ export interface AgentDefaultsState {
   browserExtensionPort: number | undefined;
   /** Chrome Extension bridge host (default 127.0.0.1). */
   browserExtensionHost: string;
+  /** Extension connection wait timeout in ms (default 30000). */
+  browserExtensionConnectionTimeout: number | undefined;
   /** Keep CloakBrowser alive between tasks. */
   browserCloakKeepOpen: boolean;
   /** Use a temporary CloakBrowser profile. */
@@ -108,6 +110,16 @@ export interface AgentDefaultsState {
   browserCloakCacheDir: string;
   /** Optional CloakBrowser executable path. */
   browserCloakBinaryPath: string;
+  /** CloakBrowser timezone emulation (e.g. America/New_York). */
+  browserCloakTimezone: string;
+  /** CloakBrowser locale emulation (e.g. en-US). */
+  browserCloakLocale: string;
+  /** Public IP for WebRTC leak prevention. */
+  browserCloakWebrtcIp: string;
+  /** Platform fingerprint override (e.g. windows, macos). */
+  browserCloakFingerprintPlatform: string;
+  /** Extra Chromium launch args (one per line in UI). */
+  browserCloakExtraArgs: string;
   /** Humanized browser input simulation. */
   browserHumanize: boolean;
   /** Humanized input behavior preset. */
@@ -234,10 +246,16 @@ type BrowserFieldsPick = Pick<
   | 'browserCdpUrl'
   | 'browserExtensionPort'
   | 'browserExtensionHost'
+  | 'browserExtensionConnectionTimeout'
   | 'browserCloakKeepOpen'
   | 'browserCloakTemporaryProfile'
   | 'browserCloakCacheDir'
   | 'browserCloakBinaryPath'
+  | 'browserCloakTimezone'
+  | 'browserCloakLocale'
+  | 'browserCloakWebrtcIp'
+  | 'browserCloakFingerprintPlatform'
+  | 'browserCloakExtraArgs'
   | 'browserHumanize'
   | 'browserHumanPreset'
   | 'browserDialogPolicy'
@@ -260,10 +278,16 @@ function parseBrowserFromDefaults(d: Record<string, unknown>): BrowserFieldsPick
       browserCdpUrl: '',
       browserExtensionPort: undefined,
       browserExtensionHost: '127.0.0.1',
+      browserExtensionConnectionTimeout: undefined,
       browserCloakKeepOpen: true,
       browserCloakTemporaryProfile: false,
       browserCloakCacheDir: '',
       browserCloakBinaryPath: '',
+      browserCloakTimezone: '',
+      browserCloakLocale: '',
+      browserCloakWebrtcIp: '',
+      browserCloakFingerprintPlatform: '',
+      browserCloakExtraArgs: '',
       browserHumanize: true,
       browserHumanPreset: 'careful',
       browserDialogPolicy: 'auto_dismiss',
@@ -316,6 +340,12 @@ function parseBrowserFromDefaults(d: Record<string, unknown>): BrowserFieldsPick
       ? Math.floor(ext.port)
       : undefined;
   const extensionHost = typeof ext.host === 'string' && ext.host ? ext.host : '127.0.0.1';
+  const extensionConnectionTimeout =
+    typeof ext.connectionTimeout === 'number' &&
+    Number.isFinite(ext.connectionTimeout) &&
+    ext.connectionTimeout >= 1000
+      ? Math.floor(ext.connectionTimeout)
+      : undefined;
 
   const cloakbrowser =
     typeof b.cloakbrowser === 'object' && b.cloakbrowser && !Array.isArray(b.cloakbrowser)
@@ -348,10 +378,21 @@ function parseBrowserFromDefaults(d: Record<string, unknown>): BrowserFieldsPick
     browserCdpUrl: cdpUrl,
     browserExtensionPort: extensionPort,
     browserExtensionHost: extensionHost,
+    browserExtensionConnectionTimeout: extensionConnectionTimeout,
     browserCloakKeepOpen: cloakbrowser.keepOpen !== false,
     browserCloakTemporaryProfile: cloakbrowser.temporaryProfile === true,
     browserCloakCacheDir: typeof cloakbrowser.cacheDir === 'string' ? cloakbrowser.cacheDir : '',
     browserCloakBinaryPath: typeof cloakbrowser.binaryPath === 'string' ? cloakbrowser.binaryPath : '',
+    browserCloakTimezone: typeof cloakbrowser.timezone === 'string' ? cloakbrowser.timezone : '',
+    browserCloakLocale: typeof cloakbrowser.locale === 'string' ? cloakbrowser.locale : '',
+    browserCloakWebrtcIp: typeof cloakbrowser.webrtcIp === 'string' ? cloakbrowser.webrtcIp : '',
+    browserCloakFingerprintPlatform:
+      typeof cloakbrowser.fingerprintPlatform === 'string' ? cloakbrowser.fingerprintPlatform : '',
+    browserCloakExtraArgs: Array.isArray(cloakbrowser.extraArgs)
+      ? cloakbrowser.extraArgs
+          .filter((a): a is string => typeof a === 'string' && a.trim().length > 0)
+          .join('\n')
+      : '',
     browserHumanize: b.humanize !== false,
     browserHumanPreset: humanPreset,
     browserDialogPolicy: dialogPolicy,
@@ -695,6 +736,56 @@ export function parseParamsJsonForSave(paramsJson: string): Record<string, unkno
   return parsed as Record<string, unknown>;
 }
 
+/** Maps agent-defaults browser fields to `agents.defaults.browser` for PATCH payloads. */
+export function buildBrowserConfigFromAgentDefaults(state: AgentDefaultsState): Record<string, unknown> {
+  return {
+    enabled: state.browserEnabled,
+    headless: state.browserHeadless,
+    allowPrivateUrls: state.browserAllowPrivateUrls,
+    commandTimeout: state.browserCommandTimeout ?? null,
+    backend: state.browserBackend === 'extension' ? null : state.browserBackend,
+    cloudProvider: state.browserCloudProvider === 'local' ? null : state.browserCloudProvider,
+    cloud: state.browserBackend === 'cloud'
+      ? {
+          apiKey: state.browserCloudApiKey.trim() || null,
+          projectId: state.browserCloudProjectId.trim() || null,
+          region: state.browserCloudRegion.trim() || null,
+        }
+      : null,
+    cdpUrl: state.browserCdpUrl.trim() || null,
+    extension: state.browserBackend === 'extension'
+      ? {
+          port: state.browserExtensionPort ?? null,
+          host: state.browserExtensionHost.trim() || null,
+          connectionTimeout: state.browserExtensionConnectionTimeout ?? null,
+        }
+      : null,
+    cloakbrowser: state.browserBackend === 'cloakbrowser'
+      ? {
+          keepOpen: state.browserCloakKeepOpen,
+          temporaryProfile: state.browserCloakTemporaryProfile,
+          cacheDir: state.browserCloakCacheDir.trim() || null,
+          binaryPath: state.browserCloakBinaryPath.trim() || null,
+          timezone: state.browserCloakTimezone.trim() || null,
+          locale: state.browserCloakLocale.trim() || null,
+          webrtcIp: state.browserCloakWebrtcIp.trim() || null,
+          fingerprintPlatform: state.browserCloakFingerprintPlatform.trim() || null,
+          extraArgs: (() => {
+            const args = state.browserCloakExtraArgs
+              .split('\n')
+              .map((line) => line.trim())
+              .filter(Boolean);
+            return args.length > 0 ? args : null;
+          })(),
+        }
+      : null,
+    humanize: state.browserBackend === 'cloakbrowser' ? state.browserHumanize : null,
+    humanPreset: state.browserBackend === 'cloakbrowser' ? state.browserHumanPreset : null,
+    dialogPolicy: state.browserDialogPolicy === 'auto_dismiss' ? null : state.browserDialogPolicy,
+    dialogTimeoutSeconds: state.browserDialogTimeout ?? null,
+  };
+}
+
 export async function fetchAgentDefaults(): Promise<AgentDefaultsState> {
   const res = await fetchJson<{ ok?: boolean; payload?: { config?: unknown } }>(apiUrl('/api/config'));
   const cfg = configFromApiResponse(res);
@@ -777,40 +868,7 @@ export async function patchAgentDefaults(state: AgentDefaultsState): Promise<voi
     maxRequestsPerTurn: state.maxRequestsPerTurn,
     maxToolFailuresPerTurn: state.maxToolFailuresPerTurn,
     workspace: state.workspace,
-    browser: {
-      enabled: state.browserEnabled,
-      headless: state.browserHeadless,
-      allowPrivateUrls: state.browserAllowPrivateUrls,
-      commandTimeout: state.browserCommandTimeout ?? null,
-      backend: state.browserBackend === 'extension' ? null : state.browserBackend,
-      cloudProvider: state.browserCloudProvider === 'local' ? null : state.browserCloudProvider,
-      cloud: state.browserBackend === 'cloud'
-        ? {
-            apiKey: state.browserCloudApiKey.trim() || null,
-            projectId: state.browserCloudProjectId.trim() || null,
-            region: state.browserCloudRegion.trim() || null,
-          }
-        : null,
-      cdpUrl: state.browserCdpUrl.trim() || null,
-      extension: state.browserBackend === 'extension'
-        ? {
-            port: state.browserExtensionPort ?? null,
-            host: state.browserExtensionHost.trim() || null,
-          }
-        : null,
-      cloakbrowser: state.browserBackend === 'cloakbrowser'
-        ? {
-            keepOpen: state.browserCloakKeepOpen,
-            temporaryProfile: state.browserCloakTemporaryProfile,
-            cacheDir: state.browserCloakCacheDir.trim() || null,
-            binaryPath: state.browserCloakBinaryPath.trim() || null,
-          }
-        : null,
-      humanize: state.browserBackend === 'cloakbrowser' ? state.browserHumanize : null,
-      humanPreset: state.browserBackend === 'cloakbrowser' ? state.browserHumanPreset : null,
-      dialogPolicy: state.browserDialogPolicy === 'auto_dismiss' ? null : state.browserDialogPolicy,
-      dialogTimeoutSeconds: state.browserDialogTimeout ?? null,
-    },
+    browser: buildBrowserConfigFromAgentDefaults(state),
     thinkingDefault: state.thinkingDefault,
     reasoningDefault: state.reasoningDefault,
     verboseDefault: state.verboseDefault,

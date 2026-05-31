@@ -83,10 +83,45 @@ function buildFieldSeeds(language: StoredLanguage): FieldSeed[] {
     // --- Agent defaults: Browser ---
     {
       id: 'field:agent:browser',
-      title: isZh ? '浏览器自动化' : 'Browser Automation',
-      subtitle: isZh ? '启用/禁用 Playwright 浏览器工具' : 'Enable/disable Playwright browser tools',
+      title: isZh ? '浏览器自动化' : 'Browser automation',
+      subtitle: isZh ? '启用 browser_use 工具' : 'Enable browser_use tools',
       path: '/settings/agent-browser',
-      keywords: ['browser', 'playwright', 'chromium', 'automation', 'headless', '浏览器'],
+      keywords: ['browser', 'browser_use', 'automation', '浏览器'],
+    },
+    {
+      id: 'field:agent:browser-extension',
+      title: isZh ? 'Chrome 扩展连接' : 'Chrome extension bridge',
+      subtitle: isZh ? '安装扩展并启动 WebSocket 桥接' : 'Install extension and start the bridge',
+      path: '/settings/agent-browser?tab=extension',
+      keywords: ['extension', 'chrome', 'bridge', 'websocket', '扩展', '桥接'],
+    },
+    {
+      id: 'field:agent:browser-playwright',
+      title: isZh ? '安装 Playwright Chromium' : 'Install Playwright Chromium',
+      subtitle: isZh ? '本地 Playwright 后端就绪检查' : 'Local Playwright backend setup',
+      path: '/settings/agent-browser?tab=local',
+      keywords: ['playwright', 'chromium', 'install', 'local', '安装'],
+    },
+    {
+      id: 'field:agent:browser-cloak',
+      title: isZh ? 'CloakBrowser 配置' : 'CloakBrowser settings',
+      subtitle: isZh ? '反指纹浏览器下载与高级选项' : 'Stealth browser download and fingerprint options',
+      path: '/settings/agent-browser?tab=cloakbrowser',
+      keywords: ['cloak', 'cloakbrowser', 'fingerprint', 'stealth', '反指纹'],
+    },
+    {
+      id: 'field:agent:browser-headless',
+      title: isZh ? '浏览器无头模式' : 'Browser headless mode',
+      subtitle: isZh ? '隐藏浏览器窗口' : 'Run without a visible window',
+      path: '/settings/agent-browser?focus=runtime',
+      keywords: ['headless', 'window', 'visible', '无头'],
+    },
+    {
+      id: 'field:agent:browser-private-urls',
+      title: isZh ? '允许内网 URL' : 'Allow private URLs',
+      subtitle: isZh ? '浏览器导航安全限制' : 'Browser navigation security policy',
+      path: '/settings/agent-browser?focus=security',
+      keywords: ['private', 'internal', 'localhost', 'security', '内网', '安全'],
     },
 
     // --- Agent defaults: Runtime ---

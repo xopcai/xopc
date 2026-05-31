@@ -29,6 +29,33 @@ type ServerState = {
 
 let state: ServerState | null = null;
 
+export type ExtensionBrowserServerSnapshot = {
+  active: boolean;
+  refCount: number;
+  key: string | null;
+};
+
+export function getExtensionBrowserServerSnapshot(): ExtensionBrowserServerSnapshot {
+  if (!state) {
+    return { active: false, refCount: 0, key: null };
+  }
+  return { active: true, refCount: state.refCount, key: state.key };
+}
+
+export function getExtensionBrowserProvider(): ExtensionBrowserProvider | null {
+  return state?.provider ?? null;
+}
+
+/** Shut down the shared listener regardless of remaining ref counts (settings UI stop). */
+export async function forceShutdownExtensionBrowserServer(): Promise<boolean> {
+  return withExclusive(async () => {
+    if (!state) return false;
+    await state.provider.shutdown();
+    state = null;
+    return true;
+  });
+}
+
 function normalizeConfig(config?: ExtensionProviderConfig): Required<ExtensionProviderConfig> {
   return {
     port: config?.port ?? DEFAULT_PORT,

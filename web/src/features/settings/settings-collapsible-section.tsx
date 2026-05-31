@@ -1,5 +1,6 @@
 import { ChevronDown, type LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { useState } from 'react';
 
 import { cn } from '@/lib/cn';
 
@@ -24,9 +25,12 @@ export function SettingsCollapsibleSection({
   className,
   defaultOpen,
 }: Props) {
+  const [open, setOpen] = useState(defaultOpen ?? false);
+
   return (
     <details
-      open={defaultOpen}
+      open={open}
+      onToggle={(e) => setOpen(e.currentTarget.open)}
       className={cn(
         'group rounded-2xl bg-surface-base open:pb-1',
         className,

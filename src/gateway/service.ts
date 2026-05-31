@@ -806,15 +806,23 @@ export class GatewayService {
     await this.reconcileBrowserExtensionServer();
   }
 
+  /** Release the gateway's hold on the shared extension bridge (does not restart). */
+  async releaseBrowserExtensionBridge(): Promise<void> {
+    if (!this.browserExtensionRelease) return;
+    await this.browserExtensionRelease();
+    this.browserExtensionRelease = null;
+    this.browserExtensionProvider = null;
+    this.browserExtensionBindKey = null;
+    log.debug('Browser extension WS server released');
+  }
+
   /**
    * Start/stop/rebind the Chrome extension bridge when `agents.defaults.browser` changes.
    * PATCH saves update config in memory without re-running gateway startup, so this must run on save too.
    */
   async reconcileBrowserExtensionServer(): Promise<void> {
-    const browser = (this.config.agents?.defaults as Record<string, unknown> | undefined)?.browser as
-      | Record<string, unknown>
-      | undefined;
-    const wantsExtension = browser?.backend === 'extension';
+    const { shouldRunExtensionBridgeServer } = await import('../browser/backend-from-config.js');
+    const wantsExtension = shouldRunExtensionBridgeServer(this.config);
 
     if (!wantsExtension) {
       if (this.browserExtensionRelease) {
@@ -827,9 +835,21 @@ export class GatewayService {
       return;
     }
 
-    const ext = browser.extension as Record<string, unknown> | undefined;
+    const browser = (this.config.agents?.defaults as Record<string, unknown> | undefined)?.browser as
+      | Record<string, unknown>
+      | undefined;
+    const ext = browser?.extension as Record<string, unknown> | undefined;
     const port = typeof ext?.port === 'number' ? ext.port : 19820;
     const host = typeof ext?.host === 'string' && ext.host ? ext.host : '127.0.0.1';
+    const connectionTimeout =
+      typeof ext?.connectionTimeout === 'number' && ext.connectionTimeout >= 1000
+        ? Math.floor(ext.connectionTimeout)
+        : undefined;
+    const cmdSec = browser?.commandTimeout;
+    const commandTimeout =
+      typeof cmdSec === 'number' && Number.isFinite(cmdSec) && cmdSec > 0
+        ? Math.floor(cmdSec * 1000)
+        : undefined;
     const bindKey = `${host}:${port}`;
 
     if (this.browserExtensionRelease && this.browserExtensionBindKey === bindKey) {
@@ -845,7 +865,12 @@ export class GatewayService {
 
     try {
       const { acquireExtensionBrowserServer } = await import('../browser/providers/extension-ws-acquire.js');
-      const { provider, release } = await acquireExtensionBrowserServer({ port, host });
+      const { provider, release } = await acquireExtensionBrowserServer({
+        port,
+        host,
+        connectionTimeout,
+        commandTimeout,
+      });
       this.browserExtensionProvider = provider;
       this.browserExtensionRelease = release;
       this.browserExtensionBindKey = bindKey;

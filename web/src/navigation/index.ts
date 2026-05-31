@@ -152,6 +152,11 @@ export function remoteAccessDocsUrl(
   return section ? `${href}#${section}` : href;
 }
 
+/** Browser tools guide (`docs/tools.md#browser-optional`). */
+export function browserDocsUrl(language: StoredLanguage): string {
+  return `${docsGuidePageUrl(language, 'tools')}#browser-optional`;
+}
+
 /** Path for React Router `to` prop (hash router, no `#`). */
 export function pathForTab(tab: Tab): string {
   if (tab === 'chat') return '/chat';

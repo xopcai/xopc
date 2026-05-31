@@ -27,6 +27,7 @@ import { assertCacheDir, expandHome } from '../cache-dir-policy.js';
 import { pickFreePort } from '../free-port.js';
 import {
   buildStealthArgs,
+  filterCloakBrowserExtraArgs,
   generateFingerprintSeed,
   makeExecutable,
   removeQuarantineAttr,
@@ -54,6 +55,9 @@ interface PlatformInfo {
 
 const DOWNLOAD_BASE_URL = 'https://cloakbrowser.dev';
 const GITHUB_DOWNLOAD_BASE_URL = 'https://github.com/CloakHQ/CloakBrowser/releases/download';
+const XOPC_CLOAKBROWSER_PROXY_BASE =
+  process.env.XOPC_CLOAKBROWSER_DOWNLOAD_BASE?.trim().replace(/\/$/, '') ||
+  'https://xopc.ai/api/cloakbrowser/download';
 const READY_TIMEOUT_MS = 45_000;
 const READY_POLL_INTERVAL_MS = 300;
 const DEFAULT_KEEP_OPEN_CDP_PORT = 9222;
@@ -121,9 +125,15 @@ export function listCloakBrowserPlatforms(): PlatformInfo[] {
 function archiveDownloadUrls(platformInfo: PlatformInfo): string[] {
   const archiveName = `cloakbrowser-${platformInfo.tag}${platformInfo.archiveExt}`;
   return [
+    `${XOPC_CLOAKBROWSER_PROXY_BASE}/${archiveName}`,
     `${GITHUB_DOWNLOAD_BASE_URL}/chromium-v${platformInfo.chromiumVersion}/${archiveName}`,
     `${DOWNLOAD_BASE_URL}/download/${archiveName}`,
   ];
+}
+
+/** Test-only: resolved download URLs for a platform manifest (proxy first). */
+export function cloakBrowserArchiveDownloadUrls(platformInfo: PlatformInfo): string[] {
+  return archiveDownloadUrls(platformInfo);
 }
 
 async function sha256OfFile(path: string): Promise<string> {
@@ -467,10 +477,84 @@ async function reuseOrCreatePageEndpoint(port: number): Promise<string | null> {
 // ── Provider ────────────────────────────────────────────────────────────────
 
 export interface CloakBrowserLaunchResult {
-  browser: Browser;
-  context: BrowserContext;
+  browser?: Browser;
+  context?: BrowserContext;
   childProcess: ChildProcess | null;
   temporaryProfileDir: string | null;
+  cdpPort: number;
+  userDataDir: string;
+  reused: boolean;
+  pid: number | null;
+}
+
+function resolveCloakBrowserProfilePaths(
+  config: CloakBrowserConfig,
+  cacheDir: string,
+): { userDataDir: string; temporaryProfileDir: string | null } {
+  if (config.userDataDir) {
+    return { userDataDir: config.userDataDir, temporaryProfileDir: null };
+  }
+  if (config.temporaryProfile) {
+    const userDataDir = join(tmpdir(), `xopc-cloakbrowser-${process.pid}-${generateFingerprintSeed()}`);
+    return { userDataDir, temporaryProfileDir: userDataDir };
+  }
+  return { userDataDir: join(cacheDir, 'profiles', 'default'), temporaryProfileDir: null };
+}
+
+/** Resolve the persistent profile directory agents use (not ephemeral temp dirs). */
+export function resolveCloakBrowserPersistentProfileDir(config: CloakBrowserConfig = {}): string {
+  if (config.userDataDir) return config.userDataDir;
+  const cacheDir = resolveCloakBrowserCacheDir(config.cacheDir);
+  return join(cacheDir, 'profiles', 'default');
+}
+
+export interface CloakBrowserRuntimeStatus {
+  running: boolean;
+  port: number;
+  userDataDir: string;
+  temporaryProfile: boolean;
+}
+
+async function probeCdpPort(port: number): Promise<boolean> {
+  try {
+    const response = await fetch(`http://127.0.0.1:${port}/json/version`, {
+      signal: AbortSignal.timeout(2000),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+/** Probe whether CloakBrowser CDP is listening on the configured keep-open port. */
+export async function probeCloakBrowserRuntime(
+  config: CloakBrowserConfig = {},
+): Promise<CloakBrowserRuntimeStatus> {
+  const keepOpen = config.keepOpen ?? true;
+  const cdpPort = config.cdpPort ?? (keepOpen ? DEFAULT_KEEP_OPEN_CDP_PORT : DEFAULT_KEEP_OPEN_CDP_PORT);
+  const cacheDir = resolveCloakBrowserCacheDir(config.cacheDir);
+  const { userDataDir } = resolveCloakBrowserProfilePaths(config, cacheDir);
+  const running = await probeCdpPort(cdpPort);
+  return {
+    running,
+    port: cdpPort,
+    userDataDir,
+    temporaryProfile: config.temporaryProfile === true,
+  };
+}
+
+function launchResultMeta(
+  cdpPort: number,
+  userDataDir: string,
+  reused: boolean,
+  pid: number | null,
+  childProcess: ChildProcess | null,
+  temporaryProfileDir: string | null,
+): Pick<
+  CloakBrowserLaunchResult,
+  'cdpPort' | 'userDataDir' | 'reused' | 'pid' | 'childProcess' | 'temporaryProfileDir'
+> {
+  return { cdpPort, userDataDir, reused, pid, childProcess, temporaryProfileDir };
 }
 
 /**
@@ -497,12 +581,21 @@ export async function launchCloakBrowser(
 
   // Resolve CDP port
   const cdpPort = config.cdpPort ?? (keepOpen ? DEFAULT_KEEP_OPEN_CDP_PORT : await pickFreePort());
+  const skipPlaywrightConnect = config.skipPlaywrightConnect === true;
+  const { userDataDir, temporaryProfileDir: plannedTempProfileDir } = resolveCloakBrowserProfilePaths(
+    config,
+    cacheDir,
+  );
 
   // Try to reuse existing instance
   if (reuseExisting) {
     const existingEndpoint = await reuseOrCreatePageEndpoint(cdpPort);
     if (existingEndpoint) {
       log.info({ port: cdpPort }, 'Reusing existing CloakBrowser instance');
+      const meta = launchResultMeta(cdpPort, userDataDir, true, null, null, null);
+      if (skipPlaywrightConnect) {
+        return meta;
+      }
       const pw = await import('playwright-core');
       const chromium = pw.chromium ?? (pw as { default?: { chromium?: (typeof pw)['chromium'] } }).default?.chromium;
       if (!chromium?.connectOverCDP) throw new Error('playwright-core does not support connectOverCDP');
@@ -520,25 +613,16 @@ export async function launchCloakBrowser(
       // Inject stealth script
       await context.addInitScript(WEBDRIVER_OVERRIDE_SCRIPT);
 
-      return { browser, context, childProcess: null, temporaryProfileDir: null };
+      return { browser, context, ...meta };
     }
   }
 
-  // Resolve user data dir
-  let userDataDir: string;
-  let temporaryProfileDir: string | null = null;
-  if (config.userDataDir) {
-    userDataDir = config.userDataDir;
-  } else if (config.temporaryProfile) {
-    userDataDir = join(tmpdir(), `xopc-cloakbrowser-${process.pid}-${generateFingerprintSeed()}`);
-    temporaryProfileDir = userDataDir;
-  } else {
-    userDataDir = join(cacheDir, 'profiles', 'default');
-  }
+  // Resolve user data dir for a new launch
+  let temporaryProfileDir: string | null = plannedTempProfileDir;
   await mkdir(userDataDir, { recursive: true });
 
   // Build launch args
-  const stealthArgs = buildStealthArgs(config.extraArgs ?? [], {
+  const stealthArgs = buildStealthArgs(filterCloakBrowserExtraArgs(config.extraArgs ?? []), {
     timezone: config.timezone,
     locale: config.locale,
     webrtcIp: config.webrtcIp,
@@ -621,6 +705,20 @@ export async function launchCloakBrowser(
     browserLevelWsUrl = browserWsUrl;
   }
 
+  const meta = launchResultMeta(
+    cdpPort,
+    userDataDir,
+    false,
+    child.pid ?? null,
+    keepOpen ? null : child,
+    temporaryProfileDir,
+  );
+
+  if (skipPlaywrightConnect) {
+    log.info({ port: cdpPort, pid: child.pid }, 'CloakBrowser launched (CDP only)');
+    return meta;
+  }
+
   // Connect Playwright over CDP
   const pw = await import('playwright-core');
   const chromium = pw.chromium ?? (pw as { default?: { chromium?: (typeof pw)['chromium'] } }).default?.chromium;
@@ -641,8 +739,7 @@ export async function launchCloakBrowser(
   return {
     browser,
     context,
-    childProcess: keepOpen ? null : child, // Only track child if not detached
-    temporaryProfileDir,
+    ...meta,
   };
 }
 
@@ -703,7 +800,7 @@ export async function installCloakBrowser(
     onProgress: config.onProgress,
     signal: config.signal,
   });
-  await result.browser.close().catch(() => {});
+  await result.browser?.close().catch(() => {});
   await cleanupCloakBrowser(result.childProcess, result.temporaryProfileDir);
   return cloakBrowserDoctor({ cacheDir: config.cacheDir, binaryPath: config.binaryPath });
 }

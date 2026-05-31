@@ -26,6 +26,18 @@ export interface CloakDoctor {
   customBinaryPath: boolean;
 }
 
+export interface CloakRuntimeStatus {
+  running: boolean;
+  port: number;
+  userDataDir: string;
+  temporaryProfile: boolean;
+}
+
+export interface CloakLaunchResult extends CloakRuntimeStatus {
+  reused: boolean;
+  pid: number | null;
+}
+
 export interface CdpPingResult {
   reachable: boolean;
   browser?: string | null;
@@ -68,4 +80,8 @@ export interface ExtensionProbe {
   connected: boolean;
   backend?: string;
   artifacts?: ExtensionArtifacts;
+  bridgeHeld?: boolean;
+  refCount?: number;
+  manualBridge?: boolean;
+  portConflict?: boolean;
 }
