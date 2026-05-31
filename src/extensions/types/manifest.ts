@@ -193,6 +193,8 @@ export interface ModelSupportDeclaration {
 }
 
 export interface ActivationDeclaration {
+  /** When false, extension code loads after gateway ready (sidecar). Default: eager at startup. */
+  onStartup?: boolean;
   onProviders?: string[];
   onCommands?: string[];
   onChannels?: string[];
