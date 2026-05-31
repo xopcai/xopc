@@ -2,6 +2,7 @@ import { CheckCircle2, Download, LoaderCircle, RefreshCw, ShieldCheck } from 'lu
 import { useCallback, useState } from 'react';
 
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { SettingsCollapsibleSection } from '@/features/settings/settings-collapsible-section';
 
 import { AgentDefaultsField } from '../../agent-defaults-field';
 import { inputClassName, selectClassName } from '../../defaults-field-styles';
@@ -20,6 +21,11 @@ export interface CloakCardForm {
   temporaryProfile: boolean;
   humanize: boolean;
   humanPreset: 'default' | 'careful';
+  timezone: string;
+  locale: string;
+  webrtcIp: string;
+  fingerprintPlatform: string;
+  extraArgs: string;
 }
 
 export function CloakCard({
@@ -30,6 +36,7 @@ export function CloakCard({
   installStream,
   form,
   onChange,
+  embedded = false,
 }: {
   m: BrowserMessages;
   doctor: DoctorState<CloakDoctor>;
@@ -38,6 +45,7 @@ export function CloakCard({
   installStream: BrowserInstallStream;
   form: CloakCardForm;
   onChange: (patch: Partial<CloakCardForm>) => void;
+  embedded?: boolean;
 }) {
   const [status, setStatus] = useState<InstallStatus>('idle');
   const [message, setMessage] = useState<string | null>(null);
@@ -117,6 +125,7 @@ export function CloakCard({
         status={statusKind}
         statusDetail={statusDetail}
         m={m}
+        embedded={embedded}
         primaryAction={
           <button
             type="button"
@@ -204,33 +213,93 @@ export function CloakCard({
         </div>
       </BackendModeCard>
 
-      {/* Advanced fields outside the card to keep its primary surface tidy */}
-      <div className="grid gap-5 rounded-xl border border-edge bg-surface-base p-4 sm:grid-cols-2">
-        <AgentDefaultsField label={m.label.browserCloakCacheDir} description={m.desc.browserCloakCacheDir}>
-          <input
-            type="text"
-            className={inputClassName()}
-            value={form.cacheDir}
-            placeholder="~/.xopc/bin/cloakbrowser"
-            onChange={(e) => onChange({ cacheDir: e.target.value })}
-            autoComplete="off"
-          />
-          <p className="text-[11px] text-fg-subtle">{m.browserCacheDirHomeOnly}</p>
-        </AgentDefaultsField>
-        <AgentDefaultsField label={m.label.browserCloakBinaryPath} description={m.desc.browserCloakBinaryPath}>
-          <input
-            type="text"
-            className={inputClassName()}
-            value={form.binaryPath}
-            placeholder="~/.xopc/bin/cloakbrowser/chromium-v.../Chromium.app/Contents/MacOS/Chromium"
-            onChange={(e) => onChange({ binaryPath: e.target.value })}
-            autoComplete="off"
-          />
-          {form.binaryPath.trim() ? (
-            <p className="text-[11px] text-amber-600 dark:text-amber-400">{m.browserBinaryPathWarning}</p>
-          ) : null}
-        </AgentDefaultsField>
-      </div>
+      <SettingsCollapsibleSection
+        showLabel={m.browserCloakAdvancedShow}
+        hideLabel={m.browserCloakAdvancedHide}
+        hint={m.browserCloakAdvancedHint}
+        className="mt-4 border border-edge-subtle"
+      >
+        <div className="grid gap-5 sm:grid-cols-2">
+          <AgentDefaultsField label={m.label.browserCloakCacheDir} description={m.desc.browserCloakCacheDir}>
+            <input
+              type="text"
+              className={inputClassName()}
+              value={form.cacheDir}
+              placeholder="~/.xopc/bin/cloakbrowser"
+              onChange={(e) => onChange({ cacheDir: e.target.value })}
+              autoComplete="off"
+            />
+            <p className="text-[11px] text-fg-subtle">{m.browserCacheDirHomeOnly}</p>
+          </AgentDefaultsField>
+          <AgentDefaultsField label={m.label.browserCloakBinaryPath} description={m.desc.browserCloakBinaryPath}>
+            <input
+              type="text"
+              className={inputClassName()}
+              value={form.binaryPath}
+              placeholder="~/.xopc/bin/cloakbrowser/chromium-v.../Chromium.app/Contents/MacOS/Chromium"
+              onChange={(e) => onChange({ binaryPath: e.target.value })}
+              autoComplete="off"
+            />
+            {form.binaryPath.trim() ? (
+              <p className="text-[11px] text-amber-600 dark:text-amber-400">{m.browserBinaryPathWarning}</p>
+            ) : null}
+          </AgentDefaultsField>
+          <AgentDefaultsField label={m.label.browserCloakTimezone} description={m.desc.browserCloakTimezone}>
+            <input
+              type="text"
+              className={inputClassName()}
+              value={form.timezone}
+              placeholder="America/New_York"
+              onChange={(e) => onChange({ timezone: e.target.value })}
+              autoComplete="off"
+            />
+          </AgentDefaultsField>
+          <AgentDefaultsField label={m.label.browserCloakLocale} description={m.desc.browserCloakLocale}>
+            <input
+              type="text"
+              className={inputClassName()}
+              value={form.locale}
+              placeholder="en-US"
+              onChange={(e) => onChange({ locale: e.target.value })}
+              autoComplete="off"
+            />
+          </AgentDefaultsField>
+          <AgentDefaultsField label={m.label.browserCloakWebrtcIp} description={m.desc.browserCloakWebrtcIp}>
+            <input
+              type="text"
+              className={inputClassName()}
+              value={form.webrtcIp}
+              placeholder="203.0.113.10"
+              onChange={(e) => onChange({ webrtcIp: e.target.value })}
+              autoComplete="off"
+            />
+          </AgentDefaultsField>
+          <AgentDefaultsField
+            label={m.label.browserCloakFingerprintPlatform}
+            description={m.desc.browserCloakFingerprintPlatform}
+          >
+            <input
+              type="text"
+              className={inputClassName()}
+              value={form.fingerprintPlatform}
+              placeholder="macos"
+              onChange={(e) => onChange({ fingerprintPlatform: e.target.value })}
+              autoComplete="off"
+            />
+          </AgentDefaultsField>
+          <div className="sm:col-span-2">
+            <AgentDefaultsField label={m.label.browserCloakExtraArgs} description={m.desc.browserCloakExtraArgs}>
+              <textarea
+                className={cnInputTextarea()}
+                value={form.extraArgs}
+                placeholder="--disable-dev-shm-usage"
+                rows={3}
+                onChange={(e) => onChange({ extraArgs: e.target.value })}
+              />
+            </AgentDefaultsField>
+          </div>
+        </div>
+      </SettingsCollapsibleSection>
 
       <ConfirmDialog
         open={confirmOpen}
@@ -243,6 +312,10 @@ export function CloakCard({
       />
     </>
   );
+}
+
+function cnInputTextarea(): string {
+  return `${inputClassName()} min-h-[4.5rem] resize-y font-mono text-xs`;
 }
 
 function buildConfirmBody(m: BrowserMessages, data: CloakDoctor | null): string {
