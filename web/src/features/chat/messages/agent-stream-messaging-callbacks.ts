@@ -80,6 +80,10 @@ export function createAgentStreamMessagingCallbacks(opts: {
   };
 
   return {
+    onUserMessage: (message) => {
+      if (!shouldApplyStreamUpdate(chatId)) return;
+      store().appendUserMessageIfMissing(chatId, message);
+    },
     onStreamStart: () => {
       beforeAssistantDelta();
       store().mutateSessionStreaming(chatId, () => {});

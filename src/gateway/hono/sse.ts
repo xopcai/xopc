@@ -62,6 +62,7 @@ function maxBase64CharsForBinary(maxBinaryBytes: number): number {
  *
  * SSE events:
  *   event: status   — { status, runId }
+ *   event: user_message — { timestamp, content?, attachments? } (user turn accepted, before agent tokens)
  *   event: user_transcript — { text, attachments? } (voice STT complete, before agent tokens)
  *   event: token    — { content }
  *   event: error    — { content }

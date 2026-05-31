@@ -19,6 +19,7 @@ import {
 } from '@/features/chat/session/chat-session-store';
 import { coerceReasoningLevel } from '@/features/chat/messages/messages.types';
 import { hasPendingAgentRunForChat, setPendingAgentRun } from '@/features/chat/messages/message-sender';
+import { userMessageFromSsePayload } from '@/features/chat/messages/user-message-from-sse';
 import type { PendingFollowUp } from '@/features/chat/follow-up/pending-follow-up.types';
 import { SessionManager } from '@/features/chat/session/session-manager';
 import { resetChatViewState } from '@/features/chat/session/reset-chat-view-state';
@@ -287,11 +288,22 @@ export function useChatSession() {
     const onAgentStream = (e: Event) => {
       const d = (e as CustomEvent<{ sessionKey?: string; event?: unknown }>).detail;
       if (!d?.sessionKey) return;
-      const inner = d.event as { type?: string; runId?: string } | undefined;
-      if (!inner || inner.type !== 'status' || typeof inner.runId !== 'string' || !inner.runId.trim()) {
+      const inner = d.event as Record<string, unknown> | undefined;
+      if (!inner || typeof inner.type !== 'string') return;
+
+      const streamSessionKey = d.sessionKey;
+
+      if (inner.type === 'user_message' || inner.type === 'user_transcript') {
+        const userMsg = userMessageFromSsePayload(inner);
+        if (userMsg && shouldApplyStreamUpdate(streamSessionKey)) {
+          useChatSessionStore.getState().appendUserMessageIfMissing(streamSessionKey, userMsg);
+        }
         return;
       }
-      const streamSessionKey = d.sessionKey;
+
+      if (inner.type !== 'status' || typeof inner.runId !== 'string' || !inner.runId.trim()) {
+        return;
+      }
       setPendingAgentRun(streamSessionKey, inner.runId);
       if (!shouldApplyStreamUpdate(streamSessionKey)) return;
       if (chatRunManager.isStreamingFor(streamSessionKey)) return;

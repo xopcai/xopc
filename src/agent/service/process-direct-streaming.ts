@@ -266,6 +266,20 @@ export async function* runProcessDirectStreaming(
         timestamp: Date.now(),
       };
       const userPlain = extractAgentUserPlainText(userMessage);
+      if (channel === 'webchat') {
+        pushEvent({
+          type: 'user_message',
+          timestamp: userMessage.timestamp,
+          content: userMessage.content,
+          attachments: prepared?.map((att) => ({
+            type: att.type,
+            mimeType: att.mimeType,
+            name: att.name,
+            size: att.size,
+            workspaceRelativePath: att.workspaceRelativePath,
+          })),
+        });
+      }
       const userMessageForModel = await agentManager.applyMemoryPrefetchToUserMessage(
         userMessage,
         sessionKey,
