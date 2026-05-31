@@ -25,6 +25,7 @@ import { createLogger } from '../../utils/logger.js';
 import { resolveBinDir } from '../../config/paths.js';
 import { assertCacheDir, expandHome } from '../cache-dir-policy.js';
 import { pickFreePort } from '../free-port.js';
+import { loadPlaywrightCoreModule } from './playwright-doctor.js';
 import {
   buildStealthArgs,
   filterCloakBrowserExtraArgs,
@@ -596,7 +597,7 @@ export async function launchCloakBrowser(
       if (skipPlaywrightConnect) {
         return meta;
       }
-      const pw = await import('playwright-core');
+      const pw = await loadPlaywrightCoreModule();
       const chromium = pw.chromium ?? (pw as { default?: { chromium?: (typeof pw)['chromium'] } }).default?.chromium;
       if (!chromium?.connectOverCDP) throw new Error('playwright-core does not support connectOverCDP');
 
@@ -720,7 +721,7 @@ export async function launchCloakBrowser(
   }
 
   // Connect Playwright over CDP
-  const pw = await import('playwright-core');
+  const pw = await loadPlaywrightCoreModule();
   const chromium = pw.chromium ?? (pw as { default?: { chromium?: (typeof pw)['chromium'] } }).default?.chromium;
   if (!chromium?.connectOverCDP) {
     child.kill();

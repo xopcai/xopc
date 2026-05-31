@@ -5,6 +5,7 @@
 import type { Page } from 'playwright-core';
 
 import { BrowserManager, resolveBrowserBackendFromConfig, createBrowserActionRegistry } from '../../browser/index.js';
+import { loadPlaywrightCoreModule } from '../../browser/providers/playwright-doctor.js';
 import { validateBrowserPipeline, runBrowserPipeline } from '../../browser/pipeline/runner.js';
 import { loadBrowserPipelineSource } from '../../browser/pipeline/source.js';
 import type { BrowserActionContext } from '../../browser/actions/types.js';
@@ -126,7 +127,7 @@ export async function doctorCli(): Promise<void> {
 
   // Check playwright-core
   try {
-    const pw = await import('playwright-core');
+    const pw = await loadPlaywrightCoreModule();
     const chromium = pw.chromium ?? (pw as any).default?.chromium;
     if (chromium) {
       console.log('✓ playwright-core installed');

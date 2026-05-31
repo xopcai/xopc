@@ -16,6 +16,7 @@ import { ChildProcess, spawn } from 'node:child_process';
 import { createLogger } from '../utils/logger.js';
 
 import { pickFreePort } from './free-port.js';
+import { loadPlaywrightCoreModule } from './providers/playwright-doctor.js';
 
 const log = createLogger('CdpLocalLauncher');
 
@@ -58,7 +59,7 @@ export async function resolveChromeBinary(override?: string): Promise<string> {
   }
 
   try {
-    const pw = await import('playwright-core');
+    const pw = await loadPlaywrightCoreModule();
     const chromium = pw.chromium
       ?? (pw as { default?: { chromium?: (typeof pw)['chromium'] } }).default?.chromium;
     const exec = chromium?.executablePath?.();

@@ -31,12 +31,13 @@ export function resolvePlaywrightCoreCliPath(): string {
   return join(resolvePlaywrightCoreRoot(), 'cli.js');
 }
 
-async function loadPlaywrightCoreModule(): Promise<typeof import('playwright-core')> {
+/** Load playwright-core (Electron extraResources or node_modules). */
+export async function loadPlaywrightCoreModule(): Promise<typeof import('playwright-core')> {
   const envRoot = process.env.XOPC_PLAYWRIGHT_CORE_ROOT?.trim();
   if (envRoot) {
-    const pkgJson = join(envRoot, 'package.json');
-    const require = createRequire(pkgJson);
-    return require('playwright-core') as typeof import('playwright-core');
+    const entry = join(envRoot, 'index.js');
+    const require = createRequire(import.meta.url);
+    return require(entry) as typeof import('playwright-core');
   }
   return import('playwright-core');
 }
