@@ -2,7 +2,7 @@
 // with out-of-band updates:
 //   - `session-updated`: another tab / the session sidebar renamed this session.
 //   - `session-transcript-updated`: the gateway persisted new transcript rows
-//     while no stream is active (e.g. a background webchat run finished).
+//     (merged into the live slice when another device sent a user turn).
 //   - `config-reload`: the user changed the agent's model/thinking config in the
 //     settings drawer; reload it so the composer shows the new value immediately.
 
@@ -27,8 +27,6 @@ export function useChatSessionWindowEvents(opts: {
   const {
     sessionKey,
     sessionKeyRef,
-    sendingRef,
-    streamingRef,
     sessionMgrRef,
     loadSessionById,
     applyAgentConfig,
@@ -50,12 +48,11 @@ export function useChatSessionWindowEvents(opts: {
     const handler = (e: Event) => {
       const d = (e as CustomEvent<{ key?: string }>).detail;
       if (!d?.key || d.key !== sessionKey) return;
-      if (sendingRef.current || streamingRef.current) return;
       void loadSessionById(sessionKey, 0);
     };
     window.addEventListener('session-transcript-updated', handler);
     return () => window.removeEventListener('session-transcript-updated', handler);
-  }, [sessionKey, sendingRef, streamingRef, loadSessionById]);
+  }, [sessionKey, loadSessionById]);
 
   useEffect(() => {
     const onConfigReload = () => {
