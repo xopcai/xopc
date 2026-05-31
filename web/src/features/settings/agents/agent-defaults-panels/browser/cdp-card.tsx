@@ -36,6 +36,7 @@ export function CdpCard({
   stop,
   listInstances,
   ping,
+  embedded = false,
 }: {
   m: BrowserMessages;
   cdpUrl: string;
@@ -44,6 +45,7 @@ export function CdpCard({
   stop: (port: number) => Promise<void>;
   listInstances: () => Promise<LaunchedCdpInstance[]>;
   ping: (url: string) => Promise<{ reachable: boolean; browser?: string | null; error?: string }>;
+  embedded?: boolean;
 }) {
   const [ui, dispatch] = useReducer(uiPatchReducer<CdpCardUi>, initialCdpCardUi);
   const { instances, launchStatus, launchMessage, testStatus, testMessage, executablePath } = ui;
@@ -139,6 +141,8 @@ export function CdpCard({
         title={m.browserCdpLaunchLocal}
         description={m.browserCdpLaunchLocalDesc}
         m={m}
+        embedded={embedded}
+        sectionTitle={embedded ? m.browserCdpLaunchLocal : undefined}
         primaryAction={
           <button
             type="button"
@@ -198,6 +202,8 @@ export function CdpCard({
         title={m.label.browserCdpUrl}
         description={m.desc.browserCdpUrl}
         m={m}
+        embedded={embedded}
+        sectionTitle={embedded ? m.label.browserCdpUrl : undefined}
         primaryAction={
           <button
             type="button"

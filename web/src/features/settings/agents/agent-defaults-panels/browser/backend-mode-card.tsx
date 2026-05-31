@@ -18,6 +18,8 @@ export function BackendModeCard({
   children,
   advanced,
   m,
+  embedded = false,
+  sectionTitle,
 }: {
   icon: LucideIcon;
   title: string;
@@ -29,8 +31,48 @@ export function BackendModeCard({
   /** Collapsible "Advanced" section. */
   advanced?: ReactNode;
   m: BrowserMessages;
+  /** Inside {@link BrowserWorkspace}: omit outer chrome; optional sub-section title. */
+  embedded?: boolean;
+  sectionTitle?: string;
 }) {
   const [showAdvanced, setShowAdvanced] = useState(false);
+
+  const advancedBlock = advanced ? (
+    <div className="flex flex-col gap-3">
+      <button
+        type="button"
+        className="self-start text-xs font-medium text-fg-muted hover:text-fg"
+        onClick={() => setShowAdvanced((v) => !v)}
+      >
+        {showAdvanced ? m.browserAdvancedHide : m.browserAdvancedShow}
+      </button>
+      {showAdvanced ? (
+        <div className="flex flex-col gap-4 rounded-lg border border-edge bg-surface-base p-3">{advanced}</div>
+      ) : null}
+    </div>
+  ) : null;
+
+  if (embedded) {
+    return (
+      <div className="flex flex-col gap-4">
+        {sectionTitle ? (
+          <div className="flex flex-col gap-0.5">
+            <h4 className="text-sm font-medium text-fg">{sectionTitle}</h4>
+            {description ? <p className="text-xs leading-relaxed text-fg-muted">{description}</p> : null}
+          </div>
+        ) : null}
+        {status || primaryAction ? (
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            {status ? <StatusBadge kind={status} detail={statusDetail} m={m} /> : <span />}
+            {primaryAction ? <div className="shrink-0">{primaryAction}</div> : null}
+          </div>
+        ) : null}
+        {children ? <div className="flex flex-col gap-4">{children}</div> : null}
+        {advancedBlock}
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-4 rounded-xl border border-edge bg-surface-panel p-4">
       <div className="flex items-start gap-3">
@@ -48,23 +90,7 @@ export function BackendModeCard({
       </div>
 
       {children ? <div className="flex flex-col gap-4">{children}</div> : null}
-
-      {advanced ? (
-        <div className="flex flex-col gap-3">
-          <button
-            type="button"
-            className="self-start text-xs font-medium text-fg-muted hover:text-fg"
-            onClick={() => setShowAdvanced((v) => !v)}
-          >
-            {showAdvanced ? m.browserAdvancedHide : m.browserAdvancedShow}
-          </button>
-          {showAdvanced ? (
-            <div className="flex flex-col gap-4 rounded-lg border border-edge bg-surface-base p-3">
-              {advanced}
-            </div>
-          ) : null}
-        </div>
-      ) : null}
+      {advancedBlock}
     </div>
   );
 }

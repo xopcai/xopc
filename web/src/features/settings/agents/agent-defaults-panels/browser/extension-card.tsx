@@ -1,7 +1,5 @@
 import {
   Download,
-  ExternalLink,
-  FolderOpen,
   LoaderCircle,
   Play,
   Plug,
@@ -18,13 +16,16 @@ import { AgentDefaultsField } from '../../agent-defaults-field';
 import { inputClassName } from '../../defaults-field-styles';
 
 import { ActionResultBox, BackendModeCard } from './backend-mode-card';
+import { ExtensionSetupGuide } from './extension-setup-guide';
 import type { BrowserMessages, DoctorState, ExtensionArtifacts, ExtensionProbe } from './types';
 
 const DEFAULT_PORT = 19820;
+const DEFAULT_CONNECTION_TIMEOUT_MS = 30_000;
 
 export interface ExtensionCardForm {
   port: number | undefined;
   host: string;
+  connectionTimeoutMs: number | undefined;
 }
 
 export function ExtensionCard({
@@ -34,11 +35,13 @@ export function ExtensionCard({
   onChange,
   startBridge,
   stopBridge,
+  disconnectExtension,
   installArtifacts,
   refetchArtifacts,
   openExtensionChrome,
   revealExtensionFolder,
   form,
+  embedded = false,
 }: {
   m: BrowserMessages;
   probe: DoctorState<ExtensionProbe>;
@@ -47,12 +50,14 @@ export function ExtensionCard({
   onChange: (patch: Partial<ExtensionCardForm>) => void;
   startBridge: (opts?: { host?: string; port?: number }) => Promise<void>;
   stopBridge: () => Promise<void>;
+  disconnectExtension: () => Promise<void>;
   installArtifacts: (opts?: { force?: boolean }) => Promise<ExtensionArtifacts | null>;
   refetchArtifacts: () => Promise<ExtensionArtifacts | null>;
   openExtensionChrome: () => Promise<void>;
   revealExtensionFolder: () => Promise<void>;
+  embedded?: boolean;
 }) {
-  const [busy, setBusy] = useState<'start' | 'stop' | 'install' | 'open' | 'folder' | null>(null);
+  const [busy, setBusy] = useState<'start' | 'stop' | 'disconnect' | 'install' | 'open' | 'folder' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [installMessage, setInstallMessage] = useState<string | null>(null);
 
@@ -62,8 +67,12 @@ export function ExtensionCard({
 
   const running = probe.kind === 'ok' && probe.data.running;
   const connected = probe.kind === 'ok' && probe.data.connected;
+  const bridgeHeld = probe.kind === 'ok' && probe.data.bridgeHeld === true;
+  const portConflict = probe.kind === 'ok' && probe.data.portConflict === true;
+  const canStopBridge = running || bridgeHeld;
 
-  const artifactData = artifacts.kind === 'ok' ? artifacts.data : probe.kind === 'ok' ? probe.data.artifacts : undefined;
+  const artifactData =
+    artifacts.kind === 'ok' ? artifacts.data : probe.kind === 'ok' ? probe.data.artifacts : undefined;
   const installed = artifactData?.installed === true;
   const extensionDir = artifactData?.extensionDir;
   const needsChromeReload = artifactData?.needsChromeReload === true;
@@ -103,6 +112,19 @@ export function ExtensionCard({
       setBusy(null);
     }
   }, [busy, stopBridge]);
+
+  const onDisconnect = useCallback(async () => {
+    if (busy) return;
+    setBusy('disconnect');
+    setError(null);
+    try {
+      await disconnectExtension();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(null);
+    }
+  }, [busy, disconnectExtension]);
 
   const onInstall = useCallback(async () => {
     if (busy) return;
@@ -145,9 +167,7 @@ export function ExtensionCard({
     try {
       const copied = await copyTextToClipboard(extensionDir);
       await revealExtensionFolder();
-      setInstallMessage(
-        copied ? m.browserExtensionPathCopied : m.browserExtensionFolderOpened,
-      );
+      setInstallMessage(copied ? m.browserExtensionPathCopied : m.browserExtensionFolderOpened);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -155,50 +175,68 @@ export function ExtensionCard({
     }
   }, [busy, extensionDir, m.browserExtensionFolderOpened, m.browserExtensionPathCopied, revealExtensionFolder]);
 
+  const primaryAction = (
+    <div className="flex flex-wrap items-center gap-2">
+      <button
+        type="button"
+        className="inline-flex items-center gap-1.5 rounded-lg border border-edge bg-surface-panel px-2.5 py-1.5 text-xs font-medium text-fg hover:bg-surface-raised disabled:cursor-not-allowed disabled:opacity-60"
+        disabled={busy !== null}
+        onClick={() => void onInstall()}
+      >
+        {busy === 'install' ? (
+          <LoaderCircle className="size-3.5 animate-spin" />
+        ) : (
+          <Download className="size-3.5" />
+        )}
+        {busy === 'install' ? m.browserExtensionInstalling : m.browserExtensionInstall}
+      </button>
+      {canStopBridge ? (
+        <button
+          type="button"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-edge bg-surface-panel px-2.5 py-1.5 text-xs font-medium text-fg hover:bg-surface-raised disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={busy !== null}
+          onClick={() => void onStop()}
+        >
+          {busy === 'stop' ? <LoaderCircle className="size-3.5 animate-spin" /> : <Square className="size-3.5" />}
+          {m.browserExtensionStopBridge}
+        </button>
+      ) : (
+        <button
+          type="button"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-edge bg-surface-panel px-2.5 py-1.5 text-xs font-medium text-fg hover:bg-surface-raised disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={busy !== null}
+          onClick={() => void onStart()}
+        >
+          {busy === 'start' ? <LoaderCircle className="size-3.5 animate-spin" /> : <Play className="size-3.5" />}
+          {busy === 'start' ? m.browserExtensionStarting : m.browserExtensionStartBridge}
+        </button>
+      )}
+      {connected ? (
+        <button
+          type="button"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-edge bg-surface-panel px-2.5 py-1.5 text-xs font-medium text-fg hover:bg-surface-raised disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={busy !== null}
+          onClick={() => void onDisconnect()}
+        >
+          {busy === 'disconnect' ? (
+            <LoaderCircle className="size-3.5 animate-spin" />
+          ) : (
+            <Unplug className="size-3.5" />
+          )}
+          {m.browserExtensionDisconnect}
+        </button>
+      ) : null}
+    </div>
+  );
+
   return (
     <BackendModeCard
       icon={Puzzle}
       title={m.browserBackendExtension}
       description={m.browserExtensionDownloadHint}
       m={m}
-      primaryAction={
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            className="inline-flex items-center gap-1.5 rounded-lg border border-edge bg-surface-panel px-2.5 py-1.5 text-xs font-medium text-fg hover:bg-surface-raised disabled:cursor-not-allowed disabled:opacity-60"
-            disabled={busy !== null}
-            onClick={() => void onInstall()}
-          >
-            {busy === 'install' ? (
-              <LoaderCircle className="size-3.5 animate-spin" />
-            ) : (
-              <Download className="size-3.5" />
-            )}
-            {busy === 'install' ? m.browserExtensionInstalling : m.browserExtensionInstall}
-          </button>
-          {running ? (
-            <button
-              type="button"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-edge bg-surface-panel px-2.5 py-1.5 text-xs font-medium text-fg hover:bg-surface-raised disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={busy !== null}
-              onClick={() => void onStop()}
-            >
-              {busy === 'stop' ? <LoaderCircle className="size-3.5 animate-spin" /> : <Square className="size-3.5" />}
-              {m.browserExtensionStopBridge}
-            </button>
-          ) : (
-            <button
-              type="button"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-edge bg-surface-panel px-2.5 py-1.5 text-xs font-medium text-fg hover:bg-surface-raised disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={busy !== null}
-              onClick={() => void onStart()}
-            >
-              {busy === 'start' ? <LoaderCircle className="size-3.5 animate-spin" /> : <Play className="size-3.5" />}
-              {busy === 'start' ? m.browserExtensionStarting : m.browserExtensionStartBridge}
-            </button>
-          )}
-        </div>
-      }
+      embedded={embedded}
+      primaryAction={primaryAction}
       advanced={
         <div className="grid gap-5 sm:grid-cols-2">
           <AgentDefaultsField label={m.label.browserExtensionPort} description={m.desc.browserExtensionPort}>
@@ -225,6 +263,30 @@ export function ExtensionCard({
               autoComplete="off"
             />
           </AgentDefaultsField>
+          <AgentDefaultsField
+            label={m.label.browserExtensionConnectionTimeout}
+            description={m.desc.browserExtensionConnectionTimeout}
+          >
+            <input
+              type="number"
+              className={inputClassName()}
+              min={1}
+              step={1}
+              value={
+                form.connectionTimeoutMs != null
+                  ? Math.round(form.connectionTimeoutMs / 1000)
+                  : ''
+              }
+              placeholder={String(DEFAULT_CONNECTION_TIMEOUT_MS / 1000)}
+              onChange={(e) => {
+                const v = e.target.value;
+                onChange({
+                  connectionTimeoutMs:
+                    v === '' ? undefined : Math.max(1, Number.parseInt(v, 10)) * 1000,
+                });
+              }}
+            />
+          </AgentDefaultsField>
         </div>
       }
     >
@@ -237,53 +299,25 @@ export function ExtensionCard({
           </span>
         </div>
 
-        <div className="rounded-lg border border-edge bg-surface-base px-3 py-3">
-          <p className="text-xs font-medium text-fg">{m.browserExtensionInstallGuideTitle}</p>
-          <ol className="mt-2.5 list-decimal space-y-2.5 pl-4 text-[11px] leading-relaxed text-fg-muted">
-            <li className="text-fg">{m.browserExtensionInstallStep1}</li>
-            <li>
-              <span className="text-fg">{m.browserExtensionInstallStep2}</span>
-              {extensionDir ? (
-                <div className="mt-2 rounded-md border border-edge bg-surface-raised px-2.5 py-2">
-                  <p className="text-[10px] font-medium uppercase tracking-wide text-fg-subtle">
-                    {m.browserExtensionInstallStep2FolderLabel}
-                  </p>
-                  <p className="mt-1 break-all font-mono text-[11px] text-fg">{extensionDir}</p>
-                  <div className="mt-2 flex flex-wrap gap-3">
-                    <button
-                      type="button"
-                      className="inline-flex items-center gap-1 text-[11px] text-accent hover:underline disabled:opacity-60"
-                      disabled={busy !== null}
-                      onClick={() => void openChromeExtensions()}
-                    >
-                      <ExternalLink className="size-3" />
-                      {m.browserExtensionOpenChrome}
-                    </button>
-                    <button
-                      type="button"
-                      className="inline-flex items-center gap-1 text-[11px] text-accent hover:underline disabled:opacity-60"
-                      disabled={busy !== null}
-                      onClick={() => void onRevealFolder()}
-                      title={extensionDir}
-                    >
-                      {busy === 'folder' ? (
-                        <LoaderCircle className="size-3 animate-spin" />
-                      ) : (
-                        <FolderOpen className="size-3" />
-                      )}
-                      {m.browserExtensionRevealFolder}
-                    </button>
-                  </div>
-                </div>
-              ) : null}
-            </li>
-            <li className="text-fg">{m.browserExtensionInstallStep3}</li>
-          </ol>
-        </div>
+        <ExtensionSetupGuide
+          m={m}
+          installed={installed}
+          extensionDir={extensionDir}
+          connected={connected}
+          busy={busy !== null}
+          folderBusy={busy === 'folder'}
+          onOpenChrome={() => void openChromeExtensions()}
+          onRevealFolder={() => void onRevealFolder()}
+        />
 
         {needsChromeReload ? (
           <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs leading-relaxed text-amber-800 dark:text-amber-200">
             {m.browserExtensionNeedsChromeReload}
+          </div>
+        ) : null}
+        {portConflict ? (
+          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs leading-relaxed text-amber-800 dark:text-amber-200">
+            {m.browserExtensionPortConflict.replace('{{port}}', String(port))}
           </div>
         ) : null}
         {installMessage ? <ActionResultBox kind="success" message={installMessage} /> : null}

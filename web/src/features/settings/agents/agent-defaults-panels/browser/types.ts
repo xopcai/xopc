@@ -68,4 +68,8 @@ export interface ExtensionProbe {
   connected: boolean;
   backend?: string;
   artifacts?: ExtensionArtifacts;
+  bridgeHeld?: boolean;
+  refCount?: number;
+  manualBridge?: boolean;
+  portConflict?: boolean;
 }

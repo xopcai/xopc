@@ -806,6 +806,16 @@ export class GatewayService {
     await this.reconcileBrowserExtensionServer();
   }
 
+  /** Release the gateway's hold on the shared extension bridge (does not restart). */
+  async releaseBrowserExtensionBridge(): Promise<void> {
+    if (!this.browserExtensionRelease) return;
+    await this.browserExtensionRelease();
+    this.browserExtensionRelease = null;
+    this.browserExtensionProvider = null;
+    this.browserExtensionBindKey = null;
+    log.debug('Browser extension WS server released');
+  }
+
   /**
    * Start/stop/rebind the Chrome extension bridge when `agents.defaults.browser` changes.
    * PATCH saves update config in memory without re-running gateway startup, so this must run on save too.
