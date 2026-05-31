@@ -50,6 +50,15 @@ function parseProfileFiles(raw: unknown): Record<string, string> | undefined | {
   return profileFiles;
 }
 
+function isParseError(value: unknown): value is { error: string } {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'error' in value &&
+    typeof (value as { error: string }).error === 'string'
+  );
+}
+
 function parseCreateAgentBody(raw: unknown): CreateAgentBody | { error: string } {
   if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
     return { error: 'each agent must be an object' };
@@ -67,7 +76,7 @@ function parseCreateAgentBody(raw: unknown): CreateAgentBody | { error: string }
   let profileFiles: Record<string, string> | undefined;
   if (Object.hasOwn(body, 'profileFiles')) {
     const parsed = parseProfileFiles(body.profileFiles);
-    if ('error' in parsed) {
+    if (isParseError(parsed)) {
       return parsed;
     }
     profileFiles = parsed;

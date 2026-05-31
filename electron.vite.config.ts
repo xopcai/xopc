@@ -18,6 +18,9 @@ function tryGitSha(): string {
   }
 }
 
+/** Packaged Electron loads the embedded gateway URL; renderer build is dev/preview-only. */
+const skipRenderer = process.env['ELECTRON_VITE_SKIP_RENDERER'] === '1';
+
 export default defineConfig({
   main: {
     build: {
@@ -57,51 +60,55 @@ export default defineConfig({
       },
     },
   },
-  renderer: {
-    root: resolve(__dirname, 'web'),
-    base: './',
-    define: {
-      __XOPC_WEB_VERSION__: JSON.stringify(webPkg.version),
-      __XOPC_WEB_COMMIT__: JSON.stringify(process.env['VITE_XOPC_WEB_COMMIT'] ?? tryGitSha()),
-      __XOPC_WEB_BUILD_TIME__: JSON.stringify(
-        process.env['VITE_XOPC_WEB_BUILD_TIME'] ?? new Date().toISOString(),
-      ),
-    },
-    plugins: [react(), tailwindcss()],
-    resolve: {
-      alias: {
-        '@': resolve(__dirname, 'web/src'),
-      },
-    },
-    build: {
-      rollupOptions: {
-        input: resolve(__dirname, 'web/index.html'),
-      },
-      outDir: resolve(__dirname, 'out/renderer'),
-      emptyOutDir: true,
-    },
-    server: {
-      port: 5173,
-      // Same-origin API calls use `window.location.origin` (this dev server). Mirror `web/vite.config.ts`
-      // so `/api/*` reaches the xopc gateway — required for Electron dev (renderer loads from :5173).
-      proxy: {
-        '/api': {
-          target: 'http://localhost:18790',
-          changeOrigin: true,
+  ...(skipRenderer
+    ? {}
+    : {
+        renderer: {
+          root: resolve(__dirname, 'web'),
+          base: './',
+          define: {
+            __XOPC_WEB_VERSION__: JSON.stringify(webPkg.version),
+            __XOPC_WEB_COMMIT__: JSON.stringify(process.env['VITE_XOPC_WEB_COMMIT'] ?? tryGitSha()),
+            __XOPC_WEB_BUILD_TIME__: JSON.stringify(
+              process.env['VITE_XOPC_WEB_BUILD_TIME'] ?? new Date().toISOString(),
+            ),
+          },
+          plugins: [react(), tailwindcss()],
+          resolve: {
+            alias: {
+              '@': resolve(__dirname, 'web/src'),
+            },
+          },
+          build: {
+            rollupOptions: {
+              input: resolve(__dirname, 'web/index.html'),
+            },
+            outDir: resolve(__dirname, 'out/renderer'),
+            emptyOutDir: true,
+          },
+          server: {
+            port: 5173,
+            // Same-origin API calls use `window.location.origin` (this dev server). Mirror `web/vite.config.ts`
+            // so `/api/*` reaches the xopc gateway — required for Electron dev (renderer loads from :5173).
+            proxy: {
+              '/api': {
+                target: 'http://localhost:18790',
+                changeOrigin: true,
+              },
+              '/health': {
+                target: 'http://localhost:18790',
+                changeOrigin: true,
+              },
+              '/status': {
+                target: 'http://localhost:18790',
+                changeOrigin: true,
+              },
+              '/favicon.ico': {
+                target: 'http://localhost:18790',
+                changeOrigin: true,
+              },
+            },
+          },
         },
-        '/health': {
-          target: 'http://localhost:18790',
-          changeOrigin: true,
-        },
-        '/status': {
-          target: 'http://localhost:18790',
-          changeOrigin: true,
-        },
-        '/favicon.ico': {
-          target: 'http://localhost:18790',
-          changeOrigin: true,
-        },
-      },
-    },
-  },
+      }),
 });

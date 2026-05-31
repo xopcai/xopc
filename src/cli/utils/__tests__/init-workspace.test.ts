@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import { initWorkspace } from '../init-workspace.js';
+import { initWorkspaceCore } from '../init-workspace-core.js';
 
 describe('initWorkspace', () => {
   beforeAll(async () => {
@@ -26,6 +27,24 @@ describe('initWorkspace', () => {
       const raw = readFileSync(configPath, 'utf8');
       expect(raw).toContain('"token"');
       expect(raw).toContain(result.token);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('initWorkspaceCore matches Electron shell init without channel plugins', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'xopc-init-core-'));
+    try {
+      const configPath = join(root, 'xopc.json');
+      const workspacePath = join(root, 'workspace', 'main');
+      const result = await initWorkspaceCore({
+        configPath,
+        workspacePath,
+        persistWorkspacePath: true,
+      });
+      expect(result.token.length).toBeGreaterThan(10);
+      expect(result.configCreated).toBe(true);
+      expect(readFileSync(configPath, 'utf8')).toContain(result.token);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

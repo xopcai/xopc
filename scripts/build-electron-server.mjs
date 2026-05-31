@@ -8,6 +8,8 @@ import { cpSync, existsSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { ELECTRON_GATEWAY_EXTERNALS } from './electron-runtime-externals.mjs';
+
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const entry = join(root, 'dist/src/cli/bin.js');
 const outfile = join(root, 'out/server/index.js');
@@ -21,14 +23,8 @@ if (!existsSync(entry)) {
 
 // Exclude Electron-only or optional native / heavy deps the gateway subprocess does not need bundled.
 // Marketplace adapters (store, skillhub, clawhub) are built-in under src/agent/skills/marketplace/.
-const external = [
-  'electron',
-  '@vscode/ripgrep',
-  'silk-wasm',
-  'playwright-core',
-  'node-cron',
-  'fsevents',
-];
+const external = ELECTRON_GATEWAY_EXTERNALS;
+const minify = process.env['XOPC_ELECTRON_SERVER_MINIFY'] !== '0';
 
 await esbuild.build({
   entryPoints: [entry],
@@ -49,11 +45,11 @@ await esbuild.build({
       'globalThis.require = __xopcCreateRequire(import.meta.url);',
     ].join('\n'),
   },
-  minify: false,
+  minify,
   sourcemap: false,
 });
 
-console.log(`[build-electron-server] Wrote ${outfile}`);
+console.log(`[build-electron-server] Wrote ${outfile}${minify ? ' (minified)' : ''}`);
 
 // workspace-seed.ts resolves bundled templates next to the running module (`__dirname/workspace-templates`).
 // The esbuild bundle is a single file under out/server/, so copy templates beside index.js for packaged Electron.

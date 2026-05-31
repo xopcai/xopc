@@ -23,10 +23,14 @@ directories:
   buildResources: electron/resources
 
 files:
-  - out/**/*
+  # Packaged apps embed the gateway and load UI from http://127.0.0.1 — not out/renderer (dev/preview only).
+  - out/main/**/*
+  - out/preload/**/*
+  - out/server/**/*
   - package.json
   # Gateway UI: `pnpm run build:web` → dist/gateway/static/root (not in esbuild server bundle)
   - dist/gateway/static/root/**/*
+  - '!dist/gateway/static/root/**/*.map'
   # Built-in skills: bundled SKILL.md files for the agent
   - skills/**/*
 
