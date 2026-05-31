@@ -1,3 +1,5 @@
+import { ChevronRight } from 'lucide-react';
+
 import { cn } from '@/lib/cn';
 
 import type { ModeStatusKind } from './backend-mode-card';
@@ -50,32 +52,65 @@ export function BrowserStatusStrip({
   backendName,
   status,
   statusLabel,
+  onOpenConfig,
 }: {
   m: BrowserMessages;
   backendName: string;
   status: ModeStatusKind | undefined;
   statusLabel: string | undefined;
+  onOpenConfig?: () => void;
 }) {
   const tone = statusTone(status);
   const label = statusLabel ?? m.browserStatusUnknown;
 
-  return (
-    <div className="flex items-center justify-between gap-3 rounded-lg border border-edge-subtle bg-surface-panel px-3 py-2.5">
+  const content = (
+    <>
       <div className="min-w-0">
         <p className="text-[11px] font-medium uppercase tracking-wide text-fg-subtle">
           {m.browserStatusStripBackend}
         </p>
         <p className="truncate text-sm font-medium text-fg">{backendName}</p>
       </div>
-      <span
+      <div className="flex shrink-0 items-center gap-2">
+        <span
+          className={cn(
+            'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium',
+            toneClass(tone),
+          )}
+        >
+          <span className={cn('inline-block size-1.5 rounded-full', dotClass(tone))} aria-hidden />
+          {label}
+        </span>
+        {onOpenConfig ? (
+          <span className="inline-flex items-center gap-0.5 text-xs font-medium text-accent">
+            <span className="hidden sm:inline">{m.browserGoToConfigure}</span>
+            <ChevronRight className="size-4 shrink-0" aria-hidden />
+          </span>
+        ) : null}
+      </div>
+    </>
+  );
+
+  if (onOpenConfig) {
+    return (
+      <button
+        type="button"
+        onClick={() => onOpenConfig()}
         className={cn(
-          'inline-flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium',
-          toneClass(tone),
+          'group flex w-full items-center justify-between gap-3 rounded-lg border border-edge-subtle bg-surface-panel px-3 py-2.5 text-left transition-colors',
+          'hover:border-edge hover:bg-surface-hover/50',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
         )}
+        aria-label={`${backendName} — ${m.browserGoToConfigure}`}
       >
-        <span className={cn('inline-block size-1.5 rounded-full', dotClass(tone))} aria-hidden />
-        {label}
-      </span>
+        {content}
+      </button>
+    );
+  }
+
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-lg border border-edge-subtle bg-surface-panel px-3 py-2.5">
+      {content}
     </div>
   );
 }

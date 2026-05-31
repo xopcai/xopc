@@ -1,6 +1,9 @@
 import type { LucideIcon } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 
 import { cn } from '@/lib/cn';
+
+import { selectClassName } from '../../defaults-field-styles';
 
 import type { BrowserMessages } from './types';
 import type { ModeStatusKind } from './backend-mode-card';
@@ -30,74 +33,82 @@ function statusDotClass(status: ModeStatusKind | undefined): string {
   }
 }
 
-/**
- * Single-column backend picker. Selected row uses a left accent bar instead of
- * heavy badges to keep the page calm (design system §2.2).
- */
+/** Compact backend picker — native select instead of a five-row list. */
 export function BackendModeList({
   value,
   onChange,
+  onOpenConfig,
   options,
   m,
 }: {
   value: BackendMode;
   onChange: (next: BackendMode) => void;
+  onOpenConfig?: (backend: BackendMode) => void;
   options: BackendModeOption[];
   m: BrowserMessages;
 }) {
+  const selected = options.find((opt) => opt.value === value) ?? options[0];
+
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-col">
-        <div className="text-sm font-medium text-fg">{m.browserPickerTitle}</div>
+      <div className="flex flex-col gap-0.5">
+        <label htmlFor="browser-backend-select" className="text-sm font-medium text-fg">
+          {m.browserPickerTitle}
+        </label>
+        <p className="text-xs leading-relaxed text-fg-muted">{m.browserPickerSubtitle}</p>
       </div>
-      <div role="radiogroup" aria-label={m.browserPickerTitle} className="flex flex-col gap-1.5">
-        {options.map((opt) => {
-          const selected = opt.value === value;
-          const Icon = opt.icon;
-          return (
-            <button
-              key={opt.value}
-              type="button"
-              role="radio"
-              aria-checked={selected}
-              aria-label={opt.name}
-              onClick={() => onChange(opt.value)}
-              className={cn(
-                'flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-[border-color,background-color]',
-                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
-                selected
-                  ? 'border-accent/50 bg-accent/5 pl-[10px] shadow-[inset_3px_0_0_0] shadow-accent'
-                  : 'border-edge bg-surface-panel hover:border-edge-strong hover:bg-surface-hover',
-              )}
-            >
-              <div
-                className={cn(
-                  'flex size-8 shrink-0 items-center justify-center rounded-lg transition-colors',
-                  selected ? 'bg-accent/15 text-accent' : 'bg-surface-hover text-fg-muted',
-                )}
+
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:gap-2">
+        <select
+          id="browser-backend-select"
+          className={cn(selectClassName(), 'min-w-0 flex-1 sm:max-w-md')}
+          value={value}
+          onChange={(e) => onChange(e.target.value as BackendMode)}
+          aria-label={m.browserPickerTitle}
+        >
+          {options.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.name}
+            </option>
+          ))}
+        </select>
+
+        {onOpenConfig ? (
+          <button
+            type="button"
+            className={cn(
+              'inline-flex shrink-0 items-center justify-center gap-1 rounded-lg border border-edge bg-surface-panel px-3 py-2 text-xs font-medium text-accent',
+              'transition-colors hover:border-edge-strong hover:bg-surface-hover',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
+            )}
+            onClick={() => onOpenConfig(value)}
+            aria-label={`${selected?.name ?? value} — ${m.browserGoToConfigure}`}
+          >
+            <span>{m.browserGoToConfigure}</span>
+            <ChevronRight className="size-4 shrink-0" aria-hidden />
+          </button>
+        ) : null}
+      </div>
+
+      {selected ? (
+        <div className="flex flex-col gap-1.5 rounded-lg border border-edge-subtle bg-surface-panel px-3 py-2.5">
+          <div className="flex flex-wrap items-center gap-2">
+            {selected.statusLabel ? (
+              <span
+                className="inline-flex items-center gap-1.5 text-[11px] font-medium text-fg-muted"
+                aria-label={selected.statusLabel}
               >
-                <Icon className="size-4" strokeWidth={1.75} />
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="text-sm font-medium text-fg">{opt.name}</div>
-                <p className="truncate text-[11px] leading-snug text-fg-muted">{opt.tagline}</p>
-              </div>
-              {opt.statusLabel ? (
                 <span
-                  className="inline-flex shrink-0 items-center gap-1.5 text-[11px] text-fg-muted"
-                  aria-label={opt.statusLabel}
-                >
-                  <span
-                    className={cn('inline-block size-1.5 rounded-full', statusDotClass(opt.status))}
-                    aria-hidden
-                  />
-                  <span className="hidden sm:inline">{opt.statusLabel}</span>
-                </span>
-              ) : null}
-            </button>
-          );
-        })}
-      </div>
+                  className={cn('inline-block size-1.5 rounded-full', statusDotClass(selected.status))}
+                  aria-hidden
+                />
+                {selected.statusLabel}
+              </span>
+            ) : null}
+          </div>
+          <p className="text-xs leading-relaxed text-fg-muted">{selected.tagline}</p>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -30,12 +30,11 @@ export interface StealthOptions {
 }
 
 /**
- * Default Chromium args that reduce automation detectability.
- * Applied to both local Playwright and CloakBrowser launches.
+ * Default Chromium args that reduce automation detectability for CloakBrowser.
+ * Does not include `--no-sandbox` — CloakBrowser rejects it with an infobar warning.
  */
 const BASE_STEALTH_ARGS = [
   '--disable-blink-features=AutomationControlled',
-  '--no-sandbox',
   '--disable-infobars',
   '--disable-dev-shm-usage',
   '--disable-background-networking',
@@ -45,6 +44,14 @@ const BASE_STEALTH_ARGS = [
   '--metrics-recording-only',
   '--no-first-run',
 ];
+
+/** Flags CloakBrowser does not support (shown as unsupported infobar if passed). */
+const CLOAK_UNSUPPORTED_FLAGS = new Set(['--no-sandbox', '--disable-setuid-sandbox']);
+
+/** Strip sandbox flags before passing user extraArgs to CloakBrowser. */
+export function filterCloakBrowserExtraArgs(extraArgs: string[] = []): string[] {
+  return extraArgs.filter((arg) => !CLOAK_UNSUPPORTED_FLAGS.has(arg.split('=')[0] ?? arg));
+}
 
 /**
  * Build stealth launch args with deduplication.

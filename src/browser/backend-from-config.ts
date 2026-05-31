@@ -1,6 +1,6 @@
 import type { Config } from '../config/schema.js';
 
-import type { BrowserBackend } from './providers/types.js';
+import type { BrowserBackend, CloakBrowserConfig } from './providers/types.js';
 
 /**
  * Whether the gateway should keep the Chrome extension WebSocket bridge listening.
@@ -96,5 +96,24 @@ export function resolveBrowserBackendFromConfig(cfg: Config | undefined): Browse
           ? Math.floor(cmdSec * 1000)
           : undefined,
     },
+  };
+}
+
+/** CloakBrowser launch options aligned with saved agent defaults (headed for manual use). */
+export function cloakBrowserConfigFromAgentDefaults(cfg: Config | undefined): CloakBrowserConfig {
+  const b = cfg?.agents?.defaults?.browser;
+  const cb = b?.cloakbrowser;
+  return {
+    headless: false,
+    keepOpen: cb?.keepOpen,
+    temporaryProfile: cb?.temporaryProfile,
+    cacheDir: cb?.cacheDir,
+    binaryPath: cb?.binaryPath,
+    timezone: cb?.timezone,
+    locale: cb?.locale,
+    webrtcIp: cb?.webrtcIp,
+    fingerprintPlatform: cb?.fingerprintPlatform,
+    extraArgs: cb?.extraArgs,
+    reuseExisting: true,
   };
 }

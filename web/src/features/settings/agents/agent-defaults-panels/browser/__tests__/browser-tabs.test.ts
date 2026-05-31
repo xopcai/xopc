@@ -23,12 +23,16 @@ describe('browser-tabs', () => {
   it('maps legacy focus ids to tabs', () => {
     expect(LEGACY_BROWSER_FOCUS_TO_TAB.extension).toBe('extension');
     expect(LEGACY_BROWSER_FOCUS_TO_TAB.cloak).toBe('cloakbrowser');
-    expect(LEGACY_BROWSER_FOCUS_TO_TAB.runtime).toBe('behavior');
+    expect(LEGACY_BROWSER_FOCUS_TO_TAB.runtime).toBe('overview');
+    expect(LEGACY_BROWSER_FOCUS_TO_TAB.security).toBe('overview');
+  });
+
+  it('maps legacy behavior tab to overview', () => {
+    expect(parseBrowserTab('behavior')).toBe('overview');
   });
 
   it('maps backend tabs to backend modes', () => {
     expect(browserTabToBackend('extension')).toBe('extension');
     expect(browserTabToBackend('overview')).toBeNull();
-    expect(browserTabToBackend('behavior')).toBeNull();
   });
 });

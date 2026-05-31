@@ -17,12 +17,10 @@ import { BrowserBehaviorSections } from './browser/browser-behavior-sections';
 import { BrowserDocsLink } from './browser/browser-docs-link';
 import { browserFocusElementId } from './browser/browser-focus';
 import { BrowserSetupGuide } from './browser/browser-setup-guide';
-import { BrowserStatusStrip } from './browser/browser-status-strip';
 import {
   doctorStatus,
   extensionDoctorStatus,
   extensionStatusLabelFor,
-  selectedBackendStatus,
   statusLabelFor,
 } from './browser/browser-status';
 import type { BrowserTabId } from './browser/browser-tabs';
@@ -68,14 +66,6 @@ export function AgentDefaultsBrowserPanel(
   const extensionStatus = extensionDoctorStatus(doctor.extension);
   const extensionStatusLabel = extensionStatusLabelFor(doctor.extension, a);
 
-  const stripStatus = selectedBackendStatus(form.browserBackend, {
-    extensionStatus,
-    extensionStatusLabel,
-    localStatus,
-    cloakStatus,
-    a,
-  });
-
   const modeOptions = useMemo<BackendModeOption[]>(() => {
     const base: BackendModeOption[] = [
       {
@@ -117,21 +107,6 @@ export function AgentDefaultsBrowserPanel(
     ];
     return base;
   }, [a, cloakStatus, extensionStatus, extensionStatusLabel, localStatus]);
-
-  const backendName = useMemo(() => {
-    switch (form.browserBackend) {
-      case 'extension':
-        return a.browserBackendExtension;
-      case 'local':
-        return a.browserBackendLocal;
-      case 'cloakbrowser':
-        return a.browserBackendCloakBrowser;
-      case 'cdp':
-        return a.browserBackendCdp;
-      case 'cloud':
-        return a.browserBackendCloud;
-    }
-  }, [a, form.browserBackend]);
 
   const startSetup = (backend: Extract<BackendMode, 'extension' | 'local' | 'cloud'>) => {
     update({ browserEnabled: true, browserBackend: backend });
@@ -200,6 +175,8 @@ export function AgentDefaultsBrowserPanel(
             refetch={doctor.refetchCloak}
             applyDoctor={doctor.applyCloakDoctor}
             installStream={cloakInstall}
+            fetchRuntimeStatus={doctor.fetchCloakRuntimeStatus}
+            launchCloak={doctor.launchCloak}
             form={{
               cacheDir: form.browserCloakCacheDir,
               binaryPath: form.browserCloakBinaryPath,
@@ -310,47 +287,36 @@ export function AgentDefaultsBrowserPanel(
             </div>
 
             {form.browserEnabled ? (
-              <>
-                <BrowserStatusStrip
+              <div
+                id={browserFocusElementId('connection')}
+                className={cn(
+                  'scroll-mt-24 transition-opacity',
+                  !form.browserEnabled && 'pointer-events-none opacity-40',
+                )}
+              >
+                <BackendModeList
                   m={a}
-                  backendName={backendName}
-                  status={stripStatus.status}
-                  statusLabel={stripStatus.statusLabel}
+                  value={form.browserBackend}
+                  onChange={(next) => update({ browserBackend: next })}
+                  onOpenConfig={setActiveTab}
+                  options={modeOptions}
                 />
-                <div
-                  id={browserFocusElementId('connection')}
-                  className={cn(
-                    'scroll-mt-24 transition-opacity',
-                    !form.browserEnabled && 'pointer-events-none opacity-40',
-                  )}
-                >
-                  <BackendModeList
-                    m={a}
-                    value={form.browserBackend}
-                    onChange={(next) => update({ browserBackend: next })}
-                    options={modeOptions}
-                  />
-                </div>
-              </>
+              </div>
             ) : (
               <p className="text-xs text-fg-muted">{a.browserDisabledHint}</p>
             )}
           </div>
         </SettingsFormSection>
-      </div>
-    );
-  }
 
-  if (activeTab === 'behavior') {
-    return (
-      <div
-        className={cn(
-          'transition-opacity',
-          !form.browserEnabled && 'pointer-events-none opacity-40',
-        )}
-        aria-hidden={!form.browserEnabled}
-      >
-        <BrowserBehaviorSections a={a} form={form} update={update} />
+        <div
+          className={cn(
+            'transition-opacity',
+            !form.browserEnabled && 'pointer-events-none opacity-40',
+          )}
+          aria-hidden={!form.browserEnabled}
+        >
+          <BrowserBehaviorSections a={a} form={form} update={update} />
+        </div>
       </div>
     );
   }
