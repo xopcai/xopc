@@ -3,7 +3,7 @@ import { join } from 'node:path';
 
 import { app } from 'electron';
 
-import { initWorkspace } from '../src/cli/utils/init-workspace.js';
+import { initWorkspaceCore } from '../src/cli/utils/init-workspace-core.js';
 import {
   resolveGatewayBindMode,
   resolveGatewayEffectiveHost,
@@ -39,12 +39,11 @@ export async function ensureGatewayConfigForElectron(paths: ElectronUserPaths): 
 }> {
   mkdirSync(paths.userData, { recursive: true });
 
-  const initResult = await initWorkspace({
+  const initResult = await initWorkspaceCore({
     configPath: paths.configPath,
     workspacePath: paths.workspacePath,
     gatewayPort: getDefaultGatewayPort(),
     persistWorkspacePath: true,
-    skipChannelPluginValidation: true,
   });
 
   const preferredPort = initResult.config.gateway?.port ?? getDefaultGatewayPort();
