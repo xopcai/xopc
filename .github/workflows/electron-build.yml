@@ -152,8 +152,20 @@ jobs:
             echo "❌ dist/release directory not found!"
             exit 1
           fi
-          
-          mapfile -t ARTIFACTS < <(bash scripts/list-electron-release-upload-files.sh dist/release)
+
+          # Use process substitution + readarray fallback for bash < 4 (macOS uses bash 3.2).
+          # mapfile is bash 4+. POSIX read -ra works in bash 2.0+.
+          mapfile -t ARTIFACTS < <(bash scripts/list-electron-release-upload-files.sh dist/release) 2>/dev/null || {
+            mapfile_exit=$?
+            if [ "$mapfile_exit" -eq 127 ]; then
+              # mapfile not available (bash < 4): fall back to read -ra
+              while IFS= read -r f; do
+                ARTIFACTS+=("$f")
+              done < <(bash scripts/list-electron-release-upload-files.sh dist/release)
+            else
+              exit "$mapfile_exit"
+            fi
+          }
           if [ ${#ARTIFACTS[@]} -eq 0 ]; then
             echo "❌ No installable artifacts found in dist/release!"
             echo "Contents of dist/release:"
@@ -205,7 +217,17 @@ jobs:
           TAG="${{ github.ref_name }}"
           REPO="${{ github.repository }}"
           # See scripts/list-electron-release-upload-files.sh (excludes win-unpacked/xopc.exe).
-          mapfile -t FILES < <(bash scripts/list-electron-release-upload-files.sh release-assets)
+          # Use process substitution + readarray fallback for bash < 4 (macOS uses bash 3.2).
+          mapfile -t FILES < <(bash scripts/list-electron-release-upload-files.sh release-assets) 2>/dev/null || {
+            mapfile_exit=$?
+            if [ "$mapfile_exit" -eq 127 ]; then
+              while IFS= read -r f; do
+                FILES+=("$f")
+              done < <(bash scripts/list-electron-release-upload-files.sh release-assets)
+            else
+              exit "$mapfile_exit"
+            fi
+          }
           if [ ${#FILES[@]} -eq 0 ]; then
             echo "No installable artifacts found under release-assets"
             exit 1
