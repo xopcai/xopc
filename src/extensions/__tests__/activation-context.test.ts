@@ -50,4 +50,16 @@ describe('collectConfiguredProviderIds', () => {
     });
     expect(ids ?? []).not.toContain('openai');
   });
+
+  it('includes LLM/image providers configured only via env vars', () => {
+    const prev = process.env.DASHSCOPE_API_KEY;
+    process.env.DASHSCOPE_API_KEY = 'sk-test-dashscope';
+    try {
+      const ids = collectConfiguredProviderIds({});
+      expect(ids).toContain('dashscope');
+    } finally {
+      if (prev === undefined) delete process.env.DASHSCOPE_API_KEY;
+      else process.env.DASHSCOPE_API_KEY = prev;
+    }
+  });
 });

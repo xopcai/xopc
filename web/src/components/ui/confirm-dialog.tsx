@@ -46,7 +46,6 @@ export function ConfirmDialog({
             SETTINGS_SHELL_CONTENT_Z,
             'rounded-2xl border border-edge bg-surface-panel p-6 shadow-popover outline-none dark:border-edge',
           )}
-          onOpenAutoFocus={(e) => e.preventDefault()}
         >
           <Dialog.Title className="text-base font-semibold text-fg">{title}</Dialog.Title>
           <Dialog.Description className="mt-2 max-h-[min(50vh,16rem)] overflow-y-auto text-sm text-fg-muted whitespace-pre-wrap break-all">
