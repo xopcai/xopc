@@ -237,6 +237,7 @@ export function ExtensionCard({
       m={m}
       embedded={embedded}
       primaryAction={primaryAction}
+      advancedTitle={m.browserAdvancedShow}
       advanced={
         <div className="grid gap-5 sm:grid-cols-2">
           <AgentDefaultsField label={m.label.browserExtensionPort} description={m.desc.browserExtensionPort}>

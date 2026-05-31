@@ -1,6 +1,6 @@
 import { ShieldAlert, SlidersHorizontal } from 'lucide-react';
 
-import { SettingsCollapsibleSection } from '@/features/settings/settings-collapsible-section';
+import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/settings/settings-form-section';
 
 import { AgentDefaultsField } from '../../agent-defaults-field';
 import { inputClassName, selectClassName } from '../../defaults-field-styles';
@@ -14,14 +14,10 @@ export function BrowserBehaviorSections({
   update,
 }: Pick<AgentDefaultsPanelProps, 'a' | 'form' | 'update'>) {
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-5">
       <div id={browserFocusElementId('runtime')} className="scroll-mt-24">
-        <SettingsCollapsibleSection
-          icon={SlidersHorizontal}
-          showLabel={a.browserBehaviorShow}
-          hideLabel={a.browserBehaviorHide}
-          hint={a.browserBehaviorHint}
-        >
+        <SettingsFormSection>
+          <SettingsFormSectionHeader icon={SlidersHorizontal} title={a.browserBehaviorShow} />
         <div className="grid gap-5 sm:grid-cols-2">
           <AgentDefaultsField label={a.label.browserHeadless} description={a.desc.browserHeadless}>
             <label className="flex cursor-pointer items-center gap-2 text-sm text-fg">
@@ -63,17 +59,12 @@ export function BrowserBehaviorSections({
             />
           </AgentDefaultsField>
         </div>
-      </SettingsCollapsibleSection>
+        </SettingsFormSection>
       </div>
 
       <div id={browserFocusElementId('security')} className="scroll-mt-24">
-        <SettingsCollapsibleSection
-          icon={ShieldAlert}
-          showLabel={a.browserSecurityShow}
-          hideLabel={a.browserSecurityHide}
-          hint={a.browserSecurityHint}
-          className="border border-amber-500/20"
-        >
+        <SettingsFormSection className="border border-amber-500/20">
+          <SettingsFormSectionHeader icon={ShieldAlert} title={a.browserSecurityShow} />
         <div className="grid gap-5 sm:grid-cols-2">
           <AgentDefaultsField label={a.label.browserAllowPrivateUrls} description={a.desc.browserAllowPrivateUrls}>
             <label className="flex cursor-pointer items-center gap-2 text-sm text-fg">
@@ -100,7 +91,7 @@ export function BrowserBehaviorSections({
             />
           </AgentDefaultsField>
         </div>
-      </SettingsCollapsibleSection>
+        </SettingsFormSection>
       </div>
     </div>
   );

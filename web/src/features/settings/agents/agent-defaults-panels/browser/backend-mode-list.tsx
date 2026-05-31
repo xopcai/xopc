@@ -49,7 +49,6 @@ export function BackendModeList({
     <div className="flex flex-col gap-3">
       <div className="flex flex-col">
         <div className="text-sm font-medium text-fg">{m.browserPickerTitle}</div>
-        <p className="text-xs leading-relaxed text-fg-muted">{m.browserPickerSubtitle}</p>
       </div>
       <div role="radiogroup" aria-label={m.browserPickerTitle} className="flex flex-col gap-1.5">
         {options.map((opt) => {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { Config } from '../../config/schema.js';
-import { resolveBrowserBackendFromConfig } from '../backend-from-config.js';
+import { resolveBrowserBackendFromConfig, shouldRunExtensionBridgeServer } from '../backend-from-config.js';
 import { resolveBrowserCommandTimeoutMs } from '../browser-command-timeout.js';
 
 describe('resolveBrowserBackendFromConfig', () => {
@@ -157,6 +157,47 @@ describe('resolveBrowserBackendFromConfig', () => {
       },
     } as unknown as Config;
     expect(resolveBrowserBackendFromConfig(cfg).mode).toBe('cloakbrowser');
+  });
+});
+
+describe('shouldRunExtensionBridgeServer', () => {
+  it('starts for default extension backend (null backend)', () => {
+    const cfg = {
+      agents: { defaults: { browser: { enabled: true } } },
+    } as unknown as Config;
+    expect(shouldRunExtensionBridgeServer(cfg)).toBe(true);
+  });
+
+  it('starts when backend is explicitly extension', () => {
+    const cfg = {
+      agents: { defaults: { browser: { backend: 'extension' as const } } },
+    } as unknown as Config;
+    expect(shouldRunExtensionBridgeServer(cfg)).toBe(true);
+  });
+
+  it('does not start when browser is disabled', () => {
+    const cfg = {
+      agents: { defaults: { browser: { enabled: false, backend: 'extension' as const } } },
+    } as unknown as Config;
+    expect(shouldRunExtensionBridgeServer(cfg)).toBe(false);
+  });
+
+  it('does not start for local backend', () => {
+    const cfg = {
+      agents: { defaults: { browser: { backend: 'local' as const } } },
+    } as unknown as Config;
+    expect(shouldRunExtensionBridgeServer(cfg)).toBe(false);
+  });
+
+  it('does not start when cdpUrl selects CDP backend', () => {
+    const cfg = {
+      agents: {
+        defaults: {
+          browser: { cdpUrl: 'ws://127.0.0.1:9222/devtools/browser/x' },
+        },
+      },
+    } as unknown as Config;
+    expect(shouldRunExtensionBridgeServer(cfg)).toBe(false);
   });
 });
 

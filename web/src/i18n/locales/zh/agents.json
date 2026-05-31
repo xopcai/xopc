@@ -32,6 +32,16 @@
       "system-prompt": "系统提示词"
     },
     "defaultsTabsAria": "智能体默认配置分区",
+    "browserTabs": {
+      "overview": "概览",
+      "extension": "Chrome 扩展",
+      "local": "本地 Chromium",
+      "cloakbrowser": "CloakBrowser",
+      "cdp": "CDP",
+      "cloud": "云端",
+      "behavior": "行为与安全"
+    },
+    "browserTabsAria": "浏览器设置分区",
     "cardModelsTitle": "模型",
     "cardModelsSubtitle": "对话、视觉与图像生成默认模型",
     "cardWorkspaceTitle": "工作区与附件",
@@ -118,8 +128,8 @@
     "browserSecurityShow": "安全与限制",
     "browserSecurityHide": "收起安全与限制",
     "browserSecurityHint": "内网 URL 访问与单命令超时。云元数据端点始终被拦截。",
-    "browserPickerTitle": "连接方式",
-    "browserPickerSubtitle": "选择网关如何连接浏览器。选中项的配置显示在下方。",
+    "browserPickerTitle": "生效的浏览器",
+    "browserPickerSubtitle": "选择智能体运行时使用的后端。各后端的详细配置在对应 Tab 中设置。",
     "browserConfiguringHeader": "正在配置：{{mode}}",
     "browserSelectedBadge": "已选中",
     "browserStatusReady": "就绪",

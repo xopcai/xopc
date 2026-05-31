@@ -120,12 +120,12 @@ export function LocalCard({
         </button>
       }
     >
-      <details className="group text-xs">
-        <summary className="cursor-pointer text-fg-muted hover:text-fg">{m.browserPlaywrightManualInstall}</summary>
+      <div className="text-xs">
+        <p className="text-fg-muted">{m.browserPlaywrightManualInstall}</p>
         <code className="mt-2 block w-fit rounded-md border border-edge bg-surface-base px-2 py-1 text-xs text-fg">
           node node_modules/playwright-core/cli.js install chromium
         </code>
-      </details>
+      </div>
       {running ? (
         <BrowserInstallProgressPanel
           m={m}
