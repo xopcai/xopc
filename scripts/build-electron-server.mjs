@@ -25,6 +25,7 @@ const external = [
   'electron',
   '@vscode/ripgrep',
   'silk-wasm',
+  'playwright-core',
   'node-cron',
   'fsevents',
 ];

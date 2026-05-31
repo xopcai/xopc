@@ -147,6 +147,8 @@ export function spawnGatewayProcess(opts: GatewayProcessOptions): ChildProcess {
               XOPC_UI_STATIC_ROOT: join(app.getAppPath(), 'dist/gateway/static/root'),
               XOPC_BROWSER_EXT_BUNDLED_ROOT: join(process.resourcesPath, 'browser-ext'),
               XOPC_TEMPLATE_PATH: join(app.getAppPath(), 'out/server/workspace-templates'),
+              XOPC_PLAYWRIGHT_CORE_ROOT: join(process.resourcesPath, 'playwright-core'),
+              NODE_PATH: process.resourcesPath,
             }
           : {}),
       },
