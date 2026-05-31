@@ -65,13 +65,17 @@ export function useChatSessionAgents(opts: {
   }, [chatAgentsData]);
 
   const resolveAgentIdForPost = useCallback((): string | undefined => {
+    const key = sessionKeyRef.current;
+    const fromKey = key ? getAgentIdFromWebSessionKey(key) : null;
+    if (fromKey) return fromKey;
+
     const agents = chatAgentsRef.current;
     const pref = (preferredAgentIdRef.current ?? '').trim().toLowerCase();
     if (!agents) return pref || undefined;
     const valid = new Set(agents.items.map((i) => i.id));
     if (pref && valid.has(pref)) return pref;
     return agents.defaultId;
-  }, []);
+  }, [sessionKeyRef]);
 
   const onChatAgentChange = useCallback(
     (id: string) => {
@@ -101,22 +105,18 @@ export function useChatSessionAgents(opts: {
     return () => window.removeEventListener('xopc-set-chat-agent', handler);
   }, [onChatAgentChange]);
 
-  const trackedSessionAgentRef = useRef<string | null>(null);
-  if (sessionKey) {
+  useLayoutEffect(() => {
+    if (!sessionKey) return;
     const agentFromSession = getAgentIdFromWebSessionKey(sessionKey);
-    if (agentFromSession && trackedSessionAgentRef.current !== `${sessionKey}:${agentFromSession}`) {
-      trackedSessionAgentRef.current = `${sessionKey}:${agentFromSession}`;
-      if (preferredAgentIdRef.current !== agentFromSession) {
-        preferredAgentIdRef.current = agentFromSession;
-        setPreferredAgentId(agentFromSession);
-        try {
-          globalThis.localStorage?.setItem(WEBCHAT_AGENT_STORAGE_KEY, agentFromSession);
-        } catch {
-          /* noop */
-        }
-      }
+    if (!agentFromSession || preferredAgentIdRef.current === agentFromSession) return;
+    preferredAgentIdRef.current = agentFromSession;
+    setPreferredAgentId(agentFromSession);
+    try {
+      globalThis.localStorage?.setItem(WEBCHAT_AGENT_STORAGE_KEY, agentFromSession);
+    } catch {
+      /* noop */
     }
-  }
+  }, [sessionKey]);
 
   useLayoutEffect(() => {
     if (!isNewRoute) return;
