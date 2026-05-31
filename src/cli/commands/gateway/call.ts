@@ -4,7 +4,7 @@ import {
   addGatewayClientOptions,
   parseGatewayClientOptions,
 } from '../../utils/gateway-client-options.js';
-import { getContextWithOpts } from '../../index.js';
+import { getContextWithOpts } from '../../context.js';
 import { resolveConfigPath } from '../../../config/paths.js';
 
 const METHOD_ALIASES: Record<string, { method: 'GET' | 'POST'; path: string }> = {

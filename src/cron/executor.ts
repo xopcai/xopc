@@ -375,7 +375,7 @@ export class DefaultJobExecutor implements JobExecutor {
         throw new Error('Job was aborted');
       }
 
-      await this.agentService.applyCronJobWorkingDirectory(sessionKey, job.workingDirectory);
+      await this.agentService.sessionConfig.applyCronJobWorkingDirectory(sessionKey, job.workingDirectory);
 
       const jobModel = resolveIsolatedCronJobModel(job);
       if (jobModel) {
@@ -388,7 +388,7 @@ export class DefaultJobExecutor implements JobExecutor {
         await this.agentService.resetSessionModelToAgentDefault(sessionKey);
       }
 
-      const response = await this.agentService.processDirect(message, sessionKey);
+      const response = await this.agentService.turnDispatcher.processDirect(message, sessionKey);
 
       const model = this.agentService.getModelForSession(sessionKey);
 

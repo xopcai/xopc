@@ -1,0 +1,225 @@
+/**
+ * GatewaySessionsApi — session CRUD, search, compaction, tag/pin/archive,
+ * stats, and chat-id grouping for the gateway REST surface.
+ *
+ * Twenty-four methods, previously sitting on `GatewayService` as a mix of
+ * one-line `sessionIndex.*` delegations and small composite operations (e.g.
+ * `restoreCheckpoint` also evicts the in-memory agent, `runCompaction` also
+ * appends a transcript context entry). Centralising them here lets routes
+ * depend on the narrow `GatewaySessionsApi` surface instead of the full
+ * `GatewayService`, and keeps the gateway composition root focused on
+ * lifecycle + wiring.
+ */
+
+import type { AgentService } from '../../agent/service.js';
+import type { CompactionResult } from '../../agent/memory/compaction.js';
+import { retireSessionMcpRuntimeForSessionKey } from '../../agent/mcp/bundle-mcp-tools.js';
+import { SessionIndex } from '../../session/index.js';
+import type { ExportFormat, SessionListQuery } from '../../session/types.js';
+import type { SessionPatchBody } from '../../session/patch-metadata.js';
+import { getDistinctSessionChatIds } from './session-chat-ids.js';
+
+export interface GatewaySessionsApiOptions {
+  sessionIndex: SessionIndex;
+  /** Resolves the live agent service (created lazily; throws if gateway is starting). */
+  getAgentService: () => AgentService;
+  /** Read-only view of in-flight webchat runs (per session key → run id). */
+  getActiveWebchatRunId: (sessionKey: string) => string | undefined;
+}
+
+export class GatewaySessionsApi {
+  private readonly opts: GatewaySessionsApiOptions;
+
+  constructor(opts: GatewaySessionsApiOptions) {
+    this.opts = opts;
+  }
+
+  // ── List / get ─────────────────────────────────────────────────────────
+
+  listSessions(query?: SessionListQuery) {
+    return this.opts.sessionIndex.listSessions(query);
+  }
+
+  /** Subagent sessions have keys starting with `subagent:`. */
+  listSubagents(query?: SessionListQuery) {
+    return this.opts.sessionIndex.listSubagents(query);
+  }
+
+  getSession(
+    key: string,
+    options?: { includeTranscriptSummary?: boolean; includeTranscriptRows?: boolean },
+  ) {
+    return this.opts.sessionIndex.getSession(key, options);
+  }
+
+  /** Read-only: in-flight webchat agent run for this session key, if any. */
+  getActiveRun(sessionKey: string): { active: boolean; runId?: string } {
+    const key = sessionKey.trim();
+    if (!key) return { active: false };
+    const runId = this.opts.getActiveWebchatRunId(key)?.trim();
+    if (!runId) return { active: false };
+    return { active: true, runId };
+  }
+
+  getMessagePage(
+    key: string,
+    options?: {
+      offset?: number;
+      limit?: number;
+      before?: string;
+      includeTranscriptSummary?: boolean;
+      includeTranscriptRows?: boolean;
+    },
+  ) {
+    return this.opts.sessionIndex.getSessionMessagePage(key, options);
+  }
+
+  // ── Metadata patches ──────────────────────────────────────────────────
+
+  patch(key: string, body: SessionPatchBody): Promise<{ ok: true } | { ok: false; error: string }> {
+    return this.opts.sessionIndex.patchSession(key, body);
+  }
+
+  async getAgentConfig(sessionKey: string) {
+    return this.opts.getAgentService().sessionInspector.agentConfig(sessionKey);
+  }
+
+  /** Resolved markdown workspace for a session (after hydration / mkdir). */
+  getEffectiveWorkspacePath(sessionKey: string): Promise<string> {
+    return this.opts.getAgentService().getEffectiveWorkspacePathForSession(sessionKey);
+  }
+
+  patchAgentConfig(
+    sessionKey: string,
+    body: {
+      thinkingLevel?: string;
+      model?: string | null;
+      reasoningLevel?: string;
+      workingDirectory?: string;
+    },
+  ) {
+    return this.opts.getAgentService().sessionConfig.patch(sessionKey, body);
+  }
+
+  // ── Compaction checkpoints ────────────────────────────────────────────
+
+  listCompactionCheckpoints(key: string) {
+    return this.opts.sessionIndex.listCompactionCheckpoints(key);
+  }
+
+  getCompactionCheckpoint(key: string, checkpointId: string) {
+    return this.opts.sessionIndex.getCompactionCheckpointDetail(key, checkpointId);
+  }
+
+  async restoreCompactionCheckpoint(key: string, checkpointId: string): Promise<void> {
+    await this.opts.sessionIndex.restoreCompactionCheckpoint(key, checkpointId);
+    this.opts.getAgentService().evictSessionAgent(key);
+  }
+
+  async runCompaction(
+    key: string,
+    options?: { instructions?: string; force?: boolean },
+  ): Promise<CompactionResult> {
+    const result = await this.opts.getAgentService().sessionInspector.compact(key, options);
+    if (result.compacted) {
+      void this.opts.sessionIndex
+        .appendTranscriptContextEntry(key, {
+          text: 'Session transcript compacted',
+          data: {
+            firstKeptIndex: result.firstKeptIndex,
+            tokensBefore: result.tokensBefore,
+            tokensAfter: result.tokensAfter,
+            summaryPreview: result.summary.slice(0, 500),
+          },
+        })
+        .catch(() => {});
+    }
+    return result;
+  }
+
+  // ── Lifecycle (delete / rename / tag / pin / archive) ─────────────────
+
+  async delete(key: string): Promise<{ deleted: boolean }> {
+    const result = await this.opts.sessionIndex.deleteSession(key);
+    if (result) {
+      this.opts.getAgentService().evictSessionAgent(key);
+      await retireSessionMcpRuntimeForSessionKey({ sessionKey: key, reason: 'session-delete' });
+    }
+    return { deleted: result };
+  }
+
+  deleteMany(keys: string[]): Promise<{ success: string[]; failed: string[] }> {
+    return this.opts.sessionIndex.deleteSessions(keys);
+  }
+
+  async rename(key: string, name: string): Promise<{ renamed: boolean }> {
+    await this.opts.sessionIndex.renameSession(key, name);
+    return { renamed: true };
+  }
+
+  async tag(key: string, tags: string[]): Promise<{ tagged: boolean }> {
+    await this.opts.sessionIndex.tagSession(key, tags);
+    return { tagged: true };
+  }
+
+  async untag(key: string, tags: string[]): Promise<{ untagged: boolean }> {
+    await this.opts.sessionIndex.untagSession(key, tags);
+    return { untagged: true };
+  }
+
+  async archive(key: string): Promise<{ archived: boolean }> {
+    await this.opts.sessionIndex.archiveSession(key);
+    return { archived: true };
+  }
+
+  async unarchive(key: string): Promise<{ unarchived: boolean }> {
+    await this.opts.sessionIndex.unarchiveSession(key);
+    return { unarchived: true };
+  }
+
+  async pin(key: string): Promise<{ pinned: boolean }> {
+    await this.opts.sessionIndex.pinSession(key);
+    return { pinned: true };
+  }
+
+  async unpin(key: string): Promise<{ unpinned: boolean }> {
+    await this.opts.sessionIndex.unpinSession(key);
+    return { unpinned: true };
+  }
+
+  // ── Search + export + stats ───────────────────────────────────────────
+
+  search(query: string) {
+    return this.opts.sessionIndex.searchSessions(query);
+  }
+
+  searchIn(key: string, keyword: string) {
+    return this.opts.sessionIndex.searchInSession(key, keyword);
+  }
+
+  async export(key: string, format: ExportFormat): Promise<{ content: string }> {
+    const content = await this.opts.sessionIndex.exportSession(key, format);
+    return { content };
+  }
+
+  stats() {
+    return this.opts.sessionIndex.getStats();
+  }
+
+  /**
+   * Distinct chat-id pairs from sessions, grouped by channel. Used by cron job
+   * configuration UI to seed the "send to existing chat" picker.
+   */
+  chatIds(channel?: string): Promise<
+    Array<{
+      channel: string;
+      chatId: string;
+      lastActive: string;
+      accountId?: string;
+      peerKind?: string;
+      peerId?: string;
+    }>
+  > {
+    return getDistinctSessionChatIds(this.opts.sessionIndex, channel);
+  }
+}

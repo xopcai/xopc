@@ -2,7 +2,7 @@ import { Command } from 'commander';
 import { loadConfig } from '../../config/index.js';
 import { register, formatExamples } from '../registry.js';
 import type { CLIContext } from '../registry.js';
-import { getContextWithOpts } from '../index.js';
+import { getContextWithOpts } from '../context.js';
 import {
   getAllModels,
   getAvailableModels,

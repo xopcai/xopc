@@ -6,7 +6,10 @@ import {
   type GoalChecklistItem,
 } from './checklist-types.js';
 
-import type { GoalUiLocale } from './goal-locale.js';
+// Direct import of the underlying locale type — `goal-locale.ts` aliases this as
+// `GoalUiLocale` AND imports values from `state.ts`, so going through `./goal-locale.js`
+// would create a circular module cycle.
+import type { ServerLocale as GoalUiLocale } from '../../i18n/locale.js';
 
 /** Persisted under `SessionMetadata.customData.persistentGoal`. */
 export const PERSISTENT_GOAL_CUSTOM_KEY = 'persistentGoal';

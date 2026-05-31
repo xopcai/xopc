@@ -1,5 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
@@ -32,5 +31,13 @@ describe('prepare-electron-pack-dir', () => {
     expect(existsSync(join(packDir, 'node_modules/silk-wasm'))).toBe(true);
     expect(existsSync(join(packDir, 'node_modules/@vscode/ripgrep'))).toBe(true);
     expect(existsSync(join(packDir, 'node_modules/@earendil-works/pi-ai'))).toBe(false);
+    // Pack dir lives outside the repo so `pnpm --workspace-root` (run by electron-builder)
+    // returns nothing and the dep collector stays scoped to pack dir.
+    expect(packDir.startsWith(repoRoot)).toBe(false);
+    // Build inputs are staged so pack.yml can reference them via relative `_pack-resources/...`.
+    expect(existsSync(join(packDir, '_pack-resources/electron-before-build.cjs'))).toBe(true);
+    expect(existsSync(join(packDir, '_pack-resources/build-resources'))).toBe(true);
+    expect(existsSync(join(packDir, '_pack-resources/playwright-core'))).toBe(true);
+    expect(existsSync(join(packDir, '_pack-resources/browser-ext'))).toBe(true);
   });
 });

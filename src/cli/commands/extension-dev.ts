@@ -21,7 +21,7 @@ import { runGatewayLoop } from '../../gateway/run-loop.js';
 import { PACKAGE_VERSION } from '../../package-version.js';
 import { createLogger } from '../../utils/logger.js';
 import { colors } from '../utils/colors.js';
-import { getContextWithOpts } from '../index.js';
+import { getContextWithOpts } from '../context.js';
 import { initWorkspace } from '../utils/init-workspace.js';
 import { seedMainAgentProfileMarkdown } from '../../agent/context/workspace-seed.js';
 

@@ -2,7 +2,10 @@
  * Channel Plugin Types - Core type definitions for channel plugins
  */
 
-import type { Config } from '../config/index.js';
+// Direct import (not via `../config/index.js` barrel) — the barrel re-exports
+// `config/rules.ts`, which itself imports `ChannelPlugin` from this file. Using
+// the barrel here creates a config ↔ channels circular cascade.
+import type { Config } from '../config/schema.js';
 import type { MessageBus } from '../infra/bus/index.js';
 
 import type { ChannelId, ChannelMeta, ChannelCapabilities } from './plugins/types.core.js';

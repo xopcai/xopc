@@ -2,31 +2,57 @@ import fs from 'node:fs/promises';
 
 const DEFAULT_TTL_MS = 30_000;
 
-const cache = new Map<string, boolean>();
+/**
+ * Tracks which session JSONL files we have already confirmed exist on disk so
+ * subsequent acquires can skip the open/close probe. The class is owned by the
+ * session runner pool; {@link defaultSessionManagerCache} keeps the free-function
+ * API working until every caller has been wired through dependency injection.
+ */
+export class SessionManagerCache {
+  private readonly seen = new Map<string, boolean>();
 
-export async function prewarmSessionFile(sessionFile: string): Promise<void> {
-  if (cache.get(sessionFile) === true) {
-    return;
+  async prewarm(sessionFile: string): Promise<void> {
+    if (this.seen.get(sessionFile) === true) {
+      return;
+    }
+    try {
+      const handle = await fs.open(sessionFile, 'r');
+      await handle.close();
+      this.seen.set(sessionFile, true);
+    } catch {
+      // File doesn't exist yet; SessionManager will create it
+    }
   }
-  try {
-    const handle = await fs.open(sessionFile, 'r');
-    await handle.close();
-    cache.set(sessionFile, true);
-  } catch {
-    // File doesn't exist yet; SessionManager will create it
+
+  trackAccess(sessionFile: string): void {
+    this.seen.set(sessionFile, true);
   }
+
+  has(sessionFile: string): boolean {
+    return this.seen.get(sessionFile) === true;
+  }
+
+  resetForTest(): void {
+    this.seen.clear();
+  }
+}
+
+export const defaultSessionManagerCache = new SessionManagerCache();
+
+export function prewarmSessionFile(sessionFile: string): Promise<void> {
+  return defaultSessionManagerCache.prewarm(sessionFile);
 }
 
 export function trackSessionManagerAccess(sessionFile: string): void {
-  cache.set(sessionFile, true);
+  defaultSessionManagerCache.trackAccess(sessionFile);
 }
 
 export function isSessionManagerCached(sessionFile: string): boolean {
-  return cache.get(sessionFile) === true;
+  return defaultSessionManagerCache.has(sessionFile);
 }
 
 export function resetSessionManagerCacheForTest(): void {
-  cache.clear();
+  defaultSessionManagerCache.resetForTest();
 }
 
 export function getSessionManagerCacheTtlMs(): number {

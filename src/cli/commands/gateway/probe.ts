@@ -5,7 +5,7 @@ import {
   addGatewayClientOptions,
   parseGatewayClientOptions,
 } from '../../utils/gateway-client-options.js';
-import { getContextWithOpts } from '../../index.js';
+import { getContextWithOpts } from '../../context.js';
 
 type GatewayClientModule = typeof import('../../utils/gateway-client.js');
 

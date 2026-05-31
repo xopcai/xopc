@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { formatXopcTuiHotkeys } from '../format-tui-hotkeys.js';
-import { createXopcTuiKeybindingsManager } from '../xopc-tui-keybindings.js';
+import { createXopcTuiKeybindingsManager } from '../tui-keybindings-file.js';
 
 describe('formatXopcTuiHotkeys', () => {
   it('includes model cycle and session picker descriptions', () => {

@@ -1,18 +1,18 @@
-import crypto from 'node:crypto';
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 
-import { parseSlashCommand } from '../../chat-commands/command-parse.js';
-import { commandRegistry } from '../../chat-commands/index.js';
 import type { CommandHandler } from '../messaging/command-handler.js';
-import { extractAgentUserPlainText } from '../memory/user-message-text.js';
-import { runEmbeddedTurnForSession } from '../embedded/run-for-session.js';
-import type { ProcessDirectStreamLog } from './process-direct-streaming.js';
-import type { AgentManager } from '../agent-manager.js';
+import type { AgentInstanceGateway } from '../agent-instance-gateway.js';
 import type { ModelManager } from '../models/index.js';
 import type { SessionStore } from '../../session/index.js';
 import type { Config } from '../../config/schema.js';
 import { appendPiTranscriptMessage } from '../../session/parity/jsonl-transcript-io.js';
 import { buildDirectUserMessageContent, type DirectInboundAttachment } from './build-direct-message-content.js';
+import type { ProcessDirectStreamLog } from './process-direct-streaming.js';
+import {
+  hydratePerTurnState,
+  runDirectAgentTurn,
+  tryRunSlashCommand,
+} from './direct-turn-helpers.js';
 
 export type RunProcessDirectDeps = {
   log: ProcessDirectStreamLog;
@@ -21,7 +21,7 @@ export type RunProcessDirectDeps = {
   initSessionContext: (sessionKey: string, channel: string, chatId: string) => void;
   hydrateSessionWorkspaceFromStore: (sessionKey: string) => Promise<void>;
   hydrateSessionModelFromStore: (sessionKey: string) => Promise<void>;
-  agentManager: AgentManager;
+  agentManager: AgentInstanceGateway;
   sessionStore: SessionStore;
   modelManager: ModelManager;
   applyResolvedThinkingLevel: (sessionKey: string, thinking?: string | null) => Promise<void>;
@@ -47,23 +47,17 @@ export async function runProcessDirect(
   deps.initSessionContext(input.sessionKey, channel, chatId);
 
   try {
-    await deps.hydrateSessionWorkspaceFromStore(input.sessionKey);
-    await deps.hydrateSessionModelFromStore(input.sessionKey);
-    await deps.applyResolvedThinkingLevel(input.sessionKey, input.thinking);
-
+    await hydratePerTurnState(deps, input.sessionKey, input.thinking);
     const prepared = await deps.prepareInboundAttachments(input.sessionKey, input.attachments);
 
-    const cmd = parseSlashCommand(input.content);
-    if (cmd && commandRegistry.has(cmd.command)) {
-      const { aggregatedText } = await deps.commandHandler.executeCommandAndAggregateReply(cmd.command, cmd.args, {
-        sessionKey: input.sessionKey,
-        channel,
-        chatId,
-        senderId: '',
-        isGroup: false,
-        inboundMetadata: {},
-      });
-      if (aggregatedText?.trim()) {
+    const slash = await tryRunSlashCommand(
+      deps,
+      { sessionKey: input.sessionKey, channel, chatId },
+      input.content,
+    );
+    if (slash.matched) {
+      const trimmed = slash.aggregatedText.trim();
+      if (trimmed) {
         const { absPath } = await deps.sessionStore.resolveTranscriptPath(input.sessionKey);
         const workspaceDir = deps.agentManager.getResolvedWorkspaceForSession(input.sessionKey);
         await appendPiTranscriptMessage({
@@ -71,13 +65,13 @@ export async function runProcessDirect(
           cwd: workspaceDir,
           message: {
             role: 'assistant',
-            content: [{ type: 'text', text: aggregatedText.trim() }],
+            content: [{ type: 'text', text: trimmed }],
             timestamp: Date.now(),
           } as AgentMessage,
           sessionKey: input.sessionKey,
         });
       }
-      return aggregatedText ?? '';
+      return slash.aggregatedText ?? '';
     }
 
     const textForDirect = input.content.trimStart().startsWith('/skill:')
@@ -97,25 +91,11 @@ export async function runProcessDirect(
       content: messageContent,
       timestamp: Date.now(),
     };
-    const userPlain = extractAgentUserPlainText(userMessage);
-    const userMessageForModel = await deps.agentManager.applyMemoryPrefetchToUserMessage(
-      userMessage,
-      input.sessionKey,
+
+    const result = await runDirectAgentTurn(
+      { ...deps, config: deps.config },
+      { sessionKey: input.sessionKey, userMessage },
     );
-
-    const result = await runEmbeddedTurnForSession({
-      sessionKey: input.sessionKey,
-      runId: crypto.randomUUID(),
-      userMessage: userMessageForModel,
-      sessionStore: deps.sessionStore,
-      agentManager: deps.agentManager,
-      modelManager: deps.modelManager,
-      getConfig: () => deps.config,
-      beforeTurn: () => deps.agentManager.beginBackgroundReviewUserTurn(input.sessionKey),
-    });
-
-    deps.agentManager.afterAgentTurn(input.sessionKey, userPlain);
-    deps.agentManager.scheduleBackgroundReviewAfterUserTurn(input.sessionKey);
 
     if (result.lastAssistantText) {
       deps.onTurnComplete?.(input.sessionKey, result.lastAssistantText);

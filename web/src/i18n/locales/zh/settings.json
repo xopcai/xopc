@@ -602,7 +602,11 @@
     "themeOptionSystem": "跟随系统",
     "openFullPreferences": "打开全部设置",
     "quickMenuHint": "语言、主题与字号",
-    "aboutApp": "关于"
+    "aboutApp": "关于",
+    "developerGroupTitle": "开发者选项",
+    "developerGroupDescription": "影响对话中工具调用结果的展示形式。",
+    "showRawToolDataTitle": "显示工具调试数据",
+    "showRawToolDataDescription": "在工具调用步骤中显示原始 JSON 输入与输出，便于排查问题。"
   },
   "mcpSettings": {
     "title": "外部工具 (MCP)",

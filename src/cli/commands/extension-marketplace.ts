@@ -23,7 +23,7 @@ import { getExtensionLockfileManager } from '../../extensions/lockfile.js';
 import * as marketplace from '../../extensions/marketplace.js';
 import { normalizeExtensionManifest } from '../../extensions/normalize-manifest.js';
 import { colors } from '../utils/colors.js';
-import { getContextWithOpts } from '../index.js';
+import { getContextWithOpts } from '../context.js';
 
 const MANIFEST = 'xopc.extension.json';
 

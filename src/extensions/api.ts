@@ -39,7 +39,7 @@ import { resolve, isAbsolute } from 'path';
 import { EventEmitter } from 'events';
 import { createLogger } from '../utils/logger.js';
 import { TypedEventBus } from './typed-event-bus.js';
-import { ExtensionRegistryImpl } from './loader.js';
+import { ExtensionRegistryImpl } from './extension-registry-impl.js';
 import { registerMarketplaceAdapter as _registerMarketplaceAdapter, unregisterMarketplaceAdapter as _unregisterMarketplaceAdapter } from '../agent/skills/marketplace/registry.js';
 import { registerSpeechProvider as registerSpeechProviderInRegistry } from '../voice/tts/speech-registry.js';
 import type { SpeechProviderPlugin } from '../voice/tts/speech-provider-types.js';

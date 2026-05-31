@@ -1,7 +1,11 @@
 import { Type } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 
-import { createDelegateChildHandle, type DelegateChildHandleOptions } from '../child-agent-factory.js';
+import {
+  createDelegateChildHandle,
+  type BuildChildToolsOptions,
+  type DelegateChildHandleOptions,
+} from '../child-agent-factory.js';
 
 const DEFAULT_MAX_ITERATIONS = 30;
 
@@ -67,6 +71,12 @@ export interface DelegateToolDeps {
   getCurrentContext?: () => { sessionKey?: string; channel?: string; accountId?: string; to?: string; threadId?: string | number } | null;
   hookRunner?: import('../../extensions/index.js').ExtensionHookRunner;
   toolExecutorConfig?: Partial<import('./executor.js').ToolExecutorConfig>;
+  /**
+   * Construct the child agent's tool set. Injected by `AgentToolsFactory` so
+   * the child-agent-factory module does not import `tools/factory.ts`
+   * (which would form a factory ↔ delegate-tool ↔ child-agent-factory cycle).
+   */
+  buildChildTools: (opts: BuildChildToolsOptions) => AgentTool<any, any>[];
 }
 
 type DelegateTaskParams = {
@@ -146,6 +156,7 @@ export function createDelegateTool(deps: DelegateToolDeps): AgentTool {
         bus: deps.bus,
         getConfig: deps.getConfig,
         toolExecutorConfig: deps.toolExecutorConfig,
+        buildChildTools: deps.buildChildTools,
       };
 
       // Sub-agent lifecycle hook (parity surface for channel thread bindings).

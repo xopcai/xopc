@@ -1,7 +1,7 @@
 import { Command } from 'commander';
 
 import { register, formatExamples, type CLIContext } from '../registry.js';
-import { getContextWithOpts } from '../index.js';
+import { getContextWithOpts } from '../context.js';
 import { runGatewayFromCliOptions } from './gateway/run-foreground.js';
 import { prepareGatewayCommandForArgv } from './gateway/subcommands.js';
 

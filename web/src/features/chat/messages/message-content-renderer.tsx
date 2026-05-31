@@ -12,6 +12,12 @@ import type {
   ThinkingContent,
   ToolUseContent,
 } from '@/features/chat/messages/messages.types';
+import type {
+  StepsClusterDoneLabels,
+  StepsClusterIngLabels,
+  StepsClusterJoinLabels,
+} from '@/features/chat/messages/tool-action-cluster';
+import type { ToolCardLabels } from '@/features/chat/tool-results/tool-result-cards';
 import { UserMessageSegments } from '@/features/chat/messages/user-message-segments';
 import { stripEnvelopeTimestampPrefix } from '@/features/chat/messages/user-message-plain-text';
 import { cn } from '@/lib/cn';
@@ -104,6 +110,12 @@ export function renderChunkedContent(
     fetchUrl: string;
     unknownTool: string;
   },
+  clusterLabels: {
+    done: StepsClusterDoneLabels;
+    ing: StepsClusterIngLabels;
+    join: StepsClusterJoinLabels;
+  },
+  cardLabels: ToolCardLabels,
   imagePreviewLabel: string,
   onImagePreview: ((block: ImageContent, index: number) => void) | undefined,
   sessionKey: string | null | undefined,
@@ -127,6 +139,8 @@ export function renderChunkedContent(
             blocks={slice}
             toolLabels={toolLabels}
             stepLabels={stepLabels}
+            clusterLabels={clusterLabels}
+            cardLabels={cardLabels}
             sessionKey={sessionKey}
             isMessageStreaming={!isUser && isAssistantMessageStreaming}
             finalAnswerStarted={finalAnswerStarted}

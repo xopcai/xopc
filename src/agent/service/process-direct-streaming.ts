@@ -1,10 +1,7 @@
-import crypto from 'node:crypto';
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 
 import type { Config } from '../../config/schema.js';
 import type { InternalAttachmentRoots } from '../../channels/attachments/inbound-persist.js';
-import { commandRegistry } from '../../chat-commands/index.js';
-import { parseSlashCommand } from '../../chat-commands/command-parse.js';
 import {
   isVoiceLikeAttachment,
   mergeVoiceTranscriptsIntoUserText,
@@ -17,15 +14,20 @@ import {
 } from '../../session/index.js';
 import { appendPiTranscriptMessage } from '../../session/parity/jsonl-transcript-io.js';
 import type { SessionContext } from '../session/index.js';
-import { extractAgentUserPlainText } from '../memory/user-message-text.js';
 import { applyReasoningVisibilityToSseEvent } from '../streaming/reasoning-visibility-sse.js';
 import type { ReasoningLevel } from '../transcript/thinking-types.js';
-import { runEmbeddedTurnForSession } from '../embedded/run-for-session.js';
 import { abortEmbeddedRun } from '../embedded/runs.js';
 import { mapEmbeddedEventToGatewaySse } from '../embedded/map-stream-events.js';
-import type { AgentManager } from '../agent-manager.js';
+import type { AgentInstanceGateway } from '../agent-instance-gateway.js';
 import type { CommandHandler } from '../messaging/command-handler.js';
 import type { ModelManager } from '../models/index.js';
+
+import { AsyncQueue } from './async-queue.js';
+import {
+  hydratePerTurnState,
+  runDirectAgentTurn,
+  tryRunSlashCommand,
+} from './direct-turn-helpers.js';
 
 export type DirectStreamInboundAttachment = {
   type: string;
@@ -55,7 +57,7 @@ export interface ProcessDirectStreamingDeps {
     publisher: (event: { type: string; [key: string]: unknown }) => void,
   ) => void;
   unregisterWebchatSsePublisher: (sessionKey: string) => void;
-  agentManager: AgentManager;
+  agentManager: AgentInstanceGateway;
   hydrateSessionWorkspaceFromStore: (sessionKey: string) => Promise<void>;
   hydrateSessionModelFromStore: (sessionKey: string) => Promise<void>;
   sessionStore: SessionStore;
@@ -102,172 +104,119 @@ export async function* runProcessDirectStreaming(
   deps: ProcessDirectStreamingDeps,
   input: ProcessDirectStreamingInput,
 ): AsyncGenerator<ProcessDirectStreamingSseEvent, void, unknown> {
-  const {
-    log,
-    parseSessionKey,
-    initDirectStreamingSession,
-    registerWebchatSsePublisher,
-    unregisterWebchatSsePublisher,
-    agentManager,
-    hydrateSessionWorkspaceFromStore,
-    hydrateSessionModelFromStore,
-    sessionStore,
-    modelManager,
-    applyResolvedThinkingLevel,
-    getConfig,
-    sessionConfigStore,
-    attachmentRootsForSession,
-    commandHandler,
-    prepareInboundAttachments,
-    buildMessageContent,
-    recordPersistentGoalStreamOutcome,
-    onTurnComplete,
-    reloadWebchatTranscript,
-    maybeEmitWebchatTts,
-    endDirectRequestContext,
-  } = deps;
-
   const sessionKey = input.sessionKey ?? 'cli:direct';
-  const { channel, chatId } = parseSessionKey(sessionKey);
-  const context = initDirectStreamingSession(sessionKey, channel, chatId);
-  const runId = crypto.randomUUID();
+  const { channel, chatId } = deps.parseSessionKey(sessionKey);
+  const context = deps.initDirectStreamingSession(sessionKey, channel, chatId);
 
-  const eventQueue: ProcessDirectStreamingSseEvent[] = [];
-  let resolveWaiting: (() => void) | null = null;
-  let agentDone = false;
-
+  const queue = new AsyncQueue<ProcessDirectStreamingSseEvent>();
   let reasoningLevel: ReasoningLevel = 'stream';
 
-  const enqueueSseEvent = (event: ProcessDirectStreamingSseEvent) => {
-    eventQueue.push(event);
-    if (resolveWaiting) {
-      resolveWaiting();
-      resolveWaiting = null;
-    }
-  };
-
-  const pushEvent = (event: ProcessDirectStreamingSseEvent) => {
+  const pushVisible = (event: ProcessDirectStreamingSseEvent) => {
     const visible = applyReasoningVisibilityToSseEvent(event, reasoningLevel);
     if (visible !== null) {
-      enqueueSseEvent(visible);
+      queue.push(visible);
     }
   };
 
   if (channel === 'webchat') {
-    registerWebchatSsePublisher(sessionKey, (e) => pushEvent(e));
+    deps.registerWebchatSsePublisher(sessionKey, pushVisible);
   }
 
   const signal = input.signal;
   let userAborted = false;
   let abortHandled = false;
+  let inboundVoice = false;
+  let ranSlashCommand = false;
+  let mergedUserText = input.content;
+  let webchatSlashReceipt: string | undefined;
 
-  try {
-    await hydrateSessionWorkspaceFromStore(sessionKey);
-    await hydrateSessionModelFromStore(sessionKey);
-    await applyResolvedThinkingLevel(sessionKey, input.thinking);
-    {
-      const defReason = (getConfig()?.agents?.defaults?.reasoningDefault ?? 'stream') as ReasoningLevel;
-      reasoningLevel = await resolveEffectiveReasoningLevel(sessionConfigStore, sessionKey, defReason);
-    }
+  // Kick off the agent task in the background; events stream into `queue` as they happen
+  // and the generator below drains `queue` until the task closes it.
+  const taskPromise = (async () => {
+    try {
+      await hydratePerTurnState(deps, sessionKey, input.thinking);
+      {
+        const defReason = (deps.getConfig()?.agents?.defaults?.reasoningDefault ?? 'stream') as ReasoningLevel;
+        reasoningLevel = await resolveEffectiveReasoningLevel(deps.sessionConfigStore, sessionKey, defReason);
+      }
 
-    const prepared = await prepareInboundAttachments(sessionKey, input.attachments);
+      const prepared = await deps.prepareInboundAttachments(sessionKey, input.attachments);
 
-    const sttCfg = mergeSttConfigFromAppConfig(getConfig()?.tools?.media?.audio, getConfig()?.tools?.media);
-    const { text: mergedUserText, inboundVoice, voiceTranscripts } =
-      await mergeVoiceTranscriptsIntoUserText(
-        attachmentRootsForSession(sessionKey),
+      const sttCfg = mergeSttConfigFromAppConfig(deps.getConfig()?.tools?.media?.audio, deps.getConfig()?.tools?.media);
+      const voiceMerge = await mergeVoiceTranscriptsIntoUserText(
+        deps.attachmentRootsForSession(sessionKey),
         prepared,
         input.content,
         sttCfg,
       );
+      mergedUserText = voiceMerge.text;
+      inboundVoice = voiceMerge.inboundVoice;
 
-    if (inboundVoice) {
-      const transcriptParts = [
-        voiceTranscripts.filter(Boolean).join('\n'),
-        input.content.trim(),
-      ].filter(Boolean);
-      const voiceAttachments = (prepared ?? []).filter(isVoiceLikeAttachment).map((att) => ({
-        workspaceRelativePath: att.workspaceRelativePath,
-        mimeType: att.mimeType,
-        name: att.name,
-      }));
-      pushEvent({
-        type: 'user_transcript',
-        text: transcriptParts.join('\n\n'),
-        attachments: voiceAttachments,
-      });
-    }
-
-    const armAbort = () => {
-      if (abortHandled) {
-        return;
+      if (inboundVoice) {
+        const transcriptParts = [
+          voiceMerge.voiceTranscripts.filter(Boolean).join('\n'),
+          input.content.trim(),
+        ].filter(Boolean);
+        const voiceAttachments = (prepared ?? []).filter(isVoiceLikeAttachment).map((att) => ({
+          workspaceRelativePath: att.workspaceRelativePath,
+          mimeType: att.mimeType,
+          name: att.name,
+        }));
+        pushVisible({
+          type: 'user_transcript',
+          text: transcriptParts.join('\n\n'),
+          attachments: voiceAttachments,
+        });
       }
-      abortHandled = true;
-      userAborted = true;
-      void abortEmbeddedRun(sessionKey);
-      agentDone = true;
-      pushEvent({ type: '__done__' });
-    };
-    if (signal) {
-      if (signal.aborted) {
-        armAbort();
-      } else {
+
+      const armAbort = () => {
+        if (abortHandled) {
+          return;
+        }
+        abortHandled = true;
+        userAborted = true;
+        void abortEmbeddedRun(sessionKey);
+        queue.close();
+      };
+      if (signal) {
+        if (signal.aborted) {
+          armAbort();
+          return;
+        }
         signal.addEventListener('abort', armAbort, { once: true });
       }
-    }
 
-    const commandInfo = parseSlashCommand(mergedUserText);
-    let ranSlashCommand = false;
-    let webchatSlashReceipt: string | undefined;
-    if (!abortHandled && commandInfo) {
-      if (commandRegistry.has(commandInfo.command)) {
+      const slash = await tryRunSlashCommand(
+        deps,
+        { sessionKey, channel, chatId, senderId: context.senderId, isGroup: context.isGroup },
+        mergedUserText,
+      );
+      if (slash.matched) {
         ranSlashCommand = true;
-        try {
-          const { aggregatedText } = await commandHandler.executeCommandAndAggregateReply(
-            commandInfo.command,
-            commandInfo.args,
-            {
-              sessionKey,
-              channel,
-              chatId,
-              senderId: context.senderId,
-              isGroup: context.isGroup,
-              inboundMetadata: {},
-            },
-          );
-          if (aggregatedText?.trim()) {
-            webchatSlashReceipt = aggregatedText.trim();
-            pushEvent({ type: 'token', content: webchatSlashReceipt });
-          } else if (channel === 'webchat') {
-            webchatSlashReceipt =
-              'Command finished with no assistant text. If you used `/goal`, a follow-up turn may still be scheduled automatically.';
-            pushEvent({ type: 'token', content: webchatSlashReceipt });
-          }
-        } catch (cmdErr) {
-          const em = cmdErr instanceof Error ? cmdErr.message : String(cmdErr);
-          log.warn({ err: cmdErr, sessionKey, command: commandInfo.command }, `Slash command failed: ${em}`);
-          webchatSlashReceipt = `Command error: ${em}`;
-          pushEvent({ type: 'token', content: webchatSlashReceipt });
+        const text = slash.aggregatedText.trim();
+        if (text) {
+          webchatSlashReceipt = text;
+          pushVisible({ type: 'token', content: text });
+        } else if (channel === 'webchat') {
+          webchatSlashReceipt =
+            'Command finished with no assistant text. If you used `/goal`, a follow-up turn may still be scheduled automatically.';
+          pushVisible({ type: 'token', content: webchatSlashReceipt });
         }
-        pushEvent({ type: '__done__' });
-        agentDone = true;
+        return;
       }
-    }
 
-    if (!abortHandled && !ranSlashCommand) {
       const textForAgent = mergedUserText.trimStart().startsWith('/skill:')
-        ? agentManager.expandSkillUserText(mergedUserText)
+        ? deps.agentManager.expandSkillUserText(mergedUserText)
         : mergedUserText;
-      const messageContent = await buildMessageContent(textForAgent, prepared, sessionKey);
+      const messageContent = await deps.buildMessageContent(textForAgent, prepared, sessionKey);
 
       const userMessage = {
         role: 'user' as const,
         content: messageContent,
         timestamp: Date.now(),
       };
-      const userPlain = extractAgentUserPlainText(userMessage);
       if (channel === 'webchat') {
-        pushEvent({
+        pushVisible({
           type: 'user_message',
           timestamp: userMessage.timestamp,
           content: userMessage.content,
@@ -280,81 +229,52 @@ export async function* runProcessDirectStreaming(
           })),
         });
       }
-      const userMessageForModel = await agentManager.applyMemoryPrefetchToUserMessage(
-        userMessage,
-        sessionKey,
-      );
 
-      const agentPromise = (async () => {
-        const result = await runEmbeddedTurnForSession({
+      const result = await runDirectAgentTurn(
+        {
+          sessionStore: deps.sessionStore,
+          agentManager: deps.agentManager,
+          modelManager: deps.modelManager,
+          config: deps.getConfig(),
+        },
+        {
           sessionKey,
-          runId,
-          userMessage: userMessageForModel,
-          sessionStore,
-          agentManager,
-          modelManager,
-          getConfig,
+          userMessage,
           abortSignal: signal,
-          beforeTurn: () => agentManager.beginBackgroundReviewUserTurn(sessionKey),
           onEvent: (embeddedEvent) => {
             const mapped = mapEmbeddedEventToGatewaySse(embeddedEvent);
             if (mapped) {
-              pushEvent(mapped);
+              pushVisible(mapped);
             }
           },
-        });
-        agentManager.afterAgentTurn(sessionKey, userPlain);
-        agentManager.scheduleBackgroundReviewAfterUserTurn(sessionKey);
-        if (result.lastAssistantText) {
-          onTurnComplete?.(sessionKey, result.lastAssistantText);
-        }
-        if (!result.ok && result.errorMessage && !abortHandled) {
-          pushEvent({ type: 'error', content: result.errorMessage });
-        }
-      })();
+        },
+      );
 
-      agentPromise
-        .then(() => {
-          if (abortHandled) {
-            return;
-          }
-          agentDone = true;
-          pushEvent({ type: '__done__' });
-        })
-        .catch((err) => {
-          if (abortHandled) {
-            return;
-          }
-          agentDone = true;
-          pushEvent({ type: 'error', content: err instanceof Error ? err.message : String(err) });
-          pushEvent({ type: '__done__' });
-        });
-    }
-
-    while (true) {
-      if (eventQueue.length > 0) {
-        const event = eventQueue.shift()!;
-        if (event.type === '__done__') break;
-        yield event;
-      } else if (agentDone) {
-        break;
-      } else {
-        await new Promise<void>((resolve) => {
-          resolveWaiting = resolve;
-        });
+      if (result.lastAssistantText) {
+        deps.onTurnComplete?.(sessionKey, result.lastAssistantText);
       }
+      if (!result.ok && result.errorMessage && !abortHandled) {
+        pushVisible({ type: 'error', content: result.errorMessage });
+      }
+    } catch (err) {
+      if (!abortHandled) {
+        pushVisible({ type: 'error', content: err instanceof Error ? err.message : String(err) });
+      }
+    } finally {
+      queue.close();
     }
+  })();
 
-    while (eventQueue.length > 0) {
-      const event = eventQueue.shift()!;
-      if (event.type === '__done__') continue;
+  try {
+    for await (const event of queue) {
       yield event;
     }
+    await taskPromise; // surface unexpected throws
 
     if (channel === 'webchat' && ranSlashCommand) {
       try {
-        const { absPath } = await sessionStore.resolveTranscriptPath(sessionKey);
-        const workspaceDir = agentManager.getResolvedWorkspaceForSession(sessionKey);
+        const { absPath } = await deps.sessionStore.resolveTranscriptPath(sessionKey);
+        const workspaceDir = deps.agentManager.getResolvedWorkspaceForSession(sessionKey);
         const userMsg = {
           role: 'user' as const,
           content: [{ type: 'text' as const, text: mergedUserText }],
@@ -378,27 +298,25 @@ export async function* runProcessDirectStreaming(
             message: assistantMsg,
             sessionKey,
           });
-          reloadWebchatTranscript?.(sessionKey);
-        } else {
-          reloadWebchatTranscript?.(sessionKey);
         }
+        deps.reloadWebchatTranscript?.(sessionKey);
       } catch (err) {
-        log.warn({ err, sessionKey }, 'Failed to persist webchat slash command receipt');
+        deps.log.warn({ err, sessionKey }, 'Failed to persist webchat slash command receipt');
       }
     }
 
     if (!userAborted) {
-      const ttsAudioEvent = await maybeEmitWebchatTts(sessionKey, inboundVoice);
+      const ttsAudioEvent = await deps.maybeEmitWebchatTts(sessionKey, inboundVoice);
       if (ttsAudioEvent) {
         yield ttsAudioEvent;
       }
     }
 
-    recordPersistentGoalStreamOutcome?.(sessionKey, { skipPersistentGoalPostTurn: ranSlashCommand });
+    deps.recordPersistentGoalStreamOutcome?.(sessionKey, { skipPersistentGoalPostTurn: ranSlashCommand });
   } finally {
     if (channel === 'webchat') {
-      unregisterWebchatSsePublisher(sessionKey);
+      deps.unregisterWebchatSsePublisher(sessionKey);
     }
-    endDirectRequestContext();
+    deps.endDirectRequestContext();
   }
 }

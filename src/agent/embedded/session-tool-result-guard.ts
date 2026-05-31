@@ -1,47 +1,187 @@
-import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import type { SessionManager } from "@earendil-works/pi-coding-agent";
+/**
+ * Session tool-result guard — wraps a pi `SessionManager.appendMessage` to:
+ *   1. cap oversized tool-result text + details so they cannot blow up the next
+ *      LLM request (size + persistence limits).
+ *   2. track pending tool-call IDs so missing tool results can be synthesised
+ *      (some providers refuse a turn that has an orphan tool_use block).
+ *   3. drop assistant `toolCall` blocks whose tool name is not in the allowlist
+ *      (these would also trigger provider 400s).
+ *   4. broadcast `xopc:transcript-row` updates so the gateway UI can stream them.
+ *
+ * Previously this module shipped with three sibling files
+ * (`session-tool-result-state.ts`, `session-raw-append-message.ts`,
+ * `session-tool-result-guard-wrapper.ts`). They are now consolidated here as
+ * private constructs around the `ToolResultGuard` class. Pi-coding-agent owns
+ * the `SessionManager` instance and calls `appendMessage` from inside the
+ * runtime, so we still need to monkey-patch that method — but the patched
+ * implementation is just `guard.guardedAppend.bind(guard)` and all state lives
+ * on the class.
+ */
+
+import type { AgentMessage } from '@earendil-works/pi-agent-core';
+import type { SessionManager } from '@earendil-works/pi-coding-agent';
+
+import type { Config } from '../../config/schema.js';
 import {
   boundedJsonUtf8Bytes,
   firstEnumerableOwnKeys,
   jsonUtf8BytesOrInfinity,
   type BoundedJsonUtf8Bytes,
-} from "../../infra/json-utf8-bytes.js";
+} from '../../infra/json-utf8-bytes.js';
+import { emitSessionTranscriptUpdate } from '../../session/transcript-events.js';
+import { normalizeOptionalString } from '../../utils/string-coerce.js';
+import { formatContextLimitTruncationNotice } from './tool-result-context-guard.js';
+import {
+  DEFAULT_MAX_LIVE_TOOL_RESULT_CHARS,
+  resolveLiveToolResultMaxChars,
+  truncateToolResultMessage,
+} from './tool-result-truncation.js';
+import {
+  makeMissingToolResult,
+  sanitizeToolCallInputs,
+} from '../transcript/session-transcript-repair.js';
+import {
+  extractToolCallsFromAssistant,
+  extractToolResultId,
+} from '../transcript/tool-call-id.js';
+
+// ── Public surface ──────────────────────────────────────────────────────────
+
 export type BeforeMessageWriteHookEvent = { message: AgentMessage };
 export type BeforeMessageWriteHookResult =
   | { block?: boolean; message?: AgentMessage }
   | undefined;
-import { emitSessionTranscriptUpdate } from "../../session/transcript-events.js";
-import { normalizeOptionalString } from "../../utils/string-coerce.js";
-import { formatContextLimitTruncationNotice } from "./tool-result-context-guard.js";
-import {
-  DEFAULT_MAX_LIVE_TOOL_RESULT_CHARS,
-  truncateToolResultMessage,
-} from "./tool-result-truncation.js";
-import {
-  getRawSessionAppendMessage,
-  setRawSessionAppendMessage,
-} from "./session-raw-append-message.js";
-import { createPendingToolCallState } from "./session-tool-result-state.js";
-import { makeMissingToolResult, sanitizeToolCallInputs } from '../transcript/session-transcript-repair.js';
-import { extractToolCallsFromAssistant, extractToolResultId } from '../transcript/tool-call-id.js';
+
+export interface ToolResultGuardOptions {
+  /** Optional session key for transcript update broadcasts. */
+  sessionKey?: string;
+  /** Optional transform applied to any message before persistence. */
+  transformMessageForPersistence?: (message: AgentMessage) => AgentMessage;
+  /**
+   * Optional, synchronous transform applied to toolResult messages *before* they are
+   * persisted to the session transcript.
+   */
+  transformToolResultForPersistence?: (
+    message: AgentMessage,
+    meta: { toolCallId?: string; toolName?: string; isSynthetic?: boolean },
+  ) => AgentMessage;
+  /**
+   * Whether to synthesize missing tool results to satisfy strict providers.
+   * Defaults to true.
+   */
+  allowSyntheticToolResults?: boolean;
+  missingToolResultText?: string;
+  /**
+   * Optional set/list of tool names accepted for assistant toolCall/toolUse blocks.
+   * When set, tool calls with unknown names are dropped before persistence.
+   */
+  allowedToolNames?: Iterable<string>;
+  /**
+   * Synchronous hook invoked before any message is written to the session JSONL.
+   * If the hook returns { block: true }, the message is silently dropped.
+   * If it returns { message }, the modified message is written instead.
+   */
+  beforeMessageWriteHook?: (event: BeforeMessageWriteHookEvent) => BeforeMessageWriteHookResult;
+  maxToolResultChars?: number;
+}
+
+export interface InstallSessionToolResultGuardResult {
+  flushPendingToolResults: () => void;
+  clearPendingToolResults: () => void;
+  getPendingIds: () => string[];
+}
+
+/** Idempotent wrapper that also adds the helper methods consumers expect. */
+export type GuardedPiTranscriptManager = SessionManager & {
+  flushPendingToolResults?: () => void;
+  clearPendingToolResults?: () => void;
+};
 
 /**
- * Truncate oversized text content blocks in a tool result message.
- * Returns the original message if under the limit, or a new message with
- * truncated text blocks otherwise.
+ * Install the guard on a SessionManager and return its control API.
+ * Subsequent assistant/toolResult writes by pi-coding-agent flow through the
+ * guard transparently.
  */
+export function installSessionToolResultGuard(
+  sessionManager: SessionManager,
+  opts: ToolResultGuardOptions = {},
+): InstallSessionToolResultGuardResult {
+  const guard = new ToolResultGuard(sessionManager, opts);
+  guard.attach();
+  return {
+    flushPendingToolResults: () => guard.flushPending(),
+    clearPendingToolResults: () => guard.clearPending(),
+    getPendingIds: () => guard.getPendingIds(),
+  };
+}
+
+/**
+ * Convenience wrapper used by the embedded runner pool: install the guard
+ * (idempotent), pin the size cap from the model context window, and expose
+ * `flushPendingToolResults` / `clearPendingToolResults` directly on the
+ * SessionManager instance so callers do not need to keep the install result.
+ */
+export function guardSessionManager(
+  sessionManager: SessionManager,
+  opts?: {
+    agentId?: string;
+    sessionKey?: string;
+    config?: Config;
+    contextWindowTokens?: number;
+    allowSyntheticToolResults?: boolean;
+    missingToolResultText?: string;
+    allowedToolNames?: Iterable<string>;
+  },
+): GuardedPiTranscriptManager {
+  if (typeof (sessionManager as GuardedPiTranscriptManager).flushPendingToolResults === 'function') {
+    return sessionManager as GuardedPiTranscriptManager;
+  }
+
+  const result = installSessionToolResultGuard(sessionManager, {
+    sessionKey: opts?.sessionKey,
+    allowSyntheticToolResults: opts?.allowSyntheticToolResults,
+    missingToolResultText: opts?.missingToolResultText,
+    allowedToolNames: opts?.allowedToolNames,
+    maxToolResultChars:
+      typeof opts?.contextWindowTokens === 'number'
+        ? resolveLiveToolResultMaxChars({
+            contextWindowTokens: opts.contextWindowTokens,
+            cfg: opts?.config,
+            agentId: opts?.agentId,
+          })
+        : undefined,
+  });
+  const tagged = sessionManager as GuardedPiTranscriptManager;
+  tagged.flushPendingToolResults = result.flushPendingToolResults;
+  tagged.clearPendingToolResults = result.clearPendingToolResults;
+  return tagged;
+}
+
+/**
+ * Recover the original (un-guarded) appendMessage for a session manager.
+ * Useful for callers that need a low-level "bypass the guard" write path.
+ */
+export function getRawSessionAppendMessage(
+  sessionManager: SessionManager,
+): SessionManager['appendMessage'] {
+  const stored = (sessionManager as SessionManagerWithRawAppend)[RAW_APPEND_MESSAGE];
+  return stored ?? sessionManager.appendMessage.bind(sessionManager);
+}
+
+// ── Internal: persistence + truncation helpers ──────────────────────────────
+
+function resolveMaxToolResultChars(opts: { maxToolResultChars?: number }): number {
+  return Math.max(1, opts.maxToolResultChars ?? DEFAULT_MAX_LIVE_TOOL_RESULT_CHARS);
+}
+
 function capToolResultSize(msg: AgentMessage, maxChars: number): AgentMessage {
-  if ((msg as { role?: string }).role !== "toolResult") {
+  if ((msg as { role?: string }).role !== 'toolResult') {
     return msg;
   }
   return truncateToolResultMessage(msg, maxChars, {
     suffix: (truncatedChars) => formatContextLimitTruncationNotice(truncatedChars),
     minKeepChars: 2_000,
   });
-}
-
-function resolveMaxToolResultChars(opts?: { maxToolResultChars?: number }): number {
-  return Math.max(1, opts?.maxToolResultChars ?? DEFAULT_MAX_LIVE_TOOL_RESULT_CHARS);
 }
 
 // `details` is runtime/UI metadata, not model-visible tool output. Keep the
@@ -72,30 +212,30 @@ function truncatePersistedDetailString(
 }
 
 function sanitizePersistedSessionDetail(value: unknown): unknown {
-  if (!value || typeof value !== "object") {
+  if (!value || typeof value !== 'object') {
     return value;
   }
   const src = value as Record<string, unknown>;
   const out: Record<string, unknown> = {};
   for (const key of [
-    "sessionId",
-    "status",
-    "pid",
-    "startedAt",
-    "endedAt",
-    "runtimeMs",
-    "cwd",
-    "name",
-    "truncated",
-    "exitCode",
-    "exitSignal",
+    'sessionId',
+    'status',
+    'pid',
+    'startedAt',
+    'endedAt',
+    'runtimeMs',
+    'cwd',
+    'name',
+    'truncated',
+    'exitCode',
+    'exitSignal',
   ]) {
     const field = src[key];
     if (field !== undefined) {
-      out[key] = typeof field === "string" ? truncatePersistedDetailString(field, 500) : field;
+      out[key] = typeof field === 'string' ? truncatePersistedDetailString(field, 500) : field;
     }
   }
-  if (typeof src.command === "string") {
+  if (typeof src.command === 'string') {
     out.command = truncatePersistedDetailString(src.command, 500);
   }
   return out;
@@ -106,9 +246,6 @@ function buildPersistedDetailsFallback(
   originalSize: BoundedJsonUtf8Bytes,
   sanitizedBytes?: number,
 ): Record<string, unknown> {
-  // If even the structured summary is too large, keep only shape and stable
-  // status fields. This preserves "what happened?" without persisting the raw
-  // diagnostics payload that caused the cap to trip.
   const fallback: Record<string, unknown> = {
     persistedDetailsTruncated: true,
     finalDetailsTruncated: true,
@@ -119,11 +256,11 @@ function buildPersistedDetailsFallback(
   }
   if (src) {
     fallback.originalDetailKeys = firstEnumerableOwnKeys(src, 40);
-    for (const key of ["status", "sessionId", "pid", "exitCode", "exitSignal", "truncated"]) {
+    for (const key of ['status', 'sessionId', 'pid', 'exitCode', 'exitSignal', 'truncated']) {
       const field = src[key];
       if (field !== undefined) {
         fallback[key] =
-          typeof field === "string"
+          typeof field === 'string'
             ? truncatePersistedDetailString(field, MAX_PERSISTED_DETAIL_FALLBACK_STRING_CHARS)
             : field;
       }
@@ -157,13 +294,11 @@ function sanitizeToolResultDetailsForPersistence(details: unknown): unknown {
   if (details === undefined || details === null) {
     return details;
   }
-  // Measure with an early-exit walker so hostile or enormous details do not
-  // need to be fully stringified just to learn they exceed the persistence cap.
   const originalSize = boundedJsonUtf8Bytes(details, MAX_PERSISTED_TOOL_RESULT_DETAILS_BYTES);
   if (originalSize.complete && originalSize.bytes <= MAX_PERSISTED_TOOL_RESULT_DETAILS_BYTES) {
     return details;
   }
-  if (typeof details !== "object") {
+  if (typeof details !== 'object') {
     return enforcePersistedDetailsByteCap(
       {
         persistedDetailsTruncated: true,
@@ -181,29 +316,29 @@ function sanitizeToolResultDetailsForPersistence(details: unknown): unknown {
     originalDetailKeys: firstEnumerableOwnKeys(src, 40),
   };
   for (const key of [
-    "status",
-    "sessionId",
-    "pid",
-    "startedAt",
-    "endedAt",
-    "cwd",
-    "name",
-    "exitCode",
-    "exitSignal",
-    "retryInMs",
-    "total",
-    "totalLines",
-    "totalChars",
-    "truncated",
-    "fullOutputPath",
-    "truncation",
+    'status',
+    'sessionId',
+    'pid',
+    'startedAt',
+    'endedAt',
+    'cwd',
+    'name',
+    'exitCode',
+    'exitSignal',
+    'retryInMs',
+    'total',
+    'totalLines',
+    'totalChars',
+    'truncated',
+    'fullOutputPath',
+    'truncation',
   ]) {
     const field = src[key];
     if (field !== undefined) {
-      out[key] = typeof field === "string" ? truncatePersistedDetailString(field) : field;
+      out[key] = typeof field === 'string' ? truncatePersistedDetailString(field) : field;
     }
   }
-  if (typeof src.tail === "string") {
+  if (typeof src.tail === 'string') {
     out.tail = truncatePersistedDetailString(src.tail);
   }
   if (Array.isArray(src.sessions)) {
@@ -218,7 +353,7 @@ function sanitizeToolResultDetailsForPersistence(details: unknown): unknown {
 }
 
 function capToolResultDetails(msg: AgentMessage): AgentMessage {
-  if ((msg as { role?: string }).role !== "toolResult") {
+  if ((msg as { role?: string }).role !== 'toolResult') {
     return msg;
   }
   const details = (msg as { details?: unknown }).details;
@@ -239,10 +374,10 @@ function normalizePersistedToolResultName(
   message: AgentMessage,
   fallbackName?: string,
 ): AgentMessage {
-  if ((message as { role?: unknown }).role !== "toolResult") {
+  if ((message as { role?: unknown }).role !== 'toolResult') {
     return message;
   }
-  const toolResult = message as Extract<AgentMessage, { role: "toolResult" }>;
+  const toolResult = message as Extract<AgentMessage, { role: 'toolResult' }>;
   const rawToolName = (toolResult as { toolName?: unknown }).toolName;
   const normalizedToolName = normalizeOptionalString(rawToolName);
   if (normalizedToolName) {
@@ -257,83 +392,160 @@ function normalizePersistedToolResultName(
     return { ...toolResult, toolName: normalizedFallback };
   }
 
-  if (typeof rawToolName === "string") {
-    return { ...toolResult, toolName: "unknown" };
+  if (typeof rawToolName === 'string') {
+    return { ...toolResult, toolName: 'unknown' };
   }
   return toolResult;
 }
 
-export { getRawSessionAppendMessage };
+// ── Internal: raw-append symbol storage ─────────────────────────────────────
 
-export function installSessionToolResultGuard(
+const RAW_APPEND_MESSAGE = Symbol('xopc.session.rawAppendMessage');
+
+type SessionManagerWithRawAppend = SessionManager & {
+  [RAW_APPEND_MESSAGE]?: SessionManager['appendMessage'];
+};
+
+function rememberOriginalAppend(
   sessionManager: SessionManager,
-  opts?: {
-    /** Optional session key for transcript update broadcasts. */
-    sessionKey?: string;
-    /**
-     * Optional transform applied to any message before persistence.
-     */
-    transformMessageForPersistence?: (message: AgentMessage) => AgentMessage;
-    /**
-     * Optional, synchronous transform applied to toolResult messages *before* they are
-     * persisted to the session transcript.
-     */
-    transformToolResultForPersistence?: (
-      message: AgentMessage,
-      meta: { toolCallId?: string; toolName?: string; isSynthetic?: boolean },
-    ) => AgentMessage;
-    /**
-     * Whether to synthesize missing tool results to satisfy strict providers.
-     * Defaults to true.
-     */
-    allowSyntheticToolResults?: boolean;
-    missingToolResultText?: string;
-    /**
-     * Optional set/list of tool names accepted for assistant toolCall/toolUse blocks.
-     * When set, tool calls with unknown names are dropped before persistence.
-     */
-    allowedToolNames?: Iterable<string>;
-    /**
-     * Synchronous hook invoked before any message is written to the session JSONL.
-     * If the hook returns { block: true }, the message is silently dropped.
-     * If it returns { message }, the modified message is written instead.
-     */
-    beforeMessageWriteHook?: (
-      event: BeforeMessageWriteHookEvent,
-    ) => BeforeMessageWriteHookResult;
-    maxToolResultChars?: number;
-  },
-): {
-  flushPendingToolResults: () => void;
-  clearPendingToolResults: () => void;
-  getPendingIds: () => string[];
-} {
-  const originalAppend = getRawSessionAppendMessage(sessionManager);
-  setRawSessionAppendMessage(sessionManager, originalAppend);
-  const pendingState = createPendingToolCallState();
-  const persistMessage = (message: AgentMessage) => {
-    const transformer = opts?.transformMessageForPersistence;
-    return transformer ? transformer(message) : message;
-  };
+): SessionManager['appendMessage'] {
+  const tagged = sessionManager as SessionManagerWithRawAppend;
+  const stored = tagged[RAW_APPEND_MESSAGE];
+  if (stored) {
+    return stored;
+  }
+  const original = sessionManager.appendMessage.bind(sessionManager);
+  tagged[RAW_APPEND_MESSAGE] = original;
+  return original;
+}
 
-  const persistToolResult = (
+// ── Internal: pending tool-call state ──────────────────────────────────────
+
+type PendingToolCall = { id: string; name?: string };
+
+class PendingToolCallTracker {
+  private readonly pending = new Map<string, string | undefined>();
+
+  size(): number {
+    return this.pending.size;
+  }
+
+  getToolName(id: string): string | undefined {
+    return this.pending.get(id);
+  }
+
+  delete(id: string): void {
+    this.pending.delete(id);
+  }
+
+  clear(): void {
+    this.pending.clear();
+  }
+
+  trackToolCalls(calls: readonly PendingToolCall[]): void {
+    for (const call of calls) {
+      this.pending.set(call.id, call.name);
+    }
+  }
+
+  entries(): IterableIterator<[string, string | undefined]> {
+    return this.pending.entries();
+  }
+
+  getPendingIds(): string[] {
+    return Array.from(this.pending.keys());
+  }
+
+  shouldFlushForSanitizedDrop(): boolean {
+    return this.pending.size > 0;
+  }
+
+  shouldFlushBeforeNonToolResult(nextRole: unknown, toolCallCount: number): boolean {
+    return this.pending.size > 0 && (toolCallCount === 0 || nextRole !== 'assistant');
+  }
+
+  shouldFlushBeforeNewToolCalls(toolCallCount: number): boolean {
+    return this.pending.size > 0 && toolCallCount > 0;
+  }
+}
+
+// ── ToolResultGuard class ──────────────────────────────────────────────────
+
+class ToolResultGuard {
+  private readonly sessionManager: SessionManager;
+  private readonly opts: ToolResultGuardOptions;
+  private readonly pending = new PendingToolCallTracker();
+  private readonly originalAppend: SessionManager['appendMessage'];
+  private readonly allowSyntheticToolResults: boolean;
+  private readonly maxToolResultChars: number;
+
+  constructor(sessionManager: SessionManager, opts: ToolResultGuardOptions) {
+    this.sessionManager = sessionManager;
+    this.opts = opts;
+    this.originalAppend = rememberOriginalAppend(sessionManager);
+    this.allowSyntheticToolResults = opts.allowSyntheticToolResults ?? true;
+    this.maxToolResultChars = resolveMaxToolResultChars(opts);
+  }
+
+  /** Monkey-patch the session manager so pi-coding-agent's internal appendMessage flows through us. */
+  attach(): void {
+    const bound = this.guardedAppend.bind(this);
+    this.sessionManager.appendMessage = bound as SessionManager['appendMessage'];
+  }
+
+  flushPending(): void {
+    if (this.pending.size() === 0) {
+      return;
+    }
+    if (this.allowSyntheticToolResults) {
+      for (const [id, name] of this.pending.entries()) {
+        const synthetic = makeMissingToolResult({
+          toolCallId: id,
+          toolName: name,
+          text: this.opts.missingToolResultText,
+        });
+        const flushed = this.applyBeforeWriteHook(
+          this.persistToolResult(this.persistMessage(synthetic), {
+            toolCallId: id,
+            toolName: name,
+            isSynthetic: true,
+          }),
+        );
+        if (flushed) {
+          this.originalAppend(capToolResultForPersistence(flushed, this.maxToolResultChars) as never);
+        }
+      }
+    }
+    this.pending.clear();
+  }
+
+  clearPending(): void {
+    this.pending.clear();
+  }
+
+  getPendingIds(): string[] {
+    return this.pending.getPendingIds();
+  }
+
+  private persistMessage(message: AgentMessage): AgentMessage {
+    const transformer = this.opts.transformMessageForPersistence;
+    return transformer ? transformer(message) : message;
+  }
+
+  private persistToolResult(
     message: AgentMessage,
     meta: { toolCallId?: string; toolName?: string; isSynthetic?: boolean },
-  ) => {
-    const transformer = opts?.transformToolResultForPersistence;
+  ): AgentMessage {
+    const transformer = this.opts.transformToolResultForPersistence;
     return transformer ? transformer(message, meta) : message;
-  };
-
-  const allowSyntheticToolResults = opts?.allowSyntheticToolResults ?? true;
-  const missingToolResultText = opts?.missingToolResultText;
-  const beforeWrite = opts?.beforeMessageWriteHook;
-  const maxToolResultChars = resolveMaxToolResultChars(opts);
+  }
 
   /**
    * Run the before_message_write hook. Returns the (possibly modified) message,
    * or null if the message should be blocked.
    */
-  const applyBeforeWriteHook = (msg: AgentMessage): AgentMessage | null => {
+  private applyBeforeWriteHook(msg: AgentMessage): AgentMessage | null {
+    const beforeWrite = this.opts.beforeMessageWriteHook;
     if (!beforeWrite) {
       return msg;
     }
@@ -345,48 +557,18 @@ export function installSessionToolResultGuard(
       return result.message;
     }
     return msg;
-  };
+  }
 
-  const flushPendingToolResults = () => {
-    if (pendingState.size() === 0) {
-      return;
-    }
-    if (allowSyntheticToolResults) {
-      for (const [id, name] of pendingState.entries()) {
-        const synthetic = makeMissingToolResult({
-          toolCallId: id,
-          toolName: name,
-          text: missingToolResultText,
-        });
-        const flushed = applyBeforeWriteHook(
-          persistToolResult(persistMessage(synthetic), {
-            toolCallId: id,
-            toolName: name,
-            isSynthetic: true,
-          }),
-        );
-        if (flushed) {
-          originalAppend(capToolResultForPersistence(flushed, maxToolResultChars) as never);
-        }
-      }
-    }
-    pendingState.clear();
-  };
-
-  const clearPendingToolResults = () => {
-    pendingState.clear();
-  };
-
-  const guardedAppend = (message: AgentMessage) => {
+  private guardedAppend(message: AgentMessage): unknown {
     let nextMessage = message;
     const role = (message as { role?: unknown }).role;
-    if (role === "assistant") {
+    if (role === 'assistant') {
       const sanitized = sanitizeToolCallInputs([message], {
-        allowedToolNames: opts?.allowedToolNames,
+        allowedToolNames: this.opts.allowedToolNames,
       });
       if (sanitized.length === 0) {
-        if (pendingState.shouldFlushForSanitizedDrop()) {
-          flushPendingToolResults();
+        if (this.pending.shouldFlushForSanitizedDrop()) {
+          this.flushPending();
         }
         return undefined;
       }
@@ -394,21 +576,21 @@ export function installSessionToolResultGuard(
     }
     const nextRole = (nextMessage as { role?: unknown }).role;
 
-    if (nextRole === "toolResult") {
-      const id = extractToolResultId(nextMessage as Extract<AgentMessage, { role: "toolResult" }>);
-      const toolName = id ? pendingState.getToolName(id) : undefined;
+    if (nextRole === 'toolResult') {
+      const id = extractToolResultId(nextMessage as Extract<AgentMessage, { role: 'toolResult' }>);
+      const toolName = id ? this.pending.getToolName(id) : undefined;
       if (id) {
-        pendingState.delete(id);
+        this.pending.delete(id);
       }
       const normalizedToolResult = normalizePersistedToolResultName(nextMessage, toolName);
       // Apply hard size cap before persistence to prevent oversized tool results
       // from consuming the entire context window on subsequent LLM calls.
       const capped = capToolResultForPersistence(
-        persistMessage(normalizedToolResult),
-        maxToolResultChars,
+        this.persistMessage(normalizedToolResult),
+        this.maxToolResultChars,
       );
-      const persisted = applyBeforeWriteHook(
-        persistToolResult(capped, {
+      const persisted = this.applyBeforeWriteHook(
+        this.persistToolResult(capped, {
           toolCallId: id ?? undefined,
           toolName,
           isSynthetic: false,
@@ -417,7 +599,7 @@ export function installSessionToolResultGuard(
       if (!persisted) {
         return undefined;
       }
-      return originalAppend(capToolResultForPersistence(persisted, maxToolResultChars) as never);
+      return this.originalAppend(capToolResultForPersistence(persisted, this.maxToolResultChars) as never);
     }
 
     // Skip tool call extraction for aborted/errored assistant messages.
@@ -428,8 +610,8 @@ export function installSessionToolResultGuard(
     // This matches the behavior in repairToolUseResultPairing (session-transcript-repair.ts)
     const stopReason = (nextMessage as { stopReason?: string }).stopReason;
     const toolCalls =
-      nextRole === "assistant" && stopReason !== "aborted" && stopReason !== "error"
-        ? extractToolCallsFromAssistant(nextMessage as Extract<AgentMessage, { role: "assistant" }>)
+      nextRole === 'assistant' && stopReason !== 'aborted' && stopReason !== 'error'
+        ? extractToolCallsFromAssistant(nextMessage as Extract<AgentMessage, { role: 'assistant' }>)
         : [];
 
     // Always clear pending tool call state before appending non-tool-result messages.
@@ -438,45 +620,36 @@ export function installSessionToolResultGuard(
     // synthetic results (e.g. OpenAI) accumulate stale pending state when a user message
     // interrupts in-flight tool calls, leaving orphaned tool_use blocks in the transcript
     // that cause API 400 errors on subsequent requests.
-    if (pendingState.shouldFlushBeforeNonToolResult(nextRole, toolCalls.length)) {
-      flushPendingToolResults();
+    if (this.pending.shouldFlushBeforeNonToolResult(nextRole, toolCalls.length)) {
+      this.flushPending();
     }
     // If new tool calls arrive while older ones are pending, flush the old ones first.
-    if (pendingState.shouldFlushBeforeNewToolCalls(toolCalls.length)) {
-      flushPendingToolResults();
+    if (this.pending.shouldFlushBeforeNewToolCalls(toolCalls.length)) {
+      this.flushPending();
     }
 
-    const finalMessage = applyBeforeWriteHook(persistMessage(nextMessage));
+    const finalMessage = this.applyBeforeWriteHook(this.persistMessage(nextMessage));
     if (!finalMessage) {
       return undefined;
     }
-    const result = originalAppend(finalMessage as never);
+    const result = this.originalAppend(finalMessage as never);
 
     const sessionFile = (
-      sessionManager as { getSessionFile?: () => string | null }
+      this.sessionManager as { getSessionFile?: () => string | null }
     ).getSessionFile?.();
     if (sessionFile) {
       emitSessionTranscriptUpdate({
         sessionFile,
-        sessionKey: opts?.sessionKey,
+        sessionKey: this.opts.sessionKey,
         message: finalMessage,
-        messageId: typeof result === "string" ? result : undefined,
+        messageId: typeof result === 'string' ? result : undefined,
       });
     }
 
     if (toolCalls.length > 0) {
-      pendingState.trackToolCalls(toolCalls);
+      this.pending.trackToolCalls(toolCalls);
     }
 
     return result;
-  };
-
-  // Monkey-patch appendMessage with our guarded version.
-  sessionManager.appendMessage = guardedAppend as SessionManager["appendMessage"];
-
-  return {
-    flushPendingToolResults,
-    clearPendingToolResults,
-    getPendingIds: pendingState.getPendingIds,
-  };
+  }
 }

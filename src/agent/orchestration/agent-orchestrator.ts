@@ -9,6 +9,7 @@ import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import type { Config } from '../../config/schema.js';
 import type { InboundMessage } from '../../infra/bus/index.js';
 import type { SessionConfigStore, SessionStore } from '../../session/index.js';
+import type { SessionHydrator } from '../session/index.js';
 import { resolveEffectiveThinkingLevel } from '../../session/thinking-resolve.js';
 import type { ThinkLevel } from '../transcript/thinking-types.js';
 import type { ModelManager } from '../models/index.js';
@@ -47,8 +48,8 @@ export interface AgentOrchestratorConfig {
   eventHandler: AgentEventHandler;
   feedbackCoordinator: FeedbackCoordinator;
   sessionConfigStore: SessionConfigStore;
-  /** Load per-session workspace override and mkdir before creating the agent. */
-  hydrateSessionWorkspaceFromStore?: (sessionKey: string) => Promise<void>;
+  /** Per-session hydration (workspace override + model override) before the agent runs. */
+  sessionHydrator: SessionHydrator;
   getThinkingDefault: () => ThinkLevel | undefined;
   /** Per-session default from merged `agents.list` / defaults (optional). */
   getThinkingDefaultForSession?: (sessionKey: string) => ThinkLevel | undefined;
@@ -75,7 +76,7 @@ export class AgentOrchestrator {
   private eventHandler: AgentEventHandler;
   private feedbackCoordinator: FeedbackCoordinator;
   private sessionConfigStore: SessionConfigStore;
-  private hydrateSessionWorkspaceFromStore?: (sessionKey: string) => Promise<void>;
+  private sessionHydrator: SessionHydrator;
   private getThinkingDefault: () => ThinkLevel | undefined;
   private getThinkingDefaultForSession?: (sessionKey: string) => ThinkLevel | undefined;
   private workspaceRoot: string;
@@ -93,7 +94,7 @@ export class AgentOrchestrator {
     this.eventHandler = config.eventHandler;
     this.feedbackCoordinator = config.feedbackCoordinator;
     this.sessionConfigStore = config.sessionConfigStore;
-    this.hydrateSessionWorkspaceFromStore = config.hydrateSessionWorkspaceFromStore;
+    this.sessionHydrator = config.sessionHydrator;
     this.getThinkingDefault = config.getThinkingDefault;
     this.getThinkingDefaultForSession = config.getThinkingDefaultForSession;
     this.workspaceRoot = config.workspaceRoot;
@@ -107,13 +108,6 @@ export class AgentOrchestrator {
     this.onEmbeddedTurnComplete = config.onEmbeddedTurnComplete;
   }
 
-  private async hydrateSessionModelFromStore(sessionKey: string): Promise<void> {
-    const cfg = await this.sessionConfigStore.get(sessionKey);
-    if (cfg?.modelOverride) {
-      await this.modelManager.switchModelForSession(sessionKey, cfg.modelOverride);
-    }
-  }
-
   /**
    * Process a message through the agent orchestration pipeline
    */
@@ -122,7 +116,7 @@ export class AgentOrchestrator {
 
     log.debug({ sessionKey }, 'Processing message through agent orchestrator');
 
-    await this.hydrateSessionWorkspaceFromStore?.(sessionKey);
+    await this.sessionHydrator.workspace(sessionKey);
 
     // Dreaming: short-circuit cron-triggered sweep tokens into maintenance runs.
     // This avoids spending LLM tokens for scheduled memory consolidation.
@@ -171,7 +165,7 @@ export class AgentOrchestrator {
     }
 
     try {
-      await this.hydrateSessionModelFromStore(sessionKey);
+      await this.sessionHydrator.model(sessionKey);
 
       const thinkingDefault =
         this.getThinkingDefaultForSession?.(sessionKey) ?? this.getThinkingDefault();

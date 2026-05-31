@@ -48,6 +48,33 @@ jobs:
       - name: CLI bootstrap import guard
         run: pnpm run test:startup:imports
 
+  architecture:
+    name: Architecture Check (dependency-cruiser)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v5
+        with:
+          version: 11
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Enforces the 25 SOLID rules in `.dependency-cruiser.cjs`. Errors block
+      # the build; the remaining circular-import warnings (intentional, tracked
+      # tech debt) do not. Reviewer notes are surfaced in PULL_REQUEST_TEMPLATE.md.
+      - name: Architecture check (depcheck)
+        run: pnpm run depcheck
+
   react-doctor:
     name: React Doctor (web)
     runs-on: ubuntu-latest

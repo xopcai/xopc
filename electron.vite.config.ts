@@ -24,6 +24,9 @@ const skipRenderer = process.env['ELECTRON_VITE_SKIP_RENDERER'] === '1';
 export default defineConfig({
   main: {
     build: {
+      // electron-vite leaves main/preload unminified by default (~907KB readable JS for 25k+ lines).
+      // Node-side bundles don't need a debuggable shape in production; esbuild minify halves it.
+      minify: 'esbuild',
       rollupOptions: {
         // IMPORTANT: In the Electron main process, `electron` is a runtime-provided module.
         // If Rollup resolves it to the npm package `electron`, the bundle will include
@@ -46,6 +49,7 @@ export default defineConfig({
   },
   preload: {
     build: {
+      minify: 'esbuild',
       rollupOptions: {
         // Same as main: keep `electron` as runtime-provided, not the npm package.
         external: ['electron'],

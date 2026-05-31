@@ -1,6 +1,9 @@
 import { readFile } from 'node:fs/promises';
 
-import type { SessionsJsonMap } from './sessions-json-file.js';
+// Type duplicated inline — `sessions-json-file.ts` imports a value from this
+// file (cache.ts → file-read.ts → file.ts), so re-importing the type back
+// would close the loop. The shape is trivial so we declare it locally.
+type SessionsJsonMap<T> = Record<string, T>;
 
 /**
  * Raw disk read for sessions.json (no in-memory cache).

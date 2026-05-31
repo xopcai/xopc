@@ -2,7 +2,7 @@
  * Channel config adapter factories.
  */
 
-import type { Config } from '../config/index.js';
+import type { Config } from '../config/schema.js';
 import type { ChannelConfigAdapter } from './plugin-types.js';
 
 export function createTopLevelChannelConfigAdapter<ResolvedAccount>(params: {

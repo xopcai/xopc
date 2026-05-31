@@ -137,9 +137,13 @@ export async function *runGatewayAgent(
       let streamError: string | undefined;
       try {
         emit('agent.stream', { sessionKey, event: statusEvent });
-        const eventStream = agentService.processDirectStreaming(stampedMessage, sessionKey, prepared, thinking, {
-          signal: mergedSignal,
-        });
+        const eventStream = agentService.turnDispatcher.processDirectStreaming(
+          stampedMessage,
+          sessionKey,
+          prepared,
+          thinking,
+          { signal: mergedSignal },
+        );
 
         for await (const event of eventStream) {
           runRelay.publish(runId, event);
@@ -173,9 +177,9 @@ export async function *runGatewayAgent(
         activeWebchatRunBySession.delete(sessionKey);
         runAbortControllers.delete(runId);
         const assistantPlainText = agentService.getLastAssistantPlainText(sessionKey);
-        const streamOutcome = agentService.takePersistentGoalStreamOutcome(sessionKey);
+        const streamOutcome = agentService.persistentGoals.takeStreamOutcome(sessionKey);
         try {
-          await agentService.emitSessionTurnComplete({
+          await agentService.outboundCoordinator.emitSessionTurnComplete({
             sessionKey,
             channel: 'webchat',
             chatId: sessionKey,

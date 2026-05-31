@@ -81,7 +81,7 @@ function main() {
     if (bytes > maxNodeModulesBytes) {
       console.error(
         `[verify-electron-asar-deps] node_modules too large: ${mb} MB (max ${maxMb} MB). ` +
-          'pnpm workspace deps may have been bundled — check electron-pack-context.mjs',
+          'pnpm workspace deps may have been bundled — check prepare-electron-pack-dir.mjs',
       );
       process.exit(1);
     }

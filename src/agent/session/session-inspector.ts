@@ -1,0 +1,210 @@
+/**
+ * SessionInspector — read-only / introspection-oriented operations on a session.
+ *
+ * Owns the five methods previously scattered across `AgentService` that all
+ * compute a "summary view" of one session:
+ *   - `compact` (manual user-triggered compaction)
+ *   - `btwQuery` (one-shot LLM answer with transcript as background)
+ *   - `report` (Markdown / JSON `/context` summary)
+ *   - `agentConfig` (resolved thinking + model + workspace for the Web UI)
+ *   - `contextUsage` (rough token budget vs estimated transcript)
+ *
+ * The shared helper `computeStats` keeps the three callsites that need
+ * `getWindowStats` / `getCompactionStats` / `estimateTokenUsage` in lockstep.
+ */
+
+import type { AgentMessage } from '@earendil-works/pi-agent-core';
+import type { ThinkingLevel } from '@earendil-works/pi-agent-core';
+
+import type { Config } from '../../config/schema.js';
+import { resolveEffectiveAgentProfileForSession } from '../../config/agent-profile.js';
+import {
+  effectiveWorkspacePathForSession,
+  resolveEffectiveReasoningLevel,
+  resolveEffectiveThinkingLevel,
+  type SessionConfigStore,
+} from '../../session/index.js';
+import type { SessionStore } from '../../session/store.js';
+import type { CompactionResult } from '../memory/compaction.js';
+import type { ModelManager } from '../models/index.js';
+import type { AgentInstanceGateway } from '../agent-instance-gateway.js';
+import { runBtwQuery } from '../service/btw-query.js';
+import { formatSessionContextReport } from '../service/session-context-report.js';
+import type { ReasoningLevel } from '../transcript/thinking-types.js';
+import { createLogger } from '../../utils/logger.js';
+import type { SessionHydrator } from './session-hydrator.js';
+
+const log = createLogger('SessionInspector');
+
+export interface SessionInspectorOptions {
+  sessionStore: SessionStore;
+  sessionConfigStore: SessionConfigStore;
+  modelManager: ModelManager;
+  agentManager: AgentInstanceGateway;
+  sessionHydrator: SessionHydrator;
+  /** Effective config snapshot accessor (honours runtime overrides). */
+  getConfig: () => Config | undefined;
+  /**
+   * Nominal context window the session is budgeted against. Currently derived
+   * from `agents.defaults.maxTokens * 4`, defaulting to 128k.
+   */
+  getContextWindow: () => number;
+}
+
+export interface SessionContextUsage {
+  estimatedTokens: number;
+  contextWindow: number;
+  usagePercent: number | null;
+}
+
+export interface SessionAgentConfigView {
+  thinkingLevel: ThinkingLevel;
+  model: string;
+  reasoningLevel: ReasoningLevel;
+  effectiveWorkspacePath: string;
+  workingDirectoryLocked: boolean;
+}
+
+export class SessionInspector {
+  private readonly opts: SessionInspectorOptions;
+
+  constructor(opts: SessionInspectorOptions) {
+    this.opts = opts;
+  }
+
+  /**
+   * Manual compaction triggered by a user / API. Always forces a compaction
+   * pass (`force: true` by default) and evicts the in-memory agent so the
+   * next turn reloads from the compacted transcript.
+   */
+  async compact(
+    sessionKey: string,
+    options?: { instructions?: string; force?: boolean },
+  ): Promise<CompactionResult> {
+    const messages = await this.opts.sessionStore.load(sessionKey);
+    const contextWindow = this.opts.getContextWindow();
+    const result = await this.opts.sessionStore.compact(
+      sessionKey,
+      messages,
+      contextWindow,
+      options?.instructions,
+      options?.force ?? true,
+    );
+    if (result.compacted) {
+      this.opts.agentManager.removeAgent(sessionKey);
+    }
+    log.info({ sessionKey, result }, 'Manual compaction complete');
+    return result;
+  }
+
+  /** One-shot LLM answer for `/btw`: transcript as background, not persisted. */
+  btwQuery(sessionKey: string, question: string): Promise<{ text: string; error?: string }> {
+    return runBtwQuery({
+      sessionKey,
+      question,
+      sessionStore: this.opts.sessionStore,
+      modelForSession: this.opts.modelManager.getModelForSession(sessionKey),
+      log,
+    });
+  }
+
+  /** Cheap stats used by both the report and other callers. */
+  stats(sessionKey: string, messages: AgentMessage[]): {
+    windowStats: ReturnType<SessionStore['getWindowStats']>;
+    compactionStats: ReturnType<SessionStore['getCompactionStats']>;
+    tokenEstimate: ReturnType<SessionStore['estimateTokenUsage']>;
+  } {
+    return {
+      windowStats: this.opts.sessionStore.getWindowStats(messages),
+      compactionStats: this.opts.sessionStore.getCompactionStats(sessionKey),
+      tokenEstimate: this.opts.sessionStore.estimateTokenUsage(sessionKey, messages),
+    };
+  }
+
+  /** Rough context usage for TUI footer (estimated tokens vs nominal budget). */
+  async contextUsage(sessionKey: string): Promise<SessionContextUsage> {
+    const messages = await this.opts.sessionStore.load(sessionKey);
+    const contextWindow = this.opts.getContextWindow();
+    const estimatedTokens = await this.opts.sessionStore.estimateTokenUsage(sessionKey, messages);
+    const usagePercent =
+      contextWindow > 0 ? Math.min(100, Math.round((estimatedTokens / contextWindow) * 100)) : null;
+    return { estimatedTokens, contextWindow, usagePercent };
+  }
+
+  /** Markdown or JSON summary for `/context`. */
+  async report(sessionKey: string, mode: 'list' | 'detail' | 'json'): Promise<string> {
+    const cfg = this.opts.getConfig();
+    if (!cfg) {
+      throw new Error('SessionInspector requires a config snapshot to render report');
+    }
+    const messages = await this.opts.sessionStore.load(sessionKey);
+    const cw = this.opts.getContextWindow();
+    const computed = this.stats(sessionKey, messages);
+    const model = this.opts.modelManager.getModelForSession(sessionKey);
+    const sc = await this.opts.sessionConfigStore.get(sessionKey);
+    const workspace = effectiveWorkspacePathForSession(cfg, sessionKey, sc);
+    const estTokens = await this.opts.sessionStore.estimateTokenUsage(sessionKey, messages);
+    const profile = resolveEffectiveAgentProfileForSession(cfg, sessionKey);
+    const defaults = cfg.agents?.defaults;
+    const compaction = defaults?.compaction;
+    const tools = defaults?.tools;
+
+    const toolsSummary =
+      tools && typeof tools === 'object'
+        ? Object.entries(tools as Record<string, unknown>)
+            .filter(([, v]) => v === true)
+            .map(([k]) => k)
+            .slice(0, 16)
+            .join(', ') || '(none explicitly true)'
+        : '(see agents.defaults.tools in config)';
+
+    return formatSessionContextReport({
+      sessionKey,
+      mode,
+      model,
+      workspacePath: workspace,
+      agentId: profile.agentId,
+      messageCount: messages.length,
+      contextWindowNominal: cw,
+      estimatedTranscriptTokens: estTokens,
+      thinkingDefault: defaults?.thinkingDefault,
+      reasoningDefault: defaults?.reasoningDefault,
+      verboseDefault: defaults?.verboseDefault,
+      compaction,
+      toolsFlagsSummary: toolsSummary,
+      windowStats: computed.windowStats,
+      compactionRunStats: computed.compactionStats,
+    });
+  }
+
+  /** Resolved thinking / model / workspace for the Web UI. */
+  async agentConfig(sessionKey: string): Promise<SessionAgentConfigView> {
+    await this.opts.sessionHydrator.model(sessionKey);
+    const cfg = this.opts.getConfig();
+    if (!cfg) {
+      throw new Error('SessionInspector requires a config snapshot to resolve agent config');
+    }
+    const sc = await this.opts.sessionConfigStore.get(sessionKey);
+
+    // Ensure model display matches the effective agent profile even before an Agent instance exists.
+    // Otherwise `ModelManager.getModelForSession()` falls back to the global default until the first turn creates the agent.
+    const profile = resolveEffectiveAgentProfileForSession(cfg, sessionKey);
+    const profileModelRef = profile.primaryModelRef?.trim();
+    if (profileModelRef) {
+      this.opts.modelManager.setSessionProfileDefault(sessionKey, profileModelRef);
+    }
+
+    const defThink = cfg.agents?.defaults?.thinkingDefault ?? 'medium';
+    const level = await resolveEffectiveThinkingLevel(this.opts.sessionConfigStore, sessionKey, null, defThink);
+    const defReason = (cfg.agents?.defaults?.reasoningDefault ?? 'stream') as ReasoningLevel;
+    const reasoningLevel = await resolveEffectiveReasoningLevel(this.opts.sessionConfigStore, sessionKey, defReason);
+    const model = this.opts.modelManager.getModelForSession(sessionKey);
+    return {
+      thinkingLevel: level,
+      model,
+      reasoningLevel,
+      effectiveWorkspacePath: effectiveWorkspacePathForSession(cfg, sessionKey, sc),
+      workingDirectoryLocked: Boolean(sc?.workingDirectoryOverride?.trim()),
+    };
+  }
+}

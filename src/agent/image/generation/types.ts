@@ -5,6 +5,10 @@ import type { MediaNormalizationEntry } from '../../media-generation/normalizati
 
 // Re-export the provider contract from `provider-registry.ts` so callers can
 // continue importing it from `./types.js` (single import surface).
+// NOTE: this re-export creates a known circular cycle with `provider-registry.ts`
+// (which imports `ImageGenerationCapabilities*` from this file). It is preserved
+// because removing it breaks 5 extension packages' public API. Suppressed via
+// dependency-cruiser at the warning level.
 export type {
   ImageGenerationProvider,
   ImageGenerationProviderConfiguredContext,

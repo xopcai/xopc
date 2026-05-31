@@ -1,7 +1,7 @@
 import { Command } from 'commander';
 
 import { resolveConfigPath } from '../../../config/paths.js';
-import { getContextWithOpts } from '../../index.js';
+import { getContextWithOpts } from '../../context.js';
 import {
   addGatewayClientOptions,
   parseGatewayClientOptions,

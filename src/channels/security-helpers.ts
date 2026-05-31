@@ -2,7 +2,7 @@
  * Helpers for building DM/security policy resolvers.
  */
 
-import type { Config } from '../config/index.js';
+import type { Config } from '../config/schema.js';
 
 export function createScopedDmSecurityResolver<ResolvedAccount>(params: {
   channelKey: string;

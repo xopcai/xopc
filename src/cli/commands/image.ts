@@ -15,7 +15,7 @@ import {
 } from '../../agent/image/index.js';
 import { register, formatExamples, type CLIContext } from '../registry.js';
 import { colors } from '../utils/colors.js';
-import { getContextWithOpts } from '../index.js';
+import { getContextWithOpts } from '../context.js';
 
 function modelRefToString(model?: AgentModelConfig): string | null {
   if (!model) {

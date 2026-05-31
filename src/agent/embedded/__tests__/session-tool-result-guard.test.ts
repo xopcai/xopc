@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { SessionManager } from '@earendil-works/pi-coding-agent';
 
-import { guardSessionManager } from '../session-tool-result-guard-wrapper.js';
+import { guardSessionManager } from '../session-tool-result-guard.js';
 import { repairAssistantUsageInSessionManager } from '../session-manager-init.js';
 import { readTranscriptRowsFromFile } from '../../../session/parity/jsonl-transcript-io.js';
 import { appendPiTranscriptContextEntry } from '../../../session/parity/jsonl-transcript-io.js';

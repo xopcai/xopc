@@ -102,7 +102,7 @@ export class EmbeddedBackend implements TuiBackend {
           ? opts.message
           : prependEnvelopeTimestamp(opts.message);
 
-        const stream = this.agent!.processDirectStreaming(
+        const stream = this.agent!.turnDispatcher.processDirectStreaming(
           messageForAgent,
           opts.sessionKey,
           undefined,
@@ -142,7 +142,7 @@ export class EmbeddedBackend implements TuiBackend {
 
   async steerChat(opts: { sessionKey: string; message: string }): Promise<{ ok: boolean }> {
     if (!this.agent) return { ok: false };
-    const ok = await this.agent.steerWebchatSession(opts.sessionKey, opts.message);
+    const ok = await this.agent.turnDispatcher.steerWebchatSession(opts.sessionKey, opts.message);
     return { ok };
   }
 
@@ -154,7 +154,7 @@ export class EmbeddedBackend implements TuiBackend {
       return { messages: [] };
     }
     try {
-      const detail = await this.agent.loadSessionDetail(opts.sessionKey);
+      const detail = await this.agent.sessionStore.get(opts.sessionKey);
       if (!detail) {
         return { messages: [] };
       }
@@ -171,8 +171,12 @@ export class EmbeddedBackend implements TuiBackend {
   async listSessions(): Promise<TuiSessionItem[]> {
     if (!this.agent) return [];
     try {
-      const items = await this.agent.listSessionsForUi(200);
-      return items.map(sessionMetadataToTuiItem);
+      const result = await this.agent.sessionStore.list({
+        limit: 200,
+        sortBy: 'updatedAt',
+        sortOrder: 'desc',
+      });
+      return result.items.map(sessionMetadataToTuiItem);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       log.warn({ err: error, errorMessage }, `Embedded listSessions failed: ${errorMessage}`);
@@ -183,7 +187,7 @@ export class EmbeddedBackend implements TuiBackend {
   async renameSession(sessionKey: string, name: string): Promise<{ ok: boolean }> {
     if (!this.agent) return { ok: false };
     try {
-      await this.agent.renameSessionKey(sessionKey, name);
+      await this.agent.sessionStore.updateMetadata(sessionKey, { name: name.trim() });
       return { ok: true };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -195,7 +199,7 @@ export class EmbeddedBackend implements TuiBackend {
   async deleteSession(sessionKey: string): Promise<{ ok: boolean }> {
     if (!this.agent) return { ok: false };
     try {
-      const ok = await this.agent.deleteSessionKey(sessionKey);
+      const ok = await this.agent.sessionStore.deleteSession(sessionKey);
       return { ok };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -212,9 +216,9 @@ export class EmbeddedBackend implements TuiBackend {
       return { model: model ?? undefined };
     }
     try {
-      const cfg = await this.agent.getSessionAgentConfig(sessionKey);
+      const cfg = await this.agent.sessionInspector.agentConfig(sessionKey);
       const parsed = parseModelRef(cfg.model);
-      const usage = await this.agent.getSessionContextUsage(sessionKey);
+      const usage = await this.agent.sessionInspector.contextUsage(sessionKey);
       return {
         model: parsed?.model ?? cfg.model,
         modelProvider: parsed?.provider,
@@ -265,7 +269,7 @@ export class EmbeddedBackend implements TuiBackend {
   ): Promise<{ compacted: boolean; summary?: string }> {
     if (!this.agent) return { compacted: false, summary: 'Agent not started' };
     try {
-      const result = await this.agent.compactSession(sessionKey, { force: options?.force ?? true });
+      const result = await this.agent.sessionInspector.compact(sessionKey, { force: options?.force ?? true });
       const summary = result.compacted
         ? `Compacted (${result.tokensBefore ?? '?'} → ${result.tokensAfter ?? '?'} tokens)`
         : 'Nothing to compact';

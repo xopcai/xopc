@@ -1,13 +1,22 @@
 /**
- * Tool Executor - Unified tool execution with timeout and retry
+ * Tool Executor - Unified tool execution wrapper.
  *
- * Wraps tool execution with:
- * - Timeout protection (prevents hanging)
- * - Retry mechanism (for transient failures)
- * - Error tracking (for reliability)
+ * Adds:
+ * - Timeout protection (tools that hang would otherwise stall the turn).
+ * - Optional retry for tools explicitly marked `idempotent`.
+ *
+ * Pi-agent contract (from `AgentTool.execute` docstring): "Throw on failure
+ * instead of encoding errors in `content`." Pi-agent turns thrown errors into
+ * `tool_execution_end` events with `isError=true`, which feeds the loop guard,
+ * error tracker, and error-pattern matcher. This wrapper therefore re-throws
+ * instead of synthesising fake-success results.
  */
 
-import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
+import type {
+  AgentTool,
+  AgentToolResult,
+  AgentToolUpdateCallback,
+} from '@earendil-works/pi-agent-core';
 import { createLogger } from '../../utils/logger.js';
 import { executeWithTimeout, TimeoutError } from '../lifecycle/timeout-wrapper.js';
 import { withRetry } from '../../infra/retry.js';
@@ -15,207 +24,158 @@ import { withRetry } from '../../infra/retry.js';
 const log = createLogger('ToolExecutor');
 
 export interface ToolExecutorConfig {
-  // Timeout configuration
+  /** Default per-tool timeout when the tool does not declare its own `timeoutMs`. */
   defaultTimeoutMs: number;
-  shellTimeoutMs: number;
-  readTimeoutMs: number;
-  writeTimeoutMs: number;
-  networkTimeoutMs: number;
-  
-  // Retry configuration
+
+  /** Max retry attempts for tools opted into retry via `idempotent: true`. */
   maxRetries: number;
+  /** Initial backoff between retries (passed straight to `withRetry`). */
   retryDelayMs: number;
-  
-  // Enable/disable features
+
+  /** Master switches; default both on so the wrapper is still effective. */
   enableTimeout: boolean;
   enableRetry: boolean;
 }
 
 const DEFAULT_CONFIG: ToolExecutorConfig = {
-  defaultTimeoutMs: 5 * 60 * 1000,  // 5 minutes
-  shellTimeoutMs: 5 * 60 * 1000,    // 5 minutes
-  readTimeoutMs: 30 * 1000,         // 30 seconds
-  writeTimeoutMs: 60 * 1000,        // 1 minute
-  networkTimeoutMs: 60 * 1000,      // 1 minute
-  
+  defaultTimeoutMs: 5 * 60 * 1000, // 5 minutes
   maxRetries: 2,
   retryDelayMs: 1000,
-  
   enableTimeout: true,
   enableRetry: true,
 };
 
 /**
- * Get timeout for specific tool type
+ * Optional xopc-side hints that any tool may attach. They are not part of the
+ * pi-agent `AgentTool` contract; the wrapper reads them via structural typing.
+ *
+ * - `timeoutMs`: per-tool override of the default execution timeout.
+ * - `idempotent`: marks a tool as safe to retry. The wrapper retries only
+ *   tools that opt in — write/edit-like tools must leave this `false`.
  */
-function getTimeoutForTool(toolName: string, config: ToolExecutorConfig): number {
-  const name = toolName.toLowerCase();
-  
-  if (name.includes('shell') || name.includes('exec') || name.includes('bash')) {
-    return config.shellTimeoutMs;
-  }
-  if (name.includes('read') || name.includes('view') || name.includes('cat')) {
-    return config.readTimeoutMs;
-  }
-  if (name.includes('write') || name.includes('edit') || name.includes('create')) {
-    return config.writeTimeoutMs;
-  }
-  if (name.includes('web') || name.includes('http') || name.includes('fetch') || name.includes('search')) {
-    return config.networkTimeoutMs;
-  }
-  
-  return config.defaultTimeoutMs;
+export interface XopcToolHints {
+  timeoutMs?: number;
+  idempotent?: boolean;
+}
+
+function readToolHints(tool: AgentTool<any, any>): XopcToolHints {
+  const t = tool as AgentTool<any, any> & XopcToolHints;
+  return {
+    timeoutMs: typeof t.timeoutMs === 'number' && t.timeoutMs > 0 ? t.timeoutMs : undefined,
+    idempotent: t.idempotent === true,
+  };
+}
+
+function resolveTimeoutMs(tool: AgentTool<any, any>, config: ToolExecutorConfig): number {
+  const hints = readToolHints(tool);
+  return hints.timeoutMs ?? config.defaultTimeoutMs;
 }
 
 /**
- * Execute tool with timeout and retry protection
+ * Execute tool with timeout (always) and retry (only for idempotent tools).
+ * Re-throws on failure so pi-agent records `isError=true`.
  */
-export async function executeToolWithProtection(
-  tool: AgentTool<any, any>,
+export async function executeToolWithProtection<TDetails>(
+  tool: AgentTool<any, TDetails>,
   toolCallId: string,
   params: any,
-  config: Partial<ToolExecutorConfig> = {}
-): Promise<AgentToolResult<any>> {
+  signal?: AbortSignal,
+  onUpdate?: AgentToolUpdateCallback<TDetails>,
+  config: Partial<ToolExecutorConfig> = {},
+): Promise<AgentToolResult<TDetails>> {
   const fullConfig = { ...DEFAULT_CONFIG, ...config };
   const toolName = tool.name;
-  
-  // Build execution function
-  const execute = async (): Promise<AgentToolResult<any>> => {
-    try {
-      const result = await (tool as any).execute(toolCallId, params);
-      return result;
-    } catch (error) {
-      // Wrap non-error throws
-      if (error instanceof Error) {
-        throw error;
-      }
-      throw new Error(String(error));
-    }
-  };
-  
-  // Apply timeout if enabled
-  let operation = execute;
+  const hints = readToolHints(tool);
+
+  const runOnce = (): Promise<AgentToolResult<TDetails>> =>
+    tool.execute(toolCallId, params, signal, onUpdate);
+
+  let operation: () => Promise<AgentToolResult<TDetails>> = runOnce;
+
   if (fullConfig.enableTimeout) {
-    const timeoutMs = getTimeoutForTool(toolName, fullConfig);
-    const originalExecute = execute;
-    
-    operation = async () => {
-      return executeWithTimeout(
-        originalExecute,
-        {
-          toolName,
-          timeoutMs,
-          description: `Executing ${toolName}`,
-        }
-      );
-    };
+    const timeoutMs = resolveTimeoutMs(tool, fullConfig);
+    const inner = operation;
+    operation = () =>
+      executeWithTimeout(inner, {
+        toolName,
+        timeoutMs,
+        description: `Executing ${toolName}`,
+      });
   }
-  
-  // Apply retry if enabled
-  if (fullConfig.enableRetry && fullConfig.maxRetries > 0) {
-    const originalOperation = operation;
-    
-    operation = async () => {
-      return withRetry(
-        originalOperation,
-        {
-          attempts: fullConfig.maxRetries + 1,
-          minDelayMs: fullConfig.retryDelayMs,
-          onRetry: (info) => {
-            log.warn(
-              { tool: toolName, attempt: info.attempt, delayMs: info.delayMs, error: info.error },
-              'Tool execution failed, retrying'
-            );
-          },
-        }
-      );
-    };
+
+  const shouldRetry = fullConfig.enableRetry && fullConfig.maxRetries > 0 && hints.idempotent;
+  if (shouldRetry) {
+    const inner = operation;
+    operation = () =>
+      withRetry(inner, {
+        attempts: fullConfig.maxRetries + 1,
+        minDelayMs: fullConfig.retryDelayMs,
+        onRetry: (info) => {
+          log.warn(
+            { tool: toolName, attempt: info.attempt, delayMs: info.delayMs, error: info.error },
+            'Tool execution failed, retrying (idempotent)',
+          );
+        },
+      });
   }
-  
-  // Execute with error handling
+
   const startTime = Date.now();
   try {
     const result = await operation();
-    const durationMs = Date.now() - startTime;
-    
     log.debug(
-      { tool: toolName, durationMs, success: true },
-      'Tool execution completed'
+      { tool: toolName, durationMs: Date.now() - startTime, success: true },
+      'Tool execution completed',
     );
-    
     return result;
   } catch (error) {
     const durationMs = Date.now() - startTime;
-    
-    // Handle timeout error
+
     if (error instanceof TimeoutError) {
       log.error(
         { tool: toolName, timeoutMs: error.timeoutMs, durationMs },
-        'Tool execution timed out'
+        'Tool execution timed out',
       );
-      
-      return {
-        content: [
-          {
-            type: 'text',
-            text: error.getUserMessage(),
-          },
-        ],
-        details: {
-          exitCode: null,
-          timedOut: true,
-          truncated: false,
-        },
-      };
+      throw new Error(`Tool '${toolName}' timed out after ${error.timeoutMs}ms`, { cause: error });
     }
-    
-    // Handle other errors
+
     const errorMessage = error instanceof Error ? error.message : String(error);
     log.error(
       { tool: toolName, error: errorMessage, durationMs },
-      'Tool execution failed'
+      'Tool execution failed',
     );
-    
-    return {
-      content: [
-        {
-          type: 'text',
-          text: `❌ Tool '${toolName}' failed: ${errorMessage}`,
-        },
-      ],
-      details: {
-        exitCode: null,
-        timedOut: false,
-        truncated: false,
-        error: errorMessage,
-      },
-    };
+    throw error instanceof Error ? error : new Error(errorMessage);
   }
 }
 
 /**
- * Create wrapped tool with protection
+ * Wrap a single tool with the protection pipeline. Preserves the original
+ * `execute` signature so streaming `signal` / `onUpdate` reach the tool.
  */
-export function wrapToolWithProtection(
-  tool: AgentTool<any, any>,
-  config?: Partial<ToolExecutorConfig>
-): AgentTool<any, any> {
-  return ({
+export function wrapToolWithProtection<TDetails>(
+  tool: AgentTool<any, TDetails>,
+  config?: Partial<ToolExecutorConfig>,
+): AgentTool<any, TDetails> {
+  return {
     ...tool,
-    async execute(toolCallId: string, params: any): Promise<AgentToolResult<any>> {
-      return executeToolWithProtection(tool, toolCallId, params, config);
+    async execute(
+      toolCallId: string,
+      params: any,
+      signal?: AbortSignal,
+      onUpdate?: AgentToolUpdateCallback<TDetails>,
+    ): Promise<AgentToolResult<TDetails>> {
+      return executeToolWithProtection(tool, toolCallId, params, signal, onUpdate, config);
     },
-  } as any) as AgentTool<any, any>;
+  } as AgentTool<any, TDetails>;
 }
 
 /**
- * Wrap all tools with protection
+ * Wrap a batch of tools with protection.
  */
 export function wrapToolsWithProtection(
   tools: AgentTool<any, any>[],
-  config?: Partial<ToolExecutorConfig>
+  config?: Partial<ToolExecutorConfig>,
 ): AgentTool<any, any>[] {
-  return tools.map(tool => wrapToolWithProtection(tool, config));
+  return tools.map((tool) => wrapToolWithProtection(tool, config));
 }
 
 // Export configuration

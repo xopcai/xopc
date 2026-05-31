@@ -2,6 +2,7 @@ import { PreferenceSelectFields } from '@/components/shell/preference-select-fie
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
+import { useDevViewStore } from '@/stores/dev-view-store';
 import { useLocaleStore } from '@/stores/locale-store';
 import { type ColorScheme, useThemeStore } from '@/stores/theme-store';
 
@@ -185,6 +186,34 @@ function ColorSchemeSelector() {
   );
 }
 
+function DeveloperOptionsSection() {
+  const language = useLocaleStore((s) => s.language);
+  const a = messages(language).appearanceSettings;
+  const showRawToolData = useDevViewStore((s) => s.showRawToolData);
+  const setShowRawToolData = useDevViewStore((s) => s.setShowRawToolData);
+
+  return (
+    <div className="flex flex-col gap-2 py-3.5 sm:py-4">
+      <div className="min-w-0">
+        <div className="text-sm font-semibold text-fg">{a.developerGroupTitle}</div>
+        <p className="mt-0.5 text-xs text-fg-muted">{a.developerGroupDescription}</p>
+      </div>
+      <label className="flex items-center justify-between gap-3 rounded-xl bg-surface-hover/50 px-3 py-2.5 dark:bg-surface-hover/35">
+        <div className="min-w-0">
+          <div className="text-sm font-medium text-fg">{a.showRawToolDataTitle}</div>
+          <p className="text-xs text-fg-muted">{a.showRawToolDataDescription}</p>
+        </div>
+        <input
+          type="checkbox"
+          className="ui-checkbox"
+          checked={showRawToolData}
+          onChange={(e) => setShowRawToolData(e.target.checked)}
+        />
+      </label>
+    </div>
+  );
+}
+
 export function AppearanceSettingsPanel() {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
@@ -210,6 +239,13 @@ export function AppearanceSettingsPanel() {
         </h2>
         <PreferenceSelectFields variant="page" sections={['theme', 'font']} />
         <ColorSchemeSelector />
+      </section>
+
+      <section className={preferenceCardClassName()} aria-labelledby="pref-developer-heading">
+        <h2 id="pref-developer-heading" className="sr-only">
+          {a.developerGroupTitle}
+        </h2>
+        <DeveloperOptionsSection />
       </section>
     </div>
   );

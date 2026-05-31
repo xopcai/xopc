@@ -1,4 +1,4 @@
-import type { AgentContext } from '../service.js';
+import type { AgentContext } from '../service.types.js';
 
 export type LifecycleEventType =
   | 'conversation_start'

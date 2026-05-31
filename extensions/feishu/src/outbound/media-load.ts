@@ -2,7 +2,7 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { Readable } from 'node:stream';
 
-import { getWorkspacePath } from '@xopcai/xopc/config/schema.js';
+import { getWorkspacePath } from '@xopcai/xopc/config/workspace-path-helpers.js';
 import type { Config } from '@xopcai/xopc/config/schema.js';
 import { checkFileSafety } from '@xopcai/xopc/agent/prompt/safety.js';
 import { getMimeType } from '@xopcai/xopc/channels/media.js';

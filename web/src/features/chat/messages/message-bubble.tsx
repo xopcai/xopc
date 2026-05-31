@@ -133,6 +133,27 @@ export const MessageBubble = memo(function MessageBubble({
     ],
   );
 
+  const clusterLabels = useMemo(
+    () => ({
+      done: m.chat.stepsClusterDone,
+      ing: m.chat.stepsClusterIng,
+      join: {
+        join: m.chat.stepsClusterJoin,
+        joinFinal: m.chat.stepsClusterJoinFinal,
+        moreSuffix: m.chat.stepsClusterMoreSuffix,
+      },
+    }),
+    [
+      m.chat.stepsClusterDone,
+      m.chat.stepsClusterIng,
+      m.chat.stepsClusterJoin,
+      m.chat.stepsClusterJoinFinal,
+      m.chat.stepsClusterMoreSuffix,
+    ],
+  );
+
+  const cardLabels = useMemo(() => m.chat.toolCard, [m.chat.toolCard]);
+
   const reasoningHidden = reasoningLevel === 'off';
 
   const displayContent = useMemo(() => {
@@ -331,6 +352,8 @@ export const MessageBubble = memo(function MessageBubble({
                   isAssistant && isStreaming,
                   toolLabels,
                   stepLabels,
+                  clusterLabels,
+                  cardLabels,
                   m.chat.attachmentPreviewImage,
                   openInlineImagePreview,
                   sessionKey,
