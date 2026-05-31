@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
+  loadPlaywrightCoreModule,
   playwrightChromiumDoctor,
   resolvePlaywrightCoreCliPath,
   resolvePlaywrightCoreRoot,
@@ -35,5 +36,13 @@ describe('playwrightChromiumDoctor', () => {
     } else {
       expect(result.reason ?? result.executablePath).toBeTruthy();
     }
+  });
+
+  it('loadPlaywrightCoreModule honors XOPC_PLAYWRIGHT_CORE_ROOT (Electron extraResources layout)', async () => {
+    process.env.XOPC_PLAYWRIGHT_CORE_ROOT = resolvePlaywrightCoreRoot();
+    const pw = await loadPlaywrightCoreModule();
+    const chromium = pw.chromium
+      ?? (pw as { default?: { chromium?: (typeof pw)['chromium'] } }).default?.chromium;
+    expect(chromium).toBeTruthy();
   });
 });
