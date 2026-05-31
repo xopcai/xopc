@@ -6,11 +6,14 @@ import type { AuthenticatedRouteDeps } from './deps.js';
 import { messagesToClientHistory } from '../../../session/client-history.js';
 import { computeUserRoundDeleteRange } from '../../../session/user-round-delete.js';
 import { respondStartupUnavailable } from '../lib/startup-unavailable.js';
+import type { StartupUnavailableGatewayMethod } from '../../startup-readiness.js';
+
+type SessionsStartupMethod = StartupUnavailableGatewayMethod;
 
 function ensureGatewayReadyForSessions(
   c: Parameters<typeof respondStartupUnavailable>[0],
   service: AuthenticatedRouteDeps['service'],
-  method: 'sessions.history' | 'sessions.messages' | 'sessions.list' | 'sessions.run',
+  method: SessionsStartupMethod,
 ): Response | null {
   if (service.isGatewayReady()) {
     return null;
