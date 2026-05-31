@@ -3,7 +3,7 @@ import useSWR from 'swr';
 
 import { CONFIGURED_MODELS_SWR_KEY, fetchConfiguredModelsCached } from '@/features/chat/api/registry-api';
 import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
-import { needsModelOrProviders } from '@/features/gateway/model-setup-state';
+import { computeNeedsModelSetup } from '@/features/onboarding/model-setup-derivation';
 
 import { LOCAL_STORAGE_MODEL_SETUP_DISMISSED } from '@/features/onboarding/onboarding-constants';
 
@@ -32,14 +32,18 @@ export function useNeedsModelSetup(enabled: boolean) {
 
   const ready = !enabled || (!configLoading && !modelsLoading);
 
-  const needsSetup = useMemo(() => {
-    if (!enabled || !ready) return false;
-    if (configError) return true;
-    if (modelsError) return true;
-    const configNeeds = needsModelOrProviders(configData?.payload?.config);
-    const noUsableModels = !Array.isArray(modelsData) || modelsData.length === 0;
-    return configNeeds || noUsableModels;
-  }, [enabled, ready, configError, configData, modelsData, modelsError]);
+  const needsSetup = useMemo(
+    () =>
+      computeNeedsModelSetup({
+        enabled,
+        ready,
+        configError,
+        modelsError,
+        config: configData?.payload?.config,
+        modelsData,
+      }),
+    [enabled, ready, configError, configData, modelsData, modelsError],
+  );
 
   const refresh = useCallback(async () => {
     await Promise.all([mutateConfig(), mutateModels()]);
