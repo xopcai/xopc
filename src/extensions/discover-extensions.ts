@@ -9,7 +9,6 @@ import { resolveDefaultAgentId } from '../agent/agent-scope.js';
 import { loadConfig } from '../config/loader.js';
 import type { Config } from '../config/schema.js';
 import {
-  resolveAgentWorkspaceDir,
   resolveBundledExtensionsDir,
   resolveExtensionsDir,
   resolveWorkspaceExtensionsDir,

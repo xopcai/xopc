@@ -123,7 +123,7 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
       thinkingLevel: thinkingLevel ?? 'medium',
     });
 
-    const { session, piSm, reused } = runner;
+    const { session, reused } = runner;
 
     const streamFnWithXopcExtensions = wrapStreamFnForXopcExtensions(session.agent.streamFn);
     const loggingStreamFn: typeof session.agent.streamFn = (streamModel, context, options) => {

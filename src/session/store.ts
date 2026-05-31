@@ -838,7 +838,6 @@ export class SessionStore {
     const keySessionsDir = this.resolveSessionsDirForKey(key);
     const abs = this.transcriptPathForEntry(entry, keySessionsDir);
     const llm = rowsToLlmMessages(rows);
-    const now = Date.now();
     await persistMergedTranscriptRows({
       absPath: abs,
       sessionId: entry.sessionId,

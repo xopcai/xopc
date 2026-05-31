@@ -7,7 +7,6 @@ import lockfile from 'proper-lockfile';
 import { writeTextAtomic } from '../../infra/write-file-atomic.js';
 import {
   commitSessionsJsonWrite,
-  invalidateSessionsJsonCache,
   noteSessionsJsonWritten,
   readSessionsJsonCached,
 } from './sessions-json-cache.js';

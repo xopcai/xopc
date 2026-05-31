@@ -1,5 +1,4 @@
 import type { XopcSessionDiskEntry } from './xopc-session-disk-entry.js';
-import type { SessionMetadata } from '../types.js';
 
 export type SessionsJsonStatsPatch = {
   messageCount: number;

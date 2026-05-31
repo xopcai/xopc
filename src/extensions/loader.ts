@@ -52,7 +52,6 @@ import {
   discoverExtensionsFromDisk,
   type DiscoverConfig,
   type ExtensionLoaderOptions,
-  type ExtensionSourceOrigin,
 } from './discover-extensions.js';
 import type { ExtensionMetadataSnapshot } from './extension-metadata-snapshot.js';
 import { ManifestRegistry } from './manifest-registry.js';
