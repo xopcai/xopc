@@ -398,6 +398,7 @@ function normalizeModelSupport(raw: unknown): ModelSupportDeclaration | undefine
 
 function normalizeActivation(raw: unknown): ActivationDeclaration | undefined {
   if (!isRecord(raw)) return undefined;
+  const onStartup = typeof raw.onStartup === 'boolean' ? raw.onStartup : undefined;
   const onProviders = Array.isArray(raw.onProviders)
     ? raw.onProviders.filter((x): x is string => typeof x === 'string')
     : undefined;
@@ -414,10 +415,16 @@ function normalizeActivation(raw: unknown): ActivationDeclaration | undefined {
           x === 'provider' || x === 'channel' || x === 'tool' || x === 'hook',
       )
     : undefined;
-  if (!onProviders?.length && !onCommands?.length && !onChannels?.length && !onCapabilities?.length) {
+  if (
+    onStartup === undefined &&
+    !onProviders?.length &&
+    !onCommands?.length &&
+    !onChannels?.length &&
+    !onCapabilities?.length
+  ) {
     return undefined;
   }
-  return { onProviders, onCommands, onChannels, onCapabilities };
+  return { onStartup, onProviders, onCommands, onChannels, onCapabilities };
 }
 
 function normalizeContracts(raw: unknown): ContractDeclaration | undefined {

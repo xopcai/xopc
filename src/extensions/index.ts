@@ -11,7 +11,8 @@ export * from './types/index.js';
 export { ExtensionApiImpl, createExtensionLogger, createPathResolver } from './api.js';
 
 // Extension Loader and Registry
-export { ExtensionRegistryImpl, ExtensionLoader, normalizeExtensionConfig, resolveExtensionPath } from './loader.js';
+export { ExtensionRegistryImpl, ExtensionLoader, normalizeExtensionConfig, resolveExtensionPath, areExtensionsGloballyDisabled } from './loader.js';
+export type { ActivationPlanLoadOptions } from './loader.js';
 export type { ExtensionRegistry } from './types/core.js';
 
 // Manifest-first control plane
@@ -21,6 +22,7 @@ export {
   type ActivationContext,
   type ActivationDecision,
   type ActivationReason,
+  type ActivationLoadPhase,
 } from './activation-planner.js';
 export {
   mergeActivationContext,
@@ -35,6 +37,16 @@ export {
   type OnboardChannelInfo,
 } from './onboard-helpers.js';
 export { normalizeExtensionManifest } from './normalize-manifest.js';
+export {
+  buildExtensionMetadataSnapshot,
+  resolveExtensionLoaderOptionsFromConfig,
+  type ExtensionMetadataSnapshot,
+} from './extension-metadata-snapshot.js';
+export {
+  discoverExtensionsFromDisk,
+  type ExtensionLoaderOptions,
+  type ExtensionSourceOrigin,
+} from './discover-extensions.js';
 
 // Hook System
 export { ExtensionHookRunner, createHookContext, isHookEvent } from './hooks.js';

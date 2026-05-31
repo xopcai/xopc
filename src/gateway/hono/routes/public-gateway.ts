@@ -13,9 +13,12 @@ export function registerPublicGatewayRoutes(app: Hono, service: GatewayService):
   app.get('/api/health', (c) => {
     const health = service.getHealth();
     return c.json({
-      status: 'ok',
+      status: health.ready ? 'ok' : 'starting',
+      ready: health.ready,
+      httpListening: health.httpListening,
       version: health.version,
       uptime: health.uptime,
+      startupDurationMs: health.startupDurationMs,
     });
   });
 

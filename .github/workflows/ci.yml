@@ -143,3 +143,6 @@ jobs:
 
       - name: CLI startup benchmark
         run: pnpm run test:startup:bench:check
+
+      - name: Gateway startup benchmark
+        run: pnpm run test:startup:gateway:check

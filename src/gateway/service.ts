@@ -11,7 +11,7 @@ import { loadConfig, saveConfig as writeConfigToDisk } from '../config/index.js'
 import { getWorkspacePath } from '../config/schema.js';
 import { CronService } from '../cron/index.js';
 import { computeBundledExtensionExtensionsPatch } from '../extensions/bundled-extension-activation.js';
-import { ExtensionLoader } from '../extensions/index.js';
+import { ExtensionLoader, areExtensionsGloballyDisabled, buildExtensionMetadataSnapshot } from '../extensions/index.js';
 import { installExtensionFromStoreZip, peekExtensionIdFromStoreZip } from '../extensions/install.js';
 import { getExtensionLockfileManager } from '../extensions/lockfile.js';
 import { HeartbeatService, heartbeatRunnerConfigFromConfig } from './heartbeat/index.js';
@@ -33,7 +33,7 @@ import { auditGatewayConfig } from './security/audit.js';
 import { assertGatewayRuntimeConfig } from './runtime-config.js';
 import { resolveEffectiveGatewayPort } from './host.js';
 import { isGatewayStrictSecurityEnabled } from './auth-rate-limit.js';
-import { getModelRegistry } from '../providers/index.js';
+import { getModelRegistry, prewarmModelRegistry } from '../providers/index.js';
 import { createLogger, getLogDir, getLogStats } from '../utils/logger.js';
 import {
   resolveConfigPath,
@@ -95,6 +95,11 @@ import type {
   GatewayServiceConfig,
   ServiceEvent,
 } from './service/types.js';
+import {
+  GatewayReadiness,
+  type GatewayReadinessSnapshot,
+} from './startup-readiness.js';
+import { createGatewayStartupTrace, type GatewayStartupTrace } from './startup-trace.js';
 
 export type {
   GatewayChannelStartupPhase1Metrics,
@@ -109,15 +114,16 @@ export class GatewayService {
   private bus: MessageBus;
   private config: Config;
   private configPath: string;
-  private agentService: AgentService;
+  private _agentService: AgentService | null = null;
   private channelManager: ChannelManager;
   private cronService: CronService;
   private extensionLoader: ExtensionLoader | null = null;
+  private extensionMetadataSnapshot: import('../extensions/extension-metadata-snapshot.js').ExtensionMetadataSnapshot | null = null;
   private browserExtensionProvider: import('../browser/providers/extension.js').ExtensionBrowserProvider | null = null;
   private browserExtensionRelease: (() => Promise<void>) | null = null;
   /** `${host}:${port}` when the gateway holds the extension bridge listener. */
   private browserExtensionBindKey: string | null = null;
-  private heartbeatService: HeartbeatService;
+  private heartbeatService: HeartbeatService | null = null;
   private sessionIndex: SessionIndex;
   private running = false;
   private configReloader: ConfigHotReloader | null = null;
@@ -147,6 +153,9 @@ export class GatewayService {
   private lastDeferredChannelConnectIds: string[] = [];
   private lastChannelConnectDeferMode: 'auto' | 'off' | 'explicit' = 'auto';
   private lastChannelConnectDeferSource: 'off' | 'explicit' | 'meta' = 'off';
+
+  private readonly readiness = new GatewayReadiness();
+  private startupTrace: GatewayStartupTrace | null = null;
 
   private readonly clarifyBridge = new ClarifyBridge();
 
@@ -217,26 +226,33 @@ export class GatewayService {
     // Initialize channel manager
     this.channelManager = new ChannelManager(this.config, this.bus);
 
-    // Initialize extension loader
+    // Initialize extension loader (manifest snapshot only — code load in start()).
     this.workspacePath = getWorkspacePath(this.config) || './workspace';
     this.initializeExtensionLoader();
-
-    // Initialize ModelRegistry (loads from models.json)
-    const registry = getModelRegistry();
-    log.debug({ 
-      modelCount: registry.getAll().length, 
-      error: registry.getError() || 'none' 
-    }, 'ModelRegistry initialized');
 
     // Session index + files shared with AgentService (webchat `/goal` metadata must match GET /api/goals/webchat).
     this.sessionIndex = new SessionIndex({
       config: this.config,
     });
 
-    // Initialize agent service with extension registry
+    this.cronService = new CronService({
+      filePath: resolveCronJobsPath(),
+    });
+  }
+
+  /** Lazy AgentService — constructed on first use or during `start()`. */
+  get agentService(): AgentService {
+    return this.ensureAgentService();
+  }
+
+  private ensureAgentService(): AgentService {
+    if (this._agentService) {
+      return this._agentService;
+    }
+
     const modelConfig = this.config.agents?.defaults?.model;
-    const cronRef: { service?: CronService } = {};
-    this.agentService = new AgentService(this.bus, {
+    const cronRef: { service?: CronService } = { service: this.cronService };
+    this._agentService = new AgentService(this.bus, {
       workspace: this.workspacePath,
       model: typeof modelConfig === 'string' ? modelConfig : modelConfig?.primary,
       config: this.config,
@@ -254,7 +270,7 @@ export class GatewayService {
           const runId = this.activeWebchatRunBySession.get(sessionKey);
           const publishSse = runId
             ? (e: RelayEvent) => {
-                this.agentService.enqueueWebchatSseEvent(sessionKey, e);
+                this._agentService!.enqueueWebchatSseEvent(sessionKey, e);
               }
             : undefined;
           const parsed = parseSessionKey(sessionKey);
@@ -281,25 +297,24 @@ export class GatewayService {
       },
     });
 
-
-    // Set channel manager reference for model switching
-    this.agentService.setChannelManager(this.channelManager);
+    this._agentService.setChannelManager(this.channelManager);
     this.channelManager.setSessionModelHooks({
-      getModelForSession: (sk) => this.agentService.getModelForSession(sk),
-      switchModelForSession: (sk, id) => this.agentService.switchModelForSession(sk, id),
+      getModelForSession: (sk) => this._agentService!.getModelForSession(sk),
+      switchModelForSession: (sk, id) => this._agentService!.switchModelForSession(sk, id),
     });
 
-    // Initialize cron service
-    this.cronService = new CronService({
-      filePath: resolveCronJobsPath(),
-      agentService: this.agentService,
+    this.cronService.setDeps({
+      agentService: this._agentService,
       messageBus: this.bus,
+      heartbeatService: this.ensureHeartbeatService(),
+      sessionStore: this.sessionIndex.getStore(),
+      getDefaultCronAgentId: () => getDefaultAgentId(this.config),
     });
     cronRef.service = this.cronService;
 
-    this.agentService.setPersistentGoalWebchatContinuationScheduler((sessionKey, message) => {
+    this._agentService.setPersistentGoalWebchatContinuationScheduler((sessionKey, message) => {
       const scheduleWhenIdle = () => {
-        if (this.agentService.getInboundTurnDepth(sessionKey) > 0) {
+        if (this._agentService!.getInboundTurnDepth(sessionKey) > 0) {
           setTimeout(scheduleWhenIdle, 50);
           return;
         }
@@ -312,20 +327,21 @@ export class GatewayService {
       queueMicrotask(scheduleWhenIdle);
     });
 
+    return this._agentService;
+  }
+
+  private ensureHeartbeatService(): HeartbeatService {
+    if (this.heartbeatService) {
+      return this.heartbeatService;
+    }
     this.heartbeatService = new HeartbeatService({
-      agentService: this.agentService,
+      agentService: this.ensureAgentService(),
       messageBus: this.bus,
       cronService: this.cronService,
       sessionStore: this.sessionIndex.getStore(),
       getConfig: () => this.config,
     });
-
-    this.cronService.setDeps({
-      agentService: this.agentService,
-      messageBus: this.bus,
-      heartbeatService: this.heartbeatService,
-      getDefaultCronAgentId: () => getDefaultAgentId(this.config),
-    });
+    return this.heartbeatService;
   }
 
   /** Hermes-style: after HTTP sets a goal, enqueue the goal text as the next user turn. */
@@ -335,18 +351,33 @@ export class GatewayService {
     });
   }
 
-  /**
-   * Create extension loader and resolve configs (load runs in start() before channels).
-   */
   private initializeExtensionLoader(): void {
     try {
-      this.extensionLoader = new ExtensionLoader({
+      if (areExtensionsGloballyDisabled(this.config)) {
+        log.info('Extensions globally disabled — skipping loader initialization');
+        return;
+      }
+
+      const loaderOptions = {
         workspaceDir: this.workspacePath,
         extensionsDir: resolveExtensionsDir(),
-      });
+      };
+      this.extensionMetadataSnapshot = buildExtensionMetadataSnapshot(loaderOptions, this.config);
+      this.extensionLoader = new ExtensionLoader(loaderOptions);
+      this.extensionLoader.setManifestSnapshot(this.extensionMetadataSnapshot);
       this.extensionLoader.setConfig(this.config as Parameters<ExtensionLoader['setConfig']>[0]);
     } catch (error) {
       log.warn({ error }, 'Failed to initialize extension loader');
+    }
+  }
+
+  private registerExtensionChannelPlugins(): void {
+    if (!this.extensionLoader) {
+      return;
+    }
+    const reg = this.extensionLoader.getRegistry();
+    for (const plugin of reg.channelPlugins) {
+      this.channelManager.registerPlugin(plugin);
     }
   }
 
@@ -358,20 +389,66 @@ export class GatewayService {
       return;
     }
     try {
-      await this.extensionLoader.loadByActivationPlan();
+      await this.extensionLoader.loadByActivationPlan({ phase: 'startup' });
+      this.registerExtensionChannelPlugins();
       const reg = this.extensionLoader.getRegistry();
-      for (const plugin of reg.channelPlugins) {
-        this.channelManager.registerPlugin(plugin);
-      }
       log.debug(
         {
           extensionRecords: reg.extensions.size,
           channelPlugins: reg.channelPlugins.length,
         },
-        'Extensions loaded and channel plugins registered',
+        'Startup-phase extensions loaded and channel plugins registered',
       );
     } catch (err) {
-      log.warn({ err }, 'Failed to load extensions');
+      log.warn({ err }, 'Failed to load startup-phase extensions');
+    }
+  }
+
+  private async loadDeferredExtensions(): Promise<void> {
+    if (!this.extensionLoader) {
+      return;
+    }
+    try {
+      await this.extensionLoader.loadByActivationPlan({ phase: 'deferred' });
+      this.registerExtensionChannelPlugins();
+      log.debug('Deferred-phase extensions loaded');
+    } catch (err) {
+      log.warn({ err }, 'Failed to load deferred extensions');
+    }
+  }
+
+  private schedulePostReadySidecars(): void {
+    queueMicrotask(() => {
+      void this.runPostReadySidecars();
+    });
+  }
+
+  private async runPostReadySidecars(): Promise<void> {
+    const trace = this.startupTrace;
+    try {
+      if (trace) {
+        await trace.measure('sidecars.model-prewarm', () => prewarmModelRegistry());
+      } else {
+        await prewarmModelRegistry();
+      }
+    } catch (err) {
+      const em = err instanceof Error ? err.message : String(err);
+      log.warn({ err, errorMessage: em, phase: 'sidecars.model_prewarm' }, `Model registry prewarm failed: ${em}`);
+    }
+
+    if (!this.extensionLoader || areExtensionsGloballyDisabled(this.config)) {
+      return;
+    }
+
+    try {
+      if (trace) {
+        await trace.measure('extensions.deferred-load', () => this.loadDeferredExtensions());
+      } else {
+        await this.loadDeferredExtensions();
+      }
+    } catch (err) {
+      const em = err instanceof Error ? err.message : String(err);
+      log.warn({ err, errorMessage: em, phase: 'extensions.deferred_load' }, `Deferred extension load failed: ${em}`);
     }
   }
 
@@ -385,8 +462,13 @@ export class GatewayService {
     log.debug('Starting gateway service...');
     this.startTime = Date.now();
     this.running = true;
+    this.startupTrace = createGatewayStartupTrace();
+    this.readiness.markStarting(this.startTime);
+    const trace = this.startupTrace;
 
     registerClarifyBridge(this.clarifyBridge);
+
+    this.ensureAgentService();
 
     this.channelManager.setOutboundHooks({
       runMessageSending: (to, content, channel) =>
@@ -408,41 +490,60 @@ export class GatewayService {
       });
     }
 
-    await this.loadExtensionsAndRegisterChannels();
+    await trace.measure('extensions.load', () => this.loadExtensionsAndRegisterChannels());
+
+    const skipChannels =
+      process.env.XOPC_SKIP_CHANNELS === '1' ||
+      process.env.XOPC_SKIP_CHANNELS === 'true' ||
+      process.env.XOPC_SKIP_PROVIDERS === '1' ||
+      process.env.XOPC_SKIP_PROVIDERS === 'true';
 
     // Start channels: init all; optional defer for meta.deferConnectUntilAfterListen (GatewayServer)
     const phase1StartedAt = performance.now();
-    const t0 = performance.now();
-    await this.channelManager.initialize();
-    const channelInitMs = performance.now() - t0;
-
-    const t1 = performance.now();
-    const deferResolution = resolveChannelConnectDeferSet({
-      config: this.config,
-      channelManager: this.channelManager,
-      deferChannelConnectUntilAfterHttp: this.serviceConfig.deferChannelConnectUntilAfterHttp === true,
-    });
-    const deferConnect = deferResolution.deferPluginIds;
-    const deferPlanMs = performance.now() - t1;
-    this.lastDeferredChannelConnectIds = [...deferConnect];
-    this.lastChannelConnectDeferMode = deferResolution.mode;
-    this.lastChannelConnectDeferSource = deferResolution.source;
-
-    if (deferConnect.size > 0) {
-      log.info({ channels: [...deferConnect] }, 'Deferring channel outbound connect until HTTP listen');
-    }
-
-    const t2 = performance.now();
-    await this.channelManager.start(
-      deferConnect.size > 0 ? { deferConnectPluginIds: deferConnect } : undefined,
-    );
-    const channelPhase1StartMs = performance.now() - t2;
-
+    let channelInitMs = 0;
+    let deferPlanMs = 0;
+    let channelPhase1StartMs = 0;
     let replayOutboundMs: number | null = null;
-    if (this.serviceConfig.deferChannelConnectUntilAfterHttp !== true) {
-      const tr = performance.now();
-      await this.channelManager.replayPendingOutboundMessages();
-      replayOutboundMs = performance.now() - tr;
+    let deferConnect = new Set<string>();
+
+    if (skipChannels) {
+      log.info('Skipping channel startup (XOPC_SKIP_CHANNELS or XOPC_SKIP_PROVIDERS)');
+    } else {
+      const t0 = performance.now();
+      await trace.measure('channels.initialize', () => this.channelManager.initialize());
+      channelInitMs = performance.now() - t0;
+
+      const t1 = performance.now();
+      const deferResolution = resolveChannelConnectDeferSet({
+        config: this.config,
+        channelManager: this.channelManager,
+        deferChannelConnectUntilAfterHttp: this.serviceConfig.deferChannelConnectUntilAfterHttp === true,
+      });
+      deferConnect = deferResolution.deferPluginIds;
+      deferPlanMs = performance.now() - t1;
+      this.lastDeferredChannelConnectIds = [...deferConnect];
+      this.lastChannelConnectDeferMode = deferResolution.mode;
+      this.lastChannelConnectDeferSource = deferResolution.source;
+
+      if (deferConnect.size > 0) {
+        log.info({ channels: [...deferConnect] }, 'Deferring channel outbound connect until HTTP listen');
+      }
+
+      const t2 = performance.now();
+      await trace.measure('channels.start', () =>
+        this.channelManager.start(
+          deferConnect.size > 0 ? { deferConnectPluginIds: deferConnect } : undefined,
+        ),
+      );
+      channelPhase1StartMs = performance.now() - t2;
+
+      if (this.serviceConfig.deferChannelConnectUntilAfterHttp !== true) {
+        const tr = performance.now();
+        await trace.measure('channels.replay-outbound', () =>
+          this.channelManager.replayPendingOutboundMessages(),
+        );
+        replayOutboundMs = performance.now() - tr;
+      }
     }
 
     const channelStartupPhase1TotalMs = performance.now() - phase1StartedAt;
@@ -450,9 +551,9 @@ export class GatewayService {
     const phase1Metrics: GatewayChannelStartupPhase1Metrics = {
       deferChannelConnectUntilAfterHttp: this.serviceConfig.deferChannelConnectUntilAfterHttp === true,
       channelConnectDeferMode: this.serviceConfig.deferChannelConnectUntilAfterHttp
-        ? deferResolution.mode
+        ? this.lastChannelConnectDeferMode
         : gwDeferMode,
-      channelConnectDeferSource: deferResolution.source,
+      channelConnectDeferSource: this.lastChannelConnectDeferSource,
       deferredChannelIds: this.lastDeferredChannelConnectIds,
       deferredChannelCount: this.lastDeferredChannelConnectIds.length,
       channelInitMs: Math.round(channelInitMs),
@@ -467,13 +568,13 @@ export class GatewayService {
     );
 
     // Initialize session manager
-    await this.sessionIndex.initialize();
+    await trace.measure('sessions.initialize', () => this.sessionIndex.initialize());
     log.debug('Session manager initialized');
 
     this.cronService.setDeps({
       agentService: this.agentService,
       messageBus: this.bus,
-      heartbeatService: this.heartbeatService,
+      heartbeatService: this.ensureHeartbeatService(),
       sessionStore: this.sessionIndex.getStore(),
       getDefaultCronAgentId: () => getDefaultAgentId(this.config),
     });
@@ -484,17 +585,17 @@ export class GatewayService {
 
     // Start cron service
     if (this.config.cron?.enabled !== false) {
-      await this.cronService.initialize();
+      await trace.measure('cron.initialize', () => this.cronService.initialize());
     }
 
-    this.heartbeatService.start(heartbeatRunnerConfigFromConfig(this.config));
+    this.ensureHeartbeatService().start(heartbeatRunnerConfigFromConfig(this.config));
 
     void import('../browser/providers/browser-ext-install.js')
       .then(({ ensureBrowserExtensionOnStartup }) => ensureBrowserExtensionOnStartup(this.config))
       .catch((err) => log.warn({ err }, 'Browser extension artifact ensure failed'));
 
     // Start browser extension WS server if configured
-    await this.startBrowserExtensionServerIfNeeded();
+    await trace.measure('browser-extension.start', () => this.startBrowserExtensionServerIfNeeded());
 
     // Start agent service (runs in background)
     this.agentService.start().catch((err) => {
@@ -522,7 +623,45 @@ export class GatewayService {
 
     wireTunnelEventsToGateway(this);
 
+    if (this.serviceConfig.deferChannelConnectUntilAfterHttp !== true) {
+      this.markGatewayReady();
+    } else {
+      trace.mark('service.started-awaiting-http');
+    }
+
     log.debug('Gateway service started');
+  }
+
+  /** Called when the HTTP listener is bound (before deferred channel work). */
+  markHttpListening(): void {
+    this.readiness.markHttpListening();
+    this.startupTrace?.mark('http.listening');
+  }
+
+  isGatewayReady(): boolean {
+    return this.readiness.isReady();
+  }
+
+  getGatewayReadiness(): GatewayReadinessSnapshot {
+    return this.readiness.getSnapshot();
+  }
+
+  private async applyStartupReadyDelayForTesting(): Promise<void> {
+    const raw = process.env.XOPC_GATEWAY_STARTUP_SLOW_MS?.trim();
+    if (!raw) {
+      return;
+    }
+    const delayMs = Number.parseInt(raw, 10);
+    if (!Number.isFinite(delayMs) || delayMs <= 0) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+  }
+
+  private markGatewayReady(): void {
+    this.readiness.markReady();
+    this.startupTrace?.mark('ready');
+    this.schedulePostReadySidecars();
   }
 
   /** After HTTP is listening: exposure auto-start (Tailscale, then FRP tunnel). */
@@ -542,13 +681,26 @@ export class GatewayService {
       return;
     }
     const listenStartedAt = performance.now();
+    const trace = this.startupTrace;
     try {
+      await this.applyStartupReadyDelayForTesting();
+
       const tDef = performance.now();
-      await this.channelManager.startDeferredConnects();
+      if (trace) {
+        await trace.measure('channels.deferred-connect', () => this.channelManager.startDeferredConnects());
+      } else {
+        await this.channelManager.startDeferredConnects();
+      }
       const channelPhase2DeferredMs = performance.now() - tDef;
 
       const tr = performance.now();
-      await this.channelManager.replayPendingOutboundMessages();
+      if (trace) {
+        await trace.measure('channels.replay-outbound', () =>
+          this.channelManager.replayPendingOutboundMessages(),
+        );
+      } else {
+        await this.channelManager.replayPendingOutboundMessages();
+      }
       const replayOutboundMs = performance.now() - tr;
 
       this.startOutboundProcessor().catch((err) => {
@@ -582,6 +734,8 @@ export class GatewayService {
         },
         `Deferred channel startup after HTTP listen failed: ${em}`,
       );
+    } finally {
+      this.markGatewayReady();
     }
   }
 
@@ -591,6 +745,7 @@ export class GatewayService {
     setPairingBroadcastSink(null);
 
     log.debug('Stopping gateway service...');
+    this.readiness.markStarting();
 
     await stopTailscaleExposure().catch((err) => {
       log.warn({ err }, 'Tailscale exposure shutdown failed');
@@ -613,7 +768,7 @@ export class GatewayService {
     }
 
     // Stop heartbeat service
-    this.heartbeatService.stop();
+    this.heartbeatService?.stop();
 
     // Stop browser extension WS server (shared acquire/release with BrowserManager)
     if (this.browserExtensionRelease) {
@@ -628,7 +783,7 @@ export class GatewayService {
     await disposeAllSessionMcpRuntimes().catch((err) => {
       log.warn({ err }, 'MCP runtime shutdown failed');
     });
-    this.agentService.stop();
+    this._agentService?.stop();
 
     // Unblock `consumeOutbound()` / `consumeInbound()` waiters before stopping channels (CLI agent does the same).
     this.running = false;
@@ -850,7 +1005,7 @@ export class GatewayService {
   private handleHeartbeatReload(newConfig: Config): void {
     log.debug('Reloading heartbeat config...');
     this.config = newConfig;
-    this.heartbeatService.updateConfig(newConfig);
+    this.heartbeatService?.updateConfig(newConfig);
     this.emit('config.reload', { section: 'heartbeat' });
     log.debug('Heartbeat config reloaded');
   }
@@ -1384,7 +1539,7 @@ export class GatewayService {
    * Request an immediate heartbeat run (coalesced like interval/cron wakes).
    */
   requestHeartbeatNow(opts?: { reason?: string }): void {
-    this.heartbeatService.requestNow({ reason: opts?.reason ?? 'manual' });
+    this.heartbeatService?.requestNow({ reason: opts?.reason ?? 'manual' });
   }
 
   /**
@@ -1434,6 +1589,9 @@ export class GatewayService {
     service: string;
     version: string;
     uptime: number;
+    ready: boolean;
+    httpListening: boolean;
+    startupDurationMs: number | null;
     channels: { running: number; total: number };
     configPath: string;
     logs?: {
@@ -1445,12 +1603,16 @@ export class GatewayService {
     const runningChannels = this.channelManager.getRunningChannels();
     const allChannels = this.channelManager.getAllChannels();
     const logStats = getLogStats();
+    const readiness = this.readiness.getSnapshot();
 
     return {
       status: 'ok',
       service: 'xopc-gateway',
       version: PACKAGE_VERSION,
       uptime: Math.floor((Date.now() - this.startTime) / 1000),
+      ready: readiness.ready,
+      httpListening: readiness.httpListening,
+      startupDurationMs: readiness.startupDurationMs,
       channels: {
         running: runningChannels.length,
         total: allChannels.length,

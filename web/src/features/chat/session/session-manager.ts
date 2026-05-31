@@ -3,6 +3,7 @@ import type { SessionInfo } from '@/features/chat/chat.types';
 import { sessionWireToUiMessages } from '@/features/chat/messages/agent-messages';
 import { listSessions } from '@/features/sessions/session-api';
 import { apiFetch } from '@/lib/fetch';
+import { apiFetchWithStartupRetry } from '@/lib/gateway-startup-retry';
 import { apiUrl } from '@/lib/url';
 
 /** Web UI chat sessions use segment `webchat` (same as `ui`). */
@@ -139,7 +140,7 @@ export class SessionManager {
       } else {
         params.set('offset', String(offset));
       }
-      const res = await apiFetch(
+      const res = await apiFetchWithStartupRetry(
         apiUrl(`/api/sessions/${encodeURIComponent(sessionKey)}/history?${params.toString()}`),
       );
       if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
@@ -182,7 +183,7 @@ export class SessionManager {
 
   /** Lightweight name read after auto-title (matches `ui` SessionManager). */
   async fetchSessionName(sessionKey: string): Promise<string | undefined> {
-    const res = await apiFetch(
+    const res = await apiFetchWithStartupRetry(
       apiUrl(`/api/sessions/${encodeURIComponent(sessionKey)}?offset=0&limit=1`),
     );
     if (!res.ok) return undefined;

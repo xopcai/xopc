@@ -1,32 +1,22 @@
-import { existsSync } from 'node:fs';
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
-import {
-  createAgentSession,
-  DefaultResourceLoader,
-  getAgentDir,
-  SessionManager,
-  SettingsManager,
-} from '@earendil-works/pi-coding-agent';
 import type { Model, Api } from '@earendil-works/pi-ai';
 
 import { createLogger } from '../../utils/logger.js';
-import { guardSessionManager, type GuardedPiTranscriptManager } from './session-tool-result-guard-wrapper.js';
-import { prepareSessionManagerForRun } from './session-manager-init.js';
-import { prewarmSessionFile } from './session-manager-cache.js';
 import { registerEmbeddedRun, unregisterEmbeddedRun } from './runs.js';
 import { subscribeEmbeddedSessionEvents, lastAssistantPlainText } from './subscribe-session.js';
 import type { RunXopcEmbeddedTurnParams, RunXopcEmbeddedTurnResult } from './types.js';
-import { applyXopcProviderApiKey, createEmbeddedAuthStorage } from './xopc-auth-storage.js';
-import { wrapStreamFnForXopcExtensions } from './xopc-stream-bridge.js';
-import { xopcToolsToDefinitions } from './xopc-tools-bridge.js';
 import {
   isAssistantTurnAborted,
   isAssistantTurnFailed,
   maybeRetryTurnAfterTransientLlmFailure,
 } from '../orchestration/llm-turn-retry.js';
 import { runAgentTurnWithTimeout, resolveAgentTurnTimeoutMs } from '../orchestration/run-agent-turn-with-timeout.js';
-import { applySystemPromptOverrideToSession } from './system-prompt-override.js';
 import { detectToolLoops, type RecentToolCall } from '../orchestration/loop-guard.js';
+import {
+  acquireEmbeddedSessionRunner,
+  resolveEmbeddedTranscriptInputs,
+} from './session-runner.js';
+import { wrapStreamFnForXopcExtensions } from './xopc-stream-bridge.js';
 
 const log = createLogger('EmbeddedRun');
 const LOG_PREVIEW_MAX_CHARS = 300;
@@ -50,10 +40,6 @@ function extractTextFromContent(content: unknown): string {
     .join('');
 }
 
-/**
- * Extract recent tool calls from message history for loop detection.
- * Scans assistant messages for ToolCall content blocks.
- */
 function extractRecentToolCalls(messages: readonly { role?: string; content?: unknown }[]): RecentToolCall[] {
   const calls: RecentToolCall[] = [];
   for (const message of messages) {
@@ -78,14 +64,6 @@ function getLastUserMessagePreview(messages: readonly { role?: string; content?:
     return text ? truncateForLog(text) : undefined;
   }
   return undefined;
-}
-
-/** xopc compacts via {@link SessionStore}; disable pi-coding-agent auto-compaction (unsafe without usage). */
-function createEmbeddedSettingsManager(cwd: string): SettingsManager {
-  const sm = SettingsManager.inMemory({ compaction: { enabled: false } });
-  sm.setCompactionEnabled(false);
-  void cwd;
-  return sm;
 }
 
 function requireEmbeddedModel(model: Model<Api> | undefined, modelRef: string): Model<Api> {
@@ -125,61 +103,30 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
 
   const timeoutMs = params.timeoutMs || resolveAgentTurnTimeoutMs();
   const resolvedModel = requireEmbeddedModel(model, params.modelRef);
-  const { sessionId, absPath: sessionFile, sessionsDir } = await sessionStore.resolveTranscriptPath(sessionKey);
-  const hadSessionFile = existsSync(sessionFile);
+  const transcript = await resolveEmbeddedTranscriptInputs(sessionStore, sessionKey);
 
-  await prewarmSessionFile(sessionFile);
-  const settingsManager = createEmbeddedSettingsManager(workspaceDir);
-
-  let piSm: GuardedPiTranscriptManager | undefined;
+  let runner: Awaited<ReturnType<typeof acquireEmbeddedSessionRunner>> | undefined;
   let unsubscribe: (() => void) | undefined;
 
   try {
-    piSm = guardSessionManager(SessionManager.open(sessionFile, sessionsDir, workspaceDir), {
+    runner = await acquireEmbeddedSessionRunner({
       sessionKey,
-      contextWindowTokens: resolvedModel.contextWindow ?? 128_000,
-    });
-
-    await prepareSessionManagerForRun({
-      sessionManager: piSm,
-      sessionFile,
-      hadSessionFile,
-      sessionId,
-      cwd: workspaceDir,
-    });
-
-    const toolDefs = xopcToolsToDefinitions(tools);
-    const toolNames = tools.map((t) => t.name);
-
-    const authStorage = createEmbeddedAuthStorage();
-    applyXopcProviderApiKey(authStorage, resolvedModel.provider);
-
-    const resourceLoader = new DefaultResourceLoader({
-      cwd: workspaceDir,
-      agentDir: getAgentDir(),
-      settingsManager,
-      noContextFiles: true,
-    });
-    await resourceLoader.reload();
-
-    const { session } = await createAgentSession({
-      cwd: workspaceDir,
+      sessionId: transcript.sessionId,
+      sessionFile: transcript.sessionFile,
+      sessionsDir: transcript.sessionsDir,
+      hadSessionFile: transcript.hadSessionFile,
+      workspaceDir,
       model: resolvedModel,
+      modelRef: params.modelRef,
+      tools,
+      systemPrompt,
       thinkingLevel: thinkingLevel ?? 'medium',
-      sessionManager: piSm,
-      settingsManager,
-      authStorage,
-      resourceLoader,
-      noTools: 'builtin',
-      customTools: toolDefs,
-      tools: toolNames,
     });
 
-    applySystemPromptOverrideToSession(session, systemPrompt);
+    const { session, piSm, reused } = runner;
 
     const streamFnWithXopcExtensions = wrapStreamFnForXopcExtensions(session.agent.streamFn);
     const loggingStreamFn: typeof session.agent.streamFn = (streamModel, context, options) => {
-      // ── Loop guard: inject warning and/or hide tools ──────────────
       const recentToolCalls = extractRecentToolCalls(context.messages);
       const loopGuard = detectToolLoops(recentToolCalls);
 
@@ -189,17 +136,18 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
           ? [...context.messages, { role: 'user' as const, content: loopGuard.injection, timestamp: Date.now() }]
           : context.messages;
 
-        const tools = loopGuard.hiddenTools.size > 0 && context.tools
+        const contextTools = loopGuard.hiddenTools.size > 0 && context.tools
           ? context.tools.filter((t) => !loopGuard.hiddenTools.has(t.name))
           : context.tools;
 
-        effectiveContext = { ...context, messages, tools };
+        effectiveContext = { ...context, messages, tools: contextTools };
       }
 
       log.debug(
         {
           sessionKey,
           runId,
+          reusedRunner: reused,
           modelRef: `${streamModel.provider}/${streamModel.id}`,
           systemPromptLength: effectiveContext.systemPrompt?.length ?? 0,
           messageCount: effectiveContext.messages.length,
@@ -220,7 +168,7 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
 
     const handle = {
       sessionKey,
-      sessionId,
+      sessionId: transcript.sessionId,
       runId,
       session,
       abort: async () => {
@@ -276,10 +224,11 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
   } finally {
     unsubscribe?.();
     try {
-      piSm?.flushPendingToolResults?.();
+      runner?.piSm.flushPendingToolResults?.();
     } catch {
       /* ignore */
     }
+    runner?.release();
   }
 }
 

@@ -5,6 +5,18 @@ import { agentExists, getDefaultAgentId } from '../../../routing/resolve-route.j
 import type { AuthenticatedRouteDeps } from './deps.js';
 import { messagesToClientHistory } from '../../../session/client-history.js';
 import { computeUserRoundDeleteRange } from '../../../session/user-round-delete.js';
+import { respondStartupUnavailable } from '../lib/startup-unavailable.js';
+
+function ensureGatewayReadyForSessions(
+  c: Parameters<typeof respondStartupUnavailable>[0],
+  service: AuthenticatedRouteDeps['service'],
+  method: 'sessions.history' | 'sessions.messages' | 'sessions.list',
+): Response | null {
+  if (service.isGatewayReady()) {
+    return null;
+  }
+  return respondStartupUnavailable(c, method);
+}
 
 export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const { service } = deps;
@@ -79,6 +91,10 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
 
   // GET /api/sessions - List sessions
   authenticated.get('/api/sessions', async (c) => {
+    const blocked = ensureGatewayReadyForSessions(c, service, 'sessions.list');
+    if (blocked) {
+      return blocked;
+    }
     const query = c.req.query();
     const result = await service.listSessions({
       status: query.status as any,
@@ -122,6 +138,10 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
 
   // GET /api/sessions/:key/messages — flattened transcript for TUI / clients
   authenticated.get('/api/sessions/:key/messages', async (c) => {
+    const blocked = ensureGatewayReadyForSessions(c, service, 'sessions.messages');
+    if (blocked) {
+      return blocked;
+    }
     const key = c.req.param('key');
     const limitRaw = c.req.query('limit');
     const parsedLimit = limitRaw ? Number.parseInt(limitRaw, 10) : undefined;
@@ -141,6 +161,10 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
 
   // GET /api/sessions/:key/history — UI chat history page from the newest tail.
   authenticated.get('/api/sessions/:key/history', async (c) => {
+    const blocked = ensureGatewayReadyForSessions(c, service, 'sessions.history');
+    if (blocked) {
+      return blocked;
+    }
     const key = c.req.param('key');
     const offsetRaw = c.req.query('offset');
     const limitRaw = c.req.query('limit');
@@ -254,6 +278,10 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
     const hasPagingQuery = offsetRaw !== undefined || limitRaw !== undefined;
 
     if (hasPagingQuery) {
+      const blocked = ensureGatewayReadyForSessions(c, service, 'sessions.history');
+      if (blocked) {
+        return blocked;
+      }
       const parsedOffset = offsetRaw ? Number.parseInt(offsetRaw, 10) : 0;
       const parsedLimit = limitRaw ? Number.parseInt(limitRaw, 10) : 50;
       const offset = Number.isFinite(parsedOffset) ? Math.max(0, parsedOffset) : 0;
