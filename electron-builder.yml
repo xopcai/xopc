@@ -39,6 +39,9 @@ extraResources:
     filter:
       - rg
       - rg.exe
+  # Playwright Chromium install + CDP (must stay a real package tree; not esbuild-bundled).
+  - from: node_modules/playwright-core
+    to: playwright-core
   # Chrome extension bridge (sideload copy source; must be real files, not inside app.asar)
   - from: dist/browser-ext
     to: browser-ext

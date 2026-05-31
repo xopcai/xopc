@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { stat } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
@@ -9,17 +10,41 @@ export interface PlaywrightChromiumDoctorResult {
   reason?: string;
 }
 
-/** Absolute path to bundled `playwright-core/cli.js` (same revision as runtime). */
-export function resolvePlaywrightCoreCliPath(): string {
+/** Root directory of the `playwright-core` package (Electron extraResources or node_modules). */
+export function resolvePlaywrightCoreRoot(): string {
+  const envRoot = process.env.XOPC_PLAYWRIGHT_CORE_ROOT?.trim();
+  if (envRoot) {
+    const pkgJson = join(envRoot, 'package.json');
+    if (!existsSync(pkgJson)) {
+      throw new Error(`playwright-core package.json not found under XOPC_PLAYWRIGHT_CORE_ROOT (${envRoot})`);
+    }
+    return envRoot;
+  }
+
   const require = createRequire(fileURLToPath(import.meta.url));
   const pkgJson = require.resolve('playwright-core/package.json');
-  return join(dirname(pkgJson), 'cli.js');
+  return dirname(pkgJson);
+}
+
+/** Absolute path to bundled `playwright-core/cli.js` (same revision as runtime). */
+export function resolvePlaywrightCoreCliPath(): string {
+  return join(resolvePlaywrightCoreRoot(), 'cli.js');
+}
+
+async function loadPlaywrightCoreModule(): Promise<typeof import('playwright-core')> {
+  const envRoot = process.env.XOPC_PLAYWRIGHT_CORE_ROOT?.trim();
+  if (envRoot) {
+    const pkgJson = join(envRoot, 'package.json');
+    const require = createRequire(pkgJson);
+    return require('playwright-core') as typeof import('playwright-core');
+  }
+  return import('playwright-core');
 }
 
 /** Check whether playwright-core's default Chromium revision is on disk. */
 export async function playwrightChromiumDoctor(): Promise<PlaywrightChromiumDoctorResult> {
   try {
-    const pw = await import('playwright-core');
+    const pw = await loadPlaywrightCoreModule();
     const chromium = pw.chromium
       ?? (pw as { default?: { chromium?: (typeof pw)['chromium'] } }).default?.chromium;
     if (!chromium?.executablePath) {
