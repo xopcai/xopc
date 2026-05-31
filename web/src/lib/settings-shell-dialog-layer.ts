@@ -1,3 +1,6 @@
+/** Viewport under 1200px: settings shell portals to `document.body` (full-screen). */
+export const SETTINGS_SHEET_PORTAL_BODY_MQ = '(max-width: 1199px)';
+
 /**
  * When the settings shell is portaled to `document.body` (viewport under 1200px), it sits
  * above app chrome such as the mobile sidebar (`z-50`). Nested Radix surfaces must clear

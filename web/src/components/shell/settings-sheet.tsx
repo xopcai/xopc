@@ -5,7 +5,10 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { resolveSettingsBackTarget } from '@/features/settings/settings-nav-state';
 import { cn } from '@/lib/cn';
 import { useMediaQuery } from '@/lib/use-media-query';
-import { SETTINGS_SHEET_PORTAL_Z } from '@/lib/settings-shell-dialog-layer';
+import {
+  SETTINGS_SHEET_PORTAL_BODY_MQ,
+  SETTINGS_SHEET_PORTAL_Z,
+} from '@/lib/settings-shell-dialog-layer';
 import { SettingsShellLayerProvider } from '@/lib/settings-shell-layer-context';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -13,8 +16,6 @@ import { useLocaleStore } from '@/stores/locale-store';
 interface SettingsSheetProps {
   children: React.ReactNode;
 }
-
-const SETTINGS_PORTAL_BODY_MQ = '(max-width: 1199px)';
 
 /**
  * Overlay frame for settings routes: scrim over the main column + floating panel on md+.
@@ -27,7 +28,7 @@ export const SettingsSheet = memo(function SettingsSheet({ children }: SettingsS
   const m = messages(language);
   const closeTarget = resolveSettingsBackTarget(location.state);
 
-  const portalToBody = useMediaQuery(SETTINGS_PORTAL_BODY_MQ);
+  const portalToBody = useMediaQuery(SETTINGS_SHEET_PORTAL_BODY_MQ);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

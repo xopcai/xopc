@@ -17,6 +17,8 @@ import type { SettingsShellNavGroup } from '@/navigation';
 import { isAgentDefaultsNavActive, isAgentDefaultsNavTab } from '@/navigation/agent-defaults-nav';
 import { isElectron } from '@/lib/electron-env';
 import { electronDarwinTitlebarLeftPad, isElectronDarwin } from '@/lib/electron-window-chrome';
+import { SETTINGS_SHEET_PORTAL_BODY_MQ } from '@/lib/settings-shell-dialog-layer';
+import { useMediaQuery } from '@/lib/use-media-query';
 import type { StoredLanguage } from '@/lib/storage';
 import { AGENTS_APP_LIST_PATH } from '@/features/settings/agents/agents-app-path';
 import { resolveSettingsBackTarget } from '@/features/settings/settings-nav-state';
@@ -102,6 +104,10 @@ export const SettingsPageLayout = memo(function SettingsPageLayout() {
   const settingsRailWidthPx = useSettingsRailStore((s) => s.widthPx);
   const setSettingsRailWidthPx = useSettingsRailStore((s) => s.setWidthPx);
   const [widthResizing, setWidthResizing] = useState(false);
+  /** Full-screen portal only: rail touches window edge and needs traffic-light inset on macOS Electron. */
+  const settingsPortalFullscreen = useMediaQuery(SETTINGS_SHEET_PORTAL_BODY_MQ);
+  const darwinTitlebarPad =
+    settingsPortalFullscreen && isElectronDarwin() ? electronDarwinTitlebarLeftPad() : '';
 
   const onSettingsRailResizePointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
@@ -176,10 +182,10 @@ export const SettingsPageLayout = memo(function SettingsPageLayout() {
       >
         <div
           className={cn(
-            'shrink-0 pb-2 pt-4',
+            'flex shrink-0 items-center justify-start pb-2 pt-4',
             APP_CHROME_DRAG_CLASS,
-            electronDarwinTitlebarLeftPad(),
-            isElectronDarwin() ? 'pr-4' : 'px-4',
+            darwinTitlebarPad,
+            settingsPortalFullscreen && isElectronDarwin() ? 'pr-4' : 'px-4',
           )}
         >
           {backControl}
