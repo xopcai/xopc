@@ -1,11 +1,8 @@
-/**
- * Web UI session keys: `{agentId}:webchat|gateway:default:direct:{peerId}`.
- */
+import { parseSessionKey } from '@/lib/session-key';
+
+/** Agent id encoded in a session key (`{agentId}:{source}:…` or legacy `gateway:{agentId}:…`). */
 export function getAgentIdFromWebSessionKey(key: string): string | null {
-  const parts = key.split(':').filter(Boolean);
-  if (parts.length < 5) return null;
-  const source = parts[1]?.toLowerCase();
-  if (source !== 'webchat' && source !== 'gateway') return null;
-  const id = parts[0]?.trim().toLowerCase();
+  const parsed = parseSessionKey(key);
+  const id = parsed?.agentId?.trim().toLowerCase();
   return id || null;
 }

@@ -1,3 +1,5 @@
+import { WEBCHAT_AGENT_STORAGE_KEY } from '@/features/chat/session/chat-session-defaults';
+
 import { AgentDeleteConfirmDialog } from './agent-delete-confirm-dialog';
 import { agentsAppDetailPath } from './agents-app-path';
 import { AgentsEditorModal } from './agents-editor-modal';
@@ -57,9 +59,15 @@ export function AgentsSettingsPanel() {
           agents={vm.data.agents}
           searchQuery={vm.listSearchQuery}
           onOpenAgent={(id) => vm.navigate(agentsAppDetailPath(id))}
-          onChatWithAgent={(id) =>
-            vm.navigate('/chat/new', { state: { agentId: id.trim().toLowerCase() } })
-          }
+          onChatWithAgent={(id) => {
+            const agentId = id.trim().toLowerCase();
+            try {
+              globalThis.localStorage?.setItem(WEBCHAT_AGENT_STORAGE_KEY, agentId);
+            } catch {
+              /* noop */
+            }
+            vm.navigate('/chat/new', { state: { agentId } });
+          }}
           onNewAgent={vm.openAddAgentModal}
           busy={vm.busy}
         />
