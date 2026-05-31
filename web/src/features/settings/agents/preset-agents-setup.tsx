@@ -3,7 +3,7 @@ import { SkipForward, Sparkles } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import {
-  createGatewayAgent,
+  createGatewayAgentsBatch,
 } from '@/features/settings/agents-admin-api';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
@@ -55,45 +55,35 @@ export function PresetAgentsSetup({ existingAgentIds, onComplete, onSkip }: Pres
     setError(null);
     setProgress({ current: 0, total: toCreate.length });
 
-    let completed = 0;
-    const failures: { preset: PresetAgent; message: string }[] = [];
-    await Promise.all(
-      toCreate.map(async (preset) => {
-        try {
-          await createGatewayAgent({
-            name: preset.name,
-            id: preset.id,
-            workspace: `~/.xopc/workspace/${preset.id}`,
-            description: language === 'zh' ? preset.descriptionZh : preset.descriptionEn,
-            profileFiles: {
-              'IDENTITY.md': preset.identityMd,
-              'SOUL.md': preset.soulMd,
-            },
-            ...(preset.toolsDisable && preset.toolsDisable.length > 0
-              ? { toolsDisable: preset.toolsDisable }
-              : {}),
-          });
-          completed += 1;
-          setProgress({ current: completed, total: toCreate.length });
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          if (message.toLowerCase().includes('already exists')) {
-            return;
-          }
-          failures.push({ preset, message });
-        }
-      }),
-    );
-
-    const firstFailure = failures[0];
-    if (firstFailure) {
-      setError(
-        a.presetCreateFailed
-          .replace('{{name}}', firstFailure.preset.name)
-          .replace('{{message}}', firstFailure.message),
+    try {
+      await createGatewayAgentsBatch(
+        toCreate.map((preset) => ({
+          name: preset.name,
+          id: preset.id,
+          workspace: `~/.xopc/workspace/${preset.id}`,
+          description: language === 'zh' ? preset.descriptionZh : preset.descriptionEn,
+          profileFiles: {
+            'IDENTITY.md': preset.identityMd,
+            'SOUL.md': preset.soulMd,
+          },
+          ...(preset.toolsDisable && preset.toolsDisable.length > 0
+            ? { toolsDisable: preset.toolsDisable }
+            : {}),
+        })),
       );
-      setCreating(false);
-      return;
+      setProgress({ current: toCreate.length, total: toCreate.length });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (!message.toLowerCase().includes('already exists')) {
+        const failedPreset = toCreate[0];
+        setError(
+          a.presetCreateFailed
+            .replace('{{name}}', failedPreset?.name ?? '')
+            .replace('{{message}}', message),
+        );
+        setCreating(false);
+        return;
+      }
     }
 
     setCreating(false);

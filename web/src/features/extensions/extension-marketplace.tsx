@@ -13,6 +13,7 @@ import {
   uninstallExtensionFromDisk,
 } from '@/features/extensions/extension-marketplace-api';
 import { useExtensions } from '@/features/extensions/extension-provider';
+import { dispatchConfigReload } from '@/features/gateway/dispatch-config-reload';
 import type { ExtensionApiRow } from '@/features/extensions/types';
 import { messages, type MessageBundle } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
@@ -95,7 +96,7 @@ export function ExtensionMarketplacePanel({ className }: { className?: string })
 
   const refetchExtensions = useCallback(() => {
     void mutate('gateway-extensions-list');
-    window.dispatchEvent(new CustomEvent('config-reload'));
+    dispatchConfigReload();
   }, [mutate]);
 
   const runInstall = useCallback(

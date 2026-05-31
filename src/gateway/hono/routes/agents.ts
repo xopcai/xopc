@@ -13,6 +13,7 @@ import {
   listAgentProfileFiles,
   listGatewayAgents,
   prepareCreateAgent,
+  prepareCreateAgentsBatch,
   prepareDeleteAgent,
   prepareUpdateAgent,
   readAgentAvatarFile,
@@ -20,6 +21,7 @@ import {
   runAfterDeletePurge,
   writeAgentAvatarFromBase64,
   writeAgentProfileFile,
+  type CreateAgentBody,
 } from '../../agents-admin.js';
 import {
   resolveImageGenerationCapabilities,
@@ -31,6 +33,57 @@ import {
 } from '../lib/agent-model.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
+function parseProfileFiles(raw: unknown): Record<string, string> | undefined | { error: string } {
+  if (raw === undefined) {
+    return undefined;
+  }
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
+    return { error: 'profileFiles must be an object' };
+  }
+  const profileFiles: Record<string, string> = {};
+  for (const [name, content] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof content !== 'string') {
+      return { error: `profileFiles["${name}"] must be a string` };
+    }
+    profileFiles[name] = content;
+  }
+  return profileFiles;
+}
+
+function parseCreateAgentBody(raw: unknown): CreateAgentBody | { error: string } {
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
+    return { error: 'each agent must be an object' };
+  }
+  const body = raw as Record<string, unknown>;
+  const name = typeof body.name === 'string' ? body.name : '';
+  const workspace = typeof body.workspace === 'string' ? body.workspace : '';
+  const model = typeof body.model === 'string' ? body.model : undefined;
+  const agentDir = typeof body.agentDir === 'string' ? body.agentDir : undefined;
+  const description = typeof body.description === 'string' ? body.description : undefined;
+  const id = typeof body.id === 'string' ? body.id : undefined;
+  const toolsDisable = Array.isArray(body.toolsDisable)
+    ? body.toolsDisable.map((x: unknown) => String(x).trim()).filter(Boolean)
+    : undefined;
+  let profileFiles: Record<string, string> | undefined;
+  if (Object.hasOwn(body, 'profileFiles')) {
+    const parsed = parseProfileFiles(body.profileFiles);
+    if ('error' in parsed) {
+      return parsed;
+    }
+    profileFiles = parsed;
+  }
+  return {
+    name,
+    workspace,
+    ...(model !== undefined ? { model } : {}),
+    ...(agentDir !== undefined ? { agentDir } : {}),
+    ...(id !== undefined ? { id } : {}),
+    ...(description !== undefined ? { description } : {}),
+    ...(toolsDisable !== undefined ? { toolsDisable } : {}),
+    ...(profileFiles !== undefined ? { profileFiles } : {}),
+  };
+}
+
 export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const { service, strictRateLimitMiddleware } = deps;
 
@@ -40,6 +93,55 @@ export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRou
     return c.json({ ok: true, payload });
   });
 
+  authenticated.post('/api/agents/batch', strictRateLimitMiddleware, async (c) => {
+    let body: Record<string, unknown> = {};
+    try {
+      body = (await c.req.json()) as Record<string, unknown>;
+    } catch {
+      return c.json({ ok: false, error: { message: 'Invalid JSON' } }, 400);
+    }
+    const rawAgents = body.agents;
+    if (!Array.isArray(rawAgents)) {
+      return c.json({ ok: false, error: { message: 'agents must be an array' } }, 400);
+    }
+    const parsedAgents: CreateAgentBody[] = [];
+    for (const raw of rawAgents) {
+      const parsed = parseCreateAgentBody(raw);
+      if ('error' in parsed) {
+        return c.json({ ok: false, error: { message: parsed.error } }, 400);
+      }
+      parsedAgents.push(parsed);
+    }
+    const prep = prepareCreateAgentsBatch(service.currentConfig as Config, parsedAgents);
+    if (prep.ok === false) {
+      return c.json({ ok: false, error: { message: prep.error } }, prep.status ?? 400);
+    }
+    const { nextConfig, created } = prep.data;
+    const save = await service.saveConfig(nextConfig);
+    if (!save.saved) {
+      return c.json({ ok: false, error: { message: save.error ?? 'save failed' } }, 500);
+    }
+    const cfg = service.currentConfig as Config;
+    const agentIds: string[] = [];
+    for (const item of created) {
+      const finalized = await finalizeCreateAgentDirs(cfg, item.agentId, {
+        ...(item.profileFiles !== undefined ? { profileFiles: item.profileFiles } : {}),
+      });
+      if (finalized.ok === false) {
+        return c.json({ ok: false, error: { message: finalized.error } }, finalized.status ?? 400);
+      }
+      agentIds.push(item.agentId);
+    }
+    const agentsPayload = await listGatewayAgents(cfg);
+    return c.json({
+      ok: true,
+      payload: {
+        agentIds,
+        agents: agentsPayload,
+      },
+    });
+  });
+
   authenticated.post('/api/agents', strictRateLimitMiddleware, async (c) => {
     let body: Record<string, unknown> = {};
     try {
@@ -47,42 +149,11 @@ export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRou
     } catch {
       return c.json({ ok: false, error: { message: 'Invalid JSON' } }, 400);
     }
-    const name = typeof body.name === 'string' ? body.name : '';
-    const workspace = typeof body.workspace === 'string' ? body.workspace : '';
-    const model = typeof body.model === 'string' ? body.model : undefined;
-    const agentDir = typeof body.agentDir === 'string' ? body.agentDir : undefined;
-    const description = typeof body.description === 'string' ? body.description : undefined;
-    const id = typeof body.id === 'string' ? body.id : undefined;
-    const toolsDisable = Array.isArray(body.toolsDisable)
-      ? body.toolsDisable.map((x: unknown) => String(x).trim()).filter(Boolean)
-      : undefined;
-    let profileFiles: Record<string, string> | undefined;
-    if (Object.hasOwn(body, 'profileFiles')) {
-      const raw = body.profileFiles;
-      if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
-        return c.json({ ok: false, error: { message: 'profileFiles must be an object' } }, 400);
-      }
-      profileFiles = {};
-      for (const [name, content] of Object.entries(raw as Record<string, unknown>)) {
-        if (typeof content !== 'string') {
-          return c.json(
-            { ok: false, error: { message: `profileFiles["${name}"] must be a string` } },
-            400,
-          );
-        }
-        profileFiles[name] = content;
-      }
+    const parsed = parseCreateAgentBody(body);
+    if ('error' in parsed) {
+      return c.json({ ok: false, error: { message: parsed.error } }, 400);
     }
-    const prep = prepareCreateAgent(service.currentConfig as Config, {
-      name,
-      workspace,
-      model,
-      agentDir,
-      ...(id !== undefined ? { id } : {}),
-      ...(description !== undefined ? { description } : {}),
-      ...(toolsDisable !== undefined ? { toolsDisable } : {}),
-      ...(profileFiles !== undefined ? { profileFiles } : {}),
-    });
+    const prep = prepareCreateAgent(service.currentConfig as Config, parsed);
     if (prep.ok === false) {
       return c.json({ ok: false, error: { message: prep.error } }, prep.status ?? 400);
     }
@@ -92,7 +163,7 @@ export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRou
       return c.json({ ok: false, error: { message: save.error ?? 'save failed' } }, 500);
     }
     const finalized = await finalizeCreateAgentDirs(service.currentConfig as Config, agentId, {
-      ...(profileFiles !== undefined ? { profileFiles } : {}),
+      ...(parsed.profileFiles !== undefined ? { profileFiles: parsed.profileFiles } : {}),
     });
     if (finalized.ok === false) {
       return c.json({ ok: false, error: { message: finalized.error } }, finalized.status ?? 400);

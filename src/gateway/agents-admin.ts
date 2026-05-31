@@ -237,6 +237,34 @@ export function prepareCreateAgent(
   return { ok: true, data: { nextConfig: next, agentId, workspace: wsAbs } };
 }
 
+export type PreparedBatchCreateAgent = {
+  agentId: string;
+  profileFiles?: Record<string, string>;
+};
+
+export function prepareCreateAgentsBatch(
+  cfg: Config,
+  bodies: CreateAgentBody[],
+): AgentAdminResult<{ nextConfig: Config; created: PreparedBatchCreateAgent[] }> {
+  if (!Array.isArray(bodies) || bodies.length === 0) {
+    return { ok: false, error: 'agents must be a non-empty array', status: 400 };
+  }
+  let next = cfg;
+  const created: PreparedBatchCreateAgent[] = [];
+  for (const body of bodies) {
+    const prep = prepareCreateAgent(next, body);
+    if (prep.ok === false) {
+      return prep;
+    }
+    next = prep.data.nextConfig;
+    created.push({
+      agentId: prep.data.agentId,
+      ...(body.profileFiles !== undefined ? { profileFiles: body.profileFiles } : {}),
+    });
+  }
+  return { ok: true, data: { nextConfig: next, created } };
+}
+
 export async function finalizeCreateAgentDirs(
   cfg: Config,
   agentId: string,

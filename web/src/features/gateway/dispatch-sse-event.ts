@@ -1,3 +1,5 @@
+import { dispatchConfigReload } from '@/features/gateway/dispatch-config-reload';
+
 /**
  * Mirror `ui` ChatPanel: dispatch `config.reload` as `config-reload` on `window` for listeners.
  */
@@ -7,6 +9,10 @@ export function dispatchGatewaySseEvent(eventName: string, rawData: string): voi
     detail = JSON.parse(rawData) as unknown;
   } catch {
     /* keep raw string */
+  }
+  if (eventName === 'config.reload') {
+    dispatchConfigReload(detail);
+    return;
   }
   const hyphenName = eventName.replace(/\./g, '-');
   window.dispatchEvent(new CustomEvent(hyphenName, { detail }));

@@ -3,6 +3,20 @@ import { describe, expect, it } from 'vitest';
 import { buildSafeBrowserConfigForWeb, buildSafeMcpConfigForWeb } from '../config-payload.js';
 
 describe('buildSafeBrowserConfigForWeb', () => {
+  it('keeps local backend for config reloads', () => {
+    const safe = buildSafeBrowserConfigForWeb({
+      enabled: true,
+      headless: true,
+      backend: 'local',
+    });
+
+    expect(safe).toMatchObject({
+      enabled: true,
+      headless: true,
+      backend: 'local',
+    });
+  });
+
   it('keeps cloakbrowser backend and related settings for config reloads', () => {
     const safe = buildSafeBrowserConfigForWeb({
       enabled: true,

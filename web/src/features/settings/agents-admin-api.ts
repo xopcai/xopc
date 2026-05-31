@@ -47,6 +47,16 @@ export async function fetchGatewayAgents(): Promise<GatewayAgentsPayload> {
 
 export type CreateGatewayAgentResult = GatewayAgentsPayload & { createdAgentId: string };
 
+export type CreateGatewayAgentsBatchResult = GatewayAgentsPayload & { createdAgentIds: string[] };
+
+export async function applyGatewayAgentsPayloadToCaches(payload: GatewayAgentsPayload): Promise<void> {
+  const { mutate } = await import('swr');
+  await Promise.all([
+    mutate('settings-gateway-agents', payload, { revalidate: false }),
+    mutate('setup-checklist-agents', payload, { revalidate: false }),
+  ]);
+}
+
 export async function createGatewayAgent(body: {
   name: string;
   id?: string;
@@ -75,6 +85,45 @@ export async function createGatewayAgent(body: {
     defaultId: agents.defaultId,
     agents: agents.agents.map(normalizeAgentRow),
     builtinToolIds: Array.isArray(agents.builtinToolIds) ? agents.builtinToolIds : [],
+  };
+}
+
+export async function createGatewayAgentsBatch(
+  agents: Array<{
+    name: string;
+    id?: string;
+    workspace: string;
+    model?: string;
+    agentDir?: string;
+    description?: string;
+    toolsDisable?: string[];
+    profileFiles?: Record<string, string>;
+  }>,
+): Promise<CreateGatewayAgentsBatchResult> {
+  const res = await fetchJson<{
+    ok?: boolean;
+    payload?: { agentIds?: string[]; agents: GatewayAgentsPayload };
+  }>(apiUrl('/api/agents/batch'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ agents }),
+  });
+  const createdAgentIds = Array.isArray(res.payload?.agentIds)
+    ? res.payload.agentIds.map((id) => String(id).trim()).filter(Boolean)
+    : [];
+  const agentsPayload = res.payload?.agents;
+  if (createdAgentIds.length === 0 || !agentsPayload?.defaultId || !Array.isArray(agentsPayload.agents)) {
+    throw new Error('Invalid batch create agent response');
+  }
+  const normalized: GatewayAgentsPayload = {
+    defaultId: agentsPayload.defaultId,
+    agents: agentsPayload.agents.map(normalizeAgentRow),
+    builtinToolIds: Array.isArray(agentsPayload.builtinToolIds) ? agentsPayload.builtinToolIds : [],
+  };
+  await applyGatewayAgentsPayloadToCaches(normalized);
+  return {
+    createdAgentIds,
+    ...normalized,
   };
 }
 
