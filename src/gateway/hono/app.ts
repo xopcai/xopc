@@ -177,13 +177,16 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   );
   authenticated.use(operatorScopes());
 
+  const STRICT_RATE_LIMIT_MAX = 15;
+  const STRICT_RATE_LIMIT_WINDOW_MS = 60_000;
+
   const strictRateLimiter = new Map<string, ReturnType<typeof createFixedWindowRateLimiter>>();
 
   const RATE_LIMIT_CLEANUP_INTERVAL = 5 * 60 * 1000;
   setInterval(() => {
     for (const [ip, limiter] of strictRateLimiter.entries()) {
       const result = limiter.consume();
-      if (result.remaining === 9) {
+      if (result.remaining === STRICT_RATE_LIMIT_MAX - 1) {
         strictRateLimiter.delete(ip);
       }
     }
@@ -196,7 +199,10 @@ export function createHonoApp(config: HonoAppConfig): Hono {
 
     let limiter = strictRateLimiter.get(clientIp);
     if (!limiter) {
-      limiter = createFixedWindowRateLimiter({ maxRequests: 10, windowMs: 60_000 });
+      limiter = createFixedWindowRateLimiter({
+        maxRequests: STRICT_RATE_LIMIT_MAX,
+        windowMs: STRICT_RATE_LIMIT_WINDOW_MS,
+      });
       strictRateLimiter.set(clientIp, limiter);
     }
 
