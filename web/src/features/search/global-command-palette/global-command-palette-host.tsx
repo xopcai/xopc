@@ -31,6 +31,7 @@ import { fetchGatewayAgents } from '@/features/settings/agents-admin-api';
 import { agentListDisplayName } from '@/features/settings/agents/agent-display-names';
 import { useUiExtensions } from '@/features/extensions/extension-provider';
 import { revalidateGatewayConfig } from '@/features/gateway/gateway-config-swr';
+import { dispatchConfigReload } from '@/features/gateway/dispatch-config-reload';
 import { fetchJson } from '@/lib/fetch';
 import { useAsyncResource } from '@/lib/use-async-resource';
 import { apiUrl } from '@/lib/url';
@@ -494,7 +495,7 @@ function GlobalCommandPalettePanel({ onClose }: { onClose: () => void }) {
             body: JSON.stringify({ agents: { defaults: { model: row.id } } }),
           });
           void revalidateGatewayConfig();
-          window.dispatchEvent(new CustomEvent('config-reload'));
+          dispatchConfigReload();
           onClose();
           dispatchUi({ type: 'resetMain' });
         })();
@@ -617,7 +618,7 @@ function GlobalCommandPalettePanel({ onClose }: { onClose: () => void }) {
                               body: JSON.stringify({ agents: { defaults: { model: row.id } } }),
                             });
                             void revalidateGatewayConfig();
-                            window.dispatchEvent(new CustomEvent('config-reload'));
+                            dispatchConfigReload();
                             onClose();
                             dispatchUi({ type: 'resetMain' });
                           })();

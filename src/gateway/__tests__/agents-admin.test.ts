@@ -5,6 +5,7 @@ import {
   extractAvatarFromIdentityMarkdown,
   listGatewayAgents,
   prepareCreateAgent,
+  prepareCreateAgentsBatch,
   prepareDeleteAgent,
   prepareUpdateAgent,
   readAgentProfileFile,
@@ -186,6 +187,43 @@ describe('agents-admin', () => {
     expect(r.ok).toBe(false);
     if (!r.ok) {
       expect(r.status).toBe(400);
+    }
+  });
+
+  it('prepareCreateAgentsBatch adds multiple agents in one config pass', () => {
+    const cfg = minimalConfig();
+    const r = prepareCreateAgentsBatch(cfg, [
+      { name: 'Coder', id: 'coder', workspace: '/tmp/coder' },
+      { name: 'Writer', id: 'writer', workspace: '/tmp/writer', toolsDisable: ['shell'] },
+    ]);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const list = r.data.nextConfig.agents?.list ?? [];
+    expect(list.some((e) => e.id === 'coder')).toBe(true);
+    expect(list.some((e) => e.id === 'writer')).toBe(true);
+    expect(r.data.created.map((c) => c.agentId).sort()).toEqual(['coder', 'writer']);
+    const writer = list.find((e) => e.id === 'writer');
+    expect(writer?.tools?.disable).toEqual(['shell']);
+  });
+
+  it('prepareCreateAgentsBatch rejects empty array', () => {
+    const cfg = minimalConfig();
+    const r = prepareCreateAgentsBatch(cfg, []);
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.status).toBe(400);
+    }
+  });
+
+  it('prepareCreateAgentsBatch fails fast on duplicate id in batch', () => {
+    const cfg = minimalConfig();
+    const r = prepareCreateAgentsBatch(cfg, [
+      { name: 'A', id: 'dup', workspace: '/tmp/a' },
+      { name: 'B', id: 'dup', workspace: '/tmp/b' },
+    ]);
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.status).toBe(409);
     }
   });
 

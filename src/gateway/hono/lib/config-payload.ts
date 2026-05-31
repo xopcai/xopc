@@ -89,6 +89,7 @@ export function buildSafeBrowserConfigForWeb(browser: Config['agents']['defaults
         ? Math.floor(browser.commandTimeout)
         : null,
     backend:
+      browser.backend === 'local' ||
       browser.backend === 'cdp' ||
       browser.backend === 'cloud' ||
       browser.backend === 'extension' ||

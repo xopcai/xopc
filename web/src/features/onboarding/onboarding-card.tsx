@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom';
 import type { ConfiguredModel } from '@/features/chat/api/registry-api';
 import { fetchConfiguredModelsCached, invalidateConfiguredModelsCache } from '@/features/chat/api/registry-api';
 import { revalidateGatewayConfig } from '@/features/gateway/gateway-config-swr';
+import { dispatchConfigReload } from '@/features/gateway/dispatch-config-reload';
 import { OnboardingModelSelect } from '@/features/onboarding/onboarding-model-select';
 import { OnboardingProviderGrid } from '@/features/onboarding/onboarding-provider-grid';
 import { PROVIDER_ENRICHMENT } from '@/features/settings/provider-enrichment';
@@ -121,7 +122,7 @@ export function OnboardingCard({ onComplete, onDismiss }: OnboardingCardProps) {
       });
       void revalidateGatewayConfig();
       void invalidateConfiguredModelsCache();
-      window.dispatchEvent(new CustomEvent('config-reload'));
+      dispatchConfigReload();
       onComplete();
     } catch (e) {
       dispatch({ type: 'patch', patch: { error: e instanceof Error ? e.message : String(e) } });

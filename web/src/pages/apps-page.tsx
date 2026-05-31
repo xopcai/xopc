@@ -13,6 +13,7 @@ import {
   useExtensionsLoading,
 } from '@/features/extensions/extension-provider';
 import { ExtensionMarketplacePanel } from '@/features/extensions/extension-marketplace';
+import { dispatchConfigReload } from '@/features/gateway/dispatch-config-reload';
 import { postBundledExtensionActivation } from '@/features/extensions/extension-marketplace-api';
 import { extensionPagePath } from '@/features/extensions/extension-paths';
 import type { ExtensionApiRow, PageContribution } from '@/features/extensions/types';
@@ -374,7 +375,7 @@ function ExtensionDetailDialog({
         enabled: !bundledConfiguredOn,
       });
       await mutate('gateway-extensions-list');
-      window.dispatchEvent(new CustomEvent('config-reload'));
+      dispatchConfigReload();
       setBundledRestartHint(requiresGatewayRestart);
     } catch (e) {
       setBundledToggleErr(e instanceof Error ? e.message : copy.builtinToggleFailed);
