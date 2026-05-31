@@ -3,6 +3,9 @@ import { create } from 'zustand';
 import type { Message, ProgressState, ReasoningLevel } from '@/features/chat/messages/messages.types';
 import { hasPendingAgentRunForChat } from '@/features/chat/messages/message-sender';
 import { mergeConsecutiveAssistantMessages } from '@/features/chat/messages/agent-messages';
+import { mergeMissingUserMessagesFromServer } from '@/features/chat/messages/merge-missing-user-messages';
+import { userMessagesEquivalent } from '@/features/chat/messages/user-message-from-sse';
+import { isUiUserMessage } from '@/features/chat/messages/user-round-index';
 import { defaultSessionMeta } from '@/features/chat/session/chat-session-defaults';
 import { chatRunManager } from '@/features/chat/session/chat-run-manager';
 import { cloneMessageForRender, ensureAssistantMessage } from '@/features/chat/messages/streaming';
@@ -80,6 +83,12 @@ type ChatSessionStoreActions = {
     tail: Message | null,
   ) => void;
   prependHistoryMessages: (sessionKey: string, older: Message[], hasMore: boolean) => void;
+  appendUserMessageIfMissing: (sessionKey: string, message: Message) => void;
+  mergeCommittedFromServer: (
+    sessionKey: string,
+    serverMessages: Message[],
+    hasMore?: boolean,
+  ) => void;
 };
 
 const IDLE_STREAM: Pick<ChatSessionSlice, 'streamingMsg' | 'progress' | 'sending' | 'streaming'> = {
@@ -352,6 +361,82 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
               streaming: true,
               sending: true,
             },
+          },
+        };
+      });
+    },
+
+    appendUserMessageIfMissing: (sessionKey, message) => {
+      const key = normalizeKey(sessionKey);
+      if (!key || !isUiUserMessage(message.role)) return;
+      set((state) => {
+        const current = state.sessions[key];
+        const meta = metaFrom(current);
+        if (!current) {
+          return {
+            sessions: {
+              ...state.sessions,
+              [key]: {
+                ...meta,
+                messages: cloneMessages([message]),
+                hasMore: false,
+                ...IDLE_STREAM,
+              },
+            },
+          };
+        }
+        const hasDup = current.messages.some((m) => userMessagesEquivalent(m, message));
+        if (hasDup) return state;
+        return {
+          sessions: {
+            ...state.sessions,
+            [key]: {
+              ...current,
+              messages: cloneMessages(
+                mergeConsecutiveAssistantMessages([...current.messages, message]),
+              ),
+            },
+          },
+        };
+      });
+    },
+
+    mergeCommittedFromServer: (sessionKey, serverMessages, hasMore) => {
+      const key = normalizeKey(sessionKey);
+      if (!key) return;
+      set((state) => {
+        const current = state.sessions[key];
+        const meta = metaFrom(current);
+        const nextHasMore = hasMore ?? current?.hasMore ?? false;
+        if (!current) {
+          return {
+            sessions: {
+              ...state.sessions,
+              [key]: {
+                ...meta,
+                messages: cloneMessages(serverMessages),
+                hasMore: nextHasMore,
+                ...IDLE_STREAM,
+              },
+            },
+          };
+        }
+        if (!isSessionSliceLive(current)) {
+          return {
+            sessions: {
+              ...state.sessions,
+              [key]: { ...meta, messages: cloneMessages(serverMessages), hasMore: nextHasMore, ...IDLE_STREAM },
+            },
+          };
+        }
+        const merged = mergeMissingUserMessagesFromServer(current.messages, serverMessages);
+        if (merged === current.messages && nextHasMore === current.hasMore) {
+          return state;
+        }
+        return {
+          sessions: {
+            ...state.sessions,
+            [key]: { ...current, messages: cloneMessages(merged), hasMore: nextHasMore },
           },
         };
       });

@@ -149,8 +149,16 @@ export function useChatSessionStreaming(deps: {
       if (!runId) return;
       if (chatRunManager.activeResumeRunId === runId) return;
 
-      const seedMessages = loadedMessages ?? getSessionMessages(chatId);
-      const seedHasMore = getChatSessionSnapshot(chatId)?.hasMore ?? false;
+      let seedMessages = loadedMessages ?? getSessionMessages(chatId);
+      let seedHasMore = getChatSessionSnapshot(chatId)?.hasMore ?? false;
+      try {
+        const fresh = await sessionMgrRef.current.loadSession(chatId, 0);
+        store().mergeCommittedFromServer(chatId, fresh.messages, fresh.hasMore);
+        seedMessages = fresh.messages;
+        seedHasMore = fresh.hasMore;
+      } catch {
+        /* use cached seed */
+      }
 
       chatRunManager.userAborted = false;
       chatRunManager.activeResumeRunId = runId;

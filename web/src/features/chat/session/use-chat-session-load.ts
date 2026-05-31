@@ -117,11 +117,19 @@ export function useChatSessionLoad(deps: {
 
   const applyLoadedSessionSnapshot = useCallback(
     (chatId: string, data: { messages: Message[]; hasMore: boolean; name?: string; nextBeforeCursor?: string }) => {
-      store().setCommittedSnapshot(chatId, {
-        messages: data.messages,
-        hasMore: data.hasMore,
-        name: data.name,
-      });
+      const snap = store().getSessionSnapshot(chatId);
+      if (snap && (snap.streaming || snap.sending || snap.streamingMsg)) {
+        store().mergeCommittedFromServer(chatId, data.messages, data.hasMore);
+        if (data.name !== undefined) {
+          store().patchSessionMeta(chatId, { name: data.name || null });
+        }
+      } else {
+        store().setCommittedSnapshot(chatId, {
+          messages: data.messages,
+          hasMore: data.hasMore,
+          name: data.name,
+        });
+      }
       if (!isStillViewingSession(chatId)) {
         return;
       }

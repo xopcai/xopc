@@ -1,5 +1,6 @@
 import type { WireAttachment } from '@/features/chat/composer/composer.types';
-import type { ProgressState } from '@/features/chat/messages/messages.types';
+import type { Message, ProgressState } from '@/features/chat/messages/messages.types';
+import { userMessageFromSsePayload } from '@/features/chat/messages/user-message-from-sse';
 import { MAX_CHAT_ATTACHMENTS } from '@/features/chat/constants';
 import { dispatchPendingAgentRunChanged } from '@/features/chat/follow-up/pending-agent-run-events';
 import { apiFetch } from '@/lib/fetch';
@@ -72,6 +73,8 @@ export type MessagingCallbacks = {
     choices?: string[];
     default?: string;
   }) => void;
+  /** User turn from another device or early in the POST stream (before assistant tokens). */
+  onUserMessage?: (message: Message) => void;
   onResult: () => void;
   onError: (msg: string) => void;
 };
@@ -343,6 +346,12 @@ export class MessageSender {
         }
         cb?.onStreamStart();
         break;
+      case 'user_message':
+      case 'user_transcript': {
+        const userMsg = userMessageFromSsePayload(parsed);
+        if (userMsg) cb?.onUserMessage?.(userMsg);
+        break;
+      }
       case 'token': {
         const chunk =
           typeof parsed.content === 'string'
