@@ -23,7 +23,8 @@ function createExposureMutationRateLimitMiddleware(): MiddlewareHandler {
     }
     const result = consumeTunnelMutationLimit(token);
     if (!result.allowed) {
-      c.header('Retry-After', String(Math.ceil(result.retryAfterMs / 1000)));
+      const retryAfterSec = Math.ceil(result.retryAfterMs / 1000);
+      c.header('Retry-After', String(retryAfterSec));
       return c.json(
         { error: 'Rate limit exceeded', retryAfterMs: result.retryAfterMs },
         429,
