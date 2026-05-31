@@ -1,4 +1,4 @@
-import { apiFetch } from '@/lib/fetch';
+import { apiFetchWithStartupRetry } from '@/lib/gateway-startup-retry';
 import { apiUrl } from '@/lib/url';
 
 export type ConfiguredModel = {
@@ -12,7 +12,7 @@ export type ConfiguredModel = {
 };
 
 async function fetchConfiguredModels(): Promise<ConfiguredModel[]> {
-  const res = await apiFetch(apiUrl('/api/models'));
+  const res = await apiFetchWithStartupRetry(apiUrl('/api/models'));
   if (!res.ok) throw new Error(`Models: HTTP ${res.status}`);
   const data = (await res.json()) as { payload?: { models?: ConfiguredModel[] } };
   return data.payload?.models ?? [];
