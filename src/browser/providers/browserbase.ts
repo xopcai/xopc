@@ -2,6 +2,8 @@ import type { Browser, BrowserContext } from 'playwright-core';
 
 import { createLogger } from '../../utils/logger.js';
 
+import { loadPlaywrightCoreModule } from './playwright-doctor.js';
+
 import type { CloudBrowserProvider, CloudBrowserProviderConfig } from './types.js';
 
 const log = createLogger('BrowserProvider:Browserbase');
@@ -61,7 +63,7 @@ export class BrowserbaseProvider implements CloudBrowserProvider {
     const connectUrl =
       session.connectUrl || `wss://connect.browserbase.com?apiKey=${apiKey}&sessionId=${session.id}`;
 
-    const pw = await import('playwright-core');
+    const pw = await loadPlaywrightCoreModule();
     const chromium = pw.chromium ?? (pw as { default?: { chromium?: (typeof pw)['chromium'] } }).default?.chromium;
     if (!chromium?.connectOverCDP) {
       throw new Error('playwright-core does not support connectOverCDP');

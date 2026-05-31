@@ -2,6 +2,7 @@ import type { Browser, BrowserContext, Page } from 'playwright-core';
 
 import { createLogger } from '../utils/logger.js';
 
+import { loadPlaywrightCoreModule } from './providers/playwright-doctor.js';
 import type { BrowserBackend, CloudBrowserProvider, CloudBrowserProviderConfig, ExtensionConnectionConfig } from './providers/types.js';
 import type { ExtensionBrowserProvider } from './providers/extension.js';
 
@@ -163,7 +164,7 @@ export class BrowserManager {
   }
 
   private async _launchLocal(headless: boolean): Promise<void> {
-    const pw = await import('playwright-core');
+    const pw = await loadPlaywrightCoreModule();
     const chromium = pw.chromium ?? (pw as { default?: { chromium?: (typeof pw)['chromium'] } }).default?.chromium;
     if (!chromium?.launch) {
       throw new Error(
@@ -184,7 +185,7 @@ export class BrowserManager {
   }
 
   private async _connectViaCdp(wsEndpoint: string): Promise<void> {
-    const pw = await import('playwright-core');
+    const pw = await loadPlaywrightCoreModule();
     const chromium = pw.chromium ?? (pw as { default?: { chromium?: (typeof pw)['chromium'] } }).default?.chromium;
     if (!chromium?.connectOverCDP) {
       throw new Error('playwright-core does not support connectOverCDP');
