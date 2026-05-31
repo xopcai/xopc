@@ -7,7 +7,7 @@
  * 3. Bundled level (xopc/extensions/) - shipped with xopc
  */
 
-import { existsSync, readFileSync, readdirSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { join, dirname, isAbsolute } from 'path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
@@ -45,8 +45,15 @@ import type {
   TuiExtensionRegistrar,
 } from './types/index.js';
 import type { ActivationContext } from './activation-planner.js';
-import { ActivationPlanner } from './activation-planner.js';
+import { ActivationPlanner, type ActivationLoadPhase } from './activation-planner.js';
 import { mergeActivationContext } from './activation-context.js';
+import {
+  areExtensionsGloballyDisabled,
+  discoverExtensionsFromDisk,
+  type DiscoverConfig,
+  type ExtensionLoaderOptions,
+} from './discover-extensions.js';
+import type { ExtensionMetadataSnapshot } from './extension-metadata-snapshot.js';
 import { ManifestRegistry } from './manifest-registry.js';
 import { normalizeExtensionManifest } from './normalize-manifest.js';
 import { checkEngineCompatibility } from './engine-check.js';
@@ -91,8 +98,33 @@ const EXTENSION_MANIFEST_FILE = 'xopc.extension.json';
 
 const log = createLogger('ExtensionLoader');
 
-// Extension source origin for debugging
-export type ExtensionSourceOrigin = 'workspace' | 'global' | 'bundled' | 'config';
+const DEFAULT_EXTENSION_LOAD_CONCURRENCY = 4;
+
+async function mapWithConcurrency<T>(
+  items: readonly T[],
+  concurrency: number,
+  fn: (item: T) => Promise<void>,
+): Promise<void> {
+  if (items.length === 0) {
+    return;
+  }
+  const queue = [...items];
+  const workerCount = Math.min(Math.max(1, concurrency), queue.length);
+  await Promise.all(
+    Array.from({ length: workerCount }, async () => {
+      while (queue.length > 0) {
+        const item = queue.shift();
+        if (item === undefined) {
+          break;
+        }
+        await fn(item);
+      }
+    }),
+  );
+}
+
+export type { ExtensionLoaderOptions, ExtensionSourceOrigin } from './discover-extensions.js';
+export { areExtensionsGloballyDisabled } from './discover-extensions.js';
 
 // ============================================================================
 // Extension Registry
@@ -261,10 +293,8 @@ export class ExtensionRegistryImpl implements ExtensionRegistry {
 // Extension Loader
 // ============================================================================
 
-export interface ExtensionLoaderOptions {
-  workspaceDir?: string;
-  extensionsDir?: string;
-  bundledExtensions?: string[];
+export interface ActivationPlanLoadOptions extends Partial<ActivationContext> {
+  phase?: ActivationLoadPhase | 'all';
 }
 
 export class ExtensionLoader {
@@ -295,6 +325,7 @@ export class ExtensionLoader {
 
   /** Manifest-only registry cache (no runtime module load). */
   private manifestRegistry: ManifestRegistry | null = null;
+  private manifestSnapshot: ExtensionMetadataSnapshot | null = null;
 
   constructor(options?: ExtensionLoaderOptions) {
     this.registry = new ExtensionRegistryImpl();
@@ -346,6 +377,18 @@ export class ExtensionLoader {
       extensions: ['.ts', '.tsx', '.mts', '.cts', '.js', '.mjs', '.cjs', '.json'],
       alias,
     });
+  }
+
+  /**
+   * Reuse a pre-built metadata snapshot (avoids duplicate filesystem discovery).
+   */
+  setManifestSnapshot(snapshot: ExtensionMetadataSnapshot | null): void {
+    this.manifestSnapshot = snapshot;
+    this.manifestRegistry = snapshot?.manifestRegistry ?? null;
+  }
+
+  getManifestSnapshot(): ExtensionMetadataSnapshot | null {
+    return this.manifestSnapshot;
   }
 
   /**
@@ -451,21 +494,41 @@ export class ExtensionLoader {
   /**
    * Phase 3: load only extensions selected by the activation plan.
    */
-  async loadByActivationPlan(context?: Partial<ActivationContext>): Promise<void> {
+  async loadByActivationPlan(context?: ActivationPlanLoadOptions): Promise<void> {
+    if (areExtensionsGloballyDisabled(this._appConfig as DiscoverConfig | undefined)) {
+      log.debug('Extension loading skipped (extensions globally disabled)');
+      return;
+    }
+
     const registry = this.buildManifestRegistry();
     const planner = new ActivationPlanner(registry);
     const fullContext = mergeActivationContext(this._appConfig, context);
-    const activatedIds = planner.getActivatedIds(fullContext).sort((a, b) => a.localeCompare(b));
+    let activatedIds = planner.getActivatedIds(fullContext).sort((a, b) => a.localeCompare(b));
 
-    for (const extensionId of activatedIds) {
-      if (this.extensionInstances.has(extensionId)) continue;
+    const phase = context?.phase ?? 'all';
+    if (phase === 'startup' || phase === 'deferred') {
+      activatedIds = planner.filterActivatedIdsByLoadPhase(activatedIds, phase);
+    }
+
+    const concurrency = Number.parseInt(
+      process.env.XOPC_EXTENSION_LOAD_CONCURRENCY ?? '',
+      10,
+    );
+    const loadConcurrency = Number.isFinite(concurrency) && concurrency > 0
+      ? concurrency
+      : DEFAULT_EXTENSION_LOAD_CONCURRENCY;
+
+    await mapWithConcurrency(activatedIds, loadConcurrency, async (extensionId) => {
+      if (this.extensionInstances.has(extensionId)) {
+        return;
+      }
       const entry = registry.getEntry(extensionId);
       if (!entry) {
         log.debug(
           { extensionId },
           'Activation plan references extension id that was not discovered on disk',
         );
-        continue;
+        return;
       }
 
       const config: ResolvedExtensionConfig = {
@@ -478,7 +541,7 @@ export class ExtensionLoader {
       };
 
       await this.loadExtension(config);
-    }
+    });
   }
 
   getManifestRegistry(): ManifestRegistry {
@@ -486,7 +549,7 @@ export class ExtensionLoader {
   }
 
   invalidateManifestCache(): void {
-    this.manifestRegistry = null;
+    this.manifestRegistry = this.manifestSnapshot?.manifestRegistry ?? null;
   }
 
   private resolveExtensionConfig(extensionId: string): Record<string, unknown> {
@@ -509,84 +572,10 @@ export class ExtensionLoader {
    * 3. Bundled (xopc/extensions/) - lowest priority
    */
   discoverExtensions(): DiscoveredExtension[] {
-    const discovered = new Map<string, DiscoveredExtension>();
-
-    // Priority 3: Bundled extensions (lowest)
-    const bundledDir = resolveBundledExtensionsDir();
-    if (bundledDir) {
-      this.discoverInDirectory(bundledDir, 'bundled', discovered);
+    if (this.manifestSnapshot) {
+      return this.manifestSnapshot.discovered;
     }
-
-    // Priority 2: Global extensions
-    const globalDir = resolveExtensionsDir();
-    this.discoverInDirectory(globalDir, 'global', discovered);
-
-    // Priority 1: Workspace extensions (highest, can override)
-    const c = loadConfig();
-    const aid = resolveDefaultAgentId(c);
-    const workspaceExtensionsDir = resolveWorkspaceExtensionsDir(c, aid);
-    this.discoverInDirectory(workspaceExtensionsDir, 'workspace', discovered);
-
-    return Array.from(discovered.values());
-  }
-
-  private discoverInDirectory(
-    dir: string,
-    source: ExtensionSourceOrigin,
-    discovered: Map<string, DiscoveredExtension>,
-  ): void {
-    if (!existsSync(dir)) {
-      return;
-    }
-
-    let entries: string[];
-    try {
-      entries = readdirSync(dir);
-    } catch {
-      return;
-    }
-
-    for (const entry of entries) {
-      const extensionPath = join(dir, entry);
-
-      // Check if it's a directory
-      try {
-        const stat = existsSync(extensionPath);
-        if (!stat) continue;
-      } catch {
-        continue;
-      }
-
-      // Try to load manifest
-      const manifest = this.loadManifest(extensionPath);
-      if (!manifest) continue;
-
-      const extensionId = manifest.id || entry;
-
-      // Higher priority origins can override lower ones
-      const existing = discovered.get(extensionId);
-      if (existing) {
-        const priority = { workspace: 3, global: 2, bundled: 1, config: 0 };
-        if (priority[source] <= priority[existing.source]) {
-          log.debug(
-            { extensionId, from: source, existing: existing.source },
-            'Skipping lower priority extension',
-          );
-          continue;
-        }
-        log.info(
-          { extensionId, from: source, overriding: existing.source },
-          'Extension override by higher priority source',
-        );
-      }
-
-      discovered.set(extensionId, {
-        id: extensionId,
-        path: extensionPath,
-        source,
-        manifest,
-      });
-    }
+    return discoverExtensionsFromDisk(this.options, this._appConfig as DiscoverConfig | undefined);
   }
 
   /**
@@ -959,7 +948,11 @@ export class ExtensionLoader {
 
       if (existsSync(fullPath)) {
         try {
-          // Use jiti to load both .ts and .js files
+          if (/\.(js|mjs|cjs)$/.test(fullPath)) {
+            const require = createRequire(import.meta.url);
+            const mod = require(fullPath);
+            return mod.default || mod;
+          }
           const mod = this.jiti(fullPath);
           return mod.default || mod;
         } catch (error) {

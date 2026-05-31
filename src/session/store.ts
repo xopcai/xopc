@@ -43,6 +43,16 @@ import { parseCompactionCheckpointTranscriptFileName } from './parity/artifacts.
 import { archiveFileOnDisk, resolveSessionFilePath, resolveSessionTranscriptPathInDir } from './parity/transcript-paths.js';
 import { validateSessionId } from './parity/session-id.js';
 import { readSessionsJsonFile, withSessionsJsonLock } from './parity/sessions-json-file.js';
+import {
+  buildSessionsJsonStatsPatch,
+  incrementSessionsJsonStatsForAppend,
+  isAppendOnlyLlmTranscriptMessage,
+  patchSessionsJsonEntryStats,
+} from './parity/sessions-json-patch.js';
+import {
+  countTranscriptMessageRows,
+  readDisplayMessagePageFromTranscriptFile,
+} from './parity/transcript-pagination.js';
 import type { XopcSessionDiskEntry } from './parity/xopc-session-disk-entry.js';
 import {
   appendPiTranscriptContextEntry,
@@ -476,14 +486,45 @@ export class SessionStore {
     if (!metadata) {
       return null;
     }
-    const messages = await this.loadDisplayMessages(key);
-    const total = messages.length;
+
     const limit = Math.min(200, Math.max(1, Math.trunc(options.limit ?? 50)));
     const offset = Math.max(0, Math.trunc(options.offset ?? 0));
     const parsedBefore = options.before ? Number.parseInt(options.before, 10) : undefined;
     const hasBeforeCursor = parsedBefore !== undefined && Number.isFinite(parsedBefore);
+
+    const checkpoints = await this.listCompactionCheckpoints(key);
+    if (checkpoints.length === 0) {
+      const entry = await this.getDiskEntry(key);
+      if (!entry) {
+        return null;
+      }
+      const keySessionsDir = this.resolveSessionsDirForKey(key);
+      const primary = this.transcriptPathForEntry(entry, keySessionsDir);
+      const page = await readDisplayMessagePageFromTranscriptFile(primary, {
+        limit,
+        offset: hasBeforeCursor ? undefined : offset,
+        beforeIndex: hasBeforeCursor ? parsedBefore : undefined,
+      });
+      const session = await this.buildSessionDetail(key, metadata, page.messages, options);
+      const nextBeforeCursor = page.startIndex > 0 ? String(page.startIndex) : undefined;
+
+      return {
+        session,
+        pagination: {
+          total: page.total,
+          limit,
+          offset,
+          hasMore: page.startIndex > 0,
+          ...(hasBeforeCursor ? { before: String(page.endIndex) } : {}),
+          ...(nextBeforeCursor ? { nextBeforeCursor } : {}),
+        },
+      };
+    }
+
+    const messages = await this.loadDisplayMessages(key);
+    const total = messages.length;
     const endExclusive = hasBeforeCursor
-      ? Math.min(total, Math.max(0, Math.trunc(parsedBefore)))
+      ? Math.min(total, Math.max(0, Math.trunc(parsedBefore!)))
       : Math.max(0, total - offset);
     const startInclusive = Math.max(0, endExclusive - limit);
     const pageMessages = messages.slice(startInclusive, endExclusive);
@@ -797,7 +838,6 @@ export class SessionStore {
     const keySessionsDir = this.resolveSessionsDirForKey(key);
     const abs = this.transcriptPathForEntry(entry, keySessionsDir);
     const llm = rowsToLlmMessages(rows);
-    const now = Date.now();
     await persistMergedTranscriptRows({
       absPath: abs,
       sessionId: entry.sessionId,
@@ -811,17 +851,10 @@ export class SessionStore {
       if (!e?.pluginExtensions?.xopc?.metadata) {
         return;
       }
-      const meta = e.pluginExtensions.xopc.metadata;
-      meta.messageCount = llm.length;
-      meta.estimatedTokens = this.estimateTokens(llm);
-      meta.updatedAt = new Date().toISOString();
-      meta.lastAccessedAt = meta.updatedAt;
-      meta.stats = {
-        messageCount: llm.length,
-        tokenCount: this.estimateTokens(llm),
-        lastTurnAt: Date.now(),
-      };
-      e.updatedAt = now;
+      patchSessionsJsonEntryStats(
+        e,
+        buildSessionsJsonStatsPatch(llm.length, this.estimateTokens(llm)),
+      );
       map[key] = e as Record<string, unknown>;
     });
     invalidateSessionSearchIndexCache();
@@ -834,25 +867,26 @@ export class SessionStore {
       return;
     }
     return this.runStoreMutation(async () => {
-      const rows = await readTranscriptRowsFromFile(update.sessionFile);
-      const llm = rowsToLlmMessages(rows);
       const keyStorePath = this.resolveStorePathForKey(sessionKey);
       await withSessionsJsonLock(keyStorePath, async (map) => {
         const e = map[sessionKey] as XopcSessionDiskEntry | undefined;
         if (!e?.pluginExtensions?.xopc?.metadata) {
           return;
         }
-        const meta = e.pluginExtensions.xopc.metadata;
-        meta.messageCount = llm.length;
-        meta.estimatedTokens = this.estimateTokens(llm);
-        meta.updatedAt = new Date().toISOString();
-        meta.lastAccessedAt = meta.updatedAt;
-        meta.stats = {
-          messageCount: llm.length,
-          tokenCount: this.estimateTokens(llm),
-          lastTurnAt: Date.now(),
-        };
-        e.updatedAt = Date.now();
+
+        if (update.message && isAppendOnlyLlmTranscriptMessage(update.message)) {
+          incrementSessionsJsonStatsForAppend(e);
+          map[sessionKey] = e as Record<string, unknown>;
+          return;
+        }
+
+        const messageCount = await countTranscriptMessageRows(update.sessionFile);
+        const rows = await readTranscriptRowsFromFile(update.sessionFile);
+        const llm = rowsToLlmMessages(rows);
+        patchSessionsJsonEntryStats(
+          e,
+          buildSessionsJsonStatsPatch(messageCount, this.estimateTokens(llm)),
+        );
         map[sessionKey] = e as Record<string, unknown>;
       });
       invalidateSessionSearchIndexCache();
@@ -892,17 +926,10 @@ export class SessionStore {
         if (!e?.pluginExtensions?.xopc?.metadata) {
           return;
         }
-        const meta = e.pluginExtensions.xopc.metadata;
-        meta.messageCount = llm.length;
-        meta.estimatedTokens = this.estimateTokens(llm);
-        meta.updatedAt = new Date().toISOString();
-        meta.lastAccessedAt = meta.updatedAt;
-        meta.stats = {
-          messageCount: llm.length,
-          tokenCount: this.estimateTokens(llm),
-          lastTurnAt: Date.now(),
-        };
-        e.updatedAt = Date.now();
+        patchSessionsJsonEntryStats(
+          e,
+          buildSessionsJsonStatsPatch(llm.length, this.estimateTokens(llm)),
+        );
         map[key] = e as Record<string, unknown>;
       });
       invalidateSessionSearchIndexCache();

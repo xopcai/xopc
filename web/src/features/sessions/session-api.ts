@@ -1,3 +1,4 @@
+import { apiFetchWithStartupRetry } from '@/lib/gateway-startup-retry';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
@@ -44,7 +45,18 @@ export async function listSessions(query?: SessionListQuery): Promise<PaginatedR
   if (existing) return existing;
 
   const url = apiUrl(`/api/sessions${buildListQuery(query)}`);
-  const pending = fetchJson<PaginatedResult<SessionMetadata>>(url).finally(() => {
+  const pending = (async () => {
+    const res = await apiFetchWithStartupRetry(url);
+    if (!res.ok) {
+      const errorBody = (await res.json().catch(() => ({}))) as {
+        error?: string | { message?: string };
+      };
+      const serverMessage =
+        typeof errorBody.error === 'string' ? errorBody.error : errorBody.error?.message;
+      throw new Error(serverMessage ?? `HTTP ${res.status}`);
+    }
+    return (await res.json()) as PaginatedResult<SessionMetadata>;
+  })().finally(() => {
     listSessionsInflight.delete(key);
   });
   listSessionsInflight.set(key, pending);

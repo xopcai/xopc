@@ -2,20 +2,24 @@ import {
   useCallback,
   useEffect,
   useEffectEvent,
+  useLayoutEffect,
   useRef,
   useState,
-  type Dispatch,
   type MutableRefObject,
-  type SetStateAction,
 } from 'react';
 
 import type { ClarifyPromptState } from '@/features/chat/composer/clarify-prompt';
+import {
+  clearClarifyPromptSnapshot,
+  readClarifyPromptSnapshot,
+  writeClarifyPromptSnapshot,
+} from '@/features/chat/clarify/clarify-prompt-storage';
+import { useChatSessionStore } from '@/features/chat/session/chat-session-store';
 import {
   clearFollowUpQueueSnapshot,
   readFollowUpQueueSnapshot,
   writeFollowUpQueueSnapshot,
 } from '@/features/chat/follow-up/follow-up-queue-storage';
-import type { ProgressState } from '@/features/chat/messages/messages.types';
 import {
   FOLLOW_UP_AUTO_SEND_IDLE_MS,
   MAX_PENDING_FOLLOW_UPS,
@@ -52,10 +56,13 @@ export type ChatFollowUpClarifyApi = {
   steerPendingFollowUp: (id: string) => Promise<void>;
   submitClarifyAnswer: (answer: string) => Promise<void>;
   cancelClarifyAnswer: () => Promise<void>;
+  /** Clear visible clarify UI only (keep per-session storage). */
+  clearVisibleClarify: () => void;
   dismissClarify: () => void;
+  dismissClarifyForSession: (chatId: string) => void;
   clearPendingFollowUps: () => void;
   dismissClarifyAndClearPending: () => void;
-  onClarifyToolEnd: () => void;
+  onClarifyToolEnd: (chatId: string) => void;
   makeOnClarifyRequest: (chatId: string) => (payload: ClarifyPromptState) => void;
   /**
    * Dequeue next pending follow-up and send it (awaits POST+SSE; used after assistant turn finalizes).
@@ -72,9 +79,6 @@ export function useChatFollowUpClarify(options: {
   activeStreamSessionKeyRef: MutableRefObject<string | null>;
   sendingRef: MutableRefObject<boolean>;
   streamingRef: MutableRefObject<boolean>;
-  setSending: (v: boolean) => void;
-  setStreaming: (v: boolean) => void;
-  setProgress: Dispatch<SetStateAction<ProgressState | null>>;
   modelSupportsThinking: boolean;
   thinkingLevel: string;
   shouldApplyStreamUpdate: (streamSessionKey: string) => boolean;
@@ -89,9 +93,6 @@ export function useChatFollowUpClarify(options: {
     activeStreamSessionKeyRef,
     sendingRef,
     streamingRef,
-    setSending,
-    setStreaming,
-    setProgress,
     modelSupportsThinking,
     thinkingLevel,
     shouldApplyStreamUpdate,
@@ -119,49 +120,69 @@ export function useChatFollowUpClarify(options: {
   pendingFollowUpsRef.current = pendingFollowUps;
   editingFollowUpIdRef.current = editingFollowUpId;
 
-  const syncQueueKey =
-    sessionKey && decodedKey && sessionKey === decodedKey ? sessionKey : null;
-
-  const prevDecodedRoute = followUpPrevDecodedKeyRef.current;
-  if (prevDecodedRoute != null && prevDecodedRoute !== decodedKey) {
-    writeFollowUpQueueSnapshot(prevDecodedRoute, {
-      pending: structuredClone(pendingFollowUps),
-      editingId: editingFollowUpId,
-    });
-    if (steeringFollowUpId !== null) {
+  useLayoutEffect(() => {
+    const prevDecodedRoute = followUpPrevDecodedKeyRef.current;
+    if (prevDecodedRoute != null && prevDecodedRoute !== decodedKey) {
+      writeFollowUpQueueSnapshot(prevDecodedRoute, {
+        pending: structuredClone(pendingFollowUpsRef.current),
+        editingId: editingFollowUpIdRef.current,
+      });
+      if (clarifyPromptRef.current != null) {
+        writeClarifyPromptSnapshot(prevDecodedRoute, clarifyPromptRef.current);
+      }
       setSteeringFollowUpId(null);
     }
-  }
-  followUpPrevDecodedKeyRef.current = decodedKey;
+    followUpPrevDecodedKeyRef.current = decodedKey;
 
-  const prevLoadedSession = followUpPrevLoadedSessionRef.current;
-  if (prevLoadedSession != null && prevLoadedSession !== sessionKey) {
-    writeFollowUpQueueSnapshot(prevLoadedSession, {
-      pending: structuredClone(pendingFollowUps),
-      editingId: editingFollowUpId,
-    });
-  }
-  followUpPrevLoadedSessionRef.current = sessionKey;
-
-  if (!sessionKey && !decodedKey) {
-    if (pendingFollowUps.length > 0 || editingFollowUpId !== null || hydratedQueueKey !== null) {
-      pendingFollowUpsRef.current = [];
-      setPendingFollowUps([]);
-      setEditingFollowUpId(null);
-      setHydratedQueueKey(null);
+    const prevLoadedSession = followUpPrevLoadedSessionRef.current;
+    if (prevLoadedSession != null && prevLoadedSession !== sessionKey) {
+      writeFollowUpQueueSnapshot(prevLoadedSession, {
+        pending: structuredClone(pendingFollowUpsRef.current),
+        editingId: editingFollowUpIdRef.current,
+      });
+      if (clarifyPromptRef.current != null) {
+        writeClarifyPromptSnapshot(prevLoadedSession, clarifyPromptRef.current);
+      }
     }
-  } else if (syncQueueKey != null && syncQueueKey !== hydratedQueueKey) {
-    const snap = readFollowUpQueueSnapshot(syncQueueKey);
-    const pending = snap ? structuredClone(snap.pending) : [];
-    pendingFollowUpsRef.current = pending;
-    setPendingFollowUps(pending);
-    setEditingFollowUpId(snap?.editingId ?? null);
-    setHydratedQueueKey(syncQueueKey);
-  }
+    followUpPrevLoadedSessionRef.current = sessionKey;
 
-  if (sessionKey != null && sessionKey !== decodedKey && clarifyPrompt != null) {
-    setClarifyPrompt(null);
-  }
+    if (!sessionKey && !decodedKey) {
+      if (
+        pendingFollowUpsRef.current.length > 0 ||
+        editingFollowUpIdRef.current !== null ||
+        hydratedQueueKey !== null
+      ) {
+        pendingFollowUpsRef.current = [];
+        setPendingFollowUps([]);
+        setEditingFollowUpId(null);
+        setHydratedQueueKey(null);
+      }
+      if (clarifyPromptRef.current != null) {
+        setClarifyPrompt(null);
+        setClarifySubmitError(null);
+      }
+      return;
+    }
+
+    const queueKey =
+      sessionKey && decodedKey && sessionKey === decodedKey ? sessionKey : null;
+    if (queueKey != null && queueKey !== hydratedQueueKey) {
+      const snap = readFollowUpQueueSnapshot(queueKey);
+      const pending = snap ? structuredClone(snap.pending) : [];
+      pendingFollowUpsRef.current = pending;
+      setPendingFollowUps(pending);
+      setEditingFollowUpId(snap?.editingId ?? null);
+      setClarifyPrompt(readClarifyPromptSnapshot(queueKey));
+      setClarifySubmitError(null);
+      setHydratedQueueKey(queueKey);
+    }
+
+    if (sessionKey != null && sessionKey !== decodedKey && clarifyPromptRef.current != null) {
+      writeClarifyPromptSnapshot(sessionKey, clarifyPromptRef.current);
+      setClarifyPrompt(null);
+      setClarifySubmitError(null);
+    }
+  }, [sessionKey, decodedKey, hydratedQueueKey]);
 
   /**
    * Debounced persist. While `sessionRoutePending`, the in-memory queue still belongs to
@@ -183,10 +204,30 @@ export function useChatFollowUpClarify(options: {
     return () => window.clearTimeout(t);
   }, [sessionKey, decodedKey, pendingFollowUps, editingFollowUpId, sessionKeyRef]);
 
-  const dismissClarify = useCallback(() => {
+  const clearVisibleClarify = useCallback(() => {
     setClarifySubmitError(null);
     setClarifyPrompt(null);
   }, []);
+
+  const dismissClarifyForSession = useCallback(
+    (chatId: string) => {
+      const key = String(chatId ?? '').trim();
+      if (!key) return;
+      clearClarifyPromptSnapshot(key);
+      if (sessionKeyRef.current === key) {
+        setClarifySubmitError(null);
+        setClarifyPrompt(null);
+      }
+    },
+    [sessionKeyRef],
+  );
+
+  const dismissClarify = useCallback(() => {
+    const key = sessionKeyRef.current;
+    if (key) clearClarifyPromptSnapshot(key);
+    setClarifySubmitError(null);
+    setClarifyPrompt(null);
+  }, [sessionKeyRef]);
 
   const clearPendingFollowUps = useCallback(() => {
     const key = sessionKeyRef.current;
@@ -199,7 +240,10 @@ export function useChatFollowUpClarify(options: {
 
   const dismissClarifyAndClearPending = useCallback(() => {
     const key = sessionKeyRef.current;
-    if (key) clearFollowUpQueueSnapshot(key);
+    if (key) {
+      clearFollowUpQueueSnapshot(key);
+      clearClarifyPromptSnapshot(key);
+    }
     pendingFollowUpsRef.current = [];
     setPendingFollowUps([]);
     setClarifySubmitError(null);
@@ -208,23 +252,25 @@ export function useChatFollowUpClarify(options: {
     setHydratedQueueKey(key);
   }, [sessionKeyRef]);
 
-  const onClarifyToolEnd = useCallback(() => {
-    setClarifySubmitError(null);
-    setClarifyPrompt(null);
-  }, []);
+  const onClarifyToolEnd = useCallback(
+    (chatId: string) => {
+      dismissClarifyForSession(chatId);
+    },
+    [dismissClarifyForSession],
+  );
 
   const makeOnClarifyRequest = useCallback(
     (chatId: string) => (payload: ClarifyPromptState) => {
+      writeClarifyPromptSnapshot(chatId, payload);
       if (!shouldApplyStreamUpdate(chatId)) return;
       sendingRef.current = false;
       streamingRef.current = false;
-      setSending(false);
-      setStreaming(false);
-      setProgress(null);
+      useChatSessionStore.getState().setSessionFlags(chatId, { sending: false, streaming: false });
+      useChatSessionStore.getState().setSessionProgress(chatId, null);
       setClarifySubmitError(null);
       setClarifyPrompt(payload);
     },
-    [shouldApplyStreamUpdate, sendingRef, streamingRef, setSending, setStreaming, setProgress],
+    [shouldApplyStreamUpdate, sendingRef, streamingRef],
   );
 
   const flushSteeringQueue = useCallback(async (forChatId?: string | null) => {
@@ -447,12 +493,14 @@ export function useChatFollowUpClarify(options: {
         setClarifySubmitError(j.error?.message ?? res.statusText ?? 'Clarify failed');
         return;
       }
+      const key = sessionKeyRef.current;
+      if (key) clearClarifyPromptSnapshot(key);
       setClarifyPrompt(null);
       setClarifySubmitError(null);
     } finally {
       setClarifySubmitting(false);
     }
-  }, []);
+  }, [sessionKeyRef]);
 
   const cancelClarifyAnswer = useCallback(async () => {
     const p = clarifyPromptRef.current;
@@ -470,12 +518,14 @@ export function useChatFollowUpClarify(options: {
         setClarifySubmitError(j.error?.message ?? res.statusText ?? 'Clarify failed');
         return;
       }
+      const key = sessionKeyRef.current;
+      if (key) clearClarifyPromptSnapshot(key);
       setClarifyPrompt(null);
       setClarifySubmitError(null);
     } finally {
       setClarifySubmitting(false);
     }
-  }, []);
+  }, [sessionKeyRef]);
 
   return {
     clarifyPrompt,
@@ -496,7 +546,9 @@ export function useChatFollowUpClarify(options: {
     steerPendingFollowUp,
     submitClarifyAnswer,
     cancelClarifyAnswer,
+    clearVisibleClarify,
     dismissClarify,
+    dismissClarifyForSession,
     clearPendingFollowUps,
     dismissClarifyAndClearPending,
     onClarifyToolEnd,

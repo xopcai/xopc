@@ -1,27 +1,18 @@
-import { useCallback, useRef, type Dispatch, type RefObject, type SetStateAction } from 'react';
+import { useCallback, useRef, type RefObject } from 'react';
 
-import {
-  mergeConsecutiveAssistantMessages,
-  reconcileSessionSnapshot,
-} from '@/features/chat/messages/agent-messages';
-import {
-  DEFAULT_THINKING,
-  pickEmptyWebSessionForAgent,
-} from '@/features/chat/session/chat-session-defaults';
+import { DEFAULT_THINKING } from '@/features/chat/session/chat-session-defaults';
 import type { SessionInfo } from '@/features/chat/chat.types';
-import {
-  coerceReasoningLevel,
-  type Message,
-  type ReasoningLevel,
-} from '@/features/chat/messages/messages.types';
+import { type Message, coerceReasoningLevel } from '@/features/chat/messages/messages.types';
 import { modelSupportsReasoning } from '@/features/chat/model/model-capabilities';
 import { hasPendingAgentRunForChat } from '@/features/chat/messages/message-sender';
+import { isViewingSession, resolveViewSessionKey } from '@/features/chat/session/chat-session-view';
+import { markSkipInitialSessionLoad } from '@/features/chat/session/chat-session-init-skip-load';
+import { useChatSessionStore } from '@/features/chat/session/chat-session-store';
 import type { SessionManager } from '@/features/chat/session/session-manager';
 
 export function useChatSessionLoad(deps: {
   sessionMgrRef: RefObject<SessionManager>;
-  sessionKeyRef: RefObject<string | null>;
-  sessionNameRef: RefObject<string | null>;
+  routeSessionKeyRef: RefObject<string | null>;
   sendingRef: RefObject<boolean>;
   streamingRef: RefObject<boolean>;
   activeStreamSessionKeyRef: RefObject<string | null>;
@@ -32,25 +23,14 @@ export function useChatSessionLoad(deps: {
   navigateToSession: (key: string, replace?: boolean, search?: string) => void;
   resolveAgentIdForPost: () => string | undefined;
   dismissClarifyOnSessionLoad: () => void;
+  detachForNewConversation: () => void;
 
   sessionKey: string | null;
-  loadingMore: boolean;
   hasMore: boolean;
-  setLoadingMore: Dispatch<SetStateAction<boolean>>;
-  setSessionKey: Dispatch<SetStateAction<string | null>>;
-  setSessionName: Dispatch<SetStateAction<string | null>>;
-  setMessages: Dispatch<SetStateAction<Message[]>>;
-  setHasMore: Dispatch<SetStateAction<boolean>>;
-  setError: Dispatch<SetStateAction<string | null>>;
-  setSessionModel: Dispatch<SetStateAction<string>>;
-  setThinkingLevel: Dispatch<SetStateAction<string>>;
-  setReasoningLevel: Dispatch<SetStateAction<ReasoningLevel>>;
-  setModelSupportsThinking: Dispatch<SetStateAction<boolean>>;
 }) {
   const {
     sessionMgrRef,
-    sessionKeyRef,
-    sessionNameRef,
+    routeSessionKeyRef,
     sendingRef,
     streamingRef,
     activeStreamSessionKeyRef,
@@ -60,45 +40,39 @@ export function useChatSessionLoad(deps: {
     navigateToSession,
     resolveAgentIdForPost,
     dismissClarifyOnSessionLoad,
+    detachForNewConversation,
     sessionKey,
-    loadingMore,
     hasMore,
-    setLoadingMore,
-    setSessionKey,
-    setSessionName,
-    setMessages,
-    setHasMore,
-    setError,
-    setSessionModel,
-    setThinkingLevel,
-    setReasoningLevel,
-    setModelSupportsThinking,
   } = deps;
 
-  /** Serialize session loads so rapid route changes (A→B→A) never drop the final `loadSession` fetch. */
+  const store = () => useChatSessionStore.getState();
+
   const loadTailRef = useRef(Promise.resolve<void>(undefined));
-  /** Cursor for the next older history page. */
   const historyBeforeCursorRef = useRef<string | null>(null);
-  /** Bumps when a new title poll starts so rapid `finalizeMessage` calls (e.g. `/goal` multi-turn) do not stack 8×N `limit=1` fetches. */
   const sessionNamePollGenRef = useRef(0);
 
   const refreshModelThinkingSupport = useCallback((modelId: string): Promise<void> => {
+    const key = store().focusedSessionKey;
     if (!modelId.trim()) {
       const gen = ++thinkingSupportGenRef.current;
-      if (gen === thinkingSupportGenRef.current) setModelSupportsThinking(false);
+      if (gen === thinkingSupportGenRef.current && key) {
+        store().patchSessionMeta(key, { modelSupportsThinking: false });
+      }
       return Promise.resolve();
     }
     const gen = ++thinkingSupportGenRef.current;
     return modelSupportsReasoning(modelId).then((supports) => {
       if (gen !== thinkingSupportGenRef.current) return;
-      setModelSupportsThinking(supports);
+      const focused = store().focusedSessionKey;
+      if (focused) store().patchSessionMeta(focused, { modelSupportsThinking: supports });
     });
-  }, [setModelSupportsThinking, thinkingSupportGenRef]);
+  }, [thinkingSupportGenRef]);
 
   const pollSessionNameAfterTurn = useCallback(() => {
-    const key = sessionKeyRef.current;
+    const key = store().focusedSessionKey;
     if (!key) return;
-    if (sessionNameRef.current?.trim()) return;
+    const existingName = store().sessions[key]?.name;
+    if (existingName?.trim()) return;
 
     const gen = ++sessionNamePollGenRef.current;
     const maxAttempts = 5;
@@ -107,18 +81,18 @@ export function useChatSessionLoad(deps: {
     const pollAttempt = (attempt: number): void => {
       if (attempt >= maxAttempts) return;
       if (gen !== sessionNamePollGenRef.current) return;
-      if (sessionKeyRef.current !== key) return;
-      if (sessionNameRef.current?.trim()) return;
+      if (store().focusedSessionKey !== key) return;
+      if (store().sessions[key]?.name?.trim()) return;
       window.setTimeout(() => {
         if (gen !== sessionNamePollGenRef.current) return;
-        if (sessionKeyRef.current !== key) return;
-        if (sessionNameRef.current?.trim()) return;
+        if (store().focusedSessionKey !== key) return;
+        if (store().sessions[key]?.name?.trim()) return;
         void sessionMgrRef.current
           .fetchSessionName(key)
           .then((name) => {
             if (gen !== sessionNamePollGenRef.current) return;
             if (name) {
-              setSessionName(name);
+              store().patchSessionMeta(key, { name });
               return;
             }
             pollAttempt(attempt + 1);
@@ -130,21 +104,30 @@ export function useChatSessionLoad(deps: {
     };
 
     pollAttempt(0);
-  }, [sessionKeyRef, sessionNameRef, sessionMgrRef, setSessionName]);
+  }, [sessionMgrRef]);
+
+  const isStillViewingSession = useCallback(
+    (chatId: string) =>
+      isViewingSession({
+        chatId,
+        routeSessionKey: routeSessionKeyRef.current,
+      }),
+    [routeSessionKeyRef],
+  );
 
   const applyLoadedSessionSnapshot = useCallback(
     (chatId: string, data: { messages: Message[]; hasMore: boolean; name?: string; nextBeforeCursor?: string }) => {
-      if (sessionKeyRef.current !== chatId) {
+      store().setCommittedSnapshot(chatId, {
+        messages: data.messages,
+        hasMore: data.hasMore,
+        name: data.name,
+      });
+      if (!isStillViewingSession(chatId)) {
         return;
       }
       historyBeforeCursorRef.current = data.nextBeforeCursor ?? null;
-      setMessages((prev) => reconcileSessionSnapshot(prev, data.messages));
-      setHasMore(data.hasMore);
-      if (data.name) {
-        setSessionName(data.name);
-      }
     },
-    [sessionKeyRef, setMessages, setHasMore, setSessionName],
+    [isStillViewingSession],
   );
 
   const loadSessionById = useCallback(
@@ -155,14 +138,6 @@ export function useChatSessionLoad(deps: {
         cursor?: string | null,
       ): Promise<Message[] | undefined> => {
         const initialLoad = o === 0 && !cursor;
-        if (
-          initialLoad &&
-          k === sessionKeyRef.current &&
-          (sendingRef.current || streamingRef.current) &&
-          activeStreamSessionKeyRef.current === k
-        ) {
-          return undefined;
-        }
         if (initialLoad && !hasPendingAgentRunForChat(k)) {
           dismissClarifyOnSessionLoad();
         }
@@ -175,17 +150,20 @@ export function useChatSessionLoad(deps: {
             nextBeforeCursor,
           } = await sessionMgrRef.current.loadSession(k, o, cursor);
           if (initialLoad) {
+            store().setCommittedSnapshot(k, { messages: loaded, hasMore: more, name: name ?? null });
+            if (!isStillViewingSession(k)) {
+              return loaded;
+            }
             historyBeforeCursorRef.current = nextBeforeCursor ?? null;
-            setSessionKey(k);
-            setSessionName(name ?? null);
-            setMessages((prev) => (prev.length > 0 ? reconcileSessionSnapshot(prev, loaded) : loaded));
-            setHasMore(more);
-            setError(null);
+            store().setShellError(null);
             try {
               const cfg = await sessionMgrRef.current.loadSessionAgentConfig(k);
-              setSessionModel(cfg.model);
-              setThinkingLevel(cfg.thinkingLevel || DEFAULT_THINKING);
-              setReasoningLevel(coerceReasoningLevel(cfg.reasoningLevel));
+              if (!isStillViewingSession(k)) return loaded;
+              store().patchSessionMeta(k, {
+                model: cfg.model,
+                thinkingLevel: cfg.thinkingLevel || DEFAULT_THINKING,
+                reasoningLevel: coerceReasoningLevel(cfg.reasoningLevel),
+              });
               void refreshModelThinkingSupport(cfg.model);
             } catch {
               /* gateway may be older */
@@ -193,17 +171,19 @@ export function useChatSessionLoad(deps: {
             return loaded;
           }
           historyBeforeCursorRef.current = nextBeforeCursor ?? null;
-          setMessages((prev) => {
-            const existing = new Set(prev.map((m) => m.timestamp));
-            const prepended = loaded.filter((m) => !existing.has(m.timestamp));
-            return mergeConsecutiveAssistantMessages([...prepended, ...prev]);
-          });
-          setHasMore(more);
+          if (!isStillViewingSession(k)) {
+            return undefined;
+          }
+          store().prependHistoryMessages(k, loaded, more);
           return undefined;
         } catch {
           if (o === 0 && !cursor) {
             historyBeforeCursorRef.current = null;
-            setError('Failed to load session');
+            store().setShellError('Failed to load session');
+            const routedViewKey = resolveViewSessionKey(routeSessionKeyRef.current);
+            if (routedViewKey && routedViewKey === k) {
+              return undefined;
+            }
             const sessions = await sessionMgrRef.current.loadSessions().catch(() => [] as SessionInfo[]);
             const withMsgs = sessions.filter((s) => (s.messageCount ?? 0) > 0);
             const target = withMsgs[0] ?? sessions[0];
@@ -218,20 +198,21 @@ export function useChatSessionLoad(deps: {
                 );
                 navigateToSession(session.key, true);
                 historyBeforeCursorRef.current = null;
-                setSessionKey(session.key);
-                setMessages([]);
-                setHasMore(false);
+                markSkipInitialSessionLoad(session.key);
+                store().setCommittedSnapshot(session.key, { messages: [], hasMore: false });
                 try {
                   const cfg = await sessionMgrRef.current.loadSessionAgentConfig(session.key);
-                  setSessionModel(cfg.model);
-                  setThinkingLevel(cfg.thinkingLevel || DEFAULT_THINKING);
-                  setReasoningLevel(coerceReasoningLevel(cfg.reasoningLevel));
+                  store().patchSessionMeta(session.key, {
+                    model: cfg.model,
+                    thinkingLevel: cfg.thinkingLevel || DEFAULT_THINKING,
+                    reasoningLevel: coerceReasoningLevel(cfg.reasoningLevel),
+                  });
                   void refreshModelThinkingSupport(cfg.model);
                 } catch {
                   /* ignore */
                 }
               } catch {
-                setError('Could not open a session');
+                store().setShellError('Could not open a session');
               }
             }
           }
@@ -255,20 +236,13 @@ export function useChatSessionLoad(deps: {
       }
     },
     [
-      sessionKeyRef,
+      routeSessionKeyRef,
+      isStillViewingSession,
       sendingRef,
       streamingRef,
       activeStreamSessionKeyRef,
       loadingSessionRef,
       dismissClarifyOnSessionLoad,
-      setSessionKey,
-      setSessionName,
-      setMessages,
-      setHasMore,
-      setError,
-      setSessionModel,
-      setThinkingLevel,
-      setReasoningLevel,
       navigateToSession,
       refreshModelThinkingSupport,
       resolveAgentIdForPost,
@@ -277,83 +251,68 @@ export function useChatSessionLoad(deps: {
   );
 
   const loadMoreMessages = useCallback(async () => {
-    const key = sessionKeyRef.current;
-    if (!key || loadingMore || !hasMore) return;
-    setLoadingMore(true);
+    const key = store().focusedSessionKey;
+    if (!key || store().loadingMore || !hasMore) return;
+    store().setLoadingMore(true);
     try {
       await loadSessionById(key, messagesLenRef.current, historyBeforeCursorRef.current);
     } finally {
-      setLoadingMore(false);
+      store().setLoadingMore(false);
     }
-  }, [hasMore, loadSessionById, loadingMore, messagesLenRef, loadingSessionRef, sessionKeyRef, setLoadingMore]);
+  }, [hasMore, loadSessionById, messagesLenRef]);
 
   const onSessionModelChange = useCallback(
     async (modelId: string) => {
       if (!sessionKey) return;
       try {
-        setError(null);
+        store().setShellError(null);
         await sessionMgrRef.current.patchSessionAgentConfig(sessionKey, { model: modelId });
-        setSessionModel(modelId);
+        store().patchSessionMeta(sessionKey, { model: modelId });
         void refreshModelThinkingSupport(modelId);
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Failed to switch model');
+        store().setShellError(e instanceof Error ? e.message : 'Failed to switch model');
       }
     },
-    [sessionKey, sessionMgrRef, setError, setSessionModel, refreshModelThinkingSupport],
+    [sessionKey, sessionMgrRef, refreshModelThinkingSupport],
   );
 
   const onSessionThinkingLevelChange = useCallback(
     async (level: string) => {
       if (!sessionKey) return;
       try {
-        setError(null);
+        store().setShellError(null);
         await sessionMgrRef.current.patchSessionAgentConfig(sessionKey, { thinkingLevel: level });
-        setThinkingLevel(level);
+        store().patchSessionMeta(sessionKey, { thinkingLevel: level });
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Failed to update thinking level');
+        store().setShellError(e instanceof Error ? e.message : 'Failed to update thinking level');
       }
     },
-    [sessionKey, sessionMgrRef, setError, setThinkingLevel],
+    [sessionKey, sessionMgrRef],
   );
 
   const createNewSession = useCallback(async () => {
     dismissClarifyOnSessionLoad();
+    detachForNewConversation();
     try {
-      const sessions = await sessionMgrRef.current.loadSessions();
       const aid = resolveAgentIdForPost();
-      const empty = pickEmptyWebSessionForAgent(sessions, aid);
-      if (empty) {
-        historyBeforeCursorRef.current = null;
-        setSessionKey(empty.key);
-        setSessionName(empty.name ?? null);
-        setMessages([]);
-        setHasMore(false);
-        navigateToSession(empty.key);
-        try {
-          const cfg = await sessionMgrRef.current.loadSessionAgentConfig(empty.key);
-          setSessionModel(cfg.model);
-          setThinkingLevel(cfg.thinkingLevel || DEFAULT_THINKING);
-          setReasoningLevel(coerceReasoningLevel(cfg.reasoningLevel));
-          void refreshModelThinkingSupport(cfg.model);
-        } catch {
-          /* ignore */
-        }
-        return;
-      }
       const session = await sessionMgrRef.current.createSession(
         aid ? { agentId: aid } : undefined,
       );
       historyBeforeCursorRef.current = null;
-      setSessionKey(session.key);
-      setSessionName(session.name ?? null);
-      setMessages([]);
-      setHasMore(false);
+      markSkipInitialSessionLoad(session.key);
+      store().setCommittedSnapshot(session.key, {
+        messages: [],
+        hasMore: false,
+        name: session.name ?? null,
+      });
       navigateToSession(session.key);
       try {
         const cfg = await sessionMgrRef.current.loadSessionAgentConfig(session.key);
-        setSessionModel(cfg.model);
-        setThinkingLevel(cfg.thinkingLevel || DEFAULT_THINKING);
-        setReasoningLevel(coerceReasoningLevel(cfg.reasoningLevel));
+        store().patchSessionMeta(session.key, {
+          model: cfg.model,
+          thinkingLevel: cfg.thinkingLevel || DEFAULT_THINKING,
+          reasoningLevel: coerceReasoningLevel(cfg.reasoningLevel),
+        });
         void refreshModelThinkingSupport(cfg.model);
       } catch {
         /* ignore */
@@ -363,17 +322,11 @@ export function useChatSessionLoad(deps: {
     }
   }, [
     dismissClarifyOnSessionLoad,
+    detachForNewConversation,
     navigateToSession,
     refreshModelThinkingSupport,
     resolveAgentIdForPost,
     sessionMgrRef,
-    setHasMore,
-    setMessages,
-    setReasoningLevel,
-    setSessionKey,
-    setSessionModel,
-    setSessionName,
-    setThinkingLevel,
   ]);
 
   return {

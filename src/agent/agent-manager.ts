@@ -38,6 +38,7 @@ import {
   disposeAllSessionMcpRuntimes,
   retireSessionMcpRuntimeForSessionKey,
 } from './mcp/bundle-mcp-tools.js';
+import { evictAllEmbeddedSessionRunners, evictEmbeddedSessionRunner } from './embedded/session-runner.js';
 import type { GatewayClarifyRequestFn } from './tools/clarify-tool.js';
 import type { ExtensionRegistryImpl as ExtensionRegistry } from '../extensions/index.js';
 import type { MessageBus } from '../infra/bus/index.js';
@@ -747,6 +748,7 @@ export class AgentManager {
       void this.toolsFactory.closeBrowserPageForSession(sessionKey);
       void retireSessionMcpRuntimeForSessionKey({ sessionKey, reason: 'agent-evict' });
       instance.agent.abort();
+      evictEmbeddedSessionRunner(sessionKey, 'agent_removed');
       this.agents.delete(sessionKey);
       this.memoryPrefetchUserTurn.delete(sessionKey);
       this.config.getModelManager?.().clearSessionProfileDefault(sessionKey);
@@ -787,6 +789,7 @@ export class AgentManager {
   dispose(): void {
     void this.toolsFactory.shutdownBrowser();
     void disposeAllSessionMcpRuntimes().catch(() => {});
+    evictAllEmbeddedSessionRunners('agent_manager_dispose');
     for (const instance of this.agents.values()) {
       instance.backgroundNudge?.unsubscribe?.();
       instance.agent.abort();

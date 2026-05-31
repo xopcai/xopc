@@ -1,46 +1,53 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 
-import { getLiveSessionCache } from '@/features/chat/session/active-session-live-cache';
 import {
-  DEFAULT_REASONING,
   DEFAULT_THINKING,
 } from '@/features/chat/session/chat-session-defaults';
 import {
-  type Message,
-  type ProgressState,
-  type ReasoningLevel,
-  coerceReasoningLevel,
-} from '@/features/chat/messages/messages.types';
-import { hasPendingAgentRunForChat, MessageSender, setPendingAgentRun } from '@/features/chat/messages/message-sender';
+  detachChatViewOnly,
+  selectDisplayMessages,
+  shouldApplyStreamUpdateToView,
+  shouldRestoreLiveCacheToView,
+} from '@/features/chat/session/chat-session-view';
+import { chatRunManager, chatRunSessionKeyRef } from '@/features/chat/session/chat-run-manager';
+import {
+  getChatSessionSnapshot,
+  getSessionMessages,
+  isSessionSliceLive,
+  useChatSessionStore,
+} from '@/features/chat/session/chat-session-store';
+import { coerceReasoningLevel } from '@/features/chat/messages/messages.types';
+import { hasPendingAgentRunForChat, setPendingAgentRun } from '@/features/chat/messages/message-sender';
 import type { PendingFollowUp } from '@/features/chat/follow-up/pending-follow-up.types';
 import { SessionManager } from '@/features/chat/session/session-manager';
+import { resetChatViewState } from '@/features/chat/session/reset-chat-view-state';
 import { useChatFollowUpClarify } from '@/features/chat/session/use-chat-follow-up-clarify';
 import { useChatSessionAgents } from '@/features/chat/session/use-chat-session-agents';
 import { useChatSessionInit } from '@/features/chat/session/use-chat-session-init';
 import { useChatSessionLoad } from '@/features/chat/session/use-chat-session-load';
+import { focusedSessionKeyRef, useChatSessionRoute } from '@/features/chat/session/use-chat-session-route';
 import { useChatSessionStreaming } from '@/features/chat/session/use-chat-session-streaming';
 import { useChatSessionWindowEvents } from '@/features/chat/session/use-chat-session-window-events';
-import { useChatAgentRunIndicatorStore } from '@/stores/chat-agent-run-indicator-store';
 
+/** @see docs/web/chat-session-semantics.md */
 export function useChatSession() {
   const navigate = useNavigate();
-  const location = useLocation();
-  const { sessionKey: sessionKeyParam } = useParams();
+  const {
+    isNewRoute,
+    decodedKey,
+    viewSessionKey,
+    routedFocusedSessionKey,
+    routeSessionKeyRef,
+    locationSearch,
+    locationState,
+  } = useChatSessionRoute();
 
   const sessionMgrRef = useRef(new SessionManager());
-  const senderRef = useRef(new MessageSender());
   const loadingSessionRef = useRef(false);
   const sendingRef = useRef(false);
   const streamingRef = useRef(false);
-  const sessionKeyRef = useRef<string | null>(null);
-  const routeSessionKeyRef = useRef<string | null>(null);
-  const activeStreamSessionKeyRef = useRef<string | null>(null);
-  const activeResumeRunIdRef = useRef<string | null>(null);
-  const sessionNameRef = useRef<string | null>(null);
   const thinkingSupportGenRef = useRef(0);
-  const userAbortedRef = useRef(false);
-  /** Previous `streaming || sending` to detect idle edge for resuming background webchat runs. */
   const streamBusyRef = useRef(false);
 
   const sendMessageRef = useRef<
@@ -51,50 +58,37 @@ export function useChatSession() {
     ) => Promise<void>
   >(async () => {});
 
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [streamingMsg, setStreamingMsg] = useState<Message | null>(null);
-  const [streaming, setStreaming] = useState(false);
-  const [sending, setSending] = useState(false);
-  const [progress, setProgress] = useState<ProgressState | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [sessionKey, setSessionKey] = useState<string | null>(null);
-  const [sessionName, setSessionName] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [sessionModel, setSessionModel] = useState('');
-  const [thinkingLevel, setThinkingLevel] = useState(DEFAULT_THINKING);
-  const [reasoningLevel, setReasoningLevel] = useState<ReasoningLevel>(DEFAULT_REASONING);
-  const [modelSupportsThinking, setModelSupportsThinking] = useState(false);
-  const [hasMore, setHasMore] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
   const messagesLenRef = useRef(0);
-  const latestMessagesRef = useRef<Message[]>([]);
-  const streamingMsgRef = useRef<Message | null>(null);
+
+  const focusedSessionKey = routedFocusedSessionKey;
+  const initLoading = useChatSessionStore((s) => s.initLoading);
+  const loadingMore = useChatSessionStore((s) => s.loadingMore);
+  const shellError = useChatSessionStore((s) => s.shellError);
+  /** URL is visible-session truth; do not read the store via lagging `focusedSessionKey`. */
+  const visibleSessionKey = viewSessionKey;
+  const sessionSlice = useChatSessionStore((s) =>
+    visibleSessionKey ? s.sessions[visibleSessionKey] : undefined,
+  );
+
+  const streamLive = visibleSessionKey ? isSessionSliceLive(sessionSlice) : false;
+  const streaming = streamLive ? (sessionSlice?.streaming ?? false) : false;
+  const sending = streamLive ? (sessionSlice?.sending ?? false) : false;
+  const progress = streamLive ? (sessionSlice?.progress ?? null) : null;
+  const hasMore = sessionSlice?.hasMore ?? false;
+  const sessionName = sessionSlice?.name ?? null;
+  const sessionModel = sessionSlice?.model ?? '';
+  const thinkingLevel = sessionSlice?.thinkingLevel ?? DEFAULT_THINKING;
+  const reasoningLevel = sessionSlice?.reasoningLevel ?? 'stream';
+  const modelSupportsThinking = sessionSlice?.modelSupportsThinking ?? false;
 
   useEffect(() => {
-    latestMessagesRef.current = messages;
-  }, [messages]);
+    messagesLenRef.current = sessionSlice?.messages.length ?? 0;
+  }, [sessionSlice?.messages.length]);
 
   useEffect(() => {
-    streamingMsgRef.current = streamingMsg;
-  }, [streamingMsg]);
-
-  useEffect(() => {
+    sendingRef.current = sending;
     streamingRef.current = streaming;
-  }, [streaming]);
-  useEffect(() => {
-    sessionKeyRef.current = sessionKey;
-  }, [sessionKey]);
-  useEffect(() => {
-    sessionNameRef.current = sessionName;
-  }, [sessionName]);
-  useEffect(() => {
-    messagesLenRef.current = messages.length;
-  }, [messages.length]);
-
-  const isNewRoute = location.pathname.endsWith('/new');
-  const decodedKey = sessionKeyParam ? decodeURIComponent(sessionKeyParam) : undefined;
-
-  routeSessionKeyRef.current = decodedKey ?? null;
+  }, [sending, streaming]);
 
   const {
     token,
@@ -105,17 +99,16 @@ export function useChatSession() {
     showChatAgentSelector,
   } = useChatSessionAgents({
     navigate,
-    sessionKeyRef,
-    sessionKey,
+    sessionKeyRef: focusedSessionKeyRef,
+    sessionKey: focusedSessionKey,
     isNewRoute,
-    locationState: location.state,
+    locationState,
   });
 
-  /** URL session param does not match loaded state yet (switching sessions or first paint). */
-  const sessionRoutePending = Boolean(decodedKey !== undefined && sessionKey !== decodedKey);
+  const sessionRoutePending = Boolean(decodedKey !== undefined && focusedSessionKey !== decodedKey);
   const showSessionLoading = useMemo(
-    () => loading && (sessionKey == null || decodedKey === undefined),
-    [loading, sessionKey, decodedKey],
+    () => initLoading && (focusedSessionKey == null || decodedKey === undefined),
+    [initLoading, focusedSessionKey, decodedKey],
   );
 
   const navigateToSession = useCallback(
@@ -127,33 +120,35 @@ export function useChatSession() {
   );
 
   const shouldApplyStreamUpdate = useCallback((streamSessionKey: string) => {
-    const a = String(streamSessionKey ?? '').trim();
-    if (!a) return false;
-    const routeKey = String(routeSessionKeyRef.current ?? '').trim();
-    const sk = String(sessionKeyRef.current ?? '').trim();
-    // Accept if the stream matches either the URL session or the resolved state session.
-    // During navigation / hydration, `decodedKey` and `sessionKey` can briefly disagree; matching only
-    // the route would drop every SSE token (slash commands look like "no response", no assistant turn).
-    if (routeKey && a === routeKey) return true;
-    if (sk && a === sk) return true;
-    return false;
+    return shouldApplyStreamUpdateToView({
+      streamSessionKey,
+      routeSessionKey: routeSessionKeyRef.current,
+    });
+  }, [routeSessionKeyRef]);
+
+  const resetVisibleChatShell = useCallback(() => {
+    resetChatViewState({ sendingRef, streamingRef });
   }, []);
 
   const fq = useChatFollowUpClarify({
-    sessionKey,
+    sessionKey: focusedSessionKey,
     decodedKey,
-    sessionKeyRef,
-    activeStreamSessionKeyRef,
+    sessionKeyRef: focusedSessionKeyRef,
+    activeStreamSessionKeyRef: chatRunSessionKeyRef,
     sendingRef,
     streamingRef,
-    setSending,
-    setStreaming,
-    setProgress,
     modelSupportsThinking,
     thinkingLevel,
     shouldApplyStreamUpdate,
     sendMessageRef,
   });
+
+  const detachForNewConversation = useCallback(() => {
+    fq.clearVisibleClarify();
+    chatRunManager.activeResumeRunId = null;
+    chatRunManager.userAborted = false;
+    detachChatViewOnly(resetVisibleChatShell);
+  }, [fq.clearVisibleClarify, resetVisibleChatShell]);
 
   const {
     refreshModelThinkingSupport,
@@ -166,137 +161,117 @@ export function useChatSession() {
     createNewSession,
   } = useChatSessionLoad({
     sessionMgrRef,
-    sessionKeyRef,
-    sessionNameRef,
+    routeSessionKeyRef,
     sendingRef,
     streamingRef,
-    activeStreamSessionKeyRef,
+    activeStreamSessionKeyRef: chatRunSessionKeyRef,
     loadingSessionRef,
     messagesLenRef,
     thinkingSupportGenRef,
     navigateToSession,
     resolveAgentIdForPost,
-    dismissClarifyOnSessionLoad: fq.dismissClarify,
-    sessionKey,
-    loadingMore,
+    dismissClarifyOnSessionLoad: fq.clearVisibleClarify,
+    detachForNewConversation,
+    sessionKey: focusedSessionKey,
     hasMore,
-    setLoadingMore,
-    setSessionKey,
-    setSessionName,
-    setMessages,
-    setHasMore,
-    setError,
-    setSessionModel,
-    setThinkingLevel,
-    setReasoningLevel,
-    setModelSupportsThinking,
   });
 
   const restoreLiveCacheIfNeeded = useCallback((key: string) => {
-    const snap = getLiveSessionCache(key);
+    if (
+      !shouldRestoreLiveCacheToView({
+        cacheSessionKey: key,
+        routeSessionKey: routeSessionKeyRef.current,
+      })
+    ) {
+      return false;
+    }
+    const snap = getChatSessionSnapshot(key);
     if (!snap) return false;
-    if (!hasPendingAgentRunForChat(key) && !senderRef.current.isStreamingFor(key)) return false;
-    setMessages(snap.messages);
-    setStreamingMsg(snap.streamingMsg);
-    setProgress(snap.progress);
-    setStreaming(snap.streaming);
-    setSending(snap.sending);
+    const cacheLive = isSessionSliceLive(snap);
+    if (!cacheLive && !hasPendingAgentRunForChat(key) && !chatRunManager.isStreamingFor(key)) {
+      return false;
+    }
+    chatRunManager.activeStreamSessionKey = key;
     sendingRef.current = snap.sending;
     streamingRef.current = snap.streaming;
-    activeStreamSessionKeyRef.current = key;
     return true;
-  }, []);
+  }, [routeSessionKeyRef]);
 
   const { tryResumeAgentRun, sendMessage, interruptAndSend, abort, deleteMessageRound, retryUserMessageRound } =
     useChatSessionStreaming({
-      sessionKey,
+      sessionKey: focusedSessionKey,
       thinkingLevel,
       modelSupportsThinking,
-      sessionKeyRef,
+      sessionKeyRef: focusedSessionKeyRef,
       sendingRef,
       streamingRef,
-      activeStreamSessionKeyRef,
-      activeResumeRunIdRef,
-      userAbortedRef,
-      senderRef,
       sessionMgrRef,
       sendMessageRef,
-      setMessages,
-      setStreamingMsg,
-      setStreaming,
-      setSending,
-      setProgress,
-      setError,
       shouldApplyStreamUpdate,
       fq,
       applyLoadedSessionSnapshot,
       loadSessionById,
       createNewSession,
       pollSessionNameAfterTurn,
-      latestMessagesRef,
-      streamingMsgRef,
     });
 
-  const trackedDecodedKeyRef = useRef(decodedKey);
-  if (decodedKey && trackedDecodedKeyRef.current !== decodedKey) {
-    trackedDecodedKeyRef.current = decodedKey;
-    const active = activeStreamSessionKeyRef.current;
-    if (!active || decodedKey !== active) {
-      activeStreamSessionKeyRef.current = null;
-      sendingRef.current = false;
-      streamingRef.current = false;
-      setStreamingMsg(null);
-      setProgress(null);
-      setStreaming(false);
-      setSending(false);
+  useEffect(() => {
+    if (isNewRoute) {
+      detachForNewConversation();
     }
-  } else if (!decodedKey) {
-    trackedDecodedKeyRef.current = undefined;
-  }
+  }, [isNewRoute, detachForNewConversation]);
 
-  const displayMessages = useMemo(() => {
-    if (!streamingMsg) return messages;
-    return [...messages, streamingMsg];
-  }, [messages, streamingMsg]);
+  const displayMessages = useMemo(
+    () =>
+      selectDisplayMessages({
+        viewSessionKey,
+        sessionKey: visibleSessionKey,
+        messages: sessionSlice?.messages ?? [],
+        streamingMsg: streamLive ? (sessionSlice?.streamingMsg ?? null) : null,
+      }),
+    [viewSessionKey, visibleSessionKey, sessionSlice?.messages, sessionSlice?.streamingMsg, streamLive],
+  );
 
   const adoptEmptySession = useCallback((key: string, name: string | null) => {
-    setSessionKey(key);
-    setSessionName(name);
-    setMessages([]);
-    setHasMore(false);
-  }, []);
+    useChatSessionStore.getState().setCommittedSnapshot(key, { messages: [], hasMore: false, name });
+    resetVisibleChatShell();
+  }, [resetVisibleChatShell]);
 
   const applyAgentConfig = useCallback(
     (cfg: { model: string; thinkingLevel?: string | null; reasoningLevel?: string | null }) => {
-      setSessionModel(cfg.model);
-      setThinkingLevel(cfg.thinkingLevel || DEFAULT_THINKING);
-      setReasoningLevel(coerceReasoningLevel(cfg.reasoningLevel ?? undefined));
+      const key = focusedSessionKeyRef.current;
+      if (!key) return;
+      useChatSessionStore.getState().patchSessionMeta(key, {
+        model: cfg.model,
+        thinkingLevel: cfg.thinkingLevel || DEFAULT_THINKING,
+        reasoningLevel: coerceReasoningLevel(cfg.reasoningLevel ?? undefined),
+      });
       void refreshModelThinkingSupport(cfg.model);
     },
     [refreshModelThinkingSupport],
   );
 
   const patchInitUi = useCallback((patch: { loading?: boolean; error?: string | null }) => {
-    if (patch.loading !== undefined) setLoading(patch.loading);
-    if (patch.error !== undefined) setError(patch.error);
+    const store = useChatSessionStore.getState();
+    if (patch.loading !== undefined) store.setInitLoading(patch.loading);
+    if (patch.error !== undefined) store.setShellError(patch.error);
   }, []);
 
   useChatSessionWindowEvents({
-    sessionKey,
-    sessionKeyRef,
+    sessionKey: focusedSessionKey,
+    sessionKeyRef: focusedSessionKeyRef,
     sendingRef,
     streamingRef,
     sessionMgrRef,
     loadSessionById,
     applyAgentConfig,
-    setSessionName,
   });
 
   useChatSessionInit({
     token,
     isNewRoute,
     decodedKey,
-    locationSearch: location.search,
+    locationSearch,
     sessionMgrRef,
     resolveAgentIdForPost,
     navigateToSession,
@@ -308,22 +283,6 @@ export function useChatSession() {
     patchInitUi,
   });
 
-  const streamBusy = streaming || sending;
-  const trackedAgentIndicatorRef = useRef({ sessionKey, streamBusy });
-  if (
-    trackedAgentIndicatorRef.current.sessionKey !== sessionKey ||
-    trackedAgentIndicatorRef.current.streamBusy !== streamBusy
-  ) {
-    trackedAgentIndicatorRef.current = { sessionKey, streamBusy };
-    const set = useChatAgentRunIndicatorStore.getState().setFocusedAgentRun;
-    set(sessionKey ?? null, sessionKey ? streamBusy : false);
-  }
-
-  /**
-   * `/goal` (and similar) schedule a follow-up webchat run without a browser POST. Those runs still
-   * broadcast `agent.stream` on `/api/events`; subscribe in `GatewaySseConnection`, then mirror POST
-   * behaviour: persist `runId` and resume SSE so tokens/tools appear in the open chat.
-   */
   useEffect(() => {
     const onAgentStream = (e: Event) => {
       const d = (e as CustomEvent<{ sessionKey?: string; event?: unknown }>).detail;
@@ -332,19 +291,20 @@ export function useChatSession() {
       if (!inner || inner.type !== 'status' || typeof inner.runId !== 'string' || !inner.runId.trim()) {
         return;
       }
-      setPendingAgentRun(d.sessionKey, inner.runId);
-      if (sessionKeyRef.current !== d.sessionKey) return;
-      if (senderRef.current.isStreamingFor(d.sessionKey)) return;
+      const streamSessionKey = d.sessionKey;
+      setPendingAgentRun(streamSessionKey, inner.runId);
+      if (!shouldApplyStreamUpdate(streamSessionKey)) return;
+      if (chatRunManager.isStreamingFor(streamSessionKey)) return;
 
       queueMicrotask(() => {
-        if (sessionKeyRef.current !== d.sessionKey) return;
-        if (senderRef.current.isStreamingFor(d.sessionKey)) return;
-        void tryResumeAgentRun(d.sessionKey, latestMessagesRef.current ?? []);
+        if (!shouldApplyStreamUpdate(streamSessionKey)) return;
+        if (chatRunManager.isStreamingFor(streamSessionKey)) return;
+        void tryResumeAgentRun(streamSessionKey, getSessionMessages(streamSessionKey));
       });
     };
     window.addEventListener('agent-stream', onAgentStream);
     return () => window.removeEventListener('agent-stream', onAgentStream);
-  }, [tryResumeAgentRun]);
+  }, [tryResumeAgentRun, shouldApplyStreamUpdate]);
 
   useEffect(() => {
     const busy = streaming || sending;
@@ -352,15 +312,15 @@ export function useChatSession() {
     streamBusyRef.current = busy;
     if (!wasBusy || busy) return;
 
-    const key = sessionKeyRef.current;
+    const key = focusedSessionKeyRef.current;
     if (!key) return;
     queueMicrotask(() => {
-      if (sessionKeyRef.current !== key) return;
-      if (senderRef.current.isStreamingFor(key)) return;
+      if (!key || !shouldApplyStreamUpdate(key)) return;
+      if (chatRunManager.isStreamingFor(key)) return;
       if (!hasPendingAgentRunForChat(key)) return;
-      void tryResumeAgentRun(key, latestMessagesRef.current ?? []);
+      void tryResumeAgentRun(key, getSessionMessages(key));
     });
-  }, [streaming, sending, tryResumeAgentRun]);
+  }, [streaming, sending, tryResumeAgentRun, shouldApplyStreamUpdate]);
 
   sendMessageRef.current = sendMessage;
 
@@ -369,12 +329,12 @@ export function useChatSession() {
       hasToken: Boolean(token),
     },
     session: {
-      sessionKey,
+      sessionKey: focusedSessionKey,
       sessionName,
       decodedKey,
       sessionRoutePending,
       showSessionLoading,
-      loading,
+      loading: initLoading,
       sessionModel,
       thinkingLevel,
       onSessionThinkingLevelChange,
@@ -391,7 +351,7 @@ export function useChatSession() {
       items: displayMessages,
     },
     stream: {
-      error,
+      error: shellError,
       streaming,
       sending,
       progress,

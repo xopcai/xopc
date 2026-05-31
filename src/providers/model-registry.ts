@@ -134,6 +134,8 @@ export class ModelRegistry {
 	private models: Model<Api>[] = [];
 	private customProviderApiKeys: Map<string, string> = new Map();
 	private loadError: string | undefined = undefined;
+	private loaded = false;
+	private prewarmPromise: Promise<void> | null = null;
 
 	// Performance caches
 	private _availableModelsCache: Model<Api>[] | undefined;
@@ -141,7 +143,34 @@ export class ModelRegistry {
 	private _authStatusCache: Map<string, boolean> = new Map();
 
 	constructor(private modelsJsonPath: string = getModelsJsonPath()) {
+		// Catalog loads on first use or via prewarm() — keeps gateway constructor off the hot path.
+	}
+
+	isLoaded(): boolean {
+		return this.loaded;
+	}
+
+	/** Synchronously materialize the catalog (idempotent). */
+	ensureLoaded(): void {
+		if (this.loaded) {
+			return;
+		}
 		this.loadModels();
+		this.loaded = true;
+	}
+
+	/** Background-friendly catalog load (idempotent). */
+	prewarm(): Promise<void> {
+		if (this.loaded) {
+			return Promise.resolve();
+		}
+		if (this.prewarmPromise) {
+			return this.prewarmPromise;
+		}
+		this.prewarmPromise = Promise.resolve().then(() => {
+			this.ensureLoaded();
+		});
+		return this.prewarmPromise;
 	}
 
 	/**
@@ -154,7 +183,9 @@ export class ModelRegistry {
 		this._availableModelsCache = undefined;
 		this._providersCache = undefined;
 		this._authStatusCache.clear();
+		this.prewarmPromise = null;
 		this.loadModels();
+		this.loaded = true;
 		log.info('Model registry refreshed');
 	}
 
@@ -170,6 +201,7 @@ export class ModelRegistry {
 	 * Results are cached until refresh() is called
 	 */
 	getAll(): readonly Model<Api>[] {
+		this.ensureLoaded();
 		return this.models;
 	}
 
@@ -178,6 +210,7 @@ export class ModelRegistry {
 	 * Results are cached on first call until refresh()
 	 */
 	getAvailable(): readonly Model<Api>[] {
+		this.ensureLoaded();
 		// Lazy initialization with caching
 		if (!this._availableModelsCache) {
 			this._availableModelsCache = this.models.filter((m) => this.hasAuth(m.provider));
@@ -189,6 +222,7 @@ export class ModelRegistry {
 	 * Find a model by provider and ID
 	 */
 	find(provider: string, modelId: string): Model<Api> | undefined {
+		this.ensureLoaded();
 		return this.models.find((m) => m.provider === provider && m.id === modelId);
 	}
 
@@ -196,6 +230,7 @@ export class ModelRegistry {
 	 * Resolve a model reference (provider/modelId or just modelId)
 	 */
 	resolve(ref: string): Model<Api> | undefined {
+		this.ensureLoaded();
 		// Handle provider/modelId format
 		if (ref.includes('/')) {
 			const [provider, modelId] = ref.split('/');
@@ -216,6 +251,7 @@ export class ModelRegistry {
 	 * Get API key for a provider (for custom providers from models.json)
 	 */
 	getApiKey(provider: string): string | undefined {
+		this.ensureLoaded();
 		// First check custom provider configs
 		const keyConfig = this.customProviderApiKeys.get(provider);
 		if (keyConfig) {
@@ -483,4 +519,9 @@ export function getModelRegistry(): ModelRegistry {
 
 export function resetModelRegistry(): void {
 	globalRegistry = undefined;
+}
+
+/** Schedule catalog load on a background turn (gateway post-ready sidecar). */
+export function prewarmModelRegistry(): Promise<void> {
+	return getModelRegistry().prewarm();
 }

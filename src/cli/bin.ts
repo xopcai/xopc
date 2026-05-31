@@ -22,5 +22,15 @@ if (rootArgs.length === 1 && (rootArgs[0] === '--help' || rootArgs[0] === '-h' |
   process.exit(0);
 }
 
+const filteredArgv = process.argv.filter((arg, index) => {
+  if (arg !== '--') return true;
+  return index < 2;
+});
+
+const { tryRunGatewayRunFastPath } = await import('./gateway-run-fast-path.js');
+if (await tryRunGatewayRunFastPath(filteredArgv)) {
+  process.exit(typeof process.exitCode === 'number' ? process.exitCode : 0);
+}
+
 const { runCli } = await import('./index.js');
 await runCli(process.argv);

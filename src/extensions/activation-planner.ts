@@ -4,6 +4,8 @@
 
 import type { ManifestRegistry, ManifestRegistryEntry } from './manifest-registry.js';
 
+export type ActivationLoadPhase = 'startup' | 'deferred';
+
 export type ActivationReason =
   | 'explicit_enabled'
   | 'explicit_disabled'
@@ -181,6 +183,22 @@ export class ActivationPlanner {
     return this.plan(context)
       .filter((d) => d.activated)
       .map((d) => d.extensionId);
+  }
+
+  /**
+   * Split activated ids by manifest `activation.onStartup`.
+   * Extensions without the field remain on the startup path (backward compatible).
+   */
+  filterActivatedIdsByLoadPhase(
+    activatedIds: readonly string[],
+    phase: ActivationLoadPhase,
+  ): string[] {
+    return activatedIds.filter((extensionId) => {
+      const entry = this.registry.getEntry(extensionId);
+      const onStartup = entry?.manifest.activation?.onStartup;
+      const eager = onStartup !== false;
+      return phase === 'startup' ? eager : !eager;
+    });
   }
 
   explainPlan(context: ActivationContext): string {

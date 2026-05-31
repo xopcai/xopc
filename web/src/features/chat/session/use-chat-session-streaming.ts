@@ -1,23 +1,23 @@
-import { useCallback, useRef, type Dispatch, type RefObject, type SetStateAction } from 'react';
+import { useCallback, useRef, type RefObject } from 'react';
 
-import {
-  clearLiveSessionCache,
-  getLiveSessionCache,
-  initLiveSessionCache,
-  liveSessionCacheApplyHydratedTail,
-  seedLiveSessionCacheIfEmpty,
-} from '@/features/chat/session/active-session-live-cache';
+import { createAgentStreamMessagingCallbacks, readStreamingBubbleFromStore } from '@/features/chat/messages/agent-stream-messaging-callbacks';
 import { mergeConsecutiveAssistantMessages } from '@/features/chat/messages/agent-messages';
-import { createAgentStreamMessagingCallbacks } from '@/features/chat/messages/agent-stream-messaging-callbacks';
 import type { WireAttachment } from '@/features/chat/composer/composer.types';
-import type { Message, ProgressState } from '@/features/chat/messages/messages.types';
+import type { Message } from '@/features/chat/messages/messages.types';
 import { extractUserMessagePlainText, messageAttachmentsToWire } from '@/features/chat/messages/user-message-plain-text';
 import {
   isUiUserMessage,
   uiDeleteCountForUserRound,
   userRoundIndexFromUiMessageIndex,
 } from '@/features/chat/messages/user-round-index';
-import { pendingAgentRunStorageKey, MessageSender } from '@/features/chat/messages/message-sender';
+import { chatRunManager } from '@/features/chat/session/chat-run-manager';
+import {
+  getChatSessionSnapshot,
+  getSessionMessages,
+  useChatSessionStore,
+} from '@/features/chat/session/chat-session-store';
+import { defaultSessionMeta } from '@/features/chat/session/chat-session-defaults';
+import { resolveResumeRunId } from '@/features/chat/session/resolve-resume-run-id';
 import {
   FOLLOW_UP_AUTO_SEND_IDLE_MS,
   type PendingFollowUp,
@@ -40,22 +40,11 @@ export function useChatSessionStreaming(deps: {
   sessionKeyRef: RefObject<string | null>;
   sendingRef: RefObject<boolean>;
   streamingRef: RefObject<boolean>;
-  activeStreamSessionKeyRef: RefObject<string | null>;
-  activeResumeRunIdRef: RefObject<string | null>;
-  userAbortedRef: RefObject<boolean>;
-  senderRef: RefObject<MessageSender>;
   sessionMgrRef: RefObject<SessionManager>;
 
   sendMessageRef: RefObject<
     (content: string, attachments?: PendingFollowUp['attachments'], levelOverride?: string) => Promise<void>
   >;
-
-  setMessages: Dispatch<SetStateAction<Message[]>>;
-  setStreamingMsg: Dispatch<SetStateAction<Message | null>>;
-  setStreaming: Dispatch<SetStateAction<boolean>>;
-  setSending: Dispatch<SetStateAction<boolean>>;
-  setProgress: Dispatch<SetStateAction<ProgressState | null>>;
-  setError: Dispatch<SetStateAction<string | null>>;
 
   shouldApplyStreamUpdate: (streamSessionKey: string) => boolean;
   fq: ChatFollowUpClarifyApi;
@@ -67,10 +56,6 @@ export function useChatSessionStreaming(deps: {
   loadSessionById: (key: string, offset?: number) => Promise<Message[] | undefined>;
   createNewSession: () => Promise<void>;
   pollSessionNameAfterTurn: () => void;
-  /** Latest committed messages (synced each render) for resume cache seeding. */
-  latestMessagesRef: RefObject<Message[]>;
-  /** In-progress assistant bubble (synced each render) for synchronous finalize. */
-  streamingMsgRef: RefObject<Message | null>;
 }) {
   const {
     sessionKey,
@@ -79,55 +64,49 @@ export function useChatSessionStreaming(deps: {
     sessionKeyRef,
     sendingRef,
     streamingRef,
-    activeStreamSessionKeyRef,
-    activeResumeRunIdRef,
-    userAbortedRef,
-    senderRef,
     sessionMgrRef,
     sendMessageRef,
-    setMessages,
-    setStreamingMsg,
-    setStreaming,
-    setSending,
-    setProgress,
-    setError,
     shouldApplyStreamUpdate,
     fq,
     applyLoadedSessionSnapshot,
     loadSessionById,
     createNewSession,
     pollSessionNameAfterTurn,
-    latestMessagesRef,
-    streamingMsgRef,
   } = deps;
 
   const flushSteeringQueueRef = useRef(fq.flushSteeringQueue);
   flushSteeringQueueRef.current = fq.flushSteeringQueue;
 
+  const store = () => useChatSessionStore.getState();
+  const setShellError = (msg: string) => store().setShellError(msg);
+  const clearShellError = () => store().setShellError(null);
+
   const finalizeMessage = useCallback(
     (opts?: { skipSteeringQueueFlush?: boolean }) => {
-      const cacheKey = activeStreamSessionKeyRef.current ?? sessionKeyRef.current;
-      const cachedBubble = cacheKey ? (getLiveSessionCache(cacheKey)?.streamingMsg ?? null) : null;
-      const bubbleSource = cachedBubble ?? streamingMsgRef.current;
+      const cacheKey = chatRunManager.activeStreamSessionKey ?? sessionKeyRef.current;
+      if (cacheKey && !shouldApplyStreamUpdate(cacheKey)) {
+        return;
+      }
+      const cachedBubble = cacheKey ? readStreamingBubbleFromStore(cacheKey) : null;
       let finalMsg: Message | null = null;
-      if (bubbleSource) {
-        const msg = ensureAssistantMessage(bubbleSource, Date.now());
+      if (cachedBubble) {
+        const msg = ensureAssistantMessage(cachedBubble, Date.now());
         finalizeStreamingThinking(msg.content);
         finalizeRunningTools(msg.content);
         finalMsg = cloneMessageForRender(msg);
       }
-      setStreamingMsg(null);
-      if (finalMsg && hasRenderableAssistantContent(finalMsg)) {
-        const prior = latestMessagesRef.current ?? [];
-        setMessages(mergeConsecutiveAssistantMessages([...prior, finalMsg]));
+      if (finalMsg && hasRenderableAssistantContent(finalMsg) && cacheKey) {
+        const prior = getChatSessionSnapshot(cacheKey)?.messages ?? getSessionMessages(cacheKey);
+        store().finalizeStreamingTurn(
+          cacheKey,
+          mergeConsecutiveAssistantMessages([...prior, finalMsg]),
+        );
+      } else if (cacheKey) {
+        store().clearStreamingState(cacheKey);
       }
-      setStreaming(false);
-      setProgress(null);
-      setSending(false);
       sendingRef.current = false;
       streamingRef.current = false;
-      activeStreamSessionKeyRef.current = null;
-      activeResumeRunIdRef.current = null;
+      chatRunManager.resetRunTracking();
       fq.dismissClarify();
       void pollSessionNameAfterTurn();
       if (!opts?.skipSteeringQueueFlush) {
@@ -138,7 +117,6 @@ export function useChatSessionStreaming(deps: {
           }, FOLLOW_UP_AUTO_SEND_IDLE_MS);
         }
       }
-      /** Persisted transcript includes `thinking` blocks the SSE path may omit (e.g. `reasoningLevel: off` strips thinking events). Re-sync from gateway so history matches server JSON. */
       const syncKey = sessionKeyRef.current;
       if (syncKey) {
         window.setTimeout(() => {
@@ -148,75 +126,53 @@ export function useChatSessionStreaming(deps: {
           void loadSessionById(syncKey, 0);
         }, 400);
       }
-      if (cacheKey) clearLiveSessionCache(cacheKey);
     },
     [
-      setStreamingMsg,
-      setMessages,
-      setStreaming,
-      setProgress,
-      setSending,
       sendingRef,
       streamingRef,
-      activeStreamSessionKeyRef,
-      activeResumeRunIdRef,
       sessionKeyRef,
       fq.dismissClarify,
       fq.pendingFollowUpsRef,
       pollSessionNameAfterTurn,
       loadSessionById,
-      streamingMsgRef,
+      shouldApplyStreamUpdate,
     ],
   );
 
   const tryResumeAgentRun = useCallback(
     async (chatId: string, loadedMessages?: Message[]) => {
-      const sender = senderRef.current;
-      if (sender.isSending) {
-        return;
-      }
-      let stored: { runId: string } | null = null;
-      try {
-        const raw = sessionStorage.getItem(pendingAgentRunStorageKey(chatId));
-        if (raw) stored = JSON.parse(raw) as { runId: string };
-      } catch {
-        /* ignore */
-      }
-      if (!stored?.runId) return;
-      if (activeResumeRunIdRef.current === stored.runId) return;
+      if (!shouldApplyStreamUpdate(chatId)) return;
+      if (chatRunManager.isStreamingFor(chatId)) return;
+      if (chatRunManager.isSending) return;
 
-      userAbortedRef.current = false;
-      activeResumeRunIdRef.current = stored.runId;
-      activeStreamSessionKeyRef.current = chatId;
+      const runId = await resolveResumeRunId(chatId);
+      if (!runId) return;
+      if (chatRunManager.activeResumeRunId === runId) return;
+
+      const seedMessages = loadedMessages ?? getSessionMessages(chatId);
+      const seedHasMore = getChatSessionSnapshot(chatId)?.hasMore ?? false;
+
+      chatRunManager.userAborted = false;
+      chatRunManager.activeResumeRunId = runId;
+      chatRunManager.activeStreamSessionKey = chatId;
       sendingRef.current = true;
       streamingRef.current = true;
-      setSending(true);
-      setStreaming(true);
-      setProgress(null);
-      seedLiveSessionCacheIfEmpty(
-        chatId,
-        loadedMessages ?? latestMessagesRef.current ?? [],
-        true,
-        true,
-      );
+      store().seedSessionIfEmpty(chatId, seedMessages, true, true, seedHasMore);
+      store().setSessionFlags(chatId, { sending: true, streaming: true });
+      store().setSessionProgress(chatId, null);
+
       let hydratedResumeTail = false;
       const hydrateResumeTailAssistant = () => {
         if (hydratedResumeTail) return;
+        if (!shouldApplyStreamUpdate(chatId)) return;
         hydratedResumeTail = true;
-        let extractedTail: Message | null = null;
-        let committedWithoutTail: Message[] = [];
-        setMessages((prev) => {
-          if (prev.length === 0) return prev;
-          const last = prev[prev.length - 1];
-          if (last?.role !== 'assistant') return prev;
-          extractedTail = cloneMessageForRender(last);
-          committedWithoutTail = prev.slice(0, -1);
-          return committedWithoutTail;
-        });
-        if (extractedTail) {
-          setStreamingMsg((prev) => prev ?? extractedTail);
-          liveSessionCacheApplyHydratedTail(chatId, committedWithoutTail, extractedTail);
-        }
+        const prev = getSessionMessages(chatId);
+        if (prev.length === 0) return;
+        const last = prev[prev.length - 1];
+        if (last?.role !== 'assistant') return;
+        const extractedTail = cloneMessageForRender(last);
+        const committedWithoutTail = prev.slice(0, -1);
+        store().applyHydratedTail(chatId, committedWithoutTail, extractedTail);
       };
 
       try {
@@ -227,68 +183,43 @@ export function useChatSessionStreaming(deps: {
           setStreamingOnStreamStart: false,
           clearResumeRunIdOnBackgroundTerminal: true,
           clearResumeRunIdOnVisibleError: true,
-          setStreaming,
-          setStreamingMsg,
-          setProgress,
-          setSending,
-          setError,
-          userAbortedRef,
-          activeStreamSessionKeyRef,
-          activeResumeRunIdRef,
-          sendingRef,
-          streamingRef,
+          setError: setShellError,
           sessionMgrRef,
           applyLoadedSessionSnapshot,
           finalizeMessage,
           fq,
         });
 
-        await sender.resume(stored.runId, chatId, resumeStreamCallbacks);
+        await chatRunManager.sender.resume(runId, chatId, resumeStreamCallbacks);
       } catch (err) {
         if ((err as Error).name !== 'AbortError') {
           console.error('[chat] resume failed:', err);
         }
-        clearLiveSessionCache(chatId);
-        activeResumeRunIdRef.current = null;
+        store().clearStreamingState(chatId);
+        chatRunManager.activeResumeRunId = null;
+        if (!shouldApplyStreamUpdate(chatId)) {
+          chatRunManager.clearActiveStreamSessionKey(chatId);
+          return;
+        }
         sendingRef.current = false;
         streamingRef.current = false;
-        setStreaming(false);
-        setSending(false);
-        setStreamingMsg(null);
-        setProgress(null);
-        if (activeStreamSessionKeyRef.current === chatId) {
-          activeStreamSessionKeyRef.current = null;
-        }
+        chatRunManager.clearActiveStreamSessionKey(chatId);
       }
     },
     [
-      senderRef,
-      activeResumeRunIdRef,
-      userAbortedRef,
-      activeStreamSessionKeyRef,
       sendingRef,
       streamingRef,
-      setSending,
-      setStreaming,
-      setProgress,
-      setMessages,
-      setStreamingMsg,
-      setError,
       shouldApplyStreamUpdate,
       sessionMgrRef,
       applyLoadedSessionSnapshot,
       finalizeMessage,
-      fq.dismissClarify,
-      fq.makeOnClarifyRequest,
-      fq.onClarifyToolEnd,
-      latestMessagesRef,
     ],
   );
 
   const interruptAndSend = useCallback(
     async (content: string, attachments?: WireAttachment[], levelOverride?: string) => {
       if (!content.trim() && !attachments?.length) return;
-      if (!sendingRef.current && !streamingRef.current && !senderRef.current.isSending) {
+      if (!sendingRef.current && !streamingRef.current && !chatRunManager.isSending) {
         return;
       }
       const trimmed = content.trim();
@@ -300,14 +231,12 @@ export function useChatSessionStreaming(deps: {
       if (!key) return;
       fq.dismissClarifyAndClearPending();
       const effectiveThinking = modelSupportsThinking ? (levelOverride ?? thinkingLevel) : 'off';
-      userAbortedRef.current = true;
-      activeResumeRunIdRef.current = null;
-      activeStreamSessionKeyRef.current = null;
-      senderRef.current.abort();
+      chatRunManager.userAborted = true;
+      chatRunManager.resetRunTracking();
+      chatRunManager.abort();
       sendingRef.current = false;
       streamingRef.current = false;
       finalizeMessage({ skipSteeringQueueFlush: true });
-      setProgress(null);
       queueMicrotask(() => {
         void sendMessageRef.current(content, attachments, effectiveThinking);
       });
@@ -315,33 +244,24 @@ export function useChatSessionStreaming(deps: {
     [
       sendingRef,
       streamingRef,
-      senderRef,
       sessionKeyRef,
       fq.dismissClarifyAndClearPending,
       modelSupportsThinking,
       thinkingLevel,
-      userAbortedRef,
-      activeResumeRunIdRef,
-      activeStreamSessionKeyRef,
       finalizeMessage,
-      setProgress,
       sendMessageRef,
       createNewSession,
     ],
   );
 
   const sendMessage = useCallback(
-    async (
-      content: string,
-      attachments?: WireAttachment[],
-      levelOverride?: string,
-    ) => {
-      if (!sessionKey) {
-        return;
-      }
+    async (content: string, attachments?: WireAttachment[], levelOverride?: string) => {
+      if (!sessionKey) return;
+      if (!shouldApplyStreamUpdate(sessionKey)) return;
       if (
         (!content.trim() && !attachments?.length) ||
-        (activeStreamSessionKeyRef.current === sessionKey && (sendingRef.current || streamingRef.current))
+        (chatRunManager.activeStreamSessionKey === sessionKey &&
+          (sendingRef.current || streamingRef.current))
       ) {
         return;
       }
@@ -353,33 +273,33 @@ export function useChatSessionStreaming(deps: {
       }
 
       const effectiveThinking = modelSupportsThinking ? (levelOverride ?? thinkingLevel) : 'off';
-
-      const sender = senderRef.current;
       const chatId = sessionKey;
-      userAbortedRef.current = false;
-      activeStreamSessionKeyRef.current = chatId;
+      chatRunManager.userAborted = false;
+      chatRunManager.activeStreamSessionKey = chatId;
       sendingRef.current = true;
-      setSending(true);
-      setError(null);
+      streamingRef.current = false;
+      clearShellError();
       fq.dismissClarify();
-      setMessages((m) => {
-        const next = [
-          ...m,
-          {
-            role: 'user',
-            content: content ? [{ type: 'text', text: content }] : [],
-            attachments,
-            timestamp: Date.now(),
-          },
-        ] as Message[];
-        initLiveSessionCache(chatId, {
-          messages: next,
-          streamingMsg: null,
-          progress: null,
-          sending: true,
-          streaming: false,
-        });
-        return next;
+
+      const nextMessages = [
+        ...getSessionMessages(chatId),
+        {
+          role: 'user',
+          content: content ? [{ type: 'text', text: content }] : [],
+          attachments,
+          timestamp: Date.now(),
+        },
+      ] as Message[];
+
+      const existing = getChatSessionSnapshot(chatId);
+      store().initSessionSnapshot(chatId, {
+        ...(existing ?? { ...defaultSessionMeta(), hasMore: false, streamingMsg: null, progress: null, sending: false, streaming: false }),
+        messages: nextMessages,
+        hasMore: existing?.hasMore ?? false,
+        streamingMsg: null,
+        progress: null,
+        sending: true,
+        streaming: false,
       });
 
       try {
@@ -390,76 +310,55 @@ export function useChatSessionStreaming(deps: {
           setStreamingOnStreamStart: true,
           clearResumeRunIdOnBackgroundTerminal: false,
           clearResumeRunIdOnVisibleError: false,
-          setStreaming,
-          setStreamingMsg,
-          setProgress,
-          setSending,
-          setError,
-          userAbortedRef,
-          activeStreamSessionKeyRef,
-          activeResumeRunIdRef,
-          sendingRef,
-          streamingRef,
+          setError: setShellError,
           sessionMgrRef,
           applyLoadedSessionSnapshot,
           finalizeMessage,
           fq,
         });
 
-        await sender.send(content, chatId, attachments, effectiveThinking, sendStreamCallbacks);
+        await chatRunManager.sender.send(
+          content,
+          chatId,
+          attachments,
+          effectiveThinking,
+          sendStreamCallbacks,
+        );
       } catch (err) {
         if ((err as Error).name !== 'AbortError') {
-          clearLiveSessionCache(chatId);
-          setError(err instanceof Error ? err.message : 'Send failed');
-          setStreamingMsg(null);
-          setStreaming(false);
+          store().clearStreamingState(chatId);
+          setShellError(err instanceof Error ? err.message : 'Send failed');
         }
       } finally {
         sendingRef.current = false;
         streamingRef.current = false;
-        setSending(false);
-        if (activeStreamSessionKeyRef.current === chatId) {
-          activeStreamSessionKeyRef.current = null;
-        }
+        store().setSessionFlags(chatId, { sending: false });
+        chatRunManager.clearActiveStreamSessionKey(chatId);
       }
     },
     [
       sessionKey,
       thinkingLevel,
       modelSupportsThinking,
-      activeStreamSessionKeyRef,
       sendingRef,
       streamingRef,
-      userAbortedRef,
-      fq.dismissClarify,
-      setSending,
-      setError,
-      setMessages,
-      setStreaming,
-      setStreamingMsg,
-      setProgress,
       shouldApplyStreamUpdate,
       sessionMgrRef,
       applyLoadedSessionSnapshot,
       finalizeMessage,
       fq.dismissClarify,
-      fq.makeOnClarifyRequest,
-      fq.onClarifyToolEnd,
       createNewSession,
-      latestMessagesRef,
     ],
   );
 
   const abort = useCallback(() => {
-    userAbortedRef.current = true;
-    activeResumeRunIdRef.current = null;
-    activeStreamSessionKeyRef.current = null;
+    chatRunManager.userAborted = true;
+    chatRunManager.resetRunTracking();
     fq.dismissClarifyAndClearPending();
-    senderRef.current.abort();
+    chatRunManager.abort();
     sendingRef.current = false;
     streamingRef.current = false;
     finalizeMessage({ skipSteeringQueueFlush: true });
-    setProgress(null);
     const key = sessionKeyRef.current;
     if (key) {
       window.setTimeout(() => {
@@ -467,15 +366,10 @@ export function useChatSessionStreaming(deps: {
       }, 300);
     }
   }, [
-    userAbortedRef,
-    activeResumeRunIdRef,
-    activeStreamSessionKeyRef,
     fq.dismissClarifyAndClearPending,
-    senderRef,
     sendingRef,
     streamingRef,
     finalizeMessage,
-    setProgress,
     sessionKeyRef,
     loadSessionById,
   ]);
@@ -486,25 +380,24 @@ export function useChatSessionStreaming(deps: {
       if (!key) return;
       if (sendingRef.current || streamingRef.current) return;
 
-      setMessages((prev) => {
-        const msg = prev[messageIndex];
-        if (!msg || !isUiUserMessage(msg.role)) return prev;
+      const messages = getSessionMessages(key);
+      const msg = messages[messageIndex];
+      if (!msg || !isUiUserMessage(msg.role)) return;
 
-        const userRoundIndex = userRoundIndexFromUiMessageIndex(prev, messageIndex);
-        if (userRoundIndex === null) return prev;
+      const userRoundIndex = userRoundIndexFromUiMessageIndex(messages, messageIndex);
+      if (userRoundIndex === null) return;
 
-        const deleteCount = uiDeleteCountForUserRound(prev, messageIndex);
-        const updated = [...prev];
-        updated.splice(messageIndex, deleteCount);
+      const deleteCount = uiDeleteCountForUserRound(messages, messageIndex);
+      const updated = [...messages];
+      updated.splice(messageIndex, deleteCount);
 
-        void sessionMgrRef.current.deleteMessages(key, { userRoundIndex }).catch(() => {
-          void loadSessionById(key, 0);
-        });
+      store().updateSessionMessages(key, () => updated);
 
-        return updated;
+      void sessionMgrRef.current.deleteMessages(key, { userRoundIndex }).catch(() => {
+        void loadSessionById(key, 0);
       });
     },
-    [sessionKeyRef, sendingRef, streamingRef, setMessages, sessionMgrRef, loadSessionById],
+    [sessionKeyRef, sendingRef, streamingRef, sessionMgrRef, loadSessionById],
   );
 
   const retryUserMessageRound = useCallback(
@@ -513,38 +406,37 @@ export function useChatSessionStreaming(deps: {
       if (!key) return;
       if (sendingRef.current || streamingRef.current) return;
 
-      setMessages((prev) => {
-        const msg = prev[messageIndex];
-        if (!msg || !isUiUserMessage(msg.role)) return prev;
-        for (let j = messageIndex + 1; j < prev.length; j++) {
-          const nextMsg = prev[j];
-          if (nextMsg && isUiUserMessage(nextMsg.role)) return prev;
+      const messages = getSessionMessages(key);
+      const msg = messages[messageIndex];
+      if (!msg || !isUiUserMessage(msg.role)) return;
+      for (let j = messageIndex + 1; j < messages.length; j++) {
+        const nextMsg = messages[j];
+        if (nextMsg && isUiUserMessage(nextMsg.role)) return;
+      }
+
+      const text = extractUserMessagePlainText(msg.content);
+      const wireAtt = messageAttachmentsToWire(msg.attachments);
+      if (!text.trim() && !wireAtt?.length) return;
+
+      const userRoundIndex = userRoundIndexFromUiMessageIndex(messages, messageIndex);
+      if (userRoundIndex === null) return;
+
+      const deleteCount = uiDeleteCountForUserRound(messages, messageIndex);
+      const updated = [...messages];
+      updated.splice(messageIndex, deleteCount);
+
+      store().updateSessionMessages(key, () => updated);
+
+      void (async () => {
+        try {
+          await sessionMgrRef.current.deleteMessages(key, { userRoundIndex });
+          await sendMessageRef.current(text, wireAtt);
+        } catch {
+          void loadSessionById(key, 0);
         }
-
-        const text = extractUserMessagePlainText(msg.content);
-        const wireAtt = messageAttachmentsToWire(msg.attachments);
-        if (!text.trim() && !wireAtt?.length) return prev;
-
-        const userRoundIndex = userRoundIndexFromUiMessageIndex(prev, messageIndex);
-        if (userRoundIndex === null) return prev;
-
-        const deleteCount = uiDeleteCountForUserRound(prev, messageIndex);
-        const updated = [...prev];
-        updated.splice(messageIndex, deleteCount);
-
-        void (async () => {
-          try {
-            await sessionMgrRef.current.deleteMessages(key, { userRoundIndex });
-            await sendMessageRef.current(text, wireAtt);
-          } catch {
-            void loadSessionById(key, 0);
-          }
-        })();
-
-        return updated;
-      });
+      })();
     },
-    [sessionKeyRef, sendingRef, streamingRef, setMessages, sessionMgrRef, loadSessionById, sendMessageRef],
+    [sessionKeyRef, sendingRef, streamingRef, sessionMgrRef, loadSessionById, sendMessageRef],
   );
 
   return {

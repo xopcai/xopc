@@ -20,6 +20,10 @@ const RULES = [
   { file: 'src/cli/bin.ts', forbidden: COLD_START_PATTERNS },
   { file: 'src/cli/commands/gateway.ts', forbidden: COLD_START_PATTERNS },
   {
+    file: 'src/cli/gateway-run-fast-path.ts',
+    forbidden: COLD_START_PATTERNS,
+  },
+  {
     file: 'src/cli/index.ts',
     forbidden: [
       /^\.\/commands\//,

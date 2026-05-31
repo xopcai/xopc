@@ -52,6 +52,8 @@
     "lint": "eslint && pnpm -C web run lint",
     "test:startup:bench": "node --import tsx scripts/bench-cli-startup.ts",
     "test:startup:bench:check": "node --import tsx scripts/bench-cli-startup.ts --runs 3 --warmup 1",
+    "test:startup:gateway": "node --import tsx scripts/bench-gateway-startup.ts",
+    "test:startup:gateway:check": "node --import tsx scripts/bench-gateway-startup.ts --runs 2 --warmup 0 --ready-budget-ms 20000",
     "test:startup:imports": "node scripts/check-cli-bootstrap-imports.mjs",
     "tunnel:phase6:verify": "node scripts/tunnel-phase6-broker-tls-verify.mjs",
     "release:patch": "bash scripts/release-patch.sh",

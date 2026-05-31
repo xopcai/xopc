@@ -9,6 +9,17 @@ export {
   isSessionManagerCached,
 } from './session-manager-cache.js';
 export {
+  acquireEmbeddedSessionRunner,
+  buildEmbeddedRunnerFingerprint,
+  evictAllEmbeddedSessionRunners,
+  evictEmbeddedSessionRunner,
+  getEmbeddedSessionRunnerIdleTtlMs,
+  getEmbeddedSessionRunnerStats,
+  isEmbeddedSessionRunnerEnabled,
+  resetEmbeddedSessionRunnerForTest,
+  resolveEmbeddedTranscriptInputs,
+} from './session-runner.js';
+export {
   DEFAULT_MAX_LIVE_TOOL_RESULT_CHARS,
   resolveLiveToolResultMaxChars,
   truncateToolResultMessage,
