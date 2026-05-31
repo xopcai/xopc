@@ -1,0 +1,70 @@
+# electron-builder config when --project out/electron-pack (paths relative to pack dir).
+appId: ai.xopc.xopc
+productName: xopc
+
+npmRebuild: false
+nodeGypRebuild: false
+
+artifactName: ${productName}-${version}-${arch}.${ext}
+
+publish:
+  provider: generic
+  url: https://xopc.ai/api/download
+
+directories:
+  output: ../../dist/release
+  buildResources: ../../electron/resources
+
+beforeBuild: ../../scripts/electron-before-build.cjs
+
+files:
+  - '**/*'
+  - '!**/*.map'
+
+extraMetadata:
+  main: out/main/index.js
+
+extraResources:
+  - from: _pack-resources/rg
+    to: bin
+    filter:
+      - rg
+      - rg.exe
+  - from: ../../node_modules/playwright-core
+    to: playwright-core
+  - from: ../../dist/browser-ext
+    to: browser-ext
+    filter:
+      - '**/*'
+  - from: ../../electron/resources
+    to: resources
+    filter:
+      - '**/*.png'
+
+protocols:
+  - name: xopc
+    schemes:
+      - xopc
+
+mac:
+  category: public.app-category.productivity
+  hardenedRuntime: true
+  entitlements: _pack-resources/entitlements.mac.plist
+  entitlementsInherit: _pack-resources/entitlements.mac.plist
+  extendInfo:
+    NSMicrophoneUsageDescription: 'xopc needs microphone access to record voice messages in chat.'
+    NSScreenCaptureUsageDescription: 'xopc needs screen recording access for screen capture and vision features.'
+  notarize: true
+
+win:
+  target:
+    - nsis
+
+nsis:
+  buildUniversalInstaller: false
+
+linux:
+  category: Utility
+  target:
+    - AppImage
+    - deb
