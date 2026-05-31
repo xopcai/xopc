@@ -19,6 +19,7 @@ import { logger } from './middleware/logger.js';
 import { registerPublicExtensionAssetRoutes } from './routes/auth-registry-extensions.js';
 import { registerAuthenticatedRoutes } from './routes/index.js';
 import { registerPublicGatewayRoutes } from './routes/public-gateway.js';
+import { prewarmStaticUiCache } from './lib/static-ui.js';
 const log = createLogger('HonoApp');
 
 export interface HonoAppConfig {
@@ -216,6 +217,11 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     strictRateLimitMiddleware,
     sseConfig,
   });
+
+  const prewarm = prewarmStaticUiCache();
+  if (prewarm.loaded > 0) {
+    log.debug({ loaded: prewarm.loaded, missing: prewarm.missing }, 'Static UI cache prewarmed');
+  }
 
   app.route('/', authenticated);
 

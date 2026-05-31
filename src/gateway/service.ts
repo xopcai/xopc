@@ -2022,6 +2022,15 @@ export class GatewayService {
     return this.sessionIndex.getSession(key, options);
   }
 
+  /** Read-only: in-flight webchat agent run for this session key, if any. */
+  getSessionActiveRun(sessionKey: string): { active: boolean; runId?: string } {
+    const key = sessionKey.trim();
+    if (!key) return { active: false };
+    const runId = this.activeWebchatRunBySession.get(key)?.trim();
+    if (!runId) return { active: false };
+    return { active: true, runId };
+  }
+
   async getSessionMessagePage(
     key: string,
     options?: {

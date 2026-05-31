@@ -13,7 +13,6 @@ import { useChatSession } from '@/features/chat/session/use-chat-session';
 import { ClarifyPrompt } from '@/features/chat/composer/clarify-prompt';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
-import { useChatAgentRunIndicatorStore } from '@/stores/chat-agent-run-indicator-store';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 import { isWebUiSessionKey } from '@/features/chat/session/session-manager';
@@ -117,12 +116,6 @@ export function ChatPage() {
     navigate,
     pathname,
   ]);
-
-  useEffect(() => {
-    return () => {
-      useChatAgentRunIndicatorStore.getState().setFocusedAgentRun(null, false);
-    };
-  }, []);
 
   const { scrollRef, atBottom, scrollToBottom, onScroll } = useChatScrollViewport({
     hasToken: auth.hasToken,
@@ -236,9 +229,10 @@ export function ChatPage() {
                     </div>
                   ) : null}
                   <MessageList
+                    key={session.decodedKey ?? 'new'}
                     messages={msgSlice.items}
                     authToken={token ?? undefined}
-                    sessionKey={session.sessionKey}
+                    sessionKey={session.decodedKey ?? session.sessionKey}
                     streaming={stream.streaming}
                     progress={stream.progress}
                     reasoningLevel={session.reasoningLevel}

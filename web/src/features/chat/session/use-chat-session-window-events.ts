@@ -8,6 +8,7 @@
 
 import { useEffect, type MutableRefObject } from 'react';
 
+import { useChatSessionStore } from '@/features/chat/session/chat-session-store';
 import type { SessionManager } from '@/features/chat/session/session-manager';
 
 export function useChatSessionWindowEvents(opts: {
@@ -22,7 +23,6 @@ export function useChatSessionWindowEvents(opts: {
     thinkingLevel?: string | null;
     reasoningLevel?: string | null;
   }) => void;
-  setSessionName: (name: string | null) => void;
 }): void {
   const {
     sessionKey,
@@ -32,18 +32,19 @@ export function useChatSessionWindowEvents(opts: {
     sessionMgrRef,
     loadSessionById,
     applyAgentConfig,
-    setSessionName,
   } = opts;
 
   useEffect(() => {
     const handler = (e: Event) => {
       const d = (e as CustomEvent<{ key?: string; name?: string }>).detail;
       if (!d?.key || d.name === undefined) return;
-      if (d.key === sessionKey) setSessionName(d.name || null);
+      if (d.key === sessionKey) {
+        useChatSessionStore.getState().patchSessionMeta(d.key, { name: d.name || null });
+      }
     };
     window.addEventListener('session-updated', handler);
     return () => window.removeEventListener('session-updated', handler);
-  }, [sessionKey, setSessionName]);
+  }, [sessionKey]);
 
   useEffect(() => {
     const handler = (e: Event) => {

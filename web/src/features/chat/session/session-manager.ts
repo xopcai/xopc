@@ -1,6 +1,7 @@
 import type { Message } from '@/features/chat/messages/messages.types';
 import type { SessionInfo } from '@/features/chat/chat.types';
 import { sessionWireToUiMessages } from '@/features/chat/messages/agent-messages';
+import { fetchSessionActiveRun } from '@/features/chat/session/resolve-resume-run-id';
 import { listSessions } from '@/features/sessions/session-api';
 import { apiFetch } from '@/lib/fetch';
 import { apiFetchWithStartupRetry } from '@/lib/gateway-startup-retry';
@@ -126,6 +127,11 @@ export class SessionManager {
       const j = (await res.json().catch(() => ({}))) as { error?: string };
       throw new Error(j.error ?? `HTTP ${res.status}`);
     }
+  }
+
+  /** Gateway read-only active webchat run (`GET /api/sessions/:key/run`). */
+  fetchSessionActiveRun(sessionKey: string) {
+    return fetchSessionActiveRun(sessionKey);
   }
 
   async loadSession(sessionKey: string, offset = 0, beforeCursor?: string | null): Promise<SessionLoadResult> {

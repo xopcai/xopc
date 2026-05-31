@@ -10,7 +10,7 @@ import { respondStartupUnavailable } from '../lib/startup-unavailable.js';
 function ensureGatewayReadyForSessions(
   c: Parameters<typeof respondStartupUnavailable>[0],
   service: AuthenticatedRouteDeps['service'],
-  method: 'sessions.history' | 'sessions.messages' | 'sessions.list',
+  method: 'sessions.history' | 'sessions.messages' | 'sessions.list' | 'sessions.run',
 ): Response | null {
   if (service.isGatewayReady()) {
     return null;
@@ -119,6 +119,20 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
     return c.json({ ok: true, payload: { chatIds } });
   });
 
+  // GET /api/sessions/:key/run — read-only active webchat agent run (for UI resume)
+  authenticated.get('/api/sessions/:key/run', async (c) => {
+    const blocked = ensureGatewayReadyForSessions(c, service, 'sessions.run');
+    if (blocked) {
+      return blocked;
+    }
+    const key = c.req.param('key');
+    const session = await service.getSession(key);
+    if (!session) {
+      return c.json({ ok: false, error: 'Session not found' }, 404);
+    }
+    return c.json({ ok: true, payload: service.getSessionActiveRun(key) });
+  });
+
   // GET /api/sessions/:key/agent-config — resolved session agent settings (thinking, etc.)
   authenticated.get('/api/sessions/:key/agent-config', async (c) => {
     const key = c.req.param('key');
@@ -150,13 +164,26 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
         ? Math.min(500, Math.max(1, parsedLimit))
         : undefined;
 
-    const session = await service.getSession(key);
-    if (!session) {
+    const before = c.req.query('before')?.trim();
+    const offsetRaw = c.req.query('offset');
+    const parsedOffset = offsetRaw ? Number.parseInt(offsetRaw, 10) : 0;
+    const offset = Number.isFinite(parsedOffset) ? Math.max(0, parsedOffset) : 0;
+
+    const result = await service.getSessionMessagePage(key, {
+      limit,
+      offset,
+      ...(before ? { before } : {}),
+    });
+    if (!result) {
       return c.json({ ok: false, error: 'Session not found' }, 404);
     }
 
-    const messages = messagesToClientHistory(session.messages, { limit });
-    return c.json({ ok: true, payload: { messages } });
+    const messages = messagesToClientHistory(result.session.messages, { limit });
+    return c.json({
+      ok: true,
+      payload: { messages },
+      pagination: result.pagination,
+    });
   });
 
   // GET /api/sessions/:key/history — UI chat history page from the newest tail.

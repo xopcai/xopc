@@ -10,6 +10,8 @@
  * command modules.
  */
 import type { Command } from 'commander';
+import { resolveCliCatalogCommandPath } from './command-path-policy.js';
+import { shouldLoadExtensionCliForCommandPath } from './command-startup-policy.js';
 import { registry, type CLIContext } from './registry.js';
 
 export type CommandLoader = () => Promise<unknown>;
@@ -56,12 +58,13 @@ export const NON_REGISTRY_COMMAND_MATCHERS: NonRegistryMatcher[] = [
   {
     matches: (name) => name === 'extensions',
     load: async (program) => {
-      const [{ registerExtensionCommands }, { registerExtensionCliCommands }] = await Promise.all([
-        import('./commands/extension.js'),
-        import('./extension-cli-register.js'),
-      ]);
+      const { registerExtensionCommands } = await import('./commands/extension.js');
       registerExtensionCommands(program);
-      await registerExtensionCliCommands(program);
+      const commandPath = resolveCliCatalogCommandPath(process.argv);
+      if (shouldLoadExtensionCliForCommandPath(commandPath)) {
+        const { registerExtensionCliCommands } = await import('./extension-cli-register.js');
+        await registerExtensionCliCommands(program);
+      }
     },
   },
 ];
@@ -109,7 +112,15 @@ export async function tryLoadCommand(
   const moduleLoader = REGISTRY_COMMAND_MODULES[name];
   if (moduleLoader) {
     await moduleLoader();
-    return registry.installOne(program, name, ctx, getCtx);
+    const installed = registry.installOne(program, name, ctx, getCtx);
+    if (installed && name === 'gateway') {
+      const gatewayCmd = program.commands.find((command) => command.name() === 'gateway');
+      if (gatewayCmd) {
+        const { prepareGatewayCommandForArgv } = await import('./commands/gateway.js');
+        await prepareGatewayCommandForArgv(gatewayCmd, ctx);
+      }
+    }
+    return installed;
   }
   const matcher = NON_REGISTRY_COMMAND_MATCHERS.find((m) => m.matches(name));
   if (matcher) {
@@ -132,5 +143,10 @@ export async function loadAllCommands(
   registry.install(program, ctx, getCtx);
   for (const matcher of NON_REGISTRY_COMMAND_MATCHERS) {
     await matcher.load(program);
+  }
+  const gatewayCmd = program.commands.find((command) => command.name() === 'gateway');
+  if (gatewayCmd) {
+    const { prepareGatewayCommandForArgv } = await import('./commands/gateway.js');
+    await prepareGatewayCommandForArgv(gatewayCmd, ctx);
   }
 }

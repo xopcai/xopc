@@ -34,6 +34,18 @@ export function setPendingAgentRun(chatId: string, runId: string): void {
   }
 }
 
+/** Drop stored run id when leaving a session (e.g. New chat). Does not abort HTTP. */
+export function clearPendingAgentRunForChat(chatId: string): void {
+  const key = String(chatId ?? '').trim();
+  if (!key) return;
+  try {
+    sessionStorage.removeItem(pendingAgentRunStorageKey(key));
+    dispatchPendingAgentRunChanged(key);
+  } catch {
+    /* ignore */
+  }
+}
+
 export type CompactionState = {
   status: 'started' | 'completed' | 'skipped';
   tokensBefore?: number;
