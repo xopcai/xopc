@@ -138,6 +138,7 @@ jobs:
           fi
           # Same as local `pnpm run electron:build`: bundle gateway CLI to out/server/index.js for packaged apps.
           pnpm run electron:server:build
+          # electron-builder.mjs hides pnpm workspace markers + verifies asar node_modules size on success.
           # macOS: build architectures sequentially to avoid DMG temp file conflicts
           if [[ "${{ matrix.os }}" == "macos-latest" ]]; then
             echo "Building macOS x64..."
@@ -151,34 +152,24 @@ jobs:
       - name: Verify artifacts
         shell: bash
         run: |
+          set -euo pipefail
           echo "Checking build artifacts..."
           if [ ! -d "dist/release" ]; then
             echo "❌ dist/release directory not found!"
             exit 1
           fi
 
-          # Use process substitution + readarray fallback for bash < 4 (macOS uses bash 3.2).
-          # mapfile is bash 4+. POSIX read -ra works in bash 2.0+.
-          mapfile -t ARTIFACTS < <(bash scripts/list-electron-release-upload-files.sh dist/release) 2>/dev/null || {
-            mapfile_exit=$?
-            if [ "$mapfile_exit" -eq 127 ]; then
-              # mapfile not available (bash < 4): fall back to read -ra
-              while IFS= read -r f; do
-                ARTIFACTS+=("$f")
-              done < <(bash scripts/list-electron-release-upload-files.sh dist/release)
-            else
-              exit "$mapfile_exit"
-            fi
-          }
-          if [ ${#ARTIFACTS[@]} -eq 0 ]; then
+          artifacts="$(bash scripts/list-electron-release-upload-files.sh dist/release || true)"
+          if [ -z "$artifacts" ]; then
             echo "❌ No installable artifacts found in dist/release!"
             echo "Contents of dist/release:"
             find dist/release -type f
             exit 1
           fi
 
-          echo "✅ Found ${#ARTIFACTS[@]} publishable artifact(s):"
-          printf '%s\n' "${ARTIFACTS[@]}"
+          artifact_count="$(echo "$artifacts" | wc -l | tr -d ' ')"
+          echo "✅ Found ${artifact_count} publishable artifact(s):"
+          echo "$artifacts"
 
       - name: Upload release artifacts
         uses: actions/upload-artifact@v7

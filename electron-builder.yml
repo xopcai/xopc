@@ -19,26 +19,23 @@ publish:
 
 directories:
   output: dist/release
+  # Isolated app tree (see scripts/prepare-electron-pack-dir.mjs); keeps pnpm workspace deps out of asar.
+  app: out/electron-pack
   # App icons: icon.png (from web/public/logo.svg). electron-builder generates .icns / .ico at package time.
   buildResources: electron/resources
 
+# Runtime node_modules are staged under out/electron-pack/node_modules; skip auto collection from repo root.
+beforeBuild: scripts/electron-before-build.cjs
+
 files:
-  # Packaged apps embed the gateway and load UI from http://127.0.0.1 — not out/renderer (dev/preview only).
-  - out/main/**/*
-  - out/preload/**/*
-  - out/server/**/*
-  - package.json
-  # Gateway UI: `pnpm run build:web` → dist/gateway/static/root (not in esbuild server bundle)
-  - dist/gateway/static/root/**/*
-  - '!dist/gateway/static/root/**/*.map'
-  # Built-in skills: bundled SKILL.md files for the agent
-  - skills/**/*
+  - '**/*'
+  - '!**/*.map'
 
 extraMetadata:
   main: out/main/index.js
 
 extraResources:
-  - from: node_modules/@vscode/ripgrep/bin
+  - from: out/electron-pack/_pack-resources/rg
     to: bin
     filter:
       - rg
