@@ -56,6 +56,8 @@ export ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/"
 export ELECTRON_BUILDER_BINARIES_MIRROR="https://npmmirror.com/mirrors/electron-builder-binaries/"
 ```
 
+macOS 打 DMG 时需要同时设置上述两个镜像；请使用 **electron-builder ≥ 26.11.1**，否则 DMG 工具会错误地走 `ELECTRON_MIRROR`，在 `cdn.npmmirror.com/binaries/electron/dmg-builder@…` 上 404。
+
 ### 更多命令
 
 ```bash

@@ -56,6 +56,8 @@ export ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/"
 export ELECTRON_BUILDER_BINARIES_MIRROR="https://npmmirror.com/mirrors/electron-builder-binaries/"
 ```
 
+Both variables are required for `electron:build` on macOS (DMG needs `electron-builder-binaries`). Use **electron-builder ≥ 26.11.1** so DMG downloads do not incorrectly use `ELECTRON_MIRROR` (older versions 404 on `cdn.npmmirror.com/binaries/electron/dmg-builder@…`).
+
 ### More commands
 
 ```bash
