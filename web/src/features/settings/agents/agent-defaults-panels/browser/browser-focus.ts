@@ -1,4 +1,4 @@
-/** Query `?focus=` targets on `/settings/agent-browser` (scroll-into-view). */
+/** Query `?focus=` (legacy) and in-panel anchors on `/settings/agent-browser?tab=…`. */
 export type BrowserSettingsFocusId =
   | 'connection'
   | 'extension'

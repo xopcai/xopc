@@ -1,4 +1,4 @@
-import { CheckCircle2, ChevronDown, Circle } from 'lucide-react';
+import { CheckCircle2, Circle } from 'lucide-react';
 import type { ReactNode } from 'react';
 
 import { cn } from '@/lib/cn';
@@ -77,28 +77,22 @@ export function ExtensionSetupGuide({
   ];
 
   const completedCount = steps.filter((s) => s.done).length;
-  const defaultOpen = !connected;
 
   return (
-    <details
-      open={defaultOpen}
+    <div
       aria-label={m.browserExtensionInstallGuideTitle}
-      className="group rounded-xl border border-edge bg-surface-base open:pb-1"
+      className="rounded-xl border border-edge bg-surface-base px-3 py-3"
     >
-      <summary className="flex cursor-pointer list-none items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium text-fg transition-colors hover:text-fg [&::-webkit-details-marker]:hidden">
-        <ChevronDown
-          className="size-4 shrink-0 text-fg-muted transition-transform group-open:rotate-180"
-          aria-hidden
-        />
-        <span>{m.browserExtensionInstallGuideTitle}</span>
+      <div className="mb-3 flex items-center gap-2">
+        <h4 className="text-sm font-medium text-fg">{m.browserExtensionInstallGuideTitle}</h4>
         <span className="ml-auto text-xs font-normal text-fg-muted">
           {m.browserExtensionChecklistProgress.replace('{{done}}', String(completedCount)).replace(
             '{{total}}',
             String(steps.length),
           )}
         </span>
-      </summary>
-      <ol className="flex flex-col gap-3 px-3 pb-3 pt-1">
+      </div>
+      <ol className="flex flex-col gap-3">
         {steps.map((step, index) => (
           <li key={step.id} className="flex gap-2.5">
             <span className="mt-0.5 shrink-0" aria-hidden>
@@ -125,6 +119,6 @@ export function ExtensionSetupGuide({
           </li>
         ))}
       </ol>
-    </details>
+    </div>
   );
 }

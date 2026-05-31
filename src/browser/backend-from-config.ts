@@ -3,6 +3,16 @@ import type { Config } from '../config/schema.js';
 import type { BrowserBackend } from './providers/types.js';
 
 /**
+ * Whether the gateway should keep the Chrome extension WebSocket bridge listening.
+ * True when browser tools are enabled and the resolved backend is extension (including default).
+ */
+export function shouldRunExtensionBridgeServer(cfg: Config | undefined): boolean {
+  const b = cfg?.agents?.defaults?.browser;
+  if (b?.enabled === false) return false;
+  return resolveBrowserBackendFromConfig(cfg).mode === 'extension';
+}
+
+/**
  * Resolve browser backend from agent defaults.
  * Precedence: `backend: 'extension'` → `cloakbrowser` → `cdpUrl` (CDP) → `cloudProvider` (remote) → `local` (explicit) → extension (default).
  */

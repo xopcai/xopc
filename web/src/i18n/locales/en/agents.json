@@ -32,6 +32,16 @@
       "system-prompt": "System prompt"
     },
     "defaultsTabsAria": "Agent default configuration sections",
+    "browserTabs": {
+      "overview": "Overview",
+      "extension": "Chrome extension",
+      "local": "Local Chromium",
+      "cloakbrowser": "CloakBrowser",
+      "cdp": "CDP",
+      "cloud": "Cloud",
+      "behavior": "Behavior & security"
+    },
+    "browserTabsAria": "Browser settings sections",
     "cardModelsTitle": "Models",
     "cardModelsSubtitle": "Chat, vision, and image generation defaults",
     "cardWorkspaceTitle": "Workspace & attachments",
@@ -118,8 +128,8 @@
     "browserSecurityShow": "Security & limits",
     "browserSecurityHide": "Hide security & limits",
     "browserSecurityHint": "Private URL access and per-command timeouts. Cloud metadata endpoints are always blocked.",
-    "browserPickerTitle": "Connection method",
-    "browserPickerSubtitle": "Pick how the gateway reaches a browser. Setup for the selected method appears below.",
+    "browserPickerTitle": "Active browser",
+    "browserPickerSubtitle": "Choose which backend agents use at runtime. Configure each method in its tab.",
     "browserConfiguringHeader": "Configuring: {{mode}}",
     "browserSelectedBadge": "Selected",
     "browserStatusReady": "Ready",

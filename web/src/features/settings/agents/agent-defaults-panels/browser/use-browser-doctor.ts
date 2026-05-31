@@ -132,7 +132,13 @@ export function useBrowserDoctor(opts: {
   binaryPath?: string;
   /** When false, all backend probes stay idle. */
   browserEnabled?: boolean;
-  /** Only the active backend is probed (lazy). */
+  /** Probe Chrome extension bridge status. */
+  probeExtension?: boolean;
+  /** Probe local Playwright / Chromium. */
+  probeLocal?: boolean;
+  /** Probe CloakBrowser install. */
+  probeCloak?: boolean;
+  /** Active backend — extension bridge auto-start runs only when this is `extension`. */
   activeBackend?: BackendMode;
   extensionHost?: string;
   extensionPort?: number;
@@ -186,7 +192,9 @@ export function useBrowserDoctor(opts: {
     dispatch({ type: 'cloak', state: { kind: 'ok', data } });
   }, []);
 
-  const extensionActive = opts.browserEnabled === true && opts.activeBackend === 'extension';
+  const extensionProbe = opts.browserEnabled === true && opts.probeExtension === true;
+  const localProbe = opts.browserEnabled === true && opts.probeLocal === true;
+  const cloakProbe = opts.browserEnabled === true && opts.probeCloak === true;
   const { extensionHost, extensionPort } = opts;
 
   const refetchExtension = useCallback(async () => {
@@ -277,40 +285,40 @@ export function useBrowserDoctor(opts: {
     });
   }, []);
 
-  // Lazy probe: Playwright only when local backend is active.
+  // Lazy probe per visible settings tab (overview probes all three for the picker).
   useEffect(() => {
-    if (!opts.browserEnabled || opts.activeBackend !== 'local') {
+    if (!localProbe) {
       dispatch({ type: 'playwright-idle' });
       return undefined;
     }
     void refetchPlaywright();
     return undefined;
-  }, [opts.activeBackend, opts.browserEnabled, refetchPlaywright]);
+  }, [localProbe, refetchPlaywright]);
 
   useEffect(() => {
-    if (!opts.browserEnabled || opts.activeBackend !== 'cloakbrowser') {
+    if (!cloakProbe) {
       dispatch({ type: 'cloak-idle' });
       return undefined;
     }
     void refetchCloak();
     return undefined;
-  }, [opts.activeBackend, opts.browserEnabled, refetchCloak]);
+  }, [cloakProbe, refetchCloak]);
 
-  const trackedExtensionActiveRef = useRef(extensionActive);
-  if (trackedExtensionActiveRef.current !== extensionActive) {
-    trackedExtensionActiveRef.current = extensionActive;
-    if (!extensionActive) {
+  const trackedExtensionProbeRef = useRef(extensionProbe);
+  if (trackedExtensionProbeRef.current !== extensionProbe) {
+    trackedExtensionProbeRef.current = extensionProbe;
+    if (!extensionProbe) {
       dispatch({ type: 'extension-idle' });
     }
   }
 
   useEffect(() => {
-    if (!extensionActive) return undefined;
+    if (!extensionProbe) return undefined;
     void refetchExtension();
     void refetchExtensionArtifacts();
     const id = setInterval(() => void refetchExtension(), 5000);
     return () => clearInterval(id);
-  }, [extensionActive, refetchExtension, refetchExtensionArtifacts]);
+  }, [extensionProbe, refetchExtension, refetchExtensionArtifacts]);
 
   const startExtensionBridge = useCallback(
     async (params?: { host?: string; port?: number }) => {
@@ -332,6 +340,27 @@ export function useBrowserDoctor(opts: {
     await postJson<{ connected: boolean }>(apiUrl('/api/browser/extension/disconnect'), {});
     await refetchExtension();
   }, [refetchExtension]);
+
+  const extensionAutoStartKeyRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!extensionProbe || opts.activeBackend !== 'extension') {
+      extensionAutoStartKeyRef.current = null;
+      return undefined;
+    }
+    if (extension.kind !== 'ok') return undefined;
+    if (extension.data.running || extension.data.bridgeHeld) return undefined;
+
+    const port = extensionPort ?? 19820;
+    const key = `${extensionHost}:${port}`;
+    if (extensionAutoStartKeyRef.current === key) return undefined;
+
+    extensionAutoStartKeyRef.current = key;
+    void startExtensionBridge({ host: extensionHost, port: extensionPort }).catch(() => {
+      extensionAutoStartKeyRef.current = null;
+    });
+    return undefined;
+  }, [extensionProbe, extension, extensionHost, extensionPort, opts.activeBackend, startExtensionBridge]);
 
   const pingCdp = useCallback(async (cdpUrl: string) => {
     return postJson<CdpPingResult>(apiUrl('/api/browser/cdp/ping'), { cdpUrl });

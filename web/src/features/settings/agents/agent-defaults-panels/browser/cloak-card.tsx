@@ -2,7 +2,7 @@ import { CheckCircle2, Download, LoaderCircle, RefreshCw, ShieldCheck } from 'lu
 import { useCallback, useState } from 'react';
 
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { SettingsCollapsibleSection } from '@/features/settings/settings-collapsible-section';
+import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/settings/settings-form-section';
 
 import { AgentDefaultsField } from '../../agent-defaults-field';
 import { inputClassName, selectClassName } from '../../defaults-field-styles';
@@ -213,12 +213,8 @@ export function CloakCard({
         </div>
       </BackendModeCard>
 
-      <SettingsCollapsibleSection
-        showLabel={m.browserCloakAdvancedShow}
-        hideLabel={m.browserCloakAdvancedHide}
-        hint={m.browserCloakAdvancedHint}
-        className="mt-4 border border-edge-subtle"
-      >
+      <SettingsFormSection className="mt-4 border border-edge-subtle">
+        <SettingsFormSectionHeader icon={ShieldCheck} title={m.browserCloakAdvancedShow} />
         <div className="grid gap-5 sm:grid-cols-2">
           <AgentDefaultsField label={m.label.browserCloakCacheDir} description={m.desc.browserCloakCacheDir}>
             <input
@@ -299,7 +295,7 @@ export function CloakCard({
             </AgentDefaultsField>
           </div>
         </div>
-      </SettingsCollapsibleSection>
+      </SettingsFormSection>
 
       <ConfirmDialog
         open={confirmOpen}
