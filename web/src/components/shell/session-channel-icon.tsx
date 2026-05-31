@@ -6,10 +6,6 @@ const BRAND_IMG_BY_CHANNEL: Record<string, string> = {
   // Static assets in `web/public` (served as `/…` in Vite + gateway static root).
   feishu: '/channel-icons/feishu.svg',
   lark: '/channel-icons/lark.svg',
-  telegram: '/channel-icons/telegram.svg',
-  weixin: '/channel-icons/weixin.svg',
-  // Extra aliases (if metadata ever uses these strings)
-  wechat: '/channel-icons/wechat.svg',
 };
 
 /** Small glyph for `SessionMetadata.sourceChannel` in sidebar / lists (some channels use brand marks from `web/public`). */

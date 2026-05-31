@@ -81,6 +81,10 @@ export default defineConfig({
         target: 'http://localhost:18790',
         changeOrigin: true,
       },
+      '/favicon.ico': {
+        target: 'http://localhost:18790',
+        changeOrigin: true,
+      },
     },
   },
 });

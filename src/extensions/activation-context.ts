@@ -9,6 +9,8 @@ import { isSttProviderConfigured } from '../voice/stt/list-providers.js';
 import { collectTtsProviderConfigEntries } from '../voice/tts/config-slice.js';
 import { isProviderConfigured } from '../voice/tts/factory.js';
 import { mergeTtsConfigFromAppConfig } from '../voice/tts/merge-config.js';
+import { isProviderConfiguredSync } from '../providers/index.js';
+import { PROVIDER_ENV_MAP } from '../providers/env-keys.js';
 import type { ActivationContext } from './activation-planner.js';
 
 function isRecord(x: unknown): x is Record<string, unknown> {
@@ -71,19 +73,17 @@ export function collectConfiguredChannelIds(config: unknown): string[] | undefin
 
 function collectConfiguredLlmProviderIds(config: unknown): string[] {
   const root = config as Record<string, unknown> | undefined;
-  const ids: string[] = [];
+  const candidateIds = new Set<string>(Object.keys(PROVIDER_ENV_MAP));
   const providers = root?.providers;
   if (isRecord(providers)) {
     for (const key of Object.keys(providers)) {
-      const v = providers[key];
-      if (!isRecord(v)) continue;
-      if (
-        (typeof v.apiKey === 'string' && v.apiKey.length > 0) ||
-        (typeof v.api_key === 'string' && v.api_key.length > 0) ||
-        v.enabled === true
-      ) {
-        ids.push(key);
-      }
+      candidateIds.add(key);
+    }
+  }
+  const ids: string[] = [];
+  for (const key of candidateIds) {
+    if (isProviderConfiguredSync(key)) {
+      ids.push(key);
     }
   }
   return ids;

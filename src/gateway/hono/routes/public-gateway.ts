@@ -80,6 +80,8 @@ export function registerPublicGatewayRoutes(app: Hono, service: GatewayService):
   app.get('/favicon.ico', (c) => {
     const response = serveStaticFile('favicon.ico', c.req.raw);
     if (response) return response;
+    const fallback = serveStaticFile('logo.svg', c.req.raw);
+    if (fallback) return fallback;
     return c.text('Not found', 404);
   });
 
