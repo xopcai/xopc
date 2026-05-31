@@ -2,10 +2,13 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { createMiddleware } from 'hono/factory';
 import { bodyLimit } from 'hono/body-limit';
+import { getConnInfo } from '@hono/node-server/conninfo';
 
 import { resolveGatewayEffectiveHost } from '../../config/gateway-bind.js';
 import { createFixedWindowRateLimiter } from '../../infra/rate-limit.js';
 import { createLogger } from '../../utils/logger.js';
+import { getClientIpFromHeaders } from '../auth-rate-limit.js';
+import { resolveClientIpFromRequest } from '../client-ip.js';
 import type { GatewayService } from '../service.js';
 import { resolveAllowedBrowserOrigins, resolveGatewayServiceListenPort } from '../host.js';
 import { loadTunnelState } from '../../tunnel/tunnel-state.js';
@@ -55,7 +58,10 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     });
 
   app.use(logContextMiddleware());
-  app.use(logger());
+  app.use(logger({
+    trustedProxies: service.currentConfig.gateway?.trustedProxies,
+    allowRealIpFallback: service.currentConfig.gateway?.allowRealIpFallback === true,
+  }));
   app.use(
     cors({
       origin: (origin) => {
@@ -122,8 +128,14 @@ export function createHonoApp(config: HonoAppConfig): Hono {
 
     if (!result.ok) {
       log.warn(
-        { origin, reason: 'reason' in result ? result.reason : 'unknown', path: c.req.path },
-        'Browser origin check failed',
+        {
+          origin,
+          requestHost: c.req.header('host'),
+          reason: 'reason' in result ? result.reason : 'unknown',
+          path: c.req.path,
+          method: c.req.method,
+        },
+        `Browser origin check failed: ${origin} not in allowed list`,
       );
       return c.json({ error: 'Forbidden', message: 'Origin not allowed' }, 403);
     }
@@ -134,6 +146,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   app.use('/api/skills/upload', bodyLimit({
     maxSize: 10 * 1024 * 1024,
     onError: (c) => {
+      log.warn({ path: c.req.path, maxSizeMb: 10 }, 'Request body too large: skills upload exceeds 10MB limit');
       return c.json({ error: 'Skill package too large', maxSize: '10MB' }, 413);
     },
   }));
@@ -146,8 +159,10 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     const maxSizeMb = Math.ceil(maxSize / (1024 * 1024));
     return bodyLimit({
       maxSize,
-      onError: (ctx) =>
-        ctx.json({ error: 'Request body too large', maxSize: `${maxSizeMb}MB` }, 413),
+      onError: (ctx) => {
+        log.warn({ path: ctx.req.path, maxSizeMb }, `Request body too large: exceeds ${maxSizeMb}MB limit`);
+        return ctx.json({ error: 'Request body too large', maxSize: `${maxSizeMb}MB` }, 413);
+      },
     })(c, next);
   });
 
@@ -193,9 +208,24 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   }, RATE_LIMIT_CLEANUP_INTERVAL);
 
   const strictRateLimitMiddleware = createMiddleware(async (c, next) => {
-    const clientIp = c.req.header('x-forwarded-for')?.split(',')[0]?.trim()
-      ?? c.req.header('x-real-ip')
-      ?? 'unknown';
+    const trustedProxies = service.currentConfig.gateway?.trustedProxies;
+    const allowRealIpFallback = service.currentConfig.gateway?.allowRealIpFallback === true;
+    let remoteAddress: string | undefined;
+    try {
+      remoteAddress = getConnInfo(c).remote.address;
+    } catch {
+      remoteAddress = undefined;
+    }
+    const clientIp = trustedProxies?.length
+      ? resolveClientIpFromRequest({
+          remoteAddress,
+          getHeader: (name) => c.req.header(name),
+          trustedProxies,
+          allowRealIpFallback,
+        })
+      : getClientIpFromHeaders({
+          get: (name) => c.req.header(name) ?? undefined,
+        });
 
     let limiter = strictRateLimiter.get(clientIp);
     if (!limiter) {
@@ -208,11 +238,25 @@ export function createHonoApp(config: HonoAppConfig): Hono {
 
     const result = limiter.consume();
     if (!result.allowed) {
-      log.warn({ clientIp, retryAfterMs: result.retryAfterMs }, 'Rate limit exceeded');
+      log.warn(
+        {
+          clientIp,
+          path: c.req.path,
+          method: c.req.method,
+          limit: STRICT_RATE_LIMIT_MAX,
+          windowSec: Math.round(STRICT_RATE_LIMIT_WINDOW_MS / 1000),
+          retryAfterSec: Math.ceil(result.retryAfterMs / 1000),
+          reason: 'api_rate_limit_exceeded',
+        },
+        `API rate limit exceeded: ${STRICT_RATE_LIMIT_MAX} req/${STRICT_RATE_LIMIT_WINDOW_MS / 1000}s limit for IP ${clientIp}`,
+      );
       c.header('Retry-After', String(Math.ceil(result.retryAfterMs / 1000)));
+      c.header('X-RateLimit-Limit', String(STRICT_RATE_LIMIT_MAX));
+      c.header('X-RateLimit-Remaining', '0');
       return c.json({ error: 'Too many requests' }, 429);
     }
 
+    c.header('X-RateLimit-Limit', String(STRICT_RATE_LIMIT_MAX));
     c.header('X-RateLimit-Remaining', String(result.remaining));
     await next();
   });
@@ -236,11 +280,26 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   app.route('/', authenticated);
 
   app.notFound((c) => {
+    const isApiRoute = c.req.path.startsWith('/api/');
+    const fields = { path: c.req.path, method: c.req.method };
+    if (isApiRoute) {
+      log.warn(fields, 'Route not found');
+    } else {
+      log.debug(fields, 'Route not found');
+    }
     return c.json({ error: 'Not found' }, 404);
   });
 
   app.onError((err, c) => {
-    log.error({ err }, 'Hono error');
+    log.error(
+      {
+        err,
+        path: c.req.path,
+        method: c.req.method,
+        userAgent: c.req.header('user-agent'),
+      },
+      `Hono error on ${c.req.method} ${c.req.path}: ${err instanceof Error ? err.message : String(err)}`,
+    );
     return c.json({ error: 'Internal server error' }, 500);
   });
 

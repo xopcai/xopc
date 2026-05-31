@@ -152,6 +152,20 @@ export function auth(config?: AuthConfig) {
         if (rateLimitActive) {
           const blocked = limiter.checkBlocked(rateLimitKey, activeRlCfg);
           if (blocked.blocked) {
+            log.warn(
+              {
+                clientIp,
+                origin: origin ?? undefined,
+                path: c.req.path,
+                method: c.req.method,
+                attemptCount: activeRlCfg.maxAttempts,
+                windowSec: Math.round(activeRlCfg.windowMs / 1000),
+                blockDurationSec: Math.round(activeRlCfg.blockDurationMs / 1000),
+                retryAfterSec: blocked.retryAfterSec,
+                reason: 'auth_failure_rate_limit',
+              },
+              `Auth rate limit blocked: ${activeRlCfg.maxAttempts} failures in ${activeRlCfg.windowMs / 1000}s, blocking for ${activeRlCfg.blockDurationMs / 1000}s`,
+            );
             c.header('Retry-After', String(blocked.retryAfterSec));
             return c.json(
               {
@@ -166,8 +180,13 @@ export function auth(config?: AuthConfig) {
         }
 
         log.warn(
-          { path: c.req.path, method: c.req.method, clientIp, reason: result.reason },
-          'HTTP auth rejected: trusted-proxy validation failed',
+          {
+            path: c.req.path,
+            method: c.req.method,
+            clientIp,
+            reason: result.reason,
+          },
+          `HTTP auth rejected: trusted-proxy validation failed (${result.reason})`,
         );
         return c.json({ error: 'Unauthorized', message: 'Trusted-proxy authentication failed' }, 401);
       }
@@ -217,6 +236,20 @@ export function auth(config?: AuthConfig) {
     if (rateLimitActive) {
       const blocked = limiter.checkBlocked(rateLimitKey, activeRlCfg);
       if (blocked.blocked) {
+        log.warn(
+          {
+            clientIp,
+            origin: origin ?? undefined,
+            path: requestPath,
+            method: c.req.method,
+            attemptCount: activeRlCfg.maxAttempts,
+            windowSec: Math.round(activeRlCfg.windowMs / 1000),
+            blockDurationSec: Math.round(activeRlCfg.blockDurationMs / 1000),
+            retryAfterSec: blocked.retryAfterSec,
+            reason: 'auth_failure_rate_limit',
+          },
+          `Auth rate limit blocked: ${activeRlCfg.maxAttempts} failures in ${activeRlCfg.windowMs / 1000}s, blocking for ${activeRlCfg.blockDurationMs / 1000}s`,
+        );
         c.header('Retry-After', String(blocked.retryAfterSec));
         return c.json(
           {
