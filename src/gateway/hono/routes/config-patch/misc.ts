@@ -30,7 +30,6 @@ import { assertGatewayRuntimeConfig } from '../../../runtime-config.js';
 import { resolveGatewayAuth, assertGatewayAuthConfigured } from '../../../auth.js';
 import { type PatchResult, PATCH_OK, patchError } from './result.js';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function applyMiscPatch(config: Config, body: any): Promise<PatchResult> {
   if (body.update !== undefined && typeof body.update === 'object' && body.update !== null) {
     const updateResult = mergeUpdateConfigPatch(config, body.update as Record<string, unknown>);
@@ -221,7 +220,6 @@ export async function applyMiscPatch(config: Config, body: any): Promise<PatchRe
  * could break the bind/auth contract. Runs *after* all per-section patches
  * land so it sees the fully merged shape.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function validateGatewayAfterPatch(config: Config, body: any): PatchResult {
   if (body.gateway === undefined) return PATCH_OK;
   try {
