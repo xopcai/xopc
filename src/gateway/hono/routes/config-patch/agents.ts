@@ -20,12 +20,10 @@ import {
   normalizePatchAgentModel,
 } from '../../lib/agent-model.js';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function applyAgentsPatch(config: Config, body: any): void {
   if (!body.agents?.defaults) return;
 
   if (!config.agents) config.agents = { defaults: { workspace: '~/.xopc/workspace', model: 'anthropic/claude-sonnet-4-5', maxTokens: 8192, temperature: 0.7, maxToolIterations: 20, maxRequestsPerTurn: 50, maxToolFailuresPerTurn: 3, thinkingDefault: 'medium', reasoningDefault: 'stream', verboseDefault: 'full' } };
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   if (!config.agents.defaults) config.agents.defaults = {} as any;
 
   if (body.agents.defaults.model !== undefined) {

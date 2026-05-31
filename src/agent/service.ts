@@ -4,7 +4,6 @@ import { type Config, getAgentDefaultModelRef } from '../config/schema.js';
 import { maybeAutoTitleSessionStore } from '../session/session-title.js';
 import type { ChannelManager } from '../channels/manager.js';
 import { existsSync, readFileSync } from 'node:fs';
-import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import {
@@ -69,7 +68,6 @@ import {
   extractProfileAgentId,
   resolveEffectiveAgentProfileForSession,
 } from '../config/agent-profile.js';
-import { type TypingController } from './lifecycle/typing.js';
 import { cleanTrailingErrors } from './memory/message-sanitizer.js';
 import { tryApplySessionTranscriptHygiene } from './transcript/transcript-hygiene.js';
 import {

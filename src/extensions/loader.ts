@@ -28,21 +28,9 @@ import type { AgentTool } from '@earendil-works/pi-agent-core';
 import type {
   ExtensionApi,
   ExtensionModule,
-  ExtensionRegistry,
-  ExtensionCliRegistration,
-  GatewayMethodHandler,
-  HttpRequestHandler,
-  ExtensionCommand,
-  ExtensionReloadRegistration,
-  ExtensionService,
-  ExtensionHookEvent,
-  ExtensionHookHandler,
   ExtensionManifest,
-  ExtensionRecord,
   ResolvedExtensionConfig,
   DiscoveredExtension,
-  TuiExtensionRegistration,
-  TuiExtensionRegistrar,
 } from './types/index.js';
 import type { ActivationContext } from './activation-planner.js';
 import { ActivationPlanner, type ActivationLoadPhase } from './activation-planner.js';
@@ -58,7 +46,6 @@ import { ManifestRegistry } from './manifest-registry.js';
 import { normalizeExtensionManifest } from './normalize-manifest.js';
 import { checkEngineCompatibility } from './engine-check.js';
 import { PACKAGE_VERSION } from '../package-version.js';
-import type { ChannelPlugin } from '../channels/plugin-types.js';
 import { bundledChannelPlugins } from '../channels/plugins/bundled.js';
 import { ExtensionApiImpl, createExtensionLogger, createPathResolver } from './api.js';
 import { validateSpeechProviderContracts } from './speech-provider-contracts.js';

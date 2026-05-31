@@ -45,7 +45,6 @@ function parseDeferIdList(raw: unknown): string[] | null {
   return ids;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function applyGatewayPatch(config: Config, body: any): PatchResult {
   if (body.gateway?.heartbeat !== undefined && typeof body.gateway.heartbeat === 'object') {
     const gw = ensureGateway(config);

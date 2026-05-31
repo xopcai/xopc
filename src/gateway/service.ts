@@ -11,9 +11,6 @@ import { ExtensionLoader, areExtensionsGloballyDisabled, buildExtensionMetadataS
 import { HeartbeatService, heartbeatRunnerConfigFromConfig } from './heartbeat/index.js';
 import { SessionIndex } from '../session/index.js';
 import type { Config } from '../config/schema.js';
-import type { SessionListQuery, ExportFormat } from '../session/types.js';
-import type { SessionPatchBody } from '../session/patch-metadata.js';
-import type { CompactionResult } from '../agent/memory/compaction.js';
 import { wireTunnelEventsToGateway } from '../tunnel/gateway-lifecycle.js';
 import {
   stopTailscaleExposure,
@@ -26,7 +23,7 @@ import { auditGatewayConfig } from './security/audit.js';
 import { assertGatewayRuntimeConfig } from './runtime-config.js';
 import { resolveEffectiveGatewayPort } from './host.js';
 import { isGatewayStrictSecurityEnabled } from './auth-rate-limit.js';
-import { getModelRegistry, prewarmModelRegistry } from '../providers/index.js';
+import { prewarmModelRegistry } from '../providers/index.js';
 import { createLogger, getLogDir, getLogStats } from '../utils/logger.js';
 import {
   resolveConfigPath,
@@ -38,15 +35,11 @@ import { AgentRunRelay, type RelayEvent } from './agent-run-relay.js';
 import { registerClarifyBridge } from './clarify-runtime.js';
 import { PACKAGE_VERSION } from '../package-version.js';
 
-import {
-  disposeAllSessionMcpRuntimes,
-  retireSessionMcpRuntimeForSessionKey,
-} from '../agent/mcp/bundle-mcp-tools.js';
+import { disposeAllSessionMcpRuntimes } from '../agent/mcp/bundle-mcp-tools.js';
 import { getDefaultAgentId } from '../routing/resolve-route.js';
 import { scheduleGatewayUpdateCheck } from '../infra/update-startup.js';
 import { resolveChannelConnectDeferSet } from './resolve-channel-connect-defer.js';
 import { restartGatewayProcessWithFreshPid } from './respawn.js';
-import { getDistinctSessionChatIds } from './service/session-chat-ids.js';
 import { GatewaySessionsApi } from './service/sessions-api.js';
 import { GatewayMarketplaceService } from './service/marketplace-service.js';
 import { GatewayConfigCoordinator } from './service/config-coordinator.js';

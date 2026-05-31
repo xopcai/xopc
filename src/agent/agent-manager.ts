@@ -52,7 +52,6 @@ import { isUnderManagedSkillsDir } from './skills/managed-store.js';
 import { loadSkillsLock, type SkillHubLockEntry } from './skills/hub-lock.js';
 import { basename, resolve, sep } from 'node:path';
 
-import { BuiltinMemoryStore } from './memory/builtin-memory-store.js';
 import {
   isMemorySubsystemEnabled,
   shouldRegisterCuratedMemoryTool,
