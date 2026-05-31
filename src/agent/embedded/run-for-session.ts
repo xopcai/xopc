@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import type { AgentMessage, ThinkingLevel } from '@earendil-works/pi-agent-core';
 
 import type { Config } from '../../config/schema.js';
-import type { AgentManager } from '../agent-manager.js';
+import type { AgentInstanceGateway } from '../agent-instance-gateway.js';
 import type { ModelManager } from '../models/index.js';
 import type { SessionStore } from '../../session/store.js';
 import { resolveAgentTurnTimeoutMs } from '../orchestration/run-agent-turn-with-timeout.js';
@@ -22,7 +22,7 @@ export type RunEmbeddedForSessionParams = {
   runId?: string;
   userMessage: AgentMessage;
   sessionStore: SessionStore;
-  agentManager: AgentManager;
+  agentManager: AgentInstanceGateway;
   modelManager: ModelManager;
   thinkingOverride?: string | null;
   abortSignal?: AbortSignal;
@@ -126,7 +126,7 @@ export async function runEmbeddedTurnForSession(
 async function maybeAutoCompactBeforeTurn(opts: {
   sessionKey: string;
   sessionStore: SessionStore;
-  agentManager: AgentManager;
+  agentManager: AgentInstanceGateway;
   model: RunXopcEmbeddedTurnParams['model'];
   config: Config | undefined;
   onEvent?: (event: EmbeddedStreamEvent) => void;

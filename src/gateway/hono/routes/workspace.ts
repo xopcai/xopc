@@ -5,7 +5,8 @@ import { copyFile, link, mkdir, readdir, readFile, rename, stat, unlink, writeFi
 import { basename, dirname, join, resolve } from 'node:path';
 
 import { extractProfileAgentId } from '../../../config/agent-profile.js';
-import { type Config, getWorkspacePath } from '../../../config/schema.js';
+import { type Config } from '../../../config/schema.js';
+import { getWorkspacePath } from '../../../config/workspace-path-helpers.js';
 import { validateWritePath } from '../../../agent/sandbox/path-policy.js';
 import { resolveSafeInboundFilePath } from '../../../channels/attachments/inbound-persist.js';
 import { resolveSafeTtsFilePath } from '../../../channels/attachments/outbound-tts-persist.js';
@@ -148,7 +149,7 @@ async function resolveEditorWorkspaceRootAsync(
   const sk = typeof sessionKeyRaw === 'string' ? sessionKeyRaw.trim() : '';
   if (sk) {
     try {
-      const root = await service.getEffectiveWorkspacePathForSession(sk);
+      const root = await service.sessions.getEffectiveWorkspacePath(sk);
       return { ok: true, root };
     } catch (err) {
       const em = err instanceof Error ? err.message : String(err);

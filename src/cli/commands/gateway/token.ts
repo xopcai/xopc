@@ -1,7 +1,7 @@
 import { Command } from 'commander';
 import crypto from 'crypto';
 import { resolveConfigPath } from '../../../config/paths.js';
-import { getContextWithOpts } from '../../index.js';
+import { getContextWithOpts } from '../../context.js';
 
 /**
  * Create the token subcommand for managing gateway authentication token.

@@ -12,6 +12,7 @@ import {
   type ThinkingLevel,
 } from '@earendil-works/pi-agent-core';
 import type { Model, Api } from '@earendil-works/pi-ai';
+import type { AgentInstanceGateway } from './agent-instance-gateway.js';
 import { type Config, getAgentDefaultModelRef } from '../config/schema.js';
 import { applyConfigOverrides } from '../config/runtime-overrides.js';
 import { resolveAgentProfileDir } from './agent-scope.js';
@@ -30,8 +31,6 @@ import { resolveBundledSkillsDir, resolveStateDir } from '../config/paths.js';
 import { loadProfileMarkdownFiles, extractTextContent } from './context/workspace.js';
 import { resolveBootstrapContextSync } from './bootstrap/bootstrap-files.js';
 import type { EmbeddedContextFile } from './bootstrap/types.js';
-import { SkillManager } from './skills/index.js';
-import { SystemPromptBuilder } from './prompt/service-prompt-builder.js';
 import { AgentToolsFactory } from './tools/factory.js';
 import { parseMcpToolName } from './mcp/bundle-mcp-policy.js';
 import {
@@ -54,32 +53,16 @@ import { loadSkillsLock, type SkillHubLockEntry } from './skills/hub-lock.js';
 import { basename, resolve, sep } from 'node:path';
 
 import { BuiltinMemoryStore } from './memory/builtin-memory-store.js';
-import { createMemoryManagerFromConfig } from './memory/create-memory-manager.js';
-import { injectPrefetchIntoUserMessage } from './memory/inject-prefetch.js';
 import {
   isMemorySubsystemEnabled,
-  resolveBuiltinMemoryStoreConfig,
-  shouldInjectMemoryPrefetchThisTurn,
   shouldRegisterCuratedMemoryTool,
 } from './memory/memory-config.js';
 import type { MemoryManager } from './memory/manager.js';
-import { extractAgentUserPlainText } from './memory/user-message-text.js';
-import { resolveBackgroundReviewSettings } from './background-review/settings.js';
-import { runBackgroundReviewTurn } from './background-review/run-background-review.js';
-import {
-  isAssistantTurnAborted,
-  isAssistantTurnFailed,
-} from './orchestration/llm-turn-retry.js';
+import { MemoryPrefetchCoordinator } from './memory/prefetch-coordinator.js';
+import { WorkspaceRuntimeRegistry, type WorkspaceRuntime } from './workspace-runtime/registry.js';
+import { BackgroundReviewCoordinator } from './background-review/coordinator.js';
 
 const log = createLogger('AgentManager');
-
-/** Counters for optional post-turn memory/skill review (see `agents.defaults.backgroundReview`). */
-export interface BackgroundNudgeState {
-  turnsSinceMemory: number;
-  itersSinceSkill: number;
-  pendingMemoryReview: boolean;
-  unsubscribe?: () => void;
-}
 
 export interface SkillCatalogEntry {
   directoryId: string;
@@ -128,17 +111,10 @@ export interface AgentInstance {
   registeredToolNames: string[];
   /** Declared env var names from skill_view; shell reads values from process.env at spawn time. */
   skillEnvPassthroughKeys: Set<string>;
-  backgroundNudge: BackgroundNudgeState;
 }
 
-interface WorkspaceRuntime {
-  skillManager: SkillManager;
-  systemPromptBuilder: SystemPromptBuilder;
-  builtinMemoryStore: BuiltinMemoryStore;
-  memoryManager: MemoryManager;
-}
 
-export class AgentManager {
+export class AgentManager implements AgentInstanceGateway {
   private agents = new Map<string, AgentInstance>();
   private config: AgentManagerConfig;
   private toolsFactory: AgentToolsFactory;
@@ -154,58 +130,27 @@ export class AgentManager {
   private defaultModel: string;
   private credentialCache = new Map<string, string>();
   private credentialResolver: CredentialResolver;
-  private workspaceRuntimes = new Map<string, WorkspaceRuntime>();
-  /** Per-session user-message index for prefetch injection cadence. */
-  private memoryPrefetchUserTurn = new Map<string, number>();
+  private workspaceRuntimes: WorkspaceRuntimeRegistry;
+  private memoryPrefetch: MemoryPrefetchCoordinator;
+  private backgroundReview: BackgroundReviewCoordinator;
 
   constructor(config: AgentManagerConfig) {
     this.config = config;
     this.baseWorkspacePath = this.computeBaseWorkspacePath();
-    const baseRt = this.getWorkspaceRuntime(this.baseWorkspacePath);
-
-    this.toolsFactory = new AgentToolsFactory({
-      workspace: this.baseWorkspacePath,
-      extensionRegistry: config.extensionRegistry,
-      getCurrentContext: config.getCurrentContext,
-      hookRunner: config.hookRunner,
-      bus: config.bus,
-      getConfig: () => this.mergedConfig(),
-      getPrimaryModel: () => this.resolveModelStringToModel(this.pickDefaultModelRef()),
-      getBuiltinMemoryStore: () => baseRt.builtinMemoryStore,
-      getMemoryManager: () => baseRt.memoryManager,
-      getSessionStore: config.getSessionStore,
-      gatewayClarify: config.gatewayClarify,
-      getCronService: config.getCronService,
-      getSkillIndexingContext: () => {
-        const ctx = this.config.getCurrentContext?.();
-        if (!ctx?.sessionKey) return undefined;
-        const inst = this.agents.get(ctx.sessionKey);
-        if (!inst) return undefined;
-        return {
-          registeredToolNames: inst.registeredToolNames,
-          skillAllowlist: inst.effectiveProfile.skillsAllowlist,
-        };
-      },
-      onSkillsFilesystemMutate: () => {
-        this.refreshSkillsAfterDiskChange();
-      },
-      getSkillPassthroughEnvVarNames: () => {
-        const ctx = this.config.getCurrentContext?.();
-        if (!ctx?.sessionKey) return [];
-        return [...(this.agents.get(ctx.sessionKey)?.skillEnvPassthroughKeys ?? [])];
-      },
-      registerSkillEnvPassthrough: (names: string[]) => {
-        const ctx = this.config.getCurrentContext?.();
-        if (!ctx?.sessionKey) return;
-        const inst = this.agents.get(ctx.sessionKey);
-        if (!inst) return;
-        for (const n of names) {
-          if (isValidSkillEnvVarName(n)) {
-            inst.skillEnvPassthroughKeys.add(n.trim());
-          }
-        }
-      },
+    this.workspaceRuntimes = new WorkspaceRuntimeRegistry({
+      getConfig: () => this.config.config!,
+      bundledSkillsDir: resolveBundledSkillsDir(),
     });
+    this.memoryPrefetch = new MemoryPrefetchCoordinator({
+      getConfig: () => this.config.config,
+      getMemoryManagerForSession: (sk) => this.getMemoryManagerForSession(sk),
+      getLastAssistantContent: (sk) => this.getLastAssistantContent(sk),
+    });
+    this.backgroundReview = new BackgroundReviewCoordinator({
+      getConfig: () => this.mergedConfig(),
+      onSkillsFilesystemMutate: () => this.refreshSkillsAfterDiskChange(),
+    });
+    this.toolsFactory = new AgentToolsFactory(this.buildToolsFactoryDeps());
 
     this.defaultModel = config.model || getDefaultModelSync(config.config);
 
@@ -260,37 +205,6 @@ export class AgentManager {
     return resolveEffectiveAgentProfileForSession(cfg, sessionKey).thinkingDefault;
   }
 
-  private getWorkspaceRuntime(resolvedPath: string): WorkspaceRuntime {
-    const existing = this.workspaceRuntimes.get(resolvedPath);
-    if (existing) {
-      return existing;
-    }
-
-    const builtinMemoryStore = new BuiltinMemoryStore(
-      resolveBuiltinMemoryStoreConfig(resolvedPath, this.config.config),
-    );
-    const memoryManager = createMemoryManagerFromConfig(
-      resolvedPath,
-      builtinMemoryStore,
-      this.config.config,
-    );
-    const skillManager = new SkillManager(resolvedPath, resolveBundledSkillsDir());
-    const systemPromptBuilder = new SystemPromptBuilder({
-      workspace: resolvedPath,
-      config: this.config.config!,
-      skillManager,
-    });
-
-    const rt: WorkspaceRuntime = {
-      skillManager,
-      systemPromptBuilder,
-      builtinMemoryStore,
-      memoryManager,
-    };
-    this.workspaceRuntimes.set(resolvedPath, rt);
-    return rt;
-  }
-
   private pickDefaultModelRef(): string {
     const cfg = this.mergedConfig();
     const ref = getAgentDefaultModelRef(cfg);
@@ -309,6 +223,13 @@ export class AgentManager {
 
   /**
    * Keep defaults in sync when config is hot-reloaded or saved from the UI.
+   *
+   * The previous implementation rebuilt the entire `AgentToolsFactory` (80+ lines
+   * of dependency wiring) on every reload. The factory's deps are now built from
+   * a single helper ({@link buildToolsFactoryDeps}) and read `this.*` through
+   * closures, so existing instances automatically see the new config without
+   * reconstruction. The browser is still shut down because its cached settings
+   * (headless mode, backend choice) come from the config snapshot at connect time.
    */
   updateAgentDefaults(config: Config): void {
     this.config.config = config;
@@ -317,19 +238,26 @@ export class AgentManager {
     this.defaultModel = ref || getDefaultModelSync(config);
     this.baseWorkspacePath = this.computeBaseWorkspacePath();
     void this.toolsFactory.shutdownBrowser();
-    for (const rt of this.workspaceRuntimes.values()) {
-      void rt.memoryManager.shutdownAll().catch(() => {});
-    }
-    this.workspaceRuntimes.clear();
-    this.toolsFactory = new AgentToolsFactory({
+    void this.workspaceRuntimes.clearAll();
+  }
+
+  /**
+   * Construct the dep bag passed to `AgentToolsFactory`. Closures reference
+   * `this.*` so they remain valid across hot reloads (no rebuild needed).
+   */
+  private buildToolsFactoryDeps(): ConstructorParameters<typeof AgentToolsFactory>[0] {
+    return {
       workspace: this.baseWorkspacePath,
       extensionRegistry: this.config.extensionRegistry,
       getCurrentContext: this.config.getCurrentContext,
+      hookRunner: this.config.hookRunner,
       bus: this.config.bus,
       getConfig: () => this.mergedConfig(),
       getPrimaryModel: () => this.resolveModelStringToModel(this.pickDefaultModelRef()),
-      getBuiltinMemoryStore: () => this.getWorkspaceRuntime(this.baseWorkspacePath).builtinMemoryStore,
-      getMemoryManager: () => this.getWorkspaceRuntime(this.baseWorkspacePath).memoryManager,
+      getBuiltinMemoryStore: () =>
+        this.workspaceRuntimes.getOrCreate(this.baseWorkspacePath).builtinMemoryStore,
+      getMemoryManager: () =>
+        this.workspaceRuntimes.getOrCreate(this.baseWorkspacePath).memoryManager,
       getSessionStore: this.config.getSessionStore,
       gatewayClarify: this.config.gatewayClarify,
       getCronService: this.config.getCronService,
@@ -362,143 +290,63 @@ export class AgentManager {
           }
         }
       },
-    });
+    };
   }
 
   getMemoryManager(): MemoryManager {
-    return this.getWorkspaceRuntime(this.baseWorkspacePath).memoryManager;
+    return this.workspaceRuntimes.getOrCreate(this.baseWorkspacePath).memoryManager;
   }
 
   private getMemoryManagerForSession(sessionKey: string): MemoryManager {
     const path = this.getResolvedWorkspaceForSession(sessionKey);
-    return this.getWorkspaceRuntime(path).memoryManager;
+    return this.workspaceRuntimes.getOrCreate(path).memoryManager;
   }
 
   /**
    * Prefix the user turn with fenced prefetched memory (external providers).
+   * Delegates to {@link MemoryPrefetchCoordinator}.
    */
-  async applyMemoryPrefetchToUserMessage(
+  applyMemoryPrefetchToUserMessage(
     userMessage: AgentMessage,
     sessionKey: string,
   ): Promise<AgentMessage> {
-    if (!isMemorySubsystemEnabled(this.config.config)) {
-      return userMessage;
-    }
-    const plain = extractAgentUserPlainText(userMessage);
-    const turn = (this.memoryPrefetchUserTurn.get(sessionKey) ?? 0) + 1;
-    this.memoryPrefetchUserTurn.set(sessionKey, turn);
-    if (!shouldInjectMemoryPrefetchThisTurn(this.config.config, turn)) {
-      return userMessage;
-    }
-    return injectPrefetchIntoUserMessage(
-      this.getMemoryManagerForSession(sessionKey),
-      sessionKey,
-      userMessage,
-      plain,
-    );
+    return this.memoryPrefetch.applyToUserMessage(userMessage, sessionKey);
   }
 
   /**
    * After a completed turn: sync external providers and queue next-turn prefetch.
+   * Delegates to {@link MemoryPrefetchCoordinator}.
    */
   afterAgentTurn(sessionKey: string, userPlainText: string): void {
-    if (!isMemorySubsystemEnabled(this.config.config)) {
-      return;
-    }
-    const assistant = this.getLastAssistantContent(sessionKey) ?? '';
-    const mm = this.getMemoryManagerForSession(sessionKey);
-    mm.syncAll(userPlainText, assistant, { sessionId: sessionKey });
-    mm.queuePrefetchAll(userPlainText, { sessionId: sessionKey });
+    this.memoryPrefetch.afterTurn(sessionKey, userPlainText);
   }
 
   /**
    * Call once per user turn before the main `agent.prompt` (via {@link runAgentTurnWithModelFallbacks} `beforeUserPrompt`).
+   * Delegates to {@link BackgroundReviewCoordinator}.
    */
   beginBackgroundReviewUserTurn(sessionKey: string): void {
     const inst = this.agents.get(sessionKey);
-    if (!inst?.backgroundNudge) return;
-    const cfg = resolveBackgroundReviewSettings(this.config.config);
-    if (!cfg.enabled || cfg.memoryNudgeInterval <= 0) return;
-    if (!inst.registeredToolNames.includes('curated_memory')) return;
-    inst.backgroundNudge.turnsSinceMemory += 1;
-    if (inst.backgroundNudge.turnsSinceMemory >= cfg.memoryNudgeInterval) {
-      inst.backgroundNudge.pendingMemoryReview = true;
-      inst.backgroundNudge.turnsSinceMemory = 0;
-    }
+    if (!inst) return;
+    this.backgroundReview.beginUserTurn(sessionKey, inst.registeredToolNames);
   }
 
   /**
    * After a successful main turn (after memory sync via `afterAgentTurn`), may run a quiet follow-up for memory/skills.
+   * Delegates to {@link BackgroundReviewCoordinator}.
    */
   scheduleBackgroundReviewAfterUserTurn(sessionKey: string): void {
-    void this.runBackgroundReviewIfNeeded(sessionKey).catch((err) => {
-      log.warn({ err, sessionKey }, 'Background review failed');
-    });
-  }
-
-  private async runBackgroundReviewIfNeeded(sessionKey: string): Promise<void> {
     const inst = this.agents.get(sessionKey);
-    if (!inst?.backgroundNudge) return;
-    const settings = resolveBackgroundReviewSettings(this.config.config);
-    if (!settings.enabled) return;
-    if (isAssistantTurnAborted(inst.agent) || isAssistantTurnFailed(inst.agent)) return;
-    const last = this.getLastAssistantContent(sessionKey);
-    if (!last?.trim()) return;
-
-    const reviewMemory = inst.backgroundNudge.pendingMemoryReview;
-    inst.backgroundNudge.pendingMemoryReview = false;
-
-    let reviewSkills = false;
-    if (settings.skillNudgeInterval > 0 && inst.registeredToolNames.includes('skill_manage')) {
-      if (inst.backgroundNudge.itersSinceSkill >= settings.skillNudgeInterval) {
-        reviewSkills = true;
-        inst.backgroundNudge.itersSinceSkill = 0;
-      }
-    }
-
-    if (!reviewMemory && !reviewSkills) return;
-
-    const rt = this.getWorkspaceRuntime(inst.resolvedWorkspacePath);
-    await runBackgroundReviewTurn({
+    if (!inst) return;
+    this.backgroundReview.scheduleAfterUserTurn({
       sessionKey,
-      mainAgent: inst.agent,
-      settings,
-      reviewMemory,
-      reviewSkills,
+      agent: inst.agent,
       registeredToolNames: inst.registeredToolNames,
       skillAllowlist: inst.effectiveProfile.skillsAllowlist,
       workspacePath: inst.resolvedWorkspacePath,
-      skillManager: rt.skillManager,
-      builtinMemoryStore: rt.builtinMemoryStore,
-      memoryManager: rt.memoryManager,
-      getConfig: () => this.mergedConfig(),
-      onSkillsFilesystemMutate: () => this.refreshSkillsAfterDiskChange(),
+      lastAssistantText: this.getLastAssistantContent(sessionKey),
+      workspaceRuntime: this.workspaceRuntimes.getOrCreate(inst.resolvedWorkspacePath),
     });
-  }
-
-  private attachBackgroundNudgeListeners(sessionKey: string): void {
-    const inst = this.agents.get(sessionKey);
-    if (!inst?.backgroundNudge) return;
-    inst.backgroundNudge.unsubscribe?.();
-    const unsub = inst.agent.subscribe((ev: AgentEvent) => {
-      const cfg = resolveBackgroundReviewSettings(this.config.config);
-      if (!cfg.enabled || cfg.skillNudgeInterval <= 0) return;
-      if (!inst.registeredToolNames.includes('skill_manage')) return;
-      if (ev.type === 'turn_start') {
-        inst.backgroundNudge.itersSinceSkill += 1;
-      }
-      if (ev.type === 'tool_execution_end') {
-        const te = ev as Extract<AgentEvent, { type: 'tool_execution_end' }>;
-        if (
-          !te.isError &&
-          typeof te.toolName === 'string' &&
-          te.toolName.trim() === 'skill_manage'
-        ) {
-          inst.backgroundNudge.itersSinceSkill = 0;
-        }
-      }
-    });
-    inst.backgroundNudge.unsubscribe = unsub;
   }
 
   /**
@@ -509,7 +357,7 @@ export class AgentManager {
     const path = ctx?.sessionKey
       ? this.getResolvedWorkspaceForSession(ctx.sessionKey)
       : this.baseWorkspacePath;
-    return this.getWorkspaceRuntime(path).skillManager.expandCommand(text);
+    return this.workspaceRuntimes.getOrCreate(path).skillManager.expandCommand(text);
   }
 
   /**
@@ -517,7 +365,7 @@ export class AgentManager {
    * When `lang` is provided (e.g. "zh"), tries SKILL-{lang}.md first; falls back to SKILL.md.
    */
   getSkillMarkdownSource(skillName: string, lang?: string): SkillMarkdownPreviewPayload | null {
-    const skill = this.getWorkspaceRuntime(this.baseWorkspacePath).skillManager.findSkill(skillName);
+    const skill = this.workspaceRuntimes.getOrCreate(this.baseWorkspacePath).skillManager.findSkill(skillName);
     if (!skill) return null;
 
     // Try localized file for display
@@ -563,7 +411,7 @@ export class AgentManager {
   getSkillCatalog(lang?: string): SkillCatalogEntry[] {
     const skillsConfig = createSkillConfigManager(resolveStateDir()).load();
     const lock = loadSkillsLock();
-    return this.getWorkspaceRuntime(this.baseWorkspacePath).skillManager.getSkills().map((s) => {
+    return this.workspaceRuntimes.getOrCreate(this.baseWorkspacePath).skillManager.getSkills().map((s) => {
       const base = resolve(s.baseDir);
       const managed = isUnderManagedSkillsDir(s.baseDir);
       const directoryId = base.split(sep).filter(Boolean).pop() || s.name;
@@ -596,7 +444,7 @@ export class AgentManager {
     const cfg = this.config.config!;
     const touched = new Set<string>();
     for (const instance of this.agents.values()) {
-      const rt = this.getWorkspaceRuntime(instance.resolvedWorkspacePath);
+      const rt = this.workspaceRuntimes.getOrCreate(instance.resolvedWorkspacePath);
       if (!touched.has(instance.resolvedWorkspacePath)) {
         rt.skillManager.refreshPromptFromConfig();
         touched.add(instance.resolvedWorkspacePath);
@@ -632,7 +480,7 @@ export class AgentManager {
 
     const touched = new Set<string>();
     for (const instance of this.agents.values()) {
-      const rt = this.getWorkspaceRuntime(instance.resolvedWorkspacePath);
+      const rt = this.workspaceRuntimes.getOrCreate(instance.resolvedWorkspacePath);
       if (!touched.has(instance.resolvedWorkspacePath)) {
         touched.add(instance.resolvedWorkspacePath);
       }
@@ -665,14 +513,6 @@ export class AgentManager {
         this.removeAgent(sessionKey);
       } else {
         existing.lastUsedAt = Date.now();
-        if (!existing.backgroundNudge) {
-          existing.backgroundNudge = {
-            turnsSinceMemory: 0,
-            itersSinceSkill: 0,
-            pendingMemoryReview: false,
-          };
-          this.attachBackgroundNudgeListeners(sessionKey);
-        }
         log.debug({ sessionKey }, 'Reusing existing agent instance');
         return existing.agent;
       }
@@ -680,7 +520,7 @@ export class AgentManager {
 
     const profile = resolveEffectiveAgentProfileForSession(cfg, sessionKey);
     const resolvedPath = targetPath;
-    const rt = this.getWorkspaceRuntime(resolvedPath);
+    const rt = this.workspaceRuntimes.getOrCreate(resolvedPath);
 
     if (isMemorySubsystemEnabled(cfg)) {
       void rt.memoryManager
@@ -708,14 +548,9 @@ export class AgentManager {
       resolvedWorkspacePath: resolvedPath,
       registeredToolNames,
       skillEnvPassthroughKeys: new Set<string>(),
-      backgroundNudge: {
-        turnsSinceMemory: 0,
-        itersSinceSkill: 0,
-        pendingMemoryReview: false,
-      },
     });
 
-    this.attachBackgroundNudgeListeners(sessionKey);
+    this.backgroundReview.attachToAgent(sessionKey, agent, registeredToolNames);
 
     const modelRef = profile.primaryModelRef?.trim() || this.defaultModel;
     this.config.getModelManager?.().setSessionProfileDefault(sessionKey, modelRef);
@@ -744,13 +579,13 @@ export class AgentManager {
   removeAgent(sessionKey: string): boolean {
     const instance = this.agents.get(sessionKey);
     if (instance) {
-      instance.backgroundNudge?.unsubscribe?.();
+      this.backgroundReview.forgetSession(sessionKey);
       void this.toolsFactory.closeBrowserPageForSession(sessionKey);
       void retireSessionMcpRuntimeForSessionKey({ sessionKey, reason: 'agent-evict' });
       instance.agent.abort();
       evictEmbeddedSessionRunner(sessionKey, 'agent_removed');
       this.agents.delete(sessionKey);
-      this.memoryPrefetchUserTurn.delete(sessionKey);
+      this.memoryPrefetch.forgetSession(sessionKey);
       this.config.getModelManager?.().clearSessionProfileDefault(sessionKey);
       log.info({ sessionKey, totalAgents: this.agents.size }, 'Removed agent instance');
       return true;
@@ -790,17 +625,14 @@ export class AgentManager {
     void this.toolsFactory.shutdownBrowser();
     void disposeAllSessionMcpRuntimes().catch(() => {});
     evictAllEmbeddedSessionRunners('agent_manager_dispose');
+    this.backgroundReview.clear();
     for (const instance of this.agents.values()) {
-      instance.backgroundNudge?.unsubscribe?.();
       instance.agent.abort();
     }
     this.agents.clear();
-    this.memoryPrefetchUserTurn.clear();
+    this.memoryPrefetch.clear();
     this.sessionWorkspaceOverrides.clear();
-    for (const rt of this.workspaceRuntimes.values()) {
-      void rt.memoryManager.shutdownAll().catch(() => {});
-    }
-    this.workspaceRuntimes.clear();
+    void this.workspaceRuntimes.clearAll();
     log.debug('All agent instances disposed');
   }
 

@@ -3,7 +3,7 @@
  */
 
 import type { MessageBus } from '../infra/bus/index.js';
-import type { Config } from '../config/index.js';
+import type { Config } from '../config/schema.js';
 import type { ProgressStage } from '../agent/lifecycle/progress.js';
 
 export type { ProgressStage } from '../agent/lifecycle/progress.js';

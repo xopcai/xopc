@@ -61,6 +61,11 @@ coverage/
 !src/agent/prompt/memory/
 docs/.vitepress/cache/
 
+# Auto-generated dependency-cruiser artifacts (run `pnpm run depcheck:graph` etc.)
+docs/dependency-graph.mmd
+docs/dependency-archi.dot
+docs/dependency-violations.html
+
 # Docs-local
 .docs-local
 

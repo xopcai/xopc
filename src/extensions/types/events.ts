@@ -4,7 +4,14 @@
  * Type-safe event bus for inter-extension communication.
  */
 
-import type { ExtensionLogger } from './core.js';
+// `core.ts` imports `TypedEventBus` from this file, so importing `ExtensionLogger`
+// back from there would create a circular cycle. Inline the 4-method shape.
+interface ExtensionLogger {
+  debug(msg: string): void;
+  info(msg: string): void;
+  warn(msg: string): void;
+  error(msg: string): void;
+}
 
 // ============================================================================
 // Event Bus Core Types

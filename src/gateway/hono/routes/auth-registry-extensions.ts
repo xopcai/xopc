@@ -424,7 +424,7 @@ export function registerAuthRegistryExtensionsRoutes(authenticated: Hono, deps: 
       return c.json({ ok: false, error: 'Invalid package name' }, 400);
     }
     try {
-      const payload = await service.fetchExtensionMarketplacePackageDetail(pkgName);
+      const payload = await service.marketplace.fetchExtensionPackageDetail(pkgName);
       return c.json({ ok: true, payload });
     } catch (err) {
       return c.json(
@@ -452,7 +452,7 @@ export function registerAuthRegistryExtensionsRoutes(authenticated: Hono, deps: 
       );
     }
     try {
-      const payload = await service.installExtensionFromMarketplace({ name, version, overwrite });
+      const payload = await service.marketplace.installExtension({ name, version, overwrite });
       return c.json({ ok: true, payload });
     } catch (err) {
       return c.json(
@@ -474,7 +474,7 @@ export function registerAuthRegistryExtensionsRoutes(authenticated: Hono, deps: 
       return c.json({ ok: false, error: 'Expected { extensionId: string }' }, 400);
     }
     try {
-      const payload = await service.uninstallUserExtension(extensionId);
+      const payload = await service.marketplace.uninstallExtension(extensionId);
       return c.json({ ok: true, payload });
     } catch (err) {
       return c.json(

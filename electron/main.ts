@@ -210,19 +210,8 @@ async function resolveWindowLoad(): Promise<
   if (shouldEmbedGateway()) {
     const paths = getElectronUserPaths();
     const { port, token, bind } = await ensureGatewayConfigForElectron(paths);
-    try {
-      if (app.isPackaged) {
-        process.env.XOPC_BROWSER_EXT_BUNDLED_ROOT = join(process.resourcesPath, 'browser-ext');
-      }
-      const { ensureBrowserExtensionArtifacts } = await import(
-        '../src/browser/providers/browser-ext-install.js'
-      );
-      await ensureBrowserExtensionArtifacts().catch((err) => {
-        console.warn('[main] Browser extension artifact ensure failed:', err);
-      });
-    } catch (err) {
-      console.warn('[main] Browser extension install module unavailable:', err);
-    }
+    // Browser-extension artifact install runs inside the gateway subprocess (see
+    // gateway/service.ts → ensureBrowserExtensionOnStartup). Main does not import src/.
     try {
       const spawnOpts: GatewayProcessOptions = {
         configPath: paths.configPath,

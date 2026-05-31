@@ -2,7 +2,7 @@
  * Outbound delivery helper: normalize then invoke the plugin outbound adapter.
  */
 
-import type { Config } from '../../config/index.js';
+import type { Config } from '../../config/schema.js';
 import type {
   ChannelOutboundContext,
   ChannelPlugin,

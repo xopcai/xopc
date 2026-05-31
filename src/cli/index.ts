@@ -2,7 +2,6 @@
 /** Command wiring and `program.parse`; executable entry is `bin.ts` (log preset before logger init). */
 import { Command } from 'commander';
 import { ROOT_COMMAND_DESCRIPTION } from './command-manifest.js';
-import { createDefaultContext, type CLIContext } from './registry.js';
 import pkg from '../../package.json' with { type: 'json' };
 import { resolveCommandName, tryLoadCommand, loadAllCommands } from './command-loaders.js';
 
@@ -16,12 +15,10 @@ async function flushLoggerAndExit(code: number): Promise<never> {
   process.exit(code);
 }
 
-// Global parsed options - updated before each command via the preAction hook.
-export let parsedOpts: { config?: string; workspace?: string; verbose?: boolean } = {};
-
-export function getContextWithOpts(argv: string[] = process.argv): CLIContext {
-  return createDefaultContext(argv, parsedOpts);
-}
+// Re-exported from `./context.js` for backward compat. Command modules should
+// import from `./context.js` directly to avoid the CLI barrel cycle.
+export { parsedOpts, getContextWithOpts } from './context.js';
+import { parsedOpts, getContextWithOpts } from './context.js';
 
 // Commands whose action never resolves until an external shutdown signal.
 // `tui` is intentionally omitted: `await runTui()` completes when the user exits
@@ -41,9 +38,15 @@ function buildProgram(): Command {
     .option('--config <path>', 'Config file path')
     .option('--workspace <path>', 'Workspace directory');
 
-  // Hook to capture parsed options before each command runs
+  // Hook to capture parsed options before each command runs. Mutate the
+  // shared object in place — `parsedOpts` is a `const` import from
+  // `./context.js` so command modules see updates through the same reference.
   program.hook('preAction', (thisCommand) => {
-    parsedOpts = thisCommand.opts();
+    const next = thisCommand.opts() as Record<string, unknown>;
+    for (const k of Object.keys(parsedOpts)) {
+      delete (parsedOpts as Record<string, unknown>)[k];
+    }
+    Object.assign(parsedOpts, next);
   });
 
   // Hook to ensure process exits after command completion.

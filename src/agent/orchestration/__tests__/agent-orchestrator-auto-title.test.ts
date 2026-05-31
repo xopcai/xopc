@@ -10,6 +10,7 @@ import type { FeedbackCoordinator } from '../../feedback/feedback-coordinator.js
 import type { AgentManager } from '../../agent-manager.js';
 import type { SessionConfigStore } from '../../../session/index.js';
 import type { SessionContext } from '../../session/session-context.js';
+import type { SessionHydrator } from '../../session/session-hydrator.js';
 
 vi.mock('../../embedded/run-for-session.js', () => ({
   runEmbeddedTurnForSession: vi.fn().mockResolvedValue({ ok: true, lastAssistantText: 'hello' }),
@@ -23,6 +24,7 @@ describe('AgentOrchestrator enqueueAutoTitle', () => {
   let mockEventHandler: Partial<AgentEventHandler>;
   let mockFeedbackCoordinator: Partial<FeedbackCoordinator>;
   let mockSessionConfigStore: Partial<SessionConfigStore>;
+  let mockSessionHydrator: Partial<SessionHydrator>;
   let enqueueAutoTitle: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
@@ -78,6 +80,12 @@ describe('AgentOrchestrator enqueueAutoTitle', () => {
     mockSessionConfigStore = {
       get: vi.fn().mockResolvedValue(undefined),
     };
+
+    mockSessionHydrator = {
+      workspace: vi.fn().mockResolvedValue(undefined),
+      model: vi.fn().mockResolvedValue(undefined),
+      thinking: vi.fn().mockResolvedValue(undefined),
+    };
   });
 
   it('calls enqueueAutoTitle once after embedded turn in process()', async () => {
@@ -88,6 +96,7 @@ describe('AgentOrchestrator enqueueAutoTitle', () => {
       eventHandler: mockEventHandler as AgentEventHandler,
       feedbackCoordinator: mockFeedbackCoordinator as FeedbackCoordinator,
       sessionConfigStore: mockSessionConfigStore as SessionConfigStore,
+      sessionHydrator: mockSessionHydrator as SessionHydrator,
       getThinkingDefault: () => undefined,
       workspaceRoot: '/tmp',
       enqueueAutoTitle,
@@ -122,6 +131,7 @@ describe('AgentOrchestrator enqueueAutoTitle', () => {
       eventHandler: mockEventHandler as AgentEventHandler,
       feedbackCoordinator: mockFeedbackCoordinator as FeedbackCoordinator,
       sessionConfigStore: mockSessionConfigStore as SessionConfigStore,
+      sessionHydrator: mockSessionHydrator as SessionHydrator,
       getThinkingDefault: () => undefined,
       workspaceRoot: '/tmp',
     });

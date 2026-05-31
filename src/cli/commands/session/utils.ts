@@ -3,7 +3,7 @@
  */
 
 import { getSessionManager } from '../../utils/session.js';
-import { getContextWithOpts } from '../../index.js';
+import { getContextWithOpts } from '../../context.js';
 import type { SessionIndex } from '../../../session/index.js';
 
 /**

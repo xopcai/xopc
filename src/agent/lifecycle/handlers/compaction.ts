@@ -1,5 +1,5 @@
 import { createLogger } from '../../../utils/logger.js';
-import type { AgentContext } from '../../service.js';
+import type { AgentContext } from '../../service.types.js';
 import type {
   LifecycleHandler,
   LifecycleEventData,

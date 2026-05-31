@@ -1,6 +1,5 @@
 import { z } from 'zod';
 
-import { getDefaultWorkspacePath } from '../agent/agent-scope.js';
 import { checkCacheDir } from '../browser/cache-dir-policy.js';
 
 // ============================================
@@ -1314,13 +1313,6 @@ export type TTSConfig = z.infer<typeof TTSConfigSchema>;
 export interface ParsedModelRef {
   provider: string;
   model: string;
-}
-
-/**
- * Default agent’s resolved Markdown workspace root (`resolveAgentWorkspaceDir` for the default agent id).
- */
-export function getWorkspacePath(config: Config): string {
-  return getDefaultWorkspacePath(config);
 }
 
 /**

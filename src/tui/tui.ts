@@ -59,7 +59,7 @@ import { loadTuiSettings, saveTuiSettings, type TuiSettings } from './tui-settin
 import { resolveFdPath } from './tui-fd-path.js';
 import packageJson from '../../package.json' with { type: 'json' };
 import { createInitialState, type TuiOptions, type TuiResult, type TuiState } from './tui-types.js';
-import { createXopcTuiKeybindingsManager } from './xopc-tui-keybindings.js';
+import { createXopcTuiKeybindingsManager } from './tui-keybindings-file.js';
 import {
   filterModelsForCycle,
   loadScopedModelRefs,

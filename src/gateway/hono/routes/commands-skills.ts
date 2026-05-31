@@ -44,7 +44,7 @@ export function registerCommandsSkillsRoutes(authenticated: Hono, deps: Authenti
 
   authenticated.get('/api/skills', (c) => {
     const lang = c.req.query('lang')?.trim() || undefined;
-    const payload = service.getSkillsApi(lang);
+    const payload = service.marketplace.getSkillsApi(lang);
     return c.json({ ok: true, payload });
   });
 
@@ -60,7 +60,7 @@ export function registerCommandsSkillsRoutes(authenticated: Hono, deps: Authenti
       return c.json({ ok: false, error: 'Invalid skill name' }, 400);
     }
     const lang = c.req.query('lang')?.trim() || undefined;
-    const data = service.getSkillMarkdownSource(skillName, lang);
+    const data = service.marketplace.getSkillMarkdownSource(skillName, lang);
     if (!data) {
       return c.json({ ok: false, error: 'Skill not found' }, 404);
     }
@@ -68,7 +68,7 @@ export function registerCommandsSkillsRoutes(authenticated: Hono, deps: Authenti
   });
 
   authenticated.post('/api/skills/reload', (c) => {
-    service.reloadSkillsFromDisk();
+    service.marketplace.reloadSkills();
     return c.json({ ok: true });
   });
 
@@ -85,7 +85,7 @@ export function registerCommandsSkillsRoutes(authenticated: Hono, deps: Authenti
       return c.json({ ok: false, error: 'Expected { skillName: string, enabled: boolean }' }, 400);
     }
     try {
-      service.patchSkillEnabled(skillName, enabled);
+      service.marketplace.patchSkillEnabled(skillName, enabled);
       return c.json({ ok: true });
     } catch (err) {
       return c.json(
@@ -110,7 +110,7 @@ export function registerCommandsSkillsRoutes(authenticated: Hono, deps: Authenti
     const category = c.req.query('category')?.trim() ?? '';
     const provider = parseMarketplaceProviderQuery(c.req.query('provider'));
     try {
-      const payload = await service.fetchSkillsMarketplaceCatalog(
+      const payload = await service.marketplace.fetchSkillsCatalog(
         {
           q: q || undefined,
           page,
@@ -130,21 +130,21 @@ export function registerCommandsSkillsRoutes(authenticated: Hono, deps: Authenti
   });
 
   authenticated.get('/api/skills/marketplace/provider', (c) => {
-    const info = service.getSkillsMarketplaceProvider();
+    const info = service.marketplace.getSkillsProvider();
     return c.json({ ok: true, payload: info });
   });
 
   /** All registered marketplace providers (built-in + extension-contributed). */
   authenticated.get('/api/skills/marketplace/providers', (c) => {
-    const providers = service.getSkillsMarketplaceProviders();
-    const current = service.getSkillsMarketplaceProvider();
+    const providers = service.marketplace.getSkillsProviders();
+    const current = service.marketplace.getSkillsProvider();
     return c.json({ ok: true, payload: { providers, current: current.provider } });
   });
 
   authenticated.get('/api/skills/marketplace/categories', async (c) => {
     const provider = parseMarketplaceProviderQuery(c.req.query('provider'));
     try {
-      const payload = await service.fetchSkillsMarketplaceCategories(provider);
+      const payload = await service.marketplace.fetchSkillsCategories(provider);
       return c.json({ ok: true, payload });
     } catch (err) {
       return c.json(
@@ -167,7 +167,7 @@ export function registerCommandsSkillsRoutes(authenticated: Hono, deps: Authenti
     }
     try {
       const provider = parseMarketplaceProviderQuery(c.req.query('provider'));
-      const payload = await service.fetchSkillsMarketplacePackageDetail(pkgName, provider);
+      const payload = await service.marketplace.fetchSkillsPackageDetail(pkgName, provider);
       return c.json({ ok: true, payload });
     } catch (err) {
       return c.json(
@@ -197,7 +197,7 @@ export function registerCommandsSkillsRoutes(authenticated: Hono, deps: Authenti
       return c.json({ ok: false, error: 'Expected { name: string, version?: string, overwrite?: boolean }' }, 400);
     }
     try {
-      const payload = await service.installSkillFromMarketplace({ name, version, overwrite, provider });
+      const payload = await service.marketplace.installSkill({ name, version, overwrite, provider });
       return c.json({ ok: true, payload });
     } catch (err) {
       return c.json(
@@ -235,7 +235,7 @@ export function registerCommandsSkillsRoutes(authenticated: Hono, deps: Authenti
       overwriteRaw === '1';
 
     try {
-      const result = service.installManagedSkillZip(buf, { skillId, overwrite });
+      const result = service.marketplace.installSkillZip(buf, { skillId, overwrite });
       return c.json({ ok: true, payload: result });
     } catch (err) {
       return c.json(
@@ -251,7 +251,7 @@ export function registerCommandsSkillsRoutes(authenticated: Hono, deps: Authenti
       return c.json({ ok: false, error: 'Missing id' }, 400);
     }
     try {
-      service.deleteManagedSkill(id);
+      service.marketplace.deleteSkill(id);
       return c.json({ ok: true });
     } catch (err) {
       return c.json(

@@ -2,10 +2,10 @@
  * Additional channel adapter contracts (optional surfaces).
  */
 
-import type { Config } from '../../config/index.js';
+import type { Config } from '../../config/schema.js';
 import type { BindingRule } from '../../routing/bindings.js';
 import type { SessionStore } from '../../session/store.js';
-import type { PairingPendingView } from '../pairing/pairing-service.js';
+import type { PairingPendingView } from '../pairing/pairing-types.js';
 
 export interface ChannelPairingAdapter {
   /** Credential-store channel key (`telegram` | `feishu` | `weixin`). */

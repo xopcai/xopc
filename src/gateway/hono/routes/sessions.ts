@@ -51,12 +51,12 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
       });
 
       await service.sessionManagerInstance.saveMessages(sessionKey, []);
-      const session = await service.getSession(sessionKey);
+      const session = await service.sessions.getSession(sessionKey);
       return c.json({ session }, 201);
     }
-    
+
     // Look for existing empty sessions to reuse
-    const existingSessions = await service.listSessions({
+    const existingSessions = await service.sessions.listSessions({
       channel,
       limit: 50,
       sortBy: 'updatedAt',
@@ -72,7 +72,7 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
     
     if (emptySession) {
       // Return existing empty session instead of creating a new one
-      const session = await service.getSession(emptySession.key);
+      const session = await service.sessions.getSession(emptySession.key);
       return c.json({ session, reused: true }, 200);
     }
     
@@ -88,7 +88,7 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
 
     await service.sessionManagerInstance.saveMessages(sessionKey, []);
 
-    const session = await service.getSession(sessionKey);
+    const session = await service.sessions.getSession(sessionKey);
     return c.json({ session }, 201);
   });
 
@@ -99,7 +99,7 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
       return blocked;
     }
     const query = c.req.query();
-    const result = await service.listSessions({
+    const result = await service.sessions.listSessions({
       status: query.status as any,
       search: query.search,
       channel: query.channel,
@@ -111,14 +111,14 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
 
   // GET /api/sessions/stats - Get session stats (must be before /:key)
   authenticated.get('/api/sessions/stats', async (c) => {
-    const result = await service.getSessionStats();
+    const result = await service.sessions.stats();
     return c.json(result);
   });
 
   // GET /api/sessions/chat-ids - Get unique chat IDs from sessions (must be before /:key)
   authenticated.get('/api/sessions/chat-ids', async (c) => {
     const channel = c.req.query('channel');
-    const chatIds = await service.getSessionChatIds(channel || undefined);
+    const chatIds = await service.sessions.chatIds(channel || undefined);
     return c.json({ ok: true, payload: { chatIds } });
   });
 
@@ -129,24 +129,24 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
       return blocked;
     }
     const key = c.req.param('key');
-    const session = await service.getSession(key);
+    const session = await service.sessions.getSession(key);
     if (!session) {
       return c.json({ ok: false, error: 'Session not found' }, 404);
     }
-    return c.json({ ok: true, payload: service.getSessionActiveRun(key) });
+    return c.json({ ok: true, payload: service.sessions.getActiveRun(key) });
   });
 
   // GET /api/sessions/:key/agent-config — resolved session agent settings (thinking, etc.)
   authenticated.get('/api/sessions/:key/agent-config', async (c) => {
     const key = c.req.param('key');
-    const payload = await service.getSessionAgentConfig(key);
+    const payload = await service.sessions.getAgentConfig(key);
     return c.json({ ok: true, payload });
   });
 
   authenticated.patch('/api/sessions/:key/agent-config', async (c) => {
     const key = c.req.param('key');
     const body = await c.req.json().catch(() => ({}));
-    const result = await service.patchSessionAgentConfig(key, body);
+    const result = await service.sessions.patchAgentConfig(key, body);
     if (!result.ok) {
       return c.json({ ok: false, error: result.error }, 400);
     }
@@ -172,7 +172,7 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
     const parsedOffset = offsetRaw ? Number.parseInt(offsetRaw, 10) : 0;
     const offset = Number.isFinite(parsedOffset) ? Math.max(0, parsedOffset) : 0;
 
-    const result = await service.getSessionMessagePage(key, {
+    const result = await service.sessions.getMessagePage(key, {
       limit,
       offset,
       ...(before ? { before } : {}),
@@ -203,7 +203,7 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
     const parsedLimit = limitRaw ? Number.parseInt(limitRaw, 10) : 50;
     const offset = Number.isFinite(parsedOffset) ? Math.max(0, parsedOffset) : 0;
     const limit = Number.isFinite(parsedLimit) ? Math.min(200, Math.max(1, parsedLimit)) : 50;
-    const result = await service.getSessionMessagePage(key, {
+    const result = await service.sessions.getMessagePage(key, {
       offset,
       limit,
       ...(before ? { before } : {}),
@@ -241,14 +241,14 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
     if (!meta) {
       return c.json({ ok: false, error: 'Session not found' }, 404);
     }
-    const checkpoints = await service.listSessionCompactionCheckpoints(key);
+    const checkpoints = await service.sessions.listCompactionCheckpoints(key);
     return c.json({ ok: true, payload: { checkpoints } });
   });
 
   authenticated.get('/api/sessions/:key/compaction/checkpoints/:checkpointId', async (c) => {
     const key = c.req.param('key');
     const checkpointId = c.req.param('checkpointId');
-    const checkpoint = await service.getSessionCompactionCheckpoint(key, checkpointId);
+    const checkpoint = await service.sessions.getCompactionCheckpoint(key, checkpointId);
     if (!checkpoint) {
       return c.json({ ok: false, error: 'Checkpoint not found' }, 404);
     }
@@ -263,7 +263,7 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
       return c.json({ ok: false, error: 'checkpointId required' }, 400);
     }
     try {
-      await service.restoreSessionCompactionCheckpoint(key, checkpointId);
+      await service.sessions.restoreCompactionCheckpoint(key, checkpointId);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       if (msg.includes('not found') || msg.includes('Invalid')) {
@@ -271,7 +271,7 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
       }
       return c.json({ ok: false, error: msg }, 500);
     }
-    const session = await service.getSession(key);
+    const session = await service.sessions.getSession(key);
     if (!session) {
       return c.json({ ok: false, error: 'Session not found' }, 404);
     }
@@ -280,14 +280,14 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
 
   authenticated.post('/api/sessions/:key/compaction/run', async (c) => {
     const key = c.req.param('key');
-    const session = await service.getSession(key);
+    const session = await service.sessions.getSession(key);
     if (!session) {
       return c.json({ ok: false, error: 'Session not found' }, 404);
     }
     const body = await c.req.json().catch(() => ({}));
     const instructions = typeof body.instructions === 'string' ? body.instructions : undefined;
     const force = typeof body.force === 'boolean' ? body.force : true;
-    const result = await service.runSessionCompaction(key, { instructions, force });
+    const result = await service.sessions.runCompaction(key, { instructions, force });
     return c.json({ ok: true, payload: { result } });
   });
 
@@ -316,7 +316,7 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
       const parsedLimit = limitRaw ? Number.parseInt(limitRaw, 10) : 50;
       const offset = Number.isFinite(parsedOffset) ? Math.max(0, parsedOffset) : 0;
       const limit = Number.isFinite(parsedLimit) ? Math.min(200, Math.max(1, parsedLimit)) : 50;
-      const result = await service.getSessionMessagePage(key, {
+      const result = await service.sessions.getMessagePage(key, {
         offset,
         limit,
         includeTranscriptSummary: includeTranscript,
@@ -328,7 +328,7 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
       return c.json(result);
     }
 
-    const session = await service.getSession(key, {
+    const session = await service.sessions.getSession(key, {
       includeTranscriptSummary: includeTranscript,
       includeTranscriptRows,
     });
@@ -360,11 +360,11 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
     if (body.customData !== undefined && typeof body.customData === 'object' && body.customData !== null) {
       patch.customData = body.customData as Record<string, unknown>;
     }
-    const result = await service.patchSession(key, patch);
+    const result = await service.sessions.patch(key, patch);
     if (result.ok === false) {
       return c.json({ ok: false, error: result.error }, 404);
     }
-    const session = await service.getSession(key);
+    const session = await service.sessions.getSession(key);
     return c.json({ ok: true, session });
   });
 
@@ -372,7 +372,7 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
   authenticated.get('/api/sessions/:key/export', async (c) => {
     const key = c.req.param('key');
     const format = c.req.query('format') as any || 'json';
-    const result = await service.exportSession(key, format);
+    const result = await service.sessions.export(key, format);
     return c.json(result);
   });
 
@@ -417,35 +417,35 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
   // DELETE /api/sessions/:key - Delete session
   authenticated.delete('/api/sessions/:key', async (c) => {
     const key = c.req.param('key');
-    const result = await service.deleteSession(key);
+    const result = await service.sessions.delete(key);
     return c.json(result);
   });
 
   // POST /api/sessions/:key/archive - Archive session
   authenticated.post('/api/sessions/:key/archive', async (c) => {
     const key = c.req.param('key');
-    const result = await service.archiveSession(key);
+    const result = await service.sessions.archive(key);
     return c.json(result);
   });
 
   // POST /api/sessions/:key/unarchive - Unarchive session
   authenticated.post('/api/sessions/:key/unarchive', async (c) => {
     const key = c.req.param('key');
-    const result = await service.unarchiveSession(key);
+    const result = await service.sessions.unarchive(key);
     return c.json(result);
   });
 
   // POST /api/sessions/:key/pin - Pin session
   authenticated.post('/api/sessions/:key/pin', async (c) => {
     const key = c.req.param('key');
-    const result = await service.pinSession(key);
+    const result = await service.sessions.pin(key);
     return c.json(result);
   });
 
   // POST /api/sessions/:key/unpin - Unpin session
   authenticated.post('/api/sessions/:key/unpin', async (c) => {
     const key = c.req.param('key');
-    const result = await service.unpinSession(key);
+    const result = await service.sessions.unpin(key);
     return c.json(result);
   });
 
@@ -455,7 +455,7 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
 
     const body = await c.req.json();
     const { name } = body;
-    const result = await service.renameSession(key, name);
+    const result = await service.sessions.rename(key, name);
     return c.json(result);
   });
 
@@ -464,7 +464,7 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
   // GET /api/subagents - List subagent sessions
   authenticated.get('/api/subagents', async (c) => {
     const query = c.req.query();
-    const result = await service.listSubagents({
+    const result = await service.sessions.listSubagents({
       limit: query.limit ? parseInt(query.limit) : undefined,
       offset: query.offset ? parseInt(query.offset) : undefined,
     });
@@ -485,7 +485,7 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
         .map((s) => s.trim())
         .filter(Boolean),
     );
-    const session = await service.getSession(key, {
+    const session = await service.sessions.getSession(key, {
       includeTranscriptSummary: includeSet.has('transcript'),
       includeTranscriptRows: includeSet.has('transcriptRows'),
     });

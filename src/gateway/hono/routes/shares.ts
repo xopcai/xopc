@@ -372,14 +372,14 @@ async function resolveWorkspaceRootForShare(
 
   if (sessionKey) {
     try {
-      return await service.getEffectiveWorkspacePathForSession(sessionKey);
+      return await service.sessions.getEffectiveWorkspacePath(sessionKey);
     } catch {
       /* fall through to agentId */
     }
   }
 
   // Import dynamically to avoid circular dependency at module load time
-  const { getWorkspacePath } = await import('../../../config/schema.js');
+  const { getWorkspacePath } = await import('../../../config/workspace-path-helpers.js');
   const { resolveAgentWorkspaceDir, normalizeAgentId, resolveDefaultAgentId } = await import(
     '../../../agent/agent-scope.js'
   );

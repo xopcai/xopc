@@ -6,7 +6,7 @@
 
 import type { InboundMessage } from '../../infra/bus/index.js';
 import { parseSlashCommand } from '../../chat-commands/command-parse.js';
-import type { AgentContext } from '../service.js';
+import type { AgentContext } from '../service.types.js';
 
 export interface MessageRoutingResult {
   context: AgentContext;

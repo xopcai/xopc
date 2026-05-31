@@ -1,4 +1,5 @@
 export * from './schema.js';
+export { getWorkspacePath } from './workspace-path-helpers.js';
 export * from './agent-profile.js';
 export * from './loader.js';
 export * from './paths.js';

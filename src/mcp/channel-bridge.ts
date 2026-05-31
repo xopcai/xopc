@@ -253,15 +253,10 @@ export class XopcChannelBridge {
   }
 }
 
-export async function serveXopcChannelMcp(opts: {
-  gatewayUrl?: string;
-  gatewayToken?: string;
-  claudeChannelMode?: ClaudeChannelMode;
-  verbose?: boolean;
-}): Promise<void> {
-  const { serveXopcChannelMcpImpl } = await import('./channel-server.js');
-  await serveXopcChannelMcpImpl(opts);
-}
+// `serveXopcChannelMcp` lazy wrapper removed — it dynamically imported
+// `./channel-server.js`, forming a bridge ↔ server ↔ tools ↔ bridge cycle.
+// Callers (currently only `cli/commands/mcp.ts`) should import
+// `serveXopcChannelMcpImpl` directly from `./channel-server.js`.
 
 export function loadMcpServeConfig(): Config {
   return loadConfig();

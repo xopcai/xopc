@@ -1,4 +1,4 @@
-import type { Config } from '../../config/index.js';
+import type { Config } from '../../config/schema.js';
 import { resolveDmPolicy } from '../security.js';
 import type { DmPolicy } from '../channel-domain.js';
 
@@ -21,15 +21,12 @@ import {
   resolveWeixinPairingPath,
 } from './paths.js';
 
-export type PairingPendingView = {
-  senderId: string;
-  codeLast4: string;
-  createdAt: string;
-  lastSeenAt: string;
-  expiresAt: string;
-  isStale: boolean;
-  meta?: Record<string, string>;
-};
+// `PairingPendingView` moved to `./pairing-types.js` (leaf) so
+// `plugins/types.adapters.ts` and other lower-level callers can reference it
+// without forming a `types.adapters → pairing-service → security → plugin-types
+// → types.adapters` cycle. Re-exported here for backward-compat.
+export { type PairingPendingView } from './pairing-types.js';
+import type { PairingPendingView } from './pairing-types.js';
 
 export type ChannelPairingState = {
   channel: PairingCliChannel;

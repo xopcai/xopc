@@ -336,8 +336,10 @@ export function createSkillLoader(): SkillLoader {
   };
 }
 
-// Export SkillManager
-export { SkillManager, type SkillDiagnostic, type SkillLoadResult } from './skill-manager.js';
+// `SkillManager` + sibling types removed from this barrel — `skill-manager.ts`
+// imports `createSkillLoader` from THIS file, so re-exporting it back here
+// formed a circular cycle. External callers should import directly from
+// `./skill-manager.js`.
 
 // Re-export types for convenience
 export type { 
@@ -383,13 +385,9 @@ export {
   type SkillConfigFile,
 } from './config.js';
 
-// Re-export watcher
-export {
-  createSkillWatcher,
-  createWatcherFromLoader,
-  type SkillWatcher,
-  type SkillWatcherOptions,
-} from './watcher.js';
+// `watcher.ts` re-exports removed — it imports `SkillLoader` from THIS file, so
+// re-exporting back here formed a circular cycle. External callers should
+// import directly from `./watcher.js`.
 
 // Re-export test framework
 export {

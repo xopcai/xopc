@@ -12,9 +12,9 @@ import {
 import type { Model, Api } from '@earendil-works/pi-ai';
 
 import { createLogger } from '../../utils/logger.js';
-import { guardSessionManager, type GuardedPiTranscriptManager } from './session-tool-result-guard-wrapper.js';
+import { guardSessionManager, type GuardedPiTranscriptManager } from './session-tool-result-guard.js';
 import { prepareSessionManagerForRun } from './session-manager-init.js';
-import { prewarmSessionFile } from './session-manager-cache.js';
+import { defaultSessionManagerCache, type SessionManagerCache } from './session-manager-cache.js';
 import { applyXopcProviderApiKey, createEmbeddedAuthStorage } from './xopc-auth-storage.js';
 import { wrapStreamFnForXopcExtensions } from './xopc-stream-bridge.js';
 import { xopcToolsToDefinitions } from './xopc-tools-bridge.js';
@@ -43,7 +43,7 @@ export function buildEmbeddedRunnerFingerprint(input: EmbeddedRunnerFingerprintI
     tools,
     promptMarker,
     input.thinkingLevel,
-  ].join('\u001f');
+  ].join('');
 }
 
 type PooledRunner = {
@@ -78,14 +78,13 @@ export type AcquiredEmbeddedSessionRunner = {
   release: () => void;
 };
 
-const pool = new Map<string, PooledRunner>();
-
-let stats = {
-  acquires: 0,
-  reuses: 0,
-  creates: 0,
-  evictions: 0,
-};
+export interface EmbeddedSessionRunnerPoolStats {
+  acquires: number;
+  reuses: number;
+  creates: number;
+  evictions: number;
+  pooled: number;
+}
 
 export function isEmbeddedSessionRunnerEnabled(): boolean {
   const raw = process.env.XOPC_SESSION_RUNNER?.trim().toLowerCase();
@@ -104,63 +103,6 @@ export function getEmbeddedSessionRunnerIdleTtlMs(): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_IDLE_TTL_MS;
 }
 
-export function getEmbeddedSessionRunnerStats(): Readonly<typeof stats> & { pooled: number } {
-  return { ...stats, pooled: pool.size };
-}
-
-export function resetEmbeddedSessionRunnerForTest(): void {
-  for (const entry of pool.values()) {
-    clearIdleTimer(entry);
-  }
-  pool.clear();
-  stats = { acquires: 0, reuses: 0, creates: 0, evictions: 0 };
-}
-
-function clearIdleTimer(entry: PooledRunner): void {
-  if (entry.idleTimer) {
-    clearTimeout(entry.idleTimer);
-    entry.idleTimer = null;
-  }
-}
-
-function scheduleIdleEviction(sessionKey: string, entry: PooledRunner): void {
-  clearIdleTimer(entry);
-  const ttlMs = getEmbeddedSessionRunnerIdleTtlMs();
-  entry.idleTimer = setTimeout(() => {
-    const current = pool.get(sessionKey);
-    if (current === entry) {
-      disposePooledRunner(sessionKey, entry, 'idle_ttl');
-    }
-  }, ttlMs);
-  entry.idleTimer.unref?.();
-}
-
-function disposePooledRunner(sessionKey: string, entry: PooledRunner, reason: string): void {
-  clearIdleTimer(entry);
-  pool.delete(sessionKey);
-  stats.evictions += 1;
-  try {
-    entry.piSm.flushPendingToolResults?.();
-  } catch {
-    /* ignore */
-  }
-  log.debug({ sessionKey, reason }, 'Embedded session runner evicted');
-}
-
-export function evictEmbeddedSessionRunner(sessionKey: string, reason = 'explicit'): void {
-  const entry = pool.get(sessionKey);
-  if (!entry) {
-    return;
-  }
-  disposePooledRunner(sessionKey, entry, reason);
-}
-
-export function evictAllEmbeddedSessionRunners(reason = 'dispose_all'): void {
-  for (const sessionKey of [...pool.keys()]) {
-    evictEmbeddedSessionRunner(sessionKey, reason);
-  }
-}
-
 function createEmbeddedSettingsManager(cwd: string): SettingsManager {
   const sm = SettingsManager.inMemory({ compaction: { enabled: false } });
   sm.setCompactionEnabled(false);
@@ -168,140 +110,253 @@ function createEmbeddedSettingsManager(cwd: string): SettingsManager {
   return sm;
 }
 
-async function createPooledRunner(params: AcquireEmbeddedSessionRunnerParams): Promise<PooledRunner> {
-  const {
-    sessionKey,
-    sessionId,
-    sessionFile,
-    sessionsDir,
-    hadSessionFile,
-    workspaceDir,
-    model,
-    thinkingLevel,
-    tools,
-    systemPrompt,
-  } = params;
-
-  await prewarmSessionFile(sessionFile);
-  const settingsManager = createEmbeddedSettingsManager(workspaceDir);
-
-  const piSm = guardSessionManager(SessionManager.open(sessionFile, sessionsDir, workspaceDir), {
-    sessionKey,
-    contextWindowTokens: model.contextWindow ?? 128_000,
-  });
-
-  await prepareSessionManagerForRun({
-    sessionManager: piSm,
-    sessionFile,
-    hadSessionFile,
-    sessionId,
-    cwd: workspaceDir,
-  });
-
-  const toolDefs = xopcToolsToDefinitions(tools);
-  const toolNames = tools.map((t) => t.name);
-
-  const authStorage = createEmbeddedAuthStorage();
-  applyXopcProviderApiKey(authStorage, model.provider);
-
-  const resourceLoader = new DefaultResourceLoader({
-    cwd: workspaceDir,
-    agentDir: getAgentDir(),
-    settingsManager,
-    noContextFiles: true,
-  });
-  await resourceLoader.reload();
-
-  const { session } = await createAgentSession({
-    cwd: workspaceDir,
-    model,
-    thinkingLevel: thinkingLevel ?? 'medium',
-    sessionManager: piSm,
-    settingsManager,
-    authStorage,
-    resourceLoader,
-    noTools: 'builtin',
-    customTools: toolDefs,
-    tools: toolNames,
-  });
-
-  applySystemPromptOverrideToSession(session, systemPrompt);
-  const baseStreamFn = wrapStreamFnForXopcExtensions(session.agent.streamFn);
-  session.agent.streamFn = baseStreamFn;
-
-  const fingerprint = buildEmbeddedRunnerFingerprint({
-    sessionFile,
-    workspaceDir,
-    modelRef: params.modelRef,
-    toolNames,
-    systemPrompt,
-    thinkingLevel: thinkingLevel ?? 'medium',
-  });
-
-  return {
-    sessionKey,
-    fingerprint,
-    session,
-    piSm,
-    settingsManager,
-    baseStreamFn,
-    lastUsedAt: Date.now(),
-    idleTimer: null,
-  };
+export interface EmbeddedSessionRunnerPoolOptions {
+  /** File-exists cache shared with prewarmSessionFile callers. */
+  sessionManagerCache?: SessionManagerCache;
+  /** Override for the env-driven enable flag (testing). */
+  isEnabled?: () => boolean;
+  /** Override for the env-driven idle TTL (testing). */
+  getIdleTtlMs?: () => number;
 }
 
-export async function acquireEmbeddedSessionRunner(
-  params: AcquireEmbeddedSessionRunnerParams,
-): Promise<AcquiredEmbeddedSessionRunner> {
-  stats.acquires += 1;
+/**
+ * Owns the per-session pool of pi `AgentSession` runners. The class is the supported,
+ * injectable owner; {@link defaultEmbeddedSessionRunnerPool} keeps the historic
+ * module-level free functions working until every caller is migrated to DI.
+ */
+export class EmbeddedSessionRunnerPool {
+  private readonly pool = new Map<string, PooledRunner>();
+  private readonly cache: SessionManagerCache;
+  private readonly isEnabledFn: () => boolean;
+  private readonly getIdleTtlMsFn: () => number;
 
-  const fingerprint = buildEmbeddedRunnerFingerprint({
-    sessionFile: params.sessionFile,
-    workspaceDir: params.workspaceDir,
-    modelRef: params.modelRef,
-    toolNames: params.tools.map((t) => t.name),
-    systemPrompt: params.systemPrompt,
-    thinkingLevel: params.thinkingLevel ?? 'medium',
-  });
+  private stats: Omit<EmbeddedSessionRunnerPoolStats, 'pooled'> = {
+    acquires: 0,
+    reuses: 0,
+    creates: 0,
+    evictions: 0,
+  };
 
-  const reuseEnabled = isEmbeddedSessionRunnerEnabled();
-  const existing = pool.get(params.sessionKey);
-
-  let entry: PooledRunner;
-  let reused = false;
-
-  if (reuseEnabled && existing && existing.fingerprint === fingerprint) {
-    clearIdleTimer(existing);
-    entry = existing;
-    entry.lastUsedAt = Date.now();
-    reused = true;
-    stats.reuses += 1;
-    applySystemPromptOverrideToSession(entry.session, params.systemPrompt);
-    entry.session.agent.streamFn = entry.baseStreamFn;
-    log.debug({ sessionKey: params.sessionKey }, 'Reusing pooled embedded session runner');
-  } else {
-    if (existing) {
-      disposePooledRunner(params.sessionKey, existing, 'fingerprint_mismatch');
-    }
-    entry = await createPooledRunner(params);
-    pool.set(params.sessionKey, entry);
-    stats.creates += 1;
-    log.debug({ sessionKey: params.sessionKey }, 'Created embedded session runner');
+  constructor(opts: EmbeddedSessionRunnerPoolOptions = {}) {
+    this.cache = opts.sessionManagerCache ?? defaultSessionManagerCache;
+    this.isEnabledFn = opts.isEnabled ?? isEmbeddedSessionRunnerEnabled;
+    this.getIdleTtlMsFn = opts.getIdleTtlMs ?? getEmbeddedSessionRunnerIdleTtlMs;
   }
 
-  return {
-    session: entry.session,
-    piSm: entry.piSm,
-    reused,
-    release: () => {
-      if (!isEmbeddedSessionRunnerEnabled()) {
-        disposePooledRunner(params.sessionKey, entry, 'runner_disabled');
-        return;
-      }
+  getStats(): Readonly<EmbeddedSessionRunnerPoolStats> {
+    return { ...this.stats, pooled: this.pool.size };
+  }
+
+  resetForTest(): void {
+    for (const entry of this.pool.values()) {
+      this.clearIdleTimer(entry);
+    }
+    this.pool.clear();
+    this.stats = { acquires: 0, reuses: 0, creates: 0, evictions: 0 };
+  }
+
+  evict(sessionKey: string, reason = 'explicit'): void {
+    const entry = this.pool.get(sessionKey);
+    if (!entry) {
+      return;
+    }
+    this.disposePooledRunner(sessionKey, entry, reason);
+  }
+
+  evictAll(reason = 'dispose_all'): void {
+    for (const sessionKey of [...this.pool.keys()]) {
+      this.evict(sessionKey, reason);
+    }
+  }
+
+  async acquire(params: AcquireEmbeddedSessionRunnerParams): Promise<AcquiredEmbeddedSessionRunner> {
+    this.stats.acquires += 1;
+
+    const fingerprint = buildEmbeddedRunnerFingerprint({
+      sessionFile: params.sessionFile,
+      workspaceDir: params.workspaceDir,
+      modelRef: params.modelRef,
+      toolNames: params.tools.map((t) => t.name),
+      systemPrompt: params.systemPrompt,
+      thinkingLevel: params.thinkingLevel ?? 'medium',
+    });
+
+    const reuseEnabled = this.isEnabledFn();
+    const existing = this.pool.get(params.sessionKey);
+
+    let entry: PooledRunner;
+    let reused = false;
+
+    if (reuseEnabled && existing && existing.fingerprint === fingerprint) {
+      this.clearIdleTimer(existing);
+      entry = existing;
       entry.lastUsedAt = Date.now();
-      scheduleIdleEviction(params.sessionKey, entry);
-    },
-  };
+      reused = true;
+      this.stats.reuses += 1;
+      applySystemPromptOverrideToSession(entry.session, params.systemPrompt);
+      entry.session.agent.streamFn = entry.baseStreamFn;
+      log.debug({ sessionKey: params.sessionKey }, 'Reusing pooled embedded session runner');
+    } else {
+      if (existing) {
+        this.disposePooledRunner(params.sessionKey, existing, 'fingerprint_mismatch');
+      }
+      entry = await this.createPooledRunner(params);
+      this.pool.set(params.sessionKey, entry);
+      this.stats.creates += 1;
+      log.debug({ sessionKey: params.sessionKey }, 'Created embedded session runner');
+    }
+
+    return {
+      session: entry.session,
+      piSm: entry.piSm,
+      reused,
+      release: () => {
+        if (!this.isEnabledFn()) {
+          this.disposePooledRunner(params.sessionKey, entry, 'runner_disabled');
+          return;
+        }
+        entry.lastUsedAt = Date.now();
+        this.scheduleIdleEviction(params.sessionKey, entry);
+      },
+    };
+  }
+
+  private clearIdleTimer(entry: PooledRunner): void {
+    if (entry.idleTimer) {
+      clearTimeout(entry.idleTimer);
+      entry.idleTimer = null;
+    }
+  }
+
+  private scheduleIdleEviction(sessionKey: string, entry: PooledRunner): void {
+    this.clearIdleTimer(entry);
+    const ttlMs = this.getIdleTtlMsFn();
+    entry.idleTimer = setTimeout(() => {
+      const current = this.pool.get(sessionKey);
+      if (current === entry) {
+        this.disposePooledRunner(sessionKey, entry, 'idle_ttl');
+      }
+    }, ttlMs);
+    entry.idleTimer.unref?.();
+  }
+
+  private disposePooledRunner(sessionKey: string, entry: PooledRunner, reason: string): void {
+    this.clearIdleTimer(entry);
+    this.pool.delete(sessionKey);
+    this.stats.evictions += 1;
+    try {
+      entry.piSm.flushPendingToolResults?.();
+    } catch {
+      /* ignore */
+    }
+    log.debug({ sessionKey, reason }, 'Embedded session runner evicted');
+  }
+
+  private async createPooledRunner(params: AcquireEmbeddedSessionRunnerParams): Promise<PooledRunner> {
+    const {
+      sessionKey,
+      sessionId,
+      sessionFile,
+      sessionsDir,
+      hadSessionFile,
+      workspaceDir,
+      model,
+      thinkingLevel,
+      tools,
+      systemPrompt,
+    } = params;
+
+    await this.cache.prewarm(sessionFile);
+    const settingsManager = createEmbeddedSettingsManager(workspaceDir);
+
+    const piSm = guardSessionManager(SessionManager.open(sessionFile, sessionsDir, workspaceDir), {
+      sessionKey,
+      contextWindowTokens: model.contextWindow ?? 128_000,
+    });
+
+    await prepareSessionManagerForRun({
+      sessionManager: piSm,
+      sessionFile,
+      hadSessionFile,
+      sessionId,
+      cwd: workspaceDir,
+    });
+
+    const toolDefs = xopcToolsToDefinitions(tools);
+    const toolNames = tools.map((t) => t.name);
+
+    const authStorage = createEmbeddedAuthStorage();
+    applyXopcProviderApiKey(authStorage, model.provider);
+
+    const resourceLoader = new DefaultResourceLoader({
+      cwd: workspaceDir,
+      agentDir: getAgentDir(),
+      settingsManager,
+      noContextFiles: true,
+    });
+    await resourceLoader.reload();
+
+    const { session } = await createAgentSession({
+      cwd: workspaceDir,
+      model,
+      thinkingLevel: thinkingLevel ?? 'medium',
+      sessionManager: piSm,
+      settingsManager,
+      authStorage,
+      resourceLoader,
+      noTools: 'builtin',
+      customTools: toolDefs,
+      tools: toolNames,
+    });
+
+    applySystemPromptOverrideToSession(session, systemPrompt);
+    const baseStreamFn = wrapStreamFnForXopcExtensions(session.agent.streamFn);
+    session.agent.streamFn = baseStreamFn;
+
+    const fingerprint = buildEmbeddedRunnerFingerprint({
+      sessionFile,
+      workspaceDir,
+      modelRef: params.modelRef,
+      toolNames,
+      systemPrompt,
+      thinkingLevel: thinkingLevel ?? 'medium',
+    });
+
+    return {
+      sessionKey,
+      fingerprint,
+      session,
+      piSm,
+      settingsManager,
+      baseStreamFn,
+      lastUsedAt: Date.now(),
+      idleTimer: null,
+    };
+  }
+}
+
+export const defaultEmbeddedSessionRunnerPool = new EmbeddedSessionRunnerPool();
+
+export function getEmbeddedSessionRunnerStats(): Readonly<EmbeddedSessionRunnerPoolStats> {
+  return defaultEmbeddedSessionRunnerPool.getStats();
+}
+
+export function resetEmbeddedSessionRunnerForTest(): void {
+  defaultEmbeddedSessionRunnerPool.resetForTest();
+}
+
+export function evictEmbeddedSessionRunner(sessionKey: string, reason = 'explicit'): void {
+  defaultEmbeddedSessionRunnerPool.evict(sessionKey, reason);
+}
+
+export function evictAllEmbeddedSessionRunners(reason = 'dispose_all'): void {
+  defaultEmbeddedSessionRunnerPool.evictAll(reason);
+}
+
+export function acquireEmbeddedSessionRunner(
+  params: AcquireEmbeddedSessionRunnerParams,
+): Promise<AcquiredEmbeddedSessionRunner> {
+  return defaultEmbeddedSessionRunnerPool.acquire(params);
 }
 
 /** Resolve transcript path inputs used by both runner acquire and turn execution. */

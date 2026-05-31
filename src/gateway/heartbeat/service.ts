@@ -189,7 +189,7 @@ export class HeartbeatService {
 
     let reply: string;
     try {
-      reply = await this.deps.agentService.processDirect(prompt, sessionKey);
+      reply = await this.deps.agentService.turnDispatcher.processDirect(prompt, sessionKey);
     } catch (error) {
       log.error({ err: error }, 'Heartbeat: agent call failed');
       return;

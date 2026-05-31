@@ -602,7 +602,11 @@
     "themeOptionSystem": "System",
     "openFullPreferences": "Open all settings",
     "quickMenuHint": "Language, theme, and text size",
-    "aboutApp": "About"
+    "aboutApp": "About",
+    "developerGroupTitle": "Developer",
+    "developerGroupDescription": "Affects how tool-call results are displayed in chat.",
+    "showRawToolDataTitle": "Show tool debugging data",
+    "showRawToolDataDescription": "Reveal raw JSON input and output inside tool-call steps to help diagnose issues."
   },
   "mcpSettings": {
     "title": "External tools (MCP)",
