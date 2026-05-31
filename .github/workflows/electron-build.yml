@@ -131,7 +131,11 @@ jobs:
           fi
           unset _EB_CSC_LINK _EB_CSC_KEY_PASSWORD
 
-          pnpm run electron:vite:build
+          pnpm run electron:vite:build:package
+          if find out/main/chunks -name '*validate-channel-configs*' 2>/dev/null | grep -q .; then
+            echo "❌ Electron main bundle still includes validate-channel-configs chunk"
+            exit 1
+          fi
           # Same as local `pnpm run electron:build`: bundle gateway CLI to out/server/index.js for packaged apps.
           pnpm run electron:server:build
           # macOS: build architectures sequentially to avoid DMG temp file conflicts

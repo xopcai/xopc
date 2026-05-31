@@ -20,7 +20,7 @@ function tryGitSha(): string {
   }
 }
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   define: {
     __XOPC_WEB_VERSION__: JSON.stringify(webPkg.version),
     __XOPC_WEB_COMMIT__: JSON.stringify(process.env.VITE_XOPC_WEB_COMMIT ?? tryGitSha()),
@@ -39,7 +39,8 @@ export default defineConfig({
   build: {
     outDir: '../dist/gateway/static/root',
     emptyOutDir: true,
-    sourcemap: true,
+    // Production gateway UI ships inside Electron; sourcemaps add ~20MB with no runtime benefit.
+    sourcemap: mode !== 'production' || process.env.VITE_SOURCEMAP === '1',
     target: 'es2022',
     rollupOptions: {
       output: {
@@ -87,4 +88,4 @@ export default defineConfig({
       },
     },
   },
-});
+}));
