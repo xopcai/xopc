@@ -48,6 +48,16 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
     },
   },
   {
+    id: 'browser-install',
+    match: (path) =>
+      path === '/api/browser/playwright/install/stream' ||
+      path === '/api/browser/cloakbrowser/install/stream',
+    load: async () => {
+      const { registerBrowserInstallRoutes } = await import('./browser-install.js');
+      return { register: registerBrowserInstallRoutes };
+    },
+  },
+  {
     id: 'config',
     match: (path) =>
       startsWithAny(path, ['/api/config', '/api/browser', '/api/heartbeat/trigger']),
@@ -74,8 +84,7 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
   },
   {
     id: 'agents',
-    match: (path) =>
-      startsWithAny(path, ['/api/agents', '/api/voice/models', '/api/image']),
+    match: (path) => startsWithAny(path, ['/api/agents', '/api/voice/models']),
     load: async () => {
       const { registerAgentsRoutes } = await import('./agents.js');
       return { register: registerAgentsRoutes };
@@ -98,7 +107,7 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
   },
   {
     id: 'models',
-    match: (path) => startsWithAny(path, ['/api/models', '/api/providers']),
+    match: (path) => startsWithAny(path, ['/api/models', '/api/providers', '/api/image']),
     load: async () => {
       const { registerModelsRoutes } = await import('./models.js');
       return { register: registerModelsRoutes };
@@ -174,16 +183,6 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
     load: async () => {
       const { registerUpdateRoutes } = await import('./update.js');
       return { register: registerUpdateRoutes };
-    },
-  },
-  {
-    id: 'browser-install',
-    match: (path) =>
-      path === '/api/browser/playwright/install/stream' ||
-      path === '/api/browser/cloakbrowser/install/stream',
-    load: async () => {
-      const { registerBrowserInstallRoutes } = await import('./browser-install.js');
-      return { register: registerBrowserInstallRoutes };
     },
   },
   {

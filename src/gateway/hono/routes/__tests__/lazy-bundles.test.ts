@@ -30,6 +30,21 @@ describe('lazy route bundles', () => {
     expect(findAuthenticatedLazyRouteBundle('/api/voice/providers')?.id).toBe('voice');
   });
 
+  it('routes browser install SSE streams to browser-install, not the broader config bundle', () => {
+    expect(findAuthenticatedLazyRouteBundle('/api/browser/cloakbrowser/install/stream')?.id).toBe(
+      'browser-install',
+    );
+    expect(findAuthenticatedLazyRouteBundle('/api/browser/playwright/install/stream')?.id).toBe(
+      'browser-install',
+    );
+    expect(findAuthenticatedLazyRouteBundle('/api/browser/cloakbrowser/doctor')?.id).toBe('config');
+  });
+
+  it('routes image generation APIs to models, not agents', () => {
+    expect(findAuthenticatedLazyRouteBundle('/api/image/providers')?.id).toBe('models');
+    expect(findAuthenticatedLazyRouteBundle('/api/agents')?.id).toBe('agents');
+  });
+
   it('has unique bundle ids', () => {
     const ids = AUTHENTICATED_LAZY_ROUTE_BUNDLES.map((bundle) => bundle.id);
     expect(new Set(ids).size).toBe(ids.length);

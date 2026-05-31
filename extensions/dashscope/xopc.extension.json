@@ -4,5 +4,6 @@
   "description": "Image generation via Alibaba Model Studio (DashScope). Configure API keys and region under Settings → Images, or here — both edit the same providers.dashscope entry.",
   "version": "1.0.0",
   "kind": "image-generation",
-  "main": "src/index.ts"
+  "main": "src/index.ts",
+  "autoEnableWhenConfiguredProviders": ["dashscope"]
 }
