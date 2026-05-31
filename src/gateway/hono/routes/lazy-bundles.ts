@@ -216,9 +216,15 @@ export const APP_LAZY_ROUTE_BUNDLES: readonly AppLazyRouteBundle[] = [
   },
   {
     id: 'tunnel-public',
-    prefixes: ['/api/tunnel/pair', '/api/tunnel/exchange-token'],
+    prefixes: [
+      '/api/tunnel/pair/ping',
+      '/api/tunnel/pair/validate-url',
+      '/api/tunnel/exchange-token',
+    ],
     match: (path) =>
-      path === '/api/tunnel/exchange-token' || startsWithAny(path, ['/api/tunnel/pair']),
+      path === '/api/tunnel/exchange-token' ||
+      path === '/api/tunnel/pair/ping' ||
+      path === '/api/tunnel/pair/validate-url',
     load: async () => {
       const { registerTunnelPublicRoutes } = await import('./tunnel.js');
       return { registerOnApp: registerTunnelPublicRoutes };

@@ -6,6 +6,7 @@ export const STARTUP_UNAVAILABLE_GATEWAY_METHODS = [
   'sessions.history',
   'sessions.messages',
   'sessions.list',
+  'sessions.run',
   'models.list',
 ] as const;
 

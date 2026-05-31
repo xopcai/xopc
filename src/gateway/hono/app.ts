@@ -19,6 +19,7 @@ import { logger } from './middleware/logger.js';
 import { registerPublicExtensionAssetRoutes } from './routes/auth-registry-extensions.js';
 import { registerAuthenticatedRoutes } from './routes/index.js';
 import { registerPublicGatewayRoutes } from './routes/public-gateway.js';
+import { resetLazyRouteBundlesForTests } from './routes/lazy-fallback.js';
 import { prewarmStaticUiCache } from './lib/static-ui.js';
 const log = createLogger('HonoApp');
 
@@ -37,6 +38,9 @@ export function isExtensionGatewayUiAssetPath(path: string): boolean {
 }
 
 export function createHonoApp(config: HonoAppConfig): Hono {
+  if (process.env.VITEST) {
+    resetLazyRouteBundlesForTests();
+  }
   const { service, token } = config;
   const app = new Hono();
 

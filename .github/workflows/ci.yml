@@ -77,7 +77,7 @@ jobs:
       # Run from web/ so react-doctor.config.json is loaded (repo-root --project skips it).
       - name: Run react-doctor (PR diff)
         if: github.event_name == 'pull_request'
-        run: pnpm -C web run react-doctor:pr -- origin/${{ github.base_ref }}
+        run: pnpm -C web run react-doctor:pr origin/${{ github.base_ref }}
 
       - name: Run react-doctor (full scan)
         if: github.event_name != 'pull_request'
