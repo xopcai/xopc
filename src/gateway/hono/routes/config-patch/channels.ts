@@ -10,7 +10,6 @@
  */
 import type { Config } from '../../../../config/schema.js';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function applyChannelsPatch(config: Config, body: any): void {
   const patchChannels = body.channels;
   if (patchChannels == null || typeof patchChannels !== 'object' || Array.isArray(patchChannels)) {
@@ -52,7 +51,6 @@ export function applyChannelsPatch(config: Config, body: any): void {
           },
         };
       }
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       if (!config.channels.telegram) config.channels.telegram = {} as any;
       const tg = config.channels.telegram as Record<string, unknown>;
 
@@ -137,7 +135,6 @@ export function applyChannelsPatch(config: Config, body: any): void {
       if (config.channels) delete config.channels.weixin;
     } else if (typeof wxRaw === 'object' && !Array.isArray(wxRaw)) {
       const wx = wxRaw as Record<string, unknown>;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       if (!config.channels) config.channels = {} as any;
       if (!config.channels.weixin) {
         config.channels.weixin = {
@@ -175,7 +172,6 @@ export function applyChannelsPatch(config: Config, body: any): void {
       if (config.channels) delete config.channels.feishu;
     } else if (typeof fsRaw === 'object' && !Array.isArray(fsRaw)) {
       const fs = fsRaw as Record<string, unknown>;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       if (!config.channels) config.channels = {} as any;
       if (!config.channels.feishu) {
         config.channels.feishu = {
