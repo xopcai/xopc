@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import { useLocation } from 'react-router-dom';
 
-import { APP_CHROME_NO_DRAG_CLASS, APP_TOP_HEADER_BAR_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
+import { APP_CHROME_NO_DRAG_CLASS, APP_TOP_HEADER_BAR_CLASS } from '@/components/shell/app-chrome';
 import { DarwinCollapsedTitlebarCluster } from '@/components/shell/darwin-collapsed-titlebar-cluster';
 import { MainRailExpandWhenCollapsed } from '@/components/shell/main-rail-expand-when-collapsed';
 import { MobileNavMenuButton } from '@/components/shell/mobile-nav-menu-button';
@@ -23,7 +23,7 @@ export const PrimaryAppHeader = memo(function PrimaryAppHeader() {
     <header
       className={cn(
         'flex shrink-0 items-center gap-3 bg-surface-panel',
-        APP_TOP_HEADER_BAR_NO_DRAG_CLASS,
+        APP_TOP_HEADER_BAR_CLASS,
         'px-3 sm:gap-4 sm:px-5 xl:px-6',
         electronDarwinCollapsedClusterMainPadMd(sidebarCollapsed),
       )}
