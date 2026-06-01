@@ -61,7 +61,8 @@ function copyDir(from, to) {
     );
   }
   mkdirSync(dirname(to), { recursive: true });
-  cpSync(from, to, { recursive: true });
+  // Dereference pnpm junctions (Windows) so extraResources copies real files, not store paths.
+  cpSync(from, to, { recursive: true, dereference: true });
 }
 
 /**
@@ -136,7 +137,7 @@ export function prepareElectronPackDir(repoRoot = root) {
     }
     const dest = join(packDir, to);
     mkdirSync(dirname(dest), { recursive: true });
-    cpSync(src, dest, { recursive: true });
+    cpSync(src, dest, { recursive: true, dereference: true });
   }
 
   const rootPkg = JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8'));

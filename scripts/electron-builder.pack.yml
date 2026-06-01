@@ -22,6 +22,9 @@ beforeBuild: _pack-resources/electron-before-build.cjs
 files:
   - '**/*'
   - '!**/*.map'
+  # Build-time staging only (extraResources / beforeBuild / mac entitlements). On Windows,
+  # pnpm junctions under _pack-resources/ (e.g. playwright-core) break asar extraction.
+  - '!_pack-resources/**'
 
 # Gateway bundle runs in a Node subprocess; asar fs adapter overhead on a 19MB require
 # slows cold start. Unpacking it (and its sibling templates) puts it on plain disk.
