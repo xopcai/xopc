@@ -1,8 +1,16 @@
 /**
- * Agent Event Handler - Handles all Agent lifecycle events
+ * Agent Event Handler — coordinates listeners on pi-agent events.
  *
- * Processes agent events and coordinates related actions like
- * progress updates, error tracking, and lifecycle events.
+ * Previously a single god-handler with ten manager fields and one `switch`. Now a
+ * thin façade around {@link SessionEventBus}: each concern (progress, lifecycle
+ * hooks, tool-chain recording, error tracking, self-verify, etc.) registers its
+ * own listener at construction time, and external code can add new listeners via
+ * {@link AgentEventHandler.registerListener} without modifying this file (OCP).
+ *
+ * Ordering note: a few listeners are order-sensitive (notably the
+ * `tool_execution_end` chain — `SystemReminder` mutates `event.result` in place
+ * and downstream listeners read the mutated value). The `installX` calls below
+ * preserve the exact order from the previous implementation.
  */
 
 import type { AgentEvent } from '@earendil-works/pi-agent-core';
@@ -16,11 +24,321 @@ import type { SelfVerifyMiddleware } from '../middleware/index.js';
 import type { SystemReminder } from '../prompt/system-reminder.js';
 import type { ToolUsageAnalyzer } from '../tools/usage-analyzer.js';
 import type { ErrorPatternMatcher } from '../tools/error-pattern-matcher.js';
-import type { ModelManager } from '../models/index.js';
 import { extractTextContent } from '../context/workspace.js';
 import { createLogger } from '../../utils/logger.js';
 
 const log = createLogger('AgentEventHandler');
+
+// ── Event bus ──────────────────────────────────────────────────────────────
+
+export type SessionEventListener = (event: AgentEvent, context: SessionContext) => void;
+export type SessionEventTypeFilter = AgentEvent['type'] | 'all';
+
+/**
+ * Typed pub/sub for agent events. Listeners run in registration order; the bus
+ * itself is synchronous — listeners that need async work must dispatch their own
+ * promises (typically by awaiting and logging on error, like the lifecycle hooks).
+ */
+export class SessionEventBus {
+  private readonly listeners = new Map<SessionEventTypeFilter, SessionEventListener[]>();
+
+  on(type: SessionEventTypeFilter, listener: SessionEventListener): () => void {
+    const bucket = this.listeners.get(type) ?? [];
+    bucket.push(listener);
+    this.listeners.set(type, bucket);
+    return () => {
+      const current = this.listeners.get(type);
+      if (!current) return;
+      const idx = current.indexOf(listener);
+      if (idx >= 0) current.splice(idx, 1);
+    };
+  }
+
+  dispatch(event: AgentEvent, context: SessionContext | null): void {
+    if (!context) {
+      if (event.type !== 'message_update') {
+        log.warn(
+          { eventType: event.type },
+          `Agent event ignored (no SessionContext): ${event.type}`,
+        );
+      }
+      return;
+    }
+    const exact = this.listeners.get(event.type);
+    if (exact) {
+      for (const listener of exact) {
+        listener(event, context);
+      }
+    }
+    const all = this.listeners.get('all');
+    if (all) {
+      for (const listener of all) {
+        listener(event, context);
+      }
+    }
+  }
+}
+
+// ── Built-in listener installers ───────────────────────────────────────────
+
+function installProgressListener(bus: SessionEventBus, progressManager: ProgressFeedbackManager): void {
+  bus.on('agent_start', () => {
+    log.debug('Agent turn started');
+    progressManager.startTask();
+  });
+  bus.on('turn_start', () => {
+    log.debug('Turn started');
+    progressManager.onTurnStart();
+  });
+  bus.on('tool_execution_start', (event) => {
+    const e = event as Extract<AgentEvent, { type: 'tool_execution_start' }>;
+    log.debug({ tool: e.toolName, args: e.args }, 'Tool execution started');
+    progressManager.onToolStart(e.toolName, e.args || {});
+  });
+  bus.on('tool_execution_update', (event) => {
+    const e = event as Extract<AgentEvent, { type: 'tool_execution_update' }>;
+    progressManager.onToolUpdate(e.toolName, e.partialResult);
+  });
+  bus.on('tool_execution_end', (event) => {
+    const e = event as Extract<AgentEvent, { type: 'tool_execution_end' }>;
+    log.debug({ tool: e.toolName, isError: e.isError }, 'Tool execution complete');
+    progressManager.onToolEnd(e.toolName, e.result, e.isError);
+  });
+  bus.on('agent_end', () => {
+    progressManager.endTask();
+  });
+}
+
+function installRequestLimitListener(
+  bus: SessionEventBus,
+  deps: {
+    requestLimiter: RequestLimiter;
+    progressManager: ProgressFeedbackManager;
+    lifecycleManager: LifecycleManager;
+  },
+): void {
+  bus.on('agent_start', (_event, context) => {
+    const result = deps.requestLimiter.recordRequest();
+
+    deps.lifecycleManager
+      .emit(
+        'llm_request',
+        context.sessionKey,
+        { requestNumber: result.count, maxRequests: result.limit },
+        context,
+      )
+      .catch((err) => {
+        const em = err instanceof Error ? err.message : String(err);
+        log.warn(
+          {
+            err,
+            errorMessage: em,
+            sessionKey: context.sessionKey,
+            requestNumber: result.count,
+            maxRequests: result.limit,
+          },
+          `Lifecycle emit llm_request failed: ${em}`,
+        );
+      });
+
+    deps.progressManager.onRequestLimitStatus(
+      result.count,
+      result.limit,
+      result.remaining,
+      result.isWarning,
+      result.shouldStop,
+    );
+
+    if (result.shouldStop) {
+      log.error(
+        { count: result.count, limit: result.limit, sessionKey: context.sessionKey },
+        `Request limit reached (${result.count}/${result.limit}) for session`,
+      );
+    }
+  });
+
+  bus.on('turn_end', () => {
+    deps.requestLimiter.reset();
+  });
+}
+
+function installLifecycleHookListener(bus: SessionEventBus, lifecycleManager: LifecycleManager): void {
+  bus.on('message_end', (event, context) => {
+    const e = event as Extract<AgentEvent, { type: 'message_end' }>;
+    if (e.message?.role !== 'assistant') return;
+    const content = e.message.content;
+    const text = Array.isArray(content)
+      ? extractTextContent(content as Array<{ type: string; text?: string }>)
+      : String(content);
+    log.debug({ contentLength: text.length }, 'Assistant response complete');
+
+    lifecycleManager
+      .emit(
+        'llm_response',
+        context.sessionKey,
+        { response: text, usage: (e.message as { usage?: unknown }).usage },
+        context,
+      )
+      .catch((err) => {
+        const em = err instanceof Error ? err.message : String(err);
+        log.warn(
+          { err, errorMessage: em, sessionKey: context.sessionKey, responseChars: text.length },
+          `Lifecycle emit llm_response failed: ${em}`,
+        );
+      });
+  });
+
+  bus.on('tool_execution_start', (event, context) => {
+    const e = event as Extract<AgentEvent, { type: 'tool_execution_start' }>;
+    lifecycleManager
+      .emit(
+        'tool_call_start',
+        context.sessionKey,
+        {
+          toolName: e.toolName,
+          arguments: e.args || {},
+          attemptNumber: 1,
+          maxAttempts: 3,
+        },
+        context,
+      )
+      .catch((err) => {
+        const em = err instanceof Error ? err.message : String(err);
+        log.warn(
+          { err, errorMessage: em, sessionKey: context.sessionKey, tool: e.toolName },
+          `Lifecycle emit tool_call_start failed: ${em}`,
+        );
+      });
+  });
+
+  bus.on('tool_execution_end', (event, context) => {
+    const e = event as Extract<AgentEvent, { type: 'tool_execution_end' }>;
+    const durationMs = (e as { durationMs?: number }).durationMs || 0;
+    lifecycleManager
+      .emit(
+        'tool_call_end',
+        context.sessionKey,
+        {
+          toolName: e.toolName,
+          success: !e.isError,
+          result: e.result,
+          error: e.isError ? String(e.result) : undefined,
+          durationMs,
+        },
+        context,
+      )
+      .catch((err) => {
+        const em = err instanceof Error ? err.message : String(err);
+        log.warn(
+          { err, errorMessage: em, sessionKey: context.sessionKey, tool: e.toolName },
+          `Lifecycle hook tool_call_end failed: ${em}`,
+        );
+      });
+  });
+}
+
+function installSystemReminderListener(bus: SessionEventBus, systemReminder: SystemReminder): void {
+  // MUTATES `event.result` so downstream listeners (tool-chain, error-tracking) see
+  // the decorated text. Must run AFTER progress + lifecycle hooks (they consume the
+  // original) and BEFORE tool-chain + error-tracking.
+  bus.on('tool_execution_end', (event) => {
+    const e = event as Extract<AgentEvent, { type: 'tool_execution_end' }> & { result: unknown };
+    e.result = systemReminder.appendToResult(e.result);
+  });
+}
+
+function installToolChainListener(bus: SessionEventBus, toolChainTracker: ToolChainTracker): void {
+  bus.on('turn_start', (_event, context) => {
+    // One chain per LLM turn (pi-agent emits turn_start each round; turn_end clears the chain).
+    toolChainTracker.startChain(context.sessionKey);
+  });
+  bus.on('tool_execution_start', (event, context) => {
+    const e = event as Extract<AgentEvent, { type: 'tool_execution_start' }>;
+    toolChainTracker.recordCall(context.sessionKey, e.toolName, e.args || {}, 0);
+  });
+  bus.on('tool_execution_end', (event, context) => {
+    const e = event as Extract<AgentEvent, { type: 'tool_execution_end' }>;
+    const durationMs = (e as { durationMs?: number }).durationMs || 0;
+    const chain = toolChainTracker.getCurrentChain(context.sessionKey);
+    if (!chain) return;
+    const lastNode = chain.nodes[chain.nodes.length - 1];
+    if (lastNode && lastNode.toolName === e.toolName) {
+      toolChainTracker.recordResult(
+        context.sessionKey,
+        lastNode.id,
+        e.result,
+        e.isError ? 'Tool execution failed' : undefined,
+        durationMs,
+      );
+    }
+  });
+  bus.on('turn_end', (_event, context) => {
+    toolChainTracker.endChain(context.sessionKey);
+  });
+}
+
+function installToolUsageListener(bus: SessionEventBus, toolUsageAnalyzer: ToolUsageAnalyzer): void {
+  bus.on('tool_execution_end', (event) => {
+    const e = event as Extract<AgentEvent, { type: 'tool_execution_end' }>;
+    const durationMs = (e as { durationMs?: number }).durationMs || 0;
+    toolUsageAnalyzer.recordUsage(e.toolName, !e.isError, durationMs);
+  });
+}
+
+function extractErrorText(result: unknown): string {
+  if (typeof result === 'string') return result;
+  if (result && typeof result === 'object') {
+    const obj = result as Record<string, unknown>;
+    if (typeof obj.error === 'string') return obj.error;
+    if (typeof obj.message === 'string') return obj.message;
+    return JSON.stringify(result);
+  }
+  return String(result);
+}
+
+function installErrorTrackingListener(
+  bus: SessionEventBus,
+  deps: { errorTracker: ToolErrorTracker; errorPatternMatcher: ErrorPatternMatcher },
+): void {
+  bus.on('tool_execution_end', (event) => {
+    const e = event as Extract<AgentEvent, { type: 'tool_execution_end' }>;
+    if (!e.isError) return;
+    const errorText = extractErrorText(e.result);
+    deps.errorTracker.recordFailure(e.toolName, errorText);
+
+    const errorMatch = deps.errorPatternMatcher.matchError(errorText);
+    if (errorMatch.matched && errorMatch.pattern) {
+      const preview = errorText.length > 120 ? `${errorText.slice(0, 120)}…` : errorText;
+      log.warn(
+        { tool: e.toolName, pattern: errorMatch.pattern.name, errorPreview: preview },
+        `Tool error matched pattern "${errorMatch.pattern.name}" (${e.toolName}): ${preview}`,
+      );
+    }
+  });
+  bus.on('turn_end', () => {
+    deps.errorTracker.reset();
+  });
+}
+
+function installSelfVerifyListener(bus: SessionEventBus, selfVerifyMiddleware: SelfVerifyMiddleware): void {
+  bus.on('tool_execution_start', (event) => {
+    const e = event as Extract<AgentEvent, { type: 'tool_execution_start' }>;
+    const args = e.args;
+    const toolName = e.toolName;
+    if (!toolName || !args) return;
+    const name = toolName.toLowerCase();
+    if (name.includes('write') && args.path) {
+      selfVerifyMiddleware.recordEdit(String(args.path), 'write');
+    } else if (name.includes('edit') && args.path) {
+      selfVerifyMiddleware.recordEdit(String(args.path), 'edit');
+    }
+  });
+  bus.on('turn_end', () => {
+    selfVerifyMiddleware.onTurnStart();
+  });
+}
+
+// ── Public façade ───────────────────────────────────────────────────────────
 
 export interface AgentEventHandlerConfig {
   progressManager: ProgressFeedbackManager;
@@ -32,297 +350,52 @@ export interface AgentEventHandlerConfig {
   systemReminder: SystemReminder;
   toolUsageAnalyzer: ToolUsageAnalyzer;
   errorPatternMatcher: ErrorPatternMatcher;
-  modelManager: ModelManager;
 }
 
+/**
+ * Thin façade over {@link SessionEventBus} that pre-registers all built-in
+ * listeners in their required order. `handle(event, ctx)` is the entry point
+ * used by `AgentService.handleSessionEvent`; extensions can hook in via
+ * {@link registerListener} without touching this class.
+ */
 export class AgentEventHandler {
-  private progressManager: ProgressFeedbackManager;
-  private errorTracker: ToolErrorTracker;
-  private requestLimiter: RequestLimiter;
-  private lifecycleManager: LifecycleManager;
-  private toolChainTracker: ToolChainTracker;
-  private selfVerifyMiddleware: SelfVerifyMiddleware;
-  private systemReminder: SystemReminder;
-  private toolUsageAnalyzer: ToolUsageAnalyzer;
-  private errorPatternMatcher: ErrorPatternMatcher;
-  private modelManager: ModelManager;
-  private taskStartTime: number = 0;
+  private readonly bus: SessionEventBus;
 
   constructor(config: AgentEventHandlerConfig) {
-    this.progressManager = config.progressManager;
-    this.errorTracker = config.errorTracker;
-    this.requestLimiter = config.requestLimiter;
-    this.lifecycleManager = config.lifecycleManager;
-    this.toolChainTracker = config.toolChainTracker;
-    this.selfVerifyMiddleware = config.selfVerifyMiddleware;
-    this.systemReminder = config.systemReminder;
-    this.toolUsageAnalyzer = config.toolUsageAnalyzer;
-    this.errorPatternMatcher = config.errorPatternMatcher;
-    this.modelManager = config.modelManager;
+    this.bus = new SessionEventBus();
+
+    // Order matters for `tool_execution_end`: SystemReminder mutates `event.result`
+    // and ToolChain + ErrorTracking depend on the mutated value. Keep these in this
+    // exact sequence.
+    installProgressListener(this.bus, config.progressManager);
+    installRequestLimitListener(this.bus, {
+      requestLimiter: config.requestLimiter,
+      progressManager: config.progressManager,
+      lifecycleManager: config.lifecycleManager,
+    });
+    installLifecycleHookListener(this.bus, config.lifecycleManager);
+    installSystemReminderListener(this.bus, config.systemReminder);
+    installToolUsageListener(this.bus, config.toolUsageAnalyzer);
+    installToolChainListener(this.bus, config.toolChainTracker);
+    installErrorTrackingListener(this.bus, {
+      errorTracker: config.errorTracker,
+      errorPatternMatcher: config.errorPatternMatcher,
+    });
+    installSelfVerifyListener(this.bus, config.selfVerifyMiddleware);
   }
 
-  /**
-   * Handle an agent event
-   */
+  /** Dispatch a pi-agent event to all registered listeners. */
   handle(event: AgentEvent, context: SessionContext | null): void {
-    if (!context) {
-      if (event.type !== 'message_update') {
-        log.warn(
-          { eventType: event.type },
-          `Agent event ignored (no SessionContext): ${event.type}`,
-        );
-      }
-      return;
-    }
-
-    switch (event.type) {
-      case 'agent_start':
-        this.handleAgentStart(event, context);
-        break;
-      case 'turn_start':
-        this.handleTurnStart(event, context);
-        break;
-      case 'message_start':
-        this.handleMessageStart(event, context);
-        break;
-      case 'message_end':
-        this.handleMessageEnd(event, context);
-        break;
-      case 'tool_execution_start':
-        this.handleToolExecutionStart(event, context);
-        break;
-      case 'tool_execution_update':
-        this.handleToolExecutionUpdate(event, context);
-        break;
-      case 'tool_execution_end':
-        this.handleToolExecutionEnd(event, context);
-        break;
-      case 'message_update':
-        // Handled by AgentService for streaming, but we acknowledge it here
-        break;
-      case 'turn_end':
-        this.handleTurnEnd(event, context);
-        break;
-      case 'agent_end':
-        this.handleAgentEnd(event, context);
-        break;
-      default:
-        log.debug({ eventType: (event as AgentEvent).type }, 'Unhandled event type');
-    }
-  }
-
-  private handleAgentStart(_event: AgentEvent, context: SessionContext): void {
-    log.debug('Agent turn started');
-    this.taskStartTime = Date.now();
-    this.progressManager.startTask();
-
-    const result = this.requestLimiter.recordRequest();
-
-    this.lifecycleManager.emit('llm_request', context.sessionKey, {
-      requestNumber: result.count,
-      maxRequests: result.limit,
-    }, context).catch((err) => {
-      const em = err instanceof Error ? err.message : String(err);
-      log.warn(
-        { err, errorMessage: em, sessionKey: context.sessionKey, requestNumber: result.count, maxRequests: result.limit },
-        `Lifecycle emit llm_request failed: ${em}`,
-      );
-    });
-
-    this.progressManager.onRequestLimitStatus(
-      result.count,
-      result.limit,
-      result.remaining,
-      result.isWarning,
-      result.shouldStop
-    );
-
-    if (result.shouldStop) {
-      log.error(
-        { count: result.count, limit: result.limit, sessionKey: context.sessionKey },
-        `Request limit reached (${result.count}/${result.limit}) for session`,
-      );
-    }
-  }
-
-  private handleTurnStart(_event: AgentEvent, context: SessionContext): void {
-    log.debug('Turn started');
-    this.progressManager.onTurnStart();
-    // One chain per LLM turn (pi-agent emits turn_start each round; turn_end clears the chain)
-    this.toolChainTracker.startChain(context.sessionKey);
-  }
-
-  private handleMessageStart(event: AgentEvent, _context: SessionContext): void {
-    const msgEvent = event as Extract<AgentEvent, { type: 'message_start' }>;
-    if (msgEvent.message?.role === 'assistant') {
-      log.debug('Assistant response starting');
-    }
-  }
-
-  private handleMessageEnd(event: AgentEvent, context: SessionContext): void {
-    const msgEvent = event as Extract<AgentEvent, { type: 'message_end' }>;
-    if (msgEvent.message?.role === 'assistant') {
-      const content = msgEvent.message.content;
-      const text = Array.isArray(content)
-        ? extractTextContent(content as Array<{ type: string; text?: string }>)
-        : String(content);
-      log.debug({ contentLength: text.length }, 'Assistant response complete');
-
-      this.lifecycleManager.emit('llm_response', context.sessionKey, {
-        response: text,
-        usage: (msgEvent.message as any).usage,
-      }, context).catch((err) => {
-        const em = err instanceof Error ? err.message : String(err);
-        log.warn(
-          { err, errorMessage: em, sessionKey: context.sessionKey, responseChars: text.length },
-          `Lifecycle emit llm_response failed: ${em}`,
-        );
-      });
-    }
-  }
-
-  private handleToolExecutionStart(event: AgentEvent, context: SessionContext): void {
-    const toolEvent = event as Extract<AgentEvent, { type: 'tool_execution_start' }>;
-    log.debug({ tool: toolEvent.toolName, args: toolEvent.args }, 'Tool execution started');
-    this.progressManager.onToolStart(toolEvent.toolName, toolEvent.args || {});
-
-    this.lifecycleManager.emit('tool_call_start', context.sessionKey, {
-      toolName: toolEvent.toolName,
-      arguments: toolEvent.args || {},
-      attemptNumber: 1,
-      maxAttempts: 3,
-    }, context).catch((err) => {
-      const em = err instanceof Error ? err.message : String(err);
-      log.warn(
-        { err, errorMessage: em, sessionKey: context.sessionKey, tool: toolEvent.toolName },
-        `Lifecycle emit tool_call_start failed: ${em}`,
-      );
-    });
-
-    this.toolChainTracker.recordCall(
-      context.sessionKey,
-      toolEvent.toolName,
-      toolEvent.args || {},
-      0
-    );
-
-    // Track file edits for self-verify
-    this.trackFileEdit(toolEvent.toolName, toolEvent.args);
-  }
-
-  private handleToolExecutionUpdate(event: AgentEvent, _context: SessionContext): void {
-    const toolEvent = event as Extract<AgentEvent, { type: 'tool_execution_update' }>;
-    this.progressManager.onToolUpdate(toolEvent.toolName, toolEvent.partialResult);
-  }
-
-  private handleToolExecutionEnd(event: AgentEvent, context: SessionContext): void {
-    const toolEvent = event as Extract<AgentEvent, { type: 'tool_execution_end' }>;
-    log.debug({ tool: toolEvent.toolName, isError: toolEvent.isError }, 'Tool execution complete');
-    this.progressManager.onToolEnd(toolEvent.toolName, toolEvent.result, toolEvent.isError);
-
-    const durationMs = (toolEvent as any).durationMs || 0;
-
-    this.lifecycleManager.emit('tool_call_end', context.sessionKey, {
-      toolName: toolEvent.toolName,
-      success: !toolEvent.isError,
-      result: toolEvent.result,
-      error: toolEvent.isError ? String(toolEvent.result) : undefined,
-      durationMs,
-    }, context).catch((err) => {
-      const em = err instanceof Error ? err.message : String(err);
-      log.warn(
-        { err, errorMessage: em, sessionKey: context.sessionKey, tool: toolEvent.toolName },
-        `Lifecycle hook tool_call_end failed: ${em}`,
-      );
-    });
-
-    // System reminder
-    (toolEvent as any).result = this.systemReminder.appendToResult(toolEvent.result);
-
-    // Record tool usage
-    this.toolUsageAnalyzer.recordUsage(toolEvent.toolName, !toolEvent.isError, durationMs);
-
-    // Record tool result in chain
-    this.recordToolResult(context.sessionKey, toolEvent.toolName, toolEvent.result, toolEvent.isError, durationMs);
-
-    // Track errors
-    if (toolEvent.isError) {
-      const errorText = this.extractError(toolEvent.result);
-      this.errorTracker.recordFailure(toolEvent.toolName, errorText);
-
-      // Match error pattern
-      const errorMatch = this.errorPatternMatcher.matchError(errorText);
-      if (errorMatch.matched && errorMatch.pattern) {
-        const preview = errorText.length > 120 ? `${errorText.slice(0, 120)}…` : errorText;
-        log.warn(
-          { tool: toolEvent.toolName, pattern: errorMatch.pattern.name, errorPreview: preview },
-          `Tool error matched pattern "${errorMatch.pattern.name}" (${toolEvent.toolName}): ${preview}`,
-        );
-      }
-    }
-  }
-
-  private handleTurnEnd(_event: AgentEvent, context: SessionContext): void {
-    // Reset trackers
-    this.errorTracker.reset();
-    this.requestLimiter.reset();
-    this.selfVerifyMiddleware.onTurnStart();
-    this.toolChainTracker.endChain(context.sessionKey);
-  }
-
-  private handleAgentEnd(_event: AgentEvent, _context: SessionContext): void {
-    this.progressManager.endTask();
-  }
-
-  private trackFileEdit(toolName: string | undefined, args: Record<string, unknown> | undefined): void {
-    if (!toolName || !args) return;
-    
-    const name = toolName.toLowerCase();
-    if (name.includes('write') && args.path) {
-      this.selfVerifyMiddleware.recordEdit(String(args.path), 'write');
-    } else if (name.includes('edit') && args.path) {
-      this.selfVerifyMiddleware.recordEdit(String(args.path), 'edit');
-    }
-  }
-
-  private recordToolResult(
-    sessionKey: string,
-    toolName: string,
-    result: unknown,
-    isError: boolean,
-    durationMs: number
-  ): void {
-    const chain = this.toolChainTracker.getCurrentChain(sessionKey);
-    if (chain) {
-      const lastNode = chain.nodes[chain.nodes.length - 1];
-      if (lastNode && lastNode.toolName === toolName) {
-        this.toolChainTracker.recordResult(
-          sessionKey,
-          lastNode.id,
-          result,
-          isError ? 'Tool execution failed' : undefined,
-          durationMs
-        );
-      }
-    }
-  }
-
-  private extractError(result: unknown): string {
-    if (typeof result === 'string') return result;
-    if (result && typeof result === 'object') {
-      const obj = result as Record<string, unknown>;
-      if (obj.error && typeof obj.error === 'string') return obj.error;
-      if (obj.message && typeof obj.message === 'string') return obj.message;
-      return JSON.stringify(result);
-    }
-    return String(result);
+    this.bus.dispatch(event, context);
   }
 
   /**
-   * Get task duration in milliseconds
+   * Register an additional listener (e.g. from an extension). Returns an
+   * unsubscribe function. Listeners run after the built-ins in registration
+   * order; if you need to run before a built-in, you must create your own
+   * {@link SessionEventBus} instance.
    */
-  getTaskDuration(): number {
-    if (!this.taskStartTime) return 0;
-    return Date.now() - this.taskStartTime;
+  registerListener(type: SessionEventTypeFilter, listener: SessionEventListener): () => void {
+    return this.bus.on(type, listener);
   }
 }

@@ -1,5 +1,5 @@
 import type { Hono } from 'hono';
-import { getWorkspacePath } from '../../../config/schema.js';
+import { getWorkspacePath } from '../../../config/workspace-path-helpers.js';
 import { normalizeConfiguredMcpServers, canonicalizeConfiguredMcpServer } from '../../../config/mcp-config-normalize.js';
 import { loadMergedBundleMcpConfig } from '../../../agent/mcp/bundle-mcp-config.js';
 import {

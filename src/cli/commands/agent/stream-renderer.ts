@@ -49,7 +49,7 @@ export async function renderStreamToTerminal(
   const stamped = message.trimStart().startsWith('/')
     ? message
     : prependEnvelopeTimestamp(message);
-  const stream = agent.processDirectStreaming(stamped, sessionKey);
+  const stream = agent.turnDispatcher.processDirectStreaming(stamped, sessionKey);
 
   let responseText = '';
   let isFirstToken = true;

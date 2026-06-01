@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import { spawn, execSync } from 'child_process';
-import { getContextWithOpts } from '../../index.js';
+import { getContextWithOpts } from '../../context.js';
 
 /**
  * Create logs subcommand

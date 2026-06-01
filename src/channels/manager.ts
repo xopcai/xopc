@@ -1,133 +1,209 @@
 /**
- * Channel Manager - Channel plugin management based on ChannelPlugin interface
+ * Channel Manager — thin composition root for the channel subsystem.
+ *
+ * Wires together the four coordinators that own what used to be the eight
+ * concerns of this 707-line class:
+ *
+ *   - {@link ChannelPluginRegistry}        — plugins Map, register/get
+ *   - {@link ChannelLifecycleSupervisor}   — init/start/stop/restart-backoff
+ *   - {@link ChannelHeartbeatScheduler}    — per-account heartbeat probes
+ *   - {@link ChannelOutboundSender}        — TTS rewrite + persist + delivery
+ *
+ * The public surface (`registerPlugin`, `initialize`, `start`, `send`, etc.) is
+ * preserved so callers (`GatewayService`, CLI commands, channel plugins) are
+ * unchanged.
  */
 
-import type { Config } from '../config/index.js';
+import type { Config } from '../config/schema.js';
 import type { MessageBus } from '../infra/bus/index.js';
+
 import type { InboundMessage, OutboundMessage } from './transport-types.js';
 import type {
   ChannelPlugin,
-  ChannelPluginInitOptions,
   ChannelPluginSessionModelHooks,
-  ChannelPluginStartOptions,
   ChannelStreamHandle,
 } from './plugin-types.js';
-
-import { createLogger } from '../utils/logger.js';
-import { INTERNAL_OUTBOUND_DROP_CHANNEL } from './internal-outbound.js';
-import { mergeTtsConfigFromAppConfig } from '../voice/tts/merge-config.js';
-import { maybeApplyTtsToPayload } from '../voice/tts/payload.js';
-import { deliverOutboundMessage } from './outbound/deliver.js';
-import { OutboundPersistStore } from './outbound/persist-store.js';
-import { syncChannelPluginsFromManager } from './plugins/registry.js';
-import { CHANNEL_RESTART_POLICY, computeBackoff } from './restart-policy.js';
 import { ChannelHealthMonitor, type ChannelHealthState } from './health-monitor.js';
+import { ChannelPluginRegistry } from './plugin-registry.js';
+import { ChannelHeartbeatScheduler } from './heartbeat-scheduler.js';
+import {
+  ChannelOutboundSender,
+  type OutboundChannelHooks,
+} from './outbound-sender.js';
+import { ChannelLifecycleSupervisor } from './lifecycle-supervisor.js';
+import { createLogger } from '../utils/logger.js';
 
 const log = createLogger('ChannelManager');
 
-function asChannelConfig(raw: unknown): Record<string, unknown> | undefined {
-  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
-    return raw as Record<string, unknown>;
-  }
-  return undefined;
-}
-
-/** Hooks wired from AgentService for `message_sending` / `message_sent` on outbound delivery. */
-export interface OutboundChannelHooks {
-  runMessageSending: (
-    to: string,
-    content: string,
-    channel: string,
-  ) => Promise<{ send: boolean; content?: string; reason?: string }>;
-  runMessageSent: (
-    to: string,
-    content: string,
-    success: boolean,
-    error: string | undefined,
-    channel: string,
-  ) => Promise<void>;
-}
-
-// ============================================
-// Manager Implementation
-// ============================================
+export type { OutboundChannelHooks } from './outbound-sender.js';
 
 export class ChannelManager {
-  private plugins = new Map<string, ChannelPlugin>();
-  /** Plugins that completed `init()` successfully (skipped channels are not listed). */
-  private initializedPluginIds = new Set<string>();
-  private bus: MessageBus;
   private config: Config;
-  private initialized = false;
-  private running = false;
-  private restartAttempts = new Map<string, number>();
-  /** When set, failed-start auto-restart is suppressed for that channel id. */
-  private manuallyStopped = new Set<string>();
-  private heartbeatTimers = new Map<string, ReturnType<typeof setInterval>>();
-  private outboundHooks?: OutboundChannelHooks;
-  private persistStore?: OutboundPersistStore;
-  private _lastHeartbeatRestartAt = new Map<string, number>();
+  private readonly registry = new ChannelPluginRegistry();
   private readonly healthMonitor = new ChannelHealthMonitor();
+  private readonly lifecycle: ChannelLifecycleSupervisor;
+  private readonly heartbeat: ChannelHeartbeatScheduler;
+  private readonly outbound: ChannelOutboundSender;
   private sessionModelHooks?: ChannelPluginSessionModelHooks;
-  /** Plugins that skipped `start()` until `startDeferredConnects()` (see `ChannelMeta.deferConnectUntilAfterListen`). */
-  private deferredConnectPending = new Set<string>();
 
   constructor(config: Config, bus: MessageBus) {
-    this.bus = bus;
     this.config = config;
-  }
-  
-  setOutboundHooks(hooks: OutboundChannelHooks): void {
-    this.outboundHooks = hooks;
+
+    this.heartbeat = new ChannelHeartbeatScheduler({
+      getConfig: () => this.config,
+      healthMonitor: this.healthMonitor,
+      requestSoftRestart: (channelId) => {
+        void this.lifecycle.softRestart(channelId);
+      },
+    });
+
+    this.lifecycle = new ChannelLifecycleSupervisor({
+      bus,
+      registry: this.registry,
+      getConfig: () => this.config,
+      getSessionModelHooks: () => this.sessionModelHooks,
+      onPluginStarted: (plugin) => this.heartbeat.schedule(plugin),
+      onPluginStopped: (pluginId) => this.heartbeat.clear(pluginId),
+    });
+
+    this.outbound = new ChannelOutboundSender({
+      registry: this.registry,
+      getConfig: () => this.config,
+    });
   }
 
-  /** Call before `initialize()` so plugins can persist per-session model overrides (e.g. Telegram /models UI). */
+  // ── Wiring hooks (called by GatewayService / cli) ─────────────────────
+
+  setOutboundHooks(hooks: OutboundChannelHooks): void {
+    this.outbound.setHooks(hooks);
+  }
+
+  /** Call before `initialize()` so plugins can persist per-session model overrides. */
   setSessionModelHooks(hooks: ChannelPluginSessionModelHooks | undefined): void {
     this.sessionModelHooks = hooks;
   }
 
   enableOutboundPersistence(agentDir: string): void {
-    this.persistStore = new OutboundPersistStore(agentDir);
+    this.outbound.enablePersistence(agentDir);
   }
 
-  /**
-   * Redeliver persisted outbound items (after channels are started). Best-effort; may duplicate if prior send succeeded but ack did not.
-   */
-  async replayPendingOutboundMessages(): Promise<void> {
-    if (!this.persistStore) return;
-    const pending = [...this.persistStore.peek()];
-    for (const p of pending) {
-      try {
-        await this.send(p.message, { skipPersist: true });
-        this.persistStore.ack(p.id);
-      } catch (err) {
-        log.error({ id: p.id, err }, 'Failed to replay outbound message');
-      }
-    }
-  }
+  // ── Plugin registry pass-throughs ──────────────────────────────────────
 
   registerPlugin(plugin: ChannelPlugin): void {
-    if (this.plugins.has(plugin.id)) {
-      log.warn({ channel: plugin.id }, 'Channel plugin already registered, overwriting');
-    }
-    this.plugins.set(plugin.id, plugin);
-    syncChannelPluginsFromManager(this.getAllPlugins());
-    log.debug({ channel: plugin.id }, 'Registered channel plugin');
-  }
-  
-  getPlugin(id: string): ChannelPlugin | undefined {
-    return this.plugins.get(id);
+    this.registry.register(plugin);
   }
 
+  getPlugin(id: string): ChannelPlugin | undefined {
+    return this.registry.get(id);
+  }
+
+  getAllPlugins(): ChannelPlugin[] {
+    return this.registry.all();
+  }
+
+  /** Backward-compat alias for `getAllPlugins`. */
+  getAllChannels(): ChannelPlugin[] {
+    return this.registry.all();
+  }
+
+  /** Channel IDs whose runtime reports connected (e.g. Telegram polling active). */
+  getRunningChannels(): string[] {
+    return this.registry.runningChannelIds(this.config, (id) => this.lifecycle.isInitialized(id));
+  }
+
+  // ── Lifecycle pass-throughs ────────────────────────────────────────────
+
+  initialize(): Promise<void> {
+    return this.lifecycle.initialize();
+  }
+
+  start(options?: { deferConnectPluginIds?: ReadonlySet<string> }): Promise<void> {
+    return this.lifecycle.start(options);
+  }
+
+  startDeferredConnects(): Promise<void> {
+    return this.lifecycle.startDeferredConnects();
+  }
+
+  async stop(): Promise<void> {
+    await this.lifecycle.stop();
+    this.heartbeat.clearAll();
+  }
+
+  stopChannel(channelId: string): Promise<void> {
+    return this.lifecycle.stopChannel(channelId);
+  }
+
+  startChannel(channelId: string): Promise<void> {
+    return this.lifecycle.startChannel(channelId);
+  }
+
+  listDeferConnectChannelIds(cfg: Config): string[] {
+    return this.lifecycle.listDeferConnectChannelIds(cfg);
+  }
+
+  // ── Outbound pass-throughs ─────────────────────────────────────────────
+
+  send(msg: OutboundMessage, options?: { skipPersist?: boolean }): Promise<void> {
+    return this.outbound.send(msg, options);
+  }
+
+  replayPendingOutboundMessages(): Promise<void> {
+    return this.outbound.replayPending();
+  }
+
+  // ── Streaming + status query (delegated to plugin directly) ────────────
+
+  startStream(
+    channel: string,
+    chatId: string,
+    accountId?: string,
+    opts?: { threadId?: string; replyToMessageId?: string },
+  ): ChannelStreamHandle | null {
+    const plugin = this.registry.get(channel);
+    if (!plugin) {
+      log.error({ channel }, 'Unknown channel');
+      return null;
+    }
+    return (
+      plugin.streaming?.startStream?.({
+        chatId,
+        accountId,
+        threadId: opts?.threadId,
+        replyToMessageId: opts?.replyToMessageId,
+      }) ?? null
+    );
+  }
+
+  async getChannelStatus(channel: string): Promise<Record<string, unknown>> {
+    const plugin = this.registry.get(channel);
+    if (!plugin) return { error: 'Unknown channel' };
+    if (!plugin.status?.buildChannelSummary) return { status: 'unknown' };
+
+    try {
+      const accountId = plugin.config.listAccountIds(this.config)[0] ?? 'default';
+      const account = plugin.config.resolveAccount(this.config, accountId);
+      return await plugin.status.buildChannelSummary({
+        account,
+        cfg: this.config,
+        defaultAccountId: accountId,
+        snapshot: plugin.status.defaultRuntime ?? { accountId, channelId: channel, enabled: true, configured: true },
+      });
+    } catch (err) {
+      return { error: String(err) };
+    }
+  }
+
+  // ── Inbound action dispatch (Feishu card actions) ──────────────────────
+
   /**
-   * Optional channel hook before AgentService consumes an inbound message (e.g. Feishu card actions).
+   * Optional channel hook before `AgentService` consumes an inbound message
+   * (e.g. Feishu card-action triggers).
    */
   async dispatchInboundMessageAction(msg: InboundMessage): Promise<void> {
-    const plugin = this.plugins.get(msg.channel);
+    const plugin = this.registry.get(msg.channel);
     const handle = plugin?.actions?.handleAction;
-    if (!handle) {
-      return;
-    }
+    if (!handle) return;
 
     const meta = msg.metadata as Record<string, unknown> | undefined;
     if (msg.channel !== 'feishu' || meta?.feishuEventType !== 'card.action.trigger') {
@@ -144,7 +220,8 @@ export class ChannelManager {
       cardCtx && typeof cardCtx.open_message_id === 'string' ? cardCtx.open_message_id.trim() : '';
     const fallbackMsgId = typeof meta.messageId === 'string' ? meta.messageId.trim() : '';
     const messageId = openMsg || fallbackMsgId;
-    const accountId = typeof meta.accountId === 'string' && meta.accountId.trim() ? meta.accountId.trim() : 'default';
+    const accountId =
+      typeof meta.accountId === 'string' && meta.accountId.trim() ? meta.accountId.trim() : 'default';
 
     try {
       await handle({
@@ -170,490 +247,18 @@ export class ChannelManager {
       log.error({ err, channel: msg.channel, accountId, em }, 'dispatchInboundMessageAction failed');
     }
   }
-  
-  getAllPlugins(): ChannelPlugin[] {
-    return Array.from(this.plugins.values());
-  }
-  
-  async initialize(): Promise<void> {
-    if (this.initialized) {
-      log.warn({ pluginCount: this.plugins.size }, 'initialize() called again; channels already initialized — skipping');
-      return;
-    }
-    
-    const initPromises: Promise<void>[] = [];
-    
-    for (const [id, plugin] of this.plugins) {
-      const channelConfig = asChannelConfig(this.config.channels?.[id]);
-      // Always init so `onConfigUpdated` runs on hot reload (e.g. Weixin turned off after QR-login
-      // started monitors while the plugin was previously skipped here and had no bus/`initialized` id).
-      const initPromise = this.initializePlugin(plugin, channelConfig ?? {});
-      initPromises.push(initPromise);
-    }
-    
-    await Promise.allSettled(initPromises);
-    this.initialized = true;
-    log.info('All channel plugins initialized');
-  }
-  
-  /**
-   * Builtin channels require `channels.<id>.enabled`. Extension-managed channels run unless explicitly disabled.
-   */
-  private shouldRunChannelPlugin(
-    plugin: ChannelPlugin,
-    channelConfig: Record<string, unknown> | undefined,
-  ): boolean {
-    if (plugin.extensionManagedConfig) {
-      return channelConfig?.enabled !== false;
-    }
-    return !!channelConfig?.enabled;
-  }
 
-  private async initializePlugin(
-    plugin: ChannelPlugin, 
-    channelConfig: Record<string, unknown>
-  ): Promise<void> {
-    try {
-      const options: ChannelPluginInitOptions = {
-        bus: this.bus,
-        config: this.config,
-        channelConfig,
-        sessionModel: this.sessionModelHooks,
-      };
-      await plugin.init(options);
-      this.initializedPluginIds.add(plugin.id);
-      log.debug({ channel: plugin.id }, 'Channel plugin initialized');
-    } catch (err) {
-      log.error({ channel: plugin.id, err }, 'Failed to initialize channel plugin');
-    }
-  }
-  
-  /**
-   * Channel ids that would run and declare `meta.deferConnectUntilAfterListen` (for logging / metrics).
-   */
-  listDeferConnectChannelIds(cfg: Config): string[] {
-    const out: string[] = [];
-    for (const [id, plugin] of this.plugins) {
-      const channelConfig = asChannelConfig(cfg.channels?.[id]);
-      if (!this.shouldRunChannelPlugin(plugin, channelConfig)) continue;
-      if (plugin.meta.deferConnectUntilAfterListen === true) {
-        out.push(id);
-      }
-    }
-    return out;
-  }
+  // ── Config + introspection ─────────────────────────────────────────────
 
-  /**
-   * Phase 1: start every enabled channel except those in `deferConnectPluginIds` (they stay pending).
-   */
-  async start(options?: { deferConnectPluginIds?: ReadonlySet<string> }): Promise<void> {
-    if (!this.initialized) {
-      throw new Error('Channels not initialized');
-    }
-
-    if (this.running) {
-      log.warn({ pluginCount: this.plugins.size }, 'start() called while channels already running — skipping');
-      return;
-    }
-
-    const deferIds = options?.deferConnectPluginIds ?? new Set<string>();
-    this.deferredConnectPending.clear();
-
-    const startPromises: Promise<void>[] = [];
-
-    for (const [id, plugin] of this.plugins) {
-      const channelConfig = asChannelConfig(this.config.channels?.[id]);
-      if (!this.shouldRunChannelPlugin(plugin, channelConfig)) continue;
-
-      if (deferIds.has(id)) {
-        this.deferredConnectPending.add(id);
-        log.info({ channel: id }, 'Channel connect deferred until HTTP listen');
-        continue;
-      }
-
-      const startPromise = this.startPlugin(plugin, {}).catch((err) => {
-        log.error({ channel: id, err }, 'Failed to start channel plugin');
-      });
-      startPromises.push(startPromise);
-    }
-
-    await Promise.allSettled(startPromises);
-    this.running = true;
-    log.info(
-      { deferred: [...this.deferredConnectPending] },
-      this.deferredConnectPending.size > 0
-        ? 'Channel plugins started (deferred connects pending)'
-        : 'All channel plugins started',
-    );
-  }
-
-  /** Phase 2: run `start()` for channels deferred at `start()`. No-op if none pending. */
-  async startDeferredConnects(): Promise<void> {
-    if (this.deferredConnectPending.size === 0) {
-      return;
-    }
-    if (!this.running) {
-      log.warn('startDeferredConnects called before channel phase-1 start; skipping');
-      return;
-    }
-    const ids = [...this.deferredConnectPending];
-    this.deferredConnectPending.clear();
-    const startPromises: Promise<void>[] = [];
-    for (const id of ids) {
-      const plugin = this.plugins.get(id);
-      if (!plugin) continue;
-      const channelConfig = asChannelConfig(this.config.channels?.[id]);
-      if (!this.shouldRunChannelPlugin(plugin, channelConfig)) continue;
-      startPromises.push(
-        this.startPlugin(plugin, {}).catch((err) => {
-          log.error({ channel: id, err }, 'Failed to start deferred channel plugin');
-        }),
-      );
-    }
-    await Promise.allSettled(startPromises);
-    log.info({ channels: ids }, 'Deferred channel connects completed');
-  }
-  
-  private async startPlugin(
-    plugin: ChannelPlugin,
-    opts: { preserveRestartAttempts?: boolean },
-  ): Promise<void> {
-    const options: ChannelPluginStartOptions = {};
-    try {
-      await plugin.start(options);
-      if (!opts.preserveRestartAttempts) {
-        this.restartAttempts.delete(plugin.id);
-      }
-      this._scheduleHeartbeat(plugin);
-      log.debug({ channel: plugin.id }, 'Channel plugin started');
-    } catch (err) {
-      const attempt = (this.restartAttempts.get(plugin.id) ?? 0) + 1;
-      this.restartAttempts.set(plugin.id, attempt);
-      if (attempt <= CHANNEL_RESTART_POLICY.maxAttempts) {
-        const delayMs = computeBackoff(CHANNEL_RESTART_POLICY, attempt);
-        log.warn(
-          { channel: plugin.id, attempt, delayMs, err },
-          'Channel failed to start, scheduling restart',
-        );
-        setTimeout(() => {
-          if (this.manuallyStopped.has(plugin.id)) {
-            log.debug({ channel: plugin.id }, 'Skipping scheduled restart (manual stop)');
-            return;
-          }
-          void this.startPlugin(plugin, { preserveRestartAttempts: true }).catch((e) => {
-            log.error({ channel: plugin.id, err: e }, 'Channel restart attempt failed');
-          });
-        }, delayMs);
-      } else {
-        log.error({ channel: plugin.id, err }, 'Channel exceeded max restart attempts');
-      }
-    }
-  }
-  
-  async stop(): Promise<void> {
-    if (!this.running) return;
-
-    this.deferredConnectPending.clear();
-
-    const stopPromises: Promise<void>[] = [];
-    
-    for (const id of this.initializedPluginIds) {
-      const plugin = this.plugins.get(id);
-      if (!plugin) continue;
-      const stopPromise = this.stopPlugin(plugin).catch(err => {
-        log.error({ channel: id, err }, 'Failed to stop channel plugin');
-      });
-      stopPromises.push(stopPromise);
-    }
-    
-    await Promise.allSettled(stopPromises);
-    this.running = false;
-    log.info('All channel plugins stopped');
-  }
-  
-  private async stopPlugin(plugin: ChannelPlugin): Promise<void> {
-    this._clearHeartbeatTimers(plugin.id);
-    await plugin.stop();
-    log.info({ channel: plugin.id }, 'Channel plugin stopped');
-  }
-
-  private _clearHeartbeatTimers(pluginId: string): void {
-    const prefix = `${pluginId}:`;
-    for (const key of [...this.heartbeatTimers.keys()]) {
-      if (key.startsWith(prefix)) {
-        clearInterval(this.heartbeatTimers.get(key)!);
-        this.heartbeatTimers.delete(key);
-      }
-    }
-  }
-
-  private _scheduleHeartbeat(plugin: ChannelPlugin): void {
-    const hb = plugin.heartbeat;
-    if (!hb) return;
-    this._clearHeartbeatTimers(plugin.id);
-    let accountIds: string[] = [];
-    try {
-      accountIds = plugin.config.listAccountIds(this.config);
-    } catch (e) {
-      log.warn({ channel: plugin.id, err: e }, 'Heartbeat: failed to list accounts');
-      return;
-    }
-    for (const accountId of accountIds) {
-      const key = `${plugin.id}:${accountId}`;
-      const timer = setInterval(() => {
-        void (async () => {
-          try {
-            const r = await hb.check({ cfg: this.config, accountId });
-            this.healthMonitor.set(plugin.id, accountId, {
-              healthy: r.healthy,
-              lastCheckAt: Date.now(),
-              detail:
-                typeof r.details === 'string'
-                  ? r.details
-                  : r.details != null
-                    ? JSON.stringify(r.details)
-                    : undefined,
-            });
-            if (!r.healthy) {
-              log.warn(
-                { channel: plugin.id, accountId, detail: r.details },
-                'Channel heartbeat unhealthy',
-              );
-              const now = Date.now();
-              const last = this._lastHeartbeatRestartAt.get(plugin.id) ?? 0;
-              if (now - last < 60_000) {
-                return;
-              }
-              this._lastHeartbeatRestartAt.set(plugin.id, now);
-              void this._softRestartChannel(plugin.id);
-            }
-          } catch (err) {
-            this.healthMonitor.set(plugin.id, accountId, {
-              healthy: false,
-              lastCheckAt: Date.now(),
-              detail: err instanceof Error ? err.message : String(err),
-            });
-            log.error({ channel: plugin.id, accountId, err }, 'Channel heartbeat check failed');
-          }
-        })();
-      }, hb.intervalMs);
-      this.heartbeatTimers.set(key, timer);
-    }
-  }
-
-  private async _softRestartChannel(channelId: string): Promise<void> {
-    if (this.manuallyStopped.has(channelId)) return;
-    const plugin = this.plugins.get(channelId);
-    if (!plugin || !this.initializedPluginIds.has(channelId)) return;
-    this._clearHeartbeatTimers(channelId);
-    try {
-      await plugin.stop();
-      await this.startPlugin(plugin, {});
-    } catch (err) {
-      log.error({ channel: channelId, err }, 'Channel soft restart after heartbeat failed');
-    }
-  }
-
-  private cloneOutbound(m: OutboundMessage): OutboundMessage {
-    return structuredClone(m);
-  }
-  
-  async send(msg: OutboundMessage, options?: { skipPersist?: boolean }): Promise<void> {
-    log.debug({ type: msg.type, channel: msg.channel, chatId: msg.chat_id }, 'Received outbound message');
-
-    let processedMsg = await this.applyTtsIfNeeded(msg);
-    const queueId =
-      !options?.skipPersist && this.persistStore ? this.persistStore.enqueue(this.cloneOutbound(processedMsg)) : null;
-
-    try {
-      if (this.outboundHooks) {
-        const hookResult = await this.outboundHooks.runMessageSending(
-          processedMsg.chat_id,
-          processedMsg.content ?? '',
-          processedMsg.channel,
-        );
-        if (!hookResult.send) {
-          if (queueId) this.persistStore!.ack(queueId);
-          return;
-        }
-        processedMsg = { ...processedMsg, content: hookResult.content ?? processedMsg.content };
-      }
-
-      if (processedMsg.channel === INTERNAL_OUTBOUND_DROP_CHANNEL) {
-        log.debug(
-          { chatId: processedMsg.chat_id },
-          'Outbound dropped (internal session — not a real channel)',
-        );
-        if (queueId) this.persistStore!.ack(queueId);
-        return;
-      }
-
-      const plugin = this.plugins.get(processedMsg.channel);
-      if (!plugin?.outbound) {
-        log.error({ channel: processedMsg.channel }, 'Unknown channel or no outbound adapter');
-        if (queueId) this.persistStore!.ack(queueId);
-        return;
-      }
-
-      const result = await deliverOutboundMessage({
-        cfg: this.config,
-        plugin,
-        processedMsg,
-      });
-
-      if (this.outboundHooks) {
-        const err = result && !result.success ? result.error : undefined;
-        await this.outboundHooks.runMessageSent(
-          processedMsg.chat_id,
-          processedMsg.content ?? '',
-          result?.success ?? false,
-          err,
-          processedMsg.channel,
-        );
-      }
-
-      if (!result) {
-        if (queueId) this.persistStore!.ack(queueId);
-        return;
-      }
-
-      if (result.success) {
-        log.info(
-          { channel: processedMsg.channel, chatId: processedMsg.chat_id, messageId: result.messageId },
-          'Message sent',
-        );
-      } else {
-        log.error(
-          { channel: processedMsg.channel, chatId: processedMsg.chat_id, error: result.error },
-          'Failed to send message',
-        );
-      }
-
-      if (queueId) this.persistStore!.ack(queueId);
-    } catch (err) {
-      log.error(
-        { channel: processedMsg.channel, chatId: processedMsg.chat_id, err },
-        'Outbound send threw',
-      );
-      if (!queueId) throw err;
-    }
-  }
-  
-  startStream(
-    channel: string,
-    chatId: string,
-    accountId?: string,
-    opts?: { threadId?: string; replyToMessageId?: string },
-  ): ChannelStreamHandle | null {
-    const plugin = this.plugins.get(channel);
-    if (!plugin) {
-      log.error({ channel }, 'Unknown channel');
-      return null;
-    }
-
-    return (
-      plugin.streaming?.startStream?.({
-        chatId,
-        accountId,
-        threadId: opts?.threadId,
-        replyToMessageId: opts?.replyToMessageId,
-      }) ?? null
-    );
-  }
-  
-  async getChannelStatus(channel: string): Promise<Record<string, unknown>> {
-    const plugin = this.plugins.get(channel);
-    if (!plugin) return { error: 'Unknown channel' };
-    
-    if (!plugin.status?.buildChannelSummary) return { status: 'unknown' };
-
-    try {
-      const accountId = plugin.config.listAccountIds(this.config)[0] ?? 'default';
-      const account = plugin.config.resolveAccount(this.config, accountId);
-      
-      const summary = await plugin.status.buildChannelSummary({
-        account,
-        cfg: this.config,
-        defaultAccountId: accountId,
-        snapshot: plugin.status.defaultRuntime ?? { accountId, channelId: channel, enabled: true, configured: true },
-      });
-      return summary;
-    } catch (err) {
-      return { error: String(err) };
-    }
-  }
-  
   async updateConfig(config: Config): Promise<void> {
     this.config = config;
-    for (const id of this.initializedPluginIds) {
-      const plugin = this.plugins.get(id);
-      if (plugin?.onConfigUpdated) {
-        await Promise.resolve(plugin.onConfigUpdated(config));
-      }
-    }
+    await this.lifecycle.forwardConfigUpdate(config);
     log.info('Channel config updated');
   }
 
   /** Replace in-memory config without running plugin `onConfigUpdated` hooks. */
   setRuntimeConfig(config: Config): void {
     this.config = config;
-  }
-  
-  private async applyTtsIfNeeded(msg: OutboundMessage): Promise<OutboundMessage> {
-    if (msg.type && msg.type !== 'message') return msg;
-    if (!msg.content?.trim()) return msg;
-    if (msg.mediaUrl) return msg;
-    
-    const ttsConfig = mergeTtsConfigFromAppConfig(this.config.messages?.tts);
-    if (!ttsConfig.enabled) return msg;
-
-    const inboundAudio = msg.metadata?.transcribedVoice === true;
-    return maybeApplyTtsToPayload(msg, {
-      config: ttsConfig,
-      channel: msg.channel,
-      inboundAudio,
-      appConfig: this.config,
-    });
-  }
-  
-  /**
-   * Stop a single channel and suppress automatic restart until `startChannel` is called.
-   */
-  async stopChannel(channelId: string): Promise<void> {
-    this.manuallyStopped.add(channelId);
-    const plugin = this.plugins.get(channelId);
-    if (!plugin || !this.initializedPluginIds.has(channelId)) {
-      return;
-    }
-    await this.stopPlugin(plugin).catch((err) => {
-      log.error({ channel: channelId, err }, 'Failed to stop channel plugin');
-    });
-  }
-
-  /**
-   * Clear manual-stop and start one channel (requires prior `initialize()`).
-   */
-  async startChannel(channelId: string): Promise<void> {
-    this.manuallyStopped.delete(channelId);
-    const plugin = this.plugins.get(channelId);
-    if (!plugin) {
-      log.warn({ channel: channelId }, 'Unknown channel');
-      return;
-    }
-    if (!this.initialized) {
-      log.warn({ channel: channelId }, 'Channels not initialized');
-      return;
-    }
-    const channelConfig = asChannelConfig(this.config.channels?.[channelId]);
-    if (!this.shouldRunChannelPlugin(plugin, channelConfig)) {
-      log.debug({ channel: channelId }, 'Channel disabled in config, skipping start');
-      return;
-    }
-    if (!this.initializedPluginIds.has(channelId)) {
-      log.warn({ channel: channelId }, 'Channel was never initialized; call initialize() first');
-      return;
-    }
-    await this.startPlugin(plugin, {});
   }
 
   getRuntimeSnapshot(): {
@@ -665,40 +270,16 @@ export class ChannelManager {
     restartAttempts: Record<string, number>;
     channelHealth: Record<string, ChannelHealthState>;
   } {
+    const lifecycleSnap = this.lifecycle.snapshot();
     return {
-      initialized: this.initialized,
-      running: this.running,
-      pluginIds: [...this.plugins.keys()],
-      initializedPluginIds: [...this.initializedPluginIds],
-      manuallyStopped: [...this.manuallyStopped],
-      restartAttempts: Object.fromEntries(this.restartAttempts),
+      ...lifecycleSnap,
+      pluginIds: this.registry.ids(),
       channelHealth: this.healthMonitor.toJSON(),
     };
   }
 
   getHealthMonitor(): ChannelHealthMonitor {
     return this.healthMonitor;
-  }
-  
-  /**
-   * Channel IDs whose runtime reports connected (e.g. Telegram polling active).
-   */
-  getRunningChannels(): string[] {
-    const result: string[] = [];
-    for (const id of this.initializedPluginIds) {
-      const plugin = this.plugins.get(id);
-      if (!plugin?.channelIsRunning) {
-        continue;
-      }
-      if (plugin.channelIsRunning(this.config)) {
-        result.push(id);
-      }
-    }
-    return result;
-  }
-  
-  getAllChannels(): ChannelPlugin[] {
-    return this.getAllPlugins();
   }
 }
 

@@ -6,7 +6,7 @@ import { expandAtFileMentionsInPlainText } from '../context/expand-at-file-menti
 import { resolveInboundImageContentParts } from '../image/inbound-image-handling.js';
 import { resolveAgentHomeDir, resolveDefaultAgentId } from '../agent-scope.js';
 import { extractProfileAgentId } from '../../config/agent-profile.js';
-import type { AgentManager } from '../agent-manager.js';
+import type { AgentInstanceGateway } from '../agent-instance-gateway.js';
 import type { ModelManager } from '../models/index.js';
 
 export type DirectInboundAttachment = {
@@ -30,7 +30,7 @@ export async function buildDirectUserMessageContent(opts: {
   attachments?: DirectInboundAttachment[];
   sessionKey?: string;
   config: Config;
-  agentManager: AgentManager;
+  agentManager: AgentInstanceGateway;
   modelManager: ModelManager;
 }): Promise<DirectMessagePart[]> {
   const { content, attachments, sessionKey, config, agentManager, modelManager } = opts;

@@ -12,7 +12,20 @@ import {
   MS_PER_DAY,
   REINFORCEMENT_WEIGHT,
 } from './constants.js';
-import type { DreamingStoreEntry } from './short-term-store.js';
+// `DreamingStoreEntry` lives in `./short-term-store.js`, which imports value
+// helpers from THIS file — so importing it back creates a circular cycle.
+// `computeCandidateScore` only reads three numeric/string fields; declaring a
+// narrow structural type keeps the helper decoupled.
+type DreamingStoreEntryScoringView = {
+  recallCount: number;
+  totalScore: number;
+  lastRecalledAt?: string;
+  queryHashes?: readonly string[];
+  dailyCount: number;
+  groundedCount: number;
+  lightHits: number;
+  remHits: number;
+};
 
 // ── Path + keying ─────────────────────────────────────────────────────
 
@@ -92,7 +105,7 @@ export function resolveDeepDefaults(overrides?: Partial<DreamingDeepConfig>): Dr
 // ── Scoring (deep promotion) ─────────────────────────────────────────
 
 export function computeCandidateScore(
-  entry: DreamingStoreEntry,
+  entry: DreamingStoreEntryScoringView,
   nowMs: number,
   recencyHalfLifeDays: number,
 ): { avgScore: number; score: number; recencyDecay: number } {

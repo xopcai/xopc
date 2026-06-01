@@ -1,7 +1,7 @@
 import { Command } from 'commander';
 
 import { register, formatExamples, type CLIContext } from '../registry.js';
-import { getContextWithOpts } from '../index.js';
+import { getContextWithOpts } from '../context.js';
 
 function createTailscaleCommand(_ctx: CLIContext): Command {
   return new Command('tailscale')

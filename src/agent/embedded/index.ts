@@ -1,7 +1,12 @@
 export { PiTranscriptManager, CURRENT_SESSION_VERSION } from './pi-transcript.js';
 export type { SessionManager as PiTranscriptManagerType } from './pi-transcript.js';
-export { guardSessionManager, type GuardedPiTranscriptManager } from './session-tool-result-guard-wrapper.js';
-export { installSessionToolResultGuard } from './session-tool-result-guard.js';
+export {
+  installSessionToolResultGuard,
+  guardSessionManager,
+  getRawSessionAppendMessage,
+  type GuardedPiTranscriptManager,
+  type ToolResultGuardOptions,
+} from './session-tool-result-guard.js';
 export { prepareSessionManagerForRun } from './session-manager-init.js';
 export {
   trackSessionManagerAccess,

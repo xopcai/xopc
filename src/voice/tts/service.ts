@@ -73,7 +73,9 @@ export class TTSService {
   }
 
   async speak(text: string, context?: TTSContext): Promise<TTSResultWithTracking> {
-    const { speak } = await import('./index.js');
+    // Direct dynamic import of `./speak-core.js` — going through `./index.js`
+    // pulls the full barrel, which re-exports this file and forms a cycle.
+    const { speak } = await import('./speak-core.js');
     return speak(text, this.config, {
       tts: {
         format: getChannelOutputFormat(context?.channel).format as 'opus' | 'mp3' | 'wav',

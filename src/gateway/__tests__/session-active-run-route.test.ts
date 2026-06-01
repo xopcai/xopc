@@ -9,9 +9,11 @@ describe('GET /api/sessions/:key/run', () => {
     const sessionKey = 'main:webchat:default:direct:abc';
     const service = {
       isGatewayReady: () => true,
-      getSession: async (key: string) => (key === sessionKey ? { key } : null),
-      getSessionActiveRun: (key: string) =>
-        key === sessionKey ? { active: true, runId: 'run-123' } : { active: false },
+      sessions: {
+        getSession: async (key: string) => (key === sessionKey ? { key } : null),
+        getActiveRun: (key: string) =>
+          key === sessionKey ? { active: true, runId: 'run-123' } : { active: false },
+      },
     } as unknown as GatewayService;
 
     const app = new Hono();
@@ -27,8 +29,10 @@ describe('GET /api/sessions/:key/run', () => {
   it('returns 404 when session missing', async () => {
     const service = {
       isGatewayReady: () => true,
-      getSession: async () => null,
-      getSessionActiveRun: () => ({ active: false }),
+      sessions: {
+        getSession: async () => null,
+        getActiveRun: () => ({ active: false }),
+      },
     } as unknown as GatewayService;
 
     const app = new Hono();

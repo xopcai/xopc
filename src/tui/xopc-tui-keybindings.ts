@@ -3,7 +3,9 @@ import {
   type KeybindingDefinitions,
 } from '@earendil-works/pi-tui';
 
-export { createXopcTuiKeybindingsManager, XopcKeybindingsManager } from './tui-keybindings-file.js';
+// Re-export removed — `./tui-keybindings-file.js` imports `XOPC_TUI_KEYBINDINGS`
+// from this file, so re-exporting from it created a circular cycle. Callers
+// (tui.ts, test files) import the manager directly from `./tui-keybindings-file.js`.
 
 /** App-level bindings wired by xopc TUI (subset of pi coding-agent). */
 export type XopcTuiAppKeybinding =

@@ -7,7 +7,7 @@ import { shouldUseTTS, getChannelOutputFormat } from '../../voice/tts/service.js
 import { isTTSAvailable } from '../../voice/tts/factory.js';
 import { resolveAgentHomeDir } from '../agent-scope.js';
 import { extractProfileAgentId } from '../../config/agent-profile.js';
-import type { AgentManager } from '../agent-manager.js';
+import type { AgentInstanceGateway } from '../agent-instance-gateway.js';
 import type { SessionStore } from '../../session/index.js';
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 
@@ -20,7 +20,7 @@ export type WebchatTtsResult = {
 
 export type WebchatTtsDeps = {
   config: Config | undefined;
-  agentManager: AgentManager;
+  agentManager: AgentInstanceGateway;
   sessionStore: SessionStore;
   log: { warn: (obj: Record<string, unknown>, msg: string) => void };
 };

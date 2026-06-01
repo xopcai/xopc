@@ -1,21 +1,14 @@
 import crypto from 'crypto';
-import { existsSync, mkdirSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
 import { AgentService } from '../agent/service.js';
 import { ChannelManager } from '../channels/manager.js';
 import { CHAT_CHANNEL_ORDER, getChatChannelMeta } from '../channels/registry.js';
 import { setPairingBroadcastSink } from '../channels/pairing/pairing-events.js';
 import { MessageBus, MessageBusShutdownError } from '../infra/bus/index.js';
-import type { Config as SurfaceConfig } from '../config/config-surface.js';
 import { loadConfig, saveConfig as writeConfigToDisk } from '../config/index.js';
-import { getWorkspacePath } from '../config/schema.js';
+import { getWorkspacePath } from '../config/workspace-path-helpers.js';
 import { CronService } from '../cron/index.js';
-import { computeBundledExtensionExtensionsPatch } from '../extensions/bundled-extension-activation.js';
 import { ExtensionLoader, areExtensionsGloballyDisabled, buildExtensionMetadataSnapshot } from '../extensions/index.js';
-import { installExtensionFromStoreZip, peekExtensionIdFromStoreZip } from '../extensions/install.js';
-import { getExtensionLockfileManager } from '../extensions/lockfile.js';
 import { HeartbeatService, heartbeatRunnerConfigFromConfig } from './heartbeat/index.js';
-import { ConfigHotReloader } from '../config/reload.js';
 import { SessionIndex } from '../session/index.js';
 import type { Config } from '../config/schema.js';
 import type { SessionListQuery, ExportFormat } from '../session/types.js';
@@ -38,56 +31,26 @@ import { createLogger, getLogDir, getLogStats } from '../utils/logger.js';
 import {
   resolveConfigPath,
   resolveCronJobsPath,
-  resolveStateDir,
   resolveAgentDir,
   resolveExtensionsDir,
 } from '../config/paths.js';
 import { AgentRunRelay, type RelayEvent } from './agent-run-relay.js';
-import { ClarifyBridge, type ClarifyBridgeRequest } from './clarify-bridge.js';
 import { registerClarifyBridge } from './clarify-runtime.js';
-import {
-  deleteManagedSkill as deleteManagedSkillDir,
-  installSkillFromZip,
-  listManagedSkillDirs,
-} from '../agent/skills/managed-store.js';
-import {
-  downloadFromMarketplace,
-  getMarketplacePackageDetail,
-  getMarketplaceProviderDisplayName,
-  listMarketplaceCategories,
-  listMarketplacePackages,
-  listRegisteredProviders,
-  resolveSkillsMarketplaceProvider,
-  type MarketplaceCategoryOption,
-  type SkillsStoreListParams,
-  type UnifiedMarketplaceListResponse,
-  type UnifiedMarketplacePackageDetail,
-} from '../agent/skills/skills-marketplace.js';
-import {
-  downloadExtensionStoreZipBuffer,
-  fetchMarketplacePackageDetail,
-  resolveExtensionZipDownloadUrl,
-  resolveExtensionsStoreBaseUrl,
-  type MarketplacePackageDetail,
-} from '../agent/skills/marketplace/adapters/store/store-api-client.js';
-import { createSkillConfigManager } from '../agent/skills/config.js';
-import { removeSkillsLockEntry } from '../agent/skills/hub-lock.js';
-import type { SkillCatalogEntry } from '../agent/agent-manager.js';
-import type { SkillMarkdownPreviewPayload } from '../agent/skills/types.js';
-import type { ManagedSkillListItem } from '../agent/skills/managed-store.js';
 import { PACKAGE_VERSION } from '../package-version.js';
 
 import {
   disposeAllSessionMcpRuntimes,
   retireSessionMcpRuntimeForSessionKey,
 } from '../agent/mcp/bundle-mcp-tools.js';
-import { buildSessionKey, parseSessionKey } from '../routing/session-key.js';
 import { getDefaultAgentId } from '../routing/resolve-route.js';
 import { scheduleGatewayUpdateCheck } from '../infra/update-startup.js';
 import { resolveChannelConnectDeferSet } from './resolve-channel-connect-defer.js';
 import { restartGatewayProcessWithFreshPid } from './respawn.js';
 import { getDistinctSessionChatIds } from './service/session-chat-ids.js';
-import { runGatewayAgent } from './service/run-gateway-agent.js';
+import { GatewaySessionsApi } from './service/sessions-api.js';
+import { GatewayMarketplaceService } from './service/marketplace-service.js';
+import { GatewayConfigCoordinator } from './service/config-coordinator.js';
+import { GatewayAgentRunner } from './service/agent-runner.js';
 import { GatewaySseHub } from './service/sse-hub.js';
 import type {
   GatewayChannelStartupPhase1Metrics,
@@ -126,23 +89,14 @@ export class GatewayService {
   private heartbeatService: HeartbeatService | null = null;
   private sessionIndex: SessionIndex;
   private running = false;
-  private configReloader: ConfigHotReloader | null = null;
-  /** In-flight coalesced apply after PATCH/save (Telegram `getMe` must not block HTTP). */
-  private channelReloadFlushPromise: Promise<void> | null = null;
-  private channelReloadPending = false;
   private startTime = Date.now();
   private workspacePath: string;
+  private readonly configCoordinator: GatewayConfigCoordinator;
 
   // Authentication
   private auth: ResolvedGatewayAuth;
 
   private readonly sse = new GatewaySseHub();
-
-  // Agent run relay for resuming SSE streams
-  public readonly runRelay = new AgentRunRelay();
-
-  /** Per-run abort for webchat (POST /api/agent/abort or client disconnect). */
-  private runAbortControllers = new Map<string, AbortController>();
 
   private stopGatewayUpdateCheck: (() => void) | null = null;
 
@@ -157,10 +111,28 @@ export class GatewayService {
   private readonly readiness = new GatewayReadiness();
   private startupTrace: GatewayStartupTrace | null = null;
 
-  private readonly clarifyBridge = new ClarifyBridge();
+  /**
+   * Webchat agent invocation surface (`runAgent`, `abortAgentRun`, `steer*`,
+   * `submitClarifyResponse`, clarify-bridge dispatch). Owns the
+   * `activeWebchatRunBySession` + `runAbortControllers` maps.
+   */
+  readonly agentRunner: GatewayAgentRunner;
 
-  /** Maps webchat session key → active `runId` for `clarify` tool routing. */
-  private activeWebchatRunBySession = new Map<string, string>();
+  /** Read-only alias re-exported from `agentRunner.runRelay` for legacy callers. */
+  get runRelay(): AgentRunRelay { return this.agentRunner.runRelay; }
+
+  /**
+   * Session CRUD / search / compaction / tag-archive-pin / stats — the gateway
+   * REST surface for sessions. Routes should depend on this narrow service
+   * rather than the full GatewayService composition root.
+   */
+  readonly sessions: GatewaySessionsApi;
+
+  /**
+   * Skills + extensions marketplace surface (browse / install / uninstall) plus
+   * local-only managed-skill ops. Routes depend on this narrow service.
+   */
+  readonly marketplace: GatewayMarketplaceService;
 
   constructor(private serviceConfig: GatewayServiceConfig = {}) {
     this.bus = new MessageBus();
@@ -238,6 +210,46 @@ export class GatewayService {
     this.cronService = new CronService({
       filePath: resolveCronJobsPath(),
     });
+
+    this.agentRunner = new GatewayAgentRunner({
+      bus: this.bus,
+      sessionIndex: this.sessionIndex,
+      getAgentService: () => this.ensureAgentService(),
+      getChannelManager: () => this.channelManager,
+      getConfig: () => this.config,
+      emit: (type, payload) => this.sse.emit(type, payload),
+    });
+
+    this.sessions = new GatewaySessionsApi({
+      sessionIndex: this.sessionIndex,
+      getAgentService: () => this.ensureAgentService(),
+      getActiveWebchatRunId: (sk) => this.agentRunner.getActiveRunId(sk),
+    });
+
+    this.marketplace = new GatewayMarketplaceService({
+      getConfig: () => this.config,
+      getAgentService: () => this.ensureAgentService(),
+      getExtensionLoader: () => this.extensionLoader,
+      getChannelManager: () => this.channelManager,
+      saveConfig: (cfg) => this.saveConfig(cfg),
+      emit: (type, payload) => this.emit(type, payload),
+    });
+
+    this.configCoordinator = new GatewayConfigCoordinator({
+      configPath: this.configPath,
+      bus: this.bus,
+      enableHotReload: this.serviceConfig.enableHotReload !== false,
+      getConfig: () => this.config,
+      setConfig: (next) => { this.config = next; },
+      getAgentService: () => this.ensureAgentService(),
+      getChannelManager: () => this.channelManager,
+      getCronService: () => this.cronService,
+      getHeartbeatService: () => this.heartbeatService,
+      getExtensionLoader: () => this.extensionLoader,
+      reconcileBrowserExtensionServer: () => this.reconcileBrowserExtensionServer(),
+      getChannelsStatus: () => this.getChannelsStatus(),
+      emit: (type, payload) => this.emit(type, payload),
+    });
   }
 
   /** Lazy AgentService — constructed on first use or during `start()`. */
@@ -266,34 +278,14 @@ export class GatewayService {
       extensionRegistry: this.extensionLoader?.getRegistry(),
       getCronService: () => cronRef.service,
       gatewayClarify: {
-        requestClarification: (sessionKey, request) => {
-          const runId = this.activeWebchatRunBySession.get(sessionKey);
-          const publishSse = runId
-            ? (e: RelayEvent) => {
-                this._agentService!.enqueueWebchatSseEvent(sessionKey, e);
-              }
-            : undefined;
-          const parsed = parseSessionKey(sessionKey);
-          const deliver =
-            parsed?.source === 'telegram'
-              ? async (ctx: { sessionKey: string; requestId: string; request: ClarifyBridgeRequest }) => {
-                  await this.deliverTelegramClarify(ctx);
-                }
-              : undefined;
-          if (!runId && !deliver) {
-            return Promise.reject(
-              new Error('Clarify is not available for this session (use webchat, Telegram, or CLI)'),
-            );
-          }
-          return this.clarifyBridge.startRequest({
+        requestClarification: (sessionKey, request) =>
+          this.agentRunner.requestClarification({
             sessionKey,
-            runId,
-            relay: this.runRelay,
-            publishSse,
             request,
-            deliver,
-          });
-        },
+            publishSseFor: (_runId) => (e: RelayEvent) => {
+              this._agentService!.turnDispatcher.enqueueWebchatSseEvent(sessionKey, e);
+            },
+          }),
       },
     });
 
@@ -312,17 +304,17 @@ export class GatewayService {
     });
     cronRef.service = this.cronService;
 
-    this._agentService.setPersistentGoalWebchatContinuationScheduler((sessionKey, message) => {
+    this._agentService.persistentGoals.setWebchatContinuationScheduler((sessionKey, message) => {
       const scheduleWhenIdle = () => {
         if (this._agentService!.getInboundTurnDepth(sessionKey) > 0) {
           setTimeout(scheduleWhenIdle, 50);
           return;
         }
-        if (this.activeWebchatRunBySession.has(sessionKey)) {
+        if (this.agentRunner.hasActiveRun(sessionKey)) {
           setTimeout(scheduleWhenIdle, 50);
           return;
         }
-        void this.drainScheduledWebchatContinuation(sessionKey, message);
+        void this.agentRunner.drainScheduledWebchatContinuation(sessionKey, message);
       };
       queueMicrotask(scheduleWhenIdle);
     });
@@ -344,11 +336,31 @@ export class GatewayService {
     return this.heartbeatService;
   }
 
-  /** Hermes-style: after HTTP sets a goal, enqueue the goal text as the next user turn. */
+  // ── Webchat agent runner (delegated to GatewayAgentRunner) ────────────
+
   enqueueWebchatPersistentGoalKickoff(sessionKey: string, goalText: string): void {
-    queueMicrotask(() => {
-      void this.drainScheduledWebchatContinuation(sessionKey, goalText);
-    });
+    this.agentRunner.enqueueWebchatPersistentGoalKickoff(sessionKey, goalText);
+  }
+
+  runAgent(
+    ...args: Parameters<GatewayAgentRunner['runAgent']>
+  ): ReturnType<GatewayAgentRunner['runAgent']> {
+    return this.agentRunner.runAgent(...args);
+  }
+
+  abortAgentRun(runId: string): boolean {
+    return this.agentRunner.abortAgentRun(runId);
+  }
+
+  steerWebchatAgent(
+    chatId: string,
+    message: string,
+  ): ReturnType<GatewayAgentRunner['steerWebchatAgent']> {
+    return this.agentRunner.steerWebchatAgent(chatId, message);
+  }
+
+  submitClarifyResponse(requestId: string, answer: string): boolean {
+    return this.agentRunner.submitClarifyResponse(requestId, answer);
   }
 
   private initializeExtensionLoader(): void {
@@ -466,15 +478,15 @@ export class GatewayService {
     this.readiness.markStarting(this.startTime);
     const trace = this.startupTrace;
 
-    registerClarifyBridge(this.clarifyBridge);
+    registerClarifyBridge(this.agentRunner.getClarifyBridge());
 
     this.ensureAgentService();
 
     this.channelManager.setOutboundHooks({
       runMessageSending: (to, content, channel) =>
-        this.agentService.invokeOutboundMessageSending(to, content, channel),
+        this.agentService.outboundCoordinator.invokeOutboundMessageSending(to, content, channel),
       runMessageSent: (to, content, success, error, channel) =>
-        this.agentService.invokeOutboundMessageSent(to, content, success, error, channel),
+        this.agentService.outboundCoordinator.invokeOutboundMessageSent(to, content, success, error, channel),
     });
     this.channelManager.enableOutboundPersistence(resolveAgentDir(this.config, getDefaultAgentId(this.config)));
 
@@ -484,7 +496,7 @@ export class GatewayService {
         sessionManager: this.sessionIndex,
         scheduleWebchatContinuation: (sessionKey: string, continuationMessage: string) => {
           queueMicrotask(() => {
-            void this.drainScheduledWebchatContinuation(sessionKey, continuationMessage);
+            void this.agentRunner.drainScheduledWebchatContinuation(sessionKey, continuationMessage);
           });
         },
       });
@@ -611,7 +623,7 @@ export class GatewayService {
 
     // Setup config hot reload
     if (this.serviceConfig.enableHotReload !== false) {
-      this.setupConfigReloader();
+      this.configCoordinator.startHotReloader();
     }
 
     this.stopGatewayUpdateCheck = scheduleGatewayUpdateCheck({
@@ -756,16 +768,7 @@ export class GatewayService {
       this.stopGatewayUpdateCheck = null;
     }
 
-    // Stop config reloader
-    if (this.configReloader) {
-      await this.configReloader.stop();
-      this.configReloader = null;
-    }
-
-    if (this.channelReloadFlushPromise) {
-      await this.channelReloadFlushPromise.catch(() => {});
-      this.channelReloadFlushPromise = null;
-    }
+    await this.configCoordinator.stopHotReloader();
 
     // Stop heartbeat service
     this.heartbeatService?.stop();
@@ -779,7 +782,7 @@ export class GatewayService {
     this.browserExtensionBindKey = null;
 
     registerClarifyBridge(null);
-    this.clarifyBridge.dispose();
+    this.agentRunner.disposeClarifyBridge();
     await disposeAllSessionMcpRuntimes().catch((err) => {
       log.warn({ err }, 'MCP runtime shutdown failed');
     });
@@ -917,540 +920,37 @@ export class GatewayService {
     }
   }
 
-  /**
-   * Setup config hot reload using ConfigHotReloader
-   */
-  private setupConfigReloader(): void {
-    this.configReloader = new ConfigHotReloader(
-      this.configPath,
-      this.config,
-      {
-        onModelsReload: (newConfig) => this.handleModelsReload(newConfig),
-        onAgentDefaultsReload: (newConfig) => this.handleAgentDefaultsReload(newConfig),
-        onChannelsReload: (newConfig) => this.handleChannelsReload(newConfig),
-        onCronReload: (newConfig) => this.handleCronReload(newConfig),
-        onHeartbeatReload: (newConfig) => this.handleHeartbeatReload(newConfig),
-        onToolsReload: (newConfig) => this.handleToolsReload(newConfig),
-        onMcpReload: (newConfig) => this.handleMcpReload(newConfig),
-        onExtensionsReload: async (newConfig, changedPaths) => {
-          await this.handleExtensionsReload(newConfig, changedPaths);
-        },
-        onFullRestart: (newConfig) => {
-          log.warn(
-            { requiresProcessRestart: true, hint: 'Restart the gateway process (hot reload cannot apply this change).' },
-            'Config reload: full gateway restart required — see prior "restartPaths" info log',
-          );
-          this.config = newConfig;
-          this.emit('config.reload', { section: 'full', requiresRestart: true });
-        },
-      },
-      {
-        debounceMs: 300,
-        enabled: this.serviceConfig.enableHotReload !== false,
-      }
-    );
-    this.configReloader.start();
-  }
+  // ── Config persistence / hot reload (delegated to GatewayConfigCoordinator) ──
 
-  /**
-   * Handle models config hot reload
-   */
-  private handleModelsReload(newConfig: Config): void {
-    log.debug('Reloading models config...');
-    this.config = newConfig;
-    getModelRegistry().refresh();
-    this.emit('config.reload', { section: 'models' });
-    log.debug('Models config reloaded');
-  }
-
-  /**
-   * Handle agent defaults config hot reload
-   */
-  private handleAgentDefaultsReload(newConfig: Config): void {
-    log.debug('Reloading agent defaults...');
-    this.config = newConfig;
-    this.agentService.applyAgentDefaultsFromConfig(newConfig);
-    void this.reconcileBrowserExtensionServer();
-    this.emit('config.reload', { section: 'agents' });
-    log.debug('Agent defaults reloaded');
-  }
-
-  /**
-   * Apply `latest.channels` to every registered channel plugin (Telegram, Weixin, extensions).
-   * Single runtime path for: file watcher hot reload, API saves, and Weixin QR follow-up.
-   */
-  private async handleChannelsReload(newConfig: Config): Promise<void> {
-    log.debug('Reloading channels config...');
-    this.config = newConfig;
-    await this.channelManager.updateConfig(newConfig);
-    this.emit('config.reload', { section: 'channels' });
-    this.emit('channels.status', { channels: this.getChannelsStatus() });
-    log.debug('Channels config reloaded');
-  }
-
-  /**
-   * Apply channel plugins for the latest persisted `this.config` without blocking `saveConfig` HTTP handlers.
-   * Coalesces rapid saves so Telegram/Weixin do not stop/start repeatedly.
-   */
-  private scheduleChannelPluginsAfterPersist(): void {
-    this.channelReloadPending = true;
-    if (this.channelReloadFlushPromise) return;
-    this.channelReloadFlushPromise = (async () => {
-      try {
-        while (this.channelReloadPending) {
-          this.channelReloadPending = false;
-          await this.handleChannelsReload(this.config);
-        }
-      } catch (err) {
-        const em = err instanceof Error ? err.message : String(err);
-        log.error({ err, errorMessage: em }, `Channel reload after persist failed: ${em}`);
-      } finally {
-        this.channelReloadFlushPromise = null;
-        if (this.channelReloadPending) {
-          this.scheduleChannelPluginsAfterPersist();
-        }
-      }
-    })();
-  }
-
-  /**
-   * Handle cron config hot reload
-   */
-  private handleCronReload(newConfig: Config): void {
-    log.debug('Reloading cron config...');
-    this.config = newConfig;
-    this.cronService.updateConfig(newConfig);
-    this.emit('config.reload', { section: 'cron' });
-    log.debug('Cron config reloaded');
-  }
-
-  /**
-   * Handle heartbeat config hot reload
-   */
-  private handleHeartbeatReload(newConfig: Config): void {
-    log.debug('Reloading heartbeat config...');
-    this.config = newConfig;
-    this.heartbeatService?.updateConfig(newConfig);
-    this.emit('config.reload', { section: 'heartbeat' });
-    log.debug('Heartbeat config reloaded');
-  }
-
-  /**
-   * Apply `gateway.heartbeat` from current config after PATCH /api/config (and when hot reload is off).
-   * File watcher uses `handleHeartbeatReload` with the same effect when paths match.
-   */
   reloadHeartbeatFromCurrentConfig(): void {
-    this.handleHeartbeatReload(this.config);
+    this.configCoordinator.reloadHeartbeatFromCurrentConfig();
   }
 
-  /**
-   * Handle tools config hot reload
-   */
-  private handleToolsReload(newConfig: Config): void {
-    log.debug('Reloading tools config...');
-    this.config = newConfig;
-    this.emit('config.reload', { section: 'tools' });
-    log.debug('Tools config reloaded');
+  reloadConfig(): Promise<{ reloaded: boolean; error?: string }> {
+    return this.configCoordinator.reloadConfig();
   }
 
-  private handleMcpReload(newConfig: Config): void {
-    log.debug('Reloading MCP config...');
-    this.config = newConfig;
-    void disposeAllSessionMcpRuntimes().catch((err) => {
-      log.warn({ err }, 'MCP runtime dispose on config reload failed');
-    });
-    this.emit('config.reload', { section: 'mcp' });
-    log.debug('MCP config reloaded');
+  afterWeixinCredentialsPersisted(): Promise<void> {
+    return this.configCoordinator.afterWeixinCredentialsPersisted();
   }
 
-  /**
-   * Dispatch config hot reload to extensions that registered `registerReload`, matching changed paths.
-   */
-  private async handleExtensionsReload(
-    newConfig: Config,
-    changedPaths: string[],
-  ): Promise<void> {
-    this.config = newConfig;
-    this.extensionLoader?.setConfig(this.config as unknown as SurfaceConfig);
-
-    if (!this.extensionLoader) {
-      this.emit('config.reload', {
-        section: 'extensions',
-        source: 'extension-reload',
-        changedPaths,
-      });
-      return;
-    }
-
-    const registry = this.extensionLoader.getRegistry();
-    const matchingRegs = registry.getMatchingReloadRegistrations(changedPaths);
-
-    if (matchingRegs.length === 0) {
-      log.debug({ changedPaths }, 'No extension reload handlers matched');
-      this.emit('config.reload', {
-        section: 'extensions',
-        source: 'extension-reload',
-        changedPaths,
-      });
-      return;
-    }
-
-    for (const reg of matchingRegs) {
-      const relevantPaths = changedPaths.filter(
-        (p) =>
-          reg.configPrefixes.length === 0 ||
-          reg.configPrefixes.some(
-            (prefix) => p === prefix || p.startsWith(`${prefix}.`),
-          ),
-      );
-
-      log.info(
-        { extensionId: reg.extensionId, relevantPaths },
-        'Calling extension reload handler',
-      );
-
-      try {
-        const result = await reg.handler(newConfig, relevantPaths);
-        if (result.success) {
-          log.info({ extensionId: reg.extensionId }, 'Extension reload succeeded');
-        } else {
-          log.warn(
-            { extensionId: reg.extensionId, error: result.error },
-            `Extension reload reported failure: ${result.error ?? 'unknown'}`,
-          );
-        }
-      } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : String(err);
-        log.error(
-          { err, extensionId: reg.extensionId, errorMessage },
-          `Extension reload handler threw: ${errorMessage}`,
-        );
-      }
-    }
-
-    this.emit('config.reload', {
-      section: 'extensions',
-      source: 'extension-reload',
-      changedPaths,
-    });
+  afterFeishuCredentialsPersisted(): Promise<void> {
+    return this.configCoordinator.afterFeishuCredentialsPersisted();
   }
 
-  /**
-   * Reload configuration from disk (manual trigger)
-   */
-  async reloadConfig(): Promise<{ reloaded: boolean; error?: string }> {
-    if (!this.configReloader) {
-      return { reloaded: false, error: 'Config reloader not initialized' };
-    }
-    const result = await this.configReloader.triggerReload();
-    return { reloaded: result.success, error: result.error };
+  saveConfig(config: Config): Promise<{ saved: boolean; error?: string }> {
+    return this.configCoordinator.saveConfig(config);
   }
 
-  /**
-   * After Weixin QR login: token files may change without a `channels.weixin` JSON diff, so run the same
-   * channel apply as an API save, then force Weixin long-poll restart (see `reloadMonitorsWithConfig`).
-   */
-  async afterWeixinCredentialsPersisted(): Promise<void> {
-    const next = loadConfig(this.configPath);
-    this.config = next;
-    this.agentService.applyAgentDefaultsFromConfig(next);
-    this.configReloader?.syncCurrentConfig(next);
-    await this.handleChannelsReload(next);
-    const { weixinPlugin } = await import('../channels/weixin/index.js');
-    await weixinPlugin.reloadMonitorsWithConfig(this.config, this.bus);
-    log.info('Weixin monitors restarted after credential login');
-  }
-
-  /**
-   * After Feishu WebUI QR setup: `channels.feishu` was written directly to disk; reload into memory
-   * and apply channel plugins (same baseline as PATCH /api/config).
-   */
-  async afterFeishuCredentialsPersisted(): Promise<void> {
-    const next = loadConfig(this.configPath);
-    this.config = next;
-    this.agentService.applyAgentDefaultsFromConfig(next);
-    this.configReloader?.syncCurrentConfig(next);
-    await this.handleChannelsReload(next);
-    log.info('Feishu config applied after QR setup');
-  }
-
-  /**
-   * Persist and replace `this.config` with the validated file contents so runtime matches disk
-   * (PATCH merge objects can drift from Zod-normalized output).
-   */
-  private async writeConfigAndReloadFromDisk(configToWrite: Config): Promise<void> {
-    await writeConfigToDisk(configToWrite, this.configPath);
-    this.config = loadConfig(this.configPath);
-    if (sanitizeTunnelConfig(this.config)) {
-      await writeConfigToDisk(this.config, this.configPath);
-    }
-    this.agentService.applyAgentDefaultsFromConfig(this.config);
-    await this.reconcileBrowserExtensionServer();
-    // Hot-apply: reconcile managed dreaming cron jobs immediately after config persists.
-    await this.agentService.reconcileDreamingNow().catch((err) => {
-      const em = err instanceof Error ? err.message : String(err);
-      log.warn({ err, errorMessage: em }, `Dreaming cron reconcile after save failed: ${em}`);
-    });
-    // Align watcher baseline before channel hooks run so fs `change` does not re-apply the same diff concurrently.
-    this.configReloader?.syncCurrentConfig(this.config);
-  }
-
-  async saveConfig(config: Config): Promise<{ saved: boolean; error?: string }> {
-    try {
-      await this.writeConfigAndReloadFromDisk(config);
-      this.scheduleChannelPluginsAfterPersist();
-      return { saved: true };
-    } catch (err) {
-      const error = err instanceof Error ? err.message : String(err);
-      log.error({ error }, 'Failed to save config');
-      return { saved: false, error };
-    }
-  }
-
-  /**
-   * App store (phase 1): persist `extensions.enabled` / `extensions.disabled` for a bundled extension.
-   * Marketplace-only extensions hot-load on enable; disable still needs a gateway restart to unload.
-   */
-  async setBundledExtensionActivationTarget(
+  setBundledExtensionActivationTarget(
     extensionId: string,
     wanted: boolean,
   ): Promise<{ ok: boolean; error?: string; requiresGatewayRestart: boolean }> {
-    const loader = this.extensionLoader;
-    if (!loader) {
-      return { ok: false, error: 'Extension loader unavailable', requiresGatewayRestart: false };
-    }
-    const id = extensionId.trim();
-    if (!id) {
-      return { ok: false, error: 'Invalid extension id', requiresGatewayRestart: false };
-    }
-    const patch = computeBundledExtensionExtensionsPatch(loader, this.config, id, wanted);
-    if (patch.ok === false) {
-      return { ok: false, error: patch.error, requiresGatewayRestart: false };
-    }
-    const newConfig = { ...this.config, extensions: patch.extensions } as Config;
-    const saved = await this.saveConfig(newConfig);
-    if (!saved.saved) {
-      return { ok: false, error: saved.error ?? 'Failed to save config', requiresGatewayRestart: false };
-    }
-    loader.setConfig(this.config as unknown as SurfaceConfig);
-
-    let requiresGatewayRestart = true;
-    if (wanted) {
-      try {
-        loader.invalidateManifestCache();
-        await loader.loadByActivationPlan();
-        requiresGatewayRestart = false;
-      } catch (err) {
-        const em = err instanceof Error ? err.message : String(err);
-        log.warn(
-          { err, extensionId: id, errorMessage: em },
-          `Extension hot-load after bundled activation failed: ${em}`,
-        );
-        requiresGatewayRestart = true;
-      }
-    }
-
-    this.emit('config.reload', { section: 'extensions', source: 'bundled-activation' });
-    return { ok: true, requiresGatewayRestart };
+    return this.configCoordinator.setBundledExtensionActivationTarget(extensionId, wanted);
   }
 
-  /**
-   * Update configuration and persist to disk
-   */
-  async updateConfig(updates: Partial<Config>): Promise<{ updated: boolean; error?: string }> {
-    try {
-      log.debug('Updating configuration...');
-      
-      // Merge updates
-      this.config = { ...this.config, ...updates };
-
-      await this.writeConfigAndReloadFromDisk(this.config);
-      this.scheduleChannelPluginsAfterPersist();
-
-      log.debug('Configuration updated successfully');
-      return { updated: true };
-    } catch (err) {
-      const error = err instanceof Error ? err.message : String(err);
-      log.error({ error }, 'Failed to update config');
-      return { updated: false, error };
-    }
-  }
-
-  /**
-   * Run agent with a message and stream events.
-   * `runOptions.signal` — When set (e.g. client disconnect), aborts in-flight generation and persists partial output.
-   */
-  async *runAgent(
-    message: string,
-    channel: string,
-    chatId: string,
-    attachments?: Array<{
-      type: string;
-      mimeType?: string;
-      data?: string;
-      name?: string;
-      size?: number;
-    }>,
-    thinking?: string,
-    runOptions?: { signal?: AbortSignal; clientCreatedAtMs?: number },
-  ): AsyncGenerator<{ type: string; content?: string; status?: string; runId?: string }, { status: string; summary: string }, unknown> {
-    const iter = runGatewayAgent(
-      {
-        config: this.config,
-        agentService: this.agentService,
-        bus: this.bus,
-        runRelay: this.runRelay,
-        runAbortControllers: this.runAbortControllers,
-        activeWebchatRunBySession: this.activeWebchatRunBySession,
-        sessionIndex: this.sessionIndex,
-        emit: (type, payload) => this.sse.emit(type, payload),
-      },
-      message,
-      channel,
-      chatId,
-      attachments,
-      thinking,
-      runOptions,
-    );
-
-    let step = await iter.next();
-    while (!step.done) {
-      yield step.value as { type: string; content?: string; status?: string; runId?: string };
-      step = await iter.next();
-    }
-    return step.value;
-  }
-
-  /** Abort an in-flight webchat agent run (matches `runId` from SSE `status`). */
-  abortAgentRun(runId: string): boolean {
-    this.clarifyBridge.cancelForRun(runId);
-    const keysToMark: string[] = [];
-    for (const [sk, id] of this.activeWebchatRunBySession) {
-      if (id === runId) {
-        keysToMark.push(sk);
-      }
-    }
-    for (const sk of keysToMark) {
-      this.activeWebchatRunBySession.delete(sk);
-    }
-    const relaySk = this.runRelay.getSessionKey(runId);
-    if (relaySk && !keysToMark.includes(relaySk)) {
-      keysToMark.push(relaySk);
-    }
-    const c = this.runAbortControllers.get(runId);
-    if (!c) {
-      return false;
-    }
-    const cutoffTs = Date.now();
-    for (const sk of keysToMark) {
-      void this.sessionIndex
-        .updateSessionMetadata(sk, { abortCutoffTimestamp: cutoffTs })
-        .catch(() => {});
-      void this.sessionIndex
-        .appendTranscriptContextEntry(sk, {
-          text: 'Webchat agent run aborted',
-          data: { runId, abortCutoffTimestamp: cutoffTs },
-        })
-        .catch(() => {});
-    }
-    c.abort();
-    for (const sk of keysToMark) {
-      void import('../agent/embedded/runs.js').then(({ abortEmbeddedRun }) => abortEmbeddedRun(sk));
-    }
-    return true;
-  }
-
-  /** Background drain for extension-initiated webchat turns (`scheduleWebchatContinuation`). */
-  private async drainScheduledWebchatContinuation(sessionKey: string, message: string): Promise<void> {
-    try {
-      const gen = this.runAgent(message, 'webchat', sessionKey, undefined, undefined, {
-        clientCreatedAtMs: Date.now(),
-      });
-      for await (const _ of gen) {
-        // Relay + `agent.stream` broadcast; UI attaches via pending runId + resume.
-      }
-    } catch (err) {
-      log.warn({ err, sessionKey }, 'Scheduled webchat continuation failed');
-    }
-  }
-
-  /**
-   * Queue steering text for an active webchat run (`Agent.steer` / tool-boundary injection).
-   * `chatId` is the same as `POST /api/agent` body (`sessionKey` or legacy peer id).
-   */
-  async steerWebchatAgent(
-    chatId: string,
-    message: string,
-  ): Promise<{ ok: true } | { ok: false; code: 'BAD_REQUEST' | 'NO_ACTIVE_RUN' | 'STEER_FAILED' }> {
-    const trimmed = message.trim();
-    if (!trimmed) {
-      return { ok: false, code: 'BAD_REQUEST' };
-    }
-    const parsedKey = parseSessionKey(chatId);
-    const sessionKey = parsedKey
-      ? chatId
-      : buildSessionKey({
-          agentId: getDefaultAgentId(this.config),
-          source: 'webchat',
-          accountId: 'default',
-          peerKind: 'direct',
-          peerId: chatId,
-        });
-    if (!this.activeWebchatRunBySession.has(sessionKey)) {
-      return { ok: false, code: 'NO_ACTIVE_RUN' };
-    }
-    const steered = await this.agentService.steerWebchatSession(sessionKey, trimmed);
-    if (!steered) {
-      return { ok: false, code: 'STEER_FAILED' };
-    }
-    return { ok: true };
-  }
-
-  private async deliverTelegramClarify(ctx: {
-    sessionKey: string;
-    requestId: string;
-    request: ClarifyBridgeRequest;
-  }): Promise<void> {
-    const parsed = parseSessionKey(ctx.sessionKey);
-    if (!parsed || parsed.source !== 'telegram') {
-      return;
-    }
-
-    let body = ctx.request.question;
-    if (ctx.request.default) {
-      body += `\n\nDefault if unsure: ${ctx.request.default}`;
-    }
-
-    const choices = ctx.request.choices;
-    const buttonRows =
-      choices && choices.length >= 2
-        ? choices.map((c, i) => [
-            {
-              text: c.length > 64 ? `${c.slice(0, 61)}…` : c,
-              callback_data: `clarify:${ctx.requestId}:${i}`,
-            },
-          ])
-        : undefined;
-
-    if (!buttonRows) {
-      body += '\n\nReply with your answer in this chat.';
-    }
-
-    await this.channelManager.send({
-      channel: 'telegram',
-      chat_id: parsed.peerId,
-      content: body,
-      metadata: {
-        accountId: parsed.accountId,
-        ...(parsed.threadId ? { threadId: parsed.threadId } : {}),
-      },
-      buttons: buttonRows,
-    });
-  }
-
-  /** Deliver a user's answer to a pending `clarify` tool call. */
-  submitClarifyResponse(requestId: string, answer: string): boolean {
-    return this.clarifyBridge.handleResponse(requestId, answer);
+  updateConfig(updates: Partial<Config>): Promise<{ updated: boolean; error?: string }> {
+    return this.configCoordinator.updateConfig(updates);
   }
 
   /**
@@ -1706,262 +1206,6 @@ export class GatewayService {
     return this.cronService;
   }
 
-  getSkillsApi(lang?: string): { catalog: SkillCatalogEntry[]; managed: ManagedSkillListItem[] } {
-    return {
-      catalog: this.agentService.getSkillCatalog(lang),
-      managed: listManagedSkillDirs(),
-    };
-  }
-
-  getSkillMarkdownSource(skillName: string, lang?: string): SkillMarkdownPreviewPayload | null {
-    return this.agentService.getSkillMarkdownSource(skillName, lang);
-  }
-
-  deleteManagedSkill(skillId: string): void {
-    removeSkillsLockEntry(skillId);
-    deleteManagedSkillDir(skillId);
-    this.agentService.refreshSkillsAfterDiskChange();
-  }
-
-  installManagedSkillZip(
-    buffer: Buffer,
-    opts: { skillId?: string; overwrite?: boolean },
-  ): { skillId: string; path: string } {
-    const result = installSkillFromZip(buffer, opts);
-    removeSkillsLockEntry(result.skillId);
-    this.agentService.refreshSkillsAfterDiskChange();
-    return result;
-  }
-
-  async fetchSkillsMarketplaceCatalog(
-    params: SkillsStoreListParams,
-    provider?: string,
-  ): Promise<UnifiedMarketplaceListResponse> {
-    return listMarketplacePackages(this.config, params, provider);
-  }
-
-  async fetchSkillsMarketplaceCategories(
-    provider?: string,
-  ): Promise<{ items: MarketplaceCategoryOption[] }> {
-    return listMarketplaceCategories(this.config, provider);
-  }
-
-  async fetchSkillsMarketplacePackageDetail(
-    packageName: string,
-    provider?: string,
-  ): Promise<UnifiedMarketplacePackageDetail> {
-    return getMarketplacePackageDetail(this.config, packageName, provider);
-  }
-
-  async installSkillFromMarketplace(opts: {
-    name: string;
-    version?: string;
-    overwrite?: boolean;
-    provider?: string;
-  }): Promise<{ skillId: string; path: string }> {
-    const { buffer, skillId } = await downloadFromMarketplace(
-      this.config,
-      opts.name,
-      opts.version,
-      opts.provider,
-    );
-    return this.installManagedSkillZip(buffer, { skillId, overwrite: opts.overwrite ?? false });
-  }
-
-  /**
-   * xopc-store extension package preview (type must be `extension`).
-   */
-  async fetchExtensionMarketplacePackageDetail(packageName: string): Promise<MarketplacePackageDetail> {
-    const base = resolveExtensionsStoreBaseUrl(this.config);
-    const detail = await fetchMarketplacePackageDetail(base, packageName.trim());
-    if (detail.type !== 'extension') {
-      throw new Error(
-        `Package "${packageName}" is not an extension (store type: ${detail.type}).`,
-      );
-    }
-    return detail;
-  }
-
-  private mergeExtensionEnabledIntoConfig(extensionId: string): Config {
-    const id = extensionId.trim();
-    const prevExt = this.config.extensions;
-    const baseExt =
-      prevExt && typeof prevExt === 'object' && !Array.isArray(prevExt)
-        ? { ...(prevExt as Record<string, unknown>) }
-        : {};
-    const enabledRaw = baseExt.enabled;
-    const enabled = Array.isArray(enabledRaw)
-      ? [...enabledRaw.filter((x): x is string => typeof x === 'string')]
-      : [];
-    if (!enabled.includes(id)) enabled.push(id);
-
-    const disabledRaw = baseExt.disabled;
-    const nextExt: Record<string, unknown> = { ...baseExt, enabled };
-    if (Array.isArray(disabledRaw)) {
-      const next = disabledRaw.filter((x): x is string => typeof x === 'string' && x !== id);
-      if (next.length > 0) nextExt.disabled = next;
-      else delete nextExt.disabled;
-    }
-
-    return {
-      ...this.config,
-      extensions: nextExt,
-    } as Config;
-  }
-
-  private mergeExtensionRemovedFromEnabledConfig(extensionId: string): Config {
-    const id = extensionId.trim();
-    const prevExt = this.config.extensions;
-    const baseExt =
-      prevExt && typeof prevExt === 'object' && !Array.isArray(prevExt)
-        ? { ...(prevExt as Record<string, unknown>) }
-        : {};
-    const enabledRaw = baseExt.enabled;
-    const enabled = Array.isArray(enabledRaw)
-      ? enabledRaw.filter((x): x is string => typeof x === 'string' && x !== id)
-      : [];
-    return {
-      ...this.config,
-      extensions: { ...baseExt, enabled },
-    } as Config;
-  }
-
-  /**
-   * Install an extension from xopc-store into the global extensions directory (`~/.xopc/extensions`),
-   * append its id to `extensions.enabled`, refresh the loader, and emit `config.reload`.
-   */
-  async installExtensionFromMarketplace(opts: {
-    name: string;
-    version?: string;
-    overwrite?: boolean;
-  }): Promise<{ extensionId: string; version: string; requiresGatewayRestart: boolean }> {
-    const packageName = opts.name.trim();
-    if (!packageName) {
-      throw new Error('Package name is required');
-    }
-    const storeBase = resolveExtensionsStoreBaseUrl(this.config);
-    const targetDir = resolveExtensionsDir();
-    mkdirSync(targetDir, { recursive: true });
-
-    const { downloadUrl, version } = await resolveExtensionZipDownloadUrl(
-      storeBase,
-      packageName,
-      opts.version,
-    );
-    const buf = await downloadExtensionStoreZipBuffer(storeBase, downloadUrl);
-
-    if (opts.overwrite) {
-      const peekId = peekExtensionIdFromStoreZip(buf);
-      if (peekId && existsSync(join(targetDir, peekId))) {
-        rmSync(join(targetDir, peekId), { recursive: true, force: true });
-      }
-    }
-
-    const result = await installExtensionFromStoreZip(buf, targetDir);
-    if (!result.ok || !result.extensionId) {
-      throw new Error(result.error ?? 'Extension install failed');
-    }
-
-    const lock = getExtensionLockfileManager();
-    await lock.upsert(result.extensionId, {
-      name: result.extensionId,
-      version,
-      resolved: packageName,
-      source: 'store',
-    });
-
-    const nextConfig = this.mergeExtensionEnabledIntoConfig(result.extensionId);
-    const saved = await this.saveConfig(nextConfig);
-    if (!saved.saved) {
-      throw new Error(saved.error ?? 'Failed to save config after extension install');
-    }
-
-    const channelIdsBefore = new Set(this.channelManager.getAllPlugins().map((p) => p.id));
-    let requiresGatewayRestart = false;
-    try {
-      if (this.extensionLoader) {
-        this.extensionLoader.invalidateManifestCache();
-        await this.extensionLoader.loadByActivationPlan();
-        const reg = this.extensionLoader.getRegistry();
-        for (const p of reg.channelPlugins) {
-          if (!channelIdsBefore.has(p.id)) {
-            requiresGatewayRestart = true;
-            break;
-          }
-        }
-      }
-    } catch (err) {
-      const em = err instanceof Error ? err.message : String(err);
-      log.warn({ err, errorMessage: em }, `Extension loader refresh after marketplace install failed: ${em}`);
-      requiresGatewayRestart = true;
-    }
-
-    this.emit('config.reload', { section: 'extensions', source: 'marketplace-install' });
-    return { extensionId: result.extensionId, version, requiresGatewayRestart };
-  }
-
-  /**
-   * Remove a user-installed (global or per-agent extensions dir) extension from disk and config.
-   */
-  async uninstallUserExtension(extensionId: string): Promise<{ requiresGatewayRestart: boolean }> {
-    const id = extensionId.trim();
-    if (!id) {
-      throw new Error('extensionId is required');
-    }
-    const loader = this.extensionLoader;
-    if (!loader) {
-      throw new Error('Extensions unavailable');
-    }
-    const discovered = loader.discoverExtensions();
-    const ext = discovered.find((e) => e.id === id);
-    if (!ext) {
-      throw new Error(`Extension not found: ${id}`);
-    }
-    if (ext.source === 'bundled') {
-      throw new Error('Built-in extensions cannot be uninstalled from the marketplace UI');
-    }
-    if (existsSync(ext.path)) {
-      rmSync(ext.path, { recursive: true, force: true });
-    }
-    await getExtensionLockfileManager().remove(id);
-    const nextConfig = this.mergeExtensionRemovedFromEnabledConfig(id);
-    const saved = await this.saveConfig(nextConfig);
-    if (!saved.saved) {
-      throw new Error(saved.error ?? 'Failed to save config after extension uninstall');
-    }
-    try {
-      loader.invalidateManifestCache();
-      await loader.loadByActivationPlan();
-    } catch (err) {
-      const em = err instanceof Error ? err.message : String(err);
-      log.warn({ err, errorMessage: em }, `Extension loader refresh after uninstall failed: ${em}`);
-    }
-    this.emit('config.reload', { section: 'extensions', source: 'marketplace-uninstall' });
-    return { requiresGatewayRestart: true };
-  }
-
-  getSkillsMarketplaceProvider(): { provider: string; displayName: string } {
-    const provider = resolveSkillsMarketplaceProvider(this.config);
-    return {
-      provider,
-      displayName: getMarketplaceProviderDisplayName(provider),
-    };
-  }
-
-  /** All registered marketplace providers (built-in + extension-contributed). */
-  getSkillsMarketplaceProviders(): Array<{ id: string; displayName: string }> {
-    return listRegisteredProviders();
-  }
-
-  reloadSkillsFromDisk(): void {
-    this.agentService.refreshSkillsAfterDiskChange();
-  }
-
-  patchSkillEnabled(skillName: string, enabled: boolean): void {
-    createSkillConfigManager(resolveStateDir()).setSkillEnabled(skillName, enabled);
-    this.agentService.refreshSkillsAfterSkillConfigChange();
-  }
-
   get sessionIndexInstance(): SessionIndex {
     return this.sessionIndex;
   }
@@ -1971,269 +1215,27 @@ export class GatewayService {
     return this.sessionIndex;
   }
 
-  async getSessionAgentConfig(sessionKey: string) {
-    return this.agentService.getSessionAgentConfig(sessionKey);
-  }
-
-  /** Resolved markdown workspace for a session (after hydration / mkdir). Used by workspace file API when `sessionKey` is passed. */
-  async getEffectiveWorkspacePathForSession(sessionKey: string): Promise<string> {
-    return this.agentService.getEffectiveWorkspacePathForSession(sessionKey);
-  }
-
-  async patchSessionAgentConfig(sessionKey: string, body: {
-    thinkingLevel?: string;
-    model?: string | null;
-    reasoningLevel?: string;
-    workingDirectory?: string;
-  }) {
-    return this.agentService.patchSessionAgentConfig(sessionKey, body);
-  }
-
-  /**
-   * Process a message directly through the agent (for CLI mode)
-   */
+  /** Process a message directly through the agent (for CLI mode). */
   async processDirect(content: string, sessionKey = 'cli:direct'): Promise<string> {
-    return this.agentService.processDirect(content, sessionKey);
+    return this.agentService.turnDispatcher.processDirect(content, sessionKey);
   }
 
   // ========== SSE Event System ==========
 
-  /**
-   * Subscribe to server-pushed events.
-   * Returns a cleanup function to unsubscribe.
-   */
-  subscribe(sessionId: string, listener: (event: ServiceEvent) => Promise<void> | void): () => void {
+  subscribe(
+    sessionId: string,
+    listener: (event: ServiceEvent) => Promise<void> | void,
+  ): () => void {
     return this.sse.subscribe(sessionId, listener);
   }
 
-  /**
-   * Emit an event to all subscribers.
-   */
   emit(type: string, payload: unknown): void {
     this.sse.emit(type, payload);
   }
 
-  /**
-   * Get events since a given event id (for Last-Event-ID reconnection).
-   */
+  /** Replay events since `lastEventId` for SSE reconnection. */
   getEventsSince(sessionId: string, lastEventId: string): ServiceEvent[] {
     return this.sse.getEventsSince(sessionId, lastEventId);
-  }
-
-  // ========== Session Management API ==========
-
-  /**
-   * List sessions with query filters
-   */
-  async listSessions(query?: SessionListQuery) {
-    return this.sessionIndex.listSessions(query);
-  }
-
-  /**
-   * List all subagent sessions.
-   * Subagent sessions have keys starting with 'subagent:'.
-   */
-  async listSubagents(query?: SessionListQuery) {
-    return this.sessionIndex.listSubagents(query);
-  }
-
-  /**
-   * Get a single session by key
-   */
-  async getSession(
-    key: string,
-    options?: { includeTranscriptSummary?: boolean; includeTranscriptRows?: boolean },
-  ) {
-    return this.sessionIndex.getSession(key, options);
-  }
-
-  /** Read-only: in-flight webchat agent run for this session key, if any. */
-  getSessionActiveRun(sessionKey: string): { active: boolean; runId?: string } {
-    const key = sessionKey.trim();
-    if (!key) return { active: false };
-    const runId = this.activeWebchatRunBySession.get(key)?.trim();
-    if (!runId) return { active: false };
-    return { active: true, runId };
-  }
-
-  async getSessionMessagePage(
-    key: string,
-    options?: {
-      offset?: number;
-      limit?: number;
-      before?: string;
-      includeTranscriptSummary?: boolean;
-      includeTranscriptRows?: boolean;
-    },
-  ) {
-    return this.sessionIndex.getSessionMessagePage(key, options);
-  }
-
-  /**
-   * Partial session metadata update (OpenClaw-style sessions.patch subset).
-   */
-  async patchSession(
-    key: string,
-    body: SessionPatchBody,
-  ): Promise<{ ok: true } | { ok: false; error: string }> {
-    return this.sessionIndex.patchSession(key, body);
-  }
-
-  async listSessionCompactionCheckpoints(key: string) {
-    return this.sessionIndex.listCompactionCheckpoints(key);
-  }
-
-  async getSessionCompactionCheckpoint(key: string, checkpointId: string) {
-    return this.sessionIndex.getCompactionCheckpointDetail(key, checkpointId);
-  }
-
-  async restoreSessionCompactionCheckpoint(key: string, checkpointId: string): Promise<void> {
-    await this.sessionIndex.restoreCompactionCheckpoint(key, checkpointId);
-    this.agentService.evictSessionAgent(key);
-  }
-
-  async runSessionCompaction(
-    key: string,
-    options?: { instructions?: string; force?: boolean },
-  ): Promise<CompactionResult> {
-    const result = await this.agentService.compactSession(key, options);
-    if (result.compacted) {
-      void this.sessionIndex
-        .appendTranscriptContextEntry(key, {
-          text: 'Session transcript compacted',
-          data: {
-            firstKeptIndex: result.firstKeptIndex,
-            tokensBefore: result.tokensBefore,
-            tokensAfter: result.tokensAfter,
-            summaryPreview: result.summary.slice(0, 500),
-          },
-        })
-        .catch(() => {});
-    }
-    return result;
-  }
-
-  /**
-   * Delete a session
-   */
-  async deleteSession(key: string): Promise<{ deleted: boolean }> {
-    const result = await this.sessionIndex.deleteSession(key);
-    if (result) {
-      this.agentService.evictSessionAgent(key);
-      await retireSessionMcpRuntimeForSessionKey({ sessionKey: key, reason: 'session-delete' });
-    }
-    return { deleted: result };
-  }
-
-  /**
-   * Delete multiple sessions
-   */
-  async deleteSessions(keys: string[]): Promise<{ success: string[]; failed: string[] }> {
-    return this.sessionIndex.deleteSessions(keys);
-  }
-
-  /**
-   * Rename a session
-   */
-  async renameSession(key: string, name: string): Promise<{ renamed: boolean }> {
-    await this.sessionIndex.renameSession(key, name);
-    return { renamed: true };
-  }
-
-  /**
-   * Tag a session
-   */
-  async tagSession(key: string, tags: string[]): Promise<{ tagged: boolean }> {
-    await this.sessionIndex.tagSession(key, tags);
-    return { tagged: true };
-  }
-
-  /**
-   * Remove tags from a session
-   */
-  async untagSession(key: string, tags: string[]): Promise<{ untagged: boolean }> {
-    await this.sessionIndex.untagSession(key, tags);
-    return { untagged: true };
-  }
-
-  /**
-   * Archive a session
-   */
-  async archiveSession(key: string): Promise<{ archived: boolean }> {
-    await this.sessionIndex.archiveSession(key);
-    return { archived: true };
-  }
-
-  /**
-   * Unarchive a session
-   */
-  async unarchiveSession(key: string): Promise<{ unarchived: boolean }> {
-    await this.sessionIndex.unarchiveSession(key);
-    return { unarchived: true };
-  }
-
-  /**
-   * Pin a session
-   */
-  async pinSession(key: string): Promise<{ pinned: boolean }> {
-    await this.sessionIndex.pinSession(key);
-    return { pinned: true };
-  }
-
-  /**
-   * Unpin a session
-   */
-  async unpinSession(key: string): Promise<{ unpinned: boolean }> {
-    await this.sessionIndex.unpinSession(key);
-    return { unpinned: true };
-  }
-
-  /**
-   * Search sessions
-   */
-  async searchSessions(query: string) {
-    return this.sessionIndex.searchSessions(query);
-  }
-
-  /**
-   * Search within a session
-   */
-  async searchInSession(key: string, keyword: string) {
-    return this.sessionIndex.searchInSession(key, keyword);
-  }
-
-  /**
-   * Export a session
-   */
-  async exportSession(key: string, format: ExportFormat): Promise<{ content: string }> {
-    const content = await this.sessionIndex.exportSession(key, format);
-    return { content };
-  }
-
-  /**
-   * Get session statistics
-   */
-  async getSessionStats() {
-    return this.sessionIndex.getStats();
-  }
-
-  /**
-   * Get unique chat IDs from sessions, grouped by channel
-   * Returns a list of channel/chatId pairs for cron job configuration.
-   * `chatId` is the session-store routing suffix (unique per bot account + peer).
-   * When `routing` exists, `peerId` is the platform id (e.g. Telegram numeric chat id).
-   */
-  async getSessionChatIds(channel?: string): Promise<
-    Array<{
-      channel: string;
-      chatId: string;
-      lastActive: string;
-      accountId?: string;
-      peerKind?: string;
-      peerId?: string;
-    }>
-  > {
-    return getDistinctSessionChatIds(this.sessionIndex, channel);
   }
 
   /**
@@ -2293,7 +1295,7 @@ export class GatewayService {
       },
     };
     
-    await this.writeConfigAndReloadFromDisk(this.config);
+    await this.saveConfig(this.config);
 
     log.info({ tokenPreview: `${newToken.slice(0, 8)}...` }, 'Gateway token refreshed');
     

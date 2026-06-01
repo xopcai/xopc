@@ -11,7 +11,11 @@ import type { SessionConfigStore, SessionStore } from '../../session/index.js';
 import type { ThinkLevel } from '../transcript/thinking-types.js';
 import type { CompactionResult } from '../memory/compaction.js';
 import { createLogger } from '../../utils/logger.js';
-import { commandRegistry, createCommandContext } from '../../chat-commands/index.js';
+import {
+  commandRegistry,
+  createCommandContext,
+  type CommandContext as UnifiedCommandContext,
+} from '../../chat-commands/index.js';
 import { getAllProviders, getModelsByProvider, getProviderDisplayName } from '../../providers/index.js';
 import type { PersistentGoalApis } from '../goals/persistent-goal-apis.js';
 
@@ -103,22 +107,16 @@ export class CommandHandler {
   }
 
   /**
-   * Execute a command using the unified command system
+   * Build the unified command context shared by all execute paths.
+   * When `recorder` is set, every reply text is also captured (for SSE / CLI aggregation).
    */
-  async executeCommand(
-    commandName: string,
-    args: string,
-    context: CommandContext
-  ): Promise<boolean> {
-    // Check if command exists
-    if (!commandRegistry.has(commandName)) {
-      return false;
-    }
+  private buildCommandContext(
+    context: CommandContext,
+    recorder?: (text: string) => void,
+  ): UnifiedCommandContext {
+    const skipBusOutbound = shouldSkipBusOutboundForChannel(context.channel);
 
-    log.info({ command: commandName, sessionKey: context.sessionKey }, 'Executing command via new system');
-
-    // Create command context
-    const cmdCtx = createCommandContext({
+    return createCommandContext({
       sessionKey: context.sessionKey,
       source: context.channel as 'telegram' | 'webui' | 'cli' | 'api' | 'system' | 'gateway',
       channelId: context.channel,
@@ -132,7 +130,8 @@ export class CommandHandler {
       applySessionThinkingLevel: this.applySessionThinkingLevel,
 
       replyHandler: async (text: string, _options?) => {
-        if (shouldSkipBusOutboundForChannel(context.channel)) return;
+        recorder?.(text);
+        if (skipBusOutbound) return;
         await this.bus.publishOutbound({
           channel: context.channel,
           chat_id: context.chatId,
@@ -142,149 +141,7 @@ export class CommandHandler {
       },
 
       typingHandler: async (typing: boolean) => {
-        if (shouldSkipBusOutboundForChannel(context.channel)) return;
-        await this.bus.publishOutbound({
-          channel: context.channel,
-          chat_id: context.chatId,
-          type: typing ? 'typing_on' : 'typing_off',
-        });
-      },
-
-      supportedFeatures: ['markdown', 'typing'],
-
-      getCurrentModel: this.getCurrentModel,
-
-      switchModel: async (modelId: string) => {
-        return this.switchModelForSession(context.sessionKey, modelId);
-      },
-
-      listModels: async () => {
-        const providers = getAllProviders();
-        const models: Array<{ id: string; name: string; provider: string }> = [];
-
-        for (const providerId of providers) {
-          if (isProviderConfiguredSync(providerId)) {
-            const providerModels = getModelsByProvider(providerId);
-            for (const m of providerModels) {
-              models.push({
-                id: `${m.provider}/${m.id}`,
-                name: m.name || m.id,
-                provider: getProviderDisplayName(providerId),
-              });
-            }
-          }
-        }
-
-        return models;
-      },
-
-      getUsage: async () => {
-        const messages = await this.sessionStore.load(context.sessionKey);
-        let promptTokens = 0;
-        let completionTokens = 0;
-
-        for (const msg of messages) {
-          if ('usage' in msg && msg.usage) {
-            const usage = msg.usage as any;
-            promptTokens += usage.input || 0;
-            completionTokens += usage.output || 0;
-          }
-        }
-
-        return {
-          promptTokens,
-          completionTokens,
-          totalTokens: promptTokens + completionTokens,
-          messageCount: messages.length,
-        };
-      },
-
-      invalidateAgentSession: this.invalidateAgentSession,
-
-      abortCurrentTurn: this.abortSessionTurn
-        ? async () => {
-            await this.abortSessionTurn!(context.sessionKey);
-          }
-        : undefined,
-
-      compactSession: this.compactSession,
-      btwQuery: this.btwQuery,
-      getSessionContextReport: this.getSessionContextReport,
-      persistentGoalApis: this.getPersistentGoalApisForCommand({
-        sessionKey: context.sessionKey,
-        channel: context.channel,
-        chatId: context.chatId,
-        inboundMetadata: context.inboundMetadata,
-      }),
-    });
-
-    const result = await commandRegistry.execute(commandName, cmdCtx, args);
-
-    if (result.content && !shouldSkipBusOutboundForChannel(context.channel)) {
-      await this.bus.publishOutbound({
-        channel: context.channel,
-        chat_id: context.chatId,
-        content: result.content,
-        type: 'message',
-      });
-    }
-
-    return true;
-  }
-
-  /**
-   * Run command and return all user-visible text (ctx.reply + result.content) for SSE/CLI.
-   * Same bus side effects as {@link executeCommand}.
-   */
-  async executeCommandAndAggregateReply(
-    commandName: string,
-    args: string,
-    context: CommandContext,
-  ): Promise<{ handled: boolean; aggregatedText: string }> {
-    if (!commandRegistry.has(commandName)) {
-      return { handled: false, aggregatedText: '' };
-    }
-
-    log.info({ command: commandName, sessionKey: context.sessionKey }, 'Executing command (aggregate reply)');
-
-    const { aggregatedText } = await this.runRegistryExecuteWithCapture(args, commandName, context);
-
-    return { handled: true, aggregatedText };
-  }
-
-  private async runRegistryExecuteWithCapture(
-    args: string,
-    commandName: string,
-    context: CommandContext,
-  ): Promise<{ aggregatedText: string }> {
-    const segments: string[] = [];
-
-    const wrapped = createCommandContext({
-      sessionKey: context.sessionKey,
-      source: context.channel as 'telegram' | 'webui' | 'cli' | 'api' | 'system' | 'gateway',
-      channelId: context.channel,
-      chatId: context.chatId,
-      senderId: context.senderId,
-      isGroup: context.isGroup,
-      config: this.config,
-      bus: this.bus,
-      sessionStore: this.sessionStore,
-      sessionConfigStore: this.sessionConfigStore,
-      applySessionThinkingLevel: this.applySessionThinkingLevel,
-
-      replyHandler: async (text: string, _options?) => {
-        segments.push(text);
-        if (shouldSkipBusOutboundForChannel(context.channel)) return;
-        await this.bus.publishOutbound({
-          channel: context.channel,
-          chat_id: context.chatId,
-          content: text,
-          type: 'message',
-        });
-      },
-
-      typingHandler: async (typing: boolean) => {
-        if (shouldSkipBusOutboundForChannel(context.channel)) return;
+        if (skipBusOutbound) return;
         await this.bus.publishOutbound({
           channel: context.channel,
           chat_id: context.chatId,
@@ -359,7 +216,54 @@ export class CommandHandler {
         inboundMetadata: context.inboundMetadata,
       }),
     });
+  }
 
+  /**
+   * Execute a command using the unified command system
+   */
+  async executeCommand(
+    commandName: string,
+    args: string,
+    context: CommandContext,
+  ): Promise<boolean> {
+    if (!commandRegistry.has(commandName)) {
+      return false;
+    }
+
+    log.info({ command: commandName, sessionKey: context.sessionKey }, 'Executing command via new system');
+
+    const cmdCtx = this.buildCommandContext(context);
+    const result = await commandRegistry.execute(commandName, cmdCtx, args);
+
+    if (result.content && !shouldSkipBusOutboundForChannel(context.channel)) {
+      await this.bus.publishOutbound({
+        channel: context.channel,
+        chat_id: context.chatId,
+        content: result.content,
+        type: 'message',
+      });
+    }
+
+    return true;
+  }
+
+  /**
+   * Run command and return all user-visible text (ctx.reply + result.content) for SSE/CLI.
+   * Same bus side effects as {@link executeCommand}.
+   */
+  async executeCommandAndAggregateReply(
+    commandName: string,
+    args: string,
+    context: CommandContext,
+  ): Promise<{ handled: boolean; aggregatedText: string }> {
+    if (!commandRegistry.has(commandName)) {
+      return { handled: false, aggregatedText: '' };
+    }
+
+    log.info({ command: commandName, sessionKey: context.sessionKey }, 'Executing command (aggregate reply)');
+
+    const segments: string[] = [];
+    const wrapped = this.buildCommandContext(context, (text) => segments.push(text));
     const result = await commandRegistry.execute(commandName, wrapped, args);
 
     if (result.content) {
@@ -375,6 +279,6 @@ export class CommandHandler {
     }
 
     const aggregatedText = segments.filter((s) => s && s.trim()).join('\n\n');
-    return { aggregatedText };
+    return { handled: true, aggregatedText };
   }
 }

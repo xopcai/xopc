@@ -17,7 +17,7 @@ import { AgentOrchestrator, AgentEventHandler } from '../orchestration/index.js'
 import { FeedbackCoordinator } from '../feedback/index.js';
 
 // Test skills layer
-import { SkillManager } from '../skills/index.js';
+import { SkillManager } from '../skills/skill-manager.js';
 
 describe('Refactored AgentService Modules', () => {
   describe('Messaging Layer', () => {

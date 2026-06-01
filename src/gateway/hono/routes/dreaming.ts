@@ -2,7 +2,8 @@ import type { Hono } from 'hono';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-import { getWorkspacePath, type Config } from '../../../config/schema.js';
+import { type Config } from '../../../config/schema.js';
+import { getWorkspacePath } from '../../../config/workspace-path-helpers.js';
 import { resolveDreamingConfig } from '../../../agent/memory/dreaming/config.js';
 import {
   DREAMING_CRON_NAME,

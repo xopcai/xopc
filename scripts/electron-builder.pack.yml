@@ -1,4 +1,6 @@
-# electron-builder config when --project out/electron-pack (paths relative to pack dir).
+# electron-builder config used when --project <packDir> is set (paths relative to pack dir,
+# except `directories.output` which is absolute via env interpolation so artifacts land in
+# the repo's dist/release/).
 appId: ai.xopc.xopc
 productName: xopc
 
@@ -12,14 +14,19 @@ publish:
   url: https://xopc.ai/api/download
 
 directories:
-  output: ../../dist/release
-  buildResources: ../../electron/resources
+  output: ${env.XOPC_ELECTRON_RELEASE_OUTPUT}
+  buildResources: _pack-resources/build-resources
 
-beforeBuild: ../../scripts/electron-before-build.cjs
+beforeBuild: _pack-resources/electron-before-build.cjs
 
 files:
   - '**/*'
   - '!**/*.map'
+
+# Gateway bundle runs in a Node subprocess; asar fs adapter overhead on a 19MB require
+# slows cold start. Unpacking it (and its sibling templates) puts it on plain disk.
+asarUnpack:
+  - 'out/server/**'
 
 extraMetadata:
   main: out/main/index.js
@@ -30,13 +37,20 @@ extraResources:
     filter:
       - rg
       - rg.exe
-  - from: ../../node_modules/playwright-core
+  # Playwright Chromium install + CDP (must stay a real package tree; not esbuild-bundled).
+  # types/ is .d.ts only; lib/vite/ is the Trace Viewer UI we never invoke.
+  - from: _pack-resources/playwright-core
     to: playwright-core
-  - from: ../../dist/browser-ext
+    filter:
+      - '**/*'
+      - '!types/**'
+      - '!lib/vite/**'
+  # Chrome extension bridge (sideload copy source; must be real files, not inside app.asar)
+  - from: _pack-resources/browser-ext
     to: browser-ext
     filter:
       - '**/*'
-  - from: ../../electron/resources
+  - from: _pack-resources/build-resources
     to: resources
     filter:
       - '**/*.png'
@@ -45,6 +59,14 @@ protocols:
   - name: xopc
     schemes:
       - xopc
+
+# Limit Chromium UI locales (file dialogs, context menus) to the ones xopc supports.
+# Drops 270+ unused locale .pak files from Electron Framework — biggest single win on dmg size.
+# Names must match Electron's *.lproj folders (underscore, not BCP-47 hyphen).
+electronLanguages:
+  - en
+  - zh_CN
+  - zh_TW
 
 mac:
   category: public.app-category.productivity

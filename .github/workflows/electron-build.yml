@@ -1,5 +1,5 @@
 # Build distributable Electron apps (electron-vite + electron-builder).
-# Artifacts: dist/release/* per job (see electron-builder.yml).
+# Artifacts: dist/release/* per job (see scripts/electron-builder.pack.yml).
 #
 # If you previously had `.github/workflows/electron.yml` and see two "Electron Build" in Actions,
 # the old workflow is orphaned after rename: disable it with:
@@ -24,7 +24,7 @@
 #   - APPLE_APP_SPECIFIC_PASSWORD: app-specific password (appleid.apple.com), not your Apple ID password
 #   - APPLE_TEAM_ID: 10-character Team ID (Membership details in developer.apple.com)
 # Alternative notarization auth: APPLE_API_KEY (base64 .p8), APPLE_API_KEY_ID, APPLE_API_ISSUER
-# Enable notarization in electron-builder.yml: mac.notarize: true
+# Enable notarization in scripts/electron-builder.pack.yml: mac.notarize: true
 #
 # Inspect runs locally (after `gh auth login`):
 #   ./scripts/gh-electron-build-runs.sh
@@ -120,7 +120,7 @@ jobs:
           # "empty password" and ".../xopc not a file" on the workspace path.
           _EB_CSC_LINK: ${{ secrets.CSC_LINK }}
           _EB_CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-          # Notarization (used when mac.notarize is true in electron-builder.yml)
+          # Notarization (used when mac.notarize is true in scripts/electron-builder.pack.yml)
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}

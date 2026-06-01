@@ -4,9 +4,9 @@ import { CheckCircle2, ChevronDown, Loader2, XCircle } from 'lucide-react';
 import { TOOL_NAMES_WITH_WORKSPACE_OUTPUT } from '@/features/chat/messages/assistant-message-artifacts';
 import {
   buildStepsRoundCompleteSummary,
+  buildStepsRoundStreamingSummary,
   filterVisibleSteps,
   viewStepsLabel,
-  type FirstToolHeaderLabels,
 } from '@/features/chat/messages/assistant-steps-summary';
 import type {
   Message,
@@ -15,6 +15,22 @@ import type {
 } from '@/features/chat/messages/messages.types';
 import { formatParamsJson, getKeyDetailLine } from '@/features/chat/messages/tool-input-preview';
 import { getFriendlyToolTitle } from '@/features/chat/messages/tool-friendly-title';
+import {
+  classifyTool,
+  type ActionKind,
+  type StepsClusterDoneLabels,
+  type StepsClusterIngLabels,
+  type StepsClusterJoinLabels,
+} from '@/features/chat/messages/tool-action-cluster';
+import {
+  EditFileCard,
+  FetchUrlCard,
+  ReadFileCard,
+  ShellCard,
+  WriteFileCard,
+  type ToolCardLabels,
+} from '@/features/chat/tool-results/tool-result-cards';
+import { useDevViewStore } from '@/stores/dev-view-store';
 import { formatStepRoundDuration } from '@/features/chat/time/step-round-duration';
 import { ToolResultFileLinks } from '@/features/chat/tool-results/tool-result-file-links';
 import { extractFilePathsFromToolResult } from '@/features/chat/tool-results/tool-result-file-paths';
@@ -79,6 +95,8 @@ export function AssistantStepsBlock({
   blocks,
   toolLabels,
   stepLabels,
+  clusterLabels,
+  cardLabels,
   sessionKey,
   isMessageStreaming = false,
   finalAnswerStarted = false,
@@ -101,6 +119,12 @@ export function AssistantStepsBlock({
     fetchUrl: string;
     unknownTool: string;
   };
+  clusterLabels: {
+    done: StepsClusterDoneLabels;
+    ing: StepsClusterIngLabels;
+    join: StepsClusterJoinLabels;
+  };
+  cardLabels: ToolCardLabels;
   sessionKey?: string | null;
   /** Assistant reply SSE still open for this bubble. */
   isMessageStreaming?: boolean;
@@ -144,24 +168,19 @@ export function AssistantStepsBlock({
 
   const completedHeader = useMemo(() => {
     if (anyActive) return '';
-    const labels: FirstToolHeaderLabels = {
-      searchedWeb: stepLabels.searchedWeb,
-      readFile: stepLabels.readFile,
-      runCommand: stepLabels.runCommand,
-      listDirectory: stepLabels.listDirectory,
-      writeFile: stepLabels.writeFile,
-      editFile: stepLabels.editFile,
-      openUrl: stepLabels.openUrl,
-      fetchUrl: stepLabels.fetchUrl,
-      unknownTool: stepLabels.unknownTool,
-    };
     return buildStepsRoundCompleteSummary(
       visibleBlocks,
-      labels,
+      clusterLabels.done,
+      clusterLabels.join,
       language,
       viewStepsLabel(stepCount, stepLabels),
     );
-  }, [anyActive, visibleBlocks, language, stepCount, stepLabels]);
+  }, [anyActive, visibleBlocks, language, stepCount, stepLabels, clusterLabels]);
+
+  const streamingHeaderText = useMemo(() => {
+    if (!anyActive) return null;
+    return buildStepsRoundStreamingSummary(visibleBlocks, clusterLabels.ing);
+  }, [anyActive, visibleBlocks, clusterLabels]);
 
   if (stepCount === 0) {
     return null;
@@ -184,7 +203,9 @@ export function AssistantStepsBlock({
 
   const headerMain = anyActive ? (
     <>
-      <span className="[overflow-wrap:anywhere]">{viewStepsLabel(stepCount, stepLabels)}</span>
+      <span className="[overflow-wrap:anywhere]">
+        {streamingHeaderText ?? viewStepsLabel(stepCount, stepLabels)}
+      </span>
       <StepRoundDurationText
         active={anyActive}
         roundStartRef={roundStartRef}
@@ -240,6 +261,7 @@ export function AssistantStepsBlock({
             blocks={blocks}
             toolLabels={toolLabels}
             stepLabels={timelineLabels}
+            cardLabels={cardLabels}
             sessionKey={sessionKey}
           />
         </div>
@@ -264,6 +286,7 @@ function AssistantStepsTimeline({
   blocks,
   toolLabels,
   stepLabels,
+  cardLabels,
   className,
   sessionKey,
 }: {
@@ -283,6 +306,7 @@ function AssistantStepsTimeline({
     fetchUrl: string;
     unknownTool: string;
   };
+  cardLabels: ToolCardLabels;
   className?: string;
   sessionKey?: string | null;
 }) {
@@ -300,6 +324,7 @@ function AssistantStepsTimeline({
             block={b}
             toolLabels={toolLabels}
             stepLabels={stepLabels}
+            cardLabels={cardLabels}
             sessionKey={sessionKey}
           />
         ))}
@@ -337,10 +362,19 @@ function ToolUseWidgetSlot({
   );
 }
 
+const KINDS_WITH_CARD: ReadonlySet<ActionKind> = new Set([
+  'readFile',
+  'editFile',
+  'writeFile',
+  'runCommand',
+  'fetchUrl',
+]);
+
 function StepRow({
   block,
   toolLabels,
   stepLabels,
+  cardLabels,
   sessionKey,
 }: {
   block: ThinkingContent | ToolUseContent;
@@ -359,8 +393,10 @@ function StepRow({
     fetchUrl: string;
     unknownTool: string;
   };
+  cardLabels: ToolCardLabels;
   sessionKey?: string | null;
 }) {
+  const showRawToolData = useDevViewStore((s) => s.showRawToolData);
   const toolResultText = useMemo(() => {
     if (block.type !== 'tool_use') {
       return '';
@@ -448,6 +484,9 @@ function StepRow({
     }
   }
 
+  const kind = classifyTool(block.name);
+  const hasCard = KINDS_WITH_CARD.has(kind);
+
   const title = getFriendlyToolTitle(block.name, {
     searchedWeb: stepLabels.searchedWeb,
     readFile: stepLabels.readFile,
@@ -462,6 +501,23 @@ function StepRow({
   const detailLine = getKeyDetailLine(block.input);
 
   const paramsJson = block.input !== undefined ? formatParamsJson(block.input) : '';
+
+  const card = hasCard
+    ? kind === 'readFile'
+      ? <ReadFileCard block={block} labels={cardLabels} />
+      : kind === 'editFile'
+        ? <EditFileCard block={block} labels={cardLabels} />
+        : kind === 'writeFile'
+          ? <WriteFileCard block={block} labels={cardLabels} />
+          : kind === 'runCommand'
+            ? <ShellCard block={block} labels={cardLabels} />
+            : kind === 'fetchUrl'
+              ? <FetchUrlCard block={block} labels={cardLabels} />
+              : null
+    : null;
+
+  /** Show legacy JSON panel when (a) developer toggle is on, or (b) no structured card exists. */
+  const showLegacyDetails = !isStreaming && (showRawToolData || !hasCard);
 
   return (
     <div className="flex min-w-0 gap-2.5">
@@ -485,15 +541,16 @@ function StepRow({
             <span className="text-xs text-red-600 dark:text-red-400">error</span>
           ) : null}
         </div>
-        {detailLine ? (
+        {card}
+        {!hasCard && detailLine ? (
           <p className="min-w-0 rounded-md bg-accent-soft/40 px-1.5 py-1 text-xs break-words text-fg-muted [overflow-wrap:anywhere] dark:bg-accent-soft/25">
             {detailLine}
           </p>
         ) : null}
-        {!isStreaming ? (
+        {showLegacyDetails ? (
           <details className="group min-w-0 text-xs">
             <summary className="cursor-pointer select-none text-fg-subtle underline-offset-2 hover:text-fg-muted group-open:text-fg-muted">
-              {stepLabels.stepDetails}
+              {hasCard ? cardLabels.rawDetails : stepLabels.stepDetails}
             </summary>
             <div className="mt-2 max-h-48 w-full min-w-0 max-w-full overflow-y-auto overflow-x-hidden rounded-md bg-surface-hover/60 p-2 font-mono dark:bg-surface-hover/35">
               {paramsJson ? (

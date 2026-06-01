@@ -1,27 +1,20 @@
-// Builders for the collapsed "steps round" header — the one-line summary shown
-// when a tool round finishes, plus the small helpers (`filterVisibleSteps`,
-// `viewStepsLabel`) shared between the collapsed and expanded states.
+// Builders for the collapsed "steps round" header — the streaming-state line
+// ("Reading files…") and the post-round summary ("Read 3 files, edited 1") —
+// plus the small helpers (`filterVisibleSteps`, `viewStepsLabel`) shared
+// between the collapsed and expanded states.
 
 import type { ThinkingContent, ToolUseContent } from '@/features/chat/messages/messages.types';
 import {
-  extractCommandPreview,
-  extractPathPreview,
-  extractSearchQuery,
-  extractUrlPreview,
-  getKeyDetailLine,
-} from '@/features/chat/messages/tool-input-preview';
-import {
-  getFriendlyToolTitle,
-  toolNameKey,
-  type FriendlyToolTitleLabels,
-} from '@/features/chat/messages/tool-friendly-title';
-import { isWebSearchToolName } from '@/features/chat/tool-results/web-search-tool-result-links';
+  summarizeClustersCompleted,
+  summarizeClustersStreaming,
+  type StepsClusterDoneLabels,
+  type StepsClusterIngLabels,
+  type StepsClusterJoinLabels,
+} from '@/features/chat/messages/tool-action-cluster';
+import type { FriendlyToolTitleLabels } from '@/features/chat/messages/tool-friendly-title';
 import type { StoredLanguage } from '@/lib/storage';
 
 export type FirstToolHeaderLabels = FriendlyToolTitleLabels;
-
-const FIRST_TOOL_DETAIL_MAX = 120;
-const COMPLETE_HEADER_LINE_MAX = 240;
 
 export function filterVisibleSteps(
   blocks: Array<ThinkingContent | ToolUseContent>,
@@ -42,55 +35,33 @@ export function viewStepsLabel(
   return key.replace(/\{\{count\}\}/g, String(count));
 }
 
-function previewDetailForFirstToolHeader(block: ToolUseContent): string {
-  const input = block.input;
-  const n = toolNameKey(block.name);
-  if (isWebSearchToolName(block.name)) {
-    const q = extractSearchQuery(input);
-    if (q.trim()) return q.trim();
-  }
-  if (n === 'shell') {
-    const c = extractCommandPreview(input);
-    if (c.trim()) return c.trim();
-  }
-  if (n === 'read_file' || n.includes('read_file')) {
-    const p = extractPathPreview(input);
-    if (p.trim()) return p.trim();
-  }
-  if (n === 'web_fetch' || n === 'open_url') {
-    const u = extractUrlPreview(input);
-    if (u.trim()) return u.trim();
-  }
-  return getKeyDetailLine(input).trim();
-}
-
-/** One-line "what happened" when a tool round finishes (first tool + best input preview). */
+/**
+ * One-line "what happened" when a tool round finishes — aggregates tool uses
+ * by action kind (e.g. "Read 3 files, edited 1"). Single-call rounds keep the
+ * familiar "Title: detail" format so power users don't lose information density.
+ *
+ * Falls back to `noToolFallback` when the round contains no tool uses (e.g.
+ * thinking-only).
+ */
 export function buildStepsRoundCompleteSummary(
   visibleBlocks: Array<ThinkingContent | ToolUseContent>,
-  labels: FirstToolHeaderLabels,
+  doneLabels: StepsClusterDoneLabels,
+  joinLabels: StepsClusterJoinLabels,
   language: StoredLanguage,
-  /** When there is no tool step (e.g. only thinking), show this (e.g. "View N steps"). */
   noToolFallback: string,
 ): string {
-  const firstTool = visibleBlocks.find((b): b is ToolUseContent => b.type === 'tool_use');
-  if (!firstTool) {
-    return noToolFallback;
-  }
+  const line = summarizeClustersCompleted(visibleBlocks, doneLabels, joinLabels, language);
+  return line ?? noToolFallback;
+}
 
-  const title = getFriendlyToolTitle(firstTool.name, labels);
-
-  let detail = previewDetailForFirstToolHeader(firstTool);
-  if (!detail) {
-    return title;
-  }
-  if (detail.length > FIRST_TOOL_DETAIL_MAX) {
-    detail = `${detail.slice(0, FIRST_TOOL_DETAIL_MAX)}…`;
-  }
-
-  const colon = language === 'zh' ? '：' : ': ';
-  let line = `${title}${colon}${detail}`;
-  if (line.length > COMPLETE_HEADER_LINE_MAX) {
-    line = `${line.slice(0, COMPLETE_HEADER_LINE_MAX)}…`;
-  }
-  return line;
+/**
+ * Streaming-state header. Returns the progressive-tense action label for the
+ * currently running cluster (e.g. "Reading files…"), or `null` to let the
+ * caller fall back to the legacy "View N steps" treatment.
+ */
+export function buildStepsRoundStreamingSummary(
+  visibleBlocks: Array<ThinkingContent | ToolUseContent>,
+  ingLabels: StepsClusterIngLabels,
+): string | null {
+  return summarizeClustersStreaming(visibleBlocks, ingLabels);
 }

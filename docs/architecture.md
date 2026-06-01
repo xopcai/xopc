@@ -158,6 +158,20 @@ User Reply / Channel Response
 | Web UI | React + Vite + Tailwind v4 (gateway console) |
 | Testing | Vitest |
 
+## Architecture Decisions
+
+Long-lived structural decisions are recorded in [`docs/adr/`](./adr/README.md):
+
+- [ADR 0001](./adr/0001-agent-service-decomposition.md) — AgentService god-class decomposition,
+  introducing `SessionStateBag` / `OutboundCoordinator` / `TurnDispatcher` / `PersistentGoalService` /
+  `SessionConfigService` / `SessionHydrator` / `SessionInspector` / `AgentInstanceGateway` and the
+  26 `dependency-cruiser` SOLID rules that lock them in.
+
+The invariants are enforced in CI via `pnpm run depcheck` (see
+[`.dependency-cruiser.cjs`](../.dependency-cruiser.cjs) and the `architecture` job in
+[`.github/workflows/ci.yml`](../.github/workflows/ci.yml)). Render the current dependency graph with
+`pnpm run depcheck:graph` (writes `docs/dependency-graph.mmd` — a Mermaid file viewable on GitHub).
+
 ## Changing xopc itself
 
 To add core tools, channels, or CLI commands, work in the xopc source tree and follow the contributor guide **`AGENTS.md`** in the repository. Extensions are the supported way to customize behaviour without forking—see [Extensions](extensions.md).

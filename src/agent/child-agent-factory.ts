@@ -13,8 +13,13 @@ import {
   resolveAgentTurnTimeoutMs,
   runAgentTurnWithTimeout,
 } from './orchestration/run-agent-turn-with-timeout.js';
+import type { AgentTool } from '@earendil-works/pi-agent-core';
 import type { ToolExecutorConfig } from './tools/executor.js';
-import { AgentToolsFactory } from './tools/factory.js';
+// `AgentToolsFactory` is NOT imported here on purpose — `tools/factory.js`
+// constructs the delegate tool, which would create a factory ↔ delegate-tool
+// ↔ child-agent-factory cycle. Instead, the caller supplies a
+// `buildChildTools()` callback that produces the already-constructed child
+// tool set (see `DelegateChildHandleOptions.buildChildTools`).
 
 const log = createLogger('delegate-child');
 
@@ -46,6 +51,14 @@ export function buildChildSystemPrompt(goal: string, context?: string, workspace
   return parts.join('\n');
 }
 
+export interface BuildChildToolsOptions {
+  workspace: string;
+  bus: MessageBus;
+  model: Model<Api>;
+  getConfig: () => Config | undefined;
+  toolExecutorConfig?: Partial<ToolExecutorConfig>;
+}
+
 export interface DelegateChildHandleOptions {
   workspace: string;
   goal: string;
@@ -56,6 +69,12 @@ export interface DelegateChildHandleOptions {
   bus: MessageBus;
   getConfig: () => Config | undefined;
   toolExecutorConfig?: Partial<ToolExecutorConfig>;
+  /**
+   * Construct the child agent's tool set. Injected by the caller (delegate-tool)
+   * so this module does not import `tools/factory.js` (which would form a
+   * factory ↔ delegate-tool ↔ child-agent-factory cycle).
+   */
+  buildChildTools: (opts: BuildChildToolsOptions) => AgentTool<any, any>[];
 }
 
 export interface DelegateChildRunResult {
@@ -72,19 +91,12 @@ export interface DelegateChildHandle {
  * Build an isolated tool factory (no extensions, no session memory hooks) and a child {@link Agent}.
  */
 export function createDelegateChildHandle(options: DelegateChildHandleOptions): DelegateChildHandle {
-  const childFactory = new AgentToolsFactory({
+  const allTools = options.buildChildTools({
     workspace: options.workspace,
     bus: options.bus,
-    getCurrentContext: () => null,
+    model: options.model,
     getConfig: options.getConfig,
-    getPrimaryModel: () => options.model,
     toolExecutorConfig: options.toolExecutorConfig,
-  });
-
-  const allTools = childFactory.createAllTools({
-    workspace: options.workspace,
-    getPrimaryModel: () => options.model,
-    disabledTools: new Set(['extensions']),
   });
 
   const allow = new Set(options.allowedToolNames);

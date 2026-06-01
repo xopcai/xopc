@@ -4,7 +4,7 @@ import { loadConfig, getWorkspacePath } from '../../config/index.js';
 import { MessageBus, MessageBusShutdownError } from '../../infra/bus/index.js';
 import { createLogger } from '../../utils/logger.js';
 import { register, formatExamples, type CLIContext } from '../registry.js';
-import { getContextWithOpts } from '../index.js';
+import { getContextWithOpts } from '../context.js';
 import { ExtensionLoader } from '../../extensions/index.js';
 import { join } from 'path';
 import { listSessions } from './agent/sessions.js';

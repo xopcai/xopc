@@ -345,6 +345,23 @@ export class AgentToolsFactory {
               getCurrentContext: () => this.deps.getCurrentContext?.() ?? null,
               hookRunner: this.deps.hookRunner,
               toolExecutorConfig: this.deps.toolExecutorConfig,
+              // Injected so `child-agent-factory.ts` does not need to import
+              // `AgentToolsFactory` directly (which would form a cycle).
+              buildChildTools: (childOpts) => {
+                const childFactory = new AgentToolsFactory({
+                  workspace: childOpts.workspace,
+                  bus: childOpts.bus,
+                  getCurrentContext: () => null,
+                  getConfig: childOpts.getConfig,
+                  getPrimaryModel: () => childOpts.model,
+                  toolExecutorConfig: childOpts.toolExecutorConfig,
+                });
+                return childFactory.createAllTools({
+                  workspace: childOpts.workspace,
+                  getPrimaryModel: () => childOpts.model,
+                  disabledTools: new Set(['extensions']),
+                });
+              },
             }),
           ]
         : []),

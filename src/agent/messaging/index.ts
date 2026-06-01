@@ -5,3 +5,8 @@
 export { MessageRouter, type MessageRoutingResult } from './message-router.js';
 export { CommandHandler, type CommandContext, type CommandHandlerConfig } from './command-handler.js';
 export { StreamManager, type StreamHandle } from './stream-manager.js';
+export {
+  OutboundCoordinator,
+  type OutboundCoordinatorConfig,
+  type SessionTurnCompletePayload,
+} from './outbound-coordinator.js';
