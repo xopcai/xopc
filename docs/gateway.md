@@ -16,7 +16,7 @@ Default port: `18790`
 
 The gateway runs in foreground mode by default. Press `Ctrl+C` to stop.
 
-### OS service (background)
+### OS service
 
 Install the gateway as a user service (systemd / LaunchAgent / Task Scheduler) so it starts on login and respawns on crash:
 

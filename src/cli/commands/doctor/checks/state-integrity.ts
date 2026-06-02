@@ -47,7 +47,7 @@ export async function checkStateIntegrity(ctx: DoctorContext): Promise<CheckResu
       label: 'State directory',
       status: 'fail',
       message: 'State directory does not exist.',
-      hints: [`Expected: ${root}`, 'Run: xopc init', 'Or: xopc doctor --fix'],
+      hints: [`Expected: ${root}`, 'Run: xopc init (or xopc setup)', 'Or: xopc doctor --fix'],
     };
   }
 

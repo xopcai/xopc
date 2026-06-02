@@ -58,30 +58,24 @@ xopc cron run <task-id>
 
 ## 执行模式
 
-### 1. 直接发送模式 (`main`)
-
-不经过 AI 处理，直接向指定渠道发送消息。
+CLI 的 `cron add` 通过标志创建 **system event** 任务（类似 heartbeat 消息）：
 
 ```bash
-xopc cron add "0 9 * * *" "早安！" \
-  --name "早安提醒" \
-  --target main \
-  --channel telegram \
-  --to 123456789
+xopc cron add --schedule "0 9 * * *" --message "早安！" --name "早安提醒"
 ```
 
-### 2. AI 智能体模式 (`isolated`)
+带 **渠道投递**、**isolated 智能体轮次** 或更复杂 payload 的任务，请在 **网关控制台**（`#/settings/cron`）或编辑磁盘上的 cron jobs 存储中配置。
 
-由 AI 智能体处理消息，再将回复发送到指定渠道。
+### 示例（CLI system event）
 
 ```bash
-xopc cron add "0 10 * * *" "今天天气怎么样？" \
-  --name "天气查询" \
-  --target isolated \
-  --model minimax/minimax-m2.5 \
-  --channel telegram \
-  --to 123456789
+xopc cron add --schedule "0 9 * * *" --message "早安！" --name "Morning"
+xopc cron add --schedule "0 18 * * 1-5" --message "收工提醒" --name "EOD"
 ```
+
+### 高级任务（网关 / JSON）
+
+直接发渠道、isolated 智能体运行等（文档中曾用 positional `cron add` 示例）**尚未**在 CLI 暴露，请使用 Web UI 或 jobs 文件。
 
 ## Cron 表达式格式
 

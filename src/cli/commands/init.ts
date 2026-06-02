@@ -343,3 +343,44 @@ _Review and update this periodically from daily memory files._
     log.info({ path: workspaceStatePath }, 'Created workspace state');
   }
 }
+
+// ─── CLI registration ───
+
+import { Command } from 'commander';
+import { register, formatExamples, type CLIContext } from '../registry.js';
+
+function createInitCommand(_ctx: CLIContext): Command {
+  return new Command('init')
+    .description('Initialize xopc state directories, config, and agent workspace')
+    .addHelpText(
+      'after',
+      formatExamples([
+        'xopc init                       # Initialize default agent (main)',
+        'xopc init --agent-id coder      # Initialize another agent id',
+        'xopc init --force               # Re-run initialization steps',
+        'xopc setup                      # Lighter config + workspace only',
+      ]),
+    )
+    .option('--force', 'Re-initialize even if directories already exist')
+    .option('--skip-workspace', 'Skip creating workspace profile files')
+    .option('--agent-id <id>', 'Agent id to initialize', 'main')
+    .action(async (options) => {
+      await initCommand({
+        force: options.force,
+        skipWorkspace: options.skipWorkspace,
+        agentId: options.agentId,
+      });
+      console.log(`✅ xopc initialized (agent: ${options.agentId})`);
+    });
+}
+
+register({
+  id: 'init',
+  name: 'init',
+  description: 'Initialize xopc state directories, config, and agent workspace',
+  factory: createInitCommand,
+  metadata: {
+    category: 'setup',
+    examples: ['xopc init', 'xopc init --agent-id main'],
+  },
+});

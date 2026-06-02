@@ -64,7 +64,7 @@ function checkWeixin(cfg: Config): { ok: boolean; messages: string[]; hints: str
   const accountKeys = wx.accounts ? Object.keys(wx.accounts).filter((k) => k.trim()) : [];
   if (accountKeys.length === 0) {
     messages.push('Weixin is enabled but no accounts are defined in config.');
-    hints.push('Run: xopc channels weixin login (or add channels.weixin.accounts).');
+    hints.push('Run: xopc channels login --channel weixin (or add channels.weixin.accounts).');
   }
 
   return { ok: messages.length === 0, messages, hints };

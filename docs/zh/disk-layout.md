@@ -72,7 +72,7 @@
 | `skills/` | 用户自建技能。 |
 | *任意文件* | `read` / `write` / `edit` 等工具操作对象。 |
 
-新安装不会把内部状态写回 Markdown 工作区。本版本只支持文首表格中的 **单一目录树**：人设 Markdown 与机器状态按上表分布；**不会**从「全部堆在 Markdown 工作区里」的旧布局自动迁移；profile Markdown 请用 `xopc setup` / `xopc onboard`，其他数据需自行搬迁。
+新安装不会把内部状态写回 Markdown 工作区。本版本只支持文首表格中的 **单一目录树**：人设 Markdown 与机器状态按上表分布；**不会**从「全部堆在 Markdown 工作区里」的旧布局自动迁移；完整状态树用 `xopc init`，或 `xopc setup` / `xopc onboard` 做配置与 profile Markdown 种子，从其它 fork 升级时需自行搬迁数据。
 
 会话里引用的入站附件 / TTS 路径仅支持相对 `inbound/`、`tts/`（相对 agent home 解析）。
 

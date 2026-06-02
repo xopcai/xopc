@@ -17,6 +17,8 @@ import { registry, type CLIContext } from './registry.js';
 export type CommandLoader = () => Promise<unknown>;
 
 export const REGISTRY_COMMAND_MODULES: Record<string, CommandLoader> = {
+  init: () => import('./commands/init.js'),
+  profile: () => import('./commands/profile.js'),
   setup: () => import('./commands/setup.js'),
   onboard: () => import('./commands/onboard.js'),
   agent: () => import('./commands/agent.js'),
