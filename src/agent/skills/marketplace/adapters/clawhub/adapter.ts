@@ -363,21 +363,24 @@ function convertListItemToPackageItem(item: ClawHubSkillListItem): PackageListIt
   };
 }
 
-function convertSearchResultToPackageItem(item: ClawHubSearchResultItem): PackageListItem {
+function convertSearchResultToPackageItem(
+  item: ClawHubSearchResultItem,
+  enrichment?: ClawHubSkillListItem,
+): PackageListItem {
   return {
     id: item.slug,
     name: item.displayName || item.slug,
     type: 'skill',
     description: item.summary || '',
-    downloads: 0,
+    downloads: enrichment?.stats.downloads ?? 0,
     author: {
       username: item.owner?.handle ?? item.ownerHandle ?? 'clawhub',
       avatarUrl: item.owner?.image ?? null,
     },
-    latestVersion: item.version ?? '1.0.0',
+    latestVersion: item.version ?? enrichment?.latestVersion?.version ?? '1.0.0',
     updatedAt: String(item.updatedAt),
-    categories: [],
-    stars: 0,
+    categories: enrichment?.metadata?.os ?? [],
+    stars: enrichment?.stats.stars ?? 0,
     sourceLabel: 'ClawHub',
   };
 }
@@ -409,10 +412,26 @@ export const clawHubMarketplaceAdapter: SkillsMarketplaceAdapter = {
     const page = params.page ?? 1;
 
     if (params.q?.trim()) {
-      const searchResponse = await cachedSearchClawHubSkills(params.q.trim(), LIST_BATCH_SIZE);
-      let rows = searchResponse.results.map(convertSearchResultToPackageItem);
+      // Search results from /search omit downloads/stars/metadata. We pull the cached list
+      // snapshot in parallel and merge by slug — costs nothing when the list cache is hot
+      // (which it is after any preceding browse), and adds at most one round-trip on a cold
+      // cache. We still tolerate a list-fetch failure: enrichment becomes a no-op.
+      const [searchResponse, listSettled] = await Promise.allSettled([
+        cachedSearchClawHubSkills(params.q.trim(), LIST_BATCH_SIZE),
+        cachedListClawHubSkills({ limit: LIST_BATCH_SIZE }),
+      ]);
+      if (searchResponse.status === 'rejected') throw searchResponse.reason;
+      const enrichmentBySlug = new Map<string, ClawHubSkillListItem>();
+      if (listSettled.status === 'fulfilled') {
+        for (const it of listSettled.value.items) enrichmentBySlug.set(it.slug, it);
+      }
+      let rows = searchResponse.value.results.map((r) =>
+        convertSearchResultToPackageItem(r, enrichmentBySlug.get(r.slug)),
+      );
       if (params.sort === 'downloads') {
         rows = [...rows].sort((a, b) => b.downloads - a.downloads);
+      } else if (params.sort === 'newest') {
+        rows = [...rows].sort((a, b) => Number(b.updatedAt) - Number(a.updatedAt));
       }
       const total = rows.length;
       const start = (page - 1) * pageSize;

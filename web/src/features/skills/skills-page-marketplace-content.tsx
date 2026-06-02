@@ -26,6 +26,12 @@ type Props = Pick<
   | 'openMarketplaceDetail'
   | 'onUseSkillInChat'
   | 'usingSkillInChatName'
+  | 'searchActive'
+  | 'searchQuery'
+  | 'setSearchQuery'
+  | 'registeredProviders'
+  | 'marketBrowseProvider'
+  | 'setMarketBrowseProvider'
 >;
 
 export function SkillsPageMarketplaceContent(p: Props) {
@@ -45,19 +51,35 @@ export function SkillsPageMarketplaceContent(p: Props) {
     openMarketplaceDetail,
     onUseSkillInChat,
     usingSkillInChatName,
+    searchActive,
+    searchQuery,
+    setSearchQuery,
+    registeredProviders,
+    marketBrowseProvider,
+    setMarketBrowseProvider,
   } = p;
+  const showCategories = !searchActive;
+  const otherProviders = registeredProviders.filter((rp) => rp.id !== marketBrowseProvider);
+  const trimmedQuery = searchQuery.trim();
 
   return (
     <>
       <div
         className={cn(
           '-mx-1 flex min-h-[2.75rem] items-center gap-2 overflow-x-auto px-1 pb-1 pt-0.5 [scrollbar-width:thin]',
-          !mpCategoriesLoading && mpCategories.length === 0 && 'min-h-0 pb-0 pt-0',
+          (!showCategories || (!mpCategoriesLoading && mpCategories.length === 0)) &&
+            'min-h-0 pb-0 pt-0',
         )}
-        role={mpCategories.length > 0 || mpCategoriesLoading ? 'tablist' : undefined}
-        aria-label={mpCategories.length > 0 || mpCategoriesLoading ? sk.marketplaceCategoriesAria : undefined}
+        role={
+          showCategories && (mpCategories.length > 0 || mpCategoriesLoading) ? 'tablist' : undefined
+        }
+        aria-label={
+          showCategories && (mpCategories.length > 0 || mpCategoriesLoading)
+            ? sk.marketplaceCategoriesAria
+            : undefined
+        }
       >
-        {mpCategories.length > 0 ? (
+        {!showCategories ? null : mpCategories.length > 0 ? (
           <>
             <button
               type="button"
@@ -108,7 +130,7 @@ export function SkillsPageMarketplaceContent(p: Props) {
           </div>
         ) : null}
       </div>
-      {mpCategoriesError ? (
+      {showCategories && mpCategoriesError ? (
         <p className="text-xs text-red-600 dark:text-red-400" role="alert">
           {mpCategoriesError}
         </p>
@@ -146,8 +168,37 @@ export function SkillsPageMarketplaceContent(p: Props) {
             </div>
           ) : null}
           {mpPayload.items.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-edge py-16 text-center text-sm text-fg-muted">
-              {sk.marketplaceEmpty}
+            <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-edge py-12 text-center text-sm text-fg-muted">
+              <p className="px-4">
+                {searchActive && trimmedQuery
+                  ? interpolate(sk.marketplaceEmptySearch, { query: trimmedQuery })
+                  : sk.marketplaceEmpty}
+              </p>
+              {searchActive ? (
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  {otherProviders.map((rp) => (
+                    <Button
+                      key={rp.id}
+                      type="button"
+                      variant="secondary"
+                      className="h-8 px-3 text-xs"
+                      onClick={() => setMarketBrowseProvider(rp.id)}
+                    >
+                      {interpolate(sk.marketplaceEmptySearchTryProvider, {
+                        provider: rp.displayName,
+                      })}
+                    </Button>
+                  ))}
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="h-8 px-3 text-xs"
+                    onClick={() => setSearchQuery('')}
+                  >
+                    {sk.marketplaceEmptySearchClear}
+                  </Button>
+                </div>
+              ) : null}
             </div>
           ) : (
             <div
@@ -178,14 +229,14 @@ export function SkillsPageMarketplaceContent(p: Props) {
                       onClick={(e) => {
                         const el = e.target as HTMLElement;
                         if (el.closest('button')) return;
-                        void openMarketplaceDetail(row.id, row.name);
+                        void openMarketplaceDetail(row.id, row.name, row.providerId ?? undefined);
                       }}
                       onKeyDown={(e) => {
                         const el = e.target as HTMLElement;
                         if (el.closest('button')) return;
                         if (e.key === 'Enter' || e.key === ' ') {
                           e.preventDefault();
-                          void openMarketplaceDetail(row.id, row.name);
+                          void openMarketplaceDetail(row.id, row.name, row.providerId ?? undefined);
                         }
                       }}
                     >
@@ -211,7 +262,11 @@ export function SkillsPageMarketplaceContent(p: Props) {
                                 className="h-8 shrink-0 whitespace-nowrap px-2.5 text-xs font-medium"
                                 disabled={mpLoading || usingSkillInChatName === row.id}
                                 onClick={() =>
-                                  void onUseSkillInChat({ name: row.id, source: 'store' })
+                                  void onUseSkillInChat({
+                                    name: row.id,
+                                    source: 'store',
+                                    providerOverride: row.providerId ?? null,
+                                  })
                                 }
                               >
                                 {usingSkillInChatName === row.id
@@ -220,6 +275,38 @@ export function SkillsPageMarketplaceContent(p: Props) {
                               </Button>
                             </div>
                           </div>
+                          {(() => {
+                            const pills: { id: string; label: string }[] = [];
+                            const pushPill = (id: string | undefined, label: string | undefined) => {
+                              if (!id) return;
+                              if (pills.some((p) => p.id === id)) return;
+                              const display =
+                                registeredProviders.find((rp) => rp.id === id)?.displayName ??
+                                label ??
+                                id;
+                              pills.push({ id, label: display });
+                            };
+                            pushPill(row.providerId, row.sourceLabel);
+                            for (const s of row.additionalSources ?? []) {
+                              pushPill(s.providerId, s.sourceLabel);
+                            }
+                            if (pills.length === 0 && row.sourceLabel) {
+                              pills.push({ id: row.sourceLabel, label: row.sourceLabel });
+                            }
+                            if (pills.length === 0) return null;
+                            return (
+                              <div className="flex flex-wrap gap-1">
+                                {pills.map((pill) => (
+                                  <span
+                                    key={pill.id}
+                                    className="inline-flex items-center rounded-full border border-edge-subtle bg-surface-panel px-2 py-0.5 text-[10px] font-medium leading-none text-fg-muted dark:bg-surface-hover/40"
+                                  >
+                                    {pill.label}
+                                  </span>
+                                ))}
+                              </div>
+                            );
+                          })()}
                           <p
                             className="line-clamp-2 text-sm leading-relaxed text-fg-muted"
                             title={row.description ? row.description : undefined}
@@ -261,31 +348,14 @@ export function SkillsPageMarketplaceContent(p: Props) {
                                 </>
                               ) : null}
                             </p>
-                            <p
-                              className="line-clamp-1 min-h-[1.125rem] font-mono text-[10px] text-fg-subtle"
-                              title={
-                                [
-                                  row.latestVersion ? `${sk.marketplaceVersion}: ${row.latestVersion}` : '',
-                                  row.sourceLabel ? `${sk.marketplaceSource}: ${row.sourceLabel}` : '',
-                                ]
-                                  .filter(Boolean)
-                                  .join(' · ') || undefined
-                              }
-                            >
-                              {row.latestVersion ? (
-                                <>
-                                  {sk.marketplaceVersion}: {row.latestVersion}
-                                </>
-                              ) : null}
-                              {row.latestVersion && row.sourceLabel ? (
-                                <span className="text-fg-subtle"> · </span>
-                              ) : null}
-                              {row.sourceLabel ? (
-                                <>
-                                  {sk.marketplaceSource}: {row.sourceLabel}
-                                </>
-                              ) : null}
-                            </p>
+                            {row.latestVersion ? (
+                              <p
+                                className="line-clamp-1 min-h-[1.125rem] font-mono text-[10px] text-fg-subtle"
+                                title={`${sk.marketplaceVersion}: ${row.latestVersion}`}
+                              >
+                                {sk.marketplaceVersion}: {row.latestVersion}
+                              </p>
+                            ) : null}
                           </div>
                         </div>
                       </div>

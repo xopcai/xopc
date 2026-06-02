@@ -137,6 +137,9 @@ export async function getMarketplaceSkills(params: {
   sort?: 'downloads' | 'newest';
   category?: string;
   provider?: string;
+  /** Optional caller-provided abort signal — used by aggregated search to enforce a per-provider
+   *  timeout so a third-party adapter that hangs cannot pin its tab on "loading" forever. */
+  signal?: AbortSignal;
 }): Promise<SkillsMarketplacePayload & { provider?: string }> {
   const sp = new URLSearchParams();
   if (params.q?.trim()) sp.set('q', params.q.trim());
@@ -148,6 +151,7 @@ export async function getMarketplaceSkills(params: {
   const qs = sp.toString();
   const res = await apiFetch(apiUrl(`/api/skills/marketplace${qs ? `?${qs}` : ''}`), {
     cache: 'no-store',
+    signal: params.signal,
   });
   if (!res.ok) {
     throw new Error(await readErrorMessage(res));
