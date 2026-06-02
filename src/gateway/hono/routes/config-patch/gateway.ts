@@ -229,6 +229,7 @@ export function applyGatewayPatch(config: Config, body: any): PatchResult {
           maxAttempts: 5,
           windowMs: 900_000,
           blockDurationMs: 300_000,
+          burstCoalesceMs: 1000,
           exemptLoopback: true,
         };
       }

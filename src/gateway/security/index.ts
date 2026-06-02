@@ -28,11 +28,6 @@ export {
   type PreauthConnectionBudget,
 } from './preauth-connection-budget.js';
 export {
-  UnauthorizedFloodGuard,
-  type FloodGuardOptions,
-  type FloodGuardDecision,
-} from './flood-guard.js';
-export {
   auditGatewayConfig,
   collectGatewayConfigFindings,
   collectGatewaySecurityFindings,

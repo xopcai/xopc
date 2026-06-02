@@ -35,7 +35,7 @@ import {
 import { consumeTunnelMutationLimit } from '../../../tunnel/tunnel-rate-limit.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 import type { GatewayService } from '../../service.js';
-import { getClientIpFromHeaders } from '../../auth-rate-limit.js';
+import { getClientIpFromHeaders } from '../../security/loopback.js';
 
 async function configureTunnelFromService(
   deps: AuthenticatedRouteDeps,

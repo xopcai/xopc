@@ -48,6 +48,16 @@ describe('lazy route bundles', () => {
     expect(findAuthenticatedLazyRouteBundle('/api/agents')?.id).toBe('agents');
   });
 
+  it('routes models-json config endpoints to the models bundle', () => {
+    // /api/models-json is `/api/models` + `-json`, not `/api/models/...`,
+    // so the prefix matcher needs an explicit entry. Without it the
+    // models settings panel sees a 404 on every load.
+    expect(findAuthenticatedLazyRouteBundle('/api/models-json')?.id).toBe('models');
+    expect(findAuthenticatedLazyRouteBundle('/api/models-json/validate')?.id).toBe('models');
+    expect(findAuthenticatedLazyRouteBundle('/api/models-json/reload')?.id).toBe('models');
+    expect(findAuthenticatedLazyRouteBundle('/api/models-json/test-api-key')?.id).toBe('models');
+  });
+
   it('has unique bundle ids', () => {
     const ids = AUTHENTICATED_LAZY_ROUTE_BUNDLES.map((bundle) => bundle.id);
     expect(new Set(ids).size).toBe(ids.length);

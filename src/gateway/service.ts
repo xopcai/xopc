@@ -22,7 +22,7 @@ import { assertGatewayAuthNotKnownWeak } from './security/known-weak-secrets.js'
 import { auditGatewayConfig } from './security/audit.js';
 import { assertGatewayRuntimeConfig } from './runtime-config.js';
 import { resolveEffectiveGatewayPort } from './host.js';
-import { isGatewayStrictSecurityEnabled } from './auth-rate-limit.js';
+import { buckets, isGatewayStrictSecurityEnabled } from './rate-limit/index.js';
 import { prewarmModelRegistry } from '../providers/index.js';
 import { createLogger, getLogDir, getLogStats } from '../utils/logger.js';
 import {
@@ -793,6 +793,9 @@ export class GatewayService {
 
     // Stop cron service
     await this.cronService.stop();
+
+    // Tear down rate-limit cleanup timers so the process can exit cleanly.
+    buckets.destroyAll();
 
     log.debug('Gateway service stopped');
   }

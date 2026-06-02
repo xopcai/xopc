@@ -537,6 +537,13 @@ export const GatewayAuthRateLimitSchema = z
     lockoutMs: z.number().optional(),
     /** Skip rate limiting for loopback client IPs (default true). Remote browser Origin requests never exempt. */
     exemptLoopback: z.boolean().default(true),
+    /**
+     * Coalesce same-client failures arriving within this window into a single
+     * attempt. Absorbs SPA fan-out / SDK auto-retry storms without weakening
+     * brute-force protection (deliberate attackers are still rate-limited to
+     * one effective attempt per window). Set to 0 to disable.
+     */
+    burstCoalesceMs: z.number().int().min(0).default(1000),
   })
   .optional();
 

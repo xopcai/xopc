@@ -51,9 +51,4 @@ export {
   assertSecureGatewayHttpUrl,
   isInsecurePrivateWsAllowed,
 } from './ws-security.js';
-export {
-  isGatewayStrictSecurityEnabled,
-  buildBrowserOriginRateLimitKey,
-  resolveAuthRateLimitTracking,
-  resetAuthRateLimitersForTests,
-} from './auth-rate-limit.js';
+export { isGatewayStrictSecurityEnabled, buckets } from './rate-limit/index.js';
