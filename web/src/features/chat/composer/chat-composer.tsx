@@ -7,28 +7,19 @@ import { ChatPendingFollowUpStack } from '@/features/chat/follow-up/chat-pending
 import { ComposerAttachmentChips } from '@/features/chat/composer/composer-attachment-chips';
 import { ComposerToolbar } from '@/features/chat/composer/composer-toolbar';
 import { wireFollowUpAttachmentsToComposer } from '@/features/chat/composer/follow-up-attachments-wire';
+import { MAX_PENDING_FOLLOW_UPS } from '@/features/chat/follow-up/pending-follow-up.types';
 import type { SessionManager } from '@/features/chat/session/session-manager';
-import type { AtMentionItem } from '@/features/chat/palette/at-mention-api';
-import { recordRecentAtPath } from '@/features/chat/palette/at-mention-recent';
 import { AtMentionPicker } from '@/features/chat/palette/at-mention-picker';
 import { CommandPalette } from '@/features/chat/palette/command-palette';
 import { fetchCommandsCached } from '@/features/chat/palette/command-palette-api';
 import type { PendingFollowUp } from '@/features/chat/follow-up/pending-follow-up.types';
-import type { PaletteItem } from '@/features/chat/palette/command-palette.types';
 import { interpolate, type WireAttachment } from '@/features/chat/composer/composer.types';
 import { useComposerInputHistoryWalk } from '@/features/chat/composer/use-composer-input-history-walk';
 import type { Message } from '@/features/chat/messages/messages.types';
-import { formatFilePathForWire } from '@/features/chat/palette/file-wire-pattern';
-import {
-  browseDirFromQuery,
-  browseParentDir,
-  detectAtRange,
-  useAtMentionPicker,
-} from '@/features/chat/palette/use-at-mention-picker';
-import { useCommandPalette } from '@/features/chat/palette/use-command-palette';
 import { useComposerActions } from '@/features/chat/composer/use-composer-actions';
 import { useComposerAttachments } from '@/features/chat/composer/use-composer-attachments';
 import { useComposerEditor } from '@/features/chat/composer/use-composer-editor';
+import { useComposerPickers } from '@/features/chat/composer/use-composer-pickers';
 import { appendTranscriptToDraft } from '@/features/chat/composer/append-transcript-to-draft';
 import { ComposerVoiceInputBar } from '@/features/chat/composer/composer-voice-input-bar';
 import { useComposerVoiceInput } from '@/features/chat/composer/use-composer-voice-input';
@@ -69,6 +60,8 @@ export const ChatComposer = memo(function ChatComposer({
   onModelChange,
   modelDisabled,
   contextUsageMessages,
+  onChatAgentChange,
+  currentAgentId,
 }: {
   disabled: boolean;
   sending: boolean;
@@ -105,6 +98,10 @@ export const ChatComposer = memo(function ChatComposer({
   onPendingFollowUpReorder: (fromIndex: number, toIndex: number) => void;
   onPendingFollowUpSteer: (id: string) => void;
   steeringFollowUpId: string | null;
+  /** Optional: when provided, `/` palette lists agents and selecting one switches the active agent. */
+  onChatAgentChange?: (agentId: string) => void;
+  /** Active session agent id; the matching agent row in `/` palette gets a "current" badge. */
+  currentAgentId?: string;
 }) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
@@ -142,27 +139,33 @@ export const ChatComposer = memo(function ChatComposer({
       onWireInput: editor.onWireInput,
     });
 
-  const atRangeRaw = useMemo(
-    () => detectAtRange(editor.value, editor.cursor),
-    [editor.value, editor.cursor],
-  );
-  const palette = useCommandPalette(editor.value, editor.cursor, {
-    suppress: atRangeRaw != null,
-    isComposing: editor.isComposing,
-  });
-  const atPicker = useAtMentionPicker(editor.value, editor.cursor, {
-    sessionKey,
-    slashPaletteOpen: palette.open,
-    isComposing: editor.isComposing,
-    precomputedAtRange: atRangeRaw,
-  });
-
-  shouldSyncSelectionRef.current = palette.open || atPicker.open || atRangeRaw != null;
-
-  const composerDraftChars = useMemo(() => editor.value.length, [editor.value]);
-
   const runBusy = sending || streaming;
   busyRef.current = runBusy;
+
+  const pickers = useComposerPickers({
+    sessionKey,
+    editorValue: editor.value,
+    editorCursor: editor.cursor,
+    isComposing: editor.isComposing,
+    runBusy,
+    thinkingLevel,
+    editorRef: editor.editorRef,
+    valueRef: editor.valueRef,
+    resetEditor: editor.resetEditor,
+    clearAttachments: att.clearAttachments,
+    onSend,
+    onUserTextCommitted,
+    onChatAgentChange,
+    onAddPendingFollowUp,
+    onAbort,
+    pendingFollowUpsCount: pendingFollowUps.length,
+    maxPendingFollowUps: MAX_PENDING_FOLLOW_UPS,
+    commandPalettePanelRef,
+  });
+
+  shouldSyncSelectionRef.current = pickers.shouldSyncSelection;
+
+  const composerDraftChars = useMemo(() => editor.value.length, [editor.value]);
 
   const voice = useComposerVoiceInput({
     disabled,
@@ -201,107 +204,6 @@ export const ChatComposer = memo(function ChatComposer({
     clearEditFollowUpRef,
     onUserTextCommitted,
   });
-
-  const replaceRange = (text: string, start: number, end: number, insert: string) =>
-    text.slice(0, start) + insert + text.slice(end);
-
-  const paletteSlashRangeRef = useRef(palette.slashRange);
-  paletteSlashRangeRef.current = palette.slashRange;
-
-  useEffect(() => {
-    if (!palette.open) {
-      return;
-    }
-    const onPointerDown = (e: PointerEvent) => {
-      const t = e.target;
-      if (!(t instanceof Node)) {
-        return;
-      }
-      if (editor.editorRef.current?.contains(t)) {
-        return;
-      }
-      if (commandPalettePanelRef.current?.contains(t)) {
-        return;
-      }
-      if (t instanceof Element && t.closest('[data-slash-palette-tooltip]')) {
-        return;
-      }
-      const range = paletteSlashRangeRef.current;
-      if (!range) {
-        return;
-      }
-      const v = editor.valueRef.current;
-      const next = v.slice(0, range.start) + v.slice(range.end);
-      editor.resetEditor({ nextText: next, caretOffset: range.start });
-    };
-    document.addEventListener('pointerdown', onPointerDown, true);
-    return () => document.removeEventListener('pointerdown', onPointerDown, true);
-  }, [editor.resetEditor, palette.open]);
-
-  const applyPaletteItem = (item: PaletteItem) => {
-    const range = palette.slashRange;
-    if (!range) return;
-    if (item.kind === 'command' && range.start === 0 && busyRef.current) {
-      return;
-    }
-
-    if (item.kind === 'skill') {
-      const insert = `/skill:${item.name} `;
-      const next = replaceRange(editor.valueRef.current, range.start, range.end, insert);
-      const pos = range.start + insert.length;
-      editor.resetEditor({ nextText: next, caretOffset: pos, focus: true });
-      return;
-    }
-
-    if (item.kind === 'command' && range.start !== 0) {
-      return;
-    }
-
-    const accepts = item.acceptsArgs === true;
-    if (!accepts) {
-      const cmd = `/${item.name}`;
-      onSend(cmd, undefined, thinkingLevel);
-      onUserTextCommitted(cmd);
-      att.clearAttachments();
-      editor.resetEditor();
-      return;
-    }
-
-    const insert = `/${item.name} `;
-    const next = replaceRange(editor.valueRef.current, range.start, range.end, insert);
-    const pos = range.start + insert.length;
-    editor.resetEditor({ nextText: next, caretOffset: pos, focus: true });
-  };
-
-  const applyAtMentionItem = (item: AtMentionItem, opts?: { stayOpen?: boolean }) => {
-    const range = atPicker.atRange;
-    if (!range) return;
-    if (item.isBrowseUp) {
-      const dir = browseDirFromQuery(range.query);
-      const parentDir = browseParentDir(dir);
-      const newQuery = parentDir ? `${parentDir}/` : '';
-      const insert = `@${newQuery}`;
-      const next = replaceRange(editor.valueRef.current, range.start, range.end, insert);
-      const pos = range.start + insert.length;
-      editor.resetEditor({ nextText: next, caretOffset: pos, focus: true });
-      return;
-    }
-
-    const path =
-      item.isDirectory && !item.relativePath.endsWith('/') ? `${item.relativePath}/` : item.relativePath;
-
-    const wire = `@file:${formatFilePathForWire(path)}`;
-
-    if (sessionKey && !item.isDirectory) {
-      recordRecentAtPath(sessionKey, path.replace(/\/$/, ''));
-    }
-
-    const suffix = opts?.stayOpen ? ' @' : ' ';
-    const insert = wire + suffix;
-    const next = replaceRange(editor.valueRef.current, range.start, range.end, insert);
-    const pos = range.start + insert.length;
-    editor.resetEditor({ nextText: next, caretOffset: pos, focus: true });
-  };
 
   useLayoutEffect(() => {
     if (!editingFollowUpId) {
@@ -347,11 +249,7 @@ export const ChatComposer = memo(function ChatComposer({
   const kbdRef = useRef({} as ComposerKbdContext);
 
   kbdRef.current = {
-    palette,
-    atPicker,
-    replaceRange,
-    applyPaletteItem,
-    applyAtMentionItem,
+    adapters: pickers.adapters,
     send: actions.send,
     runBusy,
     pendingFollowUpsCount: pendingFollowUps.length,
@@ -362,11 +260,8 @@ export const ChatComposer = memo(function ChatComposer({
     attachmentsLen: att.attachments.length,
     isComposing: editor.isComposing,
     valueRef: editor.valueRef,
-    setValue: editor.setValue,
-    setCursor: editor.setCursor,
     adjustHeight: editor.adjustHeight,
     editorRef: editor.editorRef,
-    resetEditor: editor.resetEditor,
     tryInputHistoryArrow,
   };
 
@@ -444,50 +339,69 @@ export const ChatComposer = memo(function ChatComposer({
           className={cn('relative px-4 pb-0 pt-1', att.attachments.length > 0 && 'pt-2')}
         >
           <AtMentionPicker
-            open={atPicker.open}
+            open={pickers.atPicker.open}
             anchorRef={editor.editorRef}
-            items={atPicker.items}
-            selectedIndex={atPicker.selectedIndex}
-            loading={atPicker.loading}
-            query={atPicker.query}
-            noResults={atPicker.error ?? m.chat.atMention.noResults}
+            items={pickers.atPicker.items}
+            selectedIndex={pickers.atPicker.selectedIndex}
+            loading={pickers.atPicker.loading}
+            query={pickers.atPicker.query}
+            noResults={pickers.atPicker.error ?? m.chat.atMention.noResults}
             sessionKey={sessionKey}
             recentLabel={m.chat.atMention.recentBadge}
             ariaLabel={m.chat.atMention.placeholder}
             shiftHint={m.chat.atMention.shiftHint}
-            onSelectItem={(it, meta) => applyAtMentionItem(it, { stayOpen: meta?.shiftKey === true })}
+            onSelectItem={(it, meta) => pickers.applyAtMention(it, { stayOpen: meta?.shiftKey === true })}
           />
           <CommandPalette
-            open={palette.open}
+            open={pickers.palette.open}
             anchorRef={editor.editorRef}
             panelRef={commandPalettePanelRef}
-            items={palette.loadError ? [] : palette.items}
-            selectedIndex={palette.selectedIndex}
-            noResults={palette.loadError ?? m.chat.commandPalette.noResults}
-            grouped={palette.loadError ? false : palette.grouped}
-            skillRowCount={palette.loadError ? 0 : palette.skillRowCount}
-            query={palette.query}
+            items={pickers.palette.loadError ? [] : pickers.palette.items}
+            selectedIndex={pickers.palette.selectedIndex}
+            noResults={pickers.palette.loadError ?? m.chat.commandPalette.noResults}
+            grouped={pickers.palette.loadError ? false : pickers.palette.grouped}
+            skillRowCount={pickers.palette.loadError ? 0 : pickers.palette.skillRowCount}
+            commandRowCount={pickers.palette.loadError ? 0 : pickers.palette.commandRowCount}
+            query={pickers.palette.query}
             skillsLabel={m.chat.commandPalette.skillsSection}
             commandsLabel={m.chat.commandPalette.commandsSection}
-            groupedHasSkills={palette.loadError ? false : palette.groupedHasSkills}
-            groupedHasCommands={palette.loadError ? false : palette.groupedHasCommands}
+            agentsLabel={m.chat.commandPalette.agentsSection}
+            groupedHasSkills={pickers.palette.loadError ? false : pickers.palette.groupedHasSkills}
+            groupedHasCommands={pickers.palette.loadError ? false : pickers.palette.groupedHasCommands}
+            groupedHasAgents={pickers.palette.loadError ? false : pickers.palette.groupedHasAgents}
             groupedSkillsShowMoreLabel={
-              palette.loadError || !palette.grouped
+              pickers.palette.loadError || !pickers.palette.grouped
                 ? null
-                : palette.groupedSkillsMoreCount > 0
-                  ? interpolate(m.chat.commandPalette.showGroupedMore, { count: palette.groupedSkillsMoreCount })
+                : pickers.palette.groupedSkillsMoreCount > 0
+                  ? interpolate(m.chat.commandPalette.showGroupedMore, { count: pickers.palette.groupedSkillsMoreCount })
                   : null
             }
             groupedCommandsShowMoreLabel={
-              palette.loadError || !palette.grouped
+              pickers.palette.loadError || !pickers.palette.grouped
                 ? null
-                : palette.groupedCommandsMoreCount > 0
-                  ? interpolate(m.chat.commandPalette.showGroupedMore, { count: palette.groupedCommandsMoreCount })
+                : pickers.palette.groupedCommandsMoreCount > 0
+                  ? interpolate(m.chat.commandPalette.showGroupedMore, { count: pickers.palette.groupedCommandsMoreCount })
                   : null
             }
-            onExpandSkills={palette.expandGroupedSkills}
-            onExpandCommands={palette.expandGroupedCommands}
-            onSelectItem={applyPaletteItem}
+            groupedAgentsShowMoreLabel={
+              pickers.palette.loadError || !pickers.palette.grouped
+                ? null
+                : pickers.palette.groupedAgentsMoreCount > 0
+                  ? interpolate(m.chat.commandPalette.showGroupedMore, { count: pickers.palette.groupedAgentsMoreCount })
+                  : null
+            }
+            onExpandSkills={pickers.palette.expandGroupedSkills}
+            onExpandCommands={pickers.palette.expandGroupedCommands}
+            onExpandAgents={pickers.palette.expandGroupedAgents}
+            currentAgentId={currentAgentId}
+            currentBadgeLabel={m.chat.commandPalette.currentBadge}
+            runBusy={runBusy}
+            pendingFollowUpsCount={pendingFollowUps.length}
+            maxPendingFollowUps={MAX_PENDING_FOLLOW_UPS}
+            queueBadgeLabel={m.chat.commandPalette.queueBadge}
+            queueFullBadgeLabel={m.chat.commandPalette.queueFullBadge}
+            queueFullTooltip={m.chat.commandPalette.queueFullTooltip}
+            onSelectItem={pickers.applyPalette}
           />
           {voice.voiceActive ? (
             <ComposerVoiceInputBar

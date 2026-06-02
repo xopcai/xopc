@@ -1,26 +1,23 @@
 import { memo, useRef, type MutableRefObject } from 'react';
 
-import type { AtMentionItem } from '@/features/chat/palette/at-mention-api';
-import type { PaletteItem } from '@/features/chat/palette/command-palette.types';
 import {
   getWireCaretOffset,
   handleComposerBackspace,
   normalizeOrphanComposerDom,
   serializeEditorToWire,
 } from '@/features/chat/composer/composer-editor-wire';
+import {
+  dispatchPickerKey,
+  type PickerKeyAdapter,
+} from '@/features/chat/composer/picker-key-adapter';
 import { showComposerNotification } from '@/features/chat/composer/composer-notifications';
 import { collectClipboardFiles, isComposerAcceptableFile } from '@/features/chat/composer/composer-clipboard';
-import { useAtMentionPicker } from '@/features/chat/palette/use-at-mention-picker';
-import { useCommandPalette } from '@/features/chat/palette/use-command-palette';
 import { syncComposerPlaceholderClass } from '@/features/chat/composer/use-composer-editor';
 import { cn } from '@/lib/cn';
 
-export type ComposerKbdContext = {
-  palette: ReturnType<typeof useCommandPalette>;
-  atPicker: ReturnType<typeof useAtMentionPicker>;
-  replaceRange: (text: string, start: number, end: number, insert: string) => string;
-  applyPaletteItem: (item: PaletteItem) => void;
-  applyAtMentionItem: (item: AtMentionItem, opts?: { stayOpen?: boolean }) => void;
+export interface ComposerKbdContext {
+  /** Picker dispatcher list, in priority order. */
+  adapters: readonly PickerKeyAdapter[];
   send: () => void;
   runBusy: boolean;
   /** Treat like runBusy for Enter: queue rows waiting to flush after the model went idle. */
@@ -32,13 +29,10 @@ export type ComposerKbdContext = {
   attachmentsLen: number;
   isComposing: boolean;
   valueRef: MutableRefObject<string>;
-  setValue: (v: string) => void;
-  setCursor: (c: number) => void;
   adjustHeight: () => void;
   editorRef: MutableRefObject<HTMLDivElement | null>;
-  resetEditor: (opts?: { nextText?: string; caretOffset?: number; focus?: boolean }) => void;
   tryInputHistoryArrow?: (dir: 'up' | 'down') => boolean;
-};
+}
 
 export const ChatComposerInput = memo(function ChatComposerInput({
   editorRef,
@@ -121,71 +115,21 @@ export const ChatComposerInput = memo(function ChatComposerInput({
       }}
       onKeyDown={(e) => {
         const k = kbdRef.current;
+
+        // 1. Pill-aware Backspace (handles single-char deletes that should swallow whole tokens).
         if (e.key === 'Backspace' && !k.isComposing && editorRef.current) {
           if (handleComposerBackspace(editorRef.current)) {
             e.preventDefault();
             return;
           }
         }
-        const { atPicker, palette } = k;
-        if (atPicker.open && atPicker.atRange && !k.isComposing) {
-          if (e.key === 'Escape') {
-            e.preventDefault();
-            const range = atPicker.atRange;
-            const v = k.valueRef.current;
-            const next = k.replaceRange(v, range.start, range.end, '');
-            k.resetEditor({ nextText: next, caretOffset: range.start, focus: true });
-            return;
-          }
-          if (atPicker.items.length > 0) {
-            if (e.key === 'ArrowDown') {
-              e.preventDefault();
-              atPicker.onNavigate('down');
-              return;
-            }
-            if (e.key === 'ArrowUp') {
-              e.preventDefault();
-              atPicker.onNavigate('up');
-              return;
-            }
-            if (e.key === 'Enter' || e.key === 'Tab') {
-              e.preventDefault();
-              const item = atPicker.items[atPicker.selectedIndex];
-              if (item) k.applyAtMentionItem(item, { stayOpen: e.shiftKey });
-              return;
-            }
-          }
+
+        // 2. Picker dispatch (at-mention takes priority, then slash palette).
+        if (dispatchPickerKey(k.adapters, e)) {
+          return;
         }
-        if (palette.open && !k.isComposing) {
-          if (palette.items.length > 0) {
-            if (e.key === 'ArrowDown') {
-              e.preventDefault();
-              palette.onNavigate('down');
-              return;
-            }
-            if (e.key === 'ArrowUp') {
-              e.preventDefault();
-              palette.onNavigate('up');
-              return;
-            }
-            if ((e.key === 'Enter' || e.key === 'Tab') && !e.shiftKey) {
-              e.preventDefault();
-              const item = palette.items[palette.selectedIndex];
-              if (item) k.applyPaletteItem(item);
-              return;
-            }
-          }
-          if (e.key === 'Escape') {
-            e.preventDefault();
-            const range = palette.slashRange;
-            if (range) {
-              const v = k.valueRef.current;
-              const next = k.replaceRange(v, range.start, range.end, '');
-              k.resetEditor({ nextText: next, caretOffset: range.start, focus: true });
-            }
-            return;
-          }
-        }
+
+        // 3. Input history walk (only when no picker open — adapters above already returned).
         if (!k.isComposing && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
           const dir = e.key === 'ArrowUp' ? 'up' : 'down';
           if (k.tryInputHistoryArrow?.(dir)) {
@@ -194,16 +138,22 @@ export const ChatComposerInput = memo(function ChatComposerInput({
             return;
           }
         }
+
+        // 4. Cancel editing of a queued follow-up.
         if (e.key === 'Escape' && !k.isComposing && k.editingFollowUpId) {
           e.preventDefault();
           k.onCancelEditFollowUp?.();
           return;
         }
+
+        // 5. Newline.
         if (e.key === 'Enter' && e.shiftKey && !k.isComposing) {
           e.preventDefault();
           document.execCommand('insertText', false, '\n');
           return;
         }
+
+        // 6. Send / steer / interrupt.
         const nativeComposing =
           typeof KeyboardEvent !== 'undefined' &&
           e.nativeEvent instanceof KeyboardEvent &&

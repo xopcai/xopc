@@ -1,6 +1,8 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 
+import { fetchChatAgents } from '@/features/chat/agent-selection/chat-agents-api';
 import { listSkillNamesInWire } from '@/features/chat/composer/composer-editor-wire';
+import { ABORT_CLASS_NAMES } from '@/features/chat/composer/palette-item-handlers';
 import { fetchCommandsCached, getSkillsCached } from '@/features/chat/palette/command-palette-api';
 import { useLocaleStore } from '@/stores/locale-store';
 import type { PaletteItem, SlashRange } from '@/features/chat/palette/command-palette.types';
@@ -10,6 +12,52 @@ import { useAsyncResource } from '@/lib/use-async-resource';
 
 /** Same boundary as `@file:` wire tokens (quoted or unquoted); path `/` is not slash-palette. */
 const AT_FILE_TOKEN_AT_INDEX = new RegExp(`^@file:${FILE_WIRE_TAIL_BODY}`, 'u');
+
+function isAbortClassCommand(item: PaletteItem): boolean {
+  if (item.kind !== 'command') return false;
+  if (ABORT_CLASS_NAMES.has(item.name.toLowerCase())) return true;
+  for (const alias of item.aliases ?? []) {
+    if (ABORT_CLASS_NAMES.has(alias.toLowerCase())) return true;
+  }
+  return false;
+}
+
+/**
+ * UI-side disabled check for palette rows. Mirrors the runtime guard inside
+ * `applyCommandItem`; returning `true` means: render the row greyed-out, do not
+ * select on click, and have the keyboard adapter consume Enter without action.
+ *
+ * Disabled iff: command, `acceptsArgs=false`, non-abort, in stream-like state,
+ * AND the follow-up queue is full. Other states stay actionable (queue available
+ * → queue badge; abort → fires `onAbort`; args=true → just inserts text).
+ */
+export function commandRowDisabled(
+  item: PaletteItem,
+  ctx: { runBusy: boolean; pendingFollowUpsCount: number; maxPendingFollowUps: number },
+): boolean {
+  if (item.kind !== 'command') return false;
+  if (item.acceptsArgs === true) return false;
+  if (isAbortClassCommand(item)) return false;
+  const streamLike = ctx.runBusy || ctx.pendingFollowUpsCount > 0;
+  if (!streamLike) return false;
+  return ctx.pendingFollowUpsCount >= ctx.maxPendingFollowUps;
+}
+
+/**
+ * Whether the row should display the "queued" badge (non-disabled, but selecting
+ * will route through `onAddPendingFollowUp` rather than `onSend`).
+ */
+export function commandRowWillQueue(
+  item: PaletteItem,
+  ctx: { runBusy: boolean; pendingFollowUpsCount: number; maxPendingFollowUps: number },
+): boolean {
+  if (item.kind !== 'command') return false;
+  if (item.acceptsArgs === true) return false;
+  if (isAbortClassCommand(item)) return false;
+  const streamLike = ctx.runBusy || ctx.pendingFollowUpsCount > 0;
+  if (!streamLike) return false;
+  return ctx.pendingFollowUpsCount < ctx.maxPendingFollowUps;
+}
 
 function atFileTokenSpanContainingIndex(text: string, index: number): { start: number; end: number } | null {
   let from = 0;
@@ -151,6 +199,7 @@ export function useCommandPalette(
   /** Grouped (empty) palette: each section can expand independently after "Show N more". */
   const [groupedSkillsExpanded, setGroupedSkillsExpanded] = useState(false);
   const [groupedCommandsExpanded, setGroupedCommandsExpanded] = useState(false);
+  const [groupedAgentsExpanded, setGroupedAgentsExpanded] = useState(false);
   const language = useLocaleStore((s) => s.language);
 
   const slashRange = useMemo(
@@ -159,14 +208,22 @@ export function useCommandPalette(
   );
   const paletteActive = Boolean(slashRange && !options?.suppress);
 
-  if (!paletteActive && (groupedSkillsExpanded || groupedCommandsExpanded)) {
+  if (
+    !paletteActive &&
+    (groupedSkillsExpanded || groupedCommandsExpanded || groupedAgentsExpanded)
+  ) {
     setGroupedSkillsExpanded(false);
     setGroupedCommandsExpanded(false);
+    setGroupedAgentsExpanded(false);
   }
 
   const itemsResource = useAsyncResource(
     async () => {
-      const [commands, skillsPayload] = await Promise.all([fetchCommandsCached(), getSkillsCached(language)]);
+      const [commands, skillsPayload, agentsPayload] = await Promise.all([
+        fetchCommandsCached(),
+        getSkillsCached(language),
+        fetchChatAgents().catch(() => null),
+      ]);
       const commandItems: PaletteItem[] = commands.map((c) => ({
         kind: 'command' as const,
         id: `cmd:${c.id}`,
@@ -189,7 +246,20 @@ export function useCommandPalette(
           },
         ];
       });
-      return [...skillItems, ...commandItems];
+      // Agents: only when there is more than one (matches header `showChatAgentSelector`).
+      const agentItems: PaletteItem[] =
+        agentsPayload && agentsPayload.items.length > 1
+          ? agentsPayload.items.map((a) => ({
+              kind: 'agent' as const,
+              id: `agent:${a.id}`,
+              name: a.id,
+              description: a.description ?? '',
+              category: 'agent',
+              ...(a.avatar ? { avatar: a.avatar } : {}),
+              ...(a.name ? { aliases: [a.name] } : {}),
+            }))
+          : [];
+      return [...skillItems, ...commandItems, ...agentItems];
     },
     [language],
     { enabled: paletteActive, initial: [] as PaletteItem[], errorData: [] },
@@ -205,12 +275,15 @@ export function useCommandPalette(
 
   /** Slash commands only run when the token is at the start of the composer (`/new`). */
   const commandsAllowed = slashRange !== null && slashRange.start === 0;
+  /** Agents are sentence-level switches; only meaningful at the start of the composer. */
+  const agentsAllowed = commandsAllowed;
 
   const qTrim = query.trim();
   const grouped = qTrim === '';
 
   const effectiveGroupedSkillsExpanded = paletteActive && grouped && groupedSkillsExpanded;
   const effectiveGroupedCommandsExpanded = paletteActive && grouped && groupedCommandsExpanded;
+  const effectiveGroupedAgentsExpanded = paletteActive && grouped && groupedAgentsExpanded;
 
   const expandGroupedSkills = useCallback(() => {
     setGroupedSkillsExpanded(true);
@@ -218,20 +291,29 @@ export function useCommandPalette(
   const expandGroupedCommands = useCallback(() => {
     setGroupedCommandsExpanded(true);
   }, []);
+  const expandGroupedAgents = useCallback(() => {
+    setGroupedAgentsExpanded(true);
+  }, []);
 
   const {
     items,
     skillRowCount,
+    commandRowCount,
     groupedHasSkills,
     groupedHasCommands,
+    groupedHasAgents,
     groupedSkillsMoreCount,
     groupedCommandsMoreCount,
+    groupedAgentsMoreCount,
   } = useMemo(() => {
     const alreadyPicked = listSkillNamesInWire(value);
     const scored: Array<{ item: PaletteItem; rank: number }> = [];
 
     for (const item of allItems) {
       if (item.kind === 'command' && !commandsAllowed) {
+        continue;
+      }
+      if (item.kind === 'agent' && !agentsAllowed) {
         continue;
       }
       if (item.kind === 'skill' && alreadyPicked.has(item.name)) {
@@ -245,43 +327,44 @@ export function useCommandPalette(
     }
 
     if (grouped) {
-      const skills = scored
-        .filter((s) => s.item.kind === 'skill')
-        .sort((a, b) => {
-          const t = paletteDefaultTiebreak(a.item, b.item);
-          if (t !== 0) return t;
-          return a.item.id.localeCompare(b.item.id);
-        })
-        .map((s) => s.item);
-      const commands = scored
-        .filter((s) => s.item.kind === 'command')
-        .sort((a, b) => {
-          const t = paletteDefaultTiebreak(a.item, b.item);
-          if (t !== 0) return t;
-          return a.item.id.localeCompare(b.item.id);
-        })
-        .map((s) => s.item);
-      const hasSkills = skills.length > 0;
-      const hasCommands = commands.length > 0;
+      const sortByDefault = (a: { item: PaletteItem }, b: { item: PaletteItem }) => {
+        const t = paletteDefaultTiebreak(a.item, b.item);
+        if (t !== 0) return t;
+        return a.item.id.localeCompare(b.item.id);
+      };
+      const skills = scored.filter((s) => s.item.kind === 'skill').sort(sortByDefault).map((s) => s.item);
+      const commands = scored.filter((s) => s.item.kind === 'command').sort(sortByDefault).map((s) => s.item);
+      const agents = scored.filter((s) => s.item.kind === 'agent').sort(sortByDefault).map((s) => s.item);
+
       const visSkills = effectiveGroupedSkillsExpanded
         ? skills
         : skills.slice(0, GROUPED_INITIAL_PER_SECTION);
       const visCommands = effectiveGroupedCommandsExpanded
         ? commands
         : commands.slice(0, GROUPED_INITIAL_PER_SECTION);
+      const visAgents = effectiveGroupedAgentsExpanded
+        ? agents
+        : agents.slice(0, GROUPED_INITIAL_PER_SECTION);
+
       const moreSkills = !effectiveGroupedSkillsExpanded
         ? Math.max(0, skills.length - GROUPED_INITIAL_PER_SECTION)
         : 0;
       const moreCommands = !effectiveGroupedCommandsExpanded
         ? Math.max(0, commands.length - GROUPED_INITIAL_PER_SECTION)
         : 0;
+      const moreAgents = !effectiveGroupedAgentsExpanded
+        ? Math.max(0, agents.length - GROUPED_INITIAL_PER_SECTION)
+        : 0;
       return {
-        items: [...visSkills, ...visCommands],
+        items: [...visSkills, ...visCommands, ...visAgents],
         skillRowCount: visSkills.length,
-        groupedHasSkills: hasSkills,
-        groupedHasCommands: hasCommands,
+        commandRowCount: visCommands.length,
+        groupedHasSkills: skills.length > 0,
+        groupedHasCommands: commands.length > 0,
+        groupedHasAgents: agents.length > 0,
         groupedSkillsMoreCount: moreSkills,
         groupedCommandsMoreCount: moreCommands,
+        groupedAgentsMoreCount: moreAgents,
       };
     }
 
@@ -299,17 +382,22 @@ export function useCommandPalette(
     return {
       items: scored.slice(0, MAX_FLAT_PALETTE_ITEMS).map((s) => s.item),
       skillRowCount: 0,
+      commandRowCount: 0,
       groupedHasSkills: false,
       groupedHasCommands: false,
+      groupedHasAgents: false,
       groupedSkillsMoreCount: 0,
       groupedCommandsMoreCount: 0,
+      groupedAgentsMoreCount: 0,
     };
   }, [
     allItems,
     commandsAllowed,
+    agentsAllowed,
     grouped,
     effectiveGroupedCommandsExpanded,
     effectiveGroupedSkillsExpanded,
+    effectiveGroupedAgentsExpanded,
     query,
     value,
   ]);
@@ -340,17 +428,24 @@ export function useCommandPalette(
     slashRange,
     /** False when `/` is not at position 0 - palette may still list skills. */
     commandsAllowed,
-    /** `true` when the slash token has no filter text: show Skills / Commands sections. */
+    /** False when `/` is not at position 0 - agents are sentence-level switches. */
+    agentsAllowed,
+    /** `true` when the slash token has no filter text: show Skills / Commands / Agents sections. */
     grouped,
-    /** In grouped mode, number of leading rows that belong to Skills (rest are Commands). */
+    /** In grouped mode, number of leading rows that belong to Skills. */
     skillRowCount,
+    /** In grouped mode, number of rows after Skills that belong to Commands. Agents follow. */
+    commandRowCount,
     /** In grouped mode, whether the full (untruncated) lists include each kind. */
     groupedHasSkills,
     groupedHasCommands,
+    groupedHasAgents,
     /** Hidden skill rows in that section when the section is collapsed. */
     groupedSkillsMoreCount,
     /** Hidden command rows in that section when the section is collapsed. */
     groupedCommandsMoreCount,
+    /** Hidden agent rows in that section when the section is collapsed. */
+    groupedAgentsMoreCount,
     items,
     selectedIndex: resolvedSelectedIndex,
     query,
@@ -359,5 +454,6 @@ export function useCommandPalette(
     setSelectedIndex,
     expandGroupedSkills,
     expandGroupedCommands,
+    expandGroupedAgents,
   };
 }

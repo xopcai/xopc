@@ -24,7 +24,7 @@ const COMMAND_WEIGHT: Readonly<Record<string, number>> = {
 
 const DEFER_COMMANDS = new Set(['abort', 'archive']);
 
-/** 0 = curated command, 1 = skills + everything else, 2 = defer */
+/** 0 = curated command, 1 = skills + agents + everything else, 2 = defer */
 function paletteTier(item: PaletteItem): number {
   if (item.kind === 'command') {
     const n = item.name.toLowerCase();

@@ -190,7 +190,7 @@ export function ChatPage() {
         showChatAgentSelector={agents.showChatAgentSelector}
         chatAgentId={agents.displayAgentId}
         onChatAgentChange={agents.onChatAgentChange}
-        chatAgentDisabled={session.showSessionLoading || session.sessionRoutePending || stream.streaming}
+        chatAgentDisabled={session.showSessionLoading || session.sessionRoutePending}
       />
 
       <div className="relative mx-auto flex min-h-0 w-full max-w-[var(--max-width-chat)] flex-1 flex-col">
@@ -299,6 +299,10 @@ export function ChatPage() {
                   session.showSessionLoading || session.sessionRoutePending || stream.streaming
                 }
                 contextUsageMessages={msgSlice.items}
+                onChatAgentChange={
+                  agents.showChatAgentSelector ? agents.onChatAgentChange : undefined
+                }
+                currentAgentId={agents.displayAgentId}
               />
             </div>
           </div>
