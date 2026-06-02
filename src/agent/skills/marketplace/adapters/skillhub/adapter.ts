@@ -144,8 +144,8 @@ interface LightmakeSearchHit {
   score?: number;
   updatedAt?: number;
   updated_at?: number;
-  /** Origin registry — Lightmake mixes ClawHub rows in, but their detail/download endpoints
-   *  are not reachable from the SkillHub adapter, so we filter them out here. */
+  /** Origin registry label from Lightmake (e.g. clawhub, community). Detail/download still go
+   *  through api.skillhub.cn for synced skills. */
   source?: string;
 }
 
@@ -481,7 +481,7 @@ function lightmakeHitToPackageItem(hit: LightmakeSearchHit): PackageListItem {
     updatedAt: String(updated),
     categories: cat ? [cat] : [],
     stars: typeof hit.stars === 'number' ? hit.stars : undefined,
-    sourceLabel: 'Lightmake',
+    sourceLabel: sourceLabelFromSkillSource(hit.source) ?? 'Lightmake',
   };
 }
 
@@ -504,10 +504,6 @@ async function searchSkillHubLightmake(urls: EcosystemUrls, query: string, limit
       const hit = item as LightmakeSearchHit;
       const slug = String(hit.slug ?? '').trim();
       if (!slug) continue;
-      // Skip rows that belong to a different registry — Lightmake aggregates ClawHub items
-      // but our detail/download paths can't resolve them, which manifests as "搜得到、点不开".
-      const src = hit.source?.trim().toLowerCase();
-      if (src && src !== 'skillhub' && src !== 'lightmake') continue;
       out.push(lightmakeHitToPackageItem(hit));
     }
     return out;
