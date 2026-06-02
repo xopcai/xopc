@@ -287,10 +287,7 @@ This will:
 | `gateway restart` | Restart gateway |
 | `gateway logs` | View gateway logs |
 | `gateway token` | View/generate auth token |
-| `gateway install` | Install as system service |
-| `gateway uninstall` | Remove system service |
-| `gateway service-start` | Start via system service |
-| `gateway service-status` | Check service status |
+| `gateway service` | Install/start/stop OS service (`install`, `start`, `stop`, `restart`, `uninstall`) |
 
 **Examples:**
 
@@ -300,9 +297,6 @@ xopc gateway status
 
 # Stop gateway (graceful)
 xopc gateway stop
-
-# Force stop
-xopc gateway stop --force
 
 # Restart gateway
 xopc gateway restart
@@ -316,11 +310,9 @@ xopc gateway logs --follow
 # Generate new token
 xopc gateway token --generate
 
-# Install as system service
-xopc gateway install
-
-# Uninstall system service
-xopc gateway uninstall
+# Install and start as system service
+xopc gateway service install
+xopc gateway service start
 ```
 
 ---
