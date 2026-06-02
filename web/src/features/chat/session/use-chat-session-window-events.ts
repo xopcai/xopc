@@ -18,11 +18,14 @@ export function useChatSessionWindowEvents(opts: {
   streamingRef: MutableRefObject<boolean>;
   sessionMgrRef: MutableRefObject<SessionManager>;
   loadSessionById: (key: string, offset: number) => Promise<unknown>;
-  applyAgentConfig: (cfg: {
-    model: string;
-    thinkingLevel?: string | null;
-    reasoningLevel?: string | null;
-  }) => void;
+  applyAgentConfig: (
+    sessionKey: string,
+    cfg: {
+      model: string;
+      thinkingLevel?: string | null;
+      reasoningLevel?: string | null;
+    },
+  ) => void;
 }): void {
   const {
     sessionKey,
@@ -61,7 +64,7 @@ export function useChatSessionWindowEvents(opts: {
       void sessionMgrRef.current
         .loadSessionAgentConfig(key)
         .then((cfg) => {
-          applyAgentConfig(cfg);
+          applyAgentConfig(key, cfg);
         })
         .catch(() => {});
     };

@@ -25,11 +25,14 @@ export function useChatSessionInit(opts: {
   tryResumeAgentRun: (key: string, seed: Message[]) => Promise<void>;
   restoreLiveCacheIfNeeded: (key: string) => boolean;
   adoptEmptySession: (key: string, name: string | null) => void;
-  applyAgentConfig: (cfg: {
-    model: string;
-    thinkingLevel?: string | null;
-    reasoningLevel?: string | null;
-  }) => void;
+  applyAgentConfig: (
+    sessionKey: string,
+    cfg: {
+      model: string;
+      thinkingLevel?: string | null;
+      reasoningLevel?: string | null;
+    },
+  ) => void;
   patchInitUi: (patch: { loading?: boolean; error?: string | null }) => void;
 }): void {
   const {
@@ -66,7 +69,7 @@ export function useChatSessionInit(opts: {
         .loadSessionAgentConfig(key)
         .then((cfg) => {
           if (!isLive()) return;
-          applyAgentConfig(cfg);
+          applyAgentConfig(key, cfg);
         })
         .catch(() => {
           /* ignore */
@@ -98,6 +101,7 @@ export function useChatSessionInit(opts: {
     const initDecodedKey = (key: string): Promise<void> => {
       if (!isLive()) return Promise.resolve();
       if (takeSkipInitialSessionLoad(key)) {
+        applyResolvedSessionConfig(key);
         return resumeSessionRun(key, getSessionMessages(key));
       }
       return loadSessionById(key, 0).then((loaded) => {

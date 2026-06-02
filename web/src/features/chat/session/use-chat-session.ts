@@ -17,11 +17,11 @@ import {
   isSessionSliceLive,
   useChatSessionStore,
 } from '@/features/chat/session/chat-session-store';
-import { coerceReasoningLevel } from '@/features/chat/messages/messages.types';
 import { hasPendingAgentRunForChat, setPendingAgentRun } from '@/features/chat/messages/message-sender';
 import { userMessageFromSsePayload } from '@/features/chat/messages/user-message-from-sse';
 import type { PendingFollowUp } from '@/features/chat/follow-up/pending-follow-up.types';
 import { SessionManager } from '@/features/chat/session/session-manager';
+import { patchSessionAgentConfigView } from '@/features/chat/session/patch-session-agent-config-view';
 import { resetChatViewState } from '@/features/chat/session/reset-chat-view-state';
 import { useChatFollowUpClarify } from '@/features/chat/session/use-chat-follow-up-clarify';
 import { useChatSessionAgents } from '@/features/chat/session/use-chat-session-agents';
@@ -239,14 +239,11 @@ export function useChatSession() {
   }, [resetVisibleChatShell]);
 
   const applyAgentConfig = useCallback(
-    (cfg: { model: string; thinkingLevel?: string | null; reasoningLevel?: string | null }) => {
-      const key = focusedSessionKeyRef.current;
-      if (!key) return;
-      useChatSessionStore.getState().patchSessionMeta(key, {
-        model: cfg.model,
-        thinkingLevel: cfg.thinkingLevel || DEFAULT_THINKING,
-        reasoningLevel: coerceReasoningLevel(cfg.reasoningLevel ?? undefined),
-      });
+    (
+      sessionKey: string,
+      cfg: { model: string; thinkingLevel?: string | null; reasoningLevel?: string | null },
+    ) => {
+      patchSessionAgentConfigView(sessionKey, cfg);
       void refreshModelThinkingSupport(cfg.model);
     },
     [refreshModelThinkingSupport],
