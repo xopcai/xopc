@@ -748,20 +748,20 @@ Environment variables take priority over config file values.
 ### Validate Configuration
 
 ```bash
+xopc config validate
+# legacy alias:
 xopc config --validate
 ```
 
 ### View Configuration
 
 ```bash
+xopc config show
+# legacy alias:
 xopc config --show
 ```
 
-### Edit Configuration
-
-```bash
-xopc config --edit
-```
+Edit values with `xopc config set` / `xopc config unset`, or open `xopc config path` in your editor.
 
 ---
 

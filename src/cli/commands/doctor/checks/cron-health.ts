@@ -47,7 +47,7 @@ export async function checkCronHealth(ctx: DoctorContext): Promise<CheckResult> 
       label: 'Cron',
       status: 'warn',
       message: 'Cron directory does not exist.',
-      hints: [cronDir, 'Run: xopc init'],
+      hints: [cronDir, 'Run: xopc init (creates cron directory)'],
     };
   }
 

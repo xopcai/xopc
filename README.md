@@ -64,8 +64,10 @@ Both variables are required for `electron:build` on macOS (DMG needs `electron-b
 xopc agent -i                              # classic interactive CLI
 xopc agent -m "Summarize the last 5 commits" # one-shot
 
+xopc init                                  # full ~/.xopc state tree (first install / repair)
 xopc gateway                               # local web server + React console (URL in logs)
 xopc gateway service install               # OS service; xopc gateway stop | status | logs
+xopc profile list                          # optional isolated state profiles
 ```
 
 **From source:**

@@ -74,6 +74,39 @@ xopc setup --workspace ~/my-workspace
 - Creates `~/.xopc/xopc.json` (if not exists)
 - Creates workspace directory with profile Markdown templates
 
+For full state directory layout (agents, cron, logs, profile seeds), use **`xopc init`** instead.
+
+---
+
+## init
+
+Initialize the full xopc state tree (config, `agents/<id>/`, cron, logs, profile Markdown seeds).
+
+```bash
+xopc init
+xopc init --agent-id coder
+xopc init --force
+```
+
+| Option | Description |
+|--------|-------------|
+| `--force` | Re-run initialization steps |
+| `--skip-workspace` | Skip profile Markdown seed files |
+| `--agent-id <id>` | Agent id to initialize (default: `main`) |
+
+---
+
+## profile
+
+Manage isolated state profiles (`~/.xopc` for `default`, `~/.xopc-<name>` otherwise). Switching profiles sets `XOPC_PROFILE` in your shell.
+
+```bash
+xopc profile list
+xopc profile create staging
+xopc profile switch staging
+xopc profile delete staging --force
+```
+
 ---
 
 ## onboard
@@ -111,7 +144,7 @@ xopc onboard --channels
 - Configure LLM provider and model
 - Configure messaging channels (Telegram, Weixin QR via channel menu, …)
 - Apply gateway defaults with auto-generated token when missing
-- At the end (interactive): choose **Terminal UI (embedded)** or **Gateway (background)** or exit
+- At the end (interactive): choose **Terminal UI (embedded)** or **Gateway (OS service)** or exit
 
 ---
 
@@ -262,7 +295,7 @@ The gateway runs in foreground mode by default. Press `Ctrl+C` to stop.
 | `--no-hot-reload` | Disable config hot reload |
 | `--force` | Force kill existing process on port |
 
-For background operation, use **`xopc gateway service install`** (see [Gateway](./gateway.md)).
+For an OS-managed gateway, use **`xopc gateway service install`** (see [Gateway](./gateway.md)).
 
 ### Force Start
 
@@ -364,6 +397,8 @@ xopc cron disable <task-id>
 ### Trigger Task
 
 ```bash
+xopc cron run <task-id>
+# alias:
 xopc cron trigger <task-id>
 ```
 
@@ -596,20 +631,20 @@ View and edit configuration (non-interactive).
 ### Show Configuration
 
 ```bash
+xopc config show
+# legacy alias:
 xopc config --show
 ```
 
 ### Validate Configuration
 
 ```bash
+xopc config validate
+# legacy alias:
 xopc config --validate
 ```
 
-### Edit Configuration
-
-```bash
-xopc config --edit
-```
+Edit values with `xopc config set` / `xopc config unset`, or open the file path from `xopc config path` in your editor.
 
 ---
 

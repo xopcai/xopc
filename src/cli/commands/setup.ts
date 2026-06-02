@@ -12,6 +12,7 @@ function createSetupCommand(ctx: CLIContext): Command {
       formatExamples([
         'xopc setup                    # Create config + workspace',
         'xopc setup --workspace /path  # Custom workspace path',
+        'xopc init                     # Full state dirs + agent profile seeds',
       ])
     )
     .option('--workspace <path>', 'Workspace directory path', ctx.workspacePath)
@@ -53,6 +54,7 @@ function createSetupCommand(ctx: CLIContext): Command {
       console.log('   Workspace:', workspacePath);
 
       console.log('\n🚀 Next Steps:');
+      console.log('   xopc init                 # Full Agent OS dirs (optional, beyond setup)');
       console.log('   xopc onboard              # Run full setup wizard');
       console.log('   xopc onboard --model      # Configure model only');
       console.log('   xopc onboard --channels  # Configure channels only');

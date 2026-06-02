@@ -105,6 +105,16 @@ CLI **未**加载到配置文件时，优先 **`XOPC_WORKSPACE`**（主智能体
 | `XOPC_CREDENTIALS_DIR` | 全局凭据目录 |
 | `XOPC_LOG_DIR` | 日志目录 |
 
+### 状态 Profile（CLI）
+
+使用 **`xopc profile`** 管理独立状态根（`default` 为 `~/.xopc`，其它为 `~/.xopc-<name>`）：
+
+```bash
+xopc profile list
+xopc profile create staging
+xopc profile switch staging   # 输出 export XOPC_PROFILE=staging
+```
+
 ## 另见
 
 - [工作空间模板](reference/templates.md) — 各 Markdown 模板说明

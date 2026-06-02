@@ -157,8 +157,9 @@ Web UI 在网关根路径提供可视化会话管理（hash 路由，会话列�
 ### 访问 UI
 
 ```bash
-# 启动 gateway
-xopc gateway start
+# 安装并启动网关 OS 服务（或前台运行：xopc gateway）
+xopc gateway service install
+xopc gateway service start
 
 # 在浏览器中打开
 open http://localhost:18790/#/sessions

@@ -169,7 +169,9 @@ async function runOnboard(
   console.log('  xopc agent -m "Hello"    # Chat with AI');
   console.log('  xopc agent -i            # Interactive mode');
   console.log('  xopc models list         # List models');
+  console.log('  xopc config validate     # Validate xopc.json');
   console.log('  xopc auth list           # View authentication');
+  console.log('  xopc init                # Full state dirs (if upgrading or missing data)');
 
   console.log('\n📁 Files:');
   console.log('  Config:', configPath);

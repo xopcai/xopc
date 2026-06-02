@@ -64,8 +64,10 @@ macOS 打 DMG 时需要同时设置上述两个镜像；请使用 **electron-bui
 xopc agent -i                    # 经典交互式 CLI
 xopc agent -m "总结最近 5 条提交"  # 只问一句
 
+xopc init                        # 完整 ~/.xopc 状态目录（首次安装 / 修复）
 xopc gateway                     # 本地网页服务 + React 控制台（地址见终端输出）
-xopc gateway service install   # OS service (background); xopc gateway stop | status | logs
+xopc gateway service install     # OS 系统服务；xopc gateway stop | status | logs
+xopc profile list                # 可选：独立状态 Profile
 ```
 
 **从源码开发：**

@@ -43,7 +43,7 @@ export async function checkWorkspaceStatus(ctx: DoctorContext): Promise<CheckRes
       label: 'Workspace',
       status: 'warn',
       message: 'Agent workspace directory is missing.',
-      hints: [root, 'Run: xopc onboard'],
+      hints: [root, 'Run: xopc init or xopc onboard'],
     };
   }
 
@@ -53,7 +53,7 @@ export async function checkWorkspaceStatus(ctx: DoctorContext): Promise<CheckRes
       label: 'Workspace',
       status: 'warn',
       message: 'Agent profile directory is missing.',
-      hints: [profileRoot, 'Run: xopc onboard'],
+      hints: [profileRoot, 'Run: xopc init or xopc onboard'],
     };
   }
 
@@ -67,7 +67,7 @@ export async function checkWorkspaceStatus(ctx: DoctorContext): Promise<CheckRes
       label: 'Workspace',
       status: 'warn',
       message: `Essential profile files missing: ${missing.join(', ')}.`,
-      hints: [profileRoot, root, 'Run: xopc onboard'],
+      hints: [profileRoot, root, 'Run: xopc init or xopc onboard'],
     };
   }
 

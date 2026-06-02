@@ -157,8 +157,9 @@ The Web UI provides a visual interface for session management at the gateway roo
 ### Accessing the UI
 
 ```bash
-# Start the gateway
-xopc gateway start
+# Install and start the gateway OS service (or run foreground: xopc gateway)
+xopc gateway service install
+xopc gateway service start
 
 # Open in browser
 open http://localhost:18790/#/sessions

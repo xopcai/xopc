@@ -742,20 +742,20 @@ xopc 支持环境变量存储敏感数据：
 ### 验证配置
 
 ```bash
+xopc config validate
+# 兼容旧写法：
 xopc config --validate
 ```
 
 ### 查看配置
 
 ```bash
+xopc config show
+# 兼容旧写法：
 xopc config --show
 ```
 
-### 编辑配置
-
-```bash
-xopc config --edit
-```
+使用 `xopc config set` / `xopc config unset` 修改配置，或通过 `xopc config path` 在编辑器中打开文件。
 
 ---
 

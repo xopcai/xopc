@@ -107,6 +107,16 @@ After `xopc init`, profile Markdown for `main` lives under **`~/.xopc/agents/mai
 | `XOPC_CREDENTIALS_DIR` | Global credentials directory |
 | `XOPC_LOG_DIR` | Log file directory |
 
+### State profiles (CLI)
+
+Use **`xopc profile`** to manage separate state roots (`~/.xopc` for `default`, `~/.xopc-<name>` otherwise):
+
+```bash
+xopc profile list
+xopc profile create staging
+xopc profile switch staging   # prints export XOPC_PROFILE=staging
+```
+
 ## See also
 
 - [Workspace templates](reference/templates.md) — what each Markdown file is for

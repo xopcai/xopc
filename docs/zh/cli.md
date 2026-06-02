@@ -79,6 +79,39 @@ xopc setup --workspace ~/my-workspace
 - 创建 `~/.xopc/xopc.json`（如果不存在）
 - 创建工作区目录并在 `agents/<id>/profile/` 生成引导文件（AGENTS.md、BOOTSTRAP.md 等）
 
+完整状态目录（agents、cron、logs 等）请使用 **`xopc init`**。
+
+---
+
+## init
+
+初始化完整 xopc 状态树（配置、`agents/<id>/`、cron、logs、profile Markdown 种子）。
+
+```bash
+xopc init
+xopc init --agent-id coder
+xopc init --force
+```
+
+| 选项 | 描述 |
+|------|------|
+| `--force` | 强制重新初始化 |
+| `--skip-workspace` | 跳过 profile Markdown 种子文件 |
+| `--agent-id <id>` | 要初始化的智能体 id（默认 `main`） |
+
+---
+
+## profile
+
+管理独立状态 Profile（`default` → `~/.xopc`，其它 → `~/.xopc-<name>`）。切换时在 shell 中设置 `XOPC_PROFILE`。
+
+```bash
+xopc profile list
+xopc profile create staging
+xopc profile switch staging
+xopc profile delete staging --force
+```
+
 ---
 
 ## onboard
@@ -119,7 +152,7 @@ xopc onboard --gateway
 - 配置 LLM 服务商和模型
 - 配置消息渠道（Telegram、在渠道菜单中可选 Weixin 扫码等）
 - 应用 Gateway 默认设置（令牌缺失则自动生成）
-- 交互结束前可选择：**终端 UI（本地嵌入）**、**后台启动 Gateway**，或稍后手动启动
+- 交互结束前可选择：**终端 UI（本地嵌入）**、**Gateway（OS 系统服务）**，或稍后手动启动
 
 ---
 
@@ -278,7 +311,7 @@ xopc gateway --port 18790
 | `--no-hot-reload` | 禁用配置热重载 |
 | `--force` | 强制终止端口上的现有进程 |
 
-后台运行请使用 **`xopc gateway service install`**（见 [Gateway](./gateway.md)）。
+后台常驻请使用 **`xopc gateway service install`**（见 [Gateway](./gateway.md)）。
 
 如果端口已被占用，使用 `--force` 自动终止现有进程：
 
@@ -391,6 +424,8 @@ xopc cron disable <task-id>
 ### 触发任务
 
 ```bash
+xopc cron run <task-id>
+# 别名：
 xopc cron trigger <task-id>
 ```
 

@@ -14,9 +14,9 @@ xopc gateway --port 18790
 
 网关默认在前台运行，按 `Ctrl+C` 停止。
 
-### 后台运行
+### OS 系统服务
 
-需要终端立刻返回、网关常驻后台时：
+需要终端立刻返回、网关由系统服务管理时：
 
 ```bash
 xopc gateway service install

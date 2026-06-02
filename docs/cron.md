@@ -58,30 +58,27 @@ xopc cron run <task-id>
 
 ## Execution Modes
 
-### 1. Direct Mode (`main`)
-
-Sends messages directly to the specified channel without AI processing.
+The CLI `cron add` command creates a **system event** job (heartbeat-style message) using flags:
 
 ```bash
-xopc cron add "0 9 * *" "Good morning!" \
-  --name "Morning" \
-  --target main \
-  --channel telegram \
-  --to 123456789
+xopc cron add --schedule "0 9 * * *" --message "Good morning!" --name "Morning"
 ```
 
-### 2. AI Agent Mode (`isolated`)
+Jobs with **channel delivery**, **isolated agent turns**, or richer payloads are managed via the **gateway console** (`#/settings/cron`) or by editing the cron jobs store on disk. See gateway API / agent tools for advanced scheduling.
 
-Uses AI agent to process the message, then sends the response to the channel.
+### Examples (CLI system events)
 
 ```bash
-xopc cron add "0 10 * * *" "What's the weather today?" \
-  --name "Weather" \
-  --target isolated \
-  --model minimax/minimax-m2.5 \
-  --channel telegram \
-  --to 123456789
+# Daily reminder
+xopc cron add --schedule "0 9 * * *" --message "Good morning!" --name "Morning"
+
+# Weekday wrap-up
+xopc cron add --schedule "0 18 * * 1-5" --message "Time to wrap up!" --name "EOD"
 ```
+
+### Advanced jobs (gateway / JSON)
+
+Direct channel sends and isolated agent runs (previously shown with positional `cron add` arguments) are **not** exposed on the CLI yet. Configure them in the web UI or jobs file.
 
 ## Cron Expression Format
 

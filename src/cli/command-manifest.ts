@@ -19,7 +19,9 @@ export const ROOT_HELP_OPTIONS: RootHelpOption[] = [
 ];
 
 export const ROOT_HELP_COMMANDS: RootHelpCommand[] = [
-  { name: 'setup [options]', description: 'Initialize config file and workspace directory' },
+  { name: 'init [options]', description: 'Initialize xopc state directories, config, and agent workspace' },
+  { name: 'setup [options]', description: 'Initialize config file and workspace directory (lighter than init)' },
+  { name: 'profile', description: 'Manage xopc state profiles (~/.xopc vs ~/.xopc-<name>)' },
   { name: 'onboard [options]', description: 'Interactive setup wizard for xopc (gateway uses schema defaults)' },
   { name: 'channels', description: 'Messaging channel login and credentials' },
   { name: 'auth', description: 'Manage authentication credentials' },

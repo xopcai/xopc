@@ -40,7 +40,7 @@ export async function checkConfigHealth(ctx: DoctorContext): Promise<CheckResult
       label: 'Config',
       status: 'fail',
       message: 'Config file not found.',
-      hints: [`Run: xopc init`, `Or: xopc doctor --fix`],
+      hints: [`Run: xopc init (or xopc setup)`, `Or: xopc doctor --fix`],
     };
   }
 
