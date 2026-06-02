@@ -31,6 +31,11 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
     registeredProviders,
     filterLabel,
     inSettingsShell,
+    searchActive,
+    resultTab,
+    setResultTab,
+    aggregatedTabCounts,
+    aggregatedProviderStatus,
   } = vm;
 
   if (!hasToken) {
@@ -198,78 +203,135 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
                 </DropdownMenu.Root>
               ) : null}
               {mainTab === 'marketplace' ? (
-                <>
+                searchActive ? (
                   <div
                     className="inline-flex h-9 shrink-0 rounded-lg border border-edge bg-surface-panel p-0.5 shadow-surface"
-                    role="group"
-                    aria-label={sk.marketplaceBrowseSwitchAria}
+                    role="tablist"
+                    aria-label={sk.marketplaceResultsTabsAria}
                   >
-                    {registeredProviders.map((p) => {
-                      const selected = marketBrowseProvider === p.id;
+                    {(['all', ...registeredProviders.map((rp) => rp.id)] as string[]).map((id) => {
+                      const selected = resultTab === id;
+                      const label =
+                        id === 'all'
+                          ? sk.marketplaceResultsTabAll
+                          : registeredProviders.find((rp) => rp.id === id)?.displayName ?? id;
+                      const count = aggregatedTabCounts[id] ?? 0;
+                      const status = id === 'all' ? null : aggregatedProviderStatus[id];
                       return (
                         <button
-                          key={p.id}
+                          key={id}
                           type="button"
+                          role="tab"
+                          aria-selected={selected}
                           className={cn(
-                            'rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors',
+                            'inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors',
                             interaction.focusRingPanel,
                             selected
                               ? 'bg-fg text-surface-panel dark:bg-fg dark:text-surface-base'
                               : 'text-fg-muted hover:text-fg',
                           )}
-                          aria-pressed={selected}
-                          onClick={() => setMarketBrowseProvider(p.id)}
+                          onClick={() => setResultTab(id)}
+                          title={
+                            status === 'error'
+                              ? `${label} · ${sk.marketplaceLoadFailed}`
+                              : undefined
+                          }
                         >
-                          {p.displayName}
+                          <span>{label}</span>
+                          {status === 'loading' ? (
+                            <span
+                              className={cn(
+                                'inline-block size-1.5 animate-pulse rounded-full motion-reduce:animate-none',
+                                selected ? 'bg-surface-panel/70' : 'bg-fg-muted/60',
+                              )}
+                              aria-hidden
+                            />
+                          ) : status === 'error' ? (
+                            <span
+                              className="inline-block size-1.5 rounded-full bg-red-500"
+                              aria-hidden
+                            />
+                          ) : (
+                            <span className="tabular-nums opacity-70">{count}</span>
+                          )}
                         </button>
                       );
                     })}
                   </div>
-                  <DropdownMenu.Root>
-                    <DropdownMenu.Trigger asChild>
-                      <button
-                        type="button"
-                        className={cn(
-                          'inline-flex h-9 min-h-9 min-w-[9rem] shrink-0 items-center gap-1.5 rounded-lg border border-edge bg-surface-panel px-2.5 text-xs font-medium text-fg shadow-surface',
-                          interaction.transition,
-                          interaction.focusRingPanel,
-                        )}
-                      >
-                        <Funnel className="size-3.5 text-fg-muted" strokeWidth={1.75} aria-hidden />
-                        <span>
-                          {marketSort === 'newest' ? sk.marketplaceSortNewest : sk.marketplaceSortDownloads}
-                        </span>
-                        <ChevronDown className="size-3.5 text-fg-subtle" strokeWidth={1.75} aria-hidden />
-                      </button>
-                    </DropdownMenu.Trigger>
-                    <DropdownMenu.Portal>
-                      <DropdownMenu.Content
-                        className="z-50 min-w-[10rem] rounded-xl border border-edge bg-surface-panel p-1 shadow-popover dark:border-edge"
-                        sideOffset={6}
-                        align="end"
-                      >
-                        <DropdownMenu.Item
+                ) : (
+                  <>
+                    <div
+                      className="inline-flex h-9 shrink-0 rounded-lg border border-edge bg-surface-panel p-0.5 shadow-surface"
+                      role="group"
+                      aria-label={sk.marketplaceBrowseSwitchAria}
+                    >
+                      {registeredProviders.map((p) => {
+                        const selected = marketBrowseProvider === p.id;
+                        return (
+                          <button
+                            key={p.id}
+                            type="button"
+                            className={cn(
+                              'rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors',
+                              interaction.focusRingPanel,
+                              selected
+                                ? 'bg-fg text-surface-panel dark:bg-fg dark:text-surface-base'
+                                : 'text-fg-muted hover:text-fg',
+                            )}
+                            aria-pressed={selected}
+                            onClick={() => setMarketBrowseProvider(p.id)}
+                          >
+                            {p.displayName}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <DropdownMenu.Root>
+                      <DropdownMenu.Trigger asChild>
+                        <button
+                          type="button"
                           className={cn(
-                            'cursor-pointer rounded-lg px-3 py-2 text-sm text-fg outline-none',
-                            'hover:bg-surface-hover data-[highlighted]:bg-surface-hover',
+                            'inline-flex h-9 min-h-9 min-w-[9rem] shrink-0 items-center gap-1.5 rounded-lg border border-edge bg-surface-panel px-2.5 text-xs font-medium text-fg shadow-surface',
+                            interaction.transition,
+                            interaction.focusRingPanel,
                           )}
-                          onSelect={() => setMarketSort('downloads')}
                         >
-                          {sk.marketplaceSortDownloads}
-                        </DropdownMenu.Item>
-                        <DropdownMenu.Item
-                          className={cn(
-                            'cursor-pointer rounded-lg px-3 py-2 text-sm text-fg outline-none',
-                            'hover:bg-surface-hover data-[highlighted]:bg-surface-hover',
-                          )}
-                          onSelect={() => setMarketSort('newest')}
+                          <Funnel className="size-3.5 text-fg-muted" strokeWidth={1.75} aria-hidden />
+                          <span>
+                            {marketSort === 'newest' ? sk.marketplaceSortNewest : sk.marketplaceSortDownloads}
+                          </span>
+                          <ChevronDown className="size-3.5 text-fg-subtle" strokeWidth={1.75} aria-hidden />
+                        </button>
+                      </DropdownMenu.Trigger>
+                      <DropdownMenu.Portal>
+                        <DropdownMenu.Content
+                          className="z-50 min-w-[10rem] rounded-xl border border-edge bg-surface-panel p-1 shadow-popover dark:border-edge"
+                          sideOffset={6}
+                          align="end"
                         >
-                          {sk.marketplaceSortNewest}
-                        </DropdownMenu.Item>
-                      </DropdownMenu.Content>
-                    </DropdownMenu.Portal>
-                  </DropdownMenu.Root>
-                </>
+                          <DropdownMenu.Item
+                            className={cn(
+                              'cursor-pointer rounded-lg px-3 py-2 text-sm text-fg outline-none',
+                              'hover:bg-surface-hover data-[highlighted]:bg-surface-hover',
+                            )}
+                            onSelect={() => setMarketSort('downloads')}
+                          >
+                            {sk.marketplaceSortDownloads}
+                          </DropdownMenu.Item>
+                          <DropdownMenu.Item
+                            className={cn(
+                              'cursor-pointer rounded-lg px-3 py-2 text-sm text-fg outline-none',
+                              'hover:bg-surface-hover data-[highlighted]:bg-surface-hover',
+                            )}
+                            onSelect={() => setMarketSort('newest')}
+                          >
+                            {sk.marketplaceSortNewest}
+                          </DropdownMenu.Item>
+                        </DropdownMenu.Content>
+                      </DropdownMenu.Portal>
+                    </DropdownMenu.Root>
+                  </>
+                )
               ) : null}
               {mainTab === 'builtin' ? <div className="h-9 min-w-[9rem] shrink-0" aria-hidden /> : null}
             </div>
