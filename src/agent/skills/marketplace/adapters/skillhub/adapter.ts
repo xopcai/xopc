@@ -144,6 +144,9 @@ interface LightmakeSearchHit {
   score?: number;
   updatedAt?: number;
   updated_at?: number;
+  /** Origin registry — Lightmake mixes ClawHub rows in, but their detail/download endpoints
+   *  are not reachable from the SkillHub adapter, so we filter them out here. */
+  source?: string;
 }
 
 interface PackageListItem {
@@ -482,7 +485,7 @@ function lightmakeHitToPackageItem(hit: LightmakeSearchHit): PackageListItem {
   };
 }
 
-async function searchSkillHubLightmake(urls: EcosystemUrls, query: string, limit: number, timeoutMs = 8000): Promise<PackageListItem[]> {
+async function searchSkillHubLightmake(urls: EcosystemUrls, query: string, limit: number, timeoutMs = 4000): Promise<PackageListItem[]> {
   const q = query.trim().toLowerCase();
   if (!q) return [];
   const search = new URL(urls.searchUrl);
@@ -498,9 +501,14 @@ async function searchSkillHubLightmake(urls: EcosystemUrls, query: string, limit
     const out: PackageListItem[] = [];
     for (const item of results) {
       if (!item || typeof item !== 'object') continue;
-      const slug = String((item as LightmakeSearchHit).slug ?? '').trim();
+      const hit = item as LightmakeSearchHit;
+      const slug = String(hit.slug ?? '').trim();
       if (!slug) continue;
-      out.push(lightmakeHitToPackageItem(item as LightmakeSearchHit));
+      // Skip rows that belong to a different registry — Lightmake aggregates ClawHub items
+      // but our detail/download paths can't resolve them, which manifests as "搜得到、点不开".
+      const src = hit.source?.trim().toLowerCase();
+      if (src && src !== 'skillhub' && src !== 'lightmake') continue;
+      out.push(lightmakeHitToPackageItem(hit));
     }
     return out;
   } finally { clearTimeout(timer); }
@@ -554,10 +562,16 @@ const curatedByIndexUrl = new Map<string, CacheEntry<CuratedIndex>>();
 let defaultSlugsEntry: CacheEntry<string[]> | undefined;
 let registryCategoriesEntry: CacheEntry<SkillHubRegistryCategoryItem[]> | undefined;
 const batchBySlugsKey = new Map<string, CacheEntry<SkillHubSkillDetail[]>>();
+const lightmakeSearchByQuery = new Map<string, CacheEntry<PackageListItem[]>>();
 
 function evictOldestBatchKey(): void {
   const first = batchBySlugsKey.keys().next().value;
   if (first !== undefined) batchBySlugsKey.delete(first);
+}
+
+function evictOldestSearchKey(): void {
+  const first = lightmakeSearchByQuery.keys().next().value;
+  if (first !== undefined) lightmakeSearchByQuery.delete(first);
 }
 
 function batchSlugsCacheKey(slugs: string[]): string {
@@ -599,6 +613,24 @@ async function cachedBatchGetSkillHubSkills(slugs: string[]): Promise<SkillHubSk
   if (ttl > 0) {
     while (batchBySlugsKey.size >= MAX_BATCH_CACHE_KEYS) evictOldestBatchKey();
     batchBySlugsKey.set(key, { value, expiresAt: Date.now() + ttl });
+  }
+  return value;
+}
+
+async function cachedSearchSkillHubLightmake(
+  urls: EcosystemUrls,
+  query: string,
+  limit: number,
+): Promise<PackageListItem[]> {
+  const q = query.trim().toLowerCase();
+  if (!q) return [];
+  const ttl = cacheTtlMs();
+  const key = `${urls.searchUrl}|${q}|${limit}`;
+  if (ttl > 0) { const hit = getFresh(lightmakeSearchByQuery.get(key)); if (hit) return hit; }
+  const value = await searchSkillHubLightmake(urls, q, limit);
+  if (ttl > 0) {
+    while (lightmakeSearchByQuery.size >= MAX_BATCH_CACHE_KEYS) evictOldestSearchKey();
+    lightmakeSearchByQuery.set(key, { value, expiresAt: Date.now() + ttl });
   }
   return value;
 }
@@ -725,12 +757,18 @@ export const skillHubMarketplaceAdapter: SkillsMarketplaceAdapter = {
       const q = params.q.trim();
       let rows: PackageListItem[] = [];
       try {
-        rows = await searchSkillHubLightmake(ecoUrls, q, 100);
-      } catch { rows = []; }
-      if (rows.length === 0) {
-        const searchResult = await searchSkillHubSkills(q, 200);
-        const details = await cachedBatchGetSkillHubSkills(searchResult.slugs);
-        rows = details.map((d) => convertSkillHubToPackageListItem(d.skill));
+        rows = await cachedSearchSkillHubLightmake(ecoUrls, q, 100);
+      } catch {
+        // Lightmake unavailable — fall back to the registry skillset scan. We do NOT run this
+        // when Lightmake returned zero hits: that would queue ~40 sequential HTTP calls just to
+        // confirm "no results", and the empty state UI is the better answer for the user.
+        try {
+          const searchResult = await searchSkillHubSkills(q, 200);
+          const details = await cachedBatchGetSkillHubSkills(searchResult.slugs);
+          rows = details.map((d) => convertSkillHubToPackageListItem(d.skill));
+        } catch {
+          rows = [];
+        }
       }
       rows = filterByCategory(rows, params.category);
       if (params.sort === 'downloads') rows = [...rows].sort((a, b) => b.downloads - a.downloads);

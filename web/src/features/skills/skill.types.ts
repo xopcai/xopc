@@ -120,6 +120,18 @@ export interface MarketplacePackageItem {
   tags?: string[];
   stars?: number;
   sourceLabel?: string;
+  /**
+   * The marketplace provider id this row originated from. Used by aggregated search to install
+   * / fetch detail from the correct adapter regardless of which provider the user is browsing.
+   * Stamped client-side from the response envelope's top-level `provider` field — the backend
+   * row schema is unchanged.
+   */
+  providerId?: MarketplaceProviderId;
+  /**
+   * Additional providers that returned the same logical package (matched by slug + displayName +
+   * author) during aggregated search. Empty / absent for single-source rows.
+   */
+  additionalSources?: { providerId: MarketplaceProviderId; sourceLabel?: string }[];
 }
 
 export interface SkillsMarketplacePayload {

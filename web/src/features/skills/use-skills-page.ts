@@ -8,6 +8,7 @@ import {
   type DragEvent,
 } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { useDebounce } from 'use-debounce';
 
 import {
   deleteSkill,
@@ -75,6 +76,12 @@ export function useSkillsPage() {
     : 'all';
 
   const [searchQuery, setSearchQuery] = useState(initialSearch);
+  // Debounce the marketplace-bound query so each keystroke doesn't fire a network request,
+  // reset pagination, or rewrite the URL. The local catalog filter still uses the live value
+  // for instant client-side feedback.
+  const [debouncedSearchQueryRaw] = useDebounce(searchQuery, 250);
+  const debouncedSearchQuery = debouncedSearchQueryRaw.trim();
+  const searchActive = debouncedSearchQuery.length > 0;
   const [actionFeedback, setActionFeedback] = useState<{
     kind: 'success' | 'error';
     message: string;
@@ -116,6 +123,27 @@ export function useSkillsPage() {
   const trackedProvidersCurrentRef = useRef<string | null>(null);
   const trackedMarketFilterKeyRef = useRef('');
   const trackedMarketProviderRef = useRef<string | null>(null);
+
+  // ─── Aggregated search state ─────────────────────────────────────────────
+  // When the user types a query we fan out across every registered marketplace provider
+  // concurrently and render each provider's slice as it arrives. The single-provider
+  // mpSkillsResource is gated off in this mode.
+  type AggregatedProviderResult = {
+    status: 'loading' | 'ok' | 'error';
+    rows: MarketplacePackageItem[];
+    error?: string;
+  };
+  const [aggregated, setAggregated] = useState<{
+    query: string;
+    byProvider: Record<string, AggregatedProviderResult>;
+  }>({ query: '', byProvider: {} });
+  const [resultTab, setResultTab] = useState<string>('all');
+  const aggregatedFetchTokenRef = useRef(0);
+  const trackedDebouncedQueryRef = useRef(debouncedSearchQuery);
+  if (trackedDebouncedQueryRef.current !== debouncedSearchQuery) {
+    trackedDebouncedQueryRef.current = debouncedSearchQuery;
+    setResultTab((prev) => (prev === 'all' ? prev : 'all'));
+  }
 
   const catalogResource = useAsyncResource(
     () =>
@@ -206,7 +234,7 @@ export function useSkillsPage() {
     setMarketBrowseProvider((prev) => prev ?? providersResource.data.current);
   }
 
-  const marketFilterKey = `${searchQuery}|${marketSort}|${mainTab}|${marketCategoryId}|${marketBrowseProvider ?? ''}`;
+  const marketFilterKey = `${debouncedSearchQuery}|${marketSort}|${mainTab}|${marketCategoryId}|${marketBrowseProvider ?? ''}|${resultTab}`;
   if (trackedMarketFilterKeyRef.current !== marketFilterKey) {
     trackedMarketFilterKeyRef.current = marketFilterKey;
     setMarketPage(1);
@@ -225,16 +253,26 @@ export function useSkillsPage() {
   const mpSkillsResource = useAsyncResource(
     () =>
       getMarketplaceSkills({
-        q: searchQuery.trim() || undefined,
         page: marketPage,
         pageSize: 20,
         sort: marketSort,
         category: marketCategoryId.trim() || undefined,
         provider: marketBrowseProvider!,
       }),
-    [hasToken, mainTab, marketCategoryId, marketPage, marketSort, searchQuery, marketBrowseProvider],
+    [
+      hasToken,
+      mainTab,
+      marketCategoryId,
+      marketPage,
+      marketSort,
+      searchActive,
+      marketBrowseProvider,
+    ],
     {
-      enabled: hasToken && mainTab === 'marketplace' && Boolean(marketBrowseProvider),
+      // Aggregated search supersedes the single-provider browse fetch — when the user is
+      // searching we fan out via the dedicated effect below.
+      enabled:
+        hasToken && mainTab === 'marketplace' && Boolean(marketBrowseProvider) && !searchActive,
       initial: null as {
         items: MarketplacePackageItem[];
         meta: { page: number; pageSize: number; total: number; totalPages: number };
@@ -243,6 +281,84 @@ export function useSkillsPage() {
       errorData: null,
     },
   );
+
+  useEffect(() => {
+    if (!hasToken || !searchActive || mainTab !== 'marketplace') return;
+    if (registeredProviders.length === 0) return;
+    const token = ++aggregatedFetchTokenRef.current;
+    const initialMap: Record<string, AggregatedProviderResult> = {};
+    for (const p of registeredProviders) initialMap[p.id] = { status: 'loading', rows: [] };
+    setAggregated({ query: debouncedSearchQuery, byProvider: initialMap });
+
+    // Defensive timeout: a third-party adapter that hangs would otherwise pin its result tab
+    // on "loading" indefinitely. We fail-fast at 8s and surface as a tab-level error; other
+    // providers' results stay visible. Cleanup cancels controllers when the deps change.
+    const ADAPTER_TIMEOUT_MS = 8000;
+    const controllers: AbortController[] = [];
+    const timers: number[] = [];
+
+    for (const p of registeredProviders) {
+      const ctrl = new AbortController();
+      controllers.push(ctrl);
+      const timer = window.setTimeout(() => {
+        ctrl.abort(new DOMException('Adapter timed out', 'TimeoutError'));
+      }, ADAPTER_TIMEOUT_MS);
+      timers.push(timer);
+
+      void getMarketplaceSkills({
+        provider: p.id,
+        q: debouncedSearchQuery,
+        page: 1,
+        // Pull a richer slice per provider so round-robin merge has room to interleave.
+        pageSize: 40,
+        sort: marketSort,
+        signal: ctrl.signal,
+      })
+        .then((payload) => {
+          window.clearTimeout(timer);
+          if (token !== aggregatedFetchTokenRef.current) return;
+          const rows = payload.items.map((row) => ({ ...row, providerId: p.id }));
+          setAggregated((prev) => ({
+            ...prev,
+            byProvider: { ...prev.byProvider, [p.id]: { status: 'ok', rows } },
+          }));
+        })
+        .catch((err: unknown) => {
+          window.clearTimeout(timer);
+          // Stale result (debounce/typed-again or unmount): cleanup ran and bumped the token
+          // before this catch landed, so don't smear the in-flight state with an abort error.
+          if (token !== aggregatedFetchTokenRef.current) return;
+          const isTimeout =
+            err instanceof DOMException &&
+            (err.name === 'TimeoutError' || err.name === 'AbortError');
+          const message = isTimeout
+            ? sk.marketplaceLoadFailed
+            : err instanceof Error
+              ? err.message
+              : sk.marketplaceLoadFailed;
+          setAggregated((prev) => ({
+            ...prev,
+            byProvider: {
+              ...prev.byProvider,
+              [p.id]: { status: 'error', rows: [], error: message },
+            },
+          }));
+        });
+    }
+
+    return () => {
+      for (const t of timers) window.clearTimeout(t);
+      for (const c of controllers) c.abort();
+    };
+  }, [
+    hasToken,
+    mainTab,
+    searchActive,
+    debouncedSearchQuery,
+    registeredProviders,
+    marketSort,
+    sk.marketplaceLoadFailed,
+  ]);
 
   const mpCategoriesResource = useAsyncResource(
     () => getMarketplaceCategories({ provider: marketBrowseProvider! }).then((r) => r.items),
@@ -254,10 +370,120 @@ export function useSkillsPage() {
     },
   );
 
-  const mpPayload = mainTab === 'marketplace' ? mpSkillsResource.data : null;
-  const mpLoading = mainTab === 'marketplace' ? mpSkillsResource.loading : false;
-  const mpError =
-    mpSkillsResource.error instanceof Error
+  // Round-robin merge each provider's slice, then dedup by (slug, displayName, author).
+  // Stable: providers iterate in registration order, first hit wins, subsequent hits add to
+  // additionalSources. The merge re-runs whenever any provider settles, so the list grows
+  // incrementally as fan-out completes.
+  const aggregatedAllRows = useMemo<MarketplacePackageItem[]>(() => {
+    if (!searchActive) return [];
+    const queues = registeredProviders.map((p) => ({
+      id: p.id,
+      rows: [...(aggregated.byProvider[p.id]?.rows ?? [])],
+    }));
+    const interleaved: MarketplacePackageItem[] = [];
+    while (queues.some((q) => q.rows.length > 0)) {
+      for (const q of queues) {
+        if (q.rows.length > 0) interleaved.push(q.rows.shift()!);
+      }
+    }
+    const seen = new Map<string, MarketplacePackageItem>();
+    for (const row of interleaved) {
+      const key = [
+        (row.id ?? '').toLowerCase().trim(),
+        (row.name ?? '').toLowerCase().trim(),
+        (row.author?.username ?? '').toLowerCase().trim(),
+      ].join('|');
+      const existing = seen.get(key);
+      if (!existing) {
+        seen.set(key, { ...row, additionalSources: [] });
+        continue;
+      }
+      if (row.providerId && row.providerId !== existing.providerId) {
+        const list = existing.additionalSources ?? [];
+        if (!list.some((s) => s.providerId === row.providerId)) {
+          list.push({ providerId: row.providerId, sourceLabel: row.sourceLabel });
+          existing.additionalSources = list;
+        }
+      }
+    }
+    return Array.from(seen.values());
+  }, [searchActive, aggregated, registeredProviders]);
+
+  const aggregatedTabCounts = useMemo<Record<string, number>>(() => {
+    if (!searchActive) return {};
+    const out: Record<string, number> = { all: aggregatedAllRows.length };
+    for (const p of registeredProviders) {
+      out[p.id] = aggregatedAllRows.filter(
+        (r) =>
+          r.providerId === p.id ||
+          (r.additionalSources ?? []).some((s) => s.providerId === p.id),
+      ).length;
+    }
+    return out;
+  }, [searchActive, aggregatedAllRows, registeredProviders]);
+
+  const aggregatedFilteredRows = useMemo(() => {
+    if (!searchActive) return [] as MarketplacePackageItem[];
+    if (resultTab === 'all') return aggregatedAllRows;
+    return aggregatedAllRows.filter(
+      (r) =>
+        r.providerId === resultTab ||
+        (r.additionalSources ?? []).some((s) => s.providerId === resultTab),
+    );
+  }, [searchActive, aggregatedAllRows, resultTab]);
+
+  const aggregatedProviderStatus = useMemo<Record<string, AggregatedProviderResult['status']>>(
+    () => {
+      if (!searchActive) return {};
+      const out: Record<string, AggregatedProviderResult['status']> = {};
+      for (const p of registeredProviders) {
+        out[p.id] = aggregated.byProvider[p.id]?.status ?? 'loading';
+      }
+      return out;
+    },
+    [searchActive, aggregated, registeredProviders],
+  );
+
+  const aggregatedAnyLoading = useMemo(
+    () => Object.values(aggregatedProviderStatus).some((s) => s === 'loading'),
+    [aggregatedProviderStatus],
+  );
+
+  const aggregatedAllFailed = useMemo(() => {
+    if (!searchActive) return false;
+    const states = Object.values(aggregatedProviderStatus);
+    return states.length > 0 && states.every((s) => s === 'error');
+  }, [searchActive, aggregatedProviderStatus]);
+
+  const aggregatedPayload = useMemo(() => {
+    if (!searchActive) return null;
+    // Initial fan-out: nothing has arrived yet. Render skeletons (null payload).
+    if (aggregatedAllRows.length === 0 && aggregatedAnyLoading) return null;
+    const pageSize = 20;
+    const total = aggregatedFilteredRows.length;
+    const start = (marketPage - 1) * pageSize;
+    const items = aggregatedFilteredRows.slice(start, start + pageSize);
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    return { items, meta: { page: marketPage, pageSize, total, totalPages }, provider: resultTab };
+  }, [searchActive, aggregatedAllRows, aggregatedAnyLoading, aggregatedFilteredRows, marketPage, resultTab]);
+
+  const mpPayload =
+    mainTab === 'marketplace'
+      ? searchActive
+        ? aggregatedPayload
+        : mpSkillsResource.data
+      : null;
+  const mpLoading =
+    mainTab === 'marketplace'
+      ? searchActive
+        ? aggregatedAnyLoading
+        : mpSkillsResource.loading
+      : false;
+  const mpError = searchActive
+    ? aggregatedAllFailed
+      ? sk.marketplaceLoadFailed
+      : null
+    : mpSkillsResource.error instanceof Error
       ? mpSkillsResource.error.message
       : mpSkillsResource.error
         ? sk.marketplaceLoadFailed
@@ -315,8 +541,7 @@ export function useSkillsPage() {
     setSearchParams(
       (prev) => {
         const params = new URLSearchParams(prev);
-        const nextQ = searchQuery.trim();
-        if (nextQ) params.set('q', nextQ);
+        if (debouncedSearchQuery) params.set('q', debouncedSearchQuery);
         else params.delete('q');
         if (mainTab !== 'marketplace') params.set('tab', mainTab);
         else params.delete('tab');
@@ -339,7 +564,14 @@ export function useSkillsPage() {
       },
       { replace: true },
     );
-  }, [mainTab, marketCategoryId, marketBrowseProvider, searchQuery, setSearchParams, sourceFilter]);
+  }, [
+    mainTab,
+    marketCategoryId,
+    marketBrowseProvider,
+    debouncedSearchQuery,
+    setSearchParams,
+    sourceFilter,
+  ]);
 
   const showFeedback = useCallback((kind: 'success' | 'error', message: string, durationMs = 5000) => {
     setActionFeedback({ kind, message });
@@ -371,10 +603,10 @@ export function useSkillsPage() {
   );
 
   const openMarketplaceDetail = useCallback(
-    async (packageId: string, listTitle?: string) => {
-      const browse = marketBrowseProvider;
-      if (!browse) return;
-      marketplaceDetailProviderRef.current = browse;
+    async (packageId: string, listTitle?: string, providerOverride?: string | null) => {
+      const provider = providerOverride?.trim() || marketBrowseProvider;
+      if (!provider) return;
+      marketplaceDetailProviderRef.current = provider;
       setDetailSource('store');
       setDetailOpen(true);
       setDetailTitle(listTitle?.trim() || packageId);
@@ -384,7 +616,7 @@ export function useSkillsPage() {
       setDetailError(null);
       setDetailLoading(true);
       try {
-        const pkg = await getMarketplacePackageDetail(packageId, { provider: browse });
+        const pkg = await getMarketplacePackageDetail(packageId, { provider });
         setDetailTitle(pkg.name);
         if (pkg.skillDocPreview) {
           setDetailMarketplacePreview(pkg.skillDocPreview);
@@ -644,7 +876,11 @@ export function useSkillsPage() {
   );
 
   const onUseSkillInChat = useCallback(
-    async (opts?: { name?: string; source?: 'catalog' | 'store' }) => {
+    async (opts?: {
+      name?: string;
+      source?: 'catalog' | 'store';
+      providerOverride?: string | null;
+    }) => {
       const name = (opts?.name ?? detailTitle).trim();
       if (!name) return;
       const source = opts?.source ?? detailSource;
@@ -653,7 +889,10 @@ export function useSkillsPage() {
       setUsingSkillInChatName(name);
       try {
         if (needsMarketInstall) {
-          const mp = marketplaceDetailProviderRef.current ?? marketBrowseProvider;
+          const mp =
+            opts?.providerOverride?.trim() ||
+            marketplaceDetailProviderRef.current ||
+            marketBrowseProvider;
           await installMarketplaceSkill({
             name,
             overwrite: false,
@@ -682,7 +921,10 @@ export function useSkillsPage() {
   );
 
   const onMarketInstall = useCallback(
-    async (name: string, opts?: { useDetailProvider?: boolean }) => {
+    async (
+      name: string,
+      opts?: { useDetailProvider?: boolean; providerOverride?: string | null },
+    ) => {
       const installed = isSkillInstalledByName(name);
       if (installed) {
         const ok = window.confirm(sk.marketplaceReinstallConfirm);
@@ -691,9 +933,11 @@ export function useSkillsPage() {
       setActionFeedback(null);
       setInstallingMarketName(name);
       try {
-        const p = opts?.useDetailProvider
-          ? marketplaceDetailProviderRef.current ?? marketBrowseProvider
-          : marketBrowseProvider;
+        const p =
+          opts?.providerOverride?.trim() ||
+          (opts?.useDetailProvider
+            ? marketplaceDetailProviderRef.current ?? marketBrowseProvider
+            : marketBrowseProvider);
         await installMarketplaceSkill({
           name,
           overwrite: installed,
@@ -782,6 +1026,12 @@ export function useSkillsPage() {
     mpLoading,
     mpError,
     mpPayload,
+    searchActive,
+    resultTab,
+    setResultTab,
+    aggregatedTabCounts,
+    aggregatedProviderStatus,
+    aggregatedAllFailed,
     installingMarketName,
     usingSkillInChatName,
     onUseSkillInChat,
