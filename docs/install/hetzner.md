@@ -6,7 +6,7 @@ Run the gateway on a persistent VPS with **loopback bind** and reach it via SSH 
 
 1. Install Node.js >= 22 and xopc.
 2. Configure `gateway.bind=loopback` and a strong token.
-3. Start: `xopc gateway --background`
+3. Start: `xopc gateway service install && xopc gateway service start`
 4. Access:
    - **Tailscale Serve:** `gateway.tailscale.mode=serve` — see [tailscale.md](../gateway/tailscale.md)
    - **SSH tunnel:** `xopc gateway ssh-tunnel --target user@your-vps` — see [remote.md](../gateway/remote.md)

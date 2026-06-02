@@ -261,7 +261,8 @@ The gateway runs in foreground mode by default. Press `Ctrl+C` to stop.
 | `--token` | Auth token |
 | `--no-hot-reload` | Disable config hot reload |
 | `--force` | Force kill existing process on port |
-| `--background` | Start in background mode |
+
+For background operation, use **`xopc gateway service install`** (see [Gateway](./gateway.md)).
 
 ### Force Start
 
