@@ -188,7 +188,7 @@ async function runOnboard(
   process.exit(0);
 }
 
-async function startGatewayInBackground(config: Config, ctx: CLIContext): Promise<void> {
+async function startGatewayAsService(config: Config, ctx: CLIContext): Promise<void> {
   const { startGatewayNow } = await import('./onboard/gateway.js');
   await startGatewayNow(config, ctx);
 }
@@ -222,7 +222,7 @@ async function promptLaunchAfterOnboard(
   });
 
   if (choice === 'gateway') {
-    await startGatewayInBackground(config, ctx);
+    await startGatewayAsService(config, ctx);
     return;
   }
 

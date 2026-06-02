@@ -336,14 +336,3 @@ function parseWaitTimeout(wait: string): number {
       return value * 1000;
   }
 }
-
-// Legacy exports for tests still importing executeDaemonStop/Restart
-export async function executeDaemonStop(options: DaemonLifecycleOptions = {}): Promise<void> {
-  const { runDaemonStop } = await import('./lifecycle.js');
-  await runDaemonStop(options);
-}
-
-export async function executeDaemonRestart(options: DaemonLifecycleOptions = {}): Promise<void> {
-  const { runDaemonRestart } = await import('./lifecycle.js');
-  await runDaemonRestart(options);
-}

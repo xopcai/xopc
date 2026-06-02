@@ -9,7 +9,7 @@ export function createStopCommand(): Command {
     .option('--disable', 'Disable KeepAlive so gateway does not respawn')
     .option('--json', 'Output JSON')
     .action(async (options) => {
-      const { executeDaemonStop } = await import('./lifecycle-core.js');
-      await executeDaemonStop(options);
+      const { runDaemonStop } = await import('./lifecycle.js');
+      await runDaemonStop(options);
     });
 }

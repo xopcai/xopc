@@ -78,11 +78,8 @@ xopc gateway stop --json
 ### 重启网关
 
 ```bash
-# 通过 OS 服务管理器优雅重启
+# 通过 OS 服务管理器优雅重启（或未托管进程的 SIGUSR1 回退）
 xopc gateway restart
-
-# 强制重启（立即终止，KeepAlive 会自动重启新进程）
-xopc gateway restart --force
 
 # 重启后等待健康检查（指定超时）
 xopc gateway restart --wait 30s
@@ -671,12 +668,6 @@ xopc gateway --force
 2. 如果 5 秒后仍有请求，强制终止
 3. 自动释放锁文件
 
-可通过 `--timeout` 参数自定义超时时间：
-
-```bash
-xopc gateway stop --timeout 10000  # 10 秒超时
-```
-
 ## 环境变量
 
 | 变量 | 描述 |
@@ -685,8 +676,9 @@ xopc gateway stop --timeout 10000  # 10 秒超时
 | `XOPC_GATEWAY_TOKEN` | `token` 模式下的网关 token |
 | `XOPC_GATEWAY_PASSWORD` | `password` 模式下的网关密码 |
 | `XOPC_NO_RESPAWN` | 禁用进程重生，使用进程内重启 |
-| `XOPC_ALLOW_SIGUSR1_RESTART` | 允许 SIGUSR1 触发重启 |
 | `XOPC_SERVICE_MARKER` | 标记在监督器下运行（systemd/launchd） |
+
+在 `xopc.json` 中设置 **`commands.restart: false`** 可禁用 SIGUSR1 重启（CLI 未托管重启与进程内重启策略）。
 
 ## CORS 配置
 

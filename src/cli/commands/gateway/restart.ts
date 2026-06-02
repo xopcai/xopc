@@ -6,11 +6,10 @@ import { Command } from 'commander';
 export function createRestartCommand(): Command {
   return new Command('restart')
     .description('Restart the gateway service')
-    .option('--force', 'Force restart (kill if needed)')
     .option('--wait <timeout>', 'Wait for health after restart (e.g. "30s", "1m")')
     .option('--json', 'Output JSON')
     .action(async (options) => {
-      const { executeDaemonRestart } = await import('./lifecycle-core.js');
-      await executeDaemonRestart(options);
+      const { runDaemonRestart } = await import('./lifecycle.js');
+      await runDaemonRestart(options);
     });
 }

@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createStopCommand } from '../stop.js';
 
-// Mock lifecycle-core to avoid real daemon operations
-vi.mock('../lifecycle-core.js', () => ({
-  executeDaemonStop: vi.fn(),
+// Mock lifecycle to avoid real daemon operations
+vi.mock('../lifecycle.js', () => ({
+  runDaemonStop: vi.fn(),
 }));
 
 describe('Gateway Stop Command', () => {
@@ -32,36 +32,36 @@ describe('Gateway Stop Command', () => {
   });
 
   describe('stop behavior', () => {
-    it('should delegate to executeDaemonStop', async () => {
-      const { executeDaemonStop } = await import('../lifecycle-core.js');
-      vi.mocked(executeDaemonStop).mockResolvedValue(undefined);
+    it('should delegate to runDaemonStop', async () => {
+      const { runDaemonStop } = await import('../lifecycle.js');
+      vi.mocked(runDaemonStop).mockResolvedValue(undefined);
 
       const cmd = createStopCommand();
       await cmd.parseAsync(['node', 'test']);
 
-      expect(executeDaemonStop).toHaveBeenCalledWith(expect.objectContaining({}));
+      expect(runDaemonStop).toHaveBeenCalledWith(expect.objectContaining({}));
     });
 
-    it('should pass --disable option to executeDaemonStop', async () => {
-      const { executeDaemonStop } = await import('../lifecycle-core.js');
-      vi.mocked(executeDaemonStop).mockResolvedValue(undefined);
+    it('should pass --disable option to runDaemonStop', async () => {
+      const { runDaemonStop } = await import('../lifecycle.js');
+      vi.mocked(runDaemonStop).mockResolvedValue(undefined);
 
       const cmd = createStopCommand();
       await cmd.parseAsync(['node', 'test', '--disable']);
 
-      expect(executeDaemonStop).toHaveBeenCalledWith(
+      expect(runDaemonStop).toHaveBeenCalledWith(
         expect.objectContaining({ disable: true }),
       );
     });
 
-    it('should pass --json option to executeDaemonStop', async () => {
-      const { executeDaemonStop } = await import('../lifecycle-core.js');
-      vi.mocked(executeDaemonStop).mockResolvedValue(undefined);
+    it('should pass --json option to runDaemonStop', async () => {
+      const { runDaemonStop } = await import('../lifecycle.js');
+      vi.mocked(runDaemonStop).mockResolvedValue(undefined);
 
       const cmd = createStopCommand();
       await cmd.parseAsync(['node', 'test', '--json']);
 
-      expect(executeDaemonStop).toHaveBeenCalledWith(
+      expect(runDaemonStop).toHaveBeenCalledWith(
         expect.objectContaining({ json: true }),
       );
     });

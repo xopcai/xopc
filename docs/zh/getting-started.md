@@ -116,7 +116,7 @@ xopc tui --local
 
 连已启动的网关、选会话等用法见 **[终端界面（TUI）](./tui.md)**。
 
-## 5. 网关、后台运行与频道
+## 5. 网关、系统服务与频道
 
 ### 以 Telegram 为例
 
@@ -146,7 +146,7 @@ xopc gateway
 
 4. 去 **Telegram** 找机器人发消息，或在浏览器打开 **网页控制台**（端口以终端输出为准，常见默认 **18790**，具体看 `gateway.port`）。
 
-### 网关放后台跑
+### 以 OS 服务运行网关
 
 ```bash
 xopc gateway service install
