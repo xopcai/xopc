@@ -44,7 +44,9 @@ import { createImageTool } from './image-tool.js';
 import { createImageGenerateTool } from './image-generate-tool.js';
 import {
   BrowserManager,
+  BrowserNotReadyError,
   CdpSupervisor,
+  checkBrowserReadiness,
   resolveBrowserBackendFromConfig,
 } from '../../browser/index.js';
 import { createBrowserUseTool } from './browser/tool/browser-use-tool.js';
@@ -126,8 +128,55 @@ export class AgentToolsFactory {
   private browserManager: BrowserManager | null = null;
   /** One dialog/console supervisor per chat session (browser tab). */
   private readonly browserTaskSupervisors = new Map<string, CdpSupervisor>();
+  /** Cached readiness probe — keyed by backend mode + extension host:port. */
+  private browserReadinessCache: {
+    key: string;
+    expiresAt: number;
+    inflight?: Promise<BrowserNotReadyError | null>;
+    result?: BrowserNotReadyError | null;
+  } | null = null;
 
   constructor(private deps: ToolFactoryDeps) {}
+
+  private browserReadinessKey(): string {
+    const cfg = this.deps.getConfig?.();
+    const backend = resolveBrowserBackendFromConfig(cfg);
+    const ext = cfg?.agents?.defaults?.browser?.extension;
+    const host = typeof ext?.host === 'string' && ext.host.trim() ? ext.host.trim() : '127.0.0.1';
+    const port = typeof ext?.port === 'number' ? ext.port : 19820;
+    const cdpUrl = backend.mode === 'cdp' ? backend.config.wsEndpoint : '';
+    const cloudKind = backend.mode === 'cloud' ? backend.config.type : '';
+    return `${backend.mode}@${host}:${port}|${cdpUrl}|${cloudKind}`;
+  }
+
+  private async checkBrowserReadinessCached(): Promise<BrowserNotReadyError | null> {
+    const key = this.browserReadinessKey();
+    const now = Date.now();
+    const cached = this.browserReadinessCache;
+    if (cached && cached.key === key && cached.expiresAt > now && cached.inflight === undefined) {
+      return cached.result ?? null;
+    }
+    if (cached && cached.key === key && cached.inflight) {
+      return cached.inflight;
+    }
+    const inflight = checkBrowserReadiness(this.deps.getConfig?.());
+    this.browserReadinessCache = { key, expiresAt: now + 30_000, inflight };
+    try {
+      const result = await inflight;
+      this.browserReadinessCache = { key, expiresAt: Date.now() + 30_000, result };
+      return result;
+    } catch (e) {
+      // Probe should never throw, but if it does we just bypass the cache.
+      this.browserReadinessCache = null;
+      log.warn({ err: e }, 'browserReadiness probe failed');
+      return null;
+    }
+  }
+
+  /** Invalidate the readiness cache (config hot-reload, settings-page save, etc.). */
+  invalidateBrowserReadinessCache(): void {
+    this.browserReadinessCache = null;
+  }
 
   private browserSupervisorForTask(taskId: string): CdpSupervisor {
     let s = this.browserTaskSupervisors.get(taskId);
@@ -173,6 +222,7 @@ export class AgentToolsFactory {
 
   /** Close Playwright and all pages (gateway stop, agent manager dispose, or config hot-reload). */
   async shutdownBrowser(): Promise<void> {
+    this.browserReadinessCache = null;
     if (!this.browserManager) {
       return;
     }
@@ -320,6 +370,7 @@ export class AgentToolsFactory {
               getPageForTask: () => this.acquireBrowserPage(),
               getTaskId: () => this.deps.getCurrentContext()?.sessionKey ?? 'default',
               getConfig: () => this.deps.getConfig?.(),
+              getReadiness: () => this.checkBrowserReadinessCached(),
               getSupervisor: () =>
                 this.browserSupervisorForTask(this.deps.getCurrentContext()?.sessionKey ?? 'default'),
               notifyBrowserPageClosed: (taskId) => {

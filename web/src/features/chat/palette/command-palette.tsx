@@ -18,6 +18,11 @@ import {
 import { createPortal } from 'react-dom';
 
 import type { PaletteItem } from '@/features/chat/palette/command-palette.types';
+import {
+  commandRowDisabled,
+  commandRowWillQueue,
+} from '@/features/chat/palette/use-command-palette';
+import { AgentAvatarDisplay } from '@/features/settings/agents/agent-avatar-display';
 import { cn } from '@/lib/cn';
 
 /** Above shell `overflow-hidden`; portal + fixed avoids clipping (only shadow was visible). */
@@ -90,15 +95,28 @@ export const CommandPalette = memo(function CommandPalette({
   noResults,
   grouped,
   skillRowCount,
+  commandRowCount,
   query,
   skillsLabel,
   commandsLabel,
+  agentsLabel,
   groupedHasSkills,
   groupedHasCommands,
+  groupedHasAgents,
   groupedSkillsShowMoreLabel,
   groupedCommandsShowMoreLabel,
+  groupedAgentsShowMoreLabel,
+  currentAgentId,
+  currentBadgeLabel,
+  runBusy,
+  pendingFollowUpsCount,
+  maxPendingFollowUps,
+  queueBadgeLabel,
+  queueFullBadgeLabel,
+  queueFullTooltip,
   onExpandSkills,
   onExpandCommands,
+  onExpandAgents,
   onSelectItem,
   panelRef,
 }: {
@@ -109,20 +127,40 @@ export const CommandPalette = memo(function CommandPalette({
   items: PaletteItem[];
   selectedIndex: number;
   noResults: string;
-  /** When true, show Skills / Commands section labels (query empty). */
+  /** When true, show Skills / Commands / Agents section labels (query empty). */
   grouped: boolean;
-  /** Leading rows in `items` that are skills; rest are commands. */
+  /** Leading rows in `items` that are skills. */
   skillRowCount: number;
+  /** Rows after skills that are commands; agents follow. */
+  commandRowCount: number;
   query: string;
   skillsLabel: string;
   commandsLabel: string;
+  agentsLabel: string;
   groupedHasSkills: boolean;
   groupedHasCommands: boolean;
+  groupedHasAgents: boolean;
   groupedSkillsShowMoreLabel: string | null;
   groupedCommandsShowMoreLabel: string | null;
+  groupedAgentsShowMoreLabel: string | null;
+  /** Active session agent id; the matching agent row gets a "current" trailing badge. */
+  currentAgentId?: string;
+  /** Localized text for the "current" badge (e.g. "current" / "当前"). */
+  currentBadgeLabel: string;
+  /** Stream-state input to per-row disabled / "queue" badge calculation. */
+  runBusy: boolean;
+  pendingFollowUpsCount: number;
+  maxPendingFollowUps: number;
+  /** Localized text for the "queue" badge on args=false commands during streaming. */
+  queueBadgeLabel: string;
+  /** Localized text for the "queue full" badge when the follow-up queue is at capacity. */
+  queueFullBadgeLabel: string;
+  /** Tooltip shown when hovering a queue-full disabled row. */
+  queueFullTooltip: string;
   onExpandSkills: () => void;
   onExpandCommands: () => void;
-  /** Same behavior as choosing the row with Enter (skill pill / slash command). */
+  onExpandAgents: () => void;
+  /** Same behavior as choosing the row with Enter (skill pill / slash command / agent switch). */
   onSelectItem: (item: PaletteItem) => void;
 }) {
   const [box, setBox] = useState<{ left: number; top: number; width: number } | null>(null);
@@ -175,30 +213,80 @@ export const CommandPalette = memo(function CommandPalette({
   const sectionHeaderClass =
     'mb-1.5 px-2.5 pt-2.5 text-[0.6rem] font-medium uppercase leading-none tracking-wide text-fg-muted';
 
+  const streamCtx = { runBusy, pendingFollowUpsCount, maxPendingFollowUps };
+
   const renderOptionRow = (item: PaletteItem, i: number) => {
     const isSkill = item.kind === 'skill';
+    const isAgent = item.kind === 'agent';
+    const icon = isAgent ? (
+      <AgentAvatarDisplay
+        agentId={item.name}
+        avatar={item.avatar}
+        size={18}
+        className="size-[18px] shrink-0"
+      />
+    ) : isSkill ? (
+      <Sparkles className="size-3 shrink-0 text-accent-fg" aria-hidden />
+    ) : (
+      <Zap className="size-3 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />
+    );
+    // Agents render as `name` (no leading slash); skills/commands keep the leading slash.
+    const nameLine = isAgent ? (
+      showHighlight ? (
+        <>{highlightFuzzyName(item.name, filterQuery)}</>
+      ) : (
+        <span className="text-fg">{item.name}</span>
+      )
+    ) : showHighlight ? (
+      <>
+        <span className="text-fg">/</span>
+        {highlightFuzzyName(item.name, filterQuery)}
+      </>
+    ) : (
+      <span className="text-fg">/{item.name}</span>
+    );
+    const isCurrentAgent =
+      isAgent && currentAgentId != null && currentAgentId.length > 0 && item.name === currentAgentId;
+    const willQueue = commandRowWillQueue(item, streamCtx);
+    const isDisabled = commandRowDisabled(item, streamCtx);
+
+    let trailingBadge: ReactNode = null;
+    if (isCurrentAgent) {
+      trailingBadge = (
+        <span
+          className="ml-1 shrink-0 rounded bg-accent-soft px-1 py-px text-[0.6rem] font-medium leading-none text-accent-fg"
+          aria-label={currentBadgeLabel}
+        >
+          {currentBadgeLabel}
+        </span>
+      );
+    } else if (isDisabled) {
+      trailingBadge = (
+        <span
+          className="ml-1 shrink-0 rounded bg-red-100 px-1 py-px text-[0.6rem] font-medium leading-none text-red-700 dark:bg-red-900/40 dark:text-red-300"
+          aria-label={queueFullBadgeLabel}
+        >
+          {queueFullBadgeLabel}
+        </span>
+      );
+    } else if (willQueue) {
+      trailingBadge = (
+        <span
+          className="ml-1 shrink-0 rounded bg-surface-hover px-1 py-px text-[0.6rem] font-medium leading-none text-fg-muted"
+          aria-label={queueBadgeLabel}
+        >
+          {queueBadgeLabel}
+        </span>
+      );
+    }
+
     return (
       <PaletteRow
         item={item}
-        icon={
-          isSkill ? (
-            <Sparkles className="size-3 shrink-0 text-accent-fg" aria-hidden />
-          ) : (
-            <Zap className="size-3 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />
-          )
-        }
+        icon={icon}
         selected={selectedIndex === i}
         id={`palette-${i}`}
-        nameLine={
-          showHighlight ? (
-            <>
-              <span className="text-fg">/</span>
-              {highlightFuzzyName(item.name, filterQuery)}
-            </>
-          ) : (
-            <span className="text-fg">/{item.name}</span>
-          )
-        }
+        nameLine={nameLine}
         descriptionLine={
           item.description
             ? showHighlight
@@ -207,6 +295,9 @@ export const CommandPalette = memo(function CommandPalette({
             : null
         }
         dimCategoryBadge={showHighlight}
+        trailingBadge={trailingBadge}
+        disabled={isDisabled}
+        disabledTooltip={isDisabled ? queueFullTooltip : undefined}
         onSelect={() => onSelectItem(item)}
       />
     );
@@ -248,7 +339,7 @@ export const CommandPalette = memo(function CommandPalette({
             <div className={sectionHeaderClass} aria-hidden>
               {commandsLabel}
             </div>
-            {items.slice(skillRowCount).map((item, j) => (
+            {items.slice(skillRowCount, skillRowCount + commandRowCount).map((item, j) => (
               <Fragment key={item.id}>{renderOptionRow(item, skillRowCount + j)}</Fragment>
             ))}
             {groupedCommandsShowMoreLabel ? (
@@ -261,6 +352,34 @@ export const CommandPalette = memo(function CommandPalette({
                 }}
               >
                 {groupedCommandsShowMoreLabel}
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+        {groupedHasAgents ? (
+          <div
+            className={cn(
+              (groupedHasSkills || groupedHasCommands) && 'mt-1 border-t border-edge-subtle',
+            )}
+          >
+            <div className={sectionHeaderClass} aria-hidden>
+              {agentsLabel}
+            </div>
+            {items.slice(skillRowCount + commandRowCount).map((item, j) => (
+              <Fragment key={item.id}>
+                {renderOptionRow(item, skillRowCount + commandRowCount + j)}
+              </Fragment>
+            ))}
+            {groupedAgentsShowMoreLabel ? (
+              <button
+                type="button"
+                className={showMoreClass}
+                onClick={(e) => {
+                  e.preventDefault();
+                  onExpandAgents();
+                }}
+              >
+                {groupedAgentsShowMoreLabel}
               </button>
             ) : null}
           </div>
@@ -303,6 +422,9 @@ const PaletteRow = memo(function PaletteRow({
   nameLine,
   descriptionLine,
   dimCategoryBadge,
+  trailingBadge,
+  disabled,
+  disabledTooltip,
   onSelect,
 }: {
   item: PaletteItem;
@@ -313,6 +435,12 @@ const PaletteRow = memo(function PaletteRow({
   descriptionLine: ReactNode | null;
   /** Hide category chip when the row uses match highlighting (grouped by section instead). */
   dimCategoryBadge: boolean;
+  /** Optional flush-right badge (e.g. "current" / "queue" marker). */
+  trailingBadge?: ReactNode;
+  /** Render greyed out, ignore pointerdown, and surface `disabledTooltip` instead of the description. */
+  disabled?: boolean;
+  /** Tooltip text shown when `disabled`; takes precedence over the description tooltip. */
+  disabledTooltip?: string;
   onSelect: () => void;
 }) {
   const descPlain = (item.description ?? '').trim();
@@ -320,12 +448,17 @@ const PaletteRow = memo(function PaletteRow({
   const showDescTooltip = descPlain.length > 0;
   const fullDescription = item.description ?? '';
 
+  // Hide the category chip on agent rows when a trailing badge is shown (otherwise we get
+  // both "agent" and "current" stacked, which looks noisy in the small palette width).
+  const showCategoryBadge =
+    item.category && item.kind !== 'skill' && !dimCategoryBadge && !(item.kind === 'agent' && trailingBadge);
+
   const textColumn = (
     <span className="flex min-w-0 flex-1 items-baseline gap-1">
       <span className="min-w-0 max-w-[min(12rem,46%)] shrink-0 truncate font-semibold text-fg">
         {nameLine}
       </span>
-      {item.category && item.kind !== 'skill' && !dimCategoryBadge ? (
+      {showCategoryBadge ? (
         <span className="shrink-0 rounded bg-surface-hover px-1 py-px text-[0.6rem] font-normal leading-none text-fg-muted">
           {item.category}
         </span>
@@ -339,11 +472,16 @@ const PaletteRow = memo(function PaletteRow({
   );
 
   const optionClassName = cn(
-    'flex w-full min-w-0 cursor-pointer items-center gap-1.5 px-2.5 py-1 text-left text-xs leading-4',
-    selected ? 'bg-surface-hover text-fg' : 'text-fg-subtle hover:bg-surface-hover/80',
+    'flex w-full min-w-0 items-center gap-1.5 px-2.5 py-1 text-left text-xs leading-4',
+    disabled
+      ? 'cursor-not-allowed opacity-50 text-fg-muted'
+      : selected
+        ? 'cursor-pointer bg-surface-hover text-fg'
+        : 'cursor-pointer text-fg-subtle hover:bg-surface-hover/80',
   );
 
   const onRowPointerDown = (e: PointerEvent) => {
+    if (disabled) return;
     if (e.pointerType === 'mouse' && e.button !== 0) return;
     e.preventDefault();
     onSelect();
@@ -353,24 +491,31 @@ const PaletteRow = memo(function PaletteRow({
     <>
       <span className="shrink-0 [&_svg]:align-middle">{icon}</span>
       {textColumn}
+      {trailingBadge}
     </>
   );
 
-  if (showDescTooltip) {
+  // Tooltip priority: disabled tooltip > description tooltip.
+  const tooltipText = disabled && disabledTooltip ? disabledTooltip : showDescTooltip ? fullDescription : null;
+
+  const rowEl = (
+    <div
+      id={id}
+      role="option"
+      aria-selected={selected}
+      aria-disabled={disabled || undefined}
+      tabIndex={-1}
+      className={optionClassName}
+      onPointerDown={onRowPointerDown}
+    >
+      {rowInner}
+    </div>
+  );
+
+  if (tooltipText !== null) {
     return (
       <TooltipRoot delayDuration={0}>
-        <TooltipTrigger asChild>
-          <div
-            id={id}
-            role="option"
-            aria-selected={selected}
-            tabIndex={-1}
-            className={optionClassName}
-            onPointerDown={onRowPointerDown}
-          >
-            {rowInner}
-          </div>
-        </TooltipTrigger>
+        <TooltipTrigger asChild>{rowEl}</TooltipTrigger>
         <TooltipPortal>
           <TooltipContent
             side="right"
@@ -380,23 +525,12 @@ const PaletteRow = memo(function PaletteRow({
             className="!z-[10000] max-h-[min(12rem,40vh)] max-w-sm overflow-y-auto rounded-md border border-edge bg-surface-panel px-2 py-1.5 text-left text-[11px] leading-snug text-fg shadow-lg select-text [max-width:min(20rem,90vw)]"
             data-slash-palette-tooltip=""
           >
-            <span className="whitespace-pre-wrap break-words">{fullDescription}</span>
+            <span className="whitespace-pre-wrap break-words">{tooltipText}</span>
           </TooltipContent>
         </TooltipPortal>
       </TooltipRoot>
     );
   }
 
-  return (
-    <div
-      id={id}
-      role="option"
-      aria-selected={selected}
-      tabIndex={-1}
-      className={optionClassName}
-      onPointerDown={onRowPointerDown}
-    >
-      {rowInner}
-    </div>
-  );
+  return rowEl;
 });
