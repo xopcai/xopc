@@ -12,4 +12,5 @@ export {
   createUninstallCommand,
   createServiceStartCommand,
   createServiceStatusCommand,
+  createServiceCommand,
 } from './service.js';

@@ -18,10 +18,7 @@ const GATEWAY_SUBCOMMAND_LOADERS: Record<string, GatewaySubcommandLoader> = {
   stop: async () => (await import('./stop.js')).createStopCommand(),
   restart: async () => (await import('./restart.js')).createRestartCommand(),
   logs: async () => (await import('./logs.js')).createLogsCommand(),
-  install: async () => (await import('./service.js')).createInstallCommand(),
-  uninstall: async () => (await import('./service.js')).createUninstallCommand(),
-  start: async () => (await import('./service.js')).createServiceStartCommand(),
-  'service-status': async () => (await import('./service.js')).createServiceStatusCommand(),
+  service: async () => (await import('./service.js')).createServiceCommand(),
 };
 
 async function attachAllGatewaySubcommands(cmd: Command, ctx: CLIContext): Promise<void> {
