@@ -3,21 +3,14 @@
  */
 
 import { confirm } from '@inquirer/prompts';
-import { spawn } from 'child_process';
 import type { Config } from '../../../config/schema.js';
 import type { CLIContext } from '../../registry.js';
 import { acquireGatewayLock, GatewayLockError } from '../../../gateway/lock.js';
 
-/**
- * Check if running in interactive mode
- */
 function isInteractive(): boolean {
   return process.stdin.isTTY && process.stdout.isTTY;
 }
 
-/**
- * Configure Gateway WebUI
- */
 export async function setupGateway(config: Config): Promise<Config> {
   console.log('\n🌐 Step: Gateway WebUI (Optional)\n');
 
@@ -33,7 +26,6 @@ export async function setupGateway(config: Config): Promise<Config> {
     return config;
   }
 
-  // Check if gateway auth is already configured
   const existingToken = config?.gateway?.auth?.token;
   const existingMode = config?.gateway?.auth?.mode;
 
@@ -50,11 +42,9 @@ export async function setupGateway(config: Config): Promise<Config> {
     }
   }
 
-  // Generate new token
   const crypto = await import('crypto');
   const token = crypto.randomBytes(24).toString('hex');
 
-  // Configure gateway with defaults
   config.gateway = config.gateway || {};
   config.gateway.bind = config.gateway.bind || 'loopback';
   config.gateway.port = config.gateway.port || 18790;
@@ -72,17 +62,42 @@ export async function setupGateway(config: Config): Promise<Config> {
   return config;
 }
 
-/**
- * Handle gateway startup after onboarding.
- * In interactive mode, asks user if they want to start gateway in background.
- * In non-interactive mode, provides guidance on how to start manually.
- */
+async function installAndStartGatewayService(config: Config, ctx: CLIContext): Promise<boolean> {
+  const [{ resolveGatewayService, isDaemonAvailableAsync, getPlatformName }, { buildGatewayInstallArgs }] =
+    await Promise.all([
+      import('../../../daemon/service.js'),
+      import('../../../daemon/install-plan.js'),
+    ]);
+
+  const available = await isDaemonAvailableAsync();
+  if (!available) {
+    console.log(`ℹ️  OS service not available on ${getPlatformName()}.`);
+    console.log('   Start manually with: xopc gateway');
+    return false;
+  }
+
+  const service = await resolveGatewayService();
+  const port = config.gateway?.port ?? 18790;
+  const bind = config.gateway?.bind ?? 'loopback';
+  const token = config.gateway?.auth?.token;
+
+  const loaded = await service.isLoaded({ env: process.env }).catch(() => false);
+  if (!loaded) {
+    const installArgs = buildGatewayInstallArgs({ port, bind, token });
+    installArgs.stdout = process.stdout;
+    await service.install(installArgs);
+  }
+
+  const { startGatewayService } = await import('../../../daemon/service.js');
+  const result = await startGatewayService({ service });
+  return result.outcome === 'started' || result.outcome === 'scheduled';
+}
+
 export async function startGatewayNow(config: Config, ctx: CLIContext): Promise<void> {
   const bind = config?.gateway?.bind ?? 'loopback';
   const port = config?.gateway?.port || 18790;
   const displayHost = bind === 'lan' ? 'localhost' : '127.0.0.1';
 
-  // Check if gateway is already running by trying to acquire lock
   let isRunning = false;
   try {
     const lock = await acquireGatewayLock(ctx.configPath, { timeoutMs: 100, port });
@@ -94,74 +109,51 @@ export async function startGatewayNow(config: Config, ctx: CLIContext): Promise<
   }
 
   if (isRunning) {
-    // Gateway is running - provide restart guidance
     console.log('\n🌐 Gateway is already running!');
     console.log(`   URL: http://${displayHost}:${port}`);
     console.log('');
     console.log('📝 To apply the new configuration, restart gateway:');
     console.log('   xopc gateway restart');
-  } else {
-    // Gateway is not running
-    if (isInteractive()) {
-      // Interactive mode: ask user if they want to start gateway
-      const shouldStart = await confirm({
-        message: 'Start Gateway WebUI now (background mode)?',
-        default: true,
-      });
+  } else if (isInteractive()) {
+    const shouldInstall = await confirm({
+      message: 'Install and start Gateway as an OS service now?',
+      default: true,
+    });
 
-      if (shouldStart) {
-        console.log('\n🚀 Starting Gateway WebUI in background...');
-        console.log('');
-
-        const args = [
-          ...process.execArgv,
-          ...process.argv.slice(1).filter(arg => !arg.includes('onboard') && arg !== '--quick'),
-          'gateway',
-          '--background',
-          '--bind', bind,
-          '--port', String(port),
-        ];
-
-        const child = spawn(process.execPath, args, {
-          detached: true,
-          stdio: 'ignore',
-          env: process.env,
-        });
-
-        child.unref();
-
-        // Wait a moment to check if process started successfully
-        await new Promise(resolve => setTimeout(resolve, 500));
-
-        if (child.pid && !child.killed) {
-          console.log('✅ Gateway started in background');
-          console.log(`   PID: ${child.pid}`);
+    if (shouldInstall) {
+      console.log('\n🚀 Installing Gateway service...');
+      try {
+        const started = await installAndStartGatewayService(config, ctx);
+        if (started) {
+          console.log('✅ Gateway service installed and started');
           console.log(`   URL: http://${displayHost}:${port}`);
           const token = config?.gateway?.auth?.token;
           if (token) {
             console.log(`   Token: ${token.slice(0, 8)}...${token.slice(-8)}`);
           }
         } else {
-          console.log('⚠️  Failed to start gateway automatically.');
-          console.log('   You can start it manually with:');
-          console.log(`   xopc gateway --background`);
+          console.log('⚠️  Service install completed but start may need manual action.');
+          console.log('   Try: xopc gateway service start');
         }
-      } else {
-        // User chose not to start
-        console.log('\n⏭️  Skipping gateway startup.');
-        console.log('   You can start it later with:');
-        console.log(`   xopc gateway --background`);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.log(`⚠️  Failed to install/start gateway service: ${message}`);
+        console.log('   Start manually with: xopc gateway');
       }
     } else {
-      // Non-interactive mode: provide guidance
-      console.log('\n🚀 Gateway is configured but not running.');
-      console.log('');
-      console.log('📝 To start the gateway in background:');
-      console.log(`   xopc gateway --background`);
-      console.log('');
-      console.log('📝 To start in foreground (development mode):');
-      console.log(`   pnpm run dev -- gateway --bind ${bind} --port ${port}`);
+      console.log('\n⏭️  Skipping gateway service install.');
+      console.log('   Start in foreground with: xopc gateway');
+      console.log('   Or install service later: xopc gateway service install');
     }
+  } else {
+    console.log('\n🚀 Gateway is configured but not running.');
+    console.log('');
+    console.log('📝 To install and start as an OS service:');
+    console.log('   xopc gateway service install');
+    console.log('   xopc gateway service start');
+    console.log('');
+    console.log('📝 To start in foreground (development):');
+    console.log(`   xopc gateway --bind ${bind} --port ${port}`);
   }
 
   console.log('');

@@ -11,8 +11,8 @@ function createGatewayCommand(_ctx: CLIContext): Command {
     .addHelpText(
       'after',
       formatExamples([
-        'xopc gateway                   # Start gateway (foreground, default)',
-        'xopc gateway --background      # Start gateway in background',
+        'xopc gateway                   # Start gateway (foreground)',
+        'xopc gateway service install   # Install OS service (background)',
         'xopc gateway --bind lan          # Listen on all interfaces (LAN)',
         'xopc gateway --port 8080       # Custom port',
         'xopc gateway --force           # Force kill existing process',
@@ -38,7 +38,6 @@ function createGatewayCommand(_ctx: CLIContext): Command {
     .option('--force', 'Force kill existing process on port', false)
     .option('--no-hot-reload', 'Disable config hot reload')
     .option('--foreground', 'Start gateway in foreground mode (blocks terminal)', true)
-    .option('--background', 'Start gateway in background mode (detached)', false)
     .action(async (options) => {
       const ctx = getContextWithOpts();
       await runGatewayFromCliOptions(options, ctx);
@@ -56,7 +55,7 @@ register({
     category: 'runtime',
     examples: [
       'xopc gateway',
-      'xopc gateway --background',
+      'xopc gateway service install',
       'xopc gateway --port 8080',
     ],
   },

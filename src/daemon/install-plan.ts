@@ -108,6 +108,7 @@ export function buildGatewayInstallPlan(params: {
     XOPC_LOG_CONSOLE: 'false',
     XOPC_LOG_DIR: resolveLogDir(),
     [SERVICE_VERSION_ENV_KEY]: version,
+    XOPC_SERVICE_MARKER: '1',
   };
 
   if (params.token) {

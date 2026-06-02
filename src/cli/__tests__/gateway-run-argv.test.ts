@@ -14,10 +14,9 @@ describe('gateway run argv', () => {
     );
   });
 
-  it('rejects help, subcommands, and background mode', () => {
+  it('rejects help and subcommands', () => {
     expect(isGatewayRunFastPathArgv(['node', 'xopc', 'gateway', '--help'])).toBe(false);
     expect(isGatewayRunFastPathArgv(['node', 'xopc', 'gateway', 'status'])).toBe(false);
-    expect(isGatewayRunFastPathArgv(['node', 'xopc', 'gateway', '--background'])).toBe(false);
   });
 
   it('resolves gateway catalog command paths', () => {

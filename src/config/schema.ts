@@ -1105,6 +1105,15 @@ export const UpdateConfigSchema = z
 
 export type UpdateConfig = z.infer<typeof UpdateConfigSchema>;
 
+export const CommandsConfigSchema = z
+  .object({
+    restart: z.boolean().optional(),
+  })
+  .strict()
+  .optional();
+
+export type CommandsConfig = z.infer<typeof CommandsConfigSchema>;
+
 // ============================================
 // MCP (Model Context Protocol)
 // ============================================
@@ -1179,6 +1188,7 @@ export const ConfigSchema = z.object({
   /** Delivery / presentation concerns (currently `tts`). */
   messages: MessagesConfigSchema,
   update: UpdateConfigSchema,
+  commands: CommandsConfigSchema,
 }).default({
   agents: {
     defaults: {

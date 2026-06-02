@@ -1,50 +1,179 @@
 /**
- * Daemon Lifecycle Core - Unified start/stop/restart/uninstall logic
- *
- * Entry point for all daemon lifecycle operations. Handles:
- * - Service resolution and availability checks
- * - Token drift detection
- * - Restart intent writing
- * - Health wait coordination
- * - JSON output mode
+ * Daemon lifecycle core — OpenClaw-aligned service start/stop/restart with onNotLoaded fallback.
  */
 
 import { createLogger } from '../../../utils/logger.js';
 import type {
   DaemonLifecycleOptions,
+  GatewayService,
   GatewayServiceRestartResult,
 } from '../../../daemon/types.js';
+import {
+  clearGatewayRestartIntentSync,
+  writeGatewayRestartIntentSync,
+} from '../../../infra/restart.js';
 
 const log = createLogger('DaemonLifecycle');
 
-// ─── Stop ───
+export type ServiceRecoveryResult = {
+  result: 'started' | 'stopped' | 'restarted';
+  message?: string;
+  warnings?: string[];
+  loaded?: boolean;
+};
 
-export async function executeDaemonStop(options: DaemonLifecycleOptions): Promise<void> {
-  const { resolveGatewayService, isDaemonAvailableAsync } = await import(
-    '../../../daemon/service.js'
-  );
+type ServiceRecoveryContext = {
+  json: boolean;
+  fail: (message: string, hints?: string[], diagnostics?: string[], options?: DaemonLifecycleOptions) => void;
+};
 
-  const available = await isDaemonAvailableAsync();
-  if (!available) {
-    outputResult(options, { ok: false, error: 'Daemon service not available on this platform' });
+type RestartPostCheckContext = {
+  options: DaemonLifecycleOptions;
+  fail: (message: string, hints?: string[], diagnostics?: string[], options?: DaemonLifecycleOptions) => void;
+};
+
+function emitResult(
+  options: DaemonLifecycleOptions,
+  payload: {
+    ok: boolean;
+    result?: string;
+    message?: string;
+    error?: string;
+    hints?: string[];
+    warnings?: string[];
+  },
+): void {
+  if (options.json) {
+    console.log(JSON.stringify(payload, null, 2));
+    return;
+  }
+  if (payload.ok) {
+    if (payload.message) {
+      console.log(`✅ ${payload.message}`);
+    }
+    for (const warning of payload.warnings ?? []) {
+      console.warn(`⚠️  ${warning}`);
+    }
+    return;
+  }
+  if (payload.error) {
+    console.error(`❌ ${payload.error}`);
+  }
+  for (const hint of payload.hints ?? []) {
+    console.log(`💡 ${hint}`);
+  }
+}
+
+function createFail(options: DaemonLifecycleOptions) {
+  return (
+    message: string,
+    hints?: string[],
+    diagnostics?: string[],
+    opts: DaemonLifecycleOptions = options,
+  ) => {
+    emitResult(opts, { ok: false, error: message, hints });
+    for (const line of diagnostics ?? []) {
+      if (!opts.json) {
+        console.log(`   ${line}`);
+      }
+    }
     process.exit(1);
+  };
+}
+
+async function resolveServiceLoadedOrFail(
+  service: GatewayService,
+  fail: ServiceRecoveryContext['fail'],
+): Promise<boolean | null> {
+  try {
+    return await service.isLoaded({ env: process.env });
+  } catch (err) {
+    fail(`Gateway service check failed: ${String(err)}`);
+    return null;
+  }
+}
+
+async function handleServiceNotLoaded(params: {
+  service: GatewayService;
+  renderStartHints: () => string[];
+  options: DaemonLifecycleOptions;
+}): Promise<void> {
+  emitResult(params.options, {
+    ok: true,
+    result: 'not-loaded',
+    message: `Gateway service ${params.service.notLoadedText}.`,
+    hints: params.renderStartHints(),
+  });
+}
+
+async function checkAndWarnTokenDrift(
+  service: GatewayService,
+  options: DaemonLifecycleOptions,
+): Promise<string[]> {
+  const warnings: string[] = [];
+  try {
+    const command = await service.readCommand(process.env);
+    const serviceToken = command?.environment?.XOPC_GATEWAY_TOKEN;
+    if (!serviceToken) {
+      return warnings;
+    }
+    const { loadConfig } = await import('../../../config/index.js');
+    const { resolveConfigPath } = await import('../../../config/paths.js');
+    const config = loadConfig(resolveConfigPath());
+    const configToken = config?.gateway?.auth?.token;
+    if (configToken && serviceToken !== configToken) {
+      const warning =
+        'Token drift detected: service token differs from config. Run `xopc gateway service install --force` to sync.';
+      warnings.push(warning);
+      if (!options.json) {
+        console.warn(`⚠️  ${warning}`);
+      }
+    }
+  } catch {
+    // Best-effort
+  }
+  return warnings;
+}
+
+export async function runServiceStop(params: {
+  service: GatewayService;
+  opts?: DaemonLifecycleOptions;
+  onNotLoaded?: (ctx: ServiceRecoveryContext) => Promise<ServiceRecoveryResult | null>;
+}): Promise<void> {
+  const options = params.opts ?? {};
+  const fail = createFail(options);
+  const loaded = await resolveServiceLoadedOrFail(params.service, fail);
+  if (loaded === null) {
+    return;
   }
 
-  const service = await resolveGatewayService();
-  const loaded = await service.isLoaded({ env: process.env });
-
   if (!loaded) {
-    outputResult(options, {
-      ok: true,
-      result: 'not-running',
-      message: `Gateway service ${service.notLoadedText}. Nothing to stop.`,
+    try {
+      const handled = await params.onNotLoaded?.({ json: Boolean(options.json), fail });
+      if (handled) {
+        emitResult(options, {
+          ok: true,
+          result: handled.result,
+          message: handled.message,
+          warnings: handled.warnings,
+        });
+        return;
+      }
+    } catch (err) {
+      fail(`Gateway stop failed: ${String(err)}`);
+      return;
+    }
+    await handleServiceNotLoaded({
+      service: params.service,
+      renderStartHints: () => ['xopc gateway service install', 'xopc gateway'],
+      options,
     });
     return;
   }
 
   try {
-    await service.stop({ env: process.env, disable: options.disable });
-    outputResult(options, {
+    await params.service.stop({ env: process.env, disable: options.disable });
+    emitResult(options, {
       ok: true,
       result: 'stopped',
       message: options.disable
@@ -52,225 +181,170 @@ export async function executeDaemonStop(options: DaemonLifecycleOptions): Promis
         : 'Gateway stop signal sent.',
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
     log.error({ err }, 'Failed to stop gateway');
-    outputResult(options, { ok: false, error: `Failed to stop: ${message}` });
-    process.exit(1);
+    fail(`Gateway stop failed: ${String(err)}`);
   }
 }
 
-// ─── Restart ───
+export async function runServiceRestart(params: {
+  service: GatewayService;
+  opts?: DaemonLifecycleOptions;
+  renderStartHints: () => string[];
+  checkTokenDrift?: boolean;
+  onNotLoaded?: (ctx: ServiceRecoveryContext) => Promise<ServiceRecoveryResult | null>;
+  postRestartCheck?: (ctx: RestartPostCheckContext) => Promise<void>;
+}): Promise<void> {
+  const options = params.opts ?? {};
+  const fail = createFail(options);
+  const warnings: string[] = [];
+  let handledRecovery: ServiceRecoveryResult | null = null;
 
-export async function executeDaemonRestart(options: DaemonLifecycleOptions): Promise<void> {
-  const { resolveGatewayService, isDaemonAvailableAsync } = await import(
-    '../../../daemon/service.js'
-  );
-
-  const available = await isDaemonAvailableAsync();
-  if (!available) {
-    outputResult(options, { ok: false, error: 'Daemon service not available on this platform' });
-    process.exit(1);
+  const loaded = await resolveServiceLoadedOrFail(params.service, fail);
+  if (loaded === null) {
+    return;
   }
-
-  const service = await resolveGatewayService();
-  const loaded = await service.isLoaded({ env: process.env });
 
   if (!loaded) {
-    outputResult(options, {
-      ok: false,
-      error: `Gateway service ${service.notLoadedText}. Install first with: xopc gateway service install`,
-      hints: ['xopc gateway service install'],
-    });
-    process.exit(1);
+    try {
+      handledRecovery = (await params.onNotLoaded?.({ json: Boolean(options.json), fail })) ?? null;
+    } catch (err) {
+      fail(`Gateway restart failed: ${String(err)}`);
+      return;
+    }
+    if (!handledRecovery) {
+      await handleServiceNotLoaded({
+        service: params.service,
+        renderStartHints: params.renderStartHints,
+        options,
+      });
+      return;
+    }
+    if (handledRecovery.warnings?.length) {
+      warnings.push(...handledRecovery.warnings);
+    }
   }
 
-  // Token drift check
-  await checkAndWarnTokenDrift(service, options);
-
-  // Write restart intent
-  const { writeGatewayRestartIntentSync } = await import('../../../infra/restart-intent.js');
-  writeGatewayRestartIntentSync({ force: options.force });
+  if (loaded && params.checkTokenDrift) {
+    warnings.push(...(await checkAndWarnTokenDrift(params.service, options)));
+  }
 
   try {
-    const result: GatewayServiceRestartResult = await service.restart({ env: process.env });
+    if (loaded) {
+      let wroteRestartIntent = false;
+      const runtime = await params.service.readRuntime(process.env).catch(() => null);
+      wroteRestartIntent = writeGatewayRestartIntentSync({ targetPid: runtime?.pid });
+      try {
+        await params.service.restart({ env: process.env });
+      } catch (err) {
+        if (wroteRestartIntent) {
+          clearGatewayRestartIntentSync();
+        }
+        throw err;
+      }
+    }
 
-    // If --wait specified, wait for health
+    if (params.postRestartCheck) {
+      await params.postRestartCheck({ options, fail });
+    }
+
     if (options.wait) {
       const timeoutMs = parseWaitTimeout(options.wait);
-      await waitForHealthAfterRestart(service, timeoutMs, options);
-    } else {
-      outputResult(options, {
-        ok: true,
-        result: result.outcome,
-        message: `Gateway restart ${result.outcome}.`,
+      const { loadConfig } = await import('../../../config/index.js');
+      const { resolveConfigPath } = await import('../../../config/paths.js');
+      const config = loadConfig(resolveConfigPath());
+      const port = typeof config.gateway?.port === 'number' ? config.gateway.port : 18790;
+      const { waitForRestartHealth } = await import('./restart-health.js');
+      const snapshot = await waitForRestartHealth({
+        service: params.service,
+        port,
+        timeoutMs,
+        onProgress: () => {
+          if (!options.json) {
+            process.stdout.write('.');
+          }
+        },
       });
+      if (!options.json) {
+        process.stdout.write('\n');
+      }
+      if (!snapshot.healthy) {
+        fail(`Restart health check failed: ${snapshot.waitOutcome ?? 'timeout'}`, [
+          'xopc gateway logs',
+        ]);
+        return;
+      }
+      emitResult(options, {
+        ok: true,
+        result: 'healthy',
+        message: `Gateway restarted and healthy (pid ${snapshot.runtime?.pid ?? 'unknown'}, ${snapshot.elapsedMs ?? 0}ms).`,
+        warnings: warnings.length ? warnings : undefined,
+      });
+      return;
     }
+
+    emitResult(options, {
+      ok: true,
+      result: 'restarted',
+      message: handledRecovery?.message ?? 'Gateway restart completed.',
+      warnings: warnings.length ? warnings : undefined,
+    });
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
     log.error({ err }, 'Failed to restart gateway');
-    outputResult(options, { ok: false, error: `Failed to restart: ${message}` });
-    process.exit(1);
+    fail(`Gateway restart failed: ${String(err)}`, params.renderStartHints());
   } finally {
-    // Clean up intent
-    const { clearGatewayRestartIntentSync } = await import('../../../infra/restart-intent.js');
     clearGatewayRestartIntentSync();
   }
 }
 
-// ─── Uninstall ───
-
-export async function executeDaemonUninstall(options: DaemonLifecycleOptions): Promise<void> {
-  const { resolveGatewayService, isDaemonAvailableAsync } = await import(
-    '../../../daemon/service.js'
-  );
-
+export async function executeDaemonUninstall(options: DaemonLifecycleOptions = {}): Promise<void> {
+  const { resolveGatewayService, isDaemonAvailableAsync } = await import('../../../daemon/service.js');
   const available = await isDaemonAvailableAsync();
   if (!available) {
-    outputResult(options, { ok: false, error: 'Daemon service not available on this platform' });
+    emitResult(options, { ok: false, error: 'Daemon service not available on this platform' });
     process.exit(1);
   }
-
   const service = await resolveGatewayService();
-
+  const loaded = await service.isLoaded({ env: process.env }).catch(() => false);
+  if (loaded) {
+    try {
+      await service.stop({ env: process.env });
+    } catch {
+      // Best-effort
+    }
+  }
   try {
     await service.uninstall({ env: process.env });
-    outputResult(options, {
-      ok: true,
-      result: 'uninstalled',
-      message: 'Gateway service uninstalled.',
-    });
+    emitResult(options, { ok: true, result: 'uninstalled', message: 'Gateway service uninstalled.' });
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
     log.error({ err }, 'Failed to uninstall gateway service');
-    outputResult(options, { ok: false, error: `Failed to uninstall: ${message}` });
+    emitResult(options, { ok: false, error: `Failed to uninstall: ${String(err)}` });
     process.exit(1);
   }
 }
-
-// ─── Token Drift Check ───
-
-async function checkAndWarnTokenDrift(
-  service: { readCommand: (env?: Record<string, string | undefined>) => Promise<{ environment?: Record<string, string> } | null> },
-  options: DaemonLifecycleOptions,
-): Promise<void> {
-  try {
-    const command = await service.readCommand(process.env);
-    if (!command?.environment?.XOPC_GATEWAY_TOKEN) return;
-
-    const { loadConfig } = await import('../../../config/index.js');
-    const { resolveConfigPath } = await import('../../../config/paths.js');
-    const config = loadConfig(resolveConfigPath());
-    const configToken = config?.gateway?.auth?.token;
-
-    if (configToken && command.environment.XOPC_GATEWAY_TOKEN !== configToken) {
-      const warning =
-        'Token drift detected: service token differs from config. ' +
-        'Run `xopc gateway service install --force` to sync.';
-
-      if (options.json) {
-        // Will be included in output
-      } else {
-        console.warn(`⚠️  ${warning}`);
-      }
-    }
-  } catch {
-    // Best-effort; don't block restart on drift check failure
-  }
-}
-
-// ─── Health Wait ───
-
-async function waitForHealthAfterRestart(
-  service: { readRuntime: (env?: Record<string, string | undefined>) => Promise<{ status: string; pid?: number }> },
-  timeoutMs: number,
-  options: DaemonLifecycleOptions,
-): Promise<void> {
-  const { loadConfig } = await import('../../../config/index.js');
-  const { resolveConfigPath } = await import('../../../config/paths.js');
-  const config = loadConfig(resolveConfigPath());
-  const port = config?.gateway?.port ?? 18790;
-
-  try {
-    const { waitForRestartHealth } = await import('./restart-health.js');
-    const snapshot = await waitForRestartHealth({
-      service: service as any,
-      port,
-      timeoutMs,
-      onProgress: (_snap) => {
-        if (!options.json) {
-          process.stdout.write('.');
-        }
-      },
-    });
-
-    if (!options.json) {
-      process.stdout.write('\n');
-    }
-
-    if (snapshot.healthy) {
-      outputResult(options, {
-        ok: true,
-        result: 'healthy',
-        message: `Gateway restarted and healthy (pid ${snapshot.runtime?.pid ?? 'unknown'}, ${snapshot.elapsedMs}ms).`,
-      });
-    } else {
-      outputResult(options, {
-        ok: false,
-        error: `Restart health check failed: ${snapshot.waitOutcome}`,
-        hints: ['Check logs with: xopc gateway logs'],
-      });
-      process.exit(1);
-    }
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    outputResult(options, {
-      ok: false,
-      error: `Health wait failed: ${message}`,
-    });
-    process.exit(1);
-  }
-}
-
-// ─── Helpers ───
 
 function parseWaitTimeout(wait: string): number {
   const match = wait.match(/^(\d+)(s|m|ms)?$/);
   if (!match) return 60_000;
-
   const value = parseInt(match[1], 10);
   const unit = match[2] || 's';
-
   switch (unit) {
-    case 'ms': return value;
-    case 'm': return value * 60_000;
+    case 'ms':
+      return value;
+    case 'm':
+      return value * 60_000;
     case 's':
-    default: return value * 1000;
+    default:
+      return value * 1000;
   }
 }
 
-interface LifecycleOutput {
-  ok: boolean;
-  result?: string;
-  message?: string;
-  error?: string;
-  hints?: string[];
+// Legacy exports for tests still importing executeDaemonStop/Restart
+export async function executeDaemonStop(options: DaemonLifecycleOptions = {}): Promise<void> {
+  const { runDaemonStop } = await import('./lifecycle.js');
+  await runDaemonStop(options);
 }
 
-function outputResult(options: DaemonLifecycleOptions, output: LifecycleOutput): void {
-  if (options.json) {
-    console.log(JSON.stringify(output, null, 2));
-  } else if (output.ok) {
-    if (output.message) {
-      console.log(`✅ ${output.message}`);
-    }
-  } else {
-    if (output.error) {
-      console.error(`❌ ${output.error}`);
-    }
-    if (output.hints) {
-      for (const hint of output.hints) {
-        console.log(`💡 ${hint}`);
-      }
-    }
-  }
+export async function executeDaemonRestart(options: DaemonLifecycleOptions = {}): Promise<void> {
+  const { runDaemonRestart } = await import('./lifecycle.js');
+  await runDaemonRestart(options);
 }

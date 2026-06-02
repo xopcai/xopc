@@ -190,73 +190,8 @@ async function runOnboard(
 }
 
 async function startGatewayInBackground(config: Config, ctx: CLIContext): Promise<void> {
-  const bind = (config as { gateway?: { bind?: string } }).gateway?.bind ?? 'loopback';
-  const port = (config as { gateway?: { port?: number } }).gateway?.port ?? 18790;
-  const displayHost = bind === 'lan' ? 'localhost' : '127.0.0.1';
-
-  let isRunning = false;
-  try {
-    const lock = await acquireGatewayLock(ctx.configPath, { timeoutMs: 100, port });
-    await lock.release();
-  } catch (err) {
-    if (err instanceof GatewayLockError) {
-      isRunning = true;
-    }
-  }
-
-  if (isRunning) {
-    console.log('\n🌐 Gateway is already running!');
-    console.log(`   URL: http://${displayHost}:${port}`);
-    console.log('');
-    console.log('📝 To apply the new configuration, restart gateway:');
-    console.log('   xopc gateway restart');
-  } else {
-    console.log('\n🚀 Starting Gateway WebUI in background...');
-    console.log('');
-
-    const { spawn } = await import('child_process');
-    const args = [
-      ...process.execArgv,
-      ...process.argv.slice(1).filter((arg) => !arg.includes('onboard') && arg !== '--quick'),
-      'gateway',
-      '--background',
-      '--bind',
-      bind,
-      '--port',
-      String(port),
-    ];
-
-    const child = spawn(process.execPath, args, {
-      detached: true,
-      stdio: 'ignore',
-      env: process.env,
-    });
-
-    child.unref();
-
-    await new Promise((resolve) => setTimeout(resolve, 500));
-
-    if (child.pid && !child.killed) {
-      console.log('✅ Gateway started in background');
-      console.log(`   PID: ${child.pid}`);
-      console.log(`   URL: http://${displayHost}:${port}`);
-      const token = (config as { gateway?: { auth?: { token?: string } } }).gateway?.auth?.token;
-      if (token) {
-        console.log(`   Token: ${token.slice(0, 8)}...${token.slice(-8)}`);
-      }
-    } else {
-      console.log('⚠️  Failed to start gateway automatically.');
-      console.log('   Start manually with:');
-      console.log('   xopc gateway --background');
-    }
-  }
-
-  console.log('');
-  console.log('📚 Useful commands:');
-  console.log('   xopc gateway status    # Check gateway status');
-  console.log('   xopc gateway stop      # Stop gateway');
-  console.log('   xopc gateway restart   # Restart gateway');
-  console.log('   xopc gateway logs      # View logs');
+  const { startGatewayNow } = await import('./onboard/gateway.js');
+  await startGatewayNow(config, ctx);
 }
 
 async function promptLaunchAfterOnboard(
@@ -275,8 +210,8 @@ async function promptLaunchAfterOnboard(
       },
       {
         value: 'gateway',
-        name: 'Gateway WebUI (background)',
-        description: 'Start the HTTP gateway for the browser console',
+        name: 'Gateway WebUI (OS service)',
+        description: 'Install and start the HTTP gateway for the browser console',
       },
       {
         value: 'none',
@@ -306,7 +241,8 @@ async function promptLaunchAfterOnboard(
   }
 
   console.log('\n⏭️  You can start later:');
-  console.log('   xopc gateway --background');
+  console.log('   xopc gateway service install');
+  console.log('   xopc gateway');
   console.log('   xopc tui --local');
 }
 

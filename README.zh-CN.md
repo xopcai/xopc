@@ -65,7 +65,7 @@ xopc agent -i                    # 经典交互式 CLI
 xopc agent -m "总结最近 5 条提交"  # 只问一句
 
 xopc gateway                     # 本地网页服务 + React 控制台（地址见终端输出）
-xopc gateway --background        # 后台常驻；停服 xopc gateway stop | status | logs
+xopc gateway service install   # OS service (background); xopc gateway stop | status | logs
 ```
 
 **从源码开发：**

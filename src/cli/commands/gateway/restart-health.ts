@@ -11,11 +11,15 @@
 import { createLogger } from '../../../utils/logger.js';
 import type { GatewayServiceRuntime } from '../../../daemon/types.js';
 import type { PortUsage } from '../../../infra/ports.js';
+import { formatPortDiagnostics, inspectPortUsage } from '../../../infra/ports.js';
 
 const log = createLogger('RestartHealth');
 
 export const DEFAULT_RESTART_HEALTH_TIMEOUT_MS = 60_000;
 export const DEFAULT_RESTART_HEALTH_DELAY_MS = 500;
+export const DEFAULT_RESTART_HEALTH_ATTEMPTS = Math.ceil(
+  DEFAULT_RESTART_HEALTH_TIMEOUT_MS / DEFAULT_RESTART_HEALTH_DELAY_MS,
+);
 
 export type GatewayRestartWaitOutcome =
   | 'healthy'
@@ -235,4 +239,69 @@ async function probeHealth(port: number, token?: string): Promise<HealthProbeRes
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export type GatewayPortHealthSnapshot = {
+  portUsage?: PortUsage;
+  healthy: boolean;
+};
+
+async function inspectGatewayPortHealth(port: number, token?: string): Promise<GatewayPortHealthSnapshot> {
+  let portUsage: PortUsage;
+  try {
+    portUsage = await inspectPortUsage(port);
+  } catch (err) {
+    portUsage = {
+      port,
+      status: 'unknown',
+      listeners: [],
+      hints: [],
+      errors: [String(err)],
+    };
+  }
+
+  let healthy = false;
+  if (portUsage.status === 'busy') {
+    const healthResult = await probeHealth(port, token);
+    healthy = healthResult.ok;
+  }
+
+  return { portUsage, healthy };
+}
+
+export async function waitForGatewayHealthyListener(params: {
+  port: number;
+  attempts?: number;
+  delayMs?: number;
+  token?: string;
+}): Promise<GatewayPortHealthSnapshot> {
+  const attempts = params.attempts ?? DEFAULT_RESTART_HEALTH_ATTEMPTS;
+  const delayMs = params.delayMs ?? DEFAULT_RESTART_HEALTH_DELAY_MS;
+
+  let snapshot = await inspectGatewayPortHealth(params.port, params.token);
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    if (snapshot.healthy) {
+      return snapshot;
+    }
+    await sleep(delayMs);
+    snapshot = await inspectGatewayPortHealth(params.port, params.token);
+  }
+  return snapshot;
+}
+
+export function renderGatewayPortHealthDiagnostics(snapshot: GatewayPortHealthSnapshot): string[] {
+  const lines: string[] = [];
+  if (!snapshot.portUsage) {
+    lines.push('Gateway port health unavailable.');
+    return lines;
+  }
+  if (snapshot.portUsage.status === 'busy') {
+    lines.push(...formatPortDiagnostics(snapshot.portUsage));
+  } else {
+    lines.push(`Gateway port ${snapshot.portUsage.port} status: ${snapshot.portUsage.status}.`);
+  }
+  if (snapshot.portUsage.errors?.length) {
+    lines.push(`Port diagnostics errors: ${snapshot.portUsage.errors.join('; ')}`);
+  }
+  return lines;
 }

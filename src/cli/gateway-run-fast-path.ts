@@ -24,8 +24,7 @@ function buildGatewayRunOptions(cmd: Command) {
     .option('--tailscale-reset-on-exit', 'Reset Tailscale serve/funnel on gateway shutdown', false)
     .option('--force', 'Force kill existing process on port', false)
     .option('--no-hot-reload', 'Disable config hot reload')
-    .option('--foreground', 'Start gateway in foreground mode (blocks terminal)', true)
-    .option('--background', 'Start gateway in background mode (detached)', false);
+    .option('--foreground', 'Start gateway in foreground mode (blocks terminal)', true);
 }
 
 export async function tryRunGatewayRunFastPath(argv: string[] = process.argv): Promise<boolean> {

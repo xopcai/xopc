@@ -16,15 +16,18 @@ Default port: `18790`
 
 The gateway runs in foreground mode by default. Press `Ctrl+C` to stop.
 
-### Background mode
+### OS service (background)
 
-Detach a gateway process so your shell returns immediately (prints **PID** and **URL**):
+Install the gateway as a user service (systemd / LaunchAgent / Task Scheduler) so it starts on login and respawns on crash:
 
 ```bash
-xopc gateway --background
+xopc gateway service install
+xopc gateway service start
 ```
 
 Manage it with **`xopc gateway status`**, **`xopc gateway stop`**, **`xopc gateway restart`**, and **`xopc gateway logs`** (see [Process management commands](#process-management-commands) below).
+
+If the service is not installed, **`xopc gateway stop`** / **`restart`** still target verified gateway processes listening on the configured port (OpenClaw-aligned unmanaged fallback).
 
 ### Force Start
 
