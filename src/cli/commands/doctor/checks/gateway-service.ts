@@ -48,7 +48,7 @@ export async function checkGatewayService(ctx: DoctorContext): Promise<CheckResu
       label: 'Gateway service',
       status: 'warn',
       message: 'Gateway is not installed as a system service.',
-      hints: ['Install: xopc gateway install (or your platform equivalent)'],
+      hints: ['Install: xopc gateway service install'],
     };
   }
 
@@ -68,6 +68,6 @@ export async function checkGatewayService(ctx: DoctorContext): Promise<CheckResu
     label: 'Gateway service',
     status: 'warn',
     message: `Gateway service is installed but not running (status: ${runtime.status}).`,
-    hints: ['Start: xopc gateway start'],
+    hints: ['Start: xopc gateway service start'],
   };
 }
