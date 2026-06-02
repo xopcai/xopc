@@ -2,6 +2,14 @@ export { BrowserManager, type BrowserManagerOptions } from './manager.js';
 export { resolveBrowserBackendFromConfig } from './backend-from-config.js';
 export { resolveBrowserCommandTimeoutMs } from './browser-command-timeout.js';
 export {
+  BrowserNotReadyError,
+  buildBrowserSetupDeepLink,
+  checkBrowserReadiness,
+  type BrowserBackendKind,
+  type BrowserNotReadyReason,
+  type BrowserSetupHint,
+} from './readiness.js';
+export {
   assertBrowserUrlAllowed,
   checkPostRedirectUrl,
   containsApiKeyPattern,

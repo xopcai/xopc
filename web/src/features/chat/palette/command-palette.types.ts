@@ -1,4 +1,4 @@
-export type PaletteItemKind = 'skill' | 'command';
+export type PaletteItemKind = 'skill' | 'command' | 'agent';
 
 export type CommandCategory = 'session' | 'model' | 'system' | 'tool' | 'extension';
 
@@ -22,6 +22,8 @@ export interface PaletteItem {
   source?: string;
   aliases?: string[];
   acceptsArgs?: boolean;
+  /** Agent avatar URL (only used by `kind === 'agent'` rows). */
+  avatar?: string;
 }
 
 export interface SlashRange {

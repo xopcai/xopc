@@ -17,6 +17,7 @@ import { BrowserUseSchema } from './schemas.js';
 import { createBrowserActionRegistry } from '../../../../browser/actions/registry.js';
 import type { BrowserActionContext, BrowserActionResult } from '../../../../browser/actions/types.js';
 import { loadBrowserPipelineSource } from '../../../../browser/pipeline/source.js';
+import type { BrowserNotReadyError, BrowserSetupHint } from '../../../../browser/readiness.js';
 
 const log = createLogger('browser_use');
 
@@ -27,6 +28,12 @@ export interface CreateBrowserUseToolDeps {
   getConfig: () => Config | undefined;
   getSupervisor?: () => CdpSupervisor | undefined;
   notifyBrowserPageClosed?: (taskId: string) => void;
+  /**
+   * Preflight readiness check. Returns `null` when the configured backend is
+   * usable, otherwise a structured hint the chat surface renders as a setup
+   * card. Cache the result upstream (~30s) so back-to-back calls don't reprobe.
+   */
+  getReadiness?: () => Promise<BrowserNotReadyError | null>;
   /** Pipeline runner (injected to avoid circular deps; lazy-loaded if not provided). */
   runPipeline?: (yaml: string, args: Record<string, unknown>, ctx: BrowserActionContext, dryRun: boolean) => Promise<BrowserActionResult>;
 }
@@ -42,6 +49,38 @@ export function createBrowserUseTool(deps: CreateBrowserUseToolDeps): AgentTool<
       taskId: deps.getTaskId(),
       supervisor: deps.getSupervisor?.(),
       signal,
+    };
+  }
+
+  /**
+   * Render a {@link BrowserSetupHint} as a tool result. The text body is a
+   * JSON envelope (`kind: 'browser_setup_required'`) so the chat surface can
+   * detect it and render a Setup card; the embedded `message` keeps the
+   * payload human-readable for the LLM so it stops the browser attempt and
+   * tells the user to finish setup.
+   */
+  function formatNotReady(hint: BrowserSetupHint): { content: { type: 'text'; text: string }[]; details: Record<string, unknown> } {
+    const message =
+      `⚠ Browser is not ready (backend=${hint.backend}, reason=${hint.reason}). ` +
+      `Do NOT retry. Tell the user to open Settings → Browser to finish setup, ` +
+      `then ask them to confirm before running any browser action again.`;
+    const payload = {
+      kind: 'browser_setup_required' as const,
+      backend: hint.backend,
+      reason: hint.reason,
+      deepLink: hint.deepLink,
+      detail: hint.detail,
+      message,
+    };
+    return {
+      content: [{ type: 'text', text: JSON.stringify(payload) }],
+      details: {
+        ok: false,
+        kind: 'browser_setup_required',
+        backend: hint.backend,
+        reason: hint.reason,
+        deepLink: hint.deepLink,
+      },
     };
   }
 
@@ -80,6 +119,22 @@ export function createBrowserUseTool(deps: CreateBrowserUseToolDeps): AgentTool<
         pipeline?: { yaml?: string; script?: string; path?: string; args?: Record<string, unknown>; dryRun?: boolean };
         options?: { timeout?: number; headless?: boolean };
       };
+
+      // ─── readiness preflight ────────────────────────────────────────────
+      // Probes the configured backend (doctor + WS bridge / CDP / cloud key)
+      // before any launch attempt. On failure we short-circuit with a setup
+      // hint the chat renders as a card — the agent should stop and ask the
+      // user to finish setup instead of looping on launch errors.
+      if (deps.getReadiness) {
+        try {
+          const notReady = await deps.getReadiness();
+          if (notReady) {
+            return formatNotReady(notReady.hint);
+          }
+        } catch (e) {
+          log.warn({ err: e }, 'Readiness preflight threw; continuing with launch attempt');
+        }
+      }
 
       // ─── inspect ────────────────────────────────────────────────────────
       if (mode === 'inspect') {

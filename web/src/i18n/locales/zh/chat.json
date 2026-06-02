@@ -324,6 +324,19 @@
     "clarifyDefaultChoice": "默认：{{text}}",
     "clarifySkip": "跳过",
     "clarifyTimeRemaining": "剩余时间（约）：{{time}}",
+    "browserSetupRequiredTitle": "需要先配置浏览器",
+    "browserSetupRequiredCta": "去配置浏览器",
+    "browserSetupRequiredDetailToggle": "查看诊断详情",
+    "browserSetupRequiredReasons": {
+      "generic": "当前浏览器后端尚未就绪，请到 设置 → 浏览器 完成配置后再继续。",
+      "extension_not_installed": "尚未安装 xopc 浏览器扩展。请到 设置 → 浏览器 一键安装后再使用。",
+      "extension_bridge_offline": "扩展桥接服务未启动。请到 设置 → 浏览器 启动桥接并保持 Chrome 打开。",
+      "extension_not_connected": "桥接已启动，但 Chrome 还没连上。请打开 Chrome 并启用 xopc 扩展。",
+      "local_chromium_missing": "本地 Chromium 尚未安装。请到 设置 → 浏览器 一键安装后再使用 local 后端。",
+      "cloakbrowser_not_installed": "CloakBrowser 二进制尚未下载。请到 设置 → 浏览器 一键下载。",
+      "cdp_unreachable": "配置的 CDP 调试地址无法访问。请到 设置 → 浏览器 确认地址，并确保 Chrome 以 --remote-debugging-port 模式启动。",
+      "cloud_api_key_missing": "云端浏览器缺少 API Key。请到 设置 → 浏览器 填入凭证。"
+    },
     "voicePlay": "播放语音",
     "voicePause": "暂停",
     "voiceLoading": "正在加载音频…",
@@ -395,6 +408,11 @@
       "placeholder": "搜索技能与命令…",
       "skillsSection": "技能",
       "commandsSection": "命令",
+      "agentsSection": "智能体",
+      "currentBadge": "当前",
+      "queueBadge": "排队",
+      "queueFullBadge": "队列已满",
+      "queueFullTooltip": "跟进队列已满，请先处理",
       "showGroupedMore": "显示另外 {{count}} 条"
     },
     "goal": {

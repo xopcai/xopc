@@ -32,6 +32,10 @@ import {
 } from '@/features/chat/tool-results/tool-result-cards';
 import { useDevViewStore } from '@/stores/dev-view-store';
 import { formatStepRoundDuration } from '@/features/chat/time/step-round-duration';
+import {
+  BrowserSetupRequiredCard,
+  parseBrowserSetupRequired,
+} from '@/features/chat/tool-results/browser-setup-required-card';
 import { ToolResultFileLinks } from '@/features/chat/tool-results/tool-result-file-links';
 import { extractFilePathsFromToolResult } from '@/features/chat/tool-results/tool-result-file-paths';
 import {
@@ -441,6 +445,15 @@ function StepRow({
     return extractWebSearchLinksFromToolResult(toolResultText);
   }, [block, toolResultText]);
 
+  // browser_use preflight produces a structured "setup required" sentinel.
+  // The agent-side text is JSON, so the generic outputPreview would render
+  // raw JSON — hide it and render the dedicated card instead.
+  const browserSetup = useMemo(() => {
+    if (block.type !== 'tool_use' || block.status === 'running') return null;
+    if (block.name !== 'browser_use') return null;
+    return parseBrowserSetupRequired(toolResultText);
+  }, [block, toolResultText]);
+
   if (block.type === 'thinking') {
     const streaming = Boolean(block.streaming);
     const text = block.text?.trim() ?? '';
@@ -517,7 +530,9 @@ function StepRow({
     : null;
 
   /** Show legacy JSON panel when (a) developer toggle is on, or (b) no structured card exists. */
-  const showLegacyDetails = !isStreaming && (showRawToolData || !hasCard);
+  // The browser setup card replaces the raw text view; only resurface it when devs explicitly opt in.
+  const showLegacyDetails =
+    !isStreaming && (showRawToolData || (!hasCard && !browserSetup));
 
   return (
     <div className="flex min-w-0 gap-2.5">
@@ -576,6 +591,9 @@ function StepRow({
         ) : null}
         {!isStreaming && !isError && extractedFilePaths.length > 0 ? (
           <ToolResultFileLinks paths={extractedFilePaths} sessionKey={sessionKey} />
+        ) : null}
+        {!isStreaming && browserSetup ? (
+          <BrowserSetupRequiredCard payload={browserSetup} />
         ) : null}
       </div>
     </div>

@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 
 import { createBrowserUseTool } from '../tool/browser-use-tool.js';
 import type { BrowserManager } from '../../../../browser/manager.js';
+import { BrowserNotReadyError } from '../../../../browser/readiness.js';
 
 function mockPage() {
   return {
@@ -147,6 +148,79 @@ describe('browser_use tool', () => {
       const { tool } = createTool();
       const result = await tool.execute('call-9', { mode: 'unknown' as any }, undefined as any, undefined as any);
       expect(result.content[0].text).toContain('Unknown mode');
+    });
+  });
+
+  describe('readiness preflight', () => {
+    function createToolWithReadiness(
+      getReadiness: () => Promise<BrowserNotReadyError | null>,
+    ) {
+      const manager = mockManager();
+      const page = mockPage();
+      const tool = createBrowserUseTool({
+        getManager: () => manager,
+        getPageForTask: () => Promise.resolve(page),
+        getTaskId: () => 'test-session',
+        getConfig: () => undefined,
+        getReadiness,
+        notifyBrowserPageClosed: vi.fn(),
+      });
+      return { tool, manager, page };
+    }
+
+    it('short-circuits with setup card payload when backend is not ready', async () => {
+      const err = new BrowserNotReadyError({
+        backend: 'extension',
+        reason: 'extension_not_connected',
+        deepLink: '/settings/agent-browser?tab=extension',
+        detail: 'no client connected',
+      });
+      const { tool, manager } = createToolWithReadiness(async () => err);
+      const result = await tool.execute(
+        'call-ready-1',
+        { mode: 'command', command: 'press', args: { key: 'Enter' } },
+        undefined as any,
+        undefined as any,
+      );
+      // Tool short-circuits before touching the manager.
+      expect(manager.ensureConnected).not.toHaveBeenCalled();
+      expect(result.details).toMatchObject({
+        ok: false,
+        kind: 'browser_setup_required',
+        backend: 'extension',
+        reason: 'extension_not_connected',
+        deepLink: '/settings/agent-browser?tab=extension',
+      });
+      const parsed = JSON.parse(result.content[0].text) as Record<string, unknown>;
+      expect(parsed.kind).toBe('browser_setup_required');
+      expect(parsed.backend).toBe('extension');
+      expect(parsed.reason).toBe('extension_not_connected');
+      expect(parsed.deepLink).toBe('/settings/agent-browser?tab=extension');
+      expect(typeof parsed.message).toBe('string');
+    });
+
+    it('short-circuits inspect mode too', async () => {
+      const err = new BrowserNotReadyError({
+        backend: 'local',
+        reason: 'local_chromium_missing',
+        deepLink: '/settings/agent-browser?tab=local',
+      });
+      const { tool, manager } = createToolWithReadiness(async () => err);
+      const result = await tool.execute('call-ready-2', { mode: 'inspect' }, undefined as any, undefined as any);
+      expect(manager.ensureConnected).not.toHaveBeenCalled();
+      expect(result.details.kind).toBe('browser_setup_required');
+      expect(result.details.backend).toBe('local');
+    });
+
+    it('runs the action normally when readiness returns null', async () => {
+      const { tool } = createToolWithReadiness(async () => null);
+      const result = await tool.execute(
+        'call-ready-3',
+        { mode: 'command', command: 'press', args: { key: 'Enter' } },
+        undefined as any,
+        undefined as any,
+      );
+      expect(result.details.ok).toBe(true);
     });
   });
 });
