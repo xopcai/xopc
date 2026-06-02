@@ -7,7 +7,6 @@ import type { CLIContext } from '../registry.js';
 import type { Config } from '../../config/schema.js';
 import { setupModel as runModelSetup } from './onboard/model.js';
 import { colors } from '../utils/colors.js';
-import { acquireGatewayLock, GatewayLockError } from '../../gateway/lock.js';
 import { setupChannels as runChannelOnboard, getChannelConfigurators } from './onboard/channels/index.js';
 import { seedMainAgentProfileMarkdown } from '../../agent/context/workspace-seed.js';
 import { resolveDefaultAgentId, resolveAgentProfileDir } from '../../agent/agent-scope.js';

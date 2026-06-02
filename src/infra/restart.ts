@@ -2,7 +2,6 @@
  * Gateway restart coordination — OpenClaw-aligned SIGUSR1 authorization and restart intent.
  */
 
-import { randomUUID } from 'node:crypto';
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { resolveStateDir } from '../config/paths-state.js';
@@ -13,7 +12,6 @@ const log = createLogger('Restart');
 const SIGUSR1_AUTH_GRACE_MS = 5000;
 const GATEWAY_RESTART_INTENT_FILENAME = 'gateway-restart-intent.json';
 const GATEWAY_RESTART_INTENT_TTL_MS = 60_000;
-const GATEWAY_RESTART_INTENT_MAX_BYTES = 1024;
 
 type GatewayRestartIntentPayload = {
   kind: 'gateway-restart';

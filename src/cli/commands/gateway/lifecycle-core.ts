@@ -6,7 +6,6 @@ import { createLogger } from '../../../utils/logger.js';
 import type {
   DaemonLifecycleOptions,
   GatewayService,
-  GatewayServiceRestartResult,
 } from '../../../daemon/types.js';
 import {
   clearGatewayRestartIntentSync,

@@ -62,7 +62,7 @@ export async function setupGateway(config: Config): Promise<Config> {
   return config;
 }
 
-async function installAndStartGatewayService(config: Config, ctx: CLIContext): Promise<boolean> {
+async function installAndStartGatewayService(config: Config, _ctx: CLIContext): Promise<boolean> {
   const [{ resolveGatewayService, isDaemonAvailableAsync, getPlatformName }, { buildGatewayInstallArgs }] =
     await Promise.all([
       import('../../../daemon/service.js'),
