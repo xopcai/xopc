@@ -8,6 +8,7 @@ import { SkillsPageConfirmDialog } from '@/features/skills/skills-page-confirm-d
 import { SkillsPageDetailDialog } from '@/features/skills/skills-page-detail-dialog';
 import { SkillsPageInstallDialog } from '@/features/skills/skills-page-install-dialog';
 import { SkillsPageMarketplaceContent } from '@/features/skills/skills-page-marketplace-content';
+import { interpolate } from '@/features/skills/skills-page.utils';
 import type { SkillsPageVm } from '@/features/skills/use-skills-page';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
@@ -24,6 +25,9 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
     setSourceFilter,
     builtinTabStats,
     userTabStats,
+    catalogDisabledCount,
+    catalogStatusFilter,
+    setCatalogStatusFilter,
     marketSort,
     setMarketSort,
     marketBrowseProvider,
@@ -31,7 +35,7 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
     registeredProviders,
     filterLabel,
     inSettingsShell,
-    searchActive,
+    searchInputActive,
     resultTab,
     setResultTab,
     aggregatedTabCounts,
@@ -203,7 +207,7 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
                 </DropdownMenu.Root>
               ) : null}
               {mainTab === 'marketplace' ? (
-                searchActive ? (
+                searchInputActive ? (
                   <div
                     className="inline-flex h-9 shrink-0 rounded-lg border border-edge bg-surface-panel p-0.5 shadow-surface"
                     role="tablist"
@@ -333,7 +337,29 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
                   </>
                 )
               ) : null}
-              {mainTab === 'builtin' ? <div className="h-9 min-w-[9rem] shrink-0" aria-hidden /> : null}
+              {mainTab !== 'marketplace' && catalogDisabledCount > 0 ? (
+                <button
+                  type="button"
+                  className={cn(
+                    'inline-flex h-9 shrink-0 items-center rounded-lg border px-2.5 text-xs font-medium transition-colors',
+                    interaction.focusRingPanel,
+                    catalogStatusFilter === 'disabled'
+                      ? 'border-fg bg-fg text-surface-panel dark:border-fg dark:bg-fg dark:text-surface-base'
+                      : 'border-amber-300/80 bg-amber-50/90 text-amber-950 hover:border-amber-400 dark:border-amber-700/60 dark:bg-amber-950/40 dark:text-amber-100',
+                  )}
+                  aria-pressed={catalogStatusFilter === 'disabled'}
+                  aria-label={sk.filterDisabledOnlyAria}
+                  onClick={() =>
+                    setCatalogStatusFilter((f) => (f === 'disabled' ? 'all' : 'disabled'))
+                  }
+                >
+                  {catalogStatusFilter === 'disabled'
+                    ? sk.filterAll
+                    : interpolate(sk.filterDisabledOnly, { count: catalogDisabledCount })}
+                </button>
+              ) : mainTab === 'builtin' ? (
+                <div className="h-9 min-w-[9rem] shrink-0" aria-hidden />
+              ) : null}
             </div>
           </div>
 
