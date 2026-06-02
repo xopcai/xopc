@@ -1,15 +1,19 @@
 import { createMiddleware } from 'hono/factory';
 import type { Context } from 'hono';
 import { getConnInfo } from '@hono/node-server/conninfo';
+
 import type { GatewayAuthConfig } from '../../../config/schema.js';
-import {
-  getClientIpFromHeaders,
-  isAuthRateLimitGloballyDisabled,
-  resolveAuthRateLimitConfig,
-  resolveAuthRateLimitTracking,
-} from '../../auth-rate-limit.js';
 import type { ResolvedGatewayAuth } from '../../auth.js';
 import { resolveClientIpFromRequest } from '../../client-ip.js';
+import {
+  authPolicyConfig,
+  buckets,
+  isAuthRateLimitGloballyDisabled,
+  resolveAuthRateLimit,
+  resolveAuthTracking,
+  type ResolvedAuthRateLimitConfig,
+} from '../../rate-limit/index.js';
+import { getClientIpFromHeaders } from '../../security/loopback.js';
 import { safeEqualSecret } from '../../security/secret-equal.js';
 import { authorizeTrustedProxy } from '../../trusted-proxy.js';
 import { createLogger } from '../../../utils/logger.js';
@@ -27,42 +31,28 @@ export interface AuthConfig {
   };
 }
 
-/**
- * Validate token using constant-time comparison to prevent timing attacks.
- */
 function validateToken(providedToken: string | undefined, expectedToken: string): boolean {
   if (!providedToken) return false;
   return safeEqualSecret(providedToken, expectedToken);
 }
 
-/**
- * Extract token from Authorization header
- * Supports: "Bearer <token>", "<token>"
- */
 function extractTokenFromHeader(authHeader: string | null): string | null {
   if (!authHeader) return null;
-
   const parts = authHeader.split(' ');
-  if (parts.length === 2 && parts[0].toLowerCase() === 'bearer') {
-    return parts[1];
-  }
+  if (parts.length === 2 && parts[0].toLowerCase() === 'bearer') return parts[1];
   return authHeader;
 }
 
 /**
- * Extract token from query parameter.
- *
  * SECURITY: query-string tokens leak into server logs, Referer headers, and
  * browser history. We accept them only for SSE/WebSocket connections where
  * the `Authorization` header cannot be set by `EventSource`. For normal REST
  * requests prefer the `Authorization: Bearer <token>` header.
  */
 function extractTokenFromQuery(url: string): string | null {
-  const parsed = new URL(url);
-  return parsed.searchParams.get('token');
+  return new URL(url).searchParams.get('token');
 }
 
-/** Paths where query-string token auth is acceptable (SSE / WebSocket). */
 const QUERY_TOKEN_ALLOWED_PATHS = new Set(['/api/events', '/api/ws']);
 
 function isQueryTokenAllowedPath(path: string): boolean {
@@ -95,9 +85,57 @@ function resolveMiddlewareClientIp(
   });
 }
 
-/**
- * Create auth middleware for HTTP routes
- */
+type RateLimitContext = {
+  active: boolean;
+  cfg: ResolvedAuthRateLimitConfig;
+  /** `undefined` when the client is exempted (loopback, disabled, etc.). */
+  trackingKey: string | undefined;
+};
+
+function buildRateLimitContext(
+  getGatewayAuth: AuthConfig['getGatewayAuth'],
+  clientIp: string,
+  origin: string | undefined,
+): RateLimitContext {
+  const cfg = resolveAuthRateLimit(getGatewayAuth?.()?.rateLimit);
+  const active = cfg.enabled && !isAuthRateLimitGloballyDisabled();
+  if (!active) return { active: false, cfg, trackingKey: undefined };
+  const tracking = resolveAuthTracking({ clientIp, origin, cfg: authPolicyConfig(cfg) });
+  return {
+    active: true,
+    cfg,
+    trackingKey: tracking.exempt ? undefined : tracking.key,
+  };
+}
+
+function checkBlocked(rl: RateLimitContext): { blocked: false } | { blocked: true; retryAfterSec: number } {
+  if (!rl.active || rl.trackingKey === undefined) return { blocked: false };
+  return buckets.authFailure(rl.cfg).check(rl.trackingKey);
+}
+
+function recordFailure(rl: RateLimitContext): void {
+  if (!rl.active || rl.trackingKey === undefined) return;
+  buckets.authFailure(rl.cfg).fail(rl.trackingKey);
+}
+
+function recordSuccess(rl: RateLimitContext): void {
+  if (!rl.active || rl.trackingKey === undefined) return;
+  buckets.authFailure(rl.cfg).succeed(rl.trackingKey);
+}
+
+function blockedResponse(c: Context, retryAfterSec: number) {
+  c.header('Retry-After', String(retryAfterSec));
+  return c.json(
+    {
+      error: 'Too Many Requests',
+      code: 'auth_blocked',
+      message: 'Too many authentication attempts',
+      retryAfter: retryAfterSec,
+    },
+    429,
+  );
+}
+
 export function auth(config?: AuthConfig) {
   const { token, getGatewayAuth, getResolvedAuth, getTrustedProxyContext } = config || {};
 
@@ -110,27 +148,29 @@ export function auth(config?: AuthConfig) {
       const trustedProxies = proxyContext?.trustedProxies;
       const trustedProxyConfig = resolvedAuth?.trustedProxy;
 
-      const rlInput = getGatewayAuth?.()?.rateLimit;
-      const rlCfg = resolveAuthRateLimitConfig(rlInput);
-      const rateLimitActive = rlCfg.enabled && !isAuthRateLimitGloballyDisabled();
-      const clientIp = resolveMiddlewareClientIp(
-        c,
-        trustedProxies,
-        proxyContext?.allowRealIpFallback,
-      );
+      const clientIp = resolveMiddlewareClientIp(c, trustedProxies, proxyContext?.allowRealIpFallback);
       const origin = c.req.header('origin');
-      const tracking = resolveAuthRateLimitTracking({ clientIp, origin, cfg: rlCfg });
-      const { limiter, key: rateLimitKey, cfg: activeRlCfg } = tracking;
+      const rl = buildRateLimitContext(getGatewayAuth, clientIp, origin);
 
+      // Server misconfiguration — not an attack signal. Don't count.
       if (!trustedProxyConfig) {
-        if (rateLimitActive) {
-          limiter.recordFailure(rateLimitKey, activeRlCfg);
-        }
         log.warn(
           { path: c.req.path, method: c.req.method, clientIp, reason: 'trusted_proxy_config_missing' },
           'HTTP auth rejected: trusted-proxy config missing',
         );
-        return c.json({ error: 'Unauthorized', message: 'Trusted-proxy auth is not configured' }, 401);
+        return c.json(
+          { error: 'Unauthorized', code: 'auth_unconfigured', message: 'Trusted-proxy auth is not configured' },
+          401,
+        );
+      }
+
+      const blocked = checkBlocked(rl);
+      if (blocked.blocked) {
+        log.warn(
+          { clientIp, origin: origin ?? undefined, path: c.req.path, method: c.req.method, retryAfterSec: blocked.retryAfterSec, reason: 'auth_blocked' },
+          'Auth rate limit blocked',
+        );
+        return blockedResponse(c, blocked.retryAfterSec);
       }
 
       const result = authorizeTrustedProxy({
@@ -140,81 +180,35 @@ export function auth(config?: AuthConfig) {
         trustedProxyConfig,
       });
 
-      if (result.ok) {
-        if (rateLimitActive) {
-          limiter.recordSuccess(rateLimitKey);
-        }
-        await next();
-        return;
-      }
-
       if (result.ok === false) {
-        if (rateLimitActive) {
-          const blocked = limiter.checkBlocked(rateLimitKey, activeRlCfg);
-          if (blocked.blocked) {
-            log.warn(
-              {
-                clientIp,
-                origin: origin ?? undefined,
-                path: c.req.path,
-                method: c.req.method,
-                attemptCount: activeRlCfg.maxAttempts,
-                windowSec: Math.round(activeRlCfg.windowMs / 1000),
-                blockDurationSec: Math.round(activeRlCfg.blockDurationMs / 1000),
-                retryAfterSec: blocked.retryAfterSec,
-                reason: 'auth_failure_rate_limit',
-              },
-              `Auth rate limit blocked: ${activeRlCfg.maxAttempts} failures in ${activeRlCfg.windowMs / 1000}s, blocking for ${activeRlCfg.blockDurationMs / 1000}s`,
-            );
-            c.header('Retry-After', String(blocked.retryAfterSec));
-            return c.json(
-              {
-                error: 'Too Many Requests',
-                message: 'Too many authentication attempts',
-                retryAfter: blocked.retryAfterSec,
-              },
-              429,
-            );
-          }
-          limiter.recordFailure(rateLimitKey, activeRlCfg);
-        }
-
+        recordFailure(rl);
         log.warn(
-          {
-            path: c.req.path,
-            method: c.req.method,
-            clientIp,
-            reason: result.reason,
-          },
+          { path: c.req.path, method: c.req.method, clientIp, reason: result.reason },
           `HTTP auth rejected: trusted-proxy validation failed (${result.reason})`,
         );
-        return c.json({ error: 'Unauthorized', message: 'Trusted-proxy authentication failed' }, 401);
+        return c.json(
+          { error: 'Unauthorized', code: 'invalid_proxy_credentials', message: 'Trusted-proxy authentication failed' },
+          401,
+        );
       }
+
+      recordSuccess(rl);
+      await next();
+      return;
     }
 
     if (authMode === 'none' || !token) {
       return next();
     }
 
-    const rlInput = getGatewayAuth?.()?.rateLimit;
-    const rlCfg = resolveAuthRateLimitConfig(rlInput);
-    const rateLimitActive = rlCfg.enabled && !isAuthRateLimitGloballyDisabled();
-
     const proxyContext = getTrustedProxyContext?.();
-    const clientIp = resolveMiddlewareClientIp(
-      c,
-      proxyContext?.trustedProxies,
-      proxyContext?.allowRealIpFallback,
-    );
+    const clientIp = resolveMiddlewareClientIp(c, proxyContext?.trustedProxies, proxyContext?.allowRealIpFallback);
     const origin = c.req.header('origin');
-    const tracking = resolveAuthRateLimitTracking({ clientIp, origin, cfg: rlCfg });
-    const { limiter, key: rateLimitKey, cfg: activeRlCfg } = tracking;
+    const rl = buildRateLimitContext(getGatewayAuth, clientIp, origin);
 
     const authHeader = extractTokenFromHeader(c.req.header('authorization'));
     const requestPath = new URL(c.req.url).pathname;
-    const queryToken = isQueryTokenAllowedPath(requestPath)
-      ? extractTokenFromQuery(c.req.url)
-      : null;
+    const queryToken = isQueryTokenAllowedPath(requestPath) ? extractTokenFromQuery(c.req.url) : null;
 
     if (!authHeader && queryToken === null && new URL(c.req.url).searchParams.has('token')) {
       log.warn(
@@ -226,100 +220,42 @@ export function auth(config?: AuthConfig) {
     const providedToken = authHeader || queryToken;
 
     if (providedToken && validateToken(providedToken, token)) {
-      if (rateLimitActive) {
-        limiter.recordSuccess(rateLimitKey);
-      }
+      recordSuccess(rl);
       await next();
       return;
     }
 
-    if (rateLimitActive) {
-      const blocked = limiter.checkBlocked(rateLimitKey, activeRlCfg);
-      if (blocked.blocked) {
-        log.warn(
-          {
-            clientIp,
-            origin: origin ?? undefined,
-            path: requestPath,
-            method: c.req.method,
-            attemptCount: activeRlCfg.maxAttempts,
-            windowSec: Math.round(activeRlCfg.windowMs / 1000),
-            blockDurationSec: Math.round(activeRlCfg.blockDurationMs / 1000),
-            retryAfterSec: blocked.retryAfterSec,
-            reason: 'auth_failure_rate_limit',
-          },
-          `Auth rate limit blocked: ${activeRlCfg.maxAttempts} failures in ${activeRlCfg.windowMs / 1000}s, blocking for ${activeRlCfg.blockDurationMs / 1000}s`,
-        );
-        c.header('Retry-After', String(blocked.retryAfterSec));
-        return c.json(
-          {
-            error: 'Too Many Requests',
-            message: 'Too many authentication attempts',
-            retryAfter: blocked.retryAfterSec,
-          },
-          429,
-        );
-      }
+    const blocked = checkBlocked(rl);
+    if (blocked.blocked) {
+      log.warn(
+        { clientIp, origin: origin ?? undefined, path: requestPath, method: c.req.method, retryAfterSec: blocked.retryAfterSec, reason: 'auth_blocked' },
+        'Auth rate limit blocked',
+      );
+      return blockedResponse(c, blocked.retryAfterSec);
     }
 
+    // Missing token is an unauthenticated request, not a brute-force signal —
+    // page reloads / SDK cold starts often hit endpoints before the token is
+    // attached. Counting this would lock users out of the token-entry path.
     if (!providedToken) {
-      if (rateLimitActive) {
-        limiter.recordFailure(rateLimitKey, activeRlCfg);
-      }
       log.warn(
         { path: c.req.path, method: c.req.method, clientIp, reason: 'missing_token' },
         'HTTP auth rejected: no Bearer or ?token=',
       );
-      return c.json({ error: 'Unauthorized', message: 'Missing authentication token' }, 401);
-    }
-
-    if (!validateToken(providedToken, token)) {
-      if (rateLimitActive) {
-        limiter.recordFailure(rateLimitKey, activeRlCfg);
-      }
-      log.warn(
-        { path: c.req.path, method: c.req.method, clientIp, reason: 'invalid_token' },
-        'HTTP auth rejected: token mismatch',
+      return c.json(
+        { error: 'Unauthorized', code: 'missing_token', message: 'Missing authentication token' },
+        401,
       );
-      return c.json({ error: 'Unauthorized', message: 'Invalid authentication token' }, 401);
     }
-  });
-}
 
-export interface WebSocketAuthResult {
-  valid: boolean;
-  error?: string;
-}
-
-/**
- * Validate WebSocket connection token
- */
-export function validateWebSocketAuth(
-  url: URL,
-  authHeader: string | null,
-  expectedToken?: string
-): WebSocketAuthResult {
-  if (!expectedToken) {
-    return { valid: true };
-  }
-
-  const queryToken = url.searchParams.get('token');
-  const headerToken = extractTokenFromHeader(authHeader);
-
-  const providedToken = queryToken || headerToken;
-
-  if (!providedToken) {
+    recordFailure(rl);
     log.warn(
-      { path: url.pathname, reason: 'missing_token', hasHeaderToken: Boolean(headerToken) },
-      'WebSocket auth rejected: no token in query or Authorization',
+      { path: c.req.path, method: c.req.method, clientIp, reason: 'invalid_token' },
+      'HTTP auth rejected: token mismatch',
     );
-    return { valid: false, error: 'Missing authentication token' };
-  }
-
-  if (!safeEqualSecret(providedToken, expectedToken)) {
-    log.warn({ path: url.pathname, reason: 'invalid_token' }, 'WebSocket auth rejected: token mismatch');
-    return { valid: false, error: 'Invalid authentication token' };
-  }
-
-  return { valid: true };
+    return c.json(
+      { error: 'Unauthorized', code: 'invalid_token', message: 'Invalid authentication token' },
+      401,
+    );
+  });
 }
