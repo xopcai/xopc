@@ -235,30 +235,45 @@ export function SkillsPageDetailDialog(p: Props) {
                 </>
               ) : (
                 <>
+                  {detailEnabled ? (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      disabled={!detailTitle || togglingSkillName === detailTitle}
+                      onClick={() => {
+                        if (!detailTitle) return;
+                        void onSkillToggle(detailTitle, false);
+                      }}
+                    >
+                      {togglingSkillName === detailTitle ? sk.uploading : sk.detailModalDisable}
+                    </Button>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="primary"
+                      disabled={!detailTitle || togglingSkillName === detailTitle}
+                      onClick={() => {
+                        if (!detailTitle) return;
+                        void onSkillToggle(detailTitle, true);
+                      }}
+                    >
+                      {togglingSkillName === detailTitle ? sk.uploading : sk.detailModalEnable}
+                    </Button>
+                  )}
                   <Button
                     type="button"
                     variant="secondary"
                     disabled={
                       !detailTitle ||
+                      !detailEnabled ||
                       detailLoading ||
                       usingSkillInChatName === detailTitle ||
                       togglingSkillName === detailTitle
                     }
+                    title={!detailEnabled ? sk.useRequiresEnabled : undefined}
                     onClick={() => void onUseSkillInChat()}
                   >
                     {usingSkillInChatName === detailTitle ? sk.previewUseInChatBusy : sk.previewUseInChat}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="primary"
-                    disabled={!detailTitle || togglingSkillName === detailTitle}
-                    onClick={async () => {
-                      if (!detailTitle) return;
-                      const ok = await onSkillToggle(detailTitle, !detailEnabled);
-                      if (ok) setDetailOpen(false);
-                    }}
-                  >
-                    {detailEnabled ? sk.detailModalDisable : sk.detailModalEnable}
                   </Button>
                 </>
               )}

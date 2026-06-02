@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -37,6 +38,7 @@ import {
   MAIN_TAB_SET,
   MARKETPLACE_PROVIDER_PARAM,
   SOURCE_FILTER_SET,
+  type CatalogStatusFilter,
   type MainTab,
   type SourceFilter,
 } from '@/features/skills/skills-page.constants';
@@ -81,6 +83,7 @@ export function useSkillsPage() {
   // for instant client-side feedback.
   const [debouncedSearchQueryRaw] = useDebounce(searchQuery, 250);
   const debouncedSearchQuery = debouncedSearchQueryRaw.trim();
+  const searchInputActive = searchQuery.trim().length > 0;
   const searchActive = debouncedSearchQuery.length > 0;
   const [actionFeedback, setActionFeedback] = useState<{
     kind: 'success' | 'error';
@@ -90,6 +93,7 @@ export function useSkillsPage() {
   const [mainTab, setMainTab] = useState<MainTab>(initialTab);
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>(initialSourceFilter);
   const [builtinCategoryFilter, setBuiltinCategoryFilter] = useState('');
+  const [catalogStatusFilter, setCatalogStatusFilter] = useState<CatalogStatusFilter>('all');
 
   const [installOpen, setInstallOpen] = useState(false);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
@@ -282,6 +286,13 @@ export function useSkillsPage() {
     },
   );
 
+  // Marketplace fan-out only runs on the marketplace tab; switch as soon as the user types
+  // so 内置/用户安装 does not show an empty local filter while debounce catches up.
+  useLayoutEffect(() => {
+    if (!hasToken || !searchInputActive) return;
+    setMainTab((tab) => (tab === 'marketplace' ? tab : 'marketplace'));
+  }, [hasToken, searchInputActive]);
+
   useEffect(() => {
     if (!hasToken || !searchActive || mainTab !== 'marketplace') return;
     if (registeredProviders.length === 0) return;
@@ -376,6 +387,7 @@ export function useSkillsPage() {
   // incrementally as fan-out completes.
   const aggregatedAllRows = useMemo<MarketplacePackageItem[]>(() => {
     if (!searchActive) return [];
+    if (aggregated.query !== debouncedSearchQuery) return [];
     const queues = registeredProviders.map((p) => ({
       id: p.id,
       rows: [...(aggregated.byProvider[p.id]?.rows ?? [])],
@@ -407,7 +419,7 @@ export function useSkillsPage() {
       }
     }
     return Array.from(seen.values());
-  }, [searchActive, aggregated, registeredProviders]);
+  }, [searchActive, debouncedSearchQuery, aggregated, registeredProviders]);
 
   const aggregatedTabCounts = useMemo<Record<string, number>>(() => {
     if (!searchActive) return {};
@@ -469,14 +481,18 @@ export function useSkillsPage() {
 
   const mpPayload =
     mainTab === 'marketplace'
-      ? searchActive
-        ? aggregatedPayload
+      ? searchInputActive
+        ? searchActive
+          ? aggregatedPayload
+          : null
         : mpSkillsResource.data
       : null;
   const mpLoading =
     mainTab === 'marketplace'
-      ? searchActive
-        ? aggregatedAnyLoading
+      ? searchInputActive
+        ? searchActive
+          ? aggregatedAnyLoading
+          : true
         : mpSkillsResource.loading
       : false;
   const mpError = searchActive
@@ -685,21 +701,41 @@ export function useSkillsPage() {
     await load();
   }, [load, sk.reloadFailed]);
 
+  const catalogMatchingSearch = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return catalog;
+    return catalog.filter((row) => {
+      const blob = [
+        row.name,
+        row.description,
+        row.directoryId,
+        row.path,
+        row.source,
+        row.hub?.source,
+        row.hub?.ref,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+      return blob.includes(q);
+    });
+  }, [catalog, searchQuery]);
+
   const builtinTabStats = useMemo(() => {
-    const rows = catalog.filter((r) => r.source === 'builtin');
+    const rows = catalogMatchingSearch.filter((r) => r.source === 'builtin');
     return {
       total: rows.length,
       enabled: rows.filter((r) => enabledOverride[r.name] ?? r.enabled).length,
     };
-  }, [catalog, enabledOverride]);
+  }, [catalogMatchingSearch, enabledOverride]);
 
   const userTabStats = useMemo(() => {
-    const rows = catalog.filter((r) => r.source !== 'builtin');
+    const rows = catalogMatchingSearch.filter((r) => r.source !== 'builtin');
     return {
       total: rows.length,
       enabled: rows.filter((r) => enabledOverride[r.name] ?? r.enabled).length,
     };
-  }, [catalog, enabledOverride]);
+  }, [catalogMatchingSearch, enabledOverride]);
 
   const detailFromCatalog = useMemo(
     () => (detailTitle ? catalog.find((r) => r.name === detailTitle) : undefined),
@@ -718,35 +754,19 @@ export function useSkillsPage() {
   }, [detailSource, detailTitle, marketBrowseProvider]);
 
   const filteredCatalog = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    let rows = catalog;
+    let rows = catalogMatchingSearch;
 
     if (mainTab === 'builtin') {
       rows = rows.filter((r) => r.source === 'builtin');
-    } else {
+    } else if (mainTab === 'user') {
       rows = rows.filter((r) => r.source !== 'builtin');
       if (sourceFilter !== 'all') {
         rows = rows.filter((r) => r.source === sourceFilter);
       }
     }
 
-    if (!q) return rows;
-    return rows.filter((row) => {
-      const blob = [
-        row.name,
-        row.description,
-        row.directoryId,
-        row.path,
-        row.source,
-        row.hub?.source,
-        row.hub?.ref,
-      ]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase();
-      return blob.includes(q);
-    });
-  }, [catalog, searchQuery, mainTab, sourceFilter]);
+    return rows;
+  }, [catalogMatchingSearch, mainTab, sourceFilter]);
 
   const builtinCategories = useMemo(() => {
     const seen = new Set<string>();
@@ -779,6 +799,33 @@ export function useSkillsPage() {
     if (!builtinCategoryFilter) return filteredCatalog;
     return filteredCatalog.filter((r) => r.category === builtinCategoryFilter);
   }, [filteredCatalog, builtinCategoryFilter]);
+
+  useEffect(() => {
+    setCatalogStatusFilter('all');
+  }, [mainTab]);
+
+  const resolveSkillEnabled = useCallback(
+    (row: SkillCatalogEntry) => enabledOverride[row.name] ?? row.enabled,
+    [enabledOverride],
+  );
+
+  const catalogDisabledCount = useMemo(
+    () => categoryFilteredCatalog.filter((r) => !resolveSkillEnabled(r)).length,
+    [categoryFilteredCatalog, resolveSkillEnabled],
+  );
+
+  const catalogDisplayRows = useMemo(() => {
+    let rows = categoryFilteredCatalog;
+    if (catalogStatusFilter === 'disabled') {
+      rows = rows.filter((r) => !resolveSkillEnabled(r));
+    }
+    return [...rows].sort((a, b) => {
+      const ae = resolveSkillEnabled(a);
+      const be = resolveSkillEnabled(b);
+      if (ae !== be) return ae ? -1 : 1;
+      return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+    });
+  }, [categoryFilteredCatalog, catalogStatusFilter, resolveSkillEnabled]);
 
   const runUpload = async (file: File) => {
     setActionFeedback(null);
@@ -884,6 +931,10 @@ export function useSkillsPage() {
       const name = (opts?.name ?? detailTitle).trim();
       if (!name) return;
       const source = opts?.source ?? detailSource;
+      if (source === 'catalog') {
+        const row = catalog.find((r) => r.name === name);
+        if (row && !(enabledOverride[row.name] ?? row.enabled)) return;
+      }
       setActionFeedback(null);
       const needsMarketInstall = source === 'store' && !isSkillInstalledByName(name);
       setUsingSkillInChatName(name);
@@ -909,8 +960,10 @@ export function useSkillsPage() {
       }
     },
     [
+      catalog,
       detailTitle,
       detailSource,
+      enabledOverride,
       isSkillInstalledByName,
       load,
       navigate,
@@ -1027,6 +1080,7 @@ export function useSkillsPage() {
     mpError,
     mpPayload,
     searchActive,
+    searchInputActive,
     resultTab,
     setResultTab,
     aggregatedTabCounts,
@@ -1052,6 +1106,11 @@ export function useSkillsPage() {
     filteredCatalog,
     builtinCategories,
     categoryFilteredCatalog,
+    catalogDisplayRows,
+    catalogDisabledCount,
+    catalogStatusFilter,
+    setCatalogStatusFilter,
+    resolveSkillEnabled,
     filterLabel,
     inSettingsShell,
     categoryLabel,

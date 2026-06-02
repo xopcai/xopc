@@ -16,12 +16,16 @@ type Props = Pick<
   | 'builtinCategories'
   | 'builtinCategoryFilter'
   | 'setBuiltinCategoryFilter'
-  | 'categoryFilteredCatalog'
+  | 'catalogDisplayRows'
+  | 'catalogStatusFilter'
+  | 'resolveSkillEnabled'
   | 'categoryLabel'
   | 'sourceLabel'
   | 'openSkillDetail'
+  | 'onSkillToggle'
   | 'onUseSkillInChat'
   | 'usingSkillInChatName'
+  | 'togglingSkillName'
 >;
 
 export function SkillsPageCatalogContent(p: Props) {
@@ -34,12 +38,16 @@ export function SkillsPageCatalogContent(p: Props) {
     builtinCategories,
     builtinCategoryFilter,
     setBuiltinCategoryFilter,
-    categoryFilteredCatalog,
+    catalogDisplayRows,
+    catalogStatusFilter,
+    resolveSkillEnabled,
     categoryLabel,
     sourceLabel,
     openSkillDetail,
+    onSkillToggle,
     onUseSkillInChat,
     usingSkillInChatName,
+    togglingSkillName,
   } = p;
 
   if (loading) {
@@ -117,19 +125,22 @@ export function SkillsPageCatalogContent(p: Props) {
           })}
         </div>
       ) : null}
-      {categoryFilteredCatalog.length === 0 ? (
+      {catalogDisplayRows.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-edge py-16 text-center text-sm text-fg-muted">
-          {sk.noSearchResults}
+          {catalogStatusFilter === 'disabled' ? sk.noDisabledSkills : sk.noSearchResults}
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {categoryFilteredCatalog.map((row) => (
+          {catalogDisplayRows.map((row) => {
+            const enabled = resolveSkillEnabled(row);
+            return (
             <article
               key={`${row.directoryId}-${row.path}`}
               className={cn(
-                'group flex h-full flex-col rounded-xl border border-edge-subtle bg-surface-base p-4',
-                'transition-colors hover:border-accent/40 hover:bg-surface-hover',
-                'dark:border-edge-subtle',
+                'group flex h-full flex-col rounded-xl border bg-surface-base p-4 transition-colors',
+                enabled
+                  ? 'border-edge-subtle hover:border-accent/40 hover:bg-surface-hover dark:border-edge-subtle'
+                  : 'border-amber-300/70 bg-amber-50/30 hover:border-amber-400/80 hover:bg-amber-50/50 dark:border-amber-700/50 dark:bg-amber-950/20 dark:hover:border-amber-600/60',
               )}
             >
               <div
@@ -170,11 +181,29 @@ export function SkillsPageCatalogContent(p: Props) {
                         onClick={(e) => e.stopPropagation()}
                         onKeyDown={(e) => e.stopPropagation()}
                       >
+                        {!enabled ? (
+                          <Button
+                            type="button"
+                            variant="primary"
+                            className="h-8 shrink-0 whitespace-nowrap px-2.5 text-xs font-medium"
+                            disabled={togglingSkillName === row.name}
+                            onClick={() => void onSkillToggle(row.name, true)}
+                          >
+                            {togglingSkillName === row.name
+                              ? sk.uploading
+                              : sk.detailModalEnable}
+                          </Button>
+                        ) : null}
                         <Button
                           type="button"
                           variant="secondary"
                           className="h-8 shrink-0 whitespace-nowrap px-2.5 text-xs font-medium"
-                          disabled={usingSkillInChatName === row.name}
+                          disabled={
+                            !enabled ||
+                            usingSkillInChatName === row.name ||
+                            togglingSkillName === row.name
+                          }
+                          title={!enabled ? sk.useRequiresEnabled : undefined}
                           onClick={() =>
                             void onUseSkillInChat({ name: row.name, source: 'catalog' })
                           }
@@ -191,8 +220,9 @@ export function SkillsPageCatalogContent(p: Props) {
                     >
                       {row.description || '—'}
                     </p>
-                    {mainTab !== 'builtin' || row.managed ? (
-                      <div className="flex flex-wrap gap-1.5 text-[11px] text-fg-subtle">
+                    <div className="flex flex-wrap gap-1.5 text-[11px] text-fg-subtle">
+                        {mainTab !== 'builtin' || row.managed ? (
+                      <>
                         {mainTab !== 'builtin' ? (
                           <span className="rounded-md bg-surface-hover/60 px-2 py-0.5 dark:bg-surface-active/50">
                             {sourceLabel(row.source)}
@@ -215,13 +245,15 @@ export function SkillsPageCatalogContent(p: Props) {
                               : row.hub.source}
                           </span>
                         ) : null}
-                      </div>
-                    ) : null}
+                      </>
+                        ) : null}
+                    </div>
                   </div>
                 </div>
               </div>
             </article>
-          ))}
+            );
+          })}
         </div>
       )}
     </>

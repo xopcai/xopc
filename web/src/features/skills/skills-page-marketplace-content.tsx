@@ -26,7 +26,7 @@ type Props = Pick<
   | 'openMarketplaceDetail'
   | 'onUseSkillInChat'
   | 'usingSkillInChatName'
-  | 'searchActive'
+  | 'searchInputActive'
   | 'searchQuery'
   | 'setSearchQuery'
   | 'registeredProviders'
@@ -51,14 +51,14 @@ export function SkillsPageMarketplaceContent(p: Props) {
     openMarketplaceDetail,
     onUseSkillInChat,
     usingSkillInChatName,
-    searchActive,
+    searchInputActive,
     searchQuery,
     setSearchQuery,
     registeredProviders,
     marketBrowseProvider,
     setMarketBrowseProvider,
   } = p;
-  const showCategories = !searchActive;
+  const showCategories = !searchInputActive;
   const otherProviders = registeredProviders.filter((rp) => rp.id !== marketBrowseProvider);
   const trimmedQuery = searchQuery.trim();
 
@@ -170,11 +170,11 @@ export function SkillsPageMarketplaceContent(p: Props) {
           {mpPayload.items.length === 0 ? (
             <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-edge py-12 text-center text-sm text-fg-muted">
               <p className="px-4">
-                {searchActive && trimmedQuery
+                {searchInputActive && trimmedQuery
                   ? interpolate(sk.marketplaceEmptySearch, { query: trimmedQuery })
                   : sk.marketplaceEmpty}
               </p>
-              {searchActive ? (
+              {searchInputActive ? (
                 <div className="flex flex-wrap items-center justify-center gap-2">
                   {otherProviders.map((rp) => (
                     <Button
