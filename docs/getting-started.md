@@ -119,7 +119,7 @@ xopc tui --local
 
 See [Terminal UI (TUI)](./tui.md) for gateway-connected mode (`xopc tui`) and session flags.
 
-## 5. Gateway, background mode, and channels
+## 5. Gateway, OS service, and channels
 
 ### Telegram (example)
 
@@ -149,7 +149,7 @@ xopc gateway
 
 4. **Chat** in Telegram, or open the **Web console** in a browser (default port is often **18790** unless you changed `gateway.port`).
 
-### Run the gateway in the background
+### Run the gateway as an OS service
 
 ```bash
 xopc gateway service install

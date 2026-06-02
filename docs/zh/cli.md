@@ -297,10 +297,7 @@ xopc gateway --force
 | `gateway restart` | 重启网关 |
 | `gateway logs` | 查看网关日志 |
 | `gateway token` | 查看/生成认证令牌 |
-| `gateway install` | 安装为系统服务 |
-| `gateway uninstall` | 卸载系统服务 |
-| `gateway service-start` | 通过系统服务启动 |
-| `gateway service-status` | 查看服务状态 |
+| `gateway service` | 安装/启动/停止 OS 服务（`install`、`start`、`stop`、`restart`、`uninstall`） |
 
 **示例**：
 
@@ -308,17 +305,11 @@ xopc gateway --force
 # 查看状态
 xopc gateway status
 
-# 停止网关（SIGTERM，5秒超时）
+# 停止网关
 xopc gateway stop
 
-# 强制停止（立即 SIGKILL）
-xopc gateway stop --force
-
-# 重启网关（SIGUSR1 信号）
+# 重启网关
 xopc gateway restart
-
-# 强制重启（终止并重新启动）
-xopc gateway restart --force
 
 # 查看最近 50 行日志
 xopc gateway logs
@@ -329,17 +320,9 @@ xopc gateway logs --follow
 # 生成新令牌
 xopc gateway token --generate
 
-# 安装为系统服务
-xopc gateway install
-
-# 卸载系统服务
-xopc gateway uninstall
-
-# 通过系统服务启动
-xopc gateway service-start
-
-# 查看服务状态
-xopc gateway service-status
+# 安装并启动系统服务
+xopc gateway service install
+xopc gateway service start
 ```
 
 ### 进程管理
@@ -353,8 +336,9 @@ xopc gateway service-status
 | 变量 | 描述 |
 |------|------|
 | `XOPC_NO_RESPAWN` | 禁用进程重生 |
-| `XOPC_ALLOW_SIGUSR1_RESTART` | 允许 SIGUSR1 重启 |
 | `XOPC_SERVICE_MARKER` | 标记受监督环境 |
+
+在 `xopc.json` 中设置 **`commands.restart: false`** 可禁用 SIGUSR1 重启。
 
 ---
 

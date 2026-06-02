@@ -118,7 +118,6 @@ export async function runDaemonStop(options: { json?: boolean; disable?: boolean
 
 export async function runDaemonRestart(options: {
   json?: boolean;
-  force?: boolean;
   wait?: string;
 } = {}): Promise<void> {
   const service = await resolveGatewayService();

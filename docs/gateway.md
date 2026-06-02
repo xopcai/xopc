@@ -84,11 +84,8 @@ xopc gateway stop --json
 ### Restart Gateway
 
 ```bash
-# Graceful restart via OS service manager
+# Graceful restart via OS service manager (or unmanaged SIGUSR1 fallback)
 xopc gateway restart
-
-# Force restart (kill immediately, KeepAlive respawns)
-xopc gateway restart --force
 
 # Wait for health check after restart (with timeout)
 xopc gateway restart --wait 30s
@@ -638,12 +635,6 @@ Gateway supports graceful shutdown:
 2. If requests still pending after 5 seconds, force terminate
 3. Automatically release lock file
 
-Timeout can be customized:
-
-```bash
-xopc gateway stop --timeout 10000  # 10 second timeout
-```
-
 ---
 
 ## Environment Variables
@@ -654,8 +645,9 @@ xopc gateway stop --timeout 10000  # 10 second timeout
 | `XOPC_GATEWAY_TOKEN` | Gateway token when auth mode is `token` |
 | `XOPC_GATEWAY_PASSWORD` | Gateway password when auth mode is `password` |
 | `XOPC_NO_RESPAWN` | Disable process respawn |
-| `XOPC_ALLOW_SIGUSR1_RESTART` | Allow SIGUSR1 to trigger restart |
 | `XOPC_SERVICE_MARKER` | Mark running under supervisor |
+
+Set **`commands.restart: false`** in `xopc.json` to disable SIGUSR1 restart (CLI unmanaged restart and in-process restart policy).
 
 ---
 

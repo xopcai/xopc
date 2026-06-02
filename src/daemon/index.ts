@@ -25,4 +25,3 @@ export * from './types.js';
 export * from './constants.js';
 export * from './service.js';
 export * from './install-plan.js';
-export * from './launchd-restart-handoff.js';
