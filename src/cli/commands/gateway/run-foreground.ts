@@ -1,5 +1,3 @@
-import { spawn } from 'node:child_process';
-
 import type { CLIContext } from '../../registry.js';
 
 export type GatewayRunCliOptions = {
@@ -10,7 +8,6 @@ export type GatewayRunCliOptions = {
   tailscaleResetOnExit?: boolean;
   force?: boolean;
   hotReload?: boolean;
-  background?: boolean;
   foreground?: boolean;
 };
 
@@ -151,49 +148,6 @@ export async function runGatewayFromCliOptions(
   const portAvailable = await checkPortAvailable(port, bindHost);
   if (!portAvailable) {
     console.error(`Port ${port} is already in use. Use --force to kill existing process.`);
-    process.exit(1);
-  }
-
-  if (options.background === true) {
-    console.log('🚀 Starting xopc gateway in background...');
-    console.log(`   Bind: ${listenPlan.bindMode} (${bindHost})`);
-    console.log(`   Port: ${port}`);
-    console.log('');
-
-    const args = [
-      ...process.execArgv,
-      ...process.argv.slice(1).filter((arg) => arg !== '--background'),
-      '--foreground',
-    ];
-
-    const child = spawn(process.execPath, args, {
-      detached: true,
-      stdio: 'ignore',
-      env: process.env,
-    });
-
-    child.unref();
-
-    await new Promise((resolve) => setTimeout(resolve, 500));
-
-    if (child.pid && !child.killed) {
-      const displayHost = bindHost === '0.0.0.0' ? 'localhost' : bindHost;
-      console.log('✅ Gateway started in background');
-      console.log(`   PID: ${child.pid}`);
-      console.log(`   URL: http://${displayHost}:${port}`);
-      const token = options.token || config?.gateway?.auth?.token;
-      if (token) {
-        console.log(`   Token: ${token.slice(0, 8)}...${token.slice(-8)}`);
-      }
-      console.log('');
-      console.log('📝 Management commands:');
-      console.log(`   xopc gateway status     # Check status`);
-      console.log(`   xopc gateway stop       # Stop gateway`);
-      console.log(`   xopc gateway restart    # Restart gateway`);
-      process.exit(0);
-    }
-
-    console.error('❌ Failed to start gateway in background');
     process.exit(1);
   }
 

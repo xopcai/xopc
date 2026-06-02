@@ -12,7 +12,6 @@ const GATEWAY_RUN_BOOLEAN_FLAGS = new Set([
   '--force',
   '--no-hot-reload',
   '--foreground',
-  '--background',
 ]);
 
 const GATEWAY_SUBCOMMANDS = new Set([
@@ -157,10 +156,6 @@ export function isGatewayRunFastPathArgv(argv: string[]): boolean {
 
     const consumed = consumeGatewayRunOptionToken(args, index);
     if (consumed > 0) {
-      const flag = args[index] ?? '';
-      if (flag === '--background' || flag.startsWith('--background=')) {
-        return false;
-      }
       index += consumed - 1;
       continue;
     }

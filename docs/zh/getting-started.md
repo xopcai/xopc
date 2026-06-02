@@ -149,7 +149,8 @@ xopc gateway
 ### 网关放后台跑
 
 ```bash
-xopc gateway --background
+xopc gateway service install
+xopc gateway service start
 ```
 
 之后可用 **`xopc gateway status`**、**`xopc gateway stop`**、**`xopc gateway restart`**、**`xopc gateway logs`**。详见 **[网关](./gateway.md)**。

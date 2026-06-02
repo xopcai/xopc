@@ -277,9 +277,8 @@ xopc gateway --port 18790
 | `--token` | 认证令牌 |
 | `--no-hot-reload` | 禁用配置热重载 |
 | `--force` | 强制终止端口上的现有进程 |
-| `--background` | 后台模式启动（分离进程） |
 
-### 强制启动
+后台运行请使用 **`xopc gateway service install`**（见 [Gateway](./gateway.md)）。
 
 如果端口已被占用，使用 `--force` 自动终止现有进程：
 

@@ -73,11 +73,6 @@ export interface GatewayServiceRestartResult {
   outcome: GatewayServiceRestartOutcome;
 }
 
-export interface GatewayRestartIntent {
-  force?: boolean;
-  waitMs?: number;
-}
-
 // ─── Start Repair ───
 
 export type StartRepairIssueCode =

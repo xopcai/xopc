@@ -152,7 +152,8 @@ xopc gateway
 ### Run the gateway in the background
 
 ```bash
-xopc gateway --background
+xopc gateway service install
+xopc gateway service start
 ```
 
 Then use **`xopc gateway status`**, **`xopc gateway stop`**, **`xopc gateway restart`**, and **`xopc gateway logs`** as needed. See [Gateway](./gateway.md).

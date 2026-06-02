@@ -19,7 +19,8 @@ xopc gateway --port 18790
 需要终端立刻返回、网关常驻后台时：
 
 ```bash
-xopc gateway --background
+xopc gateway service install
+xopc gateway service start
 ```
 
 启动成功后会打印 **PID** 与 **URL**。之后用 **`xopc gateway status`**、**`xopc gateway stop`**、**`xopc gateway restart`**、**`xopc gateway logs`** 管理进程（见下文 [进程管理命令](#进程管理命令)）。

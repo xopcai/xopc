@@ -65,7 +65,7 @@ xopc agent -i                              # classic interactive CLI
 xopc agent -m "Summarize the last 5 commits" # one-shot
 
 xopc gateway                               # local web server + React console (URL in logs)
-xopc gateway --background                  # detached; xopc gateway stop | status | logs
+xopc gateway service install               # OS service; xopc gateway stop | status | logs
 ```
 
 **From source:**
