@@ -1,8 +1,11 @@
 import { Command } from 'commander';
-import { existsSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { resolveGatewayLocalClientHost } from '../../config/gateway-bind.js';
 import { writeTextAtomic } from '../../infra/write-file-atomic.js';
+import { ConfigSchema } from '../../config/schema.js';
 import { register, formatExamples, type CLIContext } from '../registry.js';
+
+const MISSING_CONFIG_HINT = 'Run: xopc setup, xopc onboard, or xopc init';
 
 async function loadConfigDeps() {
   const [{ loadConfig }, { createLogger }] = await Promise.all([
@@ -10,6 +13,66 @@ async function loadConfigDeps() {
     import('../../utils/logger.js'),
   ]);
   return { loadConfig, log: createLogger('ConfigCommand') };
+}
+
+async function runConfigShow(configPath: string): Promise<void> {
+  const { loadConfig, log } = await loadConfigDeps();
+  if (!existsSync(configPath)) {
+    log.warn(`No config file found. ${MISSING_CONFIG_HINT}`);
+    return;
+  }
+
+  const config = loadConfig(configPath);
+  const maskedConfig = JSON.stringify(
+    config,
+    (key, value) => {
+      if (key === 'api_key' || key === 'token') {
+        return value ? '********' : value;
+      }
+      return value;
+    },
+    2,
+  );
+  console.log(maskedConfig);
+}
+
+async function runConfigValidate(configPath: string): Promise<boolean> {
+  const { log } = await loadConfigDeps();
+  if (!existsSync(configPath)) {
+    log.error('Config file not found. Run: xopc onboard');
+    return false;
+  }
+
+  let json: unknown;
+  try {
+    json = JSON.parse(readFileSync(configPath, 'utf-8'));
+  } catch {
+    log.error('Config file is not valid JSON.');
+    return false;
+  }
+
+  const parsed = ConfigSchema.safeParse(json);
+  if (!parsed.success) {
+    log.error('Config does not match the expected schema.');
+    for (const issue of parsed.error.issues) {
+      console.error(`  - ${issue.path.join('.') || '(root)'}: ${issue.message}`);
+    }
+    return false;
+  }
+
+  const { validateChannelPluginConfigs } = await import('../../config/validate-channel-configs.js');
+  const channelErrors = validateChannelPluginConfigs(parsed.data);
+  if (channelErrors.length > 0) {
+    log.error('Channel configuration failed validation.');
+    for (const err of channelErrors) {
+      console.error(`  - ${err}`);
+    }
+    return false;
+  }
+
+  log.info({ path: configPath }, 'Config is valid');
+  console.log('✅ Configuration is valid');
+  return true;
 }
 
 function getNestedValue(obj: any, path: string): any {
@@ -37,6 +100,8 @@ function setNestedValue(obj: any, path: string, value: any): any {
 function createConfigCommand(ctx: CLIContext): Command {
   const cmd = new Command('config')
     .description('View and edit configuration')
+    .option('--show', 'Show full configuration (alias for `config show`)')
+    .option('--validate', 'Validate configuration file (alias for `config validate`)')
     .addHelpText(
       'after',
       formatExamples([
@@ -44,11 +109,26 @@ function createConfigCommand(ctx: CLIContext): Command {
         'xopc config set agents.defaults.temperature 0.8',
         'xopc config unset agents.defaults.max_tokens',
         'xopc config show',
+        'xopc config validate',
         'xopc config token              # Show gateway token info',
         'xopc config token --show       # Show full token',
         'xopc config token --generate   # Generate new token',
-      ])
-    );
+      ]),
+    )
+    .action(async (options) => {
+      if (options.show) {
+        await runConfigShow(ctx.configPath);
+        return;
+      }
+      if (options.validate) {
+        const ok = await runConfigValidate(ctx.configPath);
+        if (!ok) {
+          process.exit(1);
+        }
+        return;
+      }
+      cmd.outputHelp();
+    });
 
   cmd
     .command('get <path>')
@@ -56,7 +136,7 @@ function createConfigCommand(ctx: CLIContext): Command {
     .action(async (path: string) => {
       const { loadConfig, log } = await loadConfigDeps();
       if (!existsSync(ctx.configPath)) {
-        log.error('Config file not found. Run: xopc onboard');
+        log.error(`Config file not found. ${MISSING_CONFIG_HINT}`);
         process.exit(1);
       }
 
@@ -77,7 +157,7 @@ function createConfigCommand(ctx: CLIContext): Command {
     .action(async (path: string, value: string) => {
       const { loadConfig, log } = await loadConfigDeps();
       if (!existsSync(ctx.configPath)) {
-        log.error('Config file not found. Run: xopc onboard');
+        log.error(`Config file not found. ${MISSING_CONFIG_HINT}`);
         process.exit(1);
       }
 
@@ -102,7 +182,7 @@ function createConfigCommand(ctx: CLIContext): Command {
     .action(async (path: string) => {
       const { loadConfig, log } = await loadConfigDeps();
       if (!existsSync(ctx.configPath)) {
-        log.error('Config file not found. Run: xopc onboard');
+        log.error(`Config file not found. ${MISSING_CONFIG_HINT}`);
         process.exit(1);
       }
 
@@ -127,22 +207,17 @@ function createConfigCommand(ctx: CLIContext): Command {
     .command('show')
     .description('Show full configuration (sensitive values masked)')
     .action(async () => {
-      const { loadConfig, log } = await loadConfigDeps();
-      if (!existsSync(ctx.configPath)) {
-        log.warn('No config file found. Run: xopc onboard');
-        return;
+      await runConfigShow(ctx.configPath);
+    });
+
+  cmd
+    .command('validate')
+    .description('Validate configuration file against schema and channel plugins')
+    .action(async () => {
+      const ok = await runConfigValidate(ctx.configPath);
+      if (!ok) {
+        process.exit(1);
       }
-
-      const config = loadConfig(ctx.configPath);
-
-      const maskedConfig = JSON.stringify(config, (key, value) => {
-        if (key === 'api_key' || key === 'token') {
-          return value ? '********' : value;
-        }
-        return value;
-      }, 2);
-
-      console.log(maskedConfig);
     });
 
   cmd
@@ -153,7 +228,7 @@ function createConfigCommand(ctx: CLIContext): Command {
     .action(async (options) => {
       const { loadConfig, log } = await loadConfigDeps();
       if (!existsSync(ctx.configPath)) {
-        log.error('Config file not found. Run: xopc onboard');
+        log.error(`Config file not found. ${MISSING_CONFIG_HINT}`);
         process.exit(1);
       }
 
@@ -202,7 +277,7 @@ function createConfigCommand(ctx: CLIContext): Command {
         console.log('\nUse "xopc config token --show" to view the full token');
         console.log('Use "xopc config token --generate" to generate a new token');
       } else if (mode === 'token') {
-        console.log('  Token: not set (will be auto-generated on first gateway start)');
+        console.log('  Token: not set (will be auto-generated on first `xopc gateway` run)');
       }
     });
 
@@ -227,6 +302,7 @@ register({
       'xopc config get agents.defaults.model',
       'xopc config set agents.defaults.temperature 0.8',
       'xopc config show',
+      'xopc config validate',
       'xopc config token',
       'xopc config token --show',
       'xopc config token --generate',

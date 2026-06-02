@@ -72,7 +72,7 @@ Resolved by `resolveAgentWorkspaceDir(config, agentId)` — often **`<stateDir>/
 | `skills/` | User-authored skills. |
 | *arbitrary files* | `read` / `write` / `edit` tool targets. |
 
-Internal state is **not** written here on new installs. This tree is the only supported layout: persona Markdown and machine state follow the table at top. There is **no** automatic import from older “everything under the markdown workspace” layouts—use `xopc setup` / `xopc onboard` for profile Markdown templates, and move any old data yourself if you are upgrading from another fork.
+Internal state is **not** written here on new installs. This tree is the only supported layout: persona Markdown and machine state follow the table at top. There is **no** automatic import from older “everything under the markdown workspace” layouts—use `xopc init` for the full state tree, or `xopc setup` / `xopc onboard` for config + profile Markdown seeds, and move any old data yourself if you are upgrading from another fork.
 
 Inbound / TTS attachments in transcripts use relative paths under `inbound/` and `tts/` **only** (resolved from agent home).
 
