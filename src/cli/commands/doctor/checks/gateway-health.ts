@@ -59,7 +59,7 @@ export async function checkGatewayHealth(ctx: DoctorContext): Promise<CheckResul
       label: 'Gateway HTTP',
       status: 'warn',
       message: `Gateway returned HTTP ${res.status} at ${url}.`,
-      hints: ['Start the gateway: xopc gateway start'],
+      hints: ['Start the gateway: xopc gateway service start (or xopc gateway for foreground)'],
     };
   } catch (e) {
     clearTimeout(timer);
@@ -71,7 +71,7 @@ export async function checkGatewayHealth(ctx: DoctorContext): Promise<CheckResul
       message: isAbort
         ? `Gateway did not respond within ${FETCH_TIMEOUT_MS / 1000}s (${url}).`
         : `Gateway not reachable (${url}).`,
-      hints: ['Start the gateway: xopc gateway start', `Configured base: ${base}`],
+      hints: ['Start the gateway: xopc gateway service start (or xopc gateway for foreground)', `Configured base: ${base}`],
     };
   }
 }

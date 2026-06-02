@@ -23,10 +23,7 @@ const GATEWAY_SUBCOMMANDS = new Set([
   'stop',
   'restart',
   'logs',
-  'install',
-  'uninstall',
-  'start',
-  'service-status',
+  'service',
   'ssh-tunnel',
 ]);
 
@@ -112,6 +109,19 @@ export function resolveGatewayCatalogCommandPath(argv: string[]): string[] | nul
     if (arg.startsWith('-')) {
       continue;
     }
+    if (arg === 'service') {
+      for (let nestedIndex = index + 1; nestedIndex < args.length; nestedIndex += 1) {
+        const nested = args[nestedIndex];
+        if (!nested || nested === '--') {
+          break;
+        }
+        if (nested.startsWith('-')) {
+          continue;
+        }
+        return ['gateway', 'service', nested];
+      }
+      return ['gateway', 'service'];
+    }
     return ['gateway', arg];
   }
 
@@ -120,7 +130,7 @@ export function resolveGatewayCatalogCommandPath(argv: string[]): string[] | nul
 
 export function resolveGatewaySubcommandName(argv: string[]): string | undefined {
   const path = resolveGatewayCatalogCommandPath(argv);
-  return path && path.length === 2 ? path[1] : undefined;
+  return path && path.length >= 2 ? path[1] : undefined;
 }
 
 export function isGatewayRunFastPathArgv(argv: string[]): boolean {

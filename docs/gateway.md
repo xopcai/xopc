@@ -160,7 +160,7 @@ xopc gateway service install [--force] [--port N] [--token T]
 xopc gateway service start
 
 # Show OS service status (loaded, runtime PID, version)
-xopc gateway service-status [--json]
+xopc gateway service status [--json]
 
 # Uninstall service
 xopc gateway service uninstall [--json]

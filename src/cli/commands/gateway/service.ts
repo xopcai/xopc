@@ -1,6 +1,8 @@
 import { Command } from 'commander';
 import { resolveConfigPath } from '../../../config/paths.js';
 import { getContextWithOpts } from '../../context.js';
+import { createRestartCommand } from './restart.js';
+import { createStopCommand } from './stop.js';
 
 /**
  * Create service install subcommand - actually installs the OS service
@@ -154,7 +156,7 @@ export function createServiceStartCommand(): Command {
  * Create service status subcommand
  */
 export function createServiceStatusCommand(): Command {
-  return new Command('service-status')
+  return new Command('status')
     .description('Show OS service status')
     .option('--json', 'Output JSON')
     .action(async (options) => {
@@ -205,4 +207,20 @@ export function createServiceStatusCommand(): Command {
         console.log('💡 Install with: xopc gateway service install');
       }
     });
+}
+
+/**
+ * Gateway OS service command group (`xopc gateway service …`).
+ */
+export function createServiceCommand(): Command {
+  const cmd = new Command('service').description(
+    'Manage gateway OS service (LaunchAgent / systemd / Task)',
+  );
+  cmd.addCommand(createInstallCommand());
+  cmd.addCommand(createUninstallCommand());
+  cmd.addCommand(createServiceStartCommand());
+  cmd.addCommand(createServiceStatusCommand());
+  cmd.addCommand(createStopCommand());
+  cmd.addCommand(createRestartCommand());
+  return cmd;
 }

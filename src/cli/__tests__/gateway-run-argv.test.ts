@@ -25,11 +25,21 @@ describe('gateway run argv', () => {
       'gateway',
       'probe',
     ]);
+    expect(resolveGatewayCatalogCommandPath(['node', 'xopc', 'gateway', 'service', 'install'])).toEqual([
+      'gateway',
+      'service',
+      'install',
+    ]);
     expect(resolveGatewayCatalogCommandPath(['node', 'xopc', 'config', 'show'])).toBeNull();
   });
 
   it('resolves gateway subcommand names', () => {
     expect(resolveGatewaySubcommandName(['node', 'xopc', 'gateway', 'stop'])).toBe('stop');
+    expect(resolveGatewaySubcommandName(['node', 'xopc', 'gateway', 'service', 'install'])).toBe('service');
     expect(resolveGatewaySubcommandName(['node', 'xopc', 'gateway', '--port', '8080'])).toBeUndefined();
+  });
+
+  it('rejects service subcommands for run fast path', () => {
+    expect(isGatewayRunFastPathArgv(['node', 'xopc', 'gateway', 'service', 'install'])).toBe(false);
   });
 });

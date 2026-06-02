@@ -4,6 +4,7 @@ import {
   createUninstallCommand,
   createServiceStartCommand,
   createServiceStatusCommand,
+  createServiceCommand,
 } from '../service.js';
 
 // Mock lifecycle-core
@@ -153,7 +154,7 @@ describe('Gateway Service Commands', () => {
   describe('createServiceStatusCommand', () => {
     it('should create command with correct name and description', () => {
       const cmd = createServiceStatusCommand();
-      expect(cmd.name()).toBe('service-status');
+      expect(cmd.name()).toBe('status');
       expect(cmd.description()).toBe('Show OS service status');
     });
 
@@ -161,6 +162,17 @@ describe('Gateway Service Commands', () => {
       const cmd = createServiceStatusCommand();
       const jsonOption = cmd.options.find((opt: any) => opt.attributeName() === 'json');
       expect(jsonOption).toBeDefined();
+    });
+  });
+
+  describe('createServiceCommand', () => {
+    it('should group service subcommands', () => {
+      const cmd = createServiceCommand();
+      expect(cmd.name()).toBe('service');
+      const names = cmd.commands.map((sub) => sub.name());
+      expect(names).toEqual(
+        expect.arrayContaining(['install', 'uninstall', 'start', 'status', 'stop', 'restart']),
+      );
     });
   });
 });

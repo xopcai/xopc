@@ -153,7 +153,7 @@ xopc gateway service install [--force] [--port N] [--token T]
 xopc gateway service start
 
 # 查看 OS 服务状态（是否加载、运行 PID、版本）
-xopc gateway service-status [--json]
+xopc gateway service status [--json]
 
 # 卸载服务
 xopc gateway service uninstall [--json]
