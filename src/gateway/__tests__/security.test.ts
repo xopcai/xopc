@@ -3,7 +3,7 @@ import { createHonoApp, isExtensionGatewayUiAssetPath } from '../hono/app.js';
 import type { GatewayService } from '../service.js';
 import { resolveGatewayEffectiveHost } from '../../config/gateway-bind.js';
 import { GatewayConfigSchema, type Config } from '../../config/schema.js';
-import { resetAuthRateLimitersForTests } from '../auth-rate-limit.js';
+import { buckets } from '../rate-limit/index.js';
 import { resolveEffectiveGatewayPort } from '../host.js';
 import { loadTunnelState } from '../../tunnel/tunnel-state.js';
 
@@ -358,10 +358,10 @@ describe('Gateway Security Fixes', () => {
 
   describe('Auth failure rate limiting', () => {
     beforeEach(() => {
-      resetAuthRateLimitersForTests();
+      buckets.resetAllForTests();
     });
     afterEach(() => {
-      resetAuthRateLimitersForTests();
+      buckets.resetAllForTests();
     });
 
     it('returns 429 after repeated invalid gateway tokens', async () => {
@@ -375,6 +375,10 @@ describe('Gateway Security Fixes', () => {
               maxAttempts: 2,
               windowMs: 60_000,
               blockDurationMs: 60_000,
+              // Disable burst-coalesce so sequential test requests count as
+              // distinct attempts. Production default (1000ms) absorbs SPA
+              // fan-out — see auth-rate-limit policy docs.
+              burstCoalesceMs: 0,
             },
           },
         },
@@ -466,6 +470,7 @@ describe('Gateway Security Fixes', () => {
               windowMs: 60_000,
               blockDurationMs: 60_000,
               exemptLoopback: true,
+              burstCoalesceMs: 0,
             },
           },
         },
@@ -493,6 +498,7 @@ describe('Gateway Security Fixes', () => {
               maxAttempts: 2,
               windowMs: 60_000,
               blockDurationMs: 60_000,
+              burstCoalesceMs: 0,
             },
           },
         },
@@ -526,7 +532,10 @@ describe('Gateway Security Fixes', () => {
       expect(badAfterSuccess.status).toBe(401);
     });
 
-    it('allows immediate recovery with a valid token after missing-token lockout', async () => {
+    it('does not count missing-token requests as failures', async () => {
+      // Page reloads / SDK cold starts often issue requests before a token is
+      // attached. Counting these as brute-force attempts would lock users out
+      // of the recovery path (they couldn't even open the token-entry UI).
       const service = createMockService({
         gateway: {
           auth: {
@@ -537,21 +546,22 @@ describe('Gateway Security Fixes', () => {
               maxAttempts: 2,
               windowMs: 60_000,
               blockDurationMs: 60_000,
+              burstCoalesceMs: 0,
             },
           },
         },
       });
       const app = createHonoApp({ service, token: 'real' });
 
-      // Missing token attempts should also lead to lockout.
-      const miss1 = await app.request('/api/config');
-      expect(miss1.status).toBe(401);
-      const miss2 = await app.request('/api/config');
-      expect(miss2.status).toBe(401);
-      const blocked = await app.request('/api/config');
-      expect(blocked.status).toBe(429);
+      // 10 missing-token requests must never trigger a block.
+      for (let i = 0; i < 10; i += 1) {
+        const res = await app.request('/api/config');
+        expect(res.status).toBe(401);
+        const body = (await res.json()) as { code?: string };
+        expect(body.code).toBe('missing_token');
+      }
 
-      // Correct token should still recover immediately.
+      // After all that, valid token still works — bucket was never armed.
       const good = await app.request('/api/config', {
         headers: { Authorization: 'Bearer real' },
       });

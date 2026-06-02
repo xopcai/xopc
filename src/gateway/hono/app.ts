@@ -2,13 +2,9 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { createMiddleware } from 'hono/factory';
 import { bodyLimit } from 'hono/body-limit';
-import { getConnInfo } from '@hono/node-server/conninfo';
 
 import { resolveGatewayEffectiveHost } from '../../config/gateway-bind.js';
-import { createFixedWindowRateLimiter } from '../../infra/rate-limit.js';
 import { createLogger } from '../../utils/logger.js';
-import { getClientIpFromHeaders } from '../auth-rate-limit.js';
-import { resolveClientIpFromRequest } from '../client-ip.js';
 import type { GatewayService } from '../service.js';
 import { resolveAllowedBrowserOrigins, resolveGatewayServiceListenPort } from '../host.js';
 import { loadTunnelState } from '../../tunnel/tunnel-state.js';
@@ -17,6 +13,7 @@ import { buildGatewayConsoleCspHeader } from '../security/csp.js';
 import { checkBrowserOrigin } from '../security/origin-check.js';
 import { auth } from './middleware/auth.js';
 import { operatorScopes } from './middleware/scopes.js';
+import { createStrictRateLimitMiddleware } from './middleware/strict-rate-limit.js';
 import { logContextMiddleware } from './middleware/log-context.js';
 import { logger } from './middleware/logger.js';
 import { registerPublicExtensionAssetRoutes } from './routes/auth-registry-extensions.js';
@@ -192,73 +189,11 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   );
   authenticated.use(operatorScopes());
 
-  const STRICT_RATE_LIMIT_MAX = 15;
-  const STRICT_RATE_LIMIT_WINDOW_MS = 60_000;
-
-  const strictRateLimiter = new Map<string, ReturnType<typeof createFixedWindowRateLimiter>>();
-
-  const RATE_LIMIT_CLEANUP_INTERVAL = 5 * 60 * 1000;
-  setInterval(() => {
-    for (const [ip, limiter] of strictRateLimiter.entries()) {
-      const result = limiter.consume();
-      if (result.remaining === STRICT_RATE_LIMIT_MAX - 1) {
-        strictRateLimiter.delete(ip);
-      }
-    }
-  }, RATE_LIMIT_CLEANUP_INTERVAL);
-
-  const strictRateLimitMiddleware = createMiddleware(async (c, next) => {
-    const trustedProxies = service.currentConfig.gateway?.trustedProxies;
-    const allowRealIpFallback = service.currentConfig.gateway?.allowRealIpFallback === true;
-    let remoteAddress: string | undefined;
-    try {
-      remoteAddress = getConnInfo(c).remote.address;
-    } catch {
-      remoteAddress = undefined;
-    }
-    const clientIp = trustedProxies?.length
-      ? resolveClientIpFromRequest({
-          remoteAddress,
-          getHeader: (name) => c.req.header(name),
-          trustedProxies,
-          allowRealIpFallback,
-        })
-      : getClientIpFromHeaders({
-          get: (name) => c.req.header(name) ?? undefined,
-        });
-
-    let limiter = strictRateLimiter.get(clientIp);
-    if (!limiter) {
-      limiter = createFixedWindowRateLimiter({
-        maxRequests: STRICT_RATE_LIMIT_MAX,
-        windowMs: STRICT_RATE_LIMIT_WINDOW_MS,
-      });
-      strictRateLimiter.set(clientIp, limiter);
-    }
-
-    const result = limiter.consume();
-    if (!result.allowed) {
-      log.warn(
-        {
-          clientIp,
-          path: c.req.path,
-          method: c.req.method,
-          limit: STRICT_RATE_LIMIT_MAX,
-          windowSec: Math.round(STRICT_RATE_LIMIT_WINDOW_MS / 1000),
-          retryAfterSec: Math.ceil(result.retryAfterMs / 1000),
-          reason: 'api_rate_limit_exceeded',
-        },
-        `API rate limit exceeded: ${STRICT_RATE_LIMIT_MAX} req/${STRICT_RATE_LIMIT_WINDOW_MS / 1000}s limit for IP ${clientIp}`,
-      );
-      c.header('Retry-After', String(Math.ceil(result.retryAfterMs / 1000)));
-      c.header('X-RateLimit-Limit', String(STRICT_RATE_LIMIT_MAX));
-      c.header('X-RateLimit-Remaining', '0');
-      return c.json({ error: 'Too many requests' }, 429);
-    }
-
-    c.header('X-RateLimit-Limit', String(STRICT_RATE_LIMIT_MAX));
-    c.header('X-RateLimit-Remaining', String(result.remaining));
-    await next();
+  const strictRateLimitMiddleware = createStrictRateLimitMiddleware({
+    getTrustedProxyContext: () => ({
+      trustedProxies: service.currentConfig.gateway?.trustedProxies,
+      allowRealIpFallback: service.currentConfig.gateway?.allowRealIpFallback === true,
+    }),
   });
 
   const sseConfig = {

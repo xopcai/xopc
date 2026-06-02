@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto';
 import { Readable } from 'node:stream';
 
 import { extractToken } from '../../auth.js';
-import { getClientIpFromHeaders } from '../../auth-rate-limit.js';
+import { getClientIpFromHeaders } from '../../security/loopback.js';
 import { getShareStore } from '../../../share/share-store.js';
 import { resolveShareUrl } from '../../../share/share-url.js';
 import { consumeSharePublicLimit } from '../../../share/share-rate-limit.js';

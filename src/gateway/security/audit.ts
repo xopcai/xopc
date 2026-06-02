@@ -1,7 +1,7 @@
 import type { Config } from '../../config/schema.js';
 import type { ResolvedGatewayAuth } from '../auth.js';
 import { resolveGatewayAuth, assertGatewayAuthConfigured } from '../auth.js';
-import { isAuthRateLimitGloballyDisabled, isGatewayStrictSecurityEnabled } from '../auth-rate-limit.js';
+import { isAuthRateLimitGloballyDisabled, isGatewayStrictSecurityEnabled } from '../rate-limit/index.js';
 import { assertGatewayRuntimeConfig } from '../runtime-config.js';
 import { resolveGatewayListenPlan } from '../listen.js';
 import {

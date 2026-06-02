@@ -2,7 +2,7 @@ import { createMiddleware } from 'hono/factory';
 import type { Context } from 'hono';
 import { getConnInfo } from '@hono/node-server/conninfo';
 
-import { getClientIpFromHeaders } from '../../auth-rate-limit.js';
+import { getClientIpFromHeaders } from '../../security/loopback.js';
 import { resolveClientIpFromRequest } from '../../client-ip.js';
 import { createLogger } from '../../../utils/logger.js';
 
