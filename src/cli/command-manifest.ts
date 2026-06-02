@@ -20,7 +20,7 @@ export const ROOT_HELP_OPTIONS: RootHelpOption[] = [
 
 export const ROOT_HELP_COMMANDS: RootHelpCommand[] = [
   { name: 'init [options]', description: 'Initialize xopc state directories, config, and agent workspace' },
-  { name: 'setup [options]', description: 'Initialize config file and workspace directory (lighter than init)' },
+  { name: 'setup [options]', description: 'Initialize config file and workspace directory' },
   { name: 'profile', description: 'Manage xopc state profiles (~/.xopc vs ~/.xopc-<name>)' },
   { name: 'onboard [options]', description: 'Interactive setup wizard for xopc (gateway uses schema defaults)' },
   { name: 'channels', description: 'Messaging channel login and credentials' },
@@ -35,7 +35,7 @@ export const ROOT_HELP_COMMANDS: RootHelpCommand[] = [
   { name: 'logs', description: 'Manage and query logs' },
   { name: 'mcp', description: 'Manage xopc MCP config and channel bridge' },
   { name: 'cron', description: 'Manage scheduled tasks' },
-  { name: 'config', description: 'View and edit configuration' },
+  { name: 'config [options]', description: 'View and edit configuration' },
   { name: 'image', description: 'Configure image generation and understanding models' },
   { name: 'models [options]', description: 'List and manage available models' },
   { name: 'providers', description: 'Manage LLM provider credentials (user-friendly hub over `xopc auth`)' },
