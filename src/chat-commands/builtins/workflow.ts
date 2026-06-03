@@ -24,6 +24,14 @@ import type { CatalogEntry } from '../../agent/workflow/catalog.js';
 
 const VIEW_MAX_LINES = 200;
 
+function formatEntryDetail(entry: CatalogEntry): string {
+  const tags = entry.tags?.length ? `[${entry.tags.join(', ')}] ` : '';
+  const agents = entry.estimatedAgents
+    ? ` (~${entry.estimatedAgents.min}–${entry.estimatedAgents.max} agents)`
+    : '';
+  return `${tags}${entry.description}${agents}`;
+}
+
 function formatWorkflowListContent(entries: CatalogEntry[], userDir: string): string {
   const grouped = {
     builtin: entries.filter((e) => e.source === 'builtin'),
@@ -36,7 +44,7 @@ function formatWorkflowListContent(entries: CatalogEntry[], userDir: string): st
     blocks.push(
       joinBlocks(
         section('User workflows'),
-        bulletList(grouped.user.map((e) => ({ label: e.name, detail: e.description }))),
+        bulletList(grouped.user.map((e) => ({ label: e.name, detail: formatEntryDetail(e) }))),
       ),
     );
   }
@@ -44,7 +52,7 @@ function formatWorkflowListContent(entries: CatalogEntry[], userDir: string): st
     blocks.push(
       joinBlocks(
         section('Built-in workflows'),
-        bulletList(grouped.builtin.map((e) => ({ label: e.name, detail: e.description }))),
+        bulletList(grouped.builtin.map((e) => ({ label: e.name, detail: formatEntryDetail(e) }))),
       ),
     );
   }

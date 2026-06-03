@@ -111,4 +111,24 @@ export const meta = { name: 'demo', description: 'd' }
     const { meta } = parseWorkflowScript(script);
     expect((meta as any).timeoutSec).toBe(-1);
   });
+
+  it('accepts tags and estimatedAgents in meta', () => {
+    const script = `export const meta = {
+  name: 'demo',
+  description: 'd',
+  tags: ['code-review', 'audit'],
+  estimatedAgents: { min: 3, max: 7 },
+}
+await agent('go')
+`;
+    const { meta } = parseWorkflowScript(script);
+    expect(meta.tags).toEqual(['code-review', 'audit']);
+    expect(meta.estimatedAgents).toEqual({ min: 3, max: 7 });
+  });
+
+  it('rejects invalid estimatedAgents', () => {
+    const script = `export const meta = { name: 'demo', description: 'd', estimatedAgents: { min: 0, max: 1 } }
+`;
+    expect(() => parseWorkflowScript(script)).toThrow(/estimatedAgents/);
+  });
 });

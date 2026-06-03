@@ -22,11 +22,13 @@ describe('createWorkflowCatalog', () => {
   it('lists built-ins when user dir is empty', () => {
     const cat = createWorkflowCatalog({ userDir: dir });
     const entries = cat.list();
-    expect(entries.length).toBeGreaterThanOrEqual(3);
+    expect(entries.length).toBeGreaterThanOrEqual(5);
     const names = entries.map((e) => e.name);
     expect(names).toContain('audit_repo');
     expect(names).toContain('multi_perspective_review');
     expect(names).toContain('research');
+    expect(names).toContain('pr_review');
+    expect(names).toContain('debug_incident');
     for (const e of entries) {
       expect(e.source).toBe('builtin');
     }
@@ -37,6 +39,7 @@ describe('createWorkflowCatalog', () => {
     const loaded = cat.load('audit_repo');
     expect(loaded.source).toBe('builtin');
     expect(loaded.meta.name).toBe('audit_repo');
+    expect(loaded.meta.tags).toContain('code-review');
     expect(loaded.script.length).toBeGreaterThan(100);
   });
 

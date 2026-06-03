@@ -28,11 +28,20 @@ export interface WorkflowMetaPhase {
   model?: string;
 }
 
+export interface WorkflowMetaEstimatedAgents {
+  min: number;
+  max: number;
+}
+
 export interface WorkflowMeta {
   name: string;
   description: string;
   whenToUse?: string;
   phases?: WorkflowMetaPhase[];
+  /** Discovery tags, e.g. `['code-review', 'planning']`. */
+  tags?: string[];
+  /** Rough subagent count range for UX / cost hints. */
+  estimatedAgents?: WorkflowMetaEstimatedAgents;
 }
 
 export type WorkflowAgentStatus = 'queued' | 'running' | 'done' | 'error' | 'skipped';
