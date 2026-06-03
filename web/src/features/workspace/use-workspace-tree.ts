@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 
-import type { TreeEntry } from '@/features/file-tree/file-tree';
+import type { TreeEntry } from '@/features/file-tree/file-tree-types';
 import { listWorkspaceDir, type WorkspaceEntry } from '@/features/workspace/workspace-api';
 
 /** Convert flat API entries into TreeEntry nodes (children initially empty for dirs). */

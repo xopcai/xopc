@@ -8,7 +8,8 @@ import { useLocaleStore } from '@/stores/locale-store';
 
 import { AgentDefaultsField } from '../agent-defaults-field';
 import type { AgentDefaultsPanelProps } from '../agent-defaults-panel-props';
-import { BuiltinToolsDisableUi, sortedDisableList } from '../builtin-tools-disable-ui';
+import { BuiltinToolsDisableUi } from '../builtin-tools-disable-ui';
+import { sortedDisableList } from '../builtin-tools-disable-utils';
 import type { BuiltinToolUiGroupKey } from '../builtin-tool-disable-groups';
 import { useBuiltinToolIdsLoad } from '../hooks/use-builtin-tool-ids';
 

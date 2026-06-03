@@ -2,7 +2,7 @@ import { AlertTriangle, Globe, Loader2, Power } from 'lucide-react';
 
 import { CopyTextRow } from '@/components/ui/copy-text-row';
 import { Button } from '@/components/ui/button';
-import { settingsFormSectionClassName } from '@/features/settings/settings-form-section';
+import { settingsFormSectionClassName } from '@/features/settings/settings-form-section.utils';
 import type { TunnelStatusResponse } from '@/features/tunnel/tunnel-api';
 import { TunnelStartProgressPanel } from '@/features/tunnel/tunnel-start-progress';
 import { cn } from '@/lib/cn';

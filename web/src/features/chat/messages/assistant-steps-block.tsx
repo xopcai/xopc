@@ -9,7 +9,6 @@ import {
   viewStepsLabel,
 } from '@/features/chat/messages/assistant-steps-summary';
 import type {
-  Message,
   ThinkingContent,
   ToolUseContent,
 } from '@/features/chat/messages/messages.types';
@@ -34,15 +33,17 @@ import { useDevViewStore } from '@/stores/dev-view-store';
 import { formatStepRoundDuration } from '@/features/chat/time/step-round-duration';
 import {
   BrowserSetupRequiredCard,
-  parseBrowserSetupRequired,
 } from '@/features/chat/tool-results/browser-setup-required-card';
+import { parseBrowserSetupRequired } from '@/features/chat/tool-results/browser-setup-required-parser';
 import { ToolResultFileLinks } from '@/features/chat/tool-results/tool-result-file-links';
 import { extractFilePathsFromToolResult } from '@/features/chat/tool-results/tool-result-file-paths';
 import {
-  extractWebSearchLinksFromToolResult,
-  isWebSearchToolName,
   WebSearchToolResultLinks,
 } from '@/features/chat/tool-results/web-search-tool-result-links';
+import {
+  extractWebSearchLinksFromToolResult,
+  isWebSearchToolName,
+} from '@/features/chat/tool-results/web-search-tool-result-parser';
 import { ExtensionChatWidget } from '@/features/extensions/extension-chat-widget';
 import { useUiExtensions } from '@/features/extensions/extension-provider';
 import { useChatWidgetMatch } from '@/features/extensions/use-chat-widget-match';
@@ -272,18 +273,6 @@ export function AssistantStepsBlock({
       ) : null}
     </div>
   );
-}
-
-/** All thinking + tool_use blocks from the message, in order (for the execution drawer). */
-export function collectAssistantStepBlocks(message: Message): Array<ThinkingContent | ToolUseContent> {
-  const out: Array<ThinkingContent | ToolUseContent> = [];
-  for (const b of message.content ?? []) {
-    if (b.type === 'thinking' || b.type === 'tool_use') {
-      out.push(b);
-    }
-  }
-  if (out.length > 0) return out;
-  return [];
 }
 
 function AssistantStepsTimeline({

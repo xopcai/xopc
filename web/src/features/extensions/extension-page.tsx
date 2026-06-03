@@ -10,7 +10,8 @@ import { useParams } from 'react-router-dom';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 
 import { ExtensionIframeHost } from './extension-iframe-host';
-import { extensionShellUiReachable, useExtensions } from './extension-provider';
+import { useExtensions } from './extension-provider';
+import { extensionShellUiReachable } from './extension-ui-guards';
 
 export function ExtensionPage() {
   const { extensionId, pageId } = useParams<{ extensionId: string; pageId?: string }>();

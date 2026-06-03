@@ -3,12 +3,13 @@ import { Activity, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { DreamingEvent } from '@/features/settings/dreaming-api';
 import {
-  formatDurationMs,
-  isoShort,
-  sectionHeaderTightClass,
-  sectionTightClass,
   type DreamingSettingsI18n,
 } from '@/features/settings/dreaming-settings-shared';
+import {
+  sectionHeaderTightClass,
+  sectionTightClass,
+} from '@/features/settings/dreaming-settings-shared.styles';
+import { formatDurationMs, isoShort } from '@/features/settings/dreaming-settings-shared.utils';
 import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/settings/settings-form-section';
 import { cn } from '@/lib/cn';
 

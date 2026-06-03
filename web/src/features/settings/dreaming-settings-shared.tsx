@@ -1,23 +1,15 @@
 import type { ReactNode } from 'react';
 
 import {
-  type DreamingGatewayStatus,
   type DreamingLastRunRecord,
   type PhaseLastRun,
 } from '@/features/settings/dreaming-api';
+import { phasePanelClass } from '@/features/settings/dreaming-settings-shared.styles';
+import { formatDurationMs } from '@/features/settings/dreaming-settings-shared.utils';
 import type { CronSchedulePickerLabels } from '@/features/scheduling/cron/cron-schedule-picker';
 import { ScheduleField } from '@/features/scheduling/schedule-field';
 import type { MessageBundle } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
-import { formControlBorderFocusClass } from '@/lib/form-field-width';
-
-export const sectionTightClass = 'p-4 sm:px-5';
-export const sectionHeaderTightClass = 'mb-3';
-export const phasePanelClass = 'rounded-xl border border-edge-subtle bg-surface-panel/30 p-3 sm:p-4';
-export const numInputClass = cn(
-  'mt-1 w-full rounded-lg border border-edge-subtle bg-surface-panel px-2.5 py-1.5 text-sm text-fg',
-  formControlBorderFocusClass,
-);
 
 export type DreamingSettingsI18n = MessageBundle['dreamingSettings'];
 
@@ -62,27 +54,6 @@ export function PanelHeading({ label, className }: { label: string; className?: 
   return (
     <h3 className={cn('text-[0.7rem] font-semibold uppercase tracking-wider text-fg-muted', className)}>{label}</h3>
   );
-}
-
-export function isoShort(v: string | null | undefined): string {
-  if (!v) return '—';
-  return v.replace('T', ' ').replace('Z', '');
-}
-
-export function formatDurationMs(ms: number | undefined): string {
-  if (ms === undefined || !Number.isFinite(ms) || ms < 0) return '—';
-  if (ms < 1000) return `${Math.round(ms)} ms`;
-  return `${(ms / 1000).toFixed(2)} s`;
-}
-
-export function lockStatusLabel(
-  s: DreamingGatewayStatus['lock'],
-  labels: Pick<DreamingSettingsI18n, 'lockValueLocked' | 'lockValueUnlocked'>,
-): { text: string; className: string } {
-  if (s.locked) {
-    return { text: labels.lockValueLocked, className: 'text-amber-600 dark:text-amber-400' };
-  }
-  return { text: labels.lockValueUnlocked, className: 'text-emerald-600 dark:text-emerald-400' };
 }
 
 export function PhaseConfigPanel({

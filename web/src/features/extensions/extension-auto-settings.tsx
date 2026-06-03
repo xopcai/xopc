@@ -2,7 +2,8 @@ import { useCallback, useMemo, useReducer, useRef, useState } from 'react';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
-import { extractObjectDefaults, SchemaForm, type JsonSchema } from '@/components/ui/schema-form';
+import { extractObjectDefaults } from '@/components/ui/schema-form-utils';
+import { SchemaForm, type JsonSchema } from '@/components/ui/schema-form';
 import { apiFetch, fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 import { messages } from '@/i18n/messages';

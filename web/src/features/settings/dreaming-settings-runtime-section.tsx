@@ -6,14 +6,15 @@ import {
   PhaseLastRunBlock,
   PhaseStatusCard,
   StatCell,
-  isoShort,
-  lockStatusLabel,
+  LastRunStructuredView,
+  type DreamingSettingsI18n,
+} from '@/features/settings/dreaming-settings-shared';
+import {
   phasePanelClass,
   sectionHeaderTightClass,
   sectionTightClass,
-  type DreamingSettingsI18n,
-} from '@/features/settings/dreaming-settings-shared';
-import { LastRunStructuredView } from '@/features/settings/dreaming-settings-shared';
+} from '@/features/settings/dreaming-settings-shared.styles';
+import { isoShort, lockStatusLabel } from '@/features/settings/dreaming-settings-shared.utils';
 import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/settings/settings-form-section';
 import { formatCronExpressionLabel, type ScheduleBadgeLabels } from '@/features/scheduling/cron/format-cron-label';
 import { ScheduleSummary } from '@/features/scheduling/schedule-summary';

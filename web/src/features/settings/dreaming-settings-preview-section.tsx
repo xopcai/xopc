@@ -3,10 +3,12 @@ import { Loader2, ScanLine } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { DreamingPreviewItem } from '@/features/settings/dreaming-api';
 import {
-  sectionHeaderTightClass,
-  sectionTightClass,
   type DreamingSettingsI18n,
 } from '@/features/settings/dreaming-settings-shared';
+import {
+  sectionHeaderTightClass,
+  sectionTightClass,
+} from '@/features/settings/dreaming-settings-shared.styles';
 import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/settings/settings-form-section';
 
 type Props = {

@@ -4,6 +4,8 @@ import { Button } from '@/components/ui/button';
 import {
   sectionHeaderTightClass,
   sectionTightClass,
+} from '@/features/settings/dreaming-settings-shared.styles';
+import {
   type DreamingSettingsI18n,
 } from '@/features/settings/dreaming-settings-shared';
 import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/settings/settings-form-section';

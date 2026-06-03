@@ -6,9 +6,8 @@ import { APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
 import { Button } from '@/components/ui/button';
 import {
   FileTree,
-  type FileTreeAction,
-  type TreeEntry,
 } from '@/features/file-tree/file-tree';
+import type { FileTreeAction, TreeEntry } from '@/features/file-tree/file-tree-types';
 import { base64ToArrayBuffer, inferMimeTypeFromFileName } from '@/features/chat/attachments/attachment-utils-core';
 import {
   downloadBinaryFile,

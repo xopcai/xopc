@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { parseBrowserSetupRequired } from '../browser-setup-required-card';
+import { parseBrowserSetupRequired } from '../browser-setup-required-parser';
 
 describe('parseBrowserSetupRequired', () => {
   it('returns null for empty / non-JSON / non-object input', () => {

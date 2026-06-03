@@ -14,4 +14,4 @@ export const APP_CHROME_NO_DRAG_CLASS = '[-webkit-app-region:no-drag]';
 export const APP_TOP_HEADER_BAR_CLASS = `h-14 shrink-0 items-center ${APP_CHROME_DRAG_CLASS}`;
 
 /** Main column `PrimaryAppHeader` — same rhythm, no window drag. */
-export const APP_TOP_HEADER_BAR_NO_DRAG_CLASS = 'h-14 shrink-0 items-center';
+const APP_TOP_HEADER_BAR_NO_DRAG_CLASS = 'h-14 shrink-0 items-center';

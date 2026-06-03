@@ -12,7 +12,7 @@ import {
 import { createPortal } from 'react-dom';
 
 import type { AtMentionItem } from '@/features/chat/palette/at-mention-api';
-import { fileExtColor } from '@/features/file-tree/file-tree';
+import { fileExtColor } from '@/features/file-tree/file-tree-utils';
 import { cn } from '@/lib/cn';
 import { readWorkspaceFile } from '@/features/workspace/workspace-api';
 

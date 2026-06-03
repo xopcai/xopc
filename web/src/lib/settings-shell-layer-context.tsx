@@ -1,12 +1,6 @@
 import { createContext, useContext, type ReactNode } from 'react';
 
-import {
-  SETTINGS_SHELL_MODAL_POPOVER_Z,
-  SETTINGS_SHELL_POPOVER_Z,
-} from '@/lib/settings-shell-dialog-layer';
-
-/** Stacking tier for portaled popovers/menus under the settings shell. */
-export type SettingsShellPopoverLayer = 'default' | 'page' | 'modal';
+import type { SettingsShellPopoverLayer } from '@/lib/settings-shell-layer.utils';
 
 const SettingsShellLayerContext = createContext<SettingsShellPopoverLayer>('default');
 
@@ -14,17 +8,6 @@ function mergeLayer(parent: SettingsShellPopoverLayer, layer: SettingsShellPopov
   if (parent === 'modal' || layer === 'modal') return 'modal';
   if (parent === 'page' || layer === 'page') return 'page';
   return 'default';
-}
-
-export function settingsShellPopoverZClass(layer: SettingsShellPopoverLayer): string {
-  switch (layer) {
-    case 'modal':
-      return SETTINGS_SHELL_MODAL_POPOVER_Z;
-    case 'page':
-      return SETTINGS_SHELL_POPOVER_Z;
-    default:
-      return 'z-50';
-  }
 }
 
 export function SettingsShellLayerProvider({
