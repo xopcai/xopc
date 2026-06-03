@@ -24,3 +24,10 @@ export {
   type GoalsMessages,
   type JudgeReasonId,
 } from './goals-bundle.js';
+export {
+  resolveToolLocale,
+  shareToolErrorLine,
+  shareToolMessages,
+  shareToolSuccessLines,
+  type ShareToolMessages,
+} from './share-tool-bundle.js';

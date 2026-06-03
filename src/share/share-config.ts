@@ -5,6 +5,7 @@ import {
   SHARE_CONFIG_DEFAULTS,
   type ShareConfig,
   type ShareDirectoryConfig,
+  type ShareThumbnailConfig,
 } from './share-types.js';
 
 const ShareDirectoryPatchSchema = z.object({
@@ -16,6 +17,17 @@ const ShareDirectoryPatchSchema = z.object({
   zipConcurrency: z.number().int().min(1).max(8).optional(),
 });
 
+const ShareThumbnailPatchSchema = z.object({
+  enabled: z.boolean().optional(),
+  concurrency: z.number().int().min(1).max(8).optional(),
+  maxBytes: z.number().int().min(8_192).max(4_194_304).optional(),
+  viewportWidth: z.number().int().min(320).max(2_560).optional(),
+  viewportHeight: z.number().int().min(320).max(2_560).optional(),
+  generationTimeoutMs: z.number().int().min(1_000).max(60_000).optional(),
+  failureCooldownMs: z.number().int().min(0).max(3_600_000).optional(),
+  internalGatewayUrl: z.string().min(1).optional(),
+});
+
 const ShareConfigPatchSchema = z.object({
   enabled: z.boolean().optional(),
   defaultTtlMs: z.number().int().min(60_000).max(604_800_000).optional(),
@@ -24,6 +36,7 @@ const ShareConfigPatchSchema = z.object({
   maxFileSize: z.number().int().min(1_048_576).max(10_737_418_240).optional(),
   inlinePreviewMimes: z.array(z.string().min(1)).optional(),
   directory: ShareDirectoryPatchSchema.optional(),
+  thumbnail: ShareThumbnailPatchSchema.optional(),
 });
 
 function resolveDirectoryConfig(raw: unknown): ShareDirectoryConfig {
@@ -40,10 +53,26 @@ function resolveDirectoryConfig(raw: unknown): ShareDirectoryConfig {
   };
 }
 
+function resolveThumbnailConfig(raw: unknown): ShareThumbnailConfig {
+  const base = SHARE_CONFIG_DEFAULTS.thumbnail;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { ...base };
+  const patch = raw as Partial<ShareThumbnailConfig>;
+  return {
+    enabled: patch.enabled ?? base.enabled,
+    concurrency: patch.concurrency ?? base.concurrency,
+    maxBytes: patch.maxBytes ?? base.maxBytes,
+    viewportWidth: patch.viewportWidth ?? base.viewportWidth,
+    viewportHeight: patch.viewportHeight ?? base.viewportHeight,
+    generationTimeoutMs: patch.generationTimeoutMs ?? base.generationTimeoutMs,
+    failureCooldownMs: patch.failureCooldownMs ?? base.failureCooldownMs,
+    internalGatewayUrl: patch.internalGatewayUrl ?? base.internalGatewayUrl,
+  };
+}
+
 export function resolveShareConfig(raw: unknown): ShareConfig {
   const patch =
     raw && typeof raw === 'object' && !Array.isArray(raw)
-      ? (raw as Partial<ShareConfig> & { directory?: unknown })
+      ? (raw as Partial<ShareConfig> & { directory?: unknown; thumbnail?: unknown })
       : {};
   return {
     enabled: patch.enabled ?? SHARE_CONFIG_DEFAULTS.enabled,
@@ -55,6 +84,7 @@ export function resolveShareConfig(raw: unknown): ShareConfig {
       ? patch.inlinePreviewMimes.filter((x): x is string => typeof x === 'string' && x.trim().length > 0)
       : [...SHARE_CONFIG_DEFAULTS.inlinePreviewMimes],
     directory: resolveDirectoryConfig(patch.directory),
+    thumbnail: resolveThumbnailConfig(patch.thumbnail),
   };
 }
 
@@ -88,6 +118,9 @@ export function mergeShareConfigPatch(
     directory: parsed.data.directory
       ? { ...current.directory, ...parsed.data.directory }
       : current.directory,
+    thumbnail: parsed.data.thumbnail
+      ? { ...current.thumbnail, ...parsed.data.thumbnail }
+      : current.thumbnail,
   };
 
   if (next.defaultTtlMs > next.maxTtlMs) {

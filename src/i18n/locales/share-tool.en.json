@@ -1,0 +1,12 @@
+{
+  "success": {
+    "headline": "✅ Share link created ({{kind}}): {{shareUrl}}",
+    "reachabilityWarning": "⚠️ Current reachability: {{reachability}}. {{hint}}",
+    "title": "Title: {{title}}",
+    "expiresAt": "Expires: {{expiresAt}}",
+    "thumbnail": "Thumbnail: {{thumbnailUrl}}"
+  },
+  "error": {
+    "prefix": "❌ create_share failed: {{message}}"
+  }
+}

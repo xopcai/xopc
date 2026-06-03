@@ -8,6 +8,7 @@
       "guide": "Overview",
       "tailscale": "Tailscale",
       "public": "Public internet",
+      "reverse-proxy": "Reverse proxy",
       "ssh": "SSH tunnel",
       "lan": "Local network"
     },
@@ -15,6 +16,7 @@
       "guide": "Compare options and see what's active on this gateway.",
       "tailscale": "Best for personal devices on your tailnet. Gateway stays on loopback; Tailscale Serve publishes HTTPS.",
       "public": "Create a Tunnel Registration Key in the Console and save it here, then start the tunnel for a public URL and pair your mobile app.",
+      "reverse-proxy": "Front the gateway with your own HTTPS reverse proxy (Caddy / nginx / Cloudflare Tunnel) at a custom domain, then scan to pair your mobile app.",
       "ssh": "CLI SSH port forwarding when VPN or a public tunnel are unavailable.",
       "lan": "Reach the gateway on the same Wi‑Fi or LAN via its bind address, then scan to pair your mobile app."
     },
@@ -29,6 +31,8 @@
       "tailscaleCardDesc": "HTTPS on your tailnet only. No public internet exposure.",
       "publicCardTitle": "Public tunnel",
       "publicCardDesc": "Share a public URL for mobile pairing and remote clients.",
+      "reverseProxyCardTitle": "Reverse proxy",
+      "reverseProxyCardDesc": "Use your own HTTPS reverse proxy at a custom domain.",
       "sshCardTitle": "SSH tunnel",
       "sshCardDesc": "CLI forwarding when VPN or public tunnel are unavailable.",
       "sshCardStatus": "CLI",
@@ -84,6 +88,48 @@
       "hint": "Replace user@your-host with your SSH login. Run on the machine where you want to use the gateway console.",
       "copy": "Copy command",
       "copied": "Copied"
+    },
+    "reverseProxy": {
+      "title": "Reverse proxy (self-hosted HTTPS)",
+      "subtitle": "Front the gateway with your own Caddy / nginx / Cloudflare Tunnel at a custom domain.",
+      "urlLabel": "Public URL",
+      "urlPlaceholder": "https://gateway.example.com",
+      "urlHint": "No trailing path. https required for public hostnames; http is only allowed for RFC1918 / .local.",
+      "probeButton": "Test",
+      "probing": "Testing…",
+      "autoDetectedTitle": "Detected from your current browser address",
+      "autoDetectedHint": "The QR below already uses this URL. Click \"Save as default\" to persist it so other machines see the same URL.",
+      "saveAsDefault": "Save as default",
+      "saving": "Saving…",
+      "clear": "Clear configured URL",
+      "certWarning": "Mobile clients require a certificate trusted by the system root store (Let's Encrypt / Cloudflare / commercial CA). Self-signed certificates are not supported in v1.",
+      "qrTitle": "Mobile pairing QR",
+      "qrSubtitle": "Scan from the xopc mobile app to pair through your reverse proxy.",
+      "noUrlYet": "Enter your reverse-proxy public URL above to generate the pairing QR.",
+      "mintingSecret": "Minting pairing secret…",
+      "encoding": "Encoding QR…",
+      "refreshQr": "Refresh QR",
+      "copyLink": "Copy deeplink",
+      "copied": "Copied",
+      "probeStatus": {
+        "ok": "Reachable",
+        "mobileReady": "mobile pairing ready",
+        "codeUnknown": "Probe failed",
+        "code_TIMEOUT": "Timed out reaching the URL",
+        "code_TLS_INVALID": "TLS / certificate error",
+        "code_DNS_OR_CONN_REFUSED": "DNS or connection refused",
+        "code_NETWORK_ERROR": "Network error",
+        "code_AUTH_BLOCKED": "Reverse proxy returned 401/403 — remove auth in front of /api/tunnel/pair/ping",
+        "code_HTTP_ERROR": "HTTP error from the URL",
+        "code_NOT_XOPC_GATEWAY": "URL did not identify as an xopc gateway",
+        "code_invalid_url": "Invalid URL",
+        "code_invalid_scheme": "Scheme must be http(s)",
+        "code_has_userinfo": "URL must not contain userinfo",
+        "code_has_path": "URL must not contain a path",
+        "code_has_query_or_fragment": "URL must not contain query or fragment",
+        "code_requires_https": "Public hostnames require https",
+        "code_INVALID_JSON": "Invalid JSON body"
+      }
     }
   }
 }

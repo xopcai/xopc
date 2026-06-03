@@ -36,6 +36,8 @@ export class SiteShareStore {
   private dirty = false;
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
   private cleanupTimer: ReturnType<typeof setInterval> | null = null;
+  /** Optional cleanup hook invoked when a record is dropped (e.g. delete staging dir). */
+  private onCleanup: ((record: SiteShareRecord) => void) | null = null;
 
   constructor(config?: Partial<SiteShareConfig>) {
     this.config = { ...SITE_SHARE_CONFIG_DEFAULTS, ...config };
@@ -45,6 +47,10 @@ export class SiteShareStore {
 
   updateConfig(config: Partial<SiteShareConfig>): void {
     this.config = { ...this.config, ...config };
+  }
+
+  setCleanupHook(hook: (record: SiteShareRecord) => void): void {
+    this.onCleanup = hook;
   }
 
   getConfig(): SiteShareConfig {
@@ -222,11 +228,27 @@ export class SiteShareStore {
     this.scheduleDebouncedPersist();
   }
 
+  setThumbnailStatus(id: string, status: 'pending' | 'ready' | 'failed'): void {
+    const record = this.shares.get(id);
+    if (!record) return;
+    record.thumbnailStatus = status;
+    if (status === 'ready') record.thumbnailGeneratedAt = new Date().toISOString();
+    if (status === 'failed') record.thumbnailFailedAt = new Date().toISOString();
+    this.persistSync();
+  }
+
   revoke(id: string): boolean {
     const record = this.shares.get(id);
     if (!record) return false;
     record.revoked = true;
     this.persistSync();
+    if (this.onCleanup) {
+      try {
+        this.onCleanup(record);
+      } catch (err) {
+        log.warn({ err, id }, 'Site share cleanup hook threw on revoke');
+      }
+    }
     log.info({ id, tokenPrefix: record.token.slice(0, 8) }, 'Site share revoked');
     return true;
   }
@@ -343,6 +365,13 @@ export class SiteShareStore {
           this.shares.delete(id);
           this.byToken.delete(record.token);
           if (record.subdomain) this.bySubdomain.delete(record.subdomain);
+          if (this.onCleanup) {
+            try {
+              this.onCleanup(record);
+            } catch (err) {
+              log.warn({ err, id }, 'Site share cleanup hook threw');
+            }
+          }
           removed++;
         }
       }

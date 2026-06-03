@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { checkCacheDir } from '../browser/cache-dir-policy.js';
+import { validatePublicUrl } from './public-url.js';
 
 // ============================================
 // Agent Configs
@@ -709,6 +710,23 @@ export const GatewayConfigSchema = z.object({
   heartbeat: HeartbeatConfigSchema.optional(),
   maxSseConnections: z.number().optional(),
   corsOrigins: z.array(z.string()).optional(),
+  /**
+   * Reverse-proxy publicly reachable URL (e.g. `https://gateway.example.com`).
+   * Optional. When set, mobile pairing surfaces this URL as the preferred
+   * baseUrl and it is auto-added to the browser CORS/CSRF allowlist.
+   * - Must be a URL with no path / query / userinfo.
+   * - Must use `https:` for public hosts; `http:` is only allowed when the
+   *   hostname is in an RFC1918 / `.local` private range.
+   */
+  publicUrl: z
+    .string()
+    .superRefine((value, ctx) => {
+      const result = validatePublicUrl(value);
+      if (result.ok === false) {
+        ctx.addIssue({ code: 'custom', message: `gateway.publicUrl: ${result.message}` });
+      }
+    })
+    .optional(),
   /** Dangerous: allow browser Origin to match the HTTP Host header when not in corsOrigins. */
   dangerouslyAllowHostHeaderOriginFallback: z.boolean().optional(),
   /** CIDRs or exact IPs of reverse proxies allowed to terminate auth (trusted-proxy mode). */

@@ -1,4 +1,11 @@
-export const REMOTE_ACCESS_TABS = ['guide', 'tailscale', 'public', 'ssh', 'lan'] as const;
+export const REMOTE_ACCESS_TABS = [
+  'guide',
+  'tailscale',
+  'public',
+  'reverse-proxy',
+  'ssh',
+  'lan',
+] as const;
 
 export type RemoteAccessTabId = (typeof REMOTE_ACCESS_TABS)[number];
 

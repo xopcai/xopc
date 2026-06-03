@@ -233,7 +233,7 @@ function PreviewBody({
   pptxText: string | null;
   docxBuffer: ArrayBuffer | null;
   openInlineUrl: string;
-  t: typeof PREVIEW_LABELS_EN;
+  t: typeof PREVIEW_LABELS_EN | typeof PREVIEW_LABELS_ZH;
 }) {
   if (meta.kind === 'directory') {
     return (

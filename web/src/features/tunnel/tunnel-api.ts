@@ -60,7 +60,7 @@ export type TunnelPairResponse = {
   expiresAt: string;
 };
 
-export type MobilePairCandidateKind = 'lan' | 'tunnel';
+export type MobilePairCandidateKind = 'lan' | 'tunnel' | 'reverse-proxy';
 
 export type MobilePairBlockReason = 'GATEWAY_LOOPBACK_ONLY' | 'NO_REACHABLE_URL';
 

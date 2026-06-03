@@ -28,6 +28,8 @@ import {
 import { consumePairingExchangeFailLimit } from '../../../tunnel/pairing-rate-limit.js';
 import { loadTunnelState } from '../../../tunnel/tunnel-state.js';
 import { logTunnelAudit } from '../../../tunnel/tunnel-audit.js';
+import { resolveReverseProxyPublicUrl } from '../../public-url.js';
+import { validatePublicUrl } from '../../../config/public-url.js';
 import {
   applyTunnelConsentToConfig,
   setTunnelEnabledInConfig,
@@ -101,6 +103,7 @@ export function registerTunnelPublicRoutes(app: Hono, service: GatewayService): 
       config,
       tunnelPublicUrl: status.publicUrl,
       tunnelConnected: status.state === 'connected',
+      reverseProxyPublicUrl: resolveReverseProxyPublicUrl(config),
     });
     return c.json({
       ok: true,
@@ -112,6 +115,7 @@ export function registerTunnelPublicRoutes(app: Hono, service: GatewayService): 
       pairingReady: context.pairingReady,
       blockReason: context.blockReason ?? null,
       tunnelConnected: status.state === 'connected',
+      reverseProxyConfigured: Boolean(resolveReverseProxyPublicUrl(config)),
       connectUrls: context.connectUrls,
     });
   });
@@ -175,13 +179,21 @@ export function registerTunnelPublicRoutes(app: Hono, service: GatewayService): 
 
     const persisted = loadTunnelState();
     const config = service.currentConfig as Config;
-    const publicUrl = persisted?.publicUrl?.trim() || null;
+    const tunnelUrl = persisted?.publicUrl?.trim() || null;
+    const reverseProxyUrl = resolveReverseProxyPublicUrl(config);
     const lanUrl = resolveMobilePairLanUrl(config);
-    const connectUrls = buildMobileConnectUrlOrder({ baseUrl: publicUrl, lanUrl });
+    const connectUrls = buildMobileConnectUrlOrder({
+      reverseProxyUrl,
+      baseUrl: reverseProxyUrl ?? tunnelUrl,
+      lanUrl,
+      tunnelUrl,
+    });
+    // Mobile prefers HTTPS user-deployed URL over FRP broker when both exist.
+    const advertisedBaseUrl = reverseProxyUrl ?? tunnelUrl;
 
     const payload = await exchangePairingSecretOnce(pairingSecret, () => ({
       token,
-      baseUrl: publicUrl,
+      baseUrl: advertisedBaseUrl,
       lanUrl,
       connectUrls,
     }));
@@ -221,6 +233,7 @@ export function registerTunnelRoutes(authenticated: Hono, deps: AuthenticatedRou
       config,
       tunnelPublicUrl: status.publicUrl,
       tunnelConnected: status.state === 'connected',
+      reverseProxyPublicUrl: resolveReverseProxyPublicUrl(config),
     });
     return c.json(context);
   });
@@ -255,6 +268,7 @@ export function registerTunnelRoutes(authenticated: Hono, deps: AuthenticatedRou
       config: deps.service.currentConfig as Config,
       tunnelPublicUrl: status.publicUrl,
       tunnelConnected: status.state === 'connected',
+      reverseProxyPublicUrl: resolveReverseProxyPublicUrl(deps.service.currentConfig as Config),
     });
 
     if (patchResult.changed) {
@@ -287,6 +301,78 @@ export function registerTunnelRoutes(authenticated: Hono, deps: AuthenticatedRou
       'Mobile pairing session created',
     );
     return c.json({ pairingSecret: secret, expiresAt: expiresAt.toISOString() });
+  });
+
+  /**
+   * Probe a candidate reverse-proxy URL before persisting it. The check round-trips
+   * a `GET /api/tunnel/pair/ping` and validates the response identifies as
+   * `service: 'xopc-gateway'`. Surface-area errors are mapped to stable codes so
+   * the UI can render targeted hints (TLS / DNS / wrong service / blocked path).
+   */
+  authenticated.post('/api/tunnel/pair/probe-public', tunnelMutationLimit, async (c) => {
+    const token = requireGatewayToken(c);
+    if (!token) return c.json({ error: 'Gateway token required' }, 401);
+
+    let body: { url?: unknown };
+    try {
+      body = (await c.req.json()) as { url?: unknown };
+    } catch {
+      return c.json({ ok: false, code: 'INVALID_JSON', message: 'Invalid JSON body' }, 400);
+    }
+    const raw = typeof body.url === 'string' ? body.url : '';
+    const validation = validatePublicUrl(raw);
+    if (validation.ok === false) {
+      return c.json({ ok: false, code: validation.code, message: validation.message });
+    }
+
+    const pingUrl = `${validation.url}/api/tunnel/pair/ping`;
+    const startedAt = Date.now();
+    let response: Response;
+    try {
+      response = await fetch(pingUrl, {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+        signal: AbortSignal.timeout(5000),
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      // Node's fetch surfaces TLS errors as TypeError with cause; map heuristically.
+      const lower = message.toLowerCase();
+      let code: 'TIMEOUT' | 'TLS_INVALID' | 'DNS_OR_CONN_REFUSED' | 'NETWORK_ERROR' = 'NETWORK_ERROR';
+      if (lower.includes('timeout') || lower.includes('aborted')) code = 'TIMEOUT';
+      else if (lower.includes('certificate') || lower.includes('cert') || lower.includes('tls') || lower.includes('ssl')) {
+        code = 'TLS_INVALID';
+      } else if (lower.includes('enotfound') || lower.includes('econnrefused') || lower.includes('eai_again')) {
+        code = 'DNS_OR_CONN_REFUSED';
+      }
+      return c.json({ ok: false, code, message });
+    }
+
+    if (response.status === 401 || response.status === 403) {
+      return c.json({ ok: false, code: 'AUTH_BLOCKED', message: `Reverse proxy returned ${response.status}` });
+    }
+    if (!response.ok) {
+      return c.json({ ok: false, code: 'HTTP_ERROR', message: `HTTP ${response.status}` });
+    }
+    let parsed: { service?: unknown; mobilePairing?: unknown } | null = null;
+    try {
+      parsed = (await response.json()) as { service?: unknown; mobilePairing?: unknown };
+    } catch {
+      return c.json({ ok: false, code: 'NOT_XOPC_GATEWAY', message: 'Response was not JSON' });
+    }
+    if (!parsed || parsed.service !== 'xopc-gateway') {
+      return c.json({
+        ok: false,
+        code: 'NOT_XOPC_GATEWAY',
+        message: 'Endpoint did not identify as an xopc gateway',
+      });
+    }
+    return c.json({
+      ok: true,
+      url: validation.url,
+      latencyMs: Date.now() - startedAt,
+      mobilePairing: parsed.mobilePairing === true,
+    });
   });
 
   authenticated.get('/api/tunnel/status', async (c) => {

@@ -5,10 +5,11 @@ import {
   resolveGatewayBindMode,
   resolveGatewayEffectiveHost,
 } from '../config/gateway-bind.js';
+import { normalizePublicUrlOrNull } from '../config/public-url.js';
 import { enumerateLanGatewayCandidates } from './tunnel-qr.js';
 import { buildMobileConnectUrlOrder } from './pair-url.js';
 
-export type MobilePairCandidateKind = 'lan' | 'tunnel';
+export type MobilePairCandidateKind = 'lan' | 'tunnel' | 'reverse-proxy';
 
 export type MobilePairBlockReason = 'GATEWAY_LOOPBACK_ONLY' | 'NO_REACHABLE_URL';
 
@@ -39,6 +40,12 @@ export function buildMobilePairContext(params: {
   config: Config;
   tunnelPublicUrl?: string | null;
   tunnelConnected?: boolean;
+  /**
+   * Optional override for `gateway.publicUrl`. Falls back to the configured
+   * value when omitted; useful for transient candidates (e.g. UI auto-detect
+   * from `window.location.origin` before the user persists the value).
+   */
+  reverseProxyPublicUrl?: string | null;
 }): MobilePairContext {
   const port = params.config.gateway?.port ?? 18790;
   const bindMode = resolveGatewayBindMode(params.config);
@@ -54,19 +61,34 @@ export function buildMobilePairContext(params: {
     ...(lanListenReady ? {} : { note: 'requires_lan_bind' }),
   }));
 
-  const publicUrl = params.tunnelPublicUrl?.trim() || null;
-  const tunnelConnected = params.tunnelConnected === true && Boolean(publicUrl);
-  if (tunnelConnected && publicUrl) {
+  const tunnelUrl = params.tunnelPublicUrl?.trim() || null;
+  const tunnelConnected = params.tunnelConnected === true && Boolean(tunnelUrl);
+  if (tunnelConnected && tunnelUrl) {
     candidates.unshift({
       kind: 'tunnel',
-      url: publicUrl,
+      url: tunnelUrl,
+      reachable: true,
+    });
+  }
+
+  const configuredReverseProxy = normalizePublicUrlOrNull(params.config.gateway?.publicUrl);
+  const reverseProxyUrl =
+    params.reverseProxyPublicUrl !== undefined
+      ? normalizePublicUrlOrNull(params.reverseProxyPublicUrl)
+      : configuredReverseProxy;
+  if (reverseProxyUrl) {
+    candidates.unshift({
+      kind: 'reverse-proxy',
+      url: reverseProxyUrl,
       reachable: true,
     });
   }
 
   let recommended: MobilePairContext['recommended'] = { mode: null, url: null };
-  if (tunnelConnected && publicUrl) {
-    recommended = { mode: 'tunnel', url: publicUrl };
+  if (reverseProxyUrl) {
+    recommended = { mode: 'reverse-proxy', url: reverseProxyUrl };
+  } else if (tunnelConnected && tunnelUrl) {
+    recommended = { mode: 'tunnel', url: tunnelUrl };
   } else if (lanListenReady && lanEnumerated[0]) {
     recommended = { mode: 'lan', url: lanEnumerated[0].url };
   } else if (lanEnumerated[0]) {
@@ -74,7 +96,7 @@ export function buildMobilePairContext(params: {
   }
 
   const pairingReady = Boolean(
-    tunnelConnected || (lanListenReady && lanEnumerated.length > 0),
+    reverseProxyUrl || tunnelConnected || (lanListenReady && lanEnumerated.length > 0),
   );
 
   let blockReason: MobilePairBlockReason | undefined;
@@ -85,14 +107,21 @@ export function buildMobilePairContext(params: {
 
   const lanUrlForConnect =
     lanListenReady && lanEnumerated[0] ? lanEnumerated[0].url : null;
-  const baseUrlForConnect = tunnelConnected && publicUrl
-    ? publicUrl
-    : lanListenReady && recommended.url
-      ? recommended.url
-      : null;
+  // When reverse-proxy or tunnel is active, LAN is the secondary candidate.
+  // When only LAN is available, lanUrl IS the baseUrl (don't duplicate it).
+  const hasUpstream = Boolean(reverseProxyUrl) || tunnelConnected;
+  const baseUrlForConnect = reverseProxyUrl
+    ? reverseProxyUrl
+    : tunnelConnected && tunnelUrl
+      ? tunnelUrl
+      : lanListenReady && recommended.url
+        ? recommended.url
+        : null;
   const connectUrls = buildMobileConnectUrlOrder({
+    reverseProxyUrl,
     baseUrl: baseUrlForConnect,
-    lanUrl: tunnelConnected ? lanUrlForConnect : null,
+    lanUrl: hasUpstream ? lanUrlForConnect : null,
+    tunnelUrl: tunnelConnected ? tunnelUrl : null,
   });
 
   return {

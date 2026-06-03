@@ -45,6 +45,17 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 `;
 }
 
+export interface ShareLandingOgOptions {
+  /** Absolute https/http URL of this landing page (for og:url). Omit if non-public. */
+  absoluteShareUrl?: string | null;
+  /** Absolute URL of the thumbnail image (for og:image). Omit if non-public. */
+  absoluteThumbnailUrl?: string | null;
+  /** Title override (default: fileName). */
+  title?: string;
+  /** Description override (default: type + size). */
+  description?: string;
+}
+
 /** Render the file download confirmation landing page (does not consume downloadCount). */
 export function renderShareLandingPage(
   record: ShareRecord,
@@ -54,6 +65,8 @@ export function renderShareLandingPage(
     inlineUrl?: string | null;
     /** SPA preview URL (for markdown / docs / code that benefit from rich rendering). */
     previewUrl?: string | null;
+    /** Social card / unfurl metadata. */
+    og?: ShareLandingOgOptions;
   },
 ): string {
   const fileName = escapeHtml(record.fileName);
@@ -84,13 +97,23 @@ export function renderShareLandingPage(
 </form>`,
   );
 
+  const ogTitle = escapeHtml(options?.og?.title ?? record.fileName);
+  const ogDesc = escapeHtml(options?.og?.description ?? `${size} · 由 xopc 分享`);
+  const ogTags = renderOgTags({
+    title: ogTitle,
+    description: ogDesc,
+    url: options?.og?.absoluteShareUrl ?? null,
+    image: options?.og?.absoluteThumbnailUrl ?? null,
+  });
+
   return `<!DOCTYPE html>
 <html lang="zh">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="referrer" content="no-referrer">
-<meta name="robots" content="noindex,nofollow">
+<meta name="robots" content="noindex,follow">
+${ogTags}
 <title>${fileName} — xopc Share</title>
 <style>${commonCss()}</style>
 </head>
@@ -109,11 +132,31 @@ ${buttons.join('\n')}
 </html>`;
 }
 
+/** Emit OG / Twitter / WeChat-compatible meta tags. Only emitted when url+image present. */
+function renderOgTags(opts: { title: string; description: string; url: string | null; image: string | null }): string {
+  if (!opts.url || !opts.image) return '';
+  return [
+    `<meta property="og:type" content="website">`,
+    `<meta property="og:site_name" content="xopc Share">`,
+    `<meta property="og:title" content="${opts.title}">`,
+    `<meta property="og:description" content="${opts.description}">`,
+    `<meta property="og:image" content="${escapeHtml(opts.image)}">`,
+    `<meta property="og:image:width" content="1200">`,
+    `<meta property="og:image:height" content="630">`,
+    `<meta property="og:url" content="${escapeHtml(opts.url)}">`,
+    `<meta itemprop="name" content="${opts.title}">`,
+    `<meta itemprop="description" content="${opts.description}">`,
+    `<meta itemprop="image" content="${escapeHtml(opts.image)}">`,
+    `<meta name="twitter:card" content="summary_large_image">`,
+  ].join('\n');
+}
+
 /** Render the folder landing page (browse mode shows a tree, zip-only shows a single button). */
 export function renderFolderLandingPage(
   record: ShareRecord,
   listing: DirectoryListing | null,
   urls: { tree: (path: string) => string; file: (path: string) => string; zip: (path: string) => string },
+  options?: { og?: ShareLandingOgOptions },
 ): string {
   const folderName = escapeHtml(record.fileName);
   const description = record.description ? escapeHtml(record.description) : '';
@@ -132,13 +175,23 @@ export function renderFolderLandingPage(
   const treeHtml = zipOnly ? '' : renderTree(listing!, urls);
   const breadcrumbs = zipOnly ? '' : renderBreadcrumbs(listing!.path, urls);
 
+  const ogTitle = escapeHtml(options?.og?.title ?? record.fileName);
+  const ogDesc = escapeHtml(options?.og?.description ?? `${entryCount} 项 · ${totalSize}`);
+  const ogTags = renderOgTags({
+    title: ogTitle,
+    description: ogDesc,
+    url: options?.og?.absoluteShareUrl ?? null,
+    image: options?.og?.absoluteThumbnailUrl ?? null,
+  });
+
   return `<!DOCTYPE html>
 <html lang="zh">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="referrer" content="no-referrer">
-<meta name="robots" content="noindex,nofollow">
+<meta name="robots" content="noindex,follow">
+${ogTags}
 <title>${folderName} — xopc Share</title>
 <style>${commonCss()}</style>
 </head>

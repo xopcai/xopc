@@ -1,7 +1,9 @@
 import { Hono } from 'hono';
+import type { Context } from 'hono';
 import { cors } from 'hono/cors';
 import { createMiddleware } from 'hono/factory';
 import { bodyLimit } from 'hono/body-limit';
+import { getConnInfo } from '@hono/node-server/conninfo';
 
 import { resolveGatewayEffectiveHost } from '../../config/gateway-bind.js';
 import { createLogger } from '../../utils/logger.js';
@@ -11,6 +13,8 @@ import { loadTunnelState } from '../../tunnel/tunnel-state.js';
 import { maxWebchatAgentRequestBodyBytes } from '../chat-limits.js';
 import { buildGatewayConsoleCspHeader } from '../security/csp.js';
 import { checkBrowserOrigin } from '../security/origin-check.js';
+import { isLoopbackIpAddress, isTrustedProxyAddress } from '../client-ip.js';
+import { resolveReverseProxyPublicUrl } from '../public-url.js';
 import { auth } from './middleware/auth.js';
 import { operatorScopes } from './middleware/scopes.js';
 import { createStrictRateLimitMiddleware } from './middleware/strict-rate-limit.js';
@@ -53,7 +57,34 @@ export function createHonoApp(config: HonoAppConfig): Hono {
       port: gatewayPort,
       bindHost: resolveGatewayEffectiveHost(service.currentConfig),
       tunnelPublicUrl: loadTunnelState()?.publicUrl,
+      reverseProxyPublicUrl: resolveReverseProxyPublicUrl(service.currentConfig),
     });
+
+  /**
+   * TCP source for the in-flight request, normalized for trusted-proxy checks.
+   * Returns undefined when the runtime doesn't expose conninfo (tests, mocks).
+   */
+  const resolveRequestRemoteAddress = (c: Context): string | undefined => {
+    try {
+      return getConnInfo(c).remote.address;
+    } catch {
+      return undefined;
+    }
+  };
+
+  /**
+   * A request's TCP source qualifies as a "trusted proxy hop" when it's
+   * loopback (the user's own machine, where any reverse proxy lives) or
+   * listed in `gateway.trustedProxies`. We use this signal to safely
+   * auto-allow same-host Origins through CSRF without requiring a manual
+   * `corsOrigins` entry for every reverse-proxy hostname.
+   */
+  const isRequestFromTrustedProxy = (c: Context): boolean => {
+    const remote = resolveRequestRemoteAddress(c);
+    if (!remote) return false;
+    if (isLoopbackIpAddress(remote)) return true;
+    return isTrustedProxyAddress(remote, service.currentConfig.gateway?.trustedProxies);
+  };
 
   app.use(logContextMiddleware());
   app.use(logger({
@@ -126,6 +157,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
       origin,
       allowedOrigins: resolveBrowserOrigins(),
       allowHostHeaderOriginFallback,
+      autoAllowSameHostFromTrustedProxy: isRequestFromTrustedProxy(c),
       isLocalClient: false,
     });
 

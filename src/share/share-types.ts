@@ -51,6 +51,12 @@ export interface ShareRecord {
   description?: string;
   /** Directory-only extra fields. */
   directory?: ShareDirectoryMeta;
+  /** Thumbnail generation status (lazy + scheduled). */
+  thumbnailStatus?: 'pending' | 'ready' | 'failed';
+  /** ISO timestamp of the last successful thumbnail render. */
+  thumbnailGeneratedAt?: string;
+  /** ISO timestamp of the last failed attempt (used for cooldown). */
+  thumbnailFailedAt?: string;
 }
 
 export interface CreateShareParams {
@@ -103,6 +109,21 @@ export interface ShareDirectoryConfig {
   zipConcurrency: number;
 }
 
+export interface ShareThumbnailConfig {
+  enabled: boolean;
+  concurrency: number;
+  /** Hard cap on emitted jpeg bytes. */
+  maxBytes: number;
+  viewportWidth: number;
+  viewportHeight: number;
+  /** Per-render timeout (Playwright navigation + screenshot). */
+  generationTimeoutMs: number;
+  /** Cooldown before a failed token is retried. */
+  failureCooldownMs: number;
+  /** Optional override for the loopback URL used by the headless renderer. */
+  internalGatewayUrl?: string;
+}
+
 export interface ShareConfig {
   enabled: boolean;
   defaultTtlMs: number;
@@ -111,6 +132,7 @@ export interface ShareConfig {
   maxFileSize: number;
   inlinePreviewMimes: string[];
   directory: ShareDirectoryConfig;
+  thumbnail: ShareThumbnailConfig;
 }
 
 /** Default share configuration values. */
@@ -139,5 +161,14 @@ export const SHARE_CONFIG_DEFAULTS: ShareConfig = {
     maxDepth: 20,
     listingCacheMs: 60_000,
     zipConcurrency: 1,
+  },
+  thumbnail: {
+    enabled: true,
+    concurrency: 2,
+    maxBytes: 262_144, // 256 KB after re-encode
+    viewportWidth: 1200,
+    viewportHeight: 630,
+    generationTimeoutMs: 8_000,
+    failureCooldownMs: 5 * 60_000,
   },
 };

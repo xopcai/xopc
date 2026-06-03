@@ -141,7 +141,13 @@ export function docsGuidePageUrl(language: StoredLanguage, page: string): string
   return `${HELP_DOCS_BASE_URL}/${slug}`;
 }
 
-export type RemoteAccessDocsSection = 'tailscale-serve' | 'public-tunnel' | 'ssh-tunnel' | 'lan' | 'advanced';
+export type RemoteAccessDocsSection =
+  | 'tailscale-serve'
+  | 'public-tunnel'
+  | 'reverse-proxy'
+  | 'ssh-tunnel'
+  | 'lan'
+  | 'advanced';
 
 /** Remote access guide (`docs/remote-access.md`), optionally anchored to a section. */
 export function remoteAccessDocsUrl(

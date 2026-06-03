@@ -7,6 +7,7 @@ import { RemoteAccessLanTab } from '@/features/remote-access/remote-access-lan-t
 import { RemoteAccessSshTab } from '@/features/remote-access/remote-access-ssh-tab';
 import { RemoteAccessGuideTab } from '@/features/remote-access/remote-access-guide-tab';
 import { RemoteAccessDocsLink } from '@/features/remote-access/remote-access-docs-link';
+import { ReverseProxySection } from '@/features/remote-access/reverse-proxy-section';
 import {
   REMOTE_ACCESS_TABS,
   parseRemoteAccessTab,
@@ -32,6 +33,8 @@ function tabDocsSection(tab: RemoteAccessTabId): RemoteAccessDocsSection | undef
       return 'tailscale-serve';
     case 'public':
       return 'public-tunnel';
+    case 'reverse-proxy':
+      return 'reverse-proxy';
     case 'ssh':
       return 'ssh-tunnel';
     case 'lan':
@@ -55,6 +58,8 @@ function RemoteAccessTabPanel({
       return <TailscaleServeSection embedded />;
     case 'public':
       return <TunnelSettingsPanel embedded />;
+    case 'reverse-proxy':
+      return <ReverseProxySection />;
     case 'ssh':
       return <RemoteAccessSshTab />;
     case 'lan':
