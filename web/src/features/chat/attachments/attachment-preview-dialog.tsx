@@ -1,6 +1,7 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { Download, Maximize2, Minimize2, X } from 'lucide-react';
 
+import { APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
 import type { MessageAttachment } from '@/features/chat/messages/messages.types';
 import {
   getAttachmentBinaryPayload,
@@ -108,7 +109,12 @@ export function AttachmentPreviewDialog({
               'shadow-float dark:shadow-elevated',
             )}
           >
-            <div className="shrink-0 border-b border-edge bg-surface-panel dark:border-edge">
+            <div
+              className={cn(
+                'shrink-0 border-b border-edge bg-surface-panel dark:border-edge',
+                APP_CHROME_NO_DRAG_CLASS,
+              )}
+            >
               <div className="flex w-full items-center justify-between gap-2 px-4 py-3 sm:px-8">
                 <Dialog.Title className="min-w-0 flex-1 truncate text-sm font-semibold text-fg">
                   {preview?.name ?? ''}

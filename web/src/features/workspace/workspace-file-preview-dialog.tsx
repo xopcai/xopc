@@ -1,6 +1,7 @@
 import { Check, Copy, Download, Eye, FolderOpen, Link2, Loader2, Maximize2, Minimize2, Pencil, X } from 'lucide-react';
 import { useCallback, useState } from 'react';
 
+import { APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
 import { showComposerNotification } from '@/features/chat/composer/composer-notifications';
 import {
   FilePreviewBody,
@@ -99,7 +100,12 @@ export function WorkspaceFilePreviewPanel({
   return (
     <>
     <div ref={rootRef} className="flex h-full min-h-0 flex-col bg-surface-panel">
-      <div className="flex shrink-0 items-start gap-2 border-b border-edge px-4 py-2 dark:border-edge">
+      <div
+        className={cn(
+          'flex shrink-0 items-start gap-2 border-b border-edge px-4 py-2 dark:border-edge',
+          APP_CHROME_NO_DRAG_CLASS,
+        )}
+      >
         <div className="min-w-0 flex-1">
           <h2
             className="truncate text-base font-semibold leading-tight tracking-tight text-fg"
