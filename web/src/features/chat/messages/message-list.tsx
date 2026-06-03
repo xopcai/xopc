@@ -36,6 +36,8 @@ export const MessageList = memo(function MessageList({
   onDeleteRound,
   onRetryUserMessageRound,
   deleteRoundDisabled,
+  onAbortCurrentTurn,
+  onSendUserMessage,
 }: {
   messages: Message[];
   authToken?: string;
@@ -57,6 +59,10 @@ export const MessageList = memo(function MessageList({
   onRetryUserMessageRound?: (messageIndex: number) => void;
   /** Omit delete-round control while sending/streaming. */
   deleteRoundDisabled?: boolean;
+  /** Cancel the in-flight assistant turn (wires WorkflowCard's cancel button). */
+  onAbortCurrentTurn?: () => void;
+  /** Send a synthetic user message (wires WorkflowCard's "Save as…" → `/workflow save <name>`). */
+  onSendUserMessage?: (text: string) => void;
 }) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
@@ -207,6 +213,8 @@ export const MessageList = memo(function MessageList({
                 Boolean(onRetryUserMessageRound) && isLastUserMessageInThread(list, virtualRow.index)
               }
               deleteRoundDisabled={deleteRoundDisabled}
+              onAbortCurrentTurn={onAbortCurrentTurn}
+              onSendUserMessage={onSendUserMessage}
             />
           </div>
         );

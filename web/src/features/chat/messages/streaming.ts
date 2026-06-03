@@ -149,12 +149,18 @@ export function appendTextDelta(content: MessageContent[], delta: string): void 
   content.push({ type: 'text', text: delta });
 }
 
-export function appendToolStart(content: MessageContent[], toolName: string, args: unknown): void {
+export function appendToolStart(
+  content: MessageContent[],
+  toolName: string,
+  args: unknown,
+  toolCallId?: string,
+): void {
   closeStreamingThinkingIfAny(content);
 
   const block: ToolUseContent = {
     type: 'tool_use',
     id: crypto.randomUUID(),
+    toolCallId,
     name: toolName,
     input: args,
     status: 'running',
@@ -177,6 +183,34 @@ export function completeTool(
     ) {
       b.status = isError ? 'error' : 'done';
       b.result = result;
+      return;
+    }
+  }
+}
+
+/**
+ * Write structured `details` onto a still-running tool_use block. Matches by
+ * toolCallId when provided (most reliable), otherwise falls back to the most
+ * recent running block with the same tool name. Silently no-ops when no
+ * matching block exists — the SSE stream can race ahead of the tool_start the
+ * resume path missed, and we'd rather drop an update than crash.
+ */
+export function updateToolDetails(
+  content: MessageContent[],
+  toolName: string,
+  toolCallId: string | undefined,
+  details: unknown,
+): void {
+  for (let i = content.length - 1; i >= 0; i--) {
+    const b = content[i];
+    if (b.type !== 'tool_use') continue;
+    if (b.status !== 'running') continue;
+    if (toolCallId && b.toolCallId === toolCallId) {
+      b.details = details;
+      return;
+    }
+    if (!toolCallId && toolNameMatches(b.name, toolName)) {
+      b.details = details;
       return;
     }
   }

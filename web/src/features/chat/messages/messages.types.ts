@@ -13,11 +13,25 @@ export type ImageContent = {
 export type ToolUseContent = {
   type: 'tool_use';
   id: string;
+  /**
+   * Server-assigned tool call id from SSE `tool_start`. Optional because
+   * historical / rehydrated transcripts may not have it. Used to route
+   * `tool_update` snapshots back to the right block when multiple workflows
+   * (or tools) run in the same assistant turn.
+   */
+  toolCallId?: string;
   name: string;
   input?: unknown;
   status: 'running' | 'done' | 'error';
   /** Serialized tool output; may be an object in edge cases (normalize before parsing). */
   result?: string | unknown;
+  /**
+   * Live structured details streamed from the tool while it's still running
+   * (SSE `tool_update`). Only populated for tools that call `onUpdate` with
+   * a structured `details` payload — today that's the `workflow` tool. The
+   * WorkflowCard reads this first and falls back to `result` after `tool_end`.
+   */
+  details?: unknown;
 };
 
 /** Reasoning / thinking segment; order in `content` matches model execution (vs tools & text). */

@@ -27,6 +27,13 @@ export function mapEmbeddedEventToGatewaySse(event: EmbeddedStreamEvent): Gatewa
         isError: event.isError,
         result: event.result,
       };
+    case 'tool_update':
+      return {
+        type: 'tool_update',
+        toolName: event.toolName,
+        toolCallId: event.toolCallId,
+        details: event.details,
+      };
     case 'message_end':
       return { type: 'message_end' };
     case 'progress':

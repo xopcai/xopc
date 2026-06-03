@@ -1,0 +1,139 @@
+/**
+ * Default English label bag for the WorkflowCard tree.
+ *
+ * Kept in a separate file so callers can either consume it as-is (today's
+ * call sites that don't thread i18n yet) or override individual fields once
+ * they wire `messages(language).chat.workflow.*` through.
+ */
+
+import type { StoredLanguage } from '@/lib/storage';
+
+import type { WorkflowCardLabels } from './workflow-card';
+
+/**
+ * Resolve a {@link WorkflowCardLabels} bag for the given language. Falls back
+ * to English when an unknown locale is passed.
+ *
+ * Lives in this module rather than in the global chat.json so all workflow
+ * copy stays self-contained — easier to add fields when the card evolves
+ * without poking the ~500-line chat translation file.
+ */
+export function workflowCardLabels(language: StoredLanguage | undefined): WorkflowCardLabels {
+  if (language === 'zh') return zhLabels();
+  return enLabels();
+}
+
+/** @deprecated Use {@link workflowCardLabels}; kept for callers that don't have a language handy. */
+export function defaultWorkflowCardLabels(): WorkflowCardLabels {
+  return enLabels();
+}
+
+function enLabels(): WorkflowCardLabels {
+  return {
+    header: {
+      collapse: 'Collapse',
+      expand: 'Expand',
+      runningMeta: (count, duration) =>
+        duration ? `${count} · ${duration}` : `${count}`,
+      completedMeta: (count, duration) =>
+        duration ? `✓ ${count} · ${duration}` : `✓ ${count}`,
+      failedMeta: 'failed',
+    },
+    phase: {
+      countTpl: (done, total) => `${done}/${total}`,
+      runningTag: (n) => `· ${n} running`,
+      errorsTag: (n) => `· ${n} errors`,
+      skippedTag: (n) => `· ${n} skipped`,
+      showPrompt: 'Show prompt',
+      hidePrompt: 'Hide prompt',
+      promptHeading: 'Prompt',
+      resultPreviewHeading: 'Result',
+      errorHeading: 'Error',
+      emptyPreview: '(no preview)',
+      agentNumber: (n) => `#${n}`,
+    },
+    result: {
+      topFindingsHeading: (n) => `Top findings (${n})`,
+      topRisksHeading: (n) => `Top risks (${n})`,
+      executiveSummaryHeading: 'Executive summary',
+      summaryHeading: 'Summary',
+      openQuestionsHeading: 'Open questions',
+      moreSuffix: (n) => `${n} more…`,
+      rawHeading: 'View raw result',
+      emptyResult: '(no result)',
+    },
+    error: {
+      titleParse: 'Workflow parse error',
+      titleAbort: 'Workflow aborted',
+      titleTimeout: 'Workflow timed out',
+      titleRuntime: 'Workflow failed',
+      viewScriptHeading: 'View submitted script',
+    },
+    cancel: 'Cancel workflow',
+    saveAria: 'Save workflow…',
+    saveTitle: 'Save this workflow under a name (~/.xopc/workflows/)',
+    savePlaceholder: 'snake_case_name',
+    saveSubmit: 'Save',
+    saveCancel: 'Cancel',
+    saveDispatched: 'Saved',
+    copyAria: 'Copy result',
+    copyDoneAria: 'Copied',
+    moreAria: 'More actions',
+    viewSubagentsHeading: 'View subagents',
+    recentLogsHeading: 'Logs',
+  };
+}
+
+function zhLabels(): WorkflowCardLabels {
+  return {
+    header: {
+      collapse: '收起',
+      expand: '展开',
+      runningMeta: (count, duration) => (duration ? `${count} · ${duration}` : `${count}`),
+      completedMeta: (count, duration) => (duration ? `✓ ${count} · ${duration}` : `✓ ${count}`),
+      failedMeta: '失败',
+    },
+    phase: {
+      countTpl: (done, total) => `${done}/${total}`,
+      runningTag: (n) => `· ${n} 运行中`,
+      errorsTag: (n) => `· ${n} 失败`,
+      skippedTag: (n) => `· ${n} 已跳过`,
+      showPrompt: '查看 prompt',
+      hidePrompt: '收起 prompt',
+      promptHeading: 'Prompt',
+      resultPreviewHeading: '结果预览',
+      errorHeading: '错误',
+      emptyPreview: '（暂无预览）',
+      agentNumber: (n) => `#${n}`,
+    },
+    result: {
+      topFindingsHeading: (n) => `主要发现（${n}）`,
+      topRisksHeading: (n) => `主要风险（${n}）`,
+      executiveSummaryHeading: '摘要',
+      summaryHeading: '总结',
+      openQuestionsHeading: '待解决的问题',
+      moreSuffix: (n) => `还有 ${n} 条…`,
+      rawHeading: '查看原始结果',
+      emptyResult: '（无结果）',
+    },
+    error: {
+      titleParse: '工作流解析失败',
+      titleAbort: '工作流已中止',
+      titleTimeout: '工作流超时',
+      titleRuntime: '工作流执行失败',
+      viewScriptHeading: '查看提交的脚本',
+    },
+    cancel: '取消工作流',
+    saveAria: '保存工作流…',
+    saveTitle: '把这个工作流保存到 ~/.xopc/workflows/',
+    savePlaceholder: 'snake_case 名字',
+    saveSubmit: '保存',
+    saveCancel: '取消',
+    saveDispatched: '已保存',
+    copyAria: '复制结果',
+    copyDoneAria: '已复制',
+    moreAria: '更多操作',
+    viewSubagentsHeading: '查看子 agent',
+    recentLogsHeading: '日志',
+  };
+}

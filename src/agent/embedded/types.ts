@@ -21,6 +21,26 @@ export type EmbeddedStreamEvent =
       isError?: boolean;
       result?: unknown;
     }
+  | {
+      /**
+       * Mid-execution structured update for a tool whose `partialResult` is a
+       * {@link AgentToolResult}-shaped object (i.e. it carries `details`).
+       *
+       * The runtime only emits this when the upstream tool actually called
+       * `onUpdate` with structured details — so single-shot tools (read/write,
+       * shell, …) never produce this event, but the workflow tool — which
+       * pushes a fresh `WorkflowSnapshot` on every phase / agent state change
+       * — produces a steady stream that the client wires straight into the
+       * WorkflowCard's live progress tree.
+       *
+       * Carries `details` only (no `content` text) to keep the SSE payload
+       * tight — the final `tool_end` event still ships the full envelope.
+       */
+      type: 'tool_update';
+      toolName: string;
+      toolCallId?: string;
+      details: unknown;
+    }
   | { type: 'message_end' }
   | { type: 'progress'; stage: string; message: string }
   | { type: 'error'; content: string }

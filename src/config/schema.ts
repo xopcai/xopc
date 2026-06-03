@@ -303,6 +303,20 @@ export const AgentDefaultsSchema = z.object({
       enabled: z.boolean().optional(),
     })
     .optional(),
+  /**
+   * Dynamic workflows (`workflow` tool). On by default — disable to remove the
+   * tool from the agent surface entirely. Subagents spawned by workflows still
+   * obey the global `delegate` allowlist; `maxSubagents` caps a single workflow
+   * run, `defaultTimeoutSec` caps wall-clock per run.
+   */
+  workflow: z
+    .object({
+      enabled: z.boolean().default(true),
+      maxConcurrency: z.number().int().min(1).max(64).default(16),
+      maxSubagents: z.number().int().min(1).max(10000).default(1000),
+      defaultTimeoutSec: z.number().int().min(60).max(14_400).default(1800),
+    })
+    .optional(),
   /** Optional full system prompt replacement (merged with per-agent entry; entry wins). */
   systemPromptOverride: z.string().optional(),
   /** Optional allowlist of skill names for `<available_skills>`; when set, replaces unfiltered list. */

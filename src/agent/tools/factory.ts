@@ -53,6 +53,8 @@ import {
 } from '../../browser/index.js';
 import { createBrowserUseTool } from './browser/tool/browser-use-tool.js';
 import { createDelegateTool } from './delegate-tool.js';
+import { createWorkflowTool } from './workflow-tool.js';
+import { createWorkflowCatalog } from '../workflow/catalog.js';
 import { buildSandboxToolMap, createExecuteCodeTool } from './execute-code-tool.js';
 import { createCronjobTool } from './cronjob-tool.js';
 import type { CronService } from '../../cron/index.js';
@@ -385,6 +387,43 @@ export class AgentToolsFactory {
                 this.browserSupervisorForTask(this.deps.getCurrentContext()?.sessionKey ?? 'default'),
               notifyBrowserPageClosed: (taskId) => {
                 this.browserTaskSupervisors.delete(taskId);
+              },
+            }),
+          ]
+        : []),
+      ...(cfg?.agents?.defaults?.workflow?.enabled !== false && primary
+        ? [
+            createWorkflowTool({
+              workspace,
+              bus: this.deps.bus,
+              getConfig: () => this.deps.getConfig?.(),
+              catalog: createWorkflowCatalog(),
+              getCurrentSessionKey: () => this.deps.getCurrentContext()?.sessionKey,
+              getSubagentModel: () => {
+                const gp = options?.getPrimaryModel ?? this.deps.getPrimaryModel;
+                const m = gp?.();
+                if (!m) {
+                  throw new Error('No primary model configured for workflow');
+                }
+                return m;
+              },
+              toolExecutorConfig: this.deps.toolExecutorConfig,
+              // Injected so `subagent-runner.ts` doesn't import `AgentToolsFactory`
+              // (which would form the same cycle delegate-tool was carved out to avoid).
+              buildChildTools: (childOpts) => {
+                const childFactory = new AgentToolsFactory({
+                  workspace: childOpts.workspace,
+                  bus: childOpts.bus,
+                  getCurrentContext: () => null,
+                  getConfig: childOpts.getConfig,
+                  getPrimaryModel: () => childOpts.model,
+                  toolExecutorConfig: childOpts.toolExecutorConfig,
+                });
+                return childFactory.createAllTools({
+                  workspace: childOpts.workspace,
+                  getPrimaryModel: () => childOpts.model,
+                  disabledTools: new Set(['extensions']),
+                });
               },
             }),
           ]

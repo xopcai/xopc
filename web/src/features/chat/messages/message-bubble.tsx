@@ -26,6 +26,7 @@ import {
   getAssistantCopyPlainText,
 } from '@/features/chat/messages/assistant-copy-utils';
 import { renderChunkedContent } from '@/features/chat/messages/message-content-renderer';
+import { workflowCardLabels } from '@/features/chat/workflow/workflow-card-labels';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/cn';
 import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
@@ -69,6 +70,8 @@ export const MessageBubble = memo(function MessageBubble({
   onRetryUserMessageRound,
   userMessageCanRetry = false,
   deleteRoundDisabled = false,
+  onAbortCurrentTurn,
+  onSendUserMessage,
 }: {
   message: Message;
   authToken?: string;
@@ -86,6 +89,10 @@ export const MessageBubble = memo(function MessageBubble({
   userMessageCanRetry?: boolean;
   /** When true, omit delete control (e.g. while sending or streaming). */
   deleteRoundDisabled?: boolean;
+  /** Cancel the in-flight assistant turn — wires WorkflowCard's cancel button. */
+  onAbortCurrentTurn?: () => void;
+  /** Send a synthetic user message — wires WorkflowCard's "Save as…" entry. */
+  onSendUserMessage?: (text: string) => void;
 }) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
@@ -357,6 +364,15 @@ export const MessageBubble = memo(function MessageBubble({
                   m.chat.attachmentPreviewImage,
                   openInlineImagePreview,
                   sessionKey,
+                  {
+                    labels: workflowCardLabels(language),
+                    // Only the streaming row owns the abort handler — for
+                    // completed/historical rows it would point at an unrelated
+                    // turn, so we leave it undefined and the cancel button
+                    // stays hidden.
+                    onAbort: isAssistant && isStreaming ? onAbortCurrentTurn : undefined,
+                    onSendChatMessage: onSendUserMessage,
+                  },
                 )}
                 {isStreaming ? (
                   <span className="inline-block h-3 w-0.5 animate-pulse bg-accent align-middle" />
