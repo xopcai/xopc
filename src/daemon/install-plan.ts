@@ -53,9 +53,10 @@ function resolveEntryPoint(): string {
   if (isSEABinary()) {
     return process.execPath;
   }
-  // Resolve relative to this file's location → ../cli/index.js (built output)
+  // Must match package.json "bin" (cli/bin.js). index.js only exports runCli and exits
+  // immediately when executed directly — systemd/LaunchAgent need the real entry.
   const thisDir = path.dirname(new URL(import.meta.url).pathname);
-  return path.join(thisDir, '..', 'cli', 'index.js');
+  return path.join(thisDir, '..', 'cli', 'bin.js');
 }
 
 // ─── Plan Builder ───
