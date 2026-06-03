@@ -20,6 +20,7 @@ import type {
 import type { ToolCardLabels } from '@/features/chat/tool-results/tool-result-cards';
 import { UserMessageSegments } from '@/features/chat/messages/user-message-segments';
 import { stripEnvelopeTimestampPrefix } from '@/features/chat/messages/user-message-plain-text';
+import { stripStartupContextForDisplay } from '@/features/chat/messages/wire-text-scrub';
 import { WorkflowCard, type WorkflowCardLabels } from '@/features/chat/workflow/workflow-card';
 import { defaultWorkflowCardLabels } from '@/features/chat/workflow/workflow-card-labels';
 import { isWorkflowToolBlock } from '@/features/chat/workflow/workflow.utils';
@@ -36,7 +37,9 @@ function renderTextOrImageBlock(
 ) {
   if (block.type === 'text') {
     if (isUser) {
-      const displayText = stripEnvelopeTimestampPrefix(block.text ?? '');
+      const displayText = stripEnvelopeTimestampPrefix(
+        stripStartupContextForDisplay(block.text ?? ''),
+      );
       return (
         <div key={key} className="min-w-0">
           <UserMessageSegments text={displayText} />
