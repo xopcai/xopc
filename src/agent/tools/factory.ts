@@ -25,6 +25,8 @@ import {
   createWebExtractTool,
   createMessageTool,
   createSendMediaTool,
+  createCreateShareTool,
+  isShareToolAvailable,
   createMemorySearchTool,
   createMemoryGetTool,
   createTodoTool,
@@ -335,6 +337,14 @@ export class AgentToolsFactory {
           ]
         : []),
       createSendMediaTool(workspace, bus, () => this.deps.getCurrentContext()),
+      ...(isShareToolAvailable(cfg)
+        ? [
+            createCreateShareTool({
+              workspace,
+              getConfig: () => this.deps.getConfig?.(),
+            }),
+          ]
+        : []),
       createMemorySearchTool({ workspaceDir: workspace, memoriesDir }),
       createMemoryGetTool({ workspaceDir: workspace, memoriesDir }),
       ...(getBuiltin && shouldRegisterCuratedMemoryTool(this.deps.getConfig?.())

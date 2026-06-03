@@ -14,9 +14,10 @@ Only **one public exposure mode** should be active at a time (Tailscale Serve **
 |----------|--------|--------------|
 | Personal devices on your Tailscale tailnet | **Tailscale Serve** (recommended) | Tailscale |
 | Mobile app / public HTTPS URL from anywhere | **Public tunnel** (FRP) | Public internet |
+| Self-hosted HTTPS at your own domain | **Reverse proxy** (Caddy / nginx / Cloudflare Tunnel) | Reverse proxy |
 | CLI/TUI on a laptop, SSH to the host | **SSH tunnel** | SSH tunnel |
 | Phone on the same Wi‑Fi | **LAN bind** | Local network → Gateway settings |
-| Enterprise SSO in front of the gateway | **Reverse proxy** | Overview (see below) |
+| Enterprise SSO in front of the gateway | **Trusted-proxy auth** (advanced) | (see advanced section below) |
 
 See also the [network hub](./network.md) for how these layers fit together.
 
@@ -28,9 +29,9 @@ The Overview tab summarizes what is active on **this** gateway:
 
 - **Tailscale Serve** — tailnet HTTPS status
 - **Public tunnel** — FRP connection state
+- **Reverse proxy** — configured `gateway.publicUrl` (self-deployed HTTPS)
 - **SSH tunnel** — CLI port-forwarding command
 - **Local network** — LAN bind shortcut to Gateway settings
-- **Reverse proxy** — notes when the gateway sits behind nginx, Caddy, or similar
 
 Pick a method card to jump to the matching tab. If Tailscale and the public tunnel are both enabled, fix the conflict before switching.
 
@@ -160,6 +161,104 @@ More: [Remote access (SSH + CLI)](./gateway/remote.md).
 
 ---
 
+## Reverse proxy (self-hosted HTTPS) {#reverse-proxy}
+
+Front the gateway with **your own HTTPS reverse proxy** (Caddy, nginx, Cloudflare Tunnel, etc.) at a custom domain such as `https://gateway.example.com`. The proxy terminates TLS and forwards to the loopback gateway; the mobile app pairs over the public URL.
+
+This is **distinct from** trusted-proxy auth (see [Advanced](#advanced)): here the proxy is just a TLS / domain shim — the gateway still authenticates clients with its own Bearer token. No SSO required.
+
+### When to use it
+
+- You already run a domain + TLS cert (Let's Encrypt, Cloudflare, commercial CA).
+- You want a memorable URL like `https://xopc.yourdomain.com` instead of `*.frp.xopc.ai`.
+- You need IP-allowlisting / WAF in front of the gateway.
+- You're behind CGNAT and use Cloudflare Tunnel / Tailscale Funnel as the reverse proxy.
+
+### In the settings UI
+
+1. Open **Remote access → Reverse proxy**.
+2. If you already accessed the console through the proxy (the URL bar shows `https://gateway.example.com`), the tab **auto-detects** the URL and shows a pairing QR immediately — no save required.
+3. Click **Test** to round-trip `/api/tunnel/pair/ping` and verify TLS + DNS + reachability.
+4. Click **Save as default** to persist as `gateway.publicUrl`. Then other clients (and restarts) see the same URL.
+5. Scan the QR from the xopc mobile app.
+
+The mobile app stores the URL as the primary `baseUrl` and falls back to LAN / FRP if reachable.
+
+### Configuration
+
+```json5
+{
+  gateway: {
+    bind: "loopback",                       // proxy connects via localhost
+    port: 18790,
+    auth: { mode: "token", token: "…" },
+    publicUrl: "https://gateway.example.com",  // NEW
+  },
+}
+```
+
+- `publicUrl` must use **https** for public hostnames; `http` is allowed only for RFC1918 / `.local`.
+- No path, no query, no userinfo. Trailing `/` is stripped.
+- The configured URL is automatically added to the CORS/CSRF allowlist.
+- When both reverse-proxy and FRP are active, **reverse-proxy is preferred** by the mobile app; FRP remains as a fallback in `connectUrls`.
+
+### Reverse-proxy templates
+
+**Caddy** (auto Let's Encrypt):
+
+```caddy
+gateway.example.com {
+  reverse_proxy 127.0.0.1:18790 {
+    flush_interval -1                     # SSE: disable response buffering
+    transport http { keepalive 90s }
+  }
+}
+```
+
+**nginx:**
+
+```nginx
+server {
+  listen 443 ssl http2;
+  server_name gateway.example.com;
+  ssl_certificate     /etc/letsencrypt/live/gateway.example.com/fullchain.pem;
+  ssl_certificate_key /etc/letsencrypt/live/gateway.example.com/privkey.pem;
+
+  location / {
+    proxy_pass         http://127.0.0.1:18790;
+    proxy_http_version 1.1;
+    proxy_set_header   Host $host;
+    proxy_set_header   X-Forwarded-Proto https;
+    proxy_set_header   Upgrade $http_upgrade;
+    proxy_set_header   Connection "upgrade";
+    proxy_buffering    off;               # SSE: disable response buffering
+    proxy_read_timeout 3600s;             # long-lived SSE / WS
+  }
+}
+```
+
+### Requirements
+
+| Requirement | Why |
+|---|---|
+| **System-trusted TLS cert** (Let's Encrypt / commercial CA) | Mobile apps reject self-signed certs (iOS ATS, Android default config). Self-signed is **not supported in v1**. |
+| `proxy_buffering off` (nginx) / `flush_interval -1` (Caddy) | SSE streams (`/api/events`, `/api/agent/stream`) must flush immediately. |
+| Long idle timeout (≥ 60s, ideally hours) | Chat and event streams stay open. |
+| Do **not** strip `Authorization` header | The gateway authenticates with its own Bearer token. |
+| `/health` and `/api/tunnel/pair/ping` must be reachable | Used for mobile preflight + the "Test" button in the UI. |
+
+### Troubleshooting
+
+| Symptom | Check |
+|---|---|
+| Mobile shows "Reverse proxy did not respond" | Run the **Test** button. TLS cert valid? DNS resolves? `/api/tunnel/pair/ping` reachable? |
+| Browser console shows CORS / 403 errors | Make sure your TCP connection comes from loopback (proxy on same host) **or** add the proxy IP to `gateway.trustedProxies`. |
+| SSE streams stall after a few seconds | Disable proxy buffering. nginx: `proxy_buffering off`. Caddy: `flush_interval -1`. |
+| Mobile pairs but disconnects after a minute | Increase proxy idle timeout. |
+| The QR works locally but not over cellular | Public DNS / firewall — the URL must resolve and be reachable from outside your network. |
+
+---
+
 ## Same network (LAN) {#lan}
 
 For phones or laptops on the **same Wi‑Fi** without public exposure, open **Remote access → Local network**, then:
@@ -172,13 +271,15 @@ The Public internet tab can suggest LAN addresses for mobile pairing when the ga
 
 ---
 
-## Reverse proxy & enterprise front door {#advanced}
+## Advanced: trusted-proxy authentication {#advanced}
 
-When nginx, Caddy, or Pomerium terminates TLS and authenticates users:
+For the case where the **reverse proxy itself authenticates users** (Pomerium, oauth2-proxy, enterprise SSO, etc.) and you want the gateway to trust the user identity from request headers — distinct from the [Reverse proxy](#reverse-proxy) tab, which keeps Bearer-token auth:
 
 - Keep `gateway.bind=loopback`.
-- Configure [trusted proxy auth](./gateway/trusted-proxy.md).
+- Configure [trusted proxy auth](./gateway/trusted-proxy.md): `gateway.auth.mode = "trusted-proxy"`, set `trustedProxies` CIDRs, and `auth.trustedProxy.userHeader`.
 - Block direct access to the gateway port from the internet.
+
+The mobile pairing flow does **not** use this mode (the phone has no SSO identity to present).
 
 ---
 
@@ -188,9 +289,11 @@ When nginx, Caddy, or Pomerium terminates TLS and authenticates users:
 |---------|--------|
 | Overview shows a conflict | Disable Tailscale Serve or stop the public tunnel |
 | Public tunnel won’t start | Registration secret set? Consent accepted? See logs `TunnelAudit` |
-| Mobile QR says localhost blocked | Enable LAN bind or start the public tunnel |
+| Mobile QR says localhost blocked | Enable LAN bind, start the public tunnel, or configure reverse proxy |
 | Tailscale Enable fails | Tailscale installed and logged in? `gateway.bind=loopback`? |
 | CLI can’t reach remote gateway | `gateway.mode=remote`, SSH tunnel running, token in `gateway.remote` |
+| Reverse-proxy: "Test" button fails with TLS error | Cert not trusted (self-signed?), wrong SNI, or expired cert |
+| Reverse-proxy: SSE streams cut after seconds | `proxy_buffering off` (nginx) / `flush_interval -1` (Caddy) missing |
 
 ---
 

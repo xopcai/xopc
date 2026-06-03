@@ -6,7 +6,14 @@
  */
 
 type OriginCheckResult =
-  | { ok: true; matchedBy: 'allowlist' | 'host-header-fallback' | 'local-loopback' }
+  | {
+      ok: true;
+      matchedBy:
+        | 'allowlist'
+        | 'host-header-fallback'
+        | 'local-loopback'
+        | 'trusted-proxy-same-host';
+    }
   | { ok: false; reason: string };
 
 const LOOPBACK_HOSTNAMES = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
@@ -44,6 +51,14 @@ export function checkBrowserOrigin(params: {
   allowedOrigins?: string[];
   allowHostHeaderOriginFallback?: boolean;
   isLocalClient?: boolean;
+  /**
+   * When true, allow `Origin` whose host portion exactly equals the `Host`
+   * header. Only flip this on after verifying the TCP source is loopback or
+   * inside `gateway.trustedProxies` — otherwise an attacker who can set
+   * arbitrary Origin + Host (e.g. via an open SSRF) bypasses CSRF.
+   * Enables zero-config reverse-proxy access at the user's own domain.
+   */
+  autoAllowSameHostFromTrustedProxy?: boolean;
 }): OriginCheckResult {
   const parsedOrigin = parseOriginHost(params.origin);
   if (!parsedOrigin) {
@@ -60,6 +75,15 @@ export function checkBrowserOrigin(params: {
   }
 
   const requestHost = normalizeHostHeader(params.requestHost);
+
+  if (
+    params.autoAllowSameHostFromTrustedProxy === true &&
+    requestHost &&
+    parsedOrigin.host === requestHost
+  ) {
+    return { ok: true, matchedBy: 'trusted-proxy-same-host' };
+  }
+
   if (
     params.allowHostHeaderOriginFallback === true &&
     requestHost &&

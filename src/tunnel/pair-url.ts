@@ -112,10 +112,23 @@ export function parseMobileConnectDeepLink(raw: string): ParsedMobileConnectDeep
   }
 }
 
-/** Ordered URLs for mobile clients: prefer LAN on the same network, then tunnel/base. */
+/**
+ * Ordered URLs for mobile clients. Priority:
+ *   1. reverse-proxy public URL (user-deployed HTTPS, typically fastest + works on cellular)
+ *   2. LAN URL (zero-RTT on same network)
+ *   3. baseUrl (legacy: usually the FRP tunnel public URL, kept for callers that
+ *      do not yet split reverseProxyUrl from tunnelUrl)
+ *   4. tunnelUrl (explicit FRP tunnel URL, kept as a fallback even when a
+ *      reverse-proxy URL is also configured)
+ *
+ * Loopback URLs are dropped (they only work on the gateway host) and
+ * duplicates are de-duped while preserving first occurrence order.
+ */
 export function buildMobileConnectUrlOrder(params: {
   baseUrl: string | null | undefined;
   lanUrl: string | null | undefined;
+  reverseProxyUrl?: string | null | undefined;
+  tunnelUrl?: string | null | undefined;
 }): string[] {
   const ordered: string[] = [];
   const seen = new Set<string>();
@@ -127,8 +140,10 @@ export function buildMobileConnectUrlOrder(params: {
     ordered.push(url);
   };
 
+  push(params.reverseProxyUrl);
   push(params.lanUrl);
   push(params.baseUrl);
+  push(params.tunnelUrl);
   return ordered;
 }
 

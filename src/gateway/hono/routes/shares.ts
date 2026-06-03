@@ -7,6 +7,8 @@ import { Readable } from 'node:stream';
 import { extractToken } from '../../auth.js';
 import { getClientIpFromHeaders } from '../../security/loopback.js';
 import { getShareStore, shareResponseContentType } from '../../../share/share-store.js';
+import { getSiteShareStore } from '../../../share/site-share-store.js';
+import { resolveSiteShareConfig } from '../../../share/site-share-config.js';
 import { resolveShareUrl } from '../../../share/share-url.js';
 import { consumeSharePublicLimit } from '../../../share/share-rate-limit.js';
 import { logShareAudit } from '../../../share/share-audit.js';
@@ -20,6 +22,27 @@ import type { ShareConfig, ShareRecord } from '../../../share/share-types.js';
 import { resolveGatewayEffectiveHost } from '../../../config/gateway-bind.js';
 import { SHARE_CONFIG_DEFAULTS } from '../../../share/share-types.js';
 import { createZipStream, planDirectoryFiles } from '../../../share/share-zip.js';
+import {
+  audienceDefaults,
+  cleanupStagedSite,
+  decideShareKind,
+  forgetStagedSite,
+  makeDescription,
+  makeTitle,
+  probeShareTarget,
+  rememberStagedSite,
+  stageSingleHtmlAsSite,
+  type ShareAudience,
+  type ShareAutoMode,
+} from '../../../share/share-auto.js';
+import {
+  deleteThumbnail,
+  placeholderSvg,
+  readThumbnail,
+  scheduleThumbnail,
+  thumbnailContentType,
+  thumbnailExists,
+} from '../../../share/share-thumbnail.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 import type { GatewayService } from '../../service.js';
 
@@ -29,6 +52,14 @@ function getShareUrlContext(service: GatewayService) {
     gatewayHost: resolveGatewayEffectiveHost(service.currentConfig),
     gatewayPort: gateway.port ?? 18790,
   };
+}
+
+function thumbnailRenderContext(service: GatewayService) {
+  const cfg = { ...SHARE_CONFIG_DEFAULTS, ...resolveShareConfig(service) };
+  const port = service.currentConfig.gateway.port ?? 18790;
+  // Always use loopback for the internal renderer — never the public tunnel URL.
+  const internalBaseUrl = cfg.thumbnail.internalGatewayUrl ?? `http://127.0.0.1:${port}`;
+  return { config: cfg.thumbnail, internalBaseUrl };
 }
 
 function resolveShareConfig(service: GatewayService): Partial<ShareConfig> {
@@ -147,10 +178,12 @@ export function registerSharePublicRoutes(app: Hono, service: GatewayService): v
     const cfg = { ...SHARE_CONFIG_DEFAULTS, ...resolveShareConfig(service) };
     const previewable = isPreviewableInline(record.mimeType, cfg.inlinePreviewMimes);
     const richPreviewable = isRichSpaPreviewable(record.mimeType);
+    const og = buildLandingOg(service, record);
     return c.html(
       renderShareLandingPage(record, downloadPath, {
         inlineUrl: previewable ? `/s/${token}?inline=1` : null,
         previewUrl: richPreviewable ? `/#/share/${encodeURIComponent(token)}` : null,
+        og,
       }),
     );
   });
@@ -300,6 +333,103 @@ export function registerSharePublicRoutes(app: Hono, service: GatewayService): v
     const validation = store.validateAccess(record);
     return c.body(null, validation.valid ? 200 : 410);
   });
+
+  /** Thumbnail (jpeg/png/svg) — does NOT consume views. */
+  app.get('/s/:token/thumbnail', async (c) => {
+    const clientIp = getClientIpFromHeaders({ get: (n: string) => c.req.header(n) ?? undefined });
+    const rateResult = consumeSharePublicLimit(clientIp);
+    if (!rateResult.allowed) {
+      c.header('Retry-After', String(Math.ceil(rateResult.retryAfterMs / 1000)));
+      return c.text('Too many requests', 429);
+    }
+    const token = c.req.param('token');
+    const record = store.getByToken(token);
+    if (!record) return c.body(null, 404);
+    const validation = store.validateAccess(record);
+    if (!validation.valid) return c.body(null, 410);
+
+    const cached = await readThumbnail(token);
+    if (cached) {
+      return new Response(cached, {
+        status: 200,
+        headers: {
+          'Content-Type': thumbnailContentType(cached),
+          'Cache-Control': 'public, max-age=300',
+          'X-Content-Type-Options': 'nosniff',
+        },
+      });
+    }
+    // Schedule and return a placeholder so social-card scrapers always get an image.
+    scheduleThumbnail({ scope: 'file', token, recordId: record.id }, thumbnailRenderContext(service));
+    const placeholder = placeholderSvg(record.fileName, record.kind === 'directory' ? 'folder' : 'file');
+    return new Response(placeholder, {
+      status: 200,
+      headers: {
+        'Content-Type': 'image/svg+xml; charset=utf-8',
+        'Cache-Control': 'public, max-age=10',
+        'X-Content-Type-Options': 'nosniff',
+      },
+    });
+  });
+
+  app.on('HEAD', '/s/:token/thumbnail', async (c) => {
+    const token = c.req.param('token');
+    const record = store.getByToken(token);
+    if (!record) return c.body(null, 404);
+    const validation = store.validateAccess(record);
+    if (!validation.valid) return c.body(null, 410);
+    const ready = await thumbnailExists(token);
+    return c.body(null, ready ? 200 : 202);
+  });
+
+  /** Site-share thumbnail. Shape mirrors /s/:token/thumbnail. */
+  app.get('/site/:token/thumbnail', async (c) => {
+    const clientIp = getClientIpFromHeaders({ get: (n: string) => c.req.header(n) ?? undefined });
+    const rateResult = consumeSharePublicLimit(clientIp);
+    if (!rateResult.allowed) {
+      c.header('Retry-After', String(Math.ceil(rateResult.retryAfterMs / 1000)));
+      return c.text('Too many requests', 429);
+    }
+    const token = c.req.param('token');
+    const siteStore = getSiteShareStore(resolveSiteShareConfig(service));
+    const record = siteStore.getByToken(token);
+    if (!record) return c.body(null, 404);
+    const validation = siteStore.validateAccess(record);
+    if (!validation.valid) return c.body(null, 410);
+
+    const cached = await readThumbnail(token);
+    if (cached) {
+      return new Response(cached, {
+        status: 200,
+        headers: {
+          'Content-Type': thumbnailContentType(cached),
+          'Cache-Control': 'public, max-age=300',
+          'X-Content-Type-Options': 'nosniff',
+        },
+      });
+    }
+    scheduleThumbnail({ scope: 'site', token, recordId: record.id }, thumbnailRenderContext(service));
+    const placeholder = placeholderSvg(record.description ?? 'site share', 'html');
+    return new Response(placeholder, {
+      status: 200,
+      headers: {
+        'Content-Type': 'image/svg+xml; charset=utf-8',
+        'Cache-Control': 'public, max-age=10',
+        'X-Content-Type-Options': 'nosniff',
+      },
+    });
+  });
+
+  app.on('HEAD', '/site/:token/thumbnail', async (c) => {
+    const token = c.req.param('token');
+    const ready = await thumbnailExists(token);
+    return c.body(null, ready ? 200 : 202);
+  });
+
+  // Wire share-store cleanup → drop on-disk thumbnail file.
+  store.setCleanupHook((rec) => {
+    void deleteThumbnail(rec.token);
+  });
 }
 
 // ── Authenticated routes ──────────────────────────────────────────────────────
@@ -307,6 +437,12 @@ export function registerSharePublicRoutes(app: Hono, service: GatewayService): v
 export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const { service } = deps;
   const store = getShareStore(resolveShareConfig(service));
+  const siteStoreEager = getSiteShareStore(resolveSiteShareConfig(service));
+  // Register once: when a site share is revoked / expires, drop its staging dir (if any).
+  siteStoreEager.setCleanupHook((rec) => {
+    const dir = forgetStagedSite(rec.id);
+    if (dir) void cleanupStagedSite(dir);
+  });
 
   authenticated.post('/api/shares', async (c) => {
     const gatewayToken = extractToken({ authorization: c.req.header('authorization') ?? undefined });
@@ -382,6 +518,148 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
         },
         201,
       );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return c.json({ ok: false, error: { message } }, 400);
+    }
+  });
+
+  /**
+   * Smart share — picks file vs site, fills sensible defaults, returns the
+   * payload the mobile share-sheet needs (title, description, thumbnailUrl,
+   * reachability) in a single round-trip.
+   */
+  authenticated.post('/api/shares/auto', async (c) => {
+    const gatewayToken = extractToken({ authorization: c.req.header('authorization') ?? undefined });
+    if (!gatewayToken) return c.json({ ok: false, error: { message: 'Token required' } }, 401);
+
+    let body: Record<string, unknown>;
+    try {
+      body = (await c.req.json()) as Record<string, unknown>;
+    } catch {
+      return c.json({ ok: false, error: { message: 'Invalid JSON' } }, 400);
+    }
+
+    const path = typeof body.path === 'string' ? body.path.trim() : '';
+    if (!path) return c.json({ ok: false, error: { message: 'Missing path' } }, 400);
+    const sessionKey = typeof body.sessionKey === 'string' ? body.sessionKey.trim() : undefined;
+    const agentId = typeof body.agentId === 'string' ? body.agentId.trim() : undefined;
+    const mode = (typeof body.mode === 'string' && ['auto', 'force-file', 'force-site', 'force-zip'].includes(body.mode))
+      ? (body.mode as ShareAutoMode)
+      : 'auto';
+    const audience: ShareAudience | undefined =
+      body.audience === 'friend' || body.audience === 'colleague' || body.audience === 'public'
+        ? body.audience
+        : undefined;
+    const title = typeof body.title === 'string' ? body.title : undefined;
+    const description = typeof body.description === 'string' ? body.description : undefined;
+    const ttlOverride = typeof body.ttlMs === 'number' ? body.ttlMs : undefined;
+    const maxViewsOverride =
+      body.maxViews === null ? null : typeof body.maxViews === 'number' ? body.maxViews : undefined;
+    const wantThumbnail = body.thumbnail !== false;
+
+    const workspaceRoot = await resolveWorkspaceRootForShare(service, sessionKey, agentId);
+    if (!workspaceRoot) {
+      return c.json({ ok: false, error: { message: 'Workspace not configured' } }, 400);
+    }
+
+    let probe;
+    try {
+      probe = await probeShareTarget(workspaceRoot, path);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return c.json({ ok: false, error: { message } }, 400);
+    }
+
+    let decision;
+    try {
+      decision = decideShareKind(probe, mode);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return c.json({ ok: false, error: { message } }, 400);
+    }
+
+    const defaults = audienceDefaults(audience);
+    const ttlMs = ttlOverride ?? defaults.ttlMs;
+    const maxViews = maxViewsOverride !== undefined ? maxViewsOverride : defaults.maxViews;
+    const tokenHash = hashGatewayToken(gatewayToken);
+    const urlCtx = getShareUrlContext(service);
+
+    try {
+      if (decision.kind === 'site') {
+        const siteStore = getSiteShareStore(resolveSiteShareConfig(service));
+        // Single HTML file → stage into a temp dir as index.html so it can be
+        // served as a site (recipient lands on a rendered page, not the
+        // file-landing). The staging dir is auto-cleaned on revoke/expire.
+        let sitePath = path;
+        let stagedDir: string | null = null;
+        if (probe.kind === 'file') {
+          const staged = await stageSingleHtmlAsSite(workspaceRoot, probe.absolutePath);
+          sitePath = staged.relativePath;
+          stagedDir = staged.stagingDir;
+        }
+        const siteRec = await siteStore.create({
+          kind: 'static',
+          path: sitePath,
+          ttlMs,
+          description,
+          subdomain: typeof body.subdomain === 'string' ? body.subdomain : undefined,
+          spaFallback: true,
+          rewriteMode: 'html-css',
+          sessionKey,
+          agentId,
+          workspaceRoot,
+          gatewayTokenHash: tokenHash,
+        });
+        if (stagedDir) rememberStagedSite(siteRec.id, stagedDir);
+        const cfg = siteStore.getConfig();
+        const gatewayPort = service.currentConfig.gateway.port ?? 18790;
+        const gatewayHost = resolveGatewayEffectiveHost(service.currentConfig);
+        const subdomainLabel = siteRec.subdomain ?? siteRec.token;
+        const tunnelUp = !!(await import('../../../tunnel/tunnel-state.js')).loadTunnelState();
+        const shareUrl = tunnelUp
+          ? `https://${subdomainLabel}.${cfg.publicHostSuffix}/`
+          : `http://${gatewayHost}:${gatewayPort}/site/${siteRec.token}/`;
+        const reachability = tunnelUp ? 'public' : (gatewayHost === '127.0.0.1' || gatewayHost === 'localhost' || gatewayHost === '::1' ? 'local-only' : 'lan');
+        const thumbnailUrl = wantThumbnail
+          ? `${tunnelUp ? `https://${subdomainLabel}.${cfg.publicHostSuffix}` : `http://${gatewayHost}:${gatewayPort}`}/site/${siteRec.token}/thumbnail`
+          : '';
+        if (wantThumbnail) {
+          scheduleThumbnail({ scope: 'site', token: siteRec.token, recordId: siteRec.id }, thumbnailRenderContext(service));
+          siteStore.setThumbnailStatus(siteRec.id, 'pending');
+        }
+        const titleOut = makeTitle(probe.kind === 'directory' ? path.split('/').pop() || path : path, title);
+        return c.json({
+          ok: true,
+          payload: {
+            share: {
+              id: siteRec.id,
+              kind: 'site',
+              title: titleOut,
+              description: makeDescription({ audience, expiresAt: siteRec.expiresAt, override: description }),
+              shareUrl,
+              lanUrl: null,
+              reachability,
+              reachabilityHint: reachability === 'public' ? null : (reachability === 'lan' ? '当前局域网内可访问，开启远程隧道后对外网可达' : '当前仅本机可访问，开启远程隧道后对外可达'),
+              expiresAt: siteRec.expiresAt,
+              maxViews: null,
+            },
+            thumbnail: {
+              url: thumbnailUrl,
+              status: wantThumbnail ? 'pending' : 'unavailable',
+              width: SHARE_CONFIG_DEFAULTS.thumbnail.viewportWidth,
+              height: SHARE_CONFIG_DEFAULTS.thumbnail.viewportHeight,
+            },
+            routing: { reason: decision.reason, hint: decision.hint },
+          },
+        }, 201);
+      }
+
+      return await createFileShareResponse({
+        c, service, store, probe, decision,
+        ttlMs, maxViews, title, description, audience,
+        workspaceRoot, tokenHash, urlCtx, wantThumbnail,
+      });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return c.json({ ok: false, error: { message } }, 400);
@@ -532,7 +810,21 @@ async function renderDirectoryLanding(
       return c.html(renderShareExpiredPage('not_found'), 404);
     }
   }
-  return c.html(renderFolderLandingPage(record, listing, urls)) as unknown as Response;
+  const og = buildLandingOg(service, record);
+  return c.html(renderFolderLandingPage(record, listing, urls, { og })) as unknown as Response;
+}
+
+function buildLandingOg(service: GatewayService, record: ShareRecord) {
+  const resolved = resolveShareUrl(record.token, getShareUrlContext(service));
+  // Only emit OG tags when the share is genuinely public — otherwise WeChat
+  // and friends would silently fall back to "no preview" on unreachable URLs.
+  if (resolved.reachability !== 'public') return undefined;
+  return {
+    absoluteShareUrl: resolved.shareUrl,
+    absoluteThumbnailUrl: `${resolved.shareUrl}/thumbnail`,
+    title: record.fileName,
+    description: record.description ?? undefined,
+  };
 }
 
 async function handleDirectoryFile(
@@ -676,6 +968,79 @@ async function handleDirectoryZip(
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+async function createFileShareResponse(args: {
+  c: Context;
+  service: GatewayService;
+  store: ReturnType<typeof getShareStore>;
+  probe: Awaited<ReturnType<typeof probeShareTarget>>;
+  decision: ReturnType<typeof decideShareKind>;
+  ttlMs: number;
+  maxViews: number | null | undefined;
+  title?: string;
+  description?: string;
+  audience?: ShareAudience;
+  workspaceRoot: string;
+  tokenHash: string;
+  urlCtx: ReturnType<typeof getShareUrlContext>;
+  wantThumbnail: boolean;
+}): Promise<Response> {
+  const { c, service, store, probe, decision, ttlMs, maxViews, title, description, audience, workspaceRoot, tokenHash, urlCtx, wantThumbnail } = args;
+  store.updateConfig(resolveShareConfig(service));
+  const record = await store.create({
+    path: relPathFromAbs(workspaceRoot, probe.absolutePath),
+    workspaceRoot,
+    gatewayTokenHash: tokenHash,
+    ttlMs,
+    maxViews: maxViews === undefined ? undefined : maxViews,
+    description,
+    kind: probe.kind === 'directory' ? 'directory' : 'file',
+    directoryMode: decision.kind === 'zip' ? 'zip-only' : (probe.kind === 'directory' ? 'browse' : undefined),
+  });
+  const resolved = resolveShareUrl(record.token, urlCtx);
+  const titleOut = makeTitle(record.fileName, title);
+  const descOut = makeDescription({ audience, expiresAt: record.expiresAt, override: description });
+  const thumbnailUrl = wantThumbnail
+    ? `${resolved.shareUrl}/thumbnail`
+    : '';
+  if (wantThumbnail) {
+    scheduleThumbnail({ scope: 'file', token: record.token, recordId: record.id }, thumbnailRenderContext(service));
+    store.setThumbnailStatus(record.id, 'pending');
+  }
+  return c.json({
+    ok: true,
+    payload: {
+      share: {
+        id: record.id,
+        kind: decision.kind,
+        title: titleOut,
+        description: descOut,
+        shareUrl: resolved.shareUrl,
+        lanUrl: resolved.lanUrl,
+        reachability: resolved.reachability,
+        reachabilityHint: resolved.reachabilityHint,
+        expiresAt: record.expiresAt,
+        maxViews: record.maxViews,
+      },
+      thumbnail: {
+        url: thumbnailUrl,
+        status: wantThumbnail ? 'pending' : 'unavailable',
+        width: SHARE_CONFIG_DEFAULTS.thumbnail.viewportWidth,
+        height: SHARE_CONFIG_DEFAULTS.thumbnail.viewportHeight,
+      },
+      routing: { reason: decision.reason, hint: decision.hint },
+    },
+  }, 201) as unknown as Response;
+}
+
+function relPathFromAbs(workspaceRoot: string, abs: string): string {
+  const root = workspaceRoot.replace(/[\\/]+$/, '');
+  if (abs === root) return '';
+  if (abs.startsWith(`${root}/`)) return abs.slice(root.length + 1);
+  if (abs.startsWith(`${root}\\`)) return abs.slice(root.length + 1).replace(/\\/g, '/');
+  // Fall back to basename — store.create will resolve again under workspace.
+  return abs.split(/[\\/]/).pop() ?? abs;
+}
 
 async function resolveWorkspaceRootForShare(
   service: GatewayService,

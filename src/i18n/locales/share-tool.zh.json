@@ -1,0 +1,12 @@
+{
+  "success": {
+    "headline": "✅ 分享链接已生成（{{kind}}）：{{shareUrl}}",
+    "reachabilityWarning": "⚠️ 当前可达性：{{reachability}}。{{hint}}",
+    "title": "标题：{{title}}",
+    "expiresAt": "有效期至：{{expiresAt}}",
+    "thumbnail": "缩略图：{{thumbnailUrl}}"
+  },
+  "error": {
+    "prefix": "❌ create_share 失败：{{message}}"
+  }
+}
