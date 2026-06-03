@@ -2,6 +2,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { memo, useEffect, useMemo } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
 
+import { APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
 import { getFileName } from '@/features/file-preview';
 import { WorkspaceFilePreviewPanel } from '@/features/workspace/workspace-file-preview-dialog';
 import { cn } from '@/lib/cn';
@@ -70,6 +71,7 @@ export const WorkspacePreviewDialog = memo(function WorkspacePreviewDialog() {
           className={cn(
             'xopc-dialog-content-pane fixed z-[66] flex min-h-0 flex-col overflow-hidden border border-edge bg-surface-panel shadow-popover outline-none',
             'dark:border-edge',
+            APP_CHROME_NO_DRAG_CLASS,
           )}
           style={insetStyle}
           aria-describedby={undefined}
