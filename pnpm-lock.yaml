@@ -50,6 +50,9 @@ importers:
       abort-controller:
         specifier: ^3.0.0
         version: 3.0.0
+      acorn:
+        specifier: ^8.16.0
+        version: 8.16.0
       adm-zip:
         specifier: ^0.5.17
         version: 0.5.17

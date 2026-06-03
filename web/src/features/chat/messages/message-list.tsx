@@ -107,6 +107,7 @@ export const MessageList = memo(function MessageList({
       virtualizer.scrollToIndex(c - 1, { align: 'end', behavior: 'auto' });
       return;
     }
+    if (!pinToBottomRef.current) return;
     const fromBottom = chatScrollDistanceFromBottom(scrollEl);
     /** Already aligned to tail (avoid virtualizer / RO jitter). */
     if (fromBottom <= 1) return;
