@@ -147,12 +147,13 @@ export const WorkspaceColumn = memo(function WorkspaceColumn() {
 
   const handleAction = useCallback(
     async (action: FileTreeAction, entry: TreeEntry) => {
-      if (entry.isDirectory) return;
       switch (action) {
         case 'preview':
+          if (entry.isDirectory) return;
           setPreviewPath(entry.path);
           break;
         case 'download':
+          if (entry.isDirectory) return;
           try {
             const fileName = getFileName(entry.path);
             if (shouldReadWorkspaceFileAsBase64Path(entry.path)) {
@@ -181,6 +182,7 @@ export const WorkspaceColumn = memo(function WorkspaceColumn() {
         case 'share':
           await createShareLink({
             path: entry.path,
+            ...(entry.isDirectory ? { kind: 'directory', directoryMode: 'browse' } : {}),
             ...workspaceReadOpts,
           });
           break;

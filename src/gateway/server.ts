@@ -1,10 +1,13 @@
 import { serve, type ServerType } from '@hono/node-server';
+import type { IncomingMessage } from 'node:http';
+import type { Socket } from 'node:net';
 
 import type { GatewayBindMode } from '../config/schema.js';
 import { resolveGatewayBindHost, resolveGatewayListenHosts } from '../config/gateway-bind.js';
 import { resolveGatewayListenPlan } from './listen.js';
 import { GatewayService } from './service.js';
 import { createHonoApp } from './hono/app.js';
+import { handleSiteShareUpgrade } from '../share/site-share-router.js';
 
 export interface GatewayServerConfig {
   port: number;
@@ -83,6 +86,25 @@ export class GatewayServer {
     });
 
     const primaryHost = listenHosts[0] ?? bindHost;
+    const attachUpgrade = (server: ServerType): void => {
+      // `@hono/node-server`'s `serve()` returns the underlying `http.Server`.
+      const inner = server as unknown as {
+        on(event: 'upgrade', listener: (req: IncomingMessage, socket: Socket, head: Buffer) => void): void;
+      };
+      inner.on('upgrade', (req, socket, head) => {
+        try {
+          handleSiteShareUpgrade(this.service, req, socket, head);
+        } catch (err) {
+          console.error('[GatewayServer] site-share upgrade error:', err);
+          try {
+            socket.destroy();
+          } catch {
+            /* ignore */
+          }
+        }
+      });
+    };
+
     this.server = serve(
       {
         fetch: app.fetch,
@@ -97,6 +119,7 @@ export class GatewayServer {
         });
       },
     );
+    attachUpgrade(this.server);
 
     for (const aliasHost of listenHosts.slice(1)) {
       const extra = serve({
@@ -104,6 +127,7 @@ export class GatewayServer {
         port: this.config.port,
         hostname: aliasHost,
       });
+      attachUpgrade(extra);
       this.extraServers.push(extra);
     }
   }

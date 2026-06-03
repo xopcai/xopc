@@ -166,6 +166,14 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
     },
   },
   {
+    id: 'site-shares',
+    match: (path) => startsWithAny(path, ['/api/site-shares']),
+    load: async () => {
+      const { registerSiteShareRoutes } = await import('./site-shares.js');
+      return { register: registerSiteShareRoutes };
+    },
+  },
+  {
     id: 'tunnel',
     match: (path) => startsWithAny(path, ['/api/tunnel']),
     load: async () => {
