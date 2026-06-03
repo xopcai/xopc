@@ -4,7 +4,7 @@ import { resolve as resolvePath, relative as relPathPosix, join } from 'node:pat
 import { Readable } from 'node:stream';
 
 import { isPathUnderWorkspace } from '../gateway/workspace-editor-path.js';
-import { resolveMimeType } from './share-store.js';
+import { resolveMimeType, shareResponseContentType } from './share-store.js';
 import type { SiteShareRecord, SiteStaticSource } from './site-share-types.js';
 
 const HASHED_ASSET_RE = /\.[a-f0-9]{8,}\.(?:js|mjs|css|woff2?|ttf|otf|svg|png|jpg|jpeg|gif|webp|avif|ico)$/i;
@@ -113,7 +113,7 @@ function buildHeaders(
   fileName: string,
 ): Record<string, string> {
   return {
-    'Content-Type': mime,
+    'Content-Type': shareResponseContentType(mime),
     'Content-Length': String(contentLength),
     'Cache-Control': cacheControl,
     'X-Content-Type-Options': 'nosniff',
