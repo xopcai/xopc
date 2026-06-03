@@ -257,4 +257,21 @@ function validateMeta(meta: unknown): asserts meta is WorkflowMeta {
       }
     }
   }
+  if (value.tags !== undefined) {
+    if (!Array.isArray(value.tags) || value.tags.some((tag) => typeof tag !== 'string' || !tag.trim())) {
+      throw new Error('meta.tags must be an array of non-empty strings');
+    }
+  }
+  if (value.estimatedAgents !== undefined) {
+    const est = value.estimatedAgents;
+    if (!est || typeof est !== 'object') {
+      throw new Error('meta.estimatedAgents must be an object');
+    }
+    if (typeof est.min !== 'number' || typeof est.max !== 'number' || !Number.isFinite(est.min) || !Number.isFinite(est.max)) {
+      throw new Error('meta.estimatedAgents.min and .max must be finite numbers');
+    }
+    if (est.min < 1 || est.max < est.min) {
+      throw new Error('meta.estimatedAgents requires min >= 1 and max >= min');
+    }
+  }
 }

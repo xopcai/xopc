@@ -39,6 +39,8 @@ export interface WorkflowMeta {
   name: string;
   description: string;
   whenToUse?: string;
+  tags?: string[];
+  estimatedAgents?: { min: number; max: number };
 }
 
 /**
