@@ -24,6 +24,7 @@ import {
   collapseExpandedSkillBlockForDisplay,
   stripExpandedAtFileBlocks,
   stripInboundFileMachineText,
+  stripStartupContextForDisplay,
 } from '@/features/chat/messages/wire-text-scrub';
 
 /** Plain text for search / previews over wire-format or UI message content. */
@@ -277,7 +278,8 @@ function applyStripToUserContent(
   if (role !== 'user' && role !== 'user-with-attachments') return blocks;
   const mapped = blocks.map((b) => {
     if (b.type === 'text' && typeof b.text === 'string') {
-      let stripped = stripExpandedAtFileBlocks(b.text);
+      let stripped = stripStartupContextForDisplay(b.text);
+      stripped = stripExpandedAtFileBlocks(stripped);
       stripped = stripInboundFileMachineText(stripped);
       return { ...b, text: collapseExpandedSkillBlockForDisplay(stripped) };
     }

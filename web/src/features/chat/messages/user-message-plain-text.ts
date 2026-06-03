@@ -1,5 +1,6 @@
 import type { WireAttachment } from '@/features/chat/composer/composer.types';
 import type { Message, MessageAttachment, MessageContent } from '@/features/chat/messages/messages.types';
+import { stripStartupContextForDisplay } from '@/features/chat/messages/wire-text-scrub';
 
 export function stripEnvelopeTimestampPrefix(text: string): string {
   return text.replace(/^\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}[^\]]*\]\s+/, '');
@@ -8,7 +9,7 @@ export function stripEnvelopeTimestampPrefix(text: string): string {
 export function extractUserMessagePlainText(content: MessageContent[] | undefined): string {
   return (content ?? [])
     .filter((b): b is { type: 'text'; text: string } => b.type === 'text' && Boolean(b.text))
-    .map((b) => stripEnvelopeTimestampPrefix(b.text))
+    .map((b) => stripEnvelopeTimestampPrefix(stripStartupContextForDisplay(b.text)))
     .join('\n\n')
     .trim();
 }

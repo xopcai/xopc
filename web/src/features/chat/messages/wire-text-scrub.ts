@@ -1,6 +1,46 @@
 // Text scrubbing applied to persisted user-message content so the UI re-renders
 // the original wire form (rather than the server-expanded skill/file bodies).
 
+const STARTUP_CONTEXT_MARKER = '[Startup context loaded by runtime]';
+const STARTUP_MEMORY_TRUNCATED = '...[additional startup memory truncated]...';
+const STARTUP_MEMORY_END = 'END_QUOTED_NOTES';
+
+/**
+ * Remove runtime-injected startup daily-memory prelude from persisted user text.
+ * The LLM still receives the prelude; the chat bubble should show only the user's words.
+ */
+export function stripStartupContextForDisplay(text: string): string {
+  if (!text.includes(STARTUP_CONTEXT_MARKER)) {
+    return text;
+  }
+  const trimmed = text.replace(/^\uFEFF/, '');
+  if (!trimmed.startsWith(STARTUP_CONTEXT_MARKER)) {
+    return text;
+  }
+
+  let cutIndex = -1;
+  const lastEndNotes = trimmed.lastIndexOf(STARTUP_MEMORY_END);
+  if (lastEndNotes >= 0) {
+    cutIndex = lastEndNotes + STARTUP_MEMORY_END.length;
+  } else {
+    const truncIdx = trimmed.indexOf(STARTUP_MEMORY_TRUNCATED);
+    if (truncIdx >= 0) {
+      cutIndex = truncIdx + STARTUP_MEMORY_TRUNCATED.length;
+    }
+  }
+
+  if (cutIndex < 0) {
+    const afterMarker = trimmed.slice(STARTUP_CONTEXT_MARKER.length);
+    const doubleNewline = afterMarker.indexOf('\n\n');
+    if (doubleNewline >= 0) {
+      return afterMarker.slice(doubleNewline + 2).replace(/^\s+/, '');
+    }
+    return text;
+  }
+
+  return trimmed.slice(cutIndex).replace(/^\s+/, '');
+}
+
 /**
  * Session stores the server-expanded skill body (see SkillManager.buildSkillBlock).
  * Collapse back to wire form for UI: `/skill:name` and optional trailing args from `**Arguments**:`.

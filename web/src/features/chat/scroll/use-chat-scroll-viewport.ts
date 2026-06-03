@@ -8,9 +8,12 @@ import {
 } from 'react';
 
 import {
-  CHAT_SCROLL_REPIN_WITHIN_PX,
   CHAT_SCROLL_UNPIN_BEYOND_PX,
+  CHAT_SCROLL_USER_UPWARD_EPS,
   chatScrollDistanceFromBottom,
+  isChatScrollNearBottomForRepin,
+  isChatScrollPinnedToBottom,
+  shouldFollowPinnedChatTail,
 } from '@/features/chat/scroll/chat-scroll-geometry';
 import type { Message } from '@/features/chat/messages/messages.types';
 
@@ -123,15 +126,14 @@ export function useChatScrollViewport({
   const onScroll = useCallback(() => {
     const el = scrollRef.current;
     if (!el) return;
-    const { scrollTop, scrollHeight, clientHeight } = el;
-    const fromBottom = scrollHeight - scrollTop - clientHeight;
+    const { scrollTop, scrollHeight } = el;
 
     if (atBottomRef.current) {
-      if (fromBottom > CHAT_SCROLL_UNPIN_BEYOND_PX) {
+      if (!isChatScrollPinnedToBottom(el)) {
         atBottomRef.current = false;
         setAtBottom(false);
       }
-    } else if (fromBottom < CHAT_SCROLL_REPIN_WITHIN_PX) {
+    } else if (isChatScrollNearBottomForRepin(el)) {
       atBottomRef.current = true;
       setAtBottom(true);
     }
@@ -143,6 +145,28 @@ export function useChatScrollViewport({
       void loadMoreMessages();
     }
   }, [hasMore, loadingMore, loadMoreMessages]);
+
+  const unpinFromUserIntent = useCallback(() => {
+    if (!atBottomRef.current) return;
+    atBottomRef.current = false;
+    startTransition(() => setAtBottom(false));
+  }, []);
+
+  const clearPinIfFollowDisallowed = useCallback(
+    (el: HTMLElement, prevScrollTop: number, prevScrollHeight: number): boolean => {
+      if (
+        shouldFollowPinnedChatTail(el, prevScrollTop, prevScrollHeight, atBottomRef.current)
+      ) {
+        return true;
+      }
+      if (atBottomRef.current) {
+        atBottomRef.current = false;
+        setAtBottom(false);
+      }
+      return false;
+    },
+    [],
+  );
 
   useLayoutEffect(() => {
     if (!hasToken) return;
@@ -185,7 +209,7 @@ export function useChatScrollViewport({
 
   useLayoutEffect(() => {
     if (!shouldPinForSend) return;
-    scrollToBottom(true, true);
+    scrollToBottom(false, true);
   }, [shouldPinForSend, scrollToBottom]);
 
   /** Wheel / touch intent to view older messages: unpin before React commits so list auto-scroll cannot fight the gesture. */
@@ -194,16 +218,17 @@ export function useChatScrollViewport({
     const root = scrollRef.current;
     if (!root) return;
 
-    const unpinFromUserIntent = () => {
-      if (!atBottomRef.current) return;
-      atBottomRef.current = false;
-      startTransition(() => setAtBottom(false));
-    };
-
     const onWheel = (e: WheelEvent) => {
-      if (!atBottomRef.current) return;
       if (Math.abs(e.deltaY) < Math.abs(e.deltaX)) return;
       if (Math.abs(e.deltaY) < 0.25) return;
+
+      /** Unpin immediately so streaming tail-follow (single rAF) cannot win the race. */
+      if (atBottomRef.current && wheelDeltaImpliesTowardOlderMessages(e)) {
+        unpinFromUserIntent();
+        return;
+      }
+
+      if (!atBottomRef.current) return;
 
       const beforeTop = root.scrollTop;
       const beforeFromBottom = chatScrollDistanceFromBottom(root);
@@ -263,7 +288,7 @@ export function useChatScrollViewport({
       root.removeEventListener('touchstart', onTouchStart);
       root.removeEventListener('touchmove', onTouchMove);
     };
-  }, [hasToken, showSessionLoading]);
+  }, [hasToken, showSessionLoading, unpinFromUserIntent]);
 
   /**
    * Transcript grew while pinned: `scrollHeight` jumps before `scrollTop` is corrected, so
@@ -306,7 +331,7 @@ export function useChatScrollViewport({
      * The browser then **clamps** `scrollTop` downward while we stay visually at the tail — that is
      * not a user gesture; treating it as scroll-up cleared `atBottom` and stopped tail follow.
      */
-    if (st < prevSt - 1.5) {
+    if (st < prevSt - CHAT_SCROLL_USER_UPWARD_EPS) {
       const contentShrunk = sh < prevSh - 1;
       if (!contentShrunk) {
         if (atBottomRef.current) {
@@ -327,7 +352,10 @@ export function useChatScrollViewport({
     followTailRafRef.current = requestAnimationFrame(() => {
       followTailRafRef.current = null;
       const root = scrollRef.current;
-      if (!root || !atBottomRef.current) return;
+      if (!root) return;
+      const followPrevSt = lastFollowLayoutScrollTopRef.current;
+      const followPrevSh = lastFollowLayoutScrollHeightRef.current;
+      if (!clearPinIfFollowDisallowed(root, followPrevSt, followPrevSh)) return;
       scrollToBottom(false, true);
       lastFollowLayoutScrollTopRef.current = root.scrollTop;
       lastFollowLayoutScrollHeightRef.current = root.scrollHeight;
@@ -338,7 +366,7 @@ export function useChatScrollViewport({
         followTailRafRef.current = null;
       }
     };
-  }, [chatMessages, scrollToBottom, showSessionLoading]);
+  }, [chatMessages, scrollToBottom, showSessionLoading, clearPinIfFollowDisallowed]);
 
   useLayoutEffect(() => {
     const el = scrollRef.current;
