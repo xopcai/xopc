@@ -8,6 +8,9 @@
  */
 
 import { spawn, spawnSync } from 'node:child_process';
+import { mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
 import { createLogger } from '../utils/logger.js';
 import { resolveGatewayWindowsTaskName } from './constants.js';
 import type {
@@ -72,6 +75,49 @@ async function schtasksExec(args: string[]): Promise<string> {
   return result.stdout;
 }
 
+// ─── Environment Sidecar ───
+// schtasks does not natively support per-task environment variables.
+// We persist them in a JSON sidecar so readCommand can return them
+// for version-mismatch detection and other diagnostics.
+
+function resolveTaskEnvSidecarPath(taskName: string): string {
+  const configDir = path.join(os.homedir(), '.xopc', 'daemon');
+  return path.join(configDir, `${taskName}.env.json`);
+}
+
+function writeTaskEnvSidecar(taskName: string, environment: Record<string, string>): void {
+  const sidecarPath = resolveTaskEnvSidecarPath(taskName);
+  try {
+    mkdirSync(path.dirname(sidecarPath), { recursive: true });
+    writeFileSync(sidecarPath, JSON.stringify(environment, null, 2), 'utf8');
+  } catch (err) {
+    log.warn({ err, sidecarPath }, 'Failed to write task environment sidecar');
+  }
+}
+
+function readTaskEnvSidecar(taskName: string): Record<string, string> | undefined {
+  const sidecarPath = resolveTaskEnvSidecarPath(taskName);
+  try {
+    const raw = readFileSync(sidecarPath, 'utf8');
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return parsed as Record<string, string>;
+    }
+  } catch {
+    // Sidecar missing or corrupt — not fatal
+  }
+  return undefined;
+}
+
+function removeTaskEnvSidecar(taskName: string): void {
+  const sidecarPath = resolveTaskEnvSidecarPath(taskName);
+  try {
+    rmSync(sidecarPath, { force: true });
+  } catch {
+    // Best-effort
+  }
+}
+
 // ─── Availability Check ───
 
 export function isSchtasksAvailable(): boolean {
@@ -119,6 +165,12 @@ export const schtasksService: GatewayService = {
 
     await schtasksExec(createArgs);
 
+    // Persist environment variables in a sidecar file
+    // (schtasks does not support per-task env vars natively)
+    if (args.environment && Object.keys(args.environment).length > 0) {
+      writeTaskEnvSidecar(taskName, args.environment);
+    }
+
     args.stdout?.write(`Created scheduled task: ${taskName}\n`);
     args.stdout?.write(`  Program: ${program}\n`);
     args.stdout?.write(`  Args: ${programArgs}\n`);
@@ -143,6 +195,9 @@ export const schtasksService: GatewayService = {
     } catch (err) {
       log.debug({ err }, 'Uninstall task not found');
     }
+
+    // Clean up environment sidecar
+    removeTaskEnvSidecar(taskName);
 
     log.info({ taskName }, 'Scheduled task uninstalled');
   },
@@ -257,9 +312,13 @@ export const schtasksService: GatewayService = {
         programArguments = taskRun.split(/\s+/);
       }
 
+      // Read environment from sidecar file (schtasks has no native env support)
+      const environment = readTaskEnvSidecar(taskName);
+
       return {
         programArguments,
         workingDirectory: workDirMatch?.[1]?.trim() || undefined,
+        environment,
       };
     } catch {
       return null;

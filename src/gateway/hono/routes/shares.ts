@@ -1,4 +1,4 @@
-import type { Hono } from 'hono';
+import type { Context, Hono } from 'hono';
 import { createReadStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
@@ -10,11 +10,16 @@ import { getShareStore } from '../../../share/share-store.js';
 import { resolveShareUrl } from '../../../share/share-url.js';
 import { consumeSharePublicLimit } from '../../../share/share-rate-limit.js';
 import { logShareAudit } from '../../../share/share-audit.js';
-import { renderShareLandingPage, renderShareExpiredPage } from '../../../share/share-landing.js';
+import {
+  renderShareLandingPage,
+  renderShareExpiredPage,
+  renderFolderLandingPage,
+} from '../../../share/share-landing.js';
 import type { ShareExpiredReason } from '../../../share/share-landing.js';
-import type { ShareConfig } from '../../../share/share-types.js';
+import type { ShareConfig, ShareRecord } from '../../../share/share-types.js';
 import { resolveGatewayEffectiveHost } from '../../../config/gateway-bind.js';
 import { SHARE_CONFIG_DEFAULTS } from '../../../share/share-types.js';
+import { createZipStream, planDirectoryFiles } from '../../../share/share-zip.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 import type { GatewayService } from '../../service.js';
 
@@ -38,6 +43,7 @@ function hashGatewayToken(token: string): string {
 
 const MAX_CONCURRENT_DOWNLOADS_PER_TOKEN = 5;
 const activeDownloads = new Map<string, number>();
+const activeZipStreams = new Map<string, number>();
 
 function acquireDownloadSlot(token: string): boolean {
   const current = activeDownloads.get(token) ?? 0;
@@ -48,11 +54,50 @@ function acquireDownloadSlot(token: string): boolean {
 
 function releaseDownloadSlot(token: string): void {
   const current = activeDownloads.get(token) ?? 0;
-  if (current <= 1) {
-    activeDownloads.delete(token);
-  } else {
-    activeDownloads.set(token, current - 1);
-  }
+  if (current <= 1) activeDownloads.delete(token);
+  else activeDownloads.set(token, current - 1);
+}
+
+function acquireZipSlot(token: string, limit: number): boolean {
+  const current = activeZipStreams.get(token) ?? 0;
+  if (current >= limit) return false;
+  activeZipStreams.set(token, current + 1);
+  return true;
+}
+
+function releaseZipSlot(token: string): void {
+  const current = activeZipStreams.get(token) ?? 0;
+  if (current <= 1) activeZipStreams.delete(token);
+  else activeZipStreams.set(token, current - 1);
+}
+
+/**
+ * Whether the browser can render this MIME natively (when served with
+ * `Content-Disposition: inline`). Honours the per-deployment whitelist so
+ * admins can block specific types.
+ */
+function isPreviewableInline(mime: string, whitelist: string[]): boolean {
+  return whitelist.includes(mime);
+}
+
+/**
+ * Whether the type benefits from being rendered through the SPA preview page
+ * (e.g. markdown — the browser would otherwise show raw source). Independent
+ * of the inline whitelist: SPA preview pulls the bytes via the share API and
+ * renders client-side, so admins control reach via TTL/maxViews, not MIME.
+ */
+function isRichSpaPreviewable(mime: string): boolean {
+  return (
+    mime === 'text/markdown' ||
+    mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+    mime === 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+  );
+}
+
+function rfc5987ContentDisposition(disposition: 'inline' | 'attachment', fileName: string): string {
+  const ascii = fileName.replace(/[^\x20-\x7e]/g, '_').replace(/"/g, '');
+  const utf8 = encodeURIComponent(fileName);
+  return `${disposition}; filename="${ascii}"; filename*=UTF-8''${utf8}`;
 }
 
 // ── Public routes (no auth required) ──────────────────────────────────────────
@@ -60,7 +105,7 @@ function releaseDownloadSlot(token: string): void {
 export function registerSharePublicRoutes(app: Hono, service: GatewayService): void {
   const store = getShareStore(resolveShareConfig(service));
 
-  /** Landing page — does NOT consume viewCount (prevents link unfurl from wasting views). */
+  /** Landing page — does NOT consume downloadCount. */
   app.get('/s/:token', async (c) => {
     const clientIp = getClientIpFromHeaders({ get: (n: string) => c.req.header(n) ?? undefined });
     const rateResult = consumeSharePublicLimit(clientIp);
@@ -71,10 +116,7 @@ export function registerSharePublicRoutes(app: Hono, service: GatewayService): v
 
     const token = c.req.param('token');
     const record = store.getByToken(token);
-
-    if (!record) {
-      return c.html(renderShareExpiredPage('not_found'), 404);
-    }
+    if (!record) return c.html(renderShareExpiredPage('not_found'), 404);
 
     const validation = store.validateAccess(record);
     if (!validation.valid) {
@@ -86,24 +128,34 @@ export function registerSharePublicRoutes(app: Hono, service: GatewayService): v
       return c.html(renderShareExpiredPage(validation.reason as ShareExpiredReason), 410);
     }
 
-    // Direct download shortcut: ?dl=1
-    if (c.req.query('dl') === '1') {
-      return handleDownload(c, store, record, clientIp);
+    if (record.kind === 'directory') {
+      return renderDirectoryLanding(c, store, service, record, token);
     }
 
-    // Inline preview for whitelisted MIME types: ?inline=1
+    // File: support direct download / inline preview shortcuts
+    if (c.req.query('dl') === '1') {
+      return handleFileDownload(c, store, record, clientIp);
+    }
     if (c.req.query('inline') === '1') {
       const cfg = { ...SHARE_CONFIG_DEFAULTS, ...resolveShareConfig(service) };
       if (cfg.inlinePreviewMimes.includes(record.mimeType)) {
-        return handleDownload(c, store, record, clientIp, true);
+        return handleFileDownload(c, store, record, clientIp, true);
       }
     }
 
     const downloadPath = `/s/${token}/download`;
-    return c.html(renderShareLandingPage(record, downloadPath));
+    const cfg = { ...SHARE_CONFIG_DEFAULTS, ...resolveShareConfig(service) };
+    const previewable = isPreviewableInline(record.mimeType, cfg.inlinePreviewMimes);
+    const richPreviewable = isRichSpaPreviewable(record.mimeType);
+    return c.html(
+      renderShareLandingPage(record, downloadPath, {
+        inlineUrl: previewable ? `/s/${token}?inline=1` : null,
+        previewUrl: richPreviewable ? `/#/share/${encodeURIComponent(token)}` : null,
+      }),
+    );
   });
 
-  /** Actual file download — consumes viewCount. */
+  /** Single-file download — POST so unfurl/scrapers don't consume views. */
   app.post('/s/:token/download', async (c) => {
     const clientIp = getClientIpFromHeaders({ get: (n: string) => c.req.header(n) ?? undefined });
     const rateResult = consumeSharePublicLimit(clientIp);
@@ -114,10 +166,7 @@ export function registerSharePublicRoutes(app: Hono, service: GatewayService): v
 
     const token = c.req.param('token');
     const record = store.getByToken(token);
-
-    if (!record) {
-      return c.html(renderShareExpiredPage('not_found'), 404);
-    }
+    if (!record) return c.html(renderShareExpiredPage('not_found'), 404);
 
     const validation = store.validateAccess(record);
     if (!validation.valid) {
@@ -129,10 +178,92 @@ export function registerSharePublicRoutes(app: Hono, service: GatewayService): v
       return c.html(renderShareExpiredPage(validation.reason as ShareExpiredReason), 410);
     }
 
-    return handleDownload(c, store, record, clientIp);
+    if (record.kind === 'directory') {
+      return c.html(renderShareExpiredPage('not_found'), 404);
+    }
+    return handleFileDownload(c, store, record, clientIp);
   });
 
-  /** File metadata (for link preview cards). */
+  /** Directory child file (GET — preview counts as download per product). */
+  app.get('/s/:token/file', async (c) => {
+    const clientIp = getClientIpFromHeaders({ get: (n: string) => c.req.header(n) ?? undefined });
+    const rateResult = consumeSharePublicLimit(clientIp);
+    if (!rateResult.allowed) {
+      c.header('Retry-After', String(Math.ceil(rateResult.retryAfterMs / 1000)));
+      return c.text('Too many requests', 429);
+    }
+
+    const token = c.req.param('token');
+    const record = store.getByToken(token);
+    if (!record) return c.html(renderShareExpiredPage('not_found'), 404);
+    if (record.kind !== 'directory') return c.html(renderShareExpiredPage('not_found'), 404);
+
+    const validation = store.validateAccess(record);
+    if (!validation.valid) {
+      return c.html(renderShareExpiredPage(validation.reason as ShareExpiredReason), 410);
+    }
+
+    const relPath = c.req.query('path') ?? '';
+    const inline = c.req.query('inline') === '1' || c.req.query('dl') !== '1';
+    return handleDirectoryFile(c, store, service, record, relPath, clientIp, inline);
+  });
+
+  /** Directory JSON listing. */
+  app.get('/s/:token/tree', async (c) => {
+    const clientIp = getClientIpFromHeaders({ get: (n: string) => c.req.header(n) ?? undefined });
+    const rateResult = consumeSharePublicLimit(clientIp);
+    if (!rateResult.allowed) {
+      c.header('Retry-After', String(Math.ceil(rateResult.retryAfterMs / 1000)));
+      return c.text('Too many requests', 429);
+    }
+
+    const token = c.req.param('token');
+    const record = store.getByToken(token);
+    if (!record) return c.json({ ok: false, error: { message: 'not_found' } }, 404);
+    if (record.kind !== 'directory') return c.json({ ok: false, error: { message: 'not_directory' } }, 400);
+
+    const validation = store.validateAccess(record);
+    if (!validation.valid) {
+      return c.json({ ok: false, error: { message: validation.reason } }, 410);
+    }
+
+    const path = c.req.query('path') ?? '';
+    // Tree HTML browser pages: render landing for the sub-path
+    if ((c.req.header('accept') ?? '').includes('text/html')) {
+      return renderDirectoryLanding(c, store, service, record, token, path);
+    }
+    try {
+      const listing = await store.listDirectory(record, path);
+      return c.json({ ok: true, payload: listing });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return c.json({ ok: false, error: { message } }, 400);
+    }
+  });
+
+  /** Folder ZIP download (whole share or sub-path). */
+  app.get('/s/:token/zip', async (c) => {
+    const clientIp = getClientIpFromHeaders({ get: (n: string) => c.req.header(n) ?? undefined });
+    const rateResult = consumeSharePublicLimit(clientIp);
+    if (!rateResult.allowed) {
+      c.header('Retry-After', String(Math.ceil(rateResult.retryAfterMs / 1000)));
+      return c.text('Too many requests', 429);
+    }
+
+    const token = c.req.param('token');
+    const record = store.getByToken(token);
+    if (!record) return c.html(renderShareExpiredPage('not_found'), 404);
+    if (record.kind !== 'directory') return c.html(renderShareExpiredPage('not_found'), 404);
+
+    const validation = store.validateAccess(record);
+    if (!validation.valid) {
+      return c.html(renderShareExpiredPage(validation.reason as ShareExpiredReason), 410);
+    }
+
+    return handleDirectoryZip(c, store, service, record, c.req.query('path') ?? '', clientIp);
+  });
+
+  /** Metadata (for link preview cards / unfurl). Does NOT consume views. */
   app.get('/s/:token/meta', async (c) => {
     const clientIp = getClientIpFromHeaders({ get: (n: string) => c.req.header(n) ?? undefined });
     const rateResult = consumeSharePublicLimit(clientIp);
@@ -143,14 +274,13 @@ export function registerSharePublicRoutes(app: Hono, service: GatewayService): v
 
     const token = c.req.param('token');
     const record = store.getByToken(token);
-    if (!record) {
-      return c.json({ valid: false }, 404);
-    }
+    if (!record) return c.json({ valid: false }, 404);
 
     const validation = store.validateAccess(record);
-    const remainingViews = record.maxViews !== null ? Math.max(0, record.maxViews - record.viewCount) : null;
+    const remainingViews = record.maxViews !== null ? Math.max(0, record.maxViews - record.downloadCount) : null;
 
     return c.json({
+      kind: record.kind,
       fileName: record.fileName,
       fileSize: record.fileSize,
       mimeType: record.mimeType,
@@ -158,10 +288,11 @@ export function registerSharePublicRoutes(app: Hono, service: GatewayService): v
       expiresAt: record.expiresAt,
       remainingViews,
       valid: validation.valid,
+      directory: record.directory ?? null,
     });
   });
 
-  /** HEAD check (Hono uses .on() for HEAD method). */
+  /** HEAD check. */
   app.on('HEAD', '/s/:token', async (c) => {
     const token = c.req.param('token');
     const record = store.getByToken(token);
@@ -177,7 +308,6 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
   const { service } = deps;
   const store = getShareStore(resolveShareConfig(service));
 
-  /** Create a share. */
   authenticated.post('/api/shares', async (c) => {
     const gatewayToken = extractToken({ authorization: c.req.header('authorization') ?? undefined });
     if (!gatewayToken) return c.json({ ok: false, error: { message: 'Token required' } }, 401);
@@ -190,14 +320,11 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
     }
 
     const path = typeof body.path === 'string' ? body.path.trim() : '';
-    if (!path) {
-      return c.json({ ok: false, error: { message: 'Missing path' } }, 400);
-    }
+    if (!path) return c.json({ ok: false, error: { message: 'Missing path' } }, 400);
 
     const sessionKey = typeof body.sessionKey === 'string' ? body.sessionKey.trim() : undefined;
     const agentId = typeof body.agentId === 'string' ? body.agentId.trim() : undefined;
 
-    // Resolve workspace root (same logic as workspace editor routes)
     const workspaceRoot = await resolveWorkspaceRootForShare(service, sessionKey, agentId);
     if (!workspaceRoot) {
       return c.json({ ok: false, error: { message: 'Workspace not configured' } }, 400);
@@ -206,6 +333,12 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
     const ttlMs = typeof body.ttlMs === 'number' ? body.ttlMs : undefined;
     const maxViews = body.maxViews === null ? null : typeof body.maxViews === 'number' ? body.maxViews : undefined;
     const description = typeof body.description === 'string' ? body.description.trim() || undefined : undefined;
+    const kind = body.kind === 'directory' || body.kind === 'file' ? body.kind : undefined;
+    const directoryMode = body.directoryMode === 'zip-only' ? 'zip-only' : body.directoryMode === 'browse' ? 'browse' : undefined;
+    const followSymlinks = body.followSymlinks === true;
+    const maxFileCount = typeof body.maxFileCount === 'number' ? body.maxFileCount : undefined;
+    const maxFolderSize = typeof body.maxFolderSize === 'number' ? body.maxFolderSize : undefined;
+    const maxDepth = typeof body.maxDepth === 'number' ? body.maxDepth : undefined;
 
     try {
       store.updateConfig(resolveShareConfig(service));
@@ -218,33 +351,43 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
         agentId,
         workspaceRoot,
         gatewayTokenHash: hashGatewayToken(gatewayToken),
+        kind,
+        directoryMode,
+        followSymlinks,
+        maxFileCount,
+        maxFolderSize,
+        maxDepth,
       });
 
       const urlCtx = getShareUrlContext(service);
       const resolved = resolveShareUrl(record.token, urlCtx);
 
-      return c.json({
-        ok: true,
-        payload: {
-          id: record.id,
-          token: record.token,
-          shareUrl: resolved.shareUrl,
-          lanUrl: resolved.lanUrl,
-          reachability: resolved.reachability,
-          reachabilityHint: resolved.reachabilityHint,
-          expiresAt: record.expiresAt,
-          maxViews: record.maxViews,
-          fileName: record.fileName,
-          fileSize: record.fileSize,
+      return c.json(
+        {
+          ok: true,
+          payload: {
+            id: record.id,
+            token: record.token,
+            kind: record.kind,
+            shareUrl: resolved.shareUrl,
+            lanUrl: resolved.lanUrl,
+            reachability: resolved.reachability,
+            reachabilityHint: resolved.reachabilityHint,
+            expiresAt: record.expiresAt,
+            maxViews: record.maxViews,
+            fileName: record.fileName,
+            fileSize: record.fileSize,
+            directory: record.directory ?? null,
+          },
         },
-      }, 201);
+        201,
+      );
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return c.json({ ok: false, error: { message } }, 400);
     }
   });
 
-  /** List all shares. */
   authenticated.get('/api/shares', async (c) => {
     store.updateConfig(resolveShareConfig(service));
     const shares = store.getAllShares();
@@ -256,6 +399,7 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
       const expired = now >= new Date(r.expiresAt).getTime();
       return {
         id: r.id,
+        kind: r.kind,
         fileName: r.fileName,
         workspaceRelativePath: r.workspaceRelativePath,
         shareUrl: resolved.shareUrl,
@@ -263,20 +407,20 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
         reachability: resolved.reachability,
         createdAt: r.createdAt,
         expiresAt: r.expiresAt,
-        viewCount: r.viewCount,
+        downloadCount: r.downloadCount,
         maxViews: r.maxViews,
         revoked: r.revoked,
         expired,
         description: r.description ?? null,
         fileSize: r.fileSize,
         mimeType: r.mimeType,
+        directory: r.directory ?? null,
       };
     });
 
     return c.json({ ok: true, payload: { shares: items } });
   });
 
-  /** Get single share details. */
   authenticated.get('/api/shares/:id', async (c) => {
     const id = c.req.param('id');
     const record = store.getById(id);
@@ -299,7 +443,6 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
     });
   });
 
-  /** Revoke a share. */
   authenticated.delete('/api/shares/:id', async (c) => {
     const id = c.req.param('id');
     const success = store.revoke(id);
@@ -307,7 +450,6 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
     return c.json({ ok: true });
   });
 
-  /** Batch revoke. */
   authenticated.delete('/api/shares', async (c) => {
     let body: Record<string, unknown> = {};
     try {
@@ -329,7 +471,6 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
     return c.json({ ok: true, payload: { revokedCount: count } });
   });
 
-  /** Update a share (extend TTL or change maxViews). */
   authenticated.patch('/api/shares/:id', async (c) => {
     const id = c.req.param('id');
     let body: Record<string, unknown>;
@@ -361,6 +502,179 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
   });
 }
 
+// ── Directory landing / file / zip helpers ────────────────────────────────────
+
+async function renderDirectoryLanding(
+  c: Context,
+  store: ReturnType<typeof getShareStore>,
+  service: GatewayService,
+  record: ShareRecord,
+  token: string,
+  subPath = '',
+): Promise<Response> {
+  store.updateConfig(resolveShareConfig(service));
+  const urls = {
+    tree: (p: string) => (p ? `/s/${token}/tree?path=${encodeURIComponent(p)}` : `/s/${token}`),
+    file: (p: string) => `/s/${token}/file?path=${encodeURIComponent(p)}`,
+    zip: (p: string) => (p ? `/s/${token}/zip?path=${encodeURIComponent(p)}` : `/s/${token}/zip`),
+  };
+
+  let listing: import('../../../share/share-store.js').DirectoryListing | null = null;
+  if (record.directory?.mode !== 'zip-only') {
+    try {
+      listing = await store.listDirectory(record, subPath);
+    } catch (err) {
+      logShareAudit(
+        'share.access_denied',
+        { shareId: record.id, tokenPrefix: record.token.slice(0, 8), subPath, reason: String(err) },
+        `Directory listing failed`,
+      );
+      return c.html(renderShareExpiredPage('not_found'), 404);
+    }
+  }
+  return c.html(renderFolderLandingPage(record, listing, urls)) as unknown as Response;
+}
+
+async function handleDirectoryFile(
+  c: Context,
+  store: ReturnType<typeof getShareStore>,
+  service: GatewayService,
+  record: ShareRecord,
+  relPath: string,
+  clientIp: string,
+  inline: boolean,
+): Promise<Response> {
+  if (!acquireDownloadSlot(record.token)) {
+    return new Response('Too many concurrent downloads for this share', { status: 429 });
+  }
+
+  try {
+    const resolved = await store.resolveDirectoryChild(record, relPath);
+    if (resolved.ok !== true) {
+      logShareAudit(
+        'share.access_denied',
+        { shareId: record.id, tokenPrefix: record.token.slice(0, 8), reason: resolved.reason, clientIp, relPath },
+        `Directory child resolution failed: ${resolved.reason}`,
+      );
+      return c.html(renderShareExpiredPage('not_found'), 404);
+    }
+    const integrity = await store.validateFileIntegrity(record);
+    if (!integrity.valid) {
+      return c.html(renderShareExpiredPage((integrity.reason ?? 'file_deleted') as ShareExpiredReason), 410);
+    }
+
+    const fileStat = await stat(resolved.absolutePath);
+    if (!fileStat.isFile()) {
+      return c.html(renderShareExpiredPage('not_found'), 404);
+    }
+
+    // Re-check size against configured max
+    store.updateConfig(resolveShareConfig(service));
+    const cfg = store.getConfig();
+    if (fileStat.size > cfg.maxFileSize) {
+      return c.html(renderShareExpiredPage('not_found'), 410);
+    }
+
+    // Inline preview MIME guard
+    const cfgPreview = { ...SHARE_CONFIG_DEFAULTS, ...resolveShareConfig(service) };
+    const baseName = relPath.split('/').pop() || record.fileName;
+    const { resolveMimeType } = await import('../../../share/share-store.js');
+    const mime = resolveMimeType(baseName);
+    const useInline = inline && cfgPreview.inlinePreviewMimes.includes(mime);
+
+    store.incrementDownloadCount(record.id);
+    logShareAudit(
+      'share.access',
+      { shareId: record.id, tokenPrefix: record.token.slice(0, 8), clientIp, relPath, mode: useInline ? 'inline' : 'attachment' },
+      `Directory file served: ${baseName}`,
+    );
+
+    const stream = createReadStream(resolved.absolutePath);
+    const webStream = Readable.toWeb(stream) as ReadableStream;
+    const disposition = rfc5987ContentDisposition(useInline ? 'inline' : 'attachment', baseName);
+
+    return new Response(webStream, {
+      status: 200,
+      headers: {
+        'Content-Type': mime,
+        'Content-Disposition': disposition,
+        'Content-Length': String(fileStat.size),
+        'Cache-Control': 'private, no-store',
+        'X-Content-Type-Options': 'nosniff',
+        'X-Frame-Options': 'DENY',
+        'Referrer-Policy': 'no-referrer',
+      },
+    });
+  } finally {
+    releaseDownloadSlot(record.token);
+  }
+}
+
+async function handleDirectoryZip(
+  c: Context,
+  store: ReturnType<typeof getShareStore>,
+  service: GatewayService,
+  record: ShareRecord,
+  subPath: string,
+  clientIp: string,
+): Promise<Response> {
+  store.updateConfig(resolveShareConfig(service));
+  const cfg = store.getConfig();
+  const zipLimit = cfg.directory.zipConcurrency;
+  if (!acquireZipSlot(record.token, zipLimit)) {
+    return new Response('Too many concurrent ZIP streams for this share', { status: 429 });
+  }
+
+  try {
+    const resolved = await store.resolveDirectoryChild(record, subPath);
+    if (resolved.ok !== true) {
+      return c.html(renderShareExpiredPage('not_found'), 404);
+    }
+    const integrity = await store.validateFileIntegrity(record);
+    if (!integrity.valid) {
+      return c.html(renderShareExpiredPage((integrity.reason ?? 'file_deleted') as ShareExpiredReason), 410);
+    }
+
+    const files = await planDirectoryFiles(record, {
+      rootRelativePath: subPath,
+      maxFileCount: cfg.directory.maxFileCount,
+      maxFolderSize: cfg.directory.maxFolderSize,
+      followSymlinks: record.directory?.followSymlinks ?? false,
+      maxDepth: record.directory?.maxDepth ?? cfg.directory.maxDepth,
+    });
+
+    store.incrementDownloadCount(record.id);
+    logShareAudit(
+      'share.access',
+      { shareId: record.id, tokenPrefix: record.token.slice(0, 8), clientIp, mode: 'zip', subPath, fileCount: files.length },
+      `Directory zip served: ${record.fileName}${subPath ? '/' + subPath : ''}`,
+    );
+
+    const zipName = subPath
+      ? `${record.fileName}-${subPath.replace(/[\\/]/g, '_')}.zip`
+      : `${record.fileName}.zip`;
+    const stream = createZipStream({ files });
+    const webStream = Readable.toWeb(stream) as ReadableStream;
+
+    return new Response(webStream, {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/zip',
+        'Content-Disposition': rfc5987ContentDisposition('attachment', zipName),
+        'Cache-Control': 'private, no-store',
+        'X-Content-Type-Options': 'nosniff',
+        'X-Frame-Options': 'DENY',
+        'Referrer-Policy': 'no-referrer',
+      },
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return new Response(`zip build failed: ${message}`, { status: 500 });
+  } finally {
+    releaseZipSlot(record.token);
+  }
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 async function resolveWorkspaceRootForShare(
@@ -378,7 +692,6 @@ async function resolveWorkspaceRootForShare(
     }
   }
 
-  // Import dynamically to avoid circular dependency at module load time
   const { getWorkspacePath } = await import('../../../config/workspace-path-helpers.js');
   const { resolveAgentWorkspaceDir, normalizeAgentId, resolveDefaultAgentId } = await import(
     '../../../agent/agent-scope.js'
@@ -396,20 +709,18 @@ async function resolveWorkspaceRootForShare(
   return resolveAgentWorkspaceDir(cfg, defaultId);
 }
 
-async function handleDownload(
-  c: { header: (n: string, v: string) => void; body: (b: unknown, s?: number) => Response },
+async function handleFileDownload(
+  c: Context,
   store: ReturnType<typeof getShareStore>,
-  record: ReturnType<ReturnType<typeof getShareStore>['getByToken']> & {},
+  record: ShareRecord,
   clientIp: string,
   inline = false,
 ): Promise<Response> {
-  // Concurrency check
   if (!acquireDownloadSlot(record.token)) {
-    return c.body('Too many concurrent downloads for this share', 429) as unknown as Response;
+    return new Response('Too many concurrent downloads for this share', { status: 429 });
   }
 
   try {
-    // File integrity check (inode + path)
     const integrity = await store.validateFileIntegrity(record);
     if (!integrity.valid) {
       logShareAudit(
@@ -417,28 +728,24 @@ async function handleDownload(
         { shareId: record.id, tokenPrefix: record.token.slice(0, 8), reason: integrity.reason, clientIp },
         `Share file integrity check failed: ${integrity.reason}`,
       );
-      const { renderShareExpiredPage: render } = await import('../../../share/share-landing.js');
-      return new Response(render(integrity.reason as ShareExpiredReason), {
+      return new Response(renderShareExpiredPage((integrity.reason ?? 'file_deleted') as ShareExpiredReason), {
         status: 410,
         headers: { 'Content-Type': 'text/html; charset=utf-8' },
       });
     }
 
-    // Consume viewCount
-    store.incrementViewCount(record.id);
+    store.incrementDownloadCount(record.id);
 
     logShareAudit(
       'share.access',
-      { shareId: record.id, tokenPrefix: record.token.slice(0, 8), clientIp, viewCount: record.viewCount },
+      { shareId: record.id, tokenPrefix: record.token.slice(0, 8), clientIp, downloadCount: record.downloadCount },
       `Share downloaded: ${record.fileName}`,
     );
 
-    // Stream file
     const fileStat = await stat(record.absolutePath);
     const stream = createReadStream(record.absolutePath);
     const webStream = Readable.toWeb(stream) as ReadableStream;
-
-    const disposition = inline ? `inline; filename="${encodeURIComponent(record.fileName)}"` : `attachment; filename="${encodeURIComponent(record.fileName)}"`;
+    const disposition = rfc5987ContentDisposition(inline ? 'inline' : 'attachment', record.fileName);
 
     return new Response(webStream, {
       status: 200,

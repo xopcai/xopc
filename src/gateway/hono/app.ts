@@ -21,6 +21,7 @@ import { registerAuthenticatedRoutes } from './routes/index.js';
 import { registerPublicGatewayRoutes } from './routes/public-gateway.js';
 import { resetLazyRouteBundlesForTests } from './routes/lazy-fallback.js';
 import { prewarmStaticUiCache } from './lib/static-ui.js';
+import { registerSiteShareMiddleware } from '../../share/site-share-router.js';
 const log = createLogger('HonoApp');
 
 export interface HonoAppConfig {
@@ -59,6 +60,11 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     trustedProxies: service.currentConfig.gateway?.trustedProxies,
     allowRealIpFallback: service.currentConfig.gateway?.allowRealIpFallback === true,
   }));
+
+  // Site-share middleware runs BEFORE CORS/CSP — it owns the request when the
+  // Host header matches `*.<publicHostSuffix>` (default `*.share.xopc.ai`) or
+  // the path starts with `/site/:token/`. Otherwise it falls through.
+  registerSiteShareMiddleware(app, service);
   app.use(
     cors({
       origin: (origin) => {

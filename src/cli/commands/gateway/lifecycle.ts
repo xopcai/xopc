@@ -11,7 +11,7 @@ import {
   formatGatewayPidList,
   signalVerifiedGatewayPidSync,
 } from '../../../infra/gateway-processes.js';
-import { authorizeGatewaySigusr1Restart } from '../../../infra/restart.js';
+import { authorizeGatewaySigusr1Restart, writeGatewayRestartIntentSync } from '../../../infra/restart.js';
 import {
   DEFAULT_RESTART_HEALTH_ATTEMPTS,
   DEFAULT_RESTART_HEALTH_DELAY_MS,
@@ -94,11 +94,22 @@ async function restartGatewayWithoutServiceManager(port: number): Promise<Servic
       `multiple gateway processes are listening on port ${port}: ${formatGatewayPidList(pids)}; use "xopc gateway status" before retrying restart`,
     );
   }
-  authorizeGatewaySigusr1Restart();
-  signalVerifiedGatewayPidSync(pids[0], 'SIGUSR1');
+  const targetPid = pids[0];
+
+  if (process.platform === 'win32') {
+    // Windows does not support SIGUSR1. Write a restart intent file and send
+    // SIGTERM; the gateway run-loop's onSigterm handler checks for the intent
+    // and treats it as a restart instead of a stop.
+    writeGatewayRestartIntentSync({ targetPid });
+    signalVerifiedGatewayPidSync(targetPid, 'SIGTERM');
+  } else {
+    authorizeGatewaySigusr1Restart();
+    signalVerifiedGatewayPidSync(targetPid, 'SIGUSR1');
+  }
+
   return {
     result: 'restarted',
-    message: `Gateway restart signal sent to unmanaged process on port ${port}: ${pids[0]}.`,
+    message: `Gateway restart signal sent to unmanaged process on port ${port}: ${targetPid}.`,
   };
 }
 

@@ -64,7 +64,7 @@ describe('ShareStore', () => {
       expect(record.token.length).toBeGreaterThan(40);
       expect(record.fileName).toBe('hello.txt');
       expect(record.mimeType).toBe('text/plain');
-      expect(record.viewCount).toBe(0);
+      expect(record.downloadCount).toBe(0);
       expect(record.revoked).toBe(false);
       expect(record.workspaceRelativePath).toBe('hello.txt');
     });
@@ -179,7 +179,7 @@ describe('ShareStore', () => {
         workspaceRoot: TEST_WORKSPACE,
         gatewayTokenHash: 'abc123def456',
       });
-      store.incrementViewCount(record.id);
+      store.incrementDownloadCount(record.id);
       const updated = store.getById(record.id)!;
       expect(store.validateAccess(updated)).toEqual({ valid: false, reason: 'max_views' });
     });

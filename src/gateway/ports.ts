@@ -148,8 +148,53 @@ function listPortListenersViaProc(port: number): PortProcess[] {
   return results;
 }
 
+/**
+ * Parse `netstat -ano` output (Windows) to find PIDs listening on a given port.
+ * Example line:
+ *   TCP    0.0.0.0:18790          0.0.0.0:0              LISTENING       1234
+ */
+export function parseNetstatOutput(output: string, port: number): PortProcess[] {
+  const portSuffix = `:${port}`;
+  const results: PortProcess[] = [];
+
+  for (const line of output.split(/\r?\n/)) {
+    if (!line.includes("LISTENING")) continue;
+    const parts = line.trim().split(/\s+/);
+    // Format: TCP  <local addr>  <foreign addr>  LISTENING  <pid>
+    if (parts.length < 5) continue;
+    const localAddr = parts[1];
+    if (!localAddr.endsWith(portSuffix)) continue;
+    const pid = parseInt(parts[parts.length - 1], 10);
+    if (Number.isFinite(pid) && pid > 0 && !results.some((p) => p.pid === pid)) {
+      results.push({ pid });
+    }
+  }
+
+  return results;
+}
+
+function listPortListenersViaNetstat(port: number): PortProcess[] {
+  let out: string;
+  try {
+    out = execFileSync("netstat", ["-ano", "-p", "TCP"], {
+      encoding: "utf-8",
+      shell: true,
+      timeout: 5000,
+    });
+  } catch {
+    return [];
+  }
+
+  return parseNetstatOutput(out, port);
+}
+
 // List processes listening on port
 export function listPortListeners(port: number): PortProcess[] {
+  // Windows: use netstat -ano
+  if (process.platform === "win32") {
+    return listPortListenersViaNetstat(port);
+  }
+
   // Try lsof first (macOS + most Linux distros)
   try {
     const out = execFileSync("lsof", ["-nP", `-iTCP:${port}`, "-sTCP:LISTEN", "-FpFc"], {

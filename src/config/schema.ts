@@ -755,6 +755,84 @@ export const GatewayConfigSchema = z.object({
       'text/plain',
       'application/json',
     ]),
+    /** Folder-sharing controls (browse + ZIP). */
+    directory: z.object({
+      enabled: z.boolean().default(true),
+      /** Maximum folder size in bytes at scan time (default 1 GB). */
+      maxFolderSize: z.number().int().min(1_048_576).max(10_737_418_240).default(1_073_741_824),
+      /** Maximum number of entries scanned for a single folder share. */
+      maxFileCount: z.number().int().min(1).max(100_000).default(1_000),
+      /** Traversal depth cap (defense against recursive symlinks). */
+      maxDepth: z.number().int().min(1).max(64).default(20),
+      /** In-memory directory listing cache TTL. */
+      listingCacheMs: z.number().int().min(0).max(600_000).default(60_000),
+      /** Maximum simultaneous ZIP streams per share token. */
+      zipConcurrency: z.number().int().min(1).max(8).default(1),
+    }).default({
+      enabled: true,
+      maxFolderSize: 1_073_741_824,
+      maxFileCount: 1_000,
+      maxDepth: 20,
+      listingCacheMs: 60_000,
+      zipConcurrency: 1,
+    }),
+  }).optional(),
+  /** Site-share configuration (static directory or reverse-proxy a local dev server). */
+  siteShare: z.object({
+    enabled: z.boolean().default(true),
+    /** Public host suffix that subdomain shares are served under. */
+    publicHostSuffix: z.string().min(1).default('share.xopc.ai'),
+    /** Default TTL in ms (default 6h, shorter than file shares — live app surface). */
+    defaultTtlMs: z.number().int().min(60_000).max(604_800_000).default(21_600_000),
+    /** Maximum TTL in ms (default 7 days). */
+    maxTtlMs: z.number().int().min(60_000).max(2_592_000_000).default(604_800_000),
+    /** Maximum concurrent active site shares. */
+    maxActiveSites: z.number().int().min(1).max(1_000).default(5),
+    static: z.object({
+      enabled: z.boolean().default(true),
+      /** Maximum total bytes of files served per static site. */
+      maxRootDirSize: z.number().int().min(1_048_576).max(10_737_418_240).default(524_288_000),
+      /** Maximum file count under root dir. */
+      maxFileCount: z.number().int().min(1).max(100_000).default(10_000),
+      /** Whether HTML/CSS rewrite of absolute paths is on by default. */
+      rewriteEnabledByDefault: z.boolean().default(false),
+    }).default({
+      enabled: true,
+      maxRootDirSize: 524_288_000,
+      maxFileCount: 10_000,
+      rewriteEnabledByDefault: false,
+    }),
+    proxy: z.object({
+      /** Reverse-proxy mode default-enabled per the product brief. */
+      enabled: z.boolean().default(true),
+      /** Upstream host whitelist. Loopback by default. */
+      allowedUpstreamHosts: z
+        .array(z.string().min(1))
+        .default(['127.0.0.1', 'localhost', '::1']),
+      /** Upstream port whitelist (common dev-server ports). */
+      allowedUpstreamPorts: z
+        .array(z.number().int().min(1).max(65535))
+        .default([3000, 3001, 4321, 5173, 8000, 8080, 8888, 9000]),
+      /** Whether to forward WebSocket upgrades. */
+      forwardWebSocket: z.boolean().default(true),
+      /** Maximum request body size in bytes (50 MB). */
+      bodySizeLimit: z.number().int().min(0).max(1_073_741_824).default(52_428_800),
+      /** Per-request HTTP timeout in ms. */
+      requestTimeoutMs: z.number().int().min(1_000).max(600_000).default(30_000),
+      /** Per-WebSocket idle timeout in ms. */
+      wsIdleTimeoutMs: z.number().int().min(10_000).max(3_600_000).default(300_000),
+      /** Rewrite Set-Cookie Path attribute (subpath mode only). */
+      rewriteSetCookiePath: z.boolean().default(true),
+    }).default({
+      enabled: true,
+      allowedUpstreamHosts: ['127.0.0.1', 'localhost', '::1'],
+      allowedUpstreamPorts: [3000, 3001, 4321, 5173, 8000, 8080, 8888, 9000],
+      forwardWebSocket: true,
+      bodySizeLimit: 52_428_800,
+      requestTimeoutMs: 30_000,
+      wsIdleTimeoutMs: 300_000,
+      rewriteSetCookiePath: true,
+    }),
   }).optional(),
 }).default({
   bind: 'loopback',

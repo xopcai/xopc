@@ -34,6 +34,19 @@ function ActionMenu({
   const [menuOpen, setMenuOpen] = useState(false);
   const close = () => setMenuOpen(false);
 
+  // Directories only get share + copy-path; preview/download have no sensible meaning.
+  const items: { action: FileTreeAction; label: string }[] = entry.isDirectory
+    ? [
+        { action: 'share', label: labels.share },
+        { action: 'copyPath', label: labels.copyPath },
+      ]
+    : [
+        { action: 'preview', label: labels.preview },
+        { action: 'download', label: labels.download },
+        { action: 'share', label: labels.share },
+        { action: 'copyPath', label: labels.copyPath },
+      ];
+
   return (
     <>
       {menuOpen ? (
@@ -73,50 +86,20 @@ function ActionMenu({
             className="absolute right-0 top-full z-50 mt-0.5 min-w-[9rem] rounded-md border border-edge bg-surface-panel py-1 shadow-popover"
             onPointerDown={(e) => e.stopPropagation()}
           >
-            <button
-              type="button"
-              role="menuitem"
-              className="block w-full px-3 py-1.5 text-left text-sm text-fg hover:bg-surface-hover"
-              onClick={() => {
-                onAction('preview', entry);
-                close();
-              }}
-            >
-              {labels.preview}
-            </button>
-            <button
-              type="button"
-              role="menuitem"
-              className="block w-full px-3 py-1.5 text-left text-sm text-fg hover:bg-surface-hover"
-              onClick={() => {
-                onAction('download', entry);
-                close();
-              }}
-            >
-              {labels.download}
-            </button>
-            <button
-              type="button"
-              role="menuitem"
-              className="block w-full px-3 py-1.5 text-left text-sm text-fg hover:bg-surface-hover"
-              onClick={() => {
-                onAction('share', entry);
-                close();
-              }}
-            >
-              {labels.share}
-            </button>
-            <button
-              type="button"
-              role="menuitem"
-              className="block w-full px-3 py-1.5 text-left text-sm text-fg hover:bg-surface-hover"
-              onClick={() => {
-                onAction('copyPath', entry);
-                close();
-              }}
-            >
-              {labels.copyPath}
-            </button>
+            {items.map(({ action, label }) => (
+              <button
+                key={action}
+                type="button"
+                role="menuitem"
+                className="block w-full px-3 py-1.5 text-left text-sm text-fg hover:bg-surface-hover"
+                onClick={() => {
+                  onAction(action, entry);
+                  close();
+                }}
+              >
+                {label}
+              </button>
+            ))}
           </div>
         ) : null}
       </div>
@@ -148,29 +131,34 @@ function TreeRow({
   if (entry.isDirectory) {
     return (
       <div className="select-none">
-        <button
-          type="button"
-          aria-expanded={open}
-          className={cn(
-            'flex w-full items-center gap-1 rounded-md py-1 pr-2 text-left text-sm',
-            'hover:bg-surface-hover',
-            isSel && 'bg-accent-soft text-accent-fg',
-          )}
-          style={{ paddingLeft: 8 + depth * 12 }}
-          onClick={() => {
-            const next = !open;
-            setOpen(next);
-            if (next) onExpandDir?.(entry.path);
-            onSelect(entry.path, true);
-          }}
-        >
-          <ChevronRight
-            className={cn('size-3.5 shrink-0 transition-transform', open && 'rotate-90')}
-            aria-hidden
-          />
-          <Folder className="size-3.5 shrink-0 text-fg-muted" aria-hidden />
-          <span className="truncate">{entry.name}</span>
-        </button>
+        <div className="group flex w-full items-stretch gap-0.5">
+          <button
+            type="button"
+            aria-expanded={open}
+            className={cn(
+              'flex min-w-0 flex-1 items-center gap-1 rounded-md py-1 pr-2 text-left text-sm',
+              'hover:bg-surface-hover',
+              isSel && 'bg-accent-soft text-accent-fg',
+            )}
+            style={{ paddingLeft: 8 + depth * 12 }}
+            onClick={() => {
+              const next = !open;
+              setOpen(next);
+              if (next) onExpandDir?.(entry.path);
+              onSelect(entry.path, true);
+            }}
+          >
+            <ChevronRight
+              className={cn('size-3.5 shrink-0 transition-transform', open && 'rotate-90')}
+              aria-hidden
+            />
+            <Folder className="size-3.5 shrink-0 text-fg-muted" aria-hidden />
+            <span className="truncate">{entry.name}</span>
+          </button>
+          {onAction && actionLabels ? (
+            <ActionMenu entry={entry} labels={actionLabels} onAction={onAction} />
+          ) : null}
+        </div>
         {open && entry.children?.length ? (
           <div>
             {entry.children.map((c) => (
@@ -217,6 +205,7 @@ export function FileTree({
   tree,
   selectedPath,
   onSelectFile,
+  onSelectEntry,
   onExpandDir,
   onAction,
   actionLabels,
@@ -225,12 +214,15 @@ export function FileTree({
   tree: TreeEntry[];
   selectedPath: string | null;
   onSelectFile: (path: string) => void;
+  /** Optional — fires on every row click (file or directory). Useful for pickers. */
+  onSelectEntry?: (path: string, isDirectory: boolean) => void;
   onExpandDir?: (dirPath: string) => void;
   onAction?: (action: FileTreeAction, entry: TreeEntry) => void;
   actionLabels?: { preview: string; download: string; copyPath: string; share: string };
   emptyHint: string;
 }) {
   const handleSelect = (path: string, isDir: boolean) => {
+    onSelectEntry?.(path, isDir);
     if (!isDir) onSelectFile(path);
   };
 

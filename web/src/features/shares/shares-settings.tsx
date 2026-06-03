@@ -1,5 +1,6 @@
 import {
   Check,
+  ChevronDown,
   Clock,
   Copy,
   FileText,
@@ -9,6 +10,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { useCallback, useMemo, useReducer, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 
 import { uiPatchReducer } from '@/lib/settings-form-draft';
 import useSWR from 'swr';
@@ -32,11 +34,23 @@ import {
   type ShareLinkResult,
 } from '@/features/shares/share-link-dialog';
 import { SharePolicySection } from '@/features/shares/share-policy-section';
+import { WorkspacePathPickerDialog } from '@/features/shares/workspace-path-picker';
 import { cn } from '@/lib/cn';
 import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
+import { interaction } from '@/lib/interaction';
 import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
+
+// ── Tab plumbing ──────────────────────────────────────────────────────────────
+
+type SharesTabId = 'shares' | 'policy';
+const SHARES_TABS: readonly SharesTabId[] = ['shares', 'policy'] as const;
+
+function parseSharesTab(raw: string | null | undefined): SharesTabId {
+  const id = (raw ?? '').trim();
+  return SHARES_TABS.includes(id as SharesTabId) ? (id as SharesTabId) : 'shares';
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -83,13 +97,114 @@ export function SharesSettingsPanel() {
   const t = messages(language).sharesSettings;
   const token = useGatewayStore((st) => st.token);
   const hasToken = Boolean(token);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = parseSharesTab(searchParams.get('tab'));
 
+  const setActiveTab = useCallback(
+    (tab: SharesTabId) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          if (tab === 'shares') next.delete('tab');
+          else next.set('tab', tab);
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
+
+  if (!hasToken) {
+    return (
+      <div className="mx-auto w-full max-w-app-main px-4 py-8">
+        <p className="text-sm text-fg-muted">{t.needToken}</p>
+      </div>
+    );
+  }
+
+  const tabLabels: Record<SharesTabId, string> = {
+    shares: t.tabShares,
+    policy: t.tabPolicy,
+  };
+
+  return (
+    <div className="mx-auto flex w-full max-w-app-main flex-col gap-6 px-4 py-8">
+      <div>
+        <h1 className="text-lg font-semibold text-fg">{t.title}</h1>
+        <p className="mt-1 text-sm text-fg-muted">{t.subtitle}</p>
+      </div>
+
+      <div
+        className="flex flex-col gap-5"
+        role="tablist"
+        aria-label={t.tabsAria}
+        onKeyDown={(e) => {
+          if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+          e.preventDefault();
+          const idx = SHARES_TABS.indexOf(activeTab);
+          const delta = e.key === 'ArrowRight' ? 1 : -1;
+          const next = SHARES_TABS[(idx + delta + SHARES_TABS.length) % SHARES_TABS.length];
+          setActiveTab(next);
+        }}
+      >
+        <div className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1">
+          {SHARES_TABS.map((tab) => {
+            const selected = tab === activeTab;
+            return (
+              <button
+                key={tab}
+                type="button"
+                role="tab"
+                aria-selected={selected}
+                id={`shares-tab-${tab}`}
+                aria-controls={`shares-panel-${tab}`}
+                className={cn(
+                  'shrink-0 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+                  interaction.press,
+                  selected
+                    ? 'bg-accent-soft text-accent-fg'
+                    : 'text-fg-muted hover:bg-surface-hover hover:text-fg',
+                )}
+                onClick={() => setActiveTab(tab)}
+              >
+                {tabLabels[tab]}
+              </button>
+            );
+          })}
+        </div>
+
+        <div
+          role="tabpanel"
+          id={`shares-panel-${activeTab}`}
+          aria-labelledby={`shares-tab-${activeTab}`}
+          className="min-w-0"
+        >
+          {activeTab === 'shares' ? (
+            <SharesManageTab t={t} language={language} />
+          ) : (
+            <SharePolicySection hasToken={hasToken} />
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SharesManageTab({
+  t,
+  language,
+}: {
+  t: ReturnType<typeof messages>['sharesSettings'];
+  language: 'en' | 'zh';
+}) {
   const {
     data,
     error,
     isLoading,
     mutate,
-  } = useSWR(hasToken ? 'shares-list' : null, fetchShares, { refreshInterval: 30_000 });
+  } = useSWR('shares-list', fetchShares, { refreshInterval: 30_000 });
 
   const shares = data?.payload?.shares ?? [];
   const [showExpired, setShowExpired] = useState(false);
@@ -102,23 +217,8 @@ export function SharesSettingsPanel() {
   const activeCount = useMemo(() => shares.filter((s) => !s.expired && !s.revoked).length, [shares]);
   const expiredCount = useMemo(() => shares.filter((s) => s.expired || s.revoked).length, [shares]);
 
-  if (!hasToken) {
-    return (
-      <div className="mx-auto w-full max-w-app-main px-4 py-8">
-        <p className="text-sm text-fg-muted">{t.needToken}</p>
-      </div>
-    );
-  }
-
   return (
-    <div className="mx-auto flex w-full max-w-app-main flex-col gap-6 px-4 py-8">
-      <div>
-        <h1 className="text-lg font-semibold text-fg">{t.title}</h1>
-        <p className="mt-1 text-sm text-fg-muted">{t.subtitle}</p>
-      </div>
-
-      <SharePolicySection hasToken={hasToken} />
-
+    <div className="flex flex-col gap-6">
       <CreateShareSection t={t} onCreated={() => void mutate()} />
 
       <SettingsFormSection>
@@ -193,25 +293,33 @@ export function SharesSettingsPanel() {
 type CreateShareUi = {
   expanded: boolean;
   path: string;
+  isDirectory: boolean;
+  agentId: string;
   ttlMs: number;
   maxViews: number | null;
   description: string;
+  directoryMode: 'browse' | 'zip-only';
   creating: boolean;
   result: ShareLinkResult | null;
   errorMsg: string | null;
   resultDialogOpen: boolean;
+  pickerOpen: boolean;
 };
 
 const initialCreateShareUi: CreateShareUi = {
-  expanded: false,
+  expanded: true,
   path: '',
+  isDirectory: false,
+  agentId: '',
   ttlMs: 86_400_000,
   maxViews: null,
   description: '',
+  directoryMode: 'browse',
   creating: false,
   result: null,
   errorMsg: null,
   resultDialogOpen: false,
+  pickerOpen: false,
 };
 
 function CreateShareSection({
@@ -225,13 +333,17 @@ function CreateShareSection({
   const {
     expanded,
     path,
+    isDirectory,
+    agentId,
     ttlMs,
     maxViews,
     description,
+    directoryMode,
     creating,
     result,
     errorMsg,
     resultDialogOpen,
+    pickerOpen,
   } = ui;
 
   const handleCreate = useCallback(async () => {
@@ -243,6 +355,8 @@ function CreateShareSection({
         ttlMs,
         maxViews,
         description: description.trim() || undefined,
+        ...(agentId ? { agentId } : {}),
+        ...(isDirectory ? { kind: 'directory', directoryMode } : {}),
       };
       const res = await createShare(params);
       dispatch({ type: 'patch', patch: { result: res.payload, resultDialogOpen: true } });
@@ -255,16 +369,19 @@ function CreateShareSection({
     } finally {
       dispatch({ type: 'patch', patch: { creating: false } });
     }
-  }, [path, ttlMs, maxViews, description, onCreated]);
+  }, [path, isDirectory, agentId, ttlMs, maxViews, description, directoryMode, onCreated]);
 
   const resetForm = useCallback(() => {
     dispatch({
       type: 'patch',
       patch: {
         path: '',
+        isDirectory: false,
+        agentId: '',
         description: '',
         maxViews: null,
         ttlMs: 86_400_000,
+        directoryMode: 'browse',
         result: null,
         errorMsg: null,
       },
@@ -286,16 +403,55 @@ function CreateShareSection({
       <p className="mb-4 text-xs text-fg-muted">{t.createHint}</p>
 
       <div className="flex flex-col gap-3">
-        <label className="flex flex-col gap-1">
+        <div className="flex flex-col gap-1">
           <span className="text-xs font-medium text-fg">{t.pathLabel}</span>
-          <input
-            type="text"
-            className="rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg placeholder:text-fg-subtle focus:outline-none focus:ring-2 focus:ring-accent"
-            placeholder={t.pathPlaceholder}
-            value={path}
-            onChange={(e) => dispatch({ type: 'patch', patch: { path: e.target.value } })}
-          />
-        </label>
+          <div className="flex items-center gap-2">
+            <div
+              className={cn(
+                'flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm',
+                path ? 'text-fg' : 'text-fg-subtle',
+              )}
+            >
+              {path ? (
+                <>
+                  <span aria-hidden>{isDirectory ? '📁' : '📄'}</span>
+                  <span className="min-w-0 flex-1 truncate" title={path}>
+                    {path}
+                  </span>
+                </>
+              ) : (
+                <span className="truncate">{t.pathPlaceholder}</span>
+              )}
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => dispatch({ type: 'patch', patch: { pickerOpen: true } })}
+            >
+              <FileText className="size-4" />
+              {path ? t.pathBrowseChange : t.pathBrowse}
+            </Button>
+          </div>
+        </div>
+
+        {isDirectory ? (
+          <label className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-fg">{t.directoryModeLabel}</span>
+            <select
+              className="rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg focus:outline-none focus:ring-2 focus:ring-accent"
+              value={directoryMode}
+              onChange={(e) =>
+                dispatch({
+                  type: 'patch',
+                  patch: { directoryMode: e.target.value === 'zip-only' ? 'zip-only' : 'browse' },
+                })
+              }
+            >
+              <option value="browse">{t.directoryModeBrowse}</option>
+              <option value="zip-only">{t.directoryModeZipOnly}</option>
+            </select>
+          </label>
+        ) : null}
 
         <div className="flex flex-wrap gap-3">
           <label className="flex flex-col gap-1">
@@ -367,6 +523,24 @@ function CreateShareSection({
           dispatch({ type: 'patch', patch: { resultDialogOpen: open, ...(open ? {} : { result: null }) } });
         }}
         result={result}
+      />
+
+      <WorkspacePathPickerDialog
+        open={pickerOpen}
+        onOpenChange={(open) => dispatch({ type: 'patch', patch: { pickerOpen: open } })}
+        initialPath={path || undefined}
+        selectKind="any"
+        onConfirm={(picked) =>
+          dispatch({
+            type: 'patch',
+            patch: {
+              path: picked.path,
+              isDirectory: picked.isDirectory,
+              agentId: picked.agentId,
+              directoryMode: 'browse',
+            },
+          })
+        }
       />
     </SettingsFormSection>
   );
@@ -452,34 +626,54 @@ function ShareRow({
     }
   }, [share.id, onExtended]);
 
+  const linksPanelId = `share-links-${share.id}`;
+
   return (
     <>
       <div className="rounded-lg border border-edge-subtle bg-surface-panel px-3 py-2.5">
         <div className="flex items-start gap-3">
-          <FileText className="mt-0.5 size-4 shrink-0 text-fg-muted" />
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              <span className="truncate text-sm font-medium text-fg">{share.fileName}</span>
-              <span className={cn('text-xs font-medium', statusColor)}>{statusLabel}</span>
-            </div>
-            <p className="truncate text-xs text-fg-subtle">{share.workspaceRelativePath}</p>
-            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-fg-muted">
-              <span>{formatFileSize(share.fileSize)}</span>
-              <span className="flex items-center gap-1">
-                <Clock className="size-3" />
-                {share.expired
-                  ? (language === 'zh' ? '已过期' : 'expired')
-                  : formatRelativeTime(share.expiresAt, language)}
-              </span>
-              <span>
-                {t.views}: {share.viewCount}
-                {share.maxViews !== null && ` ${t.viewsOf} ${share.maxViews}`}
-              </span>
-              {share.description && (
-                <span className="italic text-fg-subtle">{share.description}</span>
+          <button
+            type="button"
+            className={cn(
+              'flex min-w-0 flex-1 items-start gap-3 rounded-md text-left',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+            )}
+            aria-expanded={linksOpen}
+            aria-controls={linksPanelId}
+            onClick={() => dispatch({ type: 'patch', patch: { linksOpen: !linksOpen } })}
+          >
+            <ChevronDown
+              className={cn(
+                'mt-0.5 size-4 shrink-0 text-fg-muted transition-transform',
+                linksOpen ? 'rotate-0' : '-rotate-90',
               )}
+              aria-hidden
+            />
+            <FileText className="mt-0.5 size-4 shrink-0 text-fg-muted" aria-hidden />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <span className="truncate text-sm font-medium text-fg">{share.fileName}</span>
+                <span className={cn('text-xs font-medium', statusColor)}>{statusLabel}</span>
+              </div>
+              <p className="truncate text-xs text-fg-subtle">{share.workspaceRelativePath}</p>
+              <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-fg-muted">
+                <span>{formatFileSize(share.fileSize)}</span>
+                <span className="flex items-center gap-1">
+                  <Clock className="size-3" />
+                  {share.expired
+                    ? (language === 'zh' ? '已过期' : 'expired')
+                    : formatRelativeTime(share.expiresAt, language)}
+                </span>
+                <span>
+                  {t.views}: {share.downloadCount}
+                  {share.maxViews !== null && ` ${t.viewsOf} ${share.maxViews}`}
+                </span>
+                {share.description && (
+                  <span className="italic text-fg-subtle">{share.description}</span>
+                )}
+              </div>
             </div>
-          </div>
+          </button>
           <div className="flex shrink-0 items-center gap-1">
             {isActive && (
               <>
@@ -516,7 +710,10 @@ function ShareRow({
           </div>
         </div>
         {isActive && linksOpen ? (
-          <div className="mt-3 border-t border-edge-subtle pt-3 pl-7">
+          <div
+            id={linksPanelId}
+            className="mt-3 border-t border-edge-subtle pt-3 pl-7"
+          >
             <ShareUrlCopyRows
               shareUrl={share.shareUrl}
               lanUrl={share.lanUrl}
