@@ -1,26 +1,9 @@
 import { ChevronRight, FileText, Folder, MoreHorizontal } from 'lucide-react';
 import { useState } from 'react';
 
+import type { FileTreeAction, TreeEntry } from '@/features/file-tree/file-tree-types';
+import { fileExtColor } from '@/features/file-tree/file-tree-utils';
 import { cn } from '@/lib/cn';
-
-export interface TreeEntry {
-  name: string;
-  path: string;
-  /** Host absolute path when provided by the gateway (copy path). */
-  absolutePath?: string;
-  isDirectory: boolean;
-  children?: TreeEntry[];
-}
-
-export type FileTreeAction = 'preview' | 'download' | 'copyPath' | 'share';
-
-export function fileExtColor(name: string): string {
-  const lower = name.toLowerCase();
-  if (lower.endsWith('.md')) return 'text-green-600 dark:text-green-400';
-  if (lower.endsWith('.json')) return 'text-yellow-600 dark:text-yellow-400';
-  if (lower.endsWith('.ts') || lower.endsWith('.js')) return 'text-blue-600 dark:text-blue-400';
-  return 'text-fg-muted';
-}
 
 function ActionMenu({
   entry,

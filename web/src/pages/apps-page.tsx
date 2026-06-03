@@ -7,11 +7,13 @@ import { useSWRConfig } from 'swr';
 import { Button } from '@/components/ui/button';
 import { parseAppsMainTab, type AppsMainTab } from '@/features/apps/apps-page.constants';
 import {
-  extensionHasProviderCredentialsSettings,
-  extensionShellUiReachable,
   useExtensions,
   useExtensionsLoading,
 } from '@/features/extensions/extension-provider';
+import {
+  extensionHasProviderCredentialsSettings,
+  extensionShellUiReachable,
+} from '@/features/extensions/extension-ui-guards';
 import { ExtensionMarketplacePanel } from '@/features/extensions/extension-marketplace';
 import { dispatchConfigReload } from '@/features/gateway/dispatch-config-reload';
 import { postBundledExtensionActivation } from '@/features/extensions/extension-marketplace-api';

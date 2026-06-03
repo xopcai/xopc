@@ -9,7 +9,8 @@ import { useTranslation } from 'react-i18next';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 
-import { extensionHasProviderCredentialsSettings, useUiExtensions } from './extension-provider';
+import { extensionHasProviderCredentialsSettings } from './extension-ui-guards';
+import { useUiExtensions } from './extension-provider';
 import type { ExtensionUiInfo, SettingsPanelContribution } from './types';
 
 interface ExtensionSettingsNavProps {

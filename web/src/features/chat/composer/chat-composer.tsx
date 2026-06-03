@@ -27,9 +27,6 @@ import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { useLocaleStore } from '@/stores/locale-store';
 
-export type { ThinkingLevel } from '@/features/chat/composer/composer.types';
-export { collectClipboardFiles, isComposerAcceptableFile } from '@/features/chat/composer/composer-clipboard';
-
 export const ChatComposer = memo(function ChatComposer({
   disabled,
   sending,
