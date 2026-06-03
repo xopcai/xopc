@@ -46,6 +46,9 @@ const ExtensionDebugPage = lazy(() =>
     default: m.ExtensionDebugPage,
   })),
 );
+const SharePreviewPage = lazy(() =>
+  import('@/pages/share-preview-page').then((m) => ({ default: m.SharePreviewPage })),
+);
 
 function SecondaryRouteFallback() {
   return (
@@ -84,6 +87,16 @@ function SettingsRouteFallback() {
 }
 
 const router = createHashRouter([
+  {
+    // Public share preview — bypasses `AppShell`'s gateway-token gate so any
+    // recipient of a share link can render it. Talks only to /s/:token/* APIs.
+    path: '/share/:token',
+    element: (
+      <Suspense fallback={<SecondaryRouteFallback />}>
+        <SharePreviewPage />
+      </Suspense>
+    ),
+  },
   {
     path: '/',
     element: <AppShell />,

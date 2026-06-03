@@ -1,13 +1,19 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { stat, lstat, realpath } from 'node:fs/promises';
+import { join, relative as relPathPosix, resolve as resolvePath } from 'node:path';
+import { stat, lstat, realpath, readdir } from 'node:fs/promises';
 
 import { resolveStateDir } from '../config/paths.js';
 import { isPathUnderWorkspace } from '../gateway/workspace-editor-path.js';
 import { createLogger } from '../utils/logger.js';
 import { logShareAudit } from './share-audit.js';
-import type { ShareRecord, ShareStoreData, ShareConfig, CreateShareParams } from './share-types.js';
+import type {
+  ShareRecord,
+  ShareStoreData,
+  ShareConfig,
+  CreateShareParams,
+  ShareKind,
+} from './share-types.js';
 import { SHARE_CONFIG_DEFAULTS } from './share-types.js';
 
 const log = createLogger('ShareStore');
@@ -17,19 +23,42 @@ const CLEANUP_INTERVAL_MS = 10 * 60_000;
 const EXPIRED_RETENTION_MS = 24 * 60 * 60_000;
 const MAX_STORED_RECORDS = 500;
 const TRUNCATE_TO = 200;
-const VIEW_COUNT_DEBOUNCE_MS = 2_000;
+const COUNTER_DEBOUNCE_MS = 2_000;
 
 function resolveSharesPath(): string {
   return join(resolveStateDir(), SHARES_FILE);
 }
 
+export interface DirectoryListingEntry {
+  name: string;
+  /** Workspace/share-relative POSIX path. */
+  path: string;
+  isDirectory: boolean;
+  size: number;
+  mtime: string;
+  mimeType: string;
+}
+
+export interface DirectoryListing {
+  /** Share-relative path of the listed dir ('' for root). */
+  path: string;
+  entries: DirectoryListingEntry[];
+  truncated: boolean;
+}
+
+interface DirectoryScanSummary {
+  entryCount: number;
+  totalSize: number;
+}
+
 export class ShareStore {
   private shares = new Map<string, ShareRecord>();
   private tokenIndex = new Map<string, string>();
-  private viewCountDirty = false;
-  private viewCountTimer: ReturnType<typeof setTimeout> | null = null;
+  private dirty = false;
+  private debounceTimer: ReturnType<typeof setTimeout> | null = null;
   private cleanupTimer: ReturnType<typeof setInterval> | null = null;
   private config: ShareConfig;
+  private listingCache = new Map<string, { listing: DirectoryListing; expiresAt: number }>();
 
   constructor(config?: Partial<ShareConfig>) {
     this.config = { ...SHARE_CONFIG_DEFAULTS, ...config };
@@ -47,10 +76,12 @@ export class ShareStore {
 
   // ── CRUD ────────────────────────────────────────────────────────────────────
 
-  async create(params: CreateShareParams & {
-    workspaceRoot: string;
-    gatewayTokenHash: string;
-  }): Promise<ShareRecord> {
+  async create(
+    params: CreateShareParams & {
+      workspaceRoot: string;
+      gatewayTokenHash: string;
+    },
+  ): Promise<ShareRecord> {
     if (!this.config.enabled) {
       throw new Error('File sharing is disabled');
     }
@@ -75,6 +106,48 @@ export class ShareStore {
     const absolutePath = await this.resolveAndValidatePath(relPath, workspaceRoot);
     const fileStat = await stat(absolutePath);
 
+    const detectedKind: ShareKind = fileStat.isDirectory() ? 'directory' : 'file';
+    const requestedKind = params.kind ?? detectedKind;
+    if (requestedKind !== detectedKind) {
+      throw new Error(
+        `Requested share kind '${requestedKind}' does not match filesystem (got '${detectedKind}')`,
+      );
+    }
+
+    if (requestedKind === 'file') {
+      return this.createFileShare({
+        params,
+        absolutePath,
+        fileStat,
+        relPath,
+        workspaceRoot,
+        ttlMs,
+        gatewayTokenHash,
+      });
+    }
+
+    return this.createDirectoryShare({
+      params,
+      absolutePath,
+      fileStat,
+      relPath,
+      workspaceRoot,
+      ttlMs,
+      gatewayTokenHash,
+    });
+  }
+
+  private async createFileShare(args: {
+    params: CreateShareParams;
+    absolutePath: string;
+    fileStat: import('node:fs').Stats;
+    relPath: string;
+    workspaceRoot: string;
+    ttlMs: number;
+    gatewayTokenHash: string;
+  }): Promise<ShareRecord> {
+    const { params, absolutePath, fileStat, relPath, workspaceRoot, ttlMs, gatewayTokenHash } = args;
+
     if (!fileStat.isFile()) {
       throw new Error('Path is not a regular file');
     }
@@ -85,49 +158,154 @@ export class ShareStore {
 
     const linkStat = await lstat(absolutePath);
     if (linkStat.isSymbolicLink()) {
-      const realPath = await realpath(absolutePath);
-      if (!isPathUnderWorkspace(workspaceRoot, realPath)) {
+      const real = await realpath(absolutePath);
+      if (!isPathUnderWorkspace(workspaceRoot, real)) {
         throw new Error('Symlink target is outside workspace');
       }
     }
 
-    const id = randomUUID();
-    const token = randomBytes(32).toString('base64url');
-    const fileName = relPath.split('/').pop() ?? relPath;
+    const fileName = relPath.split('/').pop() || relPath;
     const mimeType = resolveMimeType(fileName);
-    const now = new Date();
-
-    const record: ShareRecord = {
-      id,
-      token,
+    const record = this.buildRecord({
+      kind: 'file',
       absolutePath,
-      workspaceRelativePath: relPath,
       workspaceRoot,
+      workspaceRelativePath: relPath,
       inode: fileStat.ino,
-      isDirectory: false,
       fileName,
       fileSize: fileStat.size,
       mimeType,
-      createdAt: now.toISOString(),
-      expiresAt: new Date(now.getTime() + ttlMs).toISOString(),
-      maxViews: params.maxViews ?? null,
-      viewCount: 0,
-      revoked: false,
-      createdByTokenHash: gatewayTokenHash,
+      ttlMs,
+      maxViews: params.maxViews,
       description: params.description,
+      gatewayTokenHash,
+    });
+
+    this.persistAndAudit(record, 'share.create', `Share created: ${record.fileName}`, {
+      fileName: record.fileName,
+      fileSize: record.fileSize,
+      ttlMs,
+    });
+
+    return record;
+  }
+
+  private async createDirectoryShare(args: {
+    params: CreateShareParams;
+    absolutePath: string;
+    fileStat: import('node:fs').Stats;
+    relPath: string;
+    workspaceRoot: string;
+    ttlMs: number;
+    gatewayTokenHash: string;
+  }): Promise<ShareRecord> {
+    const { params, absolutePath, fileStat, relPath, workspaceRoot, ttlMs, gatewayTokenHash } = args;
+    const dirCfg = this.config.directory;
+    if (!dirCfg.enabled) {
+      throw new Error('Directory sharing is disabled');
+    }
+
+    const followSymlinks = params.followSymlinks ?? false;
+    const maxDepth = params.maxDepth ?? dirCfg.maxDepth;
+    const maxFileCount = Math.min(params.maxFileCount ?? dirCfg.maxFileCount, dirCfg.maxFileCount);
+    const maxFolderSize = Math.min(
+      params.maxFolderSize ?? dirCfg.maxFolderSize,
+      dirCfg.maxFolderSize,
+    );
+
+    const summary = await scanDirectory(absolutePath, {
+      workspaceRoot,
+      followSymlinks,
+      maxDepth,
+      maxFileCount,
+      maxFolderSize,
+    });
+
+    const fileName = relPath.split('/').pop() || relPath || 'shared';
+    const record = this.buildRecord({
+      kind: 'directory',
+      absolutePath,
+      workspaceRoot,
+      workspaceRelativePath: relPath,
+      inode: fileStat.ino,
+      fileName,
+      fileSize: summary.totalSize,
+      mimeType: 'application/x-directory',
+      ttlMs,
+      maxViews: params.maxViews,
+      description: params.description,
+      gatewayTokenHash,
+      directory: {
+        mode: params.directoryMode ?? 'browse',
+        entryCount: summary.entryCount,
+        followSymlinks,
+        maxDepth,
+      },
+    });
+
+    this.persistAndAudit(record, 'share.create', `Folder share created: ${record.fileName}`, {
+      fileName: record.fileName,
+      entryCount: summary.entryCount,
+      totalSize: summary.totalSize,
+      ttlMs,
+      mode: record.directory?.mode,
+    });
+
+    return record;
+  }
+
+  private buildRecord(input: {
+    kind: ShareKind;
+    absolutePath: string;
+    workspaceRoot: string;
+    workspaceRelativePath: string;
+    inode: number;
+    fileName: string;
+    fileSize: number;
+    mimeType: string;
+    ttlMs: number;
+    maxViews?: number | null;
+    description?: string;
+    gatewayTokenHash: string;
+    directory?: ShareRecord['directory'];
+  }): ShareRecord {
+    const id = randomUUID();
+    const token = randomBytes(32).toString('base64url');
+    const now = new Date();
+    const record: ShareRecord = {
+      id,
+      token,
+      absolutePath: input.absolutePath,
+      workspaceRelativePath: input.workspaceRelativePath,
+      workspaceRoot: input.workspaceRoot,
+      inode: input.inode,
+      kind: input.kind,
+      fileName: input.fileName,
+      fileSize: input.fileSize,
+      mimeType: input.mimeType,
+      createdAt: now.toISOString(),
+      expiresAt: new Date(now.getTime() + input.ttlMs).toISOString(),
+      maxViews: input.maxViews ?? null,
+      downloadCount: 0,
+      revoked: false,
+      createdByTokenHash: input.gatewayTokenHash,
+      description: input.description,
+      directory: input.directory,
     };
 
     this.shares.set(id, record);
     this.tokenIndex.set(token, id);
-    this.persistSync();
-
-    logShareAudit(
-      'share.create',
-      { shareId: id, tokenPrefix: token.slice(0, 8), fileName, fileSize: fileStat.size, ttlMs },
-      `Share created: ${fileName}`,
-    );
-
     return record;
+  }
+
+  private persistAndAudit(
+    record: ShareRecord,
+    event: Parameters<typeof logShareAudit>[0],
+    message: string,
+    extra: Record<string, unknown>,
+  ): void {
+    this.persistSync();
+    logShareAudit(event, { shareId: record.id, tokenPrefix: record.token.slice(0, 8), ...extra }, message);
   }
 
   getById(id: string): ShareRecord | null {
@@ -144,17 +322,17 @@ export class ShareStore {
   validateAccess(record: ShareRecord): { valid: boolean; reason?: string } {
     if (record.revoked) return { valid: false, reason: 'revoked' };
     if (Date.now() >= new Date(record.expiresAt).getTime()) return { valid: false, reason: 'expired' };
-    if (record.maxViews !== null && record.viewCount >= record.maxViews) {
+    if (record.maxViews !== null && record.downloadCount >= record.maxViews) {
       return { valid: false, reason: 'max_views' };
     }
     return { valid: true };
   }
 
-  /** Increment view count (debounced persist). */
-  incrementViewCount(id: string): void {
+  /** Increment download counter (used by directory & file downloads). Debounced persist. */
+  incrementDownloadCount(id: string): void {
     const record = this.shares.get(id);
     if (!record) return;
-    record.viewCount++;
+    record.downloadCount++;
     this.scheduleDebouncedPersist();
   }
 
@@ -169,8 +347,13 @@ export class ShareStore {
       if (fileStat.ino !== record.inode) {
         logShareAudit(
           'share.path_changed',
-          { shareId: record.id, tokenPrefix: record.token.slice(0, 8), oldInode: record.inode, newInode: fileStat.ino },
-          `Share file replaced (inode changed): ${record.fileName}`,
+          {
+            shareId: record.id,
+            tokenPrefix: record.token.slice(0, 8),
+            oldInode: record.inode,
+            newInode: fileStat.ino,
+          },
+          `Share path replaced (inode changed): ${record.fileName}`,
         );
         return { valid: false, reason: 'file_deleted' };
       }
@@ -180,10 +363,118 @@ export class ShareStore {
     }
   }
 
+  /**
+   * Resolve a child path inside a directory share. Returns the absolute path
+   * if it stays within both the share root and the workspace.
+   */
+  async resolveDirectoryChild(
+    record: ShareRecord,
+    relativePath: string,
+  ): Promise<{ ok: true; absolutePath: string } | { ok: false; reason: string }> {
+    if (record.kind !== 'directory') {
+      return { ok: false, reason: 'not_directory' };
+    }
+    const trimmed = (relativePath ?? '').replace(/^\/+/, '').replace(/\\/g, '/');
+    if (trimmed.includes('..') || trimmed.includes('\0')) {
+      return { ok: false, reason: 'path_traversal' };
+    }
+    const abs = resolvePath(record.absolutePath, trimmed);
+    const relToShare = relPathPosix(record.absolutePath, abs);
+    if (relToShare.startsWith('..') || relToShare.split(/[/\\]/).includes('..')) {
+      return { ok: false, reason: 'path_outside_share' };
+    }
+    try {
+      const real = await realpath(abs);
+      if (!isPathUnderWorkspace(record.workspaceRoot, real)) {
+        return { ok: false, reason: 'path_outside_workspace' };
+      }
+      const relToShareReal = relPathPosix(record.absolutePath, real);
+      if (relToShareReal.startsWith('..') || relToShareReal.split(/[/\\]/).includes('..')) {
+        return { ok: false, reason: 'path_outside_share' };
+      }
+      return { ok: true, absolutePath: real };
+    } catch {
+      return { ok: false, reason: 'not_found' };
+    }
+  }
+
+  /** List a single directory level (cached, share-root-relative). */
+  async listDirectory(record: ShareRecord, relativePath: string): Promise<DirectoryListing> {
+    if (record.kind !== 'directory') throw new Error('Not a directory share');
+    const trimmed = (relativePath ?? '').replace(/^\/+/, '');
+    const cacheKey = `${record.id}::${trimmed}`;
+    const cacheTtl = this.config.directory.listingCacheMs;
+    const now = Date.now();
+    const cached = this.listingCache.get(cacheKey);
+    if (cached && cached.expiresAt > now) return cached.listing;
+
+    const resolved = await this.resolveDirectoryChild(record, trimmed);
+    if (resolved.ok !== true) throw new Error(resolved.reason);
+
+    const absDir = resolved.absolutePath;
+    const stats = await stat(absDir);
+    if (!stats.isDirectory()) throw new Error('not_directory');
+
+    const followSymlinks = record.directory?.followSymlinks ?? false;
+    const dirents = await readdir(absDir, { withFileTypes: true });
+    const entries: DirectoryListingEntry[] = [];
+    let truncated = false;
+    const limit = 2_000;
+
+    for (const dirent of dirents) {
+      if (entries.length >= limit) {
+        truncated = true;
+        break;
+      }
+      const childAbs = resolvePath(absDir, dirent.name);
+      try {
+        const childLstat = await lstat(childAbs);
+        if (childLstat.isSymbolicLink()) {
+          if (!followSymlinks) continue;
+          const real = await realpath(childAbs);
+          if (!isPathUnderWorkspace(record.workspaceRoot, real)) continue;
+          const relToShare = relPathPosix(record.absolutePath, real);
+          if (relToShare.startsWith('..')) continue;
+        }
+        const childStat = childLstat.isSymbolicLink() ? await stat(childAbs) : childLstat;
+        const childRel = trimmed ? `${trimmed}/${dirent.name}` : dirent.name;
+        entries.push({
+          name: dirent.name,
+          path: childRel,
+          isDirectory: childStat.isDirectory(),
+          size: childStat.isFile() ? childStat.size : 0,
+          mtime: childStat.mtime.toISOString(),
+          mimeType: childStat.isDirectory() ? 'application/x-directory' : resolveMimeType(dirent.name),
+        });
+      } catch {
+        /* skip unreadable entries */
+      }
+    }
+
+    entries.sort((a, b) => {
+      if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
+
+    const listing: DirectoryListing = { path: trimmed, entries, truncated };
+    if (cacheTtl > 0) {
+      this.listingCache.set(cacheKey, { listing, expiresAt: now + cacheTtl });
+    }
+    return listing;
+  }
+
+  /** Drop the listing cache for a share (used on revoke/update). */
+  invalidateListingCache(shareId: string): void {
+    for (const key of this.listingCache.keys()) {
+      if (key.startsWith(`${shareId}::`)) this.listingCache.delete(key);
+    }
+  }
+
   revoke(id: string): boolean {
     const record = this.shares.get(id);
     if (!record) return false;
     record.revoked = true;
+    this.invalidateListingCache(id);
     this.persistSync();
     logShareAudit(
       'share.revoke',
@@ -199,6 +490,7 @@ export class ShareStore {
       const record = this.shares.get(id);
       if (record && !record.revoked) {
         record.revoked = true;
+        this.invalidateListingCache(id);
         count++;
         logShareAudit(
           'share.revoke',
@@ -217,6 +509,7 @@ export class ShareStore {
     for (const record of this.shares.values()) {
       if (!record.revoked && now >= new Date(record.expiresAt).getTime()) {
         record.revoked = true;
+        this.invalidateListingCache(record.id);
         count++;
       }
     }
@@ -311,16 +604,16 @@ export class ShareStore {
   }
 
   private scheduleDebouncedPersist(): void {
-    this.viewCountDirty = true;
-    if (this.viewCountTimer) return;
-    this.viewCountTimer = setTimeout(() => {
-      this.viewCountTimer = null;
-      if (this.viewCountDirty) {
-        this.viewCountDirty = false;
+    this.dirty = true;
+    if (this.debounceTimer) return;
+    this.debounceTimer = setTimeout(() => {
+      this.debounceTimer = null;
+      if (this.dirty) {
+        this.dirty = false;
         this.persistSync();
       }
-    }, VIEW_COUNT_DEBOUNCE_MS);
-    this.viewCountTimer.unref?.();
+    }, COUNTER_DEBOUNCE_MS);
+    this.debounceTimer.unref?.();
   }
 
   // ── Cleanup ─────────────────────────────────────────────────────────────────
@@ -340,6 +633,7 @@ export class ShareStore {
       if (expiredMs > EXPIRED_RETENTION_MS) {
         this.shares.delete(id);
         this.tokenIndex.delete(record.token);
+        this.invalidateListingCache(id);
         removed++;
       }
     }
@@ -354,14 +648,15 @@ export class ShareStore {
       clearInterval(this.cleanupTimer);
       this.cleanupTimer = null;
     }
-    if (this.viewCountTimer) {
-      clearTimeout(this.viewCountTimer);
-      this.viewCountTimer = null;
+    if (this.debounceTimer) {
+      clearTimeout(this.debounceTimer);
+      this.debounceTimer = null;
     }
-    if (this.viewCountDirty) {
-      this.viewCountDirty = false;
+    if (this.dirty) {
+      this.dirty = false;
       this.persistSync();
     }
+    this.listingCache.clear();
   }
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -372,17 +667,65 @@ export class ShareStore {
     if (trimmed.includes('..')) throw new Error('Path traversal not allowed');
     if (trimmed.includes('\0')) throw new Error('Invalid path');
 
-    const { resolve } = await import('node:path');
-    const { relative } = await import('node:path');
-
-    const abs = resolve(workspaceRoot, trimmed);
-    const root = resolve(workspaceRoot);
-    const relToRoot = relative(root, abs);
+    const abs = resolvePath(workspaceRoot, trimmed);
+    const root = resolvePath(workspaceRoot);
+    const relToRoot = relPathPosix(root, abs);
     if (relToRoot.startsWith('..') || relToRoot.split(/[/\\]/).includes('..')) {
       throw new Error('Path is outside workspace');
     }
     return abs;
   }
+}
+
+// ── Directory scan helpers ────────────────────────────────────────────────────
+
+async function scanDirectory(
+  root: string,
+  opts: {
+    workspaceRoot: string;
+    followSymlinks: boolean;
+    maxDepth: number;
+    maxFileCount: number;
+    maxFolderSize: number;
+  },
+): Promise<DirectoryScanSummary> {
+  let entryCount = 0;
+  let totalSize = 0;
+
+  async function walk(dir: string, depth: number): Promise<void> {
+    if (depth > opts.maxDepth) return;
+    const dirents = await readdir(dir, { withFileTypes: true });
+    for (const dirent of dirents) {
+      if (entryCount >= opts.maxFileCount) {
+        throw new Error(`Folder exceeds maxFileCount (${opts.maxFileCount})`);
+      }
+      const childAbs = resolvePath(dir, dirent.name);
+      const childLstat = await lstat(childAbs);
+      let effectiveStat = childLstat;
+      if (childLstat.isSymbolicLink()) {
+        if (!opts.followSymlinks) continue;
+        const real = await realpath(childAbs);
+        if (!isPathUnderWorkspace(opts.workspaceRoot, real)) {
+          throw new Error('Symlink target escapes workspace');
+        }
+        effectiveStat = await stat(childAbs);
+      }
+      if (effectiveStat.isFile()) {
+        entryCount++;
+        totalSize += effectiveStat.size;
+        if (totalSize > opts.maxFolderSize) {
+          const maxMb = (opts.maxFolderSize / 1_048_576).toFixed(0);
+          throw new Error(`Folder exceeds maxFolderSize (${maxMb} MB)`);
+        }
+      } else if (effectiveStat.isDirectory()) {
+        entryCount++;
+        await walk(childAbs, depth + 1);
+      }
+    }
+  }
+
+  await walk(root, 0);
+  return { entryCount, totalSize };
 }
 
 // ── MIME resolution ─────────────────────────────────────────────────────────
@@ -402,6 +745,7 @@ const MIME_BY_EXT: Record<string, string> = {
   html: 'text/html',
   css: 'text/css',
   js: 'text/javascript',
+  mjs: 'text/javascript',
   ts: 'text/typescript',
   xml: 'application/xml',
   csv: 'text/csv',
@@ -414,12 +758,18 @@ const MIME_BY_EXT: Record<string, string> = {
   mp4: 'video/mp4',
   webm: 'video/webm',
   mov: 'video/quicktime',
+  wasm: 'application/wasm',
+  woff: 'font/woff',
+  woff2: 'font/woff2',
+  ttf: 'font/ttf',
+  otf: 'font/otf',
+  ico: 'image/x-icon',
   docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
 };
 
-function resolveMimeType(fileName: string): string {
+export function resolveMimeType(fileName: string): string {
   const ext = fileName.split('.').pop()?.toLowerCase() ?? '';
   return MIME_BY_EXT[ext] || 'application/octet-stream';
 }

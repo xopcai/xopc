@@ -3,8 +3,18 @@ import { apiUrl } from '@/lib/url';
 
 export type ShareReachability = 'public' | 'lan' | 'local-only';
 
+export type ShareKind = 'file' | 'directory';
+
+export type ShareDirectoryMeta = {
+  mode: 'browse' | 'zip-only';
+  entryCount: number;
+  followSymlinks: boolean;
+  maxDepth: number;
+};
+
 export type ShareItem = {
   id: string;
+  kind: ShareKind;
   fileName: string;
   workspaceRelativePath: string;
   shareUrl: string;
@@ -12,13 +22,14 @@ export type ShareItem = {
   reachability: ShareReachability;
   createdAt: string;
   expiresAt: string;
-  viewCount: number;
+  downloadCount: number;
   maxViews: number | null;
   revoked: boolean;
   expired: boolean;
   description: string | null;
   fileSize: number;
   mimeType: string;
+  directory: ShareDirectoryMeta | null;
 };
 
 export type ShareListResponse = {
@@ -33,6 +44,12 @@ export type CreateShareParams = {
   description?: string;
   sessionKey?: string;
   agentId?: string;
+  kind?: ShareKind;
+  directoryMode?: 'browse' | 'zip-only';
+  followSymlinks?: boolean;
+  maxFileCount?: number;
+  maxFolderSize?: number;
+  maxDepth?: number;
 };
 
 export type CreateShareResponse = {
@@ -40,6 +57,7 @@ export type CreateShareResponse = {
   payload: {
     id: string;
     token: string;
+    kind: ShareKind;
     shareUrl: string;
     lanUrl: string | null;
     reachability: ShareReachability;
@@ -48,6 +66,7 @@ export type CreateShareResponse = {
     maxViews: number | null;
     fileName: string;
     fileSize: number;
+    directory: ShareDirectoryMeta | null;
   };
 };
 
