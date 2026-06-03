@@ -6,6 +6,8 @@ import { getTuiKeybindingsPath } from './tui-keybindings-file.js';
 import type { StreamAssembler } from './stream-assembler.js';
 import type { TuiState } from './tui-types.js';
 
+import { rewriteUnknownSlashAsWorkflow } from './tui-workflow-slash.js';
+
 interface SlashCommandDef {
   name: string;
   description: string;
@@ -43,6 +45,8 @@ export function getSlashCommands(_isLocal: boolean): SlashCommandDef[] {
     { name: 'reload-keybindings', description: 'Reload ~/.xopc/keybindings.json' },
     { name: 'start', description: 'Show welcome message' },
     { name: 'hotkeys', description: 'Show resolved keyboard shortcuts (pi-style)' },
+    { name: 'workflows', description: 'List saved workflows (built-in + ~/.xopc/workflows/)' },
+    { name: 'workflow', description: 'Workflow subcommands: list, view <name>, save <name>' },
   ];
 }
 
@@ -201,6 +205,19 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: strin
       }
       default:
         break;
+    }
+
+    // Unknown slash that names a known workflow → rewrite into a natural prompt
+    // so the assistant deterministically calls workflow({name}) instead of
+    // depending on the model to puzzle out "/audit_repo".
+    if (input.trimStart().startsWith('/')) {
+      const rewritten = rewriteUnknownSlashAsWorkflow(normalizedCommand, commandArgs);
+      if (rewritten) {
+        chatLog.addSystem(`▶ Running workflow: ${normalizedCommand}`);
+        tui.requestRender();
+        sendMessage(rewritten);
+        return;
+      }
     }
 
     sendMessage(input);

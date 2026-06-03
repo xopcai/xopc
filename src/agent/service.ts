@@ -51,6 +51,10 @@ import {
   type SessionContext,
 } from './session/index.js';
 import { AgentOrchestrator, AgentEventHandler } from './orchestration/index.js';
+import {
+  getWorkflowProgressBroker,
+  type BrokerListenerHandle,
+} from './workflow/index.js';
 import { FeedbackCoordinator } from './feedback/index.js';
 import { AgentManager, type SkillCatalogEntry } from './agent-manager.js';
 import type { SkillMarkdownPreviewPayload } from './skills/types.js';
@@ -153,6 +157,7 @@ export class AgentService {
   private sessionLifecycleManager: SessionLifecycleManager;
   private agentOrchestrator: AgentOrchestrator;
   private agentEventHandler: AgentEventHandler;
+  private workflowProgressBrokerHandle: BrokerListenerHandle | null = null;
   private feedbackCoordinator: FeedbackCoordinator;
   private agentManager: AgentManager;
 
@@ -260,6 +265,14 @@ export class AgentService {
       toolUsageAnalyzer: this.toolUsageAnalyzer,
       errorPatternMatcher: this.errorPatternMatcher,
     });
+
+    // Wire the workflow progress broker into the session event bus. Channel
+    // extensions self-register their capability against the singleton at
+    // boot; the broker only forwards updates to whatever has registered, so
+    // this is safe even when no channel is configured.
+    this.workflowProgressBrokerHandle = getWorkflowProgressBroker().attachTo(
+      this.agentEventHandler,
+    );
 
     // sessionHydrator is constructed early because AgentOrchestrator + InboundLoop +
     // TurnDispatcher all need it; the SessionConfigService instance below also
@@ -934,5 +947,7 @@ export class AgentService {
     this.sessionTracker.dispose();
     this.sessionState.disposeAll();
     this.agentManager.dispose();
+    this.workflowProgressBrokerHandle?.dispose();
+    this.workflowProgressBrokerHandle = null;
   }
 }

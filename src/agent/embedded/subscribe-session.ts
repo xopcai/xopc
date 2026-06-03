@@ -54,6 +54,22 @@ export function subscribeEmbeddedSessionEvents(
         });
         break;
       }
+      case 'tool_execution_update': {
+        const t = base as Extract<AgentEvent, { type: 'tool_execution_update' }>;
+        const details = extractStructuredDetails(t.partialResult);
+        // Only forward when the tool actually produced structured details.
+        // Tools that just stream text chunks via onUpdate (shell, web_*) would
+        // otherwise saturate the SSE channel with redundant payloads.
+        if (details !== undefined) {
+          onEvent({
+            type: 'tool_update',
+            toolName: t.toolName,
+            toolCallId: t.toolCallId,
+            details,
+          });
+        }
+        break;
+      }
       case 'agent_start':
         onEvent({ type: 'progress', stage: 'thinking', message: 'Thinking...' });
         break;
@@ -64,6 +80,21 @@ export function subscribeEmbeddedSessionEvents(
         break;
     }
   });
+}
+
+/**
+ * Pull a structured `details` payload out of an AgentToolResult-shaped
+ * `partialResult`. Returns undefined when the update is text-only (e.g. shell
+ * stdout deltas), so callers can skip emitting empty SSE updates.
+ */
+function extractStructuredDetails(partial: unknown): unknown {
+  if (!partial || typeof partial !== 'object') return undefined;
+  const rec = partial as Record<string, unknown>;
+  if (!('details' in rec)) return undefined;
+  const d = rec.details;
+  if (d === null || d === undefined) return undefined;
+  if (typeof d === 'object') return d;
+  return undefined;
 }
 
 export function lastAssistantPlainText(session: AgentSession): string | undefined {

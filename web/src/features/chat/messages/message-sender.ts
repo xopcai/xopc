@@ -59,8 +59,14 @@ export type MessagingCallbacks = {
   onToken: (delta: string) => void;
   onThinking: (content: string, isDelta: boolean) => void;
   onThinkingEnd: () => void;
-  onToolStart: (toolName: string, args?: unknown) => void;
+  onToolStart: (toolName: string, args?: unknown, toolCallId?: string) => void;
   onToolEnd: (toolName: string, isError: boolean, result?: string) => void;
+  /**
+   * Mid-execution structured update for a tool whose `partialResult` carried
+   * `details`. Only emitted today by the `workflow` tool — feeds the
+   * WorkflowCard's live progress tree.
+   */
+  onToolUpdate?: (toolName: string, toolCallId: string | undefined, details: unknown) => void;
   onProgress: (progress: ProgressState) => void;
   /** Context compaction in progress (pre-turn automatic or manual). */
   onCompaction?: (state: CompactionState) => void;
@@ -379,12 +385,13 @@ export class MessageSender {
         break;
       case 'tool_start': {
         const toolName = String(parsed.toolName || 'unknown');
+        const toolCallId = typeof parsed.toolCallId === 'string' ? parsed.toolCallId : undefined;
         // The `clarify` tool suspends the agent turn and will be followed by a
         // `clarify_request` SSE event carrying the real requestId from the backend.
         // Skip the tool card here so the UI does not show a permanently-pending
         // tool call; the clarify prompt will appear when `clarify_request` arrives.
         if (toolName === 'clarify') break;
-        cb?.onToolStart(toolName, parsed.args);
+        cb?.onToolStart(toolName, parsed.args, toolCallId);
         break;
       }
       case 'tool_end':
@@ -394,6 +401,13 @@ export class MessageSender {
           parsed.result as string | undefined,
         );
         break;
+      case 'tool_update': {
+        const toolName =
+          typeof parsed.toolName === 'string' && parsed.toolName ? parsed.toolName : 'unknown';
+        const toolCallId = typeof parsed.toolCallId === 'string' ? parsed.toolCallId : undefined;
+        cb?.onToolUpdate?.(toolName, toolCallId, parsed.details);
+        break;
+      }
       case 'progress':
         cb?.onProgress({
           stage: String(parsed.stage || 'thinking'),

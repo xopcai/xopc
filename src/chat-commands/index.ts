@@ -15,6 +15,7 @@ import { registerConfigCommand } from './builtins/config.js';
 import { registerContextCommands } from './builtins/context.js';
 import { registerGoalCommand } from './builtins/goal.js';
 import { registerSubgoalCommand } from './builtins/subgoal.js';
+import { registerWorkflowCommands } from './builtins/workflow.js';
 
 // Types
 export type {
@@ -75,6 +76,7 @@ export { registerConfigCommand } from './builtins/config.js';
 export { registerContextCommands } from './builtins/context.js';
 export { registerGoalCommand } from './builtins/goal.js';
 export { registerSubgoalCommand } from './builtins/subgoal.js';
+export { registerWorkflowCommands } from './builtins/workflow.js';
 
 /**
  * Initialize the command system with all built-in commands
@@ -89,4 +91,5 @@ export function initializeCommands(): void {
   registerThinkingCommands();
   registerGoalCommand();
   registerSubgoalCommand();
+  registerWorkflowCommands();
 }

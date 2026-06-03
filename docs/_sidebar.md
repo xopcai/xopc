@@ -23,6 +23,7 @@
   - [Progress Feedback](progress.md)
   - [Extensions](extensions.md)
   - [Scheduled Tasks (Cron)](cron.md)
+  - [Dynamic Workflows](workflows.md)
   - [Heartbeat](heartbeat.md)
   - [Gateway Server](gateway.md)
   - [Remote access](remote-access.md)
