@@ -3,7 +3,8 @@ import { useCallback, useEffect, useReducer } from 'react';
 
 import { uiPatchReducer } from '@/lib/settings-form-draft';
 
-import { SettingsFormSection, settingsFormSectionClassName } from '@/features/settings/settings-form-section';
+import { SettingsFormSection } from '@/features/settings/settings-form-section';
+import { settingsFormSectionClassName } from '@/features/settings/settings-form-section.utils';
 import {
   dispatchShellPrefsChanged,
   enableDesktopNotificationsWithTest,

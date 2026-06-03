@@ -1,5 +1,5 @@
 import { AppManagementSection } from '@/features/settings/app-management-section';
-import { settingsFormSectionClassName } from '@/features/settings/settings-form-section';
+import { settingsFormSectionClassName } from '@/features/settings/settings-form-section.utils';
 import { isElectron } from '@/lib/electron-env';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';

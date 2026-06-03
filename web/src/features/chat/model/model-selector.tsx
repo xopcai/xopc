@@ -12,10 +12,8 @@ import {
 } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
-import {
-  settingsShellPopoverZClass,
-  useSettingsShellPopoverLayer,
-} from '@/lib/settings-shell-layer-context';
+import { settingsShellPopoverZClass } from '@/lib/settings-shell-layer.utils';
+import { useSettingsShellPopoverLayer } from '@/lib/settings-shell-layer-context';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 

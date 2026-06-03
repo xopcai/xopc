@@ -28,7 +28,6 @@ import {
   classifyFailure,
   extractSnapshot,
   formatDuration,
-  isWorkflowToolBlock,
   readErrorText,
   resolveCardStatus,
   rollupPhases,
@@ -407,5 +406,3 @@ function safeStringify(value: unknown): string {
     return String(value);
   }
 }
-
-export { isWorkflowToolBlock };

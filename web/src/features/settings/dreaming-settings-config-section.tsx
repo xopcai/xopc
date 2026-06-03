@@ -5,12 +5,14 @@ import type { DreamingConfigState } from '@/features/settings/dreaming-config-ap
 import {
   FieldCell,
   PhaseConfigPanel,
+  type DreamingSettingsI18n,
+} from '@/features/settings/dreaming-settings-shared';
+import {
   numInputClass,
   phasePanelClass,
   sectionHeaderTightClass,
   sectionTightClass,
-  type DreamingSettingsI18n,
-} from '@/features/settings/dreaming-settings-shared';
+} from '@/features/settings/dreaming-settings-shared.styles';
 import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/settings/settings-form-section';
 import type { CronSchedulePickerLabels } from '@/features/scheduling/cron/cron-schedule-picker';
 import { ScheduleField } from '@/features/scheduling/schedule-field';

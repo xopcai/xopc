@@ -21,8 +21,6 @@ import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useWorkspacePanelStore } from '@/stores/workspace-panel-store';
 
-export { folderDisplayName } from '@/features/fs/directory-path-utils';
-
 type Props = {
   sessionKey: string | null;
   disabled: boolean;

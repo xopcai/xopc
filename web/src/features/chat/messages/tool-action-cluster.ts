@@ -14,7 +14,7 @@ import {
   extractUrlPreview,
   getKeyDetailLine,
 } from '@/features/chat/messages/tool-input-preview';
-import { isWebSearchToolName } from '@/features/chat/tool-results/web-search-tool-result-links';
+import { isWebSearchToolName } from '@/features/chat/tool-results/web-search-tool-result-parser';
 import type { StoredLanguage } from '@/lib/storage';
 
 export type ActionKind =

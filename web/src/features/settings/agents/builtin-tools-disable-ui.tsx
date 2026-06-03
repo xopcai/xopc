@@ -11,13 +11,6 @@ const PRESET_READ_ONLY_WORKSPACE = ['write_file', 'edit_file', 'shell'] as const
 const PRESET_HIGH_RISK = ['shell', 'image_generate', 'extensions'] as const;
 const PRESET_NO_OUTBOUND = ['send_message', 'send_media'] as const;
 
-function sortedDisableList(ids: Set<string>): string[] {
-  return Array.from(ids).flatMap((s) => {
-    const v = s.trim();
-    return v ? [v] : [];
-  }).toSorted((x, y) => x.localeCompare(y));
-}
-
 export type BuiltinToolsDisableUiMode = 'defaults' | 'agentEntry';
 
 export type BuiltinToolsDisableUiLabels = {
@@ -247,5 +240,3 @@ export function BuiltinToolsDisableUi(props: BuiltinToolsDisableUiProps) {
     </div>
   );
 }
-
-export { sortedDisableList };

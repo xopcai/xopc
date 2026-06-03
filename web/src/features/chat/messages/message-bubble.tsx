@@ -8,7 +8,7 @@ import type {
   ProgressState,
   ReasoningLevel,
 } from '@/features/chat/messages/messages.types';
-import { collectAssistantStepBlocks } from '@/features/chat/messages/assistant-steps-block';
+import { collectAssistantStepBlocks } from '@/features/chat/messages/assistant-step-blocks';
 import { AttachmentPreviewDialog } from '@/features/chat/attachments/attachment-preview-dialog';
 import { AttachmentRenderer } from '@/features/chat/attachments/attachment-renderer';
 import { SearchSourceList } from '@/features/chat/tool-results/search-source-list';
