@@ -6,7 +6,7 @@ import { Readable } from 'node:stream';
 
 import { extractToken } from '../../auth.js';
 import { getClientIpFromHeaders } from '../../security/loopback.js';
-import { getShareStore } from '../../../share/share-store.js';
+import { getShareStore, shareResponseContentType } from '../../../share/share-store.js';
 import { resolveShareUrl } from '../../../share/share-url.js';
 import { consumeSharePublicLimit } from '../../../share/share-rate-limit.js';
 import { logShareAudit } from '../../../share/share-audit.js';
@@ -596,7 +596,7 @@ async function handleDirectoryFile(
     return new Response(webStream, {
       status: 200,
       headers: {
-        'Content-Type': mime,
+        'Content-Type': shareResponseContentType(mime),
         'Content-Disposition': disposition,
         'Content-Length': String(fileStat.size),
         'Cache-Control': 'private, no-store',
@@ -750,7 +750,7 @@ async function handleFileDownload(
     return new Response(webStream, {
       status: 200,
       headers: {
-        'Content-Type': record.mimeType,
+        'Content-Type': shareResponseContentType(record.mimeType),
         'Content-Disposition': disposition,
         'Content-Length': String(fileStat.size),
         'Cache-Control': 'private, no-store',
