@@ -42,6 +42,8 @@ export interface CatalogEntry {
   path: string | null;
   description: string;
   whenToUse?: string;
+  tags?: string[];
+  estimatedAgents?: { min: number; max: number };
 }
 
 export interface LoadedWorkflow {
@@ -79,6 +81,8 @@ export function createWorkflowCatalog(opts: { userDir?: string } = {}): Workflow
         path: null,
         description: meta?.description ?? '(unparseable)',
         whenToUse: meta?.whenToUse,
+        tags: meta?.tags,
+        estimatedAgents: meta?.estimatedAgents,
       });
     }
     for (const file of safeListUserFiles(userDir)) {
@@ -93,6 +97,8 @@ export function createWorkflowCatalog(opts: { userDir?: string } = {}): Workflow
         path: full,
         description: meta?.description ?? '(unparseable)',
         whenToUse: meta?.whenToUse,
+        tags: meta?.tags,
+        estimatedAgents: meta?.estimatedAgents,
       });
     }
     return [...entries.values()].sort((a, b) => a.name.localeCompare(b.name));

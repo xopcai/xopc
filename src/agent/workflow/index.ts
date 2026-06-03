@@ -57,6 +57,7 @@ export type {
   WorkflowAgentSnapshot,
   WorkflowAgentStatus,
   WorkflowMeta,
+  WorkflowMetaEstimatedAgents,
   WorkflowMetaPhase,
   WorkflowRunOptions,
   WorkflowRunResult,

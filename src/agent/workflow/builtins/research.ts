@@ -5,12 +5,18 @@
  * exploration / source-reading angles in parallel, then synthesises a cited
  * report. Each angle is its own subagent so source reading does not pollute the
  * parent context.
+ *
+ * Args:
+ *   - question: research question
+ *   - depth: 'quick' (2 angles) | 'standard' (4) | 'deep' (6)
  */
 
 export const RESEARCH_SCRIPT = `export const meta = {
   name: 'research',
   description: 'Multi-angle research on a question with parallel exploration and a cited synthesis.',
   whenToUse: 'User asks a non-trivial research question that benefits from multiple search angles or source reads.',
+  tags: ['research', 'investigation'],
+  estimatedAgents: { min: 4, max: 8 },
   phases: [
     { title: 'Frame' },
     { title: 'Sweep' },
@@ -18,13 +24,21 @@ export const RESEARCH_SCRIPT = `export const meta = {
   ],
 }
 
+const RESEARCH_TOOLS = ['web_search', 'web_fetch', 'read_file', 'grep', 'find', 'list_dir']
+
 const question = args && typeof args === 'object' && args.question
   ? String(args.question)
   : 'No explicit question supplied; infer from the most recent user turn.'
 
+const depth = args && typeof args === 'object' && args.depth
+  ? String(args.depth)
+  : 'standard'
+const maxAngles = depth === 'quick' ? 2 : depth === 'deep' ? 6 : 4
+
 phase('Frame')
 const frame = await agent(
-  'Frame this research question. Return 3–5 distinct angles worth investigating, plus the single most decisive sub-question for each. Be concrete.\\n\\nQUESTION:\\n' +
+  'Frame this research question. Return exactly ' + maxAngles + ' distinct angles worth investigating, ' +
+    'each with the single most decisive sub-question. Be concrete.\\n\\nQUESTION:\\n' +
     question,
   {
     label: 'framing',
@@ -49,12 +63,14 @@ const frame = await agent(
 )
 
 if (!frame || !frame.angles?.length) {
-  return { ok: false, reason: 'framing failed', question }
+  return { ok: false, reason: 'framing failed', question, depth }
 }
+
+const angles = frame.angles.slice(0, maxAngles)
 
 phase('Sweep')
 const angleReports = await parallel(
-  frame.angles.map((a) => () =>
+  angles.map((a) => () =>
     agent(
       'Investigate this angle. Use search and source-read tools liberally. Distinguish what you can confirm from what is conjecture.\\n\\n' +
         'ANGLE: ' + a.title + '\\n' +
@@ -62,6 +78,8 @@ const angleReports = await parallel(
         'Return: 3–6 grounded findings (each with a 1-line claim and a source URL or file path), plus the strongest counter-evidence.',
       {
         label: a.title,
+        toolset: RESEARCH_TOOLS,
+        maxIterations: depth === 'deep' ? 40 : 30,
         schema: {
           type: 'object',
           properties: {
@@ -90,9 +108,9 @@ phase('Synthesize')
 const live = angleReports.filter(Boolean)
 const synthesis = await agent(
   'Synthesize a cited research report from these angle-level findings. Drop unsupported or duplicate claims. Use the highest-confidence source per claim. ' +
-    'Return: an executive summary (max 5 sentences), a bullet list of top findings with inline source URLs, and one section listing open questions.\\n\\n' +
+    'Explicitly list contradictions where angles disagree. Return: an executive summary (max 5 sentences), top findings with inline source URLs, open questions, and contradictions.\\n\\n' +
     'QUESTION:\\n' + question + '\\n\\n' +
-    JSON.stringify({ angles: frame.angles, reports: live }, null, 2),
+    JSON.stringify({ angles, reports: live }, null, 2),
   {
     label: 'synthesis',
     schema: {
@@ -111,6 +129,17 @@ const synthesis = await agent(
           },
         },
         openQuestions: { type: 'array', items: { type: 'string' } },
+        contradictions: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              topic: { type: 'string' },
+              sides: { type: 'array', items: { type: 'string' } },
+            },
+            required: ['topic', 'sides'],
+          },
+        },
       },
       required: ['executiveSummary', 'topFindings'],
     },
@@ -120,6 +149,8 @@ const synthesis = await agent(
 return {
   ok: true,
   question,
-  ...(synthesis ?? { executiveSummary: 'synthesis failed', topFindings: [] }),
+  depth,
+  angleCount: angles.length,
+  ...(synthesis ?? { executiveSummary: 'synthesis failed', topFindings: [], contradictions: [] }),
 }
 `
