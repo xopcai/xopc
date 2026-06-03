@@ -59,6 +59,8 @@ export class ShareStore {
   private cleanupTimer: ReturnType<typeof setInterval> | null = null;
   private config: ShareConfig;
   private listingCache = new Map<string, { listing: DirectoryListing; expiresAt: number }>();
+  /** Optional cleanup hook invoked when a share record is dropped (e.g. delete thumbnail). */
+  private onCleanup: ((record: ShareRecord) => void) | null = null;
 
   constructor(config?: Partial<ShareConfig>) {
     this.config = { ...SHARE_CONFIG_DEFAULTS, ...config };
@@ -68,6 +70,11 @@ export class ShareStore {
 
   updateConfig(config: Partial<ShareConfig>): void {
     this.config = { ...this.config, ...config };
+  }
+
+  /** Register a cleanup hook (idempotent — last wins). */
+  setCleanupHook(hook: (record: ShareRecord) => void): void {
+    this.onCleanup = hook;
   }
 
   getConfig(): ShareConfig {
@@ -463,6 +470,16 @@ export class ShareStore {
     return listing;
   }
 
+  /** Update thumbnail status. Persists immediately so generator restart is safe. */
+  setThumbnailStatus(id: string, status: 'pending' | 'ready' | 'failed'): void {
+    const record = this.shares.get(id);
+    if (!record) return;
+    record.thumbnailStatus = status;
+    if (status === 'ready') record.thumbnailGeneratedAt = new Date().toISOString();
+    if (status === 'failed') record.thumbnailFailedAt = new Date().toISOString();
+    this.persistSync();
+  }
+
   /** Drop the listing cache for a share (used on revoke/update). */
   invalidateListingCache(shareId: string): void {
     for (const key of this.listingCache.keys()) {
@@ -634,6 +651,13 @@ export class ShareStore {
         this.shares.delete(id);
         this.tokenIndex.delete(record.token);
         this.invalidateListingCache(id);
+        if (this.onCleanup) {
+          try {
+            this.onCleanup(record);
+          } catch (err) {
+            log.warn({ err, shareId: id }, 'Share cleanup hook threw');
+          }
+        }
         removed++;
       }
     }

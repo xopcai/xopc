@@ -1,4 +1,4 @@
-import { ChevronRight, Globe, Network, Server, Terminal } from 'lucide-react';
+import { ChevronRight, Globe, Network, Server, Shield, Terminal } from 'lucide-react';
 import useSWR from 'swr';
 
 import { RemoteAccessDocsLink } from '@/features/remote-access/remote-access-docs-link';
@@ -115,6 +115,13 @@ export function RemoteAccessGuideTab({ onOpenTab }: { onOpenTab: (tab: RemoteAcc
             description={g.publicCardDesc}
             openLabel={g.configure}
             onOpen={() => onOpenTab('public')}
+          />
+          <MethodCard
+            icon={Shield}
+            title={g.reverseProxyCardTitle}
+            description={g.reverseProxyCardDesc}
+            openLabel={g.configure}
+            onOpen={() => onOpenTab('reverse-proxy')}
           />
           <MethodCard
             icon={Terminal}

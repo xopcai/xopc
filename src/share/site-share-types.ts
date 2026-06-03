@@ -48,6 +48,10 @@ export interface SiteShareRecord {
   maxRequests: number | null;
   /** Cached client IPs that have counted toward uniqueClientCount (last 200). */
   recentClientIps?: string[];
+  /** Thumbnail generation status (parallels ShareRecord). */
+  thumbnailStatus?: 'pending' | 'ready' | 'failed';
+  thumbnailGeneratedAt?: string;
+  thumbnailFailedAt?: string;
 }
 
 export interface SiteShareStoreData {

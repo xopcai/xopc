@@ -1,8 +1,8 @@
-import { Globe, Network, Server, Terminal } from 'lucide-react';
+import { Globe, Network, Server, Shield, Terminal } from 'lucide-react';
 import useSWR from 'swr';
 
 import { fetchExposureStatus } from '@/features/remote-access/remote-access-api';
-import { fetchTunnelStatus } from '@/features/tunnel/tunnel-api';
+import { fetchTunnelStatus, fetchTunnelPairContext } from '@/features/tunnel/tunnel-api';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { useGatewayStore } from '@/stores/gateway-store';
@@ -42,6 +42,11 @@ export function RemoteAccessStatusStrip({ onOpenTab }: { onOpenTab: (tab: Remote
   const { data: tunnel } = useSWR(hasToken ? 'tunnel-status' : null, fetchTunnelStatus, {
     refreshInterval: 15_000,
   });
+  const { data: pairContext } = useSWR(
+    hasToken ? 'tunnel-pair-context' : null,
+    fetchTunnelPairContext,
+    { refreshInterval: 60_000 },
+  );
 
   if (!hasToken) return null;
 
@@ -54,6 +59,9 @@ export function RemoteAccessStatusStrip({ onOpenTab }: { onOpenTab: (tab: Remote
       tunnelState === 'reconnecting' ||
       Boolean(tunnel?.startProgress) ||
       Boolean(tunnel?.frpcDownload));
+  const reverseProxyActive = (pairContext?.candidates ?? []).some(
+    (c) => c.kind === 'reverse-proxy',
+  );
 
   const items: Array<{
     tab: RemoteAccessTabId;
@@ -77,6 +85,13 @@ export function RemoteAccessStatusStrip({ onOpenTab }: { onOpenTab: (tab: Remote
       statusLabel: tunnelActive ? g.statusActive : tunnelConnecting ? g.statusConnecting : g.statusOff,
     },
     {
+      tab: 'reverse-proxy',
+      icon: Shield,
+      title: g.reverseProxyCardTitle,
+      kind: reverseProxyActive ? 'active' : 'off',
+      statusLabel: reverseProxyActive ? g.statusActive : g.statusOff,
+    },
+    {
       tab: 'ssh',
       icon: Terminal,
       title: g.sshCardTitle,
@@ -93,7 +108,7 @@ export function RemoteAccessStatusStrip({ onOpenTab }: { onOpenTab: (tab: Remote
   ];
 
   return (
-    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
       {items.map((item) => {
         const Icon = item.icon;
         return (

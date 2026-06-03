@@ -93,12 +93,14 @@ export function originFromGatewayPublicUrl(publicUrl: string | null | undefined)
   }
 }
 
-/** CORS + CSRF allowlist including active FRP tunnel origin when connected. */
+/** CORS + CSRF allowlist including active FRP tunnel + reverse-proxy origins. */
 export function resolveAllowedBrowserOrigins(params: {
   configuredOrigins?: string[];
   port: number;
   bindHost?: string;
   tunnelPublicUrl?: string | null;
+  /** User-configured reverse-proxy public URL (gateway.publicUrl). */
+  reverseProxyPublicUrl?: string | null;
 }): string[] {
   const origins = resolveGatewayCorsOrigins({
     configuredOrigins: params.configuredOrigins,
@@ -108,6 +110,10 @@ export function resolveAllowedBrowserOrigins(params: {
   const tunnelOrigin = originFromGatewayPublicUrl(params.tunnelPublicUrl);
   if (tunnelOrigin && !origins.includes(tunnelOrigin)) {
     origins.push(tunnelOrigin);
+  }
+  const reverseProxyOrigin = originFromGatewayPublicUrl(params.reverseProxyPublicUrl);
+  if (reverseProxyOrigin && !origins.includes(reverseProxyOrigin)) {
+    origins.push(reverseProxyOrigin);
   }
   return origins;
 }

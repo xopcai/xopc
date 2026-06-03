@@ -628,6 +628,13 @@ export class GatewayService {
 
     wireTunnelEventsToGateway(this);
 
+    // Drop orphan single-HTML site-share staging dirs left behind by a
+    // process death between create and cleanup. Re-registers live ones into
+    // the in-process map so post-restart revoke/expire still cleans them.
+    void import('../share/share-auto.js')
+      .then(({ runStagingSweep }) => runStagingSweep())
+      .catch((err) => log.warn({ err }, 'Share staging sweep failed'));
+
     if (this.serviceConfig.deferChannelConnectUntilAfterHttp !== true) {
       this.markGatewayReady();
     } else {

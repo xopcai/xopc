@@ -8,6 +8,7 @@
       "guide": "概览",
       "tailscale": "Tailscale",
       "public": "公网访问",
+      "reverse-proxy": "反向代理",
       "ssh": "SSH 隧道",
       "lan": "局域网"
     },
@@ -15,6 +16,7 @@
       "guide": "对比各方式并查看当前 Gateway 上的激活状态。",
       "tailscale": "适合 tailnet 内的个人设备。Gateway 仍绑定 loopback，由 Tailscale Serve 发布 HTTPS。",
       "public": "先在 Console 创建 Tunnel Registration Key 并保存，再启动隧道获取公网地址，然后扫码配对移动 App。",
+      "reverse-proxy": "用自己的 HTTPS 反向代理（Caddy / nginx / Cloudflare Tunnel）将 Gateway 暴露在自定义域名下，然后扫码配对移动 App。",
       "ssh": "无 VPN 或公网隧道时，通过 CLI 做 SSH 端口转发。",
       "lan": "在同一 Wi‑Fi 或局域网内，通过 Gateway 绑定地址访问，并扫码配对移动 App。"
     },
@@ -29,6 +31,8 @@
       "tailscaleCardDesc": "仅在 tailnet 内提供 HTTPS，不暴露到公网。",
       "publicCardTitle": "公网隧道",
       "publicCardDesc": "生成公网 URL，用于移动配对与远程访问。",
+      "reverseProxyCardTitle": "反向代理",
+      "reverseProxyCardDesc": "用自部署的 HTTPS 反代将 Gateway 暴露在自定义域名下。",
       "sshCardTitle": "SSH 隧道",
       "sshCardDesc": "无 VPN 或公网隧道时，通过 CLI 做端口转发。",
       "sshCardStatus": "CLI",
@@ -84,6 +88,48 @@
       "hint": "将 user@your-host 替换为你的 SSH 登录。在需要使用 Gateway 控制台的机器上运行。",
       "copy": "复制命令",
       "copied": "已复制"
+    },
+    "reverseProxy": {
+      "title": "反向代理（自部署 HTTPS）",
+      "subtitle": "用自己部署的 Caddy / nginx / Cloudflare Tunnel 将 Gateway 暴露在自定义域名下。",
+      "urlLabel": "公网 URL",
+      "urlPlaceholder": "https://gateway.example.com",
+      "urlHint": "不能包含路径。公网域名必须使用 https；http 仅限 RFC1918 / .local。",
+      "probeButton": "测试",
+      "probing": "测试中…",
+      "autoDetectedTitle": "已自动识别当前浏览器地址",
+      "autoDetectedHint": "下方 QR 已使用此 URL。点击「保存为默认」可持久化，让其他机器/重启后共用同一地址。",
+      "saveAsDefault": "保存为默认",
+      "saving": "保存中…",
+      "clear": "清除已保存的 URL",
+      "certWarning": "移动端需要系统信任根证书（Let's Encrypt / Cloudflare / 商业 CA）。v1 不支持自签证书。",
+      "qrTitle": "移动 App 配对 QR",
+      "qrSubtitle": "在 xopc 移动 App 中扫码即可通过反向代理完成配对。",
+      "noUrlYet": "请先在上方输入反代公网 URL 以生成配对 QR。",
+      "mintingSecret": "正在生成配对密钥…",
+      "encoding": "正在生成 QR…",
+      "refreshQr": "刷新 QR",
+      "copyLink": "复制 deeplink",
+      "copied": "已复制",
+      "probeStatus": {
+        "ok": "可达",
+        "mobileReady": "移动配对就绪",
+        "codeUnknown": "测试失败",
+        "code_TIMEOUT": "请求超时",
+        "code_TLS_INVALID": "TLS / 证书错误",
+        "code_DNS_OR_CONN_REFUSED": "DNS 解析失败或连接被拒",
+        "code_NETWORK_ERROR": "网络错误",
+        "code_AUTH_BLOCKED": "反代返回 401/403 — 请移除 /api/tunnel/pair/ping 前面的鉴权",
+        "code_HTTP_ERROR": "HTTP 错误",
+        "code_NOT_XOPC_GATEWAY": "URL 未识别为 xopc gateway",
+        "code_invalid_url": "URL 不合法",
+        "code_invalid_scheme": "Scheme 必须是 http(s)",
+        "code_has_userinfo": "URL 不能包含用户名密码",
+        "code_has_path": "URL 不能包含路径",
+        "code_has_query_or_fragment": "URL 不能包含 query 或 fragment",
+        "code_requires_https": "公网域名必须使用 https",
+        "code_INVALID_JSON": "请求体 JSON 不合法"
+      }
     }
   }
 }
