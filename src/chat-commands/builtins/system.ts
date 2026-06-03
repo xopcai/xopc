@@ -9,6 +9,7 @@
 
 import type { CommandDefinition, CommandContext } from '../types.js';
 import { commandRegistry } from '../registry.js';
+import { bulletList, commandBullet, joinBlocks, kvList, section } from '../format-output.js';
 
 const helpCommand: CommandDefinition = {
   id: 'system.help',
@@ -29,19 +30,20 @@ const helpCommand: CommandDefinition = {
       byCategory.get(cmd.category)!.push(cmd);
     }
 
-    const lines: string[] = ['📖 *Available Commands*\n'];
-
+    const categoryBlocks: string[] = [];
     for (const [category, commands] of byCategory) {
-      lines.push(`*${category.toUpperCase()}*`);
-      for (const cmd of commands) {
-        const aliases = cmd.aliases?.length ? ` (${cmd.aliases.join(', ')})` : '';
-        lines.push(`/${cmd.name}${aliases} - ${cmd.description}`);
-      }
-      lines.push('');
+      categoryBlocks.push(
+        joinBlocks(
+          section(category.toUpperCase()),
+          commands
+            .map((cmd) => commandBullet(cmd.name, cmd.description, cmd.aliases))
+            .join('\n'),
+        ),
+      );
     }
 
     return {
-      content: lines.join('\n'),
+      content: joinBlocks(section('📖 Available Commands'), ...categoryBlocks),
       success: true,
     };
   },
@@ -54,13 +56,16 @@ const startCommand: CommandDefinition = {
   category: 'system',
   scope: ['global', 'private', 'group'],
   handler: async (_ctx: CommandContext) => {
-    const content =
-      '👋 *Welcome to xopc!*\n\n' +
-      'I am your AI assistant. Here\'s what I can do:\n\n' +
-      '🤖 *AI Chat* - Just send a message to start chatting\n' +
-      '📊 *Session Management* - Use /new, /list, /usage\n' +
-      '🔧 *Model Selection* - `/models` shows names and `provider/model` refs; `/switch` uses that ref\n\n' +
-      'Type /help to see all available commands.';
+    const content = joinBlocks(
+      section('👋 Welcome to xopc!'),
+      "I am your AI assistant. Here's what I can do:",
+      bulletList([
+        '**AI Chat** — Just send a message to start chatting',
+        '**Session Management** — Use `/new`, `/list`, `/usage`',
+        '**Model Selection** — `/models` shows names and `provider/model` refs; `/switch` uses that ref',
+      ]),
+      'Type `/help` to see all available commands.',
+    );
 
     return {
       content,
@@ -79,12 +84,15 @@ const settingsCommand: CommandDefinition = {
     const model = ctx.getCurrentModel();
     const sessionKey = ctx.sessionKey;
 
-    const content =
-      '⚙️ *Current Settings*\n\n' +
-      `🤖 Model: ${model}\n` +
-      `💬 Session: ${sessionKey}\n` +
-      `📱 Platform: ${ctx.source}\n` +
-      `👥 Group: ${ctx.isGroup ? 'Yes' : 'No'}`;
+    const content = joinBlocks(
+      section('⚙️ Current Settings'),
+      kvList([
+        { key: 'Model', value: model },
+        { key: 'Session', value: sessionKey },
+        { key: 'Platform', value: ctx.source },
+        { key: 'Group', value: ctx.isGroup ? 'Yes' : 'No' },
+      ]),
+    );
 
     return {
       content,
@@ -110,12 +118,14 @@ const skillsCommand: CommandDefinition = {
         success: true,
       };
     }
-    
+
+    const content = joinBlocks(
+      section('🛠️ Skills Management'),
+      bulletList(['`/skills reload` — Reload all skills from disk']),
+    );
+
     return {
-      content: 
-        '🛠️ *Skills Management*\n\n' +
-        'Available commands:\n' +
-        '/skills reload - Reload all skills from disk',
+      content,
       success: true,
     };
   },

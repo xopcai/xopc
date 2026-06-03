@@ -68,7 +68,7 @@ describe('/workflow save', () => {
 
     const res = await workflowCommand.handler(ctx(), 'save demo');
     expect(res?.success).toBe(true);
-    expect(res?.content).toMatch(/Saved workflow "demo"/);
+    expect(res?.content).toMatch(/Saved workflow \*\*demo\*\*/);
 
     const filePath = join(stateDir, 'workflows', 'demo.js');
     expect(existsSync(filePath)).toBe(true);
