@@ -3,7 +3,7 @@ import { mkdirSync, writeFileSync, existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
-import { ShareStore, resetShareStoreForTests } from '../share-store.js';
+import { ShareStore, resetShareStoreForTests, resolveMimeType, shareResponseContentType } from '../share-store.js';
 
 const TEST_DIR = join(tmpdir(), `xopc-share-test-${Date.now()}`);
 const TEST_WORKSPACE = join(TEST_DIR, 'workspace');
@@ -274,5 +274,22 @@ describe('ShareStore', () => {
       expect(active.length).toBe(1);
       expect(active[0].fileName).toBe('active.txt');
     });
+  });
+});
+
+describe('shareResponseContentType', () => {
+  it('adds charset=utf-8 for markdown and other text-like MIME types', () => {
+    expect(shareResponseContentType(resolveMimeType('notes.md'))).toBe('text/markdown; charset=utf-8');
+    expect(shareResponseContentType('text/plain')).toBe('text/plain; charset=utf-8');
+    expect(shareResponseContentType('application/json')).toBe('application/json; charset=utf-8');
+  });
+
+  it('leaves binary MIME types unchanged', () => {
+    expect(shareResponseContentType('image/png')).toBe('image/png');
+    expect(shareResponseContentType('application/pdf')).toBe('application/pdf');
+  });
+
+  it('does not duplicate charset', () => {
+    expect(shareResponseContentType('text/html; charset=utf-8')).toBe('text/html; charset=utf-8');
   });
 });

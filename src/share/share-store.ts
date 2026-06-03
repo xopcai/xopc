@@ -774,6 +774,21 @@ export function resolveMimeType(fileName: string): string {
   return MIME_BY_EXT[ext] || 'application/octet-stream';
 }
 
+/** HTTP Content-Type with charset for text-like bodies (browser inline preview). */
+export function shareResponseContentType(mime: string): string {
+  if (/;\s*charset=/i.test(mime)) return mime;
+  if (
+    mime.startsWith('text/') ||
+    mime === 'application/json' ||
+    mime === 'application/javascript' ||
+    mime === 'application/xml' ||
+    mime === 'image/svg+xml'
+  ) {
+    return `${mime}; charset=utf-8`;
+  }
+  return mime;
+}
+
 // ── Singleton ─────────────────────────────────────────────────────────────────
 
 let singleton: ShareStore | null = null;
