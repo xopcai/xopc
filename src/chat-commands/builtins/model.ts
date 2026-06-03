@@ -1,6 +1,6 @@
 /**
  * Model Commands
- * 
+ *
  * Built-in commands for model management:
  * - /models - List models with display names and `provider/model` refs for /switch
  * - /switch - Switch model using the ref from /models
@@ -9,6 +9,7 @@
 
 import type { CommandDefinition, CommandContext, UIComponent } from '../types.js';
 import { commandRegistry } from '../registry.js';
+import { bulletList, code, hint, joinBlocks, kvList, section } from '../format-output.js';
 
 const modelsCommand: CommandDefinition = {
   id: 'model.list',
@@ -19,17 +20,17 @@ const modelsCommand: CommandDefinition = {
   scope: ['global', 'private', 'group'],
   handler: async (ctx: CommandContext) => {
     await ctx.setTyping(true);
-    
+
     const models = await ctx.listModels();
     const currentModel = ctx.getCurrentModel();
-    
+
     if (models.length === 0) {
       return {
         content: '🤖 No models available. Please check your configuration.',
         success: true,
       };
     }
-    
+
     // Group by provider
     const byProvider = new Map<string, typeof models>();
     for (const m of models) {
@@ -38,27 +39,25 @@ const modelsCommand: CommandDefinition = {
       }
       byProvider.get(m.provider)!.push(m);
     }
-    
+
     /** `m.id` from listModels is always `serviceId/modelId` (canonical `/switch` ref). */
-    const lines: string[] = [
-      '🤖 Available models (use the `provider/model` ref with `/switch`):\n',
-    ];
-
-    for (const [provider, providerModels] of byProvider) {
-      lines.push(`**${provider}**`);
-      for (const m of providerModels.slice(0, 5)) {
-        const indicator = m.id === currentModel ? '▶️' : '  ';
-        lines.push(`${indicator} ${m.name} — \`${m.id}\``);
-      }
+    const providerBlocks = Array.from(byProvider.entries()).map(([provider, providerModels]) => {
+      const items = providerModels.slice(0, 5).map((m) => {
+        const marker = m.id === currentModel ? '▶️ ' : '';
+        return `${marker}**${m.name}** — ${code(m.id)}`;
+      });
       if (providerModels.length > 5) {
-        lines.push(`   … and ${providerModels.length - 5} more in this provider`);
+        items.push(hint(`… and ${providerModels.length - 5} more in this provider`));
       }
-      lines.push('');
-    }
+      return joinBlocks(section(provider), bulletList(items));
+    });
 
-    lines.push('_Copy the ref in backticks after each name, then: `/switch provider/model-id`._');
-    const content = lines.join('\n');
-    
+    const content = joinBlocks(
+      '🤖 Available models (use the `provider/model` ref with `/switch`):',
+      ...providerBlocks,
+      hint('Copy the ref in backticks after each name, then: `/switch provider/model-id`.'),
+    );
+
     // Create UI component if supported
     if (ctx.supports('buttons')) {
       const component: UIComponent = {
@@ -66,7 +65,7 @@ const modelsCommand: CommandDefinition = {
         providers: Array.from(byProvider.entries()).map(([id, models]) => ({
           id,
           name: id,
-          models: models.map(m => ({
+          models: models.map((m) => ({
             id: m.id,
             name: m.name,
             provider: m.provider,
@@ -74,14 +73,14 @@ const modelsCommand: CommandDefinition = {
         })),
         currentModel,
       };
-      
+
       return {
         content,
         success: true,
         components: [component],
       };
     }
-    
+
     return {
       content,
       success: true,
@@ -100,37 +99,40 @@ const switchCommand: CommandDefinition = {
   handler: async (ctx: CommandContext, args: string) => {
     if (!args.trim()) {
       return {
-        content:
-          '❌ Missing model ref.\n\n' +
-          '**Usage:** `/switch provider/model-id`\n\n' +
-          'Run `/models` — each line shows a display name and a `provider/model` ref in backticks. Copy that ref.\n\n' +
+        content: joinBlocks(
+          '❌ Missing model ref.',
+          '**Usage:** `/switch provider/model-id`',
+          'Run `/models` — each line shows a display name and a `provider/model` ref in backticks. Copy that ref.',
           '**Example:** `/switch openai/gpt-4o`',
+        ),
         success: false,
       };
     }
-    
+
     await ctx.setTyping(true);
-    
+
     const modelId = args.trim();
     const success = await ctx.switchModel(modelId);
-    
+
     if (success) {
       const modelName = modelId.split('/').pop() || modelId;
       return {
-        content:
-          `✅ Switched to *\`${modelId}\`* (${modelName}).\n\n` +
+        content: joinBlocks(
+          `✅ Switched to ${code(modelId)} (${modelName}).`,
           'This model will be used for your next message.',
+        ),
         success: true,
       };
-    } else {
-      return {
-        content:
-          `❌ Could not switch to \`${modelId}\`.\n\n` +
-          'Use the exact `provider/model` ref from `/models` (not only the display name). ' +
-          '**Example:** `/switch anthropic/claude-sonnet-4-20250514`',
-        success: false,
-      };
     }
+
+    return {
+      content: joinBlocks(
+        `❌ Could not switch to ${code(modelId)}.`,
+        'Use the exact `provider/model` ref from `/models` (not only the display name).',
+        '**Example:** `/switch anthropic/claude-sonnet-4-20250514`',
+      ),
+      success: false,
+    };
   },
 };
 
@@ -142,18 +144,21 @@ const usageCommand: CommandDefinition = {
   scope: ['global', 'private', 'group'],
   handler: async (ctx: CommandContext) => {
     await ctx.setTyping(true);
-    
+
     const stats = await ctx.getUsage();
     const modelName = ctx.getCurrentModel().split('/').pop() || 'Unknown';
-    
-    const content = 
-      '📊 *Session Token Usage*\n\n' +
-      `🤖 Model: ${modelName}\n` +
-      `📥 Prompt: ${stats.promptTokens.toLocaleString()} tokens\n` +
-      `📤 Completion: ${stats.completionTokens.toLocaleString()} tokens\n` +
-      `📊 Total: ${stats.totalTokens.toLocaleString()} tokens\n` +
-      `💬 Messages: ${stats.messageCount}`;
-    
+
+    const content = joinBlocks(
+      section('📊 Session Token Usage'),
+      kvList([
+        { key: 'Model', value: modelName },
+        { key: 'Prompt', value: `${stats.promptTokens.toLocaleString()} tokens` },
+        { key: 'Completion', value: `${stats.completionTokens.toLocaleString()} tokens` },
+        { key: 'Total', value: `${stats.totalTokens.toLocaleString()} tokens` },
+        { key: 'Messages', value: String(stats.messageCount) },
+      ]),
+    );
+
     // Create UI component if supported
     if (ctx.supports('buttons')) {
       const component: UIComponent = {
@@ -161,14 +166,14 @@ const usageCommand: CommandDefinition = {
         stats,
         modelName,
       };
-      
+
       return {
         content,
         success: true,
         components: [component],
       };
     }
-    
+
     return {
       content,
       success: true,
