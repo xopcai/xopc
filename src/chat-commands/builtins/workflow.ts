@@ -16,11 +16,52 @@
 
 import { commandRegistry } from '../registry.js';
 import type { CommandContext, CommandDefinition } from '../types.js';
+import { bulletList, code, joinBlocks, section } from '../format-output.js';
 
 import { createWorkflowCatalog } from '../../agent/workflow/catalog.js';
 import { getLastWorkflowMemory } from '../../agent/workflow/last-run-memory.js';
+import type { CatalogEntry } from '../../agent/workflow/catalog.js';
 
 const VIEW_MAX_LINES = 200;
+
+function formatWorkflowListContent(entries: CatalogEntry[], userDir: string): string {
+  const grouped = {
+    builtin: entries.filter((e) => e.source === 'builtin'),
+    user: entries.filter((e) => e.source === 'user'),
+  };
+  const exampleName = entries[0]?.name ?? 'audit_repo';
+  const blocks: string[] = [];
+
+  if (grouped.user.length > 0) {
+    blocks.push(
+      joinBlocks(
+        section('User workflows'),
+        bulletList(grouped.user.map((e) => ({ label: e.name, detail: e.description }))),
+      ),
+    );
+  }
+  if (grouped.builtin.length > 0) {
+    blocks.push(
+      joinBlocks(
+        section('Built-in workflows'),
+        bulletList(grouped.builtin.map((e) => ({ label: e.name, detail: e.description }))),
+      ),
+    );
+  }
+
+  blocks.push(
+    joinBlocks(
+      section('How to run'),
+      bulletList([
+        `Plain language: "run the ${exampleName} workflow"`,
+        `Inspect source: ${code(`/workflow view ${exampleName}`)}`,
+        `Add your own: drop a ${code('.js')} at ${code(userDir)}`,
+      ]),
+    ),
+  );
+
+  return joinBlocks(...blocks);
+}
 
 const workflowsCommand: CommandDefinition = {
   id: 'system.workflows',
@@ -33,34 +74,11 @@ const workflowsCommand: CommandDefinition = {
     const entries = catalog.list();
     if (entries.length === 0) {
       return {
-        content: `No workflows found. Drop a script at ${catalog.userDir}/<name>.js to add one.`,
+        content: `No workflows found. Drop a script at ${code(`${catalog.userDir}/<name>.js`)} to add one.`,
         success: true,
       };
     }
-    const grouped = {
-      builtin: entries.filter((e) => e.source === 'builtin'),
-      user: entries.filter((e) => e.source === 'user'),
-    };
-    const lines: string[] = [];
-    if (grouped.user.length > 0) {
-      lines.push('*User workflows*');
-      for (const e of grouped.user) {
-        lines.push(`• ${e.name} — ${e.description}`);
-      }
-      lines.push('');
-    }
-    if (grouped.builtin.length > 0) {
-      lines.push('*Built-in workflows*');
-      for (const e of grouped.builtin) {
-        lines.push(`• ${e.name} — ${e.description}`);
-      }
-      lines.push('');
-    }
-    lines.push('How to run:');
-    lines.push(`  • Plain language: "run the ${entries[0].name} workflow"`);
-    lines.push(`  • Inspect source: /workflow view ${entries[0].name}`);
-    lines.push(`  • Add your own:  drop a .js at ${catalog.userDir}`);
-    return { content: lines.join('\n').trimEnd(), success: true };
+    return { content: formatWorkflowListContent(entries, catalog.userDir), success: true };
   },
 };
 
@@ -83,7 +101,7 @@ export const workflowCommand: CommandDefinition = {
 
     if (subLower === 'view' || subLower === 'show' || subLower === 'cat') {
       if (!target) {
-        return { content: 'usage: /workflow view <name>', success: false };
+        return { content: `usage: ${code('/workflow view <name>')}`, success: false };
       }
       const catalog = createWorkflowCatalog();
       try {
@@ -95,7 +113,10 @@ export const workflowCommand: CommandDefinition = {
             : lines;
         const source = loaded.source === 'user' ? loaded.path ?? 'user' : 'built-in';
         return {
-          content: `*${loaded.name}* (${source}) — ${loaded.meta.description}\n\n\`\`\`js\n${visible.join('\n')}\n\`\`\``,
+          content: joinBlocks(
+            `**${loaded.name}** (${source}) — ${loaded.meta.description}`,
+            '```js\n' + visible.join('\n') + '\n```',
+          ),
           success: true,
         };
       } catch (e) {
@@ -105,25 +126,25 @@ export const workflowCommand: CommandDefinition = {
     }
 
     if (subLower === 'run' || subLower === 'start') {
+      const name = target || '<name>';
       return {
-        content:
-          `To run a workflow, ask in plain language: "run the ${target || '<name>'} workflow".\n` +
-          'The assistant will call the workflow tool with name="' +
-          (target || '<name>') +
-          '" and stream progress inline.',
+        content: joinBlocks(
+          `To run a workflow, ask in plain language: "run the ${name} workflow".`,
+          `The assistant will call the workflow tool with ${code(`name="${name}"`)} and stream progress inline.`,
+        ),
         success: true,
       };
     }
 
     if (subLower === 'save') {
       if (!target) {
-        return { content: 'usage: /workflow save <name>', success: false };
+        return { content: `usage: ${code('/workflow save <name>')}`, success: false };
       }
       const last = getLastWorkflowMemory().get(ctx.sessionKey);
       if (!last) {
         return {
           content:
-            'No workflow has run successfully in this session yet. Run one first (e.g. ask "run the audit_repo workflow"), then /workflow save <name>.',
+            'No workflow has run successfully in this session yet. Run one first (e.g. ask "run the audit_repo workflow"), then `/workflow save <name>`.',
           success: false,
         };
       }
@@ -135,9 +156,13 @@ export const workflowCommand: CommandDefinition = {
           last.metaName === target ? last.script : rewriteMetaName(last.script, target);
         const { path } = catalog.save(target, script);
         return {
-          content:
-            `✓ Saved workflow "${target}" → ${path}\n` +
-            `Trigger it any time with /${target}, "run the ${target} workflow", or via /workflow view ${target} to inspect.`,
+          content: joinBlocks(
+            `✓ Saved workflow **${target}** → ${code(path)}`,
+            bulletList([
+              `Trigger with ${code(`/${target}`)} or "run the ${target} workflow"`,
+              `Inspect with ${code(`/workflow view ${target}`)}`,
+            ]),
+          ),
           success: true,
         };
       } catch (e) {
@@ -147,9 +172,10 @@ export const workflowCommand: CommandDefinition = {
     }
 
     return {
-      content:
-        `Unknown subcommand "${sub}". Available: list, view <name>, save <name>.\n` +
-        'To run a workflow, ask in plain language ("run the audit_repo workflow") — the assistant uses the workflow tool with name="...".',
+      content: joinBlocks(
+        `Unknown subcommand "${sub}". Available: list, view ${code('<name>')}, save ${code('<name>')}.`,
+        'To run a workflow, ask in plain language ("run the audit_repo workflow") — the assistant uses the workflow tool with `name="..."`.',
+      ),
       success: false,
     };
   },
