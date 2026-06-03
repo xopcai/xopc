@@ -242,6 +242,10 @@ export function ChatPage() {
                     onDeleteRound={stream.deleteMessageRound}
                     onRetryUserMessageRound={stream.retryUserMessageRound}
                     deleteRoundDisabled={stream.streaming || stream.sending}
+                    onAbortCurrentTurn={stream.abort}
+                    onSendUserMessage={(text) => {
+                      void stream.sendMessage(text);
+                    }}
                   />
                 </>
               )}

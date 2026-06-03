@@ -35,6 +35,8 @@ import { normalizeWeixinCronDeliveryToResolved } from './delivery-to.js';
 import { weixinConfigSurface } from './config-surface.js';
 import { WeixinConfigSchema } from './config-schema.js';
 import { weixinOnboardAdapter } from './adapters/onboard-cli.js';
+import { getWorkflowProgressBroker } from '@xopcai/xopc/agent/workflow/index.js';
+import { createWeixinWorkflowProgressCapability } from './workflow-progress.js';
 
 const log = createLogger('WeixinPlugin');
 
@@ -113,6 +115,8 @@ export class WeixinChannelPlugin implements ChannelPlugin<ResolvedWeixinAccount>
   private bus!: ChannelPluginInitOptions['bus'];
   private cfg!: Config;
   private abortControllers = new Map<string, AbortController>();
+  /** Unregister fn for the workflow-progress capability registered against the global broker. */
+  private workflowProgressUnregister: (() => void) | null = null;
 
   config = {
     listAccountIds: (cfg: Config) => listWeixinAccountIds(cfg),
@@ -174,6 +178,14 @@ export class WeixinChannelPlugin implements ChannelPlugin<ResolvedWeixinAccount>
   async init(options: ChannelPluginInitOptions): Promise<void> {
     this.bus = options.bus;
     this.cfg = options.config;
+
+    // Workflow progress broker capability — WeChat has no editMessage, so the
+    // capability runs in `final-only` mode: the broker silently drops every
+    // mid-run snapshot and only invokes us once when `tool_end` lands.
+    this.workflowProgressUnregister = getWorkflowProgressBroker().registerChannel(
+      createWeixinWorkflowProgressCapability({ getConfig: () => this.cfg }),
+    );
+
     log.debug('Weixin plugin initialized');
   }
 
@@ -218,6 +230,12 @@ export class WeixinChannelPlugin implements ChannelPlugin<ResolvedWeixinAccount>
         ac.abort();
         this.abortControllers.delete(id);
       }
+    }
+    // Only unregister the broker capability on a full stop. Per-account stops
+    // still leave the cap usable for other accounts.
+    if (!accountId) {
+      this.workflowProgressUnregister?.();
+      this.workflowProgressUnregister = null;
     }
   }
 

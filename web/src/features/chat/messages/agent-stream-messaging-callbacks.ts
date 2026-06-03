@@ -13,6 +13,7 @@ import {
   completeTool,
   finalizeStreamingThinking,
   startThinkingSegment,
+  updateToolDetails,
 } from '@/features/chat/messages/streaming';
 
 export type AgentStreamFqCallbacks = {
@@ -111,10 +112,10 @@ export function createAgentStreamMessagingCallbacks(opts: {
         finalizeStreamingThinking(msg.content);
       });
     },
-    onToolStart: (toolName, args) => {
+    onToolStart: (toolName, args, toolCallId) => {
       beforeAssistantDelta();
       store().mutateSessionStreaming(chatId, (msg) => {
-        appendToolStart(msg.content, toolName, args);
+        appendToolStart(msg.content, toolName, args, toolCallId);
       });
       store().setSessionFlags(chatId, { streaming: true });
     },
@@ -125,6 +126,15 @@ export function createAgentStreamMessagingCallbacks(opts: {
       beforeAssistantDelta();
       store().mutateSessionStreaming(chatId, (msg) => {
         completeTool(msg.content, toolName, isErr, result);
+      });
+    },
+    onToolUpdate: (toolName, toolCallId, details) => {
+      // Mid-run structured update — currently only the `workflow` tool emits
+      // these; the WorkflowCard reads `block.details` first and falls back to
+      // `block.result` once `tool_end` arrives.
+      beforeAssistantDelta();
+      store().mutateSessionStreaming(chatId, (msg) => {
+        updateToolDetails(msg.content, toolName, toolCallId, details);
       });
     },
     onProgress: (p) => {

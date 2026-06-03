@@ -55,6 +55,8 @@ import { feishuCliLoginAdapter } from './adapters/cli-login.js';
 import { feishuOnboardAdapter } from './adapters/onboard-cli.js';
 import { handleFeishuChannelMessageAction } from './actions/message-action-handler.js';
 import { createFeishuInboundPipeline, type FeishuInboundWork } from './transport/reliability/inbound-pipeline.js';
+import { getWorkflowProgressBroker } from '@xopcai/xopc/agent/workflow/index.js';
+import { createFeishuWorkflowProgressCapability } from './workflow-progress.js';
 
 const log = createLogger('FeishuPlugin');
 
@@ -118,6 +120,8 @@ export class FeishuChannelPlugin implements ChannelPlugin<ResolvedFeishuAccount>
   private cfg!: Config;
   private abortControllers = new Map<string, AbortController>();
   private inboundPipeline?: ReturnType<typeof createFeishuInboundPipeline>;
+  /** Unregister fn for the workflow-progress capability registered against the global broker. */
+  private workflowProgressUnregister: (() => void) | null = null;
 
   config = {
     listAccountIds: (cfg: Config) => listFeishuAccountIds(cfg),
@@ -292,6 +296,15 @@ export class FeishuChannelPlugin implements ChannelPlugin<ResolvedFeishuAccount>
         log.error({ err, count: items.length }, 'Feishu inbound pipeline flush failed');
       },
     });
+
+    // Workflow progress broker capability — turns mid-run snapshots into
+    // edit-in-place Feishu messages. Broker is the agent-side subscriber for
+    // `tool_execution_update` on the `workflow` tool. Registration is
+    // idempotent (replaces a prior cap with the same channelId).
+    this.workflowProgressUnregister = getWorkflowProgressBroker().registerChannel(
+      createFeishuWorkflowProgressCapability({ getConfig: () => this.cfg }),
+    );
+
     log.debug('Feishu plugin initialized');
   }
 
@@ -370,6 +383,13 @@ export class FeishuChannelPlugin implements ChannelPlugin<ResolvedFeishuAccount>
         ac.abort();
         this.abortControllers.delete(id);
       }
+    }
+    // Only unregister the broker capability on a full stop. Per-account stops
+    // still leave other accounts capable of delivering progress through the
+    // same registered cap.
+    if (!accountId) {
+      this.workflowProgressUnregister?.();
+      this.workflowProgressUnregister = null;
     }
   }
 

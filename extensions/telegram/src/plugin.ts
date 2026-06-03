@@ -39,6 +39,8 @@ import type { STTConfig } from '@xopcai/xopc/voice/stt/types.js';
 
 import { TelegramAccountManager } from './account-manager.js';
 import { createOutboundSender } from './outbound-sender.js';
+import { getWorkflowProgressBroker } from '@xopcai/xopc/agent/workflow/index.js';
+import { createTelegramWorkflowProgressCapability } from './workflow-progress.js';
 import { createTelegramCommandHandler } from './command-handler.js';
 import { createInboundProcessor } from './inbound-processor.js';
 import { TELEGRAM_CHANNEL_DEFAULTS } from './plugin-defaults.js';
@@ -136,6 +138,8 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
   private commandHandler!: ReturnType<typeof createTelegramCommandHandler>;
   private inboundProcessor!: ReturnType<typeof createInboundProcessor>;
   private sessionModelHooks?: ChannelPluginSessionModelHooks;
+  /** Unregister fn for the workflow-progress capability registered against the global broker. */
+  private workflowProgressUnregister: (() => void) | null = null;
 
   config!: import('@xopcai/xopc/channels/plugin-types.js').ChannelConfigAdapter<TelegramResolvedAccount>;
   security!: import('@xopcai/xopc/channels/plugin-types.js').ChannelSecurityAdapter<TelegramResolvedAccount>;
@@ -157,6 +161,14 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
     this.accountManager = new TelegramAccountManager();
     this.loadAccounts();
     this.bindOutboundComponents();
+
+    // Workflow progress is fed from the agent-side broker (subscribes to
+    // tool_execution_update for the `workflow` tool); the capability turns
+    // each snapshot into an edit-in-place Telegram message. Registration is
+    // idempotent — the broker replaces a prior cap with the same channelId.
+    this.workflowProgressUnregister = getWorkflowProgressBroker().registerChannel(
+      createTelegramWorkflowProgressCapability(this.accountManager),
+    );
 
     const debounceMs =
       this.defaults.queue?.debounceMs ?? TELEGRAM_CHANNEL_DEFAULTS.queue.debounceMs;
@@ -345,6 +357,13 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
     for (const id of ids) {
       await this.accountManager.stopRunner(id);
       log.info({ accountId: id }, 'Telegram account stopped');
+    }
+    // Only unregister the broker capability on a full stop (no specific
+    // account). A per-account stop still leaves other accounts capable of
+    // sending progress through the same registered cap.
+    if (!accountId) {
+      this.workflowProgressUnregister?.();
+      this.workflowProgressUnregister = null;
     }
   }
 

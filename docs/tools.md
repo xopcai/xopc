@@ -20,6 +20,7 @@ This page lists tools the xopc agent can call: read and edit files, run commands
 | Images (optional) | `image`, `image_generate` when models and keys are set |
 | Browser (optional) | `browser_*` when browser automation is enabled |
 | Delegation & code (optional) | `delegate_task`, `execute_code` |
+| Multi-agent orchestration | `workflow` — fan-out subagents via a deterministic JS script. See [Dynamic Workflows](workflows.md). |
 | Scheduling (optional) | `cronjob` — when the runtime exposes cron (typical gateway setup) |
 | MCP (optional) | `serverId__toolName` — from configured MCP servers; disable all with `bundle-mcp` in `tools.disable` |
 

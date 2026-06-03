@@ -67,6 +67,8 @@ export {
   DELEGATE_BLOCKED_TOOLS,
 } from './delegate-tool.js';
 
+export { createWorkflowTool, type WorkflowToolDeps, type WorkflowToolInput } from './workflow-tool.js';
+
 export {
   createExecuteCodeTool,
   buildSandboxToolMap,
