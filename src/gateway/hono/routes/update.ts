@@ -162,18 +162,28 @@ export function registerUpdateRoutes(authenticated: Hono, deps: AuthenticatedRou
         );
       }
 
-      if (!result.ok) {
-        log.warn(
-          { channel, exitCode: result.exitCode, reason: result.reason },
-          'Gateway: one-click npm update failed',
-        );
-        return c.json({
-          ok: false,
-          error: 'update-failed',
-          message: result.stderr?.trim() || result.reason || `Update exited with code ${result.exitCode ?? 'unknown'}`,
-          result: parsed,
-        });
-      }
+        if (!result.ok) {
+          const installMessage =
+            typeof parsed?.message === 'string'
+              ? parsed.message
+              : typeof parsed?.stderrTail === 'string'
+                ? parsed.stderrTail
+                : undefined;
+          log.warn(
+            { channel, exitCode: result.exitCode, reason: result.reason },
+            'Gateway: one-click npm update failed',
+          );
+          return c.json({
+            ok: false,
+            error: 'update-failed',
+            message:
+              installMessage ||
+              result.stderr?.trim() ||
+              result.reason ||
+              `Update exited with code ${result.exitCode ?? 'unknown'}`,
+            result: parsed,
+          });
+        }
 
       log.info({ channel }, 'Gateway: one-click npm update finished');
       return c.json({ ok: true, result: parsed });
@@ -245,13 +255,22 @@ export function registerUpdateRoutes(authenticated: Hono, deps: AuthenticatedRou
         }
 
         if (!result.ok) {
+          const installMessage =
+            typeof parsed?.message === 'string'
+              ? parsed.message
+              : typeof parsed?.stderrTail === 'string'
+                ? parsed.stderrTail
+                : undefined;
           await stream.writeSSE({
             event: 'result',
             data: JSON.stringify({
               ok: false,
               error: 'update-failed',
               message:
-                result.stderr?.trim() || result.reason || `Update exited with code ${result.exitCode ?? 'unknown'}`,
+                installMessage ||
+                result.stderr?.trim() ||
+                result.reason ||
+                `Update exited with code ${result.exitCode ?? 'unknown'}`,
               result: parsed,
               exitCode: result.exitCode,
               reason: result.reason,
