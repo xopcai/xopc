@@ -1,11 +1,14 @@
 // src/cli/commands/update.ts
 
 import { Command } from 'commander';
-import { spawn } from 'node:child_process';
 
 import { loadConfig } from '../../config/index.js';
-import { PACKAGE_VERSION } from '../../package-version.js';
-import { register, formatExamples, type CLIContext } from '../registry.js';
+import {
+  formatGlobalInstallFailure,
+  resolveGlobalInstallSpec,
+  resolveGlobalManager,
+  runGlobalPackageInstall,
+} from '../../infra/update-global.js';
 import { normalizeUpdateChannel, DEFAULT_PACKAGE_CHANNEL } from '../../infra/update-channels.js';
 import {
   resolveNpmChannelTag,
@@ -13,6 +16,8 @@ import {
   detectInstallKind,
   resolvePackageRoot,
 } from '../../infra/update-check.js';
+import { PACKAGE_VERSION } from '../../package-version.js';
+import { register, formatExamples, type CLIContext } from '../registry.js';
 
 function createUpdateCommand(_ctx: CLIContext): Command {
   return new Command('update')
@@ -43,7 +48,6 @@ function createUpdateCommand(_ctx: CLIContext): Command {
         })();
         const channel = normalizeUpdateChannel(fromCli ?? fromConfig) ?? DEFAULT_PACKAGE_CHANNEL;
 
-        // Check current install kind
         const root = await resolvePackageRoot();
         if (root) {
           const installKind = await detectInstallKind(root);
@@ -121,16 +125,13 @@ function createUpdateCommand(_ctx: CLIContext): Command {
           }
         }
 
-        const packageManager = detectGlobalPackageManager();
-        const spec = `@xopcai/xopc@${resolved.version}`;
+        const packageManager = await resolveGlobalManager({ root });
+        const spec = resolveGlobalInstallSpec({ version: resolved.version });
 
         if (!options.json) {
           console.log(`Installing ${spec} via ${packageManager}...`);
         }
 
-        const installArgs = buildInstallArgs(packageManager, spec);
-
-        // Gateway / auto-update spawn this CLI with XOPC_AUTO_UPDATE=1 after acquiring the lock.
         const { acquireUpdateLock } = await import('../../infra/update-lock.js');
         const lock = process.env.XOPC_AUTO_UPDATE
           ? { release: async () => {} }
@@ -145,14 +146,19 @@ function createUpdateCommand(_ctx: CLIContext): Command {
           process.exit(1);
         }
 
-        let exitCode: number;
+        let installResult: Awaited<ReturnType<typeof runGlobalPackageInstall>>;
         try {
-          exitCode = await runInstallCommand(installArgs);
+          installResult = await runGlobalPackageInstall({
+            manager: packageManager,
+            spec,
+            pkgRoot: root,
+            echoToTerminal: !options.json,
+          });
         } finally {
           await lock.release();
         }
 
-        if (exitCode === 0) {
+        if (installResult.exitCode === 0) {
           if (options.json) {
             console.log(
               JSON.stringify({
@@ -160,7 +166,7 @@ function createUpdateCommand(_ctx: CLIContext): Command {
                 previousVersion: PACKAGE_VERSION,
                 installedVersion: resolved.version,
                 channel: resolved.tag,
-                packageManager,
+                packageManager: installResult.packageManager,
               }),
             );
           } else {
@@ -168,51 +174,33 @@ function createUpdateCommand(_ctx: CLIContext): Command {
             console.log('Restart the gateway to use the new version: xopc gateway restart');
           }
         } else {
+          const message = formatGlobalInstallFailure({
+            packageManager: installResult.packageManager,
+            spec,
+            exitCode: installResult.exitCode,
+            stderr: installResult.stderr,
+            usedFallback: installResult.usedFallback,
+          });
           if (options.json) {
             console.log(
               JSON.stringify({
                 status: 'error',
                 reason: 'install-failed',
-                exitCode,
-                packageManager,
+                exitCode: installResult.exitCode,
+                packageManager: installResult.packageManager,
+                usedFallback: installResult.usedFallback,
+                stderrTail: installResult.stderr.trim().slice(-4000) || undefined,
+                message,
               }),
             );
           } else {
-            console.error(`❌ Update failed (exit code ${exitCode})`);
-            console.error(`Try manually: ${packageManager} install -g ${spec}`);
+            console.error(`❌ Update failed (exit code ${installResult.exitCode})`);
+            console.error(message);
           }
           process.exit(1);
         }
       },
     );
-}
-
-/**
- * Detect which package manager was used to install xopc globally.
- * Checks common indicators: npm_config_user_agent, process.env, argv paths.
- */
-function detectGlobalPackageManager(): 'npm' | 'pnpm' {
-  const userAgent = process.env.npm_config_user_agent ?? '';
-  if (userAgent.startsWith('pnpm/')) return 'pnpm';
-  return 'npm';
-}
-
-function buildInstallArgs(manager: 'npm' | 'pnpm', spec: string): string[] {
-  if (manager === 'pnpm') {
-    return ['pnpm', 'add', '-g', spec];
-  }
-  return ['npm', 'install', '-g', spec, '--no-fund', '--no-audit'];
-}
-
-function runInstallCommand(argv: string[]): Promise<number> {
-  return new Promise((resolve) => {
-    const child = spawn(argv[0], argv.slice(1), {
-      stdio: 'inherit',
-      env: process.env,
-    });
-    child.on('error', () => resolve(1));
-    child.on('exit', (code) => resolve(code ?? 1));
-  });
 }
 
 register({
