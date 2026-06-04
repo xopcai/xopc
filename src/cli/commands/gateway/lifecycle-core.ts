@@ -177,7 +177,7 @@ export async function runServiceStop(params: {
       result: 'stopped',
       message: options.disable
         ? 'Gateway stopped and disabled (will not respawn).'
-        : 'Gateway stop signal sent.',
+        : 'Gateway stopped.',
     });
   } catch (err) {
     log.error({ err }, 'Failed to stop gateway');

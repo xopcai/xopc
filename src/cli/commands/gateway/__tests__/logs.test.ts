@@ -1,27 +1,12 @@
-// Mock os.homedir for consistent paths across environments
-vi.mock("os", () => ({
-  homedir: () => "/root",
-}));
+import { mkdtemp, rm, mkdir, writeFile } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Set consistent HOME for tests
-process.env.HOME = '/root';
+import { createLogsCommand, gatewayLogsTestInternals } from '../logs.js';
 
-import { createLogsCommand } from '../logs.js';
-
-// Mock child_process — re-export everything the module under test needs
-vi.mock('child_process', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('child_process')>();
-  return {
-    ...actual,
-    spawn: vi.fn(),
-    execSync: vi.fn(),
-  };
-});
-
-// Mock dependencies
-vi.mock('../../index.js', () => ({
+vi.mock('../../../context.js', () => ({
   getContextWithOpts: vi.fn(() => ({
     configPath: '/root/.xopc/xopc.json',
     workspacePath: '/root/.xopc/workspace/main',
@@ -29,118 +14,70 @@ vi.mock('../../index.js', () => ({
   })),
 }));
 
-import { spawn, execSync } from 'child_process';
-
 describe('Gateway Logs Command', () => {
-  let consoleLogSpy: ReturnType<typeof vi.spyOn>;
-  let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
-  let processExitSpy: ReturnType<typeof vi.spyOn>;
+  let tempDir: string;
+  let originalLogDir: string | undefined;
 
-  beforeEach(() => {
-    consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    processExitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {}) as any);
-    vi.clearAllMocks();
+  beforeEach(async () => {
+    originalLogDir = process.env.XOPC_LOG_DIR;
+    tempDir = await mkdtemp(path.join(os.tmpdir(), 'xopc-gateway-logs-'));
   });
 
-  afterEach(() => {
-    consoleLogSpy.mockRestore();
-    consoleErrorSpy.mockRestore();
-    processExitSpy.mockRestore();
+  afterEach(async () => {
+    if (originalLogDir === undefined) {
+      delete process.env.XOPC_LOG_DIR;
+    } else {
+      process.env.XOPC_LOG_DIR = originalLogDir;
+    }
+    await rm(tempDir, { recursive: true, force: true });
+    vi.restoreAllMocks();
   });
 
-  describe('createLogsCommand', () => {
-    it('should create command with correct name and description', () => {
-      const cmd = createLogsCommand();
-      expect(cmd.name()).toBe('logs');
-      expect(cmd.description()).toBe('View gateway logs');
-    });
+  it('creates command with expected options', () => {
+    const cmd = createLogsCommand();
 
-    it('should have --lines option with default value', () => {
-      const cmd = createLogsCommand();
-      const linesOption = cmd.options.find((opt: any) => opt.attributeName() === 'lines');
-      expect(linesOption).toBeDefined();
-    });
-
-    it('should have --follow option', () => {
-      const cmd = createLogsCommand();
-      const followOption = cmd.options.find((opt: any) => opt.attributeName() === 'follow');
-      expect(followOption).toBeDefined();
-    });
+    expect(cmd.name()).toBe('logs');
+    expect(cmd.description()).toBe('View gateway logs');
+    expect(cmd.options.some((option) => option.attributeName() === 'lines')).toBe(true);
+    expect(cmd.options.some((option) => option.attributeName() === 'follow')).toBe(true);
   });
 
-  describe('logs display', () => {
-    it('should use tail -f in follow mode', async () => {
-      const mockTail = {
-        on: vi.fn(),
-      };
-      vi.mocked(spawn).mockReturnValue(mockTail as any);
+  it('resolves log path without shell-specific path concatenation', () => {
+    process.env.XOPC_LOG_DIR = path.join(tempDir, 'logs with spaces');
 
-      const cmd = createLogsCommand();
-      await cmd.parseAsync(['node', 'test', '--follow']);
+    const logPath = gatewayLogsTestInternals.resolveGatewayLogPath('/root/.xopc/xopc.json');
 
-      expect(spawn).toHaveBeenCalledWith('tail', ['-f', '-n', '50', expect.stringContaining('app.log')], {
-        stdio: 'inherit',
-      });
-    });
-
-    it('should use execSync in static mode', async () => {
-      vi.mocked(execSync).mockReturnValue('log line 1\nlog line 2\n');
-
-      const cmd = createLogsCommand();
-      await cmd.parseAsync(['node', 'test', '--lines', '10']);
-
-      expect(execSync).toHaveBeenCalledWith(
-        expect.stringContaining('tail -n 10'),
-        { encoding: 'utf-8' }
-      );
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Last 10 lines'));
-    });
-
-    it('should handle custom line count', async () => {
-      vi.mocked(execSync).mockReturnValue('log content');
-
-      const cmd = createLogsCommand();
-      await cmd.parseAsync(['node', 'test', '--lines', '100']);
-
-      expect(execSync).toHaveBeenCalledWith(
-        expect.stringContaining('tail -n 100'),
-        { encoding: 'utf-8' }
-      );
-    });
+    expect(logPath).toBe(path.join(tempDir, 'logs with spaces', 'app.log'));
   });
 
-  describe('error handling', () => {
-    it('should handle tail errors in follow mode', async () => {
-      const mockTail = {
-        on: vi.fn((event: string, callback: Function) => {
-          if (event === 'error') {
-            callback(new Error('Tail failed'));
-          }
-        }),
-      };
-      vi.mocked(spawn).mockReturnValue(mockTail as any);
+  it('reads last lines using Node APIs instead of shell tail', async () => {
+    const logPath = path.join(tempDir, 'app.log');
+    await writeFile(logPath, 'one\ntwo\nthree\nfour\n', 'utf8');
 
-      const cmd = createLogsCommand();
-      await cmd.parseAsync(['node', 'test', '--follow']);
+    const output = await gatewayLogsTestInternals.readLastLines(logPath, 2);
 
-      // Error handler is registered
-      expect(mockTail.on).toHaveBeenCalledWith('error', expect.any(Function));
-    });
+    expect(output).toBe('three\nfour\n');
+  });
 
-    it('should handle execSync errors', async () => {
-      vi.mocked(execSync).mockImplementation(() => {
-        throw new Error('Command failed');
-      });
+  it('returns a friendly message when log file is missing', async () => {
+    const output = await gatewayLogsTestInternals.readLastLines(path.join(tempDir, 'missing.log'), 10);
 
-      const cmd = createLogsCommand();
-      await cmd.parseAsync(['node', 'test']);
+    expect(output).toBe('No logs found\n');
+  });
 
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        '❌ Failed to read logs:',
-        expect.any(Error)
-      );
-      expect(processExitSpy).toHaveBeenCalledWith(1);
-    });
+  it('prints static logs from custom log dir', async () => {
+    const logDir = path.join(tempDir, 'logs');
+    await mkdir(logDir, { recursive: true });
+    await writeFile(path.join(logDir, 'app.log'), 'alpha\nbeta\ngamma\n', 'utf8');
+    process.env.XOPC_LOG_DIR = logDir;
+    const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const processExitSpy = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
+
+    const cmd = createLogsCommand();
+    await cmd.parseAsync(['node', 'test', '--lines', '2']);
+
+    expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Last 2 lines'));
+    expect(consoleLogSpy).toHaveBeenCalledWith('beta\ngamma\n');
+    expect(processExitSpy).toHaveBeenCalledWith(0);
   });
 });

@@ -5,12 +5,10 @@
  */
 
 import {
-  buildAgentMainSessionKey,
   buildAgentPeerSessionKey,
   defaultMainSessionKey,
   normalizeAgentId,
   normalizeMainKey,
-  normalizeSessionKey,
   parseAgentSessionKey,
   resolveThreadSessionKeys,
   type PeerKind,

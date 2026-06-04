@@ -53,10 +53,33 @@ function resolveEntryPoint(): string {
   if (isSEABinary()) {
     return process.execPath;
   }
-  // Must match package.json "bin" (cli/bin.js). index.js only exports runCli and exits
-  // immediately when executed directly — systemd/LaunchAgent need the real entry.
+  // Must match package.json "bin" in built packages, while source/dev runs use bin.ts.
+  // index.js only exports runCli and exits immediately when executed directly.
   const thisDir = path.dirname(new URL(import.meta.url).pathname);
+  const sourceEntryPoint = path.join(thisDir, '..', 'cli', 'bin.ts');
+  if (existsSync(sourceEntryPoint)) {
+    return sourceEntryPoint;
+  }
   return path.join(thisDir, '..', 'cli', 'bin.js');
+}
+
+function resolveServiceNodeArgs(): string[] {
+  const serviceNodeArgs: string[] = [];
+  const skipValueFlags = new Set(['-e', '--eval', '-p', '--print', '--test-name-pattern']);
+
+  for (let index = 0; index < process.execArgv.length; index += 1) {
+    const arg = process.execArgv[index];
+    if (!arg) continue;
+    if (arg.startsWith('--inspect') || arg.startsWith('--debug')) continue;
+    if (skipValueFlags.has(arg)) {
+      index += 1;
+      continue;
+    }
+    if ([...skipValueFlags].some((flag) => arg.startsWith(`${flag}=`))) continue;
+    serviceNodeArgs.push(arg);
+  }
+
+  return serviceNodeArgs;
 }
 
 // ─── Plan Builder ───
@@ -82,9 +105,7 @@ export function buildGatewayInstallPlan(params: {
     programArguments = [binaryPath, 'gateway', '--foreground', '--port', params.port.toString()];
   } else {
     // Node.js runtime
-    const nodeArgs = process.execArgv.filter(
-      (arg) => !arg.startsWith('--inspect') && !arg.startsWith('--debug'),
-    );
+    const nodeArgs = resolveServiceNodeArgs();
     const entryPoint = resolveEntryPoint();
     programArguments = [
       process.execPath,

@@ -62,8 +62,8 @@ export function parseSessionKey(sessionKey: string | undefined | null): ParsedSe
   if (parts.length >= 4 && parts[2] === 'direct') {
     return {
       agentId: agentParsed.agentId,
-      source: parts[0]!,
-      accountId: parts[1]!,
+      source: parts[0],
+      accountId: parts[1],
       peerKind: 'direct',
       peerId: parts.slice(3).join(':'),
       threadId,
@@ -73,7 +73,7 @@ export function parseSessionKey(sessionKey: string | undefined | null): ParsedSe
   if (parts.length >= 3 && parts[1] === 'direct') {
     return {
       agentId: agentParsed.agentId,
-      source: parts[0]!,
+      source: parts[0],
       accountId: 'default',
       peerKind: 'direct',
       peerId: parts.slice(2).join(':'),
@@ -95,9 +95,9 @@ export function parseSessionKey(sessionKey: string | undefined | null): ParsedSe
   if (parts.length >= 3 && (parts[1] === 'group' || parts[1] === 'channel')) {
     return {
       agentId: agentParsed.agentId,
-      source: parts[0]!,
+      source: parts[0],
       accountId: 'default',
-      peerKind: parts[1]!,
+      peerKind: parts[1],
       peerId: parts.slice(2).join(':'),
       threadId,
     };
