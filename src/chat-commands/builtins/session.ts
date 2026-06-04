@@ -23,9 +23,9 @@ const newCommand: CommandDefinition = {
   handler: async (ctx: CommandContext) => {
     await ctx.setTyping(true);
     
-    await ctx.clearSession();
+    await ctx.resetSession();
     
-    // Note: clearSession already sends confirmation message
+    // Note: resetSession already sends confirmation message
     return {
       content: '',
       success: true,

@@ -336,6 +336,17 @@ export class SessionIndex extends EventEmitter {
     await this.store.delete(key);
   }
 
+  /** Archive transcript and start a new session id for the same key. */
+  async resetSession(
+    key: string,
+  ): Promise<{ sessionId: string; previousSessionId: string } | null> {
+    const result = await this.store.reset(key);
+    if (result) {
+      this.emit('sessionUpdated', { key });
+    }
+    return result;
+  }
+
   /** Token/window stats for a message list */
   getWindowStats(messages: any[]) {
     return this.store.getWindowStats(messages);

@@ -24,7 +24,7 @@ const VALID_SCRIPT = `export const meta = { name: 'demo', description: 'demo wor
 
 function ctx(overrides: Partial<CommandContext> = {}): CommandContext {
   return {
-    sessionKey: 'main:cli:default:dm:42',
+    sessionKey: 'agent:main:direct:42',
     ...overrides,
   } as unknown as CommandContext;
 }
@@ -59,7 +59,7 @@ describe('/workflow save', () => {
   });
 
   it('saves the recorded script when meta.name matches the target', async () => {
-    getLastWorkflowMemory().record('main:cli:default:dm:42', {
+    getLastWorkflowMemory().record('agent:main:direct:42', {
       script: VALID_SCRIPT,
       metaName: 'demo',
       source: 'script',
@@ -76,7 +76,7 @@ describe('/workflow save', () => {
   });
 
   it("rewrites meta.name when the user saves under a different name", async () => {
-    getLastWorkflowMemory().record('main:cli:default:dm:42', {
+    getLastWorkflowMemory().record('agent:main:direct:42', {
       script: VALID_SCRIPT,
       metaName: 'demo',
       source: 'script',
@@ -94,7 +94,7 @@ describe('/workflow save', () => {
   });
 
   it('refuses non-snake-case save names', async () => {
-    getLastWorkflowMemory().record('main:cli:default:dm:42', {
+    getLastWorkflowMemory().record('agent:main:direct:42', {
       script: VALID_SCRIPT,
       metaName: 'demo',
       source: 'script',
@@ -107,7 +107,7 @@ describe('/workflow save', () => {
   });
 
   it('does not see another session\'s recorded workflow', async () => {
-    getLastWorkflowMemory().record('main:cli:default:dm:OTHER', {
+    getLastWorkflowMemory().record('agent:main:direct:OTHER', {
       script: VALID_SCRIPT,
       metaName: 'demo',
       source: 'script',

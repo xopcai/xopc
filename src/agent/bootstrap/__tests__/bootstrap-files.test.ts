@@ -32,7 +32,7 @@ describe('bootstrap-files', () => {
     const main = filterBootstrapFilesForSession(files, 'agent:main:webchat:direct:u1');
     expect(main.some((f) => f.name === 'MEMORY.md')).toBe(true);
 
-    const sub = filterBootstrapFilesForSession(files, 'subagent:main:default:dm:123456');
+    const sub = filterBootstrapFilesForSession(files, 'agent:main:subagent:telegram:default:direct:123456');
     expect(sub.some((f) => f.name === 'MEMORY.md')).toBe(false);
   });
 

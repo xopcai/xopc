@@ -11,6 +11,9 @@ import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 import type { ThinkLevel } from '../agent/transcript/thinking-types.js';
+import { loadConfig } from '../config/index.js';
+import { resolveTuiSessionKey, resolveTuiStartupSessionKey } from '../routing/resolve-tui-session-key.js';
+import { parseAgentSessionKey } from '../routing/agent-session-key.js';
 import type { TuiBackend, TuiEvent, TuiModelChoice } from './tui-backend.js';
 import { EmbeddedBackend } from './backends/embedded-backend.js';
 import { GatewaySseBackend } from './backends/gateway-sse-backend.js';
@@ -43,7 +46,6 @@ import {
   createSubmitBurstCoalescer,
   shouldEnableWindowsGitBashPasteFallback,
 } from './tui-submit.js';
-import { appendHistoryToChatLog } from './chat-history.js';
 import { installTuiStdioFilter } from './tui-stdio-filter.js';
 import { withTuiSuspended } from './tui-suspend.js';
 import { saveClipboardImageToTempFile } from './clipboard-image.js';
@@ -58,6 +60,7 @@ import { editorTheme, theme } from './theme.js';
 import { loadTuiSettings, saveTuiSettings, type TuiSettings } from './tui-settings.js';
 import { resolveFdPath } from './tui-fd-path.js';
 import packageJson from '../../package.json' with { type: 'json' };
+import { createSessionActions } from './tui-session-actions.js';
 import { createInitialState, type TuiOptions, type TuiResult, type TuiState } from './tui-types.js';
 import { createXopcTuiKeybindingsManager } from './tui-keybindings-file.js';
 import {
@@ -107,10 +110,25 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
   const restoreStdio = () => stdioFilter.restore();
 
   const isLocalMode = opts.local === true;
-  const sessionKey = opts.session ?? 'cli:tui';
+  const config = loadConfig();
+  const startup = resolveTuiStartupSessionKey({
+    cfg: config,
+    sessionOption: opts.session,
+    cwd: process.cwd(),
+  });
+  let currentAgentId = startup.agentId;
+  const sessionScope = startup.sessionScope;
+  const sessionMainKey = startup.sessionMainKey;
+  const resolveSessionKey = (raw?: string) =>
+    resolveTuiSessionKey({
+      raw,
+      sessionScope,
+      currentAgentId,
+      sessionMainKey,
+    });
   let tuiSettings = loadTuiSettings();
   initTuiTheme({ themeId: opts.theme ?? tuiSettings.theme });
-  const state = createInitialState(sessionKey);
+  const state = createInitialState(startup.sessionKey);
   state.scopedModelRefs = loadScopedModelRefs();
   state.showThinking = tuiSettings.showThinking;
   state.toolsExpanded = tuiSettings.toolsExpanded;
@@ -331,17 +349,6 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     tui.requestRender();
   };
 
-  const refreshSessionInfo = async () => {
-    try {
-      state.sessionInfo = await client.getSessionInfo(state.currentSessionKey);
-      updateEditorBorderColor();
-      updateFooter();
-      tui.requestRender();
-    } catch {
-      // ignore
-    }
-  };
-
   let finishTui: (() => void) | null = null;
   let exitResult: TuiResult = { exitReason: 'exit' };
 
@@ -365,15 +372,33 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     });
   };
 
-  const abortActive = async () => {
-    if (!state.activeRunId) return;
-    const runId = state.activeRunId;
-    state.activeRunId = null;
-    assembler.drop(runId);
-    chatLog.dropAssistant(runId);
-    setActivityStatus('idle');
-    tui.requestRender();
-    await client.abortChat({ sessionKey: state.currentSessionKey, runId }).catch(() => {});
+  const sessionActions = createSessionActions({
+    client,
+    chatLog,
+    tui,
+    state,
+    assembler,
+    resolveSessionKey,
+    updateHeader,
+    updateFooter,
+    setActivityStatus,
+    onAgentIdChange: (agentId) => {
+      currentAgentId = agentId;
+    },
+  });
+
+  const {
+    refreshSessionInfo,
+    loadHistory: loadSessionHistory,
+    setSession,
+    abortActive,
+    resetCurrentSession,
+    clearChatForSessionSwitch,
+  } = sessionActions;
+
+  const refreshSessionInfoWithBorder = async () => {
+    await refreshSessionInfo();
+    updateEditorBorderColor();
   };
 
   const resolveModelChoiceIndex = (): number => {
@@ -552,7 +577,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     } finally {
       state.isCompacting = false;
       setActivityStatus('idle');
-      await refreshSessionInfo();
+      await refreshSessionInfoWithBorder();
       const queued = state.compactionQueue.shift();
       if (queued && !state.activeRunId) {
         sendMessage(queued);
@@ -609,6 +634,9 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     uiOverlays,
     runCompaction,
     extensionSlashCommands: extensionRuntime.slashCommands,
+    currentAgentId,
+    setSession,
+    resetSession: resetCurrentSession,
   });
 
   const { runLocalShellLine } = createLocalShellRunner({
@@ -687,29 +715,14 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
   };
 
   const setSessionKey = (key: string) => {
-    state.currentSessionKey = key;
+    state.currentSessionKey = resolveSessionKey(key);
+    updateAgentFromPicker(key);
   };
 
-  const clearChatForSessionSwitch = () => {
-    assembler.clear();
-    chatLog.clearAll();
-    clearPendingToolCallIds();
-    state.historyLoaded = false;
-    state.messageFollowUpQueue.length = 0;
-  };
-
-  const loadSessionHistory = async () => {
-    try {
-      const { messages } = await client.loadHistory({
-        sessionKey: state.currentSessionKey,
-        limit: 200,
-      });
-      appendHistoryToChatLog(chatLog, messages, state.toolsExpanded);
-    } catch {
-      // ignore; footer already hints on disconnect
-    } finally {
-      state.historyLoaded = true;
-      tui.requestRender();
+  const updateAgentFromPicker = (key: string) => {
+    const parsed = parseAgentSessionKey(resolveSessionKey(key));
+    if (parsed?.agentId) {
+      currentAgentId = parsed.agentId;
     }
   };
 
@@ -862,7 +875,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     );
     state.activeRunId = null;
     setActivityStatus('idle');
-    void refreshSessionInfo().finally(() => {
+    void refreshSessionInfoWithBorder().finally(() => {
       updateFooter();
       tui.requestRender();
     });
@@ -872,7 +885,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
 
   const onAgentRunEnded = () => {
     state.progressMessage = null;
-    void refreshSessionInfo().finally(() => {
+    void refreshSessionInfoWithBorder().finally(() => {
       updateFooter();
       tui.requestRender();
     });
@@ -899,7 +912,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     setConnectionStatus(isLocalMode ? 'local ready' : 'gateway connected');
     touchStreamingActivity();
     void (async () => {
-      await refreshSessionInfo();
+      await refreshSessionInfoWithBorder();
       await refreshModelChoices();
       await loadSessionHistory();
       updateHeader();

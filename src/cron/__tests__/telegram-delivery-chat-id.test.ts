@@ -7,7 +7,7 @@ describe('normalizeTelegramDeliveryChatId', () => {
   });
 
   it('strips full telegram session key to peer id', () => {
-    expect(normalizeTelegramDeliveryChatId('main:telegram:default:dm:916534770')).toBe(
+    expect(normalizeTelegramDeliveryChatId('agent:main:telegram:default:direct:916534770')).toBe(
       '916534770'
     );
   });

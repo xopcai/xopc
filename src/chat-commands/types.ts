@@ -173,6 +173,8 @@ export interface CommandContext {
   getSession(): Promise<AgentMessage[]>;
   /** Clear current session (start fresh) */
   clearSession(): Promise<void>;
+  /** Reset session in place (archive transcript, new session id; preserve overrides) */
+  resetSession(): Promise<void>;
   /** Archive current session */
   archiveSession(): Promise<void>;
   /** List user's sessions */

@@ -8,8 +8,8 @@ import {
 } from '@/features/chat/clarify/clarify-prompt-storage';
 
 describe('clarify session switch persistence', () => {
-  const sessionA = 'main:webchat:default:direct:a';
-  const sessionB = 'main:webchat:default:direct:b';
+  const sessionA = 'agent:main:webchat:default:direct:a';
+  const sessionB = 'agent:main:webchat:default:direct:b';
   const promptA = {
     requestId: 'req-a',
     question: 'Pick one?',

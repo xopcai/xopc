@@ -12,10 +12,10 @@ describe('normalizeWeixinCronDeliveryTo', () => {
     });
   });
 
-  it('parses shorthand accountId:dm:peer (gateway / cron UI)', () => {
+  it('parses shorthand accountId:direct:peer (gateway / cron UI)', () => {
     expect(
       normalizeWeixinCronDeliveryTo(
-        'e948216a701a-im-bot:dm:o9cq80xmyaah0gi4cogkdxdf_0bq-im-wechat',
+        'e948216a701a-im-bot:direct:o9cq80xmyaah0gi4cogkdxdf_0bq-im-wechat',
       ),
     ).toEqual({
       chatId: 'o9cq80xmyaah0gi4cogkdxdf_0bq-im-wechat',
@@ -26,7 +26,7 @@ describe('normalizeWeixinCronDeliveryTo', () => {
   it('strips full weixin session key to peer id and accountId', () => {
     expect(
       normalizeWeixinCronDeliveryTo(
-        'main:weixin:e948216a701a-im-bot:dm:o9cq80xmyaah0gi4cogkdxdf_0bq-im-wechat',
+        'agent:main:weixin:e948216a701a-im-bot:direct:o9cq80xmyaah0gi4cogkdxdf_0bq-im-wechat',
       ),
     ).toEqual({
       chatId: 'o9cq80xmyaah0gi4cogkdxdf_0bq-im-wechat',
@@ -42,7 +42,7 @@ describe('resolveWeixinAccountIdFromSessions', () => {
       list: vi.fn().mockResolvedValue({
         items: [
           {
-            key: `main:weixin:e948216a701a-im-bot:dm:${peer}`,
+            key: `agent:main:weixin:e948216a701a-im-bot:direct:${peer}`,
             sourceChannel: 'weixin',
             routing: {
               agentId: 'main',
@@ -70,12 +70,12 @@ describe('resolveWeixinAccountIdFromSessions', () => {
       list: vi.fn().mockResolvedValue({
         items: [
           {
-            key: `main:weixin:acc-a:dm:${peer}`,
+            key: `agent:main:weixin:acc-a:direct:${peer}`,
             sourceChannel: 'weixin',
             routing: { accountId: 'acc-a', peerId: peer, source: 'weixin', agentId: 'm', peerKind: 'dm' },
           },
           {
-            key: `main:weixin:acc-b:dm:${peer}`,
+            key: `agent:main:weixin:acc-b:direct:${peer}`,
             sourceChannel: 'weixin',
             routing: { accountId: 'acc-b', peerId: peer, source: 'weixin', agentId: 'm', peerKind: 'dm' },
           },
@@ -97,7 +97,7 @@ describe('normalizeWeixinCronDeliveryToResolved', () => {
       list: vi.fn().mockResolvedValue({
         items: [
           {
-            key: `main:weixin:e948216a701a-im-bot:dm:${peer}`,
+            key: `agent:main:weixin:e948216a701a-im-bot:direct:${peer}`,
             sourceChannel: 'weixin',
             routing: {
               agentId: 'main',

@@ -414,7 +414,29 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
     return c.json({ ok: true, deleted: deleteCount });
   });
 
-  // DELETE /api/sessions/:key - Delete session
+  // POST /api/sessions/:key/reset - Reset session (archive transcript, new session id; keep key + overrides)
+  authenticated.post('/api/sessions/:key/reset', async (c) => {
+    const blocked = ensureGatewayReadyForSessions(c, service, 'sessions.reset');
+    if (blocked) {
+      return blocked;
+    }
+    const key = c.req.param('key');
+    const result = await service.sessions.reset(key);
+    if (result.ok === false) {
+      const status = result.error === 'Session not found' ? 404 : 400;
+      return c.json({ ok: false, error: result.error }, status);
+    }
+    const session = await service.sessions.getSession(key);
+    return c.json({
+      ok: true,
+      reset: true,
+      sessionId: result.sessionId,
+      previousSessionId: result.previousSessionId,
+      session,
+    });
+  });
+
+  // DELETE /api/sessions/:key - Delete session (removes key from index)
   authenticated.delete('/api/sessions/:key', async (c) => {
     const key = c.req.param('key');
     const result = await service.sessions.delete(key);

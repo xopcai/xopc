@@ -5,7 +5,7 @@ import type { SessionMetadata } from '../types.js';
 import { SessionStatus } from '../types.js';
 
 const baseMeta = (overrides: Partial<SessionMetadata> = {}): SessionMetadata => ({
-  key: 'main:webchat:default:direct:u1',
+  key: 'agent:main:webchat:default:direct:u1',
   status: SessionStatus.ACTIVE,
   tags: ['a'],
   createdAt: '2026-01-01T00:00:00.000Z',

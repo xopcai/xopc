@@ -6,7 +6,7 @@ describe('message bindings', () => {
   it('records and retrieves bindings by messageId', () => {
     recordFeishuMessageBinding({
       messageId: 'm1',
-      sessionKey: 'main:feishu:default:dm:ou_x',
+      sessionKey: 'agent:main:feishu:default:direct:ou_x',
       accountId: 'default',
       chatId: 'oc_chat',
       senderId: 'ou_x',
@@ -14,7 +14,7 @@ describe('message bindings', () => {
       threadId: 't1',
     });
     const b = getFeishuBindingByMessageId('m1');
-    expect(b?.sessionKey).toBe('main:feishu:default:dm:ou_x');
+    expect(b?.sessionKey).toBe('agent:main:feishu:default:direct:ou_x');
     expect(b?.threadId).toBe('t1');
   });
 });

@@ -9,7 +9,7 @@ import {
   useChatSessionStore,
 } from '@/features/chat/session/chat-session-store';
 
-const sessionKey = 'main:webchat:default:direct:abc';
+const sessionKey = 'agent:main:webchat:default:direct:abc';
 
 const userMsg: Message = {
   role: 'user',

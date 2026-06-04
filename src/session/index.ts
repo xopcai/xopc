@@ -39,6 +39,32 @@ export { normalizeCompactionCheckpointId } from './compaction-checkpoints.js';
 
 export { shouldSkipWebchatInboundByAbortCutoff } from './abort-cutoff.js';
 
+export {
+  DEFAULT_RESET_AT_HOUR,
+  DEFAULT_RESET_MODE,
+  DEFAULT_IDLE_MINUTES,
+  evaluateSessionFreshness,
+  resolveDailyResetAtMs,
+  resolveSessionResetPolicy,
+  type SessionFreshness,
+  type SessionResetConfig,
+  type SessionResetMode,
+  type SessionResetPolicy,
+  type SessionResetType,
+} from './reset-policy.js';
+export {
+  isThreadSessionKey,
+  resolveChannelResetConfig,
+  resolveSessionResetType,
+} from './reset-type.js';
+export { resolveSessionLifecycleTimestamps, type SessionLifecycleEntry } from './lifecycle-timestamps.js';
+export {
+  resolveSession,
+  resolveSessionKeyForRequest,
+  type SessionKeyResolution,
+  type SessionResolution,
+} from './resolve-session.js';
+
 export type { CompactionConfig, CompactionResult } from '../agent/memory/compaction.js';
 export type { WindowConfig } from '../agent/memory/window.js';
 
