@@ -1,16 +1,24 @@
 /**
  * One `agent()` call rendered as a row. Holds the status icon, label, and
- * (when present) result preview / error message. Expands inline on click to
- * reveal the prompt + result preview — no modal, no jump.
+ * optional current-step / elapsed summary. Click opens the detail drawer.
  */
 
-import { memo, useState } from 'react';
-import { ChevronRight, CircleAlert, CircleDashed, CircleDot, CircleSlash, CircleCheck, Loader2 } from 'lucide-react';
+import { memo, useEffect, useState } from 'react';
+import {
+  ChevronRight,
+  CircleAlert,
+  CircleDashed,
+  CircleDot,
+  CircleSlash,
+  CircleCheck,
+  Loader2,
+} from 'lucide-react';
 
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 
 import type { WorkflowAgentSnapshot } from './workflow.types';
+import { formatAgentElapsed } from './workflow.utils';
 
 export type WorkflowAgentRowLabels = {
   showPrompt: string;
@@ -20,6 +28,9 @@ export type WorkflowAgentRowLabels = {
   errorHeading: string;
   emptyPreview: string;
   agentNumber: (n: number) => string;
+  queued: string;
+  running: string;
+  openDetail: string;
 };
 
 const statusToIcon = {
@@ -33,83 +44,61 @@ const statusToIcon = {
 export const WorkflowAgentRow = memo(function WorkflowAgentRow({
   agent,
   labels,
+  selected,
+  onSelect,
 }: {
   agent: WorkflowAgentSnapshot;
   labels: WorkflowAgentRowLabels;
+  selected?: boolean;
+  onSelect?: (agent: WorkflowAgentSnapshot) => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const canExpand = Boolean(agent.prompt || agent.resultPreview || agent.error);
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (agent.status !== 'running') return;
+    const id = window.setInterval(() => setTick((n) => n + 1), 1000);
+    return () => window.clearInterval(id);
+  }, [agent.status, agent.startedAtMs]);
+
   const icon = statusToIcon[agent.status] ?? <CircleDot className="size-3.5 shrink-0" aria-hidden />;
+  const elapsed = formatAgentElapsed(agent);
+  const statusHint =
+    agent.status === 'queued'
+      ? labels.queued
+      : agent.status === 'running' && !agent.currentStep
+        ? labels.running
+        : agent.currentStep;
 
   return (
     <div className="min-w-0">
       <button
         type="button"
-        onClick={() => canExpand && setOpen((v) => !v)}
-        disabled={!canExpand}
-        aria-expanded={canExpand ? open : undefined}
+        onClick={() => onSelect?.(agent)}
+        aria-label={`${labels.openDetail}: ${agent.label}`}
+        aria-current={selected ? 'true' : undefined}
         className={cn(
-          'flex w-full min-w-0 items-center gap-2 rounded-md px-1.5 py-0.5 text-left',
+          'flex w-full min-w-0 flex-col gap-0.5 rounded-md px-1.5 py-0.5 text-left',
           'text-sm leading-6 text-fg-muted',
-          canExpand && 'hover:bg-surface-hover hover:text-fg',
+          'hover:bg-surface-hover hover:text-fg',
+          selected && 'bg-surface-hover/80 ring-1 ring-edge-subtle',
           interaction.transition,
           interaction.focusRingPanel,
-          interaction.disabled,
         )}
       >
-        {canExpand ? (
-          <ChevronRight
-            className={cn(
-              'size-3.5 shrink-0 text-fg-disabled transition-transform duration-150',
-              open && 'rotate-90 text-fg-subtle',
-            )}
-            aria-hidden
-          />
-        ) : (
-          <span className="inline-block size-3.5 shrink-0" aria-hidden />
-        )}
-        {icon}
-        <span className="shrink-0 text-xs tabular-nums text-fg-disabled">
-          {labels.agentNumber(agent.id)}
+        <span className="flex min-w-0 items-center gap-2">
+          <ChevronRight className="size-3.5 shrink-0 text-fg-disabled" aria-hidden />
+          {icon}
+          <span className="shrink-0 text-xs tabular-nums text-fg-disabled">
+            {labels.agentNumber(agent.id)}
+          </span>
+          <span className="min-w-0 flex-1 truncate text-fg">{agent.label}</span>
+          {elapsed ? (
+            <span className="shrink-0 text-[10px] tabular-nums text-fg-disabled">{elapsed}</span>
+          ) : null}
         </span>
-        <span className="min-w-0 flex-1 truncate text-fg">{agent.label}</span>
+        {statusHint ? (
+          <span className="ml-7 truncate text-xs text-fg-subtle">{statusHint}</span>
+        ) : null}
       </button>
-
-      {open && canExpand ? (
-        <div className="ml-7 mt-1 space-y-2 rounded-md border border-edge-subtle bg-surface-hover/30 p-2 text-xs">
-          {agent.prompt ? (
-            <div className="min-w-0">
-              <div className="mb-0.5 text-[10px] font-medium uppercase tracking-wide text-fg-subtle">
-                {labels.promptHeading}
-              </div>
-              <pre className="max-h-48 min-w-0 overflow-y-auto whitespace-pre-wrap break-words font-mono text-fg-muted">
-                {agent.prompt}
-              </pre>
-            </div>
-          ) : null}
-          {agent.resultPreview ? (
-            <div className="min-w-0">
-              <div className="mb-0.5 text-[10px] font-medium uppercase tracking-wide text-fg-subtle">
-                {labels.resultPreviewHeading}
-              </div>
-              <div className="max-h-48 min-w-0 overflow-y-auto whitespace-pre-wrap break-words font-mono text-fg-muted">
-                {agent.resultPreview}
-              </div>
-            </div>
-          ) : null}
-          {agent.error ? (
-            <div className="min-w-0">
-              <div className="mb-0.5 text-[10px] font-medium uppercase tracking-wide text-rose-600 dark:text-rose-400">
-                {labels.errorHeading}
-              </div>
-              <div className="font-mono text-rose-600 dark:text-rose-400">{agent.error}</div>
-            </div>
-          ) : null}
-          {!agent.prompt && !agent.resultPreview && !agent.error ? (
-            <div className="text-fg-disabled">{labels.emptyPreview}</div>
-          ) : null}
-        </div>
-      ) : null}
     </div>
   );
 });

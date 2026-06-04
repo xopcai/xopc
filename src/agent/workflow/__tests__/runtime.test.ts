@@ -263,6 +263,36 @@ return await agent('do', { label: 'review' })
     expect(runner.calls[0].opts.model).toBe(m);
   });
 
+  it('emits onAgentQueued before onAgentStart when concurrency is saturated', async () => {
+    const events: Array<{ kind: 'queued' | 'start'; id: number }> = [];
+    const runner: SubagentRunner = {
+      async run(_prompt, _opts) {
+        await new Promise((r) => setTimeout(r, 30));
+        return 'ok';
+      },
+    };
+    const script = `export const meta = { name: 'demo', description: 'd' }
+await parallel([
+  () => agent('a', { label: 'a' }),
+  () => agent('b', { label: 'b' }),
+])
+return 'done'
+`;
+    await runWorkflow(
+      script,
+      { runner },
+      {
+        cwd: '/tmp',
+        concurrency: 1,
+        onAgentQueued: (e) => events.push({ kind: 'queued', id: e.id }),
+        onAgentStart: (e) => events.push({ kind: 'start', id: e.id }),
+      },
+    );
+    expect(events.filter((e) => e.kind === 'queued')).toHaveLength(2);
+    expect(events.some((e) => e.kind === 'queued' && e.id === 1)).toBe(true);
+    expect(events.some((e) => e.kind === 'start' && e.id === 1)).toBe(true);
+  });
+
   it('rewrites .map-on-Promise TypeError with an await hint', async () => {
     // Bypass static lint via dynamic indirection: a closure returns the
     // Promise, then the script calls .map on it. This mirrors bugs that

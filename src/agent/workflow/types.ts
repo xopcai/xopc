@@ -47,6 +47,18 @@ export interface WorkflowMeta {
 
 export type WorkflowAgentStatus = 'queued' | 'running' | 'done' | 'error' | 'skipped';
 
+export type WorkflowAgentStepStatus = 'running' | 'done' | 'error';
+
+export interface WorkflowAgentStep {
+  id: string;
+  kind: 'tool' | 'llm' | 'thinking';
+  label: string;
+  detail?: string;
+  status: WorkflowAgentStepStatus;
+  startedAtMs?: number;
+  durationMs?: number;
+}
+
 export interface WorkflowAgentSnapshot {
   id: number;
   label: string;
@@ -55,6 +67,15 @@ export interface WorkflowAgentSnapshot {
   status: WorkflowAgentStatus;
   resultPreview?: string;
   error?: string;
+  startedAtMs?: number;
+  durationMs?: number;
+  steps?: WorkflowAgentStep[];
+  /** One-line summary for inline agent rows. */
+  currentStep?: string;
+  iteration?: number;
+  maxIterations?: number;
+  /** Accumulated assistant/thinking text when subagentStream is `full`. */
+  streamText?: string;
 }
 
 export interface WorkflowSnapshot {
@@ -89,9 +110,18 @@ export interface SubagentRunOptions<T = unknown> {
   rethrow?: boolean;
   /** Hint about which phase this agent belongs to (passed through for logging). */
   phase?: string;
+  /** Live progress from the child agent loop (workflow tool binds per agent id). */
+  onProgress?: (event: SubagentProgressEvent) => void;
   /** Pre-bound capture for structured output (internal: created by the adapter when schema present). */
   __capture?: { called: boolean; value?: T };
 }
+
+export type SubagentProgressEvent =
+  | { type: 'tool_start'; toolCallId: string; toolName: string; args: Record<string, unknown> }
+  | { type: 'tool_end'; toolCallId: string; toolName: string; isError: boolean }
+  | { type: 'iteration'; count: number; max: number }
+  | { type: 'text_delta'; delta: string }
+  | { type: 'thinking_delta'; delta: string };
 
 /**
  * Spawns a single fresh subagent and returns its result.
@@ -133,8 +163,16 @@ export interface WorkflowRunOptions {
   maxSubagents?: number;
   onLog?: (message: string) => void;
   onPhase?: (title: string) => void;
+  onAgentQueued?: (event: { id: number; label: string; phase?: string; prompt: string }) => void;
   onAgentStart?: (event: { id: number; label: string; phase?: string; prompt: string }) => void;
   onAgentEnd?: (event: { id: number; label: string; phase?: string; result: unknown; status: WorkflowAgentStatus }) => void;
+  /** Merge extra subagent run options (e.g. progress callbacks) per agent id. */
+  enhanceSubagentRun?: (ctx: {
+    id: number;
+    label: string;
+    phase?: string;
+    prompt: string;
+  }) => Partial<SubagentRunOptions<unknown>>;
 }
 
 export interface WorkflowRunResult<T = unknown> {

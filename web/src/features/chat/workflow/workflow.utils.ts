@@ -169,6 +169,20 @@ export function formatDuration(ms: number): string {
   return minRem ? `${hours}h ${minRem}m` : `${hours}h`;
 }
 
+/** Elapsed time for a live or finished agent row. */
+export function agentElapsedMs(agent: WorkflowAgentSnapshot, now = Date.now()): number | null {
+  if (agent.durationMs != null && Number.isFinite(agent.durationMs)) return agent.durationMs;
+  if (agent.status === 'running' && agent.startedAtMs != null) {
+    return Math.max(0, now - agent.startedAtMs);
+  }
+  return null;
+}
+
+export function formatAgentElapsed(agent: WorkflowAgentSnapshot, now = Date.now()): string {
+  const ms = agentElapsedMs(agent, now);
+  return ms != null ? formatDuration(ms) : '';
+}
+
 /**
  * Severity colour swatch used by the result summary. Stays neutral by default
  * (DESIGN.md: "灰色是主角，蓝色是信号") and only reaches for accent / rose

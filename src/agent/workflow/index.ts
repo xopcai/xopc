@@ -1,3 +1,4 @@
+export { applySubagentProgress } from './agent-progress.js';
 export { BUILTIN_WORKFLOWS, type BuiltinWorkflow } from './builtins/index.js';
 export {
   createWorkflowCatalog,
@@ -54,8 +55,10 @@ export type {
   JsonSchema,
   SubagentRunner,
   SubagentRunOptions,
+  SubagentProgressEvent,
   WorkflowAgentSnapshot,
   WorkflowAgentStatus,
+  WorkflowAgentStep,
   WorkflowMeta,
   WorkflowMetaEstimatedAgents,
   WorkflowMetaPhase,
