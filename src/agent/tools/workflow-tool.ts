@@ -36,6 +36,8 @@ import {
   type WorkflowSnapshot,
 } from '../workflow/index.js';
 import { resolveModel as resolveModelById } from '../../providers/index.js';
+import { extractProfileAgentId } from '../../config/agent-profile.js';
+import { resolveModelRef } from '../../config/agent-typed-models.js';
 import type { ToolExecutorConfig } from './executor.js';
 
 const log = createLogger('workflow-tool');
@@ -197,7 +199,16 @@ export function createWorkflowTool(deps: WorkflowToolDeps): AgentTool {
         buildChildTools: deps.buildChildTools,
       });
 
-      const resolveModelId = (modelId: string): Model<Api> => resolveModelById(modelId);
+      const resolveModelId = (modelRef: string): Model<Api> => {
+        const config = deps.getConfig();
+        if (!config) {
+          throw new Error('workflow model resolution requires config');
+        }
+        const sessionKey = deps.getCurrentSessionKey?.();
+        const agentId = extractProfileAgentId(sessionKey, config);
+        const realRef = resolveModelRef(config, agentId, modelRef);
+        return resolveModelById(realRef);
+      };
 
       // Combined abort: parent signal + per-run timeout.
       const controller = new AbortController();

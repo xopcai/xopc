@@ -7,6 +7,7 @@ import {
   patchAgentDefaults,
   type AgentDefaultsState,
 } from '@/features/settings/config-api';
+import { validateTypedModelsForSave } from '@/features/settings/agents/typed-models-lib';
 import type { MessageBundle } from '@/i18n/messages';
 import { createFormDraftReducer, syncFormDraftFromParsed } from '@/lib/settings-form-draft';
 import { useGatewayStore } from '@/stores/gateway-store';
@@ -91,6 +92,15 @@ export function useAgentDefaultsForm(a: MessageBundle['agentSettings']): UseAgen
               ? e.message
               : a.advanced.paramsInvalidJson,
         );
+        return false;
+      }
+      const typedErr = validateTypedModelsForSave(form.typedModels, {
+        invalidId: a.typedModelsInvalidId,
+        duplicateId: a.typedModelsDuplicateId,
+        invalidModel: a.typedModelsInvalidModel,
+      });
+      if (typedErr) {
+        setError(typedErr);
         return false;
       }
       await patchAgentDefaults(form);

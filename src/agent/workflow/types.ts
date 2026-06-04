@@ -25,6 +25,7 @@ export interface JsonSchema {
 export interface WorkflowMetaPhase {
   title: string;
   detail?: string;
+  /** Default model for this phase: `provider/model` or configured typed id. */
   model?: string;
 }
 
@@ -111,7 +112,7 @@ export interface AgentScriptOptions {
   phase?: string;
   schema?: JsonSchema;
   /**
-   * Real model id (e.g. `openai/gpt-4o-mini`) — must contain `/`.
+   * Model ref: `provider/model` or a configured typed id (e.g. `small`, `@large`).
    */
   model?: string;
   /** Subagent tool allowlist override (forwarded to the runner). */

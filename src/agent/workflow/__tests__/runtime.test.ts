@@ -214,6 +214,55 @@ return await agent('do', { model: 'openai/gpt-4o-mini' })
     expect(runner.calls[0].opts.model).toBe(m);
   });
 
+  it('resolves typed model id via resolveModelId', async () => {
+    const runner = new StubRunner(() => 'ok');
+    const m = { id: 'fake/small' } as never;
+    let askedFor: string | undefined;
+    const script = `export const meta = { name: 'demo', description: 'd' }
+return await agent('do', { model: 'small' })
+`;
+    await runWorkflow(
+      script,
+      {
+        runner,
+        resolveModelId: (id) => {
+          askedFor = id;
+          return m;
+        },
+      },
+      { cwd: '/tmp' },
+    );
+    expect(askedFor).toBe('small');
+    expect(runner.calls[0].opts.model).toBe(m);
+  });
+
+  it('uses phase default model via resolveModelId', async () => {
+    const runner = new StubRunner(() => 'ok');
+    const m = { id: 'fake/large' } as never;
+    let askedFor: string | undefined;
+    const script = `export const meta = {
+  name: 'demo',
+  description: 'd',
+  phases: [{ title: 'Review', model: 'large' }],
+}
+phase('Review')
+return await agent('do', { label: 'review' })
+`;
+    await runWorkflow(
+      script,
+      {
+        runner,
+        resolveModelId: (id) => {
+          askedFor = id;
+          return m;
+        },
+      },
+      { cwd: '/tmp' },
+    );
+    expect(askedFor).toBe('large');
+    expect(runner.calls[0].opts.model).toBe(m);
+  });
+
   it('rewrites .map-on-Promise TypeError with an await hint', async () => {
     // Bypass static lint via dynamic indirection: a closure returns the
     // Promise, then the script calls .map on it. This mirrors bugs that

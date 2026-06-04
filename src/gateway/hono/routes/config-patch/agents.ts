@@ -18,6 +18,7 @@ import type { Config } from '../../../../config/schema.js';
 import {
   normalizePatchAgentImageGenerationModel,
   normalizePatchAgentModel,
+  normalizePatchTypedModels,
 } from '../../lib/agent-model.js';
 
 export function applyAgentsPatch(config: Config, body: any): void {
@@ -663,6 +664,17 @@ export function applyAgentsPatch(config: Config, body: any): void {
       delete def.skills;
     } else if (Array.isArray(v) && v.every((x) => typeof x === 'string')) {
       def.skills = v;
+    }
+  }
+
+  if (dPatch.models !== undefined) {
+    const normalized = normalizePatchTypedModels(dPatch.models);
+    if (normalized === undefined) {
+      // skip invalid shape
+    } else if (normalized === null) {
+      delete def.models;
+    } else {
+      def.models = normalized;
     }
   }
 
