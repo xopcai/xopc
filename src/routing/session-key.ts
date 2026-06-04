@@ -1,104 +1,62 @@
 /**
- * Session key construction and parsing.
+ * Session key parsing helpers for `agent:{agentId}:{rest}` keys.
  *
- * Format: {agentId}:{source}:{accountId}:{peerKind}:{peerId}[:thread:{threadId}][:scope:{scopeId}]
- *
- * Examples:
- * - main:telegram:acc_default:dm:123456
- * - main:discord:acc_work:channel:987654:thread:789
- * - subagent:main:abc123:telegram:acc_default:dm:123456
+ * Re-exports the OpenClaw-aligned builder/parser surface from agent-session-key.ts.
  */
 
-// Precompiled regexes for segment validation
+import {
+  buildAgentMainSessionKey,
+  buildAgentPeerSessionKey,
+  defaultMainSessionKey,
+  normalizeAgentId,
+  normalizeMainKey,
+  normalizeSessionKey,
+  parseAgentSessionKey,
+  resolveThreadSessionKeys,
+  type PeerKind,
+} from './agent-session-key.js';
+
+export * from './agent-session-key.js';
+export * from './session-key-utils.js';
+
 const VALID_SEGMENT_RE = /^[a-z0-9](?:[a-z0-9_-]*[a-z0-9])?$/i;
 const INVALID_CHARS_RE = /[^a-z0-9_-]+/g;
 const LEADING_DASH_RE = /^-+/;
 const TRAILING_DASH_RE = /-+$/;
 
-/**
- * Sanitize a segment to allowed chars a-z0-9_-
- */
-export function sanitizeSegment(value: string | undefined | null, options?: { allowLeadingDash?: boolean }): string {
+export function sanitizeSegment(
+  value: string | undefined | null,
+  options?: { allowLeadingDash?: boolean },
+): string {
   const trimmed = (value ?? '').trim();
   if (!trimmed) {
     return '';
   }
-  
-  // Strip disallowed characters
-  let cleaned = trimmed
-    .toLowerCase()
-    .replace(INVALID_CHARS_RE, '-');
-  
-  // Trim leading/trailing dashes unless a leading dash is allowed (e.g. negative IDs)
+
+  let cleaned = trimmed.toLowerCase().replace(INVALID_CHARS_RE, '-');
+
   if (!options?.allowLeadingDash) {
-    cleaned = cleaned
-      .replace(LEADING_DASH_RE, '')
-      .replace(TRAILING_DASH_RE, '');
+    cleaned = cleaned.replace(LEADING_DASH_RE, '').replace(TRAILING_DASH_RE, '');
   } else {
-    // When leading dash is allowed, only strip trailing dashes
     cleaned = cleaned.replace(TRAILING_DASH_RE, '');
   }
-  
+
   if (!cleaned) {
     return '';
   }
-  
+
   return cleaned.slice(0, 64);
 }
 
-/**
- * Whether the segment matches the allowed pattern and length.
- */
 export function isValidSegment(value: string | undefined | null): boolean {
   const trimmed = (value ?? '').trim();
-  if (!trimmed) {
+  if (!trimmed || trimmed.length > 64) {
     return false;
   }
-  
-  if (trimmed.length > 64) {
-    return false;
-  }
-  
   return VALID_SEGMENT_RE.test(trimmed);
 }
 
-/**
- * Fields used to build a session key.
- */
-export interface BuildSessionKeyParams {
-  agentId: string;
-  source: string;
-  accountId: string;
-  peerKind: string;
-  peerId: string;
-  threadId?: string | null;
-  scopeId?: string | null;
-}
-
-export function buildSessionKey(params: BuildSessionKeyParams): string {
-  const segments = [
-    sanitizeSegment(params.agentId) || 'main',
-    sanitizeSegment(params.source) || 'unknown',
-    sanitizeSegment(params.accountId) || 'default',
-    sanitizeSegment(params.peerKind) || 'unknown',
-    // peerId may start with '-' (e.g. Telegram supergroup id -1001234567890)
-    sanitizeSegment(params.peerId, { allowLeadingDash: true }) || 'unknown',
-  ];
-  
-  if (params.threadId) {
-    segments.push('thread', sanitizeSegment(params.threadId, { allowLeadingDash: true }) || 'unknown');
-  }
-  
-  if (params.scopeId) {
-    segments.push('scope', sanitizeSegment(params.scopeId, { allowLeadingDash: true }) || 'default');
-  }
-  
-  return segments.join(':');
-}
-
-/**
- * Parsed session key components.
- */
+/** Structured view of an agent session key rest segment. */
 export interface ParsedSessionKey {
   agentId: string;
   source: string;
@@ -109,176 +67,241 @@ export interface ParsedSessionKey {
   scopeId?: string;
 }
 
+export interface BuildSessionKeyParams {
+  agentId: string;
+  source: string;
+  accountId: string;
+  peerKind: string;
+  peerId: string;
+  threadId?: string | null;
+  scopeId?: string | null;
+  mainKey?: string;
+  dmScope?: 'main' | 'per-peer' | 'per-channel-peer' | 'per-account-channel-peer';
+  identityLinks?: Record<string, string[]>;
+}
+
+/** Build an OpenClaw-style agent session key from routing segments. */
+export function buildSessionKey(params: BuildSessionKeyParams): string {
+  const peerKind = (params.peerKind === 'dm' ? 'direct' : params.peerKind) as PeerKind;
+  let key = buildAgentPeerSessionKey({
+    agentId: params.agentId,
+    mainKey: params.mainKey,
+    channel: params.source,
+    accountId: params.accountId,
+    peerKind,
+    peerId: params.peerId,
+    identityLinks: params.identityLinks,
+    dmScope:
+      params.dmScope ??
+      (peerKind === 'direct' ? 'per-account-channel-peer' : undefined),
+  });
+
+  if (params.threadId) {
+    key = resolveThreadSessionKeys({ baseSessionKey: key, threadId: params.threadId }).sessionKey;
+  }
+
+  if (params.scopeId) {
+    key = `${key}:scope:${sanitizeSegment(params.scopeId, { allowLeadingDash: true }) || 'default'}`;
+  }
+
+  return key;
+}
+
+/** Parse `agent:{agentId}:{rest}` into routing segments. Returns null for invalid keys. */
 export function parseSessionKey(sessionKey: string | undefined | null): ParsedSessionKey | null {
   const raw = (sessionKey ?? '').trim();
   if (!raw) {
     return null;
   }
-  
-  const parts = raw.split(':').filter(Boolean);
 
-  /**
-   * Alternate encoding used in some installs / tests: `gateway:{agentId}:{source}:{accountId}:{peerKind}:{peerId}…`
-   * (distinct from normal `{agentId}:{source}:…` where the first segment is the agent id.)
-   */
-  if (parts.length >= 6 && parts[0]?.toLowerCase() === 'gateway') {
-    const agentId = parts[1] ?? '';
-    const source = parts[2] ?? '';
-    const accountId = parts[3] ?? '';
-    const peerKind = parts[4] ?? '';
-    const peerId = parts[5] ?? '';
-    const rest = parts.slice(6);
-    const result: ParsedSessionKey = {
-      agentId: agentId.toLowerCase(),
-      source: source.toLowerCase(),
-      accountId: accountId.toLowerCase(),
-      peerKind: peerKind.toLowerCase(),
-      peerId: peerId.toLowerCase(),
+  const { baseSessionKey, threadId } = parseThreadSuffix(raw);
+  const agentParsed = parseAgentSessionKey(baseSessionKey);
+  if (!agentParsed) {
+    return null;
+  }
+
+  const scopeParts = parseScopeSuffix(agentParsed.rest);
+  const rest = scopeParts.rest;
+  const scopeId = scopeParts.scopeId;
+
+  const mainKey = normalizeMainKey(undefined);
+  if (rest === mainKey) {
+    return {
+      agentId: agentParsed.agentId,
+      source: 'cli',
+      accountId: 'default',
+      peerKind: 'direct',
+      peerId: mainKey,
+      threadId,
+      scopeId,
     };
-    let i = 0;
-    while (i < rest.length) {
-      const marker = rest[i]?.toLowerCase();
-      const value = rest[i + 1];
-      if (marker === 'thread' && value) {
-        result.threadId = value.toLowerCase();
-        i += 2;
-      } else if (marker === 'scope' && value) {
-        result.scopeId = value.toLowerCase();
-        i += 2;
-      } else {
-        i++;
-      }
-    }
-    return result;
   }
 
-  if (parts.length < 5) {
-    return null;
+  if (rest.startsWith('subagent:')) {
+    return parseSubagentRest(agentParsed.agentId, rest, threadId, scopeId);
   }
-  
-  const [agentId, source, accountId, peerKind, peerId, ...rest] = parts;
-  
-  if (!agentId || !source || !accountId || !peerKind || !peerId) {
-    return null;
+
+  if (rest.startsWith('cron:')) {
+    const parts = rest.split(':');
+    return {
+      agentId: agentParsed.agentId,
+      source: 'cron',
+      accountId: 'default',
+      peerKind: 'direct',
+      peerId: parts.slice(1).join(':') || 'cron',
+      threadId,
+      scopeId,
+    };
   }
-  
-  const result: ParsedSessionKey = {
-    agentId: agentId.toLowerCase(),
-    source: source.toLowerCase(),
-    accountId: accountId.toLowerCase(),
-    peerKind: peerKind.toLowerCase(),
-    peerId: peerId.toLowerCase(),
+
+  const parts = rest.split(':').filter(Boolean);
+
+  // channel:account:direct:peer
+  if (parts.length >= 4 && parts[2] === 'direct') {
+    return {
+      agentId: agentParsed.agentId,
+      source: parts[0]!,
+      accountId: parts[1]!,
+      peerKind: 'direct',
+      peerId: parts.slice(3).join(':'),
+      threadId,
+      scopeId,
+    };
+  }
+
+  // channel:direct:peer
+  if (parts.length >= 3 && parts[1] === 'direct') {
+    return {
+      agentId: agentParsed.agentId,
+      source: parts[0]!,
+      accountId: 'default',
+      peerKind: 'direct',
+      peerId: parts.slice(2).join(':'),
+      threadId,
+      scopeId,
+    };
+  }
+
+  // direct:peer
+  if (parts.length >= 2 && parts[0] === 'direct') {
+    return {
+      agentId: agentParsed.agentId,
+      source: 'cli',
+      accountId: 'default',
+      peerKind: 'direct',
+      peerId: parts.slice(1).join(':'),
+      threadId,
+      scopeId,
+    };
+  }
+
+  // channel:group|channel:peer
+  if (parts.length >= 3 && (parts[1] === 'group' || parts[1] === 'channel')) {
+    return {
+      agentId: agentParsed.agentId,
+      source: parts[0]!,
+      accountId: 'default',
+      peerKind: parts[1]!,
+      peerId: parts.slice(2).join(':'),
+      threadId,
+      scopeId,
+    };
+  }
+
+  // Custom rest (e.g. tui-uuid)
+  return {
+    agentId: agentParsed.agentId,
+    source: 'cli',
+    accountId: 'default',
+    peerKind: 'direct',
+    peerId: rest,
+    threadId,
+    scopeId,
   };
-  
-  // Optional :thread: and :scope: suffix segments
-  let i = 0;
-  while (i < rest.length) {
-    const marker = rest[i]?.toLowerCase();
-    const value = rest[i + 1];
-    
-    if (marker === 'thread' && value) {
-      result.threadId = value.toLowerCase();
-      i += 2;
-    } else if (marker === 'scope' && value) {
-      result.scopeId = value.toLowerCase();
-      i += 2;
-    } else {
-      i++;
-    }
+}
+
+function parseThreadSuffix(raw: string): { baseSessionKey: string; threadId?: string } {
+  const lower = raw.toLowerCase();
+  const idx = lower.lastIndexOf(':thread:');
+  if (idx === -1) {
+    return { baseSessionKey: raw };
   }
-  
-  return result;
+  return {
+    baseSessionKey: raw.slice(0, idx),
+    threadId: raw.slice(idx + ':thread:'.length),
+  };
 }
 
-/**
- * Whether the key refers to a subagent session.
- */
-export function isSubagentSessionKey(sessionKey: string | undefined | null): boolean {
-  const parsed = parseSessionKey(sessionKey);
-  return parsed?.agentId === 'subagent';
-}
-
-/**
- * Whether the key is a cron-driven session.
- */
-export function isCronSessionKey(sessionKey: string | undefined | null): boolean {
-  const parsed = parseSessionKey(sessionKey);
-  return parsed?.source === 'cron';
-}
-
-/**
- * Nesting depth from repeated `subagent` prefixes in the colon-separated key.
- * e.g. `subagent:...` => 1, `subagent:subagent:...` => 2
- */
-export function getSubagentDepth(sessionKey: string | undefined | null): number {
-  const raw = (sessionKey ?? '').trim();
-  if (!raw) {
-    return 0;
+function parseScopeSuffix(rest: string): { rest: string; scopeId?: string } {
+  const lower = rest.toLowerCase();
+  const idx = lower.lastIndexOf(':scope:');
+  if (idx === -1) {
+    return { rest };
   }
-  
-  const parts = raw.split(':');
-  let depth = 0;
-  
-  for (const part of parts) {
-    if (part.toLowerCase() === 'subagent') {
-      depth++;
-    } else {
-      break;
-    }
-  }
-  
-  return depth;
+  return {
+    rest: rest.slice(0, idx),
+    scopeId: rest.slice(idx + ':scope:'.length),
+  };
 }
 
-/**
- * Parameters for building a subagent session key.
- */
+function parseSubagentRest(
+  parentAgentId: string,
+  rest: string,
+  threadId?: string,
+  scopeId?: string,
+): ParsedSessionKey {
+  const body = rest.replace(/^subagent:/, '');
+  const parentKey = body ? `agent:${parentAgentId}:${body}` : '';
+  const parentParsed = parentKey ? parseSessionKey(parentKey) : null;
+  if (parentParsed) {
+    return {
+      ...parentParsed,
+      agentId: 'subagent',
+      threadId: threadId ?? parentParsed.threadId,
+      scopeId: scopeId ?? parentParsed.scopeId,
+    };
+  }
+  return {
+    agentId: 'subagent',
+    source: parentAgentId,
+    accountId: 'default',
+    peerKind: 'direct',
+    peerId: body || 'unknown',
+    threadId,
+    scopeId,
+  };
+}
+
 export interface BuildSubagentSessionKeyParams extends BuildSessionKeyParams {
   parentSessionKey: string;
 }
 
 export function buildSubagentSessionKey(params: BuildSubagentSessionKeyParams): string {
-  const parentParsed = parseSessionKey(params.parentSessionKey);
+  const parentParsed = parseAgentSessionKey(params.parentSessionKey);
   if (!parentParsed) {
     throw new Error(`Invalid parent session key: ${params.parentSessionKey}`);
   }
-  
-  return buildSessionKey({
-    agentId: 'subagent',
-    source: parentParsed.agentId,
-    accountId: parentParsed.accountId,
-    peerKind: parentParsed.peerKind,
-    peerId: parentParsed.peerId,
-    threadId: params.threadId,
-    scopeId: params.scopeId,
-  });
+  const parentRest = parentParsed.rest;
+  let key = `agent:${normalizeAgentId(parentParsed.agentId)}:subagent:${parentRest}`;
+  if (params.threadId) {
+    key = resolveThreadSessionKeys({ baseSessionKey: key, threadId: params.threadId }).sessionKey;
+  }
+  return key;
 }
 
-/**
- * Parent session key without a :thread: suffix, if any.
- */
 export function getParentSessionKey(sessionKey: string | undefined | null): string | null {
   const parsed = parseSessionKey(sessionKey);
-  if (!parsed) {
+  if (!parsed?.threadId) {
     return null;
   }
-  
-  if (!parsed.threadId) {
-    return null;
-  }
-  
   return buildSessionKey({
     agentId: parsed.agentId,
     source: parsed.source,
     accountId: parsed.accountId,
     peerKind: parsed.peerKind,
     peerId: parsed.peerId,
+    scopeId: parsed.scopeId,
   });
 }
 
-/**
- * Normalize a session key (trim + lowercase).
- */
-export function normalizeSessionKey(sessionKey: string | undefined | null): string {
-  return (sessionKey ?? '').trim().toLowerCase();
-}
+export { defaultMainSessionKey };

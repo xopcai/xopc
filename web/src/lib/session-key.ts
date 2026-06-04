@@ -1,8 +1,7 @@
 /**
- * Session key parsing — aligned with gateway `src/routing/session-key.ts`.
+ * Session key parsing for the gateway console.
  *
- * Format: `{agentId}:{source}:{accountId}:{peerKind}:{peerId}[:thread:{threadId}][:scope:{scopeId}]`
- * Alternate: `gateway:{agentId}:{source}:{accountId}:{peerKind}:{peerId}…`
+ * Canonical format: `agent:{agentId}:{rest}`
  */
 
 export interface ParsedSessionKey {
@@ -15,78 +14,113 @@ export interface ParsedSessionKey {
   scopeId?: string;
 }
 
+type ParsedAgentSessionKey = { agentId: string; rest: string };
+
+function parseAgentSessionKey(sessionKey: string | undefined | null): ParsedAgentSessionKey | null {
+  const raw = (sessionKey ?? '').trim().toLowerCase();
+  if (!raw) return null;
+  const parts = raw.split(':').filter(Boolean);
+  if (parts.length < 3 || parts[0] !== 'agent') return null;
+  const agentId = parts[1];
+  const rest = parts.slice(2).join(':');
+  if (!agentId || !rest) return null;
+  return { agentId, rest };
+}
+
+function parseThreadSuffix(raw: string): { baseSessionKey: string; threadId?: string } {
+  const lower = raw.toLowerCase();
+  const idx = lower.lastIndexOf(':thread:');
+  if (idx === -1) return { baseSessionKey: raw };
+  return {
+    baseSessionKey: raw.slice(0, idx),
+    threadId: raw.slice(idx + ':thread:'.length),
+  };
+}
+
 export function parseSessionKey(sessionKey: string | undefined | null): ParsedSessionKey | null {
   const raw = (sessionKey ?? '').trim();
-  if (!raw) {
-    return null;
-  }
+  if (!raw) return null;
 
-  const parts = raw.split(':').filter(Boolean);
+  const { baseSessionKey, threadId } = parseThreadSuffix(raw);
+  const agentParsed = parseAgentSessionKey(baseSessionKey);
+  if (!agentParsed) return null;
 
-  if (parts.length >= 6 && parts[0]?.toLowerCase() === 'gateway') {
-    const agentId = parts[1] ?? '';
-    const source = parts[2] ?? '';
-    const accountId = parts[3] ?? '';
-    const peerKind = parts[4] ?? '';
-    const peerId = parts[5] ?? '';
-    const rest = parts.slice(6);
-    const result: ParsedSessionKey = {
-      agentId: agentId.toLowerCase(),
-      source: source.toLowerCase(),
-      accountId: accountId.toLowerCase(),
-      peerKind: peerKind.toLowerCase(),
-      peerId: peerId.toLowerCase(),
+  const rest = agentParsed.rest;
+  if (rest === 'main') {
+    return {
+      agentId: agentParsed.agentId,
+      source: 'cli',
+      accountId: 'default',
+      peerKind: 'direct',
+      peerId: 'main',
+      threadId,
     };
-    let i = 0;
-    while (i < rest.length) {
-      const marker = rest[i]?.toLowerCase();
-      const value = rest[i + 1];
-      if (marker === 'thread' && value) {
-        result.threadId = value.toLowerCase();
-        i += 2;
-      } else if (marker === 'scope' && value) {
-        result.scopeId = value.toLowerCase();
-        i += 2;
-      } else {
-        i++;
-      }
-    }
-    return result;
   }
 
-  if (parts.length < 5) {
-    return null;
+  const parts = rest.split(':').filter(Boolean);
+
+  if (parts.length >= 4 && parts[2] === 'direct') {
+    return {
+      agentId: agentParsed.agentId,
+      source: parts[0]!,
+      accountId: parts[1]!,
+      peerKind: 'direct',
+      peerId: parts.slice(3).join(':'),
+      threadId,
+    };
   }
 
-  const [agentId, source, accountId, peerKind, peerId, ...rest] = parts;
-
-  if (!agentId || !source || !accountId || !peerKind || !peerId) {
-    return null;
+  if (parts.length >= 3 && parts[1] === 'direct') {
+    return {
+      agentId: agentParsed.agentId,
+      source: parts[0]!,
+      accountId: 'default',
+      peerKind: 'direct',
+      peerId: parts.slice(2).join(':'),
+      threadId,
+    };
   }
 
-  const result: ParsedSessionKey = {
-    agentId: agentId.toLowerCase(),
-    source: source.toLowerCase(),
-    accountId: accountId.toLowerCase(),
-    peerKind: peerKind.toLowerCase(),
-    peerId: peerId.toLowerCase(),
+  if (parts.length >= 2 && parts[0] === 'direct') {
+    return {
+      agentId: agentParsed.agentId,
+      source: 'cli',
+      accountId: 'default',
+      peerKind: 'direct',
+      peerId: parts.slice(1).join(':'),
+      threadId,
+    };
+  }
+
+  if (parts.length >= 3 && (parts[1] === 'group' || parts[1] === 'channel')) {
+    return {
+      agentId: agentParsed.agentId,
+      source: parts[0]!,
+      accountId: 'default',
+      peerKind: parts[1]!,
+      peerId: parts.slice(2).join(':'),
+      threadId,
+    };
+  }
+
+  return {
+    agentId: agentParsed.agentId,
+    source: 'cli',
+    accountId: 'default',
+    peerKind: 'direct',
+    peerId: rest,
+    threadId,
   };
+}
 
-  let i = 0;
-  while (i < rest.length) {
-    const marker = rest[i]?.toLowerCase();
-    const value = rest[i + 1];
+export function resolveAgentIdFromSessionKey(sessionKey: string | undefined | null): string {
+  return parseAgentSessionKey(sessionKey)?.agentId ?? 'main';
+}
 
-    if (marker === 'thread' && value) {
-      result.threadId = value.toLowerCase();
-      i += 2;
-    } else if (marker === 'scope' && value) {
-      result.scopeId = value.toLowerCase();
-      i += 2;
-    } else {
-      i++;
-    }
-  }
+export function buildAgentMainSessionKey(agentId: string, mainKey = 'main'): string {
+  return `agent:${agentId}:${mainKey}`;
+}
 
-  return result;
+export function defaultMainSessionKey(agentId = 'main', mainKey = 'main'): string {
+  return buildAgentMainSessionKey(agentId, mainKey);
 }
