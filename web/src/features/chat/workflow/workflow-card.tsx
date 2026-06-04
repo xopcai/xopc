@@ -20,10 +20,12 @@ import { cn } from '@/lib/cn';
 import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
 import { interaction } from '@/lib/interaction';
 
+import { WorkflowAgentDetailDrawer, type WorkflowAgentDetailDrawerLabels } from './workflow-agent-detail-drawer';
 import { WorkflowCardHeader, type WorkflowCardHeaderLabels } from './workflow-card-header';
 import { WorkflowErrorCard, type WorkflowErrorCardLabels } from './workflow-error-card';
 import { WorkflowPhaseRow, type WorkflowPhaseRowLabels } from './workflow-phase-row';
 import { WorkflowResultSummary, type WorkflowResultSummaryLabels } from './workflow-result-summary';
+import type { WorkflowAgentSnapshot } from './workflow.types';
 import {
   classifyFailure,
   extractSnapshot,
@@ -38,6 +40,7 @@ export type WorkflowCardLabels = {
   phase: WorkflowPhaseRowLabels;
   result: WorkflowResultSummaryLabels;
   error: WorkflowErrorCardLabels;
+  drawer: WorkflowAgentDetailDrawerLabels;
   /** Header action button tooltips / a11y. */
   cancel: string;
   saveAria: string;
@@ -51,6 +54,7 @@ export type WorkflowCardLabels = {
   moreAria: string;
   viewSubagentsHeading: string;
   recentLogsHeading: string;
+  showAllLogs: string;
 };
 
 export interface WorkflowCardProps {
@@ -68,8 +72,6 @@ export interface WorkflowCardProps {
   labels: WorkflowCardLabels;
   className?: string;
 }
-
-const SHOW_RECENT_LOGS = 2;
 
 export const WorkflowCard = memo(function WorkflowCard({
   block,
@@ -94,6 +96,42 @@ export const WorkflowCard = memo(function WorkflowCard({
   }, [status]);
 
   const [showSubagentsAfterComplete, setShowSubagentsAfterComplete] = useState(false);
+  const [drawerAgentId, setDrawerAgentId] = useState<number | null>(null);
+  const [pinnedAgentId, setPinnedAgentId] = useState<number | null>(null);
+  const [logsExpanded, setLogsExpanded] = useState(false);
+  const [autoFollow, setAutoFollow] = useState(true);
+
+  const drawerAgent = useMemo(() => {
+    if (drawerAgentId == null || !snapshot) return null;
+    return snapshot.agents.find((a) => a.id === drawerAgentId) ?? null;
+  }, [drawerAgentId, snapshot]);
+
+  const handleSelectAgent = useCallback((agent: WorkflowAgentSnapshot) => {
+    setDrawerAgentId(agent.id);
+    setAutoFollow(false);
+  }, []);
+
+  const closeDrawer = useCallback(() => {
+    setDrawerAgentId(null);
+    setAutoFollow(false);
+  }, []);
+
+  useEffect(() => {
+    if (status === 'completed' || status === 'failed') setAutoFollow(true);
+  }, [status]);
+
+  // Auto-follow the current running agent unless the user closed the drawer or pinned another row.
+  useEffect(() => {
+    if (status !== 'running' || !snapshot || !autoFollow) return;
+    if (pinnedAgentId != null) {
+      setDrawerAgentId(pinnedAgentId);
+      return;
+    }
+    const running = snapshot.agents.filter((a) => a.status === 'running');
+    if (running.length === 1) {
+      setDrawerAgentId(running[0].id);
+    }
+  }, [status, snapshot, pinnedAgentId, autoFollow, snapshot?.agents, snapshot?.runningCount]);
 
   // Live elapsed ticker for running state. Tick once a second; cleared on
   // status change.
@@ -233,6 +271,7 @@ export const WorkflowCard = memo(function WorkflowCard({
   );
 
   return (
+    <>
     <div
       className={cn(
         'min-w-0 rounded-xl border border-edge bg-surface-panel shadow-surface',
@@ -312,8 +351,13 @@ export const WorkflowCard = memo(function WorkflowCard({
               rollup={rollup}
               currentPhase={snapshot.currentPhase}
               labels={labels.phase}
-              recentLogs={snapshot.logs.slice(-SHOW_RECENT_LOGS)}
+              recentLogs={snapshot.logs}
               recentLogsHeading={labels.recentLogsHeading}
+              showAllLogsLabel={labels.showAllLogs}
+              logsExpanded={logsExpanded}
+              onToggleLogs={() => setLogsExpanded((v) => !v)}
+              selectedAgentId={drawerAgentId}
+              onSelectAgent={handleSelectAgent}
             />
           ) : null}
 
@@ -340,6 +384,11 @@ export const WorkflowCard = memo(function WorkflowCard({
                   labels={labels.phase}
                   recentLogs={[]}
                   recentLogsHeading={labels.recentLogsHeading}
+                  showAllLogsLabel={labels.showAllLogs}
+                  logsExpanded={false}
+                  onToggleLogs={() => {}}
+                  selectedAgentId={drawerAgentId}
+                  onSelectAgent={handleSelectAgent}
                 />
               </div>
             </details>
@@ -347,6 +396,17 @@ export const WorkflowCard = memo(function WorkflowCard({
         </div>
       ) : null}
     </div>
+
+    <WorkflowAgentDetailDrawer
+      open={drawerAgentId != null && drawerAgent != null}
+      agent={drawerAgent}
+      snapshot={snapshot}
+      pinnedAgentId={pinnedAgentId}
+      onPinAgent={setPinnedAgentId}
+      onClose={closeDrawer}
+      labels={labels.drawer}
+    />
+    </>
   );
 });
 
@@ -356,29 +416,66 @@ function ProgressTree({
   labels,
   recentLogs,
   recentLogsHeading,
+  showAllLogsLabel,
+  logsExpanded,
+  onToggleLogs,
+  selectedAgentId,
+  onSelectAgent,
 }: {
   rollup: ReturnType<typeof rollupPhases>;
   currentPhase: string | undefined;
   labels: WorkflowPhaseRowLabels;
   recentLogs: string[];
   recentLogsHeading: string;
+  showAllLogsLabel: string;
+  logsExpanded: boolean;
+  onToggleLogs: () => void;
+  selectedAgentId?: number | null;
+  onSelectAgent?: (agent: WorkflowAgentSnapshot) => void;
 }) {
+  const visibleLogs =
+    logsExpanded || recentLogs.length <= 2 ? recentLogs : recentLogs.slice(-2);
+
   return (
     <div className="space-y-1">
       {rollup.phases.map((p) => (
-        <WorkflowPhaseRow key={p.title} rollup={p} isCurrent={p.title === currentPhase} labels={labels} />
+        <WorkflowPhaseRow
+          key={p.title}
+          rollup={p}
+          isCurrent={p.title === currentPhase}
+          labels={labels}
+          selectedAgentId={selectedAgentId}
+          onSelectAgent={onSelectAgent}
+        />
       ))}
       {rollup.unphased ? (
-        <WorkflowPhaseRow rollup={rollup.unphased} isCurrent={false} labels={labels} />
+        <WorkflowPhaseRow
+          rollup={rollup.unphased}
+          isCurrent={false}
+          labels={labels}
+          selectedAgentId={selectedAgentId}
+          onSelectAgent={onSelectAgent}
+        />
       ) : null}
       {recentLogs.length > 0 ? (
         <div className="mt-2 border-t border-edge-subtle pt-2">
-          <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-fg-subtle">
-            {recentLogsHeading}
+          <div className="mb-1 flex items-center justify-between gap-2">
+            <div className="text-[10px] font-medium uppercase tracking-wide text-fg-subtle">
+              {recentLogsHeading}
+            </div>
+            {recentLogs.length > 2 ? (
+              <button
+                type="button"
+                onClick={onToggleLogs}
+                className="text-[10px] text-accent-fg hover:underline"
+              >
+                {showAllLogsLabel}
+              </button>
+            ) : null}
           </div>
           <div className="space-y-0.5">
-            {recentLogs.map((line, i) => (
-              <div key={i} className="truncate font-mono text-xs text-fg-subtle">
+            {visibleLogs.map((line, i) => (
+              <div key={i} className="break-words font-mono text-xs text-fg-subtle">
                 {line}
               </div>
             ))}

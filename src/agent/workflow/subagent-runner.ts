@@ -37,7 +37,7 @@ import {
   STRUCTURED_OUTPUT_TOOL_NAME,
   type StructuredOutputCapture,
 } from './structured-output-tool.js';
-import type { SubagentRunOptions, SubagentRunner } from './types.js';
+import type { SubagentRunOptions, SubagentRunner, SubagentProgressEvent } from './types.js';
 
 const log = createLogger('workflow-subagent-runner');
 
@@ -76,6 +76,7 @@ export class DelegateSubagentRunner implements SubagentRunner {
     }
 
     const fullPrompt = buildPrompt(prompt, opts, wantStructured);
+    const streamMode = resolveSubagentStreamMode(this.deps.getConfig);
 
     const childOptions: DelegateChildHandleOptions = {
       workspace: this.deps.workspace,
@@ -96,6 +97,15 @@ export class DelegateSubagentRunner implements SubagentRunner {
           createStructuredOutputTool({ schema: opts.schema, capture }) as unknown as AgentTool<any, any>,
         ];
       },
+      progressHooks:
+        opts.onProgress && streamMode !== 'off'
+          ? {
+              mode: streamMode === 'full' ? 'full' : 'steps',
+              onProgress: (event) => {
+                opts.onProgress?.(mapChildProgressEvent(event));
+              },
+            }
+          : undefined,
     };
 
     const handle = createDelegateChildHandle(childOptions);
@@ -166,5 +176,53 @@ function safeResolveDefaultModel(get: () => Model<Api>): Model<Api> | null {
   } catch (e) {
     log.warn({ err: e }, 'failed to resolve default subagent model');
     return null;
+  }
+}
+
+function resolveSubagentStreamMode(
+  getConfig: () => Config | undefined,
+): 'off' | 'steps' | 'full' {
+  const mode = getConfig()?.agents?.defaults?.workflow?.subagentStream;
+  if (mode === 'off' || mode === 'steps' || mode === 'full') return mode;
+  return 'steps';
+}
+
+function mapChildProgressEvent(event: {
+  type: 'tool_start' | 'tool_end' | 'iteration' | 'text_delta' | 'thinking_delta';
+  toolCallId?: string;
+  toolName?: string;
+  args?: Record<string, unknown>;
+  isError?: boolean;
+  count?: number;
+  max?: number;
+  delta?: string;
+}): SubagentProgressEvent {
+  switch (event.type) {
+    case 'tool_start':
+      return {
+        type: 'tool_start',
+        toolCallId: event.toolCallId ?? '',
+        toolName: event.toolName ?? 'tool',
+        args: event.args ?? {},
+      };
+    case 'tool_end':
+      return {
+        type: 'tool_end',
+        toolCallId: event.toolCallId ?? '',
+        toolName: event.toolName ?? 'tool',
+        isError: Boolean(event.isError),
+      };
+    case 'iteration':
+      return {
+        type: 'iteration',
+        count: event.count ?? 0,
+        max: event.max ?? 0,
+      };
+    case 'text_delta':
+      return { type: 'text_delta', delta: event.delta ?? '' };
+    case 'thinking_delta':
+      return { type: 'thinking_delta', delta: event.delta ?? '' };
+    default:
+      return { type: 'text_delta', delta: '' };
   }
 }

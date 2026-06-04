@@ -13,20 +13,14 @@ import type {
   WorkflowMeta,
   WorkflowSnapshot,
 } from './types.js';
+import { emptySnapshotFor } from './runtime.js';
 
 export function createWorkflowSnapshot(meta: WorkflowMeta): WorkflowSnapshot {
-  return {
-    name: meta.name,
-    description: meta.description,
-    phases: [],
-    logs: [],
-    agents: [],
-    agentCount: 0,
-    runningCount: 0,
-    doneCount: 0,
-    errorCount: 0,
-    skippedCount: 0,
-  };
+  return emptySnapshotFor(
+    meta.name,
+    meta.description,
+    meta.phases?.map((p) => p.title),
+  );
 }
 
 export function recomputeCounts(snapshot: WorkflowSnapshot): void {

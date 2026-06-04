@@ -9,6 +9,7 @@
 import type { StoredLanguage } from '@/lib/storage';
 
 import type { WorkflowCardLabels } from './workflow-card';
+import type { WorkflowAgentDetailDrawerLabels } from './workflow-agent-detail-drawer';
 
 /**
  * Resolve a {@link WorkflowCardLabels} bag for the given language. Falls back
@@ -26,6 +27,62 @@ export function workflowCardLabels(language: StoredLanguage | undefined): Workfl
 /** @deprecated Use {@link workflowCardLabels}; kept for callers that don't have a language handy. */
 export function defaultWorkflowCardLabels(): WorkflowCardLabels {
   return enLabels();
+}
+
+function drawerLabelsEn(): WorkflowAgentDetailDrawerLabels {
+  return {
+    close: 'Close',
+    statusQueued: 'Queued',
+    statusRunning: 'Running',
+    statusDone: 'Completed',
+    statusError: 'Failed',
+    statusSkipped: 'Skipped',
+    workedFor: (d) => `Worked for ${d}`,
+    phaseHeading: 'Phase',
+    promptHeading: 'Prompt',
+    stepsHeading: 'Steps',
+    outputHeading: 'Output',
+    logsHeading: 'Workflow logs',
+    pin: 'Pin',
+    pinned: 'Pinned',
+    runningPlaceholder: 'Waiting for subagent steps…',
+    steps: {
+      empty: 'No steps yet',
+      iteration: (c, m) => `Tool round ${c}/${m}`,
+    },
+    stream: {
+      heading: 'Live output',
+      empty: 'No streamed output yet',
+    },
+  };
+}
+
+function drawerLabelsZh(): WorkflowAgentDetailDrawerLabels {
+  return {
+    close: '关闭',
+    statusQueued: '排队中',
+    statusRunning: '运行中',
+    statusDone: '已完成',
+    statusError: '失败',
+    statusSkipped: '已跳过',
+    workedFor: (d) => `已运行 ${d}`,
+    phaseHeading: '阶段',
+    promptHeading: 'Prompt',
+    stepsHeading: '步骤',
+    outputHeading: '输出',
+    logsHeading: '工作流日志',
+    pin: '固定',
+    pinned: '已固定',
+    runningPlaceholder: '等待子 agent 步骤…',
+    steps: {
+      empty: '暂无步骤',
+      iteration: (c, m) => `工具轮次 ${c}/${m}`,
+    },
+    stream: {
+      heading: '实时输出',
+      empty: '暂无流式输出',
+    },
+  };
 }
 
 function enLabels(): WorkflowCardLabels {
@@ -51,7 +108,11 @@ function enLabels(): WorkflowCardLabels {
       errorHeading: 'Error',
       emptyPreview: '(no preview)',
       agentNumber: (n) => `#${n}`,
+      queued: 'Queued',
+      running: 'Running…',
+      openDetail: 'View agent details',
     },
+    drawer: drawerLabelsEn(),
     result: {
       topFindingsHeading: (n) => `Top findings (${n})`,
       topRisksHeading: (n) => `Top risks (${n})`,
@@ -82,6 +143,7 @@ function enLabels(): WorkflowCardLabels {
     moreAria: 'More actions',
     viewSubagentsHeading: 'View subagents',
     recentLogsHeading: 'Logs',
+    showAllLogs: 'Show all',
   };
 }
 
@@ -106,7 +168,11 @@ function zhLabels(): WorkflowCardLabels {
       errorHeading: '错误',
       emptyPreview: '（暂无预览）',
       agentNumber: (n) => `#${n}`,
+      queued: '排队中',
+      running: '运行中…',
+      openDetail: '查看 agent 详情',
     },
+    drawer: drawerLabelsZh(),
     result: {
       topFindingsHeading: (n) => `主要发现（${n}）`,
       topRisksHeading: (n) => `主要风险（${n}）`,
@@ -137,5 +203,6 @@ function zhLabels(): WorkflowCardLabels {
     moreAria: '更多操作',
     viewSubagentsHeading: '查看子 agent',
     recentLogsHeading: '日志',
+    showAllLogs: '显示全部',
   };
 }
