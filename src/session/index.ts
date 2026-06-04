@@ -64,6 +64,22 @@ export {
   type SessionKeyResolution,
   type SessionResolution,
 } from './resolve-session.js';
+export {
+  initSessionTurn,
+  type InitSessionTurnOptions,
+  type InitSessionTurnResult,
+  type SessionResetFn,
+} from './init-session-turn.js';
+export {
+  DEFAULT_RESET_TRIGGERS,
+  RESET_OVERLAP_COMMANDS,
+  bareResetAckMessage,
+  matchResetTriggers,
+  resolveResetTriggers,
+  shouldSkipResetOverlapCommand,
+  stripLeadingEnvelopeTimestamp,
+  type ResetTriggerMatch,
+} from './reset-triggers.js';
 
 export type { CompactionConfig, CompactionResult } from '../agent/memory/compaction.js';
 export type { WindowConfig } from '../agent/memory/window.js';

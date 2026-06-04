@@ -5,8 +5,7 @@ import type { GatewayService } from '../service.js';
 import { MAX_WEBCHAT_ATTACHMENT_FILE_BYTES } from '../chat-limits.js';
 import { createLogger, updateAsyncLogContext } from '../../utils/logger.js';
 import { stringifySSEData } from './sse-json.js';
-import { buildSessionKey, parseSessionKey } from '../../routing/session-key.js';
-import { getDefaultAgentId } from '../../routing/resolve-route.js';
+import { resolveWebchatSessionKey } from '../resolve-webchat-session-key.js';
 
 const log = createLogger('Hono:SSE');
 
@@ -88,24 +87,20 @@ export function createAgentSSEHandler(config: SSEHandlerConfig) {
         ? body.clientCreatedAtMs
         : undefined;
     const newSession = Boolean(body.newSession);
-    let chatId = 'default';
-    if (newSession && channel === 'webchat') {
-      chatId = `chat_${randomUUID()}`;
-    } else {
-      const sk = typeof body.sessionKey === 'string' && body.sessionKey.trim() ? body.sessionKey.trim() : '';
-      const cid = typeof body.chatId === 'string' && body.chatId.trim() ? body.chatId.trim() : '';
-      const rawChatId = sk || cid || 'default';
-
-      // Validate sessionKey / chatId format to prevent cross-session access
-      if (rawChatId !== 'default' && !/^[a-zA-Z0-9][a-zA-Z0-9._:@\-]{0,255}$/.test(rawChatId)) {
-        log.warn({ rawChatId: rawChatId.slice(0, 64) }, 'Rejected invalid chatId format');
-        return c.json({
-          ok: false,
-          error: { code: 'BAD_REQUEST', message: 'Invalid session key format' },
-        }, 400);
-      }
-      chatId = rawChatId;
+    const cfg = service.currentConfig;
+    const resolved = resolveWebchatSessionKey({
+      cfg,
+      sessionKey: typeof body.sessionKey === 'string' ? body.sessionKey : undefined,
+      chatId: typeof body.chatId === 'string' ? body.chatId : undefined,
+      newSession,
+    });
+    if (resolved.ok === false) {
+      return c.json({
+        ok: false,
+        error: { code: 'BAD_REQUEST', message: resolved.error },
+      }, 400);
     }
+    const chatId = resolved.sessionKey;
 
     updateAsyncLogContext({ sessionId: String(chatId) });
 
@@ -147,20 +142,7 @@ export function createAgentSSEHandler(config: SSEHandlerConfig) {
 
     // --- Non-streaming fallback: collect everything, return JSON ---
     if (!wantSSE) {
-      let jsonSessionKey: string | undefined;
-      if (channel === 'webchat') {
-        const cfg = service.currentConfig;
-        const parsedKey = parseSessionKey(chatId);
-        jsonSessionKey = parsedKey
-          ? chatId
-          : buildSessionKey({
-              agentId: getDefaultAgentId(cfg),
-              source: 'webchat',
-              accountId: 'default',
-              peerKind: 'direct',
-              peerId: chatId,
-            });
-      }
+      const jsonSessionKey = channel === 'webchat' ? chatId : undefined;
 
       const generator = service.runAgent(message, channel, chatId, attachments, thinking, {
         signal: clientAbort.signal,

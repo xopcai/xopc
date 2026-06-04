@@ -41,6 +41,10 @@ xopc provides comprehensive session management for conversation history via CLI 
 
 Channel slash **`/new`** (aliases `/reset`, `/restart`) uses reset semantics, not delete. TUI **`/new`** / **`/reset`** call the same reset API in gateway mode (`POST /api/sessions/:key/reset` via `performSessionReset`).
 
+**Automatic rollover:** At turn start, xopc evaluates `session.reset` (daily at `atHour` or idle via `idleMinutes`) and archives + assigns a new `sessionId` when the session is stale—same as OpenClaw channel `initSessionState`. Configured **`session.resetTriggers`** (default `["/new","/reset"]`) are matched on inbound body before the model runs; bare triggers ack without a turn, `/new hello` resets then continues with `hello`.
+
+**Webchat API:** `POST /api/agent` requires `sessionKey` / `chatId` in `agent:{agentId}:{rest}` form (or omit for `agent:main:main`). Bare `chat_*` ids are rejected; create sessions via `POST /api/sessions`.
+
 ---
 
 ## Agent session keys

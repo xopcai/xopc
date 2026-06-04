@@ -9,7 +9,7 @@ import {
 } from '../../channels/attachments/voice-stt-webchat.js';
 import {
   resolveEffectiveReasoningLevel,
-  resolveSession,
+  initSessionTurn,
   type SessionConfigStore,
   type SessionStore,
 } from '../../session/index.js';
@@ -89,6 +89,7 @@ export interface ProcessDirectStreamingDeps {
     hadInboundVoice: boolean,
   ) => Promise<{ type: 'tts_audio'; workspaceRelativePath: string; mimeType: string; name: string } | null>;
   endDirectRequestContext: () => void;
+  resetSession: (sessionKey: string) => Promise<{ sessionId: string; previousSessionId: string } | null>;
 }
 
 export interface ProcessDirectStreamingInput {
@@ -136,14 +137,31 @@ export async function* runProcessDirectStreaming(
   const taskPromise = (async () => {
     try {
       const cfg = deps.getConfig();
+      let turnBody = input.content;
+      let resetTriggeredAtInit = false;
       if (cfg) {
-        const sessionResolution = await resolveSession({ cfg, sessionKey });
-        if (sessionResolution.isNewSession) {
+        const turn = await initSessionTurn({
+          cfg,
+          sessionKey,
+          body: input.content,
+          resetSession: deps.resetSession,
+        });
+        resetTriggeredAtInit = turn.resetTriggered;
+        if (turn.bareReset && turn.ackMessage) {
+          ranSlashCommand = true;
+          webchatSlashReceipt = turn.ackMessage;
+          pushVisible({ type: 'token', content: turn.ackMessage });
+          return;
+        }
+        turnBody = turn.bodyStripped;
+        if (turn.isNewSession) {
           deps.log.debug(
             {
               sessionKey,
-              sessionId: sessionResolution.sessionId,
-              previousSessionId: sessionResolution.sessionEntry?.sessionId,
+              sessionId: turn.sessionId,
+              previousSessionId: turn.previousSessionId,
+              resetTriggered: turn.resetTriggered,
+              staleRollover: turn.staleRollover,
             },
             'Session reset boundary at direct turn start',
           );
@@ -162,7 +180,7 @@ export async function* runProcessDirectStreaming(
       const voiceMerge = await mergeVoiceTranscriptsIntoUserText(
         deps.attachmentRootsForSession(sessionKey),
         prepared,
-        input.content,
+        turnBody,
         sttCfg,
       );
       mergedUserText = voiceMerge.text;
@@ -171,7 +189,7 @@ export async function* runProcessDirectStreaming(
       if (inboundVoice) {
         const transcriptParts = [
           voiceMerge.voiceTranscripts.filter(Boolean).join('\n'),
-          input.content.trim(),
+          turnBody.trim(),
         ].filter(Boolean);
         const voiceAttachments = (prepared ?? []).filter(isVoiceLikeAttachment).map((att) => ({
           workspaceRelativePath: att.workspaceRelativePath,
@@ -206,6 +224,7 @@ export async function* runProcessDirectStreaming(
         deps,
         { sessionKey, channel, chatId, senderId: context.senderId, isGroup: context.isGroup },
         mergedUserText,
+        { skipResetCommands: resetTriggeredAtInit },
       );
       if (slash.matched) {
         ranSlashCommand = true;
