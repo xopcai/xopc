@@ -1,11 +1,12 @@
 /**
- * Install bundled Chrome extension artifacts into {resolveBinDir()}/browser-ext/{version}/.
- * Single version directory per install — direct overwrite, no `current` symlink.
+ * Install bundled Chrome extension artifacts into {resolveBinDir()}/browser-ext/.
+ * Fixed path — gateway upgrades overwrite in place so Chrome sideload paths stay stable.
  */
 
 import {
   existsSync,
   mkdirSync,
+  readdirSync,
   readFileSync,
   renameSync,
   rmSync,
@@ -28,7 +29,7 @@ const log = createLogger('BrowserExtInstall');
 
 const META_FILENAME = '.meta.json';
 const STAGING_MAX_AGE_MS = 60 * 60 * 1000;
-const VERSION_DIR_RE = /^\d+\.\d+\.\d+/;
+const INSTALLED_ARTIFACT_NAMES = ['manifest.json', 'popup.html', 'dist', 'icons'] as const;
 
 export const BROWSER_EXT_REQUIRED_FILES = [
   'manifest.json',
@@ -109,22 +110,14 @@ function resolveMetaPath(cacheDir: string): string {
   return join(browserExtRoot(cacheDir), META_FILENAME);
 }
 
-function resolveVersionDir(cacheDir: string, version: string): string {
-  return join(browserExtRoot(cacheDir), version);
-}
-
-/** Resolve the installed extension directory (version folder, not a symlink). */
+/** Resolve the installed extension directory (fixed `browser-ext/` root). */
 export function resolveInstalledExtensionPath(
   cacheDir: string,
-  meta: BrowserExtInstallMeta | null,
+  _meta: BrowserExtInstallMeta | null,
 ): string | null {
-  if (meta?.installPath && validateBrowserExtLayout(meta.installPath)) {
-    return meta.installPath;
-  }
-
-  const expectedDir = resolveVersionDir(cacheDir, PACKAGE_VERSION);
-  if (validateBrowserExtLayout(expectedDir)) {
-    return expectedDir;
+  const root = browserExtRoot(cacheDir);
+  if (validateBrowserExtLayout(root)) {
+    return root;
   }
 
   return null;
@@ -222,24 +215,23 @@ async function cleanupStaleStaging(root: string): Promise<void> {
   }
 }
 
-async function cleanupSiblingVersionDirs(root: string, keepVersion: string): Promise<void> {
-  if (!existsSync(root)) return;
-  let entries: string[];
-  try {
-    entries = await readdir(root);
-  } catch {
-    return;
-  }
-  for (const name of entries) {
-    if (name === META_FILENAME || name.startsWith('.')) continue;
-    if (!VERSION_DIR_RE.test(name)) continue;
-    if (name === keepVersion) continue;
-    try {
-      await rm(join(root, name), { recursive: true, force: true });
-      log.info({ version: name }, 'Removed old browser extension version directory');
-    } catch (err) {
-      log.warn({ err, version: name }, 'Failed to remove old browser extension version');
+function removeInstalledArtifacts(root: string): void {
+  for (const name of INSTALLED_ARTIFACT_NAMES) {
+    const full = join(root, name);
+    if (existsSync(full)) {
+      rmSync(full, { recursive: true, force: true });
     }
+  }
+}
+
+function promoteStagingToRoot(stagingDir: string, root: string): void {
+  removeInstalledArtifacts(root);
+  for (const name of readdirSync(stagingDir)) {
+    renameSync(join(stagingDir, name), join(root, name));
+  }
+  rmSync(stagingDir, { recursive: true, force: true });
+  if (!validateBrowserExtLayout(root)) {
+    throw new Error('Bundled browser extension copy failed validation');
   }
 }
 
@@ -348,10 +340,9 @@ export async function ensureBrowserExtensionArtifacts(opts?: {
     meta,
   });
 
-  const versionKey = bundledManifestVersion;
+  const extensionDir = root;
 
   if (!needsRefresh && installedPath) {
-    await cleanupSiblingVersionDirs(root, versionKey);
     return {
       extensionDir: installedPath,
       xopcVersion: PACKAGE_VERSION,
@@ -359,20 +350,13 @@ export async function ensureBrowserExtensionArtifacts(opts?: {
     };
   }
 
-  const versionDir = join(root, versionKey);
-  const stagingDir = join(root, `.staging-${versionKey}-${process.pid}`);
+  const stagingDir = join(root, `.staging-${process.pid}`);
 
   if (existsSync(stagingDir)) {
     rmSync(stagingDir, { recursive: true, force: true });
   }
   copyBundledTree(bundled.dir, stagingDir);
-
-  if (existsSync(versionDir)) {
-    rmSync(versionDir, { recursive: true, force: true });
-  }
-  renameSync(stagingDir, versionDir);
-
-  await cleanupSiblingVersionDirs(root, versionKey);
+  promoteStagingToRoot(stagingDir, root);
 
   const nextMeta: BrowserExtInstallMeta = {
     xopcVersion: PACKAGE_VERSION,
@@ -380,17 +364,17 @@ export async function ensureBrowserExtensionArtifacts(opts?: {
     source: 'bundled',
     bundledFrom: bundled.bundledFrom,
     installedAt: new Date().toISOString(),
-    installPath: versionDir,
+    installPath: extensionDir,
   };
   await writeTextAtomic(resolveMetaPath(cacheDir), JSON.stringify(nextMeta, null, 2));
 
   log.info(
-    { extensionDir: versionDir, xopcVersion: PACKAGE_VERSION, bundledFrom: bundled.bundledFrom },
+    { extensionDir, xopcVersion: PACKAGE_VERSION, bundledFrom: bundled.bundledFrom },
     'Browser extension artifacts installed',
   );
 
   return {
-    extensionDir: versionDir,
+    extensionDir,
     xopcVersion: PACKAGE_VERSION,
     copied: true,
   };
