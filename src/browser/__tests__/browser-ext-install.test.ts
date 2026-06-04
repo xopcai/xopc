@@ -97,17 +97,19 @@ describe('browser-ext-install', () => {
   });
 
   it('ensure is idempotent on second run', async () => {
+    const extensionRoot = join(binDir, 'browser-ext');
     const first = await ensureBrowserExtensionArtifacts({ cacheDir: binDir });
     expect(first.copied).toBe(true);
     expect(validateBrowserExtLayout(first.extensionDir)).toBe(true);
-    expect(first.extensionDir).toBe(join(binDir, 'browser-ext', PACKAGE_VERSION));
+    expect(first.extensionDir).toBe(extensionRoot);
 
     const second = await ensureBrowserExtensionArtifacts({ cacheDir: binDir });
     expect(second.copied).toBe(false);
     expect(second.extensionDir).toBe(first.extensionDir);
   });
 
-  it('ensure refreshes when bundled manifest version changes', async () => {
+  it('ensure overwrites the same directory when bundled manifest version changes', async () => {
+    const extensionRoot = join(binDir, 'browser-ext');
     const nextVersion = '9.9.9';
     await ensureBrowserExtensionArtifacts({ cacheDir: binDir });
     writeFileSync(
@@ -117,30 +119,17 @@ describe('browser-ext-install', () => {
 
     const upgraded = await ensureBrowserExtensionArtifacts({ cacheDir: binDir });
     expect(upgraded.copied).toBe(true);
-    expect(upgraded.extensionDir).toBe(join(binDir, 'browser-ext', nextVersion));
-    const manifest = JSON.parse(readFileSync(join(upgraded.extensionDir, 'manifest.json'), 'utf8')) as {
+    expect(upgraded.extensionDir).toBe(extensionRoot);
+    const manifest = JSON.parse(readFileSync(join(extensionRoot, 'manifest.json'), 'utf8')) as {
       version: string;
     };
     expect(manifest.version).toBe(nextVersion);
-    expect(existsSync(join(binDir, 'browser-ext', PACKAGE_VERSION))).toBe(false);
+    expect(existsSync(join(extensionRoot, 'manifest.json'))).toBe(true);
   });
 
   it('rejects cacheDir outside home', async () => {
     await expect(
       ensureBrowserExtensionArtifacts({ cacheDir: '/tmp/not-allowed' }),
     ).rejects.toThrow(/home directory/i);
-  });
-
-  it('removes stale version directories during refresh', async () => {
-    const root = join(binDir, 'browser-ext');
-    mkdirSync(join(root, '0.0.99-stale'), { recursive: true });
-    writeFileSync(join(root, '0.0.99-stale', 'marker.txt'), 'stale');
-    writeMinimalExtensionTree(join(root, '0.0.88'), '0.0.88');
-
-    await ensureBrowserExtensionArtifacts({ cacheDir: binDir });
-
-    expect(existsSync(join(root, '0.0.99-stale'))).toBe(false);
-    expect(existsSync(join(root, '0.0.88'))).toBe(false);
-    expect(existsSync(join(root, PACKAGE_VERSION))).toBe(true);
   });
 });
