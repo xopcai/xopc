@@ -10,6 +10,7 @@ import crypto from 'node:crypto';
 
 import { commandRegistry } from '../../chat-commands/index.js';
 import { parseSlashCommand } from '../../chat-commands/command-parse.js';
+import { shouldSkipResetOverlapCommand } from '../../session/reset-triggers.js';
 import type { CommandHandler } from '../messaging/command-handler.js';
 import type { SessionStore } from '../../session/index.js';
 import type { Config } from '../../config/schema.js';
@@ -67,9 +68,13 @@ export async function tryRunSlashCommand(
     inboundMetadata?: Record<string, unknown>;
   },
   content: string,
+  options?: { skipResetCommands?: boolean },
 ): Promise<SlashCommandOutcome> {
   const parsed = parseSlashCommand(content);
   if (!parsed) {
+    return { matched: false, aggregatedText: '' };
+  }
+  if (options?.skipResetCommands && shouldSkipResetOverlapCommand(parsed.command, true)) {
     return { matched: false, aggregatedText: '' };
   }
   if (!commandRegistry.has(parsed.command)) {

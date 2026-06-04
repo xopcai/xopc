@@ -1,18 +1,16 @@
 import crypto from 'crypto';
 
 import type { AgentService } from '../../agent/service.js';
-import { prependEnvelopeTimestamp } from '../../channels/envelope-timestamp.js';
 import type { Config } from '../../config/schema.js';
 import type { MessageBus } from '../../infra/bus/index.js';
-import { buildSessionKey, parseSessionKey } from '../../routing/session-key.js';
-import { getDefaultAgentId } from '../../routing/resolve-route.js';
+import { prependEnvelopeTimestamp } from '../../channels/envelope-timestamp.js';
+import { resolveWebchatSessionKey } from '../resolve-webchat-session-key.js';
 import type { SessionIndex } from '../../session/index.js';
 import {
   createLogger,
   inboundCorrelationMetadataFromAsyncLogContext,
 } from '../../utils/logger.js';
 import { shouldSkipWebchatInboundByAbortCutoff } from '../../session/abort-cutoff.js';
-import { resolveSession } from '../../session/resolve-session.js';
 
 import type { AgentRunRelay } from '../agent-run-relay.js';
 import { MAX_CHAT_ATTACHMENTS } from '../chat-limits.js';
@@ -81,16 +79,11 @@ export async function *runGatewayAgent(
   let webchatSessionKey: string | undefined;
   let webchatStaleSkip = false;
   if (channel === 'webchat') {
-    const parsedKey = parseSessionKey(chatId);
-    webchatSessionKey = parsedKey
-      ? chatId
-      : buildSessionKey({
-          agentId: getDefaultAgentId(config),
-          source: 'webchat',
-          accountId: 'default',
-          peerKind: 'direct',
-          peerId: chatId,
-        });
+    const resolved = resolveWebchatSessionKey({ cfg: config, chatId, newSession: false });
+    if (resolved.ok === false) {
+      throw new Error(resolved.error);
+    }
+    webchatSessionKey = resolved.sessionKey;
     const meta = await sessionIndex.getSessionMetadata(webchatSessionKey);
     webchatStaleSkip = shouldSkipWebchatInboundByAbortCutoff(meta, runOptions?.clientCreatedAtMs);
     if (!webchatStaleSkip && meta?.abortCutoffTimestamp !== undefined) {
@@ -132,18 +125,6 @@ export async function *runGatewayAgent(
       const mergedSignal = runOptions?.signal
         ? AbortSignal.any([runOptions.signal, runAbort.signal])
         : runAbort.signal;
-
-      const sessionResolution = await resolveSession({ cfg: config, sessionKey });
-      if (sessionResolution.isNewSession) {
-        log.debug(
-          {
-            sessionKey,
-            sessionId: sessionResolution.sessionId,
-            previousSessionId: sessionResolution.sessionEntry?.sessionId,
-          },
-          'Session reset boundary at gateway turn start',
-        );
-      }
 
       agentService.beginInboundTurn(sessionKey);
       activeWebchatRunBySession.set(sessionKey, runId);
