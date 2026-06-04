@@ -1,22 +1,10 @@
 /**
  * STT config slice resolution — maps persisted config to per-provider raw config.
  *
- * Supports OpenClaw-aligned `tools.media.audio.providers.<id>` plus legacy flat keys
- * (`tools.media.audio.openai`, `tools.media.audio.alibaba`, …).
+ * Reads `tools.media.audio.providers.<id>` only — there is no legacy flat-key form.
  */
 
 import type { STTConfig } from './types.js';
-
-/** Top-level `tools.media.audio` keys that are not provider config buckets. */
-export const STT_CONFIG_RESERVED_KEYS = new Set([
-  'enabled',
-  'provider',
-  'providers',
-  'models',
-  'fallback',
-  'timeoutMs',
-  'sharedModels',
-]);
 
 /** Built-in env fallbacks when config slice has no apiKey. */
 export const STT_LEGACY_ENV_KEYS: Record<string, string> = {
@@ -30,36 +18,17 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
     : undefined;
 }
 
-function asProviderConfig(value: unknown): Record<string, unknown> {
-  return asRecord(value) ?? {};
-}
-
-/** Collect provider-id → raw config entries from providers map + legacy flat keys. */
+/** Collect provider-id → raw config entries from the `providers` map. */
 export function collectSttProviderConfigEntries(
   config: Partial<STTConfig> | Record<string, unknown> | undefined,
 ): Record<string, Record<string, unknown>> {
   const raw = (config ?? {}) as Record<string, unknown>;
-  const entries: Record<string, Record<string, unknown>> = {};
-
   const providers = asRecord(raw.providers);
-  if (providers) {
-    for (const [providerId, value] of Object.entries(providers)) {
-      entries[providerId] = { ...entries[providerId], ...asProviderConfig(value) };
-    }
+  if (!providers) return {};
+  const entries: Record<string, Record<string, unknown>> = {};
+  for (const [providerId, value] of Object.entries(providers)) {
+    entries[providerId] = { ...(asRecord(value) ?? {}) };
   }
-
-  for (const [key, value] of Object.entries(raw)) {
-    if (STT_CONFIG_RESERVED_KEYS.has(key)) {
-      continue;
-    }
-    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-      continue;
-    }
-    if (entries[key] === undefined) {
-      entries[key] = asProviderConfig(value);
-    }
-  }
-
   return entries;
 }
 
@@ -68,8 +37,7 @@ export function resolveSttProviderConfigSlice(
   providerId: string,
   config: Partial<STTConfig> | Record<string, unknown> | undefined,
 ): Record<string, unknown> {
-  const entries = collectSttProviderConfigEntries(config);
-  return entries[providerId] ?? {};
+  return collectSttProviderConfigEntries(config)[providerId] ?? {};
 }
 
 function trimToUndefined(value: unknown): string | undefined {

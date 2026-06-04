@@ -112,18 +112,16 @@ function safeListProviders(
   }
 }
 
-/**
- * Normalize an {@link AgentModelConfig} (which may be a bare string for
- * legacy configs) to an object with explicit `primary` / `fallbacks`.
- */
+/** Normalize an {@link AgentModelConfig} to `{ primary?, fallbacks }`. */
 function normalizeModelConfig(
   cfg: AgentModelConfig | undefined,
 ): { primary?: string; fallbacks: string[] } {
-  if (cfg === undefined || cfg === null) return { fallbacks: [] };
-  if (typeof cfg === 'string') return { primary: cfg, fallbacks: [] };
+  if (!cfg) return { fallbacks: [] };
   return {
     primary: typeof cfg.primary === 'string' ? cfg.primary : undefined,
-    fallbacks: Array.isArray(cfg.fallbacks) ? cfg.fallbacks.filter((s): s is string => typeof s === 'string') : [],
+    fallbacks: Array.isArray(cfg.fallbacks)
+      ? cfg.fallbacks.filter((s): s is string => typeof s === 'string')
+      : [],
   };
 }
 

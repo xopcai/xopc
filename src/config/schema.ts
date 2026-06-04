@@ -7,53 +7,45 @@ import { validatePublicUrl } from './public-url.js';
 // Agent Configs
 // ============================================
 
-export const AgentModelRefSchema = z.union([
-  z.string(),
-  z
-    .object({
-      primary: z.string().optional(),
-      fallbacks: z.array(z.string()).optional(),
-    })
-    .strict(),
-]);
+/**
+ * Agent model ref. Always an object with explicit `primary` and optional
+ * `fallbacks` chain. No string-form shorthand — every write site builds the
+ * object explicitly so reads never branch on shape.
+ */
+export const AgentModelRefSchema = z
+  .object({
+    primary: z.string().min(1),
+    fallbacks: z.array(z.string()).optional(),
+  })
+  .strict();
 
 export type AgentModelConfig = z.infer<typeof AgentModelRefSchema>;
 
 /**
- * Image-generation model ref. Superset of {@link AgentModelRefSchema} with
- * runtime knobs (`timeoutMs`, `autoProviderFallback`) used by the
- * image-generation runtime; falls back to a plain string for backward
- * compatibility with old configs.
+ * Image-generation model ref. {@link AgentModelRefSchema} plus runtime knobs
+ * (`timeoutMs`, `autoProviderFallback`) used by the image-generation runtime.
  */
-export const AgentImageGenerationModelSchema = z.union([
-  z.string(),
-  z
-    .object({
-      primary: z.string().optional(),
-      fallbacks: z.array(z.string()).optional(),
-      /** Hard cap for the whole generation attempt (ms). */
-      timeoutMs: z.number().int().positive().optional(),
-      /**
-       * When all `primary + fallbacks` candidates fail, sweep every other
-       * configured provider before giving up.
-       */
-      autoProviderFallback: z.boolean().optional(),
-    })
-    .strict(),
-]);
+export const AgentImageGenerationModelSchema = z
+  .object({
+    primary: z.string().min(1),
+    fallbacks: z.array(z.string()).optional(),
+    /** Hard cap for the whole generation attempt (ms). */
+    timeoutMs: z.number().int().positive().optional(),
+    /**
+     * When all `primary + fallbacks` candidates fail, sweep every other
+     * configured provider before giving up.
+     */
+    autoProviderFallback: z.boolean().optional(),
+  })
+  .strict();
 
 export type AgentImageGenerationModelConfig = z.infer<typeof AgentImageGenerationModelSchema>;
 
 export const AgentDefaultsSchema = z.object({
   /** Parent directory: each agent’s Markdown root is `<expanded>/<agentId>/` (e.g. `.../workspace/main`). */
   workspace: z.string().default('~/.xopc/workspace'),
-  model: z.union([
-    z.string(),
-    z.object({
-      primary: z.string().optional(),
-      fallbacks: z.array(z.string()).optional(),
-    }).strict(),
-  ]).default(''), // Empty default - will be resolved dynamically at runtime
+  /** Default model for new sessions. Optional — runtime resolves a fallback when unset. */
+  model: AgentModelRefSchema.optional(),
   /** Vision / image understanding model (provider/model). Falls back to heuristics when unset. */
   imageModel: AgentModelRefSchema.optional(),
   /** Image generation model (provider/model), e.g. openai/gpt-image-1. Supports plugin-based providers (OpenAI / DashScope / MiniMax / Google / Fal). */
@@ -368,7 +360,7 @@ export const AgentsConfigSchema = z.object({
 }).default({
   defaults: {
     workspace: '~/.xopc/workspace',
-    model: '', // Empty default - will be resolved dynamically at runtime
+    // `model` is intentionally omitted — resolved dynamically at runtime.
     maxTokens: 8192,
     temperature: 0.7,
     maxToolIterations: 20,
@@ -394,6 +386,8 @@ export const AgentsConfigSchema = z.object({
       tailKeepRatio: 0.3,
     },
     browser: {
+      enabled: true,
+      headless: false,
       backend: 'extension',
     },
   },
@@ -991,13 +985,10 @@ export const STTConfigSchema = z
     timeoutMs: z.number().int().min(1000).max(180000).optional(),
     /** Ordered model entries for this capability (OpenClaw `tools.media.audio.models`). */
     models: z.array(MediaUnderstandingModelSchema).optional(),
-    /** OpenClaw-aligned provider settings map (`tools.media.audio.providers.<id>`). */
+    /** Provider settings map keyed by provider id. */
     providers: z.record(z.string(), STTProviderConfigSchema).optional(),
-    /** Legacy flat provider keys — kept for backward compatibility. */
-    alibaba: STTProviderConfigSchema.optional(),
-    openai: STTProviderConfigSchema.optional(),
   })
-  .passthrough();
+  .strict();
 
 // ============================================
 // TTS (Text-to-Speech) Config
@@ -1068,15 +1059,10 @@ export const TTSConfigSchema = z
     timeoutMs: z.number().int().min(1000).max(180000).default(60000),
     summarization: TTSSummarizationConfigSchema.optional(),
     modelOverrides: TTSModelOverridesConfigSchema.optional(),
-    /** OpenClaw-aligned provider settings map (`messages.tts.providers.<id>`). */
+    /** Provider settings map keyed by provider id. */
     providers: z.record(z.string(), TTSProviderConfigSchema).optional(),
-    /** Legacy flat provider keys — kept for backward compatibility. */
-    alibaba: TTSProviderConfigSchema.optional(),
-    openai: TTSProviderConfigSchema.optional(),
-    edge: TTSEdgeConfigSchema.optional(),
-    minimax: TTSProviderConfigSchema.optional(),
   })
-  .passthrough();
+  .strict();
 
 // ============================================
 // messages.* — delivery / presentation concerns
@@ -1334,7 +1320,7 @@ export const ConfigSchema = z.object({
   agents: {
     defaults: {
       workspace: '~/.xopc/workspace',
-      model: '', // Empty default - will be resolved dynamically at runtime
+      // `model` is intentionally omitted — resolved dynamically at runtime.
       maxTokens: 8192,
       temperature: 0.7,
       maxToolIterations: 20,
@@ -1476,16 +1462,11 @@ export interface ParsedModelRef {
 }
 
 /**
- * Primary model ref from `agents.defaults.model` (string or `{ primary }`).
- * Returns undefined when unset or empty.
+ * Primary model ref from `agents.defaults.model`. Returns undefined when unset.
  */
 export function getAgentDefaultModelRef(config: Config): string | undefined {
-  const raw = config.agents?.defaults?.model;
-  if (raw === undefined || raw === null) return undefined;
-  const ref = typeof raw === 'string' ? raw : raw.primary;
-  if (ref === undefined || ref === null) return undefined;
-  const s = String(ref).trim();
-  return s ? s : undefined;
+  const ref = config.agents?.defaults?.model?.primary?.trim();
+  return ref || undefined;
 }
 
 /** `provider/model` or null when invalid. */

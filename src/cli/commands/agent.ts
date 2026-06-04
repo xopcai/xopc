@@ -50,8 +50,7 @@ function createAgentCommand(_ctx: CLIContext): Command {
         return;
       }
 
-      const modelConfig = config.agents?.defaults?.model;
-      const modelFromConfig = typeof modelConfig === 'string' ? modelConfig : modelConfig?.primary;
+      const modelFromConfig = config.agents?.defaults?.model?.primary;
       const modelId = (options.model?.trim() || modelFromConfig) as string | undefined;
       const bus = new MessageBus();
 
@@ -62,8 +61,8 @@ function createAgentCommand(_ctx: CLIContext): Command {
       // Validate session key if provided
       let sessionKey = options.session || 'agent:main:main';
       if (options.session) {
-        const { getSessionManager } = await import('../utils/session.js');
-        const manager = await getSessionManager();
+        const { getSessionIndex } = await import('../utils/session.js');
+        const manager = await getSessionIndex();
         const session = await manager.getSessionMetadata(options.session);
         if (!session) {
           console.error(`❌ Session not found: ${options.session}`);

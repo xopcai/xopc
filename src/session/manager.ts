@@ -314,7 +314,8 @@ export class SessionIndex extends EventEmitter {
   }
 
   /**
-   * @deprecated Runtime turns must use PiTranscriptManager.appendMessage. Compaction/admin only.
+   * Runtime turns must use PiTranscriptManager.appendMessage; this entry point
+   * is reserved for compaction, tests, and admin tools.
    */
   async saveMessages(key: string, messages: any[]) {
     return this.store.saveMessages(key, messages);

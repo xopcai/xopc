@@ -16,6 +16,27 @@ import type { AgentRunRelay } from '../agent-run-relay.js';
 import { MAX_CHAT_ATTACHMENTS } from '../chat-limits.js';
 const log = createLogger('GatewayService');
 
+/**
+ * Match upstream pi-ai "No API key found for <provider>" errors and replace
+ * with a short, actionable message the web UI can render as a setup card.
+ * Falls back to `Error: <raw>` for anything else.
+ */
+const API_KEY_MISSING_RE = /^No API key found for (\S+)/i;
+
+function formatAgentErrorForClient(rawError: string): string {
+  const match = API_KEY_MISSING_RE.exec(rawError);
+  if (match) {
+    const provider = match[1].replace(/\.$/, '');
+    return JSON.stringify({
+      kind: 'provider_setup_required',
+      provider,
+      deepLink: '/settings/providers',
+      message: rawError,
+    });
+  }
+  return `Error: ${rawError}`;
+}
+
 export type RunGatewayAgentYield = {
   type: string;
   content?: string;
@@ -161,7 +182,8 @@ export async function *runGatewayAgent(
       } catch (error) {
         log.error({ error }, 'Agent processing failed');
         streamError = error instanceof Error ? error.message : 'Unknown error';
-        const errorEvent = { type: 'error', content: `Error: ${streamError}` };
+        const errorContent = formatAgentErrorForClient(streamError);
+        const errorEvent = { type: 'error', content: errorContent };
         runRelay.publish(runId, errorEvent);
         emit('agent.stream', { sessionKey, event: errorEvent });
         runRelay.complete(runId);

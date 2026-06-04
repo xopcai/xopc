@@ -19,6 +19,7 @@ import { isWebUiSessionKey } from '@/features/chat/session/session-manager';
 import { isValidSkillWireId } from '@/features/chat/palette/skill-wire-pattern';
 import { wireTextForSlashCommandEntry } from '@/features/chat/palette/slash-command-wire-text';
 import { useWorkspaceEditorAgentStore } from '@/stores/workspace-editor-agent-store';
+import { ProviderSetupRequiredBanner } from '@/features/chat/messages/provider-setup-required-banner';
 
 export function ChatPage() {
   const language = useLocaleStore((s) => s.language);
@@ -224,9 +225,7 @@ export function ChatPage() {
                     <div className="mb-3 text-center text-xs text-fg-muted">{m.chat.loadOlder}</div>
                   ) : null}
                   {stream.error ? (
-                    <div className="mb-4 rounded-md border border-edge bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-edge dark:bg-red-950/40 dark:text-red-300">
-                      {stream.error}
-                    </div>
+                    <ProviderSetupRequiredBanner errorText={stream.error} />
                   ) : null}
                   <MessageList
                     key={session.decodedKey ?? 'new'}
@@ -244,7 +243,17 @@ export function ChatPage() {
                     deleteRoundDisabled={stream.streaming || stream.sending}
                     onAbortCurrentTurn={stream.abort}
                     onSendUserMessage={(text) => {
-                      void stream.sendMessage(text);
+                      // stream.sendMessage silently no-ops when the assistant
+                      // is still streaming/sending — so chat-card actions like
+                      // "save workflow" would vanish if the user clicked while
+                      // the post-tool synthesis was still being written. Route
+                      // through the pending-follow-up queue in that case; it
+                      // auto-flushes after the current turn settles.
+                      if (stream.streaming || stream.sending) {
+                        void followUp.addPendingFollowUp(text);
+                      } else {
+                        void stream.sendMessage(text);
+                      }
                     }}
                   />
                 </>

@@ -337,6 +337,10 @@
       "cdp_unreachable": "The configured CDP endpoint isn't reachable. Verify the URL in Settings → Browser and make sure Chrome is running with --remote-debugging-port.",
       "cloud_api_key_missing": "Cloud browser API key is missing. Add it in Settings → Browser."
     },
+    "providerSetupRequiredTitle": "Model provider not configured",
+    "providerSetupRequiredBody": "No API key found for {{provider}}. Add your credentials in Settings → Providers to start chatting.",
+    "providerSetupRequiredCta": "Configure providers",
+    "providerSetupRequiredDetailToggle": "View detail",
     "voicePlay": "Play voice",
     "voicePause": "Pause",
     "voiceLoading": "Loading audio…",

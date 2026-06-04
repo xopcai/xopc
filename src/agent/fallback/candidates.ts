@@ -49,8 +49,8 @@ export function resolveFallbackCandidates(params: {
   const { cfg, provider: inputProvider, model: inputModel, fallbacksOverride } = params;
 
   const modelConfig = cfg?.agents?.defaults?.model;
-  const primaryRef = typeof modelConfig === 'string' ? modelConfig : modelConfig?.primary;
-  const fallbacks = fallbacksOverride ?? (typeof modelConfig === 'object' ? modelConfig.fallbacks : undefined);
+  const primaryRef = modelConfig?.primary;
+  const fallbacks = fallbacksOverride ?? modelConfig?.fallbacks;
 
   const defaultParts = getDefaultModelParts(cfg);
   const primaryResolved = parseModelRef(primaryRef || getDefaultModelSync(cfg));

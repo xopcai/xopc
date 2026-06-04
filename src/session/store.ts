@@ -995,8 +995,8 @@ export class SessionStore {
   }
 
   /**
-   * @deprecated Runtime agent turns must persist via {@link guardSessionManager} + appendMessage.
-   * Retained for compaction, tests, and admin tools until fully removed.
+   * Bulk write entry point used by compaction, tests, and admin tools.
+   * Runtime agent turns must persist via {@link guardSessionManager} + appendMessage.
    */
   async saveMessages(key: string, messages: AgentMessage[]): Promise<void> {
     return this.runStoreMutation(async () => {
@@ -1243,11 +1243,6 @@ export class SessionStore {
 
   async load(key: string, options?: { fromArchive?: boolean }): Promise<AgentMessage[]> {
     return this.loadMessages(key, options);
-  }
-
-  /** @deprecated See {@link saveMessages}. */
-  async save(key: string, messages: AgentMessage[]): Promise<void> {
-    return this.saveMessages(key, messages);
   }
 
   async estimateTokenUsage(_key: string, messages: AgentMessage[]): Promise<number> {

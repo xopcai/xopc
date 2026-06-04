@@ -32,7 +32,7 @@ function createMockService(config: Partial<Config> = pairingConfig()): GatewaySe
     getChannelsStatus: () => [],
     getAuthToken: () => TOKEN,
     getAuthMode: () => 'token',
-    sessionManagerInstance: {} as GatewayService['sessionManagerInstance'],
+    sessionIndexInstance: {} as GatewayService['sessionIndexInstance'],
     cronServiceInstance: {} as GatewayService['cronServiceInstance'],
     emit: () => {},
     listSessions: async () => ({ items: [], total: 0 }),

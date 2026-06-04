@@ -12,12 +12,14 @@ describe('safe-voice-config', () => {
     const masked = maskSttConfigForWeb({
       enabled: true,
       provider: 'groq',
-      providers: { groq: { apiKey: 'gsk-secret', model: 'whisper-large-v3-turbo' } },
-      openai: { apiKey: 'sk-openai' },
-    }) as Record<string, unknown>;
+      providers: {
+        groq: { apiKey: 'gsk-secret', model: 'whisper-large-v3-turbo' },
+        openai: { apiKey: 'sk-openai' },
+      },
+    }) as Record<string, Record<string, { apiKey: string }>>;
 
-    expect((masked.providers as Record<string, { apiKey: string }>).groq.apiKey).toBe('***');
-    expect((masked.openai as { apiKey: string }).apiKey).toBe('***');
+    expect(masked.providers.groq.apiKey).toBe('***');
+    expect(masked.providers.openai.apiKey).toBe('***');
   });
 
   it('preserves STT api keys when patch sends masked sentinel', () => {
@@ -34,20 +36,20 @@ describe('safe-voice-config', () => {
     const masked = maskTtsConfigForWeb({
       enabled: true,
       provider: 'openai',
-      openai: { apiKey: 'sk-test', model: 'tts-1', voice: 'alloy' },
-    }) as Record<string, unknown>;
+      providers: { openai: { apiKey: 'sk-test', model: 'tts-1', voice: 'alloy' } },
+    }) as Record<string, Record<string, { apiKey: string }>>;
 
-    expect((masked.openai as { apiKey: string }).apiKey).toBe('***');
+    expect(masked.providers.openai.apiKey).toBe('***');
   });
 
   it('preserves TTS api keys when patch sends masked sentinel', () => {
     const merged = mergeTtsConfigPatch(
-      { openai: { apiKey: 'sk-secret', model: 'tts-1', voice: 'alloy' } },
-      { openai: { apiKey: '***', model: 'tts-1-hd', voice: 'echo' } },
-    ) as { openai: { apiKey: string; model: string; voice: string } };
+      { providers: { openai: { apiKey: 'sk-secret', model: 'tts-1', voice: 'alloy' } } },
+      { providers: { openai: { apiKey: '***', model: 'tts-1-hd', voice: 'echo' } } },
+    ) as { providers: { openai: { apiKey: string; model: string; voice: string } } };
 
-    expect(merged.openai.apiKey).toBe('sk-secret');
-    expect(merged.openai.model).toBe('tts-1-hd');
-    expect(merged.openai.voice).toBe('echo');
+    expect(merged.providers.openai.apiKey).toBe('sk-secret');
+    expect(merged.providers.openai.model).toBe('tts-1-hd');
+    expect(merged.providers.openai.voice).toBe('echo');
   });
 });

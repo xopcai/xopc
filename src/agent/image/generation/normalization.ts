@@ -21,7 +21,6 @@ import {
 } from '../../media-generation/index.js';
 import type {
   ImageGenerationBackground,
-  ImageGenerationCapabilitiesLegacy,
   ImageGenerationGeometryCapability,
   ImageGenerationIgnoredOverride,
   ImageGenerationIgnoredOverrideKey,
@@ -33,25 +32,6 @@ import type {
   ImageGenerationResolution,
   ImageGenerationSourceImage,
 } from './types.js';
-
-/**
- * Narrow `provider.capabilities` to the new nested shape. The registry accepts
- * the legacy flat shape too, but normalization only understands the new one;
- * legacy fields surface here as `undefined`.
- */
-function asNewCapabilities(
-  caps: ImageGenerationProviderCapabilities | ImageGenerationCapabilitiesLegacy | undefined,
-): ImageGenerationProviderCapabilities {
-  if (!caps) return {};
-  // Legacy flat shape exposes `supportsEdit` (boolean). When seen, treat as
-  // an empty new-shape capability map so normalization defaults kick in.
-  if ((caps as ImageGenerationCapabilitiesLegacy).supportsEdit !== undefined &&
-      (caps as ImageGenerationProviderCapabilities).generate === undefined &&
-      (caps as ImageGenerationProviderCapabilities).edit === undefined) {
-    return {};
-  }
-  return caps as ImageGenerationProviderCapabilities;
-}
 
 export interface ResolveImageGenerationOverridesParams {
   provider: ImageGenerationProvider;
@@ -79,7 +59,7 @@ export function resolveImageGenerationOverrides(
   params: ResolveImageGenerationOverridesParams,
 ): ResolvedImageGenerationOverrides {
   const provider = params.provider;
-  const caps = asNewCapabilities(provider.capabilities);
+  const caps = provider.capabilities ?? {};
   const isEdit = (params.inputImages?.length ?? 0) > 0;
 
   // Hard checks (throw, do not downgrade) ---------------------------------
@@ -281,7 +261,7 @@ function assertEditSupported(
   inputImages: ImageGenerationSourceImage[] | undefined,
 ): void {
   if (!isEdit) return;
-  const caps = asNewCapabilities(provider.capabilities);
+  const caps = provider.capabilities ?? {};
   const editCap = caps.edit;
   const enabled = editCap?.enabled === true;
   if (!enabled) {

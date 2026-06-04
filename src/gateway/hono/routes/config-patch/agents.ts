@@ -23,11 +23,21 @@ import {
 export function applyAgentsPatch(config: Config, body: any): void {
   if (!body.agents?.defaults) return;
 
-  if (!config.agents) config.agents = { defaults: { workspace: '~/.xopc/workspace', model: 'anthropic/claude-sonnet-4-5', maxTokens: 8192, temperature: 0.7, maxToolIterations: 20, maxRequestsPerTurn: 50, maxToolFailuresPerTurn: 3, thinkingDefault: 'medium', reasoningDefault: 'stream', verboseDefault: 'full' } };
+  if (!config.agents) config.agents = { defaults: { workspace: '~/.xopc/workspace', model: { primary: 'anthropic/claude-sonnet-4-5' }, maxTokens: 8192, temperature: 0.7, maxToolIterations: 20, maxRequestsPerTurn: 50, maxToolFailuresPerTurn: 3, thinkingDefault: 'medium', reasoningDefault: 'stream', verboseDefault: 'full' } };
   if (!config.agents.defaults) config.agents.defaults = {} as any;
 
   if (body.agents.defaults.model !== undefined) {
-    config.agents.defaults.model = normalizePatchAgentModel(body.agents.defaults.model) as Config['agents']['defaults']['model'];
+    const v = body.agents.defaults.model;
+    if (v === null) {
+      delete (config.agents.defaults as Record<string, unknown>).model;
+    } else {
+      const normalized = normalizePatchAgentModel(v);
+      if (normalized === undefined) {
+        delete (config.agents.defaults as Record<string, unknown>).model;
+      } else {
+        config.agents.defaults.model = normalized as Config['agents']['defaults']['model'];
+      }
+    }
   }
   if (body.agents.defaults.maxTokens !== undefined) {
     config.agents.defaults.maxTokens = body.agents.defaults.maxTokens;
@@ -52,15 +62,20 @@ export function applyAgentsPatch(config: Config, body: any): void {
   }
   if (body.agents.defaults.imageModel !== undefined) {
     const v = body.agents.defaults.imageModel;
-    if (v === '' || v === null) {
+    if (v === null) {
       delete (config.agents.defaults as Record<string, unknown>).imageModel;
     } else {
-      config.agents.defaults.imageModel = normalizePatchAgentModel(v) as Config['agents']['defaults']['imageModel'];
+      const normalized = normalizePatchAgentModel(v);
+      if (normalized === undefined) {
+        delete (config.agents.defaults as Record<string, unknown>).imageModel;
+      } else {
+        config.agents.defaults.imageModel = normalized as Config['agents']['defaults']['imageModel'];
+      }
     }
   }
   if (body.agents.defaults.imageGenerationModel !== undefined) {
     const v = body.agents.defaults.imageGenerationModel;
-    if (v === '' || v === null) {
+    if (v === null) {
       delete (config.agents.defaults as Record<string, unknown>).imageGenerationModel;
     } else {
       const normalized = normalizePatchAgentImageGenerationModel(v);

@@ -165,14 +165,10 @@ function createImageCommand(_ctx: CLIContext): Command {
       }
 
       const existingFallbacks = modelFallbacksToArray(config.agents.defaults.imageModel);
-      if (existingFallbacks.length > 0) {
-        config.agents.defaults.imageModel = {
-          primary: modelRef,
-          fallbacks: existingFallbacks,
-        };
-      } else {
-        config.agents.defaults.imageModel = modelRef;
-      }
+      config.agents.defaults.imageModel =
+        existingFallbacks.length > 0
+          ? { primary: modelRef, fallbacks: existingFallbacks }
+          : { primary: modelRef };
 
       await saveConfig(config, configPath);
       console.log(colors.green(`Image understanding model set to: ${modelRef}`));
@@ -209,14 +205,10 @@ function createImageCommand(_ctx: CLIContext): Command {
       }
 
       const existingFallbacks = modelFallbacksToArray(config.agents.defaults.imageGenerationModel);
-      if (existingFallbacks.length > 0) {
-        config.agents.defaults.imageGenerationModel = {
-          primary: modelRef,
-          fallbacks: existingFallbacks,
-        };
-      } else {
-        config.agents.defaults.imageGenerationModel = modelRef;
-      }
+      config.agents.defaults.imageGenerationModel =
+        existingFallbacks.length > 0
+          ? { primary: modelRef, fallbacks: existingFallbacks }
+          : { primary: modelRef };
 
       await saveConfig(config, configPath);
       console.log(colors.green(`Image generation model set to: ${modelRef}`));
@@ -318,10 +310,9 @@ function createImageCommand(_ctx: CLIContext): Command {
         config.agents.defaults = {} as typeof config.agents.defaults;
       }
 
-      if (fallbacks.length > 0 && primary) {
-        config.agents.defaults[configKey] = { primary, fallbacks };
-      } else if (primary) {
-        config.agents.defaults[configKey] = primary;
+      if (primary) {
+        config.agents.defaults[configKey] =
+          fallbacks.length > 0 ? { primary, fallbacks } : { primary };
       }
 
       await saveConfig(config, configPath);
@@ -442,32 +433,28 @@ function createImageCommand(_ctx: CLIContext): Command {
 
       const current = config.agents.defaults.imageGenerationModel;
       const primary = resolveAgentModelPrimaryValue(current);
+      if (!primary) {
+        console.error(
+          colors.red('No image generation model is configured. Run `xopc image set-generation <provider/model>` first.'),
+        );
+        process.exit(1);
+      }
       const fallbacks = resolveAgentModelFallbackValues(current);
-      const autoProviderFallback =
-        typeof current === 'object' && current !== null && !Array.isArray(current)
-          ? (current as { autoProviderFallback?: boolean }).autoProviderFallback === true
-          : false;
+      const autoProviderFallback = current?.autoProviderFallback === true;
 
       if (ms === 0) {
-        // Clear timeout but keep other knobs.
-        if (primary && fallbacks.length === 0 && !autoProviderFallback) {
-          config.agents.defaults.imageGenerationModel = primary;
-        } else if (primary || fallbacks.length > 0) {
-          config.agents.defaults.imageGenerationModel = {
-            ...(primary ? { primary } : {}),
-            ...(fallbacks.length > 0 ? { fallbacks } : {}),
-            ...(autoProviderFallback ? { autoProviderFallback: true } : {}),
-          };
-        } else {
-          delete (config.agents.defaults as Record<string, unknown>).imageGenerationModel;
-        }
+        config.agents.defaults.imageGenerationModel = {
+          primary,
+          ...(fallbacks.length > 0 ? { fallbacks } : {}),
+          ...(autoProviderFallback ? { autoProviderFallback: true } : {}),
+        };
         await saveConfig(config, configPath);
         console.log(colors.green('Image generation timeout cleared.'));
         return;
       }
 
       config.agents.defaults.imageGenerationModel = {
-        ...(primary ? { primary } : {}),
+        primary,
         ...(fallbacks.length > 0 ? { fallbacks } : {}),
         ...(autoProviderFallback ? { autoProviderFallback: true } : {}),
         timeoutMs: ms,
@@ -495,31 +482,28 @@ function createImageCommand(_ctx: CLIContext): Command {
 
       const current = config.agents.defaults.imageGenerationModel;
       const primary = resolveAgentModelPrimaryValue(current);
+      if (!primary) {
+        console.error(
+          colors.red('No image generation model is configured. Run `xopc image set-generation <provider/model>` first.'),
+        );
+        process.exit(1);
+      }
       const fallbacks = resolveAgentModelFallbackValues(current);
-      const timeoutMs =
-        typeof current === 'object' && current !== null && !Array.isArray(current)
-          ? (current as { timeoutMs?: number }).timeoutMs
-          : undefined;
+      const timeoutMs = current?.timeoutMs;
 
       if (disable) {
-        if (primary && fallbacks.length === 0 && !timeoutMs) {
-          config.agents.defaults.imageGenerationModel = primary;
-        } else if (primary || fallbacks.length > 0 || timeoutMs) {
-          config.agents.defaults.imageGenerationModel = {
-            ...(primary ? { primary } : {}),
-            ...(fallbacks.length > 0 ? { fallbacks } : {}),
-            ...(timeoutMs ? { timeoutMs } : {}),
-          };
-        } else {
-          delete (config.agents.defaults as Record<string, unknown>).imageGenerationModel;
-        }
+        config.agents.defaults.imageGenerationModel = {
+          primary,
+          ...(fallbacks.length > 0 ? { fallbacks } : {}),
+          ...(timeoutMs ? { timeoutMs } : {}),
+        };
         await saveConfig(config, configPath);
         console.log(colors.green('Image generation auto-fallback disabled.'));
         return;
       }
 
       config.agents.defaults.imageGenerationModel = {
-        ...(primary ? { primary } : {}),
+        primary,
         ...(fallbacks.length > 0 ? { fallbacks } : {}),
         ...(timeoutMs ? { timeoutMs } : {}),
         autoProviderFallback: true,

@@ -4,7 +4,7 @@
 
 import type { Interface as _Interface } from 'readline';
 import type { AgentService } from '../../../agent/index.js';
-import { getSessionManager } from '../../utils/session.js';
+import { getSessionIndex } from '../../utils/session.js';
 import { listSessions } from './sessions.js';
 import { renderStreamToTerminal } from './stream-renderer.js';
 
@@ -52,7 +52,7 @@ export async function startInteractiveChat(
     
     if (trimmed.startsWith(':session ')) {
       const newSessionKey = trimmed.slice(9).trim();
-      const manager = await getSessionManager();
+      const manager = await getSessionIndex();
       const session = await manager.getSessionMetadata(newSessionKey);
       if (session) {
         sessionKey = newSessionKey;

@@ -18,8 +18,8 @@ import { resolveShareConfig } from '../../share/share-config.js';
 import { mergeWithDefaults as resolveSiteShareConfigFromRaw } from '../../share/site-share-config.js';
 import { getShareStore } from '../../share/share-store.js';
 import { getSiteShareStore } from '../../share/site-share-store.js';
-import { resolveShareUrl } from '../../share/share-url.js';
-import { loadTunnelState } from '../../tunnel/tunnel-state.js';
+import { resolveShareUrl, resolveSiteShareUrl } from '../../share/share-url.js';
+import { resolveReverseProxyPublicUrl } from '../../gateway/public-url.js';
 import {
   audienceDefaults,
   decideShareKind,
@@ -136,6 +136,8 @@ export function createCreateShareTool(deps: CreateShareToolDeps): AgentTool {
       );
       const gatewayHost = cfg ? resolveGatewayEffectiveHost(cfg) : '127.0.0.1';
       const gatewayPort = gatewayPortOf(cfg);
+      const reverseProxyPublicUrl = resolveReverseProxyPublicUrl(cfg);
+      const urlCtx = { gatewayHost, gatewayPort, reverseProxyPublicUrl };
       const tokenHash = hashCreator(deps.getAgentId?.() ?? 'agent-tool');
 
       // Resolve absolute path + verify it sits under the workspace root.
@@ -169,7 +171,6 @@ export function createCreateShareTool(deps: CreateShareToolDeps): AgentTool {
       const maxViews = defaults.maxViews;
 
       try {
-        const tunnelUp = !!loadTunnelState();
         if (decision.kind === 'site') {
           const siteStore = getSiteShareStore(siteCfg);
           let sitePath = relPath;
@@ -191,14 +192,13 @@ export function createCreateShareTool(deps: CreateShareToolDeps): AgentTool {
           });
           if (stagedDir) rememberStagedSite(siteRec.id, stagedDir);
 
-          const label = siteRec.subdomain ?? siteRec.token;
-          const shareUrl = tunnelUp
-            ? `https://${label}.${siteCfg.publicHostSuffix}/`
-            : `http://${gatewayHost}:${gatewayPort}/site/${siteRec.token}/`;
-          const reachability = tunnelUp
-            ? 'public'
-            : (gatewayHost === '127.0.0.1' || gatewayHost === 'localhost' || gatewayHost === '::1' ? 'local-only' : 'lan');
-          const thumbnailUrl = `${shareUrl.replace(/\/+$/, '')}/thumbnail`;
+          const subdomainLabel = siteRec.subdomain ?? siteRec.token;
+          const resolved = resolveSiteShareUrl({
+            ...urlCtx,
+            token: siteRec.token,
+            subdomainLabel,
+            publicHostSuffix: siteCfg.publicHostSuffix,
+          });
           scheduleThumbnail(
             { scope: 'site', token: siteRec.token, recordId: siteRec.id },
             {
@@ -213,9 +213,10 @@ export function createCreateShareTool(deps: CreateShareToolDeps): AgentTool {
 
           return successResult(locale, {
             kind: 'site',
-            shareUrl,
-            thumbnailUrl,
-            reachability,
+            shareUrl: resolved.shareUrl,
+            thumbnailUrl: resolved.thumbnailUrl,
+            reachability: resolved.reachability,
+            reachabilityHint: resolved.reachabilityHint,
             title: titleOut,
             description: descOut,
             expiresAt: siteRec.expiresAt,
@@ -235,7 +236,7 @@ export function createCreateShareTool(deps: CreateShareToolDeps): AgentTool {
           kind: probe.kind === 'directory' ? 'directory' : 'file',
           directoryMode: decision.kind === 'zip' ? 'zip-only' : (probe.kind === 'directory' ? 'browse' : undefined),
         });
-        const resolved = resolveShareUrl(rec.token, { gatewayHost, gatewayPort });
+        const resolved = resolveShareUrl(rec.token, urlCtx);
         const thumbnailUrl = `${resolved.shareUrl}/thumbnail`;
         scheduleThumbnail(
           { scope: 'file', token: rec.token, recordId: rec.id },

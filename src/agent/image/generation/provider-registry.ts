@@ -1,7 +1,6 @@
 import type { Config } from '../../../config/schema.js';
 import type { ImageProviderUiMetadata } from './image-provider-ui.js';
 import type {
-  ImageGenerationCapabilitiesLegacy,
   ImageGenerationProviderCapabilities,
   ImageGenerationRequest,
   ImageGenerationResult,
@@ -21,12 +20,8 @@ export interface ImageGenerationProvider {
   label?: string;
   defaultModel?: string;
   models?: string[];
-  /**
-   * New nested capability shape (Step 2). Legacy flat shape from Step 1
-   * is also accepted for backward compatibility while three vendor modules
-   * migrate.
-   */
-  capabilities?: ImageGenerationProviderCapabilities | ImageGenerationCapabilitiesLegacy;
+  /** Provider capability map. */
+  capabilities?: ImageGenerationProviderCapabilities;
   /**
    * Synchronous configuration check (Step 2 — was async in Step 1).
    * MUST NOT touch keychain or trigger OS prompts.
@@ -124,7 +119,7 @@ export interface ImageGenerationProviderSummary {
   defaultModel?: string;
   models: string[];
   aliases?: string[];
-  capabilities?: ImageGenerationProviderCapabilities | ImageGenerationCapabilitiesLegacy;
+  capabilities?: ImageGenerationProviderCapabilities;
   ui?: ImageProviderUiMetadata;
 }
 

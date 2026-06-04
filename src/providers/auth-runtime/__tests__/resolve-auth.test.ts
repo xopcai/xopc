@@ -70,28 +70,13 @@ describe('resolveAuthProfileForProvider', () => {
     expect(r).toMatchObject({ apiKey: 'env-dash', mode: 'api-key', source: 'env' });
   });
 
-  it('legacy stores (only getApiKeySync) still resolve as api-key', () => {
-    const legacy: AuthProfileStore = {
-      getApiKeySync: () => 'legacy-key',
-      hasCredentialSync: () => true,
-    };
-    const r = resolveAuthProfileForProvider({
-      providerId: 'openai',
-      store: legacy,
-      envReader: () => undefined,
-    });
-    expect(r.source).toBe('store');
-    expect(r.mode).toBe('api-key');
-    expect(r.apiKey).toBe('legacy-key');
-    expect(r.profileId).toBe('default');
-  });
-
   it('store throwing is swallowed; resolution falls through to config', () => {
     const bad: AuthProfileStore = {
       getApiKeySync: () => {
         throw new Error('boom');
       },
       hasCredentialSync: () => false,
+      list: () => [],
       get: () => {
         throw new Error('boom-get');
       },

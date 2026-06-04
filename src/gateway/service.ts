@@ -255,11 +255,10 @@ export class GatewayService {
       return this._agentService;
     }
 
-    const modelConfig = this.config.agents?.defaults?.model;
     const cronRef: { service?: CronService } = { service: this.cronService };
     this._agentService = new AgentService(this.bus, {
       workspace: this.workspacePath,
-      model: typeof modelConfig === 'string' ? modelConfig : modelConfig?.primary,
+      model: this.config.agents?.defaults?.model?.primary,
       config: this.config,
       sessionStore: this.sessionIndex.getStore(),
       onSessionMetadataUpdated: (sessionKey) => {
@@ -1210,11 +1209,6 @@ export class GatewayService {
   }
 
   get sessionIndexInstance(): SessionIndex {
-    return this.sessionIndex;
-  }
-
-  /** @deprecated Use {@link sessionIndexInstance}. */
-  get sessionManagerInstance(): SessionIndex {
     return this.sessionIndex;
   }
 

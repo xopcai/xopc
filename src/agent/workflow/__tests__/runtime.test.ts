@@ -175,15 +175,56 @@ await agent('3', { label: '3' })
     ).rejects.toThrow(/quota/);
   });
 
-  it('errors when workflow result is not structured-cloneable (forgot await inside container)', async () => {
-    const runner = new StubRunner(() => 'x');
-    // Returning a bare promise is fine — async return auto-unwraps it. The trap
-    // is forgetting to await when the promise is nested in an array/object,
-    // which is exactly what the runtime's structured-clone check catches.
+  it('errors with a Promise-path hint when workflow result nests a Promise', async () => {
+    // Static lint catches the common `const p = agent(...)` shape, so we use
+    // a runner that returns a Promise inside its result — the script awaits
+    // the runner correctly, but the Promise inside survives into the return.
+    const runner: SubagentRunner = {
+      async run() {
+        return { pending: Promise.resolve('inner') } as never;
+      },
+    };
     const script = `export const meta = { name: 'demo', description: 'd' }
-const p = agent('x', { label: 'x' })
-return { pending: p }
+return await agent('x', { label: 'x' })
 `;
-    await expect(runWorkflow(script, { runner }, { cwd: '/tmp' })).rejects.toThrow(/structured-cloneable/);
+    await expect(runWorkflow(script, { runner }, { cwd: '/tmp' })).rejects.toThrow(
+      /contains a Promise.*await/s,
+    );
+  });
+
+  it('resolves a real model id via resolveModelId', async () => {
+    const runner = new StubRunner(() => 'ok');
+    const m = { id: 'fake/x' } as never;
+    let askedFor: string | undefined;
+    const script = `export const meta = { name: 'demo', description: 'd' }
+return await agent('do', { model: 'openai/gpt-4o-mini' })
+`;
+    await runWorkflow(
+      script,
+      {
+        runner,
+        resolveModelId: (id) => {
+          askedFor = id;
+          return m;
+        },
+      },
+      { cwd: '/tmp' },
+    );
+    expect(askedFor).toBe('openai/gpt-4o-mini');
+    expect(runner.calls[0].opts.model).toBe(m);
+  });
+
+  it('rewrites .map-on-Promise TypeError with an await hint', async () => {
+    // Bypass static lint via dynamic indirection: a closure returns the
+    // Promise, then the script calls .map on it. This mirrors bugs that
+    // slip past the AST check (helper functions, late-bound vars).
+    const runner = new StubRunner(() => ['a', 'b']);
+    const script = `export const meta = { name: 'demo', description: 'd' }
+const fns = [1].map(() => parallel(['x'].map((v) => () => agent(v))))
+return fns[0].map((r) => r)
+`;
+    await expect(runWorkflow(script, { runner }, { cwd: '/tmp' })).rejects.toThrow(
+      /map is not a function[\s\S]*Hint:[\s\S]*await/,
+    );
   });
 });

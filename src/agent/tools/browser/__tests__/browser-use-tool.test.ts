@@ -28,7 +28,6 @@ function mockManager(): BrowserManager {
     getPage: vi.fn().mockResolvedValue(mockPage()),
     closePage: vi.fn().mockResolvedValue(undefined),
     shutdown: vi.fn().mockResolvedValue(undefined),
-    ensureBrowser: vi.fn().mockResolvedValue({}),
     ensureConnected: vi.fn().mockResolvedValue(undefined),
     getExtensionProvider: vi.fn().mockReturnValue(null),
   } as any;

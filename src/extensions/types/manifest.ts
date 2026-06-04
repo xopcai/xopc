@@ -1,6 +1,5 @@
 /**
  * Extension manifest — control-plane metadata (readable without loading extension code).
- * New fields are optional for backward compatibility.
  */
 
 import type { ExtensionKind } from './core.js';
@@ -22,7 +21,6 @@ export interface ExtensionManifest {
   dependencies?: Record<string, string>;
 
   enabledByDefault?: boolean;
-  legacyExtensionIds?: string[];
 
   providers?: string[];
   /** Speech/TTS provider ids implemented by this extension. */

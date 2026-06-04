@@ -50,7 +50,7 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
         peerId: body.chat_id,
       });
 
-      await service.sessionManagerInstance.saveMessages(sessionKey, []);
+      await service.sessionIndexInstance.saveMessages(sessionKey, []);
       const session = await service.sessions.getSession(sessionKey);
       return c.json({ session }, 201);
     }
@@ -86,7 +86,7 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
       peerId: chatId,
     });
 
-    await service.sessionManagerInstance.saveMessages(sessionKey, []);
+    await service.sessionIndexInstance.saveMessages(sessionKey, []);
 
     const session = await service.sessions.getSession(sessionKey);
     return c.json({ session }, 201);
@@ -219,7 +219,7 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
   // POST /api/sessions/:key/transcript/context — append persisted-only `kind: 'context'` row (not in LLM context)
   authenticated.post('/api/sessions/:key/transcript/context', async (c) => {
     const key = c.req.param('key');
-    const meta = await service.sessionManagerInstance.getSessionMetadata(key);
+    const meta = await service.sessionIndexInstance.getSessionMetadata(key);
     if (!meta) {
       return c.json({ ok: false, error: 'Session not found' }, 404);
     }
@@ -230,14 +230,14 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
       body.data !== undefined && typeof body.data === 'object' && body.data !== null && !Array.isArray(body.data)
         ? (body.data as Record<string, unknown>)
         : undefined;
-    await service.sessionManagerInstance.appendTranscriptContextEntry(key, { id, text, data });
+    await service.sessionIndexInstance.appendTranscriptContextEntry(key, { id, text, data });
     return c.json({ ok: true });
   });
 
   // GET /api/sessions/:key/compaction/checkpoints — list pre-compaction snapshots (OpenClaw-style)
   authenticated.get('/api/sessions/:key/compaction/checkpoints', async (c) => {
     const key = c.req.param('key');
-    const meta = await service.sessionManagerInstance.getSessionMetadata(key);
+    const meta = await service.sessionIndexInstance.getSessionMetadata(key);
     if (!meta) {
       return c.json({ ok: false, error: 'Session not found' }, 404);
     }
@@ -383,7 +383,7 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
   authenticated.delete('/api/sessions/:key/messages', async (c) => {
     const key = c.req.param('key');
     const body = await c.req.json().catch(() => ({}));
-    const loaded = await service.sessionManagerInstance.loadMessages(key);
+    const loaded = await service.sessionIndexInstance.loadMessages(key);
     if (!loaded) {
       return c.json({ error: 'Session not found' }, 404);
     }
@@ -410,7 +410,7 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
     }
     const deleteCount = Math.min(count, loaded.length - startIndex);
     const next = loaded.slice(0, startIndex).concat(loaded.slice(startIndex + deleteCount));
-    await service.sessionManagerInstance.saveMessages(key, next);
+    await service.sessionIndexInstance.saveMessages(key, next);
     return c.json({ ok: true, deleted: deleteCount });
   });
 

@@ -416,9 +416,6 @@ export function applyTelegramAccount(
   const channels = { ...((cfg.channels ?? {}) as Record<string, unknown>) };
   const tg = { ...((channels.telegram ?? {}) as Record<string, unknown>) };
   if (enable) tg.enabled = true;
-  // Preserve the legacy single-account top-level field for backwards
-  // compatibility with older config readers.
-  tg.botToken = botToken;
   const accounts = { ...((tg.accounts ?? {}) as Record<string, Record<string, unknown>>) };
   accounts[accountId] = {
     ...(accounts[accountId] ?? {}),
@@ -449,10 +446,6 @@ export function removeChannelAccount(
     ch.accounts = accounts;
     if (Object.keys(accounts).length === 0) {
       ch.enabled = false;
-      // Drop legacy top-level token alongside the last removed account.
-      if (channelId === 'telegram') {
-        delete ch.botToken;
-      }
     }
     channels[channelId] = ch;
     return { ...cfg, channels } as Config;

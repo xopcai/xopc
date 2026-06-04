@@ -10,9 +10,10 @@ import {
 } from '../agent-model.js';
 
 describe('agentModelRefToString / agentModelFallbacksToArray', () => {
-  it('handles plain strings + objects with primary', () => {
-    expect(agentModelRefToString('openai/gpt-image-1')).toBe('openai/gpt-image-1');
+  it('reads primary from object refs and rejects everything else', () => {
     expect(agentModelRefToString({ primary: 'openai/x' })).toBe('openai/x');
+    expect(agentModelRefToString({ primary: '  ' })).toBeUndefined();
+    expect(agentModelRefToString('openai/x')).toBeUndefined();
     expect(agentModelRefToString(undefined)).toBeUndefined();
     expect(agentModelRefToString({})).toBeUndefined();
   });
@@ -53,29 +54,39 @@ describe('agentImageGenerationModelAutoProviderFallback', () => {
   });
 });
 
-describe('normalizePatchAgentModel (legacy)', () => {
-  it('trims primary; drops empty fallbacks; collapses {primary} → string', () => {
-    expect(normalizePatchAgentModel('  openai/x  ')).toBe('  openai/x  ');
-    expect(normalizePatchAgentModel({ primary: '  openai/x  ' })).toBe('openai/x');
-    expect(normalizePatchAgentModel({ primary: 'a', fallbacks: [] })).toBe('a');
+describe('normalizePatchAgentModel', () => {
+  it('coerces objects into the canonical { primary, fallbacks? } shape', () => {
+    expect(normalizePatchAgentModel({ primary: '  openai/x  ' })).toEqual({ primary: 'openai/x' });
+    expect(normalizePatchAgentModel({ primary: 'a', fallbacks: [] })).toEqual({ primary: 'a' });
     expect(normalizePatchAgentModel({ primary: 'a', fallbacks: ['b', '', 'c'] })).toEqual({
       primary: 'a',
       fallbacks: ['b', 'c'],
     });
   });
+
+  it('rejects strings and bodies without a usable primary', () => {
+    expect(normalizePatchAgentModel('openai/x')).toBeUndefined();
+    expect(normalizePatchAgentModel(undefined)).toBeUndefined();
+    expect(normalizePatchAgentModel({})).toBeUndefined();
+    expect(normalizePatchAgentModel({ primary: '   ' })).toBeUndefined();
+  });
 });
 
 describe('normalizePatchAgentImageGenerationModel', () => {
-  it('passes through plain strings + undefined', () => {
-    expect(normalizePatchAgentImageGenerationModel('openai/x')).toBe('openai/x');
+  it('rejects strings + undefined + objects without primary', () => {
+    expect(normalizePatchAgentImageGenerationModel('openai/x')).toBeUndefined();
     expect(normalizePatchAgentImageGenerationModel(undefined)).toBeUndefined();
+    expect(normalizePatchAgentImageGenerationModel({})).toBeUndefined();
+    expect(normalizePatchAgentImageGenerationModel({ fallbacks: [''] })).toBeUndefined();
   });
 
-  it('collapses to plain string when only primary is set', () => {
-    expect(normalizePatchAgentImageGenerationModel({ primary: '  openai/x  ' })).toBe('openai/x');
+  it('returns an object even when only primary is set', () => {
+    expect(normalizePatchAgentImageGenerationModel({ primary: '  openai/x  ' })).toEqual({
+      primary: 'openai/x',
+    });
   });
 
-  it('keeps the object form when extra knobs are set', () => {
+  it('keeps extra knobs (fallbacks, timeoutMs, autoProviderFallback)', () => {
     const out = normalizePatchAgentImageGenerationModel({
       primary: 'openai/x',
       fallbacks: ['b', ' c '],
@@ -96,12 +107,7 @@ describe('normalizePatchAgentImageGenerationModel', () => {
       timeoutMs: -1,
       autoProviderFallback: false,
     });
-    expect(out).toBe('openai/x');
-  });
-
-  it('returns undefined when nothing usable is provided', () => {
-    expect(normalizePatchAgentImageGenerationModel({})).toBeUndefined();
-    expect(normalizePatchAgentImageGenerationModel({ fallbacks: [''] })).toBeUndefined();
+    expect(out).toEqual({ primary: 'openai/x' });
   });
 
   it('floors fractional timeoutMs', () => {

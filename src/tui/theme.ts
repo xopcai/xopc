@@ -34,9 +34,6 @@ export const palette = new Proxy({} as ReturnType<typeof getThemeExports>['palet
   },
 });
 
-/** @deprecated Use `getLightMode()` — kept for existing imports. */
-export const lightMode = getLightMode();
-
 export const markdownTheme = new Proxy({} as ReturnType<typeof getThemeExports>['markdownTheme'], {
   get(_target, prop) {
     const exports = getThemeExports().markdownTheme;

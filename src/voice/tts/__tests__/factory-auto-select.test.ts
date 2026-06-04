@@ -12,7 +12,7 @@ describe('resolveProviderOrder', () => {
       {
         enabled: true,
         provider: 'openai',
-        openai: { apiKey: 'sk-test' },
+        providers: { openai: { apiKey: 'sk-test' } },
       } as TTSConfig,
     );
     expect(order).toEqual(['openai', 'minimax', 'edge']);
@@ -25,8 +25,7 @@ describe('resolveProviderOrder', () => {
       {
         enabled: true,
         provider: 'edge',
-        openai: { apiKey: 'sk-test' },
-        edge: { enabled: true },
+        providers: { openai: { apiKey: 'sk-test' }, edge: { enabled: true } },
       } as TTSConfig,
     );
     expect(order[0]).toBe('edge');

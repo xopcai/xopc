@@ -6,26 +6,26 @@ describe('mergeTtsConfigFromAppConfig', () => {
   it('fills defaults when tts is undefined', () => {
     const merged = mergeTtsConfigFromAppConfig(undefined);
     expect(merged.provider).toBe('openai');
-    expect(merged.openai?.model).toBe('tts-1');
+    expect(merged.providers?.openai?.model).toBe('tts-1');
     expect(merged.fallback?.order?.length).toBeGreaterThan(0);
   });
 
-  it('preserves explicit provider and nested openai fields', () => {
+  it('preserves explicit provider and nested provider fields', () => {
     const merged = mergeTtsConfigFromAppConfig({
       enabled: true,
       provider: 'alibaba',
-      alibaba: { model: 'qwen-tts', voice: 'Cherry' },
+      providers: { alibaba: { model: 'qwen-tts', voice: 'Cherry' } },
     });
     expect(merged.provider).toBe('alibaba');
-    expect(merged.alibaba?.model).toBe('qwen-tts');
+    expect(merged.providers?.alibaba?.model).toBe('qwen-tts');
   });
 
-  it('merges minimax defaults and overrides', () => {
+  it('merges provider defaults with caller overrides', () => {
     const merged = mergeTtsConfigFromAppConfig({
-      minimax: { voice: 'female-shaonv' },
+      providers: { minimax: { voice: 'female-shaonv' } },
     });
-    expect(merged.minimax?.model).toBe('speech-2.8-hd');
-    expect(merged.minimax?.voice).toBe('female-shaonv');
+    expect(merged.providers?.minimax?.model).toBe('speech-2.8-hd');
+    expect(merged.providers?.minimax?.voice).toBe('female-shaonv');
   });
 
   it('merges providers map entries for extension providers', () => {
@@ -60,15 +60,14 @@ describe('appendTtsReadinessNote', () => {
   });
 
   it('appends setup hint when TTS enabled but no provider works', () => {
-    // Schema v2: TTS lives under `messages.tts`, not the top-level `tts` key.
     const cfg = {
       messages: {
         tts: {
           enabled: true,
           provider: 'openai' as const,
           trigger: 'always' as const,
-          edge: { enabled: false },
-          fallback: { enabled: false, order: [] as ('openai' | 'alibaba' | 'edge' | 'minimax')[] },
+          providers: { edge: { enabled: false } },
+          fallback: { enabled: false, order: [] as string[] },
         },
       },
     } as unknown as Config;

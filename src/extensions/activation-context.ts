@@ -153,7 +153,6 @@ function defaultModelId(config: unknown): string | undefined {
   const defaults = agents.defaults;
   if (!isRecord(defaults)) return undefined;
   const model = defaults.model;
-  if (typeof model === 'string' && model.trim().length > 0) return model;
   if (isRecord(model)) {
     const primary = model.primary;
     if (typeof primary === 'string' && primary.trim().length > 0) return primary;

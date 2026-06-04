@@ -40,7 +40,7 @@ export {
 } from './generation/provider-registry.js';
 export type {
   ImageGenerationSourceImage,
-  ImageGenerationCapabilities,
+  ImageGenerationProviderCapabilities,
 } from './generation/types.js';
 export {
   modelSupportsVision,

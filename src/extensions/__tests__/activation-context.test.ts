@@ -11,8 +11,10 @@ describe('collectConfiguredProviderIds', () => {
         tts: {
           enabled: true,
           provider: 'openai',
-          openai: { apiKey: 'sk-test' },
-          edge: { enabled: true },
+          providers: {
+            openai: { apiKey: 'sk-test' },
+            edge: { enabled: true },
+          },
         },
       },
     });
@@ -44,7 +46,7 @@ describe('collectConfiguredProviderIds', () => {
         tts: {
           enabled: true,
           provider: 'openai',
-          openai: {},
+          providers: { openai: {} },
         },
       },
     });

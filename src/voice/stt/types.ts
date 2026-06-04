@@ -31,27 +31,11 @@ import type { MediaUnderstandingModelEntry } from '../../media-understanding/typ
 export interface STTConfig {
   enabled: boolean;
   provider: string;
-  alibaba?: {
-    apiKey?: string;
-    model?: string;
-    baseUrl?: string;
-    headers?: Record<string, string>;
-    language?: string;
-    prompt?: string;
-  };
-  openai?: {
-    apiKey?: string;
-    model?: string;
-    baseUrl?: string;
-    headers?: Record<string, string>;
-    language?: string;
-    prompt?: string;
-  };
   /** Capability-local model chain (`tools.media.audio.models`). */
   models?: MediaUnderstandingModelEntry[];
   /** Shared model entries merged from `tools.media.models` at runtime. */
   sharedModels?: MediaUnderstandingModelEntry[];
-  /** OpenClaw-aligned provider settings map (`tools.media.audio.providers.<id>`). */
+  /** Provider settings map (`tools.media.audio.providers.<id>`). */
   providers?: Record<string, Record<string, unknown>>;
   fallback?: {
     enabled: boolean;
@@ -59,7 +43,6 @@ export interface STTConfig {
   };
   /** Hard timeout per provider call (ms). Default 60s. */
   timeoutMs?: number;
-  [key: string]: unknown;
 }
 
 export type STTProviderAttemptOutcome = 'success' | 'skipped' | 'failed';
@@ -89,11 +72,9 @@ export interface STTResultWithTracking extends STTResult {
 export const DEFAULT_STT_CONFIG: STTConfig = {
   enabled: false,
   provider: 'alibaba',
-  alibaba: {
-    model: 'paraformer-v2',
-  },
-  openai: {
-    model: 'whisper-1',
+  providers: {
+    alibaba: { model: 'paraformer-v2' },
+    openai: { model: 'whisper-1' },
   },
   fallback: {
     enabled: true,

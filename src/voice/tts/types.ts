@@ -80,36 +80,8 @@ export interface TTSConfig {
   summarization?: TTSSummarizationConfig;
   /** Allow model to override TTS parameters */
   modelOverrides?: TTSModelOverrideConfig;
-  /** OpenClaw-aligned provider settings map (`messages.tts.providers.<id>`). */
+  /** Provider settings map (`messages.tts.providers.<id>`). */
   providers?: Record<string, Record<string, unknown>>;
-  alibaba?: {
-    apiKey?: string;
-    model?: string;
-    voice?: string;
-  };
-  openai?: {
-    apiKey?: string;
-    model?: string;
-    voice?: string;
-  };
-  edge?: {
-    enabled?: boolean;
-    voice?: string;
-    lang?: string;
-    outputFormat?: string;
-    pitch?: string;
-    rate?: string;
-    volume?: string;
-    proxy?: string;
-    timeoutMs?: number;
-  };
-  minimax?: {
-    apiKey?: string;
-    model?: string;
-    voice?: string;
-  };
-  /** Extension / legacy flat provider config (e.g. `tts-local-cli`). */
-  [providerId: string]: unknown;
 }
 
 export interface TTSSummarizationConfig {
@@ -143,23 +115,16 @@ export const DEFAULT_TTS_CONFIG: TTSConfig = {
     allowNormalization: false,
     allowSeed: false,
   },
-  alibaba: {
-    model: 'qwen-tts',
-    voice: 'Cherry',
-  },
-  openai: {
-    model: 'tts-1',
-    voice: 'alloy',
-  },
-  edge: {
-    enabled: true,
-    voice: 'en-US-MichelleNeural',
-    lang: 'en-US',
-    outputFormat: 'audio-24khz-48kbitrate-mono-mp3',
-  },
-  minimax: {
-    model: 'speech-2.8-hd',
-    voice: 'male-qn-qingse',
+  providers: {
+    alibaba: { model: 'qwen-tts', voice: 'Cherry' },
+    openai: { model: 'tts-1', voice: 'alloy' },
+    edge: {
+      enabled: true,
+      voice: 'en-US-MichelleNeural',
+      lang: 'en-US',
+      outputFormat: 'audio-24khz-48kbitrate-mono-mp3',
+    },
+    minimax: { model: 'speech-2.8-hd', voice: 'male-qn-qingse' },
   },
 };
 

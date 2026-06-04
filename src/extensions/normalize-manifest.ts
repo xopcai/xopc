@@ -92,9 +92,6 @@ export function normalizeExtensionManifest(raw: Record<string, unknown>): Extens
     dependencies: isRecord(raw.dependencies) ? (raw.dependencies as Record<string, string>) : undefined,
 
     enabledByDefault: typeof raw.enabledByDefault === 'boolean' ? raw.enabledByDefault : undefined,
-    legacyExtensionIds: Array.isArray(raw.legacyExtensionIds)
-      ? raw.legacyExtensionIds.filter((x): x is string => typeof x === 'string')
-      : undefined,
 
     providers: Array.isArray(raw.providers)
       ? raw.providers.filter((x): x is string => typeof x === 'string')

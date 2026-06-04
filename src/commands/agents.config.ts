@@ -47,7 +47,7 @@ export function applyAgentConfig(
     ...(params.description?.trim() ? { description: params.description.trim() } : {}),
     ...(params.workspace ? { workspace: params.workspace } : {}),
     ...(params.agentDir ? { agentDir: params.agentDir } : {}),
-    ...(params.model ? { model: params.model } : {}),
+    ...(params.model ? { model: { primary: params.model } } : {}),
   };
   const nextList = [...list];
   if (index >= 0) {

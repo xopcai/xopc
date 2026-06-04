@@ -4,8 +4,7 @@
  *
  * Lives in this file rather than `./schema.js` because schema.ts is the leaf
  * type module — letting it import agent-scope creates a circular cycle
- * (`schema → agent-scope → schema`). Callers import via the `./index.js`
- * barrel; backward-compat re-export keeps existing call sites working.
+ * (`schema → agent-scope → schema`). Callers import via the `./index.js` barrel.
  */
 
 import { getDefaultWorkspacePath } from '../agent/agent-scope.js';

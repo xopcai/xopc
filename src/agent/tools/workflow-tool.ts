@@ -35,6 +35,7 @@ import {
   type WorkflowMeta,
   type WorkflowSnapshot,
 } from '../workflow/index.js';
+import { resolveModel as resolveModelById } from '../../providers/index.js';
 import type { ToolExecutorConfig } from './executor.js';
 
 const log = createLogger('workflow-tool');
@@ -196,6 +197,8 @@ export function createWorkflowTool(deps: WorkflowToolDeps): AgentTool {
         buildChildTools: deps.buildChildTools,
       });
 
+      const resolveModelId = (modelId: string): Model<Api> => resolveModelById(modelId);
+
       // Combined abort: parent signal + per-run timeout.
       const controller = new AbortController();
       const onParentAbort = () => controller.abort();
@@ -208,7 +211,7 @@ export function createWorkflowTool(deps: WorkflowToolDeps): AgentTool {
       pushUpdate();
 
       try {
-        const result = await runWorkflow(script, { runner }, {
+        const result = await runWorkflow(script, { runner, resolveModelId }, {
           cwd: deps.workspace,
           args: params.args,
           signal: controller.signal,

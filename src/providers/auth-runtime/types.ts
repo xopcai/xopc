@@ -3,11 +3,6 @@
  * (image / audio / video). Decoupled from the LLM-side
  * `src/auth/credentials.ts` so capability providers do not need to
  * `await` for every isConfigured() call.
- *
- * Step 4 expands {@link AuthProfileStore} from a simple key lookup into a
- * full per-agent profile store that can hold OAuth tokens and refresh them
- * on demand, while keeping every existing sync caller working (legacy
- * methods remain on the interface).
  */
 
 import type { Config } from '../../config/schema.js';
@@ -63,20 +58,19 @@ export interface AuthProfile {
  *
  * Sync members ({@link getApiKeySync}, {@link hasCredentialSync}) keep
  * `resolveApiKeyForProvider` synchronous so capability providers and tool
- * default-model resolution stay non-blocking. Async members
- * ({@link list}, {@link get}, {@link save}, {@link refresh}) are used by
- * vendor-specific code (Codex / Anthropic OAuth) and the gateway settings
- * UI.
+ * default-model resolution stay non-blocking. {@link get} / {@link list} are
+ * required so OAuth-aware callers can branch on `mode` without falling back
+ * to the sync getters.
  */
 export interface AuthProfileStore {
   /** Synchronous lookup; returns undefined when no profile is loaded. */
   getApiKeySync(providerId: string, profile?: string): string | undefined;
   /** Synchronous "do we have any usable credential" check. */
   hasCredentialSync(providerId: string, profile?: string): boolean;
-  /** All profiles for a provider (Step 4 stores can return multiple). */
-  list?(providerId: string): AuthProfile[];
+  /** All profiles for a provider. */
+  list(providerId: string): AuthProfile[];
   /** Single profile; defaults to `default: true` then "default" id. */
-  get?(providerId: string, profileId?: string): AuthProfile | undefined;
+  get(providerId: string, profileId?: string): AuthProfile | undefined;
   /** Persist a profile; replaces any existing record with the same id. */
   save?(profile: AuthProfile): Promise<void>;
   /** Refresh OAuth access token; idempotent if still fresh. */

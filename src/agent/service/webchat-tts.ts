@@ -112,7 +112,7 @@ export async function appendAttachmentToLastAssistant(
       }
       const next = [...prev, att];
       loaded[i] = { ...m, attachments: next } as unknown as AgentMessage;
-      await sessionStore.save(sessionKey, loaded);
+      await sessionStore.saveMessages(sessionKey, loaded);
       return;
     }
   }
