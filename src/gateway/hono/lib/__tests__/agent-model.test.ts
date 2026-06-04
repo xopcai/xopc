@@ -7,6 +7,7 @@ import {
   agentModelRefToString,
   normalizePatchAgentImageGenerationModel,
   normalizePatchAgentModel,
+  normalizePatchTypedModels,
 } from '../agent-model.js';
 
 describe('agentModelRefToString / agentModelFallbacksToArray', () => {
@@ -116,5 +117,34 @@ describe('normalizePatchAgentImageGenerationModel', () => {
       timeoutMs: 1234.9,
     });
     expect(out).toEqual({ primary: 'openai/x', timeoutMs: 1234 });
+  });
+});
+
+describe('normalizePatchTypedModels', () => {
+  it('returns null for null and empty after filtering', () => {
+    expect(normalizePatchTypedModels(null)).toBeNull();
+    expect(normalizePatchTypedModels([])).toBeNull();
+    expect(normalizePatchTypedModels([{ id: 'Bad', model: 'openai/x' }])).toBeNull();
+  });
+
+  it('validates id and provider/model', () => {
+    expect(
+      normalizePatchTypedModels([
+        { id: 'small', model: 'deepseek/flash', description: 'Fast' },
+        { id: 'large', model: 'anthropic/claude' },
+      ]),
+    ).toEqual([
+      { id: 'small', description: 'Fast', model: 'deepseek/flash' },
+      { id: 'large', model: 'anthropic/claude' },
+    ]);
+  });
+
+  it('dedupes by id keeping last valid entry', () => {
+    expect(
+      normalizePatchTypedModels([
+        { id: 'small', model: 'openai/a' },
+        { id: 'small', model: 'openai/b' },
+      ]),
+    ).toEqual([{ id: 'small', model: 'openai/b' }]);
   });
 });

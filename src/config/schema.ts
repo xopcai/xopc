@@ -41,11 +41,54 @@ export const AgentImageGenerationModelSchema = z
 
 export type AgentImageGenerationModelConfig = z.infer<typeof AgentImageGenerationModelSchema>;
 
+/** Named model role for workflows (e.g. `small`, `large`). Maps to a concrete `provider/model` ref. */
+export const AgentTypedModelSchema = z
+  .object({
+    id: z.string().min(1).regex(/^[a-z][a-z0-9_-]{0,63}$/),
+    description: z.string().max(500).optional(),
+    model: z.string().min(1),
+  })
+  .strict()
+  .superRefine((entry, ctx) => {
+    const trimmed = entry.model.trim();
+    const idx = trimmed.indexOf('/');
+    if (idx <= 0 || idx === trimmed.length - 1) {
+      ctx.addIssue({
+        code: 'custom',
+        message: `model must be provider/model format (got '${entry.model}')`,
+        path: ['model'],
+      });
+    }
+  });
+
+export type AgentTypedModel = z.infer<typeof AgentTypedModelSchema>;
+
+const AgentTypedModelsArraySchema = z
+  .array(AgentTypedModelSchema)
+  .optional()
+  .superRefine((arr, ctx) => {
+    if (!arr) return;
+    const seen = new Set<string>();
+    for (let i = 0; i < arr.length; i++) {
+      const id = arr[i]!.id;
+      if (seen.has(id)) {
+        ctx.addIssue({
+          code: 'custom',
+          message: `duplicate typed model id '${id}'`,
+          path: [i, 'id'],
+        });
+      }
+      seen.add(id);
+    }
+  });
+
 export const AgentDefaultsSchema = z.object({
   /** Parent directory: each agent’s Markdown root is `<expanded>/<agentId>/` (e.g. `.../workspace/main`). */
   workspace: z.string().default('~/.xopc/workspace'),
   /** Default model for new sessions. Optional — runtime resolves a fallback when unset. */
   model: AgentModelRefSchema.optional(),
+  /** Named model roles (e.g. `small`, `large`) for workflows and other callers. */
+  models: AgentTypedModelsArraySchema,
   /** Vision / image understanding model (provider/model). Falls back to heuristics when unset. */
   imageModel: AgentModelRefSchema.optional(),
   /** Image generation model (provider/model), e.g. openai/gpt-image-1. Supports plugin-based providers (OpenAI / DashScope / MiniMax / Google / Fal). */
@@ -339,6 +382,8 @@ export const AgentConfigSchema = z.object({
    */
   agentDir: z.string().optional(),
   model: AgentModelRefSchema.optional(),
+  /** Per-agent typed model overrides; same `id` replaces the defaults entry. */
+  models: AgentTypedModelsArraySchema,
   thinkingDefault: z.enum(['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'adaptive']).optional(),
   reasoningDefault: z.enum(['off', 'on', 'stream']).optional(),
   verboseDefault: z.enum(['off', 'on', 'full']).optional(),

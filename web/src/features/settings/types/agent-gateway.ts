@@ -10,6 +10,12 @@ export type GatewayAgentToolsInfo = {
   effectiveDisable: string[];
 };
 
+export type GatewayAgentTypedModelsInfo = {
+  defaults: Array<{ id: string; model: string; description?: string }>;
+  entry?: Array<{ id: string; model: string; description?: string }>;
+  effective: Array<{ id: string; model: string; description?: string }>;
+};
+
 export type GatewayAgentRow = {
   id: string;
   name?: string;
@@ -19,6 +25,7 @@ export type GatewayAgentRow = {
   workspace: string;
   profileDir: string;
   model?: { primary?: string; fallbacks?: string[] };
+  typedModels: GatewayAgentTypedModelsInfo;
   isDefault: boolean;
   skills: GatewayAgentSkillsInfo;
   tools: GatewayAgentToolsInfo;

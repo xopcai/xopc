@@ -1,3 +1,41 @@
+import type { AgentTypedModel } from '../../../config/schema.js';
+
+const TYPED_MODEL_ID_RE = /^[a-z][a-z0-9_-]{0,63}$/;
+
+function isValidProviderModelRef(ref: string): boolean {
+  const trimmed = ref.trim();
+  const idx = trimmed.indexOf('/');
+  return idx > 0 && idx < trimmed.length - 1;
+}
+
+/**
+ * Coerce PATCH body `models[]` into validated typed model entries.
+ * Returns `null` to clear, `undefined` when input should be skipped, or cleaned array.
+ * Empty array after filtering → `null` (same as clear).
+ */
+export function normalizePatchTypedModels(v: unknown): AgentTypedModel[] | null | undefined {
+  if (v === undefined) return undefined;
+  if (v === null) return null;
+  if (!Array.isArray(v)) return undefined;
+
+  const byId = new Map<string, AgentTypedModel>();
+  for (const raw of v) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
+    const o = raw as Record<string, unknown>;
+    const id = typeof o.id === 'string' ? o.id.trim() : '';
+    const model = typeof o.model === 'string' ? o.model.trim() : '';
+    if (!id || !TYPED_MODEL_ID_RE.test(id) || !model || !isValidProviderModelRef(model)) continue;
+    const description =
+      typeof o.description === 'string' && o.description.trim()
+        ? o.description.trim().slice(0, 500)
+        : undefined;
+    byId.set(id, description ? { id, description, model } : { id, model });
+  }
+
+  if (byId.size === 0) return null;
+  return [...byId.values()];
+}
+
 /** Read `primary` from an `AgentModelConfig` object. */
 export function agentModelRefToString(ref: unknown): string | undefined {
   if (!ref || typeof ref !== 'object' || Array.isArray(ref)) return undefined;

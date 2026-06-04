@@ -7,6 +7,7 @@ import { AgentDefaultsField } from '../agent-defaults-field';
 import type { AgentDefaultsPanelProps } from '../agent-defaults-panel-props';
 import { inputClassName, selectClassName } from '../defaults-field-styles';
 import { AgentDefaultsChatModelFallbacksSection } from './chat-model-fallbacks-section';
+import { AgentDefaultsTypedModelsSection } from './typed-models-section';
 
 const THINKING_KEYS = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'adaptive'] as const;
 
@@ -31,6 +32,8 @@ export function AgentDefaultsBasicsPanel(props: AgentDefaultsPanelProps) {
       </SettingsFormSection>
 
       <AgentDefaultsChatModelFallbacksSection {...props} />
+
+      <AgentDefaultsTypedModelsSection {...props} />
 
       <SettingsFormSection>
         <SettingsFormSectionHeader icon={SlidersHorizontal} title={a.cardGenerationTitle} subtitle={a.cardGenerationSubtitle} />
