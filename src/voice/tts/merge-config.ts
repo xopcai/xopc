@@ -1,8 +1,4 @@
 import type { Config } from '../../config/schema.js';
-import {
-  collectTtsProviderConfigEntries,
-  TTS_CONFIG_RESERVED_KEYS,
-} from './config-slice.js';
 import { DEFAULT_TTS_CONFIG, type TTSConfig } from './types.js';
 import { isTTSAvailable } from './factory.js';
 
@@ -34,49 +30,9 @@ function mergeProviderEntries(
   return merged;
 }
 
-function mergeKnownFlatProviderSlices(
-  merged: TTSConfig,
-  patch: Partial<TTSConfig>,
-): TTSConfig {
-  return {
-    ...merged,
-    alibaba: { ...DEFAULT_TTS_CONFIG.alibaba, ...patch.alibaba },
-    openai: { ...DEFAULT_TTS_CONFIG.openai, ...patch.openai },
-    edge: { ...DEFAULT_TTS_CONFIG.edge, ...patch.edge },
-    minimax: { ...DEFAULT_TTS_CONFIG.minimax, ...patch.minimax },
-  };
-}
-
-function mergeExtensionFlatProviderSlices(
-  merged: TTSConfig,
-  patch: Record<string, unknown>,
-): TTSConfig {
-  const next = { ...merged } as Record<string, unknown>;
-  for (const [key, value] of Object.entries(patch)) {
-    if (TTS_CONFIG_RESERVED_KEYS.has(key)) {
-      continue;
-    }
-    if (['alibaba', 'openai', 'edge', 'minimax'].includes(key)) {
-      continue;
-    }
-    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-      continue;
-    }
-    const existing = next[key];
-    next[key] =
-      typeof existing === 'object' && existing !== null && !Array.isArray(existing)
-        ? { ...(existing as Record<string, unknown>), ...(value as Record<string, unknown>) }
-        : value;
-  }
-  return next as TTSConfig;
-}
-
 export function mergeTtsConfigFromAppConfig(tts: Partial<TTSConfig> | undefined): TTSConfig {
-  const p = (tts ?? {}) as Partial<TTSConfig> & Record<string, unknown>;
-  const defaultEntries = collectTtsProviderConfigEntries(DEFAULT_TTS_CONFIG);
-  const patchEntries = collectTtsProviderConfigEntries(p);
-
-  let merged: TTSConfig = {
+  const p = (tts ?? {}) as Partial<TTSConfig>;
+  return {
     ...DEFAULT_TTS_CONFIG,
     ...p,
     enabled: p.enabled ?? DEFAULT_TTS_CONFIG.enabled,
@@ -90,16 +46,12 @@ export function mergeTtsConfigFromAppConfig(tts: Partial<TTSConfig> | undefined)
       ...DEFAULT_TTS_CONFIG.modelOverrides!,
       ...p.modelOverrides,
     },
-    providers: mergeProviderEntries(defaultEntries, patchEntries),
+    providers: mergeProviderEntries(DEFAULT_TTS_CONFIG.providers, p.providers),
     summarization: {
       ...DEFAULT_TTS_CONFIG.summarization,
       ...p.summarization,
     },
   };
-
-  merged = mergeKnownFlatProviderSlices(merged, p);
-  merged = mergeExtensionFlatProviderSlices(merged, p);
-  return merged;
 }
 
 /**

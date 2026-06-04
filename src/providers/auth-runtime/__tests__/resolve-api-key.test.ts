@@ -40,6 +40,10 @@ describe('resolveApiKeyForProvider', () => {
     const store: AuthProfileStore = {
       getApiKeySync: () => 'from-store',
       hasCredentialSync: () => true,
+      list: () => [
+        { provider: 'openai', profileId: 'default', mode: 'api-key', apiKey: 'from-store' },
+      ],
+      get: () => ({ provider: 'openai', profileId: 'default', mode: 'api-key', apiKey: 'from-store' }),
     };
     const cfg = cfgWith({ openai: { apiKey: 'sk-cfg' } });
     const v = resolveApiKeyForProvider({
@@ -57,6 +61,10 @@ describe('resolveApiKeyForProvider', () => {
         throw new Error('store boom');
       },
       hasCredentialSync: () => false,
+      list: () => [],
+      get: () => {
+        throw new Error('store boom');
+      },
     };
     const cfg = cfgWith({ openai: { apiKey: 'sk-cfg' } });
     const v = resolveApiKeyForProvider({

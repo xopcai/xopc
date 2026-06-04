@@ -10,7 +10,7 @@
 
 import { createHash } from 'node:crypto';
 import { createReadStream, createWriteStream } from 'node:fs';
-import { mkdir, mkdtemp, readdir, rename, rm, stat } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, stat } from 'node:fs/promises';
 import { platform as osPlatform, arch as osArch, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pipeline } from 'node:stream/promises';
@@ -190,49 +190,6 @@ async function resolveCloakExecutablePath(
   }
 
   return { execPath: customPath, installed: false, customBinaryPath: true };
-}
-
-/**
- * Move legacy layout (~/.xopc/bin/chromium-v* and profiles/) into ~/.xopc/bin/cloakbrowser/.
- * No-op when using a custom cacheDir or when the new layout already exists.
- */
-export async function migrateLegacyCloakBrowserLayout(cacheDir: string): Promise<void> {
-  if (cacheDir !== defaultCloakBrowserCacheDir()) return;
-
-  const binDir = resolveBinDir();
-  await mkdir(cacheDir, { recursive: true });
-
-  let entries: string[];
-  try {
-    entries = await readdir(binDir);
-  } catch {
-    return;
-  }
-
-  for (const name of entries) {
-    if (!name.startsWith('chromium-v')) continue;
-    const from = join(binDir, name);
-    const to = join(cacheDir, name);
-    if (await fileExists(to)) continue;
-    if (!(await fileExists(from))) continue;
-    try {
-      await rename(from, to);
-      log.info({ from, to }, 'Migrated legacy CloakBrowser binary directory');
-    } catch (err) {
-      log.warn({ err, from, to }, 'Failed to migrate legacy CloakBrowser binary directory');
-    }
-  }
-
-  const legacyProfiles = join(binDir, 'profiles');
-  const newProfiles = join(cacheDir, 'profiles');
-  if (await fileExists(newProfiles) || !(await fileExists(legacyProfiles))) return;
-
-  try {
-    await rename(legacyProfiles, newProfiles);
-    log.info({ from: legacyProfiles, to: newProfiles }, 'Migrated legacy CloakBrowser profiles directory');
-  } catch (err) {
-    log.warn({ err, from: legacyProfiles, to: newProfiles }, 'Failed to migrate legacy CloakBrowser profiles');
-  }
 }
 
 function binaryDir(cacheDir: string, platformInfo: PlatformInfo): string {
@@ -566,7 +523,6 @@ export async function launchCloakBrowser(
 ): Promise<CloakBrowserLaunchResult> {
   const platformInfo = detectPlatform();
   const cacheDir = resolveCloakBrowserCacheDir(config.cacheDir);
-  await migrateLegacyCloakBrowserLayout(cacheDir);
   const keepOpen = config.keepOpen ?? true;
   const reuseExisting = config.reuseExisting ?? keepOpen;
 
@@ -812,7 +768,6 @@ export async function cloakBrowserDoctor(
 ): Promise<CloakBrowserDoctorResult> {
   const platformInfo = detectPlatform();
   const cacheDir = resolveCloakBrowserCacheDir(config.cacheDir);
-  await migrateLegacyCloakBrowserLayout(cacheDir);
   const { execPath, installed, customBinaryPath } = await resolveCloakExecutablePath(
     cacheDir,
     platformInfo,

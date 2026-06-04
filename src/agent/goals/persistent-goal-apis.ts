@@ -7,8 +7,6 @@ export interface PersistentGoalApis {
   getSessionMetadata(key: string): Promise<SessionMetadata | null>;
   updateSessionMetadata(key: string, updates: Partial<SessionMetadata>): Promise<void>;
   loadMessages(key: string): Promise<AgentMessage[]>;
-  /** @deprecated Prefer {@link appendAssistantReceipt} for runtime turns. */
-  saveMessages(key: string, messages: AgentMessage[]): Promise<void>;
   appendAssistantReceipt(sessionKey: string, text: string): Promise<void>;
   scheduleContinuation(sessionKey: string, message: string): void;
   /**

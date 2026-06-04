@@ -24,6 +24,10 @@ import { stripStartupContextForDisplay } from '@/features/chat/messages/wire-tex
 import { WorkflowCard, type WorkflowCardLabels } from '@/features/chat/workflow/workflow-card';
 import { defaultWorkflowCardLabels } from '@/features/chat/workflow/workflow-card-labels';
 import { isWorkflowToolBlock } from '@/features/chat/workflow/workflow.utils';
+import {
+  parseProviderSetupRequired,
+  ProviderSetupRequiredCard,
+} from '@/features/chat/messages/provider-setup-required-banner';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 
@@ -46,6 +50,17 @@ function renderTextOrImageBlock(
         </div>
       );
     }
+
+    // Intercept upstream "No API key found" messages rendered as assistant text
+    const providerPayload = parseProviderSetupRequired(block.text ?? '');
+    if (providerPayload) {
+      return (
+        <div key={key} className="min-w-0">
+          <ProviderSetupRequiredCard payload={providerPayload} />
+        </div>
+      );
+    }
+
     return (
       <div key={key} className="markdown-content min-w-0">
         <MarkdownView content={block.text} compact />

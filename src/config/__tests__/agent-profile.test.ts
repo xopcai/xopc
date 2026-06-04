@@ -12,7 +12,6 @@ function minimalConfig(overrides: Partial<Config> = {}): Config {
     agents: {
       defaults: {
         workspace: '~/.xopc/workspace',
-        model: '',
         maxTokens: 8192,
         temperature: 0.7,
         maxToolIterations: 20,
@@ -26,7 +25,7 @@ function minimalConfig(overrides: Partial<Config> = {}): Config {
           id: 'coder',
           enabled: true,
           workspace: '~/coder-ws',
-          model: 'anthropic/claude-3-5-sonnet-20241022',
+          model: { primary: 'anthropic/claude-3-5-sonnet-20241022' },
           tools: { disable: ['shell'] },
         },
       ],
@@ -113,7 +112,7 @@ describe('agent-profile', () => {
       agents: {
         ...base.agents!,
         default: 'main',
-        list: [{ id: 'coder', enabled: true, model: 'openai/gpt-4o' }],
+        list: [{ id: 'coder', enabled: true, model: { primary: 'openai/gpt-4o' } }],
       },
     };
     const p = resolveEffectiveAgentProfile(cfg, 'coder');

@@ -195,29 +195,3 @@ export function checkFileSafety(
   return { allowed: true };
 }
 
-/**
- * Quick safety check for shell commands
- */
-export function checkShellSafety(command: string): { allowed: boolean; message?: string } {
-  const dangerousPatterns = [
-    /\brm\s+-?[rf]/i,           // rm -rf
-    /\bdd\s+/i,                  // dd
-    /\bmkfs/i,                   // mkfs
-    /\bchmod\s+[0-7]{3}/i,       // chmod 777
-    />\s*\/dev\//i,              // redirect to device
-    /\|\s*sh/i,                  // pipe to shell
-    /\bcurl\b.*\|\s*bash/i,      // curl | bash
-    /\bwget\b.*\|\s*bash/i,      // wget | bash
-  ];
-
-  for (const pattern of dangerousPatterns) {
-    if (pattern.test(command)) {
-      return {
-        allowed: false,
-        message: `Potentially dangerous command detected: ${command.slice(0, 50)}...`,
-      };
-    }
-  }
-
-  return { allowed: true };
-}

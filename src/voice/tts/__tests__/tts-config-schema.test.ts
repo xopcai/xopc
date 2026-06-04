@@ -23,16 +23,14 @@ describe('TTSConfigSchema', () => {
     expect(parsed.providers?.['tts-local-cli']?.command).toBe('piper --text {{Text}}');
   });
 
-  it('preserves legacy flat provider keys via passthrough', () => {
-    const parsed = TTSConfigSchema.parse({
-      enabled: true,
-      provider: 'openai',
-      openai: { model: 'tts-1', voice: 'alloy' },
-      'tts-local-cli': { command: 'local-bin' },
-    });
-
-    expect(parsed.openai?.model).toBe('tts-1');
-    expect((parsed as Record<string, unknown>)['tts-local-cli']).toEqual({ command: 'local-bin' });
+  it('rejects legacy flat provider keys (must live under providers.<id>)', () => {
+    expect(() =>
+      TTSConfigSchema.parse({
+        enabled: true,
+        provider: 'openai',
+        openai: { model: 'tts-1', voice: 'alloy' },
+      }),
+    ).toThrow();
   });
 
   it('accepts open fallback order entries', () => {

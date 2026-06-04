@@ -119,7 +119,6 @@ export class PersistentGoalService {
         this.opts.onSessionMetadataUpdated?.(k);
       },
       loadMessages: (k) => this.opts.sessionStore.loadMessages(k),
-      saveMessages: (k, m) => this.opts.sessionStore.saveMessages(k, m),
       appendAssistantReceipt: async (k, text) => {
         const trimmed = text.trim();
         if (!trimmed) return;

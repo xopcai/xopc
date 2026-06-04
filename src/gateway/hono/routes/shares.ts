@@ -9,7 +9,8 @@ import { getClientIpFromHeaders } from '../../security/loopback.js';
 import { getShareStore, shareResponseContentType } from '../../../share/share-store.js';
 import { getSiteShareStore } from '../../../share/site-share-store.js';
 import { resolveSiteShareConfig } from '../../../share/site-share-config.js';
-import { resolveShareUrl } from '../../../share/share-url.js';
+import { resolveShareUrl, resolveSiteShareUrl } from '../../../share/share-url.js';
+import { resolveReverseProxyPublicUrl } from '../../public-url.js';
 import { consumeSharePublicLimit } from '../../../share/share-rate-limit.js';
 import { logShareAudit } from '../../../share/share-audit.js';
 import {
@@ -51,6 +52,7 @@ function getShareUrlContext(service: GatewayService) {
   return {
     gatewayHost: resolveGatewayEffectiveHost(service.currentConfig),
     gatewayPort: gateway.port ?? 18790,
+    reverseProxyPublicUrl: resolveReverseProxyPublicUrl(service.currentConfig),
   };
 }
 
@@ -613,17 +615,13 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
         });
         if (stagedDir) rememberStagedSite(siteRec.id, stagedDir);
         const cfg = siteStore.getConfig();
-        const gatewayPort = service.currentConfig.gateway.port ?? 18790;
-        const gatewayHost = resolveGatewayEffectiveHost(service.currentConfig);
         const subdomainLabel = siteRec.subdomain ?? siteRec.token;
-        const tunnelUp = !!(await import('../../../tunnel/tunnel-state.js')).loadTunnelState();
-        const shareUrl = tunnelUp
-          ? `https://${subdomainLabel}.${cfg.publicHostSuffix}/`
-          : `http://${gatewayHost}:${gatewayPort}/site/${siteRec.token}/`;
-        const reachability = tunnelUp ? 'public' : (gatewayHost === '127.0.0.1' || gatewayHost === 'localhost' || gatewayHost === '::1' ? 'local-only' : 'lan');
-        const thumbnailUrl = wantThumbnail
-          ? `${tunnelUp ? `https://${subdomainLabel}.${cfg.publicHostSuffix}` : `http://${gatewayHost}:${gatewayPort}`}/site/${siteRec.token}/thumbnail`
-          : '';
+        const resolved = resolveSiteShareUrl({
+          ...urlCtx,
+          token: siteRec.token,
+          subdomainLabel,
+          publicHostSuffix: cfg.publicHostSuffix,
+        });
         if (wantThumbnail) {
           scheduleThumbnail({ scope: 'site', token: siteRec.token, recordId: siteRec.id }, thumbnailRenderContext(service));
           siteStore.setThumbnailStatus(siteRec.id, 'pending');
@@ -637,15 +635,15 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
               kind: 'site',
               title: titleOut,
               description: makeDescription({ audience, expiresAt: siteRec.expiresAt, override: description }),
-              shareUrl,
+              shareUrl: resolved.shareUrl,
               lanUrl: null,
-              reachability,
-              reachabilityHint: reachability === 'public' ? null : (reachability === 'lan' ? '当前局域网内可访问，开启远程隧道后对外网可达' : '当前仅本机可访问，开启远程隧道后对外可达'),
+              reachability: resolved.reachability,
+              reachabilityHint: resolved.reachabilityHint,
               expiresAt: siteRec.expiresAt,
               maxViews: null,
             },
             thumbnail: {
-              url: thumbnailUrl,
+              url: wantThumbnail ? resolved.thumbnailUrl : '',
               status: wantThumbnail ? 'pending' : 'unavailable',
               width: SHARE_CONFIG_DEFAULTS.thumbnail.viewportWidth,
               height: SHARE_CONFIG_DEFAULTS.thumbnail.viewportHeight,

@@ -16,12 +16,6 @@ export async function getSessionIndex(): Promise<SessionIndex> {
   return manager;
 }
 
-/**
- * Get session manager and handle errors consistently
- */
-/** @deprecated Use {@link getSessionIndex}. */
-export const getSessionManager = getSessionIndex;
-
 export async function getSessionIndexSafe(): Promise<
   { manager: SessionIndex; error: null } | { manager: null; error: Error }
 > {

@@ -189,7 +189,7 @@ export async function maybeAutoTitleSessionStore(
 
   let meta = await sessionStore.getMetadata(sessionKey);
   if (!meta) {
-    await sessionStore.save(sessionKey, messages);
+    await sessionStore.saveMessages(sessionKey, messages);
     meta = await sessionStore.getMetadata(sessionKey);
   }
   if (!meta) {

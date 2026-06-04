@@ -337,6 +337,10 @@
       "cdp_unreachable": "配置的 CDP 调试地址无法访问。请到 设置 → 浏览器 确认地址，并确保 Chrome 以 --remote-debugging-port 模式启动。",
       "cloud_api_key_missing": "云端浏览器缺少 API Key。请到 设置 → 浏览器 填入凭证。"
     },
+    "providerSetupRequiredTitle": "模型服务商未配置",
+    "providerSetupRequiredBody": "未找到 {{provider}} 的 API Key。请到 设置 → 服务商 添加凭证后再开始对话。",
+    "providerSetupRequiredCta": "去配置服务商",
+    "providerSetupRequiredDetailToggle": "查看详情",
     "voicePlay": "播放语音",
     "voicePause": "暂停",
     "voiceLoading": "正在加载音频…",

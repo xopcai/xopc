@@ -197,10 +197,11 @@ const DEFAULT_WEB_EXTRACT: AgentDefaultsWebExtractState = {
 };
 
 function normalizeModelRef(raw: unknown): string {
-  if (raw == null) return '';
+  if (!raw) return '';
+  // API returns a plain string for model refs (via agentModelRefToString).
   if (typeof raw === 'string') return raw;
-  if (typeof raw === 'object' && raw !== null && 'primary' in raw) {
-    const p = (raw as { primary?: string }).primary;
+  if (typeof raw === 'object' && !Array.isArray(raw)) {
+    const p = (raw as { primary?: unknown }).primary;
     return typeof p === 'string' ? p : '';
   }
   return '';
@@ -266,7 +267,7 @@ function parseBrowserFromDefaults(d: Record<string, unknown>): BrowserFieldsPick
   const browser = d.browser;
   if (!browser || typeof browser !== 'object' || Array.isArray(browser)) {
     return {
-      browserEnabled: false,
+      browserEnabled: true,
       browserHeadless: false,
       browserAllowPrivateUrls: false,
       browserCommandTimeout: undefined,
@@ -797,17 +798,24 @@ export async function patchAgentDefaults(state: AgentDefaultsState): Promise<voi
     const v = s.trim();
     return v ? [v] : [];
   });
-  const modelField =
-    fallbacks.length > 0 ? { primary: state.model, fallbacks } : state.model;
+  const primaryRef = state.model.trim();
+  // Always object-form; backend deletes the slot when the field is null.
+  const modelField: unknown = primaryRef
+    ? fallbacks.length > 0
+      ? { primary: primaryRef, fallbacks }
+      : { primary: primaryRef }
+    : null;
 
   const imageFbs = state.imageModelFallbacks.flatMap((s) => {
     const v = s.trim();
     return v ? [v] : [];
   });
-  const imageModelField =
-    imageFbs.length > 0 && state.imageModel.trim()
-      ? { primary: state.imageModel.trim(), fallbacks: imageFbs }
-      : state.imageModel || '';
+  const imagePrimary = state.imageModel.trim();
+  const imageModelField: unknown = imagePrimary
+    ? imageFbs.length > 0
+      ? { primary: imagePrimary, fallbacks: imageFbs }
+      : { primary: imagePrimary }
+    : null;
 
   const imageGenFbs = state.imageGenerationModelFallbacks.flatMap((s) => {
     const v = s.trim();
@@ -820,16 +828,14 @@ export async function patchAgentDefaults(state: AgentDefaultsState): Promise<voi
       ? Math.floor(state.imageGenerationModelTimeoutMs)
       : null;
   const imageGenAuto = state.imageGenerationModelAutoProviderFallback === true;
-  const imageGenerationModelField: unknown = (() => {
-    const obj: Record<string, unknown> = {};
-    if (imageGenPrimary) obj.primary = imageGenPrimary;
-    if (imageGenFbs.length > 0) obj.fallbacks = imageGenFbs;
-    if (imageGenTimeoutMs) obj.timeoutMs = imageGenTimeoutMs;
-    if (imageGenAuto) obj.autoProviderFallback = true;
-    if (Object.keys(obj).length === 0) return '';
-    if (Object.keys(obj).length === 1 && typeof obj.primary === 'string') return obj.primary;
-    return obj;
-  })();
+  const imageGenerationModelField: unknown = imageGenPrimary
+    ? {
+        primary: imageGenPrimary,
+        ...(imageGenFbs.length > 0 ? { fallbacks: imageGenFbs } : {}),
+        ...(imageGenTimeoutMs ? { timeoutMs: imageGenTimeoutMs } : {}),
+        ...(imageGenAuto ? { autoProviderFallback: true } : {}),
+      }
+    : null;
 
   const maxTaskDurationMs: number | null =
     state.maxTaskDurationMinutes === undefined || state.maxTaskDurationMinutes === null

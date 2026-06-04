@@ -22,7 +22,7 @@ function isGoalAction(x: unknown): x is PersistentGoalUserAction {
 
 /** Webchat persistent `/goal` REST API. */
 export function registerGoalsRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
-  const sm = deps.service.sessionManagerInstance;
+  const sm = deps.service.sessionIndexInstance;
   const cfg = () => deps.service.currentConfig;
 
   authenticated.get('/api/goals/webchat', async (c) => {

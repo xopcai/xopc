@@ -25,14 +25,14 @@ describe('STTConfigSchema', () => {
     expect(parsed.models?.[0]?.provider).toBe('openai');
   });
 
-  it('preserves legacy flat provider keys via passthrough', () => {
-    const parsed = STTConfigSchema.parse({
-      enabled: true,
-      provider: 'alibaba',
-      alibaba: { model: 'paraformer-v2' },
-    });
-
-    expect(parsed.alibaba?.model).toBe('paraformer-v2');
+  it('rejects legacy flat provider keys (must live under providers.<id>)', () => {
+    expect(() =>
+      STTConfigSchema.parse({
+        enabled: true,
+        provider: 'alibaba',
+        alibaba: { model: 'paraformer-v2' },
+      }),
+    ).toThrow();
   });
 
   it('accepts open fallback order entries', () => {

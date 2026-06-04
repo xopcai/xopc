@@ -27,10 +27,13 @@
 import { availableParallelism } from 'node:os';
 import { createContext, Script } from 'node:vm';
 
+import type { Api, Model } from '@earendil-works/pi-ai';
+
 import { parseWorkflowScript } from './parser.js';
 import type {
   AgentScriptOptions,
   SubagentRunner,
+  WorkflowMetaPhase,
   WorkflowRunOptions,
   WorkflowRunResult,
   WorkflowSnapshot,
@@ -51,6 +54,8 @@ interface RuntimeState {
 
 export interface RunWorkflowDeps {
   runner: SubagentRunner;
+  /** Resolve a real model id (must contain `/`) to a {@link Model}. Throws on unknown id. */
+  resolveModelId?: (modelId: string) => Model<Api>;
 }
 
 export async function runWorkflow<T = unknown>(
@@ -66,6 +71,7 @@ export async function runWorkflow<T = unknown>(
   const maxSubagents = Math.max(1, options.maxSubagents ?? DEFAULT_MAX_SUBAGENTS);
   const limiter = createLimiter(concurrency);
   const pendingAgentRuns = new Set<Promise<unknown>>();
+  const phaseDefaultModels = buildPhaseModelMap(meta.phases);
 
   const log = (message: unknown) => {
     const text = String(message);
@@ -93,6 +99,29 @@ export async function runWorkflow<T = unknown>(
     if (options.signal?.aborted) throw new Error('workflow aborted');
   };
 
+  const resolveAgentModel = (
+    normalized: AgentScriptOptions,
+    assignedPhase: string | undefined,
+  ): Model<Api> | undefined => {
+    const realId = normalized.model?.trim();
+    if (realId) {
+      if (!deps.resolveModelId) {
+        throw new Error('workflow runtime missing resolveModelId; cannot resolve real model id');
+      }
+      return deps.resolveModelId(realId);
+    }
+    if (assignedPhase) {
+      const phaseRef = phaseDefaultModels.get(assignedPhase);
+      if (phaseRef) {
+        if (phaseRef.includes('/')) {
+          if (!deps.resolveModelId) return undefined;
+          return deps.resolveModelId(phaseRef);
+        }
+      }
+    }
+    return undefined;
+  };
+
   const agent = async (prompt: unknown, agentOptions: unknown = {}) => {
     throwIfAborted();
     if (budget.total !== null && budget.remaining() <= 0) {
@@ -116,6 +145,7 @@ export async function runWorkflow<T = unknown>(
 
       try {
         throwIfAborted();
+        const resolvedModel = resolveAgentModel(normalized, assignedPhase);
         const result = await deps.runner.run<unknown>(taskPrompt, {
           label,
           schema: normalized.schema,
@@ -123,9 +153,7 @@ export async function runWorkflow<T = unknown>(
           maxIterations: normalized.maxIterations,
           phase: assignedPhase,
           signal: options.signal,
-          instructions: normalized.model
-            ? `The parent workflow requested model "${normalized.model}".`
-            : undefined,
+          model: resolvedModel,
         });
         throwIfAborted();
 
@@ -253,7 +281,7 @@ export async function runWorkflow<T = unknown>(
   } catch (e) {
     // Drain pending agent calls before propagating, so the snapshot reflects final state.
     await Promise.allSettled([...pendingAgentRuns]);
-    throw e;
+    throw rewriteScriptError(e);
   }
 
   assertStructuredCloneable(result, 'workflow result');
@@ -326,6 +354,17 @@ function createLimiter(limit: number) {
   };
 }
 
+function buildPhaseModelMap(phases: WorkflowMetaPhase[] | undefined): Map<string, string> {
+  const out = new Map<string, string>();
+  if (!phases) return out;
+  for (const p of phases) {
+    if (p && typeof p.title === 'string' && typeof p.model === 'string' && p.model.trim()) {
+      out.set(p.title, p.model.trim());
+    }
+  }
+  return out;
+}
+
 function requireString(value: unknown, name: string): string {
   if (typeof value !== 'string') throw new TypeError(`${name} must be a string`);
   return value;
@@ -352,11 +391,20 @@ function normalizeAgentOptions(value: unknown): AgentScriptOptions {
       throw new TypeError('agent maxIterations must be a positive number');
     }
   }
+  const modelStr = optionalString(options.model, 'agent model');
+  if (modelStr !== undefined) {
+    const trimmed = modelStr.trim();
+    if (trimmed && !trimmed.includes('/')) {
+      throw new Error(
+        `agent option 'model' must be a real model id in 'provider/model' form (got '${trimmed}')`,
+      );
+    }
+  }
   return {
     label: optionalString(options.label, 'agent label'),
     phase: optionalString(options.phase, 'agent phase'),
     schema: options.schema,
-    model: optionalString(options.model, 'agent model'),
+    model: modelStr,
     toolset,
     maxIterations,
   };
@@ -366,11 +414,80 @@ function assertStructuredCloneable(value: unknown, name: string): void {
   try {
     structuredClone(value);
   } catch (e) {
+    const promisePath = findPromisePath(value, '');
+    if (promisePath !== null) {
+      throw new Error(
+        `${name} contains a Promise at \`${promisePath || '<root>'}\` — missing 'await' before parallel()/pipeline()/agent(). ` +
+          `Async return auto-unwraps a bare Promise, but a Promise nested in an object/array is returned as-is.`,
+      );
+    }
     const detail = e instanceof Error ? ` ${e.message}` : '';
     throw new Error(
       `${name} must be structured-cloneable; did you forget to await agent(), parallel(), or pipeline()?${detail}`,
     );
   }
+}
+
+/**
+ * Find the first Promise lurking in `value`, returning a JS-path like
+ * "results[0].pending". Returns null when no Promise is found. Bounded
+ * depth/breadth so it never explodes on weird user shapes.
+ */
+function findPromisePath(value: unknown, path: string, depth = 0): string | null {
+  if (depth > 4) return null;
+  if (isThenable(value)) return path;
+  if (Array.isArray(value)) {
+    for (let i = 0; i < Math.min(value.length, 32); i++) {
+      const inner = findPromisePath(value[i], `${path}[${i}]`, depth + 1);
+      if (inner !== null) return inner;
+    }
+    return null;
+  }
+  if (value !== null && typeof value === 'object') {
+    let count = 0;
+    for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+      if (count++ > 32) break;
+      const inner = findPromisePath(child, path ? `${path}.${key}` : key, depth + 1);
+      if (inner !== null) return inner;
+    }
+  }
+  return null;
+}
+
+function isThenable(value: unknown): boolean {
+  return (
+    value !== null &&
+    typeof value === 'object' &&
+    typeof (value as { then?: unknown }).then === 'function'
+  );
+}
+
+/**
+ * Rewrite TypeErrors that look like "called .map on a Promise" with an
+ * await-shaped hint. Static lint catches the obvious form at parse time;
+ * this is the safety net for cases lint can't see (dynamic indirection,
+ * values stashed in helper closures).
+ */
+const PROMISE_METHOD_ERROR =
+  /\.(map|filter|forEach|flat|flatMap|find|some|every|reduce|join|length|then)\b is not a function/;
+
+function rewriteScriptError(error: unknown): Error {
+  // VM-context errors aren't `instanceof` host classes (the vm has its own
+  // global constructors), so check by name + duck-typing message.
+  const asError = error as { name?: string; message?: string } | null | undefined;
+  const isTypeError = asError?.name === 'TypeError' && typeof asError.message === 'string';
+  if (!isTypeError) {
+    return error instanceof Error ? error : new Error(String(error));
+  }
+  const message = (asError as { message: string }).message;
+  if (!PROMISE_METHOD_ERROR.test(message)) {
+    return error instanceof Error ? error : new Error(message);
+  }
+  return new Error(
+    `${message}\n\nHint: parallel()/pipeline()/agent() return a Promise — 'await' the call before using its result.\n` +
+      `  ❌ const r = parallel(...); r.map(...)\n` +
+      `  ✅ const r = await parallel(...); r.map(...)`,
+  );
 }
 
 function defaultAgentLabel(phase: string | undefined, index: number): string {

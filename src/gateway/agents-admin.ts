@@ -346,10 +346,14 @@ export function prepareUpdateAgent(
     }
   }
   if (body.model !== undefined) {
-    if (body.model === null || String(body.model).trim() === '') {
+    if (body.model === null) {
       delete entry.model;
     } else {
-      entry.model = String(body.model).trim() as Entry['model'];
+      const trimmed = String(body.model).trim();
+      if (!trimmed) {
+        return { ok: false, error: 'model must be a non-empty string or null', status: 400 };
+      }
+      entry.model = { primary: trimmed };
     }
   }
   if (body.agentDir !== undefined) {

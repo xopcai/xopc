@@ -35,12 +35,12 @@ describe('xopc channels helpers', () => {
   });
 
   describe('applyTelegramAccount', () => {
-    it('writes both per-account and legacy top-level botToken', () => {
+    it('writes the bot token under the per-account record only', () => {
       const before = {} as Config;
       const after = applyTelegramAccount(before, 'default', VALID_TOKEN, true);
       const tg = (after.channels as Record<string, Record<string, unknown>>).telegram;
       expect(tg.enabled).toBe(true);
-      expect(tg.botToken).toBe(VALID_TOKEN);
+      expect(tg.botToken).toBeUndefined();
       const accounts = tg.accounts as Record<string, Record<string, unknown>>;
       expect(accounts.default).toMatchObject({
         accountId: 'default',

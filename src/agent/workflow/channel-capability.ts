@@ -44,9 +44,9 @@ export interface WorkflowProgressPostInput {
    * prefixes mid-run `append` messages with "▾ progress" so the user can tell
    * them apart from the final summary).
    *
-   * Optional for backwards compatibility with hand-rolled callers and unit
-   * tests; the broker always provides it. Capabilities that consume the field
-   * should default to `'edit'` when missing.
+   * Optional only to keep hand-rolled callers and unit-test stubs lean — the
+   * broker always provides it. Capabilities that consume the field should
+   * default to `'edit'` when missing.
    */
   mode?: WorkflowProgressMode;
 }

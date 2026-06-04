@@ -3,7 +3,6 @@ import { Type } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 import { spawn } from 'child_process';
 import { evaluateExecPolicy } from '../sandbox/exec-policy.js';
-import { checkShellSafety } from '../prompt/safety.js';
 import { createWriteStream } from 'fs';
 
 const MAX_SHELL_TIMEOUT = 300;
@@ -78,15 +77,6 @@ export function createShellTool(
       _signal?: AbortSignal,
     ): Promise<AgentToolResult<ShellDetails>> {
       const p = params as { command: string };
-
-      // Legacy safety check (kept for backward compat; exec-policy is the primary gate)
-      const safety = checkShellSafety(p.command);
-      if (!safety.allowed) {
-        return {
-          content: [{ type: 'text', text: `🚫 ${safety.message}` }],
-          details: { exitCode: null, timedOut: false, truncated: false },
-        };
-      }
 
       // Sandbox exec-policy check (path + command injection + env sanitization)
       const passthroughNames = options?.getSkillPassthroughEnvVarNames?.() ?? [];

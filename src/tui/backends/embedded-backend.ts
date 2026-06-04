@@ -50,8 +50,7 @@ export class EmbeddedBackend implements TuiBackend {
 
     const config = loadConfig();
     const workspace = getWorkspacePath(config);
-    const modelConfig = config.agents?.defaults?.model;
-    const modelId = typeof modelConfig === 'string' ? modelConfig : modelConfig?.primary;
+    const modelId = config.agents?.defaults?.model?.primary;
 
     this.agent = new AgentService(this.bus, {
       workspace: workspace ?? process.cwd(),
@@ -211,8 +210,7 @@ export class EmbeddedBackend implements TuiBackend {
   async getSessionInfo(sessionKey: string): Promise<SessionInfo> {
     if (!this.agent) {
       const config = loadConfig();
-      const modelConfig = config.agents?.defaults?.model;
-      const model = typeof modelConfig === 'string' ? modelConfig : modelConfig?.primary;
+      const model = config.agents?.defaults?.model?.primary;
       return { model: model ?? undefined };
     }
     try {
@@ -231,8 +229,7 @@ export class EmbeddedBackend implements TuiBackend {
       const errorMessage = err instanceof Error ? err.message : String(err);
       log.warn({ err, sessionKey, errorMessage }, `getSessionInfo failed: ${errorMessage}`);
       const config = loadConfig();
-      const modelConfig = config.agents?.defaults?.model;
-      const model = typeof modelConfig === 'string' ? modelConfig : modelConfig?.primary;
+      const model = config.agents?.defaults?.model?.primary;
       return { model: model ?? undefined };
     }
   }

@@ -1,0 +1,144 @@
+import { useMemo } from 'react';
+import { KeyRound } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+
+import { cn } from '@/lib/cn';
+import { messages } from '@/i18n/messages';
+import { useLocaleStore } from '@/stores/locale-store';
+
+export type ProviderSetupPayload = {
+  kind: 'provider_setup_required';
+  provider: string;
+  deepLink: string;
+  message?: string;
+};
+
+/**
+ * Detect provider-setup-required errors in two forms:
+ * 1. Structured JSON from gateway catch path: `{"kind":"provider_setup_required",...}`
+ * 2. Plain text from upstream pi-coding-agent assistant output: "No API key found for <provider>..."
+ */
+const PLAIN_TEXT_API_KEY_RE = /^No API key found for (\S+)/i;
+
+export function parseProviderSetupRequired(text: string): ProviderSetupPayload | null {
+  const trimmed = text.trim();
+
+  // 1. Structured JSON (from gateway error event)
+  if (trimmed.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(trimmed) as Record<string, unknown>;
+      if (parsed.kind !== 'provider_setup_required') return null;
+      if (typeof parsed.provider !== 'string' || !parsed.provider) return null;
+      if (typeof parsed.deepLink !== 'string' || !parsed.deepLink.startsWith('/settings/')) return null;
+      return {
+        kind: 'provider_setup_required',
+        provider: parsed.provider,
+        deepLink: parsed.deepLink,
+        message: typeof parsed.message === 'string' ? parsed.message : undefined,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  // 2. Plain text (from upstream pi-coding-agent assistant message)
+  const match = PLAIN_TEXT_API_KEY_RE.exec(trimmed);
+  if (match) {
+    const provider = match[1].replace(/[.,]$/, '');
+    return {
+      kind: 'provider_setup_required',
+      provider,
+      deepLink: '/settings/providers',
+      message: trimmed,
+    };
+  }
+
+  return null;
+}
+
+/** Shared card UI for provider setup required — used by both the error banner and assistant message interceptor. */
+export function ProviderSetupRequiredCard({ payload }: { payload: ProviderSetupPayload }) {
+  const navigate = useNavigate();
+  const language = useLocaleStore((s) => s.language);
+  const m = messages(language).chat;
+  const bodyText = (m.providerSetupRequiredBody as string).replace('{{provider}}', payload.provider);
+
+  return (
+    <section
+      role="status"
+      aria-live="polite"
+      className={cn(
+        'flex flex-col gap-2 rounded-xl border border-amber-300/60 bg-amber-50/70 px-3 py-3',
+        'dark:border-amber-500/30 dark:bg-amber-500/10',
+      )}
+    >
+      <div className="flex items-start gap-3">
+        <span
+          className={cn(
+            'flex size-8 shrink-0 items-center justify-center rounded-lg',
+            'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300',
+          )}
+          aria-hidden
+        >
+          <KeyRound className="size-4" strokeWidth={1.75} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <h3 className="text-sm font-semibold text-amber-900 dark:text-amber-100">
+            {m.providerSetupRequiredTitle}
+          </h3>
+          <p className="mt-1 text-xs leading-relaxed text-amber-900/85 dark:text-amber-100/80">
+            {bodyText}
+          </p>
+        </div>
+      </div>
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <button
+          type="button"
+          className={cn(
+            'inline-flex h-8 items-center rounded-lg px-3 py-1.5 text-xs font-medium',
+            'bg-amber-600 text-white hover:bg-amber-700',
+            'dark:bg-amber-500 dark:text-amber-950 dark:hover:bg-amber-400',
+            'transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/50',
+          )}
+          onClick={() => navigate(payload.deepLink)}
+        >
+          {m.providerSetupRequiredCta}
+        </button>
+      </div>
+      {payload.message ? (
+        <details className="group min-w-0 text-xs">
+          <summary className="cursor-pointer select-none text-amber-800/80 underline-offset-2 hover:text-amber-900 dark:text-amber-200/80 dark:hover:text-amber-100">
+            {m.providerSetupRequiredDetailToggle}
+          </summary>
+          <pre className="mt-2 max-h-40 w-full min-w-0 overflow-y-auto overflow-x-hidden whitespace-pre-wrap break-words rounded-md bg-amber-100/60 p-2 font-mono text-[11px] text-amber-900 dark:bg-amber-500/15 dark:text-amber-100 [overflow-wrap:anywhere]">
+            {payload.message}
+          </pre>
+        </details>
+      ) : null}
+    </section>
+  );
+}
+
+/**
+ * Renders a friendly setup card when the error is a structured `provider_setup_required`
+ * payload (API key missing), otherwise falls back to the default red error banner.
+ *
+ * Used by `chat-page.tsx` for the SSE error banner position.
+ */
+export function ProviderSetupRequiredBanner({ errorText }: { errorText: string }) {
+  const payload = useMemo(() => parseProviderSetupRequired(errorText), [errorText]);
+
+  if (!payload) {
+    return (
+      <div className="mb-4 rounded-md border border-edge bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-edge dark:bg-red-950/40 dark:text-red-300">
+        {errorText}
+      </div>
+    );
+  }
+
+  return (
+    <div className="mb-4">
+      <ProviderSetupRequiredCard payload={payload} />
+    </div>
+  );
+}

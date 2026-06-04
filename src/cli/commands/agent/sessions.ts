@@ -2,13 +2,13 @@
  * Session listing for agent command
  */
 
-import { getSessionManager } from '../../utils/session.js';
+import { getSessionIndex } from '../../utils/session.js';
 
 /**
  * List available sessions in a table format
  */
 export async function listSessions(): Promise<void> {
-  const manager = await getSessionManager();
+  const manager = await getSessionIndex();
   
   const result = await manager.listSessions({ limit: 20, sortBy: 'updatedAt', sortOrder: 'desc' });
   

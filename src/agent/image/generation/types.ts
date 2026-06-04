@@ -1,13 +1,12 @@
 import type { Config } from '../../../config/schema.js';
 import type { AuthProfileStore } from '../../../providers/auth-runtime/index.js';
-import type { FallbackAttempt } from '../../failover-error.js';
 import type { MediaNormalizationEntry } from '../../media-generation/normalization.types.js';
 
 // Re-export the provider contract from `provider-registry.ts` so callers can
 // continue importing it from `./types.js` (single import surface).
 // NOTE: this re-export creates a known circular cycle with `provider-registry.ts`
-// (which imports `ImageGenerationCapabilities*` from this file). It is preserved
-// because removing it breaks 5 extension packages' public API. Suppressed via
+// (which imports the capability type from this file). It is preserved because
+// removing it breaks 5 extension packages' public API. Suppressed via
 // dependency-cruiser at the warning level.
 export type {
   ImageGenerationProvider,
@@ -163,26 +162,3 @@ export interface ImageGenerationResult {
   metadata?: Record<string, unknown>;
 }
 
-// ============================================
-// Backward-compatible aliases (Step 2)
-// ============================================
-
-/** @deprecated Use {@link FallbackAttempt} from `../failover-error.js`. */
-export type ImageGenFallbackAttempt = FallbackAttempt;
-
-/**
- * @deprecated Legacy flat capability shape from Step 1. Kept for backward
- * compatibility while older code migrates to {@link ImageGenerationProviderCapabilities}.
- */
-export interface ImageGenerationCapabilitiesLegacy {
-  supportsEdit: boolean;
-  maxInputImages?: number;
-  maxOutputImages?: number;
-  supportedSizes?: string[];
-}
-
-/**
- * @deprecated Use {@link ImageGenerationProviderCapabilities}. The legacy alias
- * remains so existing code compiles unchanged during Step 2.
- */
-export type ImageGenerationCapabilities = ImageGenerationCapabilitiesLegacy;

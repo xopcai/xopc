@@ -94,7 +94,7 @@ function trimToUndefined(value: unknown): string | undefined {
 }
 
 function normalizeConfig(rawConfig: Record<string, unknown>): AlibabaTtsConfig {
-  const raw = asObject(rawConfig.alibaba) ?? rawConfig;
+  const raw = asObject(rawConfig.alibaba) ?? {};
   return {
     apiKey: trimToUndefined(raw.apiKey),
     baseUrl: trimToUndefined(raw.baseUrl) ?? DEFAULT_BASE_URL,
