@@ -10,6 +10,7 @@ import {
   buildSubagentSessionKey,
   getParentSessionKey,
   normalizeSessionKey,
+  defaultMainSessionKey,
 } from '../session-key.js';
 
 describe('session-key', () => {
@@ -69,8 +70,14 @@ describe('session-key', () => {
     });
   });
 
+  describe('defaultMainSessionKey', () => {
+    it('should build main bucket key', () => {
+      expect(defaultMainSessionKey('main')).toBe('agent:main:main');
+    });
+  });
+
   describe('buildSessionKey', () => {
-    it('should build basic session key', () => {
+    it('should build telegram DM session key', () => {
       const key = buildSessionKey({
         agentId: 'main',
         source: 'telegram',
@@ -78,19 +85,41 @@ describe('session-key', () => {
         peerKind: 'dm',
         peerId: '123456',
       });
-      expect(key).toBe('main:telegram:default:dm:123456');
+      expect(key).toBe('agent:main:telegram:default:direct:123456');
+    });
+
+    it('should build telegram group session key', () => {
+      const key = buildSessionKey({
+        agentId: 'main',
+        source: 'telegram',
+        accountId: 'default',
+        peerKind: 'group',
+        peerId: '-100123456',
+      });
+      expect(key).toBe('agent:main:telegram:group:-100123456');
+    });
+
+    it('should build webchat session key', () => {
+      const key = buildSessionKey({
+        agentId: 'main',
+        source: 'webchat',
+        accountId: 'default',
+        peerKind: 'direct',
+        peerId: 'chat_abc123',
+      });
+      expect(key).toBe('agent:main:webchat:default:direct:chat_abc123');
     });
 
     it('should build session key with thread', () => {
       const key = buildSessionKey({
         agentId: 'main',
-        source: 'discord',
-        accountId: 'work',
-        peerKind: 'channel',
-        peerId: '987654',
+        source: 'telegram',
+        accountId: 'default',
+        peerKind: 'dm',
+        peerId: '123',
         threadId: '789',
       });
-      expect(key).toBe('main:discord:work:channel:987654:thread:789');
+      expect(key).toBe('agent:main:telegram:default:direct:123:thread:789');
     });
 
     it('should build session key with scope', () => {
@@ -102,89 +131,120 @@ describe('session-key', () => {
         peerId: '123456',
         scopeId: 'scope1',
       });
-      expect(key).toBe('main:telegram:default:dm:123456:scope:scope1');
+      expect(key).toBe('agent:main:telegram:default:direct:123456:scope:scope1');
     });
 
-    it('should sanitize segments', () => {
+    it('should normalize dm peerKind to direct', () => {
       const key = buildSessionKey({
         agentId: 'MAIN',
         source: 'Telegram',
         accountId: 'DEFAULT',
-        peerKind: 'DM',
+        peerKind: 'dm',
         peerId: 'USER@123',
       });
-      expect(key).toBe('main:telegram:default:dm:user-123');
+      expect(key).toBe('agent:main:telegram:default:direct:user@123');
     });
 
-    it('should use defaults for missing required fields', () => {
+    it('should use defaults for missing required fields on group keys', () => {
       const key = buildSessionKey({
         agentId: '',
         source: '',
         accountId: '',
-        peerKind: '',
+        peerKind: 'group',
         peerId: '',
       });
-      expect(key).toBe('main:unknown:default:unknown:unknown');
+      expect(key).toBe('agent:main:unknown:group:unknown');
     });
   });
 
   describe('parseSessionKey', () => {
-    it('should parse basic session key', () => {
-      const parsed = parseSessionKey('main:telegram:default:dm:123456');
+    it('should parse main bucket key', () => {
+      const parsed = parseSessionKey('agent:main:main');
+      expect(parsed).toEqual({
+        agentId: 'main',
+        source: 'cli',
+        accountId: 'default',
+        peerKind: 'direct',
+        peerId: 'main',
+      });
+    });
+
+    it('should parse telegram DM key', () => {
+      const parsed = parseSessionKey('agent:main:telegram:default:direct:123456');
       expect(parsed).toEqual({
         agentId: 'main',
         source: 'telegram',
         accountId: 'default',
-        peerKind: 'dm',
+        peerKind: 'direct',
         peerId: '123456',
       });
     });
 
-    it('should parse session key with thread', () => {
-      const parsed = parseSessionKey('main:discord:work:channel:987654:thread:789');
-      expect(parsed).toEqual({
-        agentId: 'main',
-        source: 'discord',
-        accountId: 'work',
-        peerKind: 'channel',
-        peerId: '987654',
-        threadId: '789',
-      });
-    });
-
-    it('should parse session key with scope', () => {
-      const parsed = parseSessionKey('main:telegram:default:dm:123456:scope:scope1');
+    it('should parse telegram group key', () => {
+      const parsed = parseSessionKey('agent:main:telegram:group:-100123456');
       expect(parsed).toEqual({
         agentId: 'main',
         source: 'telegram',
         accountId: 'default',
-        peerKind: 'dm',
-        peerId: '123456',
-        scopeId: 'scope1',
+        peerKind: 'group',
+        peerId: '-100123456',
       });
     });
 
-    it('should parse session key with both thread and scope', () => {
-      const parsed = parseSessionKey('main:telegram:default:dm:123456:thread:789:scope:scope1');
-      expect(parsed).toEqual({
-        agentId: 'main',
-        source: 'telegram',
-        accountId: 'default',
-        peerKind: 'dm',
-        peerId: '123456',
-        threadId: '789',
-        scopeId: 'scope1',
-      });
-    });
-
-    it('should parse gateway-prefixed console keys (agent in segment 2)', () => {
-      const parsed = parseSessionKey('gateway:main:webchat:default:direct:chat_1');
+    it('should parse webchat key', () => {
+      const parsed = parseSessionKey('agent:main:webchat:default:direct:chat_abc123');
       expect(parsed).toEqual({
         agentId: 'main',
         source: 'webchat',
         accountId: 'default',
         peerKind: 'direct',
-        peerId: 'chat_1',
+        peerId: 'chat_abc123',
+      });
+    });
+
+    it('should parse session key with thread', () => {
+      const parsed = parseSessionKey('agent:main:telegram:default:direct:123:thread:789');
+      expect(parsed).toEqual({
+        agentId: 'main',
+        source: 'telegram',
+        accountId: 'default',
+        peerKind: 'direct',
+        peerId: '123',
+        threadId: '789',
+      });
+    });
+
+    it('should parse session key with scope', () => {
+      const parsed = parseSessionKey('agent:main:telegram:default:direct:123456:scope:scope1');
+      expect(parsed).toEqual({
+        agentId: 'main',
+        source: 'telegram',
+        accountId: 'default',
+        peerKind: 'direct',
+        peerId: '123456',
+        scopeId: 'scope1',
+      });
+    });
+
+    it('should parse cron rest key', () => {
+      const parsed = parseSessionKey('agent:main:cron:job-123');
+      expect(parsed).toEqual({
+        agentId: 'main',
+        source: 'cron',
+        accountId: 'default',
+        peerKind: 'direct',
+        peerId: 'job-123',
+      });
+    });
+
+    it('should parse subagent key', () => {
+      const parsed = parseSessionKey('agent:main:subagent:telegram:default:direct:123456');
+      expect(parsed).toEqual({
+        agentId: 'subagent',
+        source: 'telegram',
+        accountId: 'default',
+        peerKind: 'direct',
+        peerId: '123456',
       });
     });
 
@@ -192,11 +252,12 @@ describe('session-key', () => {
       expect(parseSessionKey(null)).toBeNull();
       expect(parseSessionKey('')).toBeNull();
       expect(parseSessionKey('invalid')).toBeNull();
-      expect(parseSessionKey('a:b:c:d')).toBeNull(); // Too few segments
+      expect(parseSessionKey('main:telegram:default:dm:123456')).toBeNull();
+      expect(parseSessionKey('agent:main')).toBeNull();
     });
 
     it('should handle case insensitivity', () => {
-      const parsed = parseSessionKey('MAIN:TELEGRAM:DEFAULT:DM:123456');
+      const parsed = parseSessionKey('AGENT:MAIN:TELEGRAM:DEFAULT:DIRECT:123456');
       expect(parsed?.agentId).toBe('main');
       expect(parsed?.source).toBe('telegram');
     });
@@ -204,80 +265,82 @@ describe('session-key', () => {
 
   describe('isSubagentSessionKey', () => {
     it('should return true for subagent keys', () => {
-      expect(isSubagentSessionKey('subagent:main:default:dm:123456')).toBe(true);
+      expect(isSubagentSessionKey('agent:main:subagent:telegram:default:direct:123456')).toBe(true);
     });
 
     it('should return false for non-subagent keys', () => {
-      expect(isSubagentSessionKey('main:telegram:default:dm:123456')).toBe(false);
+      expect(isSubagentSessionKey('agent:main:telegram:default:direct:123456')).toBe(false);
     });
   });
 
   describe('isCronSessionKey', () => {
     it('should return true for cron keys', () => {
-      expect(isCronSessionKey('main:cron:default:dm:job-123')).toBe(true);
+      expect(isCronSessionKey('agent:main:cron:job-123')).toBe(true);
     });
 
     it('should return false for non-cron keys', () => {
-      expect(isCronSessionKey('main:telegram:default:dm:123456')).toBe(false);
+      expect(isCronSessionKey('agent:main:telegram:default:direct:123456')).toBe(false);
     });
   });
 
   describe('getSubagentDepth', () => {
     it('should return 0 for non-subagent keys', () => {
-      expect(getSubagentDepth('main:telegram:default:dm:123456')).toBe(0);
+      expect(getSubagentDepth('agent:main:telegram:default:direct:123456')).toBe(0);
     });
 
     it('should return 1 for single subagent', () => {
-      expect(getSubagentDepth('subagent:main:default:dm:123456')).toBe(1);
+      expect(getSubagentDepth('agent:main:subagent:telegram:default:direct:123456')).toBe(1);
     });
 
     it('should count nested subagents', () => {
-      expect(getSubagentDepth('subagent:subagent:main:default:dm:123456')).toBe(2);
+      expect(
+        getSubagentDepth('agent:main:subagent:telegram:default:direct:123:subagent:nested'),
+      ).toBe(2);
     });
   });
 
   describe('buildSubagentSessionKey', () => {
     it('should build subagent session key from parent', () => {
-      const parentKey = 'main:telegram:default:dm:123456';
+      const parentKey = 'agent:main:telegram:default:direct:123456';
       const subKey = buildSubagentSessionKey({
         parentSessionKey: parentKey,
-        agentId: 'subagent',
-        source: 'main',
+        agentId: 'main',
+        source: 'telegram',
         accountId: 'default',
-        peerKind: 'dm',
+        peerKind: 'direct',
         peerId: '123456',
       });
-      expect(subKey).toBe('subagent:main:default:dm:123456');
+      expect(subKey).toBe('agent:main:subagent:telegram:default:direct:123456');
     });
 
     it('should throw for invalid parent key', () => {
       expect(() =>
         buildSubagentSessionKey({
-          parentSessionKey: 'invalid',
-          agentId: 'subagent',
-          source: 'main',
+          parentSessionKey: 'main:telegram:default:dm:123456',
+          agentId: 'main',
+          source: 'telegram',
           accountId: 'default',
-          peerKind: 'dm',
+          peerKind: 'direct',
           peerId: '123456',
-        })
+        }),
       ).toThrow();
     });
   });
 
   describe('getParentSessionKey', () => {
     it('should remove thread suffix', () => {
-      const parent = getParentSessionKey('main:telegram:default:dm:123456:thread:789');
-      expect(parent).toBe('main:telegram:default:dm:123456');
+      const parent = getParentSessionKey('agent:main:telegram:default:direct:123:thread:789');
+      expect(parent).toBe('agent:main:telegram:default:direct:123');
     });
 
     it('should return null for keys without thread', () => {
-      expect(getParentSessionKey('main:telegram:default:dm:123456')).toBeNull();
+      expect(getParentSessionKey('agent:main:telegram:default:direct:123456')).toBeNull();
     });
   });
 
   describe('normalizeSessionKey', () => {
     it('should normalize to lowercase', () => {
-      expect(normalizeSessionKey('MAIN:TELEGRAM:DEFAULT')).toBe('main:telegram:default');
+      expect(normalizeSessionKey('AGENT:MAIN:TELEGRAM:DEFAULT')).toBe('agent:main:telegram:default');
     });
 
     it('should handle null/undefined', () => {

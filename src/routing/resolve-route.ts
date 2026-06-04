@@ -14,6 +14,10 @@ import type { BindingRule, RouteInput, RouteResult } from './bindings.js';
 export type RouteContext = RouteInput;
 import { parseBindingRules, resolveRoute as resolveBindingRoute } from './bindings.js';
 import { buildSessionKey, normalizeSessionKey, parseSessionKey } from './session-key.js';
+import {
+  buildAgentMainSessionKey,
+  buildAgentPeerSessionKey,
+} from './agent-session-key.js';
 import { normalizeAccountId } from './account-id.js';
 
 /**
@@ -171,7 +175,7 @@ export function buildRouteSessionKey(
   peerKind: string,
   peerId: string,
   threadId?: string | null,
-  scopeId?: string | null
+  scopeId?: string | null,
 ): string {
   return buildSessionKey({
     agentId,
@@ -181,6 +185,7 @@ export function buildRouteSessionKey(
     peerId,
     threadId: threadId || undefined,
     scopeId: scopeId || undefined,
+    dmScope: peerKind === 'dm' || peerKind === 'direct' ? 'per-account-channel-peer' : undefined,
   });
 }
 
@@ -227,36 +232,49 @@ export function resolveRoute(input: ResolveRouteInput): ResolveRouteResult {
   
   const agentId = pickFirstExistingAgentId(bindingResult.agentId, config);
   
-  const dmScope = config.session?.dmScope ?? 'per-account-channel-peer';
-  
+  const dmScope = config.session?.dmScope ?? 'main';
+
   let sessionKey: string;
   let mainSessionKey: string;
-  
+
+  const identityLinks = config.session?.identityLinks;
+  const mainKey = undefined;
+
   if (peerKind === 'dm' || peerKind === 'direct') {
-    // DM: merge or split sessions depending on dmScope
-    mainSessionKey = buildRouteSessionKey(agentId, channel, accountId, 'dm', 'main');
-    
-    switch (dmScope) {
-      case 'per-peer':
-        sessionKey = buildRouteSessionKey(agentId, channel, accountId, 'dm', peerId);
-        break;
-      case 'per-channel-peer':
-        sessionKey = buildRouteSessionKey(agentId, channel, 'default', 'dm', peerId);
-        break;
-      case 'per-account-channel-peer':
-        sessionKey = buildRouteSessionKey(agentId, 'default', 'default', 'dm', peerId);
-        break;
-      case 'main':
-      default:
-        sessionKey = mainSessionKey;
-        break;
-    }
+    mainSessionKey = buildAgentMainSessionKey({ agentId, mainKey });
+
+    sessionKey = buildAgentPeerSessionKey({
+      agentId,
+      mainKey,
+      channel,
+      accountId,
+      peerKind: 'direct',
+      peerId,
+      identityLinks,
+      dmScope,
+    });
   } else {
-    // Group / channel / other peer kinds
-    sessionKey = buildRouteSessionKey(agentId, channel, accountId, peerKind, peerId, threadId);
-    mainSessionKey = buildRouteSessionKey(agentId, channel, accountId, peerKind, 'main');
+    const mappedKind = peerKind === 'group' || peerKind === 'channel' ? peerKind : peerKind;
+    sessionKey = buildAgentPeerSessionKey({
+      agentId,
+      mainKey,
+      channel,
+      accountId,
+      peerKind: mappedKind as 'group' | 'channel',
+      peerId,
+      identityLinks,
+    });
+    mainSessionKey = buildAgentPeerSessionKey({
+      agentId,
+      mainKey,
+      channel,
+      accountId,
+      peerKind: mappedKind as 'group' | 'channel',
+      peerId: 'main',
+      identityLinks,
+    });
   }
-  
+
   if (threadId && !sessionKey.includes(':thread:')) {
     sessionKey = `${sessionKey}:thread:${threadId.toLowerCase()}`;
   }
