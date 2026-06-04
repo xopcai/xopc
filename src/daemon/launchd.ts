@@ -72,7 +72,7 @@ function escapeXml(str: string): string {
     .replace(/'/g, '&apos;');
 }
 
-function buildLaunchAgentPlist(params: {
+export function buildLaunchAgentPlist(params: {
   label: string;
   programArguments: string[];
   workingDirectory?: string;
@@ -129,10 +129,7 @@ ${envDict}
   plist += `    <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>
-    <dict>
-        <key>SuccessfulExit</key>
-        <false/>
-    </dict>
+    <true/>
     <key>ThrottleInterval</key>
     <integer>${LAUNCH_AGENT_THROTTLE_INTERVAL_SECONDS}</integer>
     <key>ExitTimeOut</key>
@@ -330,14 +327,13 @@ export const launchdService: GatewayService = {
       }
       log.info('LaunchAgent stopped and disabled (plist removed)');
     } else {
-      // Send SIGTERM via launchctl kill
       try {
-        await launchctlExec(['kill', 'SIGTERM', serviceTarget]);
+        await launchctlExec(['bootout', serviceTarget]);
       } catch {
-        // Service might not be running
-        log.debug('LaunchAgent kill SIGTERM failed (may not be running)');
+        // Service might not be running or loaded.
+        log.debug('LaunchAgent bootout failed (may not be loaded)');
       }
-      log.info('LaunchAgent stop signal sent');
+      log.info('LaunchAgent stopped and unloaded');
     }
   },
 

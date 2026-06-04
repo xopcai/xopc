@@ -85,7 +85,6 @@ describe('agent-profile', () => {
     expect(p.tools.disable.has('grep')).toBe(true);
     expect(p.tools.disable.has('shell')).toBe(true);
   });
-
   it('extractProfileAgentId falls back to main for unknown agent id', () => {
     const cfg = minimalConfig();
     expect(extractProfileAgentId('nope:webchat:default:direct:x', cfg)).toBe('main');

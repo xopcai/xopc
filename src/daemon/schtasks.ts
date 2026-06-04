@@ -11,6 +11,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+
 import { createLogger } from '../utils/logger.js';
 import { resolveGatewayWindowsTaskName } from './constants.js';
 import type {
@@ -48,7 +49,6 @@ async function schtasks(args: string[]): Promise<SchtasksResult> {
   return new Promise<SchtasksResult>((resolve, reject) => {
     const child = spawn('schtasks', args, {
       stdio: ['ignore', 'pipe', 'pipe'],
-      shell: true,
     });
 
     let stdout = '';
@@ -80,9 +80,124 @@ async function schtasksExec(args: string[]): Promise<string> {
 // We persist them in a JSON sidecar so readCommand can return them
 // for version-mismatch detection and other diagnostics.
 
+function resolveTaskDaemonDir(): string {
+  return path.join(os.homedir(), '.xopc', 'daemon');
+}
+
 function resolveTaskEnvSidecarPath(taskName: string): string {
-  const configDir = path.join(os.homedir(), '.xopc', 'daemon');
-  return path.join(configDir, `${taskName}.env.json`);
+  return path.join(resolveTaskDaemonDir(), `${taskName}.env.json`);
+}
+
+function resolveTaskCommandSidecarPath(taskName: string): string {
+  return path.join(resolveTaskDaemonDir(), `${taskName}.command.json`);
+}
+
+function resolveTaskWrapperPath(taskName: string): string {
+  return path.join(resolveTaskDaemonDir(), `${taskName}.cmd`);
+}
+
+function resolveTaskXmlPath(taskName: string): string {
+  return path.join(resolveTaskDaemonDir(), `${taskName}.xml`);
+}
+
+function escapeCmdSetValue(value: string): string {
+  return value
+    .replace(/\^/g, '^^')
+    .replace(/%/g, '%%')
+    .replace(/"/g, '^"')
+    .replace(/&/g, '^&')
+    .replace(/</g, '^<')
+    .replace(/>/g, '^>')
+    .replace(/\|/g, '^|');
+}
+
+function quoteCmdArg(value: string): string {
+  return `"${value.replace(/"/g, '\\"')}"`;
+}
+
+function escapeXmlValue(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
+function buildTaskWrapperContent(params: {
+  programArguments: string[];
+  workingDirectory?: string;
+  environment?: Record<string, string>;
+}): string {
+  const lines = ['@echo off'];
+  for (const [key, value] of Object.entries(params.environment ?? {})) {
+    lines.push(`set "${key}=${escapeCmdSetValue(value)}"`);
+  }
+  if (params.workingDirectory) {
+    lines.push(`cd /d ${quoteCmdArg(params.workingDirectory)}`);
+  }
+  lines.push(params.programArguments.map(quoteCmdArg).join(' '));
+  return `${lines.join('\r\n')}\r\n`;
+}
+
+function buildTaskXml(params: {
+  description: string;
+  wrapperPath: string;
+  workingDirectory?: string;
+}): string {
+  const escapedDescription = escapeXmlValue(params.description);
+  const escapedWrapperPath = escapeXmlValue(params.wrapperPath);
+  const escapedWorkingDirectory = params.workingDirectory ? escapeXmlValue(params.workingDirectory) : '';
+  const workingDirectoryXml = escapedWorkingDirectory
+    ? `\n      <WorkingDirectory>${escapedWorkingDirectory}</WorkingDirectory>`
+    : '';
+
+  return `<?xml version="1.0" encoding="UTF-16"?>
+<Task version="1.4" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <Description>${escapedDescription}</Description>
+  </RegistrationInfo>
+  <Triggers>
+    <LogonTrigger>
+      <Enabled>true</Enabled>
+    </LogonTrigger>
+  </Triggers>
+  <Principals>
+    <Principal id="Author">
+      <LogonType>InteractiveToken</LogonType>
+      <RunLevel>LeastPrivilege</RunLevel>
+    </Principal>
+  </Principals>
+  <Settings>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <AllowHardTerminate>true</AllowHardTerminate>
+    <StartWhenAvailable>true</StartWhenAvailable>
+    <RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable>
+    <IdleSettings>
+      <StopOnIdleEnd>false</StopOnIdleEnd>
+      <RestartOnIdle>false</RestartOnIdle>
+    </IdleSettings>
+    <AllowStartOnDemand>true</AllowStartOnDemand>
+    <Enabled>true</Enabled>
+    <Hidden>false</Hidden>
+    <RunOnlyIfIdle>false</RunOnlyIfIdle>
+    <WakeToRun>false</WakeToRun>
+    <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
+    <Priority>7</Priority>
+    <RestartOnFailure>
+      <Interval>PT1M</Interval>
+      <Count>999</Count>
+    </RestartOnFailure>
+  </Settings>
+  <Actions Context="Author">
+    <Exec>
+      <Command>${escapedWrapperPath}</Command>${workingDirectoryXml}
+    </Exec>
+  </Actions>
+</Task>
+`;
 }
 
 function writeTaskEnvSidecar(taskName: string, environment: Record<string, string>): void {
@@ -109,14 +224,86 @@ function readTaskEnvSidecar(taskName: string): Record<string, string> | undefine
   return undefined;
 }
 
-function removeTaskEnvSidecar(taskName: string): void {
-  const sidecarPath = resolveTaskEnvSidecarPath(taskName);
+function writeTaskCommandSidecar(taskName: string, args: GatewayServiceInstallArgs): void {
+  const sidecarPath = resolveTaskCommandSidecarPath(taskName);
   try {
-    rmSync(sidecarPath, { force: true });
-  } catch {
-    // Best-effort
+    writeFileSync(sidecarPath, JSON.stringify({
+      programArguments: args.programArguments,
+      workingDirectory: args.workingDirectory,
+    }, null, 2), 'utf8');
+  } catch (err) {
+    log.warn({ err, sidecarPath }, 'Failed to write task command sidecar');
   }
 }
+
+function readTaskCommandSidecar(taskName: string): Pick<GatewayServiceCommandConfig, 'programArguments' | 'workingDirectory'> | null {
+  const sidecarPath = resolveTaskCommandSidecarPath(taskName);
+  try {
+    const raw = readFileSync(sidecarPath, 'utf8');
+    const parsed = JSON.parse(raw);
+    if (
+      parsed
+      && typeof parsed === 'object'
+      && Array.isArray(parsed.programArguments)
+      && parsed.programArguments.every((arg: unknown) => typeof arg === 'string')
+    ) {
+      return {
+        programArguments: parsed.programArguments,
+        workingDirectory: typeof parsed.workingDirectory === 'string' ? parsed.workingDirectory : undefined,
+      };
+    }
+  } catch {
+    // Sidecar missing or corrupt — not fatal
+  }
+  return null;
+}
+
+function writeTaskSupportFiles(taskName: string, args: GatewayServiceInstallArgs): {
+  wrapperPath: string;
+  xmlPath: string;
+} {
+  const wrapperPath = resolveTaskWrapperPath(taskName);
+  const xmlPath = resolveTaskXmlPath(taskName);
+  mkdirSync(resolveTaskDaemonDir(), { recursive: true });
+  writeFileSync(wrapperPath, buildTaskWrapperContent({
+    programArguments: args.programArguments,
+    workingDirectory: args.workingDirectory,
+    environment: args.environment,
+  }), 'utf8');
+  writeFileSync(xmlPath, buildTaskXml({
+    description: args.description || 'xopc Gateway Service',
+    wrapperPath,
+    workingDirectory: args.workingDirectory,
+  }), 'utf16le');
+  writeTaskEnvSidecar(taskName, args.environment ?? {});
+  writeTaskCommandSidecar(taskName, args);
+  return { wrapperPath, xmlPath };
+}
+
+function removeTaskSupportFiles(taskName: string): void {
+  for (const filePath of [
+    resolveTaskEnvSidecarPath(taskName),
+    resolveTaskCommandSidecarPath(taskName),
+    resolveTaskWrapperPath(taskName),
+    resolveTaskXmlPath(taskName),
+  ]) {
+    try {
+      rmSync(filePath, { force: true });
+    } catch {
+      // Best-effort
+    }
+  }
+}
+
+export const schtasksTestInternals = {
+  buildTaskWrapperContent,
+  buildTaskXml,
+  escapeCmdSetValue,
+  quoteCmdArg,
+  resolveTaskCommandSidecarPath,
+  resolveTaskWrapperPath,
+  resolveTaskXmlPath,
+};
 
 // ─── Availability Check ───
 
@@ -125,7 +312,6 @@ export function isSchtasksAvailable(): boolean {
   try {
     const result = spawnSync('schtasks', ['/query', '/?'], {
       stdio: ['ignore', 'ignore', 'ignore'],
-      shell: true,
       timeout: 3000,
     });
     return result.status === 0;
@@ -143,8 +329,6 @@ export const schtasksService: GatewayService = {
 
   async install(args: GatewayServiceInstallArgs): Promise<void> {
     const taskName = resolveTaskName(args.env);
-    const program = args.programArguments[0];
-    const programArgs = args.programArguments.slice(1).join(' ');
 
     // Delete existing task first (ignore errors)
     try {
@@ -153,29 +337,14 @@ export const schtasksService: GatewayService = {
       // Ignore
     }
 
-    // Create task with ONLOGON trigger
-    const createArgs = [
-      '/create',
-      '/tn', taskName,
-      '/tr', `"${program}" ${programArgs}`,
-      '/sc', 'ONLOGON',
-      '/rl', 'LIMITED',
-      '/f',
-    ];
-
-    await schtasksExec(createArgs);
-
-    // Persist environment variables in a sidecar file
-    // (schtasks does not support per-task env vars natively)
-    if (args.environment && Object.keys(args.environment).length > 0) {
-      writeTaskEnvSidecar(taskName, args.environment);
-    }
+    const { wrapperPath, xmlPath } = writeTaskSupportFiles(taskName, args);
+    await schtasksExec(['/create', '/tn', taskName, '/xml', xmlPath, '/f']);
 
     args.stdout?.write(`Created scheduled task: ${taskName}\n`);
-    args.stdout?.write(`  Program: ${program}\n`);
-    args.stdout?.write(`  Args: ${programArgs}\n`);
+    args.stdout?.write(`  Wrapper: ${wrapperPath}\n`);
+    args.stdout?.write(`  Command: ${args.programArguments.join(' ')}\n`);
 
-    log.info({ taskName }, 'Scheduled task installed');
+    log.info({ taskName, wrapperPath }, 'Scheduled task installed');
   },
 
   async uninstall(args: GatewayServiceControlArgs): Promise<void> {
@@ -196,8 +365,8 @@ export const schtasksService: GatewayService = {
       log.debug({ err }, 'Uninstall task not found');
     }
 
-    // Clean up environment sidecar
-    removeTaskEnvSidecar(taskName);
+    // Clean up support files
+    removeTaskSupportFiles(taskName);
 
     log.info({ taskName }, 'Scheduled task uninstalled');
   },
@@ -290,35 +459,13 @@ export const schtasksService: GatewayService = {
       const result = await schtasks(['/query', '/tn', taskName, '/fo', 'list', '/v']);
       if (result.exitCode !== 0) return null;
 
-      const output = result.stdout;
-      const taskRunMatch = output.match(/Task To Run:\s*(.+)/i);
-      const workDirMatch = output.match(/Start In:\s*(.+)/i);
-
-      if (!taskRunMatch) return null;
-
-      const taskRun = taskRunMatch[1].trim();
-      // Handle quoted program path
-      let programArguments: string[];
-      if (taskRun.startsWith('"')) {
-        const closeQuote = taskRun.indexOf('"', 1);
-        if (closeQuote > 0) {
-          const program = taskRun.slice(1, closeQuote);
-          const rest = taskRun.slice(closeQuote + 1).trim();
-          programArguments = [program, ...rest.split(/\s+/).filter(Boolean)];
-        } else {
-          programArguments = taskRun.split(/\s+/);
-        }
-      } else {
-        programArguments = taskRun.split(/\s+/);
-      }
-
-      // Read environment from sidecar file (schtasks has no native env support)
-      const environment = readTaskEnvSidecar(taskName);
+      const commandSidecar = readTaskCommandSidecar(taskName);
+      if (!commandSidecar) return null;
 
       return {
-        programArguments,
-        workingDirectory: workDirMatch?.[1]?.trim() || undefined,
-        environment,
+        programArguments: commandSidecar.programArguments,
+        workingDirectory: commandSidecar.workingDirectory,
+        environment: readTaskEnvSidecar(taskName),
       };
     } catch {
       return null;

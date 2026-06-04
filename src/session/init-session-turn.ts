@@ -5,8 +5,6 @@ import { parseSessionKey } from '../routing/session-key.js';
 import { createLogger } from '../utils/logger.js';
 
 import { resolveSessionLifecycleTimestamps } from './lifecycle-timestamps.js';
-import { readSessionsJsonFile } from './parity/sessions-json-file.js';
-import type { XopcSessionDiskEntry } from './parity/xopc-session-disk-entry.js';
 import {
   evaluateSessionFreshness,
   resolveSessionResetPolicy,

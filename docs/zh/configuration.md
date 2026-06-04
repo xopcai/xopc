@@ -161,7 +161,7 @@ xopc onboard
 | `max_tokens` | number | `8192` | 最大输出 tokens |
 | `temperature` | number | `0.7` | 温度参数 (0-2) |
 | `max_tool_iterations` | number | `20` | 最大工具调用次数 |
-| `imageModel` | string \| object | — | `image`、`browser_vision` 工具及**主模型不支持视觉**时对入站图做描述的视觉模型。格式与 `model` 相同（字符串或 `{ primary, fallbacks }`）。详见 [图像与视觉](image-multimodal.md)。 |
+| `imageModel` | string \| object | — | `image`、`browser_use` 工具及**主模型不支持视觉**时对入站图做描述的视觉模型。格式与 `model` 相同（字符串或 `{ primary, fallbacks }`）。详见 [图像与视觉](image-multimodal.md)。 |
 | `imageGenerationModel` | string \| object | — | `image_generate` 的文生图模型链（如 `openai/gpt-image-1`、`dashscope/wan2.6-t2i`）。格式与 `model` 相同。详见 [图像与视觉](image-multimodal.md)。 |
 | `mediaMaxMb` | number | — | 可选。`image` 工具从路径或 URL 加载单张图片时的最大体积（**MB**）。 |
 
@@ -216,7 +216,7 @@ xopc onboard
 
 #### agents.defaults.browser
 
-基于 Playwright 的 **`browser_*`** 工具；`enabled` 为 `true` 时注册。本机模式需先安装 Chromium：`npx playwright install chromium`。工具列表与 URL 策略见 [工具说明](./tools.md)中的「浏览器（可选）」一节。
+统一的 **`browser_use`** 工具会在 `enabled` 为 `true` 时注册。本机模式需先安装 Chromium：`npx playwright install chromium`。工具行为与 URL 策略见 [工具说明](./tools.md)中的「浏览器（可选）」一节。
 
 | 字段 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|

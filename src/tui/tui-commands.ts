@@ -121,7 +121,6 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: strin
     keybindings,
     uiOverlays,
     extensionSlashCommands = [],
-    currentAgentId = 'main',
     setSession,
     resetSession,
   } = deps;

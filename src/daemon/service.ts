@@ -90,20 +90,17 @@ export async function startGatewayService(params: {
   const { service, env } = params;
   const serviceEnv = env || process.env;
 
-  // Check if service is installed
-  const loaded = await service.isLoaded({ env: serviceEnv });
-  if (!loaded) {
-    const state = await gatherServiceState(service, serviceEnv);
-    return { outcome: 'missing-install', state };
+  const initialState = await gatherServiceState(service, serviceEnv);
+  if (!initialState.installed) {
+    return { outcome: 'missing-install', state: initialState };
   }
 
-  // Read command to check for repair issues
-  const command = await service.readCommand(serviceEnv);
-  const issues = detectStartRepairIssues(command);
+  // Read command to check for repair issues. On macOS, a stopped LaunchAgent can
+  // be installed on disk but not loaded into launchd yet.
+  const issues = detectStartRepairIssues(initialState.command);
 
   if (issues.length > 0) {
-    const state = await gatherServiceState(service, serviceEnv);
-    return { outcome: 'repair-required', state, issues };
+    return { outcome: 'repair-required', state: initialState, issues };
   }
 
   // Start via restart (which handles both cold-start and running scenarios)
