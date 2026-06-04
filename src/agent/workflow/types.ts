@@ -52,6 +52,8 @@ export type WorkflowAgentStepStatus = 'running' | 'done' | 'error';
 export interface WorkflowAgentStep {
   id: string;
   kind: 'tool' | 'llm' | 'thinking';
+  /** Original tool name when `kind === 'tool'` (for chat UI reuse). */
+  toolName?: string;
   label: string;
   detail?: string;
   status: WorkflowAgentStepStatus;

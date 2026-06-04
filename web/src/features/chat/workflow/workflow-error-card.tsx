@@ -1,16 +1,8 @@
 /**
  * Minimal card for a failed workflow run.
  *
- * Layout mirrors the success card:
- *   [icon]  <title>  <reason inline, truncated>     [chevron]
- *   (body shown when expanded: full reason + submitted script)
- *
- * The header itself is the toggle — clicking anywhere on the row expands or
- * collapses the body. Default is collapsed so transcript scroll length stays
- * bounded; the chevron / aria-expanded attribute mirror open state.
- *
- * The body is hidden entirely when there is nothing extra to show (no script
- * preview AND a single-line reason that already fits in the header).
+ * Header is always clickable — expanded body shows the full error, logs,
+ * failed subagents, optional progress snapshot, and submitted script.
  */
 
 import { memo, useState } from 'react';
@@ -26,7 +18,9 @@ import {
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 
-import type { WorkflowFailureKind } from './workflow.types';
+import type { WorkflowAgentSnapshot, WorkflowFailureKind, WorkflowSnapshot } from './workflow.types';
+import { rollupPhases } from './workflow.utils';
+import { WorkflowPhaseRow, type WorkflowPhaseRowLabels } from './workflow-phase-row';
 
 export type WorkflowErrorCardLabels = {
   titleParse: string;
@@ -35,24 +29,33 @@ export type WorkflowErrorCardLabels = {
   titleRuntime: string;
   expand: string;
   collapse: string;
-};
-
-const iconFor: Record<WorkflowFailureKind, React.ReactNode> = {
-  parse_error: <OctagonX className="size-4 shrink-0 text-rose-600 dark:text-rose-400" aria-hidden />,
-  aborted: <XCircle className="size-4 shrink-0 text-fg-muted" aria-hidden />,
-  timeout: <TimerOff className="size-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />,
-  runtime_error: <AlertTriangle className="size-4 shrink-0 text-rose-600 dark:text-rose-400" aria-hidden />,
+  expandHint: string;
+  detailsHeading: string;
+  logsHeading: string;
+  failedAgentsHeading: string;
+  progressHeading: string;
+  scriptHeading: string;
+  noExtraDetails: string;
+  phase: WorkflowPhaseRowLabels;
 };
 
 export const WorkflowErrorCard = memo(function WorkflowErrorCard({
   kind,
   reason,
+  detailLines,
+  logs,
+  failedAgents,
+  snapshot,
   scriptPreview,
   labels,
   className,
 }: {
   kind: WorkflowFailureKind;
   reason: string;
+  detailLines?: string[];
+  logs?: string[];
+  failedAgents?: WorkflowAgentSnapshot[];
+  snapshot?: WorkflowSnapshot | null;
   scriptPreview?: string;
   labels: WorkflowErrorCardLabels;
   className?: string;
@@ -66,42 +69,42 @@ export const WorkflowErrorCard = memo(function WorkflowErrorCard({
           ? labels.titleTimeout
           : labels.titleRuntime;
 
-  const trimmedReason = reason.trim();
-  const reasonIsMultiLine = trimmedReason.includes('\n');
-  const inlineReason = reasonIsMultiLine
-    ? trimmedReason.slice(0, trimmedReason.indexOf('\n'))
-    : trimmedReason;
+  const trimmedReason = reason.trim() || 'workflow failed';
+  const details = detailLines ?? [];
+  const logLines = logs ?? [];
+  const agents = failedAgents ?? [];
+  const rollup = snapshot ? rollupPhases(snapshot) : null;
+  const hasProgress =
+    rollup != null && (rollup.phases.length > 0 || rollup.unphased != null) && (snapshot?.agents.length ?? 0) > 0;
 
-  // Body shows full reason when it's longer/multi-line than the header preview,
-  // and/or the submitted script. Otherwise the header tells the whole story
-  // and we hide the chevron entirely.
-  const showFullReasonInBody = reasonIsMultiLine;
-  const hasExpandable = Boolean(scriptPreview) || showFullReasonInBody;
+  const bodySections =
+    details.length > 0 ||
+    logLines.length > 0 ||
+    agents.length > 0 ||
+    hasProgress ||
+    Boolean(scriptPreview?.trim());
 
   const [collapsed, setCollapsed] = useState(true);
-  const isOpen = hasExpandable && !collapsed;
+  const isOpen = !collapsed;
 
   const headerInner = (
     <>
       {iconFor[kind]}
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-baseline gap-2">
-          <span className="shrink-0 text-sm font-semibold tracking-tight text-fg">
-            {title}
-          </span>
-          {inlineReason ? (
-            <span className="min-w-0 truncate text-sm text-fg-muted">{inlineReason}</span>
-          ) : null}
+          <span className="shrink-0 text-sm font-semibold tracking-tight text-fg">{title}</span>
+          <span className="min-w-0 truncate text-sm text-fg-muted">{trimmedReason}</span>
         </div>
+        {collapsed && bodySections ? (
+          <div className="mt-0.5 text-xs text-fg-subtle">{labels.expandHint}</div>
+        ) : null}
       </div>
-      {hasExpandable ? (
-        <span
-          className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-fg-muted"
-          aria-hidden
-        >
-          {isOpen ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
-        </span>
-      ) : null}
+      <span
+        className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-fg-muted"
+        aria-hidden
+      >
+        {isOpen ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+      </span>
     </>
   );
 
@@ -114,43 +117,105 @@ export const WorkflowErrorCard = memo(function WorkflowErrorCard({
       role="group"
       aria-label={title}
     >
-      {hasExpandable ? (
-        <button
-          type="button"
-          onClick={() => setCollapsed((v) => !v)}
-          aria-expanded={isOpen}
-          aria-label={isOpen ? labels.collapse : labels.expand}
-          className={cn(
-            'flex w-full min-w-0 items-center gap-2 px-3 py-2 text-left',
-            // Match the outer card's rounded-xl so the hover background
-            // doesn't bleed past the card's rounded corners. When expanded,
-            // only the top corners round and a border separates the body.
-            isOpen ? 'rounded-t-xl border-b border-edge-subtle' : 'rounded-xl',
-            'hover:bg-surface-hover',
-            interaction.transition,
-            interaction.focusRingPanel,
-          )}
-        >
-          {headerInner}
-        </button>
-      ) : (
-        <div className="flex w-full min-w-0 items-center gap-2 px-3 py-2">{headerInner}</div>
-      )}
+      <button
+        type="button"
+        onClick={() => setCollapsed((v) => !v)}
+        aria-expanded={isOpen}
+        aria-label={isOpen ? labels.collapse : labels.expand}
+        className={cn(
+          'flex w-full min-w-0 items-center gap-2 px-3 py-2 text-left',
+          isOpen ? 'rounded-t-xl border-b border-edge-subtle' : 'rounded-xl',
+          'hover:bg-surface-hover',
+          interaction.transition,
+          interaction.focusRingPanel,
+        )}
+      >
+        {headerInner}
+      </button>
 
       {isOpen ? (
-        <div className="space-y-2 px-3 py-2.5">
-          {showFullReasonInBody ? (
-            <pre className="max-h-60 min-w-0 overflow-y-auto whitespace-pre-wrap break-words rounded-md bg-surface-hover/60 p-2 font-mono text-xs text-fg-muted dark:bg-surface-hover/35">
-              {trimmedReason}
-            </pre>
+        <div className="space-y-3 px-3 py-2.5">
+          {details.length > 0 ? (
+            <section className="min-w-0">
+              <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-fg-subtle">
+                {labels.detailsHeading}
+              </div>
+              <pre className="max-h-60 min-w-0 overflow-y-auto whitespace-pre-wrap break-words rounded-md bg-surface-hover/60 p-2 font-mono text-xs text-fg-muted dark:bg-surface-hover/35">
+                {details.join('\n\n')}
+              </pre>
+            </section>
           ) : null}
-          {scriptPreview ? (
-            <pre className="max-h-60 min-w-0 overflow-y-auto whitespace-pre-wrap break-words rounded-md bg-surface-hover/60 p-2 font-mono text-xs text-fg-muted dark:bg-surface-hover/35">
-              {scriptPreview}
-            </pre>
+
+          {agents.length > 0 ? (
+            <section className="min-w-0">
+              <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-fg-subtle">
+                {labels.failedAgentsHeading}
+              </div>
+              <ul className="space-y-1 text-xs text-fg-muted">
+                {agents.map((a) => (
+                  <li key={a.id} className="rounded-md bg-surface-hover/40 px-2 py-1">
+                    <span className="font-medium text-fg">{a.label}</span>
+                    {a.error ? (
+                      <span className="text-rose-600 dark:text-rose-400"> — {a.error}</span>
+                    ) : (
+                      <span> — {a.status}</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
+          {logLines.length > 0 ? (
+            <section className="min-w-0">
+              <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-fg-subtle">
+                {labels.logsHeading}
+              </div>
+              <pre className="max-h-48 min-w-0 overflow-y-auto whitespace-pre-wrap break-words rounded-md bg-surface-hover/60 p-2 font-mono text-xs text-fg-muted dark:bg-surface-hover/35">
+                {logLines.join('\n')}
+              </pre>
+            </section>
+          ) : null}
+
+          {hasProgress && rollup ? (
+            <section className="min-w-0">
+              <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-fg-subtle">
+                {labels.progressHeading}
+              </div>
+              <div className="space-y-1">
+                {rollup.phases.map((p) => (
+                  <WorkflowPhaseRow key={p.title} rollup={p} isCurrent={false} labels={labels.phase} />
+                ))}
+                {rollup.unphased ? (
+                  <WorkflowPhaseRow rollup={rollup.unphased} isCurrent={false} labels={labels.phase} />
+                ) : null}
+              </div>
+            </section>
+          ) : null}
+
+          {scriptPreview?.trim() ? (
+            <section className="min-w-0">
+              <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-fg-subtle">
+                {labels.scriptHeading}
+              </div>
+              <pre className="max-h-60 min-w-0 overflow-y-auto whitespace-pre-wrap break-words rounded-md bg-surface-hover/60 p-2 font-mono text-xs text-fg-muted dark:bg-surface-hover/35">
+                {scriptPreview}
+              </pre>
+            </section>
+          ) : null}
+
+          {!bodySections ? (
+            <div className="text-xs text-fg-disabled">{labels.noExtraDetails}</div>
           ) : null}
         </div>
       ) : null}
     </div>
   );
 });
+
+const iconFor: Record<WorkflowFailureKind, React.ReactNode> = {
+  parse_error: <OctagonX className="size-4 shrink-0 text-rose-600 dark:text-rose-400" aria-hidden />,
+  aborted: <XCircle className="size-4 shrink-0 text-fg-muted" aria-hidden />,
+  timeout: <TimerOff className="size-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />,
+  runtime_error: <AlertTriangle className="size-4 shrink-0 text-rose-600 dark:text-rose-400" aria-hidden />,
+};
