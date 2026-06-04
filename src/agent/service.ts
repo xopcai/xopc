@@ -336,6 +336,7 @@ export class AgentService {
       invalidateAgentSession: (sessionKey: string) => {
         this.agentManager.removeAgent(sessionKey);
       },
+      resetSession: (sessionKey: string) => this.resetSession(sessionKey),
       abortSessionTurn: async (sessionKey: string) => {
         await this.streamManager.abort();
         this.agentOrchestrator.abort(sessionKey);
@@ -832,6 +833,25 @@ export class AgentService {
   async clearSessionMessages(key: string): Promise<void> {
     await this.sessionStore.saveMessages(key, []);
     this.agentManager.removeAgent(key);
+  }
+
+  /**
+   * Reset session transcript (archive + new session id) and evict in-memory agent state.
+   * Preserves the session key and persisted per-session overrides.
+   */
+  async resetSession(
+    key: string,
+  ): Promise<{ sessionId: string; previousSessionId: string } | null> {
+    const { abortEmbeddedRun } = await import('./embedded/runs.js');
+    const { retireSessionMcpRuntimeForSessionKey } = await import('./mcp/bundle-mcp-tools.js');
+    await abortEmbeddedRun(key);
+    const outcome = await this.sessionStore.reset(key);
+    if (!outcome) {
+      return null;
+    }
+    this.agentManager.removeAgent(key);
+    await retireSessionMcpRuntimeForSessionKey({ sessionKey: key, reason: 'session-reset' });
+    return outcome;
   }
 
   /**

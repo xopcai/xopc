@@ -44,13 +44,13 @@ describe('effectiveWorkspacePathForSession', () => {
   } as unknown as Config;
 
   it('uses profile default when no override', () => {
-    const p = effectiveWorkspacePathForSession(minimalCfg, 'gateway:main:webchat:default:direct:x', null);
+    const p = effectiveWorkspacePathForSession(minimalCfg, 'agent:main:webchat:default:direct:x', null);
     expect(p).toContain('default-ws');
   });
 
   it('uses override when set in session config', () => {
     const tmp = resolve('/tmp/session-override-test');
-    const p = effectiveWorkspacePathForSession(minimalCfg, 'gateway:main:webchat:default:direct:x', {
+    const p = effectiveWorkspacePathForSession(minimalCfg, 'agent:main:webchat:default:direct:x', {
       workingDirectoryOverride: tmp,
     });
     expect(p).toBe(tmp);

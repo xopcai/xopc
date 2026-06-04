@@ -6,7 +6,7 @@ import type { GatewayService } from '../service.js';
 
 describe('GET /api/sessions/:key/run', () => {
   it('returns active run from gateway service', async () => {
-    const sessionKey = 'main:webchat:default:direct:abc';
+    const sessionKey = 'agent:main:webchat:default:direct:abc';
     const service = {
       isGatewayReady: () => true,
       sessions: {

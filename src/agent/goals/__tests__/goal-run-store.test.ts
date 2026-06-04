@@ -8,7 +8,7 @@ import { ENV_VARS } from '../../../config/paths-state.js';
 import type { GoalPostTurnDecision } from '../evaluate-turn.js';
 import { appendGoalRun, listGoalRuns, resolveGoalRunsFilePath } from '../goal-run-store.js';
 
-const sessionKey = 'main:webchat:default:direct:test-goal-runs';
+const sessionKey = 'agent:main:webchat:default:direct:test-goal-runs';
 
 function minimalConfig(stateRoot: string): Config {
   return {

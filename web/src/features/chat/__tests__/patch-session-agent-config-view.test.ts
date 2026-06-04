@@ -9,7 +9,7 @@ import {
 import { useChatSessionStore } from '@/features/chat/session/chat-session-store';
 import { patchSessionAgentConfigView } from '@/features/chat/session/patch-session-agent-config-view';
 
-const sessionKey = 'main:webchat:default:direct:new';
+const sessionKey = 'agent:main:webchat:default:direct:new';
 
 describe('patchSessionAgentConfigView', () => {
   beforeEach(() => {

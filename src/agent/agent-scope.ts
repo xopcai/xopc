@@ -2,7 +2,8 @@
  * Agent path and list resolution (config is the single source of truth).
  */
 
-import { basename, join, resolve } from 'node:path';
+import fs from 'node:fs';
+import { basename, join, relative, resolve, isAbsolute } from 'node:path';
 
 import type { Config } from '../config/schema.js';
 import { resolveStateDir } from '../config/paths-state.js';
@@ -208,23 +209,77 @@ export function resolveSessionsDir(cfg: Config, agentId: string): string {
   return join(resolveAgentHomeDir(cfg, agentId), 'sessions');
 }
 
+function normalizePathForComparison(input: string): string {
+  const resolved = resolve(resolveUserPath(input));
+  let normalized = resolved;
+  try {
+    normalized = fs.realpathSync.native(resolved);
+  } catch {
+    // Keep lexical path for non-existent directories.
+  }
+  if (process.platform === 'win32') {
+    return normalized.toLowerCase();
+  }
+  return normalized;
+}
+
+function isPathWithinRoot(candidatePath: string, rootPath: string): boolean {
+  const rel = relative(rootPath, candidatePath);
+  return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
+}
+
+/** Agent ids whose workspace root contains `workspacePath` (longest match first). */
+export function resolveAgentIdsByWorkspacePath(cfg: Config, workspacePath: string): string[] {
+  const normalizedWorkspacePath = normalizePathForComparison(workspacePath);
+  const entries = listAgentEntries(cfg);
+  const matches: Array<{ id: string; workspaceDir: string; order: number }> = [];
+
+  for (let index = 0; index < entries.length; index += 1) {
+    const entry = entries[index]!;
+    const id = normalizeAgentId(entry.id);
+    const workspaceDir = normalizePathForComparison(resolveAgentWorkspaceDir(cfg, id));
+    if (!isPathWithinRoot(normalizedWorkspacePath, workspaceDir)) {
+      continue;
+    }
+    matches.push({ id, workspaceDir, order: index });
+  }
+
+  const defaultId = resolveDefaultAgentId(cfg);
+  if (!entries.some((e) => normalizeAgentId(e.id) === defaultId)) {
+    const workspaceDir = normalizePathForComparison(resolveAgentWorkspaceDir(cfg, defaultId));
+    if (isPathWithinRoot(normalizedWorkspacePath, workspaceDir)) {
+      matches.push({ id: defaultId, workspaceDir, order: entries.length });
+    }
+  }
+
+  matches.sort((left, right) => {
+    const workspaceLengthDelta = right.workspaceDir.length - left.workspaceDir.length;
+    if (workspaceLengthDelta !== 0) {
+      return workspaceLengthDelta;
+    }
+    return left.order - right.order;
+  });
+
+  return matches.map((entry) => entry.id);
+}
+
+/** Best-matching agent id for cwd, or `undefined` when no workspace contains the path. */
+export function resolveAgentIdByWorkspacePath(
+  cfg: Config,
+  workspacePath: string,
+): string | undefined {
+  return resolveAgentIdsByWorkspacePath(cfg, workspacePath)[0];
+}
+
 /**
  * Find the agent id whose resolved markdown workspace matches `resolvedWorkspacePath`.
  * Falls back to {@link resolveDefaultAgentId} when no list entry matches.
  */
 export function resolveAgentIdForWorkspacePath(cfg: Config, resolvedWorkspacePath: string): string {
-  const target = resolveUserPath(resolvedWorkspacePath);
-  for (const e of listAgentEntries(cfg)) {
-    const id = normalizeAgentId(e.id);
-    if (resolveAgentWorkspaceDir(cfg, id) === target) {
-      return id;
-    }
-  }
-  const def = resolveDefaultAgentId(cfg);
-  if (resolveAgentWorkspaceDir(cfg, def) === target) {
-    return def;
-  }
-  return def;
+  return (
+    resolveAgentIdByWorkspacePath(cfg, resolvedWorkspacePath) ??
+    resolveDefaultAgentId(cfg)
+  );
 }
 
 export function getDefaultWorkspacePath(cfg: Config): string {

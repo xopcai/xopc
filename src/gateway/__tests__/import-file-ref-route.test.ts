@@ -9,7 +9,7 @@ import { createHonoApp } from '../hono/app.js';
 import type { GatewayService } from '../service.js';
 
 const TOKEN = 'import-test-token';
-const SESSION_KEY = 'main:webchat:default:direct:chat_test';
+const SESSION_KEY = 'agent:main:webchat:default:direct:chat_test';
 
 function authHeaders(): Record<string, string> {
   return {

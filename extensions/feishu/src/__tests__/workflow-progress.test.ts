@@ -45,8 +45,8 @@ import * as clientModule from '../transport/client/client.js';
 const editMock = vi.mocked(editMessageFeishu);
 const createMock = (clientModule as { __createMock: ReturnType<typeof vi.fn> }).__createMock;
 
-const DM_SESSION = 'main:feishu:default:dm:ou_aa11bb22cc33dd44';
-const GROUP_SESSION = 'main:feishu:default:group:oc_55ee66ff77gg88hh';
+const DM_SESSION = 'agent:main:feishu:default:direct:ou_aa11bb22cc33dd44';
+const GROUP_SESSION = 'agent:main:feishu:group:oc_55ee66ff77gg88hh';
 
 function mkCap() {
   return createFeishuWorkflowProgressCapability({
@@ -174,7 +174,7 @@ describe('feishu workflow progress capability', () => {
     const cap = mkCap();
     await expect(
       cap.postProgress({
-        sessionKey: 'main:telegram:default:dm:123',
+        sessionKey: 'agent:main:telegram:default:direct:123',
         text: 'x',
         isFinal: false,
       }),

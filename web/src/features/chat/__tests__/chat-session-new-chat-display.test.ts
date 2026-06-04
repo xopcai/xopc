@@ -4,8 +4,8 @@ import type { Message } from '@/features/chat/messages/messages.types';
 import { useChatSessionStore } from '@/features/chat/session/chat-session-store';
 import { selectDisplayMessages } from '@/features/chat/session/chat-session-view';
 
-const oldKey = 'main:webchat:default:direct:old';
-const newKey = 'main:webchat:default:direct:new';
+const oldKey = 'agent:main:webchat:default:direct:old';
+const newKey = 'agent:main:webchat:default:direct:new';
 
 const oldMessages: Message[] = [
   { role: 'user', content: [{ type: 'text', text: 'hello' }], timestamp: 1 },

@@ -12,7 +12,7 @@
  * the full final snapshot rendered as text. The user sees a single
  * tasteful summary at the end.
  *
- * Routing: sessionKey `main:weixin:<accountId>:dm:<ilinkUserId>`. We need a
+ * Routing: sessionKey `agent:main:weixin:<accountId>:direct:<ilinkUserId>`. We need a
  * valid `contextToken` for the recipient — which requires the user to have
  * recently messaged the bot (the token is harvested from inbound). If
  * missing, we throw and the broker logs; the run still completes, just

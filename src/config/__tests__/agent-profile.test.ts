@@ -94,7 +94,7 @@ describe('agent-profile', () => {
 
   it('resolveEffectiveAgentProfileForSession parses agent id from key', () => {
     const cfg = minimalConfig();
-    const key = 'coder:telegram:acc_default:dm:123';
+    const key = 'agent:coder:telegram:acc_default:direct:123';
     const p = resolveEffectiveAgentProfileForSession(cfg, key);
     expect(p.agentId).toBe('coder');
     expect(p.resolvedWorkspacePath).toContain('coder-ws');

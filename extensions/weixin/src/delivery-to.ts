@@ -17,13 +17,13 @@ export function normalizeWeixinCronDeliveryTo(to: string): NormalizedWeixinCronD
   }
 
   const parsed = parseSessionKey(trimmed);
-  if (parsed?.source === 'weixin' && parsed.peerKind === 'dm' && parsed.peerId) {
+  if (parsed?.source === 'weixin' && (parsed.peerKind === 'direct' || parsed.peerKind === 'dm') && parsed.peerId) {
     const accountId = parsed.accountId && parsed.accountId !== '_' ? parsed.accountId : undefined;
     return { chatId: parsed.peerId, accountId };
   }
 
   const parts = trimmed.split(':');
-  if (parts.length === 3 && parts[1]?.toLowerCase() === 'dm' && parts[0] && parts[2]) {
+  if (parts.length === 3 && parts[1]?.toLowerCase() === 'direct' && parts[0] && parts[2]) {
     return { chatId: parts[2], accountId: parts[0] };
   }
 

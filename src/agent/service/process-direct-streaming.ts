@@ -9,6 +9,7 @@ import {
 } from '../../channels/attachments/voice-stt-webchat.js';
 import {
   resolveEffectiveReasoningLevel,
+  resolveSession,
   type SessionConfigStore,
   type SessionStore,
 } from '../../session/index.js';
@@ -104,7 +105,7 @@ export async function* runProcessDirectStreaming(
   deps: ProcessDirectStreamingDeps,
   input: ProcessDirectStreamingInput,
 ): AsyncGenerator<ProcessDirectStreamingSseEvent, void, unknown> {
-  const sessionKey = input.sessionKey ?? 'cli:direct';
+  const sessionKey = input.sessionKey ?? 'agent:main:main';
   const { channel, chatId } = deps.parseSessionKey(sessionKey);
   const context = deps.initDirectStreamingSession(sessionKey, channel, chatId);
 
@@ -134,6 +135,21 @@ export async function* runProcessDirectStreaming(
   // and the generator below drains `queue` until the task closes it.
   const taskPromise = (async () => {
     try {
+      const cfg = deps.getConfig();
+      if (cfg) {
+        const sessionResolution = await resolveSession({ cfg, sessionKey });
+        if (sessionResolution.isNewSession) {
+          deps.log.debug(
+            {
+              sessionKey,
+              sessionId: sessionResolution.sessionId,
+              previousSessionId: sessionResolution.sessionEntry?.sessionId,
+            },
+            'Session reset boundary at direct turn start',
+          );
+        }
+      }
+
       await hydratePerTurnState(deps, sessionKey, input.thinking);
       {
         const defReason = (deps.getConfig()?.agents?.defaults?.reasoningDefault ?? 'stream') as ReasoningLevel;

@@ -28,7 +28,7 @@ describe('SessionSearchIndex', () => {
     mkdirSync(root, { recursive: true });
     const store = new SessionStore({ config: testConfig, sessionsDir: root });
     await store.initialize();
-    const sessionKey = 'main:webchat:default:direct:testuser';
+    const sessionKey = 'agent:main:webchat:default:direct:testuser';
     await store.saveMessages(sessionKey, [
       { role: 'user', content: 'remember the alpha project deadline' } as any,
       { role: 'assistant', content: 'Noted.' } as any,
@@ -50,7 +50,7 @@ describe('SessionSearchIndex', () => {
     mkdirSync(root, { recursive: true });
     const store = new SessionStore({ config: testConfig, sessionsDir: root });
     await store.initialize();
-    const sessionKey = 'main:webchat:default:direct:ctxfind';
+    const sessionKey = 'agent:main:webchat:default:direct:ctxfind';
     await store.saveMessages(sessionKey, [{ role: 'user', content: 'hello' } as any]);
     await store.appendTranscriptContextEntry(sessionKey, { text: 'zephyr_audit_marker_xyz', id: 'evt-1' });
 

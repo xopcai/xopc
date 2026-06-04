@@ -15,6 +15,7 @@ xopc provides comprehensive session management for conversation history via CLI 
 | Pin/Unpin | ✅ | ✅ |
 | Export (JSON) | ✅ | ✅ |
 | Delete | ✅ | ✅ |
+| Reset in place (`/new`) | ✅ (channels) | ✅ |
 | Search in session | ❌ | ✅ |
 
 ---
@@ -28,6 +29,32 @@ xopc provides comprehensive session management for conversation history via CLI 
 | File format | JSON |
 | Archive directory | `agents/<agentId>/sessions/archive/` |
 | Session overrides | `agents/<agentId>/sessions/config/<sanitized-session-key>.json` |
+
+---
+
+## Reset vs delete
+
+| Action | Session key | Transcript | Overrides (`sessions/config/`, thinking on disk) |
+|--------|-------------|------------|--------------------------------------------------|
+| **Reset** (`/new`, `POST /api/sessions/:key/reset`) | Same key | Current JSONL archived as `*.reset.*`; new `sessionId` + empty transcript | Preserved |
+| **Delete** (`DELETE /api/sessions/:key`) | Removed from index | Archived as `*.deleted.*` | Config file removed with session |
+
+Channel slash **`/new`** (aliases `/reset`, `/restart`) uses reset semantics, not delete. TUI **`/new`** / **`/reset`** call the same reset API in gateway mode (`POST /api/sessions/:key/reset` via `performSessionReset`).
+
+---
+
+## Agent session keys
+
+Runtime session keys use the OpenClaw-aligned form **`agent:{agentId}:{rest}`**:
+
+| Shape | Example | Use |
+|-------|---------|-----|
+| Main bucket | `agent:main:main` | Default TUI/CLI “home” session when `session.scope` is `per-sender` (`session.mainKey` defaults to `main`) |
+| Global scope | `global` | When `session.scope` is `global` and no `-s` is passed |
+| Channel peer | `agent:main:telegram:default:direct:123456` | Routed inbound/outbound chats |
+| Shorthand | `mytopic` on CLI/TUI | Expanded to `agent:{currentAgentId}:mytopic` |
+
+The `agentId` segment selects which **`agents.list`** entry (merged over `agents.defaults`) owns workspace, model defaults, and on-disk `agents/<id>/sessions/`. Prefer full `agent:…` keys in scripts; shorthand is fine for interactive TUI.
 
 ---
 
@@ -323,5 +350,6 @@ The gateway exposes sessions under **`/api/sessions`** (authenticated JSON over 
 | Pin / unpin | `POST /api/sessions/:key/pin` · `POST /api/sessions/:key/unpin` |
 | Export | `GET /api/sessions/:key/export` |
 | Delete | `DELETE /api/sessions/:key` |
+| Reset (archive + new transcript id) | `POST /api/sessions/:key/reset` |
 
 Search inside transcript text from the CLI: `xopc session grep <sessionKey> <pattern>`.

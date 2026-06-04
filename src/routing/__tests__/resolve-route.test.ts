@@ -130,12 +130,12 @@ describe('resolve-route', () => {
         'thread-1',
         'scope-1'
       );
-      expect(key).toBe('main:telegram:default:dm:123456:thread:thread-1:scope:scope-1');
+      expect(key).toBe('agent:main:telegram:default:direct:123456:thread:thread-1:scope:scope-1');
     });
 
     it('should build session key without optional params', () => {
       const key = buildRouteSessionKey('main', 'telegram', 'default', 'dm', '123456');
-      expect(key).toBe('main:telegram:default:dm:123456');
+      expect(key).toBe('agent:main:telegram:default:direct:123456');
     });
   });
 
@@ -180,7 +180,7 @@ describe('resolve-route', () => {
         config: baseConfig,
         channel: 'telegram',
         accountId: 'work',
-        peerKind: 'dm',
+        peerKind: 'direct',
         peerId: '123456',
       });
 
@@ -195,7 +195,7 @@ describe('resolve-route', () => {
         config: baseConfig,
         channel: 'telegram',
         accountId: 'default',
-        peerKind: 'dm',
+        peerKind: 'direct',
         peerId: '123456',
       });
 
@@ -214,7 +214,7 @@ describe('resolve-route', () => {
       const result = resolveRoute({
         config,
         channel: 'telegram',
-        peerKind: 'dm',
+        peerKind: 'direct',
         peerId: '123456',
       });
 
@@ -233,7 +233,7 @@ describe('resolve-route', () => {
       const result = resolveRoute({
         config,
         channel: 'telegram',
-        peerKind: 'dm',
+        peerKind: 'direct',
         peerId: '123456',
       });
 
@@ -279,7 +279,7 @@ describe('resolve-route', () => {
       const result = resolveRoute({
         config,
         channel: 'telegram',
-        peerKind: 'dm',
+        peerKind: 'direct',
         peerId: '123456',
       });
 
@@ -303,20 +303,20 @@ describe('resolve-route', () => {
         peerId: 'USER123',
       });
 
-      expect(result.sessionKey).toBe('main:telegram:work:dm:user123');
+      expect(result.sessionKey).toBe('agent:main:direct:user123');
     });
   });
 
   describe('resolveRouteFromSessionKey', () => {
     it('should parse session key back to route info', () => {
-      const sessionKey = 'main:telegram:default:dm:123456:thread:789';
+      const sessionKey = 'agent:main:telegram:default:direct:123456:thread:789';
       const result = resolveRouteFromSessionKey(sessionKey, {});
 
       expect(result).toEqual({
         agentId: 'main',
         source: 'telegram',
         accountId: 'default',
-        peerKind: 'dm',
+        peerKind: 'direct',
         peerId: '123456',
       });
     });

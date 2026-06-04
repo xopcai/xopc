@@ -72,8 +72,8 @@ describe('Routing Benchmarks', () => {
   });
 
   describe('Session Key Parsing', () => {
-    const simpleKey = 'main:telegram:acc_default:dm:123456';
-    const complexKey = 'main:telegram:acc_default:group:-1001234567:thread:999:scope:project-a';
+    const simpleKey = 'agent:main:telegram:acc_default:direct:123456';
+    const complexKey = 'agent:main:telegram:group:-1001234567:thread:999:scope:project-a';
 
     bench('parseSessionKey - simple', () => {
       parseSessionKey(simpleKey);
@@ -174,7 +174,7 @@ describe('Routing Benchmarks', () => {
   // =============================================================================
 
   describe('Identity Links Application', () => {
-    const baseSessionKey = 'main:telegram:acc_default:dm:123456';
+    const baseSessionKey = 'agent:main:telegram:acc_default:direct:123456';
     
     const smallIdentityLinks = {
       'alice': ['telegram:123456'],
@@ -334,7 +334,7 @@ describe('Routing Benchmarks', () => {
 
       for (let i = 0; i < 1000; i++) {
         applyIdentityLinks(
-          'main:telegram:acc_default:dm:xxx',
+          'agent:main:telegram:acc_default:direct:xxx',
           identityLinks,
           {
             channel: 'telegram',
@@ -352,7 +352,7 @@ describe('Routing Benchmarks', () => {
   describe('Memory Efficiency', () => {
     bench('Memory: parse 10000 keys', () => {
       const keys = Array.from({ length: 10000 }, (_, i) => 
-        `main:telegram:acc_default:dm:${i}`
+        `agent:main:telegram:acc_default:direct:${i}`
       );
 
       for (const key of keys) {
@@ -397,7 +397,7 @@ describe('Routing Benchmarks', () => {
 
     it('should parse session key in < 50μs', () => {
       const start = performance.now();
-      const key = 'main:telegram:acc_default:dm:123456:thread:789';
+      const key = 'agent:main:telegram:acc_default:direct:123456:thread:789';
       
       for (let i = 0; i < 100; i++) {
         parseSessionKey(key);
@@ -446,7 +446,7 @@ describe('Routing Benchmarks', () => {
       const start = performance.now();
       for (let i = 0; i < 10; i++) {
         applyIdentityLinks(
-          'main:telegram:acc_default:dm:xxx',
+          'agent:main:telegram:acc_default:direct:xxx',
           identityLinks,
           {
             channel: 'telegram',

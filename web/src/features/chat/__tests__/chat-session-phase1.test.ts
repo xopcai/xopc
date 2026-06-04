@@ -20,7 +20,7 @@ vi.mock('@/stores/gateway-store', () => ({
 import { apiFetch } from '@/lib/fetch';
 
 describe('resolveResumeRunId', () => {
-  const sessionKey = 'main:webchat:default:direct:abc';
+  const sessionKey = 'agent:main:webchat:default:direct:abc';
   const storage = new Map<string, string>();
 
   beforeEach(() => {

@@ -40,7 +40,7 @@ export async function buildDirectUserMessageContent(opts: {
   if (content.trim()) {
     let textPart = content;
     if (/@file:/.test(textPart)) {
-      const wsKey = sk !== '' ? sk : 'cli:direct';
+      const wsKey = sk !== '' ? sk : 'agent:main:main';
       const root = agentManager.getResolvedWorkspaceForSession(wsKey);
       textPart = await expandAtFileMentionsInPlainText(textPart, root);
     }
