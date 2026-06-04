@@ -275,7 +275,7 @@ export function AssistantStepsBlock({
   );
 }
 
-function AssistantStepsTimeline({
+export function AssistantStepsTimeline({
   blocks,
   toolLabels,
   stepLabels,

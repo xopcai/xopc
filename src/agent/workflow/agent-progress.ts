@@ -23,6 +23,7 @@ export function applySubagentProgress(
       const step: WorkflowAgentStep = {
         id: event.toolCallId,
         kind: 'tool',
+        toolName: event.toolName,
         label,
         detail,
         status: 'running',
