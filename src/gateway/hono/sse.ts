@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto';
 import { streamSSE } from 'hono/streaming';
 import type { Context } from 'hono';
 import type { GatewayService } from '../service.js';

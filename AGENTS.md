@@ -361,7 +361,7 @@ cd web && pnpm run build                  # → ../dist/gateway/static/root (gat
 | Telegram silent | Token, BotFather, policies |
 | No logs in console | `XOPC_LOG_LEVEL`, file logging flags |
 | Cron idle | `cron.enabled` in config |
-| Browser / `browser_*` tools error at first use | Enable `agents.defaults.browser.enabled`; install Chromium once with `npx playwright install chromium` (`playwright-core` does not ship browsers) |
+| `browser_use` tool error at first use | Enable `agents.defaults.browser.enabled`; install Chromium once with `npx playwright install chromium` (`playwright-core` does not ship browsers) |
 
 ---
 

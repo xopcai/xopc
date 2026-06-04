@@ -53,7 +53,6 @@ describe('agents-admin', () => {
     expect(extractAvatarFromIdentityMarkdown('')).toBeUndefined();
     expect(extractAvatarFromIdentityMarkdown('- **Avatar:**  \n')).toBeUndefined();
   });
-
   it('prepareUpdateAgent sets description and can clear it', () => {
     const cfg = minimalConfig({
       agents: {
@@ -92,7 +91,6 @@ describe('agents-admin', () => {
     expect(e?.skills).toEqual(['note']);
     expect(e?.tools?.disable).toEqual(['shell']);
   });
-
   it('prepareCreateAgent uses explicit id seed for agent id and keeps display name', () => {
     const cfg = minimalConfig();
     const r = prepareCreateAgent(cfg, {
@@ -161,7 +159,6 @@ describe('agents-admin', () => {
     const e = r.data.nextConfig.agents?.list?.find((x) => x.id === 'coder');
     expect(e?.tools?.disable).toEqual(['shell', 'image_generate']);
   });
-
   it('prepareCreateAgent rejects unsupported profileFiles name', () => {
     const cfg = minimalConfig();
     const r = prepareCreateAgent(cfg, {

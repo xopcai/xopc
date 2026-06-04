@@ -61,7 +61,7 @@ export function ProviderSetupRequiredCard({ payload }: { payload: ProviderSetupP
   const navigate = useNavigate();
   const language = useLocaleStore((s) => s.language);
   const m = messages(language).chat;
-  const bodyText = (m.providerSetupRequiredBody as string).replace('{{provider}}', payload.provider);
+  const bodyText = m.providerSetupRequiredBody.replace('{{provider}}', payload.provider);
 
   return (
     <section

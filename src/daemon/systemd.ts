@@ -50,17 +50,32 @@ export function resolveSystemdUserUnitPath(env?: GatewayServiceEnv): string {
 
 // ─── Unit File Generation ───
 
-function buildSystemdUnit(params: {
+function escapeSystemdUnitValue(value: string): string {
+  return value
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"')
+    .replace(/%/g, '%%');
+}
+
+function quoteSystemdExecArg(arg: string): string {
+  const escapedArg = escapeSystemdUnitValue(arg);
+  if (/^[A-Za-z0-9_@%+=:,./-]+$/.test(arg)) {
+    return escapedArg;
+  }
+  return `"${escapedArg}"`;
+}
+
+export function buildSystemdUnit(params: {
   description: string;
   programArguments: string[];
   workingDirectory?: string;
   environment: Record<string, string>;
 }): string {
   const envLines = Object.entries(params.environment)
-    .map(([k, v]) => `Environment="${k}=${v}"`)
+    .map(([key, value]) => `Environment="${key}=${escapeSystemdUnitValue(value)}"`)
     .join('\n');
 
-  const execStart = params.programArguments.join(' ');
+  const execStart = params.programArguments.map(quoteSystemdExecArg).join(' ');
 
   let unit = `[Unit]
 Description=${params.description}
@@ -240,6 +255,14 @@ export const systemdService: GatewayService = {
 
     // Enable service
     await systemctlExec(['enable', serviceName]);
+
+    try {
+      await enableLinger();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      args.stdout?.write(`Warning: ${message}\n`);
+      log.warn({ err }, 'Systemd user linger is not enabled; gateway may stop after logout');
+    }
 
     log.info({ serviceName, unitPath }, 'Systemd service installed and enabled');
   },

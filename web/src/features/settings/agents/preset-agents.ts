@@ -58,15 +58,7 @@ Precise, pragmatic, and competent. Like a senior engineer who reviews your PR �
     emoji: '✍️',
     descriptionEn: 'Writing and content creation — eloquent, adaptive, and audience-aware.',
     descriptionZh: '写作与内容创作 — 文笔流畅、风格多变、关注读者。',
-    toolsDisable: [
-      'shell',
-      'browser_navigate',
-      'browser_snapshot',
-      'browser_click',
-      'browser_type',
-      'browser_scroll',
-      'browser_screenshot',
-    ],
+    toolsDisable: ['shell', 'browser_use'],
     identityMd: `# IDENTITY.md - Who Am I?
 
 - **Name:** Writer
@@ -144,14 +136,7 @@ Thorough, curious, and intellectually honest. Like a good academic — rigorous 
     emoji: '📊',
     descriptionEn: 'Data analysis and visualization — analytical, clear, and reproducible.',
     descriptionZh: '数据分析与可视化 — 严谨分析、清晰表达、可复现。',
-    toolsDisable: [
-      'browser_navigate',
-      'browser_snapshot',
-      'browser_click',
-      'browser_type',
-      'browser_scroll',
-      'browser_screenshot',
-    ],
+    toolsDisable: ['browser_use'],
     identityMd: `# IDENTITY.md - Who Am I?
 
 - **Name:** Data Analyst

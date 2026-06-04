@@ -160,7 +160,7 @@ The same optional keys can appear under **`agents.defaults`** for global default
 | `max_tokens` | number | `8192` | Maximum output tokens |
 | `temperature` | number | `0.7` | Temperature (0-2) |
 | `max_tool_iterations` | number | `20` | Max tool call iterations |
-| `imageModel` | string \| object | — | Vision model for the `image` and `browser_vision` tools and for **describing** inbound images when the session model does not support vision. Same formats as `model` (string or `{ primary, fallbacks }`). See [Image & vision](image-multimodal.md). |
+| `imageModel` | string \| object | — | Vision model for the `image` and `browser_use` tools and for **describing** inbound images when the session model does not support vision. Same formats as `model` (string or `{ primary, fallbacks }`). See [Image & vision](image-multimodal.md). |
 | `imageGenerationModel` | string \| object | — | Image generation chain for `image_generate` (e.g. `openai/gpt-image-1`, `dashscope/wan2.6-t2i`). Same formats as `model`. See [Image & vision](image-multimodal.md). |
 | `mediaMaxMb` | number | — | Optional. Max size in **MB** when the `image` tool loads files from disk or URLs. |
 
@@ -215,7 +215,7 @@ Cross-session transcript search via the `session_search` tool (when session pers
 
 #### agents.defaults.browser
 
-Playwright-based **`browser_*`** tools when `enabled` is true. Install Chromium once for local mode: `npx playwright install chromium`. Tool behavior and URL policy: [Tools — Browser](tools.md#browser-optional).
+The unified **`browser_use`** tool is registered when `enabled` is true. Install Chromium once for local mode: `npx playwright install chromium`. Tool behavior and URL policy: [Tools — Browser](tools.md#browser-optional).
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|

@@ -8,13 +8,13 @@ export const BUILTIN_TOOL_UI_GROUPS = [
     toolIds: ['read_file', 'write_file', 'edit_file', 'list_dir', 'grep', 'find'] as const,
   },
   { key: 'execution', toolIds: ['shell'] as const },
-  { key: 'web', toolIds: ['web_search', 'web_fetch'] as const },
   { key: 'messaging', toolIds: ['send_message', 'send_media'] as const },
   {
     key: 'memory',
     toolIds: ['memory_search', 'memory_get', 'curated_memory', 'session_search'] as const,
   },
   { key: 'media', toolIds: ['image', 'image_generate'] as const },
+  { key: 'web', toolIds: ['web_search', 'web_fetch', 'browser_use'] as const },
   { key: 'extensions', toolIds: ['extensions'] as const },
   { key: 'mcp', toolIds: ['bundle-mcp'] as const },
 ] as const;

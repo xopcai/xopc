@@ -18,7 +18,7 @@
 | 语音（可选） | `text_to_speech` — 在配置中启用 TTS 时注册 |
 | 记忆（可选） | `memory_search`, `memory_get`；配置后可含 `curated_memory`、`session_search` |
 | 图像（可选） | `image`, `image_generate` — 需模型与密钥 |
-| 浏览器（可选） | `browser_*` — 启用浏览器自动化时 |
+| 浏览器（可选） | `browser_use` — 启用浏览器自动化时 |
 | 委托与代码（可选） | `delegate_task`, `execute_code` |
 | 定时任务（可选） | `cronjob` — 运行时提供 Cron（常见为网关） |
 | MCP（可选） | `服务器ID__工具名` — 来自已配置的 MCP 服务；在 `tools.disable` 中加 `bundle-mcp` 可关闭全部 |
@@ -334,20 +334,9 @@ TTS 开启时注册。用于需要语音播报的场景；一般仍以文字回�
 
 | 工具 | 作用 |
 |------|------|
-| `browser_navigate` | 打开 http(s)；默认拦截 localhost / 私网段 |
-| `browser_back` | 浏览器后退；可选 `waitFor`（`load` / `domcontentloaded` / `networkidle`） |
-| `browser_snapshot` | 页面或选择器的无障碍快照 |
-| `browser_click` | 通过 `selector` / `text` / `role` 点击 |
-| `browser_type` | 输入（`selector` 或 `label`；可选 `pressEnter`） |
-| `browser_scroll` | 页面或元素滚动 |
-| `browser_press` | 按键或组合键（如 `Enter`、`Control+A`） |
-| `browser_screenshot` | 视口或元素截图（有大小限制）；可选视觉描述提示 |
-| `browser_console` | 在页面上下文执行 JS 表达式（可选参数 `javascript`） |
-| `browser_get_images` | 列出范围内图片 URL（可选 `selector`、`maxImages`） |
-| `browser_dialog` | 接受/关闭待处理的 JS 对话框（`alert` / `confirm` / `prompt` / `beforeunload`）；需 CDP 监督器 |
-| `browser_vision` | 截图并由视觉模型分析；需配置 `agents.defaults.imageModel` |
-| `browser_cdp` | 发送原始 Chrome DevTools Protocol 命令（高级用法） |
-| `browser_close` | 关闭本会话的浏览器标签 |
+| `browser_use` | 统一的浏览器自动化工具。可用 `mode: "command"` 执行 `open` / `navigate`、`snapshot`、`click`、`type`、`scroll`、`keys` / `press`、`screenshot`、`console` / `eval`、`images`、`dialog`、`cdp`、`close`、`wait`、网络辅助等动作；也可用 `mode: "pipeline"` 执行 YAML pipeline。 |
+
+如需为某个 agent 禁用浏览器自动化，在 `agents.defaults.tools.disable` 或 `agents.list[].tools.disable` 中加入 `browser_use`。
 
 **URL 策略：** 拒绝带内嵌凭据的 URL、指向**云元数据 / IMDS** 及链路本地地址的导航（即使允许私网也仍拦截），以及查询串里疑似 **API Key / Token 外泄** 的模式。`agents.defaults.browser.allowPrivateUrls` 仅放宽**私网 IP** 拦截；元数据与可疑凭据模式仍拦截。
 

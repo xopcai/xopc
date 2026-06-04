@@ -546,6 +546,7 @@
       "shell": "Run shell commands with workspace context — high impact; turn off for read-only or safer agents.",
       "web_search": "Search the public web for facts and pages newer than the model may know.",
       "web_fetch": "Fetch a URL and read its text content for the model.",
+      "browser_use": "Unified browser automation tool for navigation, snapshots, clicks, typing, screenshots, and browser pipelines.",
       "send_message": "Send outbound chat messages on connected channels (e.g. Telegram, CLI, gateway) when the agent replies.",
       "send_media": "Send images or other media attachments through those channels.",
       "memory_search": "Search indexed memories and notes stored for this agent.",

@@ -3,16 +3,8 @@
  */
 
 import { normalizeLowercaseStringOrEmpty } from '../utils/string-coerce.js';
-import { DEFAULT_ACCOUNT_ID, normalizeAccountId } from './account-id.js';
-import {
-  getSubagentDepth,
-  isAcpSessionKey,
-  isCronSessionKey,
-  isSubagentSessionKey,
-  parseAgentSessionKey,
-  parseThreadSessionSuffix,
-  type ParsedAgentSessionKey,
-} from './session-key-utils.js';
+import { normalizeAccountId } from './account-id.js';
+import { parseAgentSessionKey } from './session-key-utils.js';
 
 export {
   getSubagentDepth,

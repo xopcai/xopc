@@ -20,6 +20,7 @@ export const GATEWAY_BUILTIN_TOOL_IDS = [
   'session_search',
   'image',
   'image_generate',
+  'browser_use',
   'extensions',
   'bundle-mcp',
 ] as const;
