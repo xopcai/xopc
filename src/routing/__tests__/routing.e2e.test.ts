@@ -41,7 +41,7 @@ describe('Routing E2E', () => {
       expect(parsed).toBeTruthy();
       expect(parsed?.agentId).toBe('main');
       expect(parsed?.source).toBe('telegram');
-      expect(parsed?.peerKind).toBe('dm');
+      expect(parsed?.peerKind).toBe('direct');
       expect(parsed?.peerId).toBe('789012');
 
       // Verify it can be used for routing back
@@ -338,7 +338,6 @@ describe('Routing E2E', () => {
         accountId: 'acc_work',
         peerKind: 'group' as const,
         peerId: '-1001234567',
-        threadId: '789',
         scopeId: 'project-a',
       };
 
@@ -347,10 +346,11 @@ describe('Routing E2E', () => {
 
       expect(parsed?.agentId).toBe(original.agentId);
       expect(parsed?.source).toBe(original.source);
-      expect(parsed?.accountId).toBe(original.accountId);
+      // Group keys omit account segment in agent:{id}:{channel}:group:{peer} form.
+      expect(parsed?.accountId).toBe('default');
       expect(parsed?.peerKind).toBe(original.peerKind);
       expect(parsed?.peerId).toBe(original.peerId);
-      expect(parsed?.threadId).toBe(original.threadId);
+      expect(parsed?.threadId).toBeUndefined();
       expect(parsed?.scopeId).toBe(original.scopeId);
     });
 
@@ -387,7 +387,7 @@ describe('Routing E2E', () => {
         config
       );
 
-      expect(sessionKey).toMatch(/^main:telegram:acc_default:dm:789012$/);
+      expect(sessionKey).toMatch(/^agent:main:telegram:acc_default:direct:789012$/);
     });
 
     it('should handle missing accountId', () => {
@@ -400,7 +400,7 @@ describe('Routing E2E', () => {
       });
 
       // sanitizeSegment returns 'default' for null/empty accountId
-      expect(sessionKey).toContain(':default:dm:');
+      expect(sessionKey).toContain(':default:direct:');
     });
 
     it('should sanitize invalid characters', () => {
@@ -427,8 +427,7 @@ describe('Routing E2E', () => {
       });
 
       const parsed = parseSessionKey(sessionKey);
-      // sanitizeSegment truncates to 64 characters
-      expect(parsed?.peerId).toBe(longPeerId.slice(0, 64));
+      expect(parsed?.peerId).toBe(longPeerId);
     });
   });
 });

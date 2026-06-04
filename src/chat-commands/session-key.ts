@@ -132,7 +132,7 @@ export function getSessionDisplayName(sessionKey: string): string {
     case 'thread':
       return `Thread (${parsed.source})`;
     case 'direct':
-      return parsed.peerId === 'main' ? 'Main session' : `Direct (${parsed.source})`;
+      return parsed.chatId === 'main' ? 'Main session' : `Direct (${parsed.source})`;
     default:
       return `${parsed.source}:${parsed.chatId}`;
   }

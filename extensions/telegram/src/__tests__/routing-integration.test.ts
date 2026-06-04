@@ -30,7 +30,7 @@ describe('TelegramRouting', () => {
         baseConfig
       );
 
-      expect(sessionKey).toMatch(/^main:telegram:acc_default:dm:789012$/);
+      expect(sessionKey).toMatch(/^agent:main:telegram:acc_default:direct:789012$/);
     });
 
     it('should generate group session key', () => {
@@ -44,7 +44,7 @@ describe('TelegramRouting', () => {
         baseConfig
       );
 
-      expect(sessionKey).toMatch(/^main:telegram:acc_default:group:-1001234567$/);
+      expect(sessionKey).toMatch(/^agent:main:telegram:group:-1001234567$/);
     });
 
     it('should use configured default agent', () => {
@@ -65,7 +65,7 @@ describe('TelegramRouting', () => {
         config
       );
 
-      expect(sessionKey).toMatch(/^custom-agent:telegram:acc_default:dm:789012$/);
+      expect(sessionKey).toMatch(/^agent:custom-agent:telegram:acc_default:direct:789012$/);
     });
 
     it('should route to specific agent based on binding', () => {
@@ -93,7 +93,7 @@ describe('TelegramRouting', () => {
         config
       );
 
-      expect(sessionKey).toMatch(/^coder:telegram:acc_default:group:-1001234567$/);
+      expect(sessionKey).toMatch(/^agent:coder:telegram:group:-1001234567$/);
     });
 
     it('should apply identity links', () => {
@@ -118,7 +118,7 @@ describe('TelegramRouting', () => {
       );
 
       // Should use canonical name 'alice' instead of senderId
-      expect(sessionKey).toMatch(/^main:telegram:acc_default:dm:alice$/);
+      expect(sessionKey).toMatch(/^agent:main:telegram:acc_default:direct:alice$/);
     });
 
     it('should handle thread ID', () => {
@@ -168,7 +168,7 @@ describe('TelegramRouting', () => {
         },
         config
       );
-      expect(sessionKey1).toMatch(/^coder:/);
+      expect(sessionKey1).toMatch(/^agent:coder:/);
 
       // Should match researcher (only match)
       const sessionKey2 = generateSessionKeyWithRouting(
@@ -180,7 +180,7 @@ describe('TelegramRouting', () => {
         },
         config
       );
-      expect(sessionKey2).toMatch(/^researcher:/);
+      expect(sessionKey2).toMatch(/^agent:researcher:/);
     });
   });
 

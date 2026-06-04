@@ -1219,7 +1219,7 @@ export class GatewayService {
   }
 
   /** Process a message directly through the agent (for CLI mode). */
-  async processDirect(content: string, sessionKey = 'cli:direct'): Promise<string> {
+  async processDirect(content: string, sessionKey = 'agent:main:main'): Promise<string> {
     return this.agentService.turnDispatcher.processDirect(content, sessionKey);
   }
 

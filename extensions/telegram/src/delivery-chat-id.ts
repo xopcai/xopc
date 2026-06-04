@@ -2,7 +2,7 @@ import { parseSessionKey } from '@xopcai/xopc/routing/session-key.js';
 
 /**
  * Resolves Telegram Bot API `chat_id` from config/UI `to` / `targetChatId`.
- * Accepts numeric ids, full session keys (`main:telegram:...`), or
+ * Accepts numeric ids, full session keys (`agent:main:telegram:...`), or
  * routing suffixes (`account:dm:peerId` / `account:group:peerId`).
  */
 export function normalizeTelegramDeliveryChatId(to: string): string {

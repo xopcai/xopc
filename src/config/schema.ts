@@ -448,11 +448,42 @@ export const SessionStorageConfigSchema = z.object({
   maxEntries: z.number().optional(),
 });
 
+export const SessionResetModeSchema = z.enum(['daily', 'idle']);
+
+export const SessionResetConfigSchema = z
+  .object({
+    mode: SessionResetModeSchema.optional(),
+    /** Local hour (0–23) for the daily reset boundary. */
+    atHour: z.number().int().min(0).max(23).optional(),
+    /** Sliding idle window (minutes). When set with daily mode, whichever expires first wins. */
+    idleMinutes: z.number().int().min(0).optional(),
+  })
+  .strict();
+
+export const SessionResetByTypeSchema = z
+  .object({
+    direct: SessionResetConfigSchema.optional(),
+    group: SessionResetConfigSchema.optional(),
+    thread: SessionResetConfigSchema.optional(),
+  })
+  .strict();
+
+export const SessionScopeSchema = z.enum(['per-sender', 'global']);
+
 export const SessionConfigSchema = z.object({
+  scope: SessionScopeSchema.default('per-sender'),
+  mainKey: z.string().default('main'),
   dmScope: SessionDmScopeSchema.default('main'),
   identityLinks: z.record(z.string(), z.array(z.string())).optional(),
+  resetTriggers: z.array(z.string()).optional(),
+  idleMinutes: z.number().int().positive().optional(),
+  reset: SessionResetConfigSchema.optional(),
+  resetByType: SessionResetByTypeSchema.optional(),
+  resetByChannel: z.record(z.string(), SessionResetConfigSchema).optional(),
   storage: SessionStorageConfigSchema.optional(),
 }).default({
+  scope: 'per-sender',
+  mainKey: 'main',
   dmScope: 'main',
 });
 
@@ -1335,6 +1366,8 @@ export const ConfigSchema = z.object({
   },
   bindings: [],
   session: {
+    scope: 'per-sender' as const,
+    mainKey: 'main',
     dmScope: 'main' as const,
   },
   channels: {

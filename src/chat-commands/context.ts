@@ -54,6 +54,8 @@ export interface CommandContextDeps {
   supportedFeatures: PlatformFeature[];
   /** Called after session files are removed so in-memory agents match disk */
   invalidateAgentSession?: (sessionKey: string) => void;
+  /** Reset session in place (archive + new session id); optional — falls back to clearSession */
+  resetSession?: (sessionKey: string) => Promise<void>;
   // Model management (optional, will be injected)
   getCurrentModel?: () => string;
   switchModel?: (modelId: string) => Promise<boolean>;
@@ -137,6 +139,34 @@ export class CommandContextImpl implements CommandContext {
     return this.deps.sessionStore.load(this.sessionKey);
   }
 
+  async resetSession(): Promise<void> {
+    if (this.deps.resetSession) {
+      await this.deps.resetSession(this.sessionKey);
+    } else if (typeof this.deps.sessionStore.reset === 'function') {
+      const outcome = await this.deps.sessionStore.reset(this.sessionKey);
+      if (!outcome) {
+        throw new Error('Session not found');
+      }
+      this.deps.invalidateAgentSession?.(this.sessionKey);
+    } else {
+      await this.clearSession();
+      return;
+    }
+
+    const routing = getRoutingInfo(this.sessionKey);
+    await this.deps.bus.publishOutbound({
+      channel: routing.channel,
+      chat_id: routing.chatId,
+      content: '✅ New session started. Previous transcript archived; model and session overrides kept.',
+      type: 'message',
+      metadata: {
+        threadId: routing.threadId,
+      },
+    });
+
+    log.info({ sessionKey: this.sessionKey }, 'Session reset');
+  }
+
   async clearSession(): Promise<void> {
     // Archive first if has messages
     const messages = await this.getSession();
@@ -154,7 +184,7 @@ export class CommandContextImpl implements CommandContext {
     await this.deps.bus.publishOutbound({
       channel: routing.channel,
       chat_id: routing.chatId,
-      content: '✅ New session started. Previous session has been archived.',
+      content: '✅ Session cleared.',
       type: 'message',
       metadata: {
         threadId: routing.threadId,

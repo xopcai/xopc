@@ -60,7 +60,7 @@ function createAgentCommand(_ctx: CLIContext): Command {
       }
 
       // Validate session key if provided
-      let sessionKey = options.session || 'cli:direct';
+      let sessionKey = options.session || 'agent:main:main';
       if (options.session) {
         const { getSessionManager } = await import('../utils/session.js');
         const manager = await getSessionManager();

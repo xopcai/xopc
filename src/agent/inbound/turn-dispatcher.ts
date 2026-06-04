@@ -86,7 +86,7 @@ export class TurnDispatcher {
   /** One-shot direct turn (CLI / embedded TUI). */
   processDirect(
     content: string,
-    sessionKey = 'cli:direct',
+    sessionKey = 'agent:main:main',
     attachments?: DirectAttachment[],
     thinking?: string,
   ): Promise<string> {
@@ -101,7 +101,7 @@ export class TurnDispatcher {
   /** Streaming direct turn (webchat SSE / CLI streaming). */
   async *processDirectStreaming(
     content: string,
-    sessionKey = 'cli:direct',
+    sessionKey = 'agent:main:main',
     attachments?: DirectAttachment[],
     thinking?: string,
     options?: { signal?: AbortSignal },

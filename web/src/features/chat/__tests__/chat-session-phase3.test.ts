@@ -5,7 +5,7 @@ import { defaultSessionMeta } from '@/features/chat/session/chat-session-default
 import { useChatSessionStore } from '@/features/chat/session/chat-session-store';
 import { selectDisplayMessages } from '@/features/chat/session/chat-session-view';
 
-const sessionKey = 'main:webchat:default:direct:abc';
+const sessionKey = 'agent:main:webchat:default:direct:abc';
 
 describe('Phase 3 store-backed display', () => {
   beforeEach(() => {

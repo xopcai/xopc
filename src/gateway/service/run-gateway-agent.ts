@@ -12,6 +12,7 @@ import {
   inboundCorrelationMetadataFromAsyncLogContext,
 } from '../../utils/logger.js';
 import { shouldSkipWebchatInboundByAbortCutoff } from '../../session/abort-cutoff.js';
+import { resolveSession } from '../../session/resolve-session.js';
 
 import type { AgentRunRelay } from '../agent-run-relay.js';
 import { MAX_CHAT_ATTACHMENTS } from '../chat-limits.js';
@@ -131,6 +132,18 @@ export async function *runGatewayAgent(
       const mergedSignal = runOptions?.signal
         ? AbortSignal.any([runOptions.signal, runAbort.signal])
         : runAbort.signal;
+
+      const sessionResolution = await resolveSession({ cfg: config, sessionKey });
+      if (sessionResolution.isNewSession) {
+        log.debug(
+          {
+            sessionKey,
+            sessionId: sessionResolution.sessionId,
+            previousSessionId: sessionResolution.sessionEntry?.sessionId,
+          },
+          'Session reset boundary at gateway turn start',
+        );
+      }
 
       agentService.beginInboundTurn(sessionKey);
       activeWebchatRunBySession.set(sessionKey, runId);

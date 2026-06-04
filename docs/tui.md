@@ -47,7 +47,7 @@ xopc tui --local
 
 - Session list and model list APIs are not wired; `/sessions` and `/model` (without arguments) show empty or “not available” style results, and **`/model <id>`** does not change the model (patch is not supported).
 - Chat history is not loaded from disk in this iteration.
-- **`/reset`** restarts the embedded agent runtime for a clean in-memory state.
+- **`/reset`** and **`/new`** reset the session transcript (archive + new `sessionId`) while keeping the same session key and persisted overrides. Embedded mode uses the in-process reset path; gateway mode calls `POST /api/sessions/:key/reset`.
 
 For switching sessions and models from the TUI, prefer **gateway mode**.
 
@@ -59,7 +59,7 @@ For switching sessions and models from the TUI, prefer **gateway mode**.
 |--------|-------------|
 | `--url <url>` | Gateway base URL (no trailing path). |
 | `--token <token>` | `Authorization: Bearer` token for the gateway. |
-| `-s, --session <key>` | Session key (default when omitted: `cli:tui`). |
+| `-s, --session <key>` | Session key. Omitted: `agent:{defaultAgentId}:{mainKey}` (usually `agent:main:main`; see [Session keys](./session.md#agent-session-keys)). Shorthand `mytopic` → `agent:{currentAgent}:mytopic`. |
 | `-m, --message <text>` | After connect, send this message once and keep the UI open. |
 | `--local` | Embedded mode (no gateway). |
 | `--theme <name>` | Theme: `auto`, `dark`, `light`, or a custom name from `~/.xopc/themes/`. |
@@ -68,7 +68,8 @@ For switching sessions and models from the TUI, prefer **gateway mode**.
 Examples:
 
 ```bash
-xopc tui -s telegram:dm:123456
+xopc tui -s agent:main:telegram:default:direct:123456
+xopc tui -s mytopic
 xopc tui -m "Summarize my inbox"
 xopc tui --url http://192.168.1.10:18790 --token "$TOKEN"
 ```
@@ -116,7 +117,7 @@ Lines starting with **`/`** are treated as **slash commands** (not sent to the m
 | `/models` | Same as `/model` without args. |
 | `/session <key>` | Switch session; clears the on-screen log. |
 | `/sessions` | List sessions (**gateway mode**). |
-| `/new`, `/reset` | Abort if needed; `/reset` also resets the session on the server (embedded: restarts local agent). |
+| `/new`, `/reset` | Abort if needed; reset transcript on the server (gateway: `POST …/reset`; embedded: `AgentService.resetSession`). Model/thinking overrides are preserved. |
 | `/abort` | Abort the current run. |
 | `/thinking` | Toggle thinking display (same effect as **Ctrl+T**). |
 | `/tools` | Toggle tools expanded (same as **Ctrl+O**). |

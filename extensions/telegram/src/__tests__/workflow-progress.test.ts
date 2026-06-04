@@ -18,8 +18,8 @@ function mkBot() {
   };
 }
 
-const DM_SESSION = 'main:telegram:default:dm:916534770';
-const GROUP_SESSION = 'main:telegram:default:group:-1001234567890:thread:55';
+const DM_SESSION = 'agent:main:telegram:default:direct:916534770';
+const GROUP_SESSION = 'agent:main:telegram:group:-1001234567890:thread:55';
 
 describe('telegram workflow progress capability', () => {
   it('declares the expected channel defaults', () => {
@@ -134,7 +134,7 @@ describe('telegram workflow progress capability', () => {
     const bot = mkBot();
     const cap = createTelegramWorkflowProgressCapability(mkAccountManager(bot));
     await expect(
-      cap.postProgress({ sessionKey: 'main:webchat:default:dm:abc', text: 'x', isFinal: false }),
+      cap.postProgress({ sessionKey: 'agent:main:webchat:default:direct:abc', text: 'x', isFinal: false }),
     ).rejects.toThrow(/cannot route/);
   });
 

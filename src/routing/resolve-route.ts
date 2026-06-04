@@ -31,10 +31,25 @@ export type IdentityLinks = Record<string, string[]>;
  * Session-related routing options.
  */
 export interface SessionConfig {
+  scope?: 'per-sender' | 'global';
+  mainKey?: string;
   /** How DM sessions are scoped / merged */
   dmScope?: 'main' | 'per-peer' | 'per-channel-peer' | 'per-account-channel-peer';
   /** Cross-channel identity aliases */
   identityLinks?: IdentityLinks;
+  resetTriggers?: string[];
+  idleMinutes?: number;
+  reset?: {
+    mode?: 'daily' | 'idle';
+    atHour?: number;
+    idleMinutes?: number;
+  };
+  resetByType?: {
+    direct?: SessionConfig['reset'];
+    group?: SessionConfig['reset'];
+    thread?: SessionConfig['reset'];
+  };
+  resetByChannel?: Record<string, NonNullable<SessionConfig['reset']>>;
   /** Optional session store tuning */
   storage?: {
     pruneAfterMs?: number;

@@ -338,9 +338,9 @@ export class GatewaySseBackend implements TuiBackend {
   async resetSession(sessionKey: string): Promise<void> {
     await gatewayFetch(
       this.baseUrl,
-      `/api/sessions/${encodeURIComponent(sessionKey)}`,
+      `/api/sessions/${encodeURIComponent(sessionKey)}/reset`,
       this.token,
-      { method: 'DELETE' },
+      { method: 'POST' },
     ).catch(() => {});
   }
 

@@ -610,6 +610,64 @@ export class SessionStore {
     });
   }
 
+  /**
+   * Reset transcript for an existing session key: archive the current JSONL as
+   * `*.reset.*`, assign a new `sessionId`, and preserve per-session overrides
+   * on the disk entry (thinking/verbose) and in `sessions/config/*.json`.
+   */
+  async reset(key: string): Promise<{ sessionId: string; previousSessionId: string } | null> {
+    return this.runStoreMutation(async () => {
+      const existing = await this.getDiskEntry(key);
+      if (!existing?.pluginExtensions?.xopc?.metadata) {
+        return null;
+      }
+
+      const previousSessionId = existing.sessionId;
+      const keySessionsDir = this.resolveSessionsDirForKey(key);
+      const abs = this.transcriptPathForEntry(existing, keySessionsDir);
+      if (existsSync(abs)) {
+        try {
+          archiveFileOnDisk(abs, 'reset');
+        } catch (err) {
+          log.warn({ err, key }, 'Transcript archive on reset failed');
+        }
+      }
+
+      const sessionId = randomUUID();
+      validateSessionId(sessionId);
+      const now = Date.now();
+      const nextAbs = resolveSessionTranscriptPathInDir(sessionId, keySessionsDir);
+      await writeTranscriptJsonl({
+        absPath: nextAbs,
+        sessionId,
+        cwd: process.cwd(),
+        rows: [],
+      });
+
+      const keyStorePath = this.resolveStorePathForKey(key);
+      await withSessionsJsonLock(keyStorePath, async (map) => {
+        const e = map[key] as XopcSessionDiskEntry | undefined;
+        if (!e?.pluginExtensions?.xopc?.metadata) {
+          return;
+        }
+        e.sessionId = sessionId;
+        e.sessionFile = `${sessionId}.jsonl`;
+        e.updatedAt = now;
+        e.sessionStartedAt = now;
+        e.lastInteractionAt = undefined;
+        patchSessionsJsonEntryStats(e, buildSessionsJsonStatsPatch(0, 0));
+        const meta = e.pluginExtensions.xopc.metadata;
+        meta.transcriptId = sessionId;
+        meta.updatedAt = new Date(now).toISOString();
+        map[key] = e as Record<string, unknown>;
+      });
+
+      invalidateSessionSearchIndexCache();
+      log.info({ key, previousSessionId, sessionId }, 'Session reset');
+      return { sessionId, previousSessionId };
+    });
+  }
+
   async delete(key: string): Promise<boolean> {
     return this.runStoreMutation(async () => {
       const entry = await this.getDiskEntry(key);

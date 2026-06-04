@@ -47,6 +47,8 @@ export interface CommandHandlerConfig {
   switchModelForSession: (sessionKey: string, modelId: string) => Promise<boolean>;
   /** Drop in-memory agent after session file is cleared (e.g. /new) */
   invalidateAgentSession?: (sessionKey: string) => void;
+  /** Reset session in place (archive transcript, new session id; preserve overrides) */
+  resetSession?: (sessionKey: string) => Promise<{ sessionId: string; previousSessionId: string } | null>;
   /** Cancel streaming preview + in-flight LLM work for this session (e.g. /abort) */
   abortSessionTurn?: (sessionKey: string) => Promise<void>;
 
@@ -84,6 +86,7 @@ export class CommandHandler {
   private btwQuery?: CommandHandlerConfig['btwQuery'];
   private getSessionContextReport?: CommandHandlerConfig['getSessionContextReport'];
   private getPersistentGoalApisForCommand: CommandHandlerConfig['getPersistentGoalApisForCommand'];
+  private resetSession?: CommandHandlerConfig['resetSession'];
 
   constructor(handlerConfig: CommandHandlerConfig) {
     this.config = handlerConfig.config;
@@ -99,6 +102,7 @@ export class CommandHandler {
     this.btwQuery = handlerConfig.btwQuery;
     this.getSessionContextReport = handlerConfig.getSessionContextReport;
     this.getPersistentGoalApisForCommand = handlerConfig.getPersistentGoalApisForCommand;
+    this.resetSession = handlerConfig.resetSession;
   }
 
   /** Replace config reference after hot reload or gateway PATCH so commands see current defaults. */
@@ -199,6 +203,12 @@ export class CommandHandler {
       },
 
       invalidateAgentSession: this.invalidateAgentSession,
+
+      resetSession: this.resetSession
+        ? async (sk) => {
+            await this.resetSession!(sk);
+          }
+        : undefined,
 
       abortCurrentTurn: this.abortSessionTurn
         ? async () => {

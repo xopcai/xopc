@@ -18,6 +18,7 @@ import { SessionIndex } from '../../session/index.js';
 import type { ExportFormat, SessionListQuery } from '../../session/types.js';
 import type { SessionPatchBody } from '../../session/patch-metadata.js';
 import { getDistinctSessionChatIds } from './session-chat-ids.js';
+import { performSessionReset, type SessionResetResult } from '../session-reset-service.js';
 
 export interface GatewaySessionsApiOptions {
   sessionIndex: SessionIndex;
@@ -146,6 +147,14 @@ export class GatewaySessionsApi {
       await retireSessionMcpRuntimeForSessionKey({ sessionKey: key, reason: 'session-delete' });
     }
     return { deleted: result };
+  }
+
+  /** Reset transcript in place (archive + new session id); preserves session key and overrides. */
+  reset(key: string): Promise<SessionResetResult> {
+    return performSessionReset(key, {
+      sessionIndex: this.opts.sessionIndex,
+      getAgentService: this.opts.getAgentService,
+    });
   }
 
   deleteMany(keys: string[]): Promise<{ success: string[]; failed: string[] }> {

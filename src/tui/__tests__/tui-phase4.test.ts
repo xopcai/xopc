@@ -30,7 +30,7 @@ describe('createTuiExtensionHost', () => {
     const host = createTuiExtensionHost({
       extensionId: 'test-ext',
       surface,
-      getSessionKey: () => 'cli:tui',
+      getSessionKey: () => 'agent:main:main',
       notify: () => {},
       showOverlay: () => {},
       hideOverlay: () => {},

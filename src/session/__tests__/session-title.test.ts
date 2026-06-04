@@ -4,13 +4,13 @@ import { fallbackTitleFromMessages, shouldAutoTitleSessionKey } from '../session
 
 describe('shouldAutoTitleSessionKey', () => {
   it('allows webchat, telegram, weixin-style keys', () => {
-    expect(shouldAutoTitleSessionKey('main:webchat:default:direct:chat_abc')).toBe(true);
-    expect(shouldAutoTitleSessionKey('main:telegram:acc_default:dm:123456')).toBe(true);
-    expect(shouldAutoTitleSessionKey('main:weixin:acc_default:dm:openid123')).toBe(true);
+    expect(shouldAutoTitleSessionKey('agent:main:webchat:default:direct:chat_abc')).toBe(true);
+    expect(shouldAutoTitleSessionKey('agent:main:telegram:acc_default:direct:123456')).toBe(true);
+    expect(shouldAutoTitleSessionKey('agent:main:weixin:acc_default:direct:openid123')).toBe(true);
   });
 
   it('rejects cron sessions', () => {
-    expect(shouldAutoTitleSessionKey('main:cron:default:dm:job-123')).toBe(false);
+    expect(shouldAutoTitleSessionKey('agent:main:cron:job-123')).toBe(false);
   });
 
   it('rejects heartbeat keys', () => {

@@ -38,7 +38,7 @@ const getCtxMock = vi.mocked(getContextToken);
 const ensureMock = vi.mocked(ensureWeixinContextTokenForOutbound);
 const sendMock = vi.mocked(sendMessageWeixin);
 
-const SESSION = 'main:weixin:default:dm:ilink_user_abc';
+const SESSION = 'agent:main:weixin:default:direct:ilink_user_abc';
 
 function mkCap() {
   return createWeixinWorkflowProgressCapability({
@@ -97,7 +97,7 @@ describe('weixin workflow progress capability', () => {
     const cap = mkCap();
     await expect(
       cap.postProgress({
-        sessionKey: 'main:telegram:default:dm:123',
+        sessionKey: 'agent:main:telegram:default:direct:123',
         text: 'x',
         isFinal: true,
       }),

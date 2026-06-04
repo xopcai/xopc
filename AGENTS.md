@@ -376,6 +376,7 @@ cd web && pnpm run build                  # → ../dist/gateway/static/root (gat
 - **Webchat abort cutoff:** `POST /api/agent` accepts optional `clientCreatedAtMs`. When it is **omitted**, `abortCutoffTimestamp` does **not** drop stale POSTs (clients must send send-time for skip semantics). Abort uses `abortEmbeddedRun` + context rows via `appendCustomEntry`.
 - **Audit rows on disk:** `kind: 'context'` entries persist for ops/UI via `GET /api/sessions/:key?include=transcriptRows` (comma-separated with `transcript` if you also want `transcriptSummary`).
 - **JSON export:** `SessionStore.exportSession(..., 'json')` includes `transcriptRows` (full on-disk order) alongside API-shaped `messages` (LLM-only). Session text search indexes `context` row `text` / `id` tokens as well.
+- **Reset (`/new`, TUI `/reset`):** `performSessionReset` (`src/gateway/session-reset-service.ts`) archives the live JSONL as `*.reset.*`, assigns a new `sessionId` for the same session key, and keeps per-session overrides (`sessions/config/*.json`, thinking/verbose on the disk entry). Gateway: `POST /api/sessions/:key/reset`. **Delete** (`DELETE /api/sessions/:key`) removes the key from the index — do not use delete for `/new`.
 
 | Area | Primary locations |
 |------|-------------------|
@@ -390,7 +391,7 @@ cd web && pnpm run build                  # → ../dist/gateway/static/root (gat
 | Logging | `src/utils/logger.ts` (barrel) → `src/utils/logger/`; conventions: [Logging conventions](#logging-conventions) |
 | Log Manager | `web/src/` (logs feature / pages) |
 | Tests | Colocated `__tests__` |
-| Session store / transcript | `src/session/store.ts`, `src/session/transcript-format.ts`, `src/session/session-context-for-llm.ts` |
+| Session store / transcript | `src/session/store.ts`, `src/session/transcript-format.ts`, `src/session/session-context-for-llm.ts`, `src/gateway/session-reset-service.ts` |
 
 ---
 

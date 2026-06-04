@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import type { KeybindingsManager, TUI } from '@earendil-works/pi-tui';
 
 import type { ChatLog } from './components/chat-log.js';
@@ -27,8 +29,9 @@ export function getSlashCommands(_isLocal: boolean): SlashCommandDef[] {
     { name: 'models', description: 'List available models' },
     { name: 'switch', description: 'Switch model — copy `provider/model` from /models' },
     { name: 'usage', description: 'Show token usage statistics' },
-    { name: 'new', description: 'Start a new session' },
-    { name: 'clear', description: 'Clear current session' },
+    { name: 'new', description: 'Start a new isolated TUI session (tui-{uuid})' },
+    { name: 'reset', description: 'Reset current session transcript and reload history' },
+    { name: 'clear', description: 'Alias for /reset' },
     { name: 'list', description: 'List sessions' },
     { name: 'resume', description: 'Open session picker (or Ctrl+Shift+P)' },
     { name: 'scoped-models', description: 'Choose models for Ctrl+P cycling' },
@@ -99,6 +102,9 @@ export type CommandHandlerDeps = {
   };
   runCompaction?: () => void | Promise<void>;
   extensionSlashCommands?: TuiExtensionSlashCommandEntry[];
+  currentAgentId?: string;
+  setSession?: (rawKey: string) => Promise<void>;
+  resetSession?: () => Promise<void>;
 };
 
 export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: string) => void {
@@ -115,7 +121,24 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: strin
     keybindings,
     uiOverlays,
     extensionSlashCommands = [],
+    currentAgentId = 'main',
+    setSession,
+    resetSession,
   } = deps;
+
+  const runReset = async () => {
+    await abortActive();
+    if (resetSession) {
+      await resetSession();
+      chatLog.addSystem(`session ${state.currentSessionKey} reset`);
+    } else {
+      assembler.clear();
+      chatLog.clearAll();
+      state.messageFollowUpQueue.length = 0;
+      chatLog.addSystem('Session cleared (reset not available in this mode).');
+    }
+    tui.requestRender();
+  };
 
   return (input: string) => {
     const trimmed = input.replace(/^\//, '').trim();
@@ -190,19 +213,36 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: strin
     }
 
     switch (normalizedCommand) {
-      case 'new':
-      case 'reset':
-      case 'restart':
-      case 'clear': {
-        void abortActive().then(() => {
-          assembler.clear();
-          chatLog.clearAll();
-          state.messageFollowUpQueue.length = 0;
-          tui.requestRender();
-          sendMessage(input);
-        });
+      case 'new': {
+        void (async () => {
+          try {
+            await abortActive();
+            const uniqueKey = `tui-${randomUUID()}`;
+            if (setSession) {
+              await setSession(uniqueKey);
+              chatLog.addSystem(`new session: ${state.currentSessionKey}`);
+            } else {
+              assembler.clear();
+              chatLog.clearAll();
+              state.messageFollowUpQueue.length = 0;
+              chatLog.addSystem('New session requires gateway or local session support.');
+            }
+            tui.requestRender();
+          } catch (err) {
+            const errorMessage = err instanceof Error ? err.message : String(err);
+            chatLog.addSystem(`new session failed: ${errorMessage}`);
+            tui.requestRender();
+          }
+        })();
         return;
       }
+      case 'reset':
+      case 'restart':
+        void runReset();
+        return;
+      case 'clear':
+        void runReset();
+        return;
       default:
         break;
     }

@@ -53,7 +53,7 @@ describe('Complete Routing E2E Flow', () => {
       const parsed = parseSessionKey(sessionKey);
       expect(parsed).toBeTruthy();
       expect(parsed?.agentId).toBe('main');
-      expect(parsed?.peerKind).toBe('dm');
+      expect(parsed?.peerKind).toBe('direct');
     });
   });
 

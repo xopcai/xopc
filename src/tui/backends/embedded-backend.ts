@@ -253,7 +253,7 @@ export class EmbeddedBackend implements TuiBackend {
 
   async resetSession(sessionKey: string): Promise<void> {
     if (!this.agent) return;
-    await this.agent.clearSessionMessages(sessionKey);
+    await this.agent.resetSession(sessionKey);
   }
 
   async patchSession(

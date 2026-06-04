@@ -30,14 +30,14 @@ describe('SessionStore', () => {
         { role: 'assistant', content: 'Hi there' },
       ];
 
-      await store.saveMessages('main:telegram:default:dm:123456', messages);
-      const metadata = await store.getMetadata('main:telegram:default:dm:123456');
+      await store.saveMessages('agent:main:telegram:default:direct:123456', messages);
+      const metadata = await store.getMetadata('agent:main:telegram:default:direct:123456');
 
       expect(metadata?.routing).toEqual({
         agentId: 'main',
         source: 'telegram',
         accountId: 'default',
-        peerKind: 'dm',
+        peerKind: 'direct',
         peerId: '123456',
       });
     });
@@ -45,13 +45,13 @@ describe('SessionStore', () => {
     it('should extract routing with thread', async () => {
       const messages: any[] = [{ role: 'user', content: 'Thread message' }];
 
-      await store.saveMessages('main:discord:work:channel:987654:thread:789', messages);
-      const metadata = await store.getMetadata('main:discord:work:channel:987654:thread:789');
+      await store.saveMessages('agent:main:discord:channel:987654:thread:789', messages);
+      const metadata = await store.getMetadata('agent:main:discord:channel:987654:thread:789');
 
       expect(metadata?.routing).toEqual({
         agentId: 'main',
         source: 'discord',
-        accountId: 'work',
+        accountId: 'default',
         peerKind: 'channel',
         peerId: '987654',
         threadId: '789',
@@ -70,8 +70,21 @@ describe('SessionStore', () => {
   });
 
   describe('message persistence (JSONL + sessions.json)', () => {
+    it('should reset in place with archived transcript and new session id', async () => {
+      const key = 'agent:main:webchat:default:direct:reset-test';
+      await store.saveMessages(key, [{ role: 'user', content: 'hello', timestamp: Date.now() }]);
+      const before = await store.getMetadata(key);
+      const outcome = await store.reset(key);
+      expect(outcome?.previousSessionId).toBe(before?.transcriptId);
+      expect(outcome?.sessionId).not.toBe(before?.transcriptId);
+      const after = await store.getMetadata(key);
+      expect(after?.key).toBe(key);
+      expect(after?.transcriptId).toBe(outcome?.sessionId);
+      expect(await store.loadMessages(key)).toHaveLength(0);
+    });
+
     it('should save and load messages', async () => {
-      const key = 'main:telegram:default:dm:123456';
+      const key = 'agent:main:telegram:default:direct:123456';
       const messages: any[] = [
         { role: 'user', content: 'Hello', timestamp: Date.now() },
         { role: 'assistant', content: 'Hi there!', timestamp: Date.now() },
@@ -86,7 +99,7 @@ describe('SessionStore', () => {
     });
 
     it('should hide compaction summary messages from display history', async () => {
-      const key = 'main:webchat:default:direct:compaction-summary';
+      const key = 'agent:main:webchat:default:direct:compaction-summary';
       const messages: any[] = [
         {
           role: 'user',
@@ -121,7 +134,7 @@ describe('SessionStore', () => {
     });
 
     it('should page messages from the newest tail while preserving chronological order', async () => {
-      const key = 'main:webchat:default:direct:history-page';
+      const key = 'agent:main:webchat:default:direct:history-page';
       const messages: any[] = Array.from({ length: 5 }, (_, index) => ({
         role: index % 2 === 0 ? 'user' : 'assistant',
         content: `message-${index}`,
@@ -178,8 +191,8 @@ describe('SessionStore', () => {
     });
 
     it('should list sessions with channel filter', async () => {
-      await store.saveMessages('main:telegram:default:dm:1', [{ role: 'user', content: '1' }]);
-      await store.saveMessages('main:discord:default:dm:2', [{ role: 'user', content: '2' }]);
+      await store.saveMessages('agent:main:telegram:default:direct:1', [{ role: 'user', content: '1' }]);
+      await store.saveMessages('agent:main:discord:default:direct:2', [{ role: 'user', content: '2' }]);
 
       const telegramSessions = await store.list({ channel: 'telegram' });
       expect(telegramSessions.items).toHaveLength(1);
@@ -187,7 +200,7 @@ describe('SessionStore', () => {
     });
 
     it('lists webchat when sessions.json metadata omits sourceChannel (rehydrate from session key)', async () => {
-      const key = 'main:webchat:default:direct:meta-gap';
+      const key = 'agent:main:webchat:default:direct:meta-gap';
       await store.saveMessages(key, [{ role: 'user', content: 'x', timestamp: Date.now() }]);
       const mapPath = join(store.getSessionsRoot(), FILENAMES.SESSIONS_MAP);
       const raw = JSON.parse(await readFile(mapPath, 'utf-8')) as Record<string, { pluginExtensions?: { xopc?: { metadata?: Record<string, unknown> } } }>;
@@ -201,20 +214,20 @@ describe('SessionStore', () => {
     });
 
     it('should list sessions with status filter', async () => {
-      await store.saveMessages('main:telegram:default:dm:1', [{ role: 'user', content: '1' }]);
-      await store.saveMessages('main:telegram:default:dm:2', [{ role: 'user', content: '2' }]);
+      await store.saveMessages('agent:main:telegram:default:direct:1', [{ role: 'user', content: '1' }]);
+      await store.saveMessages('agent:main:telegram:default:direct:2', [{ role: 'user', content: '2' }]);
 
-      await store.archive('main:telegram:default:dm:1');
+      await store.archive('agent:main:telegram:default:direct:1');
 
       const activeSessions = await store.list({ status: 'active' });
       expect(activeSessions.items).toHaveLength(1);
-      expect(activeSessions.items[0].key).toBe('main:telegram:default:dm:2');
+      expect(activeSessions.items[0].key).toBe('agent:main:telegram:default:direct:2');
     });
   });
 
   describe('transcript document (synthetic)', () => {
     it('persists stable session id across saves', async () => {
-      const key = 'main:telegram:default:dm:envtest';
+      const key = 'agent:main:telegram:default:direct:envtest';
       await store.saveMessages(key, [{ role: 'user', content: 'a' }]);
       const doc1 = await store.loadTranscriptDocument(key);
       expect(doc1).not.toBeNull();
@@ -233,7 +246,7 @@ describe('SessionStore', () => {
     });
 
     it('includes transcriptSummary on get when requested', async () => {
-      const key = 'main:telegram:default:dm:sumtest';
+      const key = 'agent:main:telegram:default:direct:sumtest';
       await store.saveMessages(key, [{ role: 'user', content: 'z' }]);
       const detail = await store.get(key, { includeTranscriptSummary: true });
       expect(detail?.transcriptSummary?.id).toBeDefined();
@@ -243,7 +256,7 @@ describe('SessionStore', () => {
     });
 
     it('appends compaction record when applyCompaction runs', async () => {
-      const key = 'main:telegram:default:dm:comptest';
+      const key = 'agent:main:telegram:default:direct:comptest';
       const msgs = Array.from({ length: 12 }, (_, i) => ({
         role: 'user' as const,
         content: `line-${i}`,
@@ -269,7 +282,7 @@ describe('SessionStore', () => {
     });
 
     it('lists and restores compaction checkpoints', async () => {
-      const key = 'main:telegram:default:dm:cpapi';
+      const key = 'agent:main:telegram:default:direct:cpapi';
       const msgs = Array.from({ length: 12 }, (_, i) => ({
         role: 'user' as const,
         content: `m-${i}`,
@@ -310,7 +323,7 @@ describe('SessionStore', () => {
 
   describe('transcript context rows', () => {
     it('appendTranscriptContextEntry keeps row on disk but loadMessages returns LLM only', async () => {
-      const key = 'main:webchat:default:direct:ctxrow1';
+      const key = 'agent:main:webchat:default:direct:ctxrow1';
       await store.saveMessages(key, [{ role: 'user', content: 'hi' }]);
       await store.appendTranscriptContextEntry(key, { text: 'audit', id: 'e1' });
       const llm = await store.loadMessages(key);
@@ -322,7 +335,7 @@ describe('SessionStore', () => {
     });
 
     it('json exportSession includes transcriptRows', async () => {
-      const key = 'main:webchat:default:direct:exportctx';
+      const key = 'agent:main:webchat:default:direct:exportctx';
       await store.saveMessages(key, [{ role: 'user', content: 'hi' }]);
       await store.appendTranscriptContextEntry(key, { text: 'export_note', id: 'n1' });
       const json = await store.exportSession(key, 'json');

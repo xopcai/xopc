@@ -110,7 +110,7 @@ describe('AgentOrchestrator enqueueAutoTitle', () => {
     };
 
     const context: SessionContext = {
-      sessionKey: 'main:telegram:default:dm:999',
+      sessionKey: 'agent:main:telegram:default:direct:999',
       channel: 'telegram',
       chatId: '999',
       senderId: '1',
@@ -120,7 +120,7 @@ describe('AgentOrchestrator enqueueAutoTitle', () => {
     await orchestrator.process(msg, context);
 
     expect(enqueueAutoTitle).toHaveBeenCalledTimes(1);
-    expect(enqueueAutoTitle).toHaveBeenCalledWith('main:telegram:default:dm:999');
+    expect(enqueueAutoTitle).toHaveBeenCalledWith('agent:main:telegram:default:direct:999');
   });
 
   it('does not require enqueueAutoTitle when omitted', async () => {
@@ -144,7 +144,7 @@ describe('AgentOrchestrator enqueueAutoTitle', () => {
     };
 
     const context: SessionContext = {
-      sessionKey: 'main:telegram:default:dm:999',
+      sessionKey: 'agent:main:telegram:default:direct:999',
       channel: 'telegram',
       chatId: '999',
       senderId: '1',

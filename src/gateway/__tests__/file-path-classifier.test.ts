@@ -20,9 +20,9 @@ describe('fileRefSessionKeysMatch', () => {
   });
 
   it('requires exact match when either side is non-empty', () => {
-    expect(fileRefSessionKeysMatch('main:webchat', 'main:webchat')).toBe(true);
-    expect(fileRefSessionKeysMatch('main:webchat', '')).toBe(false);
-    expect(fileRefSessionKeysMatch('', 'main:webchat')).toBe(false);
+    expect(fileRefSessionKeysMatch('agent:main:webchat', 'agent:main:webchat')).toBe(true);
+    expect(fileRefSessionKeysMatch('agent:main:webchat', '')).toBe(false);
+    expect(fileRefSessionKeysMatch('', 'agent:main:webchat')).toBe(false);
   });
 });
 
@@ -97,7 +97,7 @@ describe('resolveFileReferenceCandidate', () => {
     await writeFile(join(profile, 'IDENTITY.md'), 'ok');
 
     const cfg = { agents: { defaults: {}, list: [{ id: 'a', default: true }] } } as Config;
-    const built = buildFilePathClassifierContext(cfg, 'a:webchat:default:dm:1');
+    const built = buildFilePathClassifierContext(cfg, 'agent:a:webchat:default:direct:1');
     const ctx = {
       ...built,
       workspaceRoot: workspace,
