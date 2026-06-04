@@ -38,6 +38,8 @@ import type {
 import type { FeedbackCoordinator } from '../feedback/index.js';
 import type { HookHandler } from '../lifecycle/hook-handler.js';
 import type { SessionStore } from '../../session/store.js';
+import { initSessionTurn } from '../../session/init-session-turn.js';
+import { shouldSkipResetOverlapCommand } from '../../session/reset-triggers.js';
 import type { StreamHandle } from '../service.types.js';
 import { runEmbeddedTurnForSession } from '../embedded/run-for-session.js';
 import { inboundMessageLogRequestId } from '../service-inbound-utils.js';
@@ -77,6 +79,8 @@ export interface InboundLoopConfig {
   enqueueMaybeAutoTitleAfterPersist: (sessionKey: string) => void;
   /** Effective merged config snapshot. */
   getConfig: () => Config | undefined;
+  /** Archive transcript + new session id (freshness / reset trigger rollover). */
+  resetSession: (sessionKey: string) => Promise<{ sessionId: string; previousSessionId: string } | null>;
   /** Connect a channel stream handle for partial assistant text rendering. */
   setStreamHandle: (handle: StreamHandle) => void;
 }
@@ -205,6 +209,7 @@ export class InboundLoop {
         let typingController: ReturnType<OutboundCoordinator['createTypingControllerForInbound']> = null;
         let inboundTurnArmed = false;
         let busProcessFailed: string | undefined;
+        let inboundMsg = msg;
 
         try {
           if (msg.channel === 'system') {
@@ -216,19 +221,50 @@ export class InboundLoop {
             await this.channelManagerRef.dispatchInboundMessageAction(msg);
           }
 
-          if (isCommand && command) {
-            const handled = await this.cfg.commandHandler.executeCommand(command, commandArgs || '', {
+          const cfg = this.cfg.getConfig();
+          let effectiveContent = msg.content;
+          let resetTriggeredAtInit = false;
+
+          if (cfg && typeof msg.content === 'string') {
+            const turn = await initSessionTurn({
+              cfg,
               sessionKey: sessionContext.sessionKey,
-              channel: sessionContext.channel,
-              chatId: sessionContext.chatId,
-              senderId: sessionContext.senderId,
-              isGroup: sessionContext.isGroup,
-              inboundMetadata: msg.metadata,
+              body: msg.content,
+              resetSession: (sk) => this.cfg.resetSession(sk),
             });
-            if (handled) {
+            resetTriggeredAtInit = turn.resetTriggered;
+
+            if (turn.bareReset && turn.ackMessage) {
+              await this.cfg.bus.publishOutbound({
+                channel: sessionContext.channel,
+                chat_id: sessionContext.chatId,
+                content: turn.ackMessage,
+                type: 'message',
+              });
               return;
             }
+
+            effectiveContent = turn.bodyStripped;
           }
+
+          if (isCommand && command) {
+            if (!shouldSkipResetOverlapCommand(command, resetTriggeredAtInit)) {
+              const handled = await this.cfg.commandHandler.executeCommand(command, commandArgs || '', {
+                sessionKey: sessionContext.sessionKey,
+                channel: sessionContext.channel,
+                chatId: sessionContext.chatId,
+                senderId: sessionContext.senderId,
+                isGroup: sessionContext.isGroup,
+                inboundMetadata: msg.metadata,
+              });
+              if (handled) {
+                return;
+              }
+            }
+          }
+
+          inboundMsg =
+            effectiveContent !== msg.content ? { ...msg, content: effectiveContent } : msg;
 
           // Continuous typing indicator (renews every 5 seconds); stopped only AFTER outbound.
           typingController = this.cfg.outboundCoordinator.createTypingControllerForInbound(msg);
@@ -253,7 +289,7 @@ export class InboundLoop {
           this.cfg.sessionState.beginInboundTurn(sessionContext.sessionKey);
           inboundTurnArmed = true;
           try {
-            await this.cfg.agentOrchestrator.process(msg, sessionContext);
+            await this.cfg.agentOrchestrator.process(inboundMsg, sessionContext);
           } catch (procErr) {
             busProcessFailed = procErr instanceof Error ? procErr.message : String(procErr);
             throw procErr;
@@ -275,7 +311,7 @@ export class InboundLoop {
                 sessionKey: sessionContext.sessionKey,
                 channel: sessionContext.channel,
                 chatId: sessionContext.chatId,
-                inboundUserText: msg.content,
+                inboundUserText: inboundMsg.content,
                 assistantPlainText,
                 aborted: false,
                 ...(busProcessFailed !== undefined ? { streamError: busProcessFailed } : {}),

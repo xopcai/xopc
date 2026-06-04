@@ -412,6 +412,7 @@ export class AgentService {
       enqueueMaybeAutoTitleAfterPersist: (sk) => this.enqueueMaybeAutoTitleAfterPersist(sk),
       endDirectRequestContext: () => this.endDirectRequestContext(),
       onSessionTranscriptUpdated: this.onSessionTranscriptUpdated,
+      resetSession: (sk) => this.resetSession(sk),
     });
 
     this.inboundLoop = new InboundLoop({
@@ -437,6 +438,7 @@ export class AgentService {
       checkAndCompact: (sk, msgs) => this.checkAndCompact(sk, msgs),
       enqueueMaybeAutoTitleAfterPersist: (sk) => this.enqueueMaybeAutoTitleAfterPersist(sk),
       getConfig: () => this.effectiveAppConfig(),
+      resetSession: (sk) => this.resetSession(sk),
       setStreamHandle: (handle) => this.setStreamHandle(handle),
     });
 

@@ -70,6 +70,7 @@ export interface TurnDispatcherConfig {
   endDirectRequestContext: () => void;
   /** Gateway hook fired after assistant text lands on disk (UI refetch). */
   onSessionTranscriptUpdated?: (sessionKey: string) => void;
+  resetSession: (sessionKey: string) => Promise<{ sessionId: string; previousSessionId: string } | null>;
 }
 
 export type DirectAttachment = DirectInboundAttachment;
@@ -203,6 +204,7 @@ export class TurnDispatcher {
           hadVoice,
         ),
       endDirectRequestContext: c.endDirectRequestContext,
+      resetSession: c.resetSession,
     };
   }
 
@@ -231,6 +233,7 @@ export class TurnDispatcher {
         c.enqueueMaybeAutoTitleAfterPersist(sk);
       },
       endDirectRequestContext: c.endDirectRequestContext,
+      resetSession: c.resetSession,
     };
   }
 }

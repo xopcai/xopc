@@ -5,6 +5,7 @@ import type { AgentInstanceGateway } from '../agent-instance-gateway.js';
 import type { ModelManager } from '../models/index.js';
 import type { SessionStore } from '../../session/index.js';
 import type { Config } from '../../config/schema.js';
+import { initSessionTurn } from '../../session/index.js';
 import { appendPiTranscriptMessage } from '../../session/parity/jsonl-transcript-io.js';
 import { buildDirectUserMessageContent, type DirectInboundAttachment } from './build-direct-message-content.js';
 import type { ProcessDirectStreamLog } from './process-direct-streaming.js';
@@ -32,6 +33,7 @@ export type RunProcessDirectDeps = {
   commandHandler: Pick<CommandHandler, 'executeCommandAndAggregateReply'>;
   onTurnComplete?: (sessionKey: string, lastAssistantText?: string) => void;
   endDirectRequestContext: () => void;
+  resetSession: (sessionKey: string) => Promise<{ sessionId: string; previousSessionId: string } | null>;
 };
 
 export async function runProcessDirect(
@@ -47,13 +49,28 @@ export async function runProcessDirect(
   deps.initSessionContext(input.sessionKey, channel, chatId);
 
   try {
+    let turnBody = input.content;
+    let resetTriggeredAtInit = false;
+    const turn = await initSessionTurn({
+      cfg: deps.config,
+      sessionKey: input.sessionKey,
+      body: input.content,
+      resetSession: deps.resetSession,
+    });
+    resetTriggeredAtInit = turn.resetTriggered;
+    if (turn.bareReset && turn.ackMessage) {
+      return turn.ackMessage;
+    }
+    turnBody = turn.bodyStripped;
+
     await hydratePerTurnState(deps, input.sessionKey, input.thinking);
     const prepared = await deps.prepareInboundAttachments(input.sessionKey, input.attachments);
 
     const slash = await tryRunSlashCommand(
       deps,
       { sessionKey: input.sessionKey, channel, chatId },
-      input.content,
+      turnBody,
+      { skipResetCommands: resetTriggeredAtInit },
     );
     if (slash.matched) {
       const trimmed = slash.aggregatedText.trim();
@@ -74,9 +91,9 @@ export async function runProcessDirect(
       return slash.aggregatedText ?? '';
     }
 
-    const textForDirect = input.content.trimStart().startsWith('/skill:')
-      ? deps.agentManager.expandSkillUserText(input.content)
-      : input.content;
+    const textForDirect = turnBody.trimStart().startsWith('/skill:')
+      ? deps.agentManager.expandSkillUserText(turnBody)
+      : turnBody;
     const messageContent = await buildDirectUserMessageContent({
       content: textForDirect,
       attachments: prepared,
