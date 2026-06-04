@@ -159,6 +159,7 @@ export function renderChunkedContent(
           key={`workflow-${b.id ?? i}`}
           block={b}
           startedAt={wfOpts.getStartedAt?.(b)}
+          sessionKey={sessionKey}
           onAbort={wfOpts.onAbort}
           onSendChatMessage={wfOpts.onSendChatMessage}
           labels={wfLabels}

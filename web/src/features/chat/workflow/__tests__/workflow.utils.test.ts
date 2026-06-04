@@ -3,11 +3,13 @@ import { describe, expect, it } from 'vitest';
 import type { ToolUseContent } from '@/features/chat/messages/messages.types';
 
 import {
+  buildWorkflowFailureContext,
   classifyFailure,
   extractSnapshot,
-  formatDuration,
   formatAgentElapsed,
   agentElapsedMs,
+  formatDuration,
+  isWorkflowFailureOutcome,
   isWorkflowToolBlock,
   resolveCardStatus,
   rollupPhases,
@@ -58,6 +60,54 @@ describe('resolveCardStatus', () => {
     expect(resolveCardStatus(mkBlock({ status: 'running' }))).toBe('running');
     expect(resolveCardStatus(mkBlock({ status: 'done' }))).toBe('completed');
     expect(resolveCardStatus(mkBlock({ status: 'error' }))).toBe('failed');
+  });
+
+  it('treats in-band workflow failed text as failed even when status is done', () => {
+    const result = JSON.stringify({
+      content: [{ type: 'text', text: 'workflow failed: token budget exhausted' }],
+      details: mkSnapshot(),
+    });
+    expect(resolveCardStatus(mkBlock({ status: 'done', result }))).toBe('failed');
+  });
+});
+
+describe('isWorkflowFailureOutcome', () => {
+  it('detects structured parse errors', () => {
+    expect(
+      isWorkflowFailureOutcome(
+        mkBlock({
+          status: 'done',
+          result: JSON.stringify({
+            content: [{ type: 'text', text: 'workflow: meta.name required' }],
+            details: { error: 'meta.name must be snake_case' },
+          }),
+        }),
+      ),
+    ).toBe(true);
+  });
+});
+
+describe('buildWorkflowFailureContext', () => {
+  it('collects logs and failed agents into detail lines', () => {
+    const snap = mkSnapshot({
+      logs: ['workflow failed: VM timeout', 'agent review failed: no model'],
+      agents: [
+        { id: 1, label: 'review', phase: 'Scan', prompt: 'p', status: 'error', error: 'no model' },
+      ],
+    });
+    const ctx = buildWorkflowFailureContext(
+      mkBlock({
+        status: 'done',
+        result: JSON.stringify({
+          content: [{ type: 'text', text: 'workflow failed: VM timeout' }],
+          details: snap,
+        }),
+      }),
+    );
+    expect(ctx.headline).toBe('VM timeout');
+    expect(ctx.detailLines.some((l) => l.includes('VM timeout'))).toBe(true);
+    expect(ctx.failedAgents).toHaveLength(1);
+    expect(ctx.logs).toHaveLength(2);
   });
 });
 

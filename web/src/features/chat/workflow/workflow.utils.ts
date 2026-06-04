@@ -59,8 +59,97 @@ function coerceSnapshot(candidate: unknown): WorkflowSnapshot | null {
 /** Resolve the card status from the tool_use block. */
 export function resolveCardStatus(block: ToolUseContent): WorkflowCardStatus {
   if (block.status === 'running') return 'running';
+  if (isWorkflowFailureOutcome(block)) return 'failed';
   if (block.status === 'error') return 'failed';
   return 'completed';
+}
+
+/**
+ * True when the workflow tool returned a failure payload even if the outer
+ * tool_use block stayed `done` (the tool resolves errors in-band, not via throw).
+ */
+export function isWorkflowFailureOutcome(block: ToolUseContent): boolean {
+  if (block.status === 'error') return true;
+  const text = readErrorText(block).toLowerCase().trim();
+  if (text.startsWith('workflow failed')) return true;
+  if (text.startsWith('workflow:')) return true;
+  if (text.includes('parse error') || text.includes('snake_case')) return true;
+  if (text.includes('workflow aborted') || text.includes('timed out')) return true;
+  if (readStructuredError(block)) return true;
+  return false;
+}
+
+export interface WorkflowFailureContext {
+  /** Short line for the card header. */
+  headline: string;
+  /** Full diagnostic lines for the expanded body. */
+  detailLines: string[];
+  snapshot: WorkflowSnapshot | null;
+  logs: string[];
+  failedAgents: WorkflowAgentSnapshot[];
+}
+
+/** Collect everything useful for a failed-workflow error card. */
+export function buildWorkflowFailureContext(block: ToolUseContent): WorkflowFailureContext {
+  const snapshot = extractSnapshot(block);
+  const raw = readErrorText(block).trim();
+  const structuredErr = readStructuredError(block);
+  const headline = pickFailureHeadline(raw, structuredErr);
+  const detailLines = buildFailureDetailLines(raw, structuredErr, snapshot);
+  const logs = snapshot?.logs ?? [];
+  const failedAgents =
+    snapshot?.agents.filter(
+      (a) => a.status === 'error' || a.status === 'skipped' || Boolean(a.error?.trim()),
+    ) ?? [];
+
+  return { headline, detailLines, snapshot, logs, failedAgents };
+}
+
+function readStructuredError(block: ToolUseContent): string {
+  if (block.details != null && typeof block.details === 'object') {
+    const err = (block.details as Record<string, unknown>).error;
+    if (typeof err === 'string' && err.trim()) return err.trim();
+  }
+  if (block.result != null) {
+    const parsed = parseToolResult(block.result);
+    const err = parsed.details?.error;
+    if (typeof err === 'string' && err.trim()) return err.trim();
+  }
+  return '';
+}
+
+function pickFailureHeadline(raw: string, structuredErr: string): string {
+  const source = structuredErr || raw;
+  if (!source) return 'workflow failed';
+  const stripped = source.replace(/^workflow failed:\s*/i, '').trim();
+  if (stripped && stripped !== source) return stripped;
+  if (source.length > 140) return `${source.slice(0, 137)}…`;
+  return source;
+}
+
+function buildFailureDetailLines(
+  raw: string,
+  structuredErr: string,
+  snapshot: WorkflowSnapshot | null,
+): string[] {
+  const lines: string[] = [];
+  const push = (line: string) => {
+    const t = line.trim();
+    if (t && !lines.includes(t)) lines.push(t);
+  };
+
+  if (raw) push(raw);
+  if (structuredErr && structuredErr !== raw) push(structuredErr);
+
+  for (const line of snapshot?.logs ?? []) push(line);
+
+  for (const agent of snapshot?.agents ?? []) {
+    if (agent.error?.trim()) push(`${agent.label}: ${agent.error.trim()}`);
+    else if (agent.status === 'error') push(`${agent.label}: subagent failed`);
+    else if (agent.status === 'skipped') push(`${agent.label}: skipped`);
+  }
+
+  return lines;
 }
 
 /** Best-effort classification of a failed workflow run from the result text. */
@@ -70,12 +159,15 @@ export function classifyFailure(block: ToolUseContent): WorkflowFailureKind {
   const lower = text.toLowerCase();
   if (lower.includes('parse error') || lower.includes('snake_case') || lower.includes('first statement'))
     return 'parse_error';
+  if (lower.startsWith('workflow:')) return 'parse_error';
   if (lower.includes('abort')) return 'aborted';
   if (lower.includes('timed out') || lower.includes('timeout')) return 'timeout';
   return 'runtime_error';
 }
 
 export function readErrorText(block: ToolUseContent): string {
+  const structured = readStructuredError(block);
+  if (structured) return structured;
   if (block.result == null) return '';
   const parsed = parseToolResult(block.result);
   if (parsed.text) return parsed.text;

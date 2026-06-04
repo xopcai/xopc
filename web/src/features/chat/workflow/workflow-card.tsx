@@ -28,8 +28,10 @@ import { WorkflowResultSummary, type WorkflowResultSummaryLabels } from './workf
 import type { WorkflowAgentSnapshot } from './workflow.types';
 import {
   classifyFailure,
+  buildWorkflowFailureContext,
   extractSnapshot,
   formatDuration,
+  isWorkflowFailureOutcome,
   readErrorText,
   resolveCardStatus,
   rollupPhases,
@@ -61,6 +63,7 @@ export interface WorkflowCardProps {
   block: ToolUseContent;
   /** Live elapsed-time anchor; set when the block transitions to running. */
   startedAt?: number;
+  sessionKey?: string | null;
   /** Cancel handler — wired by parent (typically calls existing /abort path). */
   onAbort?: () => void;
   /**
@@ -76,6 +79,7 @@ export interface WorkflowCardProps {
 export const WorkflowCard = memo(function WorkflowCard({
   block,
   startedAt,
+  sessionKey,
   onAbort,
   onSendChatMessage,
   labels,
@@ -181,13 +185,18 @@ export const WorkflowCard = memo(function WorkflowCard({
   }, [saveName, onSendChatMessage]);
 
   // ----- render -----
-  if (status === 'failed' || (status === 'completed' && !snapshot)) {
+  if (isWorkflowFailureOutcome(block) || (status === 'completed' && !snapshot)) {
     const kind = failureKind ?? classifyFailure(block);
+    const failureCtx = buildWorkflowFailureContext(block);
     const scriptPreview = extractScriptPreview(block);
     return (
       <WorkflowErrorCard
         kind={kind}
-        reason={errorReason || 'workflow failed'}
+        reason={failureCtx.headline || errorReason || 'workflow failed'}
+        detailLines={failureCtx.detailLines}
+        logs={failureCtx.logs}
+        failedAgents={failureCtx.failedAgents}
+        snapshot={failureCtx.snapshot}
         scriptPreview={scriptPreview}
         labels={labels.error}
         className={className}
@@ -401,6 +410,7 @@ export const WorkflowCard = memo(function WorkflowCard({
       open={drawerAgentId != null && drawerAgent != null}
       agent={drawerAgent}
       snapshot={snapshot}
+      sessionKey={sessionKey}
       pinnedAgentId={pinnedAgentId}
       onPinAgent={setPinnedAgentId}
       onClose={closeDrawer}
