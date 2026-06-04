@@ -134,16 +134,23 @@ export async function runWorkflow<T = unknown>(
     const assignedPhase = normalized.phase ?? state.currentPhase;
     const requestedLabel = normalized.label?.trim();
 
+    state.agentCount += 1;
+    const id = state.agentCount;
+    const label = requestedLabel || defaultAgentLabel(assignedPhase, id);
+    options.onAgentQueued?.({ id, label, phase: assignedPhase, prompt: taskPrompt });
+
     const runPromise = limiter(async () => {
-      // Counter increments inside the limiter — id reflects start order, not enqueue order.
-      state.agentCount += 1;
-      const id = state.agentCount;
-      const label = requestedLabel || defaultAgentLabel(assignedPhase, id);
       options.onAgentStart?.({ id, label, phase: assignedPhase, prompt: taskPrompt });
 
       try {
         throwIfAborted();
         const resolvedModel = resolveAgentModel(normalized, assignedPhase);
+        const enhanced = options.enhanceSubagentRun?.({
+          id,
+          label,
+          phase: assignedPhase,
+          prompt: taskPrompt,
+        });
         const result = await deps.runner.run<unknown>(taskPrompt, {
           label,
           schema: normalized.schema,
@@ -152,6 +159,7 @@ export async function runWorkflow<T = unknown>(
           phase: assignedPhase,
           signal: options.signal,
           model: resolvedModel,
+          ...enhanced,
         });
         throwIfAborted();
 
@@ -299,11 +307,15 @@ export async function runWorkflow<T = unknown>(
 // truth for "what a fresh snapshot looks like for this workflow".
 // ---------------------------------------------------------------------------
 
-export function emptySnapshotFor(name: string, description?: string): WorkflowSnapshot {
+export function emptySnapshotFor(
+  name: string,
+  description?: string,
+  phaseTitles?: string[],
+): WorkflowSnapshot {
   return {
     name,
     description,
-    phases: [],
+    phases: phaseTitles ? [...phaseTitles] : [],
     logs: [],
     agents: [],
     agentCount: 0,

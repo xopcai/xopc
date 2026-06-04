@@ -8,6 +8,18 @@
 
 export type WorkflowAgentStatus = 'queued' | 'running' | 'done' | 'error' | 'skipped';
 
+export type WorkflowAgentStepStatus = 'running' | 'done' | 'error';
+
+export interface WorkflowAgentStep {
+  id: string;
+  kind: 'tool' | 'llm' | 'thinking';
+  label: string;
+  detail?: string;
+  status: WorkflowAgentStepStatus;
+  startedAtMs?: number;
+  durationMs?: number;
+}
+
 export interface WorkflowAgentSnapshot {
   id: number;
   label: string;
@@ -16,6 +28,13 @@ export interface WorkflowAgentSnapshot {
   status: WorkflowAgentStatus;
   resultPreview?: string;
   error?: string;
+  startedAtMs?: number;
+  durationMs?: number;
+  steps?: WorkflowAgentStep[];
+  currentStep?: string;
+  iteration?: number;
+  maxIterations?: number;
+  streamText?: string;
 }
 
 export interface WorkflowSnapshot {

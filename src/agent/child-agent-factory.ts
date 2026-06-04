@@ -1,4 +1,4 @@
-import { Agent, type ThinkingLevel } from '@earendil-works/pi-agent-core';
+import { Agent, type AgentEvent, type ThinkingLevel } from '@earendil-works/pi-agent-core';
 import type { Api, Model } from '@earendil-works/pi-ai';
 
 import type { Config } from '../config/schema.js';
@@ -59,6 +59,20 @@ export interface BuildChildToolsOptions {
   toolExecutorConfig?: Partial<ToolExecutorConfig>;
 }
 
+export interface DelegateChildProgressHooks {
+  mode: 'steps' | 'full';
+  onProgress: (event: {
+    type: 'tool_start' | 'tool_end' | 'iteration' | 'text_delta' | 'thinking_delta';
+    toolCallId?: string;
+    toolName?: string;
+    args?: Record<string, unknown>;
+    isError?: boolean;
+    count?: number;
+    max?: number;
+    delta?: string;
+  }) => void;
+}
+
 export interface DelegateChildHandleOptions {
   workspace: string;
   goal: string;
@@ -75,6 +89,8 @@ export interface DelegateChildHandleOptions {
    * factory ↔ delegate-tool ↔ child-agent-factory cycle).
    */
   buildChildTools: (opts: BuildChildToolsOptions) => AgentTool<any, any>[];
+  /** Optional live progress for workflow subagents. */
+  progressHooks?: DelegateChildProgressHooks;
 }
 
 export interface DelegateChildRunResult {
@@ -116,6 +132,7 @@ export function createDelegateChildHandle(options: DelegateChildHandleOptions): 
 
   let toolIterations = 0;
   let aborted = false;
+  const progress = options.progressHooks;
 
   const agent = new Agent({
     initialState: {
@@ -128,7 +145,7 @@ export function createDelegateChildHandle(options: DelegateChildHandleOptions): 
     streamFn: createExtensionAwareStreamFn(),
     getApiKey: (provider: string) =>
       resolveProviderApiKeySync(provider) ?? getApiKeySync(provider) ?? '',
-    beforeToolCall: async () => {
+    beforeToolCall: async ({ toolCall, args }) => {
       if (aborted) {
         return { block: true, reason: 'Sub-agent aborted.' };
       }
@@ -138,10 +155,27 @@ export function createDelegateChildHandle(options: DelegateChildHandleOptions): 
           reason: `Sub-agent reached max tool iterations (${options.maxIterations}).`,
         };
       }
+      progress?.onProgress({
+        type: 'tool_start',
+        toolCallId: toolCall.id,
+        toolName: toolCall.name,
+        args: (args ?? {}) as Record<string, unknown>,
+      });
       return undefined;
     },
-    afterToolCall: async () => {
+    afterToolCall: async ({ toolCall, isError }) => {
       toolIterations += 1;
+      progress?.onProgress({
+        type: 'iteration',
+        count: toolIterations,
+        max: options.maxIterations,
+      });
+      progress?.onProgress({
+        type: 'tool_end',
+        toolCallId: toolCall.id,
+        toolName: toolCall.name,
+        isError: Boolean(isError),
+      });
       return undefined;
     },
   });
@@ -154,6 +188,21 @@ export function createDelegateChildHandle(options: DelegateChildHandleOptions): 
     async run(): Promise<DelegateChildRunResult> {
       toolIterations = 0;
       aborted = false;
+      const unsub =
+        progress?.mode === 'full'
+          ? agent.subscribe((ev: AgentEvent) => {
+              if (ev.type === 'message_update') {
+                const u = ev as Extract<AgentEvent, { type: 'message_update' }>;
+                const delta = u.assistantMessageEvent;
+                if (delta?.type === 'text_delta' && typeof delta.delta === 'string' && delta.delta) {
+                  progress.onProgress({ type: 'text_delta', delta: delta.delta });
+                }
+                if (delta?.type === 'thinking_delta' && typeof delta.delta === 'string' && delta.delta) {
+                  progress.onProgress({ type: 'thinking_delta', delta: delta.delta });
+                }
+              }
+            })
+          : undefined;
       try {
         await runAgentTurnWithTimeout(
           agent,
@@ -207,6 +256,8 @@ export function createDelegateChildHandle(options: DelegateChildHandleOptions): 
           summary: `Sub-agent error: ${msg}`,
           toolIterations,
         };
+      } finally {
+        unsub?.();
       }
     },
 

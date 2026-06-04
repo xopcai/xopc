@@ -6,6 +6,8 @@ import {
   classifyFailure,
   extractSnapshot,
   formatDuration,
+  formatAgentElapsed,
+  agentElapsedMs,
   isWorkflowToolBlock,
   resolveCardStatus,
   rollupPhases,
@@ -190,6 +192,24 @@ describe('formatDuration', () => {
     expect(formatDuration(3_900_000)).toBe('1h 5m');
     expect(formatDuration(3_600_000)).toBe('1h');
     expect(formatDuration(60_000)).toBe('1m');
+  });
+});
+
+describe('formatAgentElapsed', () => {
+  it('uses durationMs when finished', () => {
+    expect(formatAgentElapsed({ id: 1, label: 'x', prompt: '', status: 'done', durationMs: 5000 })).toBe('5s');
+  });
+
+  it('computes live elapsed from startedAtMs', () => {
+    const now = 10_000;
+    const ms = agentElapsedMs(
+      { id: 1, label: 'x', prompt: '', status: 'running', startedAtMs: 4000 },
+      now,
+    );
+    expect(ms).toBe(6000);
+    expect(formatAgentElapsed({ id: 1, label: 'x', prompt: '', status: 'running', startedAtMs: 4000 }, now)).toBe(
+      '6s',
+    );
   });
 });
 

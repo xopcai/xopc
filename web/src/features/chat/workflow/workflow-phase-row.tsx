@@ -17,6 +17,7 @@ import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 
 import { WorkflowAgentRow, type WorkflowAgentRowLabels } from './workflow-agent-row';
+import type { WorkflowAgentSnapshot } from './workflow.types';
 import type { PhaseRollup } from './workflow.utils';
 
 export type WorkflowPhaseRowLabels = WorkflowAgentRowLabels & {
@@ -30,10 +31,14 @@ export const WorkflowPhaseRow = memo(function WorkflowPhaseRow({
   rollup,
   isCurrent,
   labels,
+  selectedAgentId,
+  onSelectAgent,
 }: {
   rollup: PhaseRollup;
   isCurrent: boolean;
   labels: WorkflowPhaseRowLabels;
+  selectedAgentId?: number | null;
+  onSelectAgent?: (agent: WorkflowAgentSnapshot) => void;
 }) {
   const shouldDefaultOpen = isCurrent || rollup.running > 0 || rollup.errored > 0 || rollup.skipped > 0 || !rollup.complete;
   const [open, setOpen] = useState(shouldDefaultOpen);
@@ -96,7 +101,13 @@ export const WorkflowPhaseRow = memo(function WorkflowPhaseRow({
       {open ? (
         <div className="ml-4 mt-0.5 space-y-0.5 border-l border-edge-subtle pl-2">
           {rollup.agents.map((agent) => (
-            <WorkflowAgentRow key={agent.id} agent={agent} labels={labels} />
+            <WorkflowAgentRow
+              key={agent.id}
+              agent={agent}
+              labels={labels}
+              selected={selectedAgentId === agent.id}
+              onSelect={onSelectAgent}
+            />
           ))}
           {rollup.agents.length === 0 ? (
             <div className="px-1.5 py-0.5 text-xs text-fg-disabled">…</div>

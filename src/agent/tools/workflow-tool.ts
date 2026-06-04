@@ -30,10 +30,12 @@ import {
   recomputeCounts,
   renderWorkflowText,
   runWorkflow,
+  applySubagentProgress,
   type WorkflowAgentSnapshot,
   type WorkflowCatalog,
   type WorkflowMeta,
   type WorkflowSnapshot,
+  type SubagentProgressEvent,
 } from '../workflow/index.js';
 import { resolveModel as resolveModelById } from '../../providers/index.js';
 import { extractProfileAgentId } from '../../config/agent-profile.js';
@@ -46,6 +48,7 @@ const DEFAULT_TIMEOUT_SEC = 30 * 60;
 const MAX_TIMEOUT_SEC = 4 * 60 * 60;
 const DEFAULT_MAX_CONCURRENCY = 16;
 const DEFAULT_MAX_SUBAGENTS = 1000;
+const PUSH_UPDATE_THROTTLE_MS = 300;
 
 const WorkflowToolSchema = Type.Object({
   name: Type.Optional(
@@ -167,7 +170,7 @@ export function createWorkflowTool(deps: WorkflowToolDeps): AgentTool {
       const snapshot: WorkflowSnapshot = {
         name: meta.name,
         description: meta.description,
-        phases: [],
+        phases: meta.phases?.map((p) => p.title) ?? [],
         logs: [],
         agents: [],
         agentCount: 0,
@@ -177,18 +180,34 @@ export function createWorkflowTool(deps: WorkflowToolDeps): AgentTool {
         skippedCount: 0,
       };
 
-      const pushUpdate = (completed = false) => {
+      let pushTimer: ReturnType<typeof setTimeout> | undefined;
+      const pushUpdate = (completed = false, immediate = false) => {
         recomputeCounts(snapshot);
-        onUpdate?.({
-          content: [
-            {
-              type: 'text',
-              text: renderWorkflowText(snapshot, completed, { showResultPreviews: false }),
-            },
-          ],
-          details: snapshot,
-        });
+        const emit = () => {
+          onUpdate?.({
+            content: [
+              {
+                type: 'text',
+                text: renderWorkflowText(snapshot, completed, { showResultPreviews: false }),
+              },
+            ],
+            details: snapshot,
+          });
+        };
+        if (completed || immediate) {
+          if (pushTimer) clearTimeout(pushTimer);
+          pushTimer = undefined;
+          emit();
+          return;
+        }
+        if (pushTimer) return;
+        pushTimer = setTimeout(() => {
+          pushTimer = undefined;
+          emit();
+        }, PUSH_UPDATE_THROTTLE_MS);
       };
+
+      const subagentStream = wfCfg?.subagentStream ?? 'steps';
 
       const runner = new DelegateSubagentRunner({
         workspace: deps.workspace,
@@ -237,24 +256,57 @@ export function createWorkflowTool(deps: WorkflowToolDeps): AgentTool {
             if (!snapshot.phases.includes(title)) snapshot.phases.push(title);
             pushUpdate();
           },
-          onAgentStart: (event) => {
+          onAgentQueued: (event) => {
             snapshot.agents.push({
               id: event.id,
               label: event.label,
               phase: event.phase,
               prompt: event.prompt,
-              status: 'running',
+              status: 'queued',
             });
-            pushUpdate();
+            pushUpdate(false, true);
+          },
+          onAgentStart: (event) => {
+            const agent = findAgentById(snapshot.agents, event.id);
+            if (agent) {
+              agent.status = 'running';
+              agent.startedAtMs = Date.now();
+            } else {
+              snapshot.agents.push({
+                id: event.id,
+                label: event.label,
+                phase: event.phase,
+                prompt: event.prompt,
+                status: 'running',
+                startedAtMs: Date.now(),
+              });
+            }
+            pushUpdate(false, true);
           },
           onAgentEnd: (event) => {
             const agent = findAgentById(snapshot.agents, event.id);
             if (agent) {
               agent.status = event.status;
               agent.resultPreview = previewValue(event.result);
+              if (agent.startedAtMs != null) {
+                agent.durationMs = Date.now() - agent.startedAtMs;
+              }
+              agent.currentStep = undefined;
             }
-            pushUpdate();
+            pushUpdate(false, true);
           },
+          enhanceSubagentRun:
+            subagentStream === 'off'
+              ? undefined
+              : ({ id }) => ({
+                  onProgress: (event: SubagentProgressEvent) => {
+                    const agent = findAgentById(snapshot.agents, id);
+                    if (!agent) return;
+                    if (applySubagentProgress(agent, event)) {
+                      pushUpdate();
+                    }
+                  },
+                }),
         });
 
         if (result.agentCount === 0) {
@@ -319,6 +371,7 @@ export function createWorkflowTool(deps: WorkflowToolDeps): AgentTool {
         };
       } finally {
         if (timeoutHandle) clearTimeout(timeoutHandle);
+        if (pushTimer) clearTimeout(pushTimer);
         signal?.removeEventListener('abort', onParentAbort);
       }
     },

@@ -350,6 +350,8 @@ export const AgentDefaultsSchema = z.object({
       maxConcurrency: z.number().int().min(1).max(64).default(16),
       maxSubagents: z.number().int().min(1).max(10000).default(1000),
       defaultTimeoutSec: z.number().int().min(60).max(14_400).default(1800),
+      /** Subagent live progress in workflow snapshots: tool steps only, or full text stream. */
+      subagentStream: z.enum(['off', 'steps', 'full']).default('steps'),
     })
     .optional(),
   /** Optional full system prompt replacement (merged with per-agent entry; entry wins). */
