@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import * as providerHttp from '../../../../media-shared/http/index.js';
 import { createOpenAiCompatibleImageProvider } from '../openai-compatible-image-provider.js';
 import type {
   ImageGenerationProvider,
@@ -21,9 +22,9 @@ const baseCaps: ImageGenerationProviderCapabilities = {
   },
 };
 
-interface MockFetchCall {
+interface MockPostCall {
   url: string;
-  init: RequestInit;
+  options: providerHttp.PostJsonRequestOptions | providerHttp.PostMultipartRequestOptions;
 }
 
 function makeJsonResponse(payload: unknown, init: ResponseInit = { status: 200 }): Response {
@@ -48,18 +49,50 @@ function buildProvider(overrides?: Partial<Parameters<typeof createOpenAiCompati
   });
 }
 
+function stubPostJson(
+  calls: MockPostCall[],
+  payload: unknown = { data: [{ b64_json: PNG_BASE64, revised_prompt: 'rewritten' }] },
+): ReturnType<typeof vi.spyOn<typeof providerHttp, 'postJsonRequest'>> {
+  return vi.spyOn(providerHttp, 'postJsonRequest').mockImplementation(async (url, options) => {
+    calls.push({ url: String(url), options });
+    return makeJsonResponse(payload);
+  });
+}
+
+function stubPostMultipart(
+  calls: MockPostCall[],
+  payload: unknown = { data: [{ b64_json: PNG_BASE64 }] },
+): ReturnType<typeof vi.spyOn<typeof providerHttp, 'postMultipartRequest'>> {
+  return vi.spyOn(providerHttp, 'postMultipartRequest').mockImplementation(async (url, options) => {
+    calls.push({ url: String(url), options });
+    return makeJsonResponse(payload);
+  });
+}
+
+function headersRecord(headers: Record<string, string> | Headers | undefined): Record<string, string> {
+  if (!headers) return {};
+  if (headers instanceof Headers) {
+    const out: Record<string, string> = {};
+    headers.forEach((value, key) => {
+      out[key.toLowerCase()] = value;
+    });
+    return out;
+  }
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(headers)) {
+    out[key.toLowerCase()] = value;
+  }
+  return out;
+}
+
 afterEach(() => {
   vi.restoreAllMocks();
 });
 
 describe('createOpenAiCompatibleImageProvider', () => {
   it('issues a JSON POST to /images/generations with bearer auth and decodes b64_json', async () => {
-    const calls: MockFetchCall[] = [];
-    const fetchMock = vi.fn(async (url: string, init: RequestInit) => {
-      calls.push({ url, init });
-      return makeJsonResponse({ data: [{ b64_json: PNG_BASE64, revised_prompt: 'rewritten' }] });
-    });
-    vi.stubGlobal('fetch', fetchMock);
+    const calls: MockPostCall[] = [];
+    stubPostJson(calls);
 
     const provider = buildProvider();
     const result = await provider.generateImage({
@@ -75,20 +108,15 @@ describe('createOpenAiCompatibleImageProvider', () => {
     expect(result.images[0]?.revisedPrompt).toBe('rewritten');
     expect(calls).toHaveLength(1);
     expect(calls[0]?.url).toBe('https://example.com/v1/images/generations');
-    const headers = calls[0]?.init.headers as Record<string, string>;
+    const headers = headersRecord((calls[0]?.options as providerHttp.PostJsonRequestOptions).headers);
     expect(headers['authorization']).toBe('Bearer sk-test');
-    expect(headers['content-type']).toBe('application/json');
-    const body = JSON.parse(String(calls[0]?.init.body));
+    const body = (calls[0]?.options as providerHttp.PostJsonRequestOptions).body as Record<string, unknown>;
     expect(body).toMatchObject({ model: 'mock-model', prompt: 'a cat', n: 1, size: '1024x1024' });
   });
 
   it('routes to /images/edits with multipart when inputImages present', async () => {
-    const calls: MockFetchCall[] = [];
-    const fetchMock = vi.fn(async (url: string, init: RequestInit) => {
-      calls.push({ url, init });
-      return makeJsonResponse({ data: [{ b64_json: PNG_BASE64 }] });
-    });
-    vi.stubGlobal('fetch', fetchMock);
+    const calls: MockPostCall[] = [];
+    stubPostMultipart(calls);
 
     const provider = buildProvider();
     await provider.generateImage({
@@ -101,22 +129,17 @@ describe('createOpenAiCompatibleImageProvider', () => {
     } as ImageGenerationRequest);
 
     expect(calls[0]?.url).toBe('https://example.com/v1/images/edits');
-    expect(calls[0]?.init.body).toBeInstanceOf(FormData);
-    const headers = calls[0]?.init.headers as Record<string, string>;
+    const options = calls[0]?.options as providerHttp.PostMultipartRequestOptions;
+    expect(options.body).toBeInstanceOf(FormData);
+    const headers = headersRecord(options.headers);
     // multipart helper strips content-type so the runtime sets the boundary.
     expect(headers['content-type']).toBeUndefined();
     expect(headers['authorization']).toBe('Bearer sk-test');
   });
 
   it('honours custom Authorization scheme + extra headers from resolveEndpoint', async () => {
-    const calls: MockFetchCall[] = [];
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async (url: string, init: RequestInit) => {
-        calls.push({ url, init });
-        return makeJsonResponse({ data: [{ b64_json: PNG_BASE64 }] });
-      }),
-    );
+    const calls: MockPostCall[] = [];
+    stubPostJson(calls);
 
     const provider = buildProvider({
       resolveEndpoint: () => ({
@@ -134,21 +157,15 @@ describe('createOpenAiCompatibleImageProvider', () => {
     } as ImageGenerationRequest);
 
     expect(calls[0]?.url).toBe('https://example.com/openai/images/generations:submit');
-    const headers = calls[0]?.init.headers as Record<string, string>;
+    const headers = headersRecord((calls[0]?.options as providerHttp.PostJsonRequestOptions).headers);
     expect(headers['api-key']).toBe('sk-test');
     expect(headers['authorization']).toBeUndefined();
     expect(headers['x-custom']).toBe('yes');
   });
 
   it('forwards quality / outputFormat / background / providerOptions via applyOpenAiOptions', async () => {
-    const calls: MockFetchCall[] = [];
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async (url: string, init: RequestInit) => {
-        calls.push({ url, init });
-        return makeJsonResponse({ data: [{ b64_json: PNG_BASE64 }] });
-      }),
-    );
+    const calls: MockPostCall[] = [];
+    stubPostJson(calls);
 
     const provider = buildProvider();
     await provider.generateImage({
@@ -161,7 +178,7 @@ describe('createOpenAiCompatibleImageProvider', () => {
       providerOptions: { openai: { moderation: 'low', outputCompression: 80, user: 'user-1' } },
     } as ImageGenerationRequest);
 
-    const body = JSON.parse(String(calls[0]?.init.body));
+    const body = (calls[0]?.options as providerHttp.PostJsonRequestOptions).body as Record<string, unknown>;
     expect(body.quality).toBe('high');
     expect(body.output_format).toBe('jpeg');
     expect(body.background).toBe('transparent');
@@ -171,14 +188,8 @@ describe('createOpenAiCompatibleImageProvider', () => {
   });
 
   it('clamps count between 1 and capability maxCount', async () => {
-    const calls: MockFetchCall[] = [];
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async (url: string, init: RequestInit) => {
-        calls.push({ url, init });
-        return makeJsonResponse({ data: [{ b64_json: PNG_BASE64 }] });
-      }),
-    );
+    const calls: MockPostCall[] = [];
+    const postJson = stubPostJson(calls);
 
     const provider = buildProvider();
     await provider.generateImage({
@@ -187,7 +198,7 @@ describe('createOpenAiCompatibleImageProvider', () => {
       prompt: 'p',
       count: 999,
     } as ImageGenerationRequest);
-    expect(JSON.parse(String(calls[0]?.init.body)).n).toBe(4);
+    expect((calls[0]?.options as providerHttp.PostJsonRequestOptions).body).toMatchObject({ n: 4 });
 
     await provider.generateImage({
       provider: 'mock',
@@ -195,11 +206,12 @@ describe('createOpenAiCompatibleImageProvider', () => {
       prompt: 'p',
       count: 0,
     } as ImageGenerationRequest);
-    expect(JSON.parse(String(calls[1]?.init.body)).n).toBe(1);
+    expect((calls[1]?.options as providerHttp.PostJsonRequestOptions).body).toMatchObject({ n: 1 });
+    expect(postJson).toHaveBeenCalledTimes(2);
   });
 
   it('throws when provider returns no decodable images', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => makeJsonResponse({ data: [{ b64_json: '' }] })));
+    stubPostJson([], { data: [{ b64_json: '' }] });
     const provider = buildProvider();
     await expect(
       provider.generateImage({
@@ -211,14 +223,8 @@ describe('createOpenAiCompatibleImageProvider', () => {
   });
 
   it('uses buildGenerateRequestBody hook to mutate payload', async () => {
-    const calls: MockFetchCall[] = [];
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async (url: string, init: RequestInit) => {
-        calls.push({ url, init });
-        return makeJsonResponse({ data: [{ b64_json: PNG_BASE64 }] });
-      }),
-    );
+    const calls: MockPostCall[] = [];
+    stubPostJson(calls);
     const provider = buildProvider({
       buildGenerateRequestBody: (_req, base) => ({ ...base, watermark: false }),
     });
@@ -227,6 +233,6 @@ describe('createOpenAiCompatibleImageProvider', () => {
       model: 'mock-model',
       prompt: 'p',
     } as ImageGenerationRequest);
-    expect(JSON.parse(String(calls[0]?.init.body)).watermark).toBe(false);
+    expect((calls[0]?.options as providerHttp.PostJsonRequestOptions).body).toMatchObject({ watermark: false });
   });
 });
