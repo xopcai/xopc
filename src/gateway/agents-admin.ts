@@ -27,6 +27,9 @@ import {
 import type { Config } from '../config/schema.js';
 import { WORKSPACE_FILES } from '../config/paths.js';
 import { resolveEffectiveAgentProfile } from '../config/agent-profile.js';
+import { resolveEffectiveTypedModels } from '../config/agent-typed-models.js';
+import type { AgentTypedModel } from '../config/schema.js';
+import { normalizePatchTypedModels } from './hono/lib/agent-model.js';
 import { GATEWAY_BUILTIN_TOOL_IDS } from './agent-builtin-tools.js';
 import { isPathUnderWorkspace, resolveWorkspaceSafePath } from './workspace-editor-path.js';
 
@@ -34,6 +37,12 @@ const EDITABLE_PROFILE_MARKDOWN_NAMES = new Set<string>([
   ...AGENT_PROFILE_MARKDOWN_SYSTEM_FILES,
   WORKSPACE_FILES.BOOTSTRAP,
 ]);
+
+export type GatewayAgentTypedModelsInfo = {
+  defaults: AgentTypedModel[];
+  entry?: AgentTypedModel[];
+  effective: AgentTypedModel[];
+};
 
 export type GatewayAgentRow = {
   id: string;
@@ -45,6 +54,7 @@ export type GatewayAgentRow = {
   /** Absolute directory for profile Markdown (`SOUL.md`, …) and gateway avatars: `agents/<id>/profile/`. */
   profileDir: string;
   model?: { primary?: string; fallbacks?: string[] };
+  typedModels: GatewayAgentTypedModelsInfo;
   isDefault: boolean;
   skills: {
     defaults: string[];
@@ -95,6 +105,7 @@ export async function listGatewayAgents(cfg: Config): Promise<GatewayAgentsListR
   const agents: GatewayAgentRow[] = [];
   const defaultsSkills = cfg.agents?.defaults?.skills;
   const defaultsDisable = cfg.agents?.defaults?.tools?.disable ?? [];
+  const defaultsTypedModels = cfg.agents?.defaults?.models ?? [];
   for (const id of collectAgentIdsForList(cfg)) {
     const profile = resolveEffectiveAgentProfile(cfg, id);
     const entry = listAgentEntries(cfg).find((e) => normalizeAgentId(e.id) === id);
@@ -107,6 +118,9 @@ export async function listGatewayAgents(cfg: Config): Promise<GatewayAgentsListR
         : undefined;
     const entrySkills = entry?.skills;
     const entryDisable = entry?.tools?.disable ?? [];
+    const entryTypedModels = entry?.models;
+    const effectiveTypedMap = resolveEffectiveTypedModels(cfg, id);
+    const effectiveTypedModels = [...effectiveTypedMap.values()];
     let avatar: string | undefined;
     try {
       const identityPath = join(resolveAgentProfileDir(cfg, id), WORKSPACE_FILES.IDENTITY);
@@ -123,6 +137,11 @@ export async function listGatewayAgents(cfg: Config): Promise<GatewayAgentsListR
       workspace: profile.resolvedWorkspacePath,
       profileDir: resolveAgentProfileDir(cfg, id),
       ...(model ? { model } : {}),
+      typedModels: {
+        defaults: [...defaultsTypedModels],
+        ...(entryTypedModels !== undefined ? { entry: [...entryTypedModels] } : {}),
+        effective: effectiveTypedModels,
+      },
       isDefault: id === defaultId,
       skills: {
         defaults: defaultsSkills ? [...defaultsSkills] : [],
@@ -305,6 +324,8 @@ export type UpdateAgentBody = {
   skills?: string[] | null;
   /** Replace `agents.list[].tools.disable`; `null` clears entry-level disables. */
   toolsDisable?: string[] | null;
+  /** Replace `agents.list[].models`; `null` removes entry overrides (inherit defaults). */
+  models?: AgentTypedModel[] | null;
 };
 
 export function prepareUpdateAgent(
@@ -388,6 +409,19 @@ export function prepareUpdateAgent(
     } else {
       const next = body.toolsDisable.map((s) => String(s).trim()).filter(Boolean);
       entry.tools = { ...entry.tools, disable: next };
+    }
+  }
+
+  if (body.models !== undefined) {
+    if (body.models === null) {
+      delete entry.models;
+    } else {
+      const normalized = normalizePatchTypedModels(body.models);
+      if (normalized === null || normalized === undefined) {
+        delete entry.models;
+      } else {
+        entry.models = normalized;
+      }
     }
   }
 

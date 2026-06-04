@@ -22,12 +22,20 @@ export type {
 
 function normalizeAgentRow(raw: GatewayAgentRow): GatewayAgentRow {
   const profileDir = typeof raw.profileDir === 'string' ? raw.profileDir.trim() : '';
+  const typedDefaults = raw.typedModels?.defaults ?? [];
+  const typedEntry = raw.typedModels?.entry;
+  const typedEffective = raw.typedModels?.effective ?? typedDefaults;
   return {
     ...raw,
     profileDir,
     ...(typeof raw.avatar === 'string' && raw.avatar.trim() ? { avatar: raw.avatar.trim() } : {}),
     skills: raw.skills ?? { defaults: [] },
     tools: raw.tools ?? { defaultsDisable: [], entryDisable: [], effectiveDisable: [] },
+    typedModels: {
+      defaults: typedDefaults,
+      ...(typedEntry !== undefined ? { entry: typedEntry } : {}),
+      effective: typedEffective,
+    },
   };
 }
 
@@ -138,6 +146,7 @@ export async function updateGatewayAgent(
     setDefault?: boolean;
     skills?: string[] | null;
     toolsDisable?: string[] | null;
+    models?: Array<{ id: string; description?: string; model: string }> | null;
   },
 ): Promise<GatewayAgentsPayload> {
   const res = await fetchJson<{ ok?: boolean; payload?: GatewayAgentsPayload }>(

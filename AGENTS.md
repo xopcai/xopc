@@ -215,7 +215,7 @@ import { DraftStreamManager } from '@xopcai/xopc/channels/telegram/draft-stream.
 | Section | Purpose |
 |---------|---------|
 | `providers` | LLM API keys |
-| `agents.defaults` | Default model, limits, temperature |
+| `agents.defaults` | Default model, typed model roles (`models[]`), limits, temperature |
 | `channels` | Telegram and other channel configs |
 | `gateway` | HTTP + SSE |
 | `mcp` | Outbound MCP server registry (`mcp.servers`) + session idle TTL |
@@ -225,6 +225,8 @@ import { DraftStreamManager } from '@xopcai/xopc/channels/telegram/draft-stream.
 ### Multiple agents (`agents.list`)
 
 Runtime behavior (model, workspace, tools, prompts per **session key** agent id) is driven by the main config file (`xopc.json` by default) — `agents.defaults` merged with the matching entry in **`agents.list`**. Default agent id: **`agents.default`**, else a `list` entry with **`default: true`**, else the first enabled entry, else **`main`**. On-disk paths (`~/.xopc/agents/<id>/` including **`profile/`** Markdown, Markdown workspace roots) resolve from the same config via **`src/agent/agent-scope.ts`**.
+
+**Typed model roles** (`agents.defaults.models`, overridable per list entry by `id`): named slots like `small` / `large` mapping to `provider/model` refs. Workflows reference them in `agent({ model: 'small' })` or `meta.phases[].model`. Resolution: `src/config/agent-typed-models.ts`.
 
 Use **`xopc agents list`**, **`xopc agents add`**, **`xopc agents delete`** to manage `agents.list` and initialize directories — there is no separate agent registry outside config.
 

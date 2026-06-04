@@ -54,7 +54,7 @@ interface RuntimeState {
 
 export interface RunWorkflowDeps {
   runner: SubagentRunner;
-  /** Resolve a real model id (must contain `/`) to a {@link Model}. Throws on unknown id. */
+  /** Resolve a model ref (`provider/model` or configured typed id) to a {@link Model}. Throws on unknown ref. */
   resolveModelId?: (modelId: string) => Model<Api>;
 }
 
@@ -113,10 +113,8 @@ export async function runWorkflow<T = unknown>(
     if (assignedPhase) {
       const phaseRef = phaseDefaultModels.get(assignedPhase);
       if (phaseRef) {
-        if (phaseRef.includes('/')) {
-          if (!deps.resolveModelId) return undefined;
-          return deps.resolveModelId(phaseRef);
-        }
+        if (!deps.resolveModelId) return undefined;
+        return deps.resolveModelId(phaseRef);
       }
     }
     return undefined;
@@ -392,14 +390,6 @@ function normalizeAgentOptions(value: unknown): AgentScriptOptions {
     }
   }
   const modelStr = optionalString(options.model, 'agent model');
-  if (modelStr !== undefined) {
-    const trimmed = modelStr.trim();
-    if (trimmed && !trimmed.includes('/')) {
-      throw new Error(
-        `agent option 'model' must be a real model id in 'provider/model' form (got '${trimmed}')`,
-      );
-    }
-  }
   return {
     label: optionalString(options.label, 'agent label'),
     phase: optionalString(options.phase, 'agent phase'),

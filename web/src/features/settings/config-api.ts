@@ -52,6 +52,13 @@ export type AgentDefaultsWebExtractState = {
   maxLength: number | undefined;
 };
 
+import type { AgentTypedModelRow } from '@/features/settings/agents/typed-models-lib';
+import {
+  cleanTypedModelsForPatch,
+  parseTypedModelsFromConfig,
+} from '@/features/settings/agents/typed-models-lib';
+
+export type { AgentTypedModelRow };
 export type AgentDefaultsDelegateState = { enabled: boolean };
 export type AgentDefaultsExecuteCodeState = { enabled: boolean };
 
@@ -144,6 +151,8 @@ export interface AgentDefaultsState {
   skillsAllowlist: string[];
   /** Maps to `agents.defaults.tools.disable`. */
   toolsDisable: string[];
+  /** Named model roles for workflows (`agents.defaults.models`). */
+  typedModels: AgentTypedModelRow[];
   /** JSON for `agents.defaults.params`. */
   paramsJson: string;
 }
@@ -694,6 +703,7 @@ export function parseAgentDefaultsFromConfig(cfg: unknown): AgentDefaultsState {
       const dis = (t as { disable?: unknown }).disable;
       return parseStringList(dis);
     })(),
+    typedModels: parseTypedModelsFromConfig(d.models),
     paramsJson: parseParamsJson(d.params),
   };
 }
@@ -862,6 +872,8 @@ export async function patchAgentDefaults(state: AgentDefaultsState): Promise<voi
   const params =
     paramsParsed === null || Object.keys(paramsParsed).length === 0 ? null : paramsParsed;
 
+  const typedModelsClean = cleanTypedModelsForPatch(state.typedModels);
+
   const defaults: Record<string, unknown> = {
     model: modelField,
     imageModel: imageModelField,
@@ -901,6 +913,7 @@ export async function patchAgentDefaults(state: AgentDefaultsState): Promise<voi
     systemPromptOverride: state.systemPromptOverride.trim() || null,
     skills: skillsClean.length > 0 ? skillsClean : null,
     tools: { disable: toolsDisableClean.length > 0 ? toolsDisableClean : null },
+    models: typedModelsClean,
     params,
   };
 

@@ -1,4 +1,4 @@
-import { Clock, FileText, Plug, Puzzle, User, UserCircle, Wrench } from 'lucide-react';
+import { Clock, Cpu, FileText, Plug, Puzzle, User, UserCircle, Wrench } from 'lucide-react';
 
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
@@ -10,6 +10,7 @@ const mainNav: { id: AgentPanel; labelKey: keyof AgentsSettingsMessages; icon: t
   { id: 'overview', labelKey: 'navIdentity', icon: User },
   { id: 'profile', labelKey: 'navProfile', icon: UserCircle },
   { id: 'tools', labelKey: 'navTools', icon: Wrench },
+  { id: 'models', labelKey: 'navModels', icon: Cpu },
   { id: 'skills', labelKey: 'navSkills', icon: Puzzle },
   { id: 'files', labelKey: 'navCoreFiles', icon: FileText },
 ];

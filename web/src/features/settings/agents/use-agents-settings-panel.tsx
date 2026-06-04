@@ -39,6 +39,11 @@ import { useAgentsChannelBindings } from './hooks/use-agents-channel-bindings';
 import { useAgentsCronJobs } from './hooks/use-agents-cron-jobs';
 import { useAgentsSkillsCatalog } from './hooks/use-agents-skills-catalog';
 import { useAgentsToolsSkillsLocalState } from './hooks/use-agents-tools-skills-local-state';
+import {
+  isTypedModelsPanelDirty,
+  useAgentsTypedModelsLocalState,
+} from './hooks/use-agents-typed-models-local-state';
+import { cleanTypedModelsForPatch } from './typed-models-lib';
 import { PRESET_AGENTS_SKIPPED_KEY } from './preset-agents';
 import type { AgentPanel } from './utils';
 
@@ -238,6 +243,7 @@ export function useAgentsSettingsPanel() {
   });
 
   const toolsSkills = useAgentsToolsSkillsLocalState({ panel, selected });
+  const typedModels = useAgentsTypedModelsLocalState({ panel, selected });
 
   const channels = useAgentsChannelBindings({
     panel,
@@ -476,6 +482,50 @@ export function useAgentsSettingsPanel() {
     }
   }
 
+  async function onSaveModels() {
+    if (!selected) {
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const next = await updateGatewayAgent(selected.id, {
+        models: typedModels.modelsInherit
+          ? null
+          : cleanTypedModelsForPatch(typedModels.modelsRows) ?? [],
+      });
+      void mutateAgents(next, { revalidate: false });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : a.saveError);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onResetModelsInherit() {
+    if (!selected) {
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const next = await updateGatewayAgent(selected.id, { models: null });
+      void mutateAgents(next, { revalidate: false });
+      typedModels.setModelsInherit(true);
+      typedModels.setModelsRows(
+        next.agents.find((x) => x.id === selected.id)?.typedModels.effective.map((r) => ({
+          id: r.id,
+          model: r.model,
+          description: r.description?.trim() ?? '',
+        })) ?? [],
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : a.saveError);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const footerSaveNotApplicable = panel === 'channels' || panel === 'cron';
 
   const overviewRestDirty = (() => {
@@ -494,11 +544,14 @@ export function useAgentsSettingsPanel() {
 
   const isCurrentPanelDirty = (() => {
     if (footerSaveNotApplicable) return false;
+    if (!selected) return false;
     switch (panel) {
       case 'overview':
         return overviewRestDirty || overviewProfile.dirty;
       case 'profile':
         return profileDirty;
+      case 'models':
+        return isTypedModelsPanelDirty(selected, typedModels.modelsInherit, typedModels.modelsRows);
       default:
         return true;
     }
@@ -530,6 +583,10 @@ export function useAgentsSettingsPanel() {
         break;
       case 'skills':
         await onSaveSkills();
+        showSavedFlash();
+        break;
+      case 'models':
+        await onSaveModels();
         showSavedFlash();
         break;
       case 'files':
@@ -603,6 +660,12 @@ export function useAgentsSettingsPanel() {
     skillsPick: toolsSkills.skillsPick,
     setSkillsPick: toolsSkills.setSkillsPick,
     onSaveSkills: () => void onSaveSkills(),
+    modelsInherit: typedModels.modelsInherit,
+    setModelsInherit: typedModels.setModelsInherit,
+    modelsRows: typedModels.modelsRows,
+    setModelsRows: typedModels.setModelsRows,
+    onSaveModels: () => void onSaveModels(),
+    onResetModelsInherit: () => void onResetModelsInherit(),
     bindingsLoading: channels.bindingsLoading,
     agentBindings: channels.agentBindings,
     bindChannelStatuses: channels.bindChannelStatuses,

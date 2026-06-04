@@ -128,7 +128,7 @@ agent(prompt, {
   schema?: JsonSchema,       // when set, return value is validated against this
   toolset?: string[],        // subagent tool allowlist (default DEFAULT_DELEGATE_TOOLS)
   maxIterations?: number,    // subagent tool-iteration cap (default 30)
-  model?: string,            // currently a hint; subagents default to the parent model
+  model?: string,            // provider/model or configured typed id (e.g. small, @large)
 })
 ```
 
@@ -242,24 +242,61 @@ This is experimental — defaults will not change unless real-world usage confir
 
 ## Configuration
 
-All settings live under `agents.defaults.workflow` in `~/.xopc/xopc.json`. Defaults are tuned for the common case and you usually don't need to touch them:
+Workflow runtime limits live under `agents.defaults.workflow`. Typed model roles (`agents.defaults.models`) let scripts reference `small` / `large` instead of hard-coded `provider/model` strings. Per-agent overrides go in `agents.list[].models` (same `id` wins over defaults).
 
 ```jsonc
 {
   "agents": {
     "defaults": {
+      "model": { "primary": "anthropic/claude-sonnet-4" },
+      "models": [
+        {
+          "id": "small",
+          "description": "Fast/cheap for fan-out subtasks",
+          "model": "deepseek/deepseek-v4-flash"
+        },
+        {
+          "id": "large",
+          "description": "High quality for synthesis",
+          "model": "anthropic/claude-sonnet-4"
+        }
+      ],
       "workflow": {
         "enabled": true,           // set to false to drop the workflow tool entirely
         "maxConcurrency": 16,      // upper bound on parallel subagents per workflow run
         "maxSubagents": 1000,      // hard cap on total subagents in one run (runaway guard)
         "defaultTimeoutSec": 1800  // wall-clock timeout per workflow run (30 min)
       }
-    }
+    },
+    "list": [
+      {
+        "id": "research",
+        "models": [{ "id": "small", "model": "openai/gpt-4o-mini" }]
+      }
+    ]
   }
 }
 ```
 
-Subagents inherit the parent agent's primary model. Per-call `agent({ model: '...' })` is currently passed as text guidance only — model overrides per call may move to a real resolver in a later release.
+Subagents inherit the parent agent's primary model when no override is set. Per-call `agent({ model: '...' })` and `meta.phases[].model` resolve to a real model at runtime:
+
+- **`provider/model`** — e.g. `openai/gpt-4o-mini`
+- **Typed id** — e.g. `small` or `@large`, mapped from config above
+
+Workflow example:
+
+```js
+export const meta = {
+  name: 'audit_repo',
+  phases: [
+    { title: 'Review', model: 'small' },
+    { title: 'Synthesize', model: 'large' },
+  ],
+}
+
+phase('Review')
+await agent('Review for bugs…', { model: 'small', label: 'bugs' })
+```
 
 ## Limits and what's not in v1
 

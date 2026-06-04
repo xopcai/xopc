@@ -3,7 +3,15 @@ import type { CronJob, SessionChatId } from '@/features/cron/cron-api';
 import { cn } from '@/lib/cn';
 import { settingsInputFocusClass } from '@/lib/form-field-width';
 
-export type AgentPanel = 'overview' | 'profile' | 'files' | 'tools' | 'skills' | 'channels' | 'cron';
+export type AgentPanel =
+  | 'overview'
+  | 'profile'
+  | 'files'
+  | 'tools'
+  | 'skills'
+  | 'models'
+  | 'channels'
+  | 'cron';
 
 export function agentsSettingsInputClass(): string {
   return cn(

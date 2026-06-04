@@ -13,6 +13,7 @@ import type { AgentsSettingsMessages, ChatMessages, MessageBundle } from '@/i18n
 import { AgentChannelsTab } from './tabs/agent-channels-tab';
 import { AgentCronTab } from './tabs/agent-cron-tab';
 import { AgentFilesTab } from './tabs/agent-files-tab';
+import { AgentModelsTab } from './tabs/agent-models-tab';
 import { AgentOverviewTab } from './tabs/agent-overview-tab';
 import { AgentProfileTab } from './tabs/agent-profile-tab';
 import { AgentSkillsTab } from './tabs/agent-skills-tab';
@@ -78,6 +79,12 @@ export type AgentsEditorPanelContentProps = {
   skillsPick: Set<string>;
   setSkillsPick: Dispatch<SetStateAction<Set<string>>>;
   onSaveSkills: () => void;
+  modelsInherit: boolean;
+  setModelsInherit: (v: boolean) => void;
+  modelsRows: import('./typed-models-lib').AgentTypedModelRow[];
+  setModelsRows: (rows: import('./typed-models-lib').AgentTypedModelRow[]) => void;
+  onSaveModels: () => void;
+  onResetModelsInherit: () => void;
   bindingsLoading: boolean;
   agentBindings: GatewayConfigBinding[];
   bindChannelStatuses: ChannelStatus[];
@@ -146,6 +153,12 @@ export function AgentsEditorPanelContent({
   skillsPick,
   setSkillsPick,
   onSaveSkills,
+  modelsInherit,
+  setModelsInherit,
+  modelsRows,
+  setModelsRows,
+  onSaveModels,
+  onResetModelsInherit,
   bindingsLoading,
   agentBindings,
   bindChannelStatuses,
@@ -256,6 +269,24 @@ export function AgentsEditorPanelContent({
         skillsPick={skillsPick}
         setSkillsPick={setSkillsPick}
         onSaveSkills={onSaveSkills}
+        hideInlineSave
+      />
+    );
+  }
+
+  if (panel === 'models') {
+    return (
+      <AgentModelsTab
+        a={a}
+        chat={chat}
+        selected={selected}
+        busy={busy}
+        modelsInherit={modelsInherit}
+        setModelsInherit={setModelsInherit}
+        modelsRows={modelsRows}
+        setModelsRows={setModelsRows}
+        onSaveModels={onSaveModels}
+        onResetModelsInherit={onResetModelsInherit}
         hideInlineSave
       />
     );
