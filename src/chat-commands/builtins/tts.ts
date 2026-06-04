@@ -66,24 +66,13 @@ const ttsCommand: CommandDefinition = {
     const isEnabled = ttsConfig?.enabled ?? false;
     const currentTrigger = ttsConfig?.trigger ?? 'off';
     const currentProvider = ttsConfig?.provider ?? 'openai';
-    const voicePack = ttsConfig as
-      | {
-          openai?: { voice?: string };
-          alibaba?: { voice?: string };
-          edge?: { voice?: string };
-          minimax?: { voice?: string };
-        }
+    const providerSlice = ttsConfig?.providers?.[currentProvider] as
+      | { voice?: string }
       | undefined;
     const currentVoice =
-      (currentProvider === 'openai'
-        ? voicePack?.openai?.voice
-        : currentProvider === 'alibaba'
-          ? voicePack?.alibaba?.voice
-          : currentProvider === 'edge'
-            ? voicePack?.edge?.voice
-            : currentProvider === 'minimax'
-              ? voicePack?.minimax?.voice
-              : undefined) ?? defaultTtsVoiceForProvider(currentProvider);
+      typeof providerSlice?.voice === 'string' && providerSlice.voice.trim()
+        ? providerSlice.voice
+        : defaultTtsVoiceForProvider(currentProvider);
 
     const effectiveTts = mergeTtsConfigFromAppConfig(ttsConfig);
     const ttsRuntimeOk = isTTSAvailable(effectiveTts);

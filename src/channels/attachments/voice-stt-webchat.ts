@@ -16,6 +16,18 @@ import {
 
 const STT_MAX_BYTES = 25 * 1024 * 1024;
 
+function mergeSttProviders(
+  base: STTConfig['providers'],
+  patch: STTConfig['providers'],
+): STTConfig['providers'] {
+  if (!base && !patch) return undefined;
+  const merged: Record<string, Record<string, unknown>> = { ...(base ?? {}) };
+  for (const [id, slice] of Object.entries(patch ?? {})) {
+    merged[id] = { ...(merged[id] ?? {}), ...slice };
+  }
+  return merged;
+}
+
 export function mergeSttConfigFromAppConfig(
   stt: Partial<STTConfig> | undefined,
   toolsMedia?: { models?: STTConfig['sharedModels'] },
@@ -24,8 +36,7 @@ export function mergeSttConfigFromAppConfig(
   return {
     ...DEFAULT_STT_CONFIG,
     ...p,
-    alibaba: { ...DEFAULT_STT_CONFIG.alibaba, ...p.alibaba },
-    openai: { ...DEFAULT_STT_CONFIG.openai, ...p.openai },
+    providers: mergeSttProviders(DEFAULT_STT_CONFIG.providers, p.providers),
     fallback: { ...DEFAULT_STT_CONFIG.fallback!, ...p.fallback },
     ...(toolsMedia?.models?.length ? { sharedModels: toolsMedia.models } : {}),
   };

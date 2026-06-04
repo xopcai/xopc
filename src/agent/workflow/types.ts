@@ -110,7 +110,9 @@ export interface AgentScriptOptions {
   label?: string;
   phase?: string;
   schema?: JsonSchema;
-  /** Model id; currently passed as text guidance, runner may resolve in future. */
+  /**
+   * Real model id (e.g. `openai/gpt-4o-mini`) — must contain `/`.
+   */
   model?: string;
   /** Subagent tool allowlist override (forwarded to the runner). */
   toolset?: string[];

@@ -66,13 +66,20 @@ export function applyImageGenerationModelConfigDefaults(
   if (!cfg) {
     return undefined;
   }
+  const primary = imageGenerationModelConfig.primary?.trim();
+  if (!primary) {
+    return cfg;
+  }
   return {
     ...cfg,
     agents: {
       ...cfg.agents,
       defaults: {
         ...cfg.agents?.defaults,
-        imageGenerationModel: imageGenerationModelConfig,
+        imageGenerationModel: {
+          primary,
+          ...(imageGenerationModelConfig.fallbacks?.length ? { fallbacks: imageGenerationModelConfig.fallbacks } : {}),
+        },
       },
     },
   };

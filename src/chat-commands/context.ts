@@ -231,8 +231,7 @@ export class CommandContextImpl implements CommandContext {
     }
     
     // Fallback to config default
-    const modelConfig = this.config.agents?.defaults?.model;
-    return typeof modelConfig === 'string' ? modelConfig : modelConfig?.primary || 'minimax/minimax-m2.1';
+    return this.config.agents?.defaults?.model?.primary || 'minimax/minimax-m2.1';
   }
 
   async listModels(): Promise<ModelInfo[]> {

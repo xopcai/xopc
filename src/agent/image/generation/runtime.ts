@@ -21,7 +21,6 @@ import {
 } from './provider-registry.js';
 import type {
   ImageGenerationProviderCapabilities,
-  ImageGenerationCapabilitiesLegacy,
   ImageGenerationRequest,
   ImageGenerationSourceImage,
 } from './types.js';
@@ -255,12 +254,8 @@ function buildNoImageGenerationModelConfiguredMessage(
   });
 }
 
-// Touch capability + legacy types so they remain part of the public surface
-// callers can rely on (avoids accidental removal from re-exports).
-export type {
-  ImageGenerationCapabilitiesLegacy,
-  ImageGenerationProviderCapabilities,
-};
+// Re-export the canonical capability type for callers consuming this barrel.
+export type { ImageGenerationProviderCapabilities };
 // Re-export the provider-registry surface that gateway routes / CLI consume
 // through this single barrel module. NOTE: `listImageGenerationProvidersSummary`
 // is implemented locally above (it overlays cfg-aware `configured` flags), so

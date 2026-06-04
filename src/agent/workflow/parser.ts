@@ -16,6 +16,7 @@
 import { parse } from 'acorn';
 import type { Node } from 'acorn';
 
+import { lintAwaits } from './lint.js';
 import type { WorkflowMeta, WorkflowMetaPhase } from './types.js';
 
 type AnyNode = Node & { [key: string]: any; start: number; end: number };
@@ -38,6 +39,7 @@ export function parseWorkflowScript(script: string): ParsedWorkflow {
       allowAwaitOutsideFunction: true,
       allowReturnOutsideFunction: true,
       ranges: false,
+      locations: true,
     }) as AnyNode;
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
@@ -46,6 +48,7 @@ export function parseWorkflowScript(script: string): ParsedWorkflow {
 
   assertDeterministicAst(ast);
   assertNoDangerousImports(ast);
+  lintAwaits(ast);
 
   const first = ast.body?.[0] as AnyNode | undefined;
   if (first?.type !== 'ExportNamedDeclaration') {

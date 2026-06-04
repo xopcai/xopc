@@ -17,7 +17,7 @@
 
 import { getApiKeyFromEnv } from '../env-keys.js';
 import { getDefaultAuthProfileStore } from './auth-profile-store.js';
-import type { AuthProfile, ProviderAuthMode, ResolveApiKeyOptions } from './types.js';
+import type { AuthProfile, AuthProfileStore, ProviderAuthMode, ResolveApiKeyOptions } from './types.js';
 
 export interface ProviderAuthResolution {
   apiKey?: string;
@@ -81,32 +81,15 @@ export function resolveAuthProfileForProvider(
 }
 
 function pickProfile(
-  store: { get?(p: string, id?: string): AuthProfile | undefined; getApiKeySync(p: string, id?: string): string | undefined },
+  store: AuthProfileStore,
   providerId: string,
   profileName?: string,
 ): AuthProfile | undefined {
-  if (typeof store.get === 'function') {
-    try {
-      return store.get(providerId, profileName);
-    } catch {
-      // fall through to legacy lookup
-    }
-  }
-  // Legacy-only stores that just have getApiKeySync — synthesize a minimal
-  // profile so callers can still branch on `mode === 'api-key'`.
-  let key: string | undefined;
   try {
-    key = store.getApiKeySync(providerId, profileName);
+    return store.get(providerId, profileName);
   } catch {
     return undefined;
   }
-  if (!key) return undefined;
-  return {
-    provider: providerId,
-    profileId: profileName ?? 'default',
-    mode: 'api-key',
-    apiKey: key,
-  };
 }
 
 function readCfgApiKey(cfg: ResolveApiKeyOptions['cfg'], providerId: string): string | undefined {

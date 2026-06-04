@@ -7,24 +7,20 @@ import {
 } from '../config-slice.js';
 
 describe('collectTtsProviderConfigEntries', () => {
-  it('merges providers map with legacy flat keys', () => {
+  it('returns entries straight from the providers map', () => {
     const entries = collectTtsProviderConfigEntries({
       provider: 'openai',
       providers: {
         openai: { model: 'tts-1-hd', voice: 'nova' },
+        'tts-local-cli': { command: 'piper --text {{Text}}' },
       },
-      openai: { apiKey: 'sk-test' },
-      'tts-local-cli': { command: 'piper --text {{Text}}' },
     });
 
-    expect(entries.openai).toEqual({
-      model: 'tts-1-hd',
-      voice: 'nova',
-    });
+    expect(entries.openai).toEqual({ model: 'tts-1-hd', voice: 'nova' });
     expect(entries['tts-local-cli']).toEqual({ command: 'piper --text {{Text}}' });
   });
 
-  it('ignores reserved top-level keys', () => {
+  it('returns {} when no providers map is set', () => {
     const entries = collectTtsProviderConfigEntries({
       enabled: true,
       provider: 'edge',
@@ -52,10 +48,9 @@ describe('buildTtsResolveRawConfig', () => {
 });
 
 describe('resolveTtsProviderConfigSlice', () => {
-  it('prefers providers map over flat legacy key', () => {
+  it('reads from the providers map', () => {
     const slice = resolveTtsProviderConfigSlice('openai', {
       providers: { openai: { model: 'from-map' } },
-      openai: { model: 'from-flat' },
     });
     expect(slice.model).toBe('from-map');
   });

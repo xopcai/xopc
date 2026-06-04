@@ -57,24 +57,6 @@ export function applyChannelsPatch(config: Config, body: any): void {
       if (bodyTg.enabled !== undefined) {
         tg.enabled = bodyTg.enabled;
       }
-      if (bodyTg.botToken !== undefined) {
-        const accRaw = tg.accounts;
-        const acc =
-          accRaw && typeof accRaw === 'object' && !Array.isArray(accRaw)
-            ? { ...(accRaw as Record<string, unknown>) }
-            : {};
-        const defRaw = acc.default;
-        const def =
-          defRaw && typeof defRaw === 'object' && !Array.isArray(defRaw)
-            ? { ...(defRaw as Record<string, unknown>) }
-            : {};
-        acc.default = {
-          ...def,
-          accountId: 'default',
-          botToken: bodyTg.botToken,
-        };
-        tg.accounts = acc;
-      }
       if (bodyTg.allowFrom !== undefined) {
         tg.allowFrom = bodyTg.allowFrom;
       }

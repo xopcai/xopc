@@ -154,15 +154,6 @@ export class BrowserManager {
     }
   }
 
-  /** @deprecated Use {@link ensureConnected}. */
-  async ensureBrowser(): Promise<BrowserContext> {
-    await this.ensureConnected();
-    if (!this.context) {
-      throw new Error('ensureBrowser: no Playwright context (extension backend uses ensureConnected + registry bridge)');
-    }
-    return this.context;
-  }
-
   private async _launchLocal(headless: boolean): Promise<void> {
     const pw = await loadPlaywrightCoreModule();
     const chromium = pw.chromium ?? (pw as { default?: { chromium?: (typeof pw)['chromium'] } }).default?.chromium;

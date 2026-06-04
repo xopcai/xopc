@@ -269,5 +269,5 @@ export function listProfilesForProvider(
   providerId: string,
 ): AuthProfile[] {
   const s = store ?? getDefaultAuthProfileStore();
-  return s.list?.(providerId) ?? [];
+  return s.list(providerId);
 }

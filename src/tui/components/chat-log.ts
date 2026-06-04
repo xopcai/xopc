@@ -105,10 +105,10 @@ export class ChatLog extends Container {
       this.assistantAnchorByRunId.set(runId, existing);
       return;
     }
-    const legacy = new AssistantMessageComponent(text);
-    this.append(legacy);
+    const finalMessage = new AssistantMessageComponent(text);
+    this.append(finalMessage);
     if (text.trim()) {
-      this.assistantAnchorByRunId.set(runId, legacy);
+      this.assistantAnchorByRunId.set(runId, finalMessage);
     }
   }
 

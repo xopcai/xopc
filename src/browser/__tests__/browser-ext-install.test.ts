@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -8,7 +8,6 @@ import {
   BROWSER_EXT_REQUIRED_FILES,
   computeNeedsRefresh,
   ensureBrowserExtensionArtifacts,
-  resolveInstalledExtensionPath,
   validateBrowserExtLayout,
 } from '../providers/browser-ext-install.js';
 
@@ -132,28 +131,16 @@ describe('browser-ext-install', () => {
     ).rejects.toThrow(/home directory/i);
   });
 
-  it('removes stale version directories and legacy current link', async () => {
+  it('removes stale version directories during refresh', async () => {
     const root = join(binDir, 'browser-ext');
     mkdirSync(join(root, '0.0.99-stale'), { recursive: true });
     writeFileSync(join(root, '0.0.99-stale', 'marker.txt'), 'stale');
     writeMinimalExtensionTree(join(root, '0.0.88'), '0.0.88');
-    symlinkSync('0.0.88', join(root, 'current'), 'dir');
 
     await ensureBrowserExtensionArtifacts({ cacheDir: binDir });
 
     expect(existsSync(join(root, '0.0.99-stale'))).toBe(false);
     expect(existsSync(join(root, '0.0.88'))).toBe(false);
-    expect(existsSync(join(root, 'current'))).toBe(false);
     expect(existsSync(join(root, PACKAGE_VERSION))).toBe(true);
-  });
-
-  it('resolveInstalledExtensionPath reads legacy current before migration', () => {
-    const root = join(binDir, 'browser-ext');
-    const legacyDir = join(root, '0.0.55');
-    writeMinimalExtensionTree(legacyDir, '0.0.55');
-    symlinkSync('0.0.55', join(root, 'current'), 'dir');
-
-    const resolved = resolveInstalledExtensionPath(binDir, null);
-    expect(resolved).toBe(realpathSync(legacyDir));
   });
 });

@@ -7,7 +7,6 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
-  realpathSync,
   renameSync,
   rmSync,
   statSync,
@@ -28,7 +27,6 @@ import { assertCacheDir } from '../cache-dir-policy.js';
 const log = createLogger('BrowserExtInstall');
 
 const META_FILENAME = '.meta.json';
-const LEGACY_CURRENT_LINK = 'current';
 const STAGING_MAX_AGE_MS = 60 * 60 * 1000;
 const VERSION_DIR_RE = /^\d+\.\d+\.\d+/;
 
@@ -129,17 +127,6 @@ export function resolveInstalledExtensionPath(
     return expectedDir;
   }
 
-  const root = browserExtRoot(cacheDir);
-  const legacyCurrent = join(root, LEGACY_CURRENT_LINK);
-  if (existsSync(legacyCurrent)) {
-    try {
-      const real = realpathSync(legacyCurrent);
-      if (validateBrowserExtLayout(real)) return real;
-    } catch {
-      /* legacy path unreadable */
-    }
-  }
-
   return null;
 }
 
@@ -235,14 +222,6 @@ async function cleanupStaleStaging(root: string): Promise<void> {
   }
 }
 
-/** Remove legacy `current` link only (safe before a fresh install). */
-function removeLegacyCurrentLink(root: string): void {
-  const legacyCurrent = join(root, LEGACY_CURRENT_LINK);
-  if (!existsSync(legacyCurrent)) return;
-  rmSync(legacyCurrent, { recursive: true, force: true });
-  log.info('Removed legacy browser-ext/current');
-}
-
 async function cleanupSiblingVersionDirs(root: string, keepVersion: string): Promise<void> {
   if (!existsSync(root)) return;
   let entries: string[];
@@ -253,14 +232,6 @@ async function cleanupSiblingVersionDirs(root: string, keepVersion: string): Pro
   }
   for (const name of entries) {
     if (name === META_FILENAME || name.startsWith('.')) continue;
-    if (name === LEGACY_CURRENT_LINK) {
-      try {
-        await rm(join(root, name), { recursive: true, force: true });
-      } catch (err) {
-        log.warn({ err, name }, 'Failed to remove legacy browser extension path');
-      }
-      continue;
-    }
     if (!VERSION_DIR_RE.test(name)) continue;
     if (name === keepVersion) continue;
     try {
@@ -378,7 +349,6 @@ export async function ensureBrowserExtensionArtifacts(opts?: {
   });
 
   const versionKey = bundledManifestVersion;
-  removeLegacyCurrentLink(root);
 
   if (!needsRefresh && installedPath) {
     await cleanupSiblingVersionDirs(root, versionKey);

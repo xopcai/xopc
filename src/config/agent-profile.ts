@@ -41,35 +41,21 @@ function mergeModelConfig(
   base: AgentModelConfig | undefined,
   override: AgentModelConfig | undefined,
 ): AgentModelConfig | undefined {
-  if (override === undefined) {
-    return base;
-  }
-  if (typeof override === 'string') {
-    return override.trim() ? override : base;
-  }
-  const b =
-    typeof base === 'string'
-      ? { primary: base, fallbacks: [] as string[] }
-      : { primary: base?.primary, fallbacks: [...(base?.fallbacks ?? [])] };
-  const o = override;
+  if (override === undefined) return base;
+  if (base === undefined) return override;
   return {
-    primary: o.primary ?? b.primary,
-    fallbacks: o.fallbacks ?? b.fallbacks,
+    primary: override.primary ?? base.primary,
+    fallbacks: override.fallbacks ?? base.fallbacks,
   };
 }
 
 function primaryAndFallbacksFromModelConfig(
   raw: AgentModelConfig | undefined,
 ): { primary?: string; fallbacks: string[] } {
-  if (raw === undefined || raw === null) {
-    return { primary: undefined, fallbacks: [] };
-  }
-  if (typeof raw === 'string') {
-    const s = raw.trim();
-    return s ? { primary: s, fallbacks: [] } : { primary: undefined, fallbacks: [] };
-  }
-  const primary = raw.primary?.trim();
-  const fallbacks = Array.isArray(raw.fallbacks) ? raw.fallbacks.map((s) => String(s).trim()).filter(Boolean) : [];
+  const primary = raw?.primary?.trim();
+  const fallbacks = Array.isArray(raw?.fallbacks)
+    ? raw.fallbacks.map((s) => s.trim()).filter(Boolean)
+    : [];
   return { primary: primary || undefined, fallbacks };
 }
 
@@ -120,7 +106,7 @@ export function resolveEffectiveAgentProfile(config: Config, agentId: string): E
 
   const resolvedWorkspacePath = resolveAgentWorkspaceDir(config, agentId);
 
-  const mergedModel = mergeModelConfig(defaults?.model as AgentModelConfig | undefined, entry?.model as AgentModelConfig | undefined);
+  const mergedModel = mergeModelConfig(defaults?.model, entry?.model);
   const { primary: primaryFromMerged, fallbacks: fallbacksFromMerged } = primaryAndFallbacksFromModelConfig(mergedModel);
   const globalDefault = getAgentDefaultModelRef(config);
   const primaryModelRef = primaryFromMerged?.trim() || globalDefault;

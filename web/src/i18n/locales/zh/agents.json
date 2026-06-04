@@ -204,6 +204,8 @@
     "label": {
       "model": "模型",
       "modelFallbacks": "备用模型",
+      "smallModel": "小模型",
+      "smallModelFallbacks": "小模型备用链",
       "imageModel": "图像理解模型",
       "imageModelFallbacks": "图像理解备用模型",
       "imageGenerationModel": "图像生成模型",
@@ -246,6 +248,8 @@
     "desc": {
       "model": "新会话的默认模型。",
       "modelFallbacks": "主模型在瞬时重试后仍失败时，按顺序尝试。各服务商均需配置 API Key。",
+      "smallModel": "可选的更快/更便宜模型档位。Workflow 脚本可用 agent(prompt, { tier: 'small' }) 调用；留空则回退到主模型。",
+      "smallModelFallbacks": "小模型主选失败时按顺序尝试。各服务商均需配置 API Key。",
       "imageModel": "可选，用于图像理解 / 视觉。下列仅展示网关判定为接受图像输入的模型。",
       "imageModelFallbacks": "主视觉模型失败时按顺序尝试。下列仅展示标记为支持图像输入的模型。",
       "imageGenerationModel": "可选，用于 image_generate。下列仅展示网关判定为已配置 API 凭证的图像生成服务商。",
@@ -480,6 +484,9 @@
     "agentDescriptionPlaceholder": "简短说明，会显示在智能体卡片和选择器中（可选）。",
     "workspacePath": "Markdown 工作区",
     "modelPrimary": "模型（主）",
+    "modelSmall": "小模型",
+    "modelSmallHint": "可选的更快/更便宜模型档位 —— Workflow 脚本可用 { tier: 'small' } 调用；留空则继承默认值。",
+    "modelSmallDefaultsPrefix": "默认：",
     "modelClear": "清除",
     "save": "保存",
     "discard": "放弃",

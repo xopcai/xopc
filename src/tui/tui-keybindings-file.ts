@@ -10,16 +10,6 @@ import {
 import { resolveStateDir } from '../config/paths.js';
 import { XOPC_TUI_KEYBINDINGS } from './xopc-tui-keybindings.js';
 
-const LEGACY_KEYBINDING_MIGRATIONS: Record<string, string> = {
-  interrupt: 'app.interrupt',
-  clear: 'app.clear',
-  exit: 'app.exit',
-  suspend: 'app.suspend',
-  pasteImage: 'app.clipboard.pasteImage',
-  followUp: 'app.message.followUp',
-  dequeue: 'app.message.dequeue',
-};
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -39,16 +29,6 @@ function toKeybindingsConfig(value: unknown): KeybindingsConfig {
   return config;
 }
 
-function migrateKeybindingsConfig(rawConfig: Record<string, unknown>): KeybindingsConfig {
-  const config: KeybindingsConfig = {};
-  for (const [key, value] of Object.entries(rawConfig)) {
-    const nextKey = LEGACY_KEYBINDING_MIGRATIONS[key] ?? key;
-    if (Object.hasOwn(rawConfig, nextKey) && nextKey !== key) continue;
-    config[nextKey] = value as KeyId | KeyId[];
-  }
-  return config;
-}
-
 function loadRawConfig(path: string): Record<string, unknown> | undefined {
   if (!existsSync(path)) return undefined;
   try {
@@ -64,9 +44,7 @@ export function getTuiKeybindingsPath(): string {
 }
 
 export function loadTuiKeybindingsConfig(path = getTuiKeybindingsPath()): KeybindingsConfig {
-  const raw = loadRawConfig(path);
-  if (!raw) return {};
-  return toKeybindingsConfig(migrateKeybindingsConfig(raw));
+  return toKeybindingsConfig(loadRawConfig(path));
 }
 
 export class XopcKeybindingsManager extends KeybindingsManager {

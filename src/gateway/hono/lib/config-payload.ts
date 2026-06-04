@@ -81,7 +81,7 @@ export function buildSafeBrowserConfigForWeb(browser: Config['agents']['defaults
   }
 
   return {
-    enabled: browser.enabled === true,
+    enabled: browser.enabled !== false,
     headless: browser.headless === true,
     allowPrivateUrls: browser.allowPrivateUrls === true,
     commandTimeout:

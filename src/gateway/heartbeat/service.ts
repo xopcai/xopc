@@ -181,7 +181,7 @@ export class HeartbeatService {
     // self-contained (HEARTBEAT.md + this turn's text), so we start from an empty history.
     if (sessionKey === 'heartbeat:main') {
       try {
-        await this.deps.sessionStore.save(sessionKey, []);
+        await this.deps.sessionStore.saveMessages(sessionKey, []);
       } catch (err) {
         log.warn({ err, sessionKey }, 'Heartbeat: failed to reset main session transcript');
       }

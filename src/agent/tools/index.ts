@@ -58,7 +58,6 @@ export {
 } from './clarify-tool.js';
 
 
-export { createBrowserTools, type CreateBrowserToolsDeps } from './browser-legacy-tools.js';
 export { BrowserManager, assertBrowserUrlAllowed } from '../../browser/index.js';
 
 export {

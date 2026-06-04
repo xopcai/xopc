@@ -2,7 +2,7 @@
  * Session command utilities
  */
 
-import { getSessionManager } from '../../utils/session.js';
+import { getSessionIndex } from '../../utils/session.js';
 import { getContextWithOpts } from '../../context.js';
 import type { SessionIndex } from '../../../session/index.js';
 
@@ -11,7 +11,7 @@ import type { SessionIndex } from '../../../session/index.js';
  */
 export async function getManager(): Promise<SessionIndex> {
   getContextWithOpts();
-  return getSessionManager();
+  return getSessionIndex();
 }
 
 /**
