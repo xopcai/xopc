@@ -2,6 +2,7 @@ import { readFileSync, existsSync, mkdirSync, promises as fsPromises } from 'fs'
 import { dirname } from 'path';
 import { writeTextAtomic } from '../infra/write-file-atomic.js';
 import { type Config, ConfigSchema } from './schema.js';
+import { normalizeVoiceConfigInJson } from './voice-config-normalize.js';
 import { resolveConfigPath } from './paths.js';
 import { config } from 'dotenv';
 import { createLogger } from '../utils/logger.js';
@@ -79,7 +80,7 @@ export function loadConfig(configPath?: string): Config {
     try {
       const content = readFileSync(path, 'utf-8');
       const json = JSON.parse(content);
-      const cfg = ConfigSchema.parse(json);
+      const cfg = ConfigSchema.parse(normalizeVoiceConfigInJson(json));
       assertChannelPluginConfigs(cfg);
       return cfg;
     } catch (error) {
@@ -108,7 +109,7 @@ export async function saveConfig(config: Config, configPath?: string): Promise<v
     mkdirSync(dir, { recursive: true });
   }
 
-  const validated = ConfigSchema.parse(config);
+  const validated = ConfigSchema.parse(normalizeVoiceConfigInJson(config));
   assertChannelPluginConfigs(validated);
   const content = JSON.stringify(validated, null, 2);
 

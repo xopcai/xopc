@@ -1,3 +1,4 @@
+import { normalizeSttConfigBlock, normalizeTtsConfigBlock } from '../../../config/voice-config-normalize.js';
 import { isMaskedApiKey } from '../../config-tools-web.js';
 
 function maskProviderSlice(slice: Record<string, unknown>): Record<string, unknown> {
@@ -90,10 +91,10 @@ function mergeVoiceConfigPatch(previous: unknown, incoming: unknown): unknown {
 
 /** Merge incoming STT patch, preserving api keys when the UI sends masked sentinels. */
 export function mergeSttConfigPatch(previous: unknown, incoming: unknown): unknown {
-  return mergeVoiceConfigPatch(previous, incoming);
+  return normalizeSttConfigBlock(mergeVoiceConfigPatch(previous, incoming));
 }
 
 /** Merge incoming TTS patch, preserving api keys when the UI sends masked sentinels. */
 export function mergeTtsConfigPatch(previous: unknown, incoming: unknown): unknown {
-  return mergeVoiceConfigPatch(previous, incoming);
+  return normalizeTtsConfigBlock(mergeVoiceConfigPatch(previous, incoming));
 }
