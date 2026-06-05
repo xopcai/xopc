@@ -10,7 +10,6 @@
     "saved": "已保存",
     "saveError": "保存失败",
     "routeIntro": {
-      "chat": "主模型、采样参数与界面展示方式。保存到网关配置中的 agents.defaults。",
       "workspace": "智能体工作目录与图像工具加载入站图片的体积上限。",
       "browser": "让智能体通过 browser_use 操作网页。启用工具、选择连接方式，再在下方完成就绪配置。",
       "runtime": "单轮耗时、工具调用轮数、请求重试与连续工具失败上限。保存到 agents.defaults。",
@@ -18,10 +17,11 @@
       "memory": "记忆快照、session_search 摘要模型与可选的后台审阅。",
       "tools": "可选工具（网页抽取、子任务委托、沙箱执行代码）、全局禁用内置工具，以及扩展用 Params（JSON）。技能白名单见「技能」页。",
       "skills": "技能市场来源（在该区块内单独保存）与全部智能体的默认技能白名单（使用页头保存）。在「技能库」安装技能；按工具开关见「工具」页。",
-      "systemPrompt": "可选覆盖默认系统提示；与条目级合并（条目优先）。保存到 agents.defaults。"
+      "systemPrompt": "可选覆盖默认系统提示；与条目级合并（条目优先）。保存到 agents.defaults。",
+      "modelStrategy": "默认聊天模型、备用链和模型角色。保存到网关配置中的 agents.defaults。",
+      "generation": "控制模型回复长度、随机性、思考级别、推理可见性与详细程度。"
     },
     "defaultsTabs": {
-      "chat": "模型与对话",
       "workspace": "工作区",
       "browser": "浏览器",
       "runtime": "单轮限制",
@@ -29,7 +29,9 @@
       "memory": "记忆",
       "tools": "工具",
       "skills": "技能",
-      "system-prompt": "系统提示词"
+      "system-prompt": "系统提示词",
+      "model-strategy": "模型策略",
+      "generation": "生成参数"
     },
     "defaultsTabsAria": "智能体默认配置分区",
     "browserTabs": {
@@ -41,8 +43,8 @@
       "cloud": "云端"
     },
     "browserTabsAria": "浏览器设置分区",
-    "cardModelsTitle": "模型",
-    "cardModelsSubtitle": "对话、视觉与图像生成默认模型",
+    "cardModelsTitle": "默认聊天模型",
+    "cardModelsSubtitle": "新会话默认使用的主模型。",
     "cardWorkspaceTitle": "工作区与附件",
     "cardWorkspaceSubtitle": "工作目录与入站媒体大小限制",
     "cardBrowserTitle": "浏览器自动化",
@@ -204,7 +206,7 @@
     "label": {
       "model": "模型",
       "modelFallbacks": "备用模型",
-      "typedModels": "模型角色（Workflow）",
+      "typedModels": "模型角色",
       "smallModel": "小模型",
       "smallModelFallbacks": "小模型备用链",
       "imageModel": "图像理解模型",
@@ -249,7 +251,7 @@
     "desc": {
       "model": "新会话的默认模型。",
       "modelFallbacks": "主模型在瞬时重试后仍失败时，按顺序尝试。各服务商均需配置 API Key。",
-      "typedModels": "供 Workflow 脚本使用的命名档位（如 small、large）：agent({ model: 'small' })。与主模型及备用链无关。",
+      "typedModels": "为 Workflow 或内部任务设置命名模型角色，如 small、large、vision。",
       "smallModel": "可选的更快/更便宜模型档位。Workflow 脚本可用 agent(prompt, { tier: 'small' }) 调用；留空则回退到主模型。",
       "smallModelFallbacks": "小模型主选失败时按顺序尝试。各服务商均需配置 API Key。",
       "imageModel": "可选，用于图像理解 / 视觉。下列仅展示网关判定为接受图像输入的模型。",
@@ -304,7 +306,7 @@
     "typedModelsInvalidModel": "每个模型角色需要 provider/model 格式的模型引用。",
     "setDefaultWorkspace": "设为默认",
     "visionRegistryEmpty": "当前已配置的服务商下，没有标记为支持图像输入的模型。可在 models.json 中为模型设置包含 \"image\" 的 `input`，或选择上游目录中声明支持图像的模型。",
-    "visionOutOfFilterNote": "网关模型目录未将该模型标为支持图像；建议尽量选择带图像能力的模型。",
+    "visionOutOfFilterNote": "当前模型列表未将该模型标为支持图像；建议尽量选择带图像能力的模型。",
     "imageGenRegistryEmpty": "当前没有已配置 API 凭证的图像生成服务商。请在配置或环境变量中填写对应密钥（如 OpenAI）后刷新。",
     "imageGenOutOfFilterNote": "该模型所属服务商未配置凭证；在配置完成或改选已配置的服务商之前，image_generate 将无法使用该模型。",
     "reasoning": {
@@ -456,7 +458,15 @@
       "paramsJson": "Params 对象",
       "paramsJsonDesc": "如 {\"myFlag\": true}。清空可去掉配置文件中的 params。",
       "paramsInvalidJson": "Params 必须是有效 JSON 对象。请检查花括号、引号等。"
-    }
+    },
+    "modelsOverrideTitle": "模型覆盖",
+    "modelsOverrideHint": "查看当前 Agent 是继承全局模型策略，还是使用自己的模型角色。",
+    "modelResolutionGlobal": "全局默认",
+    "modelResolutionAgent": "Agent 覆盖",
+    "modelResolutionSession": "当前会话选择",
+    "modelResolutionUnset": "未设置",
+    "modelResolutionAgentInherits": "默认被各 Agent 继承，可在 Agent 详情覆盖模型角色。",
+    "modelResolutionSessionSelectable": "聊天页可临时选择会话模型。"
   },
   "agentsSettings": {
     "title": "智能体",
@@ -698,7 +708,11 @@
     "presetCreating": "正在创建…",
     "presetCreatingProgress": "正在创建第 {{current}} 个 / 共 {{total}} 个…",
     "presetSetupComplete": "Agent 创建成功！",
-    "presetCreateFailed": "创建 {{name}} 失败：{{message}}"
+    "presetCreateFailed": "创建 {{name}} 失败：{{message}}",
+    "modelsResolutionGlobal": "全局默认",
+    "modelsResolutionAgent": "本 Agent 覆盖",
+    "modelsResolutionEffective": "最终生效",
+    "modelsResolutionInherits": "继承全局默认"
   },
   "goalsSettings": {
     "title": "目标评判（/goal）",

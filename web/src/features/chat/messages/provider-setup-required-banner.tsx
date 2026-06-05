@@ -48,7 +48,7 @@ export function parseProviderSetupRequired(text: string): ProviderSetupPayload |
     return {
       kind: 'provider_setup_required',
       provider,
-      deepLink: '/settings/providers',
+      deepLink: '/settings/credentials',
       message: trimmed,
     };
   }

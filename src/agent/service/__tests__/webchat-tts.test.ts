@@ -1,0 +1,101 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import type { Config } from '../../../config/schema.js';
+import { maybeEmitWebchatTts } from '../webchat-tts.js';
+import { speak } from '../../../voice/tts/index.js';
+
+vi.mock('../../../voice/tts/factory.js', () => ({
+  isTTSAvailable: vi.fn(() => true),
+}));
+
+vi.mock('../../../voice/tts/index.js', () => ({
+  speak: vi.fn(async () => ({
+    audio: Buffer.from('speech'),
+    format: 'mp3',
+    provider: 'edge',
+  })),
+}));
+
+vi.mock('../../../voice/tts/audio.js', () => ({
+  compressAudio: vi.fn(async (buffer: Buffer, format: string) => ({ buffer, format })),
+}));
+
+vi.mock('../../../channels/attachments/outbound-tts-persist.js', () => ({
+  persistOutboundTtsAudio: vi.fn(async () => ({
+    name: 'reply.mp3',
+    size: 6,
+    workspaceRelativePath: 'tts/reply.mp3',
+  })),
+}));
+
+vi.mock('../../agent-scope.js', () => ({
+  resolveAgentHomeDir: vi.fn(() => '/tmp/xopc-agent'),
+}));
+
+vi.mock('../../../config/agent-profile.js', () => ({
+  extractProfileAgentId: vi.fn(() => 'main'),
+}));
+
+describe('maybeEmitWebchatTts', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('uses the webchat cached assistant plain text when generating TTS', async () => {
+    const savedMessages: unknown[] = [];
+    const sessionStore = {
+      load: vi.fn(async () => [
+        { role: 'user', content: [{ type: 'text', text: 'hi' }] },
+        { role: 'assistant', content: [{ type: 'text', text: 'hello from cache' }] },
+      ]),
+      saveMessages: vi.fn(async (_sessionKey: string, messages: unknown[]) => {
+        savedMessages.push(...messages);
+      }),
+    };
+    const getLastAssistantPlainText = vi.fn(() => 'hello from cache');
+
+    const result = await maybeEmitWebchatTts(
+      {
+        config: {
+          messages: {
+            tts: {
+              enabled: true,
+              provider: 'edge',
+              trigger: 'always',
+              providers: { edge: { enabled: true } },
+            },
+          },
+        } as unknown as Config,
+        sessionStore: sessionStore as never,
+        getLastAssistantPlainText,
+        log: { warn: vi.fn() },
+      },
+      'agent:main:main',
+      false,
+    );
+
+    expect(result).toEqual({
+      type: 'tts_audio',
+      workspaceRelativePath: 'tts/reply.mp3',
+      mimeType: 'audio/mpeg',
+      name: 'reply.mp3',
+    });
+    expect(getLastAssistantPlainText).toHaveBeenCalledWith('agent:main:main');
+    expect(speak).toHaveBeenCalledWith(
+      'hello from cache',
+      expect.objectContaining({ enabled: true, provider: 'edge', trigger: 'always' }),
+      expect.objectContaining({ tts: { format: 'mp3' } }),
+    );
+    expect(sessionStore.saveMessages).toHaveBeenCalledOnce();
+    expect(savedMessages.at(-1)).toMatchObject({
+      role: 'assistant',
+      attachments: [
+        expect.objectContaining({
+          type: 'audio',
+          mimeType: 'audio/mpeg',
+          workspaceRelativePath: 'tts/reply.mp3',
+        }),
+      ],
+    });
+  });
+});

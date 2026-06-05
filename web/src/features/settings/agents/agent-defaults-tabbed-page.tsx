@@ -12,6 +12,7 @@ import { AgentDefaultsBasicsPanel } from './agent-defaults-panels/basics-panel';
 import { AgentDefaultsCapabilitiesPanel } from './agent-defaults-panels/capabilities-panel';
 import { AgentDefaultsContextPanel } from './agent-defaults-panels/context-panel';
 import { AgentDefaultsExpertPanel } from './agent-defaults-panels/expert-panel';
+import { AgentDefaultsGenerationPanel } from './agent-defaults-panels/generation-panel';
 import { AgentDefaultsLimitsPanel } from './agent-defaults-panels/limits-panel';
 import { AgentDefaultsMemoryPanel } from './agent-defaults-panels/memory-panel';
 import { AgentDefaultsSkillsAllowlistPanel } from './agent-defaults-panels/skills-allowlist-panel';
@@ -31,8 +32,10 @@ function tabLabel(a: ReturnType<typeof messages>['agentSettings'], tab: AgentDef
 
 function tabIntro(a: ReturnType<typeof messages>['agentSettings'], tab: AgentDefaultsTabId): string {
   switch (tab) {
-    case 'chat':
-      return a.routeIntro.chat;
+    case 'model-strategy':
+      return a.routeIntro.modelStrategy;
+    case 'generation':
+      return a.routeIntro.generation;
     case 'workspace':
       return a.routeIntro.workspace;
     case 'runtime':
@@ -60,8 +63,10 @@ function AgentDefaultsTabPanel({
   hasToken: boolean;
 }) {
   switch (tab) {
-    case 'chat':
+    case 'model-strategy':
       return <AgentDefaultsBasicsPanel {...pp} />;
+    case 'generation':
+      return <AgentDefaultsGenerationPanel {...pp} />;
     case 'workspace':
       return <AgentDefaultsWorkspacePanel {...pp} />;
     case 'runtime':
@@ -109,7 +114,7 @@ export function AgentDefaultsTabbedPage() {
       setSearchParams(
         (prev) => {
           const next = new URLSearchParams(prev);
-          if (tab === 'chat') next.delete('tab');
+          if (tab === 'model-strategy') next.delete('tab');
           else next.set('tab', tab);
           return next;
         },

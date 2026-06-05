@@ -17,7 +17,7 @@ import { useSetupChecklist } from './use-setup-checklist';
 const CHECKLIST_PATHS: Record<SetupChecklistItemId, string> = {
   gateway: '/settings/gateway',
   provider: '/settings/credentials',
-  defaultModel: '/settings/agent-defaults?tab=chat',
+  defaultModel: '/settings/agent-defaults',
   channel: '/channels',
   skill: '/skills',
   presets: '/agents',

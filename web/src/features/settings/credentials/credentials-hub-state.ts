@@ -35,7 +35,7 @@ function llmDomain(
         ? labels.llmConfigured(configured)
         : labels.llmMissing;
 
-  return { id: 'llm', status, detail, managePath: '/settings/providers' };
+  return { id: 'llm', status, detail, managePath: '/settings/credentials?tab=providers' };
 }
 
 function webSearchDomain(
@@ -47,7 +47,7 @@ function webSearchDomain(
       id: 'webSearch',
       status: 'missing',
       detail: labels.webSearchNoProviders,
-      managePath: '/settings/search',
+      managePath: '/settings/credentials?tab=search',
     };
   }
 
@@ -57,7 +57,7 @@ function webSearchDomain(
       id: 'webSearch',
       status: 'notNeeded',
       detail: labels.webSearchDisabled,
-      managePath: '/settings/search',
+      managePath: '/settings/credentials?tab=search',
     };
   }
   const configured = active.filter((p) => keyConfigured(p.apiKey)).length;
@@ -75,7 +75,7 @@ function webSearchDomain(
       total > 0
         ? labels.webSearchReady(configured, total)
         : labels.webSearchNoProviders,
-    managePath: '/settings/search',
+    managePath: '/settings/credentials?tab=search',
   };
 }
 
@@ -98,7 +98,7 @@ function imageDomain(
       total > 0
         ? labels.imageReady(configured, total)
         : labels.imageNoProviders,
-    managePath: '/settings/image-models',
+    managePath: '/settings/credentials?tab=image-models',
   };
 }
 
@@ -138,7 +138,7 @@ function voiceDomain(
       id: 'voice',
       status: 'missing',
       detail: labels.voiceMissing,
-      managePath: '/settings/voice',
+      managePath: '/settings/credentials?tab=voice',
     };
   }
 
@@ -166,7 +166,7 @@ function voiceDomain(
       id: 'voice',
       status: 'notNeeded',
       detail: labels.voiceDisabled,
-      managePath: '/settings/voice',
+      managePath: '/settings/credentials?tab=voice',
     };
   }
 
@@ -175,7 +175,7 @@ function voiceDomain(
       id: 'voice',
       status: 'ready',
       detail: labels.voiceReadyNoKeys,
-      managePath: '/settings/voice',
+      managePath: '/settings/credentials?tab=voice',
     };
   }
 
@@ -187,7 +187,7 @@ function voiceDomain(
     id: 'voice',
     status,
     detail: labels.voiceKeysReady(haveKeys, needKeys),
-    managePath: '/settings/voice',
+    managePath: '/settings/credentials?tab=voice',
   };
 }
 

@@ -1,5 +1,5 @@
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
-import type { Model, Api } from '@earendil-works/pi-ai';
+import type { ImageContent, Model, Api } from '@earendil-works/pi-ai';
 
 import { createLogger } from '../../utils/logger.js';
 import { registerEmbeddedRun, unregisterEmbeddedRun } from './runs.js';
@@ -80,11 +80,37 @@ function userMessageToPromptText(message: AgentMessage): string {
   }
   if (Array.isArray(content)) {
     return content
-      .filter((b): b is { type: 'text'; text: string } => !!b && typeof b === 'object' && (b as { type?: string }).type === 'text')
-      .map((b) => b.text)
+      .filter((block): block is { type: 'text'; text: string } => {
+        return !!block && typeof block === 'object' && (block as { type?: string }).type === 'text';
+      })
+      .map((block) => block.text)
       .join('');
   }
   return '';
+}
+
+function userMessageToPromptImages(message: AgentMessage): ImageContent[] {
+  const content = (message as { content?: unknown }).content;
+  if (!Array.isArray(content)) {
+    return [];
+  }
+
+  const images: ImageContent[] = [];
+  for (const block of content) {
+    if (!block || typeof block !== 'object') {
+      continue;
+    }
+    const typedBlock = block as { type?: string; data?: unknown; mimeType?: unknown };
+    if (typedBlock.type !== 'image' || typeof typedBlock.data !== 'string' || typedBlock.data.length === 0) {
+      continue;
+    }
+    images.push({
+      type: 'image',
+      data: typedBlock.data,
+      mimeType: typeof typedBlock.mimeType === 'string' ? typedBlock.mimeType : 'image/png',
+    });
+  }
+  return images;
 }
 
 export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Promise<RunXopcEmbeddedTurnResult> {
@@ -193,7 +219,8 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
         session.agent,
         async () => {
           const text = userMessageToPromptText(userMessage);
-          await session.prompt(text, params.images?.length ? { images: params.images } : undefined);
+          const images = [...(params.images ?? []), ...userMessageToPromptImages(userMessage)];
+          await session.prompt(text, images.length > 0 ? { images } : undefined);
           await session.agent.waitForIdle();
           await maybeRetryTurnAfterTransientLlmFailure(session.agent, { sessionKey, log });
         },
