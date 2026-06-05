@@ -45,12 +45,26 @@ function normalizeSttProvider(v: unknown): string {
   return typeof v === 'string' && v.trim().length > 0 ? v.trim() : 'alibaba';
 }
 
+function readProviderSlice(
+  raw: Record<string, unknown>,
+  id: string,
+  defaults: Record<string, unknown>,
+): Record<string, unknown> {
+  const fromProviders = isRecord(raw.providers?.[id]) ? raw.providers[id] : undefined;
+  const flat = isRecord(raw[id]) ? raw[id] : undefined;
+  return {
+    ...defaults,
+    ...(fromProviders ?? {}),
+    ...(flat ?? {}),
+  };
+}
+
 function mergeStt(raw: unknown): SttSettings {
   const d = defaultStt();
   if (!isRecord(raw)) return d;
   const provider = normalizeSttProvider(raw.provider);
-  const alibaba = isRecord(raw.alibaba) ? { ...d.alibaba, ...raw.alibaba } : d.alibaba;
-  const openai = isRecord(raw.openai) ? { ...d.openai, ...raw.openai } : d.openai;
+  const alibaba = readProviderSlice(raw, 'alibaba', d.alibaba ?? {}) as SttSettings['alibaba'];
+  const openai = readProviderSlice(raw, 'openai', d.openai ?? {}) as SttSettings['openai'];
   const baseFallback = d.fallback ?? { enabled: true, order: ['alibaba', 'openai'] };
   let fallback = baseFallback;
   if (isRecord(raw.fallback)) {
@@ -98,10 +112,7 @@ function mergeTts(raw: unknown): TtsSettings {
     raw.trigger === 'tagged'
       ? raw.trigger
       : 'always';
-  // Per-provider buckets: keep built-in defaults, plus passthrough for any
-  // extension-provider key (e.g. `tts-local-cli`) so unknown plugins survive
-  // a round-trip through the UI without losing their config.
-  const localCliRaw = raw['tts-local-cli'];
+  const localCliDefaults = d['tts-local-cli'] ?? {};
   return {
     enabled: Boolean(raw.enabled),
     provider,
@@ -112,13 +123,44 @@ function mergeTts(raw: unknown): TtsSettings {
         : d.maxTextLength,
     timeoutMs:
       typeof raw.timeoutMs === 'number' && Number.isFinite(raw.timeoutMs) ? raw.timeoutMs : d.timeoutMs,
-    alibaba: isRecord(raw.alibaba) ? { ...d.alibaba, ...raw.alibaba } : d.alibaba,
-    openai: isRecord(raw.openai) ? { ...d.openai, ...raw.openai } : d.openai,
-    edge: isRecord(raw.edge) ? { ...d.edge, ...raw.edge } : d.edge,
-    minimax: isRecord(raw.minimax) ? { ...d.minimax, ...raw.minimax } : d.minimax,
-    'tts-local-cli': isRecord(localCliRaw)
-      ? { ...d['tts-local-cli'], ...localCliRaw }
-      : d['tts-local-cli'],
+    alibaba: readProviderSlice(raw, 'alibaba', d.alibaba ?? {}) as TtsSettings['alibaba'],
+    openai: readProviderSlice(raw, 'openai', d.openai ?? {}) as TtsSettings['openai'],
+    edge: readProviderSlice(raw, 'edge', d.edge ?? {}) as TtsSettings['edge'],
+    minimax: readProviderSlice(raw, 'minimax', d.minimax ?? {}) as TtsSettings['minimax'],
+    'tts-local-cli': readProviderSlice(
+      raw,
+      'tts-local-cli',
+      localCliDefaults,
+    ) as TtsSettings['tts-local-cli'],
+  };
+}
+
+function toSttPayload(stt: SttSettings): Record<string, unknown> {
+  const { alibaba, openai, providers, ...rest } = stt;
+  const providerMap: Record<string, Record<string, unknown>> = { ...(providers ?? {}) };
+  if (alibaba) {
+    providerMap.alibaba = { ...(providerMap.alibaba ?? {}), ...alibaba };
+  }
+  if (openai) {
+    providerMap.openai = { ...(providerMap.openai ?? {}), ...openai };
+  }
+  return {
+    ...rest,
+    ...(Object.keys(providerMap).length > 0 ? { providers: providerMap } : {}),
+  };
+}
+
+function toTtsPayload(tts: TtsSettings): Record<string, unknown> {
+  const { alibaba, openai, edge, minimax, 'tts-local-cli': localCli, ...rest } = tts;
+  const providerMap: Record<string, Record<string, unknown>> = {};
+  if (alibaba) providerMap.alibaba = { ...alibaba };
+  if (openai) providerMap.openai = { ...openai };
+  if (edge) providerMap.edge = { ...edge };
+  if (minimax) providerMap.minimax = { ...minimax };
+  if (localCli) providerMap['tts-local-cli'] = { ...localCli };
+  return {
+    ...rest,
+    ...(Object.keys(providerMap).length > 0 ? { providers: providerMap } : {}),
   };
 }
 
@@ -138,7 +180,7 @@ export async function fetchVoiceSettings(): Promise<VoiceSettingsState> {
 export async function patchVoiceSettings(state: VoiceSettingsState): Promise<void> {
   await fetchJson(apiUrl('/api/config'), {
     method: 'PATCH',
-    body: JSON.stringify({ stt: state.stt, tts: state.tts }),
+    body: JSON.stringify({ stt: toSttPayload(state.stt), tts: toTtsPayload(state.tts) }),
   });
   void revalidateGatewayConfig();
 }
