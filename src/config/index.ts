@@ -15,6 +15,7 @@ export * from './models-json.js';
 export * from './resolve-config-value.js';
 export * from './runtime-overrides.js';
 export * from './mcp-config-normalize.js';
+export * from './voice-config-normalize.js';
 export * from './mcp-config.js';
 
 // Re-export thinking types
