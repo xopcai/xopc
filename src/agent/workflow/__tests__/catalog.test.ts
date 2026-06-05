@@ -22,13 +22,15 @@ describe('createWorkflowCatalog', () => {
   it('lists built-ins when user dir is empty', () => {
     const cat = createWorkflowCatalog({ userDir: dir });
     const entries = cat.list();
-    expect(entries.length).toBeGreaterThanOrEqual(5);
+    expect(entries.length).toBeGreaterThanOrEqual(7);
     const names = entries.map((e) => e.name);
     expect(names).toContain('audit_repo');
     expect(names).toContain('multi_perspective_review');
     expect(names).toContain('research');
     expect(names).toContain('pr_review');
     expect(names).toContain('debug_incident');
+    expect(names).toContain('implementation_plan');
+    expect(names).toContain('release_check');
     for (const e of entries) {
       expect(e.source).toBe('builtin');
     }

@@ -5,22 +5,25 @@
  * failed subagents, optional progress snapshot, and submitted script.
  */
 
-import { memo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import {
   AlertTriangle,
+  Check,
   ChevronDown,
   ChevronUp,
+  Copy,
   OctagonX,
   TimerOff,
   XCircle,
 } from 'lucide-react';
 
 import { cn } from '@/lib/cn';
+import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
 import { interaction } from '@/lib/interaction';
 
 import type { WorkflowAgentSnapshot, WorkflowFailureKind, WorkflowSnapshot } from './workflow.types';
-import { rollupPhases } from './workflow.utils';
-import { WorkflowPhaseRow, type WorkflowPhaseRowLabels } from './workflow-phase-row';
+import { WorkflowAgentRow } from './workflow-agent-row';
+import type { WorkflowPhaseRowLabels } from './workflow-phase-row';
 
 export type WorkflowErrorCardLabels = {
   titleParse: string;
@@ -31,11 +34,18 @@ export type WorkflowErrorCardLabels = {
   collapse: string;
   expandHint: string;
   detailsHeading: string;
+  impactHeading: string;
+  recoveryHeading: string;
+  recoveryActions: Record<WorkflowFailureKind, string[]>;
   logsHeading: string;
   failedAgentsHeading: string;
+  executedAgentsHeading: string;
   progressHeading: string;
   scriptHeading: string;
   noExtraDetails: string;
+  copyReason: string;
+  copyReasonDone: string;
+  impactTpl: (done: number, total: number, failed: number) => string;
   phase: WorkflowPhaseRowLabels;
 };
 
@@ -47,6 +57,8 @@ export const WorkflowErrorCard = memo(function WorkflowErrorCard({
   failedAgents,
   snapshot,
   scriptPreview,
+  selectedAgentId,
+  onSelectAgent,
   labels,
   className,
 }: {
@@ -57,6 +69,8 @@ export const WorkflowErrorCard = memo(function WorkflowErrorCard({
   failedAgents?: WorkflowAgentSnapshot[];
   snapshot?: WorkflowSnapshot | null;
   scriptPreview?: string;
+  selectedAgentId?: number | null;
+  onSelectAgent?: (agent: WorkflowAgentSnapshot) => void;
   labels: WorkflowErrorCardLabels;
   className?: string;
 }) {
@@ -70,22 +84,43 @@ export const WorkflowErrorCard = memo(function WorkflowErrorCard({
           : labels.titleRuntime;
 
   const trimmedReason = reason.trim() || 'workflow failed';
-  const details = detailLines ?? [];
   const logLines = logs ?? [];
   const agents = failedAgents ?? [];
-  const rollup = snapshot ? rollupPhases(snapshot) : null;
-  const hasProgress =
-    rollup != null && (rollup.phases.length > 0 || rollup.unphased != null) && (snapshot?.agents.length ?? 0) > 0;
+  const workflowAgents = useMemo(() => snapshot?.agents ?? [], [snapshot?.agents]);
+  const diagnosticText = useMemo(() => {
+    const lines: string[] = [];
+    const pushLine = (line: string) => {
+      const trimmedLine = line.trim();
+      if (trimmedLine && !lines.includes(trimmedLine)) lines.push(trimmedLine);
+    };
 
+    pushLine(trimmedReason);
+    for (const line of detailLines ?? []) pushLine(line);
+    return lines.join('\n');
+  }, [detailLines, trimmedReason]);
+
+  const recoveryActions = labels.recoveryActions[kind] ?? [];
+  const doneCount = snapshot?.doneCount ?? 0;
+  const totalCount = snapshot?.agentCount ?? 0;
+  const failedCount = agents.length || snapshot?.errorCount || 0;
   const bodySections =
-    details.length > 0 ||
+    Boolean(diagnosticText) ||
+    recoveryActions.length > 0 ||
     logLines.length > 0 ||
-    agents.length > 0 ||
-    hasProgress ||
+    workflowAgents.length > 0 ||
     Boolean(scriptPreview?.trim());
 
-  const [collapsed, setCollapsed] = useState(true);
+  const [collapsed, setCollapsed] = useState(false);
+  const [reasonExpanded, setReasonExpanded] = useState(false);
+  const [copiedReason, setCopiedReason] = useState(false);
   const isOpen = !collapsed;
+
+  const handleCopyReason = async () => {
+    const ok = await copyTextToClipboard(diagnosticText || trimmedReason);
+    if (!ok) return;
+    setCopiedReason(true);
+    window.setTimeout(() => setCopiedReason(false), 1500);
+  };
 
   const headerInner = (
     <>
@@ -135,34 +170,92 @@ export const WorkflowErrorCard = memo(function WorkflowErrorCard({
 
       {isOpen ? (
         <div className="space-y-3 px-3 py-2.5">
-          {details.length > 0 ? (
+          <section className="min-w-0 rounded-lg bg-surface-hover/35 px-2.5 py-2">
+            <div className="mb-1 flex min-w-0 items-center justify-between gap-2">
+              <button
+                type="button"
+                onClick={() => setReasonExpanded((value) => !value)}
+                aria-expanded={reasonExpanded}
+                className={cn(
+                  'inline-flex min-w-0 flex-1 items-center gap-1 text-left text-[10px] font-medium uppercase tracking-wide text-fg-subtle',
+                  'hover:text-fg-muted',
+                  interaction.transition,
+                  interaction.focusRingPanel,
+                )}
+              >
+                <span className="truncate">{labels.detailsHeading}</span>
+                {reasonExpanded ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
+              </button>
+              <button
+                type="button"
+                onClick={handleCopyReason}
+                className={cn(
+                  'inline-flex h-6 shrink-0 items-center gap-1 rounded-md px-1.5 text-xs text-fg-muted',
+                  'hover:bg-surface-hover hover:text-fg',
+                  interaction.transition,
+                  interaction.focusRingPanel,
+                )}
+                aria-label={copiedReason ? labels.copyReasonDone : labels.copyReason}
+                title={copiedReason ? labels.copyReasonDone : labels.copyReason}
+              >
+                {copiedReason ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+                <span>{copiedReason ? labels.copyReasonDone : labels.copyReason}</span>
+              </button>
+            </div>
+            {reasonExpanded ? (
+              <pre className="max-h-36 min-w-0 overflow-y-auto whitespace-pre-wrap break-words rounded-md bg-surface-panel/60 p-2 font-sans text-sm leading-6 text-fg-muted">
+                {diagnosticText || trimmedReason}
+              </pre>
+            ) : (
+              <div className="truncate text-sm text-fg-muted" title={trimmedReason}>
+                {trimmedReason}
+              </div>
+            )}
+          </section>
+
+          {totalCount > 0 ? (
             <section className="min-w-0">
               <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-fg-subtle">
-                {labels.detailsHeading}
+                {labels.impactHeading}
               </div>
-              <pre className="max-h-60 min-w-0 overflow-y-auto whitespace-pre-wrap break-words rounded-md bg-surface-hover/60 p-2 font-mono text-xs text-fg-muted dark:bg-surface-hover/35">
-                {details.join('\n\n')}
-              </pre>
+              <div className="text-sm text-fg-muted">
+                {labels.impactTpl(doneCount, totalCount, failedCount)}
+              </div>
             </section>
           ) : null}
 
-          {agents.length > 0 ? (
+          {recoveryActions.length > 0 ? (
             <section className="min-w-0">
               <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-fg-subtle">
-                {labels.failedAgentsHeading}
+                {labels.recoveryHeading}
               </div>
-              <ul className="space-y-1 text-xs text-fg-muted">
-                {agents.map((a) => (
-                  <li key={a.id} className="rounded-md bg-surface-hover/40 px-2 py-1">
-                    <span className="font-medium text-fg">{a.label}</span>
-                    {a.error ? (
-                      <span className="text-rose-600 dark:text-rose-400"> — {a.error}</span>
-                    ) : (
-                      <span> — {a.status}</span>
-                    )}
+              <ul className="space-y-0.5 text-sm text-fg-muted">
+                {recoveryActions.map((action, index) => (
+                  <li key={index} className="flex gap-2">
+                    <span className="text-fg-disabled">•</span>
+                    <span className="min-w-0 break-words">{action}</span>
                   </li>
                 ))}
               </ul>
+            </section>
+          ) : null}
+
+          {workflowAgents.length > 0 ? (
+            <section className="min-w-0">
+              <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-fg-subtle">
+                {labels.executedAgentsHeading}
+              </div>
+              <div className="space-y-0.5">
+                {workflowAgents.map((agent) => (
+                  <WorkflowAgentRow
+                    key={agent.id}
+                    agent={agent}
+                    labels={labels.phase}
+                    selected={selectedAgentId === agent.id}
+                    onSelect={onSelectAgent}
+                  />
+                ))}
+              </div>
             </section>
           ) : null}
 
@@ -174,22 +267,6 @@ export const WorkflowErrorCard = memo(function WorkflowErrorCard({
               <pre className="max-h-48 min-w-0 overflow-y-auto whitespace-pre-wrap break-words rounded-md bg-surface-hover/60 p-2 font-mono text-xs text-fg-muted dark:bg-surface-hover/35">
                 {logLines.join('\n')}
               </pre>
-            </section>
-          ) : null}
-
-          {hasProgress && rollup ? (
-            <section className="min-w-0">
-              <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-fg-subtle">
-                {labels.progressHeading}
-              </div>
-              <div className="space-y-1">
-                {rollup.phases.map((p) => (
-                  <WorkflowPhaseRow key={p.title} rollup={p} isCurrent={false} labels={labels.phase} />
-                ))}
-                {rollup.unphased ? (
-                  <WorkflowPhaseRow rollup={rollup.unphased} isCurrent={false} labels={labels.phase} />
-                ) : null}
-              </div>
             </section>
           ) : null}
 

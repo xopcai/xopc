@@ -4,7 +4,7 @@ import { apiUrl } from '@/lib/url';
 
 import type { SttSettings, SttProvidersPayload, TtsSettings, VoiceModelsPayload, VoiceSettingsState, VoiceProvidersPayload } from './voice-settings.types';
 
-export type { SttSettings, TtsSettings, VoiceModelsPayload, VoiceSettingsState, VoiceProvidersPayload, SttProvidersPayload, TtsProviderListEntry, SttProviderListEntry } from './voice-settings.types';
+export type { SttSettings, TtsSettings, VoiceConfigFieldMetadata, VoiceModelsPayload, VoiceSettingsState, VoiceProvidersPayload, SttProvidersPayload, TtsProviderListEntry, SttProviderListEntry } from './voice-settings.types';
 
 function defaultStt(): SttSettings {
   return {
@@ -45,17 +45,16 @@ function normalizeSttProvider(v: unknown): string {
   return typeof v === 'string' && v.trim().length > 0 ? v.trim() : 'alibaba';
 }
 
-function readProviderSlice(
+function readProviderSlice<T extends object>(
   raw: Record<string, unknown>,
   id: string,
-  defaults: Record<string, unknown>,
-): Record<string, unknown> {
-  const fromProviders = isRecord(raw.providers?.[id]) ? raw.providers[id] : undefined;
-  const flat = isRecord(raw[id]) ? raw[id] : undefined;
+  defaults: T,
+): T {
+  const providers = isRecord(raw.providers) ? raw.providers : undefined;
+  const fromProviders = providers && isRecord(providers[id]) ? providers[id] : undefined;
   return {
     ...defaults,
     ...(fromProviders ?? {}),
-    ...(flat ?? {}),
   };
 }
 
@@ -113,6 +112,15 @@ function mergeTts(raw: unknown): TtsSettings {
       ? raw.trigger
       : 'always';
   const localCliDefaults = d['tts-local-cli'] ?? {};
+  const providers = isRecord(raw.providers)
+    ? Object.fromEntries(
+        Object.entries(raw.providers).map(([key, value]) => [
+          key,
+          isRecord(value) ? { ...value } : {},
+        ]),
+      )
+    : undefined;
+
   return {
     enabled: Boolean(raw.enabled),
     provider,
@@ -123,15 +131,12 @@ function mergeTts(raw: unknown): TtsSettings {
         : d.maxTextLength,
     timeoutMs:
       typeof raw.timeoutMs === 'number' && Number.isFinite(raw.timeoutMs) ? raw.timeoutMs : d.timeoutMs,
-    alibaba: readProviderSlice(raw, 'alibaba', d.alibaba ?? {}) as TtsSettings['alibaba'],
-    openai: readProviderSlice(raw, 'openai', d.openai ?? {}) as TtsSettings['openai'],
-    edge: readProviderSlice(raw, 'edge', d.edge ?? {}) as TtsSettings['edge'],
-    minimax: readProviderSlice(raw, 'minimax', d.minimax ?? {}) as TtsSettings['minimax'],
-    'tts-local-cli': readProviderSlice(
-      raw,
-      'tts-local-cli',
-      localCliDefaults,
-    ) as TtsSettings['tts-local-cli'],
+    ...(providers ? { providers } : {}),
+    alibaba: readProviderSlice(raw, 'alibaba', d.alibaba ?? {}),
+    openai: readProviderSlice(raw, 'openai', d.openai ?? {}),
+    edge: readProviderSlice(raw, 'edge', d.edge ?? {}),
+    minimax: readProviderSlice(raw, 'minimax', d.minimax ?? {}),
+    'tts-local-cli': readProviderSlice(raw, 'tts-local-cli', localCliDefaults),
   };
 }
 
@@ -151,13 +156,13 @@ function toSttPayload(stt: SttSettings): Record<string, unknown> {
 }
 
 function toTtsPayload(tts: TtsSettings): Record<string, unknown> {
-  const { alibaba, openai, edge, minimax, 'tts-local-cli': localCli, ...rest } = tts;
-  const providerMap: Record<string, Record<string, unknown>> = {};
-  if (alibaba) providerMap.alibaba = { ...alibaba };
-  if (openai) providerMap.openai = { ...openai };
-  if (edge) providerMap.edge = { ...edge };
-  if (minimax) providerMap.minimax = { ...minimax };
-  if (localCli) providerMap['tts-local-cli'] = { ...localCli };
+  const { alibaba, openai, edge, minimax, 'tts-local-cli': localCli, providers, ...rest } = tts;
+  const providerMap: Record<string, Record<string, unknown>> = { ...(providers ?? {}) };
+  if (alibaba) providerMap.alibaba = { ...(providerMap.alibaba ?? {}), ...alibaba };
+  if (openai) providerMap.openai = { ...(providerMap.openai ?? {}), ...openai };
+  if (edge) providerMap.edge = { ...(providerMap.edge ?? {}), ...edge };
+  if (minimax) providerMap.minimax = { ...(providerMap.minimax ?? {}), ...minimax };
+  if (localCli) providerMap['tts-local-cli'] = { ...(providerMap['tts-local-cli'] ?? {}), ...localCli };
   return {
     ...rest,
     ...(Object.keys(providerMap).length > 0 ? { providers: providerMap } : {}),

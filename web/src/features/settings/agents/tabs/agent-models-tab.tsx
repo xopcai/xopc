@@ -1,4 +1,4 @@
-import { Layers } from 'lucide-react';
+import { ArrowRight, Layers } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
@@ -46,6 +46,28 @@ export function AgentModelsTab(props: {
         title={a.modelsTabTitle}
         subtitle={a.modelsTabHint}
       />
+      <div className="mb-4 grid shrink-0 gap-2 rounded-2xl border border-edge-subtle bg-surface-panel/60 p-3 text-xs sm:grid-cols-[1fr_auto_1fr_auto_1fr]">
+        <div className="min-w-0 rounded-xl bg-surface-base px-3 py-2">
+          <p className="font-medium text-fg-subtle">{a.modelsResolutionGlobal}</p>
+          <p className="mt-1 truncate text-sm font-medium text-fg">{formatTypedModelsSummary(selected.typedModels.defaults)}</p>
+        </div>
+        <div className="hidden items-center justify-center text-fg-disabled sm:flex" aria-hidden>
+          <ArrowRight className="size-4" strokeWidth={1.75} />
+        </div>
+        <div className="min-w-0 rounded-xl bg-surface-base px-3 py-2">
+          <p className="font-medium text-fg-subtle">{a.modelsResolutionAgent}</p>
+          <p className="mt-1 truncate text-sm font-medium text-fg">
+            {modelsInherit ? a.modelsResolutionInherits : formatTypedModelsSummary(selected.typedModels.entry ?? selected.typedModels.effective)}
+          </p>
+        </div>
+        <div className="hidden items-center justify-center text-fg-disabled sm:flex" aria-hidden>
+          <ArrowRight className="size-4" strokeWidth={1.75} />
+        </div>
+        <div className="min-w-0 rounded-xl bg-surface-base px-3 py-2">
+          <p className="font-medium text-fg-subtle">{a.modelsResolutionEffective}</p>
+          <p className="mt-1 truncate text-sm font-medium text-fg">{formatTypedModelsSummary(selected.typedModels.effective)}</p>
+        </div>
+      </div>
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap gap-2">
           <Button

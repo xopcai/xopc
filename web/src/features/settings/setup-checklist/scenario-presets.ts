@@ -14,15 +14,15 @@ export const SCENARIO_PRESETS: readonly ScenarioPreset[] = [
   {
     id: 'lightChat',
     steps: [
-      { path: '/settings/credentials', labelKey: 'stepProviders' },
-      { path: '/settings/agent-defaults?tab=chat', labelKey: 'stepDefaultModel' },
+      { path: '/settings/credentials?tab=providers', labelKey: 'stepProviders' },
+      { path: '/settings/agent-defaults', labelKey: 'stepDefaultModel' },
     ],
   },
   {
     id: 'multiChannel',
     steps: [
-      { path: '/settings/credentials', labelKey: 'stepProviders' },
-      { path: '/settings/agent-defaults?tab=chat', labelKey: 'stepDefaultModel' },
+      { path: '/settings/credentials?tab=providers', labelKey: 'stepProviders' },
+      { path: '/settings/agent-defaults', labelKey: 'stepDefaultModel' },
       { path: '/channels', labelKey: 'stepChannel' },
       { path: '/agents', labelKey: 'stepPresets' },
     ],
@@ -30,7 +30,7 @@ export const SCENARIO_PRESETS: readonly ScenarioPreset[] = [
   {
     id: 'automation',
     steps: [
-      { path: '/settings/credentials', labelKey: 'stepProviders' },
+      { path: '/settings/credentials?tab=providers', labelKey: 'stepProviders' },
       { path: '/skills', labelKey: 'stepSkills' },
       { path: '/cron', labelKey: 'stepCron' },
     ],

@@ -159,7 +159,7 @@ export function OnboardingCard({ onComplete, onDismiss }: OnboardingCardProps) {
             />
             <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
               <Link
-                to="/settings/providers"
+                to="/settings/credentials"
                 className="text-xs font-medium text-accent-fg hover:underline"
               >
                 {language === 'zh' ? '高级设置…' : 'More settings…'}

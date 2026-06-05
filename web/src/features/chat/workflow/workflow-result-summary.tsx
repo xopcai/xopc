@@ -20,6 +20,10 @@ export type WorkflowResultSummaryLabels = {
   executiveSummaryHeading: string;
   summaryHeading: string;
   openQuestionsHeading: string;
+  conclusionHeading: string;
+  recommendationsHeading: string;
+  nextStepsHeading: string;
+  checklistHeading: string;
   moreSuffix: (n: number) => string;
   rawHeading: string;
   emptyResult: string;
@@ -66,6 +70,47 @@ export const WorkflowResultSummary = memo(function WorkflowResultSummary({
     sections.push(<TextBlock key="sum" heading={labels.summaryHeading} text={obj.summary} />);
   }
 
+  const conclusion = pickFirstString(obj.conclusion, obj.decision);
+  if (conclusion) {
+    sections.push(<TextBlock key="conclusion" heading={labels.conclusionHeading} text={conclusion} />);
+  }
+
+  const recommendations = pickStringArray(obj.recommendations) ?? pickStringArray(obj.actions);
+  if (recommendations && recommendations.length > 0) {
+    sections.push(
+      <StringList
+        key="recommendations"
+        heading={labels.recommendationsHeading}
+        items={recommendations}
+        moreSuffix={labels.moreSuffix}
+      />,
+    );
+  }
+
+  const nextSteps = pickStringArray(obj.nextSteps);
+  if (nextSteps && nextSteps.length > 0) {
+    sections.push(
+      <StringList
+        key="nextSteps"
+        heading={labels.nextStepsHeading}
+        items={nextSteps}
+        moreSuffix={labels.moreSuffix}
+      />,
+    );
+  }
+
+  const checklist = pickStringArray(obj.checklist);
+  if (checklist && checklist.length > 0) {
+    sections.push(
+      <StringList
+        key="checklist"
+        heading={labels.checklistHeading}
+        items={checklist}
+        moreSuffix={labels.moreSuffix}
+      />,
+    );
+  }
+
   const findings = pickArray<FindingLike>(obj.topFindings) ?? pickArray<FindingLike>(obj.findings);
   if (findings && findings.length > 0) {
     sections.push(
@@ -93,11 +138,11 @@ export const WorkflowResultSummary = memo(function WorkflowResultSummary({
   const openQuestions = pickStringArray(obj.openQuestions);
   if (openQuestions && openQuestions.length > 0) {
     sections.push(
-      <div key="oq" className="min-w-0">
-        <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-fg-subtle">
+      <details key="oq" className="group min-w-0">
+        <summary className="cursor-pointer select-none text-[10px] font-medium uppercase tracking-wide text-fg-subtle underline-offset-2 hover:text-fg-muted">
           {labels.openQuestionsHeading}
-        </div>
-        <ul className="space-y-0.5 text-sm text-fg-muted">
+        </summary>
+        <ul className="mt-1 space-y-0.5 text-sm text-fg-muted">
           {openQuestions.slice(0, MAX_ITEMS).map((q, i) => (
             <li key={i} className="flex gap-2">
               <span className="text-fg-disabled">•</span>
@@ -108,7 +153,7 @@ export const WorkflowResultSummary = memo(function WorkflowResultSummary({
             <li className="pl-4 text-xs text-fg-disabled">{labels.moreSuffix(openQuestions.length - MAX_ITEMS)}</li>
           ) : null}
         </ul>
-      </div>,
+      </details>,
     );
   }
 
@@ -131,10 +176,42 @@ export const WorkflowResultSummary = memo(function WorkflowResultSummary({
 
 function TextBlock({ heading, text }: { heading: string; text: string }) {
   return (
-    <div className="min-w-0">
-      <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-fg-subtle">{heading}</div>
-      <div className="whitespace-pre-wrap break-words text-sm text-fg">{text}</div>
-    </div>
+    <details className="group min-w-0">
+      <summary className="cursor-pointer select-none text-[10px] font-medium uppercase tracking-wide text-fg-subtle underline-offset-2 hover:text-fg-muted">
+        {heading}
+      </summary>
+      <div className="mt-1 whitespace-pre-wrap break-words text-sm text-fg">{text}</div>
+    </details>
+  );
+}
+
+function StringList({
+  heading,
+  items,
+  moreSuffix,
+}: {
+  heading: string;
+  items: string[];
+  moreSuffix: (n: number) => string;
+}) {
+  const visible = items.slice(0, MAX_ITEMS);
+  return (
+    <details className="group min-w-0">
+      <summary className="cursor-pointer select-none text-[10px] font-medium uppercase tracking-wide text-fg-subtle underline-offset-2 hover:text-fg-muted">
+        {heading}
+      </summary>
+      <ul className="mt-1 space-y-0.5 text-sm text-fg-muted">
+        {visible.map((item, index) => (
+          <li key={index} className="flex gap-2">
+            <span className="text-fg-disabled">•</span>
+            <span className="min-w-0 break-words">{item}</span>
+          </li>
+        ))}
+        {items.length > visible.length ? (
+          <li className="pl-4 text-xs text-fg-disabled">{moreSuffix(items.length - visible.length)}</li>
+        ) : null}
+      </ul>
+    </details>
   );
 }
 
@@ -149,9 +226,11 @@ function FindingList({
 }) {
   const visible = items.slice(0, MAX_ITEMS);
   return (
-    <div className="min-w-0">
-      <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-fg-subtle">{heading}</div>
-      <ul className="space-y-1">
+    <details className="group min-w-0">
+      <summary className="cursor-pointer select-none text-[10px] font-medium uppercase tracking-wide text-fg-subtle underline-offset-2 hover:text-fg-muted">
+        {heading}
+      </summary>
+      <ul className="mt-1 space-y-1">
         {visible.map((it, i) => (
           <FindingRow key={i} item={it} />
         ))}
@@ -159,7 +238,7 @@ function FindingList({
       {items.length > visible.length ? (
         <div className="mt-1 pl-1 text-xs text-fg-disabled">{moreSuffix(items.length - visible.length)}</div>
       ) : null}
-    </div>
+    </details>
   );
 }
 
@@ -234,4 +313,11 @@ function pickStringArray(v: unknown): string[] | null {
   if (!Array.isArray(v)) return null;
   const filtered = v.filter((x): x is string => typeof x === 'string' && x.trim().length > 0);
   return filtered.length > 0 ? filtered : null;
+}
+
+function pickFirstString(...values: unknown[]): string | null {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) return value;
+  }
+  return null;
 }

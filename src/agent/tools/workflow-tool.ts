@@ -180,10 +180,19 @@ export function createWorkflowTool(deps: WorkflowToolDeps): AgentTool {
         skippedCount: 0,
       };
 
-      let pushTimer: ReturnType<typeof setTimeout> | undefined;
+      let lastUpdatePushedAtMs = Number.NEGATIVE_INFINITY;
+      let liveUpdatesDisabled = false;
       const pushUpdate = (completed = false, immediate = false) => {
+        if (liveUpdatesDisabled) return;
+
         recomputeCounts(snapshot);
-        const emit = () => {
+        const nowMs = Date.now();
+        const shouldEmit =
+          completed || immediate || nowMs - lastUpdatePushedAtMs >= PUSH_UPDATE_THROTTLE_MS;
+        if (!shouldEmit) return;
+
+        lastUpdatePushedAtMs = nowMs;
+        try {
           onUpdate?.({
             content: [
               {
@@ -193,18 +202,14 @@ export function createWorkflowTool(deps: WorkflowToolDeps): AgentTool {
             ],
             details: snapshot,
           });
-        };
-        if (completed || immediate) {
-          if (pushTimer) clearTimeout(pushTimer);
-          pushTimer = undefined;
-          emit();
-          return;
+        } catch (e) {
+          liveUpdatesDisabled = true;
+          const message = e instanceof Error ? e.message : String(e);
+          log.warn(
+            { err: e, errorMessage: message, workflow: meta.name },
+            `workflow live progress disabled: ${message}`,
+          );
         }
-        if (pushTimer) return;
-        pushTimer = setTimeout(() => {
-          pushTimer = undefined;
-          emit();
-        }, PUSH_UPDATE_THROTTLE_MS);
       };
 
       const subagentStream = wfCfg?.subagentStream ?? 'steps';
@@ -371,7 +376,6 @@ export function createWorkflowTool(deps: WorkflowToolDeps): AgentTool {
         };
       } finally {
         if (timeoutHandle) clearTimeout(timeoutHandle);
-        if (pushTimer) clearTimeout(pushTimer);
         signal?.removeEventListener('abort', onParentAbort);
       }
     },

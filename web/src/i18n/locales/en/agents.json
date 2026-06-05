@@ -10,7 +10,6 @@
     "saved": "Saved",
     "saveError": "Failed to save",
     "routeIntro": {
-      "chat": "Primary model, sampling, and how replies appear. Saves to agents.defaults on the gateway.",
       "workspace": "Working directory for agent files and limits for inbound images in the image tool.",
       "browser": "Let the agent drive the web via browser_use. Enable tools, pick a connection method, then finish setup below.",
       "runtime": "Per-turn time limits, tool call depth, request retries, and consecutive tool failure caps. Saves to agents.defaults.",
@@ -18,10 +17,11 @@
       "memory": "Memory snapshots, session_search summary model, and optional background review.",
       "tools": "Optional tools (web_extract, delegate_task, execute_code), global built-in tool disables, and extension params JSON. Skill allowlist is under Skills.",
       "skills": "Skills marketplace source (use the section Save button) and default skill allowlist for all agents (use the page header Save). Install skills in the Skills library. Per-tool toggles are under Tools.",
-      "systemPrompt": "Optional full replacement for the default system prompt; merges with per-agent entries (entry wins). Saves to agents.defaults."
+      "systemPrompt": "Optional full replacement for the default system prompt; merges with per-agent entries (entry wins). Saves to agents.defaults.",
+      "modelStrategy": "Default chat model, fallback chain, and model roles. Saves to agents.defaults on the gateway.",
+      "generation": "Control response length, randomness, thinking level, reasoning visibility, and verbosity."
     },
     "defaultsTabs": {
-      "chat": "Model & chat",
       "workspace": "Workspace",
       "browser": "Browser",
       "runtime": "Turn limits",
@@ -29,7 +29,9 @@
       "memory": "Memory",
       "tools": "Tools",
       "skills": "Skills",
-      "system-prompt": "System prompt"
+      "system-prompt": "System prompt",
+      "model-strategy": "Model strategy",
+      "generation": "Generation"
     },
     "defaultsTabsAria": "Agent default configuration sections",
     "browserTabs": {
@@ -41,8 +43,8 @@
       "cloud": "Cloud"
     },
     "browserTabsAria": "Browser settings sections",
-    "cardModelsTitle": "Models",
-    "cardModelsSubtitle": "Chat, vision, and image generation defaults",
+    "cardModelsTitle": "Default chat model",
+    "cardModelsSubtitle": "Primary model used by new sessions.",
     "cardWorkspaceTitle": "Workspace & attachments",
     "cardWorkspaceSubtitle": "Working directory and inbound media limits",
     "cardBrowserTitle": "Browser automation",
@@ -204,7 +206,7 @@
     "label": {
       "model": "Model",
       "modelFallbacks": "Fallback models",
-      "typedModels": "Model roles (workflows)",
+      "typedModels": "Model roles",
       "smallModel": "Small model",
       "smallModelFallbacks": "Small-model fallbacks",
       "imageModel": "Image model",
@@ -249,7 +251,7 @@
     "desc": {
       "model": "Default model for new sessions.",
       "modelFallbacks": "Tried in order when the primary model returns an error after transient retries. Requires API keys for each provider.",
-      "typedModels": "Named slots (e.g. small, large) for workflow scripts: agent({ model: 'small' }). Separate from the primary model and fallback chain.",
+      "typedModels": "Named model roles for workflows or internal tasks, such as small, large, and vision.",
       "smallModel": "Optional cheaper/faster tier. Workflow scripts can request it with agent(prompt, { tier: 'small' }). Leave blank to fall back to the primary model.",
       "smallModelFallbacks": "Tried in order when the small primary fails. Requires API keys for each provider.",
       "imageModel": "Optional. Used for image understanding / vision. Only models the gateway marks as accepting image input are listed.",
@@ -456,7 +458,15 @@
       "paramsJson": "Params object",
       "paramsJsonDesc": "e.g. {\"myFlag\": true}. Clear to remove params from the config file.",
       "paramsInvalidJson": "Params must be valid JSON object (e.g. empty or {}). Check syntax."
-    }
+    },
+    "modelsOverrideTitle": "Model overrides",
+    "modelsOverrideHint": "See whether this agent inherits the global model strategy or uses its own model roles.",
+    "modelResolutionGlobal": "Global default",
+    "modelResolutionAgent": "Agent override",
+    "modelResolutionSession": "Current session selection",
+    "modelResolutionUnset": "Not set",
+    "modelResolutionAgentInherits": "Inherited by agents; model roles can be overridden per agent.",
+    "modelResolutionSessionSelectable": "The chat page can select a temporary session model."
   },
   "agentsSettings": {
     "title": "Agents",
@@ -698,7 +708,11 @@
     "presetCreating": "Creating…",
     "presetCreatingProgress": "Creating agent {{current}} of {{total}}…",
     "presetSetupComplete": "Agents created successfully!",
-    "presetCreateFailed": "Failed to create {{name}}: {{message}}"
+    "presetCreateFailed": "Failed to create {{name}}: {{message}}",
+    "modelsResolutionGlobal": "Global defaults",
+    "modelsResolutionAgent": "This agent override",
+    "modelsResolutionEffective": "Effective result",
+    "modelsResolutionInherits": "Inherits global defaults"
   },
   "goalsSettings": {
     "title": "Goal judge (/goal)",

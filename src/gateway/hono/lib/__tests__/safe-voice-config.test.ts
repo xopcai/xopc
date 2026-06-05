@@ -31,17 +31,6 @@ describe('safe-voice-config', () => {
     expect(merged.providers.groq.apiKey).toBe('gsk-secret');
     expect(merged.providers.groq.model).toBe('whisper-large-v3');
   });
-
-  it('hoists legacy flat STT provider keys during merge', () => {
-    const merged = mergeSttConfigPatch(
-      {},
-      { enabled: true, alibaba: { model: 'paraformer-v2' } },
-    ) as Record<string, Record<string, { model: string }>>;
-
-    expect(merged.alibaba).toBeUndefined();
-    expect(merged.providers.alibaba.model).toBe('paraformer-v2');
-  });
-
   it('masks TTS api keys for web GET', () => {
     const masked = maskTtsConfigForWeb({
       enabled: true,

@@ -1198,6 +1198,14 @@ export class GatewayService {
     return this.config;
   }
 
+  get currentWorkspacePath(): string {
+    return this.workspacePath;
+  }
+
+  get messageBusInstance(): MessageBus {
+    return this.bus;
+  }
+
   /** Effective HTTP listen port (CLI `--port` override or config default). */
   getEffectiveListenPort(): number {
     return resolveEffectiveGatewayPort(this.config, this.serviceConfig.listenPort);

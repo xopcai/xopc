@@ -13,6 +13,7 @@ import enShell from './en/shell.json' with { type: 'json' };
 import enShares from './en/shares.json' with { type: 'json' };
 import enTunnel from './en/tunnel.json' with { type: 'json' };
 import enSkills from './en/skills.json' with { type: 'json' };
+import enWorkflows from './en/workflows.json' with { type: 'json' };
 import enWorkspace from './en/workspace.json' with { type: 'json' };
 
 import zhAgents from './zh/agents.json' with { type: 'json' };
@@ -30,6 +31,7 @@ import zhShell from './zh/shell.json' with { type: 'json' };
 import zhShares from './zh/shares.json' with { type: 'json' };
 import zhTunnel from './zh/tunnel.json' with { type: 'json' };
 import zhSkills from './zh/skills.json' with { type: 'json' };
+import zhWorkflows from './zh/workflows.json' with { type: 'json' };
 import zhWorkspace from './zh/workspace.json' with { type: 'json' };
 
 /** Full English message tree; assembled from `locales/en/*.json` fragments. */
@@ -49,6 +51,7 @@ export const en = {
   ...enShares,
   ...enTunnel,
   ...enSkills,
+  ...enWorkflows,
   ...enWorkspace,
 };
 
@@ -69,5 +72,6 @@ export const zh = {
   ...zhShares,
   ...zhTunnel,
   ...zhSkills,
+  ...zhWorkflows,
   ...zhWorkspace,
 };

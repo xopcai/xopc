@@ -17,6 +17,9 @@ const SessionsPage = lazy(() =>
   import('@/pages/sessions-page').then((m) => ({ default: m.SessionsPage })),
 );
 const CronPage = lazy(() => import('@/pages/cron-page').then((m) => ({ default: m.CronPage })));
+const WorkflowsPage = lazy(() =>
+  import('@/pages/workflows-page').then((m) => ({ default: m.WorkflowsPage })),
+);
 const SkillsPage = lazy(() => import('@/pages/skills-page').then((m) => ({ default: m.SkillsPage })));
 const LogsPage = lazy(() => import('@/pages/logs-page').then((m) => ({ default: m.LogsPage })));
 const SettingsPage = lazy(() =>
@@ -61,11 +64,6 @@ function SecondaryRouteFallback() {
   );
 }
 
-
-function LegacyAgentDefaultsRedirect({ tab }: { tab?: string }) {
-  const to = tab ? `/settings/agent-defaults?tab=${encodeURIComponent(tab)}` : '/settings/agent-defaults';
-  return <Navigate to={to} replace />;
-}
 
 function RedirectLegacySettingsAgentsDetail() {
   const { agentId } = useParams();
@@ -124,6 +122,14 @@ const router = createHashRouter([
         element: (
           <Suspense fallback={<SecondaryRouteFallback />}>
             <CronPage />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'workflows',
+        element: (
+          <Suspense fallback={<SecondaryRouteFallback />}>
+            <WorkflowsPage />
           </Suspense>
         ),
       },
@@ -254,42 +260,6 @@ const router = createHashRouter([
             element: <RedirectLegacySettingsAgentsDetail />,
           },
           {
-            path: 'agent-chat',
-            element: <LegacyAgentDefaultsRedirect />,
-          },
-          {
-            path: 'agent-workspace',
-            element: <LegacyAgentDefaultsRedirect tab="workspace" />,
-          },
-          {
-            path: 'agent-runtime',
-            element: <LegacyAgentDefaultsRedirect tab="runtime" />,
-          },
-          {
-            path: 'agent-context',
-            element: <LegacyAgentDefaultsRedirect tab="context" />,
-          },
-          {
-            path: 'agent-memory',
-            element: <LegacyAgentDefaultsRedirect tab="memory" />,
-          },
-          {
-            path: 'agent-tools',
-            element: <LegacyAgentDefaultsRedirect tab="tools" />,
-          },
-          {
-            path: 'agent-skills',
-            element: <LegacyAgentDefaultsRedirect tab="skills" />,
-          },
-          {
-            path: 'agent-system-prompt',
-            element: <LegacyAgentDefaultsRedirect tab="system-prompt" />,
-          },
-          {
-            path: 'agent-models',
-            element: <Navigate to="/settings/models" replace />,
-          },
-          {
             path: 'extensions/debug',
             element: (
               <Suspense fallback={<SettingsRouteFallback />}>
@@ -353,7 +323,7 @@ export function App() {
         <ExtensionProvider>
           <div className="flex min-h-0 flex-1 flex-col">
             <ThemeEffects />
-            <div className="flex min-h-0 flex-1 flex-col [&>*]:min-h-0 [&>*]:flex-1">
+            <div className="flex min-h-0 flex-1 flex-col *:min-h-0 *:flex-1">
               <RouterProvider router={router} />
             </div>
           </div>

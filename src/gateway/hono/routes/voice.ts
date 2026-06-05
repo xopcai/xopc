@@ -16,6 +16,7 @@ import { complete, type UserMessage } from '@earendil-works/pi-ai';
 import type { Config } from '../../../config/schema.js';
 import { getDefaultModelSync, resolveModel } from '../../../providers/index.js';
 import { isSTTAvailable, transcribe } from '../../../voice/stt/index.js';
+import { isTTSAvailable, mergeTtsConfigFromAppConfig, speak } from '../../../voice/tts/index.js';
 import { listTtsProvidersForApi } from '../../../voice/tts/list-providers.js';
 import { listSttProvidersForApi } from '../../../voice/stt/list-providers.js';
 import { mergeSttConfigFromAppConfig } from '../../../channels/attachments/voice-stt-webchat.js';
@@ -189,6 +190,70 @@ export function registerVoiceRoutes(authenticated: Hono, deps: AuthenticatedRout
         source: apiKey ? ('config' as const) : ('none' as const),
       },
     });
+  });
+
+  /**
+   * POST /api/voice/tts-test
+   *
+   * Body: { text: string, provider?: string, model?: string, voice?: string }
+   * Response: { ok: true, payload: { audio: string, format: string, provider: string } }
+   */
+  authenticated.post('/api/voice/tts-test', strictRateLimitMiddleware, async (c) => {
+    let body: { text?: unknown; provider?: unknown; model?: unknown; voice?: unknown } = {};
+    try {
+      body = (await c.req.json()) as typeof body;
+    } catch {
+      return c.json({ ok: false, error: { message: 'Invalid JSON body' } }, 400);
+    }
+
+    const text = typeof body.text === 'string' ? body.text.trim() : '';
+    if (!text) {
+      return c.json({ ok: false, error: { message: 'text is required' } }, 400);
+    }
+    if (text.length > 1000) {
+      return c.json({ ok: false, error: { message: 'text exceeds 1000 characters' } }, 400);
+    }
+
+    const config = service.currentConfig as Config;
+    const baseTtsConfig = mergeTtsConfigFromAppConfig(config.messages?.tts);
+    const provider = typeof body.provider === 'string' && body.provider.trim() ? body.provider.trim() : baseTtsConfig.provider;
+    const ttsConfig = {
+      ...baseTtsConfig,
+      enabled: true,
+      provider,
+      fallback: { enabled: false, order: [provider] },
+    };
+
+    if (!isTTSAvailable(ttsConfig)) {
+      return c.json({
+        ok: false,
+        error: { message: `TTS provider "${provider}" is not configured.` },
+      }, 503);
+    }
+
+    try {
+      const result = await speak(text, ttsConfig, {
+        appConfig: config,
+        parseDirectives: false,
+        tts: {
+          ...(typeof body.model === 'string' && body.model.trim() ? { model: body.model.trim() } : {}),
+          ...(typeof body.voice === 'string' && body.voice.trim() ? { voice: body.voice.trim() } : {}),
+        },
+      });
+      return c.json({
+        ok: true,
+        payload: {
+          audio: result.audio.toString('base64'),
+          format: result.format,
+          provider: result.provider,
+          ...(result.duration !== undefined ? { duration: result.duration } : {}),
+        },
+      });
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      log.error({ errorMessage: msg, provider }, 'Voice TTS test failed');
+      return c.json({ ok: false, error: { message: `TTS test failed: ${msg}` } }, 502);
+    }
   });
 
   /**
