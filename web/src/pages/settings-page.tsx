@@ -30,16 +30,11 @@ const SECTIONS: SettingsSectionId[] = [
   'agent-browser',
   'agent-mcp',
   'credentials',
-  'providers',
-  'models',
-  'image-models',
-  'voice',
   'gateway',
   'heartbeat',
   'tunnel',
   'remote-access',
   'shares',
-  'search',
   'cron',
   'goals',
   'dreams',
@@ -60,21 +55,6 @@ export function SettingsPage() {
 
   if (section === 'tunnel') {
     return <Navigate to="/settings/remote-access" replace />;
-  }
-
-  // M3.4: providers / models / image-models / voice / search legacy routes
-  // redirect to the unified hub at /settings/credentials, landing on the
-  // matching tab via `?tab=<id>`. The hub's `parseModelsHubTab` defaults to
-  // `providers` so the omitted tab is implied (clean URL on default).
-  if (
-    section === 'providers' ||
-    section === 'models' ||
-    section === 'image-models' ||
-    section === 'voice' ||
-    section === 'search'
-  ) {
-    const tab = section === 'providers' ? '' : `?tab=${section}`;
-    return <Navigate to={`/settings/credentials${tab}`} replace />;
   }
 
   const id = section as SettingsSectionId;

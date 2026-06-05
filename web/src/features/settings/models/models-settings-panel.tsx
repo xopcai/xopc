@@ -177,8 +177,8 @@ export function ModelsSettingsPanel({ embedded = false }: { embedded?: boolean }
     [config, baseline],
   );
 
-  // M3.4 follow-up: the chat-model fallback chain moved to
-  // /settings/agent-defaults?tab=chat, so this panel no longer renders or
+  // The chat-model fallback chain lives under Agent defaults > Model strategy,
+  // so this panel no longer renders or
   // saves agent defaults. We still load `useAgentDefaultsForm` above
   // because the agent-defaults page may not be mounted yet — invoking the
   // hook here keeps the form's SWR cache warm for fast cross-tab load —

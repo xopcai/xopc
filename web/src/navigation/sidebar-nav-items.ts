@@ -1,4 +1,4 @@
-import { Clock, Layers, Plug, Users } from 'lucide-react';
+import { Clock, GitBranch, Layers, Plug, Users } from 'lucide-react';
 
 import type { LucideIcon } from '@/features/extensions/extension-nav-icon';
 
@@ -20,6 +20,7 @@ export type BuiltinNavId =
   | 'builtin:agents'
   | 'builtin:skills'
   | 'builtin:cron'
+  | 'builtin:workflows'
   | 'builtin:channels';
 
 export type BuiltinNavDef = {
@@ -36,6 +37,7 @@ export const BUILTIN_NAV_DEFS: readonly BuiltinNavDef[] = [
   { id: 'builtin:agents', to: '/agents', Icon: Users },
   { id: 'builtin:skills', to: '/skills', Icon: Layers },
   { id: 'builtin:cron', to: '/cron', Icon: Clock },
+  { id: 'builtin:workflows', to: '/workflows', Icon: GitBranch },
   { id: 'builtin:channels', to: '/channels', Icon: Plug },
 ] as const;
 

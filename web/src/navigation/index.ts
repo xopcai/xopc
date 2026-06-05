@@ -40,16 +40,16 @@ const TAB_TO_SETTINGS_SECTION: Record<
   settingsAgentMcp: 'agent-mcp',
   settingsAgents: 'agents',
   settingsCredentials: 'credentials',
-  settingsProviders: 'providers',
-  settingsModels: 'models',
-  settingsImageModels: 'image-models',
+  settingsProviders: 'credentials',
+  settingsModels: 'credentials',
+  settingsImageModels: 'credentials',
   settingsChannels: 'channels',
-  settingsVoice: 'voice',
+  settingsVoice: 'credentials',
   settingsGateway: 'gateway',
   settingsHeartbeat: 'heartbeat',
   settingsTunnel: 'remote-access',
   settingsShares: 'shares',
-  settingsSearch: 'search',
+  settingsSearch: 'credentials',
   settingsDreams: 'dreams',
   settingsCron: 'cron',
   settingsGoals: 'goals',
@@ -89,17 +89,12 @@ export const ELECTRON_SYSTEM_NAV_GROUP: SettingsShellNavGroup = {
  * Settings rail. M3.1 collapsed two groups that previously exposed many
  * sibling rail items leading to the same underlying page or hub:
  *
- *   - `credentials` group: 6 → 1. The credentials hub
- *     (`/settings/credentials`) already lists LLM / search / image / voice as
- *     cards with manage links, so flat exposure of every sub-page in the rail
- *     was redundant.
+ *   - `credentials` group: one Models & Capabilities center for keys, catalog,
+ *     capability models, and setup health.
  *   - `agent` group: 9 → 3. The agent-defaults page (`/settings/agent-defaults`)
  *     has internal tabs for chat / workspace / runtime / context / memory /
  *     tools / skills / system-prompt. Browser remains a first-level rail item
  *     because it is a core default next to model and chat settings.
- *
- * Old direct URLs (`/settings/providers`, `/settings/agent-tools`, …) keep
- * working — see `settings-page.tsx` and the legacy redirects.
  *
  * Electron system group and extensions append in `SettingsPageLayout`.
  */
@@ -174,6 +169,7 @@ export function pathForTab(tab: Tab): string {
   if (tab === 'channels' || tab === 'settingsChannels') return '/channels';
   if (tab === 'settingsAgentDefaults') return '/settings/agent-defaults';
   if (tab === 'settingsAgentChat') return '/settings/agent-defaults';
+  if (tab === 'settingsAgentGeneration') return '/settings/agent-defaults?tab=generation';
   if (tab === 'settingsAgentWorkspace') return '/settings/agent-defaults?tab=workspace';
   if (tab === 'settingsAgentBrowser') return '/settings/agent-browser';
   if (tab === 'settingsAgentRuntime') return '/settings/agent-defaults?tab=runtime';
@@ -182,6 +178,11 @@ export function pathForTab(tab: Tab): string {
   if (tab === 'settingsAgentTools') return '/settings/agent-defaults?tab=tools';
   if (tab === 'settingsAgentSkills') return '/settings/agent-defaults?tab=skills';
   if (tab === 'settingsAgentSystemPrompt') return '/settings/agent-defaults?tab=system-prompt';
+  if (tab === 'settingsProviders') return '/settings/credentials?tab=providers';
+  if (tab === 'settingsModels') return '/settings/credentials?tab=catalog';
+  if (tab === 'settingsImageModels') return '/settings/credentials?tab=image-models';
+  if (tab === 'settingsVoice') return '/settings/credentials?tab=voice';
+  if (tab === 'settingsSearch') return '/settings/credentials?tab=search';
   const section = tabToSettingsSection(tab);
   if (section) return `/settings/${section}`;
   if (tab === 'sessions' || tab === 'logs') {

@@ -31,6 +31,7 @@ export const WorkflowCardHeader = memo(function WorkflowCardHeader({
   doneCount,
   totalCount,
   durationText,
+  metaText,
   collapsed,
   onToggleCollapsed,
   actions,
@@ -42,6 +43,7 @@ export const WorkflowCardHeader = memo(function WorkflowCardHeader({
   doneCount: number;
   totalCount: number;
   durationText: string;
+  metaText?: string;
   collapsed: boolean;
   onToggleCollapsed: () => void;
   actions?: React.ReactNode;
@@ -49,12 +51,12 @@ export const WorkflowCardHeader = memo(function WorkflowCardHeader({
 }) {
   const countLabel =
     totalCount > 0 ? `${doneCount}/${totalCount}` : status === 'running' ? '…' : '0';
-  const metaLine =
-    status === 'running'
+  const metaLine = metaText ??
+    (status === 'running'
       ? labels.runningMeta(countLabel, durationText)
       : status === 'completed'
         ? labels.completedMeta(countLabel, durationText)
-        : labels.failedMeta;
+        : labels.failedMeta);
 
   return (
     <div
@@ -72,8 +74,8 @@ export const WorkflowCardHeader = memo(function WorkflowCardHeader({
       </span>
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-baseline gap-2">
-          <div className="min-w-0 truncate text-base font-semibold tracking-tight text-fg">{name}</div>
-          <div className="shrink-0 text-xs tabular-nums text-fg-subtle">{metaLine}</div>
+          <div className="min-w-0 shrink truncate text-base font-semibold tracking-tight text-fg">{name}</div>
+          <div className="min-w-0 flex-1 truncate text-xs tabular-nums text-fg-subtle">{metaLine}</div>
         </div>
         {description ? (
           <div className="mt-0.5 line-clamp-1 text-xs text-fg-subtle">{description}</div>

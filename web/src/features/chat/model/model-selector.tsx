@@ -242,7 +242,7 @@ export function ModelSelector({
                   'hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
                 )}
                 onClick={() => {
-                  navigate('/settings/providers');
+                  navigate('/settings/credentials');
                   setOpen(false);
                   setQuery('');
                 }}

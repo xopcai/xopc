@@ -13,6 +13,7 @@ import {
   patchVoiceSettings,
   type SttProviderListEntry,
   type TtsProviderListEntry,
+  type VoiceConfigFieldMetadata,
   type VoiceModelsPayload,
   type VoiceSettingsState,
 } from '@/features/settings/voice-config-api';
@@ -108,16 +109,72 @@ const TTS_MINIMAX_VOICES_FALLBACK = [
 ];
 
 const FALLBACK_TTS_PROVIDERS: TtsProviderListEntry[] = [
-  { id: 'openai', aliases: [], configured: false },
-  { id: 'alibaba', aliases: [], configured: false },
-  { id: 'minimax', aliases: [], configured: false },
-  { id: 'edge', aliases: [], configured: false },
-  { id: 'tts-local-cli', aliases: ['cli', 'local-cli'], configured: false },
+  {
+    id: 'openai',
+    capability: 'tts',
+    displayName: 'OpenAI',
+    aliases: [],
+    configured: false,
+    fields: [],
+    diagnostics: { requiresApiKey: true, configPath: 'messages.tts.providers.openai' },
+  },
+  {
+    id: 'alibaba',
+    capability: 'tts',
+    displayName: 'Alibaba DashScope',
+    aliases: [],
+    configured: false,
+    fields: [],
+    diagnostics: { requiresApiKey: true, configPath: 'messages.tts.providers.alibaba' },
+  },
+  {
+    id: 'minimax',
+    capability: 'tts',
+    displayName: 'MiniMax',
+    aliases: [],
+    configured: false,
+    fields: [],
+    diagnostics: { requiresApiKey: true, configPath: 'messages.tts.providers.minimax' },
+  },
+  {
+    id: 'edge',
+    capability: 'tts',
+    displayName: 'Microsoft Edge',
+    aliases: [],
+    configured: false,
+    fields: [],
+    diagnostics: { requiresApiKey: false, configPath: 'messages.tts.providers.edge' },
+  },
+  {
+    id: 'tts-local-cli',
+    capability: 'tts',
+    displayName: 'Local CLI',
+    aliases: ['cli', 'local-cli'],
+    configured: false,
+    fields: [],
+    diagnostics: { requiresApiKey: false, configPath: 'messages.tts.providers.tts-local-cli' },
+  },
 ];
 
 const FALLBACK_STT_PROVIDERS: SttProviderListEntry[] = [
-  { id: 'alibaba', aliases: ['dashscope', 'paraformer'], configured: false },
-  { id: 'openai', aliases: [], configured: false },
+  {
+    id: 'alibaba',
+    capability: 'stt',
+    displayName: 'Alibaba DashScope',
+    aliases: ['dashscope', 'paraformer'],
+    configured: false,
+    fields: [],
+    diagnostics: { requiresApiKey: true, configPath: 'tools.media.audio.providers.alibaba' },
+  },
+  {
+    id: 'openai',
+    capability: 'stt',
+    displayName: 'OpenAI Whisper',
+    aliases: [],
+    configured: false,
+    fields: [],
+    diagnostics: { requiresApiKey: true, configPath: 'tools.media.audio.providers.openai' },
+  },
 ];
 
 function sttProviderLabel(id: string, v: VoiceSettingsMessages): string {
@@ -160,6 +217,29 @@ function voiceApiKeyLabels(v: VoiceSettingsMessages): VoiceApiKeyFieldLabels {
     notInConfigFile: v.apiKeyNotInConfigFile,
     loadFailed: v.apiKeyRevealFailed,
   };
+}
+
+function readSchemaFieldValue(
+  source: Record<string, unknown>,
+  field: VoiceConfigFieldMetadata,
+): string | number | boolean {
+  const value = source[field.key];
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return value;
+  }
+  if (field.defaultValue !== undefined) {
+    return field.defaultValue;
+  }
+  return field.type === 'boolean' ? false : '';
+}
+
+function parseSchemaFieldValue(field: VoiceConfigFieldMetadata, rawValue: string | boolean): unknown {
+  if (field.type === 'boolean') return Boolean(rawValue);
+  if (field.type !== 'number') return rawValue;
+  const trimmedValue = String(rawValue).trim();
+  if (!trimmedValue) return undefined;
+  const numberValue = Number(trimmedValue);
+  return Number.isFinite(numberValue) ? numberValue : undefined;
 }
 
 type VoiceFormDraft = {
@@ -632,16 +712,36 @@ function SttSection({
       options.push(entry);
     }
     if (stt.provider && !seen.has(stt.provider)) {
-      options.push({ id: stt.provider, aliases: [], configured: false });
+      options.push({
+        id: stt.provider,
+        capability: 'stt',
+        displayName: stt.provider,
+        aliases: [],
+        configured: false,
+        fields: [
+          { key: 'apiKey', label: 'API Key', type: 'password', secret: true },
+          { key: 'model', label: 'Model', type: 'string' },
+        ],
+        diagnostics: { requiresApiKey: true, configPath: `tools.media.audio.providers.${stt.provider}` },
+      });
     }
     return options;
   }, [sttProviders, stt.provider]);
 
+  const activeProvider = providerOptions.find((entry) => entry.id === stt.provider);
   const extensionProviderSlice = stt.providers?.[stt.provider];
   const extensionApiKey =
     typeof extensionProviderSlice?.apiKey === 'string' ? extensionProviderSlice.apiKey : '';
   const extensionModel =
     typeof extensionProviderSlice?.model === 'string' ? extensionProviderSlice.model : '';
+  const schemaProviderSlice: Record<string, unknown> = {
+    ...(stt.provider === 'alibaba' ? (stt.alibaba ?? {}) : {}),
+    ...(stt.provider === 'openai' ? (stt.openai ?? {}) : {}),
+    ...(extensionProviderSlice ?? {}),
+  };
+  const additionalFields = (activeProvider?.fields ?? []).filter(
+    (field) => field.key !== 'apiKey' && field.key !== 'model',
+  );
 
   const updateExtensionProvider = useCallback(
     (patch: Record<string, unknown>) => {
@@ -776,6 +876,20 @@ function SttSection({
               </div>
             </div>
 
+            {additionalFields.length > 0 ? (
+              <div className="grid gap-3 sm:grid-cols-2">
+                {additionalFields.map((field) => (
+                  <SchemaConfigField
+                    key={field.key}
+                    field={field}
+                    value={readSchemaFieldValue(schemaProviderSlice, field)}
+                    onChange={(next) => updateExtensionProvider({ [field.key]: next })}
+                    className={field.type === 'textarea' ? 'sm:col-span-2' : credentialFieldWidthClass}
+                  />
+                ))}
+              </div>
+            ) : null}
+
             <div className="flex items-center justify-between gap-2 rounded-xl bg-surface-hover/50 px-3 py-2.5 dark:bg-surface-hover/35">
               <div>
                 <div className="text-sm font-medium text-fg">{v.stt.fallback}</div>
@@ -847,10 +961,66 @@ function TtsSection({
       options.push(entry);
     }
     if (tts.provider && !seen.has(tts.provider)) {
-      options.push({ id: tts.provider, aliases: [], configured: false });
+      options.push({
+        id: tts.provider,
+        capability: 'tts',
+        displayName: tts.provider,
+        aliases: [],
+        configured: false,
+        fields: [
+          { key: 'apiKey', label: 'API Key', type: 'password', secret: true },
+          { key: 'model', label: 'Model', type: 'string' },
+          { key: 'voice', label: 'Voice', type: 'string' },
+        ],
+        diagnostics: { requiresApiKey: true, configPath: `messages.tts.providers.${tts.provider}` },
+      });
     }
     return options;
   }, [ttsProviders, tts.provider]);
+
+  const activeProvider = providerOptions.find((entry) => entry.id === tts.provider);
+  const providerSlice = tts.providers?.[tts.provider];
+  const schemaProviderSlice: Record<string, unknown> = {
+    ...(tts.provider === 'openai' ? (tts.openai ?? {}) : {}),
+    ...(tts.provider === 'alibaba' ? (tts.alibaba ?? {}) : {}),
+    ...(tts.provider === 'edge' ? (tts.edge ?? {}) : {}),
+    ...(tts.provider === 'minimax' ? (tts.minimax ?? {}) : {}),
+    ...(tts.provider === 'tts-local-cli' ? (tts['tts-local-cli'] ?? {}) : {}),
+    ...(providerSlice ?? {}),
+  };
+  const additionalFields = (activeProvider?.fields ?? []).filter(
+    (field) => !['apiKey', 'model', 'voice'].includes(field.key),
+  );
+
+  const updateProviderSlice = useCallback(
+    (patch: Record<string, unknown>) => {
+      updateTts({
+        providers: {
+          ...(tts.providers ?? {}),
+          [tts.provider]: {
+            ...(tts.providers?.[tts.provider] ?? {}),
+            ...patch,
+          },
+        },
+      });
+    },
+    [tts.provider, tts.providers, updateTts],
+  );
+
+  const updateSchemaField = useCallback(
+    (field: VoiceConfigFieldMetadata, next: unknown) => {
+      const patch = { [field.key]: next };
+      updateProviderSlice(patch);
+      if (tts.provider === 'openai' && field.key === 'baseUrl') {
+        updateTtsOpenai(patch);
+      } else if (tts.provider === 'minimax' && (field.key === 'baseUrl' || field.key === 'groupId')) {
+        updateTtsMinimax(patch);
+      } else if (tts.provider === 'edge' && field.key === 'lang') {
+        updateTtsEdge(patch);
+      }
+    },
+    [tts.provider, updateProviderSlice, updateTtsEdge, updateTtsMinimax, updateTtsOpenai],
+  );
 
   return (
     <section className="rounded-2xl bg-surface-base px-4 py-5 sm:px-5">
@@ -1096,10 +1266,101 @@ function TtsSection({
                 <p className="text-xs text-fg-subtle sm:col-span-2">{v.tts.localCli.hint}</p>
               </div>
             ) : null}
+
+            {additionalFields.length > 0 ? (
+              <div className="grid gap-3 sm:grid-cols-2">
+                {additionalFields.map((field) => (
+                  <SchemaConfigField
+                    key={field.key}
+                    field={field}
+                    value={readSchemaFieldValue(schemaProviderSlice, field)}
+                    onChange={(next) => updateSchemaField(field, next)}
+                    className={field.type === 'textarea' ? 'sm:col-span-2' : credentialFieldWidthClass}
+                  />
+                ))}
+              </div>
+            ) : null}
           </>
         ) : null}
       </div>
     </section>
+  );
+}
+
+function SchemaConfigField({
+  field,
+  value,
+  onChange,
+  className,
+}: {
+  field: VoiceConfigFieldMetadata;
+  value: string | number | boolean;
+  onChange: (next: unknown) => void;
+  className?: string;
+}) {
+  const id = `voice-schema-field-${field.key}`;
+  const description = field.description;
+
+  if (field.type === 'boolean') {
+    return (
+      <label className={cn('flex items-center justify-between gap-3 rounded-xl bg-surface-hover/50 px-3 py-2.5 dark:bg-surface-hover/35', className)}>
+        <span>
+          <span className="block text-sm font-medium text-fg">{field.label}</span>
+          {description ? <span className="mt-1 block text-xs text-fg-subtle">{description}</span> : null}
+        </span>
+        <input
+          type="checkbox"
+          className="ui-checkbox"
+          checked={Boolean(value)}
+          onChange={(event) => onChange(parseSchemaFieldValue(field, event.target.checked))}
+        />
+      </label>
+    );
+  }
+
+  const fieldValue = typeof value === 'boolean' ? '' : String(value);
+
+  return (
+    <div className={cn('flex flex-col gap-1.5', className)}>
+      <FieldLabel>{field.label}</FieldLabel>
+      {field.type === 'select' ? (
+        <select
+          id={id}
+          className={selectClassName()}
+          value={fieldValue}
+          required={field.required}
+          onChange={(event) => onChange(parseSchemaFieldValue(field, event.target.value))}
+        >
+          {(field.options ?? []).map((option) => (
+            <option key={option.id} value={option.id}>
+              {option.name}
+            </option>
+          ))}
+        </select>
+      ) : field.type === 'textarea' ? (
+        <textarea
+          id={id}
+          className={cn(inputClassName(), 'min-h-24 resize-y')}
+          value={fieldValue}
+          required={field.required}
+          placeholder={field.placeholder}
+          onChange={(event) => onChange(parseSchemaFieldValue(field, event.target.value))}
+        />
+      ) : (
+        <input
+          id={id}
+          className={inputClassName()}
+          type={field.type === 'number' ? 'number' : field.type === 'password' ? 'password' : 'text'}
+          autoComplete={field.secret ? 'new-password' : 'off'}
+          spellCheck={false}
+          value={fieldValue}
+          required={field.required}
+          placeholder={field.placeholder}
+          onChange={(event) => onChange(parseSchemaFieldValue(field, event.target.value))}
+        />
+      )}
+      {description ? <p className="text-xs text-fg-subtle">{description}</p> : null}
+    </div>
   );
 }
 

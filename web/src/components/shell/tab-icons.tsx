@@ -53,6 +53,7 @@ const TAB_ICONS: Record<Tab, LucideIcon> = {
   settingsAgentChat: Cpu,
   settingsAgentWorkspace: Folder,
   settingsAgentBrowser: Globe,
+  settingsAgentGeneration: SlidersHorizontal,
   settingsAgentRuntime: Timer,
   settingsAgentContext: Layers2,
   settingsAgentMemory: Brain,

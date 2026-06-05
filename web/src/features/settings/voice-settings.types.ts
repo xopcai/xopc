@@ -17,22 +17,41 @@ export interface VoiceModel {
 }
 
 export interface VoiceModelsPayload {
-  stt: {
-    alibaba: VoiceModel[];
-    openai: VoiceModel[];
-  };
-  tts: {
-    alibaba: VoiceModel[];
-    openai: VoiceModel[];
-    edge: VoiceModel[];
-    minimax: VoiceModel[];
-  };
-  ttsVoices: {
-    alibaba: VoiceModel[];
-    openai: VoiceModel[];
-    edge: VoiceModel[];
-    minimax: VoiceModel[];
-  };
+  stt: Record<string, VoiceModel[]>;
+  tts: Record<string, VoiceModel[]>;
+  ttsVoices: Record<string, VoiceModel[]>;
+}
+
+export type VoiceConfigFieldType = 'string' | 'password' | 'number' | 'boolean' | 'select' | 'textarea';
+
+export interface VoiceConfigFieldMetadata {
+  key: string;
+  label: string;
+  type: VoiceConfigFieldType;
+  required?: boolean;
+  secret?: boolean;
+  placeholder?: string;
+  description?: string;
+  options?: VoiceModel[];
+  defaultValue?: string | number | boolean;
+}
+
+export interface VoiceProviderDiagnosticMetadata {
+  requiresApiKey: boolean;
+  envKeys?: string[];
+  configPath: string;
+}
+
+export interface VoiceProviderMetadata {
+  id: string;
+  capability: 'stt' | 'tts';
+  displayName: string;
+  description?: string;
+  aliases?: string[];
+  models?: VoiceModel[];
+  voices?: VoiceModel[];
+  fields: VoiceConfigFieldMetadata[];
+  diagnostics: VoiceProviderDiagnosticMetadata;
 }
 
 export interface SttSettings {
@@ -71,6 +90,7 @@ export interface TtsSettings {
   trigger: 'off' | 'always' | 'inbound' | 'tagged';
   maxTextLength?: number;
   timeoutMs?: number;
+  providers?: Record<string, Record<string, unknown>>;
   alibaba?: { apiKey?: string; model?: string; voice?: string };
   openai?: { apiKey?: string; baseUrl?: string; model?: string; voice?: string };
   edge?: { voice?: string; lang?: string };
@@ -83,8 +103,7 @@ export interface VoiceSettingsState {
   tts: TtsSettings;
 }
 
-export interface TtsProviderListEntry {
-  id: string;
+export interface TtsProviderListEntry extends VoiceProviderMetadata {
   aliases: string[];
   configured: boolean;
 }
@@ -94,8 +113,7 @@ export interface VoiceProvidersPayload {
   active: string;
 }
 
-export interface SttProviderListEntry {
-  id: string;
+export interface SttProviderListEntry extends VoiceProviderMetadata {
   aliases: string[];
   configured: boolean;
 }

@@ -64,7 +64,7 @@ export function ExtensionSettingsPage() {
         <div className="flex flex-col gap-2 rounded-lg border border-edge-subtle bg-surface-base px-4 py-3 text-sm">
           <p className="leading-relaxed text-fg-muted">{xm.banner}</p>
           <Link
-            to="/settings/image-models"
+            to="/settings/credentials?tab=image-models"
             className="w-fit font-medium text-accent hover:underline"
             title={m.imageModelsSettings.imageModelsLinkTitle}
           >
@@ -76,7 +76,7 @@ export function ExtensionSettingsPage() {
       {isMediaProvider ? (
         <div className="flex flex-col gap-2 rounded-lg border border-edge-subtle bg-surface-base px-4 py-3 text-sm">
           <p className="leading-relaxed text-fg-muted">{xs.banner}</p>
-          <Link to="/settings/voice" className="w-fit font-medium text-accent hover:underline">
+          <Link to="/settings/credentials?tab=voice" className="w-fit font-medium text-accent hover:underline">
             {xs.openVoice}
           </Link>
         </div>

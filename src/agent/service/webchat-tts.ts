@@ -7,7 +7,6 @@ import { shouldUseTTS, getChannelOutputFormat } from '../../voice/tts/service.js
 import { isTTSAvailable } from '../../voice/tts/factory.js';
 import { resolveAgentHomeDir } from '../agent-scope.js';
 import { extractProfileAgentId } from '../../config/agent-profile.js';
-import type { AgentInstanceGateway } from '../agent-instance-gateway.js';
 import type { SessionStore } from '../../session/index.js';
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 
@@ -20,8 +19,8 @@ export type WebchatTtsResult = {
 
 export type WebchatTtsDeps = {
   config: Config | undefined;
-  agentManager: AgentInstanceGateway;
   sessionStore: SessionStore;
+  getLastAssistantPlainText: (sessionKey: string) => string;
   log: { warn: (obj: Record<string, unknown>, msg: string) => void };
 };
 
@@ -41,7 +40,7 @@ export async function maybeEmitWebchatTts(
   if (!decision.useTTS) {
     return null;
   }
-  const text = deps.agentManager.getLastAssistantContent(sessionKey)?.trim();
+  const text = deps.getLastAssistantPlainText(sessionKey).trim();
   if (!text) {
     return null;
   }

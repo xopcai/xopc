@@ -30,6 +30,7 @@ export type Tab =
   | 'settingsAgentChat'
   | 'settingsAgentWorkspace'
   | 'settingsAgentBrowser'
+  | 'settingsAgentGeneration'
   | 'settingsAgentRuntime'
   | 'settingsAgentContext'
   | 'settingsAgentMemory'
