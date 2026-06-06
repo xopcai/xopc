@@ -2,8 +2,6 @@ import * as Dialog from '@radix-ui/react-dialog';
 import {
   CheckCircle2,
   ExternalLink,
-  Eye,
-  EyeOff,
   Loader2,
   Trash2,
   X,
@@ -13,6 +11,7 @@ import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import type { ConfiguredModel } from '@/features/chat/api/registry-api';
+import { ProviderApiKeyField } from '@/features/settings/provider-api-key-field';
 import {
   deleteProviderApiKey,
   isMaskedKey,
@@ -59,6 +58,11 @@ export interface ProviderManageDialogMessages {
   getApiKeyCn: string;
   showKey: string;
   hideKey: string;
+  copy: string;
+  copied: string;
+  maskedHelp: string;
+  notInConfigFile: string;
+  loadFailed: string;
   custom: string;
 }
 
@@ -151,7 +155,6 @@ function ManageBuiltinProvider({
   const providerModels = allModels.filter((m) => m.provider === providerId);
 
   const [apiKey, setApiKey] = useState(row?.apiKey ?? '');
-  const [showKey, setShowKey] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -226,36 +229,26 @@ function ManageBuiltinProvider({
         ) : null}
 
         {/* API key */}
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="manage-api-key" className="text-sm font-medium text-fg">
-            {labels.apiKeyLabel}
-          </label>
-          <div className="relative">
-            <input
-              id="manage-api-key"
-              type={showKey ? 'text' : 'password'}
-              autoComplete="off"
-              value={apiKey}
-              onChange={(e) => {
-                setApiKey(e.target.value);
-                setSaved(false);
-              }}
-              placeholder={labels.apiKeyPlaceholder}
-              className={cn(
-                'w-full rounded-lg border border-edge bg-surface-panel py-2 pl-3 pr-10 text-sm text-fg placeholder:text-fg-subtle',
-                settingsInputFocusClass,
-              )}
-            />
-            <button
-              type="button"
-              onClick={() => setShowKey(!showKey)}
-              className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-fg-subtle hover:text-fg"
-              title={showKey ? labels.hideKey : labels.showKey}
-            >
-              {showKey ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
-            </button>
-          </div>
-        </div>
+        <ProviderApiKeyField
+          providerId={providerId}
+          inputId="manage-api-key"
+          value={apiKey}
+          onChange={(next) => {
+            setApiKey(next);
+            setSaved(false);
+          }}
+          labels={{
+            apiKeyLabel: labels.apiKeyLabel,
+            apiKeyPlaceholder: labels.apiKeyPlaceholder,
+            maskedHelp: labels.maskedHelp,
+            copy: labels.copy,
+            copied: labels.copied,
+            show: labels.showKey,
+            hide: labels.hideKey,
+            notInConfigFile: labels.notInConfigFile,
+            loadFailed: labels.loadFailed,
+          }}
+        />
 
         {apiKeyLinks.length > 0 ? (
           <div className="flex flex-wrap gap-2">
@@ -370,7 +363,6 @@ function ManageCustomProvider({
   const existingProvider = customConfig?.providers[providerId];
   const [baseUrl, setBaseUrl] = useState(existingProvider?.baseUrl ?? '');
   const [apiKey, setApiKey] = useState(existingProvider?.apiKey ?? '');
-  const [showKey, setShowKey] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmRemove, setConfirmRemove] = useState(false);
@@ -382,10 +374,13 @@ function ManageCustomProvider({
     setSaving(true);
     setError(null);
     try {
+      const trimmedKey = apiKey.trim();
       const updatedProvider: ProviderConfig = {
         ...existingProvider,
         baseUrl: baseUrl.trim() || undefined,
-        apiKey: apiKey.trim() || undefined,
+        apiKey: isMaskedKey(trimmedKey)
+          ? existingProvider?.apiKey
+          : trimmedKey || undefined,
       };
       const updatedConfig: ModelsJsonConfig = {
         providers: {
@@ -454,33 +449,23 @@ function ManageCustomProvider({
         </div>
 
         {/* API Key */}
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="manage-custom-api-key" className="text-sm font-medium text-fg">
-            {labels.apiKeyLabel}
-          </label>
-          <div className="relative">
-            <input
-              id="manage-custom-api-key"
-              type={showKey ? 'text' : 'password'}
-              autoComplete="off"
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              placeholder={labels.apiKeyPlaceholder}
-              className={cn(
-                'w-full rounded-lg border border-edge bg-surface-panel py-2 pl-3 pr-10 text-sm text-fg placeholder:text-fg-subtle',
-                settingsInputFocusClass,
-              )}
-            />
-            <button
-              type="button"
-              onClick={() => setShowKey(!showKey)}
-              className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-fg-subtle hover:text-fg"
-              title={showKey ? labels.hideKey : labels.showKey}
-            >
-              {showKey ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
-            </button>
-          </div>
-        </div>
+        <ProviderApiKeyField
+          providerId={providerId}
+          inputId="manage-custom-api-key"
+          value={apiKey}
+          onChange={setApiKey}
+          labels={{
+            apiKeyLabel: labels.apiKeyLabel,
+            apiKeyPlaceholder: labels.apiKeyPlaceholder,
+            maskedHelp: labels.maskedHelp,
+            copy: labels.copy,
+            copied: labels.copied,
+            show: labels.showKey,
+            hide: labels.hideKey,
+            notInConfigFile: labels.notInConfigFile,
+            loadFailed: labels.loadFailed,
+          }}
+        />
 
         {/* Model count */}
         <div className="text-sm text-fg-muted">

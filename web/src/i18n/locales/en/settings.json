@@ -147,6 +147,11 @@
       "getApiKeyCn": "Get API key (CN)",
       "showKey": "Show key",
       "hideKey": "Hide key",
+      "copy": "Copy",
+      "copied": "Copied",
+      "maskedHelp": "Saved keys are hidden. Use the eye to load the key from the gateway store or models.json (not from environment variables).",
+      "notInConfigFile": "No key stored in the gateway or models.json — this provider may be using an environment variable or OAuth.",
+      "loadFailed": "Could not load the API key.",
       "custom": "Custom"
     }
   },

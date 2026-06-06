@@ -28,6 +28,13 @@ import type { ProviderModelDefinition } from '../../../extensions/types/provider
 import type { AuthenticatedRouteDeps } from './deps.js';
 import { respondStartupUnavailable } from '../lib/startup-unavailable.js';
 
+function readModelsJsonProviderApiKey(providerId: string): string | undefined {
+  const { config } = loadModelsJson(getModelsJsonPath());
+  const entry = config.providers?.[providerId.trim()];
+  const key = entry?.apiKey;
+  return typeof key === 'string' && key.trim() ? key.trim() : undefined;
+}
+
 /** Plaintext key only when persisted under `cfg.providers.<id>.apiKey` (not env / credential store). */
 function readProviderApiKeyFromConfigFileOnly(cfg: Config, providerId: string): string | undefined {
   const id = providerId.trim().toLowerCase();
@@ -356,6 +363,41 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
 
     return c.json({ ok: true, payload: { providers: meta } });
   });
+
+  /**
+   * POST /api/providers/:providerId/reveal-api-key — plaintext key when stored in the
+   * gateway credential store or models.json (not env vars or OAuth tokens).
+   */
+  authenticated.post(
+    '/api/providers/:providerId/reveal-api-key',
+    strictRateLimitMiddleware,
+    async (c) => {
+      const rawId = c.req.param('providerId')?.trim();
+      if (!rawId) {
+        return c.json({ ok: false, error: { message: 'Missing providerId' } }, 400);
+      }
+      const providerId = rawId.toLowerCase();
+      const resolver = new CredentialResolver();
+      const stored = await resolver.revealGatewayStoredApiKey(providerId);
+      if (stored) {
+        return c.json({
+          ok: true,
+          payload: { id: providerId, apiKey: stored, source: 'credential' as const },
+        });
+      }
+      const fromModelsJson = readModelsJsonProviderApiKey(providerId);
+      if (fromModelsJson) {
+        return c.json({
+          ok: true,
+          payload: { id: providerId, apiKey: fromModelsJson, source: 'models_json' as const },
+        });
+      }
+      return c.json({
+        ok: true,
+        payload: { id: providerId, apiKey: null, source: 'none' as const },
+      });
+    },
+  );
 
   // DELETE /api/providers/:providerId/key - Remove a provider's stored API key
   authenticated.delete('/api/providers/:providerId/key', strictRateLimitMiddleware, async (c) => {

@@ -66,7 +66,7 @@ export function mergeProviderRows(
   return meta.map((p) => ({
     ...p,
     configured: p.configured || configuredFromModels.has(p.id),
-    apiKey: configKeys[p.id] || (p.configured || configuredFromModels.has(p.id) ? '***' : ''),
+    apiKey: configKeys[p.id] || (p.configured || configuredFromModels.has(p.id) ? '••••••••••••' : ''),
   }));
 }
 
@@ -83,6 +83,29 @@ export async function deleteProviderApiKey(providerId: string): Promise<void> {
     method: 'DELETE',
   });
   await revalidateModelsHubCaches();
+}
+
+export type RevealProviderApiKeyPayload = {
+  id: string;
+  apiKey: string | null;
+  source: 'credential' | 'models_json' | 'none';
+};
+
+/** POST /api/providers/:id/reveal-api-key — gateway-stored or models.json key only. */
+export async function revealProviderApiKey(providerId: string): Promise<RevealProviderApiKeyPayload> {
+  const data = await fetchJson<{
+    ok?: boolean;
+    payload?: RevealProviderApiKeyPayload;
+    error?: { message?: string };
+  }>(apiUrl(`/api/providers/${encodeURIComponent(providerId)}/reveal-api-key`), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: '{}',
+  });
+  if (!data.ok || !data.payload) {
+    throw new Error(data.error?.message ?? 'Reveal failed');
+  }
+  return data.payload;
 }
 
 export type TestApiKeyResolutionPayload = {

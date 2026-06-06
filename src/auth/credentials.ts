@@ -170,6 +170,18 @@ export class CredentialResolver {
   }
 
   /**
+   * Plaintext API key from global auth profiles only (no env/oauth fallback).
+   * Used by the gateway console reveal endpoint.
+   */
+  async revealGatewayStoredApiKey(provider: string): Promise<string | null> {
+    const normalizedProvider = provider.toLowerCase();
+    const profiles = await this.loadAuthProfilesFile();
+    const profile = this.findProfileForProvider(profiles, normalizedProvider);
+    const key = profile?.key?.trim();
+    return key || null;
+  }
+
+  /**
    * Save an API key profile
    */
   async saveApiKey(
