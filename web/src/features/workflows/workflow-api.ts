@@ -5,6 +5,11 @@ export type WorkflowRunStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 
 export type WorkflowPhaseStatus = 'pending' | 'running' | 'completed' | 'failed';
 export type WorkflowAgentStatus = 'queued' | 'running' | 'done' | 'error' | 'skipped';
 
+export interface WorkflowDefinitionEstimatedAgents {
+  min: number;
+  max: number;
+}
+
 export interface WorkflowDefinition {
   id: string;
   name: string;
@@ -12,8 +17,14 @@ export interface WorkflowDefinition {
   description: string;
   version: string;
   phases: WorkflowPhaseDefinition[];
+  runtime?: WorkflowRuntimeDefinition;
   defaults: WorkflowDefinitionDefaults;
   metadata: WorkflowDefinitionMetadata;
+}
+
+export interface WorkflowRuntimeDefinition {
+  kind: 'script';
+  source: string;
 }
 
 export interface WorkflowPhaseDefinition {
@@ -31,8 +42,24 @@ export interface WorkflowDefinitionDefaults {
 export interface WorkflowDefinitionMetadata {
   tags: string[];
   builtIn: boolean;
+  source: 'builtin' | 'user';
+  whenToUse?: string;
+  estimatedAgents?: WorkflowDefinitionEstimatedAgents;
+  examplePrompts?: WorkflowDefinitionExamplePrompt[];
+  i18n?: Record<string, WorkflowDefinitionLocaleBundle>;
   createdAtMs: number;
   updatedAtMs: number;
+}
+
+export interface WorkflowDefinitionExamplePrompt {
+  field: string;
+  text: string;
+}
+
+export interface WorkflowDefinitionLocaleBundle {
+  description?: string;
+  whenToUse?: string;
+  examplePrompts?: WorkflowDefinitionExamplePrompt[];
 }
 
 export interface WorkflowRunMetrics {
@@ -93,6 +120,15 @@ export interface WorkflowAgentView {
   error?: string;
   startedAtMs?: number;
   completedAtMs?: number;
+  steps?: Array<{
+    id: string;
+    label: string;
+    kind: 'tool' | 'llm' | 'thinking';
+    detail?: string;
+    status: 'running' | 'done' | 'error';
+    startedAtMs?: number;
+    completedAtMs?: number;
+  }>;
 }
 
 export interface WorkflowLogEntry {
@@ -111,6 +147,15 @@ export interface WorkflowRunView {
   controls: { canCancel: boolean; canRetry: boolean; canArchive: boolean };
 }
 
+export interface WorkflowStats {
+  totalRuns: number;
+  activeRuns: number;
+  succeededRuns: number;
+  failedRuns: number;
+  averageDurationMs: number | null;
+  topDefinitions: Array<{ definitionId: string; count: number }>;
+}
+
 export interface StartWorkflowRunOptions {
   definitionId: string;
   goal?: string;
@@ -125,6 +170,30 @@ export interface StartWorkflowRunOptions {
 export async function listWorkflowDefinitions(): Promise<WorkflowDefinition[]> {
   const data = await fetchJson<{ definitions: WorkflowDefinition[] }>(apiUrl('/api/workflows/definitions'));
   return data.definitions ?? [];
+}
+
+export async function getWorkflowDefinition(id: string): Promise<WorkflowDefinition> {
+  const data = await fetchJson<{ definition: WorkflowDefinition }>(
+    apiUrl(`/api/workflows/definitions/${encodeURIComponent(id)}`),
+  );
+  return data.definition;
+}
+
+export async function saveWorkflowDefinition(name: string, script: string): Promise<WorkflowDefinition> {
+  const data = await fetchJson<{ definition: WorkflowDefinition }>(apiUrl('/api/workflows/definitions'), {
+    method: 'POST',
+    body: JSON.stringify({ name, script }),
+  });
+  return data.definition;
+}
+
+export async function deleteWorkflowDefinition(id: string): Promise<void> {
+  await fetchJson(apiUrl(`/api/workflows/definitions/${encodeURIComponent(id)}`), { method: 'DELETE' });
+}
+
+export async function getWorkflowStats(): Promise<WorkflowStats> {
+  const data = await fetchJson<{ stats: WorkflowStats }>(apiUrl('/api/workflows/stats'));
+  return data.stats;
 }
 
 export async function listWorkflowRuns(limit = 50): Promise<WorkflowRunSummary[]> {
@@ -154,4 +223,11 @@ export async function rebuildWorkflowRun(runId: string): Promise<WorkflowRunView
     { method: 'POST' },
   );
   return data.view;
+}
+
+export async function retryWorkflowRun(runId: string): Promise<{ runId: string }> {
+  return fetchJson<{ runId: string }>(
+    apiUrl(`/api/workflows/runs/${encodeURIComponent(runId)}/retry`),
+    { method: 'POST' },
+  );
 }

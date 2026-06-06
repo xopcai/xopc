@@ -31,6 +31,7 @@ function createDefinition(script: string): WorkflowDefinition {
     metadata: {
       tags: ['research'],
       builtIn: true,
+      source: 'builtin',
       createdAtMs: 1_000,
       updatedAtMs: 1_000,
     },

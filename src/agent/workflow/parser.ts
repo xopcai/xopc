@@ -17,6 +17,7 @@ import { parse } from 'acorn';
 import type { Node } from 'acorn';
 
 import { lintAwaits } from './lint.js';
+import { validateExamplePrompts, validateMetaI18n } from './meta-locale.js';
 import type { WorkflowMeta, WorkflowMetaPhase } from './types.js';
 
 type AnyNode = Node & { [key: string]: any; start: number; end: number };
@@ -277,4 +278,6 @@ function validateMeta(meta: unknown): asserts meta is WorkflowMeta {
       throw new Error('meta.estimatedAgents requires min >= 1 and max >= min');
     }
   }
+  validateExamplePrompts(value.examplePrompts, 'meta.examplePrompts');
+  validateMetaI18n(value.i18n);
 }

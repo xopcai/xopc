@@ -6,14 +6,14 @@ import type {
   WorkflowPhaseStatus,
   WorkflowPhaseView,
   WorkflowRun,
-  WorkflowRunStatus,
   WorkflowRunView,
   WorkflowTimelineItem,
 } from '../domain/run.js';
+import { isTerminalWorkflowRunStatus } from '../domain/run.js';
 import type { WorkflowArtifactRef } from '../domain/result.js';
 
-function terminalRunStatus(status: WorkflowRunStatus): boolean {
-  return status === 'succeeded' || status === 'failed' || status === 'cancelled' || status === 'timeout';
+function terminalRunStatus(status: WorkflowRun['status']): boolean {
+  return isTerminalWorkflowRunStatus(status);
 }
 
 function phaseStatusAfterAgentStatus(agentStatuses: WorkflowAgentStatus[]): WorkflowPhaseStatus {

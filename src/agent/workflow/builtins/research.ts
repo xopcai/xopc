@@ -15,6 +15,20 @@ export const RESEARCH_SCRIPT = `export const meta = {
   name: 'research',
   description: 'Multi-angle research on a question with parallel exploration and a cited synthesis.',
   whenToUse: 'User asks a non-trivial research question that benefits from multiple search angles or source reads.',
+  examplePrompts: [
+    { field: 'question', text: 'Compare Bun vs Node startup performance' },
+    { field: 'question', text: 'What are the trade-offs of SQLite vs Postgres for this app?' },
+  ],
+  i18n: {
+    zh: {
+      description: '多角度并行调研一个问题，并产出带引用的综合报告。',
+      whenToUse: '用户提出需要多角度检索、阅读来源的非平凡调研问题时。',
+      examplePrompts: [
+        { field: 'question', text: '比较 Bun 与 Node 的启动性能' },
+        { field: 'question', text: '这个应用用 SQLite 还是 Postgres 各有什么权衡？' },
+      ],
+    },
+  },
   tags: ['research', 'investigation'],
   estimatedAgents: { min: 4, max: 8 },
   phases: [

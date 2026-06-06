@@ -14,6 +14,20 @@ export const IMPLEMENTATION_PLAN_SCRIPT = `export const meta = {
   name: 'implementation_plan',
   description: 'Create an actionable implementation plan from a feature, refactor, or bugfix request.',
   whenToUse: 'User wants a technical plan before coding, especially for multi-file or unfamiliar code changes.',
+  examplePrompts: [
+    { field: 'request', text: 'Plan a refactor of the session store' },
+    { field: 'request', text: 'Design implementation steps for OAuth login' },
+  ],
+  i18n: {
+    zh: {
+      description: '将功能、重构或修复需求转化为可执行的实现计划。',
+      whenToUse: '用户想在动手写代码前拿到技术方案，尤其是多文件或不熟悉代码的改动。',
+      examplePrompts: [
+        { field: 'request', text: '规划 session store 的重构步骤' },
+        { field: 'request', text: '设计 OAuth 登录的实现步骤' },
+      ],
+    },
+  },
   tags: ['planning', 'implementation', 'architecture'],
   estimatedAgents: { min: 5, max: 6 },
   phases: [
