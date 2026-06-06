@@ -7,6 +7,7 @@ import {
   X,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -62,6 +63,9 @@ export interface ProviderManageDialogMessages {
   copied: string;
   maskedHelp: string;
   notInConfigFile: string;
+  extensionKeyHint: string;
+  openExtensionSettings: string;
+  extensionSettingsLinkTitle: string;
   loadFailed: string;
   custom: string;
 }
@@ -228,27 +232,43 @@ function ManageBuiltinProvider({
           <p className="text-sm text-fg-muted">{labels.apiUrlExtensionHint}</p>
         ) : null}
 
-        {/* API key */}
-        <ProviderApiKeyField
-          providerId={providerId}
-          inputId="manage-api-key"
-          value={apiKey}
-          onChange={(next) => {
-            setApiKey(next);
-            setSaved(false);
-          }}
-          labels={{
-            apiKeyLabel: labels.apiKeyLabel,
-            apiKeyPlaceholder: labels.apiKeyPlaceholder,
-            maskedHelp: labels.maskedHelp,
-            copy: labels.copy,
-            copied: labels.copied,
-            show: labels.showKey,
-            hide: labels.hideKey,
-            notInConfigFile: labels.notInConfigFile,
-            loadFailed: labels.loadFailed,
-          }}
-        />
+        {row?.supportsApiKey !== false ? (
+          <ProviderApiKeyField
+            providerId={providerId}
+            inputId="manage-api-key"
+            value={apiKey}
+            onChange={(next) => {
+              setApiKey(next);
+              setSaved(false);
+            }}
+            labels={{
+              apiKeyLabel: labels.apiKeyLabel,
+              apiKeyPlaceholder: labels.apiKeyPlaceholder,
+              maskedHelp: labels.maskedHelp,
+              copy: labels.copy,
+              copied: labels.copied,
+              show: labels.showKey,
+              hide: labels.hideKey,
+              notInConfigFile: labels.notInConfigFile,
+              loadFailed: labels.loadFailed,
+            }}
+          />
+        ) : (
+          <div className="flex flex-col gap-2 rounded-lg border border-edge-subtle bg-surface-panel/60 px-3 py-2 text-sm text-fg-muted">
+            <p>{labels.extensionKeyHint}</p>
+            {row?.extensionId ? (
+              <Link
+                to={`/settings/ext/${encodeURIComponent(row.extensionId)}`}
+                className="inline-flex w-fit items-center gap-1 font-medium text-accent hover:underline"
+                title={labels.extensionSettingsLinkTitle}
+                onClick={onClose}
+              >
+                {labels.openExtensionSettings}
+                <ExternalLink className="size-3" aria-hidden />
+              </Link>
+            ) : null}
+          </div>
+        )}
 
         {apiKeyLinks.length > 0 ? (
           <div className="flex flex-wrap gap-2">
@@ -296,15 +316,19 @@ function ManageBuiltinProvider({
       </div>
 
       <div className="flex items-center justify-between border-t border-edge-subtle px-5 py-3">
-        <Button
-          type="button"
-          variant="ghost"
-          className="gap-1.5 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
-          onClick={() => setConfirmRemove(true)}
-        >
-          <Trash2 className="size-3.5" aria-hidden />
-          {labels.remove}
-        </Button>
+        {row?.supportsApiKey !== false ? (
+          <Button
+            type="button"
+            variant="ghost"
+            className="gap-1.5 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+            onClick={() => setConfirmRemove(true)}
+          >
+            <Trash2 className="size-3.5" aria-hidden />
+            {labels.remove}
+          </Button>
+        ) : (
+          <span />
+        )}
         <div className="flex items-center gap-2">
           {dirty && !isMaskedKey(apiKey.trim()) ? (
             <Button

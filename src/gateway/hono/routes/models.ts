@@ -25,6 +25,7 @@ import {
 import { CredentialResolver } from '../../../auth/credentials.js';
 import { getProviderRegistry } from '../../../providers/plugin-registry.js';
 import type { ProviderModelDefinition } from '../../../extensions/types/providers.js';
+import type { GatewayService } from '../../service.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 import { respondStartupUnavailable } from '../lib/startup-unavailable.js';
 
@@ -42,6 +43,13 @@ function readProviderApiKeyFromConfigFileOnly(cfg: Config, providerId: string): 
   if (!bucket || typeof bucket !== 'object' || Array.isArray(bucket)) return undefined;
   const k = (bucket as { apiKey?: unknown }).apiKey;
   return typeof k === 'string' && k.trim() ? k.trim() : undefined;
+}
+
+/** Extension id from manifest `providers[]` (e.g. provider `demo` → extension `demo-provider`). */
+function resolveExtensionIdForProvider(service: GatewayService, providerId: string): string | undefined {
+  const loader = service.getExtensionLoader();
+  if (!loader) return undefined;
+  return loader.buildManifestRegistry().findByProvider(providerId)?.id;
 }
 
 /** Effective LLM REST base URL for a provider (models.json overrides included). */
@@ -333,15 +341,19 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
     const meta = await Promise.all(
       providers.map(async (provider) => {
         const plugin = pluginRegistry.get(provider);
+        const extensionId = plugin
+          ? resolveExtensionIdForProvider(service, provider)
+          : undefined;
         return {
           id: provider,
           name: plugin?.name ?? PROVIDER_META[provider]?.name ?? provider,
           category: plugin ? ('extension' as const) : PROVIDER_META[provider]?.category || 'specialty',
           supportsOAuth: plugin ? false : (PROVIDER_META[provider]?.supportsOAuth ?? false),
-          supportsApiKey: plugin ? true : (PROVIDER_META[provider]?.supportsApiKey ?? true),
+          supportsApiKey: plugin ? false : (PROVIDER_META[provider]?.supportsApiKey ?? true),
           configured: await isProviderConfigured(provider),
           activeKeySource: await getProviderActiveKeySource(provider),
           baseUrl: resolveProviderApiBaseUrl(provider),
+          ...(extensionId ? { extensionId } : {}),
         };
       }),
     );
@@ -349,15 +361,17 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
     const knownProviderIds = new Set(providers);
     for (const plugin of pluginRegistry.listAll()) {
       if (!knownProviderIds.has(plugin.id)) {
+        const extensionId = resolveExtensionIdForProvider(service, plugin.id);
         meta.push({
           id: plugin.id,
           name: plugin.name,
           category: 'extension',
           supportsOAuth: false,
-          supportsApiKey: true,
+          supportsApiKey: false,
           configured: true,
           activeKeySource: 'extension',
           baseUrl: resolveProviderApiBaseUrl(plugin.id),
+          ...(extensionId ? { extensionId } : {}),
         });
       }
     }
