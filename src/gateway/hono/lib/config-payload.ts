@@ -25,6 +25,7 @@ import {
 import { CredentialResolver } from '../../../auth/credentials.js';
 import { loadModelsJson, getModelsJsonPath } from '../../../config/models-json.js';
 import { getAllProviders, isProviderConfigured } from '../../../providers/index.js';
+import { getProviderRegistry } from '../../../providers/plugin-registry.js';
 import type { GatewayService } from '../../service.js';
 import { safeToolsWebForGet } from '../../config-tools-web.js';
 import {
@@ -51,6 +52,9 @@ async function maskLlmProviderApiKeyForWeb(provider: string): Promise<string> {
 
   const fromModelsJson = readModelsJsonProviderApiKey(provider);
   if (fromModelsJson) return maskSecretLength(fromModelsJson);
+
+  // Extension plugins manage their own auth; don't show a fake gateway key mask.
+  if (getProviderRegistry().has(provider)) return '';
 
   if (await isProviderConfigured(provider)) return GENERIC_MASKED_SECRET;
   return '';

@@ -31,6 +31,8 @@ export interface ProviderMeta {
   activeKeySource?: ProviderActiveKeySource;
   /** Effective LLM REST base URL (includes models.json overrides). */
   baseUrl?: string;
+  /** Owning extension id when provider is contributed by an extension manifest. */
+  extensionId?: string;
 }
 
 export interface ProviderRowModel extends ProviderMeta {
@@ -68,7 +70,13 @@ export function mergeProviderRows(
   return meta.map((p) => ({
     ...p,
     configured: p.configured || configuredFromModels.has(p.id),
-    apiKey: configKeys[p.id] || (p.configured || configuredFromModels.has(p.id) ? '••••••••••••' : ''),
+    apiKey:
+      configKeys[p.id] ??
+      (p.activeKeySource === 'extension'
+        ? ''
+        : p.configured || configuredFromModels.has(p.id)
+          ? '••••••••••••'
+          : ''),
   }));
 }
 

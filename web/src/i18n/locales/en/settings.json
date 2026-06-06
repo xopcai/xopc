@@ -151,6 +151,9 @@
       "copied": "Copied",
       "maskedHelp": "Saved keys are hidden. Use the eye to load the key from the gateway store or models.json (not from environment variables).",
       "notInConfigFile": "No key stored in the gateway or models.json — this provider may be using an environment variable or OAuth.",
+      "extensionKeyHint": "This extension provider manages its own credentials. No gateway API key is required — configure optional keys in extension settings or environment variables if needed.",
+      "openExtensionSettings": "Open extension settings",
+      "extensionSettingsLinkTitle": "Configure optional credentials in the extension settings page",
       "loadFailed": "Could not load the API key.",
       "custom": "Custom"
     }
