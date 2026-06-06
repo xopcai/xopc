@@ -92,10 +92,11 @@ export function useMaskedApiKeyField(options: {
     return value;
   })();
 
-  const inputType =
-    !masked || (masked && ui.showKey && typeof ui.revealed === 'string')
-      ? ('text' as const)
-      : ('password' as const);
+  const inputType = (() => {
+    if (!masked) return ui.showKey ? 'text' : 'password';
+    if (ui.showKey && typeof ui.revealed === 'string') return 'text';
+    return 'password';
+  })();
 
   const copyEnabled =
     (!masked && value.trim().length > 0 && !isMaskedKey(value)) ||

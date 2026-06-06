@@ -17,7 +17,8 @@ import {
   resolveSessionConfigForWeb,
   resolveUpdateConfigForWeb,
 } from '../../../config/web-patch.js';
-import { bundledChannelPlugins } from '../../../generated/bundled-channel-plugins.js';
+import { CredentialResolver } from '../../../auth/credentials.js';
+import { loadModelsJson, getModelsJsonPath } from '../../../config/models-json.js';
 import { getAllProviders, isProviderConfigured } from '../../../providers/index.js';
 import type { GatewayService } from '../../service.js';
 import { safeToolsWebForGet } from '../../config-tools-web.js';
@@ -29,6 +30,33 @@ import {
 } from './agent-model.js';
 import { buildSafeProvidersConfigForWeb } from './safe-providers-config.js';
 import { maskSttConfigForWeb, maskTtsConfigForWeb } from './safe-voice-config.js';
+
+const GENERIC_MASKED_API_KEY = '••••••••••••';
+
+function maskSecretLength(secret: string): string {
+  const trimmed = secret.trim();
+  return trimmed ? '•'.repeat(trimmed.length) : '';
+}
+
+function readModelsJsonProviderApiKey(providerId: string): string | undefined {
+  const { config } = loadModelsJson(getModelsJsonPath());
+  const entry = config.providers?.[providerId];
+  const key = entry?.apiKey;
+  return typeof key === 'string' && key.trim() ? key.trim() : undefined;
+}
+
+/** Length-preserving mask for LLM provider keys in GET `/api/config`. */
+async function maskLlmProviderApiKeyForWeb(provider: string): Promise<string> {
+  const resolver = new CredentialResolver();
+  const stored = await resolver.revealGatewayStoredApiKey(provider);
+  if (stored) return maskSecretLength(stored);
+
+  const fromModelsJson = readModelsJsonProviderApiKey(provider);
+  if (fromModelsJson) return maskSecretLength(fromModelsJson);
+
+  if (await isProviderConfigured(provider)) return GENERIC_MASKED_API_KEY;
+  return '';
+}
 
 /** MCP block for GET/PATCH `/api/config` (authenticated console editing). */
 export function buildSafeMcpConfigForWeb(config: Config) {
@@ -200,7 +228,7 @@ export async function buildSafeWebConfigPayload(service: GatewayService) {
       await Promise.all(
         getAllProviders().map(async (provider) => [
           provider,
-          (await isProviderConfigured(provider)) ? '***' : '',
+          await maskLlmProviderApiKeyForWeb(provider),
         ]),
       ),
     ),
