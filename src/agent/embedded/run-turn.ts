@@ -6,6 +6,7 @@ import { registerEmbeddedRun, unregisterEmbeddedRun } from './runs.js';
 import { subscribeEmbeddedSessionEvents, lastAssistantPlainText } from './subscribe-session.js';
 import type { RunXopcEmbeddedTurnParams, RunXopcEmbeddedTurnResult } from './types.js';
 import {
+  getAssistantTurnErrorMessage,
   isAssistantTurnAborted,
   isAssistantTurnFailed,
   maybeRetryTurnAfterTransientLlmFailure,
@@ -233,7 +234,7 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
       if (isAssistantTurnFailed(session.agent)) {
         return {
           ok: false,
-          errorMessage: 'Assistant turn failed',
+          errorMessage: getAssistantTurnErrorMessage(session.agent) ?? 'Assistant turn failed',
           lastAssistantText: lastAssistantPlainText(session),
         };
       }

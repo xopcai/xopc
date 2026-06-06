@@ -17,6 +17,7 @@ import { appendPiTranscriptMessage } from '../../session/parity/jsonl-transcript
 import type { SessionContext } from '../session/index.js';
 import { applyReasoningVisibilityToSseEvent } from '../streaming/reasoning-visibility-sse.js';
 import type { ReasoningLevel } from '../transcript/thinking-types.js';
+import { formatAgentRunErrorForClient } from '../client-error-format.js';
 import { abortEmbeddedRun } from '../embedded/runs.js';
 import { mapEmbeddedEventToGatewaySse } from '../embedded/map-stream-events.js';
 import type { AgentInstanceGateway } from '../agent-instance-gateway.js';
@@ -118,6 +119,19 @@ export async function* runProcessDirectStreaming(
     if (visible !== null) {
       queue.push(visible);
     }
+  };
+
+  const formatStreamError = (raw: string): string => {
+    let provider: string | undefined;
+    let modelRef: string | undefined;
+    try {
+      const resolved = deps.modelManager.getResolvedModelForSession(sessionKey);
+      provider = resolved.provider;
+      modelRef = deps.modelManager.getModelForSession(sessionKey);
+    } catch {
+      /* ignore — format without provider context */
+    }
+    return formatAgentRunErrorForClient(raw, { provider, modelRef });
   };
 
   if (channel === 'webchat') {
@@ -279,6 +293,9 @@ export async function* runProcessDirectStreaming(
           onEvent: (embeddedEvent) => {
             const mapped = mapEmbeddedEventToGatewaySse(embeddedEvent);
             if (mapped) {
+              if (mapped.type === 'error' && typeof mapped.content === 'string') {
+                mapped.content = formatStreamError(mapped.content);
+              }
               pushVisible(mapped);
             }
           },
@@ -289,11 +306,12 @@ export async function* runProcessDirectStreaming(
         deps.onTurnComplete?.(sessionKey, result.lastAssistantText);
       }
       if (!result.ok && result.errorMessage && !abortHandled) {
-        pushVisible({ type: 'error', content: result.errorMessage });
+        pushVisible({ type: 'error', content: formatStreamError(result.errorMessage) });
       }
     } catch (err) {
       if (!abortHandled) {
-        pushVisible({ type: 'error', content: err instanceof Error ? err.message : String(err) });
+        const em = err instanceof Error ? err.message : String(err);
+        pushVisible({ type: 'error', content: formatStreamError(em) });
       }
     } finally {
       queue.close();
