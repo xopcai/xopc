@@ -15,6 +15,13 @@ type AttachmentTileProps = {
   sessionKey?: string | null;
   showDelete?: boolean;
   onDelete?: () => void;
+  /** How image thumbnails are sized inside attachment grids. */
+  imageSize?: 'thumbnail' | 'single' | 'grid-cell';
+  /** Grid-cell aspect: square tiles vs filling a tall mosaic slot. */
+  gridCellFill?: 'square' | 'stretch';
+  className?: string;
+  /** Shown over the thumbnail when the album truncates extra images. */
+  overflowLabel?: string;
   onOpen: (att: MessageAttachment) => void;
 };
 
@@ -24,6 +31,10 @@ export function AttachmentTile({
   sessionKey,
   showDelete = false,
   onDelete,
+  imageSize = 'thumbnail',
+  gridCellFill = 'square',
+  className,
+  overflowLabel,
   onOpen,
 }: AttachmentTileProps) {
   const language = useLocaleStore((s) => s.language);
@@ -91,15 +102,49 @@ export function AttachmentTile({
 
   const missingAuthText = m.chat.attachmentPreviewMissingAuth;
 
+  const imageThumbClass =
+    imageSize === 'single'
+      ? 'max-h-48 w-full max-w-xs object-contain'
+      : imageSize === 'grid-cell'
+        ? 'size-full object-cover'
+        : 'max-h-16 w-full object-cover';
+
+  const imageWrapperClass =
+    imageSize === 'single'
+      ? 'max-w-xs'
+      : imageSize === 'grid-cell'
+        ? gridCellFill === 'stretch'
+          ? 'h-full min-h-0 w-full'
+          : 'min-h-0 w-full'
+        : 'max-w-[10rem]';
+
+  const imageButtonClass =
+    imageSize === 'grid-cell'
+      ? cn(
+          'relative block w-full overflow-hidden rounded-md border border-edge dark:border-edge',
+          gridCellFill === 'stretch' ? 'h-full min-h-0' : 'aspect-square',
+        )
+      : 'block w-full overflow-hidden rounded-md border border-edge dark:border-edge';
+
   return (
-    <div className="group relative inline-block">
+    <div
+      className={cn(
+        'group relative',
+        imageSize === 'grid-cell'
+          ? gridCellFill === 'stretch'
+            ? 'h-full min-h-0'
+            : 'min-h-0'
+          : 'inline-block',
+        className,
+      )}
+    >
       {showImageThumb ? (
-        <div className="max-w-[10rem]">
-          <div className="relative">
+        <div className={imageWrapperClass}>
+          <div className="relative size-full min-h-0">
             <button
               type="button"
               className={cn(
-                'block w-full overflow-hidden rounded-md border border-edge dark:border-edge',
+                imageButtonClass,
                 interaction.transition,
                 interaction.press,
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
@@ -109,7 +154,12 @@ export function AttachmentTile({
               aria-label={mainLabel}
               aria-describedby={showMissingAuthHint ? missingAuthHintId : undefined}
             >
-              <img src={thumbSrc} alt={displayName} className="max-h-16 w-full object-cover" />
+              <img src={thumbSrc} alt={displayName} className={imageThumbClass} />
+              {overflowLabel ? (
+                <span className="absolute inset-0 flex items-center justify-center bg-black/55 text-lg font-semibold text-white">
+                  {overflowLabel}
+                </span>
+              ) : null}
             </button>
             {isPdf ? (
               <div

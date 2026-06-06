@@ -14,6 +14,54 @@ function isAudioAttachment(att: MessageAttachment): boolean {
   );
 }
 
+const IMAGE_GRID_MAX_VISIBLE = 9;
+
+function imageGridLayout(count: number): {
+  container: string;
+  tileSize: 'single' | 'grid-cell';
+  itemClass?: (index: number) => string | undefined;
+  gridCellFill?: (index: number) => 'square' | 'stretch' | undefined;
+  overflowCount?: number;
+} {
+  if (count === 1) {
+    return {
+      container: 'grid max-w-xs grid-cols-1 gap-1.5',
+      tileSize: 'single',
+    };
+  }
+  if (count === 2) {
+    return {
+      container: 'grid max-w-xs grid-cols-2 gap-1.5',
+      tileSize: 'grid-cell',
+    };
+  }
+  if (count === 3) {
+    return {
+      container: 'grid h-44 max-w-xs grid-cols-2 grid-rows-2 gap-1.5 sm:h-48',
+      tileSize: 'grid-cell',
+      itemClass: (index) => (index === 0 ? 'row-span-2 min-h-0' : undefined),
+      gridCellFill: (index) => (index === 0 ? 'stretch' : 'square'),
+    };
+  }
+  if (count === 4) {
+    return {
+      container: 'grid max-w-xs grid-cols-2 gap-1.5',
+      tileSize: 'grid-cell',
+    };
+  }
+  if (count <= IMAGE_GRID_MAX_VISIBLE) {
+    return {
+      container: 'grid max-w-xs grid-cols-3 gap-1.5',
+      tileSize: 'grid-cell',
+    };
+  }
+  return {
+    container: 'grid max-w-xs grid-cols-3 gap-1.5',
+    tileSize: 'grid-cell',
+    overflowCount: count - (IMAGE_GRID_MAX_VISIBLE - 1),
+  };
+}
+
 export function AttachmentRenderer({
   attachments,
   authToken,
@@ -49,27 +97,51 @@ export function AttachmentRenderer({
     <>
       <div className="flex flex-col gap-2">
         {images.length > 0 ? (
-          <div
-            className={cn(
-              'grid w-full max-w-40 gap-1',
-              images.length === 1 && 'grid-cols-1',
-              images.length === 2 && 'grid-cols-2',
-              images.length >= 3 && 'grid-cols-2 sm:grid-cols-3',
-            )}
-          >
-            {images.map((img, i) => (
-              <AttachmentTile
-                key={img.id ?? `${img.name}-${i}`}
-                attachment={img}
-                authToken={authToken}
-                sessionKey={sessionKey}
-                onOpen={(att) => {
-                  setActive(att);
-                  setOpen(true);
-                }}
-              />
-            ))}
-          </div>
+          (() => {
+            const layout = imageGridLayout(images.length);
+            const visibleImages =
+              layout.overflowCount != null
+                ? images.slice(0, IMAGE_GRID_MAX_VISIBLE - 1)
+                : images;
+
+            return (
+              <div className={cn('w-full', layout.container)}>
+                {visibleImages.map((img, i) => (
+                  <AttachmentTile
+                    key={img.id ?? `${img.name}-${i}`}
+                    attachment={img}
+                    authToken={authToken}
+                    sessionKey={sessionKey}
+                    imageSize={layout.tileSize}
+                    gridCellFill={layout.gridCellFill?.(i)}
+                    className={layout.itemClass?.(i)}
+                    onOpen={(att) => {
+                      setActive(att);
+                      setOpen(true);
+                    }}
+                  />
+                ))}
+                {layout.overflowCount != null ? (
+                  <AttachmentTile
+                    key={
+                      images[IMAGE_GRID_MAX_VISIBLE - 1]?.id ??
+                      `overflow-${IMAGE_GRID_MAX_VISIBLE - 1}`
+                    }
+                    attachment={images[IMAGE_GRID_MAX_VISIBLE - 1]!}
+                    authToken={authToken}
+                    sessionKey={sessionKey}
+                    imageSize="grid-cell"
+                    gridCellFill="square"
+                    overflowLabel={`+${layout.overflowCount}`}
+                    onOpen={(att) => {
+                      setActive(att);
+                      setOpen(true);
+                    }}
+                  />
+                ) : null}
+              </div>
+            );
+          })()
         ) : null}
         {audioItems.length > 0 ? (
           <div
