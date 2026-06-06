@@ -115,6 +115,8 @@
     "manageProviderDialog": {
       "apiKeyLabel": "API Key",
       "apiKeyPlaceholder": "Enter new API key…",
+      "apiUrlLabel": "API URL",
+      "apiUrlExtensionHint": "Requests are routed through the extension plugin (no fixed public API URL).",
       "baseUrlLabel": "Base URL",
       "modelsLabel": "Available models",
       "noModels": "No models for this provider",

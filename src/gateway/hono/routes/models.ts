@@ -13,6 +13,7 @@ import {
   listImageGenerationProvidersSummary,
 } from '../../../agent/image/generation/runtime.js';
 import {
+  EXTENSION_PROVIDER_BASE_URL,
   getAllModels,
   getAvailableModels,
   getModelRegistry,
@@ -34,6 +35,13 @@ function readProviderApiKeyFromConfigFileOnly(cfg: Config, providerId: string): 
   if (!bucket || typeof bucket !== 'object' || Array.isArray(bucket)) return undefined;
   const k = (bucket as { apiKey?: unknown }).apiKey;
   return typeof k === 'string' && k.trim() ? k.trim() : undefined;
+}
+
+/** Effective LLM REST base URL for a provider (models.json overrides included). */
+function resolveProviderApiBaseUrl(providerId: string): string | undefined {
+  const model = getModelRegistry().getAll().find((m) => m.provider === providerId);
+  if (!model?.baseUrl || model.baseUrl === EXTENSION_PROVIDER_BASE_URL) return undefined;
+  return model.baseUrl;
 }
 
 function mapPluginModel(providerId: string, model: ProviderModelDefinition, available: boolean) {
@@ -326,6 +334,7 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
           supportsApiKey: plugin ? true : (PROVIDER_META[provider]?.supportsApiKey ?? true),
           configured: await isProviderConfigured(provider),
           activeKeySource: await getProviderActiveKeySource(provider),
+          baseUrl: resolveProviderApiBaseUrl(provider),
         };
       }),
     );

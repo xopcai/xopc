@@ -1,6 +1,8 @@
 import { apiFetch } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
+import { revalidateModelsHubCaches } from '@/features/settings/models-hub/models-hub-cache';
+
 import type {
   ApiType,
   CustomModel,
@@ -112,6 +114,7 @@ export async function saveModelsJson(
   if (!res.ok || !data.ok || !data.payload) {
     throw new Error(gatewayErrorMessage(data) || `HTTP ${res.status}`);
   }
+  await revalidateModelsHubCaches();
   return data.payload;
 }
 
@@ -125,6 +128,7 @@ export async function reloadModelsJson(): Promise<{ modelCount: number; error?: 
   if (!res.ok || !data.ok || !data.payload) {
     throw new Error(gatewayErrorMessage(data) || `HTTP ${res.status}`);
   }
+  await revalidateModelsHubCaches();
   return data.payload;
 }
 

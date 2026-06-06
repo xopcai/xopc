@@ -13,6 +13,7 @@ import { docsGuidePageUrl } from '@/navigation';
 import { useLocaleStore } from '@/stores/locale-store';
 
 import { ConnectedProvidersGrid, useConnectedProviders } from './connected-providers-grid';
+import { revalidateModelsHubCaches } from './models-hub-cache';
 import { AddProviderDialog } from './add-provider-dialog';
 import { ProviderManageDialog } from './provider-manage-dialog';
 
@@ -66,8 +67,7 @@ export function ModelsHubPanel() {
   );
 
   const handleSaved = useCallback(() => {
-    // SWR will revalidate automatically via mutate calls in the save functions.
-    // Force a small delay so the user sees the "saved" state before the dialog closes.
+    void revalidateModelsHubCaches();
   }, []);
 
   return (

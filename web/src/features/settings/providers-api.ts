@@ -1,8 +1,7 @@
 import { type ConfiguredModel } from '@/features/chat/api/registry-api';
-import { revalidateGatewayConfig } from '@/features/gateway/gateway-config-swr';
+import { revalidateModelsHubCaches } from '@/features/settings/models-hub/models-hub-cache';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
-import { mutate } from 'swr';
 
 /** True for gateway masked key sentinels (`***` or bullet placeholder). */
 export function isMaskedKey(value: string): boolean {
@@ -28,6 +27,8 @@ export interface ProviderMeta {
   supportsApiKey: boolean;
   configured: boolean;
   activeKeySource?: ProviderActiveKeySource;
+  /** Effective LLM REST base URL (includes models.json overrides). */
+  baseUrl?: string;
 }
 
 export interface ProviderRowModel extends ProviderMeta {
@@ -74,14 +75,14 @@ export async function patchProviderApiKeys(providers: Record<string, string>): P
     method: 'PATCH',
     body: JSON.stringify({ providers }),
   });
-  void Promise.all([revalidateGatewayConfig(), mutate(apiUrl('/api/providers/meta'))]);
+  await revalidateModelsHubCaches();
 }
 
 export async function deleteProviderApiKey(providerId: string): Promise<void> {
   await fetchJson(apiUrl(`/api/providers/${encodeURIComponent(providerId)}/key`), {
     method: 'DELETE',
   });
-  void Promise.all([revalidateGatewayConfig(), mutate(apiUrl('/api/providers/meta'))]);
+  await revalidateModelsHubCaches();
 }
 
 export type TestApiKeyResolutionPayload = {

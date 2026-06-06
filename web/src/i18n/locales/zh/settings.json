@@ -115,6 +115,8 @@
     "manageProviderDialog": {
       "apiKeyLabel": "API Key",
       "apiKeyPlaceholder": "输入新的 API Key…",
+      "apiUrlLabel": "API 地址",
+      "apiUrlExtensionHint": "请求由扩展插件转发，无固定公开 API 地址。",
       "baseUrlLabel": "Base URL",
       "modelsLabel": "可用模型",
       "noModels": "该服务商下暂无模型",
