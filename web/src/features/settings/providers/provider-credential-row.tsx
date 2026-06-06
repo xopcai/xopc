@@ -4,8 +4,6 @@ import {
   ChevronDown,
   Copy,
   ExternalLink,
-  Eye,
-  EyeOff,
   Info,
   KeyRound,
   Loader2,
@@ -18,6 +16,7 @@ import { useCallback, useEffect, useEffectEvent, useMemo, useReducer, useRef, us
 
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { SecretInput } from '@/components/ui/secret-input';
 import type { ConfiguredModel } from '@/features/chat/api/registry-api';
 import {
   cancelOAuth,
@@ -30,6 +29,7 @@ import {
 import {
   deleteProviderApiKey,
   isMaskedKey,
+  revealProviderApiKey,
   testProviderKeyResolution,
   type ProviderRowModel,
 } from '@/features/settings/providers-api';
@@ -42,6 +42,7 @@ import { ProviderInfoPopover } from '@/features/settings/provider-info-popover';
 import { activeSourceLabel, interpolate } from './providers-settings-lib';
 import { settingsInputFocusClass } from '@/lib/form-field-width';
 import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
+import { secretInputLabelsFromChannels } from '@/lib/secret-input-labels';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 import type { StoredLanguage } from '@/lib/storage';
@@ -154,8 +155,6 @@ function oauthReducer(state: OAuthState, action: OAuthAction): OAuthState {
 }
 
 type RowUiState = {
-  showKey: boolean;
-  copied: boolean;
   revokeError: string | null;
   removeLoading: boolean;
   removeMessage: string | null;
@@ -166,9 +165,6 @@ type RowUiState = {
 };
 
 type RowUiAction =
-  | { type: 'toggleShowKey' }
-  | { type: 'copied' }
-  | { type: 'clearCopied' }
   | { type: 'revokeError'; message: string | null }
   | { type: 'removeStart' }
   | { type: 'removeDone'; message: string | null }
@@ -177,8 +173,6 @@ type RowUiAction =
   | { type: 'testDone'; ok: boolean | null; message: string | null };
 
 const initialRowUi: RowUiState = {
-  showKey: false,
-  copied: false,
   revokeError: null,
   removeLoading: false,
   removeMessage: null,
@@ -190,12 +184,6 @@ const initialRowUi: RowUiState = {
 
 function rowUiReducer(state: RowUiState, action: RowUiAction): RowUiState {
   switch (action.type) {
-    case 'toggleShowKey':
-      return { ...state, showKey: !state.showKey };
-    case 'copied':
-      return { ...state, copied: true };
-    case 'clearCopied':
-      return { ...state, copied: false };
     case 'revokeError':
       return { ...state, revokeError: action.message };
     case 'removeStart':
@@ -295,8 +283,6 @@ export function ProviderCredentialRow({
 
   const [ui, dispatchUi] = useReducer(rowUiReducer, initialRowUi);
   const {
-    showKey,
-    copied,
     revokeError,
     removeLoading,
     removeMessage,
@@ -321,7 +307,6 @@ export function ProviderCredentialRow({
   oauthSessionIdRef.current = oauthSessionId;
 
   const masked = isMaskedKey(value);
-  const inputValue = masked && !showKey ? '' : value;
   const isOAuthConfigured = row.configured && !masked && Boolean(value);
 
   const activeSrc = row.activeKeySource ?? 'none';
@@ -448,13 +433,10 @@ export function ProviderCredentialRow({
   const canRemoveKey =
     row.configured && masked && activeSrc !== 'env' && activeSrc !== 'extension' && activeSrc !== 'models_json';
 
-  const copyKey = async () => {
-    if (!value || masked) return;
-    const ok = await copyTextToClipboard(value);
-    if (!ok) return;
-    dispatchUi({ type: 'copied' });
-    window.setTimeout(() => dispatchUi({ type: 'clearCopied' }), 2000);
-  };
+  const revealProviderKey = useCallback(
+    () => revealProviderApiKey(row.id).then((payload) => payload.apiKey ?? null),
+    [row.id],
+  );
 
   const runTest = async () => {
     const v = value.trim();
@@ -538,57 +520,24 @@ export function ProviderCredentialRow({
             <div className="flex flex-col gap-2">
               <div className="relative flex flex-col gap-2 sm:flex-row sm:gap-2">
                 <div className="relative min-w-0 flex-1">
-                  <input
-                    ref={bindKeyInputRef}
-                    type={showKey || !masked ? 'text' : 'password'}
-                    className={cn(
-                      'w-full rounded-lg border border-edge bg-surface-panel py-2 pl-3 pr-20 font-mono text-sm text-fg',
-                      'placeholder:text-fg-subtle',
-                      settingsInputFocusClass,
-                      'dark:border-edge',
-                    )}
-                    value={inputValue}
+                  <SecretInput
+                    inputRef={bindKeyInputRef}
+                    value={value}
+                    onChange={(v) => onChange(row.id, v)}
                     placeholder={
                       masked ? labels.placeholderOverride : row.configured ? labels.placeholderKeep : labels.placeholderKey
                     }
                     disabled={oauthLoading}
-                    onChange={(e) => onChange(row.id, e.target.value)}
-                    autoComplete="off"
-                    spellCheck={false}
+                    labels={secretInputLabelsFromChannels({
+                      show: labels.show,
+                      hide: labels.hide,
+                      copy: labels.copy,
+                      copied: labels.copied,
+                    })}
+                    reveal={revealProviderKey}
+                    loadFailedLabel={labels.testFailed}
+                    notInConfigFile={labels.envHint}
                   />
-                  <div className="absolute right-1 top-1/2 flex -translate-y-1/2 gap-0.5">
-                    {value && !masked ? (
-                      <button
-                        type="button"
-                        className={cn(
-                          'rounded p-1.5 text-fg-subtle hover:bg-surface-hover hover:text-fg',
-                          interaction.transition,
-                          interaction.press,
-                          interaction.focusRingPanel,
-                        )}
-                        title={copied ? labels.copied : labels.copy}
-                        aria-label={copied ? labels.copied : labels.copy}
-                        onClick={() => void copyKey()}
-                      >
-                        {copied ? <CheckCircle2 className="size-4" /> : <Copy className="size-4" />}
-                      </button>
-                    ) : null}
-                    <button
-                      type="button"
-                      className={cn(
-                        'rounded p-1.5 text-fg-subtle hover:bg-surface-hover hover:text-fg disabled:opacity-40',
-                        interaction.transition,
-                        interaction.press,
-                        interaction.focusRingPanel,
-                      )}
-                      title={showKey ? labels.hide : labels.show}
-                      aria-label={showKey ? labels.hide : labels.show}
-                      disabled={masked}
-                      onClick={() => dispatchUi({ type: 'toggleShowKey' })}
-                    >
-                      {showKey ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-                    </button>
-                  </div>
                 </div>
                 <div className="flex flex-wrap gap-2 sm:shrink-0">
                   <Button

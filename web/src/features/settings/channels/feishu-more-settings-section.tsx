@@ -2,11 +2,13 @@ import { Check, ChevronDown, Copy, Eye, EyeOff } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { SecretInput } from '@/components/ui/secret-input';
 import type { ChatAgentsPayload } from '@/features/chat/agent-selection/chat-agents-api';
 import { feishuRoutingAccountIds } from '@/features/settings/channel-bindings-merge';
 import type { ChannelsSettingsState, DmPolicy, GroupPolicy } from '@/features/settings/channels-config-api';
 import type { ChannelsSettingsMessages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
+import { secretInputLabelsFromChannels } from '@/lib/secret-input-labels';
 
 import { ChannelAgentRoutingBlock } from './channel-agent-routing-block';
 import { ChannelPairingSection } from './channel-pairing-section';
@@ -18,13 +20,13 @@ export function FeishuMoreSettingsSection({
   ch,
   form,
   baseline,
-  showFeishuSecret,
-  setShowFeishuSecret,
+  showFeishuSecret: _showFeishuSecret,
+  setShowFeishuSecret: _setShowFeishuSecret,
   showFeishuWebhookSecrets,
   setShowFeishuWebhookSecrets,
-  feishuCopied,
+  feishuCopied: _feishuCopied,
   feishuWebhookCopied,
-  copyFeishuSecret,
+  copyFeishuSecret: _copyFeishuSecret,
   copyFeishuWebhookConfig,
   updateFeishu,
   updateChannelAgentRoute,
@@ -74,10 +76,12 @@ export function FeishuMoreSettingsSection({
   const feishuAccountIds = feishuRoutingAccountIds(fs);
   const resolvedFeishuAccounts = feishuAccountIds.length > 0 ? feishuAccountIds : ['default'];
   const feishuBaselineSecret = baseline?.feishu?.appSecret ?? '';
-  const feishuSecretDisplayLocked =
-    !showFeishuSecret &&
-    Boolean(String(feishuBaselineSecret).trim()) &&
-    fs.appSecret === feishuBaselineSecret;
+  const secretLabels = secretInputLabelsFromChannels({
+    show: ch.show,
+    hide: ch.hide,
+    copy: ch.copy,
+    copied: ch.copied,
+  });
 
   const detailsRef = useRef<HTMLDetailsElement>(null);
 
@@ -147,44 +151,14 @@ export function FeishuMoreSettingsSection({
               {ch.feishuAppSecret}
               <span className="text-red-600 dark:text-red-400"> *</span>
             </FieldLabel>
-            <div className="flex flex-wrap gap-2">
-              <input
-                className={cn(inputClassName(), 'min-w-0 flex-1 font-mono text-xs')}
-                type={showFeishuSecret ? 'text' : 'password'}
-                autoComplete="off"
-                readOnly={feishuSecretDisplayLocked}
-                value={
-                  feishuSecretDisplayLocked
-                    ? '*'.repeat(Math.max(1, fs.appSecret.length))
-                    : fs.appSecret
-                }
-                onChange={(e) => {
-                  if (feishuSecretDisplayLocked) return;
-                  updateFeishu({ appSecret: e.target.value });
-                }}
-                placeholder="••••••••"
-              />
-              {fs.appSecret ? (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  className="px-2 py-1 text-xs"
-                  onClick={() => void copyFeishuSecret()}
-                >
-                  {feishuCopied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-                  {feishuCopied ? ch.copied : ch.copy}
-                </Button>
-              ) : null}
-              <Button
-                type="button"
-                variant="secondary"
-                className="px-2 py-1 text-xs"
-                onClick={() => setShowFeishuSecret((s) => !s)}
-              >
-                {showFeishuSecret ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
-                {showFeishuSecret ? ch.hide : ch.show}
-              </Button>
-            </div>
+            <SecretInput
+              value={fs.appSecret}
+              onChange={(appSecret) => updateFeishu({ appSecret })}
+              placeholder="••••••••"
+              labels={secretLabels}
+              baselineValue={feishuBaselineSecret}
+              inputClassName={cn(inputClassName(), 'text-xs')}
+            />
             <FieldHint>{ch.feishuAppSecretDesc}</FieldHint>
           </div>
 

@@ -1,15 +1,14 @@
-import { Check, CheckCircle2, Copy, ExternalLink, Eye, EyeOff, KeyRound, Loader2 } from 'lucide-react';
-import { useCallback, useId, useReducer, useRef, type RefObject } from 'react';
+import { Check, ExternalLink, KeyRound, Loader2 } from 'lucide-react';
+import { useId, useReducer, type RefObject } from 'react';
 
 import { uiPatchReducer } from '@/lib/settings-form-draft';
 
 import { Button } from '@/components/ui/button';
+import { SecretInput } from '@/components/ui/secret-input';
 import { SettingsFormSection } from '@/features/settings/settings-form-section';
 import { isMaskedKey } from '@/features/settings/providers-api';
 import { revealTunnelRegistrationSecret } from '@/features/tunnel/tunnel-api';
 import { cn } from '@/lib/cn';
-import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
-import { interaction } from '@/lib/interaction';
 import type { TunnelSettingsMessages } from '@/i18n/messages';
 
 const TUNNEL_CONSOLE_REGISTRATION_KEY_URL = 'https://console.xopc.ai/keys/tunnel';
@@ -32,20 +31,10 @@ export type BrokerSecretSetupProps = {
 
 type BrokerSecretUi = {
   reconfiguring: boolean;
-  showKey: boolean;
-  revealed: string | null | undefined;
-  revealLoading: boolean;
-  revealErr: string | null;
-  copied: boolean;
 };
 
 const initialBrokerSecretUi: BrokerSecretUi = {
   reconfiguring: false,
-  showKey: false,
-  revealed: undefined,
-  revealLoading: false,
-  revealErr: null,
-  copied: false,
 };
 
 export function BrokerSecretSetupSection({
@@ -68,65 +57,22 @@ export function BrokerSecretSetupSection({
   const ready = !needsSetup;
 
   const [ui, dispatch] = useReducer(uiPatchReducer<BrokerSecretUi>, initialBrokerSecretUi);
-  const { reconfiguring, showKey, revealed, revealLoading, revealErr, copied } = ui;
+  const { reconfiguring } = ui;
 
   const showStoredKeyRow =
     brokerSecretConfiguredInConfig && !brokerSecretFromEnv && !reconfiguring && !brokerSecretDraft.trim();
 
-  const trackedConfiguredRef = useRef(brokerSecretConfiguredInConfig);
-  if (!brokerSecretConfiguredInConfig && trackedConfiguredRef.current) {
-    dispatch({
-      type: 'patch',
-      patch: { reconfiguring: false, revealed: undefined, revealErr: null, showKey: false },
-    });
-  }
-  trackedConfiguredRef.current = brokerSecretConfiguredInConfig;
-
-  const trackedNoticeRef = useRef(brokerSecretNotice);
-  if (brokerSecretNotice && brokerSecretNotice !== trackedNoticeRef.current) {
-    dispatch({ type: 'patch', patch: { reconfiguring: false } });
-  }
-  trackedNoticeRef.current = brokerSecretNotice;
-
-  const copyKey = useCallback(async () => {
-    const text = typeof revealed === 'string' ? revealed : '';
-    if (!text) return;
-    const ok = await copyTextToClipboard(text);
-    if (!ok) {
-      dispatch({ type: 'patch', patch: { revealErr: copyFailedLabel } });
-      return;
-    }
-    dispatch({ type: 'patch', patch: { copied: true } });
-    window.setTimeout(() => dispatch({ type: 'patch', patch: { copied: false } }), 2000);
-  }, [copyFailedLabel, revealed]);
-
-  const toggleEye = useCallback(async () => {
-    dispatch({ type: 'patch', patch: { revealErr: null } });
-    if (revealed !== undefined) {
-      dispatch({ type: 'patch', patch: { showKey: !showKey } });
-      return;
-    }
-    dispatch({ type: 'patch', patch: { revealLoading: true } });
-    try {
-      const payload = await revealTunnelRegistrationSecret();
-      dispatch({ type: 'patch', patch: { revealed: payload.registrationSecret ?? null, showKey: true } });
-    } catch (e) {
-      dispatch({
-        type: 'patch',
-        patch: {
-          revealErr: e instanceof Error ? e.message : t.brokerSecretRevealFailed,
-          revealed: null,
-        },
-      });
-    } finally {
-      dispatch({ type: 'patch', patch: { revealLoading: false } });
-    }
-  }, [revealed, t.brokerSecretRevealFailed]);
+  const secretLabels = {
+    show: t.showKey,
+    hide: t.hideKey,
+    copy: t.copyKey,
+    copied: t.copied,
+  };
 
   const canSave = brokerSecretDraft.trim().length > 0 && !isMaskedKey(brokerSecretDraft.trim());
 
   const cancelReconfigure = () => {
-    dispatch({ type: 'patch', patch: { reconfiguring: false, revealErr: null } });
+    dispatch({ type: 'patch', patch: { reconfiguring: false } });
     onDraftChange('');
   };
 
@@ -181,73 +127,28 @@ export function BrokerSecretSetupSection({
 
             {showStoredKeyRow ? (
               <>
-                <p className="text-[11px] text-fg-subtle">{t.brokerSecretMaskedHelp}</p>
                 <label className="sr-only" htmlFor={inputId}>
                   {t.brokerSecretTitle}
                 </label>
-                <div className="relative min-w-0">
-                  <input
-                    id={inputId}
-                    type={showKey && typeof revealed === 'string' ? 'text' : 'password'}
-                    readOnly
-                    autoComplete="off"
-                    spellCheck={false}
-                    className="w-full rounded-lg border border-edge bg-surface-panel py-2 pl-3 pr-24 font-mono text-sm text-fg"
-                    value={
-                      showKey && typeof revealed === 'string' ? revealed : brokerSecretMaskedValue
-                    }
-                  />
-                  <div className="absolute right-1 top-1/2 flex -translate-y-1/2 gap-0.5">
-                    {showKey && typeof revealed === 'string' && revealed.length > 0 ? (
-                      <button
-                        type="button"
-                        className={cn(
-                          'rounded p-1.5 text-fg-subtle hover:bg-surface-hover hover:text-fg',
-                          interaction.transition,
-                          interaction.press,
-                          interaction.focusRingPanel,
-                        )}
-                        title={copied ? t.copied : t.copyKey}
-                        aria-label={copied ? t.copied : t.copyKey}
-                        onClick={() => void copyKey()}
-                      >
-                        {copied ? <CheckCircle2 className="size-4" /> : <Copy className="size-4" />}
-                      </button>
-                    ) : null}
-                    <button
-                      type="button"
-                      className={cn(
-                        'rounded p-1.5 text-fg-subtle hover:bg-surface-hover hover:text-fg disabled:opacity-40',
-                        interaction.transition,
-                        interaction.press,
-                        interaction.focusRingPanel,
-                      )}
-                      title={showKey ? t.hideKey : t.showKey}
-                      aria-label={showKey ? t.hideKey : t.showKey}
-                      disabled={revealLoading}
-                      onClick={() => void toggleEye()}
-                    >
-                      {revealLoading ? (
-                        <Loader2 className="size-4 animate-spin" aria-hidden />
-                      ) : showKey ? (
-                        <EyeOff className="size-4" aria-hidden />
-                      ) : (
-                        <Eye className="size-4" aria-hidden />
-                      )}
-                    </button>
-                  </div>
-                </div>
-                {showKey && revealed === null && !revealErr ? (
-                  <p className="text-xs text-amber-700 dark:text-amber-400/90">{t.brokerSecretNotInConfigFile}</p>
-                ) : null}
-                {revealErr ? <p className="text-xs text-red-600 dark:text-red-400">{revealErr}</p> : null}
+                <SecretInput
+                  id={inputId}
+                  value={brokerSecretMaskedValue}
+                  labels={secretLabels}
+                  reveal={() =>
+                    revealTunnelRegistrationSecret().then((payload) => payload.registrationSecret ?? null)
+                  }
+                  loadFailedLabel={copyFailedLabel || t.brokerSecretRevealFailed}
+                  maskedHelp={t.brokerSecretMaskedHelp}
+                  notInConfigFile={t.brokerSecretNotInConfigFile}
+                  readOnly
+                />
                 <div className="flex flex-wrap gap-2">
                   <Button
                     type="button"
                     variant="secondary"
                     disabled={savingBrokerSecret}
                     onClick={() => {
-                      dispatch({ type: 'patch', patch: { revealErr: null, reconfiguring: true } });
+                      dispatch({ type: 'patch', patch: { reconfiguring: true } });
                     }}
                   >
                     {t.brokerSecretReconfigure}
@@ -262,18 +163,13 @@ export function BrokerSecretSetupSection({
                 <label className="sr-only" htmlFor={inputId}>
                   {t.brokerSecretTitle}
                 </label>
-                <input
+                <SecretInput
                   id={inputId}
-                  type="password"
-                  autoComplete="off"
-                  spellCheck={false}
-                  className="w-full rounded-lg border border-edge bg-surface-panel px-3 py-2 font-mono text-sm text-fg placeholder:text-fg-subtle"
-                  placeholder={
-                    reconfiguring ? t.brokerSecretPlaceholder : t.brokerSecretPlaceholder
-                  }
                   value={brokerSecretDraft}
+                  onChange={onDraftChange}
+                  placeholder={t.brokerSecretPlaceholder}
+                  labels={secretLabels}
                   disabled={savingBrokerSecret}
-                  onChange={(e) => onDraftChange(e.target.value)}
                 />
                 <div className="flex flex-wrap gap-2">
                   <Button type="button" disabled={savingBrokerSecret || !canSave} onClick={onSave}>

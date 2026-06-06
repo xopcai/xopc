@@ -1,7 +1,11 @@
 import type { Config, SearchProviderEntry } from '../config/schema.js';
+import {
+  isMaskedSecretPatchValue,
+  maskSecretLength,
+} from './hono/lib/mask-secret-length.js';
 
 export function isMaskedApiKey(v: unknown): boolean {
-  return v === '***' || v === '••••••••••••';
+  return typeof v === 'string' && isMaskedSecretPatchValue(v);
 }
 
 export function safeToolsWebForGet(config: Config): {
@@ -22,7 +26,7 @@ export function safeToolsWebForGet(config: Config): {
   const providers = search?.providers ?? [];
   const providersOut = providers.map((p) => ({
     type: p.type,
-    apiKey: p.apiKey && p.apiKey.trim().length > 0 ? '***' : '',
+    apiKey: p.apiKey && p.apiKey.trim().length > 0 ? maskSecretLength(p.apiKey) : '',
     url: typeof p.url === 'string' ? p.url : '',
     disabled: Boolean(p.disabled),
   }));

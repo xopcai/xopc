@@ -12,6 +12,7 @@ import { useCallback, useMemo, useReducer, useRef, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 
 import { Button } from '@/components/ui/button';
+import { SecretInput } from '@/components/ui/secret-input';
 import { SETTINGS_SHELL_CONTENT_Z, SETTINGS_SHELL_OVERLAY_Z } from '@/lib/settings-shell-dialog-layer';
 import {
   patchProviderApiKeys,
@@ -36,6 +37,8 @@ import {
   selectClassName,
 } from '@/features/settings/models/models-settings-lib';
 import { settingsInputFocusClass } from '@/lib/form-field-width';
+import { messages } from '@/i18n/messages';
+import { secretInputLabelsFromChannels } from '@/lib/secret-input-labels';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 import type { StoredLanguage } from '@/lib/storage';
@@ -167,6 +170,7 @@ export function AddProviderDialog({
             <ConfigureCustomStep
               customConfig={customConfig}
               labels={labels}
+              language={language}
               onBack={() => setStep({ type: 'pick' })}
               onSaved={handleSaved}
             />
@@ -341,7 +345,7 @@ function ConfigureBuiltinStep({
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-
+  const secretLabels = secretInputLabelsFromChannels(messages(language).providersSettings);
   const apiKeyLinks = useMemo(
     () => getOrderedApiKeyLinks(providerId, language),
     [providerId, language],
@@ -389,19 +393,13 @@ function ConfigureBuiltinStep({
           <label htmlFor="builtin-api-key" className="text-sm font-medium text-fg">
             {labels.apiKeyLabel}
           </label>
-          <input
-            ref={inputRef}
+          <SecretInput
             id="builtin-api-key"
-            type="password"
-            autoComplete="off"
-            autoFocus
             value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
+            onChange={setApiKey}
             placeholder={labels.apiKeyPlaceholder}
-            className={cn(
-              'rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg placeholder:text-fg-subtle',
-              settingsInputFocusClass,
-            )}
+            labels={secretLabels}
+            inputRef={inputRef}
             onKeyDown={(e) => {
               if (e.key === 'Enter') void handleSave();
             }}
@@ -539,16 +537,19 @@ function customFormReducer(state: CustomProviderFormState, action: CustomFormAct
 function ConfigureCustomStep({
   customConfig,
   labels,
+  language,
   onBack,
   onSaved,
 }: {
   customConfig: ModelsJsonConfig | null;
   labels: AddProviderDialogMessages;
+  language: StoredLanguage;
   onBack: () => void;
   onSaved: () => void;
 }) {
   const [form, dispatch] = useReducer(customFormReducer, undefined as never, () => customFormFromPreset());
   const [saving, setSaving] = useState(false);
+  const secretLabels = secretInputLabelsFromChannels(messages(language).providersSettings);
 
   const { preset, providerId, baseUrl, api, apiKey, modelIds, error } = form;
 
@@ -698,17 +699,12 @@ function ConfigureCustomStep({
           <label htmlFor="custom-api-key" className="text-sm font-medium text-fg">
             {labels.apiKeyLabel}
           </label>
-          <input
+          <SecretInput
             id="custom-api-key"
-            type="password"
-            autoComplete="off"
             value={apiKey}
-            onChange={(e) => dispatch({ type: 'setApiKey', value: e.target.value })}
+            onChange={(next) => dispatch({ type: 'setApiKey', value: next })}
             placeholder={labels.apiKeyPlaceholder}
-            className={cn(
-              'rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg placeholder:text-fg-subtle',
-              settingsInputFocusClass,
-            )}
+            labels={secretLabels}
           />
         </div>
 

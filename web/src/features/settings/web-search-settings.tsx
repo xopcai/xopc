@@ -2,17 +2,19 @@ import { Ban, ExternalLink, Loader2, Plus, Search, Trash2 } from 'lucide-react';
 import { useCallback, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { SecretInput, type SecretInputLabels } from '@/components/ui/secret-input';
 import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
 import {
   normalizeWebSearchSettingsFromConfig,
   patchWebSearchSettings,
+  revealWebSearchApiKey,
   type SearchProviderRow,
   type WebSearchSettingsState,
 } from '@/features/settings/web-search-config-api';
 import { useSaveBarRegistration } from '@/features/settings/save-bar/use-save-bar-registration';
 import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/settings/settings-form-section';
-import { isMaskedKey } from '@/features/settings/providers-api';
 import { nativeSelectMaxWidthClass, selectControlBaseClass, settingsInputFocusClass } from '@/lib/form-field-width';
+import { secretInputLabelsFromChannels } from '@/lib/secret-input-labels';
 import { cn } from '@/lib/cn';
 import { messages, type WebSearchSettingsMessages } from '@/i18n/messages';
 import { docsGuidePageUrl } from '@/navigation';
@@ -299,7 +301,9 @@ export function WebSearchSettingsPanel({ embedded = false }: { embedded?: boolea
               <ProviderRowEditor
                 key={`${row.type}:${row.url}:${row.apiKey}:${row.disabled}`}
                 row={row}
+                providerIndex={index}
                 labels={w}
+                secretLabels={secretInputLabelsFromChannels(m.providersSettings)}
                 onChange={(next) => {
                   const nextRows = [...form.providers];
                   nextRows[index] = next;
@@ -330,15 +334,24 @@ export function WebSearchSettingsPanel({ embedded = false }: { embedded?: boolea
 
 function ProviderRowEditor({
   row,
+  providerIndex,
   labels,
+  secretLabels,
   onChange,
   onRemove,
 }: {
   row: SearchProviderRow;
+  providerIndex: number;
   labels: WebSearchSettingsMessages;
+  secretLabels: SecretInputLabels;
   onChange: (r: SearchProviderRow) => void;
   onRemove: () => void;
 }) {
+  const reveal = useCallback(
+    () => revealWebSearchApiKey(providerIndex).then((payload) => payload.apiKey ?? null),
+    [providerIndex],
+  );
+
   return (
     <div className="flex flex-col gap-3 rounded-xl border border-edge-subtle bg-surface-panel/60 p-4 dark:border-edge-subtle">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -386,13 +399,14 @@ function ProviderRowEditor({
         </Field>
       ) : null}
       <Field label={labels.apiKeyLabel} description={labels.apiKeyDesc}>
-        <input
-          type="password"
-          autoComplete="off"
-          className={inputClassName()}
-          value={isMaskedKey(row.apiKey) ? '' : row.apiKey}
-          placeholder={isMaskedKey(row.apiKey) ? labels.keyPlaceholderMasked : labels.keyPlaceholder}
-          onChange={(e) => onChange({ ...row, apiKey: e.target.value })}
+        <SecretInput
+          value={row.apiKey}
+          onChange={(apiKey) => onChange({ ...row, apiKey })}
+          placeholder={labels.keyPlaceholder}
+          labels={secretLabels}
+          reveal={reveal}
+          loadFailedLabel={labels.saveError}
+          notInConfigFile={labels.keyPlaceholderMasked}
         />
       </Field>
     </div>

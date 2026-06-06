@@ -15,6 +15,7 @@
  * pre-extraction behavior so the route stays a "best-effort merge").
  */
 import type { Config } from '../../../../config/schema.js';
+import { isMaskedSecretPatchValue } from '../../lib/mask-secret-length.js';
 import {
   normalizePatchAgentImageGenerationModel,
   normalizePatchAgentModel,
@@ -163,7 +164,7 @@ export function applyAgentsPatch(config: Config, body: any): void {
           if (cloudPatch.apiKey !== undefined) {
             if (cloudPatch.apiKey === null || cloudPatch.apiKey === '') {
               delete cloudTarget.apiKey;
-            } else if (cloudPatch.apiKey === '***') {
+            } else if (isMaskedSecretPatchValue(String(cloudPatch.apiKey))) {
               // Keep the existing stored key when the web UI sends the masked sentinel.
             } else if (typeof cloudPatch.apiKey === 'string') {
               cloudTarget.apiKey = cloudPatch.apiKey.trim();

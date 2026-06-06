@@ -13,11 +13,11 @@ describe('buildSafeProvidersConfigForWeb', () => {
       fal: { apiKey: 'fal_xxx', baseUrl: 'https://fal.run' },
     });
     expect(safe.dashscope).toEqual({
-      apiKey: '***',
+      apiKey: '••••••••••',
       region: 'beijing',
       imageBaseUrl: 'https://dashscope.aliyuncs.com/api/v1/',
     });
-    expect(safe.fal).toEqual({ apiKey: '***', baseUrl: 'https://fal.run' });
+    expect(safe.fal).toEqual({ apiKey: '•••••••', baseUrl: 'https://fal.run' });
   });
 
   it('returns empty apiKey when missing', () => {

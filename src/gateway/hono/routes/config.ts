@@ -78,4 +78,59 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
     const safeConfig = await buildSafeWebConfigPayload(service);
     return c.json({ ok: true, payload: { config: safeConfig } });
   });
+
+  /** POST /api/gateway/reveal-auth-secret — plaintext gateway.auth token/password from config only. */
+  authenticated.post('/api/gateway/reveal-auth-secret', strictRateLimitMiddleware, async (c) => {
+    let field: unknown;
+    try {
+      const body = await c.req.json();
+      field = body && typeof body === 'object' ? (body as { field?: unknown }).field : undefined;
+    } catch {
+      field = undefined;
+    }
+    if (field !== 'token' && field !== 'password') {
+      return c.json({ ok: false, error: { message: 'field must be token or password' } }, 400);
+    }
+    const config = service.currentConfig as Config;
+    const secret =
+      field === 'token'
+        ? config.gateway?.auth?.token?.trim() || null
+        : config.gateway?.auth?.password?.trim() || null;
+    return c.json({
+      ok: true,
+      payload: { field, secret, source: secret ? ('config' as const) : ('none' as const) },
+    });
+  });
+
+  /** POST /api/agents/browser/reveal-cloud-api-key — plaintext browser cloud apiKey from config only. */
+  authenticated.post('/api/agents/browser/reveal-cloud-api-key', strictRateLimitMiddleware, async (c) => {
+    const config = service.currentConfig as Config;
+    const apiKey = config.agents?.defaults?.browser?.cloud?.apiKey?.trim() || null;
+    return c.json({
+      ok: true,
+      payload: { apiKey, source: apiKey ? ('config' as const) : ('none' as const) },
+    });
+  });
+
+  /** POST /api/tools/web/reveal-search-api-key — plaintext search provider apiKey by index. */
+  authenticated.post('/api/tools/web/reveal-search-api-key', strictRateLimitMiddleware, async (c) => {
+    let index = -1;
+    try {
+      const body = await c.req.json();
+      if (body && typeof body === 'object' && typeof (body as { index?: unknown }).index === 'number') {
+        index = Math.floor((body as { index: number }).index);
+      }
+    } catch {
+      index = -1;
+    }
+    const providers = service.currentConfig.tools?.web?.search?.providers ?? [];
+    if (index < 0 || index >= providers.length) {
+      return c.json({ ok: false, error: { message: 'Invalid provider index' } }, 400);
+    }
+    const apiKey = providers[index]?.apiKey?.trim() || null;
+    return c.json({
+      ok: true,
+      payload: { index, apiKey, source: apiKey ? ('config' as const) : ('none' as const) },
+    });
+  });
 }
