@@ -3,9 +3,11 @@ import { revalidateModelsHubCaches } from '@/features/settings/models-hub/models
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
+import { isMaskedSecret } from '@/lib/is-masked-secret';
+
 /** True for gateway masked key sentinels (`***` or bullet placeholder). */
 export function isMaskedKey(value: string): boolean {
-  return value === '***' || value === '••••••••••••' || /^•+$/.test(value);
+  return isMaskedSecret(value);
 }
 
 export type ProviderCategory = 'common' | 'specialty' | 'enterprise' | 'oauth' | 'extension';

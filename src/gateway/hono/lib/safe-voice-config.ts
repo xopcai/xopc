@@ -1,9 +1,10 @@
 import { isMaskedApiKey } from '../../config-tools-web.js';
+import { maskSecretLength } from './mask-secret-length.js';
 
 function maskProviderSlice(slice: Record<string, unknown>): Record<string, unknown> {
   const next = { ...slice };
   if (typeof next.apiKey === 'string' && next.apiKey.trim()) {
-    next.apiKey = '***';
+    next.apiKey = maskSecretLength(next.apiKey);
   }
   return next;
 }

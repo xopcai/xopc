@@ -9,6 +9,11 @@ import {
 } from '../../../channels/plugins/registry.js';
 import { normalizeConfiguredMcpServers } from '../../../config/mcp-config-normalize.js';
 import type { Config } from '../../../config/schema.js';
+import { bundledChannelPlugins } from '../../../generated/bundled-channel-plugins.js';
+import {
+  GENERIC_MASKED_SECRET,
+  maskSecretLength,
+} from './mask-secret-length.js';
 import { maskTunnelSecretForWeb } from '../../../tunnel/env.js';
 import { resolveShareConfig } from '../../../share/share-config.js';
 import {
@@ -31,13 +36,6 @@ import {
 import { buildSafeProvidersConfigForWeb } from './safe-providers-config.js';
 import { maskSttConfigForWeb, maskTtsConfigForWeb } from './safe-voice-config.js';
 
-const GENERIC_MASKED_API_KEY = '••••••••••••';
-
-function maskSecretLength(secret: string): string {
-  const trimmed = secret.trim();
-  return trimmed ? '•'.repeat(trimmed.length) : '';
-}
-
 function readModelsJsonProviderApiKey(providerId: string): string | undefined {
   const { config } = loadModelsJson(getModelsJsonPath());
   const entry = config.providers?.[providerId];
@@ -54,7 +52,7 @@ async function maskLlmProviderApiKeyForWeb(provider: string): Promise<string> {
   const fromModelsJson = readModelsJsonProviderApiKey(provider);
   if (fromModelsJson) return maskSecretLength(fromModelsJson);
 
-  if (await isProviderConfigured(provider)) return GENERIC_MASKED_API_KEY;
+  if (await isProviderConfigured(provider)) return GENERIC_MASKED_SECRET;
   return '';
 }
 
@@ -77,7 +75,7 @@ function maskBrowserCloudConfigForWeb(cloud: unknown): Record<string, unknown> |
   const raw = cloud as Record<string, unknown>;
   const safe: Record<string, unknown> = {};
   if (typeof raw.apiKey === 'string' && raw.apiKey.trim()) {
-    safe.apiKey = '***';
+    safe.apiKey = maskSecretLength(raw.apiKey);
   }
   if (typeof raw.projectId === 'string' && raw.projectId.trim()) {
     safe.projectId = raw.projectId.trim();
@@ -250,8 +248,10 @@ export async function buildSafeWebConfigPayload(service: GatewayService) {
       },
       auth: {
         mode: config.gateway?.auth?.mode || 'token',
-        token: config.gateway?.auth?.token || '',
-        password: config.gateway?.auth?.password ? '••••••••••••' : '',
+        token: config.gateway?.auth?.token ? maskSecretLength(config.gateway.auth.token) : '',
+        password: config.gateway?.auth?.password
+          ? maskSecretLength(config.gateway.auth.password)
+          : '',
         trustedProxy: config.gateway?.auth?.trustedProxy
           ? {
               userHeader: config.gateway.auth.trustedProxy.userHeader,

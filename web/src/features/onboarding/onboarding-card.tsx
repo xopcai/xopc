@@ -11,7 +11,9 @@ import { OnboardingProviderGrid } from '@/features/onboarding/onboarding-provide
 import { PROVIDER_ENRICHMENT } from '@/features/settings/provider-enrichment';
 import { patchProviderApiKeys } from '@/features/settings/providers-api';
 import { Button } from '@/components/ui/button';
+import { SecretInput } from '@/components/ui/secret-input';
 import { fetchJson } from '@/lib/fetch';
+import { secretInputLabelsFromChannels } from '@/lib/secret-input-labels';
 import { apiUrl } from '@/lib/url';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -221,13 +223,13 @@ export function OnboardingCard({ onComplete, onDismiss }: OnboardingCardProps) {
             })()}
             <label className="block text-sm font-medium text-fg">
               <span className="sr-only">{o.step2Placeholder}</span>
-              <input
-                type="password"
-                autoComplete="off"
+              <SecretInput
+                className="mt-1"
                 value={apiKey}
-                onChange={(e) => dispatch({ type: 'patch', patch: { apiKey: e.target.value } })}
+                onChange={(next) => dispatch({ type: 'patch', patch: { apiKey: next } })}
                 placeholder={o.step2Placeholder}
-                className="mt-1 w-full rounded-xl border border-edge bg-surface-panel px-3 py-2.5 text-sm text-fg outline-none ring-accent placeholder:text-fg-muted focus:border-accent focus:ring-2 focus:ring-accent/30"
+                labels={secretInputLabelsFromChannels(messages(language).providersSettings)}
+                inputClassName="rounded-xl py-2.5 ring-accent focus:border-accent focus:ring-2 focus:ring-accent/30"
               />
             </label>
             <p className="text-xs text-fg-muted">{o.step2SecurityNote}</p>

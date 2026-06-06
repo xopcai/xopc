@@ -1,6 +1,8 @@
 import { useCallback, useMemo } from 'react';
 
+import { SecretInput } from '@/components/ui/secret-input';
 import { cn } from '@/lib/cn';
+import { DEFAULT_SECRET_INPUT_LABELS } from '@/lib/secret-input-labels';
 
 export type JsonSchema = Record<string, unknown>;
 
@@ -104,13 +106,27 @@ function StringField({
       </div>
     );
   }
-  const inputType = fmt === 'password' ? 'password' : 'text';
+  if (fmt === 'password') {
+    return (
+      <div className="flex flex-col gap-1.5">
+        {desc ? <label className="text-xs text-fg-muted">{desc}</label> : null}
+        <SecretInput
+          value={value}
+          onChange={onChange}
+          placeholder={placeholder}
+          labels={DEFAULT_SECRET_INPUT_LABELS}
+          disabled={disabled}
+          inputClassName="ui-input h-9 rounded-md border border-edge bg-surface-base px-2.5 text-sm text-fg placeholder:text-fg-muted/70"
+        />
+      </div>
+    );
+  }
   return (
     <div className="flex flex-col gap-1.5">
       {desc ? <label className="text-xs text-fg-muted">{desc}</label> : null}
       <input
         name={name}
-        type={inputType}
+        type="text"
         className="ui-input h-9 rounded-md border border-edge bg-surface-base px-2.5 text-sm text-fg placeholder:text-fg-muted/70"
         value={value}
         placeholder={placeholder}

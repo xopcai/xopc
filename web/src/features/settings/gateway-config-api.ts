@@ -1,5 +1,6 @@
 import { revalidateGatewayConfig } from '@/features/gateway/gateway-config-swr';
 import { fetchJson } from '@/lib/fetch';
+import { isMaskedSecret } from '@/lib/is-masked-secret';
 import { apiUrl } from '@/lib/url';
 
 import {
@@ -30,7 +31,44 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 }
 
 export function isMaskedGatewaySecret(value: string): boolean {
-  return value === '***' || value === '••••••••••••';
+  return isMaskedSecret(value);
+}
+
+export async function revealGatewayAuthSecret(
+  field: 'token' | 'password',
+): Promise<{ field: typeof field; secret: string | null; source: 'config' | 'none' }> {
+  const data = await fetchJson<{
+    ok?: boolean;
+    payload?: { field: typeof field; secret: string | null; source: 'config' | 'none' };
+    error?: { message?: string };
+  }>(apiUrl('/api/gateway/reveal-auth-secret'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ field }),
+  });
+  if (!data.ok || !data.payload) {
+    throw new Error(data.error?.message ?? 'Reveal failed');
+  }
+  return data.payload;
+}
+
+export async function revealBrowserCloudApiKey(): Promise<{
+  apiKey: string | null;
+  source: 'config' | 'none';
+}> {
+  const data = await fetchJson<{
+    ok?: boolean;
+    payload?: { apiKey: string | null; source: 'config' | 'none' };
+    error?: { message?: string };
+  }>(apiUrl('/api/agents/browser/reveal-cloud-api-key'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: '{}',
+  });
+  if (!data.ok || !data.payload) {
+    throw new Error(data.error?.message ?? 'Reveal failed');
+  }
+  return data.payload;
 }
 
 function normalizeSecretForRestartCompare(value: string): string {

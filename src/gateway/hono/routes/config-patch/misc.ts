@@ -15,6 +15,7 @@
 import type { Config } from '../../../../config/schema.js';
 import { BindingsConfigSchema, McpConfigSchema } from '../../../../config/schema.js';
 import { CredentialResolver } from '../../../../auth/credentials.js';
+import { isMaskedSecretPatchValue } from '../../lib/mask-secret-length.js';
 import { applyToolsWebPatch } from '../../../config-tools-web.js';
 import { mergeTunnelConfigPatch } from '../../../../tunnel/tunnel-config.js';
 import { canonicalizeConfiguredMcpServer } from '../../../../config/mcp-config-normalize.js';
@@ -98,9 +99,7 @@ export async function applyMiscPatch(config: Config, body: any): Promise<PatchRe
         apiKey !== undefined &&
         typeof apiKey === 'string' &&
         apiKey.trim() &&
-        apiKey !== '***' &&
-        apiKey !== '••••••••••••' &&
-        !/^•+$/.test(apiKey)
+        !isMaskedSecretPatchValue(apiKey)
       ) {
         await resolver.saveApiKey(key, apiKey, { profileName: 'default' });
       }
@@ -125,7 +124,11 @@ export async function applyMiscPatch(config: Config, body: any): Promise<PatchRe
         if (patch[field] === null || patch[field] === '') {
           delete next[field];
         } else if (typeof patch[field] === 'string') {
-          next[field] = (patch[field] as string).trim();
+          const trimmed = (patch[field] as string).trim();
+          if (field === 'apiKey' && isMaskedSecretPatchValue(trimmed)) {
+            continue;
+          }
+          next[field] = trimmed;
         }
       }
       if (patch.azure === null) {

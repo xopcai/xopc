@@ -1,10 +1,6 @@
 import {
   AlertCircle,
-  Check,
-  Copy,
   ExternalLink,
-  Eye,
-  EyeOff,
   KeyRound,
   Loader2,
   Network,
@@ -21,11 +17,13 @@ import { useSearchParams } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { SecretInput } from '@/components/ui/secret-input';
 import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
 import {
   gatewaySettingsRequireRestart,
   normalizeGatewayFromConfig,
   patchGatewaySettings,
+  revealGatewayAuthSecret,
   validateGatewaySettings,
   type GatewaySettingsState,
 } from '@/features/settings/gateway-config-api';
@@ -34,7 +32,7 @@ import { MAX_CHANNEL_DEFER_LIST_SIZE } from '@/features/settings/gateway-setting
 import { restartGatewayAfterConfigChange } from '@/features/tunnel/gateway-restart';
 import { settingsInputFocusClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
-import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
+import { secretInputLabelsFromGateway } from '@/lib/secret-input-labels';
 import { interaction } from '@/lib/interaction';
 import { messages, type GatewaySettingsMessages } from '@/i18n/messages';
 import { docsGuidePageUrl } from '@/navigation';
@@ -130,9 +128,6 @@ type GatewayUi = {
   saving: boolean;
   error: string | null;
   saveOk: boolean;
-  showAccessToken: boolean;
-  showPassword: boolean;
-  copied: boolean;
   auditRefreshToken: number;
   restarting: boolean;
   restartConfirmOpen: boolean;
@@ -142,9 +137,6 @@ const initialGatewayUi: GatewayUi = {
   saving: false,
   error: null,
   saveOk: false,
-  showAccessToken: false,
-  showPassword: false,
-  copied: false,
   auditRefreshToken: 0,
   restarting: false,
   restartConfirmOpen: false,
@@ -189,9 +181,6 @@ export function GatewaySettingsPanel() {
     saving,
     error,
     saveOk,
-    showAccessToken,
-    showPassword,
-    copied,
     auditRefreshToken,
     restarting,
     restartConfirmOpen,
@@ -369,14 +358,7 @@ export function GatewaySettingsPanel() {
     dispatchUi({ type: 'patch', patch: { error: null, saveOk: false } });
   }, [baseline]);
 
-  const copyAccessToken = useCallback(async () => {
-    const t = form?.auth.token;
-    if (!t) return;
-    const ok = await copyTextToClipboard(t);
-    if (!ok) return;
-    dispatchUi({ type: 'patch', patch: { copied: true } });
-    window.setTimeout(() => dispatchUi({ type: 'patch', patch: { copied: false } }), 2000);
-  }, [form?.auth.token]);
+  const authSecretLabels = secretInputLabelsFromGateway(g);
 
   const executeRestart = useCallback(async () => {
     if (restarting) return;
@@ -616,18 +598,14 @@ export function GatewaySettingsPanel() {
         {form.auth.mode === 'token' ? (
           <>
             <SecretCredentialField
-              g={g}
               id="gateway-access-token"
               label={g.accessToken}
               help={g.tokenHelp}
               placeholder={g.tokenPlaceholder}
               value={form.auth.token}
-              show={showAccessToken}
-              copied={copied}
-              onToggleShow={() =>
-                dispatchUi({ type: 'patch', patch: { showAccessToken: !showAccessToken } })
-              }
-              onCopy={() => void copyAccessToken()}
+              labels={authSecretLabels}
+              reveal={() => revealGatewayAuthSecret('token').then((payload) => payload.secret)}
+              loadFailedLabel={g.saveError}
               onChange={(tokenValue) => updateAuth({ token: tokenValue })}
             />
             <Button type="button" variant="secondary" className="w-full sm:w-auto" onClick={() => openTokenDialog()}>
@@ -638,14 +616,14 @@ export function GatewaySettingsPanel() {
 
         {form.auth.mode === 'password' ? (
           <SecretCredentialField
-            g={g}
             id="gateway-auth-password"
             label={g.authPassword}
             help={g.authPasswordHelp}
             placeholder={g.authPasswordPlaceholder}
             value={form.auth.password}
-            show={showPassword}
-            onToggleShow={() => dispatchUi({ type: 'patch', patch: { showPassword: !showPassword } })}
+            labels={authSecretLabels}
+            reveal={() => revealGatewayAuthSecret('password').then((payload) => payload.secret)}
+            loadFailedLabel={g.saveError}
             onChange={(passwordValue) => updateAuth({ password: passwordValue })}
           />
         ) : null}
@@ -1304,28 +1282,24 @@ function AuthRateLimitFields({
 }
 
 function SecretCredentialField({
-  g,
   id,
   label,
   help,
   placeholder,
   value,
-  show,
-  copied,
-  onToggleShow,
-  onCopy,
+  labels,
+  reveal,
+  loadFailedLabel,
   onChange,
 }: {
-  g: GatewaySettingsMessages;
   id: string;
   label: string;
   help: string;
   placeholder: string;
   value: string;
-  show: boolean;
-  copied?: boolean;
-  onToggleShow: () => void;
-  onCopy?: () => void;
+  labels: ReturnType<typeof secretInputLabelsFromGateway>;
+  reveal: () => Promise<string | null>;
+  loadFailedLabel: string;
   onChange: (v: string) => void;
 }) {
   return (
@@ -1333,27 +1307,16 @@ function SecretCredentialField({
       <label className="text-sm font-medium text-fg" htmlFor={id}>
         {label}
       </label>
-      <div className="flex flex-wrap gap-2">
-        <input
-          id={id}
-          className={cn(inputClassName(), 'min-w-0 flex-1 font-mono text-xs')}
-          type={show ? 'text' : 'password'}
-          autoComplete="off"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={placeholder}
-        />
-        {value && onCopy ? (
-          <Button type="button" variant="secondary" className="px-2 py-1 text-xs" onClick={onCopy}>
-            {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-            {copied ? g.copied : g.copy}
-          </Button>
-        ) : null}
-        <Button type="button" variant="secondary" className="px-2 py-1 text-xs" onClick={onToggleShow}>
-          {show ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
-          {show ? g.hide : g.show}
-        </Button>
-      </div>
+      <SecretInput
+        id={id}
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder}
+        labels={labels}
+        reveal={reveal}
+        loadFailedLabel={loadFailedLabel}
+        inputClassName="text-xs"
+      />
       <p className="text-xs text-fg-subtle">{help}</p>
     </div>
   );

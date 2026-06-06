@@ -1,8 +1,9 @@
 import type { Config } from '../../../config/schema.js';
+import { maskSecretLength } from './mask-secret-length.js';
 
 /**
  * Per-vendor slice of {@link Config.providers} safe for GET `/api/config`.
- * Secrets are never sent verbatim; `apiKey` is `***` when set, else empty.
+ * Secrets are never sent verbatim; `apiKey` is length-preserving bullets when set, else empty.
  */
 export type SafeProviderAuthEntry = {
   apiKey: string;
@@ -23,7 +24,8 @@ export function buildSafeProvidersConfigForWeb(
     if (!id) continue;
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
     const o = raw as Record<string, unknown>;
-    const apiKey = typeof o.apiKey === 'string' && o.apiKey.trim() ? '***' : '';
+    const apiKey =
+      typeof o.apiKey === 'string' && o.apiKey.trim() ? maskSecretLength(o.apiKey) : '';
     const entry: SafeProviderAuthEntry = { apiKey };
     if (typeof o.region === 'string' && o.region.trim()) {
       entry.region = o.region.trim();

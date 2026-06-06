@@ -3,8 +3,6 @@ import {
   ChevronDown,
   ChevronRight,
   Cpu,
-  Eye,
-  EyeOff,
   Pencil,
   Plus,
   Trash2,
@@ -13,6 +11,8 @@ import {
 import type { Dispatch, SetStateAction } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { SecretInput } from '@/components/ui/secret-input';
+import { DEFAULT_SECRET_INPUT_LABELS } from '@/lib/secret-input-labels';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 import { type ModelsSettingsMessages } from '@/i18n/messages';
@@ -50,8 +50,8 @@ export function ModelsProvidersList({
   setConfig,
   expanded,
   toggleExpand,
-  showPw,
-  toggleShowPw,
+  showPw: _showPw,
+  toggleShowPw: _toggleShowPw,
   testResults,
   runTestKey,
   ms,
@@ -68,7 +68,6 @@ export function ModelsProvidersList({
           const nModels = prov.models?.length ?? 0;
           const keyType = prov.apiKey ? getApiKeyType(prov.apiKey) : null;
           const testResult = testResults.get(id);
-          const pwVisible = showPw.has(id);
 
           return (
             <section
@@ -154,13 +153,10 @@ export function ModelsProvidersList({
                   <div>
                     <label className="mb-1 block text-xs font-medium text-fg-muted">{ms.apiKey}</label>
                     <div className="flex flex-wrap gap-2">
-                      <input
-                        className={cn(inputClassName(), 'min-w-0 flex-1')}
-                        type={pwVisible ? 'text' : 'password'}
-                        autoComplete="off"
+                      <SecretInput
+                        className="min-w-0 flex-1"
                         value={prov.apiKey || ''}
-                        onChange={(e) => {
-                          const v = e.target.value;
+                        onChange={(v) => {
                           setConfig((c) => updateProvider(c, id, { apiKey: v }));
                           setTestResults((prev) => {
                             const next = new Map(prev);
@@ -169,25 +165,12 @@ export function ModelsProvidersList({
                           });
                         }}
                         placeholder={ms.apiKeyPlaceholder}
+                        labels={{
+                          ...DEFAULT_SECRET_INPUT_LABELS,
+                          show: ms.show,
+                          hide: ms.hide,
+                        }}
                       />
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        className="px-2 py-1 text-xs"
-                        onClick={() => toggleShowPw(id)}
-                      >
-                        {pwVisible ? (
-                          <>
-                            <EyeOff className="mr-1 size-3.5" />
-                            {ms.hide}
-                          </>
-                        ) : (
-                          <>
-                            <Eye className="mr-1 size-3.5" />
-                            {ms.show}
-                          </>
-                        )}
-                      </Button>
                       <Button
                         type="button"
                         variant="secondary"

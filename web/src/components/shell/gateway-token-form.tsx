@@ -1,9 +1,10 @@
 import { useState, type ReactNode } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { SecretInput } from '@/components/ui/secret-input';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
-import { settingsInputFocusClass } from '@/lib/form-field-width';
+import { secretInputLabelsFromToken } from '@/lib/secret-input-labels';
 import { useLocaleStore } from '@/stores/locale-store';
 
 export type GatewayTokenFormProps = {
@@ -22,7 +23,6 @@ export function GatewayTokenForm({ baseUrl, onSubmit, footerLeft, className }: G
   const t = messages(language).token;
 
   const [value, setValue] = useState('');
-  const [show, setShow] = useState(false);
   const [error, setError] = useState('');
 
   function handleSave() {
@@ -48,28 +48,18 @@ export function GatewayTokenForm({ baseUrl, onSubmit, footerLeft, className }: G
       </label>
       <label className="flex flex-col gap-1.5">
         <span className="text-xs font-medium text-fg-muted">{t.tokenLabel}</span>
-        <div className="flex gap-2">
-          <input
-            type={show ? 'text' : 'password'}
-            autoComplete="off"
-            className={cn(
-              'min-w-0 flex-1 rounded-md border border-edge bg-surface-panel px-3 py-2 text-sm text-fg placeholder:text-fg-disabled',
-              settingsInputFocusClass,
-            )}
-            placeholder={t.placeholder}
-            value={value}
-            onChange={(e) => {
-              setValue(e.target.value);
-              setError('');
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') handleSave();
-            }}
-          />
-          <Button type="button" variant="secondary" className="shrink-0 px-2" onClick={() => setShow((s) => !s)}>
-            {show ? t.hide : t.show}
-          </Button>
-        </div>
+        <SecretInput
+          value={value}
+          onChange={(next) => {
+            setValue(next);
+            setError('');
+          }}
+          placeholder={t.placeholder}
+          labels={secretInputLabelsFromToken(t)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') handleSave();
+          }}
+        />
         {error ? <p className="text-xs text-danger">{error}</p> : null}
       </label>
 
