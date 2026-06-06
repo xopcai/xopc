@@ -15,6 +15,20 @@ export const DEBUG_INCIDENT_SCRIPT = `export const meta = {
   name: 'debug_incident',
   description: 'Triage an error or log snippet with parallel hypotheses and ranked root-cause analysis.',
   whenToUse: 'User reports a bug, crash, error message, or unexpected behavior and wants systematic triage.',
+  examplePrompts: [
+    { field: 'error', text: 'Triage this stack trace from production' },
+    { field: 'error', text: 'Why does the gateway return 502 after deploy?' },
+  ],
+  i18n: {
+    zh: {
+      description: '对错误或日志片段做并行假设推演，并排序根因与验证步骤。',
+      whenToUse: '用户报告 bug、崩溃、报错或异常行为，需要系统化排查时。',
+      examplePrompts: [
+        { field: 'error', text: '排查生产环境这条堆栈' },
+        { field: 'error', text: '部署后网关返回 502，可能是什么原因？' },
+      ],
+    },
+  },
   tags: ['debug', 'incident', 'troubleshooting'],
   estimatedAgents: { min: 7, max: 7 },
   phases: [

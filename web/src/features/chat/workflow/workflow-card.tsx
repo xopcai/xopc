@@ -13,7 +13,8 @@
  */
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { CircleStop, Copy, Check, MoreHorizontal, Save } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { CircleStop, Copy, Check, GitBranch, MoreHorizontal, Save } from 'lucide-react';
 
 import type { ToolUseContent } from '@/features/chat/messages/messages.types';
 import { cn } from '@/lib/cn';
@@ -22,11 +23,11 @@ import { interaction } from '@/lib/interaction';
 
 import { WorkflowAgentDetailDrawer, type WorkflowAgentDetailDrawerLabels } from './workflow-agent-detail-drawer';
 import { WorkflowCardHeader, type WorkflowCardHeaderLabels } from './workflow-card-header';
-import { WorkflowAgentRow } from './workflow-agent-row';
 import { WorkflowErrorCard, type WorkflowErrorCardLabels } from './workflow-error-card';
-import { WorkflowPhaseRow, type WorkflowPhaseRowLabels } from './workflow-phase-row';
+import type { WorkflowPhaseRowLabels } from './workflow-phase-row';
+import { ProgressTree, RunningProgressPanel } from './workflow-progress-display';
 import { WorkflowResultSummary, type WorkflowResultSummaryLabels } from './workflow-result-summary';
-import type { WorkflowAgentSnapshot, WorkflowSnapshot } from './workflow.types';
+import type { WorkflowAgentSnapshot } from './workflow.types';
 import {
   classifyFailure,
   buildWorkflowFailureContext,
@@ -55,6 +56,8 @@ export type WorkflowCardLabels = {
   copyAria: string;
   copyDoneAria: string;
   moreAria: string;
+  openInWorkflowsAria: string;
+  openInWorkflowsTitle: string;
   viewSubagentsHeading: string;
   runningProgressHeading: string;
   runningAgentsHeading: string;
@@ -94,6 +97,7 @@ export const WorkflowCard = memo(function WorkflowCard({
 }: WorkflowCardProps) {
   const status = resolveCardStatus(block);
   const snapshot = useMemo(() => extractSnapshot(block), [block]);
+  const navigate = useNavigate();
   const failureKind = status === 'failed' ? classifyFailure(block) : null;
   const errorReason = status === 'failed' ? readErrorText(block) : '';
 
@@ -170,6 +174,12 @@ export const WorkflowCard = memo(function WorkflowCard({
     onSendChatMessage(`/workflow save ${cleaned}`);
     setSavePromptOpen(false);
   }, [saveName, onSendChatMessage]);
+
+  const openInWorkflows = useCallback(() => {
+    const name = snapshot?.name?.trim();
+    if (!name) return;
+    navigate(`/workflows?tab=catalog&def=${encodeURIComponent(name)}`);
+  }, [navigate, snapshot?.name]);
 
   // ----- render -----
   if (isWorkflowFailureOutcome(block) || (status === 'completed' && !snapshot)) {
@@ -272,6 +282,22 @@ export const WorkflowCard = memo(function WorkflowCard({
               title={labels.saveTitle}
             >
               <Save className="size-4" />
+            </button>
+          ) : null}
+          {snapshot?.name ? (
+            <button
+              type="button"
+              onClick={openInWorkflows}
+              className={cn(
+                'inline-flex size-7 items-center justify-center rounded-md text-fg-muted',
+                'hover:bg-surface-hover hover:text-fg',
+                interaction.transition,
+                interaction.focusRingPanel,
+              )}
+              aria-label={labels.openInWorkflowsAria}
+              title={labels.openInWorkflowsTitle}
+            >
+              <GitBranch className="size-4" />
             </button>
           ) : null}
           <button
@@ -432,224 +458,6 @@ export const WorkflowCard = memo(function WorkflowCard({
     </>
   );
 });
-
-function RunningProgressPanel({
-  snapshot,
-  labels,
-  logsExpanded,
-  onToggleLogs,
-  selectedAgentId,
-  onSelectAgent,
-}: {
-  snapshot: WorkflowSnapshot;
-  labels: WorkflowCardLabels;
-  logsExpanded: boolean;
-  onToggleLogs: () => void;
-  selectedAgentId?: number | null;
-  onSelectAgent?: (agent: WorkflowAgentSnapshot) => void;
-}) {
-  const runningAgents = snapshot.agents.filter((agent) => agent.status === 'running');
-  const failedAgents = snapshot.agents.filter((agent) => agent.status === 'error' || agent.status === 'skipped');
-  const completedAgents = snapshot.agents.filter((agent) => agent.status === 'done');
-  const queuedAgents = snapshot.agents.filter((agent) => agent.status === 'queued');
-
-  return (
-    <div className="space-y-3">
-      <AgentStatusSection
-        heading={labels.runningAgentsHeading}
-        agents={runningAgents}
-        labels={labels.phase}
-        selectedAgentId={selectedAgentId}
-        onSelectAgent={onSelectAgent}
-      />
-      <AgentStatusSection
-        heading={labels.failedAgentsHeading}
-        agents={failedAgents}
-        labels={labels.phase}
-        selectedAgentId={selectedAgentId}
-        onSelectAgent={onSelectAgent}
-      />
-      <AgentStatusSection
-        heading={labels.completedAgentsHeading}
-        agents={completedAgents}
-        labels={labels.phase}
-        selectedAgentId={selectedAgentId}
-        onSelectAgent={onSelectAgent}
-      />
-      <AgentStatusSection
-        heading={labels.queuedAgentsHeading}
-        agents={queuedAgents}
-        labels={labels.phase}
-        selectedAgentId={selectedAgentId}
-        onSelectAgent={onSelectAgent}
-      />
-
-      <RecentLogs
-        recentLogs={snapshot.logs}
-        recentLogsHeading={labels.recentLogsHeading}
-        showAllLogsLabel={labels.showAllLogs}
-        logsExpanded={logsExpanded}
-        onToggleLogs={onToggleLogs}
-      />
-    </div>
-  );
-}
-
-function AgentStatusSection({
-  heading,
-  agents,
-  labels,
-  selectedAgentId,
-  onSelectAgent,
-}: {
-  heading: string;
-  agents: WorkflowAgentSnapshot[];
-  labels: WorkflowPhaseRowLabels;
-  selectedAgentId?: number | null;
-  onSelectAgent?: (agent: WorkflowAgentSnapshot) => void;
-}) {
-  if (agents.length === 0) return null;
-
-  return (
-    <section className="min-w-0">
-      <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-fg-subtle">
-        {heading}
-      </div>
-      <div className="space-y-0.5">
-        {agents.map((agent) => (
-          <WorkflowAgentRow
-            key={agent.id}
-            agent={agent}
-            labels={labels}
-            selected={selectedAgentId === agent.id}
-            onSelect={onSelectAgent}
-          />
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function RecentLogs({
-  recentLogs,
-  recentLogsHeading,
-  showAllLogsLabel,
-  logsExpanded,
-  onToggleLogs,
-}: {
-  recentLogs: string[];
-  recentLogsHeading: string;
-  showAllLogsLabel: string;
-  logsExpanded: boolean;
-  onToggleLogs: () => void;
-}) {
-  const visibleLogs =
-    logsExpanded || recentLogs.length <= 2 ? recentLogs : recentLogs.slice(-2);
-
-  if (recentLogs.length === 0) return null;
-
-  return (
-    <div className="border-t border-edge-subtle pt-2">
-      <div className="mb-1 flex items-center justify-between gap-2">
-        <div className="text-[10px] font-medium uppercase tracking-wide text-fg-subtle">
-          {recentLogsHeading}
-        </div>
-        {recentLogs.length > 2 ? (
-          <button
-            type="button"
-            onClick={onToggleLogs}
-            className="text-[10px] text-accent-fg hover:underline"
-          >
-            {showAllLogsLabel}
-          </button>
-        ) : null}
-      </div>
-      <div className="space-y-0.5">
-        {visibleLogs.map((line, index) => (
-          <div key={index} className="break-words font-mono text-xs text-fg-subtle">
-            {line}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function ProgressTree({
-  rollup,
-  currentPhase,
-  labels,
-  recentLogs,
-  recentLogsHeading,
-  showAllLogsLabel,
-  logsExpanded,
-  onToggleLogs,
-  selectedAgentId,
-  onSelectAgent,
-}: {
-  rollup: ReturnType<typeof rollupPhases>;
-  currentPhase: string | undefined;
-  labels: WorkflowPhaseRowLabels;
-  recentLogs: string[];
-  recentLogsHeading: string;
-  showAllLogsLabel: string;
-  logsExpanded: boolean;
-  onToggleLogs: () => void;
-  selectedAgentId?: number | null;
-  onSelectAgent?: (agent: WorkflowAgentSnapshot) => void;
-}) {
-  const visibleLogs =
-    logsExpanded || recentLogs.length <= 2 ? recentLogs : recentLogs.slice(-2);
-
-  return (
-    <div className="space-y-1">
-      {rollup.phases.map((p) => (
-        <WorkflowPhaseRow
-          key={p.title}
-          rollup={p}
-          isCurrent={p.title === currentPhase}
-          labels={labels}
-          selectedAgentId={selectedAgentId}
-          onSelectAgent={onSelectAgent}
-        />
-      ))}
-      {rollup.unphased ? (
-        <WorkflowPhaseRow
-          rollup={rollup.unphased}
-          isCurrent={false}
-          labels={labels}
-          selectedAgentId={selectedAgentId}
-          onSelectAgent={onSelectAgent}
-        />
-      ) : null}
-      {recentLogs.length > 0 ? (
-        <div className="mt-2 border-t border-edge-subtle pt-2">
-          <div className="mb-1 flex items-center justify-between gap-2">
-            <div className="text-[10px] font-medium uppercase tracking-wide text-fg-subtle">
-              {recentLogsHeading}
-            </div>
-            {recentLogs.length > 2 ? (
-              <button
-                type="button"
-                onClick={onToggleLogs}
-                className="text-[10px] text-accent-fg hover:underline"
-              >
-                {showAllLogsLabel}
-              </button>
-            ) : null}
-          </div>
-          <div className="space-y-0.5">
-            {visibleLogs.map((line, i) => (
-              <div key={i} className="break-words font-mono text-xs text-fg-subtle">
-                {line}
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : null}
-    </div>
-  );
-}
 
 function extractScriptPreview(block: ToolUseContent): string | undefined {
   if (!block.input || typeof block.input !== 'object') return undefined;

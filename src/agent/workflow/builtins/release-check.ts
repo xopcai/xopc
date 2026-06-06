@@ -13,6 +13,20 @@ export const RELEASE_CHECK_SCRIPT = `export const meta = {
   name: 'release_check',
   description: 'Assess whether a change is ready to release with parallel risk checks and a go/no-go verdict.',
   whenToUse: 'User is near the end of implementation and wants a release-quality readiness check before shipping.',
+  examplePrompts: [
+    { field: 'target', text: 'Is this repo ready to release v1.2?' },
+    { field: 'target', text: 'Pre-release readiness check for the current branch' },
+  ],
+  i18n: {
+    zh: {
+      description: '并行检查发布风险，判断变更是否达到可发布标准。',
+      whenToUse: '用户接近开发尾声，想在发布前做发布质量/就绪检查时。',
+      examplePrompts: [
+        { field: 'target', text: '这个仓库是否准备好发布 v1.2？' },
+        { field: 'target', text: '对当前分支做发布前就绪检查' },
+      ],
+    },
+  },
   tags: ['release', 'quality', 'validation'],
   estimatedAgents: { min: 6, max: 7 },
   phases: [

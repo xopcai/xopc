@@ -61,6 +61,12 @@ export interface WorkflowMeta {
   whenToUse?: string;
   tags?: string[];
   estimatedAgents?: { min: number; max: number };
+  examplePrompts?: Array<{ field: string; text: string }>;
+  i18n?: Record<string, {
+    description?: string;
+    whenToUse?: string;
+    examplePrompts?: Array<{ field: string; text: string }>;
+  }>;
 }
 
 /**

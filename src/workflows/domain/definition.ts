@@ -41,9 +41,30 @@ export interface WorkflowDefinitionDefaults {
   maxSubagents: number;
 }
 
+export interface WorkflowDefinitionEstimatedAgents {
+  min: number;
+  max: number;
+}
+
+export interface WorkflowDefinitionExamplePrompt {
+  field: string;
+  text: string;
+}
+
+export interface WorkflowDefinitionLocale {
+  description?: string;
+  whenToUse?: string;
+  examplePrompts?: WorkflowDefinitionExamplePrompt[];
+}
+
 export interface WorkflowDefinitionMetadata {
   tags: string[];
   builtIn: boolean;
+  source: 'builtin' | 'user';
+  whenToUse?: string;
+  estimatedAgents?: WorkflowDefinitionEstimatedAgents;
+  examplePrompts?: WorkflowDefinitionExamplePrompt[];
+  i18n?: Record<string, WorkflowDefinitionLocale>;
   createdAtMs: number;
   updatedAtMs: number;
 }

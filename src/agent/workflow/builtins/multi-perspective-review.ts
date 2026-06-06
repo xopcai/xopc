@@ -16,6 +16,20 @@ export const MULTI_PERSPECTIVE_REVIEW_SCRIPT = `export const meta = {
   name: 'multi_perspective_review',
   description: 'Review a target from N independent perspectives, then adversarially judge what would actually break.',
   whenToUse: 'User wants a stress-test of a design, plan, PR, or proposal before committing to it.',
+  examplePrompts: [
+    { field: 'target', text: 'Stress-test this API redesign before we ship' },
+    { field: 'target', text: 'Review the migration plan from multiple angles' },
+  ],
+  i18n: {
+    zh: {
+      description: '从多个独立视角评审目标，并由对抗性评审判断实际会出什么问题。',
+      whenToUse: '用户想在落地前对设计、方案、PR 或提案做压力测试时。',
+      examplePrompts: [
+        { field: 'target', text: '上线前从多角度压力测试这个 API redesign' },
+        { field: 'target', text: '从多个视角评审这份迁移方案' },
+      ],
+    },
+  },
   tags: ['review', 'planning', 'decision'],
   estimatedAgents: { min: 5, max: 6 },
   phases: [

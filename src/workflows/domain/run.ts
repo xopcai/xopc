@@ -8,6 +8,17 @@ export type WorkflowRunStatus =
   | 'cancelled'
   | 'timeout';
 
+const TERMINAL_WORKFLOW_RUN_STATUSES = new Set<WorkflowRunStatus>([
+  'succeeded',
+  'failed',
+  'cancelled',
+  'timeout',
+]);
+
+export function isTerminalWorkflowRunStatus(status: WorkflowRunStatus): boolean {
+  return TERMINAL_WORKFLOW_RUN_STATUSES.has(status);
+}
+
 export interface WorkflowRun {
   id: string;
   definitionId: string;

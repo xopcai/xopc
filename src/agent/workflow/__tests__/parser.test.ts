@@ -131,4 +131,36 @@ await agent('go')
 `;
     expect(() => parseWorkflowScript(script)).toThrow(/estimatedAgents/);
   });
+
+  it('accepts examplePrompts and i18n locale bundles in meta', () => {
+    const script = `export const meta = {
+  name: 'demo',
+  description: 'English description',
+  whenToUse: 'English when',
+  examplePrompts: [
+    { field: 'question', text: 'English example' },
+  ],
+  i18n: {
+    zh: {
+      description: '中文描述',
+      whenToUse: '中文场景',
+      examplePrompts: [
+        { field: 'question', text: '中文示例' },
+      ],
+    },
+  },
+}
+await agent('go')
+`;
+    const { meta } = parseWorkflowScript(script);
+    expect(meta.examplePrompts).toEqual([{ field: 'question', text: 'English example' }]);
+    expect(meta.i18n?.zh?.description).toBe('中文描述');
+    expect(meta.i18n?.zh?.examplePrompts?.[0]?.text).toBe('中文示例');
+  });
+
+  it('rejects invalid examplePrompts entries', () => {
+    const script = `export const meta = { name: 'demo', description: 'd', examplePrompts: [{ field: '', text: 'x' }] }
+`;
+    expect(() => parseWorkflowScript(script)).toThrow(/field must be a non-empty string/);
+  });
 });

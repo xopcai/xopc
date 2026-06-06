@@ -34,6 +34,19 @@ export interface WorkflowMetaEstimatedAgents {
   max: number;
 }
 
+/** One-click starter text in the gateway start dialog; `field` is `goal` or an `args` key. */
+export interface WorkflowMetaExamplePrompt {
+  field: string;
+  text: string;
+}
+
+/** Locale-specific copy overrides; top-level `description` / `whenToUse` / `examplePrompts` are English defaults. */
+export interface WorkflowMetaLocale {
+  description?: string;
+  whenToUse?: string;
+  examplePrompts?: WorkflowMetaExamplePrompt[];
+}
+
 export interface WorkflowMeta {
   name: string;
   description: string;
@@ -43,6 +56,10 @@ export interface WorkflowMeta {
   tags?: string[];
   /** Rough subagent count range for UX / cost hints. */
   estimatedAgents?: WorkflowMetaEstimatedAgents;
+  /** English-default example prompts for the gateway start dialog. */
+  examplePrompts?: WorkflowMetaExamplePrompt[];
+  /** Non-English locale bundles keyed by BCP-47 language tag (e.g. `zh`). */
+  i18n?: Record<string, WorkflowMetaLocale>;
 }
 
 export type WorkflowAgentStatus = 'queued' | 'running' | 'done' | 'error' | 'skipped';
