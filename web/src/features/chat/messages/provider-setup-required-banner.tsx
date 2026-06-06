@@ -1,4 +1,3 @@
-import { useMemo } from 'react';
 import { KeyRound } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -119,26 +118,4 @@ export function ProviderSetupRequiredCard({ payload }: { payload: ProviderSetupP
   );
 }
 
-/**
- * Renders a friendly setup card when the error is a structured `provider_setup_required`
- * payload (API key missing), otherwise falls back to the default red error banner.
- *
- * Used by `chat-page.tsx` for the SSE error banner position.
- */
-export function ProviderSetupRequiredBanner({ errorText }: { errorText: string }) {
-  const payload = useMemo(() => parseProviderSetupRequired(errorText), [errorText]);
-
-  if (!payload) {
-    return (
-      <div className="mb-4 rounded-md border border-edge bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-edge dark:bg-red-950/40 dark:text-red-300">
-        {errorText}
-      </div>
-    );
-  }
-
-  return (
-    <div className="mb-4">
-      <ProviderSetupRequiredCard payload={payload} />
-    </div>
-  );
-}
+export { AgentRunErrorBanner, ProviderSetupRequiredBanner } from '@/features/chat/messages/agent-run-error-banner';

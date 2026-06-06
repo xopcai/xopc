@@ -35,6 +35,17 @@ export function getLastAssistantMessage(messages: AgentMessage[]): AgentMessage 
   return undefined;
 }
 
+/** Raw provider/LLM error from the last failed assistant message, if any. */
+export function getAssistantTurnErrorMessage(agent: Agent): string | undefined {
+  const last = getLastAssistantMessage(agent.state.messages);
+  if (!last) return undefined;
+  const stopReason = (last as { stopReason?: string }).stopReason;
+  if (stopReason !== 'error') return undefined;
+  const errMsg = (last as { errorMessage?: string }).errorMessage;
+  if (typeof errMsg === 'string' && errMsg.trim()) return errMsg.trim();
+  return undefined;
+}
+
 /** After waitForIdle + transient retries, true if the last assistant turn ended in error. */
 export function isAssistantTurnFailed(agent: Agent): boolean {
   const last = getLastAssistantMessage(agent.state.messages);

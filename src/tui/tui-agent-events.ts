@@ -1,5 +1,6 @@
 import type { TUI } from '@earendil-works/pi-tui';
 
+import { formatAgentRunErrorForDisplay } from '../agent/client-error-format.js';
 import type { ChatLog } from './components/chat-log.js';
 import type { StreamAssembler } from './stream-assembler.js';
 import type { TuiState } from './tui-types.js';
@@ -108,7 +109,7 @@ export function dispatchAgentSSE(
       break;
     }
     case 'error': {
-      const errorContent = String(data.content ?? 'Unknown error');
+      const errorContent = formatAgentRunErrorForDisplay(String(data.content ?? 'Unknown error'));
       const finalText = assembler.finalize(runId, state.showThinking);
       if (finalText) {
         chatLog.finalizeAssistant(finalText, runId);
