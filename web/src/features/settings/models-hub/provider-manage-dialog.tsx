@@ -101,7 +101,6 @@ export function ProviderManageDialog({
             'fixed left-1/2 top-1/2 flex max-h-[85vh] w-full max-w-lg -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge-subtle bg-surface-base shadow-xl',
             SETTINGS_SHELL_CONTENT_Z,
           )}
-          onPointerDownOutside={(e) => e.preventDefault()}
         >
           {isCustom ? (
             <ManageCustomProvider
@@ -314,9 +313,6 @@ function ManageBuiltinProvider({
           {labels.remove}
         </Button>
         <div className="flex items-center gap-2">
-          <Button type="button" variant="secondary" onClick={onClose}>
-            {labels.close}
-          </Button>
           {dirty && !isMaskedKey(apiKey.trim()) ? (
             <Button
               type="button"
@@ -509,9 +505,6 @@ function ManageCustomProvider({
           {labels.remove}
         </Button>
         <div className="flex items-center gap-2">
-          <Button type="button" variant="secondary" onClick={onClose}>
-            {labels.close}
-          </Button>
           <Button
             type="button"
             variant="primary"
