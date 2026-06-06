@@ -86,14 +86,19 @@ function renderTextOrImageBlock(
         >
           <img
             src={block.source.data}
-            className="max-h-96 max-w-full rounded-lg align-top"
+            className="max-h-48 max-w-64 rounded-lg align-top object-contain"
             alt=""
           />
         </button>
       );
     }
     return (
-      <img key={key} src={block.source.data} className="max-h-96 max-w-full rounded-lg" alt="" />
+      <img
+        key={key}
+        src={block.source.data}
+        className="max-h-48 max-w-64 rounded-lg object-contain"
+        alt=""
+      />
     );
   }
   return null;
