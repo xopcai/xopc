@@ -38,6 +38,8 @@ import type { StoredLanguage } from '@/lib/storage';
 export interface ProviderManageDialogMessages {
   apiKeyLabel: string;
   apiKeyPlaceholder: string;
+  apiUrlLabel: string;
+  apiUrlExtensionHint: string;
   baseUrlLabel: string;
   modelsLabel: string;
   noModels: string;
@@ -211,6 +213,17 @@ function ManageBuiltinProvider({
       <div className="flex flex-col gap-4 overflow-y-auto px-5 py-4">
         {enrichment?.description ? (
           <p className="text-sm text-fg-muted">{enrichment.description}</p>
+        ) : null}
+
+        {row?.baseUrl ? (
+          <div className="flex flex-col gap-1.5">
+            <span className="text-sm font-medium text-fg">{labels.apiUrlLabel}</span>
+            <code className="break-all rounded-lg border border-edge-subtle bg-surface-panel/60 px-3 py-2 font-mono text-xs text-fg-muted">
+              {row.baseUrl}
+            </code>
+          </div>
+        ) : row?.category === 'extension' ? (
+          <p className="text-sm text-fg-muted">{labels.apiUrlExtensionHint}</p>
         ) : null}
 
         {/* API key */}
