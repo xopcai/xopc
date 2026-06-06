@@ -15,6 +15,20 @@ export const AUDIT_REPO_SCRIPT = `export const meta = {
   name: 'audit_repo',
   description: 'Fan-out repository audit across multiple dimensions, then synthesize a structured report.',
   whenToUse: 'User asks for a thorough / multi-dimension code review of the whole repo or a major subsystem.',
+  examplePrompts: [
+    { field: 'goal', text: 'Run a thorough audit of this repository' },
+    { field: 'goal', text: 'Review code quality across the whole codebase' },
+  ],
+  i18n: {
+    zh: {
+      description: '多维度并行审查整个仓库，并汇总为结构化报告。',
+      whenToUse: '用户需要对整库或主要子系统做全面、多维度的代码审查时。',
+      examplePrompts: [
+        { field: 'goal', text: '对整个仓库做一次全面审查' },
+        { field: 'goal', text: '从代码质量维度审查整个代码库' },
+      ],
+    },
+  },
   tags: ['code-review', 'audit'],
   estimatedAgents: { min: 7, max: 7 },
   phases: [

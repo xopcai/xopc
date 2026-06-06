@@ -14,6 +14,20 @@ export const PR_REVIEW_SCRIPT = `export const meta = {
   name: 'pr_review',
   description: 'Review a PR/diff/commit range with parallel focused reviewers and a ship/block verdict.',
   whenToUse: 'User asks to review a PR, diff, specific changes, or commit range (not the whole repo).',
+  examplePrompts: [
+    { field: 'target', text: 'Review the changes on this branch' },
+    { field: 'target', text: 'Review PR #42 for ship/block verdict' },
+  ],
+  i18n: {
+    zh: {
+      description: '并行聚焦审查 PR、diff 或提交范围，并给出可合并/应拦截的结论。',
+      whenToUse: '用户要审查 PR、diff、特定改动或提交范围（而非整库）时。',
+      examplePrompts: [
+        { field: 'target', text: '审查当前分支上的改动' },
+        { field: 'target', text: '审查 PR #42，给出是否可合并的结论' },
+      ],
+    },
+  },
   tags: ['code-review', 'pr'],
   estimatedAgents: { min: 7, max: 7 },
   phases: [
