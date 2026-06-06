@@ -11,6 +11,7 @@ import {
   type ProviderRowModel,
 } from '@/features/settings/providers-api';
 import { fetchModelsJson, normalizeModelsJsonConfig, type ModelsJsonConfig } from '@/features/settings/models-json-api';
+import { MODELS_JSON_SWR_KEY } from '@/features/settings/models-hub/models-hub-cache';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 import { apiUrl } from '@/lib/url';
@@ -70,7 +71,7 @@ export function useConnectedProviders(): {
     { revalidateOnFocus: false },
   );
   const { data: modelsJsonData } = useSWR(
-    hasToken ? 'models-json-config' : null,
+    hasToken ? MODELS_JSON_SWR_KEY : null,
     () => fetchModelsJson(),
     { revalidateOnFocus: false },
   );
@@ -88,10 +89,13 @@ export function useConnectedProviders(): {
 
   const cards = useMemo((): ConnectedProviderCard[] => {
     const result: ConnectedProviderCard[] = [];
+    const metaConfigured = new Set(
+      (metaList ?? []).filter((p) => p.configured).map((p) => p.id),
+    );
 
-    // Built-in configured providers
+    // Built-in configured providers (meta is authoritative for credential state)
     for (const row of builtinRows) {
-      if (!row.configured) continue;
+      if (!metaConfigured.has(row.id)) continue;
       const modelCount = models.filter((m) => m.provider === row.id).length;
       result.push({
         id: row.id,
@@ -118,7 +122,7 @@ export function useConnectedProviders(): {
     }
 
     return result;
-  }, [builtinRows, customConfig, models]);
+  }, [builtinRows, customConfig, models, metaList]);
 
   const loading = cfgLoading || metaLoading || modelsLoading;
 
