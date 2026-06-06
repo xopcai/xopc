@@ -99,7 +99,8 @@ export async function applyMiscPatch(config: Config, body: any): Promise<PatchRe
         typeof apiKey === 'string' &&
         apiKey.trim() &&
         apiKey !== '***' &&
-        apiKey !== '••••••••••••'
+        apiKey !== '••••••••••••' &&
+        !/^•+$/.test(apiKey)
       ) {
         await resolver.saveApiKey(key, apiKey, { profileName: 'default' });
       }
