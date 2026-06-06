@@ -1,5 +1,6 @@
 import { useCallback, useRef, type RefObject } from 'react';
 
+import { buildSendFailedErrorPayload } from '@/features/chat/messages/agent-run-error-parser';
 import { createAgentStreamMessagingCallbacks, readStreamingBubbleFromStore } from '@/features/chat/messages/agent-stream-messaging-callbacks';
 import { mergeConsecutiveAssistantMessages } from '@/features/chat/messages/agent-messages';
 import type { WireAttachment } from '@/features/chat/composer/composer.types';
@@ -335,7 +336,7 @@ export function useChatSessionStreaming(deps: {
       } catch (err) {
         if ((err as Error).name !== 'AbortError') {
           store().clearStreamingState(chatId);
-          setShellError(err instanceof Error ? err.message : 'Send failed');
+          setShellError(JSON.stringify(buildSendFailedErrorPayload()));
         }
       } finally {
         sendingRef.current = false;

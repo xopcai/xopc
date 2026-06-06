@@ -19,7 +19,7 @@ import { isWebUiSessionKey } from '@/features/chat/session/session-manager';
 import { isValidSkillWireId } from '@/features/chat/palette/skill-wire-pattern';
 import { wireTextForSlashCommandEntry } from '@/features/chat/palette/slash-command-wire-text';
 import { useWorkspaceEditorAgentStore } from '@/stores/workspace-editor-agent-store';
-import { ProviderSetupRequiredBanner } from '@/features/chat/messages/provider-setup-required-banner';
+import { AgentRunErrorBanner } from '@/features/chat/messages/agent-run-error-banner';
 
 export function ChatPage() {
   const language = useLocaleStore((s) => s.language);
@@ -225,7 +225,7 @@ export function ChatPage() {
                     <div className="mb-3 text-center text-xs text-fg-muted">{m.chat.loadOlder}</div>
                   ) : null}
                   {stream.error ? (
-                    <ProviderSetupRequiredBanner errorText={stream.error} />
+                    <AgentRunErrorBanner errorText={stream.error} />
                   ) : null}
                   <MessageList
                     key={session.decodedKey ?? 'new'}

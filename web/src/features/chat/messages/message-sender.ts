@@ -1,3 +1,4 @@
+import { buildSendFailedErrorPayload } from '@/features/chat/messages/agent-run-error-parser';
 import type { WireAttachment } from '@/features/chat/composer/composer.types';
 import type { Message, ProgressState } from '@/features/chat/messages/messages.types';
 import { userMessageFromSsePayload } from '@/features/chat/messages/user-message-from-sse';
@@ -458,7 +459,7 @@ export class MessageSender {
           String(
             parsed.content ||
               (parsed.error as { message?: string } | undefined)?.message ||
-              'Send failed',
+              JSON.stringify(buildSendFailedErrorPayload()),
           ),
         );
         break;

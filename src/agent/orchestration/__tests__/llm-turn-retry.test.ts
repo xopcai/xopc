@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import {
+  getAssistantTurnErrorMessage,
   isTransientLlmErrorMessage,
   stripTrailingErrorAssistantMessages,
   maybeRetryTurnAfterTransientLlmFailure,
@@ -93,6 +94,23 @@ describe('llm-turn-retry', () => {
         state: { messages: [user, errAssistant] },
       } as unknown as import('@earendil-works/pi-agent-core').Agent),
     ).toBe(true);
+  });
+
+  it('getAssistantTurnErrorMessage returns errorMessage from failed assistant', () => {
+    const user: AgentMessage = { role: 'user', content: 'hi', timestamp: 1 };
+    const errAssistant: AgentMessage = {
+      role: 'assistant',
+      content: [{ type: 'text', text: '' }],
+      stopReason: 'error',
+      errorMessage: '401 Authentication Fails',
+      timestamp: 2,
+    } as AgentMessage;
+
+    expect(
+      getAssistantTurnErrorMessage({
+        state: { messages: [user, errAssistant] },
+      } as unknown as import('@earendil-works/pi-agent-core').Agent),
+    ).toBe('401 Authentication Fails');
   });
 
   it('isAssistantTurnAborted detects aborted assistant', () => {
