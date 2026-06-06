@@ -151,6 +151,9 @@
       "copied": "已复制",
       "maskedHelp": "已保存的密钥默认隐藏。点击眼睛图标可从网关凭据或 models.json 读取（不含环境变量中的密钥）。",
       "notInConfigFile": "网关与 models.json 中未找到密钥 — 该服务商可能使用环境变量或 OAuth。",
+      "extensionKeyHint": "此扩展服务商由插件自行管理凭据，无需在网关保存 API Key。如需可选密钥，请在扩展设置或环境变量中配置。",
+      "openExtensionSettings": "打开扩展设置",
+      "extensionSettingsLinkTitle": "在扩展设置页配置可选凭据",
       "loadFailed": "无法读取 API Key。",
       "custom": "自定义"
     }
