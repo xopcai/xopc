@@ -7,7 +7,7 @@ import {
   Search,
   X,
 } from 'lucide-react';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useReducer, useRef, useState } from 'react';
 
 import * as Dialog from '@radix-ui/react-dialog';
 
@@ -24,10 +24,17 @@ import {
 } from '@/features/settings/provider-enrichment';
 import { CATEGORY_ORDER, groupByCategory } from '@/features/settings/providers/providers-settings-lib';
 import {
+  API_TYPE_OPTIONS,
   saveModelsJson,
+  type ApiType,
   type ModelsJsonConfig,
   type ProviderConfig,
 } from '@/features/settings/models-json-api';
+import {
+  PROVIDER_PRESETS,
+  providerIdForPreset,
+  selectClassName,
+} from '@/features/settings/models/models-settings-lib';
 import { settingsInputFocusClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
@@ -52,6 +59,7 @@ export interface AddProviderDialogMessages {
   saving: string;
   saved: string;
   cancel: string;
+  close: string;
   back: string;
   getApiKey: string;
   getApiKeyIntl: string;
@@ -64,6 +72,16 @@ export interface AddProviderDialogMessages {
   step1Title: string;
   step2BuiltinTitle: string;
   step2CustomTitle: string;
+  presetLabel: string;
+  presetCustom: string;
+  presetOllama: string;
+  presetLmStudio: string;
+  presetOpenRouter: string;
+  presetZhipuCn: string;
+  presetZaiGeneral: string;
+  apiTypeLabel: string;
+  providerIdRequired: string;
+  baseUrlRequired: string;
   categories: Record<string, string>;
 }
 
@@ -94,22 +112,26 @@ export function AddProviderDialog({
   const [step, setStep] = useState<DialogStep>({ type: 'pick' });
   const [searchQuery, setSearchQuery] = useState('');
 
-  const handleClose = useCallback(() => {
-    onOpenChange(false);
-    // Reset after close animation
-    window.setTimeout(() => {
-      setStep({ type: 'pick' });
-      setSearchQuery('');
-    }, 200);
-  }, [onOpenChange]);
+  const handleOpenChange = useCallback(
+    (next: boolean) => {
+      if (!next) {
+        window.setTimeout(() => {
+          setStep({ type: 'pick' });
+          setSearchQuery('');
+        }, 200);
+      }
+      onOpenChange(next);
+    },
+    [onOpenChange],
+  );
 
   const handleSaved = useCallback(() => {
     onSaved();
-    handleClose();
-  }, [onSaved, handleClose]);
+    handleOpenChange(false);
+  }, [onSaved, handleOpenChange]);
 
   return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+    <Dialog.Root open={open} onOpenChange={handleOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay
           className={cn(
@@ -122,7 +144,6 @@ export function AddProviderDialog({
             'fixed left-1/2 top-1/2 flex max-h-[85vh] w-full max-w-lg -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge-subtle bg-surface-base shadow-xl',
             SETTINGS_SHELL_CONTENT_Z,
           )}
-          onPointerDownOutside={(e) => e.preventDefault()}
         >
           {step.type === 'pick' ? (
             <PickProviderStep
@@ -153,6 +174,20 @@ export function AddProviderDialog({
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
+  );
+}
+
+function DialogCloseButton({ label }: { label: string }) {
+  return (
+    <Dialog.Close asChild>
+      <button
+        type="button"
+        className={cn('rounded-lg p-1.5 text-fg-muted hover:bg-surface-hover hover:text-fg', interaction.press)}
+        aria-label={label}
+      >
+        <X className="size-4" aria-hidden />
+      </button>
+    </Dialog.Close>
   );
 }
 
@@ -192,8 +227,9 @@ function PickProviderStep({
 
   return (
     <>
-      <div className="flex items-center justify-between border-b border-edge-subtle px-5 py-4">
-        <Dialog.Title className="text-base font-semibold text-fg">{labels.step1Title}</Dialog.Title>
+      <div className="flex items-center justify-between gap-2 border-b border-edge-subtle px-5 py-4">
+        <Dialog.Title className="min-w-0 flex-1 text-base font-semibold text-fg">{labels.step1Title}</Dialog.Title>
+        <DialogCloseButton label={labels.close} />
       </div>
 
       <div className="px-5 pt-3">
@@ -338,9 +374,10 @@ function ConfigureBuiltinStep({
         >
           <ChevronRight className="size-4 rotate-180" aria-hidden />
         </button>
-        <Dialog.Title className="text-base font-semibold text-fg">
+        <Dialog.Title className="min-w-0 flex-1 text-base font-semibold text-fg">
           {row?.name ?? providerId}
         </Dialog.Title>
+        <DialogCloseButton label={labels.close} />
       </div>
 
       <div className="flex flex-col gap-4 px-5 py-4">
@@ -422,7 +459,82 @@ function ConfigureBuiltinStep({
   );
 }
 
-/* ── Step 2b: Configure custom provider (base URL + key + models) ── */
+/* ── Step 2b: Configure custom provider (preset + base URL + API type + key + models) ── */
+
+type CustomProviderFormState = {
+  preset: string;
+  providerId: string;
+  baseUrl: string;
+  api: ApiType;
+  apiKey: string;
+  modelIds: string[];
+  error: string | null;
+};
+
+function customFormFromPreset(presetKey = 'custom'): CustomProviderFormState {
+  if (presetKey !== 'custom' && PROVIDER_PRESETS[presetKey]) {
+    const p = PROVIDER_PRESETS[presetKey];
+    return {
+      preset: presetKey,
+      providerId: providerIdForPreset(presetKey),
+      baseUrl: p.baseUrl ?? '',
+      api: (p.api as ApiType) ?? 'openai-completions',
+      apiKey: p.apiKey ?? '',
+      modelIds: [''],
+      error: null,
+    };
+  }
+  return {
+    preset: 'custom',
+    providerId: '',
+    baseUrl: '',
+    api: 'openai-completions',
+    apiKey: '',
+    modelIds: [''],
+    error: null,
+  };
+}
+
+type CustomFormAction =
+  | { type: 'applyPreset'; key: string }
+  | { type: 'setProviderId'; value: string }
+  | { type: 'setBaseUrl'; value: string }
+  | { type: 'setApi'; value: ApiType }
+  | { type: 'setApiKey'; value: string }
+  | { type: 'addModelSlot' }
+  | { type: 'updateModelId'; index: number; value: string }
+  | { type: 'removeModelSlot'; index: number }
+  | { type: 'setError'; value: string | null };
+
+function customFormReducer(state: CustomProviderFormState, action: CustomFormAction): CustomProviderFormState {
+  switch (action.type) {
+    case 'applyPreset':
+      if (action.key === 'custom') {
+        return { ...state, preset: 'custom', error: null };
+      }
+      if (!PROVIDER_PRESETS[action.key]) return state;
+      return { ...customFormFromPreset(action.key), modelIds: state.modelIds };
+    case 'setProviderId':
+      return { ...state, providerId: action.value };
+    case 'setBaseUrl':
+      return { ...state, baseUrl: action.value };
+    case 'setApi':
+      return { ...state, api: action.value };
+    case 'setApiKey':
+      return { ...state, apiKey: action.value };
+    case 'addModelSlot':
+      return { ...state, modelIds: [...state.modelIds, ''] };
+    case 'updateModelId':
+      return {
+        ...state,
+        modelIds: state.modelIds.map((m, i) => (i === action.index ? action.value : m)),
+      };
+    case 'removeModelSlot':
+      return { ...state, modelIds: state.modelIds.filter((_, i) => i !== action.index) };
+    case 'setError':
+      return { ...state, error: action.value };
+  }
+}
 
 function ConfigureCustomStep({
   customConfig,
@@ -435,34 +547,32 @@ function ConfigureCustomStep({
   onBack: () => void;
   onSaved: () => void;
 }) {
-  const [providerId, setProviderId] = useState('');
-  const [baseUrl, setBaseUrl] = useState('');
-  const [apiKey, setApiKey] = useState('');
-  const [modelIds, setModelIds] = useState<string[]>(['']);
+  const [form, dispatch] = useReducer(customFormReducer, undefined as never, () => customFormFromPreset());
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
-  const addModelSlot = () => setModelIds((prev) => [...prev, '']);
-  const updateModelId = (index: number, value: string) => {
-    setModelIds((prev) => prev.map((m, i) => (i === index ? value : m)));
-  };
-  const removeModelSlot = (index: number) => {
-    setModelIds((prev) => prev.filter((_, i) => i !== index));
-  };
+  const { preset, providerId, baseUrl, api, apiKey, modelIds, error } = form;
 
   const handleSave = async () => {
     const trimmedId = providerId.trim();
     const trimmedUrl = baseUrl.trim();
-    if (!trimmedId || !trimmedUrl) return;
+    if (!trimmedId) {
+      dispatch({ type: 'setError', value: labels.providerIdRequired });
+      return;
+    }
+    if (!trimmedUrl) {
+      dispatch({ type: 'setError', value: labels.baseUrlRequired });
+      return;
+    }
 
     const validModels = modelIds.map((m) => m.trim()).filter(Boolean);
 
     setSaving(true);
-    setError(null);
+    dispatch({ type: 'setError', value: null });
     try {
       const existingProviders = customConfig?.providers ?? {};
       const newProvider: ProviderConfig = {
         baseUrl: trimmedUrl,
+        api,
         apiKey: apiKey.trim() || undefined,
         models: validModels.map((id) => ({ id })),
       };
@@ -477,7 +587,7 @@ function ConfigureCustomStep({
       await saveModelsJson(updatedConfig);
       onSaved();
     } catch (e) {
-      setError(e instanceof Error ? e.message : labels.saveError);
+      dispatch({ type: 'setError', value: e instanceof Error ? e.message : labels.saveError });
     } finally {
       setSaving(false);
     }
@@ -496,13 +606,34 @@ function ConfigureCustomStep({
         >
           <ChevronRight className="size-4 rotate-180" aria-hidden />
         </button>
-        <Dialog.Title className="text-base font-semibold text-fg">
+        <Dialog.Title className="min-w-0 flex-1 text-base font-semibold text-fg">
           {labels.step2CustomTitle}
         </Dialog.Title>
+        <DialogCloseButton label={labels.close} />
       </div>
 
       <div className="flex max-h-[60vh] flex-col gap-4 overflow-y-auto px-5 py-4">
         <p className="text-sm text-fg-muted">{labels.customDescription}</p>
+
+        {/* Preset */}
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="custom-preset" className="text-sm font-medium text-fg">
+            {labels.presetLabel}
+          </label>
+          <select
+            id="custom-preset"
+            value={preset}
+            onChange={(e) => dispatch({ type: 'applyPreset', key: e.target.value })}
+            className={selectClassName()}
+          >
+            <option value="custom">{labels.presetCustom}</option>
+            <option value="ollama">{labels.presetOllama}</option>
+            <option value="lmstudio">{labels.presetLmStudio}</option>
+            <option value="openrouter">{labels.presetOpenRouter}</option>
+            <option value="zhipuCn">{labels.presetZhipuCn}</option>
+            <option value="zaiGeneral">{labels.presetZaiGeneral}</option>
+          </select>
+        </div>
 
         {/* Provider ID */}
         <div className="flex flex-col gap-1.5">
@@ -515,7 +646,7 @@ function ConfigureCustomStep({
             autoComplete="off"
             autoFocus
             value={providerId}
-            onChange={(e) => setProviderId(e.target.value)}
+            onChange={(e) => dispatch({ type: 'setProviderId', value: e.target.value })}
             placeholder={labels.providerIdPlaceholder}
             className={cn(
               'rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg placeholder:text-fg-subtle',
@@ -524,23 +655,42 @@ function ConfigureCustomStep({
           />
         </div>
 
-        {/* Base URL */}
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="custom-base-url" className="text-sm font-medium text-fg">
-            {labels.baseUrlLabel}
-          </label>
-          <input
-            id="custom-base-url"
-            type="url"
-            autoComplete="off"
-            value={baseUrl}
-            onChange={(e) => setBaseUrl(e.target.value)}
-            placeholder={labels.baseUrlPlaceholder}
-            className={cn(
-              'rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg placeholder:text-fg-subtle',
-              settingsInputFocusClass,
-            )}
-          />
+        {/* Base URL + API type */}
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="custom-base-url" className="text-sm font-medium text-fg">
+              {labels.baseUrlLabel}
+            </label>
+            <input
+              id="custom-base-url"
+              type="url"
+              autoComplete="off"
+              value={baseUrl}
+              onChange={(e) => dispatch({ type: 'setBaseUrl', value: e.target.value })}
+              placeholder={labels.baseUrlPlaceholder}
+              className={cn(
+                'rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg placeholder:text-fg-subtle',
+                settingsInputFocusClass,
+              )}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="custom-api-type" className="text-sm font-medium text-fg">
+              {labels.apiTypeLabel}
+            </label>
+            <select
+              id="custom-api-type"
+              value={api}
+              onChange={(e) => dispatch({ type: 'setApi', value: e.target.value as ApiType })}
+              className={selectClassName()}
+            >
+              {API_TYPE_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
         {/* API Key (optional) */}
@@ -553,7 +703,7 @@ function ConfigureCustomStep({
             type="password"
             autoComplete="off"
             value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
+            onChange={(e) => dispatch({ type: 'setApiKey', value: e.target.value })}
             placeholder={labels.apiKeyPlaceholder}
             className={cn(
               'rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg placeholder:text-fg-subtle',
@@ -571,7 +721,7 @@ function ConfigureCustomStep({
                 type="text"
                 autoComplete="off"
                 value={modelId}
-                onChange={(e) => updateModelId(index, e.target.value)}
+                onChange={(e) => dispatch({ type: 'updateModelId', index, value: e.target.value })}
                 placeholder={labels.modelIdPlaceholder}
                 className={cn(
                   'flex-1 rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg placeholder:text-fg-subtle',
@@ -581,7 +731,7 @@ function ConfigureCustomStep({
               {modelIds.length > 1 ? (
                 <button
                   type="button"
-                  onClick={() => removeModelSlot(index)}
+                  onClick={() => dispatch({ type: 'removeModelSlot', index })}
                   className={cn('rounded-lg p-1.5 text-fg-subtle hover:bg-surface-hover hover:text-fg', interaction.press)}
                 >
                   <X className="size-3.5" aria-hidden />
@@ -589,7 +739,12 @@ function ConfigureCustomStep({
               ) : null}
             </div>
           ))}
-          <Button type="button" variant="ghost" className="w-fit gap-1.5 text-fg-muted" onClick={addModelSlot}>
+          <Button
+            type="button"
+            variant="ghost"
+            className="w-fit gap-1.5 text-fg-muted"
+            onClick={() => dispatch({ type: 'addModelSlot' })}
+          >
             <Plus className="size-3.5" aria-hidden />
             {labels.addModel}
           </Button>
