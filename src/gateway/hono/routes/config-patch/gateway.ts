@@ -16,6 +16,7 @@
 import type { Config, GatewayBindMode } from '../../../../config/schema.js';
 import { isValidIPv4 } from '../../../../config/gateway-bind.js';
 import { mergeShareConfigPatch } from '../../../../share/share-config.js';
+import { isMaskedSecretPatchValue } from '../../lib/mask-secret-length.js';
 import { type PatchResult, PATCH_OK, patchError } from './result.js';
 
 /**
@@ -206,18 +207,14 @@ export function applyGatewayPatch(config: Config, body: any): PatchResult {
     if (a.token !== undefined) {
       if (a.token === null || (typeof a.token === 'string' && !a.token.trim())) {
         delete gw.auth.token;
-      } else if (typeof a.token === 'string') {
+      } else if (typeof a.token === 'string' && !isMaskedSecretPatchValue(a.token)) {
         gw.auth.token = a.token;
       }
     }
     if (a.password !== undefined) {
       if (a.password === null || (typeof a.password === 'string' && !a.password.trim())) {
         delete gw.auth.password;
-      } else if (
-        typeof a.password === 'string' &&
-        a.password !== '***' &&
-        a.password !== '••••••••••••'
-      ) {
+      } else if (typeof a.password === 'string' && !isMaskedSecretPatchValue(a.password)) {
         gw.auth.password = a.password;
       }
     }

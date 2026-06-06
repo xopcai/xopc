@@ -3,7 +3,9 @@ import { AlertCircle, X } from 'lucide-react';
 import { useReducer, useRef } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { SecretInput } from '@/components/ui/secret-input';
 import { cn } from '@/lib/cn';
+import { DEFAULT_SECRET_INPUT_LABELS } from '@/lib/secret-input-labels';
 import { ghostIconButton } from '@/lib/interaction';
 import { SETTINGS_SHELL_CONTENT_Z, SETTINGS_SHELL_OVERLAY_Z } from '@/lib/settings-shell-dialog-layer';
 import { type ModelsSettingsMessages } from '@/i18n/messages';
@@ -219,11 +221,11 @@ export function ProviderAddDialog({ open, onOpenChange, presetKey, onConfirm, m 
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-fg-muted">{m.apiKey}</label>
-              <input
-                className={inputClassName()}
+              <SecretInput
                 value={apiKey}
-                onChange={(e) => dispatch({ type: 'setApiKey', value: e.target.value })}
+                onChange={(next) => dispatch({ type: 'setApiKey', value: next })}
                 placeholder={m.apiKeyPlaceholder}
+                labels={{ ...DEFAULT_SECRET_INPUT_LABELS, show: m.show, hide: m.hide }}
               />
             </div>
             {error ? (

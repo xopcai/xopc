@@ -18,8 +18,8 @@ describe('safe-voice-config', () => {
       },
     }) as Record<string, Record<string, { apiKey: string }>>;
 
-    expect(masked.providers.groq.apiKey).toBe('***');
-    expect(masked.providers.openai.apiKey).toBe('***');
+    expect(masked.providers.groq.apiKey).toBe('••••••••••');
+    expect(masked.providers.openai.apiKey).toBe('•••••••••');
   });
 
   it('preserves STT api keys when patch sends masked sentinel', () => {
@@ -38,7 +38,7 @@ describe('safe-voice-config', () => {
       providers: { openai: { apiKey: 'sk-test', model: 'tts-1', voice: 'alloy' } },
     }) as Record<string, Record<string, { apiKey: string }>>;
 
-    expect(masked.providers.openai.apiKey).toBe('***');
+    expect(masked.providers.openai.apiKey).toBe('•••••••');
   });
 
   it('preserves TTS api keys when patch sends masked sentinel', () => {

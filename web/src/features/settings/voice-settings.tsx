@@ -3,6 +3,7 @@ import { useCallback, useMemo, useReducer, useRef, useState, type ReactNode } fr
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
+import { SecretInput } from '@/components/ui/secret-input';
 import { useSaveBarRegistration } from '@/features/settings/save-bar/use-save-bar-registration';
 import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
 import {
@@ -24,6 +25,7 @@ import {
 import { apiUrl } from '@/lib/url';
 import { nativeSelectMaxWidthClass, selectControlBaseClass, settingsInputFocusClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
+import { DEFAULT_SECRET_INPUT_LABELS } from '@/lib/secret-input-labels';
 import { messages, type VoiceSettingsMessages } from '@/i18n/messages';
 import { docsGuidePageUrl } from '@/navigation';
 import { useGatewayStore } from '@/stores/gateway-store';
@@ -1346,11 +1348,20 @@ function SchemaConfigField({
           placeholder={field.placeholder}
           onChange={(event) => onChange(parseSchemaFieldValue(field, event.target.value))}
         />
+      ) : field.type === 'password' ? (
+        <SecretInput
+          id={id}
+          className={className}
+          value={fieldValue}
+          onChange={(next) => onChange(parseSchemaFieldValue(field, next))}
+          placeholder={field.placeholder}
+          labels={DEFAULT_SECRET_INPUT_LABELS}
+        />
       ) : (
         <input
           id={id}
           className={inputClassName()}
-          type={field.type === 'number' ? 'number' : field.type === 'password' ? 'password' : 'text'}
+          type={field.type === 'number' ? 'number' : 'text'}
           autoComplete={field.secret ? 'new-password' : 'off'}
           spellCheck={false}
           value={fieldValue}

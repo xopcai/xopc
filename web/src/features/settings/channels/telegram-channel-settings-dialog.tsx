@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Check, ChevronDown, Copy, Eye, EyeOff } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { SecretInput } from '@/components/ui/secret-input';
 import type { ChatAgentsPayload } from '@/features/chat/agent-selection/chat-agents-api';
 import { telegramRoutingAccountIds } from '@/features/settings/channel-bindings-merge';
 import {
@@ -14,6 +15,7 @@ import {
 } from '@/features/settings/channels-config-api';
 import type { ChannelsSettingsMessages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
+import { secretInputLabelsFromChannels } from '@/lib/secret-input-labels';
 
 import { ChannelAgentRoutingBlock } from './channel-agent-routing-block';
 import { ChannelPairingSection } from './channel-pairing-section';
@@ -35,10 +37,10 @@ export function TelegramChannelSettingsDialog({
   baseline,
   tgAdvanced,
   setTgAdvanced,
-  showToken,
-  setShowToken,
-  copied,
-  copyToken,
+  showToken: _showToken,
+  setShowToken: _setShowToken,
+  copied: _copied,
+  copyToken: _copyToken,
   updateTelegram,
   updateChannelAgentRoute,
   tgAccountsDraft,
@@ -93,8 +95,12 @@ export function TelegramChannelSettingsDialog({
   const tg = form.telegram;
   const tgBaselineToken = baseline ? telegramDefaultBotToken(baseline.telegram) : '';
   const tgToken = telegramDefaultBotToken(tg);
-  const telegramTokenDisplayLocked =
-    !showToken && Boolean(String(tgBaselineToken).trim()) && tgToken === tgBaselineToken;
+  const secretLabels = secretInputLabelsFromChannels({
+    show: ch.show,
+    hide: ch.hide,
+    copy: ch.copy,
+    copied: ch.copied,
+  });
   const [pairedCredentialCount, setPairedCredentialCount] = useState(0);
   const tokenReady = Boolean(tgToken.trim()) && tg.enabled;
   const tgAccountIds = telegramRoutingAccountIds(tg);
@@ -154,45 +160,22 @@ export function TelegramChannelSettingsDialog({
                 {ch.telegramToken}
                 <span className="text-red-600 dark:text-red-400"> *</span>
               </FieldLabel>
-              <div className="flex flex-wrap gap-2">
-                <input
-                  className={cn(inputClassName(), 'min-w-0 flex-1 font-mono text-xs')}
-                  type={showToken ? 'text' : 'password'}
-                  autoComplete="off"
-                  readOnly={telegramTokenDisplayLocked}
-                  value={
-                    telegramTokenDisplayLocked
-                      ? '*'.repeat(Math.max(1, tgBaselineToken.length))
-                      : tgToken
-                  }
-                  onChange={(e) => {
-                    if (telegramTokenDisplayLocked) return;
-                    const prev = tg.accounts?.default ?? emptyTelegramAccount('default');
-                    updateTelegram({
-                      accounts: {
-                        ...tg.accounts,
-                        default: { ...prev, accountId: 'default', botToken: e.target.value },
-                      },
-                    });
-                  }}
-                  placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
-                />
-                {tgToken ? (
-                  <Button type="button" variant="secondary" className="px-2 py-1 text-xs" onClick={() => void copyToken()}>
-                    {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-                    {copied ? ch.copied : ch.copy}
-                  </Button>
-                ) : null}
-                <Button
-                  type="button"
-                  variant="secondary"
-                  className="px-2 py-1 text-xs"
-                  onClick={() => setShowToken((s) => !s)}
-                >
-                  {showToken ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
-                  {showToken ? ch.hide : ch.show}
-                </Button>
-              </div>
+              <SecretInput
+                value={tgToken}
+                onChange={(botToken) => {
+                  const prev = tg.accounts?.default ?? emptyTelegramAccount('default');
+                  updateTelegram({
+                    accounts: {
+                      ...tg.accounts,
+                      default: { ...prev, accountId: 'default', botToken },
+                    },
+                  });
+                }}
+                placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
+                labels={secretLabels}
+                baselineValue={tgBaselineToken}
+                inputClassName={cn(inputClassName(), 'text-xs')}
+              />
               <FieldHint>{ch.telegramTokenDesc}</FieldHint>
             </div>
 

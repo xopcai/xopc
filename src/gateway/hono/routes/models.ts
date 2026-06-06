@@ -357,6 +357,7 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
           supportsApiKey: true,
           configured: true,
           activeKeySource: 'extension',
+          baseUrl: resolveProviderApiBaseUrl(plugin.id),
         });
       }
     }

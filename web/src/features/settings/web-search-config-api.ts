@@ -102,3 +102,23 @@ export async function patchWebSearchSettings(state: WebSearchSettingsState): Pro
   });
   void revalidateGatewayConfig();
 }
+
+export async function revealWebSearchApiKey(index: number): Promise<{
+  index: number;
+  apiKey: string | null;
+  source: 'config' | 'none';
+}> {
+  const data = await fetchJson<{
+    ok?: boolean;
+    payload?: { index: number; apiKey: string | null; source: 'config' | 'none' };
+    error?: { message?: string };
+  }>(apiUrl('/api/tools/web/reveal-search-api-key'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ index }),
+  });
+  if (!data.ok || !data.payload) {
+    throw new Error(data.error?.message ?? 'Reveal failed');
+  }
+  return data.payload;
+}

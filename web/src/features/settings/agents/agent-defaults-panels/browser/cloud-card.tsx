@@ -1,6 +1,12 @@
 import { Cloud, LoaderCircle, Plug } from 'lucide-react';
 import { useCallback, useState } from 'react';
 
+import { SecretInput } from '@/components/ui/secret-input';
+import { revealBrowserCloudApiKey } from '@/features/settings/gateway-config-api';
+import { messages } from '@/i18n/messages';
+import { secretInputLabelsFromChannels } from '@/lib/secret-input-labels';
+import { useLocaleStore } from '@/stores/locale-store';
+
 import { AgentDefaultsField } from '../../agent-defaults-field';
 import { inputClassName, selectClassName } from '../../defaults-field-styles';
 
@@ -33,6 +39,17 @@ export function CloudCard({
   const [message, setMessage] = useState<string | null>(null);
 
   const provider = form.provider === 'local' ? 'browserbase' : form.provider;
+
+  const language = useLocaleStore((s) => s.language);
+  const ps = messages(language).providersSettings;
+  const secretLabels = secretInputLabelsFromChannels({
+    show: ps.show,
+    hide: ps.hide,
+    copy: ps.copy,
+    copied: ps.copied,
+  });
+
+  const reveal = useCallback(() => revealBrowserCloudApiKey().then((payload) => payload.apiKey ?? null), []);
 
   const onTest = useCallback(async () => {
     setStatus('pending');
@@ -83,19 +100,13 @@ export function CloudCard({
           </select>
         </AgentDefaultsField>
         <AgentDefaultsField label={m.label.browserCloudApiKey} description={m.desc.browserCloudApiKey}>
-          <input
-            type="password"
-            className={inputClassName()}
-            value={form.apiKey === '***' ? '' : form.apiKey}
-            placeholder={
-              form.apiKey === '***'
-                ? '••••••••'
-                : provider === 'browserbase'
-                  ? 'BROWSERBASE_API_KEY'
-                  : 'BROWSER_USE_API_KEY'
-            }
-            onChange={(e) => onChange({ apiKey: e.target.value })}
-            autoComplete="off"
+          <SecretInput
+            value={form.apiKey}
+            onChange={(apiKey) => onChange({ apiKey })}
+            placeholder={provider === 'browserbase' ? 'BROWSERBASE_API_KEY' : 'BROWSER_USE_API_KEY'}
+            labels={secretLabels}
+            reveal={reveal}
+            loadFailedLabel="Failed to load key"
           />
         </AgentDefaultsField>
         {provider === 'browserbase' ? (
