@@ -127,7 +127,7 @@ export function AttachmentRenderer({
                       images[IMAGE_GRID_MAX_VISIBLE - 1]?.id ??
                       `overflow-${IMAGE_GRID_MAX_VISIBLE - 1}`
                     }
-                    attachment={images[IMAGE_GRID_MAX_VISIBLE - 1]!}
+                    attachment={images[IMAGE_GRID_MAX_VISIBLE - 1]}
                     authToken={authToken}
                     sessionKey={sessionKey}
                     imageSize="grid-cell"
