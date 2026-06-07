@@ -58,7 +58,7 @@ import { createWorkflowCatalog } from '../workflow/catalog.js';
 import { buildSandboxToolMap, createExecuteCodeTool } from './execute-code-tool.js';
 import { createCronjobTool } from './cronjob-tool.js';
 import type { CronService } from '../../cron/index.js';
-import type { WorkflowRunService } from '../../workflows/service/workflow-run-service.js';
+import type { WorkflowRunServiceLike } from '../../workflows/service/workflow-run-service.types.js';
 import { createLogger } from '../../utils/logger.js';
 import type { SkillManager } from '../skills/skill-manager.js';
 import { wrapToolsWithProtection, type ToolExecutorConfig } from './executor.js';
@@ -103,7 +103,7 @@ export interface ToolFactoryDeps {
   /** Gateway: enables the `cronjob` tool. */
   getCronService?: () => CronService | undefined;
   /** Gateway: starts persisted workflow runs (dedicated chat session per run). */
-  getWorkflowRunService?: () => WorkflowRunService | undefined;
+  getWorkflowRunService?: () => WorkflowRunServiceLike | undefined;
   /** Current session skill indexing (tool gating + allowlist); used by skills_list / skill_view. */
   getSkillIndexingContext?: () =>
     | { registeredToolNames: string[]; skillAllowlist?: string[] }

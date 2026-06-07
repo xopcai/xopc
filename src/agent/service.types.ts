@@ -2,7 +2,7 @@ import type { ThinkingLevel } from '@earendil-works/pi-agent-core';
 
 import type { Config, AgentDefaults } from '../config/schema.js';
 import type { SessionStore } from '../session/store.js';
-import type { CronService } from '../cron/index.js';
+import type { CronService } from '../cron/service.js';
 import type { ExtensionRegistryImpl as ExtensionRegistry } from '../extensions/index.js';
 import type { GatewayClarifyRequestFn } from './tools/clarify-tool.js';
 import type { ProgressStage } from './lifecycle/progress.js';
@@ -39,7 +39,7 @@ export interface AgentServiceConfig {
   /** Gateway: transcript JSONL append (goal verdict, slash receipt, background turns). */
   onSessionTranscriptUpdated?: (sessionKey: string) => void;
   /** Gateway: persisted workflow runs. */
-  getWorkflowRunService?: () => import('../workflows/service/workflow-run-service.js').WorkflowRunService;
+  getWorkflowRunService?: () => import('../workflows/service/workflow-run-service.types.js').WorkflowRunServiceLike;
 }
 
 export interface AgentContext {

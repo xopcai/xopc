@@ -1,11 +1,12 @@
 import { randomUUID } from 'node:crypto';
 
+import type { AgentTool } from '@earendil-works/pi-agent-core';
+
 import type { BuildChildToolsOptions } from '../../agent/child-agent-factory.js';
 import { extractProfileAgentId } from '../../config/agent-profile.js';
 import { resolveModelRef } from '../../config/agent-typed-models.js';
-import type { GatewayService } from '../../gateway/service.js';
+import type { GatewayWorkflowHost } from '../../gateway/gateway-workflow-host.types.js';
 import { resolveModel as resolveModelById } from '../../providers/index.js';
-import { AgentToolsFactory } from '../../agent/tools/factory.js';
 import { createWorkflowCatalog } from '../../agent/workflow/catalog.js';
 import { DelegateSubagentRunner } from '../../agent/workflow/subagent-runner.js';
 import type {
@@ -20,65 +21,31 @@ import { WorkflowEngine } from '../engine/index.js';
 import { WorkflowEventStore } from '../store/event-store.js';
 import { WorkflowRunStore } from '../store/run-store.js';
 import type { WorkflowSessionBridge } from './workflow-session-bridge.js';
+export type {
+  CancelWorkflowRunResult,
+  CancelWorkflowRunServiceParams,
+  CancelWorkflowRunServiceResult,
+  RetryWorkflowRunServiceParams,
+  StartWorkflowRunServiceParams,
+  StartWorkflowRunServiceResult,
+  WorkflowRunServiceErrorCode,
+  WorkflowRunServiceErrorResult,
+  WorkflowRunServiceResult,
+} from './workflow-run-service.types.js';
+
+import type {
+  CancelWorkflowRunResult,
+  CancelWorkflowRunServiceParams,
+  RetryWorkflowRunServiceParams,
+  StartWorkflowRunServiceParams,
+  WorkflowRunServiceResult,
+} from './workflow-run-service.types.js';
 
 export interface WorkflowRunServiceOptions {
-  service: GatewayService;
+  service: GatewayWorkflowHost;
   sessionBridge: WorkflowSessionBridge;
+  buildChildTools: (childOptions: BuildChildToolsOptions) => AgentTool<any, any>[];
 }
-
-export interface StartWorkflowRunServiceParams {
-  agentId: string;
-  definitionId: string;
-  parentSessionKey?: string;
-  input?: unknown;
-  inputEnvelope?: WorkflowRunInputEnvelope;
-  goal?: string;
-  source: WorkflowRunSource;
-  concurrency?: number;
-  maxSubagents?: number;
-  tokenBudget?: number | null;
-  retryOfRunId?: string;
-  idempotencyKey?: string;
-}
-
-export interface StartWorkflowRunServiceResult {
-  ok: true;
-  runId: string;
-  sessionKey: string;
-}
-
-export interface WorkflowRunServiceErrorResult {
-  ok: false;
-  code: WorkflowRunServiceErrorCode;
-  message: string;
-  httpStatus: 400 | 404 | 409;
-}
-
-export type WorkflowRunServiceResult = StartWorkflowRunServiceResult | WorkflowRunServiceErrorResult;
-
-export type WorkflowRunServiceErrorCode =
-  | 'definition_not_found'
-  | 'run_not_found'
-  | 'invalid_state';
-
-export interface RetryWorkflowRunServiceParams {
-  agentId: string;
-  runId: string;
-}
-
-export interface CancelWorkflowRunServiceParams {
-  agentId: string;
-  runId: string;
-  reason?: string;
-}
-
-export interface CancelWorkflowRunServiceResult {
-  ok: true;
-  cancelled: boolean;
-  alreadyFinished?: boolean;
-}
-
-export type CancelWorkflowRunResult = CancelWorkflowRunServiceResult | WorkflowRunServiceErrorResult;
 
 export class WorkflowRunService {
   private readonly activeRuns = new Map<string, AbortController>();
@@ -242,7 +209,7 @@ export class WorkflowRunService {
       bus: gatewayService.messageBusInstance,
       getDefaultModel: () => resolveModelById(gatewayService.agentService.getModelForSession(params.sessionKey)),
       getConfig: () => gatewayService.currentConfig,
-      buildChildTools: (childOptions) => buildWorkflowChildTools(childOptions),
+      buildChildTools: (childOptions) => this.options.buildChildTools(childOptions),
     });
 
     return new WorkflowEngine({
@@ -336,22 +303,6 @@ export function extractWorkflowRunSessionKey(source: WorkflowRunSource): string 
     return source.sessionKey.trim();
   }
   return null;
-}
-
-function buildWorkflowChildTools(childOptions: BuildChildToolsOptions) {
-  const childFactory = new AgentToolsFactory({
-    workspace: childOptions.workspace,
-    bus: childOptions.bus,
-    getCurrentContext: () => null,
-    getConfig: childOptions.getConfig,
-    getPrimaryModel: () => childOptions.model,
-    toolExecutorConfig: childOptions.toolExecutorConfig,
-  });
-  return childFactory.createAllTools({
-    workspace: childOptions.workspace,
-    getPrimaryModel: () => childOptions.model,
-    disabledTools: new Set(['extensions']),
-  });
 }
 
 function buildWorkflowRunOrigin(source: WorkflowRunSource): WorkflowRunMetadata['origin'] {

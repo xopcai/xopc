@@ -1,7 +1,6 @@
 import { z } from 'zod';
 
 import type { Config } from '../config/schema.js';
-import type { GatewayService } from '../gateway/service.js';
 import {
   SITE_SHARE_CONFIG_DEFAULTS,
   type SiteShareConfig,
@@ -35,7 +34,7 @@ const SiteSharePatchSchema = z.object({
   proxy: SiteShareProxyPatchSchema.optional(),
 });
 
-export function resolveSiteShareConfig(service: GatewayService): SiteShareConfig {
+export function resolveSiteShareConfig(service: { currentConfig: Config }): SiteShareConfig {
   const raw = (service.currentConfig.gateway as Record<string, unknown> | undefined)?.siteShare;
   return mergeWithDefaults(raw);
 }

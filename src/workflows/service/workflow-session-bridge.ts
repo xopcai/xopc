@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import type { GatewayService } from '../../gateway/service.js';
+import type { GatewayWorkflowHost } from '../../gateway/gateway-workflow-host.types.js';
 import { renderWorkflowText } from '../../agent/workflow/snapshot.js';
 import type { WorkflowSnapshot } from '../../agent/workflow/types.js';
 import {
@@ -33,7 +33,7 @@ export interface PrepareWorkflowRunSessionResult {
 export class WorkflowSessionBridge {
   private readonly terminalPersistedRunIds = new Set<string>();
 
-  constructor(private readonly gateway: GatewayService) {}
+  constructor(private readonly gateway: GatewayWorkflowHost) {}
 
   async prepareRunSession(params: PrepareWorkflowRunSessionParams): Promise<PrepareWorkflowRunSessionResult> {
     const sessionKey = buildWorkflowRunSessionKey(params.agentId, params.runId);
