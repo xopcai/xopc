@@ -1,12 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  CHAT_SCROLL_REPIN_WITHIN_PX,
-  CHAT_SCROLL_UNPIN_BEYOND_PX,
+  CHAT_SCROLL_NEAR_BOTTOM_PX,
   chatScrollDistanceFromBottom,
-  isChatScrollNearBottomForRepin,
-  isChatScrollPinnedToBottom,
-  shouldFollowPinnedChatTail,
+  isNearChatBottom,
+  scrollChatToEnd,
 } from '@/features/chat/scroll/chat-scroll-geometry';
 
 function mockScrollEl(params: {
@@ -18,42 +16,22 @@ function mockScrollEl(params: {
 }
 
 describe('chat-scroll-geometry', () => {
-  it('isChatScrollPinnedToBottom within unpin threshold', () => {
-    const el = mockScrollEl({ scrollTop: 100, scrollHeight: 200, clientHeight: 96 });
-    expect(chatScrollDistanceFromBottom(el)).toBe(4);
-    expect(isChatScrollPinnedToBottom(el)).toBe(true);
+  it('isNearChatBottom within threshold', () => {
+    const near = mockScrollEl({ scrollTop: 100, scrollHeight: 200, clientHeight: 96 });
+    expect(chatScrollDistanceFromBottom(near)).toBe(4);
+    expect(isNearChatBottom(near)).toBe(true);
 
-    const scrolledUp = mockScrollEl({ scrollTop: 99, scrollHeight: 200, clientHeight: 96 });
-    expect(isChatScrollPinnedToBottom(scrolledUp)).toBe(false);
+    const far = mockScrollEl({ scrollTop: 0, scrollHeight: 200, clientHeight: 96 });
+    expect(isNearChatBottom(far)).toBe(false);
   });
 
-  it('repin hysteresis stays below unpin threshold', () => {
-    expect(CHAT_SCROLL_REPIN_WITHIN_PX).toBeLessThan(CHAT_SCROLL_UNPIN_BEYOND_PX);
+  it('uses a generous follow threshold like Cursor chat', () => {
+    expect(CHAT_SCROLL_NEAR_BOTTOM_PX).toBeGreaterThanOrEqual(24);
   });
 
-  it('isChatScrollNearBottomForRepin only when almost flush with tail', () => {
-    const almost = mockScrollEl({ scrollTop: 101, scrollHeight: 200, clientHeight: 98 });
-    expect(isChatScrollNearBottomForRepin(almost)).toBe(true);
-
-    const slightlyUp = mockScrollEl({ scrollTop: 97, scrollHeight: 200, clientHeight: 96 });
-    expect(isChatScrollNearBottomForRepin(slightlyUp)).toBe(false);
-  });
-
-  it('shouldFollowPinnedChatTail when content grows but user did not scroll up', () => {
-    const before = mockScrollEl({ scrollTop: 0, scrollHeight: 400, clientHeight: 600 });
-    const afterFirstMessage = mockScrollEl({ scrollTop: 0, scrollHeight: 900, clientHeight: 600 });
-    expect(isChatScrollPinnedToBottom(afterFirstMessage)).toBe(false);
-    expect(shouldFollowPinnedChatTail(afterFirstMessage, 0, 400, true)).toBe(true);
-    expect(shouldFollowPinnedChatTail(before, 0, 400, true)).toBe(true);
-  });
-
-  it('shouldFollowPinnedChatTail stops when user scrolled up', () => {
-    const readingHistory = mockScrollEl({ scrollTop: 40, scrollHeight: 900, clientHeight: 600 });
-    expect(shouldFollowPinnedChatTail(readingHistory, 120, 800, true)).toBe(false);
-  });
-
-  it('shouldFollowPinnedChatTail respects unpinned state', () => {
-    const el = mockScrollEl({ scrollTop: 0, scrollHeight: 900, clientHeight: 600 });
-    expect(shouldFollowPinnedChatTail(el, 0, 400, false)).toBe(false);
+  it('scrollChatToEnd sets scrollTop to scrollHeight', () => {
+    const el = mockScrollEl({ scrollTop: 0, scrollHeight: 1200, clientHeight: 600 });
+    scrollChatToEnd(el);
+    expect(el.scrollTop).toBe(1200);
   });
 });
