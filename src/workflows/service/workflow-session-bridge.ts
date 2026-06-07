@@ -2,7 +2,6 @@ import { randomUUID } from 'node:crypto';
 
 import type { GatewayWorkflowHost } from '../../gateway/gateway-workflow-host.types.js';
 import { renderWorkflowText } from '../../agent/workflow/snapshot.js';
-import type { WorkflowSnapshot } from '../../agent/workflow/types.js';
 import {
   appendPiTranscriptContextEntry,
   appendPiTranscriptMessage,
