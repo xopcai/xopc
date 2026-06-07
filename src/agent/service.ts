@@ -252,6 +252,7 @@ export class AgentService {
       verboseLevel: config.verboseLevel,
       gatewayClarify: config.gatewayClarify,
       getCronService: config.getCronService,
+      getWorkflowRunService: config.getWorkflowRunService,
     });
 
     this.agentEventHandler = new AgentEventHandler({

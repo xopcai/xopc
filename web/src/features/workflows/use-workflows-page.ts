@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
 
 import { messages } from '@/i18n/messages';
@@ -17,6 +17,7 @@ import {
   saveWorkflowDefinition,
   startWorkflowRun,
   type WorkflowDefinition,
+  type WorkflowRunSummary,
   type WorkflowRunView,
 } from './workflow-api';
 import {
@@ -32,7 +33,7 @@ import {
   type WorkflowMainTab,
   type WorkflowSourceFilter,
 } from './workflow-page.constants';
-import { filterDefinitions, filterRunsByTab, interpolate } from './workflow-page.utils';
+import { filterDefinitions, filterRunsByTab, interpolate, workflowChatHref } from './workflow-page.utils';
 
 function resolveMainTab(searchParams: URLSearchParams): WorkflowMainTab {
   const tabRaw = searchParams.get(WORKFLOW_TAB_PARAM);
@@ -45,6 +46,7 @@ export function useWorkflowsPage() {
   const localeTag = language === 'zh' ? 'zh-CN' : 'en-US';
   const token = useGatewayStore((s) => s.token);
   const hasToken = Boolean(token);
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const mainTab = resolveMainTab(searchParams);
@@ -158,6 +160,18 @@ export function useWorkflowsPage() {
     [patchSearchParams],
   );
 
+  const openRunInChat = useCallback(
+    (run: WorkflowRunSummary) => {
+      const sessionKey = run.metadata?.sessionKey?.trim();
+      if (sessionKey) {
+        navigate(workflowChatHref(sessionKey));
+        return;
+      }
+      selectRun(run.id);
+    },
+    [navigate, selectRun],
+  );
+
   // Repair stale URLs like ?tab=catalog&run=…
   useEffect(() => {
     if (mainTab !== 'catalog' || !runParam) return;
@@ -257,13 +271,14 @@ export function useWorkflowsPage() {
         await runsSwr.mutate();
         await statsSwr.mutate();
         setActionFeedback(labels.startSuccess);
+        navigate(workflowChatHref(result.sessionKey));
       } catch (err) {
         setActionError(err instanceof Error ? err.message : labels.startFailed);
       } finally {
         setStarting(false);
       }
     },
-    [labels.startFailed, labels.startSuccess, patchSearchParams, runsSwr, startDefinition, statsSwr],
+    [labels.startFailed, labels.startSuccess, navigate, patchSearchParams, runsSwr, startDefinition, statsSwr],
   );
 
   const cancelSelectedRun = useCallback(async () => {
@@ -293,10 +308,11 @@ export function useWorkflowsPage() {
       });
       await runsSwr.mutate();
       await statsSwr.mutate();
+      navigate(workflowChatHref(result.sessionKey));
     } catch (err) {
       setActionError(err instanceof Error ? err.message : labels.retryFailed);
     }
-  }, [labels.retryFailed, patchSearchParams, runsSwr, selectedRunId, statsSwr]);
+  }, [labels.retryFailed, navigate, patchSearchParams, runsSwr, selectedRunId, statsSwr]);
 
   const saveCustomWorkflow = useCallback(
     async (payload: { name: string; script: string }) => {
@@ -356,6 +372,7 @@ export function useWorkflowsPage() {
     visibleRuns,
     selectedRunId,
     selectRun,
+    openRunInChat,
     startDefinition,
     setStartDefinition,
     detailDefinition,

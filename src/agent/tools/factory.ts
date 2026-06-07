@@ -58,6 +58,7 @@ import { createWorkflowCatalog } from '../workflow/catalog.js';
 import { buildSandboxToolMap, createExecuteCodeTool } from './execute-code-tool.js';
 import { createCronjobTool } from './cronjob-tool.js';
 import type { CronService } from '../../cron/index.js';
+import type { WorkflowRunService } from '../../workflows/service/workflow-run-service.js';
 import { createLogger } from '../../utils/logger.js';
 import type { SkillManager } from '../skills/skill-manager.js';
 import { wrapToolsWithProtection, type ToolExecutorConfig } from './executor.js';
@@ -101,6 +102,8 @@ export interface ToolFactoryDeps {
   gatewayClarify?: { requestClarification: GatewayClarifyRequestFn };
   /** Gateway: enables the `cronjob` tool. */
   getCronService?: () => CronService | undefined;
+  /** Gateway: starts persisted workflow runs (dedicated chat session per run). */
+  getWorkflowRunService?: () => WorkflowRunService | undefined;
   /** Current session skill indexing (tool gating + allowlist); used by skills_list / skill_view. */
   getSkillIndexingContext?: () =>
     | { registeredToolNames: string[]; skillAllowlist?: string[] }
@@ -394,37 +397,12 @@ export class AgentToolsFactory {
       ...(cfg?.agents?.defaults?.workflow?.enabled !== false && primary
         ? [
             createWorkflowTool({
-              workspace,
-              bus: this.deps.bus,
-              getConfig: () => this.deps.getConfig?.(),
               catalog: createWorkflowCatalog(),
               getCurrentSessionKey: () => this.deps.getCurrentContext()?.sessionKey,
-              getSubagentModel: () => {
-                const gp = options?.getPrimaryModel ?? this.deps.getPrimaryModel;
-                const m = gp?.();
-                if (!m) {
-                  throw new Error('No primary model configured for workflow');
-                }
-                return m;
-              },
-              toolExecutorConfig: this.deps.toolExecutorConfig,
-              // Injected so `subagent-runner.ts` doesn't import `AgentToolsFactory`
-              // (which would form the same cycle delegate-tool was carved out to avoid).
-              buildChildTools: (childOpts) => {
-                const childFactory = new AgentToolsFactory({
-                  workspace: childOpts.workspace,
-                  bus: childOpts.bus,
-                  getCurrentContext: () => null,
-                  getConfig: childOpts.getConfig,
-                  getPrimaryModel: () => childOpts.model,
-                  toolExecutorConfig: childOpts.toolExecutorConfig,
-                });
-                return childFactory.createAllTools({
-                  workspace: childOpts.workspace,
-                  getPrimaryModel: () => childOpts.model,
-                  disabledTools: new Set(['extensions']),
-                });
-              },
+              getConfig: () => this.deps.getConfig?.(),
+              startWorkflowRun: this.deps.getWorkflowRunService
+                ? (params) => this.deps.getWorkflowRunService!().startWorkflowRun(params)
+                : undefined,
             }),
           ]
         : []),

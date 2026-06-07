@@ -259,25 +259,15 @@ export class DefaultJobExecutor implements JobExecutor {
 
     const fallbackAgentId = this.getDefaultCronAgentId?.() ?? DEFAULT_AGENT_ID;
     const agentId = normalizeAgentId(job.payload.agentId || job.agentId || fallbackAgentId);
-    const sessionKey = job.payload.sessionKey || buildSessionKey({
-      agentId,
-      source: 'cron',
-      accountId: 'default',
-      peerKind: 'dm',
-      peerId: job.id,
-    });
     const fireId = job.payload.source?.fireId || crypto.randomUUID();
-    const scheduledAtMs = job.payload.source?.scheduledAtMs ?? Date.now();
     const source = {
       kind: 'cron' as const,
       scheduleId: job.payload.source?.scheduleId || job.id,
       fireId,
-      scheduledAtMs,
+      scheduledAtMs: job.payload.source?.scheduledAtMs ?? Date.now(),
     };
-
     const result = await this.workflowRunService.startWorkflowRun({
       agentId,
-      sessionKey,
       definitionId: job.payload.definitionId,
       input: job.payload.input,
       inputEnvelope: job.payload.inputEnvelope,
@@ -294,16 +284,21 @@ export class DefaultJobExecutor implements JobExecutor {
     }
 
     log.info(
-      { jobId: job.id, workflowRunId: result.runId, definitionId: job.payload.definitionId, sessionKey },
+      {
+        jobId: job.id,
+        workflowRunId: result.runId,
+        definitionId: job.payload.definitionId,
+        sessionKey: result.sessionKey,
+      },
       'Workflow run started from cron',
     );
 
     return {
       status: 'ok',
       summary: `Started workflow run ${result.runId}`,
-      sessionId: sessionKey,
-      sessionKey,
-      sessionType: 'cron',
+      sessionId: result.sessionKey,
+      sessionKey: result.sessionKey,
+      sessionType: 'workflow',
       workflowRunId: result.runId,
     };
   }

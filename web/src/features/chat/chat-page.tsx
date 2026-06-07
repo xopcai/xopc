@@ -18,6 +18,12 @@ import { useLocaleStore } from '@/stores/locale-store';
 import { isWebUiSessionKey } from '@/features/chat/session/session-manager';
 import { isValidSkillWireId } from '@/features/chat/palette/skill-wire-pattern';
 import { wireTextForSlashCommandEntry } from '@/features/chat/palette/slash-command-wire-text';
+import { WorkflowRunLinkCard } from '@/features/chat/workflow/workflow-run-link-card';
+import { WorkflowSessionBanner } from '@/features/chat/workflow/workflow-session-banner';
+import { ACTIVE_RUN_STATUSES } from '@/features/workflows/workflow-page.constants';
+import { useSessionWorkflowRunLinks } from '@/features/workflows/use-session-workflow-run-links';
+import { useWorkflowRunLive } from '@/features/workflows/use-workflow-run-live';
+import { useWorkflowSessionMetadata } from '@/features/workflows/use-workflow-session-metadata';
 import { useWorkspaceEditorAgentStore } from '@/stores/workspace-editor-agent-store';
 import { AgentRunErrorBanner } from '@/features/chat/messages/agent-run-error-banner';
 
@@ -38,6 +44,29 @@ export function ChatPage() {
 
   const skillQuery = searchParams.get('skill')?.trim() ?? '';
   const slashQuery = searchParams.get('slash')?.trim() ?? '';
+  const chatSessionKey = session.decodedKey ?? session.sessionKey;
+  const { data: workflowMeta } = useWorkflowSessionMetadata(chatSessionKey);
+  const workflowRunId = workflowMeta?.workflowRunId ?? null;
+  const { view: workflowRunView } = useWorkflowRunLive(workflowRunId);
+  const { data: workflowRunLinks = [], mutate: refreshWorkflowRunLinks } =
+    useSessionWorkflowRunLinks(chatSessionKey);
+  const showWorkflowLiveBanner = Boolean(
+    workflowRunId &&
+      workflowRunView &&
+      ACTIVE_RUN_STATUSES.has(workflowRunView.run.status),
+  );
+
+  useEffect(() => {
+    if (!chatSessionKey) return;
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<{ key?: string }>).detail;
+      if (detail?.key === chatSessionKey) {
+        void refreshWorkflowRunLinks();
+      }
+    };
+    window.addEventListener('session-transcript-updated', handler);
+    return () => window.removeEventListener('session-transcript-updated', handler);
+  }, [chatSessionKey, refreshWorkflowRunLinks]);
 
   useEffect(() => {
     routeComposerSeedMarkerRef.current = null;
@@ -226,6 +255,27 @@ export function ChatPage() {
                   ) : null}
                   {stream.error ? (
                     <AgentRunErrorBanner errorText={stream.error} />
+                  ) : null}
+                  {workflowRunLinks.length > 0 ? (
+                    <div className="mb-6 flex flex-col gap-3">
+                      {workflowRunLinks.map((link) => (
+                        <WorkflowRunLinkCard key={link.id} link={link} />
+                      ))}
+                    </div>
+                  ) : null}
+                  {showWorkflowLiveBanner && workflowRunView ? (
+                    <WorkflowSessionBanner
+                      view={workflowRunView}
+                      sessionKey={chatSessionKey}
+                      onAbortCurrentTurn={stream.abort}
+                      onSendUserMessage={(text) => {
+                        if (stream.streaming || stream.sending) {
+                          void followUp.addPendingFollowUp(text);
+                        } else {
+                          void stream.sendMessage(text);
+                        }
+                      }}
+                    />
                   ) : null}
                   <MessageList
                     key={session.decodedKey ?? 'new'}
