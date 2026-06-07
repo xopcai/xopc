@@ -1,157 +1,50 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { createWorkflowTool } from '../workflow-tool.js';
 
-const mocks = vi.hoisted(() => ({
-  runWorkflow: vi.fn(),
-}));
-
-vi.mock('../../workflow/index.js', async () => {
-  const actual = await vi.importActual<typeof import('../../workflow/index.js')>('../../workflow/index.js');
-  return {
-    ...actual,
-    DelegateSubagentRunner: class DelegateSubagentRunner {},
-    getLastWorkflowMemory: () => ({ record: vi.fn() }),
-    runWorkflow: mocks.runWorkflow,
-  };
-});
-
-describe('workflow tool progress updates', () => {
-  afterEach(() => {
-    vi.useRealTimers();
-    vi.restoreAllMocks();
-  });
-
-  it('does not emit throttled progress from a timer callback', async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(0);
-
-    mocks.runWorkflow.mockImplementation(async (_script: string, _deps: unknown, options: any) => {
-      options.onLog('queued');
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      return {
-        meta: { name: 'demo', description: 'Demo workflow' },
-        agentCount: 1,
-        durationMs: 10,
-        result: 'ok',
-      };
-    });
+describe('workflow tool async run start', () => {
+  it('starts a persisted run and returns runId + sessionKey immediately', async () => {
+    const startWorkflowRun = vi.fn(async () => ({
+      ok: true as const,
+      runId: 'run-1',
+      sessionKey: 'agent:main:webchat:default:direct:wf_run-1',
+    }));
+    const catalog = {
+      load: vi.fn(),
+      save: vi.fn(),
+    };
 
     const tool = createWorkflowTool({
-      workspace: '/tmp/xopc-test',
-      bus: {} as any,
-      getSubagentModel: () => ({}) as any,
-      getConfig: () => ({ agents: { defaults: { workflow: { defaultTimeoutSec: 0 } } } }) as any,
-      buildChildTools: () => [],
-      catalog: { load: vi.fn() } as any,
+      catalog: catalog as never,
+      getConfig: () => ({}) as never,
+      getCurrentSessionKey: () => 'agent:main:webchat:default:direct:parent',
+      startWorkflowRun,
     });
 
-    const updates: unknown[] = [];
-    const executePromise = tool.execute(
-      'tool-call-1',
-      {
-        script: `export const meta = { name: 'demo', description: 'Demo workflow' }
-log('start')
-const result = await agent('work')
-return result`,
-      },
-      undefined,
-      (update) => updates.push(update),
+    const result = await tool.execute('tool-call-1', { name: 'audit_repo', goal: 'Check repo' });
+
+    expect(startWorkflowRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        definitionId: 'audit_repo',
+        goal: 'Check repo',
+        parentSessionKey: 'agent:main:webchat:default:direct:parent',
+        source: { kind: 'chat', sessionKey: 'agent:main:webchat:default:direct:parent' },
+      }),
     );
-
-    await vi.advanceTimersByTimeAsync(300);
-    expect(updates).toHaveLength(1);
-
-    await vi.advanceTimersByTimeAsync(200);
-    await executePromise;
-
-    expect(updates).toHaveLength(2);
-  });
-
-  it('keeps the workflow result when the host throws during live progress updates', async () => {
-    mocks.runWorkflow.mockImplementation(async (_script: string, _deps: unknown, options: any) => {
-      options.onAgentQueued({ id: 1, label: 'bugs review', prompt: 'review bugs' });
-      options.onAgentStart({ id: 1, label: 'bugs review', prompt: 'review bugs' });
-      options.onAgentEnd({ id: 1, label: 'bugs review', result: null, status: 'error' });
-      return {
-        meta: { name: 'demo', description: 'Demo workflow' },
-        agentCount: 1,
-        durationMs: 10,
-        result: 'ok',
-      };
+    expect(result.details).toMatchObject({
+      runId: 'run-1',
+      sessionKey: 'agent:main:webchat:default:direct:wf_run-1',
     });
-
-    const tool = createWorkflowTool({
-      workspace: '/tmp/xopc-test',
-      bus: {} as any,
-      getSubagentModel: () => ({}) as any,
-      getConfig: () => ({ agents: { defaults: { workflow: { defaultTimeoutSec: 0 } } } }) as any,
-      buildChildTools: () => [],
-      catalog: { load: vi.fn() } as any,
-    });
-
-    let updateCount = 0;
-    const result = await tool.execute(
-      'tool-call-1',
-      {
-        script: `export const meta = { name: 'demo', description: 'Demo workflow' }
-const result = await agent('work')
-return result`,
-      },
-      undefined,
-      () => {
-        updateCount += 1;
-        throw new Error('Agent listener invoked outside active run');
-      },
-    );
-
-    expect(updateCount).toBe(1);
     expect(result.content[0]?.type).toBe('text');
-    expect(result.content[0]?.text).toContain('workflow demo completed');
   });
 
-  it('keeps the workflow result when the host asynchronously rejects live progress updates', async () => {
-    mocks.runWorkflow.mockImplementation(async (_script: string, _deps: unknown, options: any) => {
-      options.onAgentQueued({ id: 1, label: 'bugs review', prompt: 'review bugs' });
-      await Promise.resolve();
-      options.onAgentStart({ id: 1, label: 'bugs review', prompt: 'review bugs' });
-      options.onAgentEnd({ id: 1, label: 'bugs review', result: null, status: 'done' });
-      return {
-        meta: { name: 'demo', description: 'Demo workflow' },
-        agentCount: 1,
-        durationMs: 10,
-        result: 'ok',
-      };
-    });
-
+  it('returns unavailable when workflow run service is missing', async () => {
     const tool = createWorkflowTool({
-      workspace: '/tmp/xopc-test',
-      bus: {} as any,
-      getSubagentModel: () => ({}) as any,
-      getConfig: () => ({ agents: { defaults: { workflow: { defaultTimeoutSec: 0 } } } }) as any,
-      buildChildTools: () => [],
-      catalog: { load: vi.fn() } as any,
+      catalog: { load: vi.fn() } as never,
+      getConfig: () => ({}) as never,
     });
 
-    let updateCount = 0;
-    const result = await tool.execute(
-      'tool-call-1',
-      {
-        script: `export const meta = { name: 'demo', description: 'Demo workflow' }
-const result = await agent('work')
-return result`,
-      },
-      undefined,
-      () => {
-        updateCount += 1;
-        return Promise.reject(new Error('Agent listener invoked outside active run')) as never;
-      },
-    );
-
-    await Promise.resolve();
-
-    expect(updateCount).toBeGreaterThan(0);
-    expect(result.content[0]?.type).toBe('text');
-    expect(result.content[0]?.text).toContain('workflow demo completed');
+    const result = await tool.execute('tool-call-1', { name: 'audit_repo' });
+    expect(result.details).toMatchObject({ error: 'workflow_run_unavailable' });
   });
 });

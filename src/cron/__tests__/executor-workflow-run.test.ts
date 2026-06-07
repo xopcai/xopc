@@ -32,7 +32,11 @@ function createWorkflowRunJob(): JobData {
 
 describe('DefaultJobExecutor workflowRun payload', () => {
   it('starts a workflow run and records workflowRunId in execution history', async () => {
-    const startWorkflowRun = vi.fn(async () => ({ ok: true as const, runId: 'run-1' }));
+    const startWorkflowRun = vi.fn(async () => ({
+      ok: true as const,
+      runId: 'run-1',
+      sessionKey: 'agent:main:webchat:default:direct:wf_run-1',
+    }));
     const executor = new DefaultJobExecutor();
 
     await executor.execute(createWorkflowRunJob(), new AbortController().signal, {
@@ -63,8 +67,8 @@ describe('DefaultJobExecutor workflowRun payload', () => {
     expect(executor.getHistory('nightly', 1)[0]).toMatchObject({
       status: 'success',
       workflowRunId: 'run-1',
-      sessionKey: 'agent:main:cron:default:direct:nightly',
-      sessionType: 'cron',
+      sessionKey: 'agent:main:webchat:default:direct:wf_run-1',
+      sessionType: 'workflow',
     });
   });
 });

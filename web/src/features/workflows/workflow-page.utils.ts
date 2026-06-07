@@ -1,4 +1,6 @@
-import type { WorkflowDefinition, WorkflowRunStatus, WorkflowRunSummary } from './workflow-api';
+import { isWebUiSessionKey } from '@/features/chat/session/session-manager';
+
+import type { WorkflowDefinition, WorkflowRunStatus, WorkflowRunSummary, WorkflowRunView } from './workflow-api';
 import { collectWorkflowSearchText } from './workflow-meta-locale';
 import {
   ACTIVE_RUN_STATUSES,
@@ -93,6 +95,18 @@ export function resolveWorkflowResultForDisplay(result: unknown): unknown {
     return raw !== undefined ? raw : result;
   }
   return result;
+}
+
+/** Dedicated web chat session for a workflow run (from run metadata). */
+export function resolveWorkflowSessionKey(view: WorkflowRunView): string | null {
+  const metadataKey = view.run.metadata?.sessionKey?.trim();
+  if (metadataKey && isWebUiSessionKey(metadataKey)) return metadataKey;
+  return null;
+}
+
+/** Navigate target for opening a workflow run in Chat. */
+export function workflowChatHref(sessionKey: string): string {
+  return `/chat/${encodeURIComponent(sessionKey)}`;
 }
 
 export function buildWorkflowInput(args: Record<string, string>): unknown {

@@ -34,7 +34,7 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
     activeRuns,
     visibleRuns,
     selectedRunId,
-    selectRun,
+    openRunInChat,
     startDefinition,
     setStartDefinition,
     detailDefinition,
@@ -200,7 +200,7 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
                     selected={selectedRunId === run.id}
                     language={language}
                     localeTag={localeTag}
-                    onSelect={() => selectRun(run.id)}
+                    onSelect={() => openRunInChat(run)}
                   />
                 ))
               )}

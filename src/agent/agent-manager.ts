@@ -97,6 +97,8 @@ export interface AgentManagerConfig {
   gatewayClarify?: { requestClarification: GatewayClarifyRequestFn };
   /** Gateway: exposes CronService for the `cronjob` tool. */
   getCronService?: () => CronService | undefined;
+  /** Gateway: starts persisted workflow runs (dedicated chat session per run). */
+  getWorkflowRunService?: () => import('../workflows/service/workflow-run-service.js').WorkflowRunService | undefined;
 }
 
 export interface AgentInstance {
@@ -260,6 +262,7 @@ export class AgentManager implements AgentInstanceGateway {
       getSessionStore: this.config.getSessionStore,
       gatewayClarify: this.config.gatewayClarify,
       getCronService: this.config.getCronService,
+      getWorkflowRunService: this.config.getWorkflowRunService,
       getSkillIndexingContext: () => {
         const ctx = this.config.getCurrentContext?.();
         if (!ctx?.sessionKey) return undefined;
