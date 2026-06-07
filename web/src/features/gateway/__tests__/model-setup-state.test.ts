@@ -27,6 +27,15 @@ describe('needsModelOrProviders', () => {
     ).toBe(false);
   });
 
+  it('treats length-preserving bullet masks as configured providers', () => {
+    expect(
+      needsModelOrProviders({
+        agents: { defaults: { model: 'deepseek/deepseek-v4-flash' } },
+        providers: { deepseek: '••••••••••••••••••••••••••••••••', openai: '' },
+      }),
+    ).toBe(false);
+  });
+
   it('is true when provider ok but default model missing', () => {
     expect(
       needsModelOrProviders({
