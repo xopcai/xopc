@@ -7,6 +7,7 @@ import { MessageBus, MessageBusShutdownError } from '../infra/bus/index.js';
 import { loadConfig, saveConfig as writeConfigToDisk } from '../config/index.js';
 import { getWorkspacePath } from '../config/workspace-path-helpers.js';
 import { CronService } from '../cron/index.js';
+import { WorkflowRunService } from '../workflows/index.js';
 import { ExtensionLoader, areExtensionsGloballyDisabled, buildExtensionMetadataSnapshot } from '../extensions/index.js';
 import { HeartbeatService, heartbeatRunnerConfigFromConfig } from './heartbeat/index.js';
 import { SessionIndex } from '../session/index.js';
@@ -293,6 +294,7 @@ export class GatewayService {
       heartbeatService: this.ensureHeartbeatService(),
       sessionStore: this.sessionIndex.getStore(),
       getDefaultCronAgentId: () => getDefaultAgentId(this.config),
+      workflowRunService: new WorkflowRunService({ service: this }),
     });
     cronRef.service = this.cronService;
 
@@ -581,6 +583,7 @@ export class GatewayService {
       heartbeatService: this.ensureHeartbeatService(),
       sessionStore: this.sessionIndex.getStore(),
       getDefaultCronAgentId: () => getDefaultAgentId(this.config),
+      workflowRunService: new WorkflowRunService({ service: this }),
     });
 
     this.sessionIndex.on('sessionUpdated', (data: { key: string; name?: string; tags?: string[] }) => {

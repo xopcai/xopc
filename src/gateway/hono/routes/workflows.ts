@@ -1,29 +1,21 @@
-import { randomUUID } from 'node:crypto';
-
 import type { Hono } from 'hono';
 
 import { resolveDefaultAgentId } from '../../../agent/agent-scope.js';
-import type { BuildChildToolsOptions } from '../../../agent/child-agent-factory.js';
-import { AgentToolsFactory } from '../../../agent/tools/factory.js';
 import { createWorkflowCatalog } from '../../../agent/workflow/catalog.js';
-import { DelegateSubagentRunner } from '../../../agent/workflow/subagent-runner.js';
-import type { WorkflowDefinition, WorkflowRunSource, WorkflowRunSummary } from '../../../workflows/domain/index.js';
-import { isTerminalWorkflowRunStatus } from '../../../workflows/domain/run.js';
-import { WorkflowEngine, WorkflowEventStore, WorkflowRunStore } from '../../../workflows/index.js';
-import { extractProfileAgentId } from '../../../config/agent-profile.js';
-import { resolveModelRef } from '../../../config/agent-typed-models.js';
-import { resolveModel as resolveModelById } from '../../../providers/index.js';
+import type {
+  WorkflowDefinition,
+  WorkflowRunInputEnvelope,
+  WorkflowRunSource,
+  WorkflowRunSummary,
+} from '../../../workflows/domain/index.js';
+import { buildWorkflowDefinition, validateWorkflowDefinitionInput } from '../../../workflows/domain/index.js';
+import { WorkflowRunService } from '../../../workflows/index.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
-
-const DEFAULT_WORKFLOW_CONCURRENCY = 4;
-const DEFAULT_WORKFLOW_TIMEOUT_SEC = 30 * 60;
-const DEFAULT_WORKFLOW_MAX_SUBAGENTS = 100;
-
-const activeWorkflowRuns = new Map<string, AbortController>();
 
 interface StartWorkflowRunRequestBody {
   definitionId?: string;
   input?: unknown;
+  inputEnvelope?: WorkflowRunInputEnvelope;
   goal?: string;
   agentId?: string;
   sessionKey?: string;
@@ -31,6 +23,7 @@ interface StartWorkflowRunRequestBody {
   concurrency?: number;
   maxSubagents?: number;
   tokenBudget?: number | null;
+  idempotencyKey?: string;
 }
 
 interface SaveWorkflowDefinitionRequestBody {
@@ -40,6 +33,7 @@ interface SaveWorkflowDefinitionRequestBody {
 
 export function registerWorkflowRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const { service } = deps;
+  const workflowRunService = new WorkflowRunService({ service });
 
   authenticated.get('/api/workflows/definitions', (c) => {
     const catalog = createWorkflowCatalog();
@@ -65,17 +59,27 @@ export function registerWorkflowRoutes(authenticated: Hono, deps: AuthenticatedR
     }
   });
 
+  authenticated.post('/api/workflows/definitions/validate', async (c) => {
+    const body = await readJsonBody<SaveWorkflowDefinitionRequestBody>(c.req.raw);
+    const result = validateWorkflowDefinitionInput({
+      name: body.name,
+      script: body.script,
+    });
+    return c.json(result);
+  });
+
   authenticated.post('/api/workflows/definitions', async (c) => {
     const body = await readJsonBody<SaveWorkflowDefinitionRequestBody>(c.req.raw);
-    const name = body.name?.trim();
-    const script = body.script?.trim();
-    if (!name) {
-      return c.json({ error: 'name is required' }, 400);
-    }
-    if (!script) {
-      return c.json({ error: 'script is required' }, 400);
+    const validation = validateWorkflowDefinitionInput({
+      name: body.name,
+      script: body.script,
+    });
+    if (!validation.valid) {
+      return c.json({ error: validation.errors[0]?.message ?? 'Invalid workflow definition', validation }, 400);
     }
 
+    const name = body.name?.trim() ?? '';
+    const script = body.script ?? '';
     const catalog = createWorkflowCatalog();
     try {
       catalog.save(name, script);
@@ -106,7 +110,7 @@ export function registerWorkflowRoutes(authenticated: Hono, deps: AuthenticatedR
 
   authenticated.get('/api/workflows/stats', async (c) => {
     const agentId = getAgentId(c.req.query('agentId'), service.currentConfig);
-    const runStore = createRunStore(service.currentConfig, agentId);
+    const runStore = workflowRunService.createRunStore(agentId);
     const runs = await runStore.listRunSummaries(500);
     return c.json({ stats: buildWorkflowStats(runs) });
   });
@@ -120,31 +124,32 @@ export function registerWorkflowRoutes(authenticated: Hono, deps: AuthenticatedR
 
     const agentId = getAgentId(body.agentId ?? c.req.query('agentId'), service.currentConfig);
     const sessionKey = body.sessionKey?.trim() || `workflow:${agentId}`;
-    const runId = await queueWorkflowRun({
-      deps,
+    const result = await workflowRunService.startWorkflowRun({
       agentId,
       sessionKey,
       definitionId,
       input: body.input,
+      inputEnvelope: body.inputEnvelope,
       goal: body.goal,
-      source: body.source ?? { kind: 'webui' },
+      source: normalizeWorkflowRunSource(body.source, sessionKey),
       concurrency: normalizePositiveInteger(body.concurrency),
       maxSubagents: normalizePositiveInteger(body.maxSubagents),
       tokenBudget: body.tokenBudget,
+      idempotencyKey: body.idempotencyKey,
     });
 
-    if (!runId) {
-      return c.json({ error: 'Workflow definition not found' }, 404);
+    if (result.ok === false) {
+      return c.json({ error: result.message, code: result.code }, result.httpStatus);
     }
 
-    return c.json({ runId }, 202);
+    return c.json({ runId: result.runId }, 202);
   });
 
   authenticated.get('/api/workflows/runs', async (c) => {
     const agentId = getAgentId(c.req.query('agentId'), service.currentConfig);
     const rawLimit = c.req.query('limit');
     const limit = rawLimit ? Number.parseInt(rawLimit, 10) : 50;
-    const runStore = createRunStore(service.currentConfig, agentId);
+    const runStore = workflowRunService.createRunStore(agentId);
     const runs = await runStore.listRunSummaries(Number.isFinite(limit) ? limit : 50);
     return c.json({ runs });
   });
@@ -152,41 +157,24 @@ export function registerWorkflowRoutes(authenticated: Hono, deps: AuthenticatedR
   authenticated.post('/api/workflows/runs/:runId/cancel', async (c) => {
     const runId = c.req.param('runId');
     const agentId = getAgentId(c.req.query('agentId'), service.currentConfig);
-    const runStore = createRunStore(service.currentConfig, agentId);
-
-    const controller = activeWorkflowRuns.get(runId);
-    if (controller) {
-      controller.abort();
-      activeWorkflowRuns.delete(runId);
-      return c.json({ cancelled: true });
-    }
-
-    const view = await runStore.readRunView(runId);
-    if (!view) {
-      return c.json({ error: 'Workflow run not found' }, 404);
-    }
-
-    if (isTerminalWorkflowRunStatus(view.run.status)) {
-      return c.json({ cancelled: true, alreadyFinished: true });
-    }
-
-    const eventStore = new WorkflowEventStore(service.currentConfig, agentId);
-    await eventStore.append({
+    const result = await workflowRunService.cancelWorkflowRun({
+      agentId,
       runId,
-      type: 'run_cancelled',
-      payload: { reason: 'Cancelled by user' },
+      reason: 'Cancelled by user',
     });
-    const updated = await runStore.rebuildRunView(runId);
-    if (updated) {
-      service.emit('workflow.run.updated', { runId, view: updated });
+    if (result.ok === false) {
+      return c.json({ error: result.message, code: result.code }, result.httpStatus);
     }
-    return c.json({ cancelled: true });
+    return c.json({
+      cancelled: result.cancelled,
+      alreadyFinished: result.alreadyFinished,
+    });
   });
 
   authenticated.get('/api/workflows/runs/:runId', async (c) => {
     const agentId = getAgentId(c.req.query('agentId'), service.currentConfig);
     const runId = c.req.param('runId');
-    const runStore = createRunStore(service.currentConfig, agentId);
+    const runStore = workflowRunService.createRunStore(agentId);
     const view = await runStore.readRunView(runId);
     if (!view) {
       return c.json({ error: 'Workflow run not found' }, 404);
@@ -197,7 +185,7 @@ export function registerWorkflowRoutes(authenticated: Hono, deps: AuthenticatedR
   authenticated.post('/api/workflows/runs/:runId/rebuild', async (c) => {
     const agentId = getAgentId(c.req.query('agentId'), service.currentConfig);
     const runId = c.req.param('runId');
-    const runStore = createRunStore(service.currentConfig, agentId);
+    const runStore = workflowRunService.createRunStore(agentId);
     const view = await runStore.rebuildRunView(runId);
     if (!view) {
       return c.json({ error: 'Workflow run not found' }, 404);
@@ -209,34 +197,13 @@ export function registerWorkflowRoutes(authenticated: Hono, deps: AuthenticatedR
   authenticated.post('/api/workflows/runs/:runId/retry', async (c) => {
     const agentId = getAgentId(c.req.query('agentId'), service.currentConfig);
     const runId = c.req.param('runId');
-    const runStore = createRunStore(service.currentConfig, agentId);
-    const existing = await runStore.readRunView(runId);
-    if (!existing) {
-      return c.json({ error: 'Workflow run not found' }, 404);
+    const result = await workflowRunService.retryWorkflowRun({ agentId, runId });
+    if (result.ok === false) {
+      return c.json({ error: result.message, code: result.code }, result.httpStatus);
     }
 
-    const sessionKey = `workflow:${agentId}`;
-    const newRunId = await queueWorkflowRun({
-      deps,
-      agentId,
-      sessionKey,
-      definitionId: existing.run.definitionId,
-      input: existing.run.input,
-      goal: existing.run.goal,
-      source: { kind: 'webui' },
-    });
-
-    if (!newRunId) {
-      return c.json({ error: 'Workflow definition not found' }, 404);
-    }
-
-    return c.json({ runId: newRunId }, 202);
+    return c.json({ runId: result.runId }, 202);
   });
-}
-
-function createRunStore(config: AuthenticatedRouteDeps['service']['currentConfig'], agentId: string): WorkflowRunStore {
-  const eventStore = new WorkflowEventStore(config, agentId);
-  return new WorkflowRunStore(config, agentId, eventStore);
 }
 
 function getAgentId(rawAgentId: string | undefined, config: AuthenticatedRouteDeps['service']['currentConfig']): string {
@@ -248,98 +215,12 @@ function getAgentId(rawAgentId: string | undefined, config: AuthenticatedRouteDe
 }
 
 function toWorkflowDefinition(loaded: ReturnType<ReturnType<typeof createWorkflowCatalog>['load']>): WorkflowDefinition {
-  const nowMs = Date.now();
-  const phases = loaded.meta.phases?.map((phase, index) => ({
-    id: normalizeId(phase.title) || `phase-${index + 1}`,
-    title: phase.title,
-    description: phase.detail,
-  })) ?? [];
-
-  return {
-    id: loaded.name,
+  return buildWorkflowDefinition({
     name: loaded.name,
-    title: toTitle(loaded.name),
-    description: loaded.meta.description,
-    version: '1.0.0',
-    phases,
-    runtime: {
-      kind: 'script',
-      source: loaded.script,
-    },
-    defaults: {
-      concurrency: DEFAULT_WORKFLOW_CONCURRENCY,
-      timeoutSec: DEFAULT_WORKFLOW_TIMEOUT_SEC,
-      maxSubagents: loaded.meta.estimatedAgents?.max ?? DEFAULT_WORKFLOW_MAX_SUBAGENTS,
-    },
-    metadata: {
-      tags: loaded.meta.tags ?? [],
-      builtIn: loaded.source === 'builtin',
-      source: loaded.source,
-      whenToUse: loaded.meta.whenToUse,
-      estimatedAgents: loaded.meta.estimatedAgents,
-      examplePrompts: loaded.meta.examplePrompts,
-      i18n: loaded.meta.i18n,
-      createdAtMs: nowMs,
-      updatedAtMs: nowMs,
-    },
-  };
-}
-
-interface QueueWorkflowRunParams {
-  deps: AuthenticatedRouteDeps;
-  agentId: string;
-  sessionKey: string;
-  definitionId: string;
-  input?: unknown;
-  goal?: string;
-  source: WorkflowRunSource;
-  concurrency?: number;
-  maxSubagents?: number;
-  tokenBudget?: number | null;
-}
-
-async function queueWorkflowRun(params: QueueWorkflowRunParams): Promise<string | null> {
-  const { deps, agentId, sessionKey, definitionId } = params;
-  const { service } = deps;
-  const catalog = createWorkflowCatalog();
-  let definition: WorkflowDefinition;
-  try {
-    definition = toWorkflowDefinition(catalog.load(definitionId));
-  } catch {
-    return null;
-  }
-
-  const eventStore = new WorkflowEventStore(service.currentConfig, agentId);
-  const runStore = new WorkflowRunStore(service.currentConfig, agentId, eventStore);
-  const runId = randomUUID();
-  const abortController = new AbortController();
-  const engine = createWorkflowEngine({
-    deps,
-    eventStore,
-    runStore,
-    sessionKey,
+    source: loaded.source,
+    script: loaded.script,
+    meta: loaded.meta,
   });
-
-  activeWorkflowRuns.set(runId, abortController);
-  void engine.startRun(definition, {
-    runId,
-    input: params.input,
-    goal: params.goal,
-    source: params.source,
-    signal: abortController.signal,
-    concurrency: params.concurrency,
-    maxSubagents: params.maxSubagents,
-    tokenBudget: params.tokenBudget,
-  }).catch((err) => {
-    service.emit('workflow.run.error', {
-      runId,
-      error: err instanceof Error ? err.message : String(err),
-    });
-  }).finally(() => {
-    activeWorkflowRuns.delete(runId);
-  });
-
-  return runId;
 }
 
 function buildWorkflowStats(runs: WorkflowRunSummary[]): {
@@ -381,61 +262,22 @@ function buildWorkflowStats(runs: WorkflowRunSummary[]): {
   };
 }
 
-function createWorkflowEngine(params: {
-  deps: AuthenticatedRouteDeps;
-  eventStore: WorkflowEventStore;
-  runStore: WorkflowRunStore;
-  sessionKey: string;
-}): WorkflowEngine {
-  const { service } = params.deps;
-  const runner = new DelegateSubagentRunner({
-    workspace: service.currentWorkspacePath,
-    bus: service.messageBusInstance,
-    getDefaultModel: () => resolveModelById(service.agentService.getModelForSession(params.sessionKey)),
-    getConfig: () => service.currentConfig,
-    buildChildTools: (childOptions) => buildWorkflowChildTools(childOptions),
-  });
-
-  return new WorkflowEngine({
-    cwd: service.currentWorkspacePath,
-    eventStore: params.eventStore,
-    runStore: params.runStore,
-    runner,
-    resolveModelId: (modelId) => {
-      const agentId = extractProfileAgentId(params.sessionKey, service.currentConfig);
-      return resolveModelById(resolveModelRef(service.currentConfig, agentId, modelId));
-    },
-    onEventAppended: (event) => {
-      service.emit('workflow.event.appended', { runId: event.runId, event });
-    },
-    onRunViewUpdated: (view) => {
-      service.emit('workflow.run.updated', { runId: view.run.id, view });
-    },
-  });
-}
-
-function buildWorkflowChildTools(childOptions: BuildChildToolsOptions) {
-  const childFactory = new AgentToolsFactory({
-    workspace: childOptions.workspace,
-    bus: childOptions.bus,
-    getCurrentContext: () => null,
-    getConfig: childOptions.getConfig,
-    getPrimaryModel: () => childOptions.model,
-    toolExecutorConfig: childOptions.toolExecutorConfig,
-  });
-  return childFactory.createAllTools({
-    workspace: childOptions.workspace,
-    getPrimaryModel: () => childOptions.model,
-    disabledTools: new Set(['extensions']),
-  });
-}
-
 async function readJsonBody<T>(request: Request): Promise<T> {
   try {
     return await request.json() as T;
   } catch {
     return {} as T;
   }
+}
+
+function normalizeWorkflowRunSource(source: WorkflowRunSource | undefined, sessionKey: string): WorkflowRunSource {
+  if (!source) {
+    return { kind: 'webui', sessionKey };
+  }
+  if (source.kind === 'webui' && !source.sessionKey) {
+    return { ...source, sessionKey };
+  }
+  return source;
 }
 
 function normalizePositiveInteger(value: number | undefined): number | undefined {
@@ -445,18 +287,3 @@ function normalizePositiveInteger(value: number | undefined): number | undefined
   return Math.floor(value);
 }
 
-function normalizeId(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-}
-
-function toTitle(value: string): string {
-  return value
-    .split(/[_-]+/g)
-    .filter(Boolean)
-    .map((part) => `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`)
-    .join(' ');
-}

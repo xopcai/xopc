@@ -181,9 +181,6 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
             hidden={mainTab === 'catalog'}
           >
             <div className="space-y-3">
-              {mainTab === 'history' ? (
-                <h2 className="text-sm font-semibold text-fg">{labels.historyRunsHeading}</h2>
-              ) : null}
               {loading && visibleRuns.length === 0 ? (
                 <p className="text-sm text-fg-muted">{labels.loading}</p>
               ) : visibleRuns.length === 0 ? (

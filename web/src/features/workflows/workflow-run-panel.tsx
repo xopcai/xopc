@@ -1,4 +1,14 @@
-import { Check, CircleStop, Copy, Download, MessageSquare, RotateCcw } from 'lucide-react';
+import {
+  AlertTriangle,
+  Check,
+  CircleStop,
+  Copy,
+  Download,
+  MessageSquare,
+  PackageCheck,
+  RotateCcw,
+  Sparkles,
+} from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -35,6 +45,53 @@ function statusLabel(status: WorkflowRunView['run']['status'], labels: Workflows
 
 function phaseStatusLabel(status: string, labels: WorkflowsMessages): string {
   return labels.phaseStatus[status as keyof WorkflowsMessages['phaseStatus']] ?? status;
+}
+
+function buildRunSummary(view: WorkflowRunView, labels: WorkflowsMessages): string {
+  const { run } = view;
+  if (run.status === 'succeeded') {
+    return interpolate(labels.runSummarySucceeded, {
+      agents: run.metrics.doneAgentCount,
+      artifacts: run.metrics.artifactCount,
+    });
+  }
+  if (run.status === 'failed' || run.status === 'timeout') {
+    return run.error?.message ?? labels.runSummaryFailedFallback;
+  }
+  if (run.status === 'cancelled') return labels.runSummaryCancelled;
+  return interpolate(labels.runSummaryActive, {
+    done: run.metrics.doneAgentCount,
+    total: run.metrics.agentCount,
+  });
+}
+
+function buildDiagnosticHint(view: WorkflowRunView, labels: WorkflowsMessages): string | null {
+  const { run } = view;
+  if (run.status === 'failed') return labels.diagnosticFailedHint;
+  if (run.status === 'timeout') return labels.diagnosticTimeoutHint;
+  if (run.status === 'cancelled') return labels.diagnosticCancelledHint;
+  if (run.status === 'succeeded' && run.metrics.errorAgentCount > 0) return labels.diagnosticPartialHint;
+  return null;
+}
+
+function resolveWorkflowSessionKey(view: WorkflowRunView): string | null {
+  const metadataSessionKey = view.run.metadata?.sessionKey;
+  if (metadataSessionKey?.trim()) return metadataSessionKey.trim();
+
+  const source = view.run.source;
+  if (!source || typeof source !== 'object') return null;
+  const sessionKey = (source as { sessionKey?: unknown }).sessionKey;
+  return typeof sessionKey === 'string' && sessionKey.trim() ? sessionKey.trim() : null;
+}
+
+function formatSourceSummary(source: WorkflowRunView['run']['source']): string {
+  if (!source || typeof source !== 'object' || !('kind' in source)) return 'unknown';
+  if (source.kind === 'chat') return `chat · ${source.sessionKey}`;
+  if (source.kind === 'webui') return source.sessionKey ? `webui · ${source.sessionKey}` : 'webui';
+  if (source.kind === 'cron') return `cron · ${source.scheduleId}`;
+  if (source.kind === 'api') return source.requestId ? `api · ${source.requestId}` : 'api';
+  if (source.kind === 'im') return `${source.channel} · ${source.chatId}`;
+  return String(source.kind);
 }
 
 export function WorkflowRunPanel({
@@ -113,6 +170,12 @@ export function WorkflowRunPanel({
 
   const continueInChat = useCallback(() => {
     if (!view) return;
+    const sessionKey = resolveWorkflowSessionKey(view);
+    if (sessionKey) {
+      navigate(`/chat/${encodeURIComponent(sessionKey)}`);
+      return;
+    }
+
     const prompt = interpolate(labels.continueInChatPrompt, {
       workflow: view.run.definitionId,
       goal: view.run.goal || view.run.title,
@@ -142,6 +205,10 @@ export function WorkflowRunPanel({
   const durationText = isActive && run.startedAtMs != null
     ? formatDuration(Date.now() - run.startedAtMs)
     : formatDuration(run.metrics.durationMs ?? undefined);
+  const runSummary = buildRunSummary(view, labels);
+  const diagnosticHint = buildDiagnosticHint(view, labels);
+  const metadata = run.metadata;
+  const sourceSummary = formatSourceSummary(run.source);
 
   return (
     <>
@@ -156,9 +223,6 @@ export function WorkflowRunPanel({
             </div>
             <p className="mt-1 text-xs text-fg-subtle">{run.definitionId}</p>
             {run.goal ? <p className="mt-3 text-sm leading-6 text-fg-muted">{run.goal}</p> : null}
-            {run.error ? (
-              <p className="mt-3 text-sm leading-6 text-red-600 dark:text-red-300">{run.error.message}</p>
-            ) : null}
           </div>
           <div className="flex shrink-0 flex-wrap gap-2">
             {canCancel ? (
@@ -176,6 +240,27 @@ export function WorkflowRunPanel({
           </div>
         </div>
 
+        <div className="mt-5 rounded-2xl border border-edge-subtle bg-surface-base/60 p-4">
+          <div className="flex items-start gap-3">
+            <div className="rounded-xl bg-accent-soft p-2 text-accent-fg">
+              {run.status === 'succeeded' ? (
+                <PackageCheck className="size-4" aria-hidden />
+              ) : run.status === 'failed' || run.status === 'timeout' ? (
+                <AlertTriangle className="size-4" aria-hidden />
+              ) : (
+                <Sparkles className="size-4" aria-hidden />
+              )}
+            </div>
+            <div className="min-w-0">
+              <h3 className="text-sm font-semibold text-fg">{labels.runSummaryTitle}</h3>
+              <p className="mt-1 text-sm leading-6 text-fg-muted">{runSummary}</p>
+              {diagnosticHint ? (
+                <p className="mt-2 text-xs leading-5 text-fg-subtle">{diagnosticHint}</p>
+              ) : null}
+            </div>
+          </div>
+        </div>
+
         <dl className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Metric label={labels.metrics.startedAt} value={formatTime(run.startedAtMs ?? run.createdAtMs, localeTag)} />
           <Metric label={labels.metrics.duration} value={durationText} />
@@ -188,6 +273,16 @@ export function WorkflowRunPanel({
           />
           <Metric label={labels.metrics.artifacts} value={String(run.metrics.artifactCount)} />
         </dl>
+
+        <div className="mt-5 grid gap-3 rounded-2xl border border-edge-subtle bg-surface-base/35 p-4 sm:grid-cols-2 lg:grid-cols-4">
+          <MetadataItem label={labels.metadataSession} value={metadata?.sessionKey ?? resolveWorkflowSessionKey(view) ?? '—'} />
+          <MetadataItem label={labels.metadataSource} value={sourceSummary} />
+          <MetadataItem
+            label={labels.metadataDefinition}
+            value={`${metadata?.definition.version ?? run.definitionVersion} · ${metadata?.definition.source ?? 'unknown'}`}
+          />
+          <MetadataItem label={labels.metadataRetryOf} value={metadata?.retryOfRunId ?? '—'} />
+        </div>
 
         <div className="mt-6 rounded-2xl border border-edge bg-surface-base/35">
           <button
@@ -303,6 +398,15 @@ function Metric({ label, value }: { label: string; value: string }) {
     <div className="rounded-xl border border-edge bg-surface-base/40 p-3">
       <dt className="text-xs text-fg-subtle">{label}</dt>
       <dd className="mt-1 text-sm font-semibold text-fg">{value}</dd>
+    </div>
+  );
+}
+
+function MetadataItem({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0">
+      <div className="text-xs text-fg-subtle">{label}</div>
+      <div className="mt-1 truncate text-sm font-medium text-fg" title={value}>{value}</div>
     </div>
   );
 }

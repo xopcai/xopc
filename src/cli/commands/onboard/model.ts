@@ -52,11 +52,18 @@ async function doOAuthLogin(provider: string): Promise<boolean> {
       }
       console.log('\n');
     },
+    onDeviceCode: (info) => {
+      console.log(`\nOpen ${info.verificationUri} and enter code ${info.userCode}\n`);
+    },
     onPrompt: async (prompt) => {
       return input({ message: prompt.message });
     },
     onProgress: (message) => {
       console.log(' →', message);
+    },
+    onSelect: async (prompt) => {
+      const browserOption = prompt.options.find((option) => option.id === 'browser');
+      return browserOption?.id ?? prompt.options[0]?.id;
     },
   };
 

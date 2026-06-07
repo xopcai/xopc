@@ -1,4 +1,4 @@
-import type { WorkflowRunSource } from './run.js';
+import type { WorkflowRunInputEnvelope, WorkflowRunSource } from './run.js';
 
 export type WorkflowCommand =
   | StartWorkflowRunCommand
@@ -9,6 +9,7 @@ export interface StartWorkflowRunCommand {
   type: 'start_run';
   definitionId: string;
   input?: unknown;
+  inputEnvelope?: WorkflowRunInputEnvelope;
   source: WorkflowRunSource;
   goal?: string;
 }

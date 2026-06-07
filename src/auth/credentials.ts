@@ -1,4 +1,4 @@
-import { readFile, mkdir } from 'fs/promises';
+import { readFile, mkdir, rm } from 'fs/promises';
 import { writeTextAtomic } from '../infra/write-file-atomic.js';
 import { join, dirname } from 'path';
 import { createLogger } from '../utils/logger.js';
@@ -229,31 +229,38 @@ export class CredentialResolver {
   }
 
   /**
-   * Load OAuth token for a provider
+   * Load OAuth token for a provider.
    */
   async loadOAuthToken(provider: string): Promise<OAuthToken | null> {
+    const token = await this.loadOAuthTokenRecord(provider);
+    if (!token) return null;
+
+    if (token.expiresAt && token.expiresAt < Date.now()) {
+      log.warn({ provider, expiresAt: token.expiresAt }, 'OAuth token is expired');
+      return null;
+    }
+
+    return token;
+  }
+
+  /**
+   * Load the raw OAuth token record, including expired tokens for status UIs.
+   */
+  async loadOAuthTokenRecord(provider: string): Promise<OAuthToken | null> {
     const normalizedProvider = provider.toLowerCase();
     const oauthPath = resolveOAuthPath(normalizedProvider);
 
     try {
       const content = await readFile(oauthPath, 'utf-8');
       const token = JSON.parse(content) as OAuthToken;
-
-      // Check if token is expired
-      if (token.expiresAt && token.expiresAt < Date.now()) {
-        log.warn({ provider, expiresAt: token.expiresAt }, 'OAuth token is expired');
-        // TODO: Implement token refresh
-        return null;
-      }
-
-      return token;
+      return token.provider === normalizedProvider ? token : null;
     } catch {
       return null;
     }
   }
 
   /**
-   * Save OAuth token for a provider
+   * Save OAuth token for a provider.
    */
   async saveOAuthToken(provider: string, token: Omit<OAuthToken, 'type' | 'provider' | 'updatedAt'>): Promise<void> {
     const normalizedProvider = provider.toLowerCase();
@@ -269,7 +276,26 @@ export class CredentialResolver {
     };
 
     await writeTextAtomic(oauthPath, JSON.stringify(fullToken, null, 2));
-    log.info({ provider }, 'Saved OAuth token');
+    log.info({ provider: normalizedProvider }, 'Saved OAuth token');
+  }
+
+  /**
+   * Delete the OAuth token persisted for a provider.
+   */
+  async deleteOAuthToken(provider: string): Promise<void> {
+    const normalizedProvider = provider.toLowerCase();
+    const oauthPath = resolveOAuthPath(normalizedProvider);
+    await rm(oauthPath, { force: true });
+    log.info({ provider: normalizedProvider }, 'Deleted OAuth token');
+  }
+
+  /**
+   * Disconnect the default credential for a provider from local storage.
+   */
+  async deleteProviderCredential(provider: string): Promise<void> {
+    const normalizedProvider = provider.toLowerCase();
+    await this.deleteProfile(`${normalizedProvider}:default`);
+    await this.deleteOAuthToken(normalizedProvider);
   }
 
   // ============================================
