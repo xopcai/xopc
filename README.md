@@ -200,6 +200,12 @@ pnpm run build && pnpm test && pnpm run lint
 
 ---
 
+## Star history
+
+[![Star History Chart](https://api.star-history.com/svg?repos=xopcai/xopc&type=Date)](https://star-history.com/#xopcai/xopc&Date)
+
+---
+
 ## Credits
 
 - LLM layer: [@earendil-works/pi-ai](https://github.com/earendil-works/pi-mono) · Agent runtime: [@earendil-works/pi-agent-core](https://github.com/earendil-works/pi-mono)

@@ -200,6 +200,12 @@ pnpm run build && pnpm test && pnpm run lint
 
 ---
 
+## Star 历史
+
+[![Star History Chart](https://api.star-history.com/svg?repos=xopcai/xopc&type=Date)](https://star-history.com/#xopcai/xopc&Date)
+
+---
+
 ## 致谢
 
 - 大模型接入：[@earendil-works/pi-ai](https://github.com/earendil-works/pi-mono) · 运行时：[@earendil-works/pi-agent-core](https://github.com/earendil-works/pi-mono)
