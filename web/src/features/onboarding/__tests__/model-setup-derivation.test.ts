@@ -56,4 +56,17 @@ describe('computeNeedsModelSetup', () => {
   it('returns false when config and models are usable', () => {
     expect(computeNeedsModelSetup(readyInput)).toBe(false);
   });
+
+  it('returns false when gateway masks provider keys with bullet placeholders', () => {
+    expect(
+      computeNeedsModelSetup({
+        ...readyInput,
+        config: {
+          agents: { defaults: { model: 'deepseek/deepseek-v4-flash' } },
+          providers: { deepseek: '••••••••••••••••••••••••••••••••', openai: '' },
+        },
+        modelsData: [{ id: 'deepseek/deepseek-v4-flash', name: 'DeepSeek V4 Flash', provider: 'deepseek' }],
+      }),
+    ).toBe(false);
+  });
 });

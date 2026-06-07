@@ -1,4 +1,5 @@
 import { normalizeChannelsFromConfig } from '@/features/settings/channels-config-api';
+import { isMaskedSecret } from '@/lib/is-masked-secret';
 import {
   isFeishuConfigured,
   isTelegramConfigured,
@@ -43,7 +44,9 @@ function countConfiguredProviders(config: unknown): number {
   if (!config || typeof config !== 'object') return 0;
   const providers = (config as Record<string, unknown>).providers;
   if (!providers || typeof providers !== 'object' || Array.isArray(providers)) return 0;
-  return Object.values(providers as Record<string, unknown>).filter((v) => v === '***').length;
+  return Object.values(providers as Record<string, unknown>).filter(
+    (v) => typeof v === 'string' && isMaskedSecret(v),
+  ).length;
 }
 
 function readDefaultModel(config: unknown): string {

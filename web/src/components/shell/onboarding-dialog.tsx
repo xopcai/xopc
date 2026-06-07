@@ -40,7 +40,7 @@ export function OnboardingDialog() {
           <Dialog.Title className="sr-only">{m.onboarding.title}</Dialog.Title>
           <Dialog.Description className="sr-only">{m.onboarding.subtitle}</Dialog.Description>
           <OnboardingCard
-            onComplete={() => void modelSetup.refresh()}
+            onComplete={() => modelSetup.refresh()}
             onDismiss={modelSetup.dismissPermanently}
           />
         </Dialog.Content>

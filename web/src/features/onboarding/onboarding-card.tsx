@@ -19,7 +19,7 @@ import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 
 interface OnboardingCardProps {
-  onComplete: () => void;
+  onComplete: () => void | Promise<void>;
   onDismiss: () => void;
 }
 
@@ -117,7 +117,8 @@ export function OnboardingCard({ onComplete, onDismiss }: OnboardingCardProps) {
         body: JSON.stringify({
           agents: {
             defaults: {
-              model: modelRef,
+              // Backend PATCH expects object-form model refs (see patchAgentDefaults).
+              model: { primary: modelRef },
             },
           },
         }),
@@ -125,7 +126,7 @@ export function OnboardingCard({ onComplete, onDismiss }: OnboardingCardProps) {
       void revalidateGatewayConfig();
       void invalidateConfiguredModelsCache();
       dispatchConfigReload();
-      onComplete();
+      await onComplete();
     } catch (e) {
       dispatch({ type: 'patch', patch: { error: e instanceof Error ? e.message : String(e) } });
     } finally {
