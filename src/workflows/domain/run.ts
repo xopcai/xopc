@@ -1,3 +1,4 @@
+import type { WorkflowDefinitionEstimatedAgents } from './definition.js';
 import type { WorkflowArtifactRef, WorkflowResultEnvelope } from './result.js';
 
 export type WorkflowRunStatus =
@@ -28,6 +29,7 @@ export interface WorkflowRun {
   input: unknown;
   status: WorkflowRunStatus;
   source: WorkflowRunSource;
+  metadata?: WorkflowRunMetadata;
   result?: WorkflowResultEnvelope;
   error?: WorkflowRunError;
   metrics: WorkflowRunMetrics;
@@ -36,12 +38,65 @@ export interface WorkflowRun {
   completedAtMs?: number;
 }
 
+export interface WorkflowRunMetadata {
+  sessionKey: string;
+  triggerSource: WorkflowRunSource['kind'];
+  agentId?: string;
+  retryOfRunId?: string;
+  definition: WorkflowRunDefinitionSnapshot;
+  input?: WorkflowRunInputEnvelope;
+  correlation?: WorkflowRunCorrelation;
+  origin?: WorkflowRunOrigin;
+  schedule?: WorkflowRunScheduleMetadata;
+}
+
+export interface WorkflowRunInputEnvelope {
+  payload: unknown;
+  goal?: string;
+  variables?: Record<string, unknown>;
+  context?: Record<string, unknown>;
+}
+
+export interface WorkflowRunCorrelation {
+  idempotencyKey?: string;
+  requestId?: string;
+  traceId?: string;
+  parentRunId?: string;
+}
+
+export interface WorkflowRunOrigin {
+  channel: string;
+  sessionKey?: string;
+  chatId?: string;
+  messageId?: string;
+  scheduleId?: string;
+  fireId?: string;
+  requestId?: string;
+}
+
+export interface WorkflowRunScheduleMetadata {
+  scheduleId: string;
+  fireId?: string;
+  scheduledAtMs?: number;
+}
+
+export interface WorkflowRunDefinitionSnapshot {
+  id: string;
+  name: string;
+  title: string;
+  version: string;
+  source: 'builtin' | 'user';
+  tags: string[];
+  phaseCount: number;
+  estimatedAgents?: WorkflowDefinitionEstimatedAgents;
+}
+
 export type WorkflowRunSource =
   | { kind: 'chat'; sessionKey: string; messageId?: string }
-  | { kind: 'webui' }
-  | { kind: 'cron'; scheduleId: string }
-  | { kind: 'api'; requestId?: string }
-  | { kind: 'im'; channel: string; chatId: string };
+  | { kind: 'webui'; sessionKey?: string; requestId?: string }
+  | { kind: 'cron'; scheduleId: string; fireId?: string; scheduledAtMs?: number }
+  | { kind: 'api'; requestId?: string; idempotencyKey?: string }
+  | { kind: 'im'; channel: string; chatId: string; messageId?: string; userId?: string };
 
 export interface WorkflowRunMetrics {
   agentCount: number;
@@ -80,6 +135,7 @@ export interface WorkflowRunSummary {
   title: string;
   status: WorkflowRunStatus;
   source: WorkflowRunSource;
+  metadata?: WorkflowRunMetadata;
   createdAtMs: number;
   startedAtMs?: number;
   completedAtMs?: number;

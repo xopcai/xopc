@@ -17,6 +17,7 @@ import { useAsyncResource } from '@/lib/use-async-resource';
 export type FormMode = 'add' | 'edit';
 export type FormSessionTarget = 'main' | 'isolated';
 export type FormMessageMdMode = 'edit' | 'preview';
+export type FormTaskKind = 'message' | 'workflowRun';
 
 type FormState = {
   formOpen: boolean;
@@ -28,6 +29,10 @@ type FormState = {
   formChatId: string;
   formMessage: string;
   formMessageMdMode: FormMessageMdMode;
+  formTaskKind: FormTaskKind;
+  formWorkflowDefinitionId: string;
+  formWorkflowGoal: string;
+  formWorkflowInputJson: string;
   messageEditorNonce: number;
   formSessionTarget: FormSessionTarget;
   formAgentId: string;
@@ -53,6 +58,10 @@ function initialFormState(): FormState {
     formChatId: '',
     formMessage: '',
     formMessageMdMode: 'edit',
+    formTaskKind: 'message',
+    formWorkflowDefinitionId: '',
+    formWorkflowGoal: '',
+    formWorkflowInputJson: '{}',
     messageEditorNonce: 0,
     formSessionTarget: 'main',
     formAgentId: '',
@@ -93,6 +102,16 @@ function buildOpenFormState(job: CronJob | undefined, defaultModelForForm: () =>
   base.formSchedule = (job.schedule && String(job.schedule).trim()) || DEFAULT_SCHEDULE;
   const bodyText = cronJobBodyText(job);
   base.formMessage = bodyText ?? '';
+  if (job.payload.kind === 'workflowRun') {
+    base.formTaskKind = 'workflowRun';
+    base.formWorkflowDefinitionId = job.payload.definitionId;
+    base.formWorkflowGoal = job.payload.goal || '';
+    base.formWorkflowInputJson = JSON.stringify(
+      job.payload.inputEnvelope?.payload ?? job.payload.input ?? {},
+      null,
+      2,
+    );
+  }
   base.formSessionTarget = job.sessionTarget || 'main';
   base.formAgentId =
     (job.sessionTarget || 'main') === 'isolated' && job.agentId?.trim()
@@ -189,16 +208,22 @@ export function useCronJobForm(opts: {
   }, [chatAgents, form.formAgentId]);
 
   const needsDeliveryChat =
+    form.formTaskKind === 'message' &&
     form.formChannel !== 'local' &&
     (form.formSessionTarget === 'main' || (form.formSessionTarget === 'isolated' && !form.formAgentLocalOnly));
 
   const showChannelPicker =
-    form.formSessionTarget === 'main' || (form.formSessionTarget === 'isolated' && !form.formAgentLocalOnly);
+    form.formTaskKind === 'message' &&
+    (form.formSessionTarget === 'main' || (form.formSessionTarget === 'isolated' && !form.formAgentLocalOnly));
+
+  const hasRunnablePayload = form.formTaskKind === 'workflowRun'
+    ? Boolean(form.formWorkflowDefinitionId.trim())
+    : Boolean(form.formMessage.trim());
 
   const canSubmit =
     Boolean(form.formName.trim()) &&
     Boolean(form.formSchedule.trim()) &&
-    Boolean(form.formMessage.trim()) &&
+    hasRunnablePayload &&
     (!needsDeliveryChat || Boolean(form.formChatId.trim()));
 
   const openForm = useCallback(
@@ -293,6 +318,10 @@ export function useCronJobForm(opts: {
     formChatId: form.formChatId,
     formMessage: form.formMessage,
     formMessageMdMode: form.formMessageMdMode,
+    formTaskKind: form.formTaskKind,
+    formWorkflowDefinitionId: form.formWorkflowDefinitionId,
+    formWorkflowGoal: form.formWorkflowGoal,
+    formWorkflowInputJson: form.formWorkflowInputJson,
     messageEditorNonce: form.messageEditorNonce,
     formSessionTarget: form.formSessionTarget,
     formAgentId: form.formAgentId,
@@ -306,6 +335,15 @@ export function useCronJobForm(opts: {
     setFormSchedule: (formSchedule: string) => patchForm({ formSchedule }),
     setFormChatId: (formChatId: string) => patchForm({ formChatId }),
     setFormMessage: (formMessage: string) => patchForm({ formMessage }),
+    setFormTaskKind: (formTaskKind: FormTaskKind) =>
+      patchForm(
+        formTaskKind === 'workflowRun'
+          ? { formTaskKind, formSessionTarget: 'isolated', formAgentLocalOnly: true }
+          : { formTaskKind },
+      ),
+    setFormWorkflowDefinitionId: (formWorkflowDefinitionId: string) => patchForm({ formWorkflowDefinitionId }),
+    setFormWorkflowGoal: (formWorkflowGoal: string) => patchForm({ formWorkflowGoal }),
+    setFormWorkflowInputJson: (formWorkflowInputJson: string) => patchForm({ formWorkflowInputJson }),
     setFormAgentId: (formAgentId: string) => patchForm({ formAgentId }),
     setFormAgentLocalOnly: (formAgentLocalOnly: boolean) => patchForm({ formAgentLocalOnly }),
     setFormWorkingDirectory: (formWorkingDirectory: string) => patchForm({ formWorkingDirectory }),

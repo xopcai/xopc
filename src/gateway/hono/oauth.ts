@@ -22,7 +22,7 @@ import {
   openaiCodexOAuthProvider,
 } from '../../auth/oauth/index.js';
 import { CredentialResolver } from '../../auth/credentials.js';
-import { isProviderConfigured } from '../../providers/index.js';
+import { getProviderAuthState, isProviderConfigured } from '../../providers/index.js';
 
 // Static OAuth providers map
 const OAUTH_PROVIDERS: Record<string, OAuthProviderInterface> = {
@@ -81,6 +81,15 @@ export function createOAuthHandler(_service: GatewayService) {
         onAuth: (auth: { url: string; instructions?: string }) => {
           authResult = { url: auth.url, instructions: auth.instructions };
         },
+        onDeviceCode: (info) => {
+          authResult = {
+            url: info.verificationUri,
+            instructions: `Enter code ${info.userCode}`,
+            message: `Open ${info.verificationUri} and enter code ${info.userCode}`,
+            deviceCode: info.userCode,
+            verificationUri: info.verificationUri,
+          };
+        },
         onPrompt: async (prompt: { message: string; deviceCode?: string; verificationUri?: string }) => {
           authResult = { 
             message: prompt.message, 
@@ -98,17 +107,23 @@ export function createOAuthHandler(_service: GatewayService) {
           // Return empty - frontend will handle manual input
           return '';
         },
+        onSelect: async (prompt) => {
+          const browserOption = prompt.options.find((option) => option.id === 'browser');
+          return browserOption?.id ?? prompt.options[0]?.id;
+        },
       };
 
       const credentials = await oauthProvider.login(callbacks);
       setOAuthCredentialsToCache(provider, credentials);
 
-      // Get API key from OAuth credentials
-      const apiKey = oauthProvider.getApiKey(credentials);
-
-      // Save API key to credential system
       const resolver = new CredentialResolver();
-      await resolver.saveApiKey(provider, apiKey, { profileName: 'default' });
+      await resolver.saveOAuthToken(provider, {
+        access: oauthProvider.getApiKey(credentials),
+        refresh: credentials.refresh,
+        expiresAt: credentials.expires,
+        scope: Array.isArray(credentials.scope) ? credentials.scope.filter((value): value is string => typeof value === 'string') : undefined,
+        createdAt: new Date().toISOString(),
+      });
 
       return c.json({ 
         ok: true, 
@@ -140,13 +155,16 @@ export function createOAuthHandler(_service: GatewayService) {
   oauth.get('/:provider', async (c) => {
     const provider = c.req.param('provider');
     const credentials = getOAuthCredentialsFromCache(provider);
+    const authState = await getProviderAuthState(provider);
     const configured = await isProviderConfigured(provider);
 
     return c.json({ 
       ok: true, 
       payload: { 
         configured: configured || !!credentials,
-        expires: credentials?.expires 
+        authMode: authState.authMode,
+        authStatus: authState.authStatus,
+        expiresAt: authState.expiresAt ?? credentials?.expires,
       } 
     });
   });
@@ -159,8 +177,10 @@ export function createOAuthHandler(_service: GatewayService) {
     const provider = c.req.param('provider');
     
     deleteOAuthCredentialsFromCache(provider);
+    const resolver = new CredentialResolver();
+    await resolver.deleteProviderCredential(provider);
 
-    return c.json({ ok: true });
+    return c.json({ ok: true, payload: { disconnected: provider } });
   });
 
   /**

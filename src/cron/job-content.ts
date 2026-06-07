@@ -6,5 +6,6 @@ import type { JobData } from './types.js';
 export function getCronPayloadText(job: Pick<JobData, 'payload'>): string {
   const p = job.payload;
   if (p.kind === 'systemEvent') return p.text;
-  return p.message;
+  if (p.kind === 'agentTurn') return p.message;
+  return p.goal || p.definitionId;
 }

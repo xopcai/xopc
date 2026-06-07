@@ -88,9 +88,7 @@ setInterval(() => {
   const now = Date.now();
   for (const [id, session] of oauthSessions.entries()) {
     if (now > session.expiresAt) {
-      if (session.abortController) {
-        session.abortController.abort();
-      }
+      cancelOAuthSession(session, 'OAuth flow expired');
       oauthSessions.delete(id);
       log.debug({ sessionId: id }, 'Cleaned up expired OAuth session');
     }
@@ -99,6 +97,21 @@ setInterval(() => {
 
 function generateSessionId(): string {
   return `oauth_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+}
+
+function cancelOAuthSession(session: OAuthSession, message = 'OAuth flow cancelled'): void {
+  if (session.abortController) {
+    session.abortController.abort();
+  }
+
+  if (session.manualCodeResolve) {
+    session.manualCodeResolve('');
+  }
+
+  session.manualCodeResolve = undefined;
+  session.manualCodeReject = undefined;
+  session.status = 'cancelled';
+  session.message = message;
 }
 
 export function createOAuthAsyncHandler(service: GatewayService) {
@@ -223,18 +236,7 @@ export function createOAuthAsyncHandler(service: GatewayService) {
       return c.json({ error: 'Session not found' }, 404);
     }
 
-    if (session.abortController) {
-      session.abortController.abort();
-    }
-
-    if (session.manualCodeReject) {
-      session.manualCodeReject(new Error('OAuth cancelled by user'));
-      session.manualCodeReject = undefined;
-      session.manualCodeResolve = undefined;
-    }
-
-    session.status = 'cancelled';
-    session.message = 'OAuth flow cancelled';
+    cancelOAuthSession(session);
 
     return c.json({ 
       ok: true, 
@@ -253,9 +255,7 @@ export function createOAuthAsyncHandler(service: GatewayService) {
     
     if (oauthSessions.has(sessionId)) {
       const session = oauthSessions.get(sessionId)!;
-      if (session.abortController) {
-        session.abortController.abort();
-      }
+      cancelOAuthSession(session);
       oauthSessions.delete(sessionId);
     }
 
@@ -300,6 +300,14 @@ async function runOAuthFlow(
         session.message = 'Complete authorization in browser';
       }
     },
+    onDeviceCode: (info) => {
+      session.status = 'waiting_auth';
+      session.authUrl = info.verificationUri;
+      session.deviceCode = info.userCode;
+      session.verificationUri = info.verificationUri;
+      session.instructions = `Enter code ${info.userCode}`;
+      session.message = `Open ${info.verificationUri} and enter code ${info.userCode}`;
+    },
     onPrompt: async (prompt: { message: string; deviceCode?: string; verificationUri?: string }) => {
       session.status = 'waiting_code';
       session.deviceCode = prompt.deviceCode;
@@ -328,21 +336,36 @@ async function runOAuthFlow(
       }
       return '';
     },
+    onSelect: async (prompt) => {
+      const browserOption = prompt.options.find((option) => option.id === 'browser');
+      const firstOption = prompt.options[0];
+      const selectedOption = browserOption ?? firstOption;
+      if (!selectedOption) {
+        throw new Error('OAuth login did not provide any selectable auth method');
+      }
+      log.debug(
+        { sessionId: session.id, provider: session.provider, selected: selectedOption.id },
+        'Selected OAuth auth method',
+      );
+      return selectedOption.id;
+    },
     signal: abortController.signal,
   };
 
   try {
     const credentials = await oauthProvider.login(callbacks);
     
-    // Save credentials to cache
+    // Save credentials to cache and persist them as first-class OAuth credentials.
     setOAuthCredentialsToCache(session.provider, credentials);
 
-    // Get API key from OAuth credentials
-    const apiKey = oauthProvider.getApiKey(credentials);
-
-    // Save API key to credential system
     const resolver = new CredentialResolver();
-    await resolver.saveApiKey(session.provider, apiKey, { profileName: 'default' });
+    await resolver.saveOAuthToken(session.provider, {
+      access: oauthProvider.getApiKey(credentials),
+      refresh: credentials.refresh,
+      expiresAt: credentials.expires,
+      scope: Array.isArray(credentials.scope) ? credentials.scope.filter((value): value is string => typeof value === 'string') : undefined,
+      createdAt: new Date().toISOString(),
+    });
 
     session.status = 'completed';
     session.credentials = credentials;
@@ -350,9 +373,9 @@ async function runOAuthFlow(
     
     log.info({ sessionId: session.id, provider: session.provider }, 'OAuth login completed');
   } catch (err) {
-    if (abortController.signal.aborted) {
+    if (abortController.signal.aborted || session.status === 'cancelled') {
       session.status = 'cancelled';
-      session.message = 'OAuth flow cancelled by user';
+      session.message ??= 'OAuth flow cancelled by user';
     } else {
       session.status = 'failed';
       session.error = formatOAuthAsyncError(err);

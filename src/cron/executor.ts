@@ -1,6 +1,7 @@
 // Cron job executor with timeout, retry logic and agent integration
 import type {
   CronRunOutcome,
+  CronWorkflowRunStarter,
   HeartbeatWakeSink,
   JobData,
   JobExecution,
@@ -62,6 +63,7 @@ export class DefaultJobExecutor implements JobExecutor {
   private sessionStore: SessionStore | undefined;
   private runLogStore: CronRunLogStore | null = null;
   private getDefaultCronAgentId: (() => string) | null = null;
+  private workflowRunService: CronWorkflowRunStarter | null = null;
 
   setRunLogStore(store: CronRunLogStore | null): void {
     this.runLogStore = store;
@@ -75,6 +77,7 @@ export class DefaultJobExecutor implements JobExecutor {
       this.sessionStore = deps.sessionStore;
     }
     this.getDefaultCronAgentId = deps.getDefaultCronAgentId ?? null;
+    this.workflowRunService = deps.workflowRunService ?? null;
   }
 
   private async buildCronOutboundMessage(
@@ -156,6 +159,7 @@ export class DefaultJobExecutor implements JobExecutor {
       execution.sessionKey = result.sessionKey;
       execution.sessionType = result.sessionType;
       execution.model = result.model;
+      execution.workflowRunId = result.workflowRunId;
 
       if (result.status === 'ok') {
         log.info(
@@ -216,13 +220,17 @@ export class DefaultJobExecutor implements JobExecutor {
       return { status: 'skipped', error: 'Job was aborted before execution' };
     }
 
-    // If no agent service, fall back to basic execution
-    if (!this.agentService || !this.messageBus) {
-      log.warn({ jobId: job.id }, 'No agent service configured, using basic execution');
-      return this.basicExecute(job, signal, timeout);
-    }
-
     try {
+      if (job.payload.kind === 'workflowRun') {
+        return await this.executeWorkflowRun(job, signal);
+      }
+
+      // If no agent service, fall back to basic execution
+      if (!this.agentService || !this.messageBus) {
+        log.warn({ jobId: job.id }, 'No agent service configured, using basic execution');
+        return this.basicExecute(job, signal, timeout);
+      }
+
       if (sessionTarget === 'main') {
         return await this.executeMainSession(job, signal, timeout);
       } else {
@@ -234,6 +242,70 @@ export class DefaultJobExecutor implements JobExecutor {
         error: error instanceof Error ? error.message : String(error),
       };
     }
+  }
+
+  private async executeWorkflowRun(job: JobData, signal: AbortSignal): Promise<CronRunOutcome> {
+    if (signal.aborted) {
+      return { status: 'skipped', error: 'Job was aborted before workflow run start' };
+    }
+
+    if (job.payload.kind !== 'workflowRun') {
+      return { status: 'error', error: 'Cron job payload is not workflowRun' };
+    }
+
+    if (!this.workflowRunService) {
+      return { status: 'error', error: 'Workflow run service is not configured for cron' };
+    }
+
+    const fallbackAgentId = this.getDefaultCronAgentId?.() ?? DEFAULT_AGENT_ID;
+    const agentId = normalizeAgentId(job.payload.agentId || job.agentId || fallbackAgentId);
+    const sessionKey = job.payload.sessionKey || buildSessionKey({
+      agentId,
+      source: 'cron',
+      accountId: 'default',
+      peerKind: 'dm',
+      peerId: job.id,
+    });
+    const fireId = job.payload.source?.fireId || crypto.randomUUID();
+    const scheduledAtMs = job.payload.source?.scheduledAtMs ?? Date.now();
+    const source = {
+      kind: 'cron' as const,
+      scheduleId: job.payload.source?.scheduleId || job.id,
+      fireId,
+      scheduledAtMs,
+    };
+
+    const result = await this.workflowRunService.startWorkflowRun({
+      agentId,
+      sessionKey,
+      definitionId: job.payload.definitionId,
+      input: job.payload.input,
+      inputEnvelope: job.payload.inputEnvelope,
+      goal: job.payload.goal,
+      source,
+      idempotencyKey: `cron:${job.id}:${fireId}`,
+    });
+
+    if (result.ok === false) {
+      return {
+        status: 'error',
+        error: result.message,
+      };
+    }
+
+    log.info(
+      { jobId: job.id, workflowRunId: result.runId, definitionId: job.payload.definitionId, sessionKey },
+      'Workflow run started from cron',
+    );
+
+    return {
+      status: 'ok',
+      summary: `Started workflow run ${result.runId}`,
+      sessionId: sessionKey,
+      sessionKey,
+      sessionType: 'cron',
+      workflowRunId: result.runId,
+    };
   }
 
   /**

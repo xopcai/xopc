@@ -142,12 +142,19 @@ function createAuthCommand(_ctx: CLIContext): Command {
 					}
 					console.log('\n');
 				},
+				onDeviceCode: (info) => {
+					console.log(`\nOpen ${info.verificationUri} and enter code ${info.userCode}\n`);
+				},
 				onPrompt: async (prompt) => {
 					const { input } = await import('@inquirer/prompts');
 					return input({ message: prompt.message });
 				},
 				onProgress: (message) => {
 					log.info(message);
+				},
+				onSelect: async (prompt) => {
+					const browserOption = prompt.options.find((option) => option.id === 'browser');
+					return browserOption?.id ?? prompt.options[0]?.id;
 				},
 			};
 

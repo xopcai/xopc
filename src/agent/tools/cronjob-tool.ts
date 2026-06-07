@@ -3,6 +3,7 @@ import { Type } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 
 import type { CronService } from '../../cron/index.js';
+import { getCronPayloadText } from '../../cron/job-content.js';
 import type { CronPayload, JobData, JobExecution, JobWithNextRun } from '../../cron/types.js';
 
 const CRON_THREAT_PATTERNS: Array<[RegExp, string]> = [
@@ -107,8 +108,7 @@ function textResult(text: string): AgentToolResult<{}> {
 
 function formatJob(job: JobWithNextRun): string {
   const status = job.enabled ? '▶️ active' : '⏸️ disabled';
-  const payloadText =
-    job.payload.kind === 'agentTurn' ? job.payload.message : job.payload.text;
+  const payloadText = getCronPayloadText(job);
   const truncatedPayload =
     payloadText.length > 100 ? `${payloadText.slice(0, 100)}...` : payloadText;
 
