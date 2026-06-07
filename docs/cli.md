@@ -43,6 +43,7 @@ pnpm run dev -- <command>
 | `config` | View/edit configuration |
 | `image` | Image understanding / generation defaults (`status`, `set-understanding`, `set-generation`, fallbacks, `providers`) |
 | `session` | Manage sessions |
+| `update` | Check for and install xopc updates (extension sync + gateway restart) — see [Updates](./update.md) |
 
 ---
 
@@ -451,6 +452,30 @@ xopc extensions search [keyword]
 xopc extensions update [extension-id]
 xopc extensions freeze
 ```
+
+`extensions update` refreshes lockfile-managed extensions only. After `xopc update`, the same sync runs automatically — see [Post-update extension sync](./extensions.md#post-update-extension-sync).
+
+---
+
+## update
+
+Check for and install xopc updates. On success: sync lockfile extensions, then restart the gateway (unless disabled). Full guide: [Updates](./update.md).
+
+```bash
+xopc update
+xopc update --check
+xopc update --channel beta
+xopc update --yes --json
+xopc update --no-restart
+```
+
+| Option | Description |
+|--------|-------------|
+| `--check` | Query registry only; do not install |
+| `--yes` | Skip confirmation |
+| `--channel <stable\|beta\|dev>` | Override `update.channel` in config |
+| `--json` | Machine-readable output (includes `postUpdate`) |
+| `--no-restart` | Skip gateway restart after a successful install |
 
 ### Develop, Package, and Publish
 

@@ -631,6 +631,7 @@ export class GatewayService {
       onUpdateAvailableChange: (update) => {
         this.emit('update.available', update);
       },
+      triggerInProcessRestart: () => this.triggerGatewayProcessRestart(),
     });
 
     wireTunnelEventsToGateway(this);

@@ -731,6 +731,25 @@ xopc extensions update [extension-id]
 xopc extensions freeze
 ```
 
+### Post-update extension sync
+
+When **`xopc update`** (or gateway `POST /api/update/run`) succeeds, xopc automatically reinstalls extensions recorded in **`~/.xopc/extensions.lock`**:
+
+- **`npm`** — `resolved` spec is packed and installed under `~/.xopc/extensions/`
+- **`store`** — latest zip from the configured xopc-store base URL
+- **`local` / `git`** — skipped (not managed by the post-update sync)
+
+On the **`dev`** update channel, extensions whose id also exists in the **bundled** tree are skipped so the shipped copy stays authoritative.
+
+Manual equivalent:
+
+```bash
+xopc extensions update          # all lockfile entries
+xopc extensions update my-ext   # one id
+```
+
+See [Updates](./update.md) for the full core-update + restart pipeline.
+
 ---
 
 ## Troubleshooting

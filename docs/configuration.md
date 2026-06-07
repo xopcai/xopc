@@ -765,6 +765,40 @@ Edit values with `xopc config set` / `xopc config unset`, or open `xopc config p
 
 ---
 
+## Update
+
+Controls version checks, optional auto-install, and post-update gateway restart behavior. See [Updates](./update.md).
+
+```json
+{
+  "update": {
+    "channel": "stable",
+    "checkOnStart": true,
+    "auto": {
+      "enabled": false,
+      "stableDelayHours": 6,
+      "stableJitterHours": 12,
+      "betaCheckIntervalHours": 1
+    }
+  },
+  "commands": {
+    "restart": true
+  }
+}
+```
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `update.channel` | `stable` | `stable` \| `beta` \| `dev` — maps to npm dist-tags `latest` / `beta` / `dev` |
+| `update.checkOnStart` | `true` | Gateway queries registry on startup |
+| `update.auto.enabled` | `false` | Auto-install from gateway (stable/beta npm global only) |
+| `update.auto.stableDelayHours` | `6` | Stable rollout delay after first detection |
+| `update.auto.stableJitterHours` | `12` | Extra random delay for stable auto-update |
+| `update.auto.betaCheckIntervalHours` | `1` | Min hours between auto attempts for same beta version |
+| `commands.restart` | `true` | When `false`, disables post-update restart and SIGUSR1 restart paths |
+
+---
+
 ## FAQ
 
 ### Q: How to use multiple providers?
