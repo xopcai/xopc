@@ -86,7 +86,7 @@ pnpm run build    # Node + web console → dist/
 - 🔑 **Bring your own keys** — DeepSeek (recommended), OpenAI, Anthropic, Ollama, LM Studio, vLLM, and **20+** providers. Mix cloud and local; switch models in one config line. See **[Models](https://xopcai.github.io/xopc/models)**.
 - 📱 **One brain, every screen** — Same assistant in terminal, browser, desktop, phone, and IM. No sync layer — one system.
 - 🧩 **Grows with you** — **`xopc skills install`** · **`xopc extensions install`** for tools, channels, and UI panels; multi-agent routing per context.
-- ⏰ **Proactive** — **Cron** for scheduled summaries and reminders; **multi-agent** routing with isolated workspaces, tools, and prompts.
+- ⏰ **Proactive** — **Cron** for scheduled summaries and reminders; **workflows** for fan-out subagent tasks; **multi-agent** routing with isolated workspaces, tools, and prompts.
 
 ---
 
@@ -163,6 +163,7 @@ Optional tools (e.g. browser) stay **off until enabled**; use Playwright Chromiu
 | [CLI](https://xopcai.github.io/xopc/cli) | Commands and flags |
 | [Channels](https://xopcai.github.io/xopc/channels) | Telegram, WeChat, Feishu |
 | [Architecture](https://xopcai.github.io/xopc/architecture) | How pieces fit together |
+| [Workflows](https://xopcai.github.io/xopc/workflows) | Fan-out subagents, board UI, scripts |
 
 Also: [Tools](https://xopcai.github.io/xopc/tools) · [Voice](https://xopcai.github.io/xopc/voice) · [Remote access](https://xopcai.github.io/xopc/remote-access)
 

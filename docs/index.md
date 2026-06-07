@@ -32,6 +32,9 @@ features:
   - title: ⏰ Cron scheduling
     details: Summaries, reminders, and reports on a timetable. Your agent runs while you focus elsewhere.
     link: /cron
+  - title: 🔀 Dynamic workflows
+    details: Fan-out subagents from deterministic scripts — repo audits, multi-perspective reviews, and parallel research with live progress.
+    link: /workflows
   - title: 🤖 Multi-agent routing
     details: Route different contexts to different agents — each with its own model, workspace, tools, and system prompt.
     link: /routing-system

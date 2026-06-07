@@ -4,15 +4,23 @@ xopc workflows let one prompt fan out across many isolated subagents and merge t
 
 A workflow is a small deterministic JavaScript script. The model writes it, the `workflow` tool runs it in a sandbox, and you see a live progress tree until the synthesised result lands.
 
+Each workflow **run** gets its own chat session (`sessionType: workflow`). Progress, transcript, and the final synthesis live there — not mixed into the conversation that triggered the run.
+
 ## How to run one
 
-You almost never write the script yourself — describe the goal in plain language, the model decides whether a workflow fits. There are three ways a workflow gets triggered:
+You almost never write the script yourself — describe the goal in plain language, the model decides whether a workflow fits. Common triggers:
 
-1. **Implicit (most common)** — say things like *"do a thorough audit of this repo"*, *"research X from multiple angles"*, *"review this plan from several perspectives"*. The model picks `workflow` over a single subagent on its own.
-2. **By name** — once you have saved workflows, just reference one: *"/audit_repo"*, *"run the audit_repo workflow"*, *"do a research workflow on bun vs node startup"*. In the TUI, typing `/<name>` is automatically rewritten into the correct prompt, so `/audit_repo` always triggers `audit_repo`.
-3. **Inline** — you can hand the model an explicit script, but that is power-user territory.
+| Trigger | What happens |
+|---|---|
+| **Chat (implicit)** | Say *"do a thorough audit of this repo"* or *"research X from multiple angles"*. The assistant calls the `workflow` tool, which starts an async run in a **dedicated session** and links back to your current chat. |
+| **Chat (by name)** | *"run the audit_repo workflow"*, or in the TUI type `/audit_repo` (rewritten into the correct prompt). |
+| **Gateway Workflows page** | Open `#/workflows`, pick a template, start a run. The console navigates to `#/chat/<sessionKey>` for live progress. |
+| **Cron (`workflowRun`)** | Schedule a workflow directly from `#/settings/cron` (task kind **Workflow run**) — no assistant turn required. |
+| **REST API** | `POST /api/workflows/runs` with `definitionId` (returns `{ runId, sessionKey }`). |
 
-When a workflow starts, the TUI and gateway show a progress tree that grows as subagents fan out:
+Power users can also pass an inline script via the `workflow` tool's `script` parameter.
+
+When a workflow starts, the TUI and gateway Chat session show a progress tree that grows as subagents fan out:
 
 ```
 ◆ workflow: audit_repo (7/12 done, 3 running)
@@ -30,6 +38,31 @@ When a workflow starts, the TUI and gateway show a progress tree that grows as s
 ```
 
 Press `Esc` (TUI) or run `/abort` to cancel. In-flight subagents are aborted and surface as `skipped`.
+
+## Gateway console
+
+### Workflows board (`#/workflows`)
+
+The Workflows page is a kanban-style board of **runs** (not templates):
+
+| Column | Run statuses |
+|---|---|
+| **Queued** | `queued` |
+| **In progress** | `running` |
+| **Done** | `succeeded` — last 7 days, up to 20 items (collapsed by default) |
+| **Needs attention** | `failed`, `timeout`, `cancelled` |
+
+Filter by workflow template with `?wf=<definitionId>`. Starting, retrying, or opening a run card navigates to its dedicated Chat session.
+
+### Chat session for a run
+
+Each run opens (or reopens) `#/chat/<sessionKey>`:
+
+- A **workflow banner** and live **WorkflowCard** stream progress via SSE.
+- The session transcript holds the goal line, subagent tree updates, and terminal result.
+- When the run was started from another chat, a **parent session** link card points back to the originating conversation.
+
+Cancel and retry actions are available from the board or the workflow card where supported.
 
 ## The `/workflows` command
 
@@ -151,13 +184,14 @@ const live = findings.filter(Boolean)
 if (!live.length) return { ok: false, reason: 'no findings' }
 ```
 
-## Combining with cronjob
+## Combining with cron
 
-The `cronjob` tool runs prompts on a schedule. A scheduled prompt that names a saved workflow turns into a recurring fan-out:
+Two patterns:
 
-> `/cronjob 0 9 * * 1 "Run the audit_repo workflow and summarise the top 3 risks."`
+1. **Direct workflow run (recommended)** — In `#/settings/cron`, set task kind to **Workflow run**, pick a saved definition, optional goal text, and delivery channel. The executor calls `WorkflowRunService` directly (no assistant turn).
+2. **Prompt + assistant** — A scheduled **message** task can ask the agent to run a workflow by name; the assistant then calls the `workflow` tool as in normal chat.
 
-The cron fire writes the prompt as a user turn, the assistant calls `workflow({name:'audit_repo'})`, and the synthesised result is delivered to the configured channel. See [Scheduled Tasks (Cron)](cron.md) for the full cron surface.
+See [Scheduled Tasks (Cron)](cron.md) for schedules, delivery, and isolated-agent modes.
 
 ## Combining with todo
 
@@ -172,7 +206,7 @@ If you want a workflow itself to produce a `todo`-shaped output, return a struct
 | Surface | What you see during a run |
 |---|---|
 | TUI (`xopc tui --local`) | Live progress tree, updated on every snapshot change. |
-| Gateway console | Live WorkflowCard — progress tree streams in via SSE `tool_update`, the result summary lands when `tool_end` fires, and inline cancel / save actions are wired to the active turn. |
+| Gateway console | Dedicated workflow Chat session — WorkflowCard streams progress via SSE; board at `#/workflows` shows run status; cancel/retry from card or board. |
 | Telegram | **Live, edit-in-place.** A single message is sent at the start and edited every 5 s (default), with key events — phase change, new error, completion — bypassing the throttle for prompt visibility. |
 | Feishu / Lark | **Live, edit-in-place.** Same edit-in-place flow as Telegram (`im.v1.message.update`); 5 s default throttle. |
 | WeChat | **Final result only** by design. WeChat (personal/ilink bots) does not expose an editMessage API for bot replies, so live edits would have to spam the chat with a fresh message per tick. The broker silently drops mid-run snapshots and sends a single summary on completion. |
@@ -298,11 +332,30 @@ phase('Review')
 await agent('Review for bugs…', { model: 'small', label: 'bugs' })
 ```
 
+## REST API (gateway)
+
+Authenticated routes under `/api/workflows/` (Bearer token same as other gateway APIs):
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/definitions` | List built-in + user workflow definitions |
+| `GET` | `/definitions/:id` | Load one definition (script + meta) |
+| `POST` | `/definitions` | Save a user workflow script |
+| `POST` | `/definitions/validate` | Validate script without saving |
+| `DELETE` | `/definitions/:id` | Remove a user workflow (not built-ins) |
+| `GET` | `/stats` | Aggregate run counts |
+| `POST` | `/runs` | Start a run → `{ runId, sessionKey }` (202) |
+| `GET` | `/runs` | List recent run summaries |
+| `GET` | `/runs/:runId` | Full run view (tree, status, metrics) |
+| `POST` | `/runs/:runId/cancel` | Cancel an active run |
+| `POST` | `/runs/:runId/retry` | Retry a failed/cancelled run → new `{ runId, sessionKey }` |
+
+Optional query `agentId` scopes runs to a specific agent from `agents.list`.
+
 ## Limits and what's not in v1
 
-- No journaling / resume — a workflow that aborts mid-run starts over.
+- No journaling / resume — a workflow that aborts mid-run starts over (use **Retry** for a fresh run).
 - No nested workflows — `agent()` does not have access to `workflow()`.
-- No `/workflow save` — to save a one-off script, drop the file manually.
-- IM channels show the final result only (see table above).
+- WeChat defaults to **final result only** on IM (see table above); Telegram and Feishu support live edits.
 
-These are intentional v1 cuts; the runtime keeps determinism (no `Date.now`/`Math.random`) so future journaling can be added cleanly.
+The runtime keeps determinism (no `Date.now`/`Math.random`) so future journaling can be added cleanly.

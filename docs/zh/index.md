@@ -32,6 +32,9 @@ features:
   - title: ⏰ Cron 定时
     details: 摘要、提醒与报告按时间表推送。在你专注别处时，Agent 也能主动运行。
     link: /zh/cron
+  - title: 🔀 动态工作流
+    details: 确定性脚本扇出多个子 Agent——仓库审计、多视角评审、并行调研，实时进度可见。
+    link: /zh/workflows
   - title: 🤖 多 Agent 路由
     details: 不同场景路由到不同 Agent——各自模型、工作区、工具与系统提示词，上下文完全隔离。
     link: /zh/routing-system

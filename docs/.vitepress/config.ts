@@ -72,6 +72,7 @@ export default defineConfig({
               { text: 'Skills Testing', link: '/skills-testing' },
               { text: 'MCP', link: '/mcp' },
               { text: 'Cron', link: '/cron' },
+              { text: 'Dynamic Workflows', link: '/workflows' },
               { text: 'Heartbeat', link: '/heartbeat' }
             ]
           },
@@ -148,6 +149,7 @@ export default defineConfig({
               { text: '技能测试', link: '/zh/skills-testing' },
               { text: 'MCP', link: '/zh/mcp' },
               { text: '定时任务', link: '/zh/cron' },
+              { text: '动态工作流', link: '/zh/workflows' },
               { text: '心跳监控', link: '/zh/heartbeat' }
             ]
           },

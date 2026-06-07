@@ -80,6 +80,8 @@ xopc cron add --schedule "0 18 * * 1-5" --message "Time to wrap up!" --name "EOD
 
 Direct channel sends and isolated agent runs (previously shown with positional `cron add` arguments) are **not** exposed on the CLI yet. Configure them in the web UI or jobs file.
 
+**Workflow runs:** In `#/settings/cron`, choose task kind **Workflow run** to schedule a saved workflow definition directly (no assistant turn). See [Dynamic Workflows](workflows.md).
+
 ## Cron Expression Format
 
 ```

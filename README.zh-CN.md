@@ -86,7 +86,7 @@ pnpm run build    # Node + 网页 → dist/
 - 🔑 **自带钥匙** — DeepSeek（推荐）、OpenAI、Anthropic、Ollama、LM Studio、vLLM 等 **20+** 厂商；云端本地可混用，一行配置换模型。详见 **[模型](https://xopcai.github.io/xopc/zh/models)**。
 - 📱 **一个大脑，处处可用** — 终端、浏览器、桌面、手机、IM 同一套助手，无需另做同步。
 - 🧩 **随你长大** — **`xopc skills install`** · **`xopc extensions install`** 扩展工具、频道与 UI；多 Agent 按场景隔离。
-- ⏰ **能主动干活** — **Cron** 定时摘要与提醒；**多 Agent** 各自工作区、工具与系统提示词。
+- ⏰ **能主动干活** — **Cron** 定时摘要与提醒；**工作流**扇出多子 Agent 任务；**多 Agent** 各自工作区、工具与系统提示词。
 
 ---
 
@@ -163,6 +163,7 @@ xopc extensions dev ./my-extension
 | [CLI](https://xopcai.github.io/xopc/zh/cli) | 命令与参数 |
 | [频道](https://xopcai.github.io/xopc/zh/channels) | Telegram、微信、飞书 |
 | [架构](https://xopcai.github.io/xopc/zh/architecture) | 整体结构 |
+| [工作流](https://xopcai.github.io/xopc/zh/workflows) | 扇出子 Agent、看板、脚本 |
 
 更多：[工具](https://xopcai.github.io/xopc/zh/tools) · [语音](https://xopcai.github.io/xopc/zh/voice) · [远程访问](https://xopcai.github.io/xopc/zh/remote-access)
 

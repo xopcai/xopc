@@ -20,6 +20,7 @@
 | 图像（可选） | `image`, `image_generate` — 需模型与密钥 |
 | 浏览器（可选） | `browser_use` — 启用浏览器自动化时 |
 | 委托与代码（可选） | `delegate_task`, `execute_code` |
+| 多 Agent 编排（可选） | `workflow` — 通过确定性 JS 脚本扇出子 Agent。见 [动态工作流](workflows.md)。 |
 | 定时任务（可选） | `cronjob` — 运行时提供 Cron（常见为网关） |
 | MCP（可选） | `服务器ID__工具名` — 来自已配置的 MCP 服务；在 `tools.disable` 中加 `bundle-mcp` 可关闭全部 |
 
