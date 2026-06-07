@@ -225,6 +225,22 @@ export function projectWorkflowRunView(events: WorkflowEventEnvelope[]): Workflo
       case 'run_cancelled': {
         run.status = 'cancelled';
         run.completedAtMs = event.createdAtMs;
+        for (const [agentId, agent] of agentIdToAgent) {
+          if (agent.status !== 'queued' && agent.status !== 'running') {
+            continue;
+          }
+          agentIdToAgent.set(agentId, {
+            ...agent,
+            status: 'skipped',
+            currentStep: undefined,
+            completedAtMs: event.createdAtMs,
+            steps: agent.steps.map((step) =>
+              step.status === 'running'
+                ? { ...step, status: 'error', completedAtMs: event.createdAtMs }
+                : step,
+            ),
+          });
+        }
         break;
       }
       case 'run_queued':
