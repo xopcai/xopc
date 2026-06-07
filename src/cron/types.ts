@@ -8,7 +8,7 @@ import type {
 import type {
   StartWorkflowRunServiceParams,
   WorkflowRunServiceResult,
-} from '../workflows/service/workflow-run-service.js';
+} from '../workflows/service/workflow-run-service.types.js';
 
 // ============================================================================
 // Delivery Types

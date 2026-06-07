@@ -7,7 +7,9 @@ import { MessageBus, MessageBusShutdownError } from '../infra/bus/index.js';
 import { loadConfig, saveConfig as writeConfigToDisk } from '../config/index.js';
 import { getWorkspacePath } from '../config/workspace-path-helpers.js';
 import { CronService } from '../cron/index.js';
-import { WorkflowRunService, WorkflowSessionBridge } from '../workflows/index.js';
+import { buildWorkflowChildTools } from '../agent/workflow/workflow-child-tools.js';
+import { WorkflowRunService } from '../workflows/service/workflow-run-service.js';
+import { WorkflowSessionBridge } from '../workflows/service/workflow-session-bridge.js';
 import { ExtensionLoader, areExtensionsGloballyDisabled, buildExtensionMetadataSnapshot } from '../extensions/index.js';
 import { HeartbeatService, heartbeatRunnerConfigFromConfig } from './heartbeat/index.js';
 import { SessionIndex } from '../session/index.js';
@@ -1233,6 +1235,7 @@ export class GatewayService {
       this.workflowRunServiceInstance = new WorkflowRunService({
         service: this,
         sessionBridge: this.workflowSessionBridge,
+        buildChildTools: buildWorkflowChildTools,
       });
     }
     return this.workflowRunServiceInstance;
