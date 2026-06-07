@@ -45,7 +45,7 @@ export function CronJobCard({
       role="button"
       tabIndex={0}
       className={cn(
-        'flex cursor-pointer flex-col rounded-xl border border-edge-subtle bg-surface-base text-left transition-colors duration-150 ease-out dark:border-edge-subtle',
+        'flex h-full min-h-0 cursor-pointer flex-col rounded-xl border border-edge-subtle bg-surface-base text-left transition-colors duration-150 ease-out dark:border-edge-subtle',
         'hover:bg-surface-hover',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
       )}
