@@ -118,7 +118,7 @@ export function ChatPage() {
     pathname,
   ]);
 
-  const { scrollRef, atBottom, scrollToBottom, onScroll } = useChatScrollViewport({
+  const { scrollRef, atBottom, registerListContentRef, scrollToBottom, onScroll } = useChatScrollViewport({
     hasToken: auth.hasToken,
     showSessionLoading: session.showSessionLoading,
     sessionKey: session.sessionKey,
@@ -210,7 +210,7 @@ export function ChatPage() {
             <div
               ref={scrollRef}
               className={cn(
-                'chat-messages min-h-0 flex-1 overflow-y-auto overflow-x-hidden [scrollbar-gutter:stable_both-edges]',
+                'chat-messages min-h-0 flex-1 overflow-y-auto overflow-x-hidden [overflow-anchor:none] [scrollbar-gutter:stable_both-edges]',
                 compactWelcomeLayout ? 'chat-messages--compact-welcome pt-5 pb-2' : 'py-4',
               )}
               onScroll={onScroll}
@@ -235,8 +235,7 @@ export function ChatPage() {
                     streaming={stream.streaming}
                     progress={stream.progress}
                     reasoningLevel={session.reasoningLevel}
-                    scrollElementRef={scrollRef}
-                    pinToBottom={atBottom}
+                    registerListContentRef={registerListContentRef}
                     onPickWelcomePrompt={onPickWelcomePrompt}
                     onDeleteRound={stream.deleteMessageRound}
                     onRetryUserMessageRound={stream.retryUserMessageRound}
@@ -324,7 +323,7 @@ export function ChatPage() {
 
       <ScrollToBottomButton
         visible={!session.showSessionLoading && !atBottom}
-        onClick={() => scrollToBottom(true, true)}
+        onClick={() => scrollToBottom(true)}
       />
     </div>
   );
