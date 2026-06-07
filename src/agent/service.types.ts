@@ -38,6 +38,8 @@ export interface AgentServiceConfig {
   onSessionMetadataUpdated?: (sessionKey: string) => void;
   /** Gateway: transcript JSONL append (goal verdict, slash receipt, background turns). */
   onSessionTranscriptUpdated?: (sessionKey: string) => void;
+  /** Gateway: persisted workflow runs. */
+  getWorkflowRunService?: () => import('../workflows/service/workflow-run-service.js').WorkflowRunService;
 }
 
 export interface AgentContext {

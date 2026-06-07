@@ -75,7 +75,7 @@ describe('WorkflowRunService helpers', () => {
     const metadata = buildWorkflowRunMetadata({
       definition: createDefinition(),
       agentId: 'main',
-      sessionKey: 'workflow:main',
+      sessionKey: 'agent:main:webchat:default:direct:wf_run-abc',
       source: { kind: 'cron', scheduleId: 'nightly', fireId: 'fire-1', scheduledAtMs: 123 },
       input,
       retryOfRunId: 'run-previous',
@@ -83,7 +83,7 @@ describe('WorkflowRunService helpers', () => {
     });
 
     expect(metadata).toMatchObject({
-      sessionKey: 'workflow:main',
+      sessionKey: 'agent:main:webchat:default:direct:wf_run-abc',
       triggerSource: 'cron',
       agentId: 'main',
       retryOfRunId: 'run-previous',

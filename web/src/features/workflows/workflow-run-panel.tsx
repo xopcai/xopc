@@ -13,7 +13,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { workflowCardLabels } from '@/features/chat/workflow/workflow-card-labels';
-import { dispatchFillChatComposer } from '@/features/chat/composer/fill-composer-dispatch';
 import { WorkflowAgentDetailDrawer } from '@/features/chat/workflow/workflow-agent-detail-drawer';
 import { ProgressTree, RunningProgressPanel } from '@/features/chat/workflow/workflow-progress-display';
 import { WorkflowResultSummary } from '@/features/chat/workflow/workflow-result-summary';
@@ -33,8 +32,10 @@ import {
   formatTime,
   interpolate,
   resolveWorkflowResultForDisplay,
+  resolveWorkflowSessionKey,
   statusTone,
   stringifyWorkflowResult,
+  workflowChatHref,
 } from './workflow-page.utils';
 
 type WorkflowsMessages = ReturnType<typeof messages>['workflows'];
@@ -74,14 +75,8 @@ function buildDiagnosticHint(view: WorkflowRunView, labels: WorkflowsMessages): 
   return null;
 }
 
-function resolveWorkflowSessionKey(view: WorkflowRunView): string | null {
-  const metadataSessionKey = view.run.metadata?.sessionKey;
-  if (metadataSessionKey?.trim()) return metadataSessionKey.trim();
-
-  const source = view.run.source;
-  if (!source || typeof source !== 'object') return null;
-  const sessionKey = (source as { sessionKey?: unknown }).sessionKey;
-  return typeof sessionKey === 'string' && sessionKey.trim() ? sessionKey.trim() : null;
+function resolveWorkflowSessionKeyFromView(view: WorkflowRunView): string | null {
+  return resolveWorkflowSessionKey(view);
 }
 
 function formatSourceSummary(source: WorkflowRunView['run']['source']): string {
@@ -170,19 +165,11 @@ export function WorkflowRunPanel({
 
   const continueInChat = useCallback(() => {
     if (!view) return;
-    const sessionKey = resolveWorkflowSessionKey(view);
-    if (sessionKey) {
-      navigate(`/chat/${encodeURIComponent(sessionKey)}`);
-      return;
-    }
-
-    const prompt = interpolate(labels.continueInChatPrompt, {
-      workflow: view.run.definitionId,
-      goal: view.run.goal || view.run.title,
-    });
-    dispatchFillChatComposer(prompt);
-    navigate('/chat');
-  }, [labels.continueInChatPrompt, navigate, view]);
+    const sessionKey = resolveWorkflowSessionKeyFromView(view);
+    if (!sessionKey) return;
+    navigate(workflowChatHref(sessionKey));
+  }, [navigate, view]);
+  const workflowSessionKey = view ? resolveWorkflowSessionKeyFromView(view) : null;
 
   if (loading) {
     return (
@@ -225,6 +212,12 @@ export function WorkflowRunPanel({
             {run.goal ? <p className="mt-3 text-sm leading-6 text-fg-muted">{run.goal}</p> : null}
           </div>
           <div className="flex shrink-0 flex-wrap gap-2">
+            {workflowSessionKey ? (
+              <Button variant="primary" onClick={continueInChat}>
+                <MessageSquare className="size-4" aria-hidden />
+                {labels.continueInChat}
+              </Button>
+            ) : null}
             {canCancel ? (
               <Button variant="secondary" onClick={onCancel} className="text-red-600 dark:text-red-300">
                 <CircleStop className="size-4" aria-hidden />

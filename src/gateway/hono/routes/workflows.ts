@@ -18,7 +18,7 @@ interface StartWorkflowRunRequestBody {
   inputEnvelope?: WorkflowRunInputEnvelope;
   goal?: string;
   agentId?: string;
-  sessionKey?: string;
+  parentSessionKey?: string;
   source?: WorkflowRunSource;
   concurrency?: number;
   maxSubagents?: number;
@@ -33,7 +33,7 @@ interface SaveWorkflowDefinitionRequestBody {
 
 export function registerWorkflowRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const { service } = deps;
-  const workflowRunService = new WorkflowRunService({ service });
+  const workflowRunService = service.createWorkflowRunService();
 
   authenticated.get('/api/workflows/definitions', (c) => {
     const catalog = createWorkflowCatalog();
@@ -123,15 +123,15 @@ export function registerWorkflowRoutes(authenticated: Hono, deps: AuthenticatedR
     }
 
     const agentId = getAgentId(body.agentId ?? c.req.query('agentId'), service.currentConfig);
-    const sessionKey = body.sessionKey?.trim() || `workflow:${agentId}`;
+    const parentSessionKey = body.parentSessionKey?.trim() || undefined;
     const result = await workflowRunService.startWorkflowRun({
       agentId,
-      sessionKey,
       definitionId,
       input: body.input,
       inputEnvelope: body.inputEnvelope,
       goal: body.goal,
-      source: normalizeWorkflowRunSource(body.source, sessionKey),
+      parentSessionKey,
+      source: normalizeWorkflowRunSource(body.source),
       concurrency: normalizePositiveInteger(body.concurrency),
       maxSubagents: normalizePositiveInteger(body.maxSubagents),
       tokenBudget: body.tokenBudget,
@@ -142,7 +142,7 @@ export function registerWorkflowRoutes(authenticated: Hono, deps: AuthenticatedR
       return c.json({ error: result.message, code: result.code }, result.httpStatus);
     }
 
-    return c.json({ runId: result.runId }, 202);
+    return c.json({ runId: result.runId, sessionKey: result.sessionKey }, 202);
   });
 
   authenticated.get('/api/workflows/runs', async (c) => {
@@ -202,7 +202,7 @@ export function registerWorkflowRoutes(authenticated: Hono, deps: AuthenticatedR
       return c.json({ error: result.message, code: result.code }, result.httpStatus);
     }
 
-    return c.json({ runId: result.runId }, 202);
+    return c.json({ runId: result.runId, sessionKey: result.sessionKey }, 202);
   });
 }
 
@@ -270,12 +270,9 @@ async function readJsonBody<T>(request: Request): Promise<T> {
   }
 }
 
-function normalizeWorkflowRunSource(source: WorkflowRunSource | undefined, sessionKey: string): WorkflowRunSource {
+function normalizeWorkflowRunSource(source: WorkflowRunSource | undefined): WorkflowRunSource {
   if (!source) {
-    return { kind: 'webui', sessionKey };
-  }
-  if (source.kind === 'webui' && !source.sessionKey) {
-    return { ...source, sessionKey };
+    return { kind: 'webui' };
   }
   return source;
 }

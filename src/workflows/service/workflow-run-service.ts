@@ -19,15 +19,17 @@ import { buildWorkflowDefinition, isTerminalWorkflowRunStatus } from '../domain/
 import { WorkflowEngine } from '../engine/index.js';
 import { WorkflowEventStore } from '../store/event-store.js';
 import { WorkflowRunStore } from '../store/run-store.js';
+import type { WorkflowSessionBridge } from './workflow-session-bridge.js';
 
 export interface WorkflowRunServiceOptions {
   service: GatewayService;
+  sessionBridge: WorkflowSessionBridge;
 }
 
 export interface StartWorkflowRunServiceParams {
   agentId: string;
-  sessionKey: string;
   definitionId: string;
+  parentSessionKey?: string;
   input?: unknown;
   inputEnvelope?: WorkflowRunInputEnvelope;
   goal?: string;
@@ -42,6 +44,7 @@ export interface StartWorkflowRunServiceParams {
 export interface StartWorkflowRunServiceResult {
   ok: true;
   runId: string;
+  sessionKey: string;
 }
 
 export interface WorkflowRunServiceErrorResult {
@@ -94,13 +97,23 @@ export class WorkflowRunService {
     }
 
     const runId = randomUUID();
+    const goal = params.goal ?? '';
+    const { sessionKey } = await this.options.sessionBridge.prepareRunSession({
+      runId,
+      agentId: params.agentId,
+      definitionId: params.definitionId,
+      definitionTitle: definition.title,
+      goal,
+      parentSessionKey: params.parentSessionKey,
+    });
+    const source = normalizeWorkflowRunSourceForSession(params.source, sessionKey, params.parentSessionKey);
     const abortController = new AbortController();
     const eventStore = new WorkflowEventStore(this.options.service.currentConfig, params.agentId);
     const runStore = new WorkflowRunStore(this.options.service.currentConfig, params.agentId, eventStore);
     const engine = this.createWorkflowEngine({
       eventStore,
       runStore,
-      sessionKey: params.sessionKey,
+      sessionKey,
     });
     const inputEnvelope = params.inputEnvelope ?? buildWorkflowRunInputEnvelope(params.input, params.goal);
 
@@ -109,12 +122,12 @@ export class WorkflowRunService {
       runId,
       input: inputEnvelope.payload,
       goal: inputEnvelope.goal ?? params.goal,
-      source: params.source,
+      source,
       metadata: buildWorkflowRunMetadata({
         definition,
         agentId: params.agentId,
-        sessionKey: params.sessionKey,
-        source: params.source,
+        sessionKey,
+        source,
         input: inputEnvelope,
         retryOfRunId: params.retryOfRunId,
         idempotencyKey: params.idempotencyKey,
@@ -132,7 +145,7 @@ export class WorkflowRunService {
       this.activeRuns.delete(runId);
     });
 
-    return { ok: true, runId };
+    return { ok: true, runId, sessionKey };
   }
 
   async retryWorkflowRun(params: RetryWorkflowRunServiceParams): Promise<WorkflowRunServiceResult> {
@@ -147,17 +160,16 @@ export class WorkflowRunService {
       };
     }
 
-    const sessionKey = existing.run.metadata?.sessionKey
-      ?? extractWorkflowRunSessionKey(existing.run.source)
-      ?? `workflow:${params.agentId}`;
+    const parentSessionKey =
+      existing.run.source.kind === 'chat' ? existing.run.source.sessionKey : undefined;
 
     return this.startWorkflowRun({
       agentId: params.agentId,
-      sessionKey,
       definitionId: existing.run.definitionId,
       input: existing.run.input,
       goal: existing.run.goal,
-      source: { kind: 'webui', sessionKey },
+      source: existing.run.source,
+      parentSessionKey,
       retryOfRunId: existing.run.id,
     });
   }
@@ -194,6 +206,7 @@ export class WorkflowRunService {
     const updated = await runStore.rebuildRunView(params.runId);
     if (updated) {
       this.options.service.emit('workflow.run.updated', { runId: params.runId, view: updated });
+      void this.options.sessionBridge.handleRunViewUpdated(updated);
     }
     return { ok: true, cancelled: true };
   }
@@ -246,9 +259,27 @@ export class WorkflowRunService {
       },
       onRunViewUpdated: (view) => {
         gatewayService.emit('workflow.run.updated', { runId: view.run.id, view });
+        void this.options.sessionBridge.handleRunViewUpdated(view);
       },
     });
   }
+}
+
+function normalizeWorkflowRunSourceForSession(
+  source: WorkflowRunSource,
+  workflowSessionKey: string,
+  parentSessionKey?: string,
+): WorkflowRunSource {
+  if (parentSessionKey?.trim()) {
+    return { kind: 'chat', sessionKey: parentSessionKey.trim() };
+  }
+  if (source.kind === 'webui') {
+    return { ...source, sessionKey: workflowSessionKey };
+  }
+  if (source.kind === 'chat') {
+    return source;
+  }
+  return source;
 }
 
 export function buildWorkflowRunInputEnvelope(input: unknown, goal?: string): WorkflowRunInputEnvelope {

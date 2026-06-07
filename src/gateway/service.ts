@@ -7,7 +7,7 @@ import { MessageBus, MessageBusShutdownError } from '../infra/bus/index.js';
 import { loadConfig, saveConfig as writeConfigToDisk } from '../config/index.js';
 import { getWorkspacePath } from '../config/workspace-path-helpers.js';
 import { CronService } from '../cron/index.js';
-import { WorkflowRunService } from '../workflows/index.js';
+import { WorkflowRunService, WorkflowSessionBridge } from '../workflows/index.js';
 import { ExtensionLoader, areExtensionsGloballyDisabled, buildExtensionMetadataSnapshot } from '../extensions/index.js';
 import { HeartbeatService, heartbeatRunnerConfigFromConfig } from './heartbeat/index.js';
 import { SessionIndex } from '../session/index.js';
@@ -104,6 +104,8 @@ export class GatewayService {
 
   private readonly readiness = new GatewayReadiness();
   private startupTrace: GatewayStartupTrace | null = null;
+  private workflowSessionBridge: WorkflowSessionBridge | null = null;
+  private workflowRunServiceInstance: WorkflowRunService | null = null;
 
   /**
    * Webchat agent invocation surface (`runAgent`, `abortAgentRun`, `steer*`,
@@ -270,6 +272,7 @@ export class GatewayService {
       },
       extensionRegistry: this.extensionLoader?.getRegistry(),
       getCronService: () => cronRef.service,
+      getWorkflowRunService: () => this.createWorkflowRunService(),
       gatewayClarify: {
         requestClarification: (sessionKey, request) =>
           this.agentRunner.requestClarification({
@@ -294,7 +297,7 @@ export class GatewayService {
       heartbeatService: this.ensureHeartbeatService(),
       sessionStore: this.sessionIndex.getStore(),
       getDefaultCronAgentId: () => getDefaultAgentId(this.config),
-      workflowRunService: new WorkflowRunService({ service: this }),
+      workflowRunService: this.createWorkflowRunService(),
     });
     cronRef.service = this.cronService;
 
@@ -583,7 +586,7 @@ export class GatewayService {
       heartbeatService: this.ensureHeartbeatService(),
       sessionStore: this.sessionIndex.getStore(),
       getDefaultCronAgentId: () => getDefaultAgentId(this.config),
-      workflowRunService: new WorkflowRunService({ service: this }),
+      workflowRunService: this.createWorkflowRunService(),
     });
 
     this.sessionIndex.on('sessionUpdated', (data: { key: string; name?: string; tags?: string[] }) => {
@@ -1221,6 +1224,18 @@ export class GatewayService {
 
   get sessionIndexInstance(): SessionIndex {
     return this.sessionIndex;
+  }
+
+  /** Shared workflow run orchestrator + session bridge (one instance per gateway). */
+  createWorkflowRunService(): WorkflowRunService {
+    if (!this.workflowRunServiceInstance) {
+      this.workflowSessionBridge = new WorkflowSessionBridge(this);
+      this.workflowRunServiceInstance = new WorkflowRunService({
+        service: this,
+        sessionBridge: this.workflowSessionBridge,
+      });
+    }
+    return this.workflowRunServiceInstance;
   }
 
   /** Process a message directly through the agent (for CLI mode). */

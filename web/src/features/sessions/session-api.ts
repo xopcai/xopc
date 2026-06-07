@@ -69,9 +69,12 @@ export async function getSessionStats(): Promise<SessionStats> {
 
 export async function getSessionDetail(
   key: string,
-  options?: { includeTranscript?: boolean },
+  options?: { includeTranscript?: boolean; includeTranscriptRows?: boolean },
 ): Promise<SessionDetail> {
-  const qs = options?.includeTranscript ? '?include=transcript' : '';
+  const includeParts: string[] = [];
+  if (options?.includeTranscript) includeParts.push('transcript');
+  if (options?.includeTranscriptRows) includeParts.push('transcriptRows');
+  const qs = includeParts.length ? `?include=${includeParts.join(',')}` : '';
   const data = await fetchJson<{ session: SessionDetail }>(
     apiUrl(`/api/sessions/${encodeURIComponent(key)}${qs}`),
   );

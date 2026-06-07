@@ -224,10 +224,15 @@ export interface StartWorkflowRunOptions {
   goal?: string;
   input?: unknown;
   agentId?: string;
-  sessionKey?: string;
+  parentSessionKey?: string;
   concurrency?: number;
   maxSubagents?: number;
   tokenBudget?: number | null;
+}
+
+export interface StartWorkflowRunResult {
+  runId: string;
+  sessionKey: string;
 }
 
 export type WorkflowDefinitionValidationIssueCode =
@@ -300,8 +305,8 @@ export async function getWorkflowRun(runId: string): Promise<WorkflowRunView> {
   return data.view;
 }
 
-export async function startWorkflowRun(options: StartWorkflowRunOptions): Promise<{ runId: string }> {
-  return fetchJson<{ runId: string }>(apiUrl('/api/workflows/runs'), {
+export async function startWorkflowRun(options: StartWorkflowRunOptions): Promise<StartWorkflowRunResult> {
+  return fetchJson<StartWorkflowRunResult>(apiUrl('/api/workflows/runs'), {
     method: 'POST',
     body: JSON.stringify(options),
   });
@@ -319,8 +324,8 @@ export async function rebuildWorkflowRun(runId: string): Promise<WorkflowRunView
   return data.view;
 }
 
-export async function retryWorkflowRun(runId: string): Promise<{ runId: string }> {
-  return fetchJson<{ runId: string }>(
+export async function retryWorkflowRun(runId: string): Promise<StartWorkflowRunResult> {
+  return fetchJson<StartWorkflowRunResult>(
     apiUrl(`/api/workflows/runs/${encodeURIComponent(runId)}/retry`),
     { method: 'POST' },
   );
