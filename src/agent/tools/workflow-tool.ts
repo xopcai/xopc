@@ -12,7 +12,7 @@ import type { WorkflowCatalog } from '../workflow/catalog.js';
 import type {
   StartWorkflowRunServiceParams,
   WorkflowRunServiceResult,
-} from '../../workflows/service/workflow-run-service.js';
+} from '../../workflows/service/workflow-run-service.types.js';
 
 const log = createLogger('workflow-tool');
 

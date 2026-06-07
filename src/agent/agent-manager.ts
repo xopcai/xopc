@@ -98,7 +98,7 @@ export interface AgentManagerConfig {
   /** Gateway: exposes CronService for the `cronjob` tool. */
   getCronService?: () => CronService | undefined;
   /** Gateway: starts persisted workflow runs (dedicated chat session per run). */
-  getWorkflowRunService?: () => import('../workflows/service/workflow-run-service.js').WorkflowRunService | undefined;
+  getWorkflowRunService?: () => import('../workflows/service/workflow-run-service.types.js').WorkflowRunServiceLike | undefined;
 }
 
 export interface AgentInstance {
