@@ -115,4 +115,45 @@ describe('projectWorkflowRunView', () => {
 
     expect(view).toBeNull();
   });
+
+  it('marks queued and running agents as skipped when the run is cancelled', () => {
+    const view = projectWorkflowRunView([
+      event(1, 'run_queued', { run: createRun() }),
+      event(2, 'run_started', { startedAtMs: 1_002 }),
+      event(3, 'agent_queued', { agentId: 'agent-1', label: 'bugs review' }),
+      event(4, 'agent_queued', { agentId: 'agent-2', label: 'perf review' }),
+      event(5, 'agent_started', { agentId: 'agent-2' }),
+      event(6, 'agent_step_started', {
+        agentId: 'agent-2',
+        stepId: 'step-1',
+        label: 'Analyze',
+        kind: 'llm',
+      }),
+      event(7, 'agent_queued', { agentId: 'agent-3', label: 'main' }),
+      event(8, 'agent_started', { agentId: 'agent-3' }),
+      event(9, 'agent_completed', {
+        agentId: 'agent-3',
+        status: 'done',
+        resultPreview: 'main agent finished',
+      }),
+      event(10, 'run_cancelled', { reason: 'Cancelled by user' }),
+    ]);
+
+    expect(view?.run.status).toBe('cancelled');
+    expect(view?.agents).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'agent-1', status: 'skipped' }),
+        expect.objectContaining({
+          id: 'agent-2',
+          status: 'skipped',
+          steps: [expect.objectContaining({ id: 'step-1', status: 'error' })],
+        }),
+        expect.objectContaining({ id: 'agent-3', status: 'done' }),
+      ]),
+    );
+    expect(view?.run.metrics.skippedAgentCount).toBe(2);
+    expect(view?.run.metrics.doneAgentCount).toBe(1);
+    expect(view?.controls.canCancel).toBe(false);
+    expect(view?.controls.canRetry).toBe(true);
+  });
 });
