@@ -14,6 +14,8 @@ export type WorkflowSourceFilter = (typeof WORKFLOW_SOURCE_FILTERS)[number];
 export const WORKFLOW_SOURCE_FILTER_SET = new Set<string>(WORKFLOW_SOURCE_FILTERS);
 
 export const WORKFLOW_SEARCH_PARAM = 'q';
+export const WORKFLOW_WF_FILTER_PARAM = 'wf';
+/** @deprecated Legacy deep links — cleaned on load */
 export const WORKFLOW_TAB_PARAM = 'tab';
 export const WORKFLOW_RUN_PARAM = 'run';
 export const WORKFLOW_DEF_PARAM = 'def';
