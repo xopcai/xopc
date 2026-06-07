@@ -8,11 +8,27 @@ import { CredentialResolver } from '../credentials.js';
 let tempDir: string;
 let previousCredentialsDir: string | undefined;
 
+// Environment variables to isolate from the host environment (e.g. GITHUB_TOKEN in CI)
+const GITHUB_COPILOT_ENV_VARS = [
+  'COPILOT_GITHUB_TOKEN',
+  'GH_TOKEN',
+  'GITHUB_TOKEN',
+  'GITHUB_COPILOT_TOKEN',
+];
+let previousEnvVars: Record<string, string | undefined> = {};
+
 describe('CredentialResolver OAuth credentials', () => {
   beforeEach(async () => {
     previousCredentialsDir = process.env.XOPC_CREDENTIALS_DIR;
     tempDir = await mkdtemp(join(tmpdir(), 'xopc-credentials-oauth-'));
     process.env.XOPC_CREDENTIALS_DIR = join(tempDir, 'credentials');
+
+    // Isolate from CI host environment
+    previousEnvVars = {};
+    for (const key of GITHUB_COPILOT_ENV_VARS) {
+      previousEnvVars[key] = process.env[key];
+      delete process.env[key];
+    }
   });
 
   afterEach(async () => {
@@ -20,6 +36,14 @@ describe('CredentialResolver OAuth credentials', () => {
       delete process.env.XOPC_CREDENTIALS_DIR;
     } else {
       process.env.XOPC_CREDENTIALS_DIR = previousCredentialsDir;
+    }
+    // Restore host environment
+    for (const key of GITHUB_COPILOT_ENV_VARS) {
+      if (previousEnvVars[key] === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = previousEnvVars[key];
+      }
     }
     await rm(tempDir, { recursive: true, force: true });
   });
