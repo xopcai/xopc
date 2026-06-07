@@ -18,7 +18,7 @@ import {
   getAvailableModels,
   getModelRegistry,
   getAllProviders,
-  getProviderActiveKeySource,
+  getProviderAuthState,
   isProviderConfigured,
   PROVIDER_META,
 } from '../../../providers/index.js';
@@ -344,14 +344,19 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
         const extensionId = plugin
           ? resolveExtensionIdForProvider(service, provider)
           : undefined;
+        const authState = await getProviderAuthState(provider);
+        const configured = authState.authMode !== 'none' || (await isProviderConfigured(provider));
         return {
           id: provider,
           name: plugin?.name ?? PROVIDER_META[provider]?.name ?? provider,
           category: plugin ? ('extension' as const) : PROVIDER_META[provider]?.category || 'specialty',
           supportsOAuth: plugin ? false : (PROVIDER_META[provider]?.supportsOAuth ?? false),
           supportsApiKey: plugin ? false : (PROVIDER_META[provider]?.supportsApiKey ?? true),
-          configured: await isProviderConfigured(provider),
-          activeKeySource: await getProviderActiveKeySource(provider),
+          configured,
+          activeKeySource: authState.authMode,
+          authMode: authState.authMode,
+          authStatus: authState.authStatus,
+          ...(authState.expiresAt ? { expiresAt: authState.expiresAt } : {}),
           baseUrl: resolveProviderApiBaseUrl(provider),
           ...(extensionId ? { extensionId } : {}),
         };
@@ -370,6 +375,8 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
           supportsApiKey: false,
           configured: true,
           activeKeySource: 'extension',
+          authMode: 'extension',
+          authStatus: 'connected',
           baseUrl: resolveProviderApiBaseUrl(plugin.id),
           ...(extensionId ? { extensionId } : {}),
         });
@@ -422,11 +429,10 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
     }
 
     const normalizedProvider = providerId.toLowerCase();
-    const profileId = `${normalizedProvider}:default`;
     const resolver = new CredentialResolver();
 
     try {
-      await resolver.deleteProfile(profileId);
+      await resolver.deleteProviderCredential(normalizedProvider);
       return c.json({ ok: true, payload: { deleted: normalizedProvider } });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);

@@ -158,8 +158,16 @@ export function CronPage() {
       setError(c.nameRequired);
       return;
     }
-    if (!form.formSchedule.trim() || !form.formMessage.trim()) {
+    if (!form.formSchedule.trim()) {
       setError(c.scheduleRequired);
+      return;
+    }
+    if (form.formTaskKind === 'message' && !form.formMessage.trim()) {
+      setError(c.scheduleRequired);
+      return;
+    }
+    if (form.formTaskKind === 'workflowRun' && !form.formWorkflowDefinitionId.trim()) {
+      setError(c.workflowDefinitionRequired);
       return;
     }
     if (form.needsDeliveryChat && !form.formChatId.trim()) {
@@ -171,8 +179,17 @@ export function CronPage() {
     setError(null);
     try {
       const message = form.formMessage.trim();
+      const modelTrimmed = form.formModel.trim();
+      const agentIdTrim = form.formAgentId.trim().toLowerCase();
+      const workingDirectoryTrimmed = form.formWorkingDirectory.trim();
+      const isWorkflowRun = form.formTaskKind === 'workflowRun';
+      const isIsolatedMessage = form.formTaskKind === 'message' && form.formSessionTarget === 'isolated';
+      const effectiveSessionTarget = isWorkflowRun ? 'isolated' : form.formSessionTarget;
+
       let delivery: CronDelivery;
-      if (form.formSessionTarget === 'isolated' && form.formAgentLocalOnly) {
+      if (isWorkflowRun) {
+        delivery = { mode: 'none' };
+      } else if (form.formSessionTarget === 'isolated' && form.formAgentLocalOnly) {
         delivery = { mode: 'none' };
       } else if (form.formChannel === 'local') {
         delivery = { mode: 'direct', channel: 'local' };
@@ -180,42 +197,61 @@ export function CronPage() {
         delivery = { mode: 'direct', channel: form.formChannel, to: form.formChatId.trim() };
       }
 
-      const payload: CronPayload =
-        form.formSessionTarget === 'isolated'
+      let payload: CronPayload;
+      if (isWorkflowRun) {
+        let workflowInputPayload: unknown = {};
+        const rawInput = form.formWorkflowInputJson.trim();
+        if (rawInput) {
+          try {
+            workflowInputPayload = JSON.parse(rawInput);
+          } catch {
+            setError(c.workflowInputInvalid);
+            return;
+          }
+        }
+        payload = {
+          kind: 'workflowRun',
+          definitionId: form.formWorkflowDefinitionId.trim(),
+          inputEnvelope: { payload: workflowInputPayload },
+          ...(form.formWorkflowGoal.trim() ? { goal: form.formWorkflowGoal.trim() } : {}),
+          ...(agentIdTrim ? { agentId: agentIdTrim } : {}),
+        };
+      } else {
+        payload = isIsolatedMessage
           ? {
               kind: 'agentTurn',
               message,
-              ...(form.formModel.trim() ? { model: form.formModel.trim() } : {}),
+              ...(modelTrimmed ? { model: modelTrimmed } : {}),
             }
           : { kind: 'systemEvent', text: message };
+      }
 
-      const modelTrimmed = form.formModel.trim();
-      const agentIdTrim = form.formAgentId.trim().toLowerCase();
-      const agentIdForEdit = form.formSessionTarget === 'main' ? null : agentIdTrim || null;
-      const wdTrim = form.formWorkingDirectory.trim();
+      const agentIdForEdit = effectiveSessionTarget === 'main' ? null : agentIdTrim || null;
       const jobData = {
         name: form.formName.trim(),
         schedule: form.formSchedule.trim(),
-        sessionTarget: form.formSessionTarget,
-        model: form.formSessionTarget === 'isolated' && modelTrimmed ? modelTrimmed : undefined,
+        sessionTarget: effectiveSessionTarget,
+        model: isIsolatedMessage && modelTrimmed ? modelTrimmed : undefined,
         delivery,
         payload,
         ...(form.formMode === 'edit'
           ? {
               agentId: agentIdForEdit,
-              workingDirectory: form.formSessionTarget === 'isolated' ? wdTrim || null : null,
+              workingDirectory: isIsolatedMessage ? workingDirectoryTrimmed || null : null,
             }
           : {
-              ...(form.formSessionTarget === 'isolated' && agentIdTrim ? { agentId: agentIdTrim } : {}),
-              ...(form.formSessionTarget === 'isolated' && wdTrim ? { workingDirectory: wdTrim } : {}),
+              ...(effectiveSessionTarget === 'isolated' && agentIdTrim ? { agentId: agentIdTrim } : {}),
+              ...(isIsolatedMessage && workingDirectoryTrimmed
+                ? { workingDirectory: workingDirectoryTrimmed }
+                : {}),
             }),
       };
 
       if (form.formMode === 'edit' && form.formJobId) {
         await updateJob(form.formJobId, jobData);
       } else {
-        const { schedule: sched, agentId, workingDirectory, ...rest } = jobData;
-        await addJob(sched, {
+        const { schedule: cronSchedule, agentId, workingDirectory, ...rest } = jobData;
+        await addJob(cronSchedule, {
           ...rest,
           ...(agentId != null ? { agentId } : {}),
           ...(workingDirectory ? { workingDirectory } : {}),
@@ -223,15 +259,8 @@ export function CronPage() {
       }
       form.closeForm();
       await data.loadJobs();
-      await data.loadAux();
     } catch (e) {
-      setError(
-        e instanceof Error
-          ? e.message
-          : form.formMode === 'edit'
-            ? c.failedToUpdateJob
-            : c.failedToCreateJob,
-      );
+      setError(e instanceof Error ? e.message : form.formMode === 'edit' ? c.failedToUpdateJob : c.failedToCreateJob);
     } finally {
       form.setFormSubmitting(false);
     }
@@ -487,6 +516,14 @@ export function CronPage() {
         formSchedule={form.formSchedule}
         onFormScheduleChange={form.setFormSchedule}
         formSubmitting={form.formSubmitting}
+        formTaskKind={form.formTaskKind}
+        onFormTaskKindChange={form.setFormTaskKind}
+        formWorkflowDefinitionId={form.formWorkflowDefinitionId}
+        onFormWorkflowDefinitionIdChange={form.setFormWorkflowDefinitionId}
+        formWorkflowGoal={form.formWorkflowGoal}
+        onFormWorkflowGoalChange={form.setFormWorkflowGoal}
+        formWorkflowInputJson={form.formWorkflowInputJson}
+        onFormWorkflowInputJsonChange={form.setFormWorkflowInputJson}
         formSessionTarget={form.formSessionTarget}
         onFormSessionTargetChange={form.handleFormSessionTargetChange}
         formAgentLocalOnly={form.formAgentLocalOnly}

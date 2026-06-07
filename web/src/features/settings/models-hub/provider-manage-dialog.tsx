@@ -3,16 +3,25 @@ import {
   CheckCircle2,
   ExternalLink,
   Loader2,
+  LogIn,
   Trash2,
   X,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import type { ConfiguredModel } from '@/features/chat/api/registry-api';
 import { ProviderApiKeyField } from '@/features/settings/provider-api-key-field';
+import {
+  cancelOAuth,
+  cleanupOAuthSession,
+  fetchOAuthSessionStatus,
+  revokeOAuth,
+  startAsyncOAuthLogin,
+  submitOAuthCode,
+} from '@/features/settings/oauth-api';
 import {
   deleteProviderApiKey,
   isMaskedKey,
@@ -34,6 +43,7 @@ import { settingsInputFocusClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 import type { StoredLanguage } from '@/lib/storage';
+import { messages } from '@/i18n/messages';
 
 export interface ProviderManageDialogMessages {
   apiKeyLabel: string;
@@ -163,6 +173,23 @@ function ManageBuiltinProvider({
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmRemove, setConfirmRemove] = useState(false);
+  const providerLabels = messages(language).providersSettings;
+  const supportsApiKey = row?.supportsApiKey !== false;
+  const supportsOAuth = row?.supportsOAuth === true;
+  const isOAuthConnected = row?.authMode === 'oauth' && row.authStatus === 'connected';
+  const canRemoveProviderCredential =
+    row?.configured === true &&
+    row.activeKeySource !== 'env' &&
+    row.activeKeySource !== 'extension' &&
+    row.activeKeySource !== 'models_json';
+
+  const [oauthSessionId, setOAuthSessionId] = useState<string | null>(null);
+  const [oauthMessage, setOAuthMessage] = useState<string | null>(null);
+  const [oauthStatus, setOAuthStatus] = useState<'idle' | 'waiting' | 'waiting_code' | 'success' | 'error'>('idle');
+  const [authUrl, setAuthUrl] = useState<string | null>(null);
+  const [instructions, setInstructions] = useState<string | null>(null);
+  const [codeInput, setCodeInput] = useState('');
+  const oauthLoading = oauthStatus === 'waiting' || oauthStatus === 'waiting_code';
 
   const apiKeyLinks = useMemo(
     () => getOrderedApiKeyLinks(providerId, language),
@@ -173,7 +200,7 @@ function ManageBuiltinProvider({
 
   const handleSave = async () => {
     const trimmed = apiKey.trim();
-    if (!trimmed || isMaskedKey(trimmed)) return;
+    if (!trimmed || !supportsApiKey || isMaskedKey(trimmed)) return;
     setSaving(true);
     setError(null);
     try {
@@ -190,6 +217,46 @@ function ManageBuiltinProvider({
     }
   };
 
+  useEffect(() => {
+    if (!oauthSessionId || !oauthLoading) return;
+    const intervalId = window.setInterval(() => {
+      void (async () => {
+        try {
+          const status = await fetchOAuthSessionStatus(oauthSessionId);
+          if (status.status === 'waiting_auth' || status.status === 'waiting_code') {
+            setOAuthStatus(status.status === 'waiting_code' ? 'waiting_code' : 'waiting');
+            setOAuthMessage(status.message ?? null);
+            setAuthUrl(status.authUrl ?? null);
+            setInstructions(status.instructions ?? null);
+          } else if (status.status === 'completed') {
+            window.clearInterval(intervalId);
+            setOAuthStatus('success');
+            setOAuthMessage(status.message ?? providerLabels.saved);
+            window.setTimeout(() => {
+              onSaved();
+              onClose();
+            }, 600);
+          } else if (status.status === 'failed' || status.status === 'cancelled') {
+            window.clearInterval(intervalId);
+            setOAuthStatus('error');
+            setOAuthMessage(status.error ?? status.message ?? providerLabels.revokeFailed);
+          }
+        } catch {
+          // Keep polling; transient gateway reloads should not kill the flow.
+        }
+      })();
+    }, 1000);
+    return () => window.clearInterval(intervalId);
+  }, [oauthSessionId, oauthLoading, onClose, onSaved, providerLabels.revokeFailed, providerLabels.saved]);
+
+  useEffect(() => {
+    return () => {
+      if (oauthSessionId) {
+        void cleanupOAuthSession(oauthSessionId).catch(() => {});
+      }
+    };
+  }, [oauthSessionId]);
+
   const handleRemove = async () => {
     try {
       await deleteProviderApiKey(providerId);
@@ -197,6 +264,55 @@ function ManageBuiltinProvider({
       onClose();
     } catch {
       // silent — not critical
+    }
+  };
+
+  const startOAuth = async () => {
+    setOAuthStatus('waiting');
+    setOAuthMessage(providerLabels.oauthStarting);
+    setError(null);
+    try {
+      const result = await startAsyncOAuthLogin(providerId);
+      setOAuthSessionId(result.sessionId);
+    } catch (e) {
+      setOAuthStatus('error');
+      setOAuthMessage(e instanceof Error ? e.message : providerLabels.revokeFailed);
+    }
+  };
+
+  const cancelFlow = async () => {
+    if (!oauthSessionId) return;
+    try {
+      await cancelOAuth(oauthSessionId);
+    } catch {
+      // Best effort cancellation.
+    }
+    setOAuthStatus('idle');
+    setOAuthMessage(null);
+    setOAuthSessionId(null);
+    setAuthUrl(null);
+    setInstructions(null);
+  };
+
+  const submitCode = async () => {
+    if (!oauthSessionId || !codeInput.trim()) return;
+    try {
+      await submitOAuthCode(oauthSessionId, codeInput.trim());
+      setCodeInput('');
+      setOAuthMessage(providerLabels.oauthProcessingCode);
+    } catch (e) {
+      setOAuthStatus('error');
+      setOAuthMessage(e instanceof Error ? e.message : providerLabels.revokeFailed);
+    }
+  };
+
+  const disconnectOAuth = async () => {
+    try {
+      await revokeOAuth(providerId);
+      onSaved();
+      onClose();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : providerLabels.revokeFailed);
     }
   };
 
@@ -232,7 +348,7 @@ function ManageBuiltinProvider({
           <p className="text-sm text-fg-muted">{labels.apiUrlExtensionHint}</p>
         ) : null}
 
-        {row?.supportsApiKey !== false ? (
+        {supportsApiKey ? (
           <ProviderApiKeyField
             providerId={providerId}
             inputId="manage-api-key"
@@ -253,7 +369,7 @@ function ManageBuiltinProvider({
               loadFailed: labels.loadFailed,
             }}
           />
-        ) : (
+        ) : row?.category === 'extension' ? (
           <div className="flex flex-col gap-2 rounded-lg border border-edge-subtle bg-surface-panel/60 px-3 py-2 text-sm text-fg-muted">
             <p>{labels.extensionKeyHint}</p>
             {row?.extensionId ? (
@@ -268,9 +384,85 @@ function ManageBuiltinProvider({
               </Link>
             ) : null}
           </div>
-        )}
+        ) : null}
 
-        {apiKeyLinks.length > 0 ? (
+        {supportsOAuth ? (
+          <div className="flex flex-col gap-2 rounded-lg border border-edge-subtle bg-surface-panel/60 px-3 py-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-fg">{providerLabels.oauth}</p>
+                <p className="mt-0.5 text-xs text-fg-muted">
+                  {isOAuthConnected ? providerLabels.sourceOauth : providerLabels.oauthHint}
+                </p>
+              </div>
+              {isOAuthConnected ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="gap-1.5 text-red-600 dark:text-red-400"
+                  onClick={() => void disconnectOAuth()}
+                >
+                  {providerLabels.revoke}
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  variant="primary"
+                  className="gap-1.5"
+                  disabled={oauthLoading}
+                  onClick={() => void startOAuth()}
+                >
+                  {oauthLoading ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : <LogIn className="size-3.5" aria-hidden />}
+                  {providerLabels.oauth}
+                </Button>
+              )}
+            </div>
+            {oauthMessage ? (
+              <p className={cn('text-xs', oauthStatus === 'error' ? 'text-red-600 dark:text-red-400' : 'text-fg-muted')}>
+                {oauthMessage}
+              </p>
+            ) : null}
+            {(oauthStatus === 'waiting' || oauthStatus === 'waiting_code') ? (
+              <div className="flex flex-wrap gap-2">
+                {authUrl ? (
+                  <a
+                    href={authUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 rounded-md bg-accent px-3 py-2 text-sm font-medium text-white hover:bg-accent-hover"
+                  >
+                    <ExternalLink className="size-4" aria-hidden />
+                    {providerLabels.openAuthPage}
+                  </a>
+                ) : null}
+                <Button type="button" variant="secondary" onClick={() => void cancelFlow()}>
+                  {providerLabels.cancelOAuth}
+                </Button>
+              </div>
+            ) : null}
+            {instructions ? <p className="text-xs text-fg-muted">{instructions}</p> : null}
+            {oauthStatus === 'waiting_code' ? (
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <input
+                  type="text"
+                  value={codeInput}
+                  onChange={(event) => setCodeInput(event.target.value)}
+                  onKeyDown={(event) => event.key === 'Enter' && void submitCode()}
+                  placeholder={providerLabels.pasteRedirectUrl}
+                  className={cn(
+                    'min-w-0 flex-1 rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg placeholder:text-fg-subtle',
+                    settingsInputFocusClass,
+                  )}
+                />
+                <Button type="button" variant="primary" onClick={() => void submitCode()}>
+                  {providerLabels.submitCode}
+                </Button>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
+        {apiKeyLinks.length > 0 && supportsApiKey ? (
           <div className="flex flex-wrap gap-2">
             {apiKeyLinks.map(({ kind, href }) => (
               <a
@@ -316,7 +508,7 @@ function ManageBuiltinProvider({
       </div>
 
       <div className="flex items-center justify-between border-t border-edge-subtle px-5 py-3">
-        {row?.supportsApiKey !== false ? (
+        {canRemoveProviderCredential ? (
           <Button
             type="button"
             variant="ghost"
@@ -330,7 +522,7 @@ function ManageBuiltinProvider({
           <span />
         )}
         <div className="flex items-center gap-2">
-          {dirty && !isMaskedKey(apiKey.trim()) ? (
+          {supportsApiKey && dirty && !isMaskedKey(apiKey.trim()) ? (
             <Button
               type="button"
               variant="primary"

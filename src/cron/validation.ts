@@ -88,9 +88,33 @@ const CronAgentTurnPayloadSchema = z.object({
   timeoutSeconds: z.number().int().min(10).max(3600).optional(),
 });
 
+const WorkflowRunInputEnvelopeSchema = z.object({
+  payload: z.unknown(),
+  goal: optionalTrimmedString(5000, 1),
+  variables: z.record(z.string(), z.unknown()).optional(),
+  context: z.record(z.string(), z.unknown()).optional(),
+});
+
+const CronWorkflowRunPayloadSchema = z.object({
+  kind: z.literal('workflowRun'),
+  definitionId: z.string().min(1).max(200),
+  input: z.unknown().optional(),
+  inputEnvelope: WorkflowRunInputEnvelopeSchema.optional(),
+  goal: optionalTrimmedString(5000, 1),
+  agentId: optionalTrimmedString(64, 1),
+  sessionKey: optionalTrimmedString(300, 1),
+  source: z.object({
+    kind: z.literal('cron').optional(),
+    scheduleId: optionalTrimmedString(200, 1),
+    fireId: optionalTrimmedString(200, 1),
+    scheduledAtMs: z.number().int().nonnegative().optional(),
+  }).optional(),
+});
+
 const CronPayloadSchema = z.union([
   CronSystemEventPayloadSchema,
   CronAgentTurnPayloadSchema,
+  CronWorkflowRunPayloadSchema,
 ]);
 
 // CronDelivery validation — channel must match gateway UI / message bus ids (telegram, weixin, cli, local, …)

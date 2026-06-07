@@ -190,22 +190,55 @@ export async function isProviderConfigured(provider: string): Promise<boolean> {
 /** Where runtime {@link getApiKey} resolves the key from (no secret values). */
 export type ProviderActiveKeySource = 'none' | 'agent' | 'gateway' | 'oauth' | 'env' | 'models_json' | 'extension';
 
+export type ProviderAuthMode = ProviderActiveKeySource;
+export type ProviderAuthStatus = 'connected' | 'expired' | 'not_connected';
+
+export interface ProviderAuthState {
+  authMode: ProviderAuthMode;
+  authStatus: ProviderAuthStatus;
+  expiresAt?: number;
+}
+
 export async function getProviderActiveKeySource(provider: string): Promise<ProviderActiveKeySource> {
-  if (getProviderRegistry().has(provider)) return 'extension';
+  const authState = await getProviderAuthState(provider);
+  return authState.authMode;
+}
+
+export async function getProviderAuthState(provider: string): Promise<ProviderAuthState> {
+  if (getProviderRegistry().has(provider)) {
+    return { authMode: 'extension', authStatus: 'connected' };
+  }
 
   const resolver = new CredentialResolver();
   const fromCredentials = await resolver.resolveApiKeySource(provider);
-  if (fromCredentials === 'agent') return 'agent';
-  if (fromCredentials === 'global') return 'gateway';
-  if (fromCredentials === 'oauth') return 'oauth';
-  if (fromCredentials === 'env') return 'env';
+  if (fromCredentials === 'agent') return { authMode: 'agent', authStatus: 'connected' };
+  if (fromCredentials === 'global') return { authMode: 'gateway', authStatus: 'connected' };
+  if (fromCredentials === 'oauth') {
+    const token = await resolver.loadOAuthTokenRecord(provider);
+    const expired = Boolean(token?.expiresAt && token.expiresAt < Date.now());
+    return {
+      authMode: 'oauth',
+      authStatus: expired ? 'expired' : 'connected',
+      ...(token?.expiresAt ? { expiresAt: token.expiresAt } : {}),
+    };
+  }
+  if (fromCredentials === 'env') return { authMode: 'env', authStatus: 'connected' };
+
+  const expiredOAuthToken = await resolver.loadOAuthTokenRecord(provider);
+  if (expiredOAuthToken?.expiresAt && expiredOAuthToken.expiresAt < Date.now()) {
+    return {
+      authMode: 'oauth',
+      authStatus: 'expired',
+      expiresAt: expiredOAuthToken.expiresAt,
+    };
+  }
 
   const registry = getModelRegistry();
   if (registry.getApiKey(provider)) {
-    return 'models_json';
+    return { authMode: 'models_json', authStatus: 'connected' };
   }
 
-  return 'none';
+  return { authMode: 'none', authStatus: 'not_connected' };
 }
 
 export async function getConfiguredProviders(): Promise<string[]> {
@@ -299,10 +332,10 @@ export const PROVIDER_META: Record<string, ProviderMeta> = {
   'azure-openai-responses': { name: 'Azure OpenAI', category: 'enterprise', supportsApiKey: true },
   'google-vertex': { name: 'Google Vertex AI', category: 'enterprise', supportsApiKey: true },
   'vercel-ai-gateway': { name: 'Vercel AI Gateway', category: 'enterprise', supportsApiKey: true },
-  'github-copilot': { name: 'GitHub Copilot (OAuth)', category: 'oauth', supportsOAuth: true },
+  'github-copilot': { name: 'GitHub Copilot (OAuth)', category: 'oauth', supportsOAuth: true, supportsApiKey: false },
   'openai-codex': { name: 'OpenAI Codex (OAuth)', category: 'oauth', supportsOAuth: true, supportsApiKey: false },
-  'google-gemini-cli': { name: 'Google Gemini CLI (OAuth)', category: 'oauth', supportsOAuth: true },
-  'google-antigravity': { name: 'Google Antigravity (OAuth)', category: 'oauth', supportsOAuth: true },
+  'google-gemini-cli': { name: 'Google Gemini CLI (OAuth)', category: 'oauth', supportsOAuth: true, supportsApiKey: false },
+  'google-antigravity': { name: 'Google Antigravity (OAuth)', category: 'oauth', supportsOAuth: true, supportsApiKey: false },
 };
 
 export function getSortedProviders(): string[] {

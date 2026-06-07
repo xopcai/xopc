@@ -39,6 +39,14 @@ export type CronJobFormDialogProps = {
   formSchedule: string;
   onFormScheduleChange: (v: string) => void;
   formSubmitting: boolean;
+  formTaskKind: 'message' | 'workflowRun';
+  onFormTaskKindChange: (v: 'message' | 'workflowRun') => void;
+  formWorkflowDefinitionId: string;
+  onFormWorkflowDefinitionIdChange: (v: string) => void;
+  formWorkflowGoal: string;
+  onFormWorkflowGoalChange: (v: string) => void;
+  formWorkflowInputJson: string;
+  onFormWorkflowInputJsonChange: (v: string) => void;
   formSessionTarget: 'main' | 'isolated';
   onFormSessionTargetChange: (
     target: 'main' | 'isolated',
@@ -88,6 +96,14 @@ export function CronJobFormDialog(props: CronJobFormDialogProps) {
     formSchedule,
     onFormScheduleChange,
     formSubmitting,
+    formTaskKind,
+    onFormTaskKindChange,
+    formWorkflowDefinitionId,
+    onFormWorkflowDefinitionIdChange,
+    formWorkflowGoal,
+    onFormWorkflowGoalChange,
+    formWorkflowInputJson,
+    onFormWorkflowInputJsonChange,
     formSessionTarget,
     onFormSessionTargetChange,
     formAgentLocalOnly,
@@ -153,7 +169,71 @@ export function CronJobFormDialog(props: CronJobFormDialogProps) {
                     labels={c.schedulePicker}
                   />
                   <label className="flex flex-col gap-1">
-                    <span className="text-xs font-medium text-fg-muted">{c.mode}</span>
+                    <span className="text-xs font-medium text-fg-muted">{c.taskKind}</span>
+                    <select
+                      className={selectClassName()}
+                      value={formTaskKind}
+                      disabled={formSubmitting}
+                      onChange={(e) => onFormTaskKindChange(e.target.value as 'message' | 'workflowRun')}
+                    >
+                      <option value="message">{c.taskKindMessage}</option>
+                      <option value="workflowRun">{c.taskKindWorkflowRun}</option>
+                    </select>
+                  </label>
+                  {formTaskKind === 'workflowRun' ? (
+                    <>
+                      <label className="flex flex-col gap-1">
+                        <span className="text-xs font-medium text-fg-muted">{c.workflowDefinitionId}</span>
+                        <input
+                          type="text"
+                          className={inputClassName()}
+                          value={formWorkflowDefinitionId}
+                          onChange={(e) => onFormWorkflowDefinitionIdChange(e.target.value)}
+                          placeholder={c.workflowDefinitionPlaceholder}
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1">
+                        <span className="text-xs font-medium text-fg-muted">{c.workflowGoal}</span>
+                        <textarea
+                          className={cn(inputClassName(), 'min-h-20 resize-y')}
+                          value={formWorkflowGoal}
+                          onChange={(e) => onFormWorkflowGoalChange(e.target.value)}
+                          placeholder={c.workflowGoalPlaceholder}
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1">
+                        <span className="text-xs font-medium text-fg-muted">{c.workflowInputJson}</span>
+                        <textarea
+                          className={cn(inputClassName(), 'min-h-28 resize-y font-mono text-xs')}
+                          value={formWorkflowInputJson}
+                          onChange={(e) => onFormWorkflowInputJsonChange(e.target.value)}
+                          spellCheck={false}
+                        />
+                        <span className="text-xs text-fg-muted">{c.workflowInputJsonHint}</span>
+                      </label>
+                      <label className="flex flex-col gap-1">
+                        <span className="text-xs font-medium text-fg-muted">{c.agentProfile}</span>
+                        <select
+                          className={selectClassName()}
+                          value={formAgentId}
+                          disabled={formSubmitting}
+                          onChange={(e) => onFormAgentIdChange(e.target.value)}
+                        >
+                          <option value="">{c.agentProfileDefault}</option>
+                          {cronAgentSelectOptions.map((ag) => (
+                            <option key={ag.id} value={ag.id}>
+                              {`${ag.id} — ${agentListDisplayName(ag, agentsMessages)}`}
+                            </option>
+                          ))}
+                        </select>
+                        <p className="text-xs text-fg-muted">{c.agentProfileHint}</p>
+                      </label>
+                    </>
+                  ) : null}
+                  {formTaskKind === 'message' ? (
+                    <>
+                      <label className="flex flex-col gap-1">
+                        <span className="text-xs font-medium text-fg-muted">{c.mode}</span>
                     <select
                       className={selectClassName()}
                       value={formSessionTarget}
@@ -359,6 +439,8 @@ export function CronJobFormDialog(props: CronJobFormDialogProps) {
                     </div>
                     <p className="text-xs text-fg-muted">{c.messageMarkdownHint}</p>
                   </div>
+                    </>
+                  ) : null}
                 </div>
               </div>
               <div className="flex shrink-0 justify-end gap-2 border-t border-edge px-4 py-3">

@@ -17,4 +17,20 @@ describe('getCronPayloadText', () => {
       })
     ).toBe('prompt');
   });
+
+  it('reads workflowRun goal when available', () => {
+    expect(
+      getCronPayloadText({
+        payload: { kind: 'workflowRun', definitionId: 'release-check', goal: 'Check release' },
+      })
+    ).toBe('Check release');
+  });
+
+  it('falls back to workflowRun definition id', () => {
+    expect(
+      getCronPayloadText({
+        payload: { kind: 'workflowRun', definitionId: 'release-check' },
+      })
+    ).toBe('release-check');
+  });
 });

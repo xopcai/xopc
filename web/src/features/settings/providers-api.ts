@@ -21,6 +21,9 @@ export type ProviderActiveKeySource =
   | 'models_json'
   | 'extension';
 
+export type ProviderAuthMode = ProviderActiveKeySource;
+export type ProviderAuthStatus = 'connected' | 'expired' | 'not_connected';
+
 export interface ProviderMeta {
   id: string;
   name: string;
@@ -29,6 +32,9 @@ export interface ProviderMeta {
   supportsApiKey: boolean;
   configured: boolean;
   activeKeySource?: ProviderActiveKeySource;
+  authMode?: ProviderAuthMode;
+  authStatus?: ProviderAuthStatus;
+  expiresAt?: number;
   /** Effective LLM REST base URL (includes models.json overrides). */
   baseUrl?: string;
   /** Owning extension id when provider is contributed by an extension manifest. */

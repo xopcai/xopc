@@ -1,9 +1,14 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { messages } from '@/i18n/messages';
 import type { StoredLanguage } from '@/lib/storage';
+
+import {
+  validateWorkflowDefinition,
+  type ValidateWorkflowDefinitionResponse,
+} from './workflow-api';
 
 export function WorkflowManageDialog({
   open,
@@ -16,15 +21,23 @@ export function WorkflowManageDialog({
   language: StoredLanguage;
   saving: boolean;
   onClose: () => void;
-  onSave: (payload: { name: string; script: string }) => void;
+  onSave: (payload: { name: string; script: string }) => Promise<void> | void;
 }) {
   const labels = messages(language).workflows;
   const [name, setName] = useState('');
   const [script, setScript] = useState('');
+  const [submitted, setSubmitted] = useState(false);
+  const [validating, setValidating] = useState(false);
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const [validationResult, setValidationResult] = useState<ValidateWorkflowDefinitionResponse | null>(null);
 
   useEffect(() => {
     if (!open) return;
     setName('');
+    setSubmitted(false);
+    setValidating(false);
+    setValidationError(null);
+    setValidationResult(null);
     setScript(
       `export const meta = {
   name: 'my_workflow',
@@ -56,6 +69,69 @@ return await agent('Summarize:\\n\\n' + first, { label: 'synthesis' })
     );
   }, [open]);
 
+  const trimmedName = name.trim();
+  const hasRequiredFields = Boolean(trimmedName && script.trim());
+
+  useEffect(() => {
+    if (!open || !hasRequiredFields) {
+      setValidating(false);
+      setValidationError(null);
+      setValidationResult(null);
+      return;
+    }
+
+    let cancelled = false;
+    const timeoutId = window.setTimeout(() => {
+      setValidating(true);
+      setValidationError(null);
+      void validateWorkflowDefinition(trimmedName, script)
+        .then((result) => {
+          if (cancelled) return;
+          setValidationResult(result);
+        })
+        .catch((err) => {
+          if (cancelled) return;
+          setValidationResult(null);
+          setValidationError(err instanceof Error ? err.message : labels.validateWorkflowFailed);
+        })
+        .finally(() => {
+          if (!cancelled) setValidating(false);
+        });
+    }, 450);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+    };
+  }, [hasRequiredFields, labels.validateWorkflowFailed, open, script, trimmedName]);
+
+  const validationIssues = useMemo(() => {
+    if (validationError) return [validationError];
+    return validationResult?.errors.map((issue) => issue.message) ?? [];
+  }, [validationError, validationResult]);
+
+  const showValidationPanel = submitted || validating || validationResult != null || validationError != null;
+  const canSave = hasRequiredFields && !saving && !validating && validationResult?.valid === true;
+
+  const submit = async () => {
+    setSubmitted(true);
+    if (!hasRequiredFields || saving) return;
+
+    setValidating(true);
+    setValidationError(null);
+    try {
+      const result = await validateWorkflowDefinition(trimmedName, script);
+      setValidationResult(result);
+      if (!result.valid) return;
+      await onSave({ name: trimmedName, script });
+    } catch (err) {
+      setValidationResult(null);
+      setValidationError(err instanceof Error ? err.message : labels.validateWorkflowFailed);
+    } finally {
+      setValidating(false);
+    }
+  };
+
   return (
     <Dialog.Root open={open} onOpenChange={(next) => !next && onClose()}>
       <Dialog.Portal>
@@ -71,7 +147,11 @@ return await agent('Summarize:\\n\\n' + first, { label: 'synthesis' })
               <span className="text-xs font-medium text-fg">{labels.workflowNameLabel}</span>
               <input
                 value={name}
-                onChange={(event) => setName(event.target.value)}
+                onChange={(event) => {
+                  setName(event.target.value);
+                  setValidationResult(null);
+                  setValidationError(null);
+                }}
                 placeholder={labels.workflowNamePlaceholder}
                 className="mt-1.5 w-full rounded-xl border border-edge bg-surface-base px-3 py-2 text-sm font-mono text-fg outline-none placeholder:text-fg-subtle focus:border-accent focus:ring-2 focus:ring-accent/20"
               />
@@ -80,22 +160,52 @@ return await agent('Summarize:\\n\\n' + first, { label: 'synthesis' })
               <span className="text-xs font-medium text-fg">{labels.workflowScriptLabel}</span>
               <textarea
                 value={script}
-                onChange={(event) => setScript(event.target.value)}
+                onChange={(event) => {
+                  setScript(event.target.value);
+                  setValidationResult(null);
+                  setValidationError(null);
+                }}
                 spellCheck={false}
                 className="mt-1.5 min-h-72 w-full resize-y rounded-xl border border-edge bg-surface-base px-3 py-2 font-mono text-xs leading-5 text-fg outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
               />
             </label>
+
+            {showValidationPanel ? (
+              <div
+                className={
+                  validationIssues.length > 0
+                    ? 'rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:text-red-200'
+                    : 'rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-200'
+                }
+                role="status"
+              >
+                <div className="font-medium">
+                  {validating
+                    ? labels.validatingWorkflow
+                    : validationIssues.length > 0
+                      ? labels.validationFailed
+                      : labels.validationPassed}
+                </div>
+                {validationIssues.length > 0 ? (
+                  <ul className="mt-1 list-disc space-y-1 pl-5">
+                    {validationIssues.map((issue) => (
+                      <li key={issue}>{issue}</li>
+                    ))}
+                  </ul>
+                ) : validationResult?.definition ? (
+                  <div className="mt-1 text-xs opacity-80">
+                    {labels.validationPreview.replace('{{phaseCount}}', String(validationResult.definition.phases.length))}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
           </div>
 
           <div className="flex justify-end gap-2 border-t border-edge px-5 py-4">
             <Button variant="secondary" onClick={onClose} disabled={saving}>
               {labels.cancelDialog}
             </Button>
-            <Button
-              variant="primary"
-              disabled={saving || !name.trim() || !script.trim()}
-              onClick={() => onSave({ name: name.trim(), script })}
-            >
+            <Button variant="primary" disabled={!canSave} onClick={() => void submit()}>
               {saving ? labels.savingWorkflow : labels.saveWorkflow}
             </Button>
           </div>

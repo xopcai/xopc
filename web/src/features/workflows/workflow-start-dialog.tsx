@@ -1,5 +1,5 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, Layers3, SlidersHorizontal, Target, UsersRound } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -46,6 +46,35 @@ function ExamplePromptList({
   );
 }
 
+function agentScaleLabel(definition: WorkflowDefinition, labels: WorkflowsMessages): string {
+  const estimatedAgents = definition.metadata.estimatedAgents;
+  if (!estimatedAgents) {
+    return interpolate(labels.agentScaleExact, { count: definition.defaults.maxSubagents });
+  }
+  if (estimatedAgents.min === estimatedAgents.max) {
+    return interpolate(labels.agentScaleExact, { count: estimatedAgents.min });
+  }
+  return interpolate(labels.agentScaleRange, {
+    min: estimatedAgents.min,
+    max: estimatedAgents.max,
+  });
+}
+
+function summarizeInput(
+  goal: string,
+  argValues: Record<string, string>,
+  fallbackGoal: string,
+  labels: WorkflowsMessages,
+): string {
+  const parts = Object.values(argValues)
+    .map((value) => value.trim())
+    .filter(Boolean);
+  const resolvedGoal = goal.trim() || fallbackGoal;
+  if (resolvedGoal) parts.unshift(resolvedGoal);
+  if (parts.length === 0) return labels.noInputSummary;
+  return parts.join(' · ');
+}
+
 export function WorkflowStartDialog({
   open,
   definition,
@@ -80,6 +109,11 @@ export function WorkflowStartDialog({
 
   const examples = localized?.examplePrompts ?? [];
   const hasArgFields = argFields.length > 0;
+  const effectiveConcurrency = concurrency.trim() ? Number(concurrency) : definition?.defaults.concurrency;
+  const effectiveMaxSubagents = maxSubagents.trim() ? Number(maxSubagents) : definition?.defaults.maxSubagents;
+  const inputSummary = definition && localized
+    ? summarizeInput(goal, argValues, localized.description, labels)
+    : labels.noInputSummary;
 
   useEffect(() => {
     if (!open || !definition) return;
@@ -119,6 +153,57 @@ export function WorkflowStartDialog({
           </div>
 
           <div className="min-h-0 flex-1 space-y-4 overflow-auto px-5 py-4">
+            <section className="rounded-2xl border border-edge bg-surface-base/70 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-fg">{labels.runPlanPreview}</h3>
+                  <p className="mt-1 line-clamp-2 text-xs leading-5 text-fg-muted">{inputSummary}</p>
+                </div>
+                <span className="shrink-0 rounded-full bg-accent-soft px-2 py-1 text-[11px] font-medium text-accent-fg">
+                  {labels.readyToStart}
+                </span>
+              </div>
+
+              <div className="mt-4 grid gap-2 text-xs text-fg-muted sm:grid-cols-3">
+                <div className="flex items-center gap-2 rounded-xl bg-surface-panel px-2.5 py-2">
+                  <Layers3 className="size-3.5 shrink-0 text-fg-subtle" aria-hidden />
+                  <span>{interpolate(labels.phaseCount, { count: definition.phases.length })}</span>
+                </div>
+                <div className="flex items-center gap-2 rounded-xl bg-surface-panel px-2.5 py-2">
+                  <UsersRound className="size-3.5 shrink-0 text-fg-subtle" aria-hidden />
+                  <span>{agentScaleLabel(definition, labels)}</span>
+                </div>
+                <div className="flex items-center gap-2 rounded-xl bg-surface-panel px-2.5 py-2">
+                  <SlidersHorizontal className="size-3.5 shrink-0 text-fg-subtle" aria-hidden />
+                  <span>
+                    {interpolate(labels.runLimitsSummary, {
+                      concurrency: effectiveConcurrency ?? definition.defaults.concurrency,
+                      max: effectiveMaxSubagents ?? definition.defaults.maxSubagents,
+                    })}
+                  </span>
+                </div>
+              </div>
+
+              {definition.phases.length > 0 ? (
+                <div className="mt-4">
+                  <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-wide text-fg-subtle">
+                    <Target className="size-3.5" aria-hidden />
+                    {labels.startPlanPhases}
+                  </div>
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                    {definition.phases.map((phase, index) => (
+                      <div key={phase.id} className="flex items-center gap-1.5">
+                        {index > 0 ? <span className="text-fg-subtle">→</span> : null}
+                        <span className="rounded-lg border border-edge-subtle bg-surface-panel px-2 py-1 text-[11px] text-fg-muted">
+                          {phase.title}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </section>
+
             {argFields.map((field) => (
               <label key={field.key} className="block">
                 <span className="text-xs font-medium text-fg">

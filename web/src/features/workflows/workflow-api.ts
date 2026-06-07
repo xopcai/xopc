@@ -71,12 +71,74 @@ export interface WorkflowRunMetrics {
   durationMs?: number;
 }
 
+export type WorkflowRunSource =
+  | { kind: 'chat'; sessionKey: string; messageId?: string }
+  | { kind: 'webui'; sessionKey?: string; requestId?: string }
+  | { kind: 'cron'; scheduleId: string; fireId?: string; scheduledAtMs?: number }
+  | { kind: 'api'; requestId?: string; idempotencyKey?: string }
+  | { kind: 'im'; channel: string; chatId: string; messageId?: string; userId?: string }
+  | Record<string, unknown>;
+
+export interface WorkflowRunMetadata {
+  sessionKey: string;
+  triggerSource: string;
+  agentId?: string;
+  retryOfRunId?: string;
+  definition: WorkflowRunDefinitionSnapshot;
+  input?: WorkflowRunInputEnvelope;
+  correlation?: WorkflowRunCorrelation;
+  origin?: WorkflowRunOrigin;
+  schedule?: WorkflowRunScheduleMetadata;
+}
+
+export interface WorkflowRunInputEnvelope {
+  payload: unknown;
+  goal?: string;
+  variables?: Record<string, unknown>;
+  context?: Record<string, unknown>;
+}
+
+export interface WorkflowRunCorrelation {
+  idempotencyKey?: string;
+  requestId?: string;
+  traceId?: string;
+  parentRunId?: string;
+}
+
+export interface WorkflowRunOrigin {
+  channel: string;
+  sessionKey?: string;
+  chatId?: string;
+  messageId?: string;
+  scheduleId?: string;
+  fireId?: string;
+  requestId?: string;
+}
+
+export interface WorkflowRunScheduleMetadata {
+  scheduleId: string;
+  fireId?: string;
+  scheduledAtMs?: number;
+}
+
+export interface WorkflowRunDefinitionSnapshot {
+  id: string;
+  name: string;
+  title: string;
+  version: string;
+  source: 'builtin' | 'user';
+  tags: string[];
+  phaseCount: number;
+  estimatedAgents?: WorkflowDefinitionEstimatedAgents;
+}
+
 export interface WorkflowRunSummary {
   id: string;
   definitionId: string;
   title: string;
   status: WorkflowRunStatus;
-  source: unknown;
+  source: WorkflowRunSource;
+  metadata?: WorkflowRunMetadata;
   createdAtMs: number;
   startedAtMs?: number;
   completedAtMs?: number;
@@ -91,7 +153,8 @@ export interface WorkflowRun {
   goal: string;
   input: unknown;
   status: WorkflowRunStatus;
-  source: unknown;
+  source: WorkflowRunSource;
+  metadata?: WorkflowRunMetadata;
   result?: unknown;
   error?: { code: string; message: string; detail?: string; recoverable: boolean };
   metrics: WorkflowRunMetrics;
@@ -167,6 +230,27 @@ export interface StartWorkflowRunOptions {
   tokenBudget?: number | null;
 }
 
+export type WorkflowDefinitionValidationIssueCode =
+  | 'name_required'
+  | 'script_required'
+  | 'parse_failed'
+  | 'meta_name_mismatch'
+  | 'unknown_error';
+
+export interface WorkflowDefinitionValidationIssue {
+  code: WorkflowDefinitionValidationIssueCode;
+  message: string;
+  line?: number;
+  column?: number;
+}
+
+export interface ValidateWorkflowDefinitionResponse {
+  valid: boolean;
+  errors: WorkflowDefinitionValidationIssue[];
+  warnings: WorkflowDefinitionValidationIssue[];
+  definition?: WorkflowDefinition;
+}
+
 export async function listWorkflowDefinitions(): Promise<WorkflowDefinition[]> {
   const data = await fetchJson<{ definitions: WorkflowDefinition[] }>(apiUrl('/api/workflows/definitions'));
   return data.definitions ?? [];
@@ -177,6 +261,16 @@ export async function getWorkflowDefinition(id: string): Promise<WorkflowDefinit
     apiUrl(`/api/workflows/definitions/${encodeURIComponent(id)}`),
   );
   return data.definition;
+}
+
+export async function validateWorkflowDefinition(
+  name: string,
+  script: string,
+): Promise<ValidateWorkflowDefinitionResponse> {
+  return fetchJson<ValidateWorkflowDefinitionResponse>(apiUrl('/api/workflows/definitions/validate'), {
+    method: 'POST',
+    body: JSON.stringify({ name, script }),
+  });
 }
 
 export async function saveWorkflowDefinition(name: string, script: string): Promise<WorkflowDefinition> {

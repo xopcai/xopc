@@ -30,4 +30,21 @@ describe('cron validation agentId', () => {
     const r = UpdateJobRequestSchema.safeParse({ agentId: null });
     expect(r.success).toBe(true);
   });
+
+  it('AddJobRequestSchema accepts workflowRun payload', () => {
+    const r = AddJobRequestSchema.safeParse({
+      schedule: '0 * * * *',
+      payload: {
+        kind: 'workflowRun',
+        definitionId: 'release-check',
+        goal: 'Check release',
+        inputEnvelope: {
+          payload: { branch: 'main' },
+          variables: { releaseType: 'patch' },
+          context: { actor: 'cron' },
+        },
+      },
+    });
+    expect(r.success).toBe(true);
+  });
 });

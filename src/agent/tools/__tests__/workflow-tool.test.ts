@@ -68,7 +68,7 @@ return result`,
     expect(updates).toHaveLength(2);
   });
 
-  it('keeps the workflow result when the host rejects live progress updates', async () => {
+  it('keeps the workflow result when the host throws during live progress updates', async () => {
     mocks.runWorkflow.mockImplementation(async (_script: string, _deps: unknown, options: any) => {
       options.onAgentQueued({ id: 1, label: 'bugs review', prompt: 'review bugs' });
       options.onAgentStart({ id: 1, label: 'bugs review', prompt: 'review bugs' });
@@ -106,6 +106,51 @@ return result`,
     );
 
     expect(updateCount).toBe(1);
+    expect(result.content[0]?.type).toBe('text');
+    expect(result.content[0]?.text).toContain('workflow demo completed');
+  });
+
+  it('keeps the workflow result when the host asynchronously rejects live progress updates', async () => {
+    mocks.runWorkflow.mockImplementation(async (_script: string, _deps: unknown, options: any) => {
+      options.onAgentQueued({ id: 1, label: 'bugs review', prompt: 'review bugs' });
+      await Promise.resolve();
+      options.onAgentStart({ id: 1, label: 'bugs review', prompt: 'review bugs' });
+      options.onAgentEnd({ id: 1, label: 'bugs review', result: null, status: 'done' });
+      return {
+        meta: { name: 'demo', description: 'Demo workflow' },
+        agentCount: 1,
+        durationMs: 10,
+        result: 'ok',
+      };
+    });
+
+    const tool = createWorkflowTool({
+      workspace: '/tmp/xopc-test',
+      bus: {} as any,
+      getSubagentModel: () => ({}) as any,
+      getConfig: () => ({ agents: { defaults: { workflow: { defaultTimeoutSec: 0 } } } }) as any,
+      buildChildTools: () => [],
+      catalog: { load: vi.fn() } as any,
+    });
+
+    let updateCount = 0;
+    const result = await tool.execute(
+      'tool-call-1',
+      {
+        script: `export const meta = { name: 'demo', description: 'Demo workflow' }
+const result = await agent('work')
+return result`,
+      },
+      undefined,
+      () => {
+        updateCount += 1;
+        return Promise.reject(new Error('Agent listener invoked outside active run')) as never;
+      },
+    );
+
+    await Promise.resolve();
+
+    expect(updateCount).toBeGreaterThan(0);
     expect(result.content[0]?.type).toBe('text');
     expect(result.content[0]?.text).toContain('workflow demo completed');
   });

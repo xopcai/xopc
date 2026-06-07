@@ -13,6 +13,21 @@ function createRun(): WorkflowRun {
     input: { query: 'workflow' },
     status: 'queued',
     source: { kind: 'chat', sessionKey: 'chat-1' },
+    metadata: {
+      sessionKey: 'chat-1',
+      triggerSource: 'chat',
+      agentId: 'main',
+      retryOfRunId: 'previous-run',
+      definition: {
+        id: 'research',
+        name: 'research',
+        title: 'Research task',
+        version: '1.0.0',
+        source: 'builtin',
+        tags: ['research'],
+        phaseCount: 2,
+      },
+    },
     metrics: {
       agentCount: 0,
       doneAgentCount: 0,
@@ -84,6 +99,9 @@ describe('projectWorkflowRunView', () => {
     expect(view?.run.metrics.agentCount).toBe(1);
     expect(view?.run.metrics.doneAgentCount).toBe(1);
     expect(view?.run.metrics.artifactCount).toBe(1);
+    expect(view?.run.metadata?.sessionKey).toBe('chat-1');
+    expect(view?.run.metadata?.retryOfRunId).toBe('previous-run');
+    expect(view?.run.metadata?.definition.version).toBe('1.0.0');
     expect(view?.phases[0]).toMatchObject({ id: 'discover', status: 'completed', agentIds: ['agent-1'] });
     expect(view?.agents[0]).toMatchObject({ id: 'agent-1', status: 'done', resultPreview: 'Found workflow runtime' });
     expect(view?.agents[0]?.steps[0]).toMatchObject({ id: 'step-1', status: 'done' });

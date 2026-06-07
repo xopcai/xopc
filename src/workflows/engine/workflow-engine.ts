@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import type { WorkflowDefinition } from '../domain/definition.js';
 import type { WorkflowEventEnvelope, WorkflowEventPayload, WorkflowEventType } from '../domain/event.js';
-import type { WorkflowRun, WorkflowRunError, WorkflowRunSource, WorkflowRunView } from '../domain/run.js';
+import type { WorkflowRun, WorkflowRunError, WorkflowRunMetadata, WorkflowRunSource, WorkflowRunView } from '../domain/run.js';
 import type { WorkflowResultEnvelope } from '../domain/result.js';
 import { WorkflowEventStore } from '../store/event-store.js';
 import { WorkflowRunStore } from '../store/run-store.js';
@@ -24,6 +24,7 @@ export interface WorkflowEngineOptions {
 export interface StartWorkflowRunOptions {
   input?: unknown;
   source: WorkflowRunSource;
+  metadata?: WorkflowRunMetadata;
   goal?: string;
   runId?: string;
   signal?: AbortSignal;
@@ -51,6 +52,7 @@ export class WorkflowEngine {
       input: options.input ?? {},
       status: 'queued',
       source: options.source,
+      metadata: options.metadata,
       metrics: {
         agentCount: 0,
         doneAgentCount: 0,

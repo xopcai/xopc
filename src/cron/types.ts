@@ -1,6 +1,14 @@
 // Cron types and interfaces
 
 import type { SessionStore } from '../session/store.js';
+import type {
+  WorkflowRunInputEnvelope,
+  WorkflowRunSource,
+} from '../workflows/domain/index.js';
+import type {
+  StartWorkflowRunServiceParams,
+  WorkflowRunServiceResult,
+} from '../workflows/service/workflow-run-service.js';
 
 // ============================================================================
 // Delivery Types
@@ -21,7 +29,19 @@ export interface CronDelivery {
 
 export type CronPayload =
   | { kind: 'systemEvent'; text: string }
-  | { kind: 'agentTurn'; message: string; model?: string; timeoutSeconds?: number };
+  | { kind: 'agentTurn'; message: string; model?: string; timeoutSeconds?: number }
+  | CronWorkflowRunPayload;
+
+export interface CronWorkflowRunPayload {
+  kind: 'workflowRun';
+  definitionId: string;
+  input?: unknown;
+  inputEnvelope?: WorkflowRunInputEnvelope;
+  goal?: string;
+  agentId?: string;
+  sessionKey?: string;
+  source?: Partial<Extract<WorkflowRunSource, { kind: 'cron' }>>;
+}
 
 // ============================================================================
 // Session Target
@@ -91,6 +111,7 @@ export interface JobExecution {
   model?: string;
   provider?: string;
   usage?: CronUsageSummary;
+  workflowRunId?: string;
 }
 
 export interface CronUsageSummary {
@@ -116,11 +137,16 @@ export interface CronRunOutcome {
   model?: string;
   provider?: string;
   usage?: CronUsageSummary;
+  workflowRunId?: string;
 }
 
 // ============================================================================
 // Executor Interface
 // ============================================================================
+
+export interface CronWorkflowRunStarter {
+  startWorkflowRun(params: StartWorkflowRunServiceParams): Promise<WorkflowRunServiceResult>;
+}
 
 /** Optional hook after a successful cron run (e.g. wake gateway heartbeat). */
 export interface HeartbeatWakeSink {
@@ -138,6 +164,7 @@ export interface JobExecutorDeps {
    * (same as {@link JobData.agentId} set to the default agent). Typically `getDefaultAgentId(config)`.
    */
   getDefaultCronAgentId?: () => string;
+  workflowRunService?: CronWorkflowRunStarter;
 }
 
 export interface JobExecutor {

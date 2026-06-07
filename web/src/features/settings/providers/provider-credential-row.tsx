@@ -307,9 +307,9 @@ export function ProviderCredentialRow({
   oauthSessionIdRef.current = oauthSessionId;
 
   const masked = isMaskedKey(value);
-  const isOAuthConfigured = row.configured && !masked && Boolean(value);
+  const isOAuthConfigured = row.authMode === 'oauth' && row.authStatus === 'connected';
 
-  const activeSrc = row.activeKeySource ?? 'none';
+  const activeSrc = row.authMode ?? row.activeKeySource ?? 'none';
 
   const apiKeyLinks = useMemo(() => getOrderedApiKeyLinks(row.id, language), [row.id, language]);
 
@@ -431,7 +431,11 @@ export function ProviderCredentialRow({
   };
 
   const canRemoveKey =
-    row.configured && masked && activeSrc !== 'env' && activeSrc !== 'extension' && activeSrc !== 'models_json';
+    row.configured &&
+    masked &&
+    activeSrc !== 'env' &&
+    activeSrc !== 'extension' &&
+    activeSrc !== 'models_json';
 
   const revealProviderKey = useCallback(
     () => revealProviderApiKey(row.id).then((payload) => payload.apiKey ?? null),

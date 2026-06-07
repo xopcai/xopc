@@ -182,6 +182,16 @@ export function createWorkflowTool(deps: WorkflowToolDeps): AgentTool {
 
       let lastUpdatePushedAtMs = Number.NEGATIVE_INFINITY;
       let liveUpdatesDisabled = false;
+      const disableLiveUpdates = (error: unknown) => {
+        if (liveUpdatesDisabled) return;
+        liveUpdatesDisabled = true;
+        const message = error instanceof Error ? error.message : String(error);
+        log.warn(
+          { err: error, errorMessage: message, workflow: meta.name },
+          `workflow live progress disabled: ${message}`,
+        );
+      };
+
       const pushUpdate = (completed = false, immediate = false) => {
         if (liveUpdatesDisabled) return;
 
@@ -193,7 +203,10 @@ export function createWorkflowTool(deps: WorkflowToolDeps): AgentTool {
 
         lastUpdatePushedAtMs = nowMs;
         try {
-          onUpdate?.({
+          const maybeAsyncOnUpdate = onUpdate as
+            | undefined
+            | ((result: { content: AgentToolResult<unknown>['content']; details: WorkflowSnapshot }) => void | PromiseLike<void>);
+          const updateResult = maybeAsyncOnUpdate?.({
             content: [
               {
                 type: 'text',
@@ -202,13 +215,11 @@ export function createWorkflowTool(deps: WorkflowToolDeps): AgentTool {
             ],
             details: snapshot,
           });
+          if (updateResult && typeof updateResult.then === 'function') {
+            void updateResult.then(undefined, disableLiveUpdates);
+          }
         } catch (e) {
-          liveUpdatesDisabled = true;
-          const message = e instanceof Error ? e.message : String(e);
-          log.warn(
-            { err: e, errorMessage: message, workflow: meta.name },
-            `workflow live progress disabled: ${message}`,
-          );
+          disableLiveUpdates(e);
         }
       };
 

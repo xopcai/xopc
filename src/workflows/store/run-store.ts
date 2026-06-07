@@ -63,6 +63,7 @@ export class WorkflowRunStore {
         title: view.run.title,
         status: view.run.status,
         source: view.run.source,
+        metadata: view.run.metadata,
         createdAtMs: view.run.createdAtMs,
         startedAtMs: view.run.startedAtMs,
         completedAtMs: view.run.completedAtMs,

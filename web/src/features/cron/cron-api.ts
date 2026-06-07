@@ -1,6 +1,7 @@
 import { apiFetch } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 import { fetchConfiguredModelsCached } from '@/features/chat/api/registry-api';
+import type { WorkflowRunInputEnvelope, WorkflowRunSource } from '@/features/workflows/workflow-api';
 
 export interface CronDelivery {
   mode: 'none' | 'announce' | 'direct';
@@ -9,12 +10,20 @@ export interface CronDelivery {
   bestEffort?: boolean;
 }
 
-export interface CronPayload {
-  kind: 'systemEvent' | 'agentTurn';
-  text?: string;
-  message?: string;
-  model?: string;
-  timeoutSeconds?: number;
+export type CronPayload =
+  | { kind: 'systemEvent'; text: string }
+  | { kind: 'agentTurn'; message: string; model?: string; timeoutSeconds?: number }
+  | CronWorkflowRunPayload;
+
+export interface CronWorkflowRunPayload {
+  kind: 'workflowRun';
+  definitionId: string;
+  input?: unknown;
+  inputEnvelope?: WorkflowRunInputEnvelope;
+  goal?: string;
+  agentId?: string;
+  sessionKey?: string;
+  source?: Partial<Extract<WorkflowRunSource, { kind: 'cron' }>>;
 }
 
 export interface CronJob {
@@ -51,8 +60,9 @@ export interface AddJobOptions {
 
 export function cronJobBodyText(job: Pick<CronJob, 'payload'>): string {
   const p = job.payload;
-  if (p.kind === 'systemEvent') return p.text ?? '';
-  return p.message ?? '';
+  if (p.kind === 'systemEvent') return p.text;
+  if (p.kind === 'agentTurn') return p.message;
+  return p.goal || p.definitionId;
 }
 
 export interface ModelInfo {
@@ -107,6 +117,7 @@ export interface CronJobExecution {
   sessionId?: string;
   sessionType?: string;
   model?: string;
+  workflowRunId?: string;
 }
 
 export interface CronRunHistoryRow extends CronJobExecution {
