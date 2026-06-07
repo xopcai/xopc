@@ -17,6 +17,7 @@ import { useDirectoryPicker } from '@/features/fs/use-directory-picker';
 import { WorkingDirectoryPickerModal } from '@/features/fs/working-directory-picker-modal';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
+import { showToast } from '@/lib/toast';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useWorkspacePanelStore } from '@/stores/workspace-panel-store';
@@ -84,16 +85,12 @@ export const SessionWorkingDirectoryControl = memo(function SessionWorkingDirect
   const directoryPicker = useDirectoryPicker({ initialPath: effectivePath, onPicked: applyPath });
 
   const showWorkspaceLockedReminder = useCallback(() => {
-    window.dispatchEvent(
-      new CustomEvent('extension-notification', {
-        detail: {
-          type: 'info' as const,
-          title: wd.lockedTapTitle,
-          message: wd.lockedTapBody,
-          duration: 6500,
-        },
-      }),
-    );
+    showToast({
+      type: 'info',
+      title: wd.lockedTapTitle,
+      message: wd.lockedTapBody,
+      duration: 6500,
+    });
   }, [wd.lockedTapBody, wd.lockedTapTitle]);
 
   if (!sessionKey) {

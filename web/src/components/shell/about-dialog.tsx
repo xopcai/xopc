@@ -10,6 +10,7 @@ import { messages } from '@/i18n/messages';
 import { webBuildInfo } from '@/lib/build-info';
 import { cn } from '@/lib/cn';
 import { fetchJson } from '@/lib/fetch';
+import { showToast } from '@/lib/toast';
 import { apiUrl } from '@/lib/url';
 import { useAsyncResource } from '@/lib/use-async-resource';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -92,15 +93,11 @@ export function AboutDialog({
     const panel = messages(language).updatePanel;
     const r = await runNpmUpdate();
     if (r.ok) {
-      window.dispatchEvent(
-        new CustomEvent('extension-notification', {
-          detail: {
-            type: 'success',
-            title: panel.updateSuccess,
-            message: panel.updateSuccessDetail,
-          },
-        }),
-      );
+      showToast({
+        type: 'success',
+        title: panel.updateSuccess,
+        message: panel.updateSuccessDetail,
+      });
       return;
     }
     const title =
@@ -109,11 +106,7 @@ export function AboutDialog({
         : r.error === 'busy'
           ? panel.updateErrorBusy
           : panel.updateErrorFailed;
-    window.dispatchEvent(
-      new CustomEvent('extension-notification', {
-        detail: { type: 'error' as const, title, message: r.message },
-      }),
-    );
+    showToast({ type: 'error', title, message: r.message });
   }, [runNpmUpdate, language]);
 
   const commit = webBuildInfo.commit;

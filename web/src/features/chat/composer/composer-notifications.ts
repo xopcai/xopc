@@ -1,11 +1,11 @@
-type NotificationLevel = 'info' | 'warning' | 'error' | 'success';
+import { showToast, type ToastType } from '@/lib/toast';
 
 /**
- * Show a toast notification via the global `extension-notification` event.
+ * Show a toast notification via the global toast host.
  * Supports `{{key}}` template interpolation.
  */
 export function showComposerNotification(
-  level: NotificationLevel,
+  level: ToastType,
   template: string,
   params?: Record<string, string | number>,
   options?: { duration?: number },
@@ -14,13 +14,9 @@ export function showComposerNotification(
     ? template.replace(/\{\{(\w+)\}\}/g, (_, key: string) => String(params[key] ?? ''))
     : template;
 
-  window.dispatchEvent(
-    new CustomEvent('extension-notification', {
-      detail: {
-        type: level,
-        title: message,
-        duration: options?.duration ?? 4000,
-      },
-    }),
-  );
+  showToast({
+    type: level,
+    title: message,
+    duration: options?.duration ?? 4000,
+  });
 }
