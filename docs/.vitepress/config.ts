@@ -42,6 +42,7 @@ export default defineConfig({
               { text: 'Configuration', link: '/configuration' },
               { text: 'Routing System', link: '/routing-system' },
               { text: 'CLI', link: '/cli' },
+              { text: 'Updates', link: '/update' },
               { text: 'Tools', link: '/tools' },
               { text: 'Extensions', link: '/extensions' },
               { text: 'Models', link: '/models' }
@@ -119,6 +120,7 @@ export default defineConfig({
               { text: '配置参考', link: '/zh/configuration' },
               { text: 'Session 路由', link: '/zh/routing-system' },
               { text: 'CLI 命令', link: '/zh/cli' },
+              { text: '更新', link: '/zh/update' },
               { text: '内置工具', link: '/zh/tools' },
               { text: '扩展系统', link: '/zh/extensions' },
               { text: '模型支持', link: '/zh/models' }

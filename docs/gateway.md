@@ -647,7 +647,28 @@ Gateway supports graceful shutdown:
 | `XOPC_NO_RESPAWN` | Disable process respawn |
 | `XOPC_SERVICE_MARKER` | Mark running under supervisor |
 
-Set **`commands.restart: false`** in `xopc.json` to disable SIGUSR1 restart (CLI unmanaged restart and in-process restart policy).
+Set **`commands.restart: false`** in `xopc.json` to disable SIGUSR1 restart (CLI unmanaged restart, post-update auto-restart, and in-process restart policy).
+
+---
+
+## Updates
+
+The gateway checks npm for newer `@xopcai/xopc` releases on startup (when `update.checkOnStart` is true) and can **auto-install** stable/beta builds when `update.auto.enabled` is true. After a successful install it **syncs lockfile extensions** and **restarts in-process** so the new binary and extension artifacts load without manual steps.
+
+Full guide: [Updates](./update.md).
+
+### REST API (admin scope)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/update/status` | Current version and whether an update is available |
+| `POST` | `/api/update/check` | Force registry check (updates reminder bar state) |
+| `POST` | `/api/update/run` | Run update in-process; returns JSON result with `postUpdate` |
+| `POST` | `/api/update/run/stream` | Same as `run`, with SSE `progress` + `result` events |
+
+Streamed `result` payload mirrors CLI `--json` (`installedVersion`, `postUpdate.extensions`, `postUpdate.restart`).
+
+**Auto-update** never runs from a git worktree. **Manual** `POST /api/update/run` supports git checkouts the same as `xopc update`.
 
 ---
 

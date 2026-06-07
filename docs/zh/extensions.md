@@ -359,6 +359,25 @@ xopc extensions update [extension-id]
 xopc extensions freeze
 ```
 
+### 更新后扩展同步
+
+**`xopc update`**（或 Gateway `POST /api/update/run`）成功后，会自动重装 **`~/.xopc/extensions.lock`** 中记录的扩展：
+
+- **`npm`** — 按 `resolved` 规格安装到 `~/.xopc/extensions/`
+- **`store`** — 从配置的 xopc-store 拉取最新 zip
+- **`local` / `git`** — 跳过
+
+**`dev`** 更新通道下，若扩展 id 在 **bundled** 中也存在，则跳过 npm 更新（以内置副本为准）。
+
+手动等价命令：
+
+```bash
+xopc extensions update
+xopc extensions update my-ext
+```
+
+完整流程见 [更新](./update.md)。
+
 ## 扩展结构
 
 ### Manifest 文件

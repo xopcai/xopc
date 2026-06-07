@@ -759,6 +759,40 @@ xopc config --show
 
 ---
 
+## update（更新）
+
+控制版本检查、可选自动安装及更新后 gateway 重启。详见 [更新](./update.md)。
+
+```json
+{
+  "update": {
+    "channel": "stable",
+    "checkOnStart": true,
+    "auto": {
+      "enabled": false,
+      "stableDelayHours": 6,
+      "stableJitterHours": 12,
+      "betaCheckIntervalHours": 1
+    }
+  },
+  "commands": {
+    "restart": true
+  }
+}
+```
+
+| 键 | 默认值 | 说明 |
+|----|--------|------|
+| `update.channel` | `stable` | `stable` \| `beta` \| `dev`，对应 npm 标签 `latest` / `beta` / `dev` |
+| `update.checkOnStart` | `true` | Gateway 启动时查询 registry |
+| `update.auto.enabled` | `false` | 由 Gateway 自动安装（仅 stable/beta 的全局 npm，不含 git 工作区） |
+| `update.auto.stableDelayHours` | `6` | 稳定版首次发现后的等待时间 |
+| `update.auto.stableJitterHours` | `12` | 稳定版自动更新的随机额外延迟 |
+| `update.auto.betaCheckIntervalHours` | `1` | 同一 beta 版本两次自动尝试的最小间隔（小时） |
+| `commands.restart` | `true` | 为 `false` 时禁用更新后重启及 SIGUSR1 重启 |
+
+---
+
 ## 常见问题
 
 ### Q: 如何使用多个服务商？

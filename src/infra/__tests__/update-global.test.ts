@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises';
+import fsSync from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -15,9 +16,15 @@ import {
   XOPC_PACKAGE_NAME,
 } from '../update-global.js';
 
+function resolveTestNpmCommand(): string {
+  const npmCandidate = path.join(path.dirname(process.execPath), 'npm');
+  return fsSync.existsSync(npmCandidate) ? npmCandidate : 'npm';
+}
+
 function createNpmRootRunner(defaultNpmRoot: string): CommandRunner {
+  const npmCommand = resolveTestNpmCommand();
   return async (argv) => {
-    if (argv[0] === 'npm' && argv[1] === 'root') {
+    if (argv[0] === npmCommand && argv[1] === 'root') {
       return { stdout: `${defaultNpmRoot}\n`, stderr: '', code: 0 };
     }
     if (argv[0] === 'pnpm') {
@@ -49,8 +56,9 @@ describe('update-global', () => {
   });
 
   it('globalInstallArgs uses npm install with quiet flags', () => {
+    const npmCommand = resolveTestNpmCommand();
     expect(globalInstallArgs('npm', `${XOPC_PACKAGE_NAME}@1.0.0`)).toEqual([
-      'npm',
+      npmCommand,
       'install',
       '-g',
       `${XOPC_PACKAGE_NAME}@1.0.0`,
@@ -58,6 +66,15 @@ describe('update-global', () => {
       '--no-audit',
       '--loglevel=error',
     ]);
+  });
+
+  it('globalInstallArgs resolves npm from process.execPath when pkgRoot is absent', () => {
+    const npmCandidate = path.join(path.dirname(process.execPath), 'npm');
+    if (!fsSync.existsSync(npmCandidate)) return;
+
+    const argv = globalInstallArgs('npm', `${XOPC_PACKAGE_NAME}@1.0.0`, null);
+    expect(argv[0]).toBe(npmCandidate);
+    expect(argv.slice(1, 4)).toEqual(['install', '-g', `${XOPC_PACKAGE_NAME}@1.0.0`]);
   });
 
   it('globalInstallFallbackArgs adds omit=optional for npm only', () => {

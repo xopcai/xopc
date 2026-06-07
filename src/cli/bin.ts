@@ -6,7 +6,10 @@
 import './cli-log-level-preset.js';
 
 import pkg from '../../package.json' with { type: 'json' };
+import { ensureXopcCliOnPath } from '../infra/path-env.js';
 import { formatRootHelp } from './command-manifest.js';
+
+ensureXopcCliOnPath();
 
 function printRootHelp(): void {
   console.log(formatRootHelp());

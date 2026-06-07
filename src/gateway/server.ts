@@ -2,6 +2,10 @@ import { serve, type ServerType } from '@hono/node-server';
 import type { IncomingMessage } from 'node:http';
 import type { Socket } from 'node:net';
 
+import { ensureXopcCliOnPath } from '../infra/path-env.js';
+
+ensureXopcCliOnPath();
+
 import type { GatewayBindMode } from '../config/schema.js';
 import { resolveGatewayBindHost, resolveGatewayListenHosts } from '../config/gateway-bind.js';
 import { resolveGatewayListenPlan } from './listen.js';
