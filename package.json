@@ -1,6 +1,6 @@
 {
   "name": "@xopcai/xopc",
-  "version": "0.0.88",
+  "version": "0.0.89",
   "description": "The OPC workstation that grows with you: AI assistant for One Person Companies — CLI, gateway, multi-channel (Telegram/WeChat), 20+ LLM providers via pi-ai, extensions and skills.",
   "type": "module",
   "main": "dist/src/index.js",
