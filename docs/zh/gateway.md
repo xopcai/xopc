@@ -678,7 +678,24 @@ xopc gateway --force
 | `XOPC_NO_RESPAWN` | 禁用进程重生，使用进程内重启 |
 | `XOPC_SERVICE_MARKER` | 标记在监督器下运行（systemd/launchd） |
 
-在 `xopc.json` 中设置 **`commands.restart: false`** 可禁用 SIGUSR1 重启（CLI 未托管重启与进程内重启策略）。
+在 `xopc.json` 中设置 **`commands.restart: false`** 可禁用 SIGUSR1 重启、更新后自动重启及进程内重启策略。
+
+## 更新
+
+Gateway 启动时会检查 npm 是否有更新的 `@xopcai/xopc`（`update.checkOnStart`）。启用 `update.auto.enabled` 后可在 stable/beta 通道自动安装。安装成功后会 **同步 lockfile 扩展** 并 **进程内重启**，无需手动 `gateway restart`。
+
+完整说明：[更新](./update.md)。
+
+### REST API（需 admin scope）
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| `GET` | `/api/update/status` | 当前版本与是否有可用更新 |
+| `POST` | `/api/update/check` | 强制检查 registry |
+| `POST` | `/api/update/run` | 进程内更新；JSON 含 `postUpdate` |
+| `POST` | `/api/update/run/stream` | 同上，SSE `progress` + `result` |
+
+**自动更新** 不会从 git 工作区触发。**手动** `POST /api/update/run` 与 CLI `xopc update` 一样支持 git 检出。
 
 ## CORS 配置
 

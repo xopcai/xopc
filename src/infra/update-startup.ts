@@ -18,6 +18,7 @@ import {
   type InstallKind,
   type UpdateAvailable,
 } from './update-check.js';
+import type { InProcessRestartTrigger } from './update-restart.js';
 
 const log = createLogger('UpdateCheck');
 
@@ -110,6 +111,7 @@ function resolveStableJitterMs(
 export async function runGatewayUpdateCheck(params: {
   config: Config;
   onUpdateAvailableChange?: (update: UpdateAvailable | null) => void;
+  triggerInProcessRestart?: InProcessRestartTrigger;
   /** When true, bypass checkOnStart/auto-disabled early exit and throttle (for POST /api/update/check). */
   force?: boolean;
 }): Promise<void> {
@@ -222,6 +224,7 @@ export async function runGatewayUpdateCheck(params: {
         now,
         root,
         config,
+        triggerInProcessRestart: params.triggerInProcessRestart,
       });
     }
   } else {
@@ -245,6 +248,7 @@ async function handleAutoUpdate(params: {
   now: number;
   root: string | null;
   config: Config;
+  triggerInProcessRestart?: InProcessRestartTrigger;
 }): Promise<void> {
   const { channel, version, tag, state, nextState, now, root, config } = params;
   const auto = config.update?.auto;
@@ -313,11 +317,21 @@ async function handleAutoUpdate(params: {
   }
   try {
     const { runAutoUpdateCommand } = await import('./update-runner.js');
-    const result = await runAutoUpdateCommand({ channel, root });
+    const result = await runAutoUpdateCommand({
+      channel,
+      root,
+      triggerInProcessRestart: params.triggerInProcessRestart,
+    });
     if (result.ok) {
       nextState.autoLastSuccessVersion = version;
       nextState.autoLastSuccessAt = new Date(now).toISOString();
-      log.info({ channel, version, tag }, 'Auto-update applied successfully; restart gateway to refresh browser extension artifacts');
+      const restartMode = result.result?.postUpdate?.restart?.mode;
+      log.info(
+        { channel, version, tag, restartMode },
+        restartMode === 'in-process'
+          ? 'Auto-update applied; gateway restart scheduled'
+          : 'Auto-update applied successfully',
+      );
     } else {
       log.warn(
         { channel, version, tag, exitCode: result.exitCode, reason: result.reason },
@@ -337,6 +351,7 @@ async function handleAutoUpdate(params: {
 export function scheduleGatewayUpdateCheck(params: {
   config: Config;
   onUpdateAvailableChange?: (update: UpdateAvailable | null) => void;
+  triggerInProcessRestart?: InProcessRestartTrigger;
 }): () => void {
   let stopped = false;
   let timer: ReturnType<typeof setTimeout> | null = null;

@@ -197,6 +197,7 @@ import { DraftStreamManager } from '@xopcai/xopc/channels/telegram/draft-stream.
 | Task | Steps |
 |------|--------|
 | New CLI command | `src/cli/commands/<name>.ts` + register + import in `src/cli/index.ts` |
+| Package / gateway update | `src/infra/update-runner.ts` (`runGatewayUpdateWithPostSteps`), `src/extensions/update.ts`, `src/infra/update-restart.ts`; CLI `update`, gateway `POST /api/update/*` — see [docs/update.md](./docs/update.md) |
 | New tool | `src/agent/tools/<area>.ts` → export from `src/agent/tools/index.ts` → wire in `AgentService` |
 | New provider | Prefer upstream **`pi-ai`**; else OpenRouter / Vercel AI Gateway for custom bases. See [pi-ai](https://github.com/earendil-works/pi-mono). |
 | New channel plugin | `ChannelPlugin` + optional `defineChannelPluginEntry` → `bundled.ts` if shipping in core |
@@ -397,4 +398,4 @@ cd web && pnpm run build                  # → ../dist/gateway/static/root (gat
 
 ---
 
-_Last updated: 2026-05-06_
+_Last updated: 2026-06-08_

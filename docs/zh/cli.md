@@ -48,6 +48,7 @@ pnpm run dev -- <command>
 | `config` | 查看和编辑配置（非交互式） |
 | `image` | 图像理解 / 文生图默认项（`status`、`set-understanding`、`set-generation`、备用链、`providers` 等） |
 | `session` | 管理会话 |
+| `update` | 检查并安装 xopc 更新（含扩展同步与 gateway 重启）— 见 [更新](./update.md) |
 
 ---
 
@@ -498,6 +499,30 @@ xopc extensions search [keyword]
 xopc extensions update [extension-id]
 xopc extensions freeze
 ```
+
+`extensions update` 仅刷新 lockfile 中的扩展。`xopc update` 成功后会自动执行相同同步 — 见 [更新后扩展同步](./extensions.md#更新后扩展同步)。
+
+---
+
+## update（更新）
+
+检查并安装 xopc 核心包更新；成功后同步 lockfile 扩展并重启 gateway（可禁用）。完整说明：[更新](./update.md)。
+
+```bash
+xopc update
+xopc update --check
+xopc update --channel beta
+xopc update --yes --json
+xopc update --no-restart
+```
+
+| 选项 | 说明 |
+|------|------|
+| `--check` | 仅查询 registry，不安装 |
+| `--yes` | 跳过确认 |
+| `--channel <stable\|beta\|dev>` | 覆盖配置中的 `update.channel` |
+| `--json` | JSON 输出（含 `postUpdate`） |
+| `--no-restart` | 安装成功后不重启 gateway |
 
 ### 本地开发、打包和发布
 
