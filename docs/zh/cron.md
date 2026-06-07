@@ -77,6 +77,8 @@ xopc cron add --schedule "0 18 * * 1-5" --message "收工提醒" --name "EOD"
 
 直接发渠道、isolated 智能体运行等（文档中曾用 positional `cron add` 示例）**尚未**在 CLI 暴露，请使用 Web UI 或 jobs 文件。
 
+**工作流运行：** 在 `#/settings/cron` 中选择任务类型 **工作流运行**，可直接定时执行已保存的工作流定义（无需助手轮次）。详见 [动态工作流](workflows.md)。
+
 ## Cron 表达式格式
 
 ```
