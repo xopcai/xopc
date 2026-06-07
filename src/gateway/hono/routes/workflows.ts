@@ -9,7 +9,6 @@ import type {
   WorkflowRunSummary,
 } from '../../../workflows/domain/index.js';
 import { buildWorkflowDefinition, validateWorkflowDefinitionInput } from '../../../workflows/domain/index.js';
-import { WorkflowRunService } from '../../../workflows/index.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
 interface StartWorkflowRunRequestBody {
