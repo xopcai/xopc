@@ -1,3 +1,5 @@
+import { isMaskedSecret } from '@/lib/is-masked-secret';
+
 /** Minimal config shape for deciding if the user must configure providers / default model. */
 export type GatewayModelSetupConfig = {
   agents: { defaults: { model: string } };
@@ -17,7 +19,9 @@ export function needsModelOrProviders(config: unknown): boolean {
     rawProviders && typeof rawProviders === 'object' && !Array.isArray(rawProviders)
       ? (rawProviders as Record<string, unknown>)
       : {};
-  const hasProvider = Object.values(providers).some((v) => v === '***');
+  const hasProvider = Object.values(providers).some(
+    (v) => typeof v === 'string' && isMaskedSecret(v),
+  );
 
   const agents = c.agents;
   let model = '';
