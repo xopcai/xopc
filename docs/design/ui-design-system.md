@@ -1,6 +1,6 @@
 # xopc 工作站 · 产品设计系统 (Design System)
 
-> **版本**: v1.2 · **建立时间**: 2026-03 · **修订**: 2026-03-29（§9.2.1 列表/网格刷新反馈：骨架屏 + 行内状态，避免成功 Toast；此前 2026-03-26：Vercel Web Interface Guidelines 对齐等）
+> **版本**: v1.3 · **建立时间**: 2026-03 · **修订**: 2026-06-08（§9.3 Toast 规范：顶栏堆叠、banner 联动、不透明面板；此前 2026-03-29：§9.2.1 列表/网格刷新反馈等）
 > 本文档是 xopc 所有产品的设计宪法，所有 UI 决策应以此为准。
 >
 > **工程实现：** 网关 Web 应用中的 **`globals.css`**（Tailwind v4 `@theme`）为语义 token 的单一来源；本文数值与其保持一致。
@@ -552,6 +552,54 @@ focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-
 | ✅ **失败** | 仍使用**内联错误**（页面内 `role="alert"` 或简短错误条）或必要时的错误说明；失败需要用户知晓原因。 |
 
 **参考实现**：技能列表页（网关 Web）（刷新时网格骨架 + 无成功 Toast）。
+
+### 9.3 Toast 通知（Gateway Web）
+
+Toast 用于**跨页面、短时、非阻塞**的操作结果反馈（保存失败、扩展通知、更新结果等）。与 §9.2.1 的「列表刷新成功」不同——Toast **不**替代内容区就地反馈。
+
+#### 何时使用
+
+| 场景 | 做法 |
+|------|------|
+| ✅ 用户触发的**单次操作**结果（复制、导入、重启失败、npm 更新） | Toast（必要时带 `message` 副文案） |
+| ✅ 扩展 iframe 通过 `ui.notification` 推送 | Toast |
+| ❌ 列表/网格**刷新成功** | 由新数据替换内容即可，见 §9.2.1 |
+| ❌ 表单字段校验 | 字段旁内联错误（`role="alert"`） |
+| ❌ 当前页面上下文内的失败 | 页面内错误条 / banner，优先于 Toast |
+
+#### 位置与堆叠
+
+- **位置**：视口**顶栏居中**（`fixed` + `inset-x-0` + 水平居中），**不要**放在右下角——避免与聊天「回到底部」FAB、右侧工作区栏重叠。
+- **与顶栏 banner 联动**：当 `UpdateReminderBar`、`GatewayRestartBanner`、`ElectronGatewayExitBanner` 等可见时，Toast 整体下移；工程上由 `TopBannerStack` 测量高度并写入 CSS 变量 `--toast-top-inset`，`ToastHost` 使用 `top: max(var(--toast-top-inset, 0.75rem), env(safe-area-inset-top))`。
+- **堆叠**：快速连续触发时最多同时显示 **3** 条；新消息在**上方**，超出时丢弃最旧的一条。每条独立计时、可单独关闭。
+
+#### 视觉规范
+
+遵循 §2.4 语义色 + §2.1 不透明浮层，**禁止**使用低透明度 `bg-*-500/10` 类样式（易与底层内容混叠、对比度不足）。
+
+```
+结构（单条）：
+[Lucide 语义图标 16px] [标题 font-medium text-fg] [关闭 ×]
+                       [可选副文案 text-fg-muted text-sm]
+容器：bg-surface-panel · border-edge · border-l-[3px] 语义色条 · shadow-popover · rounded-xl · max-w-md
+```
+
+| 类型 | 左边条 / 图标色 | 典型场景 |
+|------|-----------------|----------|
+| `success` | `success` | 操作完成 |
+| `error` | `danger` | 操作失败 |
+| `warning` | `warning` | 需注意 |
+| `info` | `accent` | 中性提示 |
+
+- **动效**：入场 `toast-enter`（200ms 轻微下移 + 淡入）；`prefers-reduced-motion: reduce` 时关闭动画。
+- **无障碍**：容器 `role="status"` + `aria-live="polite"`；关闭按钮需 `aria-label`（中/英随 locale）。
+
+#### 工程 API
+
+- 触发：`showToast({ type, title, message?, duration? })`（`web/src/lib/toast.ts`）
+- 渲染：`ToastHost`（`web/src/components/ui/toast-host.tsx`），挂载于 `AppShell`
+- 默认自动关闭：**5s**；`duration: 0` 表示仅手动关闭
+- 扩展桥接：仍监听 `extension-notification` 事件（与 `TOAST_EVENT` 同名）
 
 ---
 

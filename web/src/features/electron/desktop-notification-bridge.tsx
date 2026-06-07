@@ -6,6 +6,7 @@ import {
   SHELL_PREFS_CHANGED_EVENT,
 } from '@/features/electron/desktop-notifications';
 import { isElectron } from '@/lib/electron-env';
+import { TOAST_EVENT } from '@/lib/toast';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 
@@ -78,10 +79,10 @@ export function DesktopNotificationBridge() {
       });
     };
 
-    window.addEventListener('extension-notification', onExtensionNotification);
+    window.addEventListener(TOAST_EVENT, onExtensionNotification);
     window.addEventListener('agent-stream-event', onAgentStream);
     return () => {
-      window.removeEventListener('extension-notification', onExtensionNotification);
+      window.removeEventListener(TOAST_EVENT, onExtensionNotification);
       window.removeEventListener('agent-stream-event', onAgentStream);
     };
   }, [language]);

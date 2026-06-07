@@ -5,6 +5,7 @@ import type { UpdateReminderController } from '@/features/updater/use-update-rem
 import { restartGatewayAfterConfigChange } from '@/features/tunnel/gateway-restart';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
+import { showToast } from '@/lib/toast';
 import { useLocaleStore } from '@/stores/locale-store';
 
 /**
@@ -32,25 +33,17 @@ export function UpdateReminderBar({
         window.dispatchEvent(new Event('gateway-restart-initiated'));
         return;
       }
-      window.dispatchEvent(
-        new CustomEvent('extension-notification', {
-          detail: {
-            type: 'error',
-            title: tp.updateErrorFailed,
-            message: j.message ?? 'Gateway restart failed',
-          },
-        }),
-      );
+      showToast({
+        type: 'error',
+        title: tp.updateErrorFailed,
+        message: j.message ?? 'Gateway restart failed',
+      });
     } catch (e) {
-      window.dispatchEvent(
-        new CustomEvent('extension-notification', {
-          detail: {
-            type: 'error',
-            title: tp.updateErrorFailed,
-            message: e instanceof Error ? e.message : String(e),
-          },
-        }),
-      );
+      showToast({
+        type: 'error',
+        title: tp.updateErrorFailed,
+        message: e instanceof Error ? e.message : String(e),
+      });
     } finally {
       setRestartBusy(false);
     }
@@ -60,15 +53,11 @@ export function UpdateReminderBar({
     const tp = messages(language).updatePanel;
     const r = await runNpmUpdate();
     if (r.ok) {
-      window.dispatchEvent(
-        new CustomEvent('extension-notification', {
-          detail: {
-            type: 'success',
-            title: tp.updateSuccess,
-            message: tp.updateSuccessDetail,
-          },
-        }),
-      );
+      showToast({
+        type: 'success',
+        title: tp.updateSuccess,
+        message: tp.updateSuccessDetail,
+      });
       return;
     }
     const title =
@@ -77,11 +66,7 @@ export function UpdateReminderBar({
         : r.error === 'busy'
           ? tp.updateErrorBusy
           : tp.updateErrorFailed;
-    window.dispatchEvent(
-      new CustomEvent('extension-notification', {
-        detail: { type: 'error' as const, title, message: r.message },
-      }),
-    );
+    showToast({ type: 'error', title, message: r.message });
   }, [runNpmUpdate, language]);
 
   if (show.kind === 'none') {
