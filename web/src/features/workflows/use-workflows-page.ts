@@ -18,27 +18,18 @@ import {
   startWorkflowRun,
   type WorkflowDefinition,
   type WorkflowRunSummary,
-  type WorkflowRunView,
 } from './workflow-api';
 import {
-  ACTIVE_RUN_STATUSES,
   RUN_FETCH_LIMIT,
   WORKFLOW_DEF_PARAM,
-  WORKFLOW_MAIN_TAB_SET,
   WORKFLOW_RUN_PARAM,
   WORKFLOW_SEARCH_PARAM,
   WORKFLOW_START_PARAM,
   WORKFLOW_TAB_PARAM,
-  type WorkflowCategoryFilter,
-  type WorkflowMainTab,
-  type WorkflowSourceFilter,
+  WORKFLOW_WF_FILTER_PARAM,
 } from './workflow-page.constants';
-import { filterDefinitions, filterRunsByTab, interpolate, workflowChatHref } from './workflow-page.utils';
-
-function resolveMainTab(searchParams: URLSearchParams): WorkflowMainTab {
-  const tabRaw = searchParams.get(WORKFLOW_TAB_PARAM);
-  return WORKFLOW_MAIN_TAB_SET.has(tabRaw ?? '') ? (tabRaw as WorkflowMainTab) : 'catalog';
-}
+import { filterDefinitions, interpolate, workflowChatHref } from './workflow-page.utils';
+import { resolveRunSessionKey } from './workflow-board.utils';
 
 export function useWorkflowsPage() {
   const language = useLocaleStore((s) => s.language);
@@ -49,14 +40,12 @@ export function useWorkflowsPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const mainTab = resolveMainTab(searchParams);
   const searchQuery = searchParams.get(WORKFLOW_SEARCH_PARAM) ?? '';
+  const workflowFilterId = searchParams.get(WORKFLOW_WF_FILTER_PARAM)?.trim() ?? '';
   const runParam = searchParams.get(WORKFLOW_RUN_PARAM)?.trim() ?? '';
-  const selectedRunId = mainTab === 'catalog' ? '' : runParam;
 
-  const [categoryFilter, setCategoryFilter] = useState<WorkflowCategoryFilter>('all');
-  const [sourceFilter, setSourceFilter] = useState<WorkflowSourceFilter>('all');
   const [startDefinition, setStartDefinition] = useState<WorkflowDefinition | null>(null);
+  const [pickStartOpen, setPickStartOpen] = useState(false);
   const [detailDefinition, setDetailDefinition] = useState<WorkflowDefinition | null>(null);
   const [manageOpen, setManageOpen] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -69,23 +58,15 @@ export function useWorkflowsPage() {
   });
   const runsSwr = useSWR(hasToken ? ['workflow-runs', token] : null, () => listWorkflowRuns(RUN_FETCH_LIMIT), {
     revalidateOnFocus: false,
+    refreshInterval: (latest) => {
+      if (!latest?.length) return 0;
+      const hasActive = latest.some((run) => run.status === 'queued' || run.status === 'running');
+      return hasActive ? 3000 : 0;
+    },
   });
   const statsSwr = useSWR(hasToken ? ['workflow-stats', token] : null, getWorkflowStats, {
     revalidateOnFocus: false,
   });
-
-  const detailSwr = useSWR(
-    hasToken && selectedRunId ? ['workflow-run', selectedRunId, token] : null,
-    () => getWorkflowRun(selectedRunId),
-    {
-      revalidateOnFocus: false,
-      keepPreviousData: false,
-      refreshInterval: (latest) => {
-        if (!latest) return 0;
-        return latest.run.status === 'queued' || latest.run.status === 'running' ? 3000 : 0;
-      },
-    },
-  );
 
   useEffect(() => {
     if (!actionFeedback) return;
@@ -97,13 +78,9 @@ export function useWorkflowsPage() {
   const runs = runsSwr.data ?? [];
 
   const filteredDefinitions = useMemo(
-    () => filterDefinitions(definitions, searchQuery, categoryFilter, sourceFilter),
-    [definitions, searchQuery, categoryFilter, sourceFilter],
+    () => filterDefinitions(definitions, searchQuery, 'all', 'all'),
+    [definitions, searchQuery],
   );
-
-  const activeRuns = useMemo(() => filterRunsByTab(runs, 'active'), [runs]);
-  const historyRuns = useMemo(() => filterRunsByTab(runs, 'history'), [runs]);
-  const visibleRuns = mainTab === 'active' ? activeRuns : historyRuns;
 
   const patchSearchParams = useCallback(
     (mutate: (next: URLSearchParams, prev: URLSearchParams) => void) => {
@@ -119,27 +96,6 @@ export function useWorkflowsPage() {
     [setSearchParams],
   );
 
-  const setMainTab = useCallback(
-    (tab: WorkflowMainTab) => {
-      patchSearchParams((next) => {
-        next.set(WORKFLOW_TAB_PARAM, tab);
-        if (tab === 'catalog') {
-          next.delete(WORKFLOW_RUN_PARAM);
-          return;
-        }
-        const list = tab === 'active' ? activeRuns : historyRuns;
-        const current = next.get(WORKFLOW_RUN_PARAM)?.trim();
-        if (current && list.some((run) => run.id === current)) return;
-        if (list[0]?.id) {
-          next.set(WORKFLOW_RUN_PARAM, list[0].id);
-        } else if (!runsSwr.isLoading) {
-          next.delete(WORKFLOW_RUN_PARAM);
-        }
-      });
-    },
-    [activeRuns, historyRuns, patchSearchParams, runsSwr.isLoading],
-  );
-
   const setSearchQuery = useCallback(
     (value: string) => {
       patchSearchParams((next) => {
@@ -151,10 +107,12 @@ export function useWorkflowsPage() {
     [patchSearchParams],
   );
 
-  const selectRun = useCallback(
-    (runId: string) => {
+  const setWorkflowFilterId = useCallback(
+    (value: string) => {
       patchSearchParams((next) => {
-        next.set(WORKFLOW_RUN_PARAM, runId);
+        const trimmed = value.trim();
+        if (trimmed) next.set(WORKFLOW_WF_FILTER_PARAM, trimmed);
+        else next.delete(WORKFLOW_WF_FILTER_PARAM);
       });
     },
     [patchSearchParams],
@@ -162,23 +120,32 @@ export function useWorkflowsPage() {
 
   const openRunInChat = useCallback(
     (run: WorkflowRunSummary) => {
-      const sessionKey = run.metadata?.sessionKey?.trim();
+      const sessionKey = resolveRunSessionKey(run);
       if (sessionKey) {
         navigate(workflowChatHref(sessionKey));
-        return;
       }
-      selectRun(run.id);
     },
-    [navigate, selectRun],
+    [navigate],
   );
 
-  // Repair stale URLs like ?tab=catalog&run=…
+  // Legacy ?run= / ?tab= deep links → open Chat and clean URL.
   useEffect(() => {
-    if (mainTab !== 'catalog' || !runParam) return;
+    const legacyTab = searchParams.get(WORKFLOW_TAB_PARAM);
+    if (!runParam && !legacyTab) return;
+
+    if (runParam && runs.length > 0) {
+      const match = runs.find((item) => item.id === runParam);
+      const sessionKey = match ? resolveRunSessionKey(match) : null;
+      if (sessionKey) {
+        navigate(workflowChatHref(sessionKey), { replace: true });
+      }
+    }
+
     patchSearchParams((next) => {
+      next.delete(WORKFLOW_TAB_PARAM);
       next.delete(WORKFLOW_RUN_PARAM);
     });
-  }, [mainTab, patchSearchParams, runParam]);
+  }, [navigate, patchSearchParams, runParam, runs, searchParams]);
 
   useEffect(() => {
     const defId = searchParams.get(WORKFLOW_DEF_PARAM);
@@ -191,64 +158,32 @@ export function useWorkflowsPage() {
     } else {
       setDetailDefinition(definition);
     }
-  }, [definitions, searchParams]);
-
-  // Deep link: ?run= without ?tab= → open the matching run tab.
-  useEffect(() => {
-    if (searchParams.get(WORKFLOW_TAB_PARAM) || !runParam || !runs.length) return;
-    const run = runs.find((item) => item.id === runParam);
-    if (!run) return;
-    const tab: WorkflowMainTab = ACTIVE_RUN_STATUSES.has(run.status) ? 'active' : 'history';
     patchSearchParams((next) => {
-      next.set(WORKFLOW_TAB_PARAM, tab);
-      next.set(WORKFLOW_RUN_PARAM, runParam);
+      next.delete(WORKFLOW_DEF_PARAM);
+      next.delete(WORKFLOW_START_PARAM);
     });
-  }, [patchSearchParams, runParam, runs, searchParams]);
-
-  // On run tabs, ensure the selected run belongs to the visible list.
-  useEffect(() => {
-    if (mainTab === 'catalog' || runsSwr.isLoading) return;
-    const list = mainTab === 'active' ? activeRuns : historyRuns;
-    if (!list.length) {
-      if (runParam) {
-        patchSearchParams((next) => {
-          next.delete(WORKFLOW_RUN_PARAM);
-        });
-      }
-      return;
-    }
-    if (runParam && list.some((run) => run.id === runParam)) return;
-    patchSearchParams((next) => {
-      next.set(WORKFLOW_RUN_PARAM, list[0].id);
-    });
-  }, [activeRuns, historyRuns, mainTab, patchSearchParams, runParam, runsSwr.isLoading]);
+  }, [definitions, patchSearchParams, searchParams]);
 
   useEffect(() => {
-    const refreshRuns = () => void runsSwr.mutate();
-    const refreshDetail = (event: Event) => {
-      const detail = (event as CustomEvent<{ runId?: string; view?: WorkflowRunView }>).detail;
+    const refreshRuns = () => {
       void runsSwr.mutate();
       void statsSwr.mutate();
-      if (detail?.runId && detail.runId === selectedRunId) {
-        void detailSwr.mutate(detail.view, { revalidate: false });
-      }
     };
     window.addEventListener('workflow-event-appended', refreshRuns);
-    window.addEventListener('workflow-run-updated', refreshDetail);
+    window.addEventListener('workflow-run-updated', refreshRuns);
     window.addEventListener('workflow-run-error', refreshRuns);
     return () => {
       window.removeEventListener('workflow-event-appended', refreshRuns);
-      window.removeEventListener('workflow-run-updated', refreshDetail);
+      window.removeEventListener('workflow-run-updated', refreshRuns);
       window.removeEventListener('workflow-run-error', refreshRuns);
     };
-  }, [detailSwr, runsSwr, selectedRunId, statsSwr]);
+  }, [runsSwr, statsSwr]);
 
   const refreshAll = useCallback(() => {
     void definitionsSwr.mutate();
     void runsSwr.mutate();
     void statsSwr.mutate();
-    void detailSwr.mutate();
-  }, [definitionsSwr, detailSwr, runsSwr, statsSwr]);
+  }, [definitionsSwr, runsSwr, statsSwr]);
 
   const submitStart = useCallback(
     async (payload: { goal: string; input?: unknown; concurrency?: number; maxSubagents?: number }) => {
@@ -264,10 +199,6 @@ export function useWorkflowsPage() {
           maxSubagents: payload.maxSubagents,
         });
         setStartDefinition(null);
-        patchSearchParams((next) => {
-          next.set(WORKFLOW_TAB_PARAM, 'active');
-          next.set(WORKFLOW_RUN_PARAM, result.runId);
-        });
         await runsSwr.mutate();
         await statsSwr.mutate();
         setActionFeedback(labels.startSuccess);
@@ -278,41 +209,41 @@ export function useWorkflowsPage() {
         setStarting(false);
       }
     },
-    [labels.startFailed, labels.startSuccess, navigate, patchSearchParams, runsSwr, startDefinition, statsSwr],
+    [labels.startFailed, labels.startSuccess, navigate, runsSwr, startDefinition, statsSwr],
   );
 
-  const cancelSelectedRun = useCallback(async () => {
-    if (!selectedRunId) return;
-    try {
-      await cancelWorkflowRun(selectedRunId);
-      await runsSwr.mutate();
-      await detailSwr.mutate();
-    } catch (err) {
-      const message = err instanceof Error ? err.message : labels.cancelFailed;
-      if (/not active|already finished/i.test(message)) {
+  const cancelRun = useCallback(
+    async (runId: string) => {
+      try {
+        await cancelWorkflowRun(runId);
         await runsSwr.mutate();
-        await detailSwr.mutate();
-        return;
+        await statsSwr.mutate();
+      } catch (err) {
+        const message = err instanceof Error ? err.message : labels.cancelFailed;
+        if (/not active|already finished/i.test(message)) {
+          await runsSwr.mutate();
+          await statsSwr.mutate();
+          return;
+        }
+        setActionError(message);
       }
-      setActionError(message);
-    }
-  }, [detailSwr, labels.cancelFailed, runsSwr, selectedRunId]);
+    },
+    [labels.cancelFailed, runsSwr, statsSwr],
+  );
 
-  const retrySelectedRun = useCallback(async () => {
-    if (!selectedRunId) return;
-    try {
-      const result = await retryWorkflowRun(selectedRunId);
-      patchSearchParams((next) => {
-        next.set(WORKFLOW_TAB_PARAM, 'active');
-        next.set(WORKFLOW_RUN_PARAM, result.runId);
-      });
-      await runsSwr.mutate();
-      await statsSwr.mutate();
-      navigate(workflowChatHref(result.sessionKey));
-    } catch (err) {
-      setActionError(err instanceof Error ? err.message : labels.retryFailed);
-    }
-  }, [labels.retryFailed, navigate, patchSearchParams, runsSwr, selectedRunId, statsSwr]);
+  const retryRun = useCallback(
+    async (runId: string) => {
+      try {
+        const result = await retryWorkflowRun(runId);
+        await runsSwr.mutate();
+        await statsSwr.mutate();
+        navigate(workflowChatHref(result.sessionKey));
+      } catch (err) {
+        setActionError(err instanceof Error ? err.message : labels.retryFailed);
+      }
+    },
+    [labels.retryFailed, navigate, runsSwr, statsSwr],
+  );
 
   const saveCustomWorkflow = useCallback(
     async (payload: { name: string; script: string }) => {
@@ -350,29 +281,22 @@ export function useWorkflowsPage() {
 
   const loading = definitionsSwr.isLoading || runsSwr.isLoading;
   const error = definitionsSwr.error?.message ?? runsSwr.error?.message ?? null;
-  const runView = detailSwr.data?.run.id === selectedRunId ? detailSwr.data : undefined;
-  const runLoading = Boolean(selectedRunId) && !runView && detailSwr.isLoading;
 
   return {
     language,
     localeTag,
     labels,
     hasToken,
-    mainTab,
-    setMainTab,
     searchQuery,
     setSearchQuery,
-    categoryFilter,
-    setCategoryFilter,
-    sourceFilter,
-    setSourceFilter,
+    workflowFilterId,
+    setWorkflowFilterId,
+    definitions,
     filteredDefinitions,
-    activeRuns,
-    historyRuns,
-    visibleRuns,
-    selectedRunId,
-    selectRun,
+    runs,
     openRunInChat,
+    pickStartOpen,
+    setPickStartOpen,
     startDefinition,
     setStartDefinition,
     detailDefinition,
@@ -386,15 +310,18 @@ export function useWorkflowsPage() {
     loading,
     error,
     stats: statsSwr.data,
-    runView,
-    runLoading,
     refreshAll,
     submitStart,
-    cancelSelectedRun,
-    retrySelectedRun,
+    cancelRun,
+    retryRun,
     saveCustomWorkflow,
     removeCustomWorkflow,
   };
 }
 
 export type WorkflowsPageVm = ReturnType<typeof useWorkflowsPage>;
+
+/** Resolve run by id for legacy callers (e.g. tests). */
+export async function fetchWorkflowRunById(runId: string) {
+  return getWorkflowRun(runId);
+}
