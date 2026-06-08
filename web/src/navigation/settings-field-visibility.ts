@@ -79,7 +79,7 @@ export function visibleBrowserSettingsTabs(
   return tabs.filter((tab) => isBrowserSettingsTabVisibleInMode(tab, mode));
 }
 
-export function fallbackAgentDefaultsTab(mode: SettingsMode): AgentDefaultsTabId {
+export function fallbackAgentDefaultsTab(_mode: SettingsMode): AgentDefaultsTabId {
   return 'model-strategy';
 }
 
