@@ -12,6 +12,7 @@ import {
   type WebSearchSettingsState,
 } from '@/features/settings/web-search-config-api';
 import { useSaveBarRegistration } from '@/features/settings/save-bar/use-save-bar-registration';
+import { SettingsAdvancedGate } from '@/features/settings/settings-advanced-gate';
 import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/settings/settings-form-section';
 import { nativeSelectMaxWidthClass, selectControlBaseClass, settingsInputFocusClass } from '@/lib/form-field-width';
 import { secretInputLabelsFromChannels } from '@/lib/secret-input-labels';
@@ -248,38 +249,40 @@ export function WebSearchSettingsPanel({ embedded = false }: { embedded?: boolea
         </div>
       </SettingsFormSection>
 
-      <SettingsFormSection>
-        <SettingsFormSectionHeader icon={Ban} title={w.sectionBlocklist} subtitle={w.sectionBlocklistHint} />
-        <div className="flex max-w-xl flex-col gap-4">
-          <label className="flex cursor-pointer items-start gap-2 text-sm text-fg">
-            <input
-              type="checkbox"
-              className="ui-checkbox mt-0.5"
-              checked={form.blocklistEnabled}
-              onChange={(e) => update({ blocklistEnabled: e.target.checked })}
-            />
-            <span>
-              <span className="font-medium">{w.blocklistEnabled}</span>
-              <span className="mt-0.5 block text-xs text-fg-subtle">{w.blocklistEnabledDesc}</span>
-            </span>
-          </label>
-          <Field label={w.blocklistDomains} description={w.blocklistDomainsDesc}>
-            <textarea
-              className={cn(inputClassName(), 'min-h-[6rem] font-mono text-xs')}
-              value={form.blocklistDomains.join('\n')}
-              placeholder={w.blocklistDomainsPlaceholder}
-              disabled={!form.blocklistEnabled}
-              onChange={(e) => {
-                const domains = e.target.value.split(/\r?\n/).flatMap((line) => {
-                  const v = line.trim().toLowerCase();
-                  return v ? [v] : [];
-                });
-                update({ blocklistDomains: domains });
-              }}
-            />
-          </Field>
-        </div>
-      </SettingsFormSection>
+      <SettingsAdvancedGate>
+        <SettingsFormSection>
+          <SettingsFormSectionHeader icon={Ban} title={w.sectionBlocklist} subtitle={w.sectionBlocklistHint} />
+          <div className="flex max-w-xl flex-col gap-4">
+            <label className="flex cursor-pointer items-start gap-2 text-sm text-fg">
+              <input
+                type="checkbox"
+                className="ui-checkbox mt-0.5"
+                checked={form.blocklistEnabled}
+                onChange={(e) => update({ blocklistEnabled: e.target.checked })}
+              />
+              <span>
+                <span className="font-medium">{w.blocklistEnabled}</span>
+                <span className="mt-0.5 block text-xs text-fg-subtle">{w.blocklistEnabledDesc}</span>
+              </span>
+            </label>
+            <Field label={w.blocklistDomains} description={w.blocklistDomainsDesc}>
+              <textarea
+                className={cn(inputClassName(), 'min-h-[6rem] font-mono text-xs')}
+                value={form.blocklistDomains.join('\n')}
+                placeholder={w.blocklistDomainsPlaceholder}
+                disabled={!form.blocklistEnabled}
+                onChange={(e) => {
+                  const domains = e.target.value.split(/\r?\n/).flatMap((line) => {
+                    const v = line.trim().toLowerCase();
+                    return v ? [v] : [];
+                  });
+                  update({ blocklistDomains: domains });
+                }}
+              />
+            </Field>
+          </div>
+        </SettingsFormSection>
+      </SettingsAdvancedGate>
 
       <SettingsFormSection>
         <SettingsFormSectionHeader icon={Search} title={w.sectionSearch} subtitle={w.sectionSearchHint} />

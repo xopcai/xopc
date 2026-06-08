@@ -1,4 +1,5 @@
 import { PreferenceSelectFields } from '@/components/shell/preference-select-fields';
+import { SettingsAdvancedGate } from '@/features/settings/settings-advanced-gate';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
@@ -241,12 +242,14 @@ export function AppearanceSettingsPanel() {
         <ColorSchemeSelector />
       </section>
 
-      <section className={preferenceCardClassName()} aria-labelledby="pref-developer-heading">
-        <h2 id="pref-developer-heading" className="sr-only">
-          {a.developerGroupTitle}
-        </h2>
-        <DeveloperOptionsSection />
-      </section>
+      <SettingsAdvancedGate>
+        <section className={preferenceCardClassName()} aria-labelledby="pref-developer-heading">
+          <h2 id="pref-developer-heading" className="sr-only">
+            {a.developerGroupTitle}
+          </h2>
+          <DeveloperOptionsSection />
+        </section>
+      </SettingsAdvancedGate>
     </div>
   );
 }

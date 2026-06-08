@@ -3,6 +3,8 @@ import { ArrowRight, Cpu } from 'lucide-react';
 import { ModelSelector } from '@/features/chat/model/model-selector';
 import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/settings/settings-form-section';
 
+import { SettingsAdvancedGate } from '@/features/settings/settings-advanced-gate';
+
 import { AgentDefaultsField } from '../agent-defaults-field';
 import type { AgentDefaultsPanelProps } from '../agent-defaults-panel-props';
 import { AgentDefaultsChatModelFallbacksSection } from './chat-model-fallbacks-section';
@@ -55,14 +57,16 @@ export function AgentDefaultsBasicsPanel(props: AgentDefaultsPanelProps) {
     <div className="flex flex-col gap-5">
       <SettingsFormSection>
         <SettingsFormSectionHeader icon={Cpu} title={a.cardModelsTitle} subtitle={a.cardModelsSubtitle} />
-        <ModelResolutionChain
-          globalLabel={a.modelResolutionGlobal}
-          agentLabel={a.modelResolutionAgent}
-          sessionLabel={a.modelResolutionSession}
-          globalValue={form.model || a.modelResolutionUnset}
-          agentValue={a.modelResolutionAgentInherits}
-          sessionValue={a.modelResolutionSessionSelectable}
-        />
+        <SettingsAdvancedGate>
+          <ModelResolutionChain
+            globalLabel={a.modelResolutionGlobal}
+            agentLabel={a.modelResolutionAgent}
+            sessionLabel={a.modelResolutionSession}
+            globalValue={form.model || a.modelResolutionUnset}
+            agentValue={a.modelResolutionAgentInherits}
+            sessionValue={a.modelResolutionSessionSelectable}
+          />
+        </SettingsAdvancedGate>
         <div className="mt-5 flex flex-col gap-5">
           <AgentDefaultsField label={a.label.model} description={a.desc.model}>
             <ModelSelector
@@ -76,8 +80,12 @@ export function AgentDefaultsBasicsPanel(props: AgentDefaultsPanelProps) {
           </AgentDefaultsField>
         </div>
       </SettingsFormSection>
-      <AgentDefaultsChatModelFallbacksSection {...props} />
-      <AgentDefaultsTypedModelsSection {...props} />
+      <SettingsAdvancedGate>
+        <AgentDefaultsChatModelFallbacksSection {...props} />
+      </SettingsAdvancedGate>
+      <SettingsAdvancedGate>
+        <AgentDefaultsTypedModelsSection {...props} />
+      </SettingsAdvancedGate>
     </div>
   );
 }

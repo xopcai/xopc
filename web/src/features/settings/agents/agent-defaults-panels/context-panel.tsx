@@ -3,6 +3,8 @@ import { Layers2, Scissors } from 'lucide-react';
 import type { AgentDefaultsState } from '@/features/settings/config-api';
 import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/settings/settings-form-section';
 
+import { SettingsAdvancedGate } from '@/features/settings/settings-advanced-gate';
+
 import { AgentDefaultsAdvancedDetails } from '../agent-defaults-advanced-details';
 import { AgentDefaultsField } from '../agent-defaults-field';
 import type { AgentDefaultsPanelProps } from '../agent-defaults-panel-props';
@@ -30,23 +32,25 @@ export function AgentDefaultsContextPanel(props: AgentDefaultsPanelProps) {
               <span>{x.compactionEnabledOn}</span>
             </label>
           </AgentDefaultsField>
-          <AgentDefaultsField label={x.compactionMode} description={x.compactionModeDesc}>
-            <select
-              className={selectClassName()}
-              value={form.compaction.mode}
-              onChange={(e) =>
-                update({
-                  compaction: {
-                    ...form.compaction,
-                    mode: e.target.value as AgentDefaultsState['compaction']['mode'],
-                  },
-                })
-              }
-            >
-              <option value="default">{x.compactionModeDefault}</option>
-              <option value="safeguard">{x.compactionModeSafeguard}</option>
-            </select>
-          </AgentDefaultsField>
+          <SettingsAdvancedGate>
+            <AgentDefaultsField label={x.compactionMode} description={x.compactionModeDesc}>
+              <select
+                className={selectClassName()}
+                value={form.compaction.mode}
+                onChange={(e) =>
+                  update({
+                    compaction: {
+                      ...form.compaction,
+                      mode: e.target.value as AgentDefaultsState['compaction']['mode'],
+                    },
+                  })
+                }
+              >
+                <option value="default">{x.compactionModeDefault}</option>
+                <option value="safeguard">{x.compactionModeSafeguard}</option>
+              </select>
+            </AgentDefaultsField>
+          </SettingsAdvancedGate>
           <AgentDefaultsAdvancedDetails showLabel={x.advancedOptionsShow} hideLabel={x.advancedOptionsHide}>
             <div className="grid gap-5 sm:grid-cols-2">
               <AgentDefaultsField label={x.reserveTokens} description={x.reserveTokensDesc}>

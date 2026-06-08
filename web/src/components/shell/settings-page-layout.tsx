@@ -1,8 +1,9 @@
 import { ArrowLeft, Menu, X } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
-import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
+import { Link, NavLink, Navigate, Outlet, useLocation } from 'react-router-dom';
 
 import { APP_CHROME_DRAG_CLASS, APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
+import { SettingsModeToggle } from '@/components/shell/settings-mode-toggle';
 import { TabIcon } from '@/components/shell/tab-icons';
 import { messages, tabLabel } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
@@ -14,6 +15,7 @@ import {
   SETTINGS_SHELL_NAV_GROUPS,
 } from '@/navigation';
 import type { SettingsShellNavGroup } from '@/navigation';
+import { isSettingsPathVisibleInMode, isSettingsTabVisibleInMode } from '@/navigation/settings-nav-visibility';
 import { isAgentDefaultsNavActive, isAgentDefaultsNavTab } from '@/navigation/agent-defaults-nav';
 import { isElectron } from '@/lib/electron-env';
 import { electronDarwinTitlebarLeftPad, isElectronDarwin } from '@/lib/electron-window-chrome';
@@ -22,6 +24,7 @@ import { useMediaQuery } from '@/lib/use-media-query';
 import type { StoredLanguage } from '@/lib/storage';
 import { resolveSettingsBackTarget } from '@/features/settings/settings-nav-state';
 import { useLocaleStore } from '@/stores/locale-store';
+import { useSettingsModeStore } from '@/stores/settings-mode-store';
 import { useSettingsRailStore } from '@/stores/settings-rail-store';
 
 /** Aligned with `SidebarNav` secondary links (§4.3 — same rail rhythm as main app sidebar). */
@@ -50,8 +53,13 @@ const mobileToolbarButtonClass = cn(
   APP_CHROME_NO_DRAG_CLASS,
 );
 
-function visibleSettingsNavTabs(group: SettingsShellNavGroup) {
-  return group.tabs.filter((tab) => !ELECTRON_ONLY_SETTINGS_TABS.has(tab) || isElectron());
+function visibleSettingsNavTabs(group: SettingsShellNavGroup, settingsMode: ReturnType<typeof useSettingsModeStore.getState>['mode']) {
+  return group.tabs.filter((tab) => {
+    if (!isSettingsTabVisibleInMode(tab, settingsMode)) {
+      return false;
+    }
+    return !ELECTRON_ONLY_SETTINGS_TABS.has(tab) || isElectron();
+  });
 }
 
 function SettingsNavGroupBlock({
@@ -59,14 +67,16 @@ function SettingsNavGroupBlock({
   groupIndex,
   language,
   location,
+  settingsMode,
 }: {
   group: SettingsShellNavGroup;
   groupIndex: number;
   language: StoredLanguage;
   location: ReturnType<typeof useLocation>;
+  settingsMode: ReturnType<typeof useSettingsModeStore.getState>['mode'];
 }) {
   const m = messages(language);
-  const tabs = visibleSettingsNavTabs(group);
+  const tabs = visibleSettingsNavTabs(group, settingsMode);
   if (tabs.length === 0) {
     return null;
   }
@@ -108,6 +118,7 @@ export const SettingsPageLayout = memo(function SettingsPageLayout() {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const location = useLocation();
+  const settingsMode = useSettingsModeStore((s) => s.mode);
   const settingsRailWidthPx = useSettingsRailStore((s) => s.widthPx);
   const setSettingsRailWidthPx = useSettingsRailStore((s) => s.setWidthPx);
   const [widthResizing, setWidthResizing] = useState(false);
@@ -170,14 +181,16 @@ export const SettingsPageLayout = memo(function SettingsPageLayout() {
   const activeSettingsTab = useMemo(
     () =>
       railNavGroups
-        .flatMap((group) => visibleSettingsNavTabs(group))
+        .flatMap((group) => visibleSettingsNavTabs(group, settingsMode))
         .find((tab) =>
           isAgentDefaultsNavTab(tab)
             ? isAgentDefaultsNavActive(tab, location)
             : location.pathname === pathForTab(tab),
         ),
-    [location, railNavGroups],
+    [location, railNavGroups, settingsMode],
   );
+
+  const settingsPathBlocked = !isSettingsPathVisibleInMode(location.pathname, settingsMode);
 
   const activeTitle = activeSettingsTab ? tabLabel(language, activeSettingsTab) : m.nav.settings;
 
@@ -186,23 +199,30 @@ export const SettingsPageLayout = memo(function SettingsPageLayout() {
   }, [location.pathname, location.search]);
 
   const railNav = (
-    <nav
-      className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 pb-4 pt-2"
-      aria-label={m.nav.settings}
-    >
-      <div className="flex flex-col gap-1">
-        {railNavGroups.map((group, groupIndex) => (
-          <SettingsNavGroupBlock
-            key={group.id}
-            group={group}
-            groupIndex={groupIndex}
-            language={language}
-            location={location}
+    <div className="flex min-h-0 flex-1 flex-col">
+      <nav
+        className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 pb-4 pt-2"
+        aria-label={m.nav.settings}
+      >
+        <div className="flex flex-col gap-1">
+          {railNavGroups.map((group, groupIndex) => (
+            <SettingsNavGroupBlock
+              key={group.id}
+              group={group}
+              groupIndex={groupIndex}
+              language={language}
+              location={location}
+              settingsMode={settingsMode}
+            />
+          ))}
+          <ExtensionSettingsNav
+            navLinkClassName={settingsNavLinkClass}
+            showAdvanced={settingsMode === 'advanced'}
           />
-        ))}
-        <ExtensionSettingsNav navLinkClassName={settingsNavLinkClass} />
-      </div>
-    </nav>
+        </div>
+      </nav>
+      <SettingsModeToggle />
+    </div>
   );
 
   return (
@@ -303,7 +323,7 @@ export const SettingsPageLayout = memo(function SettingsPageLayout() {
 
       {/* Right: surface-panel — elevated vs left rail */}
       <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain bg-surface-panel scrollbar-gutter-both">
-        <Outlet />
+        {settingsPathBlocked ? <Navigate to="/settings/overview" replace /> : <Outlet />}
       </div>
     </div>
   );

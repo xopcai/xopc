@@ -584,6 +584,10 @@
       }
     }
   },
+  "settingsMode": {
+    "toggleLabel": "显示高级选项",
+    "toggleAria": "切换高级设置导航"
+  },
   "settingsNavGroups": {
     "general": "通用",
     "system": "系统设置",

@@ -584,6 +584,10 @@
       }
     }
   },
+  "settingsMode": {
+    "toggleLabel": "Show advanced options",
+    "toggleAria": "Toggle advanced settings navigation"
+  },
   "settingsNavGroups": {
     "general": "General",
     "system": "System settings",
