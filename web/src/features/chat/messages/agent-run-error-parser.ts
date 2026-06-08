@@ -1,4 +1,4 @@
-import type { ProviderSetupPayload } from '@/features/chat/messages/provider-setup-required-banner';
+import type { ProviderSetupPayload } from '@/features/chat/messages/provider-setup-required.types';
 
 export type AgentRunErrorKind =
   | 'provider_setup_required'

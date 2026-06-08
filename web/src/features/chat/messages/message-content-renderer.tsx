@@ -24,10 +24,8 @@ import { stripStartupContextForDisplay } from '@/features/chat/messages/wire-tex
 import { WorkflowCard, type WorkflowCardLabels } from '@/features/chat/workflow/workflow-card';
 import { defaultWorkflowCardLabels } from '@/features/chat/workflow/workflow-card-labels';
 import { isWorkflowToolBlock } from '@/features/chat/workflow/workflow.utils';
-import {
-  parseProviderSetupRequired,
-  ProviderSetupRequiredCard,
-} from '@/features/chat/messages/provider-setup-required-banner';
+import { ProviderSetupRequiredCard } from '@/features/chat/messages/provider-setup-required-banner';
+import { parseProviderSetupRequired } from '@/features/chat/messages/provider-setup-required.parser';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 

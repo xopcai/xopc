@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 import { useLocation, useSearchParams } from 'react-router-dom';
 
 import { SettingsAdvancedGate } from '@/features/settings/settings-advanced-gate';
@@ -107,7 +107,9 @@ export function AgentDefaultsTabbedPage() {
   const m = messages(language);
   const a = m.agentSettings;
   const chat = m.chat;
-  const location = useLocation();
+  const routerLocation = useLocation();
+  const routerLocationStateRef = useRef(routerLocation.state);
+  routerLocationStateRef.current = routerLocation.state;
   const [searchParams, setSearchParams] = useSearchParams();
 
   const settingsMode = useSettingsModeStore((s) => s.mode);
@@ -132,10 +134,10 @@ export function AgentDefaultsTabbedPage() {
           else next.set('tab', tab);
           return next;
         },
-        { replace: true, state: location.state },
+        { replace: true, state: routerLocationStateRef.current },
       );
     },
-    [location.state, setSearchParams],
+    [setSearchParams],
   );
 
   useAgentDefaultsTabGuard(activeTab, setActiveTab);
