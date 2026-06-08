@@ -23,7 +23,6 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
     labels,
     hasToken,
     definitions,
-    filteredDefinitions,
     runs,
     searchQuery,
     workflowFilterId,
@@ -176,7 +175,7 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
 
       <WorkflowPickStartDialog
         open={pickStartOpen}
-        definitions={filteredDefinitions}
+        definitions={definitions}
         language={language}
         onClose={() => setPickStartOpen(false)}
         onPick={(definition) => {

@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createHonoApp, isExtensionGatewayUiAssetPath } from '../hono/app.js';
+import { isQueryTokenAllowedPath } from '../hono/middleware/auth.js';
 import type { GatewayService } from '../service.js';
 import { resolveGatewayEffectiveHost } from '../../config/gateway-bind.js';
 import { GatewayConfigSchema, type Config } from '../../config/schema.js';
@@ -70,6 +71,15 @@ function createMockService(config: any = {}, listenPort?: number): GatewayServic
 }
 
 describe('Gateway Security Fixes', () => {
+  describe('query token path policy', () => {
+    it('allows query token only for SSE and agent avatar GET', () => {
+      expect(isQueryTokenAllowedPath('/api/events', 'GET')).toBe(true);
+      expect(isQueryTokenAllowedPath('/api/agents/main/avatar', 'GET')).toBe(true);
+      expect(isQueryTokenAllowedPath('/api/agents/main/avatar', 'PUT')).toBe(false);
+      expect(isQueryTokenAllowedPath('/api/config', 'GET')).toBe(false);
+    });
+  });
+
   describe('extension UI asset paths', () => {
     it('detects extension sandbox static URLs so global anti-framing headers are skipped', () => {
       expect(isExtensionGatewayUiAssetPath('/api/extensions/hello/assets/ui/panel.html')).toBe(true);
@@ -530,6 +540,17 @@ describe('Gateway Security Fixes', () => {
         headers: { Authorization: 'Bearer wrong' },
       });
       expect(badAfterSuccess.status).toBe(401);
+    });
+
+    it('allows GET agent avatar with ?token= (img subresources cannot send Authorization)', async () => {
+      const service = createMockService();
+      const app = createHonoApp({ service, token: 'test' });
+
+      const res = await app.request('/api/agents/main/avatar?token=test');
+      expect(res.status).not.toBe(401);
+
+      const rejected = await app.request('/api/config?token=test');
+      expect(rejected.status).toBe(401);
     });
 
     it('does not count missing-token requests as failures', async () => {
