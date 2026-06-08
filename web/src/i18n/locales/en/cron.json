@@ -231,6 +231,8 @@
     },
     "templateFilterAll": "All",
     "fromTemplate": "From template",
+    "templatePickerHint": "Browse templates by category, then create a scheduled task.",
+    "templateSearchPlaceholder": "Search templates…",
     "templatesEmptyHint": "No templates match this filter.",
     "templateCategories": {
       "daily": "Daily",
