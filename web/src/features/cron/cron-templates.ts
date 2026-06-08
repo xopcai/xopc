@@ -165,6 +165,6 @@ export const CRON_JOB_TEMPLATES = [
 
 export type CronTemplateId = (typeof CRON_JOB_TEMPLATES)[number]['templateId'];
 
-export function cronTemplateById(id: string): (typeof CRON_JOB_TEMPLATES)[number] | undefined {
+export function cronTemplateById(id: string): CronJobTemplateDef | undefined {
   return CRON_JOB_TEMPLATES.find((t) => t.templateId === id);
 }
