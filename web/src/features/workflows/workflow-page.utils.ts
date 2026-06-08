@@ -5,6 +5,7 @@ import { collectWorkflowSearchText } from './workflow-meta-locale';
 import {
   ACTIVE_RUN_STATUSES,
   HISTORY_RUN_STATUSES,
+  WORKFLOW_CATEGORY_ORDER,
   WORKFLOW_CATEGORY_TAGS,
   type WorkflowCategoryFilter,
   type WorkflowSourceFilter,
@@ -43,11 +44,47 @@ export function statusTone(status: WorkflowRunStatus): string {
   return 'bg-accent-soft text-accent-fg';
 }
 
+export function resolveWorkflowCategory(
+  definition: WorkflowDefinition,
+): Exclude<WorkflowCategoryFilter, 'all'> | null {
+  const tags = definition.metadata.tags.map((tag) => tag.toLowerCase());
+  for (const category of WORKFLOW_CATEGORY_ORDER) {
+    if (WORKFLOW_CATEGORY_TAGS[category].some((tag) => tags.includes(tag))) {
+      return category;
+    }
+  }
+  return null;
+}
+
 export function matchesCategory(definition: WorkflowDefinition, category: WorkflowCategoryFilter): boolean {
   if (category === 'all') return true;
   const tags = definition.metadata.tags.map((tag) => tag.toLowerCase());
   const categoryTags = WORKFLOW_CATEGORY_TAGS[category];
   return categoryTags.some((tag) => tags.includes(tag));
+}
+
+export function groupDefinitionsByCategory(
+  definitions: WorkflowDefinition[],
+): Array<{ category: Exclude<WorkflowCategoryFilter, 'all'> | 'uncategorized'; items: WorkflowDefinition[] }> {
+  const buckets = new Map<Exclude<WorkflowCategoryFilter, 'all'> | 'uncategorized', WorkflowDefinition[]>();
+
+  for (const definition of definitions) {
+    const category = resolveWorkflowCategory(definition) ?? 'uncategorized';
+    const bucket = buckets.get(category) ?? [];
+    bucket.push(definition);
+    buckets.set(category, bucket);
+  }
+
+  const ordered: Array<{ category: Exclude<WorkflowCategoryFilter, 'all'> | 'uncategorized'; items: WorkflowDefinition[] }> =
+    [];
+  for (const category of WORKFLOW_CATEGORY_ORDER) {
+    const items = buckets.get(category);
+    if (items?.length) ordered.push({ category, items });
+  }
+  const uncategorized = buckets.get('uncategorized');
+  if (uncategorized?.length) ordered.push({ category: 'uncategorized', items: uncategorized });
+
+  return ordered;
 }
 
 export function matchesSource(definition: WorkflowDefinition, source: WorkflowSourceFilter): boolean {
