@@ -297,6 +297,9 @@ export function CronPage() {
   const onToggle = async (job: CronJob, enabled: boolean) => {
     try {
       await toggleJob(job.id, enabled);
+      if (detailJob?.id === job.id) {
+        dispatch({ type: 'patch', patch: { detailJob: { ...detailJob, enabled } } });
+      }
       await Promise.all([data.loadJobs(), data.loadAux()]);
     } catch (e) {
       setError(e instanceof Error ? e.message : c.failedToToggleJob);
@@ -578,8 +581,17 @@ export function CronPage() {
         detailLoading={detailLoading}
         detailHistory={detailHistory}
         c={c}
+        localeTag={localeTag}
+        scheduleBadgeLabels={scheduleBadgeLabels}
         chatWorkingDirNotSet={chatM.workingDirectory.notSet}
         statusLabels={statusLabels}
+        onEdit={(job) => {
+          closeDetail();
+          form.openForm(job);
+        }}
+        onRunNow={(job) => openConfirm('run', job.id)}
+        onToggle={(job, enabled) => void onToggle(job, enabled)}
+        onDelete={(job) => openConfirm('delete', job.id)}
       />
 
       <CronConfirmActionDialog

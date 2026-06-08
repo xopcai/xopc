@@ -9,7 +9,11 @@ export type ScheduleBadgeLabels = {
   hourly: string;
   dailyAt: string;
   weekdaysAt: string;
+  weekendsAt: string;
   weeklyOn: string;
+  daysAt: string;
+  monthlyAt: string;
+  customSchedule: string;
   cronExpr: string;
 };
 
@@ -27,17 +31,29 @@ function weekdayShort(dow: number, locale: string): string {
   return d.toLocaleDateString(locale, { weekday: 'short', timeZone: 'UTC' });
 }
 
-export function formatCronExpressionLabel(
-  schedule: string,
+function joinList(items: string[], locale: string): string {
+  if (items.length <= 1) return items[0] ?? '';
+  if (locale.startsWith('zh')) return items.join('、');
+  if (items.length === 2) return `${items[0]} and ${items[1]}`;
+  return `${items.slice(0, -1).join(', ')}, and ${items.at(-1)}`;
+}
+
+function isMonToFri(dowVals: number[]): boolean {
+  return dowVals.length === 5 && dowVals.every((value, index) => value === index + 1);
+}
+
+function isWeekends(dowVals: number[]): boolean {
+  if (dowVals.length !== 2) return false;
+  const sorted = [...dowVals].sort((a, b) => a - b);
+  return sorted[0] === 0 && sorted[1] === 6;
+}
+
+function describeParsedCron(
+  expr: string,
   locale: string,
   labels: ScheduleBadgeLabels,
-  options?: { timezone?: string; nextRun?: string | null },
-): string {
-  const expr = schedule.trim();
-  if (!expr) {
-    return fallbackFromNextRun(options?.nextRun, locale) || '—';
-  }
-
+  options?: { timezone?: string },
+): string | null {
   try {
     const parsed = CronExpressionParser.parse(expr, {
       ...(options?.timezone ? { tz: options.timezone } : {}),
@@ -47,6 +63,7 @@ export function formatCronExpressionLabel(
     const minuteVals = numericFieldValues(f.minute.values);
     const hourVals = numericFieldValues(f.hour.values);
     const dowVals = numericFieldValues(f.dayOfWeek.values);
+    const domVals = numericFieldValues(f.dayOfMonth.values);
 
     if (
       minuteVals.length === 60 &&
@@ -116,11 +133,19 @@ export function formatCronExpressionLabel(
       f.dayOfMonth.isWildcard &&
       f.month.isWildcard &&
       !f.dayOfWeek.isWildcard &&
-      dowVals.length === 5 &&
-      dowVals[0] === 1 &&
-      dowVals[4] === 5
+      isMonToFri(dowVals)
     ) {
       return labels.weekdaysAt.replace('{{time}}', hm);
+    }
+
+    if (
+      hm &&
+      f.dayOfMonth.isWildcard &&
+      f.month.isWildcard &&
+      !f.dayOfWeek.isWildcard &&
+      isWeekends(dowVals)
+    ) {
+      return labels.weekendsAt.replace('{{time}}', hm);
     }
 
     if (
@@ -134,13 +159,51 @@ export function formatCronExpressionLabel(
       return labels.weeklyOn.replace('{{day}}', day).replace('{{time}}', hm);
     }
 
-    const nextFallback = fallbackFromNextRun(options?.nextRun, locale);
-    if (nextFallback) return nextFallback;
-    return labels.cronExpr.replace('{{expr}}', expr);
+    if (
+      hm &&
+      f.dayOfMonth.isWildcard &&
+      f.month.isWildcard &&
+      !f.dayOfWeek.isWildcard &&
+      dowVals.length > 1
+    ) {
+      const days = joinList(dowVals.map((dow) => weekdayShort(dow, locale)), locale);
+      return labels.daysAt.replace('{{days}}', days).replace('{{time}}', hm);
+    }
+
+    if (
+      hm &&
+      !f.dayOfMonth.isWildcard &&
+      domVals.length === 1 &&
+      f.month.isWildcard &&
+      f.dayOfWeek.isWildcard
+    ) {
+      return labels.monthlyAt.replace('{{day}}', String(domVals[0])).replace('{{time}}', hm);
+    }
+
+    return labels.customSchedule;
   } catch {
-    const nextFallback = fallbackFromNextRun(options?.nextRun, locale);
-    return nextFallback || labels.cronExpr.replace('{{expr}}', expr);
+    return null;
   }
+}
+
+export function formatCronExpressionLabel(
+  schedule: string,
+  locale: string,
+  labels: ScheduleBadgeLabels,
+  options?: { timezone?: string; nextRun?: string | null },
+): string {
+  const expr = schedule.trim();
+  if (!expr) {
+    return fallbackFromNextRun(options?.nextRun, locale) || '—';
+  }
+
+  const described = describeParsedCron(expr, locale, labels, options);
+  if (described) return described;
+
+  const nextFallback = fallbackFromNextRun(options?.nextRun, locale);
+  if (nextFallback) return nextFallback;
+
+  return labels.customSchedule;
 }
 
 function fallbackFromNextRun(nextRun: string | null | undefined, locale: string): string {
