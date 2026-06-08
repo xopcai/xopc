@@ -10,19 +10,19 @@ export const SIMPLE_MODE_HIDDEN_AGENT_DEFAULTS_TABS = new Set<AgentDefaultsTabId
   'system-prompt',
 ]);
 
-/** Gateway settings tabs hidden in simple mode. */
-export const SIMPLE_MODE_HIDDEN_GATEWAY_TABS = new Set([
-  'updates',
-  'security',
-  'advanced',
-] as const);
-
 export type GatewaySettingsTabId =
   | 'network'
   | 'access'
   | 'updates'
   | 'security'
   | 'advanced';
+
+/** Gateway settings tabs hidden in simple mode. */
+export const SIMPLE_MODE_HIDDEN_GATEWAY_TABS = new Set<GatewaySettingsTabId>([
+  'updates',
+  'security',
+  'advanced',
+]);
 
 /** Browser settings tabs hidden in simple mode. */
 export const SIMPLE_MODE_HIDDEN_BROWSER_TABS = new Set<BrowserTabId>([
