@@ -146,6 +146,26 @@ export function workflowChatHref(sessionKey: string): string {
   return `/chat/${encodeURIComponent(sessionKey)}`;
 }
 
+/** Deep link to the workflows board with a run detail drawer open. */
+export function workflowBoardHref(runId: string): string {
+  const id = runId.trim();
+  return `/workflows?run=${encodeURIComponent(id)}`;
+}
+
+export function runTriggerKind(run: WorkflowRunSummary): string {
+  const source = run.source;
+  if (source && typeof source === 'object' && 'kind' in source && typeof source.kind === 'string') {
+    return source.kind;
+  }
+  return run.metadata?.triggerSource?.trim() || 'unknown';
+}
+
+export function runMatchesTriggerFilter(run: WorkflowRunSummary, filter: string): boolean {
+  const normalized = filter.trim();
+  if (!normalized || normalized === 'all') return true;
+  return runTriggerKind(run) === normalized;
+}
+
 export function buildWorkflowInput(args: Record<string, string>): unknown {
   const input: Record<string, string> = {};
   for (const [key, value] of Object.entries(args)) {

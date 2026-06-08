@@ -9,6 +9,9 @@ export const RUN_HISTORY_FETCH_LIMIT = 400;
 
 export const DEFAULT_SCHEDULE = '*/5 * * * *';
 
+/** Default cron job timeout for workflow runs (35 minutes). */
+export const WORKFLOW_CRON_TIMEOUT_MS = 35 * 60 * 1000;
+
 export function startOfLocalDay(d: Date): Date {
   const x = new Date(d);
   x.setHours(0, 0, 0, 0);
@@ -34,6 +37,13 @@ export function navigateToSessionChat(sessionKey: string | undefined | null): vo
   window.dispatchEvent(
     new CustomEvent('navigate-to-chat', { detail: { sessionKey: sk }, bubbles: true }),
   );
+}
+
+/** Open the workflows board with the run detail drawer (hash router). */
+export function navigateToWorkflowRun(runId: string | undefined | null): void {
+  const id = runId?.trim();
+  if (!id) return;
+  window.location.hash = `/workflows?run=${encodeURIComponent(id)}`;
 }
 
 export function inputClassName(disabled?: boolean): string {

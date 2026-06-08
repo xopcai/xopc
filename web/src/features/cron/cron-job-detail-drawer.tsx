@@ -5,6 +5,7 @@ import {
   ChevronDown,
   Clock,
   Copy,
+  GitBranch,
   Loader2,
   MessageSquare,
   Play,
@@ -18,7 +19,7 @@ import { MarkdownView } from '@/components/markdown/markdown-view';
 import { Button } from '@/components/ui/button';
 import type { CronJob, CronJobExecution } from '@/features/cron/cron-api';
 import { cronJobBodyText } from '@/features/cron/cron-api';
-import { navigateToSessionChat } from '@/features/cron/cron-page-lib';
+import { navigateToSessionChat, navigateToWorkflowRun } from '@/features/cron/cron-page-lib';
 import {
   execStatusLabel,
   formatDeliveryToSummary,
@@ -141,18 +142,32 @@ function CronRunHistoryCard({
             {expanded ? c.detailCollapseRun : c.detailExpandRun}
           </Button>
         ) : null}
-        {row.sessionKey?.trim() ? (
-          <Button
-            type="button"
-            variant="secondary"
-            className="ml-auto h-8 gap-1.5 px-2.5 text-xs"
-            title={c.openChatTitle}
-            onClick={() => navigateToSessionChat(row.sessionKey)}
-          >
-            <MessageSquare className="size-3.5" strokeWidth={1.75} aria-hidden />
-            {c.openChat}
-          </Button>
-        ) : null}
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          {row.workflowRunId?.trim() ? (
+            <Button
+              type="button"
+              variant="secondary"
+              className="h-8 gap-1.5 px-2.5 text-xs"
+              title={c.openWorkflowTitle}
+              onClick={() => navigateToWorkflowRun(row.workflowRunId)}
+            >
+              <GitBranch className="size-3.5" strokeWidth={1.75} aria-hidden />
+              {c.openWorkflow}
+            </Button>
+          ) : null}
+          {row.sessionKey?.trim() ? (
+            <Button
+              type="button"
+              variant="secondary"
+              className="h-8 gap-1.5 px-2.5 text-xs"
+              title={c.openChatTitle}
+              onClick={() => navigateToSessionChat(row.sessionKey)}
+            >
+              <MessageSquare className="size-3.5" strokeWidth={1.75} aria-hidden />
+              {c.openChat}
+            </Button>
+          ) : null}
+        </div>
       </div>
     </article>
   );

@@ -80,7 +80,16 @@ xopc cron add --schedule "0 18 * * 1-5" --message "Time to wrap up!" --name "EOD
 
 Direct channel sends and isolated agent runs (previously shown with positional `cron add` arguments) are **not** exposed on the CLI yet. Configure them in the web UI or jobs file.
 
-**Workflow runs:** In `#/settings/cron`, choose task kind **Workflow run** to schedule a saved workflow definition directly (no assistant turn). See [Dynamic Workflows](workflows.md).
+**Workflow runs:** Schedule a workflow directly (no assistant turn):
+
+```bash
+xopc cron add --schedule "0 17 * * 5" --workflow weekly_review --goal "Weekly review"
+xopc cron add --schedule "30 8 * * 1-5" --workflow inbox_triage \
+  --input-json '{"inbox":"paste items here"}' \
+  --channel telegram --to <chat-id>
+```
+
+In `#/settings/cron`, choose task kind **Workflow run** for the same payload with structured args and optional delivery. Cron waits for completion by default (~35 min timeout). See [Dynamic Workflows](workflows.md).
 
 ## Cron Expression Format
 

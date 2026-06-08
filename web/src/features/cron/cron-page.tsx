@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef } 
 
 import { uiPatchReducer } from '@/lib/settings-form-draft';
 import { useLocation } from 'react-router-dom';
+import useSWR from 'swr';
 
 import {
   addJob,
@@ -26,6 +27,7 @@ import { CronSystemTasksPanel } from '@/features/cron/cron-system-tasks-panel';
 import { CronTasksPanel } from '@/features/cron/cron-tasks-panel';
 import type { CronTemplateFilter } from '@/features/cron/cron-template-library';
 import { CronTemplatePickerDialog } from '@/features/cron/cron-template-picker-dialog';
+import { WORKFLOW_CRON_TIMEOUT_MS } from '@/features/cron/cron-page-lib';
 import { useCronJobForm } from '@/features/cron/use-cron-job-form';
 import { useCronKeepAwake } from '@/features/cron/use-cron-keep-awake';
 import {
@@ -35,6 +37,9 @@ import {
   type HistoryRange,
   type JobSort,
 } from '@/features/cron/use-cron-page-data';
+import { listWorkflowDefinitions } from '@/features/workflows/workflow-api';
+import { buildWorkflowInput } from '@/features/workflows/workflow-page.utils';
+import { validateWorkflowArgValues } from '@/features/workflows/workflow-input.utils';
 import { messages, type MessageBundle } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -119,6 +124,13 @@ export function CronPage() {
     chatAgents: data.chatAgents,
   });
 
+  const workflowDefinitionsSwr = useSWR(
+    hasToken && form.formOpen ? ['workflow-definitions-cron', token] : null,
+    listWorkflowDefinitions,
+    { revalidateOnFocus: false },
+  );
+  const workflowDefinitions = workflowDefinitionsSwr.data ?? [];
+
   const confirmActionRef = useRef<'delete' | 'run' | null>(null);
   const confirmJobIdRef = useRef<string | null>(null);
 
@@ -170,6 +182,13 @@ export function CronPage() {
       setError(c.workflowDefinitionRequired);
       return;
     }
+    if (
+      form.formTaskKind === 'workflowRun' &&
+      !validateWorkflowArgValues(form.formWorkflowDefinitionId.trim(), form.formWorkflowArgValues)
+    ) {
+      setError(c.workflowArgsRequired);
+      return;
+    }
     if (form.needsDeliveryChat && !form.formChatId.trim()) {
       setError(c.chatIdRequired);
       return;
@@ -188,7 +207,13 @@ export function CronPage() {
 
       let delivery: CronDelivery;
       if (isWorkflowRun) {
-        delivery = { mode: 'none' };
+        if (form.formAgentLocalOnly) {
+          delivery = { mode: 'none' };
+        } else if (form.formChannel === 'local') {
+          delivery = { mode: 'direct', channel: 'local' };
+        } else {
+          delivery = { mode: 'direct', channel: form.formChannel, to: form.formChatId.trim() };
+        }
       } else if (form.formSessionTarget === 'isolated' && form.formAgentLocalOnly) {
         delivery = { mode: 'none' };
       } else if (form.formChannel === 'local') {
@@ -199,20 +224,14 @@ export function CronPage() {
 
       let payload: CronPayload;
       if (isWorkflowRun) {
-        let workflowInputPayload: unknown = {};
-        const rawInput = form.formWorkflowInputJson.trim();
-        if (rawInput) {
-          try {
-            workflowInputPayload = JSON.parse(rawInput);
-          } catch {
-            setError(c.workflowInputInvalid);
-            return;
-          }
-        }
+        const definitionId = form.formWorkflowDefinitionId.trim();
+        const workflowInputPayload = buildWorkflowInput(form.formWorkflowArgValues);
         payload = {
           kind: 'workflowRun',
-          definitionId: form.formWorkflowDefinitionId.trim(),
-          inputEnvelope: { payload: workflowInputPayload },
+          definitionId,
+          ...(workflowInputPayload !== undefined
+            ? { inputEnvelope: { payload: workflowInputPayload } }
+            : {}),
           ...(form.formWorkflowGoal.trim() ? { goal: form.formWorkflowGoal.trim() } : {}),
           ...(agentIdTrim ? { agentId: agentIdTrim } : {}),
         };
@@ -232,6 +251,7 @@ export function CronPage() {
         schedule: form.formSchedule.trim(),
         sessionTarget: effectiveSessionTarget,
         model: isIsolatedMessage && modelTrimmed ? modelTrimmed : undefined,
+        ...(isWorkflowRun ? { timeout: WORKFLOW_CRON_TIMEOUT_MS } : {}),
         delivery,
         payload,
         ...(form.formMode === 'edit'
@@ -521,12 +541,14 @@ export function CronPage() {
         formSubmitting={form.formSubmitting}
         formTaskKind={form.formTaskKind}
         onFormTaskKindChange={form.setFormTaskKind}
+        workflowDefinitions={workflowDefinitions}
+        workflowDefinitionsLoading={workflowDefinitionsSwr.isLoading}
         formWorkflowDefinitionId={form.formWorkflowDefinitionId}
         onFormWorkflowDefinitionIdChange={form.setFormWorkflowDefinitionId}
         formWorkflowGoal={form.formWorkflowGoal}
         onFormWorkflowGoalChange={form.setFormWorkflowGoal}
-        formWorkflowInputJson={form.formWorkflowInputJson}
-        onFormWorkflowInputJsonChange={form.setFormWorkflowInputJson}
+        formWorkflowArgValues={form.formWorkflowArgValues}
+        onFormWorkflowArgValuesChange={form.setFormWorkflowArgValues}
         formSessionTarget={form.formSessionTarget}
         onFormSessionTargetChange={form.handleFormSessionTargetChange}
         formAgentLocalOnly={form.formAgentLocalOnly}

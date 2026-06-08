@@ -70,14 +70,19 @@
     "taskKind": "任务类型",
     "taskKindMessage": "发送消息 / AI 处理",
     "taskKindWorkflowRun": "运行 Workflow",
-    "workflowDefinitionId": "Workflow Definition ID *",
-    "workflowDefinitionPlaceholder": "例如 daily-briefing",
-    "workflowGoal": "Workflow 目标",
+    "workflowDefinition": "工作流模板 *",
+    "workflowDefinitionPlaceholder": "选择工作流…",
+    "workflowDefinitionsLoading": "正在加载工作流…",
+    "workflowDefinitionsEmpty": "未找到工作流。可在 ~/.xopc/workflows/ 添加，或使用内置模板。",
+    "workflowDefinitionCustom": "自定义",
+    "workflowDefinitionMissing": "该工作流 ID 不在当前目录中，请重新选择或修正 ID。",
+    "workflowDefinitionRequired": "请选择工作流模板",
+    "workflowArgsRequired": "请填写所有必填的工作流参数",
+    "workflowGoal": "运行目标",
     "workflowGoalPlaceholder": "这次运行希望达成什么？",
-    "workflowInputJson": "Workflow 输入（JSON）",
-    "workflowInputJsonHint": "会作为 inputEnvelope.payload 传给 Workflow Run。",
-    "workflowDefinitionRequired": "请填写 Workflow Definition ID",
-    "workflowInputInvalid": "Workflow 输入必须是合法 JSON",
+    "workflowLocalOnly": "仅本地（不投递到频道）",
+    "workflowLocalOnlyHint": "在网关完成运行，记录保存在工作流页面。取消勾选可在运行结束后将结果发送到频道。",
+    "workflowDeliveryHint": "工作流结束后，将向该收件人发送摘要与结果预览。",
     "message": "消息 *",
     "messagePlaceholder": "助手应该做什么？",
     "messageEdit": "编辑",
@@ -114,6 +119,9 @@
     "colChat": "会话",
     "openChat": "打开",
     "openChatTitle": "在聊天中打开此次执行（仅 AI 智能体隔离会话）",
+    "openWorkflow": "工作流",
+    "openWorkflowTitle": "在工作流看板打开此次运行",
+    "colWorkflow": "工作流",
     "execStatusRunning": "运行中",
     "execStatusSuccess": "成功",
     "execStatusFailed": "失败",
@@ -241,6 +249,11 @@
         "description": "根据近期 Git 与文件变动起草站会式更新，便于口头汇报。",
         "prompt": "帮我准备**站会发言稿**：\n- 若可访问 Git：概括**自上次站会或昨天以来**的提交主题（不要堆 hash），若有明显风险路径可点出。\n- 若不可用：给出我本地应执行的**简短命令**以便下次自动生成。\n- **文件/改动线索**：从工作区可见信息推断，不确定请标注「推断」。\n- **阻塞**：最多 3 条，可写「暂无」。\n- **今天打算做什么**：一句话。\n- 控制在约 **90 秒**可念完。"
       },
+      "meeting_prep": {
+        "title": "会议准备",
+        "description": "会前运行 meeting_prep 工作流，生成议程、要点与风险。",
+        "prompt": "工作流 meeting_prep — 请在表单中填写会议主题与参会人。"
+      },
       "end_of_day_wrap_up": {
         "title": "日终小结",
         "description": "总结今日进展、未闭环与明日第一件事。",
@@ -291,6 +304,11 @@
         "description": "从工作区内的反馈笔记、工单导出等聚类主题与痛点；无材料则给收集模板。",
         "prompt": "我存放反馈的位置或命名习惯（**请编辑**）：**（例：`feedback/`、导出的 issues、问卷摘要）**。\n- 从可读文本中聚类**重复主题**、**大致情绪**、**主要痛点**（≤5）。\n- 注意**脱敏**：不展开无关个人信息。\n- 若无内容：给出我下次应粘贴/保存的**简短结构模板**。"
       },
+      "content_repurpose": {
+        "title": "内容改写分发",
+        "description": "用 content_repurpose 工作流将一篇内容改写为多平台草稿。",
+        "prompt": "工作流 content_repurpose — 请在表单中粘贴源内容与目标平台。"
+      },
       "stale_todo_or_issue_sweep": {
         "title": "陈旧待办清扫",
         "description": "扫描 TODO/FIXME 或简易 issue 列表，建议保留/关闭/拆分，不自动改文件。",
@@ -300,6 +318,21 @@
         "title": "发版说明草稿",
         "description": "结合版本号文件与近期提交起草 changelog 草案，需人工核对后发布。",
         "prompt": "为**下一次**版本发布起草 **changelog / 发版说明** 草案：\n- 读取 `CHANGELOG`、以及 `package.json` / `Cargo.toml` 等版本字段（若存在）。\n- 从可见提交归纳**面向用户**的变更；无法确定上次标签则退化为「最近一周」。\n- 不确定条目请标注「待核实」。\n- 语气克制，避免营销夸张。"
+      },
+      "client_proposal": {
+        "title": "客户方案",
+        "description": "用 client_proposal 工作流根据简报起草客户方案。",
+        "prompt": "工作流 client_proposal — 请在表单中填写客户简报与报价要点。"
+      },
+      "offer_design": {
+        "title": "产品/报价设计",
+        "description": "每月用 offer_design 工作流复盘能力与报价包装。",
+        "prompt": "工作流 offer_design — 请在表单中填写技能、受众与约束。"
+      },
+      "decision_compare": {
+        "title": "方案对比",
+        "description": "用 decision_compare 工作流比较选项与权衡。",
+        "prompt": "工作流 decision_compare — 请在表单中填写决策问题与备选方案。"
       },
       "workspace_cleanup_suggestions": {
         "title": "工作区清理建议",

@@ -14,6 +14,7 @@ export const WorkflowBoard = memo(function WorkflowBoard({
   labels,
   searchQuery,
   workflowFilterId,
+  triggerFilter,
   selectedRunId,
   loading,
   onOpenRun,
@@ -33,6 +34,7 @@ export const WorkflowBoard = memo(function WorkflowBoard({
   };
   searchQuery: string;
   workflowFilterId: string;
+  triggerFilter: string;
   selectedRunId: string | null;
   loading: boolean;
   onOpenRun: (run: WorkflowRunSummary) => void;
@@ -51,9 +53,9 @@ export const WorkflowBoard = memo(function WorkflowBoard({
   }, [hasActiveRuns]);
 
   const columns = useMemo(() => {
-    const filtered = filterRunsForBoard(runs, { searchQuery, workflowFilterId });
+    const filtered = filterRunsForBoard(runs, { searchQuery, workflowFilterId, triggerFilter });
     return buildWorkflowBoardColumns(filtered, nowMs);
-  }, [nowMs, runs, searchQuery, workflowFilterId]);
+  }, [nowMs, runs, searchQuery, triggerFilter, workflowFilterId]);
 
   const totalCards = columns.reduce((sum, col) => sum + col.runs.length, 0);
 

@@ -1,4 +1,5 @@
 import type { WorkflowRunSummary, WorkflowRunStatus } from './workflow-api';
+import { runMatchesTriggerFilter } from './workflow-page.utils';
 
 export const WORKFLOW_BOARD_COLUMNS = ['queued', 'running', 'succeeded', 'attention'] as const;
 export type WorkflowBoardColumnId = (typeof WORKFLOW_BOARD_COLUMNS)[number];
@@ -63,11 +64,12 @@ export function runMatchesBoardSearch(run: WorkflowRunSummary, query: string): b
 
 export function filterRunsForBoard(
   runs: WorkflowRunSummary[],
-  opts: { searchQuery: string; workflowFilterId: string },
+  opts: { searchQuery: string; workflowFilterId: string; triggerFilter?: string },
 ): WorkflowRunSummary[] {
   const wf = opts.workflowFilterId.trim();
   return runs.filter((run) => {
     if (wf && run.definitionId !== wf) return false;
+    if (!runMatchesTriggerFilter(run, opts.triggerFilter ?? 'all')) return false;
     return runMatchesBoardSearch(run, opts.searchQuery);
   });
 }

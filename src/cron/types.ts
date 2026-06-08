@@ -4,6 +4,7 @@ import type { SessionStore } from '../session/store.js';
 import type {
   WorkflowRunInputEnvelope,
   WorkflowRunSource,
+  WorkflowRunView,
 } from '../workflows/domain/index.js';
 import type {
   StartWorkflowRunServiceParams,
@@ -40,6 +41,8 @@ export interface CronWorkflowRunPayload {
   goal?: string;
   agentId?: string;
   sessionKey?: string;
+  /** When true (default), cron waits for terminal workflow status before marking the job result. */
+  waitForCompletion?: boolean;
   source?: Partial<Extract<WorkflowRunSource, { kind: 'cron' }>>;
 }
 
@@ -146,6 +149,8 @@ export interface CronRunOutcome {
 
 export interface CronWorkflowRunStarter {
   startWorkflowRun(params: StartWorkflowRunServiceParams): Promise<WorkflowRunServiceResult>;
+  readWorkflowRunView?(agentId: string, runId: string): Promise<WorkflowRunView | null>;
+  retryWorkflowRun?(params: { agentId: string; runId: string }): Promise<WorkflowRunServiceResult>;
 }
 
 /** Optional hook after a successful cron run (e.g. wake gateway heartbeat). */

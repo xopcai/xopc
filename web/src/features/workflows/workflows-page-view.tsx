@@ -27,6 +27,8 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
     searchQuery,
     workflowFilterId,
     setWorkflowFilterId,
+    triggerFilter,
+    setTriggerFilter,
     selectedRunId,
     selectedRunView,
     selectedRunLoading,
@@ -93,6 +95,21 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <select
+              value={triggerFilter}
+              aria-label={labels.boardTriggerFilterAria}
+              onChange={(event) => setTriggerFilter(event.target.value)}
+              className={cn(
+                'h-9 min-w-[7.5rem] rounded-lg border border-edge bg-surface-panel px-2.5 text-xs font-medium text-fg shadow-surface',
+                interaction.focusRingPanel,
+              )}
+            >
+              <option value="all">{labels.boardTriggerFilterAll}</option>
+              <option value="cron">{labels.boardTriggerFilterCron}</option>
+              <option value="webui">{labels.boardTriggerFilterWebui}</option>
+              <option value="chat">{labels.boardTriggerFilterChat}</option>
+              <option value="api">{labels.boardTriggerFilterApi}</option>
+            </select>
+            <select
               value={workflowFilterId}
               aria-label={labels.boardWorkflowFilterAria}
               onChange={(event) => setWorkflowFilterId(event.target.value)}
@@ -148,6 +165,7 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
             }}
             searchQuery={searchQuery}
             workflowFilterId={workflowFilterId}
+            triggerFilter={triggerFilter}
             selectedRunId={selectedRunId}
             loading={loading}
             onOpenRun={openRunDetails}

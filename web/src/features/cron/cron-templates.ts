@@ -8,6 +8,9 @@ export interface CronJobTemplateDef {
   category: CronTemplateCategory;
   defaultSchedule: string;
   defaultSessionTarget: 'isolated';
+  /** When set, the template opens as a direct workflow run instead of an agent message. */
+  taskKind?: 'workflowRun';
+  workflowDefinitionId?: string;
 }
 
 /** Grouped like common scheduled-task UIs: daily rhythm, external monitoring, periodic reports, repo automation. */
@@ -26,6 +29,14 @@ export const CRON_JOB_TEMPLATES = [
     defaultSessionTarget: 'isolated',
   },
   {
+    templateId: 'meeting_prep',
+    category: 'daily',
+    defaultSchedule: '0 9 * * 1-5',
+    defaultSessionTarget: 'isolated',
+    taskKind: 'workflowRun',
+    workflowDefinitionId: 'meeting_prep',
+  },
+  {
     templateId: 'end_of_day_wrap_up',
     category: 'daily',
     defaultSchedule: '0 18 * * 1-5',
@@ -36,6 +47,8 @@ export const CRON_JOB_TEMPLATES = [
     category: 'daily',
     defaultSchedule: '30 8 * * 1-5',
     defaultSessionTarget: 'isolated',
+    taskKind: 'workflowRun',
+    workflowDefinitionId: 'inbox_triage',
   },
   // Monitoring
   {
@@ -43,6 +56,8 @@ export const CRON_JOB_TEMPLATES = [
     category: 'monitoring',
     defaultSchedule: '0 9 * * 1',
     defaultSessionTarget: 'isolated',
+    taskKind: 'workflowRun',
+    workflowDefinitionId: 'competitor_scan',
   },
   {
     templateId: 'trending_topics_monitor',
@@ -68,6 +83,8 @@ export const CRON_JOB_TEMPLATES = [
     category: 'reports',
     defaultSchedule: '0 17 * * 5',
     defaultSessionTarget: 'isolated',
+    taskKind: 'workflowRun',
+    workflowDefinitionId: 'weekly_review',
   },
   {
     templateId: 'code_quality_report',
@@ -87,6 +104,14 @@ export const CRON_JOB_TEMPLATES = [
     defaultSchedule: '0 16 * * 5',
     defaultSessionTarget: 'isolated',
   },
+  {
+    templateId: 'content_repurpose',
+    category: 'reports',
+    defaultSchedule: '0 11 * * 4',
+    defaultSessionTarget: 'isolated',
+    taskKind: 'workflowRun',
+    workflowDefinitionId: 'content_repurpose',
+  },
   // Automation
   {
     templateId: 'stale_todo_or_issue_sweep',
@@ -99,6 +124,30 @@ export const CRON_JOB_TEMPLATES = [
     category: 'automation',
     defaultSchedule: '0 10 * * 4',
     defaultSessionTarget: 'isolated',
+  },
+  {
+    templateId: 'client_proposal',
+    category: 'automation',
+    defaultSchedule: '0 10 * * 2',
+    defaultSessionTarget: 'isolated',
+    taskKind: 'workflowRun',
+    workflowDefinitionId: 'client_proposal',
+  },
+  {
+    templateId: 'offer_design',
+    category: 'automation',
+    defaultSchedule: '0 14 1 * *',
+    defaultSessionTarget: 'isolated',
+    taskKind: 'workflowRun',
+    workflowDefinitionId: 'offer_design',
+  },
+  {
+    templateId: 'decision_compare',
+    category: 'automation',
+    defaultSchedule: '0 15 * * 3',
+    defaultSessionTarget: 'isolated',
+    taskKind: 'workflowRun',
+    workflowDefinitionId: 'decision_compare',
   },
   {
     templateId: 'workspace_cleanup_suggestions',

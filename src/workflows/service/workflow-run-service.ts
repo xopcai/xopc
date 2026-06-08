@@ -183,6 +183,10 @@ export class WorkflowRunService {
     return new WorkflowRunStore(this.options.service.currentConfig, agentId, eventStore);
   }
 
+  async readWorkflowRunView(agentId: string, runId: string) {
+    return this.createRunStore(agentId).readRunView(runId);
+  }
+
   private loadDefinition(definitionId: string): WorkflowDefinition | null {
     const catalog = createWorkflowCatalog();
     try {

@@ -2,7 +2,7 @@ import { Clock, Loader2, RefreshCw } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import type { CronJob, CronRunHistoryRow } from '@/features/cron/cron-api';
-import { navigateToSessionChat } from '@/features/cron/cron-page-lib';
+import { navigateToSessionChat, navigateToWorkflowRun } from '@/features/cron/cron-page-lib';
 import {
   execStatusLabel,
   formatDuration,
@@ -85,6 +85,7 @@ export function CronRunHistorySection({
                 <th className="px-3 py-2.5 font-medium">{c.status}</th>
                 <th className="px-3 py-2.5 font-medium">{c.colDuration}</th>
                 <th className="px-3 py-2.5 font-medium">{c.colDetail}</th>
+                <th className="px-3 py-2.5 font-medium">{c.colWorkflow}</th>
                 <th className="px-3 py-2.5 font-medium">{c.colChat}</th>
               </tr>
             </thead>
@@ -131,6 +132,21 @@ export function CronRunHistorySection({
                     title={row.summary || row.error || ''}
                   >
                     {truncate(row.summary || row.error, 96)}
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-2.5">
+                    {row.workflowRunId?.trim() ? (
+                      <button
+                        type="button"
+                        className="text-xs font-medium text-accent hover:underline"
+                        title={c.openWorkflowTitle}
+                        aria-label={c.openWorkflowTitle}
+                        onClick={() => navigateToWorkflowRun(row.workflowRunId)}
+                      >
+                        {c.openWorkflow}
+                      </button>
+                    ) : (
+                      <span className="text-fg-disabled">—</span>
+                    )}
                   </td>
                   <td className="whitespace-nowrap px-3 py-2.5">
                     {row.sessionKey?.trim() ? (
