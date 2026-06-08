@@ -1,4 +1,5 @@
 // Cron job executor with timeout, retry logic and agent integration
+import type { WorkflowRunView } from '../workflows/domain/index.js';
 import type {
   CronRunOutcome,
   CronWorkflowRunStarter,
@@ -27,6 +28,13 @@ import {
 } from '../heartbeat/tokens.js';
 import { DEFAULT_AGENT_ID, normalizeAgentId } from '../agent/agent-scope.js';
 import { buildSessionKey } from '../routing/session-key.js';
+import {
+  buildWorkflowRunCronSummary,
+  buildWorkflowRunDeliveryText,
+  isWorkflowRunCronSuccess,
+  resolveWorkflowCronWaitMs,
+  waitForWorkflowRunView,
+} from './workflow-run-completion.js';
 
 const log = createLogger('CronExecutor');
 
@@ -293,14 +301,157 @@ export class DefaultJobExecutor implements JobExecutor {
       'Workflow run started from cron',
     );
 
-    return {
-      status: 'ok',
-      summary: `Started workflow run ${result.runId}`,
-      sessionId: result.sessionKey,
+    const waitForCompletion = job.payload.waitForCompletion !== false;
+    if (!waitForCompletion || !this.workflowRunService.readWorkflowRunView) {
+      return {
+        status: 'ok',
+        summary: `Started workflow run ${result.runId}`,
+        sessionId: result.sessionKey,
+        sessionKey: result.sessionKey,
+        sessionType: 'workflow',
+        workflowRunId: result.runId,
+      };
+    }
+
+    return this.waitForWorkflowRunOutcome({
+      job,
+      agentId,
       sessionKey: result.sessionKey,
+      initialRunId: result.runId,
+      signal,
+    });
+  }
+
+  private async waitForWorkflowRunOutcome(params: {
+    job: JobData;
+    agentId: string;
+    sessionKey: string;
+    initialRunId: string;
+    signal: AbortSignal;
+  }): Promise<CronRunOutcome> {
+    const waitMs = resolveWorkflowCronWaitMs(params.job.timeout);
+    const maxWorkflowRetries = Math.max(0, params.job.maxRetries ?? 0);
+    let runId = params.initialRunId;
+    let attempt = 0;
+
+    while (attempt <= maxWorkflowRetries) {
+      const waitResult = await waitForWorkflowRunView({
+        readView: (id) => this.workflowRunService!.readWorkflowRunView!(params.agentId, id),
+        runId,
+        signal: params.signal,
+        timeoutMs: waitMs,
+      });
+
+      if (waitResult.kind === 'aborted') {
+        return { status: 'skipped', error: 'Job was aborted while waiting for workflow run' };
+      }
+
+      if (waitResult.kind === 'timeout') {
+        return {
+          status: 'error',
+          error: `Workflow run ${runId} did not finish within ${waitMs}ms`,
+          summary: waitResult.lastView ? buildWorkflowRunCronSummary(waitResult.lastView) : undefined,
+          sessionId: params.sessionKey,
+          sessionKey: params.sessionKey,
+          sessionType: 'workflow',
+          workflowRunId: runId,
+        };
+      }
+
+      const view = waitResult.view;
+      const summary = buildWorkflowRunCronSummary(view);
+      const succeeded = isWorkflowRunCronSuccess(view);
+
+      if (succeeded) {
+        const baseOutcome: CronRunOutcome = {
+          status: 'ok',
+          summary,
+          sessionId: params.sessionKey,
+          sessionKey: params.sessionKey,
+          sessionType: 'workflow',
+          workflowRunId: runId,
+        };
+        await this.deliverWorkflowRunOutcome(params.job, view, baseOutcome);
+        return baseOutcome;
+      }
+
+      const canRetry =
+        attempt < maxWorkflowRetries &&
+        view.run.status === 'failed' &&
+        Boolean(this.workflowRunService?.retryWorkflowRun);
+
+      if (!canRetry) {
+        return {
+          status: 'error',
+          summary,
+          error: summary,
+          sessionId: params.sessionKey,
+          sessionKey: params.sessionKey,
+          sessionType: 'workflow',
+          workflowRunId: runId,
+        };
+      }
+
+      const retryResult = await this.workflowRunService!.retryWorkflowRun!({
+        agentId: params.agentId,
+        runId,
+      });
+      if (retryResult.ok === false) {
+        return {
+          status: 'error',
+          error: retryResult.message,
+          summary,
+          sessionId: params.sessionKey,
+          sessionKey: params.sessionKey,
+          sessionType: 'workflow',
+          workflowRunId: runId,
+        };
+      }
+
+      runId = retryResult.runId;
+      attempt += 1;
+      log.info(
+        { jobId: params.job.id, attempt, workflowRunId: runId },
+        'Retrying failed workflow run from cron',
+      );
+    }
+
+    return {
+      status: 'error',
+      error: 'Workflow run retries exhausted',
+      sessionId: params.sessionKey,
+      sessionKey: params.sessionKey,
       sessionType: 'workflow',
-      workflowRunId: result.runId,
+      workflowRunId: runId,
     };
+  }
+
+  private async deliverWorkflowRunOutcome(
+    job: JobData,
+    view: WorkflowRunView,
+    outcome: CronRunOutcome,
+  ): Promise<void> {
+    if (!this.messageBus) return;
+    const delivery = job.delivery;
+    if (!delivery || delivery.mode === 'none' || delivery.channel === 'local' || !delivery.to?.trim()) {
+      return;
+    }
+
+    try {
+      const text = buildWorkflowRunDeliveryText(view);
+      const outbound = await this.buildCronOutboundMessage(delivery.channel!, delivery.to!, text);
+      await this.messageBus.publishOutbound(outbound);
+      log.info(
+        { jobId: job.id, channel: delivery.channel, to: outbound.chat_id, workflowRunId: view.run.id },
+        'Delivered workflow run result from cron',
+      );
+    } catch (err) {
+      const em = err instanceof Error ? err.message : String(err);
+      log.warn({ jobId: job.id, err, workflowRunId: view.run.id }, `Workflow cron delivery failed: ${em}`);
+      if (outcome.status === 'ok') {
+        outcome.summary = `${outcome.summary ?? ''} (delivery failed: ${em})`.trim();
+      }
+    }
   }
 
   /**

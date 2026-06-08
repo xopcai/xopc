@@ -16,7 +16,11 @@ import {
   selectClassName,
 } from '@/features/cron/cron-page-lib';
 import { agentListDisplayName } from '@/features/settings/agents/agent-display-names';
+import { WorkflowArgFieldsForm } from '@/features/workflows/workflow-arg-fields-form';
+import type { WorkflowDefinition } from '@/features/workflows/workflow-api';
+import { resolveWorkflowLocalizedCopy } from '@/features/workflows/workflow-meta-locale';
 import type { MessageBundle } from '@/i18n/messages';
+import { useLocaleStore } from '@/stores/locale-store';
 import { cn } from '@/lib/cn';
 
 type CronCopy = MessageBundle['cron'];
@@ -41,12 +45,14 @@ export type CronJobFormDialogProps = {
   formSubmitting: boolean;
   formTaskKind: 'message' | 'workflowRun';
   onFormTaskKindChange: (v: 'message' | 'workflowRun') => void;
+  workflowDefinitions: WorkflowDefinition[];
+  workflowDefinitionsLoading: boolean;
   formWorkflowDefinitionId: string;
   onFormWorkflowDefinitionIdChange: (v: string) => void;
   formWorkflowGoal: string;
   onFormWorkflowGoalChange: (v: string) => void;
-  formWorkflowInputJson: string;
-  onFormWorkflowInputJsonChange: (v: string) => void;
+  formWorkflowArgValues: Record<string, string>;
+  onFormWorkflowArgValuesChange: (v: Record<string, string>) => void;
   formSessionTarget: 'main' | 'isolated';
   onFormSessionTargetChange: (
     target: 'main' | 'isolated',
@@ -98,12 +104,14 @@ export function CronJobFormDialog(props: CronJobFormDialogProps) {
     formSubmitting,
     formTaskKind,
     onFormTaskKindChange,
+    workflowDefinitions,
+    workflowDefinitionsLoading,
     formWorkflowDefinitionId,
     onFormWorkflowDefinitionIdChange,
     formWorkflowGoal,
     onFormWorkflowGoalChange,
-    formWorkflowInputJson,
-    onFormWorkflowInputJsonChange,
+    formWorkflowArgValues,
+    onFormWorkflowArgValuesChange,
     formSessionTarget,
     onFormSessionTargetChange,
     formAgentLocalOnly,
@@ -130,6 +138,14 @@ export function CronJobFormDialog(props: CronJobFormDialogProps) {
     onRefreshRecipients,
   } = props;
 
+  const language = useLocaleStore((s) => s.language);
+  const selectedWorkflow = workflowDefinitions.find(
+    (definition) => definition.id === formWorkflowDefinitionId.trim(),
+  );
+  const selectedWorkflowCopy = selectedWorkflow
+    ? resolveWorkflowLocalizedCopy(selectedWorkflow, language)
+    : null;
+
   return (
     <>
       <Dialog.Root open={open} onOpenChange={(o) => !o && onRequestClose()}>
@@ -137,7 +153,7 @@ export function CronJobFormDialog(props: CronJobFormDialogProps) {
           <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[60] bg-scrim" />
           <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 pointer-events-none">
             <Dialog.Content
-              className="xopc-dialog-content-pane pointer-events-auto relative flex max-h-[min(90vh,800px)] w-full max-w-md flex-col rounded-xl border border-edge bg-surface-panel shadow-popover outline-none sm:max-w-lg lg:max-w-xl dark:border-edge"
+              className="xopc-dialog-content-pane pointer-events-auto relative flex h-[min(90vh,800px)] w-full max-w-md flex-col rounded-xl border border-edge bg-surface-panel shadow-popover outline-none sm:max-w-lg lg:max-w-xl dark:border-edge"
               onOpenAutoFocus={(e) => e.preventDefault()}
             >
               <div className="flex shrink-0 items-center justify-between gap-2 border-b border-edge px-4 py-3">
@@ -183,34 +199,48 @@ export function CronJobFormDialog(props: CronJobFormDialogProps) {
                   {formTaskKind === 'workflowRun' ? (
                     <>
                       <label className="flex flex-col gap-1">
-                        <span className="text-xs font-medium text-fg-muted">{c.workflowDefinitionId}</span>
-                        <input
-                          type="text"
-                          className={inputClassName()}
+                        <span className="text-xs font-medium text-fg-muted">{c.workflowDefinition}</span>
+                        <select
+                          className={selectClassName()}
                           value={formWorkflowDefinitionId}
+                          disabled={formSubmitting || workflowDefinitionsLoading}
                           onChange={(e) => onFormWorkflowDefinitionIdChange(e.target.value)}
-                          placeholder={c.workflowDefinitionPlaceholder}
-                        />
+                        >
+                          <option value="">
+                            {workflowDefinitionsLoading ? c.workflowDefinitionsLoading : c.workflowDefinitionPlaceholder}
+                          </option>
+                          {formWorkflowDefinitionId.trim() &&
+                          !workflowDefinitions.some((d) => d.id === formWorkflowDefinitionId.trim()) ? (
+                            <option value={formWorkflowDefinitionId}>{formWorkflowDefinitionId}</option>
+                          ) : null}
+                          {workflowDefinitions.map((definition) => (
+                            <option key={definition.id} value={definition.id}>
+                              {definition.title}
+                              {definition.metadata.source === 'user' ? ` (${c.workflowDefinitionCustom})` : ''}
+                            </option>
+                          ))}
+                        </select>
+                        {!workflowDefinitionsLoading && workflowDefinitions.length === 0 ? (
+                          <p className="text-xs text-fg-muted">{c.workflowDefinitionsEmpty}</p>
+                        ) : null}
+                        {selectedWorkflowCopy ? (
+                          <p className="text-xs leading-5 text-fg-muted">{selectedWorkflowCopy.description}</p>
+                        ) : formWorkflowDefinitionId.trim() && !selectedWorkflow ? (
+                          <p className="text-xs text-amber-700 dark:text-amber-300">{c.workflowDefinitionMissing}</p>
+                        ) : null}
                       </label>
-                      <label className="flex flex-col gap-1">
-                        <span className="text-xs font-medium text-fg-muted">{c.workflowGoal}</span>
-                        <textarea
-                          className={cn(inputClassName(), 'min-h-20 resize-y')}
-                          value={formWorkflowGoal}
-                          onChange={(e) => onFormWorkflowGoalChange(e.target.value)}
-                          placeholder={c.workflowGoalPlaceholder}
+                      {formWorkflowDefinitionId.trim() ? (
+                        <WorkflowArgFieldsForm
+                          workflowName={formWorkflowDefinitionId.trim()}
+                          language={language}
+                          argValues={formWorkflowArgValues}
+                          onArgValuesChange={onFormWorkflowArgValuesChange}
+                          goal={formWorkflowGoal}
+                          onGoalChange={onFormWorkflowGoalChange}
+                          examplePrompts={selectedWorkflowCopy?.examplePrompts ?? []}
+                          inputClassName={inputClassName()}
                         />
-                      </label>
-                      <label className="flex flex-col gap-1">
-                        <span className="text-xs font-medium text-fg-muted">{c.workflowInputJson}</span>
-                        <textarea
-                          className={cn(inputClassName(), 'min-h-28 resize-y font-mono text-xs')}
-                          value={formWorkflowInputJson}
-                          onChange={(e) => onFormWorkflowInputJsonChange(e.target.value)}
-                          spellCheck={false}
-                        />
-                        <span className="text-xs text-fg-muted">{c.workflowInputJsonHint}</span>
-                      </label>
+                      ) : null}
                       <label className="flex flex-col gap-1">
                         <span className="text-xs font-medium text-fg-muted">{c.agentProfile}</span>
                         <select
@@ -228,6 +258,86 @@ export function CronJobFormDialog(props: CronJobFormDialogProps) {
                         </select>
                         <p className="text-xs text-fg-muted">{c.agentProfileHint}</p>
                       </label>
+                      <label className="flex cursor-pointer items-start gap-2 rounded-md bg-surface-hover/45 px-3 py-2 dark:bg-surface-hover/30">
+                        <input
+                          type="checkbox"
+                          className={cn('ui-checkbox', 'mt-0.5')}
+                          checked={formAgentLocalOnly}
+                          onChange={(e) => onFormAgentLocalOnlyChange(e.target.checked)}
+                          aria-label={c.workflowLocalOnly}
+                        />
+                        <span>
+                          <span className="text-sm font-medium text-fg">{c.workflowLocalOnly}</span>
+                          <p className="mt-1 text-xs text-fg-muted">{c.workflowLocalOnlyHint}</p>
+                        </span>
+                      </label>
+                      {showChannelPicker ? (
+                        <>
+                          <label className="flex flex-col gap-1">
+                            <span className="text-xs font-medium text-fg-muted">{c.channel}</span>
+                            <select
+                              className={selectClassName()}
+                              value={formChannel}
+                              onChange={(e) => onFormChannelChange(e.target.value)}
+                            >
+                              <option value="local">{c.channelLocal}</option>
+                              {channels.map((ch) => (
+                                <option key={ch.name} value={ch.name} disabled={!ch.enabled}>
+                                  {ch.name} {!ch.enabled ? '(disabled)' : ''}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          {needsDeliveryChat ? (
+                            <div className="flex flex-col gap-1">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-xs font-medium text-fg-muted">{c.recipient}</span>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  className="h-7 gap-1 px-2 text-xs"
+                                  title={c.refreshRecipientHint}
+                                  onClick={() => void onRefreshRecipients()}
+                                >
+                                  <RefreshCw className="size-3.5" strokeWidth={1.75} />
+                                  {c.refreshList}
+                                </Button>
+                              </div>
+                              <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch sm:gap-2">
+                                <input
+                                  type="text"
+                                  className={cn(inputClassName(), 'min-w-0 w-full sm:flex-1')}
+                                  value={formChatId}
+                                  onChange={(e) => onFormChatIdChange(e.target.value)}
+                                  placeholder={c.recipientPlaceholder}
+                                />
+                                <select
+                                  className={cronRecipientSelectClass}
+                                  value={formChatId}
+                                  onChange={(e) => {
+                                    const v = e.target.value;
+                                    if (v) onFormChatIdChange(v);
+                                  }}
+                                >
+                                  <option value="">{c.selectRecipient}</option>
+                                  {sessionChatIds.length > 0 ? (
+                                    sessionChatIds.map((item) => (
+                                      <option key={`${item.channel}-${item.chatId}`} value={item.chatId}>
+                                        {formatRecipientOptionLabel(item, c.lastActiveLabels)}
+                                      </option>
+                                    ))
+                                  ) : (
+                                    <option value="" disabled>
+                                      {c.noRecentChatsOption}
+                                    </option>
+                                  )}
+                                </select>
+                              </div>
+                              <p className="text-xs text-fg-muted">{c.workflowDeliveryHint}</p>
+                            </div>
+                          ) : null}
+                        </>
+                      ) : null}
                     </>
                   ) : null}
                   {formTaskKind === 'message' ? (

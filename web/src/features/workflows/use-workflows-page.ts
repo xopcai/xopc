@@ -26,6 +26,7 @@ import {
   WORKFLOW_SEARCH_PARAM,
   WORKFLOW_START_PARAM,
   WORKFLOW_TAB_PARAM,
+  WORKFLOW_TRIGGER_FILTER_PARAM,
   WORKFLOW_WF_FILTER_PARAM,
 } from './workflow-page.constants';
 import { filterDefinitions, interpolate, workflowChatHref } from './workflow-page.utils';
@@ -43,6 +44,7 @@ export function useWorkflowsPage() {
 
   const searchQuery = searchParams.get(WORKFLOW_SEARCH_PARAM) ?? '';
   const workflowFilterId = searchParams.get(WORKFLOW_WF_FILTER_PARAM)?.trim() ?? '';
+  const triggerFilter = searchParams.get(WORKFLOW_TRIGGER_FILTER_PARAM)?.trim() || 'all';
   const runParam = searchParams.get(WORKFLOW_RUN_PARAM)?.trim() ?? '';
 
   const [startDefinition, setStartDefinition] = useState<WorkflowDefinition | null>(null);
@@ -118,6 +120,17 @@ export function useWorkflowsPage() {
         const trimmed = value.trim();
         if (trimmed) next.set(WORKFLOW_WF_FILTER_PARAM, trimmed);
         else next.delete(WORKFLOW_WF_FILTER_PARAM);
+      });
+    },
+    [patchSearchParams],
+  );
+
+  const setTriggerFilter = useCallback(
+    (value: string) => {
+      patchSearchParams((next) => {
+        const trimmed = value.trim();
+        if (trimmed && trimmed !== 'all') next.set(WORKFLOW_TRIGGER_FILTER_PARAM, trimmed);
+        else next.delete(WORKFLOW_TRIGGER_FILTER_PARAM);
       });
     },
     [patchSearchParams],
@@ -303,6 +316,8 @@ export function useWorkflowsPage() {
     setSearchQuery,
     workflowFilterId,
     setWorkflowFilterId,
+    triggerFilter,
+    setTriggerFilter,
     definitions,
     filteredDefinitions,
     runs,

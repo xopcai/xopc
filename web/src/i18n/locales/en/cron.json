@@ -70,14 +70,19 @@
     "taskKind": "Task type",
     "taskKindMessage": "Send message / AI processing",
     "taskKindWorkflowRun": "Run Workflow",
-    "workflowDefinitionId": "Workflow Definition ID *",
-    "workflowDefinitionPlaceholder": "e.g. daily-briefing",
+    "workflowDefinition": "Workflow template *",
+    "workflowDefinitionPlaceholder": "Select a workflow…",
+    "workflowDefinitionsLoading": "Loading workflows…",
+    "workflowDefinitionsEmpty": "No workflows found. Add templates under ~/.xopc/workflows/ or use built-ins.",
+    "workflowDefinitionCustom": "custom",
+    "workflowDefinitionMissing": "This workflow id is not in the current catalog. Pick another template or fix the id.",
+    "workflowDefinitionRequired": "Select a workflow template",
+    "workflowArgsRequired": "Fill in all required workflow fields",
     "workflowGoal": "Workflow goal",
     "workflowGoalPlaceholder": "What should this run accomplish?",
-    "workflowInputJson": "Workflow input (JSON)",
-    "workflowInputJsonHint": "Passed to the Workflow Run as inputEnvelope.payload.",
-    "workflowDefinitionRequired": "Workflow Definition ID is required",
-    "workflowInputInvalid": "Workflow input must be valid JSON",
+    "workflowLocalOnly": "Local only (no channel delivery)",
+    "workflowLocalOnlyHint": "Run completes on the gateway; transcript is saved under Workflows. Uncheck to send the result to a channel when the run finishes.",
+    "workflowDeliveryHint": "When the workflow finishes, a summary and result preview are sent to this recipient.",
     "message": "Message *",
     "messagePlaceholder": "What should the assistant do?",
     "messageEdit": "Edit",
@@ -114,6 +119,9 @@
     "colChat": "Chat",
     "openChat": "Open",
     "openChatTitle": "Open this run in chat (isolated agent sessions only)",
+    "openWorkflow": "Workflow",
+    "openWorkflowTitle": "Open this run on the workflows board",
+    "colWorkflow": "Workflow",
     "execStatusRunning": "Running",
     "execStatusSuccess": "Success",
     "execStatusFailed": "Failed",
@@ -241,6 +249,11 @@
         "description": "Draft a standup-style update from recent git activity and notable file changes in the workspace.",
         "prompt": "Prepare a **standup update** for me:\n- If Git is available: **yesterday / since last standup** themes from `git log` (no wall of SHAs), risky paths if obvious from messages.\n- If not: give **commands** I should run locally next time.\n- **Files touched**: infer from workspace if you can (recent edits, open PR-style hints); mark uncertain.\n- **Blockers**: max 3, honest \"unknown\" allowed.\n- **Today intent**: one sentence.\n- Keep it speakable aloud in under ~90 seconds."
       },
+      "meeting_prep": {
+        "title": "Meeting prep",
+        "description": "Run the meeting_prep workflow before calls—agenda, talking points, and risks.",
+        "prompt": "Workflow: meeting_prep — fill meeting topic and attendees in the form."
+      },
       "end_of_day_wrap_up": {
         "title": "End-of-day wrap-up",
         "description": "Summarize progress, open items, and tomorrow's priorities from workspace context when possible.",
@@ -291,6 +304,11 @@
         "description": "Summarize recurring feedback and pain points from notes, issues exports, or docs you keep in the workspace.",
         "prompt": "I store feedback in (edit paths or patterns): **`feedback/`, issues export, Notion export, etc.`**\n- From readable workspace text, cluster **recurring themes**, **sentiment (rough)**, and **top pain points** (max 5).\n- If no material: give a **template** for how I should paste feedback next time.\n- No PII beyond what is already in files; redact if needed in summary."
       },
+      "content_repurpose": {
+        "title": "Content repurpose",
+        "description": "Turn one piece of content into multi-platform drafts via the content_repurpose workflow.",
+        "prompt": "Workflow: content_repurpose — paste source content and target platforms in the form."
+      },
       "stale_todo_or_issue_sweep": {
         "title": "Stale todo / issue sweep",
         "description": "Find aging TODOs or issue-like markers in the repo and suggest keep / close / split.",
@@ -300,6 +318,21 @@
         "title": "Release notes draft",
         "description": "Draft changelog bullets from recent commits and version files—human must verify before ship.",
         "prompt": "Draft **release notes / changelog** candidate for the **next** version bump:\n- Read `CHANGELOG`, version in `package.json`/`Cargo.toml`/similar if present.\n- Summarize **user-visible** changes from recent commits since last tag if inferable; else since last week.\n- Mark **uncertain** items; I will edit before publishing.\n- No marketing exaggeration."
+      },
+      "client_proposal": {
+        "title": "Client proposal",
+        "description": "Draft a client proposal from a brief using the client_proposal workflow.",
+        "prompt": "Workflow: client_proposal — fill client brief and offer details in the form."
+      },
+      "offer_design": {
+        "title": "Offer design",
+        "description": "Monthly offer packaging review for solopreneurs via the offer_design workflow.",
+        "prompt": "Workflow: offer_design — describe skills, audience, and constraints in the form."
+      },
+      "decision_compare": {
+        "title": "Decision compare",
+        "description": "Compare options with trade-offs using the decision_compare workflow.",
+        "prompt": "Workflow: decision_compare — fill the decision question and options in the form."
       },
       "workspace_cleanup_suggestions": {
         "title": "Workspace cleanup",

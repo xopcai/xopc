@@ -7,6 +7,8 @@ import { EditorState } from '@codemirror/state';
 import { oneDark } from '@codemirror/theme-one-dark';
 import { EditorView, keymap, highlightActiveLine, lineNumbers } from '@codemirror/view';
 
+import { appCodeMirrorTheme } from '@/components/codemirror/app-editor-theme';
+
 export interface MarkdownEditorProps {
   /**
    * Seed document on mount (and when `isDark` toggles, the view is recreated with the current prop).
@@ -49,16 +51,7 @@ export function MarkdownEditor({
             onChangeRef.current(update.state.doc.toString());
           }
         }),
-        EditorView.theme({
-          '&': { height: '100%', fontSize: '14px' },
-          '.cm-scroller': {
-            fontFamily: 'var(--font-mono)',
-            lineHeight: '1.7',
-            overflow: 'auto',
-          },
-          '.cm-content': { padding: '16px 20px' },
-          '.cm-focused': { outline: 'none' },
-        }),
+        appCodeMirrorTheme,
       ],
     });
 

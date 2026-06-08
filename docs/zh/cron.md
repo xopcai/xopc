@@ -77,7 +77,16 @@ xopc cron add --schedule "0 18 * * 1-5" --message "收工提醒" --name "EOD"
 
 直接发渠道、isolated 智能体运行等（文档中曾用 positional `cron add` 示例）**尚未**在 CLI 暴露，请使用 Web UI 或 jobs 文件。
 
-**工作流运行：** 在 `#/settings/cron` 中选择任务类型 **工作流运行**，可直接定时执行已保存的工作流定义（无需助手轮次）。详见 [动态工作流](workflows.md)。
+**工作流运行：** 可直接定时执行工作流（无需助手轮次）：
+
+```bash
+xopc cron add --schedule "0 17 * * 5" --workflow weekly_review --goal "周复盘"
+xopc cron add --schedule "30 8 * * 1-5" --workflow inbox_triage \
+  --input-json '{"inbox":"在此粘贴待分拣内容"}' \
+  --channel telegram --to <chat-id>
+```
+
+在 `#/settings/cron` 中选择任务类型 **工作流运行** 可获得相同能力（结构化参数 + 可选投递）。默认等待工作流完成（超时约 35 分钟）。详见 [动态工作流](workflows.md)。
 
 ## Cron 表达式格式
 

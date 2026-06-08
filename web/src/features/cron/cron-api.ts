@@ -23,6 +23,8 @@ export interface CronWorkflowRunPayload {
   goal?: string;
   agentId?: string;
   sessionKey?: string;
+  /** When omitted or true, cron waits for terminal workflow status (default). */
+  waitForCompletion?: boolean;
   source?: Partial<Extract<WorkflowRunSource, { kind: 'cron' }>>;
 }
 
@@ -54,6 +56,7 @@ export interface AddJobOptions {
   agentId?: string;
   workingDirectory?: string;
   model?: string;
+  timeout?: number;
   delivery?: CronDelivery;
   payload: CronPayload;
 }
