@@ -17,6 +17,8 @@ export interface WorkflowAgentStep {
   label: string;
   detail?: string;
   status: WorkflowAgentStepStatus;
+  resultPreview?: string;
+  error?: string;
   startedAtMs?: number;
   durationMs?: number;
 }

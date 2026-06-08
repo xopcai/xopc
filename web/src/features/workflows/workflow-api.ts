@@ -187,8 +187,11 @@ export interface WorkflowAgentView {
     id: string;
     label: string;
     kind: 'tool' | 'llm' | 'thinking';
+    toolName?: string;
     detail?: string;
     status: 'running' | 'done' | 'error';
+    resultPreview?: string;
+    error?: string;
     startedAtMs?: number;
     completedAtMs?: number;
   }>;
@@ -290,8 +293,12 @@ export async function deleteWorkflowDefinition(id: string): Promise<void> {
   await fetchJson(apiUrl(`/api/workflows/definitions/${encodeURIComponent(id)}`), { method: 'DELETE' });
 }
 
-export async function getWorkflowStats(): Promise<WorkflowStats> {
-  const data = await fetchJson<{ stats: WorkflowStats }>(apiUrl('/api/workflows/stats'));
+export async function getWorkflowStats(definitionId?: string): Promise<WorkflowStats> {
+  const trimmedDefinitionId = definitionId?.trim();
+  const searchParams = new URLSearchParams();
+  if (trimmedDefinitionId) searchParams.set('definitionId', trimmedDefinitionId);
+  const suffix = searchParams.size > 0 ? `?${searchParams.toString()}` : '';
+  const data = await fetchJson<{ stats: WorkflowStats }>(apiUrl(`/api/workflows/stats${suffix}`));
   return data.stats;
 }
 

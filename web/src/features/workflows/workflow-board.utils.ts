@@ -14,16 +14,50 @@ export function resolveRunSessionKey(run: WorkflowRunSummary): string | null {
   return key || null;
 }
 
-export function resolveRunCardTitle(run: WorkflowRunSummary, maxLen = 60): string {
-  const raw = run.title?.trim() || run.definitionId;
-  if (raw.length <= maxLen) return raw;
-  return `${raw.slice(0, maxLen - 1)}…`;
+function truncateCardText(value: string, maxLen: number): string {
+  if (value.length <= maxLen) return value;
+  return `${value.slice(0, maxLen - 1)}…`;
+}
+
+function extractStringField(value: unknown, fieldNames: string[]): string | null {
+  if (!value || typeof value !== 'object') return null;
+
+  const record = value as Record<string, unknown>;
+  for (const fieldName of fieldNames) {
+    const fieldValue = record[fieldName];
+    if (typeof fieldValue === 'string' && fieldValue.trim()) return fieldValue.trim();
+  }
+
+  return null;
+}
+
+export function resolveRunUserQuery(run: WorkflowRunSummary, maxLen = 90): string | null {
+  const raw = run.metadata?.input?.goal?.trim()
+    || (typeof run.metadata?.input?.payload === 'string' ? run.metadata.input.payload.trim() : null)
+    || extractStringField(run.metadata?.input?.payload, ['query', 'goal', 'prompt', 'input', 'message'])
+    || extractStringField(run.metadata?.input?.variables, ['query', 'goal', 'prompt', 'input', 'message']);
+
+  if (!raw) return null;
+  return truncateCardText(raw, maxLen);
+}
+
+export function resolveRunCardTitle(run: WorkflowRunSummary, maxLen = 90): string {
+  return resolveRunUserQuery(run, maxLen) ?? truncateCardText(run.title?.trim() || run.definitionId, maxLen);
+}
+
+export function resolveRunWorkflowLabel(run: WorkflowRunSummary, maxLen = 44): string {
+  return truncateCardText(run.title?.trim() || run.definitionId, maxLen);
 }
 
 export function runMatchesBoardSearch(run: WorkflowRunSummary, query: string): boolean {
   const normalized = query.trim().toLowerCase();
   if (!normalized) return true;
-  const haystack = [run.title, run.definitionId, run.id].join(' ').toLowerCase();
+  const haystack = [
+    resolveRunUserQuery(run, 500),
+    run.title,
+    run.definitionId,
+    run.id,
+  ].filter(Boolean).join(' ').toLowerCase();
   return haystack.includes(normalized);
 }
 

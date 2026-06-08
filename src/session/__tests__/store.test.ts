@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtemp, readFile, rm, writeFile } from 'fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
 
@@ -211,6 +211,53 @@ describe('SessionStore', () => {
 
       const listed = await store.list({ channel: 'webchat,gateway' });
       expect(listed.items.some((s) => s.key === key)).toBe(true);
+    });
+
+    it('lists webchat sessions from standalone agent directories outside agents.list', async () => {
+      const previousStateDir = process.env.XOPC_STATE_DIR;
+      process.env.XOPC_STATE_DIR = join(tempDir, '.state');
+      try {
+        const aggregateStore = new SessionStore({ config: testConfig });
+        await aggregateStore.initialize();
+        await mkdir(join(tempDir, '.state', 'agents', 'empty-agent', 'sessions'), { recursive: true });
+
+        const standaloneStore = new SessionStore({ config: testConfig, agentId: 'coder' });
+        await standaloneStore.initialize();
+        const key = 'agent:coder:webchat:default:direct:standalone';
+        await standaloneStore.saveMessages(key, [{ role: 'user', content: 'x', timestamp: Date.now() }]);
+
+        const listed = await aggregateStore.list({ channel: 'webchat,gateway' });
+        expect(listed.items.some((session) => session.key === key)).toBe(true);
+      } finally {
+        if (previousStateDir === undefined) {
+          delete process.env.XOPC_STATE_DIR;
+        } else {
+          process.env.XOPC_STATE_DIR = previousStateDir;
+        }
+      }
+    });
+
+    it('invalidates aggregate cache when a session is written through the same store', async () => {
+      const previousStateDir = process.env.XOPC_STATE_DIR;
+      process.env.XOPC_STATE_DIR = join(tempDir, '.state');
+      try {
+        const aggregateStore = new SessionStore({ config: testConfig });
+        await aggregateStore.initialize();
+        const before = await aggregateStore.list({ channel: 'webchat' });
+        expect(before.items).toHaveLength(0);
+
+        const key = 'agent:main:webchat:default:direct:cache-write';
+        await aggregateStore.saveMessages(key, [{ role: 'user', content: 'x', timestamp: Date.now() }]);
+
+        const after = await aggregateStore.list({ channel: 'webchat' });
+        expect(after.items.some((session) => session.key === key)).toBe(true);
+      } finally {
+        if (previousStateDir === undefined) {
+          delete process.env.XOPC_STATE_DIR;
+        } else {
+          process.env.XOPC_STATE_DIR = previousStateDir;
+        }
+      }
     });
 
     it('should list sessions with status filter', async () => {

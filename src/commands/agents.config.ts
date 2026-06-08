@@ -6,6 +6,8 @@ import { rm } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 
 import type { Config } from '../config/schema.js';
+import type { LocalizedText } from '../config/localized-text.js';
+import { normalizeLocalizedText } from '../config/localized-text.js';
 import {
   listAgentEntries,
   normalizeAgentId,
@@ -28,15 +30,16 @@ export function applyAgentConfig(
   cfg: Config,
   params: {
     agentId: string;
-    name?: string;
-    description?: string;
+    name?: LocalizedText;
+    description?: LocalizedText;
     workspace?: string;
     agentDir?: string;
     model?: string;
   },
 ): Config {
   const agentId = normalizeAgentId(params.agentId);
-  const name = params.name?.trim();
+  const name = normalizeLocalizedText(params.name);
+  const description = normalizeLocalizedText(params.description);
   const list = listAgentEntries(cfg);
   const index = findAgentEntryIndex(list, agentId);
   const base = index >= 0 ? list[index] : { id: agentId, enabled: true as const };
@@ -44,7 +47,7 @@ export function applyAgentConfig(
     ...base,
     enabled: base.enabled ?? true,
     ...(name ? { name } : {}),
-    ...(params.description?.trim() ? { description: params.description.trim() } : {}),
+    ...(description ? { description } : {}),
     ...(params.workspace ? { workspace: params.workspace } : {}),
     ...(params.agentDir ? { agentDir: params.agentDir } : {}),
     ...(params.model ? { model: { primary: params.model } } : {}),

@@ -276,7 +276,7 @@ if (!live.length) return { ok: false, reason: 'no findings' }
 
 ## 配置
 
-运行限制在 `agents.defaults.workflow`。类型化模型角色（`agents.defaults.models`）让脚本引用 `small` / `large` 而非硬编码 `provider/model`。按 Agent 覆盖写在 `agents.list[].models`（同 `id` 覆盖 defaults）。
+运行限制在 `agents.defaults.workflow`。类型化模型角色（`agents.defaults.models`）让脚本引用 `small` / `large` 而非硬编码 `provider/model`。类型化模型角色仅支持全局默认配置。
 
 ```jsonc
 {

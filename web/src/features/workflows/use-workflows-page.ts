@@ -30,6 +30,7 @@ import {
 } from './workflow-page.constants';
 import { filterDefinitions, interpolate, workflowChatHref } from './workflow-page.utils';
 import { resolveRunSessionKey } from './workflow-board.utils';
+import { useWorkflowRunLive } from './use-workflow-run-live';
 
 export function useWorkflowsPage() {
   const language = useLocaleStore((s) => s.language);
@@ -64,9 +65,11 @@ export function useWorkflowsPage() {
       return hasActive ? 3000 : 0;
     },
   });
-  const statsSwr = useSWR(hasToken ? ['workflow-stats', token] : null, getWorkflowStats, {
-    revalidateOnFocus: false,
-  });
+  const statsSwr = useSWR(
+    hasToken ? ['workflow-stats', token, workflowFilterId] : null,
+    () => getWorkflowStats(workflowFilterId),
+    { revalidateOnFocus: false },
+  );
 
   useEffect(() => {
     if (!actionFeedback) return;
@@ -76,6 +79,8 @@ export function useWorkflowsPage() {
 
   const definitions = definitionsSwr.data ?? [];
   const runs = runsSwr.data ?? [];
+  const selectedRunId = runParam || null;
+  const selectedRunLive = useWorkflowRunLive(selectedRunId);
 
   const filteredDefinitions = useMemo(
     () => filterDefinitions(definitions, searchQuery, 'all', 'all'),
@@ -118,6 +123,21 @@ export function useWorkflowsPage() {
     [patchSearchParams],
   );
 
+  const openRunDetails = useCallback(
+    (run: WorkflowRunSummary) => {
+      patchSearchParams((next) => {
+        next.set(WORKFLOW_RUN_PARAM, run.id);
+      });
+    },
+    [patchSearchParams],
+  );
+
+  const closeRunDetails = useCallback(() => {
+    patchSearchParams((next) => {
+      next.delete(WORKFLOW_RUN_PARAM);
+    });
+  }, [patchSearchParams]);
+
   const openRunInChat = useCallback(
     (run: WorkflowRunSummary) => {
       const sessionKey = resolveRunSessionKey(run);
@@ -128,24 +148,12 @@ export function useWorkflowsPage() {
     [navigate],
   );
 
-  // Legacy ?run= / ?tab= deep links → open Chat and clean URL.
   useEffect(() => {
-    const legacyTab = searchParams.get(WORKFLOW_TAB_PARAM);
-    if (!runParam && !legacyTab) return;
-
-    if (runParam && runs.length > 0) {
-      const match = runs.find((item) => item.id === runParam);
-      const sessionKey = match ? resolveRunSessionKey(match) : null;
-      if (sessionKey) {
-        navigate(workflowChatHref(sessionKey), { replace: true });
-      }
-    }
-
+    if (!searchParams.get(WORKFLOW_TAB_PARAM)) return;
     patchSearchParams((next) => {
       next.delete(WORKFLOW_TAB_PARAM);
-      next.delete(WORKFLOW_RUN_PARAM);
     });
-  }, [navigate, patchSearchParams, runParam, runs, searchParams]);
+  }, [patchSearchParams, searchParams]);
 
   useEffect(() => {
     const defId = searchParams.get(WORKFLOW_DEF_PARAM);
@@ -202,14 +210,16 @@ export function useWorkflowsPage() {
         await runsSwr.mutate();
         await statsSwr.mutate();
         setActionFeedback(labels.startSuccess);
-        navigate(workflowChatHref(result.sessionKey));
+        patchSearchParams((next) => {
+          next.set(WORKFLOW_RUN_PARAM, result.runId);
+        });
       } catch (err) {
         setActionError(err instanceof Error ? err.message : labels.startFailed);
       } finally {
         setStarting(false);
       }
     },
-    [labels.startFailed, labels.startSuccess, navigate, runsSwr, startDefinition, statsSwr],
+    [labels.startFailed, labels.startSuccess, patchSearchParams, runsSwr, startDefinition, statsSwr],
   );
 
   const cancelRun = useCallback(
@@ -237,12 +247,14 @@ export function useWorkflowsPage() {
         const result = await retryWorkflowRun(runId);
         await runsSwr.mutate();
         await statsSwr.mutate();
-        navigate(workflowChatHref(result.sessionKey));
+        patchSearchParams((next) => {
+          next.set(WORKFLOW_RUN_PARAM, result.runId);
+        });
       } catch (err) {
         setActionError(err instanceof Error ? err.message : labels.retryFailed);
       }
     },
-    [labels.retryFailed, navigate, runsSwr, statsSwr],
+    [labels.retryFailed, patchSearchParams, runsSwr, statsSwr],
   );
 
   const saveCustomWorkflow = useCallback(
@@ -294,6 +306,12 @@ export function useWorkflowsPage() {
     definitions,
     filteredDefinitions,
     runs,
+    selectedRunId,
+    selectedRunView: selectedRunLive.view,
+    selectedRunLoading: selectedRunLive.loading,
+    selectedRunError: selectedRunLive.error?.message ?? null,
+    openRunDetails,
+    closeRunDetails,
     openRunInChat,
     pickStartOpen,
     setPickStartOpen,

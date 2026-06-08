@@ -6,7 +6,7 @@
  */
 
 import * as Dialog from '@radix-ui/react-dialog';
-import { memo, useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { X } from 'lucide-react';
 
 import { MarkdownView } from '@/features/chat/markdown/markdown-view';
@@ -28,7 +28,11 @@ export type WorkflowAgentDetailDrawerLabels = {
   statusError: string;
   statusSkipped: string;
   workedFor: (duration: string) => string;
+  statusHeading: string;
   phaseHeading: string;
+  elapsedHeading: string;
+  currentStepHeading: string;
+  executionHeading: string;
   promptHeading: string;
   stepsHeading: string;
   outputHeading: string;
@@ -36,6 +40,7 @@ export type WorkflowAgentDetailDrawerLabels = {
   pin: string;
   pinned: string;
   runningPlaceholder: string;
+  resizeLabel: string;
   stream: { heading: string; empty: string };
 };
 
@@ -55,6 +60,17 @@ function statusLabel(agent: WorkflowAgentSnapshot, labels: WorkflowAgentDetailDr
       return agent.status;
   }
 }
+
+function agentStatusTone(status: WorkflowAgentSnapshot['status']): string {
+  if (status === 'done') return 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300';
+  if (status === 'error') return 'bg-rose-500/10 text-rose-700 dark:text-rose-300';
+  if (status === 'running') return 'bg-accent-soft text-accent-fg';
+  return 'bg-surface-hover text-fg-subtle';
+}
+
+const DEFAULT_DRAWER_WIDTH = 448;
+const MIN_DRAWER_WIDTH = 384;
+const MAX_DRAWER_WIDTH = 960;
 
 export const WorkflowAgentDetailDrawer = memo(function WorkflowAgentDetailDrawer({
   open,
@@ -100,6 +116,31 @@ export const WorkflowAgentDetailDrawer = memo(function WorkflowAgentDetailDrawer
     [m],
   );
   const cardLabels = m.chat.toolCard;
+  const [drawerWidth, setDrawerWidth] = useState(DEFAULT_DRAWER_WIDTH);
+
+  const handleResizePointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    const startClientX = event.clientX;
+    const startWidth = drawerWidth;
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      const nextWidth = startWidth + startClientX - moveEvent.clientX;
+      const maxWidth = Math.min(MAX_DRAWER_WIDTH, window.innerWidth - 32);
+      setDrawerWidth(Math.min(Math.max(nextWidth, MIN_DRAWER_WIDTH), maxWidth));
+    };
+
+    const handlePointerUp = () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+
+    document.body.style.cursor = 'ew-resize';
+    document.body.style.userSelect = 'none';
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp, { once: true });
+  }, [drawerWidth]);
 
   const executionBlocks = useMemo(
     () => (agent ? buildWorkflowAgentExecutionBlocks(agent) : []),
@@ -124,32 +165,29 @@ export const WorkflowAgentDetailDrawer = memo(function WorkflowAgentDetailDrawer
   return (
     <Dialog.Root open={open} onOpenChange={(v) => !v && onClose()}>
       <Dialog.Portal>
-        <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[70] bg-scrim" />
+        <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-70 bg-scrim" />
         <Dialog.Content
           className={cn(
-            'xopc-drawer-right fixed right-0 top-0 z-[71] flex size-full max-w-md flex-col border-l border-edge bg-surface-panel shadow-popover outline-none',
+            'xopc-drawer-right fixed right-0 top-0 z-71 flex h-full flex-col border-l border-edge bg-surface-panel shadow-popover outline-none',
           )}
+          style={{ width: drawerWidth, maxWidth: 'calc(100vw - 1rem)' }}
           aria-describedby={undefined}
         >
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            aria-label={labels.resizeLabel}
+            className="absolute -left-1 top-0 z-10 h-full w-2 cursor-ew-resize touch-none"
+            onPointerDown={handleResizePointerDown}
+          >
+            <div className="mx-auto h-full w-px bg-transparent transition-colors hover:bg-accent" />
+          </div>
           {agent ? (
             <>
-              <div className="flex min-w-0 shrink-0 items-start justify-between gap-2 border-b border-edge px-4 py-3">
-                <div className="min-w-0 flex-1">
-                  <Dialog.Title className="truncate text-base font-medium text-fg">
-                    {agent.label}
-                  </Dialog.Title>
-                  <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-fg-muted">
-                    <span>{statusLabel(agent, labels)}</span>
-                    {elapsed ? (
-                      <span className="tabular-nums text-fg-subtle">{labels.workedFor(elapsed)}</span>
-                    ) : null}
-                    {agent.phase ? (
-                      <span className="truncate text-fg-disabled">
-                        {labels.phaseHeading}: {agent.phase}
-                      </span>
-                    ) : null}
-                  </div>
-                </div>
+              <div className="flex min-w-0 shrink-0 items-center justify-between gap-2 border-b border-edge px-4 py-3">
+                <Dialog.Title className="min-w-0 flex-1 truncate text-base font-medium text-fg">
+                  {agent.label}
+                </Dialog.Title>
                 <div className="flex shrink-0 items-center gap-1">
                   {agent.status === 'running' ? (
                     <button
@@ -183,30 +221,65 @@ export const WorkflowAgentDetailDrawer = memo(function WorkflowAgentDetailDrawer
                 </div>
               </div>
 
-              <div className="shrink-0 border-b border-edge-subtle px-4 py-3">
-                <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-fg-subtle">
-                  {labels.promptHeading}
+              <div className="shrink-0 space-y-3 border-b border-edge bg-surface-subtle/30 px-4 py-3">
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="rounded-lg border border-edge-subtle bg-surface-panel px-3 py-2">
+                    <div className="text-[10px] font-medium uppercase tracking-wide text-fg-subtle">{labels.statusHeading}</div>
+                    <div className={cn('mt-1 inline-flex rounded-full px-2 py-0.5 text-xs font-medium', agentStatusTone(agent.status))}>
+                      {statusLabel(agent, labels)}
+                    </div>
+                  </div>
+                  <div className="rounded-lg border border-edge-subtle bg-surface-panel px-3 py-2">
+                    <div className="text-[10px] font-medium uppercase tracking-wide text-fg-subtle">
+                      {labels.phaseHeading}
+                    </div>
+                    <div className="mt-1 truncate text-xs font-medium text-fg-muted">
+                      {agent.phase || '-'}
+                    </div>
+                  </div>
+                  <div className="rounded-lg border border-edge-subtle bg-surface-panel px-3 py-2">
+                    <div className="text-[10px] font-medium uppercase tracking-wide text-fg-subtle">{labels.elapsedHeading}</div>
+                    <div className="mt-1 truncate text-xs font-medium tabular-nums text-fg-muted">
+                      {elapsed ? labels.workedFor(elapsed) : '-'}
+                    </div>
+                  </div>
                 </div>
-                <pre className="max-h-[min(28vh,12rem)] min-w-0 overflow-y-auto whitespace-pre-wrap break-words rounded-md border border-edge-subtle bg-surface-hover/30 p-2 font-mono text-xs text-fg-muted">
-                  {agent.prompt}
-                </pre>
+
+                <section className="rounded-lg border border-edge-subtle bg-surface-panel p-3">
+                  <div className="text-[10px] font-medium uppercase tracking-wide text-fg-subtle">
+                    {labels.currentStepHeading}
+                  </div>
+                  <div className="mt-1 wrap-break-word text-sm font-medium text-fg">
+                    {agent.currentStep || (agent.status === 'running' ? labels.runningPlaceholder : '-')}
+                  </div>
+                </section>
+
+                {agent.resultPreview || agent.error ? (
+                  <section className="min-w-0 rounded-lg border border-edge-subtle bg-surface-panel p-3">
+                    <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-fg-subtle">
+                      {labels.outputHeading}
+                    </div>
+                    {agent.error ? (
+                      <div className="max-h-32 overflow-y-auto whitespace-pre-wrap wrap-break-word font-mono text-xs text-rose-600 dark:text-rose-400">
+                        {agent.error}
+                      </div>
+                    ) : (
+                      <div className="markdown-content max-h-40 min-w-0 overflow-y-auto text-sm text-fg-muted">
+                        <MarkdownView content={agent.resultPreview ?? ''} compact />
+                      </div>
+                    )}
+                  </section>
+                ) : null}
               </div>
 
-              <div className="flex min-h-0 flex-1 flex-col">
-                <div className="shrink-0 px-4 pb-2 pt-3">
-                  <div className="text-[10px] font-medium uppercase tracking-wide text-fg-subtle">
-                    {labels.stepsHeading}
+              <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
+                <section className="pt-3">
+                  <div className="mb-2 text-[10px] font-medium uppercase tracking-wide text-fg-subtle">
+                    {labels.executionHeading}
                   </div>
-                  {agent.currentStep ? (
-                    <div className="mt-1 truncate text-xs text-accent-fg">{agent.currentStep}</div>
-                  ) : null}
-                </div>
-
-                <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
                   {showExecutionPlaceholder ? (
                     <div className="text-xs text-fg-subtle">{labels.runningPlaceholder}</div>
                   ) : null}
-
                   {executionBlocks.length > 0 ? (
                     <AssistantStepsTimeline
                       blocks={executionBlocks}
@@ -217,39 +290,31 @@ export const WorkflowAgentDetailDrawer = memo(function WorkflowAgentDetailDrawer
                       className="pb-2"
                     />
                   ) : null}
+                </section>
 
-                  {agent.resultPreview || agent.error ? (
-                    <section className="mt-4 min-w-0 border-t border-edge-subtle pt-3">
-                      <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-fg-subtle">
-                        {labels.outputHeading}
-                      </div>
-                      {agent.error ? (
-                        <div className="font-mono text-xs text-rose-600 dark:text-rose-400">
-                          {agent.error}
-                        </div>
-                      ) : (
-                        <div className="markdown-content min-w-0 text-sm text-fg-muted">
-                          <MarkdownView content={agent.resultPreview ?? ''} compact />
-                        </div>
-                      )}
-                    </section>
-                  ) : null}
+                <section className="mt-4 min-w-0 border-t border-edge-subtle pt-3">
+                  <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-fg-subtle">
+                    {labels.promptHeading}
+                  </div>
+                  <pre className="max-h-[min(28vh,12rem)] min-w-0 overflow-y-auto whitespace-pre-wrap wrap-break-word rounded-md border border-edge-subtle bg-surface-hover/30 p-2 font-mono text-xs text-fg-muted">
+                    {agent.prompt}
+                  </pre>
+                </section>
 
-                  {snapshot && snapshot.logs.length > 0 ? (
-                    <section className="mt-4 min-w-0 border-t border-edge-subtle pt-3">
-                      <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-fg-subtle">
-                        {labels.logsHeading}
-                      </div>
-                      <div className="space-y-0.5 font-mono text-xs text-fg-subtle">
-                        {snapshot.logs.map((line, i) => (
-                          <div key={i} className="break-words">
-                            {line}
-                          </div>
-                        ))}
-                      </div>
-                    </section>
-                  ) : null}
-                </div>
+                {snapshot && snapshot.logs.length > 0 ? (
+                  <section className="mt-4 min-w-0 border-t border-edge-subtle pt-3">
+                    <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-fg-subtle">
+                      {labels.logsHeading}
+                    </div>
+                    <div className="space-y-0.5 font-mono text-xs text-fg-subtle">
+                      {snapshot.logs.map((line, i) => (
+                        <div key={i} className="wrap-break-word">
+                          {line}
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                ) : null}
               </div>
             </>
           ) : null}

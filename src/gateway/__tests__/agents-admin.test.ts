@@ -49,7 +49,7 @@ describe('agents-admin', () => {
     expect(agents[0]?.typedModels.effective).toEqual([]);
   });
 
-  it('listGatewayAgents merges typed models defaults and entry', async () => {
+  it('listGatewayAgents exposes only global typed models', async () => {
     const cfg = minimalConfig({
       agents: {
         ...minimalConfig().agents,
@@ -57,36 +57,14 @@ describe('agents-admin', () => {
           ...minimalConfig().agents!.defaults!,
           models: [{ id: 'small', model: 'deepseek/flash' }],
         },
-        list: [{ id: 'coder', enabled: true, workspace: '/tmp/c', models: [{ id: 'small', model: 'openai/mini' }] }],
+        list: [{ id: 'coder', enabled: true, workspace: '/tmp/c' }],
       },
     } as Partial<Config>);
     const { agents } = await listGatewayAgents(cfg);
     const coder = agents.find((a) => a.id === 'coder');
     expect(coder?.typedModels.defaults).toEqual([{ id: 'small', model: 'deepseek/flash' }]);
-    expect(coder?.typedModels.entry).toEqual([{ id: 'small', model: 'openai/mini' }]);
-    expect(coder?.typedModels.effective).toEqual([{ id: 'small', model: 'openai/mini' }]);
-  });
-
-  it('prepareUpdateAgent sets and clears typed models on list entry', () => {
-    const cfg = minimalConfig({
-      agents: {
-        ...minimalConfig().agents,
-        list: [{ id: 'coder', enabled: true, workspace: '/tmp/c' }],
-      },
-    } as Partial<Config>);
-    const set = prepareUpdateAgent(cfg, 'coder', {
-      models: [{ id: 'small', model: 'openai/mini', description: 'Fast' }],
-    });
-    expect(set.ok).toBe(true);
-    if (!set.ok) return;
-    const e = set.data.nextConfig.agents?.list?.find((x) => x.id === 'coder');
-    expect(e?.models).toEqual([{ id: 'small', model: 'openai/mini', description: 'Fast' }]);
-
-    const cleared = prepareUpdateAgent(set.data.nextConfig, 'coder', { models: null });
-    expect(cleared.ok).toBe(true);
-    if (!cleared.ok) return;
-    const e2 = cleared.data.nextConfig.agents?.list?.find((x) => x.id === 'coder');
-    expect(e2?.models).toBeUndefined();
+    expect(coder?.typedModels.effective).toEqual([{ id: 'small', model: 'deepseek/flash' }]);
+    expect('entry' in (coder?.typedModels ?? {})).toBe(false);
   });
 
   it('extractAvatarFromIdentityMarkdown reads Avatar line', () => {

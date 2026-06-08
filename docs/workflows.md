@@ -276,7 +276,7 @@ This is experimental — defaults will not change unless real-world usage confir
 
 ## Configuration
 
-Workflow runtime limits live under `agents.defaults.workflow`. Typed model roles (`agents.defaults.models`) let scripts reference `small` / `large` instead of hard-coded `provider/model` strings. Per-agent overrides go in `agents.list[].models` (same `id` wins over defaults).
+Workflow runtime limits live under `agents.defaults.workflow`. Typed model roles (`agents.defaults.models`) let scripts reference `small` / `large` instead of hard-coded `provider/model` strings. Typed model roles are global defaults only.
 
 ```jsonc
 {
