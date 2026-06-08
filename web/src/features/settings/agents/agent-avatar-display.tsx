@@ -1,9 +1,13 @@
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState, useEffect } from 'react';
 
 import { cn } from '@/lib/cn';
 import { apiUrl } from '@/lib/url';
 import { useGatewayStore } from '@/stores/gateway-store';
 
+import {
+  AGENT_AVATAR_UPDATED_EVENT,
+  getAgentAvatarCacheRevision,
+} from './agent-avatar-cache';
 import {
   XOPC_CUSTOM_AVATAR,
   defaultAvatarDataUri,
@@ -16,6 +20,7 @@ function resolveAvatarSrc(
   avatar: string | undefined,
   token: string | null | undefined,
   size: number,
+  cacheRevision: number,
 ): string {
   const trimmed = avatar?.trim() ?? '';
   if (!trimmed) {
@@ -23,8 +28,15 @@ function resolveAvatarSrc(
   }
   if (trimmed === XOPC_CUSTOM_AVATAR) {
     const u = apiUrl(`/api/agents/${encodeURIComponent(agentId)}/avatar`);
-    const sep = u.includes('?') ? '&' : '?';
-    return token ? `${u}${sep}token=${encodeURIComponent(token)}` : u;
+    const params = new URLSearchParams();
+    if (token) {
+      params.set('token', token);
+    }
+    if (cacheRevision > 0) {
+      params.set('v', String(cacheRevision));
+    }
+    const qs = params.toString();
+    return qs ? `${u}?${qs}` : u;
   }
   if (/^https?:\/\//i.test(trimmed)) {
     return trimmed;
@@ -47,9 +59,22 @@ export function AgentAvatarDisplay(props: {
   const token = props.token !== undefined ? props.token : storeToken;
   const { agentId, avatar, size = 44 } = props;
 
+  const [cacheTick, setCacheTick] = useState(0);
+  useEffect(() => {
+    const onUpdated = (event: Event) => {
+      const detail = (event as CustomEvent<{ agentId?: string }>).detail;
+      if (detail?.agentId === agentId) {
+        setCacheTick((n) => n + 1);
+      }
+    };
+    window.addEventListener(AGENT_AVATAR_UPDATED_EVENT, onUpdated);
+    return () => window.removeEventListener(AGENT_AVATAR_UPDATED_EVENT, onUpdated);
+  }, [agentId]);
+
+  const cacheRevision = getAgentAvatarCacheRevision(agentId);
   const primarySrc = useMemo(
-    () => resolveAvatarSrc(agentId, avatar, token, size),
-    [agentId, avatar, token, size],
+    () => resolveAvatarSrc(agentId, avatar, token, size, cacheRevision),
+    [agentId, avatar, token, size, cacheRevision, cacheTick],
   );
   const [src, setSrc] = useState(primarySrc);
   const trackedPrimaryRef = useRef(primarySrc);

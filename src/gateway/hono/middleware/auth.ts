@@ -45,9 +45,10 @@ function extractTokenFromHeader(authHeader: string | null): string | null {
 
 /**
  * SECURITY: query-string tokens leak into server logs, Referer headers, and
- * browser history. We accept them only for SSE/WebSocket connections where
- * the `Authorization` header cannot be set by `EventSource`. For normal REST
- * requests prefer the `Authorization: Bearer <token>` header.
+ * browser history. We accept them only where the `Authorization` header cannot
+ * be set — SSE/WebSocket (`EventSource`) and `<img>` subresource loads for agent
+ * avatars. For normal REST requests prefer the `Authorization: Bearer <token>`
+ * header.
  */
 function extractTokenFromQuery(url: string): string | null {
   return new URL(url).searchParams.get('token');
@@ -55,8 +56,18 @@ function extractTokenFromQuery(url: string): string | null {
 
 const QUERY_TOKEN_ALLOWED_PATHS = new Set(['/api/events', '/api/ws']);
 
-function isQueryTokenAllowedPath(path: string): boolean {
-  return QUERY_TOKEN_ALLOWED_PATHS.has(path) || path.startsWith('/api/events');
+const AGENT_AVATAR_GET_PATH = /^\/api\/agents\/[^/]+\/avatar$/;
+
+/** Exported for gateway security tests. */
+export function isQueryTokenAllowedPath(path: string, method: string): boolean {
+  if (QUERY_TOKEN_ALLOWED_PATHS.has(path) || path.startsWith('/api/events')) {
+    return true;
+  }
+  // `<img src>` cannot send Bearer tokens; gateway console loads custom avatars here.
+  if (method === 'GET' && AGENT_AVATAR_GET_PATH.test(path)) {
+    return true;
+  }
+  return false;
 }
 
 function resolveRemoteAddress(c: Context): string | undefined {
@@ -208,7 +219,9 @@ export function auth(config?: AuthConfig) {
 
     const authHeader = extractTokenFromHeader(c.req.header('authorization'));
     const requestPath = new URL(c.req.url).pathname;
-    const queryToken = isQueryTokenAllowedPath(requestPath) ? extractTokenFromQuery(c.req.url) : null;
+    const queryToken = isQueryTokenAllowedPath(requestPath, c.req.method)
+      ? extractTokenFromQuery(c.req.url)
+      : null;
 
     if (!authHeader && queryToken === null && new URL(c.req.url).searchParams.has('token')) {
       log.warn(

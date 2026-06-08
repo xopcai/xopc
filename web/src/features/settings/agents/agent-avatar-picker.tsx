@@ -12,6 +12,7 @@ import {
   uploadAgentAvatarFile,
 } from '@/features/settings/agents-admin-api';
 
+import { bumpAgentAvatarCacheRevision } from './agent-avatar-cache';
 import { AgentAvatarDisplay } from './agent-avatar-display';
 import {
   DICEBEAR_MORE_SEEDS,
@@ -88,6 +89,7 @@ export function AgentAvatarPicker(props: {
       setUploadBusy(true);
       try {
         await uploadAgentAvatarFile(agentId, file);
+        bumpAgentAvatarCacheRevision(agentId);
         onChange(XOPC_CUSTOM_AVATAR);
       } catch (err) {
         const code = err instanceof Error ? err.message : '';
