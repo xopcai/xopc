@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
+import { useBrowserSettingsTabGuard } from '@/features/settings/use-settings-tab-guard';
 import { messages } from '@/i18n/messages';
+import { visibleBrowserSettingsTabs } from '@/navigation/settings-field-visibility';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 import { useLocaleStore } from '@/stores/locale-store';
+import { useSettingsModeStore } from '@/stores/settings-mode-store';
 
 import { AgentDefaultsBrowserPanel } from './agent-defaults-panels/browser-panel';
 import {
@@ -32,8 +35,13 @@ export function AgentBrowserSettingsPage() {
   const messageBundle = messages(language);
   const agentSettings = messageBundle.agentSettings;
   const chatMessages = messageBundle.chat;
+  const settingsMode = useSettingsModeStore((s) => s.mode);
   const viewModel = useAgentDefaultsForm(agentSettings);
   const [searchParams, setSearchParams] = useSearchParams();
+  const visibleTabs = useMemo(
+    () => visibleBrowserSettingsTabs(BROWSER_TABS, settingsMode),
+    [settingsMode],
+  );
 
   const focus = parseBrowserSettingsFocus(searchParams.get('focus'));
   const activeTab = focus
@@ -68,6 +76,8 @@ export function AgentBrowserSettingsPage() {
     [setSearchParams],
   );
 
+  useBrowserSettingsTabGuard(activeTab, setActiveTab);
+
   useEffect(() => {
     if (!focus) return undefined;
     const tab = LEGACY_BROWSER_FOCUS_TO_TAB[focus] ?? parseBrowserTab(searchParams.get('tab'));
@@ -99,14 +109,15 @@ export function AgentBrowserSettingsPage() {
         onKeyDown={(e) => {
           if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
           e.preventDefault();
-          const idx = BROWSER_TABS.indexOf(activeTab);
+          const idx = visibleTabs.indexOf(activeTab);
+          if (idx < 0) return;
           const delta = e.key === 'ArrowRight' ? 1 : -1;
-          const next = BROWSER_TABS[(idx + delta + BROWSER_TABS.length) % BROWSER_TABS.length];
+          const next = visibleTabs[(idx + delta + visibleTabs.length) % visibleTabs.length];
           setActiveTab(next);
         }}
       >
         <div className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1">
-          {BROWSER_TABS.map((tab) => {
+          {visibleTabs.map((tab) => {
             const selected = tab === activeTab;
             return (
               <button

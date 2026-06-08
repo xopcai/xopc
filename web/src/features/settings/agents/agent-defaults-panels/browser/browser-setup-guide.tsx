@@ -1,11 +1,13 @@
-import { ChevronRight, Cloud, MonitorPlay, Puzzle } from 'lucide-react';
+import { ChevronRight, Cloud, MonitorPlay, Puzzle, ShieldCheck } from 'lucide-react';
 
+import { isBrowserSettingsTabVisibleInMode } from '@/navigation/settings-field-visibility';
 import { cn } from '@/lib/cn';
+import { useSettingsModeStore } from '@/stores/settings-mode-store';
 
 import type { BackendMode } from './backend-mode-list';
 import type { BrowserMessages } from './types';
 
-type MethodId = Extract<BackendMode, 'extension' | 'local' | 'cloud'>;
+type MethodId = Extract<BackendMode, 'extension' | 'local' | 'cloakbrowser' | 'cloud'>;
 
 function MethodCard({
   title,
@@ -67,6 +69,7 @@ export function BrowserSetupGuide({
   m: BrowserMessages;
   onStart: (backend: MethodId) => void;
 }) {
+  const settingsMode = useSettingsModeStore((s) => s.mode);
   const methods: Array<{
     id: MethodId;
     icon: typeof Puzzle;
@@ -82,6 +85,12 @@ export function BrowserSetupGuide({
       recommended: true,
     },
     {
+      id: 'cloakbrowser',
+      icon: ShieldCheck,
+      title: m.browserBackendCloakBrowser,
+      description: m.browserModeCloakTagline,
+    },
+    {
       id: 'local',
       icon: MonitorPlay,
       title: m.browserSetupLocalTitle,
@@ -93,7 +102,7 @@ export function BrowserSetupGuide({
       title: m.browserSetupCloudTitle,
       description: m.browserSetupCloudDesc,
     },
-  ];
+  ].filter((method) => isBrowserSettingsTabVisibleInMode(method.id, settingsMode));
 
   return (
     <div className="flex flex-col gap-3 rounded-xl border border-edge-subtle bg-surface-base px-4 py-4">

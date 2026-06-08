@@ -1,6 +1,7 @@
 import { ChevronDown } from 'lucide-react';
 import type { ReactNode } from 'react';
 
+import { SettingsAdvancedGate } from '@/features/settings/settings-advanced-gate';
 import { cn } from '@/lib/cn';
 
 type Props = {
@@ -12,6 +13,7 @@ type Props = {
 
 export function AgentDefaultsAdvancedDetails({ showLabel, hideLabel, children, className }: Props) {
   return (
+    <SettingsAdvancedGate>
     <details
       className={cn(
         'group rounded-lg border border-edge-subtle/80 bg-surface-hover/20 open:pb-3 dark:border-edge-subtle',
@@ -25,5 +27,6 @@ export function AgentDefaultsAdvancedDetails({ showLabel, hideLabel, children, c
       </summary>
       <div className="flex flex-col gap-5 px-3 pt-3">{children}</div>
     </details>
+    </SettingsAdvancedGate>
   );
 }

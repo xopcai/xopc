@@ -1,9 +1,12 @@
 import { Cloud, Globe, MonitorPlay, Puzzle, ShieldCheck, Webhook } from 'lucide-react';
 import { useMemo } from 'react';
 
+import { SettingsAdvancedGate } from '@/features/settings/settings-advanced-gate';
 import { SettingsFormSection } from '@/features/settings/settings-form-section';
+import { isBrowserSettingsTabVisibleInMode } from '@/navigation/settings-field-visibility';
 import { cn } from '@/lib/cn';
 import { useLocaleStore } from '@/stores/locale-store';
+import { useSettingsModeStore } from '@/stores/settings-mode-store';
 
 import { AgentDefaultsField } from '../agent-defaults-field';
 import type { AgentDefaultsPanelProps } from '../agent-defaults-panel-props';
@@ -41,6 +44,7 @@ export function AgentDefaultsBrowserPanel(
 ) {
   const { a, form, update, activeTab, setActiveTab } = props;
   const language = useLocaleStore((s) => s.language);
+  const settingsMode = useSettingsModeStore((s) => s.mode);
 
   const playwrightInstall = useBrowserInstallStream('playwright');
   const cloakInstall = useBrowserInstallStream('cloakbrowser');
@@ -105,10 +109,10 @@ export function AgentDefaultsBrowserPanel(
         tagline: a.browserModeCloudTagline,
       },
     ];
-    return base;
-  }, [a, cloakStatus, extensionStatus, extensionStatusLabel, localStatus]);
+    return base.filter((opt) => isBrowserSettingsTabVisibleInMode(opt.value, settingsMode));
+  }, [a, cloakStatus, extensionStatus, extensionStatusLabel, localStatus, settingsMode]);
 
-  const startSetup = (backend: Extract<BackendMode, 'extension' | 'local' | 'cloud'>) => {
+  const startSetup = (backend: Extract<BackendMode, 'extension' | 'local' | 'cloakbrowser' | 'cloud'>) => {
     update({ browserEnabled: true, browserBackend: backend });
     setActiveTab(backend);
   };
@@ -308,15 +312,17 @@ export function AgentDefaultsBrowserPanel(
           </div>
         </SettingsFormSection>
 
-        <div
-          className={cn(
-            'transition-opacity',
-            !form.browserEnabled && 'pointer-events-none opacity-40',
-          )}
-          aria-hidden={!form.browserEnabled}
-        >
-          <BrowserBehaviorSections a={a} form={form} update={update} />
-        </div>
+        <SettingsAdvancedGate>
+          <div
+            className={cn(
+              'transition-opacity',
+              !form.browserEnabled && 'pointer-events-none opacity-40',
+            )}
+            aria-hidden={!form.browserEnabled}
+          >
+            <BrowserBehaviorSections a={a} form={form} update={update} />
+          </div>
+        </SettingsAdvancedGate>
       </div>
     );
   }

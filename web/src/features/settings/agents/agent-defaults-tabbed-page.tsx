@@ -1,11 +1,15 @@
 import { useCallback, useMemo } from 'react';
 import { useLocation, useSearchParams } from 'react-router-dom';
 
+import { SettingsAdvancedGate } from '@/features/settings/settings-advanced-gate';
+import { useAgentDefaultsTabGuard } from '@/features/settings/use-settings-tab-guard';
 import { SkillsMarketplaceConfigSection } from '@/features/skills/skills-marketplace-config-section';
 import { messages } from '@/i18n/messages';
+import { visibleAgentDefaultsTabs } from '@/navigation/settings-field-visibility';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 import { useLocaleStore } from '@/stores/locale-store';
+import { useSettingsModeStore } from '@/stores/settings-mode-store';
 
 import type { AgentDefaultsPanelProps } from './agent-defaults-panel-props';
 import { AgentDefaultsBasicsPanel } from './agent-defaults-panels/basics-panel';
@@ -79,13 +83,17 @@ function AgentDefaultsTabPanel({
       return (
         <div className="flex flex-col gap-8">
           <AgentDefaultsCapabilitiesPanel {...pp} />
-          <AgentDefaultsExpertPanel {...pp} />
+          <SettingsAdvancedGate>
+            <AgentDefaultsExpertPanel {...pp} />
+          </SettingsAdvancedGate>
         </div>
       );
     case 'skills':
       return (
         <div className="flex flex-col gap-8">
-          <SkillsMarketplaceConfigSection hasToken={hasToken} />
+          <SettingsAdvancedGate>
+            <SkillsMarketplaceConfigSection hasToken={hasToken} />
+          </SettingsAdvancedGate>
           <AgentDefaultsSkillsAllowlistPanel {...pp} />
         </div>
       );
@@ -102,8 +110,13 @@ export function AgentDefaultsTabbedPage() {
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
 
+  const settingsMode = useSettingsModeStore((s) => s.mode);
   const activeTab = parseAgentDefaultsTab(searchParams.get('tab'));
   const vm = useAgentDefaultsForm(a);
+  const visibleTabs = useMemo(
+    () => visibleAgentDefaultsTabs(AGENT_DEFAULTS_TABS, settingsMode),
+    [settingsMode],
+  );
 
   const pp = useMemo(() => {
     if (!vm.form) return null;
@@ -125,6 +138,8 @@ export function AgentDefaultsTabbedPage() {
     [location.state, setSearchParams],
   );
 
+  useAgentDefaultsTabGuard(activeTab, setActiveTab);
+
   const intro = tabIntro(a, activeTab);
 
   return (
@@ -136,14 +151,15 @@ export function AgentDefaultsTabbedPage() {
         onKeyDown={(e) => {
           if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
           e.preventDefault();
-          const idx = AGENT_DEFAULTS_TABS.indexOf(activeTab);
+          const idx = visibleTabs.indexOf(activeTab);
+          if (idx < 0) return;
           const delta = e.key === 'ArrowRight' ? 1 : -1;
-          const next = AGENT_DEFAULTS_TABS[(idx + delta + AGENT_DEFAULTS_TABS.length) % AGENT_DEFAULTS_TABS.length];
+          const next = visibleTabs[(idx + delta + visibleTabs.length) % visibleTabs.length];
           setActiveTab(next);
         }}
       >
         <div className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1">
-          {AGENT_DEFAULTS_TABS.map((tab) => {
+          {visibleTabs.map((tab) => {
             const selected = tab === activeTab;
             return (
               <button

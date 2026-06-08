@@ -8,6 +8,7 @@ import {
   patchCronGlobals,
   type CronGlobalsState,
 } from '@/features/cron/cron-globals-api';
+import { SettingsAdvancedGate } from '@/features/settings/settings-advanced-gate';
 import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/settings/settings-form-section';
 import { settingsInputFocusClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
@@ -160,13 +161,15 @@ export function CronGlobalsSection({ hasToken }: { hasToken: boolean }) {
           <input type="checkbox" className="ui-checkbox" checked={ui.form.enabled} onChange={(e) => update({ enabled: e.target.checked })} />
           {t.enabled}
         </label>
-        <Field label={t.maxConcurrent} value={ui.form.maxConcurrentJobs} min={1} max={100} disabled={!ui.form.enabled} onChange={(maxConcurrentJobs) => update({ maxConcurrentJobs })} />
-        <Field label={t.timezone} text value={ui.form.defaultTimezone} disabled={!ui.form.enabled} onTextChange={(defaultTimezone) => update({ defaultTimezone })} />
-        <Field label={t.retentionDays} value={ui.form.historyRetentionDays} min={1} max={365} disabled={!ui.form.enabled} onChange={(historyRetentionDays) => update({ historyRetentionDays })} />
-        <label className="flex items-center gap-2 text-sm text-fg">
-          <input type="checkbox" className="ui-checkbox" checked={ui.form.enableMetrics} disabled={!ui.form.enabled} onChange={(e) => update({ enableMetrics: e.target.checked })} />
-          {t.metrics}
-        </label>
+        <SettingsAdvancedGate>
+          <Field label={t.maxConcurrent} value={ui.form.maxConcurrentJobs} min={1} max={100} disabled={!ui.form.enabled} onChange={(maxConcurrentJobs) => update({ maxConcurrentJobs })} />
+          <Field label={t.timezone} text value={ui.form.defaultTimezone} disabled={!ui.form.enabled} onTextChange={(defaultTimezone) => update({ defaultTimezone })} />
+          <Field label={t.retentionDays} value={ui.form.historyRetentionDays} min={1} max={365} disabled={!ui.form.enabled} onChange={(historyRetentionDays) => update({ historyRetentionDays })} />
+          <label className="flex items-center gap-2 text-sm text-fg">
+            <input type="checkbox" className="ui-checkbox" checked={ui.form.enableMetrics} disabled={!ui.form.enabled} onChange={(e) => update({ enableMetrics: e.target.checked })} />
+            {t.metrics}
+          </label>
+        </SettingsAdvancedGate>
       </div>
     </SettingsFormSection>
   );
