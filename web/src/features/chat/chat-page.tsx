@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { fetchCommandsCached } from '@/features/chat/palette/command-palette-api';
 import { ChatComposer } from '@/features/chat/composer/chat-composer';
@@ -26,13 +26,15 @@ import { useWorkflowRunLive } from '@/features/workflows/use-workflow-run-live';
 import { useWorkflowSessionMetadata } from '@/features/workflows/use-workflow-session-metadata';
 import { useWorkspaceEditorAgentStore } from '@/stores/workspace-editor-agent-store';
 import { AgentRunErrorBanner } from '@/features/chat/messages/agent-run-error-banner';
+import { agentsAppDetailPath } from '@/features/settings/agents/agents-app-path';
 
 export function ChatPage() {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const token = useGatewayStore((s) => s.token);
   const navigate = useNavigate();
-  const { pathname } = useLocation();
+  const location = useLocation();
+  const { pathname } = location;
   const [searchParams] = useSearchParams();
   /** Dedupe applying the same `?skill=` / `?slash=` seed for a session (StrictMode-safe). */
   const routeComposerSeedMarkerRef = useRef<string | null>(null);
@@ -224,6 +226,18 @@ export function ChatPage() {
       />
 
       <div className="relative mx-auto flex min-h-0 w-full max-w-[var(--max-width-chat)] flex-1 flex-col">
+        {(location.state as { fromAgentEditor?: boolean } | null)?.fromAgentEditor &&
+        agents.displayAgentId ? (
+          <div className="shrink-0 border-b border-edge-subtle bg-surface-panel/80 px-3 py-1.5 sm:px-5 xl:px-6">
+            <Link
+              to={agentsAppDetailPath(agents.displayAgentId)}
+              className="inline-flex items-center gap-1 text-xs font-medium text-accent transition-colors hover:text-accent-fg"
+            >
+              <span aria-hidden>←</span>
+              {m.agentsSettings.backToEditor}
+            </Link>
+          </div>
+        ) : null}
         {session.sessionKey &&
         isWebUiSessionKey(session.sessionKey) &&
         !session.showSessionLoading &&

@@ -1,6 +1,8 @@
 import type { Hono } from 'hono';
 
 import { type Config, parseModelRef } from '../../../config/schema.js';
+import type { LocalizedText } from '../../../config/localized-text.js';
+import { normalizeLocalizedText } from '../../../config/localized-text.js';
 import { getVoiceModelsConfig } from '../../../config/voice.js';
 import {
   isProviderConfigured,
@@ -59,16 +61,45 @@ function isParseError(value: unknown): value is { error: string } {
   );
 }
 
+function parseLocalizedText(raw: unknown, fieldName: string): LocalizedText | undefined | { error: string } {
+  if (raw === undefined) {
+    return undefined;
+  }
+  if (typeof raw === 'string') {
+    return raw;
+  }
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
+    return { error: `${fieldName} must be a string or locale map` };
+  }
+  const localized: Record<string, string> = {};
+  for (const [locale, text] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof text !== 'string') {
+      return { error: `${fieldName}.${locale} must be a string` };
+    }
+    localized[locale] = text;
+  }
+  const normalized = normalizeLocalizedText(localized);
+  return normalized;
+}
+
 function parseCreateAgentBody(raw: unknown): CreateAgentBody | { error: string } {
   if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
     return { error: 'each agent must be an object' };
   }
   const body = raw as Record<string, unknown>;
-  const name = typeof body.name === 'string' ? body.name : '';
+  const parsedName = parseLocalizedText(body.name, 'name');
+  if (isParseError(parsedName)) {
+    return parsedName;
+  }
+  const parsedDescription = parseLocalizedText(body.description, 'description');
+  if (isParseError(parsedDescription)) {
+    return parsedDescription;
+  }
+  const name = parsedName ?? '';
   const workspace = typeof body.workspace === 'string' ? body.workspace : '';
   const model = typeof body.model === 'string' ? body.model : undefined;
   const agentDir = typeof body.agentDir === 'string' ? body.agentDir : undefined;
-  const description = typeof body.description === 'string' ? body.description : undefined;
+  const description = parsedDescription;
   const id = typeof body.id === 'string' ? body.id : undefined;
   const toolsDisable = Array.isArray(body.toolsDisable)
     ? body.toolsDisable.map((x: unknown) => String(x).trim()).filter(Boolean)
@@ -81,6 +112,7 @@ function parseCreateAgentBody(raw: unknown): CreateAgentBody | { error: string }
     }
     profileFiles = parsed;
   }
+  const cloneFrom = typeof body.cloneFrom === 'string' ? body.cloneFrom : undefined;
   return {
     name,
     workspace,
@@ -90,6 +122,7 @@ function parseCreateAgentBody(raw: unknown): CreateAgentBody | { error: string }
     ...(description !== undefined ? { description } : {}),
     ...(toolsDisable !== undefined ? { toolsDisable } : {}),
     ...(profileFiles !== undefined ? { profileFiles } : {}),
+    ...(cloneFrom !== undefined ? { cloneFrom } : {}),
   };
 }
 
@@ -98,7 +131,8 @@ export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRou
 
   authenticated.get('/api/agents', async (c) => {
     const cfg = service.currentConfig as Config;
-    const payload = await listGatewayAgents(cfg);
+    const locale = c.req.query('locale') || c.req.header('Accept-Language')?.split(',')[0]?.trim();
+    const payload = await listGatewayAgents(cfg, { locale });
     return c.json({ ok: true, payload });
   });
 
@@ -141,7 +175,8 @@ export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRou
       }
       agentIds.push(item.agentId);
     }
-    const agentsPayload = await listGatewayAgents(cfg);
+    const locale = c.req.query('locale') || c.req.header('Accept-Language')?.split(',')[0]?.trim();
+    const agentsPayload = await listGatewayAgents(cfg, { locale });
     return c.json({
       ok: true,
       payload: {
@@ -173,11 +208,13 @@ export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRou
     }
     const finalized = await finalizeCreateAgentDirs(service.currentConfig as Config, agentId, {
       ...(parsed.profileFiles !== undefined ? { profileFiles: parsed.profileFiles } : {}),
+      ...(parsed.cloneFrom ? { cloneFrom: parsed.cloneFrom } : {}),
     });
     if (finalized.ok === false) {
       return c.json({ ok: false, error: { message: finalized.error } }, finalized.status ?? 400);
     }
-    const agentsPayload = await listGatewayAgents(service.currentConfig as Config);
+    const locale = c.req.query('locale') || c.req.header('Accept-Language')?.split(',')[0]?.trim();
+    const agentsPayload = await listGatewayAgents(service.currentConfig as Config, { locale });
     return c.json({
       ok: true,
       payload: {
@@ -208,16 +245,29 @@ export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRou
           ? body.toolsDisable.map((x: unknown) => String(x).trim()).filter(Boolean)
           : undefined;
 
-    const descriptionPatch: string | null | undefined = Object.hasOwn(body, 'description')
-      ? body.description === null
-        ? null
-        : typeof body.description === 'string'
-          ? body.description
-          : undefined
-      : undefined;
+    let namePatch: LocalizedText | undefined;
+    if (Object.hasOwn(body, 'name')) {
+      const parsedName = parseLocalizedText(body.name, 'name');
+      if (isParseError(parsedName)) {
+        return c.json({ ok: false, error: { message: parsedName.error } }, 400);
+      }
+      namePatch = parsedName;
+    }
+    let descriptionPatch: LocalizedText | null | undefined;
+    if (Object.hasOwn(body, 'description')) {
+      if (body.description === null) {
+        descriptionPatch = null;
+      } else {
+        const parsedDescription = parseLocalizedText(body.description, 'description');
+        if (isParseError(parsedDescription)) {
+          return c.json({ ok: false, error: { message: parsedDescription.error } }, 400);
+        }
+        descriptionPatch = parsedDescription;
+      }
+    }
 
     const prep = prepareUpdateAgent(service.currentConfig as Config, id, {
-      name: typeof body.name === 'string' ? body.name : undefined,
+      name: namePatch,
       ...(descriptionPatch !== undefined ? { description: descriptionPatch } : {}),
       workspace: typeof body.workspace === 'string' ? body.workspace : undefined,
       model:
@@ -243,7 +293,8 @@ export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRou
     if (!save.saved) {
       return c.json({ ok: false, error: { message: save.error ?? 'save failed' } }, 500);
     }
-    const agentsPayload = await listGatewayAgents(service.currentConfig as Config);
+    const locale = c.req.query('locale') || c.req.header('Accept-Language')?.split(',')[0]?.trim();
+    const agentsPayload = await listGatewayAgents(service.currentConfig as Config, { locale });
     return c.json({ ok: true, payload: agentsPayload });
   });
 
@@ -262,7 +313,8 @@ export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRou
     if (purge) {
       await runAfterDeletePurge(service.currentConfig as Config, agentId);
     }
-    const agentsPayload = await listGatewayAgents(service.currentConfig as Config);
+    const locale = c.req.query('locale') || c.req.header('Accept-Language')?.split(',')[0]?.trim();
+    const agentsPayload = await listGatewayAgents(service.currentConfig as Config, { locale });
     return c.json({
       ok: true,
       payload: { agentId, purged: purge, agents: agentsPayload },

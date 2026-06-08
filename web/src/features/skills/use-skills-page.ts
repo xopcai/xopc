@@ -120,7 +120,7 @@ export function useSkillsPage() {
   const [installingMarketName, setInstallingMarketName] = useState<string | null>(null);
   const [usingSkillInChatName, setUsingSkillInChatName] = useState<string | null>(null);
   const [marketCategoryId, setMarketCategoryId] = useState('');
-  const [marketBrowseProvider, setMarketBrowseProvider] = useState<string | null>(null);
+  const [marketBrowseProvider, setMarketBrowseProvider] = useState<string | null>(() => urlMarketProvider);
   const [providersRefreshKey, setProvidersRefreshKey] = useState(0);
   const marketplaceDetailProviderRef = useRef<string | null>(null);
   const trackedUrlProviderRef = useRef<string | null>(urlMarketProvider);

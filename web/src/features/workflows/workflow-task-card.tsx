@@ -14,15 +14,18 @@ import {
   isRunRetriable,
   resolveRunCardTitle,
   resolveRunSessionKey,
+  resolveRunWorkflowLabel,
 } from './workflow-board.utils';
-import { interpolate } from './workflow-page.utils';
+import { formatDuration, interpolate, statusTone } from './workflow-page.utils';
 
 export const WorkflowTaskCard = memo(function WorkflowTaskCard({
   run,
   language,
   localeTag,
   nowMs,
+  selected,
   onOpen,
+  onOpenChat,
   onCancel,
   onRetry,
 }: {
@@ -30,14 +33,16 @@ export const WorkflowTaskCard = memo(function WorkflowTaskCard({
   language: StoredLanguage;
   localeTag: string;
   nowMs: number;
+  selected?: boolean;
   onOpen: (run: WorkflowRunSummary) => void;
+  onOpenChat: (run: WorkflowRunSummary) => void;
   onCancel: (runId: string) => void;
   onRetry: (runId: string) => void;
 }) {
   const labels = messages(language).workflows;
   const [menuOpen, setMenuOpen] = useState(false);
   const sessionKey = resolveRunSessionKey(run);
-  const disabled = !sessionKey;
+  const chatDisabled = !sessionKey;
   const active = isRunActive(run);
   const showProgress = run.status === 'running' || run.status === 'queued';
   const progress =
@@ -46,34 +51,55 @@ export const WorkflowTaskCard = memo(function WorkflowTaskCard({
       : 0;
   const hasErrors = run.metrics.errorAgentCount > 0;
   const timeMs = run.startedAtMs ?? run.createdAtMs;
+  const durationMs = active ? nowMs - timeMs : run.metrics.durationMs;
+  const durationText = formatDuration(durationMs);
+  const artifactText = interpolate(labels.taskArtifacts, { count: run.metrics.artifactCount });
+  const cardTitle = resolveRunCardTitle(run);
+  const workflowLabel = resolveRunWorkflowLabel(run);
 
   const handleOpen = useCallback(() => {
-    if (disabled) return;
     onOpen(run);
-  }, [disabled, onOpen, run]);
+  }, [onOpen, run]);
+
+  const handleOpenChat = useCallback(() => {
+    if (chatDisabled) return;
+    onOpenChat(run);
+  }, [chatDisabled, onOpenChat, run]);
 
   return (
     <div
       className={cn(
-        'group relative rounded-xl border border-edge bg-surface-panel p-3 transition-colors',
-        disabled ? 'opacity-60' : 'hover:border-edge-strong hover:bg-surface-hover/50',
+        'group relative rounded-xl border bg-surface-panel p-3 transition-colors',
+        selected ? 'border-accent/70 ring-1 ring-accent/30' : 'border-edge',
+        'hover:border-edge-strong hover:bg-surface-hover/50',
       )}
     >
       <button
         type="button"
         onClick={handleOpen}
-        disabled={disabled}
-        title={disabled ? labels.taskNoSession : undefined}
-        className={cn('w-full text-left', interaction.focusRingPanel, disabled && 'cursor-not-allowed')}
+        aria-label={`${labels.taskOpenDetails}: ${cardTitle}`}
+        aria-current={selected ? 'true' : undefined}
+        className={cn('w-full text-left', interaction.focusRingPanel)}
       >
         <div className="pr-7">
-          <div className="line-clamp-2 text-sm font-medium leading-5 text-fg">
-            {resolveRunCardTitle(run)}
+          <div className="flex min-w-0 items-start justify-between gap-2">
+            <div className="line-clamp-2 min-w-0 text-sm font-medium leading-5 text-fg">
+              {cardTitle}
+            </div>
+            <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium', statusTone(run.status))}>
+              {labels.status[run.status] ?? run.status}
+            </span>
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-1 text-[11px] text-fg-subtle">
-            <span className="truncate">{run.definitionId}</span>
+            <span className="truncate">{workflowLabel}</span>
             <span aria-hidden>·</span>
             <span>{formatRelativeTime(timeMs, nowMs, localeTag)}</span>
+            {durationText !== '—' ? (
+              <>
+                <span aria-hidden>·</span>
+                <span>{interpolate(labels.taskElapsed, { duration: durationText })}</span>
+              </>
+            ) : null}
           </div>
         </div>
 
@@ -96,6 +122,11 @@ export const WorkflowTaskCard = memo(function WorkflowTaskCard({
             </div>
           </div>
         ) : null}
+
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-fg-subtle">
+          {run.metrics.artifactCount > 0 ? <span>{artifactText}</span> : null}
+          {selected ? <span className="text-accent-fg">{labels.taskOpenDetails}</span> : null}
+        </div>
 
         {hasErrors ? (
           <div className="mt-2 flex items-center gap-1 text-[11px] text-amber-700 dark:text-amber-300">
@@ -123,13 +154,13 @@ export const WorkflowTaskCard = memo(function WorkflowTaskCard({
               aria-label={labels.taskCloseMenu}
               onClick={() => setMenuOpen(false)}
             />
-            <div className="absolute right-0 z-20 mt-1 min-w-[9rem] rounded-lg border border-edge bg-surface-panel py-1 shadow-surface">
+            <div className="absolute right-0 z-20 mt-1 min-w-36 rounded-lg border border-edge bg-surface-panel py-1 shadow-surface">
               <TaskMenuItem
                 label={labels.continueInChat}
-                disabled={disabled}
+                disabled={chatDisabled}
                 onClick={() => {
                   setMenuOpen(false);
-                  handleOpen();
+                  handleOpenChat();
                 }}
               />
               {active ? (

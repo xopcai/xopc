@@ -9,7 +9,6 @@ export type AgentPanel =
   | 'files'
   | 'tools'
   | 'skills'
-  | 'models'
   | 'channels'
   | 'cron';
 

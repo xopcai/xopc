@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 import type { Config } from '../schema.js';
 import { ConfigSchema } from '../schema.js';
 import {
-  mergeTypedModels,
   resolveEffectiveTypedModels,
   resolveModelRef,
   resolveTypedModelRef,
@@ -21,32 +20,17 @@ const baseConfig = {
       {
         id: 'research',
         enabled: true,
-        models: [{ id: 'small', model: 'openai/gpt-4o-mini' }],
       },
     ],
   },
 } as Config;
-
-describe('mergeTypedModels', () => {
-  it('overlays entry ids onto defaults', () => {
-    const merged = mergeTypedModels(baseConfig.agents?.defaults?.models, [
-      { id: 'small', model: 'openai/gpt-4o-mini' },
-    ]);
-    expect(merged.get('small')?.model).toBe('openai/gpt-4o-mini');
-    expect(merged.get('large')?.model).toBe('anthropic/claude-sonnet-4');
-  });
-});
-
 describe('resolveEffectiveTypedModels', () => {
-  it('returns defaults for unknown agent', () => {
-    const map = resolveEffectiveTypedModels(baseConfig, 'main');
-    expect(map.get('small')?.model).toBe('deepseek/deepseek-v4-flash');
-  });
-
-  it('applies per-agent override by id', () => {
-    const map = resolveEffectiveTypedModels(baseConfig, 'research');
-    expect(map.get('small')?.model).toBe('openai/gpt-4o-mini');
-    expect(map.get('large')?.model).toBe('anthropic/claude-sonnet-4');
+  it('returns global defaults for any agent', () => {
+    const mainMap = resolveEffectiveTypedModels(baseConfig, 'main');
+    const researchMap = resolveEffectiveTypedModels(baseConfig, 'research');
+    expect(mainMap.get('small')?.model).toBe('deepseek/deepseek-v4-flash');
+    expect(researchMap.get('small')?.model).toBe('deepseek/deepseek-v4-flash');
+    expect(researchMap.get('large')?.model).toBe('anthropic/claude-sonnet-4');
   });
 });
 
@@ -63,8 +47,8 @@ describe('resolveModelRef', () => {
     expect(resolveModelRef(baseConfig, 'main', '@large')).toBe('anthropic/claude-sonnet-4');
   });
 
-  it('uses per-agent typed override', () => {
-    expect(resolveModelRef(baseConfig, 'research', 'small')).toBe('openai/gpt-4o-mini');
+  it('resolves typed ids from global defaults for all agents', () => {
+    expect(resolveModelRef(baseConfig, 'research', 'small')).toBe('deepseek/deepseek-v4-flash');
   });
 
   it('throws for unknown typed id with available hint', () => {

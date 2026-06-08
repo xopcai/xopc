@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { performance } from 'node:perf_hooks';
 import { copyFile, mkdir, readdir, stat, unlink } from 'fs/promises';
 import { join } from 'path';
 import { existsSync } from 'fs';
@@ -9,7 +10,7 @@ import type { CompactionEntry } from '@earendil-works/pi-coding-agent';
 import { loadEntriesFromFile } from './parity/load-jsonl-entries.js';
 
 import type { Config } from '../config/schema.js';
-import { resolveSessionsDir, FILENAMES } from '../config/paths.js';
+import { resolveSessionsDir, resolveStateDir, FILENAMES } from '../config/paths.js';
 import { resolveDefaultAgentId, listAgentEntries } from '../agent/agent-scope.js';
 import { resolveEffectiveAgentProfileForSession } from '../config/agent-profile.js';
 import { readPostCompactionContext } from '../agent/reply/post-compaction-context.js';
@@ -67,6 +68,7 @@ const log = createLogger('SessionStore');
 
 const INDEX_VERSION = '1.0';
 const DELETED_MARKER = '.jsonl.deleted.';
+const ALL_SESSIONS_MAP_CACHE_TTL_MS = 2_000;
 
 export interface SessionStoreOptions {
   config: Config;
@@ -82,6 +84,10 @@ export class SessionStore {
   private compactor: SessionCompactor;
   private storeMutationDepth = 0;
   private storeMutationChain: Promise<void> = Promise.resolve();
+  private allSessionsMapCache?: {
+    expiresAtMs: number;
+    map: Record<string, XopcSessionDiskEntry>;
+  };
   /** Cache of per-agent sessions dirs to avoid re-resolution on every call. */
   private agentSessionsDirCache = new Map<string, string>();
 
@@ -168,29 +174,75 @@ export class SessionStore {
     return readSessionsJsonFile<XopcSessionDiskEntry>(this.storePath);
   }
 
+  private invalidateAllSessionsMapCache(): void {
+    this.allSessionsMapCache = undefined;
+  }
+
+  private async discoverSessionMapPaths(): Promise<Array<{ agentId: string; mapPath: string }>> {
+    const agents = listAgentEntries(this.options.config);
+    const defaultId = resolveDefaultAgentId(this.options.config);
+    const agentIds = new Set<string>([defaultId, ...agents.map((agent) => agent.id)]);
+
+    const agentsRoot = join(resolveStateDir(process.env), 'agents');
+    if (existsSync(agentsRoot)) {
+      const entries = await readdir(agentsRoot, { withFileTypes: true }).catch(() => []);
+      for (const entry of entries) {
+        if (entry.isDirectory()) {
+          agentIds.add(entry.name);
+        }
+      }
+    }
+
+    return [...agentIds].map((agentId) => ({
+      agentId,
+      mapPath: join(resolveSessionsDir(this.options.config, agentId), FILENAMES.SESSIONS_MAP),
+    }));
+  }
+
   /**
-   * OpenClaw-aligned: read sessions.json from ALL known agents and merge into a single map.
-   * Used by aggregation queries (list, getByAgent, getByAccount, etc.) so the gateway UI
-   * can display sessions across all agents.
+   * Unified cross-agent aggregation entry for global session views.
+   * Reads configured agents plus existing per-agent session maps under the state directory.
    */
   private async readAllMaps(): Promise<Record<string, XopcSessionDiskEntry>> {
     if (this.options.sessionsDir) {
       return this.readMap();
     }
-    const agents = listAgentEntries(this.options.config);
-    const defaultId = resolveDefaultAgentId(this.options.config);
-    const agentIds = new Set<string>([defaultId, ...agents.map((a) => a.id)]);
 
+    const nowMs = Date.now();
+    if (this.allSessionsMapCache && this.allSessionsMapCache.expiresAtMs > nowMs) {
+      log.debug(
+        { sessionCount: Object.keys(this.allSessionsMapCache.map).length },
+        'All session maps cache hit',
+      );
+      return this.allSessionsMapCache.map;
+    }
+
+    const startedAt = performance.now();
+    const paths = await this.discoverSessionMapPaths();
     const merged: Record<string, XopcSessionDiskEntry> = {};
-    for (const id of agentIds) {
-      const dir = resolveSessionsDir(this.options.config, id);
-      const path = join(dir, FILENAMES.SESSIONS_MAP);
-      if (!existsSync(path)) {
+    let scannedMapCount = 0;
+    for (const { mapPath } of paths) {
+      if (!existsSync(mapPath)) {
         continue;
       }
-      const map = await readSessionsJsonFile<XopcSessionDiskEntry>(path);
+      const map = await readSessionsJsonFile<XopcSessionDiskEntry>(mapPath);
       Object.assign(merged, map);
+      scannedMapCount++;
     }
+
+    this.allSessionsMapCache = {
+      expiresAtMs: nowMs + ALL_SESSIONS_MAP_CACHE_TTL_MS,
+      map: merged,
+    };
+    log.debug(
+      {
+        candidateAgentCount: paths.length,
+        scannedMapCount,
+        sessionCount: Object.keys(merged).length,
+        durationMs: Math.round(performance.now() - startedAt),
+      },
+      'All session maps scanned',
+    );
     return merged;
   }
 
@@ -277,27 +329,28 @@ export class SessionStore {
     const keyStorePath = this.resolveStorePathForKey(sessionKey);
     const keySessionsDir = this.resolveSessionsDirForKey(sessionKey);
     await mkdir(keySessionsDir, { recursive: true });
-    return withSessionsJsonLock(keyStorePath, async (map) => {
+    let changed = false;
+    const entry = await withSessionsJsonLock(keyStorePath, async (map) => {
       const existing = map[sessionKey] as XopcSessionDiskEntry | undefined;
       if (existing?.pluginExtensions?.xopc?.metadata) {
         return existing;
       }
-      let entry = existing;
-      if (!entry) {
+      let nextEntry = existing;
+      if (!nextEntry) {
         const sessionId = randomUUID();
         validateSessionId(sessionId);
         const sessionFile = `${sessionId}.jsonl`;
         const now = Date.now();
         const metadata = this.buildDefaultMetadata(sessionKey);
         metadata.transcriptId = sessionId;
-        entry = {
+        nextEntry = {
           sessionId,
           updatedAt: now,
           sessionStartedAt: now,
           sessionFile,
           pluginExtensions: { xopc: { metadata } },
         };
-        map[sessionKey] = entry as Record<string, unknown>;
+        map[sessionKey] = nextEntry as Record<string, unknown>;
         const abs = resolveSessionTranscriptPathInDir(sessionId, keySessionsDir);
         await writeTranscriptJsonl({
           absPath: abs,
@@ -305,14 +358,20 @@ export class SessionStore {
           cwd: process.cwd(),
           rows: [],
         });
-      } else if (!entry.pluginExtensions?.xopc?.metadata) {
+        changed = true;
+      } else if (!nextEntry.pluginExtensions?.xopc?.metadata) {
         const metadata = this.buildDefaultMetadata(sessionKey);
-        metadata.transcriptId = entry.sessionId;
-        entry.pluginExtensions = { xopc: { metadata } };
-        map[sessionKey] = entry as Record<string, unknown>;
+        metadata.transcriptId = nextEntry.sessionId;
+        nextEntry.pluginExtensions = { xopc: { metadata } };
+        map[sessionKey] = nextEntry as Record<string, unknown>;
+        changed = true;
       }
-      return entry!;
+      return nextEntry!;
     });
+    if (changed) {
+      this.invalidateAllSessionsMapCache();
+    }
+    return entry;
   }
 
   private metadataFromEntry(sessionKey: string, entry: XopcSessionDiskEntry): SessionMetadata {
@@ -605,6 +664,7 @@ export class SessionStore {
         entry.updatedAt = Date.now();
         map[key] = entry as Record<string, unknown>;
       });
+      this.invalidateAllSessionsMapCache();
       invalidateSessionSearchIndexCache();
       log.debug({ key, updates }, 'Session metadata updated');
     });
@@ -662,6 +722,7 @@ export class SessionStore {
         map[key] = e as Record<string, unknown>;
       });
 
+      this.invalidateAllSessionsMapCache();
       invalidateSessionSearchIndexCache();
       log.info({ key, previousSessionId, sessionId }, 'Session reset');
       return { sessionId, previousSessionId };
@@ -687,6 +748,7 @@ export class SessionStore {
       } catch (err) {
         log.warn({ err, key }, 'Transcript archive on delete failed');
       }
+      this.invalidateAllSessionsMapCache();
       invalidateSessionSearchIndexCache();
       log.info({ key }, 'Session deleted');
       return true;
@@ -915,6 +977,7 @@ export class SessionStore {
       );
       map[key] = e as Record<string, unknown>;
     });
+    this.invalidateAllSessionsMapCache();
     invalidateSessionSearchIndexCache();
   }
 
@@ -947,6 +1010,7 @@ export class SessionStore {
         );
         map[sessionKey] = e as Record<string, unknown>;
       });
+      this.invalidateAllSessionsMapCache();
       invalidateSessionSearchIndexCache();
     });
   }
@@ -990,6 +1054,7 @@ export class SessionStore {
         );
         map[key] = e as Record<string, unknown>;
       });
+      this.invalidateAllSessionsMapCache();
       invalidateSessionSearchIndexCache();
     });
   }

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { checkCacheDir } from '../browser/cache-dir-policy.js';
+import { LocalizedTextSchema } from './localized-text.js';
 import { validatePublicUrl } from './public-url.js';
 
 // ============================================
@@ -372,9 +373,9 @@ export const AgentConfigSchema = z.object({
   id: z.string(),
   /** When true, this entry is the default routing agent. */
   default: z.boolean().optional(),
-  name: z.string().optional(),
+  name: LocalizedTextSchema.optional(),
   /** Short human-readable summary for UIs (gateway console, pickers). */
-  description: z.string().max(4000).optional(),
+  description: LocalizedTextSchema.optional(),
   enabled: z.boolean().default(true),
   /** Per-agent workspace root (`~` expanded at runtime). */
   workspace: z.string().optional(),
@@ -384,8 +385,6 @@ export const AgentConfigSchema = z.object({
    */
   agentDir: z.string().optional(),
   model: AgentModelRefSchema.optional(),
-  /** Per-agent typed model overrides; same `id` replaces the defaults entry. */
-  models: AgentTypedModelsArraySchema,
   thinkingDefault: z.enum(['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'adaptive']).optional(),
   reasoningDefault: z.enum(['off', 'on', 'stream']).optional(),
   verboseDefault: z.enum(['off', 'on', 'full']).optional(),

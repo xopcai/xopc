@@ -74,6 +74,8 @@ export interface WorkflowAgentStep {
   label: string;
   detail?: string;
   status: WorkflowAgentStepStatus;
+  resultPreview?: string;
+  error?: string;
   startedAtMs?: number;
   durationMs?: number;
 }
@@ -137,7 +139,14 @@ export interface SubagentRunOptions<T = unknown> {
 
 export type SubagentProgressEvent =
   | { type: 'tool_start'; toolCallId: string; toolName: string; args: Record<string, unknown> }
-  | { type: 'tool_end'; toolCallId: string; toolName: string; isError: boolean }
+  | {
+      type: 'tool_end';
+      toolCallId: string;
+      toolName: string;
+      isError: boolean;
+      resultPreview?: string;
+      error?: string;
+    }
   | { type: 'iteration'; count: number; max: number }
   | { type: 'text_delta'; delta: string }
   | { type: 'thinking_delta'; delta: string };

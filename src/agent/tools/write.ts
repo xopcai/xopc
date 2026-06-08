@@ -4,7 +4,11 @@ import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 import { writeFile, mkdir } from 'fs/promises';
 import { dirname } from 'path';
 import { checkFileSafety } from '../prompt/safety.js';
-import { resolvePathUnderWorkspace } from './tool-paths.js';
+import {
+  isBareProfileMarkdownFileName,
+  resolveProfileMarkdownPathIfBareName,
+  resolvePathUnderWorkspace,
+} from './tool-paths.js';
 import { evaluateFilePolicy } from '../sandbox/exec-policy.js';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
@@ -16,10 +20,19 @@ const WriteFileSchema = Type.Object({
 
 type WriteFileParams = { path: string; content: string };
 
-export function createWriteFileTool(workspace: string): AgentTool {
+export interface CreateWriteFileToolOptions {
+  /** When set and the path is a bare profile filename (e.g. SOUL.md), write to this root. */
+  profileMarkdownRoot?: string;
+}
+
+export function createWriteFileTool(
+  workspace: string,
+  options?: CreateWriteFileToolOptions,
+): AgentTool {
   return {
     name: 'write_file',
-    description: 'Create or overwrite a file. Relative paths are under the current agent workspace.',
+    description:
+      'Create or overwrite a file. Relative paths are under the current agent workspace; profile Markdown (SOUL.md, etc.) is written automatically when given by filename.',
     parameters: WriteFileSchema,
     label: '📝 Write',
 
@@ -35,11 +48,16 @@ export function createWriteFileTool(workspace: string): AgentTool {
           return { content: [{ type: 'text', text: `🚫 ${safety.message}` }], details: {} };
         }
 
+        const writesProfileFile = Boolean(
+          options?.profileMarkdownRoot && isBareProfileMarkdownFileName(p.path),
+        );
+        const workspaceRoot = writesProfileFile ? options!.profileMarkdownRoot! : workspace;
+
         // Sandbox path-policy check (blocked dirs, symlink escape, config protection)
         const pathPolicy = evaluateFilePolicy({
           operation: 'write',
           path: p.path,
-          workspaceRoot: workspace,
+          workspaceRoot,
         });
         if (!pathPolicy.allowed) {
           return { content: [{ type: 'text', text: `🚫 Sandbox: ${pathPolicy.reason}` }], details: {} };
@@ -50,7 +68,9 @@ export function createWriteFileTool(workspace: string): AgentTool {
           return { content: [{ type: 'text', text: `🚫 File too large: ${contentBytes} bytes` }], details: {} };
         }
 
-        const target = resolvePathUnderWorkspace(p.path, workspace);
+        const target = writesProfileFile
+          ? resolveProfileMarkdownPathIfBareName(p.path, options!.profileMarkdownRoot!)
+          : resolvePathUnderWorkspace(p.path, workspace);
         await mkdir(dirname(target), { recursive: true });
         await writeFile(target, p.content, 'utf-8');
         return { content: [{ type: 'text', text: `File written: ${target}` }], details: { size: contentBytes } };

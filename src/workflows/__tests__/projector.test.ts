@@ -68,8 +68,15 @@ describe('projectWorkflowRunView', () => {
         stepId: 'step-1',
         label: 'Search code',
         kind: 'tool',
+        toolName: 'file_grep',
+        detail: 'workflow',
       }),
-      event(7, 'agent_step_completed', { agentId: 'agent-1', stepId: 'step-1', status: 'done' }),
+      event(7, 'agent_step_completed', {
+        agentId: 'agent-1',
+        stepId: 'step-1',
+        status: 'done',
+        resultPreview: 'workflow matches',
+      }),
       event(8, 'agent_completed', {
         agentId: 'agent-1',
         status: 'done',
@@ -104,7 +111,13 @@ describe('projectWorkflowRunView', () => {
     expect(view?.run.metadata?.definition.version).toBe('1.0.0');
     expect(view?.phases[0]).toMatchObject({ id: 'discover', status: 'completed', agentIds: ['agent-1'] });
     expect(view?.agents[0]).toMatchObject({ id: 'agent-1', status: 'done', resultPreview: 'Found workflow runtime' });
-    expect(view?.agents[0]?.steps[0]).toMatchObject({ id: 'step-1', status: 'done' });
+    expect(view?.agents[0]?.steps[0]).toMatchObject({
+      id: 'step-1',
+      toolName: 'file_grep',
+      detail: 'workflow',
+      status: 'done',
+      resultPreview: 'workflow matches',
+    });
     expect(view?.logs[0]?.message).toBe('Discovery complete');
     expect(view?.controls.canCancel).toBe(false);
     expect(view?.controls.canRetry).toBe(true);

@@ -2,6 +2,7 @@ import { Link2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/settings/settings-form-section';
+import type { SettingsNavLocationState } from '@/features/settings/settings-nav-state';
 import type { AgentsSettingsMessages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 
@@ -50,9 +51,17 @@ export function AgentConfigInheritanceSummary(props: {
   agentModel: string;
   agentWorkspace: string;
   settingsPath?: string;
+  settingsState?: SettingsNavLocationState;
 }) {
-  const { a, defaultModel, defaultWorkspace, agentModel, agentWorkspace, settingsPath = '/settings/agent-defaults' } =
-    props;
+  const {
+    a,
+    defaultModel,
+    defaultWorkspace,
+    agentModel,
+    agentWorkspace,
+    settingsPath = '/settings/agent-defaults',
+    settingsState,
+  } = props;
   const inh = a.inheritance;
 
   const modelInherits = !agentModel.trim();
@@ -72,6 +81,7 @@ export function AgentConfigInheritanceSummary(props: {
         trailing={
           <Link
             to={settingsPath}
+            state={settingsState}
             className="text-xs font-medium text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
           >
             {inh.editDefaultsLink}

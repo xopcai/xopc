@@ -2,11 +2,14 @@ import { revalidateGatewayConfig } from '@/features/gateway/gateway-config-swr';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
+import { getLanguage } from '@/lib/storage';
+
 import type {
   AgentProfileFileEntry,
   GatewayAgentRow,
   GatewayAgentsPayload,
   GatewayConfigBinding,
+  LocalizedText,
   SkillCatalogRow,
 } from './types/agent-gateway';
 
@@ -17,13 +20,13 @@ export type {
   GatewayAgentSkillsInfo,
   GatewayAgentToolsInfo,
   GatewayConfigBinding,
+  LocalizedText,
   SkillCatalogRow,
 } from './types/agent-gateway';
 
 function normalizeAgentRow(raw: GatewayAgentRow): GatewayAgentRow {
   const profileDir = typeof raw.profileDir === 'string' ? raw.profileDir.trim() : '';
   const typedDefaults = raw.typedModels?.defaults ?? [];
-  const typedEntry = raw.typedModels?.entry;
   const typedEffective = raw.typedModels?.effective ?? typedDefaults;
   return {
     ...raw,
@@ -33,14 +36,16 @@ function normalizeAgentRow(raw: GatewayAgentRow): GatewayAgentRow {
     tools: raw.tools ?? { defaultsDisable: [], entryDisable: [], effectiveDisable: [] },
     typedModels: {
       defaults: typedDefaults,
-      ...(typedEntry !== undefined ? { entry: typedEntry } : {}),
       effective: typedEffective,
     },
   };
 }
 
 export async function fetchGatewayAgents(): Promise<GatewayAgentsPayload> {
-  const res = await fetchJson<{ ok?: boolean; payload?: GatewayAgentsPayload }>(apiUrl('/api/agents'));
+  const locale = encodeURIComponent(getLanguage());
+  const res = await fetchJson<{ ok?: boolean; payload?: GatewayAgentsPayload }>(
+    apiUrl(`/api/agents?locale=${locale}`),
+  );
   const p = res.payload;
   if (!p?.defaultId || !Array.isArray(p.agents)) {
     throw new Error('Invalid /api/agents response');
@@ -66,14 +71,15 @@ export async function applyGatewayAgentsPayloadToCaches(payload: GatewayAgentsPa
 }
 
 export async function createGatewayAgent(body: {
-  name: string;
+  name: LocalizedText;
   id?: string;
   workspace: string;
   model?: string;
   agentDir?: string;
-  description?: string;
+  description?: LocalizedText;
   toolsDisable?: string[];
   profileFiles?: Record<string, string>;
+  cloneFrom?: string;
 }): Promise<CreateGatewayAgentResult> {
   const res = await fetchJson<{
     ok?: boolean;
@@ -98,12 +104,12 @@ export async function createGatewayAgent(body: {
 
 export async function createGatewayAgentsBatch(
   agents: Array<{
-    name: string;
+    name: LocalizedText;
     id?: string;
     workspace: string;
     model?: string;
     agentDir?: string;
-    description?: string;
+    description?: LocalizedText;
     toolsDisable?: string[];
     profileFiles?: Record<string, string>;
   }>,
@@ -138,15 +144,14 @@ export async function createGatewayAgentsBatch(
 export async function updateGatewayAgent(
   id: string,
   body: {
-    name?: string;
-    description?: string | null;
+    name?: LocalizedText;
+    description?: LocalizedText | null;
     workspace?: string;
     model?: string | null;
     agentDir?: string | null;
     setDefault?: boolean;
     skills?: string[] | null;
     toolsDisable?: string[] | null;
-    models?: Array<{ id: string; description?: string; model: string }> | null;
   },
 ): Promise<GatewayAgentsPayload> {
   const res = await fetchJson<{ ok?: boolean; payload?: GatewayAgentsPayload }>(

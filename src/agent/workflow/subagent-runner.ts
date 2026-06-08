@@ -193,6 +193,8 @@ function mapChildProgressEvent(event: {
   toolName?: string;
   args?: Record<string, unknown>;
   isError?: boolean;
+  resultPreview?: string;
+  error?: string;
   count?: number;
   max?: number;
   delta?: string;
@@ -211,6 +213,8 @@ function mapChildProgressEvent(event: {
         toolCallId: event.toolCallId ?? '',
         toolName: event.toolName ?? 'tool',
         isError: Boolean(event.isError),
+        resultPreview: event.resultPreview,
+        error: event.error,
       };
     case 'iteration':
       return {

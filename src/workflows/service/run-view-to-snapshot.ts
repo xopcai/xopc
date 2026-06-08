@@ -38,10 +38,12 @@ export function runViewToSnapshot(view: WorkflowRunView): WorkflowSnapshot {
     steps: agent.steps?.map((step) => ({
       id: step.id,
       kind: step.kind,
-      toolName: step.kind === 'tool' ? step.label : undefined,
+      toolName: step.toolName,
       label: step.label,
       detail: step.detail,
       status: step.status,
+      resultPreview: step.resultPreview,
+      error: step.error,
       startedAtMs: step.startedAtMs,
       durationMs:
         step.startedAtMs != null && step.completedAtMs != null

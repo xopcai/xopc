@@ -1,6 +1,9 @@
+import * as Dialog from '@radix-ui/react-dialog';
+
 import {
   AlertTriangle,
   Check,
+  ChevronDown,
   CircleStop,
   Copy,
   Download,
@@ -8,6 +11,7 @@ import {
   PackageCheck,
   RotateCcw,
   Sparkles,
+  X,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -96,6 +100,7 @@ export function WorkflowRunPanel({
   localeTag,
   onCancel,
   onRetry,
+  onClose,
 }: {
   view: WorkflowRunView | undefined;
   loading: boolean;
@@ -103,6 +108,7 @@ export function WorkflowRunPanel({
   localeTag: string;
   onCancel: () => void;
   onRetry: () => void;
+  onClose: () => void;
 }) {
   const labels = messages(language).workflows;
   const cardLabels = workflowCardLabels(language);
@@ -119,9 +125,15 @@ export function WorkflowRunPanel({
 
   useEffect(() => {
     if (!view?.run.id) return;
-    setProcessExpanded(isActive);
+
+    const shouldExpandProcess = isActive
+      || runStatus === 'failed'
+      || runStatus === 'timeout'
+      || (runStatus === 'succeeded' && view.run.metrics.errorAgentCount > 0);
+
+    setProcessExpanded(shouldExpandProcess);
     setDrawerAgentId(null);
-  }, [view?.run.id, isActive]);
+  }, [view?.run.id, isActive, runStatus, view?.run.metrics.errorAgentCount]);
 
   useEffect(() => {
     if (!isActive) return;
@@ -173,19 +185,24 @@ export function WorkflowRunPanel({
 
   if (loading) {
     return (
-      <div className="rounded-2xl border border-edge bg-surface-panel p-6 text-sm text-fg-muted">
-        {labels.loading}
-      </div>
+      <Dialog.Root open onOpenChange={(next) => !next && onClose()}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-65 bg-scrim backdrop-blur-[1px]" />
+          <Dialog.Content className="fixed left-1/2 top-1/2 z-66 flex max-h-[min(85vh,44rem)] w-[min(100%-2rem,48rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-panel shadow-popover outline-none">
+            <div className="flex shrink-0 items-center justify-between gap-2 border-b border-edge px-5 py-4">
+              <Dialog.Title className="text-base font-semibold tracking-tight text-fg">{labels.runSummaryTitle}</Dialog.Title>
+              <Button type="button" variant="ghost" className="size-9 shrink-0 p-0" aria-label={labels.pickStartClose} onClick={onClose}>
+                <X className="size-5" aria-hidden />
+              </Button>
+            </div>
+            <div className="p-5 text-sm text-fg-muted">{labels.loading}</div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
     );
   }
 
-  if (!view || !snapshot) {
-    return (
-      <div className="rounded-2xl border border-dashed border-edge p-6 text-sm text-fg-muted">
-        {labels.selectRunHint}
-      </div>
-    );
-  }
+  if (!view || !snapshot) return null;
 
   const { run } = view;
   const canCancel = view.controls.canCancel && isActive;
@@ -199,9 +216,19 @@ export function WorkflowRunPanel({
 
   return (
     <>
-      <section className="rounded-2xl border border-edge bg-surface-panel p-5">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div className="min-w-0">
+      <Dialog.Root open onOpenChange={(next) => !next && onClose()}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-65 bg-scrim backdrop-blur-[1px]" />
+          <Dialog.Content className="fixed left-1/2 top-1/2 z-66 flex max-h-[min(90vh,52rem)] w-[min(100%-2rem,64rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-panel shadow-popover outline-none">
+            <div className="flex shrink-0 items-center justify-between gap-2 border-b border-edge px-5 py-4">
+              <Dialog.Title className="truncate text-base font-semibold tracking-tight text-fg">{run.title}</Dialog.Title>
+              <Button type="button" variant="ghost" className="size-9 shrink-0 p-0" aria-label={labels.pickStartClose} onClick={onClose}>
+                <X className="size-5" aria-hidden />
+              </Button>
+            </div>
+            <section className="min-h-0 flex-1 overflow-y-auto p-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-lg font-semibold text-fg">{run.title}</h2>
               <span className={cn('rounded-full px-2 py-0.5 text-xs font-medium', statusTone(run.status))}>
@@ -210,26 +237,6 @@ export function WorkflowRunPanel({
             </div>
             <p className="mt-1 text-xs text-fg-subtle">{run.definitionId}</p>
             {run.goal ? <p className="mt-3 text-sm leading-6 text-fg-muted">{run.goal}</p> : null}
-          </div>
-          <div className="flex shrink-0 flex-wrap gap-2">
-            {workflowSessionKey ? (
-              <Button variant="primary" onClick={continueInChat}>
-                <MessageSquare className="size-4" aria-hidden />
-                {labels.continueInChat}
-              </Button>
-            ) : null}
-            {canCancel ? (
-              <Button variant="secondary" onClick={onCancel} className="text-red-600 dark:text-red-300">
-                <CircleStop className="size-4" aria-hidden />
-                {labels.cancel}
-              </Button>
-            ) : null}
-            {view.controls.canRetry ? (
-              <Button variant="secondary" onClick={onRetry}>
-                <RotateCcw className="size-4" aria-hidden />
-                {labels.rerun}
-              </Button>
-            ) : null}
           </div>
         </div>
 
@@ -267,14 +274,50 @@ export function WorkflowRunPanel({
           <Metric label={labels.metrics.artifacts} value={String(run.metrics.artifactCount)} />
         </dl>
 
-        <div className="mt-5 grid gap-3 rounded-2xl border border-edge-subtle bg-surface-base/35 p-4 sm:grid-cols-2 lg:grid-cols-4">
-          <MetadataItem label={labels.metadataSession} value={metadata?.sessionKey ?? resolveWorkflowSessionKey(view) ?? '—'} />
-          <MetadataItem label={labels.metadataSource} value={sourceSummary} />
-          <MetadataItem
-            label={labels.metadataDefinition}
-            value={`${metadata?.definition.version ?? run.definitionVersion} · ${metadata?.definition.source ?? 'unknown'}`}
-          />
-          <MetadataItem label={labels.metadataRetryOf} value={metadata?.retryOfRunId ?? '—'} />
+        <div className="mt-5 flex flex-wrap gap-2">
+          {workflowSessionKey ? (
+            <Button variant="primary" onClick={continueInChat}>
+              <MessageSquare className="size-4" aria-hidden />
+              {labels.continueInChat}
+            </Button>
+          ) : null}
+          {canCancel ? (
+            <Button variant="secondary" onClick={onCancel} className="text-red-600 dark:text-red-300">
+              <CircleStop className="size-4" aria-hidden />
+              {labels.cancel}
+            </Button>
+          ) : null}
+          {view.controls.canRetry ? (
+            <Button variant="secondary" onClick={onRetry}>
+              <RotateCcw className="size-4" aria-hidden />
+              {labels.rerun}
+            </Button>
+          ) : null}
+          {hasResult ? (
+            <>
+              <Button variant="secondary" onClick={handleCopy}>
+                {copied ? <Check className="size-4" aria-hidden /> : <Copy className="size-4" aria-hidden />}
+                {copied ? labels.copied : labels.copyResult}
+              </Button>
+              <Button variant="secondary" onClick={handleExport}>
+                <Download className="size-4" aria-hidden />
+                {labels.exportResult}
+              </Button>
+            </>
+          ) : null}
+        </div>
+
+        <div className="mt-6">
+          <h3 className="text-sm font-semibold text-fg">{labels.resultTitle}</h3>
+          {hasResult ? (
+            <div className="mt-3 rounded-xl border border-edge bg-surface-base/50 p-3">
+              <WorkflowResultSummary result={resultForDisplay} labels={cardLabels.result} />
+            </div>
+          ) : (
+            <div className="mt-3 rounded-xl border border-dashed border-edge p-4 text-sm text-fg-muted">
+              {labels.noResult}
+            </div>
+          )}
         </div>
 
         <div className="mt-6 rounded-2xl border border-edge bg-surface-base/35">
@@ -295,7 +338,10 @@ export function WorkflowRunPanel({
                 {durationText}
               </p>
             </div>
-            <span className="text-xs text-fg-muted">{processExpanded ? labels.collapse : labels.expand}</span>
+            <ChevronDown
+              className={cn('size-4 shrink-0 text-fg-subtle transition-transform', processExpanded ? 'rotate-180' : null)}
+              aria-hidden
+            />
           </button>
 
           {processExpanded ? (
@@ -340,37 +386,25 @@ export function WorkflowRunPanel({
           ) : null}
         </div>
 
-        <div className="mt-6">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h3 className="text-sm font-semibold text-fg">{labels.resultTitle}</h3>
-            {hasResult ? (
-              <div className="flex flex-wrap gap-2">
-                <Button variant="secondary" onClick={handleCopy}>
-                  {copied ? <Check className="size-4" aria-hidden /> : <Copy className="size-4" aria-hidden />}
-                  {copied ? labels.copied : labels.copyResult}
-                </Button>
-                <Button variant="secondary" onClick={handleExport}>
-                  <Download className="size-4" aria-hidden />
-                  {labels.exportResult}
-                </Button>
-                <Button variant="secondary" onClick={continueInChat}>
-                  <MessageSquare className="size-4" aria-hidden />
-                  {labels.continueInChat}
-                </Button>
-              </div>
-            ) : null}
-          </div>
-          {hasResult ? (
-            <div className="mt-3 rounded-xl border border-edge bg-surface-base/50 p-3">
-              <WorkflowResultSummary result={resultForDisplay} labels={cardLabels.result} />
-            </div>
-          ) : (
-            <div className="mt-3 rounded-xl border border-dashed border-edge p-4 text-sm text-fg-muted">
-              {labels.noResult}
-            </div>
-          )}
+        <AgentInputOutputOverview
+          agents={snapshot.agents}
+          labels={labels}
+          defaultExpanded={run.status === 'failed' || run.status === 'timeout' || run.metrics.errorAgentCount > 0}
+        />
+
+        <div className="mt-6 grid gap-3 rounded-2xl border border-edge-subtle bg-surface-base/35 p-4 sm:grid-cols-2 lg:grid-cols-4">
+          <MetadataItem label={labels.metadataSession} value={metadata?.sessionKey ?? resolveWorkflowSessionKey(view) ?? '—'} />
+          <MetadataItem label={labels.metadataSource} value={sourceSummary} />
+          <MetadataItem
+            label={labels.metadataDefinition}
+            value={`${metadata?.definition.version ?? run.definitionVersion} · ${metadata?.definition.source ?? 'unknown'}`}
+          />
+          <MetadataItem label={labels.metadataRetryOf} value={metadata?.retryOfRunId ?? '—'} />
         </div>
-      </section>
+            </section>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
 
       <WorkflowAgentDetailDrawer
         open={drawerAgentId != null && drawerAgent != null}
@@ -384,6 +418,91 @@ export function WorkflowRunPanel({
       />
     </>
   );
+}
+
+function AgentInputOutputOverview({
+  agents,
+  labels,
+  defaultExpanded,
+}: {
+  agents: WorkflowAgentSnapshot[];
+  labels: WorkflowsMessages;
+  defaultExpanded: boolean;
+}) {
+  const [expanded, setExpanded] = useState(defaultExpanded);
+
+  useEffect(() => {
+    setExpanded(defaultExpanded);
+  }, [defaultExpanded]);
+
+  if (agents.length === 0) return null;
+
+  return (
+    <section className="mt-6 rounded-2xl border border-edge bg-surface-base/35">
+      <button
+        type="button"
+        className="flex w-full items-start justify-between gap-4 px-4 py-3 text-left"
+        onClick={() => setExpanded((value) => !value)}
+        aria-expanded={expanded}
+      >
+        <div className="flex flex-col gap-1">
+          <h3 className="text-sm font-semibold text-fg">{labels.agentIoTitle}</h3>
+          <p className="text-xs leading-5 text-fg-subtle">{labels.agentIoHint}</p>
+        </div>
+        <ChevronDown
+          className={cn('mt-0.5 size-4 shrink-0 text-fg-subtle transition-transform', expanded ? 'rotate-180' : null)}
+          aria-hidden
+        />
+      </button>
+      {expanded ? (
+        <div className="grid gap-3 border-t border-edge px-4 py-4">
+          {agents.map((agent) => {
+          const output = agent.error || agent.resultPreview || labels.agentNoOutput;
+          return (
+            <article key={agent.id} className="rounded-xl border border-edge-subtle bg-surface-panel p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="min-w-0 text-sm font-medium text-fg">{agent.label}</div>
+                <span className={cn('rounded-full px-2 py-0.5 text-xs font-medium', agentStatusTone(agent.status))}>
+                  {labels.agentStatus[agent.status] ?? agent.status}
+                </span>
+              </div>
+              <div className="mt-3 grid gap-3 lg:grid-cols-2">
+                <div className="min-w-0">
+                  <div className="text-[10px] font-medium uppercase tracking-wide text-fg-subtle">
+                    {labels.agentInputHeading}
+                  </div>
+                  <pre className="mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap wrap-break-word rounded-lg border border-edge-subtle bg-surface-base/50 p-2 font-mono text-xs leading-5 text-fg-muted">
+                    {agent.prompt || '—'}
+                  </pre>
+                </div>
+                <div className="min-w-0">
+                  <div className="text-[10px] font-medium uppercase tracking-wide text-fg-subtle">
+                    {labels.agentOutputHeading}
+                  </div>
+                  <div
+                    className={cn(
+                      'mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap wrap-break-word rounded-lg border border-edge-subtle bg-surface-base/50 p-2 text-xs leading-5',
+                      agent.error ? 'font-mono text-rose-600 dark:text-rose-400' : 'text-fg-muted',
+                    )}
+                  >
+                    {output}
+                  </div>
+                </div>
+              </div>
+            </article>
+          );
+          })}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function agentStatusTone(status: WorkflowAgentSnapshot['status']): string {
+  if (status === 'done') return 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300';
+  if (status === 'error') return 'bg-rose-500/10 text-rose-700 dark:text-rose-300';
+  if (status === 'running') return 'bg-accent-soft text-accent-fg';
+  return 'bg-surface-hover text-fg-subtle';
 }
 
 function Metric({ label, value }: { label: string; value: string }) {

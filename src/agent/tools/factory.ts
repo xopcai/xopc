@@ -273,8 +273,12 @@ export class AgentToolsFactory {
     const readTool = createReadFileTool(workspace, {
       profileMarkdownRoot: options?.profileMarkdownRoot,
     });
-    const writeTool = createWriteFileTool(workspace);
-    const editTool = createEditFileTool(workspace);
+    const writeTool = createWriteFileTool(workspace, {
+      profileMarkdownRoot: options?.profileMarkdownRoot,
+    });
+    const editTool = createEditFileTool(workspace, {
+      profileMarkdownRoot: options?.profileMarkdownRoot,
+    });
     const listDir = createListDirTool(workspace);
     const grep = createGrepTool(workspace);
     const find = createFindTool(workspace);

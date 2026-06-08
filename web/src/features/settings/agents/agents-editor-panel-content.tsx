@@ -13,7 +13,6 @@ import type { AgentsSettingsMessages, ChatMessages, MessageBundle } from '@/i18n
 import { AgentChannelsTab } from './tabs/agent-channels-tab';
 import { AgentCronTab } from './tabs/agent-cron-tab';
 import { AgentFilesTab } from './tabs/agent-files-tab';
-import { AgentModelsTab } from './tabs/agent-models-tab';
 import { AgentOverviewTab } from './tabs/agent-overview-tab';
 import { AgentProfileTab } from './tabs/agent-profile-tab';
 import { AgentSkillsTab } from './tabs/agent-skills-tab';
@@ -32,10 +31,21 @@ export type AgentsEditorPanelContentProps = {
   panel: AgentPanel;
   data: GatewayAgentsPayload | null;
   busy: boolean;
+  currentLanguageLabel: string;
   editName: string;
   setEditName: (v: string) => void;
+  editNameZh: string;
+  setEditNameZh: (v: string) => void;
+  editNameEn: string;
+  setEditNameEn: (v: string) => void;
+  editLocalizedOpen: boolean;
+  setEditLocalizedOpen: (v: boolean) => void;
   editDescription: string;
   setEditDescription: (v: string) => void;
+  editDescriptionZh: string;
+  setEditDescriptionZh: (v: string) => void;
+  editDescriptionEn: string;
+  setEditDescriptionEn: (v: string) => void;
   editWorkspace: string;
   setEditWorkspace: (v: string) => void;
   editModel: string;
@@ -79,12 +89,6 @@ export type AgentsEditorPanelContentProps = {
   skillsPick: Set<string>;
   setSkillsPick: Dispatch<SetStateAction<Set<string>>>;
   onSaveSkills: () => void;
-  modelsInherit: boolean;
-  setModelsInherit: (v: boolean) => void;
-  modelsRows: import('./typed-models-lib').AgentTypedModelRow[];
-  setModelsRows: (rows: import('./typed-models-lib').AgentTypedModelRow[]) => void;
-  onSaveModels: () => void;
-  onResetModelsInherit: () => void;
   bindingsLoading: boolean;
   agentBindings: GatewayConfigBinding[];
   bindChannelStatuses: ChannelStatus[];
@@ -104,6 +108,7 @@ export type AgentsEditorPanelContentProps = {
   cronLoading: boolean;
   agentCronJobs: CronJob[];
   onSetCronJobAgent: (job: CronJob, agentKey: string) => void;
+  onTryInChat?: () => void;
 };
 
 export function AgentsEditorPanelContent({
@@ -114,10 +119,21 @@ export function AgentsEditorPanelContent({
   panel,
   data,
   busy,
+  currentLanguageLabel,
   editName,
   setEditName,
+  editNameZh,
+  setEditNameZh,
+  editNameEn,
+  setEditNameEn,
+  editLocalizedOpen,
+  setEditLocalizedOpen,
   editDescription,
   setEditDescription,
+  editDescriptionZh,
+  setEditDescriptionZh,
+  editDescriptionEn,
+  setEditDescriptionEn,
   editWorkspace,
   setEditWorkspace,
   editModel,
@@ -153,12 +169,6 @@ export function AgentsEditorPanelContent({
   skillsPick,
   setSkillsPick,
   onSaveSkills,
-  modelsInherit,
-  setModelsInherit,
-  modelsRows,
-  setModelsRows,
-  onSaveModels,
-  onResetModelsInherit,
   bindingsLoading,
   agentBindings,
   bindChannelStatuses,
@@ -178,6 +188,7 @@ export function AgentsEditorPanelContent({
   cronLoading,
   agentCronJobs,
   onSetCronJobAgent,
+  onTryInChat,
 }: AgentsEditorPanelContentProps) {
   if (!selected) {
     return <p className="text-sm text-fg-muted">{a.selectAgentHint}</p>;
@@ -190,10 +201,21 @@ export function AgentsEditorPanelContent({
         chat={chat}
         selected={selected}
         busy={busy}
+        currentLanguageLabel={currentLanguageLabel}
         editName={editName}
         setEditName={setEditName}
+        editNameZh={editNameZh}
+        setEditNameZh={setEditNameZh}
+        editNameEn={editNameEn}
+        setEditNameEn={setEditNameEn}
+        editLocalizedOpen={editLocalizedOpen}
+        setEditLocalizedOpen={setEditLocalizedOpen}
         editDescription={editDescription}
         setEditDescription={setEditDescription}
+        editDescriptionZh={editDescriptionZh}
+        setEditDescriptionZh={setEditDescriptionZh}
+        editDescriptionEn={editDescriptionEn}
+        setEditDescriptionEn={setEditDescriptionEn}
         editWorkspace={editWorkspace}
         setEditWorkspace={setEditWorkspace}
         editModel={editModel}
@@ -211,6 +233,7 @@ export function AgentsEditorPanelContent({
         toggleSoulPreviewMode={overviewProfile.toggleSoulPreviewMode}
         defaultModel={defaultModel}
         defaultWorkspace={defaultWorkspace}
+        onTryInChat={onTryInChat}
       />
     );
   }
@@ -236,6 +259,7 @@ export function AgentsEditorPanelContent({
         fileSaving={fileSaving}
         profileFileLoading={profileFileLoading}
         profileEditorNonce={profileEditorNonce}
+        onTryInChat={onTryInChat}
       />
     );
   }
@@ -273,25 +297,6 @@ export function AgentsEditorPanelContent({
       />
     );
   }
-
-  if (panel === 'models') {
-    return (
-      <AgentModelsTab
-        a={a}
-        chat={chat}
-        selected={selected}
-        busy={busy}
-        modelsInherit={modelsInherit}
-        setModelsInherit={setModelsInherit}
-        modelsRows={modelsRows}
-        setModelsRows={setModelsRows}
-        onSaveModels={onSaveModels}
-        onResetModelsInherit={onResetModelsInherit}
-        hideInlineSave
-      />
-    );
-  }
-
   if (panel === 'channels') {
     return (
       <AgentChannelsTab

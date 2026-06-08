@@ -48,6 +48,7 @@ function workflowStepToToolBlock(step: WorkflowAgentStep): ToolUseContent {
     name: toolName,
     input: stepInput(toolName, step.detail),
     status: step.status === 'running' ? 'running' : step.status === 'error' ? 'error' : 'done',
+    result: step.error ?? step.resultPreview,
   };
 }
 

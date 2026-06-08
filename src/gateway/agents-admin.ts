@@ -2,7 +2,7 @@
  * Gateway REST helpers for multi-agent management.
  */
 
-import { mkdir, readFile, realpath, stat, unlink, writeFile } from 'node:fs/promises';
+import { cp, mkdir, readdir, readFile, realpath, stat, unlink, writeFile } from 'node:fs/promises';
 import { join, resolve as pathResolve } from 'node:path';
 
 import {
@@ -25,11 +25,11 @@ import {
   removeAgentDirsFromDisk,
 } from '../commands/agents.config.js';
 import type { Config } from '../config/schema.js';
+import type { LocalizedText } from '../config/localized-text.js';
+import { normalizeLocalizedText, resolveLocalizedText } from '../config/localized-text.js';
 import { WORKSPACE_FILES } from '../config/paths.js';
 import { resolveEffectiveAgentProfile } from '../config/agent-profile.js';
-import { resolveEffectiveTypedModels } from '../config/agent-typed-models.js';
 import type { AgentTypedModel } from '../config/schema.js';
-import { normalizePatchTypedModels } from './hono/lib/agent-model.js';
 import { GATEWAY_BUILTIN_TOOL_IDS } from './agent-builtin-tools.js';
 import { isPathUnderWorkspace, resolveWorkspaceSafePath } from './workspace-editor-path.js';
 
@@ -40,7 +40,6 @@ const EDITABLE_PROFILE_MARKDOWN_NAMES = new Set<string>([
 
 export type GatewayAgentTypedModelsInfo = {
   defaults: AgentTypedModel[];
-  entry?: AgentTypedModel[];
   effective: AgentTypedModel[];
 };
 
@@ -48,6 +47,10 @@ export type GatewayAgentRow = {
   id: string;
   name?: string;
   description?: string;
+  localized?: {
+    name?: LocalizedText;
+    description?: LocalizedText;
+  };
   /** Value from `IDENTITY.md` **Avatar:** line when present (may be URL, `xopc:…`, etc.). */
   avatar?: string;
   workspace: string;
@@ -100,7 +103,10 @@ export function extractAvatarFromIdentityMarkdown(content: string): string | und
   return undefined;
 }
 
-export async function listGatewayAgents(cfg: Config): Promise<GatewayAgentsListResponse> {
+export async function listGatewayAgents(
+  cfg: Config,
+  options: { locale?: string } = {},
+): Promise<GatewayAgentsListResponse> {
   const defaultId = resolveDefaultAgentId(cfg);
   const agents: GatewayAgentRow[] = [];
   const defaultsSkills = cfg.agents?.defaults?.skills;
@@ -118,9 +124,7 @@ export async function listGatewayAgents(cfg: Config): Promise<GatewayAgentsListR
         : undefined;
     const entrySkills = entry?.skills;
     const entryDisable = entry?.tools?.disable ?? [];
-    const entryTypedModels = entry?.models;
-    const effectiveTypedMap = resolveEffectiveTypedModels(cfg, id);
-    const effectiveTypedModels = [...effectiveTypedMap.values()];
+    const effectiveTypedModels = [...defaultsTypedModels];
     let avatar: string | undefined;
     try {
       const identityPath = join(resolveAgentProfileDir(cfg, id), WORKSPACE_FILES.IDENTITY);
@@ -129,17 +133,28 @@ export async function listGatewayAgents(cfg: Config): Promise<GatewayAgentsListR
     } catch {
       /* missing IDENTITY.md or unreadable */
     }
+    const localizedName = normalizeLocalizedText(entry?.name);
+    const localizedDescription = normalizeLocalizedText(entry?.description);
+    const displayName = resolveLocalizedText(localizedName, options.locale);
+    const displayDescription = resolveLocalizedText(localizedDescription, options.locale);
     agents.push({
       id,
-      ...(entry?.name?.trim() ? { name: entry.name.trim() } : {}),
-      ...(entry?.description?.trim() ? { description: entry.description.trim() } : {}),
+      ...(displayName ? { name: displayName } : {}),
+      ...(displayDescription ? { description: displayDescription } : {}),
+      ...(localizedName || localizedDescription
+        ? {
+            localized: {
+              ...(localizedName ? { name: localizedName } : {}),
+              ...(localizedDescription ? { description: localizedDescription } : {}),
+            },
+          }
+        : {}),
       ...(avatar ? { avatar } : {}),
       workspace: profile.resolvedWorkspacePath,
       profileDir: resolveAgentProfileDir(cfg, id),
       ...(model ? { model } : {}),
       typedModels: {
         defaults: [...defaultsTypedModels],
-        ...(entryTypedModels !== undefined ? { entry: [...entryTypedModels] } : {}),
         effective: effectiveTypedModels,
       },
       isDefault: id === defaultId,
@@ -163,17 +178,19 @@ export async function listGatewayAgents(cfg: Config): Promise<GatewayAgentsListR
 
 export type CreateAgentBody = {
   /** Display name stored on the agent entry. */
-  name: string;
+  name: LocalizedText;
   /** Optional id seed; normalized agent id defaults from `name` when omitted. */
   id?: string;
   workspace: string;
   model?: string;
   agentDir?: string;
-  description?: string;
+  description?: LocalizedText;
   /** Initial `agents.list[].tools.disable` for the new entry. */
   toolsDisable?: string[];
   /** Profile markdown files to write after seeding (e.g. `IDENTITY.md`, `SOUL.md`). */
   profileFiles?: Record<string, string>;
+  /** Clone from an existing agent id — copies config entry fields and profile directory. */
+  cloneFrom?: string;
 };
 
 export type AgentAdminHttpStatus = 400 | 404 | 409;
@@ -193,15 +210,16 @@ export function prepareCreateAgent(
   cfg: Config,
   body: CreateAgentBody,
 ): AgentAdminResult<{ nextConfig: Config; agentId: string; workspace: string }> {
-  const name = body.name?.trim() ?? '';
-  if (!name) {
+  const normalizedName = normalizeLocalizedText(body.name);
+  const nameSeed = resolveLocalizedText(normalizedName, 'en') ?? '';
+  if (!nameSeed) {
     return { ok: false, error: 'name is required', status: 400 };
   }
   const workspace = body.workspace?.trim() ?? '';
   if (!workspace) {
     return { ok: false, error: 'workspace is required', status: 400 };
   }
-  const idRes = validateAgentIdForNewAgent(body.id, name);
+  const idRes = validateAgentIdForNewAgent(body.id, nameSeed);
   if (idRes.ok === false) {
     return { ok: false, error: idRes.error, status: 400 };
   }
@@ -224,24 +242,65 @@ export function prepareCreateAgent(
     }
   }
 
+  // Resolve fields from cloneFrom source when present
+  let cloneSourceEntry: ReturnType<typeof listAgentEntries>[number] | undefined;
+  if (body.cloneFrom) {
+    const srcId = normalizeAgentId(body.cloneFrom);
+    cloneSourceEntry = listAgentEntries(cfg).find((e) => normalizeAgentId(e.id) === srcId);
+    if (!cloneSourceEntry && srcId !== resolveDefaultAgentId(cfg)) {
+      return { ok: false, error: `source agent "${srcId}" not found`, status: 404 };
+    }
+  }
+
   const wsAbs = resolveUserPath(workspace);
+
+  // Inherit model from source if not explicitly provided
+  const effectiveModel = body.model?.trim()
+    ? body.model.trim()
+    : cloneSourceEntry?.model?.primary;
+
   let next = applyAgentConfig(cfg, {
     agentId,
-    name,
+    name: normalizedName,
     workspace: wsAbs,
-    ...(body.model?.trim() ? { model: body.model.trim() } : {}),
+    ...(effectiveModel ? { model: effectiveModel } : {}),
     ...(body.agentDir?.trim() ? { agentDir: body.agentDir.trim() } : {}),
-    ...(body.description?.trim() ? { description: body.description.trim() } : {}),
+    ...(normalizeLocalizedText(body.description) ? { description: normalizeLocalizedText(body.description) } : {}),
   });
 
-  if (body.toolsDisable !== undefined) {
+  // Resolve tools.disable: explicit body > clone source > none
+  const toolsDisable = body.toolsDisable ?? cloneSourceEntry?.tools?.disable;
+  if (toolsDisable !== undefined) {
     const list = [...listAgentEntries(next)];
     const idx = findAgentEntryIndex(list, agentId);
     if (idx >= 0) {
       type Entry = (typeof list)[number];
       const entry: Entry = { ...list[idx] };
-      const disable = body.toolsDisable.map((s) => String(s).trim()).filter(Boolean);
+      const disable = toolsDisable.map((s) => String(s).trim()).filter(Boolean);
       entry.tools = { ...entry.tools, disable };
+
+      if (cloneSourceEntry?.skills !== undefined && body.cloneFrom) {
+        entry.skills = [...cloneSourceEntry.skills];
+      }
+
+      list[idx] = entry;
+      next = {
+        ...next,
+        agents: {
+          ...next.agents,
+          list,
+        },
+      };
+    }
+  } else if (cloneSourceEntry && body.cloneFrom) {
+    const list = [...listAgentEntries(next)];
+    const idx = findAgentEntryIndex(list, agentId);
+    if (idx >= 0) {
+      type Entry = (typeof list)[number];
+      const entry: Entry = { ...list[idx] };
+      if (cloneSourceEntry.skills !== undefined) {
+        entry.skills = [...cloneSourceEntry.skills];
+      }
       list[idx] = entry;
       next = {
         ...next,
@@ -287,7 +346,7 @@ export function prepareCreateAgentsBatch(
 export async function finalizeCreateAgentDirs(
   cfg: Config,
   agentId: string,
-  opts?: { profileFiles?: Record<string, string> },
+  opts?: { profileFiles?: Record<string, string>; cloneFrom?: string },
 ): Promise<AgentAdminResult<void>> {
   const wsPath = resolveAgentWorkspaceDir(cfg, agentId);
   const profilePath = resolveAgentProfileDir(cfg, agentId);
@@ -297,8 +356,35 @@ export async function finalizeCreateAgentDirs(
   await mkdir(adPath, { recursive: true });
   const id = normalizeAgentId(agentId);
   const entry = listAgentEntries(cfg).find((e) => normalizeAgentId(e.id) === id);
-  const displayName = entry?.name?.trim() || id;
-  seedAgentProfileMarkdownFiles(profilePath, wsPath, { displayName });
+  const displayName = resolveLocalizedText(normalizeLocalizedText(entry?.name), 'en') || id;
+
+  // When cloning, copy the entire source profile directory instead of seeding
+  if (opts?.cloneFrom) {
+    const srcProfilePath = resolveAgentProfileDir(cfg, normalizeAgentId(opts.cloneFrom));
+    try {
+      const srcStat = await stat(srcProfilePath);
+      if (srcStat.isDirectory()) {
+        const srcFiles = await readdir(srcProfilePath);
+        for (const fileName of srcFiles) {
+          const srcFile = join(srcProfilePath, fileName);
+          const dstFile = join(profilePath, fileName);
+          try {
+            const fileStat = await stat(srcFile);
+            if (fileStat.isFile()) {
+              await cp(srcFile, dstFile);
+            }
+          } catch {
+            /* skip unreadable files */
+          }
+        }
+      }
+    } catch {
+      // Source profile dir doesn't exist — fall through to normal seed
+      seedAgentProfileMarkdownFiles(profilePath, wsPath, { displayName });
+    }
+  } else {
+    seedAgentProfileMarkdownFiles(profilePath, wsPath, { displayName });
+  }
 
   const profileFiles = opts?.profileFiles;
   if (profileFiles && Object.keys(profileFiles).length > 0) {
@@ -314,8 +400,8 @@ export async function finalizeCreateAgentDirs(
 }
 
 export type UpdateAgentBody = {
-  name?: string;
-  description?: string | null;
+  name?: LocalizedText;
+  description?: LocalizedText | null;
   workspace?: string;
   model?: string | null;
   agentDir?: string | null;
@@ -324,8 +410,6 @@ export type UpdateAgentBody = {
   skills?: string[] | null;
   /** Replace `agents.list[].tools.disable`; `null` clears entry-level disables. */
   toolsDisable?: string[] | null;
-  /** Replace `agents.list[].models`; `null` removes entry overrides (inherit defaults). */
-  models?: AgentTypedModel[] | null;
 };
 
 export function prepareUpdateAgent(
@@ -348,16 +432,17 @@ export function prepareUpdateAgent(
   const entry: Entry = { ...list[idx] };
 
   if (body.name !== undefined) {
-    const n = body.name.trim();
-    if (n) {
-      entry.name = n;
+    const nextName = normalizeLocalizedText(body.name);
+    if (nextName) {
+      entry.name = nextName;
     }
   }
   if (body.description !== undefined) {
-    if (body.description === null || String(body.description).trim() === '') {
-      delete entry.description;
+    const nextDescription = body.description === null ? undefined : normalizeLocalizedText(body.description);
+    if (nextDescription) {
+      entry.description = nextDescription;
     } else {
-      entry.description = String(body.description).trim();
+      delete entry.description;
     }
   }
   if (body.workspace !== undefined) {
@@ -409,19 +494,6 @@ export function prepareUpdateAgent(
     } else {
       const next = body.toolsDisable.map((s) => String(s).trim()).filter(Boolean);
       entry.tools = { ...entry.tools, disable: next };
-    }
-  }
-
-  if (body.models !== undefined) {
-    if (body.models === null) {
-      delete entry.models;
-    } else {
-      const normalized = normalizePatchTypedModels(body.models);
-      if (normalized === null || normalized === undefined) {
-        delete entry.models;
-      } else {
-        entry.models = normalized;
-      }
     }
   }
 

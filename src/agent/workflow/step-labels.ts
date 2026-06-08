@@ -17,9 +17,9 @@ export function workflowStepLabel(
   else if (n === 'edit_file') label = 'Edit file';
   else if (n === 'web_fetch') label = 'Fetch URL';
   else if (n === 'open_url') label = 'Open URL';
+  else if (n === 'grep' || n === 'rg' || n === 'file_grep') label = 'Search files';
   else if (n === 'web_search' || n === 'brave_search' || n.includes('search')) label = 'Search web';
   else if (n === 'read_file' || n.includes('read_file') || n.includes('file_read')) label = 'Read file';
-  else if (n === 'grep' || n === 'rg') label = 'Search files';
   else if (n === 'delegate_task' || n === 'workflow') label = toolName;
 
   const detail = extractStepDetail(n, args);
@@ -36,7 +36,7 @@ function extractStepDetail(toolKey: string, args: Record<string, unknown>): stri
     return truncate(args.command.trim());
   }
   if (
-    (toolKey.includes('search') || toolKey === 'grep' || toolKey === 'rg') &&
+    (toolKey.includes('search') || toolKey === 'grep' || toolKey === 'rg' || toolKey === 'file_grep') &&
     typeof args.query === 'string' &&
     args.query.trim()
   ) {

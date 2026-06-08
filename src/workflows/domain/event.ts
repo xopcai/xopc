@@ -75,6 +75,7 @@ export interface AgentStepStartedPayload {
   stepId: string;
   label: string;
   kind: 'tool' | 'llm' | 'thinking';
+  toolName?: string;
   detail?: string;
 }
 
@@ -82,6 +83,8 @@ export interface AgentStepCompletedPayload {
   agentId: string;
   stepId: string;
   status: 'done' | 'error';
+  resultPreview?: string;
+  error?: string;
 }
 
 export interface AgentCompletedPayload {

@@ -38,6 +38,8 @@ export function applySubagentProgress(
       const step = findStep(agent, event.toolCallId);
       if (!step) return false;
       step.status = event.isError ? 'error' : 'done';
+      step.resultPreview = event.resultPreview;
+      step.error = event.error;
       if (step.startedAtMs != null) step.durationMs = Date.now() - step.startedAtMs;
       if (agent.currentStep === formatCurrentStep(step)) {
         agent.currentStep = undefined;

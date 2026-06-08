@@ -3,7 +3,11 @@ import { Type } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 import { readFile, writeFile, stat } from 'fs/promises';
 import { checkFileSafety } from '../prompt/safety.js';
-import { resolvePathUnderWorkspace } from './tool-paths.js';
+import {
+  isBareProfileMarkdownFileName,
+  resolveProfileMarkdownPathIfBareName,
+  resolvePathUnderWorkspace,
+} from './tool-paths.js';
 import { evaluateFilePolicy } from '../sandbox/exec-policy.js';
 import { normalizeToLF, restoreLineEndings, normalizeForFuzzyMatch, fuzzyFindText, stripBom, generateDiffString } from './edit-diff.js';
 
@@ -23,10 +27,19 @@ export interface EditToolDetails {
 
 type EditFileParams = { path: string; oldText: string; newText: string };
 
-export function createEditFileTool(workspace: string): AgentTool {
+export interface CreateEditFileToolOptions {
+  /** When set and the path is a bare profile filename (e.g. SOUL.md), edit under this root. */
+  profileMarkdownRoot?: string;
+}
+
+export function createEditFileTool(
+  workspace: string,
+  options?: CreateEditFileToolOptions,
+): AgentTool {
   return {
     name: 'edit_file',
-    description: 'Edit file by replacing text. Relative paths are under the current agent workspace.',
+    description:
+      'Edit file by replacing text. Relative paths are under the current agent workspace; profile Markdown (SOUL.md, etc.) is edited automatically when given by filename.',
     parameters: EditFileSchema,
     label: '✏️ Edit',
 
@@ -40,17 +53,24 @@ export function createEditFileTool(workspace: string): AgentTool {
         const safety = checkFileSafety('write', p.path);
         if (!safety.allowed) return { content: [{ type: 'text', text: `🚫 ${safety.message}` }], details: {} };
 
+        const editsProfileFile = Boolean(
+          options?.profileMarkdownRoot && isBareProfileMarkdownFileName(p.path),
+        );
+        const workspaceRoot = editsProfileFile ? options!.profileMarkdownRoot! : workspace;
+
         // Sandbox path-policy check (blocked dirs, symlink escape, config protection)
         const pathPolicy = evaluateFilePolicy({
           operation: 'edit',
           path: p.path,
-          workspaceRoot: workspace,
+          workspaceRoot,
         });
         if (!pathPolicy.allowed) {
           return { content: [{ type: 'text', text: `🚫 Sandbox: ${pathPolicy.reason}` }], details: {} };
         }
 
-        const normalized = resolvePathUnderWorkspace(p.path, workspace);
+        const normalized = editsProfileFile
+          ? resolveProfileMarkdownPathIfBareName(p.path, options!.profileMarkdownRoot!)
+          : resolvePathUnderWorkspace(p.path, workspace);
         const stats = await stat(normalized);
         if (stats.size > MAX_FILE_SIZE) return { content: [{ type: 'text', text: `🚫 File too large` }], details: {} };
 

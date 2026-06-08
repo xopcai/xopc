@@ -10,6 +10,7 @@ import { WorkflowBoard } from './workflow-board';
 import { WorkflowDefinitionDetailDialog } from './workflow-definition-detail-dialog';
 import { WorkflowManageDialog } from './workflow-manage-dialog';
 import { WorkflowPickStartDialog } from './workflow-pick-start-dialog';
+import { WorkflowRunPanel } from './workflow-run-panel';
 import { WorkflowStartDialog } from './workflow-start-dialog';
 import { WorkflowStatsBar } from './workflow-stats-bar';
 import type { WorkflowsPageVm } from './use-workflows-page';
@@ -27,6 +28,12 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
     searchQuery,
     workflowFilterId,
     setWorkflowFilterId,
+    selectedRunId,
+    selectedRunView,
+    selectedRunLoading,
+    selectedRunError,
+    openRunDetails,
+    closeRunDetails,
     openRunInChat,
     pickStartOpen,
     setPickStartOpen,
@@ -79,7 +86,7 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
 
   return (
     <main className="min-h-0 flex-1 overflow-auto bg-surface-base">
-      <div className="mx-auto flex w-full max-w-[100rem] flex-col gap-5 px-4 py-6 lg:px-6">
+      <div className="mx-auto flex w-full max-w-400 flex-col gap-5 px-4 py-6 lg:px-6">
         <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h1 className="text-xl font-semibold tracking-tight text-fg">{labels.title}</h1>
@@ -91,7 +98,7 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
               aria-label={labels.boardWorkflowFilterAria}
               onChange={(event) => setWorkflowFilterId(event.target.value)}
               className={cn(
-                'h-9 min-w-[10rem] rounded-lg border border-edge bg-surface-panel px-2.5 text-xs font-medium text-fg shadow-surface',
+                'h-9 min-w-40 rounded-lg border border-edge bg-surface-panel px-2.5 text-xs font-medium text-fg shadow-surface',
                 interaction.focusRingPanel,
               )}
             >
@@ -123,25 +130,49 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
 
         <WorkflowStatsBar stats={stats} language={language} />
 
-        <WorkflowBoard
-          runs={runs}
-          language={language}
-          localeTag={localeTag}
-          labels={{
-            boardEmptyTitle: labels.boardEmptyTitle,
-            boardEmptyHint: labels.boardEmptyHint,
-            boardStart: labels.boardStart,
-            loading: labels.loading,
-          }}
-          searchQuery={searchQuery}
-          workflowFilterId={workflowFilterId}
-          loading={loading}
-          onOpenRun={openRunInChat}
-          onCancelRun={(runId) => void cancelRun(runId)}
-          onRetryRun={(runId) => void retryRun(runId)}
-          onStart={() => setPickStartOpen(true)}
-        />
+        {selectedRunError ? (
+          <div className="rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-200">
+            {selectedRunError}
+          </div>
+        ) : null}
+
+        <div className="min-w-0">
+          <WorkflowBoard
+            runs={runs}
+            language={language}
+            localeTag={localeTag}
+            labels={{
+              boardEmptyTitle: labels.boardEmptyTitle,
+              boardEmptyHint: labels.boardEmptyHint,
+              boardStart: labels.boardStart,
+              loading: labels.loading,
+            }}
+            searchQuery={searchQuery}
+            workflowFilterId={workflowFilterId}
+            selectedRunId={selectedRunId}
+            loading={loading}
+            onOpenRun={openRunDetails}
+            onOpenRunChat={openRunInChat}
+            onCancelRun={(runId) => void cancelRun(runId)}
+            onRetryRun={(runId) => void retryRun(runId)}
+            onStart={() => setPickStartOpen(true)}
+          />
+        </div>
       </div>
+
+      <WorkflowRunPanel
+        view={selectedRunView}
+        loading={Boolean(selectedRunId) && selectedRunLoading}
+        language={language}
+        localeTag={localeTag}
+        onCancel={() => {
+          if (selectedRunId) void cancelRun(selectedRunId);
+        }}
+        onRetry={() => {
+          if (selectedRunId) void retryRun(selectedRunId);
+        }}
+        onClose={closeRunDetails}
+      />
 
       <WorkflowPickStartDialog
         open={pickStartOpen}

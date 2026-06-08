@@ -1,4 +1,4 @@
-import { MessageSquarePlus, Plus } from 'lucide-react';
+import { MessageSquarePlus } from 'lucide-react';
 
 import type { GatewayAgentRow } from '@/features/settings/agents-admin-api';
 import { AgentAvatarDisplay } from '@/features/settings/agents/agent-avatar-display';
@@ -6,6 +6,7 @@ import {
   agentListDisplayDescription,
   agentListDisplayName,
 } from '@/features/settings/agents/agent-display-names';
+import { collectLocalizedSearchText } from '@/features/settings/agents/localized-text';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 import type { AgentsSettingsMessages } from '@/i18n/messages';
@@ -19,71 +20,42 @@ function filterAgents(agents: GatewayAgentRow[], query: string, a: AgentsSetting
     const name = agentListDisplayName(ag, a).toLowerCase();
     const id = ag.id.toLowerCase();
     const ws = ag.workspace.toLowerCase();
-    const desc = (ag.description ?? '').toLowerCase();
     const displayDesc = agentListDisplayDescription(ag, a).toLowerCase();
-    return name.includes(q) || id.includes(q) || ws.includes(q) || desc.includes(q) || displayDesc.includes(q);
+    const localizedTexts = [
+      ...collectLocalizedSearchText(ag.localized?.name),
+      ...collectLocalizedSearchText(ag.localized?.description),
+      ag.description ?? '',
+    ].map((text) => text.toLowerCase());
+    return (
+      name.includes(q) ||
+      id.includes(q) ||
+      ws.includes(q) ||
+      displayDesc.includes(q) ||
+      localizedTexts.some((text) => text.includes(q))
+    );
   });
 }
-
-function NewAgentCard(props: {
-  a: AgentsSettingsMessages;
-  busy: boolean;
-  onNewAgent: () => void;
-}) {
-  const { a, busy, onNewAgent } = props;
-  return (
-    <button
-      type="button"
-      disabled={busy}
-      onClick={() => onNewAgent()}
-      className={cn(
-        'flex h-full min-h-[7.5rem] w-full flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-edge-subtle bg-surface-panel/40 px-4 py-6 text-sm font-medium text-fg-muted transition-colors',
-        'hover:border-accent/50 hover:bg-surface-hover hover:text-fg',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
-        'disabled:pointer-events-none disabled:opacity-50',
-        interaction.pressCard,
-      )}
-    >
-      <Plus className="size-8 shrink-0 opacity-80" strokeWidth={1.75} aria-hidden />
-      <span>{a.listNewAgentCard}</span>
-    </button>
-  );
-}
-
 export function AgentsListGrid(props: {
   a: AgentsSettingsMessages;
   agents: GatewayAgentRow[];
   searchQuery: string;
   onOpenAgent: (id: string) => void;
   onChatWithAgent: (id: string) => void;
-  onNewAgent: () => void;
   busy: boolean;
 }) {
-  const { a, agents, searchQuery, onOpenAgent, onChatWithAgent, onNewAgent, busy } = props;
+  const { a, agents, searchQuery, onOpenAgent, onChatWithAgent, busy } = props;
   const filtered = filterAgents(agents, searchQuery, a);
   const searchMiss = agents.length > 0 && filtered.length === 0 && searchQuery.trim().length > 0;
 
   if (agents.length === 0) {
-    return (
-      <div className="flex flex-col gap-4">
-        <p className="text-sm text-fg-muted">{a.listNoAgentsYet}</p>
-        <div className="max-w-sm">
-          <NewAgentCard a={a} busy={busy} onNewAgent={onNewAgent} />
-        </div>
-      </div>
-    );
+    return <p className="text-sm text-fg-muted">{a.listNoAgentsYet}</p>;
   }
 
   return (
     <div className="flex flex-col gap-4">
       {searchMiss ? <p className="text-sm text-fg-muted">{a.listEmpty}</p> : null}
 
-      <ul
-        className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
-      >
-        <li className="h-full min-h-0">
-          <NewAgentCard a={a} busy={busy} onNewAgent={onNewAgent} />
-        </li>
+      <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {filtered.map((ag) => {
           const title = agentListDisplayName(ag, a);
           const monoId = ag.id;
@@ -130,7 +102,7 @@ export function AgentsListGrid(props: {
                   </div>
                   <p
                     className={cn(
-                      'line-clamp-1 min-h-[1.3125rem] text-xs leading-relaxed',
+                      'line-clamp-1 min-h-5.25 text-xs leading-relaxed',
                       descTrim ? 'text-fg' : 'text-fg-muted/25',
                     )}
                     title={descTrim || undefined}
@@ -138,22 +110,24 @@ export function AgentsListGrid(props: {
                     {descTrim || '\u00A0'}
                   </p>
                 </button>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => onChatWithAgent(ag.id)}
-                  className={cn(
-                    'flex w-full shrink-0 items-center justify-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold',
-                    'bg-accent-soft text-accent-fg transition-colors',
-                    'hover:bg-accent/15',
-                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
-                    'disabled:pointer-events-none disabled:opacity-50',
-                    interaction.press,
-                  )}
-                >
-                  <MessageSquarePlus className="size-4 shrink-0" strokeWidth={2} aria-hidden />
-                  {a.listChatWithAgent}
-                </button>
+                <div className="flex shrink-0 items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => onChatWithAgent(ag.id)}
+                    className={cn(
+                      'flex flex-1 items-center justify-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold',
+                      'bg-accent-soft text-accent-fg transition-colors',
+                      'hover:bg-accent/15',
+                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
+                      'disabled:pointer-events-none disabled:opacity-50',
+                      interaction.press,
+                    )}
+                  >
+                    <MessageSquarePlus className="size-4 shrink-0" strokeWidth={2} aria-hidden />
+                    {a.listChatWithAgent}
+                  </button>
+                </div>
               </div>
             </li>
           );
