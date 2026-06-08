@@ -1,5 +1,6 @@
 import { SlidersHorizontal, Zap } from 'lucide-react';
 
+import { SettingsAdvancedGate } from '@/features/settings/settings-advanced-gate';
 import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/settings/settings-form-section';
 
 import { AgentDefaultsField } from '../agent-defaults-field';
@@ -39,46 +40,48 @@ export function AgentDefaultsGenerationPanel(props: AgentDefaultsPanelProps) {
         </div>
       </SettingsFormSection>
 
-      <SettingsFormSection>
-        <SettingsFormSectionHeader icon={Zap} title={a.cardBehaviorTitle} subtitle={a.cardBehaviorSubtitle} />
-        <div className="flex flex-col gap-5">
-          <AgentDefaultsField label={a.label.thinkingDefault} description={a.desc.thinkingDefault}>
-            <select
-              className={selectClassName()}
-              value={form.thinkingDefault}
-              onChange={(event) => update({ thinkingDefault: event.target.value })}
-            >
-              {THINKING_KEYS.map((key) => (
-                <option key={key} value={key}>
-                  {chat.thinkingLevels[key]}
-                </option>
-              ))}
-            </select>
-          </AgentDefaultsField>
-          <AgentDefaultsField label={a.label.reasoningDefault} description={a.desc.reasoningDefault}>
-            <select
-              className={selectClassName()}
-              value={form.reasoningDefault}
-              onChange={(event) => update({ reasoningDefault: event.target.value })}
-            >
-              <option value="off">{a.reasoning.off}</option>
-              <option value="on">{a.reasoning.on}</option>
-              <option value="stream">{a.reasoning.stream}</option>
-            </select>
-          </AgentDefaultsField>
-          <AgentDefaultsField label={a.label.verboseDefault} description={a.desc.verboseDefault}>
-            <select
-              className={selectClassName()}
-              value={form.verboseDefault}
-              onChange={(event) => update({ verboseDefault: event.target.value })}
-            >
-              <option value="off">{a.verbose.off}</option>
-              <option value="on">{a.verbose.on}</option>
-              <option value="full">{a.verbose.full}</option>
-            </select>
-          </AgentDefaultsField>
-        </div>
-      </SettingsFormSection>
+      <SettingsAdvancedGate>
+        <SettingsFormSection>
+          <SettingsFormSectionHeader icon={Zap} title={a.cardBehaviorTitle} subtitle={a.cardBehaviorSubtitle} />
+          <div className="flex flex-col gap-5">
+            <AgentDefaultsField label={a.label.thinkingDefault} description={a.desc.thinkingDefault}>
+              <select
+                className={selectClassName()}
+                value={form.thinkingDefault}
+                onChange={(event) => update({ thinkingDefault: event.target.value })}
+              >
+                {THINKING_KEYS.map((key) => (
+                  <option key={key} value={key}>
+                    {chat.thinkingLevels[key]}
+                  </option>
+                ))}
+              </select>
+            </AgentDefaultsField>
+            <AgentDefaultsField label={a.label.reasoningDefault} description={a.desc.reasoningDefault}>
+              <select
+                className={selectClassName()}
+                value={form.reasoningDefault}
+                onChange={(event) => update({ reasoningDefault: event.target.value })}
+              >
+                <option value="off">{a.reasoning.off}</option>
+                <option value="on">{a.reasoning.on}</option>
+                <option value="stream">{a.reasoning.stream}</option>
+              </select>
+            </AgentDefaultsField>
+            <AgentDefaultsField label={a.label.verboseDefault} description={a.desc.verboseDefault}>
+              <select
+                className={selectClassName()}
+                value={form.verboseDefault}
+                onChange={(event) => update({ verboseDefault: event.target.value })}
+              >
+                <option value="off">{a.verbose.off}</option>
+                <option value="on">{a.verbose.on}</option>
+                <option value="full">{a.verbose.full}</option>
+              </select>
+            </AgentDefaultsField>
+          </div>
+        </SettingsFormSection>
+      </SettingsAdvancedGate>
     </div>
   );
 }

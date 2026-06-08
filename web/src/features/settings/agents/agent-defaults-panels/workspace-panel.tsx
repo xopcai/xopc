@@ -2,6 +2,7 @@ import { Folder } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { DirectoryPickerPathField } from '@/features/fs/directory-picker-path-field';
+import { SettingsAdvancedGate } from '@/features/settings/settings-advanced-gate';
 import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/settings/settings-form-section';
 import { DEFAULT_AGENT_WORKSPACE } from '@/features/settings/suggest-agent-workspace';
 
@@ -40,20 +41,22 @@ export function AgentDefaultsWorkspacePanel(props: AgentDefaultsPanelProps) {
               }
             />
           </AgentDefaultsField>
-          <AgentDefaultsField label={a.label.mediaMaxMb} description={a.desc.mediaMaxMb}>
-            <input
-              type="number"
-              min={1}
-              step={1}
-              className={inputClassName()}
-              value={form.mediaMaxMb ?? ''}
-              placeholder="20"
-              onChange={(e) => {
-                const v = e.target.value;
-                update({ mediaMaxMb: v === '' ? undefined : Number(v) });
-              }}
-            />
-          </AgentDefaultsField>
+          <SettingsAdvancedGate>
+            <AgentDefaultsField label={a.label.mediaMaxMb} description={a.desc.mediaMaxMb}>
+              <input
+                type="number"
+                min={1}
+                step={1}
+                className={inputClassName()}
+                value={form.mediaMaxMb ?? ''}
+                placeholder="20"
+                onChange={(e) => {
+                  const v = e.target.value;
+                  update({ mediaMaxMb: v === '' ? undefined : Number(v) });
+                }}
+              />
+            </AgentDefaultsField>
+          </SettingsAdvancedGate>
         </div>
       </SettingsFormSection>
     </div>

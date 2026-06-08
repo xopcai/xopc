@@ -29,6 +29,8 @@ import {
 } from '@/features/settings/gateway-config-api';
 import { GatewaySecurityAuditCard } from '@/features/settings/gateway-security-audit-card';
 import { MAX_CHANNEL_DEFER_LIST_SIZE } from '@/features/settings/gateway-settings.types';
+import { SettingsAdvancedGate } from '@/features/settings/settings-advanced-gate';
+import { useGatewaySettingsTabGuard } from '@/features/settings/use-settings-tab-guard';
 import { restartGatewayAfterConfigChange } from '@/features/tunnel/gateway-restart';
 import { settingsInputFocusClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
@@ -37,8 +39,13 @@ import { interaction } from '@/lib/interaction';
 import { showToast } from '@/lib/toast';
 import { messages, type GatewaySettingsMessages } from '@/i18n/messages';
 import { docsGuidePageUrl } from '@/navigation';
+import {
+  type GatewaySettingsTabId,
+  visibleGatewaySettingsTabs,
+} from '@/navigation/settings-field-visibility';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
+import { useSettingsModeStore } from '@/stores/settings-mode-store';
 
 function inputClassName(): string {
   return cn(
@@ -48,8 +55,6 @@ function inputClassName(): string {
     'dark:border-edge',
   );
 }
-
-type GatewaySettingsTabId = 'network' | 'access' | 'updates' | 'security' | 'advanced';
 
 const GATEWAY_SETTINGS_TABS: readonly GatewaySettingsTabId[] = [
   'network',
@@ -148,7 +153,13 @@ export function GatewaySettingsPanel() {
   const m = messages(language);
   const g = m.gatewaySettings;
   const [searchParams, setSearchParams] = useSearchParams();
+  const settingsMode = useSettingsModeStore((s) => s.mode);
+  const showAdvanced = settingsMode === 'advanced';
   const activeTab = parseGatewaySettingsTab(searchParams.get('tab'));
+  const visibleTabs = useMemo(
+    () => visibleGatewaySettingsTabs(GATEWAY_SETTINGS_TABS, settingsMode),
+    [settingsMode],
+  );
 
   const setActiveTab = useCallback(
     (tab: GatewaySettingsTabId) => {
@@ -164,6 +175,7 @@ export function GatewaySettingsPanel() {
     },
     [setSearchParams],
   );
+  useGatewaySettingsTabGuard(activeTab, setActiveTab);
   const token = useGatewayStore((st) => st.token);
   const tokenExpired = useGatewayStore((st) => st.tokenExpired);
   const openTokenDialog = useGatewayStore((st) => st.openTokenDialog);
@@ -495,7 +507,7 @@ export function GatewaySettingsPanel() {
         onCancel={() => dispatchUi({ type: 'patch', patch: { restartConfirmOpen: false } })}
       />
 
-      <GatewaySettingsTabs g={g} activeTab={activeTab} onChange={setActiveTab} />
+      <GatewaySettingsTabs g={g} activeTab={activeTab} visibleTabs={visibleTabs} onChange={setActiveTab} />
 
       <GatewayTabPanel g={g} id="network" activeTab={activeTab}>
         <div className="grid gap-3 sm:grid-cols-2">
@@ -510,10 +522,14 @@ export function GatewaySettingsPanel() {
               onChange={(event) => updateBind(event.target.value as GatewaySettingsState['bind'])}
             >
               <option value="loopback">{g.bindLoopback}</option>
-              <option value="lan">{g.bindLan}</option>
-              <option value="auto">{g.bindAuto}</option>
-              <option value="custom">{g.bindCustom}</option>
-              <option value="tailnet">{g.bindTailnet}</option>
+              {showAdvanced ? (
+                <>
+                  <option value="lan">{g.bindLan}</option>
+                  <option value="auto">{g.bindAuto}</option>
+                  <option value="custom">{g.bindCustom}</option>
+                  <option value="tailnet">{g.bindTailnet}</option>
+                </>
+              ) : null}
             </select>
           </div>
           {form.bind === 'custom' ? (
@@ -555,7 +571,9 @@ export function GatewaySettingsPanel() {
           <p className="text-xs text-fg-subtle sm:col-span-2">{g.listenHint}</p>
         </div>
 
-        <CorsOriginsField g={g} origins={form.corsOrigins} onChange={updateCorsOrigins} />
+        <SettingsAdvancedGate>
+          <CorsOriginsField g={g} origins={form.corsOrigins} onChange={updateCorsOrigins} />
+        </SettingsAdvancedGate>
       </GatewayTabPanel>
 
       <GatewayTabPanel g={g} id="access" activeTab={activeTab}>
@@ -577,20 +595,26 @@ export function GatewaySettingsPanel() {
           >
             <option value="token">{g.authModeToken}</option>
             <option value="password">{g.authModePassword}</option>
-            <option value="trusted-proxy">{g.authModeTrustedProxy}</option>
-            <option value="none">{g.authModeNoneLabel}</option>
+            {showAdvanced ? (
+              <>
+                <option value="trusted-proxy">{g.authModeTrustedProxy}</option>
+                <option value="none">{g.authModeNoneLabel}</option>
+              </>
+            ) : null}
           </select>
         </div>
 
-        {form.auth.mode === 'trusted-proxy' ? (
-          <TrustedProxyAuthFields
-            g={g}
-            form={form}
-            onTrustedProxyChange={updateTrustedProxy}
-            onTrustedProxiesChange={updateTrustedProxies}
-            onAllowRealIpFallbackChange={updateAllowRealIpFallback}
-          />
-        ) : null}
+        <SettingsAdvancedGate>
+          {form.auth.mode === 'trusted-proxy' ? (
+            <TrustedProxyAuthFields
+              g={g}
+              form={form}
+              onTrustedProxyChange={updateTrustedProxy}
+              onTrustedProxiesChange={updateTrustedProxies}
+              onAllowRealIpFallbackChange={updateAllowRealIpFallback}
+            />
+          ) : null}
+        </SettingsAdvancedGate>
 
         {form.auth.mode === 'token' ? (
           <>
@@ -625,9 +649,11 @@ export function GatewaySettingsPanel() {
           />
         ) : null}
 
-        {form.auth.mode !== 'none' ? (
-          <AuthRateLimitFields g={g} rateLimit={form.auth.rateLimit} onChange={updateRateLimit} />
-        ) : null}
+        <SettingsAdvancedGate>
+          {form.auth.mode !== 'none' ? (
+            <AuthRateLimitFields g={g} rateLimit={form.auth.rateLimit} onChange={updateRateLimit} />
+          ) : null}
+        </SettingsAdvancedGate>
       </GatewayTabPanel>
 
       <GatewayTabPanel g={g} id="updates" activeTab={activeTab}>
@@ -783,10 +809,12 @@ export function GatewaySettingsPanel() {
 function GatewaySettingsTabs({
   g,
   activeTab,
+  visibleTabs,
   onChange,
 }: {
   g: GatewaySettingsMessages;
   activeTab: GatewaySettingsTabId;
+  visibleTabs: readonly GatewaySettingsTabId[];
   onChange: (tab: GatewaySettingsTabId) => void;
 }) {
   return (
@@ -797,14 +825,14 @@ function GatewaySettingsTabs({
       onKeyDown={(event) => {
         if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
         event.preventDefault();
-        const currentIndex = GATEWAY_SETTINGS_TABS.indexOf(activeTab);
+        const currentIndex = visibleTabs.indexOf(activeTab);
+        if (currentIndex < 0) return;
         const delta = event.key === 'ArrowRight' ? 1 : -1;
-        const nextIndex =
-          (currentIndex + delta + GATEWAY_SETTINGS_TABS.length) % GATEWAY_SETTINGS_TABS.length;
-        onChange(GATEWAY_SETTINGS_TABS[nextIndex]);
+        const nextIndex = (currentIndex + delta + visibleTabs.length) % visibleTabs.length;
+        onChange(visibleTabs[nextIndex]);
       }}
     >
-      {GATEWAY_SETTINGS_TABS.map((tab) => {
+      {visibleTabs.map((tab) => {
         const Icon = GATEWAY_SETTINGS_TAB_ICONS[tab];
         const selected = tab === activeTab;
         return (

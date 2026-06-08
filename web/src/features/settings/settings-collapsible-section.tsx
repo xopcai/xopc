@@ -2,11 +2,14 @@ import { ChevronDown, type LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useState } from 'react';
 
+import { SettingsAdvancedGate } from '@/features/settings/settings-advanced-gate';
 import { cn } from '@/lib/cn';
 
 type Props = {
   showLabel: string;
   hideLabel: string;
+  /** When true, the whole section is omitted in simple settings mode. */
+  advancedOnly?: boolean;
   /** Optional decorative icon rendered between the chevron and the label. */
   icon?: LucideIcon;
   /** Optional muted hint shown under the summary while the section is open. */
@@ -24,10 +27,11 @@ export function SettingsCollapsibleSection({
   children,
   className,
   defaultOpen,
+  advancedOnly = false,
 }: Props) {
   const [open, setOpen] = useState(defaultOpen ?? false);
 
-  return (
+  const section = (
     <details
       open={open}
       onToggle={(e) => setOpen(e.currentTarget.open)}
@@ -51,4 +55,10 @@ export function SettingsCollapsibleSection({
       </div>
     </details>
   );
+
+  if (advancedOnly) {
+    return <SettingsAdvancedGate>{section}</SettingsAdvancedGate>;
+  }
+
+  return section;
 }

@@ -331,6 +331,7 @@ export function ImageModelsSettingsPanel({ embedded = false }: { embedded?: bool
 
       {/* Fallback chains — collapsed by default */}
       <SettingsCollapsibleSection
+        advancedOnly
         showLabel={t.fallbackChainsTitle}
         hideLabel={t.fallbackChainsTitle}
       >
@@ -344,6 +345,7 @@ export function ImageModelsSettingsPanel({ embedded = false }: { embedded?: bool
 
       {/* Runtime tuning — collapsed by default */}
       <SettingsCollapsibleSection
+        advancedOnly
         showLabel={t.runtimeTuningTitle}
         hideLabel={t.runtimeTuningTitle}
       >
@@ -389,6 +391,7 @@ export function ImageModelsSettingsPanel({ embedded = false }: { embedded?: bool
 
       {/* Provider credentials — collapsed; expands if user already has configured providers */}
       <SettingsCollapsibleSection
+        advancedOnly
         icon={Server}
         showLabel={t.providersTitle}
         hideLabel={t.providersTitle}

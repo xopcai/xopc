@@ -15,15 +15,20 @@ import type { ExtensionUiInfo, SettingsPanelContribution } from './types';
 
 interface ExtensionSettingsNavProps {
   navLinkClassName: (props: { isActive: boolean }) => string;
+  showAdvanced?: boolean;
 }
 
-export function ExtensionSettingsNav({ navLinkClassName }: ExtensionSettingsNavProps) {
+export function ExtensionSettingsNav({ navLinkClassName, showAdvanced = true }: ExtensionSettingsNavProps) {
   const { t } = useTranslation();
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const uiExtensions = useUiExtensions();
 
   const settingsPanels = collectSettingsPanels(uiExtensions);
+
+  if (!showAdvanced) {
+    return null;
+  }
 
   return (
     <div>

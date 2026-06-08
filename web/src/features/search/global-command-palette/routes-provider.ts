@@ -1,7 +1,9 @@
 import type { StoredLanguage } from '@/lib/storage';
 import { messages, tabLabel, type Tab } from '@/i18n/messages';
 import { pathForTab } from '@/navigation';
+import { isSettingsPathVisibleInMode, isSettingsTabVisibleInMode } from '@/navigation/settings-nav-visibility';
 import { channelDetailPath } from '@/features/settings/channels/channels-routes';
+import { useSettingsModeStore } from '@/stores/settings-mode-store';
 
 export type RouteHitSeed = {
   id: string;
@@ -46,10 +48,10 @@ const AGENT_DEFAULTS_ROUTE_KEYWORDS: Partial<Record<Tab, string[]>> = {
   settingsAgentMcp: ['mcp', 'external', 'tools'],
 };
 
-function buildAgentDefaultsRouteSeeds(language: StoredLanguage): RouteHitSeed[] {
+function buildAgentDefaultsRouteSeeds(language: StoredLanguage, settingsMode: ReturnType<typeof useSettingsModeStore.getState>['mode']): RouteHitSeed[] {
   const m = messages(language);
   const subtitle = m.commandPalette.routes.agentDefaultsSubtitle;
-  return AGENT_DEFAULTS_PALETTE_TABS.map((tab) => ({
+  return AGENT_DEFAULTS_PALETTE_TABS.filter((tab) => isSettingsTabVisibleInMode(tab, settingsMode)).map((tab) => ({
     id: `route:settings:agent:${tab}`,
     title: tabLabel(language, tab),
     subtitle,
@@ -58,11 +60,20 @@ function buildAgentDefaultsRouteSeeds(language: StoredLanguage): RouteHitSeed[] 
   }));
 }
 
+function filterRouteSeedsBySettingsMode(
+  seeds: RouteHitSeed[],
+  settingsMode: ReturnType<typeof useSettingsModeStore.getState>['mode'],
+): RouteHitSeed[] {
+  return seeds.filter((seed) => isSettingsPathVisibleInMode(seed.path.split('?')[0] ?? seed.path, settingsMode));
+}
+
 export function buildRouteSeeds(language: StoredLanguage): RouteHitSeed[] {
   const m = messages(language);
   const r = m.commandPalette.routes;
   const ch = m.channelsSettings;
-  return [
+  const settingsMode = useSettingsModeStore.getState().mode;
+  return filterRouteSeedsBySettingsMode(
+    [
     {
       id: 'route:chat',
       title: m.nav.chat,
@@ -225,6 +236,8 @@ export function buildRouteSeeds(language: StoredLanguage): RouteHitSeed[] {
       path: '/settings/gateway',
       keywords: ['server', 'port', 'auth', 'token'],
     },
-    ...buildAgentDefaultsRouteSeeds(language),
-  ];
+    ...buildAgentDefaultsRouteSeeds(language, settingsMode),
+  ],
+    settingsMode,
+  );
 }

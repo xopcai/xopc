@@ -1,6 +1,7 @@
 import { Code2, FileText } from 'lucide-react';
 
 import { ModelSelector } from '@/features/chat/model/model-selector';
+import { SettingsAdvancedGate } from '@/features/settings/settings-advanced-gate';
 import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/settings/settings-form-section';
 
 import { AgentDefaultsField } from '../agent-defaults-field';
@@ -14,6 +15,7 @@ export function AgentDefaultsCapabilitiesPanel(props: AgentDefaultsPanelProps) {
 
   return (
     <div className="flex flex-col gap-5">
+      <SettingsAdvancedGate>
       <SettingsFormSection>
         <SettingsFormSectionHeader
           icon={FileText}
@@ -52,7 +54,9 @@ export function AgentDefaultsCapabilitiesPanel(props: AgentDefaultsPanelProps) {
           </AgentDefaultsField>
         </div>
       </SettingsFormSection>
+      </SettingsAdvancedGate>
 
+      <SettingsAdvancedGate>
       <SettingsFormSection>
         <SettingsFormSectionHeader icon={Code2} title={x.cardDelegateTitle} subtitle={x.cardDelegateSubtitle} />
         <div className="grid gap-5 sm:grid-cols-2">
@@ -82,6 +86,7 @@ export function AgentDefaultsCapabilitiesPanel(props: AgentDefaultsPanelProps) {
           </AgentDefaultsField>
         </div>
       </SettingsFormSection>
+      </SettingsAdvancedGate>
 
       <AgentDefaultsBuiltinToolsDisableSection {...props} />
     </div>
