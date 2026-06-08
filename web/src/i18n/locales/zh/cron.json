@@ -231,7 +231,9 @@
     },
     "templateFilterAll": "全部",
     "fromTemplate": "从模版创建",
-    "templatesEmptyHint": "该分类下暂无模版。",
+    "templatePickerHint": "按分类浏览模版，然后创建定时任务。",
+    "templateSearchPlaceholder": "搜索模版…",
+    "templatesEmptyHint": "没有匹配的模版。",
     "templateCategories": {
       "daily": "每日",
       "monitoring": "监控",
