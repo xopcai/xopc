@@ -60,12 +60,40 @@ describe('cronjob tool', () => {
     expect(text).toContain('Agent: (default)');
   });
 
-  it('create requires schedule and message', async () => {
+  it('create requires schedule and message or workflow', async () => {
     const cron = mockCron();
     const tool = createCronjobTool({ getCronService: () => cron });
     const r = await tool.execute('t3', { action: 'create', schedule: '0 * * * *' });
-    expect((r.content[0] as { text: string }).text).toContain('requires schedule and message');
+    expect((r.content[0] as { text: string }).text).toContain('workflowDefinitionId');
     expect(cron.addJob).not.toHaveBeenCalled();
+  });
+
+  it('create calls addJob with workflowRun payload', async () => {
+    const cron = mockCron({
+      addJob: vi.fn().mockResolvedValue({ id: 'wf1', schedule: '0 17 * * 5' }),
+    });
+    const tool = createCronjobTool({ getCronService: () => cron });
+    const r = await tool.execute('t4w', {
+      action: 'create',
+      schedule: '0 17 * * 5',
+      workflowDefinitionId: 'weekly_review',
+      workflowGoal: 'Review the week',
+      deliveryChannel: 'telegram',
+      deliveryTo: '123',
+    });
+    expect(cron.addJob).toHaveBeenCalledWith('0 17 * * 5', {
+      name: undefined,
+      timezone: undefined,
+      sessionTarget: 'isolated',
+      timeout: 35 * 60 * 1000,
+      delivery: { mode: 'direct', channel: 'telegram', to: '123' },
+      payload: {
+        kind: 'workflowRun',
+        definitionId: 'weekly_review',
+        goal: 'Review the week',
+      },
+    });
+    expect((r.content[0] as { text: string }).text).toContain('wf1');
   });
 
   it('create calls addJob with agentTurn payload', async () => {

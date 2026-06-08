@@ -11,6 +11,7 @@ import {
 import { DEFAULT_SCHEDULE } from '@/features/cron/cron-page-lib';
 import { getCronTemplateCopy } from '@/features/cron/cron-template-i18n';
 import { cronTemplateById } from '@/features/cron/cron-templates';
+import { validateWorkflowArgValues, workflowInputToArgValues } from '@/features/workflows/workflow-input.utils';
 import type { messages as makeMessages } from '@/i18n/messages';
 import { useAsyncResource } from '@/lib/use-async-resource';
 
@@ -32,7 +33,7 @@ type FormState = {
   formTaskKind: FormTaskKind;
   formWorkflowDefinitionId: string;
   formWorkflowGoal: string;
-  formWorkflowInputJson: string;
+  formWorkflowArgValues: Record<string, string>;
   messageEditorNonce: number;
   formSessionTarget: FormSessionTarget;
   formAgentId: string;
@@ -61,7 +62,7 @@ function initialFormState(): FormState {
     formTaskKind: 'message',
     formWorkflowDefinitionId: '',
     formWorkflowGoal: '',
-    formWorkflowInputJson: '{}',
+    formWorkflowArgValues: {},
     messageEditorNonce: 0,
     formSessionTarget: 'main',
     formAgentId: '',
@@ -106,11 +107,14 @@ function buildOpenFormState(job: CronJob | undefined, defaultModelForForm: () =>
     base.formTaskKind = 'workflowRun';
     base.formWorkflowDefinitionId = job.payload.definitionId;
     base.formWorkflowGoal = job.payload.goal || '';
-    base.formWorkflowInputJson = JSON.stringify(
+    base.formWorkflowArgValues = workflowInputToArgValues(
+      job.payload.definitionId,
       job.payload.inputEnvelope?.payload ?? job.payload.input ?? {},
-      null,
-      2,
     );
+    const payloadAgentId = job.payload.agentId?.trim().toLowerCase();
+    if (payloadAgentId) {
+      base.formAgentId = payloadAgentId;
+    }
   }
   base.formSessionTarget = job.sessionTarget || 'main';
   base.formAgentId =
@@ -208,16 +212,20 @@ export function useCronJobForm(opts: {
   }, [chatAgents, form.formAgentId]);
 
   const needsDeliveryChat =
-    form.formTaskKind === 'message' &&
     form.formChannel !== 'local' &&
-    (form.formSessionTarget === 'main' || (form.formSessionTarget === 'isolated' && !form.formAgentLocalOnly));
+    ((form.formTaskKind === 'message' &&
+      (form.formSessionTarget === 'main' || (form.formSessionTarget === 'isolated' && !form.formAgentLocalOnly))) ||
+      (form.formTaskKind === 'workflowRun' && !form.formAgentLocalOnly));
 
   const showChannelPicker =
-    form.formTaskKind === 'message' &&
-    (form.formSessionTarget === 'main' || (form.formSessionTarget === 'isolated' && !form.formAgentLocalOnly));
+    form.formTaskKind === 'workflowRun'
+      ? !form.formAgentLocalOnly
+      : form.formTaskKind === 'message' &&
+        (form.formSessionTarget === 'main' || (form.formSessionTarget === 'isolated' && !form.formAgentLocalOnly));
 
   const hasRunnablePayload = form.formTaskKind === 'workflowRun'
-    ? Boolean(form.formWorkflowDefinitionId.trim())
+    ? Boolean(form.formWorkflowDefinitionId.trim()) &&
+      validateWorkflowArgValues(form.formWorkflowDefinitionId.trim(), form.formWorkflowArgValues)
     : Boolean(form.formMessage.trim());
 
   const canSubmit =
@@ -243,6 +251,7 @@ export function useCronJobForm(opts: {
       const def = cronTemplateById(templateId);
       const copy = def ? getCronTemplateCopy(m.cron, templateId) : undefined;
       if (!def || !copy) return false;
+      const isWorkflowTemplate = def.taskKind === 'workflowRun' && Boolean(def.workflowDefinitionId);
       formModelUserTouched.current = false;
       dispatch({
         type: 'replace',
@@ -252,9 +261,13 @@ export function useCronJobForm(opts: {
           formMode: 'add',
           formName: copy.title,
           formSchedule: def.defaultSchedule,
-          formMessage: copy.prompt,
+          formMessage: isWorkflowTemplate ? '' : copy.prompt,
+          formTaskKind: isWorkflowTemplate ? 'workflowRun' : 'message',
+          formWorkflowDefinitionId: isWorkflowTemplate ? def.workflowDefinitionId! : '',
+          formWorkflowGoal: isWorkflowTemplate ? copy.description : '',
           formSessionTarget: def.defaultSessionTarget,
           formModel: defaultModelForForm(),
+          formAgentLocalOnly: isWorkflowTemplate,
           messageEditorNonce: 1,
         },
       });
@@ -321,7 +334,7 @@ export function useCronJobForm(opts: {
     formTaskKind: form.formTaskKind,
     formWorkflowDefinitionId: form.formWorkflowDefinitionId,
     formWorkflowGoal: form.formWorkflowGoal,
-    formWorkflowInputJson: form.formWorkflowInputJson,
+    formWorkflowArgValues: form.formWorkflowArgValues,
     messageEditorNonce: form.messageEditorNonce,
     formSessionTarget: form.formSessionTarget,
     formAgentId: form.formAgentId,
@@ -338,12 +351,14 @@ export function useCronJobForm(opts: {
     setFormTaskKind: (formTaskKind: FormTaskKind) =>
       patchForm(
         formTaskKind === 'workflowRun'
-          ? { formTaskKind, formSessionTarget: 'isolated', formAgentLocalOnly: true }
+          ? { formTaskKind, formSessionTarget: 'isolated', formAgentLocalOnly: false }
           : { formTaskKind },
       ),
-    setFormWorkflowDefinitionId: (formWorkflowDefinitionId: string) => patchForm({ formWorkflowDefinitionId }),
+    setFormWorkflowDefinitionId: (formWorkflowDefinitionId: string) =>
+      patchForm({ formWorkflowDefinitionId, formWorkflowArgValues: {} }),
     setFormWorkflowGoal: (formWorkflowGoal: string) => patchForm({ formWorkflowGoal }),
-    setFormWorkflowInputJson: (formWorkflowInputJson: string) => patchForm({ formWorkflowInputJson }),
+    setFormWorkflowArgValues: (formWorkflowArgValues: Record<string, string>) =>
+      patchForm({ formWorkflowArgValues }),
     setFormAgentId: (formAgentId: string) => patchForm({ formAgentId }),
     setFormAgentLocalOnly: (formAgentLocalOnly: boolean) => patchForm({ formAgentLocalOnly }),
     setFormWorkingDirectory: (formWorkingDirectory: string) => patchForm({ formWorkingDirectory }),

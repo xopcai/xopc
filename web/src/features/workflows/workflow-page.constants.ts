@@ -25,8 +25,12 @@ export const WORKFLOW_WF_FILTER_PARAM = 'wf';
 /** @deprecated Legacy deep links — cleaned on load */
 export const WORKFLOW_TAB_PARAM = 'tab';
 export const WORKFLOW_RUN_PARAM = 'run';
+export const WORKFLOW_TRIGGER_FILTER_PARAM = 'trigger';
 export const WORKFLOW_DEF_PARAM = 'def';
 export const WORKFLOW_START_PARAM = 'start';
+
+export const WORKFLOW_TRIGGER_FILTERS = ['all', 'cron', 'webui', 'chat', 'api'] as const;
+export type WorkflowTriggerFilter = (typeof WORKFLOW_TRIGGER_FILTERS)[number];
 
 /** Tag membership for category chips — first matching category wins in filters. */
 export const WORKFLOW_CATEGORY_ORDER: Exclude<WorkflowCategoryFilter, 'all'>[] = [

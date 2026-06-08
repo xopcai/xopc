@@ -188,8 +188,10 @@ if (!live.length) return { ok: false, reason: 'no findings' }
 
 Two patterns:
 
-1. **Direct workflow run (recommended)** — In `#/settings/cron`, set task kind to **Workflow run**, pick a saved definition, optional goal text, and delivery channel. The executor calls `WorkflowRunService` directly (no assistant turn).
-2. **Prompt + assistant** — A scheduled **message** task can ask the agent to run a workflow by name; the assistant then calls the `workflow` tool as in normal chat.
+1. **Direct workflow run (recommended)** — In `#/settings/cron`, set task kind to **Workflow run**, pick a template from the catalog dropdown, fill structured args (when the template defines them), and an optional goal. The executor calls `WorkflowRunService` directly (no assistant turn). By default cron **waits for a terminal workflow status** (up to ~35 minutes) before marking the job success or failure. Optionally pick a **delivery channel** to receive a summary and result preview when the run finishes. Track progress on `#/workflows` or the linked Chat session. Set `waitForCompletion: false` on the payload to fire-and-forget (success when the run starts).
+2. **Prompt + assistant** — A scheduled **message** task can ask the agent to run a workflow by name; the assistant then calls the `workflow` tool as in normal chat. Use this when a model should decide how to invoke the workflow mid-turn.
+
+**Operations:** Cron run history links to `#/workflows?run=<id>`. The workflows board can filter by trigger source (e.g. **Cron**). Failed workflow cron jobs retry the workflow up to the job’s `maxRetries` before marking the cron run failed.
 
 See [Scheduled Tasks (Cron)](cron.md) for schedules, delivery, and isolated-agent modes.
 

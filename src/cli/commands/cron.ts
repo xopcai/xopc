@@ -11,6 +11,7 @@ function createCronCommand(_ctx: CLIContext): Command {
       formatExamples([
         'xopc cron list                              # List all tasks',
         'xopc cron add --schedule "0 9 * * *" --message "Good morning"',
+        'xopc cron add --schedule "0 17 * * 5" --workflow weekly_review --goal "Weekly review"',
         'xopc cron enable <job-id>                   # Enable a task',
         'xopc cron disable <job-id>                  # Disable a task',
         'xopc cron run <job-id>                      # Run a task now',
@@ -48,14 +49,68 @@ function createCronCommand(_ctx: CLIContext): Command {
       .description('Add a scheduled task')
       .option('--name <text>', 'Task name')
       .option('--schedule <cron>', 'Cron expression (e.g., "0 9 * * *")')
-      .option('--message <text>', 'Message to send')
+      .option('--message <text>', 'Message to send (system event)')
+      .option('--workflow <id>', 'Workflow definition id (direct workflow run)')
+      .option('--goal <text>', 'Optional workflow goal')
+      .option('--input-json <json>', 'Workflow input payload as JSON object')
+      .option('--agent-id <id>', 'Agent profile for workflow or isolated jobs')
+      .option('--no-wait', 'Start workflow and return without waiting for completion')
+      .option('--channel <name>', 'Delivery channel (e.g. telegram)')
+      .option('--to <chatId>', 'Delivery recipient chat id')
       .action(async (options) => {
-        if (!options.schedule || !options.message) {
-          console.error('Error: --schedule and --message are required');
+        const hasWorkflow = Boolean(options.workflow?.trim());
+        const hasMessage = Boolean(options.message?.trim());
+        if (!options.schedule || (!hasWorkflow && !hasMessage) || (hasWorkflow && hasMessage)) {
+          console.error(
+            'Error: --schedule is required; provide exactly one of --message or --workflow',
+          );
           process.exit(1);
         }
 
         await withCronService(async (cronService) => {
+          if (hasWorkflow) {
+            const { DEFAULT_WORKFLOW_CRON_WAIT_MS } = await import(
+              '../../cron/workflow-run-completion.js'
+            );
+            let inputEnvelope: { payload: unknown } | undefined;
+            if (options.inputJson) {
+              try {
+                inputEnvelope = { payload: JSON.parse(options.inputJson) as unknown };
+              } catch {
+                console.error('Error: --input-json must be valid JSON');
+                process.exit(1);
+              }
+            }
+            const agentId = options.agentId?.trim() || undefined;
+            const delivery =
+              options.channel?.trim() && options.to?.trim()
+                ? {
+                    mode: 'direct' as const,
+                    channel: options.channel.trim(),
+                    to: options.to.trim(),
+                  }
+                : undefined;
+            const result = await cronService.addJob(options.schedule, {
+              name: options.name,
+              sessionTarget: 'isolated',
+              timeout: DEFAULT_WORKFLOW_CRON_WAIT_MS,
+              ...(agentId ? { agentId } : {}),
+              delivery,
+              payload: {
+                kind: 'workflowRun',
+                definitionId: options.workflow.trim(),
+                ...(options.goal?.trim() ? { goal: options.goal.trim() } : {}),
+                ...(inputEnvelope ? { inputEnvelope } : {}),
+                ...(agentId ? { agentId } : {}),
+                ...(options.noWait ? { waitForCompletion: false } : {}),
+              },
+            });
+            console.log(`✅ Added workflow job ${result.id}`);
+            console.log(`   Schedule: ${result.schedule}`);
+            console.log(`   Workflow: ${options.workflow.trim()}`);
+            return;
+          }
+
           const result = await cronService.addJob(options.schedule, {
             name: options.name,
             payload: { kind: 'systemEvent', text: options.message },
@@ -158,6 +213,7 @@ register({
     examples: [
       'xopc cron list',
       'xopc cron add --schedule "0 9 * * *" --message "Hello"',
+      'xopc cron add --schedule "0 17 * * 5" --workflow weekly_review',
       'xopc cron enable abc12345',
       'xopc cron run abc12345',
     ],
