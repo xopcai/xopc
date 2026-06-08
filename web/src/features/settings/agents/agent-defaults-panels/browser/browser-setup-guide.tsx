@@ -70,7 +70,7 @@ export function BrowserSetupGuide({
   onStart: (backend: MethodId) => void;
 }) {
   const settingsMode = useSettingsModeStore((s) => s.mode);
-  const methods: Array<{
+  const allMethods: Array<{
     id: MethodId;
     icon: typeof Puzzle;
     title: string;
@@ -102,7 +102,10 @@ export function BrowserSetupGuide({
       title: m.browserSetupCloudTitle,
       description: m.browserSetupCloudDesc,
     },
-  ].filter((method) => isBrowserSettingsTabVisibleInMode(method.id, settingsMode));
+  ];
+  const methods = allMethods.filter((method) =>
+    isBrowserSettingsTabVisibleInMode(method.id, settingsMode),
+  );
 
   return (
     <div className="flex flex-col gap-3 rounded-xl border border-edge-subtle bg-surface-base px-4 py-4">
