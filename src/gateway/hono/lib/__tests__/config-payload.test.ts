@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildSafeBrowserConfigForWeb, buildSafeMcpConfigForWeb } from '../config-payload.js';
+import {
+  buildSafeBrowserConfigForWeb,
+  buildSafeMcpConfigForWeb,
+  buildSafeWebConfigPayload,
+} from '../config-payload.js';
 
 describe('buildSafeBrowserConfigForWeb', () => {
   it('keeps local backend for config reloads', () => {
@@ -54,6 +58,27 @@ describe('buildSafeBrowserConfigForWeb', () => {
       humanize: true,
       humanPreset: 'careful',
     });
+  });
+});
+
+describe('buildSafeWebConfigPayload', () => {
+  it('includes agent default typed models for config round trips', async () => {
+    const payload = await buildSafeWebConfigPayload({
+      currentConfig: {
+        agents: {
+          defaults: {
+            models: [
+              { id: 'small', description: 'Fast model', model: 'ollama/AutoGLM-Phone-9B:latest' },
+            ],
+          },
+        },
+        channels: {},
+      },
+    } as never);
+
+    expect(payload.agents.defaults.models).toEqual([
+      { id: 'small', description: 'Fast model', model: 'ollama/AutoGLM-Phone-9B:latest' },
+    ]);
   });
 });
 

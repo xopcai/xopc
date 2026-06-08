@@ -1,5 +1,6 @@
 import { fetchGatewayConfigSwrResponse } from '@/features/gateway/gateway-config-swr';
 import { apiFetch } from '@/lib/fetch';
+import { getLanguage } from '@/lib/storage';
 import { apiUrl } from '@/lib/url';
 
 export type ChatAgentOption = { id: string; name?: string; description?: string; avatar?: string };
@@ -20,7 +21,7 @@ export async function fetchChatAgents(): Promise<ChatAgentsPayload> {
 }
 
 async function fetchChatAgentsUncached(): Promise<ChatAgentsPayload> {
-  const agentsRes = await apiFetch(apiUrl('/api/agents'));
+  const agentsRes = await apiFetch(apiUrl(`/api/agents?locale=${encodeURIComponent(getLanguage())}`));
   if (agentsRes.ok) {
     const data = (await agentsRes.json()) as {
       ok?: boolean;

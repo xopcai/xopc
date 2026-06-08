@@ -1,37 +1,18 @@
 /**
- * Named model roles (`agents.defaults.models` / `agents.list[].models`).
- * Merged per agent id for workflow and other callers.
+ * Named model roles from `agents.defaults.models`.
  */
 
-import { listAgentEntries } from '../agent/agent-scope.js';
 import type { AgentTypedModel, Config } from './schema.js';
 import { parseModelRef } from './schema.js';
 
 export type { AgentTypedModel };
 
-/**
- * Merge defaults + per-agent typed models. Agent entry wins on same `id`.
- */
-export function mergeTypedModels(
-  defaults?: AgentTypedModel[],
-  entry?: AgentTypedModel[],
-): Map<string, AgentTypedModel> {
+export function resolveEffectiveTypedModels(config: Config, _agentId: string): Map<string, AgentTypedModel> {
   const out = new Map<string, AgentTypedModel>();
-  for (const m of defaults ?? []) {
-    out.set(m.id, m);
-  }
-  for (const m of entry ?? []) {
-    out.set(m.id, m);
+  for (const modelRole of config.agents?.defaults?.models ?? []) {
+    out.set(modelRole.id, modelRole);
   }
   return out;
-}
-
-export function resolveEffectiveTypedModels(config: Config, agentId: string): Map<string, AgentTypedModel> {
-  const defaults = config.agents?.defaults?.models;
-  const entry = listAgentEntries(config).find(
-    (a) => a.enabled !== false && a.id.toLowerCase() === agentId.toLowerCase(),
-  )?.models;
-  return mergeTypedModels(defaults, entry);
 }
 
 /** Resolve a typed model id to `provider/model`, or undefined when not configured. */

@@ -222,6 +222,7 @@ export async function buildSafeWebConfigPayload(service: GatewayService) {
         systemPromptOverride: config.agents?.defaults?.systemPromptOverride,
         skills: config.agents?.defaults?.skills,
         tools: config.agents?.defaults?.tools,
+        models: config.agents?.defaults?.models,
         params: config.agents?.defaults?.params,
       },
     },

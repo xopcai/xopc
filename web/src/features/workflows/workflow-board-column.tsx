@@ -25,7 +25,9 @@ export const WorkflowBoardColumn = memo(function WorkflowBoardColumn({
   language,
   localeTag,
   nowMs,
+  selectedRunId,
   onOpenRun,
+  onOpenRunChat,
   onCancelRun,
   onRetryRun,
 }: {
@@ -33,7 +35,9 @@ export const WorkflowBoardColumn = memo(function WorkflowBoardColumn({
   language: StoredLanguage;
   localeTag: string;
   nowMs: number;
+  selectedRunId: string | null;
   onOpenRun: (run: WorkflowRunSummary) => void;
+  onOpenRunChat: (run: WorkflowRunSummary) => void;
   onCancelRun: (runId: string) => void;
   onRetryRun: (runId: string) => void;
 }) {
@@ -50,7 +54,7 @@ export const WorkflowBoardColumn = memo(function WorkflowBoardColumn({
   return (
     <section
       className={cn(
-        'flex min-h-[12rem] min-w-[16rem] flex-1 flex-col rounded-2xl border border-edge bg-surface-panel/40',
+        'flex min-h-48 min-w-64 flex-1 flex-col rounded-2xl border border-edge bg-surface-panel/40',
         'snap-center',
       )}
       aria-label={columnTitle(column.id, labels)}
@@ -73,7 +77,9 @@ export const WorkflowBoardColumn = memo(function WorkflowBoardColumn({
               language={language}
               localeTag={localeTag}
               nowMs={nowMs}
+              selected={run.id === selectedRunId}
               onOpen={onOpenRun}
+              onOpenChat={onOpenRunChat}
               onCancel={onCancelRun}
               onRetry={onRetryRun}
             />

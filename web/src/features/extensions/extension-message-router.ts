@@ -2,7 +2,7 @@ import { ExtensionErrorCode, type ThemeInfo } from '@xopcai/extension-ui-sdk';
 
 import { apiFetch } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
-import { showToast, type ToastDetail, type ToastType } from '@/lib/toast';
+import { showToast, type ToastDetail } from '@/lib/toast';
 import { useThemeStore } from '@/stores/theme-store';
 
 import { buildThemeInfo } from './theme-bridge';
@@ -368,7 +368,7 @@ export function registerBuiltinMethods(router: ExtensionMessageRouter): void {
         ? raw.type
         : 'info';
     const detail: ToastDetail = {
-      type: type as ToastType,
+      type,
       title,
       message: typeof raw.message === 'string' ? raw.message : undefined,
       duration: typeof raw.duration === 'number' ? raw.duration : undefined,

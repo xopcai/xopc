@@ -1,9 +1,10 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { UserPlus, X } from 'lucide-react';
-import type { FormEvent } from 'react';
+import { type FormEvent } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { ModelSelector } from '@/features/chat/model/model-selector';
+import type { GatewayAgentRow } from '@/features/settings/agents-admin-api';
 import type { AgentsSettingsMessages, ChatMessages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { ghostIconButton } from '@/lib/interaction';
@@ -12,7 +13,7 @@ import {
   SETTINGS_SHELL_OVERLAY_Z,
 } from '@/lib/settings-shell-dialog-layer';
 import { SettingsShellLayerProvider } from '@/lib/settings-shell-layer-context';
-
+import { agentListDisplayName } from './agent-display-names';
 import { agentsSettingsInputClass } from './utils';
 
 export function CreateAgentDialog(props: {
@@ -22,18 +23,32 @@ export function CreateAgentDialog(props: {
   chat: ChatMessages;
   busy: boolean;
   modalError: string | null;
+  localizedLanguageLabel: string;
   createDisplayName: string;
   setCreateDisplayName: (v: string) => void;
+  createNameZh: string;
+  setCreateNameZh: (v: string) => void;
+  createNameEn: string;
+  setCreateNameEn: (v: string) => void;
+  createLocalizedOpen: boolean;
+  setCreateLocalizedOpen: (v: boolean) => void;
   createAgentId: string;
   setCreateAgentId: (v: string) => void;
   createDescription: string;
   setCreateDescription: (v: string) => void;
+  createDescriptionZh: string;
+  setCreateDescriptionZh: (v: string) => void;
+  createDescriptionEn: string;
+  setCreateDescriptionEn: (v: string) => void;
   createWorkspace: string;
   setCreateWorkspace: (v: string) => void;
   createModel: string;
   setCreateModel: (v: string) => void;
   onCreate: (e: FormEvent) => void;
   onSuggestWorkspace: () => void;
+  agents: GatewayAgentRow[];
+  duplicateSourceId: string | null;
+  onSelectDuplicateSource: (id: string | null) => void;
 }) {
   const {
     open,
@@ -42,18 +57,32 @@ export function CreateAgentDialog(props: {
     chat,
     busy,
     modalError,
+    localizedLanguageLabel,
     createDisplayName,
     setCreateDisplayName,
+    createNameZh,
+    setCreateNameZh,
+    createNameEn,
+    setCreateNameEn,
+    createLocalizedOpen,
+    setCreateLocalizedOpen,
     createAgentId,
     setCreateAgentId,
     createDescription,
     setCreateDescription,
+    createDescriptionZh,
+    setCreateDescriptionZh,
+    createDescriptionEn,
+    setCreateDescriptionEn,
     createWorkspace,
     setCreateWorkspace,
     createModel,
     setCreateModel,
     onCreate,
     onSuggestWorkspace,
+    agents,
+    duplicateSourceId,
+    onSelectDuplicateSource,
   } = props;
 
   return (
@@ -88,6 +117,25 @@ export function CreateAgentDialog(props: {
           </div>
 
           <form className="grid gap-3" onSubmit={onCreate}>
+            {agents.length > 0 ? (
+              <label className="flex flex-col gap-1 text-sm">
+                <span className="text-fg-muted">{a.copyFromExistingAgent}</span>
+                <select
+                  className={cn(agentsSettingsInputClass(), 'bg-surface-panel')}
+                  value={duplicateSourceId ?? ''}
+                  onChange={(event) => onSelectDuplicateSource(event.target.value || null)}
+                >
+                  <option value="">{a.copyFromExistingAgentNone}</option>
+                  {agents.map((agent) => (
+                    <option key={agent.id} value={agent.id}>
+                      {agentListDisplayName(agent, a)} · {agent.id}
+                    </option>
+                  ))}
+                </select>
+                <span className="text-xs text-fg-muted">{a.duplicateAgentHint}</span>
+              </label>
+            ) : null}
+
             {modalError ? (
               <div
                 role="alert"
@@ -97,7 +145,7 @@ export function CreateAgentDialog(props: {
               </div>
             ) : null}
             <label className="flex flex-col gap-1 text-sm">
-              <span className="text-fg-muted">{a.newAgentLabel}</span>
+              <span className="text-fg-muted">{a.newAgentLabel} ({localizedLanguageLabel})</span>
               <input
                 className={agentsSettingsInputClass()}
                 value={createDisplayName}
@@ -123,10 +171,63 @@ export function CreateAgentDialog(props: {
               />
               <span className="text-xs text-fg-muted">{a.newAgentIdRules}</span>
             </label>
+            <button
+              type="button"
+              className="w-fit text-xs font-medium text-accent hover:underline"
+              onClick={() => setCreateLocalizedOpen(!createLocalizedOpen)}
+            >
+              {createLocalizedOpen ? a.hideLocalizedText : a.editLocalizedText}
+            </button>
+            {createLocalizedOpen ? (
+              <div className="grid gap-3 rounded-lg border border-edge-subtle bg-surface-base/60 p-3 dark:border-edge sm:grid-cols-2">
+                <label className="flex flex-col gap-1 text-sm">
+                  <span className="text-fg-muted">{a.newAgentLabel} · {a.languageChinese}</span>
+                  <input
+                    className={agentsSettingsInputClass()}
+                    value={createNameZh}
+                    onChange={(e) => setCreateNameZh(e.target.value)}
+                    autoComplete="off"
+                  />
+                </label>
+                <label className="flex flex-col gap-1 text-sm">
+                  <span className="text-fg-muted">{a.newAgentLabel} · {a.languageEnglish}</span>
+                  <input
+                    className={agentsSettingsInputClass()}
+                    value={createNameEn}
+                    onChange={(e) => setCreateNameEn(e.target.value)}
+                    autoComplete="off"
+                  />
+                </label>
+                <label className="flex flex-col gap-1 text-sm sm:col-span-2">
+                  <span className="text-fg-muted">{a.agentDescription} · {a.languageChinese}</span>
+                  <textarea
+                    className={cn(agentsSettingsInputClass(), 'min-h-16 resize-y font-sans text-sm leading-relaxed')}
+                    value={createDescriptionZh}
+                    onChange={(e) => setCreateDescriptionZh(e.target.value)}
+                    placeholder={a.agentDescriptionPlaceholder}
+                    maxLength={4000}
+                    rows={2}
+                    spellCheck
+                  />
+                </label>
+                <label className="flex flex-col gap-1 text-sm sm:col-span-2">
+                  <span className="text-fg-muted">{a.agentDescription} · {a.languageEnglish}</span>
+                  <textarea
+                    className={cn(agentsSettingsInputClass(), 'min-h-16 resize-y font-sans text-sm leading-relaxed')}
+                    value={createDescriptionEn}
+                    onChange={(e) => setCreateDescriptionEn(e.target.value)}
+                    placeholder={a.agentDescriptionPlaceholder}
+                    maxLength={4000}
+                    rows={2}
+                    spellCheck
+                  />
+                </label>
+              </div>
+            ) : null}
             <label className="flex flex-col gap-1 text-sm">
-              <span className="text-fg-muted">{a.agentDescription}</span>
+              <span className="text-fg-muted">{a.agentDescription} ({localizedLanguageLabel})</span>
               <textarea
-                className={cn(agentsSettingsInputClass(), 'min-h-[4.5rem] resize-y font-sans text-sm leading-relaxed')}
+                className={cn(agentsSettingsInputClass(), 'min-h-18 resize-y font-sans text-sm leading-relaxed')}
                 value={createDescription}
                 onChange={(e) => setCreateDescription(e.target.value)}
                 placeholder={a.agentDescriptionPlaceholder}

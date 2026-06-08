@@ -109,9 +109,11 @@ export function registerWorkflowRoutes(authenticated: Hono, deps: AuthenticatedR
 
   authenticated.get('/api/workflows/stats', async (c) => {
     const agentId = getAgentId(c.req.query('agentId'), service.currentConfig);
+    const definitionId = c.req.query('definitionId')?.trim();
     const runStore = workflowRunService.createRunStore(agentId);
     const runs = await runStore.listRunSummaries(500);
-    return c.json({ stats: buildWorkflowStats(runs) });
+    const filteredRuns = definitionId ? runs.filter((run) => run.definitionId === definitionId) : runs;
+    return c.json({ stats: buildWorkflowStats(filteredRuns) });
   });
 
   authenticated.post('/api/workflows/runs', async (c) => {

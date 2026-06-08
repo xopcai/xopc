@@ -185,8 +185,11 @@ export interface WorkflowAgentStepView {
   id: string;
   label: string;
   kind: 'tool' | 'llm' | 'thinking';
+  toolName?: string;
   detail?: string;
   status: WorkflowAgentStepStatus;
+  resultPreview?: string;
+  error?: string;
   startedAtMs?: number;
   completedAtMs?: number;
 }

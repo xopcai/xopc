@@ -1,6 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { useCallback } from 'react';
-import { AlertTriangle, Cog, Eye, Pencil, Sparkles, Trash2, User, X } from 'lucide-react';
+import { AlertTriangle, Cog, Eye, MessageSquarePlus, Pencil, Sparkles, Trash2, User, X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { MarkdownEditor } from '@/components/markdown/markdown-editor';
@@ -9,7 +9,9 @@ import { ModelSelector } from '@/features/chat/model/model-selector';
 import { DirectoryPickerPathField } from '@/features/fs/directory-picker-path-field';
 import type { GatewayAgentRow } from '@/features/settings/agents-admin-api';
 import type { OverviewProfileDraft } from '@/features/settings/agents/hooks/use-agent-overview-profile-markdown';
+import { agentsAppDetailPath } from '@/features/settings/agents/agents-app-path';
 import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/settings/settings-form-section';
+import { SETTINGS_BACK_PATH_STATE_KEY } from '@/features/settings/settings-nav-state';
 import type { AgentsSettingsMessages, ChatMessages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { ghostIconButton, interaction } from '@/lib/interaction';
@@ -35,10 +37,21 @@ export function AgentOverviewTab(props: {
   chat: ChatMessages;
   selected: GatewayAgentRow | null;
   busy: boolean;
+  currentLanguageLabel: string;
   editName: string;
   setEditName: (v: string) => void;
+  editNameZh: string;
+  setEditNameZh: (v: string) => void;
+  editNameEn: string;
+  setEditNameEn: (v: string) => void;
+  editLocalizedOpen: boolean;
+  setEditLocalizedOpen: (v: boolean) => void;
   editDescription: string;
   setEditDescription: (v: string) => void;
+  editDescriptionZh: string;
+  setEditDescriptionZh: (v: string) => void;
+  editDescriptionEn: string;
+  setEditDescriptionEn: (v: string) => void;
   editWorkspace: string;
   setEditWorkspace: (v: string) => void;
   editModel: string;
@@ -56,16 +69,28 @@ export function AgentOverviewTab(props: {
   toggleSoulPreviewMode: () => void;
   defaultModel?: string;
   defaultWorkspace?: string;
+  onTryInChat?: () => void;
 }) {
   const {
     a,
     chat,
     selected,
     busy,
+    currentLanguageLabel,
     editName,
     setEditName,
+    editNameZh,
+    setEditNameZh,
+    editNameEn,
+    setEditNameEn,
+    editLocalizedOpen,
+    setEditLocalizedOpen,
     editDescription,
     setEditDescription,
+    editDescriptionZh,
+    setEditDescriptionZh,
+    editDescriptionEn,
+    setEditDescriptionEn,
     editWorkspace,
     setEditWorkspace,
     editModel,
@@ -83,6 +108,7 @@ export function AgentOverviewTab(props: {
     toggleSoulPreviewMode,
     defaultModel = '',
     defaultWorkspace = '',
+    onTryInChat,
   } = props;
 
   const language = useLocaleStore((s) => s.language);
@@ -114,6 +140,7 @@ export function AgentOverviewTab(props: {
         defaultWorkspace={defaultWorkspace}
         agentModel={editModel}
         agentWorkspace={editWorkspace}
+        settingsState={{ [SETTINGS_BACK_PATH_STATE_KEY]: agentsAppDetailPath(selected.id) }}
       />
 
       {/* ===== Section 1: Basic Identity ===== */}
@@ -187,7 +214,7 @@ export function AgentOverviewTab(props: {
 
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="flex flex-col gap-1.5 text-sm">
-            <span className="font-medium text-fg">{a.displayName}</span>
+            <span className="font-medium text-fg">{a.displayName} ({currentLanguageLabel})</span>
             <input
               className={inputClass}
               value={editName}
@@ -211,8 +238,67 @@ export function AgentOverviewTab(props: {
             />
           </label>
 
+          <div className="sm:col-span-2">
+            <button
+              type="button"
+              className="text-xs font-medium text-accent hover:underline"
+              onClick={() => setEditLocalizedOpen(!editLocalizedOpen)}
+            >
+              {editLocalizedOpen ? a.hideLocalizedText : a.editLocalizedText}
+            </button>
+          </div>
+
+          {editLocalizedOpen ? (
+            <div className="grid gap-3 rounded-lg border border-edge-subtle bg-surface-base/60 p-3 dark:border-edge sm:col-span-2 sm:grid-cols-2">
+              <label className="flex flex-col gap-1.5 text-sm">
+                <span className="font-medium text-fg">{a.displayName} · {a.languageChinese}</span>
+                <input
+                  className={inputClass}
+                  value={editNameZh}
+                  onChange={(e) => setEditNameZh(e.target.value)}
+                  placeholder={a.personaNamePlaceholder}
+                  autoComplete="off"
+                />
+              </label>
+              <label className="flex flex-col gap-1.5 text-sm">
+                <span className="font-medium text-fg">{a.displayName} · {a.languageEnglish}</span>
+                <input
+                  className={inputClass}
+                  value={editNameEn}
+                  onChange={(e) => setEditNameEn(e.target.value)}
+                  placeholder={a.personaNamePlaceholder}
+                  autoComplete="off"
+                />
+              </label>
+              <label className="flex flex-col gap-1.5 text-sm sm:col-span-2">
+                <span className="font-medium text-fg">{a.agentDescription} · {a.languageChinese}</span>
+                <textarea
+                  className={cn(inputClass, 'min-h-16 resize-y text-sm leading-relaxed')}
+                  value={editDescriptionZh}
+                  onChange={(e) => setEditDescriptionZh(e.target.value)}
+                  placeholder={a.agentDescriptionPlaceholder}
+                  maxLength={4000}
+                  rows={2}
+                  spellCheck
+                />
+              </label>
+              <label className="flex flex-col gap-1.5 text-sm sm:col-span-2">
+                <span className="font-medium text-fg">{a.agentDescription} · {a.languageEnglish}</span>
+                <textarea
+                  className={cn(inputClass, 'min-h-16 resize-y text-sm leading-relaxed')}
+                  value={editDescriptionEn}
+                  onChange={(e) => setEditDescriptionEn(e.target.value)}
+                  placeholder={a.agentDescriptionPlaceholder}
+                  maxLength={4000}
+                  rows={2}
+                  spellCheck
+                />
+              </label>
+            </div>
+          ) : null}
+
           <label className="flex flex-col gap-1.5 text-sm sm:col-span-2">
-            <span className="font-medium text-fg">{a.agentDescription}</span>
+            <span className="font-medium text-fg">{a.agentDescription} ({currentLanguageLabel})</span>
             <textarea
               className={cn(inputClass, 'min-h-16 resize-y text-sm leading-relaxed')}
               value={editDescription}
@@ -293,10 +379,16 @@ export function AgentOverviewTab(props: {
           </div>
         </div>
         {!hideInlineSave ? (
-          <div className="mt-4">
+          <div className="mt-4 flex flex-wrap items-center gap-2">
             <Button type="button" disabled={busy} onClick={() => void onSaveAgentEdits()}>
               {a.save}
             </Button>
+            {onTryInChat ? (
+              <Button type="button" variant="secondary" disabled={busy} onClick={onTryInChat}>
+                <MessageSquarePlus className="mr-1.5 size-4" aria-hidden />
+                {a.tryInChat}
+              </Button>
+            ) : null}
           </div>
         ) : null}
       </SettingsFormSection>

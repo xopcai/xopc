@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useLocation, useSearchParams } from 'react-router-dom';
 
 import { SkillsMarketplaceConfigSection } from '@/features/skills/skills-marketplace-config-section';
 import { messages } from '@/i18n/messages';
@@ -99,6 +99,7 @@ export function AgentDefaultsTabbedPage() {
   const m = messages(language);
   const a = m.agentSettings;
   const chat = m.chat;
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const activeTab = parseAgentDefaultsTab(searchParams.get('tab'));
@@ -118,10 +119,10 @@ export function AgentDefaultsTabbedPage() {
           else next.set('tab', tab);
           return next;
         },
-        { replace: true },
+        { replace: true, state: location.state },
       );
     },
-    [setSearchParams],
+    [location.state, setSearchParams],
   );
 
   const intro = tabIntro(a, activeTab);

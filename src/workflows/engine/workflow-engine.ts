@@ -9,6 +9,8 @@ import { WorkflowRunStore } from '../store/run-store.js';
 import { runWorkflowScript } from '../runtime/script-runtime.js';
 import type { Api, Model } from '@earendil-works/pi-ai';
 
+import { workflowStepLabel } from '../../agent/workflow/step-labels.js';
+import type { SubagentProgressEvent } from '../../agent/workflow/types.js';
 import type { WorkflowScriptSubagentRunner } from '../runtime/script-runtime.js';
 
 export interface WorkflowEngineOptions {
@@ -42,6 +44,7 @@ export class WorkflowEngine {
     const phaseTitleToId = buildPhaseTitleToId(definition);
     let currentPhaseId: string | undefined;
     let eventQueue = Promise.resolve();
+    const progressRecorders = new Map<number, AgentProgressRecorder>();
 
     const run: WorkflowRun = {
       id: runId,
@@ -125,12 +128,22 @@ export class WorkflowEngine {
           },
           onAgentEnd: (event) => {
             const completedStatus = normalizeCompletedAgentStatus(event.status);
+            progressRecorders.get(event.id)?.completeOpenSteps(completedStatus === 'done' ? 'done' : 'error');
+            progressRecorders.delete(event.id);
             void appendEvent('agent_completed', {
               agentId: formatRuntimeAgentId(event.id),
               status: completedStatus,
               resultPreview: previewWorkflowValue(event.result),
               error: completedStatus === 'error' ? 'Subagent failed' : undefined,
             });
+          },
+          enhanceSubagentRun: (ctx) => {
+            const recorder = new AgentProgressRecorder({
+              agentId: formatRuntimeAgentId(ctx.id),
+              appendEvent,
+            });
+            progressRecorders.set(ctx.id, recorder);
+            return { onProgress: (event) => recorder.onProgress(event) };
           },
         },
       );
@@ -155,6 +168,154 @@ export class WorkflowEngine {
       throw new Error(`workflow run view was not created for ${runId}`);
     }
     return view;
+  }
+}
+
+type AppendWorkflowEvent = (
+  type: WorkflowEventType,
+  payload: WorkflowEventPayload,
+  createdAtMsOverride?: number,
+) => Promise<void>;
+
+class AgentProgressRecorder {
+  private readonly activeToolStepIds = new Map<string, string>();
+  private activeIterationStepId: string | null = null;
+  private activeThinkingStepId: string | null = null;
+  private activeLlmStepId: string | null = null;
+  private sequence = 0;
+
+  constructor(
+    private readonly options: {
+      agentId: string;
+      appendEvent: AppendWorkflowEvent;
+    },
+  ) {}
+
+  onProgress(event: SubagentProgressEvent): void {
+    switch (event.type) {
+      case 'tool_start':
+        this.startToolStep(event);
+        return;
+      case 'tool_end':
+        this.completeToolStep(event);
+        return;
+      case 'iteration':
+        this.replaceSingletonStep('iteration', this.buildIterationLabel(event.count, event.max), 'llm');
+        return;
+      case 'thinking_delta':
+        this.ensureSingletonStep('thinking', 'Thinking', 'thinking');
+        return;
+      case 'text_delta':
+        this.ensureSingletonStep('llm', 'Writing response', 'llm');
+        return;
+      default:
+        return;
+    }
+  }
+
+  completeOpenSteps(status: 'done' | 'error'): void {
+    for (const stepId of this.activeToolStepIds.values()) {
+      void this.options.appendEvent('agent_step_completed', {
+        agentId: this.options.agentId,
+        stepId,
+        status,
+      });
+    }
+    this.activeToolStepIds.clear();
+    this.completeSingletonStep('iteration', status);
+    this.completeSingletonStep('thinking', status);
+    this.completeSingletonStep('llm', status);
+  }
+
+  private startToolStep(event: Extract<SubagentProgressEvent, { type: 'tool_start' }>): void {
+    const stepId = this.nextStepId('tool');
+    const { label, detail } = workflowStepLabel(event.toolName, event.args);
+    this.activeToolStepIds.set(event.toolCallId, stepId);
+    void this.options.appendEvent('agent_step_started', {
+      agentId: this.options.agentId,
+      stepId,
+      label,
+      kind: 'tool',
+      toolName: event.toolName,
+      detail: detail ?? previewWorkflowValue(event.args),
+    });
+  }
+
+  private completeToolStep(event: Extract<SubagentProgressEvent, { type: 'tool_end' }>): void {
+    const stepId = this.activeToolStepIds.get(event.toolCallId);
+    if (!stepId) return;
+    this.activeToolStepIds.delete(event.toolCallId);
+    void this.options.appendEvent('agent_step_completed', {
+      agentId: this.options.agentId,
+      stepId,
+      status: event.isError ? 'error' : 'done',
+      resultPreview: event.resultPreview,
+      error: event.error,
+    });
+  }
+
+  private replaceSingletonStep(
+    slot: 'iteration' | 'thinking' | 'llm',
+    label: string,
+    kind: 'tool' | 'llm' | 'thinking',
+  ): void {
+    this.completeSingletonStep(slot, 'done');
+    this.ensureSingletonStep(slot, label, kind);
+  }
+
+  private ensureSingletonStep(
+    slot: 'iteration' | 'thinking' | 'llm',
+    label: string,
+    kind: 'tool' | 'llm' | 'thinking',
+  ): void {
+    if (this.getSingletonStepId(slot)) return;
+    const stepId = this.nextStepId(slot);
+    this.setSingletonStepId(slot, stepId);
+    void this.options.appendEvent('agent_step_started', {
+      agentId: this.options.agentId,
+      stepId,
+      label,
+      kind,
+    });
+  }
+
+  private completeSingletonStep(slot: 'iteration' | 'thinking' | 'llm', status: 'done' | 'error'): void {
+    const stepId = this.getSingletonStepId(slot);
+    if (!stepId) return;
+    this.setSingletonStepId(slot, null);
+    void this.options.appendEvent('agent_step_completed', {
+      agentId: this.options.agentId,
+      stepId,
+      status,
+    });
+  }
+
+  private getSingletonStepId(slot: 'iteration' | 'thinking' | 'llm'): string | null {
+    if (slot === 'iteration') return this.activeIterationStepId;
+    if (slot === 'thinking') return this.activeThinkingStepId;
+    return this.activeLlmStepId;
+  }
+
+  private setSingletonStepId(slot: 'iteration' | 'thinking' | 'llm', stepId: string | null): void {
+    if (slot === 'iteration') {
+      this.activeIterationStepId = stepId;
+      return;
+    }
+    if (slot === 'thinking') {
+      this.activeThinkingStepId = stepId;
+      return;
+    }
+    this.activeLlmStepId = stepId;
+  }
+
+  private buildIterationLabel(count: number, max: number): string {
+    if (max > 0) return `Iteration ${count}/${max}`;
+    return `Iteration ${count}`;
+  }
+
+  private nextStepId(kind: string): string {
+    this.sequence += 1;
+    return `${this.options.agentId}-${kind}-${this.sequence}`;
   }
 }
 

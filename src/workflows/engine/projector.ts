@@ -136,6 +136,7 @@ export function projectWorkflowRunView(events: WorkflowEventEnvelope[]): Workflo
           stepId: string;
           label: string;
           kind: 'tool' | 'llm' | 'thinking';
+          toolName?: string;
           detail?: string;
         };
         const existing = agentIdToAgent.get(payload.agentId);
@@ -149,6 +150,7 @@ export function projectWorkflowRunView(events: WorkflowEventEnvelope[]): Workflo
                 id: payload.stepId,
                 label: payload.label,
                 kind: payload.kind,
+                toolName: payload.toolName,
                 detail: payload.detail,
                 status: 'running',
                 startedAtMs: event.createdAtMs,
@@ -159,7 +161,13 @@ export function projectWorkflowRunView(events: WorkflowEventEnvelope[]): Workflo
         break;
       }
       case 'agent_step_completed': {
-        const payload = event.payload as { agentId: string; stepId: string; status: 'done' | 'error' };
+        const payload = event.payload as {
+          agentId: string;
+          stepId: string;
+          status: 'done' | 'error';
+          resultPreview?: string;
+          error?: string;
+        };
         const existing = agentIdToAgent.get(payload.agentId);
         if (existing) {
           agentIdToAgent.set(payload.agentId, {
@@ -169,6 +177,8 @@ export function projectWorkflowRunView(events: WorkflowEventEnvelope[]): Workflo
                 ? {
                     ...step,
                     status: payload.status,
+                    resultPreview: payload.resultPreview,
+                    error: payload.error,
                     completedAtMs: event.createdAtMs,
                   }
                 : step,

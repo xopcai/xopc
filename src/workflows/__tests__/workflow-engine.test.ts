@@ -95,6 +95,61 @@ return { summary, sections: [{ kind: 'text', title: 'Summary', content: summary 
     expect(events.map((event) => event.type)).toContain('run_completed');
   });
 
+  it('records subagent progress as agent step events', async () => {
+    const runner: WorkflowScriptSubagentRunner = {
+      async run(prompt, opts) {
+        opts.onProgress?.({ type: 'iteration', count: 1, max: 3 });
+        opts.onProgress?.({
+          type: 'tool_start',
+          toolCallId: 'tool-1',
+          toolName: 'file_grep',
+          args: { query: 'workflow' },
+        });
+        opts.onProgress?.({
+          type: 'tool_end',
+          toolCallId: 'tool-1',
+          toolName: 'file_grep',
+          isError: false,
+          resultPreview: 'workflow matches',
+        });
+        opts.onProgress?.({ type: 'thinking_delta', delta: 'checking' });
+        opts.onProgress?.({ type: 'text_delta', delta: 'done' });
+        return `${opts.label}: ${prompt}`;
+      },
+    };
+    const eventStore = new WorkflowEventStore(config, agentId);
+    const runStore = new WorkflowRunStore(config, agentId, eventStore);
+    const engine = new WorkflowEngine({ cwd: stateDir, eventStore, runStore, runner });
+    const definition = createDefinition(`export const meta = { name: 'research', description: 'Research' }
+await agent('scan repo', { label: 'Scanner' })
+return 'ok'
+`);
+
+    const view = await engine.startRun(definition, {
+      runId: 'run-progress',
+      source: { kind: 'webui' },
+    });
+    const events = await eventStore.readRunEvents('run-progress');
+
+    expect(events.map((event) => event.type)).toEqual(
+      expect.arrayContaining(['agent_step_started', 'agent_step_completed']),
+    );
+    expect(view.agents[0]?.steps).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ label: 'Iteration 1/3', status: 'done' }),
+        expect.objectContaining({
+          label: 'Search files',
+          toolName: 'file_grep',
+          detail: 'workflow',
+          status: 'done',
+          resultPreview: 'workflow matches',
+        }),
+        expect.objectContaining({ label: 'Thinking', status: 'done' }),
+        expect.objectContaining({ label: 'Writing response', status: 'done' }),
+      ]),
+    );
+  });
+
   it('records runtime failures as failed run events', async () => {
     const runner: WorkflowScriptSubagentRunner = {
       async run() {

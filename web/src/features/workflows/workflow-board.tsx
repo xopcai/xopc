@@ -1,4 +1,4 @@
-import { memo, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import type { StoredLanguage } from '@/lib/storage';
@@ -14,8 +14,10 @@ export const WorkflowBoard = memo(function WorkflowBoard({
   labels,
   searchQuery,
   workflowFilterId,
+  selectedRunId,
   loading,
   onOpenRun,
+  onOpenRunChat,
   onCancelRun,
   onRetryRun,
   onStart,
@@ -31,13 +33,22 @@ export const WorkflowBoard = memo(function WorkflowBoard({
   };
   searchQuery: string;
   workflowFilterId: string;
+  selectedRunId: string | null;
   loading: boolean;
   onOpenRun: (run: WorkflowRunSummary) => void;
+  onOpenRunChat: (run: WorkflowRunSummary) => void;
   onCancelRun: (runId: string) => void;
   onRetryRun: (runId: string) => void;
   onStart: () => void;
 }) {
-  const [nowMs] = useState(() => Date.now());
+  const hasActiveRuns = runs.some((run) => run.status === 'queued' || run.status === 'running');
+  const [nowMs, setNowMs] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (!hasActiveRuns) return;
+    const intervalId = window.setInterval(() => setNowMs(Date.now()), 1000);
+    return () => window.clearInterval(intervalId);
+  }, [hasActiveRuns]);
 
   const columns = useMemo(() => {
     const filtered = filterRunsForBoard(runs, { searchQuery, workflowFilterId });
@@ -65,7 +76,7 @@ export const WorkflowBoard = memo(function WorkflowBoard({
   }
 
   return (
-    <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-2 snap-x snap-mandatory">
+    <div className="-mx-1 flex min-w-0 gap-3 overflow-x-auto px-1 pb-2 snap-x snap-mandatory">
       {columns.map((column) => (
         <WorkflowBoardColumn
           key={column.id}
@@ -73,7 +84,9 @@ export const WorkflowBoard = memo(function WorkflowBoard({
           language={language}
           localeTag={localeTag}
           nowMs={nowMs}
+          selectedRunId={selectedRunId}
           onOpenRun={onOpenRun}
+          onOpenRunChat={onOpenRunChat}
           onCancelRun={onCancelRun}
           onRetryRun={onRetryRun}
         />

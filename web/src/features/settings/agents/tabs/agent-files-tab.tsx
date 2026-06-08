@@ -1,4 +1,6 @@
-import { Eye, SquarePen } from 'lucide-react';
+import { Eye, MessageSquarePlus, SquarePen } from 'lucide-react';
+
+import { Button } from '@/components/ui/button';
 
 import { MarkdownEditor } from '@/components/markdown/markdown-editor';
 import { MarkdownView } from '@/components/markdown/markdown-view';
@@ -23,6 +25,7 @@ export function AgentFilesTab(props: {
   profileFileLoading: boolean;
   /** Bumps when profile Markdown body is loaded from the server (remounts CodeMirror). */
   profileEditorNonce: number;
+  onTryInChat?: () => void;
 }) {
   const {
     a,
@@ -37,6 +40,7 @@ export function AgentFilesTab(props: {
     fileSaving,
     profileFileLoading,
     profileEditorNonce,
+    onTryInChat,
   } = props;
 
   const isDark = useThemeStore((s) => s.resolved === 'dark');
@@ -112,6 +116,12 @@ export function AgentFilesTab(props: {
                   <div className="flex flex-wrap items-center gap-2 text-xs text-fg-muted">
                     {fileSaving ? <span>{a.filesSavingStatus}</span> : null}
                     <span>{a.filesAutoSaveHint}</span>
+                    {onTryInChat ? (
+                      <Button type="button" variant="secondary" className="ml-auto text-xs" onClick={onTryInChat}>
+                        <MessageSquarePlus className="mr-1 size-3.5" aria-hidden />
+                        {a.tryInChat}
+                      </Button>
+                    ) : null}
                   </div>
                 </div>
                 {filesViewMode === 'edit' ? (

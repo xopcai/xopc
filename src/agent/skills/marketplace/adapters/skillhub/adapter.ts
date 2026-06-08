@@ -779,18 +779,20 @@ export const skillHubMarketplaceAdapter: SkillsMarketplaceAdapter = {
     try {
       const idx = await cachedFetchSkillHubCuratedIndex(ecoUrls);
       let skills = [...idx.skills].filter((s) => s.slug?.trim());
-      if (params.category?.trim()) {
-        const want = params.category.trim();
-        skills = skills.filter((s) => (s.categories ?? []).some((x) => String(x).trim() === want));
+      if (skills.length > 0) {
+        if (params.category?.trim()) {
+          const want = params.category.trim();
+          skills = skills.filter((s) => (s.categories ?? []).some((x) => String(x).trim() === want));
+        }
+        if (params.sort === 'downloads') skills.sort((a, b) => (b.downloads ?? 0) - (a.downloads ?? 0));
+        else if (params.sort === 'newest') skills.sort((a, b) => (a.rank ?? 999) - (b.rank ?? 999));
+        const rows = curatedSkillsToPackageItems(skills);
+        const total = rows.length;
+        const start = (page - 1) * pageSize;
+        const items = rows.slice(start, start + pageSize);
+        const totalPages = Math.max(1, Math.ceil(total / pageSize));
+        return { items, meta: { page, pageSize, total, totalPages }, provider: 'skillhub' };
       }
-      if (params.sort === 'downloads') skills.sort((a, b) => (b.downloads ?? 0) - (a.downloads ?? 0));
-      else if (params.sort === 'newest') skills.sort((a, b) => (a.rank ?? 999) - (b.rank ?? 999));
-      const rows = curatedSkillsToPackageItems(skills);
-      const total = rows.length;
-      const start = (page - 1) * pageSize;
-      const items = rows.slice(start, start + pageSize);
-      const totalPages = Math.max(1, Math.ceil(total / pageSize));
-      return { items, meta: { page, pageSize, total, totalPages }, provider: 'skillhub' };
     } catch { /* fall through */ }
 
     const slugs = await cachedGetDefaultSkillSlugs();
