@@ -3,8 +3,8 @@ layout: home
 
 hero:
   name: xopc
-  text: OPC 工作站
-  tagline: 与你一起成长的 OPC 工作站——为一人公司打造的本地优先 AI 助手。CLI、桌面、浏览器、手机、即时通讯——全平台覆盖。自带钥匙，无需 fork 即可扩展。
+  text: AI 工作站
+  tagline: 与你一起成长的 AI 工作站——为一人公司打造的本地优先 AI 助手。CLI、桌面、浏览器、手机、即时通讯——全平台覆盖。自带钥匙，无需 fork 即可扩展。
   image:
     src: /logo.svg
     alt: xopc

@@ -6,7 +6,7 @@
 <h1 align="center"><a href="https://xopc.ai">xopc</a></h1>
 
 <p align="center">
-  <strong>与你一起成长的 OPC 工作站。</strong><br />
+  <strong>与你一起成长的 AI 工作站。</strong><br />
   可自托管的本地优先 AI——为一人公司准备；终端、浏览器、桌面、手机与 IM，一处配置，同一个大脑。<br />
   自带钥匙，无需 fork 即可扩展。
 </p>
