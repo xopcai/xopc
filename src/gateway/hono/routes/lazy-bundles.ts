@@ -150,6 +150,14 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
     },
   },
   {
+    id: 'notes',
+    match: (path) => startsWithAny(path, ['/api/notes']),
+    load: async () => {
+      const { registerNotesRoutes } = await import('./notes.js');
+      return { register: registerNotesRoutes };
+    },
+  },
+  {
     id: 'workflows',
     match: (path) => startsWithAny(path, ['/api/workflows']),
     load: async () => {

@@ -76,6 +76,7 @@ describe('reconcileNavOrder', () => {
       item('builtin:channels'),
       item('ext:foo:a'),
       item('ext:bar:b'),
+      item('ext:baz:c'),
     ];
     const out = reconcileNavOrder(available, []);
     expect(out.hasOverflow).toBe(true);
@@ -85,8 +86,9 @@ describe('reconcileNavOrder', () => {
       'builtin:skills',
       'builtin:cron',
       'builtin:channels',
+      'ext:foo:a',
     ]);
-    expect(out.overflow.map((i) => i.id)).toEqual(['ext:foo:a', 'ext:bar:b']);
+    expect(out.overflow.map((i) => i.id)).toEqual(['ext:bar:b', 'ext:baz:c']);
   });
 
   it('drops duplicate ids in stored order', () => {

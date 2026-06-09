@@ -93,23 +93,29 @@ export function useConnectedProviders(): {
       (metaList ?? []).filter((p) => p.configured).map((p) => p.id),
     );
 
+    const customProviderIds = new Set(
+      customConfig ? Object.keys(customConfig.providers) : [],
+    );
+
     // Built-in configured providers (meta is authoritative for credential state)
     for (const row of builtinRows) {
       if (!metaConfigured.has(row.id)) continue;
-      const modelCount = models.filter((m) => m.provider === row.id).length;
+      const isCustom = customProviderIds.has(row.id);
+      const modelCount = isCustom
+        ? (customConfig!.providers[row.id]?.models?.length ?? 0)
+        : models.filter((m) => m.provider === row.id).length;
       result.push({
         id: row.id,
         name: row.name,
         configured: true,
-        isCustom: false,
+        isCustom,
         modelCount,
       });
     }
 
-    // Custom providers from models.json
+    // Custom providers from models.json not already covered by meta
     if (customConfig) {
       for (const [providerId, providerConfig] of Object.entries(customConfig.providers)) {
-        // Skip if already in built-in list
         if (result.some((c) => c.id === providerId)) continue;
         result.push({
           id: providerId,

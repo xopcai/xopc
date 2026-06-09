@@ -1,0 +1,28 @@
+{
+  "notes": {
+    "title": "Notes",
+    "needToken": "Save a gateway token to manage notes.",
+    "searchPlaceholder": "Search notes…",
+    "quickCapturePlaceholder": "Write down your thought…",
+    "send": "Send",
+    "filterAll": "All",
+    "filterInbox": "Inbox",
+    "filterProcessed": "Processed",
+    "filterArchived": "Archived",
+    "kindAll": "All types",
+    "kindThought": "Thought",
+    "kindTodo": "Todo",
+    "kindVoice": "Voice",
+    "kindMedia": "Media",
+    "kindBookmark": "Bookmark",
+    "noNotes": "No notes yet",
+    "noNotesDescription": "Capture your first thought using the input above.",
+    "pinned": "Pinned",
+    "delete": "Delete",
+    "archive": "Archive",
+    "pin": "Pin",
+    "unpin": "Unpin",
+    "editTags": "Edit tags",
+    "noteCount": "{{count}} notes"
+  }
+}
