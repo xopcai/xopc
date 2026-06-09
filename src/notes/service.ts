@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 
 import { createLogger } from '../utils/logger.js';
+import { buildNoteAttachmentRef, attachmentIdFromTarget } from './attachment-ref.js';
+import { partitionAttachmentsByReference } from './note-attachment-sync.js';
 import { NotesStore } from './store.js';
 import type {
   CaptureSource,
@@ -16,7 +18,14 @@ import type {
 
 const log = createLogger('NotesService');
 
-function inferKind(text?: string, hasAttachments?: boolean): NoteKind {
+function inferKind(
+  text?: string,
+  hasAttachments?: boolean,
+  attachments?: NoteAttachment[],
+): NoteKind {
+  if (hasAttachments && attachments?.length && attachments.every((item) => item.type === 'audio')) {
+    return 'voice';
+  }
   if (hasAttachments) return 'media';
   if (!text) return 'thought';
   const lower = text.toLowerCase();
@@ -32,24 +41,51 @@ function createBlockId(): string {
   return `block_${Date.now()}_${randomUUID().slice(0, 8)}`;
 }
 
-function noteTextToBlocks(text?: string): NoteBlock[] | undefined {
+const IMAGE_MARKDOWN = /^!\[([^\]]*)\]\(([^)]+)\)$/;
+
+function noteTextToBlocks(text?: string, noteId?: string): NoteBlock[] | undefined {
   if (!text?.trim()) return undefined;
   const now = Date.now();
-  return text.split(/\n{2,}/).map((part) => ({
-    id: createBlockId(),
-    type: 'paragraph' as const,
-    text: part.trim(),
-    createdAt: now,
-    updatedAt: now,
-  }));
+  return text.split(/\n{2,}/).map((part) => {
+    const trimmed = part.trim();
+    if (noteId) {
+      const imageMatch = trimmed.match(IMAGE_MARKDOWN);
+      if (imageMatch) {
+        const attachmentId = attachmentIdFromTarget(imageMatch[2], noteId);
+        if (attachmentId) {
+          return {
+            id: createBlockId(),
+            type: 'image' as const,
+            attachmentId,
+            alt: imageMatch[1] || undefined,
+            createdAt: now,
+            updatedAt: now,
+          };
+        }
+      }
+    }
+    return {
+      id: createBlockId(),
+      type: 'paragraph' as const,
+      text: trimmed,
+      createdAt: now,
+      updatedAt: now,
+    };
+  });
 }
 
-function blocksToPlainText(blocks?: NoteBlock[]): string | undefined {
+function blocksToPlainText(blocks?: NoteBlock[], noteId?: string): string | undefined {
   if (!blocks?.length) return undefined;
   return blocks
     .map((block) => {
       if (block.type === 'divider') return '---';
       if (block.type === 'todo') return `${block.checked ? '[x]' : '[ ]'} ${block.text}`;
+      if (block.type === 'image') {
+        if (noteId) {
+          return `![${block.alt ?? ''}](${buildNoteAttachmentRef(noteId, block.attachmentId)})`;
+        }
+        return block.alt ?? '';
+      }
       return block.text;
     })
     .filter((text) => text.trim().length > 0)
@@ -125,9 +161,10 @@ export class NotesService {
 
   async quickCapture(text: string, source: CaptureSource): Promise<Note> {
     const now = Date.now();
-    const blocks = noteTextToBlocks(text);
+    const id = randomUUID();
+    const blocks = noteTextToBlocks(text, id);
     const note: Note = {
-      id: randomUUID(),
+      id,
       kind: inferKind(text),
       status: 'inbox',
       text,
@@ -145,10 +182,11 @@ export class NotesService {
 
   async createNote(params: CreateNoteParams): Promise<Note> {
     const now = Date.now();
-    const blocks = params.blocks ?? noteTextToBlocks(params.text);
-    const text = params.text ?? blocksToPlainText(blocks);
+    const id = randomUUID();
+    const blocks = params.blocks ?? noteTextToBlocks(params.text, id);
+    const text = params.text ?? blocksToPlainText(blocks, id);
     const note: Note = {
-      id: randomUUID(),
+      id,
       kind: params.kind || inferKind(text),
       status: 'inbox',
       text,
@@ -176,12 +214,48 @@ export class NotesService {
 
     const normalizedPatch: Partial<Note> = { ...patch };
     if (patch.blocks) {
-      normalizedPatch.text = patch.text ?? blocksToPlainText(patch.blocks);
+      normalizedPatch.text = patch.text ?? blocksToPlainText(patch.blocks, existing.id);
     } else if (typeof patch.text === 'string') {
-      normalizedPatch.blocks = patch.blocks ?? noteTextToBlocks(patch.text);
+      normalizedPatch.blocks = patch.blocks ?? noteTextToBlocks(patch.text, existing.id);
     }
     normalizedPatch.remoteVersion = (existing.remoteVersion ?? 0) + 1;
+
+    const contentTouched = patch.text !== undefined || patch.blocks !== undefined;
+    if (contentTouched) {
+      const merged: Note = {
+        ...existing,
+        ...normalizedPatch,
+        id: existing.id,
+        createdAt: existing.createdAt,
+        updatedAt: Date.now(),
+      };
+      const reconciled = await this.reconcileAttachments(merged);
+      normalizedPatch.attachments = reconciled.attachments;
+      normalizedPatch.kind = reconciled.kind;
+    }
+
     return this.store.updateNote(id, normalizedPatch);
+  }
+
+  private async reconcileAttachments(note: Note): Promise<Note> {
+    const { kept, removed } = partitionAttachmentsByReference(note);
+    if (removed.length === 0) return note;
+
+    for (const attachment of removed) {
+      await this.store.deleteAttachmentFile(note.id, attachment.relativePath);
+    }
+
+    log.debug(
+      { noteId: note.id, removedIds: removed.map((attachment) => attachment.id) },
+      'Pruned orphan note attachments',
+    );
+
+    const hasAttachments = kept.length > 0;
+    return {
+      ...note,
+      attachments: hasAttachments ? kept : undefined,
+      kind: inferKind(note.text, hasAttachments, kept),
+    };
   }
 
   async syncNote(
@@ -209,7 +283,7 @@ export class NotesService {
     const note = await this.store.getNote(id);
     if (!note) return null;
 
-    const sourceBlocks = blocks?.length ? blocks : note.blocks ?? noteTextToBlocks(note.text) ?? [];
+    const sourceBlocks = blocks?.length ? blocks : note.blocks ?? noteTextToBlocks(note.text, note.id) ?? [];
     const organizedBlocks = createAiOrganizedBlocks(sourceBlocks, instruction);
     const patch: NoteAiPatch = {
       id: randomUUID(),
@@ -251,7 +325,12 @@ export class NotesService {
     };
 
     const attachments = [...(note.attachments || []), attachment];
-    const kind: NoteKind = note.kind === 'thought' ? 'media' : note.kind;
+    const kind: NoteKind =
+      note.kind === 'thought' && attachment.type === 'audio'
+        ? 'voice'
+        : note.kind === 'thought'
+          ? 'media'
+          : note.kind;
     await this.store.updateNote(noteId, { attachments, kind });
 
     return attachment;

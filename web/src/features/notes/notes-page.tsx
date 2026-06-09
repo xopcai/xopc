@@ -1,4 +1,4 @@
-import { StickyNote } from 'lucide-react';
+import { StickyNote, Search } from 'lucide-react';
 import { useCallback, useLayoutEffect, useMemo, useReducer } from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -14,7 +14,8 @@ import { usePageHeaderStore } from '@/stores/page-header-store';
 
 import { NoteCard } from './note-card';
 import { QuickCaptureBar } from './quick-capture-bar';
-import { deleteNote, listNotes, quickCapture, updateNote, type NoteKind, type NoteStatus } from './notes-api';
+import { deleteNote, listNotes, quickCapture, quickCaptureImage, quickCaptureVoice, updateNote, type NoteKind, type NoteStatus } from './notes-api';
+import { showToast } from '@/lib/toast';
 
 type StatusFilter = 'all' | NoteStatus;
 type KindFilter = 'all' | NoteKind;
@@ -107,36 +108,35 @@ export function NotesPage() {
     input.onchange = async () => {
       const file = input.files?.[0];
       if (!file) return;
-      await quickCapture(`[image: ${file.name}]`, 'web');
-      await mutate();
+      try {
+        await quickCaptureImage(file, 'web');
+        await mutate();
+      } catch (err) {
+        showToast({
+          type: 'error',
+          title: n.imageUploadFailed,
+          message: err instanceof Error ? err.message : n.imageUploadFailedHint,
+        });
+      }
     };
     input.click();
-  }, [mutate]);
+  }, [mutate, n.imageUploadFailed, n.imageUploadFailedHint]);
 
-  const handleVoiceRecord = useCallback(() => {
-    // Web voice: use MediaRecorder API
-    if (!navigator.mediaDevices?.getUserMedia) return;
-    void (async () => {
+  const handleVoiceCapture = useCallback(
+    async (file: File, durationSec: number) => {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        const recorder = new MediaRecorder(stream);
-        const chunks: Blob[] = [];
-        recorder.ondataavailable = (e) => chunks.push(e.data);
-        recorder.onstop = async () => {
-          stream.getTracks().forEach((t) => t.stop());
-          const duration = Math.round((Date.now() - startTime) / 1000);
-          await quickCapture(`[voice memo: ${duration}s]`, 'web');
-          await mutate();
-        };
-        const startTime = Date.now();
-        recorder.start();
-        // Stop after 30s max or on user action (simplified: auto-stop after short delay for MVP)
-        setTimeout(() => { if (recorder.state === 'recording') recorder.stop(); }, 30000);
-      } catch {
-        // Permission denied or no mic
+        await quickCaptureVoice(file, durationSec, 'web');
+        await mutate();
+      } catch (err) {
+        showToast({
+          type: 'error',
+          title: n.voiceUploadFailed,
+          message: err instanceof Error ? err.message : n.voiceUploadFailedHint,
+        });
       }
-    })();
-  }, [mutate]);
+    },
+    [mutate, n.voiceUploadFailed, n.voiceUploadFailedHint],
+  );
 
   const handlePin = useCallback(
     async (id: string, pinned: boolean) => {
@@ -184,8 +184,20 @@ export function NotesPage() {
           sendLabel={n.send}
           onCapture={handleCapture}
           onImagePick={handleImagePick}
-          onVoiceRecord={handleVoiceRecord}
+          onVoiceCapture={handleVoiceCapture}
+          recordingLabel={n.recording}
         />
+
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-muted" aria-hidden />
+          <input
+            type="search"
+            value={ui.search}
+            onChange={(e) => dispatch({ type: 'patch', patch: { search: e.target.value } })}
+            placeholder={n.searchPlaceholder}
+            className="w-full rounded-xl border border-edge bg-surface-panel py-2 pl-9 pr-3 text-sm text-fg placeholder:text-fg-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+          />
+        </div>
 
         {/* Filters */}
         <div className="flex flex-wrap items-center gap-2">
@@ -268,6 +280,8 @@ export function NotesPage() {
                   unpin: n.unpin,
                   archive: n.archive,
                   delete: n.delete,
+                  imageNote: n.imageNote,
+                  noText: n.noText,
                 }}
               />
             ))}

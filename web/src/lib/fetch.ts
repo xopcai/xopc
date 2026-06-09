@@ -46,7 +46,10 @@ export async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Pr
 
   const token = useGatewayStore.getState().token;
   const headers = new Headers(init?.headers);
-  if (!headers.has('Content-Type')) {
+  const body = init?.body;
+  const isFormData =
+    typeof FormData !== 'undefined' && body instanceof FormData;
+  if (!headers.has('Content-Type') && !isFormData) {
     headers.set('Content-Type', 'application/json');
   }
   if (token) {

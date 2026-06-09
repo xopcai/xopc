@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import TaskList from '@tiptap/extension-task-list';
@@ -8,9 +8,14 @@ import Link from '@tiptap/extension-link';
 import { Markdown } from 'tiptap-markdown';
 
 import { cn } from '@/lib/cn';
+import { messages } from '@/i18n/messages';
+import { showToast } from '@/lib/toast';
+import { useLocaleStore } from '@/stores/locale-store';
 
-import { BlockEditorToolbar } from './toolbar';
+import { noteAttachmentRef, uploadNoteMedia } from '@/features/notes/notes-api';
+
 import { ExtraKeyboardShortcuts } from './extensions/keyboard-shortcuts';
+import { BlockEditorToolbar } from './toolbar';
 import { ResizableImage } from './extensions/resizable-image';
 import { SlashMenu } from './slash-menu';
 
@@ -35,6 +40,9 @@ export function BlockEditor({
   className,
   noteId,
 }: BlockEditorProps) {
+  const language = useLocaleStore((s) => s.language);
+  const notesLabels = messages(language).notes;
+  const [imageUploading, setImageUploading] = useState(false);
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
 
@@ -80,28 +88,25 @@ export function BlockEditor({
     async (file: File) => {
       if (!noteId || !editor) return;
 
-      const formData = new FormData();
-      formData.append('file', file);
-
-      const { apiUrl } = await import('@/lib/url');
-      const { apiFetch } = await import('@/lib/fetch');
-
-      const response = await apiFetch(apiUrl(`/api/notes/${encodeURIComponent(noteId)}/media`), {
-        method: 'POST',
-        body: formData,
-        headers: {},
-      });
-
-      if (!response.ok) return;
-
-      const data = (await response.json()) as { attachment: { id: string; relativePath: string } };
-      const imageUrl = apiUrl(
-        `/api/notes/${encodeURIComponent(noteId)}/media/${encodeURIComponent(data.attachment.id)}`,
-      );
-
-      editor.chain().focus().setImage({ src: imageUrl }).run();
+      try {
+        setImageUploading(true);
+        const attachment = await uploadNoteMedia(noteId, file);
+        editor
+          .chain()
+          .focus()
+          .setImage({ src: noteAttachmentRef(noteId, attachment.id), alt: file.name })
+          .run();
+      } catch (err) {
+        showToast({
+          type: 'error',
+          title: notesLabels.imageUploadFailed,
+          message: err instanceof Error ? err.message : notesLabels.imageUploadFailedHint,
+        });
+      } finally {
+        setImageUploading(false);
+      }
     },
-    [noteId, editor],
+    [editor, noteId, notesLabels.imageUploadFailed, notesLabels.imageUploadFailedHint],
   );
 
   // Handle paste/drop images
@@ -149,7 +154,11 @@ export function BlockEditor({
 
   return (
     <div className={cn('flex h-full flex-col overflow-hidden', className)}>
-      <BlockEditorToolbar editor={editor} onImageUpload={noteId ? handleImageUpload : undefined} />
+      <BlockEditorToolbar
+        editor={editor}
+        onImageUpload={noteId ? handleImageUpload : undefined}
+        imageUploading={imageUploading}
+      />
       <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
         <SlashMenu editor={editor} onImageUpload={noteId ? handleImageUpload : undefined} />
         <EditorContent editor={editor} />
