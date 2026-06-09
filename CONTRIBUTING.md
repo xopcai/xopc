@@ -141,10 +141,27 @@ We recommend a single project board with columns: **Backlog → Ready → In Pro
 ## Pull requests
 
 1. Fork and branch from `main`.
-2. Use **pnpm** only (`pnpm install`, `pnpm test`, `pnpm run lint`).
+2. Use **pnpm** only (`pnpm install`, `pnpm test`, `pnpm run lint`). Requires **Node.js ≥ 22**.
 3. Reference issues in the PR body: `Fixes #123` or `Closes #123`.
 4. Keep PRs focused; mention breaking changes and config updates in the description.
 5. Follow **[AGENTS.md](./AGENTS.md)** for code style, logging, and session/transcript rules.
+
+### Install & build mirrors
+
+If `registry.npmjs.org` is slow or unreachable (common in mainland China):
+
+```bash
+pnpm config set registry https://registry.npmmirror.com
+```
+
+When building Electron (`pnpm run electron:build`), set both variables before `pnpm install`:
+
+```bash
+export ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/"
+export ELECTRON_BUILDER_BINARIES_MIRROR="https://npmmirror.com/mirrors/electron-builder-binaries/"
+```
+
+Both are required for `electron:build` on macOS (DMG packaging needs `electron-builder-binaries`). Use **electron-builder ≥ 26.11.1** so DMG downloads do not incorrectly use `ELECTRON_MIRROR` (older versions 404 on `cdn.npmmirror.com/binaries/electron/dmg-builder@…`).
 
 PRs that touch specific paths may receive automatic `area:*` labels from the [labeler workflow](./.github/workflows/labeler.yml).
 

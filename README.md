@@ -49,15 +49,6 @@ xopc tui --local
 
 **Requirements:** Node.js **≥ 22**. Use **pnpm** when developing from a git clone.
 
-**China / slow `registry.npmjs.org`:** add `--registry=https://registry.npmmirror.com` to `npm install`, or `npm config set registry https://registry.npmmirror.com`. For a slow Electron download during `pnpm install` from source:
-
-```bash
-export ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/"
-export ELECTRON_BUILDER_BINARIES_MIRROR="https://npmmirror.com/mirrors/electron-builder-binaries/"
-```
-
-Both variables are required for `electron:build` on macOS (DMG needs `electron-builder-binaries`). Use **electron-builder ≥ 26.11.1** so DMG downloads do not incorrectly use `ELECTRON_MIRROR` (older versions 404 on `cdn.npmmirror.com/binaries/electron/dmg-builder@…`).
-
 ### More commands
 
 ```bash
