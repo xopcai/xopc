@@ -69,7 +69,7 @@ export const WorkflowTaskCard = memo(function WorkflowTaskCard({
   return (
     <div
       className={cn(
-        'group relative rounded-xl border bg-surface-panel p-3 transition-colors',
+        'group relative overflow-hidden rounded-xl border bg-surface-panel p-3.5 transition-colors',
         selected ? 'border-accent/70 ring-1 ring-accent/30' : 'border-edge',
         'hover:border-edge-strong hover:bg-surface-hover/50',
       )}
@@ -83,16 +83,19 @@ export const WorkflowTaskCard = memo(function WorkflowTaskCard({
       >
         <div className="pr-7">
           <div className="flex min-w-0 items-start justify-between gap-2">
-            <div className="line-clamp-2 min-w-0 text-sm font-medium leading-5 text-fg">
-              {cardTitle}
+            <div className="min-w-0">
+              <div className="line-clamp-2 text-sm font-semibold leading-5 text-fg">
+                {cardTitle}
+              </div>
+              <div className="mt-1 truncate text-[11px] font-medium text-fg-muted">
+                {workflowLabel}
+              </div>
             </div>
-            <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium', statusTone(run.status))}>
+            <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold shadow-sm', statusTone(run.status))}>
               {labels.status[run.status] ?? run.status}
             </span>
           </div>
-          <div className="mt-1 flex flex-wrap items-center gap-1 text-[11px] text-fg-subtle">
-            <span className="truncate">{workflowLabel}</span>
-            <span aria-hidden>·</span>
+          <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-fg-subtle">
             <span>{formatRelativeTime(timeMs, nowMs, localeTag)}</span>
             {durationText !== '—' ? (
               <>
@@ -114,7 +117,7 @@ export const WorkflowTaskCard = memo(function WorkflowTaskCard({
               </span>
               <span>{progress}%</span>
             </div>
-            <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-surface-hover">
+            <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-surface-hover">
               <div
                 className="h-full rounded-full bg-accent transition-all"
                 style={{ width: `${progress}%` }}
@@ -123,9 +126,13 @@ export const WorkflowTaskCard = memo(function WorkflowTaskCard({
           </div>
         ) : null}
 
-        <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-fg-subtle">
-          {run.metrics.artifactCount > 0 ? <span>{artifactText}</span> : null}
-          {selected ? <span className="text-accent-fg">{labels.taskOpenDetails}</span> : null}
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-fg-subtle">
+          {run.metrics.artifactCount > 0 ? (
+            <span className="rounded-full bg-surface-hover px-2 py-0.5 font-medium text-fg-muted">
+              {artifactText}
+            </span>
+          ) : null}
+          {selected ? <span className="font-medium text-accent-fg">{labels.taskOpenDetails}</span> : null}
         </div>
 
         {hasErrors ? (
