@@ -176,18 +176,8 @@ export function NotesPage() {
   }
 
   return (
-    <div className="mx-auto flex h-full min-h-0 w-full max-w-3xl flex-1 flex-col">
-      <div className="flex shrink-0 flex-col gap-4 p-4">
-        {/* Quick capture with voice + image */}
-        <QuickCaptureBar
-          placeholder={n.quickCapturePlaceholder}
-          sendLabel={n.send}
-          onCapture={handleCapture}
-          onImagePick={handleImagePick}
-          onVoiceCapture={handleVoiceCapture}
-          recordingLabel={n.recording}
-        />
-
+    <div className="relative mx-auto flex h-full min-h-0 w-full max-w-3xl flex-1 flex-col overflow-hidden">
+      <div className="flex shrink-0 flex-col gap-4 p-4 pb-2">
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-muted" aria-hidden />
           <input
@@ -252,7 +242,7 @@ export function NotesPage() {
       </div>
 
       {/* Notes list — only this region scrolls */}
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-8 [scrollbar-gutter:stable]">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-24 [scrollbar-gutter:stable]">
         {isLoading ? (
           <div className="flex flex-col gap-3">
             {[1, 2, 3].map((i) => (
@@ -287,6 +277,20 @@ export function NotesPage() {
             ))}
           </div>
         )}
+      </div>
+
+      {/* Quick capture — floats above the scrolling list */}
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-surface-panel from-60% via-surface-panel/90 to-transparent px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-6">
+        <div className="pointer-events-auto">
+        <QuickCaptureBar
+          placeholder={n.quickCapturePlaceholder}
+          sendLabel={n.send}
+          onCapture={handleCapture}
+          onImagePick={handleImagePick}
+          onVoiceCapture={handleVoiceCapture}
+          recordingLabel={n.recording}
+        />
+        </div>
       </div>
     </div>
   );
