@@ -42,15 +42,14 @@ describe('reconcileNavOrder', () => {
     ];
     const stored = ['builtin:skills', 'builtin:agents'];
     const out = reconcileNavOrder(available, stored);
+    expect(out.hasOverflow).toBe(true);
     expect(out.visible.map((i) => i.id)).toEqual([
       'builtin:skills',
       'builtin:agents',
       'builtin:cron',
       'builtin:channels',
-      'ext:foo:home',
     ]);
-    expect(out.overflow).toEqual([]);
-    expect(out.hasOverflow).toBe(false);
+    expect(out.overflow.map((i) => i.id)).toEqual(['ext:foo:home']);
   });
 
   it('filters out stored ids that are no longer available', () => {
@@ -66,6 +65,21 @@ describe('reconcileNavOrder', () => {
     expect(out.hasOverflow).toBe(false);
     expect(out.visible).toHaveLength(VISIBLE_NAV_CAP);
     expect(out.overflow).toEqual([]);
+  });
+
+  it('overflows built-in items when count exceeds the cap', () => {
+    const available = [
+      item('builtin:agents'),
+      item('builtin:skills'),
+      item('builtin:cron'),
+      item('builtin:channels'),
+      item('builtin:notes'),
+      item('builtin:workflows'),
+    ];
+    const out = reconcileNavOrder(available, []);
+    expect(out.hasOverflow).toBe(true);
+    expect(out.visible).toHaveLength(VISIBLE_NAV_WHEN_OVERFLOW);
+    expect(out.overflow.map((i) => i.id)).toEqual(['builtin:notes', 'builtin:workflows']);
   });
 
   it('overflows past the cap with first N shown and the rest hidden', () => {
@@ -86,9 +100,8 @@ describe('reconcileNavOrder', () => {
       'builtin:skills',
       'builtin:cron',
       'builtin:channels',
-      'ext:foo:a',
     ]);
-    expect(out.overflow.map((i) => i.id)).toEqual(['ext:bar:b', 'ext:baz:c']);
+    expect(out.overflow.map((i) => i.id)).toEqual(['ext:foo:a', 'ext:bar:b', 'ext:baz:c']);
   });
 
   it('drops duplicate ids in stored order', () => {
