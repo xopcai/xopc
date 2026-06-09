@@ -1,4 +1,14 @@
-import { BookOpen, ChevronRight, ExternalLink, Globe, Info, Palette, Settings, Type } from 'lucide-react';
+import {
+  BookOpen,
+  Check,
+  ChevronRight,
+  ExternalLink,
+  Globe,
+  Info,
+  Palette,
+  Settings,
+  Type,
+} from 'lucide-react';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 
@@ -13,7 +23,7 @@ import { type ThemePreference, useThemeStore } from '@/stores/theme-store';
 type FlyoutId = 'lang' | 'theme' | 'font';
 
 const rowClass = cn(
-  'flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-medium leading-5 text-fg',
+  'flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm font-medium leading-5 text-fg',
   'transition-colors duration-150 ease-out',
   'hover:bg-surface-hover',
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
@@ -38,13 +48,19 @@ function OptionRow({
       type="button"
       aria-pressed={selected}
       className={cn(
-        'flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium leading-5 text-fg',
+        'flex w-full items-center justify-between gap-1.5 rounded-lg px-2.5 py-1.5 text-left text-sm font-medium leading-5 text-fg',
         'transition-colors duration-150 ease-out hover:bg-surface-hover',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
+        selected && 'bg-accent-soft text-accent-fg hover:bg-accent-soft',
       )}
       onClick={onSelect}
     >
       <span className="min-w-0 truncate">{label}</span>
+      <Check
+        className={cn('size-4 shrink-0', selected ? 'opacity-100' : 'opacity-0')}
+        strokeWidth={2}
+        aria-hidden
+      />
     </button>
   );
 }
@@ -69,12 +85,26 @@ export function SidebarAppMenu({
   const m = messages(language);
   const a = m.appearanceSettings;
 
+  const currentLanguageLabel = language === 'zh' ? a.langOptionZh : a.langOptionEn;
+  const currentThemeLabel =
+    themePref === 'light'
+      ? a.themeOptionLight
+      : themePref === 'dark'
+        ? a.themeOptionDark
+        : a.themeOptionSystem;
+  const currentFontLabel =
+    fontPref === 'compact'
+      ? a.fontScaleCompact
+      : fontPref === 'large'
+        ? a.fontScaleLarge
+        : a.fontScaleDefault;
+
   /** Modest gap between the left rail and the flyout. */
   const flyoutGapClass = 'ml-2 sm:ml-2.5';
 
   const flyoutShell = (id: FlyoutId) =>
     cn(
-      'absolute left-full top-0 z-[60] min-w-[11rem] max-w-[min(calc(100vw-2rem),16rem)]',
+      'absolute left-full top-0 z-[60] min-w-[8.75rem] max-w-[min(calc(100vw-2rem),12rem)]',
       flyoutGapClass,
       openFlyout === id ? 'block' : 'hidden',
     );
@@ -88,7 +118,7 @@ export function SidebarAppMenu({
 
   return (
     <div
-      className="w-[min(calc(100vw-2rem),15rem)] shrink-0 py-1"
+      className="w-[min(calc(100vw-2rem),13rem)] shrink-0 py-0.5"
       onMouseLeave={() => setOpenFlyout(null)}
     >
       <div className="relative" onMouseEnter={() => setOpenFlyout('lang')}>
@@ -100,6 +130,7 @@ export function SidebarAppMenu({
         >
           <Globe className="size-4 shrink-0 text-fg-muted" strokeWidth={1.75} aria-hidden />
           <span className="min-w-0 flex-1 text-left">{a.languageTitle}</span>
+          <span className="max-w-20 truncate text-xs font-medium text-fg-muted">{currentLanguageLabel}</span>
           <ChevronRight className="size-4 shrink-0 text-fg-subtle" strokeWidth={2} aria-hidden />
         </button>
         <div className={bridgeClass('lang')} aria-hidden />
@@ -128,6 +159,7 @@ export function SidebarAppMenu({
         >
           <Palette className="size-4 shrink-0 text-fg-muted" strokeWidth={1.75} aria-hidden />
           <span className="min-w-0 flex-1 text-left">{a.themeTitle}</span>
+          <span className="max-w-20 truncate text-xs font-medium text-fg-muted">{currentThemeLabel}</span>
           <ChevronRight className="size-4 shrink-0 text-fg-subtle" strokeWidth={2} aria-hidden />
         </button>
         <div className={bridgeClass('theme')} aria-hidden />
@@ -161,6 +193,7 @@ export function SidebarAppMenu({
         >
           <Type className="size-4 shrink-0 text-fg-muted" strokeWidth={1.75} aria-hidden />
           <span className="min-w-0 flex-1 text-left">{a.fontScaleTitle}</span>
+          <span className="max-w-20 truncate text-xs font-medium text-fg-muted">{currentFontLabel}</span>
           <ChevronRight className="size-4 shrink-0 text-fg-subtle" strokeWidth={2} aria-hidden />
         </button>
         <div className={bridgeClass('font')} aria-hidden />

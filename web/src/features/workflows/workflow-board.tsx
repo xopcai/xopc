@@ -78,7 +78,7 @@ export const WorkflowBoard = memo(function WorkflowBoard({
   }
 
   return (
-    <div className="-mx-1 flex min-w-0 gap-3 overflow-x-auto px-1 pb-2 snap-x snap-mandatory">
+    <div className="-mx-1 flex min-w-0 snap-x snap-mandatory gap-3 overflow-x-auto px-1 pb-2">
       {columns.map((column) => (
         <WorkflowBoardColumn
           key={column.id}
