@@ -4,6 +4,8 @@ import {
   ExternalLink,
   Loader2,
   LogIn,
+  Pencil,
+  Plus,
   Trash2,
   X,
 } from 'lucide-react';
@@ -13,6 +15,7 @@ import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import type { ConfiguredModel } from '@/features/chat/api/registry-api';
+import { ModelEditDialogContent } from '@/features/settings/models/models-model-edit-dialog';
 import { ProviderApiKeyField } from '@/features/settings/provider-api-key-field';
 import {
   cancelOAuth,
@@ -35,6 +38,7 @@ import {
 } from '@/features/settings/provider-enrichment';
 import {
   saveModelsJson,
+  type CustomModel,
   type ModelsJsonConfig,
   type ProviderConfig,
 } from '@/features/settings/models-json-api';
@@ -125,6 +129,7 @@ export function ProviderManageDialog({
               providerId={providerId}
               customConfig={customConfig}
               labels={labels}
+              language={language}
               onClose={() => onOpenChange(false)}
               onSaved={onSaved}
             />
@@ -567,44 +572,53 @@ function ManageCustomProvider({
   providerId,
   customConfig,
   labels,
+  language,
   onClose,
   onSaved,
 }: {
   providerId: string;
   customConfig: ModelsJsonConfig | null;
   labels: ProviderManageDialogMessages;
+  language: StoredLanguage;
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const ms = messages(language).modelsSettings;
   const existingProvider = customConfig?.providers[providerId];
   const [baseUrl, setBaseUrl] = useState(existingProvider?.baseUrl ?? '');
   const [apiKey, setApiKey] = useState(existingProvider?.apiKey ?? '');
+  const [models, setModels] = useState<CustomModel[]>(existingProvider?.models ?? []);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmRemove, setConfirmRemove] = useState(false);
+  const [confirmRemoveModel, setConfirmRemoveModel] = useState<string | null>(null);
+  const [modelDialogOpen, setModelDialogOpen] = useState(false);
+  const [modelDialogCtx, setModelDialogCtx] = useState<{ model: CustomModel | null; isNew: boolean } | null>(null);
 
-  const modelCount = existingProvider?.models?.length ?? 0;
+  const buildUpdatedConfig = (providerPatch: Partial<ProviderConfig>): ModelsJsonConfig | null => {
+    if (!customConfig) return null;
+    const trimmedKey = apiKey.trim();
+    const updatedProvider: ProviderConfig = {
+      ...existingProvider,
+      baseUrl: baseUrl.trim() || undefined,
+      apiKey: isMaskedKey(trimmedKey) ? existingProvider?.apiKey : trimmedKey || undefined,
+      ...providerPatch,
+    };
+    return {
+      providers: {
+        ...customConfig.providers,
+        [providerId]: updatedProvider,
+      },
+    };
+  };
 
   const handleSave = async () => {
-    if (!customConfig) return;
+    const config = buildUpdatedConfig({ models });
+    if (!config) return;
     setSaving(true);
     setError(null);
     try {
-      const trimmedKey = apiKey.trim();
-      const updatedProvider: ProviderConfig = {
-        ...existingProvider,
-        baseUrl: baseUrl.trim() || undefined,
-        apiKey: isMaskedKey(trimmedKey)
-          ? existingProvider?.apiKey
-          : trimmedKey || undefined,
-      };
-      const updatedConfig: ModelsJsonConfig = {
-        providers: {
-          ...customConfig.providers,
-          [providerId]: updatedProvider,
-        },
-      };
-      await saveModelsJson(updatedConfig);
+      await saveModelsJson(config);
       onSaved();
       onClose();
     } catch (e) {
@@ -623,6 +637,43 @@ function ManageCustomProvider({
       onClose();
     } catch {
       // silent
+    }
+  };
+
+  const openModelDialog = (model: CustomModel | null, isNew: boolean) => {
+    setModelDialogCtx({ model, isNew });
+    setModelDialogOpen(true);
+  };
+
+  const handleModelSaved = async (updated: CustomModel) => {
+    if (!modelDialogCtx) return;
+    const nextModels = modelDialogCtx.isNew
+      ? [...models, updated]
+      : models.map((m) => (m.id === updated.id ? updated : m));
+    setModels(nextModels);
+
+    const config = buildUpdatedConfig({ models: nextModels });
+    if (!config) return;
+    try {
+      await saveModelsJson(config);
+      onSaved();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : labels.saveError);
+    }
+  };
+
+  const handleModelRemove = async (modelId: string) => {
+    const nextModels = models.filter((m) => m.id !== modelId);
+    setModels(nextModels);
+    setConfirmRemoveModel(null);
+
+    const config = buildUpdatedConfig({ models: nextModels });
+    if (!config) return;
+    try {
+      await saveModelsJson(config);
+      onSaved();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : labels.saveError);
     }
   };
 
@@ -683,11 +734,65 @@ function ManageCustomProvider({
           }}
         />
 
-        {/* Model count */}
-        <div className="text-sm text-fg-muted">
-          {modelCount > 0
-            ? labels.modelsCount.replace('{{count}}', String(modelCount))
-            : labels.noModels}
+        {/* Models */}
+        <div className="border-t border-edge-subtle pt-3">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <span className="text-sm font-semibold text-fg">
+              {ms.modelsSection}{models.length > 0 ? ` (${models.length})` : ''}
+            </span>
+            <Button
+              type="button"
+              variant="primary"
+              className="gap-1.5 px-2 py-1 text-xs"
+              onClick={() => openModelDialog(null, true)}
+            >
+              <Plus className="size-3.5" aria-hidden />
+              {ms.addModel}
+            </Button>
+          </div>
+          {models.length === 0 ? (
+            <p className="text-xs text-fg-muted">{ms.modelsEmpty}</p>
+          ) : (
+            <ul className="space-y-2">
+              {models.map((mod) => (
+                <li
+                  key={mod.id}
+                  className="flex items-center justify-between gap-2 rounded-lg border border-edge-subtle bg-surface-panel/40 px-3 py-2"
+                >
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-medium text-fg">{mod.id}</div>
+                    {mod.name && mod.name !== mod.id ? (
+                      <div className="truncate text-xs text-fg-muted">{mod.name}</div>
+                    ) : null}
+                  </div>
+                  <div className="flex shrink-0 gap-1">
+                    <button
+                      type="button"
+                      className={cn(
+                        'rounded-lg p-1.5 text-fg-muted hover:bg-surface-hover hover:text-fg',
+                        interaction.press,
+                      )}
+                      onClick={() => openModelDialog(mod, false)}
+                      aria-label={ms.editModel}
+                    >
+                      <Pencil className="size-3.5" aria-hidden />
+                    </button>
+                    <button
+                      type="button"
+                      className={cn(
+                        'rounded-lg p-1.5 text-fg-muted hover:bg-surface-hover hover:text-red-600 dark:hover:text-red-400',
+                        interaction.press,
+                      )}
+                      onClick={() => setConfirmRemoveModel(mod.id)}
+                      aria-label={ms.removeModel}
+                    >
+                      <Trash2 className="size-3.5" aria-hidden />
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
 
         {error ? (
@@ -733,6 +838,30 @@ function ManageCustomProvider({
         destructive
         onConfirm={() => void handleRemove()}
         onCancel={() => setConfirmRemove(false)}
+      />
+
+      <ConfirmDialog
+        open={confirmRemoveModel !== null}
+        title={ms.removeModel}
+        description={ms.removeModelConfirm.replace('{{id}}', confirmRemoveModel ?? '')}
+        confirmLabel={labels.removeConfirmAction}
+        cancelLabel={labels.cancel}
+        destructive
+        onConfirm={() => { if (confirmRemoveModel) void handleModelRemove(confirmRemoveModel); }}
+        onCancel={() => setConfirmRemoveModel(null)}
+      />
+
+      <ModelEditDialogContent
+        open={modelDialogOpen}
+        onOpenChange={(o) => {
+          setModelDialogOpen(o);
+          if (!o) setModelDialogCtx(null);
+        }}
+        providerId={providerId}
+        model={modelDialogCtx?.model ?? null}
+        isNew={modelDialogCtx?.isNew ?? false}
+        onSave={(m) => void handleModelSaved(m)}
+        m={ms}
       />
     </>
   );

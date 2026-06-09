@@ -17,6 +17,8 @@ const SessionsPage = lazy(() =>
   import('@/pages/sessions-page').then((m) => ({ default: m.SessionsPage })),
 );
 const CronPage = lazy(() => import('@/pages/cron-page').then((m) => ({ default: m.CronPage })));
+const NotesPage = lazy(() => import('@/pages/notes-page').then((m) => ({ default: m.NotesPage })));
+const NoteDetailPage = lazy(() => import('@/features/notes/note-detail-page').then((m) => ({ default: m.NoteDetailPage })));
 const WorkflowsPage = lazy(() =>
   import('@/pages/workflows-page').then((m) => ({ default: m.WorkflowsPage })),
 );
@@ -124,6 +126,27 @@ const router = createHashRouter([
             <CronPage />
           </Suspense>
         ),
+      },
+      {
+        path: 'notes',
+        children: [
+          {
+            index: true,
+            element: (
+              <Suspense fallback={<SecondaryRouteFallback />}>
+                <NotesPage />
+              </Suspense>
+            ),
+          },
+          {
+            path: ':noteId',
+            element: (
+              <Suspense fallback={<SecondaryRouteFallback />}>
+                <NoteDetailPage />
+              </Suspense>
+            ),
+          },
+        ],
       },
       {
         path: 'workflows',

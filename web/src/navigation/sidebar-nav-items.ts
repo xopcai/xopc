@@ -1,4 +1,4 @@
-import { Clock, GitBranch, Layers, Plug, Users } from 'lucide-react';
+import { Clock, GitBranch, Layers, Plug, StickyNote, Users } from 'lucide-react';
 
 import type { LucideIcon } from '@/features/extensions/extension-nav-icon';
 
@@ -20,6 +20,7 @@ export type BuiltinNavId =
   | 'builtin:agents'
   | 'builtin:skills'
   | 'builtin:cron'
+  | 'builtin:notes'
   | 'builtin:workflows'
   | 'builtin:channels';
 
@@ -37,14 +38,15 @@ export const BUILTIN_NAV_DEFS: readonly BuiltinNavDef[] = [
   { id: 'builtin:agents', to: '/agents', Icon: Users },
   { id: 'builtin:skills', to: '/skills', Icon: Layers },
   { id: 'builtin:cron', to: '/cron', Icon: Clock },
+  { id: 'builtin:notes', to: '/notes', Icon: StickyNote },
   { id: 'builtin:workflows', to: '/workflows', Icon: GitBranch },
   { id: 'builtin:channels', to: '/channels', Icon: Plug },
 ] as const;
 
 /** Cap on visible rail rows excluding the "New chat" button at the top. */
-export const VISIBLE_NAV_CAP = 5;
+export const VISIBLE_NAV_CAP = 6;
 /** When overflowing, the last visible slot becomes the "More" button. */
-export const VISIBLE_NAV_WHEN_OVERFLOW = 4;
+export const VISIBLE_NAV_WHEN_OVERFLOW = 5;
 
 export type ReconciledNav = {
   visible: NavItem[];
