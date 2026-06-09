@@ -1,7 +1,6 @@
 import { Image, Mic, Send } from 'lucide-react';
 import { useCallback, useRef, useState } from 'react';
 
-import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/cn';
 
 export type QuickCaptureBarProps = {
@@ -45,7 +44,7 @@ export function QuickCaptureBar({ placeholder, sendLabel, onCapture, onImagePick
   return (
     <div
       className={cn(
-        'flex items-end gap-1.5 rounded-2xl border border-edge bg-surface-panel px-2 py-2 shadow-sm',
+        'flex items-center gap-1.5 rounded-2xl border border-edge bg-surface-panel px-2 py-2 shadow-sm',
         'focus-within:border-accent focus-within:ring-1 focus-within:ring-accent',
       )}
     >
@@ -76,18 +75,23 @@ export function QuickCaptureBar({ placeholder, sendLabel, onCapture, onImagePick
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
         rows={1}
-        className="min-h-[2rem] flex-1 resize-none bg-transparent text-sm text-fg placeholder:text-fg-muted focus:outline-none"
+        className="min-h-8 flex-1 resize-none bg-transparent py-1.5 text-sm leading-5 text-fg placeholder:text-fg-muted focus:outline-none"
         style={{ fieldSizing: 'content' }}
       />
-      <Button
-        variant="primary"
-        className="shrink-0 rounded-lg px-2.5 py-1.5"
+      <button
+        type="button"
         disabled={!text.trim() || sending}
         onClick={() => void handleSubmit()}
         aria-label={sendLabel}
+        className={cn(
+          'shrink-0 rounded-lg p-2 transition-colors disabled:cursor-not-allowed disabled:opacity-50',
+          text.trim() && !sending
+            ? 'text-accent hover:bg-accent-soft'
+            : 'text-fg-disabled',
+        )}
       >
         <Send className="h-4 w-4" />
-      </Button>
+      </button>
     </div>
   );
 }

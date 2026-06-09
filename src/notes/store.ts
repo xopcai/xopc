@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { readFile, access, mkdir, writeFile } from 'node:fs/promises';
+import { readFile, access, mkdir, writeFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { writeTextAtomic } from '../infra/write-file-atomic.js';
@@ -114,13 +114,19 @@ export class NotesStore {
     const existing = await this.getNote(id);
     if (!existing) return false;
 
-    const trashed: Note = { ...existing, status: 'trashed', updatedAt: Date.now() };
-    await this.writeNoteItem(trashed);
+    const itemPath = resolveNoteItemPath(id);
+    await rm(itemPath, { force: true }).catch((err) => {
+      log.warn({ err, id }, 'Failed to remove note item file');
+    });
+
+    const mediaDir = resolveNoteMediaDir(id);
+    await rm(mediaDir, { recursive: true, force: true }).catch(() => undefined);
 
     const index = await this.loadIndex();
-    const idx = index.notes.findIndex((n) => n.id === id);
-    if (idx !== -1) {
-      index.notes[idx] = noteToIndexEntry(trashed);
+    const before = index.notes.length;
+    index.notes = index.notes.filter((n) => n.id !== id);
+    if (index.notes.length === before) {
+      log.debug({ id }, 'Deleted note file but index entry was missing');
     }
     index.version++;
     this.scheduleIndexSave(index);
@@ -134,6 +140,8 @@ export class NotesStore {
 
     if (query.status) {
       results = results.filter((n) => n.status === query.status);
+    } else {
+      results = results.filter((n) => n.status !== 'trashed');
     }
     if (query.kind) {
       results = results.filter((n) => n.kind === query.kind);

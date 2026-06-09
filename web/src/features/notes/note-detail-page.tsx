@@ -16,7 +16,7 @@ export function NoteDetailPage() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col">
+    <div className="mx-auto flex h-full min-h-0 w-full max-w-4xl flex-1 flex-col">
       <NoteDetailPanel noteId={noteId} onBack={handleBack} />
     </div>
   );

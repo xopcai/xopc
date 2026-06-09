@@ -198,7 +198,7 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
     return c.json({ note: updated });
   });
 
-  // DELETE /api/notes/:id — soft delete
+  // DELETE /api/notes/:id — delete note
   authenticated.delete('/api/notes/:id', async (c) => {
     const id = c.req.param('id');
     const removed = await service.notesServiceInstance.deleteNote(id);

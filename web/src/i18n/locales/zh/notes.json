@@ -23,6 +23,12 @@
     "pin": "置顶",
     "unpin": "取消置顶",
     "editTags": "编辑标签",
-    "noteCount": "{{count}} 条笔记"
+    "noteCount": "{{count}} 条笔记",
+    "back": "返回",
+    "modeEdit": "编辑",
+    "modeSource": "源码",
+    "modePreview": "预览",
+    "saving": "保存中…",
+    "emptyPreview": "空笔记 — 切换到编辑模式开始写作。"
   }
 }

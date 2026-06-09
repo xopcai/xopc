@@ -31,9 +31,8 @@ class MemoryNotesStore {
   }
 
   async deleteNote(id: string): Promise<boolean> {
-    const existing = this.notes.get(id);
-    if (!existing) return false;
-    this.notes.set(id, { ...existing, status: 'trashed', updatedAt: Date.now() });
+    if (!this.notes.has(id)) return false;
+    this.notes.delete(id);
     return true;
   }
 
