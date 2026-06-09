@@ -3,8 +3,8 @@
  *
  * Covers heartbeat, bind/customBindHost/port, tailscale, auth (mode + token +
  * password + rateLimit + trustedProxy), trustedProxies, allowRealIpFallback,
- * dangerouslyAllowHostHeaderOriginFallback, security, share, corsOrigins,
- * maxSseConnections, and channelConnectDefer{Mode,Ids,SkipIds}.
+ * dangerouslyAllowHostHeaderOriginFallback, security, share, publicUrl,
+ * corsOrigins, maxSseConnections, and channelConnectDefer{Mode,Ids,SkipIds}.
  *
  * Validation policy: each subsection that can reject rejects with a 400 and a
  * specific `message`. The dispatcher converts these into `c.json(...)`.
@@ -15,6 +15,7 @@
  */
 import type { Config, GatewayBindMode } from '../../../../config/schema.js';
 import { isValidIPv4 } from '../../../../config/gateway-bind.js';
+import { validatePublicUrl } from '../../../../config/public-url.js';
 import { mergeShareConfigPatch } from '../../../../share/share-config.js';
 import { isMaskedSecretPatchValue } from '../../lib/mask-secret-length.js';
 import { type PatchResult, PATCH_OK, patchError } from './result.js';
@@ -336,6 +337,21 @@ export function applyGatewayPatch(config: Config, body: any): PatchResult {
     const shareResult = mergeShareConfigPatch(config, body.gateway.share as Record<string, unknown>);
     if (shareResult.ok === false) {
       return patchError(shareResult.message);
+    }
+  }
+
+  if (body.gateway?.publicUrl !== undefined) {
+    const gw = ensureGateway(config);
+    if (body.gateway.publicUrl === null || body.gateway.publicUrl === '') {
+      delete gw.publicUrl;
+    } else if (typeof body.gateway.publicUrl !== 'string') {
+      return patchError('gateway.publicUrl must be a string or null');
+    } else {
+      const validation = validatePublicUrl(body.gateway.publicUrl);
+      if (validation.ok === false) {
+        return patchError(`gateway.publicUrl: ${validation.message}`);
+      }
+      gw.publicUrl = validation.url;
     }
   }
 

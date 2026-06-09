@@ -307,6 +307,7 @@ export async function buildSafeWebConfigPayload(service: GatewayService) {
         ? config.gateway.channelConnectDeferSkipIds
         : [],
       share: resolveShareConfig(config.gateway?.share),
+      publicUrl: config.gateway?.publicUrl ?? null,
       skillsMarketplaceProvider: config.gateway?.skillsMarketplaceProvider ?? 'skillhub',
       skillsStoreBaseUrl: config.gateway?.skillsStoreBaseUrl ?? 'https://store.xopc.ai',
     },
