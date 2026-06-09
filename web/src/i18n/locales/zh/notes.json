@@ -29,6 +29,16 @@
     "modeSource": "源码",
     "modePreview": "预览",
     "saving": "保存中…",
-    "emptyPreview": "空笔记 — 切换到编辑模式开始写作。"
+    "emptyPreview": "空笔记 — 切换到编辑模式开始写作。",
+    "imageUploadFailed": "图片上传失败",
+    "imageUploadFailedHint": "请检查网络连接后重试。",
+    "imageNote": "图片笔记",
+    "noText": "无文字",
+    "saveFailed": "笔记保存失败",
+    "saveFailedHint": "最近的编辑可能尚未保存。",
+    "voiceUploadFailed": "语音上传失败",
+    "voiceUploadFailedHint": "请检查麦克风权限后重试。",
+    "recording": "录音中 · {{seconds}}秒",
+    "lightboxClose": "关闭图片预览"
   }
 }

@@ -29,6 +29,16 @@
     "modeSource": "Source",
     "modePreview": "Preview",
     "saving": "Saving…",
-    "emptyPreview": "Empty note — switch to Edit to start writing."
+    "emptyPreview": "Empty note — switch to Edit to start writing.",
+    "imageUploadFailed": "Image upload failed",
+    "imageUploadFailedHint": "Check your connection and try again.",
+    "imageNote": "Image note",
+    "noText": "No text",
+    "saveFailed": "Failed to save note",
+    "saveFailedHint": "Your latest edits may not have been saved.",
+    "voiceUploadFailed": "Voice upload failed",
+    "voiceUploadFailedHint": "Check microphone permissions and try again.",
+    "recording": "Recording · {{seconds}}s",
+    "lightboxClose": "Close image preview"
   }
 }

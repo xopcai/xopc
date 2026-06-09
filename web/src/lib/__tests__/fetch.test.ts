@@ -86,4 +86,16 @@ describe('apiFetch authBarrier', () => {
     fetchMock.mockResolvedValueOnce(makeResponse(200, { ok: true }));
     await blocked;
   });
+
+  it('does not set JSON Content-Type for FormData bodies', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(makeResponse(200, { ok: true }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const form = new FormData();
+    form.append('file', new Blob(['x'], { type: 'image/png' }), 'x.png');
+    await apiFetch('/api/upload', { method: 'POST', body: form });
+
+    const headers = fetchMock.mock.calls[0]?.[1]?.headers as Headers;
+    expect(headers.get('Content-Type')).toBeNull();
+  });
 });

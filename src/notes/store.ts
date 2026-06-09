@@ -1,10 +1,11 @@
 import { randomUUID } from 'node:crypto';
-import { readFile, access, mkdir, writeFile, rm } from 'node:fs/promises';
+import { readFile, access, mkdir, writeFile, rm, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { writeTextAtomic } from '../infra/write-file-atomic.js';
 import { createLogger } from '../utils/logger.js';
-import { resolveNotesIndexPath, resolveNoteItemPath, resolveNoteMediaDir } from './paths.js';
+import { buildNoteIndexMeta } from './note-index-meta.js';
+import { resolveNotesDir, resolveNotesIndexPath, resolveNoteItemPath, resolveNoteMediaDir } from './paths.js';
 import type {
   Note,
   NoteIndexEntry,
@@ -14,22 +15,12 @@ import type {
 
 const log = createLogger('NotesStore');
 
-const DEFAULT_INDEX: NotesIndexFile = { version: 1, notes: [] };
+const DEFAULT_INDEX: NotesIndexFile = { version: 3, notes: [] };
+const INDEX_VERSION = 3;
 const DEBOUNCE_MS = 500;
-const SNIPPET_LENGTH = 100;
-
-function buildSnippet(note: Pick<Note, 'text' | 'blocks'>): string | undefined {
-  const text = note.text || note.blocks?.map((block) => {
-    if (block.type === 'divider') return '';
-    if (block.type === 'todo') return block.text;
-    return block.text;
-  }).join(' ');
-  if (!text) return undefined;
-  const clean = text.replace(/\s+/g, ' ').trim();
-  return clean.length > SNIPPET_LENGTH ? `${clean.slice(0, SNIPPET_LENGTH)}…` : clean;
-}
 
 function noteToIndexEntry(note: Note): NoteIndexEntry {
+  const { snippet, coverAttachmentId, attachmentNames } = buildNoteIndexMeta(note);
   return {
     id: note.id,
     kind: note.kind,
@@ -38,7 +29,9 @@ function noteToIndexEntry(note: Note): NoteIndexEntry {
     updatedAt: note.updatedAt,
     pinned: note.pinned || undefined,
     tags: note.tags?.length ? note.tags : undefined,
-    snippet: buildSnippet(note),
+    snippet,
+    coverAttachmentId,
+    attachmentNames,
   };
 }
 
@@ -54,6 +47,9 @@ export class NotesStore {
     try {
       await access(indexPath);
       await this.loadIndex();
+      if ((this.indexCache?.version ?? 0) < INDEX_VERSION) {
+        await this.rebuildIndexFromItems();
+      }
     } catch {
       await this.writeIndex(DEFAULT_INDEX);
       this.indexCache = DEFAULT_INDEX;
@@ -156,7 +152,8 @@ export class NotesStore {
       const term = query.search.toLowerCase();
       results = results.filter((n) =>
         n.snippet?.toLowerCase().includes(term) ||
-        n.tags?.some((t) => t.toLowerCase().includes(term)),
+        n.tags?.some((t) => t.toLowerCase().includes(term)) ||
+        n.attachmentNames?.some((name) => name.includes(term)),
       );
     }
 
@@ -187,6 +184,13 @@ export class NotesStore {
 
   resolveAttachmentPath(noteId: string, relativePath: string): string {
     return join(resolveNoteMediaDir(noteId), relativePath);
+  }
+
+  async deleteAttachmentFile(noteId: string, relativePath: string): Promise<void> {
+    const filePath = this.resolveAttachmentPath(noteId, relativePath);
+    await rm(filePath, { force: true }).catch((err) => {
+      log.warn({ err, noteId, relativePath }, 'Failed to remove note attachment file');
+    });
   }
 
   async flush(): Promise<void> {
@@ -240,5 +244,33 @@ export class NotesStore {
         log.error({ err }, 'Failed to flush notes index');
       });
     }, DEBOUNCE_MS);
+  }
+
+  private async rebuildIndexFromItems(): Promise<void> {
+    const itemsDir = join(resolveNotesDir(), 'items');
+    let files: string[];
+    try {
+      files = await readdir(itemsDir);
+    } catch {
+      this.indexCache = DEFAULT_INDEX;
+      await this.writeIndex(DEFAULT_INDEX);
+      return;
+    }
+
+    const entries: NoteIndexEntry[] = [];
+    for (const file of files) {
+      if (!file.endsWith('.json')) continue;
+      const noteId = file.slice(0, -'.json'.length);
+      const note = await this.getNote(noteId);
+      if (note) {
+        entries.push(noteToIndexEntry(note));
+      }
+    }
+
+    entries.sort((a, b) => b.createdAt - a.createdAt);
+    const index: NotesIndexFile = { version: INDEX_VERSION, notes: entries };
+    this.indexCache = index;
+    await this.writeIndex(index);
+    log.debug({ count: entries.length }, 'Notes index rebuilt');
   }
 }

@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { resolveNoteItemPath, resolveNotesIndexPath } from '../paths.js';
+import { buildNoteAttachmentRef } from '../attachment-ref.js';
 import { NotesStore } from '../store.js';
 import type { Note } from '../types.js';
 
@@ -60,7 +61,7 @@ describe('NotesStore deleteNote', () => {
     await writeFile(
       indexPath,
       JSON.stringify({
-        version: 1,
+        version: 3,
         notes: [
           {
             id: 'active-note',
@@ -90,5 +91,141 @@ describe('NotesStore deleteNote', () => {
 
     const trashedOnly = await store.listNotes({ status: 'trashed' });
     expect(trashedOnly.items.map((item) => item.id)).toEqual(['trashed-note']);
+  });
+
+  it('indexes coverAttachmentId for image notes and rebuilds stale index', async () => {
+    const note: Note = {
+      id: 'note-with-image',
+      kind: 'media',
+      status: 'inbox',
+      text: `![photo.jpg](${buildNoteAttachmentRef('note-with-image', 'att-1')})`,
+      attachments: [
+        {
+          id: 'att-1',
+          type: 'image',
+          mimeType: 'image/jpeg',
+          fileName: 'photo.jpg',
+          size: 10,
+          relativePath: 'photo.jpg',
+        },
+      ],
+      createdAt: 2,
+      updatedAt: 2,
+      capturedVia: { channel: 'web' },
+    };
+
+    await store.addNote(note);
+    await store.flush();
+
+    const listed = await store.listNotes();
+    expect(listed.items[0]).toMatchObject({
+      id: 'note-with-image',
+      coverAttachmentId: 'att-1',
+    });
+    expect(listed.items[0]?.snippet).toBeUndefined();
+
+    await writeFile(
+      resolveNotesIndexPath(),
+      JSON.stringify({
+        version: 1,
+        notes: [{ id: 'note-with-image', kind: 'media', status: 'inbox', createdAt: 2, updatedAt: 2 }],
+      }),
+    );
+
+    store = new NotesStore();
+    await store.initialize();
+
+    const rebuilt = await store.listNotes();
+    expect(rebuilt.items[0]?.coverAttachmentId).toBe('att-1');
+  });
+
+  it('prunes orphan attachments when note text is updated via service', async () => {
+    const { NotesService } = await import('../service.js');
+    const service = new NotesService(store);
+    await service.initialize();
+
+    const note: Note = {
+      id: 'note-prune',
+      kind: 'media',
+      status: 'inbox',
+      text: `![photo.jpg](${buildNoteAttachmentRef('note-prune', 'att-keep')})`,
+      attachments: [
+        {
+          id: 'att-keep',
+          type: 'image',
+          mimeType: 'image/jpeg',
+          fileName: 'photo.jpg',
+          size: 10,
+          relativePath: 'keep.jpg',
+        },
+        {
+          id: 'att-orphan',
+          type: 'image',
+          mimeType: 'image/jpeg',
+          fileName: 'orphan.jpg',
+          size: 10,
+          relativePath: 'orphan.jpg',
+        },
+      ],
+      createdAt: 3,
+      updatedAt: 3,
+      capturedVia: { channel: 'web' },
+    };
+
+    await store.addNote(note);
+    const mediaDir = join(stateDir, 'notes', 'media', 'note-prune');
+    await mkdir(mediaDir, { recursive: true });
+    await writeFile(join(mediaDir, 'keep.jpg'), Buffer.from('keep'));
+    await writeFile(join(mediaDir, 'orphan.jpg'), Buffer.from('orphan'));
+    await store.flush();
+
+    await service.updateNote('note-prune', { text: 'Plain text only' });
+    await store.flush();
+
+    const updated = await store.getNote('note-prune');
+    expect(updated?.attachments ?? []).toEqual([]);
+    await expect(access(join(mediaDir, 'orphan.jpg'))).rejects.toMatchObject({
+      code: 'ENOENT',
+    });
+    await expect(access(join(mediaDir, 'keep.jpg'))).rejects.toMatchObject({
+      code: 'ENOENT',
+    });
+
+    const listed = await store.listNotes();
+    expect(listed.items.find((item) => item.id === 'note-prune')).toMatchObject({
+      coverAttachmentId: undefined,
+      snippet: 'Plain text only',
+    });
+  });
+
+  it('searches notes by attachment file name', async () => {
+    const note: Note = {
+      id: 'note-search-file',
+      kind: 'media',
+      status: 'inbox',
+      text: `![scan.jpg](${buildNoteAttachmentRef('note-search-file', 'att-1')})`,
+      attachments: [
+        {
+          id: 'att-1',
+          type: 'image',
+          mimeType: 'image/jpeg',
+          fileName: 'Receipt-2024.jpg',
+          size: 10,
+          relativePath: 'receipt.jpg',
+        },
+      ],
+      createdAt: 3,
+      updatedAt: 3,
+      capturedVia: { channel: 'web' },
+    };
+
+    await store.addNote(note);
+    await store.flush();
+
+    const match = await store.listNotes({ search: 'receipt-2024' });
+    expect(match.items.map((item) => item.id)).toEqual(['note-search-file']);
+
+    const miss = await store.listNotes({ search: 'invoice' });
+    expect(miss.items.map((item) => item.id)).toEqual([]);
   });
 });
