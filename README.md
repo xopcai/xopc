@@ -37,17 +37,42 @@
 
 ## Get started
 
-Install, onboard, and chat — three commands:
+### One-liner (recommended)
+
+**Linux, macOS, WSL2, Termux**
 
 ```bash
-npm install -g @xopcai/xopc
+curl -fsSL https://xopc.ai/install.sh | bash
+```
+
+**Windows (native, PowerShell)**
+
+> **Heads up:** Native Windows runs xopc without WSL — CLI, gateway, TUI, and tools all work natively. Prefer WSL2? Use the bash one-liner above there too.
+
+Run this in PowerShell:
+
+```powershell
+iex (irm https://xopc.ai/install.ps1)
+```
+
+The installer detects your OS, installs **Node.js ≥ 22** when needed, and installs **`@xopcai/xopc`**. China mirror: add `--cn` (bash) or `-Cn` (PowerShell), or pass `--registry https://registry.npmmirror.com`.
+
+### Onboard & chat
+
+```bash
 xopc onboard          # faster: xopc onboard --quick
 xopc tui --local
 ```
 
 > **New here?** Start with **`xopc tui --local`** (embedded agent, no gateway). Run **`xopc gateway`** when you want the **web console** or **messengers** (Telegram, WeChat, Feishu).
 
-**Requirements:** Node.js **≥ 22**. Use **pnpm** when developing from a git clone.
+### npm (already have Node.js 22+)
+
+```bash
+npm install -g @xopcai/xopc
+```
+
+Or with pnpm: `pnpm add -g @xopcai/xopc` · China: `npm install -g @xopcai/xopc --registry=https://registry.npmmirror.com`
 
 ### More commands
 
@@ -61,13 +86,21 @@ xopc gateway service install               # OS service; xopc gateway stop | sta
 xopc profile list                          # optional isolated state profiles
 ```
 
-**From source:**
+**From source** (installer or pnpm workspace):
 
 ```bash
+# installer — clone, build, and add ~/.local/bin/xopc wrapper
+curl -fsSL https://xopc.ai/install.sh | bash -s -- --install-method git
+
+# or manual checkout
 git clone https://github.com/xopcai/xopc.git && cd xopc
-pnpm install && pnpm run dev -- agent -i
-pnpm run build    # Node + web console → dist/
+corepack enable && pnpm install && pnpm run build
+pnpm exec xopc onboard
 ```
+
+Windows git install: `& ([scriptblock]::Create((irm https://xopc.ai/install.ps1))) -InstallMethod git`
+
+**Requirements:** Node.js **≥ 22** (the one-liner handles this). Use **pnpm** when hacking from a git clone. More install options on **[xopc.ai](https://xopc.ai)** and **[Getting started](https://xopcai.github.io/xopc/getting-started)**.
 
 ---
 

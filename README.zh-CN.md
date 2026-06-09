@@ -37,17 +37,42 @@
 
 ## 快速开始
 
-安装、向导、开聊——三条命令：
+### 一键安装（推荐）
+
+**Linux、macOS、WSL2、Termux**
 
 ```bash
-npm install -g @xopcai/xopc
+curl -fsSL https://xopc.ai/install.sh | bash
+```
+
+**Windows（原生 PowerShell）**
+
+> **提示：** 原生 Windows 无需 WSL 即可运行 xopc——CLI、网关、TUI 与工具均可在本机使用。若更习惯 WSL2，在 WSL 里执行上面的 bash 命令即可。
+
+在 PowerShell 中运行：
+
+```powershell
+iex (irm https://xopc.ai/install.ps1)
+```
+
+安装脚本会自动识别系统、在需要时安装 **Node.js ≥ 22**，并安装 **`@xopcai/xopc`**。国内镜像：bash 加 `--cn`，PowerShell 加 `-Cn`，或指定 `--registry https://registry.npmmirror.com`。
+
+### 配置并开聊
+
+```bash
 xopc onboard          # 更快：xopc onboard --quick
 xopc tui --local
 ```
 
 > **第一次用？** 先跑 **`xopc tui --local`**（本地嵌入式对话，不用网关）。需要 **网页控制台** 或 **Telegram / 微信 / 飞书** 时再执行 **`xopc gateway`**。
 
-**环境：** Node.js **≥ 22**。在本仓库开发建议用 **pnpm**。
+### npm（已具备 Node.js 22+）
+
+```bash
+npm install -g @xopcai/xopc
+```
+
+也可用 pnpm：`pnpm add -g @xopcai/xopc` · 国内：`npm install -g @xopcai/xopc --registry=https://registry.npmmirror.com`
 
 ### 更多命令
 
@@ -61,13 +86,21 @@ xopc gateway service install     # OS 系统服务；xopc gateway stop | status 
 xopc profile list                # 可选：独立状态 Profile
 ```
 
-**从源码开发：**
+**从源码**（安装脚本或 pnpm workspace）：
 
 ```bash
+# 安装脚本 — 克隆、构建，并写入 ~/.local/bin/xopc 包装命令
+curl -fsSL https://xopc.ai/install.sh | bash -s -- --install-method git
+
+# 或手动克隆
 git clone https://github.com/xopcai/xopc.git && cd xopc
-pnpm install && pnpm run dev -- agent -i
-pnpm run build    # Node + 网页 → dist/
+corepack enable && pnpm install && pnpm run build
+pnpm exec xopc onboard
 ```
+
+Windows 源码安装：`& ([scriptblock]::Create((irm https://xopc.ai/install.ps1))) -InstallMethod git`
+
+**环境：** Node.js **≥ 22**（一键脚本会自动处理）。在本仓库魔改请用 **pnpm**。更多安装方式见 **[xopc.ai](https://xopc.ai)** 与 **[快速开始](https://xopcai.github.io/xopc/zh/getting-started)**。
 
 ---
 
