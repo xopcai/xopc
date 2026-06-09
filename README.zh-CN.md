@@ -49,15 +49,6 @@ xopc tui --local
 
 **环境：** Node.js **≥ 22**。在本仓库开发建议用 **pnpm**。
 
-**中国大陆用户：** `npm install` 可加 `--registry=https://registry.npmmirror.com`，或 `npm config set registry https://registry.npmmirror.com`。从源码 `pnpm install` 时若 Electron 下载慢，可先设置：
-
-```bash
-export ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/"
-export ELECTRON_BUILDER_BINARIES_MIRROR="https://npmmirror.com/mirrors/electron-builder-binaries/"
-```
-
-macOS 打 DMG 时需要同时设置上述两个镜像；请使用 **electron-builder ≥ 26.11.1**，否则 DMG 工具会错误地走 `ELECTRON_MIRROR`，在 `cdn.npmmirror.com/binaries/electron/dmg-builder@…` 上 404。
-
 ### 更多命令
 
 ```bash
