@@ -54,21 +54,25 @@ export const WorkflowBoardColumn = memo(function WorkflowBoardColumn({
   return (
     <section
       className={cn(
-        'flex min-h-48 min-w-64 flex-1 flex-col rounded-2xl border border-edge bg-surface-panel/40',
-        'snap-center',
+        'flex min-h-112 w-73 shrink-0 snap-center flex-col rounded-2xl border border-edge bg-surface-panel/40',
       )}
       aria-label={columnTitle(column.id, labels)}
     >
-      <header className="flex items-center justify-between gap-2 border-b border-edge-subtle px-3 py-2.5">
-        <h2 className="text-sm font-semibold text-fg">{columnTitle(column.id, labels)}</h2>
-        <span className="rounded-full bg-surface-hover px-2 py-0.5 text-xs tabular-nums text-fg-muted">
+      <header className="sticky top-0 z-10 flex items-center justify-between gap-2 rounded-t-2xl border-b border-edge-subtle bg-surface-panel/90 px-3.5 py-3 backdrop-blur">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="size-2 rounded-full bg-accent" aria-hidden />
+          <h2 className="truncate text-sm font-semibold text-fg">{columnTitle(column.id, labels)}</h2>
+        </div>
+        <span className="rounded-full bg-surface-hover px-2.5 py-1 text-xs font-semibold tabular-nums text-fg-muted">
           {column.runs.length}
         </span>
       </header>
 
-      <div className="flex flex-1 flex-col gap-2 p-2">
+      <div className="flex flex-1 flex-col gap-3 p-2.5">
         {visibleRuns.length === 0 ? (
-          <p className="px-1 py-6 text-center text-xs text-fg-subtle">{labels.boardColumnEmpty}</p>
+          <div className="flex min-h-32 items-center justify-center rounded-xl border border-dashed border-edge bg-surface-panel/40 px-4 py-6 text-center text-xs text-fg-subtle">
+            {labels.boardColumnEmpty}
+          </div>
         ) : (
           visibleRuns.map((run) => (
             <WorkflowTaskCard
