@@ -54,9 +54,10 @@ function ToolbarDivider() {
 export interface BlockEditorToolbarProps {
   editor: Editor;
   onImageUpload?: (file: File) => Promise<void>;
+  imageUploading?: boolean;
 }
 
-export function BlockEditorToolbar({ editor, onImageUpload }: BlockEditorToolbarProps) {
+export function BlockEditorToolbar({ editor, onImageUpload, imageUploading = false }: BlockEditorToolbarProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleImageClick = useCallback(() => {
@@ -66,14 +67,14 @@ export function BlockEditorToolbar({ editor, onImageUpload }: BlockEditorToolbar
   const handleFileChange = useCallback(
     (event: React.ChangeEvent<HTMLInputElement>) => {
       const file = event.target.files?.[0];
-      if (file && onImageUpload) {
+      if (file && onImageUpload && !imageUploading) {
         void onImageUpload(file);
       }
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
     },
-    [onImageUpload],
+    [imageUploading, onImageUpload],
   );
 
   const handleLinkInsert = useCallback(() => {
@@ -212,8 +213,12 @@ export function BlockEditorToolbar({ editor, onImageUpload }: BlockEditorToolbar
       {onImageUpload && (
         <>
           <ToolbarDivider />
-          <ToolbarButton onClick={handleImageClick} title="Insert image">
-            <ImagePlus size={iconSize} />
+          <ToolbarButton
+            onClick={handleImageClick}
+            disabled={imageUploading}
+            title={imageUploading ? 'Uploading…' : 'Insert image'}
+          >
+            <ImagePlus size={iconSize} className={imageUploading ? 'animate-pulse' : undefined} />
           </ToolbarButton>
           <input
             ref={fileInputRef}

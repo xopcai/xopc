@@ -5,14 +5,16 @@ import useSWR from 'swr';
 import { APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
 import { BlockEditor } from '@/components/block-editor';
 import { MarkdownEditor } from '@/components/markdown/markdown-editor';
-import { MarkdownView } from '@/components/markdown/markdown-view';
 import { messages } from '@/i18n/messages';
+import { showToast } from '@/lib/toast';
 import { cn } from '@/lib/cn';
 import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 import { useThemeStore } from '@/stores/theme-store';
 
 import { getNote, updateNote } from './notes-api';
+import { NoteImageLightboxProvider, useNoteImageLightbox } from './note-image-lightbox';
+import { NoteMarkdownView } from './note-markdown-view';
 
 type EditorMode = 'wysiwyg' | 'source' | 'preview';
 
@@ -61,8 +63,20 @@ export type NoteDetailPanelProps = {
 
 export function NoteDetailPanel({ noteId, onBack, onSaved }: NoteDetailPanelProps) {
   const language = useLocaleStore((s) => s.language);
+  const closeLabel = messages(language).notes.lightboxClose;
+
+  return (
+    <NoteImageLightboxProvider closeLabel={closeLabel}>
+      <NoteDetailPanelInner noteId={noteId} onBack={onBack} onSaved={onSaved} />
+    </NoteImageLightboxProvider>
+  );
+}
+
+function NoteDetailPanelInner({ noteId, onBack, onSaved }: NoteDetailPanelProps) {
+  const language = useLocaleStore((s) => s.language);
   const n = messages(language).notes;
   const isDark = useThemeStore((s) => s.resolved) === 'dark';
+  const { openImage } = useNoteImageLightbox();
   const [mode, setMode] = useState<EditorMode>('wysiwyg');
   const [saving, setSaving] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -152,12 +166,18 @@ export function NoteDetailPanel({ noteId, onBack, onSaved }: NoteDetailPanelProp
           await updateNote(noteId, { text: content });
           await mutate();
           onSaved?.();
+        } catch (err) {
+          showToast({
+            type: 'error',
+            title: n.saveFailed,
+            message: err instanceof Error ? err.message : n.saveFailedHint,
+          });
         } finally {
           setSaving(false);
         }
       }, 600);
     },
-    [noteId, mutate, onSaved],
+    [noteId, mutate, n.saveFailed, n.saveFailedHint, onSaved],
   );
 
   if (!note) {
@@ -188,9 +208,20 @@ export function NoteDetailPanel({ noteId, onBack, onSaved }: NoteDetailPanelProp
           />
         )}
         {mode === 'preview' && (
-          <div className="h-full overflow-y-auto px-6 py-4">
+          <div
+            className="h-full overflow-y-auto px-6 py-4"
+            onClick={(event) => {
+              const target = event.target;
+              if (!(target instanceof HTMLImageElement)) return;
+              openImage(target.currentSrc || target.src, target.alt);
+            }}
+          >
             {note.text ? (
-              <MarkdownView content={note.text} />
+              <NoteMarkdownView
+                noteId={noteId}
+                content={note.text}
+                className="[&_img]:cursor-zoom-in"
+              />
             ) : (
               <p className="italic text-fg-muted">{n.emptyPreview}</p>
             )}

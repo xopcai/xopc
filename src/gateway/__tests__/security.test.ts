@@ -75,7 +75,9 @@ describe('Gateway Security Fixes', () => {
     it('allows query token only for SSE and agent avatar GET', () => {
       expect(isQueryTokenAllowedPath('/api/events', 'GET')).toBe(true);
       expect(isQueryTokenAllowedPath('/api/agents/main/avatar', 'GET')).toBe(true);
+      expect(isQueryTokenAllowedPath('/api/notes/n1/media/a1', 'GET')).toBe(false);
       expect(isQueryTokenAllowedPath('/api/agents/main/avatar', 'PUT')).toBe(false);
+      expect(isQueryTokenAllowedPath('/api/notes/n1/media/a1', 'POST')).toBe(false);
       expect(isQueryTokenAllowedPath('/api/config', 'GET')).toBe(false);
     });
   });

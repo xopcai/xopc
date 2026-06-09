@@ -47,8 +47,7 @@ function extractTokenFromHeader(authHeader: string | null): string | null {
  * SECURITY: query-string tokens leak into server logs, Referer headers, and
  * browser history. We accept them only where the `Authorization` header cannot
  * be set — SSE/WebSocket (`EventSource`) and `<img>` subresource loads for agent
- * avatars. For normal REST requests prefer the `Authorization: Bearer <token>`
- * header.
+ * avatars. Note media uses Bearer-authenticated blob fetch in the gateway console.
  */
 function extractTokenFromQuery(url: string): string | null {
   return new URL(url).searchParams.get('token');
@@ -63,7 +62,6 @@ export function isQueryTokenAllowedPath(path: string, method: string): boolean {
   if (QUERY_TOKEN_ALLOWED_PATHS.has(path) || path.startsWith('/api/events')) {
     return true;
   }
-  // `<img src>` cannot send Bearer tokens; gateway console loads custom avatars here.
   if (method === 'GET' && AGENT_AVATAR_GET_PATH.test(path)) {
     return true;
   }

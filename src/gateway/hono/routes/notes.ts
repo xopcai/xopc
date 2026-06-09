@@ -25,7 +25,11 @@ function parseBlocks(value: unknown): NoteBlock[] | undefined {
   return value.filter((block): block is NoteBlock => {
     if (!block || typeof block !== 'object') return false;
     const candidate = block as Record<string, unknown>;
-    return typeof candidate.id === 'string' && typeof candidate.type === 'string';
+    if (typeof candidate.id !== 'string' || typeof candidate.type !== 'string') return false;
+    if (candidate.type === 'image') {
+      return typeof candidate.attachmentId === 'string';
+    }
+    return true;
   });
 }
 
@@ -123,10 +127,18 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
         }
 
         if (buf) {
+          const durationRaw = body.duration;
+          const duration =
+            typeof durationRaw === 'string'
+              ? parseInt(durationRaw, 10)
+              : typeof durationRaw === 'number'
+                ? durationRaw
+                : undefined;
           await service.notesServiceInstance.addAttachment(note.id, {
             name: fileName,
             buffer: buf,
             mimeType,
+            duration: Number.isFinite(duration) ? duration : undefined,
           });
         }
       }

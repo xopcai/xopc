@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { NodeViewWrapper, type NodeViewProps } from '@tiptap/react';
 
+import { AuthenticatedImage } from '@/features/notes/authenticated-image';
+import { useNoteImageLightbox } from '@/features/notes/note-image-lightbox';
 import { cn } from '@/lib/cn';
 
 /**
@@ -9,6 +11,8 @@ import { cn } from '@/lib/cn';
  */
 export function ImageBlock({ node, updateAttributes, selected }: NodeViewProps) {
   const { src, alt, title } = node.attrs as { src: string; alt?: string; title?: string; width?: number };
+  const { openImage } = useNoteImageLightbox();
+  const [loadFailed, setLoadFailed] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const [resizing, setResizing] = useState(false);
   const startXRef = useRef(0);
@@ -47,6 +51,10 @@ export function ImageBlock({ node, updateAttributes, selected }: NodeViewProps) 
     };
   }, [resizing, updateAttributes]);
 
+  useEffect(() => {
+    setLoadFailed(false);
+  }, [src]);
+
   const width = (node.attrs as { width?: number }).width;
 
   return (
@@ -59,14 +67,21 @@ export function ImageBlock({ node, updateAttributes, selected }: NodeViewProps) 
         )}
         style={{ width: width ? `${width}px` : undefined, maxWidth: '100%' }}
       >
-        <img
-          src={src}
-          alt={alt ?? ''}
-          title={title ?? undefined}
-          className="block h-auto w-full rounded-lg"
-          draggable={false}
-        />
-        {/* Resize handle */}
+        {loadFailed ? (
+          <div className="flex min-h-24 min-w-[12rem] items-center justify-center rounded-lg border border-dashed border-edge bg-surface-hover text-fg-muted">
+            <span className="text-xs">Image unavailable</span>
+          </div>
+        ) : (
+          <AuthenticatedImage
+            src={src}
+            alt={alt ?? ''}
+            title={title ?? undefined}
+            className="block h-auto w-full cursor-zoom-in rounded-lg"
+            draggable={false}
+            onClick={(displaySrc) => openImage(displaySrc, alt ?? undefined)}
+            onLoadFailed={() => setLoadFailed(true)}
+          />
+        )}
         <div
           onMouseDown={handleMouseDown}
           className={cn(

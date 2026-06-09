@@ -11,6 +11,7 @@ export type NoteBlockType =
   | 'quote'
   | 'code'
   | 'divider'
+  | 'image'
   | 'aiSuggestion';
 
 export interface BaseNoteBlock {
@@ -37,7 +38,14 @@ export interface DividerNoteBlock extends BaseNoteBlock {
   type: 'divider';
 }
 
-export type NoteBlock = TextNoteBlock | TodoNoteBlock | DividerNoteBlock;
+export interface ImageNoteBlock extends BaseNoteBlock {
+  type: 'image';
+  attachmentId: string;
+  alt?: string;
+  width?: number;
+}
+
+export type NoteBlock = TextNoteBlock | TodoNoteBlock | DividerNoteBlock | ImageNoteBlock;
 
 export type NotePatchOperation =
   | { type: 'replaceBlocks'; blocks: NoteBlock[] }
@@ -109,6 +117,10 @@ export interface NoteIndexEntry {
   pinned?: boolean;
   tags?: string[];
   snippet?: string;
+  /** First image attachment id for list thumbnails. */
+  coverAttachmentId?: string;
+  /** Lowercased attachment file names for list search. */
+  attachmentNames?: string[];
 }
 
 export interface NotesIndexFile {

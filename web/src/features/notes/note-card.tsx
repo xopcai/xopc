@@ -3,6 +3,7 @@ import { Archive, Bookmark, CheckSquare, Lightbulb, Mic, MoreVertical, Image, Pi
 
 import { cn } from '@/lib/cn';
 
+import { NoteCoverThumbnail } from './note-cover-thumbnail';
 import type { NoteIndexEntry, NoteKind } from './notes-api';
 
 const KIND_ICON: Record<NoteKind, typeof Lightbulb> = {
@@ -20,11 +21,26 @@ export type NoteCardProps = {
   onPin: (id: string, pinned: boolean) => void;
   onArchive: (id: string) => void;
   onDelete: (id: string) => void;
-  labels: { pin: string; unpin: string; archive: string; delete: string };
+  labels: {
+    pin: string;
+    unpin: string;
+    archive: string;
+    delete: string;
+    imageNote: string;
+    noText: string;
+  };
 };
+
+function noteCardPreviewText(note: NoteIndexEntry, labels: NoteCardProps['labels']): string {
+  if (note.snippet?.trim()) return note.snippet;
+  if (note.coverAttachmentId) return labels.imageNote;
+  return labels.noText;
+}
 
 export function NoteCard({ note, onPress, onPin, onArchive, onDelete, labels }: NoteCardProps) {
   const Icon = KIND_ICON[note.kind] || Lightbulb;
+  const previewText = noteCardPreviewText(note, labels);
+  const isFallbackText = !note.snippet?.trim();
   const time = new Date(note.createdAt).toLocaleString(undefined, {
     month: 'short',
     day: 'numeric',
@@ -44,10 +60,19 @@ export function NoteCard({ note, onPress, onPin, onArchive, onDelete, labels }: 
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
       )}
     >
-      <div className="flex items-start gap-2">
-        <Icon className="mt-0.5 h-4 w-4 shrink-0 text-fg-muted" />
-        <p className="min-w-0 flex-1 text-sm text-fg line-clamp-3">
-          {note.snippet || <span className="italic text-fg-muted">(no text)</span>}
+      <div className="flex items-start gap-3">
+        {note.coverAttachmentId ? (
+          <NoteCoverThumbnail noteId={note.id} attachmentId={note.coverAttachmentId} />
+        ) : (
+          <Icon className="mt-0.5 h-4 w-4 shrink-0 text-fg-muted" />
+        )}
+        <p
+          className={cn(
+            'min-w-0 flex-1 text-sm line-clamp-3',
+            isFallbackText ? 'italic text-fg-muted' : 'text-fg',
+          )}
+        >
+          {previewText}
         </p>
         <DropdownMenu.Root>
           <DropdownMenu.Trigger asChild>

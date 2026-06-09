@@ -1,6 +1,12 @@
 import { apiFetch, fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
+import {
+  formatVoiceMemoLabel,
+  noteAttachmentRef,
+  postNoteFormData,
+} from './note-media';
+
 export type NoteKind = 'thought' | 'todo' | 'voice' | 'media' | 'bookmark' | 'mixed';
 export type NoteStatus = 'inbox' | 'processed' | 'archived' | 'trashed';
 
@@ -45,6 +51,8 @@ export interface NoteIndexEntry {
   pinned?: boolean;
   tags?: string[];
   snippet?: string;
+  coverAttachmentId?: string;
+  attachmentNames?: string[];
 }
 
 export interface NotesListQuery {
@@ -102,3 +110,69 @@ export async function updateNote(id: string, patch: Partial<Note>): Promise<Note
 export async function deleteNote(id: string): Promise<void> {
   await fetchJson(apiUrl(`/api/notes/${encodeURIComponent(id)}`), { method: 'DELETE' });
 }
+
+export async function uploadNoteMedia(noteId: string, file: File): Promise<NoteAttachment> {
+  const form = new FormData();
+  form.append('file', file);
+  const result = await postNoteFormData<{ attachment: NoteAttachment }>(
+    apiUrl(`/api/notes/${encodeURIComponent(noteId)}/media`),
+    form,
+  );
+  return result.attachment;
+}
+
+export async function createNoteWithMedia(
+  file: File,
+  opts?: { text?: string; channel?: string; kind?: NoteKind; duration?: number },
+): Promise<Note> {
+  const form = new FormData();
+  form.append('file', file);
+  if (opts?.text) {
+    form.append('text', opts.text);
+  }
+  form.append('channel', opts?.channel ?? 'web');
+  if (opts?.kind) {
+    form.append('kind', opts.kind);
+  }
+  if (opts?.duration !== undefined) {
+    form.append('duration', String(opts.duration));
+  }
+  const result = await postNoteFormData<{ note: Note }>(apiUrl('/api/notes'), form);
+  return result.note;
+}
+
+/** Create a media note from an image file and embed markdown reference. */
+export async function quickCaptureImage(file: File, channel = 'web'): Promise<Note> {
+  let note = await createNoteWithMedia(file, { channel });
+  const attachment = note.attachments?.find((a) => a.type === 'image') ?? note.attachments?.[0];
+  if (!attachment) return note;
+
+  const text = `![${attachment.fileName}](${noteAttachmentRef(note.id, attachment.id)})`;
+  if (note.text !== text) {
+    note = await updateNote(note.id, { text });
+  }
+  return note;
+}
+
+/** Create a voice note from an audio recording and embed a markdown link reference. */
+export async function quickCaptureVoice(
+  file: File,
+  durationSec: number,
+  channel = 'web',
+): Promise<Note> {
+  let note = await createNoteWithMedia(file, { channel, kind: 'voice', duration: durationSec });
+  const attachment = note.attachments?.find((a) => a.type === 'audio') ?? note.attachments?.[0];
+  if (!attachment) return note;
+
+  const label = formatVoiceMemoLabel(durationSec);
+  const text = `[${label}](${noteAttachmentRef(note.id, attachment.id)})`;
+  if (note.text !== text) {
+    note = await updateNote(note.id, { text, kind: 'voice' });
+  }
+  return note;
+}
+
+export { noteAttachmentRef, formatVoiceMemoLabel } from './note-media';
+export { buildNoteAttachmentRef, parseNoteAttachmentTarget, noteMediaApiPath } from './attachment-ref';
+export { AuthenticatedImage } from './authenticated-image';
+export { NoteMarkdownView } from './note-markdown-view';
