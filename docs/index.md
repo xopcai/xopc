@@ -3,8 +3,8 @@ layout: home
 
 hero:
   name: xopc
-  text: The OPC Workstation
-  tagline: The OPC workstation that grows with you — a local-first personal AI for one-person companies. CLI, desktop, browser, mobile, and your favorite messengers. Bring your own keys. Extend without forking.
+  text: The AI Workstation
+  tagline: The AI workstation that grows with you — a local-first personal AI for one-person companies. CLI, desktop, browser, mobile, and your favorite messengers. Bring your own keys. Extend without forking.
   image:
     src: /logo.svg
     alt: xopc

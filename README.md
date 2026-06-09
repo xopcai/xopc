@@ -6,7 +6,7 @@
 <h1 align="center"><a href="https://xopc.ai">xopc</a></h1>
 
 <p align="center">
-  <strong>The OPC workstation that grows with you.</strong><br />
+  <strong>The AI workstation that grows with you.</strong><br />
   A self-hosted, local-first AI for one-person companies — terminal, browser, desktop, mobile, and messengers. One brain everywhere.<br />
   Bring your own keys. Extend without forking.
 </p>
