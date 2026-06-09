@@ -7,6 +7,7 @@ import { MessageBus, MessageBusShutdownError } from '../infra/bus/index.js';
 import { loadConfig, saveConfig as writeConfigToDisk } from '../config/index.js';
 import { getWorkspacePath } from '../config/workspace-path-helpers.js';
 import { CronService } from '../cron/index.js';
+import { NotesService, NotesStore } from '../notes/index.js';
 import { buildWorkflowChildTools } from '../agent/workflow/workflow-child-tools.js';
 import { WorkflowRunService } from '../workflows/service/workflow-run-service.js';
 import { WorkflowSessionBridge } from '../workflows/service/workflow-session-bridge.js';
@@ -76,6 +77,7 @@ export class GatewayService {
   private _agentService: AgentService | null = null;
   private channelManager: ChannelManager;
   private cronService: CronService;
+  private notesService: NotesService;
   private extensionLoader: ExtensionLoader | null = null;
   private extensionMetadataSnapshot: import('../extensions/extension-metadata-snapshot.js').ExtensionMetadataSnapshot | null = null;
   private browserExtensionProvider: import('../browser/providers/extension.js').ExtensionBrowserProvider | null = null;
@@ -208,6 +210,8 @@ export class GatewayService {
     this.cronService = new CronService({
       filePath: resolveCronJobsPath(),
     });
+
+    this.notesService = new NotesService(new NotesStore());
 
     this.agentRunner = new GatewayAgentRunner({
       bus: this.bus,
@@ -600,6 +604,8 @@ export class GatewayService {
       await trace.measure('cron.initialize', () => this.cronService.initialize());
     }
 
+    await this.notesService.initialize();
+
     this.ensureHeartbeatService().start(heartbeatRunnerConfigFromConfig(this.config));
 
     void import('../browser/providers/browser-ext-install.js')
@@ -808,6 +814,9 @@ export class GatewayService {
 
     // Stop cron service
     await this.cronService.stop();
+
+    // Flush notes to disk
+    await this.notesService.flush();
 
     // Tear down rate-limit cleanup timers so the process can exit cleanly.
     buckets.destroyAll();
@@ -1223,6 +1232,10 @@ export class GatewayService {
 
   get cronServiceInstance(): CronService {
     return this.cronService;
+  }
+
+  get notesServiceInstance(): NotesService {
+    return this.notesService;
   }
 
   get sessionIndexInstance(): SessionIndex {

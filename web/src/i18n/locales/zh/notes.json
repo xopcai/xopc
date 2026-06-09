@@ -1,0 +1,28 @@
+{
+  "notes": {
+    "title": "笔记",
+    "needToken": "请先保存网关令牌以管理笔记。",
+    "searchPlaceholder": "搜索笔记…",
+    "quickCapturePlaceholder": "写下你的想法…",
+    "send": "发送",
+    "filterAll": "全部",
+    "filterInbox": "收件箱",
+    "filterProcessed": "已处理",
+    "filterArchived": "已归档",
+    "kindAll": "所有类型",
+    "kindThought": "想法",
+    "kindTodo": "待办",
+    "kindVoice": "语音",
+    "kindMedia": "媒体",
+    "kindBookmark": "书签",
+    "noNotes": "暂无笔记",
+    "noNotesDescription": "使用上方输入框记录你的第一个想法。",
+    "pinned": "已置顶",
+    "delete": "删除",
+    "archive": "归档",
+    "pin": "置顶",
+    "unpin": "取消置顶",
+    "editTags": "编辑标签",
+    "noteCount": "{{count}} 条笔记"
+  }
+}
