@@ -364,6 +364,7 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
     if (result.ok === false) {
       return c.json({ ok: false, error: result.error }, 404);
     }
+
     const session = await service.sessions.getSession(key);
     return c.json({ ok: true, session });
   });

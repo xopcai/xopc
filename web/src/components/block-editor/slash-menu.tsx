@@ -122,6 +122,13 @@ export function SlashMenu({ editor, onImageUpload }: SlashMenuProps) {
       item.description.toLowerCase().includes(query.toLowerCase()),
   );
 
+  useEffect(() => {
+    const container = menuRef.current?.querySelector('.overflow-y-auto');
+    if (!container) return;
+    const buttons = container.querySelectorAll('button');
+    buttons[selectedIndex]?.scrollIntoView({ block: 'nearest' });
+  }, [selectedIndex]);
+
   const closeMenu = useCallback(() => {
     setIsOpen(false);
     setQuery('');
