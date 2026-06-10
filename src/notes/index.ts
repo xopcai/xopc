@@ -1,6 +1,6 @@
 export { NotesStore } from './store.js';
 export { NotesService } from './service.js';
-export { resolveNotesDir, resolveNotesIndexPath, resolveNoteItemPath, resolveNoteMediaDir } from './paths.js';
+export { resolveNotesDir, resolveNotesIndexPath, resolveNoteItemPath, resolveNoteMediaDir, resolveNoteHistoryDir } from './paths.js';
 export type {
   Note,
   NoteKind,
@@ -9,9 +9,12 @@ export type {
   NoteAiMeta,
   NoteAiDeepMeta,
   NoteIndexEntry,
+  NoteSnapshot,
+  NoteSnapshotEntry,
   NotesIndexFile,
   NotesListQuery,
   CaptureSource,
   CaptureChannel,
   CreateNoteParams,
+  SnapshotTrigger,
 } from './types.js';

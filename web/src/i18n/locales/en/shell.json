@@ -48,6 +48,7 @@
     "settingsAgentMcp": "External tools (MCP)",
     "settingsAgentSystemPrompt": "System prompt",
     "settingsAgents": "Agents",
+    "settingsKeyboardShortcuts": "Keyboard shortcuts",
     "settingsSystem": "System permissions",
     "settingsAppManagement": "App management",
     "settingsAgentGeneration": "Generation"
@@ -127,7 +128,13 @@
     "sessionChannelFilterAria": "Filter tasks: web app or channels",
     "sessionTasksTab": "Tasks",
     "sessionChannelsTab": "Channels",
-    "resizeHandleAria": "Resize sidebar"
+    "resizeHandleAria": "Resize sidebar",
+    "timelinePinned": "Pinned",
+    "timelineToday": "Today",
+    "timelineYesterday": "Yesterday",
+    "timelineLast7Days": "Previous 7 days",
+    "timelineThisMonth": "This month",
+    "timelineOlder": "Older"
   },
   "aboutDialog": {
     "windowTitle": "About this application",

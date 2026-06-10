@@ -17,3 +17,7 @@ export function resolveNoteItemPath(noteId: string): string {
 export function resolveNoteMediaDir(noteId: string): string {
   return join(resolveNotesDir(), 'media', noteId);
 }
+
+export function resolveNoteHistoryDir(noteId: string): string {
+  return join(resolveNotesDir(), 'history', noteId);
+}

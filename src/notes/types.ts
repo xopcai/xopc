@@ -92,6 +92,7 @@ export interface CaptureSource {
 
 export interface Note {
   id: string;
+  title?: string;
   kind: NoteKind;
   status: NoteStatus;
   text?: string;
@@ -110,6 +111,7 @@ export interface Note {
 
 export interface NoteIndexEntry {
   id: string;
+  title?: string;
   kind: NoteKind;
   status: NoteStatus;
   createdAt: number;
@@ -119,6 +121,10 @@ export interface NoteIndexEntry {
   snippet?: string;
   /** First image attachment id for list thumbnails. */
   coverAttachmentId?: string;
+  /** First audio attachment id for inline voice playback. */
+  voiceAttachmentId?: string;
+  /** Duration in seconds of the voice attachment (when available). */
+  voiceDurationSec?: number;
   /** Lowercased attachment file names for list search. */
   attachmentNames?: string[];
 }
@@ -126,6 +132,26 @@ export interface NoteIndexEntry {
 export interface NotesIndexFile {
   version: number;
   notes: NoteIndexEntry[];
+}
+
+export type SnapshotTrigger = 'edit' | 'ai_edit' | 'sync' | 'restore';
+
+export interface NoteSnapshot {
+  noteId: string;
+  timestamp: number;
+  trigger: SnapshotTrigger;
+  title?: string;
+  text?: string;
+  blocks?: NoteBlock[];
+  tags?: string[];
+  kind: NoteKind;
+  status: NoteStatus;
+}
+
+export interface NoteSnapshotEntry {
+  timestamp: number;
+  trigger: SnapshotTrigger;
+  snippet?: string;
 }
 
 export interface NotesListQuery {
@@ -141,6 +167,7 @@ export interface NotesListQuery {
 }
 
 export interface CreateNoteParams {
+  title?: string;
   text?: string;
   blocks?: NoteBlock[];
   kind?: NoteKind;

@@ -48,6 +48,7 @@
     "settingsAgentMcp": "外部工具 (MCP)",
     "settingsAgentSystemPrompt": "系统提示词",
     "settingsAgents": "智能体",
+    "settingsKeyboardShortcuts": "快捷键",
     "settingsSystem": "系统授权",
     "settingsAppManagement": "应用管理",
     "settingsAgentGeneration": "生成参数"
@@ -127,7 +128,13 @@
     "sessionChannelFilterAria": "按来源筛选：网页对话或消息通道",
     "sessionTasksTab": "对话",
     "sessionChannelsTab": "消息通道",
-    "resizeHandleAria": "调整左侧导航宽度"
+    "resizeHandleAria": "调整左侧导航宽度",
+    "timelinePinned": "置顶",
+    "timelineToday": "今天",
+    "timelineYesterday": "昨天",
+    "timelineLast7Days": "最近 7 天",
+    "timelineThisMonth": "本月",
+    "timelineOlder": "更早"
   },
   "aboutDialog": {
     "windowTitle": "关于本应用",

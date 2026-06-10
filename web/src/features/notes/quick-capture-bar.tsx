@@ -6,7 +6,7 @@ import { cn } from '@/lib/cn';
 export type QuickCaptureBarProps = {
   placeholder: string;
   sendLabel: string;
-  onCapture: (text: string) => Promise<void>;
+  onCapture: (text: string, opts?: { navigate?: boolean }) => Promise<void>;
   onImagePick?: () => void;
   /** Record audio and upload when stopped. */
   onVoiceCapture?: (file: File, durationSec: number) => Promise<void>;
@@ -137,13 +137,13 @@ export function QuickCaptureBar({
     void startRecording();
   }, [recording, startRecording, stopRecording]);
 
-  const handleSubmit = useCallback(async () => {
+  const handleSubmit = useCallback(async (opts?: { navigate?: boolean }) => {
     const trimmed = text.trim();
     if (!trimmed || sending) return;
     setSending(true);
     setText('');
     try {
-      await onCapture(trimmed);
+      await onCapture(trimmed, opts);
     } catch {
       setText(trimmed);
     } finally {
@@ -157,6 +157,10 @@ export function QuickCaptureBar({
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         void handleSubmit();
+      }
+      if (e.key === 'Enter' && e.shiftKey) {
+        e.preventDefault();
+        void handleSubmit({ navigate: false });
       }
     },
     [handleSubmit],
@@ -220,7 +224,7 @@ export function QuickCaptureBar({
       <button
         type="button"
         disabled={!text.trim() || busy || recording}
-        onClick={() => void handleSubmit()}
+        onClick={(e) => void handleSubmit({ navigate: !e.shiftKey })}
         aria-label={sendLabel}
         className={cn(
           'shrink-0 rounded-lg p-2 transition-colors disabled:cursor-not-allowed disabled:opacity-50',

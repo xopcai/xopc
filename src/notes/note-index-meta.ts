@@ -86,17 +86,28 @@ export function buildNoteSnippet(note: Pick<Note, 'id' | 'text' | 'blocks'>): st
   return clean.length > SNIPPET_LENGTH ? `${clean.slice(0, SNIPPET_LENGTH)}…` : clean;
 }
 
+function extractVoiceAttachment(note: Note): { voiceAttachmentId?: string; voiceDurationSec?: number } {
+  const audio = note.attachments?.find((a) => a.type === 'audio');
+  if (!audio) return {};
+  return { voiceAttachmentId: audio.id, voiceDurationSec: audio.duration };
+}
+
 export function buildNoteIndexMeta(note: Note): {
   snippet?: string;
   coverAttachmentId?: string;
+  voiceAttachmentId?: string;
+  voiceDurationSec?: number;
   attachmentNames?: string[];
 } {
   const coverAttachmentId = extractCoverAttachmentId(note);
   const snippet = buildNoteSnippet(note);
   const attachmentNames = extractAttachmentFileNames(note);
+  const { voiceAttachmentId, voiceDurationSec } = extractVoiceAttachment(note);
   return {
     snippet,
     coverAttachmentId,
+    voiceAttachmentId,
+    voiceDurationSec,
     attachmentNames,
   };
 }

@@ -14,6 +14,7 @@ import { useLocaleStore } from '@/stores/locale-store';
 
 import { noteAttachmentRef, uploadNoteMedia } from '@/features/notes/notes-api';
 
+import { AudioNode } from './extensions/audio-node';
 import { ExtraKeyboardShortcuts } from './extensions/keyboard-shortcuts';
 import { BlockEditorToolbar } from './toolbar';
 import { ResizableImage } from './extensions/resizable-image';
@@ -70,6 +71,7 @@ export function BlockEditor({
         transformPastedText: true,
         transformCopiedText: true,
       }),
+      AudioNode,
       ExtraKeyboardShortcuts,
     ],
     content: initialContent,
