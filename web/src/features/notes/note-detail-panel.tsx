@@ -255,14 +255,6 @@ function NoteDetailPanelInner({ noteId, onBack, onSaved }: NoteDetailPanelProps)
     [noteId, mutate, n.saveFailed, n.saveFailedHint, onSaved],
   );
 
-  if (!note) {
-    return (
-      <div className="flex flex-1 items-center justify-center">
-        <div className="h-6 w-6 animate-spin rounded-full border-2 border-accent border-t-transparent" />
-      </div>
-    );
-  }
-
   const handleHistorySelect = useCallback(
     async (entry: NoteSnapshotEntry) => {
       try {
@@ -287,14 +279,25 @@ function NoteDetailPanelInner({ noteId, onBack, onSaved }: NoteDetailPanelProps)
     onSaved?.();
   }, [mutate, onSaved]);
 
+  if (!note) {
+    return (
+      <div className="flex flex-1 items-center justify-center">
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+      </div>
+    );
+  }
+
   const isPreviewingSnapshot = previewSnapshot !== null;
   const displayTitle = isPreviewingSnapshot ? (previewSnapshot.title ?? '') : title;
   const displayText = isPreviewingSnapshot ? (previewSnapshot.text ?? '') : (note.text ?? '');
 
   return (
-    <div className="flex h-full min-h-0">
+    <div className="flex h-full min-h-0 gap-3 p-4 sm:px-5">
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <div ref={editorContainerRef} className="min-h-0 flex-1 overflow-hidden">
+        <div
+          ref={editorContainerRef}
+          className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-edge-subtle bg-surface-base"
+        >
           {isPreviewingSnapshot ? (
             <div className="h-full overflow-y-auto px-6 py-4">
               {displayTitle && (
@@ -389,7 +392,7 @@ function NoteDetailPanelInner({ noteId, onBack, onSaved }: NoteDetailPanelProps)
         </div>
       </div>
       {showHistory && (
-        <div className="relative shrink-0" style={{ width: historyWidth }}>
+        <div className="relative flex min-h-0 shrink-0 flex-col" style={{ width: historyWidth }}>
           <div
             role="separator"
             aria-orientation="vertical"
@@ -403,13 +406,15 @@ function NoteDetailPanelInner({ noteId, onBack, onSaved }: NoteDetailPanelProps)
               'touch-none select-none',
             )}
           />
-          <NoteHistoryPanel
-            noteId={noteId}
-            activeTimestamp={previewSnapshot?.timestamp ?? null}
-            onSelect={handleHistorySelect}
-            onClose={handleHistoryClose}
-            onRestored={handleHistoryRestored}
-          />
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-edge-subtle bg-surface-base">
+            <NoteHistoryPanel
+              noteId={noteId}
+              activeTimestamp={previewSnapshot?.timestamp ?? null}
+              onSelect={handleHistorySelect}
+              onClose={handleHistoryClose}
+              onRestored={handleHistoryRestored}
+            />
+          </div>
         </div>
       )}
     </div>

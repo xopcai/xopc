@@ -73,7 +73,7 @@ export function NoteHistoryPanel({ noteId, activeTimestamp, onSelect, onClose, o
   const now = Date.now();
 
   return (
-    <div className="flex h-full flex-col border-l border-edge bg-surface">
+    <div className="flex h-full min-h-0 flex-col">
       <div className="flex shrink-0 items-center justify-between border-b border-edge px-4 py-3">
         <div className="flex items-center gap-2 text-sm font-medium text-fg">
           <History className="h-4 w-4" aria-hidden />
