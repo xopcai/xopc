@@ -7,6 +7,7 @@ import {
 import { SetupStatusPanel } from '@/features/settings/setup-checklist/setup-status-panel';
 import { ModelsHubPanel } from '@/features/settings/models-hub/models-hub-panel';
 import { AppearanceSettingsPanel } from '@/features/settings/appearance-settings';
+import { KeyboardShortcutsSettingsPanel } from '@/features/settings/keyboard-shortcuts-settings';
 import { DreamingSettingsPanel } from '@/features/settings/dreaming-settings';
 import { CronSettingsPanel } from '@/features/settings/cron-settings';
 import { GoalsSettingsPanel } from '@/features/settings/goals-settings';
@@ -24,6 +25,7 @@ import { useLocaleStore } from '@/stores/locale-store';
 const SECTIONS: SettingsSectionId[] = [
   'overview',
   'appearance',
+  'keyboard-shortcuts',
   'system',
   'app-management',
   'agent-defaults',
@@ -79,6 +81,10 @@ export function SettingsPage() {
 
   if (id === 'appearance') {
     return <AppearanceSettingsPanel />;
+  }
+
+  if (id === 'keyboard-shortcuts') {
+    return <KeyboardShortcutsSettingsPanel />;
   }
 
   if (id === 'system') {

@@ -4,6 +4,7 @@ import { Link, useLocation } from 'react-router-dom';
 
 import { APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
 import { CommandPaletteSearchButton } from '@/components/shell/command-palette-search-button';
+import { QuickCaptureButton } from '@/components/shell/quick-capture-button';
 import { SidebarRailToggleButton } from '@/components/shell/sidebar-rail-toggle-button';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
@@ -31,6 +32,7 @@ export const DarwinCollapsedTitlebarCluster = memo(function DarwinCollapsedTitle
     >
       <div className={cn('pointer-events-auto flex items-center gap-0.5', APP_CHROME_NO_DRAG_CLASS)}>
         <SidebarRailToggleButton className="inline-flex" />
+        <QuickCaptureButton className="inline-flex" />
         <CommandPaletteSearchButton className="inline-flex" />
         <Link
           to="/chat/new"

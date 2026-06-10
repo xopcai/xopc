@@ -2,6 +2,7 @@ import { memo } from 'react';
 import { useLocation } from 'react-router-dom';
 
 import { CommandPaletteSearchButton } from '@/components/shell/command-palette-search-button';
+import { QuickCaptureButton } from '@/components/shell/quick-capture-button';
 import { SidebarRailToggleButton } from '@/components/shell/sidebar-rail-toggle-button';
 import { cn } from '@/lib/cn';
 import { isElectronDarwin } from '@/lib/electron-window-chrome';
@@ -27,6 +28,7 @@ export const MainRailExpandWhenCollapsed = memo(function MainRailExpandWhenColla
   return (
     <div className={cn('hidden shrink-0 items-center gap-0.5 md:flex', className)}>
       <SidebarRailToggleButton variant="main" />
+      <QuickCaptureButton />
       <CommandPaletteSearchButton />
     </div>
   );

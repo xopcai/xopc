@@ -3,6 +3,7 @@ import { memo, useCallback, useEffect, useState, type CSSProperties } from 'reac
 
 import { APP_CHROME_NO_DRAG_CLASS, APP_TOP_HEADER_BAR_CLASS } from '@/components/shell/app-chrome';
 import { CommandPaletteSearchButton } from '@/components/shell/command-palette-search-button';
+import { QuickCaptureButton } from '@/components/shell/quick-capture-button';
 import { ElectronSidebarHistoryNav } from '@/components/shell/electron-sidebar-history-nav';
 import { SidebarRailToggleButton } from '@/components/shell/sidebar-rail-toggle-button';
 import { SidebarNav } from '@/components/shell/sidebar';
@@ -153,6 +154,7 @@ export const SidebarColumn = memo(function SidebarColumn() {
           {!sidebarCollapsed ? (
             <>
               <SidebarRailToggleButton variant="sidebar" />
+              <QuickCaptureButton className="inline-flex" />
               <CommandPaletteSearchButton className="inline-flex" />
               <ElectronSidebarHistoryNav />
             </>

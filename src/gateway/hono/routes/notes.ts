@@ -5,7 +5,7 @@ import { Readable } from 'node:stream';
 import type { Hono } from 'hono';
 import { stream } from 'hono/streaming';
 
-import type { CaptureChannel, CaptureSource, Note, NoteBlock, NoteKind, NoteStatus } from '../../../notes/types.js';
+import type { CaptureChannel, CaptureSource, Note, NoteBlock, NoteKind, NoteStatus, SnapshotTrigger } from '../../../notes/types.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
 const VALID_KINDS = new Set<NoteKind>(['thought', 'todo', 'voice', 'media', 'bookmark', 'mixed']);
@@ -35,6 +35,7 @@ function parseBlocks(value: unknown): NoteBlock[] | undefined {
 
 function buildNotePatch(body: Record<string, unknown>): Partial<Note> {
   const patch: Partial<Note> = {};
+  if (typeof body.title === 'string') patch.title = body.title;
   if (typeof body.text === 'string') patch.text = body.text;
   if (Array.isArray(body.blocks)) patch.blocks = parseBlocks(body.blocks);
   if (typeof body.kind === 'string' && VALID_KINDS.has(body.kind as NoteKind)) patch.kind = body.kind as NoteKind;
@@ -202,8 +203,12 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
     const body = await c.req.json().catch(() => ({}));
 
     const patch = buildNotePatch(body);
+    const trigger: SnapshotTrigger =
+      body.trigger === 'ai_edit' || body.trigger === 'sync' || body.trigger === 'restore'
+        ? body.trigger
+        : 'edit';
 
-    const updated = await service.notesServiceInstance.updateNote(id, patch);
+    const updated = await service.notesServiceInstance.updateNote(id, patch, trigger);
     if (!updated) {
       return c.json({ error: 'Note not found' }, 404);
     }
@@ -218,6 +223,42 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
       return c.json({ error: 'Note not found' }, 404);
     }
     return c.json({ deleted: true });
+  });
+
+  // GET /api/notes/:id/history — list version snapshots
+  authenticated.get('/api/notes/:id/history', async (c) => {
+    const id = c.req.param('id');
+    const entries = await service.notesServiceInstance.listNoteHistory(id);
+    return c.json({ entries });
+  });
+
+  // GET /api/notes/:id/history/:timestamp — get full snapshot
+  authenticated.get('/api/notes/:id/history/:timestamp', async (c) => {
+    const id = c.req.param('id');
+    const timestamp = parseInt(c.req.param('timestamp'), 10);
+    if (!Number.isFinite(timestamp)) {
+      return c.json({ error: 'Invalid timestamp' }, 400);
+    }
+    const snapshot = await service.notesServiceInstance.getNoteSnapshot(id, timestamp);
+    if (!snapshot) {
+      return c.json({ error: 'Snapshot not found' }, 404);
+    }
+    return c.json({ snapshot });
+  });
+
+  // POST /api/notes/:id/history/restore — restore a snapshot
+  authenticated.post('/api/notes/:id/history/restore', async (c) => {
+    const id = c.req.param('id');
+    const body = await c.req.json().catch(() => ({}));
+    const timestamp = typeof body.timestamp === 'number' ? body.timestamp : 0;
+    if (!timestamp) {
+      return c.json({ error: 'Missing required field: timestamp' }, 400);
+    }
+    const note = await service.notesServiceInstance.restoreNoteSnapshot(id, timestamp);
+    if (!note) {
+      return c.json({ error: 'Snapshot or note not found' }, 404);
+    }
+    return c.json({ note });
   });
 
   // POST /api/notes/:id/ai/edit — generate previewable block-level AI patch
