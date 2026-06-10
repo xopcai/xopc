@@ -51,7 +51,7 @@ export function NotesPage() {
     [hasToken, ui.statusFilter, ui.kindFilter, ui.search],
   );
 
-  const { data, mutate, isLoading, isValidating } = useSWR(swrKey, () =>
+  const { data, mutate, isLoading } = useSWR(swrKey, () =>
     listNotes({
       status: ui.statusFilter === 'all' ? undefined : ui.statusFilter,
       kind: ui.kindFilter === 'all' ? undefined : ui.kindFilter,
