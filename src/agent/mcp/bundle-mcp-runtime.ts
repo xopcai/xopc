@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { createRequire } from "node:module";
+import Ajv2020 from "ajv/dist/2020.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
@@ -10,7 +10,6 @@ import type {
   JsonSchemaValidator,
   jsonSchemaValidator,
 } from "@modelcontextprotocol/sdk/validation/types.js";
-import type { ErrorObject, ValidateFunction } from "ajv";
 import type { Config } from "../../config/schema.js";
 import { createLogger } from "../../utils/logger.js";
 const log = createLogger("BundleMcp");
@@ -43,16 +42,10 @@ type CreateSessionMcpRuntime = (
   params: Parameters<typeof createSessionMcpRuntime>[0] & { configFingerprint?: string },
 ) => SessionMcpRuntime;
 
-const require = createRequire(import.meta.url);
 const SESSION_MCP_RUNTIME_MANAGER_KEY = Symbol.for("xopc.sessionMcpRuntimeManager");
 const DRAFT_2020_12_SCHEMA = "https://json-schema.org/draft/2020-12/schema";
 const DEFAULT_SESSION_MCP_RUNTIME_IDLE_TTL_MS = 10 * 60 * 1000;
 const SESSION_MCP_RUNTIME_SWEEP_INTERVAL_MS = 60 * 1000;
-
-type Ajv2020Like = {
-  compile: (schema: JsonSchemaType) => ValidateFunction;
-  errorsText: (errors?: ErrorObject[] | null) => string;
-};
 
 function isDraft202012Schema(schema: JsonSchemaType): boolean {
   return (schema as { $schema?: unknown }).$schema === DRAFT_2020_12_SCHEMA;
@@ -60,8 +53,7 @@ function isDraft202012Schema(schema: JsonSchemaType): boolean {
 
 export function createBundleMcpJsonSchemaValidator(): jsonSchemaValidator {
   const defaultValidator = new AjvJsonSchemaValidator();
-  const Ajv2020Ctor = require("ajv/dist/2020") as new (opts?: object) => Ajv2020Like;
-  const ajv2020 = new Ajv2020Ctor({
+  const ajv2020 = new Ajv2020({
     strict: false,
     validateFormats: false,
     validateSchema: false,
