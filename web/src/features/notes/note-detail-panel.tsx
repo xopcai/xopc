@@ -293,6 +293,7 @@ function NoteDetailPanelInner({ noteId, onBack, onSaved }: NoteDetailPanelProps)
 
   return (
     <div className="flex h-full min-h-0 gap-3 p-4 sm:px-5">
+      {/* Editor */}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <div
           ref={editorContainerRef}
@@ -391,8 +392,19 @@ function NoteDetailPanelInner({ noteId, onBack, onSaved }: NoteDetailPanelProps)
           )}
         </div>
       </div>
-      {showHistory && (
-        <div className="relative flex min-h-0 shrink-0 flex-col" style={{ width: historyWidth }}>
+
+      {/* History panel — animated width */}
+      <div
+        className={cn(
+          'relative flex min-h-0 shrink-0 flex-col overflow-hidden',
+          !historyResizing && 'transition-[width] duration-300 ease-in-out',
+        )}
+        style={{ width: showHistory ? historyWidth : 0 }}
+      >
+        <div
+          className="flex min-h-0 flex-1 flex-col"
+          style={{ width: historyWidth }}
+        >
           <div
             role="separator"
             aria-orientation="vertical"
@@ -416,7 +428,7 @@ function NoteDetailPanelInner({ noteId, onBack, onSaved }: NoteDetailPanelProps)
             />
           </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }
