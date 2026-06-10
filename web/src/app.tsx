@@ -251,6 +251,10 @@ const router = createHashRouter([
             element: <Navigate to="/settings/agent-mcp" replace />,
           },
           {
+            path: 'cron',
+            element: <Navigate to="/cron?tab=settings" replace />,
+          },
+          {
             path: 'sessions',
             element: (
               <Suspense fallback={<SecondaryRouteFallback />}>

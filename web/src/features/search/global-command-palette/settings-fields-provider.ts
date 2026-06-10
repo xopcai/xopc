@@ -197,14 +197,14 @@ function buildFieldSeeds(language: StoredLanguage): FieldSeed[] {
       id: 'field:cron:enabled',
       title: isZh ? '定时任务开关' : 'Cron Enabled',
       subtitle: isZh ? '启用/禁用定时调度器' : 'Enable or disable the scheduler',
-      path: '/settings/cron',
+      path: '/cron?tab=settings',
       keywords: ['cron', 'enabled', 'scheduler', 'timer', '定时', '调度'],
     },
     {
       id: 'field:cron:timezone',
       title: isZh ? '定时任务时区' : 'Cron Timezone',
       subtitle: isZh ? '调度器使用的时区' : 'Timezone for the scheduler',
-      path: '/settings/cron',
+      path: '/cron?tab=settings',
       keywords: ['timezone', 'tz', 'utc', 'cron', '时区'],
     },
 

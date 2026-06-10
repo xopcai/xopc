@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef } from 'react';
 
 import { uiPatchReducer } from '@/lib/settings-form-draft';
-import { useLocation } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
 
 import {
@@ -18,6 +18,7 @@ import {
   type CronPayload,
 } from '@/features/cron/cron-api';
 import { CronConfirmActionDialog } from '@/features/cron/cron-confirm-action-dialog';
+import { CronGlobalsSection } from '@/features/cron/cron-globals-section';
 import { CronJobDetailDrawer } from '@/features/cron/cron-job-detail-drawer';
 import { CronJobFormDialog } from '@/features/cron/cron-job-form-dialog';
 import { CronMainToolbar } from '@/features/cron/cron-main-toolbar';
@@ -27,7 +28,7 @@ import { CronSystemTasksPanel } from '@/features/cron/cron-system-tasks-panel';
 import { CronTasksPanel } from '@/features/cron/cron-tasks-panel';
 import type { CronTemplateFilter } from '@/features/cron/cron-template-library';
 import { CronTemplatePickerDialog } from '@/features/cron/cron-template-picker-dialog';
-import { WORKFLOW_CRON_TIMEOUT_MS } from '@/features/cron/cron-page-lib';
+import { WORKFLOW_CRON_TIMEOUT_MS, cronMainTabSearchParam, parseCronMainTab, type CronMainTab } from '@/features/cron/cron-page-lib';
 import { useCronJobForm } from '@/features/cron/use-cron-job-form';
 import { useCronKeepAwake } from '@/features/cron/use-cron-keep-awake';
 import {
@@ -47,7 +48,7 @@ import { usePageHeaderStore } from '@/stores/page-header-store';
 import { useThemeStore } from '@/stores/theme-store';
 
 type CronPageUi = {
-  mainTab: 'myTasks' | 'systemTasks' | 'history';
+  mainTab: CronMainTab;
   jobSort: JobSort;
   historyRange: HistoryRange;
   historyJobFilter: string;
@@ -86,8 +87,16 @@ export function CronPage() {
   const resolvedTheme = useThemeStore((s) => s.resolved);
   const isDark = resolvedTheme === 'dark';
   const localeTag = language === 'zh' ? 'zh-CN' : 'en-US';
+  const [searchParams, setSearchParams] = useSearchParams();
 
-  const [ui, dispatch] = useReducer(uiPatchReducer<CronPageUi>, initialCronPageUi);
+  const [ui, dispatch] = useReducer(
+    uiPatchReducer<CronPageUi>,
+    searchParams,
+    (params) => ({
+      ...initialCronPageUi,
+      mainTab: parseCronMainTab(params.get('tab')),
+    }),
+  );
   const {
     mainTab,
     jobSort,
@@ -102,6 +111,30 @@ export function CronPage() {
     templatePickerOpen,
     templateCategoryFilter,
   } = ui;
+
+  const urlMainTab = parseCronMainTab(searchParams.get('tab'));
+  useEffect(() => {
+    if (urlMainTab !== mainTab) {
+      dispatch({ type: 'patch', patch: { mainTab: urlMainTab } });
+    }
+  }, [urlMainTab, mainTab]);
+
+  const setMainTab = useCallback(
+    (tab: CronMainTab) => {
+      dispatch({ type: 'patch', patch: { mainTab: tab } });
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          const param = cronMainTabSearchParam(tab);
+          if (param) next.set('tab', param);
+          else next.delete('tab');
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
 
   const data = useCronPageData({
     hasToken,
@@ -377,8 +410,6 @@ export function CronPage() {
   );
 
   const scheduleBadgeLabels = c.scheduleBadge;
-  const { pathname } = useLocation();
-  const inSettingsShell = pathname.startsWith('/settings/');
 
   if (!hasToken) {
     return (
@@ -428,23 +459,10 @@ export function CronPage() {
           </div>
         </header>
 
-        {inSettingsShell ? (
-          <div className="flex flex-wrap items-center justify-end gap-2 border-b border-edge-subtle pb-3 dark:border-edge-subtle">
-            <CronPageHeaderActions
-              c={c}
-              loading={data.loading}
-              runHistoryLoading={data.runHistoryLoading}
-              onRefresh={data.refreshAll}
-              onOpenTemplatePicker={openTemplatePicker}
-              onAddJob={() => form.openForm()}
-            />
-          </div>
-        ) : null}
-
         <CronMainToolbar
           c={c}
           mainTab={mainTab}
-          onMainTabChange={(tab) => dispatch({ type: 'patch', patch: { mainTab: tab } })}
+          onMainTabChange={setMainTab}
           jobSort={jobSort}
           onJobSortChange={(sort) => dispatch({ type: 'patch', patch: { jobSort: sort } })}
           historyRange={historyRange}
@@ -507,7 +525,7 @@ export function CronPage() {
             onRunNow={(j) => openConfirm('run', j.id)}
             onDelete={(j) => openConfirm('delete', j.id)}
           />
-        ) : (
+        ) : mainTab === 'history' ? (
           <CronRunHistorySection
             c={c}
             runHistoryLoading={data.runHistoryLoading}
@@ -518,6 +536,8 @@ export function CronPage() {
             onOpenJobDetail={(j) => void openDetail(j)}
             statusLabels={statusLabels}
           />
+        ) : (
+          <CronGlobalsSection hasToken={hasToken} />
         )}
       </div>
 
@@ -646,8 +666,6 @@ function CronPageHeaderRegistration({
   onOpenTemplatePicker: () => void;
   onAddJob: () => void;
 }) {
-  const { pathname } = useLocation();
-  const inSettingsShell = pathname.startsWith('/settings/');
   const setPageHeader = usePageHeaderStore((s) => s.setPageHeader);
   const clearPageHeader = usePageHeaderStore((s) => s.clearPageHeader);
 
@@ -666,7 +684,7 @@ function CronPageHeaderRegistration({
   );
 
   useLayoutEffect(() => {
-    if (!hasToken || inSettingsShell) {
+    if (!hasToken) {
       clearPageHeader();
       return () => clearPageHeader();
     }
@@ -676,7 +694,7 @@ function CronPageHeaderRegistration({
       end: cronHeaderEnd,
     });
     return () => clearPageHeader();
-  }, [clearPageHeader, cronHeaderEnd, hasToken, inSettingsShell, setPageHeader]);
+  }, [clearPageHeader, cronHeaderEnd, hasToken, setPageHeader]);
 
   return null;
 }

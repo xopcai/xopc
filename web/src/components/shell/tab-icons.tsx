@@ -75,7 +75,6 @@ const TAB_ICONS: Record<Tab, LucideIcon> = {
   settingsSearch: Search,
   settingsShares: Share2,
   settingsDreams: Moon,
-  settingsCron: Clock,
   settingsGoals: Target,
 };
 

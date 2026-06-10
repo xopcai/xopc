@@ -24,7 +24,6 @@ export type Tab =
   | 'settingsShares'
   | 'settingsSearch'
   | 'settingsDreams'
-  | 'settingsCron'
   | 'settingsGoals'
   | 'settingsAgentDefaults'
   | 'settingsAgentChat'
@@ -76,7 +75,6 @@ export type SettingsSectionId =
   | 'keyboard-shortcuts'
   | 'system'
   | 'app-management'
-  | 'cron'
   | 'skills';
 
 export type MessageBundle = typeof en;
