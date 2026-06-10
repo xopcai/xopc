@@ -4,7 +4,7 @@ import {
   segmentedTrackClassName,
 } from '@/components/ui/segmented-styles';
 import type { CronJob } from '@/features/cron/cron-api';
-import { cronToolbarSelectClass } from '@/features/cron/cron-page-lib';
+import { cronToolbarSelectClass, type CronMainTab } from '@/features/cron/cron-page-lib';
 import type { MessageBundle } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 
@@ -12,8 +12,8 @@ type CronCopy = MessageBundle['cron'];
 
 export type CronMainToolbarProps = {
   c: CronCopy;
-  mainTab: 'myTasks' | 'systemTasks' | 'history';
-  onMainTabChange: (tab: 'myTasks' | 'systemTasks' | 'history') => void;
+  mainTab: CronMainTab;
+  onMainTabChange: (tab: CronMainTab) => void;
   jobSort: 'created_desc' | 'created_asc';
   onJobSortChange: (sort: 'created_desc' | 'created_asc') => void;
   historyRange: 'day' | 'week' | 'month';
@@ -77,6 +77,18 @@ export function CronMainToolbar({
           onClick={() => onMainTabChange('history')}
         >
           {c.tabRunHistory}
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={mainTab === 'settings'}
+          className={cn(
+            'rounded-md px-3 py-2 text-sm font-medium transition-colors',
+            mainTab === 'settings' ? 'text-fg' : 'text-fg-muted hover:text-fg',
+          )}
+          onClick={() => onMainTabChange('settings')}
+        >
+          {c.globals.title}
         </button>
       </div>
       <div

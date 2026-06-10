@@ -9,7 +9,6 @@ import { ModelsHubPanel } from '@/features/settings/models-hub/models-hub-panel'
 import { AppearanceSettingsPanel } from '@/features/settings/appearance-settings';
 import { KeyboardShortcutsSettingsPanel } from '@/features/settings/keyboard-shortcuts-settings';
 import { DreamingSettingsPanel } from '@/features/settings/dreaming-settings';
-import { CronSettingsPanel } from '@/features/settings/cron-settings';
 import { GoalsSettingsPanel } from '@/features/settings/goals-settings';
 import { GatewaySettingsPanel } from '@/features/settings/gateway-settings';
 import { HeartbeatSettingsPanel } from '@/features/settings/heartbeat-settings';
@@ -37,7 +36,6 @@ const SECTIONS: SettingsSectionId[] = [
   'tunnel',
   'remote-access',
   'shares',
-  'cron',
   'goals',
   'dreams',
 ];
@@ -117,10 +115,6 @@ export function SettingsPage() {
 
   if (id === 'dreams') {
     return <DreamingSettingsPanel />;
-  }
-
-  if (id === 'cron') {
-    return <CronSettingsPanel />;
   }
 
   if (id === 'goals') {

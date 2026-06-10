@@ -156,14 +156,7 @@ export function buildRouteSeeds(language: StoredLanguage): RouteHitSeed[] {
       title: m.nav.cron,
       subtitle: r.cronSubtitle,
       path: '/cron',
-      keywords: ['schedule', 'jobs', 'tasks', 'history'],
-    },
-    {
-      id: 'route:settings:cron',
-      title: m.nav.settingsCron,
-      subtitle: r.cronSettingsSubtitle,
-      path: '/settings/cron',
-      keywords: ['schedule', 'scheduler', 'timezone', 'concurrency', 'cron', 'automation'],
+      keywords: ['schedule', 'jobs', 'tasks', 'history', 'scheduler', 'timezone', 'concurrency', 'cron', 'automation'],
     },
     {
       id: 'route:settings:goals',
