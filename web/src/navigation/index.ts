@@ -26,7 +26,6 @@ const TAB_TO_SETTINGS_SECTION: Record<
   | 'settingsShares'
   | 'settingsSearch'
   | 'settingsDreams'
-  | 'settingsCron'
   | 'settingsGoals'
   | 'skills'
   | 'channels',
@@ -53,7 +52,6 @@ const TAB_TO_SETTINGS_SECTION: Record<
   settingsShares: 'shares',
   settingsSearch: 'credentials',
   settingsDreams: 'dreams',
-  settingsCron: 'cron',
   settingsGoals: 'goals',
   skills: 'skills',
   channels: 'channels',
@@ -113,7 +111,7 @@ export const SETTINGS_SHELL_NAV_GROUPS: readonly SettingsShellNavGroup[] = [
   },
   {
     id: 'automation',
-    tabs: ['settingsCron', 'settingsHeartbeat', 'settingsGoals', 'settingsDreams'],
+    tabs: ['settingsHeartbeat', 'settingsGoals', 'settingsDreams'],
   },
   { id: 'diagnostics', tabs: ['sessions', 'logs'] },
 ] as const;
@@ -165,7 +163,6 @@ export function pathForTab(tab: Tab): string {
   if (tab === 'chat') return '/chat';
   if (tab === 'agents' || tab === 'settingsAgents') return '/agents';
   if (tab === 'cron') return '/cron';
-  if (tab === 'settingsCron') return '/settings/cron';
   if (tab === 'settingsGoals') return '/settings/goals';
   if (tab === 'settingsKeyboardShortcuts') return '/settings/keyboard-shortcuts';
   if (tab === 'skills') return '/skills';

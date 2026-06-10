@@ -68,3 +68,19 @@ export const cronToolbarSelectClass = cn(
   selectControlBaseClass,
   'w-auto min-w-[9rem] max-w-[14rem] shrink-0 text-xs',
 );
+
+export type CronMainTab = 'myTasks' | 'systemTasks' | 'history' | 'settings';
+
+export function parseCronMainTab(raw: string | null): CronMainTab {
+  if (raw === 'settings') return 'settings';
+  if (raw === 'system' || raw === 'systemTasks') return 'systemTasks';
+  if (raw === 'history') return 'history';
+  return 'myTasks';
+}
+
+export function cronMainTabSearchParam(tab: CronMainTab): string | null {
+  if (tab === 'myTasks') return null;
+  if (tab === 'systemTasks') return 'system';
+  if (tab === 'history') return 'history';
+  return 'settings';
+}
