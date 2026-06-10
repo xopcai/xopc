@@ -63,9 +63,6 @@ function GlobalQuickCaptureModal({ onClose }: { onClose: () => void }) {
     [handleSave, onClose],
   );
 
-  const isMac = navigator.platform?.includes('Mac') ?? navigator.userAgent.includes('Mac');
-  const modKey = isMac ? '⌘' : 'Ctrl';
-
   return (
     <div
       className="fixed inset-0 z-[120] flex items-start justify-center bg-black/40 p-4 pt-[min(18vh,7rem)]"
