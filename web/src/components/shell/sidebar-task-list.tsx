@@ -49,6 +49,36 @@ type SidebarTaskPage = {
   hasMore: boolean;
 };
 
+type TimelineGroup = 'pinned' | 'today' | 'yesterday' | 'last7days' | 'thisMonth' | 'older';
+
+const TIMELINE_GROUP_ORDER: TimelineGroup[] = ['pinned', 'today', 'yesterday', 'last7days', 'thisMonth', 'older'];
+
+function getTimelineGroup(session: SessionMetadata): TimelineGroup {
+  if (session.status === 'pinned') return 'pinned';
+  const updated = new Date(session.updatedAt);
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startOfYesterday = new Date(startOfToday.getTime() - 86400000);
+  const startOf7DaysAgo = new Date(startOfToday.getTime() - 6 * 86400000);
+
+  if (updated >= startOfToday) return 'today';
+  if (updated >= startOfYesterday) return 'yesterday';
+  if (updated >= startOf7DaysAgo) return 'last7days';
+  if (updated.getMonth() === now.getMonth() && updated.getFullYear() === now.getFullYear()) return 'thisMonth';
+  return 'older';
+}
+
+type TimelineGroupLabelKey = 'timelinePinned' | 'timelineToday' | 'timelineYesterday' | 'timelineLast7Days' | 'timelineThisMonth' | 'timelineOlder';
+
+const TIMELINE_LABEL_KEY: Record<TimelineGroup, TimelineGroupLabelKey> = {
+  pinned: 'timelinePinned',
+  today: 'timelineToday',
+  yesterday: 'timelineYesterday',
+  last7days: 'timelineLast7Days',
+  thisMonth: 'timelineThisMonth',
+  older: 'timelineOlder',
+};
+
 function sessionTitle(s: SessionMetadata, unnamedLabel: string): string {
   return s.name?.trim() || unnamedLabel;
 }
@@ -346,6 +376,16 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
     return out;
   }, [data]);
 
+  const groupedItems = useMemo(() => {
+    const groups: Record<TimelineGroup, SessionMetadata[]> = {
+      pinned: [], today: [], yesterday: [], last7days: [], thisMonth: [], older: [],
+    };
+    for (const s of items) {
+      groups[getTimelineGroup(s)].push(s);
+    }
+    return groups;
+  }, [items]);
+
   const loadingMore = Boolean(data && size > data.length);
   const lastPage = data?.[data.length - 1];
   const hasMorePages = lastPage?.hasMore ?? false;
@@ -486,25 +526,38 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
           </div>
         ) : items.length > 0 ? (
           <div className="flex flex-col gap-0.5 px-4">
-            {items.map((session) => {
-              const sessionAgentId = resolveSessionAgentId(session, defaultAgentId);
+            {TIMELINE_GROUP_ORDER.map((group) => {
+              const groupSessions = groupedItems[group];
+              if (groupSessions.length === 0) return null;
               return (
-                <SidebarTaskRow
-                  key={session.key}
-                  session={session}
-                  isActive={activeSessionKey === session.key}
-                  showSourceChannelIcon={sessionFilter === 'channels'}
-                  onNavigate={onNavigate}
-                  mutate={mutate}
-                  onRequestRename={openRename}
-                  onRequestDelete={setDeleteKey}
-                  sb={sb}
-                  sess={sess}
-                  clipboard={m.clipboard}
-                  defaultUnnamedTitle={m.chat.newSession}
-                  sessionAgentId={sessionAgentId}
-                  sessionAgentAvatar={agentAvatarFromOptions(sessionAgentId, agentItems)}
-                />
+                <div key={group} className="flex flex-col gap-0.5">
+                  <div className="sticky top-0 z-[1] bg-surface-base pb-0.5 pt-2.5">
+                    <span className="pl-2 text-[11px] font-medium uppercase tracking-wide text-fg-subtle">
+                      {sb[TIMELINE_LABEL_KEY[group]]}
+                    </span>
+                  </div>
+                  {groupSessions.map((session) => {
+                    const sessionAgentId = resolveSessionAgentId(session, defaultAgentId);
+                    return (
+                      <SidebarTaskRow
+                        key={session.key}
+                        session={session}
+                        isActive={activeSessionKey === session.key}
+                        showSourceChannelIcon={sessionFilter === 'channels'}
+                        onNavigate={onNavigate}
+                        mutate={mutate}
+                        onRequestRename={openRename}
+                        onRequestDelete={setDeleteKey}
+                        sb={sb}
+                        sess={sess}
+                        clipboard={m.clipboard}
+                        defaultUnnamedTitle={m.chat.newSession}
+                        sessionAgentId={sessionAgentId}
+                        sessionAgentAvatar={agentAvatarFromOptions(sessionAgentId, agentItems)}
+                      />
+                    );
+                  })}
+                </div>
               );
             })}
           </div>

@@ -87,12 +87,25 @@ function fillChatComposerWithNavigate(
     dispatchFillChatComposer(text);
     return;
   }
-  navigate('/chat');
-  requestAnimationFrame(() => {
+
+  // Not on a chat page — navigate to /chat/new with query params so the
+  // ChatPage `?skill=` / `?slash=` consumption logic fills the composer
+  // after the session is created (event dispatch is unreliable here because
+  // the composer hasn't mounted yet).
+  const skillMatch = text.match(/^\/skill:(\S+)\s*$/);
+  const slashMatch = text.match(/^\/(\S+)\s*$/);
+  if (skillMatch) {
+    navigate(`/chat/new?skill=${encodeURIComponent(skillMatch[1])}`);
+  } else if (slashMatch) {
+    navigate(`/chat/new?slash=${encodeURIComponent(slashMatch[1])}`);
+  } else {
+    navigate('/chat/new');
     requestAnimationFrame(() => {
-      dispatchFillChatComposer(text);
+      requestAnimationFrame(() => {
+        dispatchFillChatComposer(text);
+      });
     });
-  });
+  }
 }
 
 function buildExtensionHits(args: {

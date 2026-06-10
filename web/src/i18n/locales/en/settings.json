@@ -32,7 +32,8 @@
     "system": "System permissions",
     "app-management": "App management",
     "cron": "Scheduled tasks",
-    "skills": "Skills"
+    "skills": "Skills",
+    "keyboard-shortcuts": "Keyboard shortcuts"
   },
   "settingsPage": {
     "comingSoon": "Settings · {{title}} (coming soon)."
@@ -713,6 +714,31 @@
     "developerGroupDescription": "Affects how tool-call results are displayed in chat.",
     "showRawToolDataTitle": "Show tool debugging data",
     "showRawToolDataDescription": "Reveal raw JSON input and output inside tool-call steps to help diagnose issues."
+  },
+  "keyboardShortcutsSettings": {
+    "pageTitle": "Keyboard shortcuts",
+    "subtitle": "All keyboard shortcuts available in the app.",
+    "categoryGlobal": "Global",
+    "categoryNavigation": "Navigation",
+    "categoryChat": "Chat",
+    "categoryEditor": "Notes editor",
+    "globalToggleWindow": "Show / hide app window",
+    "globalOpenSettings": "Open settings",
+    "globalNewChat": "New chat",
+    "globalCommandPalette": "Command palette",
+    "navCommandPalette": "Open command palette",
+    "navQuickCapture": "Quick capture note",
+    "navCloseDialog": "Close dialog / settings",
+    "chatSend": "Send message",
+    "chatNewLine": "New line",
+    "chatForceSend": "Force send (edit mode)",
+    "editorHeading1": "Heading 1",
+    "editorHeading2": "Heading 2",
+    "editorHeading3": "Heading 3",
+    "editorBulletList": "Bullet list",
+    "editorOrderedList": "Ordered list",
+    "editorTaskList": "Task list",
+    "desktopOnly": "Desktop app only"
   },
   "mcpSettings": {
     "title": "External tools (MCP)",

@@ -4,7 +4,9 @@ import { Archive, Bookmark, CheckSquare, Lightbulb, Mic, MoreVertical, Image, Pi
 import { cn } from '@/lib/cn';
 
 import { NoteCoverThumbnail } from './note-cover-thumbnail';
+import { formatRelativeTime, type NoteTimeLabels } from './note-time';
 import type { NoteIndexEntry, NoteKind } from './notes-api';
+import { VoiceMiniPlayer } from './voice-mini-player';
 
 const KIND_ICON: Record<NoteKind, typeof Lightbulb> = {
   thought: Lightbulb,
@@ -21,6 +23,7 @@ export type NoteCardProps = {
   onPin: (id: string, pinned: boolean) => void;
   onArchive: (id: string) => void;
   onDelete: (id: string) => void;
+  timeLabels: NoteTimeLabels;
   labels: {
     pin: string;
     unpin: string;
@@ -37,16 +40,11 @@ function noteCardPreviewText(note: NoteIndexEntry, labels: NoteCardProps['labels
   return labels.noText;
 }
 
-export function NoteCard({ note, onPress, onPin, onArchive, onDelete, labels }: NoteCardProps) {
+export function NoteCard({ note, onPress, onPin, onArchive, onDelete, labels, timeLabels }: NoteCardProps) {
   const Icon = KIND_ICON[note.kind] || Lightbulb;
   const previewText = noteCardPreviewText(note, labels);
   const isFallbackText = !note.snippet?.trim();
-  const time = new Date(note.createdAt).toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  const time = formatRelativeTime(note.createdAt, Date.now(), timeLabels);
 
   return (
     <article
@@ -63,17 +61,29 @@ export function NoteCard({ note, onPress, onPin, onArchive, onDelete, labels }: 
       <div className="flex items-start gap-3">
         {note.coverAttachmentId ? (
           <NoteCoverThumbnail noteId={note.id} attachmentId={note.coverAttachmentId} />
+        ) : note.kind === 'voice' && note.voiceAttachmentId ? (
+          <VoiceMiniPlayer
+            noteId={note.id}
+            attachmentId={note.voiceAttachmentId}
+            durationSec={note.voiceDurationSec}
+            className="mt-0.5 w-32 shrink-0"
+          />
         ) : (
           <Icon className="mt-0.5 h-4 w-4 shrink-0 text-fg-muted" />
         )}
-        <p
-          className={cn(
-            'min-w-0 flex-1 text-sm line-clamp-3',
-            isFallbackText ? 'italic text-fg-muted' : 'text-fg',
+        <div className="min-w-0 flex-1">
+          {note.title && (
+            <h3 className="mb-0.5 truncate text-sm font-semibold text-fg">{note.title}</h3>
           )}
-        >
-          {previewText}
-        </p>
+          <p
+            className={cn(
+              'text-sm line-clamp-3',
+              note.title ? 'text-fg-muted' : isFallbackText ? 'italic text-fg-muted' : 'text-fg',
+            )}
+          >
+            {previewText}
+          </p>
+        </div>
         <DropdownMenu.Root>
           <DropdownMenu.Trigger asChild>
             <button

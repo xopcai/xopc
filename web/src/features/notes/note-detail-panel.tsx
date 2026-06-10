@@ -1,4 +1,4 @@
-import { ArrowLeft, Eye, Code2, FileText } from 'lucide-react';
+import { ArrowLeft, Eye, Code2, FileText, History } from 'lucide-react';
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import useSWR from 'swr';
 
@@ -12,8 +12,9 @@ import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 import { useThemeStore } from '@/stores/theme-store';
 
-import { getNote, updateNote } from './notes-api';
+import { getNote, getNoteSnapshot, updateNote, type NoteSnapshot, type NoteSnapshotEntry } from './notes-api';
 import { NoteImageLightboxProvider, useNoteImageLightbox } from './note-image-lightbox';
+import { NoteHistoryPanel } from './note-history-panel';
 import { NoteMarkdownView } from './note-markdown-view';
 
 type EditorMode = 'wysiwyg' | 'source' | 'preview';
@@ -78,8 +79,16 @@ function NoteDetailPanelInner({ noteId, onBack, onSaved }: NoteDetailPanelProps)
   const isDark = useThemeStore((s) => s.resolved) === 'dark';
   const { openImage } = useNoteImageLightbox();
   const [mode, setMode] = useState<EditorMode>('wysiwyg');
+  const [showHistory, setShowHistory] = useState(false);
+  const [previewSnapshot, setPreviewSnapshot] = useState<NoteSnapshot | null>(null);
   const [saving, setSaving] = useState(false);
+  const [title, setTitle] = useState('');
+  const [historyWidth, setHistoryWidth] = useState(288);
+  const [historyResizing, setHistoryResizing] = useState(false);
+  const titleInitRef = useRef(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const titleDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const editorContainerRef = useRef<HTMLDivElement>(null);
   const setPageHeader = usePageHeaderStore((s) => s.setPageHeader);
   const clearPageHeader = usePageHeaderStore((s) => s.clearPageHeader);
 
@@ -87,6 +96,11 @@ function NoteDetailPanelInner({ noteId, onBack, onSaved }: NoteDetailPanelProps)
     noteId ? ['note-detail', noteId] : null,
     () => getNote(noteId),
   );
+
+  if (note && !titleInitRef.current) {
+    setTitle(note.title ?? '');
+    titleInitRef.current = true;
+  }
 
   const time = note
     ? new Date(note.createdAt).toLocaleString(undefined, {
@@ -115,6 +129,54 @@ function NoteDetailPanelInner({ noteId, onBack, onSaved }: NoteDetailPanelProps)
     [n.back, onBack],
   );
 
+  const handleTitleChange = useCallback(
+    (value: string) => {
+      setTitle(value);
+      if (!noteId) return;
+      if (titleDebounceRef.current) clearTimeout(titleDebounceRef.current);
+      titleDebounceRef.current = setTimeout(async () => {
+        setSaving(true);
+        try {
+          await updateNote(noteId, { title: value });
+          await mutate();
+          onSaved?.();
+        } catch {
+          // title save failed silently — content save will surface errors
+        } finally {
+          setSaving(false);
+        }
+      }, 600);
+    },
+    [noteId, mutate, onSaved],
+  );
+
+  const onHistoryResizePointerDown = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      const el = e.currentTarget;
+      el.setPointerCapture(e.pointerId);
+      setHistoryResizing(true);
+      const startX = e.clientX;
+      const startW = historyWidth;
+      const pid = e.pointerId;
+      const onMove = (ev: PointerEvent) => {
+        const newW = startW - (ev.clientX - startX);
+        setHistoryWidth(Math.max(200, Math.min(600, newW)));
+      };
+      const onDone = () => {
+        try { el.releasePointerCapture(pid); } catch { /* */ }
+        setHistoryResizing(false);
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', onDone);
+        window.removeEventListener('pointercancel', onDone);
+      };
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', onDone);
+      window.addEventListener('pointercancel', onDone);
+    },
+    [historyWidth],
+  );
+
   const headerMain = useMemo(
     () => (
       <div
@@ -123,26 +185,39 @@ function NoteDetailPanelInner({ noteId, onBack, onSaved }: NoteDetailPanelProps)
           APP_CHROME_NO_DRAG_CLASS,
         )}
       >
-        <span className="min-w-0 truncate text-sm text-fg-muted" title={time || undefined}>
-          {time}
-          {saving ? <span className="ml-2 text-xs opacity-60">{n.saving}</span> : null}
+        <span className="min-w-0 truncate text-sm font-medium text-fg" title={title || time || undefined}>
+          {title || time}
         </span>
+        {saving ? <span className="shrink-0 text-xs text-fg-muted opacity-60">{n.saving}</span> : null}
       </div>
     ),
-    [n.saving, saving, time],
+    [n.saving, saving, time, title],
   );
 
   const headerEnd = useMemo(
     () => (
-      <div className={APP_CHROME_NO_DRAG_CLASS}>
+      <div className={cn('flex items-center gap-2', APP_CHROME_NO_DRAG_CLASS)}>
         <NoteDetailModeSwitcher
           mode={mode}
           onModeChange={setMode}
           labels={{ edit: n.modeEdit, source: n.modeSource, preview: n.modePreview }}
         />
+        <button
+          type="button"
+          onClick={() => setShowHistory((v) => !v)}
+          aria-label={n.history}
+          className={cn(
+            'rounded-lg p-1.5 transition-colors',
+            showHistory
+              ? 'bg-accent/10 text-accent'
+              : 'text-fg-muted hover:bg-surface-hover hover:text-fg',
+          )}
+        >
+          <History className="h-4 w-4" aria-hidden />
+        </button>
       </div>
     ),
-    [mode, n.modeEdit, n.modePreview, n.modeSource],
+    [mode, n.modeEdit, n.modePreview, n.modeSource, n.history, showHistory],
   );
 
   useLayoutEffect(() => {
@@ -188,46 +263,155 @@ function NoteDetailPanelInner({ noteId, onBack, onSaved }: NoteDetailPanelProps)
     );
   }
 
+  const handleHistorySelect = useCallback(
+    async (entry: NoteSnapshotEntry) => {
+      try {
+        const snapshot = await getNoteSnapshot(noteId, entry.timestamp);
+        setPreviewSnapshot(snapshot);
+      } catch {
+        setPreviewSnapshot(null);
+      }
+    },
+    [noteId],
+  );
+
+  const handleHistoryClose = useCallback(() => {
+    setShowHistory(false);
+    setPreviewSnapshot(null);
+  }, []);
+
+  const handleHistoryRestored = useCallback(() => {
+    setShowHistory(false);
+    setPreviewSnapshot(null);
+    mutate();
+    onSaved?.();
+  }, [mutate, onSaved]);
+
+  const isPreviewingSnapshot = previewSnapshot !== null;
+  const displayTitle = isPreviewingSnapshot ? (previewSnapshot.title ?? '') : title;
+  const displayText = isPreviewingSnapshot ? (previewSnapshot.text ?? '') : (note.text ?? '');
+
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className="min-h-0 flex-1 overflow-hidden">
-        {mode === 'wysiwyg' && (
-          <BlockEditor
-            key={`wysiwyg-${noteId}`}
-            initialContent={note.text ?? ''}
-            onChange={handleSave}
-            noteId={noteId}
-          />
-        )}
-        {mode === 'source' && (
-          <MarkdownEditor
-            key={`source-${noteId}`}
-            initialContent={note.text ?? ''}
-            onChange={handleSave}
-            isDark={isDark}
-          />
-        )}
-        {mode === 'preview' && (
-          <div
-            className="h-full overflow-y-auto px-6 py-4"
-            onClick={(event) => {
-              const target = event.target;
-              if (!(target instanceof HTMLImageElement)) return;
-              openImage(target.currentSrc || target.src, target.alt);
-            }}
-          >
-            {note.text ? (
-              <NoteMarkdownView
-                noteId={noteId}
-                content={note.text}
-                className="[&_img]:cursor-zoom-in"
-              />
-            ) : (
-              <p className="italic text-fg-muted">{n.emptyPreview}</p>
-            )}
-          </div>
-        )}
+    <div className="flex h-full min-h-0">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <div ref={editorContainerRef} className="min-h-0 flex-1 overflow-hidden">
+          {isPreviewingSnapshot ? (
+            <div className="h-full overflow-y-auto px-6 py-4">
+              {displayTitle && (
+                <h1 className="mb-4 text-2xl font-bold text-fg/70">{displayTitle}</h1>
+              )}
+              {displayText ? (
+                <NoteMarkdownView
+                  noteId={noteId}
+                  content={displayText}
+                  className="opacity-80"
+                />
+              ) : (
+                <p className="italic text-fg-muted">{n.emptyPreview}</p>
+              )}
+            </div>
+          ) : (
+            <>
+              {mode === 'wysiwyg' && (
+                <div className="flex h-full flex-col">
+                  <div className="shrink-0 px-6 pt-4">
+                    <input
+                      type="text"
+                      value={title}
+                      onChange={(e) => handleTitleChange(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          const prosemirror = editorContainerRef.current?.querySelector<HTMLElement>('.ProseMirror');
+                          prosemirror?.focus();
+                        }
+                      }}
+                      placeholder={n.titlePlaceholder}
+                      className="w-full border-none bg-transparent text-2xl font-bold text-fg placeholder:text-fg-muted/40 focus:outline-none"
+                    />
+                  </div>
+                  <div className="min-h-0 flex-1">
+                    <BlockEditor
+                      key={`wysiwyg-${noteId}`}
+                      initialContent={note.text ?? ''}
+                      onChange={handleSave}
+                      noteId={noteId}
+                    />
+                  </div>
+                </div>
+              )}
+              {mode === 'source' && (
+                <div className="flex h-full flex-col">
+                  <div className="shrink-0 px-6 pt-4">
+                    <input
+                      type="text"
+                      value={title}
+                      onChange={(e) => handleTitleChange(e.target.value)}
+                      placeholder={n.titlePlaceholder}
+                      className="w-full border-none bg-transparent text-2xl font-bold text-fg placeholder:text-fg-muted/40 focus:outline-none"
+                    />
+                  </div>
+                  <div className="min-h-0 flex-1">
+                    <MarkdownEditor
+                      key={`source-${noteId}`}
+                      initialContent={note.text ?? ''}
+                      onChange={handleSave}
+                      isDark={isDark}
+                    />
+                  </div>
+                </div>
+              )}
+              {mode === 'preview' && (
+                <div
+                  className="h-full overflow-y-auto px-6 py-4"
+                  onClick={(event) => {
+                    const target = event.target;
+                    if (!(target instanceof HTMLImageElement)) return;
+                    openImage(target.currentSrc || target.src, target.alt);
+                  }}
+                >
+                  {title && (
+                    <h1 className="mb-4 text-2xl font-bold text-fg">{title}</h1>
+                  )}
+                  {note.text ? (
+                    <NoteMarkdownView
+                      noteId={noteId}
+                      content={note.text}
+                      className="[&_img]:cursor-zoom-in"
+                    />
+                  ) : (
+                    <p className="italic text-fg-muted">{n.emptyPreview}</p>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+        </div>
       </div>
+      {showHistory && (
+        <div className="relative shrink-0" style={{ width: historyWidth }}>
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            onPointerDown={onHistoryResizePointerDown}
+            className={cn(
+              'absolute left-0 top-0 z-10 h-full w-2 -translate-x-1/2 cursor-col-resize',
+              "before:content-[''] before:pointer-events-none before:absolute before:left-1/2 before:top-0 before:h-full before:w-px before:-translate-x-1/2",
+              'before:bg-transparent before:transition-[background-color] before:duration-150',
+              'hover:before:bg-edge/65 dark:hover:before:bg-edge/75',
+              historyResizing && 'before:!bg-edge/80 dark:before:!bg-edge/85',
+              'touch-none select-none',
+            )}
+          />
+          <NoteHistoryPanel
+            noteId={noteId}
+            activeTimestamp={previewSnapshot?.timestamp ?? null}
+            onSelect={handleHistorySelect}
+            onClose={handleHistoryClose}
+            onRestored={handleHistoryRestored}
+          />
+        </div>
+      )}
     </div>
   );
 }

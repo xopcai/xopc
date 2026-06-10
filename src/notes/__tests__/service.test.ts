@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { NotesService } from '../service.js';
-import type { Note, NoteBlock } from '../types.js';
+import type { Note, NoteBlock, NoteSnapshot, NoteSnapshotEntry, SnapshotTrigger } from '../types.js';
 
 class MemoryNotesStore {
   private notes = new Map<string, Note>();
+  snapshots: NoteSnapshot[] = [];
 
   async initialize(): Promise<void> {}
 
@@ -46,6 +47,43 @@ class MemoryNotesStore {
 
   resolveAttachmentPath(): string {
     return 'mock';
+  }
+
+  async deleteAttachmentFile(): Promise<void> {}
+
+  async saveSnapshot(note: Note, trigger: SnapshotTrigger): Promise<void> {
+    this.snapshots.push({
+      noteId: note.id,
+      timestamp: Date.now(),
+      trigger,
+      title: note.title,
+      text: note.text,
+      blocks: note.blocks,
+      tags: note.tags,
+      kind: note.kind,
+      status: note.status,
+    });
+  }
+
+  async listSnapshots(noteId: string): Promise<NoteSnapshotEntry[]> {
+    return this.snapshots
+      .filter((s) => s.noteId === noteId)
+      .sort((a, b) => b.timestamp - a.timestamp)
+      .map((s) => ({
+        timestamp: s.timestamp,
+        trigger: s.trigger,
+        snippet: s.text?.slice(0, 80),
+      }));
+  }
+
+  async getSnapshot(noteId: string, timestamp: number): Promise<NoteSnapshot | null> {
+    return this.snapshots.find((s) => s.noteId === noteId && s.timestamp === timestamp) ?? null;
+  }
+
+  async pruneSnapshots(_noteId: string, _maxCount: number): Promise<void> {}
+
+  async deleteAllSnapshots(noteId: string): Promise<void> {
+    this.snapshots = this.snapshots.filter((s) => s.noteId !== noteId);
   }
 
   async flush(): Promise<void> {}
@@ -134,5 +172,91 @@ describe('NotesService block sync and AI edit', () => {
         '明天提交方案',
       ]);
     }
+  });
+
+  it('saves a snapshot on content update', async () => {
+    const note = await service.createNote({
+      text: '原始内容',
+      capturedVia: { channel: 'web' },
+    });
+
+    await service.updateNote(note.id, { text: '修改后内容' });
+
+    const history = await service.listNoteHistory(note.id);
+    expect(history).toHaveLength(1);
+    expect(history[0].trigger).toBe('edit');
+    expect(history[0].snippet).toBe('原始内容');
+  });
+
+  it('throttles edit snapshots within 60s', async () => {
+    const note = await service.createNote({
+      text: 'v0',
+      capturedVia: { channel: 'web' },
+    });
+
+    await service.updateNote(note.id, { text: 'v1' });
+    await service.updateNote(note.id, { text: 'v2' });
+    await service.updateNote(note.id, { text: 'v3' });
+
+    const history = await service.listNoteHistory(note.id);
+    expect(history).toHaveLength(1);
+  });
+
+  it('always saves snapshot for sync trigger', async () => {
+    const note = await service.createNote({
+      text: 'v0',
+      capturedVia: { channel: 'web' },
+    });
+
+    await service.updateNote(note.id, { text: 'v1' }, 'sync');
+    await service.updateNote(note.id, { text: 'v2' }, 'sync');
+
+    const history = await service.listNoteHistory(note.id);
+    expect(history).toHaveLength(2);
+    expect(history.every((e) => e.trigger === 'sync')).toBe(true);
+  });
+
+  it('restores a snapshot and saves current state first', async () => {
+    const note = await service.createNote({
+      text: '初始版本',
+      capturedVia: { channel: 'web' },
+    });
+
+    await service.updateNote(note.id, { text: '被修改了' }, 'sync');
+    const history = await service.listNoteHistory(note.id);
+    const snapshotTimestamp = history[0].timestamp;
+
+    const restored = await service.restoreNoteSnapshot(note.id, snapshotTimestamp);
+    expect(restored?.text).toBe('初始版本');
+
+    const historyAfter = await service.listNoteHistory(note.id);
+    expect(historyAfter.some((e) => e.trigger === 'restore')).toBe(true);
+  });
+
+  it('cleans up snapshots when deleting a note', async () => {
+    const note = await service.createNote({
+      text: 'to delete',
+      capturedVia: { channel: 'web' },
+    });
+
+    await service.updateNote(note.id, { text: 'edited' }, 'sync');
+    expect(store.snapshots.length).toBeGreaterThan(0);
+
+    await service.deleteNote(note.id);
+    const remaining = store.snapshots.filter((s) => s.noteId === note.id);
+    expect(remaining).toHaveLength(0);
+  });
+
+  it('does not save snapshot for metadata-only updates', async () => {
+    const note = await service.createNote({
+      text: '内容不变',
+      capturedVia: { channel: 'web' },
+    });
+
+    await service.updateNote(note.id, { pinned: true });
+    await service.updateNote(note.id, { status: 'archived' });
+
+    const history = await service.listNoteHistory(note.id);
+    expect(history).toHaveLength(0);
   });
 });

@@ -3,6 +3,7 @@
 .block-editor-content {
   outline: none;
   min-height: 100%;
+  padding-bottom: 60vh;
   font-size: 0.9375rem;
   line-height: 1.7;
   color: var(--color-fg);

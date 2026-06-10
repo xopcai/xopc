@@ -30,6 +30,7 @@ export interface NoteAiMeta {
 
 export interface Note {
   id: string;
+  title?: string;
   kind: NoteKind;
   status: NoteStatus;
   text?: string;
@@ -44,6 +45,7 @@ export interface Note {
 
 export interface NoteIndexEntry {
   id: string;
+  title?: string;
   kind: NoteKind;
   status: NoteStatus;
   createdAt: number;
@@ -52,6 +54,8 @@ export interface NoteIndexEntry {
   tags?: string[];
   snippet?: string;
   coverAttachmentId?: string;
+  voiceAttachmentId?: string;
+  voiceDurationSec?: number;
   attachmentNames?: string[];
 }
 
@@ -170,6 +174,50 @@ export async function quickCaptureVoice(
     note = await updateNote(note.id, { text, kind: 'voice' });
   }
   return note;
+}
+
+export type SnapshotTrigger = 'edit' | 'ai_edit' | 'sync' | 'restore';
+
+export interface NoteSnapshotEntry {
+  timestamp: number;
+  trigger: SnapshotTrigger;
+  snippet?: string;
+}
+
+export interface NoteSnapshot {
+  noteId: string;
+  timestamp: number;
+  trigger: SnapshotTrigger;
+  title?: string;
+  text?: string;
+  tags?: string[];
+  kind: NoteKind;
+  status: NoteStatus;
+}
+
+export async function listNoteHistory(noteId: string): Promise<NoteSnapshotEntry[]> {
+  const result = await fetchJson<{ entries: NoteSnapshotEntry[] }>(
+    apiUrl(`/api/notes/${encodeURIComponent(noteId)}/history`),
+  );
+  return result.entries;
+}
+
+export async function getNoteSnapshot(noteId: string, timestamp: number): Promise<NoteSnapshot> {
+  const result = await fetchJson<{ snapshot: NoteSnapshot }>(
+    apiUrl(`/api/notes/${encodeURIComponent(noteId)}/history/${timestamp}`),
+  );
+  return result.snapshot;
+}
+
+export async function restoreNoteSnapshot(noteId: string, timestamp: number): Promise<Note> {
+  const result = await fetchJson<{ note: Note }>(
+    apiUrl(`/api/notes/${encodeURIComponent(noteId)}/history/restore`),
+    {
+      method: 'POST',
+      body: JSON.stringify({ timestamp }),
+    },
+  );
+  return result.note;
 }
 
 export { noteAttachmentRef, formatVoiceMemoLabel } from './note-media';

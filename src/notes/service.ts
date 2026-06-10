@@ -13,7 +13,10 @@ import type {
   NoteBlock,
   NoteIndexEntry,
   NoteKind,
+  NoteSnapshot,
+  NoteSnapshotEntry,
   NotesListQuery,
+  SnapshotTrigger,
 } from './types.js';
 
 const log = createLogger('NotesService');
@@ -147,8 +150,12 @@ function createAiOrganizedBlocks(blocks: NoteBlock[], instruction: string): Note
   ];
 }
 
+const SNAPSHOT_THROTTLE_MS = 60_000;
+const MAX_SNAPSHOTS_PER_NOTE = 30;
+
 export class NotesService {
   private store: NotesStore;
+  private lastSnapshotAt = new Map<string, number>();
 
   constructor(store: NotesStore) {
     this.store = store;
@@ -187,6 +194,7 @@ export class NotesService {
     const text = params.text ?? blocksToPlainText(blocks, id);
     const note: Note = {
       id,
+      title: params.title,
       kind: params.kind || inferKind(text),
       status: 'inbox',
       text,
@@ -208,9 +216,14 @@ export class NotesService {
     return this.store.getNote(id);
   }
 
-  async updateNote(id: string, patch: Partial<Note>): Promise<Note | null> {
+  async updateNote(id: string, patch: Partial<Note>, trigger: SnapshotTrigger = 'edit'): Promise<Note | null> {
     const existing = await this.store.getNote(id);
     if (!existing) return null;
+
+    const contentTouched = patch.text !== undefined || patch.blocks !== undefined || patch.title !== undefined;
+    if (contentTouched) {
+      await this.maybeSaveSnapshot(existing, trigger);
+    }
 
     const normalizedPatch: Partial<Note> = { ...patch };
     if (patch.blocks) {
@@ -220,7 +233,6 @@ export class NotesService {
     }
     normalizedPatch.remoteVersion = (existing.remoteVersion ?? 0) + 1;
 
-    const contentTouched = patch.text !== undefined || patch.blocks !== undefined;
     if (contentTouched) {
       const merged: Note = {
         ...existing,
@@ -271,7 +283,7 @@ export class NotesService {
       return { note: existing, conflict: true };
     }
 
-    const updated = await this.updateNote(id, patch);
+    const updated = await this.updateNote(id, patch, 'sync');
     return { note: updated, conflict: false };
   }
 
@@ -298,7 +310,12 @@ export class NotesService {
   }
 
   async deleteNote(id: string): Promise<boolean> {
-    return this.store.deleteNote(id);
+    const deleted = await this.store.deleteNote(id);
+    if (deleted) {
+      await this.store.deleteAllSnapshots(id);
+      this.lastSnapshotAt.delete(id);
+    }
+    return deleted;
   }
 
   async listNotes(query: NotesListQuery = {}): Promise<{ items: NoteIndexEntry[]; total: number }> {
@@ -350,8 +367,48 @@ export class NotesService {
     return { filePath: fullPath, mimeType: attachment.mimeType, fileName: attachment.fileName };
   }
 
+  async listNoteHistory(noteId: string): Promise<NoteSnapshotEntry[]> {
+    return this.store.listSnapshots(noteId);
+  }
+
+  async getNoteSnapshot(noteId: string, timestamp: number): Promise<NoteSnapshot | null> {
+    return this.store.getSnapshot(noteId, timestamp);
+  }
+
+  async restoreNoteSnapshot(noteId: string, timestamp: number): Promise<Note | null> {
+    const snapshot = await this.store.getSnapshot(noteId, timestamp);
+    if (!snapshot) return null;
+    const existing = await this.store.getNote(noteId);
+    if (!existing) return null;
+
+    await this.store.saveSnapshot(existing, 'restore');
+    this.lastSnapshotAt.set(noteId, Date.now());
+    await this.store.pruneSnapshots(noteId, MAX_SNAPSHOTS_PER_NOTE);
+
+    return this.store.updateNote(noteId, {
+      title: snapshot.title,
+      text: snapshot.text,
+      blocks: snapshot.blocks,
+      tags: snapshot.tags,
+    });
+  }
+
   async flush(): Promise<void> {
     await this.store.flush();
+  }
+
+  private async maybeSaveSnapshot(note: Note, trigger: SnapshotTrigger): Promise<void> {
+    if (trigger !== 'edit') {
+      await this.store.saveSnapshot(note, trigger);
+      this.lastSnapshotAt.set(note.id, Date.now());
+      await this.store.pruneSnapshots(note.id, MAX_SNAPSHOTS_PER_NOTE);
+      return;
+    }
+    const last = this.lastSnapshotAt.get(note.id) ?? 0;
+    if (Date.now() - last < SNAPSHOT_THROTTLE_MS) return;
+    await this.store.saveSnapshot(note, trigger);
+    this.lastSnapshotAt.set(note.id, Date.now());
+    await this.store.pruneSnapshots(note.id, MAX_SNAPSHOTS_PER_NOTE);
   }
 }
 

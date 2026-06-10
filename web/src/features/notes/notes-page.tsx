@@ -14,6 +14,7 @@ import { usePageHeaderStore } from '@/stores/page-header-store';
 
 import { NoteCard } from './note-card';
 import { QuickCaptureBar } from './quick-capture-bar';
+import { dateGroupKey, formatDateGroup, type NoteTimeLabels } from './note-time';
 import { deleteNote, listNotes, quickCapture, quickCaptureImage, quickCaptureVoice, updateNote, type NoteKind, type NoteStatus } from './notes-api';
 import { showToast } from '@/lib/toast';
 
@@ -50,7 +51,7 @@ export function NotesPage() {
     [hasToken, ui.statusFilter, ui.kindFilter, ui.search],
   );
 
-  const { data, mutate, isLoading } = useSWR(swrKey, () =>
+  const { data, mutate, isLoading, isValidating } = useSWR(swrKey, () =>
     listNotes({
       status: ui.statusFilter === 'all' ? undefined : ui.statusFilter,
       kind: ui.kindFilter === 'all' ? undefined : ui.kindFilter,
@@ -59,8 +60,12 @@ export function NotesPage() {
       sortBy: 'createdAt',
       sortOrder: 'desc',
     }),
+    { keepPreviousData: true },
   );
 
+  // Only show skeleton on true first load (no data at all yet).
+  // When switching tabs, previous data is retained so we skip the skeleton.
+  const showSkeleton = isLoading && !data;
   const notes = data?.items ?? [];
   const total = data?.total ?? 0;
 
@@ -93,12 +98,23 @@ export function NotesPage() {
     return () => clearPageHeader();
   }, [clearPageHeader, hasToken, n.title, noteCountLabel, setPageHeader]);
 
+  const timeLabels: NoteTimeLabels = useMemo(() => ({
+    justNow: n.justNow,
+    minutesAgo: n.minutesAgo,
+    today: n.today,
+    yesterday: n.yesterday,
+    daysAgo: n.daysAgo,
+  }), [n.justNow, n.minutesAgo, n.today, n.yesterday, n.daysAgo]);
+
   const handleCapture = useCallback(
-    async (text: string) => {
-      await quickCapture(text, 'web');
+    async (text: string, opts?: { navigate?: boolean }) => {
+      const note = await quickCapture(text, 'web');
       await mutate();
+      if (opts?.navigate !== false) {
+        navigate(`/notes/${note.id}`);
+      }
     },
-    [mutate],
+    [mutate, navigate],
   );
 
   const handleImagePick = useCallback(() => {
@@ -242,8 +258,8 @@ export function NotesPage() {
       </div>
 
       {/* Notes list — only this region scrolls */}
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-24 [scrollbar-gutter:stable]">
-        {isLoading ? (
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pt-3 pb-24 [scrollbar-gutter:stable]">
+        {showSkeleton ? (
           <div className="flex flex-col gap-3">
             {[1, 2, 3].map((i) => (
               <div key={i} className="h-24 animate-pulse rounded-xl bg-surface-hover" />
@@ -257,24 +273,37 @@ export function NotesPage() {
           </div>
         ) : (
           <div className="flex flex-col gap-3">
-            {notes.map((note) => (
-              <NoteCard
-                key={note.id}
-                note={note}
-                onPress={handleNoteClick}
-                onPin={handlePin}
-                onArchive={handleArchive}
-                onDelete={handleDelete}
-                labels={{
-                  pin: n.pin,
-                  unpin: n.unpin,
-                  archive: n.archive,
-                  delete: n.delete,
-                  imageNote: n.imageNote,
-                  noText: n.noText,
-                }}
-              />
-            ))}
+            {notes.map((note, idx) => {
+              const prevKey = idx > 0 ? dateGroupKey(notes[idx - 1].createdAt) : null;
+              const currentKey = dateGroupKey(note.createdAt);
+              const showDateHeader = currentKey !== prevKey;
+
+              return (
+                <div key={note.id}>
+                  {showDateHeader && (
+                    <div className={cn('pb-2 text-xs font-medium text-fg-muted', idx > 0 && 'pt-2')}>
+                      {formatDateGroup(note.createdAt, Date.now(), timeLabels)}
+                    </div>
+                  )}
+                  <NoteCard
+                    note={note}
+                    onPress={handleNoteClick}
+                    onPin={handlePin}
+                    onArchive={handleArchive}
+                    onDelete={handleDelete}
+                    timeLabels={timeLabels}
+                    labels={{
+                      pin: n.pin,
+                      unpin: n.unpin,
+                      archive: n.archive,
+                      delete: n.delete,
+                      imageNote: n.imageNote,
+                      noText: n.noText,
+                    }}
+                  />
+                </div>
+              );
+            })}
           </div>
         )}
       </div>

@@ -12,6 +12,7 @@ const TAB_TO_SETTINGS_SECTION: Record<
   | 'settingsAgentDefaults'
   | 'settingsAgentBrowser'
   | 'settingsAgentMcp'
+  | 'settingsKeyboardShortcuts'
   | 'settingsAgents'
   | 'settingsCredentials'
   | 'settingsProviders'
@@ -33,6 +34,7 @@ const TAB_TO_SETTINGS_SECTION: Record<
 > = {
   settingsOverview: 'overview',
   settingsAppearance: 'appearance',
+  settingsKeyboardShortcuts: 'keyboard-shortcuts',
   settingsSystem: 'system',
   settingsAppManagement: 'app-management',
   settingsAgentDefaults: 'agent-defaults',
@@ -99,7 +101,7 @@ export const ELECTRON_SYSTEM_NAV_GROUP: SettingsShellNavGroup = {
  * Electron system group and extensions append in `SettingsPageLayout`.
  */
 export const SETTINGS_SHELL_NAV_GROUPS: readonly SettingsShellNavGroup[] = [
-  { id: 'general', tabs: ['settingsOverview', 'settingsAppearance'] },
+  { id: 'general', tabs: ['settingsOverview', 'settingsAppearance', 'settingsKeyboardShortcuts'] },
   { id: 'credentials', tabs: ['settingsCredentials'] },
   {
     id: 'agent',
@@ -165,6 +167,7 @@ export function pathForTab(tab: Tab): string {
   if (tab === 'cron') return '/cron';
   if (tab === 'settingsCron') return '/settings/cron';
   if (tab === 'settingsGoals') return '/settings/goals';
+  if (tab === 'settingsKeyboardShortcuts') return '/settings/keyboard-shortcuts';
   if (tab === 'skills') return '/skills';
   if (tab === 'channels' || tab === 'settingsChannels') return '/channels';
   if (tab === 'settingsAgentDefaults') return '/settings/agent-defaults';

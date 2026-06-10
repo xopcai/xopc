@@ -39,6 +39,7 @@ export type Tab =
   | 'settingsAgentMcp'
   | 'settingsAgentSystemPrompt'
   | 'settingsAgents'
+  | 'settingsKeyboardShortcuts'
   | 'settingsSystem'
   | 'settingsAppManagement';
 
@@ -72,6 +73,7 @@ export type SettingsSectionId =
   | 'dreams'
   | 'goals'
   | 'agents'
+  | 'keyboard-shortcuts'
   | 'system'
   | 'app-management'
   | 'cron'

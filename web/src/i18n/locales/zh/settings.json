@@ -32,7 +32,8 @@
     "system": "系统授权",
     "app-management": "应用管理",
     "cron": "定时任务",
-    "skills": "技能"
+    "skills": "技能",
+    "keyboard-shortcuts": "快捷键"
   },
   "settingsPage": {
     "comingSoon": "设置 · {{title}}（即将推出）。"
@@ -713,6 +714,31 @@
     "developerGroupDescription": "影响对话中工具调用结果的展示形式。",
     "showRawToolDataTitle": "显示工具调试数据",
     "showRawToolDataDescription": "在工具调用步骤中显示原始 JSON 输入与输出，便于排查问题。"
+  },
+  "keyboardShortcutsSettings": {
+    "pageTitle": "快捷键",
+    "subtitle": "应用中可用的所有快捷键。",
+    "categoryGlobal": "全局",
+    "categoryNavigation": "导航",
+    "categoryChat": "对话",
+    "categoryEditor": "笔记编辑器",
+    "globalToggleWindow": "显示/隐藏应用窗口",
+    "globalOpenSettings": "打开设置",
+    "globalNewChat": "新建对话",
+    "globalCommandPalette": "命令面板",
+    "navCommandPalette": "打开命令面板",
+    "navQuickCapture": "快速记录笔记",
+    "navCloseDialog": "关闭弹窗/设置",
+    "chatSend": "发送消息",
+    "chatNewLine": "换行",
+    "chatForceSend": "强制发送（编辑模式）",
+    "editorHeading1": "一级标题",
+    "editorHeading2": "二级标题",
+    "editorHeading3": "三级标题",
+    "editorBulletList": "无序列表",
+    "editorOrderedList": "有序列表",
+    "editorTaskList": "任务列表",
+    "desktopOnly": "仅桌面应用"
   },
   "mcpSettings": {
     "title": "外部工具 (MCP)",

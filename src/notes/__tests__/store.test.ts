@@ -1,9 +1,9 @@
-import { access, mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises';
+import { access, mkdtemp, readdir, rm, writeFile, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { resolveNoteItemPath, resolveNotesIndexPath } from '../paths.js';
+import { resolveNoteItemPath, resolveNoteHistoryDir, resolveNotesIndexPath } from '../paths.js';
 import { buildNoteAttachmentRef } from '../attachment-ref.js';
 import { NotesStore } from '../store.js';
 import type { Note } from '../types.js';
@@ -227,5 +227,110 @@ describe('NotesStore deleteNote', () => {
 
     const miss = await store.listNotes({ search: 'invoice' });
     expect(miss.items.map((item) => item.id)).toEqual([]);
+  });
+});
+
+describe('NotesStore snapshots', () => {
+  let stateDir: string;
+  let previousStateDir: string | undefined;
+  let store: NotesStore;
+
+  const makeNote = (id: string, text: string): Note => ({
+    id,
+    kind: 'thought',
+    status: 'inbox',
+    text,
+    createdAt: 1,
+    updatedAt: 1,
+    capturedVia: { channel: 'web' },
+  });
+
+  beforeEach(async () => {
+    stateDir = await mkdtemp(join(tmpdir(), 'xopc-snap-'));
+    previousStateDir = process.env.XOPC_STATE_DIR;
+    process.env.XOPC_STATE_DIR = stateDir;
+    store = new NotesStore();
+    await store.initialize();
+  });
+
+  afterEach(async () => {
+    if (previousStateDir === undefined) {
+      delete process.env.XOPC_STATE_DIR;
+    } else {
+      process.env.XOPC_STATE_DIR = previousStateDir;
+    }
+    await rm(stateDir, { recursive: true, force: true });
+  });
+
+  it('saves and retrieves a snapshot', async () => {
+    const note = makeNote('snap-1', 'hello world');
+    await store.addNote(note);
+    await store.saveSnapshot(note, 'edit');
+
+    const entries = await store.listSnapshots('snap-1');
+    expect(entries).toHaveLength(1);
+    expect(entries[0].trigger).toBe('edit');
+    expect(entries[0].snippet).toBe('hello world');
+
+    const snapshot = await store.getSnapshot('snap-1', entries[0].timestamp);
+    expect(snapshot).toMatchObject({
+      noteId: 'snap-1',
+      text: 'hello world',
+      trigger: 'edit',
+    });
+  });
+
+  it('lists snapshots in reverse chronological order', async () => {
+    const note = makeNote('snap-order', 'v1');
+    await store.addNote(note);
+
+    await store.saveSnapshot({ ...note, text: 'v1' }, 'edit');
+    await new Promise((r) => setTimeout(r, 10));
+    await store.saveSnapshot({ ...note, text: 'v2' }, 'ai_edit');
+
+    const entries = await store.listSnapshots('snap-order');
+    expect(entries).toHaveLength(2);
+    expect(entries[0].trigger).toBe('ai_edit');
+    expect(entries[1].trigger).toBe('edit');
+    expect(entries[0].timestamp).toBeGreaterThan(entries[1].timestamp);
+  });
+
+  it('prunes oldest snapshots when exceeding maxCount', async () => {
+    const note = makeNote('snap-prune', 'text');
+    await store.addNote(note);
+
+    for (let i = 0; i < 5; i++) {
+      await store.saveSnapshot({ ...note, text: `v${i}` }, 'edit');
+      await new Promise((r) => setTimeout(r, 5));
+    }
+
+    await store.pruneSnapshots('snap-prune', 3);
+    const entries = await store.listSnapshots('snap-prune');
+    expect(entries).toHaveLength(3);
+    expect(entries[0].snippet).toBe('v4');
+    expect(entries[2].snippet).toBe('v2');
+  });
+
+  it('deleteAllSnapshots removes the history directory', async () => {
+    const note = makeNote('snap-del', 'text');
+    await store.addNote(note);
+    await store.saveSnapshot(note, 'edit');
+
+    const historyDir = resolveNoteHistoryDir('snap-del');
+    const filesBefore = await readdir(historyDir);
+    expect(filesBefore.length).toBeGreaterThan(0);
+
+    await store.deleteAllSnapshots('snap-del');
+    await expect(access(historyDir)).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('returns null for non-existent snapshot', async () => {
+    const snapshot = await store.getSnapshot('no-such-note', 9999);
+    expect(snapshot).toBeNull();
+  });
+
+  it('returns empty list for note with no history', async () => {
+    const entries = await store.listSnapshots('no-history');
+    expect(entries).toEqual([]);
   });
 });

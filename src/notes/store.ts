@@ -5,12 +5,15 @@ import { join } from 'node:path';
 import { writeTextAtomic } from '../infra/write-file-atomic.js';
 import { createLogger } from '../utils/logger.js';
 import { buildNoteIndexMeta } from './note-index-meta.js';
-import { resolveNotesDir, resolveNotesIndexPath, resolveNoteItemPath, resolveNoteMediaDir } from './paths.js';
+import { resolveNotesDir, resolveNotesIndexPath, resolveNoteItemPath, resolveNoteMediaDir, resolveNoteHistoryDir } from './paths.js';
 import type {
   Note,
   NoteIndexEntry,
+  NoteSnapshot,
+  NoteSnapshotEntry,
   NotesIndexFile,
   NotesListQuery,
+  SnapshotTrigger,
 } from './types.js';
 
 const log = createLogger('NotesStore');
@@ -20,9 +23,10 @@ const INDEX_VERSION = 3;
 const DEBOUNCE_MS = 500;
 
 function noteToIndexEntry(note: Note): NoteIndexEntry {
-  const { snippet, coverAttachmentId, attachmentNames } = buildNoteIndexMeta(note);
+  const { snippet, coverAttachmentId, voiceAttachmentId, voiceDurationSec, attachmentNames } = buildNoteIndexMeta(note);
   return {
     id: note.id,
+    title: note.title || undefined,
     kind: note.kind,
     status: note.status,
     createdAt: note.createdAt,
@@ -31,6 +35,8 @@ function noteToIndexEntry(note: Note): NoteIndexEntry {
     tags: note.tags?.length ? note.tags : undefined,
     snippet,
     coverAttachmentId,
+    voiceAttachmentId,
+    voiceDurationSec,
     attachmentNames,
   };
 }
@@ -151,6 +157,7 @@ export class NotesStore {
     if (query.search) {
       const term = query.search.toLowerCase();
       results = results.filter((n) =>
+        n.title?.toLowerCase().includes(term) ||
         n.snippet?.toLowerCase().includes(term) ||
         n.tags?.some((t) => t.toLowerCase().includes(term)) ||
         n.attachmentNames?.some((name) => name.includes(term)),
@@ -191,6 +198,89 @@ export class NotesStore {
     await rm(filePath, { force: true }).catch((err) => {
       log.warn({ err, noteId, relativePath }, 'Failed to remove note attachment file');
     });
+  }
+
+  async saveSnapshot(note: Note, trigger: SnapshotTrigger): Promise<void> {
+    const historyDir = resolveNoteHistoryDir(note.id);
+    await mkdir(historyDir, { recursive: true });
+    const snapshot: NoteSnapshot = {
+      noteId: note.id,
+      timestamp: Date.now(),
+      trigger,
+      title: note.title,
+      text: note.text,
+      blocks: note.blocks,
+      tags: note.tags,
+      kind: note.kind,
+      status: note.status,
+    };
+    const filePath = join(historyDir, `${snapshot.timestamp}.json`);
+    await writeTextAtomic(filePath, JSON.stringify(snapshot, null, 2));
+    log.debug({ noteId: note.id, trigger, timestamp: snapshot.timestamp }, 'Snapshot saved');
+  }
+
+  async listSnapshots(noteId: string): Promise<NoteSnapshotEntry[]> {
+    const historyDir = resolveNoteHistoryDir(noteId);
+    let files: string[];
+    try {
+      files = await readdir(historyDir);
+    } catch {
+      return [];
+    }
+    const entries: NoteSnapshotEntry[] = [];
+    for (const file of files) {
+      if (!file.endsWith('.json')) continue;
+      const timestamp = parseInt(file.slice(0, -'.json'.length), 10);
+      if (!Number.isFinite(timestamp)) continue;
+      try {
+        const content = await readFile(join(historyDir, file), 'utf-8');
+        const snapshot = JSON.parse(content) as NoteSnapshot;
+        const rawText = snapshot.text ?? '';
+        entries.push({
+          timestamp: snapshot.timestamp,
+          trigger: snapshot.trigger,
+          snippet: rawText.slice(0, 80) || undefined,
+        });
+      } catch {
+        log.debug({ noteId, file }, 'Skipped unreadable snapshot');
+      }
+    }
+    entries.sort((a, b) => b.timestamp - a.timestamp);
+    return entries;
+  }
+
+  async getSnapshot(noteId: string, timestamp: number): Promise<NoteSnapshot | null> {
+    const filePath = join(resolveNoteHistoryDir(noteId), `${timestamp}.json`);
+    try {
+      const content = await readFile(filePath, 'utf-8');
+      return JSON.parse(content) as NoteSnapshot;
+    } catch {
+      return null;
+    }
+  }
+
+  async pruneSnapshots(noteId: string, maxCount: number): Promise<void> {
+    const historyDir = resolveNoteHistoryDir(noteId);
+    let files: string[];
+    try {
+      files = await readdir(historyDir);
+    } catch {
+      return;
+    }
+    const jsonFiles = files
+      .filter((f) => f.endsWith('.json'))
+      .sort();
+    if (jsonFiles.length <= maxCount) return;
+    const toDelete = jsonFiles.slice(0, jsonFiles.length - maxCount);
+    for (const file of toDelete) {
+      await rm(join(historyDir, file), { force: true }).catch(() => undefined);
+    }
+    log.debug({ noteId, deleted: toDelete.length }, 'Pruned old snapshots');
+  }
+
+  async deleteAllSnapshots(noteId: string): Promise<void> {
+    const historyDir = resolveNoteHistoryDir(noteId);
+    await rm(historyDir, { recursive: true, force: true }).catch(() => undefined);
   }
 
   async flush(): Promise<void> {

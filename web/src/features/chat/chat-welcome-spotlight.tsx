@@ -1,4 +1,4 @@
-import { FileBarChart, FolderOpen, Globe, MessageCircle, PenLine } from 'lucide-react';
+import { FileBarChart, FolderOpen, Globe, MessageCircle, StickyNote } from 'lucide-react';
 import { memo, useId, useMemo, useState } from 'react';
 
 import { BrandLogo } from '@/components/shell/brand-logo';
@@ -8,7 +8,7 @@ import { interaction } from '@/lib/interaction';
 
 const categoryIcons = {
   folder: FolderOpen,
-  content: PenLine,
+  content: StickyNote,
   documents: FileBarChart,
   globe: Globe,
 } as const;
