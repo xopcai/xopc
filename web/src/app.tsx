@@ -187,7 +187,7 @@ const router = createHashRouter([
       },
       {
         path: 'mcp',
-        element: <Navigate to="/settings/agent-mcp" replace />,
+        element: <Navigate to="/settings/connectors" replace />,
       },
       {
         path: 'agents',
@@ -248,7 +248,7 @@ const router = createHashRouter([
           },
           {
             path: 'mcp',
-            element: <Navigate to="/settings/agent-mcp" replace />,
+            element: <Navigate to="/settings/connectors" replace />,
           },
           {
             path: 'cron',

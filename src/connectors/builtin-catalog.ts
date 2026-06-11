@@ -1,0 +1,123 @@
+import type { ConnectorDefinition } from './types.js';
+
+export const BUILTIN_CONNECTORS: readonly ConnectorDefinition[] = [
+  {
+    id: 'fetch',
+    version: '1.0.0',
+    displayName: 'Fetch',
+    description: 'Fetch and read web pages through the official MCP fetch server.',
+    category: 'docs',
+    kind: 'mcp',
+    source: 'builtin',
+    capabilities: ['tools', 'runtime.mcp.stdio'],
+    tags: ['web', 'docs', 'http'],
+    auth: { mode: 'none' },
+    setup: {},
+    runtime: {
+      type: 'mcp',
+      serverId: 'fetch',
+      serverTemplate: {
+        command: 'uvx',
+        args: ['mcp-server-fetch'],
+      },
+    },
+  },
+  {
+    id: 'filesystem',
+    version: '1.0.0',
+    displayName: 'Filesystem',
+    description: 'Read and search files from an explicitly selected local directory.',
+    category: 'docs',
+    kind: 'mcp',
+    source: 'builtin',
+    capabilities: ['tools', 'resources', 'runtime.mcp.stdio'],
+    tags: ['files', 'local', 'docs'],
+    auth: { mode: 'none' },
+    setup: {
+      config: [
+        {
+          key: 'rootPath',
+          label: 'Allowed directory',
+          type: 'path',
+          required: true,
+          placeholder: '/Users/you/project',
+          description: 'The only directory this connector can expose to the MCP runtime.',
+        },
+      ],
+    },
+    runtime: {
+      type: 'mcp',
+      serverId: 'filesystem',
+      serverTemplate: {
+        command: 'npx',
+        args: ['-y', '@modelcontextprotocol/server-filesystem', '{{config.rootPath}}'],
+      },
+    },
+  },
+  {
+    id: 'time',
+    version: '1.0.0',
+    displayName: 'Time',
+    description: 'Convert time zones and answer current-time questions through an MCP time server.',
+    category: 'automation',
+    kind: 'mcp',
+    source: 'builtin',
+    capabilities: ['tools', 'runtime.mcp.stdio'],
+    tags: ['time', 'timezone', 'utility'],
+    auth: { mode: 'none' },
+    setup: {},
+    runtime: {
+      type: 'mcp',
+      serverId: 'time',
+      serverTemplate: {
+        command: 'uvx',
+        args: ['mcp-server-time'],
+      },
+    },
+  },
+  {
+    id: 'playwright',
+    version: '1.0.0',
+    displayName: 'Playwright',
+    description: 'Automate and inspect browser pages through the official Playwright MCP server.',
+    category: 'browser',
+    kind: 'mcp',
+    source: 'builtin',
+    capabilities: ['tools', 'runtime.mcp.stdio'],
+    tags: ['browser', 'automation', 'testing'],
+    auth: { mode: 'none' },
+    setup: {},
+    runtime: {
+      type: 'mcp',
+      serverId: 'playwright',
+      serverTemplate: {
+        command: 'npx',
+        args: ['-y', '@playwright/mcp@latest'],
+      },
+    },
+  },
+  {
+    id: 'github',
+    version: '1.0.0',
+    displayName: 'GitHub',
+    description: 'Work with GitHub repositories, issues, pull requests, and code search.',
+    category: 'code',
+    kind: 'mcp',
+    source: 'builtin',
+    capabilities: ['tools', 'auth.oauth', 'runtime.mcp.stdio'],
+    tags: ['code', 'repository', 'issues'],
+    auth: { mode: 'oauth' },
+    setup: {},
+    runtime: {
+      type: 'mcp',
+      serverId: 'github',
+      serverTemplate: {
+        command: 'npx',
+        args: ['-y', '@modelcontextprotocol/server-github'],
+        env: {
+          GITHUB_PERSONAL_ACCESS_TOKEN: '{{secrets.GITHUB_PERSONAL_ACCESS_TOKEN}}',
+        },
+      },
+    },
+  },
+];

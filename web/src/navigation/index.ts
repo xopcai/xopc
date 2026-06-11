@@ -11,7 +11,7 @@ const TAB_TO_SETTINGS_SECTION: Record<
   | 'settingsAppManagement'
   | 'settingsAgentDefaults'
   | 'settingsAgentBrowser'
-  | 'settingsAgentMcp'
+  | 'settingsConnectors'
   | 'settingsKeyboardShortcuts'
   | 'settingsAgents'
   | 'settingsCredentials'
@@ -38,7 +38,7 @@ const TAB_TO_SETTINGS_SECTION: Record<
   settingsAppManagement: 'app-management',
   settingsAgentDefaults: 'agent-defaults',
   settingsAgentBrowser: 'agent-browser',
-  settingsAgentMcp: 'agent-mcp',
+  settingsConnectors: 'connectors',
   settingsAgents: 'agents',
   settingsCredentials: 'credentials',
   settingsProviders: 'credentials',
@@ -103,7 +103,7 @@ export const SETTINGS_SHELL_NAV_GROUPS: readonly SettingsShellNavGroup[] = [
   { id: 'credentials', tabs: ['settingsCredentials'] },
   {
     id: 'agent',
-    tabs: ['settingsAgentDefaults', 'settingsAgentBrowser', 'settingsAgentMcp'],
+    tabs: ['settingsAgentDefaults', 'settingsAgentBrowser', 'settingsConnectors'],
   },
   {
     id: 'connection',
@@ -172,6 +172,7 @@ export function pathForTab(tab: Tab): string {
   if (tab === 'settingsAgentGeneration') return '/settings/agent-defaults?tab=generation';
   if (tab === 'settingsAgentWorkspace') return '/settings/agent-defaults?tab=workspace';
   if (tab === 'settingsAgentBrowser') return '/settings/agent-browser';
+  if (tab === 'settingsConnectors') return '/settings/connectors';
   if (tab === 'settingsAgentRuntime') return '/settings/agent-defaults?tab=runtime';
   if (tab === 'settingsAgentContext') return '/settings/agent-defaults?tab=context';
   if (tab === 'settingsAgentMemory') return '/settings/agent-defaults?tab=memory';

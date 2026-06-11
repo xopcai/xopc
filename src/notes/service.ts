@@ -397,6 +397,58 @@ export class NotesService {
     await this.store.flush();
   }
 
+  // ── Space grouping ──────────────────────────────────────────────────
+
+  async moveToGroup(noteId: string, groupId: string | null): Promise<Note | null> {
+    return this.updateNote(noteId, { groupId: groupId ?? undefined });
+  }
+
+  // ── Task lifecycle ──────────────────────────────────────────────────
+
+  async createTask(
+    title: string,
+    source: CaptureSource,
+    options?: { dueAt?: number; priority?: 'high' | 'medium' | 'low'; sourceSessionKey?: string; sourceNoteId?: string; groupId?: string },
+  ): Promise<Note> {
+    return this.createNote({
+      title,
+      kind: 'task',
+      capturedVia: source,
+      groupId: options?.groupId,
+      taskMeta: {
+        done: false,
+        dueAt: options?.dueAt,
+        priority: options?.priority,
+        sourceSessionKey: options?.sourceSessionKey,
+        sourceNoteId: options?.sourceNoteId,
+      },
+    });
+  }
+
+  async toggleTaskDone(noteId: string): Promise<Note | null> {
+    const note = await this.store.getNote(noteId);
+    if (!note || note.kind !== 'task') return null;
+    const done = !note.taskMeta?.done;
+    return this.updateNote(noteId, {
+      taskMeta: { ...note.taskMeta, done },
+      status: done ? 'archived' : 'processed',
+    });
+  }
+
+  async updateTaskMeta(noteId: string, patch: Partial<import('./types.js').NoteTaskMeta>): Promise<Note | null> {
+    const note = await this.store.getNote(noteId);
+    if (!note || note.kind !== 'task') return null;
+    return this.updateNote(noteId, {
+      taskMeta: { ...note.taskMeta, done: note.taskMeta?.done ?? false, ...patch },
+    });
+  }
+
+  // ── Open tracking ──────────────────────────────────────────────────
+
+  async recordOpen(noteId: string): Promise<Note | null> {
+    return this.updateNote(noteId, { lastOpenedAt: Date.now() } as Partial<Note>);
+  }
+
   private async maybeSaveSnapshot(note: Note, trigger: SnapshotTrigger): Promise<void> {
     if (trigger !== 'edit') {
       await this.store.saveSnapshot(note, trigger);

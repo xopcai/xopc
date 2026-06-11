@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import type { Config } from '../../../config/schema.js';
+
 import {
   isMcpToolName,
   parseMcpToolName,
@@ -17,16 +19,32 @@ describe('bundle-mcp-policy', () => {
     expect(parseMcpToolName('shell')).toBeNull();
   });
 
-  it('respects bundle-mcp disable sentinel', () => {
+  it('respects bundle-mcp disable sentinel and connector-only runtime creation', () => {
+    const connectorManagedConfig = {
+      mcp: {
+        servers: {
+          fetch: {
+            command: 'node',
+            xopcConnector: { managed: true, connectorId: 'fetch', version: '1.0.0' },
+          },
+        },
+      },
+    } as Config;
+
     expect(
       shouldCreateBundleMcpRuntimeForAttempt({
-        cfg: { mcp: { servers: { demo: { command: 'node' } } } },
+        cfg: connectorManagedConfig,
         disabledTools: new Set(['bundle-mcp']),
       }),
     ).toBe(false);
     expect(
       shouldCreateBundleMcpRuntimeForAttempt({
         cfg: { mcp: { servers: { demo: { command: 'node' } } } },
+      }),
+    ).toBe(false);
+    expect(
+      shouldCreateBundleMcpRuntimeForAttempt({
+        cfg: connectorManagedConfig,
       }),
     ).toBe(true);
   });

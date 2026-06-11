@@ -25,13 +25,13 @@ const AGENT_DEFAULTS_PALETTE_TABS: readonly Tab[] = [
   'settingsAgentGeneration',
   'settingsAgentWorkspace',
   'settingsAgentBrowser',
+  'settingsConnectors',
   'settingsAgentRuntime',
   'settingsAgentContext',
   'settingsAgentMemory',
   'settingsAgentTools',
   'settingsAgentSkills',
   'settingsAgentSystemPrompt',
-  'settingsAgentMcp',
 ];
 
 const AGENT_DEFAULTS_ROUTE_KEYWORDS: Partial<Record<Tab, string[]>> = {
@@ -39,13 +39,13 @@ const AGENT_DEFAULTS_ROUTE_KEYWORDS: Partial<Record<Tab, string[]>> = {
   settingsAgentGeneration: ['temperature', 'sampling', 'thinking', 'reasoning'],
   settingsAgentWorkspace: ['workspace', 'directory', 'folder', 'attachments'],
   settingsAgentBrowser: ['browser', 'playwright', 'automation'],
+  settingsConnectors: ['connector', 'mcp', 'integration', 'tools'],
   settingsAgentRuntime: ['limits', 'turn', 'timeout', 'tool', 'iterations'],
   settingsAgentContext: ['context', 'compaction', 'pruning', 'tokens'],
   settingsAgentMemory: ['memory', 'review', 'session', 'search'],
   settingsAgentTools: ['tools', 'web', 'extract', 'code'],
   settingsAgentSkills: ['skills', 'allowlist', 'marketplace'],
   settingsAgentSystemPrompt: ['system', 'prompt', 'instructions'],
-  settingsAgentMcp: ['mcp', 'external', 'tools'],
 };
 
 function buildAgentDefaultsRouteSeeds(language: StoredLanguage, settingsMode: ReturnType<typeof useSettingsModeStore.getState>['mode']): RouteHitSeed[] {

@@ -484,12 +484,16 @@ export class SessionStore {
     }
     if (query.search) {
       const q = query.search.toLowerCase();
-      sessions = sessions.filter(
-        (s) =>
-          s.key.toLowerCase().includes(q) ||
-          (s.name?.toLowerCase().includes(q) ?? false) ||
-          s.tags.some((t) => t.toLowerCase().includes(q)),
-      );
+      const metadataMatches = sessions.filter((session) => this.sessionMetadataMatchesSearch(session, q));
+      const metadataMatchedKeys = new Set(metadataMatches.map((session) => session.key));
+      const contentMatches: SessionMetadata[] = [];
+      const candidates = sessions.filter((session) => !metadataMatchedKeys.has(session.key));
+      for (const candidate of candidates) {
+        if (await this.sessionContentMatchesSearch(candidate.key, q)) {
+          contentMatches.push(candidate);
+        }
+      }
+      sessions = [...metadataMatches, ...contentMatches];
     }
 
     const sortBy = query.sortBy || 'updatedAt';
@@ -506,6 +510,37 @@ export class SessionStore {
     const offset = query.offset || 0;
     const items = sessions.slice(offset, offset + limit);
     return { items, total, limit, offset, hasMore: offset + limit < total };
+  }
+
+  private sessionMetadataMatchesSearch(session: SessionMetadata, query: string): boolean {
+    return Boolean(
+      session.key.toLowerCase().includes(query) ||
+      session.name?.toLowerCase().includes(query) ||
+      session.sourceChannel.toLowerCase().includes(query) ||
+      session.sourceChatId.toLowerCase().includes(query) ||
+      session.tags.some((tag) => tag.toLowerCase().includes(query)),
+    );
+  }
+
+  private async sessionContentMatchesSearch(sessionKey: string, query: string): Promise<boolean> {
+    const messages = await this.loadDisplayMessages(sessionKey);
+    return messages.some((message) => {
+      const content = this.extractTextContent(this.messageContent(message)).toLowerCase();
+      if (content.includes(query)) {
+        return true;
+      }
+      const attachments = (message as unknown as Record<string, unknown>).attachments;
+      if (!Array.isArray(attachments)) {
+        return false;
+      }
+      return attachments.some((attachment) => {
+        if (!attachment || typeof attachment !== 'object') {
+          return false;
+        }
+        const name = (attachment as { name?: string }).name;
+        return typeof name === 'string' && name.toLowerCase().includes(query);
+      });
+    });
   }
 
   async get(

@@ -240,7 +240,7 @@ export class XopcChannelBridge {
     decision: ApprovalDecision;
   }): Promise<Record<string, unknown>> {
     const client = this.client!;
-    return client.postJson('/api/mcp/approvals/respond', params);
+    return client.postJson('/api/connectors/approvals/respond', params);
   }
 
   async handleClaudePermissionRequest(_params: {
@@ -252,11 +252,6 @@ export class XopcChannelBridge {
     void _params;
   }
 }
-
-// `serveXopcChannelMcp` lazy wrapper removed — it dynamically imported
-// `./channel-server.js`, forming a bridge ↔ server ↔ tools ↔ bridge cycle.
-// Callers (currently only `cli/commands/mcp.ts`) should import
-// `serveXopcChannelMcpImpl` directly from `./channel-server.js`.
 
 export function loadMcpServeConfig(): Config {
   return loadConfig();

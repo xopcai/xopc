@@ -16,7 +16,7 @@ import { RemoteAccessHub } from '@/features/remote-access/remote-access-hub';
 import { SharesSettingsPanel } from '@/features/shares/shares-settings';
 import { AppManagementSettingsPanel } from '@/features/settings/app-management-settings-panel';
 import { SystemSettingsPanel } from '@/features/settings/system-settings-panel';
-import { McpSettingsPanel } from '@/features/settings/mcp/mcp-settings';
+import { ConnectorsSettingsPanel } from '@/features/settings/connectors/connectors-settings';
 import { messages } from '@/i18n/messages';
 import type { SettingsSectionId } from '@/navigation';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -29,7 +29,7 @@ const SECTIONS: SettingsSectionId[] = [
   'app-management',
   'agent-defaults',
   'agent-browser',
-  'agent-mcp',
+  'connectors',
   'credentials',
   'gateway',
   'heartbeat',
@@ -73,8 +73,8 @@ export function SettingsPage() {
     return <AgentBrowserSettingsPage />;
   }
 
-  if (id === 'agent-mcp') {
-    return <McpSettingsPanel />;
+  if (id === 'connectors') {
+    return <ConnectorsSettingsPanel />;
   }
 
   if (id === 'appearance') {

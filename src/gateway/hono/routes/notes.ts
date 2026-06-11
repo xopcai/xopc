@@ -353,4 +353,42 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
       await s.pipe(readable);
     });
   });
+
+  // ── Task / Space / Open tracking ────────────────────────────────────
+
+  authenticated.post('/api/notes/task', async (c) => {
+    const body = await c.req.json().catch(() => ({})) as Record<string, unknown>;
+    const title = typeof body.title === 'string' ? body.title.trim() : '';
+    if (!title) return c.json({ error: 'Missing required field: title' }, 400);
+
+    const source = parseCaptureSource(body);
+    const note = await service.notesServiceInstance.createTask(title, source, {
+      dueAt: typeof body.dueAt === 'number' ? body.dueAt : undefined,
+      priority: body.priority === 'high' || body.priority === 'medium' || body.priority === 'low' ? body.priority : undefined,
+      sourceSessionKey: typeof body.sourceSessionKey === 'string' ? body.sourceSessionKey : undefined,
+      sourceNoteId: typeof body.sourceNoteId === 'string' ? body.sourceNoteId : undefined,
+      groupId: typeof body.groupId === 'string' ? body.groupId : undefined,
+    });
+    return c.json({ note }, 201);
+  });
+
+  authenticated.post('/api/notes/:id/toggle-done', async (c) => {
+    const note = await service.notesServiceInstance.toggleTaskDone(c.req.param('id'));
+    if (!note) return c.json({ error: 'Not found or not a task' }, 404);
+    return c.json({ note });
+  });
+
+  authenticated.post('/api/notes/:id/open', async (c) => {
+    const note = await service.notesServiceInstance.recordOpen(c.req.param('id'));
+    if (!note) return c.json({ error: 'Not found' }, 404);
+    return c.json({ note });
+  });
+
+  authenticated.post('/api/notes/:id/move', async (c) => {
+    const body = await c.req.json().catch(() => ({})) as Record<string, unknown>;
+    const groupId = typeof body.groupId === 'string' ? body.groupId : null;
+    const note = await service.notesServiceInstance.moveToGroup(c.req.param('id'), groupId);
+    if (!note) return c.json({ error: 'Not found' }, 404);
+    return c.json({ note });
+  });
 }

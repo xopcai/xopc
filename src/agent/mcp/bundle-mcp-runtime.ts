@@ -17,6 +17,7 @@ import { resolveGlobalSingleton } from "../../utils/global-singleton.js";
 import { redactSensitiveUrlLikeString } from "../../utils/redact-sensitive-url.js";
 import { normalizeOptionalString } from "../../utils/string-coerce.js";
 import { loadEmbeddedMcpConfig } from "./embedded-mcp.js";
+import { resolveConnectorSecretReferences } from "../../connectors/secret-store.js";
 import { isMcpConfigRecord } from "./mcp-config-shared.js";
 import { resolveMcpTransport } from "./mcp-transport.js";
 import { sanitizeServerName } from "./bundle-mcp-names.js";
@@ -220,7 +221,8 @@ export function createSessionMcpRuntime(params: {
       try {
         for (const [serverName, rawServer] of Object.entries(loaded.mcpServers)) {
           failIfDisposed();
-          const resolved = resolveMcpTransport(serverName, rawServer);
+          const resolvedServer = await resolveConnectorSecretReferences(rawServer);
+          const resolved = resolveMcpTransport(serverName, resolvedServer);
           if (!resolved) {
             continue;
           }
