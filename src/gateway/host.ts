@@ -29,6 +29,17 @@ export const GATEWAY_DEV_CONSOLE_ORIGINS = [
   'http://127.0.0.1:3000',
 ] as const;
 
+/** Expo / React Native web dev server (Metro defaults to port 8081). */
+export const GATEWAY_EXPO_DEV_ORIGINS = [
+  'http://localhost:8081',
+  'http://127.0.0.1:8081',
+] as const;
+
+const GATEWAY_LOOPBACK_DEV_ORIGINS = [
+  ...GATEWAY_DEV_CONSOLE_ORIGINS,
+  ...GATEWAY_EXPO_DEV_ORIGINS,
+] as const;
+
 /** Effective HTTP listen port: CLI `--port` override wins over config (default 18790). */
 export function resolveEffectiveGatewayPort(
   config: { gateway?: { port?: number } },
@@ -55,7 +66,7 @@ export function buildDefaultCorsOrigins(params: { port: number; bindHost?: strin
   const origins = new Set<string>([
     `http://localhost:${params.port}`,
     `http://127.0.0.1:${params.port}`,
-    ...GATEWAY_DEV_CONSOLE_ORIGINS,
+    ...GATEWAY_LOOPBACK_DEV_ORIGINS,
   ]);
   const bindHost = params.bindHost?.trim();
   if (bindHost && !isLoopbackHost(bindHost) && !isAllInterfacesHost(bindHost)) {
@@ -79,7 +90,7 @@ export function resolveGatewayCorsOrigins(params: {
   if (configured.length === 0) {
     return buildDefaultCorsOrigins({ port: params.port, bindHost: params.bindHost });
   }
-  return [...new Set([...configured, ...GATEWAY_DEV_CONSOLE_ORIGINS])];
+  return [...new Set([...configured, ...GATEWAY_LOOPBACK_DEV_ORIGINS])];
 }
 
 /** Browser origin (`https://host`) from a gateway public/tunnel root URL. */

@@ -251,6 +251,26 @@ describe('Gateway Security Fixes', () => {
       expect(res.status).not.toBe(403);
     });
 
+    it('allows Expo web dev origin when custom corsOrigins omit port 8081', async () => {
+      const service = createMockService({
+        gateway: {
+          port: 18790,
+          bind: 'lan',
+          corsOrigins: ['http://localhost:18790', 'http://192.168.1.5:18790'],
+        },
+      });
+      const app = createHonoApp({ service, token: 'test' });
+
+      const res = await app.request('/api/home', {
+        headers: {
+          Origin: 'http://localhost:8081',
+          Authorization: 'Bearer test',
+        },
+      });
+      expect(res.status).not.toBe(403);
+      expect(res.headers.get('Access-Control-Allow-Origin')).toBe('http://localhost:8081');
+    });
+
     it('allows API calls with opaque Origin null when Bearer token is valid', async () => {
       const service = createMockService();
       const app = createHonoApp({ service, token: 'test' });
