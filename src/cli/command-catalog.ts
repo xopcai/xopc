@@ -37,7 +37,6 @@ export const cliCommandCatalog: readonly CliCommandCatalogEntry[] = [
   { commandPath: ['logs'], policy: { loadExtensions: 'never' } },
   { commandPath: ['update'], policy: { loadExtensions: 'never' } },
   { commandPath: ['session'], policy: { loadExtensions: 'never' } },
-  { commandPath: ['mcp'], policy: { loadExtensions: 'never' } },
   { commandPath: ['search'], policy: { loadExtensions: 'never' } },
   { commandPath: ['voice'], policy: { loadExtensions: 'never' } },
   { commandPath: ['image'], policy: { loadExtensions: 'never' } },
