@@ -270,6 +270,19 @@ describe('SessionStore', () => {
       expect(activeSessions.items).toHaveLength(1);
       expect(activeSessions.items[0].key).toBe('agent:main:telegram:default:direct:2');
     });
+
+    it('should list sessions by message content search', async () => {
+      const targetKey = 'agent:main:webchat:default:direct:content-search';
+      await store.saveMessages(targetKey, [
+        { role: 'user', content: 'please remember alpha-session-keyword', timestamp: Date.now() },
+      ]);
+      await store.saveMessages('agent:main:webchat:default:direct:content-miss', [
+        { role: 'user', content: 'unrelated message', timestamp: Date.now() + 1 },
+      ]);
+
+      const result = await store.list({ search: 'alpha-session-keyword' });
+      expect(result.items.map((session) => session.key)).toEqual([targetKey]);
+    });
   });
 
   describe('transcript document (synthetic)', () => {

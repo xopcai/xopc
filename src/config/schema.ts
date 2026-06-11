@@ -1303,16 +1303,25 @@ const McpHttpUrlSchema = z
     }
   }, 'MCP server URL must use http or https');
 
+const ConnectorSecretReferenceSchema = z.object({
+  xopcSecretRef: z.object({
+    provider: z.string().min(1),
+    fieldKey: z.string().min(1),
+  }),
+});
+
+const McpConfigScalarSchema = z.union([z.string(), z.number(), z.boolean(), ConnectorSecretReferenceSchema]);
+
 export const McpServerSchema = z
   .object({
     command: z.string().optional(),
     args: z.array(z.string()).optional(),
-    env: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(),
+    env: z.record(z.string(), McpConfigScalarSchema).optional(),
     cwd: z.string().optional(),
     workingDirectory: z.string().optional(),
     url: McpHttpUrlSchema.optional(),
     transport: z.enum(['sse', 'streamable-http']).optional(),
-    headers: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(),
+    headers: z.record(z.string(), McpConfigScalarSchema).optional(),
     connectionTimeoutMs: z.number().finite().positive().optional(),
   })
   .catchall(z.unknown())

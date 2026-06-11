@@ -41,7 +41,6 @@ export const REGISTRY_COMMAND_MODULES: Record<string, CommandLoader> = {
   logs: () => import('./commands/logs.js'),
   tunnel: () => import('./commands/tunnel.js'),
   tailscale: () => import('./commands/tailscale.js'),
-  mcp: () => import('./commands/mcp.js'),
 };
 
 export interface NonRegistryMatcher {

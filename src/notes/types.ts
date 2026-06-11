@@ -1,4 +1,4 @@
-export type NoteKind = 'thought' | 'todo' | 'voice' | 'media' | 'bookmark' | 'mixed';
+export type NoteKind = 'thought' | 'todo' | 'voice' | 'media' | 'bookmark' | 'mixed' | 'task';
 export type NoteStatus = 'inbox' | 'processed' | 'archived' | 'trashed';
 export type CaptureChannel = 'app' | 'web' | 'electron' | 'tui' | 'telegram' | 'wechat' | 'feishu';
 
@@ -90,6 +90,16 @@ export interface CaptureSource {
   platform?: 'ios' | 'android';
 }
 
+export interface NoteTaskMeta {
+  done: boolean;
+  dueAt?: number;
+  priority?: 'high' | 'medium' | 'low';
+  /** Session key of the thread that created this task. */
+  sourceSessionKey?: string;
+  /** Note id of the page this task was extracted from. */
+  sourceNoteId?: string;
+}
+
 export interface Note {
   id: string;
   title?: string;
@@ -107,6 +117,12 @@ export interface Note {
   pinned?: boolean;
   localVersion?: number;
   remoteVersion?: number;
+  /** Space grouping — null means ungrouped (appears in root). */
+  groupId?: string;
+  /** Last time the user explicitly opened this note. */
+  lastOpenedAt?: number;
+  /** Task lifecycle metadata (only when kind === 'task'). */
+  taskMeta?: NoteTaskMeta;
 }
 
 export interface NoteIndexEntry {
@@ -127,6 +143,14 @@ export interface NoteIndexEntry {
   voiceDurationSec?: number;
   /** Lowercased attachment file names for list search. */
   attachmentNames?: string[];
+  /** Space group id. */
+  groupId?: string;
+  /** Last opened timestamp for "continue" rail. */
+  lastOpenedAt?: number;
+  /** Task done flag (only when kind === 'task'). */
+  taskDone?: boolean;
+  /** Task due timestamp (only when kind === 'task'). */
+  taskDueAt?: number;
 }
 
 export interface NotesIndexFile {
@@ -162,8 +186,12 @@ export interface NotesListQuery {
   search?: string;
   limit?: number;
   offset?: number;
-  sortBy?: 'createdAt' | 'updatedAt';
+  sortBy?: 'createdAt' | 'updatedAt' | 'lastOpenedAt';
   sortOrder?: 'asc' | 'desc';
+  /** Filter by space group id. Use `'ungrouped'` for root-level notes. */
+  groupId?: string;
+  /** Filter to only task notes with done === false. */
+  pendingTasksOnly?: boolean;
 }
 
 export interface CreateNoteParams {
@@ -174,4 +202,15 @@ export interface CreateNoteParams {
   tags?: string[];
   capturedVia: CaptureSource;
   pinned?: boolean;
+  groupId?: string;
+  taskMeta?: NoteTaskMeta;
+}
+
+/** A lightweight space group (persisted as a note with kind='mixed', used for grouping). */
+export interface NoteGroup {
+  id: string;
+  name: string;
+  icon?: string;
+  createdAt: number;
+  updatedAt: number;
 }
