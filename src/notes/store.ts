@@ -4,7 +4,7 @@ import { join } from 'node:path';
 
 import { writeTextAtomic } from '../infra/write-file-atomic.js';
 import { createLogger } from '../utils/logger.js';
-import { buildNoteIndexMeta } from './note-index-meta.js';
+import { buildNoteIndexMeta, notePlainText } from './note-index-meta.js';
 import { resolveNotesDir, resolveNotesIndexPath, resolveNoteItemPath, resolveNoteMediaDir, resolveNoteHistoryDir } from './paths.js';
 import type {
   Note,
@@ -38,6 +38,10 @@ function noteToIndexEntry(note: Note): NoteIndexEntry {
     voiceAttachmentId,
     voiceDurationSec,
     attachmentNames,
+    groupId: note.groupId || undefined,
+    lastOpenedAt: note.lastOpenedAt || undefined,
+    taskDone: note.taskMeta?.done,
+    taskDueAt: note.taskMeta?.dueAt,
   };
 }
 
@@ -154,19 +158,43 @@ export class NotesStore {
     if (query.pinned !== undefined) {
       results = results.filter((n) => Boolean(n.pinned) === query.pinned);
     }
+    if (query.groupId !== undefined) {
+      if (query.groupId === 'ungrouped') {
+        results = results.filter((n) => !n.groupId);
+      } else {
+        results = results.filter((n) => n.groupId === query.groupId);
+      }
+    }
+    if (query.pendingTasksOnly) {
+      results = results.filter((n) => n.kind === 'task' && !n.taskDone);
+    }
     if (query.search) {
       const term = query.search.toLowerCase();
-      results = results.filter((n) =>
-        n.title?.toLowerCase().includes(term) ||
-        n.snippet?.toLowerCase().includes(term) ||
-        n.tags?.some((t) => t.toLowerCase().includes(term)) ||
-        n.attachmentNames?.some((name) => name.includes(term)),
-      );
+      const indexMatches = results.filter((n) => this.noteIndexEntryMatchesSearch(n, term));
+      const indexMatchedIds = new Set(indexMatches.map((n) => n.id));
+      const contentMatches: NoteIndexEntry[] = [];
+      const candidates = results.filter((n) => !indexMatchedIds.has(n.id));
+      for (const candidate of candidates) {
+        const note = await this.getNote(candidate.id);
+        if (!note) continue;
+        const content = [note.title, notePlainText(note), note.attachments?.map((a) => a.transcript).join(' ')]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+        if (content.includes(term)) {
+          contentMatches.push(candidate);
+        }
+      }
+      results = [...indexMatches, ...contentMatches];
     }
 
     const sortField = query.sortBy || 'createdAt';
     const sortDir = query.sortOrder === 'asc' ? 1 : -1;
-    results = [...results].sort((a, b) => (a[sortField] - b[sortField]) * sortDir);
+    results = [...results].sort((a, b) => {
+      const aVal = a[sortField] ?? 0;
+      const bVal = b[sortField] ?? 0;
+      return (aVal - bVal) * sortDir;
+    });
 
     const total = results.length;
     const offset = query.offset || 0;
@@ -174,6 +202,15 @@ export class NotesStore {
     const items = results.slice(offset, offset + limit);
 
     return { items, total };
+  }
+
+  private noteIndexEntryMatchesSearch(entry: NoteIndexEntry, term: string): boolean {
+    return Boolean(
+      entry.title?.toLowerCase().includes(term) ||
+      entry.snippet?.toLowerCase().includes(term) ||
+      entry.tags?.some((tag) => tag.toLowerCase().includes(term)) ||
+      entry.attachmentNames?.some((name) => name.toLowerCase().includes(term)),
+    );
   }
 
   async saveAttachment(

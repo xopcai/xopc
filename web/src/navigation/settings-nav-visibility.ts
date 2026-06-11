@@ -3,7 +3,6 @@ import type { SettingsMode } from '@/stores/settings-mode-store';
 
 /** Settings rail tabs hidden when `mode === 'simple'`. */
 export const SIMPLE_MODE_HIDDEN_SETTINGS_TABS = new Set<Tab>([
-  'settingsAgentMcp',
   'settingsTunnel',
   'settingsShares',
   'settingsHeartbeat',
@@ -13,7 +12,6 @@ export const SIMPLE_MODE_HIDDEN_SETTINGS_TABS = new Set<Tab>([
 ]);
 
 const SIMPLE_MODE_HIDDEN_SETTINGS_PATH_PREFIXES = [
-  '/settings/agent-mcp',
   '/settings/remote-access',
   '/settings/tunnel',
   '/settings/shares',

@@ -228,6 +228,24 @@ describe('NotesStore deleteNote', () => {
     const miss = await store.listNotes({ search: 'invoice' });
     expect(miss.items.map((item) => item.id)).toEqual([]);
   });
+
+  it('searches notes by full body beyond the index snippet', async () => {
+    const note: Note = {
+      id: 'note-search-body',
+      kind: 'thought',
+      status: 'inbox',
+      text: `${'prefix '.repeat(40)}deep-body-keyword`,
+      createdAt: 4,
+      updatedAt: 4,
+      capturedVia: { channel: 'web' },
+    };
+
+    await store.addNote(note);
+    await store.flush();
+
+    const match = await store.listNotes({ search: 'deep-body-keyword' });
+    expect(match.items.map((item) => item.id)).toEqual(['note-search-body']);
+  });
 });
 
 describe('NotesStore snapshots', () => {

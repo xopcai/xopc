@@ -158,6 +158,14 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
     },
   },
   {
+    id: 'home',
+    match: (path) => startsWithAny(path, ['/api/home']),
+    load: async () => {
+      const { registerHomeRoutes } = await import('./home.js');
+      return { register: registerHomeRoutes };
+    },
+  },
+  {
     id: 'workflows',
     match: (path) => startsWithAny(path, ['/api/workflows']),
     load: async () => {
@@ -230,11 +238,11 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
     },
   },
   {
-    id: 'mcp',
-    match: (path) => startsWithAny(path, ['/api/mcp']),
+    id: 'connectors',
+    match: (path) => startsWithAny(path, ['/api/connectors']),
     load: async () => {
-      const { registerMcpRoutes } = await import('./mcp.js');
-      return { register: registerMcpRoutes };
+      const { registerConnectorRoutes } = await import('./connectors.js');
+      return { register: registerConnectorRoutes };
     },
   },
 ];

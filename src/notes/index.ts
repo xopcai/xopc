@@ -17,4 +17,6 @@ export type {
   CaptureChannel,
   CreateNoteParams,
   SnapshotTrigger,
+  NoteTaskMeta,
+  NoteGroup,
 } from './types.js';

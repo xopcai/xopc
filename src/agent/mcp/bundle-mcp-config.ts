@@ -1,11 +1,11 @@
-import { normalizeConfiguredMcpServers } from "../../config/mcp-config-normalize.js";
-import type { Config } from "../../config/schema.js";
+import { normalizeConfiguredMcpServers } from '../../config/mcp-config-normalize.js';
+import { isManagedConnectorServer } from '../../connectors/materialize.js';
+import type { Config } from '../../config/schema.js';
 import {
-  loadEnabledBundleMcpConfig,
   type BundleMcpConfig,
   type BundleMcpDiagnostic,
   type BundleMcpServerConfig,
-} from "../../extensions/bundle-mcp.js";
+} from '../../extensions/bundle-mcp.js';
 
 export type MergedBundleMcpConfig = {
   config: BundleMcpConfig;
@@ -17,33 +17,19 @@ export type BundleMcpServerMapper = (
   name: string,
 ) => BundleMcpServerConfig;
 
-const OPENCLAW_TRANSPORT_TO_CLI_BUNDLE_TYPE: Record<string, string> = {
-  "streamable-http": "http",
-  http: "http",
-  sse: "sse",
-  stdio: "stdio",
-};
-
-/**
- * User config stores OpenClaw MCP transport names, while CLI backends such as
- * Claude Code and Gemini expect a downstream `type` field. Keep this adapter
- * out of the generic merge path because embedded Pi still consumes the raw
- * OpenClaw `transport` shape directly.
- */
-export function toCliBundleMcpServerConfig(server: BundleMcpServerConfig): BundleMcpServerConfig {
-  const next = { ...server } as Record<string, unknown>;
-  const rawTransport = next.transport;
-  delete next.transport;
-  if (typeof next.type === "string") {
-    return next as BundleMcpServerConfig;
-  }
-  if (typeof rawTransport === "string") {
-    const mapped = OPENCLAW_TRANSPORT_TO_CLI_BUNDLE_TYPE[rawTransport];
-    if (mapped) {
-      next.type = mapped;
-    }
-  }
-  return next as BundleMcpServerConfig;
+function listConnectorManagedMcpServers(params: {
+  cfg?: Config;
+  mapConfiguredServer: BundleMcpServerMapper;
+}): BundleMcpConfig["mcpServers"] {
+  const configuredMcp = normalizeConfiguredMcpServers(params.cfg?.mcp?.servers);
+  return Object.fromEntries(
+    Object.entries(configuredMcp)
+      .filter(([, server]) => isManagedConnectorServer(server))
+      .map(([name, server]) => [
+        name,
+        params.mapConfiguredServer(server as BundleMcpServerConfig, name),
+      ]),
+  ) satisfies BundleMcpConfig["mcpServers"];
 }
 
 export function loadMergedBundleMcpConfig(params: {
@@ -51,26 +37,15 @@ export function loadMergedBundleMcpConfig(params: {
   cfg?: Config;
   mapConfiguredServer?: BundleMcpServerMapper;
 }): MergedBundleMcpConfig {
-  const bundleMcp = loadEnabledBundleMcpConfig({
-    workspaceDir: params.workspaceDir,
-    cfg: params.cfg,
-  });
-  const configuredMcp = normalizeConfiguredMcpServers(params.cfg?.mcp?.servers);
   const mapConfiguredServer = params.mapConfiguredServer ?? ((server) => server);
 
   return {
     config: {
-      // OpenClaw config is the owner-managed layer, so it overrides bundle defaults.
-      mcpServers: {
-        ...bundleMcp.config.mcpServers,
-        ...Object.fromEntries(
-          Object.entries(configuredMcp).map(([name, server]) => [
-            name,
-            mapConfiguredServer(server as BundleMcpServerConfig, name),
-          ]),
-        ),
-      } satisfies BundleMcpConfig["mcpServers"],
+      mcpServers: listConnectorManagedMcpServers({
+        cfg: params.cfg,
+        mapConfiguredServer,
+      }),
     },
-    diagnostics: bundleMcp.diagnostics,
+    diagnostics: [],
   };
 }
