@@ -40,6 +40,12 @@ function inferKind(
   return 'thought';
 }
 
+function deriveDefaultTitle(text?: string): string | undefined {
+  const normalizedText = text?.trim().replace(/\s+/g, ' ');
+  if (!normalizedText) return undefined;
+  return Array.from(normalizedText).slice(0, 10).join('');
+}
+
 function createBlockId(): string {
   return `block_${Date.now()}_${randomUUID().slice(0, 8)}`;
 }
@@ -172,6 +178,7 @@ export class NotesService {
     const blocks = noteTextToBlocks(text, id);
     const note: Note = {
       id,
+      title: deriveDefaultTitle(text),
       kind: inferKind(text),
       status: 'inbox',
       text,

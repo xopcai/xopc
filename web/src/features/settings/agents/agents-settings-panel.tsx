@@ -5,7 +5,6 @@ import { agentsAppDetailPath } from './agents-app-path';
 import { AgentsEditorModal } from './agents-editor-modal';
 import { AgentsEditorPanelContent } from './agents-editor-panel-content';
 import { AgentsListGrid } from './agents-list-grid';
-import { AgentsSettingsHeader } from './agents-settings-header';
 import { CreateAgentDialog } from './create-agent-dialog';
 import { PRESET_AGENTS } from './preset-agents';
 import { PresetAgentsSetup } from './preset-agents-setup';
@@ -43,8 +42,6 @@ export function AgentsSettingsPanel() {
 
   return (
     <div className="mx-auto flex w-full max-w-app-main flex-col gap-6 px-4 py-8">
-      <AgentsSettingsHeader a={vm.a} />
-
       {vm.displayError ? (
         <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
           {vm.displayError}

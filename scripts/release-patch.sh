@@ -73,11 +73,13 @@ run_release_step "pnpm -C web run react-doctor" pnpm -C web run react-doctor
 
 NEXT_VER="$(node "$ROOT/scripts/bump-patch-version.mjs")"
 TAG="v${NEXT_VER}"
+run_release_step "sync browser extension manifest version" pnpm run sync:browser-ext-version
 
 git add \
   package.json \
   web/package.json \
   packages/extension-ui-sdk/package.json \
+  packages/browser-ext/manifest.json \
   extensions/telegram/package.json \
   extensions/telegram/xopc.extension.json
 
