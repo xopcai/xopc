@@ -47,15 +47,6 @@ function validateBrowserExtLayout(dir) {
   return browserExtRequired.every((rel) => existsSync(join(dir, rel)));
 }
 
-const syncVersion = spawnSync('node', [join(__dirname, 'sync-browser-ext-version.mjs')], {
-  encoding: 'utf8',
-  stdio: 'inherit',
-  shell: process.platform === 'win32',
-});
-if ((syncVersion.status ?? 1) !== 0) {
-  process.exit(syncVersion.status ?? 1);
-}
-
 const buildBrowserExt = spawnSync('pnpm', ['-C', 'packages/browser-ext', 'run', 'build'], {
   encoding: 'utf8',
   stdio: 'inherit',

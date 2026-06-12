@@ -79,14 +79,6 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
             {error}
           </div>
         ) : null}
-
-        <header className="flex flex-col gap-4">
-          <div className="min-w-0">
-            <h1 className="text-xl font-semibold tracking-tight text-fg">{sk.title}</h1>
-            <p className="mt-1 max-w-2xl text-sm text-fg-muted">{sk.tagline}</p>
-          </div>
-        </header>
-
         {inSettingsShell ? (
           <div className="flex flex-col gap-3 border-b border-edge-subtle pb-4 dark:border-edge-subtle sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
             <SkillsPageHeaderEnd
@@ -419,11 +411,15 @@ function SkillsPageHeaderRegistration({ vm }: { vm: SkillsPageVm }) {
     }
     setPageHeader({
       startExtra: null,
-      main: null,
+      main: (
+        <div className="min-w-0">
+          <h1 className="truncate text-base font-semibold tracking-tight text-fg">{sk.title}</h1>
+        </div>
+      ),
       end: skillsHeaderEnd,
     });
     return () => clearPageHeader();
-  }, [clearPageHeader, hasToken, inSettingsShell, setPageHeader, skillsHeaderEnd]);
+  }, [clearPageHeader, hasToken, inSettingsShell, setPageHeader, skillsHeaderEnd, sk.title]);
 
   return null;
 }
