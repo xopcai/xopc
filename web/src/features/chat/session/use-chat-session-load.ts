@@ -6,8 +6,11 @@ import { type Message, coerceReasoningLevel } from '@/features/chat/messages/mes
 import { modelSupportsReasoning } from '@/features/chat/model/model-capabilities';
 import { hasPendingAgentRunForChat } from '@/features/chat/messages/message-sender';
 import { isViewingSession, resolveViewSessionKey } from '@/features/chat/session/chat-session-view';
-import { markSkipInitialSessionLoad } from '@/features/chat/session/chat-session-init-skip-load';
 import { useChatSessionStore } from '@/features/chat/session/chat-session-store';
+import {
+  followOptimisticSessionRegistration,
+  openOptimisticNewSessionHandoff,
+} from '@/features/chat/session/optimistic-new-session-handoff';
 import type { SessionManager } from '@/features/chat/session/session-manager';
 
 export function useChatSessionLoad(deps: {
@@ -67,6 +70,51 @@ export function useChatSessionLoad(deps: {
       if (focused) store().patchSessionMeta(focused, { modelSupportsThinking: supports });
     });
   }, [thinkingSupportGenRef]);
+
+  const applySessionAgentConfig = useCallback(
+    async (key: string) => {
+      try {
+        const cfg = await sessionMgrRef.current.loadSessionAgentConfig(key);
+        store().patchSessionMeta(key, {
+          model: cfg.model,
+          thinkingLevel: cfg.thinkingLevel || DEFAULT_THINKING,
+          reasoningLevel: coerceReasoningLevel(cfg.reasoningLevel),
+        });
+        void refreshModelThinkingSupport(cfg.model);
+      } catch {
+        /* ignore */
+      }
+    },
+    [sessionMgrRef, refreshModelThinkingSupport],
+  );
+
+  const followOptimisticRegistration = useCallback(
+    (ctx: {
+      sessionKey: string;
+      register: Promise<SessionInfo>;
+      replaceNavigate?: boolean;
+      search?: string;
+    }) => {
+      followOptimisticSessionRegistration({
+        ...ctx,
+        navigateToSession,
+        onError: (msg) => store().setShellError(msg),
+        onReconciled: (key, session) => {
+          store().setCommittedSnapshot(key, {
+            messages: [],
+            hasMore: false,
+            name: session.name ?? null,
+          });
+          void applySessionAgentConfig(key);
+        },
+        onRegistered: (key, session) => {
+          if (session.name) store().patchSessionMeta(key, { name: session.name });
+          void applySessionAgentConfig(key);
+        },
+      });
+    },
+    [navigateToSession, applySessionAgentConfig],
+  );
 
   const pollSessionNameAfterTurn = useCallback(() => {
     const key = store().focusedSessionKey;
@@ -199,29 +247,18 @@ export function useChatSessionLoad(deps: {
               navigateToSession(target.key, true);
               return await runBody(target.key, 0, null);
             } else {
-              try {
-                const aid = resolveAgentIdForPost();
-                const session = await sessionMgrRef.current.createSession(
-                  aid ? { agentId: aid } : undefined,
-                );
-                navigateToSession(session.key, true);
-                historyBeforeCursorRef.current = null;
-                markSkipInitialSessionLoad(session.key);
-                store().setCommittedSnapshot(session.key, { messages: [], hasMore: false });
-                try {
-                  const cfg = await sessionMgrRef.current.loadSessionAgentConfig(session.key);
-                  store().patchSessionMeta(session.key, {
-                    model: cfg.model,
-                    thinkingLevel: cfg.thinkingLevel || DEFAULT_THINKING,
-                    reasoningLevel: coerceReasoningLevel(cfg.reasoningLevel),
-                  });
-                  void refreshModelThinkingSupport(cfg.model);
-                } catch {
-                  /* ignore */
-                }
-              } catch {
-                store().setShellError('Could not open a session');
-              }
+              historyBeforeCursorRef.current = null;
+              const aid = resolveAgentIdForPost();
+              openOptimisticNewSessionHandoff({
+                sessionMgr: sessionMgrRef.current,
+                agentId: aid,
+                navigateToSession,
+                replaceNavigate: true,
+                onOpened: (key) => {
+                  store().setCommittedSnapshot(key, { messages: [], hasMore: false });
+                },
+                followRegistration: followOptimisticRegistration,
+              });
             }
           }
           return undefined;
@@ -255,6 +292,7 @@ export function useChatSessionLoad(deps: {
       refreshModelThinkingSupport,
       resolveAgentIdForPost,
       sessionMgrRef,
+      followOptimisticRegistration,
     ],
   );
 
@@ -301,40 +339,25 @@ export function useChatSessionLoad(deps: {
   const createNewSession = useCallback(async () => {
     dismissClarifyOnSessionLoad();
     detachForNewConversation();
-    try {
-      const aid = resolveAgentIdForPost();
-      const session = await sessionMgrRef.current.createSession(
-        aid ? { agentId: aid } : undefined,
-      );
-      historyBeforeCursorRef.current = null;
-      markSkipInitialSessionLoad(session.key);
-      store().setCommittedSnapshot(session.key, {
-        messages: [],
-        hasMore: false,
-        name: session.name ?? null,
-      });
-      navigateToSession(session.key);
-      try {
-        const cfg = await sessionMgrRef.current.loadSessionAgentConfig(session.key);
-        store().patchSessionMeta(session.key, {
-          model: cfg.model,
-          thinkingLevel: cfg.thinkingLevel || DEFAULT_THINKING,
-          reasoningLevel: coerceReasoningLevel(cfg.reasoningLevel),
-        });
-        void refreshModelThinkingSupport(cfg.model);
-      } catch {
-        /* ignore */
-      }
-    } catch (err) {
-      console.error('[chat] createNewSession failed:', err);
-    }
+    historyBeforeCursorRef.current = null;
+    store().setShellError(null);
+    const aid = resolveAgentIdForPost();
+    openOptimisticNewSessionHandoff({
+      sessionMgr: sessionMgrRef.current,
+      agentId: aid,
+      navigateToSession,
+      onOpened: (key) => {
+        store().setCommittedSnapshot(key, { messages: [], hasMore: false, name: null });
+      },
+      followRegistration: followOptimisticRegistration,
+    });
   }, [
     dismissClarifyOnSessionLoad,
     detachForNewConversation,
     navigateToSession,
-    refreshModelThinkingSupport,
     resolveAgentIdForPost,
     sessionMgrRef,
+    followOptimisticRegistration,
   ]);
 
   return {

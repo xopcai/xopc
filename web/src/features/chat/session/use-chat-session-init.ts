@@ -1,5 +1,5 @@
 // Initial chat-session bootstrap. Product contract: docs/web/chat-session-semantics.md
-//   1. `/chat/new` — always POST createSession, replace URL with new key.
+//   1. `/chat/new` — optimistic client key + background POST (chat_id), replace URL immediately.
 //   2. `/chat/:key` route — load that session and try to resume any in-flight agent run for it.
 //   3. No key in URL — pick the most-recent populated session (or fall back to creating one).
 //
@@ -7,10 +7,19 @@
 
 import { useEffect, useRef, type MutableRefObject } from 'react';
 
+import type { SessionInfo } from '@/features/chat/chat.types';
 import type { Message } from '@/features/chat/messages/messages.types';
-import { getChatSessionSnapshot, getSessionMessages } from '@/features/chat/session/chat-session-store';
+import {
+  getChatSessionSnapshot,
+  getSessionMessages,
+  useChatSessionStore,
+} from '@/features/chat/session/chat-session-store';
 import { searchParamsForComposerHandoff } from '@/features/chat/session/composer-handoff-params';
-import { markSkipInitialSessionLoad, takeSkipInitialSessionLoad } from '@/features/chat/session/chat-session-init-skip-load';
+import { takeSkipInitialSessionLoad } from '@/features/chat/session/chat-session-init-skip-load';
+import {
+  followOptimisticSessionRegistration,
+  openOptimisticNewSessionHandoff,
+} from '@/features/chat/session/optimistic-new-session-handoff';
 import type { SessionManager } from '@/features/chat/session/session-manager';
 
 export function useChatSessionInit(opts: {
@@ -76,18 +85,43 @@ export function useChatSessionInit(opts: {
         });
     };
 
+    const followRegistration = (ctx: {
+      sessionKey: string;
+      register: Promise<SessionInfo>;
+      replaceNavigate?: boolean;
+      search?: string;
+    }) => {
+      followOptimisticSessionRegistration({
+        ...ctx,
+        navigateToSession,
+        isActive: isLive,
+        onError: (msg) => patchInitUi({ error: msg }),
+        onReconciled: (key, session) => {
+          adoptEmptySession(key, session.name ?? null);
+          applyResolvedSessionConfig(key);
+        },
+        onRegistered: (key, session) => {
+          if (session.name) {
+            useChatSessionStore.getState().patchSessionMeta(key, { name: session.name });
+          }
+          applyResolvedSessionConfig(key);
+        },
+      });
+    };
+
     const createNewRouteSession = (): Promise<void> => {
       if (!isLive()) return Promise.resolve();
       const aid = resolveAgentIdForPost();
-      return sessionMgrRef.current
-        .createSession(aid ? { agentId: aid } : undefined)
-        .then((session) => {
-          if (!isLive()) return;
-          markSkipInitialSessionLoad(session.key);
-          adoptEmptySession(session.key, session.name ?? null);
-          navigateToSession(session.key, true, searchParamsForComposerHandoff(locationSearch));
-          applyResolvedSessionConfig(session.key);
-        });
+      openOptimisticNewSessionHandoff({
+        sessionMgr: sessionMgrRef.current,
+        agentId: aid,
+        navigateToSession,
+        replaceNavigate: true,
+        search: searchParamsForComposerHandoff(locationSearch),
+        onOpened: (key) => adoptEmptySession(key, null),
+        followRegistration,
+      });
+      return Promise.resolve();
     };
 
     const resumeSessionRun = (key: string, seed: Message[]): Promise<void> => {
@@ -129,20 +163,18 @@ export function useChatSessionInit(opts: {
         }
         if (!isLive()) return;
         const aid = resolveAgentIdForPost();
-        return sessionMgrRef.current
-          .createSession(aid ? { agentId: aid } : undefined)
-          .then((session) => {
-            if (!isLive()) return;
-            markSkipInitialSessionLoad(session.key);
-            adoptEmptySession(session.key, session.name ?? null);
-            navigateToSession(session.key);
-            applyResolvedSessionConfig(session.key);
-          });
+        openOptimisticNewSessionHandoff({
+          sessionMgr: sessionMgrRef.current,
+          agentId: aid,
+          navigateToSession,
+          onOpened: (key) => adoptEmptySession(key, null),
+          followRegistration,
+        });
       });
     };
 
     const run = () => {
-      const needsFullBlockingLoad = isNewRoute || decodedKey === undefined;
+      const needsFullBlockingLoad = decodedKey === undefined && !isNewRoute;
       patchInitUi({ loading: needsFullBlockingLoad, error: null });
 
       const branch = isNewRoute
