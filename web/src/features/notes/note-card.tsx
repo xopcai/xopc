@@ -15,6 +15,7 @@ const KIND_ICON: Record<NoteKind, typeof Lightbulb> = {
   media: Image,
   bookmark: Bookmark,
   mixed: Lightbulb,
+  task: CheckSquare,
 };
 
 export type NoteCardProps = {

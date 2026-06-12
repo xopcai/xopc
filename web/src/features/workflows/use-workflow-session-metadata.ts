@@ -6,6 +6,8 @@ import { useGatewayStore } from '@/stores/gateway-store';
 export interface WorkflowSessionMetadata {
   workflowRunId: string | null;
   sessionType: string | null;
+  sourceNoteId: string | null;
+  sourceNoteTitle: string | null;
 }
 
 /** Read workflow run binding from session metadata (`customData.workflowRunId`). */
@@ -24,7 +26,17 @@ export function useWorkflowSessionMetadata(sessionKey: string | null | undefined
         typeof detail.sessionType === 'string' && detail.sessionType.trim()
           ? detail.sessionType.trim()
           : null;
-      return { workflowRunId, sessionType };
+      const rawSourceNoteId = detail.customData?.sourceNoteId;
+      const sourceNoteId =
+        typeof rawSourceNoteId === 'string' && rawSourceNoteId.trim()
+          ? rawSourceNoteId.trim()
+          : null;
+      const rawSourceNoteTitle = detail.customData?.sourceNoteTitle;
+      const sourceNoteTitle =
+        typeof rawSourceNoteTitle === 'string' && rawSourceNoteTitle.trim()
+          ? rawSourceNoteTitle.trim()
+          : null;
+      return { workflowRunId, sessionType, sourceNoteId, sourceNoteTitle };
     },
     { revalidateOnFocus: false },
   );
