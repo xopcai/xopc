@@ -77,12 +77,46 @@ export interface NoteAiMeta {
   suggestedTags?: string[];
 }
 
+export interface NoteCatalysisAction {
+  text: string;
+  kind: 'task' | 'workflow' | 'research' | 'share' | 'chat';
+}
+
+export interface NoteCatalysisReport {
+  originalNoteId: string;
+  generatedAt: number;
+  title: string;
+  valueHypothesis: string;
+  targetUsers: string[];
+  keyQuestions: string[];
+  mvpPath: string[];
+  risks: string[];
+  nextActions: NoteCatalysisAction[];
+  confidence: number;
+}
+
+export interface NoteCatalysisMeta {
+  status: 'none' | 'queued' | 'catalyzed' | 'snoozed' | 'dismissed';
+  stage?: 'seed' | 'incubating' | 'developing' | 'validating' | 'shipped';
+  lastCatalyzedAt?: number;
+  nextCatalyzeAt?: number;
+  feedback?: 'helpful' | 'not_helpful' | 'neutral';
+  confidence?: number;
+  report?: NoteCatalysisReport;
+  reportNoteId?: string;
+  sourceSessionKey?: string;
+  linkedSessionKeys?: string[];
+  linkedWorkflowRunIds?: string[];
+  linkedShareIds?: string[];
+}
+
 export interface NoteAiDeepMeta {
   processedAt: number;
   priority?: 'high' | 'medium' | 'low';
   relatedNoteIds?: string[];
   relatedGoalId?: string;
   insights?: string;
+  catalysis?: NoteCatalysisMeta;
 }
 
 export interface CaptureSource {

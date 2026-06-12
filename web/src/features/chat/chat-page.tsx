@@ -24,6 +24,7 @@ import { ACTIVE_RUN_STATUSES } from '@/features/workflows/workflow-page.constant
 import { useSessionWorkflowRunLinks } from '@/features/workflows/use-session-workflow-run-links';
 import { useWorkflowRunLive } from '@/features/workflows/use-workflow-run-live';
 import { useWorkflowSessionMetadata } from '@/features/workflows/use-workflow-session-metadata';
+import { appendNoteContent, createTaskNote } from '@/features/notes/notes-api';
 import { useWorkspaceEditorAgentStore } from '@/stores/workspace-editor-agent-store';
 import { AgentRunErrorBanner } from '@/features/chat/messages/agent-run-error-banner';
 import { agentsAppDetailPath } from '@/features/settings/agents/agents-app-path';
@@ -204,6 +205,29 @@ export function ChatPage() {
     m.chat.newSession,
   ]);
 
+  const sourceNoteId = workflowMeta?.sourceNoteId ?? null;
+  const sourceNoteTitle = workflowMeta?.sourceNoteTitle || m.chat.sourceNoteFallbackTitle;
+
+  const handleSaveAssistantToSourceNote = useCallback(
+    async (content: string) => {
+      if (!sourceNoteId) return;
+      await appendNoteContent(sourceNoteId, content, m.chat.sourceNoteAppendHeading);
+    },
+    [m.chat.sourceNoteAppendHeading, sourceNoteId],
+  );
+
+  const handleExtractAssistantTask = useCallback(
+    async (content: string) => {
+      if (!sourceNoteId) return;
+      const title = content.trim().split(/\n+/)[0]?.replace(/^[-#*>\s]+/, '').trim() || m.chat.sourceNoteTaskFallbackTitle;
+      await createTaskNote(title.slice(0, 120), {
+        sourceNoteId,
+        sourceSessionKey: chatSessionKey,
+      });
+    },
+    [chatSessionKey, m.chat.sourceNoteTaskFallbackTitle, sourceNoteId],
+  );
+
   if (!auth.hasToken) {
     return (
       <div className="mx-auto w-full max-w-[var(--max-width-chat)] px-3 py-16 text-center text-sm leading-relaxed text-fg-muted sm:px-5">
@@ -236,6 +260,21 @@ export function ChatPage() {
               <span aria-hidden>←</span>
               {m.agentsSettings.backToEditor}
             </Link>
+          </div>
+        ) : null}
+        {sourceNoteId ? (
+          <div className="shrink-0 border-b border-edge-subtle bg-surface-panel/80 px-3 py-1.5 sm:px-5 xl:px-6">
+            <div className="flex min-w-0 items-center justify-between gap-3 text-xs text-fg-muted">
+              <span className="min-w-0 truncate">
+                {m.chat.sourceNoteBanner.replace('{{title}}', sourceNoteTitle)}
+              </span>
+              <Link
+                to={`/notes/${encodeURIComponent(sourceNoteId)}`}
+                className="shrink-0 font-medium text-accent transition-colors hover:text-accent-fg"
+              >
+                {m.chat.sourceNoteOpen}
+              </Link>
+            </div>
           </div>
         ) : null}
         {session.sessionKey &&
@@ -318,6 +357,8 @@ export function ChatPage() {
                         void stream.sendMessage(text);
                       }
                     }}
+                    onSaveAssistantToSourceNote={sourceNoteId ? handleSaveAssistantToSourceNote : undefined}
+                    onExtractAssistantTask={sourceNoteId ? handleExtractAssistantTask : undefined}
                   />
                 </>
               )}
