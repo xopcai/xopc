@@ -153,6 +153,7 @@ export function ChannelsSettingsPanel() {
     return (
       <>
         <ChannelsPageHeaderRegistration
+          title={m.settingsSections.channels}
           hasToken={hasToken}
           ch={ch}
           refreshing={refreshing}
@@ -171,6 +172,7 @@ export function ChannelsSettingsPanel() {
     return (
       <>
         <ChannelsPageHeaderRegistration
+          title={m.settingsSections.channels}
           hasToken={hasToken}
           ch={ch}
           refreshing={refreshing}
@@ -193,6 +195,7 @@ export function ChannelsSettingsPanel() {
     return (
       <>
         <ChannelsPageHeaderRegistration
+          title={m.settingsSections.channels}
           hasToken={hasToken}
           ch={ch}
           refreshing={refreshing}
@@ -266,6 +269,7 @@ export function ChannelsSettingsPanel() {
   return (
     <>
       <ChannelsPageHeaderRegistration
+        title={m.settingsSections.channels}
         hasToken={hasToken}
         ch={ch}
         refreshing={refreshing}
@@ -273,19 +277,15 @@ export function ChannelsSettingsPanel() {
         onRefresh={handleRefresh}
       />
       <div className="mx-auto flex w-full max-w-app-main flex-col gap-6 px-4 py-6">
-      <header className="flex flex-col gap-1">
-        <h1 className="text-lg font-semibold tracking-tight text-fg">{m.settingsSections.channels}</h1>
-        <p className="text-sm text-fg-muted">{ch.subtitle}</p>
-        <a
-          href={docsGuidePageUrl(language, 'channels')}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex items-center gap-1 text-sm text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
-        >
-          {ch.docsLink}
-          <ExternalLink className="size-3.5" />
-        </a>
-      </header>
+      <a
+        href={docsGuidePageUrl(language, 'channels')}
+        target="_blank"
+        rel="noreferrer"
+        className="inline-flex w-fit items-center gap-1 text-sm text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+      >
+        {ch.docsLink}
+        <ExternalLink className="size-3.5" />
+      </a>
 
       {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
       {weixinSuccessBanner ? <p className="text-xs text-accent">{weixinSuccessBanner}</p> : null}
@@ -394,12 +394,14 @@ export function ChannelsSettingsPanel() {
 }
 
 function ChannelsPageHeaderRegistration({
+  title,
   hasToken,
   ch,
   refreshing,
   saveOk,
   onRefresh,
 }: {
+  title: string;
   hasToken: boolean;
   ch: ChannelsSettingsMessages;
   refreshing: boolean;
@@ -428,11 +430,15 @@ function ChannelsPageHeaderRegistration({
     }
     setPageHeader({
       startExtra: null,
-      main: null,
+      main: (
+        <div className="min-w-0">
+          <h1 className="truncate text-base font-semibold tracking-tight text-fg">{title}</h1>
+        </div>
+      ),
       end: channelsHeaderEnd,
     });
     return () => clearPageHeader();
-  }, [channelsHeaderEnd, clearPageHeader, hasToken, setPageHeader]);
+  }, [channelsHeaderEnd, clearPageHeader, hasToken, setPageHeader, title]);
 
   return null;
 }

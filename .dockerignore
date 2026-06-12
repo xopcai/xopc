@@ -1,0 +1,72 @@
+.git
+.worktrees
+
+# Local env and secrets
+.env
+.env.*
+!.env.example
+!.env.local.example
+
+# Dependencies and package-manager caches
+node_modules
+**/node_modules
+.pnpm-store
+**/.pnpm-store
+.npm
+.yarn
+.bun
+.bun-cache
+
+# Build outputs
+dist
+**/dist
+out
+**/out
+coverage
+**/coverage
+.turbo
+**/.turbo
+.cache
+**/.cache
+.vite
+**/.vite
+docs/.vitepress/cache
+docs/.vitepress/dist
+
+# Runtime state and temporary files
+.xopc
+.local
+**/.local
+.tmp
+**/.tmp
+tmp
+**/tmp
+*.log
+*.pid
+.DS_Store
+**/.DS_Store
+
+# Electron and desktop build artifacts
+release
+**/release
+apps/macos/.build
+apps/ios/build
+
+# Test artifacts
+__openclaw_vitest__
+**/__openclaw_vitest__
+playwright-report
+**/playwright-report
+test-results
+**/test-results
+
+# Large media files usually not needed for building the runtime image
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.gif
+*.mp4
+*.mov
+*.wav
+*.mp3

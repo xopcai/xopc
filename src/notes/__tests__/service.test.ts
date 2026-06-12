@@ -108,6 +108,12 @@ describe('NotesService block sync and AI edit', () => {
     service = new NotesService(store as never);
   });
 
+  it('uses the first 10 characters of quick capture text as the default title', async () => {
+    const note = await service.quickCapture('今天要整理产品方案和会议纪要', { channel: 'web' });
+
+    expect(note.title).toBe('今天要整理产品方案和');
+  });
+
   it('creates notes from blocks and derives plain text', async () => {
     const note = await service.createNote({
       blocks: [paragraph('a', '第一段'), paragraph('b', '第二段')],

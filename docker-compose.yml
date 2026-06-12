@@ -1,0 +1,94 @@
+services:
+  xopc-gateway:
+    image: ${XOPC_IMAGE:-xopc:local}
+    build:
+      context: .
+      args:
+        XOPC_APT_MIRROR: ${XOPC_APT_MIRROR:-}
+        XOPC_IMAGE_APT_PACKAGES: ${XOPC_IMAGE_APT_PACKAGES:-}
+        XOPC_INSTALL_BROWSER: ${XOPC_INSTALL_BROWSER:-}
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      HOME: /home/node
+      XOPC_HOME: /home/node
+      XOPC_STATE_DIR: /home/node/.xopc
+      XOPC_CONFIG: /home/node/.xopc/xopc.json
+      XOPC_CONFIG_PATH: /home/node/.xopc/xopc.json
+      XOPC_WORKSPACE: /home/node/.xopc/workspace
+      XOPC_LOG_DIR: /home/node/.xopc/logs
+      XOPC_GATEWAY_TOKEN: ${XOPC_GATEWAY_TOKEN:-}
+      TERM: xterm-256color
+      TZ: ${XOPC_TZ:-UTC}
+    volumes:
+      - "${XOPC_STATE_DIR:-${HOME:-/tmp}/.xopc}:/home/node/.xopc"
+      - "${XOPC_WORKSPACE:-${HOME:-/tmp}/.xopc/workspace}:/home/node/.xopc/workspace"
+    cap_drop:
+      - NET_RAW
+      - NET_ADMIN
+    security_opt:
+      - no-new-privileges:true
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "${XOPC_GATEWAY_PORT:-18790}:18790"
+    init: true
+    restart: unless-stopped
+    command:
+      [
+        "node",
+        "dist/src/cli/bin.js",
+        "gateway",
+        "--bind",
+        "lan",
+        "--port",
+        "18790"
+      ]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:18790/api/health').then((response)=>process.exit(response.ok?0:1)).catch(()=>process.exit(1))"
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  xopc-cli:
+    image: ${XOPC_IMAGE:-xopc:local}
+    network_mode: "service:xopc-gateway"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      HOME: /home/node
+      XOPC_HOME: /home/node
+      XOPC_STATE_DIR: /home/node/.xopc
+      XOPC_CONFIG: /home/node/.xopc/xopc.json
+      XOPC_CONFIG_PATH: /home/node/.xopc/xopc.json
+      XOPC_WORKSPACE: /home/node/.xopc/workspace
+      XOPC_LOG_DIR: /home/node/.xopc/logs
+      XOPC_GATEWAY_TOKEN: ${XOPC_GATEWAY_TOKEN:-}
+      BROWSER: echo
+      TERM: xterm-256color
+      TZ: ${XOPC_TZ:-UTC}
+    volumes:
+      - "${XOPC_STATE_DIR:-${HOME:-/tmp}/.xopc}:/home/node/.xopc"
+      - "${XOPC_WORKSPACE:-${HOME:-/tmp}/.xopc/workspace}:/home/node/.xopc/workspace"
+    cap_drop:
+      - NET_RAW
+      - NET_ADMIN
+    security_opt:
+      - no-new-privileges:true
+    stdin_open: true
+    tty: true
+    init: true
+    entrypoint: ["node", "dist/src/cli/bin.js"]
+    depends_on:
+      - xopc-gateway
+    profiles:
+      - cli

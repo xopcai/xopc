@@ -67,11 +67,24 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
     }
     setPageHeader({
       startExtra: null,
-      main: null,
+      main: (
+        <div className="min-w-0">
+          <h1 className="truncate text-base font-semibold tracking-tight text-fg">{labels.title}</h1>
+        </div>
+      ),
       end: <WorkflowsPageHeaderActions vm={vm} />,
     });
     return () => clearPageHeader();
-  }, [clearPageHeader, hasToken, loading, vm, vm.refreshAll, vm.setManageOpen, vm.setSearchQuery]);
+  }, [
+    clearPageHeader,
+    hasToken,
+    labels.title,
+    loading,
+    vm,
+    vm.refreshAll,
+    vm.setManageOpen,
+    vm.setSearchQuery,
+  ]);
 
   if (!hasToken) {
     return (
@@ -88,12 +101,7 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
   return (
     <main className="min-h-0 flex-1 overflow-auto bg-surface-base">
       <div className="mx-auto flex w-full max-w-400 flex-col gap-5 px-4 py-6 lg:px-6">
-        <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight text-fg">{labels.title}</h1>
-            <p className="mt-1 max-w-2xl text-sm leading-6 text-fg-muted">{labels.subtitleBoard}</p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
             <select
               value={triggerFilter}
               aria-label={labels.boardTriggerFilterAria}
@@ -129,8 +137,7 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
               <Play className="size-4" aria-hidden />
               {labels.boardStart}
             </Button>
-          </div>
-        </header>
+        </div>
 
         {actionFeedback ? (
           <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-800 dark:text-emerald-200">

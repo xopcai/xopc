@@ -455,11 +455,15 @@ export function useAgentsSettingsPanel() {
     }
     setPageHeader({
       startExtra: null,
-      main: null,
+      main: (
+        <div className="min-w-0">
+          <h1 className="truncate text-base font-semibold tracking-tight text-fg">{a.title}</h1>
+        </div>
+      ),
       end: agentsHeaderEnd,
     });
     return () => clearPageHeader();
-  }, [agentsHeaderEnd, clearPageHeader, hasToken, setPageHeader]);
+  }, [a.title, agentsHeaderEnd, clearPageHeader, hasToken, setPageHeader]);
 
   async function onCreate(e: FormEvent) {
     e.preventDefault();

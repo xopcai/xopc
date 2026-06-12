@@ -451,14 +451,6 @@ export function CronPage() {
             {data.error}
           </div>
         ) : null}
-
-        <header className="flex flex-col gap-4">
-          <div className="min-w-0">
-            <h1 className="text-xl font-semibold tracking-tight text-fg">{c.title}</h1>
-            <p className="mt-1 max-w-2xl text-sm text-fg-muted">{c.subtitle}</p>
-          </div>
-        </header>
-
         <CronMainToolbar
           c={c}
           mainTab={mainTab}
@@ -690,11 +682,15 @@ function CronPageHeaderRegistration({
     }
     setPageHeader({
       startExtra: null,
-      main: null,
+      main: (
+        <div className="min-w-0">
+          <h1 className="truncate text-base font-semibold tracking-tight text-fg">{c.title}</h1>
+        </div>
+      ),
       end: cronHeaderEnd,
     });
     return () => clearPageHeader();
-  }, [clearPageHeader, cronHeaderEnd, hasToken, setPageHeader]);
+  }, [c.title, clearPageHeader, cronHeaderEnd, hasToken, setPageHeader]);
 
   return null;
 }

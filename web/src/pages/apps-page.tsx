@@ -114,8 +114,8 @@ export function AppsPage() {
     setPageHeader({
       startExtra: null,
       main: (
-        <div className="w-full min-w-0 px-3 sm:px-5 xl:px-6">
-          <h1 className="min-w-0 truncate text-base font-semibold tracking-tight text-fg">{m.appsPage.title}</h1>
+        <div className="min-w-0">
+          <h1 className="truncate text-base font-semibold tracking-tight text-fg">{m.appsPage.title}</h1>
         </div>
       ),
       end: null,
@@ -132,11 +132,6 @@ export function AppsPage() {
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-surface-panel">
       <div className="mx-auto w-full max-w-app-main px-4 py-8">
-        <header className="mb-6">
-          <h1 className="text-xl font-semibold text-fg">{m.appsPage.title}</h1>
-          <p className="mt-1 text-sm text-fg-muted">{m.appsPage.subtitle}</p>
-        </header>
-
         <div className="mb-5 flex flex-col gap-3 border-b border-edge-subtle pb-3 sm:flex-row sm:items-center sm:justify-between dark:border-edge-subtle">
           <div
             className="flex flex-wrap gap-x-1 gap-y-1"
