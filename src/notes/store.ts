@@ -140,7 +140,7 @@ export class NotesStore {
     return true;
   }
 
-  async listNotes(query: NotesListQuery = {}): Promise<{ items: NoteIndexEntry[]; total: number }> {
+  async listNotes(query: NotesListQuery = {}): Promise<{ items: NoteIndexEntry[]; total: number; limit: number; offset: number; hasMore: boolean }> {
     const index = await this.loadIndex();
     let results = index.notes;
 
@@ -200,8 +200,9 @@ export class NotesStore {
     const offset = query.offset || 0;
     const limit = Math.min(query.limit || 50, 200);
     const items = results.slice(offset, offset + limit);
+    const hasMore = offset + items.length < total;
 
-    return { items, total };
+    return { items, total, limit, offset, hasMore };
   }
 
   private noteIndexEntryMatchesSearch(entry: NoteIndexEntry, term: string): boolean {

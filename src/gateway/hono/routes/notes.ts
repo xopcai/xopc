@@ -5,10 +5,12 @@ import { Readable } from 'node:stream';
 import type { Hono } from 'hono';
 import { stream } from 'hono/streaming';
 
+import { buildSessionKey } from '../../../routing/session-key.js';
+import { agentExists, getDefaultAgentId } from '../../../routing/resolve-route.js';
 import type { CaptureChannel, CaptureSource, Note, NoteBlock, NoteKind, NoteStatus, SnapshotTrigger } from '../../../notes/types.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
-const VALID_KINDS = new Set<NoteKind>(['thought', 'todo', 'voice', 'media', 'bookmark', 'mixed']);
+const VALID_KINDS = new Set<NoteKind>(['thought', 'todo', 'voice', 'media', 'bookmark', 'mixed', 'task']);
 const VALID_STATUSES = new Set<NoteStatus>(['inbox', 'processed', 'archived', 'trashed']);
 const VALID_CHANNELS = new Set<CaptureChannel>(['app', 'web', 'electron', 'tui', 'telegram', 'wechat', 'feishu']);
 
@@ -46,6 +48,17 @@ function buildNotePatch(body: Record<string, unknown>): Partial<Note> {
   if (body.ai && typeof body.ai === 'object') patch.ai = body.ai as Note['ai'];
   if (body.aiDeep && typeof body.aiDeep === 'object') patch.aiDeep = body.aiDeep as Note['aiDeep'];
   return patch;
+}
+
+function buildNoteThreadContext(note: Note): string {
+  const title = note.title?.trim() || '未命名笔记';
+  const body = note.text?.trim() || '这条笔记暂无正文。';
+  return [`来源 Note：${title}`, '', body].join('\n');
+}
+
+function noteThreadName(note: Note): string {
+  const title = note.title?.trim() || note.text?.trim()?.slice(0, 28) || '未命名笔记';
+  return `讨论：${title}`;
 }
 
 export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
@@ -185,6 +198,120 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
       return c.json({ conflict: true, note: result.note }, 409);
     }
     return c.json({ conflict: false, note: result.note });
+  });
+
+  // POST /api/notes/:id/catalyze — generate an AI catalysis report and write it back
+  authenticated.post('/api/notes/:id/catalyze', async (c) => {
+    const result = await service.notesServiceInstance.catalyzeNote(c.req.param('id'), service.currentConfig);
+    if (!result) {
+      return c.json({ error: 'Note not found' }, 404);
+    }
+    return c.json(result);
+  });
+
+  // POST /api/notes/:id/catalysis-feedback — record whether the catalysis was useful
+  authenticated.post('/api/notes/:id/catalysis-feedback', async (c) => {
+    const body = await c.req.json().catch(() => ({}));
+    const feedback = body.feedback;
+    if (feedback !== 'helpful' && feedback !== 'not_helpful' && feedback !== 'neutral') {
+      return c.json({ error: 'Invalid feedback' }, 400);
+    }
+    const note = await service.notesServiceInstance.recordCatalysisFeedback(c.req.param('id'), feedback);
+    if (!note) {
+      return c.json({ error: 'Note not found' }, 404);
+    }
+    return c.json({ note });
+  });
+
+  // POST /api/notes/:id/chat — create or reuse a note-bound web chat thread
+  authenticated.post('/api/notes/:id/chat', async (c) => {
+    const noteId = c.req.param('id');
+    const note = await service.notesServiceInstance.getNote(noteId);
+    if (!note) {
+      return c.json({ error: 'Note not found' }, 404);
+    }
+
+    const body = await c.req.json().catch(() => ({}));
+    const routingCfg = service.currentConfig;
+    let agentId =
+      typeof body.agentId === 'string' && body.agentId.trim()
+        ? body.agentId.trim().toLowerCase()
+        : getDefaultAgentId(routingCfg);
+    if (!agentExists(agentId, routingCfg)) {
+      agentId = getDefaultAgentId(routingCfg);
+    }
+
+    const existingKey = note.aiDeep?.catalysis?.sourceSessionKey;
+    if (existingKey) {
+      const existingSession = await service.sessions.getSession(existingKey);
+      if (existingSession) {
+        return c.json({ session: existingSession, sessionKey: existingKey, reused: true });
+      }
+    }
+
+    const sessionKey = buildSessionKey({
+      agentId,
+      source: 'webchat',
+      accountId: 'default',
+      peerKind: 'direct',
+      peerId: `note_${noteId}_${Date.now()}`,
+    });
+
+    await service.sessionIndexInstance.saveMessages(sessionKey, []);
+    await service.sessionIndexInstance.appendTranscriptContextEntry(sessionKey, {
+      id: `source-note:${noteId}`,
+      text: buildNoteThreadContext(note),
+      data: {
+        kind: 'source_note',
+        noteId,
+        title: note.title ?? '',
+      },
+    });
+
+    const meta = await service.sessionIndexInstance.getSessionMetadata(sessionKey);
+    await service.sessionIndexInstance.updateSessionMetadata(sessionKey, {
+      name: noteThreadName(note),
+      tags: Array.from(new Set([...(meta?.tags ?? []), 'note'])),
+      customData: {
+        ...(meta?.customData ?? {}),
+        sourceNoteId: noteId,
+        sourceNoteTitle: note.title ?? '',
+      },
+    });
+
+    await service.notesServiceInstance.linkNoteThread(noteId, sessionKey);
+    const session = await service.sessions.getSession(sessionKey);
+    return c.json({ session, sessionKey, reused: false }, 201);
+  });
+
+  // GET /api/notes/:id/threads — list chat threads linked to a note
+  authenticated.get('/api/notes/:id/threads', async (c) => {
+    const noteId = c.req.param('id');
+    const keys = await service.notesServiceInstance.listNoteThreads(noteId);
+    if (!keys) {
+      return c.json({ error: 'Note not found' }, 404);
+    }
+    const sessions = [];
+    for (const key of keys) {
+      const session = await service.sessions.getSession(key);
+      if (session) sessions.push(session);
+    }
+    return c.json({ items: sessions, total: sessions.length });
+  });
+
+  // POST /api/notes/:id/append — append assistant output or selected text back to the note
+  authenticated.post('/api/notes/:id/append', async (c) => {
+    const body = await c.req.json().catch(() => ({}));
+    const content = typeof body.content === 'string' ? body.content.trim() : '';
+    const heading = typeof body.heading === 'string' && body.heading.trim() ? body.heading.trim() : undefined;
+    if (!content) {
+      return c.json({ error: 'Missing required field: content' }, 400);
+    }
+    const note = await service.notesServiceInstance.appendTextToNote(c.req.param('id'), content, heading);
+    if (!note) {
+      return c.json({ error: 'Note not found' }, 404);
+    }
+    return c.json({ note });
   });
 
   // GET /api/notes/:id — single note

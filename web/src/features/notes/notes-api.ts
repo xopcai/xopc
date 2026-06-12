@@ -7,7 +7,7 @@ import {
   postNoteFormData,
 } from './note-media';
 
-export type NoteKind = 'thought' | 'todo' | 'voice' | 'media' | 'bookmark' | 'mixed';
+export type NoteKind = 'thought' | 'todo' | 'voice' | 'media' | 'bookmark' | 'mixed' | 'task';
 export type NoteStatus = 'inbox' | 'processed' | 'archived' | 'trashed';
 
 export interface NoteAttachment {
@@ -28,6 +28,48 @@ export interface NoteAiMeta {
   suggestedTags?: string[];
 }
 
+export interface NoteCatalysisAction {
+  text: string;
+  kind: 'task' | 'workflow' | 'research' | 'share' | 'chat';
+}
+
+export interface NoteCatalysisReport {
+  originalNoteId: string;
+  generatedAt: number;
+  title: string;
+  valueHypothesis: string;
+  targetUsers: string[];
+  keyQuestions: string[];
+  mvpPath: string[];
+  risks: string[];
+  nextActions: NoteCatalysisAction[];
+  confidence: number;
+}
+
+export interface NoteCatalysisMeta {
+  status: 'none' | 'queued' | 'catalyzed' | 'snoozed' | 'dismissed';
+  stage?: 'seed' | 'incubating' | 'developing' | 'validating' | 'shipped';
+  lastCatalyzedAt?: number;
+  nextCatalyzeAt?: number;
+  feedback?: 'helpful' | 'not_helpful' | 'neutral';
+  confidence?: number;
+  report?: NoteCatalysisReport;
+  reportNoteId?: string;
+  sourceSessionKey?: string;
+  linkedSessionKeys?: string[];
+  linkedWorkflowRunIds?: string[];
+  linkedShareIds?: string[];
+}
+
+export interface NoteAiDeepMeta {
+  processedAt: number;
+  priority?: 'high' | 'medium' | 'low';
+  relatedNoteIds?: string[];
+  relatedGoalId?: string;
+  insights?: string;
+  catalysis?: NoteCatalysisMeta;
+}
+
 export interface Note {
   id: string;
   title?: string;
@@ -39,6 +81,7 @@ export interface Note {
   updatedAt: number;
   capturedVia: { channel: string; platform?: string };
   ai?: NoteAiMeta;
+  aiDeep?: NoteAiDeepMeta;
   tags?: string[];
   pinned?: boolean;
 }
@@ -113,6 +156,74 @@ export async function updateNote(id: string, patch: Partial<Note>): Promise<Note
 
 export async function deleteNote(id: string): Promise<void> {
   await fetchJson(apiUrl(`/api/notes/${encodeURIComponent(id)}`), { method: 'DELETE' });
+}
+
+export async function catalyzeNote(id: string): Promise<{ note: Note; report: NoteCatalysisReport }> {
+  return fetchJson<{ note: Note; report: NoteCatalysisReport }>(
+    apiUrl(`/api/notes/${encodeURIComponent(id)}/catalyze`),
+    { method: 'POST' },
+  );
+}
+
+export async function recordNoteCatalysisFeedback(
+  id: string,
+  feedback: 'helpful' | 'not_helpful' | 'neutral',
+): Promise<Note> {
+  const result = await fetchJson<{ note: Note }>(
+    apiUrl(`/api/notes/${encodeURIComponent(id)}/catalysis-feedback`),
+    {
+      method: 'POST',
+      body: JSON.stringify({ feedback }),
+    },
+  );
+  return result.note;
+}
+
+export interface NoteChatSessionSummary {
+  key: string;
+  name?: string;
+  updatedAt?: string;
+  messageCount?: number;
+  customData?: Record<string, unknown>;
+}
+
+export async function openNoteChat(id: string): Promise<{ sessionKey: string; reused: boolean; session?: NoteChatSessionSummary }> {
+  return fetchJson<{ sessionKey: string; reused: boolean; session?: NoteChatSessionSummary }>(
+    apiUrl(`/api/notes/${encodeURIComponent(id)}/chat`),
+    { method: 'POST' },
+  );
+}
+
+export async function listNoteThreads(id: string): Promise<NoteChatSessionSummary[]> {
+  const result = await fetchJson<{ items: NoteChatSessionSummary[]; total: number }>(
+    apiUrl(`/api/notes/${encodeURIComponent(id)}/threads`),
+  );
+  return result.items;
+}
+
+export async function appendNoteContent(id: string, content: string, heading?: string): Promise<Note> {
+  const result = await fetchJson<{ note: Note }>(apiUrl(`/api/notes/${encodeURIComponent(id)}/append`), {
+    method: 'POST',
+    body: JSON.stringify({ content, heading }),
+  });
+  return result.note;
+}
+
+export async function createTaskNote(
+  title: string,
+  opts: { sourceSessionKey?: string | null; sourceNoteId?: string | null; priority?: 'high' | 'medium' | 'low' } = {},
+): Promise<Note> {
+  const result = await fetchJson<{ note: Note }>(apiUrl('/api/notes/task'), {
+    method: 'POST',
+    body: JSON.stringify({
+      title,
+      channel: 'web',
+      priority: opts.priority,
+      sourceSessionKey: opts.sourceSessionKey || undefined,
+      sourceNoteId: opts.sourceNoteId || undefined,
+    }),
+  });
+  return result.note;
 }
 
 export async function uploadNoteMedia(noteId: string, file: File): Promise<NoteAttachment> {

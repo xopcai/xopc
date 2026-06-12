@@ -1,5 +1,5 @@
 import { memo, useCallback, useMemo, useState } from 'react';
-import { Check, Copy, FileCode2, Pencil, RefreshCw, Trash2 } from 'lucide-react';
+import { Check, Copy, FileCode2, FileText, ListTodo, Pencil, RefreshCw, Trash2 } from 'lucide-react';
 
 import type {
   ImageContent,
@@ -72,6 +72,8 @@ export const MessageBubble = memo(function MessageBubble({
   deleteRoundDisabled = false,
   onAbortCurrentTurn,
   onSendUserMessage,
+  onSaveAssistantToSourceNote,
+  onExtractAssistantTask,
 }: {
   message: Message;
   authToken?: string;
@@ -93,6 +95,10 @@ export const MessageBubble = memo(function MessageBubble({
   onAbortCurrentTurn?: () => void;
   /** Send a synthetic user message — wires WorkflowCard's "Save as…" entry. */
   onSendUserMessage?: (text: string) => void;
+  /** Append this assistant reply back to the source Note for note-bound chat threads. */
+  onSaveAssistantToSourceNote?: (content: string) => Promise<void> | void;
+  /** Create a task Note from this assistant reply for note-bound chat threads. */
+  onExtractAssistantTask?: (content: string) => Promise<void> | void;
 }) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
@@ -231,6 +237,8 @@ export const MessageBubble = memo(function MessageBubble({
     return extractUserMessagePlainText(message.content);
   }, [isUser, message.content]);
   const [copyFeedback, setCopyFeedback] = useState<'plain' | 'markdown' | 'user' | null>(null);
+  const [assistantActionFeedback, setAssistantActionFeedback] = useState<'save-note' | 'extract-task' | null>(null);
+  const [assistantActionBusy, setAssistantActionBusy] = useState<'save-note' | 'extract-task' | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [inlineImagePreview, setInlineImagePreview] = useState<MessageAttachment | null>(null);
   const openInlineImagePreview = useCallback((block: ImageContent, index: number) => {
@@ -255,6 +263,35 @@ export const MessageBubble = memo(function MessageBubble({
       window.setTimeout(() => setCopyFeedback((f) => (f === 'markdown' ? null : f)), 2000);
     });
   }, [copyMarkdown]);
+
+  const handleSaveAssistantToSourceNote = useCallback(() => {
+    if (!copyMarkdown || !onSaveAssistantToSourceNote || assistantActionBusy) return;
+    setAssistantActionBusy('save-note');
+    void Promise.resolve(onSaveAssistantToSourceNote(copyMarkdown))
+      .then(() => {
+        setAssistantActionFeedback('save-note');
+        window.setTimeout(
+          () => setAssistantActionFeedback((f) => (f === 'save-note' ? null : f)),
+          2000,
+        );
+      })
+      .finally(() => setAssistantActionBusy(null));
+  }, [assistantActionBusy, copyMarkdown, onSaveAssistantToSourceNote]);
+
+  const handleExtractAssistantTask = useCallback(() => {
+    if (!copyPlainText && !copyMarkdown) return;
+    if (!onExtractAssistantTask || assistantActionBusy) return;
+    setAssistantActionBusy('extract-task');
+    void Promise.resolve(onExtractAssistantTask(copyPlainText || copyMarkdown))
+      .then(() => {
+        setAssistantActionFeedback('extract-task');
+        window.setTimeout(
+          () => setAssistantActionFeedback((f) => (f === 'extract-task' ? null : f)),
+          2000,
+        );
+      })
+      .finally(() => setAssistantActionBusy(null));
+  }, [assistantActionBusy, copyMarkdown, copyPlainText, onExtractAssistantTask]);
 
   const handleCopyUserMessage = useCallback(() => {
     if (!userCopyText) return;
@@ -530,6 +567,38 @@ export const MessageBubble = memo(function MessageBubble({
                 <FileCode2 className="size-4" strokeWidth={1.75} aria-hidden />
               )}
             </button>
+            {onSaveAssistantToSourceNote ? (
+              <button
+                type="button"
+                className={messageActionIconButton}
+                onClick={handleSaveAssistantToSourceNote}
+                disabled={!copyMarkdown || assistantActionBusy !== null}
+                title={assistantActionFeedback === 'save-note' ? m.chat.messageSavedToNote : m.chat.messageSaveToNote}
+                aria-label={assistantActionFeedback === 'save-note' ? m.chat.messageSavedToNote : m.chat.messageSaveToNote}
+              >
+                {assistantActionFeedback === 'save-note' ? (
+                  <Check className="size-4 text-fg-muted" strokeWidth={1.75} aria-hidden />
+                ) : (
+                  <FileText className="size-4" strokeWidth={1.75} aria-hidden />
+                )}
+              </button>
+            ) : null}
+            {onExtractAssistantTask ? (
+              <button
+                type="button"
+                className={messageActionIconButton}
+                onClick={handleExtractAssistantTask}
+                disabled={(!copyPlainText && !copyMarkdown) || assistantActionBusy !== null}
+                title={assistantActionFeedback === 'extract-task' ? m.chat.messageTaskExtracted : m.chat.messageExtractTask}
+                aria-label={assistantActionFeedback === 'extract-task' ? m.chat.messageTaskExtracted : m.chat.messageExtractTask}
+              >
+                {assistantActionFeedback === 'extract-task' ? (
+                  <Check className="size-4 text-fg-muted" strokeWidth={1.75} aria-hidden />
+                ) : (
+                  <ListTodo className="size-4" strokeWidth={1.75} aria-hidden />
+                )}
+              </button>
+            ) : null}
           </div>
         ) : null}
 

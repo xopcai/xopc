@@ -1,5 +1,6 @@
-import { ArrowLeft, Eye, Code2, FileText, History } from 'lucide-react';
+import { ArrowLeft, Eye, Code2, FileText, History, MessageCircle, Sparkles } from 'lucide-react';
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import useSWR from 'swr';
 
 import { APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
@@ -12,10 +13,20 @@ import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 import { useThemeStore } from '@/stores/theme-store';
 
-import { getNote, getNoteSnapshot, updateNote, type NoteSnapshot, type NoteSnapshotEntry } from './notes-api';
+import {
+  catalyzeNote,
+  getNote,
+  getNoteSnapshot,
+  listNoteThreads,
+  openNoteChat,
+  updateNote,
+  type NoteSnapshot,
+  type NoteSnapshotEntry,
+} from './notes-api';
 import { NoteImageLightboxProvider, useNoteImageLightbox } from './note-image-lightbox';
 import { NoteHistoryPanel } from './note-history-panel';
 import { NoteMarkdownView } from './note-markdown-view';
+import { NoteBreakdownPanel } from './note-breakdown-panel';
 
 type EditorMode = 'wysiwyg' | 'source' | 'preview';
 
@@ -76,15 +87,18 @@ export function NoteDetailPanel({ noteId, onBack, onSaved }: NoteDetailPanelProp
 function NoteDetailPanelInner({ noteId, onBack, onSaved }: NoteDetailPanelProps) {
   const language = useLocaleStore((s) => s.language);
   const n = messages(language).notes;
+  const navigate = useNavigate();
   const isDark = useThemeStore((s) => s.resolved) === 'dark';
   const { openImage } = useNoteImageLightbox();
   const [mode, setMode] = useState<EditorMode>('wysiwyg');
-  const [showHistory, setShowHistory] = useState(false);
+  const [activeSidePanel, setActiveSidePanel] = useState<'history' | 'breakdown' | null>(null);
   const [previewSnapshot, setPreviewSnapshot] = useState<NoteSnapshot | null>(null);
   const [saving, setSaving] = useState(false);
   const [title, setTitle] = useState('');
-  const [historyWidth, setHistoryWidth] = useState(288);
+  const [sidePanelWidth, setSidePanelWidth] = useState(360);
   const [historyResizing, setHistoryResizing] = useState(false);
+  const [catalyzing, setCatalyzing] = useState(false);
+  const [openingChat, setOpeningChat] = useState(false);
   const titleInitRef = useRef(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const titleDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -95,6 +109,11 @@ function NoteDetailPanelInner({ noteId, onBack, onSaved }: NoteDetailPanelProps)
   const { data: note, mutate } = useSWR(
     noteId ? ['note-detail', noteId] : null,
     () => getNote(noteId),
+  );
+  const { data: noteThreads = [], mutate: mutateNoteThreads } = useSWR(
+    noteId ? ['note-threads', noteId] : null,
+    () => listNoteThreads(noteId),
+    { revalidateOnFocus: false },
   );
 
   if (note && !titleInitRef.current) {
@@ -150,33 +169,6 @@ function NoteDetailPanelInner({ noteId, onBack, onSaved }: NoteDetailPanelProps)
     [noteId, mutate, onSaved],
   );
 
-  const onHistoryResizePointerDown = useCallback(
-    (e: React.PointerEvent<HTMLDivElement>) => {
-      e.preventDefault();
-      const el = e.currentTarget;
-      el.setPointerCapture(e.pointerId);
-      setHistoryResizing(true);
-      const startX = e.clientX;
-      const startW = historyWidth;
-      const pid = e.pointerId;
-      const onMove = (ev: PointerEvent) => {
-        const newW = startW - (ev.clientX - startX);
-        setHistoryWidth(Math.max(200, Math.min(600, newW)));
-      };
-      const onDone = () => {
-        try { el.releasePointerCapture(pid); } catch { /* */ }
-        setHistoryResizing(false);
-        window.removeEventListener('pointermove', onMove);
-        window.removeEventListener('pointerup', onDone);
-        window.removeEventListener('pointercancel', onDone);
-      };
-      window.addEventListener('pointermove', onMove);
-      window.addEventListener('pointerup', onDone);
-      window.addEventListener('pointercancel', onDone);
-    },
-    [historyWidth],
-  );
-
   const headerMain = useMemo(
     () => (
       <div
@@ -194,9 +186,70 @@ function NoteDetailPanelInner({ noteId, onBack, onSaved }: NoteDetailPanelProps)
     [n.saving, saving, time, title],
   );
 
+  const handleOpenNoteChat = useCallback(async () => {
+    setOpeningChat(true);
+    try {
+      const result = await openNoteChat(noteId);
+      await mutate();
+      await mutateNoteThreads();
+      navigate(`/chat/${encodeURIComponent(result.sessionKey)}`);
+    } catch (err) {
+      showToast({
+        type: 'error',
+        title: n.chatOpenFailedTitle,
+        message: err instanceof Error ? err.message : n.chatOpenFailedMessage,
+      });
+    } finally {
+      setOpeningChat(false);
+    }
+  }, [mutate, mutateNoteThreads, navigate, noteId]);
+
+  const handleCatalyze = useCallback(async () => {
+    setCatalyzing(true);
+    try {
+      await catalyzeNote(noteId);
+      await mutate();
+      showToast({ type: 'success', title: n.catalysisDone });
+    } catch (err) {
+      showToast({
+        type: 'error',
+        title: n.catalysisFailed,
+        message: err instanceof Error ? err.message : n.chatOpenFailedMessage,
+      });
+    } finally {
+      setCatalyzing(false);
+    }
+  }, [mutate, noteId]);
+
   const headerEnd = useMemo(
     () => (
       <div className={cn('flex items-center gap-2', APP_CHROME_NO_DRAG_CLASS)}>
+        <button
+          type="button"
+          onClick={() => setActiveSidePanel(activeSidePanel === 'breakdown' ? null : 'breakdown')}
+          aria-label={n.catalysisSectionTitle}
+          className={cn(
+            'inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors',
+            activeSidePanel === 'breakdown'
+              ? 'bg-accent/10 text-accent'
+              : 'bg-accent/10 text-fg hover:bg-accent/15',
+          )}
+        >
+          <Sparkles className="h-3.5 w-3.5" aria-hidden />
+          {n.catalyzeButton}
+        </button>
+        <button
+          type="button"
+          onClick={handleOpenNoteChat}
+          disabled={openingChat}
+          className={cn(
+            'inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors',
+            'border border-edge text-fg-muted hover:bg-surface-hover hover:text-fg disabled:cursor-not-allowed disabled:opacity-50',
+          )}
+        >
+          <MessageCircle className="h-3.5 w-3.5" aria-hidden />
+          {openingChat ? n.openingChat : n.openChatButton}
+        </button>
         <NoteDetailModeSwitcher
           mode={mode}
           onModeChange={setMode}
@@ -204,11 +257,11 @@ function NoteDetailPanelInner({ noteId, onBack, onSaved }: NoteDetailPanelProps)
         />
         <button
           type="button"
-          onClick={() => setShowHistory((v) => !v)}
+          onClick={() => setActiveSidePanel(activeSidePanel === 'history' ? null : 'history')}
           aria-label={n.history}
           className={cn(
             'rounded-lg p-1.5 transition-colors',
-            showHistory
+            activeSidePanel === 'history'
               ? 'bg-accent/10 text-accent'
               : 'text-fg-muted hover:bg-surface-hover hover:text-fg',
           )}
@@ -217,7 +270,18 @@ function NoteDetailPanelInner({ noteId, onBack, onSaved }: NoteDetailPanelProps)
         </button>
       </div>
     ),
-    [mode, n.modeEdit, n.modePreview, n.modeSource, n.history, showHistory],
+    [
+      catalyzing,
+      handleCatalyze,
+      handleOpenNoteChat,
+      mode,
+      n.history,
+      n.modeEdit,
+      n.modePreview,
+      n.modeSource,
+      openingChat,
+      activeSidePanel,
+    ],
   );
 
   useLayoutEffect(() => {
@@ -256,24 +320,21 @@ function NoteDetailPanelInner({ noteId, onBack, onSaved }: NoteDetailPanelProps)
   );
 
   const handleHistorySelect = useCallback(
-    async (entry: NoteSnapshotEntry) => {
-      try {
-        const snapshot = await getNoteSnapshot(noteId, entry.timestamp);
-        setPreviewSnapshot(snapshot);
-      } catch {
-        setPreviewSnapshot(null);
-      }
+    (entry: NoteSnapshotEntry) => {
+      getNoteSnapshot(noteId, entry.timestamp).then((snapshot) => {
+        if (snapshot) setPreviewSnapshot(snapshot);
+      });
     },
     [noteId],
   );
 
   const handleHistoryClose = useCallback(() => {
-    setShowHistory(false);
+    setActiveSidePanel(null);
     setPreviewSnapshot(null);
   }, []);
 
   const handleHistoryRestored = useCallback(() => {
-    setShowHistory(false);
+    setActiveSidePanel(null);
     setPreviewSnapshot(null);
     mutate();
     onSaved?.();
@@ -393,22 +454,44 @@ function NoteDetailPanelInner({ noteId, onBack, onSaved }: NoteDetailPanelProps)
         </div>
       </div>
 
-      {/* History panel — animated width */}
+      {/* Shared side panel — animated width */}
       <div
         className={cn(
           'relative flex min-h-0 shrink-0 flex-col overflow-hidden',
           !historyResizing && 'transition-[width] duration-300 ease-in-out',
         )}
-        style={{ width: showHistory ? historyWidth : 0 }}
+        style={{ width: activeSidePanel ? sidePanelWidth : 0 }}
       >
         <div
           className="flex min-h-0 flex-1 flex-col"
-          style={{ width: historyWidth }}
+          style={{ width: sidePanelWidth }}
         >
           <div
             role="separator"
             aria-orientation="vertical"
-            onPointerDown={onHistoryResizePointerDown}
+            onPointerDown={(e) => {
+              e.preventDefault();
+              const el = e.currentTarget;
+              el.setPointerCapture(e.pointerId);
+              setHistoryResizing(true);
+              const startX = e.clientX;
+              const startW = sidePanelWidth;
+              const pid = e.pointerId;
+              const onMove = (ev: PointerEvent) => {
+                const newW = startW - (ev.clientX - startX);
+                setSidePanelWidth(Math.max(280, Math.min(600, newW)));
+              };
+              const onDone = () => {
+                try { el.releasePointerCapture(pid); } catch { /* */ }
+                setHistoryResizing(false);
+                window.removeEventListener('pointermove', onMove);
+                window.removeEventListener('pointerup', onDone);
+                window.removeEventListener('pointercancel', onDone);
+              };
+              window.addEventListener('pointermove', onMove);
+              window.addEventListener('pointerup', onDone);
+              window.addEventListener('pointercancel', onDone);
+            }}
             className={cn(
               'absolute left-0 top-0 z-10 h-full w-2 -translate-x-1/2 cursor-col-resize',
               "before:content-[''] before:pointer-events-none before:absolute before:left-1/2 before:top-0 before:h-full before:w-px before:-translate-x-1/2",
@@ -419,13 +502,26 @@ function NoteDetailPanelInner({ noteId, onBack, onSaved }: NoteDetailPanelProps)
             )}
           />
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-edge-subtle bg-surface-base">
-            <NoteHistoryPanel
-              noteId={noteId}
-              activeTimestamp={previewSnapshot?.timestamp ?? null}
-              onSelect={handleHistorySelect}
-              onClose={handleHistoryClose}
-              onRestored={handleHistoryRestored}
-            />
+            {activeSidePanel === 'history' ? (
+              <NoteHistoryPanel
+                noteId={noteId}
+                activeTimestamp={previewSnapshot?.timestamp ?? null}
+                onSelect={handleHistorySelect}
+                onClose={handleHistoryClose}
+                onRestored={handleHistoryRestored}
+              />
+            ) : activeSidePanel === 'breakdown' ? (
+              <NoteBreakdownPanel
+                noteId={noteId}
+                note={note ?? null}
+                catalyzing={catalyzing}
+                onCatalyze={handleCatalyze}
+                onClose={() => setActiveSidePanel(null)}
+                noteThreads={noteThreads}
+                openingChat={openingChat}
+                onOpenChat={handleOpenNoteChat}
+              />
+            ) : null}
           </div>
         </div>
       </div>

@@ -1,5 +1,9 @@
 import { randomUUID } from 'node:crypto';
 
+import { complete, type UserMessage } from '@earendil-works/pi-ai';
+
+import type { Config } from '../config/schema.js';
+import { getDefaultModelSync, resolveModel } from '../providers/index.js';
 import { createLogger } from '../utils/logger.js';
 import { buildNoteAttachmentRef, attachmentIdFromTarget } from './attachment-ref.js';
 import { partitionAttachmentsByReference } from './note-attachment-sync.js';
@@ -11,6 +15,9 @@ import type {
   NoteAiPatch,
   NoteAttachment,
   NoteBlock,
+  NoteCatalysisAction,
+  NoteCatalysisMeta,
+  NoteCatalysisReport,
   NoteIndexEntry,
   NoteKind,
   NoteSnapshot,
@@ -154,6 +161,170 @@ function createAiOrganizedBlocks(blocks: NoteBlock[], instruction: string): Note
       updatedAt: now,
     })),
   ];
+}
+
+function splitMeaningfulLines(text?: string): string[] {
+  return (text ?? '')
+    .split(/[\n。！？!?；;]+/)
+    .map((line) => line.trim().replace(/^[-*\d.\s]+/, ''))
+    .filter((line) => line.length > 0);
+}
+
+function summarizeIdea(text?: string): string {
+  const lines = splitMeaningfulLines(text);
+  const joined = lines.join(' ');
+  return Array.from(joined || '这个想法').slice(0, 90).join('');
+}
+
+function inferCatalysisStage(note: Note): NonNullable<NoteCatalysisMeta['stage']> {
+  const text = `${note.title ?? ''}\n${note.text ?? ''}`;
+  if (/发布|上线|分享|推广|launch|ship/i.test(text)) return 'shipped';
+  if (/验证|实验|用户|指标|反馈|validate|experiment/i.test(text)) return 'validating';
+  if (/实现|开发|MVP|原型|prototype|build/i.test(text)) return 'developing';
+  if (text.trim().length > 80) return 'incubating';
+  return 'seed';
+}
+
+function buildCatalysisReport(note: Note): NoteCatalysisReport {
+  const generatedAt = Date.now();
+  const summary = summarizeIdea(note.text ?? note.title);
+  const title = note.title?.trim() || summary.slice(0, 28) || '未命名想法';
+  const hasUserSignal = /用户|客户|读者|创作者|团队|个人|开发者|founder|creator|user/i.test(summary);
+  const hasProductSignal = /产品|工具|平台|workflow|agent|AI|自动|系统|应用/i.test(summary);
+  const confidence = Math.min(0.86, Math.max(0.42, 0.48 + (hasUserSignal ? 0.16 : 0) + (hasProductSignal ? 0.18 : 0) + Math.min(summary.length, 120) / 600));
+
+  return {
+    originalNoteId: note.id,
+    generatedAt,
+    title,
+    valueHypothesis: `如果把「${summary}」推进成一个可体验的小成果，它最可能的价值是帮助用户更快完成判断、表达或行动。`,
+    targetUsers: hasUserSignal ? ['笔记作者自己', '有类似场景的目标用户'] : ['笔记作者自己', '未来可能被这个想法帮助的人'],
+    keyQuestions: [
+      '这个想法最想解决的具体痛点是什么？',
+      '第一个可验证的用户场景是什么？',
+      '什么样的最小成果能证明它值得继续投入？',
+    ],
+    mvpPath: [
+      '把想法改写成一句清晰的问题陈述。',
+      '列出 1 个目标用户和 1 个高频使用场景。',
+      '产出一个最小原型、提纲或行动清单。',
+    ],
+    risks: [
+      '想法还停留在概念层，缺少明确使用场景。',
+      '下一步过大时容易变成长期搁置的项目。',
+    ],
+    nextActions: [
+      { kind: 'chat', text: '和 AI 继续深聊这个想法，收敛成问题陈述。' },
+      { kind: 'research', text: '补充 3 个相似产品、案例或用户反馈。' },
+      { kind: 'task', text: '写下今天能完成的一个最小推进动作。' },
+    ],
+    confidence: Number(confidence.toFixed(2)),
+  };
+}
+
+function stripJsonCodeFence(raw: string): string {
+  return raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+}
+
+function extractJsonObject(raw: string): Record<string, unknown> | null {
+  if (!raw.trim()) return null;
+  const text = stripJsonCodeFence(raw);
+  try {
+    const data = JSON.parse(text) as unknown;
+    return data && typeof data === 'object' && !Array.isArray(data) ? data as Record<string, unknown> : null;
+  } catch {
+    const start = text.indexOf('{');
+    const end = text.lastIndexOf('}');
+    if (start < 0 || end <= start) return null;
+    try {
+      const data = JSON.parse(text.slice(start, end + 1)) as unknown;
+      return data && typeof data === 'object' && !Array.isArray(data) ? data as Record<string, unknown> : null;
+    } catch {
+      return null;
+    }
+  }
+}
+
+function extractAssistantText(result: { content?: unknown }): string {
+  if (!Array.isArray(result.content)) return '';
+  return result.content
+    .filter((block): block is { type: string; text: string } => {
+      return !!block && typeof block === 'object' && (block as { type?: string }).type === 'text';
+    })
+    .map((block) => block.text)
+    .join('')
+    .trim();
+}
+
+function stringArray(value: unknown, fallback: string[], limit: number): string[] {
+  if (!Array.isArray(value)) return fallback;
+  const items = value
+    .map((item) => typeof item === 'string' ? item.trim() : '')
+    .filter(Boolean)
+    .slice(0, limit);
+  return items.length ? items : fallback;
+}
+
+function catalysisActions(value: unknown, fallback: NoteCatalysisAction[]): NoteCatalysisAction[] {
+  if (!Array.isArray(value)) return fallback;
+  const allowed = new Set<NoteCatalysisAction['kind']>(['task', 'workflow', 'research', 'share', 'chat']);
+  const items: NoteCatalysisAction[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== 'object') continue;
+    const row = item as { kind?: unknown; text?: unknown };
+    const kind = typeof row.kind === 'string' && allowed.has(row.kind as NoteCatalysisAction['kind'])
+      ? row.kind as NoteCatalysisAction['kind']
+      : 'task';
+    const text = typeof row.text === 'string' ? row.text.trim() : '';
+    if (text) items.push({ kind, text });
+  }
+  return items.length ? items.slice(0, 5) : fallback;
+}
+
+function normalizeAiCatalysisReport(note: Note, data: Record<string, unknown>): NoteCatalysisReport {
+  const fallback = buildCatalysisReport(note);
+  const confidenceRaw = typeof data.confidence === 'number' ? data.confidence : fallback.confidence;
+  const confidence = Math.min(1, Math.max(0, confidenceRaw));
+  return {
+    originalNoteId: note.id,
+    generatedAt: Date.now(),
+    title: typeof data.title === 'string' && data.title.trim() ? data.title.trim().slice(0, 80) : fallback.title,
+    valueHypothesis: typeof data.valueHypothesis === 'string' && data.valueHypothesis.trim()
+      ? data.valueHypothesis.trim()
+      : fallback.valueHypothesis,
+    targetUsers: stringArray(data.targetUsers, fallback.targetUsers, 5),
+    keyQuestions: stringArray(data.keyQuestions, fallback.keyQuestions, 6),
+    mvpPath: stringArray(data.mvpPath, fallback.mvpPath, 6),
+    risks: stringArray(data.risks, fallback.risks, 5),
+    nextActions: catalysisActions(data.nextActions, fallback.nextActions),
+    confidence: Number(confidence.toFixed(2)),
+  };
+}
+
+function buildCatalysisPrompt(note: Note): string {
+  const title = note.title?.trim() || '未命名笔记';
+  const text = (note.text ?? '').trim() || '(无正文)';
+  return `你是一个帮助用户把想法推进成成果的个人 AI Agent。请基于这条 Note 做“想法催化”，帮助用户进入：想法 → 创造 → 分享 → 反馈 的循环。\n\n要求：\n- 使用自然、具体的中文。\n- 不要空泛鼓励，要给出可执行路径。\n- 输出必须是单个 JSON 对象，不要 Markdown，不要代码块。\n- 字段必须包含：title, valueHypothesis, targetUsers, keyQuestions, mvpPath, risks, nextActions, confidence。\n- nextActions 每项格式为 {"kind":"task|workflow|research|share|chat","text":"..."}。\n- confidence 是 0 到 1 的数字。\n\nNote 标题：${title}\n\nNote 正文：\n${text.slice(0, 6000)}`;
+}
+
+async function buildAiCatalysisReport(note: Note, config?: Config): Promise<NoteCatalysisReport> {
+  const model = resolveModel(getDefaultModelSync(config));
+  const user: UserMessage = {
+    role: 'user',
+    content: buildCatalysisPrompt(note),
+    timestamp: Date.now(),
+  };
+  const result = await complete(
+    model,
+    { messages: [user] },
+    { maxTokens: 1800, temperature: 0.2 },
+  );
+  const text = extractAssistantText(result);
+  const data = extractJsonObject(text);
+  if (!data) {
+    throw new Error('Catalysis model did not return valid JSON');
+  }
+  return normalizeAiCatalysisReport(note, data);
 }
 
 const SNAPSHOT_THROTTLE_MS = 60_000;
@@ -316,6 +487,105 @@ export class NotesService {
     };
   }
 
+  async catalyzeNote(id: string, config?: Config): Promise<{ note: Note; report: NoteCatalysisReport } | null> {
+    const note = await this.store.getNote(id);
+    if (!note) return null;
+
+    let report: NoteCatalysisReport;
+    try {
+      report = await buildAiCatalysisReport(note, config);
+    } catch (err) {
+      log.warn({ err, noteId: id }, 'AI note catalysis failed; using local fallback report');
+      report = buildCatalysisReport(note);
+    }
+
+    const existingDeep = note.aiDeep;
+    const catalysis: NoteCatalysisMeta = {
+      ...existingDeep?.catalysis,
+      status: 'catalyzed',
+      stage: inferCatalysisStage(note),
+      lastCatalyzedAt: report.generatedAt,
+      confidence: report.confidence,
+      report,
+    };
+
+    const updated = await this.updateNote(id, {
+      ai: {
+        ...note.ai,
+        intent: note.ai?.intent ?? 'idea',
+        summary: note.ai?.summary ?? report.valueHypothesis,
+      },
+      aiDeep: {
+        ...existingDeep,
+        processedAt: report.generatedAt,
+        insights: report.valueHypothesis,
+        catalysis,
+      },
+      status: note.status === 'inbox' ? 'processed' : note.status,
+    }, 'ai_edit');
+
+    return updated ? { note: updated, report } : null;
+  }
+
+  async recordCatalysisFeedback(
+    id: string,
+    feedback: NonNullable<NoteCatalysisMeta['feedback']>,
+  ): Promise<Note | null> {
+    const note = await this.store.getNote(id);
+    if (!note) return null;
+    const now = Date.now();
+    return this.updateNote(id, {
+      aiDeep: {
+        ...note.aiDeep,
+        processedAt: now,
+        catalysis: {
+          status: note.aiDeep?.catalysis?.status ?? 'catalyzed',
+          ...note.aiDeep?.catalysis,
+          feedback,
+        },
+      },
+    }, 'ai_edit');
+  }
+
+  async linkNoteThread(id: string, sessionKey: string): Promise<Note | null> {
+    const note = await this.store.getNote(id);
+    if (!note) return null;
+    const existingKeys = note.aiDeep?.catalysis?.linkedSessionKeys ?? [];
+    const linkedSessionKeys = Array.from(new Set([sessionKey, ...existingKeys]));
+    return this.updateNote(id, {
+      aiDeep: {
+        ...note.aiDeep,
+        processedAt: Date.now(),
+        catalysis: {
+          status: note.aiDeep?.catalysis?.status ?? 'none',
+          ...note.aiDeep?.catalysis,
+          sourceSessionKey: note.aiDeep?.catalysis?.sourceSessionKey ?? sessionKey,
+          linkedSessionKeys,
+        },
+      },
+    }, 'sync');
+  }
+
+  async listNoteThreads(id: string): Promise<string[] | null> {
+    const note = await this.store.getNote(id);
+    if (!note) return null;
+    const keys = [
+      note.aiDeep?.catalysis?.sourceSessionKey,
+      ...(note.aiDeep?.catalysis?.linkedSessionKeys ?? []),
+    ].filter((key): key is string => typeof key === 'string' && key.length > 0);
+    return Array.from(new Set(keys));
+  }
+
+  async appendTextToNote(id: string, content: string, heading = 'AI 讨论沉淀'): Promise<Note | null> {
+    const note = await this.store.getNote(id);
+    if (!note) return null;
+    const trimmed = content.trim();
+    if (!trimmed) return note;
+    const currentText = note.text?.trimEnd() ?? '';
+    const nextText = `${currentText}${currentText ? '\n\n' : ''}## ${heading}\n\n${trimmed}`;
+    return this.updateNote(id, { text: nextText }, 'ai_edit');
+  }
+
   async deleteNote(id: string): Promise<boolean> {
     const deleted = await this.store.deleteNote(id);
     if (deleted) {
@@ -325,7 +595,7 @@ export class NotesService {
     return deleted;
   }
 
-  async listNotes(query: NotesListQuery = {}): Promise<{ items: NoteIndexEntry[]; total: number }> {
+  async listNotes(query: NotesListQuery = {}): Promise<{ items: NoteIndexEntry[]; total: number; limit: number; offset: number; hasMore: boolean }> {
     return this.store.listNotes(query);
   }
 
