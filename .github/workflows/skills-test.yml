@@ -36,8 +36,6 @@ jobs:
 
       - name: Install pnpm
         uses: pnpm/action-setup@v5
-        with:
-          version: 11
 
       - name: Setup Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v6
@@ -95,8 +93,6 @@ jobs:
       
       - name: Install pnpm
         uses: pnpm/action-setup@v5
-        with:
-          version: 11
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -137,8 +133,6 @@ jobs:
 
       - name: Install pnpm
         uses: pnpm/action-setup@v5
-        with:
-          version: 11
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -182,8 +176,6 @@ jobs:
 
       - name: Install pnpm
         uses: pnpm/action-setup@v5
-        with:
-          version: 11
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
