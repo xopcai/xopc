@@ -1,11 +1,27 @@
-import { Cable, CheckCircle2, Loader2, PackagePlus, PlugZap, Trash2 } from 'lucide-react';
+import { Cable, CheckCircle2, Loader2, PackagePlus, Pencil, Plug, PlugZap, Plus, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { SecretInput } from '@/components/ui/secret-input';
+import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
+import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/settings/settings-form-section';
 import { cn } from '@/lib/cn';
 import { settingsInputFocusClass } from '@/lib/form-field-width';
+import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
+import { useLocaleStore } from '@/stores/locale-store';
+import {
+  buildNewCustomServerRow,
+  CustomMcpServerDialog,
+} from './custom-mcp-server-dialog';
+import {
+  extractManagedMcpServers,
+  normalizeMcpSettingsFromConfig,
+  patchMcpSettings,
+  testMcpServer,
+  type McpServerRow,
+} from './mcp/mcp-config-api';
+import { mcpServerEndpointSummary } from './mcp/mcp-server-form-fields';
 import {
   completeConnectorOAuth,
   fetchConnectorCatalog,
@@ -42,6 +58,11 @@ type InstallDraft = {
     connected: boolean;
   };
 };
+
+type CustomDialogState =
+  | { mode: 'add'; row: McpServerRow }
+  | { mode: 'edit'; row: McpServerRow }
+  | null;
 
 const inputClass = cn(
   'w-full rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg',
@@ -383,7 +404,12 @@ function InstalledConnectorRow({ instance, onChanged }: { instance: ConnectorIns
     <div className="rounded-2xl border border-edge bg-surface-panel p-4 shadow-surface">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h3 className="text-sm font-semibold text-fg">{instance.displayName}</h3>
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-sm font-semibold text-fg">{instance.displayName}</h3>
+            <span className="rounded-full border border-edge bg-surface-base px-2 py-0.5 text-[11px] text-fg-muted">
+              catalog
+            </span>
+          </div>
           <p className="mt-1 text-sm text-fg-muted">MCP server: {instance.materialized.serverId}</p>
         </div>
         <div className="flex gap-2">
@@ -398,56 +424,124 @@ function InstalledConnectorRow({ instance, onChanged }: { instance: ConnectorIns
         </div>
       </div>
       {error ? <p className="mt-3 rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-600">{error}</p> : null}
-      <div className="mt-3 grid gap-2 rounded-xl bg-surface-base p-3 text-xs text-fg-muted sm:grid-cols-3">
-        <div>
-          <p className="font-medium text-fg">Last health</p>
-          <p className="mt-1">{instance.usage.lastHealthStatus ?? 'Never tested'}</p>
-        </div>
-        <div>
-          <p className="font-medium text-fg">Tools</p>
-          <p className="mt-1">{instance.usage.lastToolCount ?? 'Unknown'}</p>
-        </div>
-        <div>
-          <p className="font-medium text-fg">Checked at</p>
-          <p className="mt-1">{instance.usage.lastHealthCheckAt ?? '—'}</p>
-        </div>
-      </div>
-      {instance.audit.length ? (
-        <div className="mt-3 rounded-xl border border-edge bg-surface-base p-3">
-          <p className="text-xs font-medium uppercase tracking-wide text-fg-subtle">Recent activity</p>
-          <div className="mt-2 grid gap-1.5">
-            {instance.audit.slice(-3).reverse().map((record) => (
-              <div key={`${record.at}-${record.action}`} className="flex flex-wrap items-center justify-between gap-2 text-xs text-fg-muted">
-                <span className="font-medium text-fg">{record.action.replace('_', ' ')}</span>
-                <span>{record.status ?? (record.ok === undefined ? 'recorded' : record.ok ? 'ok' : 'failed')}</span>
-                <span className="text-fg-subtle">{record.at}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : null}
       {health ? (
-        <div className="mt-3 rounded-xl bg-surface-base p-3">
-          <p className="text-sm font-medium text-fg">{health.toolCount} tools</p>
-          <div className="mt-2 grid gap-2 sm:grid-cols-2">
-            {health.tools.slice(0, 8).map((tool) => (
-              <div key={tool.name} className="rounded-lg border border-edge px-3 py-2">
-                <p className="truncate text-xs font-medium text-fg">{tool.shortName ?? tool.name}</p>
-                {tool.description ? <p className="mt-1 line-clamp-2 text-xs text-fg-subtle">{tool.description}</p> : null}
-              </div>
-            ))}
-          </div>
-        </div>
+        <p className="mt-3 text-sm text-fg-muted">{health.toolCount} tools discovered.</p>
       ) : null}
     </div>
   );
 }
 
+function CustomMcpServerRow({
+  row,
+  t,
+  cs,
+  onEdit,
+  onRemove,
+}: {
+  row: McpServerRow;
+  t: ReturnType<typeof messages>['mcpSettings'];
+  cs: ReturnType<typeof messages>['connectorsSettings'];
+  onEdit: () => void;
+  onRemove: () => Promise<void>;
+}) {
+  const [testing, setTesting] = useState(false);
+  const [removing, setRemoving] = useState(false);
+  const [toolCount, setToolCount] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const summary = mcpServerEndpointSummary(row);
+
+  const runTest = useCallback(async () => {
+    setTesting(true);
+    setError(null);
+    try {
+      const result = await testMcpServer(row.id.trim());
+      setToolCount(result.toolCount);
+    } catch (testError) {
+      setError(testError instanceof Error ? testError.message : String(testError));
+    } finally {
+      setTesting(false);
+    }
+  }, [row.id]);
+
+  const remove = useCallback(async () => {
+    setRemoving(true);
+    setError(null);
+    try {
+      await onRemove();
+    } catch (removeError) {
+      setError(removeError instanceof Error ? removeError.message : String(removeError));
+      setRemoving(false);
+    }
+  }, [onRemove]);
+
+  return (
+    <div className="rounded-2xl border border-edge bg-surface-panel p-4 shadow-surface">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-sm font-semibold text-fg">{row.id.trim() || t.cardUntitled}</h3>
+            <span className="rounded-full border border-edge bg-surface-base px-2 py-0.5 text-[11px] text-fg-muted">
+              {cs.customBadge}
+            </span>
+            <span className="rounded-full bg-surface-hover px-2 py-0.5 text-[11px] font-medium text-fg-muted">
+              {t.transportLabels[row.transport]}
+            </span>
+          </div>
+          {summary ? (
+            <p className="mt-1 truncate font-mono text-xs text-fg-subtle" title={summary}>
+              {summary}
+            </p>
+          ) : null}
+        </div>
+        <div className="flex gap-2">
+          <Button variant="secondary" disabled={testing} onClick={() => void runTest()}>
+            {testing ? <Loader2 className="size-4 animate-spin" /> : <PlugZap className="size-4" />}
+            {t.testConnection}
+          </Button>
+          <Button variant="secondary" onClick={onEdit}>
+            <Pencil className="size-4" />
+            {cs.editCustomServer}
+          </Button>
+          <Button variant="ghost" disabled={removing} onClick={() => void remove()}>
+            {removing ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+            {t.removeServer}
+          </Button>
+        </div>
+      </div>
+      {error ? <p className="mt-3 rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-600">{error}</p> : null}
+      {toolCount != null ? <p className="mt-3 text-sm text-fg-muted">{toolCount} tools discovered.</p> : null}
+    </div>
+  );
+}
+
 export function ConnectorsSettingsPanel() {
+  const language = useLocaleStore((state) => state.language);
+  const m = messages(language);
+  const cs = m.connectorsSettings;
+  const mcp = m.mcpSettings;
   const token = useGatewayStore((state) => state.token);
-  const [tab, setTab] = useState<TabId>('discover');
+  const hasToken = Boolean(token);
+  const [tab, setTab] = useState<TabId>('installed');
   const [state, setState] = useState<LoadState>({ catalog: [], instances: [], loading: true, error: null });
-  const [draft, setDraft] = useState<InstallDraft | null>(null);
+  const [installDraft, setInstallDraft] = useState<InstallDraft | null>(null);
+  const [customDialog, setCustomDialog] = useState<CustomDialogState>(null);
+  const [sessionIdleTtlMinutes, setSessionIdleTtlMinutes] = useState<number | undefined>(undefined);
+  const [ttlSaving, setTtlSaving] = useState(false);
+  const [ttlSaved, setTtlSaved] = useState(false);
+
+  const { data: configData, mutate: mutateConfig } = useGatewayConfigSwr(hasToken);
+  const config = configData?.payload?.config;
+  const mcpSettings = useMemo(
+    () => (config !== undefined ? normalizeMcpSettingsFromConfig(config) : null),
+    [config],
+  );
+  const customServers = mcpSettings?.servers ?? [];
+
+  useEffect(() => {
+    if (mcpSettings) {
+      setSessionIdleTtlMinutes(mcpSettings.sessionIdleTtlMinutes);
+    }
+  }, [mcpSettings]);
 
   const load = useCallback(async () => {
     if (!token) {
@@ -468,52 +562,194 @@ export function ConnectorsSettingsPanel() {
   }, [load]);
 
   const installedIds = useMemo(() => new Set(state.instances.map((instance) => instance.connectorId)), [state.instances]);
+  const managedServerIds = useMemo(
+    () => new Set(state.instances.map((instance) => instance.materialized.serverId)),
+    [state.instances],
+  );
+
+  const removeCustomServer = useCallback(
+    async (row: McpServerRow) => {
+      if (!mcpSettings || config === undefined) return;
+      const nextServers = customServers.filter((server) => server.clientKey !== row.clientKey);
+      await patchMcpSettings(
+        { sessionIdleTtlMinutes: mcpSettings.sessionIdleTtlMinutes, servers: nextServers },
+        extractManagedMcpServers(config),
+      );
+      await mutateConfig();
+      await load();
+    },
+    [config, customServers, load, mcpSettings, mutateConfig],
+  );
+
+  const saveTtl = useCallback(async () => {
+    if (!mcpSettings || config === undefined || ttlSaving) return;
+    setTtlSaving(true);
+    setTtlSaved(false);
+    try {
+      await patchMcpSettings(
+        { sessionIdleTtlMinutes, servers: customServers },
+        extractManagedMcpServers(config),
+      );
+      await mutateConfig();
+      setTtlSaved(true);
+    } finally {
+      setTtlSaving(false);
+    }
+  }, [config, customServers, mcpSettings, mutateConfig, sessionIdleTtlMinutes, ttlSaving]);
+
+  const installedCount = state.instances.length + customServers.length;
 
   return (
     <div className="mx-auto flex w-full max-w-app-main flex-col gap-5 px-4 py-8">
       <div>
-        <h1 className="text-xl font-semibold text-fg">Connectors</h1>
-        <p className="mt-1 text-sm text-fg-muted">Install connector packages. Connectors are the only product entry point for MCP-backed tools.</p>
+        <h1 className="text-xl font-semibold text-fg">{cs.title}</h1>
+        <p className="mt-1 text-sm text-fg-muted">{cs.subtitle}</p>
       </div>
 
+      {!hasToken ? (
+        <p className="rounded-xl border border-edge bg-surface-panel px-4 py-3 text-sm text-fg-muted">
+          {cs.tokenHint}
+        </p>
+      ) : null}
+
       <div className="flex flex-wrap gap-2">
-        {(['discover', 'installed'] as const).map((item) => (
+        {(['installed', 'discover'] as const).map((item) => (
           <Button key={item} variant={tab === item ? 'primary' : 'secondary'} onClick={() => setTab(item)}>
-            {item === 'discover' ? 'Discover' : 'Installed'}
+            {item === 'installed' ? cs.tabInstalled : cs.tabDiscover}
           </Button>
         ))}
       </div>
 
-      {state.loading ? <div className="flex items-center gap-2 text-sm text-fg-muted"><Loader2 className="size-4 animate-spin" /> Loading connectors…</div> : null}
+      {state.loading && hasToken ? (
+        <div className="flex items-center gap-2 text-sm text-fg-muted">
+          <Loader2 className="size-4 animate-spin" />
+          {cs.loading}
+        </div>
+      ) : null}
       {state.error ? <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-600">{state.error}</p> : null}
 
-      {tab === 'discover' ? (
+      {tab === 'installed' && hasToken ? (
+        <div className="flex flex-col gap-6">
+          <SettingsFormSection>
+            <SettingsFormSectionHeader icon={Plug} title={mcp.globalTitle} subtitle={mcp.globalHint} />
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+              <label className="flex min-w-0 flex-1 flex-col gap-1.5">
+                <span className="text-sm font-medium text-fg">{mcp.idleTtlLabel}</span>
+                <input
+                  type="number"
+                  min={0}
+                  className={inputClass}
+                  value={sessionIdleTtlMinutes ?? ''}
+                  placeholder={mcp.idleTtlPlaceholder}
+                  onChange={(e) => {
+                    const raw = e.target.value.trim();
+                    setSessionIdleTtlMinutes(raw === '' ? undefined : Number.parseInt(raw, 10));
+                    setTtlSaved(false);
+                  }}
+                />
+                <span className="text-xs text-fg-subtle">{mcp.idleTtlHint}</span>
+              </label>
+              <Button variant="secondary" disabled={ttlSaving} onClick={() => void saveTtl()}>
+                {ttlSaving ? <Loader2 className="size-4 animate-spin" /> : null}
+                {mcp.save}
+              </Button>
+            </div>
+            {ttlSaved ? <p className="text-sm text-fg-muted">{mcp.saved}</p> : null}
+          </SettingsFormSection>
+
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold text-fg">{cs.installedTitle}</h2>
+              <p className="mt-1 text-sm text-fg-muted">{cs.installedHint}</p>
+            </div>
+            <Button
+              variant="primary"
+              onClick={() =>
+                setCustomDialog({
+                  mode: 'add',
+                  row: buildNewCustomServerRow(customServers, managedServerIds),
+                })
+              }
+            >
+              <Plus className="size-4" />
+              {cs.addCustomServer}
+            </Button>
+          </div>
+
+          {installedCount === 0 ? (
+            <div className="rounded-2xl border border-dashed border-edge p-8 text-center text-sm text-fg-muted">
+              {cs.installedEmpty}
+            </div>
+          ) : (
+            <div className="grid gap-3">
+              {state.instances.map((instance) => (
+                <InstalledConnectorRow key={instance.instanceId} instance={instance} onChanged={load} />
+              ))}
+              {customServers.map((row) => (
+                <CustomMcpServerRow
+                  key={row.clientKey}
+                  row={row}
+                  t={mcp}
+                  cs={cs}
+                  onEdit={() => setCustomDialog({ mode: 'edit', row: structuredClone(row) })}
+                  onRemove={async () => removeCustomServer(row)}
+                />
+              ))}
+            </div>
+          )}
+
+          <p className="text-xs text-fg-subtle">{mcp.disableHint}</p>
+        </div>
+      ) : null}
+
+      {tab === 'discover' && hasToken ? (
         <div className="grid gap-3">
+          <p className="text-sm text-fg-muted">{cs.catalogHint}</p>
           {state.catalog.map((connector) => (
             <ConnectorCard
               key={connector.id}
               connector={connector}
               installed={installedIds.has(connector.id) || connectorIsInstalled(connector, state.instances)}
-              onInstall={(selected) => setDraft(buildInitialDraft(selected))}
+              onInstall={(selected) => setInstallDraft(buildInitialDraft(selected))}
             />
           ))}
         </div>
       ) : null}
 
-      {tab === 'installed' ? (
-        <div className="grid gap-3">
-          {state.instances.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-edge p-8 text-center text-sm text-fg-muted">
-              No connectors installed yet.
-            </div>
-          ) : (
-            state.instances.map((instance) => (
-              <InstalledConnectorRow key={instance.instanceId} instance={instance} onChanged={load} />
-            ))
-          )}
-        </div>
+      {installDraft ? (
+        <InstallDialog
+          draft={installDraft}
+          onChange={setInstallDraft}
+          onClose={() => setInstallDraft(null)}
+          onInstalled={async () => {
+            await load();
+            await mutateConfig();
+            setInstallDraft(null);
+            setTab('installed');
+          }}
+        />
       ) : null}
-      {draft ? <InstallDialog draft={draft} onChange={setDraft} onClose={() => setDraft(null)} onInstalled={load} /> : null}
+
+      {customDialog ? (
+        <CustomMcpServerDialog
+          key={`${customDialog.mode}-${customDialog.row.clientKey}`}
+          open
+          mode={customDialog.mode}
+          initialRow={customDialog.row}
+          existingCustomServers={customServers}
+          sessionIdleTtlMinutes={sessionIdleTtlMinutes}
+          config={config}
+          managedServerIds={managedServerIds}
+          t={mcp}
+          cs={cs}
+          onClose={() => setCustomDialog(null)}
+          onSaved={async () => {
+            await mutateConfig();
+            await load();
+            setTab('installed');
+          }}
+        />
+      ) : null}
     </div>
   );
 }
