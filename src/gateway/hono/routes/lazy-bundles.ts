@@ -71,7 +71,15 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
   {
     id: 'config',
     match: (path) =>
-      startsWithAny(path, ['/api/config', '/api/heartbeat/trigger']),
+      startsWithAny(path, [
+        '/api/config',
+        '/api/heartbeat/trigger',
+        // Secret reveal handlers live in config routes but use /api/gateway and
+        // /api/tools paths; without these prefixes the extension-gateway bundle
+        // matches first and returns 404 (no handler for multi-segment paths).
+        '/api/gateway/reveal-auth-secret',
+        '/api/tools/web/reveal-search-api-key',
+      ]),
     load: async () => {
       const { registerConfigRoutes } = await import('./config.js');
       return { register: registerConfigRoutes };

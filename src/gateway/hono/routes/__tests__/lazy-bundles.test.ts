@@ -48,6 +48,16 @@ describe('lazy route bundles', () => {
     expect(findAuthenticatedLazyRouteBundle('/api/agents')?.id).toBe('agents');
   });
 
+  it('routes gateway auth secret reveal to config, not extension-gateway', () => {
+    expect(findAuthenticatedLazyRouteBundle('/api/gateway/reveal-auth-secret/token')?.id).toBe('config');
+    expect(findAuthenticatedLazyRouteBundle('/api/gateway/reveal-auth-secret')?.id).toBe('config');
+    expect(findAuthenticatedLazyRouteBundle('/api/gateway/some-method')?.id).toBe('extension-gateway');
+  });
+
+  it('routes search api key reveal to config', () => {
+    expect(findAuthenticatedLazyRouteBundle('/api/tools/web/reveal-search-api-key')?.id).toBe('config');
+  });
+
   it('routes models-json config endpoints to the models bundle', () => {
     // /api/models-json is `/api/models` + `-json`, not `/api/models/...`,
     // so the prefix matcher needs an explicit entry. Without it the
