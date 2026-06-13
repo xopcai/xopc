@@ -1,6 +1,6 @@
 import { resolveXopcMcpTransportAlias } from "../../config/mcp-config-normalize.js";
 import { createLogger } from "../../utils/logger.js";
-const log = createLogger("BundleMcp");
+const log = createLogger("Mcp:Bundle");
 import { normalizeLowercaseStringOrEmpty } from "../../utils/string-coerce.js";
 import { sanitizeForLog } from "../../utils/sanitize-log.js";
 import {
@@ -83,12 +83,18 @@ function resolveHttpTransportConfig(
     transportType,
     onDroppedHeader: (key) => {
       log.warn(
-        `bundle-mcp: server "${serverName}": header "${key}" has an unsupported value type and was ignored.`,
+        {
+          phase: 'agent.mcp_connect',
+          serverName,
+          header: key,
+        },
+        `bundle-mcp: server "${serverName}": header "${key}" has an unsupported value type and was ignored`,
       );
     },
     onMalformedHeaders: () => {
       log.warn(
-        `bundle-mcp: server "${serverName}": "headers" must be a JSON object; the value was ignored.`,
+        { phase: 'agent.mcp_connect', serverName },
+        `bundle-mcp: server "${serverName}": "headers" must be a JSON object; the value was ignored`,
       );
     },
   });

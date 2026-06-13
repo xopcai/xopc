@@ -7,6 +7,9 @@ import {
   createSendHandler,
 } from '../sse.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
+import { createGatewayRouteLogger, logRouteWarn } from '../lib/route-logger.js';
+
+const log = createGatewayRouteLogger('AgentStream');
 
 export function registerAgentStreamRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const { service, strictRateLimitMiddleware, sseConfig } = deps;
@@ -55,6 +58,7 @@ export function registerAgentStreamRoutes(authenticated: Hono, deps: Authenticat
     }
     const result = await service.steerWebchatAgent(chatId, message);
     if (result.ok === false) {
+      logRouteWarn(log, c, `Agent steer failed: ${result.code}`, 'gateway.route.agent', { chatId, code: result.code });
       const code = result.code;
       const status = code === 'BAD_REQUEST' ? 400 : code === 'NO_ACTIVE_RUN' ? 409 : 500;
       const msg =

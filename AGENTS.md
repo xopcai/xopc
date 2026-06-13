@@ -344,7 +344,7 @@ cd web && pnpm run build                  # → ../dist/gateway/static/root (gat
 
 - **Level:** `XOPC_LOG_LEVEL=debug` (or `trace`).
 - **CLI:** `pnpm run dev -- config show` · `config validate` · (`config --show` / `config --validate` legacy aliases).
-- **Code:** `createRequestLogger` / `clearRequestContext` in `src/utils/logger/context.ts` (re-exported via `src/utils/logger.ts`); `queryLogs` / `getLogStats` in `src/utils/logger/log-store.ts`.
+- **Code:** `runWithLogContext` / `updateAsyncLogContext` in `src/utils/logger/context.ts`; `queryLogs` / `getFileLogStats` in `src/utils/logger/log-store.ts`; `getRuntimeLogStats` in `src/utils/logger/stats.ts`.
 - **Console logs:** gateway + Log Manager tab (default dev URL is project-specific—use your configured gateway port).
 - **New logs:** follow [Logging conventions](#logging-conventions).
 

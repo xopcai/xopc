@@ -13,7 +13,8 @@ type Props = {
 
 export function LogsStatsPopover({ L, stats }: Props) {
   const statsLine = formatStatsLine(stats.byLevel ?? {}, L.levelNames);
-  if (!statsLine) return null;
+  const runtimeErrors = stats.runtime?.errorsLast24h;
+  if (!statsLine && runtimeErrors == null) return null;
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -24,8 +25,20 @@ export function LogsStatsPopover({ L, stats }: Props) {
             className="max-w-full truncate rounded-lg border border-transparent px-1 py-0.5 text-left text-xs leading-5 text-fg-subtle transition-colors duration-150 ease-out hover:border-edge-subtle hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel dark:hover:border-edge"
           >
             <span className="font-medium text-fg-muted">{L.statsRegion}</span>
-            <span className="mx-1.5 text-fg-subtle">·</span>
-            <span className="tabular-nums">{statsLine}</span>
+            {statsLine ? (
+              <>
+                <span className="mx-1.5 text-fg-subtle">·</span>
+                <span className="tabular-nums">{statsLine}</span>
+              </>
+            ) : null}
+            {runtimeErrors != null && runtimeErrors > 0 ? (
+              <>
+                <span className="mx-1.5 text-fg-subtle">·</span>
+                <span className="tabular-nums text-red-600 dark:text-red-400">
+                  {L.runtimeErrors} {runtimeErrors}
+                </span>
+              </>
+            ) : null}
           </button>
         </Popover.Trigger>
         <Popover.Portal>

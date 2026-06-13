@@ -11,7 +11,6 @@ export function sortLogsByTimeDesc(entries: readonly LogEntry[]): LogEntry[] {
 }
 
 export const PAGE_LIMIT = 50;
-export const REFRESH_MS = 5000;
 
 const LOG_LEVEL_SET = new Set<LogLevel>(LOG_LEVELS);
 
@@ -79,7 +78,7 @@ export function interpolate(template: string, params: Record<string, string | nu
 }
 
 export function moduleLabel(log: LogEntry): string {
-  return String(log.module || log.prefix || log.service || log.extension || '—');
+  return String(log.module || log.service || log.extension || '—');
 }
 
 export function messagePreview(log: LogEntry): string {
@@ -127,6 +126,76 @@ export function requestIdPreview(id: string): string {
 
 export function levelLabel(level: string): string {
   return String(level).toLowerCase();
+}
+
+export function phaseLabel(log: LogEntry): string {
+  const phase = log.phase ?? log.meta?.phase;
+  if (typeof phase === 'string' && phase.trim()) return phase;
+  return '—';
+}
+
+export function logEntryKey(log: LogEntry): string {
+  return `${log.timestamp}-${log.requestId ?? ''}-${log.message}`;
+}
+
+export function extractErrorDetail(log: LogEntry): { name?: string; message?: string; stack?: string } | null {
+  const err = log.err ?? log.meta?.err;
+  if (!err || typeof err !== 'object') return null;
+  const e = err as Record<string, unknown>;
+  return {
+    name: typeof e.name === 'string' ? e.name : undefined,
+    message: typeof e.message === 'string' ? e.message : undefined,
+    stack: typeof e.stack === 'string' ? e.stack : undefined,
+  };
+}
+
+export function logMatchesClientFilters(
+  log: LogEntry,
+  filters: {
+    debouncedSearch: string;
+    selectedLevels: Set<LogLevel>;
+    moduleFilter: string;
+    dateFrom: string;
+    dateTo: string;
+    requestIdFilter: string;
+    sessionIdFilter: string;
+  },
+): boolean {
+  if (filters.selectedLevels.size > 0 && !filters.selectedLevels.has(log.level)) return false;
+  if (filters.moduleFilter && moduleLabel(log) !== filters.moduleFilter) return false;
+  if (filters.requestIdFilter && log.requestId !== filters.requestIdFilter) return false;
+  if (filters.sessionIdFilter && log.sessionId !== filters.sessionIdFilter) return false;
+
+  if (filters.dateFrom) {
+    const from = new Date(filters.dateFrom).getTime();
+    const t = new Date(String(log.timestamp)).getTime();
+    if (Number.isFinite(from) && Number.isFinite(t) && t < from) return false;
+  }
+  if (filters.dateTo) {
+    const to = new Date(filters.dateTo).getTime();
+    const t = new Date(String(log.timestamp)).getTime();
+    if (Number.isFinite(to) && Number.isFinite(t) && t > to) return false;
+  }
+
+  if (filters.debouncedSearch) {
+    const q = filters.debouncedSearch.toLowerCase();
+    const haystack = [
+      log.message,
+      moduleLabel(log),
+      phaseLabel(log),
+      log.requestId,
+      log.sessionId,
+      extractErrorDetail(log)?.message,
+      extractErrorDetail(log)?.stack,
+    ]
+      .filter(Boolean)
+      .map(String)
+      .join(' ')
+      .toLowerCase();
+    if (!haystack.includes(q)) return false;
+  }
+
+  return true;
 }
 
 export function formatStatsLine(

@@ -1,4 +1,5 @@
 import { useLogsPage } from '@/features/logs/hooks/use-logs-page';
+import { LogsErrorSummarySection } from '@/features/logs/logs-error-summary-section';
 import { LogsDetailDrawer } from '@/features/logs/logs-detail-drawer';
 import { LogsFilesDialog } from '@/features/logs/logs-files-dialog';
 import { LogsFiltersDialog } from '@/features/logs/logs-filters-dialog';
@@ -49,6 +50,12 @@ export function LogsPage() {
     refreshAll,
     levelSegment,
     handleLevelSegment,
+    filterByRequestId,
+    filterBySessionId,
+    filterByErrorSummary,
+    openChatForSession,
+    errorSummary,
+    errorSummaryLoading,
   } = useLogsPage(language);
 
   if (!hasToken) {
@@ -65,6 +72,7 @@ export function LogsPage() {
         onOpenFiles={() => setFilesOpen(true)}
         loading={loading}
         onRefreshAll={refreshAll}
+        logs={logs}
       />
 
       {error ? (
@@ -77,6 +85,13 @@ export function LogsPage() {
       ) : null}
 
       {stats ? <LogsStatsPopover L={L} stats={stats} /> : null}
+
+      <LogsErrorSummarySection
+        L={L}
+        items={errorSummary}
+        loading={errorSummaryLoading}
+        onSelectItem={filterByErrorSummary}
+      />
 
       <LogsFiltersSection
         L={L}
@@ -102,6 +117,7 @@ export function LogsPage() {
         onSelectLog={setSelectedLog}
         onLoadMore={handleLoadMore}
         onRefreshAll={refreshAll}
+        onFilterByRequestId={filterByRequestId}
       />
 
       <LogsFiltersDialog
@@ -123,6 +139,9 @@ export function LogsPage() {
         copiedDetail={copiedDetail}
         onCopiedMessage={() => setCopiedDetail('message')}
         onCopiedJson={() => setCopiedDetail('json')}
+        onFilterByRequestId={filterByRequestId}
+        onFilterBySessionId={filterBySessionId}
+        onOpenChat={openChatForSession}
       />
 
       <LogsFilesDialog L={L} open={filesOpen} onOpenChange={setFilesOpen} files={files} logDir={logDir} />

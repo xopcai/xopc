@@ -158,7 +158,7 @@ export class MessagePipeline {
         try {
           processedCtx = await this.runProcess(processedCtx);
         } catch (err) {
-          log.error({ channel, err }, 'Process handler error');
+          log.error({ channel, err, phase: 'channel.inbound' }, `Process handler error: ${err instanceof Error ? err.message : String(err)}`);
           this.onError?.(err, processedCtx);
           return;
         }

@@ -3,10 +3,13 @@ import type { Hono } from 'hono';
 import { buildSessionKey, parseSessionKey } from '../../../routing/session-key.js';
 import { agentExists, getDefaultAgentId } from '../../../routing/resolve-route.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
+import { createGatewayRouteLogger, logRouteError } from '../lib/route-logger.js';
 import { messagesToClientHistory } from '../../../session/client-history.js';
 import { computeUserRoundDeleteRange } from '../../../session/user-round-delete.js';
 import { respondStartupUnavailable } from '../lib/startup-unavailable.js';
 import type { StartupUnavailableGatewayMethod } from '../../startup-readiness.js';
+
+const log = createGatewayRouteLogger('Sessions');
 
 type SessionsStartupMethod = StartupUnavailableGatewayMethod;
 
@@ -265,6 +268,7 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
     try {
       await service.sessions.restoreCompactionCheckpoint(key, checkpointId);
     } catch (err) {
+      logRouteError(log, c, err, 'gateway.route.sessions', { operation: 'restoreCheckpoint', sessionKey: key });
       const msg = err instanceof Error ? err.message : String(err);
       if (msg.includes('not found') || msg.includes('Invalid')) {
         return c.json({ ok: false, error: msg }, 404);

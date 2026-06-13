@@ -12,7 +12,7 @@ import type {
 } from "@modelcontextprotocol/sdk/validation/types.js";
 import type { Config } from "../../config/schema.js";
 import { createLogger } from "../../utils/logger.js";
-const log = createLogger("BundleMcp");
+const log = createLogger("Mcp:Bundle");
 import { resolveGlobalSingleton } from "../../utils/global-singleton.js";
 import { redactSensitiveUrlLikeString } from "../../utils/redact-sensitive-url.js";
 import { normalizeOptionalString } from "../../utils/string-coerce.js";
@@ -151,7 +151,14 @@ function loadSessionMcpConfig(params: {
   });
   if (params.logDiagnostics !== false) {
     for (const diagnostic of loaded.diagnostics) {
-      log.warn(`bundle-mcp: ${diagnostic.extensionId}: ${diagnostic.message}`);
+      log.warn(
+        {
+          phase: 'agent.mcp_connect',
+          extensionId: diagnostic.extensionId,
+          message: diagnostic.message,
+        },
+        `bundle-mcp diagnostic: ${diagnostic.extensionId}: ${diagnostic.message}`,
+      );
     }
   }
   return {
@@ -229,7 +236,12 @@ export function createSessionMcpRuntime(params: {
           const safeServerName = sanitizeServerName(serverName, usedServerNames);
           if (safeServerName !== serverName) {
             log.warn(
-              `bundle-mcp: server key "${serverName}" registered as "${safeServerName}" for provider-safe tool names.`,
+              {
+                phase: 'agent.mcp_connect',
+                serverName,
+                safeServerName,
+              },
+              `bundle-mcp: server key "${serverName}" registered as "${safeServerName}" for provider-safe tool names`,
             );
           }
 
@@ -431,7 +443,11 @@ function createSessionMcpRuntimeManager(
     idleSweepInFlight = sweepIdleRuntimes()
       .then(() => undefined)
       .catch((error: unknown) => {
-        log.warn(`bundle-mcp: idle runtime sweep failed: ${String(error)}`);
+        const em = error instanceof Error ? error.message : String(error);
+        log.warn(
+          { err: error, errorMessage: em, phase: 'agent.mcp_connect' },
+          `bundle-mcp: idle runtime sweep failed: ${em}`,
+        );
       })
       .finally(() => {
         idleSweepInFlight = undefined;

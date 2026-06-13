@@ -33,7 +33,7 @@ import { getDefaultAgentId } from '../../routing/resolve-route.js';
 import { runGatewayAgent } from './run-gateway-agent.js';
 import { createLogger } from '../../utils/logger.js';
 
-const log = createLogger('GatewayAgentRunner');
+const log = createLogger('Gateway:AgentRunner');
 
 export interface GatewayAgentRunnerOptions {
   bus: MessageBus;
