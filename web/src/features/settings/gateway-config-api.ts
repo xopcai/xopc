@@ -41,10 +41,9 @@ export async function revealGatewayAuthSecret(
     ok?: boolean;
     payload?: { field: typeof field; secret: string | null; source: 'config' | 'none' };
     error?: { message?: string };
-  }>(apiUrl('/api/gateway/reveal-auth-secret'), {
+  }>(apiUrl(`/api/gateway/reveal-auth-secret/${encodeURIComponent(field)}`), {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ field }),
+    body: '{}',
   });
   if (!data.ok || !data.payload) {
     throw new Error(data.error?.message ?? 'Reveal failed');
