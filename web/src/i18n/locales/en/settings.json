@@ -755,6 +755,9 @@
     "idleTtlPlaceholder": "10",
     "serversTitle": "Servers",
     "serversHint": "Each server id becomes the prefix in tool names (server__tool). Extension .mcp.json files merge in automatically.",
+    "customServersTitle": "Custom MCP servers",
+    "customServersHint": "Add stdio subprocesses or remote HTTP/SSE endpoints. Installed catalog connectors are managed separately above.",
+    "reservedServerId": "This id is reserved by an installed connector. Choose a different server name.",
     "serversEmpty": "No MCP servers configured yet.",
     "addServer": "Add server",
     "removeServer": "Remove",
@@ -801,5 +804,28 @@
       "sse": "SSE",
       "streamable-http": "Streamable HTTP"
     }
+  },
+  "connectorsSettings": {
+    "title": "Connectors",
+    "subtitle": "Configure MCP-backed tools for agent runs. Install from the catalog or add custom servers.",
+    "tokenHint": "Save a gateway token under Settings → Gateway before configuring connectors.",
+    "tabDiscover": "Discover",
+    "tabInstalled": "Installed",
+    "catalogHint": "Official MCP servers you can install with one click.",
+    "installedTitle": "Installed connectors",
+    "installedHint": "Catalog and custom MCP servers active for agent runs.",
+    "installedEmpty": "No connectors installed yet. Browse Discover or add a custom MCP server.",
+    "loading": "Loading connectors…",
+    "addCustomServer": "Add custom MCP server",
+    "editCustomServer": "Edit",
+    "customBadge": "custom",
+    "addCustomServerTitle": "Add custom MCP server",
+    "addCustomServerHint": "Configure a stdio subprocess or remote HTTP/SSE endpoint.",
+    "editCustomServerTitle": "Edit custom MCP server",
+    "editCustomServerHint": "Update connection settings for this server.",
+    "modalSave": "Save",
+    "modalCancel": "Cancel",
+    "modalClose": "Close",
+    "duplicateServerId": "A custom server with this id already exists."
   }
 }
