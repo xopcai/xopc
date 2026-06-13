@@ -1,4 +1,4 @@
-import type { Hono } from 'hono';
+import type { Context, Hono } from 'hono';
 
 import type { Config } from '../../../config/schema.js';
 import { buildSafeWebConfigPayload } from '../lib/config-payload.js';
@@ -79,16 +79,9 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
     return c.json({ ok: true, payload: { config: safeConfig } });
   });
 
-  /** POST /api/gateway/reveal-auth-secret — plaintext gateway.auth token/password from config only. */
-  authenticated.post('/api/gateway/reveal-auth-secret', strictRateLimitMiddleware, async (c) => {
-    let field: unknown;
-    try {
-      const body = await c.req.json();
-      field = body && typeof body === 'object' ? (body as { field?: unknown }).field : undefined;
-    } catch {
-      field = undefined;
-    }
-    if (field !== 'token' && field !== 'password') {
+  const revealGatewayAuthSecretHandler = async (c: Context) => {
+    const field = await resolveRevealGatewayAuthField(c);
+    if (!field) {
       return c.json({ ok: false, error: { message: 'field must be token or password' } }, 400);
     }
     const config = service.currentConfig as Config;
@@ -100,7 +93,18 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
       ok: true,
       payload: { field, secret, source: secret ? ('config' as const) : ('none' as const) },
     });
-  });
+  };
+
+  /**
+   * POST /api/gateway/reveal-auth-secret/:field — preferred; no JSON body required.
+   * POST /api/gateway/reveal-auth-secret — legacy JSON body `{ field: "token" | "password" }`.
+   */
+  authenticated.post(
+    '/api/gateway/reveal-auth-secret/:field',
+    strictRateLimitMiddleware,
+    revealGatewayAuthSecretHandler,
+  );
+  authenticated.post('/api/gateway/reveal-auth-secret', strictRateLimitMiddleware, revealGatewayAuthSecretHandler);
 
   /** POST /api/agents/browser/reveal-cloud-api-key — plaintext browser cloud apiKey from config only. */
   authenticated.post('/api/agents/browser/reveal-cloud-api-key', strictRateLimitMiddleware, async (c) => {
@@ -133,4 +137,27 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
       payload: { index, apiKey, source: apiKey ? ('config' as const) : ('none' as const) },
     });
   });
+}
+
+function normalizeRevealGatewayAuthField(raw: unknown): 'token' | 'password' | null {
+  return raw === 'token' || raw === 'password' ? raw : null;
+}
+
+async function resolveRevealGatewayAuthField(c: Context): Promise<'token' | 'password' | null> {
+  const fromPath = normalizeRevealGatewayAuthField(c.req.param('field'));
+  if (fromPath) return fromPath;
+
+  const fromQuery = normalizeRevealGatewayAuthField(c.req.query('field'));
+  if (fromQuery) return fromQuery;
+
+  try {
+    const body = await c.req.json();
+    return normalizeRevealGatewayAuthField(
+      body && typeof body === 'object' && !Array.isArray(body)
+        ? (body as { field?: unknown }).field
+        : undefined,
+    );
+  } catch {
+    return null;
+  }
 }

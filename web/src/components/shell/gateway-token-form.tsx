@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useState, type ReactNode, type Ref } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { SecretInput } from '@/components/ui/secret-input';
@@ -15,10 +15,18 @@ export type GatewayTokenFormProps = {
   footerLeft?: ReactNode;
   /** Applied to the outer wrapper (fields + footer). */
   className?: string;
+  /** Initial focus target when rendered inside a dialog. */
+  tokenInputRef?: Ref<HTMLInputElement>;
 };
 
 /** Shared gateway URL + token fields and Save action (landing page and token dialog). */
-export function GatewayTokenForm({ baseUrl, onSubmit, footerLeft, className }: GatewayTokenFormProps) {
+export function GatewayTokenForm({
+  baseUrl,
+  onSubmit,
+  footerLeft,
+  className,
+  tokenInputRef,
+}: GatewayTokenFormProps) {
   const language = useLocaleStore((s) => s.language);
   const t = messages(language).token;
 
@@ -37,11 +45,18 @@ export function GatewayTokenForm({ baseUrl, onSubmit, footerLeft, className }: G
   }
 
   return (
-    <div className={cn('flex flex-col gap-3', className)}>
+    <form
+      className={cn('flex flex-col gap-3', className)}
+      onSubmit={(event) => {
+        event.preventDefault();
+        handleSave();
+      }}
+    >
       <label className="flex flex-col gap-1.5">
         <span className="text-xs font-medium text-fg-muted">{t.gatewayUrl}</span>
         <input
           readOnly
+          tabIndex={-1}
           className="rounded-md border border-edge bg-surface-hover px-3 py-2 text-sm text-fg-muted"
           value={baseUrl}
         />
@@ -49,6 +64,7 @@ export function GatewayTokenForm({ baseUrl, onSubmit, footerLeft, className }: G
       <label className="flex flex-col gap-1.5">
         <span className="text-xs font-medium text-fg-muted">{t.tokenLabel}</span>
         <SecretInput
+          inputRef={tokenInputRef}
           value={value}
           onChange={(next) => {
             setValue(next);
@@ -56,19 +72,16 @@ export function GatewayTokenForm({ baseUrl, onSubmit, footerLeft, className }: G
           }}
           placeholder={t.placeholder}
           labels={secretInputLabelsFromToken(t)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') handleSave();
-          }}
         />
         {error ? <p className="text-xs text-danger">{error}</p> : null}
       </label>
 
       <div className="mt-4 flex justify-end gap-2">
         {footerLeft}
-        <Button type="button" variant="primary" onClick={handleSave}>
+        <Button type="submit" variant="primary">
           {t.save}
         </Button>
       </div>
-    </div>
+    </form>
   );
 }
