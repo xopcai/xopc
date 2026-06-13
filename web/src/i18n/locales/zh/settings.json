@@ -755,6 +755,9 @@
     "idleTtlPlaceholder": "10",
     "serversTitle": "服务器",
     "serversHint": "每个 server id 会作为工具名前缀（server__tool）。扩展的 .mcp.json 会自动合并。",
+    "customServersTitle": "自定义 MCP 服务器",
+    "customServersHint": "添加 stdio 子进程或远程 HTTP/SSE 端点。上方目录安装的连接器单独管理。",
+    "reservedServerId": "该名称已被已安装的连接器占用，请换一个 server id。",
     "serversEmpty": "尚未配置 MCP 服务器。",
     "addServer": "添加服务器",
     "removeServer": "删除",
@@ -801,5 +804,28 @@
       "sse": "SSE",
       "streamable-http": "Streamable HTTP"
     }
+  },
+  "connectorsSettings": {
+    "title": "连接器",
+    "subtitle": "为 Agent 运行配置 MCP 工具。可从目录安装，也可添加自定义服务器。",
+    "tokenHint": "请先在「设置 → 网关」保存访问令牌，再配置连接器。",
+    "tabDiscover": "发现",
+    "tabInstalled": "已安装",
+    "catalogHint": "官方 MCP 服务器，可一键安装。",
+    "installedTitle": "已安装的连接器",
+    "installedHint": "目录安装与自定义 MCP 服务器，供 Agent 运行时使用。",
+    "installedEmpty": "尚未安装连接器。请浏览「发现」或添加自定义 MCP 服务器。",
+    "loading": "正在加载连接器…",
+    "addCustomServer": "添加自定义 MCP 服务器",
+    "editCustomServer": "编辑",
+    "customBadge": "自定义",
+    "addCustomServerTitle": "添加自定义 MCP 服务器",
+    "addCustomServerHint": "配置 stdio 子进程或远程 HTTP/SSE 端点。",
+    "editCustomServerTitle": "编辑自定义 MCP 服务器",
+    "editCustomServerHint": "更新此服务器的连接设置。",
+    "modalSave": "保存",
+    "modalCancel": "取消",
+    "modalClose": "关闭",
+    "duplicateServerId": "已存在相同 id 的自定义服务器。"
   }
 }

@@ -229,8 +229,8 @@ function buildFieldSeeds(language: StoredLanguage): FieldSeed[] {
       id: 'field:mcp:servers',
       title: isZh ? 'MCP 服务器配置' : 'MCP Servers',
       subtitle: isZh ? '外部 MCP 工具服务器列表' : 'External MCP tool server registry',
-      path: '/settings/agent-defaults?tab=mcp',
-      keywords: ['mcp', 'server', 'tools', 'external', 'stdio', '服务器'],
+      path: '/settings/connectors',
+      keywords: ['mcp', 'server', 'tools', 'external', 'stdio', '服务器', 'connector'],
     },
 
     // --- Heartbeat ---

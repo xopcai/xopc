@@ -253,6 +253,14 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
       return { register: registerConnectorRoutes };
     },
   },
+  {
+    id: 'mcp',
+    match: (path) => startsWithAny(path, ['/api/mcp']),
+    load: async () => {
+      const { registerMcpRoutes } = await import('./mcp.js');
+      return { register: registerMcpRoutes };
+    },
+  },
 ];
 
 export const APP_LAZY_ROUTE_BUNDLES: readonly AppLazyRouteBundle[] = [

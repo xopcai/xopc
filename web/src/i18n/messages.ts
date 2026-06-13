@@ -91,6 +91,7 @@ export type TunnelSettingsMessages = MessageBundle['tunnelSettings'];
 export type SharesSettingsMessages = MessageBundle['sharesSettings'];
 export type WebSearchSettingsMessages = MessageBundle['webSearchSettings'];
 export type McpSettingsMessages = MessageBundle['mcpSettings'];
+export type ConnectorsSettingsMessages = MessageBundle['connectorsSettings'];
 export type AgentsSettingsMessages = MessageBundle['agentsSettings'];
 export type ChatMessages = MessageBundle['chat'];
 export type LogsMessages = MessageBundle['logs'];
